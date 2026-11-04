@@ -49,8 +49,8 @@ func TestKillboardSurfacesCarryTheFullGlass(t *testing.T) {
 	// The headline figures read in the mono face at the KPI
 	// weight: the feed's stat tiles and the kill page's value.
 	for _, want := range []string{
-		`.kb-stat-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1.35rem; font-weight: 600;`,
-		`.kp-value-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1.7rem; font-weight: 600;`,
+		`.kb-stat-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--fs-3xl); font-weight: 600;`,
+		`.kp-value-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--fs-4xl); font-weight: 600;`,
 	} {
 		if !strings.Contains(kb, want) {
 			t.Errorf("killboard.css missing figure rule %q", want)

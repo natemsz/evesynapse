@@ -56,7 +56,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 .mt-modes a.active { color: var(--text-bright); border-color: var(--accent); }
 .mt-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -68,7 +68,7 @@
 td.mt-reqs { max-width: 12rem; }
 .req-icon { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; margin: 0 0.35rem 0.2rem 0; vertical-align: top; text-decoration: none; }
 .req-icon img { display: block; border-radius: var(--r-xs); }
-.req-qty { font-size: 0.68rem; line-height: 1.1; color: var(--muted); font-variant-numeric: tabular-nums; }
+.req-qty { font-size: var(--fs-xs); line-height: 1.1; color: var(--muted); font-variant-numeric: tabular-nums; }
 .req-icon:hover .req-qty { color: var(--text-bright); }
 
 .mt-movers { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem 1.25rem; margin: 0.5rem 0 1rem; }
@@ -98,13 +98,13 @@ td.mt-reqs { max-width: 12rem; }
 .mb-row > a:hover { background: var(--row-hover); }
 .mb-node.open > .mb-row > a { color: var(--text-bright); }
 .mb-node.chosen > .mb-row > a { background: var(--row-hover); box-shadow: inset 2px 0 0 var(--accent); }
-.mb-children .mb-row > a { font-size: 0.8rem; }
+.mb-children .mb-row > a { font-size: var(--fs-sm); }
 /* The tree's type ladder: categories read as headings (Rajdhani
    SemiBold capitals, the display treatment), subcategories as
    capitals at the regular weight, and the groups under them stay
    small body text. Depth alone decides a row's rung. */
-.mb-node.mb-cat > .mb-row > a { font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600; font-synthesis-weight: none; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; }
-.mb-node.mb-subcat > .mb-row > a { font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 400; font-synthesis-weight: none; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8rem; }
+.mb-node.mb-cat > .mb-row > a { font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600; font-synthesis-weight: none; text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-sm); }
+.mb-node.mb-subcat > .mb-row > a { font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 400; font-synthesis-weight: none; text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--fs-sm); }
 .mb-node .market-group-icon svg { width: 1.1rem; height: 1.1rem; }
 .mb-toggle { flex: none; width: 1.05rem; height: 1.05rem; padding: 0; background: none; border: 0; cursor: pointer; position: relative; color: var(--muted); }
 .mb-toggle::before { content: ""; position: absolute; inset: 0.3rem; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(-45deg); transition: transform 120ms ease; }
@@ -131,7 +131,7 @@ td.mt-reqs { max-width: 12rem; }
    inherits the header color, the chevron carries the state. */
 .mb-sorthead { color: inherit; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 0.35rem; }
 .mb-sorthead:hover { color: var(--accent); }
-.mb-sorthead .mb-sortchev { color: var(--muted-2, var(--muted)); font-size: 0.85em; }
+.mb-sorthead .mb-sortchev { color: var(--muted-2, var(--muted)); font-size: var(--fs-md); }
 .mb-sorthead.on { color: var(--text-bright); }
 .mb-sorthead.on .mb-sortchev { color: var(--accent); }
 
@@ -164,7 +164,7 @@ td.mt-reqs { max-width: 12rem; }
 .mbk-item img { border-radius: 4px; }
 .mbk-item-name { flex: 1 1 auto; min-width: 0; }
 .mbk-item-price { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.mbk-remove { background: none; border: 0; color: var(--muted); font-size: 1.05rem; line-height: 1; padding: 0.1rem 0.3rem; cursor: pointer; }
+.mbk-remove { background: none; border: 0; color: var(--muted); font-size: var(--fs-xl); line-height: 1; padding: 0.1rem 0.3rem; cursor: pointer; }
 .mbk-remove:hover { color: var(--accent); }
 .mbk-empty { color: var(--muted); }
 .mbk-actions { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.5rem; }
@@ -186,7 +186,7 @@ td.mt-reqs { max-width: 12rem; }
 .pf-note { border-left: 3px solid var(--accent); padding-left: 0.6rem; }
 .pf-basis summary, .pf-prefs summary { cursor: pointer; color: var(--muted); }
 .pf-basis-form, .pf-prefs-form { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: end; margin: 0.4rem 0; }
-.pf-basis-form label { display: flex; flex-direction: column; font-size: 0.85rem; }
+.pf-basis-form label { display: flex; flex-direction: column; font-size: var(--fs-md); }
 .pf-basis-form input { width: 9rem; max-width: 100%; }
 .pf-prefs-form { flex-direction: column; align-items: flex-start; }
 /* Visualization slice 1: the item chart's range pills and
@@ -269,7 +269,7 @@ td.mt-reqs { max-width: 12rem; }
 @media (max-width: 640px) {
   .pf-chart .pchart svg { height: 150px; }
   .pf-chart .pchart svg.pf-short { height: 75px; }
-  .pf-chart .chart-legend { gap: 0.15rem 0.6rem; font-size: 0.72rem; }
+  .pf-chart .chart-legend { gap: 0.15rem 0.6rem; font-size: var(--fs-xs); }
   .pf-chart .legend-item { text-transform: none; letter-spacing: normal; }
 }
 
@@ -295,15 +295,15 @@ td.mt-reqs { max-width: 12rem; }
 
 .pf-mode-row { display: flex; justify-content: flex-end; margin: 0.5rem 0 -0.3rem; }
 .pf-mode-row .mt-modes { margin: 0; }
-.pf-axis-caps { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.68rem; color: var(--muted); margin-top: 0.1rem; }
+.pf-axis-caps { display: flex; justify-content: space-between; gap: 1rem; font-size: var(--fs-xs); color: var(--muted); margin-top: 0.1rem; }
 .pf-cell { min-width: 0; }
 .pf-chart .pchart svg { height: 180px; }
 .pf-chart .pchart svg.pf-short { height: 90px; }
 .pf-grid { stroke: var(--muted); stroke-opacity: 0.22; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .pf-axis-y { position: absolute; inset: 0; pointer-events: none; }
-.pf-axis-y span { position: absolute; left: 2px; transform: translateY(-50%); font-size: 0.68rem; line-height: 1; color: var(--muted); background: color-mix(in srgb, var(--panel) 75%, transparent); padding: 1px 3px; border-radius: 3px; }
+.pf-axis-y span { position: absolute; left: 2px; transform: translateY(-50%); font-size: var(--fs-xs); line-height: 1; color: var(--muted); background: color-mix(in srgb, var(--panel) 75%, transparent); padding: 1px 3px; border-radius: 3px; }
 .pf-axis-x { position: relative; height: 1.15rem; margin-top: 0.15rem; }
-.pf-axis-x span { position: absolute; top: 0; font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+.pf-axis-x span { position: absolute; top: 0; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; }
 .pf-axis-x .pf-x-mid { transform: translateX(-50%); }
 .pf-axis-x .pf-x-end { transform: translateX(-100%); }
 .pf-chart .cdot.pf-hit { fill: var(--accent); fill-opacity: 0; stroke: none; }
@@ -314,7 +314,7 @@ td.mt-reqs { max-width: 12rem; }
 .pf-act-grid { display: grid; grid-template-columns: minmax(0, 1fr) 18.75rem; gap: 1rem 1.5rem; align-items: start; }
 @media (max-width: 900px) { .pf-act-grid { grid-template-columns: minmax(0, 1fr); } }
 .pf-card { background: var(--panel); border: 1px solid var(--box-edge); border-radius: var(--r-md); padding: 0.8rem 0.9rem; }
-.pf-card h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
+.pf-card h4 { margin: 0 0 0.5rem; font-size: var(--fs-lg); }
 @media (max-width: 640px) {
   .pf-chart .pchart svg { height: 150px; }
   .pf-chart .pchart svg.pf-short { height: 75px; }
@@ -565,10 +565,10 @@ a:hover .pf-hero-gap, a:focus .pf-hero-gap { fill: color-mix(in srgb, var(--unve
 .pf-hero-sw-e { background: var(--accent); }
 .pf-hero-sw-nw { background: var(--gold); }
 .pf-hero-ends { position: absolute; inset: 0; pointer-events: none; }
-.pf-hero-ends span { position: absolute; right: 4px; transform: translateY(-50%); font-size: 0.72rem; line-height: 1; background: color-mix(in srgb, var(--panel) 75%, transparent); padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
+.pf-hero-ends span { position: absolute; right: 4px; transform: translateY(-50%); font-size: var(--fs-xs); line-height: 1; background: color-mix(in srgb, var(--panel) 75%, transparent); padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
 .pf-end-earned { color: var(--accent); }
 .pf-end-nw { color: var(--gold); }
-.pf-hero-chip { position: absolute; right: 0.5rem; bottom: 0.5rem; z-index: 2; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid color-mix(in srgb, var(--unverified) 45%, transparent); border-radius: 999px; padding: 0.18rem 0.6rem; font-size: 0.75rem; color: var(--text); text-decoration: none; }
+.pf-hero-chip { position: absolute; right: 0.5rem; bottom: 0.5rem; z-index: 2; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid color-mix(in srgb, var(--unverified) 45%, transparent); border-radius: 999px; padding: 0.18rem 0.6rem; font-size: var(--fs-sm); color: var(--text); text-decoration: none; }
 .pf-hero-chip:hover, .pf-hero-chip:focus { border-color: var(--unverified); color: var(--text); text-decoration: none; }
 .pf-dim { opacity: 0.22; }
 
@@ -580,7 +580,7 @@ a:hover .pf-hero-gap, a:focus .pf-hero-gap { fill: color-mix(in srgb, var(--unve
 .pf-wf-cap { fill: url(#pf-hatch); }
 .pf-wf-conn { stroke: var(--muted); stroke-opacity: 0.6; stroke-width: 1; stroke-dasharray: 4 3; fill: none; vector-effect: non-scaling-stroke; }
 .pf-wf-values { position: absolute; inset: 0; pointer-events: none; }
-.pf-wf-values span { position: absolute; transform: translateX(-50%); font-size: 0.68rem; line-height: 1; color: var(--text-bright); text-shadow: 0 1px 3px var(--panel); white-space: nowrap; }
+.pf-wf-values span { position: absolute; transform: translateX(-50%); font-size: var(--fs-xs); line-height: 1; color: var(--text-bright); text-shadow: 0 1px 3px var(--panel); white-space: nowrap; }
 .pf-wf-values span:first-child { color: var(--panel); text-shadow: none; }
 
 /* Efficiency: the uncovered segment hatches, a loss bucket's
@@ -601,8 +601,8 @@ a:hover .pf-hero-gap, a:focus .pf-hero-gap { fill: color-mix(in srgb, var(--unve
 .pf-bullets { display: grid; gap: 0.45rem; margin-top: 0.4rem; }
 .pf-bullet { display: grid; grid-template-columns: 6.2rem minmax(0, 1fr) 5.8rem; align-items: center; gap: 0.55rem; }
 .pf-bullet svg { display: block; width: 100%; height: 10px; }
-.pf-bullet-name { font-size: 0.82rem; }
-.pf-bullet-val { font-size: 0.82rem; text-align: right; font-variant-numeric: tabular-nums; }
+.pf-bullet-name { font-size: var(--fs-md); }
+.pf-bullet-val { font-size: var(--fs-md); text-align: right; font-variant-numeric: tabular-nums; }
 .pf-rhythm { display: block; }
 .pf-rhythm-zero { stroke: var(--muted); stroke-opacity: 0.5; stroke-width: 1; }
 .pf-act-on td { background: var(--row-hover); }
@@ -611,10 +611,10 @@ a:hover .pf-hero-gap, a:focus .pf-hero-gap { fill: color-mix(in srgb, var(--unve
    the Not explained breakdown. */
 .pf-kpi-gold .kpi-spark-line { stroke: var(--gold); }
 .pf-kpi-gold .kpi-spark-area { fill: color-mix(in srgb, var(--gold) 18%, transparent); }
-.pf-cov-pill { display: inline-block; padding: 0 0.5rem; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--unverified) 45%, transparent); background: color-mix(in srgb, var(--unverified) 16%, transparent); color: var(--unverified); font-size: 0.78rem; text-decoration: none; white-space: nowrap; }
+.pf-cov-pill { display: inline-block; padding: 0 0.5rem; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--unverified) 45%, transparent); background: color-mix(in srgb, var(--unverified) 16%, transparent); color: var(--unverified); font-size: var(--fs-sm); text-decoration: none; white-space: nowrap; }
 .pf-cov-pill:hover, .pf-cov-pill:focus { color: var(--unverified); border-color: var(--unverified); text-decoration: none; }
 .pf-ne-tip { margin: 0.35rem 0 0; }
-.pf-ne-trigger { color: var(--muted); font-size: 0.78rem; border-bottom: 1px dotted color-mix(in srgb, var(--muted) 65%, transparent); }
+.pf-ne-trigger { color: var(--muted); font-size: var(--fs-sm); border-bottom: 1px dotted color-mix(in srgb, var(--muted) 65%, transparent); }
 .info-tip:hover .pf-ne-trigger, .info-tip:focus-visible .pf-ne-trigger { color: var(--accent); }
 .pf-ne-second { display: block; margin-top: 0.5rem; }
 

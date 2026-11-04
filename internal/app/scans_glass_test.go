@@ -25,7 +25,7 @@ func TestScanSurfacesCarryTheFullGlass(t *testing.T) {
 		// The stat cards carry the glass too, blur included.
 		".sc-stat {",
 		// Stat figures read in the mono face at the KPI weight.
-		`.sc-stat-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1.35rem; font-weight: 600;`,
+		`.sc-stat-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--fs-3xl); font-weight: 600;`,
 	} {
 		if !strings.Contains(scans, want) {
 			t.Errorf("scans.css missing glass rule %q", want)

@@ -40,7 +40,7 @@ func TestPageStylesheetsLoadOnlyWhereUsed(t *testing.T) {
 		{"/", []string{ideas}},                // home trade-ideas widget
 		{"/planner/", []string{plan}},         // build planner
 		{"/industry/", []string{plan}},        // planner glyph on Blueprints
-		{"/industry/pi/", []string{plan}},     // PI planner
+		{"/industry/pi/", nil},                // PI planner (its own pi.css)
 		{"/market/ideas/", []string{ideas}},   // trade ideas page
 		{"/auth/link", []string{ideas, link}}, // chooser cards take the accents
 		{"/characters/", nil},                 // a page using none of them

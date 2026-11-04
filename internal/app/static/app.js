@@ -4497,7 +4497,10 @@
   // sorting happens inside each group it bounds. data-nosort opts a
   // table out; empty headers do nothing.
   function sortKey(cell) {
-    var raw = (cell ? (cell.getAttribute("data-sort") || cell.textContent) : "").trim();
+    // A price hover card's hidden text is not part of the figure.
+    var pop = cell && cell.querySelector(".spark-pop");
+    var text = cell ? (pop ? cell.textContent.replace(pop.textContent, "") : cell.textContent) : "";
+    var raw = (cell ? (cell.getAttribute("data-sort") || text) : "").trim();
     var m = raw.replace(/ISK|,|\s|%|\+|×/g, "").replace(/^[−–]/, "-").match(/^(-?\d+(?:\.\d+)?)([KMBT]?)$/i);
     if (m) {
       var mult = { "": 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[m[2].toLowerCase()];

@@ -23,7 +23,7 @@
       <td><a class="bk-name" href="/market/baskets/{{.ID}}/">{{.Name}}</a></td>
       <td>{{.RegionName}}</td>
       <td class="mt-num" data-mbk-count>{{.Items}}</td>
-      <td class="mt-num" data-sort="{{.Value}}">{{if .Value}}<span class="bk-worth">{{if .Spark}}<span class="spark-hover" data-spark-fallback tabindex="0" title="{{.Value}} ISK">{{.ValueShort}} ISK<span class="spark-pop">{{.Spark}}</span></span>{{else}}<span title="{{.Value}} ISK">{{.ValueShort}} ISK</span>{{end}}</span>{{if .Partial}} <small class="bk-partial">some unpriced</small>{{end}}{{else}}—{{end}}</td>
+      <td class="mt-num" data-sort="{{.Value}}">{{if .Value}}<span class="bk-worth"><span title="{{.Value}} ISK">{{sparkFigFallback (print .ValueShort " ISK") .Spark}}</span></span>{{if .Partial}} <small class="bk-partial">some unpriced</small>{{end}}{{else}}—{{end}}</td>
       <td class="bk-trend opt" data-sort="{{.Chg30.Text}}">{{if .Line}}{{.Line}}{{if .Chg30.Text}}<span class="visually-hidden">{{.Chg30.Text}} over 30 days</span>{{end}}{{end}}</td>
       <td class="mt-num">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
       <td class="mt-num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>

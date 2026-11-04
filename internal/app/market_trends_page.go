@@ -8,6 +8,7 @@ package app
 
 import (
 	"context"
+	"html/template"
 	"math"
 	"net/http"
 	"net/url"
@@ -30,13 +31,17 @@ type marketTrendRow struct {
 	TypicalSell string
 	TypicalBuy  string
 	SellShort   string // compact figures for the table (4.82M)
-	BuyShort    string
-	Orders      string
-	TradedDay   string
-	Chg1        trendFigure
-	Chg7        trendFigure
-	Chg30       trendFigure
-	Volatility  string
+	// Line is the stored 30-day line for the trend column; Spark the
+	// typical sell's hover card, live only where cards drop the column.
+	Line       template.HTML
+	Spark      template.HTML
+	BuyShort   string
+	Orders     string
+	TradedDay  string
+	Chg1       trendFigure
+	Chg7       trendFigure
+	Chg30      trendFigure
+	Volatility string
 
 	Rank     int
 	IconURL  string
@@ -225,6 +230,7 @@ func (app *Application) buildMarketTrendsViewFresh(ctx context.Context, q map[st
 			}
 		}
 	}
+	sparkOn := app.sparksOn(ctx, app.userID(ctx))
 	var widest float64
 	for i, r := range rows {
 		row := marketTrendRow{
@@ -236,6 +242,15 @@ func (app *Application) buildMarketTrendsViewFresh(ctx context.Context, q map[st
 			Chg1:      newTrendFigure(r.SellChg1d), Chg7: newTrendFigure(r.SellChg7d), Chg30: newTrendFigure(r.SellChg30d),
 		}
 		row.SellShort = formatISKShort(r.TypicalSell)
+		// The stored 30-day line (schema 121): the trend column's
+		// chart, and the typical sell's hover card where cards drop
+		// that column.
+		if r.SellSpark30d != "" {
+			row.Line = template.HTML(`<svg class="tr-line ` + row.Chg30.Dir + `" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="` + template.HTMLEscapeString(r.SellSpark30d) + `"/></svg>`)
+			if sparkOn {
+				row.Spark = storedSparkCard(r.SellSpark30d, r.SellLow30d, r.SellHigh30d, r.SellMean30d, view.RegionName)
+			}
+		}
 		if r.TypicalBuy > 0 {
 			row.TypicalBuy = esi.FormatISK(r.TypicalBuy)
 			row.BuyShort = formatISKShort(r.TypicalBuy)

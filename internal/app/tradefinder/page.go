@@ -46,6 +46,7 @@ package tradefinder
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"math"
 	"net/http"
 	"strconv"
@@ -89,6 +90,9 @@ type tradefinderRow struct {
 	MarginPct   string // "12.3%"
 	SoldPerDay  string // esi.FormatInt, sold per day at destination
 	ProfitDay   string // esi.FormatISK, estimated daily profit
+	// BuySpark and SellSpark are the price hover cards for the two
+	// typical prices: each region's stored 30-day line.
+	BuySpark, SellSpark template.HTML
 
 	// Best-price hints from the station grain: where the cheapest
 	// sell order in the origin and the highest buy order in the
@@ -108,6 +112,8 @@ type tradefinderPendingRow struct {
 	SellTypical string
 	ProfitItem  string
 	MarginPct   string
+	BuySpark    template.HTML
+	SellSpark   template.HTML
 }
 
 // tradefinderView is the /market/tradefinder/ page body.
@@ -161,6 +167,7 @@ func (app *page) handleMarketTradefinder(w http.ResponseWriter, r *http.Request)
 		app.serveTradefinderCSV(w, view)
 		return
 	}
+	app.attachTradefinderSparks(ctx, view)
 	data.MarketTradefinder = view
 	app.deps.Render(ctx, w, http.StatusOK, "market_tradefinder.html", data)
 }
@@ -427,5 +434,31 @@ func (app *page) queueTradefinderPending(ctx context.Context, view *tradefinderV
 		if err := app.deps.QueueHistoryWant(ctx, view.DestID, r.TypeID); err != nil {
 			logging.Errorf("tradefinder: queue history for type %d in region %d: %v", r.TypeID, view.DestID, err)
 		}
+	}
+}
+
+// attachTradefinderSparks gives every route's two typical prices
+// their hover cards: the origin's line for what buying costs, the
+// destination's for what selling brings. Stored lines only, one
+// read per region for the page.
+func (app *page) attachTradefinderSparks(ctx context.Context, v *tradefinderView) {
+	var keys []module.SparkKey
+	for _, r := range v.Rows {
+		keys = append(keys, module.SparkKey{RegionID: v.OriginID, TypeID: r.TypeID}, module.SparkKey{RegionID: v.DestID, TypeID: r.TypeID})
+	}
+	for _, r := range v.Pending {
+		keys = append(keys, module.SparkKey{RegionID: v.OriginID, TypeID: r.TypeID}, module.SparkKey{RegionID: v.DestID, TypeID: r.TypeID})
+	}
+	cards := app.deps.PriceSparks(ctx, keys)
+	if len(cards) == 0 {
+		return
+	}
+	for i := range v.Rows {
+		v.Rows[i].BuySpark = cards[module.SparkKey{RegionID: v.OriginID, TypeID: v.Rows[i].TypeID}]
+		v.Rows[i].SellSpark = cards[module.SparkKey{RegionID: v.DestID, TypeID: v.Rows[i].TypeID}]
+	}
+	for i := range v.Pending {
+		v.Pending[i].BuySpark = cards[module.SparkKey{RegionID: v.OriginID, TypeID: v.Pending[i].TypeID}]
+		v.Pending[i].SellSpark = cards[module.SparkKey{RegionID: v.DestID, TypeID: v.Pending[i].TypeID}]
 	}
 }

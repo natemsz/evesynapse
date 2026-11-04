@@ -75,7 +75,7 @@
   </td>
   <td class="amx-c-num">{{.Quantity}}</td>
   <td class="amx-c-num">{{.VolumeText}}</td>
-  <td class="amx-c-val">{{if .ValueText}}<span class="amx-isk">{{.ValueText}}</span><small>ISK</small>{{else}}<span class="muted">no price</span>{{end}}</td>
+  <td class="amx-c-val">{{if .ValueText}}<span class="amx-isk">{{sparkFig .ValueText .Spark}}</span><small>ISK</small>{{else}}<span class="muted">no price</span>{{end}}</td>
 </tr>
 {{end}}
 

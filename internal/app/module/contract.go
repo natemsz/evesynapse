@@ -982,6 +982,13 @@ const (
 	ActivitySwarmBytes = "swarm_bytes"
 )
 
+// SparkKey names one priced figure's history: a type in a region.
+type SparkKey struct{ RegionID, TypeID int64 }
+
+// TheForgeRegionID is the house price region: TypicalSells reads its
+// swept book, so a figure priced from it keys its hover card here.
+const TheForgeRegionID int64 = 10000002
+
 type Deps interface {
 	DB() *db.Queries
 	// NoteActivity ticks one analytics event counter (a contract
@@ -1057,6 +1064,11 @@ type Deps interface {
 	// and row cap for reading the stored spread statistics: shared data,
 	// the same numbers whichever module or page reads them.
 	SpreadDefaults() (minSpreadPct float64, rowCap int)
+	// PriceSparks is the price hover card for each listed (region,
+	// type) figure, read from the stat pack's stored 30-day line
+	// (one bounded read per region); none when the reader has hover
+	// cards switched off or the region keeps no daily history.
+	PriceSparks(ctx context.Context, keys []SparkKey) map[SparkKey]template.HTML
 
 	// --- names, sessions and shared feeds (the build planner reads these) ---
 

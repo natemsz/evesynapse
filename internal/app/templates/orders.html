@@ -42,7 +42,7 @@
   <thead><tr><th class="card-title">Item</th><th>Side</th><th class="mt-num">Price</th><th>Status</th><th>Competition</th><th>Volume</th><th>Location</th><th>Expires</th></tr></thead>
   <tbody>
   {{range .Orders.OpenRows}}
-    <tr{{if .Beaten}} class="order-beaten" data-beaten="1"{{end}}><td>{{itemLink .TypeID .Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}{{if .Range}}<small class="fo-sub">range {{.Range}}</small>{{end}}</td><td class="mt-num">{{.Price}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td>{{if .Heat}}<span title="{{.HeatNote}}">{{.Heat}}</span>{{end}}</td><td>{{.Volume}}</td><td>{{placeLink .Loc}}{{if .Region}}<small class="fo-sub">{{.Region}}</small>{{end}}</td><td>{{.Expires}}<small class="fo-sub">issued {{.Issued}}</small></td></tr>
+    <tr{{if .Beaten}} class="order-beaten" data-beaten="1"{{end}}><td>{{itemLink .TypeID .Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}{{if .Range}}<small class="fo-sub">range {{.Range}}</small>{{end}}</td><td class="mt-num">{{sparkFig .Price .Spark}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td>{{if .Heat}}<span title="{{.HeatNote}}">{{.Heat}}</span>{{end}}</td><td>{{.Volume}}</td><td>{{placeLink .Loc}}{{if .Region}}<small class="fo-sub">{{.Region}}</small>{{end}}</td><td>{{.Expires}}<small class="fo-sub">issued {{.Issued}}</small></td></tr>
   {{end}}
   </tbody>
 </table>
@@ -95,7 +95,7 @@
   <thead><tr><th class="card-title">Item</th><th>Side</th><th class="mt-num">Price</th><th>Volume</th><th>Location</th><th>State</th><th class="opt">Issued</th></tr></thead>
   <tbody>
   {{range .Orders.HistoryRows}}
-    <tr><td>{{itemLink .TypeID .Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}</td><td class="mt-num">{{.Price}}</td><td>{{.Volume}}</td><td>{{placeLink .Loc}}</td><td>{{.State}}</td><td>{{.Issued}}</td></tr>
+    <tr><td>{{itemLink .TypeID .Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}</td><td class="mt-num">{{sparkFig .Price .Spark}}</td><td>{{.Volume}}</td><td>{{placeLink .Loc}}</td><td>{{.State}}</td><td>{{.Issued}}</td></tr>
   {{end}}
   </tbody>
 </table>

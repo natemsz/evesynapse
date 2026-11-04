@@ -2,7 +2,9 @@ package fitting
 
 import (
 	"encoding/json"
+	"evesynapse/internal/app/module"
 	"fmt"
+	"html/template"
 	"net/http"
 	"sort"
 	"strconv"
@@ -31,6 +33,7 @@ type shoppingLine struct {
 	UnitPrice  string
 	LineCost   string
 	PriceKnown bool
+	Spark      template.HTML // the unit price's hover card (The Forge's stored 30-day line)
 }
 
 type shoppingView struct {
@@ -133,6 +136,17 @@ func (app *tool) handleFitShopping(w http.ResponseWriter, r *http.Request) {
 		return view.Lines[i].Name < view.Lines[j].Name
 	})
 	view.TotalCost = isk(total)
+	keys := make([]module.SparkKey, len(view.Lines))
+	for i, l := range view.Lines {
+		keys[i] = module.SparkKey{RegionID: module.TheForgeRegionID, TypeID: l.TypeID}
+	}
+	if cards := app.deps.PriceSparks(ctx, keys); len(cards) > 0 {
+		for i := range view.Lines {
+			if view.Lines[i].PriceKnown {
+				view.Lines[i].Spark = cards[keys[i]]
+			}
+		}
+	}
 
 	data.Shopping = view
 	app.deps.Render(ctx, w, http.StatusOK, "fit_shopping.html", data)

@@ -251,7 +251,7 @@ func TestKillViewReadsBoardValue(t *testing.T) {
 	app.esi.StoreCharacterName(fixtureCharA, "Fixture Ceo")
 	app.esi.StoreCharacterName(fixtureMember, "Member One")
 
-	cookie := sessionCookie(t, app, user.ID)
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
 	code, body := getPage(t, app, cookie, "/killmails/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /killmails/: status %d", code)

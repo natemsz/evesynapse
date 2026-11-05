@@ -44,6 +44,13 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+
+	// goccyjson decodes the killmail payloads at ingest and in
+	// the pricing pass: faster than encoding/json with identical
+	// results (TestAppDecoderParity in decode_parity_test.go).
+	// The standard library stays for the stream envelope and the
+	// RawMessage plumbing.
+	goccyjson "github.com/goccy/go-json"
 )
 
 const (
@@ -291,7 +298,7 @@ func (app *Application) ingestKillPackage(ctx context.Context, body []byte) erro
 // reports whether this was the first copy.
 func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, hash string, z *killZKB, source string, public bool) (bool, error) {
 	var km killmailFull
-	if err := json.Unmarshal(raw, &km); err != nil {
+	if err := goccyjson.Unmarshal(raw, &km); err != nil {
 		return false, fmt.Errorf("decode killmail: %w", err)
 	}
 	if km.KillmailID <= 0 || km.KillmailTime.IsZero() {
@@ -545,7 +552,7 @@ func (app *Application) priceKills(ctx context.Context) (int, error) {
 			continue
 		}
 		var km killmailFull
-		if json.Unmarshal(raw, &km) != nil {
+		if goccyjson.Unmarshal(raw, &km) != nil {
 			continue
 		}
 		ls := killLines(km)

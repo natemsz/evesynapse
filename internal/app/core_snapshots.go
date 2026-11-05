@@ -7,13 +7,18 @@ package app
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+
+	// json is goccy/go-json under the standard library's name: it
+	// decodes the stored snapshot payloads faster than
+	// encoding/json with identical results (TestAppDecoderParity
+	// in decode_parity_test.go).
+	json "github.com/goccy/go-json"
 )
 
 // loadCorpSnapshot decodes the stored snapshot payload for

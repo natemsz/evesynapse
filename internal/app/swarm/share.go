@@ -710,25 +710,43 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 		}
 		// Only days inside the window its fetch could have
 		// returned are written: none after the fetch, none
-		// further back than one fetch reaches.
+		// further back than one fetch reaches. The days land in
+		// one batched upsert, the query the direct fetch uses: a
+		// repeated date is kept once, its last answer, since one
+		// statement may not write the same row twice.
+		// CheckSwarmPayload already refuses a repeated date, so
+		// the dedupe only preserves the tolerance the day-by-day
+		// loop had if a payload reaches the apply unchecked.
 		first := stamp.AddDate(0, 0, -SwarmHistoryWindowDays).Format(time.DateOnly)
 		last := stamp.Format(time.DateOnly)
+		days := db.UpsertMarketHistoryDaysParams{RegionID: body.RegionID, TypeID: body.TypeID}
+		at := make(map[string]int, len(body.Days))
 		for _, day := range body.Days {
 			if day.Date < first || day.Date > last {
 				continue
 			}
-			if err := app.Queries.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
-				RegionID: body.RegionID, TypeID: body.TypeID, Date: day.Date,
-				Average: day.Average, Highest: day.Highest, Lowest: day.Lowest,
-				Volume: day.Volume, OrderCount: day.OrderCount,
-			}); err != nil {
-				return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
+			if i, seen := at[day.Date]; seen {
+				days.Averages[i], days.Highests[i], days.Lowests[i] = day.Average, day.Highest, day.Lowest
+				days.Volumes[i], days.OrderCounts[i] = day.Volume, day.OrderCount
+			} else {
+				at[day.Date] = len(days.Dates)
+				days.Dates = append(days.Dates, day.Date)
+				days.Averages = append(days.Averages, day.Average)
+				days.Highests = append(days.Highests, day.Highest)
+				days.Lowests = append(days.Lowests, day.Lowest)
+				days.Volumes = append(days.Volumes, day.Volume)
+				days.OrderCounts = append(days.OrderCounts, day.OrderCount)
 			}
 			if applied.FirstDate == "" || day.Date < applied.FirstDate {
 				applied.FirstDate = day.Date
 			}
 			if day.Date > applied.LastDate {
 				applied.LastDate = day.Date
+			}
+		}
+		if len(days.Dates) > 0 {
+			if err := app.Queries.UpsertMarketHistoryDays(ctx, days); err != nil {
+				return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 			}
 		}
 		// The sold-per-day figure follows, as after a direct fetch

@@ -8,9 +8,11 @@ import (
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/humanize"
 	"fmt"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
+	"time"
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -67,7 +69,42 @@ type contractRow struct {
 	ID   int64
 	Href string // this contract in the inspector
 	On   bool
-	Tone string // "live" while outstanding or in progress, "done" when finished, "" otherwise
+	// Tone colours the status pill: good while outstanding, info
+	// while a courier is in progress, bad once expired or failed,
+	// "" when finished.
+	Tone string
+	Kind string // ESI type: item_exchange, auction, courier, loan
+
+	// The row's one money figure and what it is (Price, Reward),
+	// with the second figure a type carries under it (a courier's
+	// collateral, an auction's buyout).
+	Value      string
+	ValueLabel string
+	ValueSub   string
+	Volume     string // m3, couriers
+	Days       int64  // days to complete, couriers
+	// Left is the time until expiry ("in 6d 2h", "Expired");
+	// IssuedOn, ExpiresOn, Accepted and Completed are dates.
+	Left      string
+	IssuedOn  string
+	ExpiresOn string
+	Accepted  string
+	Completed string
+	// Who: the pilot issued it, it is assigned to the pilot, or it
+	// was issued for the corporation; the filter chips read these.
+	Mine, ToMe, ForCorp bool
+	// Preview is the first few items for the row's icon strip;
+	// MoreItems counts the rest.
+	Preview   []contractItemRow
+	MoreItems int
+}
+
+// contractFilter is one filter chip over the list.
+type contractFilter struct {
+	Label string
+	Href  string
+	Count int
+	On    bool
 }
 
 // contractsView is the Contracts page body.
@@ -82,11 +119,122 @@ type contractsView struct {
 	Depth    int
 	ListHref string
 	Insp     *contractRow
+
+	// Kinds and Whose are the filter chips (?kind=, ?whose=); Total
+	// is every contract shown before a filter.
+	Kinds []contractFilter
+	Whose []contractFilter
+	Total int
 }
 
 // maxContractsShown caps the contract list; details warm into the
 // store for the contracts shown.
 const maxContractsShown = 100
+
+// contractPreviewItems is how many items a row's icon strip shows.
+const contractPreviewItems = 3
+
+// contractShowOrder is the filter chips' order and labels: the
+// contract types first, then whose contract it is.
+var contractShowOrder = []struct{ key, label string }{
+	{"item_exchange", "Item exchange"},
+	{"courier", "Courier"},
+	{"auction", "Auction"},
+	{"loan", "Loan"},
+	{"issued", "Issued by you"},
+	{"assigned", "Assigned to you"},
+	{"corp", "For the corporation"},
+}
+
+func validContractShow(show string) bool {
+	for _, s := range contractShowOrder {
+		if s.key == show {
+			return true
+		}
+	}
+	return false
+}
+
+// contractShows lists the filter keys a contract answers to.
+func contractShows(row contractRow) []string {
+	keys := []string{row.Kind}
+	if row.Mine {
+		keys = append(keys, "issued")
+	}
+	if row.ToMe {
+		keys = append(keys, "assigned")
+	}
+	if row.ForCorp {
+		keys = append(keys, "corp")
+	}
+	return keys
+}
+
+func containsShow(keys []string, show string) bool {
+	for _, k := range keys {
+		if k == show {
+			return true
+		}
+	}
+	return false
+}
+
+// contractFilters builds the chips: All plus every type, then every
+// whose-filter, each with its count. A chip with nothing behind it
+// stays off the bar unless it is the one in force.
+func contractFilters(base, show string, total int, counts map[string]int) (kinds, whose []contractFilter) {
+	kinds = append(kinds, contractFilter{Label: "All", Href: base, Count: total, On: show == ""})
+	for i, s := range contractShowOrder {
+		if counts[s.key] == 0 && show != s.key {
+			continue
+		}
+		f := contractFilter{Label: s.label, Href: base + "&show=" + s.key, Count: counts[s.key], On: show == s.key}
+		if i < 4 {
+			kinds = append(kinds, f)
+		} else {
+			whose = append(whose, f)
+		}
+	}
+	return kinds, whose
+}
+
+// contractTone reads a contract's state: its pill tone, and the time
+// left before it expires. ESI keeps an expired contract outstanding,
+// so the date decides.
+func contractTone(c esi.Contract, now time.Time) (tone, left string) {
+	switch c.Status {
+	case "outstanding":
+		if t, err := time.Parse(time.RFC3339, c.DateExpired); err == nil {
+			left = module.TimeLeft(t, now)
+			if left == "Expired" {
+				return "bad", left
+			}
+		}
+		return "good", left
+	case "in_progress":
+		// A courier in progress is due its days to complete after
+		// it was accepted.
+		if t, err := time.Parse(time.RFC3339, c.DateAccepted); err == nil && c.DaysToComplete > 0 {
+			if left = module.TimeLeft(t.Add(time.Duration(c.DaysToComplete)*24*time.Hour), now); left == "Expired" {
+				left = "Overdue"
+			} else {
+				left = "Due " + left
+			}
+		}
+		return "info", left
+	case "rejected", "failed", "deleted", "reversed":
+		return "bad", ""
+	}
+	return "", ""
+}
+
+// contractDate is an ESI timestamp's date, "" when unset.
+func contractDate(raw string) string {
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return module.ShortDate(t)
+	}
+	return ""
+}
 
 func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -106,7 +254,15 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 	data.ContractsChars = links
 
 	view := &contractsView{CharacterName: active.Name, Depth: 1}
-	view.ListHref = "/contracts/?character=" + strconv.FormatInt(active.CharacterID, 10)
+	base := "/contracts/?character=" + strconv.FormatInt(active.CharacterID, 10)
+	show := r.URL.Query().Get("show")
+	if !validContractShow(show) {
+		show = ""
+	}
+	view.ListHref = base
+	if show != "" {
+		view.ListHref += "&show=" + show
+	}
 	picked, _ := strconv.ParseInt(r.URL.Query().Get("contract"), 10, 64)
 	data.Contracts = view
 
@@ -124,10 +280,14 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 		contracts = contracts[:maxContractsShown]
 	}
 
+	now := time.Now()
+	counts := make(map[string]int)
+	var rows []contractRow
 	for _, c := range contracts {
 		row := contractRow{
 			Title:      c.Title,
 			Type:       app.deps.HumanizeEnum(c.Type),
+			Kind:       c.Type,
 			Status:     app.deps.HumanizeEnum(c.Status),
 			IssuerID:   c.IssuerID,
 			Price:      esi.FormatISK(c.Price),
@@ -135,15 +295,36 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 			Collateral: esi.FormatISK(c.Collateral),
 			Issued:     humanize.Finish(c.DateIssued),
 			Expires:    humanize.Finish(c.DateExpired),
+			IssuedOn:   contractDate(c.DateIssued),
+			ExpiresOn:  contractDate(c.DateExpired),
+			Accepted:   contractDate(c.DateAccepted),
+			Completed:  contractDate(c.DateCompleted),
 			ID:         c.ContractID,
-			Href:       view.ListHref + "&contract=" + strconv.FormatInt(c.ContractID, 10),
-			On:         picked > 0 && c.ContractID == picked,
+			Mine:       c.IssuerID == active.CharacterID,
+			ToMe:       c.AssigneeID == active.CharacterID || c.AcceptorID == active.CharacterID,
+			ForCorp:    c.ForCorporation,
 		}
-		switch c.Status {
-		case "outstanding", "in_progress":
-			row.Tone = "live"
-		case "finished", "finished_issuer", "finished_contractor":
-			row.Tone = "done"
+		row.Tone, row.Left = contractTone(c, now)
+		if row.Left == "Expired" {
+			row.Status = "Expired"
+		}
+		switch c.Type {
+		case "courier":
+			row.Value, row.ValueLabel = row.Reward, "Reward"
+			if c.Collateral > 0 {
+				row.ValueSub = "collateral " + humanize.ISKCompact(c.Collateral)
+			}
+			if c.Volume > 0 {
+				row.Volume = esi.FormatInt(int64(math.Round(c.Volume))) + " m³"
+			}
+			row.Days = c.DaysToComplete
+		case "auction":
+			row.Value, row.ValueLabel = row.Price, "Starting bid"
+			if c.Buyout > 0 {
+				row.ValueSub = "buyout " + humanize.ISKCompact(c.Buyout)
+			}
+		default:
+			row.Value, row.ValueLabel = row.Price, "Price"
 		}
 		row.Issuer, row.IssuerPending = app.contractCharLabel(ctx, c.IssuerID)
 		if row.Title == "" {
@@ -175,6 +356,15 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 			row.RouteEnd = app.deps.LinkPlace(ctx, c.EndLocationID, app.deps.EconLocationTitle(ctx, c.EndLocationID))
 		}
 
+		for _, key := range contractShows(row) {
+			counts[key]++
+		}
+		if show != "" && !containsShow(contractShows(row), show) {
+			continue
+		}
+		row.Href = view.ListHref + "&contract=" + strconv.FormatInt(c.ContractID, 10)
+		row.On = picked > 0 && c.ContractID == picked
+
 		// Warmed item list from the detail store (item-exchange
 		// contracts mainly; other types carry lists too).
 		items, ok, err := app.loadContractItems(ctx, c.ContractID)
@@ -200,17 +390,25 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 					Note:   note,
 				})
 			}
+			row.Preview = row.Items
+			if len(row.Preview) > contractPreviewItems {
+				row.Preview = row.Preview[:contractPreviewItems]
+				row.MoreItems = len(row.Items) - contractPreviewItems
+			}
 		case c.Type == "item_exchange":
 			row.ItemsNote = "Item details are still loading."
 		}
-		view.Rows = append(view.Rows, row)
+		rows = append(rows, row)
 	}
+	view.Rows = rows
+	view.Total = len(contracts)
 	for i := range view.Rows {
 		if view.Rows[i].On {
 			view.Insp = &view.Rows[i]
 			view.Depth = 2
 		}
 	}
+	view.Kinds, view.Whose = contractFilters(base, show, view.Total, counts)
 
 	app.deps.Render(ctx, w, http.StatusOK, "contracts.html", data)
 }

@@ -352,7 +352,7 @@ func TestOrdersAndCourierLinkPlaces(t *testing.T) {
 		t.Fatalf("GET /contracts/: status %d", code)
 	}
 	mustContain(t, "/contracts/", body,
-		`Courier: <a href="/station/?station=60003760">Jita 4 - Moon 4 - Caldari Navy Assembly Plant</a> → <a href="/station/?station=60003761">Jita 4 - Moon 10 - Hyasyoda Corporation Refinery</a>`)
+		`<a href="/station/?station=60003760">Jita 4 - Moon 4 - Caldari Navy Assembly Plant</a> <span class="ct-arrow" aria-label="to">→</span> <a href="/station/?station=60003761">Jita 4 - Moon 10 - Hyasyoda Corporation Refinery</a>`)
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)

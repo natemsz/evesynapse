@@ -48,13 +48,25 @@ func basketLineSVG(points, dir string) template.HTML {
 // sparkKey is one priced figure's history: a type in a region.
 type sparkKey = module.SparkKey
 
-// priceSparks reads the hover card for every figure a table lists
-// from the stat pack's stored 30-day line (schema 121, written by
-// the sweep): one bounded read per region, nothing derived here. A
-// type traded everywhere at one price (PLEX) reads from its one
+// priceSparks is the hover card for every figure a table lists (see
+// priceSparkPairs).
+func (app *Application) priceSparks(ctx context.Context, keys []sparkKey) map[sparkKey]template.HTML {
+	pairs := app.priceSparkPairs(ctx, keys)
+	out := make(map[sparkKey]template.HTML, len(pairs))
+	for k, p := range pairs {
+		out[k] = p.Card
+	}
+	return out
+}
+
+// priceSparkPairs reads the stat pack's stored 30-day line for
+// every figure a table lists (schema 121, written by the sweep): one
+// bounded read per region, nothing derived here. Each key gets its
+// hover card and the same line drawn small for a column of its own.
+// A type traded everywhere at one price (PLEX) reads from its one
 // market. Keys without a stored line are absent, so their figures
 // render plain; lines exist for the hub regions the sweep stores.
-func (app *Application) priceSparks(ctx context.Context, keys []sparkKey) map[sparkKey]template.HTML {
+func (app *Application) priceSparkPairs(ctx context.Context, keys []sparkKey) map[sparkKey]module.PriceSpark {
 	byRegion := make(map[int64][]int64)
 	seen := make(map[sparkKey]bool, len(keys))
 	for _, k := range keys {
@@ -68,7 +80,7 @@ func (app *Application) priceSparks(ctx context.Context, keys []sparkKey) map[sp
 		seen[read] = true
 		byRegion[read.RegionID] = append(byRegion[read.RegionID], read.TypeID)
 	}
-	cards := make(map[sparkKey]template.HTML, len(seen))
+	pairs := make(map[sparkKey]module.PriceSpark, len(seen))
 	for regionID, typeIDs := range byRegion {
 		rows, err := app.queries.ListMarketStatSparks(ctx, db.ListMarketStatSparksParams{RegionID: regionID, TypeIds: typeIDs})
 		if err != nil {
@@ -77,16 +89,28 @@ func (app *Application) priceSparks(ctx context.Context, keys []sparkKey) map[sp
 		}
 		regionName, _ := marketRegionName(regionID)
 		for _, r := range rows {
-			cards[sparkKey{RegionID: regionID, TypeID: r.TypeID}] = storedSparkCard(r.SellSpark30d, r.SellLow30d, r.SellHigh30d, r.SellMean30d, regionName)
+			if r.SellSpark30d == "" {
+				continue
+			}
+			pairs[sparkKey{RegionID: regionID, TypeID: r.TypeID}] = module.PriceSpark{
+				Card: storedSparkCard(r.SellSpark30d, r.SellLow30d, r.SellHigh30d, r.SellMean30d, regionName),
+				Line: priceLineSVG(r.SellSpark30d),
+			}
 		}
 	}
-	out := make(map[sparkKey]template.HTML, len(keys))
+	out := make(map[sparkKey]module.PriceSpark, len(keys))
 	for _, k := range keys {
-		if card, ok := cards[sparkKey{RegionID: marketRegionForType(k.TypeID, k.RegionID), TypeID: k.TypeID}]; ok {
-			out[k] = card
+		if p, ok := pairs[sparkKey{RegionID: marketRegionForType(k.TypeID, k.RegionID), TypeID: k.TypeID}]; ok {
+			out[k] = p
 		}
 	}
 	return out
+}
+
+// priceLineSVG draws a stored 30-day line (the hover card's own
+// 100 by 28 geometry) small, for a table's trend column.
+func priceLineSVG(points string) template.HTML {
+	return template.HTML(`<svg class="px-line" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="` + template.HTMLEscapeString(points) + `"/></svg>`)
 }
 
 // storedSparkCard formats one price hover card from the stored
@@ -114,6 +138,24 @@ func (app *Application) PriceSparks(ctx context.Context, keys []sparkKey) map[sp
 		return nil
 	}
 	return app.priceSparks(ctx, keys)
+}
+
+// PriceSparkLines is the trend column's line for each listed figure,
+// with the hover card for when the table reads as cards and drops the
+// column. Signed out, none; the card follows the reader's hover-card
+// switch, the line does not.
+func (app *Application) PriceSparkLines(ctx context.Context, keys []sparkKey) map[sparkKey]module.PriceSpark {
+	if app.UserID(ctx) == 0 || len(keys) == 0 {
+		return nil
+	}
+	pairs := app.priceSparkPairs(ctx, keys)
+	if !app.sparksOn(ctx, app.UserID(ctx)) {
+		for k, p := range pairs {
+			p.Card = ""
+			pairs[k] = p
+		}
+	}
+	return pairs
 }
 
 // sparksOn reports whether the signed-in reader wants hover cards

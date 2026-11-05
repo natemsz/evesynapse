@@ -8,7 +8,7 @@
 <div class="l-page">
 <div class="l-head">
   <div class="l-head-pick">{{template "charselector" .OrdersChars}}</div>
-  {{if .Orders}}<p class="l-head-sum">{{.Orders.CharacterName}}'s market orders, and every pilot's orders beaten at their station.</p>{{end}}
+  {{if .Orders}}<p class="l-head-sum">{{.Orders.CharacterName}}'s market orders, and every pilot's orders beaten at their station.{{with .Orders.Open.SnapshotAge}} <span class="fo-age">{{.}}</span>{{end}}</p>{{end}}
 </div>
 
 {{if .Orders}}
@@ -22,15 +22,15 @@
 </div>
 
 <div class="l-panel fo-tabs">
-  <div class="pilltabs fo-tablist" role="tablist" aria-label="Orders" data-tabs hidden>
-    <button type="button" role="tab" class="pilltab" id="fo-open-tab" aria-controls="fo-open" aria-selected="true">Open <span class="cnt">{{len .Orders.OpenRows}}</span></button>
-    <button type="button" role="tab" class="pilltab" id="fo-beaten-tab" aria-controls="fo-beaten" aria-selected="false">Beaten <span class="cnt">{{len .Orders.Beaten}}</span></button>
-    <button type="button" role="tab" class="pilltab" id="fo-recent-tab" aria-controls="fo-recent" aria-selected="false">Recent history <span class="cnt">{{len .Orders.HistoryRows}}</span></button>
-    <button type="button" role="tab" class="pilltab" id="fo-life-tab" aria-controls="fo-life" aria-selected="false">Your order history <span class="cnt">{{len .Orders.LifecycleRows}}</span></button>
+  <div class="l-seg fo-seg" role="tablist" aria-label="Orders" data-tabs hidden>
+    <button type="button" role="tab" id="fo-open-tab" aria-controls="fo-open" aria-selected="true">Open <span class="fo-cnt">{{len .Orders.OpenRows}}</span></button>
+    <button type="button" role="tab" id="fo-beaten-tab" aria-controls="fo-beaten" aria-selected="false">Beaten <span class="fo-cnt{{if .Orders.Beaten}} bad{{end}}">{{len .Orders.Beaten}}</span></button>
+    <button type="button" role="tab" id="fo-recent-tab" aria-controls="fo-recent" aria-selected="false">Recent <span class="fo-long">history</span> <span class="fo-cnt">{{len .Orders.HistoryRows}}</span></button>
+    <button type="button" role="tab" id="fo-life-tab" aria-controls="fo-life" aria-selected="false"><span class="fo-long">Your order</span> history <span class="fo-cnt">{{len .Orders.LifecycleRows}}</span></button>
   </div>
 
-  <section role="tabpanel" id="fo-open" aria-labelledby="fo-open-tab" class="fo-panel">
-  <h3 class="fo-h">Open orders</h3>
+  <section role="tabpanel" id="fo-open" aria-labelledby="fo-open-tab">
+  <h3 class="l-tab-h fo-h">Open orders</h3>
   {{if .Orders.Open.Note}}
 <p><small>{{.Orders.Open.Note}}</small></p>
 {{else if .Orders.Open.Warming}}
@@ -38,53 +38,64 @@
 {{else if .Orders.OpenRows}}
 {{if .Orders.HasBeaten}}<p class="fo-key"><label><input type="checkbox" data-beaten-filter> <small>Show beaten orders only</small></label><span class="beaten-key"><span class="beaten-swatch" aria-hidden="true"></span> <small>Beaten at its station</small></span></p>{{end}}
 <div class="tw">
-<table class="fo-table">
-  <thead><tr><th class="card-title">Item</th><th>Side</th><th class="mt-num">Price</th><th>Status</th><th>Competition</th><th>Volume</th><th>Location</th><th>Expires</th></tr></thead>
+<table class="fo-table fo-open">
+  <thead><tr><th class="card-title">Item</th><th>Side</th><th class="mt-num">Price</th><th class="opt">Trend, 30 days</th><th>Status</th><th>Competition</th><th class="mt-num">Left</th><th>Location</th><th>Expires</th></tr></thead>
   <tbody>
   {{range .Orders.OpenRows}}
-    <tr{{if .Beaten}} class="order-beaten" data-beaten="1"{{end}}><td>{{itemLink .TypeID .Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}{{if .Range}}<small class="fo-sub">range {{.Range}}</small>{{end}}</td><td class="mt-num">{{sparkFig .Price .Spark}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td>{{if .Heat}}<span title="{{.HeatNote}}">{{.Heat}}</span>{{end}}</td><td>{{.Volume}}</td><td>{{placeLink .Loc}}{{if .Region}}<small class="fo-sub">{{.Region}}</small>{{end}}</td><td>{{.Expires}}<small class="fo-sub">issued {{.Issued}}</small></td></tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-{{else}}
-<p><small>No open orders in the latest snapshot.</small></p>
-{{end}}
-  </section>
-
-  <section role="tabpanel" id="fo-beaten" aria-labelledby="fo-beaten-tab" class="fo-panel">
-  <h3 class="fo-h">Beaten at their station</h3>
-  {{if .Orders.Beaten}}
-  <p class="fo-lead"><small>Orders of yours, on every character, that another player beats at the same station. Copy the suggested price and paste it when you change the order in game.</small></p>
-  <div class="tw">
-<table class="fo-table">
-  <thead><tr><th class="card-title">Item</th><th>Side</th><th>Station</th><th class="mt-num">Your price</th><th class="mt-num">Beaten by</th><th class="mt-num">Gap</th><th class="mt-num">Left</th><th>Beaten</th><th class="mt-num">Suggested</th><th>Margin there</th></tr></thead>
-  <tbody>
-  {{range .Orders.Beaten}}
-    <tr>
-      <td><a href="/market/?type={{.TypeID}}">{{.Item}}</a><br><small class="mt-reqs">{{.Character}}</small></td>
-      <td>{{.Side}}</td>
-      <td>{{placeLink .Loc}}</td>
-      <td class="mt-num">{{.MyPrice}}</td>
-      <td class="mt-num">{{.Beating}}<br><small class="mt-reqs">{{.BeatingQty}} there</small></td>
-      <td class="mt-num">{{.Gap}}<br><small class="mt-reqs">{{.GapPct}}</small></td>
-      <td class="mt-num">{{.Remaining}}</td>
-      <td>{{if .BeatenAgo}}{{.BeatenAgo}}{{else}}—{{end}}{{if gt .Times 1}}<br><small class="mt-reqs">{{.Times}} times</small>{{end}}</td>
-      <td class="mt-num">{{if .Suggested}}<strong>{{.Suggested}}</strong> <button type="button" class="btn btn-quiet" data-copy data-copy-text="{{.SuggestedRaw}}" aria-label="Copy {{.SuggestedRaw}}">Copy</button>{{else}}—{{end}}</td>
-      <td>{{if .Margin}}<span class="mt-chg {{.MarginDir}}">{{.Margin}}</span><br>{{end}}<small class="mt-reqs">{{.MarginBasis}}</small></td>
+    <tr{{if .Beaten}} class="order-beaten" data-beaten="1"{{end}}>
+      <td><span class="fo-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg">{{itemLink .TypeID .Item}}{{if .Corp}} <span class="fo-tag">Corp</span>{{end}}</span></td>
+      <td><span class="fo-side {{.Side}}">{{.Side}}</span>{{if .Range}}<small class="fo-sub">range {{.Range}}</small>{{end}}</td>
+      <td class="mt-num">{{sparkFigFallback .Price .Spark}}</td>
+      <td class="fo-trend opt">{{.Line}}</td>
+      <td>{{if .Status}}<span class="fo-pill {{.Tone}}">{{.Status}}</span>{{end}}</td>
+      <td>{{if .Heat}}<span class="fo-heat {{.HeatTone}}" title="{{.HeatNote}}">{{.Heat}}</span>{{end}}</td>
+      <td class="mt-num"><span class="fo-vol">{{.Volume}}</span><svg class="l-meter fo-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.LeftPct}}" height="4"/></svg></td>
+      <td>{{placeLink .Loc}}{{if .Region}}<small class="fo-sub">{{.Region}}</small>{{end}}</td>
+      <td><span class="fo-when" title="{{.Expires}}">{{if .Left}}{{.Left}}{{else}}{{.Expires}}{{end}}</span>{{if .ExpiresOn}}<small class="fo-sub">{{.ExpiresOn}}</small>{{end}}<small class="fo-sub">issued {{.IssuedOn}}</small></td>
     </tr>
   {{end}}
   </tbody>
 </table>
 </div>
-<p><small>Prices in ISK. Suggested is the next price the game allows past the competition: one step under for a sell, one step over for a bid. Margins on sells use what the stock cost you; on bids, what it resells for at the typical sell. Changing a price also costs a broker fee, not counted here.</small></p>
+<p class="fo-note"><small>Prices in ISK. Left is what the order still has to sell or buy, out of what it listed.</small></p>
+{{else}}
+<p><small>No open orders in the latest snapshot.</small></p>
+{{end}}
+  </section>
+
+  <section role="tabpanel" id="fo-beaten" aria-labelledby="fo-beaten-tab">
+  <h3 class="l-tab-h fo-h">Beaten at their station</h3>
+  {{if .Orders.Beaten}}
+  <p class="fo-lead">Orders of yours, on every character, that another player beats at the same station. Copy the suggested price and paste it when you change the order in game.</p>
+  <div class="tw">
+<table class="fo-table">
+  <thead><tr><th class="card-title">Item</th><th>Side</th><th>Station</th><th class="mt-num">Your price</th><th class="mt-num">Beaten by</th><th class="mt-num">Gap</th><th class="mt-num">Left</th><th>Beaten</th><th class="mt-num">Suggested</th><th class="mt-num">Margin there</th></tr></thead>
+  <tbody>
+  {{range .Orders.Beaten}}
+    <tr class="order-beaten">
+      <td><span class="fo-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><span>{{itemLink .TypeID .Item}}<small class="fo-sub">{{charLink $.ViewerChars .CharacterID .Character}}</small></span></span></td>
+      <td><span class="fo-side {{.Side}}">{{.Side}}</span></td>
+      <td>{{placeLink .Loc}}</td>
+      <td class="mt-num">{{.MyPrice}}</td>
+      <td class="mt-num"><span class="fo-beat">{{.Beating}}</span><small class="fo-sub">{{.BeatingQty}} there</small></td>
+      <td class="mt-num"><span class="fo-gap">{{.Gap}}</span><small class="fo-sub">{{.GapPct}}</small></td>
+      <td class="mt-num">{{.Remaining}}</td>
+      <td>{{if .BeatenAgo}}{{.BeatenAgo}}{{else}}—{{end}}{{if gt .Times 1}}<small class="fo-sub">{{.Times}} times</small>{{end}}</td>
+      <td class="mt-num">{{if .Suggested}}<span class="fo-suggest"><strong>{{.Suggested}}</strong> <button type="button" class="btn btn-quiet" data-copy data-copy-text="{{.SuggestedRaw}}" aria-label="Copy {{.SuggestedRaw}}">Copy</button></span>{{else}}—{{end}}</td>
+      <td class="mt-num">{{if .Margin}}<span class="mt-chg {{.MarginDir}}">{{.Margin}}</span>{{end}}<small class="fo-sub">{{.MarginBasis}}</small></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p class="fo-note"><small>Prices in ISK. Suggested is the next price the game allows past the competition: one step under for a sell, one step over for a bid. Margins on sells use what the stock cost you; on bids, what it resells for at the typical sell. Changing a price also costs a broker fee, not counted here.</small></p>
   {{else}}
   <p><small>None of your orders is beaten at its station right now.</small></p>
   {{end}}
   </section>
 
-  <section role="tabpanel" id="fo-recent" aria-labelledby="fo-recent-tab" class="fo-panel">
-  <h3 class="fo-h">Recent history</h3>
+  <section role="tabpanel" id="fo-recent" aria-labelledby="fo-recent-tab">
+  <h3 class="l-tab-h fo-h">Recent history</h3>
   {{if .Orders.History.Note}}
 <p><small>{{.Orders.History.Note}}</small></p>
 {{else if .Orders.History.Warming}}
@@ -92,29 +103,45 @@
 {{else if .Orders.HistoryRows}}
 <div class="tw">
 <table class="fo-table">
-  <thead><tr><th class="card-title">Item</th><th>Side</th><th class="mt-num">Price</th><th>Volume</th><th>Location</th><th>State</th><th class="opt">Issued</th></tr></thead>
+  <thead><tr><th class="card-title">Item</th><th>Side</th><th class="mt-num">Price</th><th class="opt">Trend, 30 days</th><th class="mt-num">Left</th><th>Location</th><th>State</th><th>Issued</th></tr></thead>
   <tbody>
   {{range .Orders.HistoryRows}}
-    <tr><td>{{itemLink .TypeID .Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}</td><td class="mt-num">{{sparkFig .Price .Spark}}</td><td>{{.Volume}}</td><td>{{placeLink .Loc}}</td><td>{{.State}}</td><td>{{.Issued}}</td></tr>
+    <tr>
+      <td><span class="fo-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg">{{itemLink .TypeID .Item}}{{if .Corp}} <span class="fo-tag">Corp</span>{{end}}</span></td>
+      <td><span class="fo-side {{.Side}}">{{.Side}}</span></td>
+      <td class="mt-num">{{sparkFigFallback .Price .Spark}}</td>
+      <td class="fo-trend opt">{{.Line}}</td>
+      <td class="mt-num">{{.Volume}}</td>
+      <td>{{placeLink .Loc}}</td>
+      <td><span class="fo-pill {{.StateTone}}">{{.State}}</span></td>
+      <td>{{.IssuedOn}}</td>
+    </tr>
   {{end}}
   </tbody>
 </table>
 </div>
-{{if .Orders.HistoryCut}}<p><small>+ {{.Orders.HistoryCut}} older closed orders in this snapshot.</small></p>{{end}}
+{{if .Orders.HistoryCut}}<p class="fo-note"><small>+ {{.Orders.HistoryCut}} older closed orders in this snapshot.</small></p>{{end}}
 {{else}}
 <p><small>No closed orders in the latest snapshot.</small></p>
 {{end}}
   </section>
 
-  <section role="tabpanel" id="fo-life" aria-labelledby="fo-life-tab" class="fo-panel">
-  <h3 class="fo-h">Your order history</h3>
+  <section role="tabpanel" id="fo-life" aria-labelledby="fo-life-tab">
+  <h3 class="l-tab-h fo-h">Your order history</h3>
   {{if .Orders.LifecycleRows}}
 <div class="tw">
 <table class="fo-table">
   <thead><tr><th class="card-title">Item</th><th>Location</th><th class="mt-num">Price</th><th>Filled</th><th>Time open</th><th>Outcome</th></tr></thead>
   <tbody>
   {{range .Orders.LifecycleRows}}
-    <tr><td>{{itemLink .TypeID .Item}}</td><td>{{placeLink .Loc}}</td><td class="mt-num">{{.Price}}</td><td>{{.Filled}}</td><td>{{.OpenDuration}}</td><td>{{.Outcome}}</td></tr>
+    <tr>
+      <td><span class="fo-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg">{{itemLink .TypeID .Item}}</span></td>
+      <td>{{placeLink .Loc}}</td>
+      <td class="mt-num">{{.Price}}</td>
+      <td><span class="fo-vol">{{.Filled}}</span><svg class="l-meter fo-meter{{if .FilledOK}} full{{end}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.FilledPct}}" height="4"/></svg></td>
+      <td>{{.OpenDuration}}</td>
+      <td><span class="fo-pill{{if .FilledOK}} good{{end}}">{{.Outcome}}</span></td>
+    </tr>
   {{end}}
   </tbody>
 </table>

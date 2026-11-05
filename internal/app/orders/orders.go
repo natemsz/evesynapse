@@ -37,9 +37,12 @@ type orderRow struct {
 	// ("" until the worker's first book pass; buy rows and
 	// closed history carry none, by design).
 	Status string
-	Bad    bool   // Status is a needs-attention verdict (undercut)
-	State  string // history rows: humanized state
-	Corp   bool   // placed for the corporation
+	Bad    bool // Status is a needs-attention verdict (undercut)
+	// Tone colours the status: bad (beaten here), warn (beaten
+	// elsewhere in the region), good (best price here).
+	Tone  string
+	State string // history rows: humanized state
+	Corp  bool   // placed for the corporation
 	// Beaten: open rows only — the order is beaten at its own
 	// station per the stored lifecycle verdicts (both sides;
 	// the Status text above is sell-only). Drives the inline
@@ -54,6 +57,19 @@ type orderRow struct {
 	// word, for the cell's title.
 	Heat     string
 	HeatNote string
+	HeatTone string
+	// LeftPct is the share still listed, for the volume meter.
+	LeftPct int
+	// Left: open rows, the time until the order expires ("in 83d
+	// 4h"); ExpiresOn is its date.
+	Left      string
+	ExpiresOn string
+	// Line is the stored 30-day price line for the trend column.
+	Line template.HTML
+	// IssuedOn is Issued's date alone.
+	IssuedOn string
+	// StateTone colours a history row's state: good when filled.
+	StateTone string
 }
 
 // ordersView is the Orders page body.
@@ -100,39 +116,8 @@ type orderLifecycleRow struct {
 	Filled       string // "sold 800 of 1,000" or "bought ..."
 	OpenDuration string // "3 days 4 hours"
 	Outcome      string // "Filled" | "Ended before filling"
-}
-
-// heatKey keys a stored heat count: one station, one item, one side.
-type heatKey struct {
-	locationID, typeID, isBuy int64
-}
-
-// heatWord names how competitive an item is at a station, from how
-// often the station's best price on that side was beaten in the
-// trailing 12 hours.
-func heatWord(beats int64) string {
-	switch {
-	case beats <= 0:
-		return "Quiet"
-	case beats <= 2:
-		return "Warm"
-	case beats <= 5:
-		return "Hot"
-	default:
-		return "Very hot"
-	}
-}
-
-// heatNote is the count behind the heat word, in plain words.
-func heatNote(beats int64) string {
-	switch beats {
-	case 0:
-		return "Best price not beaten in the last 12 hours"
-	case 1:
-		return "Best price beaten once in the last 12 hours"
-	default:
-		return fmt.Sprintf("Best price beaten %d times in the last 12 hours", beats)
-	}
+	FilledOK     bool   // filled completely
+	FilledPct    int
 }
 
 // formatOpenDuration renders an order's time open the way the
@@ -247,7 +232,13 @@ func (app *mod) buildOrderLifecycle(ctx context.Context, characterID int64) (*or
 			outcome = "Filled"
 		}
 		durText := formatOpenDuration(row.ClosedAt.Time.Sub(row.FirstSeenAt))
+		pct := 0
+		if row.VolumeTotal > 0 {
+			pct = int(filledQty * 100 / row.VolumeTotal)
+		}
 		out = append(out, orderLifecycleRow{
+			FilledOK:     row.CloseKind == "filled",
+			FilledPct:    pct,
 			Item:         app.deps.TypeNameOrID(ctx, row.TypeID),
 			TypeID:       row.TypeID,
 			Loc:          app.deps.LinkPlace(ctx, row.LocationID, app.deps.EconLocationTitle(ctx, row.LocationID)),
@@ -293,6 +284,7 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 	data.OrdersChars = links
 
 	view := &ordersView{CharacterName: active.Name}
+	now := time.Now()
 	data.Orders = view
 
 	regions := make(map[int64]string)
@@ -314,6 +306,8 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 			Range:    module.OrderRangeLabel(o.Range),
 			Issued:   humanize.Finish(o.Issued),
 			Corp:     o.IsCorporation,
+			LeftPct:  module.LeftPct(o.VolumeRemain, o.VolumeTotal),
+			IssuedOn: issuedOn(o.Issued),
 		}
 	}
 
@@ -352,13 +346,20 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 				view.HasBeaten = true
 			}
 			if t, err := time.Parse(time.RFC3339, o.Issued); err == nil && o.Duration > 0 {
-				row.Expires = humanize.Finish(t.Add(time.Duration(o.Duration) * 24 * time.Hour).Format(time.RFC3339))
+				end := t.Add(time.Duration(o.Duration) * 24 * time.Hour)
+				row.Expires = humanize.Finish(end.Format(time.RFC3339))
+				row.Left, row.ExpiresOn = module.TimeLeft(end, now), module.ShortDate(end)
 			}
 			if !o.IsBuyOrder {
 				row.Status = "Not checked against the order book yet"
 				if h, ok := health[o.OrderID]; ok && h.CharacterID == active.CharacterID {
 					row.Status, row.Bad = app.deps.OrderHealthText(h.MyPrice, h.Status, h.StationBest, h.RegionBest)
+					row.Tone = module.OrderHealthTone(h.Status)
 				}
+			} else if row.Beaten {
+				// Buy rows carry no health verdict; the stored
+				// beaten verdict still says when a bid is topped.
+				row.Status, row.Bad, row.Tone = "Outbid at this station", true, "bad"
 			}
 			view.OpenRows = append(view.OpenRows, row)
 		}
@@ -377,32 +378,20 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 		// reads Quiet, so an order placed a minute ago carries
 		// its market's heat, not its own history.
 		locSet := make(map[int64]bool)
+		locs := make([]int64, 0, len(view.OpenRows))
 		for _, row := range view.OpenRows {
-			if row.LocID > 0 {
+			if row.LocID > 0 && !locSet[row.LocID] {
 				locSet[row.LocID] = true
+				locs = append(locs, row.LocID)
 			}
 		}
-		if len(locSet) > 0 {
-			locs := make([]int64, 0, len(locSet))
-			for id := range locSet {
-				locs = append(locs, id)
-			}
-			beats := make(map[heatKey]int64)
-			if heatRows, err := app.queries.ListMarketStationHeatByLocations(ctx, locs); err != nil {
-				logging.Errorf("orders: station heat: %v", err)
-			} else {
-				for _, h := range heatRows {
-					beats[heatKey{h.LocationID, h.TypeID, h.IsBuyOrder}] = h.Beats12h
-				}
-			}
+		if len(locs) > 0 {
+			beats := module.StationHeat(ctx, app.queries, locs)
 			for i := range view.OpenRows {
 				row := &view.OpenRows[i]
-				var isBuy int64
-				if row.Side == "Buy" {
-					isBuy = 1
-				}
-				n := beats[heatKey{row.LocID, row.TypeID, isBuy}]
-				row.Heat, row.HeatNote = heatWord(n), heatNote(n)
+				n := beats[module.HeatKey{LocationID: row.LocID, TypeID: row.TypeID, Buy: row.Side == "Buy"}]
+				row.Heat, row.HeatNote = module.HeatWord(n), module.HeatNote(n)
+				row.HeatTone = module.HeatTone(row.Heat)
 			}
 		}
 	}
@@ -414,6 +403,12 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 		for _, h := range history {
 			row := rowOf(h.CharOrder)
 			row.State = app.deps.HumanizeEnum(h.State)
+			if h.State == "expired" && h.VolumeRemain == 0 {
+				row.State = "Filled"
+			}
+			if row.State == "Filled" {
+				row.StateTone = "good"
+			}
 			if row.State == "" {
 				row.State = "closed"
 			}
@@ -441,10 +436,11 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 			keys = append(keys, module.SparkKey{RegionID: r.RegionID, TypeID: r.TypeID})
 		}
 	}
-	if cards := app.deps.PriceSparks(ctx, keys); len(cards) > 0 {
+	if sparks := app.deps.PriceSparkLines(ctx, keys); len(sparks) > 0 {
 		for _, rows := range [][]orderRow{view.OpenRows, view.HistoryRows} {
 			for i := range rows {
-				rows[i].Spark = cards[module.SparkKey{RegionID: rows[i].RegionID, TypeID: rows[i].TypeID}]
+				p := sparks[module.SparkKey{RegionID: rows[i].RegionID, TypeID: rows[i].TypeID}]
+				rows[i].Spark, rows[i].Line = p.Card, p.Line
 			}
 		}
 	}
@@ -456,3 +452,12 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 // holds the newest page (up to 1,000 entries) but a page wants headlines,
 // not a ledger dump.
 const maxLedgerRows = 100
+
+// issuedOn is an ESI timestamp's date: "2026-11-03"; the input as
+// it came when it is not a timestamp.
+func issuedOn(raw string) string {
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return module.ShortDate(t)
+	}
+	return raw
+}

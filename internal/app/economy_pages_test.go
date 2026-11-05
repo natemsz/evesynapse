@@ -150,7 +150,7 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 	}
 	mustContain(t, "/orders/", body,
 		"Rifter", "300,000.00", "3 / 5", "The Forge", "Station", "Tritanium", "expired",
-		"Competition", `<span title="Best price beaten 4 times in the last 12 hours">Hot</span>`)
+		"Competition", `<span class="fo-heat hot" title="Best price beaten 4 times in the last 12 hours">Hot</span>`)
 
 	code, body = getPage(t, app, cookie, "/contracts/?character=90000001")
 	if code != http.StatusOK {
@@ -158,7 +158,7 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 	}
 	mustContain(t, "/contracts/", body,
 		"Fixture Deal", "item exchange", "outstanding", "Member One",
-		`<a href="/items/type/34/">Tritanium</a> × 100`, "BPO", "courier", "Courier:")
+		`<a href="/items/type/34/">Tritanium</a> <span class="ct-qty">×100</span>`, "BPO", "courier", `<span class="ct-route">`)
 
 	// The single Industry page is three pages now: Blueprints keeps
 	// the root route; jobs and the mining ledger moved to their own.

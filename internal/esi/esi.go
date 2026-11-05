@@ -212,6 +212,11 @@ const (
 	GlobalSystemKills = "system_kills" // GET /universe/system_kills/
 	GlobalSystemJumps = "system_jumps" // GET /universe/system_jumps/
 	GlobalSovMap      = "sov_map"      // GET /sovereignty/map/
+	// CCP's per-route health (GET /meta/status/), holding only
+	// the routes CCP does not report as OK. The generic fetch
+	// stores payloads whole, so this kind has its own writer
+	// (FetchAndStoreRouteStatus) and no globalSnapshotPath entry.
+	GlobalRouteStatus = "route_status"
 )
 
 // CorpJournalKind is the snapshot kind holding wallet division d's
@@ -2726,6 +2731,87 @@ func (c *Client) FetchAndStoreGlobalSnapshot(ctx context.Context, kind string) e
 		Etag:        header.Get("ETag"),
 	}); err != nil {
 		return fmt.Errorf("store global snapshot %s: %w", kind, err)
+	}
+	return nil
+}
+
+// MetaRoute is one route's health in the GET /meta/status
+// payload. Status is "OK", "Degraded" or "Recovering".
+type MetaRoute struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Status string `json:"status"`
+}
+
+// MetaStatus is the GET /meta/status payload: the health of
+// every ESI route, as CCP reports it.
+type MetaStatus struct {
+	Routes []MetaRoute `json:"routes"`
+}
+
+// UnhealthyRoutes returns the routes CCP does not report as OK.
+func (m MetaStatus) UnhealthyRoutes() []MetaRoute {
+	bad := make([]MetaRoute, 0, len(m.Routes))
+	for _, r := range m.Routes {
+		if r.Status != "OK" {
+			bad = append(bad, r)
+		}
+	}
+	return bad
+}
+
+// metaStatusPath is the path of CCP's per-route health report.
+const metaStatusPath = "/meta/status/"
+
+// FetchAndStoreRouteStatus fetches GET /meta/status and stores
+// the routes CCP does not report as OK under GlobalRouteStatus,
+// in the MetaStatus shape. An all-OK report stores an empty
+// list, clearing any earlier problems. Like the other global
+// fetches it is conditional on the stored copy's ETag, and a
+// failed fetch stores nothing, so the last known states stand.
+func (c *Client) FetchAndStoreRouteStatus(ctx context.Context) error {
+	etag := ""
+	if stored, err := c.queries.GetGlobalSnapshot(ctx, GlobalRouteStatus); err == nil {
+		etag = stored.Etag
+	}
+	body, header, notModified, err := c.fetchIfChanged(ctx, "", metaStatusPath, etag)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	cachedUntil := cacheWindowEnd(header).UTC()
+	if notModified {
+		n, err := c.queries.TouchGlobalSnapshot(ctx, db.TouchGlobalSnapshotParams{
+			FetchedAt:   now,
+			CachedUntil: cachedUntil,
+			Kind:        GlobalRouteStatus,
+		})
+		if err != nil {
+			return fmt.Errorf("renew route status: %w", err)
+		}
+		if n == 0 {
+			return fmt.Errorf("renew route status: the snapshot is gone")
+		}
+		return nil
+	}
+
+	var meta MetaStatus
+	if err := json.Unmarshal(body, &meta); err != nil {
+		return fmt.Errorf("ESI %s: decode: %w", metaStatusPath, err)
+	}
+	payload, err := json.Marshal(MetaStatus{Routes: meta.UnhealthyRoutes()})
+	if err != nil {
+		return fmt.Errorf("encode route status: %w", err)
+	}
+	if err := c.queries.UpsertGlobalSnapshot(ctx, db.UpsertGlobalSnapshotParams{
+		Kind:        GlobalRouteStatus,
+		Payload:     string(payload),
+		FetchedAt:   now,
+		CachedUntil: cachedUntil,
+		Etag:        header.Get("ETag"),
+	}); err != nil {
+		return fmt.Errorf("store route status: %w", err)
 	}
 	return nil
 }

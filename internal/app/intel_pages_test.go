@@ -297,6 +297,8 @@ func (s *intelStubTransport) RoundTrip(req *http.Request) (*http.Response, error
 	switch {
 	case path == "/status/":
 		return respond(http.StatusOK, `{"players":23456,"server_version":"1132976","start_time":"2026-10-01T11:00:00Z","vip":false}`)
+	case path == "/meta/status/":
+		return respond(http.StatusOK, `{"routes":[{"method":"GET","path":"/status/","status":"OK"},{"method":"GET","path":"/corporations/{corporation_id}/","status":"OK"}]}`)
 	case path == "/wars/":
 		return respond(http.StatusOK, `[9002,9001]`)
 	case path == "/wars/9002/":

@@ -2,8 +2,9 @@ package app
 
 // Status pill tests: the Overview pill's combined ESI and
 // our-side state, with blame attributed by precedence (ESI down,
-// then ours-down, then ours-lagging, then ESI limited, then
-// healthy).
+// then lag that traces to ESI, then ours-down, then
+// ours-lagging, then ESI limited, then the route problems CCP
+// itself reports, then healthy).
 
 import (
 	"context"
@@ -173,6 +174,112 @@ func TestStatusRefreshStoresFreshSnapshotWithoutWorker(t *testing.T) {
 	}
 	if view.Players != "23,456" {
 		t.Fatalf("players = %q, want 23,456", view.Players)
+	}
+}
+
+func seedRouteStatus(t *testing.T, q *db.Queries, fetchedAt time.Time) {
+	t.Helper()
+	if err := q.UpsertGlobalSnapshot(context.Background(), db.UpsertGlobalSnapshotParams{
+		Kind:      esi.GlobalRouteStatus,
+		Payload:   `{"routes":[{"method":"GET","path":"/corporations/{corporation_id}/","status":"Degraded"},{"method":"GET","path":"/universe/structures/{structure_id}/","status":"Recovering"}]}`,
+		FetchedAt: fetchedAt,
+	}); err != nil {
+		t.Fatalf("seed route status: %v", err)
+	}
+}
+
+func seedCleanRouteStatus(t *testing.T, q *db.Queries, fetchedAt time.Time) {
+	t.Helper()
+	if err := q.UpsertGlobalSnapshot(context.Background(), db.UpsertGlobalSnapshotParams{
+		Kind:      esi.GlobalRouteStatus,
+		Payload:   `{"routes":[]}`,
+		FetchedAt: fetchedAt,
+	}); err != nil {
+		t.Fatalf("seed clean route status: %v", err)
+	}
+}
+
+func seedESIErrorStats(t *testing.T, q *db.Queries, now time.Time) {
+	t.Helper()
+	if err := q.UpsertStatsESI(context.Background(), db.UpsertStatsESIParams{
+		Minute: now.Add(-2 * time.Minute), Family: "characters", Calls: 40, Errors: 30,
+	}); err != nil {
+		t.Fatalf("seed ESI error stats: %v", err)
+	}
+}
+
+// CCP's own route health degrades the ESI read even when our
+// snapshot is fresh and our calls are clean: a fresh stored
+// report naming problem routes makes both statusESI and the
+// pill read degraded, and a stale report stops speaking. And
+// when our sync is behind, either witness of ESI trouble (the
+// route report, or our own failing calls) puts the blame on
+// ESI in the headline; with both witnesses clean the lag is
+// ours and says so.
+func TestStoredRouteStatusDegradesESIReads(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	now := time.Now()
+	seedPillSnapshot(t, q, now)
+	seedPillMarket(t, q, now)
+	seedPillWorker(app, now)
+
+	if state, _ := app.statusESI(ctx, now, true); state != statusOK {
+		t.Fatalf("statusESI with no route report = %q, want ok", state)
+	}
+
+	seedRouteStatus(t, q, now)
+	if state, _ := app.statusESI(ctx, now, true); state != statusDegraded {
+		t.Fatalf("statusESI with a fresh route report = %q, want degraded", state)
+	}
+	view := app.esiHealth(ctx)
+	if view.State != "degraded" || view.Label != "ESI degraded" {
+		t.Fatalf("pill = %q/%q, want degraded/ESI degraded", view.State, view.Label)
+	}
+	if !strings.Contains(view.Title, "corporations") || !strings.Contains(view.Title, "structures") {
+		t.Fatalf("title = %q, want it to name the problem areas", view.Title)
+	}
+	if areas := app.degradedRouteAreas(ctx, now); len(areas) != 2 || areas[0] != "corporations" || areas[1] != "structures" {
+		t.Fatalf("areas = %v, want [corporations structures]", areas)
+	}
+
+	seedRouteStatus(t, q, now.Add(-esiDownAfter-time.Minute))
+	if state, _ := app.statusESI(ctx, now, true); state != statusOK {
+		t.Fatalf("statusESI with a stale route report = %q, want ok", state)
+	}
+	if view := app.esiHealth(ctx); view.State != "ok" {
+		t.Fatalf("pill with a stale route report = %q, want ok", view.State)
+	}
+
+	// Our sync falls behind. With the route report as witness,
+	// the headline blames ESI, not our sync.
+	seedPillMarket(t, q, now.Add(-5*time.Hour-12*time.Minute))
+	seedRouteStatus(t, q, now)
+	view = app.esiHealth(ctx)
+	if view.State != "degraded" || view.Label != "ESI degraded" {
+		t.Fatalf("lagging pill with a fresh route report = %q/%q, want degraded/ESI degraded", view.State, view.Label)
+	}
+	if !strings.Contains(view.Title, "Market orders are") || !strings.Contains(view.Title, "corporations") || !strings.Contains(view.Title, "sync is behind") {
+		t.Fatalf("title = %q, want it to name the lag, the areas and the blame", view.Title)
+	}
+
+	// Both witnesses clean: the lag is ours and the headline
+	// says so.
+	seedCleanRouteStatus(t, q, now)
+	view = app.esiHealth(ctx)
+	if view.State != "ours-lagging" || view.Label != "Sync behind" {
+		t.Fatalf("lagging pill with clean witnesses = %q/%q, want ours-lagging/Sync behind", view.State, view.Label)
+	}
+
+	// Our own calls failing over the threshold are the second
+	// witness: the headline blames ESI again.
+	seedESIErrorStats(t, q, now)
+	view = app.esiHealth(ctx)
+	if view.State != "degraded" || view.Label != "ESI degraded" {
+		t.Fatalf("lagging pill with failing calls = %q/%q, want degraded/ESI degraded", view.State, view.Label)
+	}
+	if !strings.Contains(view.Title, "ESI calls are failing") || !strings.Contains(view.Title, "sync is behind") {
+		t.Fatalf("title = %q, want it to name the failing calls and the lag", view.Title)
 	}
 }
 

@@ -262,7 +262,8 @@ func (app *Application) statusNotifications(now time.Time) (string, time.Time) {
 
 // statusESI is ESI as the Overview bar's pill reads it (esiHealth):
 // the stored Tranquility status's age and the error budget, plus
-// the share of calls that failed over the last ten minutes.
+// the share of calls that failed over the last ten minutes, plus
+// the routes CCP itself reports as degraded or recovering.
 func (app *Application) statusESI(ctx context.Context, now time.Time, dbUp bool) (string, time.Time) {
 	if !dbUp {
 		return statusDown, time.Time{}
@@ -277,20 +278,33 @@ func (app *Application) statusESI(ctx context.Context, now time.Time, dbUp bool)
 	if app.esi != nil && app.esi.ErrorBudgetLow() {
 		return statusDegraded, snap.FetchedAt
 	}
+	if areas := app.degradedRouteAreas(ctx, now); len(areas) > 0 {
+		return statusDegraded, snap.FetchedAt
+	}
+	if app.esiErrorShareHigh(ctx, now) {
+		return statusDegraded, snap.FetchedAt
+	}
+	return statusOK, snap.FetchedAt
+}
+
+// esiErrorShareHigh reports whether our own ESI calls failed at
+// or over the degraded share over the trailing ten minutes,
+// once there are enough calls to judge by. It is the second
+// witness of ESI trouble, beside CCP's route report: statusESI
+// reads it, and the pill reads it when our sync is behind.
+func (app *Application) esiErrorShareHigh(ctx context.Context, now time.Time) bool {
 	rows, err := app.queries.StatsESIWindowMinutes(ctx, db.StatsESIWindowMinutesParams{
 		FromTs: now.Add(-10 * time.Minute), ToTs: now, Lim: 100,
 	})
-	if err == nil {
-		var calls, errs int64
-		for _, row := range rows {
-			calls += row.Calls
-			errs += row.Errors
-		}
-		if calls >= esiErrorMinCalls && float64(errs) > esiErrorShare*float64(calls) {
-			return statusDegraded, snap.FetchedAt
-		}
+	if err != nil {
+		return false
 	}
-	return statusOK, snap.FetchedAt
+	var calls, errs int64
+	for _, row := range rows {
+		calls += row.Calls
+		errs += row.Errors
+	}
+	return calls >= esiErrorMinCalls && float64(errs) > esiErrorShare*float64(calls)
 }
 
 // statusMarket is the region sweeps' freshness: the stalest swept

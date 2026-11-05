@@ -36,9 +36,8 @@ func (app *Application) takeReturnTo(ctx context.Context) string {
 	return p
 }
 
-// safeReturnPath is a path on this site: rooted, and not a
-// protocol-relative or backslashed address a browser would take
-// elsewhere.
+// safeReturnPath is a path on this site, by the same rule every
+// user-supplied redirect target follows (safeLocalNext).
 func safeReturnPath(p string) bool {
-	return strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "//") && !strings.Contains(p, "\\")
+	return safeLocalNext(p)
 }

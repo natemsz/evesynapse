@@ -27,6 +27,10 @@ func TestSafeLocalNext(t *testing.T) {
 		"ok",
 		"/ok\r\nLocation: https://evil.com",
 		"/ok\n",
+		"/\t/evil.com",
+		"/\n/evil.com",
+		"/ok\x00",
+		"/ok\x7f",
 	} {
 		if safeLocalNext(n) {
 			t.Errorf("safeLocalNext(%q) = true, want false", n)

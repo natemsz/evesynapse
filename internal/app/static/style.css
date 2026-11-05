@@ -1826,6 +1826,12 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
 }
 .card .kpis, .panel .kpis, .foldable .kpis { background: none; border: none; box-shadow: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .kpis-small { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin-bottom: 0.6rem; }
+/* Narrower than three tiles across (3 x 11rem plus gaps), an odd
+   tile out takes its row instead of leaving a hole. */
+:has(> .kpis-small) { container: kpis-small / inline-size; }
+@container kpis-small (width < 34.5rem) {
+  .kpis-small > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 .kpi {
   display: flex;
   flex-direction: column;
@@ -1935,6 +1941,8 @@ table.cards-on .spark-hover[data-spark-fallback] { border-bottom: 1px dotted var
    two across, so every figure keeps its full width. */
 @media (max-width: 70rem) {
   .home-grid .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* An odd tile out takes the row instead of leaving a hole. */
+  .home-grid .kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 .linkbtn {
   padding: 0;

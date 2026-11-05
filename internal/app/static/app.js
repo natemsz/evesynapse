@@ -4802,10 +4802,12 @@
   }
 
   function cardSortPicker(table) {
-    // The picker sits before the table's scroll wrapper, so that is
-    // where an earlier layout left it.
-    var anchor = table.parentNode && table.parentNode.classList.contains("tw") ? table.parentNode : table;
-    var prev = anchor.previousElementSibling;
+    // The picker sits right before the table, inside its scroll
+    // wrapper: a sibling of the wrapper would join whatever grid or
+    // row lays the wrapper out and push the table out of its place.
+    // As cards the wrapper never scrolls sideways, and the picker
+    // shows only then.
+    var prev = table.previousElementSibling;
     if (prev && prev.classList.contains("cards-sort")) return prev;
     // A short list needs no sort; the picker earns its row at four.
     if (table.hasAttribute("data-nosort") || !table.tBodies[0] || table.tBodies[0].rows.length < 4) return null;
@@ -4835,8 +4837,7 @@
     });
     label.appendChild(cap);
     label.appendChild(sel);
-    // The picker sits outside the table's scroll wrapper.
-    anchor.parentNode.insertBefore(label, anchor);
+    table.parentNode.insertBefore(label, table);
     return label;
   }
 
@@ -4861,7 +4862,7 @@
     }
     for (i = 0; i < measure.length; i++) {
       var table = measure[i][0];
-      var picker = table.parentNode && table.parentNode.classList.contains("tw") ? table.parentNode.previousElementSibling : table.previousElementSibling;
+      var picker = table.previousElementSibling;
       if (!measure[i][1] || !labelCardCells(table)) {
         if (picker && picker.classList.contains("cards-sort")) picker.hidden = true;
         continue;

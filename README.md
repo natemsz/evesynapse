@@ -374,8 +374,10 @@ flowchart LR
   page and assertion helpers, and seeders over exported sqlc queries
   (imports `app`, `db/sqlc`, `pgtest`). White-box tests stay in
   package `app` beside the code
-- `internal/app/apptest/`, `internal/app/testapp.go` — the test
-  application builders those tests start from
+- `internal/app/core_testrig.go` — `TestRig`, the one exported seam
+  those tests build a fixture application through. It takes a DSN
+  and returns errors rather than a `*testing.T`, so the server links
+  no test code; `internal/apptest` wraps it with `pgtest`
 - `internal/devtools/` — dev-only routes (`/dev-login`), imported
   solely by `cmd/evesynapse-dev`
 

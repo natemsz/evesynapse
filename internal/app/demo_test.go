@@ -120,6 +120,32 @@ func seedDemoSDEFixture(t *testing.T, conn *sql.DB) {
 				itemIDs[bp.name], itemIDs[mat], qty)
 		}
 	}
+	// The Forge's swept prices for what the pilots trade and hold:
+	// an install's own market data, which the seed reads and never
+	// writes, standing in here for a real sweep.
+	prices := []struct {
+		name      string
+		sell, buy float64
+		dailyVol  float64
+	}{
+		{"Tritanium", 6.32, 5.94, 900000000}, {"Pyerite", 12.42, 11.66, 260000000},
+		{"Mexallon", 52.10, 48.90, 64000000}, {"Isogen", 548, 512, 21000000},
+		{"Nocxium", 1290, 1205, 2600000}, {"Damage Control II", 768000, 721000, 2600},
+		{"Republic Fleet EMP S", 1046, 982, 1900000}, {"Scourge Heavy Missile", 471, 442, 1500000},
+		{"Warrior II", 688, 640, 320000}, {"Gyrostabilizer II", 1185000, 1110000, 900},
+		{"Ballistic Control System II", 906000, 850000, 2100}, {"Stasis Webifier II", 2250000, 2110000, 700},
+		{"Vexor", 12400000, 11600000, 480}, {"Thrasher", 1460000, 1370000, 5200},
+		{"Rifter", 428000, 402000, 9600}, {"Covetor", 26400000, 24800000, 350},
+		{"Drake", 68500000, 64400000, 620}, {"Hobgoblin II", 512000, 481000, 14000},
+		{"PLEX", 4310000, 4050000, 26000},
+	}
+	for _, p := range prices {
+		exec(`INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band,
+			sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at)
+			VALUES (10000002, $1, $2, $3, $4, $5, $6, $7, 24, 19, $8, $9, $10, now())`,
+			itemIDs[p.name], p.sell*0.99, p.sell, p.sell*0.06, p.buy*1.01, p.buy, p.buy*0.06,
+			int64(p.dailyVol*0.6), int64(p.dailyVol*0.4), p.dailyVol)
+	}
 }
 
 // demoTestApp builds the fixture application with the SDE
@@ -180,8 +206,8 @@ func TestDemoSeedIsCompleteAndIdempotent(t *testing.T) {
 	if snapsBefore < 60 {
 		t.Errorf("seed wrote %d snapshots, want a full account's worth (60+)", snapsBefore)
 	}
-	if fitsBefore != 2 {
-		t.Errorf("seed wrote %d saved fits, want 2", fitsBefore)
+	if fitsBefore != 3 {
+		t.Errorf("seed wrote %d saved fits, want 3", fitsBefore)
 	}
 
 	// The all-V pilot: every fixture skill present at level 5,
@@ -575,8 +601,8 @@ func TestDemoResetRestoresSeedState(t *testing.T) {
 			t.Error("the reset left a visitor's fit behind")
 		}
 	}
-	if len(fits) != 2 {
-		t.Errorf("fits after reset = %d, want the seeded 2", len(fits))
+	if len(fits) != 3 {
+		t.Errorf("fits after reset = %d, want the seeded 3", len(fits))
 	}
 }
 

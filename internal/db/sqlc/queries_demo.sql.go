@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -16,6 +17,26 @@ DELETE FROM user_appraisals WHERE user_id = $1
 
 func (q *Queries) DeleteDemoAppraisals(ctx context.Context, userID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteDemoAppraisals, userID)
+	return err
+}
+
+const deleteDemoBaskets = `-- name: DeleteDemoBaskets :exec
+DELETE FROM market_baskets WHERE user_id = $1
+`
+
+// The demo account's own baskets; their items and value history
+// go with them (ON DELETE CASCADE). Presets have no user.
+func (q *Queries) DeleteDemoBaskets(ctx context.Context, userID sql.NullInt64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoBaskets, userID)
+	return err
+}
+
+const deleteDemoBlueprintPins = `-- name: DeleteDemoBlueprintPins :exec
+DELETE FROM blueprint_pins WHERE user_id = $1
+`
+
+func (q *Queries) DeleteDemoBlueprintPins(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoBlueprintPins, userID)
 	return err
 }
 
@@ -34,6 +55,16 @@ DELETE FROM contract_details WHERE character_id = $1
 
 func (q *Queries) DeleteDemoContractDetails(ctx context.Context, characterID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteDemoContractDetails, characterID)
+	return err
+}
+
+const deleteDemoDoctrines = `-- name: DeleteDemoDoctrines :exec
+DELETE FROM doctrines WHERE corporation_id = $1
+`
+
+// The demo corporation's doctrines; their fits cascade.
+func (q *Queries) DeleteDemoDoctrines(ctx context.Context, corporationID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoDoctrines, corporationID)
 	return err
 }
 
@@ -82,6 +113,16 @@ func (q *Queries) DeleteDemoNotifications(ctx context.Context, userID int64) err
 	return err
 }
 
+const deleteDemoOps = `-- name: DeleteDemoOps :exec
+DELETE FROM ops WHERE corporation_id = $1
+`
+
+// The demo corporation's ops; SRP claims filed against them cascade.
+func (q *Queries) DeleteDemoOps(ctx context.Context, corporationID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoOps, corporationID)
+	return err
+}
+
 const deleteDemoOrderHealth = `-- name: DeleteDemoOrderHealth :exec
 DELETE FROM order_health WHERE character_id = $1
 `
@@ -100,12 +141,31 @@ func (q *Queries) DeleteDemoOrderLifecycle(ctx context.Context, characterID int6
 	return err
 }
 
+const deleteDemoOrgGroups = `-- name: DeleteDemoOrgGroups :exec
+DELETE FROM org_groups WHERE owner_kind = 'corporation' AND owner_id = $1
+`
+
+// The demo corporation's groups; their members cascade.
+func (q *Queries) DeleteDemoOrgGroups(ctx context.Context, ownerID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoOrgGroups, ownerID)
+	return err
+}
+
 const deleteDemoPushSubscriptions = `-- name: DeleteDemoPushSubscriptions :exec
 DELETE FROM push_subscriptions WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoPushSubscriptions(ctx context.Context, userID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteDemoPushSubscriptions, userID)
+	return err
+}
+
+const deleteDemoRestockTargets = `-- name: DeleteDemoRestockTargets :exec
+DELETE FROM restock_targets WHERE user_id = $1
+`
+
+func (q *Queries) DeleteDemoRestockTargets(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoRestockTargets, userID)
 	return err
 }
 

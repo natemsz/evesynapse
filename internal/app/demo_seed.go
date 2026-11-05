@@ -23,7 +23,9 @@ package app
 
 import (
 	"context"
+	"crypto/sha1"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,8 +48,12 @@ const (
 	demoCharSera   = int64(2900000104) // Sera Voss, corp member
 	demoCharDario  = int64(2900000105) // Dario Fenn, corp member
 	demoCharMina   = int64(2900000106) // Mina Okafor, corp member
+	demoCharKato   = int64(2900000107) // Kato Vire, Kedama Watch
+	demoCharRhen   = int64(2900000108) // Rhen Absalom, Kedama Watch
+	demoCharLio    = int64(2900000109) // Lio Marsh, Kedama Watch
 
-	demoCorpHaleID = int64(2900001002) // Hale Freight Services
+	demoCorpHaleID  = int64(2900001002) // Hale Freight Services
+	demoCorpWatchID = int64(2900001003) // Kedama Watch, the local pirates
 )
 
 // demoFictionalChars is every invented character the seed data
@@ -56,13 +62,17 @@ var demoFictionalChars = []struct {
 	ID   int64
 	Name string
 	Corp int64
+	Sec  float64 // security status; 0 reads as a quiet 1.2
 }{
-	{demoCharMarcus, "Marcus Hale", demoCorpHaleID},
-	{demoCharIlya, "Ilya Sorin", demoCorpHaleID},
-	{demoCharPetra, "Petra Lindqvist", demoCorpID},
-	{demoCharSera, "Sera Voss", demoCorpID},
-	{demoCharDario, "Dario Fenn", demoCorpID},
-	{demoCharMina, "Mina Okafor", demoCorpID},
+	{demoCharMarcus, "Marcus Hale", demoCorpHaleID, 0},
+	{demoCharIlya, "Ilya Sorin", demoCorpHaleID, 0},
+	{demoCharPetra, "Petra Lindqvist", demoCorpID, 0},
+	{demoCharSera, "Sera Voss", demoCorpID, 0},
+	{demoCharDario, "Dario Fenn", demoCorpID, 0},
+	{demoCharMina, "Mina Okafor", demoCorpID, 0},
+	{demoCharKato, "Kato Vire", demoCorpWatchID, -4.6},
+	{demoCharRhen, "Rhen Absalom", demoCorpWatchID, -2.9},
+	{demoCharLio, "Lio Marsh", demoCorpWatchID, -6.1},
 }
 
 // demoItemBase is where the seed's invented item IDs start:
@@ -98,11 +108,16 @@ type demoSeed struct {
 
 	jitaStationID, amarrStationID, dodixieStationID, hekStationID int64
 	jitaSystemID, amarrSystemID, tamaSystemID                     int64
+	kedamaSystemID, sujaSystemID                                  int64 // lowsec beside Tama; Tama when unknown
 	forgeRegionID, domainRegionID, sinqRegionID                   int64
 
 	// pendingColonies gathers each pilot's colonies while her
 	// writeColony calls run, for writeColonies to store.
 	pendingColonies map[int64][]esi.Colony
+
+	// corpKillmails is every seeded fight a corp member was in,
+	// for the corporation killboard (writeCorpSnapshots).
+	corpKillmails []esi.KillmailRef
 }
 
 type demoSkillType struct {
@@ -169,6 +184,7 @@ func (s *demoSeed) resolve(ctx context.Context) error {
 	wanted := []string{
 		// Ships.
 		"Rifter", "Thrasher", "Merlin", "Punisher", "Drake", "Vexor", "Covetor",
+		"Tristan", "Catalyst", "Atron",
 		// Station containers the asset seeds fill.
 		"Station Container", "Small Standard Container", "Station Warehouse Container",
 		// Modules and charges.
@@ -184,6 +200,10 @@ func (s *demoSeed) resolve(ctx context.Context) error {
 		// Blueprints.
 		"Rifter Blueprint", "Thrasher Blueprint", "Damage Control II Blueprint",
 		"Vexor Blueprint", "Covetor Blueprint", "Antimatter Charge S Blueprint",
+		"Drake Blueprint", "Hobgoblin I Blueprint", "Hobgoblin II Blueprint",
+		"Gyrostabilizer II Blueprint", "Ballistic Control System II Blueprint",
+		"Scourge Heavy Missile Blueprint", "Fusion S Blueprint",
+		"Small Armor Repairer II Blueprint", "Medium Shield Extender II Blueprint",
 		// Attribute implants, slots 1-5.
 		"Ocular Filter - Basic", "Memory Augmentation - Basic", "Neural Boost - Basic",
 		"Cybernetic Subprocessor - Basic", "Social Adaptation Chip - Basic",
@@ -237,18 +257,25 @@ func (s *demoSeed) resolve(ctx context.Context) error {
 		}
 	}
 
-	station := func(name string) int64 {
-		id, err := stationIDByName(ctx, s.app.db, name)
+	// The hub stations by ID: CCP's station IDs are fixed, while
+	// their names change spelling between SDE releases (Jita IV
+	// became Jita 4), and a missed name filed every asset, order
+	// and job under station 0. A station this SDE lacks stays 0.
+	station := func(id int64) int64 {
+		ok, err := stationKnown(ctx, s.app.db, id)
 		if err != nil {
-			logging.Warnf("demo seed: resolve station %q: %v", name, err)
+			logging.Warnf("demo seed: resolve station %d: %v", id, err)
+			return 0
+		}
+		if !ok {
 			return 0
 		}
 		return id
 	}
-	s.jitaStationID = station("Jita IV - Moon 4 - Caldari Navy Assembly Plant")
-	s.amarrStationID = station("Amarr VIII (Oris) - Emperor Family Academy")
-	s.dodixieStationID = station("Dodixie IX - Moon 20 - Federation Navy Assembly Plant")
-	s.hekStationID = station("Hek VIII - Moon 12 - Boundless Creation Factory")
+	s.jitaStationID = station(60003760)    // Jita 4 - Moon 4 - Caldari Navy Assembly Plant
+	s.amarrStationID = station(60008494)   // Amarr VIII (Oris) - Emperor Family Academy
+	s.dodixieStationID = station(60011866) // Dodixie 9 - Moon 20 - Federation Navy Assembly Plant
+	s.hekStationID = station(60005686)     // Hek 8 - Moon 12 - Boundless Creation Factory
 
 	system := func(name string) (int64, int64) {
 		row, err := q.GetSDESystemByName(ctx, name)
@@ -261,21 +288,29 @@ func (s *demoSeed) resolve(ctx context.Context) error {
 	s.jitaSystemID, s.forgeRegionID = system("Jita")
 	s.amarrSystemID, s.domainRegionID = system("Amarr")
 	s.tamaSystemID, _ = system("Tama")
+	s.kedamaSystemID, _ = system("Kedama")
+	s.sujaSystemID, _ = system("Sujarento")
+	if s.kedamaSystemID == 0 {
+		s.kedamaSystemID = s.tamaSystemID
+	}
+	if s.sujaSystemID == 0 {
+		s.sujaSystemID = s.tamaSystemID
+	}
 	if row, err := q.GetSDESystemByName(ctx, "Dodixie"); err == nil {
 		s.sinqRegionID = row.RegionID
 	}
 	return nil
 }
 
-// stationIDByName resolves one NPC station by its full name.
-func stationIDByName(ctx context.Context, conn *sql.DB, name string) (int64, error) {
-	var id int64
+// stationKnown reports whether this install's SDE has the station.
+func stationKnown(ctx context.Context, conn *sql.DB, id int64) (bool, error) {
+	var found int64
 	err := conn.QueryRowContext(ctx,
-		`SELECT station_id FROM sde_stations WHERE name = $1 LIMIT 1`, name).Scan(&id)
+		`SELECT station_id FROM sde_stations WHERE station_id = $1`, id).Scan(&found)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
+		return false, nil
 	}
-	return id, err
+	return err == nil, err
 }
 
 // wipe clears every row the demo account owns, so writing the
@@ -310,6 +345,14 @@ func (s *demoSeed) wipe(ctx context.Context) error {
 		func() error { return q.DeleteDemoLinkChoices(ctx, s.userID) },
 		func() error { return q.DeleteDemoPushSubscriptions(ctx, s.userID) },
 		func() error { return q.ResetDemoHomeLayout(ctx, s.userID) },
+		func() error { return q.DeleteDemoBlueprintPins(ctx, s.userID) },
+		func() error { return q.DeleteDemoRestockTargets(ctx, s.userID) },
+		func() error { return q.DeleteDemoBaskets(ctx, sql.NullInt64{Int64: s.userID, Valid: true}) },
+		// The demo corporation is invented (demoCorpID sits in the
+		// demo ID band), so everything it owns is the seed's.
+		func() error { return q.DeleteDemoDoctrines(ctx, demoCorpID) },
+		func() error { return q.DeleteDemoOps(ctx, demoCorpID) },
+		func() error { return q.DeleteDemoOrgGroups(ctx, demoCorpID) },
 	}
 	for _, step := range userSteps {
 		if err := step(); err != nil {
@@ -329,6 +372,7 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 		{Kind: esi.NameCharacter, ID: demoCharacter2ID, Name: demoChar2Name},
 		{Kind: esi.NameCorporation, ID: demoCorpID, Name: demoCorpName},
 		{Kind: esi.NameCorporation, ID: demoCorpHaleID, Name: "Hale Freight Services"},
+		{Kind: esi.NameCorporation, ID: demoCorpWatchID, Name: "Kedama Watch"},
 	}
 	for _, c := range demoFictionalChars {
 		names = append(names, entityName{Kind: esi.NameCharacter, ID: c.ID, Name: c.Name})
@@ -364,7 +408,11 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 	birthdays := []string{"2018-01-19T08:00:00Z", "2020-11-30T19:45:00Z", "2017-04-11T06:12:00Z",
 		"2021-02-25T22:31:00Z", "2015-09-09T03:17:00Z", "2022-08-16T11:58:00Z"}
 	for i, c := range demoFictionalChars {
-		if err := record(c.ID, c.Corp, c.Name, birthdays[i%len(birthdays)], 1.2); err != nil {
+		sec := c.Sec
+		if sec == 0 {
+			sec = 1.2
+		}
+		if err := record(c.ID, c.Corp, c.Name, birthdays[i%len(birthdays)], sec); err != nil {
 			return fmt.Errorf("demo seed: pilot record %d: %w", c.ID, err)
 		}
 	}
@@ -378,6 +426,20 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 	}
 	if err := q.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
 		CorporationID: demoCorpHaleID, Payload: string(corpPayload), State: "ready", FetchedAt: fetchedAt,
+	}); err != nil {
+		return fmt.Errorf("demo seed: corporation record: %w", err)
+	}
+	watchPayload, err := json.Marshal(esi.Corporation{
+		Name: "Kedama Watch", Ticker: "KWTCH", MemberCount: 14,
+		CEOID: demoCharKato, CreatorID: demoCharKato, TaxRate: 0.1,
+		DateFounded: "2020-09-03T21:10:00Z",
+		Description: "Lowsec small gang out of Kedama. Frigates welcome, tears expected.",
+	})
+	if err != nil {
+		return err
+	}
+	if err := q.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		CorporationID: demoCorpWatchID, Payload: string(watchPayload), State: "ready", FetchedAt: fetchedAt,
 	}); err != nil {
 		return fmt.Errorf("demo seed: corporation record: %w", err)
 	}
@@ -431,7 +493,7 @@ func (app *Application) seedDemoData(ctx context.Context, now time.Time) error {
 	if err := s.writeAccountRows(ctx); err != nil {
 		return err
 	}
-	if err := s.writeDemoPrices(ctx); err != nil {
+	if err := s.writeOrgRows(ctx); err != nil {
 		return err
 	}
 	// The worker folds a real pilot's snapshots into the profit
@@ -860,6 +922,9 @@ func (s *demoSeed) writePilotOneMarkets(ctx context.Context) error {
 		{OrderID: 7900000001, TypeID: s.typeID("Tritanium"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 6.12, VolumeTotal: 2500000, VolumeRemain: 1450000, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-3 * day)), Duration: 90},
 		{OrderID: 7900000002, TypeID: s.typeID("Damage Control II"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 771000, VolumeTotal: 40, VolumeRemain: 26, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-1 * day)), Duration: 90},
 		{OrderID: 7900000003, TypeID: s.typeID("PLEX"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, IsBuyOrder: true, Price: 5902777, VolumeTotal: 36, VolumeRemain: 36, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-5 * hour)), Duration: 30, Escrow: 212499972},
+		{OrderID: 7900000004, TypeID: s.typeID("Gyrostabilizer II"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 1189000, VolumeTotal: 24, VolumeRemain: 17, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-2 * day)), Duration: 90},
+		{OrderID: 7900000005, TypeID: s.typeID("Hobgoblin II"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 509900, VolumeTotal: 150, VolumeRemain: 94, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-4 * day)), Duration: 90},
+		{OrderID: 7900000006, TypeID: s.typeID("Nocxium"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, IsBuyOrder: true, Price: 1201, VolumeTotal: 60000, VolumeRemain: 41250, MinVolume: 1, Range: "region", Issued: s.rfc(now.Add(-30 * hour)), Duration: 30, Escrow: 49541250},
 	}
 	if err := s.snap(ctx, id, esi.SnapOrders, esi.CharOrders(orders)); err != nil {
 		return err
@@ -872,6 +937,9 @@ func (s *demoSeed) writePilotOneMarkets(ctx context.Context) error {
 		{orders[0], "best", 6.12, 6.10},
 		{orders[1], "undercut_station", 768750, 768750},
 		{orders[2], "best", 5902777, 5902777},
+		{orders[3], "undercut_station", 1184400, 1184400},
+		{orders[4], "best", 509900, 509800},
+		{orders[5], "best", 1201, 1203},
 	}
 	for _, hRow := range health {
 		if err := q.UpsertOrderHealth(ctx, db.UpsertOrderHealthParams{
@@ -892,9 +960,40 @@ func (s *demoSeed) writePilotOneMarkets(ctx context.Context) error {
 			return err
 		}
 	}
+	// Two sells beaten at Jita: the verdicts the order-health
+	// pass stores, so My Orders shows what beat them, the next
+	// price past it and the margin left there.
+	for _, b := range []struct {
+		order               esi.CharOrder
+		beatPrice, suggest  float64
+		beatVolume, outbids int64
+		unitCost, margin    float64
+		beatenAgo           time.Duration
+	}{
+		{orders[1], 768750, 768700, 6, 3, 612400, 23.9, 3 * hour},
+		{orders[3], 1184400, 1184300, 4, 1, 948000, 21.4, 50 * time.Minute},
+	} {
+		if err := q.UpdateOrderLifecycleBook(ctx, db.UpdateOrderLifecycleBookParams{
+			Beaten: 1, CheckedAt: now.Add(-b.beatenAgo), OutbidEvents: b.outbids,
+			BeatingPrice: b.beatPrice, BeatingVolume: b.beatVolume, SuggestedPrice: b.suggest,
+			UnitCost: b.unitCost, MarginPct: sql.NullFloat64{Float64: b.margin, Valid: true},
+			TaxRate: demoSalesTaxRate, CharacterID: id, OrderID: b.order.OrderID,
+		}); err != nil {
+			return err
+		}
+		if err := q.TouchOrderLifecycleChecked(ctx, db.TouchOrderLifecycleCheckedParams{
+			CheckedAt: now.Add(-10 * time.Minute), CharacterID: id, OrderID: b.order.OrderID,
+		}); err != nil {
+			return err
+		}
+	}
 	history := []esi.CharOrderHistoryEntry{
 		{CharOrder: esi.CharOrder{OrderID: 7900000011, TypeID: s.typeID("Vexor"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 98500000, VolumeTotal: 1, VolumeRemain: 1, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-32 * day)), Duration: 30}, State: "expired"},
 		{CharOrder: esi.CharOrder{OrderID: 7900000012, TypeID: s.typeID("Mexallon"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, IsBuyOrder: true, Price: 44.20, VolumeTotal: 500000, VolumeRemain: 500000, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-8 * day)), Duration: 30, Escrow: 22100000}, State: "cancelled"},
+		// Most of a trader's history fills: these sold or bought out.
+		{CharOrder: esi.CharOrder{OrderID: 7900000013, TypeID: s.typeID("Hobgoblin II"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 512000, VolumeTotal: 100, VolumeRemain: 0, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-12 * day)), Duration: 90}, State: "expired"},
+		{CharOrder: esi.CharOrder{OrderID: 7900000014, TypeID: s.typeID("Damage Control II"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 774500, VolumeTotal: 40, VolumeRemain: 0, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-10 * day)), Duration: 90}, State: "expired"},
+		{CharOrder: esi.CharOrder{OrderID: 7900000015, TypeID: s.typeID("Tritanium"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, IsBuyOrder: true, Price: 5.88, VolumeTotal: 3000000, VolumeRemain: 0, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-9 * day)), Duration: 30, Escrow: 0}, State: "expired"},
 	}
 	if err := s.snap(ctx, id, esi.SnapOrdersHistory, esi.CharOrderHistory(history)); err != nil {
 		return err
@@ -921,7 +1020,7 @@ func (s *demoSeed) writePilotOneMarkets(ctx context.Context) error {
 	}
 
 	contracts := []esi.Contract{
-		{ContractID: 2900005001, IssuerID: demoCharMarcus, IssuerCorporationID: demoCorpHaleID, AssigneeID: id, AcceptorID: id, Type: "item_exchange", Status: "finished", Availability: "personal", Title: "Fitted Rifter, ready to undock", Price: 92000000, StartLocationID: s.jitaStationID, EndLocationID: s.jitaStationID, DateIssued: s.rfc(now.Add(-6 * day)), DateExpired: s.rfc(now.Add(24 * day)), DateAccepted: s.rfc(now.Add(-5 * day)), DateCompleted: s.rfc(now.Add(-5 * day))},
+		{ContractID: 2900005001, IssuerID: demoCharMarcus, IssuerCorporationID: demoCorpHaleID, AssigneeID: id, AcceptorID: id, Type: "item_exchange", Status: "finished", Availability: "personal", Title: "Fitted Rifter, ready to undock", Price: 14500000, StartLocationID: s.jitaStationID, EndLocationID: s.jitaStationID, DateIssued: s.rfc(now.Add(-6 * day)), DateExpired: s.rfc(now.Add(24 * day)), DateAccepted: s.rfc(now.Add(-5 * day)), DateCompleted: s.rfc(now.Add(-5 * day))},
 		{ContractID: 2900005002, IssuerID: id, IssuerCorporationID: demoCorpID, AcceptorID: demoCharMarcus, Type: "courier", Status: "in_progress", Availability: "public", Title: "Jita to Amarr, 12,500 m3", Reward: 8500000, Collateral: 250000000, Volume: 12500, StartLocationID: s.jitaStationID, EndLocationID: s.amarrStationID, DateIssued: s.rfc(now.Add(-1 * day)), DateExpired: s.rfc(now.Add(13 * day)), DateAccepted: s.rfc(now.Add(-20 * hour)), DaysToComplete: 3},
 		{ContractID: 2900005003, IssuerID: id, IssuerCorporationID: demoCorpID, Type: "item_exchange", Status: "outstanding", Availability: "public", Title: "Damage Control II x40", Price: 41500000, StartLocationID: s.jitaStationID, EndLocationID: s.jitaStationID, DateIssued: s.rfc(now.Add(-8 * hour)), DateExpired: s.rfc(now.Add(7 * day))},
 	}
@@ -973,7 +1072,24 @@ func (s *demoSeed) writePilotOneIndustry(ctx context.Context) error {
 	jobs := []esi.IndustryJob{
 		{JobID: 8800009001, ActivityID: 1, BlueprintTypeID: s.typeID("Rifter Blueprint"), BlueprintID: demoItemBase + 501, BlueprintLocationID: s.jitaStationID, OutputLocationID: s.jitaStationID, FacilityID: s.jitaStationID, StationID: s.jitaStationID, InstallerID: id, Runs: 10, LicensedRuns: 10, Status: "active", StartDate: s.rfc(now.Add(-1 * day)), EndDate: s.rfc(now.Add(14 * hour)), Duration: 129600, Cost: 1240000, ProductTypeID: s.typeID("Rifter")},
 		{JobID: 8800009002, ActivityID: 1, BlueprintTypeID: s.typeID("Damage Control II Blueprint"), BlueprintID: demoItemBase + 502, BlueprintLocationID: s.jitaStationID, OutputLocationID: s.jitaStationID, FacilityID: s.jitaStationID, StationID: s.jitaStationID, InstallerID: id, Runs: 20, LicensedRuns: 20, SuccessfulRuns: 20, Status: "delivered", StartDate: s.rfc(now.Add(-9 * day)), EndDate: s.rfc(now.Add(-8 * day)), CompletedDate: s.rfc(now.Add(-8 * day)), Duration: 86400, Cost: 860000, ProductTypeID: s.typeID("Damage Control II"), CompletedCharacterID: id},
+		// The rest of a working week: hulls and modules building,
+		// a research and an invention job running, a batch waiting
+		// to be delivered, and two delivered earlier.
+		{JobID: 8800009003, ActivityID: 1, BlueprintTypeID: s.typeID("Thrasher Blueprint"), BlueprintID: demoItemBase + 504, BlueprintLocationID: s.jitaStationID, OutputLocationID: s.jitaStationID, FacilityID: s.jitaStationID, StationID: s.jitaStationID, InstallerID: id, Runs: 5, LicensedRuns: 5, Status: "active", StartDate: s.rfc(now.Add(-9 * hour)), EndDate: s.rfc(now.Add(6 * hour)), Duration: 54000, Cost: 1690000, ProductTypeID: s.typeID("Thrasher")},
+		{JobID: 8800009004, ActivityID: 4, BlueprintTypeID: s.typeID("Drake Blueprint"), BlueprintID: demoItemBase + 505, BlueprintLocationID: s.jitaStationID, OutputLocationID: s.jitaStationID, FacilityID: s.jitaStationID, StationID: s.jitaStationID, InstallerID: id, Runs: 1, LicensedRuns: 1, Status: "active", StartDate: s.rfc(now.Add(-1 * day)), EndDate: s.rfc(now.Add(2*day + 4*hour)), Duration: 273600, Cost: 3120000, ProductTypeID: s.typeID("Drake Blueprint")},
+		{JobID: 8800009005, ActivityID: 8, BlueprintTypeID: s.typeID("Hobgoblin I Blueprint"), BlueprintID: demoItemBase + 506, BlueprintLocationID: s.jitaStationID, OutputLocationID: s.jitaStationID, FacilityID: s.jitaStationID, StationID: s.jitaStationID, InstallerID: id, Runs: 4, LicensedRuns: 4, Probability: 0.425, Status: "active", StartDate: s.rfc(now.Add(-7 * hour)), EndDate: s.rfc(now.Add(19 * hour)), Duration: 93600, Cost: 412000, ProductTypeID: s.typeID("Hobgoblin II Blueprint")},
+		{JobID: 8800009006, ActivityID: 1, BlueprintTypeID: s.typeID("Gyrostabilizer II Blueprint"), BlueprintID: demoItemBase + 507, BlueprintLocationID: s.jitaStationID, OutputLocationID: s.jitaStationID, FacilityID: s.jitaStationID, StationID: s.jitaStationID, InstallerID: id, Runs: 10, LicensedRuns: 10, Status: "ready", StartDate: s.rfc(now.Add(-26 * hour)), EndDate: s.rfc(now.Add(-3 * hour)), Duration: 82800, Cost: 1140000, ProductTypeID: s.typeID("Gyrostabilizer II")},
+		{JobID: 8800009007, ActivityID: 1, BlueprintTypeID: s.typeID("Scourge Heavy Missile Blueprint"), BlueprintID: demoItemBase + 508, BlueprintLocationID: s.jitaStationID, OutputLocationID: s.jitaStationID, FacilityID: s.jitaStationID, StationID: s.jitaStationID, InstallerID: id, Runs: 50, LicensedRuns: 50, SuccessfulRuns: 50, Status: "delivered", StartDate: s.rfc(now.Add(-4 * day)), EndDate: s.rfc(now.Add(-3 * day)), CompletedDate: s.rfc(now.Add(-3 * day)), Duration: 90000, Cost: 286000, ProductTypeID: s.typeID("Scourge Heavy Missile"), CompletedCharacterID: id},
+		{JobID: 8800009008, ActivityID: 1, BlueprintTypeID: s.typeID("Hobgoblin II Blueprint"), BlueprintID: demoItemBase + 509, BlueprintLocationID: s.jitaStationID, OutputLocationID: s.jitaStationID, FacilityID: s.jitaStationID, StationID: s.jitaStationID, InstallerID: id, Runs: 10, LicensedRuns: 10, SuccessfulRuns: 10, Status: "delivered", StartDate: s.rfc(now.Add(-6 * day)), EndDate: s.rfc(now.Add(-5 * day)), CompletedDate: s.rfc(now.Add(-5 * day)), Duration: 64800, Cost: 512000, ProductTypeID: s.typeID("Hobgoblin II"), CompletedCharacterID: id},
 	}
+	// A job whose blueprint this SDE does not know is left out.
+	known := jobs[:0]
+	for _, j := range jobs {
+		if j.BlueprintTypeID != 0 && j.ProductTypeID != 0 {
+			known = append(known, j)
+		}
+	}
+	jobs = known
 	if err := s.snap(ctx, id, esi.SnapIndustryJobs, esi.IndustryJobs(jobs)); err != nil {
 		return err
 	}
@@ -981,9 +1097,35 @@ func (s *demoSeed) writePilotOneIndustry(ctx context.Context) error {
 		{ItemID: demoItemBase + 501, TypeID: s.typeID("Rifter Blueprint"), LocationID: s.jitaStationID, LocationFlag: "Hangar", MaterialEfficiency: 10, TimeEfficiency: 20, Quantity: -1, Runs: -1},
 		{ItemID: demoItemBase + 502, TypeID: s.typeID("Damage Control II Blueprint"), LocationID: s.jitaStationID, LocationFlag: "Hangar", MaterialEfficiency: 8, TimeEfficiency: 14, Quantity: -2, Runs: 40},
 		{ItemID: demoItemBase + 503, TypeID: s.typeID("Antimatter Charge S Blueprint"), LocationID: s.dodixieStationID, LocationFlag: "Hangar", MaterialEfficiency: 10, TimeEfficiency: 20, Quantity: -1, Runs: -1},
+		{ItemID: demoItemBase + 504, TypeID: s.typeID("Thrasher Blueprint"), LocationID: s.jitaStationID, LocationFlag: "Hangar", MaterialEfficiency: 10, TimeEfficiency: 20, Quantity: -1, Runs: -1},
+		{ItemID: demoItemBase + 505, TypeID: s.typeID("Drake Blueprint"), LocationID: s.jitaStationID, LocationFlag: "Hangar", MaterialEfficiency: 6, TimeEfficiency: 12, Quantity: -1, Runs: -1},
+		{ItemID: demoItemBase + 506, TypeID: s.typeID("Hobgoblin I Blueprint"), LocationID: s.jitaStationID, LocationFlag: "Hangar", MaterialEfficiency: 10, TimeEfficiency: 20, Quantity: -1, Runs: -1},
+		{ItemID: demoItemBase + 507, TypeID: s.typeID("Gyrostabilizer II Blueprint"), LocationID: s.jitaStationID, LocationFlag: "Hangar", MaterialEfficiency: 2, TimeEfficiency: 4, Quantity: -2, Runs: 4},
+		{ItemID: demoItemBase + 508, TypeID: s.typeID("Scourge Heavy Missile Blueprint"), LocationID: s.jitaStationID, LocationFlag: "Hangar", MaterialEfficiency: 10, TimeEfficiency: 20, Quantity: -1, Runs: -1},
+		{ItemID: demoItemBase + 509, TypeID: s.typeID("Hobgoblin II Blueprint"), LocationID: s.jitaStationID, LocationFlag: "Hangar", MaterialEfficiency: 2, TimeEfficiency: 4, Quantity: -2, Runs: 7},
+		{ItemID: demoItemBase + 510, TypeID: s.typeID("Ballistic Control System II Blueprint"), LocationID: s.jitaStationID, LocationFlag: "Hangar", MaterialEfficiency: 2, TimeEfficiency: 4, Quantity: -2, Runs: 10},
+		{ItemID: demoItemBase + 511, TypeID: s.typeID("Fusion S Blueprint"), LocationID: s.dodixieStationID, LocationFlag: "Hangar", MaterialEfficiency: 10, TimeEfficiency: 20, Quantity: -1, Runs: -1},
+		{ItemID: demoItemBase + 512, TypeID: s.typeID("Small Armor Repairer II Blueprint"), LocationID: s.amarrStationID, LocationFlag: "Hangar", MaterialEfficiency: 2, TimeEfficiency: 4, Quantity: -2, Runs: 10},
+		{ItemID: demoItemBase + 513, TypeID: s.typeID("Medium Shield Extender II Blueprint"), LocationID: s.jitaStationID, LocationFlag: "Hangar", MaterialEfficiency: 3, TimeEfficiency: 2, Quantity: -2, Runs: 8},
 	}
+	knownBPs := blueprints[:0]
+	for _, b := range blueprints {
+		if b.TypeID != 0 {
+			knownBPs = append(knownBPs, b)
+		}
+	}
+	blueprints = knownBPs
 	if err := s.snap(ctx, id, esi.SnapBlueprints, esi.Blueprints(blueprints)); err != nil {
 		return err
+	}
+	// The two lines Sable runs every week, pinned so the home
+	// page's production lines show them.
+	for _, name := range []string{"Damage Control II Blueprint", "Rifter Blueprint"} {
+		if typeID := s.typeID(name); typeID != 0 {
+			if err := s.app.queries.PinBlueprint(ctx, db.PinBlueprintParams{UserID: s.userID, BlueprintTypeID: typeID}); err != nil {
+				return err
+			}
+		}
 	}
 	mining := []esi.MiningEntry{
 		{Date: now.Add(-1 * day).Format("2006-01-02"), TypeID: s.typeID("Veldspar"), SolarSystemID: s.jitaSystemID, Quantity: 18400},
@@ -1250,48 +1392,107 @@ func (s *demoSeed) writePilotOneKillmails(ctx context.Context) error {
 	hour := time.Hour
 	day := 24 * hour
 	q := s.app.queries
+	t := s.typeID
 
-	refs := []esi.KillmailRef{
-		{KillmailID: 2900007002, KillmailHash: demoKillmailHashKill},
-		{KillmailID: 2900007001, KillmailHash: demoKillmailHashLoss},
+	// Two and a half weeks of lowsec frigate and destroyer work
+	// around Tama, Kedama and Sujarento with the corp: solo kills, a gang kill on a
+	// cruiser, and the two ships Sable lost (both claimed on SRP).
+	type fight struct {
+		id        int64
+		hash      string
+		ago       time.Duration
+		system    int64
+		victim    esi.KillmailVictim
+		attackers []esi.KillmailAttacker
 	}
-	if err := s.snap(ctx, id, esi.SnapKillmails, refs); err != nil {
-		return err
+	fights := []fight{
+		{2900007001, demoKillmailHashLoss, 2 * day, s.tamaSystemID,
+			esi.KillmailVictim{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Thrasher"), DamageTaken: 8941, Items: []esi.KillmailVictimItem{
+				{ItemTypeID: t("Damage Control II"), QuantityDestroyed: 1},
+				{ItemTypeID: t("Gyrostabilizer II"), QuantityDropped: 1},
+				{ItemTypeID: t("1MN Afterburner II"), QuantityDestroyed: 1},
+				{ItemTypeID: t("200mm AutoCannon II"), QuantityDropped: 3},
+			}},
+			[]esi.KillmailAttacker{
+				{CharacterID: demoCharIlya, CorporationID: demoCorpHaleID, ShipTypeID: t("Merlin"), FinalBlow: true, DamageDone: 5120},
+				{CharacterID: demoCharKato, CorporationID: demoCorpWatchID, ShipTypeID: t("Tristan"), DamageDone: 3821},
+			}},
+		{2900007002, demoKillmailHashKill, 26 * hour, s.tamaSystemID,
+			esi.KillmailVictim{CharacterID: demoCharIlya, CorporationID: demoCorpHaleID, ShipTypeID: t("Punisher"), DamageTaken: 6210, Items: []esi.KillmailVictimItem{
+				{ItemTypeID: t("Small Armor Repairer II"), QuantityDestroyed: 1},
+				{ItemTypeID: t("Energized Adaptive Nano Membrane II"), QuantityDropped: 1},
+			}},
+			[]esi.KillmailAttacker{
+				{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Rifter"), FinalBlow: true, DamageDone: 4105},
+				{CharacterID: demoCharDario, CorporationID: demoCorpID, ShipTypeID: t("Merlin"), DamageDone: 2105},
+			}},
+		{2900007003, "", 4 * day, s.kedamaSystemID,
+			esi.KillmailVictim{CharacterID: demoCharKato, CorporationID: demoCorpWatchID, ShipTypeID: t("Tristan"), DamageTaken: 3404, Items: []esi.KillmailVictimItem{
+				{ItemTypeID: t("Hobgoblin II"), QuantityDestroyed: 2, QuantityDropped: 1},
+				{ItemTypeID: t("Warp Scrambler II"), QuantityDropped: 1},
+				{ItemTypeID: t("Small Armor Repairer II"), QuantityDestroyed: 1},
+			}},
+			[]esi.KillmailAttacker{
+				{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Rifter"), FinalBlow: true, DamageDone: 2180},
+				{CharacterID: demoCharSera, CorporationID: demoCorpID, ShipTypeID: t("Thrasher"), DamageDone: 1224},
+			}},
+		{2900007004, "", 6 * day, s.tamaSystemID,
+			esi.KillmailVictim{CharacterID: demoCharRhen, CorporationID: demoCorpWatchID, ShipTypeID: t("Catalyst"), DamageTaken: 4870, Items: []esi.KillmailVictimItem{
+				{ItemTypeID: t("Fusion S"), QuantityDropped: 800},
+				{ItemTypeID: t("Damage Control II"), QuantityDestroyed: 1},
+			}},
+			[]esi.KillmailAttacker{
+				{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Thrasher"), FinalBlow: true, DamageDone: 4870},
+			}},
+		{2900007005, "", 9 * day, s.sujaSystemID,
+			esi.KillmailVictim{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Rifter"), DamageTaken: 3150, Items: []esi.KillmailVictimItem{
+				{ItemTypeID: t("200mm AutoCannon II"), QuantityDestroyed: 2},
+				{ItemTypeID: t("Warp Scrambler II"), QuantityDropped: 1},
+				{ItemTypeID: t("Republic Fleet EMP S"), QuantityDestroyed: 400},
+			}},
+			[]esi.KillmailAttacker{
+				{CharacterID: demoCharLio, CorporationID: demoCorpWatchID, ShipTypeID: t("Vexor"), FinalBlow: true, DamageDone: 2410},
+				{CharacterID: demoCharKato, CorporationID: demoCorpWatchID, ShipTypeID: t("Tristan"), DamageDone: 740},
+			}},
+		{2900007006, "", 13 * day, s.kedamaSystemID,
+			esi.KillmailVictim{CharacterID: demoCharLio, CorporationID: demoCorpWatchID, ShipTypeID: t("Vexor"), DamageTaken: 21460, Items: []esi.KillmailVictimItem{
+				{ItemTypeID: t("Hobgoblin II"), QuantityDestroyed: 3, QuantityDropped: 2},
+				{ItemTypeID: t("Medium Shield Extender II"), QuantityDropped: 1},
+				{ItemTypeID: t("Stasis Webifier II"), QuantityDestroyed: 1},
+				{ItemTypeID: t("Damage Control II"), QuantityDropped: 1},
+			}},
+			[]esi.KillmailAttacker{
+				{CharacterID: demoCharSera, CorporationID: demoCorpID, ShipTypeID: t("Drake"), FinalBlow: true, DamageDone: 7920},
+				{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Thrasher"), DamageDone: 6310},
+				{CharacterID: demoCharMina, CorporationID: demoCorpID, ShipTypeID: t("Vexor"), DamageDone: 4480},
+				{CharacterID: demoCharDario, CorporationID: demoCorpID, ShipTypeID: t("Merlin"), DamageDone: 2750},
+			}},
+		{2900007007, "", 17 * day, s.tamaSystemID,
+			esi.KillmailVictim{CharacterID: demoCharKato, CorporationID: demoCorpWatchID, ShipTypeID: t("Atron"), DamageTaken: 2280, Items: []esi.KillmailVictimItem{
+				{ItemTypeID: t("1MN Afterburner II"), QuantityDropped: 1},
+				{ItemTypeID: t("Warp Scrambler II"), QuantityDestroyed: 1},
+			}},
+			[]esi.KillmailAttacker{
+				{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Rifter"), FinalBlow: true, DamageDone: 2280},
+			}},
 	}
-	loss := esi.Killmail{
-		KillmailID: 2900007001, KillmailTime: s.rfc(now.Add(-2 * day)), SolarSystemID: s.tamaSystemID,
-		Victim: esi.KillmailVictim{
-			CharacterID: id, CorporationID: demoCorpID, ShipTypeID: s.typeID("Thrasher"), DamageTaken: 8941,
-			Items: []esi.KillmailVictimItem{
-				{ItemTypeID: s.typeID("Damage Control II"), QuantityDestroyed: 1},
-				{ItemTypeID: s.typeID("Gyrostabilizer II"), QuantityDropped: 1},
-			},
-		},
-		Attackers: []esi.KillmailAttacker{
-			{CharacterID: demoCharIlya, CorporationID: demoCorpHaleID, ShipTypeID: s.typeID("Merlin"), FinalBlow: true, DamageDone: 8941},
-		},
-	}
-	kill := esi.Killmail{
-		KillmailID: 2900007002, KillmailTime: s.rfc(now.Add(-26 * hour)), SolarSystemID: s.tamaSystemID,
-		Victim: esi.KillmailVictim{
-			CharacterID: demoCharIlya, CorporationID: demoCorpHaleID, ShipTypeID: s.typeID("Punisher"), DamageTaken: 6210,
-			Items: []esi.KillmailVictimItem{
-				{ItemTypeID: s.typeID("Small Armor Repairer II"), QuantityDestroyed: 1},
-			},
-		},
-		Attackers: []esi.KillmailAttacker{
-			{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: s.typeID("Rifter"), FinalBlow: true, DamageDone: 4105},
-			{CharacterID: demoCharDario, CorporationID: demoCorpID, ShipTypeID: s.typeID("Merlin"), FinalBlow: false, DamageDone: 2105},
-		},
-	}
-	for _, km := range []esi.Killmail{loss, kill} {
+
+	var refs, corpRefs []esi.KillmailRef
+	for _, f := range fights {
+		if f.victim.ShipTypeID == 0 || f.system == 0 {
+			continue // a hull this SDE does not know, or no Tama
+		}
+		hash := f.hash
+		if hash == "" {
+			hash = demoKillmailHash(f.id)
+		}
+		km := esi.Killmail{
+			KillmailID: f.id, KillmailTime: s.rfc(now.Add(-f.ago)), SolarSystemID: f.system,
+			Victim: f.victim, Attackers: f.attackers,
+		}
 		raw, err := json.Marshal(km)
 		if err != nil {
 			return err
-		}
-		hash := demoKillmailHashLoss
-		if km.KillmailID == 2900007002 {
-			hash = demoKillmailHashKill
 		}
 		if err := q.UpsertKillmailDetail(ctx, db.UpsertKillmailDetailParams{
 			KillmailID: km.KillmailID, CharacterID: id, Hash: hash,
@@ -1299,8 +1500,18 @@ func (s *demoSeed) writePilotOneKillmails(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
+		refs = append(refs, esi.KillmailRef{KillmailID: f.id, KillmailHash: hash})
+		corpRefs = append(corpRefs, esi.KillmailRef{KillmailID: f.id, KillmailHash: hash})
 	}
-	return nil
+	s.corpKillmails = corpRefs
+	return s.snap(ctx, id, esi.SnapKillmails, refs)
+}
+
+// demoKillmailHash is a stable, hash-shaped stand-in for a seeded
+// killmail's hash: the same mail always gets the same one.
+func demoKillmailHash(killmailID int64) string {
+	sum := sha1.Sum([]byte(fmt.Sprintf("evesynapse-demo-killmail-%d", killmailID)))
+	return hex.EncodeToString(sum[:])
 }
 
 // demoColony is one seeded colony: the summary row and the pin
@@ -1432,8 +1643,14 @@ func (s *demoSeed) writePilotOneComms(ctx context.Context) error {
 			"<p>All,</p><p>Form-up is Jita IV-4 at 19:00 on Saturday. Rifters and Thrashers, SRP is on. Dario has the route, Mina is bringing links. New pilots welcome, loaner fits are in the corp hangar.</p><p>Sera</p>"},
 		{esi.MailHeader{MailID: 3900000003, From: demoCharPetra, Subject: "Re: PI pickup on Sunday", Timestamp: s.rfc(now.Add(-2 * day)), IsRead: true, Labels: []int64{}, Recipients: []esi.MailRecipient{{RecipientID: id, RecipientType: "character"}}},
 			"<p>Pickup moved to Sunday after downtime, same customs office. Your Bacteria run is looking healthy, by the way. The new extractor heads paid off.</p><p>Petra</p>"},
-		{esi.MailHeader{MailID: 3900000004, From: demoCharDario, Subject: "Welcome to the collective", Timestamp: s.rfc(now.Add(-9 * day)), IsRead: true, Labels: []int64{1002}, Recipients: []esi.MailRecipient{{RecipientID: id, RecipientType: "character"}}},
-			"<p>Welcome aboard. Two rules: insure everything, and never fly what you cannot replace twice. The rest you will pick up as we go.</p><p>Dario</p>"},
+		{esi.MailHeader{MailID: 3900000004, From: demoCharDario, Subject: "Route for Saturday", Timestamp: s.rfc(now.Add(-3 * day)), IsRead: true, Labels: []int64{1002}, Recipients: []esi.MailRecipient{{RecipientID: demoCorpID, RecipientType: "corporation"}}},
+			"<p>Tama first, then Kedama, back out through Sujarento. Kedama Watch has been sitting on the Tama gate in the evenings, so scouts go ahead and nobody jumps blind.</p><p>Dario</p>"},
+		{esi.MailHeader{MailID: 3900000005, From: demoCharMarcus, Subject: "Picked up your courier", Timestamp: s.rfc(now.Add(-19 * hour)), IsRead: false, Labels: []int64{1001}, Recipients: []esi.MailRecipient{{RecipientID: id, RecipientType: "character"}}},
+			"<p>Got the Jita to Amarr run, 12,500 m3. Freighter undocks after downtime, you should see it in Amarr tomorrow evening.</p><p>Marcus</p>"},
+		{esi.MailHeader{MailID: 3900000006, From: demoCharKato, Subject: "gf", Timestamp: s.rfc(now.Add(-2*day + 40*time.Minute)), IsRead: true, Labels: []int64{1001}, Recipients: []esi.MailRecipient{{RecipientID: id, RecipientType: "character"}}},
+			"<p>gf in the Thrasher. Ilya says hi. Kedama Watch is recruiting if you get tired of buying new ships.</p><p>Kato</p>"},
+		{esi.MailHeader{MailID: 3900000007, From: demoCharSera, Subject: "SRP paid: Rifter, Kedama roam", Timestamp: s.rfc(now.Add(-7 * day)), IsRead: true, Labels: []int64{1002}, Recipients: []esi.MailRecipient{{RecipientID: id, RecipientType: "character"}}},
+			"<p>Paid 11,850,000 ISK for the Rifter you lost holding Lio's Vexor on the Sujarento gate. That tackle got us the kill. Thanks for staying on it.</p><p>Sera</p>"},
 	}
 	headers := make([]esi.MailHeader, 0, len(mails))
 	for _, m := range mails {
@@ -1960,6 +2177,11 @@ func (s *demoSeed) writeCorpSnapshots(ctx context.Context, viewerID int64) error
 	}
 	corpOrders := []esi.CorpOrder{
 		{OrderID: 7900000201, TypeID: s.typeID("Tritanium"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 6.05, VolumeTotal: 900000, VolumeRemain: 900000, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-2 * day)), Duration: 90, WalletDiv: 2, IssuedBy: demoCharacter2ID},
+		{OrderID: 7900000202, TypeID: s.typeID("Rifter"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 431000, VolumeTotal: 20, VolumeRemain: 13, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-3 * day)), Duration: 90, WalletDiv: 1, IssuedBy: demoCharacterID},
+		{OrderID: 7900000203, TypeID: s.typeID("Thrasher"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 1468000, VolumeTotal: 10, VolumeRemain: 8, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-5 * day)), Duration: 90, WalletDiv: 1, IssuedBy: demoCharacterID},
+		{OrderID: 7900000204, TypeID: s.typeID("Scourge Heavy Missile"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, Price: 474, VolumeTotal: 50000, VolumeRemain: 31600, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-6 * day)), Duration: 90, WalletDiv: 1, IssuedBy: demoCharSera},
+		{OrderID: 7900000205, TypeID: s.typeID("Pyerite"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, IsBuyOrder: true, Price: 11.52, VolumeTotal: 2000000, VolumeRemain: 1240000, MinVolume: 1, Range: "region", Issued: s.rfc(now.Add(-1 * day)), Duration: 30, Escrow: 14284800, WalletDiv: 2, IssuedBy: demoCharacter2ID},
+		{OrderID: 7900000206, TypeID: s.typeID("Isogen"), LocationID: s.jitaStationID, RegionID: s.forgeRegionID, IsBuyOrder: true, Price: 509, VolumeTotal: 80000, VolumeRemain: 80000, MinVolume: 1, Range: "station", Issued: s.rfc(now.Add(-10 * hour)), Duration: 30, Escrow: 40720000, WalletDiv: 2, IssuedBy: demoCharacter2ID},
 	}
 	if err := s.snap(ctx, viewerID, esi.SnapCorpOrders, esi.CorpOrders(corpOrders)); err != nil {
 		return err
@@ -1998,7 +2220,28 @@ func (s *demoSeed) writeCorpSnapshots(ctx context.Context, viewerID int64) error
 		{ItemID: demoItemBase + 71, TypeID: s.typeID("Tritanium"), Quantity: 900000, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar1"},
 		{ItemID: demoItemBase + 72, TypeID: s.typeID("Damage Control II"), Quantity: 20, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar1"},
 		{ItemID: demoItemBase + 73, TypeID: s.typeID("Vexor"), Quantity: 1, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar2"},
+		// The doctrine hangar: packaged hulls and the fittings,
+		// ammo and drones that go in them.
+		{ItemID: demoItemBase + 74, TypeID: s.typeID("Rifter"), Quantity: 9, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar2"},
+		{ItemID: demoItemBase + 75, TypeID: s.typeID("Thrasher"), Quantity: 5, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar2"},
+		{ItemID: demoItemBase + 76, TypeID: s.typeID("Drake"), Quantity: 2, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar2"},
+		{ItemID: demoItemBase + 77, TypeID: s.typeID("200mm AutoCannon II"), Quantity: 36, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar3"},
+		{ItemID: demoItemBase + 78, TypeID: s.typeID("Warp Scrambler II"), Quantity: 14, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar3"},
+		{ItemID: demoItemBase + 79, TypeID: s.typeID("1MN Afterburner II"), Quantity: 12, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar3"},
+		{ItemID: demoItemBase + 80, TypeID: s.typeID("Republic Fleet EMP S"), Quantity: 24000, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar3"},
+		{ItemID: demoItemBase + 81, TypeID: s.typeID("Scourge Heavy Missile"), Quantity: 18400, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar3"},
+		{ItemID: demoItemBase + 82, TypeID: s.typeID("Hobgoblin II"), Quantity: 60, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar3"},
+		{ItemID: demoItemBase + 83, TypeID: s.typeID("Pyerite"), Quantity: 640000, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar1"},
+		{ItemID: demoItemBase + 84, TypeID: s.typeID("Mexallon"), Quantity: 182000, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar1"},
+		{ItemID: demoItemBase + 85, TypeID: s.typeID("Veldspar"), Quantity: 1250000, LocationID: s.amarrStationID, LocationType: "station", LocationFlag: "CorpHangar1"},
 	}
+	knownAssets := corpAssets[:0]
+	for _, a := range corpAssets {
+		if a.TypeID != 0 && a.LocationID != 0 {
+			knownAssets = append(knownAssets, a)
+		}
+	}
+	corpAssets = knownAssets
 	if err := s.snap(ctx, viewerID, esi.SnapCorpAssets, corpAssets); err != nil {
 		return err
 	}
@@ -2016,9 +2259,7 @@ func (s *demoSeed) writeCorpSnapshots(ctx context.Context, viewerID int64) error
 	if err := s.snap(ctx, viewerID, esi.SnapCorpStructures, corpStructures); err != nil {
 		return err
 	}
-	if err := s.snap(ctx, viewerID, esi.SnapCorpKillmails, []esi.KillmailRef{
-		{KillmailID: 2900007002, KillmailHash: demoKillmailHashKill},
-	}); err != nil {
+	if err := s.snap(ctx, viewerID, esi.SnapCorpKillmails, s.corpKillmails); err != nil {
 		return err
 	}
 	return nil
@@ -2173,51 +2414,235 @@ func (s *demoSeed) writeAccountRows(ctx context.Context) error {
 	return nil
 }
 
-// writeDemoPrices seeds the demo's own swept price rows in The
-// Forge for everything the pilots trade, build with or still
-// hold, at prices beside the lanes' own: the fold prices jobs
-// and open positions from these rows, and the wallet sampler
-// values the pilots' assets from them, so the demo's prices are
-// its own rather than an empty book.
-func (s *demoSeed) writeDemoPrices(ctx context.Context) error {
+// writeOrgRows writes what the corporation and the account keep in
+// EveSynapse itself rather than in ESI: two doctrines and their fits,
+// ops (two flown, two coming), SRP claims for both of Sable's losses
+// (one paid, one waiting), two groups, and the account's restock
+// targets, a basket of roam consumables and a public fit.
+func (s *demoSeed) writeOrgRows(ctx context.Context) error {
 	q := s.app.queries
-	prices := []struct {
-		name      string
-		sell, buy float64
-		dailyVol  float64
-	}{
-		{"Tritanium", 6.32, 5.94, 900000000},
-		{"Pyerite", 12.42, 11.66, 260000000},
-		{"Mexallon", 52.10, 48.90, 64000000},
-		{"Isogen", 548, 512, 21000000},
-		{"Nocxium", 1290, 1205, 2600000},
-		{"Damage Control II", 768000, 721000, 2600},
-		{"Republic Fleet EMP S", 1046, 982, 1900000},
-		{"Scourge Heavy Missile", 471, 442, 1500000},
-		{"Warrior II", 688, 640, 320000},
-		{"Gyrostabilizer II", 1185000, 1110000, 900},
-		{"Ballistic Control System II", 906000, 850000, 2100},
-		{"Stasis Webifier II", 2250000, 2110000, 700},
-		{"Vexor", 61500000, 57800000, 480},
-		{"Thrasher", 1460000, 1370000, 5200},
-		{"Rifter", 428000, 402000, 9600},
-		{"Covetor", 26400000, 24800000, 350},
-		{"Drake", 68500000, 64400000, 620},
-		{"Hobgoblin II", 512000, 481000, 14000},
-		{"PLEX", 4310000, 4050000, 26000},
+	now := s.now
+	hour := time.Hour
+	day := 24 * hour
+	t := s.typeID
+
+	fit := func(name, ship string, items []fitview.FitDocItem) (string, int64, bool) {
+		shipID := t(ship)
+		var kept []fitview.FitDocItem
+		for _, it := range items {
+			if it.TypeID != 0 {
+				kept = append(kept, it)
+			}
+		}
+		raw, err := json.Marshal(fitview.FitDoc{Name: name, ShipTypeID: shipID, Items: kept, Charges: map[int64]int64{}})
+		return string(raw), shipID, err == nil && shipID != 0
 	}
-	for _, p := range prices {
-		typeID := s.typeID(p.name)
-		if typeID == 0 || s.forgeRegionID == 0 {
+	type docFit struct {
+		name, ship, role, note string
+		items                  []fitview.FitDocItem
+	}
+	tamaRifter := docFit{"Tama Rifter", "Rifter", "Tackle", "Scram first, then web if you fit one. Burn to the gate ahead of the gang.", []fitview.FitDocItem{
+		{TypeID: t("200mm AutoCannon II"), Qty: 2}, {TypeID: t("125mm Gatling AutoCannon II"), Qty: 1},
+		{TypeID: t("1MN Afterburner II"), Qty: 1}, {TypeID: t("Medium Shield Extender II"), Qty: 1}, {TypeID: t("Warp Scrambler II"), Qty: 1},
+		{TypeID: t("Damage Control II"), Qty: 1}, {TypeID: t("Gyrostabilizer II"), Qty: 2},
+	}}
+	brawlThrasher := docFit{"Brawl Thrasher", "Thrasher", "DPS", "Stay inside scram range and keep your transversal low. Load EMP for shields, Fusion for armor.", []fitview.FitDocItem{
+		{TypeID: t("200mm AutoCannon II"), Qty: 7},
+		{TypeID: t("1MN Afterburner II"), Qty: 1}, {TypeID: t("Warp Scrambler II"), Qty: 1}, {TypeID: t("Stasis Webifier II"), Qty: 1},
+		{TypeID: t("Damage Control II"), Qty: 1}, {TypeID: t("Gyrostabilizer II"), Qty: 2},
+	}}
+	fleetDrake := docFit{"Fleet Drake", "Drake", "DPS", "Shield brick. Primary what the FC calls, reload between targets.", []fitview.FitDocItem{
+		{TypeID: t("Heavy Missile Launcher II"), Qty: 6},
+		{TypeID: t("Medium Shield Extender II"), Qty: 2},
+		{TypeID: t("Damage Control II"), Qty: 1}, {TypeID: t("Ballistic Control System II"), Qty: 2},
+	}}
+	webVexor := docFit{"Web Vexor", "Vexor", "Tackle", "Drones on the tackled target, web whatever burns for the gate.", []fitview.FitDocItem{
+		{TypeID: t("Stasis Webifier II"), Qty: 1}, {TypeID: t("Warp Scrambler II"), Qty: 1},
+		{TypeID: t("Damage Control II"), Qty: 1}, {TypeID: t("Energized Adaptive Nano Membrane II"), Qty: 1},
+		{TypeID: t("Hobgoblin II"), Qty: 5},
+	}}
+
+	doctrines := []struct {
+		name, category, tags, description string
+		created                           time.Duration
+		fits                              []docFit
+	}{
+		{"Tama Frigates", "Small gang", "lowsec,frigates,roam",
+			"Cheap, fast and replaceable. Rifters hold tackle, Thrashers bring the damage. SRP covers both hulls and their fits.",
+			60 * day, []docFit{tamaRifter, brawlThrasher}},
+		{"Home Defense", "Medium gang", "highsec,defense",
+			"What we undock when someone camps the Jita workshop. Drakes tank and shoot, Vexors bring drones and webs.",
+			120 * day, []docFit{fleetDrake, webVexor}},
+	}
+	doctrineIDs := map[string]int64{}
+	for _, d := range doctrines {
+		docID, err := q.CreateDoctrine(ctx, db.CreateDoctrineParams{
+			CorporationID: demoCorpID, Name: d.name, Category: d.category, Description: d.description,
+			Tags: d.tags, CreatedBy: demoCharacterID, CreatedAt: now.Add(-d.created),
+		})
+		if err != nil {
+			return fmt.Errorf("demo seed: doctrine %q: %w", d.name, err)
+		}
+		doctrineIDs[d.name] = docID
+		for _, f := range d.fits {
+			raw, ship, ok := fit(f.name, f.ship, f.items)
+			if !ok {
+				continue
+			}
+			if _, err := q.AddDoctrineFit(ctx, db.AddDoctrineFitParams{
+				DoctrineID: docID, Name: f.name, ShipTypeID: ship, ItemsJson: raw,
+				FleetRole: f.role, Note: f.note, AddedBy: demoCharacterID, AddedAt: now.Add(-d.created + day),
+			}); err != nil {
+				return fmt.Errorf("demo seed: doctrine fit %q: %w", f.name, err)
+			}
+		}
+	}
+
+	ops := []struct {
+		title, description, doctrine, formUp string
+		at                                   time.Duration // from now
+		minutes                              int64
+		fc                                   int64
+	}{
+		{"Kedama roam", "Frigate roam through Kedama and Sujarento. Bring a spare Rifter.", "Tama Frigates", "Jita 4-4 undock", -9*day - 2*hour, 90, demoCharSera},
+		{"Tama roam", "The usual Tama loop. Form up on time, we undock at :15.", "Tama Frigates", "Jita 4-4 undock", -2*day - 1*hour, 90, demoCharacterID},
+		{"Saturday Tama roam", "Saturday roam. SRP covers T1 frigates and destroyers in the doctrine.", "Tama Frigates", "Jita 4-4 undock", 5 * day, 90, demoCharacterID},
+		{"Home defense drill", "Practice undocking the Home Defense fleet together. Twenty minutes, then we go shoot red crosses.", "Home Defense", "Jita 4-4", 9*day + 3*hour, 45, demoCharSera},
+	}
+	opIDs := map[string]int64{}
+	for _, o := range ops {
+		opID, err := q.CreateOp(ctx, db.CreateOpParams{
+			CorporationID: demoCorpID, Title: o.title, Description: o.description,
+			StartsAt: now.Add(o.at), DurationMinutes: o.minutes,
+			Doctrine: o.doctrine, DoctrineID: doctrineIDs[o.doctrine], FormUp: o.formUp,
+			FcCharacterID: o.fc, CreatedByCharacter: o.fc, CreatedAt: now.Add(o.at - 4*day),
+		})
+		if err != nil {
+			return fmt.Errorf("demo seed: op %q: %w", o.title, err)
+		}
+		opIDs[o.title] = opID
+	}
+
+	if err := q.SetSRPSettings(ctx, db.SetSRPSettingsParams{
+		CorporationID: demoCorpID,
+		Policy:        "T1 frigates and destroyers flown in the Tama Frigates doctrine on a corp op are covered at hull plus fit. Claim within seven days with the killmail; a director pays out on Sundays.",
+		UpdatedAt:     now.Add(-40 * day),
+	}); err != nil {
+		return err
+	}
+	claims := []struct {
+		killmail int64
+		hash     string
+		ship     string
+		system   int64
+		lostAgo  time.Duration
+		op       string
+		value    float64
+		note     string
+		paid     float64
+	}{
+		{2900007005, demoKillmailHash(2900007005), "Rifter", s.sujaSystemID, 9 * day, "Kedama roam", 11850000,
+			"Held the Vexor on the gate long enough for the gang to land.", 11850000},
+		{2900007001, demoKillmailHashLoss, "Thrasher", s.tamaSystemID, 2 * day, "Tama roam", 18420000,
+			"Caught on the Tama gate by Ilya's Merlin, Kato landed right after.", 0},
+	}
+	for _, c := range claims {
+		if t(c.ship) == 0 || opIDs[c.op] == 0 {
 			continue
 		}
-		if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
-			RegionID: s.forgeRegionID, TypeID: typeID,
-			BestSell: demoPrice(p.sell * 0.99), TypicalSell: p.sell, SellBand: demoPrice(p.sell * 0.06),
-			BestBuy: demoPrice(p.buy * 1.01), TypicalBuy: p.buy, BuyBand: demoPrice(p.buy * 0.06),
-			SellOrders: 24, BuyOrders: 19,
-			SellVolume: int64(p.dailyVol * 0.6), BuyVolume: int64(p.dailyVol * 0.4),
-			AvgDailyVolume: p.dailyVol, UpdatedAt: s.now,
+		reqID, err := q.CreateSRPRequest(ctx, db.CreateSRPRequestParams{
+			CorporationID: demoCorpID, OpID: opIDs[c.op], KillmailID: c.killmail, KillmailHash: c.hash,
+			CharacterID: demoCharacterID, UserID: s.userID, ShipTypeID: t(c.ship), SolarSystemID: c.system,
+			LostAt: now.Add(-c.lostAgo), LossValue: c.value, Note: c.note, CreatedAt: now.Add(-c.lostAgo + 3*hour),
+		})
+		if err != nil {
+			return fmt.Errorf("demo seed: SRP claim for %d: %w", c.killmail, err)
+		}
+		if c.paid > 0 {
+			if _, err := q.DecideSRPRequest(ctx, db.DecideSRPRequestParams{
+				ID: reqID, Status: "paid", Payout: c.paid, HandledBy: demoCharSera,
+				HandlerNote: "Paid hull plus fit. Good tackle.",
+				HandledAt:   sql.NullTime{Time: now.Add(-c.lostAgo + 2*day), Valid: true},
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
+	groups := []struct {
+		name, description string
+		members           []int64
+	}{
+		{"Roam regulars", "Pinged for every Tama roam and the Saturday fleet.", []int64{demoCharacterID, demoCharSera, demoCharDario, demoCharMina}},
+		{"Industry SIG", "Builders and miners: shared job planning, the ore buyback and the workshop's fuel.", []int64{demoCharacter2ID, demoCharPetra, demoCharMina}},
+	}
+	for i, g := range groups {
+		groupID, err := q.CreateOrgGroup(ctx, db.CreateOrgGroupParams{
+			OwnerKind: "corporation", OwnerID: demoCorpID, Name: g.name, Description: g.description,
+			CreatedBy: demoCharacterID, CreatedAt: now.Add(-time.Duration(90-30*i) * day),
+		})
+		if err != nil {
+			return fmt.Errorf("demo seed: group %q: %w", g.name, err)
+		}
+		for j, member := range g.members {
+			if err := q.AddOrgGroupMember(ctx, db.AddOrgGroupMemberParams{
+				GroupID: groupID, CharacterID: member, AddedBy: demoCharacterID,
+				AddedAt: now.Add(-time.Duration(80-30*i-j) * day),
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
+	// The account's own trading kit: restock targets for what Sable
+	// builds and sells, a basket of roam consumables, and the brawl
+	// Thrasher shared in the public fit browser.
+	for _, r := range []struct {
+		name   string
+		target int64
+		margin float64
+	}{
+		{"Damage Control II", 40, 15}, {"Gyrostabilizer II", 24, 12}, {"Hobgoblin II", 150, 10},
+		{"Scourge Heavy Missile", 50000, 8}, {"Rifter", 20, 6},
+	} {
+		if typeID := t(r.name); typeID != 0 {
+			if err := q.UpsertRestockTarget(ctx, db.UpsertRestockTargetParams{
+				UserID: s.userID, TypeID: typeID, TargetQty: r.target, MinMarginPct: r.margin,
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	if s.forgeRegionID != 0 {
+		basket, err := q.CreateMarketBasket(ctx, db.CreateMarketBasketParams{
+			UserID: sql.NullInt64{Int64: s.userID, Valid: true}, Name: "Roam consumables", RegionID: s.forgeRegionID,
+		})
+		if err != nil {
+			return err
+		}
+		for _, it := range []struct {
+			name string
+			qty  int64
+		}{
+			{"Republic Fleet EMP S", 5000}, {"Fusion S", 5000}, {"Scourge Heavy Missile", 4000},
+			{"Hobgoblin II", 10}, {"Damage Control II", 2}, {"Warp Scrambler II", 2},
+		} {
+			if typeID := t(it.name); typeID != 0 {
+				if err := q.InsertMarketBasketItem(ctx, db.InsertMarketBasketItemParams{BasketID: basket, TypeID: typeID, Quantity: it.qty}); err != nil {
+					return err
+				}
+			}
+		}
+		// Its history comes from the region's stored daily rows,
+		// the same pass the worker runs for every basket.
+		if err := s.app.rebuildBasketValues(ctx, basket); err != nil {
+			logging.Warnf("demo seed: basket history: %v", err)
+		}
+	}
+	if raw, ship, ok := fit(brawlThrasher.name, brawlThrasher.ship, brawlThrasher.items); ok {
+		if _, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
+			UserID: s.userID, Name: brawlThrasher.name, ShipTypeID: ship, ItemsJson: raw,
+			IsPublic: true, CreatedAt: now.Add(-30 * day), UpdatedAt: now.Add(-4 * day),
 		}); err != nil {
 			return err
 		}
@@ -2251,7 +2676,12 @@ func (s *demoSeed) writeDemoWalletHistory(ctx context.Context, ch db.Character) 
 		return fmt.Errorf("demo seed: read wallet sample for pilot %d: %w", ch.CharacterID, err)
 	}
 	if !sample.NetWorth.Valid {
-		return fmt.Errorf("demo seed: no net worth sample for pilot %d", ch.CharacterID)
+		// No house price can value the pilot's assets yet (an
+		// install whose market sweep has not run). The history
+		// waits for prices rather than inventing them; the next
+		// daily reset after a sweep writes it.
+		logging.Warnf("demo seed: no prices yet to value pilot %d's assets; wallet history waits for the market sweep", ch.CharacterID)
+		return nil
 	}
 	firstDay := today.AddDate(0, 0, -364)
 	daily, err := q.ListProfitDaily(ctx, db.ListProfitDailyParams{

@@ -15,10 +15,7 @@
 .bp-build-h, .bp-build { width: 1%; white-space: nowrap; text-align: center; }
 .bp-can { color: var(--kept); font-family: var(--font-display); font-weight: 700; }
 .bp-cannot { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-tr.bp-ready > td:first-child { box-shadow: inset 2px 0 0 var(--kept); }
-/* As a card (layout.css "Table cards") the edge is the card's own. */
-#main-content table.cards-on > tbody > tr.bp-ready:not(.yours) { padding-left: 0.6rem; box-shadow: inset 2px 0 0 var(--kept); }
-#main-content table.cards-on > tbody > tr.bp-ready > td:first-child { box-shadow: none; }
+tr.bp-ready { --row-edge: var(--kept); --row-edge-w: 2px; }
 /* Whether it can be built sits on the card's bottom row, by its Pin. */
 #main-content table.cards-on > tbody > tr > td.bp-build { order: 98; }
 .bp-owner { display: block; color: var(--muted); font-size: var(--fs-xs); }

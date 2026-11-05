@@ -677,6 +677,9 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   grid-template-columns: repeat(auto-fill, minmax(min(50% - 0.5rem, 11rem), 1fr));
   gap: 0.35rem 0.9rem;
   padding: 0.7rem 0.15rem;
+  /* A marked row's edge (see "Row edges") is the card's own side. */
+  padding-left: calc(0.15rem + var(--row-edge-w, 0px) * 3);
+  box-shadow: inset var(--row-edge-w, 0px) 0 0 var(--row-edge, transparent);
   border-bottom: 1px solid var(--box-edge);
 }
 #main-content table.cards-on > :is(tbody, tfoot) > tr > :is(td, th) {
@@ -727,7 +730,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   font-weight: 600;
   color: var(--text-bright);
 }
-#main-content table.cards-on > :is(tbody, tfoot) > tr:has(> td.card-title) > :is(td, th):first-child:not(.card-title) {
+#main-content table.cards-on > :is(tbody, tfoot) > tr:has(> td.card-title) > :is(td, th):first-child:not(.card-title, .card-ctl) {
   grid-column: auto;
   font-size: inherit;
   font-weight: inherit;
@@ -742,12 +745,38 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   grid-column: auto; justify-self: start;
   font-size: inherit; font-weight: inherit;
 }
-#main-content table.cards-on > :is(tbody, tfoot) > tr:not([hidden]) > td.card-ctl:nth-last-child(1 of .card-ctl) { grid-column: auto / -1; justify-self: end; }
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td.card-ctl:nth-last-child(1 of .card-ctl) { grid-column: auto / -1; justify-self: end; }
 #main-content table.cards-on > :is(tbody, tfoot) > tr:not(:has(> td.card-title)) > td:is(.card-ctl, .card-blank):first-child + td {
   grid-column: 1 / -1;
   font-size: var(--fs-sm); font-weight: 600; color: var(--text-bright);
 }
 #main-content table.cards-on > :is(tbody, tfoot) > tr:not(:has(> td.card-title)) > td:is(.card-ctl, .card-blank):first-child + td::before { display: none; }
+/* A column the header marks .card-figure (app.js) is the card's
+   headline figure, a worth or a total: it shares the title's line
+   at the right edge, unlabelled, and the title gives it room. */
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td.card-figure {
+  order: -1;
+  grid-column: -2 / -1;
+  justify-self: end;
+  text-align: right;
+  font-weight: 600;
+}
+#main-content table.cards-on > :is(tbody, tfoot) > tr:has(> td.card-figure) > td.card-title,
+#main-content table.cards-on > :is(tbody, tfoot) > tr:has(> td.card-figure):not(:has(> td.card-title)) > td:first-child {
+  grid-column: 1 / -2;
+}
+/* A table marked .cards-strip has a few short facts: as cards they
+   run in one even strip under the title line instead of two-up. */
+#main-content table.cards-strip.cards-on > :is(tbody, tfoot) > tr:not([hidden]) {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.75rem;
+}
+#main-content table.cards-strip.cards-on > :is(tbody, tfoot) > tr::after { content: ""; order: -1; flex-basis: 100%; }
+#main-content table.cards-strip.cards-on > :is(tbody, tfoot) > tr > td { flex: 1 1 0; }
+#main-content table.cards-strip.cards-on > :is(tbody, tfoot) > tr > :is(td.card-title, td:first-child:not(.card-ctl)) { order: -1; flex: 1 1 auto; }
+#main-content table.cards-strip.cards-on > :is(tbody, tfoot) > tr:has(> td.card-title) > td:first-child:not(.card-title) { order: 0; flex: 1 1 0; }
+#main-content table.cards-strip.cards-on > :is(tbody, tfoot) > tr > td.card-figure { flex: none; }
+#main-content table.cards-strip.cards-on > :is(tbody, tfoot) > tr > td.card-ctl { flex: none; }
+#main-content table.cards-strip.cards-on .l-meter { display: none; }
 .cards-sort {
   display: flex; align-items: center; gap: 0.5rem;
   margin: 0 0 0.3rem;
@@ -755,6 +784,15 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 .cards-sort[hidden] { display: none; }
 .cards-sort > small { color: var(--muted); }
 .cards-sort > select { flex: 1 1 auto; min-width: 0; }
+
+/* Row edges: a row marks itself (yours, ready to build, a loss)
+   by setting --row-edge (a colour) and --row-edge-w (a width). In
+   a table the edge rides the first cell; as cards it is the card's
+   own side (above), so it never lands beside a control. */
+tbody > tr > td:first-child { box-shadow: inset var(--row-edge-w, 0px) 0 0 var(--row-edge, transparent); }
+/* The marks inherit, so a table nested in a marked row starts clean. */
+td table { --row-edge: transparent; --row-edge-w: 0px; }
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td:first-child { box-shadow: none; }
 
 /* Highlighted rows (the active character, your own war): one
    selection paint from the theme's accent, laid over the solid
@@ -766,10 +804,9 @@ tbody tr.yours > td,
 .tw tbody tr.yours > td:first-child { background: var(--sel-row); }
 tbody tr.yours:hover > td,
 .tw tbody tr.yours:hover > td:first-child { background: linear-gradient(var(--row-hover), var(--row-hover)), var(--sel-row); }
-tbody tr.yours > td:first-child { box-shadow: inset 3px 0 0 var(--sel-edge); }
+tbody tr.yours { --row-edge: var(--sel-edge); --row-edge-w: 3px; }
 /* As a card, the highlight is the card's own. */
-#main-content table.cards-on > :is(tbody, tfoot) > tr.yours { padding-left: 0.6rem; padding-right: 0.6rem; background: var(--sel-row); box-shadow: inset 3px 0 0 var(--sel-edge); border-radius: var(--r-sm); }
-#main-content table.cards-on > :is(tbody, tfoot) > tr.yours > td:first-child { box-shadow: none; }
+#main-content table.cards-on > :is(tbody, tfoot) > tr.yours { padding-left: 0.6rem; padding-right: 0.6rem; background: var(--sel-row); border-radius: var(--r-sm); }
 
 /* ---- Phone frame ----
    On a phone the sub-nav keeps one row and scrolls sideways

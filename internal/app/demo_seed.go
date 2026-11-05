@@ -1964,6 +1964,36 @@ func (s *demoSeed) writeCorpSnapshots(ctx context.Context, viewerID int64) error
 	if err := s.snap(ctx, viewerID, esi.SnapCorpOrders, esi.CorpOrders(corpOrders)); err != nil {
 		return err
 	}
+	// Corporation contracts: a courier the corporation issued, an
+	// item exchange assigned to it, and one that expired unanswered.
+	corpContracts := []esi.Contract{
+		{ContractID: 2900006001, IssuerID: demoCharacter2ID, IssuerCorporationID: demoCorpID, AssigneeID: demoCorpID, Type: "courier", Status: "outstanding", Availability: "corporation", ForCorporation: true, Title: "Staging resupply: Jita to Amarr", Reward: 24000000, Collateral: 610000000, Volume: 58000, StartLocationID: s.jitaStationID, EndLocationID: s.amarrStationID, DateIssued: s.rfc(now.Add(-6 * hour)), DateExpired: s.rfc(now.Add(6 * day)), DaysToComplete: 5},
+		{ContractID: 2900006002, IssuerID: demoCharSera, IssuerCorporationID: demoCorpID, AssigneeID: demoCorpID, AcceptorID: demoCorpID, Type: "item_exchange", Status: "finished", Availability: "corporation", Title: "Doctrine hulls for the hangar", Price: 0, StartLocationID: s.jitaStationID, EndLocationID: s.jitaStationID, DateIssued: s.rfc(now.Add(-3 * day)), DateExpired: s.rfc(now.Add(11 * day)), DateAccepted: s.rfc(now.Add(-2 * day)), DateCompleted: s.rfc(now.Add(-2 * day))},
+		{ContractID: 2900006003, IssuerID: viewerID, IssuerCorporationID: demoCorpID, Type: "item_exchange", Status: "outstanding", Availability: "public", ForCorporation: true, Title: "Surplus Damage Control II", Price: 15400000, StartLocationID: s.jitaStationID, EndLocationID: s.jitaStationID, DateIssued: s.rfc(now.Add(-16 * day)), DateExpired: s.rfc(now.Add(-2 * day))},
+	}
+	if err := s.snap(ctx, viewerID, esi.SnapCorpContracts, esi.Contracts(corpContracts)); err != nil {
+		return err
+	}
+	for contractID, items := range map[int64][]esi.ContractItem{
+		2900006001: {{RecordID: 1, TypeID: s.typeID("Tritanium"), Quantity: 5000000, RawQuantity: 5000000, IsIncluded: true}},
+		2900006002: {
+			{RecordID: 1, TypeID: s.typeID("Vexor"), Quantity: 3, RawQuantity: 3, IsIncluded: true},
+			{RecordID: 2, TypeID: s.typeID("Rifter"), Quantity: 6, RawQuantity: 6, IsIncluded: true},
+			{RecordID: 3, TypeID: s.typeID("Damage Control II"), Quantity: 9, RawQuantity: 9, IsIncluded: true},
+			{RecordID: 4, TypeID: s.typeID("200mm AutoCannon II"), Quantity: 12, RawQuantity: 12, IsIncluded: true},
+		},
+		2900006003: {{RecordID: 1, TypeID: s.typeID("Damage Control II"), Quantity: 20, RawQuantity: 20, IsIncluded: true}},
+	} {
+		raw, err := json.Marshal(esi.ContractItems(items))
+		if err != nil {
+			return err
+		}
+		if err := s.app.queries.UpsertContractDetail(ctx, db.UpsertContractDetailParams{
+			ContractID: contractID, CharacterID: viewerID, Payload: string(raw), FetchedAt: now,
+		}); err != nil {
+			return err
+		}
+	}
 	corpAssets := []esi.Asset{
 		{ItemID: demoItemBase + 71, TypeID: s.typeID("Tritanium"), Quantity: 900000, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar1"},
 		{ItemID: demoItemBase + 72, TypeID: s.typeID("Damage Control II"), Quantity: 20, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "CorpHangar1"},

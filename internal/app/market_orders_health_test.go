@@ -102,7 +102,7 @@ func TestOrdersPageOrderHealth(t *testing.T) {
 		t.Fatalf("GET /orders/: status %d", code)
 	}
 	mustContain(t, "/orders/", body,
-		"<strong>Undercut", "at this station",
+		`<span class="fo-pill bad">Undercut`, "at this station",
 		"Best price here",
 		"Not checked against the order book yet",
 	)
@@ -189,7 +189,7 @@ func TestCorpOrdersHealthAndLocation(t *testing.T) {
 	}
 	mustContain(t, "/corporations/orders/", body,
 		`<a href="/station/?station=60003760">Jita 4 - Moon 4 - Caldari Navy Assembly Plant</a>`,
-		"<strong>Undercut", "at this station",
+		`<span class="fo-pill bad">Undercut`, "at this station",
 		"Not checked against the order book yet",
 	)
 	if n := strings.Count(body, "Not checked against the order book yet"); n != 1 {

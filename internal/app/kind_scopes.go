@@ -78,6 +78,7 @@ var kindScopes = map[string]string{
 	esi.SnapCorpAssets:         "esi-assets.read_corporation_assets.v1",
 	esi.SnapCorpStructures:     "esi-corporations.read_structures.v1",
 	esi.SnapCorpKillmails:      "esi-killmails.read_corporation_killmails.v1",
+	esi.SnapCorpContracts:      "esi-contracts.read_corporation_contracts.v1",
 }
 
 // kindScopePrefixes resolves the suffix-keyed kind families

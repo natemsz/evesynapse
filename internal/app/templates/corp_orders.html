@@ -9,7 +9,7 @@
 <div class="l-page">
 <div class="l-head">
   <div class="l-head-pick">{{template "charselector" .CorpChars}}</div>
-  {{with .CorpOrders}}<p class="l-head-sum"><b>{{corpLink .CorpID .CorpTitle}}</b> · the corporation's open market orders</p>{{end}}
+  {{with .CorpOrders}}<p class="l-head-sum"><b>{{corpLink .CorpID .CorpTitle}}</b>: the corporation's open market orders.{{with .SnapshotAge}} <span class="fo-age">{{.}}</span>{{end}}</p>{{end}}
 </div>
 
 {{with .CorpOrders}}
@@ -35,9 +35,9 @@
   {{if .Rows}}
   <div class="l-panel fo-tabs">
     <div class="co-bar">
-      <div class="pilltabs fo-tablist" role="tablist" aria-label="Orders" data-tabs hidden>
-        <button type="button" role="tab" class="pilltab" id="co-sell-tab" aria-controls="co-sell" aria-selected="true">Sell <span class="cnt">{{.Sells}}</span></button>
-        <button type="button" role="tab" class="pilltab" id="co-buy-tab" aria-controls="co-buy" aria-selected="false">Buy <span class="cnt">{{.Buys}}</span></button>
+      <div class="l-seg fo-seg" role="tablist" aria-label="Orders" data-tabs hidden>
+        <button type="button" role="tab" id="co-sell-tab" aria-controls="co-sell" aria-selected="true">Sell <span class="fo-cnt">{{.Sells}}</span></button>
+        <button type="button" role="tab" id="co-buy-tab" aria-controls="co-buy" aria-selected="false">Buy <span class="fo-cnt">{{.Buys}}</span></button>
       </div>
       <input type="search" class="co-filter" data-table-filter="co-orders" data-row-class="co-orow" placeholder="Filter by item, place or pilot" aria-label="Filter the orders">
     </div>
@@ -45,11 +45,21 @@
     <section role="tabpanel" id="co-sell" aria-labelledby="co-sell-tab" class="fo-panel">
       <h3 class="fo-h">Sell orders</h3>
       {{if .Sells}}<div class="tw">
-<table class="fo-table">
-  <thead><tr><th class="card-title">Item</th><th class="mt-num">Price</th><th>Status</th><th class="mt-num">Volume left</th><th>Location</th><th>Expires</th><th>Issued by</th></tr></thead>
+<table class="fo-table co-otable">
+  <thead><tr><th class="card-title">Item</th><th class="mt-num">Price</th><th class="opt">Trend, 30 days</th><th>Status</th><th>Competition</th><th class="mt-num">Left</th><th>Location</th><th>Expires</th><th>Issued by</th></tr></thead>
   <tbody>
   {{range .SellRows}}
-    <tr class="co-orow{{if .Bad}} order-beaten{{end}}" data-search="{{.Item}} {{.Location.Name}} {{.Region}} {{.IssuedBy}}"><td>{{itemLink .TypeID .Item}}</td><td class="mt-num">{{sparkFig .Price .Spark}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td class="mt-num">{{.Volume}}</td><td>{{placeLink .Location}}<small class="fo-sub">{{.Region}}</small></td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
+    <tr class="co-orow{{if .Bad}} order-beaten{{end}}" data-search="{{.Item}} {{.Location.Name}} {{.Region}} {{.IssuedBy}}">
+      <td><span class="fo-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg">{{itemLink .TypeID .Item}}</span></td>
+      <td class="mt-num">{{sparkFigFallback .Price .Spark}}</td>
+      <td class="fo-trend opt">{{.Line}}</td>
+      <td>{{if .Status}}<span class="fo-pill {{.Tone}}">{{.Status}}</span>{{end}}</td>
+      <td>{{if .Heat}}<span class="fo-heat {{.HeatTone}}" title="{{.HeatNote}}">{{.Heat}}</span>{{end}}</td>
+      <td class="mt-num"><span class="fo-vol">{{.Volume}}</span><svg class="l-meter fo-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.LeftPct}}" height="4"/></svg></td>
+      <td>{{placeLink .Location}}<small class="fo-sub">{{.Region}}</small></td>
+      <td><span class="fo-when" title="{{.Expires}}">{{if .Left}}{{.Left}}{{else}}{{.Expires}}{{end}}</span>{{if .ExpiresOn}}<small class="fo-sub">{{.ExpiresOn}}</small>{{end}}</td>
+      <td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td>
+    </tr>
   {{end}}
   </tbody>
 </table>
@@ -58,11 +68,21 @@
     <section role="tabpanel" id="co-buy" aria-labelledby="co-buy-tab" class="fo-panel">
       <h3 class="fo-h">Buy orders</h3>
       {{if .Buys}}<div class="tw">
-<table class="fo-table">
-  <thead><tr><th class="card-title">Item</th><th class="mt-num">Price</th><th>Status</th><th class="mt-num">Volume left</th><th>Location</th><th>Expires</th><th>Issued by</th></tr></thead>
+<table class="fo-table co-otable">
+  <thead><tr><th class="card-title">Item</th><th class="mt-num">Price</th><th class="opt">Trend, 30 days</th><th>Status</th><th>Competition</th><th class="mt-num">Left</th><th>Location</th><th>Expires</th><th>Issued by</th></tr></thead>
   <tbody>
   {{range .BuyRows}}
-    <tr class="co-orow{{if .Bad}} order-beaten{{end}}" data-search="{{.Item}} {{.Location.Name}} {{.Region}} {{.IssuedBy}}"><td>{{itemLink .TypeID .Item}}</td><td class="mt-num">{{sparkFig .Price .Spark}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td class="mt-num">{{.Volume}}</td><td>{{placeLink .Location}}<small class="fo-sub">{{.Region}}</small></td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
+    <tr class="co-orow{{if .Bad}} order-beaten{{end}}" data-search="{{.Item}} {{.Location.Name}} {{.Region}} {{.IssuedBy}}">
+      <td><span class="fo-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg">{{itemLink .TypeID .Item}}</span></td>
+      <td class="mt-num">{{sparkFigFallback .Price .Spark}}</td>
+      <td class="fo-trend opt">{{.Line}}</td>
+      <td>{{if .Status}}<span class="fo-pill {{.Tone}}">{{.Status}}</span>{{end}}</td>
+      <td>{{if .Heat}}<span class="fo-heat {{.HeatTone}}" title="{{.HeatNote}}">{{.Heat}}</span>{{end}}</td>
+      <td class="mt-num"><span class="fo-vol">{{.Volume}}</span><svg class="l-meter fo-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.LeftPct}}" height="4"/></svg></td>
+      <td>{{placeLink .Location}}<small class="fo-sub">{{.Region}}</small></td>
+      <td><span class="fo-when" title="{{.Expires}}">{{if .Left}}{{.Left}}{{else}}{{.Expires}}{{end}}</span>{{if .ExpiresOn}}<small class="fo-sub">{{.ExpiresOn}}</small>{{end}}</td>
+      <td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td>
+    </tr>
   {{end}}
   </tbody>
 </table>
@@ -70,7 +90,7 @@
     </section>
     </div>
   </div>
-  <p class="co-note"><small>Prices in ISK. The status line covers orders one of your own characters placed for the corporation: the order book check runs on what they sync.</small></p>
+  <p class="co-note"><small>Prices in ISK. Left is what each order still has to sell or buy, out of what it listed. The status line covers orders one of your own characters placed for the corporation: the order book check runs on what they sync.</small></p>
   {{else}}
   <div class="l-panel co-gate"><p>No open corporation orders.</p></div>
   {{end}}

@@ -230,7 +230,7 @@ var sectionGroups = map[string][]navGroup{
 	},
 	"corporation": {
 		{"People", []string{"/corporations/", "/corporations/members/", "/corporations/killmails/", "/groups/"}},
-		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/assets/", "/corporations/structures/"}},
+		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/contracts/", "/corporations/assets/", "/corporations/structures/"}},
 		{"Programs", []string{"/doctrines/", "/doctrines/fits/", "/srp/"}},
 		{"Comms & Admin", []string{"/discord/servers", "/corporations/settings/"}},
 	},

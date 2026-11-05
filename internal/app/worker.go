@@ -630,6 +630,11 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	c.characterPass("warming corp killmail details", ch, func() (int, bool) {
 		stored := app.refreshCorpSnapshots(ctx, ch)
 		warmed, limited := app.warmCorpKillmailDetails(ctx, ch)
+		if !limited && moduleCompiledIn("contracts") {
+			// The item lists behind the corporation's contracts.
+			items, itemsLimited := app.warmCorpContractItems(ctx, ch)
+			warmed, limited = warmed+items, itemsLimited
+		}
 		return stored + warmed, limited
 	})
 

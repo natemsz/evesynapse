@@ -25,8 +25,8 @@ type econSectionState = module.EconSectionState
 // loader is loadCorpSnapshot — a plain snapshot-row decode
 // despite the name; it never fetches.)
 func (app *Application) econSection(ctx context.Context, characterID int64, kind string, out any) econSectionState {
-	if app.loadCorpSnapshot(ctx, characterID, kind, out) {
-		return econSectionState{Loaded: true}
+	if at, ok := app.loadSnapshotAt(ctx, characterID, kind, out); ok {
+		return econSectionState{Loaded: true, FetchedAt: at}
 	}
 	state, detail, found := app.corpKindState(ctx, characterID, kind)
 	if found && (state == fetchStateError || state == fetchStateRoleMissing) && detail != "" {

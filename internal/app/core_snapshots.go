@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -27,6 +28,16 @@ func (app *Application) loadCorpSnapshot(ctx context.Context, characterID int64,
 		return false
 	}
 	return json.Unmarshal([]byte(snap.Payload), out) == nil
+}
+
+// loadSnapshotAt is loadCorpSnapshot that also says when the snapshot
+// was read from ESI, for a page head's "Updated 9 minutes ago".
+func (app *Application) loadSnapshotAt(ctx context.Context, characterID int64, kind string, out any) (time.Time, bool) {
+	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: characterID, Kind: kind})
+	if err != nil || json.Unmarshal([]byte(snap.Payload), out) != nil {
+		return time.Time{}, false
+	}
+	return snap.FetchedAt, true
 }
 
 // ---------------------------------------------------------------------------

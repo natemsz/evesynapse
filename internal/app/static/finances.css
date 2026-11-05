@@ -1,47 +1,128 @@
-/* EveSynapse: My Orders and My Contracts. The regions are the
-   layout framework's parts (layout.css): the page head with the
-   pilot picker, stat tiles, and for contracts the console (the list
-   its main pane, one contract its inspector). This sheet holds what
-   is the pages' own: the order tabs, the contract status tones and
-   the inspector's item list. */
+/* EveSynapse: My Orders, Corporation Orders and My Contracts. The
+   regions are the layout framework's parts (layout.css): the page head
+   with the pilot picker, stat tiles, the segmented tabs, and for
+   contracts the console (the list its main pane, one contract its
+   inspector). This sheet holds what is the pages' own: the order line
+   (item, side, tone pills, the left meter, the trend line) and the
+   contract rows and inspector. */
 
 .l-page > * + * { margin-top: var(--space-4); }
 
-/* My Orders: one section at a time under the tabs; without script
-   every section shows under its own heading. */
-.fo-tablist { margin: 0 0 var(--space-3); }
-.fo-tablist button.pilltab { appearance: none; background: none; cursor: pointer; min-height: var(--tap); }
-.fo-tablist .pilltab[aria-selected="true"] { background: var(--glass); border-color: var(--accent); color: var(--text-bright); }
+/* Snapshot age beside the head's summary. */
+.fo-age { margin-left: var(--space-2); color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
+
+/* Tabs: the framework's segmented control; each count is a quiet
+   chip, the Beaten one in the danger tone while anything is beaten. */
+.fo-seg { margin: 0 0 var(--space-3); }
+/* On a phone the tab names drop their qualifiers to stay one row. */
+@container page (max-width: 34rem) { .fo-long { display: none; } }
+.fo-cnt { display: inline-block; min-width: 1.4em; margin-left: 0.35rem; padding: 0 0.35em; border-radius: 999px; background: var(--hairline); color: var(--text); font-family: var(--font-num); font-size: var(--fs-2xs); text-align: center; }
+.fo-cnt.bad { background: color-mix(in srgb, var(--danger) 30%, transparent); color: var(--text-bright); }
 .fo-h { margin: 0 0 var(--space-3); color: var(--gold); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.fo-panel + .fo-panel { margin-top: var(--space-5); }
-.tabs-on .fo-h { display: none; }
-.tabs-on .fo-panel + .fo-panel { margin-top: 0; }
-.fo-lead { margin: 0 0 var(--space-3); color: var(--muted); }
+.fo-tabs > [role="tabpanel"] + [role="tabpanel"] { margin-top: var(--space-5); }
+.fo-tabs.tabs-on > [role="tabpanel"] + [role="tabpanel"] { margin-top: 0; }
+.fo-lead { max-width: 70ch; margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--fs-sm); }
+.fo-note { margin: var(--space-3) 0 0; color: var(--muted); }
 .fo-key { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); }
-.fo-table td { white-space: normal; }
+
+/* The order line. Every data cell reads at one size; the small
+   second lines (range, region, dates, pilot) sit under the figure. */
+.fo-table td { white-space: normal; vertical-align: middle; }
 .fo-table td.mt-num { white-space: nowrap; }
-.fo-table td:first-child { min-width: 10rem; }
+.fo-table td:first-child { min-width: 12rem; }
+.fo-sub { display: block; margin-top: 0.15rem; color: var(--muted); font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 400; }
+.fo-item { display: inline-flex; align-items: center; gap: var(--space-2); }
+.fo-item > img { flex: none; border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-inset); }
+.fo-tag { padding: 0 0.35rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 
-/* My Contracts. */
-.ct .l-panes { --l-insp: 22rem; }
+/* Side: a sell reads in the accent, a bid in the slate tone, so the
+   two never share a colour with a status. */
+.fo-side { display: inline-block; padding: 0.05rem 0.45rem; border: 1px solid currentColor; border-radius: var(--r-xs); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.fo-side.Sell { color: var(--accent); }
+.fo-side.Buy { color: var(--fo-bid); }
+:root { --fo-bid: #8fb0d8; }
+
+/* Tone pills: the order-health verdict, a history state, an outcome.
+   bad = beaten here, warn = beaten elsewhere, good = best price or
+   filled; untoned reads quiet. */
+.fo-pill { display: inline-block; max-width: 18rem; padding: 0.1rem 0.5rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); color: var(--muted); font-size: var(--fs-xs); line-height: 1.35; }
+.fo-pill::first-letter { text-transform: uppercase; }
+.fo-pill.bad { border-color: color-mix(in srgb, var(--danger) 55%, transparent); background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--text-bright); }
+.fo-pill.warn { border-color: color-mix(in srgb, var(--unverified) 55%, transparent); background: color-mix(in srgb, var(--unverified) 12%, transparent); color: var(--text-bright); }
+.fo-pill.good { border-color: color-mix(in srgb, var(--kept) 50%, transparent); background: color-mix(in srgb, var(--kept) 12%, transparent); color: var(--text-bright); }
+
+/* Competition: a dot and a word, warming from slate to danger. */
+.fo-heat { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--muted); }
+.fo-heat::before { content: ""; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: currentColor; }
+.fo-heat.warm { color: var(--gold); }
+.fo-heat.hot { color: var(--accent); }
+.fo-heat.very-hot { color: var(--danger); }
+
+/* Left: the figure over a meter of what is still listed. */
+.fo-vol { display: block; }
+.fo-when { white-space: nowrap; }
+.fo-meter { width: 100%; min-width: 4rem; margin-top: 0.3rem; }
+
+/* Trend: the stored 30-day typical sell, drawn small. */
+.fo-trend { width: 6rem; }
+.px-line { display: block; width: 5.5rem; height: 1.5rem; }
+.px-line polyline { fill: none; stroke: var(--gold); stroke-width: 1.4; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+
+/* Beaten: the gap and the competing price in the danger tone, the
+   suggested price beside its copy button. */
+tbody tr.order-beaten > td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.fo-beat, .fo-gap { color: var(--danger); }
+.fo-suggest { display: inline-flex; align-items: center; gap: var(--space-2); }
+.fo-suggest strong { color: var(--gold); }
+
+/* My Contracts. The contract column takes the row's width: its
+   title, then what it holds, as an icon strip and one line of names,
+   or a courier's route. Status, parties, value and dates stay
+   compact beside it. */
+.ct .l-panes { --l-insp: 23rem; }
 .ct-filter { min-height: var(--tap); }
-.ct-table td:first-child { white-space: normal; min-width: 12rem; }
-.ct-title { font-weight: 600; }
-.ct-sub { display: block; margin-top: 0.2rem; color: var(--muted); font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 400; line-height: 1.35; }
-.ct-status { white-space: nowrap; }
-.ct-status.live { color: var(--gold); font-weight: 600; }
-.ct-status.done { color: var(--kept); }
+.ct-table td { white-space: normal; vertical-align: top; }
+.ct-table td.mt-num { white-space: nowrap; }
+.ct-table td.ct-what { width: 100%; min-width: 18rem; }
+.ct-title { display: block; color: var(--text-bright); font-weight: 600; }
+.ct-route { display: block; margin-top: 0.2rem; }
+.ct-arrow { color: var(--muted); }
+.ct-strip { display: flex; align-items: center; gap: var(--space-2); margin-top: 0.3rem; min-width: 0; }
+.ct-icons { display: inline-flex; flex: none; }
+.ct-icons img { border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-inset); }
+.ct-icons img + img { margin-left: -0.35rem; }
+.ct-strip-txt { min-width: 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.35; }
+.ct-strip-txt a { color: var(--text); }
+.ct-qty { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.ct-parties { min-width: 9rem; }
+.ct-val { color: var(--gold); font-weight: 600; }
+.ct-late { color: var(--danger); }
 .ct-note { margin: var(--space-3) 0 0; color: var(--muted); }
+.ct-table .fo-pill, .ct-table td:is(:nth-child(2), :nth-child(5)) .fo-sub { white-space: nowrap; }
+.ct-what :is(.ct-route, .ct-strip, .fo-sub) { font-weight: 400; }
 
-/* With a contract open beside the list, the columns its inspector
-   repeats step out so the rest stays a table. */
-.l-console.ct[data-depth="2"] .ct-table :is(th, td):is(:nth-child(4), :nth-child(5), :nth-child(7), :nth-child(8), :nth-child(9)) { display: none; }
+/* Filter chips: the contract types, then whose contract it is. */
+.ct-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.ct-chips-gap { width: 1px; height: 1.4rem; margin: 0 var(--space-1); background: var(--hairline); }
+.ct-chip { display: inline-flex; align-items: center; min-height: 2rem; padding: 0 0.75rem; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; }
+.ct-chip:hover { color: var(--text); background: var(--row-hover); text-decoration: none; }
+.ct-chip.on { border-color: var(--sel-edge); background: var(--sel-bg); color: var(--text-bright); }
 
-.ct-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
+/* With a contract open beside the list, the parties and dates step
+   out (the inspector shows them) so the rest stays a table. */
+.l-console.ct[data-depth="2"] .ct-table :is(th, td):is(:nth-child(3), :nth-child(5)) { display: none; }
+
+/* The inspector: the headline figure, then the facts. */
+.ct-msub { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0.3rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
+.ct-money { display: flex; flex-direction: column; gap: 0.1rem; margin: var(--space-3) 0 0; padding: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); }
+.ct-money-l { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.ct-money-v { color: var(--gold); font-family: var(--font-num); font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ct-left { color: var(--muted); }
 .ct-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .ct-h small { font-weight: 500; }
 .ct-items { margin: 0; padding: 0; list-style: none; }
-.ct-items li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
-.ct-qty { flex: none; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-.fo-sub { display: block; margin-top: 0.15rem; color: var(--muted); font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 400; }
-.fo-status { display: inline-block; max-width: 14rem; }
+.ct-items li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.ct-items .ct-qty, .ct-items > li > .ct-qty { flex: none; }
+
+/* Info tone: a courier on its way. */
+.fo-pill.info { border-color: color-mix(in srgb, var(--fo-bid) 55%, transparent); background: color-mix(in srgb, var(--fo-bid) 12%, transparent); color: var(--text-bright); }

@@ -44,6 +44,12 @@ var Module = module.Module{
 				{Href: "/contracts/search/", Label: "Contract Search", Pages: []string{"contract_search.html", "contract_detail.html"}, After: "/market/"},
 			},
 		},
+		{
+			Section: "corporation",
+			Entries: []module.NavEntry{
+				{Href: "/corporations/contracts/", Label: "Contracts", Pages: []string{"corp_contracts.html"}, After: "/corporations/orders/"},
+			},
+		},
 	},
 	Routes: func(r chi.Router, deps module.Deps) {
 		h := func(f func(*mod, http.ResponseWriter, *http.Request)) http.HandlerFunc {
@@ -51,6 +57,7 @@ var Module = module.Module{
 		}
 		auth := r.With(deps.RequireAuth())
 		auth.Get("/contracts/", h((*mod).handleContracts))
+		auth.Get("/corporations/contracts/", h((*mod).handleCorpContracts))
 		// The public search and detail pages read the stored
 		// corpus only, so they ride the anonymous gate like the
 		// other public market surfaces.
@@ -66,6 +73,7 @@ var Module = module.Module{
 		{Template: "contracts.html", Section: "market"},
 		{Template: "contract_search.html", Section: "market"},
 		{Template: "contract_detail.html", Section: "market"},
+		{Template: "corp_contracts.html", Section: "corporation"},
 	},
 }
 
@@ -77,6 +85,10 @@ type PageData struct {
 	ContractSearch *searchView
 	ContractDetail *detailView
 	ContractPanel  *panelView
+	// The corporation's contracts: the page head and gates in
+	// CorpContracts, the list itself in Contracts like the pilot page.
+	CorpContracts *corpContractsView
+	CorpChars     []module.CharLink
 }
 
 // Shell returns the embedded ShellData pointer for render.

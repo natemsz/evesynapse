@@ -119,13 +119,34 @@ const maxContractItemsPerCycle = 100
 // stored and whether ESI's error limit stopped the pass. Deleted
 // contracts are skipped (their item endpoint is gone for good).
 func (app *Application) warmContractItems(ctx context.Context, ch db.Character) (fetched int, limited bool) {
-	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapContracts) {
+	return app.warmContractItemsOf(ctx, ch, esi.SnapContracts, func(contractID int64) ([]byte, error) {
+		return app.esi.FetchContractItems(ctx, ch, contractID)
+	})
+}
+
+// warmCorpContractItems is warmContractItems for the contracts of the
+// character's corporation (the corp_contracts snapshot), read through
+// the corporation's items endpoint into the same store.
+func (app *Application) warmCorpContractItems(ctx context.Context, ch db.Character) (fetched int, limited bool) {
+	corpID, ok := app.corpIDForCharacter(ctx, ch)
+	if !ok {
+		return 0, false
+	}
+	return app.warmContractItemsOf(ctx, ch, esi.SnapCorpContracts, func(contractID int64) ([]byte, error) {
+		return app.esi.FetchCorpContractItems(ctx, ch, corpID, contractID)
+	})
+}
+
+// warmContractItemsOf warms the item lists behind one stored
+// contracts snapshot kind, fetching each through fetch.
+func (app *Application) warmContractItemsOf(ctx context.Context, ch db.Character, kind string, fetch func(contractID int64) ([]byte, error)) (fetched int, limited bool) {
+	if kindExcludedByGrants(scopeSet(ch.Scopes), kind) {
 		return 0, false // the login never granted the contracts scope: not planned
 	}
-	if app.refusalSettled(ctx, ch.CharacterID, esi.SnapContracts) {
+	if app.refusalSettled(ctx, ch.CharacterID, kind) {
 		return 0, false // the contracts login is refused; item lists would be too
 	}
-	payload, ok := app.snapshotPayload(ctx, ch.CharacterID, esi.SnapContracts)
+	payload, ok := app.snapshotPayload(ctx, ch.CharacterID, kind)
 	if !ok {
 		return 0, false // no contracts list yet; nothing to warm
 	}
@@ -168,12 +189,12 @@ func (app *Application) warmContractItems(ctx context.Context, ch db.Character) 
 			continue // already stored (by any character's list)
 		}
 
-		body, err := app.esi.FetchContractItems(ctx, ch, c.ContractID)
+		body, err := fetch(c.ContractID)
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return fetched, true
 			}
-			if app.recordFetchRefusal(ctx, ch.CharacterID, esi.SnapContracts, err) {
+			if app.recordFetchRefusal(ctx, ch.CharacterID, kind, err) {
 				return fetched, false // the login is refused; every remaining item would be too
 			}
 			if ctx.Err() == nil {

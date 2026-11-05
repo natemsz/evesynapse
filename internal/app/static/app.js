@@ -4141,6 +4141,7 @@
     { name: "Corporation Members", url: "/corporations/members/" },
     { name: "Corporation Wallets", url: "/corporations/wallets/" },
     { name: "Corporation Orders", url: "/corporations/orders/" },
+    { name: "Corporation Contracts", url: "/corporations/contracts/" },
     { name: "Corporation Assets", url: "/corporations/assets/" },
     { name: "Corporation Structures", url: "/corporations/structures/" },
     { name: "Corporation Killmails", url: "/corporations/killmails/" },

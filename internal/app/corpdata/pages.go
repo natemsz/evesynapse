@@ -404,6 +404,18 @@ type corpOrderRow struct {
 	// stored 30-day line).
 	RegionID int64
 	Spark    template.HTML
+	// Line is the same stored line drawn in the trend column.
+	Line template.HTML
+	// Tone colours Status: bad, warn or good (module.OrderHealthTone).
+	Tone string
+	// Heat: how competitive the item is at the order's station (the
+	// pilot page's words, module.HeatWord), from the stored counts.
+	Heat, HeatNote, HeatTone string
+	// LeftPct is the share still listed, for the volume meter.
+	LeftPct int
+	// Left is the time until the order expires; ExpiresOn its date.
+	Left, ExpiresOn string
+	LocID           int64
 }
 
 // corpOrdersView is the Corporation Orders page body.
@@ -440,6 +452,7 @@ func (app *mod) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
 	data.CorpChars = sel.Links
 
 	view := &corpOrdersView{CorpViewBase: sel.Base}
+	now := time.Now()
 	data.CorpOrders = view
 
 	var orders esi.CorpOrders
@@ -503,9 +516,11 @@ func (app *mod) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
 			view.Sells++
 			sellValue += o.Price * float64(o.VolumeRemain)
 		}
-		expires := ""
+		expires, left, expiresOn := "", "", ""
 		if t, err := time.Parse(time.RFC3339, o.Issued); err == nil && o.Duration > 0 {
-			expires = t.Add(time.Duration(o.Duration) * 24 * time.Hour).UTC().Format("2006-01-02 15:04 UTC")
+			end := t.Add(time.Duration(o.Duration) * 24 * time.Hour)
+			expires = end.UTC().Format("2006-01-02 15:04 UTC")
+			left, expiresOn = module.TimeLeft(end, now), module.ShortDate(end)
 		}
 		row := corpOrderRow{
 			Item:       app.deps.TypeNameOrID(ctx, o.TypeID),
@@ -519,10 +534,15 @@ func (app *mod) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
 			IssuedBy:   app.deps.DisplayCharacter(ctx, o.IssuedBy),
 			IssuedByID: o.IssuedBy,
 			RegionID:   o.RegionID,
+			LeftPct:    module.LeftPct(o.VolumeRemain, o.VolumeTotal),
+			Left:       left,
+			ExpiresOn:  expiresOn,
+			LocID:      o.LocationID,
 		}
 		if !o.IsBuyOrder {
 			if h, ok := health[o.OrderID]; ok && h.CharacterID == o.IssuedBy {
 				row.Status, row.Bad = app.deps.OrderHealthText(h.MyPrice, h.Status, h.StationBest, h.RegionBest)
+				row.Tone = module.OrderHealthTone(h.Status)
 			} else if ownChars[o.IssuedBy] {
 				row.Status = "Not checked against the order book yet"
 			}
@@ -543,12 +563,28 @@ func (app *mod) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
 		return rows[i].Price < rows[j].Price
 	})
 	keys := make([]module.SparkKey, len(rows))
+	locSeen := make(map[int64]bool)
+	var locs []int64
 	for i, r := range rows {
 		keys[i] = module.SparkKey{RegionID: r.RegionID, TypeID: r.TypeID}
+		if r.LocID > 0 && !locSeen[r.LocID] {
+			locSeen[r.LocID] = true
+			locs = append(locs, r.LocID)
+		}
 	}
-	if cards := app.deps.PriceSparks(ctx, keys); len(cards) > 0 {
+	if sparks := app.deps.PriceSparkLines(ctx, keys); len(sparks) > 0 {
 		for i := range rows {
-			rows[i].Spark = cards[keys[i]]
+			rows[i].Spark, rows[i].Line = sparks[keys[i]].Card, sparks[keys[i]].Line
+		}
+	}
+	// Competition at each order's station: the stored heat counts the
+	// pilot's My Orders reads, one read for the page's stations.
+	if len(locs) > 0 {
+		beats := module.StationHeat(ctx, app.queries, locs)
+		for i := range rows {
+			n := beats[module.HeatKey{LocationID: rows[i].LocID, TypeID: rows[i].TypeID, Buy: rows[i].Side == "Buy"}]
+			rows[i].Heat, rows[i].HeatNote = module.HeatWord(n), module.HeatNote(n)
+			rows[i].HeatTone = module.HeatTone(rows[i].Heat)
 		}
 	}
 	view.Rows = rows

@@ -24,7 +24,7 @@
    filter first. */
 .co-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0 0 var(--space-3); }
 .co-filter { flex: 1 1 14rem; min-width: 0; max-width: 24rem; min-height: var(--tap); }
-.co-bar .fo-tablist { margin: 0; }
+.co-bar .fo-seg { margin: 0; }
 .co-bar.tabs-on ~ * .fo-h { display: none; }
 .co-bar.tabs-on ~ * .fo-panel + .fo-panel { margin-top: 0; }
 .co-roster small, .co-card small { font-size: var(--fs-sm); }

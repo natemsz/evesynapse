@@ -74,6 +74,7 @@ func corpSnapshotKinds() []string {
 		esi.SnapCorpAssets,
 		esi.SnapCorpStructures,
 		esi.SnapCorpKillmails,
+		esi.SnapCorpContracts,
 	)
 }
 
@@ -140,8 +141,8 @@ type corpSectionState = module.CorpSectionState
 // is not warming: nobody feeds this section, and the state carries
 // the targeted add-scopes link that would change that.
 func (app *Application) corpSection(ctx context.Context, characterID int64, kind string, out any) corpSectionState {
-	if app.loadCorpSnapshot(ctx, characterID, kind, out) {
-		return corpSectionState{Loaded: true}
+	if at, ok := app.loadSnapshotAt(ctx, characterID, kind, out); ok {
+		return corpSectionState{Loaded: true, FetchedAt: at}
 	}
 	state, detail, found := app.corpKindState(ctx, characterID, kind)
 	if found && state == fetchStateRoleMissing {

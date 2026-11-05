@@ -1,0 +1,31 @@
+{{define "title"}}Corporation Contracts{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Corporation Contracts</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+
+{{define "content"}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .CorpChars}}</div>
+  {{with .CorpContracts}}<p class="l-head-sum"><b>{{corpLink .CorpID .CorpTitle}}</b>: contracts the corporation issued or is assigned, newest first.{{with .SnapshotAge}} <span class="fo-age">{{.}}</span>{{end}}</p>{{end}}
+</div>
+
+{{with .CorpContracts}}
+  {{if .Forbidden}}
+  <div class="l-panel co-gate"><p>ESI refused this corporation's contracts (403). They appear here once {{.CharacterName}} can read them{{if .RoleMissing}}: the game asks for the <b>{{.RoleMissing}}</b> role{{end}}.</p></div>
+  {{else if .NoFeeder}}
+  <div class="l-panel co-gate"><p>{{.CharacterName}} hasn't granted the permission that reads corporation contracts, so nobody shares them with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
+  {{else if .Warming}}
+  <div class="l-panel co-gate"><p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p></div>
+  {{else if $.Contracts.Total}}
+  {{template "contract-console" $}}
+  {{else}}
+  <div class="l-panel co-gate"><p>No corporation contracts in the latest snapshot.</p></div>
+  {{end}}
+{{else}}
+  <p>No corporation to show yet. <a href="/auth/link">Link a character</a> first.</p>
+{{end}}
+</div>
+{{end}}

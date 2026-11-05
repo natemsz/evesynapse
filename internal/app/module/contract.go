@@ -194,6 +194,13 @@ type CorpSectionState struct {
 	// features offer theirs.
 	NoFeeder     bool
 	AddScopesURL string
+	// FetchedAt is when the loaded snapshot was read from ESI.
+	FetchedAt time.Time
+}
+
+// SnapshotAge is EconSectionState.SnapshotAge for a corporation page.
+func (s CorpSectionState) SnapshotAge() string {
+	return EconSectionState{FetchedAt: s.FetchedAt}.SnapshotAge()
 }
 
 // CorpViewBase carries what every corporation subpage header renders:
@@ -286,6 +293,38 @@ type EconSectionState struct {
 	Loaded  bool
 	Warming bool   // no snapshot yet and no failure recorded
 	Note    string // why the data is absent, when not warming
+	// FetchedAt is when the loaded snapshot was read from ESI.
+	FetchedAt time.Time
+}
+
+// SnapshotAge says how old a snapshot is the way page heads phrase
+// it: "Updated 9 minutes ago"; "" when the time is unknown.
+func (s EconSectionState) SnapshotAge() string {
+	if s.FetchedAt.IsZero() {
+		return ""
+	}
+	return "Updated " + AgoText(time.Since(s.FetchedAt))
+}
+
+// AgoText phrases how long ago something happened: "just now",
+// "1 minute ago", "9 minutes ago", "3 hours ago", "2 days ago".
+func AgoText(d time.Duration) string {
+	unit := func(n int, word string) string {
+		if n == 1 {
+			return "1 " + word + " ago"
+		}
+		return strconv.Itoa(n) + " " + word + "s ago"
+	}
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return unit(int(d/time.Minute), "minute")
+	case d < 48*time.Hour:
+		return unit(int(d/time.Hour), "hour")
+	default:
+		return unit(int(d/(24*time.Hour)), "day")
+	}
 }
 
 // Scopes and op answers the pilot pages ask about.
@@ -987,6 +1026,13 @@ const (
 // SparkKey names one priced figure's history: a type in a region.
 type SparkKey struct{ RegionID, TypeID int64 }
 
+// PriceSpark is one figure's stored 30-day price line twice over:
+// Card for the hover (sparkFig), Line drawn small for a trend column.
+type PriceSpark struct {
+	Card template.HTML
+	Line template.HTML
+}
+
 // TheForgeRegionID is the house price region: TypicalSells reads its
 // swept book, so a figure priced from it keys its hover card here.
 const TheForgeRegionID int64 = 10000002
@@ -1071,6 +1117,10 @@ type Deps interface {
 	// (one bounded read per region); none when the reader has hover
 	// cards switched off or the region keeps no daily history.
 	PriceSparks(ctx context.Context, keys []SparkKey) map[SparkKey]template.HTML
+	// PriceSparkLines is the same stored line for a table that draws
+	// it in a trend column of its own: the line for every signed-in
+	// reader, the card only when hover cards are on.
+	PriceSparkLines(ctx context.Context, keys []SparkKey) map[SparkKey]PriceSpark
 
 	// --- names, sessions and shared feeds (the build planner reads these) ---
 

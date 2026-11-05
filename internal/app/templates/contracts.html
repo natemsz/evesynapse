@@ -8,7 +8,7 @@
 <div class="l-page">
 <div class="l-head">
   <div class="l-head-pick">{{template "charselector" .ContractsChars}}</div>
-  {{if .Contracts}}<p class="l-head-sum">{{.Contracts.CharacterName}}'s contracts, newest first.</p>{{end}}
+  {{if .Contracts}}<p class="l-head-sum">{{.Contracts.CharacterName}}'s contracts, newest first.{{with .Contracts.Contracts.SnapshotAge}} <span class="fo-age">{{.}}</span>{{end}}</p>{{end}}
 </div>
 
 {{if .Contracts}}
@@ -16,75 +16,8 @@
 <p><small>{{.Contracts.Contracts.Note}}</small></p>
 {{else if .Contracts.Contracts.Warming}}
 <p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
-{{else if .Contracts.Rows}}
-<div class="l-console ct" data-depth="{{.Contracts.Depth}}" data-land-top>
-<div class="l-panes">
-<section class="l-pane l-pane--main ct-main" aria-label="Contracts">
-  <div class="l-pane-bar">
-    <h2 class="l-pane-title">Contracts <small>{{len .Contracts.Rows}}</small></h2>
-    <input type="search" class="ct-filter" placeholder="Search title, type, status or party" aria-label="Search the contracts" data-table-filter="contracts-table" data-row-class="ct-row">
-  </div>
-  <div class="tw">
-  <table id="contracts-table" class="ct-table">
-    <thead><tr><th class="card-title">Title</th><th>Type</th><th>Status</th><th>Issuer</th><th>Assignee</th><th class="mt-num">Price</th><th class="mt-num">Reward</th><th class="mt-num opt">Collateral</th><th class="opt">Issued</th><th>Expires</th></tr></thead>
-    <tbody>
-    {{range .Contracts.Rows}}
-      <tr class="ct-row{{if .On}} yours{{end}}" data-search="{{.Title}} {{.Type}} {{.Status}} {{.Issuer}} {{.Assignee}} {{.Acceptor}}">
-        <td><a href="{{.Href}}" data-l-step="in" class="ct-title">{{.Title}}</a>{{if .HasRoute}}<small class="ct-sub">Courier: {{placeLink .RouteStart}} → {{placeLink .RouteEnd}}</small>{{end}}{{if .Items}}<small class="ct-sub">{{range $i, $it := .Items}}{{if $i}} · {{end}}{{itemLink $it.TypeID $it.Name}} × {{$it.Qty}}{{if $it.Note}} ({{$it.Note}}){{end}}{{end}}</small>{{end}}{{if .ItemsNote}}<small class="ct-sub">{{.ItemsNote}}</small>{{end}}</td>
-        <td>{{.Type}}</td>
-        <td><span class="ct-status {{.Tone}}">{{.Status}}</span></td>
-        <td>{{if .IssuerPending}}<span data-live-region data-poll-url="/labels/character-fragment?id={{.IssuerID}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Issuer}}…</span>{{else}}{{charLink $.ViewerChars .IssuerID .Issuer}}{{end}}</td>
-        <td>{{if .AssigneePending}}<span data-live-region data-poll-url="/labels/character-fragment?id={{.AssigneeID}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Assignee}}…</span>{{else if .AssigneeIsChar}}{{charLink $.ViewerChars .AssigneeID .Assignee}}{{else if .AssigneeIsCorp}}{{corpLink .AssigneeID .Assignee}}{{else}}{{.Assignee}}{{end}}{{if .Acceptor}} (accepted by {{if .AcceptorPending}}<span data-live-region data-poll-url="/labels/character-fragment?id={{.AcceptorID}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Acceptor}}…</span>{{else}}{{charLink $.ViewerChars .AcceptorID .Acceptor}}{{end}}){{end}}</td>
-        <td class="mt-num">{{.Price}}</td>
-        <td class="mt-num">{{.Reward}}</td>
-        <td class="mt-num">{{.Collateral}}</td>
-        <td>{{.Issued}}</td>
-        <td>{{.Expires}}</td>
-      </tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  <p class="ct-note"><small>Prices in ISK.{{if .Contracts.Cut}} + {{.Contracts.Cut}} older contracts in this snapshot.{{end}}</small></p>
-</section>
-
-{{with .Contracts.Insp}}
-<aside class="l-pane l-pane--insp insp ct-insp" aria-label="Contract">
-  <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{$.Contracts.ListHref}}">Contracts</a><a class="l-close" href="{{$.Contracts.ListHref}}" aria-label="Close the contract">&#10005;</a></div>
-  <div class="insp-head"><div class="insp-titles"><h3>{{.Title}}</h3><p class="ct-msub">{{.Type}} · <span class="ct-status {{.Tone}}">{{.Status}}</span></p></div></div>
-  <h4 class="ct-h">Money</h4>
-  <dl class="insp-facts">
-    <div><dt>Price</dt><dd>{{.Price}} ISK</dd></div>
-    <div><dt>Reward</dt><dd>{{.Reward}} ISK</dd></div>
-    <div><dt>Collateral</dt><dd>{{.Collateral}} ISK</dd></div>
-  </dl>
-  <h4 class="ct-h">Parties</h4>
-  <dl class="insp-facts">
-    <div><dt>Issuer</dt><dd>{{if .IssuerPending}}<span data-live-region data-poll-url="/labels/character-fragment?id={{.IssuerID}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Issuer}}…</span>{{else}}{{charLink $.ViewerChars .IssuerID .Issuer}}{{end}}</dd></div>
-    <div><dt>Assignee</dt><dd>{{if .AssigneePending}}<span data-live-region data-poll-url="/labels/character-fragment?id={{.AssigneeID}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Assignee}}…</span>{{else if .AssigneeIsChar}}{{charLink $.ViewerChars .AssigneeID .Assignee}}{{else if .AssigneeIsCorp}}{{corpLink .AssigneeID .Assignee}}{{else}}{{.Assignee}}{{end}}</dd></div>
-    {{if .Acceptor}}<div><dt>Accepted by</dt><dd>{{if .AcceptorPending}}<span data-live-region data-poll-url="/labels/character-fragment?id={{.AcceptorID}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Acceptor}}…</span>{{else}}{{charLink $.ViewerChars .AcceptorID .Acceptor}}{{end}}</dd></div>{{end}}
-  </dl>
-  <h4 class="ct-h">Dates</h4>
-  <dl class="insp-facts">
-    <div><dt>Issued</dt><dd>{{.Issued}}</dd></div>
-    <div><dt>Expires</dt><dd>{{.Expires}}</dd></div>
-  </dl>
-  {{if .HasRoute}}
-  <h4 class="ct-h">Route</h4>
-  <dl class="insp-facts">
-    <div><dt>Pick up</dt><dd>{{placeLink .RouteStart}}</dd></div>
-    <div><dt>Deliver to</dt><dd>{{placeLink .RouteEnd}}</dd></div>
-  </dl>
-  {{end}}
-  {{if .Items}}
-  <h4 class="ct-h">Items <small>{{len .Items}}</small></h4>
-  <ul class="ct-items">{{range .Items}}<li><span>{{itemLink .TypeID .Name}}{{if .Note}} <small>({{.Note}})</small>{{end}}</span><span class="ct-qty">× {{.Qty}}</span></li>{{end}}</ul>
-  {{else if .ItemsNote}}<p class="insp-note">{{.ItemsNote}}</p>{{end}}
-</aside>
-<a class="l-scrim" href="{{$.Contracts.ListHref}}" aria-label="Close the contract" tabindex="-1"></a>
-{{end}}
-</div>
-</div>
+{{else if .Contracts.Total}}
+{{template "contract-console" .}}
 {{else}}
 <p><small>No contracts in the latest snapshot.</small></p>
 {{end}}

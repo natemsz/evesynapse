@@ -548,6 +548,8 @@ func (s *corpStubTransport) RoundTrip(req *http.Request) (*http.Response, error)
 		return respond(http.StatusOK, `[]`)
 	case strings.HasSuffix(path, "/killmails/recent/"):
 		return respond(http.StatusOK, `[]`)
+	case strings.HasSuffix(path, "/contracts/"):
+		return respond(http.StatusOK, `[]`)
 	default:
 		return respond(http.StatusNotFound, `{"error":"unexpected path `+path+`"}`)
 	}

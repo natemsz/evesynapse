@@ -150,24 +150,35 @@
   /* The market item's figures: best sell and best buy (the
      cards carrying their typical-price line) across the full
      width, the short figures two-up, a lone last one full. */
-  .mkt-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
-  .mkt-kpis > .kpi:has(.typical), .mkt-kpis > .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .mkt-kpis { gap: 0.55rem; }
+  .mkt-kpis > .kpi { flex-basis: 40%; }
+  .mkt-kpis > .kpi:has(.typical) { flex-basis: 100%; }
 
   /* Labelled forms (a <label> wrapping its caption, bare text or
      <small>, and its field — the site's form idiom), whether the
      labels sit in the form or in one of its <p> rows: each field
      stacks its caption over it and the fields share the row
      two-up; the submit takes the full width under them, where a
-     thumb finds it. Checkbox and radio labels keep their line. */
+     thumb finds it. Checkbox and radio labels keep their line.
+     The rule holds whichever way a page runs the form: in a row
+     the items stretch to the row and each label keeps its field
+     at the bottom, so fields line up under captions of any
+     length; in a column (a stacked form) the same stretch gives
+     every field the full width. A label's 8.5rem is a minimum
+     width, not a flex basis, which a column would read as a
+     height. */
   #main-content :is(form, form p, form [data-sheet]):has(> label > :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)) {
-    display: flex; flex-wrap: wrap; align-items: flex-end;
+    display: flex; flex-wrap: wrap; align-items: stretch;
     gap: 0.6rem 0.7rem;
   }
   #main-content :is(form, form p, form [data-sheet]) > label:has(> :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)) {
-    display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem;
-    flex: 1 1 8.5rem; min-width: 0; margin: 0;
+    display: flex; flex-direction: column; align-items: stretch; justify-content: flex-end; gap: 0.25rem;
+    flex: 1 1 0; min-width: min(8.5rem, 100%); margin: 0;
     white-space: normal;
   }
+  /* A button keeps the bottom of a row (an auto top margin, which
+     a column ignores, where the button takes the full width). */
+  #main-content :is(form, form p, form [data-sheet]):has(> label > :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)) > :is(button, .btn) { margin-top: auto; }
   #main-content :is(form, form p, form [data-sheet]) > label > :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { width: 100%; }
   #main-content :is(form, form p, form [data-sheet]):has(> label > :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)) > :is(.btn, button)[type="submit"] { flex: 1 1 100%; }
   /* A form's heading, notes and action row are rows of their own,

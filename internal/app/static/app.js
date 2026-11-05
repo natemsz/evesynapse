@@ -954,6 +954,9 @@
   document.addEventListener("evesynapse:content-will-swap", function () { closePhoneSheet(false); });
   onContentReady(layoutPhoneSheets);
   layoutPhoneSheets(document);
+  // A widget that builds a sheet after the page painted (the
+  // character picker) lays it out through here.
+  window.EveSynapseSheets = { layout: layoutPhoneSheets };
   if (sheetQuery && sheetQuery.addEventListener) {
     sheetQuery.addEventListener("change", function () { layoutPhoneSheets(document); });
   }
@@ -4764,14 +4767,15 @@
   function labelCardCells(table) {
     var head = table.tHead && table.tHead.rows.length ? table.tHead.rows[table.tHead.rows.length - 1] : null;
     if (!head) return false;
-    var texts = [], spans = [], opts = [], titles = [], i, r, c;
+    var texts = [], spans = [], opts = [], titles = [], figures = [], i, r, c;
     for (i = 0; i < head.cells.length; i++) {
       texts.push(head.cells[i].textContent.trim());
       spans.push(head.cells[i].colSpan);
       opts.push(head.cells[i].classList.contains("opt") ? "1" : "");
       titles.push(head.cells[i].classList.contains("card-title") ? "1" : "");
+      figures.push(head.cells[i].classList.contains("card-figure") ? "1" : "");
     }
-    var labels = cardLabels(texts, spans), optional = cardLabels(opts, spans), titled = cardLabels(titles, spans);
+    var labels = cardLabels(texts, spans), optional = cardLabels(opts, spans), titled = cardLabels(titles, spans), figured = cardLabels(figures, spans);
     // A footer (a Total row) becomes a card like the body rows.
     var groups = Array.prototype.slice.call(table.tBodies);
     if (table.tFoot) groups.push(table.tFoot);
@@ -4794,6 +4798,11 @@
           // place of the first cell, with no label of its own.
           cell.classList.toggle("card-title", !!titled[idx] && cell.colSpan === 1);
           if (titled[idx]) cell.removeAttribute("data-label");
+          // A column the header marks .card-figure is the card's
+          // headline figure: on the title's line, at its right edge,
+          // with no label of its own.
+          cell.classList.toggle("card-figure", !!figured[idx] && cell.colSpan === 1 && !ctl);
+          if (figured[idx] && !ctl) cell.removeAttribute("data-label");
           idx += cell.colSpan;
         }
       }
@@ -5510,13 +5519,54 @@
 // box per character). The field shows the count and filters the list
 // as you type; the list stays open while boxes are ticked and closes
 // on a click elsewhere or Escape. On a phone the list is a bottom
-// sheet instead (the shared data-sheet mechanism): a full-width row
-// carries the count and opens it, and a long list gets a search
-// field inside the sheet. The boxes are ordinary form fields, so
-// saving works the same with or without this.
+// sheet instead (the shared data-sheet mechanism, built by
+// buildSheet for every picker): a full-width row carries the count
+// and opens it, and a long list gets a search field inside the
+// sheet. The boxes are ordinary form fields, so saving works the
+// same with or without this.
 (function () {
   "use strict";
   var docWired = false;
+  var sheetSeq = 0;
+  var chevron = '<svg class="checkselector-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  // The phone sheet parts, built once per picker so every picker
+  // gets them: a row that carries the summary and opens the list,
+  // and the sheet itself (a data-sheet, titled from the picker's
+  // data-title) holding a search field, the list and Done. Off the
+  // phone band the sheet is a plain wrapper and the row stays
+  // hidden, so the picker looks and works as before.
+  function buildSheet(root, input, dropdown) {
+    if (root.querySelector(".checkselector-sheet")) return;
+    var id = "checksheet-" + (++sheetSeq);
+    var open = document.createElement("button");
+    open.type = "button";
+    open.className = "checkselector-open";
+    open.hidden = true;
+    open.setAttribute("data-sheet-open", id);
+    open.innerHTML = '<span class="checkselector-sum"></span>' + chevron;
+    var sheet = document.createElement("div");
+    sheet.className = "checkselector-sheet";
+    sheet.id = id;
+    sheet.setAttribute("data-sheet", "");
+    sheet.setAttribute("data-sheet-title", root.getAttribute("data-title") || "Characters");
+    var find = document.createElement("input");
+    find.type = "search";
+    find.className = "checkselector-search sheet-only";
+    find.placeholder = "Search characters";
+    find.autocomplete = "off";
+    find.setAttribute("aria-label", "Search characters");
+    var foot = document.createElement("div");
+    foot.className = "sheet-foot sheet-only";
+    foot.innerHTML = '<button type="button" class="btn" data-sheet-close>Done</button>';
+    input.parentNode.insertBefore(open, input.nextSibling);
+    open.parentNode.insertBefore(sheet, open.nextSibling);
+    sheet.appendChild(find);
+    sheet.appendChild(dropdown);
+    sheet.appendChild(foot);
+    if (window.EveSynapseSheets) window.EveSynapseSheets.layout(root);
+  }
+
   function wireCheckSelectors() {
     var selectors = Array.prototype.slice.call(document.querySelectorAll("[data-checkselector]"));
     if (!selectors.length) return;
@@ -5528,9 +5578,10 @@
       var dropdown = root.querySelector(".charselector-dropdown");
       var options = Array.prototype.slice.call(root.querySelectorAll(".charselector-option"));
       var boxes = Array.prototype.slice.call(root.querySelectorAll('input[type="checkbox"]'));
+      if (!input || !dropdown) return;
+      buildSheet(root, input, dropdown);
       var search = root.querySelector(".checkselector-search");
       var sum = root.querySelector(".checkselector-sum");
-      if (!input || !dropdown) return;
       if (search) search.hidden = options.length <= 6;
 
       function summarize() {
@@ -5538,6 +5589,7 @@
         // A list to pick additions from says how many are picked.
         if (root.getAttribute("data-summary") === "add") {
           input.placeholder = on ? on + " picked: press Add" : "Add characters…";
+          if (sum) sum.textContent = input.placeholder;
           return;
         }
         var total = options.length;

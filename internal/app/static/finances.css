@@ -70,7 +70,7 @@
 
 /* Beaten: the gap and the competing price in the danger tone, the
    suggested price beside its copy button. */
-tbody tr.order-beaten > td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+tbody tr.order-beaten { --row-edge: var(--danger); --row-edge-w: 3px; }
 .fo-beat, .fo-gap { color: var(--danger); }
 .fo-suggest { display: inline-flex; align-items: center; gap: var(--space-2); }
 .fo-suggest strong { color: var(--gold); }

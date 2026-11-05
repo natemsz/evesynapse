@@ -312,6 +312,17 @@ on the markup:
   card's title in place of the first cell (Killmails titles each
   card with the victim's ship, not the time). A cell with nothing
   in it stays off its card.
+- `class="card-figure"` on a header cell makes that column the
+  card's headline figure: unlabelled, on the title's line at the
+  right edge (a basket item's worth).
+- `class="cards-strip"` on the table runs a card's few short
+  figures as one even strip under the title line instead of two-up
+  (basket items: qty, share, change, effect).
+- Action-only cells (a Pin, move arrows) gather on the card's
+  bottom row, the last at the right edge. A table's shrink-to-fit
+  cell (`width: 1%`) is reset on cards, so it never collapses.
+- The Sort picker sits inside the table's wrapper, so a table laid
+  out in a grid keeps its place.
 - `data-cards="on"` forces cards; `data-cards="off"` keeps a
   table that scrolls sideways inside its own wrapper (on phones its
   text columns wrap). Use "off" only for grids whose point is
@@ -321,6 +332,19 @@ on the markup:
 - A highlighted row (`tr.yours`) takes the theme's selection
   paint, the pinned first cell included; as a card the highlight is
   the card's own.
+- A row marks itself with an edge (ready to build, a loss, an
+  order outbid) by setting `--row-edge` (a colour) and
+  `--row-edge-w` (a width) on the `tr`, never a box-shadow of its
+  own: the edge rides the first cell in a table and the card's side
+  as cards, so it never lands beside a control.
+
+KPI tiles (`.kpis` > `.kpi`) wrap as many across as fit, each at
+least `--kpi-min` wide (13rem, 11rem on `.kpis-small`); tiles on a
+short last row grow to fill it, so a lone tile never leaves a hole.
+For two across, set the tiles' `flex-basis: 40%`, not an exact half.
+
+Grid cells (`.l-grid` with `.s3`/`.s4`): in the six-track band a
+half cell left alone on its row takes the whole row.
 
 ### Phone sheets
 
@@ -335,7 +359,14 @@ sheet of form fields still submits with its form. JS adds the
 sheet's head and close button. Anything inside marked
 `.sheet-only` shows only in sheet mode, and a `.sheet-foot`
 rides the sheet's bottom edge: put the submit there. Contract
-search's filters are the worked example.
+search's filters are the worked example. The character picker
+(`[data-checkselector]`) builds its own sheet, titled from its
+`data-title`: a picker needs no sheet markup.
+
+Labelled forms on phones (a `<label>` wrapping its caption and
+field) share rows two-up with the submit under them; the rule holds
+in a page's column layout too, where every field takes the full
+width. Don't override it per form.
 
 ### Phone and touch styles
 

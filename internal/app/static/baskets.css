@@ -22,7 +22,7 @@
 /* The list. */
 .bk-table td:first-child { white-space: normal; }
 .bk-name { font-weight: 600; }
-tr.bk-own td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+tr.bk-own { --row-edge: var(--accent); --row-edge-w: 2px; }
 .bk-worth > span { color: var(--gold); font-weight: 600; }
 /* The trend column: the 30-day worth line on its own, centred in a
    column sized to it. It sorts by the 30-day change (data-sort). */
@@ -48,28 +48,9 @@ tr.bk-own td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
 .bk-mv-name small { color: var(--muted); }
 .bk-share { display: inline-flex; align-items: center; gap: 0.5rem; }
 .bk-share .l-meter { width: 3.5rem; }
-/* As cards (layout.css "Table cards") an item reads as one row: its
-   name with its worth at the right edge, then qty, share, change and
-   effect as an even strip across the card's full width. */
-#main-content table.bk-table.cards-on > tbody > tr:not([hidden]) {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.75rem;
-}
-#main-content table.bk-table.cards-on > tbody > tr::after { content: ""; order: 1; flex-basis: 100%; }
-#main-content table.bk-table.cards-on > tbody > tr > td { order: 2; flex: 1 1 0; }
-#main-content table.bk-table.cards-on > tbody > tr > td:first-child { order: 0; flex: 1 1 auto; min-width: 0; }
-#main-content table.bk-table.cards-on > tbody > tr > td.bk-wcell { order: 0; flex: none; text-align: right; font-weight: 600; }
-#main-content table.bk-table.cards-on > tbody > tr > td.bk-wcell[data-label]::before { display: none; }
-#main-content table.bk-table.cards-on .bk-share .l-meter { display: none; }
 
 .bk-edit-cols { --l-side: 17rem; --l-main-min: 60%; align-items: start; }
 .bk-rename { flex-direction: column; align-items: stretch; }
 .bk-rename label { display: flex; flex-direction: column; gap: 0.3rem; }
 .bk-rename :is(input, select) { width: 100%; min-height: var(--tap); }
-/* The rename form is one column of full-width fields with a
-   full-width Save at every width. The ids outrank the phone band's
-   labelled-form rule (phone.css), whose bottom alignment would push
-   each field in this column to the right edge at its own width. */
-#main-content #bk-edit .bk-rename { flex-direction: column; align-items: stretch; }
-#main-content #bk-edit .bk-rename > label { flex: none; }
-#main-content #bk-edit .bk-rename > .btn { width: 100%; }
 .bk-delete { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--hairline); }

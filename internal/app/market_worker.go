@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"encoding/json"
+	stdjson "encoding/json"
 	"errors"
 	"evesynapse/internal/app/module"
 	"fmt"
@@ -15,6 +15,12 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 
+	// json is goccy/go-json under the standard library's name for
+	// this file's ESI body and stored killmail decodes: faster
+	// than encoding/json with identical results
+	// (TestAppDecoderParity in decode_parity_test.go). stdjson is
+	// the standard library, kept for the contract detail decode.
+	json "github.com/goccy/go-json"
 	"github.com/lib/pq"
 )
 
@@ -577,7 +583,7 @@ func (app *Application) orbitForgeTypeIDs(ctx context.Context) map[int64]bool {
 				continue
 			}
 			var items []esi.ContractItem
-			if err := json.Unmarshal([]byte(rec.Payload), &items); err != nil {
+			if err := stdjson.Unmarshal([]byte(rec.Payload), &items); err != nil {
 				continue
 			}
 			for _, item := range items {

@@ -41,6 +41,13 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/logging"
+
+	// goccyjson decodes the zKill history pages and the killmails
+	// folded into pilot activity: faster than encoding/json with
+	// identical results (TestAppDecoderParity in
+	// decode_parity_test.go). The standard library stays for the
+	// RawMessage plumbing and the history error probe.
+	goccyjson "github.com/goccy/go-json"
 )
 
 const (
@@ -225,7 +232,7 @@ func zkillHistoryPage(ctx context.Context, client *http.Client, base string, cha
 		return nil, fmt.Errorf("history API answered %d", resp.StatusCode)
 	}
 	var entries []zkillHistoryEntry
-	if err := json.Unmarshal(body, &entries); err != nil {
+	if err := goccyjson.Unmarshal(body, &entries); err != nil {
 		var apiErr struct {
 			Error string `json:"error"`
 		}
@@ -359,7 +366,7 @@ func (app *Application) maintainPilotActivity(ctx context.Context, raw json.RawM
 		return
 	}
 	var km killmailFull
-	if err := json.Unmarshal(raw, &km); err != nil {
+	if err := goccyjson.Unmarshal(raw, &km); err != nil {
 		return
 	}
 	pilots := map[int64]bool{}

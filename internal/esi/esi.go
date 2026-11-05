@@ -33,7 +33,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -3577,25 +3576,6 @@ func (c *Client) StoreSchematic(id int64, s Schematic) {
 // ---------------------------------------------------------------------------
 // Display helpers shared by the page handlers.
 // ---------------------------------------------------------------------------
-
-// SortedSkillIDs returns the skill IDs ordered by skillpoints
-// (heaviest first, ties by ascending ID); used by the home page to
-// pick the heaviest skills first.
-func SortedSkillIDs(skills []Skill) []int64 {
-	sorted := make([]Skill, len(skills))
-	copy(sorted, skills)
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].SkillpointsInSkill != sorted[j].SkillpointsInSkill {
-			return sorted[i].SkillpointsInSkill > sorted[j].SkillpointsInSkill
-		}
-		return sorted[i].SkillID < sorted[j].SkillID
-	})
-	ids := make([]int64, len(sorted))
-	for i, s := range sorted {
-		ids[i] = s.SkillID
-	}
-	return ids
-}
 
 // FormatISK renders a wallet balance with thousands separators and two
 // decimals, e.g. 1234567.891 -> "1,234,567.89".

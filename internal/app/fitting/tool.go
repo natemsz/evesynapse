@@ -36,25 +36,12 @@ type fitEditorView struct {
 	Sim         *fitview.FitSimView
 	LocalID     int64    // saved fit currently open (0 = unsaved)
 	Notes       []string // import notes ("couldn't place ..."), shown once
-	LocalFits   []localFitEntry
 	// Anonymous serves the editor without a session: All-V
 	// skills, no pilots, no save controls, and a sign-in note.
 	Anonymous bool
 	// AnonFits is the anonymous creator's shared fits, from
 	// their history cookie.
 	AnonFits []anonFitEntry
-}
-
-// localFitEntry is one saved fit for the your-fits list.
-type localFitEntry struct {
-	ID          int64
-	Name        string
-	ShipName    string
-	Description string
-	Tags        []string
-	Updated     string
-	IsPublic    bool
-	IsDraft     bool
 }
 
 // fitSimRequest is the simulate/save/export request body: the fit
@@ -979,48 +966,8 @@ func (app *tool) attachFitEditor(ctx context.Context, r *http.Request, data *Pag
 	editor.Tags = strings.Join(doc.Tags, ", ")
 	// The editor does not embed the your-fits list (the search bar
 	// above loads fits through /fittings/mine.json), so the whole fits
-	// table is not pulled for this page. LocalFits stays on the view
-	// for API compatibility; listLocalFitEntries remains for the
-	// dedicated list consumers.
+	// table is not pulled for this page.
 	data.FitEditor = editor
-}
-
-// listLocalFitEntries builds the your-fits list: the user's saved
-// fits, newest first, with ship names and the description/tags
-// stored inside each fit document.
-//
-//lint:ignore U1000 nothing calls it since the editor stopped embedding the list; kept for the dedicated list consumers (see attachFitEditor's note)
-func (app *tool) listLocalFitEntries(ctx context.Context, userID int64) []localFitEntry {
-	rows, err := app.queries.ListLocalFittings(ctx, userID)
-	if err != nil {
-		logging.Errorf("fittings: list local fits: %v", err)
-		return nil
-	}
-	shipIDs := make([]int64, 0, len(rows))
-	for _, row := range rows {
-		shipIDs = append(shipIDs, row.ShipTypeID)
-	}
-	names := app.deps.CachedTypeNames(ctx, shipIDs)
-	entries := make([]localFitEntry, 0, len(rows))
-	for _, row := range rows {
-		var stored fitview.FitDoc
-		_ = json.Unmarshal([]byte(row.ItemsJson), &stored)
-		shipName := fmt.Sprintf("Type #%d", row.ShipTypeID)
-		if n, ok := names[row.ShipTypeID]; ok {
-			shipName = n
-		}
-		entries = append(entries, localFitEntry{
-			ID:          row.ID,
-			Name:        row.Name,
-			ShipName:    shipName,
-			Description: stored.Description,
-			Tags:        stored.Tags,
-			Updated:     rfc3339(row.UpdatedAt),
-			IsPublic:    row.IsPublic,
-			IsDraft:     row.IsDraft,
-		})
-	}
-	return entries
 }
 
 // rfc3339 is a timestamp as the front end reads it.

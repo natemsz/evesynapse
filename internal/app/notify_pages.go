@@ -234,18 +234,25 @@ func (app *Application) markNotificationsRead(ctx context.Context, userID int64,
 // as an on-site target: a path beginning with a single slash. The
 // second byte matters as much as the first — browsers treat "//"
 // and "/\" as scheme-relative addresses and leave the site — so a
-// backslash is rejected anywhere in the value, and CR/LF would let
-// the value break out of the Location header entirely. Every
-// handler that redirects to a user-supplied "next" goes through
-// here rather than re-checking by hand.
+// backslash is rejected anywhere in the value. Control characters
+// are rejected too: CR/LF would let the value break out of the
+// Location header, and browsers strip tab and newline from a URL
+// before resolving it, so "/\t/evil.com" would land on "//evil.com".
+// Every handler that redirects to a user-supplied "next" goes
+// through here rather than re-checking by hand.
 func safeLocalNext(n string) bool {
 	if !strings.HasPrefix(n, "/") {
 		return false
 	}
-	if len(n) > 1 && (n[1] == '/' || n[1] == '\\') {
+	if len(n) > 1 && n[1] == '/' {
 		return false
 	}
-	return !strings.ContainsAny(n, "\\\r\n")
+	for i := 0; i < len(n); i++ {
+		if c := n[i]; c == '\\' || c < 0x20 || c == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // notifyTarget is where a notification leads. Stored addresses are

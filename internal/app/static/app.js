@@ -266,7 +266,22 @@
       strip.scrollLeft = on.offsetLeft - strip.offsetLeft - (strip.clientWidth - on.offsetWidth) / 2;
     }
   }
-  onContentReady(revealSectionTab);
+  // swap.js repaints the shell's sub-nav bar along with
+  // #main-content, but content-ready names only the main region
+  // as its root; the tab strips living in the bar need the same
+  // pass. Run fn over the root and, when the root doesn't hold
+  // it, over the bar too.
+  function subnavBar() {
+    return document.querySelector(".page-shell > .subnav");
+  }
+  function onSectionTabsReady(fn) {
+    onContentReady(function (root) {
+      fn(root);
+      var bar = subnavBar();
+      if (bar && bar !== root && !(root.contains && root.contains(bar))) fn(bar);
+    });
+  }
+  onSectionTabsReady(revealSectionTab);
   revealSectionTab(document);
 
   // --- Section tab overflow ------------------------------------
@@ -510,7 +525,7 @@
       layoutTabStrip(st);
     }
   }
-  onContentReady(initTabOverflow);
+  onSectionTabsReady(initTabOverflow);
   initTabOverflow(document);
   window.addEventListener("resize", queueTabLayouts);
   // Crossing into or out of the phone band re-lays every strip
@@ -529,13 +544,15 @@
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(queueTabLayouts);
   }
-  // Swapped-out strips give their observers back; their state is
-  // discarded with the old content on the next init.
+  // Swapped-out strips (main's and the sub-nav bar's) give their
+  // observers back; their state is discarded with the old content
+  // on the next init.
   document.addEventListener("evesynapse:content-will-swap", function () {
     var main = document.getElementById("main-content");
+    var bar = subnavBar();
     for (var i = tabOverflowStrips.length - 1; i >= 0; i--) {
       var st = tabOverflowStrips[i];
-      if (main && main.contains(st.strip)) {
+      if ((main && main.contains(st.strip)) || (bar && bar.contains(st.strip))) {
         if (st.ro) st.ro.disconnect();
         tabOverflowStrips.splice(i, 1);
       }

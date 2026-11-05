@@ -342,3 +342,40 @@ test("the disclosure opens, closes on link click, outside click and Escape", asy
   assert.equal(s.panel.hidden, true, "Escape closes it");
   assert.equal(s.btn.focused, true, "Escape returns focus to the button");
 });
+
+// swap.js repaints the shell's sub-nav bar outside #main-content
+// and fires content-ready with main as the root. The bar's fresh
+// strips must still be laid out: coming from a page whose tabs
+// fit to one whose tabs don't, the More button has to appear
+// without a reload.
+test("a swap lays out the sub-nav bar's fresh strip, not just main's", async function () {
+  const bar = new El("div");
+  bar.className = "subnav";
+  const main = new El("main");
+  main.id = "main-content";
+  const first = makeStrip(["Home", "News"], [120, 120], 0, 90);
+  first.strip.clientWidth = 400;
+  first.strip.scrollWidth = 400;
+  bar.appendChild(first.strip);
+  const env = makeEnv([first.strip]);
+  env.doc.querySelector = function (sel) {
+    return sel === ".page-shell > .subnav" ? bar : null;
+  };
+  env.doc.getElementById = function (id) { return id === "main-content" ? main : null; };
+  loadAppJS(env);
+  assert.equal(first.wrap.hidden, true, "the first page's tabs fit");
+
+  env.fireDoc("evesynapse:content-will-swap", { detail: { url: "/next" } });
+  bar.removeChild(first.strip);
+  first.strip.isConnected = false;
+  const next = makeStrip(["Alpha", "Beta", "Gamma", "Delta"], [120, 140, 110, 160], 0, 90);
+  next.strip.clientWidth = 400;
+  next.strip.scrollWidth = 400;
+  bar.appendChild(next.strip);
+  env.fireDoc("evesynapse:content-ready", { detail: { root: main, url: "/next" } });
+
+  assert.equal(next.wrap.hidden, false, "More appears on the swapped-in sub-nav");
+  assert.deepEqual(rowLabels(next.strip, next.wrap), ["Alpha", "Beta"]);
+  assert.deepEqual(panelLabels(next.panel), ["Gamma", "Delta"]);
+  assert.equal(FakeRO.live[0].dead, true, "the swapped-out strip's observer is released");
+});

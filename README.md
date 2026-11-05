@@ -1724,7 +1724,9 @@ and shape are verified before anything is stored. Verification
 against ESI is sampled, not exhaustive: new signers are checked
 every time, then the check rate falls with trust (half at half
 trust, five percent near the top), drawn unpredictably per
-entry. A failed check counts against its signer with weight
+entry.
+
+A failed check counts against its signer with weight
 that doubles per consecutive failure, and five in a row excludes
 on velocity alone; old bad marks fade a little every gossip
 round, and passing checks rebuild trust, so a fixed peer earns
@@ -1737,7 +1739,9 @@ instance has not fetched for itself since, and fetches it from
 ESI instead. The
 urgent drain asks peers before spending ESI, and a key with a
 fresh staged entry skips its refetch while the spot decision
-lands. The operator can always add an
+lands.
+
+The operator can always add an
 instance by address, approve, exclude, re-admit, or remove one
 on the Admin page. The first key seen for an instance is the
 one kept: a later sighting under another key is refused and
@@ -1747,8 +1751,9 @@ instance is the only way its key changes (the next sighting
 pins the new one). Every member signs its own address with
 its own key and the time it signed; that tuple travels through
 every member list, relayed unchanged, so an address is always
-its owner's word, and of two tuples the later-issued wins. A
-seed is a member like any other, with its own instance ID and
+its owner's word, and of two tuples the later-issued wins.
+
+A seed is a member like any other, with its own instance ID and
 key, and there can be several. Only peers a pull has lately
 staged data from are asked for data; any other peer gets one
 probe, then is dialed for membership alone until a gossip round

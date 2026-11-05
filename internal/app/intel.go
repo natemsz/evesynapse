@@ -74,7 +74,7 @@ func (app *Application) orgDisplay(ctx context.Context, corporationID, allianceI
 // ---------------------------------------------------------------------------
 
 // serverStatusView is the Home page's Tranquility line. Nil on
-// pageData until the worker's first intel pass lands the status
+// pageData until the first status refresh lands the status
 // snapshot — Home renders exactly as before without it.
 type serverStatusView struct {
 	Players string // formatted
@@ -91,10 +91,10 @@ func (app *Application) loadServerStatus(ctx context.Context) (*serverStatusView
 }
 
 // esiDownAfter is how stale the stored Tranquility status may get
-// before the Overview bar calls ESI down. The worker refreshes it
-// every cycle (about a minute) on a 30-second ESI cache window, so
-// ten minutes without a fresh copy means ESI has stopped answering
-// (daily downtime, an outage), not a slow cycle.
+// before the Overview bar calls ESI down. The status refresh
+// renews it about every minute on a 30-second ESI cache window,
+// so ten minutes without a fresh copy means ESI has stopped
+// answering (daily downtime, an outage), not a slow refresh.
 const esiDownAfter = 10 * time.Minute
 
 // esiHealthView is the Overview bar's status pill: the combined
@@ -157,6 +157,47 @@ func (app *Application) esiHealth(ctx context.Context) *esiHealthView {
 		view.Title = "ESI is answering; Tranquility is in VIP mode (developers only)."
 	}
 	return view
+}
+
+// statusRefreshInterval is how often the standalone status
+// refresh asks ESI for Tranquility's status: about once a minute,
+// on the snapshot's own schedule.
+const statusRefreshInterval = time.Minute
+
+// refreshServerStatus fetches Tranquility's status through the
+// ESI client and stores it as the GlobalStatus snapshot the
+// readers above use. It is the snapshot's one writer. A failed
+// fetch stores nothing: the snapshot is left to age, which is
+// the readers' down signal.
+func (app *Application) refreshServerStatus(ctx context.Context) {
+	if app.esi == nil {
+		return
+	}
+	if err := app.esi.FetchAndStoreGlobalSnapshot(ctx, esi.GlobalStatus); err != nil {
+		if ctx.Err() == nil {
+			logging.Warnf("status refresh: fetch Tranquility status: %v", err)
+		}
+	}
+}
+
+// runServerStatusRefresh keeps the stored Tranquility status
+// fresh on its own ticker beside the worker cycle (started from
+// runWorker), so the status surfaces recover as soon as ESI does
+// instead of waiting for a whole cycle to complete. It attempts
+// every tick even while the worker is backed off on the error
+// budget; detecting recovery is its whole job.
+func (app *Application) runServerStatusRefresh(ctx context.Context) {
+	app.refreshServerStatus(ctx)
+	ticker := time.NewTicker(statusRefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			app.refreshServerStatus(ctx)
+		}
+	}
 }
 
 // ourSideState evaluates this server's own pipelines for the pill:

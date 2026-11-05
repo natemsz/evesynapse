@@ -46,10 +46,15 @@ const (
 // it stored, how many names it resolved, and whether ESI's error
 // limit stopped it.
 func (app *Application) refreshIntel(ctx context.Context, budget *warmBudget) (stored, names int, limited bool) {
-	// Global snapshots, freshest-contract first: status is tiny
-	// and feeds Home; factions are nearly static but ride the
-	// same Expires discipline as everything else.
+	// Global snapshots, freshest-contract first: factions are
+	// nearly static but ride the same Expires discipline as
+	// everything else. The Tranquility status snapshot is not
+	// among them: the standalone status refresh (intel.go) owns
+	// it, so the status verdict is never trapped behind this pass.
 	for _, kind := range globalKindOrder {
+		if kind == esi.GlobalStatus {
+			continue
+		}
 		if ctx.Err() != nil {
 			return stored, names, false
 		}

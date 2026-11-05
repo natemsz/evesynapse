@@ -50,6 +50,12 @@ const (
 	// defaultUserAgent identifies a client nobody told its build
 	// (tests, mostly). The app sets the real one with SetUserAgent.
 	defaultUserAgent = "EveSynapse (+https://github.com/natemsz/evesynapse)"
+	// compatibilityDate pins the ESI response shapes every request
+	// asks for. CCP replaced versioned routes with compatibility
+	// dates: versionless paths plus this header. Bumping it is one
+	// line here, plus a pass over the response handling to verify
+	// the shapes still match.
+	compatibilityDate = "2026-11-01"
 )
 
 // SetBulkHTTPClient installs the HTTP client bulk reads
@@ -1760,6 +1766,7 @@ func (c *Client) sendOnce(ctx context.Context, hc *http.Client, method, accessTo
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent())
+	req.Header.Set("X-Compatibility-Date", compatibilityDate)
 	if raw != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

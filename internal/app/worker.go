@@ -153,7 +153,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(6)
+	children.Add(7)
 
 	// The public killmail stream (killfeed.go) is its own paced
 	// loop: one file every 100 ms while kills arrive, six seconds
@@ -203,6 +203,15 @@ func (app *Application) runWorker(ctx context.Context) {
 	go func() {
 		defer children.Done()
 		app.runUrgentDrain(ctx)
+	}()
+
+	// The Tranquility status refresh (intel.go) keeps the stored
+	// server status on its own minute ticker, off the cycle, so
+	// the status verdict recovers with ESI instead of with the
+	// next completed cycle.
+	go func() {
+		defer children.Done()
+		runGuarded("server status refresh", func() { app.runServerStatusRefresh(ctx) })
 	}()
 	defer func() {
 		children.Wait()

@@ -10,8 +10,8 @@ package app
 //     highlighted user-corporation war and an incursion influence
 //     bar — and that no handler makes an outbound call.
 //   - Worker tests: a path-routing stub transport stands in for
-//     ESI, proving refreshIntel stores the global snapshots, warms
-//     war details and public names through the shared budget, and
+//     ESI, proving refreshIntel stores the global snapshots it
+//     owns, warms war details and public names through the shared budget, and
 //     settles to zero calls once everything is fresh (with active
 //     wars re-checked once their detail ages).
 
@@ -333,7 +333,8 @@ func (s *intelStubTransport) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 // TestRefreshIntel proves the worker contract: one pass stores
-// the global snapshots, both war details and the public names;
+// the global snapshots it owns (the status snapshot is the
+// standalone refresh's), both war details and the public names;
 // a second pass settles to zero calls; an aged active-war detail
 // is the one thing the third pass refetches.
 func TestRefreshIntel(t *testing.T) {
@@ -346,14 +347,17 @@ func TestRefreshIntel(t *testing.T) {
 	if limited {
 		t.Fatal("first pass: unexpectedly error-limited")
 	}
-	if stored != 11 { // 9 global snapshots + 2 war details
-		t.Fatalf("first pass: stored %d payloads, want 11", stored)
+	if stored != 10 { // 8 global snapshots + 2 war details
+		t.Fatalf("first pass: stored %d payloads, want 10", stored)
 	}
 	if names != 5 { // 3 corporations + 1 alliance + 1 constellation
 		t.Fatalf("first pass: resolved %d names, want 5", names)
 	}
 
 	for _, kind := range globalKindOrder {
+		if kind == esi.GlobalStatus {
+			continue // the standalone status refresh owns this one
+		}
 		if _, err := q.GetGlobalSnapshot(ctx, kind); err != nil {
 			t.Errorf("global snapshot %s missing: %v", kind, err)
 		}

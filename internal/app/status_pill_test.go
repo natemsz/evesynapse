@@ -142,6 +142,40 @@ func TestPillLimitedPlusLaggingNamesBoth(t *testing.T) {
 	}
 }
 
+// The standalone status refresh stores a fresh snapshot with
+// the worker cycle never run, and the pill reads healthy from
+// it: ESI recovery reaches the status surfaces on the refresh's
+// own ticker, not on the cycle's schedule.
+func TestStatusRefreshStoresFreshSnapshotWithoutWorker(t *testing.T) {
+	transport := &intelStubTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now()
+	seedPillMarket(t, q, now)
+	seedPillWorker(app, now)
+
+	if _, err := q.GetGlobalSnapshot(ctx, esi.GlobalStatus); err == nil {
+		t.Fatal("status snapshot exists before the refresh, want none")
+	}
+
+	app.refreshServerStatus(ctx)
+
+	snap, err := q.GetGlobalSnapshot(ctx, esi.GlobalStatus)
+	if err != nil {
+		t.Fatalf("status snapshot after the refresh: %v", err)
+	}
+	if age := time.Since(snap.FetchedAt); age > time.Minute {
+		t.Fatalf("status snapshot is %v old, want fresh", age)
+	}
+	view := app.esiHealth(ctx)
+	if view.State != "ok" || view.Label != "ESI healthy" {
+		t.Fatalf("pill = %q/%q, want ok/ESI healthy", view.State, view.Label)
+	}
+	if view.Players != "23,456" {
+		t.Fatalf("players = %q, want 23,456", view.Players)
+	}
+}
+
 // (e) Everything healthy shows the healthy pill, player count
 // included, unchanged.
 func TestPillHealthyUnchanged(t *testing.T) {

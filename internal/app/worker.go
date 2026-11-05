@@ -419,6 +419,12 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	c.warmNames(ctx, characters)
 	clock.mark("names", time.Now())
 
+	// Battle reports (battle_correlate.go): recent fights matched
+	// again, so a mail that landed after its fight joins it. Local
+	// reads only; no ESI call.
+	app.correlateRecentFights(ctx)
+	clock.mark("battle reports", time.Now())
+
 	// Corp pulse change log (home_pulse.go): diff the stored
 	// corp snapshots into pulse_events. The diff is local, so it
 	// runs whether or not ESI was reachable; it spends from the

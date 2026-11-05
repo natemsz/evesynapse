@@ -1,0 +1,301 @@
+{{define "title"}}{{with .Battle}}{{.Title}}{{end}}{{end}}
+{{define "pagetitle"}}<h1><span class="gt">{{with .Battle}}{{.Title}}{{end}}</span></h1>{{end}}
+{{define "pagetabs"}}{{if .Battle}}{{if .Battle.Owner}}{{template "sectiontabs" .}}{{end}}{{end}}{{end}}
+
+{{/* A party's card: the tooltip the shared hover layer shows over its
+     name (app.js lifts .spark-pop into one fixed layer). */}}
+{{define "bt-party-card"}}<span class="spark-pop" data-layer="bt-card">
+  <span class="btc-head">{{if .HullTypeID}}<img src="https://images.evetech.net/types/{{.HullTypeID}}/icon?size=64" alt="" width="36" height="36">{{end}}<span class="btc-t"><strong>{{.Name}}</strong><span class="btc-s">{{if .Ticker}}[{{.Ticker}}] {{end}}{{if ne .Name .Hull}}{{.Hull}}{{end}}{{if .Died}} <span class="kb-tag warn">died</span>{{end}}</span></span></span>
+  {{with .Card}}<span class="btc-rows">
+    {{if ne .In "0"}}<span class="btc-row btc-in"><span>Shot you for</span><b>{{.In}}</b></span>{{end}}
+    {{if ne .Out "0"}}<span class="btc-row btc-out"><span>You shot them for</span><b>{{.Out}}</b></span>{{end}}
+    {{if ne .RepsIn "0"}}<span class="btc-row btc-rep"><span>Repaired you for</span><b>{{.RepsIn}}</b></span>{{end}}
+    {{if ne .RepsOut "0"}}<span class="btc-row btc-rep"><span>You repaired them for</span><b>{{.RepsOut}}</b></span>{{end}}
+    {{if ne .Cap "0"}}<span class="btc-row btc-cap"><span>Drained you of</span><b>{{.Cap}} GJ</b></span>{{end}}
+  </span>
+  {{if .WeaponsIn}}<span class="btc-sub">Their weapons on you</span>{{range .WeaponsIn}}<span class="btc-w">{{if .TypeID}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Name}}</span><b>{{.Damage}}</b></span>{{end}}{{end}}
+  {{if .WeaponsOut}}<span class="btc-sub">Your weapons on them</span>{{range .WeaponsOut}}<span class="btc-w">{{if .TypeID}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Name}}</span><b>{{.Damage}}</b></span>{{end}}{{end}}
+  {{end}}
+  {{if .Window}}<span class="btc-foot">In the fight from {{.Window}}</span>{{end}}
+</span>{{end}}
+
+{{/* One party as a table's first cell: its name (a link once a mail
+     named the character), its ticker, and its hull. With a card, the
+     cell is a hover target for it. */}}
+{{define "bt-who"}}<span class="bt-who{{if .Card}} spark-hover bt-tipped{{end}}"{{if .Card}} tabindex="0"{{end}}>{{if .HullTypeID}}<img src="https://images.evetech.net/types/{{.HullTypeID}}/icon?size=32" alt="" width="22" height="22" loading="lazy">{{else}}<span class="bt-who-dot" aria-hidden="true"></span>{{end}}<span class="bt-who-t"><span class="bt-who-n">{{if eq .Name .Hull}}{{.Hull}}{{else}}{{.Link}}{{end}}{{if .Died}} <span class="kb-tag warn">died</span>{{end}}</span>{{if and .Hull (ne .Name .Hull)}}<span class="bt-who-s">{{if .Ticker}}[{{.Ticker}}] {{end}}{{.Hull}}</span>{{else if .Ticker}}<span class="bt-who-s">[{{.Ticker}}]</span>{{end}}</span>{{if .Card}}{{template "bt-party-card" .}}{{end}}</span>{{end}}
+
+{{/* A party table: who, a share bar, the amount; past eight rows the
+     rest wait behind Show all (open without script). */}}
+{{define "bt-party-row"}}<tr>
+    <td>{{template "bt-who" .}}</td>
+    <td class="bt-share"><span class="bt-bar"><span class="bt-bar-fill" data-w="{{.BarW}}"></span></span><span class="bt-share-n">{{.Share}}</span></td>
+    <td class="num">{{.Amount}}</td>
+  </tr>{{end}}
+{{define "bt-party-table"}}
+<div class="tw">
+<table class="bt-ptable">
+  <thead><tr><th>Pilot or ship</th><th class="bt-share-h">Share</th><th class="num">Amount</th></tr></thead>
+  <tbody>{{range .Top}}{{template "bt-party-row" .}}{{end}}</tbody>
+  {{if .More}}<tbody id="{{.ID}}" data-wmore>{{range .More}}{{template "bt-party-row" .}}{{end}}</tbody>{{end}}
+</table>
+</div>
+{{if .More}}<button type="button" class="btn btn-quiet bt-more" data-expand="{{.ID}}"><span class="bt-more-c">Show all {{.Total}}</span><span class="bt-more-o">Show fewer</span></button>{{end}}
+{{end}}
+
+{{/* One moment's panel: also served alone as the fragment battle.js
+     loads when a timeline event is picked. */}}
+{{define "battle-moment"}}{{if .}}
+<div class="bt-mhead">
+  <span class="bt-chip bt-chip-{{.Kind}}">{{.KindLabel}}</span>
+  <span class="bt-mwin">{{.Window}}</span>
+  <nav class="bt-mnav" aria-label="Moments">
+    {{if .Prev}}<a class="btn btn-quiet" href="{{.Prev}}" data-moment="{{.PrevFrag}}" rel="prev" aria-label="Previous moment">‹</a>{{end}}
+    <span class="bt-mpos">{{.Position}}</span>
+    {{if .Next}}<a class="btn btn-quiet" href="{{.Next}}" data-moment="{{.NextFrag}}" rel="next" aria-label="Next moment">›</a>{{end}}
+  </nav>
+</div>
+<h2 class="bt-mtitle" id="bt-moment-h" data-moment-seq="{{.Seq}}">{{.Title}}</h2>
+<p class="bt-msum">{{.Summary}}</p>
+<div class="bt-mfig">
+  <svg class="bt-mspark" viewBox="0 0 120 28" preserveAspectRatio="none" role="img" aria-label="Damage and repairs around this moment">
+    <rect class="bt-mspan" x="{{.MarkA}}" y="0" width="{{.MarkB}}" height="28"/>
+    <polyline class="bt-ln-repin" points="{{.SparkReps}}" vector-effect="non-scaling-stroke"/>
+    <polyline class="bt-ln-in" points="{{.SparkIn}}" vector-effect="non-scaling-stroke"/>
+    <polyline class="bt-ln-out" points="{{.SparkOut}}" vector-effect="non-scaling-stroke"/>
+  </svg>
+  <dl class="bt-mnums">
+    {{range .Figures}}<div class="bt-mnum bt-tone-{{.Tone}}"><dt>{{.Label}}</dt><dd>{{.Value}}</dd></div>{{end}}
+  </dl>
+</div>
+{{if .Kills}}
+<ul class="bt-mkills">
+  {{range .Kills}}<li class="{{if .Loss}}loss{{else}}kill{{end}}"><img src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=32" alt="" width="24" height="24" loading="lazy"><span><a href="/intel/kill/{{.KillmailID}}/">{{if .Loss}}Your {{.Ship}}{{else}}{{if .Victim}}{{.Victim}}'s {{end}}{{.Ship}}{{end}}</a> destroyed at {{.At}}</span></li>{{end}}
+</ul>
+{{end}}
+<div class="l-switcher bt-mtables">
+  {{if .Attackers.Total}}<section class="bt-m-in"><h3 class="bt-h">Shooting you</h3>{{template "bt-party-table" .Attackers}}</section>{{end}}
+  {{if .Targets.Total}}<section class="bt-m-out"><h3 class="bt-h">You were shooting</h3>{{template "bt-party-table" .Targets}}</section>{{end}}
+  {{if .Support.Total}}<section class="bt-m-rep"><h3 class="bt-h">Repairing you</h3>{{template "bt-party-table" .Support}}</section>{{end}}
+  {{if .Neuts.Total}}<section class="bt-m-cap"><h3 class="bt-h">Draining you</h3>{{template "bt-party-table" .Neuts}}</section>{{end}}
+</div>
+{{if .Tackles}}
+<h3 class="bt-h">Tackle in this window</h3>
+<ul class="bt-tlist">
+  {{range .Tackles}}<li{{if .Mine}} class="mine"{{end}}><span class="bt-tk">{{.Kind}}</span> {{.From}} <span class="bt-dim">on</span> {{.To}} <span class="bt-dim">from {{.At}}, {{.Attempts}} {{if eq .Attempts "1"}}attempt{{else}}attempts{{end}}</span></li>{{end}}
+</ul>
+{{end}}
+{{else}}
+<p class="bt-dim">This fight has no moments to open.</p>
+{{end}}{{end}}
+
+{{define "content"}}
+{{with .Battle}}
+{{/* One battle report (battle_pages.go). Its centre is the strip: the
+     damage chart and the timeline under it share one time axis, and
+     picking a moment on the timeline lights its window on the chart
+     and opens it in the panel below (battle.js loads the panel in
+     place; without script each moment is a link to this page). Every
+     figure was stored when the fight was read and matched. */}}
+<div class="l-page bt bt-report" data-battle>
+  <div class="l-head">
+    <p class="l-head-sum"><a class="bt-result bt-result-{{.Outcome}}" href="#bt-mails">{{.OutcomeText}}</a> {{charLink .Viewer .CharacterID .Listener}}{{if .Hull}} in a {{itemLink .HullTypeID .Hull}}{{end}}{{if .SystemName}}, {{systemLink .SystemID .SystemName}}{{end}}. <time datetime="{{rfc3339 .At}}">{{.When}}</time> EVE, {{.Length}} long.{{if .SystemNote}} <span class="bt-dim">System {{.SystemNote}}.</span>{{end}}</p>
+    {{if .Owner}}
+    <div class="l-head-act bt-share-act">
+      {{if .Shared}}
+      <button type="button" class="btn btn-quiet" data-copy data-copy-text="{{.ShareURL}}">Copy share link</button>
+      <form method="post" action="{{.ShareAction}}" class="inline-form"><input type="hidden" name="shared" value="off"><button type="submit" class="btn btn-quiet">Stop sharing</button></form>
+      {{else}}
+      <form method="post" action="{{.ShareAction}}" class="inline-form"><input type="hidden" name="shared" value="on"><button type="submit" class="btn">Share this report</button></form>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+
+  <div class="l-tiles bt-tiles">
+    {{range .Tiles}}<div class="l-stat bt-stat-{{.Tone}}"><span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span></div>{{end}}
+  </div>
+
+  {{if .HasChart}}
+  <section class="l-panel bt-strip" aria-labelledby="bt-strip-h">
+    <div class="bt-strip-head">
+      <h2 class="bt-h" id="bt-strip-h">Damage and repairs per second</h2>
+      <ul class="bt-key">
+        {{range .Chart.Lines}}<li class="bt-key-{{.Key}}">{{.Label}}</li>{{end}}
+      </ul>
+    </div>
+    <div class="bt-plot">
+      <div class="bt-y" aria-hidden="true">{{range .Chart.YTicks}}<span>{{.Label}}</span>{{end}}</div>
+      <svg class="bt-chart" viewBox="0 0 600 160" preserveAspectRatio="none" role="img" aria-label="Damage out, damage in and repairs each second, averaged over ten seconds, with the fight's kills marked">
+        <line class="bt-grid" x1="0" y1="0.5" x2="600" y2="0.5" vector-effect="non-scaling-stroke"/>
+        <line class="bt-grid" x1="0" y1="80" x2="600" y2="80" vector-effect="non-scaling-stroke"/>
+        <line class="bt-grid bt-grid-base" x1="0" y1="159.5" x2="600" y2="159.5" vector-effect="non-scaling-stroke"/>
+        <rect class="bt-band" id="bt-band" x="{{.Band.X}}" y="0" width="{{.Band.W}}" height="160"{{if not .Band.On}} hidden{{end}}/>
+        {{range .Chart.Lines}}<polyline class="bt-ln-{{.Key}}" points="{{.Points}}" vector-effect="non-scaling-stroke"/>{{end}}
+        {{range .Chart.Marks}}<line class="bt-mk{{if .Loss}} bt-mk-loss{{end}}" x1="{{.X}}" y1="0" x2="{{.X}}" y2="160" vector-effect="non-scaling-stroke"><title>{{.Label}}</title></line>{{end}}
+        <line class="bt-cursor" id="bt-cursor" x1="0" y1="0" x2="0" y2="160" vector-effect="non-scaling-stroke" hidden/>
+      </svg>
+      {{if .Hover}}<script type="application/json" id="bt-hover-data">{{.Hover}}</script>{{end}}
+    </div>
+    {{if .Lanes}}
+    <div class="bt-lanes" role="group" aria-label="Moments of the fight">
+      {{range .Lanes}}
+      <div class="bt-lane bt-lane-{{.Key}}">
+        <span class="bt-lane-label">{{.Label}}</span>
+        <div class="bt-lane-track">
+          {{range .Marks}}<a class="bt-ev bt-ev-{{.Kind}} spark-hover{{if .Current}} on{{end}}" href="{{.Href}}" data-moment="{{.Fragment}}" data-band-x="{{.BandX}}" data-band-w="{{.BandW}}" data-left="{{.Left}}" data-w="{{.Width}}"{{if .Current}} aria-current="true"{{end}}><span class="bt-sr">{{.When}}: {{.Title}}</span>{{template "bt-moment-card" .}}</a>{{end}}
+        </div>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+    <div class="bt-x" aria-hidden="true">{{range .Chart.Ticks}}<span>{{.Label}}</span>{{end}}</div>
+  </section>
+  {{end}}
+
+  <div class="l-sidebar l-sidebar--end bt-pair">
+    <section class="l-panel bt-moment" id="bt-moment" aria-labelledby="bt-moment-h" aria-live="polite">
+      {{template "battle-moment" .Moment}}
+    </section>
+    {{if .Findings}}
+    <section class="l-panel bt-findings" aria-labelledby="bt-find-h">
+      <h2 class="bt-h" id="bt-find-h">What the numbers say</h2>
+      <ul>
+        {{range .Findings}}<li class="bt-find-{{.Rule}}{{if .First}} first{{end}}">{{if .First}}<span class="bt-find-k">{{.Label}}</span>{{end}}<p>{{.Text}}</p></li>{{end}}
+      </ul>
+    </section>
+    {{end}}
+  </div>
+
+  <section class="l-panel bt-mails" id="bt-mails" aria-labelledby="bt-mails-h">
+    <h2 class="bt-h" id="bt-mails-h">Killmails in this fight</h2>
+    {{if .Kills}}
+    <div class="tw">
+    <table>
+      <thead><tr><th>At</th><th class="card-title">Ship</th><th>Pilot</th><th>Result</th><th class="num">Value</th><th class="num">Your damage</th><th class="num opt">Your share</th><th class="num opt">Time to kill</th></tr></thead>
+      <tbody>
+      {{range .Kills}}<tr{{if .Loss}} class="yours"{{end}}>
+        <td class="num">{{.At}}</td>
+        <td><span class="bt-who"><img src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=32" alt="" width="22" height="22" loading="lazy"><a href="/intel/kill/{{.KillmailID}}/">{{.Ship}}</a></span></td>
+        <td>{{if .VictimID}}{{charLink $.Battle.Viewer .VictimID .Victim}}{{end}}</td>
+        <td>{{if .Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}}</td>
+        <td class="num">{{if .Value}}{{.Value}}{{else}}<span class="bt-dim">pricing</span>{{end}}</td>
+        <td class="num">{{.Mine}}</td>
+        <td class="num">{{.Share}}</td>
+        <td class="num">{{.TTK}}</td>
+      </tr>{{end}}
+      </tbody>
+    </table>
+    </div>
+    {{else}}
+    <p class="bt-dim">No killmail matched this fight: nobody died, or the mails have not reached the killboard yet. Late mails join the report as they land.</p>
+    {{end}}
+  </section>
+
+  {{if or .Hostile.Hulls .Friendly.Hulls}}
+  <section class="l-panel bt-sides" aria-labelledby="bt-sides-h">
+    <h2 class="bt-h" id="bt-sides-h">Who was there</h2>
+    <div class="l-switcher bt-sides-pair">
+      {{with .Hostile}}{{if .Hulls}}<div class="bt-side bt-side-hostile">
+        <h3 class="bt-sub">Against you <span class="bt-dim">{{.Pilots}} pilots</span></h3>
+        <ul class="bt-hulls">{{range .Hulls}}<li><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy"><span class="bt-hull-n">{{itemLink .TypeID .Name}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>
+        {{if .Tickers}}<p class="bt-tickers">{{range .Tickers}}<span>[{{.Name}}] {{.Count}}</span>{{end}}</p>{{end}}
+      </div>{{end}}{{end}}
+      {{with .Friendly}}{{if .Hulls}}<div class="bt-side bt-side-friendly">
+        <h3 class="bt-sub">With you <span class="bt-dim">repairing you or repaired by you</span></h3>
+        <ul class="bt-hulls">{{range .Hulls}}<li><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy"><span class="bt-hull-n">{{itemLink .TypeID .Name}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>
+        {{if .Tickers}}<p class="bt-tickers">{{range .Tickers}}<span>[{{.Name}}] {{.Count}}</span>{{end}}</p>{{end}}
+      </div>{{end}}{{end}}
+    </div>
+  </section>
+  {{end}}
+
+  <div class="l-switcher bt-whole">
+    {{if .ShotBy.Total}}<section class="l-panel" aria-labelledby="bt-in-h"><h2 class="bt-h" id="bt-in-h">Who shot you</h2>{{template "bt-party-table" .ShotBy}}</section>{{end}}
+    {{if .Shot.Total}}<section class="l-panel" aria-labelledby="bt-out-h"><h2 class="bt-h" id="bt-out-h">Who you shot</h2>{{template "bt-party-table" .Shot}}</section>{{end}}
+  </div>
+
+  {{if or .WeaponsOut.Total .WeaponsIn.Total}}
+  <section class="l-panel bt-app" aria-labelledby="bt-app-h">
+    <div class="bt-strip-head">
+      <h2 class="bt-h" id="bt-app-h">Application</h2>
+      <ul class="bt-qkey" aria-label="Hit quality, worst to best"><li class="q-miss">Miss</li><li class="q-graze">Graze</li><li class="q-glance">Glance</li><li class="q-hit">Hit</li><li class="q-pen">Penetrate</li><li class="q-smash">Smash</li><li class="q-wreck">Wreck</li></ul>
+    </div>
+    <div class="l-seg" role="tablist" aria-label="Whose weapons" data-tabs hidden>
+      {{if .WeaponsOut.Total}}<button type="button" role="tab" id="bt-wout-tab" aria-controls="bt-wout" aria-selected="true">Your weapons</button>{{end}}
+      {{if .WeaponsIn.Total}}<button type="button" role="tab" id="bt-win-tab" aria-controls="bt-win" aria-selected="{{if .WeaponsOut.Total}}false{{else}}true{{end}}">Their weapons</button>{{end}}
+    </div>
+    {{if .WeaponsOut.Total}}<section role="tabpanel" id="bt-wout" aria-labelledby="bt-wout-tab">
+      <h3 class="l-tab-h">Your weapons</h3>
+      {{template "bt-weapons" .WeaponsOut}}
+    </section>{{end}}
+    {{if .WeaponsIn.Total}}<section role="tabpanel" id="bt-win" aria-labelledby="bt-win-tab">
+      <h3 class="l-tab-h">Their weapons</h3>
+      {{template "bt-weapons" .WeaponsIn}}
+    </section>{{end}}
+  </section>
+  {{end}}
+
+  {{if or .Support.Total .Neuts.Total .MyTackle .GridTackle}}
+  <div class="l-switcher bt-whole">
+    {{if .Support.Total}}<section class="l-panel" aria-labelledby="bt-rep-h"><h2 class="bt-h" id="bt-rep-h">Repairs on you</h2>{{template "bt-party-table" .Support}}</section>{{end}}
+    {{if .Neuts.Total}}<section class="l-panel" aria-labelledby="bt-neut-h"><h2 class="bt-h" id="bt-neut-h">Energy warfare on you</h2>{{template "bt-party-table" .Neuts}}</section>{{end}}
+    {{if or .MyTackle .GridTackle}}<section class="l-panel" aria-labelledby="bt-tk-h">
+      <h2 class="bt-h" id="bt-tk-h">Tackle</h2>
+      {{if .MyTackle}}<ul class="bt-tlist">{{range .MyTackle}}<li class="mine"><span class="bt-tk">{{.Kind}}</span> {{.From}} <span class="bt-dim">on</span> {{.To}} <span class="bt-dim">from {{.At}}, {{.Attempts}} {{if eq .Attempts "1"}}attempt{{else}}attempts{{end}}</span></li>{{end}}</ul>{{end}}
+      {{if .GridTackle}}
+      <p class="bt-note">Seen on grid between other ships, named by hull.</p>
+      <ul class="bt-tlist">{{range .GridTackle}}{{template "bt-grid-tackle" .}}{{end}}</ul>
+      {{if .GridMore}}<ul class="bt-tlist" id="bt-grid-more" data-wmore>{{range .GridMore}}{{template "bt-grid-tackle" .}}{{end}}</ul>
+      <button type="button" class="btn btn-quiet bt-more" data-expand="bt-grid-more"><span class="bt-more-c">Show all {{.GridTotal}}</span><span class="bt-more-o">Show fewer</span></button>{{end}}
+      {{end}}
+    </section>{{end}}
+  </div>
+  {{end}}
+
+  <p class="bt-note bt-coverage">Read from {{.Listener}}'s game log: {{.Lines}} combat lines{{if .Unparsed}}, {{.Unparsed}} of them in a form the reader does not know yet and left out{{end}}. A game log holds only what involved its pilot, so damage between other ships is not here.</p>
+</div>
+{{end}}
+{{end}}
+
+{{/* A timeline event's card: its kind, time and title, its figures,
+     and who led each way in its window. */}}
+{{define "bt-moment-card"}}<span class="spark-pop" data-layer="bt-card">
+  <span class="btc-top"><span class="bt-chip bt-chip-{{.Kind}}">{{.Label}}</span><span class="btc-time">{{.When}}</span></span>
+  <span class="btc-head">{{if .Brief.ShipID}}<img src="https://images.evetech.net/types/{{.Brief.ShipID}}/icon?size=64" alt="" width="36" height="36">{{end}}<span class="btc-t"><strong>{{.Title}}</strong></span></span>
+  <span class="btc-rows">
+    {{if .Brief.DamageOut}}<span class="btc-row btc-out"><span>Dealt</span><b>{{battleNum .Brief.DamageOut}}</b></span>{{end}}
+    {{if .Brief.DamageIn}}<span class="btc-row btc-in"><span>Taken</span><b>{{battleNum .Brief.DamageIn}}</b></span>{{end}}
+    {{if .Brief.RepsIn}}<span class="btc-row btc-rep"><span>Repaired</span><b>{{battleNum .Brief.RepsIn}}</b></span>{{end}}
+    {{if .Brief.CapIn}}<span class="btc-row btc-cap"><span>Neutralized</span><b>{{battleNum .Brief.CapIn}} GJ</b></span>{{end}}
+  </span>
+  {{with .Brief.TopIn}}<span class="btc-sub">Hitting you hardest</span><span class="btc-w">{{if .HullTypeID}}<img src="https://images.evetech.net/types/{{.HullTypeID}}/icon?size=32" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Name}}{{if and .Hull (ne .Name .Hull)}} <span class="btc-s">{{.Hull}}</span>{{end}}</span><b>{{battleNum .Amount}}</b></span>{{end}}
+  {{with .Brief.TopOut}}<span class="btc-sub">Your main target</span><span class="btc-w">{{if .HullTypeID}}<img src="https://images.evetech.net/types/{{.HullTypeID}}/icon?size=32" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Name}}{{if and .Hull (ne .Name .Hull)}} <span class="btc-s">{{.Hull}}</span>{{end}}</span><b>{{battleNum .Amount}}</b></span>{{end}}
+  <span class="btc-foot">Select to open this moment</span>
+</span>{{end}}
+
+{{define "bt-grid-tackle"}}<li><span class="bt-tk">{{.Kind}}</span> {{.From}} <span class="bt-dim">on</span> {{.To}} <span class="bt-dim">from {{.At}}, {{.Attempts}} {{if eq .Attempts "1"}}attempt{{else}}attempts{{end}}</span></li>{{end}}
+
+{{/* The application table: each weapon at each party, with its hit
+     quality as one bar worst to best. */}}
+{{define "bt-weapons"}}
+<div class="tw">
+<table class="bt-wtable">
+  <thead><tr><th class="card-title">Weapon</th><th>Used on</th><th class="num">Shots</th><th class="num">Damage</th><th class="bt-q-h">Hit quality</th><th class="num">Solid hits</th></tr></thead>
+  <tbody>{{range .Top}}{{template "bt-weapon-row" .}}{{end}}</tbody>
+  {{if .More}}<tbody id="{{.ID}}" data-wmore>{{range .More}}{{template "bt-weapon-row" .}}{{end}}</tbody>{{end}}
+</table>
+</div>
+{{if .More}}<button type="button" class="btn btn-quiet bt-more" data-expand="{{.ID}}"><span class="bt-more-c">Show all {{.Total}}</span><span class="bt-more-o">Show fewer</span></button>{{end}}
+{{end}}
+{{define "bt-weapon-row"}}<tr>
+    <td><span class="bt-who{{if .Judged}} spark-hover bt-tipped{{end}}">{{if .WeaponTypeID}}<img src="https://images.evetech.net/types/{{.WeaponTypeID}}/icon?size=32" alt="" width="22" height="22" loading="lazy">{{itemLink .WeaponTypeID .Weapon}}{{else}}<span tabindex="0">{{.Weapon}}</span>{{end}}{{if .Judged}}<span class="spark-pop" data-layer="bt-card">
+      <span class="btc-head">{{if .WeaponTypeID}}<img src="https://images.evetech.net/types/{{.WeaponTypeID}}/icon?size=64" alt="" width="36" height="36">{{end}}<span class="btc-t"><strong>{{.Weapon}}</strong><span class="btc-s">{{.Shots}} shots on {{.Party}}, {{.Damage}} damage</span></span></span>
+      <span class="btc-rows">{{range .Segs}}<span class="btc-row"><span><i class="btc-sw {{.Class}}"></i>{{.Label}}</span></span>{{end}}</span>
+      <span class="btc-foot">{{.Good}} hit solidly (glance or better)</span>
+    </span>{{end}}</span></td>
+    <td>{{.Party}}</td>
+    <td class="num">{{.Shots}}</td>
+    <td class="num">{{.Damage}}</td>
+    <td class="bt-q">{{if .Judged}}<svg class="bt-qbar" viewBox="0 0 100 8" preserveAspectRatio="none" role="img" aria-label="{{range $i, $s := .Segs}}{{if $i}}, {{end}}{{$s.Label}}{{end}}">{{range .Segs}}<rect class="{{.Class}}" x="{{.X}}" y="0" width="{{.W}}" height="8"><title>{{.Label}}</title></rect>{{end}}</svg>{{else}}<span class="bt-dim">no hit words</span>{{end}}</td>
+    <td class="num">{{.Good}}</td>
+  </tr>{{end}}

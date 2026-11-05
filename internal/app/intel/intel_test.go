@@ -60,7 +60,8 @@ func TestFactionDisplay(t *testing.T) {
 
 // TestModuleDeclaration: the module declares all five things (empty
 // lists written out), needs no scope, and registers its three pages;
-// its menu also leads with the core killboard, scans and channels, then the workbench (eight entries).
+// its menu also leads with the core killboard and battle reports, then
+// scans and channels, then the workbench (nine entries).
 func TestModuleDeclaration(t *testing.T) {
 	m := Module
 	if m.ID != "intel" || m.Title == "" || m.Requires == nil || m.Scopes == nil || m.EnhanceScopes == nil {
@@ -69,10 +70,10 @@ func TestModuleDeclaration(t *testing.T) {
 	if len(m.Scopes) != 0 || len(m.EnhanceScopes) != 0 {
 		t.Errorf("intel is public data and asks for no scope: %+v %+v", m.Scopes, m.EnhanceScopes)
 	}
-	if len(m.Pages) != 3 || len(m.Sitemap) != 3 || len(m.Nav) != 1 || len(m.Nav[0].Entries) != 8 {
-		t.Errorf("pages %d, sitemap %d, nav %+v; want 3 pages, 3 sitemap lines, one section of 8 entries", len(m.Pages), len(m.Sitemap), m.Nav)
+	if len(m.Pages) != 3 || len(m.Sitemap) != 3 || len(m.Nav) != 1 || len(m.Nav[0].Entries) != 9 {
+		t.Errorf("pages %d, sitemap %d, nav %+v; want 3 pages, 3 sitemap lines, one section of 9 entries", len(m.Pages), len(m.Sitemap), m.Nav)
 	}
-	if m.Nav[0].Entries[0].Href != "/intel/kills/" {
-		t.Errorf("the killboard leads the section: %+v", m.Nav[0].Entries[0])
+	if m.Nav[0].Entries[0].Href != "/intel/kills/" || m.Nav[0].Entries[1].Href != "/intel/battles/" {
+		t.Errorf("the killboard leads the section, battle reports next: %+v", m.Nav[0].Entries[:2])
 	}
 }

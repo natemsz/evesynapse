@@ -186,6 +186,128 @@ type AssetLocationValue struct {
 	ComputedAt   time.Time `json:"computed_at"`
 }
 
+type BattleFight struct {
+	ID           int64        `json:"id"`
+	UserID       int64        `json:"user_id"`
+	CharacterID  int64        `json:"character_id"`
+	Listener     string       `json:"listener"`
+	SessionFile  string       `json:"session_file"`
+	StartedAt    time.Time    `json:"started_at"`
+	EndedAt      time.Time    `json:"ended_at"`
+	SystemID     int64        `json:"system_id"`
+	SystemFrom   string       `json:"system_from"`
+	HullTypeID   int64        `json:"hull_type_id"`
+	HullFrom     string       `json:"hull_from"`
+	DamageOut    int64        `json:"damage_out"`
+	DamageIn     int64        `json:"damage_in"`
+	RepsOut      int64        `json:"reps_out"`
+	RepsIn       int64        `json:"reps_in"`
+	CapIn        int64        `json:"cap_in"`
+	PeakInDps    int64        `json:"peak_in_dps"`
+	PeakInAt     int32        `json:"peak_in_at"`
+	Pilots       int32        `json:"pilots"`
+	Kills        int32        `json:"kills"`
+	Losses       int32        `json:"losses"`
+	IskDestroyed float64      `json:"isk_destroyed"`
+	IskLost      float64      `json:"isk_lost"`
+	Outcome      string       `json:"outcome"`
+	SparkOut     string       `json:"spark_out"`
+	SparkIn      string       `json:"spark_in"`
+	Lines        int32        `json:"lines"`
+	Unparsed     int32        `json:"unparsed"`
+	ShareToken   string       `json:"share_token"`
+	Shared       bool         `json:"shared"`
+	ReceivedAt   time.Time    `json:"received_at"`
+	CorrelatedAt sql.NullTime `json:"correlated_at"`
+}
+
+type BattleFightFinding struct {
+	FightID int64  `json:"fight_id"`
+	Seq     int32  `json:"seq"`
+	Rule    string `json:"rule"`
+	Text    string `json:"text"`
+}
+
+type BattleFightKill struct {
+	FightID           int64           `json:"fight_id"`
+	KillmailID        int64           `json:"killmail_id"`
+	KillmailTime      time.Time       `json:"killmail_time"`
+	AtSecond          int32           `json:"at_second"`
+	Loss              bool            `json:"loss"`
+	VictimCharacterID int64           `json:"victim_character_id"`
+	VictimName        string          `json:"victim_name"`
+	ShipTypeID        int64           `json:"ship_type_id"`
+	DamageTaken       int64           `json:"damage_taken"`
+	MyDamage          int64           `json:"my_damage"`
+	TtkSeconds        int32           `json:"ttk_seconds"`
+	ValueIsk          sql.NullFloat64 `json:"value_isk"`
+}
+
+type BattleFightMoment struct {
+	FightID   int64  `json:"fight_id"`
+	Seq       int32  `json:"seq"`
+	Kind      string `json:"kind"`
+	AtSecond  int32  `json:"at_second"`
+	EndSecond int32  `json:"end_second"`
+	Title     string `json:"title"`
+	Brief     string `json:"brief"`
+	Detail    string `json:"detail"`
+}
+
+type BattleFightParty struct {
+	FightID     int64     `json:"fight_id"`
+	Seq         int32     `json:"seq"`
+	Name        string    `json:"name"`
+	Ticker      string    `json:"ticker"`
+	Hull        string    `json:"hull"`
+	HullTypeID  int64     `json:"hull_type_id"`
+	Pilot       bool      `json:"pilot"`
+	CharacterID int64     `json:"character_id"`
+	DamageOut   int64     `json:"damage_out"`
+	DamageIn    int64     `json:"damage_in"`
+	RepsOut     int64     `json:"reps_out"`
+	RepsIn      int64     `json:"reps_in"`
+	CapOut      int64     `json:"cap_out"`
+	CapIn       int64     `json:"cap_in"`
+	FirstAt     time.Time `json:"first_at"`
+	LastAt      time.Time `json:"last_at"`
+	Died        bool      `json:"died"`
+}
+
+type BattleFightSeries struct {
+	FightID int64  `json:"fight_id"`
+	Series  string `json:"series"`
+	Slices  string `json:"slices"`
+	Chart   string `json:"chart"`
+}
+
+type BattleFightTackle struct {
+	FightID  int64     `json:"fight_id"`
+	Seq      int32     `json:"seq"`
+	FromName string    `json:"from_name"`
+	ToName   string    `json:"to_name"`
+	Kind     string    `json:"kind"`
+	FirstAt  time.Time `json:"first_at"`
+	Attempts int64     `json:"attempts"`
+}
+
+type BattleFightWeapon struct {
+	FightID      int64  `json:"fight_id"`
+	PartySeq     int32  `json:"party_seq"`
+	Dir          string `json:"dir"`
+	Weapon       string `json:"weapon"`
+	WeaponTypeID int64  `json:"weapon_type_id"`
+	Shots        int64  `json:"shots"`
+	Damage       int64  `json:"damage"`
+	QMiss        int64  `json:"q_miss"`
+	QGraze       int64  `json:"q_graze"`
+	QGlance      int64  `json:"q_glance"`
+	QHit         int64  `json:"q_hit"`
+	QPenetrate   int64  `json:"q_penetrate"`
+	QSmash       int64  `json:"q_smash"`
+	QWreck       int64  `json:"q_wreck"`
+}
+
 type BlueprintBuildable struct {
 	UserID            int64     `json:"user_id"`
 	CharacterID       int64     `json:"character_id"`

@@ -139,7 +139,7 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 	if moduleCompiledIn("swarm") {
 		want = append(want, "swarm")
 	}
-	want = append(want, "foresight", "names", "corp pulse", "notifications")
+	want = append(want, "foresight", "names", "battle reports", "corp pulse", "notifications")
 	if moduleCompiledIn("discord") {
 		want = append(want, "discord announce ops", "discord role sync", "discord kick pass")
 	}

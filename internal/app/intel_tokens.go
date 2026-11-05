@@ -405,6 +405,19 @@ func axonSignatureText(method, path, timestamp string, body []byte) string {
 // signed by its paired private key, as its account. A token alone
 // (copied, or issued before pairing) is not enough.
 func (app *Application) intelTokenAuth(next http.Handler) http.Handler {
+	return app.intelTokenAuthLimit(intelMaxPaste)(next)
+}
+
+// intelTokenAuthLimit is intelTokenAuth reading a body of up to
+// limit bytes: a posted fight (battle_ingest.go) is larger than a
+// paste.
+func (app *Application) intelTokenAuthLimit(limit int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return app.intelTokenCheck(next, limit)
+	}
+}
+
+func (app *Application) intelTokenCheck(next http.Handler, limit int64) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		bearer = strings.TrimSpace(bearer)
@@ -430,7 +443,7 @@ func (app *Application) intelTokenAuth(next http.Handler) http.Handler {
 		}
 		var body []byte
 		if r.Body != nil {
-			body, err = io.ReadAll(http.MaxBytesReader(w, r.Body, intelMaxPaste))
+			body, err = io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 			if err != nil {
 				intelAPIError(w, http.StatusBadRequest, "unreadable body")
 				return

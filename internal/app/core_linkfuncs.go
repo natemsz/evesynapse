@@ -331,5 +331,8 @@ func linkFuncMap() template.FuncMap {
 		"signClass": signClass,
 		// Not a link: how a stored time is written out (core_timestamps.go).
 		"rfc3339": rfc3339,
+		// Not a link: a whole number with thousands separators (the
+		// battle report's cards).
+		"battleNum": battleNum,
 	}
 }

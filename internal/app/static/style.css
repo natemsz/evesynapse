@@ -1826,6 +1826,12 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
 }
 .card .kpis, .panel .kpis, .foldable .kpis { background: none; border: none; box-shadow: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .kpis-small { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin-bottom: 0.6rem; }
+/* Narrower than three tiles across (3 x 11rem plus gaps), an odd
+   tile out takes its row instead of leaving a hole. */
+:has(> .kpis-small) { container: kpis-small / inline-size; }
+@container kpis-small (width < 34.5rem) {
+  .kpis-small > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 .kpi {
   display: flex;
   flex-direction: column;
@@ -1935,6 +1941,8 @@ table.cards-on .spark-hover[data-spark-fallback] { border-bottom: 1px dotted var
    two across, so every figure keeps its full width. */
 @media (max-width: 70rem) {
   .home-grid .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* An odd tile out takes the row instead of leaving a hole. */
+  .home-grid .kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 .linkbtn {
   padding: 0;
@@ -5452,6 +5460,7 @@ table.notify-settings.cards-on .checkselector { max-width: none; min-width: 0; }
 .checkselector { margin: 0; max-width: 22rem; }
 .checkselector .charselector-option { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
 .checkselector .charselector-option input { flex: none; margin: 0; }
+.checkselector .charselector-option[hidden] { display: none; }
 .checkselector .checkselector-locked { cursor: default; color: var(--muted); flex-wrap: wrap; }
 .checkselector .checkselector-locked:hover { background: none; color: var(--muted); }
 .checkselector input.charselector-input::placeholder { color: var(--text); opacity: 1; }
@@ -5463,6 +5472,56 @@ html:not(.js) .checkselector .charselector-dropdown[hidden] {
   max-height: none;
   box-shadow: none;
 }
+/* On a phone (app.js "Phone sheets") a kind's characters open in a
+   bottom sheet: the cell spans the card, the text field gives way to
+   a full-width row that opens the sheet, and the sheet lists one tall
+   row per character with its tick box at the right edge. */
+table.notify-settings.cards-on td:has(> .checkselector) { grid-column: 1 / -1; }
+/* "Show as a card" and "No card" name their column already. */
+#main-content table.notify-settings.cards-on > tbody > tr > td.notify-card[data-label]::before { display: none; }
+.checkselector:has(> .checkselector-sheet.as-sheet) > .charselector-input { display: none; }
+.checkselector-open {
+  display: flex; align-items: center; gap: 0.5rem;
+  width: 100%; min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-sm);
+  font: inherit; text-align: left;
+  cursor: pointer;
+}
+.checkselector-open[hidden] { display: none; }
+.checkselector-open:active { background: var(--row-hover); }
+.checkselector-sum { flex: 1 1 auto; min-width: 0; }
+.checkselector-chev {
+  flex: none; width: 1.1rem; height: 1.1rem;
+  color: color-mix(in srgb, var(--text) 55%, transparent);
+}
+.as-sheet.open .checkselector-search { display: block; width: 100%; margin: 0 0 0.5rem; }
+.as-sheet.open .checkselector-search[hidden] { display: none; }
+.as-sheet .charselector-dropdown,
+.as-sheet .charselector-dropdown[hidden] {
+  display: block;
+  position: static;
+  max-height: none;
+  overflow: visible;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.as-sheet .checkselector .charselector-option,
+.as-sheet .charselector-option {
+  min-height: 3rem;
+  padding: 0.6rem 0.15rem;
+  gap: 0.75rem;
+  font-size: var(--fs-md);
+  border-bottom: 1px solid var(--box-edge);
+}
+.as-sheet .charselector-option .charselector-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.as-sheet .charselector-option input[type="checkbox"] { order: 2; width: 1.3rem; height: 1.3rem; }
+.as-sheet .checkselector-locked .charselector-tags { flex-basis: 100%; }
 /* --- settings pages: fields, cards and rows (ops, Discord servers, groups) --- */
 .lede { color: var(--muted); max-width: 62rem; margin: 0 0 1rem; }
 .hint { color: var(--muted); font-size: var(--fs-xs); margin: 0.3rem 0 0.75rem; }

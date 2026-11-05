@@ -124,7 +124,8 @@
 @container console (width < 46rem) {
   .mships { display: block; margin-top: 0.9rem; }
   .mships-h { margin: 0 0 0.5rem; font-size: var(--fs-md); }
-  .mships-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  /* As many cards across as fit: two on a phone, more as it widens. */
+  .mships-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(9.5rem, 100%), 1fr)); gap: 0.6rem; }
   .mship { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.6rem; background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
   .mship img { border-radius: var(--r-xs); }
   .mship-n { font-weight: 600; font-size: var(--fs-xs); }

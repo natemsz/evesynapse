@@ -834,6 +834,13 @@
   .cs-more-btn .cs-count { margin-left: 0.35rem; }
   .as-sheet.open .cs-actions { display: none; }
   .as-sheet.open .cs-filters { margin-bottom: 0.4rem; }
+  /* Appraisal lines: the group chip gives its width to the item
+     name (the Wants chip stays: it names the side), the quantity
+     never breaks, and the price reads a step larger. */
+  .cs-gchip:not(.want) { display: none; }
+  .cs-aq { white-space: nowrap; }
+  .cs-aline-l { flex: 1 1 55%; }
+  .cs-tp { flex: 0 1 45%; font-size: var(--fs-xs); }
 }
 
 /* ---- touch targets ----

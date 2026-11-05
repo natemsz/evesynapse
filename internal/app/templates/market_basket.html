@@ -76,7 +76,7 @@
       <td><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a></td>
       <td class="mt-num">{{.Quantity}}</td>
       <td class="mt-num"{{if .Unit}} title="{{.Unit}} ISK"{{end}}>{{if .Unit}}{{.UnitShort}}{{else}}—{{end}}</td>
-      <td class="mt-num bk-gold"{{if .Value}} title="{{.Value}} ISK"{{end}}>{{if .Value}}{{.ValueShort}}{{else}}<small>No price</small>{{end}}</td>
+      <td class="mt-num bk-gold bk-wcell"{{if .Value}} title="{{.Value}} ISK"{{end}}>{{if .Value}}{{.ValueShort}}{{else}}<small>No price</small>{{end}}</td>
       <td class="mt-num" data-sort="{{.Share}}">{{if .Share}}<span class="bk-share">{{.Share}}<svg class="l-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.SharePct}}" height="4"/></svg></span>{{else}}—{{end}}</td>
       <td class="mt-num">{{if .Chg.Text}}<span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span>{{else}}—{{end}}</td>
       <td class="mt-num" data-sort="{{if .Impact}}{{if not .ImpactUp}}-{{end}}{{.Impact}}{{end}}">{{if .Impact}}<span class="mt-chg {{if .ImpactUp}}up{{else}}down{{end}}" title="{{.Impact}} ISK">{{if .ImpactUp}}+{{else}}−{{end}}{{.ImpactShort}}</span>{{else}}—{{end}}</td>

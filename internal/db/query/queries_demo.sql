@@ -70,3 +70,26 @@ DELETE FROM push_subscriptions WHERE user_id = $1;
 
 -- name: ResetDemoHomeLayout :exec
 UPDATE users SET home_layout = '' WHERE id = $1;
+
+-- name: DeleteDemoBlueprintPins :exec
+DELETE FROM blueprint_pins WHERE user_id = $1;
+
+-- name: DeleteDemoRestockTargets :exec
+DELETE FROM restock_targets WHERE user_id = $1;
+
+-- name: DeleteDemoBaskets :exec
+-- The demo account's own baskets; their items and value history
+-- go with them (ON DELETE CASCADE). Presets have no user.
+DELETE FROM market_baskets WHERE user_id = $1;
+
+-- name: DeleteDemoDoctrines :exec
+-- The demo corporation's doctrines; their fits cascade.
+DELETE FROM doctrines WHERE corporation_id = $1;
+
+-- name: DeleteDemoOps :exec
+-- The demo corporation's ops; SRP claims filed against them cascade.
+DELETE FROM ops WHERE corporation_id = $1;
+
+-- name: DeleteDemoOrgGroups :exec
+-- The demo corporation's groups; their members cascade.
+DELETE FROM org_groups WHERE owner_kind = 'corporation' AND owner_id = $1;

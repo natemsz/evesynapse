@@ -7,7 +7,9 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -246,9 +248,22 @@ func TestAdminAnalyticsRenders(t *testing.T) {
 		t.Fatalf("GET /admin/ (seeded): status %d, want 200", code)
 	}
 	mustContain(t, "/admin/ (seeded)", body,
-		"Traffic", "Worker cycles", "Host", "ESI calls · 24h", "Growth",
+		"Traffic", "Worker cycles", "Host", "Growth",
 		"Top pages · 24h", "Activity · 24h", "Data freshness", "Swarm",
 		"Data inventory", "market_orders", "Requests · 24h", "120")
+	if strings.Contains(body, "ESI calls ·") {
+		t.Errorf("/admin/ (seeded): the per-family ESI section is still on Analytics; it belongs to the ESI Details tab")
+	}
+
+	// The ESI section lives on the ESI Details tab, with the
+	// right-now strip and the backlog tiles above it.
+	code, body = getPage(t, app, asAdmin, "/admin/esi/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /admin/esi/: status %d, want 200", code)
+	}
+	mustContain(t, "/admin/esi/", body,
+		"ESI Details", "ESI right now", "Worker backlogs", "ESI calls · 24h",
+		"No ESI calls recorded in this window yet", "No backlog readings yet")
 
 	// The 30-day range reads the hourly rollups; with none
 	// seeded it answers with the honest notes, not an error.
@@ -256,7 +271,12 @@ func TestAdminAnalyticsRenders(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /admin/?range=30d: status %d, want 200", code)
 	}
-	mustContain(t, "/admin/?range=30d", body, "ESI calls · 30 days", "No requests recorded in this window yet")
+	mustContain(t, "/admin/?range=30d", body, "No requests recorded in this window yet")
+	code, body = getPage(t, app, asAdmin, "/admin/esi/?range=30d")
+	if code != http.StatusOK {
+		t.Fatalf("GET /admin/esi/?range=30d: status %d, want 200", code)
+	}
+	mustContain(t, "/admin/esi/?range=30d", body, "ESI calls · 30 days")
 }
 
 // The Market history freshness tile reads the latest attempted_at
@@ -291,4 +311,87 @@ func TestStatsMarketHistoryLatest(t *testing.T) {
 	if !at.Equal(historyAt) {
 		t.Errorf("market history latest: got %v, want %v", at, historyAt)
 	}
+}
+
+// The ESI Details tab end to end: the stats flush records the
+// cycle's backlog depths from the tables that own them (and the
+// depth the market history pass noted), and the tab renders the
+// latest reading as a tile with its depth and its change since
+// the previous cycle, next to the right-now ESI strip.
+func TestESIDetailsBacklogTiles(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, &countingTransport{})
+	grantTestAdmin(app, fixtureCharA)
+	ctx := context.Background()
+	admin, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create admin account: %v", err)
+	}
+	seedCharacter(t, q, admin.ID, fixtureCharA, "Admin Main")
+	asAdmin := sessionCookie(t, app, admin.ID, fixtureCharA, "Admin Main")
+	now := time.Now().UTC()
+
+	// Three of the character's killmails wait unmerged; a fourth
+	// already has its kills row and does not count.
+	for _, id := range []int64{900000001, 900000002, 900000003, 900000004} {
+		if err := q.UpsertKillmailDetail(ctx, db.UpsertKillmailDetailParams{
+			KillmailID: id, CharacterID: fixtureCharA, Hash: "h", Payload: "{}", FetchedAt: now,
+		}); err != nil {
+			t.Fatalf("seed killmail detail %d: %v", id, err)
+		}
+	}
+	if _, err := conn.ExecContext(ctx,
+		`INSERT INTO kills (killmail_id, killmail_time, system_id, source, ingested_at)
+		 VALUES (900000004, $1, 30000142, 'test', $1)`, now); err != nil {
+		t.Fatalf("seed merged kill: %v", err)
+	}
+	// Two pilot records and one corporation record wait
+	// unresolved (a want with no record fetched yet is pending).
+	for _, id := range []int64{910000001, 910000002} {
+		if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{
+			CharacterID: id, Priority: 1, NotedAt: sql.NullTime{Time: now, Valid: true},
+		}); err != nil {
+			t.Fatalf("seed pilot want %d: %v", id, err)
+		}
+	}
+	if err := q.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{
+		CorporationID: 920000001, Priority: 1, NotedAt: sql.NullTime{Time: now, Valid: true},
+	}); err != nil {
+		t.Fatalf("seed corporation want: %v", err)
+	}
+	// The strip: 1,000 calls and 5 errors two minutes ago,
+	// 500 calls and 10 errors seven minutes ago.
+	if err := q.UpsertStatsESI(ctx, db.UpsertStatsESIParams{
+		Minute: now.Add(-2 * time.Minute).Truncate(time.Minute), Family: "characters", Calls: 1000, Errors: 5,
+	}); err != nil {
+		t.Fatalf("seed recent esi: %v", err)
+	}
+	if err := q.UpsertStatsESI(ctx, db.UpsertStatsESIParams{
+		Minute: now.Add(-7 * time.Minute).Truncate(time.Minute), Family: "characters", Calls: 500, Errors: 10,
+	}); err != nil {
+		t.Fatalf("seed previous esi: %v", err)
+	}
+
+	app.recorder().noteBacklog(statsBacklogHistoryDue, 7)
+	cycle := now.Add(-time.Minute)
+	app.flushStats(ctx, workerTiming{At: cycle, Took: time.Second})
+
+	// One more killmail lands before the next cycle ends.
+	if err := q.UpsertKillmailDetail(ctx, db.UpsertKillmailDetailParams{
+		KillmailID: 900000005, CharacterID: fixtureCharA, Hash: "h", Payload: "{}", FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("seed late killmail detail: %v", err)
+	}
+	app.flushStats(ctx, workerTiming{At: cycle.Add(time.Minute), Took: time.Second})
+
+	code, body := getPage(t, app, asAdmin, "/admin/esi/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /admin/esi/: status %d, want 200", code)
+	}
+	// The plus signs reach the page as &#43; (html/template's
+	// escaping of + in text); the suite asserts that form.
+	mustContain(t, "/admin/esi/ (backlogs)", body,
+		"Killmails waiting to merge", "4", "&#43;1 since the previous cycle",
+		"Market history pairs due", "7",
+		"Pilot and corporation records to resolve", "3",
+		"995", "&#43;505", "-5")
 }

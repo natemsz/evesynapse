@@ -685,6 +685,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(app.requireAdmin)
 		r.Get("/", app.handleAdmin)
+		// The ESI Details tab (admin_esi.go): the instance's ESI
+		// traffic and the worker's backlogs, read-only like the rest.
+		r.Get("/esi/", app.handleAdminESI)
 		// The Sync tab (sync.go): the worker and data-freshness
 		// page, living under Admin; /sync/ redirects here.
 		r.Get("/sync/", app.handleSync)

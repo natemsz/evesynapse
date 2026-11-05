@@ -2133,6 +2133,20 @@ type SrpSetting struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+type StatsBacklog struct {
+	CycleAt time.Time `json:"cycle_at"`
+	Backlog string    `json:"backlog"`
+	Depth   int64     `json:"depth"`
+}
+
+type StatsBacklogsHourly struct {
+	Hour     time.Time `json:"hour"`
+	Backlog  string    `json:"backlog"`
+	DepthAvg float64   `json:"depth_avg"`
+	DepthMax int64     `json:"depth_max"`
+	Samples  int64     `json:"samples"`
+}
+
 type StatsCycle struct {
 	At         time.Time `json:"at"`
 	TookMs     int64     `json:"took_ms"`

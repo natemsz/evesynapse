@@ -54,6 +54,27 @@ INSERT INTO stats_inventory (hour, name, rows_est, size_bytes)
 VALUES (sqlc.arg(hour)::timestamptz, sqlc.arg(name), sqlc.arg(rows_est), sqlc.arg(size_bytes))
 ON CONFLICT (hour, name) DO UPDATE SET rows_est = excluded.rows_est, size_bytes = excluded.size_bytes;
 
+-- name: InsertStatsBacklog :exec
+INSERT INTO stats_backlogs (cycle_at, backlog, depth)
+VALUES (sqlc.arg(cycle_at)::timestamptz, sqlc.arg(backlog), sqlc.arg(depth))
+ON CONFLICT (cycle_at, backlog) DO UPDATE SET depth = excluded.depth;
+
+-- The backlog depths the flush records at the end of a cycle,
+-- counted from the tables that own each backlog. The killmail
+-- count is the merge pass's own work list (ListESIKillsToMerge)
+-- without its cap; the record counts ride the drain indexes on
+-- (state, ...).
+
+-- name: CountKillmailsToMerge :one
+SELECT count(*)::bigint AS n FROM killmail_details d
+WHERE NOT EXISTS (SELECT 1 FROM kills k WHERE k.killmail_id = d.killmail_id);
+
+-- name: CountPendingPilotRecords :one
+SELECT count(*)::bigint AS n FROM pilot_records WHERE state = 'pending';
+
+-- name: CountPendingCorporationRecords :one
+SELECT count(*)::bigint AS n FROM corporation_records WHERE state = 'pending';
+
 -- (The inventory snapshot's pg_class reads live in stats_recorder.go
 -- as raw SQL: sqlc's schema input has no pg_catalog.)
 
@@ -181,6 +202,24 @@ DELETE FROM stats_cycle_phases_hourly WHERE hour < sqlc.arg(cutoff)::timestamptz
 
 -- name: PruneStatsInventory :exec
 DELETE FROM stats_inventory WHERE hour < sqlc.arg(cutoff)::timestamptz;
+
+-- name: RollupStatsBacklogs :exec
+INSERT INTO stats_backlogs_hourly (hour, backlog, depth_avg, depth_max, samples)
+SELECT date_trunc('hour', cycle_at), backlog, avg(depth)::float8, max(depth), count(*)
+FROM stats_backlogs WHERE cycle_at < sqlc.arg(cutoff)::timestamptz
+GROUP BY 1, 2
+ON CONFLICT (hour, backlog) DO UPDATE SET
+    depth_avg = (stats_backlogs_hourly.depth_avg * stats_backlogs_hourly.samples
+                 + excluded.depth_avg * excluded.samples)
+                / (stats_backlogs_hourly.samples + excluded.samples),
+    depth_max = GREATEST(stats_backlogs_hourly.depth_max, excluded.depth_max),
+    samples = stats_backlogs_hourly.samples + excluded.samples;
+
+-- name: DeleteStatsBacklogsRolled :exec
+DELETE FROM stats_backlogs WHERE cycle_at < sqlc.arg(cutoff)::timestamptz;
+
+-- name: PruneStatsBacklogsHourly :exec
+DELETE FROM stats_backlogs_hourly WHERE hour < sqlc.arg(cutoff)::timestamptz;
 
 -- ---------------------------------------------------------------------
 -- Analytics reads: minute tables for the 24h and 7d ranges, hourly
@@ -390,3 +429,30 @@ SELECT max(created_at) AS latest FROM intel_reports;
 
 -- name: StatsSwarmLastApplied :one
 SELECT max(applied_at) AS latest FROM swarm_applied;
+
+-- ---------------------------------------------------------------------
+-- ESI Details tab reads: the right-now strip over stats_esi_minute
+-- and the backlog snapshots. Range-independent; always the minute
+-- table, always bounded.
+-- ---------------------------------------------------------------------
+
+-- name: StatsESITotalsWindow :one
+SELECT coalesce(sum(calls), 0)::bigint AS calls, coalesce(sum(errors), 0)::bigint AS errors
+FROM stats_esi_minute
+WHERE minute >= sqlc.arg(from_ts)::timestamptz AND minute < sqlc.arg(to_ts)::timestamptz;
+
+-- name: StatsESISeries :many
+SELECT minute, sum(calls)::bigint AS calls, sum(errors)::bigint AS errors
+FROM stats_esi_minute
+WHERE minute >= sqlc.arg(from_ts)::timestamptz AND minute < sqlc.arg(to_ts)::timestamptz
+GROUP BY 1 ORDER BY 1;
+
+-- name: StatsBacklogsRecent :many
+SELECT b.backlog AS backlog, s.cycle_at AS cycle_at, s.depth AS depth
+FROM (SELECT DISTINCT backlog FROM stats_backlogs) b
+JOIN LATERAL (
+    SELECT cycle_at, depth FROM stats_backlogs
+    WHERE backlog = b.backlog ORDER BY cycle_at DESC
+    LIMIT sqlc.arg(per_kind)
+) s ON true
+ORDER BY b.backlog, s.cycle_at;

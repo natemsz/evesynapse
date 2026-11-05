@@ -222,10 +222,6 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 	ch := buildBattleChart(series, kills)
 	ch.Hostile, ch.Friendly = buildSides(parties, weapons)
 	ch.Weapons = aggregateWeapons(weapons)
-	chart, err := json.Marshal(ch)
-	if err != nil {
-		return err
-	}
 	sparkTop := 0.0
 	for _, r := range [][]float64{rolling(series.DamageOut), rolling(series.DamageIn)} {
 		for _, v := range r {
@@ -264,7 +260,8 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 	}
 	moments := buildMoments(momentInput{Fight: f, Series: series, Slices: slices, Parties: parties, Tackles: tackles, Kills: kills, Ships: ships})
 	ch.Hover = buildChartHover(series, slices, parties, kills, ships)
-	if chart, err = json.Marshal(ch); err != nil {
+	chart, err := json.Marshal(ch)
+	if err != nil {
 		return err
 	}
 	capacity := 0.0

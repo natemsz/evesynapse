@@ -57,8 +57,9 @@ type esiDetailsView struct {
 func (app *Application) handleAdminESI(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
-	data.AdminTab = "esi"
 	data.ESIDetails = app.buildESIDetails(ctx, r.URL.Query().Get("range"))
+	data.SectionTabs = adminTabs("esi")
+	data.SectionSubTabs = adminRangeTabs("/admin/esi/", data.ESIDetails.Links)
 	app.render(ctx, w, http.StatusOK, "admin_esi.html", data)
 }
 

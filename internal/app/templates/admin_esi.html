@@ -1,9 +1,8 @@
 {{define "title"}}Admin{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Admin</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
-
-{{template "admintabs" .}}
 
 {{with .ESIDetails}}
 <p class="an-note">This instance's own ESI traffic and the worker's backlogs, from its own records. This page reports; it cannot restart, deploy, or change anything on the host.</p>
@@ -30,7 +29,9 @@
 
 <section class="card spanall">
 <h2>ESI calls · {{.Word}}</h2>
-{{range .ESIBars}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span>{{.Bar}}<span class="an-bar-val">{{.Value}}</span></div>
+{{if .ESIBars}}<div class="an-kpis an-families">
+{{range .ESIBars}}<div class="an-kpi"><div class="k-l">{{.Name}}</div><div class="k-s an-mono">{{.Value}}</div>{{.Bar}}</div>
+{{end}}</div>
 {{end}}<p class="an-note">{{.ESINote}}</p>
 </section>
 

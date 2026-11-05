@@ -316,7 +316,7 @@ var noticeAdminScripts = []string{"/static/notices_admin.js"}
 func (app *Application) handleAdminNotices(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
-	data.AdminTab = "notices"
+	data.SectionTabs = adminTabs("notices")
 	data.Scripts = noticeAdminScripts
 	now := time.Now().UTC()
 	view := &noticesAdminView{

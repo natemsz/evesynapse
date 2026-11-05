@@ -765,6 +765,12 @@ var pgMarketBasketSummarySchema string
 //go:embed schema_pg/124_battle_reports.sql
 var pgBattleReportsSchema string
 
+// Step 125: stats backlogs: one row per finished worker cycle
+// per backlog, the depths the Admin ESI Details tab charts.
+//
+//go:embed schema_pg/125_stats_backlogs.sql
+var pgStatsBacklogsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -918,6 +924,7 @@ func schemaSteps() []schemaStep {
 		{122, "blueprint_buildable", pgBlueprintBuildableSchema, ""},
 		{123, "market_basket_summary", pgMarketBasketSummarySchema, ""},
 		{124, "battle_reports", pgBattleReportsSchema, ""},
+		{125, "stats_backlogs", pgStatsBacklogsSchema, ""},
 	}
 }
 

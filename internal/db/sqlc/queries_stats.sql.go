@@ -80,6 +80,55 @@ func (q *Queries) CountIntelReportsWindow(ctx context.Context, arg CountIntelRep
 	return n, err
 }
 
+const countKillmailsToMerge = `-- name: CountKillmailsToMerge :one
+
+SELECT count(*)::bigint AS n FROM killmail_details d
+WHERE NOT EXISTS (SELECT 1 FROM kills k WHERE k.killmail_id = d.killmail_id)
+`
+
+// The backlog depths the flush records at the end of a cycle,
+// counted from the tables that own each backlog. The killmail
+// count is the merge pass's own work list (ListESIKillsToMerge)
+// without its cap; the record counts ride the drain indexes on
+// (state, ...).
+func (q *Queries) CountKillmailsToMerge(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countKillmailsToMerge)
+	var n int64
+	err := row.Scan(&n)
+	return n, err
+}
+
+const countPendingCorporationRecords = `-- name: CountPendingCorporationRecords :one
+SELECT count(*)::bigint AS n FROM corporation_records WHERE state = 'pending'
+`
+
+func (q *Queries) CountPendingCorporationRecords(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPendingCorporationRecords)
+	var n int64
+	err := row.Scan(&n)
+	return n, err
+}
+
+const countPendingPilotRecords = `-- name: CountPendingPilotRecords :one
+SELECT count(*)::bigint AS n FROM pilot_records WHERE state = 'pending'
+`
+
+func (q *Queries) CountPendingPilotRecords(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPendingPilotRecords)
+	var n int64
+	err := row.Scan(&n)
+	return n, err
+}
+
+const deleteStatsBacklogsRolled = `-- name: DeleteStatsBacklogsRolled :exec
+DELETE FROM stats_backlogs WHERE cycle_at < $1::timestamptz
+`
+
+func (q *Queries) DeleteStatsBacklogsRolled(ctx context.Context, cutoff time.Time) error {
+	_, err := q.db.ExecContext(ctx, deleteStatsBacklogsRolled, cutoff)
+	return err
+}
+
 const deleteStatsCyclePhasesRolled = `-- name: DeleteStatsCyclePhasesRolled :exec
 DELETE FROM stats_cycle_phases WHERE cycle_at < $1::timestamptz
 `
@@ -143,6 +192,23 @@ func (q *Queries) DeleteStatsRequestsRolled(ctx context.Context, cutoff time.Tim
 	return err
 }
 
+const insertStatsBacklog = `-- name: InsertStatsBacklog :exec
+INSERT INTO stats_backlogs (cycle_at, backlog, depth)
+VALUES ($1::timestamptz, $2, $3)
+ON CONFLICT (cycle_at, backlog) DO UPDATE SET depth = excluded.depth
+`
+
+type InsertStatsBacklogParams struct {
+	CycleAt time.Time `json:"cycle_at"`
+	Backlog string    `json:"backlog"`
+	Depth   int64     `json:"depth"`
+}
+
+func (q *Queries) InsertStatsBacklog(ctx context.Context, arg InsertStatsBacklogParams) error {
+	_, err := q.db.ExecContext(ctx, insertStatsBacklog, arg.CycleAt, arg.Backlog, arg.Depth)
+	return err
+}
+
 const insertStatsCycle = `-- name: InsertStatsCycle :exec
 INSERT INTO stats_cycles (at, took_ms, fetches, budget, deferred, characters, esi_state)
 VALUES ($1::timestamptz, $2, $3, $4, $5, $6, $7)
@@ -186,6 +252,15 @@ type InsertStatsCyclePhaseParams struct {
 
 func (q *Queries) InsertStatsCyclePhase(ctx context.Context, arg InsertStatsCyclePhaseParams) error {
 	_, err := q.db.ExecContext(ctx, insertStatsCyclePhase, arg.CycleAt, arg.Phase, arg.TookMs)
+	return err
+}
+
+const pruneStatsBacklogsHourly = `-- name: PruneStatsBacklogsHourly :exec
+DELETE FROM stats_backlogs_hourly WHERE hour < $1::timestamptz
+`
+
+func (q *Queries) PruneStatsBacklogsHourly(ctx context.Context, cutoff time.Time) error {
+	_, err := q.db.ExecContext(ctx, pruneStatsBacklogsHourly, cutoff)
 	return err
 }
 
@@ -258,6 +333,24 @@ DELETE FROM stats_requests_hourly WHERE hour < $1::timestamptz
 
 func (q *Queries) PruneStatsRequestsHourly(ctx context.Context, cutoff time.Time) error {
 	_, err := q.db.ExecContext(ctx, pruneStatsRequestsHourly, cutoff)
+	return err
+}
+
+const rollupStatsBacklogs = `-- name: RollupStatsBacklogs :exec
+INSERT INTO stats_backlogs_hourly (hour, backlog, depth_avg, depth_max, samples)
+SELECT date_trunc('hour', cycle_at), backlog, avg(depth)::float8, max(depth), count(*)
+FROM stats_backlogs WHERE cycle_at < $1::timestamptz
+GROUP BY 1, 2
+ON CONFLICT (hour, backlog) DO UPDATE SET
+    depth_avg = (stats_backlogs_hourly.depth_avg * stats_backlogs_hourly.samples
+                 + excluded.depth_avg * excluded.samples)
+                / (stats_backlogs_hourly.samples + excluded.samples),
+    depth_max = GREATEST(stats_backlogs_hourly.depth_max, excluded.depth_max),
+    samples = stats_backlogs_hourly.samples + excluded.samples
+`
+
+func (q *Queries) RollupStatsBacklogs(ctx context.Context, cutoff time.Time) error {
+	_, err := q.db.ExecContext(ctx, rollupStatsBacklogs, cutoff)
 	return err
 }
 
@@ -395,6 +488,46 @@ func (q *Queries) StatsActiveSessions(ctx context.Context) (int64, error) {
 	var active int64
 	err := row.Scan(&active)
 	return active, err
+}
+
+const statsBacklogsRecent = `-- name: StatsBacklogsRecent :many
+SELECT b.backlog AS backlog, s.cycle_at AS cycle_at, s.depth AS depth
+FROM (SELECT DISTINCT backlog FROM stats_backlogs) b
+JOIN LATERAL (
+    SELECT cycle_at, depth FROM stats_backlogs
+    WHERE backlog = b.backlog ORDER BY cycle_at DESC
+    LIMIT $1
+) s ON true
+ORDER BY b.backlog, s.cycle_at
+`
+
+type StatsBacklogsRecentRow struct {
+	Backlog string    `json:"backlog"`
+	CycleAt time.Time `json:"cycle_at"`
+	Depth   int64     `json:"depth"`
+}
+
+func (q *Queries) StatsBacklogsRecent(ctx context.Context, perKind int32) ([]StatsBacklogsRecentRow, error) {
+	rows, err := q.db.QueryContext(ctx, statsBacklogsRecent, perKind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StatsBacklogsRecentRow
+	for rows.Next() {
+		var i StatsBacklogsRecentRow
+		if err := rows.Scan(&i.Backlog, &i.CycleAt, &i.Depth); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const statsCyclePhasesHours = `-- name: StatsCyclePhasesHours :many
@@ -804,6 +937,76 @@ func (q *Queries) StatsDurationsForGroupsMinutes(ctx context.Context, arg StatsD
 		return nil, err
 	}
 	return items, nil
+}
+
+const statsESISeries = `-- name: StatsESISeries :many
+SELECT minute, sum(calls)::bigint AS calls, sum(errors)::bigint AS errors
+FROM stats_esi_minute
+WHERE minute >= $1::timestamptz AND minute < $2::timestamptz
+GROUP BY 1 ORDER BY 1
+`
+
+type StatsESISeriesParams struct {
+	FromTs time.Time `json:"from_ts"`
+	ToTs   time.Time `json:"to_ts"`
+}
+
+type StatsESISeriesRow struct {
+	Minute time.Time `json:"minute"`
+	Calls  int64     `json:"calls"`
+	Errors int64     `json:"errors"`
+}
+
+func (q *Queries) StatsESISeries(ctx context.Context, arg StatsESISeriesParams) ([]StatsESISeriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, statsESISeries, arg.FromTs, arg.ToTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StatsESISeriesRow
+	for rows.Next() {
+		var i StatsESISeriesRow
+		if err := rows.Scan(&i.Minute, &i.Calls, &i.Errors); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const statsESITotalsWindow = `-- name: StatsESITotalsWindow :one
+
+SELECT coalesce(sum(calls), 0)::bigint AS calls, coalesce(sum(errors), 0)::bigint AS errors
+FROM stats_esi_minute
+WHERE minute >= $1::timestamptz AND minute < $2::timestamptz
+`
+
+type StatsESITotalsWindowParams struct {
+	FromTs time.Time `json:"from_ts"`
+	ToTs   time.Time `json:"to_ts"`
+}
+
+type StatsESITotalsWindowRow struct {
+	Calls  int64 `json:"calls"`
+	Errors int64 `json:"errors"`
+}
+
+// ---------------------------------------------------------------------
+// ESI Details tab reads: the right-now strip over stats_esi_minute
+// and the backlog snapshots. Range-independent; always the minute
+// table, always bounded.
+// ---------------------------------------------------------------------
+func (q *Queries) StatsESITotalsWindow(ctx context.Context, arg StatsESITotalsWindowParams) (StatsESITotalsWindowRow, error) {
+	row := q.db.QueryRowContext(ctx, statsESITotalsWindow, arg.FromTs, arg.ToTs)
+	var i StatsESITotalsWindowRow
+	err := row.Scan(&i.Calls, &i.Errors)
+	return i, err
 }
 
 const statsESIWindowHours = `-- name: StatsESIWindowHours :many

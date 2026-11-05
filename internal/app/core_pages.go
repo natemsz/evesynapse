@@ -50,6 +50,9 @@ type pageData struct {
 	AdminTab string
 	// NoticeAdmin is the Admin page's Notices tab (notices.go).
 	NoticeAdmin *noticesAdminView
+	// ESIDetails is the Admin page's ESI Details tab
+	// (admin_esi.go).
+	ESIDetails *esiDetailsView
 
 	// Legal is the /license/ page (license_page.go).
 	Legal *legalView
@@ -191,7 +194,7 @@ func sectionForPage(page string) string {
 		// The Sync page is a tab of the Admin page now; it
 		// reads as part of that section.
 		return "admin"
-	case "admin.html", "admin_notices.html":
+	case "admin.html", "admin_notices.html", "admin_esi.html":
 		return "admin"
 	}
 	return ""

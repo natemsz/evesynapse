@@ -153,6 +153,20 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		kinds[i] = marketFetchKind("history", key)
 	}
 	states, statesOK := app.marketFetchStates(ctx, kinds)
+	// The cycle's backlog reading for the Admin page: how many of
+	// the candidates are due right now, by the same rule the loop
+	// below fetches by (a missing record is due).
+	if statesOK {
+		due := 0
+		dueNow := time.Now()
+		for i := range candidates {
+			state, ok := states[kinds[i]]
+			if !ok || historyFetchStateDue(state, dueNow) {
+				due++
+			}
+		}
+		app.recorder().noteBacklog(statsBacklogHistoryDue, int64(due))
+	}
 	// Due pairs are fetched historyFetchWindow at a time: they come
 	// due together once ESI publishes a day, and one after another
 	// the cap's worth would hold the cycle for most of a minute.

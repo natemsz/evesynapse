@@ -41,6 +41,18 @@ const (
 	statsEventContractSearch = "contract_search"
 )
 
+// Backlog kinds for stats_backlogs: the worker's own queue
+// depths, recorded once per finished cycle by the flush. The
+// killmail and record depths are counted at flush time from the
+// tables that own them; the history depth is counted by the
+// market history pass itself (it already enumerates the due
+// pairs each cycle) and noted here.
+const (
+	statsBacklogKillsToMerge = "kills_to_merge"
+	statsBacklogHistoryDue   = "history_due"
+	statsBacklogRecords      = "records_unresolved"
+)
+
 // statsDurationEdgesMs are the response-time histogram edges in
 // milliseconds: bucket i counts durations over edge i-1 and at or
 // under edge i; the final bucket counts everything above the last
@@ -106,6 +118,10 @@ type statsRecorder struct {
 	reqs   map[statsReqKey]int64
 	durs   map[statsDurKey]int64
 	events map[statsEventKey]int64
+	// backlogs holds the latest measured depth per backlog kind
+	// for the kinds a worker pass counts (the market history
+	// pass); the flush writes the latest value each cycle.
+	backlogs map[string]int64
 	// lastHousekeep is the hour the inventory snapshot and the
 	// rollup last ran for; zero until the first flush.
 	lastHousekeep time.Time
@@ -113,10 +129,30 @@ type statsRecorder struct {
 
 func newStatsRecorder() *statsRecorder {
 	return &statsRecorder{
-		reqs:   make(map[statsReqKey]int64),
-		durs:   make(map[statsDurKey]int64),
-		events: make(map[statsEventKey]int64),
+		reqs:     make(map[statsReqKey]int64),
+		durs:     make(map[statsDurKey]int64),
+		events:   make(map[statsEventKey]int64),
+		backlogs: make(map[string]int64),
 	}
+}
+
+// noteBacklog records the latest measured depth of one backlog.
+func (r *statsRecorder) noteBacklog(kind string, depth int64) {
+	r.mu.Lock()
+	r.backlogs[kind] = depth
+	r.mu.Unlock()
+}
+
+// backlogSnapshot copies the latest noted depths; kinds never
+// noted are absent.
+func (r *statsRecorder) backlogSnapshot() map[string]int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make(map[string]int64, len(r.backlogs))
+	for k, v := range r.backlogs {
+		out[k] = v
+	}
+	return out
 }
 
 // recorder returns the application's shared recorder, created on
@@ -277,6 +313,24 @@ func (app *Application) flushStats(ctx context.Context, t workerTiming) {
 	minute := now.Truncate(time.Minute)
 	host, hasHost := sampleHost()
 
+	// The cycle's backlog depths: the kinds a pass counts ride
+	// the recorder; the rest are counted here, once a cycle, from
+	// the tables that own them. A failed count skips its kind
+	// for this cycle rather than failing the whole flush.
+	depths := rec.backlogSnapshot()
+	if n, err := app.queries.CountKillmailsToMerge(ctx); err == nil {
+		depths[statsBacklogKillsToMerge] = n
+	} else {
+		logging.Errorf("stats: backlog kills to merge: %v", err)
+	}
+	pilots, perr := app.queries.CountPendingPilotRecords(ctx)
+	corps, cerr := app.queries.CountPendingCorporationRecords(ctx)
+	if perr == nil && cerr == nil {
+		depths[statsBacklogRecords] = pilots + corps
+	} else {
+		logging.Errorf("stats: backlog records: %v / %v", perr, cerr)
+	}
+
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
 		logging.Errorf("stats: begin flush: %v", err)
@@ -355,6 +409,14 @@ func (app *Application) flushStats(ctx context.Context, t workerTiming) {
 			return
 		}
 	}
+	for kind, depth := range depths {
+		if err := q.InsertStatsBacklog(ctx, db.InsertStatsBacklogParams{
+			CycleAt: t.At, Backlog: kind, Depth: depth,
+		}); err != nil {
+			logging.Errorf("stats: flush backlog: %v", err)
+			return
+		}
+	}
 
 	if err := app.statsHousekeep(ctx, q, rec, now); err != nil {
 		logging.Errorf("stats: housekeeping: %v", err)
@@ -424,6 +486,7 @@ func (app *Application) statsHousekeep(ctx context.Context, q *db.Queries, rec *
 	roll := []func(context.Context, time.Time) error{
 		q.RollupStatsRequests, q.RollupStatsDurations, q.RollupStatsESI,
 		q.RollupStatsEvents, q.RollupStatsHost, q.RollupStatsCycles, q.RollupStatsCyclePhases,
+		q.RollupStatsBacklogs,
 	}
 	for _, fn := range roll {
 		if err := fn(ctx, rollCutoff); err != nil {
@@ -433,7 +496,7 @@ func (app *Application) statsHousekeep(ctx context.Context, q *db.Queries, rec *
 	del := []func(context.Context, time.Time) error{
 		q.DeleteStatsRequestsRolled, q.DeleteStatsDurationsRolled, q.DeleteStatsESIRolled,
 		q.DeleteStatsEventsRolled, q.DeleteStatsHostRolled, q.DeleteStatsCyclesRolled,
-		q.DeleteStatsCyclePhasesRolled,
+		q.DeleteStatsCyclePhasesRolled, q.DeleteStatsBacklogsRolled,
 	}
 	for _, fn := range del {
 		if err := fn(ctx, rollCutoff); err != nil {
@@ -444,7 +507,7 @@ func (app *Application) statsHousekeep(ctx context.Context, q *db.Queries, rec *
 	prune := []func(context.Context, time.Time) error{
 		q.PruneStatsRequestsHourly, q.PruneStatsDurationsHourly, q.PruneStatsESIHourly,
 		q.PruneStatsEventsHourly, q.PruneStatsHostHourly, q.PruneStatsCyclesHourly,
-		q.PruneStatsCyclePhasesHourly, q.PruneStatsInventory,
+		q.PruneStatsCyclePhasesHourly, q.PruneStatsInventory, q.PruneStatsBacklogsHourly,
 	}
 	for _, fn := range prune {
 		if err := fn(ctx, pruneCutoff); err != nil {

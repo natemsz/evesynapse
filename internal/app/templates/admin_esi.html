@@ -1,0 +1,39 @@
+{{define "title"}}Admin{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Admin</span></h1>{{end}}
+{{define "content"}}
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{template "admintabs" .}}
+
+{{with .ESIDetails}}
+<p class="an-note">This instance's own ESI traffic and the worker's backlogs, from its own records. This page reports; it cannot restart, deploy, or change anything on the host.</p>
+
+<section class="card spanall">
+<h2>ESI right now</h2>
+<div class="an-kpis">
+<div class="an-kpi"><div class="k-l">Successful ESI calls · last 5 minutes</div><div class="k-v">{{.NowOK}}</div><div class="k-s">{{.NowOKDelta}} on the previous 5 minutes</div></div>
+<div class="an-kpi"><div class="k-l">Failed ESI calls · last 5 minutes</div><div class="k-v">{{.NowErr}}</div><div class="k-s">{{.NowErrDelta}} on the previous 5 minutes</div></div>
+</div>
+{{if .NowChart}}{{.NowChart}}
+<div class="an-legend"><span><i class="an-s2"></i>Successful</span><span><i class="an-s5"></i>Failed</span><span class="an-mix">Per minute · last 60 minutes</span></div>
+{{else}}<p class="an-note">{{.NowNote}}</p>{{end}}
+</section>
+
+<section class="card spanall">
+<h2>Worker backlogs</h2>
+{{if .Backlogs}}<div class="an-kpis">
+{{range .Backlogs}}<div class="an-kpi"><div class="k-l">{{.Name}}</div><div class="k-v">{{.Depth}}</div><div class="k-s">{{.Delta}}</div>{{if .Spark}}{{.Spark}}{{end}}</div>
+{{end}}</div>
+<p class="an-note">Depths at the end of each worker cycle; each sparkline is the last 30 cycles.</p>
+{{else}}<p class="an-note">{{.BacklogNote}}</p>{{end}}
+</section>
+
+<section class="card spanall">
+<h2>ESI calls · {{.Word}}</h2>
+{{range .ESIBars}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span>{{.Bar}}<span class="an-bar-val">{{.Value}}</span></div>
+{{end}}<p class="an-note">{{.ESINote}}</p>
+</section>
+
+<p class="an-note">{{.Cost}}</p>
+{{end}}
+{{end}}

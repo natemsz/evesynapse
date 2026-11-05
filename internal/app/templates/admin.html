@@ -43,11 +43,6 @@
 
 <div class="an-grid2">
 <section class="card">
-<h2>ESI calls · {{.Word}}</h2>
-{{range .ESIBars}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span>{{.Bar}}<span class="an-bar-val">{{.Value}}</span></div>
-{{end}}<p class="an-note">{{.ESINote}}</p>
-</section>
-<section class="card">
 <h2>Growth</h2>
 {{if .GrowthChart}}{{.GrowthChart}}{{end}}
 <p class="an-note">{{.GrowthNote}}</p>

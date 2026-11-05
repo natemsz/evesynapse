@@ -113,9 +113,6 @@ type analyticsView struct {
 	HostFacts     []string
 	HostNote      string // set when no host samples exist
 
-	ESIBars []analyticsBar
-	ESINote string
-
 	GrowthChart template.HTML
 	GrowthNote  string
 
@@ -161,7 +158,11 @@ type analyticsBuild struct {
 	invLoaded  bool
 }
 
-func (app *Application) buildAnalytics(ctx context.Context, rangeKey string, totals analyticsTotals) *analyticsView {
+// newAnalyticsBuild opens one page build over the stored
+// aggregates: the range, its aligned window, and the query
+// counter the section footer prints. Shared by the Analytics
+// section and the ESI Details tab.
+func (app *Application) newAnalyticsBuild(ctx context.Context, rangeKey string, totals analyticsTotals) *analyticsBuild {
 	b := &analyticsBuild{app: app, ctx: ctx, started: time.Now(), totals: totals}
 	b.rng = analyticsRangeFor(rangeKey)
 	b.now = time.Now().UTC()
@@ -171,6 +172,11 @@ func (app *Application) buildAnalytics(ctx context.Context, rangeKey string, tot
 	// below assumes the first bucket starts at from.
 	fromUnix := b.to.Add(-b.rng.Window).Unix()
 	b.from = time.Unix(fromUnix-fromUnix%b.rng.Step, 0).UTC()
+	return b
+}
+
+func (app *Application) buildAnalytics(ctx context.Context, rangeKey string, totals analyticsTotals) *analyticsView {
+	b := app.newAnalyticsBuild(ctx, rangeKey, totals)
 
 	v := &analyticsView{Range: b.rng.Key, Word: b.rng.Word}
 	for _, r := range analyticsRanges {
@@ -186,7 +192,6 @@ func (app *Application) buildAnalytics(ctx context.Context, rangeKey string, tot
 	b.kpis(v, traffic, sum)
 	b.cycleSection(v, sum)
 	b.host(v)
-	b.esiSection(v)
 	b.activitySection(v)
 	b.growth(v)
 	b.topPages(v)
@@ -204,7 +209,7 @@ func (app *Application) buildAnalytics(ctx context.Context, rangeKey string, tot
 // phase split for the cycle section: bar widths are SVG geometry,
 // never an inline style (the CSP allows none).
 func (v *analyticsView) finishBars() {
-	for _, bars := range [][]analyticsBar{v.ESIBars, v.TopBars, v.ActivityBars, v.SwarmPeers, v.InvBars} {
+	for _, bars := range [][]analyticsBar{v.TopBars, v.ActivityBars, v.SwarmPeers, v.InvBars} {
 		for i := range bars {
 			bars[i].Bar = barSVG(bars[i].Pct)
 		}
@@ -733,13 +738,20 @@ func (b *analyticsBuild) esiWindow() esiWindowData {
 	return out
 }
 
-func (b *analyticsBuild) esiSection(v *analyticsView) {
-	v.ESIBars = b.esiData.bars
-	if b.esiData.totalCalls > 0 {
-		v.ESINote = fmt.Sprintf("%s calls in total across %d families.", esi.FormatInt(b.esiData.totalCalls), b.esiData.families)
-	} else {
-		v.ESINote = "No ESI calls recorded in this window yet."
+// esiSection builds the per-family ESI bars and their note for
+// the ESI Details tab (admin_esi.go), from the window esiWindow
+// already read for this build.
+func (b *analyticsBuild) esiSection() (bars []analyticsBar, note string) {
+	bars = b.esiData.bars
+	for i := range bars {
+		bars[i].Bar = barSVG(bars[i].Pct)
 	}
+	if b.esiData.totalCalls > 0 {
+		note = fmt.Sprintf("%s calls in total across %d families.", esi.FormatInt(b.esiData.totalCalls), b.esiData.families)
+	} else {
+		note = "No ESI calls recorded in this window yet."
+	}
+	return bars, note
 }
 
 // eventsWindow reads the recorder event kinds for the window.

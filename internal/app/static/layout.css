@@ -378,6 +378,9 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
   .l-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .l-grid > * { grid-column: span 6; }
   .l-grid > :is(.s3, .s4) { grid-column: span 3; }
+  /* A half cell left alone on its row (the odd one out of a run
+     of halves) takes the whole row instead of leaving a hole. */
+  .l-grid > :is(.s3, .s4):nth-child(odd of :is(.s3, .s4)):nth-last-child(1 of :is(.s3, .s4)) { grid-column: span 6; }
 }
 @container page (min-width: 52rem) {
   .l-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }

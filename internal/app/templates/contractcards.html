@@ -14,7 +14,7 @@
       {{if .StateNote}}<p class="cs-dnote">{{.StateNote}}</p>{{end}}
       {{range .Lines}}
       <div class="cs-aline{{if .Matched}} matched{{end}}">
-        <span class="cs-aline-l">{{if eq .Side "Wanted"}}<span class="cs-gchip want">Wants</span>{{else if .Group}}<span class="cs-gchip">{{.Group}}</span>{{end}} {{itemLink .TypeID .Name}}{{if and .RollTag .AbItemID}} <button type="button" class="cs-rolltag" data-ab-pick="{{.AbItemID}}" aria-controls="cs-tel-{{$p.ContractID}}-{{.AbItemID}}" aria-pressed="false">[{{.RollTag}}]</button>{{else if .RollTag}} [{{.RollTag}}]{{end}} <span class="cs-aq">×{{.Qty}}</span></span>
+        <span class="cs-aline-l">{{if eq .Side "Wanted"}}<span class="cs-gchip want">Wants</span>{{else if .Group}}<span class="cs-gchip">{{.Group}}</span>{{end}} {{itemLink .TypeID .Name}}{{if and .RollTag .AbItemID}} <button type="button" class="cs-rolltag" data-ab-pick="{{.AbItemID}}" aria-controls="cs-tel-{{$p.ContractID}}-{{.AbItemID}}" aria-pressed="false">[{{.RollTag}}]</button>{{else if .RollTag}} [{{.RollTag}}]{{end}}&nbsp;<span class="cs-aq">×{{.Qty}}</span></span>
         <span class="cs-tp{{if .BasisAmber}} un{{end}}">{{if .AbTier}}{{template "abyssal-howto" .BasisText}}{{else}}{{.BasisText}}{{end}}{{if .BasisNote}}<span class="cs-tnote">{{.BasisNote}}</span>{{end}}</span>
       </div>
       {{end}}

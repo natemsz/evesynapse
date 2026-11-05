@@ -74,6 +74,8 @@ func TestMyLoadoutsSourcesAndOwnerEdit(t *testing.T) {
 		// The training-plan glyph rides on both fit sources.
 		fmt.Sprintf("/skills/plans/fit?character=90000001&amp;local=%d", publicFit.ID),
 		"/skills/plans/fit?character=90000001&amp;fitting=42",
+		// The source tiles keep the character as its own parameter.
+		`href="/fittings/saved/?source=eve&character=90000001"`,
 	)
 	if strings.Contains(body, "Harbor Draft Rifter") {
 		t.Errorf("saved page lists the autosave draft")

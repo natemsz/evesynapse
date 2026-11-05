@@ -5508,8 +5508,11 @@
 // (a [data-checkselector]: the character selector's look, with a tick
 // box per character). The field shows the count and filters the list
 // as you type; the list stays open while boxes are ticked and closes
-// on a click elsewhere or Escape. The boxes are ordinary form fields,
-// so saving works the same with or without this.
+// on a click elsewhere or Escape. On a phone the list is a bottom
+// sheet instead (the shared data-sheet mechanism): a full-width row
+// carries the count and opens it, and a long list gets a search
+// field inside the sheet. The boxes are ordinary form fields, so
+// saving works the same with or without this.
 (function () {
   "use strict";
   var docWired = false;
@@ -5524,7 +5527,10 @@
       var dropdown = root.querySelector(".charselector-dropdown");
       var options = Array.prototype.slice.call(root.querySelectorAll(".charselector-option"));
       var boxes = Array.prototype.slice.call(root.querySelectorAll('input[type="checkbox"]'));
+      var search = root.querySelector(".checkselector-search");
+      var sum = root.querySelector(".checkselector-sum");
       if (!input || !dropdown) return;
+      if (search) search.hidden = options.length <= 6;
 
       function summarize() {
         var on = boxes.filter(function (box) { return box.checked; }).length;
@@ -5540,10 +5546,11 @@
             : "No access granted on " + total + (total === 1 ? " character" : " characters");
         }
         input.placeholder = text;
+        if (sum) sum.textContent = text;
       }
 
-      function filter() {
-        var q = input.value.toLowerCase().trim();
+      function filter(src) {
+        var q = ((src || input).value || "").toLowerCase().trim();
         options.forEach(function (option) {
           var name = (option.getAttribute("data-name") || "").toLowerCase();
           option.hidden = !!q && name.indexOf(q) === -1;
@@ -5570,11 +5577,12 @@
       input.addEventListener("focus", open);
       input.addEventListener("click", open);
       input.addEventListener("input", function () { filter(); dropdown.hidden = false; });
+      if (search) search.addEventListener("input", function () { filter(search); });
       root.addEventListener("change", summarize);
       root.addEventListener("keydown", function (ev) {
         if (ev.key === "Escape") { close(); input.blur(); }
         // Enter in the search field would send the whole form.
-        if (ev.key === "Enter" && ev.target === input) ev.preventDefault();
+        if (ev.key === "Enter" && (ev.target === input || ev.target === search)) ev.preventDefault();
       });
       summarize();
     });

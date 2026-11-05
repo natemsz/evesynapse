@@ -87,8 +87,8 @@ type marketLPView struct {
 	MaxISKPerLP float64
 	MinLP       int64
 	MaxLP       int64
-	Item        string // find-stores search text, as typed
-	ExportQuery string // the active filters as a query string, for the export links
+	Item        string       // find-stores search text, as typed
+	ExportQuery template.URL // the active filters as a query string, for the export links
 	HasStores   bool
 	Unpriced    int64
 	Rows        []marketLPRow
@@ -448,7 +448,7 @@ func (app *Application) attachLPBalances(ctx context.Context, view *marketLPView
 func (v *marketLPView) finishConsole(q url.Values) {
 	base := url.Values{}
 	if v.HasStores {
-		base, _ = url.ParseQuery(lpExportQuery(v))
+		base, _ = url.ParseQuery(string(lpExportQuery(v)))
 	}
 	href := func(vals url.Values) string {
 		if e := vals.Encode(); e != "" {
@@ -576,7 +576,7 @@ func (v *marketLPView) lpParams(cap int64) db.ListLPOfferValuesParams {
 
 // lpExportQuery renders the active filters as the query string the
 // export endpoints take, so an export matches the page it came from.
-func lpExportQuery(v *marketLPView) string {
+func lpExportQuery(v *marketLPView) template.URL {
 	q := url.Values{}
 	q.Set("region", strconv.FormatInt(v.RegionID, 10))
 	if v.StoreID > 0 {
@@ -601,7 +601,9 @@ func lpExportQuery(v *marketLPView) string {
 	if v.Item != "" {
 		q.Set("item", v.Item)
 	}
-	return q.Encode()
+	// Encode escapes every key and value, so the result is safe as
+	// a whole query; html/template would otherwise escape its & and =.
+	return template.URL(q.Encode())
 }
 
 const marketLPExportCap = 5000

@@ -247,7 +247,7 @@ func TestNotificationSettings(t *testing.T) {
 		"Briefing card",
 		`<input type="checkbox" name="card.mail" value="1" checked> Show as a card`,
 		`<input type="checkbox" name="card.undercut" value="1" checked> Show as a card`,
-		`<td><small>No card</small></td>`,
+		`<td class="notify-card"><small>No card</small></td>`,
 		`name="undercut_digest_hours"`,
 		`name="camp_systems"`,
 		`data-open-camp-modal`,

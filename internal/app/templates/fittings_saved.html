@@ -8,16 +8,15 @@
 
 <div class="l-page lo">
 {{if .Fittings}}
-{{$q := ""}}{{if .Fittings.CharacterID}}{{$q = printf "&character=%d" .Fittings.CharacterID}}{{end}}
 <div class="l-head">
   <p class="l-head-sum"><b>{{.Fittings.CountAll}}</b> loadout{{if ne .Fittings.CountAll 1}}s{{end}}: fits saved in EveSynapse{{if .Fittings.CharacterName}} and <b>{{.Fittings.CharacterName}}</b>'s in-game fittings{{end}}.</p>
   <div class="l-head-act"><a class="btn" href="/fittings/">New fit</a></div>
 </div>
 <nav class="l-tiles lo-tiles" aria-label="Show">
-  <a class="l-stat{{if eq .Fittings.Source "all"}} on{{end}}" href="/fittings/saved/?source=all{{$q}}"{{if eq .Fittings.Source "all"}} aria-current="true"{{end}}><span class="l-stat-label">All</span><span class="l-stat-value">{{.Fittings.CountAll}}</span><span class="l-stat-sub">Every loadout</span></a>
-  <a class="l-stat{{if eq .Fittings.Source "public"}} on{{end}}" href="/fittings/saved/?source=public{{$q}}"{{if eq .Fittings.Source "public"}} aria-current="true"{{end}}><span class="l-stat-label">Public</span><span class="l-stat-value">{{.Fittings.CountPublic}}</span><span class="l-stat-sub">Listed in the browser</span></a>
-  <a class="l-stat{{if eq .Fittings.Source "evesynapse"}} on{{end}}" href="/fittings/saved/?source=evesynapse{{$q}}"{{if eq .Fittings.Source "evesynapse"}} aria-current="true"{{end}}><span class="l-stat-label">EveSynapse</span><span class="l-stat-value">{{.Fittings.CountLocal}}</span><span class="l-stat-sub">Saved here</span></a>
-  <a class="l-stat{{if eq .Fittings.Source "eve"}} on{{end}}" href="/fittings/saved/?source=eve{{$q}}"{{if eq .Fittings.Source "eve"}} aria-current="true"{{end}}><span class="l-stat-label">EVE account</span><span class="l-stat-value">{{.Fittings.CountEVE}}</span><span class="l-stat-sub">{{if .Fittings.Warming}}Still syncing{{else}}In-game fittings{{end}}</span></a>
+  <a class="l-stat{{if eq .Fittings.Source "all"}} on{{end}}" href="/fittings/saved/?source=all{{with $.Fittings.CharacterID}}&character={{.}}{{end}}"{{if eq .Fittings.Source "all"}} aria-current="true"{{end}}><span class="l-stat-label">All</span><span class="l-stat-value">{{.Fittings.CountAll}}</span><span class="l-stat-sub">Every loadout</span></a>
+  <a class="l-stat{{if eq .Fittings.Source "public"}} on{{end}}" href="/fittings/saved/?source=public{{with $.Fittings.CharacterID}}&character={{.}}{{end}}"{{if eq .Fittings.Source "public"}} aria-current="true"{{end}}><span class="l-stat-label">Public</span><span class="l-stat-value">{{.Fittings.CountPublic}}</span><span class="l-stat-sub">Listed in the browser</span></a>
+  <a class="l-stat{{if eq .Fittings.Source "evesynapse"}} on{{end}}" href="/fittings/saved/?source=evesynapse{{with $.Fittings.CharacterID}}&character={{.}}{{end}}"{{if eq .Fittings.Source "evesynapse"}} aria-current="true"{{end}}><span class="l-stat-label">EveSynapse</span><span class="l-stat-value">{{.Fittings.CountLocal}}</span><span class="l-stat-sub">Saved here</span></a>
+  <a class="l-stat{{if eq .Fittings.Source "eve"}} on{{end}}" href="/fittings/saved/?source=eve{{with $.Fittings.CharacterID}}&character={{.}}{{end}}"{{if eq .Fittings.Source "eve"}} aria-current="true"{{end}}><span class="l-stat-label">EVE account</span><span class="l-stat-value">{{.Fittings.CountEVE}}</span><span class="l-stat-sub">{{if .Fittings.Warming}}Still syncing{{else}}In-game fittings{{end}}</span></a>
 </nav>
   {{if .Fittings.Fittings}}
   <div class="l-panel lo-filter fit-esi-controls">

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"sort"
 	"strings"
 	"time"
 
@@ -101,7 +102,7 @@ const esiDownAfter = 10 * time.Minute
 // ESI and our-side health and, while ESI is up, Tranquility's
 // player count.
 type esiHealthView struct {
-	State   string // "ok", "limited", "down", "ours-lagging", "ours-down", or "pending" (nothing stored yet)
+	State   string // "ok", "limited", "degraded", "down", "ours-lagging", "ours-down", or "pending" (nothing stored yet)
 	Label   string // the pill's words
 	Players string // formatted player count; empty while down or unknown
 	Title   string // the hover text: what the state means
@@ -113,9 +114,13 @@ type esiHealthView struct {
 // own pipeline states (ourSideState). DB only, no ESI.
 //
 // One combined state, blame attributed correctly: ESI down first
-// (our lag then is ESI's fault), then ours-down, then
-// ours-lagging, then ESI limited, then healthy. The player count
-// shows whenever ESI is answering, our-side states included.
+// (our lag then is ESI's fault), then lag that traces to ESI
+// (CCP reports route problems, or our own calls are failing at
+// the degraded rate: the headline is ESI degraded, not our
+// sync), then ours-down, then ours-lagging, then ESI limited,
+// then the route problems CCP itself reports, then healthy. The
+// player count shows whenever ESI is answering, our-side states
+// included.
 func (app *Application) esiHealth(ctx context.Context) *esiHealthView {
 	snap, err := app.queries.GetGlobalSnapshot(ctx, esi.GlobalStatus)
 	if err != nil {
@@ -135,6 +140,19 @@ func (app *Application) esiHealth(ctx context.Context) *esiHealthView {
 	}
 	limited := app.esi != nil && app.esi.ErrorBudgetLow()
 	if state, problem := app.ourSideState(ctx, now); state != "" {
+		// A lag with ESI trouble behind it is ESI's, not ours:
+		// either witness (CCP's route report, or our own calls
+		// failing at the degraded rate) leads the headline.
+		if areas := app.degradedRouteAreas(ctx, now); len(areas) > 0 {
+			view.State, view.Label = "degraded", "ESI degraded"
+			view.Title = problem + " CCP reports problems with " + strings.Join(areas, ", ") + ", which is why sync is behind."
+			return view
+		}
+		if app.esiErrorShareHigh(ctx, now) {
+			view.State, view.Label = "degraded", "ESI degraded"
+			view.Title = problem + " ESI calls are failing, which is why sync is behind."
+			return view
+		}
 		view.State = state
 		view.Label = "Sync behind"
 		if state == "ours-down" {
@@ -153,6 +171,11 @@ func (app *Application) esiHealth(ctx context.Context) *esiHealthView {
 		view.Title = "ESI is answering, but this server is close to its error limit, so syncing is paused briefly."
 		return view
 	}
+	if areas := app.degradedRouteAreas(ctx, now); len(areas) > 0 {
+		view.State, view.Label = "degraded", "ESI degraded"
+		view.Title = "ESI is answering, but CCP reports problems with " + strings.Join(areas, ", ") + "."
+		return view
+	}
 	if vip {
 		view.Title = "ESI is answering; Tranquility is in VIP mode (developers only)."
 	}
@@ -166,9 +189,10 @@ const statusRefreshInterval = time.Minute
 
 // refreshServerStatus fetches Tranquility's status through the
 // ESI client and stores it as the GlobalStatus snapshot the
-// readers above use. It is the snapshot's one writer. A failed
-// fetch stores nothing: the snapshot is left to age, which is
-// the readers' down signal.
+// readers above use, then fetches CCP's per-route health the
+// same way. It is both snapshots' one writer. A failed fetch
+// stores nothing: the snapshot is left to age, which is the
+// readers' down signal, and the last known route health stands.
 func (app *Application) refreshServerStatus(ctx context.Context) {
 	if app.esi == nil {
 		return
@@ -176,6 +200,11 @@ func (app *Application) refreshServerStatus(ctx context.Context) {
 	if err := app.esi.FetchAndStoreGlobalSnapshot(ctx, esi.GlobalStatus); err != nil {
 		if ctx.Err() == nil {
 			logging.Warnf("status refresh: fetch Tranquility status: %v", err)
+		}
+	}
+	if err := app.esi.FetchAndStoreRouteStatus(ctx); err != nil {
+		if ctx.Err() == nil {
+			logging.Warnf("status refresh: fetch route status: %v", err)
 		}
 	}
 }
@@ -198,6 +227,47 @@ func (app *Application) runServerStatusRefresh(ctx context.Context) {
 			app.refreshServerStatus(ctx)
 		}
 	}
+}
+
+// degradedRouteAreas reads the stored route health: the areas
+// with a route CCP marks degraded or recovering, named in plain
+// words and sorted. The stored copy speaks only while it is
+// inside the same fuse as the Tranquility snapshot; a stale or
+// absent copy, like an all-healthy one, names nothing.
+func (app *Application) degradedRouteAreas(ctx context.Context, now time.Time) []string {
+	snap, err := app.queries.GetGlobalSnapshot(ctx, esi.GlobalRouteStatus)
+	if err != nil || now.Sub(snap.FetchedAt) > esiDownAfter {
+		return nil
+	}
+	var meta esi.MetaStatus
+	if json.Unmarshal([]byte(snap.Payload), &meta) != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var areas []string
+	for _, r := range meta.Routes {
+		if area := routeAreaName(r.Path); area != "" && !seen[area] {
+			seen[area] = true
+			areas = append(areas, area)
+		}
+	}
+	sort.Strings(areas)
+	return areas
+}
+
+// routeAreaName names the area a route belongs to in ordinary
+// words: its first path segment, except that universe routes
+// name the thing under universe (structures, systems, types),
+// because "universe" alone says nothing.
+func routeAreaName(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		return ""
+	}
+	if parts[0] == "universe" && len(parts) > 1 {
+		return parts[1]
+	}
+	return parts[0]
 }
 
 // ourSideState evaluates this server's own pipelines for the pill:

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"evesynapse/internal/app/swarm"
@@ -169,6 +170,12 @@ func (app *Application) handleStatusFreshness(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 	rows, note := app.freshnessRows(ctx, time.Now())
 	health := app.esiHealth(ctx)
+	degraded := ""
+	if areas := app.degradedRouteAreas(ctx, time.Now()); len(areas) > 0 {
+		degraded = "CCP reports problems with " + strings.Join(areas, ", ") + " right now."
+	} else if app.esiErrorShareHigh(ctx, time.Now()) {
+		degraded = "ESI calls are failing right now."
+	}
 	writeBasketJSON(w, http.StatusOK, map[string]any{
 		"esi": map[string]any{
 			"state":   health.State,
@@ -176,7 +183,8 @@ func (app *Application) handleStatusFreshness(w http.ResponseWriter, r *http.Req
 			"players": health.Players,
 			"title":   health.Title,
 		},
-		"rows": rows,
-		"note": note,
+		"rows":     rows,
+		"note":     note,
+		"degraded": degraded,
 	})
 }

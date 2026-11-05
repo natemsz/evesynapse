@@ -2701,6 +2701,9 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .esi-limited { border-color: rgba(255, 184, 77, 0.4); }
 .esi-limited .esi-dot { background: #ffb84d; box-shadow: 0 0 6px rgba(255, 184, 77, 0.7); }
 .esi-limited .esi-label { color: #ffd27a; }
+.esi-degraded { border-color: rgba(255, 184, 77, 0.4); }
+.esi-degraded .esi-dot { background: #ffb84d; box-shadow: 0 0 6px rgba(255, 184, 77, 0.7); }
+.esi-degraded .esi-label { color: #ffd27a; }
 .esi-down { border-color: rgba(239, 68, 68, 0.5); background: rgba(60, 10, 6, 0.6); }
 .esi-down .esi-dot { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.85); }
 .esi-ours-lagging { border-color: rgba(167, 139, 250, 0.45); }
@@ -2723,6 +2726,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .status-dot { display: inline-block; flex: none; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #6b6b6b; vertical-align: middle; }
 .status-dot.is-ok { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.9); }
 .status-dot.is-limited { background: #ffb84d; box-shadow: 0 0 8px rgba(255, 184, 77, 0.85); }
+.status-dot.is-degraded { background: #ffb84d; box-shadow: 0 0 8px rgba(255, 184, 77, 0.85); }
 .status-dot.is-down { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.9); }
 .status-dot.is-ours-lagging { background: #a78bfa; box-shadow: 0 0 8px rgba(167, 139, 250, 0.85); }
 .status-dot.is-ours-down { background: #a78bfa; box-shadow: 0 0 8px rgba(167, 139, 250, 0.95); }

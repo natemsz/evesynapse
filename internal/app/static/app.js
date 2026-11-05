@@ -6327,13 +6327,14 @@
   var modalDot = document.getElementById("status-modal-dot");
   var esiLabel = document.getElementById("status-api-label");
   var esiTq = document.getElementById("status-api-players");
+  var routesLine = document.getElementById("status-routes");
   var rowsBody = document.getElementById("status-rows");
   var note = document.getElementById("status-note");
   var closeBtn = document.getElementById("status-close");
 
   function paintDot(el, state) {
     if (!el) return;
-    el.className = "status-dot is-" + (state === "ok" || state === "limited" || state === "down" || state === "ours-lagging" || state === "ours-down" ? state : "pending");
+    el.className = "status-dot is-" + (state === "ok" || state === "limited" || state === "degraded" || state === "down" || state === "ours-lagging" || state === "ours-down" ? state : "pending");
   }
 
   // The phone menu's status row: its dot, and its state in words
@@ -6353,6 +6354,7 @@
         var tips = {
           ok: "ESI is answering normally. Click for detailed stats.",
           limited: "ESI is answering slowly. Click for detailed stats.",
+          degraded: "ESI is degraded. Click for detailed stats.",
           down: "ESI is not answering. Click for detailed stats.",
           "ours-lagging": "Sync is behind on this server. Click for detailed stats.",
           "ours-down": "Sync has stalled on this server. Click for detailed stats."
@@ -6361,6 +6363,7 @@
         esiLabel.textContent = data.esi.label;
         for (var l = 0; l < extraLabels.length; l++) extraLabels[l].textContent = data.esi.label;
         esiTq.textContent = data.esi.players ? "Tranquility " + data.esi.players + " online" : "";
+        if (routesLine) routesLine.textContent = data.degraded || "";
         rowsBody.innerHTML = "";
         (data.rows || []).forEach(function (row) {
           var li = document.createElement("li");

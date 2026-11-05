@@ -1,10 +1,15 @@
 package app
 
 // Test rig: the one exported seam the black-box page tests in
-// internal/app/tests build through. It assembles a fixture Application
-// over a fresh test database with a caller-supplied ESI transport, and
-// exposes only the router, the query handle, the raw DB, a signed-in
-// session cookie and Close. No worker goroutine starts.
+// internal/app/tests and the modules' own tests build through. It
+// assembles a fixture Application over a fresh test database with a
+// caller-supplied ESI transport, and exposes only the router, the
+// query handle, the raw DB, the module deps, a signed-in session
+// cookie and Close. No worker goroutine starts.
+//
+// It takes a DSN and returns errors rather than a *testing.T, so this
+// file links neither the testing package nor the embedded Postgres
+// into the server; internal/apptest wraps it for tests.
 
 import (
 	"context"
@@ -15,6 +20,7 @@ import (
 	"github.com/alexedwards/scs/pgxstore"
 	"github.com/alexedwards/scs/v2"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/store"
@@ -64,6 +70,10 @@ func (r *TestRig) Queries() *db.Queries { return r.app.queries }
 
 // DB returns the fixture database connection.
 func (r *TestRig) DB() *sql.DB { return r.app.db }
+
+// Deps returns what core hands a module at run time, so a module's
+// own tests can call its functions the way core does.
+func (r *TestRig) Deps() module.Deps { return r.app }
 
 // SessionCookie mints a signed-in session for the user.
 func (r *TestRig) SessionCookie(userID, characterID int64, name string) (*http.Cookie, error) {

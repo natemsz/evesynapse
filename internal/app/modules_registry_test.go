@@ -175,9 +175,12 @@ func TestModuleNavKeepsItsPlace(t *testing.T) {
 	}
 
 	// The whole corporation menu, in the order it had before the modules.
+	// Corporation Contracts registers with the Contracts module, ahead
+	// of its anchor, so it lands last here; the sidebar and sub-row
+	// place it by the section's groups (nav.go), after Orders.
 	want := []string{"/corporations/", "/corporations/members/", "/corporations/wallets/", "/corporations/orders/",
 		"/corporations/assets/", "/corporations/structures/", "/corporations/killmails/", "/doctrines/", "/doctrines/fits/",
-		"/srp/", "/discord/servers", "/groups/", "/corporations/settings/"}
+		"/srp/", "/discord/servers", "/groups/", "/corporations/settings/", "/corporations/contracts/"}
 	var got []string
 	for _, e := range sectionNav["corporation"] {
 		got = append(got, e.Href)

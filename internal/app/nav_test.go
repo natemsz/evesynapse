@@ -218,7 +218,7 @@ func TestSectionGroups(t *testing.T) {
 			t.Errorf("group tab %d = %+v, want %+v", i, tabs[i], want)
 		}
 	}
-	wantSub := []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/assets/", "/corporations/structures/"}
+	wantSub := []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/contracts/", "/corporations/assets/", "/corporations/structures/"}
 	if len(sub) != len(wantSub) {
 		t.Fatalf("sub-row has %d pages, want %d", len(sub), len(wantSub))
 	}
@@ -334,7 +334,7 @@ func TestNavGroupsMirror(t *testing.T) {
 		hrefs []string
 	}{
 		{"People", []string{"/corporations/", "/corporations/members/", "/corporations/killmails/", "/groups/"}},
-		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/assets/", "/corporations/structures/"}},
+		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/contracts/", "/corporations/assets/", "/corporations/structures/"}},
 		{"Programs", []string{"/doctrines/", "/doctrines/fits/", "/srp/"}},
 		{"Comms & Admin", []string{"/discord/servers", "/corporations/settings/"}},
 	}

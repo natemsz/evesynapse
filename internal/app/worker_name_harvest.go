@@ -87,7 +87,8 @@ func (h *nameHarvest) snapshot(ctx context.Context, snap db.CharacterSnapshot) {
 		h.orders(snap.Payload)
 	case esi.SnapOrdersHistory:
 		h.orderHistory(snap.Payload)
-	case esi.SnapContracts:
+	case esi.SnapContracts, esi.SnapCorpContracts:
+		// Corporation contracts share the character payload's shape.
 		h.contracts(snap.Payload)
 	case esi.SnapIndustryJobs:
 		h.industryJobs(snap.Payload)

@@ -126,6 +126,7 @@ const (
 	SnapCorpOrders         = "corp_orders"
 	SnapCorpAssets         = "corp_assets"
 	SnapCorpStructures     = "corp_structures"
+	SnapCorpContracts      = "corp_contracts" // the corporation's contracts; items warm into contract_details
 	SnapCorpKillmails      = "corp_killmails" // recent list (id+hash pairs); details share killmail_details
 
 	// Snapshot-kind prefixes for the per-division wallet kinds.
@@ -2245,6 +2246,8 @@ func corpSnapshotPath(corporationID int64, kind string) (path string, paginated 
 		return fmt.Sprintf("/corporations/%d/assets/", corporationID), true, true
 	case SnapCorpStructures:
 		return fmt.Sprintf("/corporations/%d/structures/", corporationID), true, true
+	case SnapCorpContracts:
+		return fmt.Sprintf("/corporations/%d/contracts/", corporationID), true, true
 	case SnapCorpKillmails:
 		return fmt.Sprintf("/corporations/%d/killmails/recent/", corporationID), false, true
 	}
@@ -2564,6 +2567,18 @@ func (c *Client) FetchContractItems(ctx context.Context, ch db.Character, contra
 		return nil, err
 	}
 	body, _, err := c.FetchRaw(ctx, token, fmt.Sprintf("/characters/%d/contracts/%d/items/", ch.CharacterID, contractID))
+	return body, err
+}
+
+// FetchCorpContractItems is FetchContractItems for a contract the
+// character's corporation is party to, read through the corporation
+// endpoint with the character's token.
+func (c *Client) FetchCorpContractItems(ctx context.Context, ch db.Character, corporationID, contractID int64) ([]byte, error) {
+	token, err := c.tokens(ctx, ch)
+	if err != nil {
+		return nil, err
+	}
+	body, _, err := c.FetchRaw(ctx, token, fmt.Sprintf("/corporations/%d/contracts/%d/items/", corporationID, contractID))
 	return body, err
 }
 

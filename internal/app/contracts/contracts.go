@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"evesynapse/internal/esi"
@@ -50,6 +51,7 @@ type contractRow struct {
 	AssigneeIsCorp bool
 	Acceptor       string // "" until accepted
 	AcceptorID     int64
+	AcceptorIsCorp bool // accepted on a corporation's behalf
 	// Pending labels: the counterparty's name is still on its
 	// way; the cell renders a live region that swaps it in.
 	IssuerPending   bool
@@ -182,13 +184,17 @@ func containsShow(keys []string, show string) bool {
 // contractFilters builds the chips: All plus every type, then every
 // whose-filter, each with its count. A chip with nothing behind it
 // stays off the bar unless it is the one in force.
-func contractFilters(base, show string, total int, counts map[string]int) (kinds, whose []contractFilter) {
+func contractFilters(base, show string, total int, counts map[string]int, party contractParty) (kinds, whose []contractFilter) {
 	kinds = append(kinds, contractFilter{Label: "All", Href: base, Count: total, On: show == ""})
 	for i, s := range contractShowOrder {
 		if counts[s.key] == 0 && show != s.key {
 			continue
 		}
-		f := contractFilter{Label: s.label, Href: base + "&show=" + s.key, Count: counts[s.key], On: show == s.key}
+		label := s.label
+		if party.CorpID > 0 {
+			label = strings.Replace(label, "you", "the corporation", 1)
+		}
+		f := contractFilter{Label: label, Href: base + "&show=" + s.key, Count: counts[s.key], On: show == s.key}
 		if i < 4 {
 			kinds = append(kinds, f)
 		} else {
@@ -273,6 +279,86 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	app.fillContracts(ctx, view, contracts, contractParty{CharacterID: active.CharacterID}, base, show, picked)
+	app.deps.Render(ctx, w, http.StatusOK, "contracts.html", data)
+}
+
+// corpContractsView is the corporation Contracts page's head and gate
+// state; the list itself is a contractsView like the pilot page's.
+type corpContractsView struct {
+	module.CorpViewBase
+	module.CorpSectionState
+}
+
+// handleCorpContracts is the corporation's contracts: the contracts
+// the corporation issued or is assigned, from the corp_contracts
+// snapshot the worker keeps for the viewing character, in the same
+// console as the pilot's own.
+func (app *mod) handleCorpContracts(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := &PageData{ShellData: app.deps.PageShell(ctx)}
+
+	sel, ok, err := app.deps.PickCorpPage(ctx, r)
+	if err != nil {
+		logging.Errorf("corp contracts: pick character: %v", err)
+		data.Error = "Could not load corporation data; check the server log."
+		app.deps.Render(ctx, w, http.StatusOK, "corp_contracts.html", data)
+		return
+	}
+	if !ok {
+		app.deps.Render(ctx, w, http.StatusOK, "corp_contracts.html", data)
+		return
+	}
+	data.CorpChars = sel.Links
+	head := &corpContractsView{CorpViewBase: sel.Base}
+	data.CorpContracts = head
+
+	var contracts esi.Contracts
+	head.CorpSectionState = app.deps.CorpSection(ctx, sel.Active.CharacterID, esi.SnapCorpContracts, &contracts)
+	if !head.Loaded {
+		app.deps.Render(ctx, w, http.StatusOK, "corp_contracts.html", data)
+		return
+	}
+
+	view := &contractsView{CharacterName: sel.Base.CorpTitle, Depth: 1, Contracts: module.EconSectionState{Loaded: true, FetchedAt: head.FetchedAt}}
+	base := "/corporations/contracts/?character=" + strconv.FormatInt(sel.Active.CharacterID, 10)
+	show := r.URL.Query().Get("show")
+	if !validContractShow(show) {
+		show = ""
+	}
+	view.ListHref = base
+	if show != "" {
+		view.ListHref += "&show=" + show
+	}
+	picked, _ := strconv.ParseInt(r.URL.Query().Get("contract"), 10, 64)
+	data.Contracts = view
+	app.fillContracts(ctx, view, contracts, contractParty{CorpID: sel.Base.CorpID}, base, show, picked)
+	app.deps.Render(ctx, w, http.StatusOK, "corp_contracts.html", data)
+}
+
+// contractParty is whose contracts a page lists: one pilot's
+// (CharacterID) or their corporation's (CorpID).
+type contractParty struct {
+	CharacterID int64
+	CorpID      int64
+}
+
+// whose reads a contract from the party's side: issued by it,
+// assigned to (or accepted by) it, and, on a pilot's page, issued
+// for the corporation.
+func (p contractParty) whose(c esi.Contract) (mine, toMe, forCorp bool) {
+	if p.CorpID > 0 {
+		return c.ForCorporation && c.IssuerCorporationID == p.CorpID, c.AssigneeID == p.CorpID, false
+	}
+	return c.IssuerID == p.CharacterID, c.AssigneeID == p.CharacterID || c.AcceptorID == p.CharacterID, c.ForCorporation
+}
+
+// fillContracts builds a contracts console from one stored contracts
+// list: the newest first, capped, filtered by show, with the picked
+// contract open in the inspector. base is the page's own list URL
+// (the filter chips add to it); view.ListHref must already carry the
+// filter in force.
+func (app *mod) fillContracts(ctx context.Context, view *contractsView, contracts esi.Contracts, party contractParty, base, show string, picked int64) {
 	// Newest issued first.
 	sort.SliceStable(contracts, func(i, j int) bool { return contracts[i].DateIssued > contracts[j].DateIssued })
 	if len(contracts) > maxContractsShown {
@@ -300,10 +386,8 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 			Accepted:   contractDate(c.DateAccepted),
 			Completed:  contractDate(c.DateCompleted),
 			ID:         c.ContractID,
-			Mine:       c.IssuerID == active.CharacterID,
-			ToMe:       c.AssigneeID == active.CharacterID || c.AcceptorID == active.CharacterID,
-			ForCorp:    c.ForCorporation,
 		}
+		row.Mine, row.ToMe, row.ForCorp = party.whose(c)
 		row.Tone, row.Left = contractTone(c, now)
 		if row.Left == "Expired" {
 			row.Status = "Expired"
@@ -347,8 +431,14 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 			row.Assignee = "Public"
 		}
 		if c.AcceptorID > 0 {
-			row.Acceptor, row.AcceptorPending = app.contractCharLabel(ctx, c.AcceptorID)
 			row.AcceptorID = c.AcceptorID
+			// A contract accepted on a corporation's behalf names
+			// the corporation; resolve it like the assignee.
+			if name, _, isCorp := app.deps.TxnCounterparty(ctx, c.AcceptorID); isCorp {
+				row.Acceptor, row.AcceptorIsCorp = name, true
+			} else {
+				row.Acceptor, row.AcceptorPending = app.contractCharLabel(ctx, c.AcceptorID)
+			}
 		}
 		if c.Type == "courier" && (c.StartLocationID > 0 || c.EndLocationID > 0) {
 			row.HasRoute = true
@@ -408,9 +498,8 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 			view.Depth = 2
 		}
 	}
-	view.Kinds, view.Whose = contractFilters(base, show, view.Total, counts)
+	view.Kinds, view.Whose = contractFilters(base, show, view.Total, counts, party)
 
-	app.deps.Render(ctx, w, http.StatusOK, "contracts.html", data)
 }
 
 // contractCharLabel resolves one counterparty label for the

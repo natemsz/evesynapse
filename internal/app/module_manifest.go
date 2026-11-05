@@ -237,7 +237,8 @@ var moduleManifest = []moduleDef{
 		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-contracts.read_corporation_contracts.v1", "Corporation contracts."),
-		}},
+		},
+		Snapshots: []string{esi.SnapCorpContracts}},
 	{ID: "corp_contacts", Title: "Corporation contacts", Layer: layerCorp,
 		Activities: []string{"corporation"},
 		Scopes: []scopeUse{

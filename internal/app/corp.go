@@ -74,6 +74,7 @@ func corpSnapshotKinds() []string {
 		esi.SnapCorpAssets,
 		esi.SnapCorpStructures,
 		esi.SnapCorpKillmails,
+		esi.SnapCorpContracts,
 	)
 }
 

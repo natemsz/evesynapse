@@ -153,7 +153,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(5)
+	children.Add(6)
 
 	// The public killmail stream (killfeed.go) is its own paced
 	// loop: one file every 100 ms while kills arrive, six seconds
@@ -177,6 +177,14 @@ func (app *Application) runWorker(ctx context.Context) {
 	go func() {
 		defer children.Done()
 		runGuarded("residue step", func() { app.runResidueWorker(ctx) })
+	}()
+
+	// The game log readers (battle_queue.go) read the logs the
+	// upload form and Axon queue for battle reports.
+	go func() {
+		defer children.Done()
+		n := battleLogReaders(app.cfg.battleLogReaders)
+		runGuarded("battle log readers", func() { app.battleQueue().run(ctx, n, app.readBattleJob) })
 	}()
 
 	// SDE maintenance runs alongside the ESI cycle: a first import

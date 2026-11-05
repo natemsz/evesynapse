@@ -34,6 +34,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/gamelog"
 	"evesynapse/internal/logging"
 )
 
@@ -43,6 +44,20 @@ type battlesView struct {
 	Rows   []battleIndexRow
 	Tiles  []battleTile
 	Viewer map[int64]bool
+	// Pilots fill the upload form's picker for a pasted log with no
+	// header; the session's character comes first.
+	Pilots []battlePilot
+	// WireMB and TextMB are the upload limits, for the form's hint.
+	WireMB, TextMB int
+	// Queue is the account's game logs waiting to be read and read
+	// in the last hour (battle_queue.go).
+	Queue battleQueueView
+}
+
+type battlePilot struct {
+	ID       int64
+	Name     string
+	Selected bool
 }
 
 type battleIndexRow struct {
@@ -366,7 +381,14 @@ func (app *Application) handleBattles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 	userID := app.userID(ctx)
-	v := &battlesView{Viewer: app.viewerCharacters(ctx, userID)}
+	v := &battlesView{Viewer: map[int64]bool{}, WireMB: battleWireMax >> 20, TextMB: gamelog.MaxText >> 20, Queue: app.battleQueue().status(userID, time.Now())}
+	if chars, err := app.queries.ListCharactersByUser(ctx, userID); err == nil {
+		active := app.SessionCharacterID(ctx)
+		for _, c := range chars {
+			v.Viewer[c.CharacterID] = true
+			v.Pilots = append(v.Pilots, battlePilot{ID: c.CharacterID, Name: c.Name, Selected: c.CharacterID == active})
+		}
+	}
 	data.Battles = v
 	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "Battle Reports", CanonicalPath: "/intel/battles/"})
 	fights, err := app.queries.ListBattleFightsByUser(ctx, userID)
@@ -410,6 +432,18 @@ func (app *Application) handleBattles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	app.render(ctx, w, http.StatusOK, "battles.html", data)
+}
+
+// handleBattleQueue is GET /intel/battles/queue: how many of the
+// account's logs wait or are being read, for the page to reload
+// once none are.
+func (app *Application) handleBattleQueue(w http.ResponseWriter, r *http.Request) {
+	v := app.battleQueue().status(app.userID(r.Context()), time.Now())
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(struct {
+		Waiting int `json:"waiting"`
+	}{len(v.Waiting)})
 }
 
 // iskEfficiency is the destroyed share of all ISK on the mails.

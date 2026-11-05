@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
@@ -13,9 +15,9 @@ import (
 	"time"
 )
 
-// TestBattleFightOwnCharactersOnly pins who a posted fight can be
-// filed for: a paired device stores a fight for one of its own
-// account's characters, refuses one for a character on another
+// TestBattleFightOwnCharactersOnly pins who a game log's fights can
+// be filed for: a paired device's log is queued and stored for one of
+// its own account's characters, refused for a character on another
 // account, and the stored report opens for its owner only.
 func TestBattleFightOwnCharactersOnly(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, nil)
@@ -28,43 +30,50 @@ func TestBattleFightOwnCharactersOnly(t *testing.T) {
 	otherCookie := sessionCookie(t, app, other.ID, 90000301, "Someone Else")
 	token, priv := pairDevice(t, app, cookie, "Fight PC")
 
-	at := time.Now().Add(-time.Hour).Truncate(time.Second)
+	at := time.Now().UTC().Add(-time.Hour)
+	stamp := func(d time.Duration) string { return at.Add(d).Format("2006.01.02 15:04:05") }
 	post := func(listener string, charID int64, ts time.Time) *httptest.ResponseRecorder {
-		body, _ := json.Marshal(map[string]any{
-			"listener": listener, "character_id": charID, "session": "20261104_120000_1.txt",
-			"start": at, "end": at.Add(2 * time.Second),
-			"series": map[string][]int64{
-				"damage_out": {100, 0, 50}, "damage_in": {0, 200, 0},
-				"reps_out": {0, 0, 0}, "reps_in": {0, 0, 0}, "cap_in": {0, 0, 0},
-			},
-			"parties": []map[string]any{{"name": "Bad Guy", "ticker": "EVIL", "hull": "Vexor", "pilot": true, "damage_out": 150, "damage_in": 200, "first": at, "last": at.Add(2 * time.Second)}},
-			"slices":  []map[string]any{{"at": 0, "rows": [][6]int64{{0, 150, 200, 0, 0, 0}}}},
-			"lines":   4,
-		})
-		stamp := strconv.FormatInt(ts.Unix(), 10)
-		sig := ed25519.Sign(priv, []byte(axonSignatureText(http.MethodPost, "/api/intel/v1/fights", stamp, body)))
-		req := httptest.NewRequest(http.MethodPost, "/api/intel/v1/fights", strings.NewReader(string(body)))
+		text := strings.Join([]string{
+			"  Gamelog",
+			"  Listener: " + listener,
+			"[ " + stamp(0) + " ] (combat) <color=0xff00ffff><b>100</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Bad Guy</b>[EVIL](Vexor)<font size=10><color=0x77ffffff> - Heavy Pulse Laser II - Hits",
+			"[ " + stamp(time.Second) + " ] (combat) <color=0xffcc0000><b>200</b> <color=0x77ffffff><font size=10>from</font> <b><color=0xffffffff>Bad Guy</b>[EVIL](Vexor)<font size=10><color=0x77ffffff> - Hammerhead II - Smashes",
+			"",
+		}, "\r\n")
+		var gz bytes.Buffer
+		zw := gzip.NewWriter(&gz)
+		_, _ = zw.Write([]byte(text))
+		_ = zw.Close()
+		body := gz.Bytes()
+		path := "/api/intel/v1/gamelog?session=20261104_120000_" + strconv.FormatInt(charID, 10) + ".txt"
+		sts := strconv.FormatInt(ts.Unix(), 10)
+		sig := ed25519.Sign(priv, []byte(axonSignatureText(http.MethodPost, path, sts, body)))
+		req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("X-Axon-Timestamp", stamp)
+		req.Header.Set("X-Axon-Timestamp", sts)
 		req.Header.Set("X-Axon-Signature", base64.StdEncoding.EncodeToString(sig))
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", "application/gzip")
 		rec := httptest.NewRecorder()
 		app.Handler().ServeHTTP(rec, req)
 		return rec
 	}
 
 	if rec := post("Someone Else", 90000301, time.Now()); rec.Code != http.StatusForbidden {
-		t.Fatalf("a fight for another account's character: %d %s, want 403", rec.Code, rec.Body.String())
+		t.Fatalf("a log for another account's character: %d %s, want 403", rec.Code, rec.Body.String())
 	}
 	rec := post("Watcher Pilot", 90000201, time.Now().Add(time.Second))
 	var res struct {
-		ID     int64  `json:"id"`
-		Status string `json:"status"`
+		Queued bool `json:"queued"`
 	}
-	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &res) != nil || res.ID == 0 || res.Status != "stored" {
-		t.Fatalf("a fight for the account's own character: %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &res) != nil || !res.Queued {
+		t.Fatalf("a log for the account's own character: %d %s", rec.Code, rec.Body.String())
 	}
-	path := "/intel/battle/" + strconv.FormatInt(res.ID, 10) + "/"
+	app.battleQueue().drain(ctx, app.readBattleJob)
+	fights, err := q.ListBattleFightsByUser(ctx, u.ID)
+	if err != nil || len(fights) != 1 {
+		t.Fatalf("stored fights: %d, %v", len(fights), err)
+	}
+	path := "/intel/battle/" + strconv.FormatInt(fights[0].ID, 10) + "/"
 	if code, body := getPage(t, app, cookie, path); code != http.StatusOK || !strings.Contains(body, "Bad Guy") {
 		t.Errorf("the owner's report: %d", code)
 	}

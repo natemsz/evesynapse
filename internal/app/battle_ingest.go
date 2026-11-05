@@ -1,96 +1,59 @@
 package app
 
 // ---------------------------------------------------------------------------
-// Battle reports, ingest: POST /api/intel/v1/fights.
+// Battle reports, ingest: game logs in, fights out.
 //
-// Axon reads the pilot's game logs, cuts them into fights and posts
-// each one's aggregate, signed with its paired credential like every
-// call on this API: the frame (listener, window, session file), the
-// per-second series (damage out and in, repairs out and in,
-// capacitor pressure in) and one tally per other party. The raw log
-// never arrives. A fight is stored for the account whose credential
-// signed it, and only for one of that account's own characters.
+//	POST /intel/battles/upload     a game log file, or part of one pasted
+//	POST /api/intel/v1/gamelog     the game log lines Axon tails and sends
 //
-// Storing is idempotent on (character, start): a fight posted again
+// The site reads the log (internal/gamelog): its combat lines, cut
+// into fights, each one's frame (listener, window, session file),
+// per-second series and one tally per other party. The text is read
+// as it arrives and dropped; only the fights are kept. A fight is
+// stored for the signed-in account, or the account whose Axon
+// credential signed the post, and only for one of that account's
+// own characters.
+//
+// Storing is idempotent on (character, start): a fight read again
 // replaces its frame, series and tallies and keeps its share link.
 // Correlation with killmails (battle_correlate.go) runs right after,
 // and again from the worker while late mails can still arrive.
 // ---------------------------------------------------------------------------
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/gamelog"
 	"evesynapse/internal/logging"
 )
 
 const (
-	battleMaxBody     = 1 << 20
-	battleMaxSeconds  = 2*60*60 + 1
-	battleMaxParties  = 500
-	battleMaxWeapons  = 40
-	battleMaxNameLen  = 100
-	battleMaxAge      = 30 * 24 * time.Hour
-	battleDPSWindow   = 10 // seconds averaged for peak incoming DPS
-	battleQualityKeys = "miss graze glance hit penetrate smash wreck"
+	battleMaxParties   = 500
+	battleMaxWeapons   = 40
+	battleMaxTackles   = 300
+	battleMaxNameLen   = 100
+	battleMaxAge       = 90 * 24 * time.Hour
+	battleDPSWindow    = 10 // seconds averaged for peak incoming DPS
+	battleSliceSeconds = gamelog.SliceSeconds
 )
 
-// battleFightIn is a fight as Axon posts it (axon watch/fights.go).
-type battleFightIn struct {
-	Listener    string    `json:"listener"`
-	CharacterID int64     `json:"character_id"`
-	Session     string    `json:"session"`
-	Start       time.Time `json:"start"`
-	End         time.Time `json:"end"`
-	Series      struct {
-		DamageOut []int64 `json:"damage_out"`
-		DamageIn  []int64 `json:"damage_in"`
-		RepsOut   []int64 `json:"reps_out"`
-		RepsIn    []int64 `json:"reps_in"`
-		CapIn     []int64 `json:"cap_in"`
-	} `json:"series"`
-	Parties []struct {
-		Name      string    `json:"name"`
-		Ticker    string    `json:"ticker"`
-		Hull      string    `json:"hull"`
-		Pilot     bool      `json:"pilot"`
-		DamageOut int64     `json:"damage_out"`
-		DamageIn  int64     `json:"damage_in"`
-		RepsOut   int64     `json:"reps_out"`
-		RepsIn    int64     `json:"reps_in"`
-		CapOut    int64     `json:"cap_out"`
-		CapIn     int64     `json:"cap_in"`
-		First     time.Time `json:"first"`
-		Last      time.Time `json:"last"`
-		Weapons   []struct {
-			Dir     string           `json:"dir"`
-			Weapon  string           `json:"weapon"`
-			Shots   int64            `json:"shots"`
-			Damage  int64            `json:"damage"`
-			Quality map[string]int64 `json:"quality"`
-		} `json:"weapons"`
-	} `json:"parties"`
-	Tackles []struct {
-		From  string    `json:"from"`
-		To    string    `json:"to"`
-		Kind  string    `json:"kind"`
-		First time.Time `json:"first"`
-		Count int64     `json:"count"`
-	} `json:"tackles"`
-	Slices   []battleSlice `json:"slices"`
-	Lines    int           `json:"lines"`
-	Unparsed int           `json:"unparsed"`
-}
-
 // battleSlice is one battleSliceSeconds step of a fight: per party
-// (its index in the posted parties), damage out and in, repairs out
+// (its index in the stored parties), damage out and in, repairs out
 // and in, and capacitor pressure in.
 type battleSlice struct {
 	At   int        `json:"at"`
@@ -99,11 +62,6 @@ type battleSlice struct {
 
 // sdeCategoryShip is the SDE's ship category.
 const sdeCategoryShip = 6
-
-const (
-	battleSliceSeconds = 10
-	battleMaxTackles   = 300
-)
 
 // battleSeries is the stored series: the five per-second lines.
 type battleSeries struct {
@@ -114,89 +72,340 @@ type battleSeries struct {
 	CapIn     []int64 `json:"cap_in"`
 }
 
-// check says what is wrong with a posted fight, in words for the
-// Axon log, or "".
-func (f *battleFightIn) check(now time.Time) string {
-	f.Listener = strings.TrimSpace(f.Listener)
-	switch {
-	case f.Listener == "" || len(f.Listener) > battleMaxNameLen:
-		return "listener is missing"
-	case f.Start.IsZero() || f.End.Before(f.Start):
-		return "start and end are not a window"
-	case f.Start.After(now.Add(10 * time.Minute)):
-		return "the fight starts in the future: check this computer's clock"
-	case now.Sub(f.End) > battleMaxAge:
-		return "the fight is older than 30 days"
-	case len(f.Parties) > battleMaxParties:
-		return fmt.Sprintf("send up to %d parties", battleMaxParties)
+// battleIngest is what one game log added to the battle reports.
+type battleIngest struct {
+	Stored, Updated int
+	IDs             []int64  // the fights stored or updated, in log order
+	Skipped         []string // why a fight was not stored, one sentence each
+	Quiet           int      // fights with no player on the other side
+}
+
+// ingestGameLog files a read game log's fights for one of the
+// account's characters, already resolved from the log's header, its
+// file name or the pilot picked for a paste. Each fight is stored
+// and correlated with its killmails.
+func (app *Application) ingestGameLog(ctx context.Context, userID, charID int64, name string, l gamelog.Log) (battleIngest, error) {
+	out := battleIngest{Quiet: l.Quiet}
+	now := time.Now().UTC()
+	if over := len(l.Fights) - battleFightsPerLog; over > 0 {
+		out.Skipped = append(out.Skipped, fmt.Sprintf("Only the first %d fights in one log are read; %d more were left out.", battleFightsPerLog, over))
+		l.Fights = l.Fights[:battleFightsPerLog]
 	}
-	n := int(f.End.Sub(f.Start)/time.Second) + 1
-	if n > battleMaxSeconds {
-		return "a fight covers at most two hours"
-	}
-	s := &f.Series
-	for _, line := range [][]int64{s.DamageOut, s.DamageIn, s.RepsOut, s.RepsIn, s.CapIn} {
-		if len(line) != n {
-			return "every series holds one value per second of the window"
+	for i := range l.Fights {
+		f := &l.Fights[i]
+		f.Listener = name
+		if why := fitFight(f, now); why != "" {
+			out.Skipped = append(out.Skipped, fmt.Sprintf("The fight at %s EVE %s.", f.Start.Format("2006-01-02 15:04"), why))
+			continue
 		}
-		for _, v := range line {
-			if v < 0 {
-				return "series values are not negative"
+		id, inserted, err := app.storeFight(ctx, userID, charID, f, now)
+		if err != nil {
+			return out, err
+		}
+		if err := app.correlateFight(ctx, id); err != nil {
+			logging.Errorf("battle reports: correlate fight %d: %v", id, err)
+		}
+		out.IDs = append(out.IDs, id)
+		if inserted {
+			out.Stored++
+		} else {
+			out.Updated++
+		}
+	}
+	return out, nil
+}
+
+// fitFight bounds a fight read from a log to what a report stores,
+// or says why it is not stored.
+func fitFight(f *gamelog.Fight, now time.Time) string {
+	switch {
+	case f.Start.After(now.Add(10 * time.Minute)):
+		return "starts in the future"
+	case now.Sub(f.End) > battleMaxAge:
+		return "is older than 90 days"
+	}
+	if len(f.Parties) > battleMaxParties {
+		f.Parties = f.Parties[:battleMaxParties]
+		for i := range f.Slices {
+			rows := f.Slices[i].Rows[:0]
+			for _, r := range f.Slices[i].Rows {
+				if r[0] < battleMaxParties {
+					rows = append(rows, r)
+				}
 			}
+			f.Slices[i].Rows = rows
 		}
 	}
 	if len(f.Tackles) > battleMaxTackles {
-		return fmt.Sprintf("send up to %d tackle rows", battleMaxTackles)
+		f.Tackles = f.Tackles[:battleMaxTackles]
 	}
 	for i := range f.Tackles {
 		t := &f.Tackles[i]
-		if t.From == "" || t.To == "" || len(t.From) > battleMaxNameLen || len(t.To) > battleMaxNameLen || (t.Kind != "scramble" && t.Kind != "disruption") || t.Count < 0 {
-			return "a tackle row is malformed"
-		}
-	}
-	if len(f.Slices) > battleMaxSeconds/battleSliceSeconds+1 {
-		return "too many slices for the window"
-	}
-	for _, sl := range f.Slices {
-		if sl.At < 0 || sl.At >= n || sl.At%battleSliceSeconds != 0 || len(sl.Rows) > len(f.Parties) {
-			return "a slice lies outside the window"
-		}
-		for _, r := range sl.Rows {
-			if r[0] < 0 || r[0] >= int64(len(f.Parties)) {
-				return "a slice names a party that was not sent"
-			}
-			for _, v := range r[1:] {
-				if v < 0 {
-					return "slice values are not negative"
-				}
-			}
-		}
+		t.From, t.To = truncate(t.From, battleMaxNameLen), truncate(t.To, battleMaxNameLen)
 	}
 	for i := range f.Parties {
 		p := &f.Parties[i]
-		p.Name = strings.TrimSpace(p.Name)
-		if p.Name == "" || len(p.Name) > battleMaxNameLen || len(p.Hull) > battleMaxNameLen || len(p.Ticker) > 16 {
-			return "a party has no name, or a name too long"
-		}
+		p.Name, p.Hull, p.Ticker = truncate(p.Name, battleMaxNameLen), truncate(p.Hull, battleMaxNameLen), truncate(p.Ticker, 16)
 		if len(p.Weapons) > battleMaxWeapons {
-			return fmt.Sprintf("send up to %d weapons a party", battleMaxWeapons)
-		}
-		if p.DamageOut < 0 || p.DamageIn < 0 || p.RepsOut < 0 || p.RepsIn < 0 || p.CapOut < 0 || p.CapIn < 0 {
-			return "tallies are not negative"
+			p.Weapons = p.Weapons[:battleMaxWeapons]
 		}
 		for j := range p.Weapons {
-			w := &p.Weapons[j]
-			if (w.Dir != "out" && w.Dir != "in") || len(w.Weapon) > battleMaxNameLen || w.Shots < 0 || w.Damage < 0 {
-				return "a weapon tally is malformed"
-			}
-			for k, v := range w.Quality {
-				if !strings.Contains(battleQualityKeys, k) || v < 0 {
-					return "a quality word is not one the log uses"
-				}
-			}
+			p.Weapons[j].Weapon = truncate(p.Weapons[j].Weapon, battleMaxNameLen)
 		}
 	}
 	return ""
+}
+
+// handleBattleUpload is POST /intel/battles/upload: one game log
+// file (the page gzips it first), or a part of one pasted with the
+// character it belongs to. It passes the queue's checks before its
+// body is read (battle_queue.go), checks whose log it is, and sets
+// it waiting; the page shows it until it is read.
+func (app *Application) handleBattleUpload(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := app.userID(ctx)
+	back := app.flashBack(w, r, "/intel/battles/")
+	q := app.battleQueue()
+	if why, wait := q.admit(userID, false, r.ContentLength, time.Now()); why != "" {
+		back("Not read: " + why + ". Try again " + battleWaitText(wait) + ".")
+		return
+	}
+	// A few MB on a slow uplink can outlast the server's 30-second
+	// read limit; a signed-in upload gets two minutes.
+	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(2 * time.Minute))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, battleWireMax+64<<10))
+	if err != nil {
+		back(battleReadProblem(err))
+		return
+	}
+	_, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || params["boundary"] == "" {
+		back("Choose a game log file or paste one.")
+		return
+	}
+	jobs, msg := app.uploadJobs(ctx, userID, multipart.NewReader(bytes.NewReader(body), params["boundary"]))
+	if msg != "" {
+		back(msg)
+		return
+	}
+	var names []string
+	ahead := 0
+	for _, j := range jobs {
+		n, why, wait := q.enqueue(j, time.Now())
+		if why != "" {
+			back("Not read: " + why + ". Try again " + battleWaitText(wait) + ".")
+			return
+		}
+		names = append(names, j.name)
+		ahead = n
+	}
+	msg = strings.Join(names, " and ") + " is waiting to be read; its fights show here when it is."
+	if ahead == 0 {
+		msg = strings.Join(names, " and ") + " is being read; its fights show here in a moment."
+	}
+	back(msg)
+}
+
+// uploadJobs reads the form's parts into jobs, each checked for
+// whose log it is. A problem comes back as a sentence.
+func (app *Application) uploadJobs(ctx context.Context, userID int64, mr *multipart.Reader) ([]*battleJob, string) {
+	var parts []*battleJob
+	var pick int64
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, "Choose a game log file or paste one."
+		}
+		switch part.FormName() {
+		case "character":
+			b, _ := io.ReadAll(io.LimitReader(part, 32))
+			pick, _ = strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
+		case "log", "paste":
+			j := &battleJob{userID: userID, name: "Pasted log"}
+			if part.FormName() == "log" {
+				if part.FileName() == "" {
+					continue
+				}
+				j.session = strings.TrimSuffix(filepath.Base(part.FileName()), ".gz")
+				j.name = j.session
+			}
+			b, err := io.ReadAll(io.LimitReader(part, battleWireMax+1))
+			if err != nil {
+				return nil, "Could not read the upload; try again."
+			}
+			if part.FormName() == "paste" && len(bytes.TrimSpace(b)) == 0 {
+				continue // the paste box left empty
+			}
+			j.body = b
+			parts = append(parts, j)
+		}
+	}
+	if len(parts) == 0 {
+		return nil, "Choose a game log file or paste one."
+	}
+	for _, j := range parts {
+		listener := gamelog.Listener(j.body)
+		charID := gamelog.SessionCharacter(j.session)
+		if listener == "" && charID == 0 {
+			if pick == 0 {
+				return nil, "Pick which of your characters the pasted log belongs to."
+			}
+			charID = pick
+		}
+		id, name, ok := app.accountCharacterFor(ctx, userID, charID, listener)
+		if !ok {
+			who := listener
+			if who == "" {
+				who = "That character"
+			}
+			return nil, who + " is not a character on this account."
+		}
+		j.charID, j.listener = id, name
+	}
+	return parts, ""
+}
+
+// readBattleJob reads one queued log and files its fights.
+func (app *Application) readBattleJob(ctx context.Context, j *battleJob) battleResult {
+	l, err := gamelog.Read(bytes.NewReader(j.body), j.session)
+	res := battleResult{read: l.Text}
+	if err != nil {
+		res.Failed, res.Text = true, battleReadProblem(err)
+		return res
+	}
+	got, err := app.ingestGameLog(ctx, j.userID, j.charID, j.listener, l)
+	if err != nil {
+		logging.Errorf("battle reports: read %s for user %d: %v", j.name, j.userID, err)
+		res.Failed, res.Text = true, "Could not store the fights; send the log again."
+		return res
+	}
+	res.Text, res.IDs = battleIngestText(got), got.IDs
+	return res
+}
+
+// battleReadProblem says why a log could not be read.
+func battleReadProblem(err error) string {
+	var big *http.MaxBytesError
+	switch {
+	case errors.As(err, &big):
+		return fmt.Sprintf("That is over %d MB to send. Choose the file rather than pasting it, so the page can compress it first.", battleWireMax>>20)
+	case errors.Is(err, gamelog.ErrTooLarge):
+		return "That log is over 32 MB."
+	case errors.Is(err, gamelog.ErrNotGameLog):
+		return "That is not a game log: its lines start with a time stamp like [ 2026.11.04 12:00:05 ] (combat)."
+	}
+	return "Could not read the log; send it again."
+}
+
+// battleWaitText is when to try again, in words.
+func battleWaitText(d time.Duration) string {
+	if m := int((d + time.Minute - 1) / time.Minute); m > 1 {
+		return fmt.Sprintf("in %d minutes", m)
+	}
+	return "in a minute"
+}
+
+// battleIngestText is a read log's result in one or two sentences.
+func battleIngestText(t battleIngest) string {
+	var parts []string
+	switch {
+	case t.Stored > 0 && t.Updated > 0:
+		parts = append(parts, fmt.Sprintf("Stored %s, updated %s.", pluralCount(int64(t.Stored), "new fight", "new fights"), pluralCount(int64(t.Updated), "fight", "fights")))
+	case t.Stored > 0:
+		parts = append(parts, fmt.Sprintf("Stored %s.", pluralCount(int64(t.Stored), "new fight", "new fights")))
+	case t.Updated > 0:
+		parts = append(parts, fmt.Sprintf("Updated %s already here.", pluralCount(int64(t.Updated), "fight", "fights")))
+	case len(t.Skipped) == 0 && t.Quiet > 0:
+		parts = append(parts, "No fights with another player, only NPCs.")
+	case len(t.Skipped) == 0:
+		parts = append(parts, "No combat in it.")
+	}
+	return strings.Join(append(parts, t.Skipped...), " ")
+}
+
+// battleAPIGate runs the queue's checks on an Axon post before its
+// body is read.
+func (app *Application) battleAPIGate(w http.ResponseWriter, r *http.Request, userID int64) (func(), bool) {
+	if why, wait := app.battleQueue().admit(userID, true, r.ContentLength, time.Now()); why != "" {
+		retryAfter(w, wait)
+		intelAPIError(w, http.StatusTooManyRequests, why)
+		return nil, false
+	}
+	return func() {}, true
+}
+
+// handleAPIGameLog is POST /api/intel/v1/gamelog?session=&listener=:
+// the game log text Axon read since its last post, gzipped, sent
+// once the log has gone quiet so a fight never spans two posts.
+// listener names the pilot when the text starts after the header.
+// The text waits in the queue; the answer says where.
+func (app *Application) handleAPIGameLog(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := tokenUser(ctx)
+	q := r.URL.Query()
+	body, err := io.ReadAll(r.Body)
+	if err != nil || len(body) == 0 {
+		intelAPIError(w, http.StatusBadRequest, "send gzipped game log text")
+		return
+	}
+	j := &battleJob{userID: userID, session: strings.TrimSuffix(filepath.Base(strings.TrimSpace(q.Get("session"))), ".gz"), body: body}
+	j.name = j.session
+	listener := gamelog.Listener(body)
+	if listener == "" {
+		listener = truncate(strings.TrimSpace(q.Get("listener")), battleMaxNameLen)
+	}
+	charID := gamelog.SessionCharacter(j.session)
+	if listener == "" && charID == 0 {
+		intelAPIError(w, http.StatusBadRequest, "listener is missing")
+		return
+	}
+	id, name, ok := app.accountCharacterFor(ctx, userID, charID, listener)
+	if !ok {
+		intelAPIError(w, http.StatusForbidden, fmt.Sprintf("%s is not a character on this account", listener))
+		return
+	}
+	j.charID, j.listener = id, name
+	ahead, why, wait := app.battleQueue().enqueue(j, time.Now())
+	if why != "" {
+		retryAfter(w, wait)
+		intelAPIError(w, http.StatusServiceUnavailable, why)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(struct {
+		Queued bool `json:"queued"`
+		Ahead  int  `json:"ahead"`
+	}{true, ahead})
+}
+
+// retryAfter sets Retry-After in whole seconds, at least one.
+func retryAfter(w http.ResponseWriter, d time.Duration) {
+	w.Header().Set("Retry-After", strconv.Itoa(max(1, int(d.Seconds()+0.999))))
+}
+
+// accountCharacterFor resolves a log's listener to one of the
+// account's characters: by the session file's character ID when it
+// has one, else by name. It returns the character's ID and name.
+func (app *Application) accountCharacterFor(ctx context.Context, userID, charID int64, listener string) (int64, string, bool) {
+	chars, err := app.queries.ListCharactersByUser(ctx, userID)
+	if err != nil {
+		return 0, "", false
+	}
+	for _, c := range chars {
+		if charID > 0 && c.CharacterID == charID {
+			return c.CharacterID, c.Name, true
+		}
+	}
+	for _, c := range chars {
+		if listener != "" && strings.EqualFold(c.Name, listener) {
+			return c.CharacterID, c.Name, true
+		}
+	}
+	return 0, "", false
 }
 
 // peakIncoming is the highest incoming DPS over battleDPSWindow
@@ -226,70 +435,9 @@ func newShareToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// handleAPIFight is POST /api/intel/v1/fights.
-func (app *Application) handleAPIFight(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	userID := tokenUser(ctx)
-	var f battleFightIn
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, battleMaxBody)).Decode(&f); err != nil {
-		intelAPIError(w, http.StatusBadRequest, "send one fight as JSON, up to 1 MB")
-		return
-	}
-	now := time.Now().UTC()
-	if msg := f.check(now); msg != "" {
-		intelAPIError(w, http.StatusBadRequest, msg)
-		return
-	}
-	charID, ok := app.accountCharacterFor(ctx, userID, f.CharacterID, f.Listener)
-	if !ok {
-		intelAPIError(w, http.StatusForbidden, fmt.Sprintf("%s is not a character on this account", f.Listener))
-		return
-	}
-	id, inserted, err := app.storeFight(ctx, userID, charID, &f, now)
-	if err != nil {
-		logging.Errorf("battle reports: store fight for user %d: %v", userID, err)
-		intelAPIError(w, http.StatusInternalServerError, "could not store the fight")
-		return
-	}
-	if err := app.correlateFight(ctx, id); err != nil {
-		logging.Errorf("battle reports: correlate fight %d: %v", id, err)
-	}
-	status := "updated"
-	if inserted {
-		status = "stored"
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(struct {
-		ID     int64  `json:"id"`
-		Status string `json:"status"`
-	}{id, status})
-}
-
-// accountCharacterFor is the account's character the fight's log
-// belongs to: by the ID in the log's file name when that is one of
-// the account's, else by the listener's name.
-func (app *Application) accountCharacterFor(ctx context.Context, userID, charID int64, listener string) (int64, bool) {
-	chars, err := app.queries.ListCharactersByUser(ctx, userID)
-	if err != nil {
-		return 0, false
-	}
-	for _, c := range chars {
-		if charID > 0 && c.CharacterID == charID {
-			return c.CharacterID, true
-		}
-	}
-	for _, c := range chars {
-		if strings.EqualFold(c.Name, listener) {
-			return c.CharacterID, true
-		}
-	}
-	return 0, false
-}
-
 // storeFight writes the fight, its series and its tallies in one
 // transaction.
-func (app *Application) storeFight(ctx context.Context, userID, charID int64, f *battleFightIn, now time.Time) (int64, bool, error) {
+func (app *Application) storeFight(ctx context.Context, userID, charID int64, f *gamelog.Fight, now time.Time) (int64, bool, error) {
 	var names []string
 	for _, p := range f.Parties {
 		names = append(names, p.Name)

@@ -53,6 +53,10 @@ type Config struct {
 	// (WORKER_LANES, worker_lanes.go). 0, which only a Config not read
 	// from the environment has, means one.
 	workerLanes int
+	// battleLogReaders is how many game logs are read at once for
+	// battle reports (BATTLE_LOG_READERS); 0 picks three eighths of
+	// the cores, at least two.
+	battleLogReaders int
 
 	// Foresight (foresight.go): warming on game events. FORESIGHT=off
 	// switches it off; FORESIGHT_FETCHES_PER_CYCLE bounds what it may
@@ -388,6 +392,7 @@ func LoadConfig() (Config, error) {
 		workerTiersOff:             strings.EqualFold(strings.TrimSpace(os.Getenv("WORKER_TIERS")), "off"),
 		workerFetches:              parseWorkerFetches(os.Getenv("WORKER_FETCHES_PER_CYCLE")),
 		workerLanes:                parseWorkerLanes(os.Getenv("WORKER_LANES")),
+		battleLogReaders:           intSetting("BATTLE_LOG_READERS", os.Getenv("BATTLE_LOG_READERS"), 1, 32, 0),
 		foresightOff:               strings.EqualFold(strings.TrimSpace(os.Getenv("FORESIGHT")), "off"),
 		anonMarketOff:              strings.EqualFold(strings.TrimSpace(os.Getenv("MARKET_ANON")), "off"),
 		foresightFetches:           parseForesightFetches(os.Getenv("FORESIGHT_FETCHES_PER_CYCLE")),

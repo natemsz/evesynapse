@@ -1,4 +1,5 @@
-// EveSynapse: the battle report's timeline (battle.html).
+// EveSynapse: the battle report's timeline (battle.html), and the
+// game log form on the list (battles.html).
 //
 // Every moment on the timeline, and the panel's previous and next
 // controls, is a plain link to the report with ?m=<seq>; without
@@ -9,10 +10,95 @@
 // keeps the address bar on the moment so a reload or a shared link
 // opens the same one. Arrow keys step through the moments while the
 // panel or a lane event has focus.
+//
+// The game log form works without script. While a log waits in
+// the queue, the list asks how many still do and reloads once none
+// do. With it, a chosen or
+// dropped file shows its name, and is gzipped in the browser before
+// it is sent (a game log packs to about a tenth), which keeps the
+// upload inside the site's per-request limit.
 (function () {
   "use strict";
 
+  function initUpload(root) {
+    var form = (root || document).querySelector("[data-bt-upload]");
+    if (!form || form.getAttribute("data-bt-bound")) return;
+    form.setAttribute("data-bt-bound", "1");
+    var input = form.querySelector("input[type=file]");
+    var drop = form.querySelector(".bt-drop");
+    var label = form.querySelector("[data-bt-file]");
+    var button = form.querySelector("button[type=submit]");
+    var hint = label ? label.textContent : "";
+    var idle = button ? button.textContent : "";
+    if (!input || !drop) return;
+
+    function show() {
+      var f = input.files && input.files[0];
+      if (label) label.textContent = f ? f.name + ", " + (f.size / 1048576).toFixed(1) + " MB" : hint;
+      drop.classList.toggle("has-file", !!f);
+    }
+    function busy(on) {
+      if (!button) return;
+      button.disabled = on;
+      button.textContent = on ? "Reading" : idle;
+    }
+    input.addEventListener("change", show);
+    ["dragenter", "dragover"].forEach(function (name) {
+      drop.addEventListener(name, function (ev) { ev.preventDefault(); drop.classList.add("over"); });
+    });
+    ["dragleave", "drop"].forEach(function (name) {
+      drop.addEventListener(name, function () { drop.classList.remove("over"); });
+    });
+    drop.addEventListener("drop", function (ev) {
+      ev.preventDefault();
+      if (ev.dataTransfer && ev.dataTransfer.files.length) {
+        input.files = ev.dataTransfer.files;
+        show();
+      }
+    });
+    // Back to the page from the history: the button is usable again.
+    window.addEventListener("pageshow", function () { busy(false); });
+    form.addEventListener("submit", function (ev) {
+      var f = input.files && input.files[0];
+      if (!f || /\.gz$/i.test(f.name) || !window.CompressionStream || !window.DataTransfer || !f.stream) {
+        busy(true);
+        return;
+      }
+      ev.preventDefault();
+      busy(true);
+      new Response(f.stream().pipeThrough(new CompressionStream("gzip"))).blob().then(function (blob) {
+        var packed = new DataTransfer();
+        packed.items.add(new File([blob], f.name + ".gz", { type: "application/gzip" }));
+        input.files = packed.files;
+        form.submit();
+      }, function () {
+        form.submit();
+      });
+    });
+  }
+
+  // While a game log waits in the queue, ask every few seconds how
+  // many still do, and reload the list once none do.
+  function initQueue(root) {
+    var panel = (root || document).querySelector("[data-bt-queue]");
+    if (!panel || panel.getAttribute("data-bt-bound")) return;
+    panel.setAttribute("data-bt-bound", "1");
+    var tries = 0;
+    function ask() {
+      if (!document.body.contains(panel) || ++tries > 200) return;
+      fetch("/intel/battles/queue", { credentials: "same-origin", cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (q) {
+          if (q && q.waiting === 0) { window.location.reload(); return; }
+          setTimeout(ask, 3000);
+        }, function () { setTimeout(ask, 10000); });
+    }
+    setTimeout(ask, 1500);
+  }
+
   function init(root) {
+    initUpload(root);
+    initQueue(root);
     var page = (root || document).querySelector("[data-battle]");
     if (!page || page.getAttribute("data-battle-bound")) return;
     page.setAttribute("data-battle-bound", "1");
@@ -234,9 +320,9 @@
     }, { once: true });
   }
 
-  // This script loads only with the report, after the shell's first
+  // This script loads only with the report and the list, after the shell's first
   // content-ready: run for the document as it stands, then for every
-  // swap that brings a report back.
+  // swap that brings one back.
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () { init(document); });
   } else {

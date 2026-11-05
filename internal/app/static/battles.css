@@ -94,6 +94,87 @@
 .bt-empty p { max-width: 62ch; color: var(--muted-2); }
 .bt-empty h2 { margin-bottom: var(--space-2); }
 
+/* --- Adding a game log by hand: a drop target for the file, the
+   paste box, and the pilot a paste without its header belongs to --- */
+.bt-add > .bt-add-sum {
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+.bt-add[open] > .bt-add-sum { margin-bottom: var(--space-3); }
+.bt-add-form { display: flex; flex-direction: column; gap: var(--space-2); }
+/* The drop target sits in its own box so the phone sheet's labelled
+   form rows (phone.css) leave this form's column alone. */
+.bt-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: var(--space-3);
+  border: 1px dashed var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--row-alt);
+  cursor: pointer;
+}
+.bt-drop:hover,
+.bt-drop.over,
+.bt-drop:focus-within { border-color: var(--accent); }
+.bt-drop.has-file { border-style: solid; }
+.bt-drop-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-bright);
+}
+.bt-drop-hint { font-size: var(--fs-sm); color: var(--muted-2); overflow-wrap: anywhere; }
+/* The input covers the target, so a click or a drop anywhere on it
+   lands on the file picker; it stays focusable for the keyboard. */
+.bt-drop input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.bt-field { display: flex; flex-direction: column; gap: 0.25rem; }
+.bt-field > span {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+.bt-add-form textarea,
+.bt-field select {
+  max-width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+.bt-add-form textarea { width: 100%; min-height: 7rem; font-family: var(--font-mono); resize: vertical; }
+.bt-add-form textarea:focus,
+.bt-field select:focus { outline: none; border-color: var(--accent); }
+.bt-add-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); }
+.bt-add-row .btn { margin-left: auto; }
+@container page (width < 34rem) {
+  .bt-add-row .bt-field,
+  .bt-add-row .btn { flex: 1 1 100%; margin-left: 0; }
+}
+
+/* --- The account's game logs in the queue --- */
+.bt-qlist { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.bt-q { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem var(--space-2); }
+.bt-q-name { color: var(--text-bright); overflow-wrap: anywhere; }
+.bt-q-state { color: var(--muted-2); }
+.bt-q-wait .bt-q-state { color: var(--gold); }
+.bt-q-fail .bt-q-state { color: var(--danger); }
+.bt-q time { margin-left: auto; }
+
 /* Lines: the chart, the moment's sparkline and the list's trend
    share these strokes. */
 .bt-ln-out,

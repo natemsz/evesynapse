@@ -785,3 +785,82 @@ func TestDemoProfitCoherence(t *testing.T) {
 		t.Errorf("headline blueprint built = %d, want above zero", built)
 	}
 }
+
+// The demo's battle reports: the seed files fabricated game
+// logs through the real parser and ingest, so the demo account
+// holds three reports whose matched kills are the killmails
+// the seed planted, and reseeding neither drops nor
+// duplicates them.
+func TestDemoSeedBattleReports(t *testing.T) {
+	app, _, queries := demoTestApp(t)
+	ctx := context.Background()
+	userID := app.demoUserID(ctx)
+
+	check := func(stage string) {
+		t.Helper()
+		fights, err := queries.ListBattleFightsByUser(ctx, userID)
+		if err != nil {
+			t.Fatalf("%s: list battle fights: %v", stage, err)
+		}
+		if len(fights) != 3 {
+			t.Fatalf("%s: %d battle reports, want 3", stage, len(fights))
+		}
+		matched := map[int64]string{}
+		var parties, weapons, tackles int
+		for _, f := range fights {
+			if f.SystemID != 30003068 {
+				t.Errorf("%s: fight %d in system %d, want Tama (30003068)", stage, f.ID, f.SystemID)
+			}
+			kills, err := queries.ListBattleFightKills(ctx, f.ID)
+			if err != nil {
+				t.Fatalf("%s: list fight kills: %v", stage, err)
+			}
+			for _, k := range kills {
+				matched[k.KillmailID] = f.Outcome
+				if k.KillmailID == demoBattleLossMail && !k.Loss {
+					t.Errorf("%s: the planted loss is not flagged as a loss on its report", stage)
+				}
+			}
+			ps, err := queries.ListBattleFightParties(ctx, f.ID)
+			if err != nil {
+				t.Fatalf("%s: list fight parties: %v", stage, err)
+			}
+			parties += len(ps)
+			ws, err := queries.ListBattleFightWeapons(ctx, f.ID)
+			if err != nil {
+				t.Fatalf("%s: list fight weapons: %v", stage, err)
+			}
+			weapons += len(ws)
+			ts, err := queries.ListBattleFightTackles(ctx, f.ID)
+			if err != nil {
+				t.Fatalf("%s: list fight tackles: %v", stage, err)
+			}
+			tackles += len(ts)
+		}
+		for _, id := range demoBattleMailIDs {
+			if _, ok := matched[id]; !ok {
+				t.Errorf("%s: killmail %d is matched to no battle report", stage, id)
+			}
+		}
+		if got := matched[demoBattleLossMail]; got != "loss" {
+			t.Errorf("%s: the loss mail's report outcome = %q, want loss", stage, got)
+		}
+		if got := matched[demoBattleKillMail]; got != "kill" {
+			t.Errorf("%s: the solo kill mail's report outcome = %q, want kill", stage, got)
+		}
+		if parties == 0 || weapons == 0 || tackles == 0 {
+			t.Errorf("%s: reports carry %d parties, %d weapon rows, %d tackles; want all three kinds present",
+				stage, parties, weapons, tackles)
+		}
+	}
+	check("seeded")
+
+	seedNow := time.Now()
+	if err := app.seedDemoData(ctx, seedNow); err != nil {
+		t.Fatalf("reseed one: %v", err)
+	}
+	if err := app.seedDemoData(ctx, seedNow); err != nil {
+		t.Fatalf("reseed two: %v", err)
+	}
+	check("after two reseeds")
+}

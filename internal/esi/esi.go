@@ -28,7 +28,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -40,6 +39,12 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+
+	// json is goccy/go-json under the standard library's name: it
+	// decodes and encodes this package's ESI payloads faster than
+	// encoding/json with identical results (TestDecoderParity in
+	// decode_parity_test.go).
+	json "github.com/goccy/go-json"
 )
 
 // ESI is at https://esi.evetech.net; every request carries a

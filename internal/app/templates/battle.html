@@ -2,9 +2,27 @@
 {{define "pagetitle"}}<h1><span class="gt">{{with .Battle}}{{.Title}}{{end}}</span></h1>{{end}}
 {{define "pagetabs"}}{{if .Battle}}{{if .Battle.Owner}}{{template "sectiontabs" .}}{{end}}{{end}}{{end}}
 
+{{/* A party's card: the tooltip the shared hover layer shows over its
+     name (app.js lifts .spark-pop into one fixed layer). */}}
+{{define "bt-party-card"}}<span class="spark-pop" data-layer="bt-card">
+  <span class="btc-head">{{if .HullTypeID}}<img src="https://images.evetech.net/types/{{.HullTypeID}}/icon?size=64" alt="" width="36" height="36">{{end}}<span class="btc-t"><strong>{{.Name}}</strong><span class="btc-s">{{if .Ticker}}[{{.Ticker}}] {{end}}{{if ne .Name .Hull}}{{.Hull}}{{end}}{{if .Died}} <span class="kb-tag warn">died</span>{{end}}</span></span></span>
+  {{with .Card}}<span class="btc-rows">
+    {{if ne .In "0"}}<span class="btc-row btc-in"><span>Shot you for</span><b>{{.In}}</b></span>{{end}}
+    {{if ne .Out "0"}}<span class="btc-row btc-out"><span>You shot them for</span><b>{{.Out}}</b></span>{{end}}
+    {{if ne .RepsIn "0"}}<span class="btc-row btc-rep"><span>Repaired you for</span><b>{{.RepsIn}}</b></span>{{end}}
+    {{if ne .RepsOut "0"}}<span class="btc-row btc-rep"><span>You repaired them for</span><b>{{.RepsOut}}</b></span>{{end}}
+    {{if ne .Cap "0"}}<span class="btc-row btc-cap"><span>Drained you of</span><b>{{.Cap}} GJ</b></span>{{end}}
+  </span>
+  {{if .WeaponsIn}}<span class="btc-sub">Their weapons on you</span>{{range .WeaponsIn}}<span class="btc-w">{{if .TypeID}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Name}}</span><b>{{.Damage}}</b></span>{{end}}{{end}}
+  {{if .WeaponsOut}}<span class="btc-sub">Your weapons on them</span>{{range .WeaponsOut}}<span class="btc-w">{{if .TypeID}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Name}}</span><b>{{.Damage}}</b></span>{{end}}{{end}}
+  {{end}}
+  {{if .Window}}<span class="btc-foot">In the fight from {{.Window}}</span>{{end}}
+</span>{{end}}
+
 {{/* One party as a table's first cell: its name (a link once a mail
-     named the character), its ticker, and its hull. */}}
-{{define "bt-who"}}<span class="bt-who">{{if .HullTypeID}}<img src="https://images.evetech.net/types/{{.HullTypeID}}/icon?size=32" alt="" width="22" height="22" loading="lazy">{{else}}<span class="bt-who-dot" aria-hidden="true"></span>{{end}}<span class="bt-who-t"><span class="bt-who-n">{{if eq .Name .Hull}}{{.Hull}}{{else}}{{.Link}}{{end}}{{if .Died}} <span class="kb-tag warn">died</span>{{end}}</span>{{if and .Hull (ne .Name .Hull)}}<span class="bt-who-s">{{if .Ticker}}[{{.Ticker}}] {{end}}{{.Hull}}</span>{{else if .Ticker}}<span class="bt-who-s">[{{.Ticker}}]</span>{{end}}</span></span>{{end}}
+     named the character), its ticker, and its hull. With a card, the
+     cell is a hover target for it. */}}
+{{define "bt-who"}}<span class="bt-who{{if .Card}} spark-hover bt-tipped{{end}}"{{if .Card}} tabindex="0"{{end}}>{{if .HullTypeID}}<img src="https://images.evetech.net/types/{{.HullTypeID}}/icon?size=32" alt="" width="22" height="22" loading="lazy">{{else}}<span class="bt-who-dot" aria-hidden="true"></span>{{end}}<span class="bt-who-t"><span class="bt-who-n">{{if eq .Name .Hull}}{{.Hull}}{{else}}{{.Link}}{{end}}{{if .Died}} <span class="kb-tag warn">died</span>{{end}}</span>{{if and .Hull (ne .Name .Hull)}}<span class="bt-who-s">{{if .Ticker}}[{{.Ticker}}] {{end}}{{.Hull}}</span>{{else if .Ticker}}<span class="bt-who-s">[{{.Ticker}}]</span>{{end}}</span>{{if .Card}}{{template "bt-party-card" .}}{{end}}</span>{{end}}
 
 {{/* A party table: who, a share bar, the amount; past eight rows the
      rest wait behind Show all (open without script). */}}
@@ -114,7 +132,9 @@
         <rect class="bt-band" id="bt-band" x="{{.Band.X}}" y="0" width="{{.Band.W}}" height="160"{{if not .Band.On}} hidden{{end}}/>
         {{range .Chart.Lines}}<polyline class="bt-ln-{{.Key}}" points="{{.Points}}" vector-effect="non-scaling-stroke"/>{{end}}
         {{range .Chart.Marks}}<line class="bt-mk{{if .Loss}} bt-mk-loss{{end}}" x1="{{.X}}" y1="0" x2="{{.X}}" y2="160" vector-effect="non-scaling-stroke"><title>{{.Label}}</title></line>{{end}}
+        <line class="bt-cursor" id="bt-cursor" x1="0" y1="0" x2="0" y2="160" vector-effect="non-scaling-stroke" hidden/>
       </svg>
+      {{if .Hover}}<script type="application/json" id="bt-hover-data">{{.Hover}}</script>{{end}}
     </div>
     {{if .Lanes}}
     <div class="bt-lanes" role="group" aria-label="Moments of the fight">
@@ -122,7 +142,7 @@
       <div class="bt-lane bt-lane-{{.Key}}">
         <span class="bt-lane-label">{{.Label}}</span>
         <div class="bt-lane-track">
-          {{range .Marks}}<a class="bt-ev bt-ev-{{.Kind}}{{if .Current}} on{{end}}" href="{{.Href}}" data-moment="{{.Fragment}}" data-band-x="{{.BandX}}" data-band-w="{{.BandW}}" data-left="{{.Left}}" data-w="{{.Width}}" title="{{.When}}: {{.Title}}"{{if .Current}} aria-current="true"{{end}}><span class="bt-sr">{{.When}}: {{.Title}}</span></a>{{end}}
+          {{range .Marks}}<a class="bt-ev bt-ev-{{.Kind}} spark-hover{{if .Current}} on{{end}}" href="{{.Href}}" data-moment="{{.Fragment}}" data-band-x="{{.BandX}}" data-band-w="{{.BandW}}" data-left="{{.Left}}" data-w="{{.Width}}"{{if .Current}} aria-current="true"{{end}}><span class="bt-sr">{{.When}}: {{.Title}}</span>{{template "bt-moment-card" .}}</a>{{end}}
         </div>
       </div>
       {{end}}
@@ -237,6 +257,22 @@
 {{end}}
 {{end}}
 
+{{/* A timeline event's card: its kind, time and title, its figures,
+     and who led each way in its window. */}}
+{{define "bt-moment-card"}}<span class="spark-pop" data-layer="bt-card">
+  <span class="btc-top"><span class="bt-chip bt-chip-{{.Kind}}">{{.Label}}</span><span class="btc-time">{{.When}}</span></span>
+  <span class="btc-head">{{if .Brief.ShipID}}<img src="https://images.evetech.net/types/{{.Brief.ShipID}}/icon?size=64" alt="" width="36" height="36">{{end}}<span class="btc-t"><strong>{{.Title}}</strong></span></span>
+  <span class="btc-rows">
+    {{if .Brief.DamageOut}}<span class="btc-row btc-out"><span>Dealt</span><b>{{battleNum .Brief.DamageOut}}</b></span>{{end}}
+    {{if .Brief.DamageIn}}<span class="btc-row btc-in"><span>Taken</span><b>{{battleNum .Brief.DamageIn}}</b></span>{{end}}
+    {{if .Brief.RepsIn}}<span class="btc-row btc-rep"><span>Repaired</span><b>{{battleNum .Brief.RepsIn}}</b></span>{{end}}
+    {{if .Brief.CapIn}}<span class="btc-row btc-cap"><span>Neutralized</span><b>{{battleNum .Brief.CapIn}} GJ</b></span>{{end}}
+  </span>
+  {{with .Brief.TopIn}}<span class="btc-sub">Hitting you hardest</span><span class="btc-w">{{if .HullTypeID}}<img src="https://images.evetech.net/types/{{.HullTypeID}}/icon?size=32" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Name}}{{if and .Hull (ne .Name .Hull)}} <span class="btc-s">{{.Hull}}</span>{{end}}</span><b>{{battleNum .Amount}}</b></span>{{end}}
+  {{with .Brief.TopOut}}<span class="btc-sub">Your main target</span><span class="btc-w">{{if .HullTypeID}}<img src="https://images.evetech.net/types/{{.HullTypeID}}/icon?size=32" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Name}}{{if and .Hull (ne .Name .Hull)}} <span class="btc-s">{{.Hull}}</span>{{end}}</span><b>{{battleNum .Amount}}</b></span>{{end}}
+  <span class="btc-foot">Select to open this moment</span>
+</span>{{end}}
+
 {{define "bt-grid-tackle"}}<li><span class="bt-tk">{{.Kind}}</span> {{.From}} <span class="bt-dim">on</span> {{.To}} <span class="bt-dim">from {{.At}}, {{.Attempts}} {{if eq .Attempts "1"}}attempt{{else}}attempts{{end}}</span></li>{{end}}
 
 {{/* The application table: each weapon at each party, with its hit
@@ -252,7 +288,11 @@
 {{if .More}}<button type="button" class="btn btn-quiet bt-more" data-expand="{{.ID}}"><span class="bt-more-c">Show all {{.Total}}</span><span class="bt-more-o">Show fewer</span></button>{{end}}
 {{end}}
 {{define "bt-weapon-row"}}<tr>
-    <td>{{if .WeaponTypeID}}<span class="bt-who"><img src="https://images.evetech.net/types/{{.WeaponTypeID}}/icon?size=32" alt="" width="22" height="22" loading="lazy">{{itemLink .WeaponTypeID .Weapon}}</span>{{else}}{{.Weapon}}{{end}}</td>
+    <td><span class="bt-who{{if .Judged}} spark-hover bt-tipped{{end}}">{{if .WeaponTypeID}}<img src="https://images.evetech.net/types/{{.WeaponTypeID}}/icon?size=32" alt="" width="22" height="22" loading="lazy">{{itemLink .WeaponTypeID .Weapon}}{{else}}<span tabindex="0">{{.Weapon}}</span>{{end}}{{if .Judged}}<span class="spark-pop" data-layer="bt-card">
+      <span class="btc-head">{{if .WeaponTypeID}}<img src="https://images.evetech.net/types/{{.WeaponTypeID}}/icon?size=64" alt="" width="36" height="36">{{end}}<span class="btc-t"><strong>{{.Weapon}}</strong><span class="btc-s">{{.Shots}} shots on {{.Party}}, {{.Damage}} damage</span></span></span>
+      <span class="btc-rows">{{range .Segs}}<span class="btc-row"><span><i class="btc-sw {{.Class}}"></i>{{.Label}}</span></span>{{end}}</span>
+      <span class="btc-foot">{{.Good}} hit solidly (glance or better)</span>
+    </span>{{end}}</span></td>
     <td>{{.Party}}</td>
     <td class="num">{{.Shots}}</td>
     <td class="num">{{.Damage}}</td>

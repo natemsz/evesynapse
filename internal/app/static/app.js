@@ -6179,7 +6179,9 @@
 // hidden .spark-pop the server rendered (sparkline.go). On hover or
 // focus its contents are copied into one fixed layer, so a
 // scrollable table can never clip the card. Delegated listeners, so
-// the pattern survives in-app navigation untouched.
+// the pattern survives in-app navigation untouched. A pop that names
+// a data-layer class dresses the layer in it (a wider card, its own
+// styles: the battle report's cards are the worked example).
 (function () {
   var layer = null, owner = null;
   function ensure() {
@@ -6197,6 +6199,7 @@
     if (!pop) return;
     var l = ensure();
     l.innerHTML = pop.innerHTML;
+    l.className = pop.getAttribute("data-layer") || "";
     l.hidden = false;
     var r = fig.getBoundingClientRect();
     var lw = l.offsetWidth, lh = l.offsetHeight;

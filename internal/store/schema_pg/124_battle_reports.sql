@@ -13,8 +13,9 @@
 --     derived from them and the matched kills.
 --   * battle_fight_moments, the fight's timeline: each moment a
 --     kind (kill, loss, tackle, energy, pressure, repairs, focus), a
---     window in seconds, a title, and the detail its panel shows
---     (JSON), all derived when the fight is correlated.
+--     window in seconds, a title, a brief its timeline tooltip shows
+--     and the detail its panel shows (both JSON), all derived when
+--     the fight is correlated.
 --   * battle_fight_parties, one row per other party. The log names
 --     pilots as "Name[TICK](Hull)" and everything else bare; a bare
 --     name that is a ship type (repairs, energy warfare and tackle
@@ -82,6 +83,7 @@ CREATE TABLE IF NOT EXISTS battle_fight_moments (
     at_second  INTEGER NOT NULL,
     end_second INTEGER NOT NULL,
     title      TEXT NOT NULL,
+    brief      TEXT NOT NULL DEFAULT '',
     detail     TEXT NOT NULL,
     PRIMARY KEY (fight_id, seq)
 );

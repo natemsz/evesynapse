@@ -110,7 +110,20 @@ type battleMoment struct {
 	At     int
 	End    int
 	Title  string
+	Brief  battleMomentBrief
 	Detail battleMomentDetail
+}
+
+// battleMomentBrief is what a moment's timeline tooltip shows: its
+// figures and the party that led each way, read with the lanes.
+type battleMomentBrief struct {
+	DamageOut int64        `json:"out"`
+	DamageIn  int64        `json:"in"`
+	RepsIn    int64        `json:"rep"`
+	CapIn     int64        `json:"cap"`
+	TopIn     *momentParty `json:"top_in,omitempty"`
+	TopOut    *momentParty `json:"top_out,omitempty"`
+	ShipID    int64        `json:"ship,omitempty"` // a kill or loss: the hull that died
 }
 
 type momentInput struct {
@@ -319,7 +332,21 @@ func buildMoments(x momentInput) []battleMoment {
 		out = out[:momentTotalMax]
 	}
 	for i := range out {
-		out[i].Detail = momentDetail(x, bySeq, out[i])
+		d := momentDetail(x, bySeq, out[i])
+		out[i].Detail = d
+		b := battleMomentBrief{DamageOut: d.DamageOut, DamageIn: d.DamageIn, RepsIn: d.RepsIn, CapIn: d.CapIn}
+		if len(d.Attackers) > 0 {
+			b.TopIn = &d.Attackers[0]
+		}
+		if len(d.Targets) > 0 {
+			b.TopOut = &d.Targets[0]
+		}
+		for _, k := range d.Kills {
+			if k.At == out[i].End {
+				b.ShipID = k.ShipTypeID
+			}
+		}
+		out[i].Brief = b
 	}
 	return out
 }

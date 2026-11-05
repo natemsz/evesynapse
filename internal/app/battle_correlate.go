@@ -263,6 +263,10 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 		}
 	}
 	moments := buildMoments(momentInput{Fight: f, Series: series, Slices: slices, Parties: parties, Tackles: tackles, Kills: kills, Ships: ships})
+	ch.Hover = buildChartHover(series, slices, parties, kills, ships)
+	if chart, err = json.Marshal(ch); err != nil {
+		return err
+	}
 	capacity := 0.0
 	if nLosses > 0 {
 		for _, k := range kills {
@@ -314,9 +318,13 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 		if err != nil {
 			return err
 		}
+		brief, err := json.Marshal(m.Brief)
+		if err != nil {
+			return err
+		}
 		if err := q.InsertBattleFightMoment(ctx, db.InsertBattleFightMomentParams{
 			FightID: id, Seq: int32(i), Kind: m.Kind, AtSecond: int32(m.At), EndSecond: int32(m.End),
-			Title: m.Title, Detail: string(detail),
+			Title: m.Title, Brief: string(brief), Detail: string(detail),
 		}); err != nil {
 			return err
 		}
@@ -369,6 +377,7 @@ const (
 )
 
 type battleChart struct {
+	Hover    []battleHoverPt   `json:"hover,omitempty"`
 	Weapons  []battleWeaponAgg `json:"weapons,omitempty"`
 	Hostile  battleSide        `json:"hostile"`
 	Friendly battleSide        `json:"friendly"`
@@ -377,6 +386,96 @@ type battleChart struct {
 	Ticks    []battleChartTick `json:"ticks"`
 	YTicks   []battleChartTick `json:"yticks"`
 	Marks    []battleChartMark `json:"marks"`
+}
+
+// battleHoverPt is what the chart's crosshair shows at one of its
+// columns: the time, the rates drawn there (10-second averages), and
+// who led each way in the 10-second slice under it. Short keys: the
+// page carries one per column.
+type battleHoverPt struct {
+	T     string      `json:"t"`
+	Out   int64       `json:"o"`
+	In    int64       `json:"i"`
+	RepIn int64       `json:"r"`
+	RepOt int64       `json:"g"`
+	Cap   int64       `json:"c"`
+	TopIn *hoverParty `json:"ti,omitempty"`
+	TopOt *hoverParty `json:"to,omitempty"`
+	TopRp *hoverParty `json:"tr,omitempty"`
+	Mails []hoverMail `json:"m,omitempty"`
+}
+
+type hoverParty struct {
+	Name string `json:"n"`
+	Hull string `json:"h,omitempty"`
+	Ship int64  `json:"s,omitempty"`
+	Amt  int64  `json:"a"`
+}
+
+type hoverMail struct {
+	Ship int64  `json:"s"`
+	Loss bool   `json:"l,omitempty"`
+	Text string `json:"t"`
+}
+
+// buildChartHover lays out one hover point per chart column, in the
+// same buckets the chart's lines are drawn from.
+func buildChartHover(s battleSeries, slices []battleSlice, parties []db.BattleFightParty, kills []db.BattleFightKill, ships map[int64]string) []battleHoverPt {
+	n := len(s.DamageOut)
+	if n == 0 {
+		return nil
+	}
+	rOut, rIn, rRep, rRpo, rCap := rolling(s.DamageOut), rolling(s.DamageIn), rolling(s.RepsIn), rolling(s.RepsOut), rolling(s.CapIn)
+	bySeq := map[int64]db.BattleFightParty{}
+	for _, p := range parties {
+		bySeq[int64(p.Seq)] = p
+	}
+	at := map[int]battleSlice{}
+	for _, sl := range slices {
+		at[sl.At] = sl
+	}
+	top := func(sl battleSlice, col int) *hoverParty {
+		var best [6]int64
+		found := false
+		for _, r := range sl.Rows {
+			if r[col] > best[col] {
+				best, found = r, true
+			}
+		}
+		if !found {
+			return nil
+		}
+		p := bySeq[best[0]]
+		return &hoverParty{Name: p.Name, Hull: p.Hull, Ship: p.HullTypeID, Amt: best[col]}
+	}
+	buckets := min(n, battleChartPoints)
+	out := make([]battleHoverPt, 0, buckets)
+	for i := 0; i < buckets; i++ {
+		lo, hi := i*n/buckets, max((i+1)*n/buckets, i*n/buckets+1)
+		var pt battleHoverPt
+		for j := lo; j < hi && j < n; j++ {
+			pt.Out, pt.In = max(pt.Out, int64(rOut[j])), max(pt.In, int64(rIn[j]))
+			pt.RepIn, pt.RepOt, pt.Cap = max(pt.RepIn, int64(rRep[j])), max(pt.RepOt, int64(rRpo[j])), max(pt.Cap, int64(rCap[j]))
+		}
+		mid := (lo + hi) / 2
+		pt.T = clockOffset(mid)
+		if sl, ok := at[mid/battleSliceSeconds*battleSliceSeconds]; ok {
+			pt.TopIn, pt.TopOt, pt.TopRp = top(sl, 2), top(sl, 1), top(sl, 4)
+		}
+		for _, k := range kills {
+			if int(k.AtSecond) >= lo && int(k.AtSecond) < hi {
+				who := k.VictimName
+				if k.Loss {
+					who = "You"
+				} else if who == "" {
+					who = "A pilot"
+				}
+				pt.Mails = append(pt.Mails, hoverMail{Ship: k.ShipTypeID, Loss: k.Loss, Text: fmt.Sprintf("%s lost a %s", who, ships[k.ShipTypeID])})
+			}
+		}
+		out = append(out, pt)
+	}
+	return out
 }
 
 // battleWeaponAgg is one weapon's shots one way across every party

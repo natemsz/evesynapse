@@ -43,11 +43,11 @@ ON CONFLICT (fight_id) DO UPDATE SET series = excluded.series, slices = excluded
 DELETE FROM battle_fight_moments WHERE fight_id = $1;
 
 -- name: InsertBattleFightMoment :exec
-INSERT INTO battle_fight_moments (fight_id, seq, kind, at_second, end_second, title, detail)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
+INSERT INTO battle_fight_moments (fight_id, seq, kind, at_second, end_second, title, brief, detail)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 
 -- name: ListBattleFightMoments :many
-SELECT fight_id, seq, kind, at_second, end_second, title FROM battle_fight_moments
+SELECT fight_id, seq, kind, at_second, end_second, title, brief FROM battle_fight_moments
 WHERE fight_id = $1
 ORDER BY at_second, seq
 LIMIT 120;

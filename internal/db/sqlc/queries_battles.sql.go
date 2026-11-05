@@ -156,7 +156,7 @@ func (q *Queries) GetBattleFightByToken(ctx context.Context, shareToken string) 
 }
 
 const getBattleFightMoment = `-- name: GetBattleFightMoment :one
-SELECT fight_id, seq, kind, at_second, end_second, title, detail FROM battle_fight_moments WHERE fight_id = $1 AND seq = $2
+SELECT fight_id, seq, kind, at_second, end_second, title, brief, detail FROM battle_fight_moments WHERE fight_id = $1 AND seq = $2
 `
 
 type GetBattleFightMomentParams struct {
@@ -174,6 +174,7 @@ func (q *Queries) GetBattleFightMoment(ctx context.Context, arg GetBattleFightMo
 		&i.AtSecond,
 		&i.EndSecond,
 		&i.Title,
+		&i.Brief,
 		&i.Detail,
 	)
 	return i, err
@@ -259,8 +260,8 @@ func (q *Queries) InsertBattleFightKill(ctx context.Context, arg InsertBattleFig
 }
 
 const insertBattleFightMoment = `-- name: InsertBattleFightMoment :exec
-INSERT INTO battle_fight_moments (fight_id, seq, kind, at_second, end_second, title, detail)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO battle_fight_moments (fight_id, seq, kind, at_second, end_second, title, brief, detail)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertBattleFightMomentParams struct {
@@ -270,6 +271,7 @@ type InsertBattleFightMomentParams struct {
 	AtSecond  int32  `json:"at_second"`
 	EndSecond int32  `json:"end_second"`
 	Title     string `json:"title"`
+	Brief     string `json:"brief"`
 	Detail    string `json:"detail"`
 }
 
@@ -281,6 +283,7 @@ func (q *Queries) InsertBattleFightMoment(ctx context.Context, arg InsertBattleF
 		arg.AtSecond,
 		arg.EndSecond,
 		arg.Title,
+		arg.Brief,
 		arg.Detail,
 	)
 	return err
@@ -541,7 +544,7 @@ func (q *Queries) ListBattleFightKills(ctx context.Context, fightID int64) ([]Ba
 }
 
 const listBattleFightMoments = `-- name: ListBattleFightMoments :many
-SELECT fight_id, seq, kind, at_second, end_second, title FROM battle_fight_moments
+SELECT fight_id, seq, kind, at_second, end_second, title, brief FROM battle_fight_moments
 WHERE fight_id = $1
 ORDER BY at_second, seq
 LIMIT 120
@@ -554,6 +557,7 @@ type ListBattleFightMomentsRow struct {
 	AtSecond  int32  `json:"at_second"`
 	EndSecond int32  `json:"end_second"`
 	Title     string `json:"title"`
+	Brief     string `json:"brief"`
 }
 
 func (q *Queries) ListBattleFightMoments(ctx context.Context, fightID int64) ([]ListBattleFightMomentsRow, error) {
@@ -572,6 +576,7 @@ func (q *Queries) ListBattleFightMoments(ctx context.Context, fightID int64) ([]
 			&i.AtSecond,
 			&i.EndSecond,
 			&i.Title,
+			&i.Brief,
 		); err != nil {
 			return nil, err
 		}

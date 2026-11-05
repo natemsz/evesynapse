@@ -118,6 +118,9 @@ type battleView struct {
 	Lines    int32
 	Unparsed int32
 	Viewer   map[int64]bool
+
+	// Hover is the chart crosshair's columns as JSON for battle.js.
+	Hover template.JS
 }
 
 // battleBand is the selected moment's span over the chart, in the
@@ -134,6 +137,8 @@ type battleLane struct {
 }
 
 type battleLaneMark struct {
+	Brief    battleMomentBrief
+	Label    string // the kind, for the card's chip
 	Seq      int32
 	Kind     string
 	Left     float64 // percent of the fight
@@ -243,6 +248,23 @@ type battlePartyRow struct {
 	Share       string
 	BarW        int64
 	Window      string
+
+	// The party's card (its tooltip): everything between it and
+	// the pilot over the whole fight, and the weapons each way.
+	Card *battlePartyCard
+}
+
+type battlePartyCard struct {
+	Out, In, RepsIn, RepsOut, Cap string
+	WeaponsIn                     []battleCardWeapon // what it hit the pilot with
+	WeaponsOut                    []battleCardWeapon // what the pilot hit it with
+}
+
+type battleCardWeapon struct {
+	Name   string
+	TypeID int64
+	Damage string
+	Shots  string
 }
 
 type battleWeaponRow struct {
@@ -552,6 +574,9 @@ func (app *Application) battleViewFor(ctx context.Context, f db.BattleFight, own
 		if json.Unmarshal([]byte(s.Chart), &v.Chart) == nil && len(v.Chart.Lines) > 0 {
 			v.HasChart = true
 			v.Hostile, v.Friendly = v.Chart.Hostile, v.Chart.Friendly
+			if b, err := json.Marshal(v.Chart.Hover); err == nil {
+				v.Hover = template.JS(b)
+			}
 		}
 	}
 
@@ -588,6 +613,8 @@ func (app *Application) battleViewFor(ctx context.Context, f db.BattleFight, own
 			Href:  fmt.Sprintf("%s?m=%d#bt-moment", base, m.Seq), Fragment: fmt.Sprintf("%smoment/%d/", base, m.Seq),
 			Current: m.Seq == seq,
 		}
+		mark.Label = k.label
+		_ = json.Unmarshal([]byte(m.Brief), &mark.Brief)
 		if mark.Current {
 			v.Band = battleBand{X: mark.BandX, W: mark.BandW, On: true}
 		}
@@ -617,9 +644,36 @@ func (app *Application) battleViewFor(ctx context.Context, f db.BattleFight, own
 	for _, p := range parties {
 		bySeq[p.Seq] = p
 	}
+	// Each party's card: its totals, and its three heaviest weapons
+	// each way.
+	cards := map[int32]*battlePartyCard{}
+	for _, p := range parties {
+		cards[p.Seq] = &battlePartyCard{
+			Out: esi.FormatInt(p.DamageOut), In: esi.FormatInt(p.DamageIn),
+			RepsIn: esi.FormatInt(p.RepsIn), RepsOut: esi.FormatInt(p.RepsOut), Cap: esi.FormatInt(p.CapIn),
+		}
+	}
+	if weapons, err := app.queries.ListBattleFightWeapons(ctx, f.ID); err == nil {
+		for _, wp := range weapons {
+			c := cards[wp.PartySeq]
+			if c == nil || wp.Damage == 0 {
+				continue
+			}
+			cw := battleCardWeapon{Name: wp.Weapon, TypeID: wp.WeaponTypeID, Damage: esi.FormatInt(wp.Damage), Shots: esi.FormatInt(wp.Shots)}
+			if cw.Name == "" {
+				cw.Name = "Drones or missiles"
+			}
+			if wp.Dir == "in" && len(c.WeaponsIn) < 3 {
+				c.WeaponsIn = append(c.WeaponsIn, cw)
+			} else if wp.Dir == "out" && len(c.WeaponsOut) < 3 {
+				c.WeaponsOut = append(c.WeaponsOut, cw)
+			}
+		}
+	}
 	row := func(p db.BattleFightParty, amount, whole int64) battlePartyRow {
 		r := partyRow(p, amount, whole)
 		r.Window = clockOffset(int(p.FirstAt.Sub(f.StartedAt)/time.Second)) + " to " + clockOffset(int(p.LastAt.Sub(f.StartedAt)/time.Second))
+		r.Card = cards[p.Seq]
 		return r
 	}
 	var capOut int64

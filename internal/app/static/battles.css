@@ -8,7 +8,9 @@
  * window lights across both. Every colour is a theme token, so the
  * faction schemes recolour the page with the rest of the site:
  *
- *   damage out      --accent      the pilot's own fire
+ *   damage out      --gold        the pilot's own fire (accent and
+ *                                 danger sit too close to tell the
+ *                                 two damage lines apart)
  *   damage in       --danger      what hit the pilot
  *   repairs         --kept        repairs either way
  *   energy warfare  --bt-cap      a cool slate from --recycled, the one
@@ -18,8 +20,12 @@
  *   tackle          --text-bright hollow: an attempt, not damage
  */
 
-.bt {
-  --bt-out: var(--accent);
+/* The tokens also dress the shared hover layer (#spark-layer, app.js)
+   when it shows one of this page's cards: it lives on body, outside
+   .bt, so it names them itself. */
+.bt,
+#spark-layer.bt-card {
+  --bt-out: var(--gold);
   --bt-in: var(--danger);
   --bt-rep: var(--kept);
   --bt-cap: color-mix(in srgb, var(--recycled) 55%, var(--text));
@@ -269,7 +275,8 @@
 .bt-tickers span { padding: 0.05rem 0.45rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); color: var(--muted-2); font-size: var(--fs-xs); }
 
 /* --- Application: hit quality, worst to best, cold to hot --- */
-.bt-app { --q-miss: color-mix(in srgb, var(--muted) 45%, transparent); --q-graze: color-mix(in srgb, var(--bt-cap) 80%, transparent); --q-glance: var(--recycled); --q-hit: color-mix(in srgb, var(--success) 55%, var(--muted)); --q-pen: var(--success); --q-smash: var(--gold); --q-wreck: var(--text-bright); }
+.bt-app,
+#spark-layer.bt-card { --q-miss: color-mix(in srgb, var(--muted) 45%, transparent); --q-graze: color-mix(in srgb, var(--bt-cap) 80%, transparent); --q-glance: var(--recycled); --q-hit: color-mix(in srgb, var(--success) 55%, var(--muted)); --q-pen: var(--success); --q-smash: var(--gold); --q-wreck: var(--text-bright); }
 .bt-q-h { width: 28%; }
 .bt-qbar { display: block; width: 100%; min-width: 6rem; height: 0.55rem; border-radius: 999px; overflow: hidden; }
 .bt-qbar .q-miss,
@@ -311,3 +318,70 @@
 /* Card-mode tables give their bodies a display of their own; a
    closed Show all body stays closed. */
 .bt [data-wmore][hidden] { display: none !important; }
+
+/* --- Hover cards: the shared layer (#spark-layer) in this page's
+   dress. Wider than a price card, never wider than the screen; long
+   names ellipsize instead of wrapping the card's rows. --- */
+.bt .spark-hover { border-bottom: 0; cursor: pointer; }
+.bt .bt-tipped .bt-who-n { text-decoration: underline dotted color-mix(in srgb, var(--muted) 70%, transparent); text-underline-offset: 0.2em; }
+.bt .bt-tipped:focus-visible { outline: 2px solid var(--text-bright); outline-offset: 2px; border-radius: var(--r-xs); }
+#spark-layer.bt-card {
+  width: 17rem;
+  max-width: calc(100vw - 1rem);
+  padding: var(--space-3);
+  border-color: var(--box-edge);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+}
+/* Plain block children, at no specificity: each part's own display
+   (flex rows, grids) wins. */
+:where(#spark-layer.bt-card) > span { display: block; }
+.bt-card .btc-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-2); }
+.bt-card .btc-time { color: var(--text-bright); font-family: var(--font-num); font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.bt-card .btc-head { display: flex; align-items: center; gap: var(--space-2); min-width: 0; margin-bottom: var(--space-2); }
+.bt-card .btc-head img { flex: none; border-radius: var(--r-xs); }
+.bt-card .btc-t { display: flex; flex-direction: column; min-width: 0; }
+.bt-card .btc-t strong { color: var(--text-bright); font-weight: 600; overflow-wrap: anywhere; }
+.bt-card .btc-s { color: var(--muted); font-size: var(--fs-xs); }
+.bt-card .btc-rows { display: grid; gap: 0.15rem; }
+.bt-card .btc-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); color: var(--muted-2); }
+.bt-card .btc-row b { font-family: var(--font-num); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bt-card .btc-row::before { content: ""; flex: none; align-self: center; width: 0.5rem; height: 0.5rem; margin-right: -0.4rem; border-radius: 2px; background: var(--bt-c, transparent); }
+.bt-card .btc-row > span { flex: 1 1 auto; }
+.bt-card .btc-out { --bt-c: var(--bt-out); }
+.bt-card .btc-in { --bt-c: var(--bt-in); }
+.bt-card .btc-rep { --bt-c: var(--bt-rep); }
+.bt-card .btc-cap { --bt-c: var(--bt-cap); }
+.bt-card .btc-out b { color: var(--bt-out); }
+.bt-card .btc-in b { color: var(--bt-in); }
+.bt-card .btc-rep b { color: var(--bt-rep); }
+.bt-card .btc-cap b { color: var(--bt-cap); }
+.bt-card .btc-sw { display: inline-block; width: 0.6rem; height: 0.6rem; margin-right: 0.4rem; border-radius: 2px; vertical-align: baseline; }
+.bt-card .btc-sw.q-miss { background: var(--q-miss); }
+.bt-card .btc-sw.q-graze { background: var(--q-graze); }
+.bt-card .btc-sw.q-glance { background: var(--q-glance); }
+.bt-card .btc-sw.q-hit { background: var(--q-hit); }
+.bt-card .btc-sw.q-pen { background: var(--q-pen); }
+.bt-card .btc-sw.q-smash { background: var(--q-smash); }
+.bt-card .btc-sw.q-wreck { background: var(--q-wreck); }
+.bt-card .btc-sub { margin: var(--space-2) 0 0.2rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.bt-card .btc-w { display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: 0.1rem 0; }
+.bt-card .btc-w img,
+.bt-card .btc-noicon { flex: none; width: 22px; height: 22px; border-radius: var(--r-xs); }
+.bt-card .btc-noicon { border: 1px dashed var(--hairline); }
+.bt-card .btc-wn { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.bt-card .btc-w b { flex: none; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.bt-card .btc-kill .btc-wn { color: var(--bt-kill); }
+.bt-card .btc-loss .btc-wn { color: var(--bt-loss); }
+.bt-card .btc-foot { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--hairline); color: var(--muted); font-size: var(--fs-xs); }
+
+/* The crosshair: the column under the pointer, the whole chart high.
+   A sideways drag scrubs; up and down still scrolls the page. */
+.bt-chart { touch-action: pan-y; cursor: crosshair; }
+.bt-cursor { stroke: var(--text-bright); stroke-width: 1; stroke-opacity: 0.6; pointer-events: none; }
+/* In the moment panel two tables share a row: their bars stay short
+   so the table never scrolls inside its own box. */
+.bt-mtables .bt-share-h { width: auto; }
+.bt-mtables .bt-bar { width: 2.5rem; }
+.bt-mtables .bt-who-n { white-space: normal; overflow-wrap: anywhere; }

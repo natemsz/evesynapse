@@ -250,6 +250,7 @@ type BattleFightMoment struct {
 	AtSecond  int32  `json:"at_second"`
 	EndSecond int32  `json:"end_second"`
 	Title     string `json:"title"`
+	Brief     string `json:"brief"`
 	Detail    string `json:"detail"`
 }
 

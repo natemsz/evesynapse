@@ -67,6 +67,9 @@ func TestRequestsIdentifyThemselvesAndCarryTheirToken(t *testing.T) {
 	if got := stub.last.Header.Get("Authorization"); got != "" {
 		t.Errorf("a public request carried Authorization %q", got)
 	}
+	if got := stub.last.Header.Get("X-Compatibility-Date"); got != "2026-11-01" {
+		t.Errorf("X-Compatibility-Date = %q, want the pinned 2026-11-01", got)
+	}
 	if got := stub.last.URL.String(); got != "https://esi.evetech.net/status/" {
 		t.Errorf("request went to %q", got)
 	}
@@ -88,6 +91,9 @@ func TestRequestsIdentifyThemselvesAndCarryTheirToken(t *testing.T) {
 		}
 		if got := stub.last.Header.Get("User-Agent"); got != ua {
 			t.Errorf("%s: User-Agent = %q, want %q", name, got, ua)
+		}
+		if got := stub.last.Header.Get("X-Compatibility-Date"); got != compatibilityDate {
+			t.Errorf("%s: X-Compatibility-Date = %q, want %q", name, got, compatibilityDate)
 		}
 	}
 

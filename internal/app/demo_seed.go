@@ -2767,7 +2767,14 @@ func (s *demoSeed) writeDemoWalletHistory(ctx context.Context, ch db.Character) 
 	for d := 1; d <= 364; d++ {
 		day := today.AddDate(0, 0, -d)
 		next := day.AddDate(0, 0, 1).Format("2006-01-02")
-		worth -= attr[next] + demoDrift(ch.CharacterID, next, worth)
+		// Prices move what the pilot holds, not the ISK sitting
+		// in the wallet, so the day's drift is on the next day's
+		// holdings: its worth less its balance.
+		holdings := worth - balanceOn(day.AddDate(0, 0, 1))
+		if holdings < 0 {
+			holdings = 0
+		}
+		worth -= attr[next] + demoDrift(ch.CharacterID, next, holdings)
 		charIDs = append(charIDs, ch.CharacterID)
 		days = append(days, day.Format("2006-01-02"))
 		balances = append(balances, balanceOn(day))
@@ -2784,10 +2791,10 @@ func (s *demoSeed) writeDemoWalletHistory(ctx context.Context, ch db.Character) 
 }
 
 // demoDrift is one day's price move on what a pilot holds: a
-// small fraction of net worth, jittered by day, mostly up and
-// occasionally down. It is the only part of a day's net worth
-// change the journals never record.
-func demoDrift(charID int64, day string, worth float64) float64 {
+// small fraction of the holdings' value, jittered by day,
+// mostly up and occasionally down. It is the only part of a
+// day's net worth change the journals never record.
+func demoDrift(charID int64, day string, holdings float64) float64 {
 	t, err := time.Parse("2006-01-02", day)
 	if err != nil {
 		return 0
@@ -2797,5 +2804,5 @@ func demoDrift(charID int64, day string, worth float64) float64 {
 	if j > 0.93 {
 		rate = -0.00003 * j
 	}
-	return worth * rate
+	return holdings * rate
 }

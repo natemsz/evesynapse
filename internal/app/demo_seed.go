@@ -353,6 +353,16 @@ func (s *demoSeed) wipe(ctx context.Context) error {
 		func() error { return q.DeleteDemoDoctrines(ctx, demoCorpID) },
 		func() error { return q.DeleteDemoOps(ctx, demoCorpID) },
 		func() error { return q.DeleteDemoOrgGroups(ctx, demoCorpID) },
+		// The battle reports and the shared kill rows their
+		// fights join to (demo_battles.go): the reports' times
+		// move with every seed, and a stored kill keeps its
+		// first copy, so both go for the battles step to file
+		// the fresh ones.
+		func() error { return q.DeleteDemoBattleFights(ctx, s.userID) },
+		func() error { return q.DeleteDemoBattleKills(ctx, demoBattleMailIDs) },
+		func() error { return q.DeleteDemoBattleKillAttackers(ctx, demoBattleMailIDs) },
+		func() error { return q.DeleteDemoBattleKillDetails(ctx, demoBattleMailIDs) },
+		func() error { return q.DeleteDemoBattleKillPrices(ctx, demoBattleMailIDs) },
 	}
 	for _, step := range userSteps {
 		if err := step(); err != nil {
@@ -476,7 +486,8 @@ func (app *Application) seedDemoData(ctx context.Context, now time.Time) error {
 	}
 	for _, write := range []func(context.Context) error{
 		s.writePilotOneMarkets, s.writePilotOneIndustry,
-		s.writePilotOneAssets, s.writePilotOneKillmails, s.writePilotOneComms,
+		s.writePilotOneAssets, s.writePilotOneKillmails, s.writePilotOneBattles,
+		s.writePilotOneComms,
 	} {
 		if err := write(ctx); err != nil {
 			return err
@@ -1474,6 +1485,42 @@ func (s *demoSeed) writePilotOneKillmails(ctx context.Context) error {
 			}},
 			[]esi.KillmailAttacker{
 				{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Rifter"), FinalBlow: true, DamageDone: 2280},
+			}},
+		// One Tama gang fight three days back, the corp against
+		// the Kedama Watch: three kills inside six minutes. The
+		// battle reports step (demo_battles.go) writes the game
+		// log these mails are the other half of.
+		{2900007011, "", 3*day - 100*time.Second, s.tamaSystemID,
+			esi.KillmailVictim{CharacterID: demoCharRhen, CorporationID: demoCorpWatchID, ShipTypeID: t("Merlin"), DamageTaken: 5310, Items: []esi.KillmailVictimItem{
+				{ItemTypeID: t("Damage Control II"), QuantityDestroyed: 1},
+				{ItemTypeID: t("Medium Shield Extender II"), QuantityDropped: 1},
+			}},
+			[]esi.KillmailAttacker{
+				{CharacterID: demoCharSera, CorporationID: demoCorpID, ShipTypeID: t("Drake"), FinalBlow: true, DamageDone: 2920},
+				{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Thrasher"), DamageDone: 1710},
+				{CharacterID: demoCharDario, CorporationID: demoCorpID, ShipTypeID: t("Merlin"), DamageDone: 680},
+			}},
+		{2900007012, "", 3*day - 235*time.Second, s.tamaSystemID,
+			esi.KillmailVictim{CharacterID: demoCharKato, CorporationID: demoCorpWatchID, ShipTypeID: t("Rifter"), DamageTaken: 3980, Items: []esi.KillmailVictimItem{
+				{ItemTypeID: t("200mm AutoCannon II"), QuantityDropped: 2},
+				{ItemTypeID: t("Warp Scrambler II"), QuantityDestroyed: 1},
+			}},
+			[]esi.KillmailAttacker{
+				{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Thrasher"), FinalBlow: true, DamageDone: 2140},
+				{CharacterID: demoCharMina, CorporationID: demoCorpID, ShipTypeID: t("Vexor"), DamageDone: 1260},
+				{CharacterID: demoCharDario, CorporationID: demoCorpID, ShipTypeID: t("Merlin"), DamageDone: 580},
+			}},
+		{2900007013, "", 3*day - 370*time.Second, s.tamaSystemID,
+			esi.KillmailVictim{CharacterID: demoCharLio, CorporationID: demoCorpWatchID, ShipTypeID: t("Vexor"), DamageTaken: 18360, Items: []esi.KillmailVictimItem{
+				{ItemTypeID: t("Hobgoblin II"), QuantityDestroyed: 3, QuantityDropped: 2},
+				{ItemTypeID: t("Damage Control II"), QuantityDropped: 1},
+				{ItemTypeID: t("Stasis Webifier II"), QuantityDestroyed: 1},
+			}},
+			[]esi.KillmailAttacker{
+				{CharacterID: demoCharSera, CorporationID: demoCorpID, ShipTypeID: t("Drake"), FinalBlow: true, DamageDone: 7540},
+				{CharacterID: id, CorporationID: demoCorpID, ShipTypeID: t("Thrasher"), DamageDone: 5420},
+				{CharacterID: demoCharMina, CorporationID: demoCorpID, ShipTypeID: t("Vexor"), DamageDone: 3310},
+				{CharacterID: demoCharDario, CorporationID: demoCorpID, ShipTypeID: t("Merlin"), DamageDone: 2090},
 			}},
 	}
 

@@ -93,3 +93,27 @@ DELETE FROM ops WHERE corporation_id = $1;
 -- name: DeleteDemoOrgGroups :exec
 -- The demo corporation's groups; their members cascade.
 DELETE FROM org_groups WHERE owner_kind = 'corporation' AND owner_id = $1;
+
+-- name: DeleteDemoBattleFights :exec
+-- The demo account's battle reports; their series, parties,
+-- weapons, tackles, kills, moments and findings go with them
+-- (ON DELETE CASCADE). The seed's fight times move with every
+-- seed, so without this the reports would stack up.
+DELETE FROM battle_fights WHERE user_id = $1;
+
+-- The kills the demo seed's battle reports join to, in the
+-- shared kill tables. A stored kill keeps its first copy's time
+-- and attackers, and the seed replants its killmail details with
+-- fresh times on every seed, so the wipe clears the battles'
+-- mails for the battles step to merge the fresh copies back in.
+-- name: DeleteDemoBattleKills :exec
+DELETE FROM kills WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
+
+-- name: DeleteDemoBattleKillAttackers :exec
+DELETE FROM kill_attackers WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
+
+-- name: DeleteDemoBattleKillDetails :exec
+DELETE FROM kill_details WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
+
+-- name: DeleteDemoBattleKillPrices :exec
+DELETE FROM kill_line_prices WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);

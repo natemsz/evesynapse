@@ -68,15 +68,17 @@ func TestTabNavTypeSpec(t *testing.T) {
 	}
 }
 
-// TestOpenProseReadsInInter pins the prose role: the shared sheet
-// carries the Inter prose rule for the few blocks that still use it.
-// The Intel pages left it when they moved onto the layout framework:
-// like every framework page, their explanations, labels and forms
-// read in the one body face, so none of them marks prose.
-func TestOpenProseReadsInInter(t *testing.T) {
+// TestOpenProseTreatment pins the prose role: explanatory text
+// outside widgets and tables reads in the body face at --fs-sm
+// with a 1.55 line height, in the prose ink each theme mixes from
+// its own text and muted values. The Appraisal, Intel Channels
+// and Swarm Cache pages mark their prose blocks with it; the
+// other Intel pages mark none.
+func TestOpenProseTreatment(t *testing.T) {
 	style := readStatic(t, "style.css")
 	for _, want := range []string{
-		".prose {\n  font-family: \"Inter\", \"Segoe UI\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n  line-height: 1.55;\n}",
+		"--prose: color-mix(in srgb, var(--text) 55%, var(--muted));",
+		".prose {\n  font-family: \"Eve Sans Neue\", \"Inter\", \"Segoe UI\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n  font-size: var(--fs-sm);\n  line-height: 1.55;\n  color: var(--prose);\n}",
 		// Definition answers inside a prose block stay prose.
 		".prose dd { font-family: inherit; }",
 	} {
@@ -91,9 +93,15 @@ func TestOpenProseReadsInInter(t *testing.T) {
 		}
 		return string(raw)
 	}
-	for _, name := range []string{"channels.html", "channel.html", "feed.html", "intel_fw.html", "intel_wars.html", "intel_incursions.html", "intel_workbench.html", "killboard.html", "kill.html", "scans.html", "scan.html", "scan_compare.html"} {
-		if regexp.MustCompile(`class="(?:[^"]* )?prose(?: [^"]*)?"`).MatchString(readTpl(name)) {
-			t.Errorf("%s marks prose; Intel pages read in the framework's one body face", name)
+	marksProse := regexp.MustCompile(`class="(?:[^"]* )?prose(?: [^"]*)?"`)
+	for _, name := range []string{"market_appraise.html", "channels.html", "swarm.html"} {
+		if !marksProse.MatchString(readTpl(name)) {
+			t.Errorf("%s marks no prose; the sample pages carry the treatment", name)
+		}
+	}
+	for _, name := range []string{"channel.html", "feed.html", "intel_fw.html", "intel_wars.html", "intel_incursions.html", "intel_workbench.html", "killboard.html", "kill.html", "scans.html", "scan.html", "scan_compare.html"} {
+		if marksProse.MatchString(readTpl(name)) {
+			t.Errorf("%s marks prose; only the sample pages carry the treatment", name)
 		}
 	}
 }

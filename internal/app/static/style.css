@@ -205,6 +205,10 @@
   --muted: #b39a7d;
   --muted-2: #b8a58c;
   --note: #c9a06a;
+  /* Prose ink: explanatory text reads in a tone between the body
+     text and muted, derived here so each theme mixes its own from
+     its own text and muted values. */
+  --prose: color-mix(in srgb, var(--text) 55%, var(--muted));
   /* The Profit page's semantic tokens: capital that came back,
      verified profit kept, value lost to fees and taxes, and sales
      whose cost is unverified. Every scheme (bg.css) and the light
@@ -5529,11 +5533,15 @@ table.notify-settings.cards-on td:has(> .checkselector) { grid-column: 1 / -1; }
 .hint { color: var(--muted); font-size: var(--fs-xs); margin: 0.3rem 0 0.75rem; }
 /* Open prose: standalone explanatory text that sits outside any
    widget or table (a page's how-to paragraphs, footnotes, empty-state
-   lines) reads in Inter. The condensed face stays on table data and
-   widget/UI text. Mark each prose block: class="prose". */
+   lines) reads in the body face at --fs-sm with a 1.55 line height,
+   in the prose ink, a tone between the body text and muted. Muted
+   at the small size is for captions and labels, not for reading.
+   Mark each prose block: class="prose". */
 .prose {
-  font-family: "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Eve Sans Neue", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: var(--fs-sm);
   line-height: 1.55;
+  color: var(--prose);
 }
 /* A prose block's definition answers are prose, not standalone
    figures: they keep the prose face against the figures rule. */

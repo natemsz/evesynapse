@@ -43,6 +43,7 @@ type Log struct {
 	Lines       int    // game log lines read
 	Combat      int    // of them, combat lines
 	Quiet       int    // fights with no player on the other side, not kept
+	Text        int64  // bytes of text read, unpacked
 	Fights      []Fight
 }
 
@@ -63,9 +64,9 @@ func SessionCharacter(name string) int64 {
 // name (a ".gz" suffix is dropped), or "" for pasted text; the
 // header block is optional, so a part of a log reads too. The fight
 // in progress at the end of the text is closed there.
-func Read(r io.Reader, session string) (Log, error) {
+func Read(r io.Reader, session string) (l Log, err error) {
 	session = strings.TrimSuffix(session, ".gz")
-	l := Log{Session: session, CharacterID: SessionCharacter(session)}
+	l = Log{Session: session, CharacterID: SessionCharacter(session)}
 	seg := &Segmenter{CharacterID: l.CharacterID, Session: session}
 	br := bufio.NewReaderSize(r, 64<<10)
 	if head, _ := br.Peek(2); len(head) == 2 && head[0] == 0x1F && head[1] == 0x8B {
@@ -76,7 +77,9 @@ func Read(r io.Reader, session string) (Log, error) {
 		defer zr.Close()
 		br = bufio.NewReaderSize(zr, 64<<10)
 	}
-	br = bufio.NewReaderSize(&capReader{r: br, left: MaxText}, 64<<10)
+	capped := &capReader{r: br, left: MaxText}
+	defer func() { l.Text = MaxText - capped.left }()
+	br = bufio.NewReaderSize(capped, 64<<10)
 	if head, _ := br.Peek(2); len(head) == 2 && head[0] == 0xFF && head[1] == 0xFE {
 		_, _ = br.Discard(2)
 		r = &utf16Reader{r: br}
@@ -106,7 +109,7 @@ func Read(r io.Reader, session string) (Log, error) {
 		}
 		header = false
 		ev, combat, ok := ParseCombat(line)
-		if gameStamp.MatchString(line) {
+		if _, _, _, stamped := splitStamp(line); stamped {
 			l.Lines++
 		}
 		if !combat {
@@ -208,4 +211,40 @@ func (u *utf16Reader) Read(p []byte) (int, error) {
 	n := copy(p, u.out)
 	u.out = u.out[n:]
 	return n, nil
+}
+
+// Listener reads the Listener line out of a log's header block, from
+// at most its first 64 KB, gzipped or not; "" when the text has no
+// header.
+func Listener(b []byte) string {
+	var r io.Reader = bytes.NewReader(b)
+	if len(b) >= 2 && b[0] == 0x1F && b[1] == 0x8B {
+		zr, err := gzip.NewReader(r)
+		if err != nil {
+			return ""
+		}
+		defer zr.Close()
+		r = zr
+	}
+	head, _ := io.ReadAll(io.LimitReader(r, 64<<10))
+	if len(head) >= 2 && head[0] == 0xFF && head[1] == 0xFE {
+		units := make([]uint16, 0, len(head)/2)
+		for i := 2; i+1 < len(head); i += 2 {
+			units = append(units, uint16(head[i])|uint16(head[i+1])<<8)
+		}
+		head = []byte(string(utf16.Decode(units)))
+	}
+	sc := bufio.NewScanner(bytes.NewReader(head))
+	sc.Buffer(make([]byte, 0, 4096), MaxLine)
+	sc.Split(splitLines)
+	for sc.Scan() {
+		line := strings.TrimSpace(strings.TrimPrefix(sc.Text(), "\ufeff"))
+		if strings.HasPrefix(line, "[") {
+			break
+		}
+		if name, ok := strings.CutPrefix(line, "Listener:"); ok {
+			return strings.TrimSpace(name)
+		}
+	}
+	return ""
 }

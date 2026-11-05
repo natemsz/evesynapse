@@ -80,30 +80,12 @@ type battleIngest struct {
 	Quiet           int      // fights with no player on the other side
 }
 
-func (b *battleIngest) add(o battleIngest) {
-	b.Stored += o.Stored
-	b.Updated += o.Updated
-	b.IDs = append(b.IDs, o.IDs...)
-	b.Skipped = append(b.Skipped, o.Skipped...)
-	b.Quiet += o.Quiet
-}
-
-var errBattleNotOwn = errors.New("not a character on this account")
-
 // ingestGameLog files a read game log's fights for one of the
-// account's characters: the one its header or file name names, or
-// pick when the text names none (a pasted part of a log). Each fight
-// is stored and correlated with its killmails.
-func (app *Application) ingestGameLog(ctx context.Context, userID int64, l gamelog.Log, pick int64) (battleIngest, error) {
+// account's characters, already resolved from the log's header, its
+// file name or the pilot picked for a paste. Each fight is stored
+// and correlated with its killmails.
+func (app *Application) ingestGameLog(ctx context.Context, userID, charID int64, name string, l gamelog.Log) (battleIngest, error) {
 	out := battleIngest{Quiet: l.Quiet}
-	charID, listener := l.CharacterID, l.Listener
-	if charID == 0 && listener == "" {
-		charID = pick
-	}
-	charID, name, ok := app.accountCharacterFor(ctx, userID, charID, listener)
-	if !ok {
-		return out, errBattleNotOwn
-	}
 	now := time.Now().UTC()
 	if over := len(l.Fights) - battleFightsPerLog; over > 0 {
 		out.Skipped = append(out.Skipped, fmt.Sprintf("Only the first %d fights in one log are read; %d more were left out.", battleFightsPerLog, over))
@@ -176,19 +158,18 @@ func fitFight(f *gamelog.Fight, now time.Time) string {
 
 // handleBattleUpload is POST /intel/battles/upload: one game log
 // file (the page gzips it first), or a part of one pasted with the
-// character it belongs to. It passes the battle log gate before its
-// body is read (battle_limits.go); the text is read in memory and
-// dropped.
+// character it belongs to. It passes the queue's checks before its
+// body is read (battle_queue.go), checks whose log it is, and sets
+// it waiting; the page shows it until it is read.
 func (app *Application) handleBattleUpload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.flashBack(w, r, "/intel/battles/")
-	release, why, wait := battleLogGate.admit(userID, false, r.ContentLength, time.Now())
-	if release == nil {
+	q := app.battleQueue()
+	if why, wait := q.admit(userID, false, r.ContentLength, time.Now()); why != "" {
 		back("Not read: " + why + ". Try again " + battleWaitText(wait) + ".")
 		return
 	}
-	defer release()
 	// A few MB on a slow uplink can outlast the server's 30-second
 	// read limit; a signed-in upload gets two minutes.
 	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(2 * time.Minute))
@@ -202,40 +183,33 @@ func (app *Application) handleBattleUpload(w http.ResponseWriter, r *http.Reques
 		back("Choose a game log file or paste one.")
 		return
 	}
-	var total battleIngest
-	msg := ""
-	err = battleLogGate.read(ctx, func() error {
-		var err error
-		total, msg, err = app.readUpload(ctx, userID, multipart.NewReader(bytes.NewReader(body), params["boundary"]))
-		return err
-	})
-	switch {
-	case errors.Is(err, errBattleBusy):
-		back("The site is reading other logs right now. Try again in a minute.")
-		return
-	case err != nil:
-		logging.Errorf("battle reports: upload for user %d: %v", userID, err)
-		back("Could not store the fights; try again.")
-		return
-	case msg != "":
+	jobs, msg := app.uploadJobs(ctx, userID, multipart.NewReader(bytes.NewReader(body), params["boundary"]))
+	if msg != "" {
 		back(msg)
 		return
 	}
-	msg = battleIngestText(total)
-	if len(total.IDs) == 1 {
-		app.flash(ctx, msg)
-		http.Redirect(w, r, fmt.Sprintf("/intel/battle/%d/", total.IDs[0]), http.StatusSeeOther)
-		return
+	var names []string
+	ahead := 0
+	for _, j := range jobs {
+		n, why, wait := q.enqueue(j, time.Now())
+		if why != "" {
+			back("Not read: " + why + ". Try again " + battleWaitText(wait) + ".")
+			return
+		}
+		names = append(names, j.name)
+		ahead = n
+	}
+	msg = strings.Join(names, " and ") + " is waiting to be read; its fights show here when it is."
+	if ahead == 0 {
+		msg = strings.Join(names, " and ") + " is being read; its fights show here in a moment."
 	}
 	back(msg)
 }
 
-// readUpload reads the form's parts and files their fights. A
-// problem with what was sent comes back as a sentence; err is the
-// site's own failure.
-func (app *Application) readUpload(ctx context.Context, userID int64, mr *multipart.Reader) (battleIngest, string, error) {
-	var total battleIngest
-	var logs []gamelog.Log
+// uploadJobs reads the form's parts into jobs, each checked for
+// whose log it is. A problem comes back as a sentence.
+func (app *Application) uploadJobs(ctx context.Context, userID int64, mr *multipart.Reader) ([]*battleJob, string) {
+	var parts []*battleJob
 	var pick int64
 	for {
 		part, err := mr.NextPart()
@@ -243,66 +217,73 @@ func (app *Application) readUpload(ctx context.Context, userID int64, mr *multip
 			break
 		}
 		if err != nil {
-			return total, "Choose a game log file or paste one.", nil
+			return nil, "Choose a game log file or paste one."
 		}
 		switch part.FormName() {
 		case "character":
 			b, _ := io.ReadAll(io.LimitReader(part, 32))
 			pick, _ = strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
 		case "log", "paste":
-			session := ""
+			j := &battleJob{userID: userID, name: "Pasted log"}
 			if part.FormName() == "log" {
 				if part.FileName() == "" {
 					continue
 				}
-				session = filepath.Base(part.FileName())
+				j.session = strings.TrimSuffix(filepath.Base(part.FileName()), ".gz")
+				j.name = j.session
 			}
-			seen := &blankReader{r: part}
-			l, err := gamelog.Read(seen, session)
-			if err != nil && !seen.text && part.FormName() == "paste" {
+			b, err := io.ReadAll(io.LimitReader(part, battleWireMax+1))
+			if err != nil {
+				return nil, "Could not read the upload; try again."
+			}
+			if part.FormName() == "paste" && len(bytes.TrimSpace(b)) == 0 {
 				continue // the paste box left empty
 			}
-			if err != nil {
-				return total, battleReadProblem(err), nil
+			j.body = b
+			parts = append(parts, j)
+		}
+	}
+	if len(parts) == 0 {
+		return nil, "Choose a game log file or paste one."
+	}
+	for _, j := range parts {
+		listener := gamelog.Listener(j.body)
+		charID := gamelog.SessionCharacter(j.session)
+		if listener == "" && charID == 0 {
+			if pick == 0 {
+				return nil, "Pick which of your characters the pasted log belongs to."
 			}
-			logs = append(logs, l)
+			charID = pick
 		}
-	}
-	if len(logs) == 0 {
-		return total, "Choose a game log file or paste one.", nil
-	}
-	for _, l := range logs {
-		if l.Listener == "" && l.CharacterID == 0 && pick == 0 {
-			return total, "Pick which of your characters the pasted log belongs to.", nil
-		}
-		res, err := app.ingestGameLog(ctx, userID, l, pick)
-		if errors.Is(err, errBattleNotOwn) {
-			who := l.Listener
+		id, name, ok := app.accountCharacterFor(ctx, userID, charID, listener)
+		if !ok {
+			who := listener
 			if who == "" {
 				who = "That character"
 			}
-			return total, who + " is not a character on this account.", nil
+			return nil, who + " is not a character on this account."
 		}
-		if err != nil {
-			return total, "", err
-		}
-		total.add(res)
+		j.charID, j.listener = id, name
 	}
-	return total, "", nil
+	return parts, ""
 }
 
-// blankReader notes whether anything but white space went through.
-type blankReader struct {
-	r    io.Reader
-	text bool
-}
-
-func (b *blankReader) Read(p []byte) (int, error) {
-	n, err := b.r.Read(p)
-	if !b.text && len(bytes.TrimSpace(p[:n])) > 0 {
-		b.text = true
+// readBattleJob reads one queued log and files its fights.
+func (app *Application) readBattleJob(ctx context.Context, j *battleJob) battleResult {
+	l, err := gamelog.Read(bytes.NewReader(j.body), j.session)
+	res := battleResult{read: l.Text}
+	if err != nil {
+		res.Failed, res.Text = true, battleReadProblem(err)
+		return res
 	}
-	return n, err
+	got, err := app.ingestGameLog(ctx, j.userID, j.charID, j.listener, l)
+	if err != nil {
+		logging.Errorf("battle reports: read %s for user %d: %v", j.name, j.userID, err)
+		res.Failed, res.Text = true, "Could not store the fights; send the log again."
+		return res
+	}
+	res.Text, res.IDs = battleIngestText(got), got.IDs
+	return res
 }
 
 // battleReadProblem says why a log could not be read.
@@ -316,7 +297,7 @@ func battleReadProblem(err error) string {
 	case errors.Is(err, gamelog.ErrNotGameLog):
 		return "That is not a game log: its lines start with a time stamp like [ 2026.11.04 12:00:05 ] (combat)."
 	}
-	return "Could not read the log; try again."
+	return "Could not read the log; send it again."
 }
 
 // battleWaitText is when to try again, in words.
@@ -327,7 +308,7 @@ func battleWaitText(d time.Duration) string {
 	return "in a minute"
 }
 
-// battleIngestText is the upload's result in one or two sentences.
+// battleIngestText is a read log's result in one or two sentences.
 func battleIngestText(t battleIngest) string {
 	var parts []string
 	switch {
@@ -338,82 +319,72 @@ func battleIngestText(t battleIngest) string {
 	case t.Updated > 0:
 		parts = append(parts, fmt.Sprintf("Updated %s already here.", pluralCount(int64(t.Updated), "fight", "fights")))
 	case len(t.Skipped) == 0 && t.Quiet > 0:
-		parts = append(parts, "No fights with another player in that log, only NPCs.")
+		parts = append(parts, "No fights with another player, only NPCs.")
 	case len(t.Skipped) == 0:
-		parts = append(parts, "No combat in that log.")
+		parts = append(parts, "No combat in it.")
 	}
 	return strings.Join(append(parts, t.Skipped...), " ")
 }
 
-// battleAPIGate is the battle log gate in front of Axon's posts.
-func battleAPIGate(w http.ResponseWriter, r *http.Request, userID int64) (func(), bool) {
-	release, why, wait := battleLogGate.admit(userID, true, r.ContentLength, time.Now())
-	if release == nil {
+// battleAPIGate runs the queue's checks on an Axon post before its
+// body is read.
+func (app *Application) battleAPIGate(w http.ResponseWriter, r *http.Request, userID int64) (func(), bool) {
+	if why, wait := app.battleQueue().admit(userID, true, r.ContentLength, time.Now()); why != "" {
 		retryAfter(w, wait)
 		intelAPIError(w, http.StatusTooManyRequests, why)
 		return nil, false
 	}
-	return release, true
+	return func() {}, true
 }
 
 // handleAPIGameLog is POST /api/intel/v1/gamelog?session=&listener=:
 // the game log text Axon read since its last post, gzipped, sent
 // once the log has gone quiet so a fight never spans two posts.
 // listener names the pilot when the text starts after the header.
+// The text waits in the queue; the answer says where.
 func (app *Application) handleAPIGameLog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := tokenUser(ctx)
 	q := r.URL.Query()
-	var res battleIngest
-	var l gamelog.Log
-	var readErr error
-	err := battleLogGate.read(ctx, func() error {
-		l, readErr = gamelog.Read(r.Body, filepath.Base(strings.TrimSpace(q.Get("session"))))
-		if readErr != nil {
-			return nil
-		}
-		if l.Listener == "" {
-			l.Listener = truncate(strings.TrimSpace(q.Get("listener")), battleMaxNameLen)
-		}
-		if l.Listener == "" && l.CharacterID == 0 {
-			readErr = errBattleNotOwn
-			return nil
-		}
-		var err error
-		res, err = app.ingestGameLog(ctx, userID, l, 0)
-		return err
-	})
-	switch {
-	case errors.Is(err, errBattleBusy):
-		retryAfter(w, time.Minute)
-		intelAPIError(w, http.StatusServiceUnavailable, "the site is reading other logs: try again in a minute")
+	body, err := io.ReadAll(r.Body)
+	if err != nil || len(body) == 0 {
+		intelAPIError(w, http.StatusBadRequest, "send gzipped game log text")
 		return
-	case errors.Is(readErr, gamelog.ErrTooLarge):
-		intelAPIError(w, http.StatusRequestEntityTooLarge, "the text unpacks to over 32 MB")
-		return
-	case errors.Is(readErr, errBattleNotOwn):
+	}
+	j := &battleJob{userID: userID, session: strings.TrimSuffix(filepath.Base(strings.TrimSpace(q.Get("session"))), ".gz"), body: body}
+	j.name = j.session
+	listener := gamelog.Listener(body)
+	if listener == "" {
+		listener = truncate(strings.TrimSpace(q.Get("listener")), battleMaxNameLen)
+	}
+	charID := gamelog.SessionCharacter(j.session)
+	if listener == "" && charID == 0 {
 		intelAPIError(w, http.StatusBadRequest, "listener is missing")
 		return
-	case readErr != nil:
-		intelAPIError(w, http.StatusBadRequest, "the text holds no game log lines")
+	}
+	id, name, ok := app.accountCharacterFor(ctx, userID, charID, listener)
+	if !ok {
+		intelAPIError(w, http.StatusForbidden, fmt.Sprintf("%s is not a character on this account", listener))
 		return
-	case errors.Is(err, errBattleNotOwn):
-		intelAPIError(w, http.StatusForbidden, fmt.Sprintf("%s is not a character on this account", l.Listener))
-		return
-	case err != nil:
-		logging.Errorf("battle reports: game log for user %d: %v", userID, err)
-		intelAPIError(w, http.StatusInternalServerError, "could not store the fights")
+	}
+	j.charID, j.listener = id, name
+	ahead, why, wait := app.battleQueue().enqueue(j, time.Now())
+	if why != "" {
+		retryAfter(w, wait)
+		intelAPIError(w, http.StatusServiceUnavailable, why)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(struct {
-		Fights  []int64  `json:"fights"`
-		Stored  int      `json:"stored"`
-		Updated int      `json:"updated"`
-		Quiet   int      `json:"quiet"`
-		Skipped []string `json:"skipped,omitempty"`
-	}{res.IDs, res.Stored, res.Updated, res.Quiet, res.Skipped})
+		Queued bool `json:"queued"`
+		Ahead  int  `json:"ahead"`
+	}{true, ahead})
+}
+
+// retryAfter sets Retry-After in whole seconds, at least one.
+func retryAfter(w http.ResponseWriter, d time.Duration) {
+	w.Header().Set("Retry-After", strconv.Itoa(max(1, int(d.Seconds()+0.999))))
 }
 
 // accountCharacterFor resolves a log's listener to one of the

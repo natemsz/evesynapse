@@ -166,6 +166,15 @@
   .bt-add-row .btn { flex: 1 1 100%; margin-left: 0; }
 }
 
+/* --- The account's game logs in the queue --- */
+.bt-qlist { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.bt-q { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem var(--space-2); }
+.bt-q-name { color: var(--text-bright); overflow-wrap: anywhere; }
+.bt-q-state { color: var(--muted-2); }
+.bt-q-wait .bt-q-state { color: var(--gold); }
+.bt-q-fail .bt-q-state { color: var(--danger); }
+.bt-q time { margin-left: auto; }
+
 /* Lines: the chart, the moment's sparkline and the list's trend
    share these strokes. */
 .bt-ln-out,

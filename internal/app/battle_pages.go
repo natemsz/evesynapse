@@ -49,6 +49,9 @@ type battlesView struct {
 	Pilots []battlePilot
 	// WireMB and TextMB are the upload limits, for the form's hint.
 	WireMB, TextMB int
+	// Queue is the account's game logs waiting to be read and read
+	// in the last hour (battle_queue.go).
+	Queue battleQueueView
 }
 
 type battlePilot struct {
@@ -378,7 +381,7 @@ func (app *Application) handleBattles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 	userID := app.userID(ctx)
-	v := &battlesView{Viewer: map[int64]bool{}, WireMB: battleWireMax >> 20, TextMB: gamelog.MaxText >> 20}
+	v := &battlesView{Viewer: map[int64]bool{}, WireMB: battleWireMax >> 20, TextMB: gamelog.MaxText >> 20, Queue: app.battleQueue().status(userID, time.Now())}
 	if chars, err := app.queries.ListCharactersByUser(ctx, userID); err == nil {
 		active := app.SessionCharacterID(ctx)
 		for _, c := range chars {
@@ -429,6 +432,18 @@ func (app *Application) handleBattles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	app.render(ctx, w, http.StatusOK, "battles.html", data)
+}
+
+// handleBattleQueue is GET /intel/battles/queue: how many of the
+// account's logs wait or are being read, for the page to reload
+// once none are.
+func (app *Application) handleBattleQueue(w http.ResponseWriter, r *http.Request) {
+	v := app.battleQueue().status(app.userID(r.Context()), time.Now())
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(struct {
+		Waiting int `json:"waiting"`
+	}{len(v.Waiting)})
 }
 
 // iskEfficiency is the destroyed share of all ISK on the mails.

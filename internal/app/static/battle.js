@@ -11,7 +11,9 @@
 // opens the same one. Arrow keys step through the moments while the
 // panel or a lane event has focus.
 //
-// The game log form works without script. With it, a chosen or
+// The game log form works without script. While a log waits in
+// the queue, the list asks how many still do and reloads once none
+// do. With it, a chosen or
 // dropped file shows its name, and is gzipped in the browser before
 // it is sent (a game log packs to about a tenth), which keeps the
 // upload inside the site's per-request limit.
@@ -75,8 +77,28 @@
     });
   }
 
+  // While a game log waits in the queue, ask every few seconds how
+  // many still do, and reload the list once none do.
+  function initQueue(root) {
+    var panel = (root || document).querySelector("[data-bt-queue]");
+    if (!panel || panel.getAttribute("data-bt-bound")) return;
+    panel.setAttribute("data-bt-bound", "1");
+    var tries = 0;
+    function ask() {
+      if (!document.body.contains(panel) || ++tries > 200) return;
+      fetch("/intel/battles/queue", { credentials: "same-origin", cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (q) {
+          if (q && q.waiting === 0) { window.location.reload(); return; }
+          setTimeout(ask, 3000);
+        }, function () { setTimeout(ask, 10000); });
+    }
+    setTimeout(ask, 1500);
+  }
+
   function init(root) {
     initUpload(root);
+    initQueue(root);
     var page = (root || document).querySelector("[data-battle]");
     if (!page || page.getAttribute("data-battle-bound")) return;
     page.setAttribute("data-battle-bound", "1");

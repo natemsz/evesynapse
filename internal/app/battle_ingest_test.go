@@ -16,9 +16,9 @@ import (
 )
 
 // TestBattleFightOwnCharactersOnly pins who a game log's fights can
-// be filed for: a paired device's log is stored for one of its own
-// account's characters, refused for a character on another account,
-// and the stored report opens for its owner only.
+// be filed for: a paired device's log is queued and stored for one of
+// its own account's characters, refused for a character on another
+// account, and the stored report opens for its owner only.
 func TestBattleFightOwnCharactersOnly(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, nil)
 	ctx := context.Background()
@@ -63,13 +63,17 @@ func TestBattleFightOwnCharactersOnly(t *testing.T) {
 	}
 	rec := post("Watcher Pilot", 90000201, time.Now().Add(time.Second))
 	var res struct {
-		Fights []int64 `json:"fights"`
-		Stored int     `json:"stored"`
+		Queued bool `json:"queued"`
 	}
-	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &res) != nil || len(res.Fights) != 1 || res.Stored != 1 {
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &res) != nil || !res.Queued {
 		t.Fatalf("a log for the account's own character: %d %s", rec.Code, rec.Body.String())
 	}
-	path := "/intel/battle/" + strconv.FormatInt(res.Fights[0], 10) + "/"
+	app.battleQueue().drain(ctx, app.readBattleJob)
+	fights, err := q.ListBattleFightsByUser(ctx, u.ID)
+	if err != nil || len(fights) != 1 {
+		t.Fatalf("stored fights: %d, %v", len(fights), err)
+	}
+	path := "/intel/battle/" + strconv.FormatInt(fights[0].ID, 10) + "/"
 	if code, body := getPage(t, app, cookie, path); code != http.StatusOK || !strings.Contains(body, "Bad Guy") {
 		t.Errorf("the owner's report: %d", code)
 	}

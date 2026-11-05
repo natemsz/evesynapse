@@ -12,6 +12,18 @@
   <div class="l-head">
     <p class="l-head-sum">Fights read from your game logs, sent by Axon or added here, matched to their killmails.</p>
   </div>
+  {{with .Queue}}{{if or .Waiting .Results}}
+  {{/* The account's game logs in the queue (battle_queue.go) and
+       what the last hour's came to. battle.js asks every few
+       seconds while one waits and reloads once none do. */}}
+  <section class="l-panel bt-queue"{{if .Waiting}} data-bt-queue="{{len .Waiting}}"{{end}}>
+    <h2 class="bt-h">Game logs</h2>
+    <ul class="bt-qlist">
+      {{range .Waiting}}<li class="bt-q bt-q-wait"><span class="bt-q-name">{{.Name}}</span> <span class="bt-q-state">{{if .Reading}}Reading{{else if .Ahead}}Waiting, {{.Ahead}} ahead{{else}}Next to be read{{end}}</span></li>{{end}}
+      {{range .Results}}<li class="bt-q{{if .Failed}} bt-q-fail{{end}}"><span class="bt-q-name">{{if eq (len .IDs) 1}}<a href="/intel/battle/{{index .IDs 0}}/">{{.Name}}</a>{{else}}{{.Name}}{{end}}</span> <span class="bt-q-state">{{.Text}}</span> <time class="bt-dim" datetime="{{rfc3339 .At}}">{{.At.UTC.Format "15:04"}}</time></li>{{end}}
+    </ul>
+  </section>
+  {{end}}{{end}}
   {{if .Tiles}}
   {{template "battles-add" .}}
   <div class="l-tiles bt-tiles">

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"evesynapse/internal/app/apptest"
 	"evesynapse/internal/app/piplanner"
+	"evesynapse/internal/apptest"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
@@ -35,7 +35,8 @@ func TestMain(m *testing.M) {
 // pre-fills planet types from the character's colonies.
 func TestPIPlannerRendersChain(t *testing.T) {
 	transport := &apptest.CountingTransport{}
-	app, _, q := apptest.BuildCorpTestApp(t, transport)
+	rig := apptest.Build(t, transport)
+	q := rig.Queries()
 	ctx := context.Background()
 	user, err := q.CreateUser(ctx)
 	if err != nil {
@@ -48,9 +49,9 @@ func TestPIPlannerRendersChain(t *testing.T) {
 		{PlanetID: 401, SolarSystemID: 30000142, PlanetType: "gas", UpgradeLevel: 5, NumPins: 10},
 		{PlanetID: 402, SolarSystemID: 30000142, PlanetType: "storm", UpgradeLevel: 5, NumPins: 8},
 	})
-	cookie := apptest.SessionCookie(t, app, user.ID, apptest.FixtureCharA, "Fixture Ceo")
+	cookie := apptest.SessionCookie(t, rig, user.ID, apptest.FixtureCharA, "Fixture Ceo")
 
-	code, body := apptest.GetPage(t, app.Handler(), cookie, "/industry/pi/?product=Coolant&amount=240")
+	code, body := apptest.GetPage(t, rig, cookie, "/industry/pi/?product=Coolant&amount=240")
 	if code != http.StatusOK {
 		t.Fatalf("pi planner: status %d", code)
 	}
@@ -71,7 +72,7 @@ func TestPIPlannerRendersChain(t *testing.T) {
 	}
 
 	// Uncovered pick with explicit planets reports the gap.
-	code, body = apptest.GetPage(t, app.Handler(), cookie, "/industry/pi/?product=Coolant&planets=Lava")
+	code, body = apptest.GetPage(t, rig, cookie, "/industry/pi/?product=Coolant&planets=Lava")
 	if code != http.StatusOK {
 		t.Fatalf("pi planner uncovered: status %d", code)
 	}
@@ -79,7 +80,7 @@ func TestPIPlannerRendersChain(t *testing.T) {
 
 	// A product just picked (cover=1) ticks the planet types it
 	// needs, whatever was ticked before and whatever is owned.
-	code, body = apptest.GetPage(t, app.Handler(), cookie, "/industry/pi/?product=Coolant&planets=Lava&cover=1")
+	code, body = apptest.GetPage(t, rig, cookie, "/industry/pi/?product=Coolant&planets=Lava&cover=1")
 	if code != http.StatusOK {
 		t.Fatalf("pi planner cover: status %d", code)
 	}
@@ -106,14 +107,15 @@ func TestPIPlannerRendersChain(t *testing.T) {
 // P4 target with a complete plan (no character required beyond login).
 func TestPIPlannerDefaults(t *testing.T) {
 	transport := &apptest.CountingTransport{}
-	app, _, q := apptest.BuildCorpTestApp(t, transport)
+	rig := apptest.Build(t, transport)
+	q := rig.Queries()
 	user, err := q.CreateUser(context.Background())
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	apptest.SeedCharacter(t, q, user.ID, apptest.FixtureCharA, "Fixture Ceo")
-	cookie := apptest.SessionCookie(t, app, user.ID, apptest.FixtureCharA, "Fixture Ceo")
-	code, body := apptest.GetPage(t, app.Handler(), cookie, "/industry/pi/")
+	cookie := apptest.SessionCookie(t, rig, user.ID, apptest.FixtureCharA, "Fixture Ceo")
+	code, body := apptest.GetPage(t, rig, cookie, "/industry/pi/")
 	if code != http.StatusOK {
 		t.Fatalf("pi planner default: status %d", code)
 	}
@@ -125,7 +127,8 @@ func TestPIPlannerDefaults(t *testing.T) {
 // built-in figure only where the SDE has none.
 func TestPIPlannerVolumesComeFromTheSDE(t *testing.T) {
 	transport := &apptest.CountingTransport{}
-	app, conn, q := apptest.BuildCorpTestApp(t, transport)
+	rig := apptest.Build(t, transport)
+	conn, q := rig.DB(), rig.Queries()
 	ctx := context.Background()
 	user, err := q.CreateUser(ctx)
 	if err != nil {
@@ -142,15 +145,15 @@ func TestPIPlannerVolumesComeFromTheSDE(t *testing.T) {
 			t.Fatalf("seed SDE: %v", err)
 		}
 	}
-	volumes := piplanner.VolumesByName(ctx, app)
+	volumes := piplanner.VolumesByName(ctx, rig.Deps())
 	if volumes["Coolant"] != 2 {
 		t.Fatalf("Coolant volume from the SDE = %v, want 2", volumes["Coolant"])
 	}
 	if _, ok := volumes["Water"]; ok {
 		t.Fatalf("a commodity the SDE does not carry got a volume: %v", volumes["Water"])
 	}
-	cookie := apptest.SessionCookie(t, app, user.ID, apptest.FixtureCharA, "Fixture Ceo")
-	code, body := apptest.GetPage(t, app.Handler(), cookie, "/industry/pi/?product=Coolant&amount=240")
+	cookie := apptest.SessionCookie(t, rig, user.ID, apptest.FixtureCharA, "Fixture Ceo")
+	code, body := apptest.GetPage(t, rig, cookie, "/industry/pi/?product=Coolant&amount=240")
 	if code != http.StatusOK {
 		t.Fatalf("pi planner: status %d", code)
 	}
@@ -163,7 +166,8 @@ func TestPIPlannerVolumesComeFromTheSDE(t *testing.T) {
 // strip says where the prices come from and how fresh they are.
 func TestPIPlannerPricesInTheHouseOrder(t *testing.T) {
 	transport := &apptest.CountingTransport{}
-	app, conn, q := apptest.BuildCorpTestApp(t, transport)
+	rig := apptest.Build(t, transport)
+	conn, q := rig.DB(), rig.Queries()
 	ctx := context.Background()
 	user, err := q.CreateUser(ctx)
 	if err != nil {
@@ -180,8 +184,8 @@ func TestPIPlannerPricesInTheHouseOrder(t *testing.T) {
 	if err := q.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{FetchedAt: time.Now().UTC(), CachedUntil: time.Now().Add(24 * time.Hour).UTC()}); err != nil {
 		t.Fatalf("seed guide meta: %v", err)
 	}
-	cookie := apptest.SessionCookie(t, app, user.ID, apptest.FixtureCharA, "Fixture Ceo")
-	_, body := apptest.GetPage(t, app.Handler(), cookie, "/industry/pi/?product=Coolant&amount=10")
+	cookie := apptest.SessionCookie(t, rig, user.ID, apptest.FixtureCharA, "Fixture Ceo")
+	_, body := apptest.GetPage(t, rig, cookie, "/industry/pi/?product=Coolant&amount=10")
 	if strings.Contains(body, "9,999") {
 		t.Error("PI planner priced Coolant at the guide's average")
 	}
@@ -193,7 +197,7 @@ func TestPIPlannerPricesInTheHouseOrder(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed forge stat: %v", err)
 	}
-	code, body := apptest.GetPage(t, app.Handler(), cookie, "/industry/pi/?product=Coolant&amount=10")
+	code, body := apptest.GetPage(t, rig, cookie, "/industry/pi/?product=Coolant&amount=10")
 	if code != http.StatusOK {
 		t.Fatalf("pi planner: status %d", code)
 	}

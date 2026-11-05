@@ -36,8 +36,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -103,7 +105,7 @@ type stationKey struct {
 // counts, and the remaining volumes. The bests, counts and
 // volumes come from the staged book's SQL aggregates; the
 // typicals are distilled from the per-type price lists the
-// region pass already walks (see storeRegionSweep), so no
+// region pass already walks (see storeRegionSweepState), so no
 // second pass over the book is needed.
 type stationAccum struct {
 	BestSell    float64 // lowest sell price seen; 0 = none yet
@@ -244,6 +246,19 @@ pageLoop:
 					logging.Warnf("worker: region sweep: %s cut short by ESI error limit on page %d", marketRegionLabel(regionID), p.page)
 					out.limited = true
 					return out
+				}
+				// A 404 after page 1 is the end of a book that
+				// shrank while it was read: the first missing page
+				// is where the book now ends. Complete with the
+				// pages already staged, corrected to the landed
+				// count so sweepBookStaged agrees with them, and
+				// enter no backoff. Pages after it in the window
+				// are not staged, as with any stopped page.
+				if p.page > 1 && sweepPageMissing(p.err) {
+					if landed := state.NextPage - 1; landed > 0 {
+						state.PagesTotal = landed
+						break pageLoop
+					}
 				}
 				// Transient failure: the pages staged before it
 				// stay staged, the cursor stops at it, and nothing
@@ -421,6 +436,17 @@ func sweepPageCount(state db.MarketSweepState, left, window int) int {
 	return max(n, 1)
 }
 
+// sweepPageMissing reports whether err is ESI's 404 for a page
+// that does not exist: its "Requested page does not exist"
+// answer, not any other 404 a page fetch can return.
+func sweepPageMissing(err error) bool {
+	var se *esi.StatusError
+	if !errors.As(err, &se) || se.Code != http.StatusNotFound {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(se.Detail), "Requested page does not exist")
+}
+
 // sweepBookStaged reports whether the staged rows cover the
 // region's whole book: page 1 reports the book's size, and once
 // the cursor has moved past it every page has landed.
@@ -484,7 +510,7 @@ func (app *Application) stageSweepPage(ctx context.Context, state db.MarketSweep
 // the cursor untouched, so the next cycle finishes the same
 // sweep without re-reading a page.
 func (app *Application) completeRegionSweep(ctx context.Context, state db.MarketSweepState) {
-	types, stations, err := app.storeRegionSweep(ctx, state.RegionID)
+	types, stations, err := app.storeRegionSweepState(ctx, state)
 	if err != nil {
 		logging.Errorf("worker: region sweep: store %s: %v", marketRegionLabel(state.RegionID), err)
 		return
@@ -520,7 +546,7 @@ func (app *Application) fetchRegionBookPage(ctx context.Context, regionID int64,
 	return orders, totalPages, nil
 }
 
-// storeRegionSweep distills a completed sweep from its staged
+// storeRegionSweepState distills a completed sweep from its staged
 // book: the region's rows are replaced wholesale inside one
 // transaction (a type that left the book loses its row), the
 // top orders per side are kept as the stored book the Market
@@ -536,7 +562,8 @@ func (app *Application) fetchRegionBookPage(ctx context.Context, regionID int64,
 // daily traded volume (from market_history) on its region row,
 // so the scanner and tradefinder read a stored figure instead
 // of recomputing it per render.
-func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (typeCount, stationCount int, err error) {
+func (app *Application) storeRegionSweepState(ctx context.Context, state db.MarketSweepState) (typeCount, stationCount int, err error) {
+	regionID := state.RegionID
 	now := time.Now().UTC()
 	day := now.Format("2006-01-02")
 
@@ -1096,6 +1123,18 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	}
 	if err := qtx.DeleteMarketSweepOrdersByRegion(ctx, regionID); err != nil {
 		return 0, 0, err
+	}
+	// The stored total agrees with the pages actually staged
+	// before the cursor goes, in this same transaction: a book
+	// that shrank mid-read completes on its landed count, not
+	// the total page 1 reported.
+	if state.NextPage > 0 {
+		if err := qtx.UpdateMarketSweepState(ctx, db.UpdateMarketSweepStateParams{
+			NextPage: state.NextPage, PagesTotal: state.NextPage - 1,
+			UpdatedAt: now, RegionID: regionID,
+		}); err != nil {
+			return 0, 0, err
+		}
 	}
 	if err := qtx.DeleteMarketSweepState(ctx, regionID); err != nil {
 		return 0, 0, err

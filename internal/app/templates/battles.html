@@ -3,15 +3,17 @@
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{with .Battles}}
-{{/* The account's fights (battle_pages.go): what Axon read from the
-     game logs, newest first, each matched to its killmails. Each row
-     opens its report; the trend column is the fight's damage out and
-     in over its length, the same lines the report's chart draws. */}}
+{{/* The account's fights (battle_pages.go): read from the game logs
+     Axon sends or the form below takes, newest first, each matched to
+     its killmails. Each row opens its report; the trend column is the
+     fight's damage out and in over its length, the same lines the
+     report's chart draws. */}}
 <div class="l-page bt">
   <div class="l-head">
-    <p class="l-head-sum">Fights Axon read from your game logs, matched to their killmails.</p>
+    <p class="l-head-sum">Fights read from your game logs, sent by Axon or added here, matched to their killmails.</p>
   </div>
   {{if .Tiles}}
+  {{template "battles-add" .}}
   <div class="l-tiles bt-tiles">
     {{range .Tiles}}<div class="l-stat bt-stat-{{.Tone}}"><span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span></div>{{end}}
   </div>
@@ -41,10 +43,39 @@
   {{else}}
   <section class="l-panel bt-empty">
     <h2>No fights yet</h2>
-    <p>Axon reads your game logs while it runs. When a fight with another player ends, it sends this page a summary: damage, repairs, energy warfare and tackle, second by second. The log itself stays on your computer.</p>
+    <p>Axon sends this page your game log while it runs. The site finds the fights with other players in it and keeps their damage, repairs, energy warfare and tackle, second by second. Without Axon, add a log below.</p>
     <p><a class="btn" href="/intel/channels/#axon">Set up Axon</a></p>
   </section>
+  {{template "battles-add" .}}
   {{end}}
 </div>
 {{end}}
+{{end}}
+
+{{/* Adding a log by hand (battle_ingest.go): one game log file, or
+     part of one pasted. Open while there are no fights, folded away
+     above the list once there are. battle.js gzips a chosen file
+     before it goes; without script the file goes as it is. */}}
+{{define "battles-add"}}
+<details class="l-panel bt-add"{{if not .Rows}} open{{end}}>
+  <summary class="bt-add-sum">Add a fight from a game log</summary>
+  <form class="bt-add-form" method="post" action="/intel/battles/upload" enctype="multipart/form-data" data-bt-upload>
+    <div class="bt-pick">
+      <label class="bt-drop" for="bt-log">
+        <span class="bt-drop-title">Choose a game log</span>
+        <span class="bt-drop-hint" data-bt-file>One session's .txt file from Documents\EVE\logs\Gamelogs, up to {{.TextMB}} MB.</span>
+        <input id="bt-log" type="file" name="log" accept=".txt,.gz,text/plain">
+      </label>
+    </div>
+    <label class="bt-field" for="bt-paste"><span>Or paste part of one</span></label>
+    <textarea id="bt-paste" name="paste" rows="6" spellcheck="false" autocomplete="off" placeholder="[ 2026.11.04 12:00:05 ] (combat) 523 to Pilot[TICK](Vexor) - Heavy Pulse Laser II - Hits"></textarea>
+    <div class="bt-add-row">
+      {{if .Pilots}}<label class="bt-field"><span>Pilot, for a paste without its header</span>
+        <select name="character">{{range .Pilots}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+      </label>{{end}}
+      <button type="submit" class="btn">Read log</button>
+    </div>
+    <p class="bt-note">The site reads the fights out of the log and keeps only those, not the log. Fights older than 90 days are left out.</p>
+  </form>
+</details>
 {{end}}

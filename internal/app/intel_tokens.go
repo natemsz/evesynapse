@@ -413,11 +413,24 @@ func (app *Application) intelTokenAuth(next http.Handler) http.Handler {
 // paste.
 func (app *Application) intelTokenAuthLimit(limit int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return app.intelTokenCheck(next, limit)
+		return app.intelTokenCheck(next, limit, nil)
 	}
 }
 
-func (app *Application) intelTokenCheck(next http.Handler, limit int64) http.Handler {
+// intelTokenGate admits a request for the token's account before its
+// body is read: it answers a refusal itself, or returns a release
+// to run once the request is done.
+type intelTokenGate func(w http.ResponseWriter, r *http.Request, userID int64) (release func(), ok bool)
+
+// intelTokenAuthGate is intelTokenAuthLimit with a gate in front of
+// the body.
+func (app *Application) intelTokenAuthGate(limit int64, gate intelTokenGate) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return app.intelTokenCheck(next, limit, gate)
+	}
+}
+
+func (app *Application) intelTokenCheck(next http.Handler, limit int64, gate intelTokenGate) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		bearer = strings.TrimSpace(bearer)
@@ -440,6 +453,13 @@ func (app *Application) intelTokenCheck(next http.Handler, limit int64) http.Han
 		if err != nil {
 			intelAPIError(w, http.StatusUnauthorized, "missing X-Axon-Timestamp")
 			return
+		}
+		if gate != nil {
+			release, ok := gate(w, r, tok.UserID)
+			if !ok {
+				return
+			}
+			defer release()
 		}
 		var body []byte
 		if r.Body != nil {

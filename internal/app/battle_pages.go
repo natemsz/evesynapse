@@ -34,6 +34,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/gamelog"
 	"evesynapse/internal/logging"
 )
 
@@ -43,6 +44,17 @@ type battlesView struct {
 	Rows   []battleIndexRow
 	Tiles  []battleTile
 	Viewer map[int64]bool
+	// Pilots fill the upload form's picker for a pasted log with no
+	// header; the session's character comes first.
+	Pilots []battlePilot
+	// WireMB and TextMB are the upload limits, for the form's hint.
+	WireMB, TextMB int
+}
+
+type battlePilot struct {
+	ID       int64
+	Name     string
+	Selected bool
 }
 
 type battleIndexRow struct {
@@ -366,7 +378,14 @@ func (app *Application) handleBattles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 	userID := app.userID(ctx)
-	v := &battlesView{Viewer: app.viewerCharacters(ctx, userID)}
+	v := &battlesView{Viewer: map[int64]bool{}, WireMB: battleWireMax >> 20, TextMB: gamelog.MaxText >> 20}
+	if chars, err := app.queries.ListCharactersByUser(ctx, userID); err == nil {
+		active := app.SessionCharacterID(ctx)
+		for _, c := range chars {
+			v.Viewer[c.CharacterID] = true
+			v.Pilots = append(v.Pilots, battlePilot{ID: c.CharacterID, Name: c.Name, Selected: c.CharacterID == active})
+		}
+	}
 	data.Battles = v
 	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "Battle Reports", CanonicalPath: "/intel/battles/"})
 	fights, err := app.queries.ListBattleFightsByUser(ctx, userID)

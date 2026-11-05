@@ -897,6 +897,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// Battle reports (battle_pages.go): the account's own, and a
 	// shared one at its unlisted link.
 	r.With(app.requireAuth).Get("/intel/battles/", app.handleBattles)
+	r.With(app.requireAuth).Post("/intel/battles/upload", app.handleBattleUpload)
 	r.With(app.requireAuth).Get("/intel/battle/{id}/", app.handleBattle)
 	r.With(app.requireAuth).Get("/intel/battle/{id}/moment/{seq}/", app.handleBattleMoment)
 	r.With(app.requireAuth).Post("/intel/battle/{id}/share", app.handleBattleShare)
@@ -952,9 +953,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 			r.Get("/feed", app.handleAPIFeed)
 			r.Get("/reports/{reportID}", app.handleAPIReport)
 		})
-		// Battle reports (battle_ingest.go): one fight a post,
-		// larger than a paste.
-		r.With(app.intelTokenAuthLimit(battleMaxBody)).Post("/fights", app.handleAPIFight)
+		// Battle reports (battle_ingest.go): the game log text
+		// Axon read, gzipped, behind the battle log gate
+		// (battle_limits.go) before its body is read.
+		r.With(app.intelTokenAuthGate(battleWireMax, battleAPIGate)).Post("/gamelog", app.handleAPIGameLog)
 	})
 
 	r.Route("/map", func(r chi.Router) {

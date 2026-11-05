@@ -78,8 +78,8 @@
 
 /* The list: losses carry a red edge, the open kill the selection. */
 .km-table td.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; }
-.km-row.km-loss > td:first-child { box-shadow: inset 2px 0 0 var(--kb-dest); }
-.km-row.km-kill > td:first-child { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--kb-drop) 60%, transparent); }
+.km-row.km-loss { --row-edge: var(--kb-dest); --row-edge-w: 2px; }
+.km-row.km-kill { --row-edge: color-mix(in srgb, var(--kb-drop) 60%, transparent); --row-edge-w: 2px; }
 .km-row.on > td { background: var(--sel-row); }
 .km-table[data-cards="on"] .km-row > td:first-child { box-shadow: none; }
 .km-table[data-cards="on"] .km-row.km-loss { box-shadow: inset 2px 0 0 var(--kb-dest); }

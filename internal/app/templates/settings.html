@@ -35,17 +35,12 @@
       <td>{{if .DigestOnly}}{{.Title}}{{else}}<label><input type="checkbox" name="kind" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Title}}</label>{{end}}{{if .Minutes}} <label class="notify-minutes"><select name="op_reminder_minutes" aria-label="How long before an op starts to remind you">{{range .Minutes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select> before it starts</label>{{end}}{{if .Frequency}} <label class="notify-minutes"><select name="undercut_digest_hours" aria-label="How often the undercut digest may appear">{{range .Frequency}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>{{end}}{{if eq .ID "camp"}}{{$campText = .CampSystemsText}} <span class="notify-extra"><button type="button" class="btn btn-quiet camp-open" data-open-camp-modal title="Enter the systems to watch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg> Watched systems</button> <small>Alerts fire only while one of your characters is online.</small></span>{{end}}</td>
       <td class="notify-card">{{if .HasCard}}<label><input type="checkbox" name="card.{{.ID}}" value="1"{{if .CardOn}} checked{{end}}> Show as a card</label>{{else}}<small>No card</small>{{end}}</td>
       <td>{{$kind := .ID}}{{if .Characters}}
-        <div class="charselector checkselector" data-checkselector>
+        <div class="charselector checkselector" data-checkselector data-title="{{.Title}}">
           <input type="text" class="charselector-input" placeholder="{{.Summary}}" autocomplete="off" aria-label="Characters for {{.Title}}: {{.Summary}}. Type to search.">
-          <button type="button" class="checkselector-open" data-sheet-open="onfor-{{.ID}}" hidden><span class="checkselector-sum">{{.Summary}}</span><svg class="checkselector-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <div class="checkselector-sheet" id="onfor-{{.ID}}" data-sheet data-sheet-title="{{.Title}}">
-          <input type="search" class="checkselector-search sheet-only" placeholder="Search characters" autocomplete="off" aria-label="Search characters for {{.Title}}" hidden>
           <div class="charselector-dropdown" hidden>
             {{range .Characters}}{{if .Locked}}<div class="charselector-option checkselector-locked" data-name="{{.Name}}"><span class="charselector-name">{{.Name}}</span> <span class="charselector-tags">no access &middot; <a href="{{.RelinkURL}}">sign in again</a></span></div>
             {{else}}<label class="charselector-option" data-name="{{.Name}}"><input type="checkbox" name="char.{{$kind}}" value="{{.ID}}"{{if .On}} checked{{end}}> <span class="charselector-name">{{.Name}}</span></label>
             {{end}}{{end}}
-          </div>
-          <div class="sheet-foot sheet-only"><button type="button" class="btn" data-sheet-close>Done</button></div>
           </div>
         </div>{{else}}Your account{{end}}</td>
     </tr>

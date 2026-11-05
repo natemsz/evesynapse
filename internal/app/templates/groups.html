@@ -38,7 +38,7 @@
   {{if .Addable}}
   <form method="post" action="/groups/{{.ID}}/members/add" class="add-row">
     <input type="hidden" name="owner" value="{{$owner.Key}}">
-    <div class="charselector checkselector" data-checkselector data-summary="add">
+    <div class="charselector checkselector" data-checkselector data-summary="add" data-title="Add to {{.Name}}">
       <input type="text" class="charselector-input" placeholder="Add characters…" autocomplete="off" aria-label="Characters to add to {{.Name}}. Type to search.">
       <div class="charselector-dropdown" hidden>
         {{range .Addable}}<label class="charselector-option" data-name="{{.Name}}"><input type="checkbox" name="character" value="{{.CharacterID}}"> <span class="charselector-name">{{.Name}}</span></label>

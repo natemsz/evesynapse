@@ -1812,9 +1812,14 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
 /* --- home modules: KPI tiles, briefing cards, fleet table ---
    The v2.4 mockup's layout in the site's own ember style: figures
    up front, detail one click away. */
+/* KPI tiles wrap as many across as fit, each at least --kpi-min
+   wide; tiles on a short last row grow to fill it, so a lone tile
+   never leaves a hole beside it. A context that wants two across
+   sets the tiles' flex-basis to 40% (two fit with the gap, three
+   never do) rather than an exact half, which rounding can wrap. */
 .kpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   padding: 0.9rem;
   background: var(--glass);
@@ -1825,13 +1830,8 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
   backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
 }
 .card .kpis, .panel .kpis, .foldable .kpis { background: none; border: none; box-shadow: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.kpis-small { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin-bottom: 0.6rem; }
-/* Narrower than three tiles across (3 x 11rem plus gaps), an odd
-   tile out takes its row instead of leaving a hole. */
-:has(> .kpis-small) { container: kpis-small / inline-size; }
-@container kpis-small (width < 34.5rem) {
-  .kpis-small > :last-child:nth-child(odd) { grid-column: 1 / -1; }
-}
+.kpis > * { flex: 1 1 var(--kpi-min, 13rem); }
+.kpis-small { --kpi-min: 11rem; margin-bottom: 0.6rem; }
 .kpi {
   display: flex;
   flex-direction: column;
@@ -1940,9 +1940,7 @@ table.cards-on .spark-hover[data-spark-fallback] { border-bottom: 1px dotted var
    squeeze each figure onto two lines. Rewrap as whole cards,
    two across, so every figure keeps its full width. */
 @media (max-width: 70rem) {
-  .home-grid .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  /* An odd tile out takes the row instead of leaving a hole. */
-  .home-grid .kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .home-grid .kpis > * { flex-basis: 40%; }
 }
 .linkbtn {
   padding: 0;

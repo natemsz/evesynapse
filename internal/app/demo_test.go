@@ -16,6 +16,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -450,8 +451,19 @@ func TestDemoSignInAndPagesRender(t *testing.T) {
 			continue
 		}
 		mustContain(t, page.path, rec.Body.String(), page.want...)
+		// A query string built ahead and dropped into a link is
+		// escaped whole by html/template: its & and = arrive as
+		// %26 and %3d, and the server reads one garbled parameter.
+		if m := escapedQueryLink.FindString(rec.Body.String()); m != "" {
+			t.Errorf("demo GET %s: link carries an escaped query string: %s", page.path, m)
+		}
 	}
 }
+
+// escapedQueryLink matches a link whose query carries an escaped
+// "&name=" pair, the mark of a prebuilt query string the template
+// escaped as one value.
+var escapedQueryLink = regexp.MustCompile(`(?i)(?:href|action|src)="[^"]*%26[a-z_]+%3d[^"]*"`)
 
 func TestDemoWritesAreTurnedAway(t *testing.T) {
 	app, _, queries := demoTestApp(t)

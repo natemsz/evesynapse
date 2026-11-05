@@ -83,7 +83,7 @@ func TestKPIFiguresNeverBreakMidNumber(t *testing.T) {
 		t.Error(".kpi-v regained overflow-wrap: anywhere; figures break mid-number")
 	}
 	band := mediaBlock(t, css, "@media (max-width: 70rem) {\n  .home-grid .kpis")
-	if !strings.Contains(band, ".home-grid .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }") {
+	if !strings.Contains(band, ".home-grid .kpis > * { flex-basis: 40%; }") {
 		t.Error("the intermediate band no longer rewraps the home KPI band two across")
 	}
 }

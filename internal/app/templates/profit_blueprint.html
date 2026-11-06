@@ -8,7 +8,7 @@
 <div class="l-head">
   <p class="l-head-sum"><a href="{{.Back}}">Back to Profit Analysis</a></p>
 </div>
-<p><small>Each delivered job, what it made and what became of it. Sales are matched to a job's output oldest first; where that isn't right, say what happened.</small></p>
+<p class="prose">Each delivered job, what it made and what became of it. Sales are matched to a job's output oldest first; where that isn't right, say what happened.</p>
 {{if .KillLost}}<p class="pf-note"><small>Your killmails show {{.KillLost}} of this item lost since these jobs delivered; {{.KillMarked}} are marked lost here. Mark any that were from these jobs below.</small></p>{{end}}
 {{if .Jobs}}
 <div class="tw">
@@ -60,7 +60,7 @@
   </tbody>
 </table>
 </div>
-<p><small>Prices in ISK. ESI doesn't report the materials a job used or the ME it ran at: they come from the recipe, the ME the blueprint showed when the job delivered, and the structure bonus you set on the Profit Analysis page.</small></p>
+<p class="prose">Prices in ISK. ESI doesn't report the materials a job used or the ME it ran at: they come from the recipe, the ME the blueprint showed when the job delivered, and the structure bonus you set on the Profit Analysis page.</p>
 {{else}}
 <p><small>No delivered jobs for this blueprint in these books.</small></p>
 {{end}}

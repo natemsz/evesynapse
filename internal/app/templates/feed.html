@@ -24,7 +24,7 @@
     <section class="l-panel ch-main">
       <h2>Reports <span class="badge kill" data-ch-live hidden>Live</span></h2>
       <ol class="ch-feed" data-ch-feed="/intel/feed.json" data-ch-after="{{.LastID}}">
-        {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty ch-hint" data-ch-empty>{{if eq .Channels 0}}You are not in any intel channels yet. <a href="/intel/channels/">Make one or ask for a grant</a> and its reports will gather here.{{else}}No reports yet. When your channels hear something, it lands here.{{end}}</li>{{end}}
+        {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty prose" data-ch-empty>{{if eq .Channels 0}}You are not in any intel channels yet. <a href="/intel/channels/">Make one or ask for a grant</a> and its reports will gather here.{{else}}No reports yet. When your channels hear something, it lands here.{{end}}</li>{{end}}
       </ol>
       {{if .Older}}<p class="ch-p"><a href="{{.Older}}">Older reports</a></p>{{end}}
     </section>

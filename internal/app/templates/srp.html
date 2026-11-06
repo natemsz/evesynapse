@@ -25,7 +25,7 @@
 </div>
 {{end}}
 
-<p class="co-lede">Lost a ship on one of {{$corp.Name}}'s ops? Ask for it to be replaced here. A request names the killmail and the op it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
+<p class="prose">Lost a ship on one of {{$corp.Name}}'s ops? Ask for it to be replaced here. A request names the killmail and the op it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
 
 <div class="co-cards">
 {{if $corp.Policy}}
@@ -79,7 +79,7 @@
 <form method="post" action="/srp/paylist" class="l-panel co-card op-form form-card">
   <input type="hidden" name="corporation" value="{{$corp.ID}}">
   <h3>Pay in game</h3>
-  <p class="hint">EVE has no way for a site to give ISK, so paying is done in game. The pay list is one EVE mail listing every open request: each pilot's name opens their information window, where ISK is given, and each ship opens its kill report.</p>
+  <p class="prose">EVE has no way for a site to give ISK, so paying is done in game. The pay list is one EVE mail listing every open request: each pilot's name opens their information window, where ISK is given, and each ship opens its kill report.</p>
   {{if $corp.Mailers}}
   <div class="form-grid">
     <label class="field"><span class="field-label">Send it to</span>

@@ -14,9 +14,9 @@
 
 {{with .CorpContracts}}
   {{if .Forbidden}}
-  <div class="l-panel co-gate"><p>ESI refused this corporation's contracts (403). They appear here once {{.CharacterName}} can read them{{if .RoleMissing}}: the game asks for the <b>{{.RoleMissing}}</b> role{{end}}.</p></div>
+  <div class="l-panel co-gate"><p class="prose">ESI refused this corporation's contracts (403). They appear here once {{.CharacterName}} can read them{{if .RoleMissing}}: the game asks for the <b>{{.RoleMissing}}</b> role{{end}}.</p></div>
   {{else if .NoFeeder}}
-  <div class="l-panel co-gate"><p>{{.CharacterName}} hasn't granted the permission that reads corporation contracts, so nobody shares them with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
+  <div class="l-panel co-gate"><p class="prose">{{.CharacterName}} hasn't granted the permission that reads corporation contracts, so nobody shares them with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
   {{else if .Warming}}
   <div class="l-panel co-gate"><p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p></div>
   {{else if $.Contracts.Total}}

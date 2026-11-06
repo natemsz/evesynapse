@@ -291,7 +291,7 @@
   </section>
 
   {{end}}
-  {{if $item.Truncated}}<p><small>Order book truncated: only the first 20 pages were read, so the best prices shown are the best within those pages.</small></p>{{end}}
+  {{if $item.Truncated}}<p class="prose">Order book truncated: only the first 20 pages were read, so the best prices shown are the best within those pages.</p>{{end}}
 {{end}}
 
 {{with .Market.Browse}}{{template "market-browse" .}}{{end}}
@@ -430,7 +430,7 @@
 </div>
 {{end}}
 {{if and (not $wl.Rows) (not $wl.BasketRows)}}
-<p><small>Nothing watched yet. Watch an item or a basket to hear about its price moves here and on Home.</small></p>
+<p class="prose">Nothing watched yet. Watch an item or a basket to hear about its price moves here and on Home.</p>
 {{end}}
 </div>
 {{end}}
@@ -457,7 +457,7 @@
     </tbody>
   </table>
   </div>
-  <p><small>From recorded daily trades in {{.RegionName}} plus today's best orders. Margin is before broker fees and sales tax.</small></p>
+  <p class="prose">From recorded daily trades in {{.RegionName}} plus today's best orders. Margin is before broker fees and sales tax.</p>
   {{end}}
 </div>
 {{end}}

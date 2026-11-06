@@ -16,7 +16,7 @@
   <p class="l-head-sum"><b>{{$corp.Name}}</b>{{if $corp.Total}} · {{$corp.Total}} {{if eq $corp.Total 1}}doctrine{{else}}doctrines{{end}}{{end}}</p>
 </div>
 
-<p class="co-lede">A doctrine is a set of fits for a kind of fleet. An op can name one, and every fit opens in the <a href="/fittings/">fitting tool</a>.</p>
+<p class="prose">A doctrine is a set of fits for a kind of fleet. An op can name one, and every fit opens in the <a href="/fittings/">fitting tool</a>.</p>
 
 {{if $corp.Total}}
 <form method="get" action="/doctrines/" class="l-panel co-search">
@@ -53,7 +53,7 @@
 {{else if $corp.Total}}
 <p class="co-note">No doctrine matches. <a href="/doctrines/?corporation={{$corp.ID}}">Clear the search</a>.</p>
 {{else}}
-<p class="co-note">No doctrines yet.{{if not $corp.Manages}} They are kept by the corporation's directors, and whoever they hand it to.{{end}}</p>
+<p class="prose">No doctrines yet.{{if not $corp.Manages}} They are kept by the corporation's directors, and whoever they hand it to.{{end}}</p>
 {{end}}
 
 {{if $corp.Manages}}

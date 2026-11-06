@@ -15,13 +15,13 @@
   {{if .Forbidden}}
   <div class="l-panel co-gate">
   {{if .RoleMissing}}
-  <p>Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share this corporation's assets. They appear here once they do.</p>
+  <p class="prose">Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share this corporation's assets. They appear here once they do.</p>
   {{else}}
-  <p>Assets were refused by ESI (403). They'll appear here once {{.CharacterName}} holds the Director role in this corporation.</p>
+  <p class="prose">Assets were refused by ESI (403). They'll appear here once {{.CharacterName}} holds the Director role in this corporation.</p>
   {{end}}
   </div>
   {{else if .NoFeeder}}
-  <div class="l-panel co-gate"><p>{{.CharacterName}} hasn't granted the corporation permissions that feed the corporation assets, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
+  <div class="l-panel co-gate"><p class="prose">{{.CharacterName}} hasn't granted the corporation permissions that feed the corporation assets, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
   {{else if .Warming}}
   <div class="l-panel co-gate"><p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p></div>
   {{else if .Loaded}}
@@ -64,7 +64,7 @@
       </div>
       {{if .MoreStacks}}<p class="co-note"><small>+ {{.MoreStacks}} more stacks here; the largest are shown.</small></p>{{end}}
       {{end}}{{end}}
-      <p class="co-note"><small>Ships and renamed containers show their player-given names once the worker has resolved them; other items show their type names.</small></p>
+      <p class="prose">Ships and renamed containers show their player-given names once the worker has resolved them; other items show their type names.</p>
     </section>
   </div>
   </div>

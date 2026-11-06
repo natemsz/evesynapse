@@ -9,7 +9,7 @@
 {{$s := .MarketScanner}}
 <div class="l-page">
 <div class="sc-hero l-root">
-  <p class="sc-purpose">Find items where buying low and selling high at the same station leaves a wide gap. Prices come from each region's latest sweep: <b>buy at the highest buy price</b>, <b>sell at the lowest sell price</b>, and the gap between them is your margin before fees.</p>
+  <p class="prose">Find items where buying low and selling high at the same station leaves a wide gap. Prices come from each region's latest sweep: <b>buy at the highest buy price</b>, <b>sell at the lowest sell price</b>, and the gap between them is your margin before fees.</p>
   <div class="sc-mech" aria-hidden="true">
     <span class="sc-node sc-buy"><small>Station bid</small>Highest buy</span>
     <span class="sc-bridge"><small>Margin before fees</small><i></i><small>Same-station gap</small></span>
@@ -66,7 +66,7 @@
     <p>Try a lower minimum spread %, fewer sold per day, or scan another region.</p>
   </div>
   {{end}}
-  <p class="mk-note"><small>Prices in ISK. <sup>*</sup> Sold per day is the average daily amount that actually traded in {{$s.RegionName}} over the last seven recorded days. <sup>&dagger;</sup> Estimated daily profit is the gap between the typical (median) sell and buy prices at that station, times whichever runs out first: what trades each day, what sellers hold there, or what buyers want there. Before broker fees and sales tax.</small></p>
+  <p class="prose">Prices in ISK. <sup>*</sup> Sold per day is the average daily amount that actually traded in {{$s.RegionName}} over the last seven recorded days. <sup>&dagger;</sup> Estimated daily profit is the gap between the typical (median) sell and buy prices at that station, times whichever runs out first: what trades each day, what sellers hold there, or what buyers want there. Before broker fees and sales tax.</p>
 </section>
 {{with $s.Pick}}
 <aside class="l-pane l-pane--insp insp sc-insp" aria-label="Opportunity">

@@ -8,6 +8,9 @@
 
 /* --- shared bits --- */
 .fw-hint, .lo-hint, .sl-hint { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+/* A hint marked as prose takes the prose ink; the hint rule above
+   loads later at equal weight and would otherwise mute it. */
+.fw-hint.prose { color: var(--prose); }
 .l-page .browse-back { margin: 0; }
 .l-page .l-panel h2 {
   margin: 0 0 var(--space-3);

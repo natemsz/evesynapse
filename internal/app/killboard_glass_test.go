@@ -70,7 +70,7 @@ func TestKillboardSurfacesCarryTheFullGlass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read kill.html: %v", err)
 	}
-	if !strings.Contains(string(raw), `class="kp-missing"`) {
-		t.Errorf("kill.html missing mark %q", `class="kp-missing"`)
+	if !strings.Contains(string(raw), `class="kp-missing prose"`) {
+		t.Errorf("kill.html missing mark %q", `class="kp-missing prose"`)
 	}
 }

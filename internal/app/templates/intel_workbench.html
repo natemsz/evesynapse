@@ -379,7 +379,7 @@
       <a class="wbd-details" href="/intel/workbench/{{.ReportID}}/" data-wbd-open>Details</a>
     </li>
     {{else}}
-    <li class="wbd-empty hint" data-wbd-empty>{{if eq .Channels 0}}You are not in any intel channels yet. <a href="/intel/channels/">Make one or ask for a grant</a> and its reports will gather here.{{else}}Nothing reported in the last six hours. New reports land here as they come in.{{end}}</li>
+    <li class="wbd-empty prose" data-wbd-empty>{{if eq .Channels 0}}You are not in any intel channels yet. <a href="/intel/channels/">Make one or ask for a grant</a> and its reports will gather here.{{else}}Nothing reported in the last six hours. New reports land here as they come in.{{end}}</li>
     {{end}}
   </ol>
 </section>

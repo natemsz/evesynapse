@@ -8,7 +8,7 @@
 {{with .MarketTrends}}
 <div class="l-page">
 <div class="l-head">
-  <p class="l-head-sum">Items whose typical sell price swings the most, moved the most, or changed sharply in a hub region. Figures come from each sweep of the whole regional book.</p>
+  <p class="prose">Items whose typical sell price swings the most, moved the most, or changed sharply in a hub region. Figures come from each sweep of the whole regional book.</p>
 </div>
 
 <div class="l-stack tr-controls l-root">
@@ -55,7 +55,7 @@
   </tbody>
 </table>
 </div>
-<p class="tr-note"><small>What each sweep finds against the day before, kept for 30 days. A price move counts at 10% or more, and at three times the item's usual daily swing. Only books with at least five sell orders and recorded trade count. Watch an item to be told when it changes.</small></p>
+<p class="prose">What each sweep finds against the day before, kept for 30 days. A price move counts at 10% or more, and at three times the item's usual daily swing. Only books with at least five sell orders and recorded trade count. Watch an item to be told when it changes.</p>
 {{else}}
 <p>Nothing in {{.RegionName}} changed enough to list in that span.</p>
 {{end}}
@@ -92,7 +92,7 @@
     </tbody>
   </table>
   </div>
-  <p class="tr-note"><small>Prices in ISK. Daily swing is how far the typical sell moves from one day to the next, on average over the last 30 days. A change shows only when a stored day sits in its window.</small></p>
+  <p class="prose">Prices in ISK. Daily swing is how far the typical sell moves from one day to the next, on average over the last 30 days. A change shows only when a stored day sits in its window.</p>
   {{else}}
   <p>Nothing in {{.RegionName}} clears those filters. Try a lower traded-per-day or order count.</p>
   {{end}}

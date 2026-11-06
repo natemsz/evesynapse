@@ -10,11 +10,11 @@
 <div id="fit-editor" class="l-stack fw-editor{{if not .FitEditor.Sim.HasShip}} fit-noship{{end}}">
 {{if .FitEditor.Anonymous}}
 <section class="l-panel fw-anon" aria-label="Signed out">
-  <p class="fw-anon-lead">Fitting with All-V skills. <a href="/auth/link">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>
+  <p class="prose">Fitting with All-V skills. <a href="/auth/link">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>
   <p class="l-cluster"><button type="button" class="btn" id="fit-share-anon">Share this fit by link</button> <span id="fit-share-link"></span></p>
   {{if .FitEditor.AnonFits}}<div class="fit-anonfits"><h2>Your shared fits</h2><ul class="fw-anonlist">
   {{range .FitEditor.AnonFits}}<li><span class="fw-anon-name"><a href="{{.ShareURL}}">{{.Name}}</a> <small>{{.ShipName}} · {{.Updated}}</small></span> <form method="post" action="{{.DeleteURL}}" class="inline"><button type="submit" class="btn small">Delete</button></form></li>
-  {{end}}</ul><p class="fw-hint">Fits you share while signed out are kept for 180 days after they were last viewed, then deleted.</p></div>{{end}}
+  {{end}}</ul><p class="prose">Fits you share while signed out are kept for 180 days after they were last viewed, then deleted.</p></div>{{end}}
 </section>
 {{end}}
 <section class="l-panel fw-bar" aria-labelledby="fw-bar-h">
@@ -53,7 +53,7 @@
       <input type="text" id="fit-tags" value="{{.FitEditor.Tags}}" placeholder="pvp, kiting, …" autocomplete="off">
     </label>
   </div>
-  {{if not .FitEditor.Anonymous}}<p class="fw-hint fit-head-sec fit-shiponly">Fits you save are stored in EveSynapse. Your in-game fittings are only read, never changed, unless you press Save to EVE.</p>{{end}}
+  {{if not .FitEditor.Anonymous}}<p class="fw-hint fit-head-sec fit-shiponly prose">Fits you save are stored in EveSynapse. Your in-game fittings are only read, never changed, unless you press Save to EVE.</p>{{end}}
   <div class="fit-utilrow fit-shiponly">
     <button type="button" class="fit-head-toggle" data-fit-head-toggle aria-expanded="false" aria-controls="fit-head">Fit details</button>
     <span class="fit-saved" id="fit-saved-at" hidden></span>

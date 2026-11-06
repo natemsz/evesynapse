@@ -24,7 +24,7 @@
 </form>
 
 {{if not $v.Query}}
-<p><small>Search every item, pilot, corporation, alliance, system and region by name.</small></p>
+<p class="prose">Search every item, pilot, corporation, alliance, system and region by name.</p>
 {{else if lt (len $v.Query) 2}}
 <p><small>Type at least two letters.</small></p>
 {{else}}
@@ -64,7 +64,7 @@
 {{end}}
 
 {{if and (eq $v.Total 0) (not $v.Pending)}}
-<p><small>Nothing matches “{{$v.Query}}”. Pilots, corporations and alliances show once the site has seen them; a full pilot name is looked up as you type it.</small></p>
+<p class="prose">Nothing matches “{{$v.Query}}”. Pilots, corporations and alliances show once the site has seen them; a full pilot name is looked up as you type it.</p>
 {{end}}
 {{end}}
 {{end}}

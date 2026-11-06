@@ -163,7 +163,7 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 			return false, true
 		}
 		if code, has := esi.StatusCode(err); has && (code == http.StatusNotFound || code == http.StatusUnprocessableEntity) {
-			if serr := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+			if serr := app.setCorporationRecord(ctx, db.SetCorporationRecordParams{
 				CorporationID: id, Payload: "", State: orgStateMissing, FetchedAt: timeSet(now),
 			}); serr != nil {
 				logging.Errorf("worker: corporation records: record miss for %d: %v", id, serr)
@@ -204,7 +204,7 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 		logging.Errorf("worker: corporation records: encode payload for %d: %v", id, err)
 		return false, false
 	}
-	if err := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+	if err := app.setCorporationRecord(ctx, db.SetCorporationRecordParams{
 		CorporationID: id, Payload: string(encoded), State: orgStateReady, FetchedAt: timeSet(now),
 	}); err != nil {
 		logging.Errorf("worker: corporation records: store record for %d: %v", id, err)
@@ -235,7 +235,7 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 			return false, true
 		}
 		if code, has := esi.StatusCode(err); has && (code == http.StatusNotFound || code == http.StatusUnprocessableEntity) {
-			if serr := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
+			if serr := app.setAllianceRecord(ctx, db.SetAllianceRecordParams{
 				AllianceID: id, Payload: "", State: orgStateMissing, FetchedAt: timeSet(now),
 			}); serr != nil {
 				logging.Errorf("worker: alliance records: record miss for %d: %v", id, serr)
@@ -291,7 +291,7 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 		logging.Errorf("worker: alliance records: encode payload for %d: %v", id, err)
 		return false, false
 	}
-	if err := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
+	if err := app.setAllianceRecord(ctx, db.SetAllianceRecordParams{
 		AllianceID: id, Payload: string(encoded), State: orgStateReady, FetchedAt: timeSet(now),
 	}); err != nil {
 		logging.Errorf("worker: alliance records: store record for %d: %v", id, err)

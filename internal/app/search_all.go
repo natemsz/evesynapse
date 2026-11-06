@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -51,6 +52,12 @@ func searchQuery(r *http.Request) string {
 // searchAll gathers one query's hits under lim. It never fetches:
 // a name the app does not know yet is noted for the worker
 // (notePilotNameSearch), which only a signed-in search may do.
+// The signed-in user's own characters resolve first (the pilot
+// tier needs the own-id set); every other tier then gathers
+// concurrently, from the in-memory index when a snapshot exists
+// and from SQL when it does not. The set is assembled in the
+// fixed tier order, and typing guesses in the order the tiers
+// have always noted them: items, corporations, alliances, pilots.
 func (app *Application) searchAll(ctx context.Context, q string, userID int64, lim searchLimits) searchSet {
 	var set searchSet
 	ownIDs := map[int64]bool{}
@@ -71,21 +78,91 @@ func (app *Application) searchAll(ctx context.Context, q string, userID int64, l
 		}
 	}
 
-	// Items. Guess, same as the search boxes: a jump to any of
-	// these should land on a warming chart, not a cold one.
-	for i, it := range app.suggestTypes(ctx, q, suggestPoolAll, int64(lim.items)) {
-		set.Items = append(set.Items, searchHit{Kind: "item", ID: it.ID, Name: it.Name, Label: it.Label})
-		if i < suggestedWarmed {
-			set.guesses = append(set.guesses, typingGuess{kind: pageWantHistory, id: it.ID, region: defaultMarketRegion})
+	var (
+		itemHits, regionHits              []searchHit
+		corpHits, allianceHits, pilotHits []searchHit
+		systems                           []searchSystem
+		itemGuesses, corpGuesses          []typingGuess
+		allianceGuesses, pilotGuesses     []typingGuess
+	)
+	var wg sync.WaitGroup
+	wg.Add(6)
+	go func() {
+		defer wg.Done()
+		itemHits, itemGuesses = app.searchItemTier(ctx, q, lim.items)
+	}()
+	go func() {
+		defer wg.Done()
+		systems = app.searchSystemTier(ctx, q, lim.systems)
+	}()
+	go func() {
+		defer wg.Done()
+		regionHits = app.searchRegionTier(ctx, q, lim.regions)
+	}()
+	go func() {
+		defer wg.Done()
+		corpHits, corpGuesses = app.searchCorporationTier(ctx, q, lim.orgs)
+	}()
+	go func() {
+		defer wg.Done()
+		allianceHits, allianceGuesses = app.searchAllianceTier(ctx, q, lim.orgs)
+	}()
+	go func() {
+		defer wg.Done()
+		pilotHits, pilotGuesses = app.searchPilotTier(ctx, q, ownIDs, lim.pilots)
+	}()
+	wg.Wait()
+
+	set.Items = itemHits
+	set.Systems = systems
+	set.Regions = regionHits
+	set.Corporations = corpHits
+	set.Alliances = allianceHits
+	set.Pilots = pilotHits
+	set.guesses = append(set.guesses, itemGuesses...)
+	set.guesses = append(set.guesses, corpGuesses...)
+	set.guesses = append(set.guesses, allianceGuesses...)
+	set.guesses = append(set.guesses, pilotGuesses...)
+
+	// No character of either kind matched: if the query reads as
+	// a full pilot name, note the one-per-name resolution want and
+	// say the search is under way instead of silently offering
+	// nothing; a name resolved a moment ago answers as its pilot.
+	if userID > 0 && len(set.Characters) == 0 && len(set.Pilots) == 0 {
+		pending, hit := app.notePilotNameSearch(ctx, q, set.Items)
+		set.Pending = pending
+		if hit != nil && !ownIDs[hit.ID] {
+			set.Pilots = append(set.Pilots, *hit)
 		}
 	}
+	return set
+}
 
-	// Systems and regions, from the local star map. A system names
-	// its region and carries its security status.
-	if rows, err := app.queries.SuggestSDESystems(ctx, db.SuggestSDESystemsParams{Q: q, Lim: int64(lim.systems)}); err == nil {
+// searchItemTier is the items tier: the shared suggestion feed,
+// plus the warming guesses landing on any of these should trigger
+// (a jump to a result should land on a warming chart, not a cold
+// one).
+func (app *Application) searchItemTier(ctx context.Context, q string, limItems int) (hits []searchHit, guesses []typingGuess) {
+	for i, it := range app.suggestTypes(ctx, q, suggestPoolAll, int64(limItems)) {
+		hits = append(hits, searchHit{Kind: "item", ID: it.ID, Name: it.Name, Label: it.Label})
+		if i < suggestedWarmed {
+			guesses = append(guesses, typingGuess{kind: pageWantHistory, id: it.ID, region: defaultMarketRegion})
+		}
+	}
+	return hits, guesses
+}
+
+// searchSystemTier is the systems tier: the local star map. A
+// system names its region and carries its security status.
+func (app *Application) searchSystemTier(ctx context.Context, q string, limSystems int) []searchSystem {
+	if snap := app.searchSnapshot(); snap != nil {
+		return snap.searchSystems(q, int64(limSystems))
+	}
+	var out []searchSystem
+	if rows, err := app.queries.SuggestSDESystems(ctx, db.SuggestSDESystemsParams{Q: q, Lim: int64(limSystems)}); err == nil {
 		for _, row := range rows {
 			sec, tier := secRound(row.Security)
-			set.Systems = append(set.Systems, searchSystem{
+			out = append(out, searchSystem{
 				searchHit: searchHit{Kind: "system", ID: row.SystemID, Name: row.Name, Label: "System · " + row.RegionName,
 					Sec: sec, SecTier: tier},
 				RegionID: row.RegionID, RegionName: row.RegionName, Security: row.Security,
@@ -94,18 +171,31 @@ func (app *Application) searchAll(ctx context.Context, q string, userID int64, l
 	} else {
 		logging.Errorf("search: systems for %q: %v", q, err)
 	}
-	if rows, err := app.queries.SuggestSDERegions(ctx, db.SuggestSDERegionsParams{Q: q, Lim: int64(lim.regions)}); err == nil {
+	return out
+}
+
+func (app *Application) searchRegionTier(ctx context.Context, q string, limRegions int) []searchHit {
+	if snap := app.searchSnapshot(); snap != nil {
+		return snap.searchRegions(q, int64(limRegions))
+	}
+	var out []searchHit
+	if rows, err := app.queries.SuggestSDERegions(ctx, db.SuggestSDERegionsParams{Q: q, Lim: int64(limRegions)}); err == nil {
 		for _, row := range rows {
-			set.Regions = append(set.Regions, searchHit{Kind: "region", ID: row.RegionID, Name: row.Name, Label: "Region"})
+			out = append(out, searchHit{Kind: "region", ID: row.RegionID, Name: row.Name, Label: "Region"})
 		}
 	} else {
 		logging.Errorf("search: regions for %q: %v", q, err)
 	}
+	return out
+}
 
-	// Corporations and alliances whose public records have
-	// already been warmed answer here too, so a name the app
-	// knows links straight to its record page.
-	if rows, err := app.queries.SearchCorporationRecordsByName(ctx, q); err == nil {
+// searchCorporationTier is the corporations tier: the warmed
+// public records, so a name the app knows links straight to its
+// record page.
+func (app *Application) searchCorporationTier(ctx context.Context, q string, limOrgs int) (hits []searchHit, guesses []typingGuess) {
+	if indexed, ok := app.searchIndexCorporations(q, limOrgs); ok {
+		hits = indexed
+	} else if rows, err := app.queries.SearchCorporationRecordsByName(ctx, q); err == nil {
 		for _, row := range rows {
 			payload, ok := decodeCorpPayload(row.Payload)
 			if !ok {
@@ -118,19 +208,25 @@ func (app *Application) searchAll(ctx context.Context, q string, userID int64, l
 			if payload.Corp.Ticker != "" {
 				label = "[" + payload.Corp.Ticker + "]"
 			}
-			set.Corporations = append(set.Corporations, searchHit{
+			hits = append(hits, searchHit{
 				Kind: "corporation", ID: row.CorporationID, Name: payload.Corp.Name, Label: label,
 			})
 		}
-		sortHitsByName(set.Corporations, q)
-		set.Corporations = capHits(set.Corporations, lim.orgs)
-		for _, h := range set.Corporations {
-			set.guesses = append(set.guesses, typingGuess{kind: pageWantCorporation, id: h.ID})
-		}
+		sortHitsByName(hits, q)
+		hits = capHits(hits, limOrgs)
 	} else {
 		logging.Errorf("search: corporation records for %q: %v", q, err)
 	}
-	if rows, err := app.queries.SearchAllianceRecordsByName(ctx, q); err == nil {
+	for _, h := range hits {
+		guesses = append(guesses, typingGuess{kind: pageWantCorporation, id: h.ID})
+	}
+	return hits, guesses
+}
+
+func (app *Application) searchAllianceTier(ctx context.Context, q string, limOrgs int) (hits []searchHit, guesses []typingGuess) {
+	if indexed, ok := app.searchIndexAlliances(q, limOrgs); ok {
+		hits = indexed
+	} else if rows, err := app.queries.SearchAllianceRecordsByName(ctx, q); err == nil {
 		for _, row := range rows {
 			payload, ok := decodeAlliancePayload(row.Payload)
 			if !ok {
@@ -143,20 +239,28 @@ func (app *Application) searchAll(ctx context.Context, q string, userID int64, l
 			if payload.Alliance.Ticker != "" {
 				label = "[" + payload.Alliance.Ticker + "]"
 			}
-			set.Alliances = append(set.Alliances, searchHit{
+			hits = append(hits, searchHit{
 				Kind: "alliance", ID: row.AllianceID, Name: payload.Alliance.Name, Label: label,
 			})
 		}
-		sortHitsByName(set.Alliances, q)
-		set.Alliances = capHits(set.Alliances, lim.orgs)
-		for _, h := range set.Alliances {
-			set.guesses = append(set.guesses, typingGuess{kind: pageWantAlliance, id: h.ID})
-		}
+		sortHitsByName(hits, q)
+		hits = capHits(hits, limOrgs)
 	} else {
 		logging.Errorf("search: alliance records for %q: %v", q, err)
 	}
+	for _, h := range hits {
+		guesses = append(guesses, typingGuess{kind: pageWantAlliance, id: h.ID})
+	}
+	return hits, guesses
+}
 
-	if rows, err := app.queries.SearchPilotRecordsByName(ctx, q); err == nil {
+// searchPilotTier is the pilots tier: the warmed pilot records,
+// skipping the searcher's own characters (they answer in the
+// characters tier).
+func (app *Application) searchPilotTier(ctx context.Context, q string, ownIDs map[int64]bool, limPilots int) (hits []searchHit, guesses []typingGuess) {
+	if indexed, ok := app.searchIndexPilots(q, ownIDs, limPilots); ok {
+		hits = indexed
+	} else if rows, err := app.queries.SearchPilotRecordsByName(ctx, q); err == nil {
 		for _, row := range rows {
 			if ownIDs[row.CharacterID] || row.Payload == "" {
 				continue
@@ -172,31 +276,19 @@ func (app *Application) searchAll(ctx context.Context, q string, userID int64, l
 			if payload.Corp.Name != "" {
 				label = payload.Corp.Name
 			}
-			set.Pilots = append(set.Pilots, searchHit{
+			hits = append(hits, searchHit{
 				Kind: "pilot", ID: row.CharacterID, Name: payload.Profile.Name, Label: label,
 			})
 		}
-		sortHitsByName(set.Pilots, q)
-		set.Pilots = capHits(set.Pilots, lim.pilots)
-		for _, h := range set.Pilots {
-			set.guesses = append(set.guesses, typingGuess{kind: pageWantPilot, id: h.ID})
-		}
+		sortHitsByName(hits, q)
+		hits = capHits(hits, limPilots)
 	} else {
 		logging.Errorf("search: pilot records for %q: %v", q, err)
 	}
-
-	// No character of either kind matched: if the query reads as
-	// a full pilot name, note the one-per-name resolution want and
-	// say the search is under way instead of silently offering
-	// nothing; a name resolved a moment ago answers as its pilot.
-	if userID > 0 && len(set.Characters) == 0 && len(set.Pilots) == 0 {
-		pending, hit := app.notePilotNameSearch(ctx, q, set.Items)
-		set.Pending = pending
-		if hit != nil && !ownIDs[hit.ID] {
-			set.Pilots = append(set.Pilots, *hit)
-		}
+	for _, h := range hits {
+		guesses = append(guesses, typingGuess{kind: pageWantPilot, id: h.ID})
 	}
-	return set
+	return hits, guesses
 }
 
 func capHits(hits []searchHit, n int) []searchHit {

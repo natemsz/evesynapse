@@ -353,6 +353,60 @@ ORDER BY alliance_id
 LIMIT 100;
 
 -- ---------------------------------------------------------------------
+-- Search index extraction (search_index.go): whole-table reads a
+-- background build folds into the in-memory snapshot the search
+-- bar reads, so a keystroke never scans these tables. One pass
+-- per build, never per request.
+-- ---------------------------------------------------------------------
+
+-- Every published type with the facts the shared suggestion
+-- feed's pools filter on.
+-- name: ListSearchIndexTypes :many
+SELECT t.type_id, t.name,
+       COALESCE(g.name, '') AS group_name,
+       COALESCE(c.name, '') AS category_name,
+       t.market_group_id,
+       COALESCE(g.category_id, 0) AS category_id,
+       EXISTS (SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id) AS has_blueprint,
+       EXISTS (SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id) AS has_skill_meta
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_categories c ON c.category_id = g.category_id
+WHERE t.published = 1
+ORDER BY t.type_id;
+
+-- name: ListSearchIndexSystems :many
+SELECT s.system_id, s.name, s.region_id, COALESCE(r.name, '') AS region_name, s.security
+FROM sde_systems s
+LEFT JOIN sde_regions r ON r.region_id = s.region_id
+ORDER BY s.system_id;
+
+-- name: ListSearchIndexRegions :many
+SELECT region_id, name FROM sde_regions
+ORDER BY region_id;
+
+-- The ready records, whole: the build decodes each payload's
+-- name fields once, where the name searches above would decode
+-- per keystroke.
+-- name: ListSearchIndexPilotRecords :many
+SELECT character_id, payload
+FROM pilot_records
+WHERE state = 'ready' AND payload != ''
+ORDER BY character_id;
+
+-- name: ListSearchIndexCorporationRecords :many
+SELECT corporation_id, payload
+FROM corporation_records
+WHERE state = 'ready' AND payload != ''
+ORDER BY corporation_id;
+
+-- name: ListSearchIndexAllianceRecords :many
+SELECT alliance_id, payload
+FROM alliance_records
+WHERE state = 'ready' AND payload != ''
+ORDER BY alliance_id;
+
+-- ---------------------------------------------------------------------
 -- The daily wallet-history sampler.
 -- One row per character per day; the upsert keeps the day's
 -- latest values as fresher snapshots land.

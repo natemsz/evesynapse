@@ -2816,8 +2816,10 @@
     }
 
     function query(q) {
+      // The server's own cache header governs: a settled answer
+      // may be reused for its short window, and a pending one
+      // arrives marked no-store so the re-ask below still fires.
       fetch(endpoint(q), {
-        cache: "no-store",
         headers: { "Accept": "application/json" }
       }).then(function (resp) {
         return resp.ok ? resp.json() : [];

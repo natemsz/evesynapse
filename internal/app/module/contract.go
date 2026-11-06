@@ -1327,6 +1327,11 @@ type Deps interface {
 	ForgetTypeName(id int64)
 	MissingTypeNames(limit int) []int64
 	NoteTypeNameMiss(id int64)
+	// NoteSearchRecord reports a corporation or alliance record
+	// stored outside the search index's own store paths (a swarm
+	// apply), so the record is searchable from the moment it
+	// lands: kind is "corporation" or "alliance".
+	NoteSearchRecord(kind string, id int64, state, payload string)
 	// PublicOrigin is this install’s public address, "" when it has none.
 	PublicOrigin() string
 	// RequireAdmin guards a route group for administrators.

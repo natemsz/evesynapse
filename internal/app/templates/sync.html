@@ -43,7 +43,7 @@
 {{if .Off}}
 <p><small>Switched off (FORESIGHT=off).</small></p>
 {{else}}
-<p><small>Data fetched because of something that happened in the game, before anyone asked for it, over the last {{.Days}} days. A target is one thing warmed for one page; it counts as opened when the account opened that page while it was still current. Up to {{.PerCycle}} calls a cycle, from what the rest of the cycle leaves.</small></p>
+<p class="an-note prose">Data fetched because of something that happened in the game, before anyone asked for it, over the last {{.Days}} days. A target is one thing warmed for one page; it counts as opened when the account opened that page while it was still current. Up to {{.PerCycle}} calls a cycle, from what the rest of the cycle leaves.</p>
 <div class="tw">
 <table class="stat-table">
   <thead><tr><th>Event</th><th>Events</th><th>Targets</th><th>ESI calls</th><th>Opened</th><th>Opened, of those settled</th><th>Warm when opened</th><th>Chance in use</th></tr></thead>
@@ -52,7 +52,7 @@
   {{end}}</tbody>
 </table>
 </div>
-<p><small>{{.Calls}} calls spent, {{.Opened}} targets opened: {{.PerOpened}} calls for each one opened.</small></p>
+<p class="an-note prose">{{.Calls}} calls spent, {{.Opened}} targets opened: {{.PerOpened}} calls for each one opened.</p>
 {{end}}
 </section>
 {{end}}
@@ -60,7 +60,7 @@
 {{with .Sync.Serving}}
 <section class="card spanall" id="sync-serving">
 <h2>Serving pages</h2>
-<p><small>Whether pages render complete, how old what they show is, and what viewing costs in ESI calls.</small></p>
+<p class="an-note prose">Whether pages render complete, how old what they show is, and what viewing costs in ESI calls.</p>
 <table class="stat-table">
   <tbody>
     <tr><td>Renders fully loaded at first paint</td><td>{{if .RendersFull}}{{.Renders}}{{else}}—{{end}}</td></tr>
@@ -87,7 +87,7 @@
 
 <section class="card spanall" id="sync-characters">
 <h2>Character data</h2>
-<p><small>One character's stored data and how fresh it is. Type a name or a character id; any character on the site can be looked up.</small></p>
+<p class="an-note prose">One character's stored data and how fresh it is. Type a name or a character id; any character on the site can be looked up.</p>
 <form method="get" action="/admin/sync/" class="lookup-form">
   <span class="searchwrap">
     <input type="search" name="character" id="sync-character-q" value="{{.Sync.Lookup.Query}}" placeholder="Character name or id" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="sync-character-suggest" aria-autocomplete="list" aria-label="Find a character">
@@ -135,7 +135,7 @@
 {{if .Sync.Global}}
 <section class="card spanall" id="sync-public">
 <h2>Public data (no login needed)</h2>
-<p><small>Wars, incursions, faction warfare and server status are public ESI data; they're fetched once and shared by everyone (Intel pages, Home status line).</small></p>
+<p class="an-note prose">Wars, incursions, faction warfare and server status are public ESI data; they're fetched once and shared by everyone (Intel pages, Home status line).</p>
 <div class="tw">
 <table>
   <thead><tr><th>Data</th><th>State</th><th>Fetched at</th><th>Cached until</th></tr></thead>

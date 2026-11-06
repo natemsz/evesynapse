@@ -118,13 +118,14 @@ func TestOpenProseTreatment(t *testing.T) {
 		"piplanner.html", "planets.html", "planner.html", "profit.html",
 		"profit_blueprint.html", "report.html", "scans.html",
 		"search.html", "security_codes.html", "settings.html",
-		"srp.html", "swarm.html",
+		"srp.html", "swarm.html", "admin.html", "admin_esi.html",
+		"sync.html", "admin_notices.html",
 	} {
 		if !marksProse.MatchString(readTpl(name)) {
 			t.Errorf("%s marks no prose; its explanatory blocks carry the treatment", name)
 		}
 	}
-	for _, name := range []string{"admin.html", "admin_esi.html", "sync.html", "admin_notices.html", "landing.html", "home.html"} {
+	for _, name := range []string{"landing.html", "home.html"} {
 		if marksProse.MatchString(readTpl(name)) {
 			t.Errorf("%s marks prose; it stays outside the sweep", name)
 		}

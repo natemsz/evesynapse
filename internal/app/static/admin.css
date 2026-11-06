@@ -55,6 +55,9 @@
 .an-bad-t { color: var(--danger); }
 
 .an-note { font-size: var(--fs-xs); color: var(--muted); }
+/* A note that carries the prose treatment takes the prose size
+   and ink; the note layout around it stays. */
+.an-note.prose { font-size: var(--fs-sm); color: var(--prose); }
 
 /* Chart series: SVG fills and strokes by class, never hex. */
 .an-s2 { fill: var(--accent); opacity: .95; }

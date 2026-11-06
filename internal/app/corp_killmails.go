@@ -68,13 +68,16 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 		refs = refs[:maxKillmailsShown]
 	}
 
-	// Values are the killboard's stored prices (see handleKillmails).
-	values := app.killBoardValues(ctx, refs)
-	viewer := killmailViewer{corporationID: sel.Base.CorpID}
-	placeMemo := make(map[int64]placeRef)
-	for _, ref := range refs {
-		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, values, placeMemo))
+	// Viewing the page offers the viewing character and this
+	// corporation to the history backfill, so the board's
+	// coverage of both completes in the background.
+	app.notePilotsEncountered([]int64{sel.Active.CharacterID})
+	if sel.Base.CorpID > 0 {
+		app.noteCorpsEncountered([]int64{sel.Base.CorpID})
 	}
+
+	viewer := killmailViewer{corporationID: sel.Base.CorpID}
+	view.Rows = app.killmailUnionRows(ctx, viewer, refs)
 	app.shapeKillmails(ctx, r, view, viewer)
 
 	app.render(ctx, w, http.StatusOK, "killmails.html", data)

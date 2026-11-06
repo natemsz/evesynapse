@@ -407,6 +407,11 @@ type ContractDetail struct {
 	FetchedAt   time.Time `json:"fetched_at"`
 }
 
+type CorpKillCoverage struct {
+	CorporationID int64     `json:"corporation_id"`
+	BackfilledAt  time.Time `json:"backfilled_at"`
+}
+
 type CorpPermission struct {
 	CorporationID int64     `json:"corporation_id"`
 	Permission    string    `json:"permission"`

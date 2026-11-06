@@ -11,7 +11,10 @@ package app
 // A pilot first met in an intel reading (a channel report, a scan)
 // is backfilled once from zKillboard's history API: up to ten
 // pages of their most recent kills and losses, folded kill by kill
-// into the aggregates. After that the live kill stream
+// into the aggregates. Each history kill is also ingested into
+// the kills store, public, so the pilot's board feed and killmail
+// lists show every participation, not only losses and final
+// blows. After that the live kill stream
 // (killfeed.go) keeps the profile current, folding in each new
 // kill the pilot loses or lands the final blow on. One marker per
 // (kill, pilot) already folded in, written in the same transaction
@@ -171,7 +174,7 @@ func (app *Application) backfillPilot(ctx context.Context, client *http.Client, 
 		if !killfeedSleepCtx(ctx, pilotBackfillPace) {
 			return
 		}
-		entries, err := zkillHistoryPage(ctx, client, base, id, page)
+		entries, err := zkillHistoryPage(ctx, client, base, zkillHistoryCharacter, id, page)
 		if err != nil {
 			logging.Warnf("pilot activity: backfill pilot %d, page %d: %v", id, page, err)
 			return
@@ -181,6 +184,17 @@ func (app *Application) backfillPilot(ctx context.Context, client *http.Client, 
 				continue
 			}
 			seen++
+			// The ingest feeds every list the pilot appears
+			// on; the fold feeds the profile. A failed ingest
+			// is logged and the pass goes on: it must not
+			// block the fold or the backfilled mark, and the
+			// board's copy can still land from a later offer
+			// or the stream.
+			if len(e.Raw) > 0 {
+				if _, err := app.ingestKill(ctx, e.Raw, e.ZKB.Hash, &e.ZKB, "zkill", true); err != nil {
+					logging.Warnf("pilot activity: ingest history kill %d for pilot %d: %v", e.KillmailID, id, err)
+				}
+			}
 			if _, err := app.applyPilotKill(ctx, id, e.killmailFull, false); err != nil {
 				logging.Warnf("pilot activity: fold kill %d for pilot %d: %v", e.KillmailID, id, err)
 			}
@@ -198,19 +212,35 @@ func (app *Application) backfillPilot(ctx context.Context, client *http.Client, 
 	logging.Infof("pilot activity: backfilled pilot %d from %d kills and losses", id, seen)
 }
 
+// zkillHistoryKind selects whose history a zKillboard history
+// query reads: a pilot's kills and losses, or a corporation's.
+// The value is the API's path segment for the entity.
+type zkillHistoryKind string
+
+const (
+	zkillHistoryCharacter   zkillHistoryKind = "characterID"
+	zkillHistoryCorporation zkillHistoryKind = "corporationID"
+)
+
 // zkillHistoryEntry is one killmail from zKillboard's history
 // API: the ESI killmail with zKillboard's metadata beside it.
 type zkillHistoryEntry struct {
 	killmailFull
 	ZKB killZKB `json:"zkb"`
+	// Raw is the entry exactly as the API sent it: what the
+	// backfills hand the kill store, so a backfilled kill is
+	// stored byte for byte, not re-marshalled from the decode.
+	Raw json.RawMessage `json:"-"`
 }
 
-// zkillHistoryPage fetches one page of a pilot's kills and losses
-// from zKillboard's history API, newest first, 200 to a page. The
-// API may answer an error as a JSON object holding an error field
-// without a failure status, so the body is checked too.
-func zkillHistoryPage(ctx context.Context, client *http.Client, base string, characterID int64, page int) ([]zkillHistoryEntry, error) {
-	url := base + "characterID/" + strconv.FormatInt(characterID, 10) + "/"
+// zkillHistoryPage fetches one page of an entity's kills and
+// losses from zKillboard's history API, newest first, 200 to a
+// page. The API may answer an error as a JSON object holding an
+// error field without a failure status, so the body is checked
+// too. The page is decoded in two passes: the entries are split
+// first, so each keeps its raw bytes, then each entry decodes.
+func zkillHistoryPage(ctx context.Context, client *http.Client, base string, kind zkillHistoryKind, id int64, page int) ([]zkillHistoryEntry, error) {
+	url := base + string(kind) + "/" + strconv.FormatInt(id, 10) + "/"
 	if page > 1 {
 		url += "page/" + strconv.Itoa(page) + "/"
 	}
@@ -231,8 +261,8 @@ func zkillHistoryPage(ctx context.Context, client *http.Client, base string, cha
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("history API answered %d", resp.StatusCode)
 	}
-	var entries []zkillHistoryEntry
-	if err := goccyjson.Unmarshal(body, &entries); err != nil {
+	var rawEntries []json.RawMessage
+	if err := json.Unmarshal(body, &rawEntries); err != nil {
 		var apiErr struct {
 			Error string `json:"error"`
 		}
@@ -240,6 +270,15 @@ func zkillHistoryPage(ctx context.Context, client *http.Client, base string, cha
 			return nil, fmt.Errorf("history API error: %s", apiErr.Error)
 		}
 		return nil, fmt.Errorf("decode history page: %w", err)
+	}
+	entries := make([]zkillHistoryEntry, 0, len(rawEntries))
+	for _, raw := range rawEntries {
+		var e zkillHistoryEntry
+		if err := goccyjson.Unmarshal(raw, &e); err != nil {
+			return nil, fmt.Errorf("decode history page: %w", err)
+		}
+		e.Raw = raw
+		entries = append(entries, e)
 	}
 	return entries, nil
 }

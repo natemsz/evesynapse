@@ -68,6 +68,26 @@ func (q *Queries) GetBiggestKill(ctx context.Context, since time.Time) (Kill, er
 	return i, err
 }
 
+const getCorpKillCoverage = `-- name: GetCorpKillCoverage :one
+
+SELECT corporation_id, backfilled_at FROM corp_kill_coverage
+WHERE corporation_id = $1::bigint
+`
+
+// ---------------------------------------------------------------------
+// Corporation killboard coverage (schema 126, corp_backfill.go):
+// the marker the corporation history backfill checks before
+// fetching and sets when a pass completes, the pilot activity
+// profile's BackfilledAt discipline without the aggregates
+// corporations do not keep.
+// ---------------------------------------------------------------------
+func (q *Queries) GetCorpKillCoverage(ctx context.Context, corporationID int64) (CorpKillCoverage, error) {
+	row := q.db.QueryRowContext(ctx, getCorpKillCoverage, corporationID)
+	var i CorpKillCoverage
+	err := row.Scan(&i.CorporationID, &i.BackfilledAt)
+	return i, err
+}
+
 const getKill = `-- name: GetKill :one
 SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM kills WHERE killmail_id = $1
 `
@@ -1282,6 +1302,22 @@ func (q *Queries) ListUnpricedKills(ctx context.Context, maxRows int64) ([]ListU
 		return nil, err
 	}
 	return items, nil
+}
+
+const markCorpKillCoverage = `-- name: MarkCorpKillCoverage :exec
+INSERT INTO corp_kill_coverage (corporation_id, backfilled_at)
+VALUES ($1::bigint, $2::timestamptz)
+ON CONFLICT (corporation_id) DO NOTHING
+`
+
+type MarkCorpKillCoverageParams struct {
+	CorporationID int64     `json:"corporation_id"`
+	BackfilledAt  time.Time `json:"backfilled_at"`
+}
+
+func (q *Queries) MarkCorpKillCoverage(ctx context.Context, arg MarkCorpKillCoverageParams) error {
+	_, err := q.db.ExecContext(ctx, markCorpKillCoverage, arg.CorporationID, arg.BackfilledAt)
+	return err
 }
 
 const pruneKillAttackers = `-- name: PruneKillAttackers :execrows

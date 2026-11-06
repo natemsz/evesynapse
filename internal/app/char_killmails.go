@@ -1,10 +1,13 @@
 package app
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -143,21 +146,23 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 	}
 	view.Loaded = true
 
+	// Viewing the page offers this character and their
+	// corporation to the history backfill, so the board's
+	// coverage of both completes in the background.
+	app.notePilotsEncountered([]int64{active.CharacterID})
+	if crow, err := app.queries.GetCharacterCorporation(ctx, active.CharacterID); err == nil && crow.CorporationID > 0 {
+		app.noteCorpsEncountered([]int64{crow.CorporationID})
+	}
+
 	if len(refs) > maxKillmailsShown {
 		refs = refs[:maxKillmailsShown]
 	}
 
-	// Values are the killboard's stored prices for these kills:
-	// the board appraises every kill at ingest, and this page
-	// reads that figure instead of pricing at render.
-	values := app.killBoardValues(ctx, refs)
-
 	viewer := killmailViewer{characterID: active.CharacterID}
-	placeMemo := make(map[int64]placeRef)
-	ids := make([]int64, 0, len(refs))
-	for _, ref := range refs {
-		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, values, placeMemo))
-		ids = append(ids, ref.KillmailID)
+	view.Rows = app.killmailUnionRows(ctx, viewer, refs)
+	ids := make([]int64, 0, len(view.Rows))
+	for _, row := range view.Rows {
+		ids = append(ids, row.KillmailID)
 	}
 	// Mails that fall inside one of the account's recorded fights
 	// open its battle report (battle_pages.go).
@@ -217,12 +222,11 @@ type killmailViewer struct {
 	corporationID int64 // corp view (0 in the character view)
 }
 
-// killmailRow builds one list line from the stored detail. A
-// missing detail (worker has not warmed it yet) yields the
-// warming placeholder row.
-func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, ref esi.KillmailRef, values map[int64]float64, placeMemo map[int64]placeRef) killmailRow {
-	row := killmailRow{
-		KillmailID: ref.KillmailID,
+// warmingKillmailRow is the placeholder list line for a kill
+// whose detail has not landed in the store yet.
+func warmingKillmailRow(killmailID int64) killmailRow {
+	return killmailRow{
+		KillmailID: killmailID,
 		Time:       "—",
 		System:     placeRef{Name: "—"},
 		Victim:     "—",
@@ -232,19 +236,35 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 		Value:      "—",
 		Warming:    true,
 	}
+}
 
+// killmailRow builds one list line from the stored detail. A
+// missing detail (worker has not warmed it yet) yields the
+// warming placeholder row.
+func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, ref esi.KillmailRef, values map[int64]float64, placeMemo map[int64]placeRef) killmailRow {
 	stored, err := app.queries.GetKillmailDetail(ctx, ref.KillmailID)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			logging.Errorf("killmails: read detail %d: %v", ref.KillmailID, err)
 		}
-		return row
+		return warmingKillmailRow(ref.KillmailID)
 	}
 	var km esi.Killmail
 	if err := json.Unmarshal([]byte(stored.Payload), &km); err != nil {
 		logging.Errorf("killmails: decode detail %d: %v", ref.KillmailID, err)
-		return row
+		return warmingKillmailRow(ref.KillmailID)
 	}
+	value, priced := values[ref.KillmailID]
+	return app.killmailRowFor(ctx, viewer, km, value, priced, placeMemo)
+}
+
+// killmailRowFor shapes one list line from a decoded killmail:
+// the KILL/LOSS badge from the viewer's seat, the parties, the
+// viewer's own part in it. value and priced carry the killboard's
+// stored price for the kill, absent while the board has not
+// priced it.
+func (app *Application) killmailRowFor(ctx context.Context, viewer killmailViewer, km esi.Killmail, value float64, priced bool, placeMemo map[int64]placeRef) killmailRow {
+	row := warmingKillmailRow(km.KillmailID)
 	row.Warming = false
 
 	row.Time = formatFinish(km.KillmailTime)
@@ -295,10 +315,175 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 
 	// The killboard's stored price for this kill, or "—" while
 	// the board has not priced it.
-	if v, ok := values[ref.KillmailID]; ok {
+	if priced {
+		row.Value = esi.FormatISK(value)
+		row.ISK = value
+		row.Priced = true
+	}
+	return row
+}
+
+// boardKillmailRow builds the list line for a kill only the
+// board holds: its full killmail from kill_details, shaped by
+// the same fill the ESI rows use. A kill whose detail has been
+// pruned renders from its board summary row instead.
+func (app *Application) boardKillmailRow(ctx context.Context, viewer killmailViewer, k db.Kill, values map[int64]float64, placeMemo map[int64]placeRef) killmailRow {
+	if payload, err := app.queries.GetKillDetail(ctx, k.KillmailID); err == nil {
+		if km, ok := decodeBoardKillmail(payload); ok {
+			value, priced := values[k.KillmailID]
+			return app.killmailRowFor(ctx, viewer, km, value, priced, placeMemo)
+		}
+	}
+	return app.summaryKillmailRow(ctx, viewer, k, values, placeMemo)
+}
+
+// decodeBoardKillmail reads a board-held killmail (kill_details'
+// gzipped payload) as the ESI shape the list rows are built from.
+func decodeBoardKillmail(gz []byte) (esi.Killmail, bool) {
+	var km esi.Killmail
+	zr, err := gzip.NewReader(bytes.NewReader(gz))
+	if err != nil {
+		return km, false
+	}
+	raw, err := io.ReadAll(zr)
+	if err != nil {
+		return km, false
+	}
+	return km, json.Unmarshal(raw, &km) == nil
+}
+
+// summaryKillmailRow renders a board kill from its summary row
+// alone: the fallback for a kill whose full killmail is gone.
+// The parties and the value are the summary's own; the viewer's
+// attacking ship is known only when they landed the final blow,
+// and the wing list stays empty.
+func (app *Application) summaryKillmailRow(ctx context.Context, viewer killmailViewer, k db.Kill, values map[int64]float64, placeMemo map[int64]placeRef) killmailRow {
+	row := warmingKillmailRow(k.KillmailID)
+	row.Warming = false
+	row.Time = formatFinish(k.KillmailTime.UTC().Format(time.RFC3339))
+	row.System = app.linkPlaceMemo(ctx, placeMemo, k.SystemID, app.locationTitle(ctx, k.SystemID, "solar_system"))
+	row.At = k.KillmailTime
+	row.SystemID = k.SystemID
+	isLoss := k.VictimCharacterID == viewer.characterID
+	if viewer.corporationID > 0 {
+		isLoss = k.VictimCorporationID == viewer.corporationID
+	}
+	if isLoss {
+		row.Loss = true
+	} else {
+		row.Kill = true
+	}
+	row.Victim = app.displayCharacter(ctx, k.VictimCharacterID)
+	row.VictimID = k.VictimCharacterID
+	row.Ship = app.typeNameOrID(ctx, k.ShipTypeID)
+	row.ShipTypeID = k.ShipTypeID
+	row.Involved = fmt.Sprintf("%d", k.AttackerCount)
+	row.Pod = k.ShipTypeID == 670 || k.ShipTypeID == 33328
+	row.Solo = k.Solo
+	if row.Loss {
+		row.YourShipID = k.ShipTypeID
+	}
+	if k.FbCharacterID > 0 {
+		row.FinalBlow = app.displayCharacter(ctx, k.FbCharacterID)
+		row.FinalBlowID = k.FbCharacterID
+	}
+	viewerBlow := viewer.characterID > 0 && k.FbCharacterID == viewer.characterID ||
+		viewer.corporationID > 0 && k.FbCorporationID == viewer.corporationID
+	row.YourBlow = viewerBlow && !row.Loss
+	if row.Kill && viewerBlow {
+		row.YourShipID = k.FbShipTypeID
+	}
+	if v, ok := values[k.KillmailID]; ok {
 		row.Value = esi.FormatISK(v)
 		row.ISK = v
 		row.Priced = true
 	}
 	return row
+}
+
+// killmailUnionRows builds the killmail pages' row list: the
+// ESI recent list's rows, in the list's own order, unioned with
+// the killboard's public kills for the same entity, newest
+// first, capped at the page's size. A kill both sources know
+// appears once, as the ESI ref's row: the recent list's entry
+// keeps its place and its stored detail. Board-only kills are
+// kills the recent list cannot show: participations without the
+// final blow, or mails past its window.
+func (app *Application) killmailUnionRows(ctx context.Context, viewer killmailViewer, refs []esi.KillmailRef) []killmailRow {
+	var board []db.Kill
+	var err error
+	// The board's newest kills for the entity, through the same
+	// cursor convention the killboard handler pages with.
+	before := time.Now().Add(time.Hour).UTC()
+	switch {
+	case viewer.characterID > 0:
+		board, err = app.queries.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+			EntityID: viewer.characterID, BeforeTime: before, BeforeID: 1 << 62, MaxRows: maxKillmailsShown,
+		})
+	case viewer.corporationID > 0:
+		board, err = app.queries.ListKillsByCorporation(ctx, db.ListKillsByCorporationParams{
+			EntityID: viewer.corporationID, BeforeTime: before, BeforeID: 1 << 62, MaxRows: maxKillmailsShown,
+		})
+	}
+	if err != nil {
+		logging.Errorf("killmails: board kills for the union: %v", err)
+	}
+
+	esiIDs := make(map[int64]bool, len(refs))
+	for _, ref := range refs {
+		esiIDs[ref.KillmailID] = true
+	}
+	allRefs := make([]esi.KillmailRef, 0, len(refs)+len(board))
+	allRefs = append(allRefs, refs...)
+	for _, k := range board {
+		if !esiIDs[k.KillmailID] {
+			allRefs = append(allRefs, esi.KillmailRef{KillmailID: k.KillmailID, KillmailHash: k.Hash})
+		}
+	}
+	// Values are the killboard's stored prices for these kills:
+	// the board appraises every kill at ingest, and this page
+	// reads that figure instead of pricing at render.
+	values := app.killBoardValues(ctx, allRefs)
+	placeMemo := make(map[int64]placeRef)
+
+	rows := make([]killmailRow, 0, len(refs))
+	for _, ref := range refs {
+		rows = append(rows, app.killmailRow(ctx, viewer, ref, values, placeMemo))
+	}
+	// Effective times for the merge. A row whose detail has not
+	// warmed carries no time; the recent list is newest first,
+	// so it keeps the time of the row before it, and a warming
+	// first row counts as the newest of all.
+	eff := make([]time.Time, len(rows))
+	last := time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i, row := range rows {
+		if !row.At.IsZero() {
+			last = row.At
+		}
+		eff[i] = last
+	}
+	for _, k := range board {
+		if esiIDs[k.KillmailID] {
+			continue
+		}
+		brow := app.boardKillmailRow(ctx, viewer, k, values, placeMemo)
+		at := k.KillmailTime
+		pos := len(rows)
+		for i := range rows {
+			if eff[i].Before(at) {
+				pos = i
+				break
+			}
+		}
+		rows = append(rows, killmailRow{})
+		copy(rows[pos+1:], rows[pos:])
+		rows[pos] = brow
+		eff = append(eff, time.Time{})
+		copy(eff[pos+1:], eff[pos:])
+		eff[pos] = at
+	}
+	if len(rows) > maxKillmailsShown {
+		rows = rows[:maxKillmailsShown]
+	}
+	return rows
 }

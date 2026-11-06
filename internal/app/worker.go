@@ -153,7 +153,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(7)
+	children.Add(8)
 
 	// The public killmail stream (killfeed.go) is its own paced
 	// loop: one file every 100 ms while kills arrive, six seconds
@@ -169,6 +169,14 @@ func (app *Application) runWorker(ctx context.Context) {
 	go func() {
 		defer children.Done()
 		runGuarded("pilot backfill", func() { app.runPilotBackfill(ctx) })
+	}()
+
+	// The corporation killboard backfill (corp_backfill.go)
+	// works through the corporations profiles and killmail pages
+	// have met, one at a time, at the same pace.
+	go func() {
+		defer children.Done()
+		runGuarded("corp backfill", func() { app.runCorpBackfill(ctx) })
 	}()
 
 	// The residue step (residue_model.go) reads what settled

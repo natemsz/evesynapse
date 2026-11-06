@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -183,6 +184,132 @@ func TestZkillHistoryBackfillIngests(t *testing.T) {
 	app.backfillCorp(ctx, client, 98000002)
 	if got := hist.hitCount("/corporationID/98000002/"); got != 1 {
 		t.Errorf("corp history fetched %d times, want 1", got)
+	}
+}
+
+// TestPilotBackfillRestoresPrePermanenceProfile pins the one
+// exception to the backfill's once-only rule: a profile stamped
+// before kill involvement became permanent (the schema 127
+// step's applied_at, set to a fixed time here) is walked once
+// more on offer, and its stamp moves past the cutoff, while a
+// profile stamped after the cutoff is left alone. Without the
+// exception, pilots whose involvement was pruned before it was
+// kept would understate their record forever. The stale pilot
+// here is production-shaped: the original walk already folded
+// the kills into the aggregates, and the fold's markers are
+// gone (the retention prune takes them on the same line as
+// the detail), so the restoration walk must restore the
+// involvement by ingest alone and leave the counts exactly
+// where the first walk put them.
+func TestPilotBackfillRestoresPrePermanenceProfile(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	cutoff := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := conn.ExecContext(ctx,
+		`UPDATE schema_migrations SET applied_at = $1 WHERE version = 127`, cutoff); err != nil {
+		t.Fatalf("set involvement cutoff: %v", err)
+	}
+	hist := newFakeZkillHistory(map[string]string{
+		"/characterID/91000001/": "[" + zkPartEntry + "," + zkLossEntry + "]",
+		"/characterID/91000002/": "[" + zkCorpEntry + "]",
+	})
+	srv := httptest.NewServer(hist.handler())
+	defer srv.Close()
+	app.cfg.zkillAPIBaseURL = srv.URL + "/"
+	client := srv.Client()
+
+	stamp := func(id int64, at time.Time) {
+		t.Helper()
+		if err := q.ClaimPilotActivityProfile(ctx, db.ClaimPilotActivityProfileParams{CharacterID: id, UpdatedAt: at}); err != nil {
+			t.Fatalf("claim profile %d: %v", id, err)
+		}
+		if err := q.MarkPilotActivityBackfilled(ctx, db.MarkPilotActivityBackfilledParams{
+			CharacterID: id, BackfilledAt: sql.NullTime{Time: at, Valid: true},
+		}); err != nil {
+			t.Fatalf("stamp profile %d: %v", id, err)
+		}
+	}
+	const stalePilot, freshPilot = int64(91000001), int64(91000002)
+
+	// The stale pilot's original walk: the two kills folded
+	// into the aggregates, the stamp set before the cutoff,
+	// and the fold markers since pruned.
+	var walked []zkillHistoryEntry
+	if err := json.Unmarshal([]byte("["+zkPartEntry+","+zkLossEntry+"]"), &walked); err != nil {
+		t.Fatalf("decode walked history: %v", err)
+	}
+	if err := q.ClaimPilotActivityProfile(ctx, db.ClaimPilotActivityProfileParams{CharacterID: stalePilot, UpdatedAt: cutoff.Add(-time.Hour)}); err != nil {
+		t.Fatalf("claim stale profile: %v", err)
+	}
+	for _, e := range walked {
+		if _, err := app.applyPilotKill(ctx, stalePilot, e.killmailFull, false); err != nil {
+			t.Fatalf("fold walked kill %d: %v", e.KillmailID, err)
+		}
+	}
+	if err := q.MarkPilotActivityBackfilled(ctx, db.MarkPilotActivityBackfilledParams{
+		CharacterID: stalePilot, BackfilledAt: sql.NullTime{Time: cutoff.Add(-time.Hour), Valid: true},
+	}); err != nil {
+		t.Fatalf("stamp stale profile: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx,
+		`DELETE FROM pilot_activity_applied WHERE character_id = $1`, stalePilot); err != nil {
+		t.Fatalf("prune fold markers: %v", err)
+	}
+	stamp(freshPilot, cutoff.Add(time.Hour))
+
+	// The restoration listing names the stale pilot only.
+	stale, err := q.ListStalePilotProfiles(ctx, db.ListStalePilotProfilesParams{Before: cutoff, MaxRows: 25})
+	if err != nil {
+		t.Fatalf("ListStalePilotProfiles: %v", err)
+	}
+	if len(stale) != 1 || stale[0] != stalePilot {
+		t.Fatalf("stale profiles = %v, want [%d]", stale, stalePilot)
+	}
+
+	// The stale pilot is walked again: the history is fetched,
+	// the participation lands in the permanent involvement
+	// record, the aggregates keep the first walk's counts, and
+	// the stamp moves past the cutoff.
+	app.backfillPilot(ctx, client, stalePilot)
+	if got := hist.hitCount("/characterID/91000001/"); got != 1 {
+		t.Errorf("stale pilot history fetched %d times, want 1", got)
+	}
+	var involvement int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT count(*) FROM kill_involvement WHERE character_id = $1`, stalePilot).Scan(&involvement); err != nil {
+		t.Fatalf("count involvement: %v", err)
+	}
+	if involvement != 1 {
+		t.Errorf("involvement rows for the stale pilot = %d, want 1 (the participation)", involvement)
+	}
+	prof, err := q.GetPilotActivityProfile(ctx, stalePilot)
+	if err != nil {
+		t.Fatalf("GetPilotActivityProfile: %v", err)
+	}
+	if prof.Kills != 1 || prof.Losses != 1 {
+		t.Errorf("restored profile counts = %d kills, %d losses, want the first walk's 1 and 1", prof.Kills, prof.Losses)
+	}
+	if !prof.BackfilledAt.Valid || !prof.BackfilledAt.Time.After(cutoff) {
+		t.Errorf("restored stamp = %v, want a time past the cutoff %v", prof.BackfilledAt, cutoff)
+	}
+	// And the exception has closed behind them: a second offer
+	// fetches nothing.
+	app.backfillPilot(ctx, client, stalePilot)
+	if got := hist.hitCount("/characterID/91000001/"); got != 1 {
+		t.Errorf("restored pilot history fetched %d times, want still 1", got)
+	}
+
+	// The fresh pilot is left alone: no fetch, stamp untouched.
+	app.backfillPilot(ctx, client, freshPilot)
+	if got := hist.hitCount("/characterID/91000002/"); got != 0 {
+		t.Errorf("fresh pilot history fetched %d times, want 0", got)
+	}
+	prof, err = q.GetPilotActivityProfile(ctx, freshPilot)
+	if err != nil {
+		t.Fatalf("GetPilotActivityProfile: %v", err)
+	}
+	if !prof.BackfilledAt.Valid || !prof.BackfilledAt.Time.Equal(cutoff.Add(time.Hour)) {
+		t.Errorf("fresh stamp = %v, want the original %v", prof.BackfilledAt, cutoff.Add(time.Hour))
 	}
 }
 

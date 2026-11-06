@@ -1346,6 +1346,45 @@ func (q *Queries) ListScansWithPilot(ctx context.Context, arg ListScansWithPilot
 	return items, nil
 }
 
+const listStalePilotProfiles = `-- name: ListStalePilotProfiles :many
+SELECT character_id FROM pilot_activity_profiles
+WHERE backfilled_at IS NOT NULL AND backfilled_at < $1::timestamptz
+ORDER BY last_active_at DESC NULLS LAST, character_id
+LIMIT $2::bigint
+`
+
+type ListStalePilotProfilesParams struct {
+	Before  time.Time `json:"before"`
+	MaxRows int64     `json:"max_rows"`
+}
+
+// Profiles backfilled before kill involvement became
+// permanent: their stored involvement was pruned before it
+// was kept, so the restoration pass offers them for one
+// fresh walk. A bounded batch, most recently active first.
+func (q *Queries) ListStalePilotProfiles(ctx context.Context, arg ListStalePilotProfilesParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listStalePilotProfiles, arg.Before, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var character_id int64
+		if err := rows.Scan(&character_id); err != nil {
+			return nil, err
+		}
+		items = append(items, character_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markPilotActivityBackfilled = `-- name: MarkPilotActivityBackfilled :exec
 UPDATE pilot_activity_profiles
 SET backfilled_at = $1, updated_at = $1

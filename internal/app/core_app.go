@@ -275,6 +275,13 @@ type Application struct {
 	pilotBackfillMu     sync.Mutex
 	pilotBackfillCh     chan int64
 	pilotBackfillQueued map[int64]bool
+	// When kill involvement became permanent (schema step
+	// 127's applied_at), read once and cached: profiles
+	// backfilled before it are offered one restoration walk
+	// (pilot_activity.go).
+	involvementCutoffMu   sync.Mutex
+	involvementCutoff     time.Time
+	involvementCutoffRead bool
 	// Corporation killboard coverage (corp_backfill.go): the
 	// corp backfill queue and who is already on it, the pilot
 	// backfill queue's twin.

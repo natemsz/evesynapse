@@ -241,7 +241,7 @@ func (q *Queries) CorporationKillStats(ctx context.Context, arg CorporationKillS
 
 const countAllianceKillLosses = `-- name: CountAllianceKillLosses :one
 SELECT COUNT(*)::bigint AS losses FROM kills
-WHERE victim_alliance_id = $1 AND public AND NOT npc
+WHERE victim_alliance_id = $1 AND public
   AND killmail_time >= $2::timestamptz
 `
 
@@ -250,7 +250,7 @@ type CountAllianceKillLossesParams struct {
 	Since      time.Time `json:"since"`
 }
 
-// An alliance's losses in a window.
+// An alliance's losses in a window. NPC losses count.
 func (q *Queries) CountAllianceKillLosses(ctx context.Context, arg CountAllianceKillLossesParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countAllianceKillLosses, arg.AllianceID, arg.Since)
 	var losses int64
@@ -260,7 +260,7 @@ func (q *Queries) CountAllianceKillLosses(ctx context.Context, arg CountAlliance
 
 const countCorporationKillLosses = `-- name: CountCorporationKillLosses :one
 SELECT COUNT(*)::bigint AS losses FROM kills
-WHERE victim_corporation_id = $1 AND public AND NOT npc
+WHERE victim_corporation_id = $1 AND public
   AND killmail_time >= $2::timestamptz
 `
 
@@ -269,7 +269,8 @@ type CountCorporationKillLossesParams struct {
 	Since         time.Time `json:"since"`
 }
 
-// A corporation's losses in a window.
+// A corporation's losses in a window. NPC losses count,
+// the rule every entity's losses follow.
 func (q *Queries) CountCorporationKillLosses(ctx context.Context, arg CountCorporationKillLossesParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countCorporationKillLosses, arg.CorporationID, arg.Since)
 	var losses int64
@@ -530,7 +531,7 @@ func (q *Queries) ListAllianceShips(ctx context.Context, arg ListAllianceShipsPa
 const listAllianceShipsLost = `-- name: ListAllianceShipsLost :many
 SELECT ship_type_id, COUNT(*)::bigint AS losses
 FROM kills
-WHERE victim_alliance_id = $1 AND public AND NOT npc AND ship_type_id > 0
+WHERE victim_alliance_id = $1 AND public AND ship_type_id > 0
   AND killmail_time >= $2::timestamptz
 GROUP BY ship_type_id ORDER BY losses DESC, ship_type_id LIMIT 8
 `
@@ -546,6 +547,7 @@ type ListAllianceShipsLostRow struct {
 }
 
 // The ships an alliance loses as victim, most first.
+// NPC losses count.
 func (q *Queries) ListAllianceShipsLost(ctx context.Context, arg ListAllianceShipsLostParams) ([]ListAllianceShipsLostRow, error) {
 	rows, err := q.db.QueryContext(ctx, listAllianceShipsLost, arg.AllianceID, arg.Since)
 	if err != nil {
@@ -660,7 +662,7 @@ func (q *Queries) ListCorporationShips(ctx context.Context, arg ListCorporationS
 const listCorporationShipsLost = `-- name: ListCorporationShipsLost :many
 SELECT ship_type_id, COUNT(*)::bigint AS losses
 FROM kills
-WHERE victim_corporation_id = $1 AND public AND NOT npc AND ship_type_id > 0
+WHERE victim_corporation_id = $1 AND public AND ship_type_id > 0
   AND killmail_time >= $2::timestamptz
 GROUP BY ship_type_id ORDER BY losses DESC, ship_type_id LIMIT 8
 `
@@ -676,6 +678,7 @@ type ListCorporationShipsLostRow struct {
 }
 
 // The ships a corporation loses as victim, most first.
+// NPC losses count.
 func (q *Queries) ListCorporationShipsLost(ctx context.Context, arg ListCorporationShipsLostParams) ([]ListCorporationShipsLostRow, error) {
 	rows, err := q.db.QueryContext(ctx, listCorporationShipsLost, arg.CorporationID, arg.Since)
 	if err != nil {
@@ -1109,7 +1112,7 @@ func (q *Queries) ListPilotShips(ctx context.Context, arg ListPilotShipsParams) 
 const listPilotShipsLost = `-- name: ListPilotShipsLost :many
 SELECT ship_type_id, COUNT(*)::bigint AS losses
 FROM kills
-WHERE victim_character_id = $1 AND public AND NOT npc AND ship_type_id > 0
+WHERE victim_character_id = $1 AND public AND ship_type_id > 0
   AND killmail_time >= $2::timestamptz
 GROUP BY ship_type_id ORDER BY losses DESC, ship_type_id LIMIT 8
 `
@@ -1124,7 +1127,8 @@ type ListPilotShipsLostRow struct {
 	Losses     int64 `json:"losses"`
 }
 
-// The ships a pilot loses as victim, most first.
+// The ships a pilot loses as victim, most first. NPC
+// losses count.
 func (q *Queries) ListPilotShipsLost(ctx context.Context, arg ListPilotShipsLostParams) ([]ListPilotShipsLostRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPilotShipsLost, arg.CharacterID, arg.Since)
 	if err != nil {

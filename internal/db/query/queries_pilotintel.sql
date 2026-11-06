@@ -53,10 +53,11 @@ SELECT
     COALESCE(SUM(isk_killed) FILTER (WHERE victim_corporation_id <> sqlc.arg(corporation_id)), 0)::float8 AS isk_killed
 FROM entity_kills;
 
--- A corporation's losses in a window.
+-- A corporation's losses in a window. NPC losses count,
+-- the rule every entity's losses follow.
 -- name: CountCorporationKillLosses :one
 SELECT COUNT(*)::bigint AS losses FROM kills
-WHERE victim_corporation_id = sqlc.arg(corporation_id) AND public AND NOT npc
+WHERE victim_corporation_id = sqlc.arg(corporation_id) AND public
   AND killmail_time >= sqlc.arg(since)::timestamptz;
 
 -- The corporation's most valuable kill in a window.
@@ -93,10 +94,10 @@ SELECT
     COALESCE(SUM(isk_killed) FILTER (WHERE victim_alliance_id <> sqlc.arg(alliance_id)), 0)::float8 AS isk_killed
 FROM entity_kills;
 
--- An alliance's losses in a window.
+-- An alliance's losses in a window. NPC losses count.
 -- name: CountAllianceKillLosses :one
 SELECT COUNT(*)::bigint AS losses FROM kills
-WHERE victim_alliance_id = sqlc.arg(alliance_id) AND public AND NOT npc
+WHERE victim_alliance_id = sqlc.arg(alliance_id) AND public
   AND killmail_time >= sqlc.arg(since)::timestamptz;
 
 -- The alliance's most valuable kill in a window.
@@ -143,11 +144,12 @@ WHERE a.character_id = sqlc.arg(character_id) AND k.public AND NOT k.npc
   AND k.killmail_time >= sqlc.arg(since)::timestamptz
 GROUP BY k.system_id ORDER BY n DESC LIMIT 8;
 
--- The ships a pilot loses as victim, most first.
+-- The ships a pilot loses as victim, most first. NPC
+-- losses count.
 -- name: ListPilotShipsLost :many
 SELECT ship_type_id, COUNT(*)::bigint AS losses
 FROM kills
-WHERE victim_character_id = sqlc.arg(character_id) AND public AND NOT npc AND ship_type_id > 0
+WHERE victim_character_id = sqlc.arg(character_id) AND public AND ship_type_id > 0
   AND killmail_time >= sqlc.arg(since)::timestamptz
 GROUP BY ship_type_id ORDER BY losses DESC, ship_type_id LIMIT 8;
 
@@ -162,10 +164,11 @@ WHERE a.corporation_id = sqlc.arg(corporation_id) AND k.public AND NOT k.npc AND
 GROUP BY a.ship_type_id ORDER BY n DESC, a.ship_type_id LIMIT 8;
 
 -- The ships a corporation loses as victim, most first.
+-- NPC losses count.
 -- name: ListCorporationShipsLost :many
 SELECT ship_type_id, COUNT(*)::bigint AS losses
 FROM kills
-WHERE victim_corporation_id = sqlc.arg(corporation_id) AND public AND NOT npc AND ship_type_id > 0
+WHERE victim_corporation_id = sqlc.arg(corporation_id) AND public AND ship_type_id > 0
   AND killmail_time >= sqlc.arg(since)::timestamptz
 GROUP BY ship_type_id ORDER BY losses DESC, ship_type_id LIMIT 8;
 
@@ -189,10 +192,11 @@ WHERE a.alliance_id = sqlc.arg(alliance_id) AND k.public AND NOT k.npc AND a.shi
 GROUP BY a.ship_type_id ORDER BY n DESC, a.ship_type_id LIMIT 8;
 
 -- The ships an alliance loses as victim, most first.
+-- NPC losses count.
 -- name: ListAllianceShipsLost :many
 SELECT ship_type_id, COUNT(*)::bigint AS losses
 FROM kills
-WHERE victim_alliance_id = sqlc.arg(alliance_id) AND public AND NOT npc AND ship_type_id > 0
+WHERE victim_alliance_id = sqlc.arg(alliance_id) AND public AND ship_type_id > 0
   AND killmail_time >= sqlc.arg(since)::timestamptz
 GROUP BY ship_type_id ORDER BY losses DESC, ship_type_id LIMIT 8;
 

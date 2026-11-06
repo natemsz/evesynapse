@@ -4129,7 +4129,7 @@ html[data-theme="light"] .fit-head select {
 .fit-fold-more:hover { color: var(--text); }
 .fit-fold-more:hover::before, .fit-fold-more:hover::after { filter: brightness(1.4); }
 .fit-imp > .suggest { top: calc(100% + 2px); max-height: 18rem; overflow-y: auto; }
-.suggest li.sug-missing > span:not(.sug-label) { color: var(--danger); }
+.suggest li.sug-missing .sug-text > span { color: var(--danger); }
 .suggest li .sug-missing-tag { margin-left: 0.4rem; font-size: var(--fs-2xs); color: var(--danger); }
 .fit-missing {
   border: 1px solid #4a3410;
@@ -4567,6 +4567,25 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   height: 1.6rem;
   border-radius: var(--r-sm);
   flex: 0 0 auto;
+}
+/* A suggestion row that leads with an icon: the icon and the text
+   sit side by side with a gap, and the name-and-label column
+   centers against the icon. */
+.suggest li:has(> .sug-icon) {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.suggest .sug-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+.suggest .sug-text > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .suggest .sug-empty { color: var(--muted); cursor: default; }
 .suggest .sug-empty:hover { background: none; }

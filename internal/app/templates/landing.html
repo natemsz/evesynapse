@@ -84,6 +84,7 @@
         <li><b>Assets</b> searchable across your whole account</li>
         <li><b>Mail</b>, <b>Calendar</b>, and <b>Contacts</b></li>
         <li><b>Skill Plans</b> and training progress</li>
+        <li><b>My Killmails</b>: your full kill and loss record, all time or the last 30 days</li>
       </ul></div>
       <div class="ld-glass ld-tgroup"><h3>Fitting</h3><ul>
         <li><b>Fitting Simulator</b>: a browser-based fit tool with full skill math and live game data</li>
@@ -106,6 +107,10 @@
         <li><b>Market Orders</b>: see where your profit is coming from and what is really making money</li>
         <li><b>Top Stations</b> leaderboard</li>
         <li><b>Contract Search</b>: advanced contract filtering using our pricing model to find deals on blueprints, abyssals, and more</li>
+        <li><b>LP Store</b>: every loyalty point store priced in ISK per LP</li>
+        <li><b>Baskets</b>: group items and track what the whole set is worth over time</li>
+        <li><b>Market Trends</b>: price history and the biggest movers, by item and by region</li>
+        <li><b>Market API</b>: prices, history, and appraisals you can call from your own tools, with a key from Settings</li>
       </ul></div>
       <div class="ld-glass ld-tgroup"><h3>Corporation</h3><ul>
         <li><b>Corporation Data</b>: members, wallets, assets, and structures</li>
@@ -122,6 +127,8 @@
         <li><b>Intel Channels</b>: track gate camps, hostile pilots, and local intel in a shared dashboard you control, fully integrated with Discord and the map</li>
         <li><b>Axon</b> pushes your in-game intel chat into your channels and the universe map</li>
         <li><b>Hostile Pilots Tracker</b> for the pilots your channels are watching</li>
+        <li><b>Pilot Records</b>: any pilot's kills, losses, usual ships, and the systems they fight in</li>
+        <li><b>Battle Reports</b> from your game logs, matched to the fight's killmails, with a damage timeline</li>
         <li><b>Item Database</b> for all of New Eden</li>
       </ul></div>
     </div>
@@ -137,6 +144,8 @@
       <div class="ld-glass ld-tcard"><h3>Encrypted at rest</h3><p>Refresh tokens are sealed with AES-256-GCM, the current standard for encryption at rest. The encryption keys are stored off-server, on secure hardware. Reading your data never means trusting us with the keys to it.</p></div>
       <div class="ld-glass ld-tcard"><h3>Public data, no login</h3><p>Tools using public data require no login at all to use: the fitting simulator, planners, market and intel tools, and the universe map, are open to everyone. Sign in only when you want your own characters in the picture.</p></div>
       <div class="ld-glass ld-tcard"><h3>Or run it yourself</h3><p>Open source, one setup script, your own ESI application and your own data. The public site runs the same build you can download.</p></div>
+      <div class="ld-glass ld-tcard"><h3>The Swarm</h3><p>Self-hosted copies of EveSynapse can pull public data from each other, so a new copy does not start from an empty database.</p></div>
+      <div class="ld-glass ld-tcard"><h3>Two-factor sign-in</h3><p>Add a passkey or a security key to your account. Admin accounts have to have one.</p></div>
     </div>
     <div class="ld-glass ld-tcard ld-tcard-wide"><h3>PKCE on every sign-in</h3><p>The EVE login flow is PKCE-protected: the sign-in code can only be exchanged by the browser that asked for it, so an intercepted code is worthless to anyone else.</p></div>
     <div class="ld-glass ld-tcard ld-tcard-wide"><h3>Revoke on unlink</h3><p>When you unlink a character, you can fully revoke its token with EVE itself, right in the unlink flow. Deleting our copy is the floor; killing the token at the source is your call.</p></div>
@@ -247,7 +256,7 @@
 
 <footer class="ld-footer"><div class="ld-wrap">
   <p class="ld-legal"><a href="/about/#about">About</a> · <a href="/about/#contact">Contact</a> · <a href="/about/#privacy">Privacy Policy</a> &middot; <a href="/license/">License</a> &middot; <a href="/report/">Report a bug</a>{{if .StatusPage}} &middot; <a href="{{.StatusPage}}">Service Health</a>{{end}}</p>
-w  <p class="ld-legal">Developed in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>.<br>
+  <p class="ld-legal">Developed in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>.<br>
   © 2026 Synap6.io LLC, dba Synap6 · Licensed under the <a href="https://gitlab.com/natemsz/evesynapse/-/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">BSD-3-Clause-Clear</a> license.</p>
   <p>EVE Online and all associated material are the intellectual property of Fenris Creations and are used with permission.<br>
   No official affiliation or endorsement by Fenris Creations is stated or implied.</p>

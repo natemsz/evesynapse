@@ -86,9 +86,10 @@
 .kb-kill {
   position: relative;
   display: grid;
-  grid-template-columns: 2.75rem minmax(0, 1.5fr) minmax(0, 1.15fr) 6.5rem minmax(0, 1fr);
+  grid-template-columns: 2.75rem minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 6.2rem;
+  grid-template-areas: "ship main atk where value" "ship main atk meta value";
   align-items: center;
-  gap: 0.2rem 0.85rem;
+  gap: 0.1rem 0.85rem;
   padding: 0.55rem 0.85rem;
   border-top: 1px solid var(--hairline);
 }
@@ -96,8 +97,21 @@
 .kb-kill:hover { background: var(--row-hover); }
 .kb-kill.big { box-shadow: inset 3px 0 0 var(--kb-big); }
 .kb-kill.big .kb-kill-value { color: var(--kb-big); }
-.kb-kill-ship { grid-row: 1 / span 1; border-radius: var(--r-sm); background: var(--row-alt); }
-.kb-kill-main { display: flex; flex-direction: column; min-width: 0; }
+.kb-kill-ship { grid-area: ship; border-radius: var(--r-sm); background: var(--row-alt); }
+.kb-kill-main { grid-area: main; display: flex; flex-direction: column; min-width: 0; }
+.kb-kill-main .kb-party { margin-top: 0.15rem; }
+.kb-atk { grid-area: atk; }
+.kb-party { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.kb-face { flex: none; border-radius: var(--r-sm); background: var(--row-alt); }
+.kb-party-info { display: flex; flex-direction: column; min-width: 0; }
+.kb-party-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-party-name a { color: var(--text); text-decoration: none; }
+.kb-party-name a:hover { color: var(--accent); }
+.kb-party-orgs { display: flex; align-items: center; gap: 0.55rem; font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; }
+.kb-org { display: inline-flex; align-items: center; gap: 0.3rem; color: var(--muted-2); text-decoration: none; min-width: 0; overflow: hidden; }
+.kb-org-n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-org:hover { color: var(--accent); }
+.kb-org img { flex: none; border-radius: 3px; }
 /* The ship name's link covers the whole row; the other links sit
    above it and keep their own targets. */
 .kb-kill-link { color: var(--text-bright); font-weight: 400; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -109,10 +123,10 @@
 .kb-kill-who a, .kb-kill-where a { color: inherit; text-decoration: none; }
 .kb-kill-who a:hover, .kb-kill-where a:hover { color: var(--accent); }
 .kb-kill-org { color: var(--muted-2) !important; }
-.kb-kill-where { font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-kill-where { grid-area: where; align-self: end; font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-kill-region { color: var(--muted-2) !important; margin-left: 0.2rem; }
-.kb-kill-value { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-bright); }
-.kb-kill-meta { font-size: var(--fs-xs); color: var(--muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-kill-value { grid-area: value; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-bright); }
+.kb-kill-meta { grid-area: meta; align-self: start; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-tag {
   display: inline-block;
   padding: 0 0.35rem;
@@ -166,21 +180,21 @@
 .kb-top-n { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-top-c { font-variant-numeric: tabular-nums; color: var(--muted-2); }
 
-/* --- Narrow pages: a kill folds to two lines, ship and owner over
-   value, system over age and attackers --- */
+/* --- Narrow pages: a kill folds, ship and victim over the final
+   blow, system last, the org lines and region folded away --- */
 @container page (width < 45rem) {
   .kb-kill {
-    grid-template-columns: 2.6rem minmax(0, 1.5fr) minmax(0, 1fr);
-    grid-template-areas: "ship main value" "ship where meta";
+    grid-template-columns: 2.6rem minmax(0, 1fr) minmax(0, auto);
+    grid-template-areas: "ship main value" "ship atk value" "ship where meta";
     gap: 0.1rem 0.65rem;
     padding: 0.55rem 0.65rem;
   }
-  .kb-kill-ship { grid-area: ship; width: 2.6rem; height: 2.6rem; align-self: center; }
-  .kb-kill-main { grid-area: main; }
-  .kb-kill-value { grid-area: value; }
-  .kb-kill-where { grid-area: where; }
-  .kb-kill-meta { grid-area: meta; }
+  .kb-kill-ship { width: 2.6rem; height: 2.6rem; align-self: center; }
+  .kb-kill-value { align-self: center; }
+  .kb-kill-meta { text-align: right; align-self: center; }
+  .kb-kill-where { align-self: center; }
   .kb-kill-region { display: none; }
-  .kb-kill-org { display: none; }
+  .kb-party-orgs { display: none; }
+  .kb-face { width: 26px; height: 26px; }
   .kb-att { display: none; }
 }

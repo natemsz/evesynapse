@@ -44,10 +44,6 @@ type pageData struct {
 	SkillsChars     []assetCharLink
 	Sync            *syncView
 	Admin           *adminView
-	// AdminTab names the Admin page tab the page belongs to
-	// ("analytics" for the Admin page itself, "sync" for its
-	// Sync tab); the admintabs bar marks it active.
-	AdminTab string
 	// NoticeAdmin is the Admin page's Notices tab (notices.go).
 	NoticeAdmin *noticesAdminView
 	// ESIDetails is the Admin page's ESI Details tab
@@ -212,7 +208,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/admintabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/contractlist.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html", "templates/noticebanners.html", "templates/yourorders.html", "templates/reqicons.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/contractlist.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html", "templates/noticebanners.html", "templates/yourorders.html", "templates/reqicons.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.
@@ -278,9 +274,9 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	}
 	shell.NavLinks = navLinksFor(shell.Section, shell.NavPage, shell.NavCharacter)
 	shell.NavGroups = navGroupsFor(shell.NavLinks)
-	// A handler that set its own tab strip (the Admin page's
-	// Sync tab, whose strip is its in-page sections) keeps it;
-	// every other page's strip comes from its nav section.
+	// A handler that set its own tab strip (the Admin pages,
+	// whose strip is the Admin tabs) keeps it; every other
+	// page's strip comes from its nav section.
 	if len(shell.SectionTabs) == 0 {
 		shell.SectionTabs, shell.SectionSubTabs = sectionTabsGrouped(shell.NavLinks, shell.Section)
 	}

@@ -97,7 +97,6 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 	data.AutoRefresh = true
-	data.AdminTab = "sync"
 
 	status := app.snapshotWorkerStatus()
 	view := &syncView{
@@ -136,9 +135,10 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		view.Character = app.syncCharacterDetail(ctx, *ch)
 	}
 
-	// The sub-section strip is the site's shared section tabs
-	// (the pagetabs band), one tab per section on the page, in
-	// the order they appear; the first is where the page opens.
+	// The page's own sections ride the shared band's sub-row
+	// (the section-subtabs row), one tab per section on the
+	// page, in the order they appear; the first is where the
+	// page opens. The band itself carries the Admin tabs.
 	tabs := []module.NavLink{{Href: "#sync-worker", Label: "Worker", Active: true}}
 	if view.Foresight != nil {
 		tabs = append(tabs, module.NavLink{Href: "#sync-warmed", Label: "Warmed ahead"})
@@ -156,7 +156,8 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 	if view.SDE != nil {
 		tabs = append(tabs, module.NavLink{Href: "#sync-sde", Label: "Static data"})
 	}
-	data.SectionTabs = tabs
+	data.SectionTabs = adminTabs("sync")
+	data.SectionSubTabs = tabs
 
 	app.render(ctx, w, http.StatusOK, "sync.html", data)
 }

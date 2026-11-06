@@ -11,7 +11,7 @@ SELECT
     (SELECT COUNT(*) FROM kills v WHERE v.victim_character_id = sqlc.arg(character_id) AND v.public
         AND v.killmail_time >= sqlc.arg(since)::timestamptz)::bigint AS losses,
     COALESCE(SUM(COALESCE(k.value_ours, k.value_zkill, 0)) FILTER (WHERE k.victim_character_id <> sqlc.arg(character_id)), 0)::float8 AS isk_killed
-FROM kill_attackers a
+FROM kill_involvement a
 JOIN kills k ON k.killmail_id = a.killmail_id
 WHERE a.character_id = sqlc.arg(character_id) AND k.public AND NOT k.npc
   AND k.killmail_time >= sqlc.arg(since)::timestamptz;
@@ -21,7 +21,7 @@ WHERE a.character_id = sqlc.arg(character_id) AND k.public AND NOT k.npc
 -- name: GetPilotBiggestKill :one
 WITH entity_kills AS (
     SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
-    FROM kill_attackers a
+    FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
     WHERE a.character_id = sqlc.arg(character_id) AND k.public AND NOT k.npc
       AND k.victim_character_id <> sqlc.arg(character_id)
@@ -41,7 +41,7 @@ LIMIT 1;
 WITH entity_kills AS (
     SELECT k.killmail_id, k.victim_corporation_id, k.solo,
            COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk_killed
-    FROM kill_attackers a
+    FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
     WHERE a.corporation_id = sqlc.arg(corporation_id) AND k.public AND NOT k.npc
       AND k.killmail_time >= sqlc.arg(since)::timestamptz
@@ -64,7 +64,7 @@ WHERE victim_corporation_id = sqlc.arg(corporation_id) AND public
 -- name: GetCorporationBiggestKill :one
 WITH entity_kills AS (
     SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
-    FROM kill_attackers a
+    FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
     WHERE a.corporation_id = sqlc.arg(corporation_id) AND k.public AND NOT k.npc
       AND k.victim_corporation_id <> sqlc.arg(corporation_id)
@@ -82,7 +82,7 @@ LIMIT 1;
 WITH entity_kills AS (
     SELECT k.killmail_id, k.victim_alliance_id, k.solo,
            COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk_killed
-    FROM kill_attackers a
+    FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
     WHERE a.alliance_id = sqlc.arg(alliance_id) AND k.public AND NOT k.npc
       AND k.killmail_time >= sqlc.arg(since)::timestamptz
@@ -104,7 +104,7 @@ WHERE victim_alliance_id = sqlc.arg(alliance_id) AND public
 -- name: GetAllianceBiggestKill :one
 WITH entity_kills AS (
     SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
-    FROM kill_attackers a
+    FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
     WHERE a.alliance_id = sqlc.arg(alliance_id) AND k.public AND NOT k.npc
       AND k.victim_alliance_id <> sqlc.arg(alliance_id)

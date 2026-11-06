@@ -64,6 +64,15 @@ func (q *Queries) DeleteDemoBattleKillDetails(ctx context.Context, killmailIds [
 	return err
 }
 
+const deleteDemoBattleKillInvolvement = `-- name: DeleteDemoBattleKillInvolvement :exec
+DELETE FROM kill_involvement WHERE killmail_id = ANY($1::bigint[])
+`
+
+func (q *Queries) DeleteDemoBattleKillInvolvement(ctx context.Context, killmailIds []int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoBattleKillInvolvement, pq.Array(killmailIds))
+	return err
+}
+
 const deleteDemoBattleKillPrices = `-- name: DeleteDemoBattleKillPrices :exec
 DELETE FROM kill_line_prices WHERE killmail_id = ANY($1::bigint[])
 `

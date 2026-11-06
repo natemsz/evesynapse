@@ -112,6 +112,9 @@ DELETE FROM kills WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
 -- name: DeleteDemoBattleKillAttackers :exec
 DELETE FROM kill_attackers WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
 
+-- name: DeleteDemoBattleKillInvolvement :exec
+DELETE FROM kill_involvement WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
+
 -- name: DeleteDemoBattleKillDetails :exec
 DELETE FROM kill_details WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
 

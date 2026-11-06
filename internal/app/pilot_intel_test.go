@@ -38,6 +38,7 @@ func TestPilotIntel(t *testing.T) {
 			VALUES ($1, $2, 30002187, $3, $4, 'stream', $5, now(), 10000000)`, id, at, victim, ship, public)
 		for i, a := range attackers {
 			exec(`INSERT INTO kill_attackers (killmail_id, seq, character_id, ship_type_id, final_blow) VALUES ($1, $2, $3, 22456, $4)`, id, i, a, i == 0)
+			exec(`INSERT INTO kill_involvement (killmail_id, character_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, id, a)
 		}
 	}
 	kill(1, now.Add(-2*time.Hour), 92000001, 587, true, hostile, 91000002)

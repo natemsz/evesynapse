@@ -43,7 +43,7 @@ const allianceKillStats = `-- name: AllianceKillStats :one
 WITH entity_kills AS (
     SELECT k.killmail_id, k.victim_alliance_id, k.solo,
            COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk_killed
-    FROM kill_attackers a
+    FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
     WHERE a.alliance_id = $1 AND k.public AND NOT k.npc
       AND k.killmail_time >= $2::timestamptz
@@ -203,7 +203,7 @@ const corporationKillStats = `-- name: CorporationKillStats :one
 WITH entity_kills AS (
     SELECT k.killmail_id, k.victim_corporation_id, k.solo,
            COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk_killed
-    FROM kill_attackers a
+    FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
     WHERE a.corporation_id = $1 AND k.public AND NOT k.npc
       AND k.killmail_time >= $2::timestamptz
@@ -281,7 +281,7 @@ func (q *Queries) CountCorporationKillLosses(ctx context.Context, arg CountCorpo
 const getAllianceBiggestKill = `-- name: GetAllianceBiggestKill :one
 WITH entity_kills AS (
     SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
-    FROM kill_attackers a
+    FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
     WHERE a.alliance_id = $1 AND k.public AND NOT k.npc
       AND k.victim_alliance_id <> $1
@@ -339,7 +339,7 @@ func (q *Queries) GetAllianceBiggestKill(ctx context.Context, arg GetAllianceBig
 const getCorporationBiggestKill = `-- name: GetCorporationBiggestKill :one
 WITH entity_kills AS (
     SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
-    FROM kill_attackers a
+    FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
     WHERE a.corporation_id = $1 AND k.public AND NOT k.npc
       AND k.victim_corporation_id <> $1
@@ -428,7 +428,7 @@ func (q *Queries) GetPilotActivityProfile(ctx context.Context, characterID int64
 const getPilotBiggestKill = `-- name: GetPilotBiggestKill :one
 WITH entity_kills AS (
     SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
-    FROM kill_attackers a
+    FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
     WHERE a.character_id = $1 AND k.public AND NOT k.npc
       AND k.victim_character_id <> $1
@@ -1392,7 +1392,7 @@ SELECT
     (SELECT COUNT(*) FROM kills v WHERE v.victim_character_id = $1 AND v.public
         AND v.killmail_time >= $2::timestamptz)::bigint AS losses,
     COALESCE(SUM(COALESCE(k.value_ours, k.value_zkill, 0)) FILTER (WHERE k.victim_character_id <> $1), 0)::float8 AS isk_killed
-FROM kill_attackers a
+FROM kill_involvement a
 JOIN kills k ON k.killmail_id = a.killmail_id
 WHERE a.character_id = $1 AND k.public AND NOT k.npc
   AND k.killmail_time >= $2::timestamptz

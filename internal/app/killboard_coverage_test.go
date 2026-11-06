@@ -374,6 +374,90 @@ func TestKillInvolvementFiling(t *testing.T) {
 	}
 }
 
+// TestKillValueSurvivesPrune: a kill priced at ingest keeps its
+// value credited after its detail is pruned. The kill's attacker
+// detail and stored killmail go at the retention cutoff; the
+// pilot's kill count, the ISK destroyed and the kill's place in
+// the pilot's board kills stay, read from the permanent
+// involvement record.
+func TestKillValueSurvivesPrune(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO market_region_stats
+		(region_id, type_id, typical_sell, updated_at) VALUES (10000002, 587, 400000, now())`); err != nil {
+		t.Fatalf("seed region stats: %v", err)
+	}
+
+	// One kill, priced at ingest from the region stats: a
+	// 400,000 ISK hull, destroyed by two attackers. The pilot
+	// asserted on is the one without the final blow.
+	at := time.Now().UTC().Add(-2 * time.Hour)
+	esi := fmt.Sprintf(`{"killmail_id":800301,"killmail_time":%q,"solar_system_id":30000142,`+
+		`"victim":{"character_id":9201,"corporation_id":98000101,"ship_type_id":587,"damage_taken":900,"items":[]},`+
+		`"attackers":[{"character_id":9202,"corporation_id":98000201,"alliance_id":99000201,"ship_type_id":587,"weapon_type_id":2873,"damage_done":800,"final_blow":true},`+
+		`{"character_id":9203,"corporation_id":98000201,"alliance_id":99000201,"ship_type_id":587,"damage_done":100,"final_blow":false}]}`,
+		at.Format("2006-01-02T15:04:05Z"))
+	frame := fmt.Sprintf(`{"killmail_id":800301,"hash":"h800301","esi":%s,`+
+		`"zkb":{"locationID":60003760,"totalValue":400000,"points":1,"npc":false,"solo":false,"awox":false},"sequence_id":1}`, esi)
+	if err := app.ingestKillPackage(ctx, []byte(frame)); err != nil {
+		t.Fatalf("ingest kill: %v", err)
+	}
+	stored, err := q.GetKill(ctx, 800301)
+	if err != nil {
+		t.Fatalf("stored kill: %v", err)
+	}
+	if !stored.ValueOurs.Valid || stored.ValueOurs.Float64 != 400000 {
+		t.Fatalf("kill value_ours = %v, want 400000 priced at ingest", stored.ValueOurs)
+	}
+
+	since := at.Add(-time.Hour)
+	stats := func() db.PilotKillStatsRow {
+		t.Helper()
+		row, err := q.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: 9203, Since: since})
+		if err != nil {
+			t.Fatalf("PilotKillStats: %v", err)
+		}
+		return row
+	}
+	if got := stats(); got.Kills != 1 || got.IskKilled != 400000 {
+		t.Fatalf("stats before prune = %+v, want 1 kill and 400000 ISK destroyed", got)
+	}
+
+	// The retention prune, run as the daily pass runs it once
+	// the kill is past the cutoff.
+	if _, err := q.PruneKillDetails(ctx, time.Now().UTC()); err != nil {
+		t.Fatalf("prune details: %v", err)
+	}
+	if _, err := q.PruneKillAttackers(ctx, time.Now().UTC()); err != nil {
+		t.Fatalf("prune attackers: %v", err)
+	}
+	var attackers int
+	if err := app.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM kill_attackers WHERE killmail_id = 800301`).Scan(&attackers); err != nil {
+		t.Fatalf("count attackers: %v", err)
+	}
+	if attackers != 0 {
+		t.Fatalf("attacker rows after prune = %d, want 0 (the prune must still take the detail)", attackers)
+	}
+	if _, err := q.GetKillDetail(ctx, 800301); err == nil {
+		t.Fatal("stored killmail survived the prune, want it gone")
+	}
+
+	if got := stats(); got.Kills != 1 || got.IskKilled != 400000 {
+		t.Errorf("stats after prune = %+v, want 1 kill and 400000 ISK destroyed", got)
+	}
+	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+		EntityID: 9203, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListKillsByCharacter: %v", err)
+	}
+	if !feedIDs(feed)[800301] {
+		t.Error("pruned kill missing from the attacker's board kills")
+	}
+}
+
 func TestKillmailPageListsBoardOnlyKill(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
@@ -467,6 +551,11 @@ func TestKillmailPagesPastFifty(t *testing.T) {
 			INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, final_blow)
 			VALUES ($1, 0, 93000002, 98000003, 587, true), ($1, 1, 90000001, 98000002, 587, false)`, id); err != nil {
 			t.Fatalf("seed attackers %d: %v", id, err)
+		}
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kill_involvement (killmail_id, character_id, corporation_id)
+			VALUES ($1, 93000002, 98000003), ($1, 90000001, 98000002)`, id); err != nil {
+			t.Fatalf("seed involvement %d: %v", id, err)
 		}
 	}
 	for _, stmt := range []string{

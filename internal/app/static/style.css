@@ -5334,7 +5334,6 @@ td.cal-day:hover .cal-add, .cal-add:focus-visible { opacity: 1; }
     display: inline-flex; align-items: center; justify-content: center;
   }
 }
-}
 .cal-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .cal-key { padding: 0 0.3rem; border-left: 2px solid #3a3a3a; }
 .cal-key.cal-op { border-left-color: var(--accent); }
@@ -6168,7 +6167,7 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
 }
 @media (prefers-reduced-motion: reduce) {
   .phone-sheet:not([hidden]), .phone-sheet-backdrop:not([hidden]) { animation: none; transition: none; }
-}}
+}
 
 /* Axon's site panel: the window controls the panel's frame would
    carry, at the end of the top bar (base.html, app.js). Drawn in the

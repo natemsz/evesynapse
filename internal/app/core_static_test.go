@@ -258,6 +258,56 @@ func TestStylesheetMainColumnWidth(t *testing.T) {
 	}
 }
 
+// TestStylesheetBracesBalance: every stylesheet's braces
+// balance, comments and strings aside. A stray closing brace
+// makes the CSS parser discard the rule after it, silently.
+func TestStylesheetBracesBalance(t *testing.T) {
+	entries, err := fs.ReadDir(staticFS, "static")
+	if err != nil {
+		t.Fatalf("read static dir: %v", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".css") {
+			continue
+		}
+		raw, err := fs.ReadFile(staticFS, "static/"+e.Name())
+		if err != nil {
+			t.Fatalf("read %s: %v", e.Name(), err)
+		}
+		depth := 0
+		for i := 0; i < len(raw); i++ {
+			switch raw[i] {
+			case '/':
+				if i+1 < len(raw) && raw[i+1] == '*' {
+					end := strings.Index(string(raw[i+2:]), "*/")
+					if end < 0 {
+						t.Fatalf("%s: unterminated comment", e.Name())
+					}
+					i += 2 + end + 1
+				}
+			case '"', '\'':
+				quote := raw[i]
+				for i++; i < len(raw) && raw[i] != quote; i++ {
+					if raw[i] == '\\' {
+						i++
+					}
+				}
+			case '{':
+				depth++
+			case '}':
+				depth--
+				if depth < 0 {
+					t.Errorf("%s: closing brace with nothing open at byte %d", e.Name(), i)
+					depth = 0
+				}
+			}
+		}
+		if depth != 0 {
+			t.Errorf("%s: %d block(s) never closed", e.Name(), depth)
+		}
+	}
+}
+
 // TestCSSDeclarations: the reader finds the named rule only.
 func TestCSSDeclarations(t *testing.T) {
 	css := "nav main { max-width: 1px; }\n@media (min-width: 10px) {\n  main { max-width: 2px; }\n}\nmain {\n  max-width: 3px;\n  margin: 0 auto;\n}\nmain.wide { max-width: 4px; }\n"

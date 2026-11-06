@@ -9,12 +9,12 @@
      and the plain answers folded below. */}}
 <div class="l-page ch">
   <div class="l-head">
-    <p class="l-head-sum">An intel channel is where you and your friends share sightings, like “5 hostiles in 1DQ1-A” or “Amamake clear”. Every report shows on the <a href="/map/">map</a> for everyone in the channel for half an hour, and a route through a reported system points it out.</p>
+    <p class="prose">An intel channel is where you and your friends share sightings, like “5 hostiles in 1DQ1-A” or “Amamake clear”. Every report shows on the <a href="/map/">map</a> for everyone in the channel for half an hour, and a route through a reported system points it out.</p>
     {{if .SignedIn}}<div class="l-head-act"><a class="btn" href="/intel/feed/">Open the intel feed</a></div>{{end}}
   </div>
 
   {{if not .SignedIn}}
-  <div class="l-panel"><p class="ch-p"><a class="btn" href="/auth/login">Sign in with EVE Online</a> to make a channel or join one.</p></div>
+  <div class="l-panel"><p class="ch-p prose"><a class="btn" href="/auth/login">Sign in with EVE Online</a> to make a channel or join one.</p></div>
   {{else}}
   <div class="l-sidebar l-sidebar--end ch-top">
     <section class="l-panel">
@@ -28,9 +28,9 @@
           <span class="badge {{if .Owner}}demo{{else if .CanPost}}kill{{else}}wait{{end}}">{{if .Owner}}{{if .Org}}You manage it{{else}}Owner{{end}}{{else if .CanPost}}Read and post{{else}}Read only{{end}}</span>
         </li>{{end}}
       </ul>
-      <p class="ch-hint">Reading several at once? The <a href="/intel/feed/">intel feed</a> gathers the newest reports from all of them in one stream.</p>
-      {{else}}<p class="ch-hint">You're not in any channels yet. Make one, or ask a channel's owner to give you access.</p>{{end}}
-      <p class="ch-hint">Reports come in three ways: typed on the channel's page or the map, pasted from an in-game intel chat, or sent for you by <a href="#axon">EveSynapse Axon</a> while you play.</p>
+      <p class="prose">Reading several at once? The <a href="/intel/feed/">intel feed</a> gathers the newest reports from all of them in one stream.</p>
+      {{else}}<p class="prose">You're not in any channels yet. Make one, or ask a channel's owner to give you access.</p>{{end}}
+      <p class="prose">Reports come in three ways: typed on the channel's page or the map, pasted from an in-game intel chat, or sent for you by <a href="#axon">EveSynapse Axon</a> while you play.</p>
     </section>
 
     <form class="l-panel op-form ch-form" method="post" action="/intel/channels/create">
@@ -42,22 +42,22 @@
       {{if gt (len .Owners) 1}}<label class="field"><span class="field-label">Belongs to</span>
         <select name="owner">{{range .Owners}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></label>{{end}}
       <button type="submit" class="btn">Create channel</button>
-      <p class="ch-hint">{{if gt (len .Owners) 1}}A channel of your corporation or alliance is run by its directors (and whoever they choose in the corporation's settings), and starts open to its members. A channel of your own is yours alone until you share it.{{else}}Only you can see a new channel until you give others access on its page.{{end}}</p>
+      <p class="prose">{{if gt (len .Owners) 1}}A channel of your corporation or alliance is run by its directors (and whoever they choose in the corporation's settings), and starts open to its members. A channel of your own is yours alone until you share it.{{else}}Only you can see a new channel until you give others access on its page.{{end}}</p>
     </form>
   </div>
 
   <section class="l-panel ch-axon" id="axon">
     <h2>EveSynapse Axon</h2>
-    <p class="ch-p">Axon is a small program you run on your own computer. EVE already saves your chat to files on your computer. While you play, Axon reads those files for your in-game intel channel and sends each new line here, so sightings show up on the map without anyone typing or pasting them. It is <a href="https://github.com/natemsz/axon" rel="noopener">open source</a>.</p>
+    <p class="ch-p prose">Axon is a small program you run on your own computer. EVE already saves your chat to files on your computer. While you play, Axon reads those files for your in-game intel channel and sends each new line here, so sightings show up on the map without anyone typing or pasting them. It is <a href="https://github.com/natemsz/axon" rel="noopener">open source</a>.</p>
 
     <div class="l-switcher ch-axon-cols">
       <div>
         <h3>Set it up</h3>
-        <ol class="ch-steps">
+        <ol class="ch-steps prose">
           <li>
             <strong>Install Axon.</strong> Download the file for your computer and run it. It installs itself and opens Axon's window.
             {{if not .Tokens}}<div class="ch-dl">{{range .Downloads}}<a class="btn" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</div>
-            <p class="ch-hint">Axon isn't code-signed yet, so Windows may warn about an unknown publisher: choose <em>More info</em>, then <em>Run anyway</em>. On a Mac, make the download runnable with <code>chmod +x</code> and run it once from Terminal.</p>{{end}}
+            <p class="prose">Axon isn't code-signed yet, so Windows may warn about an unknown publisher: choose <em>More info</em>, then <em>Run anyway</em>. On a Mac, make the download runnable with <code>chmod +x</code> and run it once from Terminal.</p>{{end}}
           </li>
           <li>
             <strong>Pair it with your account.</strong> Make a pairing code here. In Axon, under <em>EveSynapse</em>, enter this site's address{{if .SiteAddr}} (<code>{{.SiteAddr}}</code>){{end}} and the code, then click <em>Pair</em>. Axon remembers it from then on, and there's nothing for you to copy, save or set up.
@@ -76,7 +76,7 @@
         <div class="ch-code" role="status">
           <h3>Your pairing code</h3>
           <p class="ch-code-v">{{.PairingCode}}</p>
-          <p class="ch-hint">Enter it in Axon now, with this site's address{{if .SiteAddr}} (<code>{{.SiteAddr}}</code>){{end}}. It works once and expires in 10 minutes.</p>
+          <p class="prose">Enter it in Axon now, with this site's address{{if .SiteAddr}} (<code>{{.SiteAddr}}</code>){{end}}. It works once and expires in 10 minutes.</p>
         </div>
         {{end}}
         <h3>Paired computers</h3>
@@ -86,13 +86,13 @@
             <form method="post" action="/intel/channels/tokens/{{.ID}}/revoke" class="inline-form"><button type="submit" class="btn btn-danger">Remove</button></form>
           </li>{{end}}
         </ul>
-        <p class="ch-hint">Axon is paired. <a href="evesynapse-axon://open">Open Axon on this computer</a>. If nothing opens, <a href="https://github.com/natemsz/axon/releases/latest" rel="noopener">get the latest Axon</a> and run it once to update.</p>
-        {{else}}<p class="ch-hint">None yet.</p>{{end}}
+        <p class="prose">Axon is paired. <a href="evesynapse-axon://open">Open Axon on this computer</a>. If nothing opens, <a href="https://github.com/natemsz/axon/releases/latest" rel="noopener">get the latest Axon</a> and run it once to update.</p>
+        {{else}}<p class="prose">None yet.</p>{{end}}
         <form class="op-form ch-form" method="post" action="/intel/channels/pairing">
           <label class="field"><span class="field-label">Computer name</span>
             <input type="text" name="name" maxlength="40" placeholder="e.g. Home PC"></label>
           <button type="submit" class="btn">Make a pairing code</button>
-          <p class="ch-hint">The name is just for this list.</p>
+          <p class="prose">The name is just for this list.</p>
         </form>
       </div>
     </div>
@@ -100,15 +100,15 @@
     <h3>Questions</h3>
     <div class="ch-faq">
       <details><summary>What exactly does Axon read?</summary>
-        <p>Only the chat log files EVE writes to your computer (in <code>Documents\EVE\logs\Chatlogs</code>), and only for the in-game channels you link. Not your screen, the game, or any other files. EVE saves these logs unless chat logging was turned off in its settings.</p></details>
+        <p class="prose">Only the chat log files EVE writes to your computer (in <code>Documents\EVE\logs\Chatlogs</code>), and only for the in-game channels you link. Not your screen, the game, or any other files. EVE saves these logs unless chat logging was turned off in its settings.</p></details>
       <details><summary>What does it send here?</summary>
-        <p>Each new line from a linked channel, as it appears. A line that names a system becomes a report with the count, “clear”, who said it and when. Lines that name no system, like chatter and questions, are dropped. Nothing from before you started watching is sent.</p></details>
+        <p class="prose">Each new line from a linked channel, as it appears. A line that names a system becomes a report with the count, “clear”, who said it and when. Lines that name no system, like chatter and questions, are dropped. Nothing from before you started watching is sent.</p></details>
       <details><summary>Do I need a config file?</summary>
-        <p>No. Axon saves its own settings. You never need to open, edit or copy anything.</p></details>
+        <p class="prose">No. Axon saves its own settings. You never need to open, edit or copy anything.</p></details>
       <details><summary>Do I need to do anything after pairing?</summary>
-        <p>No. The pairing only works on the computer you paired, so it can't be copied somewhere else. To stop a computer from posting, remove it from Paired computers.</p></details>
+        <p class="prose">No. The pairing only works on the computer you paired, so it can't be copied somewhere else. To stop a computer from posting, remove it from Paired computers.</p></details>
       <details><summary>Several computers, or several characters?</summary>
-        <p>Pair each computer once. If two of your characters are in the same in-game channel, each line is still posted only once.</p></details>
+        <p class="prose">Pair each computer once. If two of your characters are in the same in-game channel, each line is still posted only once.</p></details>
     </div>
   </section>
   {{end}}

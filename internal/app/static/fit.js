@@ -775,22 +775,25 @@ var FitGauges = (function () {
           var li = document.createElement("li");
           li.setAttribute("role", "option");
           li.appendChild(suggestIcon(it.id));
+          var text = document.createElement("span");
+          text.className = "sug-text";
           var name = document.createElement("span");
           name.textContent = it.name;
-          li.appendChild(name);
           if (it.missing) {
             li.classList.add("sug-missing");
             var miss = document.createElement("span");
             miss.className = "sug-missing-tag";
             miss.textContent = "Missing skills";
-            li.appendChild(miss);
+            name.appendChild(miss);
           }
+          text.appendChild(name);
           if (it.label) {
             var lab = document.createElement("span");
             lab.className = "sug-label";
             lab.textContent = it.label;
-            li.appendChild(lab);
+            text.appendChild(lab);
           }
+          li.appendChild(text);
           rows.push({ it: it, li: li });
           li.addEventListener("mousedown", function (ev) {
             ev.preventDefault();

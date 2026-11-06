@@ -325,3 +325,20 @@ FROM kill_attackers a
 JOIN kills k ON k.killmail_id = a.killmail_id
 WHERE k.system_id = sqlc.arg(system_id)::bigint AND k.killmail_time >= sqlc.arg(since)::timestamptz
   AND NOT k.npc AND k.public AND a.character_id > 0;
+
+-- ---------------------------------------------------------------------
+-- Corporation killboard coverage (schema 126, corp_backfill.go):
+-- the marker the corporation history backfill checks before
+-- fetching and sets when a pass completes, the pilot activity
+-- profile's BackfilledAt discipline without the aggregates
+-- corporations do not keep.
+-- ---------------------------------------------------------------------
+
+-- name: GetCorpKillCoverage :one
+SELECT corporation_id, backfilled_at FROM corp_kill_coverage
+WHERE corporation_id = sqlc.arg(corporation_id)::bigint;
+
+-- name: MarkCorpKillCoverage :exec
+INSERT INTO corp_kill_coverage (corporation_id, backfilled_at)
+VALUES (sqlc.arg(corporation_id)::bigint, sqlc.arg(backfilled_at)::timestamptz)
+ON CONFLICT (corporation_id) DO NOTHING;

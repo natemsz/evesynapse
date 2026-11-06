@@ -138,6 +138,10 @@ func (app *Application) handleCorporationPage(w http.ResponseWriter, r *http.Req
 	if data.Corporation != nil && data.Corporation.State == "loading" {
 		app.notePageWant(ctx, pageWantCorporation, id, 0)
 	}
+	// Viewing the profile offers the corporation to the history
+	// backfill, so its kills store coverage completes in the
+	// background.
+	app.noteCorpsEncountered([]int64{id})
 	if v := data.Corporation; v != nil && v.State == "ready" {
 		data.HeadMeta = app.HeadMeta(module.PageMeta{
 			Title:         v.Name,

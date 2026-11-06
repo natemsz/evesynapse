@@ -84,13 +84,16 @@ type killPackage struct {
 
 // killZKB is zKillboard's metadata on a kill (the fields kept).
 // Its totalValue is never read: a kill's price is EveSynapse's own
-// appraisal or nothing.
+// appraisal or nothing. The hash rides along for the history
+// backfill (pilot_activity.go), which hands it to the kill store
+// with the killmail it came with.
 type killZKB struct {
-	LocationID int64 `json:"locationID"`
-	Points     int32 `json:"points"`
-	NPC        bool  `json:"npc"`
-	Solo       bool  `json:"solo"`
-	Awox       bool  `json:"awox"`
+	LocationID int64  `json:"locationID"`
+	Hash       string `json:"hash"`
+	Points     int32  `json:"points"`
+	NPC        bool   `json:"npc"`
+	Solo       bool   `json:"solo"`
+	Awox       bool   `json:"awox"`
 }
 
 // killmailFull is the ESI killmail, every field the board keeps.

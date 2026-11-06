@@ -771,6 +771,13 @@ var pgBattleReportsSchema string
 //go:embed schema_pg/125_stats_backlogs.sql
 var pgStatsBacklogsSchema string
 
+// Step 126: corporation killboard coverage: one marker row per
+// corporation whose kill history the zKillboard backfill has
+// brought into the kills store.
+//
+//go:embed schema_pg/126_corp_kill_coverage.sql
+var pgCorpKillCoverageSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -925,6 +932,7 @@ func schemaSteps() []schemaStep {
 		{123, "market_basket_summary", pgMarketBasketSummarySchema, ""},
 		{124, "battle_reports", pgBattleReportsSchema, ""},
 		{125, "stats_backlogs", pgStatsBacklogsSchema, ""},
+		{126, "corp_kill_coverage", pgCorpKillCoverageSchema, ""},
 	}
 }
 

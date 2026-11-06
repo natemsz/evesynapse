@@ -8,11 +8,30 @@
 
 /* The fragment always renders the phone tab bar and header (a
    re-simulation has to carry them); they exist only at phone
-   widths. The fit head's details toggle and the search panel's
-   title bar are phone-only too. */
+   widths. The search panel's title bar is phone-only too; the
+   Fit details toggle is armed at every width and folds the
+   head's secondary controls (see the shared rule below). */
 .fit-mhead, .fit-mtabs { display: none; }
 .fit-head-toggle { display: none; }
 .fit-modsearch-bar { display: none; }
+
+/* The fit head's details toggle, armed by fit.js at every width:
+   the button lives in the head's utility row (fitting.css). The
+   fold itself is width-specific: the phone block below folds
+   every .fit-head-sec control; the desktop fold spares the strip
+   controls (.fit-stripsec: fit name, Save to EVE), which stay on
+   the bar beside the ship search and Save fit. */
+#fit-editor.fit-armed .fit-head-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 2.5rem; padding: 0.45rem 0.6rem;
+  background: none; border: 1px solid var(--box-edge); border-radius: var(--r-sm);
+  color: var(--muted); cursor: pointer;
+  font-family: var(--font-display); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-xs);
+}
+@media (min-width: 45.01rem) {
+  #fit-editor.fit-armed .fit-head:not(.fit-open) .fit-head-sec:not(.fit-stripsec) { display: none; }
+}
 
 @media (max-width: 45rem) {
   /* fit.js hides the sections outside the current view with
@@ -115,15 +134,9 @@
      controls (pilot, clone, fit name, the public flag, Save to
      EVE) fold behind the Fit details toggle. fit.js arms the
      fold by classing the editor; unarmed (no JS) everything
-     shows, as on desktop. */
-  #fit-editor.fit-armed .fit-head-toggle {
-    display: inline-flex; align-items: center; justify-content: center;
-    flex: 1 1 100%; min-height: 2.5rem; padding: 0.45rem 0.6rem;
-    background: none; border: 1px solid var(--box-edge); border-radius: var(--r-sm);
-    color: var(--muted); cursor: pointer;
-    font-family: var(--font-display); font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-xs);
-  }
+     shows. The toggle's own treatment is the shared rule above
+     this block; here it stretches across the utility row. */
+  #fit-editor.fit-armed .fit-head-toggle { flex: 1 1 100%; }
   #fit-editor.fit-armed .fit-head:not(.fit-open) .fit-head-sec { display: none; }
   #fit-editor .fit-head { row-gap: 0.5rem; }
   #fit-editor .fit-head .fit-searchwrap { flex: 1 1 9rem; min-width: 0; }

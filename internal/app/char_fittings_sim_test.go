@@ -317,12 +317,31 @@ func TestFitLocalSaveListDelete(t *testing.T) {
 	if strings.Contains(body, "Saved One") {
 		t.Errorf("editor embeds the saved fit list; it should only offer the search bar")
 	}
+	// No ship is loaded into the editor: it renders the no-ship
+	// arrangement (the doors and the empty state, with the fit's
+	// working surfaces gated off) instead of the full apparatus.
+	mustContain(t, "/fittings/", body, "fit-noship", "Pick a ship to start fitting")
+	if !strings.Contains(body, "data-fit-shipblock hidden") {
+		t.Error("no-ship editor: the module search and workbench block is not gated hidden")
+	}
+	if strings.Contains(body, "data-fit-emptystate hidden") {
+		t.Error("no-ship editor: the empty state is hidden")
+	}
 	_, mbody := getPage(t, app, cookie, "/fittings/mine.json?q=Saved")
 	mustContain(t, "/fittings/mine.json", mbody, "Saved One")
 
 	// Opening it loads the fit into the editor.
 	_, body = getPage(t, app, cookie, "/fittings/?local="+strconv.FormatInt(saved.ID, 10))
 	mustContain(t, "/fittings/", body, "Saved One", "Fixture Blaster", "Damage per second")
+	// With a ship loaded the arrangement flips: the working
+	// surfaces render open and the empty state hides.
+	if strings.Contains(body, "fit-noship") {
+		t.Error("ship loaded: the editor still carries the no-ship arrangement")
+	}
+	if strings.Contains(body, "data-fit-shipblock hidden") {
+		t.Error("ship loaded: the module search and workbench block is gated hidden")
+	}
+	mustContain(t, "/fittings/", body, "data-fit-emptystate hidden")
 
 	code, _ = postFitForm(t, app, cookie, "/fittings/delete/", url.Values{"id": {strconv.FormatInt(saved.ID, 10)}})
 	if code != http.StatusSeeOther {

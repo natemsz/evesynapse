@@ -8,6 +8,9 @@
 
 /* --- shared bits --- */
 .fw-hint, .lo-hint, .sl-hint { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+/* A hint marked as prose takes the prose ink; the hint rule above
+   loads later at equal weight and would otherwise mute it. */
+.fw-hint.prose { color: var(--prose); }
 .l-page .browse-back { margin: 0; }
 .l-page .l-panel h2 {
   margin: 0 0 var(--space-3);
@@ -39,21 +42,33 @@
 
 /* --- Ship Workbench --- */
 .fw-editor { --l-gap: var(--space-3); }
-/* The fit bar: ship, pilot, clone, name and save on the first
-   rows, the fit's description and tags under them, then opening
-   a saved fit on a hairline. */
+/* The fit bar: one strip (ship, fit name, the saves), the fit's
+   secondary controls folded behind the Fit details toggle, and
+   Make public on the utility row under the strip beside the
+   toggle, then opening a saved fit. Until a ship is picked the
+   bar shows only the doors (ship search, saved fits); fit.js
+   keeps fit-noship on the editor in step with the state. */
 .fw-bar { display: flex; flex-direction: column; gap: var(--space-3); }
 .fw-bar .fit-head { margin: 0; gap: var(--space-2) var(--space-3); }
-.fw-bar .fit-head .fit-searchwrap { flex: 1 1 100%; max-width: none; }
+.fw-bar .fit-head .fit-searchwrap { flex: 1 1 16rem; max-width: none; }
 .fw-bar .fit-head label:has(> #fit-name) { flex: 1 1 12rem; min-width: 0; }
 .fw-bar .fit-head #fit-name { width: 100%; }
 .fw-bar .fit-meta { flex: 1 1 100%; margin: 0; }
+.fw-bar .fit-head .fw-hint { flex: 1 1 100%; margin: 0; }
+.fw-bar .fit-utilrow {
+  flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-3); border-top: 1px solid var(--hairline);
+}
 .fw-bar .fit-yourfits {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
-  margin: 0; padding: var(--space-3) 0 0; border: 0; border-top: 1px solid var(--hairline);
-  border-radius: 0; background: none;
+  margin: 0; border: 0; border-radius: 0; background: none;
 }
 .fw-bar .fit-yourfitswrap { flex: 1 1 16rem; min-width: 0; }
+#fit-editor.fit-noship .fit-shiponly { display: none !important; }
+.fit-shipblock { display: flex; flex-direction: column; gap: var(--l-gap, var(--space-3)); }
+.fit-shipblock[hidden] { display: none; }
+.fit-emptystate p { margin: 0; padding: var(--space-3); text-align: center; color: var(--muted); }
 .fw-anon { display: flex; flex-direction: column; gap: var(--space-2); }
 .fw-anon > p { margin: 0; }
 .fw-anonlist { list-style: none; margin: 0 0 var(--space-2); padding: 0; }

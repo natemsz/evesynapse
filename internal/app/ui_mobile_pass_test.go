@@ -334,9 +334,9 @@ func TestFittingPhoneViews(t *testing.T) {
 	for _, want := range []string{
 		`data-fit-head-toggle`,
 		`data-fit-search-close`,
-		`<label class="fit-head-sec">Pilot`,
-		`<label class="fit-clonepick fit-head-sec">Clone`,
-		`<label class="fit-head-sec">Fit name`,
+		`<label class="fit-head-sec fit-shiponly">Pilot`,
+		`<label class="fit-clonepick fit-head-sec fit-shiponly">Clone`,
+		`<label class="fit-head-sec fit-shiponly fit-stripsec">Fit name`,
 		`id="fit-save-eve" data-fit-eve-char`,
 	} {
 		if !strings.Contains(page, want) {

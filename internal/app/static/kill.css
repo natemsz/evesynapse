@@ -26,7 +26,6 @@
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-  color: var(--muted-2);
 }
 .kp-hero {
   display: grid;

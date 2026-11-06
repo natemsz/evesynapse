@@ -907,6 +907,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// The killboard (killboard.go): core pages in the Intel section,
 	// beside the Intel module's /intel routes.
 	r.With(anonPages).Get("/intel/kills/", app.handleKillboard)
+	r.With(anonPages).Get("/intel/kills/suggest", app.handleKillboardSuggest)
 	r.With(anonPages).Get("/intel/kill/{id}/", app.handleKillPage)
 	// Battle reports (battle_pages.go): the account's own, and a
 	// shared one at its unlisted link.

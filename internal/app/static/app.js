@@ -2723,7 +2723,7 @@
       sec.textContent = it.sec;
       el.appendChild(sec);
     }
-    el.appendChild(document.createTextNode(it.label || ""));
+    el.appendChild(document.createTextNode(it.label || it.sub || ""));
   }
   window.EveSynapseHitLabel = hitLabel;
 
@@ -2774,7 +2774,7 @@
         var name = document.createElement("span");
         name.textContent = it.name;
         li.appendChild(name);
-        if (it.label) {
+        if (it.label || it.sub || it.sec) {
           var lab = document.createElement("span");
           lab.className = "sug-label";
           hitLabel(lab, it);
@@ -2911,6 +2911,17 @@
             url += "&region=" + encodeURIComponent(regionField.value);
           }
           window.location.href = url;
+        });
+    })();
+
+    // Killboard: a pick jumps to that name's scoped feed.
+    (function () {
+      attachSuggest(
+        root.querySelector("#kb-q"),
+        root.querySelector("#kb-suggest"),
+        suggestURL("/intel/kills/suggest", null),
+        function (it) {
+          window.location.href = "/intel/kills/?" + encodeURIComponent(it.kind) + "=" + encodeURIComponent(it.id);
         });
     })();
 

@@ -22,11 +22,19 @@
   </div>
 
   <div class="l-cluster kb-bar">
+    <form method="get" action="/intel/kills/" class="kb-search" role="search">
+      <span class="searchwrap">
+        <input type="text" name="q" id="kb-q" value="{{.SearchQ}}" placeholder="Pilot, corporation, alliance, system, region or ship" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="kb-suggest" aria-autocomplete="list">
+        <ul class="suggest" id="kb-suggest" role="listbox" hidden></ul>
+      </span>
+      <button class="btn" type="submit">Search</button>
+    </form>
     {{if .ScopeKind}}<p class="kb-scope"><span class="kb-scope-k">{{.ScopeLabel}}</span> <strong>{{.ScopeName}}</strong> <a class="kb-scope-x" href="{{.ClearHref}}" aria-label="Show every kill">×</a></p>{{end}}
     <nav class="kb-chips" aria-label="Show">
       {{range .Chips}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}
     </nav>
   </div>
+  {{if .SearchQ}}<p class="kb-search-note" role="status">No pilot, corporation, alliance, system, region or ship matches “{{.SearchQ}}”.</p>{{end}}
 
   <div class="kb-layout">
     <ol class="kb-list" aria-label="Kills, newest first">

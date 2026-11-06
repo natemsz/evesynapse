@@ -16,12 +16,21 @@ import (
 // bulkNamesStub plays POST /universe/names/. known IDs resolve;
 // a batch holding any other ID gets 404, like ESI. status, when
 // set, answers every call instead; fail makes the transport
-// itself fail.
+// itself fail. Answers carry cats' category per ID where set,
+// corporation otherwise.
 type bulkNamesStub struct {
 	known  map[int64]string
+	cats   map[int64]string
 	status int
 	fail   bool
 	calls  int
+}
+
+func (s *bulkNamesStub) category(id int64) string {
+	if c, ok := s.cats[id]; ok {
+		return c
+	}
+	return "corporation"
 }
 
 func (s *bulkNamesStub) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -46,7 +55,7 @@ func (s *bulkNamesStub) RoundTrip(req *http.Request) (*http.Response, error) {
 		if !ok {
 			return respond(http.StatusNotFound, `{"error":"Ensure all IDs are valid before resolving."}`)
 		}
-		out = append(out, universeName{ID: id, Name: name, Category: "corporation"})
+		out = append(out, universeName{ID: id, Name: name, Category: s.category(id)})
 	}
 	raw, _ := json.Marshal(out)
 	return respond(http.StatusOK, string(raw))

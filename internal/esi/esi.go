@@ -414,6 +414,15 @@ type Client struct {
 	allianceNamesMu sync.RWMutex
 	allianceNames   map[int64]string
 
+	// IDs the character, corporation and alliance caches were
+	// asked for and did not hold, noted by the Cached* accessors
+	// so the app can resolve the names pages actually show (see
+	// DrainNameMisses). Kind-agnostic: the bulk names endpoint
+	// sorts each ID into its own category. Capped, so a flood of
+	// unknown IDs cannot grow it without bound.
+	nameMissesMu sync.Mutex
+	nameMisses   map[int64]struct{}
+
 	// nameSink, when set, hears every character, corporation and
 	// alliance name the caches learn or see change (Store*Name), so
 	// the app can keep them in its database (entity_names). Names
@@ -3509,11 +3518,15 @@ func (c *Client) CharacterName(ctx context.Context, id int64) (string, error) {
 }
 
 // CachedCharacterName resolves a character ID from the in-process
-// cache only. Zero network.
+// cache only. Zero network. A miss is noted for the app's
+// resolution pass (see DrainNameMisses).
 func (c *Client) CachedCharacterName(id int64) (string, bool) {
 	c.charNamesMu.RLock()
-	defer c.charNamesMu.RUnlock()
 	name, ok := c.charNames[id]
+	c.charNamesMu.RUnlock()
+	if !ok {
+		c.noteNameMiss(id)
+	}
 	return name, ok
 }
 
@@ -3558,11 +3571,15 @@ func (c *Client) StoreCharacterNameMiss(id int64) {
 // ---------------------------------------------------------------------------
 
 // CachedCorpName resolves a corporation ID from the in-process
-// cache only. Zero network.
+// cache only. Zero network. A miss is noted for the app's
+// resolution pass (see DrainNameMisses).
 func (c *Client) CachedCorpName(id int64) (string, bool) {
 	c.corpNamesMu.RLock()
-	defer c.corpNamesMu.RUnlock()
 	name, ok := c.corpNames[id]
+	c.corpNamesMu.RUnlock()
+	if !ok {
+		c.noteNameMiss(id)
+	}
 	return name, ok
 }
 
@@ -3577,11 +3594,15 @@ func (c *Client) StoreCorpName(id int64, name string) {
 }
 
 // CachedAllianceName resolves an alliance ID from the in-process
-// cache only. Zero network.
+// cache only. Zero network. A miss is noted for the app's
+// resolution pass (see DrainNameMisses).
 func (c *Client) CachedAllianceName(id int64) (string, bool) {
 	c.allianceNamesMu.RLock()
-	defer c.allianceNamesMu.RUnlock()
 	name, ok := c.allianceNames[id]
+	c.allianceNamesMu.RUnlock()
+	if !ok {
+		c.noteNameMiss(id)
+	}
 	return name, ok
 }
 
@@ -3593,6 +3614,54 @@ func (c *Client) StoreAllianceName(id int64, name string) {
 	c.allianceNames[id] = name
 	c.allianceNamesMu.Unlock()
 	c.heardName(NameAlliance, id, name, changed)
+}
+
+// nameMissRegistryCap bounds the miss registry: past it, new
+// notes are dropped rather than letting the set grow without
+// bound. A pass drains up to 1000 IDs per bulk call, so the cap
+// is generous next to any real page's needs.
+const nameMissRegistryCap = 10000
+
+// noteNameMiss records an ID a name cache was asked for and did
+// not hold, so the app can resolve the names pages show.
+func (c *Client) noteNameMiss(id int64) {
+	if id <= 0 {
+		return
+	}
+	c.nameMissesMu.Lock()
+	if c.nameMisses == nil {
+		c.nameMisses = map[int64]struct{}{}
+	}
+	if len(c.nameMisses) < nameMissRegistryCap {
+		c.nameMisses[id] = struct{}{}
+	}
+	c.nameMissesMu.Unlock()
+}
+
+// NameMissesPending reports whether any cache miss is waiting
+// for the app's resolution pass.
+func (c *Client) NameMissesPending() bool {
+	c.nameMissesMu.Lock()
+	defer c.nameMissesMu.Unlock()
+	return len(c.nameMisses) > 0
+}
+
+// DrainNameMisses takes the noted cache-miss IDs and clears the
+// registry. The caller resolves them through the bulk names
+// path; an ID that stays unresolved is noted again the next
+// time a page asks for it.
+func (c *Client) DrainNameMisses() []int64 {
+	c.nameMissesMu.Lock()
+	defer c.nameMissesMu.Unlock()
+	if len(c.nameMisses) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(c.nameMisses))
+	for id := range c.nameMisses {
+		ids = append(ids, id)
+	}
+	c.nameMisses = nil
+	return ids
 }
 
 // The kinds of name the caches hold, as entity_names stores them.

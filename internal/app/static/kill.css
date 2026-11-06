@@ -58,6 +58,8 @@
 .kp-victim-names { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
 .kp-name { font-size: var(--fs-lg); font-weight: 600; color: var(--text-bright); text-decoration: none; }
 .kp-name:hover, .kp-org a:hover { color: var(--accent); }
+.kp-info { display: inline-flex; align-items: center; justify-content: center; width: 1.05rem; height: 1.05rem; margin-left: 0.35rem; border: 1px solid var(--box-edge); border-radius: 50%; color: var(--muted); font-size: var(--fs-2xs); font-weight: 600; text-decoration: none; vertical-align: middle; }
+.kp-info:hover { color: var(--text-bright); border-color: var(--accent); }
 .kp-org { display: flex; align-items: center; gap: 0.4rem; font-size: var(--fs-sm); }
 .kp-org img { border-radius: var(--r-xs); }
 .kp-org a { color: var(--text); text-decoration: none; }

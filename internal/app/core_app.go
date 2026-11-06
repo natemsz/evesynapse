@@ -248,9 +248,17 @@ type Application struct {
 	killLastPruned time.Time
 	killStatsMemo  *killboardStatsMemo // the feed's headline, held a minute
 	// Kill-name misses that must not be re-asked every minute,
-	// and when intel retention last pruned (channels.go).
-	killNameMisses  map[int64]time.Time
-	intelLastPruned time.Time
+	// and when intel retention last pruned (channels.go). The
+	// mutex guards the map now that render-kicked resolution
+	// reads and writes it beside the worker.
+	killNameMisses   map[int64]time.Time
+	killNameMissesMu sync.Mutex
+	intelLastPruned  time.Time
+
+	// The render-kicked name resolution pass (killboard.go):
+	// single-flight guard for the goroutine a render starts.
+	nameResolveMu      sync.Mutex
+	nameResolveRunning bool
 
 	// War details (intel_worker.go): what the last pass learned
 	// about each war, so settled wars cost no per-cycle read.

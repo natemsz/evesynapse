@@ -194,6 +194,10 @@ type killboardView struct {
 	Chips      []killChip
 	ScopeLabel string
 	ClearHref  string
+	// ScopeProfileHref links the scope banner's name to the
+	// scoped pilot's profile; only a character scope has one,
+	// the other kinds keep the plain strong name.
+	ScopeProfileHref string
 	// SearchQ is a search-box query that resolved to nothing; the
 	// page names it so a miss does not read as an empty board.
 	SearchQ string
@@ -312,6 +316,9 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		v.ScopeLabel = killScopeLabels[v.ScopeKind]
 		v.BaseQuery = v.ScopeKind + "=" + strconv.FormatInt(v.ScopeID, 10)
 		v.ClearHref = killHref("", v.Big, v.Solo)
+		if v.ScopeKind == "character" {
+			v.ScopeProfileHref = "/pilot/?character=" + strconv.FormatInt(v.ScopeID, 10)
+		}
 	}
 	v.Chips = []killChip{
 		{Label: "All kills", Href: killHref(v.BaseQuery, false, false), Active: !v.Big && !v.Solo},
@@ -340,6 +347,7 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		title = v.ScopeName + " · Killboard"
 	}
 	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: title, Description: "Live kills across New Eden: every ship lost, priced by EveSynapse's own appraisal.", CanonicalPath: "/intel/kills/"})
+	app.kickNameResolve()
 	app.render(ctx, w, http.StatusOK, "killboard.html", data)
 }
 
@@ -538,6 +546,7 @@ func (app *Application) handleKillPage(w http.ResponseWriter, r *http.Request) {
 		desc = fmt.Sprintf("%s lost in %s, %s: %s ISK.", v.Row.ShipName, v.Row.SystemName, v.Row.RegionName, v.ValueFull)
 	}
 	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: title, Description: desc, CanonicalPath: fmt.Sprintf("/intel/kill/%d/", id)})
+	app.kickNameResolve()
 	app.render(ctx, w, http.StatusOK, "kill.html", data)
 }
 
@@ -735,11 +744,43 @@ func (app *Application) warmKillNames(ctx context.Context) {
 	if err != nil {
 		return
 	}
+	app.resolveEntityNames(ctx, ids)
+}
+
+// killNameBackedOff reports whether the ID was asked about
+// within the last hour and ESI had no answer for it.
+func (app *Application) killNameBackedOff(id int64) bool {
+	app.killNameMissesMu.Lock()
+	defer app.killNameMissesMu.Unlock()
+	t, bad := app.killNameMisses[id]
+	return bad && time.Since(t) < time.Hour
+}
+
+// markKillNameMiss records that the ID was asked about and ESI
+// had no answer, so it is not re-asked within the hour.
+func (app *Application) markKillNameMiss(id int64) {
+	app.killNameMissesMu.Lock()
+	defer app.killNameMissesMu.Unlock()
+	if app.killNameMisses == nil {
+		app.killNameMisses = map[int64]time.Time{}
+	}
+	app.killNameMisses[id] = time.Now()
+}
+
+// resolveEntityNames settles a set of entity IDs into the shared
+// name caches in bulk: IDs already cached, or in the one-hour
+// no-answer backoff, are skipped; the rest go through the bulk
+// names path, bounded per pass, and the ones ESI does not answer
+// enter the backoff. The recent-kills warming pass and the
+// render-noted drain share it, so both keep the same bookkeeping.
+func (app *Application) resolveEntityNames(ctx context.Context, ids []int64) {
+	seen := make(map[int64]bool, len(ids))
 	var missing []int64
 	for _, id := range ids {
-		if id <= 0 {
+		if id <= 0 || seen[id] {
 			continue
 		}
+		seen[id] = true
 		if _, ok := app.esi.CachedCharacterName(id); ok {
 			continue
 		}
@@ -749,7 +790,7 @@ func (app *Application) warmKillNames(ctx context.Context) {
 		if _, ok := app.esi.CachedAllianceName(id); ok {
 			continue
 		}
-		if t, bad := app.killNameMisses[id]; bad && time.Since(t) < time.Hour {
+		if app.killNameBackedOff(id) {
 			continue // asked within the hour; EVE had no answer
 		}
 		missing = append(missing, id)
@@ -761,15 +802,55 @@ func (app *Application) warmKillNames(ctx context.Context) {
 		return
 	}
 	got, _ := app.resolveUniverseNamesLimited(ctx, &fetchBudget{left: 6}, missing)
-	if app.killNameMisses == nil {
-		app.killNameMisses = map[int64]time.Time{}
-	}
 	for _, id := range missing {
 		if _, ok := got[id]; !ok {
-			app.killNameMisses[id] = time.Now()
+			app.markKillNameMiss(id)
 		}
 	}
 	if len(got) > 0 {
 		logging.Debugf("killboard: resolved %d of %d names", len(got), len(missing))
 	}
+}
+
+// resolveNotedNames drains the name caches' miss registry: the
+// IDs pages asked for and the caches did not hold. Resolving
+// them here is what makes a name a page showed as a placeholder
+// settle because it was viewed, on any page that reads the
+// caches. The killboard maintenance cycle calls it as a
+// backstop; renders kick it directly (kickNameResolve).
+func (app *Application) resolveNotedNames(ctx context.Context) {
+	ids := app.esi.DrainNameMisses()
+	if len(ids) == 0 {
+		return
+	}
+	app.resolveEntityNames(ctx, ids)
+}
+
+// kickNameResolve starts the noted-names pass in the background
+// when a render left misses in the registry. Single-flight: a
+// kick while a pass is running is a no-op (that pass drained
+// already, or the misses wait for the next kick or the worker
+// cycle). The render never waits on ESI. Without a worker
+// context (a bare test literal) there is no background lifecycle
+// to run the pass on, so nothing is kicked; tests drive
+// resolveNotedNames directly.
+func (app *Application) kickNameResolve() {
+	if app.workerCtx == nil || !app.esi.NameMissesPending() {
+		return
+	}
+	app.nameResolveMu.Lock()
+	if app.nameResolveRunning {
+		app.nameResolveMu.Unlock()
+		return
+	}
+	app.nameResolveRunning = true
+	app.nameResolveMu.Unlock()
+	go func() {
+		defer func() {
+			app.nameResolveMu.Lock()
+			app.nameResolveRunning = false
+			app.nameResolveMu.Unlock()
+		}()
+		app.resolveNotedNames(app.workerCtx)
+	}()
 }

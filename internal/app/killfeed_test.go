@@ -238,13 +238,87 @@ func TestKillboardPages(t *testing.T) {
 	if _, ent := get("/intel/kills/?character=9002"); !strings.Contains(ent, "/intel/kill/700001/") {
 		t.Errorf("a pilot's feed includes their kills as an attacker")
 	}
+	if _, ent := get("/intel/kills/?character=9002"); !strings.Contains(ent, `href="/pilot/?character=9002"`) {
+		t.Errorf("the scope banner on a pilot's feed links their name to their profile")
+	}
+	if _, sys := get("/intel/kills/?system=30000142"); strings.Contains(sys, "/pilot/?character=") {
+		t.Errorf("a non-pilot scope keeps the plain scope name, no profile link")
+	}
 
 	code, page := get("/intel/kill/700001/")
 	if code != http.StatusOK || !strings.Contains(page, "High slots") || !strings.Contains(page, `class="kp-a fb"`) {
 		t.Errorf("kill page: %d, fitting or attackers missing", code)
 	}
+	if !strings.Contains(page, `class="kp-info" href="/pilot/?character=9001"`) {
+		t.Errorf("the victim's name carries an info link to their profile")
+	}
+	if !strings.Contains(page, `class="kp-info" href="/pilot/?character=9002"`) {
+		t.Errorf("an attacker's name carries an info link to their profile")
+	}
 	if code, _ := get("/intel/kill/700003/"); code != http.StatusNotFound {
 		t.Errorf("a private kill's page must not exist: %d", code)
+	}
+}
+
+// TestKillboardNamesResolveFromView: a name the board shows as
+// a placeholder settles because the board was viewed. The first
+// render of a pilot's feed shows the uncached parties as ID
+// placeholders and notes the misses; the resolution pass (driven
+// synchronously here, kicked in the background in production)
+// settles them into the caches, and the next render shows the
+// names.
+func TestKillboardNamesResolveFromView(t *testing.T) {
+	stub := &bulkNamesStub{
+		known: map[int64]string{
+			9001: "Victim Pilot", 9002: "Attacker Pilot",
+			98000001: "Victim Corp", 98000002: "Attacker Corp",
+			99000001: "Victim Alliance", 99000002: "Attacker Alliance",
+		},
+		cats: map[int64]string{
+			9001: "character", 9002: "character",
+			98000001: "corporation", 98000002: "corporation",
+			99000001: "alliance", 99000002: "alliance",
+		},
+	}
+	app, conn, _ := buildCorpTestApp(t, stub)
+	ctx := context.Background()
+	if _, err := conn.Exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.946)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(700001)), "h", &killZKB{}, "zkill", true); err != nil {
+		t.Fatal(err)
+	}
+	get := func(path string) string {
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d", path, rec.Code)
+		}
+		return rec.Body.String()
+	}
+	first := get("/intel/kills/?character=9001")
+	if !strings.Contains(first, "Pilot #9001") {
+		t.Fatalf("the first render should show the uncached pilot as a placeholder")
+	}
+	if strings.Contains(first, "Victim Pilot") {
+		t.Fatalf("the first render showed a name nothing had resolved yet")
+	}
+	app.resolveNotedNames(ctx)
+	if name, ok := app.esi.CachedCharacterName(9001); !ok || name != "Victim Pilot" {
+		t.Fatalf("pilot cache after the pass: %q, %v; want the resolved name", name, ok)
+	}
+	if name, ok := app.esi.CachedCorpName(98000001); !ok || name != "Victim Corp" {
+		t.Fatalf("corp cache after the pass: %q, %v; want the resolved name", name, ok)
+	}
+	if name, ok := app.esi.CachedAllianceName(99000001); !ok || name != "Victim Alliance" {
+		t.Fatalf("alliance cache after the pass: %q, %v; want the resolved name", name, ok)
+	}
+	second := get("/intel/kills/?character=9001")
+	if !strings.Contains(second, "Victim Pilot") || strings.Contains(second, "Pilot #9001") {
+		t.Errorf("the second render should show the resolved pilot name")
 	}
 }
 

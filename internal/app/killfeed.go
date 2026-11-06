@@ -469,6 +469,7 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 		logging.Errorf("killboard: list ESI killmails: %v", err)
 	}
 	app.warmKillNames(ctx)
+	app.resolveNotedNames(ctx)
 	if n, err := app.priceKills(ctx); err != nil {
 		logging.Errorf("killboard: price: %v", err)
 	} else if n > 0 {

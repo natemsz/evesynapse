@@ -565,7 +565,7 @@ func (app *Application) killboardScopedHeadline(ctx context.Context, names *kill
 			logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
 		}
 		if losses, err := app.queries.CountCorporationKillLosses(ctx, db.CountCorporationKillLossesParams{CorporationID: id, Since: since}); err == nil {
-			st.Losses = losses
+			st.Losses = losses.Losses
 		}
 		if k, err := app.queries.GetCorporationBiggestKill(ctx, db.GetCorporationBiggestKillParams{CorporationID: id, Since: since}); err == nil {
 			st.Biggest = scopedBiggestRow(names, k)

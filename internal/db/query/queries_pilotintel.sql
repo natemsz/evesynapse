@@ -10,7 +10,9 @@ SELECT
     COUNT(DISTINCT a.killmail_id) FILTER (WHERE k.victim_character_id <> sqlc.arg(character_id) AND k.solo)::bigint AS solo,
     (SELECT COUNT(*) FROM kills v WHERE v.victim_character_id = sqlc.arg(character_id) AND v.public
         AND v.killmail_time >= sqlc.arg(since)::timestamptz)::bigint AS losses,
-    COALESCE(SUM(COALESCE(k.value_ours, k.value_zkill, 0)) FILTER (WHERE k.victim_character_id <> sqlc.arg(character_id)), 0)::float8 AS isk_killed
+    COALESCE(SUM(COALESCE(k.value_ours, k.value_zkill, 0)) FILTER (WHERE k.victim_character_id <> sqlc.arg(character_id)), 0)::float8 AS isk_killed,
+    COALESCE((SELECT SUM(COALESCE(v.value_ours, v.value_zkill, 0)) FROM kills v WHERE v.victim_character_id = sqlc.arg(character_id) AND v.public
+        AND v.killmail_time >= sqlc.arg(since)::timestamptz), 0)::float8 AS isk_lost
 FROM kill_involvement a
 JOIN kills k ON k.killmail_id = a.killmail_id
 WHERE a.character_id = sqlc.arg(character_id) AND k.public AND NOT k.npc
@@ -53,10 +55,13 @@ SELECT
     COALESCE(SUM(isk_killed) FILTER (WHERE victim_corporation_id <> sqlc.arg(corporation_id)), 0)::float8 AS isk_killed
 FROM entity_kills;
 
--- A corporation's losses in a window. NPC losses count,
--- the rule every entity's losses follow.
+-- A corporation's losses in a window, and what they were
+-- worth. NPC losses count, the rule every entity's losses
+-- follow.
 -- name: CountCorporationKillLosses :one
-SELECT COUNT(*)::bigint AS losses FROM kills
+SELECT COUNT(*)::bigint AS losses,
+    COALESCE(SUM(COALESCE(value_ours, value_zkill, 0)), 0)::float8 AS isk_lost
+FROM kills
 WHERE victim_corporation_id = sqlc.arg(corporation_id) AND public
   AND killmail_time >= sqlc.arg(since)::timestamptz;
 

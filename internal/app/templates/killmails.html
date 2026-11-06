@@ -16,6 +16,7 @@
 {{with .Killmails}}
   {{if .Loaded}}
   {{if .Total}}
+  <p class="km-note km-scope">Tile figures: <b>{{.TilesScope}}</b>{{if .TilesScopeHref}} <a class="fchip" href="{{.TilesScopeHref}}">{{.TilesScopeOther}} &#8596;</a>{{end}}</p>
   <div class="l-tiles km-tiles l-root">
     {{range .Tiles}}{{if .Href}}<a class="l-stat km-stat-{{.Tone}}{{if .On}} on{{end}}" href="{{.Href}}">{{else}}<div class="l-stat">{{end}}<span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span>{{if .Href}}</a>{{else}}</div>{{end}}{{end}}
   </div>
@@ -87,7 +88,7 @@
       </tbody>
     </table>
     </div>
-    <p class="km-note">Showing {{len .Rows}} of {{.Total}}: <span class="km-k">{{.ShownDestroyed}} ISK destroyed</span>, <span class="km-l">{{.ShownLost}} ISK lost</span>. Values are the killboard's own pricing: destroyed and dropped items at EveSynapse prices.</p>
+    <p class="km-note">Showing {{len .Rows}} of {{.Total}}: {{.WindowNote}}; <span class="km-k">{{.ShownDestroyed}} ISK destroyed</span>, <span class="km-l">{{.ShownLost}} ISK lost</span>. Values are the killboard's own pricing: destroyed and dropped items at EveSynapse prices.</p>
     {{if .Older}}<p class="kb-more"><a class="btn" href="{{.Older}}">Older kills</a></p>{{end}}
     {{else}}
     <p><small>No killmails match these filters.{{if .Filtered}} <a href="{{.ClearHref}}">Clear filters</a>{{end}}</small></p>

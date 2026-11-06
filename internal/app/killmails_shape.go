@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 )
 
@@ -19,8 +20,9 @@ import (
 // Killmails summary, panels, filters and inspector. Everything here
 // reads the rows the page already built from the stored details and
 // the board's stored values: no ESI call and no repricing at render.
-// The summary and panels cover the chosen time range of the recent
-// list; the filters then narrow the table.
+// The panels cover the chosen time range of the recent list and the
+// filters then narrow the table; the summary tiles headline the
+// entity's record from the stored profile and the board's stats.
 // ---------------------------------------------------------------------------
 
 // killBigISK is the "high value" filter's floor.
@@ -120,6 +122,14 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 	default:
 		filter = ""
 	}
+	// The tile band's own scope: all time, or the last 30 days
+	// on ?scope=30d. It scopes the summary tiles only; the list
+	// below keeps its own range and filters, and neither drives
+	// the other.
+	scope := q.Get("scope")
+	if scope != "30d" {
+		scope = ""
+	}
 	systemID, _ := strconv.ParseInt(q.Get("system"), 10, 64)
 	hullID, _ := strconv.ParseInt(q.Get("hull"), 10, 64)
 	killID, _ := strconv.ParseInt(q.Get("kill"), 10, 64)
@@ -131,7 +141,7 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 		for k, vals := range base {
 			v[k] = vals
 		}
-		cur := map[string]string{"when": when, "f": filter}
+		cur := map[string]string{"when": when, "f": filter, "scope": scope}
 		if systemID > 0 {
 			cur["system"] = strconv.FormatInt(systemID, 10)
 		}
@@ -167,7 +177,10 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 		view.Ranges = append(view.Ranges, jobFilter{Label: rg.label, Href: href(map[string]string{"when": rg.key}), On: when == rg.key})
 	}
 
-	// Summary tiles.
+	// The listed window's own sums: the panels below read the
+	// same rows, the showing note reports these counts, and the
+	// tiles fall back to them when the entity has no stored
+	// record to headline.
 	var kills, losses, solo, blows, pods, attackers int
 	var destroyed, lost float64
 	for _, row := range ranged {
@@ -192,37 +205,75 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 			attackers += n
 		}
 	}
-	killSub := fmt.Sprintf("%d solo", solo)
-	if view.CharView {
-		killSub += ", " + plural(blows, "final blow")
+	view.WindowNote = fmt.Sprintf("%s, %s in this window",
+		pluralCount(int64(kills), "kill", "kills"), pluralCount(int64(losses), "loss", "losses"))
+
+	// Summary tiles. The tiles headline the entity, not the
+	// list: their figures are the entity's record at the tile
+	// scope (all time, or the last 30 days on ?scope=30d), read
+	// from the stored profile and the involvement stats. The
+	// window sums stand only when no record exists to read,
+	// and the tile band then says its figures are the window's.
+	tKills, tLosses, tSolo := int64(kills), int64(losses), int64(solo)
+	tDestroyed, tLost := destroyed, lost
+	record := app.killmailTileRecord(ctx, viewer, scope == "30d", now)
+	if record != nil {
+		tKills, tLosses, tSolo = record.kills, record.losses, record.solo
+		tDestroyed, tLost = record.destroyed, record.lost
+		view.TilesScope = "All time"
+		view.TilesScopeOther = "Last 30 days"
+		view.TilesScopeHref = href(map[string]string{"scope": "30d"})
+		if scope == "30d" {
+			view.TilesScope = "Last 30 days"
+			view.TilesScopeOther = "All time"
+			view.TilesScopeHref = href(map[string]string{"scope": ""})
+		}
+	} else {
+		view.TilesScope = "Shown window"
 	}
-	if kills > 0 {
-		killSub += fmt.Sprintf(", %.1f pilots on average", float64(attackers)/float64(kills))
-	}
-	lossSub := "no pods lost"
-	switch {
-	case pods == 1:
-		lossSub = "1 pod lost"
-	case pods > 1:
-		lossSub = fmt.Sprintf("%d pods lost", pods)
-	}
-	if losses > 0 {
-		lossSub += fmt.Sprintf(", %.2f kills per loss", float64(kills)/float64(losses))
+	// Sub-lines stay inside the scope of the figures above
+	// them: the window's subs keep its own facts (final blows,
+	// pods, gang size); the record's read only record facts.
+	var killSub, lossSub string
+	if record != nil {
+		killSub = fmt.Sprintf("%d solo", tSolo)
+		lossSub = "no losses"
+		if tLosses > 0 {
+			lossSub = fmt.Sprintf("%.2f kills per loss", float64(tKills)/float64(tLosses))
+		}
+	} else {
+		killSub = fmt.Sprintf("%d solo", solo)
+		if view.CharView {
+			killSub += ", " + plural(blows, "final blow")
+		}
+		if kills > 0 {
+			killSub += fmt.Sprintf(", %.1f pilots on average", float64(attackers)/float64(kills))
+		}
+		lossSub = "no pods lost"
+		switch {
+		case pods == 1:
+			lossSub = "1 pod lost"
+		case pods > 1:
+			lossSub = fmt.Sprintf("%d pods lost", pods)
+		}
+		if losses > 0 {
+			lossSub += fmt.Sprintf(", %.2f kills per loss", float64(kills)/float64(losses))
+		}
 	}
 	effSub := "nothing priced yet"
-	if destroyed+lost > 0 {
-		effSub = fmt.Sprintf("%d%% ISK efficiency", int(math.Round(destroyed/(destroyed+lost)*100)))
+	if tDestroyed+tLost > 0 {
+		effSub = fmt.Sprintf("%d%% ISK efficiency", int(math.Round(tDestroyed/(tDestroyed+tLost)*100)))
 	}
-	net := destroyed - lost
+	net := tDestroyed - tLost
 	netSub := "net " + iskCompact(net) + " ISK"
 	if net > 0 {
 		netSub = "net +" + iskCompact(net) + " ISK"
 	}
 	view.Tiles = []jobTile{
-		{Label: "Kills", Value: strconv.Itoa(kills), Sub: killSub, Href: href(map[string]string{"f": "kills"}), On: filter == "kills", Tone: "ok"},
-		{Label: "Losses", Value: strconv.Itoa(losses), Sub: lossSub, Href: href(map[string]string{"f": "losses"}), On: filter == "losses", Tone: "warn"},
-		{Label: "ISK destroyed", Value: iskCompact(destroyed), Sub: effSub},
-		{Label: "ISK lost", Value: iskCompact(lost), Sub: netSub},
+		{Label: "Kills", Value: strconv.FormatInt(tKills, 10), Sub: killSub, Href: href(map[string]string{"f": "kills"}), On: filter == "kills", Tone: "ok"},
+		{Label: "Losses", Value: strconv.FormatInt(tLosses, 10), Sub: lossSub, Href: href(map[string]string{"f": "losses"}), On: filter == "losses", Tone: "warn"},
+		{Label: "ISK destroyed", Value: iskCompact(tDestroyed), Sub: effSub},
+		{Label: "ISK lost", Value: iskCompact(tLost), Sub: netSub},
 	}
 	view.DestroyedAll = iskCompact(destroyed)
 	view.LostAll = iskCompact(lost)
@@ -430,7 +481,16 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 		shown = append(shown, row)
 	}
 	view.Filtered = when != "" || filter != "" || systemID > 0 || hullID > 0
-	view.ClearHref = withQuery(view.BasePath, base)
+	// Clearing the list's filters keeps the tile scope: the two
+	// are independent, and clearing one must not move the other.
+	clearVals := url.Values{}
+	for k, vals := range base {
+		clearVals[k] = vals
+	}
+	if scope != "" {
+		clearVals.Set("scope", scope)
+	}
+	view.ClearHref = withQuery(view.BasePath, clearVals)
 	view.Total = len(view.Rows)
 	view.Rows = shown
 	view.ShownDestroyed = iskCompact(shownDest)
@@ -466,6 +526,91 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 			break
 		}
 	}
+}
+
+// kmTileRecord is an entity's kill record at one scope, read
+// from the stored profile and the involvement stats.
+type kmTileRecord struct {
+	kills, losses, solo int64
+	destroyed, lost     float64
+}
+
+// killmailTileRecord reads the killmail pages' tile figures
+// for the viewing entity at the tile scope. All time, a
+// character's counts come from their stored activity profile
+// when one backs them (the profile's figures cover their
+// whole recorded history) and solo and ISK from the all-time
+// stats read over the permanent involvement record, the
+// division the pilot page and the killboard headline use.
+// Without a profile the stats read carries every figure. The
+// last 30 days read the stats directly for counts and ISK
+// alike: the profile keeps no windowed counts. A nil record
+// means the entity has no stored record to read at all, and
+// the tiles fall back to the listed window's figures.
+func (app *Application) killmailTileRecord(ctx context.Context, viewer killmailViewer, last30 bool, now time.Time) *kmTileRecord {
+	since := time.Unix(0, 0).UTC()
+	if last30 {
+		since = now.Add(-30 * 24 * time.Hour)
+	}
+	rec, err := app.killmailStatsAt(ctx, viewer, since)
+	if err != nil {
+		logging.Warnf("killmails: tile stats: %v", err)
+		return nil
+	}
+	if !last30 && viewer.characterID > 0 {
+		if prof, perr := app.queries.GetPilotActivityProfile(ctx, viewer.characterID); perr == nil && prof.Kills+prof.Losses > 0 {
+			rec.kills, rec.losses = prof.Kills, prof.Losses
+		} else if perr != nil && !errors.Is(perr, sql.ErrNoRows) {
+			logging.Warnf("killmails: tile profile %d: %v", viewer.characterID, perr)
+		}
+	}
+	if rec.kills+rec.losses > 0 {
+		return rec
+	}
+	if !last30 {
+		// The all-time scope is the whole record: empty there
+		// is absent, not a quiet window.
+		return nil
+	}
+	// A quiet 30 days is a figure, not a missing record: the
+	// fallback turns on the entity having no record at all.
+	if viewer.characterID > 0 {
+		if prof, perr := app.queries.GetPilotActivityProfile(ctx, viewer.characterID); perr == nil && prof.Kills+prof.Losses > 0 {
+			return &kmTileRecord{}
+		}
+	}
+	all, err := app.killmailStatsAt(ctx, viewer, time.Unix(0, 0).UTC())
+	if err != nil {
+		logging.Warnf("killmails: tile stats: %v", err)
+		return nil
+	}
+	if all.kills+all.losses > 0 {
+		return &kmTileRecord{}
+	}
+	return nil
+}
+
+// killmailStatsAt reads one entity's kills, losses, solo
+// kills and ISK destroyed and lost since a time, from the
+// involvement stats reads (a corporation's losses sit on the
+// victim side, in their own read).
+func (app *Application) killmailStatsAt(ctx context.Context, viewer killmailViewer, since time.Time) (*kmTileRecord, error) {
+	if viewer.corporationID > 0 {
+		st, err := app.queries.CorporationKillStats(ctx, db.CorporationKillStatsParams{CorporationID: viewer.corporationID, Since: since})
+		if err != nil {
+			return nil, err
+		}
+		losses, err := app.queries.CountCorporationKillLosses(ctx, db.CountCorporationKillLossesParams{CorporationID: viewer.corporationID, Since: since})
+		if err != nil {
+			return nil, err
+		}
+		return &kmTileRecord{kills: st.Kills, losses: losses.Losses, solo: st.Solo, destroyed: st.IskKilled, lost: losses.IskLost}, nil
+	}
+	st, err := app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: viewer.characterID, Since: since})
+	if err != nil {
+		return nil, err
+	}
+	return &kmTileRecord{kills: st.Kills, losses: st.Losses, solo: st.Solo, destroyed: st.IskKilled, lost: st.IskLost}, nil
 }
 
 // killPulse lays out the 14-day ISK flow: one column a day, the

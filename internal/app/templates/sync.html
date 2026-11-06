@@ -2,7 +2,7 @@
 {{define "pagetitle"}}<h1><span class="gt">Admin</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-<p>What the background worker is doing and how fresh the stored data is. Accounts and who they belong to are on the Accounts tab. This page refreshes itself every few seconds.</p>
+<p class="prose">What the background worker is doing and how fresh the stored data is. Accounts and who they belong to are on the Accounts tab. This page refreshes itself every few seconds.</p>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 

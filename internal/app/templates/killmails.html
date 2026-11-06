@@ -88,6 +88,7 @@
     </table>
     </div>
     <p class="km-note">Showing {{len .Rows}} of {{.Total}}: <span class="km-k">{{.ShownDestroyed}} ISK destroyed</span>, <span class="km-l">{{.ShownLost}} ISK lost</span>. Values are the killboard's own pricing: destroyed and dropped items at EveSynapse prices.</p>
+    {{if .Older}}<p class="kb-more"><a class="btn" href="{{.Older}}">Older kills</a></p>{{end}}
     {{else}}
     <p><small>No killmails match these filters.{{if .Filtered}} <a href="{{.ClearHref}}">Clear filters</a>{{end}}</small></p>
     {{end}}

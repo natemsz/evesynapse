@@ -436,6 +436,11 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 	view.ShownDestroyed = iskCompact(shownDest)
 	view.ShownLost = iskCompact(shownLost)
 	view.ListHref = href(nil)
+	// The Older link pages the board window: it keeps the
+	// page's current choices and adds the union's cursor.
+	if view.olderCursor != "" {
+		view.Older = href(map[string]string{"before": view.olderCursor})
+	}
 	view.Depth = 1 // the list; the console has no directory level
 
 	// The inspector opens a kill from the viewer's own recent list

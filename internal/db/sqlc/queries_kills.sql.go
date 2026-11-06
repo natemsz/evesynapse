@@ -335,6 +335,36 @@ func (q *Queries) InsertKillDetail(ctx context.Context, arg InsertKillDetailPara
 	return err
 }
 
+const insertKillInvolvement = `-- name: InsertKillInvolvement :exec
+INSERT INTO kill_involvement (killmail_id, character_id, corporation_id, alliance_id)
+SELECT $1::bigint,
+    unnest($2::bigint[]),
+    unnest($3::bigint[]),
+    unnest($4::bigint[])
+ON CONFLICT DO NOTHING
+`
+
+type InsertKillInvolvementParams struct {
+	KillmailID     int64   `json:"killmail_id"`
+	CharacterIds   []int64 `json:"character_ids"`
+	CorporationIds []int64 `json:"corporation_ids"`
+	AllianceIds    []int64 `json:"alliance_ids"`
+}
+
+// The kill's permanent involvement record: one slim row per
+// attacker, identity columns only. Written on the first copy
+// whether or not the attacker detail is stored with it, so a
+// kill stored in post-prune shape still credits its value.
+func (q *Queries) InsertKillInvolvement(ctx context.Context, arg InsertKillInvolvementParams) error {
+	_, err := q.db.ExecContext(ctx, insertKillInvolvement,
+		arg.KillmailID,
+		pq.Array(arg.CharacterIds),
+		pq.Array(arg.CorporationIds),
+		pq.Array(arg.AllianceIds),
+	)
+	return err
+}
+
 const insertKillLinePrices = `-- name: InsertKillLinePrices :exec
 INSERT INTO kill_line_prices (killmail_id, type_id, unit_price)
 SELECT $1::bigint,
@@ -403,7 +433,7 @@ SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, vict
      LIMIT $6::bigint)
     UNION
     (SELECT k.killmail_id, k.hash, k.killmail_time, k.system_id, k.region_id, k.location_id, k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id, k.victim_faction_id, k.ship_type_id, k.damage_taken, k.attacker_count, k.fb_character_id, k.fb_corporation_id, k.fb_alliance_id, k.fb_ship_type_id, k.npc, k.solo, k.awox, k.points, k.value_zkill, k.value_ours, k.value_dropped_ours, k.value_coverage, k.priced_at, k.source, k.public, k.ingested_at FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.alliance_id = $1::bigint)
+     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.alliance_id = $1::bigint)
        AND k.public
        AND (k.killmail_time, k.killmail_id) < ($2::timestamptz, $3::bigint)
        AND COALESCE(k.value_ours, 0) >= $4::double precision
@@ -496,7 +526,7 @@ SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, vict
      LIMIT $6::bigint)
     UNION
     (SELECT k.killmail_id, k.hash, k.killmail_time, k.system_id, k.region_id, k.location_id, k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id, k.victim_faction_id, k.ship_type_id, k.damage_taken, k.attacker_count, k.fb_character_id, k.fb_corporation_id, k.fb_alliance_id, k.fb_ship_type_id, k.npc, k.solo, k.awox, k.points, k.value_zkill, k.value_ours, k.value_dropped_ours, k.value_coverage, k.priced_at, k.source, k.public, k.ingested_at FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.character_id = $1::bigint)
+     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.character_id = $1::bigint)
        AND k.public
        AND (k.killmail_time, k.killmail_id) < ($2::timestamptz, $3::bigint)
        AND COALESCE(k.value_ours, 0) >= $4::double precision
@@ -518,10 +548,10 @@ type ListKillsByCharacterParams struct {
 }
 
 // An entity's kills and losses: the victim side from kills, the
-// attacker side from kill_attackers (a year deep).
+// attacker side from kill_involvement (permanent).
 // Each side asks for its own newest page through its own index (the
 // victim side's (victim_*_id, killmail_time), the attacker side's
-// kill_attackers index), and the two pages merge. One query with
+// kill_involvement index), and the two pages merge. One query with
 // "victim = id OR killmail_id IN (attackers)" defeated both indexes
 // and walked every kill newest first: 70 ms for a pilot with one
 // kill, against 0.4 ms this way, and never slower for busy ones.
@@ -597,7 +627,7 @@ SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, vict
      LIMIT $6::bigint)
     UNION
     (SELECT k.killmail_id, k.hash, k.killmail_time, k.system_id, k.region_id, k.location_id, k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id, k.victim_faction_id, k.ship_type_id, k.damage_taken, k.attacker_count, k.fb_character_id, k.fb_corporation_id, k.fb_alliance_id, k.fb_ship_type_id, k.npc, k.solo, k.awox, k.points, k.value_zkill, k.value_ours, k.value_dropped_ours, k.value_coverage, k.priced_at, k.source, k.public, k.ingested_at FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.corporation_id = $1::bigint)
+     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.corporation_id = $1::bigint)
        AND k.public
        AND (k.killmail_time, k.killmail_id) < ($2::timestamptz, $3::bigint)
        AND COALESCE(k.value_ours, 0) >= $4::double precision
@@ -1338,8 +1368,10 @@ DELETE FROM kill_details d USING kills k
 WHERE k.killmail_id = d.killmail_id AND k.killmail_time < $1::timestamptz
 `
 
-// Retention: attackers and full killmails older than the cutoff go;
-// the summary row stays.
+// Retention: attacker detail and full killmails older than the
+// cutoff go; the summary row, the priced lines and the
+// involvement record stay. Values and who they credit are
+// permanent; only detail ages out.
 func (q *Queries) PruneKillDetails(ctx context.Context, before time.Time) (int64, error) {
 	result, err := q.db.ExecContext(ctx, pruneKillDetails, before)
 	if err != nil {

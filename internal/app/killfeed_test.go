@@ -357,6 +357,8 @@ func TestKillboardScopedStats(t *testing.T) {
 		t.Helper()
 		exec(`INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, alliance_id, ship_type_id, final_blow)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)`, killID, seq, char, corp, alliance, ship, fb)
+		exec(`INSERT INTO kill_involvement (killmail_id, character_id, corporation_id, alliance_id)
+			VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, killID, char, corp, alliance)
 	}
 	const pilot, corp, alliance = 9201, 98201, 99201
 	kill(800001, now.Add(-time.Hour), 30000142, 9401, 98401, 99401, 587, 10000000, true, pilot, corp, alliance)

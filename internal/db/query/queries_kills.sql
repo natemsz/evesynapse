@@ -50,6 +50,18 @@ SELECT sqlc.arg(killmail_id)::bigint,
     unnest(sqlc.arg(final_blows)::boolean[])
 ON CONFLICT DO NOTHING;
 
+-- The kill's permanent involvement record: one slim row per
+-- attacker, identity columns only. Written on the first copy
+-- whether or not the attacker detail is stored with it, so a
+-- kill stored in post-prune shape still credits its value.
+-- name: InsertKillInvolvement :exec
+INSERT INTO kill_involvement (killmail_id, character_id, corporation_id, alliance_id)
+SELECT sqlc.arg(killmail_id)::bigint,
+    unnest(sqlc.arg(character_ids)::bigint[]),
+    unnest(sqlc.arg(corporation_ids)::bigint[]),
+    unnest(sqlc.arg(alliance_ids)::bigint[])
+ON CONFLICT DO NOTHING;
+
 -- name: InsertKillDetail :exec
 INSERT INTO kill_details (killmail_id, payload, stored_at)
 VALUES (sqlc.arg(killmail_id), sqlc.arg(payload), sqlc.arg(stored_at))
@@ -90,8 +102,10 @@ UPDATE kills SET value_ours = sqlc.arg(value_ours)::double precision,
     priced_at = sqlc.arg(priced_at)::timestamptz
 WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 
--- Retention: attackers and full killmails older than the cutoff go;
--- the summary row stays.
+-- Retention: attacker detail and full killmails older than the
+-- cutoff go; the summary row, the priced lines and the
+-- involvement record stay. Values and who they credit are
+-- permanent; only detail ages out.
 -- name: PruneKillDetails :execrows
 DELETE FROM kill_details d USING kills k
 WHERE k.killmail_id = d.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz;
@@ -150,10 +164,10 @@ ORDER BY k.killmail_time DESC, k.killmail_id DESC
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- An entity's kills and losses: the victim side from kills, the
--- attacker side from kill_attackers (a year deep).
+-- attacker side from kill_involvement (permanent).
 -- Each side asks for its own newest page through its own index (the
 -- victim side's (victim_*_id, killmail_time), the attacker side's
--- kill_attackers index), and the two pages merge. One query with
+-- kill_involvement index), and the two pages merge. One query with
 -- "victim = id OR killmail_id IN (attackers)" defeated both indexes
 -- and walked every kill newest first: 70 ms for a pilot with one
 -- kill, against 0.4 ms this way, and never slower for busy ones.
@@ -169,7 +183,7 @@ SELECT * FROM (
      LIMIT sqlc.arg(max_rows)::bigint)
     UNION
     (SELECT k.* FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.character_id = sqlc.arg(entity_id)::bigint)
+     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.character_id = sqlc.arg(entity_id)::bigint)
        AND k.public
        AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
        AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
@@ -192,7 +206,7 @@ SELECT * FROM (
      LIMIT sqlc.arg(max_rows)::bigint)
     UNION
     (SELECT k.* FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.corporation_id = sqlc.arg(entity_id)::bigint)
+     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.corporation_id = sqlc.arg(entity_id)::bigint)
        AND k.public
        AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
        AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
@@ -215,7 +229,7 @@ SELECT * FROM (
      LIMIT sqlc.arg(max_rows)::bigint)
     UNION
     (SELECT k.* FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.alliance_id = sqlc.arg(entity_id)::bigint)
+     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.alliance_id = sqlc.arg(entity_id)::bigint)
        AND k.public
        AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
        AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision

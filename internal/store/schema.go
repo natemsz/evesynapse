@@ -778,6 +778,14 @@ var pgStatsBacklogsSchema string
 //go:embed schema_pg/126_corp_kill_coverage.sql
 var pgCorpKillCoverageSchema string
 
+// Step 127: kill involvement: one slim permanent row per attacker
+// per kill (identity columns only), backfilled from the attacker
+// rows still on disk. Priced values credit through it forever;
+// attacker detail keeps aging out of kill_attackers.
+//
+//go:embed schema_pg/127_kill_involvement.sql
+var pgKillInvolvementSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -933,6 +941,7 @@ func schemaSteps() []schemaStep {
 		{124, "battle_reports", pgBattleReportsSchema, ""},
 		{125, "stats_backlogs", pgStatsBacklogsSchema, ""},
 		{126, "corp_kill_coverage", pgCorpKillCoverageSchema, ""},
+		{127, "kill_involvement", pgKillInvolvementSchema, ""},
 	}
 }
 

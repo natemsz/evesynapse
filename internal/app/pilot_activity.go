@@ -31,6 +31,18 @@ package app
 // a descriptive user agent. A pilot whose backfill fails is left
 // unmarked, so a later reading offers them again and the markers
 // keep the retry honest.
+//
+// One exception to the once-only rule: a profile backfilled
+// before kill involvement became permanent (schema 127) holds
+// aggregates whose underlying involvement was pruned before it
+// was kept, so its board figures understate the pilot. Such a
+// profile is offered one restoration walk, through the same
+// gate and queue; the walk's fresh stamp closes the exception
+// behind it. The restoration walk ingests (restoring the
+// involvement) but does not fold: the aggregates already count
+// those kills from the original walk, and the fold's markers
+// are pruned on the same retention line as the detail, so a
+// second fold would count the old kills twice.
 // ---------------------------------------------------------------------------
 
 import (
@@ -72,6 +84,11 @@ const (
 	// space repeated requests out; one a second is that, with
 	// margin.
 	pilotBackfillPace = 1100 * time.Millisecond
+	// How many pre-permanence profiles one restoration offer
+	// pass queues: the backfill worker walks them one at a
+	// time at the API's pace, so a pass stays a slow feed,
+	// never a flood.
+	pilotRestorationBatch = 25
 )
 
 const pilotBackfillUserAgent = "EveSynapse pilot activity (contact: the site operator; self-hosted EVE Online companion)"
@@ -149,19 +166,78 @@ func (app *Application) runPilotBackfill(ctx context.Context) {
 	}
 }
 
+// killInvolvementCutoff returns the moment kill involvement
+// became permanent: schema step 127's applied_at, read once
+// and cached. A database that cannot answer reads as the zero
+// time, under which no profile counts as stale and the
+// backfill gate behaves exactly as it always has. The step's
+// table is the store's own record, outside sqlc's schema, so
+// the read is a plain query. A failed read is not cached: the
+// next call asks again.
+func (app *Application) killInvolvementCutoff(ctx context.Context) time.Time {
+	app.involvementCutoffMu.Lock()
+	defer app.involvementCutoffMu.Unlock()
+	if app.involvementCutoffRead {
+		return app.involvementCutoff
+	}
+	var t time.Time
+	if err := app.db.QueryRowContext(ctx,
+		`SELECT applied_at FROM schema_migrations WHERE version = 127`).Scan(&t); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			logging.Warnf("pilot activity: read involvement cutoff: %v", err)
+		}
+		return time.Time{}
+	}
+	app.involvementCutoff, app.involvementCutoffRead = t, true
+	return t
+}
+
+// offerPilotRestorations queues one bounded batch of profiles
+// backfilled before kill involvement became permanent, most
+// recently active first, through the same queue readings use.
+// Each restored pilot's new stamp is past the cutoff, so the
+// stale set drains as the worker walks it and no pilot is
+// restored twice.
+func (app *Application) offerPilotRestorations(ctx context.Context) {
+	cutoff := app.killInvolvementCutoff(ctx)
+	if cutoff.IsZero() {
+		return
+	}
+	ids, err := app.queries.ListStalePilotProfiles(ctx, db.ListStalePilotProfilesParams{
+		Before: cutoff, MaxRows: pilotRestorationBatch,
+	})
+	if err != nil {
+		logging.Warnf("pilot activity: list stale profiles: %v", err)
+		return
+	}
+	if len(ids) > 0 {
+		logging.Infof("pilot activity: offering %d pre-permanence profiles for a restoration walk", len(ids))
+		app.notePilotsEncountered(ids)
+	}
+}
+
 // backfillPilot folds a pilot's recent kill history from
 // zKillboard into their activity profile, once. A pilot already
-// backfilled is left alone; a failed pass leaves the profile
-// unmarked, so a later reading offers the pilot again.
+// backfilled is left alone, with one exception: a profile
+// backfilled before kill involvement became permanent is
+// walked once more, so the involvement its aggregates rest on
+// is restored to the permanent record. The restoration walk
+// does not fold (see the note at the top of this file). A
+// failed pass leaves the profile's stamp as it was, so a later
+// reading (or the restoration offer) reaches the pilot again.
 func (app *Application) backfillPilot(ctx context.Context, client *http.Client, id int64) {
 	prof, err := app.queries.GetPilotActivityProfile(ctx, id)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		logging.Warnf("pilot activity: read profile %d: %v", id, err)
 		return
 	}
-	if err == nil && prof.BackfilledAt.Valid {
+	if err == nil && prof.BackfilledAt.Valid && !prof.BackfilledAt.Time.Before(app.killInvolvementCutoff(ctx)) {
 		return
 	}
+	// Past the gate with a stamp in hand, the pass is a
+	// restoration: the profile's aggregates already count this
+	// history, so the walk below ingests only.
+	restoring := err == nil && prof.BackfilledAt.Valid
 	if err != nil {
 		// No profile yet: claim it. The row's presence is what
 		// lets the live stream maintain the profile from here on.
@@ -189,18 +265,22 @@ func (app *Application) backfillPilot(ctx context.Context, client *http.Client, 
 			}
 			seen++
 			// The ingest feeds every list the pilot appears
-			// on; the fold feeds the profile. A failed ingest
-			// is logged and the pass goes on: it must not
-			// block the fold or the backfilled mark, and the
-			// board's copy can still land from a later offer
-			// or the stream.
+			// on; the fold feeds the profile (a restoration
+			// walk skips the fold: the profile already
+			// counts these kills). A failed ingest is logged
+			// and the pass goes on: it must not block the
+			// fold or the backfilled mark, and the board's
+			// copy can still land from a later offer or the
+			// stream.
 			if len(e.Raw) > 0 {
 				if _, err := app.ingestKill(ctx, e.Raw, e.ZKB.Hash, &e.ZKB, "zkill", true, true); err != nil {
 					logging.Warnf("pilot activity: ingest history kill %d for pilot %d: %v", e.KillmailID, id, err)
 				}
 			}
-			if _, err := app.applyPilotKill(ctx, id, e.killmailFull, false); err != nil {
-				logging.Warnf("pilot activity: fold kill %d for pilot %d: %v", e.KillmailID, id, err)
+			if !restoring {
+				if _, err := app.applyPilotKill(ctx, id, e.killmailFull, false); err != nil {
+					logging.Warnf("pilot activity: fold kill %d for pilot %d: %v", e.KillmailID, id, err)
+				}
 			}
 		}
 		if len(entries) < pilotBackfillPageSize {

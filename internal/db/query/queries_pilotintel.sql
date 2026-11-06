@@ -283,6 +283,16 @@ UPDATE pilot_activity_profiles
 SET backfilled_at = sqlc.arg(backfilled_at), updated_at = sqlc.arg(backfilled_at)
 WHERE character_id = sqlc.arg(character_id);
 
+-- Profiles backfilled before kill involvement became
+-- permanent: their stored involvement was pruned before it
+-- was kept, so the restoration pass offers them for one
+-- fresh walk. A bounded batch, most recently active first.
+-- name: ListStalePilotProfiles :many
+SELECT character_id FROM pilot_activity_profiles
+WHERE backfilled_at IS NOT NULL AND backfilled_at < sqlc.arg(before)::timestamptz
+ORDER BY last_active_at DESC NULLS LAST, character_id
+LIMIT sqlc.arg(max_rows)::bigint;
+
 -- One marker per (kill, pilot) folded into the aggregates. A
 -- conflict (no row back) means the kill already counted.
 -- name: MarkPilotKillApplied :one

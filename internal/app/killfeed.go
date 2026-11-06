@@ -478,8 +478,9 @@ func (app *Application) killRegion(ctx context.Context, systemID int64) int64 {
 }
 
 // killboardMaintenance is the worker's killboard pass: merge our
-// characters' ESI killmails, price what is unpriced, and once a day
-// prune details past retention.
+// characters' ESI killmails, offer any pre-permanence pilot
+// profiles their restoration walk, price what is unpriced, and
+// once a day prune details past retention.
 func (app *Application) killboardMaintenance(ctx context.Context) {
 	if rows, err := app.queries.ListESIKillsToMerge(ctx, killMergeBatch); err == nil {
 		merged := 0
@@ -496,6 +497,7 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 	} else {
 		logging.Errorf("killboard: list ESI killmails: %v", err)
 	}
+	app.offerPilotRestorations(ctx)
 	app.warmKillNames(ctx)
 	app.resolveNotedNames(ctx)
 	if n, err := app.priceKills(ctx); err != nil {

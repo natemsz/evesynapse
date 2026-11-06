@@ -236,10 +236,24 @@ type killboardStats struct {
 	KillsHour, KillsDay int64
 	ISKDay              string
 	Biggest             *killRow
+
+	// A scoped entity headline. The global fields above stay
+	// zero on one of these, and these stay zero on the global
+	// headline.
+	Scoped          bool
+	AriaLabel       string
+	ScopeNote       string
+	ScopeUpdatedAgo string
+	Kills           int64
+	Solo            int64
+	HasSolo         bool
+	Losses          int64
+	ISKDestroyed    string
 }
 
 type killboardTop struct {
 	Alliances []killTopRow
+	TopShips  []killTopRow // a scoped entity's ships flown, on its kills
 	Ships     []killTopRow
 	Systems   []killTopRow
 }
@@ -259,6 +273,19 @@ type killboardStatsMemo struct {
 	stats killboardStats
 	top   killboardTop
 }
+
+type killboardScopedStatsKey struct {
+	kind string
+	id   int64
+}
+
+type killboardScopedStatsMemo struct {
+	at    time.Time
+	stats killboardStats
+	top   killboardTop
+}
+
+const killScopedStatsMemoCap = 128
 
 var killScopes = []string{"system", "region", "ship", "character", "corporation", "alliance"}
 
@@ -340,7 +367,16 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		q = append(q, fmt.Sprintf("before=%d.%d", last.KillmailTime.Unix(), last.KillmailID))
 		v.Older = "/intel/kills/?" + strings.Join(q, "&")
 	}
-	v.Stats, v.Top = app.killboardHeadline(ctx, names)
+	switch v.ScopeKind {
+	case "character", "corporation", "alliance":
+		v.Stats, v.Top = app.killboardScopedHeadline(ctx, names, v.ScopeKind, v.ScopeID)
+		v.Stats.AriaLabel = v.ScopeName + ": " + v.Stats.ScopeNote
+		if v.Stats.ScopeUpdatedAgo != "" {
+			v.Stats.AriaLabel += " · updated " + v.Stats.ScopeUpdatedAgo
+		}
+	default:
+		v.Stats, v.Top = app.killboardHeadline(ctx, names)
+	}
 	data.Killboard = v
 	title := "Killboard"
 	if v.ScopeName != "" {
@@ -399,7 +435,7 @@ func (app *Application) killboardHeadline(ctx context.Context, names *killNames)
 	}
 	now := time.Now().UTC()
 	day := now.Add(-24 * time.Hour)
-	var st killboardStats
+	st := killboardStats{AriaLabel: "The last day across New Eden"}
 	if s, err := app.queries.GetKillStats(ctx, db.GetKillStatsParams{HourAgo: now.Add(-time.Hour), DayAgo: day}); err == nil {
 		st.KillsHour, st.KillsDay = s.KillsHour, s.KillsDay
 		st.ISKDay = formatISKShort(s.IskDay)
@@ -429,6 +465,160 @@ func (app *Application) killboardHeadline(ctx context.Context, names *killNames)
 	app.killRegionsMu.Lock()
 	app.killStatsMemo = &killboardStatsMemo{at: time.Now(), stats: st, top: top}
 	app.killRegionsMu.Unlock()
+	return st, top
+}
+
+// scopedBiggestRow renders an entity's biggest kill. The
+// scoped queries rank on the PilotKillStats value basis (our
+// price, else zKillboard's figure), so a kill ranked on the
+// fallback figure shows that figure rather than nothing.
+func scopedBiggestRow(names *killNames, k db.Kill) *killRow {
+	if !k.ValueOurs.Valid && k.ValueZkill.Valid {
+		k.ValueOurs = k.ValueZkill
+	}
+	row := names.row(k)
+	return &row
+}
+
+// killboardScopedHeadline is a character, corporation or
+// alliance board's headline: the scoped entity's own figures
+// instead of New Eden's. Characters read exactly what their
+// profile serves (the stored activity profile's aggregates
+// when one backs the pilot, else the 90-day board window);
+// corporations and alliances read the 90-day board window.
+// The rail reads the 90-day window for all three kinds. Held a
+// minute per entity, like the global headline.
+func (app *Application) killboardScopedHeadline(ctx context.Context, names *killNames, kind string, id int64) (killboardStats, killboardTop) {
+	key := killboardScopedStatsKey{kind: kind, id: id}
+	now := time.Now().UTC()
+	app.killScopedStatsMu.Lock()
+	memo := app.killScopedStatsMemo[key]
+	app.killScopedStatsMu.Unlock()
+	if memo != nil && now.Sub(memo.at) < killStatsCache {
+		return memo.stats, memo.top
+	}
+	since := now.Add(-pilotIntelWindow)
+	st := killboardStats{Scoped: true, ScopeNote: "last 90 days"}
+	var top killboardTop
+	switch kind {
+	case "character":
+		profileBacked := false
+		if act := app.loadPilotActivity(ctx, id, names, now); act != nil && act.Any {
+			profileBacked = true
+			st.Kills, st.Losses = act.Kills, act.Losses
+			st.ScopeNote = "every recorded kill and loss"
+			st.ScopeUpdatedAgo = act.UpdatedAgo
+			if k, err := app.queries.GetPilotBiggestKill(ctx, db.GetPilotBiggestKillParams{CharacterID: id, Since: time.Unix(0, 0).UTC()}); err == nil {
+				st.Biggest = scopedBiggestRow(names, k)
+			}
+		}
+		if !profileBacked {
+			if s, err := app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: id, Since: since}); err == nil {
+				st.Kills, st.Solo, st.Losses = s.Kills, s.Solo, s.Losses
+				st.HasSolo = true
+				if s.IskKilled > 0 {
+					st.ISKDestroyed = formatISKShort(s.IskKilled)
+				}
+			} else {
+				logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
+			}
+			if k, err := app.queries.GetPilotBiggestKill(ctx, db.GetPilotBiggestKillParams{CharacterID: id, Since: since}); err == nil {
+				st.Biggest = scopedBiggestRow(names, k)
+			}
+		}
+		if rows, err := app.queries.ListPilotShips(ctx, db.ListPilotShipsParams{CharacterID: id, Since: since}); err == nil {
+			for _, r := range rows {
+				top.TopShips = append(top.TopShips, killTopRow{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), Count: r.N})
+			}
+		}
+		if rows, err := app.queries.ListPilotShipsLost(ctx, db.ListPilotShipsLostParams{CharacterID: id, Since: since}); err == nil {
+			for _, r := range rows {
+				top.Ships = append(top.Ships, killTopRow{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), Count: r.Losses})
+			}
+		}
+		if rows, err := app.queries.ListPilotSystems(ctx, db.ListPilotSystemsParams{CharacterID: id, Since: since}); err == nil {
+			for _, r := range rows {
+				s := names.system(r.SystemID)
+				sec, tier := secRound(s.Security)
+				top.Systems = append(top.Systems, killTopRow{ID: r.SystemID, Name: s.Name, Count: r.N, Note: sec, Tier: tier})
+			}
+		}
+	case "corporation":
+		if s, err := app.queries.CorporationKillStats(ctx, db.CorporationKillStatsParams{CorporationID: id, Since: since}); err == nil {
+			st.Kills, st.Solo = s.Kills, s.Solo
+			st.HasSolo = true
+			if s.IskKilled > 0 {
+				st.ISKDestroyed = formatISKShort(s.IskKilled)
+			}
+		} else {
+			logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
+		}
+		if losses, err := app.queries.CountCorporationKillLosses(ctx, db.CountCorporationKillLossesParams{CorporationID: id, Since: since}); err == nil {
+			st.Losses = losses
+		}
+		if k, err := app.queries.GetCorporationBiggestKill(ctx, db.GetCorporationBiggestKillParams{CorporationID: id, Since: since}); err == nil {
+			st.Biggest = scopedBiggestRow(names, k)
+		}
+		if rows, err := app.queries.ListCorporationShips(ctx, db.ListCorporationShipsParams{CorporationID: id, Since: since}); err == nil {
+			for _, r := range rows {
+				top.TopShips = append(top.TopShips, killTopRow{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), Count: r.N})
+			}
+		}
+		if rows, err := app.queries.ListCorporationShipsLost(ctx, db.ListCorporationShipsLostParams{CorporationID: id, Since: since}); err == nil {
+			for _, r := range rows {
+				top.Ships = append(top.Ships, killTopRow{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), Count: r.Losses})
+			}
+		}
+		if rows, err := app.queries.ListCorporationSystems(ctx, db.ListCorporationSystemsParams{CorporationID: id, Since: since}); err == nil {
+			for _, r := range rows {
+				s := names.system(r.SystemID)
+				sec, tier := secRound(s.Security)
+				top.Systems = append(top.Systems, killTopRow{ID: r.SystemID, Name: s.Name, Count: r.N, Note: sec, Tier: tier})
+			}
+		}
+	case "alliance":
+		if s, err := app.queries.AllianceKillStats(ctx, db.AllianceKillStatsParams{AllianceID: id, Since: since}); err == nil {
+			st.Kills, st.Solo = s.Kills, s.Solo
+			st.HasSolo = true
+			if s.IskKilled > 0 {
+				st.ISKDestroyed = formatISKShort(s.IskKilled)
+			}
+		} else {
+			logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
+		}
+		if losses, err := app.queries.CountAllianceKillLosses(ctx, db.CountAllianceKillLossesParams{AllianceID: id, Since: since}); err == nil {
+			st.Losses = losses
+		}
+		if k, err := app.queries.GetAllianceBiggestKill(ctx, db.GetAllianceBiggestKillParams{AllianceID: id, Since: since}); err == nil {
+			st.Biggest = scopedBiggestRow(names, k)
+		}
+		if rows, err := app.queries.ListAllianceShips(ctx, db.ListAllianceShipsParams{AllianceID: id, Since: since}); err == nil {
+			for _, r := range rows {
+				top.TopShips = append(top.TopShips, killTopRow{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), Count: r.N})
+			}
+		}
+		if rows, err := app.queries.ListAllianceShipsLost(ctx, db.ListAllianceShipsLostParams{AllianceID: id, Since: since}); err == nil {
+			for _, r := range rows {
+				top.Ships = append(top.Ships, killTopRow{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), Count: r.Losses})
+			}
+		}
+		if rows, err := app.queries.ListAllianceSystems(ctx, db.ListAllianceSystemsParams{AllianceID: id, Since: since}); err == nil {
+			for _, r := range rows {
+				s := names.system(r.SystemID)
+				sec, tier := secRound(s.Security)
+				top.Systems = append(top.Systems, killTopRow{ID: r.SystemID, Name: s.Name, Count: r.N, Note: sec, Tier: tier})
+			}
+		}
+	}
+	app.killScopedStatsMu.Lock()
+	if app.killScopedStatsMemo == nil {
+		app.killScopedStatsMemo = map[killboardScopedStatsKey]*killboardScopedStatsMemo{}
+	}
+	if _, ok := app.killScopedStatsMemo[key]; !ok && len(app.killScopedStatsMemo) >= killScopedStatsMemoCap {
+		app.killScopedStatsMemo = map[killboardScopedStatsKey]*killboardScopedStatsMemo{}
+	}
+	app.killScopedStatsMemo[key] = &killboardScopedStatsMemo{at: now, stats: st, top: top}
+	app.killScopedStatsMu.Unlock()
 	return st, top
 }
 

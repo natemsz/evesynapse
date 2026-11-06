@@ -322,6 +322,123 @@ func TestKillboardNamesResolveFromView(t *testing.T) {
 	}
 }
 
+// TestKillboardScopedStats: a character, corporation or
+// alliance board's strip and rail show that entity's figures,
+// not New Eden's, while the unscoped board keeps the global
+// headline. The seed gives the pilot, his corporation and his
+// alliance the same record (2 kills, 1 of them flagged solo,
+// 1 loss, 40M destroyed, the biggest worth 30M) inside a board
+// whose global day is 4 kills and 1.06B destroyed, so the two
+// can never be confused. One kill carries two attackers from
+// the corporation: it still counts and values once.
+func TestKillboardScopedStats(t *testing.T) {
+	app, conn, _ := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	exec := func(s string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, s, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES
+		(30000142, 'Jita', 10000002, 0.946), (30002187, 'Amarr', 10000043, 1.0)`)
+	exec(`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge'), (10000043, 'Domain')`)
+	exec(`INSERT INTO sde_types (type_id, name) VALUES (587, 'Rifter'), (626, 'Vexor'), (22456, 'Sabre')`)
+	now := time.Now().UTC()
+	kill := func(id int64, at time.Time, system, victim, victimCorp, victimAlliance, ship int64, value float64, solo bool, fb, fbCorp, fbAlliance int64) {
+		t.Helper()
+		exec(`INSERT INTO kills (killmail_id, killmail_time, system_id, region_id, victim_character_id, victim_corporation_id,
+			victim_alliance_id, ship_type_id, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id,
+			solo, value_zkill, value_ours, source, public, ingested_at)
+			VALUES ($1, $2, $3, 10000002, $4, $5, $6, $7, 1, $8, $9, $10, $11, $12, $12, 'zkill', true, $2)`,
+			id, at, system, victim, victimCorp, victimAlliance, ship, fb, fbCorp, fbAlliance, solo, value)
+	}
+	attacker := func(killID int64, seq int, char, corp, alliance, ship int64, fb bool) {
+		t.Helper()
+		exec(`INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, alliance_id, ship_type_id, final_blow)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`, killID, seq, char, corp, alliance, ship, fb)
+	}
+	const pilot, corp, alliance = 9201, 98201, 99201
+	kill(800001, now.Add(-time.Hour), 30000142, 9401, 98401, 99401, 587, 10000000, true, pilot, corp, alliance)
+	attacker(800001, 0, pilot, corp, alliance, 626, true)
+	attacker(800001, 1, 9202, corp, alliance, 587, false)
+	kill(800002, now.Add(-2*time.Hour), 30000142, pilot, corp, alliance, 22456, 20000000, false, 9301, 98301, 99301)
+	attacker(800002, 0, 9301, 98301, 99301, 587, true)
+	kill(800003, now.Add(-3*time.Hour), 30002187, 9402, 98401, 99401, 626, 30000000, false, pilot, corp, alliance)
+	attacker(800003, 0, pilot, corp, alliance, 626, true)
+	kill(800004, now.Add(-30*time.Minute), 30000142, 9403, 98401, 99401, 587, 999000000, false, 9301, 98301, 99301)
+	attacker(800004, 0, 9301, 98301, 99301, 587, true)
+
+	get := func(path string) string {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d", path, rec.Code)
+		}
+		return rec.Body.String()
+	}
+	scopedStrip := []string{
+		`<span class="l-stat-label">Kills</span><span class="l-stat-value">2</span><span class="l-stat-sub">1 solo · last 90 days</span>`,
+		`<span class="l-stat-label">Losses</span><span class="l-stat-value">1</span><span class="l-stat-sub">last 90 days</span>`,
+		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">40.00M</span><span class="l-stat-sub">last 90 days</span>`,
+		`<span class="l-stat-label">Biggest kill</span>`,
+		`<span class="l-stat-value">30.00M</span>`,
+	}
+	for _, tc := range []struct{ name, path, aria string }{
+		{"character", "/intel/kills/?character=9201", `aria-label="Pilot #9201: last 90 days"`},
+		{"corporation", "/intel/kills/?corporation=98201", `aria-label="Corporation #98201: last 90 days"`},
+		{"alliance", "/intel/kills/?alliance=99201", `aria-label="Alliance #99201: last 90 days"`},
+	} {
+		body := get(tc.path)
+		if !strings.Contains(body, tc.aria) {
+			t.Errorf("%s board: strip aria %q missing", tc.name, tc.aria)
+		}
+		for _, want := range scopedStrip {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s board: strip lacks %q", tc.name, want)
+			}
+		}
+		if strings.Contains(body, "Last hour") || strings.Contains(body, "Destroyed today") {
+			t.Errorf("%s board: the global strip leaked in", tc.name)
+		}
+		if !strings.Contains(body, `href="/intel/kill/800003/"`) {
+			t.Errorf("%s board: the biggest kill is not the entity's 30M kill", tc.name)
+		}
+	}
+
+	char := get("/intel/kills/?character=9201")
+	for _, want := range []string{
+		`<h2>Top ships</h2>`, `<span class="kb-top-n">Vexor</span><span class="kb-top-c">2</span>`,
+		`<h2>Most lost</h2>`, `<span class="kb-top-n">Sabre</span><span class="kb-top-c">1</span>`,
+		`<h2>Top systems</h2>`,
+	} {
+		if !strings.Contains(char, want) {
+			t.Errorf("character board rail lacks %q", want)
+		}
+	}
+	if strings.Contains(char, "Top killers") || strings.Contains(char, "Hottest systems") {
+		t.Errorf("character board rail kept the global headings")
+	}
+
+	global := get("/intel/kills/")
+	for _, want := range []string{
+		`aria-label="The last day across New Eden"`,
+		`<span class="l-stat-label">Last hour</span><span class="l-stat-value">1</span>`,
+		`<span class="l-stat-label">Last day</span><span class="l-stat-value">4</span>`,
+		`<span class="l-stat-label">Destroyed today</span><span class="l-stat-value">1.06B</span>`,
+		`<span class="l-stat-value">999.00M</span>`,
+		`<h2>Top killers</h2>`, `<h2>Hottest systems</h2>`,
+	} {
+		if !strings.Contains(global, want) {
+			t.Errorf("unscoped board lacks %q", want)
+		}
+	}
+	if strings.Contains(global, "<h2>Top ships</h2>") {
+		t.Errorf("unscoped board took the scoped rail")
+	}
+}
+
 // TestKillfeedRetriesFailedIngest: a package whose ingest
 // fails is not skipped — the cursor stays on its sequence and
 // the same file is asked again until it lands.

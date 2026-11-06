@@ -10,7 +10,7 @@
 <section class="card page-card">
 
 {{with .NotifySettings}}
-<p><small>Choose what EveSynapse tells you about, and for which of your characters. Notifications show in the top bar and briefing cards show on the home page; the two switches are separate, so a kind can be a notification, a card, both, or neither. What you switch off is not shown, and switching it back on starts from then, not from what you missed.</small></p>
+<p class="prose">Choose what EveSynapse tells you about, and for which of your characters. Notifications show in the top bar and briefing cards show on the home page; the two switches are separate, so a kind can be a notification, a card, both, or neither. What you switch off is not shown, and switching it back on starts from then, not from what you missed.</p>
 
 <form method="post" action="/notifications/settings">
 <input type="hidden" name="channels_shown" value="1">
@@ -61,7 +61,7 @@
 </div>
 <h2>Browser notifications</h2>
 {{if .PushConfigured}}
-<p><small>Get the same notifications from your browser while no EveSynapse tab is open. This is per browser: turn it on in each one you want it in. What you switched off above stays off here too.</small></p>
+<p class="prose">Get the same notifications from your browser while no EveSynapse tab is open. This is per browser: turn it on in each one you want it in. What you switched off above stays off here too.</p>
 <div id="push-panel" data-vapid-key="{{.PushKey}}">
   <p id="push-status" role="status">Checking this browser…</p>
   <button type="button" class="btn" id="push-enable" hidden>Turn on in this browser</button>
@@ -112,9 +112,9 @@
     </tbody>
   </table>
   {{if .IsAdmin}}
-  <p><small>Admin accounts keep at least one key. Removing the last one is refused.</small></p>
+  <p class="prose">Admin accounts keep at least one key. Removing the last one is refused.</p>
   {{else}}
-  <p><small>Removing the last key turns two-factor sign-in off.</small></p>
+  <p class="prose">Removing the last key turns two-factor sign-in off.</p>
   {{end}}
   <p><small>{{.CodesLeft}} recovery codes left.</small></p>
   <form method="post" action="/settings/security/codes/regenerate" data-needs-fresh>
@@ -122,7 +122,7 @@
   </form>
   {{else}}
   <p><small>Off. Add a key to ask for it after EVE SSO at every sign-in.</small></p>
-  <p><small>A security key is a small device you plug in or tap, and a passkey lives on your phone or computer. This is separate from your EVE account's own two-factor sign-in: use a different key than the one guarding your EVE account. Keys are per hostname: a key enrolled here ({{.Host}}) does not work on any other EveSynapse address.</small></p>
+  <p class="prose">A security key is a small device you plug in or tap, and a passkey lives on your phone or computer. This is separate from your EVE account's own two-factor sign-in: use a different key than the one guarding your EVE account. Keys are per hostname: a key enrolled here ({{.Host}}) does not work on any other EveSynapse address.</p>
   {{end}}
   <div id="security-register" data-begin="/settings/security/keys/begin" data-finish="/settings/security/keys/finish" data-fresh="{{.Fresh}}" data-enabled="{{.Enabled}}">
     <p class="err" id="security-status" role="alert" hidden></p>
@@ -132,7 +132,7 @@
     </div>
     <div id="security-codes" hidden>
       <h2>Recovery codes</h2>
-      <p><small>Write these down now. This is the only time they are shown. Each code signs you in once, then burns.</small></p>
+      <p class="prose">Write these down now. This is the only time they are shown. Each code signs you in once, then burns.</p>
       <ol id="security-code-list"></ol>
       <p><button type="button" class="btn" id="security-done">Done</button></p>
     </div>
@@ -158,7 +158,7 @@
 <section class="card page-card" data-tabpanel="api" hidden>
 {{with .APIKeys}}
   <h2>Market API</h2>
-  <p><small>Read EveSynapse's market prices from your own tools: prices, book statistics, trends, the change feed, and appraisals that handle abyssal modules, blueprint copies and researched blueprints. Keys only read market data; they can't see or change anything on your account.</small></p>
+  <p class="prose">Read EveSynapse's market prices from your own tools: prices, book statistics, trends, the change feed, and appraisals that handle abyssal modules, blueprint copies and researched blueprints. Keys only read market data; they can't see or change anything on your account.</p>
   {{if .Error}}<p class="err" role="alert">{{.Error}}</p>{{end}}
   {{if .NewKey}}
   <div class="api-newkey" role="status">
@@ -192,7 +192,7 @@
   </form>
   {{end}}
   <h2>Using it</h2>
-  <p><small>Send the key in a header: <code>Authorization: Bearer esk_…</code>. Each key gets {{.PerMinute}} requests a minute with a short burst, a daily allowance, and up to {{.MaxBatch}} items per request.</small></p>
+  <p class="prose">Send the key in a header: <code>Authorization: Bearer esk_…</code>. Each key gets {{.PerMinute}} requests a minute with a short burst, a daily allowance, and up to {{.MaxBatch}} items per request.</p>
   <ul class="api-endpoints">
     <li><code>GET {{.BaseURL}}/prices?region=10000002&amp;types=34,35</code><br><small>Prices with where each came from, the full order book statistics, and trends.</small></li>
     <li><code>GET {{.BaseURL}}/history?region=10000002&amp;type=34&amp;days=90</code><br><small>A type's daily figures from our sweeps.</small></li>

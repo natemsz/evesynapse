@@ -57,7 +57,7 @@
   </tbody>
 </table>
 </div>
-<p class="fo-note"><small>Prices in ISK. Left is what the order still has to sell or buy, out of what it listed.</small></p>
+<p class="prose">Prices in ISK. Left is what the order still has to sell or buy, out of what it listed.</p>
 {{else}}
 <p><small>No open orders in the latest snapshot.</small></p>
 {{end}}
@@ -66,7 +66,7 @@
   <section role="tabpanel" id="fo-beaten" aria-labelledby="fo-beaten-tab">
   <h3 class="l-tab-h fo-h">Beaten at their station</h3>
   {{if .Orders.Beaten}}
-  <p class="fo-lead">Orders of yours, on every character, that another player beats at the same station. Copy the suggested price and paste it when you change the order in game.</p>
+  <p class="prose">Orders of yours, on every character, that another player beats at the same station. Copy the suggested price and paste it when you change the order in game.</p>
   <div class="tw">
 <table class="fo-table">
   <thead><tr><th class="card-title">Item</th><th>Side</th><th>Station</th><th class="mt-num">Your price</th><th class="mt-num">Beaten by</th><th class="mt-num">Gap</th><th class="mt-num">Left</th><th>Beaten</th><th class="mt-num">Suggested</th><th class="mt-num">Margin there</th></tr></thead>
@@ -88,7 +88,7 @@
   </tbody>
 </table>
 </div>
-<p class="fo-note"><small>Prices in ISK. Suggested is the next price the game allows past the competition: one step under for a sell, one step over for a bid. Margins on sells use what the stock cost you; on bids, what it resells for at the typical sell. Changing a price also costs a broker fee, not counted here.</small></p>
+<p class="prose">Prices in ISK. Suggested is the next price the game allows past the competition: one step under for a sell, one step over for a bid. Margins on sells use what the stock cost you; on bids, what it resells for at the typical sell. Changing a price also costs a broker fee, not counted here.</p>
   {{else}}
   <p><small>None of your orders is beaten at its station right now.</small></p>
   {{end}}

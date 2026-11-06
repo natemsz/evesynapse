@@ -47,7 +47,7 @@
       <ul class="km-plist">
         {{range .Hulls}}<li><a class="km-pitem km-hull{{if .On}} on{{end}}" href="{{.Href}}"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy"><span class="km-pname">{{.Name}}<small>{{.Record}}</small></span><span class="km-pval">{{.Eff}}%<span class="km-eff"><span class="km-eff-fill {{.EffClass}}"></span></span></span></a></li>{{else}}<li class="muted">No hulls on record yet.</li>{{end}}
       </ul>
-      <p class="km-note">Efficiency is ISK destroyed over ISK destroyed and lost in that hull.</p>
+      <p class="prose">Efficiency is ISK destroyed over ISK destroyed and lost in that hull.</p>
     </section>
 
     <section class="l-panel km-wing s3" aria-labelledby="km-wing-h">
@@ -149,7 +149,7 @@
   {{end}}
   {{else}}
   {{if .RoleMissing}}
-  <p>Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share {{.Subject}}'s recent killmails. The list appears here once they do.</p>
+  <p class="prose">Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share {{.Subject}}'s recent killmails. The list appears here once they do.</p>
   {{else if .Warming}}
   <p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
   {{else}}

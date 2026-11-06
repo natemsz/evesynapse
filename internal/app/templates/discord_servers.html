@@ -17,15 +17,15 @@
   </form>
   {{end}}{{end}}
 </div>
-<p class="co-lede">The EveSynapse bot can be added to the Discord server of a corporation or an alliance. There it gives roles to members who have connected their Discord account, and posts new ops in a channel. A corporation's servers are set up by its directors, an alliance's by the directors of its executor corporation.</p>
+<p class="prose">The EveSynapse bot can be added to the Discord server of a corporation or an alliance. There it gives roles to members who have connected their Discord account, and posts new ops in a channel. A corporation's servers are set up by its directors, an alliance's by the directors of its executor corporation.</p>
 
 {{if not .Owner}}
-<div class="l-panel co-gate"><p>None of your characters is a director, so there is nothing for you to set up here. To get your own roles, connect your Discord account under <a href="/settings#notifications">notification settings</a>.</p></div>
+<div class="l-panel co-gate"><p class="prose">None of your characters is a director, so there is nothing for you to set up here. To get your own roles, connect your Discord account under <a href="/settings#notifications">notification settings</a>.</p></div>
 {{end}}
 
 {{with .Owner}}
 {{$owner := .}}
-{{if $.DiscordServers.CanInstall}}<p class="co-note">Discord will ask which server, and shows what the bot may do there. You need permission to manage that server.</p>{{end}}
+{{if $.DiscordServers.CanInstall}}<p class="prose">Discord will ask which server, and shows what the bot may do there. You need permission to manage that server.</p>{{end}}
 
 {{range .Servers}}
 {{$guild := .GuildID}}
@@ -38,7 +38,7 @@
 
 <section class="l-panel co-card">
   <div class="co-card-head"><h3>Roles</h3><a class="btn" href="/groups/">Create groups</a></div>
-  <p class="hint">A member gets every role they qualify for and loses each one when they stop qualifying. The bot can only give roles that sit below its own in the server's role list.</p>
+  <p class="prose">A member gets every role they qualify for and loses each one when they stop qualifying. The bot can only give roles that sit below its own in the server's role list.</p>
   {{if .Rules}}
   <div class="tw">
   <table>
@@ -106,7 +106,7 @@
 
 <section class="l-panel co-card">
   <h3>Removals</h3>
-  <p class="hint warn-note"><strong>This removes people who never connected EveSynapse too.</strong> Everyone in the server has to be owed a role by a rule, or hold a protected role. People are kicked, not banned, a few at a time, and can come back with an invite.</p>
+  <p class="warn-note prose"><strong>This removes people who never connected EveSynapse too.</strong> Everyone in the server has to be owed a role by a rule, or hold a protected role. People are kicked, not banned, a few at a time, and can come back with an invite.</p>
   <form method="post" action="/discord/servers/{{.GuildID}}/removals" class="op-form">
     <label class="check-row"><input type="checkbox" name="kick_enabled" value="1"{{if .Kick}} checked{{end}}> <span>Remove from this server anyone who is owed no role by the rules</span></label>
     <span class="field-label">Never removed: bots, the owner, anyone in their first 24 hours, and holders of</span>
@@ -135,7 +135,7 @@
 {{if .Shares}}
 <div class="co-sec"><h2>Ops in an alliance's server</h2></div>
 <section class="l-panel">
-  <p class="hint">A corporation's ops are posted in its own servers. They are posted in its alliance's server only if you say so here.</p>
+  <p class="prose">A corporation's ops are posted in its own servers. They are posted in its alliance's server only if you say so here.</p>
   {{range .Shares}}
   <form method="post" action="/discord/servers/share" class="add-row">
     <input type="hidden" name="corporation" value="{{.CorporationID}}">

@@ -16,13 +16,13 @@
   {{if .Forbidden}}
   <div class="l-panel co-gate">
   {{if .RoleMissing}}
-  <p>Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share this corporation's open orders. They appear here once they do.</p>
+  <p class="prose">Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share this corporation's open orders. They appear here once they do.</p>
   {{else}}
-  <p>Open orders were refused by ESI (403). They'll appear here once {{.CharacterName}} holds a market role in this corporation.</p>
+  <p class="prose">Open orders were refused by ESI (403). They'll appear here once {{.CharacterName}} holds a market role in this corporation.</p>
   {{end}}
   </div>
   {{else if .NoFeeder}}
-  <div class="l-panel co-gate"><p>{{.CharacterName}} hasn't granted the corporation permissions that feed the open orders, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
+  <div class="l-panel co-gate"><p class="prose">{{.CharacterName}} hasn't granted the corporation permissions that feed the open orders, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
   {{else if .Warming}}
   <div class="l-panel co-gate"><p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p></div>
   {{else if .Loaded}}
@@ -90,7 +90,7 @@
     </section>
     </div>
   </div>
-  <p class="co-note"><small>Prices in ISK. Left is what each order still has to sell or buy, out of what it listed. The status line covers orders one of your own characters placed for the corporation: the order book check runs on what they sync.</small></p>
+  <p class="prose">Prices in ISK. Left is what each order still has to sell or buy, out of what it listed. The status line covers orders one of your own characters placed for the corporation: the order book check runs on what they sync.</p>
   {{else}}
   <div class="l-panel co-gate"><p>No open corporation orders.</p></div>
   {{end}}

@@ -67,13 +67,13 @@
 <section class="cs-dcard cd-bidcard">
   <div class="cs-dhead"><span class="cs-dhead-t dim">Bids</span><span class="cs-dhead-id">{{len $d.Bids}} placed</span></div>
   {{range $d.Bids}}<div class="cs-srow"><span class="cs-sk">{{.When}}</span><span class="cs-sv">{{.Amount}} ISK</span></div>{{end}}
-  <p class="cd-note">Bids are public in the game; bidder names are not published, so none are shown.</p>
+  <p class="prose">Bids are public in the game; bidder names are not published, so none are shown.</p>
 </section>
 {{end}}
 </div>
 
 {{else}}
-<p>That contract is not in our stored corpus. It may have finished, been deleted, or not been swept yet. <a href="/contracts/search/">Back to the search</a>.</p>
+<p class="prose">That contract is not in our stored corpus. It may have finished, been deleted, or not been swept yet. <a href="/contracts/search/">Back to the search</a>.</p>
 {{end}}
 
 {{end}}

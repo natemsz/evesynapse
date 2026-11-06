@@ -9,7 +9,7 @@
 {{$s := .Restock}}
 <div class="l-page">
 <div class="l-head">
-  <p class="l-head-sum">Set target stock levels for the items you trade. The planner compares each target against your open sell orders, shows the shortfall, and estimates the restock cost at current market sell prices.</p>
+  <p class="prose">Set target stock levels for the items you trade. The planner compares each target against your open sell orders, shows the shortfall, and estimates the restock cost at current market sell prices.</p>
 </div>
 
 {{if $s.HasData}}
@@ -63,7 +63,7 @@
 {{else}}
 <section class="l-panel mk-results">
   <h2 class="mk-title">No targets yet</h2>
-  <p>Add your first restock target above, for example the ammo or modules you sell regularly. The planner tracks your open sell orders against each target and shows what needs restocking.</p>
+  <p class="prose">Add your first restock target above, for example the ammo or modules you sell regularly. The planner tracks your open sell orders against each target and shows what needs restocking.</p>
 </section>
 {{end}}
 </div>

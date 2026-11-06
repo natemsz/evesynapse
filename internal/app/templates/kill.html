@@ -5,7 +5,7 @@
 <div class="l-page">
 {{with .KillPage}}
 {{if not .Row.ID}}
-<p class="kp-missing">This kill isn't on the killboard. It may not have been posted publicly yet, or the link is wrong. <a href="/intel/kills/">Back to the killboard</a></p>
+<p class="kp-missing prose">This kill isn't on the killboard. It may not have been posted publicly yet, or the link is wrong. <a href="/intel/kills/">Back to the killboard</a></p>
 {{else}}
 {{/* One kill (killboard.go). The hero carries what died, whose it
      was, where, when and what it was worth by our own appraisal; the
@@ -64,7 +64,7 @@
         </li>{{end}}
       </ul>
       {{else}}
-      <p class="muted">{{if .Detailed}}Nothing fitted or carried.{{else}}The full killmail is kept for a year; this one is older, so only its summary remains.{{end}}</p>
+      <p class="prose">{{if .Detailed}}Nothing fitted or carried.{{else}}The full killmail is kept for a year; this one is older, so only its summary remains.{{end}}</p>
       {{end}}
     </section>
 
@@ -80,7 +80,7 @@
           </div>
           <div class="kp-a-gear">{{if .ShipTypeID}}<img src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=32" alt="{{.ShipName}}" title="{{.ShipName}}" width="26" height="26" loading="lazy">{{end}}{{if and .WeaponTypeID (ne .WeaponTypeID .ShipTypeID)}}<img src="https://images.evetech.net/types/{{.WeaponTypeID}}/icon?size=32" alt="{{.WeaponName}}" title="{{.WeaponName}}" width="26" height="26" loading="lazy">{{end}}</div>
           <div class="kp-a-dmg"><span>{{.Damage}}</span><meter min="0" max="100" value="{{.Share}}" aria-label="Share of the damage">{{.Share}}%</meter></div>
-        </li>{{else}}<li class="muted">{{if .Detailed}}No attackers recorded.{{else}}Attacker details are kept for a year.{{end}}</li>{{end}}
+        </li>{{else}}<li class="prose">{{if .Detailed}}No attackers recorded.{{else}}Attacker details are kept for a year.{{end}}</li>{{end}}
       </ol>
     </section>
   </div>

@@ -28,7 +28,7 @@
         <div><dt>Kills</dt><dd>{{.KillsYesterday}}</dd><dd class="iw-wk">Week {{.KillsLastWeek}}</dd></div>
         <div><dt>Victory points</dt><dd>{{.VictoryYesterday}}</dd><dd class="iw-wk">Week {{.VictoryLastWeek}}</dd></div>
       </dl>
-      <p class="iw-dim iw-fac-foot">Large figures are yesterday's; Week is the last seven days.</p>
+      <p class="prose">Large figures are yesterday's; Week is the last seven days.</p>
     </article>
     {{end}}
   </div>
@@ -57,7 +57,7 @@
       </tbody>
     </table>
     </div>
-    <p class="iw-note">Contested is victory points against the flip threshold, the same figure the game shows. A system at 100% is vulnerable and flips when the militia takes its infrastructure hub.{{if gt .Total (len .Systems)}} Showing the {{len .Systems}} most contested of {{.Total}} front-line systems.{{end}}</p>
+    <p class="prose">Contested is victory points against the flip threshold, the same figure the game shows. A system at 100% is vulnerable and flips when the militia takes its infrastructure hub.{{if gt .Total (len .Systems)}} Showing the {{len .Systems}} most contested of {{.Total}} front-line systems.{{end}}</p>
   </section>
   {{end}}
   {{end}}

@@ -55,7 +55,7 @@
     <button type="button" role="tab" aria-selected="false">Buy list</button>
     <button type="button" role="tab" aria-selected="false">Cost flow</button>
   </div>
-  <p><small>Nothing planned yet. Search for a product above to see its build tree, timeline and buy list, or start from a blueprint you own on the <a href="/industry/">Blueprints</a> page.</small></p>
+  <p class="prose">Nothing planned yet. Search for a product above to see its build tree, timeline and buy list, or start from a blueprint you own on the <a href="/industry/">Blueprints</a> page.</p>
 </section>
 {{end}}
 
@@ -163,7 +163,7 @@
 {{with .Verdict}}
 <section class="l-panel bpl-verdict">
 <h3>{{.Heading}}</h3>
-<p class="bpl-sub"><small>Cash view of the full build: every buildable part built, stock on hand used first. The figures above follow the scenario you pick.</small></p>
+<p class="prose">Cash view of the full build: every buildable part built, stock on hand used first. The figures above follow the scenario you pick.</p>
 <table>
   <tbody>
     <tr><th>Materials to buy (after stock on hand)</th><td>{{if .Cost}}{{.Cost}}{{else}}—{{end}}</td></tr>

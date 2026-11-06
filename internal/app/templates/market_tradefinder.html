@@ -9,7 +9,7 @@
 {{$s := .MarketTradefinder}}
 <div class="l-page">
 <div class="l-head">
-  <p class="l-head-sum">Items that are cheap to buy in one region and sell for more in another. Prices are the typical (middle) prices from the latest sweep of each region, so one joke order cannot make a route look good.</p>
+  <p class="prose">Items that are cheap to buy in one region and sell for more in another. Prices are the typical (middle) prices from the latest sweep of each region, so one joke order cannot make a route look good.</p>
   {{if and $s.HasData $s.Rows (not $s.SameRegion)}}<div class="l-head-act"><a class="btn btn-quiet" href="#" id="csv-export">Export CSV</a></div>{{end}}
 </div>
 
@@ -59,7 +59,7 @@
     </tbody>
   </table>
   </div>
-  <p class="mk-note"><small>Prices in ISK. A route buys from sell orders in {{$s.OriginName}} and lists the items for sale in {{$s.DestName}}. Profit per item is the typical sell price in {{$s.DestName}} minus the typical sell price in {{$s.OriginName}}. Sold per day is the average daily amount that actually traded in {{$s.DestName}} over the last seven recorded days. Estimated profit per day is the profit per item times whichever runs out first: what {{$s.DestName}} sells each day, or the stock on sale in {{$s.OriginName}}. Before broker fees, sales tax and hauling.</small></p>
+  <p class="prose">Prices in ISK. A route buys from sell orders in {{$s.OriginName}} and lists the items for sale in {{$s.DestName}}. Profit per item is the typical sell price in {{$s.DestName}} minus the typical sell price in {{$s.OriginName}}. Sold per day is the average daily amount that actually traded in {{$s.DestName}} over the last seven recorded days. Estimated profit per day is the profit per item times whichever runs out first: what {{$s.DestName}} sells each day, or the stock on sale in {{$s.OriginName}}. Before broker fees, sales tax and hauling.</p>
   {{else if $s.Pending}}
   <p>No route has sales figures in {{$s.DestName}} yet. The candidates are listed below while their figures are fetched.</p>
   {{else}}
@@ -69,7 +69,7 @@
 {{if $s.Pending}}
 <section class="l-panel mk-results">
   <div class="mk-bar"><h2 class="mk-title">Waiting on sales figures <small>{{len $s.Pending}}</small></h2></div>
-  <p class="mk-lead"><small>These routes clear the price rules, but {{$s.DestName}} has no recorded sales for them yet, so there is no sold-per-day figure to rank them by. Their sales history is being fetched; each one moves into the table above once it arrives.</small></p>
+  <p class="prose">These routes clear the price rules, but {{$s.DestName}} has no recorded sales for them yet, so there is no sold-per-day figure to rank them by. Their sales history is being fetched; each one moves into the table above once it arrives.</p>
   <div class="tw">
   <table class="mk-table">
     <thead><tr><th class="card-title">Item</th><th class="mt-num">Buy in {{$s.OriginName}}</th><th class="mt-num">Sell in {{$s.DestName}}</th><th class="mt-num">Profit per item</th><th class="mt-num">Margin</th></tr></thead>

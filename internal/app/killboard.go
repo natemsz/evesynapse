@@ -482,11 +482,14 @@ func scopedBiggestRow(names *killNames, k db.Kill) *killRow {
 
 // killboardScopedHeadline is a character, corporation or
 // alliance board's headline: the scoped entity's own figures
-// instead of New Eden's. Characters read exactly what their
-// profile serves (the stored activity profile's aggregates
-// when one backs the pilot, else the 90-day board window);
-// corporations and alliances read the 90-day board window.
-// The rail reads the 90-day window for all three kinds. Held a
+// instead of New Eden's. A character with a stored activity
+// profile reads kills and losses from the profile and the
+// biggest kill from the all-time board read; solo kills and
+// ISK destroyed come from the all-time stats read over the
+// permanent involvement record, since the profile carries
+// neither. A character without a profile, and corporations
+// and alliances, read the 90-day board window. The rail
+// reads the 90-day window for all three kinds. Held a
 // minute per entity, like the global headline.
 func (app *Application) killboardScopedHeadline(ctx context.Context, names *killNames, kind string, id int64) (killboardStats, killboardTop) {
 	key := killboardScopedStatsKey{kind: kind, id: id}
@@ -508,6 +511,14 @@ func (app *Application) killboardScopedHeadline(ctx context.Context, names *kill
 			st.Kills, st.Losses = act.Kills, act.Losses
 			st.ScopeNote = "every recorded kill and loss"
 			st.ScopeUpdatedAgo = act.UpdatedAgo
+			if s, err := app.pilotAllTimeStats(ctx, id); err == nil {
+				st.Solo, st.HasSolo = s.Solo, true
+				if s.IskKilled > 0 {
+					st.ISKDestroyed = formatISKShort(s.IskKilled)
+				}
+			} else {
+				logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
+			}
 			if k, err := app.queries.GetPilotBiggestKill(ctx, db.GetPilotBiggestKillParams{CharacterID: id, Since: time.Unix(0, 0).UTC()}); err == nil {
 				st.Biggest = scopedBiggestRow(names, k)
 			}

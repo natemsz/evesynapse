@@ -447,6 +447,30 @@ func TestKillboardScopedStats(t *testing.T) {
 	if strings.Contains(global, "<h2>Top ships</h2>") {
 		t.Errorf("unscoped board took the scoped rail")
 	}
+
+	// With a stored activity profile, the character board reads
+	// its kills and losses from the profile; solo kills and ISK
+	// destroyed come from the all-time board read over the
+	// pilot's involvement (the 10M solo kill and the 30M kill
+	// seeded above), and the biggest kill stays the 30M one.
+	exec(`INSERT INTO pilot_activity_profiles (character_id, backfilled_at, updated_at, kills, losses, final_blows, gang_total, gang_samples, usual_ship_type_id, last_active_at)
+		VALUES ($1, $2, $3, 137, 42, 98, 480, 137, 22456, $3)`, pilot, now.Add(-24*time.Hour), now)
+	app.killScopedStatsMu.Lock()
+	app.killScopedStatsMemo = nil
+	app.killScopedStatsMu.Unlock()
+	profiled := get("/intel/kills/?character=9201")
+	for _, want := range []string{
+		`aria-label="Pilot #9201: every recorded kill and loss`,
+		`<span class="l-stat-label">Kills</span><span class="l-stat-value">137</span><span class="l-stat-sub">1 solo · every recorded kill and loss</span>`,
+		`<span class="l-stat-label">Losses</span><span class="l-stat-value">42</span><span class="l-stat-sub">every recorded kill and loss</span>`,
+		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">40.00M</span><span class="l-stat-sub">every recorded kill and loss</span>`,
+		`<span class="l-stat-value">30.00M</span>`,
+		`href="/intel/kill/800003/"`,
+	} {
+		if !strings.Contains(profiled, want) {
+			t.Errorf("profile-backed character board lacks %q", want)
+		}
+	}
 }
 
 // TestKillfeedRetriesFailedIngest: a package whose ingest

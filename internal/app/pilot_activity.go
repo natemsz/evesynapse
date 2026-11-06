@@ -11,7 +11,11 @@ package app
 // A pilot first met in an intel reading (a channel report, a scan)
 // is backfilled once from zKillboard's history API: up to ten
 // pages of their most recent kills and losses, folded kill by kill
-// into the aggregates. Each history kill is also ingested into
+// into the aggregates. The walk's reach is unbounded; a kill it
+// brings in already past the retention cutoff is stored by the
+// ingest in its post-prune shape (summary row and priced lines,
+// no attackers, no killmail), so depth costs the light shape,
+// not the detail. Each history kill is also ingested into
 // the kills store, public, so the pilot's board feed and killmail
 // lists show every participation, not only losses and final
 // blows. After that the live kill stream
@@ -191,7 +195,7 @@ func (app *Application) backfillPilot(ctx context.Context, client *http.Client, 
 			// board's copy can still land from a later offer
 			// or the stream.
 			if len(e.Raw) > 0 {
-				if _, err := app.ingestKill(ctx, e.Raw, e.ZKB.Hash, &e.ZKB, "zkill", true); err != nil {
+				if _, err := app.ingestKill(ctx, e.Raw, e.ZKB.Hash, &e.ZKB, "zkill", true, true); err != nil {
 					logging.Warnf("pilot activity: ingest history kill %d for pilot %d: %v", e.KillmailID, id, err)
 				}
 			}

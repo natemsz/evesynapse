@@ -204,11 +204,11 @@ func TestKillboardPages(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []int64{700001, 700002} {
-		if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(id)), "h", &killZKB{Solo: id == 700002}, "zkill", true); err != nil {
+		if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(id)), "h", &killZKB{Solo: id == 700002}, "zkill", true, false); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(700003)), "h", nil, "esi", false); err != nil {
+	if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(700003)), "h", nil, "esi", false, true); err != nil {
 		t.Fatal(err)
 	}
 	app.killboardMaintenance(ctx)
@@ -288,7 +288,7 @@ func TestKillboardNamesResolveFromView(t *testing.T) {
 	if _, err := conn.Exec(`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(700001)), "h", &killZKB{}, "zkill", true); err != nil {
+	if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(700001)), "h", &killZKB{}, "zkill", true, false); err != nil {
 		t.Fatal(err)
 	}
 	get := func(path string) string {

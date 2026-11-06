@@ -26,7 +26,10 @@ package app
 // uses; blueprint copies count as nothing. zKillboard's own figure
 // is never read or kept: the price on a kill is ours or nothing.
 // Attackers and the full killmail are kept a year;
-// the summary row forever.
+// the summary row forever. A kill that arrives already past that
+// year, from a history walk or the ESI merge rather than the
+// stream, is stored in its post-prune shape from the start:
+// summary row and priced lines, no attackers, no killmail.
 // ---------------------------------------------------------------------------
 
 import (
@@ -286,7 +289,7 @@ func (app *Application) ingestKillPackage(ctx context.Context, body []byte) erro
 		return errors.New("package without a killmail")
 	}
 	z := pkg.ZKB
-	_, err := app.ingestKill(ctx, pkg.ESI, pkg.Hash, &z, "zkill", true)
+	_, err := app.ingestKill(ctx, pkg.ESI, pkg.Hash, &z, "zkill", true, false)
 	if err == nil {
 		// A stored kill also feeds the activity profiles of the
 		// pilots it headlines (pilot_activity.go).
@@ -298,8 +301,13 @@ func (app *Application) ingestKillPackage(ctx context.Context, body []byte) erro
 // ingestKill stores one kill from either source: the summary row
 // (or, for a kill already held, what this copy adds), and on the
 // first copy its attackers and the full killmail, gzipped. It
-// reports whether this was the first copy.
-func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, hash string, z *killZKB, source string, public bool) (bool, error) {
+// reports whether this was the first copy. With pruneAged set, a
+// first copy already past the retention cutoff is stored in its
+// post-prune shape instead: the summary row and its priced
+// lines, without attackers or the killmail, exactly as if its
+// detail had aged out in place. The stream passes pruneAged
+// false: its kills are always young.
+func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, hash string, z *killZKB, source string, public bool, pruneAged bool) (bool, error) {
 	var km killmailFull
 	if err := goccyjson.Unmarshal(raw, &km); err != nil {
 		return false, fmt.Errorf("decode killmail: %w", err)
@@ -307,6 +315,7 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 	if km.KillmailID <= 0 || km.KillmailTime.IsZero() {
 		return false, errors.New("killmail without an id or a time")
 	}
+	prunedShape := pruneAged && km.KillmailTime.Before(time.Now().UTC().Add(-killDetailRetention))
 	p := db.UpsertKillParams{
 		KillmailID: km.KillmailID, Hash: hash, KillmailTime: km.KillmailTime.UTC(),
 		SystemID: km.SolarSystemID, RegionID: app.killRegion(ctx, km.SolarSystemID),
@@ -347,7 +356,7 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 	if err != nil {
 		return false, fmt.Errorf("store kill %d: %w", km.KillmailID, err)
 	}
-	if inserted {
+	if inserted && !prunedShape {
 		ap := db.InsertKillAttackersParams{KillmailID: km.KillmailID}
 		for i, a := range km.Attackers {
 			ap.Seqs = append(ap.Seqs, int32(i))
@@ -456,7 +465,7 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 	if rows, err := app.queries.ListESIKillsToMerge(ctx, killMergeBatch); err == nil {
 		merged := 0
 		for _, r := range rows {
-			if ok, err := app.ingestKill(ctx, json.RawMessage(r.Payload), r.Hash, nil, "esi", false); err != nil {
+			if ok, err := app.ingestKill(ctx, json.RawMessage(r.Payload), r.Hash, nil, "esi", false, true); err != nil {
 				logging.Errorf("killboard: merge %d: %v", r.KillmailID, err)
 			} else if ok {
 				merged++

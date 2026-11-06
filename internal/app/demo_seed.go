@@ -396,7 +396,6 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 		}
 	}
 
-	q := s.app.queries
 	fetchedAt := sql.NullTime{Time: s.now, Valid: true}
 	record := func(id int64, corpID int64, name, birthday string, sec float64) error {
 		payload, err := json.Marshal(esi.Character{
@@ -405,7 +404,7 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		return q.SetPilotRecord(ctx, db.SetPilotRecordParams{
+		return s.app.setPilotRecord(ctx, db.SetPilotRecordParams{
 			CharacterID: id, Payload: string(payload), State: "ready", FetchedAt: fetchedAt,
 		})
 	}
@@ -434,7 +433,7 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := q.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+	if err := s.app.setCorporationRecord(ctx, db.SetCorporationRecordParams{
 		CorporationID: demoCorpHaleID, Payload: string(corpPayload), State: "ready", FetchedAt: fetchedAt,
 	}); err != nil {
 		return fmt.Errorf("demo seed: corporation record: %w", err)
@@ -448,7 +447,7 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := q.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+	if err := s.app.setCorporationRecord(ctx, db.SetCorporationRecordParams{
 		CorporationID: demoCorpWatchID, Payload: string(watchPayload), State: "ready", FetchedAt: fetchedAt,
 	}); err != nil {
 		return fmt.Errorf("demo seed: corporation record: %w", err)

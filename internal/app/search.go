@@ -96,6 +96,9 @@ func (app *Application) suggestTypes(ctx context.Context, q, pool string, limit 
 	if limit < 1 || limit > 25 {
 		limit = suggestDefaultLimit
 	}
+	if snap := app.searchSnapshot(); snap != nil {
+		return snap.suggestTypes(q, pool, limit)
+	}
 	rows, err := app.queries.SuggestSDETypesShared(ctx, db.SuggestSDETypesSharedParams{
 		Q: q, Pool: pool, Lim: limit,
 	})

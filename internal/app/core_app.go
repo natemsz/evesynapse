@@ -63,6 +63,11 @@ type Application struct {
 	// lines are read against (channels.go).
 	intelSystems systemDict
 
+	// searchIdx is the in-memory search index (search_index.go):
+	// the snapshot the search bar reads instead of scanning the
+	// record and SDE tables per keystroke.
+	searchIdx searchIndexState
+
 	// Parsed scan results, remembered (scans are immutable once
 	// stored; intel_analysis.go).
 	scanMemoMu sync.Mutex
@@ -1711,6 +1716,18 @@ func (app *Application) FetchStructure(ctx context.Context, ch db.Character, id 
 }
 
 func (app *Application) LearnTypeName(id int64, name string) { app.esi.LearnTypeName(id, name) }
+
+// NoteSearchRecord is the module.Deps face of the search index's
+// record hooks (search_index.go): a corporation or alliance
+// record applied from a peer becomes searchable in the same pass.
+func (app *Application) NoteSearchRecord(kind string, id int64, state, payload string) {
+	switch kind {
+	case "corporation":
+		app.noteSearchCorporationRecord(id, state, payload)
+	case "alliance":
+		app.noteSearchAllianceRecord(id, state, payload)
+	}
+}
 
 func (app *Application) ForgetTypeName(id int64) { app.esi.ForgetTypeName(id) }
 

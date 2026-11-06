@@ -478,6 +478,10 @@ func (app *Application) importSDE(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// The search index's SDE part is stale from this moment;
+	// every import trigger (the manual sync and the background
+	// synchronizer) lands here, so this one hook covers them.
+	app.invalidateSearchIndexSDE()
 	// The universe map is built from what just landed.
 	if err := app.rebuildUniverseMap(ctx); err != nil {
 		logging.Errorf("map: rebuild after import: %v", err)

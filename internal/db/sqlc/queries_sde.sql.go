@@ -2476,6 +2476,253 @@ func (q *Queries) ListSDETypesInMarketGroupSubtree(ctx context.Context, arg List
 	return items, nil
 }
 
+const listSearchIndexAllianceRecords = `-- name: ListSearchIndexAllianceRecords :many
+SELECT alliance_id, payload
+FROM alliance_records
+WHERE state = 'ready' AND payload != ''
+ORDER BY alliance_id
+`
+
+type ListSearchIndexAllianceRecordsRow struct {
+	AllianceID int64  `json:"alliance_id"`
+	Payload    string `json:"payload"`
+}
+
+func (q *Queries) ListSearchIndexAllianceRecords(ctx context.Context) ([]ListSearchIndexAllianceRecordsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSearchIndexAllianceRecords)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSearchIndexAllianceRecordsRow
+	for rows.Next() {
+		var i ListSearchIndexAllianceRecordsRow
+		if err := rows.Scan(&i.AllianceID, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSearchIndexCorporationRecords = `-- name: ListSearchIndexCorporationRecords :many
+SELECT corporation_id, payload
+FROM corporation_records
+WHERE state = 'ready' AND payload != ''
+ORDER BY corporation_id
+`
+
+type ListSearchIndexCorporationRecordsRow struct {
+	CorporationID int64  `json:"corporation_id"`
+	Payload       string `json:"payload"`
+}
+
+func (q *Queries) ListSearchIndexCorporationRecords(ctx context.Context) ([]ListSearchIndexCorporationRecordsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSearchIndexCorporationRecords)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSearchIndexCorporationRecordsRow
+	for rows.Next() {
+		var i ListSearchIndexCorporationRecordsRow
+		if err := rows.Scan(&i.CorporationID, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSearchIndexPilotRecords = `-- name: ListSearchIndexPilotRecords :many
+SELECT character_id, payload
+FROM pilot_records
+WHERE state = 'ready' AND payload != ''
+ORDER BY character_id
+`
+
+type ListSearchIndexPilotRecordsRow struct {
+	CharacterID int64  `json:"character_id"`
+	Payload     string `json:"payload"`
+}
+
+// The ready records, whole: the build decodes each payload's
+// name fields once, where the name searches above would decode
+// per keystroke.
+func (q *Queries) ListSearchIndexPilotRecords(ctx context.Context) ([]ListSearchIndexPilotRecordsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSearchIndexPilotRecords)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSearchIndexPilotRecordsRow
+	for rows.Next() {
+		var i ListSearchIndexPilotRecordsRow
+		if err := rows.Scan(&i.CharacterID, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSearchIndexRegions = `-- name: ListSearchIndexRegions :many
+SELECT region_id, name FROM sde_regions
+ORDER BY region_id
+`
+
+func (q *Queries) ListSearchIndexRegions(ctx context.Context) ([]SdeRegion, error) {
+	rows, err := q.db.QueryContext(ctx, listSearchIndexRegions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeRegion
+	for rows.Next() {
+		var i SdeRegion
+		if err := rows.Scan(&i.RegionID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSearchIndexSystems = `-- name: ListSearchIndexSystems :many
+SELECT s.system_id, s.name, s.region_id, COALESCE(r.name, '') AS region_name, s.security
+FROM sde_systems s
+LEFT JOIN sde_regions r ON r.region_id = s.region_id
+ORDER BY s.system_id
+`
+
+type ListSearchIndexSystemsRow struct {
+	SystemID   int64   `json:"system_id"`
+	Name       string  `json:"name"`
+	RegionID   int64   `json:"region_id"`
+	RegionName string  `json:"region_name"`
+	Security   float64 `json:"security"`
+}
+
+func (q *Queries) ListSearchIndexSystems(ctx context.Context) ([]ListSearchIndexSystemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSearchIndexSystems)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSearchIndexSystemsRow
+	for rows.Next() {
+		var i ListSearchIndexSystemsRow
+		if err := rows.Scan(
+			&i.SystemID,
+			&i.Name,
+			&i.RegionID,
+			&i.RegionName,
+			&i.Security,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSearchIndexTypes = `-- name: ListSearchIndexTypes :many
+
+SELECT t.type_id, t.name,
+       COALESCE(g.name, '') AS group_name,
+       COALESCE(c.name, '') AS category_name,
+       t.market_group_id,
+       COALESCE(g.category_id, 0) AS category_id,
+       EXISTS (SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id) AS has_blueprint,
+       EXISTS (SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id) AS has_skill_meta
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_categories c ON c.category_id = g.category_id
+WHERE t.published = 1
+ORDER BY t.type_id
+`
+
+type ListSearchIndexTypesRow struct {
+	TypeID        int64  `json:"type_id"`
+	Name          string `json:"name"`
+	GroupName     string `json:"group_name"`
+	CategoryName  string `json:"category_name"`
+	MarketGroupID int64  `json:"market_group_id"`
+	CategoryID    int64  `json:"category_id"`
+	HasBlueprint  bool   `json:"has_blueprint"`
+	HasSkillMeta  bool   `json:"has_skill_meta"`
+}
+
+// ---------------------------------------------------------------------
+// Search index extraction (search_index.go): whole-table reads a
+// background build folds into the in-memory snapshot the search
+// bar reads, so a keystroke never scans these tables. One pass
+// per build, never per request.
+// ---------------------------------------------------------------------
+// Every published type with the facts the shared suggestion
+// feed's pools filter on.
+func (q *Queries) ListSearchIndexTypes(ctx context.Context) ([]ListSearchIndexTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSearchIndexTypes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSearchIndexTypesRow
+	for rows.Next() {
+		var i ListSearchIndexTypesRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.GroupName,
+			&i.CategoryName,
+			&i.MarketGroupID,
+			&i.CategoryID,
+			&i.HasBlueprint,
+			&i.HasSkillMeta,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTypeDetailWants = `-- name: ListTypeDetailWants :many
 SELECT type_id
 FROM (

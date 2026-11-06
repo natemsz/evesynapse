@@ -190,7 +190,7 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 			return false, true
 		}
 		if code, has := esi.StatusCode(err); has && (code == http.StatusNotFound || code == http.StatusUnprocessableEntity) {
-			if serr := app.queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
+			if serr := app.setPilotRecord(ctx, db.SetPilotRecordParams{
 				CharacterID: id, Payload: "", State: pilotStateMissing, FetchedAt: timeSet(now),
 			}); serr != nil {
 				logging.Errorf("worker: pilot records: record miss for %d: %v", id, serr)
@@ -321,7 +321,7 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 		logging.Errorf("worker: pilot records: encode payload for %d: %v", id, err)
 		return false, false
 	}
-	if err := app.queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
+	if err := app.setPilotRecord(ctx, db.SetPilotRecordParams{
 		CharacterID: id, Payload: string(encoded), State: pilotStateReady, FetchedAt: timeSet(now),
 	}); err != nil {
 		logging.Errorf("worker: pilot records: store record for %d: %v", id, err)

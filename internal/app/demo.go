@@ -228,7 +228,7 @@ func (app *Application) refreshDemoPilotName(ctx context.Context) error {
 				if err != nil {
 					return fmt.Errorf("demo: encode pilot record: %w", err)
 				}
-				if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
+				if err := app.setPilotRecord(ctx, db.SetPilotRecordParams{
 					CharacterID: demoCharacterID, Payload: string(raw),
 					State: rec.State, FetchedAt: rec.FetchedAt,
 				}); err != nil {

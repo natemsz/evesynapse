@@ -227,7 +227,7 @@ func (app *Application) loadCorporationView(ctx context.Context, id int64) *corp
 			// Corrupt payload: requeue rather than strand the
 			// page on the loading state forever.
 			logging.Warnf("corporation: unreadable payload for %d; requeueing", id)
-			if serr := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+			if serr := app.setCorporationRecord(ctx, db.SetCorporationRecordParams{
 				CorporationID: id, Payload: "", State: orgStatePending, FetchedAt: sql.NullTime{},
 			}); serr != nil {
 				logging.Errorf("corporation: requeue %d: %v", id, serr)
@@ -334,7 +334,7 @@ func (app *Application) loadAllianceView(ctx context.Context, id int64) *allianc
 			}
 		} else {
 			logging.Warnf("alliance: unreadable payload for %d; requeueing", id)
-			if serr := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
+			if serr := app.setAllianceRecord(ctx, db.SetAllianceRecordParams{
 				AllianceID: id, Payload: "", State: orgStatePending, FetchedAt: sql.NullTime{},
 			}); serr != nil {
 				logging.Errorf("alliance: requeue %d: %v", id, serr)
@@ -438,7 +438,7 @@ func (app *Application) resolvedCorpName(ctx context.Context, corpID int64) (str
 		}
 		// Ready but unreadable: the drain would leave it a week, so it
 		// goes back in the queue now, at the priority it had.
-		if err := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		if err := app.setCorporationRecord(ctx, db.SetCorporationRecordParams{
 			CorporationID: corpID, Payload: "", State: orgStatePending, FetchedAt: sql.NullTime{},
 		}); err != nil {
 			logging.Errorf("corporation: requeue unreadable record %d: %v", corpID, err)
@@ -485,7 +485,7 @@ func (app *Application) resolvedAllianceName(ctx context.Context, allianceID int
 			app.esi.StoreAllianceName(allianceID, payload.Alliance.Name)
 			return payload.Alliance.Name, true
 		}
-		if err := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
+		if err := app.setAllianceRecord(ctx, db.SetAllianceRecordParams{
 			AllianceID: allianceID, Payload: "", State: orgStatePending, FetchedAt: sql.NullTime{},
 		}); err != nil {
 			logging.Errorf("alliance: requeue unreadable record %d: %v", allianceID, err)

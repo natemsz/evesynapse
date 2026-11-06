@@ -183,7 +183,7 @@ func (app *Application) loadPilotView(ctx context.Context, id int64) *pilotView 
 			// Corrupt payload: requeue rather than strand the
 			// page on the loading state forever.
 			logging.Warnf("pilot: unreadable payload for %d; requeueing", id)
-			if serr := app.queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
+			if serr := app.setPilotRecord(ctx, db.SetPilotRecordParams{
 				CharacterID: id, Payload: "", State: pilotStatePending, FetchedAt: sql.NullTime{},
 			}); serr != nil {
 				logging.Errorf("pilot: requeue %d: %v", id, serr)

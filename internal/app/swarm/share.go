@@ -791,6 +791,7 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 		}); err != nil {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}
+		app.Deps.NoteSearchRecord("corporation", body.ID, module.OrgStateReady, string(encoded))
 		app.AddSwarmCounter(ctx, SwarmCounterAppliedRecords, 1)
 	case SwarmKindAlliance:
 		var body SwarmOrgPayload
@@ -810,6 +811,7 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 		}); err != nil {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}
+		app.Deps.NoteSearchRecord("alliance", body.ID, module.OrgStateReady, string(encoded))
 		app.AddSwarmCounter(ctx, SwarmCounterAppliedRecords, 1)
 	case SwarmKindStructure:
 		var body SwarmStructurePayload

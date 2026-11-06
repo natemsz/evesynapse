@@ -368,6 +368,14 @@ func TestKillboardScopedStats(t *testing.T) {
 	attacker(800003, 0, pilot, corp, alliance, 626, true)
 	kill(800004, now.Add(-30*time.Minute), 30000142, 9403, 98401, 99401, 587, 999000000, false, 9301, 98301, 99301)
 	attacker(800004, 0, 9301, 98301, 99301, 587, true)
+	// An NPC loss for the same entity, two days back: inside the
+	// 90-day scope window, outside the global day. NPC losses
+	// count, so every scope's losses and most-lost include it.
+	exec(`INSERT INTO kills (killmail_id, killmail_time, system_id, region_id, victim_character_id, victim_corporation_id,
+		victim_alliance_id, ship_type_id, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id,
+		solo, npc, value_zkill, value_ours, source, public, ingested_at)
+		VALUES (800005, $1, 30000142, 10000002, 9201, 98201, 99201, 22456, 1, 0, 0, 0, false, true, 5000000, 5000000, 'zkill', true, $1)`,
+		now.Add(-48*time.Hour))
 
 	get := func(path string) string {
 		t.Helper()
@@ -380,7 +388,7 @@ func TestKillboardScopedStats(t *testing.T) {
 	}
 	scopedStrip := []string{
 		`<span class="l-stat-label">Kills</span><span class="l-stat-value">2</span><span class="l-stat-sub">1 solo · last 90 days</span>`,
-		`<span class="l-stat-label">Losses</span><span class="l-stat-value">1</span><span class="l-stat-sub">last 90 days</span>`,
+		`<span class="l-stat-label">Losses</span><span class="l-stat-value">2</span><span class="l-stat-sub">last 90 days</span>`,
 		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">40.00M</span><span class="l-stat-sub">last 90 days</span>`,
 		`<span class="l-stat-label">Biggest kill</span>`,
 		`<span class="l-stat-value">30.00M</span>`,
@@ -410,7 +418,7 @@ func TestKillboardScopedStats(t *testing.T) {
 	char := get("/intel/kills/?character=9201")
 	for _, want := range []string{
 		`<h2>Top ships</h2>`, `<span class="kb-top-n">Vexor</span><span class="kb-top-c">2</span>`,
-		`<h2>Most lost</h2>`, `<span class="kb-top-n">Sabre</span><span class="kb-top-c">1</span>`,
+		`<h2>Most lost</h2>`, `<span class="kb-top-n">Sabre</span><span class="kb-top-c">2</span>`,
 		`<h2>Top systems</h2>`,
 	} {
 		if !strings.Contains(char, want) {

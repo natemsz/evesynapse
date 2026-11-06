@@ -162,6 +162,15 @@ func likeEscape(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
+// pilotAllTimeStats reads a pilot's kill figures over their
+// whole recorded history: PilotKillStats at epoch scope, over
+// the permanent involvement record. Profile-backed surfaces
+// take kills and losses from the stored profile, which has no
+// solo or ISK column; those two figures come from this read.
+func (app *Application) pilotAllTimeStats(ctx context.Context, id int64) (db.PilotKillStatsRow, error) {
+	return app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: id, Since: time.Unix(0, 0).UTC()})
+}
+
 func (app *Application) loadPilotIntel(ctx context.Context, id int64, name string) *pilotIntelView {
 	v := &pilotIntelView{CharacterID: id, Name: name}
 	now := time.Now()
@@ -248,12 +257,21 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 	// The stored profile, when the pilot has one with a record:
 	// its aggregates cover the whole of their kill history and
 	// are kept current at ingest, so they take over the section's
-	// numbers from the 90-day board read above. The 90-day-only
-	// figures (solo kills, ISK destroyed) do not carry over; the
-	// latest kills and the companions stay board reads either way.
+	// kills and losses from the 90-day board read above. Solo
+	// kills and ISK destroyed have no profile column; they come
+	// from the all-time stats read over the permanent
+	// involvement record. The latest kills and the companions
+	// stay board reads either way.
 	if profileBacked {
 		v.Kills, v.Losses = act.Kills, act.Losses
-		v.Solo, v.ISK = 0, ""
+		if st, err := app.pilotAllTimeStats(ctx, id); err == nil {
+			v.Solo = st.Solo
+			if st.IskKilled > 0 {
+				v.ISK = iskShortGo(st.IskKilled)
+			}
+		} else {
+			logging.Warnf("pilot intel %d: stats: %v", id, err)
+		}
 		v.Ships = nil
 		for _, s := range act.Ships {
 			v.Ships = append(v.Ships, pilotCount{ID: s.ID, Name: s.Name, Pct: s.Pct, Text: s.Text})

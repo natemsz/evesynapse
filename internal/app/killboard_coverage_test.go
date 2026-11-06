@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -297,5 +298,118 @@ func TestKillmailPageListsBoardOnlyKill(t *testing.T) {
 	bi, ri := strings.Index(body, "Board Victim"), strings.Index(body, "Ref Victim")
 	if bi > ri {
 		t.Errorf("board-only kill listed after the older ESI kill (positions %d, %d)", bi, ri)
+	}
+}
+
+// TestKillmailPagesPastFifty: the killmail page pages past its
+// first 50 rows. Page 1 holds the board's newest 50 kills and an
+// Older link; page 2, read through that link, holds the older
+// kills with no repeats and no gaps, and the walk ends there.
+func TestKillmailPagesPastFifty(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	seedCharacter(t, q, user.ID, 90000001, "Pager One")
+
+	// The recent list is loaded but empty: every row on both
+	// pages comes from the board.
+	seedSnapshot(t, q, 90000001, esi.SnapKillmails, []esi.KillmailRef{})
+
+	// Sixty board kills an hour apart, the pilot on the
+	// attacking side of each: more than one page of history.
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	for i := 1; i <= 60; i++ {
+		id := int64(900000 + i)
+		at := base.Add(time.Duration(i) * time.Hour)
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id,
+				ship_type_id, attacker_count, fb_character_id, source, ingested_at)
+			VALUES ($1, $2, 30000142, 93000001, 98000009, 587, 2, 93000002, 'zkill', $2)`, id, at); err != nil {
+			t.Fatalf("seed kill %d: %v", id, err)
+		}
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, final_blow)
+			VALUES ($1, 0, 93000002, 98000003, 587, true), ($1, 1, 90000001, 98000002, 587, false)`, id); err != nil {
+			t.Fatalf("seed attackers %d: %v", id, err)
+		}
+	}
+	for _, stmt := range []string{
+		`INSERT INTO sde_systems (system_id, name, security) VALUES (30000142, 'Jita', 0.9)`,
+		`INSERT INTO sde_types (type_id, name) VALUES (587, 'Rifter')`,
+	} {
+		if _, err := app.db.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+
+	// rowIDs reads the page's kill links in render order.
+	rowIDs := func(body string) []int64 {
+		var ids []int64
+		rest := body
+		for {
+			i := strings.Index(rest, "kill=")
+			if i < 0 {
+				return ids
+			}
+			rest = rest[i+len("kill="):]
+			j := 0
+			for j < len(rest) && rest[j] >= '0' && rest[j] <= '9' {
+				j++
+			}
+			id, err := strconv.ParseInt(rest[:j], 10, 64)
+			if err != nil {
+				t.Fatalf("parse row kill id: %v", err)
+			}
+			ids = append(ids, id)
+		}
+	}
+
+	cookie := sessionCookie(t, app, user.ID, 90000001, "Pager One")
+	code, body := getPage(t, app, cookie, "/killmails/?character=90000001")
+	if code != http.StatusOK {
+		t.Fatalf("GET /killmails/ = %d, want 200", code)
+	}
+	first := rowIDs(body)
+	if len(first) != maxKillmailsShown {
+		t.Fatalf("page 1 rows = %d, want %d", len(first), maxKillmailsShown)
+	}
+	for i, id := range first {
+		if want := int64(900060 - i); id != want {
+			t.Fatalf("page 1 row %d = kill %d, want %d", i, id, want)
+		}
+	}
+
+	// The Older link carries the cursor of the oldest board row
+	// on the page: kill 900011, eleven hours past the base.
+	bi := strings.Index(body, "before=")
+	if bi < 0 {
+		t.Fatalf("page 1 has no Older kills link")
+	}
+	hs := strings.LastIndex(body[:bi], `href="`) + len(`href="`)
+	he := bi + strings.Index(body[bi:], `"`)
+	older := strings.ReplaceAll(body[hs:he], "&amp;", "&")
+	wantCursor := fmt.Sprintf("before=%d.%d", base.Add(11*time.Hour).Unix(), 900011)
+	if !strings.Contains(older, wantCursor) {
+		t.Fatalf("Older href %q does not carry cursor %q", older, wantCursor)
+	}
+
+	code, body = getPage(t, app, cookie, older)
+	if code != http.StatusOK {
+		t.Fatalf("GET %s = %d, want 200", older, code)
+	}
+	second := rowIDs(body)
+	if len(second) != 10 {
+		t.Fatalf("page 2 rows = %d, want 10", len(second))
+	}
+	for i, id := range second {
+		if want := int64(900010 - i); id != want {
+			t.Fatalf("page 2 row %d = kill %d, want %d", i, id, want)
+		}
+	}
+	if strings.Contains(body, "Older kills") {
+		t.Errorf("page 2 still offers an Older kills link at the end of the history")
 	}
 }

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,6 +84,8 @@ type killmailsView struct {
 	Warming       bool   // no recent-list snapshot yet at all
 	RoleMissing   string // in-game role label when ESI refused the list (corp view only)
 	Rows          []killmailRow
+	Older         string // the next page's URL, "" at the end of the board's history
+	olderCursor   string // the next page's board cursor ("<unix>.<killmail id>"), "" at the end; shapeKillmails builds Older from it with the page's query state
 
 	// The summary, panels and filters (killmails_shape.go).
 	CharView       bool // the character view: hulls, wingmen and final blows read its pilot
@@ -154,12 +158,18 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 		app.noteCorpsEncountered([]int64{crow.CorporationID})
 	}
 
-	if len(refs) > maxKillmailsShown {
+	beforeTime, beforeID, cursored := parseKillmailCursor(r.URL.Query())
+	if cursored {
+		// A cursored page reads the board alone: the recent
+		// list is a newest-window snapshot and has nothing
+		// older to offer.
+		refs = nil
+	} else if len(refs) > maxKillmailsShown {
 		refs = refs[:maxKillmailsShown]
 	}
 
 	viewer := killmailViewer{characterID: active.CharacterID}
-	view.Rows = app.killmailUnionRows(ctx, viewer, refs)
+	view.Rows, view.olderCursor = app.killmailUnionRows(ctx, viewer, refs, beforeTime, beforeID)
 	ids := make([]int64, 0, len(view.Rows))
 	for _, row := range view.Rows {
 		ids = append(ids, row.KillmailID)
@@ -401,6 +411,26 @@ func (app *Application) summaryKillmailRow(ctx context.Context, viewer killmailV
 	return row
 }
 
+// parseKillmailCursor reads the ?before=<unixSeconds>.<killmailID>
+// paging cursor, the killboard's convention. An absent or
+// malformed cursor is the first page: the board window starts
+// at the newest rows and the ESI recent list joins the union.
+func parseKillmailCursor(q url.Values) (beforeTime time.Time, beforeID int64, cursored bool) {
+	beforeTime, beforeID = time.Now().Add(time.Hour).UTC(), int64(1<<62)
+	b := q.Get("before")
+	if b == "" {
+		return beforeTime, beforeID, false
+	}
+	if dot := strings.IndexByte(b, '.'); dot > 0 {
+		if sec, err := strconv.ParseInt(b[:dot], 10, 64); err == nil {
+			if id, err := strconv.ParseInt(b[dot+1:], 10, 64); err == nil {
+				return time.Unix(sec, 0).UTC(), id, true
+			}
+		}
+	}
+	return beforeTime, beforeID, false
+}
+
 // killmailUnionRows builds the killmail pages' row list: the
 // ESI recent list's rows, in the list's own order, unioned with
 // the killboard's public kills for the same entity, newest
@@ -409,20 +439,27 @@ func (app *Application) summaryKillmailRow(ctx context.Context, viewer killmailV
 // keeps its place and its stored detail. Board-only kills are
 // kills the recent list cannot show: participations without the
 // final blow, or mails past its window.
-func (app *Application) killmailUnionRows(ctx context.Context, viewer killmailViewer, refs []esi.KillmailRef) []killmailRow {
+//
+// The board side pages by the killboard's cursor convention:
+// (beforeTime, beforeID) opens its window, and the returned
+// cursor names the oldest board row on the page when the board
+// filled its side, so the next page continues past it without
+// skipping or repeating a board row. Callers pass no refs on a
+// cursored request: the recent list is a newest-window snapshot,
+// so later pages are board rows only.
+func (app *Application) killmailUnionRows(ctx context.Context, viewer killmailViewer, refs []esi.KillmailRef, beforeTime time.Time, beforeID int64) ([]killmailRow, string) {
 	var board []db.Kill
 	var err error
-	// The board's newest kills for the entity, through the same
-	// cursor convention the killboard handler pages with.
-	before := time.Now().Add(time.Hour).UTC()
+	// The board's kills for the entity inside the cursor's
+	// window, newest first.
 	switch {
 	case viewer.characterID > 0:
 		board, err = app.queries.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
-			EntityID: viewer.characterID, BeforeTime: before, BeforeID: 1 << 62, MaxRows: maxKillmailsShown,
+			EntityID: viewer.characterID, BeforeTime: beforeTime, BeforeID: beforeID, MaxRows: maxKillmailsShown,
 		})
 	case viewer.corporationID > 0:
 		board, err = app.queries.ListKillsByCorporation(ctx, db.ListKillsByCorporationParams{
-			EntityID: viewer.corporationID, BeforeTime: before, BeforeID: 1 << 62, MaxRows: maxKillmailsShown,
+			EntityID: viewer.corporationID, BeforeTime: beforeTime, BeforeID: beforeID, MaxRows: maxKillmailsShown,
 		})
 	}
 	if err != nil {
@@ -485,5 +522,20 @@ func (app *Application) killmailUnionRows(ctx context.Context, viewer killmailVi
 	if len(rows) > maxKillmailsShown {
 		rows = rows[:maxKillmailsShown]
 	}
-	return rows
+	// The next page's cursor: the oldest board kill this page
+	// shows. It exists only while the board filled its side; a
+	// short board page is the end of the entity's history.
+	next := ""
+	if len(board) >= maxKillmailsShown {
+		onPage := make(map[int64]bool, len(rows))
+		for _, row := range rows {
+			onPage[row.KillmailID] = true
+		}
+		for _, k := range board {
+			if onPage[k.KillmailID] {
+				next = fmt.Sprintf("%d.%d", k.KillmailTime.Unix(), k.KillmailID)
+			}
+		}
+	}
+	return rows, next
 }

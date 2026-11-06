@@ -64,7 +64,13 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if len(refs) > maxKillmailsShown {
+	beforeTime, beforeID, cursored := parseKillmailCursor(r.URL.Query())
+	if cursored {
+		// A cursored page reads the board alone: the recent
+		// list is a newest-window snapshot and has nothing
+		// older to offer.
+		refs = nil
+	} else if len(refs) > maxKillmailsShown {
 		refs = refs[:maxKillmailsShown]
 	}
 
@@ -77,7 +83,7 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 	}
 
 	viewer := killmailViewer{corporationID: sel.Base.CorpID}
-	view.Rows = app.killmailUnionRows(ctx, viewer, refs)
+	view.Rows, view.olderCursor = app.killmailUnionRows(ctx, viewer, refs, beforeTime, beforeID)
 	app.shapeKillmails(ctx, r, view, viewer)
 
 	app.render(ctx, w, http.StatusOK, "killmails.html", data)

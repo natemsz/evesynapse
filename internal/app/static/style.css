@@ -4461,10 +4461,12 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-picker-hint { color: var(--muted); font-size: var(--fs-xs); }
 /* Module search: sticky above the workbench. The surface is the
    shared .searchpanel glass (the template carries both classes);
-   only the sticky placement lives here. */
+   only the sticky placement lives here. It parks on the shared
+   line under the top bar and the sub-nav (--l-top), like every
+   other in-page sticky bar. */
 .fit-modsearch {
   position: sticky;
-  top: calc(var(--sticky-top) + 0.5rem);
+  top: calc(var(--l-top) + 0.5rem);
   z-index: 9;
 }
 .fit-modsearchwrap { display: block; width: 100%; }

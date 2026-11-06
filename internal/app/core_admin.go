@@ -24,6 +24,41 @@ import (
 //
 // ---------------------------------------------------------------------------
 
+// adminTabs is the Admin section's tab strip, fed by every
+// admin page's handler to the shared section-tabs band (the
+// pagetabs slot in the page frame, the same mechanism every
+// other section uses). Accounts and Access are anchors into
+// the Admin page's own sections; they are never the current
+// tab. active is the tab key the page belongs to ("analytics",
+// "esi", "sync" or "notices"); the anchors carry no key.
+func adminTabs(active string) []module.NavLink {
+	defs := []struct{ key, href, label string }{
+		{"analytics", "/admin/", "Analytics"},
+		{"esi", "/admin/esi/", "ESI Details"},
+		{"", "/admin/#accounts", "Accounts"},
+		{"", "/admin/#access", "Access"},
+		{"sync", "/admin/sync/", "Sync"},
+		{"notices", "/admin/notices/", "Notices"},
+	}
+	tabs := make([]module.NavLink, len(defs))
+	for i, d := range defs {
+		tabs[i] = module.NavLink{Href: d.href, Label: d.label, Active: d.key != "" && d.key == active}
+	}
+	return tabs
+}
+
+// adminRangeTabs turns an admin page's range links into the
+// shared band's sub-row: the same Last 24 hours / 7 days /
+// 30 days choices, carried as section sub-tabs under the tab
+// strip instead of a pill row of their own.
+func adminRangeTabs(base string, links []analyticsRangeLink) []module.NavLink {
+	out := make([]module.NavLink, len(links))
+	for i, l := range links {
+		out[i] = module.NavLink{Href: base + "?range=" + l.Key, Label: l.Label, Active: l.Active}
+	}
+	return out
+}
+
 // adminNewest is how many of the newest accounts are listed.
 const adminNewest = 10
 
@@ -89,7 +124,6 @@ type adminCharacterRow struct {
 func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
-	data.AdminTab = "analytics"
 	view := &adminView{}
 	data.Admin = view
 	now := time.Now()
@@ -167,6 +201,8 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	view.Analytics = app.buildAnalytics(ctx, r.URL.Query().Get("range"), anTotals)
+	data.SectionTabs = adminTabs("analytics")
+	data.SectionSubTabs = adminRangeTabs("/admin/", view.Analytics.Links)
 	app.render(ctx, w, http.StatusOK, "admin.html", data)
 }
 

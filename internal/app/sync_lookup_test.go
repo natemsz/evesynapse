@@ -69,9 +69,9 @@ func TestSyncShowsOneCharacter(t *testing.T) {
 		t.Fatalf("GET /admin/sync/: %d", code)
 	}
 	mustContain(t, "/admin/sync/", body, "<h2>Worker</h2>", "ESI error budget: not reported yet", "<h2>Character data</h2>",
-		// The Admin frame and the shared section-tab band, not
-		// the page's old hand-rolled nav.
-		`<a class="an-tab is-active" href="/admin/sync/">Sync</a>`,
+		// The Admin tabs ride the shared section-tab band,
+		// with the page's own sections as its sub-row.
+		`<a href="/admin/sync/" class="active" aria-current="page">Sync</a>`,
 		`<nav class="section-tabs" aria-label="Pages in this section">`,
 		`<a href="#sync-worker" class="active" aria-current="page">Worker</a>`, `<a href="#sync-characters">Character data</a>`,
 		`<input type="search" name="character" id="sync-character-q"`, `<ul class="suggest" id="sync-character-suggest"`,
@@ -155,7 +155,7 @@ func TestAdminShowsOneAccount(t *testing.T) {
 		t.Fatalf("GET /admin/: %d", code)
 	}
 	mustContain(t, "/admin/", body, "<h2>Overview</h2>", "<tr><td>Accounts</td><td>2</td></tr>", "<tr><td>Linked characters</td><td>3</td></tr>",
-		`<a class="an-tab is-active" href="/admin/">Analytics</a>`, `<a class="an-tab" href="/admin/sync/">Sync</a>`,
+		`<a href="/admin/" class="active" aria-current="page">Analytics</a>`, `<a href="/admin/sync/">Sync</a>`,
 		"<h2>Find an account</h2>", `<input type="search" name="q" id="admin-q"`, "<h2>Newest accounts</h2>", `href="/admin/sync/"`)
 	for _, gone := range []string{"Zed Hauler", "Fixture Alpha</td>", "esi-", "Snapshot cache", "Background jobs"} {
 		if strings.Contains(body, gone) {

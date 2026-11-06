@@ -1,4 +1,4 @@
-/* Admin analytics (admin.html only, loaded from base.html).
+/* Admin pages (loaded from base.html for the admin templates).
    Every color comes from the theme tokens in style.css, the
    chart fills included, so the page follows the account's
    color scheme like the rest of the site. */
@@ -8,14 +8,12 @@
 .page-body > .card { margin-bottom: 1rem; }
 .an-grid2 { margin-bottom: 1rem; }
 
-.an-tabs { display: flex; gap: .4rem; align-items: center; margin: .4rem 0 .6rem; flex-wrap: wrap; }
-.an-tab { padding: .32rem .8rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--text); text-decoration: none; font-size: var(--fs-xs); }
-.an-tab.is-active { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: var(--accent); color: var(--text-bright); }
-.an-range { margin-left: auto; display: flex; gap: .35rem; }
-.an-range a { padding: .3rem .7rem; border-radius: .45rem; border: 1px solid var(--box-edge); color: var(--muted); font-size: var(--fs-xs); text-decoration: none; }
-.an-range a.is-active { color: var(--text-bright); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-
 .an-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: .7rem; margin-bottom: 1rem; }
+/* The ESI tab's per-family tiles: a family's tile is wide
+   enough for its tallies on one line, and its meter sits
+   under them at the tile's full width. */
+.an-families { grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)); }
+.an-families .an-bar-svg { width: 100%; margin-top: .5rem; }
 .an-kpi { border: 1px solid var(--glass-edge); border-radius: .6rem; padding: .7rem .8rem; background: var(--glass); }
 .an-kpi .k-l { font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .an-kpi .k-v { font-family: 'Synapse Numerals', 'JetBrains Mono', monospace; font-size: var(--fs-4xl); color: var(--text-bright); margin: .15rem 0 .05rem; }

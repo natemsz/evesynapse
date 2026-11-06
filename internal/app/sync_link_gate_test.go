@@ -11,9 +11,9 @@ import (
 // The Sync page is admin-only, so an /admin/sync/ link anywhere
 // else is a dead end for every other signed-in user: every
 // href="/admin/sync/" in a template must sit inside the true
-// branch of an {{if .IsAdmin}}. admin.html, sync.html and the
-// admintabs.html frame they share are exempt — both pages are
-// themselves behind requireAdmin, so their links cannot dead-end.
+// branch of an {{if .IsAdmin}}. admin.html and sync.html are
+// exempt — both pages are themselves behind requireAdmin, so
+// their links cannot dead-end.
 func TestSyncLinksAreAdminGated(t *testing.T) {
 	entries, err := fs.ReadDir(templatesFS, "templates")
 	if err != nil {
@@ -21,7 +21,7 @@ func TestSyncLinksAreAdminGated(t *testing.T) {
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if name == "admin.html" || name == "sync.html" || name == "admintabs.html" {
+		if name == "admin.html" || name == "sync.html" {
 			continue
 		}
 		raw, err := fs.ReadFile(templatesFS, "templates/"+name)

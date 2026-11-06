@@ -82,7 +82,7 @@
 {{define "assets-slotsec"}}
 <div class="slotsec">
   <h4>{{.Title}}{{if .Note}} <small>{{.Note}}</small>{{end}}</h4>
-  {{range .Rows}}<div class="modrow"><span class="modrow-name">{{if gt .Qty 1}}<span class="mq">{{.Qty}} ×</span> {{end}}{{.Name}}{{if .Sub}} <small>{{.Sub}}</small>{{end}}</span><span class="modrow-val">{{if .ValueText}}{{.ValueText}} ISK{{else}}<span class="muted">no price</span>{{end}}</span></div>{{end}}
+  {{range .Rows}}<div class="modrow"><span class="modrow-name"><span class="mq">{{.Qty}} ×</span> {{.Name}}{{if .Sub}} <small>{{.Sub}}</small>{{end}}</span><span class="modrow-val">{{if .ValueText}}{{.ValueText}} ISK{{else}}<span class="muted">no price</span>{{end}}</span></div>{{end}}
 </div>
 {{end}}
 

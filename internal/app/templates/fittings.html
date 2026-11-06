@@ -30,7 +30,6 @@
   <input type="hidden" id="fit-local-id" value="{{.FitEditor.LocalID}}">
   <span class="fit-saverow fit-shiponly">
   {{if not .FitEditor.Anonymous}}<button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>{{end}}
-  {{if moduleOn "publicfits"}}<label class="fit-check fit-publicchk fit-head-sec"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>{{end}}
   </span>
   {{if .FitEditor.EVECharID}}
   <button type="button" class="btn fit-head-sec fit-shiponly fit-stripsec" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
@@ -58,6 +57,7 @@
   <div class="fit-utilrow fit-shiponly">
     <button type="button" class="fit-head-toggle" data-fit-head-toggle aria-expanded="false" aria-controls="fit-head">Fit details</button>
     <span class="fit-saved" id="fit-saved-at" hidden></span>
+    {{if moduleOn "publicfits"}}<label class="fit-check fit-publicchk"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>{{end}}
   </div>
 </div>
 {{if not .FitEditor.Anonymous}}<div class="fit-yourfits">

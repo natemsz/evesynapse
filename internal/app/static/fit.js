@@ -180,7 +180,23 @@ var FitGauges = (function () {
   // No silent taps: the last add/remove/charge change arms a flash
   // that fires on the re-rendered target once simulate() lands.
   var pendingFlash = null; // {type: "slot"|"group"|"charge", id: number, family: string}
+  // The head's arrangement follows the ship: with no ship picked
+  // the editor carries fit-noship (the bar shows only the doors)
+  // and the fit's working surfaces stay hidden behind the empty
+  // state. Derived from state.shipTypeId, the editor's own truth;
+  // called wherever a simulation is kicked off, which is every
+  // path that changes the ship.
+  function syncShipGate() {
+    var hasShip = !!state.shipTypeId;
+    editor.classList.toggle("fit-noship", !hasShip);
+    var blocks = editor.querySelectorAll("[data-fit-shipblock]");
+    for (var i = 0; i < blocks.length; i++) blocks[i].hidden = !hasShip;
+    var empty = editor.querySelector("[data-fit-emptystate]");
+    if (empty) empty.hidden = hasShip;
+  }
+
   function simulate() {
+    syncShipGate();
     // Coalesce bursts: one request in flight at a time; a change
     // made mid-flight re-sends once with the latest state instead
     // of piling up stale POSTs.
@@ -2077,10 +2093,11 @@ var FitGauges = (function () {
     if (btn) btn.focus();
   }, true);
 
-  // --- phone toolbar fold ---------------------------------------
-  // The fit head's secondary controls (pilot, clone, fit name,
-  // the public flag, Save to EVE) fold behind its Fit details
-  // toggle at phone width. fit.css hides them only while the
+  // --- fit head fold --------------------------------------------
+  // The fit head's secondary controls fold behind its Fit details
+  // toggle: at phone width every secondary control folds; on
+  // desktop the strip controls (fit name, Save to EVE) stay on
+  // the bar and the rest fold. fit.css hides them only while the
   // editor carries fit-armed, which is added here — without JS
   // the toggle never renders and nothing is ever hidden.
   var headEl = editor.querySelector(".fit-head");
@@ -2092,6 +2109,7 @@ var FitGauges = (function () {
       headToggle.setAttribute("aria-expanded", open ? "true" : "false");
     });
   }
+  syncShipGate();
   editor.addEventListener("keydown", function (ev) {
     if (ev.key !== "Enter" && ev.key !== " ") return;
     var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot.filled") : null;

@@ -7,7 +7,7 @@
 
 {{if .FitEditor}}
 <div class="l-page fw">
-<div id="fit-editor" class="l-stack fw-editor">
+<div id="fit-editor" class="l-stack fw-editor{{if not .FitEditor.Sim.HasShip}} fit-noship{{end}}">
 {{if .FitEditor.Anonymous}}
 <section class="l-panel fw-anon" aria-label="Signed out">
   <p class="fw-anon-lead">Fitting with All-V skills. <a href="/auth/link">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>
@@ -20,41 +20,44 @@
 <section class="l-panel fw-bar" aria-labelledby="fw-bar-h">
 <h2 class="visually-hidden" id="fw-bar-h">Build a fitting</h2>
 <div class="fit-head" id="fit-head">
-  <button type="button" class="fit-head-toggle" data-fit-head-toggle aria-expanded="false" aria-controls="fit-head">Fit details</button>
   <span class="searchwrap fit-searchwrap">
     <input type="text" id="fit-ship-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list" aria-label="Ship">
     <ul class="suggest" id="fit-ship-suggest" role="listbox" hidden></ul>
   </span>
-  <label class="fit-head-sec">Pilot
+  <label class="fit-head-sec fit-shiponly fit-stripsec">Fit name
+    <input type="text" id="fit-name" value="{{.FitEditor.Sim.FitName}}" placeholder="Name this fit" autocomplete="off">
+  </label>
+  <input type="hidden" id="fit-local-id" value="{{.FitEditor.LocalID}}">
+  <span class="fit-saverow fit-shiponly">
+  {{if not .FitEditor.Anonymous}}<button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>{{end}}
+  {{if moduleOn "publicfits"}}<label class="fit-check fit-publicchk fit-head-sec"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>{{end}}
+  </span>
+  {{if .FitEditor.EVECharID}}
+  <button type="button" class="btn fit-head-sec fit-shiponly fit-stripsec" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
+  {{end}}
+  <label class="fit-head-sec fit-shiponly">Pilot
     <select id="fit-pilot">
       <option value="0"{{if eq .FitEditor.PilotID 0}} selected{{end}}>All V</option>
       {{range .FitEditor.Pilots}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.PilotID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </label>
-  <label class="fit-clonepick fit-head-sec">Clone
+  <label class="fit-clonepick fit-head-sec fit-shiponly">Clone
     <select id="fit-clone"{{if not .FitEditor.Clones}} disabled{{end}} title="Whose implants the numbers are calculated with">
       {{if .FitEditor.Clones}}{{range .FitEditor.Clones}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.CloneID}} selected{{end}}>{{.Name}}{{if .Implants}} ({{.Implants}}){{end}}</option>{{end}}{{else}}<option value="0">Active clone</option>{{end}}
     </select>
   </label>
-  <label class="fit-head-sec">Fit name
-    <input type="text" id="fit-name" value="{{.FitEditor.Sim.FitName}}" placeholder="Name this fit" autocomplete="off">
-  </label>
-  <input type="hidden" id="fit-local-id" value="{{.FitEditor.LocalID}}">
-  <span class="fit-saverow">
-  {{if not .FitEditor.Anonymous}}<button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>{{end}}
-  {{if moduleOn "publicfits"}}<label class="fit-check fit-publicchk fit-head-sec"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>{{end}}
-  </span>
-  {{if .FitEditor.EVECharID}}
-  <button type="button" class="btn fit-head-sec" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
-  {{end}}
-  <span class="fit-saved" id="fit-saved-at" hidden></span>
-  <div class="fit-meta fit-head-sec">
+  <div class="fit-meta fit-head-sec fit-shiponly">
     <label class="fit-meta-desc">Description
       <input type="text" id="fit-desc" value="{{.FitEditor.Description}}" placeholder="What is this fit for?" autocomplete="off" maxlength="280">
     </label>
     <label class="fit-meta-tags">Tags
       <input type="text" id="fit-tags" value="{{.FitEditor.Tags}}" placeholder="pvp, kiting, …" autocomplete="off">
     </label>
+  </div>
+  {{if not .FitEditor.Anonymous}}<p class="fw-hint fit-head-sec fit-shiponly">Fits you save are stored in EveSynapse. Your in-game fittings are only read, never changed, unless you press Save to EVE.</p>{{end}}
+  <div class="fit-utilrow fit-shiponly">
+    <button type="button" class="fit-head-toggle" data-fit-head-toggle aria-expanded="false" aria-controls="fit-head">Fit details</button>
+    <span class="fit-saved" id="fit-saved-at" hidden></span>
   </div>
 </div>
 {{if not .FitEditor.Anonymous}}<div class="fit-yourfits">
@@ -64,14 +67,14 @@
   </span>
   <label class="fit-check"><input type="checkbox" id="fit-community"> Include community fits</label>
   <button type="button" class="btn btn-quiet" id="fit-loadouts-btn" data-href="/fittings/saved/">My Loadouts</button>
-</div>
-<p class="fw-hint">Fits you save are stored in EveSynapse. Your in-game fittings are only read, never changed, unless you press Save to EVE.</p>{{end}}
+</div>{{end}}
 </section>
 {{if .FitEditor.Notes}}
 <ul class="fit-notes">
   {{range .FitEditor.Notes}}<li>{{.}}</li>{{end}}
 </ul>
 {{end}}
+<div class="fit-shipblock" data-fit-shipblock{{if not .FitEditor.Sim.HasShip}} hidden{{end}}>
 <div class="fit-modsearch searchpanel" id="fit-modsearch">
   <div class="fit-modsearch-bar">
     <span>Add modules</span>
@@ -100,6 +103,10 @@
   </div>
 </div>
 {{template "fit-workbench" .FitEditor.Sim}}
+</div>
+<section class="l-panel fit-emptystate" data-fit-emptystate{{if .FitEditor.Sim.HasShip}} hidden{{end}}>
+  <p>Pick a ship to start fitting. Your saved fits and the community browser are one search away, above.</p>
+</section>
 
 <div class="modal-backdrop" id="fit-picker" hidden>
   <div class="modal fit-picker-modal" role="dialog" aria-modal="true" aria-labelledby="fit-picker-title">
@@ -125,7 +132,7 @@
 </div>
 
 <div class="l-switcher fw-eft">
-  <section class="l-panel fit-eft" aria-labelledby="fw-export-h">
+  <section class="l-panel fit-eft" aria-labelledby="fw-export-h" data-fit-shipblock{{if not .FitEditor.Sim.HasShip}} hidden{{end}}>
     <h2 id="fw-export-h">Export</h2>
     <p class="fw-hint">The fit as EFT text, ready to paste into EVE or any fitting tool.</p>
     <p><button type="button" class="btn" id="fit-export-btn">Show as EFT</button></p>

@@ -141,6 +141,10 @@ type killRow struct {
 	Attackers         int
 	FinalName         string
 	FinalID           int64
+	FinalCorpID       int64
+	FinalCorpName     string
+	FinalAllianceID   int64
+	FinalAllianceName string
 	Solo, NPC, Awox   bool
 	VictimIsStructure bool
 }
@@ -158,6 +162,8 @@ func (n *killNames) row(k db.Kill) killRow {
 		When: k.KillmailTime.UTC().Format("15:04"), Ago: ageText(time.Now(), k.KillmailTime),
 		Time: k.KillmailTime, Attackers: int(k.AttackerCount),
 		FinalID: k.FbCharacterID, FinalName: n.character(k.FbCharacterID),
+		FinalCorpID: k.FbCorporationID, FinalCorpName: n.corp(k.FbCorporationID),
+		FinalAllianceID: k.FbAllianceID, FinalAllianceName: n.alliance(k.FbAllianceID),
 		Solo: k.Solo, NPC: k.Npc, Awox: k.Awox,
 	}
 	if r.VictimID == 0 {

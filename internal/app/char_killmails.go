@@ -88,26 +88,30 @@ type killmailsView struct {
 	olderCursor   string // the next page's board cursor ("<unix>.<killmail id>"), "" at the end; shapeKillmails builds Older from it with the page's query state
 
 	// The summary, panels and filters (killmails_shape.go).
-	CharView       bool // the character view: hulls, wingmen and final blows read its pilot
-	Tiles          []jobTile
-	Ranges         []jobFilter
-	Filters        []jobFilter
-	Pulse          *kmPulse
-	Hotspots       []kmSpot
-	SystemClear    string
-	Hulls          []kmHull
-	HullClear      string
-	Wing           []kmWing
-	DestroyedAll   string
-	LostAll        string
-	Total          int // rows in the recent list before any filter
-	ShownDestroyed string
-	ShownLost      string
-	Filtered       bool
-	ClearHref      string
-	ListHref       string // the list with the inspector closed
-	Insp           *killmailInspector
-	Depth          int // console level: 1 the list, 2 one kill
+	CharView        bool // the character view: hulls, wingmen and final blows read its pilot
+	Tiles           []jobTile
+	TilesScope      string // the tile band's scope label: "All time" | "Last 30 days" | "Shown window"
+	TilesScopeHref  string // the tile scope swap link, "" when the tiles read the shown window
+	TilesScopeOther string // the scope the swap link switches to
+	WindowNote      string // the listed window's kill and loss counts, for the showing note
+	Ranges          []jobFilter
+	Filters         []jobFilter
+	Pulse           *kmPulse
+	Hotspots        []kmSpot
+	SystemClear     string
+	Hulls           []kmHull
+	HullClear       string
+	Wing            []kmWing
+	DestroyedAll    string
+	LostAll         string
+	Total           int // rows in the recent list before any filter
+	ShownDestroyed  string
+	ShownLost       string
+	Filtered        bool
+	ClearHref       string
+	ListHref        string // the list with the inspector closed
+	Insp            *killmailInspector
+	Depth           int // console level: 1 the list, 2 one kill
 }
 
 // handleKillmails renders the Killmails page for one of the

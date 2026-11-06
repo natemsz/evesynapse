@@ -259,7 +259,9 @@ func (q *Queries) CountAllianceKillLosses(ctx context.Context, arg CountAlliance
 }
 
 const countCorporationKillLosses = `-- name: CountCorporationKillLosses :one
-SELECT COUNT(*)::bigint AS losses FROM kills
+SELECT COUNT(*)::bigint AS losses,
+    COALESCE(SUM(COALESCE(value_ours, value_zkill, 0)), 0)::float8 AS isk_lost
+FROM kills
 WHERE victim_corporation_id = $1 AND public
   AND killmail_time >= $2::timestamptz
 `
@@ -269,13 +271,19 @@ type CountCorporationKillLossesParams struct {
 	Since         time.Time `json:"since"`
 }
 
-// A corporation's losses in a window. NPC losses count,
-// the rule every entity's losses follow.
-func (q *Queries) CountCorporationKillLosses(ctx context.Context, arg CountCorporationKillLossesParams) (int64, error) {
+type CountCorporationKillLossesRow struct {
+	Losses  int64   `json:"losses"`
+	IskLost float64 `json:"isk_lost"`
+}
+
+// A corporation's losses in a window, and what they were
+// worth. NPC losses count, the rule every entity's losses
+// follow.
+func (q *Queries) CountCorporationKillLosses(ctx context.Context, arg CountCorporationKillLossesParams) (CountCorporationKillLossesRow, error) {
 	row := q.db.QueryRowContext(ctx, countCorporationKillLosses, arg.CorporationID, arg.Since)
-	var losses int64
-	err := row.Scan(&losses)
-	return losses, err
+	var i CountCorporationKillLossesRow
+	err := row.Scan(&i.Losses, &i.IskLost)
+	return i, err
 }
 
 const getAllianceBiggestKill = `-- name: GetAllianceBiggestKill :one
@@ -1430,7 +1438,9 @@ SELECT
     COUNT(DISTINCT a.killmail_id) FILTER (WHERE k.victim_character_id <> $1 AND k.solo)::bigint AS solo,
     (SELECT COUNT(*) FROM kills v WHERE v.victim_character_id = $1 AND v.public
         AND v.killmail_time >= $2::timestamptz)::bigint AS losses,
-    COALESCE(SUM(COALESCE(k.value_ours, k.value_zkill, 0)) FILTER (WHERE k.victim_character_id <> $1), 0)::float8 AS isk_killed
+    COALESCE(SUM(COALESCE(k.value_ours, k.value_zkill, 0)) FILTER (WHERE k.victim_character_id <> $1), 0)::float8 AS isk_killed,
+    COALESCE((SELECT SUM(COALESCE(v.value_ours, v.value_zkill, 0)) FROM kills v WHERE v.victim_character_id = $1 AND v.public
+        AND v.killmail_time >= $2::timestamptz), 0)::float8 AS isk_lost
 FROM kill_involvement a
 JOIN kills k ON k.killmail_id = a.killmail_id
 WHERE a.character_id = $1 AND k.public AND NOT k.npc
@@ -1447,6 +1457,7 @@ type PilotKillStatsRow struct {
 	Solo      int64   `json:"solo"`
 	Losses    int64   `json:"losses"`
 	IskKilled float64 `json:"isk_killed"`
+	IskLost   float64 `json:"isk_lost"`
 }
 
 // ---------------------------------------------------------------------
@@ -1462,6 +1473,7 @@ func (q *Queries) PilotKillStats(ctx context.Context, arg PilotKillStatsParams) 
 		&i.Solo,
 		&i.Losses,
 		&i.IskKilled,
+		&i.IskLost,
 	)
 	return i, err
 }

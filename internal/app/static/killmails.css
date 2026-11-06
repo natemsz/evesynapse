@@ -75,6 +75,8 @@
 .km-eff { display: block; width: 3.5rem; height: 0.25rem; border-radius: 0.2rem; background: color-mix(in srgb, var(--kb-dest) 55%, transparent); overflow: hidden; }
 .km-eff-fill { display: block; height: 100%; background: var(--kb-drop); }
 .km-note { margin: var(--space-2) 0 0; color: var(--muted-2); font-size: var(--fs-xs); }
+.km-scope { margin: 0 0 var(--space-2); }
+.km-scope .fchip { margin-left: var(--space-2); }
 
 /* The list: losses carry a red edge, the open kill the selection. */
 .km-table td.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; }

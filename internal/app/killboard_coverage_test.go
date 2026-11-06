@@ -762,3 +762,112 @@ func TestKillmailPagesPastFifty(t *testing.T) {
 		t.Errorf("page 2 still offers an Older kills link at the end of the history")
 	}
 }
+
+// TestKillmailTilesScope: the killmail page's tiles read the
+// pilot's record, not the listed window. The pilot holds 65
+// priced kills and 2 losses; the newest 50 mails (the window)
+// hold only 48 of the kills, ten of them 400 days old and past
+// both the window and the 30-day line. The all-time tiles
+// count every kill, the ?scope=30d tiles count only the 55
+// inside the line, and the showing note reports the window's
+// own sums on both.
+func TestKillmailTilesScope(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	seedCharacter(t, q, user.ID, 90000001, "Record Holder")
+	seedSnapshot(t, q, 90000001, esi.SnapKillmails, []esi.KillmailRef{})
+
+	now := time.Now().UTC()
+	seedKill := func(id int64, at time.Time, victim int64, value float64, solo bool) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id,
+				ship_type_id, attacker_count, fb_character_id, source, ingested_at, public, value_ours, solo)
+			VALUES ($1, $2, 30000142, $3, 98000009, 587, 2, 93000002, 'zkill', $2, true, $4, $5)`,
+			id, at, victim, value, solo); err != nil {
+			t.Fatalf("seed kill %d: %v", id, err)
+		}
+	}
+	seedInvolvement := func(id int64) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, final_blow)
+			VALUES ($1, 0, 93000002, 98000003, 587, true), ($1, 1, 90000001, 98000002, 587, false)`, id); err != nil {
+			t.Fatalf("seed attackers %d: %v", id, err)
+		}
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kill_involvement (killmail_id, character_id, corporation_id)
+			VALUES ($1, 93000002, 98000003), ($1, 90000001, 98000002)`, id); err != nil {
+			t.Fatalf("seed involvement %d: %v", id, err)
+		}
+	}
+	id := int64(910000)
+	// 48 kills two hours ago and 7 more twenty days ago, 10M
+	// each: the 55 inside the 30-day line.
+	for i := 0; i < 48; i++ {
+		id++
+		seedKill(id, now.Add(-2*time.Hour), 93000001, 10_000_000, false)
+		seedInvolvement(id)
+	}
+	for i := 0; i < 7; i++ {
+		id++
+		seedKill(id, now.Add(-20*24*time.Hour), 93000001, 10_000_000, false)
+		seedInvolvement(id)
+	}
+	// 10 solo kills 400 days ago at 40M each: outside the
+	// window and outside the 30-day line.
+	for i := 0; i < 10; i++ {
+		id++
+		seedKill(id, now.Add(-400*24*time.Hour), 93000001, 40_000_000, true)
+		seedInvolvement(id)
+	}
+	// Two losses an hour ago at 5M each: the newest mails, so
+	// they sit in the window beside the 48 recent kills.
+	for i := 0; i < 2; i++ {
+		id++
+		seedKill(id, now.Add(-time.Hour), 90000001, 5_000_000, false)
+	}
+	for _, stmt := range []string{
+		`INSERT INTO sde_systems (system_id, name, security) VALUES (30000142, 'Jita', 0.9)`,
+		`INSERT INTO sde_types (type_id, name) VALUES (587, 'Rifter')`,
+	} {
+		if _, err := app.db.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+
+	cookie := sessionCookie(t, app, user.ID, 90000001, "Record Holder")
+	code, body := getPage(t, app, cookie, "/killmails/?character=90000001")
+	if code != http.StatusOK {
+		t.Fatalf("GET /killmails/ = %d, want 200", code)
+	}
+	// All time: 65 kills (10 of them solo), 2 losses, 950M
+	// destroyed, 10.0M lost.
+	mustContain(t, "/killmails/", body,
+		`Tile figures: <b>All time</b>`, "scope=30d",
+		`<span class="l-stat-label">Kills</span><span class="l-stat-value">65</span><span class="l-stat-sub">10 solo</span>`,
+		`<span class="l-stat-label">Losses</span><span class="l-stat-value">2</span><span class="l-stat-sub">32.50 kills per loss</span>`,
+		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">950M</span><span class="l-stat-sub">99% ISK efficiency</span>`,
+		`<span class="l-stat-label">ISK lost</span><span class="l-stat-value">10.0M</span>`,
+		// The note keeps the window's own sums: the newest 50
+		// mails hold 48 of the kills and both losses.
+		`Showing 50 of 50: 48 kills, 2 losses in this window; <span class="km-k">480M ISK destroyed</span>, <span class="km-l">10.0M ISK lost</span>.`)
+
+	code, body = getPage(t, app, cookie, "/killmails/?character=90000001&scope=30d")
+	if code != http.StatusOK {
+		t.Fatalf("GET /killmails/?scope=30d = %d, want 200", code)
+	}
+	// Last 30 days: the 55 recent kills only, none of them
+	// solo; the list and its note are untouched by the switch.
+	mustContain(t, "/killmails/?scope=30d", body,
+		`Tile figures: <b>Last 30 days</b>`,
+		`<span class="l-stat-label">Kills</span><span class="l-stat-value">55</span><span class="l-stat-sub">0 solo</span>`,
+		`<span class="l-stat-label">Losses</span><span class="l-stat-value">2</span><span class="l-stat-sub">27.50 kills per loss</span>`,
+		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">550M</span><span class="l-stat-sub">98% ISK efficiency</span>`,
+		`<span class="l-stat-label">ISK lost</span><span class="l-stat-value">10.0M</span>`,
+		`Showing 50 of 50: 48 kills, 2 losses in this window; <span class="km-k">480M ISK destroyed</span>, <span class="km-l">10.0M ISK lost</span>.`)
+}

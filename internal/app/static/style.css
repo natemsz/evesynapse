@@ -1493,8 +1493,8 @@ html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[d
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; font-family: Rajdhani, sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs); }
-.chip.on { border-color: var(--accent); color: var(--accent); }
+.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; font-family: Rajdhani, sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-2xs); }
+.chip.on { border-color: var(--accent); color: var(--accent); font-size: var(--fs-2xs); }
 .relink { color: var(--danger); }
 .attention { list-style: none; margin: 0; padding: 0; }
 .attention li { background: var(--row); padding: 0.35rem 0.5rem; border-bottom: 1px solid color-mix(in srgb, var(--accent) 7%, transparent); }

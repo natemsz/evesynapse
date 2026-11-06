@@ -7,7 +7,10 @@ package app
 // once from zKillboard's history API: up to ten pages of its most
 // recent kills and losses, each ingested into the kills store,
 // public, so the corporation's board feed and killmail lists show
-// every participation. Corporations keep no activity profile, so
+// every participation. The walk's reach is unbounded; a kill it
+// brings in already past the retention cutoff is stored by the
+// ingest in its post-prune shape, as on the pilot walk.
+// Corporations keep no activity profile, so
 // the pass folds nothing: the coverage marker (one row per
 // corporation, set when a pass completes) is its whole record,
 // and a failed pass leaves the corporation unmarked, so a later
@@ -115,7 +118,7 @@ func (app *Application) backfillCorp(ctx context.Context, client *http.Client, i
 				continue
 			}
 			seen++
-			if _, err := app.ingestKill(ctx, e.Raw, e.ZKB.Hash, &e.ZKB, "zkill", true); err != nil {
+			if _, err := app.ingestKill(ctx, e.Raw, e.ZKB.Hash, &e.ZKB, "zkill", true, true); err != nil {
 				logging.Warnf("corp coverage: ingest history kill %d for corporation %d: %v", e.KillmailID, id, err)
 			}
 		}

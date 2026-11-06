@@ -196,7 +196,7 @@ func TestZkillBackfillPromotesPrivateKill(t *testing.T) {
 	ctx := context.Background()
 
 	// The kill is already held, privately, from an ESI pull.
-	if _, err := app.ingestKill(ctx, json.RawMessage(zkPartKillmail), "hash800001", nil, "esi", false); err != nil {
+	if _, err := app.ingestKill(ctx, json.RawMessage(zkPartKillmail), "hash800001", nil, "esi", false, true); err != nil {
 		t.Fatalf("ingest private copy: %v", err)
 	}
 	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
@@ -240,6 +240,139 @@ func TestZkillBackfillPromotesPrivateKill(t *testing.T) {
 	}
 }
 
+// TestKillInvolvementFiling pins the filing rules end to end.
+// The stream stores a kill no registered character touched,
+// exactly as it stores every kill. A kill a registered character
+// fought in without the final blow shows in the character's
+// board kills, the list My Killmails unions in. And a history
+// walk reaches back without a depth cap: a walked kill past the
+// retention cutoff lands in its post-prune shape (summary row
+// and priced lines, no attackers, no stored killmail), while a
+// walked kill inside the year lands with full detail.
+func TestKillInvolvementFiling(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	seedCharacter(t, q, user.ID, 9002, "Wing")
+
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO market_region_stats
+		(region_id, type_id, typical_sell, updated_at) VALUES (10000002, 587, 400000, now())`); err != nil {
+		t.Fatalf("seed region stats: %v", err)
+	}
+
+	streamKill := func(id int64, esi string) {
+		t.Helper()
+		frame := fmt.Sprintf(`{"killmail_id":%d,"hash":"h%d","esi":%s,`+
+			`"zkb":{"locationID":60003760,"totalValue":400000,"points":1,"npc":false,"solo":false,"awox":false},"sequence_id":1}`,
+			id, id, esi)
+		if err := app.ingestKillPackage(ctx, []byte(frame)); err != nil {
+			t.Fatalf("stream kill %d: %v", id, err)
+		}
+	}
+
+	// A stream kill between strangers only: stored, public.
+	streamKill(800101, `{"killmail_id":800101,"killmail_time":"2026-10-21T10:00:00Z","solar_system_id":30000142,`+
+		`"victim":{"character_id":9103,"corporation_id":98000101,"ship_type_id":587,"damage_taken":900,"items":[]},`+
+		`"attackers":[{"character_id":9104,"corporation_id":98000102,"ship_type_id":587,"weapon_type_id":2873,"damage_done":900,"final_blow":true}]}`)
+	stranger, err := q.GetKill(ctx, 800101)
+	if err != nil {
+		t.Fatalf("stream kill with no registered involvement was not stored: %v", err)
+	}
+	if !stranger.Public {
+		t.Error("stream kill stored non-public")
+	}
+
+	// A stream kill the registered character fought in without
+	// the final blow: in their board kills; the strangers' kill
+	// is not.
+	streamKill(800102, `{"killmail_id":800102,"killmail_time":"2026-10-21T11:00:00Z","solar_system_id":30000142,`+
+		`"victim":{"character_id":9106,"corporation_id":98000101,"ship_type_id":587,"damage_taken":905,"items":[]},`+
+		`"attackers":[{"character_id":9107,"corporation_id":98000102,"ship_type_id":587,"weapon_type_id":2873,"damage_done":900,"final_blow":true},`+
+		`{"character_id":9002,"corporation_id":98000111,"ship_type_id":587,"damage_done":5,"final_blow":false}]}`)
+	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+		EntityID: 9002, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListKillsByCharacter: %v", err)
+	}
+	ids := feedIDs(feed)
+	if !ids[800102] {
+		t.Error("non-final-blow involvement kill missing from the character's board kills")
+	}
+	if ids[800101] {
+		t.Error("a kill the character never touched is in their board kills")
+	}
+
+	// The history walk: one page holding a kill inside the year
+	// and a loss three years back. The old one still arrives
+	// (no depth cap) but lands pruned; the young one lands whole.
+	youngAt := time.Now().UTC().AddDate(0, 0, -2).Format("2006-01-02T15:04:05Z")
+	oldAt := time.Now().UTC().AddDate(-3, 0, 0).Format("2006-01-02T15:04:05Z")
+	youngEntry := fmt.Sprintf(`{"killmail_id":800201,"killmail_time":%q,"solar_system_id":30000142,`+
+		`"victim":{"character_id":9108,"corporation_id":98000101,"ship_type_id":587,"damage_taken":905,"items":[]},`+
+		`"attackers":[{"character_id":9109,"corporation_id":98000102,"ship_type_id":587,"weapon_type_id":2873,"damage_done":900,"final_blow":true},`+
+		`{"character_id":9002,"corporation_id":98000111,"ship_type_id":587,"damage_done":5,"final_blow":false}],`+
+		`"zkb":{"locationID":0,"hash":"hash800201","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}}`, youngAt)
+	oldEntry := fmt.Sprintf(`{"killmail_id":800202,"killmail_time":%q,"solar_system_id":30000142,`+
+		`"victim":{"character_id":9002,"corporation_id":98000111,"ship_type_id":587,"damage_taken":900,"items":[]},`+
+		`"attackers":[{"character_id":9110,"corporation_id":98000102,"ship_type_id":587,"weapon_type_id":2873,"damage_done":900,"final_blow":true}],`+
+		`"zkb":{"locationID":0,"hash":"hash800202","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}}`, oldAt)
+	hist := newFakeZkillHistory(map[string]string{
+		"/characterID/9002/": "[" + youngEntry + "," + oldEntry + "]",
+	})
+	srv := httptest.NewServer(hist.handler())
+	defer srv.Close()
+	app.cfg.zkillAPIBaseURL = srv.URL + "/"
+
+	app.backfillPilot(ctx, srv.Client(), 9002)
+
+	old, err := q.GetKill(ctx, 800202)
+	if err != nil {
+		t.Fatalf("three-year-old walked kill was not stored: %v", err)
+	}
+	if !old.KillmailTime.Before(time.Now().AddDate(-2, 0, 0)) {
+		t.Errorf("walked old kill time = %v, want more than two years back", old.KillmailTime)
+	}
+	lines, err := q.GetKillLinePrices(ctx, 800202)
+	if err != nil {
+		t.Fatalf("old kill line prices: %v", err)
+	}
+	hullPriced := false
+	for _, l := range lines {
+		if l.TypeID == 587 && l.UnitPrice > 0 {
+			hullPriced = true
+		}
+	}
+	if !hullPriced {
+		t.Errorf("old kill priced lines = %+v, want the hull priced", lines)
+	}
+	var attackers int
+	if err := app.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM kill_attackers WHERE killmail_id = 800202`).Scan(&attackers); err != nil {
+		t.Fatalf("count old kill attackers: %v", err)
+	}
+	if attackers != 0 {
+		t.Errorf("old kill stored %d attacker rows, want none", attackers)
+	}
+	if _, err := q.GetKillDetail(ctx, 800202); err == nil {
+		t.Error("old kill stored its full killmail, want post-prune shape only")
+	}
+
+	if err := app.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM kill_attackers WHERE killmail_id = 800201`).Scan(&attackers); err != nil {
+		t.Fatalf("count young kill attackers: %v", err)
+	}
+	if attackers != 2 {
+		t.Errorf("young walked kill stored %d attacker rows, want 2", attackers)
+	}
+	if _, err := q.GetKillDetail(ctx, 800201); err != nil {
+		t.Errorf("young walked kill lost its stored killmail: %v", err)
+	}
+}
+
 func TestKillmailPageListsBoardOnlyKill(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
@@ -269,7 +402,7 @@ func TestKillmailPageListsBoardOnlyKill(t *testing.T) {
 		`"attackers":[{"character_id":93000002,"corporation_id":98000003,"ship_type_id":587,"damage_done":200,"final_blow":true,"weapon_type_id":2488},` +
 		`{"character_id":90000001,"corporation_id":98000002,"ship_type_id":587,"damage_done":100,"final_blow":false,"weapon_type_id":2488}]}`
 	zkb := &killZKB{Hash: "boardhash"}
-	if _, err := app.ingestKill(ctx, json.RawMessage(boardKill), "boardhash", zkb, "zkill", true); err != nil {
+	if _, err := app.ingestKill(ctx, json.RawMessage(boardKill), "boardhash", zkb, "zkill", true, false); err != nil {
 		t.Fatalf("ingest board kill: %v", err)
 	}
 

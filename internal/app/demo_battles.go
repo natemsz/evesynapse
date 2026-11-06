@@ -79,7 +79,7 @@ func (s *demoSeed) writePilotOneBattles(ctx context.Context) error {
 	// merges Sable's itself, through the same ingest.
 	mails := map[int64]esi.Killmail{}
 	for _, r := range rows {
-		if _, err := s.app.ingestKill(ctx, json.RawMessage(r.Payload), r.Hash, nil, "esi", false); err != nil {
+		if _, err := s.app.ingestKill(ctx, json.RawMessage(r.Payload), r.Hash, nil, "esi", false, false); err != nil {
 			return fmt.Errorf("demo seed: merge killmail %d for the battle reports: %w", r.KillmailID, err)
 		}
 		var km esi.Killmail

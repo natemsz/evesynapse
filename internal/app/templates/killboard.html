@@ -41,7 +41,7 @@
         <div class="kb-kill-meta"><time datetime="{{rfc3339 .Time}}" title="{{.When}} EVE">{{.Ago}}</time><span class="kb-att"> · {{.Attackers}} {{if eq .Attackers 1}}attacker{{else}}attackers{{end}}</span>{{if .Solo}} <span class="kb-tag">solo</span>{{end}}{{if .Awox}} <span class="kb-tag warn">awox</span>{{end}}{{if .NPC}} <span class="kb-tag dim">NPC</span>{{end}}</div>
       </li>
       {{else}}
-      <li class="kb-empty">{{if .ScopeKind}}No public kills here yet.{{else}}No kills yet. The killboard fills from zKillboard's live stream within a minute of starting.{{end}}</li>
+      <li class="prose">{{if .ScopeKind}}No public kills here yet.{{else}}No kills yet. The killboard fills from zKillboard's live stream within a minute of starting.{{end}}</li>
       {{end}}
     </ol>
 

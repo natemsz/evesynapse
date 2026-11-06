@@ -9,7 +9,7 @@
 <div class="l-page">
 <div class="l-head">
   <div class="l-head-pick">{{template "charselector" .Owners}}</div>
-  <p class="l-head-sum">Where your ISK came from, activity by activity, each after its own fees and costs.</p>
+  <p class="prose">Where your ISK came from, activity by activity, each after its own fees and costs.</p>
   {{if not .Corp}}<div class="l-head-act"><button type="button" class="viz-gear" data-open-counted-modal aria-haspopup="dialog" aria-label="How profit is counted" title="How profit is counted"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button></div>{{end}}
 </div>
 <div class="pf-chiprows">
@@ -260,7 +260,7 @@
 </table>
 </div>
 {{else}}
-<p><small>No LP balances recorded yet. They fill in once a character has granted access to loyalty points and synced. Set <a href="#lp-value">your own value for LP</a> so what you earn can be priced.</small></p>
+<p class="prose">No LP balances recorded yet. They fill in once a character has granted access to loyalty points and synced. Set <a href="#lp-value">your own value for LP</a> so what you earn can be priced.</p>
 {{end}}
 {{if .LPPicks}}
 <details class="pf-prefs"><summary><small>{{len .LPPicks}} LP spends to settle</small></summary>
@@ -287,10 +287,10 @@
 
 
 
-<p><small>Colours on this page are semantic: <span class="legend-swatch sem-recycled" aria-hidden="true"></span> recycled capital that came back, <span class="legend-swatch sem-kept" aria-hidden="true"></span> kept profit, <span class="legend-swatch sem-lost" aria-hidden="true"></span> lost to fees, taxes and losses, <span class="legend-swatch sem-unverified" aria-hidden="true"></span> unverified, no known cost. Every colour scheme retunes the four, so they read the same in every theme.</small></p>
+<p class="prose">Colours on this page are semantic: <span class="legend-swatch sem-recycled" aria-hidden="true"></span> recycled capital that came back, <span class="legend-swatch sem-kept" aria-hidden="true"></span> kept profit, <span class="legend-swatch sem-lost" aria-hidden="true"></span> lost to fees, taxes and losses, <span class="legend-swatch sem-unverified" aria-hidden="true"></span> unverified, no known cost. Every colour scheme retunes the four, so they read the same in every theme.</p>
 
 {{else}}
-<p>Nothing recorded yet for {{.OwnerLabel}}. Profit fills in as your wallets sync, and builds up from then on.</p>
+<p class="prose">Nothing recorded yet for {{.OwnerLabel}}. Profit fills in as your wallets sync, and builds up from then on.</p>
 {{end}}
 </div>
 {{end}}

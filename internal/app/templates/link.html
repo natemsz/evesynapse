@@ -10,8 +10,8 @@
 {{if eq .Step "cards"}}
 <section class="card" data-fold="never">
   <h2>What do you want to do with EveSynapse?</h2>
-  <p><small>Pick as many as you like. EveSynapse asks EVE only for the permissions those need, and shows you the list before anything is sent. You can add more later.</small></p>
-  <p class="lk-privacy"><small>Sign-in goes through EVE Online's official secure login. Your login details, account details and personal information are never shared with EveSynapse.</small></p>
+  <p class="prose">Pick as many as you like. EveSynapse asks EVE only for the permissions those need, and shows you the list before anything is sent. You can add more later.</p>
+  <p class="prose">Sign-in goes through EVE Online's official secure login. Your login details, account details and personal information are never shared with EveSynapse.</p>
   <form method="get" action="/auth/link">
     <input type="hidden" name="from" value="cards">
     {{if .Character}}<input type="hidden" name="character" value="{{.Character}}">{{end}}
@@ -30,7 +30,7 @@
 {{else if eq .Step "theme"}}
 <section class="card" data-fold="never">
   <h2>Pick your theme</h2>
-  <p><small>How EveSynapse looks, picked now and changeable later in Settings. Your theme is saved to your account and follows you across devices. First the type, then the look it applies to.</small></p>
+  <p class="prose">How EveSynapse looks, picked now and changeable later in Settings. Your theme is saved to your account and follows you across devices. First the type, then the look it applies to.</p>
   <form method="get" action="{{if .Axon}}/auth/link{{else}}/auth/eve{{end}}" data-su-theme>
     <input type="hidden" name="submitted" value="1">
     {{if .Axon}}<input type="hidden" name="step" value="axon">{{end}}
@@ -62,7 +62,7 @@
 {{else if eq .Step "axon"}}
 <section class="card" data-fold="never">
   <h2>Take intel with you: Axon</h2>
-  <p>Axon is the desktop companion for EveSynapse intel, and this sign-up turns on the character location it files reports by. It watches your EVE chat logs and sends new lines to your intel channels while you play, so sightings reach the map on their own. Its overlay puts reporting on a shortcut: a small translucent paste field where an empty send files what is on your clipboard, showing the report type and system it detected before anything is sent, either of them yours to override. A second shortcut opens the intel dashboard. Axon is still cooking and the overlay is on its way; the current release already covers the channel reporting.</p>
+  <p class="prose">Axon is the desktop companion for EveSynapse intel, and this sign-up turns on the character location it files reports by. It watches your EVE chat logs and sends new lines to your intel channels while you play, so sightings reach the map on their own. Its overlay puts reporting on a shortcut: a small translucent paste field where an empty send files what is on your clipboard, showing the report type and system it detected before anything is sent, either of them yours to override. A second shortcut opens the intel dashboard. Axon is still cooking and the overlay is on its way; the current release already covers the channel reporting.</p>
   <p class="lk-axon-dl">{{range .AxonDownloads}}<a class="btn" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</p>
   <p><small>Axon is <a href="https://github.com/natemsz/axon" rel="noopener">open source</a>. Once you are in, pair it from your Intel Channels page.</small></p>
   <form method="get" action="/auth/eve">
@@ -83,7 +83,7 @@
     {{if .Signup}}<input type="hidden" name="step" value="theme">{{end}}
     {{if .Character}}<input type="hidden" name="character" value="{{.Character}}">{{end}}
 
-    {{if .Roles}}<p><small>Corporation permissions are shown under their feature, framed by the in-game role EVE needs for them. Tick what this character can do in its corporation; if you are not sure, leave it unticked and add it later.</small></p>{{end}}
+    {{if .Roles}}<p class="prose">Corporation permissions are shown under their feature, framed by the in-game role EVE needs for them. Tick what this character can do in its corporation; if you are not sure, leave it unticked and add it later.</p>{{end}}
 
     {{range .Groups}}
     <div class="lk-group foldable ti-acc ti-a{{.Accent}}">

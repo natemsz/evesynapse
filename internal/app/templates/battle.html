@@ -187,7 +187,7 @@
     </table>
     </div>
     {{else}}
-    <p class="bt-dim">No killmail matched this fight: nobody died, or the mails have not reached the killboard yet. Late mails join the report as they land.</p>
+    <p class="prose">No killmail matched this fight: nobody died, or the mails have not reached the killboard yet. Late mails join the report as they land.</p>
     {{end}}
   </section>
 
@@ -243,7 +243,7 @@
       <h2 class="bt-h" id="bt-tk-h">Tackle</h2>
       {{if .MyTackle}}<ul class="bt-tlist">{{range .MyTackle}}<li class="mine"><span class="bt-tk">{{.Kind}}</span> {{.From}} <span class="bt-dim">on</span> {{.To}} <span class="bt-dim">from {{.At}}, {{.Attempts}} {{if eq .Attempts "1"}}attempt{{else}}attempts{{end}}</span></li>{{end}}</ul>{{end}}
       {{if .GridTackle}}
-      <p class="bt-note">Seen on grid between other ships, named by hull.</p>
+      <p class="prose">Seen on grid between other ships, named by hull.</p>
       <ul class="bt-tlist">{{range .GridTackle}}{{template "bt-grid-tackle" .}}{{end}}</ul>
       {{if .GridMore}}<ul class="bt-tlist" id="bt-grid-more" data-wmore>{{range .GridMore}}{{template "bt-grid-tackle" .}}{{end}}</ul>
       <button type="button" class="btn btn-quiet bt-more" data-expand="bt-grid-more"><span class="bt-more-c">Show all {{.GridTotal}}</span><span class="bt-more-o">Show fewer</span></button>{{end}}

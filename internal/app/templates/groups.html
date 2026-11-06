@@ -11,7 +11,7 @@
   <div class="l-head-pick">{{template "corpselector" .OwnerOptions}}</div>
   {{with .Owner}}<p class="l-head-sum"><b>{{.Name}}</b> · {{.Kind}} · {{len .Groups}} {{if eq (len .Groups) 1}}group{{else}}groups{{end}}</p>{{end}}
 </div>
-<p class="co-lede">A group is a list of characters that a corporation's or alliance's directors keep by hand: a special interest group, the fleet commanders, a logistics wing. A <a href="/discord/servers">Discord server's</a> rules can give everyone in a group a role.</p>
+<p class="prose">A group is a list of characters that a corporation's or alliance's directors keep by hand: a special interest group, the fleet commanders, a logistics wing. A <a href="/discord/servers">Discord server's</a> rules can give everyone in a group a role.</p>
 
 {{if not .Owner}}
 <div class="l-panel co-gate"><p>None of your characters is a director, so there are no groups for you to keep.</p></div>

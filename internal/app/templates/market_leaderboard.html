@@ -9,7 +9,7 @@
 {{$s := .MarketLeaderboard}}
 <div class="l-page">
 <div class="l-head">
-  <p class="l-head-sum">The busiest stations and structures across the hub regions: how many orders are open at each, and how much ISK is sitting on them. The figures update after each region sweep.</p>
+  <p class="prose">The busiest stations and structures across the hub regions: how many orders are open at each, and how much ISK is sitting on them. The figures update after each region sweep.</p>
   {{if $s.HasData}}<div class="l-head-act"><a class="btn btn-quiet" href="#" id="csv-export">Export CSV</a></div>{{end}}
 </div>
 
@@ -46,7 +46,7 @@
     </tbody>
   </table>
   </div>
-  <p class="mk-note"><small>ISK. Open orders counts every open buy and sell order the latest sweep saw at the station; ISK on orders is the value still open on those orders (price times remaining volume). The bar sets each station against the top one. Visit a station to see its best prices and the spreads traders are working there.</small></p>
+  <p class="prose">ISK. Open orders counts every open buy and sell order the latest sweep saw at the station; ISK on orders is the value still open on those orders (price times remaining volume). The bar sets each station against the top one. Visit a station to see its best prices and the spreads traders are working there.</p>
 </section>
 {{else}}
 <p>Still gathering prices. The leaderboard fills in after the first region sweeps finish.</p>

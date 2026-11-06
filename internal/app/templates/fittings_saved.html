@@ -80,7 +80,7 @@
   {{else}}
   <div class="l-panel lo-empty">
   {{if eq .Fittings.Source "public"}}
-  <p>No public fits yet. Open one of your EveSynapse fits in the fitting tool and turn on Make public to list it in the public browser.</p>
+  <p class="prose">No public fits yet. Open one of your EveSynapse fits in the fitting tool and turn on Make public to list it in the public browser.</p>
   {{else if eq .Fittings.Source "evesynapse"}}
   <p>No EveSynapse fits yet. Build one in the <a href="/fittings/">fitting tool</a> and save it.</p>
   {{else if eq .Fittings.Source "eve"}}
@@ -92,7 +92,7 @@
   {{else if .Fittings.Warming}}
   <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
   {{else}}
-  <p>No loadouts yet. Save a fit in the <a href="/fittings/">fitting tool</a>, or link a character to see its EVE fittings here.</p>
+  <p class="prose">No loadouts yet. Save a fit in the <a href="/fittings/">fitting tool</a>, or link a character to see its EVE fittings here.</p>
   {{end}}
   </div>
   {{end}}

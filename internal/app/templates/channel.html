@@ -68,15 +68,15 @@
         {{if .Seen}}<span class="ch-dim"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.SysID}}">{{.Seen}}</a></span>{{else}}<span class="ch-dim">Not seen lately</span>{{end}}</span>
       {{if $.Channel.CanPost}}<form method="post" action="/pilot/watch" class="inline-form"><input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="channel" value="{{$.Channel.ID}}"><input type="hidden" name="remove" value="1"><input type="hidden" name="back" value="/intel/channels/{{$.Channel.ID}}/"><button type="submit" class="ch-x" aria-label="Remove {{.Name}}">×</button></form>{{end}}
     </li>{{end}}
-  </ul>{{else}}<p class="ch-hint">None yet. To add someone, open their pilot page (every pilot name links to one) and choose this channel under <em>Add to known hostiles</em>.</p>{{end}}
+  </ul>{{else}}<p class="prose">None yet. To add someone, open their pilot page (every pilot name links to one) and choose this channel under <em>Add to known hostiles</em>.</p>{{end}}
 </section>
 </div>
 
 {{if .Owner}}
 <section class="l-panel" id="access">
   <h2>Who can see this channel</h2>
-  {{if .Org}}<p class="ch-hint">This is {{.Org}}'s channel. Its directors run it, along with whoever they choose under “Intel channels” in the corporation's settings. Share it with people in {{.Org}} by rank, role or group, the same choices as its Discord roles, or with anyone else by name. “Can post” lets them report too; otherwise they can only read.</p>
-  {{else}}<p class="ch-hint">Give access to a pilot, a corporation, an alliance or one of your groups. “Can post” lets them report too; otherwise they can only read.</p>{{end}}
+  {{if .Org}}<p class="prose">This is {{.Org}}'s channel. Its directors run it, along with whoever they choose under “Intel channels” in the corporation's settings. Share it with people in {{.Org}} by rank, role or group, the same choices as its Discord roles, or with anyone else by name. “Can post” lets them report too; otherwise they can only read.</p>
+  {{else}}<p class="prose">Give access to a pilot, a corporation, an alliance or one of your groups. “Can post” lets them report too; otherwise they can only read.</p>{{end}}
   {{if .Grants}}<ul class="ch-grants">
     {{range .Grants}}<li>
       <span class="ch-grant">{{if .Logo}}<img class="ch-face" src="{{.Logo}}" alt="" width="24" height="24" loading="lazy"> {{end}}<strong>{{.Name}}</strong>{{if ne .Kind "rule"}} <span class="ch-dim">{{.Kind}}</span>{{end}}</span>
@@ -94,7 +94,7 @@
       <select name="who">{{range .RuleChoices}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></label>
     <label class="check-row"><input type="checkbox" name="post" value="1" checked> <span>Can post reports as well as read them</span></label>
     <button type="submit" class="btn">Share</button>
-    <p class="ch-hint">Checked live: someone who leaves the corporation, loses the role or leaves the group loses access too.</p>
+    <p class="prose">Checked live: someone who leaves the corporation, loses the role or leaves the group loses access too.</p>
   </form>{{end}}
   <form class="l-panel op-form ch-form" method="post" action="/intel/channels/{{.ID}}/grants">
     <h3>{{if .Org}}Give access to anyone else{{else}}Give access{{end}}</h3>
@@ -120,7 +120,7 @@
     <label class="field"><span class="field-label">What it covers</span>
       <input type="text" name="description" value="{{.Description}}" maxlength="200"></label>
     <button type="submit" class="btn">Save</button>
-    <p class="ch-hint">Axon links an in-game channel with the same name automatically.</p>
+    <p class="prose">Axon links an in-game channel with the same name automatically.</p>
   </form>
 
   <form class="l-panel op-form ch-form ch-danger" method="post" action="/intel/channels/{{.ID}}/delete">

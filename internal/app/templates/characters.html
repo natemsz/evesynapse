@@ -2,7 +2,7 @@
 {{define "pagetitle"}}<h1><span class="gt">Characters</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-<p>Every character linked to your account. Their data stays up to date in the background. Tags are your own labels for telling alts apart; EVE doesn't say which characters share a game account.</p>
+<p class="prose">Every character linked to your account. Their data stays up to date in the background. Tags are your own labels for telling alts apart; EVE doesn't say which characters share a game account.</p>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
@@ -12,7 +12,7 @@
 {{if .ConfirmUnlink}}
 <section class="card">
 <h2>Unlink {{.ConfirmUnlink.Name}}?</h2>
-<p>This removes the character from your account and deletes its saved login and all cached data for it (snapshots, wallet/order history views, corp data warmed through it). Data other characters warmed is untouched. This can't be undone, but you can link the character again with EVE sign-in at any time.</p>
+<p class="prose">This removes the character from your account and deletes its saved login and all cached data for it (snapshots, wallet/order history views, corp data warmed through it). Data other characters warmed is untouched. This can't be undone, but you can link the character again with EVE sign-in at any time.</p>
 <form method="post" action="/characters/unlink">
   <input type="hidden" name="character_id" value="{{.ConfirmUnlink.ID}}">
   <p><label><input type="checkbox" name="revoke_token" value="1" checked> Also revoke this character's token with EVE Online (full disconnection)</label><br>
@@ -55,7 +55,7 @@
 </table>
 </div>
 {{else}}
-<p>No characters linked yet. <a href="/auth/link">Sign in with EVE SSO</a> to link your first character. Add the rest the same way.</p>
+<p class="prose">No characters linked yet. <a href="/auth/link">Sign in with EVE SSO</a> to link your first character. Add the rest the same way.</p>
 {{end}}
 
 {{end}}

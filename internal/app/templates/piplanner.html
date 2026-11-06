@@ -8,7 +8,7 @@
 <div class="l-page pi">
 <div class="l-head">
   <div class="l-head-pick">{{template "charselector" .PIPlannerChars}}</div>
-  <p class="l-head-sum">Plan any planetary chain from raw extraction to P4: factory counts, colony fit and POCO taxes.</p>
+  <p class="prose">Plan any planetary chain from raw extraction to P4: factory counts, colony fit and POCO taxes.</p>
   <div class="l-head-act"><a class="btn btn-quiet" href="/planets/">My Colonies</a></div>
 </div>
 
@@ -60,7 +60,7 @@
       </tbody>
     </table>
     </div>
-    <p><small>Factories is how many run side by side to finish the batch inside 24 hours of continuous running. Halve the window and the counts roughly double; extractor ECUs scale with your yield setting.</small></p>
+    <p class="prose">Factories is how many run side by side to finish the batch inside 24 hours of continuous running. Halve the window and the counts roughly double; extractor ECUs scale with your yield setting.</p>
     <p><small>Buying only the target's direct inputs instead costs {{.StepCost}} (profit {{.ProfitStep}} after POCO taxes, {{.MarginStep}}). Whole-chain prices every raw at market; the direct-input check prices one tier. Neither counts hauling or what the extractors could make instead, so compare both before committing planets.</small></p>
   </section>
   {{end}}
@@ -126,7 +126,7 @@
       </li>
     {{end}}
     </ul>
-    <p><small>Extractor planets refine R0 to P1 on the planet (25% of the volume) before export. Factory planets import P1 and run Advanced and High-Tech; only the factory planet needs a Launchpad import route for a P4's P1 input. Link and storage buffers are not counted, so leave headroom on tight fits.</small></p>
+    <p class="prose">Extractor planets refine R0 to P1 on the planet (25% of the volume) before export. Factory planets import P1 and run Advanced and High-Tech; only the factory planet needs a Launchpad import route for a P4's P1 input. Link and storage buffers are not counted, so leave headroom on tight fits.</p>
   </section>
   {{end}}
 </div>

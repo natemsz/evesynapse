@@ -14,7 +14,7 @@
   <div class="l-head-pick">{{template "corpselector" .CorpOptions}}</div>
   <p class="l-head-sum"><b>{{.Name}}</b></p>
 </div>
-<p class="co-lede">How {{.Name}} runs on EveSynapse. Directors and the CEO can always do everything here; these settings say who else can.</p>
+<p class="prose">How {{.Name}} runs on EveSynapse. Directors and the CEO can always do everything here; these settings say who else can.</p>
 
 <form method="post" action="/corporations/settings/save" class="op-form co-form">
   <input type="hidden" name="corporation" value="{{.ID}}">
@@ -44,7 +44,7 @@
 
     <section class="l-panel co-card">
       <h3>Groups and Discord</h3>
-      <p class="hint">Each setting above can be an in-game role or one of the corporation's groups. Groups, and the corporation's Discord server, have pages of their own.</p>
+      <p class="prose">Each setting above can be an in-game role or one of the corporation's groups. Groups, and the corporation's Discord server, have pages of their own.</p>
       <div class="form-actions">{{if moduleOn "groups"}}<a class="btn" href="/groups/?owner=corporation:{{.ID}}">Groups</a>{{end}}{{if moduleOn "discord"}}<a class="btn" href="/discord/servers?owner=corporation:{{.ID}}">Discord Server</a>{{end}}</div>
     </section>
   </div>

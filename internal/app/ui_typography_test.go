@@ -68,17 +68,21 @@ func TestTabNavTypeSpec(t *testing.T) {
 	}
 }
 
-// TestOpenProseTreatment pins the prose role: explanatory text
-// outside widgets and tables reads in the body face at --fs-sm
-// with a 1.55 line height, in the prose ink each theme mixes from
-// its own text and muted values. The Appraisal, Intel Channels
-// and Swarm Cache pages mark their prose blocks with it; the
-// other Intel pages mark none.
+// TestOpenProseTreatment pins the prose role: a block whose job
+// is to explain reads in Rajdhani Medium at --fs-sm with a 1.55
+// line height, in the prose ink each theme mixes from its own
+// text and muted values; emphasis inside prose reads at 600.
+// Pages across the site mark their explanatory blocks with it.
+// The admin pages mark none: their prose is marked with the
+// admin rework. The landing and home pages mark none either:
+// the landing carries its own type system and home is widgets.
 func TestOpenProseTreatment(t *testing.T) {
 	style := readStatic(t, "style.css")
 	for _, want := range []string{
 		"--prose: color-mix(in srgb, var(--text) 55%, var(--muted));",
-		".prose {\n  font-family: \"Eve Sans Neue\", \"Inter\", \"Segoe UI\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n  font-size: var(--fs-sm);\n  line-height: 1.55;\n  color: var(--prose);\n}",
+		".prose {\n  font-family: \"Rajdhani\", \"Eve Sans Neue\", \"Inter\", \"Segoe UI\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n  font-weight: 500;\n  font-size: var(--fs-sm);\n  line-height: 1.55;\n  color: var(--prose);\n}",
+		// Emphasis inside prose reads in Rajdhani SemiBold.
+		".prose strong { font-weight: 600; }",
 		// Definition answers inside a prose block stay prose.
 		".prose dd { font-family: inherit; }",
 	} {
@@ -94,14 +98,35 @@ func TestOpenProseTreatment(t *testing.T) {
 		return string(raw)
 	}
 	marksProse := regexp.MustCompile(`class="(?:[^"]* )?prose(?: [^"]*)?"`)
-	for _, name := range []string{"market_appraise.html", "channels.html", "swarm.html"} {
+	for _, name := range []string{
+		"about.html", "assets.html", "battle.html", "battles.html",
+		"calendar.html", "channel.html", "channels.html", "character.html",
+		"characters.html", "contacts.html", "contract_detail.html",
+		"corp_assets.html", "corp_contracts.html", "corp_members.html",
+		"corp_orders.html", "corp_settings.html", "corp_structures.html",
+		"corp_wallets.html", "discord_servers.html", "doctrine.html",
+		"doctrines.html", "enroll.html", "factor.html", "feed.html",
+		"fittings.html", "fittings_saved.html", "groups.html",
+		"industry_jobs.html", "intel_fw.html", "intel_workbench.html",
+		"items.html", "kill.html", "killboard.html", "killmails.html",
+		"link.html", "market.html", "market_appraise.html",
+		"market_basket.html", "market_baskets.html",
+		"market_leaderboard.html", "market_restock.html",
+		"market_scanner.html", "market_tradefinder.html",
+		"market_tradeideas.html", "market_trends.html",
+		"notifications.html", "op_paps.html", "orders.html",
+		"piplanner.html", "planets.html", "planner.html", "profit.html",
+		"profit_blueprint.html", "report.html", "scans.html",
+		"search.html", "security_codes.html", "settings.html",
+		"srp.html", "swarm.html",
+	} {
 		if !marksProse.MatchString(readTpl(name)) {
-			t.Errorf("%s marks no prose; the sample pages carry the treatment", name)
+			t.Errorf("%s marks no prose; its explanatory blocks carry the treatment", name)
 		}
 	}
-	for _, name := range []string{"channel.html", "feed.html", "intel_fw.html", "intel_wars.html", "intel_incursions.html", "intel_workbench.html", "killboard.html", "kill.html", "scans.html", "scan.html", "scan_compare.html"} {
+	for _, name := range []string{"admin.html", "admin_esi.html", "sync.html", "admin_notices.html", "landing.html", "home.html"} {
 		if marksProse.MatchString(readTpl(name)) {
-			t.Errorf("%s marks prose; only the sample pages carry the treatment", name)
+			t.Errorf("%s marks prose; it stays outside the sweep", name)
 		}
 	}
 }

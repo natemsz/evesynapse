@@ -40,7 +40,7 @@
   </svg>
   <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
 </div>
-<p class="bk-note"><small>Daily basket worth at the typical (median) sell and buy in {{$v.Basket.RegionName}}. The history fills in one point a day.</small></p>
+<p class="prose">Daily basket worth at the typical (median) sell and buy in {{$v.Basket.RegionName}}. The history fills in one point a day.</p>
 {{else}}
 <p><small>The value history fills in as {{.Basket.RegionName}} is swept, one point a day.</small></p>
 {{end}}
@@ -85,7 +85,7 @@
   </tbody>
 </table>
 </div>
-<p class="bk-note"><small>Prices in ISK, typical (median) sell in {{.Basket.RegionName}}. Effect is how much each item moved the basket's worth over the period.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}item has{{else}}items have{{end}} no price there yet.{{end}}</small></p>
+<p class="prose">Prices in ISK, typical (median) sell in {{.Basket.RegionName}}. Effect is how much each item moved the basket's worth over the period.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}item has{{else}}items have{{end}} no price there yet.{{end}}</p>
 </section>
 
 {{template "your-orders" $.BasketOrdersBlock}}

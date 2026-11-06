@@ -194,6 +194,9 @@ type killboardView struct {
 	Chips      []killChip
 	ScopeLabel string
 	ClearHref  string
+	// SearchQ is a search-box query that resolved to nothing; the
+	// page names it so a miss does not read as an empty board.
+	SearchQ string
 }
 
 type killChip struct {
@@ -265,6 +268,19 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		if id, err := strconv.ParseInt(qs.Get(s), 10, 64); err == nil && id > 0 {
 			v.ScopeKind, v.ScopeID = s, id
 			break
+		}
+	}
+	// The search form's path (no script): a name in q resolves
+	// through the same merged lookup the suggestions use, and a
+	// hit goes straight to its scoped feed. No hit renders the
+	// board with the query named under the bar.
+	if v.ScopeKind == "" {
+		if q := strings.TrimSpace(qs.Get("q")); q != "" {
+			if hits, _ := app.killboardSearch(ctx, q, app.userID(ctx)); len(hits) > 0 {
+				http.Redirect(w, r, "/intel/kills/?"+hits[0].Kind+"="+strconv.FormatInt(hits[0].ID, 10), http.StatusFound)
+				return
+			}
+			v.SearchQ = q
 		}
 	}
 	v.Big = qs.Get("big") == "1"

@@ -22,6 +22,13 @@
   .kb-big-row img { width: 1.6rem; height: 1.6rem; }
 }
 
+/* --- Name search: the box at the head of the bar; its list is the
+   shared suggestion dropdown (style.css). A query that resolved to
+   nothing is named in a note under the bar. --- */
+.kb-search { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+.kb-search .searchwrap { width: 16rem; max-width: 55vw; }
+.kb-search-note { margin: 0; color: var(--muted-2); }
+
 /* --- Scope pill and narrowing chips --- */
 .kb-scope {
   display: inline-flex;

@@ -4740,6 +4740,10 @@ html[data-theme="light"] .tw, html[data-theme="light"] .kpis { background: #fdfb
 html[data-theme="light"] .foldable { background: #fdfbf6; border-color: #ddd2bd; }
 .page-body { padding: 1.25rem 1.25rem 1.5rem; }
 .page-card { padding: 1rem 1.25rem; }
+/* Settings API panel: endpoint URLs, the appraise example and a
+   freshly made key are long unbroken strings. Let them wrap inside
+   the card instead of pushing the page sideways on narrow screens. */
+.api-endpoints code, .api-newkey code { overflow-wrap: anywhere; }
 /* Stacked page cards keep the section gap the wrapper's other
    stacked surfaces carry (.panel and .foldable sit 1.25rem apart):
    a page-card that follows another starts a step lower, never

@@ -408,14 +408,9 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 		return inserted, err
 	}
 	if inserted {
-		// Priced once, here at ingest: the kill's lines are
-		// appraised and stored, and renders read the stored
-		// prices instead of repricing per request. A pricing
-		// failure leaves the kill for the pricing pass, which
-		// covers kills held from before line prices existed.
-		if err := app.priceKillLines(ctx, km); err != nil {
-			logging.Warnf("killboard: price kill %d at ingest: %v", km.KillmailID, err)
-		}
+		// The ring entry goes in before pricing: priceKillLines
+		// finishes by calling noteRecentKillPrice, which can only
+		// fill the price into an entry that already exists.
 		if public {
 			app.noteRecentKill(db.Kill{
 				KillmailID:          km.KillmailID,
@@ -443,6 +438,14 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 				Public:              public,
 				IngestedAt:          p.IngestedAt,
 			})
+		}
+		// Priced once, here at ingest: the kill's lines are
+		// appraised and stored, and renders read the stored
+		// prices instead of repricing per request. A pricing
+		// failure leaves the kill for the pricing pass, which
+		// covers kills held from before line prices existed.
+		if err := app.priceKillLines(ctx, km); err != nil {
+			logging.Warnf("killboard: price kill %d at ingest: %v", km.KillmailID, err)
 		}
 	}
 	return inserted, nil

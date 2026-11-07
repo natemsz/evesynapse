@@ -672,6 +672,14 @@ govern how data moves:
    queries in loops. Filtering, sorting, and ranking belong in SQL
    with a LIMIT; anything the page needs beyond that belongs in a
    stored table written at ingest time.
+3. **Resident in-memory snapshots and rings.** High-traffic shared
+   surfaces (the search index, market stat pack and pricing stack,
+   recent public kill feed, SDE universe topology, entity directory,
+   system threat heatmap, and fleet overview rollups) are held in
+   RAM, updated on ingest and served on render with zero database
+   roundtrips. For resource-constrained hosts, `LOW_RAM_MODE=1` in `.env`
+   disables memory caching and routes all reads through SQL, saving
+   roughly 600-700 MB in total.
 
 Data changes on a known schedule (market sweeps complete every
 30 minutes; character snapshots refresh on their own cadence), so a page that

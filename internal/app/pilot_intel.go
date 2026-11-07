@@ -167,15 +167,6 @@ func likeEscape(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
-// pilotAllTimeStats reads a pilot's kill figures over their
-// whole recorded history: PilotKillStats at epoch scope, over
-// the permanent involvement record. Profile-backed surfaces
-// take kills and losses from the stored profile, which has no
-// solo or ISK column; those two figures come from this read.
-func (app *Application) pilotAllTimeStats(ctx context.Context, id int64) (db.PilotKillStatsRow, error) {
-	return app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: id, Since: time.Unix(0, 0).UTC()})
-}
-
 func (app *Application) loadPilotIntel(ctx context.Context, id int64, name string) *pilotIntelView {
 	v := &pilotIntelView{CharacterID: id, Name: name}
 	now := time.Now()
@@ -185,46 +176,61 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 		v.Name = names.character(id)
 	}
 	// The stored profile first: when it backs the page, its
-	// aggregates replace the 90-day ones below, so computing
-	// those only to throw them away is waste on every view of
-	// a profiled pilot.
+	// aggregates take over the counts and the ships, systems
+	// and hours, and the live read below fills only the solo
+	// kills, ISK destroyed and latest kills.
 	act := app.loadPilotActivity(ctx, id, names, now)
 	profileBacked := act != nil && act.Any
-	if !profileBacked {
-		if st, err := app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: id, Since: since}); err == nil {
-			v.Kills, v.Solo, v.Losses = st.Kills, st.Solo, st.Losses
-			if st.IskKilled > 0 {
-				v.ISK = iskShortGo(st.IskKilled)
-			}
-		} else {
-			logging.Warnf("pilot intel %d: stats: %v", id, err)
-		}
-	}
-	if rows, err := app.queries.ListPilotRecentKills(ctx, db.ListPilotRecentKillsParams{CharacterID: id, MaxRows: 10}); err == nil {
-		for _, r := range rows {
-			sys := names.system(r.SystemID)
-			k := pilotKill{KillmailID: r.KillmailID, Lost: r.Lost, ShipTypeID: r.ShipTypeID, Ship: names.typeName(r.ShipTypeID),
-				System: sys.Name, Ago: ageText(now, r.KillmailTime)}
-			k.SecText, k.SecTier = secRound(sys.Security)
-			if r.Flew > 0 {
-				k.Flew = names.typeName(r.Flew)
-			}
-			if r.Value > 0 {
-				k.Value = iskShortGo(r.Value)
-			}
-			v.Recent = append(v.Recent, k)
-		}
-		if len(v.Recent) > 0 {
-			last := v.Recent[0]
-			v.LastSeen = &last
-		}
-	}
-	if !profileBacked {
-		if rows, err := app.queries.ListPilotShips(ctx, db.ListPilotShipsParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
-			for _, r := range rows {
-				v.Ships = append(v.Ships, pilotCount{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), N: r.N, Pct: pctOf(r.N, rows[0].N)})
+	// The board figures come live from zKillboard: all-time
+	// counts and ships flown from the stats endpoint, the recent
+	// kills and losses from the history endpoint, priced with
+	// our own appraisal. A failed fetch leaves the section
+	// empty; the page never waits on it.
+	live := app.fetchPilotZKill(ctx, id, names, now)
+	if profileBacked {
+		// The stored profile carries the whole of the pilot's
+		// kill history and is kept current at ingest, so its
+		// counts and its ships, systems and hours take over.
+		// Solo kills, ISK destroyed and the latest kills have
+		// no profile column; they come from the live read.
+		v.Kills, v.Losses = act.Kills, act.Losses
+		if live != nil {
+			v.Solo = live.Solo
+			v.ISK = live.ISK
+			v.Recent = live.Recent
+			if len(v.Recent) > 0 {
+				last := v.Recent[0]
+				v.LastSeen = &last
 			}
 		}
+		v.Ships = nil
+		for _, s := range act.Ships {
+			v.Ships = append(v.Ships, pilotCount{ID: s.ID, Name: s.Name, Pct: s.Pct, Text: s.Text})
+		}
+		v.Systems = act.Systems
+		v.Hours = act.Hours
+		v.Peak = act.Peak
+		v.ProfileBacked = true
+		v.UpdatedAgo = act.UpdatedAgo
+		v.UsualShip = act.UsualShip
+		v.Gang = act.Gang
+		v.LastActive = act.LastActive
+	} else {
+		if live != nil {
+			v.Kills, v.Losses, v.Solo = live.Kills, live.Losses, live.Solo
+			v.ISK = live.ISK
+			v.Ships = live.Ships
+			v.Recent = live.Recent
+			if len(v.Recent) > 0 {
+				last := v.Recent[0]
+				v.LastSeen = &last
+			}
+			v.LiveFromZKill = true
+		}
+		// The systems and hours stay local reads over the last
+		// 90 days: zKillboard's stats give all-time totals, not
+		// recent activity by system, which is what the map and
+		// threat assessment read.
 		if rows, err := app.queries.ListPilotSystems(ctx, db.ListPilotSystemsParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
 			for _, r := range rows {
 				sys := names.system(r.SystemID)
@@ -258,42 +264,6 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 			v.Companions = append(v.Companions, pilotCompanion{ID: r.CharacterID, Name: names.character(r.CharacterID), N: r.N,
 				CorpID: r.CorporationID, CorpName: names.corp(r.CorporationID), AllianceID: r.AllianceID, AllianceName: names.alliance(r.AllianceID)})
 		}
-	}
-	// The stored profile, when the pilot has one with a record:
-	// its aggregates cover the whole of their kill history and
-	// are kept current at ingest, so they take over the section's
-	// kills and losses from the 90-day board read above. Solo
-	// kills and ISK destroyed have no profile column; they come
-	// from the all-time stats read over the permanent
-	// involvement record. The latest kills and the companions
-	// stay board reads either way.
-	if profileBacked {
-		v.Kills, v.Losses = act.Kills, act.Losses
-		if st, err := app.pilotAllTimeStats(ctx, id); err == nil {
-			v.Solo = st.Solo
-			if st.IskKilled > 0 {
-				v.ISK = iskShortGo(st.IskKilled)
-			}
-		} else {
-			logging.Warnf("pilot intel %d: stats: %v", id, err)
-		}
-		v.Ships = nil
-		for _, s := range act.Ships {
-			v.Ships = append(v.Ships, pilotCount{ID: s.ID, Name: s.Name, Pct: s.Pct, Text: s.Text})
-		}
-		v.Systems = act.Systems
-		v.Hours = act.Hours
-		v.Peak = act.Peak
-		v.ProfileBacked = true
-		v.UpdatedAgo = act.UpdatedAgo
-		v.UsualShip = act.UsualShip
-		v.Gang = act.Gang
-		v.LastActive = act.LastActive
-	}
-	// No stored activity at all: ask zKillboard live. Nothing is
-	// stored; the page reads the stats off the answer.
-	if v.Kills+v.Losses == 0 && len(v.Recent) == 0 {
-		app.fillPilotIntelLive(ctx, v, id, names, now)
 	}
 	v.Any = v.Kills+v.Losses > 0 || len(v.Recent) > 0
 	v.HasIntel = v.Any

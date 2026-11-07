@@ -330,13 +330,31 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 	if v.Big {
 		minValue = killBigValue
 	}
-	kills, err := app.listKills(ctx, v.ScopeKind, v.ScopeID, beforeTime, beforeID, minValue, v.Solo)
-	if err != nil {
-		logging.Errorf("killboard: list: %v", err)
-	}
 	names := app.newKillNames(ctx)
-	for _, k := range kills {
-		v.Kills = append(v.Kills, names.row(k))
+	// An entity's feed reads zKillboard live; every other scope
+	// reads the local kills table. Either way the Older link
+	// carries the next page's before cursor, "" at the end.
+	var nextCursor string
+	switch v.ScopeKind {
+	case "character", "corporation", "alliance":
+		rows, cursor, err := app.listScopedKills(ctx, names, v.ScopeKind, v.ScopeID, beforeTime, beforeID, minValue, v.Solo)
+		if err != nil {
+			logging.Errorf("killboard: list: %v", err)
+		}
+		v.Kills = rows
+		nextCursor = cursor
+	default:
+		kills, err := app.listKills(ctx, v.ScopeKind, v.ScopeID, beforeTime, beforeID, minValue, v.Solo)
+		if err != nil {
+			logging.Errorf("killboard: list: %v", err)
+		}
+		for _, k := range kills {
+			v.Kills = append(v.Kills, names.row(k))
+		}
+		if len(kills) == killPageSize {
+			last := kills[len(kills)-1]
+			nextCursor = fmt.Sprintf("%d.%d", last.KillmailTime.Unix(), last.KillmailID)
+		}
 	}
 	if v.ScopeKind != "" {
 		v.ScopeName = names.scopeName(v.ScopeKind, v.ScopeID)
@@ -352,8 +370,7 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		{Label: "Big kills", Href: killHref(v.BaseQuery, !v.Big, v.Solo), Active: v.Big},
 		{Label: "Solo", Href: killHref(v.BaseQuery, v.Big, !v.Solo), Active: v.Solo},
 	}
-	if len(kills) == killPageSize {
-		last := kills[len(kills)-1]
+	if nextCursor != "" {
 		q := []string{}
 		if v.BaseQuery != "" {
 			q = append(q, v.BaseQuery)
@@ -364,7 +381,7 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		if v.Solo {
 			q = append(q, "solo=1")
 		}
-		q = append(q, fmt.Sprintf("before=%d.%d", last.KillmailTime.Unix(), last.KillmailID))
+		q = append(q, "before="+nextCursor)
 		v.Older = "/intel/kills/?" + strings.Join(q, "&")
 	}
 	switch v.ScopeKind {
@@ -396,14 +413,46 @@ func (app *Application) listKills(ctx context.Context, kind string, id int64, bt
 		return q.ListKillsByRegion(ctx, db.ListKillsByRegionParams{RegionID: id, BeforeTime: bt, BeforeID: bid, MinValue: minValue, SoloOnly: solo, MaxRows: killPageSize})
 	case "ship":
 		return q.ListKillsByShip(ctx, db.ListKillsByShipParams{ShipTypeID: id, BeforeTime: bt, BeforeID: bid, MinValue: minValue, SoloOnly: solo, MaxRows: killPageSize})
-	case "character":
-		return q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{EntityID: id, BeforeTime: bt, BeforeID: bid, MinValue: minValue, SoloOnly: solo, MaxRows: killPageSize})
-	case "corporation":
-		return q.ListKillsByCorporation(ctx, db.ListKillsByCorporationParams{EntityID: id, BeforeTime: bt, BeforeID: bid, MinValue: minValue, SoloOnly: solo, MaxRows: killPageSize})
-	case "alliance":
-		return q.ListKillsByAlliance(ctx, db.ListKillsByAllianceParams{EntityID: id, BeforeTime: bt, BeforeID: bid, MinValue: minValue, SoloOnly: solo, MaxRows: killPageSize})
 	}
 	return q.ListKillsRecent(ctx, db.ListKillsRecentParams{BeforeTime: bt, BeforeID: bid, MinValue: minValue, SoloOnly: solo, MaxRows: killPageSize})
+}
+
+// listScopedKills reads an entity's feed live from zKillboard:
+// up to zkillHistoryMaxPages pages of the history endpoint,
+// priced with our own appraisal, filtered by the page's cursor
+// and filters. The cursor is the next page's before value, ""
+// when the fetched history holds no more matching kill.
+func (app *Application) listScopedKills(ctx context.Context, names *killNames, kind string, id int64, beforeTime time.Time, beforeID int64, minValue float64, solo bool) ([]killRow, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, pilotLiveTimeout)
+	defer cancel()
+	entries, _ := app.fetchZKillHistory(ctx, scopedHistoryKind(kind), id, zkillHistoryMaxPages, time.Time{})
+	values := app.priceZKillEntries(ctx, entries)
+	now := time.Now()
+	var rows []killRow
+	more := false
+	for _, e := range entries {
+		if !(e.KillmailTime.Before(beforeTime) || (e.KillmailTime.Equal(beforeTime) && e.KillmailID < beforeID)) {
+			continue
+		}
+		v := values[e.KillmailID]
+		if v < minValue {
+			continue
+		}
+		if solo && !e.ZKB.Solo {
+			continue
+		}
+		if len(rows) >= killPageSize {
+			more = true
+			break
+		}
+		rows = append(rows, names.rowFromZKill(e, v, now))
+	}
+	next := ""
+	if more && len(rows) > 0 {
+		last := rows[len(rows)-1]
+		next = fmt.Sprintf("%d.%d", last.Time.Unix(), last.ID)
+	}
+	return rows, next, nil
 }
 
 func (n *killNames) scopeName(kind string, id int64) string {
@@ -469,9 +518,9 @@ func (app *Application) killboardHeadline(ctx context.Context, names *killNames)
 }
 
 // scopedBiggestRow renders an entity's biggest kill. The
-// scoped queries rank on the PilotKillStats value basis (our
-// price, else zKillboard's figure), so a kill ranked on the
-// fallback figure shows that figure rather than nothing.
+// biggest kill ranks on the value basis (our price, else
+// zKillboard's figure), so a kill ranked on the fallback
+// figure shows that figure rather than nothing.
 func scopedBiggestRow(names *killNames, k db.Kill) *killRow {
 	if !k.ValueOurs.Valid && k.ValueZkill.Valid {
 		k.ValueOurs = k.ValueZkill
@@ -482,15 +531,14 @@ func scopedBiggestRow(names *killNames, k db.Kill) *killRow {
 
 // killboardScopedHeadline is a character, corporation or
 // alliance board's headline: the scoped entity's own figures
-// instead of New Eden's. A character with a stored activity
-// profile reads kills and losses from the profile and the
-// biggest kill from the all-time board read; solo kills and
-// ISK destroyed come from the all-time stats read over the
-// permanent involvement record, since the profile carries
-// neither. A character without a profile, and corporations
-// and alliances, read the 90-day board window. The rail
-// reads the 90-day window for all three kinds. Held a
-// minute per entity, like the global headline.
+// instead of New Eden's. The counts come live from zKillboard's
+// stats endpoint, ISK destroyed from the fetched history priced
+// with our own appraisal, the biggest kill from the stats
+// endpoint's top ISK kill ids. A character with a stored activity
+// profile reads kills and losses from the profile instead. The
+// top lists stay local 90-day reads over the kills table: they
+// are complete there, and zKillboard's stats give all-time
+// totals, not recent activity by system or ship.
 func (app *Application) killboardScopedHeadline(ctx context.Context, names *killNames, kind string, id int64) (killboardStats, killboardTop) {
 	key := killboardScopedStatsKey{kind: kind, id: id}
 	now := time.Now().UTC()
@@ -501,42 +549,73 @@ func (app *Application) killboardScopedHeadline(ctx context.Context, names *kill
 		return memo.stats, memo.top
 	}
 	since := now.Add(-pilotIntelWindow)
-	st := killboardStats{Scoped: true, ScopeNote: "last 90 days"}
+	st := killboardStats{Scoped: true, ScopeNote: "from zKill, live"}
 	var top killboardTop
-	switch kind {
-	case "character":
-		profileBacked := false
+	hk := scopedHistoryKind(kind)
+	liveCtx, cancel := context.WithTimeout(ctx, pilotLiveTimeout)
+	defer cancel()
+	stats, err := app.fetchZKillStats(liveCtx, hk, id)
+	if err != nil {
+		logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
+	}
+	entries, _ := app.fetchZKillHistory(liveCtx, hk, id, zkillHistoryMaxPages, since)
+	values := app.priceZKillEntries(liveCtx, entries)
+	// The fetched window's counts and ISK destroyed, our own
+	// appraisal: the stats call is the source for the counts,
+	// the window is only its fallback.
+	var wk, wl, wsolo int64
+	var iskKilled float64
+	for _, e := range entries {
+		isKill, isLoss := zkillEntryEntityPart(e, kind, id)
+		if isKill {
+			wk++
+			if e.ZKB.Solo {
+				wsolo++
+			}
+			iskKilled += values[e.KillmailID]
+		} else if isLoss {
+			wl++
+		}
+	}
+	if stats != nil {
+		st.Kills, st.Losses, st.Solo = stats.Kills, stats.Losses, stats.Solo
+	} else {
+		st.Kills, st.Losses, st.Solo = wk, wl, wsolo
+	}
+	st.HasSolo = true
+	if iskKilled > 0 {
+		st.ISKDestroyed = formatISKShort(iskKilled)
+	}
+	// The biggest kill: the stats endpoint's top ISK kill id,
+	// read from the local store when it is there, from the
+	// fetched history when it is not.
+	if stats != nil && len(stats.TopIskKillIDs) > 0 {
+		bid := stats.TopIskKillIDs[0]
+		if k, err := app.queries.GetPublicKill(ctx, bid); err == nil {
+			st.Biggest = scopedBiggestRow(names, k)
+		} else {
+			for _, e := range entries {
+				if e.KillmailID == bid {
+					row := names.rowFromZKill(e, values[bid], time.Now())
+					st.Biggest = &row
+					break
+				}
+			}
+		}
+	}
+	// A character with a stored activity profile reads kills
+	// and losses from the profile: its aggregates cover the
+	// whole of their kill history.
+	if kind == "character" {
 		if act := app.loadPilotActivity(ctx, id, names, now); act != nil && act.Any {
-			profileBacked = true
 			st.Kills, st.Losses = act.Kills, act.Losses
 			st.ScopeNote = "every recorded kill and loss"
 			st.ScopeUpdatedAgo = act.UpdatedAgo
-			if s, err := app.pilotAllTimeStats(ctx, id); err == nil {
-				st.Solo, st.HasSolo = s.Solo, true
-				if s.IskKilled > 0 {
-					st.ISKDestroyed = formatISKShort(s.IskKilled)
-				}
-			} else {
-				logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
-			}
-			if k, err := app.queries.GetPilotBiggestKill(ctx, db.GetPilotBiggestKillParams{CharacterID: id, Since: time.Unix(0, 0).UTC()}); err == nil {
-				st.Biggest = scopedBiggestRow(names, k)
-			}
 		}
-		if !profileBacked {
-			if s, err := app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: id, Since: since}); err == nil {
-				st.Kills, st.Solo, st.Losses = s.Kills, s.Solo, s.Losses
-				st.HasSolo = true
-				if s.IskKilled > 0 {
-					st.ISKDestroyed = formatISKShort(s.IskKilled)
-				}
-			} else {
-				logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
-			}
-			if k, err := app.queries.GetPilotBiggestKill(ctx, db.GetPilotBiggestKillParams{CharacterID: id, Since: since}); err == nil {
-				st.Biggest = scopedBiggestRow(names, k)
-			}
-		}
+	}
+	// The top lists stay local 90-day reads.
+	switch kind {
+	case "character":
 		if rows, err := app.queries.ListPilotShips(ctx, db.ListPilotShipsParams{CharacterID: id, Since: since}); err == nil {
 			for _, r := range rows {
 				top.TopShips = append(top.TopShips, killTopRow{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), Count: r.N})
@@ -555,21 +634,6 @@ func (app *Application) killboardScopedHeadline(ctx context.Context, names *kill
 			}
 		}
 	case "corporation":
-		if s, err := app.queries.CorporationKillStats(ctx, db.CorporationKillStatsParams{CorporationID: id, Since: since}); err == nil {
-			st.Kills, st.Solo = s.Kills, s.Solo
-			st.HasSolo = true
-			if s.IskKilled > 0 {
-				st.ISKDestroyed = formatISKShort(s.IskKilled)
-			}
-		} else {
-			logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
-		}
-		if losses, err := app.queries.CountCorporationKillLosses(ctx, db.CountCorporationKillLossesParams{CorporationID: id, Since: since}); err == nil {
-			st.Losses = losses.Losses
-		}
-		if k, err := app.queries.GetCorporationBiggestKill(ctx, db.GetCorporationBiggestKillParams{CorporationID: id, Since: since}); err == nil {
-			st.Biggest = scopedBiggestRow(names, k)
-		}
 		if rows, err := app.queries.ListCorporationShips(ctx, db.ListCorporationShipsParams{CorporationID: id, Since: since}); err == nil {
 			for _, r := range rows {
 				top.TopShips = append(top.TopShips, killTopRow{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), Count: r.N})
@@ -588,21 +652,6 @@ func (app *Application) killboardScopedHeadline(ctx context.Context, names *kill
 			}
 		}
 	case "alliance":
-		if s, err := app.queries.AllianceKillStats(ctx, db.AllianceKillStatsParams{AllianceID: id, Since: since}); err == nil {
-			st.Kills, st.Solo = s.Kills, s.Solo
-			st.HasSolo = true
-			if s.IskKilled > 0 {
-				st.ISKDestroyed = formatISKShort(s.IskKilled)
-			}
-		} else {
-			logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
-		}
-		if losses, err := app.queries.CountAllianceKillLosses(ctx, db.CountAllianceKillLossesParams{AllianceID: id, Since: since}); err == nil {
-			st.Losses = losses
-		}
-		if k, err := app.queries.GetAllianceBiggestKill(ctx, db.GetAllianceBiggestKillParams{AllianceID: id, Since: since}); err == nil {
-			st.Biggest = scopedBiggestRow(names, k)
-		}
 		if rows, err := app.queries.ListAllianceShips(ctx, db.ListAllianceShipsParams{AllianceID: id, Since: since}); err == nil {
 			for _, r := range rows {
 				top.TopShips = append(top.TopShips, killTopRow{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), Count: r.N})

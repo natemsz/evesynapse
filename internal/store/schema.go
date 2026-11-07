@@ -786,6 +786,15 @@ var pgCorpKillCoverageSchema string
 //go:embed schema_pg/127_kill_involvement.sql
 var pgKillInvolvementSchema string
 
+// Kill involvement (schema 128): the table goes. The killboards
+// and My Killmails read zKillboard live now, so the local
+// involvement index is dead weight (11 GB, most of it index).
+// The kills summary rows and the pilot activity profiles stay;
+// only the link table goes.
+//
+//go:embed schema_pg/128_drop_kill_involvement.sql
+var pgDropKillInvolvementSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -942,6 +951,7 @@ func schemaSteps() []schemaStep {
 		{125, "stats_backlogs", pgStatsBacklogsSchema, ""},
 		{126, "corp_kill_coverage", pgCorpKillCoverageSchema, ""},
 		{127, "kill_involvement", pgKillInvolvementSchema, ""},
+		{128, "drop_kill_involvement", pgDropKillInvolvementSchema, ""},
 	}
 }
 

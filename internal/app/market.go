@@ -56,6 +56,10 @@ const defaultMarketRegion = int64(10000002)
 // topMarketOrders is how many orders per side the tables show.
 const topMarketOrders = 5
 
+// maxExpandedMarketOrders caps the total orders rendered per side
+// when the reader expands the order book table on a live pull.
+const maxExpandedMarketOrders = 25
+
 // maxSearchPrefetchWants caps the history wants a rendered
 // search notes for its result types (results shown, never more).
 const maxSearchPrefetchWants = 50
@@ -104,9 +108,15 @@ type marketRegion struct {
 
 // marketOrderRow is one displayed order: display-ready strings.
 type marketOrderRow struct {
-	Price  string // esi.FormatISK
-	Volume string // esi.FormatInt of volume_remain
-	Loc    placeRef
+	Price   string // esi.FormatISK
+	Volume  string // esi.FormatInt of volume_remain
+	Loc     placeRef
+	VsBest  string // "Best", "+1.2%", "-1.5%"
+	Range   string // buy order range label when present
+	SecText string // rounded system security ("0.9") when known in SDE
+	SecTier int    // 0..10 for .sec-N
+	HasSec  bool
+	SecBand string // "highsec", "lowsec", "nullsec", or "all"
 }
 
 // marketItem is the item view: guide prices from /markets/prices/
@@ -114,8 +124,9 @@ type marketOrderRow struct {
 // price history (chart + changes, from market_history only — the
 // worker fills it) and the watch state for "Watch this item".
 type marketItem struct {
-	TypeID int64
-	Name   string
+	TypeID      int64
+	Name        string
+	Breadcrumbs []marketBrowseCrumb
 	// Anonymous: rendered for a visitor without a session. The page
 	// is read-only for them: no watch controls, and the order book
 	// comes from what is held -- a freshly fetched book, or the
@@ -138,6 +149,8 @@ type marketItem struct {
 	Regions           []marketRegion
 	BestSell          string // esi.FormatISK, "" when no sell orders
 	BestBuy           string // esi.FormatISK, "" when no buy orders
+	BestSellVol       string // volume remaining at best sell
+	BestBuyVol        string // volume remaining at best buy
 	BestSellLoc       placeRef
 	BestBuyLoc        placeRef
 	Spread            string // "12.3%", "" unless both sides exist and the book is deep enough
@@ -149,7 +162,9 @@ type marketItem struct {
 	BuyVolume         string
 	Truncated         bool // order book capped at maxOrderPages
 	Sells             []marketOrderRow
+	MoreSells         []marketOrderRow
 	Buys              []marketOrderRow
+	MoreBuys          []marketOrderRow
 
 	BestSellRaw float64 // numeric bests behind the formatted strings (0 = none)
 	BestBuyRaw  float64
@@ -893,8 +908,12 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 			return nil, fmt.Errorf("market: type %d is not in the local data", typeID)
 		}
 		item.Name = t.Name
+		item.Breadcrumbs = app.marketTypeBreadcrumbs(ctx, t.MarketGroupID)
 	} else {
 		item.Name = app.esi.TypeName(ctx, typeID)
+		if t, err := app.queries.GetSDEType(ctx, typeID); err == nil {
+			item.Breadcrumbs = app.marketTypeBreadcrumbs(ctx, t.MarketGroupID)
+		}
 	}
 	item.RegionName, _ = marketRegionName(regionID)
 	// A global-market type (PLEX) has one market; no regions to switch.
@@ -1019,11 +1038,13 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 	if len(sells) > 0 {
 		item.BestSellRaw = sells[0].Price
 		item.BestSell = esi.FormatISK(sells[0].Price)
+		item.BestSellVol = esi.FormatInt(sells[0].VolumeRemain)
 		item.BestSellLoc = app.orderPlace(ctx, sells[0].LocationID, sells[0].SystemID)
 	}
 	if len(buys) > 0 {
 		item.BestBuyRaw = buys[0].Price
 		item.BestBuy = esi.FormatISK(buys[0].Price)
+		item.BestBuyVol = esi.FormatInt(buys[0].VolumeRemain)
 		item.BestBuyLoc = app.orderPlace(ctx, buys[0].LocationID, buys[0].SystemID)
 	}
 	// The typicals come first: the spread below is priced from
@@ -1074,27 +1095,121 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		}
 	}
 
+	type secInfo struct {
+		text string
+		tier int
+		ok   bool
+		band string
+	}
+	secCache := make(map[int64]secInfo, 16)
+	lookupSec := func(systemID int64) secInfo {
+		if systemID <= 0 {
+			return secInfo{band: "all"}
+		}
+		if s, seen := secCache[systemID]; seen {
+			return s
+		}
+		text, tier, ok := app.SystemSecurity(ctx, systemID)
+		band := "all"
+		if ok {
+			switch {
+			case tier >= 5:
+				band = "highsec"
+			case tier >= 1:
+				band = "lowsec"
+			default:
+				band = "nullsec"
+			}
+		}
+		s := secInfo{text: text, tier: tier, ok: ok, band: band}
+		secCache[systemID] = s
+		return s
+	}
+	buildRow := func(o esi.MarketOrder, best float64, isBuy bool) marketOrderRow {
+		sec := lookupSec(o.SystemID)
+		var vsBest string
+		if best > 0 {
+			diffPct := (o.Price - best) / best * 100
+			if math.Abs(diffPct) < 0.05 {
+				vsBest = "Best"
+			} else if isBuy {
+				vsBest = fmt.Sprintf("%.1f%%", diffPct)
+			} else {
+				vsBest = fmt.Sprintf("+%.1f%%", diffPct)
+			}
+		}
+		var rng string
+		if isBuy && o.Range != "" {
+			switch o.Range {
+			case "station":
+				rng = "Station"
+			case "solarsystem":
+				rng = "System"
+			case "region":
+				rng = "Region"
+			case "1":
+				rng = "1 jump"
+			default:
+				rng = o.Range + " jumps"
+			}
+		}
+		return marketOrderRow{
+			Price:   esi.FormatISK(o.Price) + " ISK",
+			Volume:  esi.FormatInt(o.VolumeRemain),
+			Loc:     app.orderPlace(ctx, o.LocationID, o.SystemID),
+			VsBest:  vsBest,
+			Range:   rng,
+			SecText: sec.text,
+			SecTier: sec.tier,
+			HasSec:  sec.ok,
+			SecBand: sec.band,
+		}
+	}
+
 	for i, o := range sells {
-		if i >= topMarketOrders {
+		if i >= maxExpandedMarketOrders {
 			break
 		}
-		item.Sells = append(item.Sells, marketOrderRow{
-			Price:  esi.FormatISK(o.Price) + " ISK",
-			Volume: esi.FormatInt(o.VolumeRemain),
-			Loc:    app.orderPlace(ctx, o.LocationID, o.SystemID),
-		})
+		row := buildRow(o, item.BestSellRaw, false)
+		if i < topMarketOrders {
+			item.Sells = append(item.Sells, row)
+		} else {
+			item.MoreSells = append(item.MoreSells, row)
+		}
 	}
 	for i, o := range buys {
-		if i >= topMarketOrders {
+		if i >= maxExpandedMarketOrders {
 			break
 		}
-		item.Buys = append(item.Buys, marketOrderRow{
-			Price:  esi.FormatISK(o.Price) + " ISK",
-			Volume: esi.FormatInt(o.VolumeRemain),
-			Loc:    app.orderPlace(ctx, o.LocationID, o.SystemID),
-		})
+		row := buildRow(o, item.BestBuyRaw, true)
+		if i < topMarketOrders {
+			item.Buys = append(item.Buys, row)
+		} else {
+			item.MoreBuys = append(item.MoreBuys, row)
+		}
 	}
 	return item, nil
+}
+
+// marketTypeBreadcrumbs walks an item's SDE market-group chain up
+// to the root category so the item header can render clickable
+// category breadcrumbs.
+func (app *Application) marketTypeBreadcrumbs(ctx context.Context, marketGroupID int64) []marketBrowseCrumb {
+	if marketGroupID <= 0 {
+		return nil
+	}
+	var crumbs []marketBrowseCrumb
+	seen := make(map[int64]bool, 8)
+	for gid := marketGroupID; gid > 0 && !seen[gid] && len(crumbs) < 16; {
+		seen[gid] = true
+		g, err := app.queries.GetSDEMarketGroup(ctx, gid)
+		if err != nil {
+			break
+		}
+		crumbs = append([]marketBrowseCrumb{{ID: g.MarketGroupID, Name: g.Name}}, crumbs...)
+		gid = g.ParentGroupID
+	}
+	return crumbs
 }
 
 // storedBook is one type's stored sweep book: the top orders the

@@ -1363,19 +1363,6 @@ func (q *Queries) PruneKillAttackers(ctx context.Context, before time.Time) (int
 	return result.RowsAffected()
 }
 
-const pruneKillLinePrices = `-- name: PruneKillLinePrices :execrows
-DELETE FROM kill_line_prices l USING kills k
-WHERE k.killmail_id = l.killmail_id AND k.killmail_time < $1::timestamptz
-`
-
-func (q *Queries) PruneKillLinePrices(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneKillLinePrices, before)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
 const pruneKillDetails = `-- name: PruneKillDetails :execrows
 DELETE FROM kill_details d USING kills k
 WHERE k.killmail_id = d.killmail_id AND k.killmail_time < $1::timestamptz
@@ -1388,6 +1375,19 @@ WHERE k.killmail_id = d.killmail_id AND k.killmail_time < $1::timestamptz
 // for intel only (who, when, ship, total value), not a record.
 func (q *Queries) PruneKillDetails(ctx context.Context, before time.Time) (int64, error) {
 	result, err := q.db.ExecContext(ctx, pruneKillDetails, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const pruneKillLinePrices = `-- name: PruneKillLinePrices :execrows
+DELETE FROM kill_line_prices l USING kills k
+WHERE k.killmail_id = l.killmail_id AND k.killmail_time < $1::timestamptz
+`
+
+func (q *Queries) PruneKillLinePrices(ctx context.Context, before time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneKillLinePrices, before)
 	if err != nil {
 		return 0, err
 	}

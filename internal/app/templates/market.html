@@ -82,13 +82,13 @@
       </form>
       {{end}}
       {{if .Market.Watchlist}}
-      <a class="btn btn-quiet" href="#market-watchlist" data-watchlist-jump>Watchlist{{if .Market.Watchlist.Rows}} <span class="mkt-badge">{{len .Market.Watchlist.Rows}}</span>{{end}}</a>
+      <a class="btn btn-quiet" href="#market-watchlist" data-watchlist-open aria-controls="market-watchlist" aria-expanded="{{if .Market.Watchlist.Query}}true{{else}}false{{end}}">Watchlist{{if .Market.Watchlist.Rows}} <span class="mkt-badge">{{len .Market.Watchlist.Rows}}</span>{{end}}</a>
       {{end}}
       <a class="btn btn-quiet" href="/items/type/{{$item.TypeID}}/"><svg class="glyph" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15.5 11 10l3 2.6 4.2-5.4"/><path d="M18.2 7.2h-3M18.2 7.2v3"/></g></svg>Item details</a>
     </div>
   </div>
 
-  <div class="mkt-hero-head">
+  <div class="mkt-hero-head l-root">
     <div class="mkt-identity">
       <img class="mkt-item-icon" src="https://images.evetech.net/types/{{$item.TypeID}}/icon?size=64" alt="" width="48" height="48" loading="lazy">
       <div class="mkt-title-stack">
@@ -101,6 +101,9 @@
     </nav>
   </div>
 
+  <div class="l-console mkt-console" data-depth="{{if and .Market.Watchlist .Market.Watchlist.Query}}2{{else}}1{{end}}">
+  <div class="l-panes">
+  <div class="l-pane l-pane--main mkt-main">
   {{if $item.BookPending}}
   <p class="notice"><small>The live order book loads for signed-in visitors. The hub prices below come from the latest region sweep.{{if $.SSOConfigured}} <a href="/auth/eve">Sign in with EVE</a> for the full book, price alerts and your own orders.{{end}}</small></p>
   {{else if $item.BookStoredAt}}
@@ -168,11 +171,11 @@
       </div>
       <button class="btn btn-quiet small" type="button" data-sheet-open="mkt-book-filters" hidden>Filter orders</button>
       <div class="mkt-explorer-controls" id="mkt-book-filters" data-sheet data-sheet-title="Order book filters">
-        <div class="seg mkt-sec-seg" role="group" aria-label="Security filter">
-          <button type="button" class="on" data-sec-filter="all">All Sec</button>
-          <button type="button" data-sec-filter="highsec">Highsec</button>
-          <button type="button" data-sec-filter="lowsec">Lowsec</button>
-          <button type="button" data-sec-filter="nullsec">Nullsec</button>
+        <div class="l-seg" role="tablist" aria-label="Security filter">
+          <button type="button" role="tab" aria-selected="true" data-sec-filter="all">All Sec</button>
+          <button type="button" role="tab" aria-selected="false" data-sec-filter="highsec">Highsec</button>
+          <button type="button" role="tab" aria-selected="false" data-sec-filter="lowsec">Lowsec</button>
+          <button type="button" role="tab" aria-selected="false" data-sec-filter="nullsec">Nullsec</button>
         </div>
         <input type="search" class="mkt-book-search" data-book-filter placeholder="Filter station or system..." aria-label="Filter order book by station or system">
         <div class="sheet-foot sheet-only"><button type="button" class="btn" data-sheet-close>Done</button></div>
@@ -386,17 +389,49 @@
       {{end}}
     </div>
   </div>
+  {{template "your-orders" $.YourOrdersBlock}}
+  </div>
+  {{if .Market.Watchlist}}
+  {{$wl := .Market.Watchlist}}
+  <aside class="l-pane l-pane--insp insp mkt-watch-insp" id="market-watchlist" aria-label="Watchlist">
+    <div class="l-pane-bar">
+      <a class="l-back" href="#main-content" data-watchlist-close>{{$item.Name}}</a>
+      <h3 class="l-pane-title">Watchlist{{if $wl.Rows}} <small>{{len $wl.Rows}}</small>{{end}}</h3>
+      <a class="l-close" href="#main-content" data-watchlist-close aria-label="Close watchlist">&#10005;</a>
+    </div>
+    {{template "market-watchlist-content" $}}
+  </aside>
+  <a class="l-scrim" href="#main-content" data-watchlist-close aria-label="Close watchlist" tabindex="-1"></a>
+  {{end}}
+  </div>
+  </div>
 {{end}}
 
 {{with .Market.Browse}}{{template "market-browse" .}}{{end}}
 
-{{if .Market.Watchlist}}
-{{$wl := .Market.Watchlist}}
-<div class="l-panel foldable" id="market-watchlist"{{if and .Market.Item (not $wl.Query)}} data-fold="closed"{{else}} data-fold="never"{{end}}>
+{{if and .Market.Watchlist (not .Market.Item)}}
+<div class="l-panel foldable" id="market-watchlist" data-fold="never">
 <h3>Watchlist</h3>
-<form method="get" action="/market/">
+{{template "market-watchlist-content" $}}
+</div>
+{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "market-watchlist-content"}}
+{{$wl := .Market.Watchlist}}
+{{$next := "/market/"}}
+{{if .Market.Item}}
+{{$next = printf "/market/?type=%d&region=%d#market-watchlist" .Market.Item.TypeID .Market.Item.RegionID}}
+{{end}}
+<form method="get" action="/market/" class="mkt-watch-find">
+  {{if .Market.Item}}
+  <input type="hidden" name="type" value="{{.Market.Item.TypeID}}">
+  <input type="hidden" name="region" value="{{.Market.Item.RegionID}}">
+  {{end}}
   <span class="searchwrap">
-    <input type="text" name="wq" id="watch-q" value="{{$wl.Query}}" placeholder="Find an item to watch" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="watch-suggest" aria-autocomplete="list" data-watch-region="{{$.Market.Region}}">
+    <input type="text" name="wq" id="watch-q" value="{{$wl.Query}}" placeholder="Find an item to watch" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="watch-suggest" aria-autocomplete="list" data-watch-region="{{.Market.Region}}"{{if .Market.Item}} data-watch-next="{{$next}}"{{end}}>
     <ul class="suggest" id="watch-suggest" role="listbox" hidden></ul>
   </span>
   <button class="btn" type="submit">Find</button>
@@ -414,7 +449,7 @@
         <input type="hidden" name="type" value="{{.ID}}">
         <input type="hidden" name="region" value="{{$.Market.Region}}">
         <input type="hidden" name="threshold" value="5">
-        <input type="hidden" name="next" value="/market/">
+        <input type="hidden" name="next" value="{{$next}}">
         <button class="btn" type="submit">Watch</button>
       </form></td>
     </tr>
@@ -437,7 +472,7 @@
         <input type="hidden" name="action" value="add-basket">
         <input type="hidden" name="basket" value="{{.ID}}">
         <input type="hidden" name="threshold" value="5">
-        <input type="hidden" name="next" value="/market/">
+        <input type="hidden" name="next" value="{{$next}}">
         <button class="btn" type="submit">Watch</button>
       </form>{{end}}</td>
     </tr>
@@ -467,7 +502,7 @@
           <input type="hidden" name="action" value="update">
           <input type="hidden" name="type" value="{{.TypeID}}">
           <input type="hidden" name="region" value="{{.RegionID}}">
-          <input type="hidden" name="next" value="/market/">
+          <input type="hidden" name="next" value="{{$next}}">
           <input type="number" name="threshold" min="1" max="50" step="any" value="{{.Threshold}}" size="4">%
           <button class="btn" type="submit">Set</button>
         </form>
@@ -477,7 +512,7 @@
           <input type="hidden" name="action" value="remove">
           <input type="hidden" name="type" value="{{.TypeID}}">
           <input type="hidden" name="region" value="{{.RegionID}}">
-          <input type="hidden" name="next" value="/market/">
+          <input type="hidden" name="next" value="{{$next}}">
           <button class="btn" type="submit">Remove</button>
         </form>
       </td>
@@ -504,7 +539,7 @@
         <form method="post" action="/market/watch">
           <input type="hidden" name="action" value="update-basket">
           <input type="hidden" name="basket" value="{{.BasketID}}">
-          <input type="hidden" name="next" value="/market/">
+          <input type="hidden" name="next" value="{{$next}}">
           <input type="number" name="threshold" min="1" max="50" step="any" value="{{.Threshold}}" size="4">%
           <button class="btn" type="submit">Set</button>
         </form>
@@ -513,7 +548,7 @@
         <form method="post" action="/market/watch">
           <input type="hidden" name="action" value="remove-basket">
           <input type="hidden" name="basket" value="{{.BasketID}}">
-          <input type="hidden" name="next" value="/market/">
+          <input type="hidden" name="next" value="{{$next}}">
           <button class="btn" type="submit">Remove</button>
         </form>
       </td>
@@ -525,12 +560,6 @@
 {{end}}
 {{if and (not $wl.Rows) (not $wl.BasketRows)}}
 <p class="prose">Nothing watched yet. Watch an item or a basket to hear about its price moves here and on Home.</p>
-{{end}}
-</div>
-{{end}}
-
-{{template "your-orders" $.YourOrdersBlock}}
-</div>
 {{end}}
 {{end}}
 

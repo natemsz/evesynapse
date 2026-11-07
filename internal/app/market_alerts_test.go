@@ -519,6 +519,9 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 	}
 	mustContain(t, "/market/?type=34 (with history)", body,
 		"<svg", "<polyline", "Price history — The Forge", "&#43;8.0%",
+		`<div class="l-seg" role="tablist" aria-label="Security filter">`,
+		`role="tab" aria-selected="true" data-sec-filter="all"`,
+		`<aside class="l-pane l-pane--insp insp mkt-watch-insp" id="market-watchlist" aria-label="Watchlist">`,
 	)
 	if strings.Contains(body, "This item is queued") {
 		t.Fatal("item page with history still shows the loading state")

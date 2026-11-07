@@ -161,8 +161,9 @@ func TestMarketPageHonestPrices(t *testing.T) {
 		`class="kpi sp-blue"`,
 		"56.2%",
 		`kpi-k">Traded average`,
-		`kpi-k">Adjusted price`,
-		"5.00 <small>ISK</small>",
+		`kpi-k">Estimated value`,
+		"6.25 <small>ISK</small>",
+		"The Forge typical sell",
 	)
 	// The guide average is never a price on this page.
 	if strings.Contains(body, "5.90") {

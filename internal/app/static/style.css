@@ -979,6 +979,9 @@ th, td {
   text-align: left;
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 7%, transparent);
   vertical-align: middle;
+  /* Table data reads at --fs-sm: the body size was too small for
+     dense rows. Headers keep their own --fs-2xs below. */
+  font-size: var(--fs-sm);
 }
 thead th {
   background: transparent;
@@ -1252,6 +1255,9 @@ body:has(main .suggest:not([hidden])) main { position: relative; z-index: 70; }
   vertical-align: 0.12em;
   white-space: nowrap;
 }
+/* Pills inside tables stay the size they were: --fs-rel-pill is
+   relative, so the bigger table text would otherwise grow them. */
+td .sec-pill { font-size: 0.68rem; }
 
 /* --- top bar search --- */
 .topsearch { margin: 0; }
@@ -2218,9 +2224,9 @@ html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card
   .brief-count { font-size: var(--fs-2xs); }
 }
 
-/* One body size across the fleet table: names, the corporation,
-   station and ship lines under them, and every figure. */
-.fleet-table td { vertical-align: middle; font-size: var(--fs-sm); }
+/* The fleet table's rows share the table default size now; this
+   keeps only the vertical alignment the table needs. */
+.fleet-table td { vertical-align: middle; }
 .fleet-table td small, .fleet-table td .countdown { font-size: inherit; }
 /* The header row's breathing room lives in the cells' own padding,
    symmetric top and bottom, so the header text centres between the

@@ -678,7 +678,8 @@ govern how data moves:
    system threat heatmap, and fleet overview rollups) are held in
    RAM, updated on ingest and served on render with zero database
    roundtrips. For resource-constrained hosts, `LOW_RAM_MODE=1` in `.env`
-   disables memory caching and routes all reads through SQL.
+   disables memory caching and routes all reads through SQL, saving
+   roughly 600-700 MB in total.
 
 Data changes on a known schedule (market sweeps complete every
 30 minutes; character snapshots refresh on their own cadence), so a page that

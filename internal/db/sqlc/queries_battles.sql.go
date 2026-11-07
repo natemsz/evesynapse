@@ -944,7 +944,8 @@ SELECT k.killmail_id, k.killmail_time, k.system_id, k.victim_character_id,
 FROM kills k
 WHERE k.killmail_time BETWEEN $2 AND $3
   AND (k.victim_character_id = $1
-       OR k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.character_id = $1))
+       OR k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a
+                           WHERE a.character_id = $1 AND a.character_id > 0))
 ORDER BY k.killmail_time, k.killmail_id
 LIMIT 200
 `

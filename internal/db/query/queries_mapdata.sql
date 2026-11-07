@@ -18,13 +18,18 @@ FROM structure_context WHERE structure_id = ANY(sqlc.arg(ids)::bigint[]) AND sys
 -- ours is not in yet). Their own private kills count: these are theirs.
 -- name: ListAccountKillsBySystem :many
 WITH mine AS (
-    SELECT DISTINCT k.killmail_id, k.system_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk,
+    SELECT k.killmail_id, k.system_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk,
            (k.victim_character_id = ANY(sqlc.arg(character_ids)::bigint[])) AS lost
-    FROM kills k
+    FROM (
+        SELECT v.killmail_id FROM kills v
+        WHERE v.victim_character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND v.victim_character_id > 0
+          AND v.killmail_time >= sqlc.arg(since)::timestamptz
+        UNION
+        SELECT a.killmail_id FROM kill_attackers a
+        WHERE a.character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND a.character_id > 0
+    ) m
+    JOIN kills k ON k.killmail_id = m.killmail_id
     WHERE k.killmail_time >= sqlc.arg(since)::timestamptz
-      AND (k.victim_character_id = ANY(sqlc.arg(character_ids)::bigint[])
-           OR EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id
-                      AND a.character_id = ANY(sqlc.arg(character_ids)::bigint[])))
 )
 SELECT system_id,
        COUNT(*) FILTER (WHERE NOT lost)::bigint AS kills,

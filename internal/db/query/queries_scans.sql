@@ -57,7 +57,7 @@ SELECT a.character_id,
        (ARRAY_AGG(k.system_id ORDER BY k.killmail_time DESC))[1]::bigint AS last_system
 FROM kill_attackers a
 JOIN kills k ON k.killmail_id = a.killmail_id
-WHERE a.character_id = ANY(sqlc.arg(character_ids)::bigint[])
+WHERE a.character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND a.character_id > 0
   AND k.public AND NOT k.npc
   AND k.killmail_time >= sqlc.arg(since)::timestamptz
 GROUP BY a.character_id;

@@ -83,11 +83,7 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 	}
 
 	viewer := killmailViewer{corporationID: sel.Base.CorpID}
-	// The board side reads zKillboard live: the same bundle
-	// feeds the rows and the tiles, so one view costs one
-	// stats call and one bounded history walk.
-	view.zkill = app.zkillKillmailBundle(ctx, viewer)
-	view.Rows, view.olderCursor = app.killmailUnionRows(ctx, viewer, refs, view.zkill, beforeTime, beforeID)
+	view.Rows, view.olderCursor = app.killmailUnionRows(ctx, viewer, refs, beforeTime, beforeID)
 	app.shapeKillmails(ctx, r, view, viewer)
 
 	app.render(ctx, w, http.StatusOK, "killmails.html", data)

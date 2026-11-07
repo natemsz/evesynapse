@@ -211,17 +211,6 @@ func TestKillboardPages(t *testing.T) {
 	if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(700003)), "h", nil, "esi", false, true); err != nil {
 		t.Fatal(err)
 	}
-	// The pilot's scoped feed reads zKillboard live: serve the
-	// ingested kill back as the attacker's history.
-	entry := killJSON(700001)
-	entry = entry[:len(entry)-1] + `,"zkb":{"locationID":60003760,"hash":"h700001","totalValue":2500000,"points":5,"npc":false,"solo":true,"awox":false}}`
-	hist := newFakeZkillHistory(map[string]string{
-		"/stats/characterID/9002/": `{"shipsDestroyed":1,"shipsLost":0,"soloKills":1,"soloLosses":0,"topAllTime":[],"topIskKillIDs":[700001]}`,
-		"/characterID/9002/":       "[" + entry + "]",
-	})
-	srv := httptest.NewServer(hist.handler())
-	defer srv.Close()
-	app.cfg.zkillAPIBaseURL = srv.URL + "/"
 	app.killboardMaintenance(ctx)
 
 	get := func(path string) (int, string) {
@@ -302,18 +291,6 @@ func TestKillboardNamesResolveFromView(t *testing.T) {
 	if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(700001)), "h", &killZKB{}, "zkill", true, false); err != nil {
 		t.Fatal(err)
 	}
-	// The pilot's scoped feed reads zKillboard live: serve the
-	// ingested kill back as their history, so the view notes
-	// the parties for resolution.
-	entry := killJSON(700001)
-	entry = entry[:len(entry)-1] + `,"zkb":{"locationID":60003760,"hash":"h700001","totalValue":2500000,"points":5,"npc":false,"solo":true,"awox":false}}`
-	hist := newFakeZkillHistory(map[string]string{
-		"/stats/characterID/9001/": `{"shipsDestroyed":0,"shipsLost":1,"soloKills":0,"soloLosses":0,"topAllTime":[],"topIskKillIDs":[]}`,
-		"/characterID/9001/":       "[" + entry + "]",
-	})
-	srv := httptest.NewServer(hist.handler())
-	defer srv.Close()
-	app.cfg.zkillAPIBaseURL = srv.URL + "/"
 	get := func(path string) string {
 		rec := httptest.NewRecorder()
 		app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
@@ -380,6 +357,8 @@ func TestKillboardScopedStats(t *testing.T) {
 		t.Helper()
 		exec(`INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, alliance_id, ship_type_id, final_blow)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)`, killID, seq, char, corp, alliance, ship, fb)
+		exec(`INSERT INTO kill_involvement (killmail_id, character_id, corporation_id, alliance_id)
+			VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, killID, char, corp, alliance)
 	}
 	const pilot, corp, alliance = 9201, 98201, 99201
 	kill(800001, now.Add(-time.Hour), 30000142, 9401, 98401, 99401, 587, 10000000, true, pilot, corp, alliance)
@@ -400,48 +379,6 @@ func TestKillboardScopedStats(t *testing.T) {
 		VALUES (800005, $1, 30000142, 10000002, 9201, 98201, 99201, 22456, 1, 0, 0, 0, false, true, 5000000, 5000000, 'zkill', true, $1)`,
 		now.Add(-48*time.Hour))
 
-	// The scoped figures read live from zKillboard: the stats
-	// endpoint for the counts, the history endpoint for the
-	// kills and losses, priced with our own appraisal of the
-	// victim hulls (Rifter 10M, Vexor 30M).
-	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES
-		(10000002, 587, 10000000, now()), (10000002, 626, 30000000, now()) ON CONFLICT DO NOTHING`)
-	statsJSON := `{"shipsDestroyed":2,"shipsLost":2,"soloKills":1,"soloLosses":0,` +
-		`"topAllTime":[{"type":"ship","data":[{"kills":2,"shipTypeID":626}]}],"topIskKillIDs":[800003]}`
-	h1 := now.Add(-time.Hour).UTC().Format(time.RFC3339)
-	h2 := now.Add(-2 * time.Hour).UTC().Format(time.RFC3339)
-	h3 := now.Add(-3 * time.Hour).UTC().Format(time.RFC3339)
-	h5 := now.Add(-48 * time.Hour).UTC().Format(time.RFC3339)
-	historyJSON := `[` +
-		`{"killmail_id":800001,"killmail_time":"` + h1 + `","solar_system_id":30000142,` +
-		`"victim":{"character_id":9401,"corporation_id":98401,"alliance_id":99401,"ship_type_id":587,"damage_taken":900,"items":[]},` +
-		`"attackers":[{"character_id":9201,"corporation_id":98201,"alliance_id":99201,"ship_type_id":626,"damage_done":900,"final_blow":true,"weapon_type_id":2488},` +
-		`{"character_id":9202,"corporation_id":98201,"alliance_id":99201,"ship_type_id":587,"damage_done":100,"final_blow":false,"weapon_type_id":2488}],` +
-		`"zkb":{"locationID":0,"hash":"h800001","totalValue":10.0,"points":1,"npc":false,"solo":true,"awox":false}},` +
-		`{"killmail_id":800002,"killmail_time":"` + h2 + `","solar_system_id":30000142,` +
-		`"victim":{"character_id":9201,"corporation_id":98201,"alliance_id":99201,"ship_type_id":22456,"damage_taken":700,"items":[]},` +
-		`"attackers":[{"character_id":9301,"corporation_id":98301,"alliance_id":99301,"ship_type_id":587,"damage_done":700,"final_blow":true,"weapon_type_id":2488}],` +
-		`"zkb":{"locationID":0,"hash":"h800002","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}},` +
-		`{"killmail_id":800003,"killmail_time":"` + h3 + `","solar_system_id":30002187,` +
-		`"victim":{"character_id":9402,"corporation_id":98401,"alliance_id":99401,"ship_type_id":626,"damage_taken":800,"items":[]},` +
-		`"attackers":[{"character_id":9201,"corporation_id":98201,"alliance_id":99201,"ship_type_id":626,"damage_done":800,"final_blow":true,"weapon_type_id":2488}],` +
-		`"zkb":{"locationID":0,"hash":"h800003","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}},` +
-		`{"killmail_id":800005,"killmail_time":"` + h5 + `","solar_system_id":30000142,` +
-		`"victim":{"character_id":9201,"corporation_id":98201,"alliance_id":99201,"ship_type_id":22456,"damage_taken":700,"items":[]},` +
-		`"attackers":[{"character_id":0,"corporation_id":0,"alliance_id":0,"ship_type_id":587,"damage_done":700,"final_blow":true,"weapon_type_id":2488}],` +
-		`"zkb":{"locationID":0,"hash":"h800005","totalValue":10.0,"points":1,"npc":true,"solo":false,"awox":false}}]`
-	hist := newFakeZkillHistory(map[string]string{
-		"/stats/characterID/9201/":    statsJSON,
-		"/stats/corporationID/98201/": statsJSON,
-		"/stats/allianceID/99201/":    statsJSON,
-		"/characterID/9201/":          historyJSON,
-		"/corporationID/98201/":       historyJSON,
-		"/allianceID/99201/":          historyJSON,
-	})
-	srv := httptest.NewServer(hist.handler())
-	defer srv.Close()
-	app.cfg.zkillAPIBaseURL = srv.URL + "/"
-
 	get := func(path string) string {
 		t.Helper()
 		rec := httptest.NewRecorder()
@@ -452,16 +389,16 @@ func TestKillboardScopedStats(t *testing.T) {
 		return rec.Body.String()
 	}
 	scopedStrip := []string{
-		`<span class="l-stat-label">Kills</span><span class="l-stat-value">2</span><span class="l-stat-sub">1 solo · from zKill, live</span>`,
-		`<span class="l-stat-label">Losses</span><span class="l-stat-value">2</span><span class="l-stat-sub">from zKill, live</span>`,
-		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">40.00M</span><span class="l-stat-sub">from zKill, live</span>`,
+		`<span class="l-stat-label">Kills</span><span class="l-stat-value">2</span><span class="l-stat-sub">1 solo · last 90 days</span>`,
+		`<span class="l-stat-label">Losses</span><span class="l-stat-value">2</span><span class="l-stat-sub">last 90 days</span>`,
+		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">40.00M</span><span class="l-stat-sub">last 90 days</span>`,
 		`<span class="l-stat-label">Biggest kill</span>`,
 		`<span class="l-stat-value">30.00M</span>`,
 	}
 	for _, tc := range []struct{ name, path, aria string }{
-		{"character", "/intel/kills/?character=9201", `aria-label="Pilot #9201: from zKill, live"`},
-		{"corporation", "/intel/kills/?corporation=98201", `aria-label="Corporation #98201: from zKill, live"`},
-		{"alliance", "/intel/kills/?alliance=99201", `aria-label="Alliance #99201: from zKill, live"`},
+		{"character", "/intel/kills/?character=9201", `aria-label="Pilot #9201: last 90 days"`},
+		{"corporation", "/intel/kills/?corporation=98201", `aria-label="Corporation #98201: last 90 days"`},
+		{"alliance", "/intel/kills/?alliance=99201", `aria-label="Alliance #99201: last 90 days"`},
 	} {
 		body := get(tc.path)
 		if !strings.Contains(body, tc.aria) {
@@ -513,9 +450,9 @@ func TestKillboardScopedStats(t *testing.T) {
 
 	// With a stored activity profile, the character board reads
 	// its kills and losses from the profile; solo kills and ISK
-	// destroyed come from the live zKillboard read (the 10M solo
-	// kill and the 30M kill seeded above), and the biggest kill
-	// stays the 30M one.
+	// destroyed come from the all-time board read over the
+	// pilot's involvement (the 10M solo kill and the 30M kill
+	// seeded above), and the biggest kill stays the 30M one.
 	exec(`INSERT INTO pilot_activity_profiles (character_id, backfilled_at, updated_at, kills, losses, final_blows, gang_total, gang_samples, usual_ship_type_id, last_active_at)
 		VALUES ($1, $2, $3, 137, 42, 98, 480, 137, 22456, $3)`, pilot, now.Add(-24*time.Hour), now)
 	app.killScopedStatsMu.Lock()

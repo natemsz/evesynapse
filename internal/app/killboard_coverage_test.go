@@ -85,6 +85,14 @@ const zkCorpEntry = `{"killmail_id":800003,"killmail_time":"2026-10-24T20:00:00Z
 	`{"character_id":92000005,"corporation_id":98000002,"ship_type_id":626,"damage_done":200,"final_blow":false,"weapon_type_id":2488}],` +
 	`"zkb":{"locationID":0,"hash":"hash800003","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}}`
 
+func feedIDs(kills []db.Kill) map[int64]bool {
+	out := map[int64]bool{}
+	for _, k := range kills {
+		out[k.KillmailID] = true
+	}
+	return out
+}
+
 func TestZkillHistoryBackfillIngests(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, nil)
 	ctx := context.Background()
@@ -142,16 +150,17 @@ func TestZkillHistoryBackfillIngests(t *testing.T) {
 	if !strings.Contains(string(raw), `"killmail_id":800001`) {
 		t.Errorf("stored detail does not carry the killmail: %s", raw)
 	}
-	// The participation kill and the loss are in the store,
-	// public, from the backfill.
-	for _, id := range []int64{800001, 800002} {
-		k, err := q.GetKill(ctx, id)
-		if err != nil {
-			t.Fatalf("read kill %d: %v", id, err)
-		}
-		if !k.Public {
-			t.Errorf("kill %d stored non-public", id)
-		}
+	// The pilot's public feed shows the participation and the
+	// loss.
+	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+		EntityID: 91000001, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListKillsByCharacter: %v", err)
+	}
+	ids := feedIDs(feed)
+	if !ids[800001] || !ids[800002] {
+		t.Errorf("pilot feed ids = %v, want 800001 and 800002", ids)
 	}
 	// The profile folded both and is marked backfilled.
 	prof, err := q.GetPilotActivityProfile(ctx, 91000001)
@@ -173,8 +182,14 @@ func TestZkillHistoryBackfillIngests(t *testing.T) {
 	// The corporation backfill ingests a member's participation
 	// the same way and marks the corporation covered.
 	app.backfillCorp(ctx, client, 98000002)
-	if k, err := q.GetKill(ctx, 800003); err != nil || !k.Public {
-		t.Errorf("corp kill 800003 public = %v, err = %v, want stored and public", k.Public, err)
+	cfeed, err := q.ListKillsByCorporation(ctx, db.ListKillsByCorporationParams{
+		EntityID: 98000002, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListKillsByCorporation: %v", err)
+	}
+	if !feedIDs(cfeed)[800003] {
+		t.Errorf("corp feed ids = %v, want 800003", feedIDs(cfeed))
 	}
 	if _, err := q.GetCorpKillCoverage(ctx, 98000002); err != nil {
 		t.Errorf("corp coverage marker: %v", err)
@@ -241,9 +256,9 @@ func TestBackfillSkipsUnregistered(t *testing.T) {
 // here is production-shaped: the original walk already folded
 // the kills into the aggregates, and the fold's markers are
 // gone (the retention prune takes them on the same line as
-// the detail), so the restoration walk must re-ingest the
-// kills and leave the counts exactly where the first walk
-// put them.
+// the detail), so the restoration walk must restore the
+// involvement by ingest alone and leave the counts exactly
+// where the first walk put them.
 func TestPilotBackfillRestoresPrePermanenceProfile(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, nil)
 	ctx := context.Background()
@@ -318,16 +333,20 @@ func TestPilotBackfillRestoresPrePermanenceProfile(t *testing.T) {
 	}
 
 	// The stale pilot is walked again: the history is fetched,
-	// the kills are re-ingested, the aggregates keep the first
-	// walk's counts, and the stamp moves past the cutoff.
+	// the participation lands in the permanent involvement
+	// record, the aggregates keep the first walk's counts, and
+	// the stamp moves past the cutoff.
 	app.backfillPilot(ctx, client, stalePilot)
 	if got := hist.hitCount("/characterID/91000001/"); got != 1 {
 		t.Errorf("stale pilot history fetched %d times, want 1", got)
 	}
-	for _, id := range []int64{800001, 800002} {
-		if k, err := q.GetKill(ctx, id); err != nil || !k.Public {
-			t.Errorf("restored kill %d public = %v, err = %v, want stored and public", id, k.Public, err)
-		}
+	var involvement int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT count(*) FROM kill_involvement WHERE character_id = $1`, stalePilot).Scan(&involvement); err != nil {
+		t.Fatalf("count involvement: %v", err)
+	}
+	if involvement != 1 {
+		t.Errorf("involvement rows for the stale pilot = %d, want 1 (the participation)", involvement)
 	}
 	prof, err := q.GetPilotActivityProfile(ctx, stalePilot)
 	if err != nil {
@@ -381,8 +400,14 @@ func TestZkillBackfillPromotesPrivateKill(t *testing.T) {
 	if _, err := app.ingestKill(ctx, json.RawMessage(zkPartKillmail), "hash800001", nil, "esi", false, true); err != nil {
 		t.Fatalf("ingest private copy: %v", err)
 	}
-	if k, err := q.GetKill(ctx, 800001); err != nil || k.Public {
-		t.Fatalf("private kill public = %v, err = %v, want held and private", k.Public, err)
+	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+		EntityID: 91000001, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListKillsByCharacter: %v", err)
+	}
+	if feedIDs(feed)[800001] {
+		t.Fatal("private kill already shows in the public feed")
 	}
 
 	app.backfillPilot(ctx, srv.Client(), 91000001)
@@ -405,22 +430,27 @@ func TestZkillBackfillPromotesPrivateKill(t *testing.T) {
 	if attackers != 2 {
 		t.Errorf("attacker rows = %d, want 2 (no duplicate ingest)", attackers)
 	}
-	if k, err := q.GetKill(ctx, 800001); err != nil || !k.Public {
-		t.Errorf("promoted kill public = %v, err = %v, want stored and public", k.Public, err)
+	feed, err = q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+		EntityID: 91000001, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListKillsByCharacter: %v", err)
+	}
+	if !feedIDs(feed)[800001] {
+		t.Error("promoted kill missing from the public feed")
 	}
 }
 
-// TestKillIngestPruneShape pins the filing rules end to end.
+// TestKillInvolvementFiling pins the filing rules end to end.
 // The stream stores a kill no registered character touched,
-// exactly as it stores every kill. And a history walk reaches
-// back without a depth cap: a walked kill past the retention
-// cutoff lands in its post-prune shape (summary row and priced
-// lines, no attackers, no stored killmail), while a walked kill
-// inside the year lands with full detail. That a kill a
-// registered character fought in without the final blow shows
-// in their board kills is covered by the My Killmails page
-// test, which reads the board live from zKillboard.
-func TestKillIngestPruneShape(t *testing.T) {
+// exactly as it stores every kill. A kill a registered character
+// fought in without the final blow shows in the character's
+// board kills, the list My Killmails unions in. And a history
+// walk reaches back without a depth cap: a walked kill past the
+// retention cutoff lands in its post-prune shape (summary row
+// and priced lines, no attackers, no stored killmail), while a
+// walked kill inside the year lands with full detail.
+func TestKillInvolvementFiling(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, nil)
 	ctx := context.Background()
 	user, err := q.CreateUser(ctx)
@@ -457,13 +487,24 @@ func TestKillIngestPruneShape(t *testing.T) {
 	}
 
 	// A stream kill the registered character fought in without
-	// the final blow: stored, public, with both attackers.
+	// the final blow: in their board kills; the strangers' kill
+	// is not.
 	streamKill(800102, `{"killmail_id":800102,"killmail_time":"2026-10-21T11:00:00Z","solar_system_id":30000142,`+
 		`"victim":{"character_id":9106,"corporation_id":98000101,"ship_type_id":587,"damage_taken":905,"items":[]},`+
 		`"attackers":[{"character_id":9107,"corporation_id":98000102,"ship_type_id":587,"weapon_type_id":2873,"damage_done":900,"final_blow":true},`+
 		`{"character_id":9002,"corporation_id":98000111,"ship_type_id":587,"damage_done":5,"final_blow":false}]}`)
-	if k, err := q.GetKill(ctx, 800102); err != nil || !k.Public {
-		t.Fatalf("non-final-blow kill public = %v, err = %v, want stored and public", k.Public, err)
+	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+		EntityID: 9002, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListKillsByCharacter: %v", err)
+	}
+	ids := feedIDs(feed)
+	if !ids[800102] {
+		t.Error("non-final-blow involvement kill missing from the character's board kills")
+	}
+	if ids[800101] {
+		t.Error("a kill the character never touched is in their board kills")
 	}
 
 	// The history walk: one page holding a kill inside the year
@@ -531,10 +572,11 @@ func TestKillIngestPruneShape(t *testing.T) {
 }
 
 // TestKillValueSurvivesPrune: a kill priced at ingest keeps its
-// value after its detail is pruned. The kill's attacker detail
-// and stored killmail go at the retention cutoff; the summary
-// row keeps its priced total, which is what per-player stats
-// read.
+// value credited after its detail is pruned. The kill's attacker
+// detail and stored killmail go at the retention cutoff; the
+// pilot's kill count, the ISK destroyed and the kill's place in
+// the pilot's board kills stay, read from the permanent
+// involvement record.
 func TestKillValueSurvivesPrune(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, nil)
 	ctx := context.Background()
@@ -564,6 +606,19 @@ func TestKillValueSurvivesPrune(t *testing.T) {
 	}
 	if !stored.ValueOurs.Valid || stored.ValueOurs.Float64 != 400000 {
 		t.Fatalf("kill value_ours = %v, want 400000 priced at ingest", stored.ValueOurs)
+	}
+
+	since := at.Add(-time.Hour)
+	stats := func() db.PilotKillStatsRow {
+		t.Helper()
+		row, err := q.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: 9203, Since: since})
+		if err != nil {
+			t.Fatalf("PilotKillStats: %v", err)
+		}
+		return row
+	}
+	if got := stats(); got.Kills != 1 || got.IskKilled != 400000 {
+		t.Fatalf("stats before prune = %+v, want 1 kill and 400000 ISK destroyed", got)
 	}
 
 	// The retention prune, run as the daily pass runs it once
@@ -596,13 +651,17 @@ func TestKillValueSurvivesPrune(t *testing.T) {
 		t.Fatalf("priced lines after prune = %d, want 0 (the prune must take the lines too)", len(lines))
 	}
 
-	// The summary row keeps its priced total through the prune.
-	after, err := q.GetKill(ctx, 800301)
-	if err != nil {
-		t.Fatalf("kill after prune: %v", err)
+	if got := stats(); got.Kills != 1 || got.IskKilled != 400000 {
+		t.Errorf("stats after prune = %+v, want 1 kill and 400000 ISK destroyed", got)
 	}
-	if !after.ValueOurs.Valid || after.ValueOurs.Float64 != 400000 {
-		t.Errorf("kill value_ours after prune = %v, want 400000", after.ValueOurs)
+	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+		EntityID: 9203, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListKillsByCharacter: %v", err)
+	}
+	if !feedIDs(feed)[800301] {
+		t.Error("pruned kill missing from the attacker's board kills")
 	}
 }
 
@@ -628,20 +687,16 @@ func TestKillmailPageListsBoardOnlyKill(t *testing.T) {
 		t.Fatalf("UpsertKillmailDetail: %v", err)
 	}
 
-	// zKillboard alone holds a newer kill: the owner took part
+	// The board alone holds a newer kill: the owner took part
 	// without the final blow, so the recent list cannot show it.
-	// The page reads it live from the history endpoint.
 	boardKill := `{"killmail_id":800010,"killmail_time":"2026-10-22T05:00:00Z","solar_system_id":30000142,` +
 		`"victim":{"character_id":93000001,"corporation_id":98000009,"ship_type_id":626,"damage_taken":300,"items":[]},` +
 		`"attackers":[{"character_id":93000002,"corporation_id":98000003,"ship_type_id":587,"damage_done":200,"final_blow":true,"weapon_type_id":2488},` +
-		`{"character_id":90000001,"corporation_id":98000002,"ship_type_id":587,"damage_done":100,"final_blow":false,"weapon_type_id":2488}],` +
-		`"zkb":{"locationID":0,"hash":"boardhash","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}}`
-	hist := newFakeZkillHistory(map[string]string{
-		"/characterID/90000001/": "[" + boardKill + "]",
-	})
-	srv := httptest.NewServer(hist.handler())
-	defer srv.Close()
-	app.cfg.zkillAPIBaseURL = srv.URL + "/"
+		`{"character_id":90000001,"corporation_id":98000002,"ship_type_id":587,"damage_done":100,"final_blow":false,"weapon_type_id":2488}]}`
+	zkb := &killZKB{Hash: "boardhash"}
+	if _, err := app.ingestKill(ctx, json.RawMessage(boardKill), "boardhash", zkb, "zkill", true, false); err != nil {
+		t.Fatalf("ingest board kill: %v", err)
+	}
 
 	for _, stmt := range []string{
 		`INSERT INTO sde_systems (system_id, name, security) VALUES (30000142, 'Jita', 0.9)`,
@@ -688,26 +743,28 @@ func TestKillmailPagesPastFifty(t *testing.T) {
 	seedSnapshot(t, q, 90000001, esi.SnapKillmails, []esi.KillmailRef{})
 
 	// Sixty board kills an hour apart, the pilot on the
-	// attacking side of each: more than one page of history,
-	// read live from zKillboard.
+	// attacking side of each: more than one page of history.
 	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	var entries []string
-	for i := 60; i >= 1; i-- {
+	for i := 1; i <= 60; i++ {
 		id := int64(900000 + i)
-		at := base.Add(time.Duration(i) * time.Hour).Format(time.RFC3339)
-		entries = append(entries, fmt.Sprintf(`{"killmail_id":%d,"killmail_time":%q,"solar_system_id":30000142,`+
-			`"victim":{"character_id":93000001,"corporation_id":98000009,"ship_type_id":587,"damage_taken":900,"items":[]},`+
-			`"attackers":[{"character_id":93000002,"corporation_id":98000003,"ship_type_id":587,"damage_done":800,"final_blow":true,"weapon_type_id":2488},`+
-			`{"character_id":90000001,"corporation_id":98000002,"ship_type_id":587,"damage_done":100,"final_blow":false,"weapon_type_id":2488}],`+
-			`"zkb":{"locationID":0,"hash":"h%d","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}}`, id, at, id))
+		at := base.Add(time.Duration(i) * time.Hour)
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id,
+				ship_type_id, attacker_count, fb_character_id, source, ingested_at)
+			VALUES ($1, $2, 30000142, 93000001, 98000009, 587, 2, 93000002, 'zkill', $2)`, id, at); err != nil {
+			t.Fatalf("seed kill %d: %v", id, err)
+		}
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, final_blow)
+			VALUES ($1, 0, 93000002, 98000003, 587, true), ($1, 1, 90000001, 98000002, 587, false)`, id); err != nil {
+			t.Fatalf("seed attackers %d: %v", id, err)
+		}
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kill_involvement (killmail_id, character_id, corporation_id)
+			VALUES ($1, 93000002, 98000003), ($1, 90000001, 98000002)`, id); err != nil {
+			t.Fatalf("seed involvement %d: %v", id, err)
+		}
 	}
-	hist := newFakeZkillHistory(map[string]string{
-		"/stats/characterID/90000001/": `{"shipsDestroyed":60,"shipsLost":0,"soloKills":0,"soloLosses":0,"topAllTime":[],"topIskKillIDs":[900060]}`,
-		"/characterID/90000001/":       "[" + strings.Join(entries, ",") + "]",
-	})
-	srv := httptest.NewServer(hist.handler())
-	defer srv.Close()
-	app.cfg.zkillAPIBaseURL = srv.URL + "/"
 	for _, stmt := range []string{
 		`INSERT INTO sde_systems (system_id, name, security) VALUES (30000142, 'Jita', 0.9)`,
 		`INSERT INTO sde_types (type_id, name) VALUES (587, 'Rifter')`,
@@ -805,68 +862,55 @@ func TestKillmailTilesScope(t *testing.T) {
 	seedSnapshot(t, q, 90000001, esi.SnapKillmails, []esi.KillmailRef{})
 
 	now := time.Now().UTC()
-	// The record reads live from zKillboard: the stats endpoint
-	// for the counts, the history endpoint for the kills and
-	// losses, priced with our own appraisal of the hull and
-	// every fitted line.
-	if _, err := app.db.ExecContext(ctx, `INSERT INTO market_region_stats
-		(region_id, type_id, typical_sell, updated_at) VALUES
-		(10000002, 587, 10000000, now()), (10000002, 626, 5000000, now()), (10000002, 12345, 30000000, now())
-		ON CONFLICT DO NOTHING`); err != nil {
-		t.Fatalf("seed region stats: %v", err)
-	}
-	killEntry := func(id int64, at time.Time, solo bool) string {
-		if solo {
-			// A solo kill with a 30M line beside the 10M hull.
-			return fmt.Sprintf(`{"killmail_id":%d,"killmail_time":%q,"solar_system_id":30000142,`+
-				`"victim":{"character_id":93000001,"corporation_id":98000009,"ship_type_id":587,"damage_taken":900,`+
-				`"items":[{"item_type_id":12345,"quantity_destroyed":1,"flag":5,"singleton":0}]},`+
-				`"attackers":[{"character_id":90000001,"corporation_id":98000002,"ship_type_id":587,"damage_done":900,"final_blow":true,"weapon_type_id":2488}],`+
-				`"zkb":{"locationID":0,"hash":"h%d","totalValue":40.0,"points":1,"npc":false,"solo":true,"awox":false}}`, id, at.Format(time.RFC3339), id)
+	seedKill := func(id int64, at time.Time, victim int64, value float64, solo bool) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id,
+				ship_type_id, attacker_count, fb_character_id, source, ingested_at, public, value_ours, solo)
+			VALUES ($1, $2, 30000142, $3, 98000009, 587, 2, 93000002, 'zkill', $2, true, $4, $5)`,
+			id, at, victim, value, solo); err != nil {
+			t.Fatalf("seed kill %d: %v", id, err)
 		}
-		return fmt.Sprintf(`{"killmail_id":%d,"killmail_time":%q,"solar_system_id":30000142,`+
-			`"victim":{"character_id":93000001,"corporation_id":98000009,"ship_type_id":587,"damage_taken":900,"items":[]},`+
-			`"attackers":[{"character_id":93000002,"corporation_id":98000003,"ship_type_id":587,"damage_done":800,"final_blow":true,"weapon_type_id":2488},`+
-			`{"character_id":90000001,"corporation_id":98000002,"ship_type_id":587,"damage_done":100,"final_blow":false,"weapon_type_id":2488}],`+
-			`"zkb":{"locationID":0,"hash":"h%d","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}}`, id, at.Format(time.RFC3339), id)
 	}
-	lossEntry := func(id int64, at time.Time) string {
-		return fmt.Sprintf(`{"killmail_id":%d,"killmail_time":%q,"solar_system_id":30000142,`+
-			`"victim":{"character_id":90000001,"corporation_id":98000002,"ship_type_id":626,"damage_taken":700,"items":[]},`+
-			`"attackers":[{"character_id":93000002,"corporation_id":98000003,"ship_type_id":587,"damage_done":700,"final_blow":true,"weapon_type_id":2488}],`+
-			`"zkb":{"locationID":0,"hash":"h%d","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}}`, id, at.Format(time.RFC3339), id)
+	seedInvolvement := func(id int64) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, final_blow)
+			VALUES ($1, 0, 93000002, 98000003, 587, true), ($1, 1, 90000001, 98000002, 587, false)`, id); err != nil {
+			t.Fatalf("seed attackers %d: %v", id, err)
+		}
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kill_involvement (killmail_id, character_id, corporation_id)
+			VALUES ($1, 93000002, 98000003), ($1, 90000001, 98000002)`, id); err != nil {
+			t.Fatalf("seed involvement %d: %v", id, err)
+		}
 	}
 	id := int64(910000)
-	var entries []string
-	// Two losses an hour ago at 5M each: the newest mails, so
-	// they sit in the window beside the 48 recent kills.
-	for i := 0; i < 2; i++ {
-		id++
-		entries = append(entries, lossEntry(id, now.Add(-time.Hour)))
-	}
 	// 48 kills two hours ago and 7 more twenty days ago, 10M
 	// each: the 55 inside the 30-day line.
 	for i := 0; i < 48; i++ {
 		id++
-		entries = append(entries, killEntry(id, now.Add(-2*time.Hour), false))
+		seedKill(id, now.Add(-2*time.Hour), 93000001, 10_000_000, false)
+		seedInvolvement(id)
 	}
 	for i := 0; i < 7; i++ {
 		id++
-		entries = append(entries, killEntry(id, now.Add(-20*24*time.Hour), false))
+		seedKill(id, now.Add(-20*24*time.Hour), 93000001, 10_000_000, false)
+		seedInvolvement(id)
 	}
 	// 10 solo kills 400 days ago at 40M each: outside the
 	// window and outside the 30-day line.
 	for i := 0; i < 10; i++ {
 		id++
-		entries = append(entries, killEntry(id, now.Add(-400*24*time.Hour), true))
+		seedKill(id, now.Add(-400*24*time.Hour), 93000001, 40_000_000, true)
+		seedInvolvement(id)
 	}
-	hist := newFakeZkillHistory(map[string]string{
-		"/stats/characterID/90000001/": `{"shipsDestroyed":65,"shipsLost":2,"soloKills":10,"soloLosses":0,"topAllTime":[],"topIskKillIDs":[]}`,
-		"/characterID/90000001/":       "[" + strings.Join(entries, ",") + "]",
-	})
-	srv := httptest.NewServer(hist.handler())
-	defer srv.Close()
-	app.cfg.zkillAPIBaseURL = srv.URL + "/"
+	// Two losses an hour ago at 5M each: the newest mails, so
+	// they sit in the window beside the 48 recent kills.
+	for i := 0; i < 2; i++ {
+		id++
+		seedKill(id, now.Add(-time.Hour), 90000001, 5_000_000, false)
+	}
 	for _, stmt := range []string{
 		`INSERT INTO sde_systems (system_id, name, security) VALUES (30000142, 'Jita', 0.9)`,
 		`INSERT INTO sde_types (type_id, name) VALUES (587, 'Rifter')`,

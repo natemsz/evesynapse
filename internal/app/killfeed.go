@@ -300,9 +300,10 @@ func (app *Application) ingestKillPackage(ctx context.Context, body []byte) erro
 
 // ingestKill stores one kill from either source: the summary row
 // (or, for a kill already held, what this copy adds), and on the
-// first copy, unless the kill is stored in post-prune shape, its
-// attackers and the full killmail, gzipped. It reports whether
-// this was the first copy. With pruneAged set, a
+// first copy its permanent involvement record and, unless the
+// kill is stored in post-prune shape, its attackers and the full
+// killmail, gzipped. It reports whether this was the first copy.
+// With pruneAged set, a
 // first copy already past the retention cutoff is stored in its
 // post-prune shape instead: the summary row and its priced
 // lines, without attackers or the killmail, exactly as if its
@@ -356,6 +357,23 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 	inserted, err := q.UpsertKill(ctx, p)
 	if err != nil {
 		return false, fmt.Errorf("store kill %d: %w", km.KillmailID, err)
+	}
+	if inserted {
+		// The permanent involvement record lands on every first
+		// copy, including one stored in post-prune shape: the
+		// kill's priced value keeps crediting the attackers after
+		// their detail ages out.
+		iv := db.InsertKillInvolvementParams{KillmailID: km.KillmailID}
+		for _, a := range km.Attackers {
+			iv.CharacterIds = append(iv.CharacterIds, a.CharacterID)
+			iv.CorporationIds = append(iv.CorporationIds, a.CorporationID)
+			iv.AllianceIds = append(iv.AllianceIds, a.AllianceID)
+		}
+		if len(iv.CharacterIds) > 0 {
+			if err := q.InsertKillInvolvement(ctx, iv); err != nil {
+				return false, fmt.Errorf("store involvement %d: %w", km.KillmailID, err)
+			}
+		}
 	}
 	if inserted && !prunedShape {
 		ap := db.InsertKillAttackersParams{KillmailID: km.KillmailID}

@@ -4,6 +4,135 @@
 -- when public (posted to zKillboard); NPC kills never.
 -- ---------------------------------------------------------------------
 
+-- name: PilotKillStats :one
+SELECT
+    COUNT(DISTINCT a.killmail_id) FILTER (WHERE k.victim_character_id <> sqlc.arg(character_id))::bigint AS kills,
+    COUNT(DISTINCT a.killmail_id) FILTER (WHERE k.victim_character_id <> sqlc.arg(character_id) AND k.solo)::bigint AS solo,
+    (SELECT COUNT(*) FROM kills v WHERE v.victim_character_id = sqlc.arg(character_id) AND v.public
+        AND v.killmail_time >= sqlc.arg(since)::timestamptz)::bigint AS losses,
+    COALESCE(SUM(COALESCE(k.value_ours, k.value_zkill, 0)) FILTER (WHERE k.victim_character_id <> sqlc.arg(character_id)), 0)::float8 AS isk_killed,
+    COALESCE((SELECT SUM(COALESCE(v.value_ours, v.value_zkill, 0)) FROM kills v WHERE v.victim_character_id = sqlc.arg(character_id) AND v.public
+        AND v.killmail_time >= sqlc.arg(since)::timestamptz), 0)::float8 AS isk_lost
+FROM kill_involvement a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE a.character_id = sqlc.arg(character_id) AND k.public AND NOT k.npc
+  AND k.killmail_time >= sqlc.arg(since)::timestamptz;
+
+-- The pilot's most valuable kill in a window, on the same kill
+-- definition as PilotKillStats and the same value basis.
+-- name: GetPilotBiggestKill :one
+WITH entity_kills AS (
+    SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
+    FROM kill_involvement a
+    JOIN kills k ON k.killmail_id = a.killmail_id
+    WHERE a.character_id = sqlc.arg(character_id) AND k.public AND NOT k.npc
+      AND k.victim_character_id <> sqlc.arg(character_id)
+      AND k.killmail_time >= sqlc.arg(since)::timestamptz
+)
+SELECT k.* FROM kills k
+JOIN entity_kills e ON e.killmail_id = k.killmail_id
+ORDER BY e.value DESC, k.killmail_time DESC, k.killmail_id DESC
+LIMIT 1;
+
+-- A corporation's kills, solo kills and ISK destroyed in a
+-- window: PilotKillStats with the corporation as the entity
+-- (its losses are CountCorporationKillLosses below).
+-- The distinct kill set keeps a kill with several corporation
+-- members on it from counting or valuing more than once.
+-- name: CorporationKillStats :one
+WITH entity_kills AS (
+    SELECT k.killmail_id, k.victim_corporation_id, k.solo,
+           COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk_killed
+    FROM kill_involvement a
+    JOIN kills k ON k.killmail_id = a.killmail_id
+    WHERE a.corporation_id = sqlc.arg(corporation_id) AND k.public AND NOT k.npc
+      AND k.killmail_time >= sqlc.arg(since)::timestamptz
+    GROUP BY k.killmail_id, k.victim_corporation_id, k.solo, k.value_ours, k.value_zkill
+)
+SELECT
+    COUNT(*) FILTER (WHERE victim_corporation_id <> sqlc.arg(corporation_id))::bigint AS kills,
+    COUNT(*) FILTER (WHERE victim_corporation_id <> sqlc.arg(corporation_id) AND solo)::bigint AS solo,
+    COALESCE(SUM(isk_killed) FILTER (WHERE victim_corporation_id <> sqlc.arg(corporation_id)), 0)::float8 AS isk_killed
+FROM entity_kills;
+
+-- A corporation's losses in a window, and what they were
+-- worth. NPC losses count, the rule every entity's losses
+-- follow.
+-- name: CountCorporationKillLosses :one
+SELECT COUNT(*)::bigint AS losses,
+    COALESCE(SUM(COALESCE(value_ours, value_zkill, 0)), 0)::float8 AS isk_lost
+FROM kills
+WHERE victim_corporation_id = sqlc.arg(corporation_id) AND public
+  AND killmail_time >= sqlc.arg(since)::timestamptz;
+
+-- The corporation's most valuable kill in a window.
+-- name: GetCorporationBiggestKill :one
+WITH entity_kills AS (
+    SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
+    FROM kill_involvement a
+    JOIN kills k ON k.killmail_id = a.killmail_id
+    WHERE a.corporation_id = sqlc.arg(corporation_id) AND k.public AND NOT k.npc
+      AND k.victim_corporation_id <> sqlc.arg(corporation_id)
+      AND k.killmail_time >= sqlc.arg(since)::timestamptz
+)
+SELECT k.* FROM kills k
+JOIN entity_kills e ON e.killmail_id = k.killmail_id
+ORDER BY e.value DESC, k.killmail_time DESC, k.killmail_id DESC
+LIMIT 1;
+
+-- An alliance's kills, solo kills and ISK destroyed in a
+-- window: PilotKillStats with the alliance as the entity
+-- (its losses are CountAllianceKillLosses below).
+-- name: AllianceKillStats :one
+WITH entity_kills AS (
+    SELECT k.killmail_id, k.victim_alliance_id, k.solo,
+           COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk_killed
+    FROM kill_involvement a
+    JOIN kills k ON k.killmail_id = a.killmail_id
+    WHERE a.alliance_id = sqlc.arg(alliance_id) AND k.public AND NOT k.npc
+      AND k.killmail_time >= sqlc.arg(since)::timestamptz
+    GROUP BY k.killmail_id, k.victim_alliance_id, k.solo, k.value_ours, k.value_zkill
+)
+SELECT
+    COUNT(*) FILTER (WHERE victim_alliance_id <> sqlc.arg(alliance_id))::bigint AS kills,
+    COUNT(*) FILTER (WHERE victim_alliance_id <> sqlc.arg(alliance_id) AND solo)::bigint AS solo,
+    COALESCE(SUM(isk_killed) FILTER (WHERE victim_alliance_id <> sqlc.arg(alliance_id)), 0)::float8 AS isk_killed
+FROM entity_kills;
+
+-- An alliance's losses in a window. NPC losses count.
+-- name: CountAllianceKillLosses :one
+SELECT COUNT(*)::bigint AS losses FROM kills
+WHERE victim_alliance_id = sqlc.arg(alliance_id) AND public
+  AND killmail_time >= sqlc.arg(since)::timestamptz;
+
+-- The alliance's most valuable kill in a window.
+-- name: GetAllianceBiggestKill :one
+WITH entity_kills AS (
+    SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
+    FROM kill_involvement a
+    JOIN kills k ON k.killmail_id = a.killmail_id
+    WHERE a.alliance_id = sqlc.arg(alliance_id) AND k.public AND NOT k.npc
+      AND k.victim_alliance_id <> sqlc.arg(alliance_id)
+      AND k.killmail_time >= sqlc.arg(since)::timestamptz
+)
+SELECT k.* FROM kills k
+JOIN entity_kills e ON e.killmail_id = k.killmail_id
+ORDER BY e.value DESC, k.killmail_time DESC, k.killmail_id DESC
+LIMIT 1;
+
+-- The pilot's latest public kills and losses, newest first.
+-- name: ListPilotRecentKills :many
+SELECT k.killmail_id, k.killmail_time, k.system_id, k.ship_type_id, k.victim_character_id,
+       COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value,
+       (k.victim_character_id = sqlc.arg(character_id))::boolean AS lost,
+       COALESCE((SELECT a.ship_type_id FROM kill_attackers a WHERE a.killmail_id = k.killmail_id
+                 AND a.character_id = sqlc.arg(character_id) LIMIT 1), 0)::bigint AS flew
+FROM kills k
+WHERE k.public AND NOT k.npc AND (k.victim_character_id = sqlc.arg(character_id)
+   OR EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id AND a.character_id = sqlc.arg(character_id)))
+ORDER BY k.killmail_time DESC
+LIMIT sqlc.arg(max_rows)::int;
+
 -- What the pilot flies on kills, most first.
 -- name: ListPilotShips :many
 SELECT a.ship_type_id, COUNT(DISTINCT a.killmail_id)::bigint AS n

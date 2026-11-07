@@ -29,7 +29,7 @@
   </form>
   {{end}}
 </div>
-{{else}}
+{{else if not .Market.Item}}
 <form method="get" action="/market/" id="market-search" class="searchpanel">
   <span class="searchwrap">
     <input type="text" name="q" id="market-q" value="{{$m.Query}}" placeholder="Item name, e.g. Tritanium" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list">
@@ -42,29 +42,83 @@
 
 {{if .Market.Item}}
   {{$item := .Market.Item}}
-  <h2>{{$item.Name}}</h2>
-  <p class="mkt-item-actions"><a class="btn btn-quiet" href="/items/type/{{$item.TypeID}}/"><svg class="glyph" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15.5 11 10l3 2.6 4.2-5.4"/><path d="M18.2 7.2h-3M18.2 7.2v3"/></g></svg>Item details</a></p>
-  <nav class="region-pills" aria-label="Region">
-    {{range $item.Regions}}<a href="/market/?type={{$item.TypeID}}&region={{.ID}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Name}}</a>{{end}}
-  </nav>
+  <div class="mkt-topbar">
+    <form method="get" action="/market/" id="market-search" class="searchpanel mkt-top-search">
+      <span class="searchwrap">
+        <input type="text" name="q" id="market-q" value="{{$m.Query}}" placeholder="Search market items, e.g. Tritanium or PLEX..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list">
+        <ul class="suggest" id="market-suggest" role="listbox" hidden></ul>
+      </span>
+      <input type="hidden" name="region" id="market-region" value="{{$m.Region}}">
+      <button class="btn" type="submit">Search</button>
+    </form>
+    <div class="l-cluster mkt-top-actions">
+      {{if $item.Anonymous}}
+      {{else if $item.Watched}}
+      <form method="post" action="/market/watch" class="mkt-watch-inline">
+        <input type="hidden" name="action" value="update">
+        <input type="hidden" name="type" value="{{$item.TypeID}}">
+        <input type="hidden" name="region" value="{{$item.RegionID}}">
+        <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
+        <label class="mkt-watch-label"><small>Watching (±% 7d)</small>
+          <input type="number" name="threshold" min="1" max="50" step="any" value="{{$item.WatchThreshold}}" size="3">
+        </label>
+        <button class="btn small" type="submit">Update watch</button>
+      </form>
+      <form method="post" action="/market/watch" class="mkt-watch-inline">
+        <input type="hidden" name="action" value="remove">
+        <input type="hidden" name="type" value="{{$item.TypeID}}">
+        <input type="hidden" name="region" value="{{$item.RegionID}}">
+        <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
+        <button class="btn btn-quiet small" type="submit">Stop watching</button>
+      </form>
+      {{else}}
+      <form method="post" action="/market/watch" class="mkt-watch-inline">
+        <input type="hidden" name="action" value="add">
+        <input type="hidden" name="type" value="{{$item.TypeID}}">
+        <input type="hidden" name="region" value="{{$item.RegionID}}">
+        <input type="hidden" name="threshold" value="5">
+        <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
+        <button class="btn btn-quiet" type="submit">Watch this item</button>
+      </form>
+      {{end}}
+      {{if .Market.Watchlist}}
+      <a class="btn btn-quiet" href="#market-watchlist" data-watchlist-jump>Watchlist{{if .Market.Watchlist.Rows}} <span class="mkt-badge">{{len .Market.Watchlist.Rows}}</span>{{end}}</a>
+      {{end}}
+      <a class="btn btn-quiet" href="/items/type/{{$item.TypeID}}/"><svg class="glyph" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15.5 11 10l3 2.6 4.2-5.4"/><path d="M18.2 7.2h-3M18.2 7.2v3"/></g></svg>Item details</a>
+    </div>
+  </div>
+
+  <div class="mkt-hero-head">
+    <div class="mkt-identity">
+      <img class="mkt-item-icon" src="https://images.evetech.net/types/{{$item.TypeID}}/icon?size=64" alt="" width="48" height="48" loading="lazy">
+      <div class="mkt-title-stack">
+        <p class="market-crumbs mkt-item-crumbs"><small><a href="/market/">Market</a>{{range $item.Breadcrumbs}} › <a href="/market/?group={{.ID}}&region={{$item.RegionID}}">{{.Name}}</a>{{end}} · Type #{{$item.TypeID}}</small></p>
+        <h2>{{$item.Name}}</h2>
+      </div>
+    </div>
+    <nav class="region-pills" aria-label="Region">
+      {{range $item.Regions}}<a href="/market/?type={{$item.TypeID}}&region={{.ID}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Name}}</a>{{end}}
+    </nav>
+  </div>
 
   {{if $item.BookPending}}
   <p class="notice"><small>The live order book loads for signed-in visitors. The hub prices below come from the latest region sweep.{{if $.SSOConfigured}} <a href="/auth/eve">Sign in with EVE</a> for the full book, price alerts and your own orders.{{end}}</small></p>
   {{else if $item.BookStoredAt}}
   <p class="notice"><small>Order book from the latest region sweep · swept {{$item.BookStoredAt}}.{{if and $item.Anonymous $.SSOConfigured}} <a href="/auth/eve">Sign in with EVE</a> for the live book, price alerts and your own orders.{{end}}</small></p>
   {{end}}
+
   <div class="kpis mkt-kpis">
     {{if not $item.BookPending}}
     <div class="kpi">
       <span class="kpi-k">Best sell</span>
       <span class="kpi-v">{{if $item.BestSell}}{{$item.BestSell}} <small>ISK</small>{{else}}—{{end}}</span>
-      {{if $item.BestSellLoc.Name}}<span class="kpi-sub place">{{placeLink $item.BestSellLoc}}</span>{{end}}
+      {{if $item.BestSellLoc.Name}}<span class="kpi-sub place">{{if $item.BestSellVol}}<b>{{$item.BestSellVol}}</b> units at {{end}}{{placeLink $item.BestSellLoc}}</span>{{end}}
       {{if $item.TypicalSell}}<span class="typical">Typical sell <b>{{$item.TypicalSell}}</b> · 9 in 10 sell orders at or under {{$item.SellBand}} ISK</span>{{end}}
     </div>
     <div class="kpi">
       <span class="kpi-k">Best buy</span>
       <span class="kpi-v">{{if $item.BestBuy}}{{$item.BestBuy}} <small>ISK</small>{{else}}—{{end}}</span>
-      {{if $item.BestBuyLoc.Name}}<span class="kpi-sub place">{{placeLink $item.BestBuyLoc}}</span>{{end}}
+      {{if $item.BestBuyLoc.Name}}<span class="kpi-sub place">{{if $item.BestBuyVol}}<b>{{$item.BestBuyVol}}</b> units at {{end}}{{placeLink $item.BestBuyLoc}}</span>{{end}}
       {{if $item.TypicalBuy}}<span class="typical">Typical buy <b>{{$item.TypicalBuy}}</b> · 9 in 10 buy orders at or over {{$item.BuyBand}} ISK</span>{{end}}
     </div>
     {{if $item.Spread}}
@@ -73,6 +127,7 @@
       <span class="kpi-v spread-v">{{$item.Spread}}</span>
       <span class="spread-bar" aria-hidden="true"><span{{if or (eq $item.SpreadBand "white") (eq $item.SpreadBand "red")}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "pastel"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "green"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "blue"}} class="on"{{end}}></span></span>
       <span class="kpi-sub">Between typical buy and typical sell</span>
+      {{if and $item.Trader $item.Trader.MarginPct}}<span class="kpi-sub mkt-kpi-meta">Margin at best prices: <b>{{$item.Trader.MarginPct}}</b></span>{{end}}
     </div>
     {{else if $item.SpreadThin}}
     <div class="kpi">
@@ -85,9 +140,10 @@
     <div class="kpi">
       <span class="kpi-k">Traded average</span>
       <span class="kpi-v">{{if and $item.Trader $item.Trader.Avg7}}{{$item.Trader.Avg7}} <small>ISK</small>{{else}}—{{end}}</span>
-      <span class="kpi-sub">Average price paid · last 7 recorded days</span>
+      <span class="kpi-sub">Average price paid · last 7 recorded days{{if $item.Change7}} · 7d <b>{{$item.Change7}}</b>{{end}}{{if $item.Change30}} · 30d <b>{{$item.Change30}}</b>{{end}}</span>
       {{if $item.AvgSparkPoints}}
       <svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{$item.AvgSparkArea}}"/><polyline class="kpi-spark-line" points="{{$item.AvgSparkPoints}}"/></svg>{{end}}
+      {{if and $item.Trader $item.Trader.Avg30}}<span class="kpi-sub mkt-kpi-meta">30-day average <b>{{$item.Trader.Avg30}}</b> ISK</span>{{end}}
     </div>
     <div class="kpi">
       {{if $item.EstimatedSell}}
@@ -99,206 +155,244 @@
       <span class="kpi-v">{{if $item.AdjustedPrice}}{{$item.AdjustedPrice}} <small>ISK</small>{{else}}—{{end}}</span>
       <span class="kpi-sub">Industry &amp; insurance reference</span>
       {{end}}
+      <span class="kpi-sub mkt-kpi-meta">{{if and $item.Trader $item.Trader.AvgVol7}}7d vol/day <b>{{$item.Trader.AvgVol7}}</b>{{if not $item.BookPending}} · {{end}}{{end}}{{if not $item.BookPending}}Depth <b>{{$item.SellVolume}}</b> sell ({{$item.SellOrders}}) / <b>{{$item.BuyVolume}}</b> buy ({{$item.BuyOrders}}){{end}}</span>
     </div>
   </div>
-
-  {{if $item.RegionStats}}
-  <section class="foldable">
-  <h3>{{if $item.AllRegions}}Typical prices in every region{{else}}Typical prices across the hub regions{{end}}</h3>
-  <p class="mt-regions-toggle"><small>{{if $item.AllRegions}}Cheapest typical sell first. <a href="/market/?type={{$item.TypeID}}&amp;region={{$item.RegionID}}">Hub regions only</a>{{else}}<a href="/market/?type={{$item.TypeID}}&amp;region={{$item.RegionID}}&amp;regions=all">Show every region</a>{{end}}</small></p>
-  <div class="tw">
-  <table>
-    <thead><tr><th>Region</th><th>Typical sell</th><th>Typical buy</th><th>7 days</th><th>Updated</th></tr></thead>
-    <tbody>
-      {{range $item.RegionStats}}
-      <tr>
-        <td>{{if .Active}}<strong>{{.RegionName}}</strong>{{else if .Hub}}<a href="/market/?type={{$item.TypeID}}&region={{.RegionID}}">{{.RegionName}}</a>{{else}}<a href="/region/?id={{.RegionID}}">{{.RegionName}}</a>{{end}}</td>
-        {{if .HasData}}
-        <td>{{if .TypicalSell}}{{.TypicalSell}} ISK{{else}}—{{end}}</td>
-        <td>{{if .TypicalBuy}}{{.TypicalBuy}} ISK{{else}}—{{end}}</td>
-        <td>{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
-        <td><small>{{if .Source}}{{.Source}} · {{end}}{{.Age}}</small></td>
-        {{else}}
-        <td colspan="4"><small>No data yet</small></td>
-        {{end}}
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-  </div>
-  </section>
-  {{end}}
-
-  {{with $item.Pack}}
-  <section class="foldable">
-  <h3>Order book statistics: {{$item.RegionName}}</h3>
-  {{if .HasData}}
-  <p><small>From the latest sweep of the whole regional book{{if .Source}} ({{.Source}}){{end}}, {{.Age}}. Every figure counts each order once.</small></p>
-  <div class="tw">
-  <table class="mt-stats">
-    <thead><tr><th>Side</th><th>Typical</th><th>Average</th><th>Best</th><th>Far end</th><th>5% edge</th><th>Spread of prices</th><th>Orders</th><th>Units</th><th>1 day</th><th>7 days</th><th>30 days</th></tr></thead>
-    <tbody>
-      {{range .Sides}}
-      <tr>
-        <td>{{.Label}}</td>
-        {{if .Has}}
-        <td>{{.Typical}}</td><td>{{.Average}}</td><td>{{.Best}}</td><td>{{.Far}}</td><td>{{.Edge}}</td><td>{{.Dev}}</td><td>{{.Orders}}</td><td>{{.Volume}}</td>
-        <td>{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
-        <td>{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
-        <td>{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}—{{end}}</td>
-        {{else}}
-        <td colspan="11"><small>No orders on this side</small></td>
-        {{end}}
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-  </div>
-  <p><small>{{if .Volatility}}Typical sell moves {{.Volatility}} on average over the last 30 days. {{else}}Not enough days stored yet to measure how much the price moves. {{end}}{{.HistoryDays}} {{if eq .HistoryDays 1}}day{{else}}days{{end}} of book history in the last 30.{{if .TradedPerDay}} About {{.TradedPerDay}} units traded a day.{{end}} Prices in ISK. The 5% edge is the price the best 5 in 100 orders beat.</small></p>
-  {{with .Chart}}{{$bc := .}}
-  <div class="mt-chart pchart" data-chart-scrub="true">
-    <div class="chart-legend">
-      <span class="legend-item"><span class="legend-swatch mt-swatch-sell" aria-hidden="true"></span>Typical sell</span>
-      <span class="legend-item"><span class="legend-swatch mt-swatch-buy" aria-hidden="true"></span>Typical buy</span>
-      {{if .Extended}}<span class="legend-item"><span class="legend-swatch mt-swatch-best-sell" aria-hidden="true"></span>Best sell</span>
-      <span class="legend-item"><span class="legend-swatch mt-swatch-best-buy" aria-hidden="true"></span>Best buy</span>{{end}}
-      <span class="legend-note">{{.Days}} days · {{.Low}} to {{.High}} ISK</span>
-    </div>
-    <svg class="mt-book" viewBox="0 0 {{.Width}} {{.Height}}" width="100%" role="img" aria-label="Typical sell and buy price by day, {{.First}} to {{.Last}}">
-      {{range .PriceTicks}}<line class="chart-gridline price-gridline" x1="0" y1="{{.Y}}" x2="{{$bc.Width}}" y2="{{.Y}}"/>{{end}}
-      {{if .BandPoints}}<polygon class="mt-band" points="{{.BandPoints}}"/>{{end}}
-      {{if .BestSellPoints}}<polyline class="mt-line-best-sell" points="{{.BestSellPoints}}"/>{{end}}
-      {{if .BestBuyPoints}}<polyline class="mt-line-best-buy" points="{{.BestBuyPoints}}"/>{{end}}
-      {{if .SellPoints}}<polyline class="mt-line-sell" points="{{.SellPoints}}"/>{{end}}
-      {{if .BuyPoints}}<polyline class="mt-line-buy" points="{{.BuyPoints}}"/>{{end}}
-      {{range .SellDots}}<circle class="mt-dot-sell" cx="{{.X}}" cy="{{.Y}}" r="2"/>{{end}}
-      {{range .BuyDots}}<circle class="mt-dot-buy" cx="{{.X}}" cy="{{.Y}}" r="2"/>{{end}}
-      {{range .Hits}}<rect class="cdot mt-hit" x="{{.X}}" y="0" width="{{.W}}" height="{{$bc.Height}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
-      {{range .PriceTicks}}<text class="chart-axis-label price-axis" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
-      {{range .DateTicks}}<text class="chart-axis-label chart-date-tick" x="{{.X}}" y="{{.LabelY}}" text-anchor="{{.Anchor}}">{{.Label}}</text>{{end}}
-    </svg>
-    {{if .Extended}}
-    {{if .DepthBars}}
-    <div class="chart-legend viz-strip-key">
-      <span class="legend-item"><span class="legend-swatch mt-swatch-sell" aria-hidden="true"></span>Sell orders</span>
-      <span class="legend-item"><span class="legend-swatch mt-swatch-buy" aria-hidden="true"></span>Buy orders</span>
-      <span class="legend-note">Orders per day, up to {{.DepthMax}}</span>
-    </div>
-    <svg class="mt-depth" viewBox="0 0 {{.DepthWidth}} {{.DepthHeight}}" width="100%" role="img" aria-label="Sell and buy orders per day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
-      {{range .DepthBars}}<rect class="mt-depth-{{.Side}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
-    </svg>
-    {{end}}
-    {{if .SpreadPoints}}
-    <div class="chart-legend viz-strip-key">
-      <span class="legend-item"><span class="legend-swatch mt-swatch-spread" aria-hidden="true"></span>Spread, typical sell over typical buy</span>
-      <span class="legend-note">{{.SpreadLow}} to {{.SpreadHigh}}</span>
-    </div>
-    <svg class="mt-spread" viewBox="0 0 {{.SpreadWidth}} {{.SpreadHeight}}" width="100%" role="img" aria-label="Spread percent by day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
-      <polyline class="mt-line-spread" points="{{.SpreadPoints}}"/>
-    </svg>
-    <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
-    {{end}}
-    {{end}}
-    <div class="ctip" hidden></div>
-  </div>
-  {{end}}
-  {{if .Changes}}
-  <h4>Recent changes</h4>
-  <ul class="mt-changes">
-  {{range .Changes}}<li><span class="mt-chg {{.Dir}}">{{.Label}}</span> <small>{{.Day}}</small><br><small class="mt-reqs">{{.Detail}}</small></li>{{end}}
-  </ul>
-  {{end}}
-  {{else}}
-  <p><small>No sweep of {{$item.RegionName}} has covered this item yet.</small></p>
-  {{end}}
-  </section>
-  {{end}}
-
-  <section class="foldable">
-  <h3>Price history — {{$item.RegionName}}</h3>
-  {{template "history-section" $item}}
-  {{if $item.Anonymous}}
-  {{else if $item.Watched}}
-  <form method="post" action="/market/watch">
-    <input type="hidden" name="action" value="update">
-    <input type="hidden" name="type" value="{{$item.TypeID}}">
-    <input type="hidden" name="region" value="{{$item.RegionID}}">
-    <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
-    <label><small>Watching in {{$item.RegionName}}: alert me at</small>
-      <input type="number" name="threshold" min="1" max="50" step="any" value="{{$item.WatchThreshold}}" size="4">
-      <small>% over 7 days</small></label>
-    <button class="btn" type="submit">Update watch</button>
-  </form>
-  <form method="post" action="/market/watch">
-    <input type="hidden" name="action" value="remove">
-    <input type="hidden" name="type" value="{{$item.TypeID}}">
-    <input type="hidden" name="region" value="{{$item.RegionID}}">
-    <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
-    <button class="btn" type="submit">Stop watching</button>
-  </form>
-  {{else}}
-  <form method="post" action="/market/watch">
-    <input type="hidden" name="action" value="add">
-    <input type="hidden" name="type" value="{{$item.TypeID}}">
-    <input type="hidden" name="region" value="{{$item.RegionID}}">
-    <input type="hidden" name="threshold" value="5">
-    <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
-    <button class="btn" type="submit">Watch this item</button>
-  </form>
-  {{end}}
-  </section>
-
-  {{if $item.Trader}}
-  <section class="foldable">
-  <h3>Trading snapshot — {{$item.RegionName}}</h3>
-  {{template "trader-section" $item}}
-  </section>
-  {{end}}
 
   {{if not $item.BookPending}}
-  <section class="foldable">
-  <h3>Sell orders — {{$item.RegionName}}</h3>
-  <div class="tw">
-  <table data-cards="off">
-    <thead><tr><th>Price</th><th>Volume</th><th>Location</th></tr></thead>
-    <tbody>
-    {{range $item.Sells}}
-      <tr><td>{{.Price}}</td><td>{{.Volume}}</td><td>{{placeLink .Loc}}</td></tr>
-    {{else}}
-      <tr><td colspan="3">No sell orders in this region.</td></tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  <p><small>Showing top {{len $item.Sells}} · {{$item.SellOrders}} sell orders · {{$item.SellVolume}} total volume</small></p>
-  </section>
+  <section class="l-panel mkt-explorer" id="mkt-order-book">
+    <div class="mkt-explorer-head">
+      <div class="mkt-explorer-title">
+        <h2>Order book</h2>
+        <span class="mkt-explorer-meta">{{$item.RegionName}} · {{$item.SellOrders}} sell / {{$item.BuyOrders}} buy orders{{if $item.BookStoredAt}} · swept {{$item.BookStoredAt}}{{end}}</span>
+      </div>
+      <button class="btn btn-quiet small" type="button" data-sheet-open="mkt-book-filters" hidden>Filter orders</button>
+      <div class="mkt-explorer-controls" id="mkt-book-filters" data-sheet data-sheet-title="Order book filters">
+        <div class="seg mkt-sec-seg" role="group" aria-label="Security filter">
+          <button type="button" class="on" data-sec-filter="all">All Sec</button>
+          <button type="button" data-sec-filter="highsec">Highsec</button>
+          <button type="button" data-sec-filter="lowsec">Lowsec</button>
+          <button type="button" data-sec-filter="nullsec">Nullsec</button>
+        </div>
+        <input type="search" class="mkt-book-search" data-book-filter placeholder="Filter station or system..." aria-label="Filter order book by station or system">
+        <div class="sheet-foot sheet-only"><button type="button" class="btn" data-sheet-close>Done</button></div>
+      </div>
+    </div>
 
-  <section class="foldable">
-  <h3>Buy orders — {{$item.RegionName}}</h3>
-  <div class="tw">
-  <table data-cards="off">
-    <thead><tr><th>Price</th><th>Volume</th><th>Location</th></tr></thead>
-    <tbody>
-    {{range $item.Buys}}
-      <tr><td>{{.Price}}</td><td>{{.Volume}}</td><td>{{placeLink .Loc}}</td></tr>
-    {{else}}
-      <tr><td colspan="3">No buy orders in this region.</td></tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  <p><small>Showing top {{len $item.Buys}} · {{$item.BuyOrders}} buy orders · {{$item.BuyVolume}} total volume</small></p>
-  </section>
+    <div class="l-switcher mkt-book-split">
+      <div class="mkt-book-pane" data-book-side="sell">
+        <div class="mkt-pane-head">
+          <h3>Sell orders — {{$item.RegionName}}</h3>
+          <span class="mkt-pane-stats">Units: <b>{{$item.SellVolume}}</b>{{if $item.TypicalSell}} · Typical: <b>{{$item.TypicalSell}}</b>{{end}}{{if $item.SellBand}} · 90% band: <b>{{$item.SellBand}}</b>{{end}}</span>
+        </div>
+        <div class="tw">
+        <table class="mkt-book-table" data-cards="off">
+          <thead><tr><th>Price</th><th class="num mkt-col-vs">vs Best</th><th class="num">Volume</th><th>Location</th></tr></thead>
+          <tbody>
+          {{range $item.Sells}}
+            <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-sell">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}</td></tr>
+          {{else}}
+            <tr><td colspan="4">No sell orders in this region.</td></tr>
+          {{end}}
+          </tbody>
+          {{if $item.MoreSells}}
+          <tbody id="mkt-sells" data-wmore>
+          {{range $item.MoreSells}}
+            <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-sell">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}</td></tr>
+          {{end}}
+          </tbody>
+          {{end}}
+        </table>
+        </div>
+        <div class="mkt-book-foot">
+          <p><small>Showing top {{len $item.Sells}} · {{$item.SellOrders}} sell orders · {{$item.SellVolume}} total volume</small></p>
+          {{if $item.MoreSells}}<button class="btn btn-quiet small" type="button" data-expand="mkt-sells">Show {{len $item.MoreSells}} more</button>{{end}}
+        </div>
+      </div>
 
+      <div class="mkt-book-pane" data-book-side="buy">
+        <div class="mkt-pane-head">
+          <h3>Buy orders — {{$item.RegionName}}</h3>
+          <span class="mkt-pane-stats">Units: <b>{{$item.BuyVolume}}</b>{{if $item.TypicalBuy}} · Typical: <b>{{$item.TypicalBuy}}</b>{{end}}{{if $item.BuyBand}} · 90% band: <b>{{$item.BuyBand}}</b>{{end}}</span>
+        </div>
+        <div class="tw">
+        <table class="mkt-book-table" data-cards="off">
+          <thead><tr><th>Price</th><th class="num mkt-col-vs">vs Best</th><th class="num">Volume</th><th>Location</th></tr></thead>
+          <tbody>
+          {{range $item.Buys}}
+            <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-buy">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}{{if .Range}} <small class="muted">({{.Range}})</small>{{end}}</td></tr>
+          {{else}}
+            <tr><td colspan="4">No buy orders in this region.</td></tr>
+          {{end}}
+          </tbody>
+          {{if $item.MoreBuys}}
+          <tbody id="mkt-buys" data-wmore>
+          {{range $item.MoreBuys}}
+            <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-buy">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}{{if .Range}} <small class="muted">({{.Range}})</small>{{end}}</td></tr>
+          {{end}}
+          </tbody>
+          {{end}}
+        </table>
+        </div>
+        <div class="mkt-book-foot">
+          <p><small>Showing top {{len $item.Buys}} · {{$item.BuyOrders}} buy orders · {{$item.BuyVolume}} total volume</small></p>
+          {{if $item.MoreBuys}}<button class="btn btn-quiet small" type="button" data-expand="mkt-buys">Show {{len $item.MoreBuys}} more</button>{{end}}
+        </div>
+      </div>
+    </div>
+    {{if $item.Truncated}}<p class="prose">Order book truncated: only the first 20 pages were read, so the best prices shown are the best within those pages.</p>{{end}}
+  </section>
   {{end}}
-  {{if $item.Truncated}}<p class="prose">Order book truncated: only the first 20 pages were read, so the best prices shown are the best within those pages.</p>{{end}}
+
+  <div class="l-grid mkt-lower-grid">
+    <div class="l-stack s7 mkt-left-stack">
+      <div class="l-panel mkt-history-panel">
+        {{if and $item.Pack $item.Pack.Chart}}
+        <div class="l-seg" role="tablist" aria-label="History charts" data-tabs hidden>
+          <button type="button" role="tab" aria-controls="mkt-tab-price">Price history</button>
+          <button type="button" role="tab" aria-controls="mkt-tab-book">Order book history ({{$item.Pack.Chart.Days}}d)</button>
+        </div>
+        {{end}}
+        <section role="tabpanel" id="mkt-tab-price">
+          <h3>Price history — {{$item.RegionName}}</h3>
+          {{template "history-section" $item}}
+        </section>
+        {{if and $item.Pack $item.Pack.Chart}}
+        <section role="tabpanel" id="mkt-tab-book">
+          <h3 class="l-tab-h">Order book history — {{$item.RegionName}}</h3>
+          {{with $item.Pack}}{{with .Chart}}{{$bc := .}}
+          <div class="mt-chart pchart" data-chart-scrub="true">
+            <div class="chart-legend">
+              <span class="legend-item"><span class="legend-swatch mt-swatch-sell" aria-hidden="true"></span>Typical sell</span>
+              <span class="legend-item"><span class="legend-swatch mt-swatch-buy" aria-hidden="true"></span>Typical buy</span>
+              {{if .Extended}}<span class="legend-item"><span class="legend-swatch mt-swatch-best-sell" aria-hidden="true"></span>Best sell</span>
+              <span class="legend-item"><span class="legend-swatch mt-swatch-best-buy" aria-hidden="true"></span>Best buy</span>{{end}}
+              <span class="legend-note">{{.Days}} days · {{.Low}} to {{.High}} ISK</span>
+            </div>
+            <svg class="mt-book" viewBox="0 0 {{.Width}} {{.Height}}" width="100%" role="img" aria-label="Typical sell and buy price by day, {{.First}} to {{.Last}}">
+              {{range .PriceTicks}}<line class="chart-gridline price-gridline" x1="0" y1="{{.Y}}" x2="{{$bc.Width}}" y2="{{.Y}}"/>{{end}}
+              {{if .BandPoints}}<polygon class="mt-band" points="{{.BandPoints}}"/>{{end}}
+              {{if .BestSellPoints}}<polyline class="mt-line-best-sell" points="{{.BestSellPoints}}"/>{{end}}
+              {{if .BestBuyPoints}}<polyline class="mt-line-best-buy" points="{{.BestBuyPoints}}"/>{{end}}
+              {{if .SellPoints}}<polyline class="mt-line-sell" points="{{.SellPoints}}"/>{{end}}
+              {{if .BuyPoints}}<polyline class="mt-line-buy" points="{{.BuyPoints}}"/>{{end}}
+              {{range .SellDots}}<circle class="mt-dot-sell" cx="{{.X}}" cy="{{.Y}}" r="2"/>{{end}}
+              {{range .BuyDots}}<circle class="mt-dot-buy" cx="{{.X}}" cy="{{.Y}}" r="2"/>{{end}}
+              {{range .Hits}}<rect class="cdot mt-hit" x="{{.X}}" y="0" width="{{.W}}" height="{{$bc.Height}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
+              {{range .PriceTicks}}<text class="chart-axis-label price-axis" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
+              {{range .DateTicks}}<text class="chart-axis-label chart-date-tick" x="{{.X}}" y="{{.LabelY}}" text-anchor="{{.Anchor}}">{{.Label}}</text>{{end}}
+            </svg>
+            {{if .Extended}}
+            {{if .DepthBars}}
+            <div class="chart-legend viz-strip-key">
+              <span class="legend-item"><span class="legend-swatch mt-swatch-sell" aria-hidden="true"></span>Sell orders</span>
+              <span class="legend-item"><span class="legend-swatch mt-swatch-buy" aria-hidden="true"></span>Buy orders</span>
+              <span class="legend-note">Orders per day, up to {{.DepthMax}}</span>
+            </div>
+            <svg class="mt-depth" viewBox="0 0 {{.DepthWidth}} {{.DepthHeight}}" width="100%" role="img" aria-label="Sell and buy orders per day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+              {{range .DepthBars}}<rect class="mt-depth-{{.Side}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
+            </svg>
+            {{end}}
+            {{if .SpreadPoints}}
+            <div class="chart-legend viz-strip-key">
+              <span class="legend-item"><span class="legend-swatch mt-swatch-spread" aria-hidden="true"></span>Spread, typical sell over typical buy</span>
+              <span class="legend-note">{{.SpreadLow}} to {{.SpreadHigh}}</span>
+            </div>
+            <svg class="mt-spread" viewBox="0 0 {{.SpreadWidth}} {{.SpreadHeight}}" width="100%" role="img" aria-label="Spread percent by day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+              <polyline class="mt-line-spread" points="{{.SpreadPoints}}"/>
+            </svg>
+            <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
+            {{end}}
+            {{end}}
+            <div class="ctip" hidden></div>
+          </div>
+          {{end}}{{end}}
+        </section>
+        {{end}}
+      </div>
+
+      {{if $item.Trader}}
+      <section class="l-panel foldable">
+        <h3>Trading snapshot — {{$item.RegionName}}</h3>
+        {{template "trader-section" $item}}
+      </section>
+      {{end}}
+    </div>
+
+    <div class="l-stack s5 mkt-side-stack">
+      {{if $item.RegionStats}}
+      <section class="l-panel foldable">
+        <h3>{{if $item.AllRegions}}Typical prices in every region{{else}}Typical prices across the hub regions{{end}}</h3>
+        <p class="mt-regions-toggle"><small>{{if $item.AllRegions}}Cheapest typical sell first. <a href="/market/?type={{$item.TypeID}}&amp;region={{$item.RegionID}}">Hub regions only</a>{{else}}<a href="/market/?type={{$item.TypeID}}&amp;region={{$item.RegionID}}&amp;regions=all">Show every region</a>{{end}}</small></p>
+        <div class="tw">
+        <table>
+          <thead><tr><th>Region</th><th class="num">Typical sell</th><th class="num">Typical buy</th><th class="num">7 days</th><th>Updated</th></tr></thead>
+          <tbody>
+            {{range $item.RegionStats}}
+            <tr>
+              <td>{{if .Active}}<strong>{{.RegionName}}</strong>{{else if .Hub}}<a href="/market/?type={{$item.TypeID}}&region={{.RegionID}}">{{.RegionName}}</a>{{else}}<a href="/region/?id={{.RegionID}}">{{.RegionName}}</a>{{end}}</td>
+              {{if .HasData}}
+              <td class="num">{{if .TypicalSell}}{{.TypicalSell}} ISK{{else}}—{{end}}</td>
+              <td class="num">{{if .TypicalBuy}}{{.TypicalBuy}} ISK{{else}}—{{end}}</td>
+              <td class="num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
+              <td><small>{{if .Source}}{{.Source}} · {{end}}{{.Age}}</small></td>
+              {{else}}
+              <td colspan="4"><small>No data yet</small></td>
+              {{end}}
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        </div>
+      </section>
+      {{end}}
+
+      {{with $item.Pack}}
+      <section class="l-panel foldable">
+        <h3>Order book statistics: {{$item.RegionName}}</h3>
+        {{if .HasData}}
+        <p><small>From the latest sweep of the whole regional book{{if .Source}} ({{.Source}}){{end}}, {{.Age}}. Every figure counts each order once.</small></p>
+        <div class="tw">
+        <table class="mt-stats">
+          <thead><tr><th>Side</th><th>Typical</th><th>Average</th><th>Best</th><th>Far end</th><th>5% edge</th><th>Spread of prices</th><th>Orders</th><th>Units</th><th>1 day</th><th>7 days</th><th>30 days</th></tr></thead>
+          <tbody>
+            {{range .Sides}}
+            <tr>
+              <td>{{.Label}}</td>
+              {{if .Has}}
+              <td>{{.Typical}}</td><td>{{.Average}}</td><td>{{.Best}}</td><td>{{.Far}}</td><td>{{.Edge}}</td><td>{{.Dev}}</td><td>{{.Orders}}</td><td>{{.Volume}}</td>
+              <td>{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
+              <td>{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
+              <td>{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}—{{end}}</td>
+              {{else}}
+              <td colspan="11"><small>No orders on this side</small></td>
+              {{end}}
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        </div>
+        <p><small>{{if .Volatility}}Typical sell moves {{.Volatility}} on average over the last 30 days. {{else}}Not enough days stored yet to measure how much the price moves. {{end}}{{.HistoryDays}} {{if eq .HistoryDays 1}}day{{else}}days{{end}} of book history in the last 30.{{if .TradedPerDay}} About {{.TradedPerDay}} units traded a day.{{end}} Prices in ISK. The 5% edge is the price the best 5 in 100 orders beat.</small></p>
+        {{if .Changes}}
+        <h4>Recent changes</h4>
+        <ul class="mt-changes">
+        {{range .Changes}}<li><span class="mt-chg {{.Dir}}">{{.Label}}</span> <small>{{.Day}}</small><br><small class="mt-reqs">{{.Detail}}</small></li>{{end}}
+        </ul>
+        {{end}}
+        {{else}}
+        <p><small>No sweep of {{$item.RegionName}} has covered this item yet.</small></p>
+        {{end}}
+      </section>
+      {{end}}
+    </div>
+  </div>
 {{end}}
 
 {{with .Market.Browse}}{{template "market-browse" .}}{{end}}
 
 {{if .Market.Watchlist}}
 {{$wl := .Market.Watchlist}}
-<div class="foldable" data-fold="never">
+<div class="l-panel foldable" id="market-watchlist"{{if and .Market.Item (not $wl.Query)}} data-fold="closed"{{else}} data-fold="never"{{end}}>
 <h3>Watchlist</h3>
 <form method="get" action="/market/">
   <span class="searchwrap">

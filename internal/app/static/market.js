@@ -304,4 +304,55 @@
     clearTimeout(typing);
     typing = setTimeout(function () { form.dataset.live = "1"; form.requestSubmit(); }, 350);
   });
+
+  // ---- Order Book Explorer filters (security band + station/system) ----
+  function applyOrderBookFilters() {
+    var explorer = document.getElementById("mkt-order-book");
+    if (!explorer) return;
+    var activeBtn = document.querySelector("[data-sec-filter].on");
+    var sec = activeBtn ? activeBtn.getAttribute("data-sec-filter") : "all";
+    var searchInput = document.querySelector("[data-book-filter]");
+    var q = searchInput ? searchInput.value.trim().toLowerCase() : "";
+    var filtering = sec !== "all" || q !== "";
+
+    explorer.querySelectorAll("tbody[data-wmore]").forEach(function (tb) {
+      if (filtering) {
+        tb.hidden = false;
+      }
+    });
+
+    explorer.querySelectorAll("tr[data-sec-band]").forEach(function (tr) {
+      var rowSec = tr.getAttribute("data-sec-band") || "all";
+      var rowLoc = (tr.getAttribute("data-loc-text") || "").toLowerCase();
+      var secMatch = sec === "all" || rowSec === sec;
+      var locMatch = !q || rowLoc.indexOf(q) >= 0;
+      tr.hidden = !(secMatch && locMatch);
+    });
+  }
+
+  document.addEventListener("click", function (e) {
+    var secBtn = e.target.closest("[data-sec-filter]");
+    if (secBtn) {
+      e.preventDefault();
+      document.querySelectorAll("[data-sec-filter]").forEach(function (b) {
+        b.classList.toggle("on", b === secBtn);
+      });
+      applyOrderBookFilters();
+      return;
+    }
+    var wlJump = e.target.closest("[data-watchlist-jump]");
+    if (wlJump) {
+      var wl = document.getElementById("market-watchlist");
+      if (wl && wl.classList.contains("folded")) {
+        var foldBtn = wl.querySelector(":scope > h2 > .foldbtn, :scope > h3 > .foldbtn");
+        if (foldBtn) foldBtn.click();
+      }
+    }
+  });
+
+  document.addEventListener("input", function (e) {
+    if (e.target.matches("[data-book-filter]")) {
+      applyOrderBookFilters();
+    }
+  });
 })();

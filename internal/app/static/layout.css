@@ -65,8 +65,10 @@
   --l-top: calc(var(--sticky-top) + var(--subnav-h));
 }
 html[data-theme="light"] {
-  --surface-page: var(--panel);
-  --surface-pane: var(--panel);
+  --surface-page: #f6f2e8;
+  --surface-pane: #fdfbf6;
+  --surface-inset: #fdfbf6;
+  --hairline: #dcd1bc;
   --sel-bg: color-mix(in srgb, var(--accent) 11%, var(--panel));
 }
 /* A page with no sub-nav parks its sticky bars under the top bar. */
@@ -440,7 +442,9 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 .l-local:not(.on) { display: none; }
 
 /* Panel: the standard solid block on the page. */
-.l-panel { min-width: 0; padding: var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); }
+.l-panel { min-width: 0; padding: var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045); }
+html[data-theme="light"] .l-panel,
+html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05); }
 .l-panel > h2:first-child, .l-panel > h3:first-child { margin-top: 0; }
 
 /* ---- The console ----

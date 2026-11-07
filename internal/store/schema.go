@@ -786,6 +786,13 @@ var pgCorpKillCoverageSchema string
 //go:embed schema_pg/127_kill_involvement.sql
 var pgKillInvolvementSchema string
 
+// Step 129: kill and history-want indexes: kills by ingest time
+// for the latest-ingest, recent-names and ingest-count reads, and
+// history wants by last request for the urgent drain.
+//
+//go:embed schema_pg/129_kill_and_want_indexes.sql
+var pgKillAndWantIndexesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -942,6 +949,7 @@ func schemaSteps() []schemaStep {
 		{125, "stats_backlogs", pgStatsBacklogsSchema, ""},
 		{126, "corp_kill_coverage", pgCorpKillCoverageSchema, ""},
 		{127, "kill_involvement", pgKillInvolvementSchema, ""},
+		{129, "kill_and_want_indexes", pgKillAndWantIndexesSchema, ""},
 	}
 }
 

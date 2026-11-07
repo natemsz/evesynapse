@@ -45,7 +45,7 @@ WITH entity_kills AS (
            COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk_killed
     FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
-    WHERE a.alliance_id = $1 AND k.public AND NOT k.npc
+    WHERE a.alliance_id = $1 AND a.alliance_id > 0 AND k.public AND NOT k.npc
       AND k.killmail_time >= $2::timestamptz
     GROUP BY k.killmail_id, k.victim_alliance_id, k.solo, k.value_ours, k.value_zkill
 )
@@ -205,7 +205,7 @@ WITH entity_kills AS (
            COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk_killed
     FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
-    WHERE a.corporation_id = $1 AND k.public AND NOT k.npc
+    WHERE a.corporation_id = $1 AND a.corporation_id > 0 AND k.public AND NOT k.npc
       AND k.killmail_time >= $2::timestamptz
     GROUP BY k.killmail_id, k.victim_corporation_id, k.solo, k.value_ours, k.value_zkill
 )
@@ -241,7 +241,7 @@ func (q *Queries) CorporationKillStats(ctx context.Context, arg CorporationKillS
 
 const countAllianceKillLosses = `-- name: CountAllianceKillLosses :one
 SELECT COUNT(*)::bigint AS losses FROM kills
-WHERE victim_alliance_id = $1 AND public
+WHERE victim_alliance_id = $1 AND victim_alliance_id > 0 AND public
   AND killmail_time >= $2::timestamptz
 `
 
@@ -262,7 +262,7 @@ const countCorporationKillLosses = `-- name: CountCorporationKillLosses :one
 SELECT COUNT(*)::bigint AS losses,
     COALESCE(SUM(COALESCE(value_ours, value_zkill, 0)), 0)::float8 AS isk_lost
 FROM kills
-WHERE victim_corporation_id = $1 AND public
+WHERE victim_corporation_id = $1 AND victim_corporation_id > 0 AND public
   AND killmail_time >= $2::timestamptz
 `
 
@@ -291,7 +291,7 @@ WITH entity_kills AS (
     SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
     FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
-    WHERE a.alliance_id = $1 AND k.public AND NOT k.npc
+    WHERE a.alliance_id = $1 AND a.alliance_id > 0 AND k.public AND NOT k.npc
       AND k.victim_alliance_id <> $1
       AND k.killmail_time >= $2::timestamptz
 )
@@ -349,7 +349,7 @@ WITH entity_kills AS (
     SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
     FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
-    WHERE a.corporation_id = $1 AND k.public AND NOT k.npc
+    WHERE a.corporation_id = $1 AND a.corporation_id > 0 AND k.public AND NOT k.npc
       AND k.victim_corporation_id <> $1
       AND k.killmail_time >= $2::timestamptz
 )
@@ -438,7 +438,7 @@ WITH entity_kills AS (
     SELECT DISTINCT k.killmail_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value
     FROM kill_involvement a
     JOIN kills k ON k.killmail_id = a.killmail_id
-    WHERE a.character_id = $1 AND k.public AND NOT k.npc
+    WHERE a.character_id = $1 AND a.character_id > 0 AND k.public AND NOT k.npc
       AND k.victim_character_id <> $1
       AND k.killmail_time >= $2::timestamptz
 )
@@ -495,7 +495,8 @@ func (q *Queries) GetPilotBiggestKill(ctx context.Context, arg GetPilotBiggestKi
 const listAllianceShips = `-- name: ListAllianceShips :many
 SELECT a.ship_type_id, COUNT(DISTINCT a.killmail_id)::bigint AS n
 FROM kill_attackers a JOIN kills k ON k.killmail_id = a.killmail_id
-WHERE a.alliance_id = $1 AND k.public AND NOT k.npc AND a.ship_type_id > 0
+WHERE a.alliance_id = $1 AND a.alliance_id > 0
+  AND k.public AND NOT k.npc AND a.ship_type_id > 0
   AND k.victim_alliance_id <> $1
   AND k.killmail_time >= $2::timestamptz
 GROUP BY a.ship_type_id ORDER BY n DESC, a.ship_type_id LIMIT 8
@@ -539,7 +540,8 @@ func (q *Queries) ListAllianceShips(ctx context.Context, arg ListAllianceShipsPa
 const listAllianceShipsLost = `-- name: ListAllianceShipsLost :many
 SELECT ship_type_id, COUNT(*)::bigint AS losses
 FROM kills
-WHERE victim_alliance_id = $1 AND public AND ship_type_id > 0
+WHERE victim_alliance_id = $1 AND victim_alliance_id > 0
+  AND public AND ship_type_id > 0
   AND killmail_time >= $2::timestamptz
 GROUP BY ship_type_id ORDER BY losses DESC, ship_type_id LIMIT 8
 `
@@ -580,9 +582,11 @@ func (q *Queries) ListAllianceShipsLost(ctx context.Context, arg ListAllianceShi
 }
 
 const listAllianceSystems = `-- name: ListAllianceSystems :many
-SELECT k.system_id, COUNT(DISTINCT k.killmail_id)::bigint AS n, MAX(k.killmail_time)::timestamptz AS last_at
-FROM kill_attackers a JOIN kills k ON k.killmail_id = a.killmail_id
-WHERE a.alliance_id = $1 AND k.public AND NOT k.npc
+SELECT k.system_id, COUNT(*)::bigint AS n, MAX(k.killmail_time)::timestamptz AS last_at
+FROM (SELECT DISTINCT a.killmail_id FROM kill_attackers a
+      WHERE a.alliance_id = $1 AND a.alliance_id > 0) a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE k.public AND NOT k.npc
   AND k.victim_alliance_id <> $1
   AND k.killmail_time >= $2::timestamptz
 GROUP BY k.system_id ORDER BY n DESC, k.system_id LIMIT 8
@@ -626,7 +630,8 @@ func (q *Queries) ListAllianceSystems(ctx context.Context, arg ListAllianceSyste
 const listCorporationShips = `-- name: ListCorporationShips :many
 SELECT a.ship_type_id, COUNT(DISTINCT a.killmail_id)::bigint AS n
 FROM kill_attackers a JOIN kills k ON k.killmail_id = a.killmail_id
-WHERE a.corporation_id = $1 AND k.public AND NOT k.npc AND a.ship_type_id > 0
+WHERE a.corporation_id = $1 AND a.corporation_id > 0
+  AND k.public AND NOT k.npc AND a.ship_type_id > 0
   AND k.victim_corporation_id <> $1
   AND k.killmail_time >= $2::timestamptz
 GROUP BY a.ship_type_id ORDER BY n DESC, a.ship_type_id LIMIT 8
@@ -670,7 +675,8 @@ func (q *Queries) ListCorporationShips(ctx context.Context, arg ListCorporationS
 const listCorporationShipsLost = `-- name: ListCorporationShipsLost :many
 SELECT ship_type_id, COUNT(*)::bigint AS losses
 FROM kills
-WHERE victim_corporation_id = $1 AND public AND ship_type_id > 0
+WHERE victim_corporation_id = $1 AND victim_corporation_id > 0
+  AND public AND ship_type_id > 0
   AND killmail_time >= $2::timestamptz
 GROUP BY ship_type_id ORDER BY losses DESC, ship_type_id LIMIT 8
 `
@@ -711,9 +717,11 @@ func (q *Queries) ListCorporationShipsLost(ctx context.Context, arg ListCorporat
 }
 
 const listCorporationSystems = `-- name: ListCorporationSystems :many
-SELECT k.system_id, COUNT(DISTINCT k.killmail_id)::bigint AS n, MAX(k.killmail_time)::timestamptz AS last_at
-FROM kill_attackers a JOIN kills k ON k.killmail_id = a.killmail_id
-WHERE a.corporation_id = $1 AND k.public AND NOT k.npc
+SELECT k.system_id, COUNT(*)::bigint AS n, MAX(k.killmail_time)::timestamptz AS last_at
+FROM (SELECT DISTINCT a.killmail_id FROM kill_attackers a
+      WHERE a.corporation_id = $1 AND a.corporation_id > 0) a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE k.public AND NOT k.npc
   AND k.victim_corporation_id <> $1
   AND k.killmail_time >= $2::timestamptz
 GROUP BY k.system_id ORDER BY n DESC, k.system_id LIMIT 8
@@ -925,7 +933,7 @@ SELECT o.character_id, MAX(o.corporation_id)::bigint AS corporation_id, MAX(o.al
 FROM kill_attackers a
 JOIN kills k ON k.killmail_id = a.killmail_id
 JOIN kill_attackers o ON o.killmail_id = a.killmail_id AND o.character_id <> a.character_id AND o.character_id > 0
-WHERE a.character_id = $1 AND k.public AND NOT k.npc
+WHERE a.character_id = $1 AND a.character_id > 0 AND k.public AND NOT k.npc
   AND k.killmail_time >= $2::timestamptz
 GROUP BY o.character_id ORDER BY n DESC LIMIT 10
 `
@@ -972,9 +980,11 @@ func (q *Queries) ListPilotCompanions(ctx context.Context, arg ListPilotCompanio
 }
 
 const listPilotHours = `-- name: ListPilotHours :many
-SELECT EXTRACT(HOUR FROM k.killmail_time AT TIME ZONE 'UTC')::int AS hour, COUNT(DISTINCT k.killmail_id)::bigint AS n
-FROM kill_attackers a JOIN kills k ON k.killmail_id = a.killmail_id
-WHERE a.character_id = $1 AND k.public AND NOT k.npc
+SELECT EXTRACT(HOUR FROM k.killmail_time AT TIME ZONE 'UTC')::int AS hour, COUNT(*)::bigint AS n
+FROM (SELECT DISTINCT a.killmail_id FROM kill_attackers a
+      WHERE a.character_id = $1 AND a.character_id > 0) a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE k.public AND NOT k.npc
   AND k.killmail_time >= $2::timestamptz
 GROUP BY 1
 `
@@ -1078,7 +1088,8 @@ func (q *Queries) ListPilotRecentKills(ctx context.Context, arg ListPilotRecentK
 const listPilotShips = `-- name: ListPilotShips :many
 SELECT a.ship_type_id, COUNT(DISTINCT a.killmail_id)::bigint AS n
 FROM kill_attackers a JOIN kills k ON k.killmail_id = a.killmail_id
-WHERE a.character_id = $1 AND k.public AND NOT k.npc AND a.ship_type_id > 0
+WHERE a.character_id = $1 AND a.character_id > 0
+  AND k.public AND NOT k.npc AND a.ship_type_id > 0
   AND k.killmail_time >= $2::timestamptz
 GROUP BY a.ship_type_id ORDER BY n DESC LIMIT 8
 `
@@ -1120,7 +1131,8 @@ func (q *Queries) ListPilotShips(ctx context.Context, arg ListPilotShipsParams) 
 const listPilotShipsLost = `-- name: ListPilotShipsLost :many
 SELECT ship_type_id, COUNT(*)::bigint AS losses
 FROM kills
-WHERE victim_character_id = $1 AND public AND ship_type_id > 0
+WHERE victim_character_id = $1 AND victim_character_id > 0
+  AND public AND ship_type_id > 0
   AND killmail_time >= $2::timestamptz
 GROUP BY ship_type_id ORDER BY losses DESC, ship_type_id LIMIT 8
 `
@@ -1161,9 +1173,11 @@ func (q *Queries) ListPilotShipsLost(ctx context.Context, arg ListPilotShipsLost
 }
 
 const listPilotSystems = `-- name: ListPilotSystems :many
-SELECT k.system_id, COUNT(DISTINCT k.killmail_id)::bigint AS n, MAX(k.killmail_time)::timestamptz AS last_at
-FROM kill_attackers a JOIN kills k ON k.killmail_id = a.killmail_id
-WHERE a.character_id = $1 AND k.public AND NOT k.npc
+SELECT k.system_id, COUNT(*)::bigint AS n, MAX(k.killmail_time)::timestamptz AS last_at
+FROM (SELECT DISTINCT a.killmail_id FROM kill_attackers a
+      WHERE a.character_id = $1 AND a.character_id > 0) a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE k.public AND NOT k.npc
   AND k.killmail_time >= $2::timestamptz
 GROUP BY k.system_id ORDER BY n DESC LIMIT 8
 `
@@ -1204,15 +1218,19 @@ func (q *Queries) ListPilotSystems(ctx context.Context, arg ListPilotSystemsPara
 }
 
 const listPilotsLastSeen = `-- name: ListPilotsLastSeen :many
-SELECT DISTINCT ON (p.character_id) p.character_id, k.system_id, k.killmail_time
+SELECT DISTINCT ON (p.character_id) p.character_id, p.system_id, p.killmail_time
 FROM (
-    SELECT a.character_id, a.killmail_id FROM kill_attackers a WHERE a.character_id = ANY($1::bigint[])
+    SELECT a.character_id, k.system_id, k.killmail_time
+    FROM kill_attackers a JOIN kills k ON k.killmail_id = a.killmail_id
+    WHERE a.character_id = ANY($1::bigint[]) AND a.character_id > 0
+      AND k.public AND k.killmail_time >= $2::timestamptz
     UNION ALL
-    SELECT v.victim_character_id, v.killmail_id FROM kills v WHERE v.victim_character_id = ANY($1::bigint[])
+    SELECT v.victim_character_id, v.system_id, v.killmail_time
+    FROM kills v
+    WHERE v.victim_character_id = ANY($1::bigint[]) AND v.victim_character_id > 0
+      AND v.public AND v.killmail_time >= $2::timestamptz
 ) p
-JOIN kills k ON k.killmail_id = p.killmail_id
-WHERE k.public AND k.killmail_time >= $2::timestamptz
-ORDER BY p.character_id, k.killmail_time DESC
+ORDER BY p.character_id, p.killmail_time DESC
 `
 
 type ListPilotsLastSeenParams struct {
@@ -1434,17 +1452,18 @@ func (q *Queries) MarkPilotKillApplied(ctx context.Context, arg MarkPilotKillApp
 
 const pilotKillStats = `-- name: PilotKillStats :one
 
+
 SELECT
     COUNT(DISTINCT a.killmail_id) FILTER (WHERE k.victim_character_id <> $1)::bigint AS kills,
     COUNT(DISTINCT a.killmail_id) FILTER (WHERE k.victim_character_id <> $1 AND k.solo)::bigint AS solo,
-    (SELECT COUNT(*) FROM kills v WHERE v.victim_character_id = $1 AND v.public
+    (SELECT COUNT(*) FROM kills v WHERE v.victim_character_id = $1 AND v.victim_character_id > 0 AND v.public
         AND v.killmail_time >= $2::timestamptz)::bigint AS losses,
     COALESCE(SUM(COALESCE(k.value_ours, k.value_zkill, 0)) FILTER (WHERE k.victim_character_id <> $1), 0)::float8 AS isk_killed,
-    COALESCE((SELECT SUM(COALESCE(v.value_ours, v.value_zkill, 0)) FROM kills v WHERE v.victim_character_id = $1 AND v.public
+    COALESCE((SELECT SUM(COALESCE(v.value_ours, v.value_zkill, 0)) FROM kills v WHERE v.victim_character_id = $1 AND v.victim_character_id > 0 AND v.public
         AND v.killmail_time >= $2::timestamptz), 0)::float8 AS isk_lost
 FROM kill_involvement a
 JOIN kills k ON k.killmail_id = a.killmail_id
-WHERE a.character_id = $1 AND k.public AND NOT k.npc
+WHERE a.character_id = $1 AND a.character_id > 0 AND k.public AND NOT k.npc
   AND k.killmail_time >= $2::timestamptz
 `
 
@@ -1466,6 +1485,10 @@ type PilotKillStatsRow struct {
 // channels and their own scans say about one pilot. Kills count only
 // when public (posted to zKillboard); NPC kills never.
 // ---------------------------------------------------------------------
+// The entity indexes on kill_attackers, kill_involvement and kills
+// are partial (WHERE id > 0), so every read here repeats that
+// predicate: a prepared statement's generic plan can only use a
+// partial index the query itself proves applies.
 func (q *Queries) PilotKillStats(ctx context.Context, arg PilotKillStatsParams) (PilotKillStatsRow, error) {
 	row := q.db.QueryRowContext(ctx, pilotKillStats, arg.CharacterID, arg.Since)
 	var i PilotKillStatsRow

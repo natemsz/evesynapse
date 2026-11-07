@@ -14,13 +14,18 @@ import (
 
 const listAccountKillsBySystem = `-- name: ListAccountKillsBySystem :many
 WITH mine AS (
-    SELECT DISTINCT k.killmail_id, k.system_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk,
+    SELECT k.killmail_id, k.system_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk,
            (k.victim_character_id = ANY($1::bigint[])) AS lost
-    FROM kills k
+    FROM (
+        SELECT v.killmail_id FROM kills v
+        WHERE v.victim_character_id = ANY($1::bigint[]) AND v.victim_character_id > 0
+          AND v.killmail_time >= $2::timestamptz
+        UNION
+        SELECT a.killmail_id FROM kill_attackers a
+        WHERE a.character_id = ANY($1::bigint[]) AND a.character_id > 0
+    ) m
+    JOIN kills k ON k.killmail_id = m.killmail_id
     WHERE k.killmail_time >= $2::timestamptz
-      AND (k.victim_character_id = ANY($1::bigint[])
-           OR EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id
-                      AND a.character_id = ANY($1::bigint[])))
 )
 SELECT system_id,
        COUNT(*) FILTER (WHERE NOT lost)::bigint AS kills,

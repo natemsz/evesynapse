@@ -26,7 +26,7 @@
      channels' known-hostiles lists. */}}
 {{define "pilot-intel"}}
 <section class="pi" aria-labelledby="pi-h">
-  <h2 id="pi-h">Activity <small class="muted">{{if .ProfileBacked}}every recorded kill and loss{{if .UpdatedAgo}} · updated {{.UpdatedAgo}}{{end}}{{else}}public kills, last 90 days{{end}}</small></h2>
+  <h2 id="pi-h">Activity <small class="muted">{{if .ProfileBacked}}every recorded kill and loss{{if .UpdatedAgo}} · updated {{.UpdatedAgo}}{{end}}{{else if .LiveFromZKill}}from zKill, live{{else}}public kills, last 90 days{{end}}</small></h2>
   {{if .Any}}
   <div class="pi-stats">
     <div class="pi-stat"><span class="pi-v">{{.Kills}}</span><span class="pi-l">kills{{if .Solo}} · {{.Solo}} solo{{end}}</span></div>

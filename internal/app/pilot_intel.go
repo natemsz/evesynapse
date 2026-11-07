@@ -137,6 +137,11 @@ type pilotIntelView struct {
 	// record exists; the template labels the section with the
 	// wider scope and the profile's own freshness (UpdatedAgo).
 	ProfileBacked bool
+	// LiveFromZKill: the aggregates above were read live from
+	// zKillboard at page time (pilot_live.go) because the pilot
+	// holds no stored activity at all. Nothing was stored; the
+	// template labels the section with that source.
+	LiveFromZKill bool
 	UpdatedAgo    string
 	UsualShip     string
 	Gang          string
@@ -284,6 +289,11 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 		v.UsualShip = act.UsualShip
 		v.Gang = act.Gang
 		v.LastActive = act.LastActive
+	}
+	// No stored activity at all: ask zKillboard live. Nothing is
+	// stored; the page reads the stats off the answer.
+	if v.Kills+v.Losses == 0 && len(v.Recent) == 0 {
+		app.fillPilotIntelLive(ctx, v, id, names, now)
 	}
 	v.Any = v.Kills+v.Losses > 0 || len(v.Recent) > 0
 	v.HasIntel = v.Any

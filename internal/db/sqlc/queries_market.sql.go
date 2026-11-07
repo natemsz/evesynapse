@@ -3873,6 +3873,161 @@ func (q *Queries) ListStaleMarketTypePrices(ctx context.Context, arg ListStaleMa
 	return items, nil
 }
 
+const listStatPackBestBeats = `-- name: ListStatPackBestBeats :many
+SELECT location_id, region_id, type_id, is_buy_order, at
+FROM market_best_beats
+`
+
+type ListStatPackBestBeatsRow struct {
+	LocationID int64     `json:"location_id"`
+	RegionID   int64     `json:"region_id"`
+	TypeID     int64     `json:"type_id"`
+	IsBuyOrder int64     `json:"is_buy_order"`
+	At         time.Time `json:"at"`
+}
+
+// All recorded best beats for the in-memory stat pack snapshot.
+func (q *Queries) ListStatPackBestBeats(ctx context.Context) ([]ListStatPackBestBeatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listStatPackBestBeats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListStatPackBestBeatsRow
+	for rows.Next() {
+		var i ListStatPackBestBeatsRow
+		if err := rows.Scan(
+			&i.LocationID,
+			&i.RegionID,
+			&i.TypeID,
+			&i.IsBuyOrder,
+			&i.At,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStatPackRegionStats = `-- name: ListStatPackRegionStats :many
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
+       volatility_30d, history_days, avg_daily_volume_30d,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+FROM market_region_stats
+`
+
+// All swept region stats for the in-memory stat pack snapshot
+// (market_stat_pack.go): loaded once at startup and kept resident.
+func (q *Queries) ListStatPackRegionStats(ctx context.Context) ([]MarketRegionStat, error) {
+	rows, err := q.db.QueryContext(ctx, listStatPackRegionStats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketRegionStat
+	for rows.Next() {
+		var i MarketRegionStat
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.BestSell,
+			&i.TypicalSell,
+			&i.SellBand,
+			&i.BestBuy,
+			&i.TypicalBuy,
+			&i.BuyBand,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+			&i.UpdatedAt,
+			&i.AvgDailyVolume,
+			&i.SellAvg,
+			&i.SellMax,
+			&i.SellP5,
+			&i.SellStddev,
+			&i.BuyAvg,
+			&i.BuyMin,
+			&i.BuyP5,
+			&i.BuyStddev,
+			&i.SellChg1d,
+			&i.SellChg7d,
+			&i.SellChg30d,
+			&i.BuyChg1d,
+			&i.BuyChg7d,
+			&i.BuyChg30d,
+			&i.Volatility30d,
+			&i.HistoryDays,
+			&i.AvgDailyVolume30d,
+			&i.SellSpark30d,
+			&i.SellLow30d,
+			&i.SellHigh30d,
+			&i.SellMean30d,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStatPackStationStats = `-- name: ListStatPackStationStats :many
+SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy
+FROM market_station_stats
+`
+
+// All station stats for the in-memory stat pack snapshot.
+func (q *Queries) ListStatPackStationStats(ctx context.Context) ([]MarketStationStat, error) {
+	rows, err := q.db.QueryContext(ctx, listStatPackStationStats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketStationStat
+	for rows.Next() {
+		var i MarketStationStat
+		if err := rows.Scan(
+			&i.LocationID,
+			&i.RegionID,
+			&i.TypeID,
+			&i.BestSell,
+			&i.BestBuy,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+			&i.UpdatedAt,
+			&i.TypicalSell,
+			&i.TypicalBuy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStructureResolutions = `-- name: ListStructureResolutions :many
 SELECT structure_id
 FROM structure_names

@@ -516,6 +516,10 @@ func (app *Application) completeRegionSweep(ctx context.Context, state db.Market
 		return
 	}
 	logging.Infof("worker: region sweep: %s done: %d types, %d station rows over %d pages", marketRegionLabel(state.RegionID), types, stations, state.NextPage-1)
+	// Freshness for the in-memory stat pack (market_stat_pack.go):
+	// update the resident snapshot with the newly swept rows so
+	// memory never serves staler data than the SQL path just committed.
+	app.refreshStatPackRegion(ctx, state.RegionID)
 	// Industry recipe values (schema 111) read the stat pack just
 	// committed: today's figure on every blueprint priced here.
 	app.refreshIndustryRecipeValues(ctx, state.RegionID, time.Now())

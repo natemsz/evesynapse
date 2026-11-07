@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"time"
 
-	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 )
 
@@ -211,12 +210,12 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 	// Summary tiles. The tiles headline the entity, not the
 	// list: their figures are the entity's record at the tile
 	// scope (all time, or the last 30 days on ?scope=30d), read
-	// from the stored profile and the involvement stats. The
+	// from the page's live zKillboard bundle. The
 	// window sums stand only when no record exists to read,
 	// and the tile band then says its figures are the window's.
 	tKills, tLosses, tSolo := int64(kills), int64(losses), int64(solo)
 	tDestroyed, tLost := destroyed, lost
-	record := app.killmailTileRecord(ctx, viewer, scope == "30d", now)
+	record := app.killmailTileRecord(ctx, viewer, view.zkill, scope == "30d", now)
 	if record != nil {
 		tKills, tLosses, tSolo = record.kills, record.losses, record.solo
 		tDestroyed, tLost = record.destroyed, record.lost
@@ -529,32 +528,31 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 }
 
 // kmTileRecord is an entity's kill record at one scope, read
-// from the stored profile and the involvement stats.
+// from the stored profile and the live zKillboard bundle.
 type kmTileRecord struct {
 	kills, losses, solo int64
 	destroyed, lost     float64
 }
 
 // killmailTileRecord reads the killmail pages' tile figures
-// for the viewing entity at the tile scope. All time, a
-// character's counts come from their stored activity profile
-// when one backs them (the profile's figures cover their
-// whole recorded history) and solo and ISK from the all-time
-// stats read over the permanent involvement record, the
-// division the pilot page and the killboard headline use.
-// Without a profile the stats read carries every figure. The
-// last 30 days read the stats directly for counts and ISK
-// alike: the profile keeps no windowed counts. A nil record
-// means the entity has no stored record to read at all, and
-// the tiles fall back to the listed window's figures.
-func (app *Application) killmailTileRecord(ctx context.Context, viewer killmailViewer, last30 bool, now time.Time) *kmTileRecord {
+// for the viewing entity at the tile scope, from the page's
+// live zKillboard bundle. All time, a character's counts come
+// from their stored activity profile when one backs them (the
+// profile's figures cover their whole recorded history) and
+// solo and ISK from the bundle, the division the pilot page
+// and the killboard headline use. Without a profile the
+// bundle's stats carry the counts. The last 30 days read the
+// fetched history directly for counts and ISK alike: the
+// profile keeps no windowed counts. A nil record means the
+// entity has no record to read at all, and the tiles fall
+// back to the listed window's figures.
+func (app *Application) killmailTileRecord(ctx context.Context, viewer killmailViewer, zb *zkillKillmailBundle, last30 bool, now time.Time) *kmTileRecord {
 	since := time.Unix(0, 0).UTC()
 	if last30 {
 		since = now.Add(-30 * 24 * time.Hour)
 	}
-	rec, err := app.killmailStatsAt(ctx, viewer, since)
-	if err != nil {
-		logging.Warnf("killmails: tile stats: %v", err)
+	rec := killmailStatsFromBundle(zb, viewer, since)
+	if rec == nil {
 		return nil
 	}
 	if !last30 && viewer.characterID > 0 {
@@ -579,38 +577,63 @@ func (app *Application) killmailTileRecord(ctx context.Context, viewer killmailV
 			return &kmTileRecord{}
 		}
 	}
-	all, err := app.killmailStatsAt(ctx, viewer, time.Unix(0, 0).UTC())
-	if err != nil {
-		logging.Warnf("killmails: tile stats: %v", err)
-		return nil
-	}
-	if all.kills+all.losses > 0 {
+	all := killmailStatsFromBundle(zb, viewer, time.Unix(0, 0).UTC())
+	if all != nil && all.kills+all.losses > 0 {
 		return &kmTileRecord{}
 	}
 	return nil
 }
 
-// killmailStatsAt reads one entity's kills, losses, solo
-// kills and ISK destroyed and lost since a time, from the
-// involvement stats reads (a corporation's losses sit on the
-// victim side, in their own read).
-func (app *Application) killmailStatsAt(ctx context.Context, viewer killmailViewer, since time.Time) (*kmTileRecord, error) {
+// killmailStatsFromBundle reads one entity's kills, losses,
+// solo kills and ISK destroyed and lost since a time, from a
+// live zKillboard bundle: all-time counts from the stats
+// endpoint, ISK from the fetched history priced with our own
+// appraisal. A non-zero since reads a window instead, counts
+// and ISK from the entries inside it. When the stats call
+// failed, the fetched window is the fallback for the counts
+// too. (A corporation's losses sit on the victim side.)
+func killmailStatsFromBundle(zb *zkillKillmailBundle, viewer killmailViewer, since time.Time) *kmTileRecord {
+	if zb == nil {
+		return nil
+	}
+	rec := &kmTileRecord{}
+	kind, id := viewerKindID(viewer)
+	// All-time counts come from the stats endpoint; a window
+	// counts the entries inside it.
+	count := !since.IsZero() || zb.Stats == nil
+	if since.IsZero() && zb.Stats != nil {
+		rec.kills, rec.losses, rec.solo = zb.Stats.Kills, zb.Stats.Losses, zb.Stats.Solo
+	}
+	for _, e := range zb.Entries {
+		if !since.IsZero() && e.KillmailTime.Before(since) {
+			continue
+		}
+		isKill, isLoss := zkillEntryEntityPart(e, kind, id)
+		if isKill {
+			if count {
+				rec.kills++
+				if e.ZKB.Solo {
+					rec.solo++
+				}
+			}
+			rec.destroyed += zb.Values[e.KillmailID]
+		} else if isLoss {
+			if count {
+				rec.losses++
+			}
+			rec.lost += zb.Values[e.KillmailID]
+		}
+	}
+	return rec
+}
+
+// viewerKindID is a killmail viewer's scope kind and id, the
+// pair the zKillboard history and stats endpoints take.
+func viewerKindID(viewer killmailViewer) (string, int64) {
 	if viewer.corporationID > 0 {
-		st, err := app.queries.CorporationKillStats(ctx, db.CorporationKillStatsParams{CorporationID: viewer.corporationID, Since: since})
-		if err != nil {
-			return nil, err
-		}
-		losses, err := app.queries.CountCorporationKillLosses(ctx, db.CountCorporationKillLossesParams{CorporationID: viewer.corporationID, Since: since})
-		if err != nil {
-			return nil, err
-		}
-		return &kmTileRecord{kills: st.Kills, losses: losses.Losses, solo: st.Solo, destroyed: st.IskKilled, lost: losses.IskLost}, nil
+		return "corporation", viewer.corporationID
 	}
-	st, err := app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: viewer.characterID, Since: since})
-	if err != nil {
-		return nil, err
-	}
-	return &kmTileRecord{kills: st.Kills, losses: st.Losses, solo: st.Solo, destroyed: st.IskKilled, lost: st.IskLost}, nil
+	return "character", viewer.characterID
 }
 
 // killPulse lays out the 14-day ISK flow: one column a day, the

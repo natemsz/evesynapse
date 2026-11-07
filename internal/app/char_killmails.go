@@ -1,13 +1,10 @@
 package app
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -84,8 +81,9 @@ type killmailsView struct {
 	Warming       bool   // no recent-list snapshot yet at all
 	RoleMissing   string // in-game role label when ESI refused the list (corp view only)
 	Rows          []killmailRow
-	Older         string // the next page's URL, "" at the end of the board's history
-	olderCursor   string // the next page's board cursor ("<unix>.<killmail id>"), "" at the end; shapeKillmails builds Older from it with the page's query state
+	Older         string               // the next page's URL, "" at the end of the board's history
+	olderCursor   string               // the next page's board cursor ("<unix>.<killmail id>"), "" at the end; shapeKillmails builds Older from it with the page's query state
+	zkill         *zkillKillmailBundle // the live zKillboard read for this page's rows and tiles
 
 	// The summary, panels and filters (killmails_shape.go).
 	CharView        bool // the character view: hulls, wingmen and final blows read its pilot
@@ -173,7 +171,11 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 	}
 
 	viewer := killmailViewer{characterID: active.CharacterID}
-	view.Rows, view.olderCursor = app.killmailUnionRows(ctx, viewer, refs, beforeTime, beforeID)
+	// The board side reads zKillboard live: the same bundle
+	// feeds the rows and the tiles, so one view costs one
+	// stats call and one bounded history walk.
+	view.zkill = app.zkillKillmailBundle(ctx, viewer)
+	view.Rows, view.olderCursor = app.killmailUnionRows(ctx, viewer, refs, view.zkill, beforeTime, beforeID)
 	ids := make([]int64, 0, len(view.Rows))
 	for _, row := range view.Rows {
 		ids = append(ids, row.KillmailID)
@@ -337,84 +339,6 @@ func (app *Application) killmailRowFor(ctx context.Context, viewer killmailViewe
 	return row
 }
 
-// boardKillmailRow builds the list line for a kill only the
-// board holds: its full killmail from kill_details, shaped by
-// the same fill the ESI rows use. A kill whose detail has been
-// pruned renders from its board summary row instead.
-func (app *Application) boardKillmailRow(ctx context.Context, viewer killmailViewer, k db.Kill, values map[int64]float64, placeMemo map[int64]placeRef) killmailRow {
-	if payload, err := app.queries.GetKillDetail(ctx, k.KillmailID); err == nil {
-		if km, ok := decodeBoardKillmail(payload); ok {
-			value, priced := values[k.KillmailID]
-			return app.killmailRowFor(ctx, viewer, km, value, priced, placeMemo)
-		}
-	}
-	return app.summaryKillmailRow(ctx, viewer, k, values, placeMemo)
-}
-
-// decodeBoardKillmail reads a board-held killmail (kill_details'
-// gzipped payload) as the ESI shape the list rows are built from.
-func decodeBoardKillmail(gz []byte) (esi.Killmail, bool) {
-	var km esi.Killmail
-	zr, err := gzip.NewReader(bytes.NewReader(gz))
-	if err != nil {
-		return km, false
-	}
-	raw, err := io.ReadAll(zr)
-	if err != nil {
-		return km, false
-	}
-	return km, json.Unmarshal(raw, &km) == nil
-}
-
-// summaryKillmailRow renders a board kill from its summary row
-// alone: the fallback for a kill whose full killmail is gone.
-// The parties and the value are the summary's own; the viewer's
-// attacking ship is known only when they landed the final blow,
-// and the wing list stays empty.
-func (app *Application) summaryKillmailRow(ctx context.Context, viewer killmailViewer, k db.Kill, values map[int64]float64, placeMemo map[int64]placeRef) killmailRow {
-	row := warmingKillmailRow(k.KillmailID)
-	row.Warming = false
-	row.Time = formatFinish(k.KillmailTime.UTC().Format(time.RFC3339))
-	row.System = app.linkPlaceMemo(ctx, placeMemo, k.SystemID, app.locationTitle(ctx, k.SystemID, "solar_system"))
-	row.At = k.KillmailTime
-	row.SystemID = k.SystemID
-	isLoss := k.VictimCharacterID == viewer.characterID
-	if viewer.corporationID > 0 {
-		isLoss = k.VictimCorporationID == viewer.corporationID
-	}
-	if isLoss {
-		row.Loss = true
-	} else {
-		row.Kill = true
-	}
-	row.Victim = app.displayCharacter(ctx, k.VictimCharacterID)
-	row.VictimID = k.VictimCharacterID
-	row.Ship = app.typeNameOrID(ctx, k.ShipTypeID)
-	row.ShipTypeID = k.ShipTypeID
-	row.Involved = fmt.Sprintf("%d", k.AttackerCount)
-	row.Pod = k.ShipTypeID == 670 || k.ShipTypeID == 33328
-	row.Solo = k.Solo
-	if row.Loss {
-		row.YourShipID = k.ShipTypeID
-	}
-	if k.FbCharacterID > 0 {
-		row.FinalBlow = app.displayCharacter(ctx, k.FbCharacterID)
-		row.FinalBlowID = k.FbCharacterID
-	}
-	viewerBlow := viewer.characterID > 0 && k.FbCharacterID == viewer.characterID ||
-		viewer.corporationID > 0 && k.FbCorporationID == viewer.corporationID
-	row.YourBlow = viewerBlow && !row.Loss
-	if row.Kill && viewerBlow {
-		row.YourShipID = k.FbShipTypeID
-	}
-	if v, ok := values[k.KillmailID]; ok {
-		row.Value = esi.FormatISK(v)
-		row.ISK = v
-		row.Priced = true
-	}
-	return row
-}
-
 // parseKillmailCursor reads the ?before=<unixSeconds>.<killmailID>
 // paging cursor, the killboard's convention. An absent or
 // malformed cursor is the first page: the board window starts
@@ -435,39 +359,75 @@ func parseKillmailCursor(q url.Values) (beforeTime time.Time, beforeID int64, cu
 	return beforeTime, beforeID, false
 }
 
+// zkillKillmailBundle is one entity's board read live from
+// zKillboard for the killmails page: the all-time counts from
+// the stats endpoint and the recent kills and losses from the
+// history endpoint, priced with our own appraisal. The rows and
+// the tiles read the same bundle, so one page view costs one
+// stats call and one bounded history walk.
+type zkillKillmailBundle struct {
+	Stats   *zkillStats
+	Entries []zkillHistoryEntry
+	Values  map[int64]float64
+	// Complete is false when the history walk stopped at its
+	// page bound with a full page, so more history may exist
+	// past the bound.
+	Complete bool
+}
+
+// zkillKillmailBundle reads the viewing entity's board live
+// from zKillboard. A failed fetch returns a bundle with no
+// stats and no entries; the page degrades to the ESI recent
+// list and window tiles instead of failing.
+func (app *Application) zkillKillmailBundle(ctx context.Context, viewer killmailViewer) *zkillKillmailBundle {
+	ctx, cancel := context.WithTimeout(ctx, pilotLiveTimeout)
+	defer cancel()
+	var kind zkillHistoryKind
+	var id int64
+	if viewer.characterID > 0 {
+		kind, id = zkillHistoryCharacter, viewer.characterID
+	} else {
+		kind, id = zkillHistoryCorporation, viewer.corporationID
+	}
+	stats, err := app.fetchZKillStats(ctx, kind, id)
+	if err != nil {
+		logging.Warnf("killmails: live zkill stats %d: %v", id, err)
+	}
+	entries, complete := app.fetchZKillHistory(ctx, kind, id, zkillHistoryMaxPages, time.Time{})
+	values := app.priceZKillEntries(ctx, entries)
+	return &zkillKillmailBundle{Stats: stats, Entries: entries, Values: values, Complete: complete}
+}
+
 // killmailUnionRows builds the killmail pages' row list: the
 // ESI recent list's rows, in the list's own order, unioned with
-// the killboard's public kills for the same entity, newest
-// first, capped at the page's size. A kill both sources know
-// appears once, as the ESI ref's row: the recent list's entry
-// keeps its place and its stored detail. Board-only kills are
-// kills the recent list cannot show: participations without the
-// final blow, or mails past its window.
+// the entity's kills and losses read live from zKillboard,
+// newest first, capped at the page's size. A kill both sources
+// know appears once, as the ESI ref's row: the recent list's
+// entry keeps its place and its stored detail. Board-only kills
+// are kills the recent list cannot show: participations without
+// the final blow, or mails past its window.
 //
 // The board side pages by the killboard's cursor convention:
 // (beforeTime, beforeID) opens its window, and the returned
 // cursor names the oldest board row on the page when the board
-// filled its side, so the next page continues past it without
+// side holds more, so the next page continues past it without
 // skipping or repeating a board row. Callers pass no refs on a
 // cursored request: the recent list is a newest-window snapshot,
 // so later pages are board rows only.
-func (app *Application) killmailUnionRows(ctx context.Context, viewer killmailViewer, refs []esi.KillmailRef, beforeTime time.Time, beforeID int64) ([]killmailRow, string) {
-	var board []db.Kill
-	var err error
+func (app *Application) killmailUnionRows(ctx context.Context, viewer killmailViewer, refs []esi.KillmailRef, zb *zkillKillmailBundle, beforeTime time.Time, beforeID int64) ([]killmailRow, string) {
 	// The board's kills for the entity inside the cursor's
 	// window, newest first.
-	switch {
-	case viewer.characterID > 0:
-		board, err = app.queries.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
-			EntityID: viewer.characterID, BeforeTime: beforeTime, BeforeID: beforeID, MaxRows: maxKillmailsShown,
-		})
-	case viewer.corporationID > 0:
-		board, err = app.queries.ListKillsByCorporation(ctx, db.ListKillsByCorporationParams{
-			EntityID: viewer.corporationID, BeforeTime: beforeTime, BeforeID: beforeID, MaxRows: maxKillmailsShown,
-		})
-	}
-	if err != nil {
-		logging.Errorf("killmails: board kills for the union: %v", err)
+	var board []zkillHistoryEntry
+	if zb != nil {
+		for _, e := range zb.Entries {
+			if e.KillmailID <= 0 || e.KillmailTime.IsZero() {
+				continue
+			}
+			if !(e.KillmailTime.Before(beforeTime) || (e.KillmailTime.Equal(beforeTime) && e.KillmailID < beforeID)) {
+				continue
+			}
+			board = append(board, e)
+		}
 	}
 
 	esiIDs := make(map[int64]bool, len(refs))
@@ -476,15 +436,22 @@ func (app *Application) killmailUnionRows(ctx context.Context, viewer killmailVi
 	}
 	allRefs := make([]esi.KillmailRef, 0, len(refs)+len(board))
 	allRefs = append(allRefs, refs...)
-	for _, k := range board {
-		if !esiIDs[k.KillmailID] {
-			allRefs = append(allRefs, esi.KillmailRef{KillmailID: k.KillmailID, KillmailHash: k.Hash})
+	for _, e := range board {
+		if !esiIDs[e.KillmailID] {
+			allRefs = append(allRefs, esi.KillmailRef{KillmailID: e.KillmailID})
 		}
 	}
-	// Values are the killboard's stored prices for these kills:
-	// the board appraises every kill at ingest, and this page
-	// reads that figure instead of pricing at render.
+	// Values are the killboard's stored prices for the ESI
+	// rows, filled in from our own appraisal of the fetched
+	// kills where the board has not priced one yet.
 	values := app.killBoardValues(ctx, allRefs)
+	if zb != nil {
+		for id, v := range zb.Values {
+			if _, ok := values[id]; !ok {
+				values[id] = v
+			}
+		}
+	}
 	placeMemo := make(map[int64]placeRef)
 
 	rows := make([]killmailRow, 0, len(refs))
@@ -503,12 +470,17 @@ func (app *Application) killmailUnionRows(ctx context.Context, viewer killmailVi
 		}
 		eff[i] = last
 	}
-	for _, k := range board {
-		if esiIDs[k.KillmailID] {
+	for _, e := range board {
+		if esiIDs[e.KillmailID] {
 			continue
 		}
-		brow := app.boardKillmailRow(ctx, viewer, k, values, placeMemo)
-		at := k.KillmailTime
+		km, ok := zkillEntryKillmail(e)
+		if !ok {
+			continue
+		}
+		value, priced := values[e.KillmailID]
+		brow := app.killmailRowFor(ctx, viewer, km, value, priced, placeMemo)
+		at := e.KillmailTime
 		pos := len(rows)
 		for i := range rows {
 			if eff[i].Before(at) {
@@ -527,18 +499,29 @@ func (app *Application) killmailUnionRows(ctx context.Context, viewer killmailVi
 		rows = rows[:maxKillmailsShown]
 	}
 	// The next page's cursor: the oldest board kill this page
-	// shows. It exists only while the board filled its side; a
-	// short board page is the end of the entity's history.
+	// shows. It exists only while the board side holds more
+	// than this page shows.
 	next := ""
-	if len(board) >= maxKillmailsShown {
+	boardTotal := 0
+	for _, e := range board {
+		if !esiIDs[e.KillmailID] {
+			boardTotal++
+		}
+	}
+	if boardTotal > 0 {
 		onPage := make(map[int64]bool, len(rows))
 		for _, row := range rows {
 			onPage[row.KillmailID] = true
 		}
-		for _, k := range board {
-			if onPage[k.KillmailID] {
-				next = fmt.Sprintf("%d.%d", k.KillmailTime.Unix(), k.KillmailID)
+		shown := 0
+		for _, e := range board {
+			if !esiIDs[e.KillmailID] && onPage[e.KillmailID] {
+				shown++
+				next = fmt.Sprintf("%d.%d", e.KillmailTime.Unix(), e.KillmailID)
 			}
+		}
+		if shown >= boardTotal {
+			next = ""
 		}
 	}
 	return rows, next

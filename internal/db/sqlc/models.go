@@ -960,13 +960,6 @@ type KillDetail struct {
 	StoredAt   time.Time `json:"stored_at"`
 }
 
-type KillInvolvement struct {
-	KillmailID    int64 `json:"killmail_id"`
-	CharacterID   int64 `json:"character_id"`
-	CorporationID int64 `json:"corporation_id"`
-	AllianceID    int64 `json:"alliance_id"`
-}
-
 type KillLinePrice struct {
 	KillmailID int64   `json:"killmail_id"`
 	TypeID     int64   `json:"type_id"`

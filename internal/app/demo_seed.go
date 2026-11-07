@@ -362,7 +362,6 @@ func (s *demoSeed) wipe(ctx context.Context) error {
 		func() error { return q.DeleteDemoBattleFights(ctx, s.userID) },
 		func() error { return q.DeleteDemoBattleKills(ctx, demoBattleMailIDs) },
 		func() error { return q.DeleteDemoBattleKillAttackers(ctx, demoBattleMailIDs) },
-		func() error { return q.DeleteDemoBattleKillInvolvement(ctx, demoBattleMailIDs) },
 		func() error { return q.DeleteDemoBattleKillDetails(ctx, demoBattleMailIDs) },
 		func() error { return q.DeleteDemoBattleKillPrices(ctx, demoBattleMailIDs) },
 	}

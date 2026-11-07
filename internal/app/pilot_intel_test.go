@@ -38,12 +38,36 @@ func TestPilotIntel(t *testing.T) {
 			VALUES ($1, $2, 30002187, $3, $4, 'stream', $5, now(), 10000000)`, id, at, victim, ship, public)
 		for i, a := range attackers {
 			exec(`INSERT INTO kill_attackers (killmail_id, seq, character_id, ship_type_id, final_blow) VALUES ($1, $2, $3, 22456, $4)`, id, i, a, i == 0)
-			exec(`INSERT INTO kill_involvement (killmail_id, character_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, id, a)
 		}
 	}
 	kill(1, now.Add(-2*time.Hour), 92000001, 587, true, hostile, 91000002)
 	kill(2, now.Add(-1*time.Hour), hostile, 22456, true, 92000002)
 	kill(3, now.Add(-30*time.Minute), 92000003, 587, false, hostile) // private: never shown
+
+	// The board figures read live from zKillboard: the stats
+	// endpoint for the counts and ships flown, the history
+	// endpoint for the recent kills, priced with our own
+	// appraisal of the victim hull.
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES (10000002, 587, 10000000, now()) ON CONFLICT DO NOTHING`)
+	killAt := now.Add(-2 * time.Hour).UTC().Format(time.RFC3339)
+	lossAt := now.Add(-1 * time.Hour).UTC().Format(time.RFC3339)
+	hist := newFakeZkillHistory(map[string]string{
+		"/stats/characterID/91000001/": `{"shipsDestroyed":1,"shipsLost":1,"soloKills":0,"soloLosses":0,` +
+			`"topAllTime":[{"type":"ship","data":[{"kills":1,"shipTypeID":22456}]}],"topIskKillIDs":[1]}`,
+		"/characterID/91000001/": `[` +
+			`{"killmail_id":1,"killmail_time":"` + killAt + `","solar_system_id":30002187,` +
+			`"victim":{"character_id":92000001,"corporation_id":98000009,"ship_type_id":587,"damage_taken":900,"items":[]},` +
+			`"attackers":[{"character_id":91000001,"corporation_id":98000002,"ship_type_id":22456,"damage_done":900,"final_blow":true,"weapon_type_id":2488},` +
+			`{"character_id":91000002,"corporation_id":98000002,"ship_type_id":22456,"damage_done":100,"final_blow":false,"weapon_type_id":2488}],` +
+			`"zkb":{"locationID":0,"hash":"hash1","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}},` +
+			`{"killmail_id":2,"killmail_time":"` + lossAt + `","solar_system_id":30002187,` +
+			`"victim":{"character_id":91000001,"corporation_id":98000002,"ship_type_id":22456,"damage_taken":700,"items":[]},` +
+			`"attackers":[{"character_id":92000002,"corporation_id":98000004,"ship_type_id":22456,"damage_done":700,"final_blow":true,"weapon_type_id":2488}],` +
+			`"zkb":{"locationID":0,"hash":"hash2","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}}]`,
+	})
+	srv := httptest.NewServer(hist.handler())
+	defer srv.Close()
+	app.cfg.zkillAPIBaseURL = srv.URL + "/"
 
 	// A visitor sees the public record.
 	_, body := getPage(t, app, &http.Cookie{Name: "nobody", Value: "x"}, "/pilot/?character="+strconv.FormatInt(hostile, 10))
@@ -129,8 +153,9 @@ func TestPilotIntel(t *testing.T) {
 // TestPilotIntelLiveFromZKill pins the on-demand lookup: a pilot
 // with no stored activity gets their stats read live from
 // zKillboard at page time, priced with EveSynapse's own appraisal,
-// and nothing is stored. A pilot with stored activity never
-// triggers the live fetch.
+// and nothing is stored. A pilot with a stored activity profile
+// keeps the profile's counts; the live fetch fills only solo,
+// ISK destroyed and the latest kills.
 func TestPilotIntelLiveFromZKill(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, nil)
 	ctx := context.Background()
@@ -150,6 +175,10 @@ func TestPilotIntelLiveFromZKill(t *testing.T) {
 	killAt := now.Add(-2 * time.Hour).UTC().Format(time.RFC3339)
 	lossAt := now.Add(-1 * time.Hour).UTC().Format(time.RFC3339)
 	hist := newFakeZkillHistory(map[string]string{
+		"/stats/characterID/91000005/": `{"shipsDestroyed":1,"shipsLost":1,"soloKills":1,"soloLosses":0,` +
+			`"topAllTime":[{"type":"ship","data":[{"kills":1,"shipTypeID":22456}]}],"topIskKillIDs":[800011]}`,
+		"/stats/characterID/92000005/": `{"shipsDestroyed":1,"shipsLost":0,"soloKills":1,"soloLosses":0,` +
+			`"topAllTime":[{"type":"ship","data":[{"kills":1,"shipTypeID":22456}]}],"topIskKillIDs":[800013]}`,
 		"/characterID/91000005/": `[` +
 			`{"killmail_id":800011,"killmail_time":"` + killAt + `","solar_system_id":30000142,` +
 			`"victim":{"character_id":92000001,"corporation_id":98000009,"ship_type_id":587,"damage_taken":900,"items":[]},` +
@@ -193,16 +222,21 @@ func TestPilotIntelLiveFromZKill(t *testing.T) {
 		t.Error("live lookup claimed a profile, want none")
 	}
 
-	// A pilot with stored activity never triggers the live fetch.
-	exec(`INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, ship_type_id, source, public, ingested_at, value_zkill)
-		VALUES (900001, $1, 30000142, 92000003, 587, 'stream', true, now(), 10000000)`, now.Add(-2*time.Hour))
-	exec(`INSERT INTO kill_attackers (killmail_id, seq, character_id, ship_type_id, final_blow) VALUES (900001, 0, $1, 22456, true)`, stored)
-	exec(`INSERT INTO kill_involvement (killmail_id, character_id) VALUES (900001, $1) ON CONFLICT DO NOTHING`, stored)
+	// A pilot with a stored activity profile keeps the profile's
+	// counts: the live fetch fills only solo, ISK and the
+	// latest kills.
+	exec(`INSERT INTO pilot_activity_profiles (character_id, backfilled_at, updated_at, kills, losses, final_blows, gang_total, gang_samples, usual_ship_type_id, last_active_at)
+		VALUES ($1, $2, $3, 5, 3, 2, 10, 5, 22456, $3)`, stored, now.Add(-24*time.Hour), now.Add(-2*time.Hour))
 	_, body2 := getPage(t, app, visitor, "/pilot/?character="+strconv.FormatInt(stored, 10))
-	if strings.Contains(body2, "from zKill, live") {
-		t.Error("stored pilot page marked live from zKill, want stored")
+	for _, want := range []string{"every recorded kill and loss", `<span class="pi-v">5</span><span class="pi-l">kills`} {
+		if !strings.Contains(body2, want) {
+			t.Errorf("profile-backed pilot page lacks %q", want)
+		}
 	}
-	if got := hist.hitCount("/characterID/92000005/"); got != 0 {
-		t.Errorf("stored pilot history fetched %d times, want 0", got)
+	if strings.Contains(body2, "from zKill, live") {
+		t.Error("profile-backed pilot page marked live from zKill, want the profile scope")
+	}
+	if got := hist.hitCount("/characterID/92000005/"); got != 1 {
+		t.Errorf("profile-backed pilot history fetched %d times, want 1", got)
 	}
 }

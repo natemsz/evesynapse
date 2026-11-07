@@ -308,13 +308,14 @@ func (app *Application) backfillPilot(ctx context.Context, client *http.Client, 
 }
 
 // zkillHistoryKind selects whose history a zKillboard history
-// query reads: a pilot's kills and losses, or a corporation's.
-// The value is the API's path segment for the entity.
+// query reads: a pilot's kills and losses, a corporation's, or an
+// alliance's. The value is the API's path segment for the entity.
 type zkillHistoryKind string
 
 const (
 	zkillHistoryCharacter   zkillHistoryKind = "characterID"
 	zkillHistoryCorporation zkillHistoryKind = "corporationID"
+	zkillHistoryAlliance    zkillHistoryKind = "allianceID"
 )
 
 // zkillHistoryEntry is one killmail from zKillboard's history

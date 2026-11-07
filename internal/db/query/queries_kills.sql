@@ -102,10 +102,11 @@ UPDATE kills SET value_ours = sqlc.arg(value_ours)::double precision,
     priced_at = sqlc.arg(priced_at)::timestamptz
 WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 
--- Retention: attacker detail and full killmails older than the
--- cutoff go; the summary row, the priced lines and the
+-- Retention: attacker detail, full killmails and per-item priced
+-- lines older than the cutoff go; the summary row and the
 -- involvement record stay. Values and who they credit are
--- permanent; only detail ages out.
+-- permanent; only detail ages out. Past a year a kill is metadata
+-- for intel only (who, when, ship, total value), not a record.
 -- name: PruneKillDetails :execrows
 DELETE FROM kill_details d USING kills k
 WHERE k.killmail_id = d.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz;
@@ -113,6 +114,10 @@ WHERE k.killmail_id = d.killmail_id AND k.killmail_time < sqlc.arg(before)::time
 -- name: PruneKillAttackers :execrows
 DELETE FROM kill_attackers a USING kills k
 WHERE k.killmail_id = a.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz;
+
+-- name: PruneKillLinePrices :execrows
+DELETE FROM kill_line_prices l USING kills k
+WHERE k.killmail_id = l.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz;
 
 -- name: ListSystemRegions :many
 SELECT system_id, region_id FROM sde_systems;

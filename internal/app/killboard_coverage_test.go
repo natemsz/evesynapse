@@ -468,14 +468,11 @@ func TestKillInvolvementFiling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("old kill line prices: %v", err)
 	}
-	hullPriced := false
-	for _, l := range lines {
-		if l.TypeID == 587 && l.UnitPrice > 0 {
-			hullPriced = true
-		}
+	if len(lines) != 0 {
+		t.Errorf("old kill stored %d priced lines, want none: past a year a kill keeps only its total", len(lines))
 	}
-	if !hullPriced {
-		t.Errorf("old kill priced lines = %+v, want the hull priced", lines)
+	if !old.ValueOurs.Valid || old.ValueOurs.Float64 != 400000 {
+		t.Errorf("old kill value_ours = %v, want 400000: the total is what per-player stats read", old.ValueOurs)
 	}
 	var attackers int
 	if err := app.db.QueryRowContext(ctx,
@@ -559,6 +556,9 @@ func TestKillValueSurvivesPrune(t *testing.T) {
 	if _, err := q.PruneKillAttackers(ctx, time.Now().UTC()); err != nil {
 		t.Fatalf("prune attackers: %v", err)
 	}
+	if _, err := q.PruneKillLinePrices(ctx, time.Now().UTC()); err != nil {
+		t.Fatalf("prune line prices: %v", err)
+	}
 	var attackers int
 	if err := app.db.QueryRowContext(ctx,
 		`SELECT count(*) FROM kill_attackers WHERE killmail_id = 800301`).Scan(&attackers); err != nil {
@@ -569,6 +569,13 @@ func TestKillValueSurvivesPrune(t *testing.T) {
 	}
 	if _, err := q.GetKillDetail(ctx, 800301); err == nil {
 		t.Fatal("stored killmail survived the prune, want it gone")
+	}
+	lines, err := q.GetKillLinePrices(ctx, 800301)
+	if err != nil {
+		t.Fatalf("line prices after prune: %v", err)
+	}
+	if len(lines) != 0 {
+		t.Fatalf("priced lines after prune = %d, want 0 (the prune must take the lines too)", len(lines))
 	}
 
 	if got := stats(); got.Kills != 1 || got.IskKilled != 400000 {

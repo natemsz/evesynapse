@@ -431,25 +431,30 @@ func (app *Application) priceKillLines(ctx context.Context, km killmailFull) err
 	if err != nil {
 		return err
 	}
-	return app.storeKillPrices(ctx, km.KillmailID, lines, price, time.Now().UTC())
+	return app.storeKillPrices(ctx, km.KillmailID, km.KillmailTime, lines, price, time.Now().UTC())
 }
 
-// storeKillPrices persists one kill's per-line prices and its
-// totals from an appraisal's unit prices.
-func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, lines []killLine, price map[int64]float64, now time.Time) error {
-	var typeIDs []int64
-	var unitPrices []float64
-	for _, l := range lines {
-		if p, ok := price[l.typeID]; ok {
-			typeIDs = append(typeIDs, l.typeID)
-			unitPrices = append(unitPrices, p)
+// storeKillPrices persists one kill's totals from an appraisal's
+// unit prices, and its per-line prices only while the kill is
+// within retention. Past a year a kill is metadata for intel
+// only, so its lines are never stored; the total still lands on
+// the kills row, which is what per-player value stats read.
+func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, killTime time.Time, lines []killLine, price map[int64]float64, now time.Time) error {
+	if !killTime.Before(now.Add(-killDetailRetention)) {
+		var typeIDs []int64
+		var unitPrices []float64
+		for _, l := range lines {
+			if p, ok := price[l.typeID]; ok {
+				typeIDs = append(typeIDs, l.typeID)
+				unitPrices = append(unitPrices, p)
+			}
 		}
-	}
-	if len(typeIDs) > 0 {
-		if err := app.queries.InsertKillLinePrices(ctx, db.InsertKillLinePricesParams{
-			KillmailID: killmailID, TypeIds: typeIDs, UnitPrices: unitPrices,
-		}); err != nil {
-			return err
+		if len(typeIDs) > 0 {
+			if err := app.queries.InsertKillLinePrices(ctx, db.InsertKillLinePricesParams{
+				KillmailID: killmailID, TypeIds: typeIDs, UnitPrices: unitPrices,
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	total, dropped, cov := killValue(lines, price)
@@ -510,11 +515,12 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 		before := time.Now().UTC().Add(-killDetailRetention)
 		d, err1 := app.queries.PruneKillDetails(ctx, before)
 		a, err2 := app.queries.PruneKillAttackers(ctx, before)
+		l, err4 := app.queries.PruneKillLinePrices(ctx, before)
 		_, err3 := app.queries.PrunePilotActivityApplied(ctx, before)
-		if err := errors.Join(err1, err2, err3); err != nil {
+		if err := errors.Join(err1, err2, err3, err4); err != nil {
 			logging.Errorf("killboard: prune: %v", err)
-		} else if d+a > 0 {
-			logging.Infof("killboard: pruned %d killmails and %d attacker rows past a year", d, a)
+		} else if d+a+l > 0 {
+			logging.Infof("killboard: pruned %d killmails, %d attacker rows and %d priced lines past a year", d, a, l)
 		}
 	}
 }
@@ -572,6 +578,7 @@ func (app *Application) priceKills(ctx context.Context) (int, error) {
 	}
 	type pending struct {
 		id    int64
+		at    time.Time
 		lines []killLine
 	}
 	var work []pending
@@ -593,7 +600,7 @@ func (app *Application) priceKills(ctx context.Context) (int, error) {
 		for _, l := range ls {
 			types[l.typeID] = true
 		}
-		work = append(work, pending{id: r.KillmailID, lines: ls})
+		work = append(work, pending{id: r.KillmailID, at: km.KillmailTime, lines: ls})
 	}
 	lines := make([]module.AppraisalLine, 0, len(types))
 	for id := range types {
@@ -614,7 +621,7 @@ func (app *Application) priceKills(ctx context.Context) (int, error) {
 	now := time.Now().UTC()
 	n := 0
 	for _, w := range work {
-		if err := app.storeKillPrices(ctx, w.id, w.lines, price, now); err != nil {
+		if err := app.storeKillPrices(ctx, w.id, w.at, w.lines, price, now); err != nil {
 			return n, err
 		}
 		n++

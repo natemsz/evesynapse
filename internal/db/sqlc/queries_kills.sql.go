@@ -1368,12 +1368,26 @@ DELETE FROM kill_details d USING kills k
 WHERE k.killmail_id = d.killmail_id AND k.killmail_time < $1::timestamptz
 `
 
-// Retention: attacker detail and full killmails older than the
-// cutoff go; the summary row, the priced lines and the
+// Retention: attacker detail, full killmails and per-item priced
+// lines older than the cutoff go; the summary row and the
 // involvement record stay. Values and who they credit are
-// permanent; only detail ages out.
+// permanent; only detail ages out. Past a year a kill is metadata
+// for intel only (who, when, ship, total value), not a record.
 func (q *Queries) PruneKillDetails(ctx context.Context, before time.Time) (int64, error) {
 	result, err := q.db.ExecContext(ctx, pruneKillDetails, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const pruneKillLinePrices = `-- name: PruneKillLinePrices :execrows
+DELETE FROM kill_line_prices l USING kills k
+WHERE k.killmail_id = l.killmail_id AND k.killmail_time < $1::timestamptz
+`
+
+func (q *Queries) PruneKillLinePrices(ctx context.Context, before time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneKillLinePrices, before)
 	if err != nil {
 		return 0, err
 	}

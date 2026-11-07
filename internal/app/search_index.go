@@ -24,12 +24,15 @@ import (
 // soon as it is stored (the store paths upsert into the live
 // snapshot in the same pass — see the noteSearch*Record hooks),
 // and the SDE part is invalidated where an import lands
-// (importSDE). Whole-snapshot rebuilds are the backstop: the
-// first search that finds no snapshot, or one past its age,
-// starts a background build and serves the SQL path meanwhile;
-// searches never block on a build. An application without a
-// worker context (a bare test literal) never builds in the
-// background; it serves the SQL path until a build is run
+// (importSDE). The snapshot is built once at worker startup
+// (runWorker kicks off the build) and stays resident; whole
+// snapshot rebuilds are only a long backstop. A search that
+// finds no snapshot, or one past its age, starts a background
+// build and serves the SQL path meanwhile; searches never block
+// on a build, and a search never falls back to SQL just because
+// the snapshot is old while one is resident. An application
+// without a worker context (a bare test literal) never builds in
+// the background; it serves the SQL path until a build is run
 // explicitly.
 //
 // One deliberate difference from the SQL path: the record name
@@ -41,7 +44,12 @@ import (
 
 // searchIndexMaxAge is the backstop rebuild age: a snapshot older
 // than this is rebuilt in the background on the next search.
-const searchIndexMaxAge = 5 * time.Minute
+// It is a long backstop only. Freshness comes from the record
+// hooks (noteSearch*Record upserts into the live snapshot as
+// records are stored) and from SDE invalidation
+// (invalidateSearchIndexSDE), so the snapshot stays resident
+// and serving between rebuilds instead of dropping out.
+const searchIndexMaxAge = 24 * time.Hour
 
 type searchIndexType struct {
 	id         int64

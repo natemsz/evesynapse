@@ -156,6 +156,11 @@ func (app *Application) runWorker(ctx context.Context) {
 	// once there).
 	app.kickSearchIndexBuild()
 
+	// The market stat pack builds in the background at startup as
+	// well (market_stat_pack.go): renders before it lands serve
+	// SQL, low-RAM mode skips it.
+	app.kickStatPackBuild()
+
 	// The two loops below run beside the minute cycle. runWorker
 	// waits for them on the way out, so when it returns the whole
 	// worker has stopped and Close may close the database handles

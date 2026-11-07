@@ -602,6 +602,23 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = ANY($2::bigint[]);
+-- All swept region stats for the in-memory stat pack snapshot
+-- (market_stat_pack.go): loaded once at startup and kept resident.
+-- name: ListStatPackRegionStats :many
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
+       volatility_30d, history_days, avg_daily_volume_30d,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+FROM market_region_stats;
+-- All station stats for the in-memory stat pack snapshot.
+-- name: ListStatPackStationStats :many
+SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy
+FROM market_station_stats;
+-- All recorded best beats for the in-memory stat pack snapshot.
+-- name: ListStatPackBestBeats :many
+SELECT location_id, region_id, type_id, is_buy_order, at
+FROM market_best_beats;
 -- name: ListMarketAvgDailyVolumes :many
 -- The sold-per-day figure the sweep stores on each region stat:
 -- the mean recorded daily volume over the seven calendar days

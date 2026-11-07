@@ -68,6 +68,11 @@ type Application struct {
 	// record and SDE tables per keystroke.
 	searchIdx searchIndexState
 
+	// statPackIdx is the in-memory market stat pack snapshot
+	// (market_stat_pack.go): the snapshot market readers serve
+	// from RAM instead of Postgres.
+	statPackIdx statPackIndexState
+
 	// Parsed scan results, remembered (scans are immutable once
 	// stored; intel_analysis.go).
 	scanMemoMu sync.Mutex

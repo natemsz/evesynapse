@@ -9,13 +9,221 @@ package app
 // Appraisal reads through it today; baskets, the LP store and
 // alerts join it, so no surface re-reads the pricing tables its own
 // way or re-derives a figure the sweep already stored.
+//
+// The derived stat pack is held in RAM as an in-memory snapshot,
+// following the search index pattern (search_index.go): built
+// once at worker startup in the background, resident between
+// rebuilds, refreshed on sweep completion, gated by LOW_RAM_MODE=1,
+// with the existing Postgres queries serving as the fallback
+// before the snapshot lands.
 
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/logging"
 )
+
+// statPackMaxAge is the backstop rebuild age: a snapshot older
+// than this is rebuilt in the background on the next read.
+// Freshness comes from the sweep that builds the stored table,
+// plus invalidation when the stored table changes, so the snapshot
+// stays resident and serving between rebuilds.
+const statPackMaxAge = 24 * time.Hour
+
+type statPackKey struct {
+	regionID int64
+	typeID   int64
+}
+
+type beatRecord struct {
+	LocationID int64
+	RegionID   int64
+	TypeID     int64
+	IsBuyOrder int64
+	At         time.Time
+}
+
+// statPackSnapshot is the in-memory copy of the market derived stat
+// pack: swept region stats, station stats, and beats held in RAM
+// and served without touching Postgres on render.
+type statPackSnapshot struct {
+	builtAt      time.Time
+	regionStats  map[statPackKey]db.MarketRegionStat
+	byType       map[int64][]db.MarketRegionStat
+	stationStats map[stationKey]db.MarketStationStat
+	beats        []beatRecord
+}
+
+// statPackIndexState holds the Application's resident snapshot and
+// build lifecycle.
+type statPackIndexState struct {
+	mu       sync.RWMutex
+	snap     *statPackSnapshot
+	building bool
+	stale    bool
+}
+
+// statPackSnapshot returns the live snapshot, kicking a background
+// rebuild when there is none or it has gone stale. It returns nil
+// when no snapshot has landed yet or in low-RAM mode (LOW_RAM_MODE=1),
+// so callers serve the SQL fallback.
+// A render never falls back to SQL just because the snapshot is old
+// while one is resident: SQL is the fallback only when no snapshot has
+// landed yet.
+func (app *Application) statPackSnapshot() *statPackSnapshot {
+	if app.cfg.lowRAMMode {
+		return nil
+	}
+	idx := &app.statPackIdx
+	idx.mu.RLock()
+	snap := idx.snap
+	stale := snap == nil || idx.stale || time.Since(snap.builtAt) > statPackMaxAge
+	idx.mu.RUnlock()
+	if stale {
+		app.kickStatPackBuild()
+	}
+	return snap
+}
+
+// kickStatPackBuild starts one background build when none is
+// running. It needs the worker context: without one there is no
+// background lifecycle and the SQL path serves. In low-RAM mode
+// (LOW_RAM_MODE=1) it never starts a build.
+func (app *Application) kickStatPackBuild() {
+	if app.cfg.lowRAMMode {
+		return
+	}
+	if app.workerCtx == nil {
+		return
+	}
+	idx := &app.statPackIdx
+	idx.mu.Lock()
+	if idx.building {
+		idx.mu.Unlock()
+		return
+	}
+	idx.building = true
+	idx.mu.Unlock()
+	go func() {
+		defer func() {
+			idx.mu.Lock()
+			idx.building = false
+			idx.mu.Unlock()
+		}()
+		if err := app.buildStatPack(app.workerCtx); err != nil {
+			logging.Warnf("stat pack: build: %v", err)
+		}
+	}()
+}
+
+// buildStatPack reads the market derived tables and swaps the
+// in-memory snapshot whole.
+func (app *Application) buildStatPack(ctx context.Context) error {
+	regionRows, err := app.queries.ListStatPackRegionStats(ctx)
+	if err != nil {
+		return fmt.Errorf("stat pack: region stats: %w", err)
+	}
+	stationRows, err := app.queries.ListStatPackStationStats(ctx)
+	if err != nil {
+		return fmt.Errorf("stat pack: station stats: %w", err)
+	}
+	beatRows, err := app.queries.ListStatPackBestBeats(ctx)
+	if err != nil {
+		return fmt.Errorf("stat pack: best beats: %w", err)
+	}
+
+	snap := &statPackSnapshot{
+		builtAt:      time.Now(),
+		regionStats:  make(map[statPackKey]db.MarketRegionStat, len(regionRows)),
+		byType:       make(map[int64][]db.MarketRegionStat),
+		stationStats: make(map[stationKey]db.MarketStationStat, len(stationRows)),
+		beats:        make([]beatRecord, len(beatRows)),
+	}
+	for _, r := range regionRows {
+		k := statPackKey{regionID: r.RegionID, typeID: r.TypeID}
+		snap.regionStats[k] = r
+		snap.byType[r.TypeID] = append(snap.byType[r.TypeID], r)
+	}
+	for _, s := range stationRows {
+		snap.stationStats[stationKey{LocationID: s.LocationID, TypeID: s.TypeID}] = s
+	}
+	for i, b := range beatRows {
+		snap.beats[i] = beatRecord{
+			LocationID: b.LocationID,
+			RegionID:   b.RegionID,
+			TypeID:     b.TypeID,
+			IsBuyOrder: b.IsBuyOrder,
+			At:         b.At,
+		}
+	}
+
+	idx := &app.statPackIdx
+	idx.mu.Lock()
+	idx.snap = snap
+	idx.stale = false
+	idx.mu.Unlock()
+	return nil
+}
+
+// refreshStatPackRegion updates the resident snapshot with the fresh
+// rows for regionID just committed by a completed sweep, so the snapshot
+// never serves staler data than SQL even before a full backstop rebuild
+// runs.
+func (app *Application) refreshStatPackRegion(ctx context.Context, regionID int64) {
+	if app.cfg.lowRAMMode {
+		return
+	}
+	rRows, err := app.queries.ListMarketRegionStatsByRegion(ctx, regionID)
+	if err != nil {
+		logging.Warnf("stat pack: refresh region %d stats: %v", regionID, err)
+		return
+	}
+	sRows, err := app.queries.ListMarketStationStatsByRegion(ctx, regionID)
+	if err != nil {
+		logging.Warnf("stat pack: refresh region %d station stats: %v", regionID, err)
+		return
+	}
+
+	idx := &app.statPackIdx
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	if idx.snap == nil {
+		if !idx.building && app.workerCtx != nil {
+			idx.building = true
+			go func() {
+				defer func() {
+					idx.mu.Lock()
+					idx.building = false
+					idx.mu.Unlock()
+				}()
+				_ = app.buildStatPack(app.workerCtx)
+			}()
+		}
+		return
+	}
+
+	snap := idx.snap
+	for k := range snap.regionStats {
+		if k.regionID == regionID {
+			delete(snap.regionStats, k)
+		}
+	}
+	for _, r := range rRows {
+		snap.regionStats[statPackKey{regionID: r.RegionID, typeID: r.TypeID}] = r
+	}
+	snap.byType = make(map[int64][]db.MarketRegionStat, len(snap.regionStats))
+	for _, r := range snap.regionStats {
+		snap.byType[r.TypeID] = append(snap.byType[r.TypeID], r)
+	}
+	for _, s := range sRows {
+		snap.stationStats[stationKey{LocationID: s.LocationID, TypeID: s.TypeID}] = s
+	}
+	idx.stale = false
+}
 
 // statPack is one type's canonical market figures in one region.
 type statPack struct {
@@ -53,35 +261,66 @@ func (app *Application) loadStatPacks(ctx context.Context, regionID int64, typeI
 	if len(ids) == 0 {
 		return out, nil
 	}
-	ownRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
-		RegionID: regionID, Column2: ids,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("stat pack: swept rows: %w", err)
-	}
-	for i := range ownRows {
-		out[ownRows[i].TypeID].Own = &ownRows[i]
-	}
-	if regionID != globalMarketRegion {
-		var missing []int64
-		for _, id := range ids {
-			if out[id].Own == nil {
-				missing = append(missing, id)
+
+	servedFromMem := false
+	if snap := app.statPackSnapshot(); snap != nil {
+		idx := &app.statPackIdx
+		idx.mu.RLock()
+		if s := idx.snap; s != nil {
+			servedFromMem = true
+			for _, id := range ids {
+				if r, ok := s.regionStats[statPackKey{regionID: regionID, typeID: id}]; ok {
+					rowCopy := r
+					out[id].Own = &rowCopy
+				}
+			}
+			if regionID != globalMarketRegion {
+				for _, id := range ids {
+					if out[id].Own == nil {
+						if g, ok := s.regionStats[statPackKey{regionID: globalMarketRegion, typeID: id}]; ok {
+							rowCopy := g
+							out[id].Own = &rowCopy
+							out[id].FromGlobal = true
+						}
+					}
+				}
 			}
 		}
-		if len(missing) > 0 {
-			gRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
-				RegionID: globalMarketRegion, Column2: missing,
-			})
-			if err != nil {
-				return nil, fmt.Errorf("stat pack: global rows: %w", err)
+		idx.mu.RUnlock()
+	}
+
+	if !servedFromMem {
+		ownRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
+			RegionID: regionID, Column2: ids,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("stat pack: swept rows: %w", err)
+		}
+		for i := range ownRows {
+			out[ownRows[i].TypeID].Own = &ownRows[i]
+		}
+		if regionID != globalMarketRegion {
+			var missing []int64
+			for _, id := range ids {
+				if out[id].Own == nil {
+					missing = append(missing, id)
+				}
 			}
-			for i := range gRows {
-				p := out[gRows[i].TypeID]
-				p.Own, p.FromGlobal = &gRows[i], true
+			if len(missing) > 0 {
+				gRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
+					RegionID: globalMarketRegion, Column2: missing,
+				})
+				if err != nil {
+					return nil, fmt.Errorf("stat pack: global rows: %w", err)
+				}
+				for i := range gRows {
+					p := out[gRows[i].TypeID]
+					p.Own, p.FromGlobal = &gRows[i], true
+				}
 			}
 		}
 	}
+
 	tvRows, err := app.queries.ListTrueValuesForTypes(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("stat pack: estimates: %w", err)

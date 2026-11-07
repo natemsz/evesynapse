@@ -14,7 +14,7 @@
      and dropped green, as in the game. */}}
 <div class="kp">
   <section class="kp-hero">
-    <div class="kp-ship"><img src="https://images.evetech.net/types/{{.Row.ShipTypeID}}/render?size=256" alt="{{.Row.ShipName}}" width="256" height="256"></div>
+    <div class="kp-ship"><img src="https://images.evetech.net/types/{{.Row.ShipTypeID}}/render?size=256" alt="{{.Row.ShipName}}" width="256" height="256"><a class="kp-ship-link" href="/market/?type={{.Row.ShipTypeID}}">Item details</a></div>
     <div class="kp-head">
       <p class="kp-shipline"><a href="/intel/kills/?ship={{.Row.ShipTypeID}}">{{.Row.ShipName}}</a>{{if .ShipGroup}}<span class="kp-group">{{.ShipGroup}}</span>{{end}}</p>
       <div class="kp-victim">
@@ -58,7 +58,7 @@
       <ul>
         {{range .Items}}<li class="kp-item {{if .Dropped}}dropped{{else}}destroyed{{end}}{{if .Depth}} nested{{end}}">
           <img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy">
-          <span class="kp-item-n">{{.Name}}{{if .Copy}} <small class="muted">(copy)</small>{{end}}</span>
+          <span class="kp-item-n"><a class="kp-item-link" href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Copy}} <small class="muted">(copy)</small>{{end}}</span>
           <span class="kp-item-q">{{if gt .Qty 1}}× {{.Qty}}{{end}}</span>
           <span class="kp-item-v">{{.Value}}</span>
         </li>{{end}}

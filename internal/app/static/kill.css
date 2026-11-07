@@ -49,6 +49,7 @@
   background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.06), transparent 70%);
   object-fit: contain;
 }
+.kp-ship-link { display: block; margin-top: 0.4rem; text-align: center; font-size: var(--fs-xs); }
 .kp-shipline { font-family: var(--font-display); margin: 0 0 0.6rem; font-size: var(--fs-4xl); font-weight: 700; line-height: 1.2; }
 .kp-shipline a { color: var(--text-bright); text-decoration: none; }
 .kp-shipline a:hover { color: var(--accent); }
@@ -123,6 +124,8 @@
 .kp-item.nested { margin-left: 1.1rem; }
 .kp-item img { border-radius: var(--r-xs); }
 .kp-item-n { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kp-item-link { color: var(--text-bright); text-decoration: none; }
+.kp-item-link:hover { color: var(--accent); }
 .kp-item-q { color: var(--muted-2); font-variant-numeric: tabular-nums; }
 .kp-item-v { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted-2); }
 .kp-a {

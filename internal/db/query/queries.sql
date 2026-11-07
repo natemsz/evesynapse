@@ -201,6 +201,8 @@ ON CONFLICT (character_id) DO UPDATE SET
 -- name: ListAllCorporationIDs :many
 SELECT DISTINCT corporation_id FROM character_corporations
 ORDER BY corporation_id;
+-- name: CorpHasRegisteredCharacter :one
+SELECT EXISTS(SELECT 1 FROM character_corporations WHERE corporation_id = $1);
 -- name: ListCorporationIDsByUser :many
 -- Every corporation the given user's characters belong to,
 -- from the worker-maintained character -> corporation map.

@@ -226,6 +226,17 @@ func (app *Application) offerPilotRestorations(ctx context.Context) {
 // failed pass leaves the profile's stamp as it was, so a later
 // reading (or the restoration offer) reaches the pilot again.
 func (app *Application) backfillPilot(ctx context.Context, client *http.Client, id int64) {
+	// Backfills run only for registered users' characters. A
+	// pilot no user has linked gets no history walk, so the
+	// store never grows for strangers.
+	if _, err := app.queries.GetCharacter(ctx, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			logging.Infof("pilot activity: skip backfill for unregistered pilot %d", id)
+		} else {
+			logging.Warnf("pilot activity: read character %d: %v", id, err)
+		}
+		return
+	}
 	prof, err := app.queries.GetPilotActivityProfile(ctx, id)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		logging.Warnf("pilot activity: read profile %d: %v", id, err)

@@ -102,6 +102,16 @@ func (app *Application) backfillCorp(ctx context.Context, client *http.Client, i
 		logging.Warnf("corp coverage: read coverage %d: %v", id, err)
 		return
 	}
+	// Backfills run only for corporations a registered user's
+	// character belongs to. A skipped corporation stays
+	// uncovered, so a later visit offers it again.
+	if ok, err := app.queries.CorpHasRegisteredCharacter(ctx, id); err != nil {
+		logging.Warnf("corp coverage: read registered character for corporation %d: %v", id, err)
+		return
+	} else if !ok {
+		logging.Infof("corp coverage: skip backfill for unregistered corporation %d", id)
+		return
+	}
 	base := app.cfg.ZKillAPIBaseURL()
 	seen := 0
 	for page := 1; page <= pilotBackfillMaxPages; page++ {

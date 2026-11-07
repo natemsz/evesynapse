@@ -95,6 +95,20 @@ func feedIDs(kills []db.Kill) map[int64]bool {
 
 func TestZkillHistoryBackfillIngests(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	// The pilot is a registered user's character, and their
+	// corporation is a registered corporation, so the gate lets
+	// both walks through.
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	seedCharacter(t, q, user.ID, 91000001, "Backfill Pilot")
+	if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
+		CharacterID: 91000001, CorporationID: 98000002, UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed character corporation: %v", err)
+	}
 	hist := newFakeZkillHistory(map[string]string{
 		"/characterID/91000001/":   "[" + zkPartEntry + "," + zkLossEntry + "]",
 		"/corporationID/98000002/": "[" + zkCorpEntry + "]",
@@ -102,7 +116,6 @@ func TestZkillHistoryBackfillIngests(t *testing.T) {
 	srv := httptest.NewServer(hist.handler())
 	defer srv.Close()
 	app.cfg.zkillAPIBaseURL = srv.URL + "/"
-	ctx := context.Background()
 	client := srv.Client()
 
 	app.backfillPilot(ctx, client, 91000001)
@@ -187,6 +200,51 @@ func TestZkillHistoryBackfillIngests(t *testing.T) {
 	}
 }
 
+// TestBackfillSkipsUnregistered pins the backfill gate: a pilot
+// or corporation no registered user has linked gets no history
+// walk, so the store never grows for strangers. A registered
+// pilot still walks.
+func TestBackfillSkipsUnregistered(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	hist := newFakeZkillHistory(map[string]string{
+		"/characterID/91000003/":   "[" + zkPartEntry + "," + zkLossEntry + "]",
+		"/characterID/91000004/":   "[" + zkPartEntry + "," + zkLossEntry + "]",
+		"/corporationID/98000003/": "[" + zkCorpEntry + "]",
+	})
+	srv := httptest.NewServer(hist.handler())
+	defer srv.Close()
+	app.cfg.zkillAPIBaseURL = srv.URL + "/"
+	client := srv.Client()
+
+	// The registered pilot walks; the stranger does not.
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	seedCharacter(t, q, user.ID, 91000004, "Registered Pilot")
+	app.backfillPilot(ctx, client, 91000004)
+	if got := hist.hitCount("/characterID/91000004/"); got != 1 {
+		t.Errorf("registered pilot history fetched %d times, want 1", got)
+	}
+	app.backfillPilot(ctx, client, 91000003)
+	if got := hist.hitCount("/characterID/91000003/"); got != 0 {
+		t.Errorf("unregistered pilot history fetched %d times, want 0", got)
+	}
+	if _, err := q.GetPilotActivityProfile(ctx, 91000003); err == nil {
+		t.Error("unregistered pilot gained a profile, want none")
+	}
+
+	// The stranger corporation does not walk and stays uncovered.
+	app.backfillCorp(ctx, client, 98000003)
+	if got := hist.hitCount("/corporationID/98000003/"); got != 0 {
+		t.Errorf("unregistered corp history fetched %d times, want 0", got)
+	}
+	if _, err := q.GetCorpKillCoverage(ctx, 98000003); err == nil {
+		t.Error("unregistered corporation gained coverage, want none")
+	}
+}
+
 // TestPilotBackfillRestoresPrePermanenceProfile pins the one
 // exception to the backfill's once-only rule: a profile stamped
 // before kill involvement became permanent (the schema 127
@@ -230,6 +288,14 @@ func TestPilotBackfillRestoresPrePermanenceProfile(t *testing.T) {
 		}
 	}
 	const stalePilot, freshPilot = int64(91000001), int64(91000002)
+
+	// The stale pilot is a registered user's character, so the
+	// restoration offer and the walk reach them.
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	seedCharacter(t, q, user.ID, stalePilot, "Stale Pilot")
 
 	// The stale pilot's original walk: the two kills folded
 	// into the aggregates, the stamp set before the cutoff,
@@ -315,13 +381,20 @@ func TestPilotBackfillRestoresPrePermanenceProfile(t *testing.T) {
 
 func TestZkillBackfillPromotesPrivateKill(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	// The pilot is a registered user's character, so the gate
+	// lets the walk through.
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	seedCharacter(t, q, user.ID, 91000001, "Private Pilot")
 	hist := newFakeZkillHistory(map[string]string{
 		"/characterID/91000001/": "[" + zkPartEntry + "]",
 	})
 	srv := httptest.NewServer(hist.handler())
 	defer srv.Close()
 	app.cfg.zkillAPIBaseURL = srv.URL + "/"
-	ctx := context.Background()
 
 	// The kill is already held, privately, from an ESI pull.
 	if _, err := app.ingestKill(ctx, json.RawMessage(zkPartKillmail), "hash800001", nil, "esi", false, true); err != nil {

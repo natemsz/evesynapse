@@ -209,6 +209,9 @@ type PriceChart struct {
 	Width       int
 	Height      int
 	Points      string // polyline points for the average-price line
+	SmoothPath  string // cubic Bezier path through the daily-average points
+	AreaPath    string // closed area under the smooth price line, down to BaseY
+	MA7Path     string // smoothed 7-day moving-average path
 	Dots        []Dot
 	Bars        []Bar
 	Recent      []Day // newest first, capped at RecentChartDays
@@ -504,6 +507,37 @@ func buildChart(rows []db.MarketHistory, display int, opts ChartOptions, legacy 
 	if len(pts) > 1 {
 		chart.Points = strings.Join(pts, " ")
 	}
+	// The smoothed line, its area fill, and the 7-day average
+	// all derive from the same plotted dots, so the curve never
+	// moves off the data it draws.
+	if len(chart.Dots) > 1 {
+		coords := make([]chartPoint, len(chart.Dots))
+		for i, d := range chart.Dots {
+			coords[i] = chartPoint{X: float64(d.X), Y: float64(d.Y)}
+		}
+		chart.SmoothPath = smoothPathString(coords)
+		if chart.SmoothPath != "" {
+			// The area closes the smooth line down to the price
+			// band's bottom edge and back along it.
+			first, last := coords[0], coords[len(coords)-1]
+			chart.AreaPath = chart.SmoothPath +
+				fmt.Sprintf(" L%.1f,%d L%.1f,%d Z", last.X, chart.BaseY, first.X, chart.BaseY)
+		}
+		// The 7-day moving average, from the same stored rows
+		// with warmup included, so the first displayed day is
+		// already correct. A day contributes only once its full
+		// window exists; the path starts at the first such day.
+		start := len(rows) - display
+		var ma []chartPoint
+		for g := start; g < len(rows); g++ {
+			if g+1 < 7 {
+				continue
+			}
+			avg := (prefix[g+1] - prefix[g+1-7]) / 7
+			ma = append(ma, chartPoint{X: float64(x(g - start)), Y: float64(y(avg))})
+		}
+		chart.MA7Path = smoothPathString(ma)
+	}
 	if !legacy {
 		start := len(rows) - display // global index of the first displayed day
 		if opts.Wicks {
@@ -557,6 +591,42 @@ func buildChart(rows []db.MarketHistory, display int, opts ChartOptions, legacy 
 		})
 	}
 	return chart, true
+}
+
+// chartPoint is one plotted point in SVG coordinates.
+type chartPoint struct {
+	X, Y float64
+}
+
+// smoothPathString turns plotted points into a cubic Bezier path
+// that passes through every point: a uniform Catmull-Rom spline
+// converted to Bezier segments. Endpoints are duplicated so the
+// first and last segments have neighbors. The curve never moves
+// off the data: every segment starts and ends on a data point.
+func smoothPathString(pts []chartPoint) string {
+	if len(pts) < 2 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "M%.1f,%.1f", pts[0].X, pts[0].Y)
+	for i := 0; i < len(pts)-1; i++ {
+		p0 := pts[i]
+		if i > 0 {
+			p0 = pts[i-1]
+		}
+		p1 := pts[i]
+		p2 := pts[i+1]
+		p3 := pts[i+1]
+		if i+2 < len(pts) {
+			p3 = pts[i+2]
+		}
+		c1x := p1.X + (p2.X-p0.X)/6
+		c1y := p1.Y + (p2.Y-p0.Y)/6
+		c2x := p2.X - (p3.X-p1.X)/6
+		c2y := p2.Y - (p3.Y-p1.Y)/6
+		fmt.Fprintf(&b, " C%.1f,%.1f %.1f,%.1f %.1f,%.1f", c1x, c1y, c2x, c2y, p2.X, p2.Y)
+	}
+	return b.String()
 }
 
 // movingAverages computes the 5-day and 20-day moving averages of

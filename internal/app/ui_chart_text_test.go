@@ -29,9 +29,9 @@ func TestBalanceChartTextStaysReadable(t *testing.T) {
 	for _, want := range []string{
 		// Base axis/tick size in style.css (the fallback where
 		// container queries are unavailable).
-		".pchart text {\n  font-family: \"JetBrains Mono\", ui-monospace, monospace;\n  font-size: var(--fs-xs);\n}",
+		".pchart text {\n  font-family: \"JetBrains Mono\", ui-monospace, monospace;\n  font-size: var(--fs-2xs);\n}",
 		// Legend and scrub tooltip sit on the site's small scale.
-		"font-weight: 600;\n  font-size: var(--fs-md);",
+		"font-weight: 500;\n  font-size: var(--fs-2xs);",
 		"font-size: var(--fs-md);\n  line-height: 1.45;",
 	} {
 		if !strings.Contains(style, want) {

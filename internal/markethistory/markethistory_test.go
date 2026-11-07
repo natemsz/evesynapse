@@ -6,6 +6,8 @@ package markethistory
 // tests are too — no database, no network.
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -140,6 +142,89 @@ func TestBuildPriceChart(t *testing.T) {
 	if len(chart.Bars) != 4 || len(chart.Dots) != 5 {
 		t.Fatalf("zero-volume day: %d bars, %d dots", len(chart.Bars), len(chart.Dots))
 	}
+}
+
+// TestSmoothPathPassesThroughPoints pins the chart smoothing:
+// the Bezier path passes through every plotted data point, so
+// the curve never moves off the data it draws. It also pins
+// that the area closes at the price band's bottom edge and
+// that the 7-day average appears once eight days exist.
+func TestSmoothPathPassesThroughPoints(t *testing.T) {
+	rows := historyRows(
+		"2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04",
+		"2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08",
+		"2026-01-09", "2026-01-10",
+	)
+	chart, ok := BuildPriceChart(rows)
+	if !ok {
+		t.Fatal("ten rows did not chart")
+	}
+	if chart.SmoothPath == "" || chart.AreaPath == "" || chart.MA7Path == "" {
+		t.Fatalf("smooth=%q area=%q ma7=%q, want all three", chart.SmoothPath, chart.AreaPath, chart.MA7Path)
+	}
+	// Every endpoint of the smooth path is a plotted dot.
+	got := pathEndpoints(t, chart.SmoothPath)
+	if len(got) != len(chart.Dots) {
+		t.Fatalf("smooth path has %d endpoints, want %d (one per dot)", len(got), len(chart.Dots))
+	}
+	for i, p := range got {
+		if p.X != float64(chart.Dots[i].X) || p.Y != float64(chart.Dots[i].Y) {
+			t.Fatalf("smooth path point %d = %v, want dot %v", i, p, chart.Dots[i])
+		}
+	}
+	// The area closes at the price band's bottom edge.
+	if !strings.HasSuffix(chart.AreaPath, fmt.Sprintf(",%d Z", chart.BaseY)) {
+		t.Fatalf("area path %q does not close at BaseY %d", chart.AreaPath, chart.BaseY)
+	}
+	// The 7-day average needs eight days for two points.
+	short, _ := BuildPriceChart(rows[:7])
+	if short.MA7Path != "" {
+		t.Fatalf("seven rows drew a 7-day average %q", short.MA7Path)
+	}
+	// One row: a lone dot, no smooth path, no area, no average.
+	one, _ := BuildPriceChart(rows[:1])
+	if one.SmoothPath != "" || one.AreaPath != "" || one.MA7Path != "" {
+		t.Fatalf("one row drew smooth=%q area=%q ma7=%q", one.SmoothPath, one.AreaPath, one.MA7Path)
+	}
+}
+
+// pathEndpoints returns the data points a smooth path passes
+// through: the M point, then the last pair of each C command.
+func pathEndpoints(t *testing.T, path string) []chartPoint {
+	t.Helper()
+	fields := strings.Fields(path)
+	if len(fields) == 0 || !strings.HasPrefix(fields[0], "M") {
+		t.Fatalf("path %q does not start with M", path)
+	}
+	pts := []chartPoint{parseChartPoint(t, strings.TrimPrefix(fields[0], "M"))}
+	rest := fields[1:]
+	if len(rest)%3 != 0 {
+		t.Fatalf("path %q has %d fields after M, want a multiple of 3", path, len(rest))
+	}
+	for i := 0; i < len(rest); i += 3 {
+		if !strings.HasPrefix(rest[i], "C") {
+			t.Fatalf("path segment %q does not start with C", rest[i])
+		}
+		pts = append(pts, parseChartPoint(t, rest[i+2]))
+	}
+	return pts
+}
+
+func parseChartPoint(t *testing.T, s string) chartPoint {
+	t.Helper()
+	parts := strings.Split(s, ",")
+	if len(parts) != 2 {
+		t.Fatalf("point %q is not x,y", s)
+	}
+	x, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		t.Fatalf("point %q x: %v", s, err)
+	}
+	y, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		t.Fatalf("point %q y: %v", s, err)
+	}
+	return chartPoint{X: x, Y: y}
 }
 
 func TestWindow(t *testing.T) {

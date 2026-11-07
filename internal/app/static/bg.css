@@ -776,6 +776,8 @@ html[data-scheme] .legend-assets { background: var(--sch-end); }
 html[data-scheme] .legend-total { background: var(--sch-hi); }
 html[data-scheme] .pchart .chart-line { stroke: var(--sch-core); }
 html[data-scheme] .pchart .chart-line-stacked { stroke: var(--sch-hi); }
+html[data-scheme] .chart-area-stop-top { stop-color: var(--sch-core); }
+html[data-scheme] .chart-area-stop-bottom { stop-color: var(--sch-core); }
 html[data-scheme] .pchart .chart-dot { fill: var(--sch-core); }
 html[data-scheme] .pchart .chart-dot-stacked { fill: var(--sch-hi); }
 html[data-scheme] .pchart .cdot { fill: var(--sch-core); }

@@ -2348,8 +2348,8 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   margin: 0.15rem 0 0.35rem;
   color: var(--note);
   font-family: "Rajdhani", sans-serif;
-  font-weight: 600;
-  font-size: var(--fs-md);
+  font-weight: 500;
+  font-size: var(--fs-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -2608,7 +2608,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .card[data-widget="profitpulse"] .pf-y-100 { top: 100%; }
 .pchart text {
   font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
 }
 .chart-gridline { stroke: #241708; stroke-width: 1; }
 .volume-gridline { stroke: #2a1408; stroke-dasharray: 3 3; }

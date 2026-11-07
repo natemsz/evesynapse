@@ -148,6 +148,14 @@ func (app *Application) workerStatusText() string {
 func (app *Application) runWorker(ctx context.Context) {
 	logging.Infof("worker: started")
 
+	// The search index builds once here, at startup, so the
+	// first search after a restart reads memory instead of
+	// waiting for a user to trigger the build. The build runs
+	// in the background; searches before it lands serve SQL.
+	// Low-RAM mode skips it (kickSearchIndexBuild returns at
+	// once there).
+	app.kickSearchIndexBuild()
+
 	// The two loops below run beside the minute cycle. runWorker
 	// waits for them on the way out, so when it returns the whole
 	// worker has stopped and Close may close the database handles

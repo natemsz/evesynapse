@@ -120,3 +120,23 @@ DELETE FROM kill_details WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[
 
 -- name: DeleteDemoBattleKillPrices :exec
 DELETE FROM kill_line_prices WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
+
+-- The demo cast's pilot activity profiles, folded by the seed
+-- from its planted fights. The fold's applied markers would
+-- otherwise hold the first seed's aggregates while the fights
+-- are replanted with fresh times, so a reseed clears the fold
+-- for the cast and folds it again.
+-- name: DeleteDemoPilotActivityProfiles :exec
+DELETE FROM pilot_activity_profiles WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]);
+
+-- name: DeleteDemoPilotActivityShips :exec
+DELETE FROM pilot_activity_ships WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]);
+
+-- name: DeleteDemoPilotActivitySystems :exec
+DELETE FROM pilot_activity_systems WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]);
+
+-- name: DeleteDemoPilotActivityHours :exec
+DELETE FROM pilot_activity_hours WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]);
+
+-- name: DeleteDemoPilotActivityApplied :exec
+DELETE FROM pilot_activity_applied WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]);

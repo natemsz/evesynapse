@@ -218,12 +218,14 @@ func (app *Application) refreshDemoPilotName(ctx context.Context) error {
 	switch {
 	case err == nil:
 		if rec.Payload != "" {
-			var pilot esi.Character
+			// The record is the pilotPayload envelope; only
+			// its profile carries the name.
+			var pilot pilotPayload
 			if err := json.Unmarshal([]byte(rec.Payload), &pilot); err != nil {
 				return fmt.Errorf("demo: decode pilot record: %w", err)
 			}
-			if pilot.Name != demoCharName {
-				pilot.Name = demoCharName
+			if pilot.Profile.Name != demoCharName {
+				pilot.Profile.Name = demoCharName
 				raw, err := json.Marshal(pilot)
 				if err != nil {
 					return fmt.Errorf("demo: encode pilot record: %w", err)

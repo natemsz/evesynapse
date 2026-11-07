@@ -443,6 +443,12 @@ func TestDemoSignInAndPagesRender(t *testing.T) {
 		{"/planets/", []string{"Jita IV"}},
 		{"/killmails/", []string{"Thrasher"}},
 		{"/fittings/saved/", []string{"Tama Rifter", "Mission Drake"}},
+		// A seeded stranger's public record: the stored
+		// envelope renders his name, corporation and security
+		// status, and the seeded activity profile backs the
+		// activity figures.
+		{"/pilot/?character=2900000102", []string{"Ilya Sorin", "Hale Freight Services [HALE]", "1.20",
+			"every recorded kill and loss", "Merlin", "1 final blows"}},
 	}
 	for _, page := range pages {
 		rec := get(app, cookie, page.path)
@@ -643,6 +649,22 @@ func TestDemoPilotNameRefreshReachesSeededInstalls(t *testing.T) {
 		return string(raw)
 	}
 
+	// The pilot record is the pilotPayload envelope; its name
+	// sits on the profile inside it.
+	setRecordName := func(payload, name string) string {
+		t.Helper()
+		var rec pilotPayload
+		if err := json.Unmarshal([]byte(payload), &rec); err != nil {
+			t.Fatalf("decode pilot record payload: %v", err)
+		}
+		rec.Profile.Name = name
+		raw, err := json.Marshal(rec)
+		if err != nil {
+			t.Fatalf("encode pilot record payload: %v", err)
+		}
+		return string(raw)
+	}
+
 	// Put a stale name in every store the bootstrap refreshes.
 	if _, err := conn.ExecContext(ctx,
 		`UPDATE characters SET name = $1 WHERE character_id = $2`, stale, demoCharacterID); err != nil {
@@ -658,7 +680,7 @@ func TestDemoPilotNameRefreshReachesSeededInstalls(t *testing.T) {
 		t.Fatalf("pilot record: %v", err)
 	}
 	if err := queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
-		CharacterID: demoCharacterID, Payload: setPayloadName(rec.Payload, stale),
+		CharacterID: demoCharacterID, Payload: setRecordName(rec.Payload, stale),
 		State: rec.State, FetchedAt: rec.FetchedAt,
 	}); err != nil {
 		t.Fatal(err)
@@ -703,15 +725,18 @@ func TestDemoPilotNameRefreshReachesSeededInstalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pilot record: %v", err)
 	}
-	var recordPilot esi.Character
-	if err := json.Unmarshal([]byte(rec.Payload), &recordPilot); err != nil {
+	var record pilotPayload
+	if err := json.Unmarshal([]byte(rec.Payload), &record); err != nil {
 		t.Fatalf("decode pilot record: %v", err)
 	}
-	if recordPilot.Name != demoCharName {
-		t.Errorf("pilot record name = %q, want %q", recordPilot.Name, demoCharName)
+	if record.Profile.Name != demoCharName {
+		t.Errorf("pilot record name = %q, want %q", record.Profile.Name, demoCharName)
 	}
-	if recordPilot.Birthday != "2016-03-14T09:24:00Z" || recordPilot.SecurityStatus != 4.8 {
-		t.Errorf("pilot record payload changed beyond the name: %+v", recordPilot)
+	if record.Profile.Birthday != "2016-03-14T09:24:00Z" || record.Profile.SecurityStatus != 4.8 {
+		t.Errorf("pilot record payload changed beyond the name: %+v", record.Profile)
+	}
+	if record.Corp.Name != demoCorpName || len(record.History) == 0 {
+		t.Errorf("pilot record lost its corporation or history: %+v", record)
 	}
 	snap, err = queries.GetSnapshot(ctx, db.GetSnapshotParams{
 		CharacterID: demoCharacterID, Kind: esi.SnapProfile,

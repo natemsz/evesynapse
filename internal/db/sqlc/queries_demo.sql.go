@@ -216,6 +216,56 @@ func (q *Queries) DeleteDemoOrgGroups(ctx context.Context, ownerID int64) error 
 	return err
 }
 
+const deleteDemoPilotActivityApplied = `-- name: DeleteDemoPilotActivityApplied :exec
+DELETE FROM pilot_activity_applied WHERE character_id = ANY($1::bigint[])
+`
+
+func (q *Queries) DeleteDemoPilotActivityApplied(ctx context.Context, characterIds []int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoPilotActivityApplied, pq.Array(characterIds))
+	return err
+}
+
+const deleteDemoPilotActivityHours = `-- name: DeleteDemoPilotActivityHours :exec
+DELETE FROM pilot_activity_hours WHERE character_id = ANY($1::bigint[])
+`
+
+func (q *Queries) DeleteDemoPilotActivityHours(ctx context.Context, characterIds []int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoPilotActivityHours, pq.Array(characterIds))
+	return err
+}
+
+const deleteDemoPilotActivityProfiles = `-- name: DeleteDemoPilotActivityProfiles :exec
+DELETE FROM pilot_activity_profiles WHERE character_id = ANY($1::bigint[])
+`
+
+// The demo cast's pilot activity profiles, folded by the seed
+// from its planted fights. The fold's applied markers would
+// otherwise hold the first seed's aggregates while the fights
+// are replanted with fresh times, so a reseed clears the fold
+// for the cast and folds it again.
+func (q *Queries) DeleteDemoPilotActivityProfiles(ctx context.Context, characterIds []int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoPilotActivityProfiles, pq.Array(characterIds))
+	return err
+}
+
+const deleteDemoPilotActivityShips = `-- name: DeleteDemoPilotActivityShips :exec
+DELETE FROM pilot_activity_ships WHERE character_id = ANY($1::bigint[])
+`
+
+func (q *Queries) DeleteDemoPilotActivityShips(ctx context.Context, characterIds []int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoPilotActivityShips, pq.Array(characterIds))
+	return err
+}
+
+const deleteDemoPilotActivitySystems = `-- name: DeleteDemoPilotActivitySystems :exec
+DELETE FROM pilot_activity_systems WHERE character_id = ANY($1::bigint[])
+`
+
+func (q *Queries) DeleteDemoPilotActivitySystems(ctx context.Context, characterIds []int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDemoPilotActivitySystems, pq.Array(characterIds))
+	return err
+}
+
 const deleteDemoPushSubscriptions = `-- name: DeleteDemoPushSubscriptions :exec
 DELETE FROM push_subscriptions WHERE user_id = $1
 `

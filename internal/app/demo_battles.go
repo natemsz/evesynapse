@@ -17,12 +17,14 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/gamelog"
 )
@@ -123,6 +125,85 @@ func (s *demoSeed) writePilotOneBattles(ctx context.Context) error {
 		}
 		if len(got.IDs) == 0 {
 			return fmt.Errorf("demo seed: a fabricated game log filed no fights: %s", strings.Join(got.Skipped, " "))
+		}
+	}
+	return nil
+}
+
+// writePilotActivityProfiles folds the planted fights into
+// every participant's stored activity profile, the way the
+// history backfill builds a real pilot's: the profile claimed,
+// each kill folded through applyPilotKill, the backfill
+// stamped. It runs after writePilotOneBattles, which has
+// merged the fights into the shared kills store; the fold
+// itself reads the planted details, the same source that
+// step merged. Without it the pilot pages find no stored
+// record, their activity sections read empty, and the demo's
+// My Killmails tiles fall back to the shown window.
+func (s *demoSeed) writePilotActivityProfiles(ctx context.Context) error {
+	q := s.app.queries
+	rows, err := q.ListKillmailDetailsByCharacter(ctx, demoCharacterID)
+	if err != nil {
+		return fmt.Errorf("demo seed: list killmail details for the activity profiles: %w", err)
+	}
+	cast := []int64{demoCharacterID, demoCharacter2ID}
+	for _, c := range demoFictionalChars {
+		cast = append(cast, c.ID)
+	}
+	// A reseed replants the fights with fresh times; clear the
+	// cast's earlier fold so its markers cannot hold the new
+	// fold to the first run's aggregates.
+	for _, clear := range []func() error{
+		func() error { return q.DeleteDemoPilotActivityProfiles(ctx, cast) },
+		func() error { return q.DeleteDemoPilotActivityShips(ctx, cast) },
+		func() error { return q.DeleteDemoPilotActivitySystems(ctx, cast) },
+		func() error { return q.DeleteDemoPilotActivityHours(ctx, cast) },
+		func() error { return q.DeleteDemoPilotActivityApplied(ctx, cast) },
+	} {
+		if err := clear(); err != nil {
+			return fmt.Errorf("demo seed: clear pilot activity for the fold: %w", err)
+		}
+	}
+	folded := map[int64]bool{}
+	for _, r := range rows {
+		var km esi.Killmail
+		if err := json.Unmarshal([]byte(r.Payload), &km); err != nil {
+			return fmt.Errorf("demo seed: decode killmail %d for the activity profiles: %w", r.KillmailID, err)
+		}
+		raw, err := json.Marshal(km)
+		if err != nil {
+			return err
+		}
+		var full killmailFull
+		if err := json.Unmarshal(raw, &full); err != nil {
+			return fmt.Errorf("demo seed: decode killmail %d for the fold: %w", r.KillmailID, err)
+		}
+		participants := []int64{km.Victim.CharacterID}
+		for _, a := range km.Attackers {
+			participants = append(participants, a.CharacterID)
+		}
+		for _, id := range participants {
+			if id <= 0 {
+				continue
+			}
+			if !folded[id] {
+				if err := q.ClaimPilotActivityProfile(ctx, db.ClaimPilotActivityProfileParams{
+					CharacterID: id, UpdatedAt: s.now,
+				}); err != nil {
+					return fmt.Errorf("demo seed: claim activity profile %d: %w", id, err)
+				}
+				folded[id] = true
+			}
+			if _, err := s.app.applyPilotKill(ctx, id, full, false); err != nil {
+				return fmt.Errorf("demo seed: fold killmail %d for pilot %d: %w", r.KillmailID, id, err)
+			}
+		}
+	}
+	for id := range folded {
+		if err := q.MarkPilotActivityBackfilled(ctx, db.MarkPilotActivityBackfilledParams{
+			CharacterID: id, BackfilledAt: sql.NullTime{Time: s.now, Valid: true},
+		}); err != nil {
+			return fmt.Errorf("demo seed: mark activity profile %d backfilled: %w", id, err)
 		}
 	}
 	return nil

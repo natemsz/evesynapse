@@ -295,6 +295,7 @@ WHERE character_id = sqlc.arg(character_id);
 -- name: ListStalePilotProfiles :many
 SELECT character_id FROM pilot_activity_profiles
 WHERE backfilled_at IS NOT NULL AND backfilled_at < sqlc.arg(before)::timestamptz
+AND EXISTS (SELECT 1 FROM characters c WHERE c.character_id = pilot_activity_profiles.character_id)
 ORDER BY last_active_at DESC NULLS LAST, character_id
 LIMIT sqlc.arg(max_rows)::bigint;
 

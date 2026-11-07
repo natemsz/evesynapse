@@ -962,6 +962,17 @@ func (q *Queries) ListAllCorporationIDs(ctx context.Context) ([]int64, error) {
 	return items, nil
 }
 
+const corpHasRegisteredCharacter = `-- name: CorpHasRegisteredCharacter :one
+SELECT EXISTS(SELECT 1 FROM character_corporations WHERE corporation_id = $1)
+`
+
+func (q *Queries) CorpHasRegisteredCharacter(ctx context.Context, corporationID int64) (bool, error) {
+	row := q.db.QueryRowContext(ctx, corpHasRegisteredCharacter, corporationID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listBlueprintPins = `-- name: ListBlueprintPins :many
 SELECT blueprint_type_id, pinned_at FROM blueprint_pins
 WHERE user_id = $1

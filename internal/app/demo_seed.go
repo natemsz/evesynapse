@@ -59,20 +59,21 @@ const (
 // demoFictionalChars is every invented character the seed data
 // mentions, for the name and record rows they need.
 var demoFictionalChars = []struct {
-	ID   int64
-	Name string
-	Corp int64
-	Sec  float64 // security status; 0 reads as a quiet 1.2
+	ID     int64
+	Name   string
+	Corp   int64
+	Sec    float64 // security status; 0 reads as a quiet 1.2
+	Joined string  // RFC3339 start of the current corporation stint
 }{
-	{demoCharMarcus, "Marcus Hale", demoCorpHaleID, 0},
-	{demoCharIlya, "Ilya Sorin", demoCorpHaleID, 0},
-	{demoCharPetra, "Petra Lindqvist", demoCorpID, 0},
-	{demoCharSera, "Sera Voss", demoCorpID, 0},
-	{demoCharDario, "Dario Fenn", demoCorpID, 0},
-	{demoCharMina, "Mina Okafor", demoCorpID, 0},
-	{demoCharKato, "Kato Vire", demoCorpWatchID, -4.6},
-	{demoCharRhen, "Rhen Absalom", demoCorpWatchID, -2.9},
-	{demoCharLio, "Lio Marsh", demoCorpWatchID, -6.1},
+	{demoCharMarcus, "Marcus Hale", demoCorpHaleID, 0, "2019-04-18T12:00:00Z"},
+	{demoCharIlya, "Ilya Sorin", demoCorpHaleID, 0, "2021-03-08T20:14:00Z"},
+	{demoCharPetra, "Petra Lindqvist", demoCorpID, 0, "2020-02-14T08:45:00Z"},
+	{demoCharSera, "Sera Voss", demoCorpID, 0, "2021-09-01T17:20:00Z"},
+	{demoCharDario, "Dario Fenn", demoCorpID, 0, "2018-06-19T05:40:00Z"},
+	{demoCharMina, "Mina Okafor", demoCorpID, 0, "2023-01-23T13:05:00Z"},
+	{demoCharKato, "Kato Vire", demoCorpWatchID, -4.6, "2020-09-03T21:10:00Z"},
+	{demoCharRhen, "Rhen Absalom", demoCorpWatchID, -2.9, "2021-05-17T22:52:00Z"},
+	{demoCharLio, "Lio Marsh", demoCorpWatchID, -6.1, "2020-11-08T04:37:00Z"},
 }
 
 // demoItemBase is where the seed's invented item IDs start:
@@ -398,9 +399,26 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 	}
 
 	fetchedAt := sql.NullTime{Time: s.now, Valid: true}
-	record := func(id int64, corpID int64, name, birthday string, sec float64) error {
-		payload, err := json.Marshal(esi.Character{
-			Name: name, CorporationID: corpID, Birthday: birthday, SecurityStatus: sec,
+	// The pilot page reads the record as the envelope the
+	// worker's drain assembles (pilotPayload in intel_pilot.go):
+	// the profile, its corporation, and the employment history
+	// with names baked in, oldest stint first.
+	corps := map[int64]esi.Corporation{
+		demoCorpID:      {Name: demoCorpName, Ticker: "TPC"},
+		demoCorpHaleID:  {Name: "Hale Freight Services", Ticker: "HALE"},
+		demoCorpWatchID: {Name: "Kedama Watch", Ticker: "KWTCH"},
+	}
+	stint := func(corpID int64, start, end string) pilotHistoryRow {
+		return pilotHistoryRow{CorpID: corpID, CorpName: corps[corpID].Name, Start: start, End: end}
+	}
+	record := func(id int64, corpID int64, name, birthday string, sec float64, title, description string, history []pilotHistoryRow) error {
+		payload, err := json.Marshal(pilotPayload{
+			Profile: esi.Character{
+				Name: name, CorporationID: corpID, Birthday: birthday, SecurityStatus: sec,
+				Title: title, Description: description,
+			},
+			Corp:    corps[corpID],
+			History: history,
 		})
 		if err != nil {
 			return err
@@ -409,10 +427,22 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 			CharacterID: id, Payload: string(payload), State: "ready", FetchedAt: fetchedAt,
 		})
 	}
-	if err := record(demoCharacterID, demoCorpID, demoCharName, "2016-03-14T09:24:00Z", 4.8); err != nil {
+	if err := record(demoCharacterID, demoCorpID, demoCharName, "2016-03-14T09:24:00Z", 4.8,
+		"Chief Executive Officer",
+		"Test pilot for the Test Pilot Collective. Everything you see on this account is sample data, refreshed daily.",
+		[]pilotHistoryRow{
+			stint(demoCorpHaleID, "2016-03-14T09:24:00Z", "2019-05-20T10:00:00Z"),
+			stint(demoCorpID, "2019-05-20T10:00:00Z", ""),
+		}); err != nil {
 		return fmt.Errorf("demo seed: pilot record: %w", err)
 	}
-	if err := record(demoCharacter2ID, demoCorpID, demoChar2Name, "2019-06-02T14:03:00Z", 3.1); err != nil {
+	if err := record(demoCharacter2ID, demoCorpID, demoChar2Name, "2019-06-02T14:03:00Z", 3.1,
+		"Factory Manager",
+		"Industry alt of the Test Pilot Collective's CEO. Builds the ships the rest of the corp loses.",
+		[]pilotHistoryRow{
+			stint(demoCorpHaleID, "2019-06-02T14:03:00Z", "2021-08-15T09:30:00Z"),
+			stint(demoCorpID, "2021-08-15T09:30:00Z", ""),
+		}); err != nil {
 		return fmt.Errorf("demo seed: pilot record: %w", err)
 	}
 	birthdays := []string{"2018-01-19T08:00:00Z", "2020-11-30T19:45:00Z", "2017-04-11T06:12:00Z",
@@ -422,7 +452,8 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 		if sec == 0 {
 			sec = 1.2
 		}
-		if err := record(c.ID, c.Corp, c.Name, birthdays[i%len(birthdays)], sec); err != nil {
+		if err := record(c.ID, c.Corp, c.Name, birthdays[i%len(birthdays)], sec, "", "",
+			[]pilotHistoryRow{stint(c.Corp, c.Joined, "")}); err != nil {
 			return fmt.Errorf("demo seed: pilot record %d: %w", c.ID, err)
 		}
 	}
@@ -487,6 +518,7 @@ func (app *Application) seedDemoData(ctx context.Context, now time.Time) error {
 	for _, write := range []func(context.Context) error{
 		s.writePilotOneMarkets, s.writePilotOneIndustry,
 		s.writePilotOneAssets, s.writePilotOneKillmails, s.writePilotOneBattles,
+		s.writePilotActivityProfiles,
 		s.writePilotOneComms,
 	} {
 		if err := write(ctx); err != nil {

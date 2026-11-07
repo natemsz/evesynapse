@@ -161,6 +161,10 @@ func (app *Application) runWorker(ctx context.Context) {
 	// SQL, low-RAM mode skips it.
 	app.kickStatPackBuild()
 
+	// The recent kills feed primes its resident ring at startup
+	// as well (killboard_recent.go).
+	app.primeRecentKills(ctx)
+
 	// The two loops below run beside the minute cycle. runWorker
 	// waits for them on the way out, so when it returns the whole
 	// worker has stopped and Close may close the database handles

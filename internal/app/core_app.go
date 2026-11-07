@@ -73,6 +73,11 @@ type Application struct {
 	// from RAM instead of Postgres.
 	statPackIdx statPackIndexState
 
+	// recentKills is the in-memory ring of the 100 most recent public
+	// kills streamed in by the killfeed (killfeed.go): served directly
+	// on the /intel/kills/ front page without touching Postgres.
+	recentKills recentKillsState
+
 	// Parsed scan results, remembered (scans are immutable once
 	// stored; intel_analysis.go).
 	scanMemoMu sync.Mutex

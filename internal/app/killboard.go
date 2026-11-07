@@ -388,6 +388,11 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) listKills(ctx context.Context, kind string, id int64, bt time.Time, bid int64, minValue float64, solo bool) ([]db.Kill, error) {
+	if kind == "" {
+		if kills, ok := app.getRecentKills(ctx, bt, bid, minValue, solo, killPageSize); ok {
+			return kills, nil
+		}
+	}
 	q := app.queries
 	switch kind {
 	case "system":

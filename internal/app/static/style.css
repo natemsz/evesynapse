@@ -1257,7 +1257,7 @@ body:has(main .suggest:not([hidden])) main { position: relative; z-index: 70; }
 }
 /* Pills inside tables stay the size they were: --fs-rel-pill is
    relative, so the bigger table text would otherwise grow them. */
-td .sec-pill { font-size: 0.68rem; }
+td .sec-pill { font-size: var(--fs-2xs); }
 
 /* --- top bar search --- */
 .topsearch { margin: 0; }

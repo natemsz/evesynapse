@@ -146,3 +146,32 @@ func TestSearchIndexMatchesSQLPath(t *testing.T) {
 			idxWide.Pilots)
 	}
 }
+
+// TestLowRAMModeServesSearchFromSQL pins LOW_RAM_MODE=1: no
+// snapshot is ever built, noted records never pile up in
+// pending (nothing drains it while builds are off), and every
+// search reads the SQL path.
+func TestLowRAMModeServesSearchFromSQL(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, _ := buildCorpTestApp(t, transport)
+	app.cfg.lowRAMMode = true
+
+	app.noteSearchRecord(searchRecordKey{kind: searchRecordPilot, id: 1},
+		searchRecordDelta{name: "Low Ram Pilot"})
+	app.searchIdx.mu.RLock()
+	pending := len(app.searchIdx.pending)
+	app.searchIdx.mu.RUnlock()
+	if pending != 0 {
+		t.Errorf("pending = %d entries after a noted record in low-RAM mode; want 0 (no build drains it)", pending)
+	}
+	if got := app.searchSnapshot(); got != nil {
+		t.Errorf("searchSnapshot() = non-nil in low-RAM mode; want nil so callers serve SQL")
+	}
+	app.kickSearchIndexBuild()
+	app.searchIdx.mu.RLock()
+	building := app.searchIdx.building
+	app.searchIdx.mu.RUnlock()
+	if building {
+		t.Errorf("kickSearchIndexBuild started a build in low-RAM mode; want none")
+	}
+}

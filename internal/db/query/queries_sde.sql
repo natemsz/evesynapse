@@ -47,6 +47,10 @@ WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);
 -- name: GetSDEType :one
 SELECT type_id, name, group_id, market_group_id, published, description FROM sde_types
 WHERE type_id = $1;
+
+-- name: ListSDETopologyTypes :many
+SELECT type_id, name, group_id, market_group_id, published, description FROM sde_types
+ORDER BY type_id;
 -- The group each of some types is in, by name: a ship's class.
 -- name: ListTypeGroupNames :many
 SELECT t.type_id, g.name FROM sde_types t

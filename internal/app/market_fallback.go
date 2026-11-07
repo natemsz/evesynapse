@@ -313,6 +313,7 @@ func (app *Application) refreshFallbackPrices(ctx context.Context) bool {
 		logging.Errorf("worker: fallback prices: commit: %v", err)
 		return false
 	}
+	app.refreshStatPackFallbacks(ctx)
 	app.recordMarketFetch(ctx, fuzzworkFetchKind, fetchStateOK, "")
 	logging.Infof("worker: fallback prices stored (orderset %d, %d region/type rows, as of %s)",
 		fileOrderset, len(rows), asof.Format(time.RFC3339))

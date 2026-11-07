@@ -60,6 +60,9 @@ func (n *killNames) character(id int64) string {
 	if id <= 0 {
 		return ""
 	}
+	if s, ok := n.app.pilotName(id); ok && s != "" {
+		return s
+	}
 	if s, ok := n.app.esi.CachedCharacterName(id); ok && s != "" {
 		return s
 	}
@@ -70,6 +73,9 @@ func (n *killNames) corp(id int64) string {
 	if id <= 0 {
 		return ""
 	}
+	if s, ok := n.app.corpName(id); ok && s != "" {
+		return s
+	}
 	if s, ok := n.app.esi.CachedCorpName(id); ok && s != "" {
 		return s
 	}
@@ -79,6 +85,9 @@ func (n *killNames) corp(id int64) string {
 func (n *killNames) alliance(id int64) string {
 	if id <= 0 {
 		return ""
+	}
+	if s, ok := n.app.allianceName(id); ok && s != "" {
+		return s
 	}
 	if s, ok := n.app.esi.CachedAllianceName(id); ok && s != "" {
 		return s
@@ -102,6 +111,16 @@ func (n *killNames) system(id int64) db.GetSDESystemRow {
 	if s, ok := n.systems[id]; ok {
 		return s
 	}
+	if sys, ok := n.app.sdeSystem(id); ok {
+		row := db.GetSDESystemRow{
+			SystemID: sys.ID,
+			Name:     sys.Name,
+			RegionID: sys.RegionID,
+			Security: sys.Security,
+		}
+		n.systems[id] = row
+		return row
+	}
 	s, _ := n.app.queries.GetSDESystem(n.ctx, id)
 	n.systems[id] = s
 	return s
@@ -110,6 +129,10 @@ func (n *killNames) system(id int64) db.GetSDESystemRow {
 func (n *killNames) region(id int64) string {
 	if s, ok := n.regions[id]; ok {
 		return s
+	}
+	if rName, ok := n.app.sdeRegion(id); ok && rName != "" {
+		n.regions[id] = rName
+		return rName
 	}
 	r, _ := n.app.queries.GetSDERegion(n.ctx, id)
 	n.regions[id] = r.Name
@@ -388,6 +411,11 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) listKills(ctx context.Context, kind string, id int64, bt time.Time, bid int64, minValue float64, solo bool) ([]db.Kill, error) {
+	if kind == "" {
+		if kills, ok := app.getRecentKills(ctx, bt, bid, minValue, solo, killPageSize); ok {
+			return kills, nil
+		}
+	}
 	q := app.queries
 	switch kind {
 	case "system":

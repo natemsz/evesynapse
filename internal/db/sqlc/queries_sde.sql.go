@@ -1861,6 +1861,41 @@ func (q *Queries) ListSDESystemsByRegion(ctx context.Context, regionID int64) ([
 	return items, nil
 }
 
+const listSDETopologyTypes = `-- name: ListSDETopologyTypes :many
+SELECT type_id, name, group_id, market_group_id, published, description FROM sde_types
+ORDER BY type_id
+`
+
+func (q *Queries) ListSDETopologyTypes(ctx context.Context) ([]SdeType, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETopologyTypes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeType
+	for rows.Next() {
+		var i SdeType
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.GroupID,
+			&i.MarketGroupID,
+			&i.Published,
+			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDETypeAttributes = `-- name: ListSDETypeAttributes :many
 SELECT attribute_id, value FROM sde_type_attributes
 WHERE type_id = $1

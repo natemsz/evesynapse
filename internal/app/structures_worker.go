@@ -38,6 +38,9 @@ func (app *Application) storeStructureName(ctx context.Context, structureID int6
 		logging.Errorf("worker: structures: store %s name for %d: %v", source, structureID, err)
 		return false
 	}
+	if state == esi.StructureResolved && name != "" {
+		app.noteEntity(structureID, entityDirectoryEntry{ID: structureID, Name: name, Kind: "structure"}, false)
+	}
 	return true
 }
 

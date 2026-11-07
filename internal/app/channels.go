@@ -756,11 +756,15 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 
 	sysName := strings.TrimSpace(r.PostForm.Get("system"))
 	if sid, err := strconv.ParseInt(r.PostForm.Get("system_id"), 10, 64); err == nil && sid > 0 {
-		if s, err := app.queries.GetSDESystem(ctx, sid); err == nil {
+		if sys, ok := app.sdeSystem(sid); ok {
+			base.SystemID = sys.ID
+		} else if s, err := app.queries.GetSDESystem(ctx, sid); err == nil {
 			base.SystemID = s.SystemID
 		}
 	} else if sysName != "" {
-		if s, err := app.queries.GetSDESystemByName(ctx, sysName); err == nil {
+		if sys, ok := app.sdeSystemByName(sysName); ok {
+			base.SystemID = sys.ID
+		} else if s, err := app.queries.GetSDESystemByName(ctx, sysName); err == nil {
 			base.SystemID = s.SystemID
 		}
 	}

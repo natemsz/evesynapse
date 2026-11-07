@@ -502,6 +502,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 			logging.Errorf("true values: store %d: %v", typeID, err)
 			continue
 		}
+		app.noteStatPackTrueValue(db.TrueValue(row))
 		computed++
 	}
 	st.cursor = end
@@ -828,6 +829,7 @@ func (app *Application) priceThinShips(ctx context.Context, pending []int64, evi
 			logging.Errorf("true values: store ship %d: %v", typeID, err)
 			continue
 		}
+		app.noteStatPackTrueValue(db.TrueValue(row))
 		written++
 	}
 	if written > 0 {

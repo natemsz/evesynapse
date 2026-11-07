@@ -137,6 +137,7 @@ type killItem struct {
 
 // runKillfeed follows the public stream until ctx ends.
 func (app *Application) runKillfeed(ctx context.Context) {
+	app.primeRecentKills(ctx)
 	if !app.cfg.KillfeedEnabled() {
 		logging.Infof("killfeed: off (KILLFEED=off)")
 		return
@@ -415,6 +416,34 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 		if err := app.priceKillLines(ctx, km); err != nil {
 			logging.Warnf("killboard: price kill %d at ingest: %v", km.KillmailID, err)
 		}
+		if public {
+			app.noteRecentKill(db.Kill{
+				KillmailID:          km.KillmailID,
+				Hash:                hash,
+				KillmailTime:        km.KillmailTime.UTC(),
+				SystemID:            km.SolarSystemID,
+				RegionID:            p.RegionID,
+				LocationID:          p.LocationID,
+				VictimCharacterID:   km.Victim.CharacterID,
+				VictimCorporationID: km.Victim.CorporationID,
+				VictimAllianceID:    km.Victim.AllianceID,
+				VictimFactionID:     km.Victim.FactionID,
+				ShipTypeID:          km.Victim.ShipTypeID,
+				DamageTaken:         km.Victim.DamageTaken,
+				AttackerCount:       int32(len(km.Attackers)),
+				FbCharacterID:       p.FbCharacterID,
+				FbCorporationID:     p.FbCorporationID,
+				FbAllianceID:        p.FbAllianceID,
+				FbShipTypeID:        p.FbShipTypeID,
+				Npc:                 p.Npc,
+				Solo:                p.Solo,
+				Awox:                p.Awox,
+				Points:              p.Points,
+				Source:              source,
+				Public:              public,
+				IngestedAt:          p.IngestedAt,
+			})
+		}
 	}
 	return inserted, nil
 }
@@ -458,10 +487,14 @@ func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, k
 		}
 	}
 	total, dropped, cov := killValue(lines, price)
-	return app.queries.SetKillValue(ctx, db.SetKillValueParams{
+	if err := app.queries.SetKillValue(ctx, db.SetKillValueParams{
 		KillmailID: killmailID, ValueOurs: total, ValueDroppedOurs: dropped,
 		ValueCoverage: float32(cov), PricedAt: now,
-	})
+	}); err != nil {
+		return err
+	}
+	app.noteRecentKillPrice(killmailID, total, dropped, float64(cov), now)
+	return nil
 }
 
 // killRegion is a system's region, from the SDE (cached once).

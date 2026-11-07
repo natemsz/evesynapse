@@ -380,7 +380,12 @@ func (app *Application) noteSearchPilotRecord(id int64, state, payload string) {
 	if state == pilotStateReady && payload != "" {
 		if name, corpName, ok := searchPilotEntry(payload); ok {
 			delta = searchRecordDelta{name: name, corpName: corpName}
+			app.noteEntity(id, entityDirectoryEntry{ID: id, Name: name, Kind: "pilot"}, false)
+		} else {
+			app.noteEntity(id, entityDirectoryEntry{}, true)
 		}
+	} else {
+		app.noteEntity(id, entityDirectoryEntry{}, true)
 	}
 	app.noteSearchRecord(searchRecordKey{kind: searchRecordPilot, id: id}, delta)
 }
@@ -390,7 +395,12 @@ func (app *Application) noteSearchCorporationRecord(id int64, state, payload str
 	if state == orgStateReady && payload != "" {
 		if name, ticker, ok := searchCorpEntry(payload); ok {
 			delta = searchRecordDelta{name: name, ticker: ticker}
+			app.noteEntity(id, entityDirectoryEntry{ID: id, Name: name, Ticker: ticker, Kind: "corporation"}, false)
+		} else {
+			app.noteEntity(id, entityDirectoryEntry{}, true)
 		}
+	} else {
+		app.noteEntity(id, entityDirectoryEntry{}, true)
 	}
 	app.noteSearchRecord(searchRecordKey{kind: searchRecordCorporation, id: id}, delta)
 }
@@ -400,7 +410,12 @@ func (app *Application) noteSearchAllianceRecord(id int64, state, payload string
 	if state == orgStateReady && payload != "" {
 		if name, ticker, ok := searchAllianceEntry(payload); ok {
 			delta = searchRecordDelta{name: name, ticker: ticker}
+			app.noteEntity(id, entityDirectoryEntry{ID: id, Name: name, Ticker: ticker, Kind: "alliance"}, false)
+		} else {
+			app.noteEntity(id, entityDirectoryEntry{}, true)
 		}
+	} else {
+		app.noteEntity(id, entityDirectoryEntry{}, true)
 	}
 	app.noteSearchRecord(searchRecordKey{kind: searchRecordAlliance, id: id}, delta)
 }

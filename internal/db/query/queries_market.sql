@@ -229,6 +229,12 @@ WHERE state = 'pending'
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, structure_id
 LIMIT sqlc.arg(resolution_limit)::bigint;
 
+-- name: ListResolvedStructureNames :many
+SELECT structure_id, name
+FROM structure_names
+WHERE state = 'resolved' AND name != ''
+ORDER BY structure_id;
+
 -- ---------------------------------------------------------------------
 -- Structure context (schema 028): owner/system/type facts the
 -- corporation structure snapshots report, persisted as the
@@ -575,6 +581,11 @@ SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, s
 FROM market_stats_fallback
 WHERE region_id = $1 AND type_id = ANY($2::bigint[])
 ORDER BY type_id;
+
+-- name: ListStatPackFallbackStats :many
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
+       wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy
+FROM market_stats_fallback;
 -- name: GetMarketStatsFallbackMeta :one
 SELECT id, orderset_id, fetched_at, row_count FROM market_stats_fallback_meta
 WHERE id = 1;

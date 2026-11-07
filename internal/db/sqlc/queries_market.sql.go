@@ -3676,6 +3676,41 @@ func (q *Queries) ListPlanetResolutions(ctx context.Context, arg ListPlanetResol
 	return items, nil
 }
 
+const listResolvedStructureNames = `-- name: ListResolvedStructureNames :many
+SELECT structure_id, name
+FROM structure_names
+WHERE state = 'resolved' AND name != ''
+ORDER BY structure_id
+`
+
+type ListResolvedStructureNamesRow struct {
+	StructureID int64  `json:"structure_id"`
+	Name        string `json:"name"`
+}
+
+func (q *Queries) ListResolvedStructureNames(ctx context.Context) ([]ListResolvedStructureNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listResolvedStructureNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListResolvedStructureNamesRow
+	for rows.Next() {
+		var i ListResolvedStructureNamesRow
+		if err := rows.Scan(&i.StructureID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRestockTargets = `-- name: ListRestockTargets :many
 SELECT user_id, type_id, target_qty, min_margin_pct, updated_at
 FROM restock_targets
@@ -3902,6 +3937,58 @@ func (q *Queries) ListStatPackBestBeats(ctx context.Context) ([]ListStatPackBest
 			&i.TypeID,
 			&i.IsBuyOrder,
 			&i.At,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStatPackFallbackStats = `-- name: ListStatPackFallbackStats :many
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
+       wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy
+FROM market_stats_fallback
+`
+
+func (q *Queries) ListStatPackFallbackStats(ctx context.Context) ([]MarketStatsFallback, error) {
+	rows, err := q.db.QueryContext(ctx, listStatPackFallbackStats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketStatsFallback
+	for rows.Next() {
+		var i MarketStatsFallback
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.MedianSell,
+			&i.FivepctSell,
+			&i.MedianBuy,
+			&i.FivepctBuy,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+			&i.Source,
+			&i.OrdersetID,
+			&i.SourceAsof,
+			&i.FetchedAt,
+			&i.WavgSell,
+			&i.MinSell,
+			&i.MaxSell,
+			&i.StddevSell,
+			&i.WavgBuy,
+			&i.MinBuy,
+			&i.MaxBuy,
+			&i.StddevBuy,
 		); err != nil {
 			return nil, err
 		}

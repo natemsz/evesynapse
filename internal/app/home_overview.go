@@ -905,7 +905,13 @@ func parseRFC3339(raw string) (time.Time, bool) { return module.ParseRFC3339(raw
 // market-prices cache (both local, both cache-only).
 // ---------------------------------------------------------------------------
 
-func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *fleetWidget {
+func (app *Application) buildFleet(ctx context.Context, userID int64, bundles []*charSnaps) *fleetWidget {
+	now := time.Now()
+	if userID > 0 {
+		if cached := app.fleetRollup(userID, now); cached != nil {
+			return cached
+		}
+	}
 	tagSeen := map[string]bool{}
 	var rows []fleetRow
 	for _, b := range bundles {
@@ -1009,6 +1015,9 @@ func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *f
 	}
 	if anyISK {
 		w.TotalISK = esi.FormatISK(isk)
+	}
+	if userID > 0 {
+		app.storeFleetRollup(userID, now, w)
 	}
 	return w
 }
@@ -1613,7 +1622,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		case widgetBriefing:
 			w.Briefing = app.buildBriefing(ctx, bundles, briefingSince, now, marketShared)
 		case widgetFleet:
-			w.Fleet = app.buildFleet(ctx, bundles)
+			w.Fleet = app.buildFleet(ctx, userID, bundles)
 		case widgetNetWorth:
 			w.NetWorth = sharedNetWorth()
 		case widgetIndustry:

@@ -957,7 +957,9 @@ func (app *Application) wbFillHullDrawers(ctx context.Context, v *workbenchView)
 				}
 			}
 		}
-		if t, err := app.queries.GetSDEType(ctx, h.TypeID); err == nil {
+		if t, ok := app.sdeType(h.TypeID); ok {
+			d.Desc = strings.TrimSpace(t.Description)
+		} else if t, err := app.queries.GetSDEType(ctx, h.TypeID); err == nil {
 			d.Desc = strings.TrimSpace(t.Description)
 		}
 		v.HullDrawers = append(v.HullDrawers, d)

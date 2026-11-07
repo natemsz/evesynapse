@@ -78,6 +78,22 @@ type Application struct {
 	// on the /intel/kills/ front page without touching Postgres.
 	recentKills recentKillsState
 
+	// sdeTopology is the in-memory universe topology (sde_memory.go):
+	// systems, regions, and types held in RAM for immediate resolution.
+	sdeTopology sdeTopologyState
+
+	// entityDir is the in-memory entity resolution directory
+	// (entity_directory.go): pilots, corps, alliances, and structures in RAM.
+	entityDir entityDirectoryState
+
+	// threatState is the in-memory solar system threat heatmap (map_threat_memory.go):
+	// system activity, live threat scores, and camp detections held in RAM.
+	threatState threatMemoryState
+
+	// fleetOverview is the in-memory multi-character fleet overview cache
+	// (fleet_overview_memory.go): per-user aggregated fleet metrics held in RAM.
+	fleetOverview fleetOverviewState
+
 	// Parsed scan results, remembered (scans are immutable once
 	// stored; intel_analysis.go).
 	scanMemoMu sync.Mutex
@@ -1257,6 +1273,9 @@ func (app *Application) SystemRef(ctx context.Context, systemID int64) module.Pl
 // SystemSecurity mirrors the fleet overview's location badge: the
 // stored sde_systems row's security, rounded by secRound.
 func (app *Application) SystemSecurity(ctx context.Context, systemID int64) (string, int, bool) {
+	if sys, ok := app.sdeSystem(systemID); ok {
+		return sys.SecText, sys.SecTier, true
+	}
 	sys, err := app.queries.GetSDESystem(ctx, systemID)
 	if err != nil {
 		return "", 0, false
@@ -1268,6 +1287,16 @@ func (app *Application) SystemSecurity(ctx context.Context, systemID int64) (str
 // SystemRegion resolves a system's region name from the stored
 // SDE rows (the system's region_id, then the region's name).
 func (app *Application) SystemRegion(ctx context.Context, systemID int64) (string, bool) {
+	if sys, ok := app.sdeSystem(systemID); ok {
+		if sys.RegionName != "" {
+			return sys.RegionName, true
+		}
+		if sys.RegionID > 0 {
+			if rName, ok := app.sdeRegion(sys.RegionID); ok && rName != "" {
+				return rName, true
+			}
+		}
+	}
 	sys, err := app.queries.GetSDESystem(ctx, systemID)
 	if err != nil || sys.RegionID <= 0 {
 		return "", false
@@ -1310,6 +1339,9 @@ func (app *Application) Background(fn func()) {
 func (app *Application) TypeName(ctx context.Context, typeID int64) string {
 	name := app.typeNameOrID(ctx, typeID)
 	if strings.HasPrefix(name, "Type #") {
+		if sName, ok := app.sdeTypeName(typeID); ok && sName != "" {
+			return sName
+		}
 		// The SDE knows most types by name; fall back to the local SDE
 		// row before settling for the placeholder.
 		if row, err := app.queries.GetSDEType(ctx, typeID); err == nil && row.Name != "" {

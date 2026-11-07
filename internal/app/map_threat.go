@@ -335,6 +335,9 @@ func (app *Application) structureTypes(ctx context.Context, typeIDs []int64) map
 
 // loadThreat reads the recent kills and builds the threat layer.
 func (app *Application) loadThreat(ctx context.Context, now time.Time) (mapLayerThreat, bool) {
+	if snap := app.threatMemorySnapshot(now); snap != nil {
+		return snap.layer, true
+	}
 	since := now.Add(-threatWindow)
 	rows, err := app.queries.ListThreatKills(ctx, since)
 	if err != nil {
@@ -369,6 +372,7 @@ func (app *Application) loadThreat(ctx context.Context, now time.Time) (mapLayer
 		return names.character(id)
 	})
 	app.dressCamps(ctx, names, th.Camps)
+	app.storeThreatSnapshot(now, th)
 	return th, true
 }
 

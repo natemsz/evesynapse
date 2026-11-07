@@ -165,6 +165,14 @@ func (app *Application) runWorker(ctx context.Context) {
 	// as well (killboard_recent.go).
 	app.primeRecentKills(ctx)
 
+	// SDE universe topology builds in the background at startup as well
+	// (sde_memory.go).
+	app.kickSDETopologyBuild()
+
+	// Entity directory builds in the background at startup as well
+	// (entity_directory.go).
+	app.kickEntityDirectoryBuild()
+
 	// The two loops below run beside the minute cycle. runWorker
 	// waits for them on the way out, so when it returns the whole
 	// worker has stopped and Close may close the database handles

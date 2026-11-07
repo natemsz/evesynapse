@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 )
 
@@ -31,6 +32,16 @@ func TestStatPackMemorySnapshotPinsServingAndLowRAM(t *testing.T) {
 	}}
 	sweepUntilIdle(t, app)
 
+	now := time.Now().UTC()
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO true_values (type_id, build_cost, est_sell, sell_samples, sell_source, computed_at) VALUES (34, 5, 12, 4, 'listing', $1)`, now); err != nil {
+		t.Fatalf("insert true value: %v", err)
+	}
+	if err := q.InsertMarketStatsFallback(ctx, db.InsertMarketStatsFallbackParams{
+		RegionID: 10000002, TypeID: 34, MedianSell: 11, FivepctSell: 10.5, OrdersetID: 1, SourceAsof: now, FetchedAt: now,
+	}); err != nil {
+		t.Fatalf("insert fallback: %v", err)
+	}
+
 	// 1. Before snapshot builds: SQL path serves.
 	app.statPackIdx.mu.Lock()
 	app.statPackIdx.snap = nil
@@ -42,6 +53,12 @@ func TestStatPackMemorySnapshotPinsServingAndLowRAM(t *testing.T) {
 	}
 	if sqlPacks[34] == nil || sqlPacks[34].Own == nil || sqlPacks[34].Own.TypicalSell != 10 {
 		t.Fatalf("SQL pack 34 typical sell want 10, got %+v", sqlPacks[34])
+	}
+	if sqlPacks[34].Estimate == nil || sqlPacks[34].Estimate.EstSell.Float64 != 12 {
+		t.Fatalf("SQL pack 34 estimate want 12, got %+v", sqlPacks[34].Estimate)
+	}
+	if sqlPacks[34].Fallback == nil || sqlPacks[34].Fallback.MedianSell != 11 {
+		t.Fatalf("SQL pack 34 fallback want 11, got %+v", sqlPacks[34].Fallback)
 	}
 	if sqlPacks[35] == nil || sqlPacks[35].Own == nil || sqlPacks[35].Own.TypicalSell != 50 {
 		t.Fatalf("SQL pack 35 typical sell want 50, got %+v", sqlPacks[35])
@@ -57,6 +74,12 @@ func TestStatPackMemorySnapshotPinsServingAndLowRAM(t *testing.T) {
 	}
 	if memPacks[34].Own.TypicalSell != sqlPacks[34].Own.TypicalSell {
 		t.Errorf("mem pack 34 TypicalSell = %v, want %v", memPacks[34].Own.TypicalSell, sqlPacks[34].Own.TypicalSell)
+	}
+	if memPacks[34].Estimate == nil || memPacks[34].Estimate.EstSell.Float64 != 12 {
+		t.Errorf("mem pack 34 Estimate = %v, want 12", memPacks[34].Estimate)
+	}
+	if memPacks[34].Fallback == nil || memPacks[34].Fallback.MedianSell != 11 {
+		t.Errorf("mem pack 34 Fallback = %v, want 11", memPacks[34].Fallback)
 	}
 	if memPacks[35].Own.TypicalSell != sqlPacks[35].Own.TypicalSell {
 		t.Errorf("mem pack 35 TypicalSell = %v, want %v", memPacks[35].Own.TypicalSell, sqlPacks[35].Own.TypicalSell)

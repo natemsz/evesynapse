@@ -56,6 +56,8 @@ type statPackSnapshot struct {
 	byType       map[int64][]db.MarketRegionStat
 	stationStats map[stationKey]db.MarketStationStat
 	beats        []beatRecord
+	estimates    map[int64]db.TrueValue
+	fallbacks    map[statPackKey]db.MarketStatsFallback
 }
 
 // statPackIndexState holds the Application's resident snapshot and
@@ -135,6 +137,14 @@ func (app *Application) buildStatPack(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("stat pack: best beats: %w", err)
 	}
+	tvRows, err := app.queries.ListTrueValues(ctx)
+	if err != nil {
+		return fmt.Errorf("stat pack: true values: %w", err)
+	}
+	fbRows, err := app.queries.ListStatPackFallbackStats(ctx)
+	if err != nil {
+		return fmt.Errorf("stat pack: fallback stats: %w", err)
+	}
 
 	snap := &statPackSnapshot{
 		builtAt:      time.Now(),
@@ -142,6 +152,8 @@ func (app *Application) buildStatPack(ctx context.Context) error {
 		byType:       make(map[int64][]db.MarketRegionStat),
 		stationStats: make(map[stationKey]db.MarketStationStat, len(stationRows)),
 		beats:        make([]beatRecord, len(beatRows)),
+		estimates:    make(map[int64]db.TrueValue, len(tvRows)),
+		fallbacks:    make(map[statPackKey]db.MarketStatsFallback, len(fbRows)),
 	}
 	for _, r := range regionRows {
 		k := statPackKey{regionID: r.RegionID, typeID: r.TypeID}
@@ -160,6 +172,12 @@ func (app *Application) buildStatPack(ctx context.Context) error {
 			At:         b.At,
 		}
 	}
+	for _, tv := range tvRows {
+		snap.estimates[tv.TypeID] = tv
+	}
+	for _, fb := range fbRows {
+		snap.fallbacks[statPackKey{regionID: fb.RegionID, typeID: fb.TypeID}] = fb
+	}
 
 	idx := &app.statPackIdx
 	idx.mu.Lock()
@@ -167,6 +185,47 @@ func (app *Application) buildStatPack(ctx context.Context) error {
 	idx.stale = false
 	idx.mu.Unlock()
 	return nil
+}
+
+// refreshStatPackFallbacks updates the resident snapshot's fallback
+// stats table after an external fallback import lands.
+func (app *Application) refreshStatPackFallbacks(ctx context.Context) {
+	if app.cfg.lowRAMMode {
+		return
+	}
+	fbRows, err := app.queries.ListStatPackFallbackStats(ctx)
+	if err != nil {
+		logging.Warnf("stat pack: refresh fallback stats: %v", err)
+		return
+	}
+	idx := &app.statPackIdx
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	if idx.snap == nil {
+		return
+	}
+	idx.snap.fallbacks = make(map[statPackKey]db.MarketStatsFallback, len(fbRows))
+	for _, fb := range fbRows {
+		idx.snap.fallbacks[statPackKey{regionID: fb.RegionID, typeID: fb.TypeID}] = fb
+	}
+}
+
+// noteStatPackTrueValue records one newly computed true-value estimate
+// directly into the resident snapshot.
+func (app *Application) noteStatPackTrueValue(row db.TrueValue) {
+	if app.cfg.lowRAMMode {
+		return
+	}
+	idx := &app.statPackIdx
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	if idx.snap == nil {
+		return
+	}
+	if idx.snap.estimates == nil {
+		idx.snap.estimates = make(map[int64]db.TrueValue)
+	}
+	idx.snap.estimates[row.TypeID] = row
 }
 
 // refreshStatPackRegion updates the resident snapshot with the fresh
@@ -273,6 +332,14 @@ func (app *Application) loadStatPacks(ctx context.Context, regionID int64, typeI
 					rowCopy := r
 					out[id].Own = &rowCopy
 				}
+				if tv, ok := s.estimates[id]; ok {
+					tvCopy := tv
+					out[id].Estimate = &tvCopy
+				}
+				if fb, ok := s.fallbacks[statPackKey{regionID: regionID, typeID: id}]; ok {
+					fbCopy := fb
+					out[id].Fallback = &fbCopy
+				}
 			}
 			if regionID != globalMarketRegion {
 				for _, id := range ids {
@@ -319,25 +386,24 @@ func (app *Application) loadStatPacks(ctx context.Context, regionID int64, typeI
 				}
 			}
 		}
-	}
-
-	tvRows, err := app.queries.ListTrueValuesForTypes(ctx, ids)
-	if err != nil {
-		return nil, fmt.Errorf("stat pack: estimates: %w", err)
-	}
-	for i := range tvRows {
-		if p := out[tvRows[i].TypeID]; p != nil {
-			p.Estimate = &tvRows[i]
+		tvRows, err := app.queries.ListTrueValuesForTypes(ctx, ids)
+		if err != nil {
+			return nil, fmt.Errorf("stat pack: estimates: %w", err)
 		}
-	}
-	fbRows, err := app.queries.ListMarketStatsFallbackForTypes(ctx, db.ListMarketStatsFallbackForTypesParams{
-		RegionID: regionID, Column2: ids,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("stat pack: fallback: %w", err)
-	}
-	for i := range fbRows {
-		out[fbRows[i].TypeID].Fallback = &fbRows[i]
+		for i := range tvRows {
+			if p := out[tvRows[i].TypeID]; p != nil {
+				p.Estimate = &tvRows[i]
+			}
+		}
+		fbRows, err := app.queries.ListMarketStatsFallbackForTypes(ctx, db.ListMarketStatsFallbackForTypesParams{
+			RegionID: regionID, Column2: ids,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("stat pack: fallback: %w", err)
+		}
+		for i := range fbRows {
+			out[fbRows[i].TypeID].Fallback = &fbRows[i]
+		}
 	}
 	return out, nil
 }

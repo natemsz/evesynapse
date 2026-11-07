@@ -18,21 +18,25 @@
   <div class="pchart" data-chart-scrub="true">
   <div class="chart-legend">
     <span class="legend-item"><span class="legend-swatch legend-price" aria-hidden="true"></span>Average</span>
-    {{if $ma}}<span class="legend-item"><span class="legend-swatch legend-ma5" aria-hidden="true"></span>5-day average</span>
+    {{if $ma}}<span class="legend-item"><span class="legend-swatch legend-ma7" aria-hidden="true"></span>7-day average</span>
+    <span class="legend-item"><span class="legend-swatch legend-ma5" aria-hidden="true"></span>5-day average</span>
     <span class="legend-item"><span class="legend-swatch legend-ma20" aria-hidden="true"></span>20-day average</span>
     <span class="legend-item"><span class="legend-swatch legend-channel" aria-hidden="true"></span>Donchian channel</span>{{end}}
     {{if $wickOn}}<span class="legend-item"><span class="legend-swatch legend-wick" aria-hidden="true"></span>Daily wicks</span>{{end}}
   </div>
   <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, {{$c.From}} to {{$c.To}}">
+    <defs><linearGradient id="chart-area-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="chart-area-stop-top"/><stop offset="1" class="chart-area-stop-bottom"/></linearGradient></defs>
     {{range $c.PriceTicks}}<line class="chart-gridline price-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
     {{range $c.VolumeTicks}}<line class="chart-gridline volume-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
     {{if $c.ChannelPoints}}<polygon class="chart-channel" points="{{$c.ChannelPoints}}"/>{{end}}
     {{range $c.Wicks}}<line class="chart-wick" x1="{{.X}}" y1="{{.Top}}" x2="{{.X}}" y2="{{.Bottom}}"/>{{end}}
     {{range $c.Bars}}<rect class="chart-volbar" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" fill="#d63c14" fill-opacity="0.55"/>{{end}}
     {{if $c.OrdersPoints}}<polyline class="chart-orders" points="{{$c.OrdersPoints}}"/>{{end}}
+    {{if $c.AreaPath}}<path class="chart-area" d="{{$c.AreaPath}}" fill="url(#chart-area-grad)"/>{{end}}
     {{if $c.MA20Points}}<polyline class="chart-ma20" points="{{$c.MA20Points}}"/>{{end}}
     {{if $c.MA5Points}}<polyline class="chart-ma5" points="{{$c.MA5Points}}"/>{{end}}
-    {{if $c.Points}}<polyline class="chart-line" points="{{$c.Points}}" fill="none" stroke-width="1.5"/>{{end}}
+    {{if and $ma $c.MA7Path}}<path class="chart-ma7" d="{{$c.MA7Path}}" fill="none" stroke-width="1.6"/>{{end}}
+    {{if $c.SmoothPath}}<path class="chart-line" d="{{$c.SmoothPath}}" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>{{end}}
     {{range $c.Dots}}<circle class="chart-dot" cx="{{.X}}" cy="{{.Y}}" r="1.6"/>{{end}}
     {{range $c.Dots}}<circle class="cdot" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-avg="{{.Average}}" data-high="{{.Highest}}" data-low="{{.Lowest}}" data-vol="{{.Volume}}" data-orders="{{.Orders}}"{{if .MA5}} data-ma5="{{.MA5}}"{{end}}{{if .MA20}} data-ma20="{{.MA20}}"{{end}}></circle>{{end}}
     {{range $c.PriceTicks}}<text class="chart-axis-label price-axis {{.Class}}" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}

@@ -349,8 +349,8 @@
 }
 
 .mt-chg { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.mt-chg.up { color: var(--success); }
-.mt-chg.down { color: var(--danger); }
+.mt-chg.up { color: var(--kept, var(--success)); }
+.mt-chg.down { color: var(--lost, var(--danger)); }
 
 .mt-regions-toggle { margin: 0 0 0.4rem; }
 

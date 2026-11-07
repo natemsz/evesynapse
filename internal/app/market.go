@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -133,16 +134,13 @@ type marketItem struct {
 	// stored sweep snapshot (BookStoredAt set) -- never a fetch of
 	// their own (BookPending when neither exists, or when the
 	// anonymous-market switch is off).
-	Anonymous     bool
-	BookPending   bool
-	BookStoredAt  string // age of the stored sweep book shown, "" unless it came from one
-	AveragePrice  string // esi.FormatISK, "" when unknown
-	AdjustedPrice string // esi.FormatISK, "" when unknown
-	// The worker's estimated sell (truevalue.go) for a type
-	// with no guide average: the Adjusted price card then
-	// presents this as the "Estimated value" instead, with
-	// EstimatedSellNote as its basis line.
-	EstimatedSell     string // esi.FormatISK, "" when no true value applies
+	Anonymous    bool
+	BookPending  bool
+	BookStoredAt string // age of the stored sweep book shown, "" unless it came from one
+	// The house appraisal value (resolveAppraisalPrice) and its
+	// basis line: The Forge swept typical sell, stored true-value
+	// estimated sell, or Fuzzwork fallback with provenance.
+	EstimatedSell     string // esi.FormatISK, "" when unpriced
 	EstimatedSellNote string
 	RegionID          int64
 	RegionName        string
@@ -892,8 +890,68 @@ func (app *Application) cachedPrices() map[int64]esi.MarketPrice {
 	return app.prices
 }
 
-// loadMarketItem builds the item view for (type, region): guide
-// prices plus the best and top orders of the regional book.
+// attachEstimatedValue resolves the house appraisal value for an
+// item in the same order used by assets, contracts, and appraisal:
+// our swept Forge typical sell (or global PLEX market typical),
+// then the stored true-value estimate, then the Fuzzwork fallback
+// within its expiry, then the floor rule. When no swept Forge row
+// is stored yet and the page just fetched The Forge's or global
+// market's book live, liveTypicalSell supplies the typical sell.
+func (app *Application) attachEstimatedValue(ctx context.Context, item *marketItem, liveTypicalSell float64) {
+	if item == nil {
+		return
+	}
+	now := time.Now().UTC()
+	packs, err := app.loadStatPacks(ctx, defaultMarketRegion, []int64{item.TypeID})
+	if err != nil {
+		logging.Errorf("market: valuation pack for type %d: %v", item.TypeID, err)
+		return
+	}
+	p := packs[item.TypeID]
+	var own *db.MarketRegionStat
+	var tv *db.TrueValue
+	var fb *db.MarketStatsFallback
+	var fromGlobal bool
+	if p != nil {
+		own, tv, fb, fromGlobal = p.Own, p.Estimate, p.Fallback, p.FromGlobal
+	}
+	if own == nil && liveTypicalSell > 0 && (item.RegionID == defaultMarketRegion || item.RegionID == globalMarketRegion) {
+		own = &db.MarketRegionStat{
+			RegionID:    item.RegionID,
+			TypeID:      item.TypeID,
+			TypicalSell: liveTypicalSell,
+			UpdatedAt:   now,
+		}
+		fromGlobal = item.RegionID == globalMarketRegion
+	}
+	pr := resolveAppraisalPrice(own, tv, fb, now)
+	if !pr.ok {
+		return
+	}
+	item.EstimatedSell = esi.FormatISK(pr.unit)
+	switch pr.tier {
+	case module.AppraisalTierTypical:
+		note := "The Forge typical sell"
+		if fromGlobal {
+			note = "Global PLEX market typical sell"
+		}
+		if now.Sub(pr.asOf) >= fallbackOwnFresh {
+			note += " · " + ageText(now, pr.asOf)
+		}
+		item.EstimatedSellNote = note
+	case module.AppraisalTierEstimate:
+		if tv != nil {
+			item.EstimatedSellNote = "Estimated sell · " + trueValueBasis(*tv)
+		} else {
+			item.EstimatedSellNote = "Estimated sell"
+		}
+	case module.AppraisalTierFallback:
+		item.EstimatedSellNote = fallbackSourceLabel + " · " + ageText(now, pr.asOf)
+	}
+}
+
+// loadMarketItem builds the item view for (type, region): house
+// valuation plus the best and top orders of the regional book.
 func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int64, anon bool) (*marketItem, error) {
 	item := &marketItem{
 		TypeID:    typeID,
@@ -928,39 +986,6 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		})
 	}
 
-	var prices map[int64]esi.MarketPrice
-	if anon {
-		// The guide as held: an anonymous view never refreshes it.
-		app.pricesMu.Lock()
-		prices = app.prices
-		app.pricesMu.Unlock()
-	} else {
-		var err error
-		if prices, err = app.marketPrices(ctx); err != nil {
-			return nil, err
-		}
-	}
-	if p, ok := prices[typeID]; ok {
-		if p.AveragePrice > 0 {
-			item.AveragePrice = esi.FormatISK(p.AveragePrice)
-		}
-		if p.AdjustedPrice > 0 {
-			item.AdjustedPrice = esi.FormatISK(p.AdjustedPrice)
-		}
-	}
-
-	// No average: the type trades by contract, not on the
-	// market, and CCP's adjusted price for it is a fossil.
-	// The stored true value is the honest headline instead.
-	if item.AveragePrice == "" {
-		if tv, ok := app.storedTrueValues(ctx)[typeID]; ok {
-			if est, ok := storedEstimate(tv); ok {
-				item.EstimatedSell = esi.FormatISK(est)
-				item.EstimatedSellNote = trueValueBasis(tv)
-			}
-		}
-	}
-
 	var sells, buys []esi.MarketOrder
 	var truncated bool
 	// fromSnapshot: the book is the stored sweep snapshot (top
@@ -979,6 +1004,7 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 			stored, stat, sok := app.storedBook(ctx, regionID, typeID)
 			if !sok {
 				item.BookPending = true
+				app.attachEstimatedValue(ctx, item, 0)
 				return item, nil
 			}
 			sells, buys = stored.sells, stored.buys
@@ -986,6 +1012,7 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 			item.BookStoredAt = ageText(time.Now(), stat.UpdatedAt)
 		} else {
 			item.BookPending = true
+			app.attachEstimatedValue(ctx, item, 0)
 			return item, nil
 		}
 	} else {
@@ -1076,6 +1103,7 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 			item.BuyBand = esi.FormatISK(stats.Low90)
 		}
 	}
+	app.attachEstimatedValue(ctx, item, typicalSell)
 
 	// The spread card: typical against typical, and only from a
 	// book deep enough for a median to mean anything. At three

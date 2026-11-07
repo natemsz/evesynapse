@@ -817,9 +817,9 @@ func TestTrueValueItemPage(t *testing.T) {
 	}
 }
 
-// TestTrueValueMarketPage: the market page's price card for a
-// no-average type presents the estimated value, labelled as
-// such, in place of the adjusted price.
+// TestTrueValueMarketPage: the market page's valuation card for
+// a contract-traded type presents the stored true-value estimate
+// and its basis line.
 func TestTrueValueMarketPage(t *testing.T) {
 	transport := &tvPricesTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
@@ -844,9 +844,6 @@ func TestTrueValueMarketPage(t *testing.T) {
 		"590,000,000,000",
 		"from 4 public contracts",
 	)
-	if strings.Contains(body, `kpi-k">Adjusted price`) {
-		t.Error("market page still cards the adjusted price for a no-average type")
-	}
 }
 
 // TestTrueValueNetWorthFallback: net worth and the daily

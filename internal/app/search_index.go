@@ -174,7 +174,12 @@ type searchIndexState struct {
 // searchSnapshot returns the live snapshot, starting a background
 // rebuild when there is none or it has gone stale. It returns nil
 // when no snapshot has landed yet; callers serve the SQL path.
+// In low-RAM mode (LOW_RAM_MODE=1) it always returns nil without
+// starting a build, so every search path serves its SQL fallback.
 func (app *Application) searchSnapshot() *searchSnapshot {
+	if app.cfg.lowRAMMode {
+		return nil
+	}
 	idx := &app.searchIdx
 	idx.mu.RLock()
 	snap := idx.snap
@@ -188,8 +193,12 @@ func (app *Application) searchSnapshot() *searchSnapshot {
 
 // kickSearchIndexBuild starts one background build when none is
 // running. It needs the worker context: without one there is no
-// background lifecycle and the SQL path serves.
+// background lifecycle and the SQL path serves. In low-RAM mode
+// (LOW_RAM_MODE=1) it never starts a build.
 func (app *Application) kickSearchIndexBuild() {
+	if app.cfg.lowRAMMode {
+		return
+	}
 	if app.workerCtx == nil {
 		return
 	}
@@ -294,8 +303,12 @@ func (app *Application) buildSearchIndex(ctx context.Context) error {
 
 // invalidateSearchIndexSDE marks the snapshot's SDE part stale
 // and starts the rebuild: called where a new SDE becomes live
-// (importSDE), whichever trigger ran the import.
+// (importSDE), whichever trigger ran the import. In low-RAM mode
+// (LOW_RAM_MODE=1) there is no snapshot to mark stale.
 func (app *Application) invalidateSearchIndexSDE() {
+	if app.cfg.lowRAMMode {
+		return
+	}
 	idx := &app.searchIdx
 	idx.mu.Lock()
 	idx.sdeStale = true
@@ -332,7 +345,13 @@ func searchAllianceEntry(payload string) (name, ticker string, ok bool) {
 
 // noteSearchRecord folds one store's delta into the live
 // snapshot and remembers it for the build in flight, if any.
+// In low-RAM mode (LOW_RAM_MODE=1) it returns at once: with no
+// builds running, pending would otherwise grow one entry per
+// record store and never drain.
 func (app *Application) noteSearchRecord(key searchRecordKey, delta searchRecordDelta) {
+	if app.cfg.lowRAMMode {
+		return
+	}
 	idx := &app.searchIdx
 	idx.mu.Lock()
 	if idx.pending == nil {

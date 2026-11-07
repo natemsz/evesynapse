@@ -3109,7 +3109,7 @@
           var fields = {
             action: "add", type: String(it.id),
             region: input.getAttribute("data-watch-region") || "",
-            threshold: "5", next: "/market/"
+            threshold: "5", next: input.getAttribute("data-watch-next") || "/market/"
           };
           Object.keys(fields).forEach(function (name) {
             var field = document.createElement("input");

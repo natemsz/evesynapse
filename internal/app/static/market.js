@@ -309,7 +309,7 @@
   function applyOrderBookFilters() {
     var explorer = document.getElementById("mkt-order-book");
     if (!explorer) return;
-    var activeBtn = document.querySelector("[data-sec-filter].on");
+    var activeBtn = document.querySelector('[data-sec-filter][aria-selected="true"]');
     var sec = activeBtn ? activeBtn.getAttribute("data-sec-filter") : "all";
     var searchInput = document.querySelector("[data-book-filter]");
     var q = searchInput ? searchInput.value.trim().toLowerCase() : "";
@@ -330,25 +330,67 @@
     });
   }
 
+  function setWatchlistOpen(open) {
+    var con = document.querySelector(".mkt-console");
+    if (!con) return;
+    con.setAttribute("data-depth", open ? "2" : "1");
+    var btn = document.querySelector("[data-watchlist-open]");
+    if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      var wl = document.getElementById("market-watchlist");
+      if (wl) {
+        document.dispatchEvent(new CustomEvent("evesynapse:content-ready", { detail: { root: wl } }));
+      }
+    }
+  }
+
+  function syncWatchlistHash() {
+    if (location.hash === "#market-watchlist") {
+      setWatchlistOpen(true);
+    }
+  }
+
   document.addEventListener("click", function (e) {
     var secBtn = e.target.closest("[data-sec-filter]");
     if (secBtn) {
       e.preventDefault();
       document.querySelectorAll("[data-sec-filter]").forEach(function (b) {
-        b.classList.toggle("on", b === secBtn);
+        b.setAttribute("aria-selected", b === secBtn ? "true" : "false");
       });
       applyOrderBookFilters();
       return;
     }
-    var wlJump = e.target.closest("[data-watchlist-jump]");
-    if (wlJump) {
-      var wl = document.getElementById("market-watchlist");
-      if (wl && wl.classList.contains("folded")) {
-        var foldBtn = wl.querySelector(":scope > h2 > .foldbtn, :scope > h3 > .foldbtn");
-        if (foldBtn) foldBtn.click();
+    var wlOpen = e.target.closest("[data-watchlist-open]");
+    if (wlOpen) {
+      var con = document.querySelector(".mkt-console");
+      if (con) {
+        e.preventDefault();
+        setWatchlistOpen(con.getAttribute("data-depth") !== "2");
+      }
+      return;
+    }
+    var wlClose = e.target.closest("[data-watchlist-close]");
+    if (wlClose) {
+      e.preventDefault();
+      setWatchlistOpen(false);
+      if (location.hash === "#market-watchlist" && history.replaceState) {
+        history.replaceState(history.state, "", location.pathname + location.search);
+      }
+      return;
+    }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      var con = document.querySelector(".mkt-console");
+      if (con && con.getAttribute("data-depth") === "2") {
+        setWatchlistOpen(false);
       }
     }
   });
+
+  document.addEventListener("evesynapse:content-ready", syncWatchlistHash);
+  syncWatchlistHash();
 
   document.addEventListener("input", function (e) {
     if (e.target.matches("[data-book-filter]")) {

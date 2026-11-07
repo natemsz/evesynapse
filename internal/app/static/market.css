@@ -198,8 +198,8 @@
   width: 100%;
   min-width: 0;
 }
-.mkt-sec-seg > button {
-  cursor: pointer;
+.mkt-explorer-controls > .l-seg {
+  margin: 0;
 }
 .mkt-book-search {
   min-width: 13rem;
@@ -313,6 +313,55 @@
 }
 .mkt-book-table td:last-child {
   overflow-wrap: anywhere;
+}
+
+/* Watchlist right-hand inspector overlay on the item page */
+.mkt-console > .l-panes {
+  --l-insp: 36rem;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.mkt-console > .l-panes > .mkt-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0;
+  border: 0;
+}
+.mkt-watch-find {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 var(--space-3);
+}
+.mkt-watch-find > .searchwrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.mkt-watch-find > .searchwrap > input {
+  width: 100%;
+}
+@container console (width >= 70rem) {
+  .mkt-console:not([data-depth="2"]) .l-pane--insp { display: none; }
+  .mkt-console[data-depth="2"] .l-panes:not(:has(> .l-pane--dir)) { grid-template-columns: minmax(0, 1fr); }
+  .mkt-console .l-panes:not(:has(> .l-pane--dir)) > :is(.l-pane--insp, .l-scrim) { grid-column: 1; grid-row: 1; }
+  .mkt-console .l-pane--insp {
+    justify-self: end;
+    z-index: 6;
+    width: min(var(--l-insp), 92%);
+    min-height: calc(100dvh - var(--l-top));
+    background: var(--surface-float);
+    border-left: 1px solid var(--glass-edge);
+    box-shadow: -18px 0 40px rgba(0, 0, 0, 0.45);
+  }
+  .mkt-console .l-pane--insp .l-close { display: inline-flex; }
+  .mkt-console[data-depth="2"] .l-scrim {
+    display: block;
+    align-self: stretch;
+    z-index: 5;
+    background: rgba(0, 0, 0, 0.45);
+  }
 }
 
 @container page (width < 45rem) {

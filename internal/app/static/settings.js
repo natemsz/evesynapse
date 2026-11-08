@@ -90,8 +90,8 @@
       var bd = null;
       try { bd = window.localStorage.getItem('evesynapse-backdrop'); } catch (e) {}
       body.set('backdrop', st.scheme
-        ? (bd === 'muted' || bd === 'glow' ? bd : '')
-        : (st.tier === 'muted' ? 'muted' : st.tier === 'minimalistic' ? 'glow' : ''));
+        ? (bd === 'muted' || bd === 'glow' || bd === 'full' ? bd : '')
+        : (st.tier === 'full' ? 'full' : st.tier === 'minimalistic' ? 'glow' : 'muted'));
       fetch('/settings/theme', {
         method: 'POST',
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -110,7 +110,7 @@
         return { scheme: scheme, tier: tier === 'minimalistic' ? 'minimalistic' : tier === 'full' ? 'full' : 'muted' };
       }
       var bd = root.getAttribute('data-backdrop');
-      return { scheme: '', tier: bd === 'muted' ? 'muted' : bd === 'glow' ? 'minimalistic' : 'full' };
+      return { scheme: '', tier: bd === 'full' ? 'full' : bd === 'glow' ? 'minimalistic' : 'muted' };
     }
 
     function markCurrent() {
@@ -124,7 +124,8 @@
           var btn = buttons[j], on = false;
           if (name === '' && st.scheme === '') {
             var bd = btn.getAttribute('data-bd');
-            on = (bd === '' && st.tier === 'full') || (bd === 'muted' && st.tier === 'muted') ||
+            on = (bd === 'full' && st.tier === 'full') ||
+              ((bd === 'muted' || bd === '') && st.tier === 'muted') ||
               (bd === 'glow' && st.tier === 'minimalistic');
           } else if (name !== '' && name === st.scheme) {
             on = btn.getAttribute('data-tier') === st.tier;
@@ -137,11 +138,11 @@
     function applyDefault(bd) {
       root.removeAttribute('data-scheme');
       root.removeAttribute('data-tier');
-      if (bd) root.setAttribute('data-backdrop', bd);
-      else root.removeAttribute('data-backdrop');
+      if (bd === 'full' || bd === 'glow') root.setAttribute('data-backdrop', bd);
+      else root.setAttribute('data-backdrop', 'muted');
       store('evesynapse-scheme', null);
       store('evesynapse-tier', null);
-      store('evesynapse-backdrop', bd || 'art');
+      store('evesynapse-backdrop', bd || 'muted');
       saveAccount();
       markCurrent();
     }

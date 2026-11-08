@@ -97,7 +97,7 @@ var signupThemeTypes = []signupThemeType{
 }
 
 var signupThemeSchemes = []signupThemeScheme{
-	{ID: "", Name: "Default", Sub: "Minmatar · ember, the standard look"},
+	{ID: "", Name: "Dominion v3", Sub: "Muted ember glass, the standard look"},
 	{ID: "jove", Name: "Jove", Sub: "Purple and violet"},
 	{ID: "caldari", Name: "Caldari", Sub: "Steel blue"},
 	{ID: "gallente", Name: "Gallente", Sub: "Teal and green"},
@@ -105,11 +105,12 @@ var signupThemeSchemes = []signupThemeScheme{
 	{ID: "triglavian", Name: "Triglavian", Sub: "Crimson, maroon, blood red"},
 	{ID: "edencom", Name: "EdenCom", Sub: "Pale gold on slate"},
 	{ID: "soe", Name: "Servant Sisters of EVE", Sub: "Coral red and pale cyan"},
+	{ID: "minmatar", Name: "Minmatar", Sub: "Ember, the classic look"},
 }
 
 // signupThemeViewFor is the theme step as the visitor left it (the
 // reveal carries its own answers, so a re-render keeps them),
-// defaulting to the out-of-box look: the default scheme at full.
+// defaulting to the out-of-box look: the default scheme at muted.
 func signupThemeViewFor(q url.Values) *signupThemeView {
 	tierType := q.Get("ttype")
 	valid := false
@@ -119,7 +120,7 @@ func signupThemeViewFor(q url.Values) *signupThemeView {
 		}
 	}
 	if !valid {
-		tierType = "full"
+		tierType = "muted"
 	}
 	scheme := q.Get("tscheme")
 	if !validThemeScheme(scheme) {
@@ -132,7 +133,7 @@ func signupThemeViewFor(q url.Values) *signupThemeView {
 	}
 	for _, s := range signupThemeSchemes {
 		s.Selected = s.ID == scheme
-		s.Pending = view.Full && s.ID != ""
+		s.Pending = view.Full && s.ID != "" && !schemeTierFullOK(s.ID)
 		view.Schemes = append(view.Schemes, s)
 	}
 	return view

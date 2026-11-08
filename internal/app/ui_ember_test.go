@@ -22,8 +22,8 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	style, bg, plan, link := read("style.css"), read("bg.css"), read("plan.css"), read("link.css")
 
 	for _, want := range []string{
-		"--glass: color-mix(in srgb, var(--panel) 78%, transparent)",
-		"--glass-edge: color-mix(in srgb, var(--accent) 24%, transparent)",
+		"--glass: color-mix(in srgb, var(--panel) 55%, transparent)",
+		"--glass-edge: color-mix(in srgb, var(--accent) 20%, transparent)",
 		"--glass-blur: 24px",
 		"-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9)",
 		"backdrop-filter: blur(var(--glass-blur)) saturate(0.9)",
@@ -31,7 +31,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		"transform: translateY(-2px)",
 		"color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent)",
 		"animation: sev-pulse 3.2s ease-in-out infinite;",
-		"--panel: #1a120b;",
+		"--panel: #151312;",
 		"--r-lg: 0.5rem;",
 		"--r-md: 0.5rem;",
 		"--r-sm: 0.5rem;",

@@ -34,29 +34,31 @@ type themePrefs struct {
 var themeSchemes = map[string]bool{
 	"jove": true, "caldari": true, "gallente": true,
 	"amarr": true, "triglavian": true, "edencom": true, "soe": true,
-	"minmatar-v3": true,
+	"minmatar": true, "minmatar-v3": true,
 }
 
 func validThemeScheme(s string) bool { return s == "" || themeSchemes[s] }
 
 func validThemeTier(s string) bool { return s == "muted" || s == "minimalistic" }
 
-// schemeTierFullOK is whether a scheme honours the full tier: only
-// v3 Minmatar, which reuses the default's wallpapers, so its full
+// schemeTierFullOK is whether a scheme honours the full tier: Minmatar
+// and v3 Minmatar, which reuse the default calm wallpapers, so their full
 // backdrop is the calm art. Every other scheme degrades full to
 // muted until its own wallpapers are made.
-func schemeTierFullOK(scheme string) bool { return scheme == "minmatar-v3" }
+func schemeTierFullOK(scheme string) bool {
+	return scheme == "minmatar" || scheme == "minmatar-v3"
+}
 
 func validThemeBackdrop(s string) bool {
-	return s == "" || s == "muted" || s == "glow"
+	return s == "" || s == "muted" || s == "glow" || s == "full"
 }
 
 // signupThemePrefs turns the sign-up theme step's two answers (a
 // scheme, "" for the default look, and a type: full, muted or
 // minimalistic) into the stored account theme. The default look's
 // types are its backdrop strengths, the Settings mapping. A scheme
-// at full applies at muted until its wallpaper lands, except v3
-// Minmatar, which reuses the default's wallpapers; the same degrade
+// at full applies at muted until its wallpaper lands, except Minmatar
+// and v3 Minmatar, which reuse the calm wallpapers; the same degrade
 // parseThemePrefs applies to a tier it cannot honour.
 // ok is false when either answer is one the step cannot produce.
 func signupThemePrefs(scheme, tierType string) (themePrefs, bool) {
@@ -70,12 +72,13 @@ func signupThemePrefs(scheme, tierType string) (themePrefs, bool) {
 	}
 	if scheme == "" {
 		switch tierType {
-		case "muted":
-			return themePrefs{Backdrop: "muted"}, true
+		case "full":
+			return themePrefs{Backdrop: "full"}, true
 		case "minimalistic":
 			return themePrefs{Backdrop: "glow"}, true
+		default:
+			return themePrefs{Backdrop: "muted"}, true
 		}
-		return themePrefs{}, true
 	}
 	if tierType == "full" && !schemeTierFullOK(scheme) {
 		tierType = "muted"

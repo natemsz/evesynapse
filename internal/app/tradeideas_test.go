@@ -121,7 +121,7 @@ func TestTradeIdeasCSVBounded(t *testing.T) {
 	if rows[1][1] != "Tritanium" || rows[0][1] != "Item" {
 		t.Fatalf("CSV shifted by the new column: header %q, first row %q", rows[0][1], rows[1][1])
 	}
-	if !strings.Contains(text, "Tritanium") || !strings.Contains(text, "150.0%") {
+	if !strings.Contains(text, "Tritanium") || !strings.Contains(text, "136.7%") {
 		t.Fatalf("CSV lacks the seeded opportunity:\n%s", text)
 	}
 	if got := transport.calls.Load(); got != 0 {

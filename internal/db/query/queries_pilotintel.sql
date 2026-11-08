@@ -127,15 +127,27 @@ LIMIT 1;
 
 -- The pilot's latest public kills and losses, newest first.
 -- name: ListPilotRecentKills :many
-SELECT k.killmail_id, k.killmail_time, k.system_id, k.ship_type_id, k.victim_character_id,
-       COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value,
-       (k.victim_character_id = sqlc.arg(character_id))::boolean AS lost,
-       COALESCE((SELECT a.ship_type_id FROM kill_attackers a WHERE a.killmail_id = k.killmail_id
-                 AND a.character_id = sqlc.arg(character_id) LIMIT 1), 0)::bigint AS flew
-FROM kills k
-WHERE k.public AND NOT k.npc AND (k.victim_character_id = sqlc.arg(character_id)
-   OR EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id AND a.character_id = sqlc.arg(character_id)))
-ORDER BY k.killmail_time DESC
+WITH pilot_kills AS (
+    (SELECT k.killmail_id, k.killmail_time, k.system_id, k.ship_type_id, k.victim_character_id,
+            COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value,
+            true AS lost,
+            COALESCE((SELECT a.ship_type_id FROM kill_attackers a WHERE a.killmail_id = k.killmail_id AND a.character_id = sqlc.arg(character_id) LIMIT 1), 0)::bigint AS flew
+     FROM kills k
+     WHERE k.victim_character_id = sqlc.arg(character_id) AND k.public AND NOT k.npc
+     ORDER BY k.killmail_time DESC LIMIT sqlc.arg(max_rows)::int)
+    UNION ALL
+    (SELECT k.killmail_id, k.killmail_time, k.system_id, k.ship_type_id, k.victim_character_id,
+            COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value,
+            false AS lost,
+            a.ship_type_id AS flew
+     FROM kill_attackers a
+     JOIN kills k ON k.killmail_id = a.killmail_id
+     WHERE a.character_id = sqlc.arg(character_id) AND a.character_id > 0 AND k.victim_character_id <> sqlc.arg(character_id) AND k.public AND NOT k.npc
+     ORDER BY k.killmail_time DESC LIMIT sqlc.arg(max_rows)::int)
+)
+SELECT killmail_id, killmail_time, system_id, ship_type_id, victim_character_id, value, lost, flew
+FROM pilot_kills
+ORDER BY killmail_time DESC
 LIMIT sqlc.arg(max_rows)::int;
 
 -- What the pilot flies on kills, most first.

@@ -1024,21 +1024,33 @@ func (q *Queries) ListPilotHours(ctx context.Context, arg ListPilotHoursParams) 
 }
 
 const listPilotRecentKills = `-- name: ListPilotRecentKills :many
-SELECT k.killmail_id, k.killmail_time, k.system_id, k.ship_type_id, k.victim_character_id,
-       COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value,
-       (k.victim_character_id = $1)::boolean AS lost,
-       COALESCE((SELECT a.ship_type_id FROM kill_attackers a WHERE a.killmail_id = k.killmail_id
-                 AND a.character_id = $1 LIMIT 1), 0)::bigint AS flew
-FROM kills k
-WHERE k.public AND NOT k.npc AND (k.victim_character_id = $1
-   OR EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id AND a.character_id = $1))
-ORDER BY k.killmail_time DESC
-LIMIT $2::int
+WITH pilot_kills AS (
+    (SELECT k.killmail_id, k.killmail_time, k.system_id, k.ship_type_id, k.victim_character_id,
+            COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value,
+            true AS lost,
+            COALESCE((SELECT a.ship_type_id FROM kill_attackers a WHERE a.killmail_id = k.killmail_id AND a.character_id = $2 LIMIT 1), 0)::bigint AS flew
+     FROM kills k
+     WHERE k.victim_character_id = $2 AND k.public AND NOT k.npc
+     ORDER BY k.killmail_time DESC LIMIT $1::int)
+    UNION ALL
+    (SELECT k.killmail_id, k.killmail_time, k.system_id, k.ship_type_id, k.victim_character_id,
+            COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS value,
+            false AS lost,
+            a.ship_type_id AS flew
+     FROM kill_attackers a
+     JOIN kills k ON k.killmail_id = a.killmail_id
+     WHERE a.character_id = $2 AND a.character_id > 0 AND k.victim_character_id <> $2 AND k.public AND NOT k.npc
+     ORDER BY k.killmail_time DESC LIMIT $1::int)
+)
+SELECT killmail_id, killmail_time, system_id, ship_type_id, victim_character_id, value, lost, flew
+FROM pilot_kills
+ORDER BY killmail_time DESC
+LIMIT $1::int
 `
 
 type ListPilotRecentKillsParams struct {
-	CharacterID int64 `json:"character_id"`
 	MaxRows     int32 `json:"max_rows"`
+	CharacterID int64 `json:"character_id"`
 }
 
 type ListPilotRecentKillsRow struct {
@@ -1054,7 +1066,7 @@ type ListPilotRecentKillsRow struct {
 
 // The pilot's latest public kills and losses, newest first.
 func (q *Queries) ListPilotRecentKills(ctx context.Context, arg ListPilotRecentKillsParams) ([]ListPilotRecentKillsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotRecentKills, arg.CharacterID, arg.MaxRows)
+	rows, err := q.db.QueryContext(ctx, listPilotRecentKills, arg.MaxRows, arg.CharacterID)
 	if err != nil {
 		return nil, err
 	}

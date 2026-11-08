@@ -34,11 +34,11 @@ package app
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/klauspost/compress/gzip"
 	"io"
 	"net/http"
 	"strconv"

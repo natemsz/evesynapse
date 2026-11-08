@@ -2,9 +2,9 @@ package inteltag
 
 import (
 	"bytes"
-	"compress/gzip"
 	_ "embed"
 	"encoding/gob"
+	"github.com/klauspost/compress/gzip"
 	"io"
 )
 

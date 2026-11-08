@@ -8,8 +8,8 @@ package gamelog
 import (
 	"bufio"
 	"bytes"
-	"compress/gzip"
 	"errors"
+	"github.com/klauspost/compress/gzip"
 	"io"
 	"regexp"
 	"strconv"

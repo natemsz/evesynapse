@@ -2,11 +2,11 @@ package app
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/klauspost/compress/gzip"
 	"io"
 	"net/http"
 	"net/url"

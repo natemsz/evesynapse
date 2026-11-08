@@ -17,12 +17,12 @@ package app
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/klauspost/compress/gzip"
 	"io"
 	"net/http"
 	"sort"

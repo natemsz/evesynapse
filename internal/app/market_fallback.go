@@ -32,13 +32,13 @@ package app
 // ---------------------------------------------------------------------------
 
 import (
-	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/klauspost/compress/gzip"
 	"io"
 	"math"
 	"net/http"

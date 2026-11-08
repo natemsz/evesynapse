@@ -745,7 +745,7 @@ type TraderStats struct {
 	Avg7      string // mean daily average over the latest 7 recorded days
 	Avg30     string // mean daily average over the latest 30 recorded days
 	AvgVol7   string // mean daily volume over the latest 7 recorded days
-	MarginPct string // best-buy → best-sell margin, % of the sell price
+	MarginPct string // best-buy → best-sell margin, % of the net sell price
 }
 
 // Window means the daily average price and daily volume

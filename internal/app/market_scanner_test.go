@@ -137,9 +137,10 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 			t.Fatalf("seed sde: %v", err)
 		}
 	}
-	// Spreads are priced typical against typical now: type 34's
-	// typicals give (10-4)/4 = 150%, profit (10-4)*min(20,100,50)=120.
-	// Type 35: (100-90)/90 = 11.1%, profit 10*min(100,10,5)=50.
+	// Spreads are priced typical against typical, net of broker
+	// fees and sales tax at perfect rates: type 34's typicals
+	// give a 136.7% net spread, profit 5.52*20=110.45.
+	// Type 35: 5.2% net spread, profit 4.73*5=23.62.
 	// Type 36: no buy side -- never a row. (These seeds used to
 	// carry one order a side and still list: that pinned the old
 	// extremes basis and its missing depth gate, and is exactly
@@ -161,11 +162,11 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 	if !view.HasData || len(view.Rows) != 2 {
 		t.Fatalf("scanner rows: %d (hasData %v), want 2", len(view.Rows), view.HasData)
 	}
-	if view.Rows[0].TypeID != 34 || view.Rows[0].SpreadPct != "150.0%" || view.Rows[0].DailyVolume != "20" || view.Rows[0].DailyProfit != esi.FormatISK(120) {
-		t.Fatalf("top scanner row: %+v, want type 34, 150%% spread, 20/day, %s profit", view.Rows[0], esi.FormatISK(120))
+	if view.Rows[0].TypeID != 34 || view.Rows[0].SpreadPct != "136.7%" || view.Rows[0].DailyVolume != "20" || view.Rows[0].DailyProfit != esi.FormatISK(110.45) {
+		t.Fatalf("top scanner row: %+v, want type 34, 136.7%% spread, 20/day, %s profit", view.Rows[0], esi.FormatISK(110.45))
 	}
-	if view.Rows[1].TypeID != 35 || view.Rows[1].DailyProfit != esi.FormatISK(50) {
-		t.Fatalf("second scanner row: %+v, want type 35 at %s profit", view.Rows[1], esi.FormatISK(50))
+	if view.Rows[1].TypeID != 35 || view.Rows[1].DailyProfit != esi.FormatISK(23.62) {
+		t.Fatalf("second scanner row: %+v, want type 35 at %s profit", view.Rows[1], esi.FormatISK(23.62))
 	}
 	if view.Rows[0].Station.Name != "Jita 4 - Moon 4 - Caldari Navy Assembly Plant" || view.Rows[0].Station.StationID != stationA {
 		t.Fatalf("scanner station: %+v, want the seeded Jita station linked", view.Rows[0].Station)

@@ -458,6 +458,13 @@ func (app *Application) page(ctx context.Context) pageData {
 }
 
 // userID is the signed-in account's id; 0 when nobody is signed in.
-func (app *Application) userID(ctx context.Context) int64 {
+// A context with no session data (a bare context, or one that never
+// passed through the session middleware) also reads as 0, not a panic.
+func (app *Application) userID(ctx context.Context) (id int64) {
+	defer func() {
+		if recover() != nil {
+			id = 0
+		}
+	}()
 	return int64(app.sessions.GetInt(ctx, sessionUserID))
 }

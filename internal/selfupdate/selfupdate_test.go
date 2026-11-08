@@ -1670,6 +1670,70 @@ func TestNamedChainTieGoesToEarlierProvider(t *testing.T) {
 	}
 }
 
+func TestChainRecoversWhenEarlierProviderHangs(t *testing.T) {
+	key := trustTestKey(t)
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "")
+	sum := strings.Repeat("0", 64)
+
+	oldTimeout := providerCheckTimeout
+	providerCheckTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { providerCheckTimeout = oldTimeout })
+
+	// GitHub hangs indefinitely.
+	hangingSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(2 * time.Second):
+		}
+	}))
+	defer hangingSrv.Close()
+	oldGH := releaseGitHubBaseURL
+	releaseGitHubBaseURL = hangingSrv.URL
+	t.Cleanup(func() { releaseGitHubBaseURL = oldGH })
+
+	// Forgejo answers promptly with a valid signed release.
+	fjMux := http.NewServeMux()
+	serveForgejoChannel(fjMux, "v9.9.9.0")
+	publish(fjMux, "/v9.9.9.0/latest-arm64.json", manifestJSON("9.9.9.0", "arm64", sum), key)
+	fjSrv := httptest.NewServer(fjMux)
+	defer fjSrv.Close()
+	withForgejo(t, fjSrv.URL)
+
+	// GitLab and mirror are unreachable.
+	oldAPI := releaseAPIBaseURL
+	releaseAPIBaseURL = "http://127.0.0.1:1"
+	t.Cleanup(func() { releaseAPIBaseURL = oldAPI })
+	oldMirror := releaseMirrorBaseURL
+	releaseMirrorBaseURL = "http://127.0.0.1:1"
+	t.Cleanup(func() { releaseMirrorBaseURL = oldMirror })
+
+	var out bytes.Buffer
+	m, provider, signer, binaryURL, err := fetchReleaseManifest(context.Background(), &out, "arm64", false)
+	if err != nil {
+		t.Fatalf("chain failed when earlier provider hung: %v", err)
+	}
+	if m.Version != "9.9.9.0" {
+		t.Fatalf("chain picked version %q, want 9.9.9.0 from Forgejo", m.Version)
+	}
+	if provider != "forgejo" {
+		t.Fatalf("chain picked provider %q, want forgejo", provider)
+	}
+	if !strings.HasPrefix(signer, "SHA256:") {
+		t.Fatalf("chain's signer is %q, want fingerprint", signer)
+	}
+	if binaryURL != fjSrv.URL+"/v9.9.9.0/evesynapse-arm64" {
+		t.Fatalf("chain picked binary %q, want Forgejo's", binaryURL)
+	}
+	ghLine := strings.Index(out.String(), "github")
+	fjLine := strings.Index(out.String(), "forgejo")
+	if ghLine < 0 || fjLine < ghLine {
+		t.Fatalf("read-out %q: want github reported then forgejo", out.String())
+	}
+	if !strings.Contains(out.String(), "no usable release") {
+		t.Fatalf("read-out %q: want github to report no usable release", out.String())
+	}
+}
+
 func TestDownloadDisplayHeader(t *testing.T) {
 	var out bytes.Buffer
 	d := &downloadDisplay{w: &out, name: "evesynapse-arm64", from: "github", total: 54 << 20}

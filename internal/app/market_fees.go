@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/url"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/app/module"
 	"evesynapse/internal/tradefees"
 )
 

@@ -272,12 +272,12 @@ func TestScannerSuppressesThinAndImplausibleBooks(t *testing.T) {
 		t.Fatalf("scanner rows: %+v, want only type 37 (the honest deep book)", view.Rows)
 	}
 	row := view.Rows[0]
-	if row.SpreadPct != "30.0%" || row.TypicalBuy != esi.FormatISK(100) || row.TypicalSell != esi.FormatISK(130) {
-		t.Fatalf("honest row: %+v, want typicals 100/130 and a 30.0%% spread", row)
+	if row.SpreadPct != "23.1%" || row.TypicalBuy != esi.FormatISK(100) || row.TypicalSell != esi.FormatISK(130) {
+		t.Fatalf("honest row: %+v, want typicals 100/130 and a 23.1%% spread", row)
 	}
-	// Profit on typicals: (130-100) * min(40000, 9000, 9000).
-	if row.DailyProfit != esi.FormatISK(270000) {
-		t.Fatalf("honest row profit: %s, want %s", row.DailyProfit, esi.FormatISK(270000))
+	// Net profit on typicals: net round-trip on 130 vs 100 * min(40000, 9000, 9000).
+	if row.DailyProfit != esi.FormatISK(209812.5) {
+		t.Fatalf("honest row profit: %s, want %s", row.DailyProfit, esi.FormatISK(209812.5))
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("scanner build made %d outbound calls, want 0", got)
@@ -419,8 +419,8 @@ func TestScannerProfitRankingAndCapInSQL(t *testing.T) {
 			t.Fatalf("row %d: type %d, want %d (profit-desc order)", i, row.TypeID, want)
 		}
 	}
-	if view.Rows[0].DailyProfit != esi.FormatISK(2040) {
-		t.Fatalf("top row profit: %s, want %s", view.Rows[0].DailyProfit, esi.FormatISK(2040))
+	if view.Rows[0].DailyProfit != esi.FormatISK(1897) {
+		t.Fatalf("top row profit: %s, want %s", view.Rows[0].DailyProfit, esi.FormatISK(1897))
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("scanner build made %d outbound calls, want 0", got)

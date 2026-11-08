@@ -102,6 +102,7 @@ func (c *Client) userAgent() string {
 // Snapshot kinds stored in character_snapshots.
 const (
 	SnapSkills     = "skills"
+	SnapStandings  = "standings"
 	SnapSkillqueue = "skillqueue"
 	SnapWallet     = "wallet"
 	SnapAssets     = "assets"
@@ -575,6 +576,19 @@ type Skills struct {
 	UnallocatedSP int64   `json:"unallocated_sp"`
 	Skills        []Skill `json:"skills"`
 }
+
+// Standing is one entry of GET /characters/{id}/standings/:
+// the character's unmodified standing with an agent, NPC
+// corporation or faction. The fee math reads the corporation
+// and faction rows for a station's owner.
+type Standing struct {
+	FromID   int64   `json:"from_id"`
+	FromType string  `json:"from_type"` // agent | corporation | faction
+	Standing float64 `json:"standing"`
+}
+
+// Standings is GET /characters/{id}/standings/.
+type Standings []Standing
 
 // SkillqueueEntry is one entry of GET /characters/{id}/skillqueue/.
 // training_start_sp can be null (e.g. for injected skills); the rest are
@@ -2042,6 +2056,8 @@ func snapshotPath(characterID int64, kind string) string {
 		return fmt.Sprintf("/characters/%d/", characterID)
 	case SnapSkills:
 		return fmt.Sprintf("/characters/%d/skills/", characterID)
+	case SnapStandings:
+		return fmt.Sprintf("/characters/%d/standings/", characterID)
 	case SnapSkillqueue:
 		return fmt.Sprintf("/characters/%d/skillqueue/", characterID)
 	case SnapAttributes:

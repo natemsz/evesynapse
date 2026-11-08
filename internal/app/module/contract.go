@@ -67,6 +67,51 @@ type RegionChoice struct {
 	Active bool
 }
 
+// ScopeSelectorChar is one row of the character scope checklist:
+// the character, its custom tags, and the URLs that toggle it in
+// or out of the scope, or scope the page to it alone. The
+// charselectormulti template reads these fields.
+type ScopeSelectorChar struct {
+	ID         int64
+	Name       string
+	Image      string
+	Tags       []string // the character's custom tags, split for chips
+	TagsText   string   // the stored tag string, for the search filter
+	Checked    bool
+	ToggleHref string
+	OnlyHref   string
+}
+
+// ScopeSelector is the character scope control: a button naming
+// the current selection over a searchable checklist of the
+// account's characters. The charselectormulti template reads
+// these fields. Nil when the page has no signed-in viewer.
+type ScopeSelector struct {
+	Label   string // "All characters", selected names, or "N characters"
+	All     bool
+	AllHref string // the reset: every character in scope
+	Chars   []ScopeSelectorChar
+}
+
+// TradePricer resolves net-trade rates for one page render:
+// the broker fee and sales tax a round trip pays at a station,
+// for the characters in the page's scope. One pricer serves a
+// whole render: the viewer resolves once, the station owner
+// lookups memoize per station.
+type TradePricer interface {
+	// Rates returns the broker fee and sales tax for a round
+	// trip at stationID, as fractions (0.03 is 3%). Estimated
+	// is true when the station's fee is not on file (an Upwell
+	// structure, or a station the SDE has not named an owner
+	// for): the rates then fall back to the NPC formula with no
+	// standing reduction, and the figure quoting them should
+	// say so.
+	Rates(ctx context.Context, stationID int64) (broker, salesTax float64, estimated bool)
+	// ScopeControl is the character scope picker for this
+	// viewer, or nil when the page has no signed-in viewer.
+	ScopeControl() *ScopeSelector
+}
+
 // QueryValue is the first value of a query parameter, trimmed.
 func QueryValue(q map[string][]string, key string) string {
 	if vs, ok := q[key]; ok && len(vs) > 0 {
@@ -1160,6 +1205,12 @@ type Deps interface {
 	// MarketHubStation is a hub region's main trade station:
 	// the one market an appraisal in that region centers on.
 	MarketHubStation(regionID int64) (int64, bool)
+	// TradePricer resolves net-trade rates for a page render:
+	// the broker fee and sales tax a round trip pays, for the
+	// characters in the page's scope (the ?scope= parameter).
+	// Anonymous readers get perfect skills and relations.
+	// The path is the page's own, for the scope control's links.
+	TradePricer(ctx context.Context, q map[string][]string, path string) TradePricer
 	DefaultMarketRegion() int64
 	// GlobalMarketRegion is ESI's global market region, the
 	// one market that is not a place: global-market types

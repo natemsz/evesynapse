@@ -15,12 +15,17 @@ package tradefinder
 //
 // Formula (mirrored in the page copy): a haul. Buy from the
 // origin's sell orders, carry it over, list it in the destination.
+// Both legs pay broker fees (the origin's on the buy, the
+// destination's on the sale) and the sale pays sales tax, all at
+// the viewer's skills and standings, so the margin is net:
 //
-//	margin per item  = destination typical sell - origin typical sell
-//	margin %         = margin / origin typical sell * 100
-//	units per day    = min(destination sold per day,
-//	                       origin's stock on sale)
-//	profit per day   = margin * units per day
+//	buy cost       = origin typical sell * (1 + origin broker fee)
+//	sell proceeds  = destination typical sell * (1 - sales tax - destination broker fee)
+//	margin per item = sell proceeds - buy cost
+//	margin %        = margin / buy cost * 100
+//	units per day   = min(destination sold per day,
+//	                      origin's stock on sale)
+//	profit per day  = margin * units per day
 //
 // What the destination sells a day is how fast listed stock moves;
 // the origin's open sell volume is how much there is to buy. A row
@@ -49,6 +54,7 @@ import (
 	"html/template"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -57,6 +63,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/tradefees"
 )
 
 // tradefinderRowCap caps how many routes one render lists. The
@@ -86,8 +93,8 @@ type tradefinderRow struct {
 	ItemName    string
 	BuyTypical  string // esi.FormatISK, origin typical sell (what buying costs)
 	SellTypical string // esi.FormatISK, destination typical sell
-	ProfitItem  string // esi.FormatISK, margin per item
-	MarginPct   string // "12.3%"
+	ProfitItem  string // esi.FormatISK, net margin per item
+	MarginPct   string // "12.3%", net of broker fees and sales tax
 	SoldPerDay  string // esi.FormatInt, sold per day at destination
 	ProfitDay   string // esi.FormatISK, estimated daily profit
 	// BuySpark and SellSpark are the price hover cards for the two
@@ -101,6 +108,8 @@ type tradefinderRow struct {
 	OriginBest    string // esi.FormatISK, "" when no sell order
 	DestStation   module.PlaceRef
 	DestBest      string // esi.FormatISK, "" when no buy order
+
+	marginPct, profit float64 // net figures, for the re-rank after netting
 }
 
 // tradefinderPendingRow is a route that passes the price rules but
@@ -125,6 +134,8 @@ type tradefinderView struct {
 	Regions       []module.RegionChoice
 	MinMargin     string // margin-% floor as typed (echoed in the form)
 	MinVolume     int64  // sold-per-day floor from the filter
+	Scope         string // the raw ?scope= value, carried by the filter form
+	Selector      *module.ScopeSelector
 	Lowball       bool   // include long-shot routes (hidden by default)
 	SameRegion    bool   // origin == destination: a valid but empty case
 	OriginHasData bool   // a sweep has covered the origin region
@@ -247,7 +258,13 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 		MinMargin:  strconv.FormatFloat(minMargin, 'f', -1, 64),
 		MinVolume:  minVolume,
 		Lowball:    includeLowball,
+		Scope:      module.QueryValue(q, "scope"),
 	}
+	// The pricer resolves the viewer once for the render: the
+	// scope control above the list, and the per-leg rates below.
+	// Anonymous readers get perfect skills and relations.
+	pricer := app.deps.TradePricer(ctx, q, "/market/tradefinder/")
+	view.Selector = pricer.ScopeControl()
 	for _, region := range app.deps.MarketRegions() {
 		view.Regions = append(view.Regions, module.RegionChoice{
 			ID: region.ID, Name: region.Name,
@@ -293,7 +310,11 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 
 	// The route math, margin math, freshness rule, and ranking
 	// all happen in one bounded SQL query (ListTradefinderRoutes);
-	// Go only formats the displayed rows.
+	// Go only formats the displayed rows. The SQL margin floor
+	// is on the gross gap, a superset of the net floor, so no
+	// row the net filter would keep is ever cut upstream; Go
+	// nets each row, drops the ones whose net margin falls under
+	// the floor, and re-ranks by net daily profit.
 	lowballParam := int64(0)
 	if includeLowball {
 		lowballParam = 1
@@ -339,10 +360,29 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 		}
 	}
 
+	// The legs pay at their own hub stations: the buy leg the
+	// origin hub's broker fee, the sell leg the destination
+	// hub's broker fee plus sales tax.
+	originStation, _ := app.deps.MarketHubStation(originID)
+	destStation, _ := app.deps.MarketHubStation(destID)
+	originBroker, _, _ := pricer.Rates(ctx, originStation)
+	destBroker, destTax, _ := pricer.Rates(ctx, destStation)
+
 	stationMemo := make(map[int64]module.PlaceRef)
 	for _, r := range routes {
-		margin := r.DestTypicalSell - r.OriginTypicalSell
-		marginPct := margin / r.OriginTypicalSell * 100
+		// The margin is net: buy cost against sell proceeds,
+		// after both legs' broker fees and the sales tax. A
+		// route whose net margin falls under the floor drops
+		// out: the SQL floor is on the gross gap, so a thin net
+		// gap can still arrive here.
+		margin, buyCost := tradefees.NetHaul(r.OriginTypicalSell, r.DestTypicalSell, originBroker, destBroker, destTax)
+		marginPct := 0.0
+		if buyCost > 0 {
+			marginPct = margin / buyCost * 100
+		}
+		if marginPct < minMargin {
+			continue
+		}
 		// Sold per day at the destination: the stored 7-day average
 		// on the destination's region row -- no per-type history
 		// reads at render time.
@@ -364,6 +404,8 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 			MarginPct:   fmt.Sprintf("%.1f%%", marginPct),
 			SoldPerDay:  esi.FormatInt(int64(math.Round(vol))),
 			ProfitDay:   esi.FormatISK(profit),
+			marginPct:   marginPct,
+			profit:      profit,
 		}
 		if hint, ok := originCheapest[r.TypeID]; ok {
 			row.OriginStation = app.deps.StationRef(ctx, stationMemo, hint.LocationID)
@@ -375,6 +417,9 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 		}
 		view.Rows = append(view.Rows, row)
 	}
+	// Net re-ranks: the SQL ranked by gross profit, and a route
+	// with a wide gross gap can net worse than a narrower one.
+	sort.SliceStable(view.Rows, func(i, j int) bool { return view.Rows[i].profit > view.Rows[j].profit })
 
 	// Routes with no sold-per-day figure at the destination yet:
 	// listed apart, and their destination history queued.
@@ -392,14 +437,21 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 		return view
 	}
 	for _, r := range pending {
-		margin := r.DestTypicalSell - r.OriginTypicalSell
+		margin, buyCost := tradefees.NetHaul(r.OriginTypicalSell, r.DestTypicalSell, originBroker, destBroker, destTax)
+		marginPct := 0.0
+		if buyCost > 0 {
+			marginPct = margin / buyCost * 100
+		}
+		if marginPct < minMargin {
+			continue
+		}
 		view.Pending = append(view.Pending, tradefinderPendingRow{
 			TypeID:      r.TypeID,
 			ItemName:    itemNameFor(r.TypeID),
 			BuyTypical:  esi.FormatISK(r.OriginTypicalSell),
 			SellTypical: esi.FormatISK(r.DestTypicalSell),
 			ProfitItem:  esi.FormatISK(margin),
-			MarginPct:   fmt.Sprintf("%.1f%%", margin/r.OriginTypicalSell*100),
+			MarginPct:   fmt.Sprintf("%.1f%%", marginPct),
 		})
 	}
 	return view

@@ -52,6 +52,7 @@
       <button class="btn" type="submit">Search</button>
     </form>
     <div class="l-cluster mkt-top-actions">
+      {{with $m.Selector}}<div class="l-head-pick">{{template "charselectormulti" .}}</div>{{end}}
       {{if $item.Anonymous}}
       {{else if $item.Watched}}
       <form method="post" action="/market/watch" class="mkt-watch-inline">
@@ -127,9 +128,10 @@
     {{if $item.Spread}}
     <div class="kpi sp-{{$item.SpreadBand}}">
       <span class="kpi-k">Spread</span>
-      <span class="kpi-v spread-v">{{$item.Spread}}</span>
+      <span class="kpi-v spread-v">{{$item.Spread}}</span>{{if $item.SpreadEstimated}} <small title="Broker fee estimated: this station's fee is not on file">est.</small>{{end}}
       <span class="spread-bar" aria-hidden="true"><span{{if or (eq $item.SpreadBand "white") (eq $item.SpreadBand "red")}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "pastel"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "green"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "blue"}} class="on"{{end}}></span></span>
       <span class="kpi-sub">Between typical buy and typical sell</span>
+      {{if $item.SpreadGross}}<span class="kpi-sub">Gross gap {{$item.SpreadGross}}</span>{{end}}
       {{if and $item.Trader $item.Trader.MarginPct}}<span class="kpi-sub mkt-kpi-meta">Margin at best prices: <b>{{$item.Trader.MarginPct}}</b></span>{{end}}
     </div>
     {{else if $item.SpreadThin}}
@@ -570,11 +572,11 @@
       <tr><th>7-day change</th><td>{{if .Change7}}{{.Change7}}{{else}}—{{end}}</td></tr>
       <tr><th>30-day change</th><td>{{if .Change30}}{{.Change30}}{{else}}—{{end}}</td></tr>
       <tr><th>Average daily volume (7 days)</th><td>{{if .Trader.AvgVol7}}{{.Trader.AvgVol7}}{{else}}—{{end}}</td></tr>
-      <tr><th>Margin at best prices</th><td>{{if .Trader.MarginPct}}{{.Trader.MarginPct}} of the sell price{{else}}—{{end}}</td></tr>
+      <tr><th>Margin at best prices</th><td>{{if .Trader.MarginPct}}{{.Trader.MarginPct}} of the net sell price{{else}}—{{end}}</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="prose">From recorded daily trades in {{.RegionName}} plus today's best orders. Margin is before broker fees and sales tax.</p>
+  <p class="prose">From recorded daily trades in {{.RegionName}} plus today's best orders. Margin is after broker fees and sales tax.</p>
   {{end}}
 </div>
 {{end}}

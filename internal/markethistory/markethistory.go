@@ -16,6 +16,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/tradefees"
 )
 
 // ---------------------------------------------------------------------------
@@ -780,9 +781,10 @@ func Window(rows []db.MarketHistory, days int) (priceAvg, volAvg float64, ok boo
 // BuildTraderStats computes the trading snapshot from stored
 // rows plus the live book's bests (0 when a side is absent).
 // The margin is what buying at the best buy and selling at the
-// best sell returns as a share of the sell price — before
-// broker fees and sales tax, which the template says.
-func BuildTraderStats(rows []db.MarketHistory, bestSell, bestBuy float64) *TraderStats {
+// best sell returns as a share of the net sell proceeds, after
+// broker fees and sales tax at the given rates. The template
+// says so.
+func BuildTraderStats(rows []db.MarketHistory, bestSell, bestBuy, broker, salesTax float64) *TraderStats {
 	stats := &TraderStats{}
 	if avg, _, ok := Window(rows, 7); ok {
 		stats.Avg7 = esi.FormatISK(avg)
@@ -794,7 +796,7 @@ func BuildTraderStats(rows []db.MarketHistory, bestSell, bestBuy float64) *Trade
 		stats.AvgVol7 = esi.FormatInt(int64(math.Round(vol)))
 	}
 	if bestSell > 0 && bestBuy > 0 {
-		stats.MarginPct = fmt.Sprintf("%.1f%%", (bestSell-bestBuy)/bestSell*100)
+		stats.MarginPct = fmt.Sprintf("%.1f%%", tradefees.NetMarginPct(bestBuy, bestSell, broker, salesTax))
 	}
 	return stats
 }

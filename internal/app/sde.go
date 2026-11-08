@@ -48,6 +48,7 @@ var sdeFileNames = []string{
 	"invCategories.csv",
 	"invMarketGroups.csv",
 	"staStations.csv",
+	"crpNPCCorporations.csv",
 	"mapSolarSystems.csv",
 	"mapRegions.csv",
 	"invTypeMaterials.csv",
@@ -505,6 +506,7 @@ type parsedSDE struct {
 	categories   []sdeCategoryRow
 	marketGroups []sdeMarketGroupRow
 	stations     []sdeStationRow
+	npcCorps     []sdeNPCCorpRow
 	systems      []sdeSystemRow
 	regions      []sdeRegionRow
 	markers      map[string]fileMarker
@@ -715,9 +717,19 @@ type sdeMarketGroupRow struct {
 }
 
 type sdeStationRow struct {
-	stationID int64
-	name      string
-	systemID  int64
+	stationID     int64
+	name          string
+	systemID      int64
+	corporationID int64
+}
+
+// sdeNPCCorpRow is one NPC corporation from
+// crpNPCCorporations.csv: the corporation and its faction, so
+// the fee math can apply the character's faction standing
+// with a station's owner.
+type sdeNPCCorpRow struct {
+	corporationID int64
+	factionID     int64
 }
 
 type sdeSystemRow struct {
@@ -839,6 +851,8 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		parsed.marketGroups, err = parseSDEMarketGroups(cr, idx)
 	case "staStations.csv":
 		parsed.stations, err = parseSDEStations(cr, idx)
+	case "crpNPCCorporations.csv":
+		parsed.npcCorps, err = parseSDECorpFactions(cr, idx)
 	case "mapSolarSystems.csv":
 		parsed.systems, err = parseSDESystems(cr, idx)
 	case "mapRegions.csv":
@@ -1110,7 +1124,22 @@ func parseSDEStations(cr *csv.Reader, idx map[string]int) ([]sdeStationRow, erro
 		if err != nil {
 			return err
 		}
-		rows = append(rows, sdeStationRow{stationID: id, name: name, systemID: csvIDOrZero(rec, idx, "solarSystemID")})
+		rows = append(rows, sdeStationRow{stationID: id, name: name, systemID: csvIDOrZero(rec, idx, "solarSystemID"), corporationID: csvIDOrZero(rec, idx, "corporationID")})
+		return nil
+	})
+	return rows, err
+}
+
+// parseSDECorpFactions reads crpNPCCorporations.csv: each NPC
+// corporation and its faction.
+func parseSDECorpFactions(cr *csv.Reader, idx map[string]int) ([]sdeNPCCorpRow, error) {
+	var rows []sdeNPCCorpRow
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "corporationID")
+		if err != nil {
+			return errSkipRow
+		}
+		rows = append(rows, sdeNPCCorpRow{corporationID: id, factionID: csvIDOrZero(rec, idx, "factionID")})
 		return nil
 	})
 	return rows, err
@@ -1834,7 +1863,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}
 	defer tx.Rollback()
 
-	for _, table := range []string{"sde_types", "sde_type_physics", "sde_reprocessing", "sde_groups", "sde_categories", "sde_market_groups", "sde_stations", "sde_systems", "sde_regions",
+	for _, table := range []string{"sde_types", "sde_type_physics", "sde_reprocessing", "sde_groups", "sde_categories", "sde_market_groups", "sde_stations", "sde_npc_corporations", "sde_systems", "sde_regions",
 		"sde_blueprints", "sde_blueprint_materials", "sde_blueprint_skills", "sde_invention", "sde_invention_materials",
 		"sde_skill_meta", "sde_requirements",
 		"sde_type_attributes", "sde_attribute_types", "sde_effects", "sde_effect_modifiers", "sde_type_effects"} {
@@ -1893,9 +1922,15 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_stations (station_id, name, system_id) VALUES ($1, $2, $3)", len(parsed.stations), func(i int) []any {
+	if err := insert("INSERT INTO sde_stations (station_id, name, system_id, corporation_id) VALUES ($1, $2, $3, $4)", len(parsed.stations), func(i int) []any {
 		r := parsed.stations[i]
-		return []any{r.stationID, r.name, r.systemID}
+		return []any{r.stationID, r.name, r.systemID, r.corporationID}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_npc_corporations (corporation_id, faction_id) VALUES ($1, $2)", len(parsed.npcCorps), func(i int) []any {
+		r := parsed.npcCorps[i]
+		return []any{r.corporationID, r.factionID}
 	}); err != nil {
 		return 0, err
 	}

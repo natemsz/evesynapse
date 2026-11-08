@@ -22,6 +22,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/markethistory"
+	"evesynapse/internal/tradefees"
 )
 
 // ---------------------------------------------------------------------------
@@ -104,7 +105,7 @@ func TestTraderStatsWindowsAndMargin(t *testing.T) {
 		avg := float64(100 + i)
 		rows = append(rows, tradeRow(base.AddDate(0, 0, i).Format(markethistory.DateLayout), avg, avg+1, avg-1, 2000))
 	}
-	stats := markethistory.BuildTraderStats(rows, 110, 100)
+	stats := markethistory.BuildTraderStats(rows, 110, 100, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
 	if stats.Avg7 != "136.00" { // mean of 133..139
 		t.Fatalf("Avg7: %q, want 136.00", stats.Avg7)
 	}
@@ -114,8 +115,8 @@ func TestTraderStatsWindowsAndMargin(t *testing.T) {
 	if stats.AvgVol7 != "2,000" {
 		t.Fatalf("AvgVol7: %q, want 2,000", stats.AvgVol7)
 	}
-	if stats.MarginPct != "9.1%" { // (110−100)/110
-		t.Fatalf("MarginPct: %q, want 9.1%%", stats.MarginPct)
+	if stats.MarginPct != "4.0%" { // net at perfect rates: 4.19/105.19
+		t.Fatalf("MarginPct: %q, want 4.0%%", stats.MarginPct)
 	}
 
 	// Sparse rows: the window only counts recorded days inside it.
@@ -123,7 +124,7 @@ func TestTraderStatsWindowsAndMargin(t *testing.T) {
 		tradeRow("2026-09-01", 50, 0, 0, 700),
 		tradeRow("2026-10-01", 100, 0, 0, 300),
 	}
-	stats = markethistory.BuildTraderStats(sparse, 0, 0)
+	stats = markethistory.BuildTraderStats(sparse, 0, 0, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
 	if stats.Avg7 != "100.00" || stats.Avg30 != "100.00" || stats.AvgVol7 != "300" {
 		t.Fatalf("sparse stats: %+v", stats)
 	}
@@ -132,7 +133,7 @@ func TestTraderStatsWindowsAndMargin(t *testing.T) {
 	}
 
 	// No rows: nothing invented; a one-sided book gives no margin.
-	stats = markethistory.BuildTraderStats(nil, 110, 0)
+	stats = markethistory.BuildTraderStats(nil, 110, 0, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
 	if stats.Avg7 != "" || stats.Avg30 != "" || stats.AvgVol7 != "" || stats.MarginPct != "" {
 		t.Fatalf("empty stats invented figures: %+v", stats)
 	}

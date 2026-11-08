@@ -2004,6 +2004,11 @@ type SdeMetum struct {
 	Value string `json:"value"`
 }
 
+type SdeNpcCorporation struct {
+	CorporationID int64 `json:"corporation_id"`
+	FactionID     int64 `json:"faction_id"`
+}
+
 type SdeRegion struct {
 	RegionID int64  `json:"region_id"`
 	Name     string `json:"name"`
@@ -2029,9 +2034,10 @@ type SdeSkillMetum struct {
 }
 
 type SdeStation struct {
-	StationID int64  `json:"station_id"`
-	Name      string `json:"name"`
-	SystemID  int64  `json:"system_id"`
+	StationID     int64  `json:"station_id"`
+	Name          string `json:"name"`
+	SystemID      int64  `json:"system_id"`
+	CorporationID int64  `json:"corporation_id"`
 }
 
 type SdeSystem struct {

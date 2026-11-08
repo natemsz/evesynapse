@@ -19,6 +19,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/markethistory"
+	"evesynapse/internal/tradefees"
 )
 
 func vizFixtureRows() []db.MarketHistory {
@@ -215,7 +216,7 @@ func vizBookFixtureRows() []db.ListMarketRegionStatsDailyRecentRow {
 func TestVizBookChartSet(t *testing.T) {
 	rows := vizBookFixtureRows()
 
-	chart := buildBookChart(rows, true)
+	chart := buildBookChart(rows, true, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
 	if chart == nil || !chart.Extended {
 		t.Fatal("extended book chart not built")
 	}
@@ -256,11 +257,14 @@ func TestVizBookChartSet(t *testing.T) {
 		t.Fatalf("depth max: got %q, want 40", chart.DepthMax)
 	}
 
-	// Spread percent on its own scale (18.2% to 25.0%).
+	// Spread percent on its own scale, net of broker fees and
+	// sales tax at perfect rates (11.9% to 18.3%). The points
+	// match the gross shape: netting shifts the scale, not the
+	// relative positions.
 	if chart.SpreadPoints != "0.0,27.2 200.0,44.1 400.0,6.0 600.0,58.0" {
 		t.Fatalf("spread points: got %s", chart.SpreadPoints)
 	}
-	if chart.SpreadHigh != "25.0%" || chart.SpreadLow != "18.2%" {
+	if chart.SpreadHigh != "18.3%" || chart.SpreadLow != "11.9%" {
 		t.Fatalf("spread labels: got %s to %s", chart.SpreadLow, chart.SpreadHigh)
 	}
 
@@ -285,7 +289,7 @@ func TestVizBookChartSet(t *testing.T) {
 		{Day: "2026-11-02", TypicalSell: 100, TypicalBuy: 100, SellOrders: 5, BuyOrders: 5},
 		{Day: "2026-11-03", TypicalSell: 100, TypicalBuy: 100, BestSell: 120, BestBuy: 80, SellOrders: 5, BuyOrders: 5},
 	}
-	g := buildBookChart(gap, true)
+	g := buildBookChart(gap, true, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
 	if g.BestSellPoints != "6.0,52.0 714.0,10.0" {
 		t.Fatalf("gap best sell: got %s", g.BestSellPoints)
 	}
@@ -301,15 +305,15 @@ func TestVizBookChartSet(t *testing.T) {
 		{Day: "2026-12-02", TypicalSell: 220, TypicalBuy: 200},
 		{Day: "2026-12-03", TypicalSell: 55, TypicalBuy: 50},
 	}
-	f := buildBookChart(flat, true)
+	f := buildBookChart(flat, true, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
 	if f.SpreadPoints != "0.0,32.0 300.0,32.0 600.0,32.0" {
 		t.Fatalf("flat spread points: got %s", f.SpreadPoints)
 	}
-	if f.SpreadHigh != "10.0%" || f.SpreadLow != "10.0%" {
+	if f.SpreadHigh != "4.1%" || f.SpreadLow != "4.1%" {
 		t.Fatalf("flat spread labels: got %s to %s", f.SpreadLow, f.SpreadHigh)
 	}
 
-	if buildBookChart(rows[:1], true) != nil {
+	if buildBookChart(rows[:1], true, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax()) != nil {
 		t.Fatal("one row built a chart")
 	}
 }

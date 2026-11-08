@@ -678,7 +678,11 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 			Anonymous: !data.LoggedIn,
 		}
 		app.vizSetup(ctx, history, "")
-		app.attachHistory(ctx, history, typeID, forge, app.userID(ctx))
+		// The details page carries no scope control, so its
+		// margin reads the account-wide best skills and
+		// standings.
+		viewer, _, _ := app.tradeViewerForRequest(ctx, nil)
+		app.attachHistory(ctx, history, typeID, forge, app.userID(ctx), viewer)
 		detail.HistoryView = history
 		// The same warming contract as the Market item view:
 		// a visit whose history is still pending leaves a page

@@ -106,7 +106,8 @@
     function currentState() {
       var scheme = root.getAttribute('data-scheme') || '';
       if (scheme) {
-        return { scheme: scheme, tier: root.getAttribute('data-tier') === 'minimalistic' ? 'minimalistic' : 'muted' };
+        var tier = root.getAttribute('data-tier');
+        return { scheme: scheme, tier: tier === 'minimalistic' ? 'minimalistic' : tier === 'full' ? 'full' : 'muted' };
       }
       var bd = root.getAttribute('data-backdrop');
       return { scheme: '', tier: bd === 'muted' ? 'muted' : bd === 'glow' ? 'minimalistic' : 'full' };

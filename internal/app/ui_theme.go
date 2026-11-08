@@ -34,11 +34,18 @@ type themePrefs struct {
 var themeSchemes = map[string]bool{
 	"jove": true, "caldari": true, "gallente": true,
 	"amarr": true, "triglavian": true, "edencom": true, "soe": true,
+	"minmatar-v3": true,
 }
 
 func validThemeScheme(s string) bool { return s == "" || themeSchemes[s] }
 
 func validThemeTier(s string) bool { return s == "muted" || s == "minimalistic" }
+
+// schemeTierFullOK is whether a scheme honours the full tier: only
+// v3 Minmatar, which reuses the default's wallpapers, so its full
+// backdrop is the calm art. Every other scheme degrades full to
+// muted until its own wallpapers are made.
+func schemeTierFullOK(scheme string) bool { return scheme == "minmatar-v3" }
 
 func validThemeBackdrop(s string) bool {
 	return s == "" || s == "muted" || s == "glow"
@@ -48,8 +55,9 @@ func validThemeBackdrop(s string) bool {
 // scheme, "" for the default look, and a type: full, muted or
 // minimalistic) into the stored account theme. The default look's
 // types are its backdrop strengths, the Settings mapping. A scheme
-// at full applies at muted until its wallpaper lands, the same
-// degrade parseThemePrefs applies to a tier it cannot honour.
+// at full applies at muted until its wallpaper lands, except v3
+// Minmatar, which reuses the default's wallpapers; the same degrade
+// parseThemePrefs applies to a tier it cannot honour.
 // ok is false when either answer is one the step cannot produce.
 func signupThemePrefs(scheme, tierType string) (themePrefs, bool) {
 	if !validThemeScheme(scheme) {
@@ -69,7 +77,7 @@ func signupThemePrefs(scheme, tierType string) (themePrefs, bool) {
 		}
 		return themePrefs{}, true
 	}
-	if tierType == "full" {
+	if tierType == "full" && !schemeTierFullOK(scheme) {
 		tierType = "muted"
 	}
 	return themePrefs{Scheme: scheme, Tier: tierType}, true
@@ -88,6 +96,10 @@ func parseThemePrefs(blob string) themePrefs {
 	}
 	if prefs.Scheme == "" {
 		prefs.Tier = ""
+	} else if prefs.Tier == "full" {
+		if !schemeTierFullOK(prefs.Scheme) {
+			prefs.Tier = "muted"
+		}
 	} else if !validThemeTier(prefs.Tier) {
 		prefs.Tier = "muted"
 	}
@@ -146,7 +158,8 @@ func (app *Application) handleSettingsThemeSave(w http.ResponseWriter, r *http.R
 		Backdrop: r.FormValue("backdrop"),
 	}
 	if !validThemeScheme(prefs.Scheme) || !validThemeBackdrop(prefs.Backdrop) ||
-		(prefs.Scheme != "" && !validThemeTier(prefs.Tier)) {
+		(prefs.Scheme != "" && prefs.Tier != "full" && !validThemeTier(prefs.Tier)) ||
+		(prefs.Tier == "full" && !schemeTierFullOK(prefs.Scheme)) {
 		http.Error(w, "unknown theme", http.StatusBadRequest)
 		return
 	}

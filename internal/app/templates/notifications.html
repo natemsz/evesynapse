@@ -21,7 +21,7 @@
   </thead>
   <tbody>
     {{range .Rows}}
-    <tr{{if .Unread}} class="notify-unread"{{end}}>
+    <tr{{if .Unread}} class="notify-unread"{{end}} data-notify-card data-kind="{{.Kind}}" data-url="{{.URL}}">
       <td><a href="{{.URL}}">{{.Title}}</a>{{if .Unread}} <small>new</small>{{end}}</td>
       <td>{{.Kind}}</td>
       <td>{{.When}}</td>

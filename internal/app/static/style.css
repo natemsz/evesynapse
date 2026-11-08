@@ -5258,6 +5258,12 @@ html[data-theme="light"] tr.asset-inside table { border-left-color: #d8cdb8; }
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7);
 }
 .notify-menu form { margin: 0; }
+/* Notification cards swipe: a horizontal drag dismisses (left)
+   or opens (right). pan-y keeps vertical scrolling native while
+   the pointer handlers own the horizontal axis; the swiped class
+   slides a dismissed card out before it is removed. */
+[data-notify-card] { touch-action: pan-y; transition: transform 220ms ease, opacity 220ms ease; }
+[data-notify-card].notify-swiped { transform: translateX(-100%); opacity: 0; }
 .notify-row {
   display: block;
   width: 100%;

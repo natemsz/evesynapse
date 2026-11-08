@@ -177,6 +177,10 @@ LIMIT sqlc.arg(max_rows)::bigint;
 -- and walked every kill newest first: 70 ms for a pilot with one
 -- kill, against 0.4 ms this way, and never slower for busy ones.
 -- name: ListKillsByCharacter :many
+WITH involvement_ids AS MATERIALIZED (
+    SELECT a.killmail_id FROM kill_involvement a
+    WHERE a.character_id = sqlc.arg(entity_id)::bigint
+)
 SELECT * FROM (
     (SELECT k.* FROM kills k
      WHERE k.victim_character_id = sqlc.arg(entity_id)::bigint
@@ -188,8 +192,8 @@ SELECT * FROM (
      LIMIT sqlc.arg(max_rows)::bigint)
     UNION
     (SELECT k.* FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.character_id = sqlc.arg(entity_id)::bigint)
-       AND k.public
+     JOIN involvement_ids i ON i.killmail_id = k.killmail_id
+     WHERE k.public
        AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
        AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
        AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
@@ -200,6 +204,10 @@ ORDER BY u.killmail_time DESC, u.killmail_id DESC
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- name: ListKillsByCorporation :many
+WITH involvement_ids AS MATERIALIZED (
+    SELECT a.killmail_id FROM kill_involvement a
+    WHERE a.corporation_id = sqlc.arg(entity_id)::bigint
+)
 SELECT * FROM (
     (SELECT k.* FROM kills k
      WHERE k.victim_corporation_id = sqlc.arg(entity_id)::bigint
@@ -211,8 +219,8 @@ SELECT * FROM (
      LIMIT sqlc.arg(max_rows)::bigint)
     UNION
     (SELECT k.* FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.corporation_id = sqlc.arg(entity_id)::bigint)
-       AND k.public
+     JOIN involvement_ids i ON i.killmail_id = k.killmail_id
+     WHERE k.public
        AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
        AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
        AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
@@ -223,6 +231,10 @@ ORDER BY u.killmail_time DESC, u.killmail_id DESC
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- name: ListKillsByAlliance :many
+WITH involvement_ids AS MATERIALIZED (
+    SELECT a.killmail_id FROM kill_involvement a
+    WHERE a.alliance_id = sqlc.arg(entity_id)::bigint
+)
 SELECT * FROM (
     (SELECT k.* FROM kills k
      WHERE k.victim_alliance_id = sqlc.arg(entity_id)::bigint
@@ -234,8 +246,8 @@ SELECT * FROM (
      LIMIT sqlc.arg(max_rows)::bigint)
     UNION
     (SELECT k.* FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.alliance_id = sqlc.arg(entity_id)::bigint)
-       AND k.public
+     JOIN involvement_ids i ON i.killmail_id = k.killmail_id
+     WHERE k.public
        AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
        AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
        AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)

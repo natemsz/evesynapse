@@ -172,7 +172,12 @@
       });
       // A cleared abyssal drawer has no family pick and no
       // bands left: re-derive which roll sliders show.
-      if (btn.getAttribute("data-reset-drawer") === "abyssal") applyRollFamily();
+      if (btn.getAttribute("data-reset-drawer") === "abyssal") {
+        if (familySelect) familySelect.value = "";
+        if (sizeSelect) sizeSelect.value = "";
+        if (sourceSelect) sourceSelect.value = "";
+        syncAbyssalState(false);
+      }
     });
   });
 
@@ -290,40 +295,197 @@
     update();
   });
 
-  // ---- slider pairs ----------------------------------------------------
-  document.querySelectorAll("input[data-slider-for]").forEach(function (slider) {
-    var num = document.getElementById(slider.getAttribute("data-slider-for"));
-    if (!num) return;
-    slider.addEventListener("input", function () {
-      num.value = slider.value;
-    });
-    num.addEventListener("input", function () {
-      slider.value = num.value === "" ? (slider.getAttribute("data-slider-rest") || "0") : num.value;
-    });
-  });
-
-  // ---- roll band family swap ----------------------------------------------
-  // The drawer's band sliders arrive for every rollable
-  // attribute; the server shows the submitted family's set
-  // plus any banded attribute outside it. Picking a family
-  // re-derives that same split in place -- the family's
-  // sliders lead, banded ones stay visible, the rest hide
-  // and disable so nothing stale submits -- with no form
-  // submit, in the desktop drawer and the phone filters
-  // sheet alike (both are this same form). The per-family
-  // attribute lists ride the page as JSON (#cs-roll-catalog).
+  // ---- roll band catalog and dynamic sliders -----------------------------
+  // The drawer carries roll sliders per rollable attribute.
+  // The catalog carries every family's rollable attributes,
+  // value ranges, and meta variant marks as JSON (#cs-roll-catalog).
+  // Track gradients fill dynamically between min and max handles,
+  // readouts show actual rolled values with units, and clicking
+  // a meta variant mark sets the min bound to that variant.
+  var catalogByFamily = {};
   var rollCatalog = {};
+  var rollMetaByFamily = {};
   var rollCatalogEl = document.getElementById("cs-roll-catalog");
   if (rollCatalogEl) {
     try {
       JSON.parse(rollCatalogEl.textContent).forEach(function (g) {
-        rollCatalog[g.family] = g.attrs;
+        catalogByFamily[g.family] = g;
+        rollCatalog[g.family] = g.attrs || [];
+        if (g.meta && g.meta.length) {
+          var mMap = {};
+          g.meta.forEach(function (m) { mMap[m.id] = m; });
+          rollMetaByFamily[g.family] = mMap;
+        }
       });
     } catch (e) { /* a bad catalog leaves the server split in place */ }
   }
+
+  function formatRollStat(v, unit) {
+    var s;
+    if (v === Math.round(v)) {
+      s = String(v);
+    } else if (Math.abs(v) < 10) {
+      s = (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, "");
+    } else {
+      s = (Math.round(v * 10) / 10).toFixed(1).replace(/\.?0+$/, "");
+    }
+    if (unit === "x") return s + "x";
+    if (!unit) return s;
+    if (unit === "%") return s + "%";
+    return s + " " + unit;
+  }
+
   var familySelect = form.querySelector('select[name="family"]');
+  var sizeSelect = form.querySelector('select[name="module_size"]');
+  var sourceSelect = form.querySelector('select[name="source_q"]');
+  var sizeWrap = form.querySelector("[data-ab-size-wrap]");
+  var sourceWrap = form.querySelector("[data-ab-source-wrap]");
+  var valuationWrap = form.querySelector("[data-ab-valuation]");
+  var slidersWrap = form.querySelector("[data-ab-sliders]");
   var rollGrid = form.querySelector(".cs-rollgrid");
   var rollHint = form.querySelector("[data-roll-hint]");
+
+  // If styled tooltips are able to be shown, suppress native browser title tooltips
+  // so dual tooltips do not appear. Use title as a fallback only when styled tips are absent.
+  function auditMarkTooltips(container) {
+    var root = container || form;
+    if (!root) return;
+    root.querySelectorAll(".cs-roll-mark").forEach(function (mark) {
+      if (mark.querySelector(".cs-roll-mark-tip")) {
+        if (mark.hasAttribute("title")) {
+          mark.setAttribute("data-tooltip", mark.getAttribute("title"));
+          mark.removeAttribute("title");
+        }
+      } else if (mark.hasAttribute("data-tooltip") && !mark.hasAttribute("title")) {
+        mark.setAttribute("title", mark.getAttribute("data-tooltip"));
+      }
+    });
+  }
+  auditMarkTooltips(form);
+
+  function currentAttrMeta(attrId) {
+    var fam = familySelect ? familySelect.value : "";
+    var g = catalogByFamily[fam];
+    if (g) {
+      var sz = sizeSelect ? sizeSelect.value : "";
+      if (sz && g.meta_by_size && g.meta_by_size[sz]) {
+        for (var i = 0; i < g.meta_by_size[sz].length; i++) {
+          if (g.meta_by_size[sz][i].id === attrId) return g.meta_by_size[sz][i];
+        }
+      }
+      if (g.meta) {
+        for (var j = 0; j < g.meta.length; j++) {
+          if (g.meta[j].id === attrId) return g.meta[j];
+        }
+      }
+    }
+    for (var f in rollMetaByFamily) {
+      if (rollMetaByFamily[f] && rollMetaByFamily[f][attrId]) {
+        return rollMetaByFamily[f][attrId];
+      }
+    }
+    return null;
+  }
+
+  function updateTrackContainer(container) {
+    if (!container) return;
+    var field = container.closest("[data-roll-field]");
+    if (!field) return;
+    var attrId = Number(field.getAttribute("data-roll-field"));
+    var minInput = container.querySelector(".cs-rollslider-min");
+    var maxInput = container.querySelector(".cs-rollslider-max");
+    var minNum = document.getElementById("cs-rollmin-" + attrId);
+    var maxNum = document.getElementById("cs-rollmax-" + attrId);
+    var minReadout = container.querySelector('[data-readout-for="cs-rollmin-' + attrId + '"]');
+    var maxReadout = container.querySelector('[data-readout-for="cs-rollmax-' + attrId + '"]');
+
+    var mn = minNum && minNum.value !== "" ? Number(minNum.value) : (minInput ? Number(minInput.value) : 0);
+    var mx = maxNum && maxNum.value !== "" ? Number(maxNum.value) : (maxInput ? Number(maxInput.value) : 100);
+    if (isNaN(mn)) mn = 0;
+    if (isNaN(mx)) mx = 100;
+
+    container.style.setProperty("--min", mn + "%");
+    container.style.setProperty("--max", mx + "%");
+
+    var meta = currentAttrMeta(attrId);
+    if (minReadout) {
+      if (minNum && minNum.value === "") {
+        minReadout.textContent = "";
+      } else if (meta && meta.worst !== undefined && meta.best !== undefined) {
+        var vMin = meta.worst + (meta.best - meta.worst) * (mn / 100);
+        minReadout.textContent = formatRollStat(vMin, meta.unit);
+      } else {
+        minReadout.textContent = mn + "%";
+      }
+    }
+    if (maxReadout) {
+      if (maxNum && maxNum.value === "") {
+        maxReadout.textContent = "";
+      } else if (meta && meta.worst !== undefined && meta.best !== undefined) {
+        var vMax = meta.worst + (meta.best - meta.worst) * (mx / 100);
+        maxReadout.textContent = formatRollStat(vMax, meta.unit);
+      } else {
+        maxReadout.textContent = mx + "%";
+      }
+    }
+
+    container.querySelectorAll(".cs-roll-mark").forEach(function (mark) {
+      var pct = Number(mark.getAttribute("data-pct"));
+      var inRange = pct >= mn && pct <= mx;
+      var pip = mark.querySelector(".cs-roll-mark-pip");
+      var wick = mark.querySelector(".cs-roll-mark-wick");
+      if (pip) {
+        pip.style.borderColor = inRange ? "#ffd27a" : "var(--box-edge)";
+        pip.style.background = inRange ? "#ffd27a" : "#2a2018";
+      }
+      if (wick) {
+        wick.style.background = inRange ? "color-mix(in srgb, #ffd27a 65%, rgba(255, 255, 255, 0.4))" : "color-mix(in srgb, var(--accent) 45%, rgba(255, 255, 255, 0.35))";
+        wick.style.opacity = inRange ? "0.85" : "0.45";
+      }
+    });
+  }
+
+  function bindTrackMarkClicks(container) {
+    if (!container) return;
+    var field = container.closest("[data-roll-field]");
+    if (!field) return;
+    var attrId = Number(field.getAttribute("data-roll-field"));
+    var minInput = container.querySelector(".cs-rollslider-min");
+    var minNum = document.getElementById("cs-rollmin-" + attrId);
+
+    container.querySelectorAll(".cs-roll-mark").forEach(function (mark) {
+      if (mark._bound) return;
+      mark._bound = true;
+      mark.addEventListener("click", function (e) {
+        e.preventDefault();
+        var pct = mark.getAttribute("data-pct");
+        if (minInput) minInput.value = pct;
+        if (minNum) minNum.value = pct;
+        updateTrackContainer(container);
+      });
+    });
+  }
+
+  // Bind slider pairs with dynamic gradient & readout updates.
+  document.querySelectorAll("input[data-slider-for]").forEach(function (slider) {
+    var num = document.getElementById(slider.getAttribute("data-slider-for"));
+    var container = slider.closest(".cs-roll-track-container");
+    if (num) {
+      slider.addEventListener("input", function () {
+        num.value = slider.value;
+        if (container) updateTrackContainer(container);
+      });
+      num.addEventListener("input", function () {
+        slider.value = num.value === "" ? (slider.getAttribute("data-slider-rest") || "0") : num.value;
+        if (container) updateTrackContainer(container);
+      });
+    }
+    if (container) {
+      bindTrackMarkClicks(container);
+      updateTrackContainer(container);
+    }
+  });
+
   function rollFieldBanded(field) {
     var set = false;
     field.querySelectorAll('input[type="number"]').forEach(function (n) {
@@ -331,6 +493,7 @@
     });
     return set;
   }
+
   function applyRollFamily() {
     if (!rollGrid || !familySelect) return;
     var fam = familySelect.value;
@@ -362,10 +525,193 @@
       rollGrid.appendChild(field);
     });
     if (rollHint) rollHint.hidden = fam !== "";
+
+    // Refresh range badges, marks, and track readouts for the active family and size.
+    rollGrid.querySelectorAll("[data-roll-field]").forEach(function (field) {
+      var id = Number(field.getAttribute("data-roll-field"));
+      var meta = currentAttrMeta(id);
+      var rangeBadge = field.querySelector('[data-roll-range="' + id + '"]');
+      if (rangeBadge && meta) {
+        rangeBadge.textContent = meta.range_text || "";
+      }
+      var marksContainer = field.querySelector('[data-marks-for="' + id + '"]');
+      if (marksContainer && meta && meta.marks) {
+        marksContainer.innerHTML = "";
+        meta.marks.forEach(function (m) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "cs-roll-mark";
+          btn.style.left = m.pct + "%";
+          btn.setAttribute("data-pct", m.pct);
+          btn.setAttribute("data-val", m.val);
+          btn.setAttribute("data-fmt", m.fmt);
+          btn.setAttribute("data-tooltip", m.label + ": " + m.fmt);
+          btn.setAttribute("aria-label", m.label + ": " + m.fmt);
+
+          var wick = document.createElement("span");
+          wick.className = "cs-roll-mark-wick";
+          var pip = document.createElement("span");
+          pip.className = "cs-roll-mark-pip";
+          var tip = document.createElement("span");
+          tip.className = "cs-roll-mark-tip";
+          tip.textContent = m.label + ": " + m.fmt;
+
+          btn.appendChild(wick);
+          btn.appendChild(pip);
+          btn.appendChild(tip);
+          marksContainer.appendChild(btn);
+        });
+        auditMarkTooltips(marksContainer);
+      }
+      var container = field.querySelector(".cs-roll-track-container");
+      if (container) {
+        bindTrackMarkClicks(container);
+        updateTrackContainer(container);
+      }
+    });
   }
-  if (familySelect && rollGrid) {
-    familySelect.addEventListener("change", applyRollFamily);
+
+  function syncAbyssalState(sourceChange) {
+    var fam = familySelect ? familySelect.value : "";
+    var g = catalogByFamily[fam];
+    var hasFamily = Boolean(fam && g);
+    var hasSizes = Boolean(hasFamily && g.sizes && g.sizes.length > 0);
+
+    // 1. Size dropdown
+    if (sizeWrap && sizeSelect) {
+      if (hasSizes) {
+        sizeWrap.hidden = false;
+        var prevSize = sizeSelect.value;
+        var optionsValues = Array.prototype.map.call(sizeSelect.options, function (o) { return o.value; });
+        var neededValues = [""].concat(g.sizes);
+        if (optionsValues.join("|") !== neededValues.join("|")) {
+          sizeSelect.innerHTML = '<option value="">Select size...</option>';
+          g.sizes.forEach(function (sz) {
+            var opt = document.createElement("option");
+            opt.value = sz;
+            opt.textContent = sz;
+            if (sz === prevSize) opt.selected = true;
+            sizeSelect.appendChild(opt);
+          });
+        }
+      } else {
+        sizeWrap.hidden = true;
+        sizeSelect.value = "";
+      }
+    }
+
+    // 2. Source module dropdown
+    if (sourceWrap && sourceSelect) {
+      if (hasFamily) {
+        sourceWrap.hidden = false;
+        var prevSource = sourceSelect.value;
+        var sz = sizeSelect ? sizeSelect.value : "";
+        var list = [];
+        if (g.modules) {
+          if (sz && g.modules[sz]) {
+            list = g.modules[sz];
+          } else if (!hasSizes && g.modules[""]) {
+            list = g.modules[""];
+          } else {
+            for (var k in g.modules) {
+              list = list.concat(g.modules[k]);
+            }
+            list.sort();
+          }
+        }
+        var curSrcVals = Array.prototype.map.call(sourceSelect.options, function (o) { return o.value; });
+        var targetSrcVals = [""].concat(list);
+        if (curSrcVals.join("|") !== targetSrcVals.join("|")) {
+          sourceSelect.innerHTML = '<option value="">Any original module</option>';
+          list.forEach(function (mName) {
+            var opt = document.createElement("option");
+            opt.value = mName;
+            opt.textContent = mName;
+            if (mName === prevSource) opt.selected = true;
+            sourceSelect.appendChild(opt);
+          });
+        }
+      } else {
+        sourceWrap.hidden = true;
+        sourceSelect.value = "";
+      }
+    }
+
+    // 3. Unlock criteria:
+    // Only once Size or Original module is selected should attribute selectors appear.
+    var chosenSize = sizeSelect ? sizeSelect.value : "";
+    var chosenSource = sourceSelect ? sourceSelect.value : "";
+    var unlocked = Boolean(chosenSize || chosenSource);
+
+    if (valuationWrap) valuationWrap.hidden = !unlocked;
+    if (slidersWrap) slidersWrap.hidden = !unlocked;
+
     applyRollFamily();
+  }
+
+  function detectModuleSize(name) {
+    if (!name) return "";
+    var lower = name.toLowerCase();
+    if (lower.indexOf("x-large") !== -1 || lower.indexOf("xlarge") !== -1 || lower.indexOf("xl ") !== -1) return "X-Large";
+    if (lower.indexOf("capital") !== -1 || lower.indexOf("10000mn") !== -1 || lower.indexOf("50000mn") !== -1) return "Capital";
+    if (lower.indexOf("large") !== -1 || lower.indexOf("heavy") !== -1 ||
+        lower.indexOf("100mn") !== -1 || lower.indexOf("500mn") !== -1 ||
+        lower.indexOf("800mm") !== -1 || lower.indexOf("1600mm") !== -1 ||
+        lower.indexOf("corpus ") === 0 || lower.indexOf("gist ") === 0 ||
+        lower.indexOf("core x-type") !== -1 || lower.indexOf("core a-type") !== -1 ||
+        lower.indexOf("core b-type") !== -1 || lower.indexOf("core c-type") !== -1) return "Large";
+    if (lower.indexOf("medium") !== -1 || lower.indexOf("10mn") !== -1 ||
+        lower.indexOf("50mn") !== -1 || lower.indexOf("200mm") !== -1 ||
+        lower.indexOf("400mm") !== -1 || lower.indexOf("corpum ") === 0 ||
+        lower.indexOf("gistum ") === 0 || lower.indexOf("corelum ") === 0) return "Medium";
+    if (lower.indexOf("small") !== -1 || lower.indexOf("micro") !== -1 ||
+        lower.indexOf("1mn") !== -1 || lower.indexOf("5mn") !== -1 ||
+        lower.indexOf("50mm") !== -1 || lower.indexOf("100mm") !== -1 ||
+        lower.indexOf("corpii ") === 0 || lower.indexOf("gistii ") === 0 ||
+        lower.indexOf("coreli ") === 0) return "Small";
+    return "";
+  }
+
+  if (familySelect) {
+    familySelect.addEventListener("change", function () {
+      if (sizeSelect) sizeSelect.value = "";
+      if (sourceSelect) sourceSelect.value = "";
+      syncAbyssalState(false);
+    });
+  }
+  if (sizeSelect) {
+    sizeSelect.addEventListener("change", function () {
+      if (sourceSelect) sourceSelect.value = "";
+      syncAbyssalState(false);
+    });
+  }
+  if (sourceSelect) {
+    sourceSelect.addEventListener("change", function () {
+      var chosenSource = sourceSelect.value;
+      if (chosenSource && sizeSelect) {
+        var detectedSize = "";
+        var fam = familySelect ? familySelect.value : "";
+        var g = catalogByFamily[fam];
+        if (g && g.modules) {
+          for (var sz in g.modules) {
+            if (g.modules[sz] && g.modules[sz].indexOf(chosenSource) !== -1) {
+              detectedSize = sz;
+              break;
+            }
+          }
+        }
+        if (!detectedSize) {
+          detectedSize = detectModuleSize(chosenSource);
+        }
+        if (detectedSize && sizeSelect.value !== detectedSize) {
+          sizeSelect.value = detectedSize;
+        }
+      }
+      syncAbyssalState(true);
+    });
+  }
+  if (familySelect) {
+    syncAbyssalState(false);
   }
 
   // ---- security floor readout -------------------------------------------

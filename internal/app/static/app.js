@@ -3435,7 +3435,6 @@
       rows.push(["Low", dot.getAttribute("data-low") + " ISK"]);
       rows.push(["Volume", dot.getAttribute("data-vol")]);
       if (dot.getAttribute("data-orders")) rows.push(["Orders", dot.getAttribute("data-orders")]);
-      if (dot.getAttribute("data-ma5")) rows.push(["5-day average", dot.getAttribute("data-ma5") + " ISK"]);
       if (dot.getAttribute("data-ma20")) rows.push(["20-day average", dot.getAttribute("data-ma20") + " ISK"]);
     }
     for (var i = 0; i < rows.length; i++) {

@@ -171,14 +171,22 @@
   background: #fff4e4; border: 2px solid rgba(22, 13, 6, 0.6);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55); cursor: pointer;
 }
-/* The roll band sliders wear the site's ember gradient --
-   the same gold-to-ember ramp the headings take -- on the
-   security slider's pill track, so a band's percentile
-   reads hotter as it climbs. */
+/* The roll band sliders wear the site's ember gradient on the
+   security slider's pill track, dynamically filled between --min
+   and --max so active bands read hotter as they climb. */
 .cs-rollslider {
+  --min: 0%;
+  --max: 100%;
   -webkit-appearance: none; appearance: none;
   height: 0.45rem; border-radius: 999px;
-  background: linear-gradient(to right, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
+  background: linear-gradient(to right,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.08) var(--min, 0%),
+    #ffd27a var(--min, 0%),
+    #d63c14 var(--max, 100%),
+    rgba(255, 255, 255, 0.08) var(--max, 100%),
+    rgba(255, 255, 255, 0.08) 100%);
+  transition: background 0.05s ease-out;
 }
 .cs-secval { flex: none; min-width: 2.2rem; text-align: right; font-variant-numeric: tabular-nums; }
 /* The region quick selectors wear the hunt chips' pill
@@ -298,13 +306,56 @@
   gap: 0.6rem 0.9rem; margin-top: 0.65rem;
 }
 .cs-drawer-grid > .cs-field { grid-column: span 2; }
-[data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
 [data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 4; }
 .cs-drawer-grid input, .cs-drawer-grid select { width: 100%; }
 .cs-field > .cs-slider-pair { margin-top: auto; }
 .cs-slider-pair { display: flex; align-items: center; gap: 0.6rem; }
 .cs-slider-pair input[type="range"] { flex: 1; width: auto; }
 .cs-slider-pair input[type="number"] { width: 4.6rem; flex: none; }
+
+/* The state-aware abyssal module scope row */
+.cs-abyssal-primary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.6rem 0.9rem;
+  margin-top: 0.65rem;
+}
+.cs-abyssal-primary > .cs-field { grid-column: span 2; }
+.cs-abyssal-primary > .cs-field[hidden] { display: none !important; }
+.cs-abyssal-primary:not(:has(.cs-field-size:not([hidden]))) > .cs-field-family,
+.cs-abyssal-primary:not(:has(.cs-field-size:not([hidden]))) > .cs-field-source {
+  grid-column: span 3;
+}
+.cs-abyssal-primary:has(.cs-field-source[hidden]) > .cs-field-family {
+  grid-column: span 3;
+}
+.cs-abyssal-primary:has(.cs-field-source[hidden]) > .cs-field-size {
+  grid-column: span 3;
+}
+
+/* Abyssal valuation and quality row */
+.cs-abyssal-valuation {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.6rem 0.9rem;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed color-mix(in srgb, var(--box-edge) 60%, transparent);
+}
+.cs-abyssal-valuation[hidden] { display: none !important; }
+.cs-abyssal-valuation > .cs-field { grid-column: span 2; }
+.cs-abyssal-valuation > .cs-field:nth-child(4),
+.cs-abyssal-valuation > .cs-field:nth-child(5) {
+  grid-column: span 3;
+}
+
+/* Abyssal sliders section wrapper */
+.cs-abyssal-sliders-wrap {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed color-mix(in srgb, var(--box-edge) 60%, transparent);
+}
+.cs-abyssal-sliders-wrap[hidden] { display: none !important; }
 
 /* The abyssal roll bands: one field per attribute, each
    carrying its min and max slider pairs, laid on the same
@@ -317,11 +368,119 @@
 /* Sliders outside the picked family's set (or carrying no
    band) render hidden until the family pick swaps them
    in; the flex field rule would otherwise beat [hidden]. */
-.cs-rollgrid > .cs-field[hidden] { display: none; }
-/* The field's two bound pairs ride together at the cell's
-   bottom pin: the gap opens above the first pair only. */
-.cs-rollgrid > .cs-field > .cs-slider-pair { margin-top: 0; }
-.cs-rollgrid > .cs-field > .cs-slider-pair:first-of-type { margin-top: auto; }
+.cs-rollgrid > .cs-field[hidden] { display: none !important; }
+
+@media (max-width: 48rem) {
+  .cs-abyssal-primary,
+  .cs-abyssal-valuation,
+  .cs-rollgrid {
+    grid-template-columns: 1fr;
+  }
+  .cs-abyssal-primary > .cs-field,
+  .cs-abyssal-valuation > .cs-field,
+  .cs-rollgrid > .cs-field {
+    grid-column: 1 / -1 !important;
+  }
+}
+.cs-roll-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 0.5rem; margin-bottom: 0.35rem; width: 100%;
+}
+.cs-roll-name {
+  font-weight: 600; color: var(--text-bright);
+  text-transform: none; letter-spacing: normal;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cs-roll-range {
+  font-size: var(--fs-2xs); color: var(--gold);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  letter-spacing: normal; text-transform: none;
+}
+.cs-roll-track-container {
+  --min: 0%;
+  --max: 100%;
+  position: relative; display: flex; flex-direction: column; gap: 0.35rem;
+  margin-top: auto; width: 100%;
+}
+.cs-slider-row {
+  display: flex; align-items: center; gap: 0.5rem; width: 100%;
+}
+.cs-slider-bound-label {
+  flex: none; min-width: 1.8rem;
+  font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase;
+  color: var(--muted); letter-spacing: 0.04em;
+}
+.cs-slider-row input[type="range"] { flex: 1; min-width: 0; }
+.cs-slider-row input[type="number"] {
+  width: 4.4rem; flex: none; font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  padding: 0.2rem 0.25rem 0.2rem 0.5rem;
+  text-align: left;
+}
+.cs-slider-row input[type="number"]::-webkit-inner-spin-button,
+.cs-slider-row input[type="number"]::-webkit-outer-spin-button {
+  opacity: 0.25;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  margin-left: 2px;
+}
+.cs-slider-row input[type="number"]:hover::-webkit-inner-spin-button,
+.cs-slider-row input[type="number"]:focus::-webkit-inner-spin-button {
+  opacity: 0.85;
+}
+.cs-roll-val {
+  flex: none; min-width: 4.2rem; text-align: right;
+  font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
+  color: var(--text); letter-spacing: normal; text-transform: none;
+}
+.cs-roll-marks {
+  position: relative; width: calc(100% - 1.8rem - 4.4rem - 4.2rem - 1.5rem);
+  margin-left: calc(1.8rem + 0.5rem);
+  height: 0.55rem; margin-bottom: -0.2rem;
+}
+.cs-roll-mark {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  background: none; border: none; padding: 0; margin: 0;
+  cursor: pointer; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+}
+.cs-roll-mark-wick {
+  position: absolute; top: 50%; left: 50%;
+  transform: translateX(-50%);
+  width: 1px; height: 1.15rem;
+  background: color-mix(in srgb, var(--accent) 45%, rgba(255, 255, 255, 0.35));
+  pointer-events: none; opacity: 0.45; z-index: 1;
+  transition: opacity 0.1s ease, background 0.1s ease, height 0.1s ease;
+}
+.cs-roll-mark-pip {
+  display: block; width: 0.45rem; height: 0.45rem; border-radius: 50%;
+  background: #2a2018; border: 1.5px solid var(--box-edge);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: transform 0.1s ease, border-color 0.1s ease, background 0.1s ease;
+  position: relative; z-index: 2;
+}
+.cs-roll-mark:hover .cs-roll-mark-pip,
+.cs-roll-mark:focus-visible .cs-roll-mark-pip {
+  transform: scale(1.35); border-color: #ffd27a; background: #ffd27a;
+}
+.cs-roll-mark:hover .cs-roll-mark-wick,
+.cs-roll-mark:focus-visible .cs-roll-mark-wick {
+  opacity: 1; background: #ffd27a; height: 1.35rem; z-index: 3;
+}
+.cs-roll-mark-tip {
+  display: none; position: absolute; bottom: calc(100% + 4px); left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 12, 8, 0.96); color: var(--text-bright);
+  border: 1px solid var(--box-edge); border-radius: 4px;
+  padding: 0.15rem 0.45rem; font-size: var(--fs-2xs); white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); pointer-events: none; z-index: 10;
+  font-family: "Eve Sans Neue", "Inter", sans-serif; text-transform: none;
+  letter-spacing: normal;
+}
+.cs-roll-mark:hover .cs-roll-mark-tip,
+.cs-roll-mark:focus-visible .cs-roll-mark-tip {
+  display: block;
+}
 
 /* The filter labels speak in the results table's type
    voice: the box titles, the region quick links, the

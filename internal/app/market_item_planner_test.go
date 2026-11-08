@@ -172,7 +172,6 @@ func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
 		`<circle class="cdot"`,
 		`data-chart-scrub="true"`,
 		`class="chart-legend"`,
-		"5-day average",
 		"Daily wicks",
 		"Units traded",
 		"Orders per day",

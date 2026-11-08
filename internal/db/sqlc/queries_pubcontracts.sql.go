@@ -851,6 +851,98 @@ func (q *Queries) ListAbyssalFamilies(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
+const listAbyssalFamilyMetaVariants = `-- name: ListAbyssalFamilyMetaVariants :many
+WITH family_mutators AS (
+    SELECT a.family,
+           r.attribute_id,
+           MIN(r.min_mult)::double precision AS min_mult,
+           MAX(r.max_mult)::double precision AS max_mult
+    FROM abyssal_items a
+    JOIN abyssal_ranges r ON r.mutator_type_id = a.mutator_type_id
+    WHERE a.family <> '' AND a.mutator_type_id > 0 AND r.min_mult <> r.max_mult
+    GROUP BY a.family, r.attribute_id
+),
+family_sources AS (
+    SELECT DISTINCT a.family, t.type_id AS source_type_id, t.name AS source_name
+    FROM abyssal_items a
+    JOIN sde_types t ON t.type_id = a.source_type_id
+    WHERE a.family <> '' AND a.source_type_id > 0
+    UNION
+    SELECT DISTINCT a.family, t2.type_id AS source_type_id, t2.name AS source_name
+    FROM abyssal_items a
+    JOIN sde_types src ON src.type_id = a.source_type_id
+    JOIN sde_types t2 ON t2.group_id = src.group_id AND t2.published = 1 AND t2.market_group_id > 0
+    WHERE a.family <> '' AND a.source_type_id > 0 AND src.group_id > 0
+)
+SELECT fm.family,
+       fm.attribute_id,
+       fs.source_type_id,
+       fs.source_name,
+       COALESCE(ta.value, 0)::double precision AS base_value,
+       fm.min_mult,
+       fm.max_mult,
+       COALESCE(at.unit_id, 0)::bigint AS unit_id,
+       COALESCE(at.high_is_good, 1)::bigint AS high_is_good,
+       COALESCE(at.name, '')::text AS attr_sde_name
+FROM family_mutators fm
+JOIN family_sources fs ON fs.family = fm.family
+JOIN sde_type_attributes ta ON ta.type_id = fs.source_type_id AND ta.attribute_id = fm.attribute_id
+LEFT JOIN sde_attribute_types at ON at.attribute_id = fm.attribute_id
+WHERE ta.value <> 0
+ORDER BY fm.family, fm.attribute_id, ta.value
+`
+
+type ListAbyssalFamilyMetaVariantsRow struct {
+	Family       string  `json:"family"`
+	AttributeID  int64   `json:"attribute_id"`
+	SourceTypeID int64   `json:"source_type_id"`
+	SourceName   string  `json:"source_name"`
+	BaseValue    float64 `json:"base_value"`
+	MinMult      float64 `json:"min_mult"`
+	MaxMult      float64 `json:"max_mult"`
+	UnitID       int64   `json:"unit_id"`
+	HighIsGood   int64   `json:"high_is_good"`
+	AttrSdeName  string  `json:"attr_sde_name"`
+}
+
+// Every family's rollable attributes with their mutator multiplier spans,
+// base modules (observed sources and ordinary group ladder types), and base values.
+// Used to render Mutamarket-style roll sliders with real attribute bounds and
+// meta variant indicators on the track.
+func (q *Queries) ListAbyssalFamilyMetaVariants(ctx context.Context) ([]ListAbyssalFamilyMetaVariantsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalFamilyMetaVariants)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAbyssalFamilyMetaVariantsRow
+	for rows.Next() {
+		var i ListAbyssalFamilyMetaVariantsRow
+		if err := rows.Scan(
+			&i.Family,
+			&i.AttributeID,
+			&i.SourceTypeID,
+			&i.SourceName,
+			&i.BaseValue,
+			&i.MinMult,
+			&i.MaxMult,
+			&i.UnitID,
+			&i.HighIsGood,
+			&i.AttrSdeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAbyssalFamilyRollAttributes = `-- name: ListAbyssalFamilyRollAttributes :many
 SELECT r.attribute_id AS attribute_id,
        COALESCE(MAX(w.weight), 0)::double precision AS weight

@@ -1066,6 +1066,50 @@ WHERE a.family <> ''
 GROUP BY a.family, r.attribute_id
 ORDER BY a.family, weight DESC, r.attribute_id;
 
+-- name: ListAbyssalFamilyMetaVariants :many
+-- Every family's rollable attributes with their mutator multiplier spans,
+-- base modules (observed sources and ordinary group ladder types), and base values.
+-- Used to render Mutamarket-style roll sliders with real attribute bounds and
+-- meta variant indicators on the track.
+WITH family_mutators AS (
+    SELECT a.family,
+           r.attribute_id,
+           MIN(r.min_mult)::double precision AS min_mult,
+           MAX(r.max_mult)::double precision AS max_mult
+    FROM abyssal_items a
+    JOIN abyssal_ranges r ON r.mutator_type_id = a.mutator_type_id
+    WHERE a.family <> '' AND a.mutator_type_id > 0 AND r.min_mult <> r.max_mult
+    GROUP BY a.family, r.attribute_id
+),
+family_sources AS (
+    SELECT DISTINCT a.family, t.type_id AS source_type_id, t.name AS source_name
+    FROM abyssal_items a
+    JOIN sde_types t ON t.type_id = a.source_type_id
+    WHERE a.family <> '' AND a.source_type_id > 0
+    UNION
+    SELECT DISTINCT a.family, t2.type_id AS source_type_id, t2.name AS source_name
+    FROM abyssal_items a
+    JOIN sde_types src ON src.type_id = a.source_type_id
+    JOIN sde_types t2 ON t2.group_id = src.group_id AND t2.published = 1 AND t2.market_group_id > 0
+    WHERE a.family <> '' AND a.source_type_id > 0 AND src.group_id > 0
+)
+SELECT fm.family,
+       fm.attribute_id,
+       fs.source_type_id,
+       fs.source_name,
+       COALESCE(ta.value, 0)::double precision AS base_value,
+       fm.min_mult,
+       fm.max_mult,
+       COALESCE(at.unit_id, 0)::bigint AS unit_id,
+       COALESCE(at.high_is_good, 1)::bigint AS high_is_good,
+       COALESCE(at.name, '')::text AS attr_sde_name
+FROM family_mutators fm
+JOIN family_sources fs ON fs.family = fm.family
+JOIN sde_type_attributes ta ON ta.type_id = fs.source_type_id AND ta.attribute_id = fm.attribute_id
+LEFT JOIN sde_attribute_types at ON at.attribute_id = fm.attribute_id
+WHERE ta.value <> 0
+ORDER BY fm.family, fm.attribute_id, ta.value;
+
 -- ---------------------------------------------------------------------
 -- Blueprint copy medians (schema 061): the worker's pass
 -- distills the live corpus into one stored median ask per

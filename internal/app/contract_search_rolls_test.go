@@ -112,7 +112,12 @@ func TestContractSearchRollSlidersOffered(t *testing.T) {
 		`name="rollmin_64"`, `name="rollmax_64"`,
 		`name="rollmin_6"`, `name="rollmax_6"`,
 		`name="rollmin_50"`, `name="rollmax_50"`,
-		`data-roll-field="64">`, `data-roll-field="6">`, `data-roll-field="50">`)
+		`data-roll-field="64">`, `data-roll-field="6">`, `data-roll-field="50">`,
+		`<span class="cs-slider-bound-label">Min</span>`,
+		`<span class="cs-slider-bound-label">Max</span>`,
+		`class="cs-roll-track-container" data-roll-track="64"`,
+		`data-roll-range="64">1.70x – 2.30x</span>`,
+		`class="cs-roll-mark" data-left="50" data-pct="50"`)
 	if strings.Contains(body, `name="rollmin_999"`) {
 		t.Error("the fixed attribute (no range width) got a slider")
 	}
@@ -298,16 +303,88 @@ func TestContractSearchRollBandChips(t *testing.T) {
 	// the band; the chip's URL drops both bounds and keeps
 	// the family.
 	_, body := getAnon(t, app, "/contracts/search/?family=test_damage_thing&rollmin_64=50&rollmax_64=90")
-	mustContain(t, "band chip", body, "Roll: damageMultiplier 50–90%",
+	mustContain(t, "band chip", body, "Roll: Damage Multiplier 50–90%",
 		`href="/contracts/search/?family=test_damage_thing"`)
 	// One-sided chips name their single bound.
 	_, body = getAnon(t, app, "/contracts/search/?rollmin_6=40")
-	mustContain(t, "min chip", body, "Roll: capacitorNeed ≥ 40%")
+	mustContain(t, "min chip", body, "Roll: Capacitor Need ≥ 40%")
 	_, body = getAnon(t, app, "/contracts/search/?rollmax_50=25")
-	mustContain(t, "max chip", body, "Roll: cpu ≤ 25%")
+	mustContain(t, "max chip", body, "Roll: CPU ≤ 25%")
 	// A pruned band (attribute nothing rolls) chips nothing.
 	_, body = getAnon(t, app, "/contracts/search/?rollmin_9999=50")
 	if strings.Contains(body, "Attribute #9999") {
 		t.Error("a band on an unrollable attribute rendered a chip")
 	}
+}
+
+func TestContractSearchAbyssalSizeAndModuleProgression(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedRollBandCorpus(t, conn)
+
+	ctx := context.Background()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
+	}
+	exec(`INSERT INTO sde_types (type_id, name) VALUES
+		(30010, 'Small Test Shield Booster II'),
+		(30020, 'Medium Test Shield Booster II'),
+		(30030, 'Large Test Shield Booster II')`)
+	exec(`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+		(30010, 68, 50), (30020, 68, 250), (30030, 68, 800)`)
+	exec(`INSERT INTO abyssal_ranges (mutator_type_id, attribute_id, min_mult, max_mult, sde_build) VALUES
+		(47735, 68, 0.8, 1.2, 'test')`)
+	exec(`INSERT INTO abyssal_items (item_id, type_id, source_type_id, mutator_type_id, created_by,
+		attributes, fetched_at, first_seen_at, last_seen_at, family, score, percentiles, derived_stats,
+		est_value, est_low, est_high, est_basis, est_scope, est_comps, premium_mult, cap_attribute_id, cap_kind, scored_at) VALUES
+		(900100, 60001, 30010, 47735, 9001, '[]', now(), now(), now(), 'shield_booster', 0.5, '{}', '[]', 100000000, 90000000, 110000000, 'corpus', 'module', 1, 1, 0, '', now()),
+		(900200, 60001, 30020, 47735, 9001, '[]', now(), now(), now(), 'shield_booster', 0.6, '{}', '[]', 200000000, 180000000, 220000000, 'corpus', 'module', 1, 1, 0, '', now()),
+		(900300, 60001, 30030, 47735, 9001, '[]', now(), now(), now(), 'shield_booster', 0.7, '{}', '[]', 500000000, 450000000, 550000000, 'corpus', 'module', 1, 1, 0, '', now())`)
+
+	// 1. Initial state with no family: top options only; size, valuation and sliders hidden.
+	_, body := getAnon(t, app, "/contracts/search/")
+	mustContain(t, "initial state", body,
+		`data-ab-size-wrap hidden`,
+		`data-ab-source-wrap hidden`,
+		`data-ab-valuation hidden`,
+		`data-ab-sliders hidden`)
+
+	// 2. Family with sizes (shield_booster) without size selected: size and source dropdown visible, sliders still hidden.
+	_, body = getAnon(t, app, "/contracts/search/?family=shield_booster")
+	mustContain(t, "family with sizes without size picked", body,
+		`data-ab-size-wrap`,
+		`<option value="Medium"`,
+		`data-ab-valuation hidden`,
+		`data-ab-sliders hidden`)
+
+	// 3. Family with sizes with size picked (shield_booster & module_size=Medium):
+	// size is selected, original modules offer Medium variant, sliders unlocked with Medium bounds.
+	_, body = getAnon(t, app, "/contracts/search/?family=shield_booster&module_size=Medium")
+	mustContain(t, "size selected reveals sliders", body,
+		`<option value="Medium" selected>Medium</option>`,
+		`<option value="Medium Test Shield Booster II">Medium Test Shield Booster II</option>`,
+		`data-ab-valuation`,
+		`data-ab-sliders`)
+	if strings.Contains(body, `<option value="Small Test Shield Booster II">`) {
+		t.Error("medium size offered small shield booster in source module options")
+	}
+
+	// 4. Family without sizes (test_damage_thing): size selector hidden, original module selector visible.
+	// Sliders and valuation remain hidden until an original module is selected.
+	_, body = getAnon(t, app, "/contracts/search/?family=test_damage_thing")
+	mustContain(t, "non-sized family without module picked", body,
+		`data-ab-size-wrap hidden`,
+		`data-ab-source-wrap`,
+		`data-ab-valuation hidden`,
+		`data-ab-sliders hidden`)
+
+	// 5. When a module is selected, sliders unlock; and if it has a size, that size is auto-selected.
+	_, body = getAnon(t, app, "/contracts/search/?family=shield_booster&source_q=Medium+Test+Shield+Booster+II")
+	mustContain(t, "module selected auto-detects size and unlocks sliders", body,
+		`<option value="Medium" selected>Medium</option>`,
+		`data-ab-valuation`,
+		`data-ab-sliders`)
 }

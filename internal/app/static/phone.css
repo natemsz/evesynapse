@@ -38,12 +38,11 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Text fields at 16px: iOS zooms the page into any focused
-     field set smaller, and never zooms back out. */
+  /* Text fields keep the shared control typography on touch. */
   input[type="text"], input[type="search"], input[type="number"],
   input[type="email"], input[type="url"], input[type="password"],
   input[type="tel"], select, textarea {
-    font-size: max(var(--fs-xl), 1em);
+    font-size: inherit;
   }
 
   /* No double-tap-zoom wait on controls; a tap is a tap. */

@@ -86,6 +86,11 @@ const (
 	elfMachineAArch64 = 183
 )
 
+// providerCheckTimeout bounds the consultation of a single
+// provider. A provider that hangs does not exhaust the whole
+// update check; the walk moves on to the next provider.
+var providerCheckTimeout = 10 * time.Second
+
 // ---------------------------------------------------------------------------
 // The release channel: CI publishes every build as a release
 // whose assets are the package files — a tiny manifest per CPU
@@ -864,7 +869,12 @@ func walkProviders(ctx context.Context, w io.Writer, providers []string, arch st
 	var firstErr error
 	found := false
 	for _, provider := range providers {
-		m, signer, binaryURL, err := fetchProviderManifest(ctx, provider, arch, dev)
+		if ctx.Err() != nil && found {
+			break
+		}
+		pctx, pcancel := context.WithTimeout(ctx, providerCheckTimeout)
+		m, signer, binaryURL, err := fetchProviderManifest(pctx, provider, arch, dev)
+		pcancel()
 		reportProviderCheck(w, provider, m, err)
 		if err != nil {
 			var refused *refusal
@@ -940,7 +950,7 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 		return 1
 	}
 	fmt.Fprintf(stdout, "Checking for updates… you're on %s.\n", current)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	m, provider, signer, source, err := fetchReleaseManifest(ctx, stdout, arch, dev)
 	cancel()
 	if err != nil {

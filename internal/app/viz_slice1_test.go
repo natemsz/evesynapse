@@ -92,14 +92,9 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 		t.Fatalf("first wick: %+v, want x=0 top=87 bottom=131", w)
 	}
 
-	// MA5 at the last day averages days 20..24 (208.8 -> y 76);
 	// MA20 exists from the first displayed day only because the
 	// 20 warmup rows are read (day 20 averages days 1..20 = 208
 	// -> y 79).
-	ma5 := vizPoints(t, chart.MA5Points)
-	if len(ma5) != 5 || ma5[4] != [2]int{719, 76} {
-		t.Fatalf("MA5 points: %v, want 5 points ending 719,76", ma5)
-	}
 	ma20 := vizPoints(t, chart.MA20Points)
 	if len(ma20) != 5 || ma20[0] != [2]int{0, 79} {
 		t.Fatalf("MA20 points: %v, want 5 points starting 0,79 (warmup boundary)", ma20)
@@ -137,7 +132,7 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 	if !ok || bare.Points == "" {
 		t.Fatal("bare chart: not built or no average line")
 	}
-	if len(bare.Wicks) != 0 || bare.MA5Points != "" || bare.MA20Points != "" ||
+	if len(bare.Wicks) != 0 || bare.MA20Points != "" ||
 		bare.ChannelPoints != "" || bare.OrdersPoints != "" || len(bare.Bars) != 0 {
 		t.Fatal("bare chart: a switched-off layer still drew")
 	}

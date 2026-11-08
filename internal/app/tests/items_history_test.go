@@ -45,7 +45,6 @@ func TestItemPageHistoryChart(t *testing.T) {
 		`data-chart-scrub="true"`,
 		"<polyline",
 		`class="chart-line"`,
-		"5-day average",
 		"Donchian channel",
 		"Daily wicks",
 		"Units traded",

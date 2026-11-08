@@ -235,11 +235,16 @@ html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
   flex-direction: column;
   gap: 0.15rem;
   padding: 0.35rem;
-  background: var(--glass);
+  background: color-mix(in srgb, var(--panel) 94%, #000);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-md);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+html[data-theme="light"] .subnav .tabs-more-panel {
+  background: color-mix(in srgb, var(--panel) 94%, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 .subnav .tabs-more-panel[hidden] { display: none; }
 .subnav .tabs-more-panel a {
@@ -317,7 +322,9 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-head-sum { flex: 1 1 20rem; min-width: 0; margin: 0; color: var(--muted); }
 .l-head-sum b { color: var(--text); font-weight: 600; }
 /* The page's character or scope picker, leading the head. */
-.l-head-pick { flex: 0 1 26rem; min-width: 0; }
+.l-head-pick { width: min(100%, 26rem); min-width: 0; }
+.l-head > .l-head-pick { flex: 0 1 26rem; width: auto; }
+.l-page > .l-head-pick { flex: 0 0 auto; width: min(100%, 26rem); }
 /* A picker with one choice renders nothing: its slot steps aside. */
 .l-head-pick:not(:has(*)) { display: none; }
 .l-head-pick .charselector { width: 100%; margin: 0; max-width: none; }
@@ -495,7 +502,7 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
   --l-mode: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  align-items: start;
+  align-items: stretch;
   min-width: 0;
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
@@ -518,6 +525,13 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
      toned like the pane: the panel with the inset tint laid over. */
   background: linear-gradient(var(--surface-inset), var(--surface-inset)), var(--surface-float);
   border-bottom: 1px solid transparent;
+}
+.l-panes > .l-pane:first-child > .l-pane-bar {
+  border-top-left-radius: calc(var(--r-md) - 1px);
+}
+.l-panes > .l-pane:last-child > .l-pane-bar,
+.l-panes > .l-pane:only-child > .l-pane-bar {
+  border-top-right-radius: calc(var(--r-md) - 1px);
 }
 .l-pane-bar > .searchwrap, .l-pane-bar > form, .l-pane-bar > input[type="search"] { flex: 1 1 14rem; min-width: 0; }
 .l-pane-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--fs-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -839,6 +853,7 @@ tbody tr.yours { --row-edge: var(--sel-edge); --row-edge-w: 3px; }
   .subnav .subtab-note { display: none; }
   .subnav .section-subtabs > a { min-height: var(--tap); }
   .l-panes { border-radius: 0; border-left: 0; border-right: 0; }
+  .l-panes > .l-pane > .l-pane-bar { border-top-left-radius: 0; border-top-right-radius: 0; }
   /* A console page runs its panes edge to edge; other framework
      pages keep the page body's own inset. */
   .page-body:has(> .l-page > .l-console) { padding-left: 0; padding-right: 0; border-left: 0; border-right: 0; border-radius: 0; margin-left: 0; margin-right: 0; }

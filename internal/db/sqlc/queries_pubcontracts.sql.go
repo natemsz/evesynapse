@@ -1544,11 +1544,12 @@ JOIN pub_contracts c ON c.contract_id = i.contract_id
 WHERE c.type = 'item_exchange'
   AND c.departed_at IS NULL
   AND c.price > 0
-  AND c.total_lines = 1
   AND i.is_included
   AND i.is_blueprint_copy
   AND i.runs IS NOT NULL AND i.runs > 0
   AND i.quantity = 1
+  AND NOT EXISTS (SELECT 1 FROM pub_contract_items x
+                  WHERE x.contract_id = i.contract_id AND x.record_id <> i.record_id)
 GROUP BY i.type_id, i.runs
 HAVING COUNT(*) >= $1::bigint
 `

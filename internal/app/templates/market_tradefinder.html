@@ -31,8 +31,11 @@
     <input type="number" name="minvol" min="0" step="1" value="{{$s.MinVolume}}">
   </label>
   <label class="mk-check"><input type="checkbox" name="lowball" value="1"{{if $s.Lowball}} checked{{end}}> <small>Include long shots (selling for over ten times the buy price)</small></label>
+  {{if $s.Scope}}<input type="hidden" name="scope" value="{{$s.Scope}}">{{end}}
   <button class="btn" type="submit">Find routes</button>
 </form>
+
+{{with $s.Selector}}<div class="l-head-pick">{{template "charselectormulti" .}}</div>{{end}}
 
 {{if $s.HasData}}
 {{if $s.SameRegion}}
@@ -59,7 +62,7 @@
     </tbody>
   </table>
   </div>
-  <p class="prose">Prices in ISK. A route buys from sell orders in {{$s.OriginName}} and lists the items for sale in {{$s.DestName}}. Profit per item is the typical sell price in {{$s.DestName}} minus the typical sell price in {{$s.OriginName}}. Sold per day is the average daily amount that actually traded in {{$s.DestName}} over the last seven recorded days. Estimated profit per day is the profit per item times whichever runs out first: what {{$s.DestName}} sells each day, or the stock on sale in {{$s.OriginName}}. Before broker fees, sales tax and hauling.</p>
+  <p class="prose">Prices in ISK. A route buys from sell orders in {{$s.OriginName}} and lists the items for sale in {{$s.DestName}}. Profit per item is what is left after buying in {{$s.OriginName}} and selling in {{$s.DestName}}, broker fees on both legs and sales tax taken off. Sold per day is the average daily amount that actually traded in {{$s.DestName}} over the last seven recorded days. Estimated profit per day is the profit per item times whichever runs out first: what {{$s.DestName}} sells each day, or the stock on sale in {{$s.OriginName}}. Before hauling.</p>
   {{else if $s.Pending}}
   <p>No route has sales figures in {{$s.DestName}} yet. The candidates are listed below while their figures are fetched.</p>
   {{else}}

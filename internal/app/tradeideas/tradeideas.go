@@ -33,6 +33,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/ideas"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/tradefees"
 )
 
 // Module is the Trade Ideas module's registration.
@@ -278,6 +279,11 @@ func BuildCSVRows(ctx context.Context, deps module.Deps, limit int) ([]ideas.Row
 	rows := make([]ideas.Row, 0, len(opp))
 	stationMemo := make(map[int64]module.PlaceRef)
 	for i, s := range opp {
+		// The rows are built by the background worker with no
+		// viewer, so the spread and profit are net of broker
+		// fees and sales tax at perfect skills and relations.
+		spreadPct := tradefees.NetSpreadPct(s.TypicalBuy, s.TypicalSell, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
+		unitProfit, _ := tradefees.NetRoundTrip(s.TypicalBuy, s.TypicalSell, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
 		// The tradeable size is whichever runs out first: what trades
 		// each day, what sellers hold, or what buyers want.
 		size := s.DailyVolume
@@ -293,9 +299,9 @@ func BuildCSVRows(ctx context.Context, deps module.Deps, limit int) ([]ideas.Row
 			Station: tradeIdeasCell(deps.StationRef(ctx, stationMemo, s.LocationID).Name),
 			Buy:     esi.FormatISK(s.TypicalBuy),
 			Sell:    esi.FormatISK(s.TypicalSell),
-			Spread:  fmt.Sprintf("%.1f%%", (s.TypicalSell-s.TypicalBuy)/s.TypicalBuy*100),
+			Spread:  fmt.Sprintf("%.1f%%", spreadPct),
 			Sold:    esi.FormatInt(int64(math.Round(s.DailyVolume))),
-			Profit:  esi.FormatISK((s.TypicalSell - s.TypicalBuy) * size),
+			Profit:  esi.FormatISK(unitProfit * size),
 		})
 	}
 	return rows, true

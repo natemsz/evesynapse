@@ -37,6 +37,7 @@ var kindScopes = map[string]string{
 	// Character kinds.
 	esi.SnapProfile:       "", // public character record
 	esi.SnapSkills:        "esi-skills.read_skills.v1",
+	esi.SnapStandings:     "esi-characters.read_standings.v1",
 	esi.SnapSkillqueue:    "esi-skills.read_skillqueue.v1",
 	esi.SnapAttributes:    "esi-skills.read_skills.v1",
 	esi.SnapWallet:        "esi-wallet.read_character_wallet.v1",

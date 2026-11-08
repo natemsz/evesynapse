@@ -677,7 +677,7 @@ func TestHistorySectionNeverBlank(t *testing.T) {
 	now := time.Now().UTC()
 
 	item := &marketItem{TypeID: 34, RegionID: 10000002, RegionName: "The Forge"}
-	app.attachHistory(ctx, item, 34, 10000002, 0)
+	app.attachHistory(ctx, item, 34, 10000002, 0, nil)
 	if item.HistoryState != markethistory.StatePending || !item.HistoryPending {
 		t.Fatalf("cold state: %q pending=%v, want pending", item.HistoryState, item.HistoryPending)
 	}
@@ -685,7 +685,7 @@ func TestHistorySectionNeverBlank(t *testing.T) {
 	// Settled empty: worker completed the fetch, zero rows.
 	app.recordMarketFetch(ctx, "history_10000002_34", fetchStateOK, "")
 	item = &marketItem{TypeID: 34, RegionID: 10000002, RegionName: "The Forge"}
-	app.attachHistory(ctx, item, 34, 10000002, 0)
+	app.attachHistory(ctx, item, 34, 10000002, 0, nil)
 	if item.HistoryState != markethistory.StateEmpty {
 		t.Fatalf("settled state: %q, want empty", item.HistoryState)
 	}
@@ -693,7 +693,7 @@ func TestHistorySectionNeverBlank(t *testing.T) {
 	// Failed fetch: back to pending, never empty-by-silence.
 	app.recordMarketFetch(ctx, "history_10000002_34", fetchStateError, "boom")
 	item = &marketItem{TypeID: 34, RegionID: 10000002, RegionName: "The Forge"}
-	app.attachHistory(ctx, item, 34, 10000002, 0)
+	app.attachHistory(ctx, item, 34, 10000002, 0, nil)
 	if item.HistoryState != markethistory.StatePending {
 		t.Fatalf("errored state: %q, want pending", item.HistoryState)
 	}
@@ -709,7 +709,7 @@ func TestHistorySectionNeverBlank(t *testing.T) {
 		}
 	}
 	item = &marketItem{TypeID: 34, RegionID: 10000002, RegionName: "The Forge"}
-	app.attachHistory(ctx, item, 34, 10000002, 0)
+	app.attachHistory(ctx, item, 34, 10000002, 0, nil)
 	if item.HistoryState != markethistory.StateChart || item.Chart == nil {
 		t.Fatalf("chart state: %q chart=%v, want chart", item.HistoryState, item.Chart != nil)
 	}

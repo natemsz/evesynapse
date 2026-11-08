@@ -15,6 +15,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/tradefees"
 )
 
 // ---------------------------------------------------------------------------
@@ -35,10 +36,11 @@ type publicHubPrice struct {
 	BestBuy  string
 
 	// Spread is the hub's buy-to-sell margin, the gap as a share
-	// of the best sell ("" unless both sides have an order).
-	// CheapestSell and TopBuy mark the hub to buy from and the hub
-	// to sell to among the hubs listed (only when two or more
-	// hubs quote that side).
+	// of the net sell proceeds, after broker fees and sales tax
+	// at perfect skills and relations ("" unless both sides
+	// have an order). CheapestSell and TopBuy mark the hub to
+	// buy from and the hub to sell to among the hubs listed
+	// (only when two or more hubs quote that side).
 	Spread       string
 	CheapestSell bool
 	TopBuy       bool
@@ -128,7 +130,7 @@ func (app *Application) publicTypeMarket(ctx context.Context, typeID int64) (hub
 		}
 		hub := publicHubPrice{Region: region, sell: row.BestSell, buy: row.BestBuy}
 		if row.BestSell > 0 && row.BestBuy > 0 {
-			hub.Spread = strconv.FormatFloat((row.BestSell-row.BestBuy)/row.BestSell*100, 'f', 1, 64) + "%"
+			hub.Spread = strconv.FormatFloat(tradefees.NetMarginPct(row.BestBuy, row.BestSell, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax()), 'f', 1, 64) + "%"
 		}
 		if row.BestSell > 0 {
 			hub.BestSell = esi.FormatISK(row.BestSell)

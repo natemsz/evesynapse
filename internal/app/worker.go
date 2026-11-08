@@ -1015,7 +1015,7 @@ func cycleSummary(refreshed, namesResolved, failed int, limited bool, parked, de
 // coreSnapshotKinds are the per-character snapshot kinds the main
 // worker pass keeps warm (the set).
 var coreSnapshotKinds = []string{
-	esi.SnapProfile, esi.SnapSkills, esi.SnapSkillqueue, esi.SnapAttributes, esi.SnapWallet, esi.SnapAssets,
+	esi.SnapProfile, esi.SnapSkills, esi.SnapStandings, esi.SnapSkillqueue, esi.SnapAttributes, esi.SnapWallet, esi.SnapAssets,
 	esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapClones,
 	esi.SnapImplants, esi.SnapFittings, esi.SnapFatigue, esi.SnapKillmails,
 	esi.SnapCorpRoles,

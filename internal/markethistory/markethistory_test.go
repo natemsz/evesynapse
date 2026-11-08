@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/tradefees"
 )
 
 func historyRows(days ...string) []db.MarketHistory {
@@ -243,15 +244,17 @@ func TestWindow(t *testing.T) {
 }
 
 func TestBuildTraderStats(t *testing.T) {
-	stats := BuildTraderStats(historyRows("2026-01-01", "2026-01-02"), 110, 100)
+	stats := BuildTraderStats(historyRows("2026-01-01", "2026-01-02"), 110, 100, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
 	if stats.Avg7 == "" || stats.Avg30 == "" || stats.AvgVol7 == "" {
 		t.Fatalf("snapshot = %+v, want computed windows", stats)
 	}
-	if stats.MarginPct != "9.1%" {
-		t.Fatalf("margin = %q, want 9.1%%", stats.MarginPct)
+	// Net margin at perfect rates: buy 100 costs 101, sell 110
+	// returns 105.19, so 4.19/105.19 = 4.0%.
+	if stats.MarginPct != "4.0%" {
+		t.Fatalf("margin = %q, want 4.0%%", stats.MarginPct)
 	}
 	// No live book: the margin stays blank, never invented.
-	if stats := BuildTraderStats(historyRows("2026-01-01"), 0, 0); stats.MarginPct != "" {
+	if stats := BuildTraderStats(historyRows("2026-01-01"), 0, 0, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax()); stats.MarginPct != "" {
 		t.Fatalf("margin without a book = %q", stats.MarginPct)
 	}
 }

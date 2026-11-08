@@ -66,7 +66,11 @@ func (app *Application) handleMarketHistoryFragment(w http.ResponseWriter, r *ht
 	regionName, _ := marketRegionName(regionID)
 	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName, Anonymous: app.userID(ctx) == 0}
 	app.vizSetup(ctx, item, q.Get("range"))
-	app.attachHistory(ctx, item, typeID, regionID, 0)
+	// The poll URL carries the page's scope, so the re-rendered
+	// section quotes the same viewer as the page.
+	viewer, scope, _ := app.tradeViewerForRequest(ctx, q)
+	item.ScopeParam = scope.param()
+	app.attachHistory(ctx, item, typeID, regionID, app.userID(ctx), viewer)
 	app.renderFragment(w, "market.html", "history-section", item)
 }
 
@@ -98,7 +102,11 @@ func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *htt
 	if v, err := strconv.ParseFloat(q.Get("bb"), 64); err == nil && v > 0 && !math.IsInf(v, 0) {
 		item.BestBuyRaw = v
 	}
-	app.attachHistory(ctx, item, typeID, regionID, 0)
+	// The poll URL carries the page's scope, so the re-rendered
+	// margin quotes the same viewer as the page.
+	viewer, scope, _ := app.tradeViewerForRequest(ctx, q)
+	item.ScopeParam = scope.param()
+	app.attachHistory(ctx, item, typeID, regionID, app.userID(ctx), viewer)
 	app.renderFragment(w, "market.html", "trader-section", item)
 }
 

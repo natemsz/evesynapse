@@ -2,7 +2,7 @@
      shared by the market item view and the item browser detail page.
      Rendered with a marketItem as dot. */}}
 {{define "history-section"}}
-<div class="history-body" data-poll-state="{{.HistoryState}}"{{if eq .HistoryState "pending"}} data-live-region data-poll-url="/market/history-fragment?region={{.RegionID}}&amp;type={{.TypeID}}&amp;range={{.RangeKey}}"{{end}}>
+<div class="history-body" data-poll-state="{{.HistoryState}}"{{if eq .HistoryState "pending"}} data-live-region data-poll-url="/market/history-fragment?region={{.RegionID}}&amp;type={{.TypeID}}&amp;range={{.RangeKey}}{{if .ScopeParam}}&amp;scope={{.ScopeParam}}{{end}}"{{end}}>
   {{if eq .HistoryState "chart"}}
   {{if .Chart}}
   {{$c := .Chart}}

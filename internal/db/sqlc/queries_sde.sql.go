@@ -449,6 +449,20 @@ func (q *Queries) GetSDEMeta(ctx context.Context, key string) (string, error) {
 	return value, err
 }
 
+const getSDENPCCorporationFaction = `-- name: GetSDENPCCorporationFaction :one
+SELECT corporation_id, faction_id FROM sde_npc_corporations WHERE corporation_id = $1
+`
+
+// The faction an NPC corporation belongs to, for the fee
+// math's faction standing. A corporation the SDE does not
+// know returns no row.
+func (q *Queries) GetSDENPCCorporationFaction(ctx context.Context, corporationID int64) (SdeNpcCorporation, error) {
+	row := q.db.QueryRowContext(ctx, getSDENPCCorporationFaction, corporationID)
+	var i SdeNpcCorporation
+	err := row.Scan(&i.CorporationID, &i.FactionID)
+	return i, err
+}
+
 const getSDERegion = `-- name: GetSDERegion :one
 SELECT region_id, name FROM sde_regions
 WHERE region_id = $1
@@ -483,10 +497,37 @@ SELECT station_id, name, system_id FROM sde_stations
 WHERE station_id = $1
 `
 
-func (q *Queries) GetSDEStation(ctx context.Context, stationID int64) (SdeStation, error) {
+type GetSDEStationRow struct {
+	StationID int64  `json:"station_id"`
+	Name      string `json:"name"`
+	SystemID  int64  `json:"system_id"`
+}
+
+func (q *Queries) GetSDEStation(ctx context.Context, stationID int64) (GetSDEStationRow, error) {
 	row := q.db.QueryRowContext(ctx, getSDEStation, stationID)
-	var i SdeStation
+	var i GetSDEStationRow
 	err := row.Scan(&i.StationID, &i.Name, &i.SystemID)
+	return i, err
+}
+
+const getSDEStationOwner = `-- name: GetSDEStationOwner :one
+SELECT station_id, corporation_id FROM sde_stations WHERE station_id = $1
+`
+
+type GetSDEStationOwnerRow struct {
+	StationID     int64 `json:"station_id"`
+	CorporationID int64 `json:"corporation_id"`
+}
+
+// The NPC corporation owning a station, for the fee math:
+// the character's standings with the owner and its faction
+// set the broker fee. A station the SDE does not know (a
+// player structure, or a station from before the owners
+// landed) returns no row.
+func (q *Queries) GetSDEStationOwner(ctx context.Context, stationID int64) (GetSDEStationOwnerRow, error) {
+	row := q.db.QueryRowContext(ctx, getSDEStationOwner, stationID)
+	var i GetSDEStationOwnerRow
+	err := row.Scan(&i.StationID, &i.CorporationID)
 	return i, err
 }
 
@@ -1775,15 +1816,21 @@ WHERE system_id = $1
 ORDER BY name
 `
 
-func (q *Queries) ListSDEStationsBySystem(ctx context.Context, systemID int64) ([]SdeStation, error) {
+type ListSDEStationsBySystemRow struct {
+	StationID int64  `json:"station_id"`
+	Name      string `json:"name"`
+	SystemID  int64  `json:"system_id"`
+}
+
+func (q *Queries) ListSDEStationsBySystem(ctx context.Context, systemID int64) ([]ListSDEStationsBySystemRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSDEStationsBySystem, systemID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SdeStation
+	var items []ListSDEStationsBySystemRow
 	for rows.Next() {
-		var i SdeStation
+		var i ListSDEStationsBySystemRow
 		if err := rows.Scan(&i.StationID, &i.Name, &i.SystemID); err != nil {
 			return nil, err
 		}

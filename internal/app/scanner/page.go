@@ -13,6 +13,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/tradefees"
 )
 
 // scannerRow is one opportunity line, display-ready.
@@ -30,7 +32,8 @@ type scannerRow struct {
 	Station     module.PlaceRef
 	TypicalBuy  string // esi.FormatISK, median buy price here
 	TypicalSell string // esi.FormatISK, median sell price here
-	SpreadPct   string // "12.3%"
+	SpreadPct   string // "12.3%", net of broker fees and sales tax
+	SpreadEst   bool   // the station's fee is not on file, so the net spread used the NPC formula as an estimate
 	DailyVolume string // esi.FormatInt, sold per day in the region
 	DailyProfit string // esi.FormatISK, estimated daily profit
 	// The station system's security, for the badge (SecKnown false
@@ -59,6 +62,8 @@ type scannerView struct {
 	Regions    []module.RegionChoice
 	MinVolume  int64  // sold-per-day floor from the filter
 	MinSpread  string // spread-% floor as typed (echoed in the form)
+	Scope      string // the raw ?scope= value, carried by the filter form
+	Selector   *module.ScopeSelector
 	HasData    bool   // a sweep has covered this region
 	AsOf       string // "Prices as of Oct 4, 3:04 PM", HasData only
 	Age        string // "12 minutes ago", HasData only
@@ -119,10 +124,13 @@ func (app *page) serveScannerCSV(w http.ResponseWriter, view *scannerView) {
 // typical (the sweep's stored station medians), need a book
 // with depth on both sides, must sit within the region's own
 // typical range, and need enough daily trades and a
-// wide-enough spread. The filtering, profit math, and ranking
-// all happen in one bounded SQL query
-// (ListScannerOpportunities); Go only formats the displayed
-// rows.
+// wide-enough spread. The SQL pre-filter (gross spread at or
+// over the floor, capped at rowCap rows) is a superset of the
+// net filter: net is always at or under gross, so no row the
+// net filter would keep is ever cut upstream. Go then nets
+// each row at the station's rates for the viewer, drops the
+// rows whose net spread falls under the floor, and re-ranks
+// by net daily profit.
 func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *scannerView {
 	regionID := app.deps.DefaultMarketRegion()
 	if raw := module.QueryValue(q, "region"); raw != "" {
@@ -154,7 +162,13 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 		RegionName: regionName,
 		MinVolume:  minVolume,
 		MinSpread:  strconv.FormatFloat(minSpread, 'f', -1, 64),
+		Scope:      module.QueryValue(q, "scope"),
 	}
+	// The pricer resolves the viewer once for the render: the
+	// scope control above the list, and the per-station rates
+	// below. Anonymous readers get perfect skills and relations.
+	pricer := app.deps.TradePricer(ctx, q, "/market/scanner/")
+	view.Selector = pricer.ScopeControl()
 	for _, region := range app.deps.MarketRegions() {
 		view.Regions = append(view.Regions, module.RegionChoice{
 			ID: region.ID, Name: region.Name, Active: region.ID == regionID,
@@ -207,7 +221,16 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 	}
 	stationMemo := make(map[int64]module.PlaceRef)
 	for _, s := range opp {
-		spreadPct := (s.TypicalSell - s.TypicalBuy) / s.TypicalBuy * 100
+		// The spread and profit are net of broker fees and
+		// sales tax at this station, for the viewer. A row
+		// whose net spread falls under the floor drops out:
+		// the SQL floor is on the gross gap, so a thin net
+		// gap can still arrive here.
+		broker, salesTax, estimated := pricer.Rates(ctx, s.LocationID)
+		spreadPct := tradefees.NetSpreadPct(s.TypicalBuy, s.TypicalSell, broker, salesTax)
+		if spreadPct < minSpread {
+			continue
+		}
 		vol := s.DailyVolume
 		// The tradeable size is whichever runs out first: what
 		// actually trades each day, what sellers hold here, or
@@ -219,7 +242,8 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 		if float64(s.BuyVolume) < size {
 			size = float64(s.BuyVolume)
 		}
-		profit := (s.TypicalSell - s.TypicalBuy) * size
+		profit, _ := tradefees.NetRoundTrip(s.TypicalBuy, s.TypicalSell, broker, salesTax)
+		profit *= size
 		station := app.deps.StationRef(ctx, stationMemo, s.LocationID)
 		secText, secTier, secKnown := "", 0, false
 		if station.SystemID != 0 {
@@ -237,10 +261,14 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 			TypicalBuy:  esi.FormatISK(s.TypicalBuy),
 			TypicalSell: esi.FormatISK(s.TypicalSell),
 			SpreadPct:   fmt.Sprintf("%.1f%%", spreadPct),
+			SpreadEst:   estimated,
 			DailyVolume: esi.FormatInt(int64(math.Round(vol))),
 			DailyProfit: esi.FormatISK(profit),
 		})
 	}
+	// Net re-ranks: the SQL ranked by gross profit, and a row
+	// with a wide gross gap can net worse than a narrower one.
+	sort.SliceStable(view.Rows, func(i, j int) bool { return view.Rows[i].profit > view.Rows[j].profit })
 	scannerMeters(view, q)
 	return view
 }
@@ -258,6 +286,9 @@ func scannerMeters(view *scannerView, q map[string][]string) {
 	base.Set("region", strconv.FormatInt(view.RegionID, 10))
 	base.Set("minvol", strconv.FormatInt(view.MinVolume, 10))
 	base.Set("minspread", view.MinSpread)
+	if view.Scope != "" {
+		base.Set("scope", view.Scope)
+	}
 	view.CloseHref = "/market/scanner/?" + base.Encode()
 	pick, _ := strconv.Atoi(module.QueryValue(q, "pick"))
 	view.Depth = 1 // the list is the top level: there is no directory

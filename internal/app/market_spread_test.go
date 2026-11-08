@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"evesynapse/internal/esi"
 )
@@ -110,7 +111,9 @@ func (s *spreadBookTransport) RoundTrip(req *http.Request) (*http.Response, erro
 // hair over the best bid at 87.40, so the old best-based card
 // read 0.1%; the mass of the book (19 asks at 100.00, 19 bids
 // at 87.00) puts the typicals at 100.00 / 87.00, and the card
-// now quotes their 14.9%.
+// now quotes their net spread: at Broker Relations V and
+// Accounting V (no standings) the 14.9% gross gap nets to
+// 7.7%, and the gross gap stays as the card's secondary line.
 func TestMarketItemSpreadPricedFromTypicals(t *testing.T) {
 	orders := []esi.MarketOrder{}
 	orderID := int64(1)
@@ -143,6 +146,20 @@ func TestMarketItemSpreadPricedFromTypicals(t *testing.T) {
 	if _, err := conn.Exec(`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (34, 'Tritanium', 1, 1, 1)`); err != nil {
 		t.Fatalf("seed SDE type: %v", err)
 	}
+	// The hub station's owner, so the rates read the character's
+	// standings (none) instead of the unknown-station estimate.
+	if _, err := conn.Exec(`INSERT INTO sde_stations (station_id, name, system_id, corporation_id) VALUES (60003760, 'Jita IV - Moon 4 - Caldari Navy Assembly Plant', 30000142, 1000035)`); err != nil {
+		t.Fatalf("seed SDE station: %v", err)
+	}
+	if _, err := conn.Exec(`INSERT INTO sde_npc_corporations (corporation_id, faction_id) VALUES (1000035, 500001)`); err != nil {
+		t.Fatalf("seed SDE NPC corporation: %v", err)
+	}
+	// Broker Relations V and Accounting V for the fixture character.
+	now := time.Now().UTC().Format(time.RFC3339)
+	skills := `{"total_sp":0,"skills":[{"skill_id":3446,"trained_skill_level":5,"active_skill_level":5,"skillpoints_in_skill":256000},{"skill_id":16622,"trained_skill_level":5,"active_skill_level":5,"skillpoints_in_skill":256000}]}`
+	if _, err := conn.Exec(`INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until) VALUES ($1, 'skills', $2, $3, $3)`, fixtureCharA, skills, now); err != nil {
+		t.Fatalf("seed skill snapshot: %v", err)
+	}
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	code, body := getPage(t, app, cookie, "/market/?type=34")
@@ -150,10 +167,14 @@ func TestMarketItemSpreadPricedFromTypicals(t *testing.T) {
 		t.Fatalf("item page: status %d", code)
 	}
 	mustContain(t, "/market/?type=34 (typical spread)", body,
-		`spread-v">14.9%`,
+		`spread-v">7.7%`,
+		"Gross gap 14.9%",
 		"Between typical buy and typical sell",
 	)
 	if strings.Contains(body, `spread-v">0.1%`) {
-		t.Error("spread still priced from the best extremes (0.1%), want the typicals' 14.9%")
+		t.Error("spread still priced from the best extremes (0.1%), want the typicals' net 7.7%")
+	}
+	if strings.Contains(body, `spread-v">14.9%`) {
+		t.Error("spread still quotes the gross gap, want the net 7.7% with the gross as a secondary line")
 	}
 }

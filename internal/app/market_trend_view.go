@@ -19,6 +19,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/tradefees"
 )
 
 // trendFigure is one formatted percent change with its direction
@@ -122,7 +123,7 @@ type statPackView struct {
 const bookTrendDays = 90
 
 // attachStatPack fills the item's stat pack section for its region.
-func (app *Application) attachStatPack(ctx context.Context, item *marketItem) {
+func (app *Application) attachStatPack(ctx context.Context, item *marketItem, viewer *tradeViewer) {
 	if item == nil {
 		return
 	}
@@ -185,19 +186,34 @@ func (app *Application) attachStatPack(ctx context.Context, item *marketItem) {
 		logging.Errorf("market: book trend for type %d: %v", item.TypeID, err)
 		return
 	}
-	view.Chart = buildBookChart(rows, extended)
+	// The spread series and the per-day spread tips are net of
+	// broker fees and sales tax at the region hub's station, for
+	// the viewer: the same rates as the spread card above.
+	var broker, salesTax float64
+	if stationID, ok := marketHubStations[item.RegionID]; ok {
+		broker, salesTax, _ = app.tradeRatesFor(ctx, viewer, stationID)
+	} else {
+		broker, salesTax = app.tradeRatesNoStation(viewer)
+	}
+	view.Chart = buildBookChart(rows, extended, broker, salesTax)
 }
 
 // buildBookTrendChart shapes the daily rows into two polylines on a
-// shared price scale; nil under two days.
+// shared price scale; nil under two days. The rates are zero, so the
+// per-day spread tips read the raw gap: the basket value chart
+// reuses this shape for holdings, not for a round trip at a
+// station, and its gap is not a trade spread.
 func buildBookTrendChart(rows []db.ListMarketRegionStatsDailyRecentRow) *bookTrendChart {
-	return buildBookChart(rows, false)
+	return buildBookChart(rows, false, 0, 0)
 }
 
 // buildBookChart is buildBookTrendChart plus, when extended, the
 // best-price lines and band (the price scale widens to the daily
 // bests so the band fits), the depth strip and the spread series.
-func buildBookChart(rows []db.ListMarketRegionStatsDailyRecentRow, extended bool) *bookTrendChart {
+// broker and salesTax are the round-trip rates for the viewer at
+// the region hub's station; the spread series and the per-day
+// spread tips are net of them.
+func buildBookChart(rows []db.ListMarketRegionStatsDailyRecentRow, extended bool, broker, salesTax float64) *bookTrendChart {
 	if len(rows) < 2 {
 		return nil
 	}
@@ -249,7 +265,7 @@ func buildBookChart(rows []db.ListMarketRegionStatsDailyRecentRow, extended bool
 		First: rows[0].Day, Last: rows[n-1].Day,
 		Extended: extended,
 	}
-	decorateBookChart(chart, rows, x, y, lo, hi, extended, w, h, padBottom)
+	decorateBookChart(chart, rows, x, y, lo, hi, extended, w, h, padBottom, broker, salesTax)
 	if !extended {
 		return chart
 	}
@@ -257,7 +273,7 @@ func buildBookChart(rows []db.ListMarketRegionStatsDailyRecentRow, extended bool
 	chart.BestBuyPoints = line(func(r db.ListMarketRegionStatsDailyRecentRow) float64 { return r.BestBuy })
 	chart.BandPoints = bookBandPoints(rows, x, y)
 	chart.DepthWidth, chart.DepthHeight, chart.DepthBars, chart.DepthMax = bookDepthStrip(rows)
-	chart.SpreadWidth, chart.SpreadHeight, chart.SpreadPoints, chart.SpreadHigh, chart.SpreadLow = bookSpreadSeries(rows)
+	chart.SpreadWidth, chart.SpreadHeight, chart.SpreadPoints, chart.SpreadHigh, chart.SpreadLow = bookSpreadSeries(rows, broker, salesTax)
 	return chart
 }
 
@@ -324,10 +340,12 @@ func bookDepthStrip(rows []db.ListMarketRegionStatsDailyRecentRow) (int, int, []
 	return w, h, bars, esi.FormatInt(maxCount)
 }
 
-// bookSpreadSeries is the daily spread percent, (typical sell less
-// typical buy) over typical buy, across the days carrying both
-// typicals, drawn on its own scale.
-func bookSpreadSeries(rows []db.ListMarketRegionStatsDailyRecentRow) (int, int, string, string, string) {
+// bookSpreadSeries is the daily spread percent, net of broker
+// fees and sales tax at the given rates, across the days
+// carrying both typicals, drawn on its own scale. The series
+// prices each day's typicals at the current rates: the rates
+// of the day itself are not stored.
+func bookSpreadSeries(rows []db.ListMarketRegionStatsDailyRecentRow, broker, salesTax float64) (int, int, string, string, string) {
 	const w, h, pad = 600, 64, 6
 	vals := make([]float64, len(rows))
 	ok := make([]bool, len(rows))
@@ -337,7 +355,7 @@ func bookSpreadSeries(rows []db.ListMarketRegionStatsDailyRecentRow) (int, int, 
 		if r.TypicalSell <= 0 || r.TypicalBuy <= 0 {
 			continue
 		}
-		v := (r.TypicalSell - r.TypicalBuy) / r.TypicalBuy * 100
+		v := tradefees.NetSpreadPct(r.TypicalBuy, r.TypicalSell, broker, salesTax)
 		vals[i], ok[i] = v, true
 		lo, hi = math.Min(lo, v), math.Max(hi, v)
 		count++
@@ -467,7 +485,7 @@ func (app *Application) attachAllRegionStats(ctx context.Context, item *marketIt
 // decorateBookChart adds the price plot's points, per-day hover
 // columns (the site's chart tip: every figure that day), round value
 // gridlines and first, middle and last date labels.
-func decorateBookChart(c *bookTrendChart, rows []db.ListMarketRegionStatsDailyRecentRow, x func(int) float64, y func(float64) float64, lo, hi float64, extended bool, w, h, padBottom int) {
+func decorateBookChart(c *bookTrendChart, rows []db.ListMarketRegionStatsDailyRecentRow, x func(int) float64, y func(float64) float64, lo, hi float64, extended bool, w, h, padBottom int, broker, salesTax float64) {
 	n := len(rows)
 	for i, r := range rows {
 		xi := x(i)
@@ -485,7 +503,7 @@ func decorateBookChart(c *bookTrendChart, rows []db.ListMarketRegionStatsDailyRe
 			rowsTip = append(rowsTip, pfTipRow{"Typical buy", esi.FormatISK(r.TypicalBuy) + " ISK", "mt-swatch-buy"})
 		}
 		if r.TypicalSell > 0 && r.TypicalBuy > 0 {
-			rowsTip = append(rowsTip, pfTipRow{"Spread", fmt.Sprintf("%.1f%%", (r.TypicalSell-r.TypicalBuy)/r.TypicalBuy*100), "mt-swatch-spread"})
+			rowsTip = append(rowsTip, pfTipRow{"Spread", fmt.Sprintf("%.1f%%", tradefees.NetSpreadPct(r.TypicalBuy, r.TypicalSell, broker, salesTax)), "mt-swatch-spread"})
 		}
 		if extended {
 			if r.BestSell > 0 {

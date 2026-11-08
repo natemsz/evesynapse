@@ -746,3 +746,17 @@ SELECT to_system_id FROM sde_system_jumps WHERE from_system_id = $1;
 -- name: ListMarketGroupParentIDs :many
 SELECT DISTINCT parent_group_id FROM sde_market_groups
 WHERE parent_group_id > 0;
+
+-- The NPC corporation owning a station, for the fee math:
+-- the character's standings with the owner and its faction
+-- set the broker fee. A station the SDE does not know (a
+-- player structure, or a station from before the owners
+-- landed) returns no row.
+-- name: GetSDEStationOwner :one
+SELECT station_id, corporation_id FROM sde_stations WHERE station_id = $1;
+
+-- The faction an NPC corporation belongs to, for the fee
+-- math's faction standing. A corporation the SDE does not
+-- know returns no row.
+-- name: GetSDENPCCorporationFaction :one
+SELECT corporation_id, faction_id FROM sde_npc_corporations WHERE corporation_id = $1;

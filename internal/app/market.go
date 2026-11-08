@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"math"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/markethistory"
+	"evesynapse/internal/tradefees"
 )
 
 // ---------------------------------------------------------------------------
@@ -151,7 +153,9 @@ type marketItem struct {
 	BestBuyVol        string // volume remaining at best buy
 	BestSellLoc       placeRef
 	BestBuyLoc        placeRef
-	Spread            string // "12.3%", "" unless both sides exist and the book is deep enough
+	Spread            string // "12.3%", net of broker fees and sales tax; "" unless both sides exist and the book is deep enough
+	SpreadGross       string // the raw gap, "14.9%", kept as the card's secondary line
+	SpreadEstimated   bool   // the station's fee is not on file, so the net spread used the NPC formula as an estimate
 	SpreadBand        string // color band for the spread card: white|pastel|green|blue
 	SpreadThin        string // thin-book note for the spread card when a side is too shallow to quote, "" otherwise
 	SellOrders        int
@@ -216,6 +220,10 @@ type marketItem struct {
 	HistoryLastDay string
 	Watched        bool
 	WatchThreshold float64
+	// ScopeParam is the raw ?scope= value behind the spread
+	// and margin figures ("" for all characters), so the
+	// live-region poll URLs carry the same scope.
+	ScopeParam string
 
 	// RegionStats is the hub-regions strip (P1): one row per hub
 	// region from the worker's stored sweep stats, filled by
@@ -283,10 +291,14 @@ func spreadBand(pct float64) string {
 // them, so the margin survives the live-fill swap unchanged
 // instead of flickering back to a dash.
 func (item *marketItem) TraderPollURL() string {
-	return fmt.Sprintf("/market/trader-fragment?region=%d&type=%d&bs=%s&bb=%s",
+	url := fmt.Sprintf("/market/trader-fragment?region=%d&type=%d&bs=%s&bb=%s",
 		item.RegionID, item.TypeID,
 		strconv.FormatFloat(item.BestSellRaw, 'f', -1, 64),
 		strconv.FormatFloat(item.BestBuyRaw, 'f', -1, 64))
+	if item.ScopeParam != "" {
+		url += "&scope=" + item.ScopeParam
+	}
+	return url
 }
 
 // watchlistRow is one watchlist line, display-ready.
@@ -363,6 +375,9 @@ type marketView struct {
 	Watchlist  *watchlistView
 	YourOrders []yourOrderRow
 	Browse     *marketBrowseView
+	// Selector is the character scope control for the item
+	// view's spread and margin figures; nil when anonymous.
+	Selector *assetScopeSelector
 }
 
 // marketBrowseGroup is one node of the category browser: a
@@ -409,16 +424,33 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		if !anon {
 			app.foresightOpened(ctx, userID, foresightMarketView(typeID))
 		}
-		item, err := app.loadMarketItem(ctx, typeID, view.Region, anon)
+		viewer, scope, characters := app.tradeViewerForRequest(ctx, q)
+		if !anon {
+			sel := buildScopeSelector(characters, scope, func(s string) string {
+				v := url.Values{}
+				v.Set("type", strconv.FormatInt(typeID, 10))
+				v.Set("region", strconv.FormatInt(view.Region, 10))
+				if r := q.Get("range"); r != "" {
+					v.Set("range", r)
+				}
+				if s != "" {
+					v.Set("scope", s)
+				}
+				return withQuery("/market/", v)
+			})
+			view.Selector = &sel
+		}
+		item, err := app.loadMarketItem(ctx, typeID, view.Region, anon, viewer)
 		if err != nil {
 			logging.Errorf("market: load type %d in region %d: %v", typeID, view.Region, err)
 			data.Error = "Market data unavailable right now. Please try again shortly."
 		} else {
 			view.Item = item
+			view.Item.ScopeParam = scope.param()
 		}
 		app.vizSetup(ctx, view.Item, q.Get("range"))
 		if view.Item != nil || !anon {
-			app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
+			app.attachHistory(ctx, view.Item, typeID, view.Region, userID, viewer)
 		}
 		if view.Item != nil && q.Get("regions") == "all" {
 			view.Item.AllRegions = true
@@ -426,7 +458,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		} else {
 			app.attachRegionStats(ctx, view.Item)
 		}
-		app.attachStatPack(ctx, view.Item)
+		app.attachStatPack(ctx, view.Item, viewer)
 		app.attachMarketChanges(ctx, view.Item)
 		if !anon {
 			app.markGuessHit(ctx, pageWantHistory, typeID, view.Region)
@@ -604,7 +636,7 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 }
 
 // the user asked about this type either way.
-func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64) {
+func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64, viewer *tradeViewer) {
 	// The chart's own read: the displayed days plus warmup, so
 	// its moving averages and channel are right from the first
 	// displayed day. Everything else in this section keeps its
@@ -637,7 +669,15 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 		// The trading snapshot rides on whatever rows exist
 		// (possibly none yet) plus the book's bests; missing
 		// figures render as dashes, never invented numbers.
-		item.Trader = markethistory.BuildTraderStats(win, item.BestSellRaw, item.BestBuyRaw)
+		// The margin is net of broker fees and sales tax at
+		// the region hub's station, for the viewer.
+		var broker, salesTax float64
+		if stationID, ok := marketHubStations[regionID]; ok {
+			broker, salesTax, _ = app.tradeRatesFor(ctx, viewer, stationID)
+		} else {
+			broker, salesTax = app.tradeRatesNoStation(viewer)
+		}
+		item.Trader = markethistory.BuildTraderStats(win, item.BestSellRaw, item.BestBuyRaw, broker, salesTax)
 	}
 	if len(rows) == 0 {
 		if item != nil {
@@ -952,7 +992,9 @@ func (app *Application) attachEstimatedValue(ctx context.Context, item *marketIt
 
 // loadMarketItem builds the item view for (type, region): house
 // valuation plus the best and top orders of the regional book.
-func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int64, anon bool) (*marketItem, error) {
+// viewer sets the spread card's rates; anonymous renders pass
+// the perfect viewer.
+func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int64, anon bool, viewer *tradeViewer) (*marketItem, error) {
 	item := &marketItem{
 		TypeID:    typeID,
 		RegionID:  regionID,
@@ -1105,20 +1147,31 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 	}
 	app.attachEstimatedValue(ctx, item, typicalSell)
 
-	// The spread card: typical against typical, and only from a
-	// book deep enough for a median to mean anything. At three
-	// or fewer orders a side the "typical" is still one order's
-	// price wearing a median's clothes, so the card names the
-	// thin book instead of printing a percentage the extremes
-	// manufactured (one hopeful ask over a deep bid side used
-	// to read as a 2000% spread).
+	// The spread card: typical against typical, net of broker
+	// fees and sales tax at the region hub's station, for the
+	// viewer — and only from a book deep enough for a median to
+	// mean anything. At three or fewer orders a side the
+	// "typical" is still one order's price wearing a median's
+	// clothes, so the card names the thin book instead of
+	// printing a percentage the extremes manufactured (one
+	// hopeful ask over a deep bid side used to read as a 2000%
+	// spread). The raw gap stays as the card's secondary line.
 	if item.SellOrders > 0 && item.BuyOrders > 0 {
 		switch {
 		case item.SellOrders <= spreadBookDepth || item.BuyOrders <= spreadBookDepth:
 			item.SpreadThin = thinBookNote(item.SellOrders, item.BuyOrders)
 		case typicalBuy > 0:
-			pct := (typicalSell - typicalBuy) / typicalBuy * 100
+			var broker, salesTax float64
+			var estimated bool
+			if stationID, ok := marketHubStations[regionID]; ok {
+				broker, salesTax, estimated = app.tradeRatesFor(ctx, viewer, stationID)
+			} else {
+				broker, salesTax = app.tradeRatesNoStation(viewer)
+			}
+			pct := tradefees.NetSpreadPct(typicalBuy, typicalSell, broker, salesTax)
 			item.Spread = fmt.Sprintf("%.1f%%", pct)
+			item.SpreadGross = fmt.Sprintf("%.1f%%", tradefees.GrossSpreadPct(typicalBuy, typicalSell))
+			item.SpreadEstimated = estimated
 			item.SpreadBand = spreadBand(pct)
 		}
 	}

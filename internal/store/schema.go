@@ -793,6 +793,14 @@ var pgKillInvolvementSchema string
 //go:embed schema_pg/129_kill_and_want_indexes.sql
 var pgKillAndWantIndexesSchema string
 
+// Step 130: station owners: the owning NPC corporation on
+// sde_stations, and the corporation to faction map in
+// sde_npc_corporations, so the fee math can apply the
+// character's standings with a station's owner.
+//
+//go:embed schema_pg/130_station_owners.sql
+var pgStationOwnersSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -950,6 +958,7 @@ func schemaSteps() []schemaStep {
 		{126, "corp_kill_coverage", pgCorpKillCoverageSchema, ""},
 		{127, "kill_involvement", pgKillInvolvementSchema, ""},
 		{129, "kill_and_want_indexes", pgKillAndWantIndexesSchema, ""},
+		{130, "station_owners", pgStationOwnersSchema, ""},
 	}
 }
 

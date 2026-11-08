@@ -91,7 +91,7 @@
       try { return window.localStorage.getItem(key); } catch (e) { return null; }
     }
     function backdropWire(value) {
-      return value === "muted" || value === "glow" ? value : "";
+      return value === "muted" || value === "glow" || value === "full" ? value : "";
     }
     if (meta.getAttribute("content") === "stored") {
       var scheme = root.getAttribute("data-scheme");
@@ -101,7 +101,7 @@
       } else {
         store("evesynapse-scheme", null);
         store("evesynapse-tier", null);
-        store("evesynapse-backdrop", backdropWire(root.getAttribute("data-backdrop")) || "art");
+        store("evesynapse-backdrop", backdropWire(root.getAttribute("data-backdrop")) || "muted");
       }
       store("evesynapse-theme-src", "account");
       return;
@@ -110,9 +110,11 @@
     var body = new URLSearchParams();
     var savedScheme = read("evesynapse-scheme");
     if (savedScheme === "jove" || savedScheme === "caldari" || savedScheme === "gallente" ||
-        savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom" || savedScheme === "soe") {
+        savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom" || savedScheme === "soe" ||
+        savedScheme === "minmatar" || savedScheme === "minmatar-v3") {
       body.set("scheme", savedScheme);
-      body.set("tier", read("evesynapse-tier") === "minimalistic" ? "minimalistic" : "muted");
+      var savedTier = read("evesynapse-tier");
+      body.set("tier", savedTier === "minimalistic" ? "minimalistic" : savedTier === "full" ? "full" : "muted");
       body.set("backdrop", backdropWire(read("evesynapse-backdrop")));
     } else if (backdropWire(read("evesynapse-backdrop"))) {
       body.set("scheme", "");

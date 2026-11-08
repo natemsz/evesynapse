@@ -32,35 +32,61 @@
    there). The bg-calm-* tiers mirror the dramatic ones tier
    for tier, thumb underlay included. */
 body::before {
-  background-image: url("/static/bg-calm.jpg?v=cbb09d21ebe7445e"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
-  background-image: image-set(url("/static/bg-calm.jxl?v=9169d69db20dcc2a") type("image/jxl"), url("/static/bg-calm.jpg?v=cbb09d21ebe7445e") type("image/jpeg")), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+  background-image: url("/static/bg-calm-muted.jpg?v=d056adc1ec88a9fa"), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
+  background-image: image-set(url("/static/bg-calm-muted.jxl?v=202f6aca4038a6bf") type("image/jxl"), url("/static/bg-calm-muted.jpg?v=d056adc1ec88a9fa") type("image/jpeg")), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
 }
 @media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
-    background-image: url("/static/bg-calm-4k.jpg?v=0abedfc879b4aacf"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
-    background-image: image-set(url("/static/bg-calm-4k.jxl?v=e6653b67c49cd641") type("image/jxl"), url("/static/bg-calm-4k.jpg?v=0abedfc879b4aacf") type("image/jpeg")), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+    background-image: url("/static/bg-calm-muted-4k.jpg?v=fe12d353c8673a99"), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
+    background-image: image-set(url("/static/bg-calm-muted-4k.jxl?v=73ff76cacb449b10") type("image/jxl"), url("/static/bg-calm-muted-4k.jpg?v=fe12d353c8673a99") type("image/jpeg")), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
   }
 }
 @media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
-    background-image: url("/static/bg-calm-uhd.jpg?v=93ca5b3df15d4dd6"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
-    background-image: image-set(url("/static/bg-calm-uhd.jxl?v=afdbe38df4d5f595") type("image/jxl"), url("/static/bg-calm-uhd.jpg?v=93ca5b3df15d4dd6") type("image/jpeg")), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+    background-image: url("/static/bg-calm-muted-uhd.jpg?v=2ea6f95c86526cc1"), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
+    background-image: image-set(url("/static/bg-calm-muted-uhd.jxl?v=b7e4118004978f2e") type("image/jxl"), url("/static/bg-calm-muted-uhd.jpg?v=2ea6f95c86526cc1") type("image/jpeg")), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
   }
 }
 
 /* Backdrop choice: the Settings page's Interface tab picks it
    (Full, Muted, Minimalistic) and boot.js applies the saved
-   value as html[data-backdrop] before first paint. The muted
-   state swaps the art for its muted twins: the grade
+   value as html[data-backdrop] before first paint. The default
+   look is Muted. The full state restores the dramatic art and
+   clear glass. The muted state uses the muted art twins: the grade
    (brightness 0.42, saturate 0.30, contrast 1.03) is baked
    into those files, so no filter runs over the backdrop layer
    at paint time. The scheme muted tier below rides the same
    twins. The glow state swaps the art for the signature top
    horizon glow over the warm black ground. The light theme
    paints no backdrop layer at all, so the choice rests there. */
+html[data-backdrop="full"] {
+  --glass: color-mix(in srgb, var(--panel) 78%, transparent);
+}
+html[data-backdrop="full"] body::before,
+html[data-scheme="minmatar"][data-tier="full"] body::before,
+html[data-scheme="minmatar-v3"][data-tier="full"] body::before {
+  background-image: url("/static/bg-calm.jpg?v=cbb09d21ebe7445e"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+  background-image: image-set(url("/static/bg-calm.jxl?v=9169d69db20dcc2a") type("image/jxl"), url("/static/bg-calm.jpg?v=cbb09d21ebe7445e") type("image/jpeg")), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+}
+@media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
+  html[data-backdrop="full"] body::before,
+  html[data-scheme="minmatar"][data-tier="full"] body::before,
+  html[data-scheme="minmatar-v3"][data-tier="full"] body::before {
+    background-image: url("/static/bg-calm-4k.jpg?v=0abedfc879b4aacf"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+    background-image: image-set(url("/static/bg-calm-4k.jxl?v=e6653b67c49cd641") type("image/jxl"), url("/static/bg-calm-4k.jpg?v=0abedfc879b4aacf") type("image/jpeg")), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+  }
+}
+@media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
+  html[data-backdrop="full"] body::before,
+  html[data-scheme="minmatar"][data-tier="full"] body::before,
+  html[data-scheme="minmatar-v3"][data-tier="full"] body::before {
+    background-image: url("/static/bg-calm-uhd.jpg?v=93ca5b3df15d4dd6"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+    background-image: image-set(url("/static/bg-calm-uhd.jxl?v=afdbe38df4d5f595") type("image/jxl"), url("/static/bg-calm-uhd.jpg?v=93ca5b3df15d4dd6") type("image/jpeg")), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+  }
+}
 html[data-backdrop="muted"] body::before,
 html[data-scheme][data-tier="muted"] body::before {
   background-image: url("/static/bg-calm-muted.jpg?v=d056adc1ec88a9fa"), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
@@ -561,6 +587,16 @@ html[data-scheme="amarr"] { --sch-hi: #facc15; --sch-core: #f0b93f; --sch-end: #
 html[data-scheme="triglavian"] { --sch-hi: #d41236; --sch-core: #ac160a; --sch-end: #570a04; --sch-accent: #d41236; --panel: #191112; --panel-head: rgba(17, 12, 12, .55); --input-bg: rgba(25, 17, 18, .5); --row-hover: rgba(212, 18, 54, .09); --text: #f7ecee; --text-bright: #fff5f6; --muted: #b3989c; --muted-2: #bfa6aa; --note: #d18d96; --sch-ground: #120405; --sch-ground-2: #260709; --sch-glow-1: rgba(172, 22, 10, .42); --sch-glow-2: rgba(128, 18, 10, .24); --sch-glow-3: rgba(212, 18, 54, .12); --map-glow-1: rgba(255, 102, 86, .08); --map-glow-2: rgba(255, 176, 173, .05); }
 html[data-scheme="edencom"] { --sch-hi: #eab308; --sch-core: #e9cf8f; --sch-end: #334155; --sch-accent: #e9cf8f; --panel: #191b1e; --panel-head: rgba(16, 18, 20, .55); --input-bg: rgba(25, 27, 30, .5); --row-hover: rgba(233, 207, 143, .09); --text: #eef1f6; --text-bright: #f8fafd; --muted: #9aa4b4; --muted-2: #aab3c2; --note: #cbb882; --sch-ground: #0b0f14; --sch-ground-2: #18202b; --sch-glow-1: rgba(233, 207, 143, .38); --sch-glow-2: rgba(51, 65, 85, .20); --sch-glow-3: rgba(183, 166, 250, .12); --map-glow-1: rgba(196, 153, 3, .08); --map-glow-2: rgba(241, 192, 71, .05); }
 html[data-scheme="soe"] { --sch-hi: #a1dde0; --sch-core: #e55252; --sch-end: #922020; --sch-accent: #e55252; --panel: #101a20; --panel-head: rgba(9, 15, 19, .55); --input-bg: rgba(16, 26, 32, .5); --row-hover: rgba(229, 82, 82, .09); --text: #eaf3f6; --text-bright: #f4fafc; --muted: #90a8b2; --muted-2: #a0b6bf; --note: #8dc5c9; --sch-ground: #070d11; --sch-ground-2: #0c171d; --sch-glow-1: rgba(229, 82, 82, .42); --sch-glow-2: rgba(146, 32, 32, .24); --sch-glow-3: rgba(161, 221, 224, .12); --map-glow-1: rgba(229, 82, 82, .08); --map-glow-2: rgba(161, 221, 224, .05); }
+html[data-scheme="minmatar"] { --sch-hi: #ffd27a; --sch-core: #ff6a1a; --sch-end: #7a3a12; --sch-accent: #ff6a1a; --panel: #1a120b; --panel-head: rgba(10, 7, 4, .55); --input-bg: rgba(18, 12, 8, .45); --row-hover: rgba(255, 140, 50, .09); --text: #faf3e6; --text-bright: #fff6e6; --muted: #b39a7d; --muted-2: #b8a58c; --note: #c9a06a; --sch-ground: #0b0806; --sch-ground-2: #17100b; --sch-glow-1: rgba(255, 106, 26, .42); --sch-glow-2: rgba(122, 58, 18, .20); --sch-glow-3: rgba(255, 150, 60, .12); --map-glow-1: rgba(255, 106, 26, .08); --map-glow-2: rgba(255, 150, 60, .05); --glass-edge: color-mix(in srgb, var(--accent) 24%, transparent); --box-edge: color-mix(in srgb, var(--accent) 14%, transparent); }
+/* Classic Minmatar preserves the original default look: dark rust
+   and ember borders over the warm black panel. */
+html[data-scheme="minmatar"] .panel {
+  background: linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(135deg, #7a3a12 0%, #4a2408 45%, #2a1404 100%) border-box;
+}
+html[data-scheme="minmatar"] .panel > h1:first-child {
+  border-image: linear-gradient(90deg, #7a3a12, #4a2408 50%, #2a1404) 1;
+}
 html[data-scheme="minmatar-v3"] { --sch-hi: #ff983d; --sch-core: #f26619; --sch-end: #8f2d0c; --sch-accent: #f26619; --panel: #151312; --panel-head: rgba(21, 18, 16, .58); --input-bg: rgba(20, 17, 15, .5); --row-hover: rgba(242, 102, 25, .07); --text: #faf4e8; --text-bright: #fffbf2; --muted: #bfa585; --muted-2: #cdb99c; --note: #d6ad62; --sch-ground: #0f0d0c; --sch-ground-2: #191513; --sch-glow-1: rgba(242, 102, 25, .28); --sch-glow-2: rgba(143, 45, 12, .15); --sch-glow-3: rgba(255, 152, 61, .08); --map-glow-1: rgba(242, 102, 25, .06); --map-glow-2: rgba(255, 152, 61, .04); --glass-edge: color-mix(in srgb, var(--accent) 20%, transparent); --box-edge: color-mix(in srgb, var(--accent) 11%, transparent); }
 /* v3 Minmatar balances the dark industrial slate panel with a
    warm ember hairline and a subtle copper gradient ramp along the
@@ -585,6 +621,7 @@ html[data-scheme="amarr"] { --recycled: #857a6b; --kept: #2fbf9a; --lost: #ef535
 html[data-scheme="triglavian"] { --recycled: #8d8284; --kept: #2fbf9a; --lost: #ff6a4d; --unverified: #e8a13a; --sch-gold: #f59e0b; }
 html[data-scheme="edencom"] { --recycled: #64748b; --kept: #2fd39a; --lost: #f26d6d; --unverified: #f59e0b; }
 html[data-scheme="soe"] { --recycled: #71828c; --kept: #2fd39a; --lost: #ff7a59; --unverified: #f0b93f; }
+html[data-scheme="minmatar"] { --recycled: #66707e; --kept: #2fbf9a; --lost: #e0483e; --unverified: #e8a13a; --sch-gold: #ffd27a; }
 html[data-scheme="minmatar-v3"] { --recycled: #857a6b; --kept: #2fbf9a; --lost: #ef5350; --unverified: #fb923c; --sch-gold: #ffd27a; }
 html[data-scheme] {
   --accent: var(--sch-core);
@@ -603,6 +640,10 @@ html[data-scheme] {
    have something to show in every tier. */
 html[data-scheme][data-tier="muted"] {
   --glass: color-mix(in srgb, var(--panel) 55%, transparent);
+}
+html[data-scheme="minmatar"][data-tier="full"],
+html[data-scheme="minmatar-v3"][data-tier="full"] {
+  --glass: color-mix(in srgb, var(--panel) 78%, transparent);
 }
 /* Neutral chrome borders and text-box effects whose base rules
    carry a literal ember value take the scheme colour at the
@@ -743,6 +784,13 @@ html[data-scheme="soe"] .wordmark-svg .p-s4 { fill: #c17377; }
 html[data-scheme="soe"] .wordmark-svg .p-s5 { fill: #e55252; }
 html[data-scheme="soe"] .wordmark-svg .p-s6 { fill: #bc3939; }
 html[data-scheme="soe"] .wordmark-svg .p-s7 { fill: #922020; }
+html[data-scheme="minmatar"] .wordmark-svg .p-s1 { fill: #ffc36c; }
+html[data-scheme="minmatar"] .wordmark-svg .p-s2 { fill: #ffa551; }
+html[data-scheme="minmatar"] .wordmark-svg .p-s3 { fill: #ff8835; }
+html[data-scheme="minmatar"] .wordmark-svg .p-s4 { fill: #ff6a1a; }
+html[data-scheme="minmatar"] .wordmark-svg .p-s5 { fill: #f35d18; }
+html[data-scheme="minmatar"] .wordmark-svg .p-s6 { fill: #e85017; }
+html[data-scheme="minmatar"] .wordmark-svg .p-s7 { fill: #dc4315; }
 html[data-scheme] .section-tabs a.active { color: var(--sch-hi); }
 /* The top bar's search magnifier takes the scheme highlight;
    the baked data-uri magnifiers are restated per scheme in
@@ -808,7 +856,7 @@ html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 .theme-default.current, .scheme-row.current { border-color: var(--sch-accent, #ff6a1a); box-shadow: 0 0 0 1px var(--sch-accent, #ff6a1a) inset, 0 0 18px -6px var(--sch-accent, #ff6a1a); }
 .scheme-list { display: flex; flex-direction: column; gap: .55rem; }
 .scheme-swatch { flex: 0 0 92px; height: 44px; border-radius: 7px; border: 1px solid rgba(255,255,255,.14); }
-.sw-default { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,150,60,.95) 0%, rgba(234,88,12,.55) 42%, rgba(90,30,5,.9) 78%), linear-gradient(180deg,#17100b,#0b0806); }
+.sw-default { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,152,61,.95) 0%, rgba(242,102,25,.50) 42%, rgba(21,19,18,.95) 80%), linear-gradient(180deg,#191513,#0f0d0c); }
 .sw-jove { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(196,181,253,.95) 0%, rgba(139,92,246,.55) 42%, rgba(30,16,51,.95) 80%), linear-gradient(180deg,#170b2c,#0d0716); }
 .sw-caldari { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(125,211,252,.95) 0%, rgba(96,165,250,.5) 42%, rgba(10,13,18,.95) 80%), linear-gradient(180deg,#11161f,#0a0d12); }
 .sw-gallente { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(153,246,228,.9) 0%, rgba(45,212,191,.45) 42%, rgba(6,35,31,.95) 80%), linear-gradient(180deg,#07231c,#04120e); }
@@ -816,6 +864,7 @@ html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 .sw-triglavian { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(212,18,54,.95) 0%, rgba(145,16,12,.62) 42%, rgba(24,2,2,.95) 80%), linear-gradient(180deg,#2b0303,#0f0101); }
 .sw-edencom { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,243,207,.95) 0%, rgba(233,207,143,.45) 42%, rgba(30,40,54,.95) 80%), linear-gradient(180deg,#18202b,#0b0f14); }
 .sw-soe { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(161,221,224,.95) 0%, rgba(229,82,82,.5) 42%, rgba(7,13,17,.95) 80%), linear-gradient(180deg,#0c171d,#070d11); }
+.sw-minmatar { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,150,60,.95) 0%, rgba(234,88,12,.55) 42%, rgba(90,30,5,.9) 78%), linear-gradient(180deg,#17100b,#0b0806); }
 .sw-minmatar-v3 { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,152,61,.95) 0%, rgba(242,102,25,.50) 42%, rgba(21,19,18,.95) 80%), linear-gradient(180deg,#191513,#0f0d0c); }
 .scheme-meta { flex: 1 1 auto; min-width: 0; }
 .scheme-name { font-family: Rajdhani, sans-serif; font-weight: 600; font-size: var(--fs-lg); letter-spacing: .05em; text-transform: uppercase; }

@@ -43,7 +43,7 @@ try {
     window.localStorage.getItem("evesynapse-theme-src") === "account";
   if (acctTheme !== "stored" && !staleMirror) {
     var savedBackdrop = window.localStorage.getItem("evesynapse-backdrop");
-    if (savedBackdrop === "muted" || savedBackdrop === "glow") {
+    if (savedBackdrop === "muted" || savedBackdrop === "glow" || savedBackdrop === "full") {
       document.documentElement.setAttribute("data-backdrop", savedBackdrop);
     }
     // A saved colour scheme replaces the backdrop choice: the
@@ -52,7 +52,7 @@ try {
     var savedScheme = window.localStorage.getItem("evesynapse-scheme");
     if (savedScheme === "jove" || savedScheme === "caldari" || savedScheme === "gallente" ||
         savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom" || savedScheme === "soe" ||
-        savedScheme === "minmatar-v3") {
+        savedScheme === "minmatar" || savedScheme === "minmatar-v3") {
       document.documentElement.setAttribute("data-scheme", savedScheme);
       document.documentElement.removeAttribute("data-backdrop");
       var savedTier = window.localStorage.getItem("evesynapse-tier");

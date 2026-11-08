@@ -102,20 +102,22 @@ func TestAccountThemeSaveAndRender(t *testing.T) {
 // TestSignupThemePrefs: the sign-up theme step's two answers map
 // onto the stored account theme: the default look's types are its
 // backdrop strengths, a scheme's types are its tiers, and a scheme
-// at full applies at muted until its wallpaper lands, except v3
-// Minmatar, which reuses the default's wallpapers.
+// at full applies at muted until its wallpaper lands, except Minmatar
+// and v3 Minmatar, which reuse the calm wallpapers.
 func TestSignupThemePrefs(t *testing.T) {
 	cases := []struct {
 		scheme, tierType string
 		want             themePrefs
 		ok               bool
 	}{
-		{"", "full", themePrefs{}, true},
+		{"", "full", themePrefs{Backdrop: "full"}, true},
 		{"", "muted", themePrefs{Backdrop: "muted"}, true},
 		{"", "minimalistic", themePrefs{Backdrop: "glow"}, true},
 		{"soe", "muted", themePrefs{Scheme: "soe", Tier: "muted"}, true},
 		{"soe", "minimalistic", themePrefs{Scheme: "soe", Tier: "minimalistic"}, true},
 		{"soe", "full", themePrefs{Scheme: "soe", Tier: "muted"}, true},
+		{"minmatar", "full", themePrefs{Scheme: "minmatar", Tier: "full"}, true},
+		{"minmatar", "muted", themePrefs{Scheme: "minmatar", Tier: "muted"}, true},
 		{"minmatar-v3", "full", themePrefs{Scheme: "minmatar-v3", Tier: "full"}, true},
 		{"minmatar-v3", "muted", themePrefs{Scheme: "minmatar-v3", Tier: "muted"}, true},
 		{"nope", "muted", themePrefs{}, false},

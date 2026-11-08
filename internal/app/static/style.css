@@ -213,15 +213,15 @@
   color-scheme: dark;
   /* The extra text-tone variables below exist so the light theme can
      re-tone them. */
-  --text: #faf3e6;
-  --text-bright: #fff6e6;
-  --accent: #ff6a1a;
-  --success: #ffb84d;
-  --danger: #f0562f;
+  --text: #faf4e8;
+  --text-bright: #fffbf2;
+  --accent: #f26619;
+  --success: #ffd27a;
+  --danger: #ef5350;
   --gold: #ffd27a;
-  --muted: #b39a7d;
-  --muted-2: #b8a58c;
-  --note: #c9a06a;
+  --muted: #bfa585;
+  --muted-2: #cdb99c;
+  --note: #d6ad62;
   /* Prose ink: explanatory text reads in a tone between the body
      text and muted, derived here so each theme mixes its own from
      its own text and muted values. */
@@ -231,29 +231,29 @@
      whose cost is unverified. Every scheme (bg.css) and the light
      theme retune all four so kept and lost stay distinct at a
      glance in each; chart rules name only these tokens. */
-  --recycled: #66707e;
+  --recycled: #857a6b;
   --kept: #2fbf9a;
-  --lost: #e0483e;
-  --unverified: #e8a13a;
-  --panel: #1a120b;
-  --panel-head: rgba(10, 7, 4, 0.55);
-  /* Glass (Ember Nebula): the shared card/panel surface — the panel
-     color at 78% strength, an accent-tinted edge, and the blur that
+  --lost: #ef5350;
+  --unverified: #fb923c;
+  --panel: #151312;
+  --panel-head: rgba(21, 18, 16, 0.58);
+  /* Glass: the shared card/panel surface: the panel color at 55%
+     strength (muted by default), an accent-tinted edge, and the blur that
      turns the backdrop art behind a card into atmosphere. Every
      value rides the theme variables, so faction themes recolor
      the glass and the light theme's solid overrides still win. */
-  --glass: color-mix(in srgb, var(--panel) 78%, transparent);
-  --glass-edge: color-mix(in srgb, var(--accent) 24%, transparent);
+  --glass: color-mix(in srgb, var(--panel) 55%, transparent);
+  --glass-edge: color-mix(in srgb, var(--accent) 20%, transparent);
   /* The inner-box recipe: inset boxes (.box, .band, inset
      summaries) paint the flat light tint in --row-alt and
      edge it with this faint accent hairline, never a dark
      fill. One token pair restyles every inset box. */
-  --box-edge: color-mix(in srgb, var(--accent) 14%, transparent);
+  --box-edge: color-mix(in srgb, var(--accent) 11%, transparent);
   --glass-blur: 24px;
   --row: rgba(16, 13, 10, 0.55);
   --row-alt: rgba(255, 255, 255, 0.03);
-  --row-hover: rgba(255, 140, 50, 0.09);
-  --input-bg: rgba(18, 12, 8, 0.45);
+  --row-hover: rgba(242, 102, 25, 0.07);
+  --input-bg: rgba(20, 17, 15, 0.5);
   /* Where sticky in-page bars park: the top bar's bottom edge.
      Every sticky element offsets from this one token, so a layout
      that changes the bar (phone.css: the short-screen band lets it
@@ -562,10 +562,10 @@ main {
   padding: 0 1rem;
 }
 .panel {
-  /* Glass: one solid translucent surface; the ember ramp stays
+  /* Glass: one solid translucent surface; the subtle copper ember ramp stays
      on the border. */
   background: linear-gradient(var(--glass), var(--glass)) padding-box,
-    linear-gradient(135deg, #7a3a12 0%, #4a2408 45%, #2a1404 100%) border-box;
+    linear-gradient(135deg, rgba(242, 102, 25, .28) 0%, rgba(143, 45, 12, .15) 50%, rgba(30, 15, 8, .30) 100%) border-box;
   border: 1px solid transparent;
   border-radius: var(--r-lg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 20px rgba(0, 0, 0, 0.65);
@@ -622,7 +622,7 @@ main {
   margin: -1.25rem -1.25rem 1rem;
   padding: 0.6rem 1.25rem;
   border-bottom: 1px solid;
-  border-image: linear-gradient(90deg, #7a3a12, #4a2408 50%, #2a1404) 1;
+  border-image: linear-gradient(90deg, rgba(242, 102, 25, .45), rgba(143, 45, 12, .20) 50%, transparent 85%) 1;
   border-radius: var(--r-lg) var(--r-lg) 0 0;
   letter-spacing: 0.1em;
   font-size: var(--fs-3xl);

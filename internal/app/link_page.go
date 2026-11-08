@@ -88,6 +88,7 @@ type signupThemeScheme struct {
 	ID, Name, Sub string
 	Selected      bool
 	Pending       bool // a scheme at the full type: its wallpaper has not landed yet
+	FullOK        bool
 }
 
 var signupThemeTypes = []signupThemeType{
@@ -133,7 +134,8 @@ func signupThemeViewFor(q url.Values) *signupThemeView {
 	}
 	for _, s := range signupThemeSchemes {
 		s.Selected = s.ID == scheme
-		s.Pending = view.Full && s.ID != "" && !schemeTierFullOK(s.ID)
+		s.FullOK = s.ID == "" || schemeTierFullOK(s.ID)
+		s.Pending = view.Full && !s.FullOK
 		view.Schemes = append(view.Schemes, s)
 	}
 	return view

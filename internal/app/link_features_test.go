@@ -526,3 +526,28 @@ func TestSharedCacheIsNotAFeature(t *testing.T) {
 		t.Error("the structures extra is ticked by default")
 	}
 }
+
+// TestSignupThemeChooserStep: the sign-up theme step renders the theme options
+// with Dominion v3 as the default and Minmatar as an available option.
+func TestSignupThemeChooserStep(t *testing.T) {
+	app := linkApp(t)
+	rec := get(app, nil, "/auth/link?submitted=1&step=theme&feature=skills")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /auth/link theme step: status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"Pick your theme",
+		"Dominion v3",
+		"Muted ember glass, the standard look",
+		"Minmatar",
+		"Ember, the classic look",
+		`data-su-scheme=""`,
+		`data-su-scheme="minmatar"`,
+		`value="muted" checked`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("sign-up theme step missing %q", want)
+		}
+	}
+}

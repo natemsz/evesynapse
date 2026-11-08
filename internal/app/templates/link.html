@@ -51,7 +51,7 @@
         <input type="radio" name="tscheme" value="{{.ID}}"{{if .Selected}} checked{{end}}>
         <span class="scheme-swatch sw-{{if .ID}}{{.ID}}{{else}}default{{end}}" aria-hidden="true"></span>
         <span class="scheme-meta"><span class="scheme-name">{{.Name}}</span><span class="scheme-sub">{{.Sub}}</span></span>
-        {{if .ID}}<small class="su-soon" data-su-soon{{if not .Pending}} hidden{{end}}>Wallpaper coming soon</small>{{end}}
+        {{if not .FullOK}}<small class="su-soon" data-su-soon{{if not .Pending}} hidden{{end}}>Wallpaper coming soon</small>{{end}}
       </label>
       {{end}}
     </div>

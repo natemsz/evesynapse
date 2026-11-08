@@ -345,6 +345,24 @@
   var rollGrid = form.querySelector(".cs-rollgrid");
   var rollHint = form.querySelector("[data-roll-hint]");
 
+  // If styled tooltips are able to be shown, suppress native browser title tooltips
+  // so dual tooltips do not appear. Use title as a fallback only when styled tips are absent.
+  function auditMarkTooltips(container) {
+    var root = container || form;
+    if (!root) return;
+    root.querySelectorAll(".cs-roll-mark").forEach(function (mark) {
+      if (mark.querySelector(".cs-roll-mark-tip")) {
+        if (mark.hasAttribute("title")) {
+          mark.setAttribute("data-tooltip", mark.getAttribute("title"));
+          mark.removeAttribute("title");
+        }
+      } else if (mark.hasAttribute("data-tooltip") && !mark.hasAttribute("title")) {
+        mark.setAttribute("title", mark.getAttribute("data-tooltip"));
+      }
+    });
+  }
+  auditMarkTooltips(form);
+
   function currentAttrMeta(attrId) {
     var fam = familySelect ? familySelect.value : "";
     var g = catalogByFamily[fam];
@@ -527,7 +545,7 @@
           btn.setAttribute("data-pct", m.pct);
           btn.setAttribute("data-val", m.val);
           btn.setAttribute("data-fmt", m.fmt);
-          btn.title = m.label + ": " + m.fmt;
+          btn.setAttribute("data-tooltip", m.label + ": " + m.fmt);
           btn.setAttribute("aria-label", m.label + ": " + m.fmt);
 
           var wick = document.createElement("span");
@@ -543,6 +561,7 @@
           btn.appendChild(tip);
           marksContainer.appendChild(btn);
         });
+        auditMarkTooltips(marksContainer);
       }
       var container = field.querySelector(".cs-roll-track-container");
       if (container) {

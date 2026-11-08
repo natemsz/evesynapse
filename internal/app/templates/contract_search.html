@@ -180,7 +180,7 @@
             </div>
             <div class="cs-roll-track-container" data-roll-track="{{.ID}}">
               <div class="cs-roll-marks" data-marks-for="{{.ID}}">
-                {{range .Marks}}<button type="button" class="cs-roll-mark" data-left="{{.Percentile}}" data-pct="{{.Percentile}}" data-val="{{.Value}}" data-fmt="{{.Formatted}}" title="{{.Label}}: {{.Formatted}}" aria-label="{{.Label}}: {{.Formatted}}">
+                {{range .Marks}}<button type="button" class="cs-roll-mark" data-left="{{.Percentile}}" data-pct="{{.Percentile}}" data-val="{{.Value}}" data-fmt="{{.Formatted}}" data-tooltip="{{.Label}}: {{.Formatted}}" aria-label="{{.Label}}: {{.Formatted}}">
                   <span class="cs-roll-mark-wick"></span>
                   <span class="cs-roll-mark-pip"></span>
                   <span class="cs-roll-mark-tip">{{.Label}}: {{.Formatted}}</span>

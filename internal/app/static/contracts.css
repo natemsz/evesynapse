@@ -411,14 +411,30 @@
   color: var(--muted); letter-spacing: 0.04em;
 }
 .cs-slider-row input[type="range"] { flex: 1; min-width: 0; }
-.cs-slider-row input[type="number"] { width: 3.6rem; flex: none; font-size: var(--fs-xs); }
+.cs-slider-row input[type="number"] {
+  width: 4.4rem; flex: none; font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  padding: 0.2rem 0.25rem 0.2rem 0.5rem;
+  text-align: left;
+}
+.cs-slider-row input[type="number"]::-webkit-inner-spin-button,
+.cs-slider-row input[type="number"]::-webkit-outer-spin-button {
+  opacity: 0.25;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  margin-left: 2px;
+}
+.cs-slider-row input[type="number"]:hover::-webkit-inner-spin-button,
+.cs-slider-row input[type="number"]:focus::-webkit-inner-spin-button {
+  opacity: 0.85;
+}
 .cs-roll-val {
   flex: none; min-width: 4.2rem; text-align: right;
   font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
   color: var(--text); letter-spacing: normal; text-transform: none;
 }
 .cs-roll-marks {
-  position: relative; width: calc(100% - 1.8rem - 3.6rem - 4.2rem - 1.5rem);
+  position: relative; width: calc(100% - 1.8rem - 4.4rem - 4.2rem - 1.5rem);
   margin-left: calc(1.8rem + 0.5rem);
   height: 0.55rem; margin-bottom: -0.2rem;
 }

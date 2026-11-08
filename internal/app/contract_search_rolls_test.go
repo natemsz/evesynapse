@@ -303,13 +303,13 @@ func TestContractSearchRollBandChips(t *testing.T) {
 	// the band; the chip's URL drops both bounds and keeps
 	// the family.
 	_, body := getAnon(t, app, "/contracts/search/?family=test_damage_thing&rollmin_64=50&rollmax_64=90")
-	mustContain(t, "band chip", body, "Roll: damageMultiplier 50–90%",
+	mustContain(t, "band chip", body, "Roll: Damage Multiplier 50–90%",
 		`href="/contracts/search/?family=test_damage_thing"`)
 	// One-sided chips name their single bound.
 	_, body = getAnon(t, app, "/contracts/search/?rollmin_6=40")
-	mustContain(t, "min chip", body, "Roll: capacitorNeed ≥ 40%")
+	mustContain(t, "min chip", body, "Roll: Capacitor Need ≥ 40%")
 	_, body = getAnon(t, app, "/contracts/search/?rollmax_50=25")
-	mustContain(t, "max chip", body, "Roll: cpu ≤ 25%")
+	mustContain(t, "max chip", body, "Roll: CPU ≤ 25%")
 	// A pruned band (attribute nothing rolls) chips nothing.
 	_, body = getAnon(t, app, "/contracts/search/?rollmin_9999=50")
 	if strings.Contains(body, "Attribute #9999") {
@@ -372,11 +372,19 @@ func TestContractSearchAbyssalSizeAndModuleProgression(t *testing.T) {
 		t.Error("medium size offered small shield booster in source module options")
 	}
 
-	// 4. Family without sizes (test_damage_thing): size selector hidden, valuation and sliders unlocked.
+	// 4. Family without sizes (test_damage_thing): size selector hidden, original module selector visible.
+	// Sliders and valuation remain hidden until an original module is selected.
 	_, body = getAnon(t, app, "/contracts/search/?family=test_damage_thing")
-	mustContain(t, "non-sized family", body,
+	mustContain(t, "non-sized family without module picked", body,
 		`data-ab-size-wrap hidden`,
 		`data-ab-source-wrap`,
+		`data-ab-valuation hidden`,
+		`data-ab-sliders hidden`)
+
+	// 5. When a module is selected, sliders unlock; and if it has a size, that size is auto-selected.
+	_, body = getAnon(t, app, "/contracts/search/?family=shield_booster&source_q=Medium+Test+Shield+Booster+II")
+	mustContain(t, "module selected auto-detects size and unlocks sliders", body,
+		`<option value="Medium" selected>Medium</option>`,
 		`data-ab-valuation`,
 		`data-ab-sliders`)
 }

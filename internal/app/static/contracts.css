@@ -388,6 +388,7 @@
 }
 .cs-roll-name {
   font-weight: 600; color: var(--text-bright);
+  text-transform: none; letter-spacing: normal;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .cs-roll-range {
@@ -427,15 +428,28 @@
   cursor: pointer; z-index: 2;
   display: flex; align-items: center; justify-content: center;
 }
+.cs-roll-mark-wick {
+  position: absolute; top: 50%; left: 50%;
+  transform: translateX(-50%);
+  width: 1px; height: 1.15rem;
+  background: color-mix(in srgb, var(--accent) 45%, rgba(255, 255, 255, 0.35));
+  pointer-events: none; opacity: 0.45; z-index: 1;
+  transition: opacity 0.1s ease, background 0.1s ease, height 0.1s ease;
+}
 .cs-roll-mark-pip {
   display: block; width: 0.45rem; height: 0.45rem; border-radius: 50%;
   background: #2a2018; border: 1.5px solid var(--box-edge);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   transition: transform 0.1s ease, border-color 0.1s ease, background 0.1s ease;
+  position: relative; z-index: 2;
 }
 .cs-roll-mark:hover .cs-roll-mark-pip,
 .cs-roll-mark:focus-visible .cs-roll-mark-pip {
   transform: scale(1.35); border-color: #ffd27a; background: #ffd27a;
+}
+.cs-roll-mark:hover .cs-roll-mark-wick,
+.cs-roll-mark:focus-visible .cs-roll-mark-wick {
+  opacity: 1; background: #ffd27a; height: 1.35rem; z-index: 3;
 }
 .cs-roll-mark-tip {
   display: none; position: absolute; bottom: calc(100% + 4px); left: 50%;

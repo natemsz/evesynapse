@@ -286,6 +286,11 @@ func parseSearchFilters(q url.Values) searchFilters {
 	}
 	f.AbSize = strings.TrimSpace(q.Get("module_size"))
 	f.AbSourceQ = strings.TrimSpace(q.Get("source_q"))
+	if f.AbSourceQ != "" && f.AbSize == "" {
+		if sz := detectModuleSize(f.AbSourceQ); sz != "" {
+			f.AbSize = sz
+		}
+	}
 	f.AbEstMin = iskBand(q, "est_min")
 	f.AbEstMax = iskBand(q, "est_max")
 	if v := intOr(q, "attr", -1); v >= 0 {
@@ -1036,7 +1041,7 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 		names := map[int64]string{}
 		if rows, err := app.queries.ListSDEAttributeTypesByIDs(ctx, rollIDs); err == nil {
 			for _, row := range rows {
-				names[row.AttributeID] = row.Name
+				names[row.AttributeID] = attrDisplayName(row.AttributeID, row.Name)
 			}
 		}
 		view.RollAttrNames = names
@@ -2123,6 +2128,66 @@ func parseAbyssalPercentiles(raw []byte) map[int64]float64 {
 	return out
 }
 
+var rollAttrDisplayNames = map[int64]string{
+	6:    "Capacitor Need",
+	9:    "Structure HP",
+	20:   "Velocity Bonus",
+	30:   "Powergrid",
+	37:   "Max Velocity",
+	50:   "CPU",
+	54:   "Optimal Range",
+	64:   "Damage Multiplier",
+	67:   "Capacitor Capacity",
+	68:   "Shield Boost Amount",
+	72:   "Cargo Capacity Bonus",
+	73:   "Cycle Time",
+	77:   "Mining Yield",
+	84:   "Armor Repair Amount",
+	90:   "Energy Transfer Amount",
+	97:   "Energy Neutralized",
+	99:   "Smartbomb Range",
+	114:  "EM Damage",
+	116:  "Explosive Damage",
+	117:  "Kinetic Damage",
+	118:  "Thermal Damage",
+	158:  "Falloff",
+	160:  "Tracking Speed",
+	204:  "Rate of Fire Bonus",
+	213:  "Missile Damage Bonus",
+	263:  "Shield Capacity",
+	265:  "Armor HP",
+	349:  "Falloff Bonus",
+	351:  "Optimal Range Bonus",
+	459:  "Drone Control Range",
+	554:  "Signature Radius Bonus",
+	767:  "Tracking Speed Bonus",
+	796:  "Mass Addition",
+	847:  "Explosion Velocity Bonus",
+	848:  "Explosion Radius Bonus",
+	974:  "Hull EM Resistance",
+	975:  "Hull Explosive Resistance",
+	976:  "Hull Kinetic Resistance",
+	977:  "Hull Thermal Resistance",
+	983:  "Signature Radius Penalty",
+	1159: "Armor HP Bonus",
+	1255: "Drone Damage Bonus",
+	1795: "Reload Time",
+	2044: "Falloff Effectiveness",
+	2267: "Energy Warfare Resistance",
+	2306: "Siege Missile Damage",
+	2307: "Siege Turret Damage",
+	2335: "Fighter Shield Capacity",
+	2336: "Fighter Velocity",
+	2337: "Fighter Rate of Fire",
+	2338: "Fighter Shield Recharge",
+	2346: "Siege Duration Reduction",
+	2347: "Siege Repair Amount",
+	3153: "Mining Waste Volume",
+	3154: "Mining Waste Probability",
+	5967: "Mining Critical Chance",
+	5969: "Mining Critical Yield",
+}
+
 // abyssalFamilyLabel prettifies a family slug for the filter
 // list ("warp_scrambler" -> "Warp Scrambler").
 func abyssalFamilyLabel(slug string) string {
@@ -2155,6 +2220,9 @@ func capAttrDisplayName(attrID int64, sdeName string) string {
 // keep their capitals ("cpu" -> "CPU"). Display only -- the
 // stored name, and everything keyed on it, is untouched.
 func attrDisplayName(attrID int64, sdeName string) string {
+	if name, ok := rollAttrDisplayNames[attrID]; ok && name != "" {
+		return name
+	}
 	if sdeName == "" {
 		return fmt.Sprintf("Attribute #%d", attrID)
 	}

@@ -415,9 +415,14 @@
       var pct = Number(mark.getAttribute("data-pct"));
       var inRange = pct >= mn && pct <= mx;
       var pip = mark.querySelector(".cs-roll-mark-pip");
+      var wick = mark.querySelector(".cs-roll-mark-wick");
       if (pip) {
         pip.style.borderColor = inRange ? "#ffd27a" : "var(--box-edge)";
         pip.style.background = inRange ? "#ffd27a" : "#2a2018";
+      }
+      if (wick) {
+        wick.style.background = inRange ? "color-mix(in srgb, #ffd27a 65%, rgba(255, 255, 255, 0.4))" : "color-mix(in srgb, var(--accent) 45%, rgba(255, 255, 255, 0.35))";
+        wick.style.opacity = inRange ? "0.85" : "0.45";
       }
     });
   }
@@ -525,12 +530,15 @@
           btn.title = m.label + ": " + m.fmt;
           btn.setAttribute("aria-label", m.label + ": " + m.fmt);
 
+          var wick = document.createElement("span");
+          wick.className = "cs-roll-mark-wick";
           var pip = document.createElement("span");
           pip.className = "cs-roll-mark-pip";
           var tip = document.createElement("span");
           tip.className = "cs-roll-mark-tip";
           tip.textContent = m.label + ": " + m.fmt;
 
+          btn.appendChild(wick);
           btn.appendChild(pip);
           btn.appendChild(tip);
           marksContainer.appendChild(btn);
@@ -611,23 +619,38 @@
     }
 
     // 3. Unlock criteria:
-    // Only once Size or Original module is selected should attribute selectors appear
-    // (or if family has no sizes, selecting family is enough)
+    // Only once Size or Original module is selected should attribute selectors appear.
     var chosenSize = sizeSelect ? sizeSelect.value : "";
     var chosenSource = sourceSelect ? sourceSelect.value : "";
-    var unlocked = false;
-    if (hasFamily) {
-      if (hasSizes) {
-        unlocked = Boolean(chosenSize || chosenSource);
-      } else {
-        unlocked = true;
-      }
-    }
+    var unlocked = Boolean(chosenSize || chosenSource);
 
     if (valuationWrap) valuationWrap.hidden = !unlocked;
     if (slidersWrap) slidersWrap.hidden = !unlocked;
 
     applyRollFamily();
+  }
+
+  function detectModuleSize(name) {
+    if (!name) return "";
+    var lower = name.toLowerCase();
+    if (lower.indexOf("x-large") !== -1 || lower.indexOf("xlarge") !== -1 || lower.indexOf("xl ") !== -1) return "X-Large";
+    if (lower.indexOf("capital") !== -1 || lower.indexOf("10000mn") !== -1 || lower.indexOf("50000mn") !== -1) return "Capital";
+    if (lower.indexOf("large") !== -1 || lower.indexOf("heavy") !== -1 ||
+        lower.indexOf("100mn") !== -1 || lower.indexOf("500mn") !== -1 ||
+        lower.indexOf("800mm") !== -1 || lower.indexOf("1600mm") !== -1 ||
+        lower.indexOf("corpus ") === 0 || lower.indexOf("gist ") === 0 ||
+        lower.indexOf("core x-type") !== -1 || lower.indexOf("core a-type") !== -1 ||
+        lower.indexOf("core b-type") !== -1 || lower.indexOf("core c-type") !== -1) return "Large";
+    if (lower.indexOf("medium") !== -1 || lower.indexOf("10mn") !== -1 ||
+        lower.indexOf("50mn") !== -1 || lower.indexOf("200mm") !== -1 ||
+        lower.indexOf("400mm") !== -1 || lower.indexOf("corpum ") === 0 ||
+        lower.indexOf("gistum ") === 0 || lower.indexOf("corelum ") === 0) return "Medium";
+    if (lower.indexOf("small") !== -1 || lower.indexOf("micro") !== -1 ||
+        lower.indexOf("1mn") !== -1 || lower.indexOf("5mn") !== -1 ||
+        lower.indexOf("50mm") !== -1 || lower.indexOf("100mm") !== -1 ||
+        lower.indexOf("corpii ") === 0 || lower.indexOf("gistii ") === 0 ||
+        lower.indexOf("coreli ") === 0) return "Small";
+    return "";
   }
 
   if (familySelect) {
@@ -645,6 +668,26 @@
   }
   if (sourceSelect) {
     sourceSelect.addEventListener("change", function () {
+      var chosenSource = sourceSelect.value;
+      if (chosenSource && sizeSelect) {
+        var detectedSize = "";
+        var fam = familySelect ? familySelect.value : "";
+        var g = catalogByFamily[fam];
+        if (g && g.modules) {
+          for (var sz in g.modules) {
+            if (g.modules[sz] && g.modules[sz].indexOf(chosenSource) !== -1) {
+              detectedSize = sz;
+              break;
+            }
+          }
+        }
+        if (!detectedSize) {
+          detectedSize = detectModuleSize(chosenSource);
+        }
+        if (detectedSize && sizeSelect.value !== detectedSize) {
+          sizeSelect.value = detectedSize;
+        }
+      }
       syncAbyssalState(true);
     });
   }

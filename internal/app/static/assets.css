@@ -83,7 +83,7 @@
 .can-go { flex: none; color: var(--muted); font-size: var(--fs-xl); }
 
 /* The matrix table. */
-.amx-table { margin: 0.9rem 0 0; table-layout: fixed; background: var(--row-alt); border: 1px solid var(--box-edge); }
+.amx-table { margin: 0.9rem 0 0; table-layout: fixed; }
 /* Every column takes a share of the table: fixed widths add up
    to more than the middle pane whenever the inspector column is
    open at ordinary widths, and the fixed layout takes the

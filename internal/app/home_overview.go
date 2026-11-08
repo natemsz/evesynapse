@@ -1534,10 +1534,25 @@ func (s *homeMarketShared) watchlist(ctx context.Context) []db.MarketWatchlist {
 // saved, the saved layout otherwise. A saved empty array stays
 // empty.
 func (app *Application) effectiveHomeLayout(ctx context.Context, userID int64, raw string) []homeLayoutItem {
+	var layout []homeLayoutItem
 	if strings.TrimSpace(raw) == "" {
-		return app.defaultLayoutFor(ctx, userID)
+		layout = app.defaultLayoutFor(ctx, userID)
+	} else {
+		layout = parseHomeLayout(raw)
 	}
-	return parseHomeLayout(raw)
+	// The demo account shows the app's surfaces, not a digest of
+	// demo-seed news: its briefing notification cards are out,
+	// whether the layout came from the demo preset or a saved one.
+	if app.isDemoUser(ctx, userID) {
+		out := layout[:0]
+		for _, item := range layout {
+			if item.ID != widgetBriefing {
+				out = append(out, item)
+			}
+		}
+		layout = out
+	}
+	return layout
 }
 
 func (app *Application) buildHome(ctx context.Context, customize bool) *homeView {

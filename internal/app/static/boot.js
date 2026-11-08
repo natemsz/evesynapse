@@ -51,12 +51,13 @@ try {
     // comes off and the scheme's tier applies.
     var savedScheme = window.localStorage.getItem("evesynapse-scheme");
     if (savedScheme === "jove" || savedScheme === "caldari" || savedScheme === "gallente" ||
-        savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom" || savedScheme === "soe") {
+        savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom" || savedScheme === "soe" ||
+        savedScheme === "minmatar-v3") {
       document.documentElement.setAttribute("data-scheme", savedScheme);
       document.documentElement.removeAttribute("data-backdrop");
       var savedTier = window.localStorage.getItem("evesynapse-tier");
       document.documentElement.setAttribute("data-tier",
-        savedTier === "minimalistic" ? "minimalistic" : "muted");
+        savedTier === "minimalistic" ? "minimalistic" : savedTier === "full" ? "full" : "muted");
     }
   }
 } catch (e) {}

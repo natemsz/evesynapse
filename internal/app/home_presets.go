@@ -16,11 +16,21 @@ import (
 // buildHome plus the Customize reset; parseHomeLayout is untouched.
 // ---------------------------------------------------------------------------
 
-// homePresetHead is the fixed head of every preset, demo included:
-// Briefing at the top, At a Glance under it, Fleet Overview under
-// that, at these sizes.
+// homePresetHead is the fixed head of every preset except the
+// demo's: Briefing at the top, At a Glance under it, Fleet Overview
+// under that, at these sizes. The demo preset has no Briefing: the
+// demo seed is a showcase, not an account with news to catch up on,
+// so its briefing cards are noise.
 var homePresetHead = []homeLayoutItem{
 	{ID: widgetBriefing, W: 3, H: 1},
+	{ID: widgetGlance, W: 3, H: 1},
+	{ID: widgetFleet, W: 3, H: 2},
+}
+
+// demoPresetHead is the demo preset's head: At a Glance and Fleet
+// Overview, with no Briefing. The demo shows the app's surfaces,
+// not a digest of demo-seed news.
+var demoPresetHead = []homeLayoutItem{
 	{ID: widgetGlance, W: 3, H: 1},
 	{ID: widgetFleet, W: 3, H: 2},
 }
@@ -160,7 +170,7 @@ var blendFullSize = map[string]struct{ W, H int }{
 // account's stored link choice, else the generic default.
 func (app *Application) defaultLayoutFor(ctx context.Context, userID int64) []homeLayoutItem {
 	if app.isDemoUser(ctx, userID) {
-		return presetWithHead(demoHomeBody)
+		return presetWithDemoHead(demoHomeBody)
 	}
 	if choice, ok := app.rememberedLink(ctx); ok {
 		if layout, ok := presetForActivities(choice.Activities); ok {
@@ -218,6 +228,15 @@ func selectedPlaystyles(activities []string) []string {
 func presetWithHead(body []homeLayoutItem) []homeLayoutItem {
 	items := make([]homeLayoutItem, 0, len(homePresetHead)+len(body))
 	items = append(items, homePresetHead...)
+	items = append(items, body...)
+	return normalizePreset(items)
+}
+
+// presetWithDemoHead puts the demo head (no Briefing) over a preset
+// body and normalizes the result.
+func presetWithDemoHead(body []homeLayoutItem) []homeLayoutItem {
+	items := make([]homeLayoutItem, 0, len(demoPresetHead)+len(body))
+	items = append(items, demoPresetHead...)
 	items = append(items, body...)
 	return normalizePreset(items)
 }

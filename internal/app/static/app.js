@@ -1678,6 +1678,68 @@
   onContentReady(initBriefFlip);
   initBriefFlip(document);
 
+  // --- Notification cards: touch swipe ---------------------------
+  // A notification card swipes like the briefing deck cards do
+  // (pointerdown/pointerup, 48px, mostly horizontal). Left
+  // dismisses it: the kind is marked read and the card slides
+  // out. Right opens it: the bell-menu form submits, a list row
+  // follows its link. A tap is not a swipe: it never moves far
+  // enough to cross the threshold, so clicks keep working.
+  function notifySwipeDismiss(card, kind) {
+    var body = new URLSearchParams();
+    body.set("kind", kind);
+    if (window.fetch) {
+      fetch("/notifications/read", {
+        method: "POST",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        body: body,
+        credentials: "same-origin",
+        keepalive: true
+      }).catch(function () {});
+    }
+    card.classList.add("notify-swiped");
+    setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 240);
+  }
+  function initNotifySwipe(root) {
+    var cards = root.querySelectorAll("[data-notify-card]");
+    for (var i = 0; i < cards.length; i++) {
+      (function (card) {
+        var kind = card.getAttribute("data-kind") || "";
+        var sx = 0, sy = 0, tracking = false;
+        card.addEventListener("pointerdown", function (e) {
+          if (e.button !== undefined && e.button !== 0) return;
+          sx = e.clientX; sy = e.clientY; tracking = true;
+        });
+        card.addEventListener("pointerup", function (e) {
+          if (!tracking) return;
+          tracking = false;
+          var dx = e.clientX - sx, dy = e.clientY - sy;
+          if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+            card._notifySwipedAt = Date.now();
+            if (dx < 0) {
+              if (kind) notifySwipeDismiss(card, kind);
+            } else {
+              if (card.tagName === "FORM") {
+                card.submit();
+              } else {
+                var url = card.getAttribute("data-url");
+                if (url) window.location.href = url;
+              }
+            }
+          }
+        });
+        card.addEventListener("click", function (e) {
+          if (card._notifySwipedAt && Date.now() - card._notifySwipedAt < 350) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }, true);
+      })(cards[i]);
+    }
+  }
+  onContentReady(initNotifySwipe);
+  initNotifySwipe(document);
+
   // Card heights ride the layout width and the loaded faces:
   // refit every deck when either settles.
   var briefRefitTimer = 0;

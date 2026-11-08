@@ -561,6 +561,18 @@ html[data-scheme="amarr"] { --sch-hi: #facc15; --sch-core: #f0b93f; --sch-end: #
 html[data-scheme="triglavian"] { --sch-hi: #d41236; --sch-core: #ac160a; --sch-end: #570a04; --sch-accent: #d41236; --panel: #191112; --panel-head: rgba(17, 12, 12, .55); --input-bg: rgba(25, 17, 18, .5); --row-hover: rgba(212, 18, 54, .09); --text: #f7ecee; --text-bright: #fff5f6; --muted: #b3989c; --muted-2: #bfa6aa; --note: #d18d96; --sch-ground: #120405; --sch-ground-2: #260709; --sch-glow-1: rgba(172, 22, 10, .42); --sch-glow-2: rgba(128, 18, 10, .24); --sch-glow-3: rgba(212, 18, 54, .12); --map-glow-1: rgba(255, 102, 86, .08); --map-glow-2: rgba(255, 176, 173, .05); }
 html[data-scheme="edencom"] { --sch-hi: #eab308; --sch-core: #e9cf8f; --sch-end: #334155; --sch-accent: #e9cf8f; --panel: #191b1e; --panel-head: rgba(16, 18, 20, .55); --input-bg: rgba(25, 27, 30, .5); --row-hover: rgba(233, 207, 143, .09); --text: #eef1f6; --text-bright: #f8fafd; --muted: #9aa4b4; --muted-2: #aab3c2; --note: #cbb882; --sch-ground: #0b0f14; --sch-ground-2: #18202b; --sch-glow-1: rgba(233, 207, 143, .38); --sch-glow-2: rgba(51, 65, 85, .20); --sch-glow-3: rgba(183, 166, 250, .12); --map-glow-1: rgba(196, 153, 3, .08); --map-glow-2: rgba(241, 192, 71, .05); }
 html[data-scheme="soe"] { --sch-hi: #a1dde0; --sch-core: #e55252; --sch-end: #922020; --sch-accent: #e55252; --panel: #101a20; --panel-head: rgba(9, 15, 19, .55); --input-bg: rgba(16, 26, 32, .5); --row-hover: rgba(229, 82, 82, .09); --text: #eaf3f6; --text-bright: #f4fafc; --muted: #90a8b2; --muted-2: #a0b6bf; --note: #8dc5c9; --sch-ground: #070d11; --sch-ground-2: #0c171d; --sch-glow-1: rgba(229, 82, 82, .42); --sch-glow-2: rgba(146, 32, 32, .24); --sch-glow-3: rgba(161, 221, 224, .12); --map-glow-1: rgba(229, 82, 82, .08); --map-glow-2: rgba(161, 221, 224, .05); }
+html[data-scheme="minmatar-v3"] { --sch-hi: #ff8c32; --sch-core: #ff6a1a; --sch-end: #9a3412; --sch-accent: #ff6a1a; --panel: #161616; --panel-head: rgba(21, 21, 21, .55); --input-bg: rgba(21, 21, 21, .5); --row-hover: rgba(255, 106, 26, .09); --text: #faf3e6; --text-bright: #fff9ed; --muted: #c2a887; --muted-2: #d0bfa5; --note: #d4af6a; --sch-ground: #111111; --sch-ground-2: #1a1a1a; --sch-glow-1: rgba(255, 106, 26, .42); --sch-glow-2: rgba(154, 90, 34, .20); --sch-glow-3: rgba(255, 140, 50, .12); --map-glow-1: rgba(255, 106, 26, .08); --map-glow-2: rgba(255, 140, 50, .05); --glass-edge: color-mix(in srgb, var(--accent) 40%, transparent); --box-edge: color-mix(in srgb, var(--accent) 22%, transparent); }
+/* v3 Minmatar carries the strong orange panel ramp the default
+   keeps muted: the bright ember border over the dark slate panel,
+   so the containers read against the page the way the default's
+   muted ramp does not. */
+html[data-scheme="minmatar-v3"] .panel {
+  background: linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(135deg, #9a5a22 0%, #6a3410 45%, #3a1e06 100%) border-box;
+}
+html[data-scheme="minmatar-v3"] .panel > h1:first-child {
+  border-image: linear-gradient(90deg, #9a5a22, #6a3410 50%, #3a1e06) 1;
+}
 /* The Profit page's semantic tokens, one tuned set per scheme:
    kept (emerald family) and lost (crimson family) stay on opposite
    sides of the scheme's own accent, unverified stays amber, and
@@ -574,6 +586,7 @@ html[data-scheme="amarr"] { --recycled: #857a6b; --kept: #2fbf9a; --lost: #ef535
 html[data-scheme="triglavian"] { --recycled: #8d8284; --kept: #2fbf9a; --lost: #ff6a4d; --unverified: #e8a13a; --sch-gold: #f59e0b; }
 html[data-scheme="edencom"] { --recycled: #64748b; --kept: #2fd39a; --lost: #f26d6d; --unverified: #f59e0b; }
 html[data-scheme="soe"] { --recycled: #71828c; --kept: #2fd39a; --lost: #ff7a59; --unverified: #f0b93f; }
+html[data-scheme="minmatar-v3"] { --recycled: #857a6b; --kept: #2fbf9a; --lost: #ef5350; --unverified: #fb923c; --sch-gold: #ffd27a; }
 html[data-scheme] {
   --accent: var(--sch-core);
   --gold: var(--sch-gold, var(--sch-hi));
@@ -804,6 +817,7 @@ html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 .sw-triglavian { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(212,18,54,.95) 0%, rgba(145,16,12,.62) 42%, rgba(24,2,2,.95) 80%), linear-gradient(180deg,#2b0303,#0f0101); }
 .sw-edencom { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,243,207,.95) 0%, rgba(233,207,143,.45) 42%, rgba(30,40,54,.95) 80%), linear-gradient(180deg,#18202b,#0b0f14); }
 .sw-soe { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(161,221,224,.95) 0%, rgba(229,82,82,.5) 42%, rgba(7,13,17,.95) 80%), linear-gradient(180deg,#0c171d,#070d11); }
+.sw-minmatar-v3 { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,140,50,.95) 0%, rgba(255,106,26,.55) 42%, rgba(22,22,22,.95) 80%), linear-gradient(180deg,#1a1a1a,#111111); }
 .scheme-meta { flex: 1 1 auto; min-width: 0; }
 .scheme-name { font-family: Rajdhani, sans-serif; font-weight: 600; font-size: var(--fs-lg); letter-spacing: .05em; text-transform: uppercase; }
 .scheme-sub { font-size: var(--fs-xs); opacity: .72; }

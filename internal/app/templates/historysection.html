@@ -13,13 +13,12 @@
     <span class="mt-modes viz-ranges">
       {{range .RangePills}}<a href="{{.URL}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}
     </span>
-    {{if .ShowVizGear}}<button type="button" class="viz-gear" data-open-viz-modal aria-haspopup="dialog" aria-label="Visualization settings" title="Visualization settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 3v2.6M12 18.4V21M3 12h2.6M18.4 12H21M5.6 5.6l1.9 1.9M16.5 16.5l1.9 1.9M18.4 5.6l-1.9 1.9M7.5 16.5l-1.9 1.9"/></svg></button>{{end}}
+    {{if .ShowVizGear}}<button type="button" class="viz-gear" data-open-viz-modal aria-haspopup="dialog" aria-label="Visualization settings" title="Visualization settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button>{{end}}
   </div>
   <div class="pchart" data-chart-scrub="true">
   <div class="chart-legend">
     <span class="legend-item"><span class="legend-swatch legend-price" aria-hidden="true"></span>Average</span>
     {{if $ma}}<span class="legend-item"><span class="legend-swatch legend-ma7" aria-hidden="true"></span>7-day average</span>
-    <span class="legend-item"><span class="legend-swatch legend-ma5" aria-hidden="true"></span>5-day average</span>
     <span class="legend-item"><span class="legend-swatch legend-ma20" aria-hidden="true"></span>20-day average</span>
     <span class="legend-item"><span class="legend-swatch legend-channel" aria-hidden="true"></span>Donchian channel</span>{{end}}
     {{if $wickOn}}<span class="legend-item"><span class="legend-swatch legend-wick" aria-hidden="true"></span>Daily wicks</span>{{end}}
@@ -34,11 +33,10 @@
     {{if $c.OrdersPoints}}<polyline class="chart-orders" points="{{$c.OrdersPoints}}"/>{{end}}
     {{if $c.AreaPath}}<path class="chart-area" d="{{$c.AreaPath}}" fill="url(#chart-area-grad)"/>{{end}}
     {{if $c.MA20Points}}<polyline class="chart-ma20" points="{{$c.MA20Points}}"/>{{end}}
-    {{if $c.MA5Points}}<polyline class="chart-ma5" points="{{$c.MA5Points}}"/>{{end}}
     {{if and $ma $c.MA7Path}}<path class="chart-ma7" d="{{$c.MA7Path}}" fill="none" stroke-width="1.6"/>{{end}}
     {{if $c.SmoothPath}}<path class="chart-line" d="{{$c.SmoothPath}}" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>{{end}}
     {{range $c.Dots}}<circle class="chart-dot" cx="{{.X}}" cy="{{.Y}}" r="1.6"/>{{end}}
-    {{range $c.Dots}}<circle class="cdot" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-avg="{{.Average}}" data-high="{{.Highest}}" data-low="{{.Lowest}}" data-vol="{{.Volume}}" data-orders="{{.Orders}}"{{if .MA5}} data-ma5="{{.MA5}}"{{end}}{{if .MA20}} data-ma20="{{.MA20}}"{{end}}></circle>{{end}}
+    {{range $c.Dots}}<circle class="cdot" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-avg="{{.Average}}" data-high="{{.Highest}}" data-low="{{.Lowest}}" data-vol="{{.Volume}}" data-orders="{{.Orders}}"{{if .MA20}} data-ma20="{{.MA20}}"{{end}}></circle>{{end}}
     {{range $c.PriceTicks}}<text class="chart-axis-label price-axis {{.Class}}" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
     {{range $c.VolumeTicks}}<text class="chart-axis-label volume-axis {{.Class}}" x="{{$c.Width}}" y="{{.LabelY}}">{{.Label}}</text>{{end}}
     {{range $c.OrderTicks}}<text class="chart-axis-label orders-axis {{.Class}}" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}

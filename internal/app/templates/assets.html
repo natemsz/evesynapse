@@ -120,12 +120,10 @@
     <h2 class="amx-h">{{.TotalStacks}} {{if eq .TotalStacks 1}}stack{{else}}stacks{{end}} matching "{{.Query}}"{{if .Only}} on this character{{else}} across {{.Characters}} {{if eq .Characters 1}}character{{else}}characters{{end}}{{end}}</h2>
     {{template "assets-fchips" $.Assets}}
     {{if .Rows}}
-    <div class="tw">
     <table class="amx-table" data-nosort>
       <thead><tr><th>Item / Hull</th><th>Loadout / Contents</th><th class="amx-r">Qty</th><th class="amx-r">Volume</th><th class="amx-r">Est. value</th></tr></thead>
       <tbody>{{range .Rows}}{{template "assets-trow" .}}{{end}}</tbody>
     </table>
-    </div>
     {{if .MoreRows}}<p class="amx-more">+ {{.MoreRows}} more stacks; the most valuable are shown.</p>{{end}}
     {{else}}<p>No stacks matching "{{.Query}}"{{if .Only}} on this character{{else}} on any character{{end}}.</p>{{end}}
   {{else with .Matrix}}
@@ -161,12 +159,10 @@
     </div>
     {{end}}
     {{if .Rows}}
-    <div class="tw">
     <table class="amx-table" data-nosort>
       <thead><tr><th><a href="{{index .SortHrefs "name"}}"{{if eq .Sort "name"}} class="srt-on"{{end}}>Item / Hull</a></th><th><a href="{{index .SortHrefs "stacks"}}"{{if eq .Sort "stacks"}} class="srt-on"{{end}}>Loadout / Contents</a></th><th class="amx-r">Qty</th><th class="amx-r"><a href="{{index .SortHrefs "volume"}}"{{if eq .Sort "volume"}} class="srt-on"{{end}}>Volume</a></th><th class="amx-r"><a href="{{index .SortHrefs "value"}}"{{if eq .Sort "value"}} class="srt-on"{{end}}>Est. value</a></th></tr></thead>
       <tbody>{{range .Rows}}{{template "assets-trow" .}}{{end}}</tbody>
     </table>
-    </div>
     {{if .MoreRows}}<p class="amx-more">+ {{.MoreRows}} more stacks at this place; the most valuable are shown.</p>{{end}}
     {{else}}<p>Nothing here under this division.</p>{{end}}
   {{end}}

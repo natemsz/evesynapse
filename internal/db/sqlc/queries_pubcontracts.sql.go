@@ -1548,8 +1548,8 @@ WHERE c.type = 'item_exchange'
   AND i.is_blueprint_copy
   AND i.runs IS NOT NULL AND i.runs > 0
   AND i.quantity = 1
-  AND (SELECT COUNT(*) FROM pub_contract_items x
-       WHERE x.contract_id = i.contract_id) = 1
+  AND NOT EXISTS (SELECT 1 FROM pub_contract_items x
+                  WHERE x.contract_id = i.contract_id AND x.record_id <> i.record_id)
 GROUP BY i.type_id, i.runs
 HAVING COUNT(*) >= $1::bigint
 `

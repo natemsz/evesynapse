@@ -98,6 +98,9 @@ func TestBlueprintCopyMedianPass(t *testing.T) {
 	copyItem(166, 8036, 17481, nil, true, true, 1)
 	contract(8037, "item_exchange", 444_000_000) // a stack, not a singleton copy
 	copyItem(167, 8037, 17481, int64(10), true, true, 2)
+	contract(8038, "item_exchange", 333_000_000) // the copy plus an item asked in return
+	copyItem(168, 8038, 17481, int64(10), true, true, 1)
+	copyItem(169, 8038, 34, nil, false, false, 100)
 
 	if n := app.refreshBlueprintCopyMedians(ctx); n != 2 {
 		t.Fatalf("stored %d median rows, want 2", n)
@@ -134,6 +137,44 @@ func TestBlueprintCopyMedianPass(t *testing.T) {
 	}
 	if n := app.refreshBlueprintCopyMedians(ctx); n != 2 {
 		t.Errorf("aged medians: stored %d rows, want 2", n)
+	}
+}
+
+// TestBlueprintResearchMedianSingleLineOnly pins the researched
+// original median to contracts whose only line is the original:
+// one that also offers or asks for another item stays out.
+func TestBlueprintResearchMedianSingleLineOnly(t *testing.T) {
+	app, conn, _ := buildCorpTestApp(t, roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 404, Body: http.NoBody, Header: make(http.Header)}, nil
+	}))
+	ctx := context.Background()
+	contract, item := seedCopyCorpus(t, conn)
+
+	// (17483, ME 10, TE 20): five single-line originals, median 3M.
+	for i, ask := range []float64{1_000_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000} {
+		id := int64(8101 + i)
+		contract(id, "item_exchange", ask)
+		item(int64(200+i), id, 17483, nil, true, false, 1)
+	}
+	contract(8111, "item_exchange", 999_000_000) // the original plus another offered item
+	item(210, 8111, 17483, nil, true, false, 1)
+	item(211, 8111, 34, nil, true, false, 100)
+	contract(8112, "item_exchange", 888_000_000) // the original plus an item asked in return
+	item(212, 8112, 17483, nil, true, false, 1)
+	item(213, 8112, 34, nil, false, false, 100)
+
+	if n := app.refreshBlueprintCopyMedians(ctx); n != 1 {
+		t.Fatalf("stored %d median rows, want 1", n)
+	}
+	var median float64
+	var samples int64
+	if err := conn.QueryRowContext(ctx,
+		`SELECT median_price, sample_count FROM blueprint_research_medians WHERE type_id = 17483 AND me = 10 AND te = 20`,
+	).Scan(&median, &samples); err != nil {
+		t.Fatalf("read research median: %v", err)
+	}
+	if median != 3_000_000 || samples != 5 {
+		t.Errorf("research median = %v over %d, want 3000000 over 5", median, samples)
 	}
 }
 

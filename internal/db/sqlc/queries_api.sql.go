@@ -350,7 +350,7 @@ WHERE c.type = 'item_exchange'
   AND i.material_efficiency IS NOT NULL AND i.time_efficiency IS NOT NULL
   AND (i.material_efficiency > 0 OR i.time_efficiency > 0)
   AND i.quantity = 1
-  AND (SELECT COUNT(*) FROM pub_contract_items x WHERE x.contract_id = i.contract_id) = 1
+  AND c.total_lines = 1
 GROUP BY i.type_id, i.material_efficiency, i.time_efficiency
 HAVING COUNT(*) >= $1::bigint
 `

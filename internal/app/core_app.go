@@ -640,6 +640,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(requestLogger)
 	r.Use(app.countRequests)
 	r.Use(middleware.Recoverer)
+	r.Use(app.blockScrapers)
 	r.Use(app.securityHeaders)
 	// The market API's own host answers /api/ only (market_api.go).
 	r.Use(app.marketAPIHostGate)

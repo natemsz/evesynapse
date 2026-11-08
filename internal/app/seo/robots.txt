@@ -19,54 +19,44 @@ Disallow: /admin/
 Disallow: /api/
 Disallow: /fittings/saved/
 
-# AI crawlers: public content only. Longest-match rules, so the
-# Allows below carve the public paths out of Disallow /. A tie
-# on / resolves to Allow, keeping the landing page crawlable.
+# AI crawlers and automated training bots: disallowed entirely.
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: Reflectionbot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
 User-agent: GPTBot
-Allow: /$
-Allow: /fittings/$
-Allow: /fittings/public/
-Allow: /items/
-Allow: /ships/
-Allow: /planner/
-Allow: /industry/pi/
-Allow: /intel/
 Disallow: /
 
 User-agent: ClaudeBot
-Allow: /$
-Allow: /fittings/$
-Allow: /fittings/public/
-Allow: /items/
-Allow: /ships/
-Allow: /planner/
-Allow: /industry/pi/
-Allow: /intel/
 Disallow: /
 
 User-agent: CCBot
-Allow: /$
-Allow: /fittings/$
-Allow: /fittings/public/
-Allow: /items/
-Allow: /ships/
-Allow: /planner/
-Allow: /industry/pi/
-Allow: /intel/
 Disallow: /
 
 User-agent: PerplexityBot
-Allow: /$
-Allow: /fittings/$
-Allow: /fittings/public/
-Allow: /items/
-Allow: /ships/
-Allow: /planner/
-Allow: /industry/pi/
-Allow: /intel/
 Disallow: /
 
-# Everything else: public content only
+User-agent: Diffbot
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: cohere-ai
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+# Everything else: public content only.
 User-agent: *
 Allow: /$
 Allow: /fittings/$
@@ -76,5 +66,6 @@ Allow: /ships/
 Allow: /planner/
 Allow: /industry/pi/
 Allow: /intel/
+Disallow: /intel/*?*
+Disallow: /pilot/*?*
 Disallow: /
-

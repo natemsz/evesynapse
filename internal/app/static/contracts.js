@@ -172,7 +172,12 @@
       });
       // A cleared abyssal drawer has no family pick and no
       // bands left: re-derive which roll sliders show.
-      if (btn.getAttribute("data-reset-drawer") === "abyssal") applyRollFamily();
+      if (btn.getAttribute("data-reset-drawer") === "abyssal") {
+        if (familySelect) familySelect.value = "";
+        if (sizeSelect) sizeSelect.value = "";
+        if (sourceSelect) sourceSelect.value = "";
+        syncAbyssalState(false);
+      }
     });
   });
 
@@ -297,12 +302,14 @@
   // Track gradients fill dynamically between min and max handles,
   // readouts show actual rolled values with units, and clicking
   // a meta variant mark sets the min bound to that variant.
+  var catalogByFamily = {};
   var rollCatalog = {};
   var rollMetaByFamily = {};
   var rollCatalogEl = document.getElementById("cs-roll-catalog");
   if (rollCatalogEl) {
     try {
       JSON.parse(rollCatalogEl.textContent).forEach(function (g) {
+        catalogByFamily[g.family] = g;
         rollCatalog[g.family] = g.attrs || [];
         if (g.meta && g.meta.length) {
           var mMap = {};
@@ -329,13 +336,30 @@
   }
 
   var familySelect = form.querySelector('select[name="family"]');
+  var sizeSelect = form.querySelector('select[name="module_size"]');
+  var sourceSelect = form.querySelector('select[name="source_q"]');
+  var sizeWrap = form.querySelector("[data-ab-size-wrap]");
+  var sourceWrap = form.querySelector("[data-ab-source-wrap]");
+  var valuationWrap = form.querySelector("[data-ab-valuation]");
+  var slidersWrap = form.querySelector("[data-ab-sliders]");
   var rollGrid = form.querySelector(".cs-rollgrid");
   var rollHint = form.querySelector("[data-roll-hint]");
 
   function currentAttrMeta(attrId) {
     var fam = familySelect ? familySelect.value : "";
-    if (fam && rollMetaByFamily[fam] && rollMetaByFamily[fam][attrId]) {
-      return rollMetaByFamily[fam][attrId];
+    var g = catalogByFamily[fam];
+    if (g) {
+      var sz = sizeSelect ? sizeSelect.value : "";
+      if (sz && g.meta_by_size && g.meta_by_size[sz]) {
+        for (var i = 0; i < g.meta_by_size[sz].length; i++) {
+          if (g.meta_by_size[sz][i].id === attrId) return g.meta_by_size[sz][i];
+        }
+      }
+      if (g.meta) {
+        for (var j = 0; j < g.meta.length; j++) {
+          if (g.meta[j].id === attrId) return g.meta[j];
+        }
+      }
     }
     for (var f in rollMetaByFamily) {
       if (rollMetaByFamily[f] && rollMetaByFamily[f][attrId]) {
@@ -479,7 +503,7 @@
     });
     if (rollHint) rollHint.hidden = fam !== "";
 
-    // Refresh range badges, marks, and track readouts for the active family.
+    // Refresh range badges, marks, and track readouts for the active family and size.
     rollGrid.querySelectorAll("[data-roll-field]").forEach(function (field) {
       var id = Number(field.getAttribute("data-roll-field"));
       var meta = currentAttrMeta(id);
@@ -520,9 +544,112 @@
     });
   }
 
-  if (familySelect && rollGrid) {
-    familySelect.addEventListener("change", applyRollFamily);
+  function syncAbyssalState(sourceChange) {
+    var fam = familySelect ? familySelect.value : "";
+    var g = catalogByFamily[fam];
+    var hasFamily = Boolean(fam && g);
+    var hasSizes = Boolean(hasFamily && g.sizes && g.sizes.length > 0);
+
+    // 1. Size dropdown
+    if (sizeWrap && sizeSelect) {
+      if (hasSizes) {
+        sizeWrap.hidden = false;
+        var prevSize = sizeSelect.value;
+        var optionsValues = Array.prototype.map.call(sizeSelect.options, function (o) { return o.value; });
+        var neededValues = [""].concat(g.sizes);
+        if (optionsValues.join("|") !== neededValues.join("|")) {
+          sizeSelect.innerHTML = '<option value="">Select size...</option>';
+          g.sizes.forEach(function (sz) {
+            var opt = document.createElement("option");
+            opt.value = sz;
+            opt.textContent = sz;
+            if (sz === prevSize) opt.selected = true;
+            sizeSelect.appendChild(opt);
+          });
+        }
+      } else {
+        sizeWrap.hidden = true;
+        sizeSelect.value = "";
+      }
+    }
+
+    // 2. Source module dropdown
+    if (sourceWrap && sourceSelect) {
+      if (hasFamily) {
+        sourceWrap.hidden = false;
+        var prevSource = sourceSelect.value;
+        var sz = sizeSelect ? sizeSelect.value : "";
+        var list = [];
+        if (g.modules) {
+          if (sz && g.modules[sz]) {
+            list = g.modules[sz];
+          } else if (!hasSizes && g.modules[""]) {
+            list = g.modules[""];
+          } else {
+            for (var k in g.modules) {
+              list = list.concat(g.modules[k]);
+            }
+            list.sort();
+          }
+        }
+        var curSrcVals = Array.prototype.map.call(sourceSelect.options, function (o) { return o.value; });
+        var targetSrcVals = [""].concat(list);
+        if (curSrcVals.join("|") !== targetSrcVals.join("|")) {
+          sourceSelect.innerHTML = '<option value="">Any original module</option>';
+          list.forEach(function (mName) {
+            var opt = document.createElement("option");
+            opt.value = mName;
+            opt.textContent = mName;
+            if (mName === prevSource) opt.selected = true;
+            sourceSelect.appendChild(opt);
+          });
+        }
+      } else {
+        sourceWrap.hidden = true;
+        sourceSelect.value = "";
+      }
+    }
+
+    // 3. Unlock criteria:
+    // Only once Size or Original module is selected should attribute selectors appear
+    // (or if family has no sizes, selecting family is enough)
+    var chosenSize = sizeSelect ? sizeSelect.value : "";
+    var chosenSource = sourceSelect ? sourceSelect.value : "";
+    var unlocked = false;
+    if (hasFamily) {
+      if (hasSizes) {
+        unlocked = Boolean(chosenSize || chosenSource);
+      } else {
+        unlocked = true;
+      }
+    }
+
+    if (valuationWrap) valuationWrap.hidden = !unlocked;
+    if (slidersWrap) slidersWrap.hidden = !unlocked;
+
     applyRollFamily();
+  }
+
+  if (familySelect) {
+    familySelect.addEventListener("change", function () {
+      if (sizeSelect) sizeSelect.value = "";
+      if (sourceSelect) sourceSelect.value = "";
+      syncAbyssalState(false);
+    });
+  }
+  if (sizeSelect) {
+    sizeSelect.addEventListener("change", function () {
+      if (sourceSelect) sourceSelect.value = "";
+      syncAbyssalState(false);
+    });
+  }
+  if (sourceSelect) {
+    sourceSelect.addEventListener("change", function () {
+      syncAbyssalState(true);
+    });
+  }
+  if (familySelect) {
+    syncAbyssalState(false);
   }
 
   // ---- security floor readout -------------------------------------------

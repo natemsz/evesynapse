@@ -133,20 +133,28 @@
     <section class="cs-drawer" data-drawer-panel="abyssal"{{if ne $s.OpenDrawer "abyssal"}} hidden{{end}}>
       <div class="cs-drawer-head"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-24 12 12)"/></svg>Abyssal mutaplasmid roll &amp; valuation filters</h4><button type="button" class="cs-reset" data-reset-drawer="abyssal">Reset Abyssal Filters</button></div>
       <p class="cs-drawer-sub">Rolls are scored 0–100 against their mutaplasmid's theoretical ceiling. {{template "abyssal-howto" "How does EveSynapse price Abyssal modules?"}}</p>
-      <div class="cs-drawer-grid">
-        <label class="cs-field">Module family
+      
+      <div class="cs-abyssal-primary">
+        <label class="cs-field cs-field-family">Module family
           <select name="family">
             <option value="">All families</option>
             {{range $s.Families}}<option value="{{.Slug}}"{{if eq $s.Filters.AbFamily .Slug}} selected{{end}}>{{.Label}}</option>{{end}}
           </select></label>
-        <label class="cs-field">Source module contains
-          <input type="text" name="source_q" value="{{$s.Echo.source_q}}" placeholder="Original module name"></label>
+        <label class="cs-field cs-field-size" data-ab-size-wrap{{if not $s.Sizes}} hidden{{end}}>Size
+          <select name="module_size">
+            <option value="">Any size</option>
+            {{range $s.Sizes}}<option value="{{.}}"{{if eq $s.Filters.AbSize .}} selected{{end}}>{{.}}</option>{{end}}
+          </select></label>
+        <label class="cs-field cs-field-source" data-ab-source-wrap{{if not $s.Filters.AbFamily}} hidden{{end}}>Original module
+          <select name="source_q">
+            <option value="">Any original module</option>
+            {{range $s.SourceMods}}<option value="{{.}}"{{if eq $s.Filters.AbSourceQ .}} selected{{end}}>{{.}}</option>{{end}}
+          </select></label>
+      </div>
+
+      <div class="cs-abyssal-valuation" data-ab-valuation{{if not (or $s.Filters.AbSize $s.Filters.AbSourceQ (and $s.Filters.AbFamily (not $s.Sizes)))}} hidden{{end}}>
         <label class="cs-field">Min roll score (0–100)
           <input type="number" name="score_min" min="0" max="100" value="{{$s.Echo.score_min}}" placeholder="Any"></label>
-        <label class="cs-field">Our est. at least (ISK)
-          <input type="text" name="est_min" value="{{$s.Echo.est_min}}" inputmode="numeric" placeholder="0" data-isk></label>
-        <label class="cs-field">Our est. at most (ISK)
-          <input type="text" name="est_max" value="{{$s.Echo.est_max}}" inputmode="numeric" placeholder="Any" data-isk></label>
         <label class="cs-field">One roll at least
           <select name="quality">
             <option value=""{{if eq $s.Filters.AbQuality ""}} selected{{end}}>Any roll quality</option>
@@ -155,35 +163,43 @@
           </select></label>
         <label class="cs-field">Roll position ≥ (%)
           <input type="number" name="pos_min" min="0" max="100" value="{{$s.Echo.pos_min}}" placeholder="Any"></label>
+        <label class="cs-field">Our est. at least (ISK)
+          <input type="text" name="est_min" value="{{$s.Echo.est_min}}" inputmode="numeric" placeholder="0" data-isk></label>
+        <label class="cs-field">Our est. at most (ISK)
+          <input type="text" name="est_max" value="{{$s.Echo.est_max}}" inputmode="numeric" placeholder="Any" data-isk></label>
       </div>
-      {{if $s.RollSliders}}<p class="cs-drawer-sub">Filter rolls by stats in the mutaplasmid's range (higher is the better roll). Bands test the same contract line as the other abyssal filters. <span data-roll-hint{{if $s.Filters.AbFamily}} hidden{{end}}>Pick a module family to band any of its rolls.</span></p>
-      <div class="cs-rollgrid">
-        {{range $s.RollSliders}}<div class="cs-field" data-roll-field="{{.ID}}"{{if not .Visible}} hidden{{end}}>
-          <div class="cs-roll-head">
-            <span class="cs-roll-name">{{.Name}}</span>
-            <span class="cs-roll-range" data-roll-range="{{.ID}}">{{if .RangeText}}{{.RangeText}}{{end}}</span>
-          </div>
-          <div class="cs-roll-track-container" data-roll-track="{{.ID}}">
-            <div class="cs-roll-marks" data-marks-for="{{.ID}}">
-              {{range .Marks}}<button type="button" class="cs-roll-mark" data-left="{{.Percentile}}" data-pct="{{.Percentile}}" data-val="{{.Value}}" data-fmt="{{.Formatted}}" title="{{.Label}}: {{.Formatted}}" aria-label="{{.Label}}: {{.Formatted}}">
-                <span class="cs-roll-mark-pip"></span>
-                <span class="cs-roll-mark-tip">{{.Label}}: {{.Formatted}}</span>
-              </button>{{end}}
+
+      {{if $s.RollSliders}}
+      <div class="cs-abyssal-sliders-wrap" data-ab-sliders{{if not (or $s.Filters.AbSize $s.Filters.AbSourceQ (and $s.Filters.AbFamily (not $s.Sizes)))}} hidden{{end}}>
+        <p class="cs-drawer-sub">Filter rolls by stats in the mutaplasmid's range (higher is the better roll). Bands test the same contract line as the other abyssal filters. <span data-roll-hint{{if $s.Filters.AbFamily}} hidden{{end}}>Pick a module family to band any of its rolls.</span></p>
+        <div class="cs-rollgrid">
+          {{range $s.RollSliders}}<div class="cs-field" data-roll-field="{{.ID}}"{{if not .Visible}} hidden{{end}}>
+            <div class="cs-roll-head">
+              <span class="cs-roll-name">{{.Name}}</span>
+              <span class="cs-roll-range" data-roll-range="{{.ID}}">{{if .RangeText}}{{.RangeText}}{{end}}</span>
             </div>
-            <div class="cs-slider-row">
-              <span class="cs-slider-bound-label">Min</span>
-              <input type="range" class="cs-rollslider cs-rollslider-min" min="0" max="100" step="1" value="{{if .MinSet}}{{.Min}}{{else}}0{{end}}" data-slider-for="cs-rollmin-{{.ID}}" data-slider-rest="0" data-attr-id="{{.ID}}" data-role="min" aria-label="{{.Name}} minimum"{{if not .Visible}} disabled{{end}}>
-              <input type="number" id="cs-rollmin-{{.ID}}" name="rollmin_{{.ID}}" min="0" max="100" value="{{if .MinSet}}{{.Min}}{{end}}" placeholder="0"{{if not .Visible}} disabled{{end}}>
-              <span class="cs-roll-val" data-readout-for="cs-rollmin-{{.ID}}"></span>
+            <div class="cs-roll-track-container" data-roll-track="{{.ID}}">
+              <div class="cs-roll-marks" data-marks-for="{{.ID}}">
+                {{range .Marks}}<button type="button" class="cs-roll-mark" data-left="{{.Percentile}}" data-pct="{{.Percentile}}" data-val="{{.Value}}" data-fmt="{{.Formatted}}" title="{{.Label}}: {{.Formatted}}" aria-label="{{.Label}}: {{.Formatted}}">
+                  <span class="cs-roll-mark-pip"></span>
+                  <span class="cs-roll-mark-tip">{{.Label}}: {{.Formatted}}</span>
+                </button>{{end}}
+              </div>
+              <div class="cs-slider-row">
+                <span class="cs-slider-bound-label">Min</span>
+                <input type="range" class="cs-rollslider cs-rollslider-min" min="0" max="100" step="1" value="{{if .MinSet}}{{.Min}}{{else}}0{{end}}" data-slider-for="cs-rollmin-{{.ID}}" data-slider-rest="0" data-attr-id="{{.ID}}" data-role="min" aria-label="{{.Name}} minimum"{{if not .Visible}} disabled{{end}}>
+                <input type="number" id="cs-rollmin-{{.ID}}" name="rollmin_{{.ID}}" min="0" max="100" value="{{if .MinSet}}{{.Min}}{{end}}" placeholder="0"{{if not .Visible}} disabled{{end}}>
+                <span class="cs-roll-val" data-readout-for="cs-rollmin-{{.ID}}"></span>
+              </div>
+              <div class="cs-slider-row">
+                <span class="cs-slider-bound-label">Max</span>
+                <input type="range" class="cs-rollslider cs-rollslider-max" min="0" max="100" step="1" value="{{if .MaxSet}}{{.Max}}{{else}}100{{end}}" data-slider-for="cs-rollmax-{{.ID}}" data-slider-rest="100" data-attr-id="{{.ID}}" data-role="max" aria-label="{{.Name}} maximum"{{if not .Visible}} disabled{{end}}>
+                <input type="number" id="cs-rollmax-{{.ID}}" name="rollmax_{{.ID}}" min="0" max="100" value="{{if .MaxSet}}{{.Max}}{{end}}" placeholder="100"{{if not .Visible}} disabled{{end}}>
+                <span class="cs-roll-val" data-readout-for="cs-rollmax-{{.ID}}"></span>
+              </div>
             </div>
-            <div class="cs-slider-row">
-              <span class="cs-slider-bound-label">Max</span>
-              <input type="range" class="cs-rollslider cs-rollslider-max" min="0" max="100" step="1" value="{{if .MaxSet}}{{.Max}}{{else}}100{{end}}" data-slider-for="cs-rollmax-{{.ID}}" data-slider-rest="100" data-attr-id="{{.ID}}" data-role="max" aria-label="{{.Name}} maximum"{{if not .Visible}} disabled{{end}}>
-              <input type="number" id="cs-rollmax-{{.ID}}" name="rollmax_{{.ID}}" min="0" max="100" value="{{if .MaxSet}}{{.Max}}{{end}}" placeholder="100"{{if not .Visible}} disabled{{end}}>
-              <span class="cs-roll-val" data-readout-for="cs-rollmax-{{.ID}}"></span>
-            </div>
-          </div>
-        </div>{{end}}
+          </div>{{end}}
+        </div>
       </div>
       {{if $s.RollCatalog}}<script type="application/json" id="cs-roll-catalog">{{$s.RollCatalog}}</script>{{end}}{{end}}
     </section>

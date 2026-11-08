@@ -994,6 +994,7 @@ thead th {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-size: var(--fs-2xs);
+  white-space: nowrap;
 }
 td, .isk, dd, .kpi-v, .kpi-sub, .fleet-foot, .flow-figs { font-variant-numeric: tabular-nums; }
 /* Sortable headers (app.js): a pointer, and the direction once sorted. */
@@ -1024,12 +1025,10 @@ tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
   position: sticky;
   left: 0;
   z-index: 1;
-  background: color-mix(in srgb, var(--panel) 40%, transparent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--panel) 25%, transparent);
 }
 .tw tbody tr:hover td:first-child {
-  background: color-mix(in srgb, var(--panel) 40%, var(--row-hover, rgba(255, 106, 0, 0.045)));
+  background: color-mix(in srgb, var(--panel) 25%, var(--row-hover, rgba(255, 106, 0, 0.045)));
 }
 .tw thead th:first-child { z-index: 2; }
 

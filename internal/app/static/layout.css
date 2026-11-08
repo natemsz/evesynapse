@@ -322,7 +322,9 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-head-sum { flex: 1 1 20rem; min-width: 0; margin: 0; color: var(--muted); }
 .l-head-sum b { color: var(--text); font-weight: 600; }
 /* The page's character or scope picker, leading the head. */
-.l-head-pick { flex: 0 1 26rem; min-width: 0; }
+.l-head-pick { width: min(100%, 26rem); min-width: 0; }
+.l-head > .l-head-pick { flex: 0 1 26rem; width: auto; }
+.l-page > .l-head-pick { flex: 0 0 auto; width: min(100%, 26rem); }
 /* A picker with one choice renders nothing: its slot steps aside. */
 .l-head-pick:not(:has(*)) { display: none; }
 .l-head-pick .charselector { width: 100%; margin: 0; max-width: none; }

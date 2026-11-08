@@ -306,13 +306,56 @@
   gap: 0.6rem 0.9rem; margin-top: 0.65rem;
 }
 .cs-drawer-grid > .cs-field { grid-column: span 2; }
-[data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
 [data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 4; }
 .cs-drawer-grid input, .cs-drawer-grid select { width: 100%; }
 .cs-field > .cs-slider-pair { margin-top: auto; }
 .cs-slider-pair { display: flex; align-items: center; gap: 0.6rem; }
 .cs-slider-pair input[type="range"] { flex: 1; width: auto; }
 .cs-slider-pair input[type="number"] { width: 4.6rem; flex: none; }
+
+/* The state-aware abyssal module scope row */
+.cs-abyssal-primary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.6rem 0.9rem;
+  margin-top: 0.65rem;
+}
+.cs-abyssal-primary > .cs-field { grid-column: span 2; }
+.cs-abyssal-primary > .cs-field[hidden] { display: none !important; }
+.cs-abyssal-primary:not(:has(.cs-field-size:not([hidden]))) > .cs-field-family,
+.cs-abyssal-primary:not(:has(.cs-field-size:not([hidden]))) > .cs-field-source {
+  grid-column: span 3;
+}
+.cs-abyssal-primary:has(.cs-field-source[hidden]) > .cs-field-family {
+  grid-column: span 3;
+}
+.cs-abyssal-primary:has(.cs-field-source[hidden]) > .cs-field-size {
+  grid-column: span 3;
+}
+
+/* Abyssal valuation and quality row */
+.cs-abyssal-valuation {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.6rem 0.9rem;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed color-mix(in srgb, var(--box-edge) 60%, transparent);
+}
+.cs-abyssal-valuation[hidden] { display: none !important; }
+.cs-abyssal-valuation > .cs-field { grid-column: span 2; }
+.cs-abyssal-valuation > .cs-field:nth-child(4),
+.cs-abyssal-valuation > .cs-field:nth-child(5) {
+  grid-column: span 3;
+}
+
+/* Abyssal sliders section wrapper */
+.cs-abyssal-sliders-wrap {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed color-mix(in srgb, var(--box-edge) 60%, transparent);
+}
+.cs-abyssal-sliders-wrap[hidden] { display: none !important; }
 
 /* The abyssal roll bands: one field per attribute, each
    carrying its min and max slider pairs, laid on the same
@@ -325,7 +368,20 @@
 /* Sliders outside the picked family's set (or carrying no
    band) render hidden until the family pick swaps them
    in; the flex field rule would otherwise beat [hidden]. */
-.cs-rollgrid > .cs-field[hidden] { display: none; }
+.cs-rollgrid > .cs-field[hidden] { display: none !important; }
+
+@media (max-width: 48rem) {
+  .cs-abyssal-primary,
+  .cs-abyssal-valuation,
+  .cs-rollgrid {
+    grid-template-columns: 1fr;
+  }
+  .cs-abyssal-primary > .cs-field,
+  .cs-abyssal-valuation > .cs-field,
+  .cs-rollgrid > .cs-field {
+    grid-column: 1 / -1 !important;
+  }
+}
 .cs-roll-head {
   display: flex; justify-content: space-between; align-items: baseline;
   gap: 0.5rem; margin-bottom: 0.35rem; width: 100%;

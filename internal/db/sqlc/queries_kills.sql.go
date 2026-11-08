@@ -422,6 +422,10 @@ func (q *Queries) ListESIKillsToMerge(ctx context.Context, maxRows int64) ([]Lis
 }
 
 const listKillsByAlliance = `-- name: ListKillsByAlliance :many
+WITH involvement_ids AS MATERIALIZED (
+    SELECT a.killmail_id FROM kill_involvement a
+    WHERE a.alliance_id = $1::bigint
+)
 SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM (
     (SELECT k.killmail_id, k.hash, k.killmail_time, k.system_id, k.region_id, k.location_id, k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id, k.victim_faction_id, k.ship_type_id, k.damage_taken, k.attacker_count, k.fb_character_id, k.fb_corporation_id, k.fb_alliance_id, k.fb_ship_type_id, k.npc, k.solo, k.awox, k.points, k.value_zkill, k.value_ours, k.value_dropped_ours, k.value_coverage, k.priced_at, k.source, k.public, k.ingested_at FROM kills k
      WHERE k.victim_alliance_id = $1::bigint
@@ -433,8 +437,8 @@ SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, vict
      LIMIT $6::bigint)
     UNION
     (SELECT k.killmail_id, k.hash, k.killmail_time, k.system_id, k.region_id, k.location_id, k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id, k.victim_faction_id, k.ship_type_id, k.damage_taken, k.attacker_count, k.fb_character_id, k.fb_corporation_id, k.fb_alliance_id, k.fb_ship_type_id, k.npc, k.solo, k.awox, k.points, k.value_zkill, k.value_ours, k.value_dropped_ours, k.value_coverage, k.priced_at, k.source, k.public, k.ingested_at FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.alliance_id = $1::bigint)
-       AND k.public
+     JOIN involvement_ids i ON i.killmail_id = k.killmail_id
+     WHERE k.public
        AND (k.killmail_time, k.killmail_id) < ($2::timestamptz, $3::bigint)
        AND COALESCE(k.value_ours, 0) >= $4::double precision
        AND (NOT $5::boolean OR k.solo)
@@ -515,6 +519,10 @@ func (q *Queries) ListKillsByAlliance(ctx context.Context, arg ListKillsByAllian
 }
 
 const listKillsByCharacter = `-- name: ListKillsByCharacter :many
+WITH involvement_ids AS MATERIALIZED (
+    SELECT a.killmail_id FROM kill_involvement a
+    WHERE a.character_id = $1::bigint
+)
 SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM (
     (SELECT k.killmail_id, k.hash, k.killmail_time, k.system_id, k.region_id, k.location_id, k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id, k.victim_faction_id, k.ship_type_id, k.damage_taken, k.attacker_count, k.fb_character_id, k.fb_corporation_id, k.fb_alliance_id, k.fb_ship_type_id, k.npc, k.solo, k.awox, k.points, k.value_zkill, k.value_ours, k.value_dropped_ours, k.value_coverage, k.priced_at, k.source, k.public, k.ingested_at FROM kills k
      WHERE k.victim_character_id = $1::bigint
@@ -526,8 +534,8 @@ SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, vict
      LIMIT $6::bigint)
     UNION
     (SELECT k.killmail_id, k.hash, k.killmail_time, k.system_id, k.region_id, k.location_id, k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id, k.victim_faction_id, k.ship_type_id, k.damage_taken, k.attacker_count, k.fb_character_id, k.fb_corporation_id, k.fb_alliance_id, k.fb_ship_type_id, k.npc, k.solo, k.awox, k.points, k.value_zkill, k.value_ours, k.value_dropped_ours, k.value_coverage, k.priced_at, k.source, k.public, k.ingested_at FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.character_id = $1::bigint)
-       AND k.public
+     JOIN involvement_ids i ON i.killmail_id = k.killmail_id
+     WHERE k.public
        AND (k.killmail_time, k.killmail_id) < ($2::timestamptz, $3::bigint)
        AND COALESCE(k.value_ours, 0) >= $4::double precision
        AND (NOT $5::boolean OR k.solo)
@@ -616,6 +624,10 @@ func (q *Queries) ListKillsByCharacter(ctx context.Context, arg ListKillsByChara
 }
 
 const listKillsByCorporation = `-- name: ListKillsByCorporation :many
+WITH involvement_ids AS MATERIALIZED (
+    SELECT a.killmail_id FROM kill_involvement a
+    WHERE a.corporation_id = $1::bigint
+)
 SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM (
     (SELECT k.killmail_id, k.hash, k.killmail_time, k.system_id, k.region_id, k.location_id, k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id, k.victim_faction_id, k.ship_type_id, k.damage_taken, k.attacker_count, k.fb_character_id, k.fb_corporation_id, k.fb_alliance_id, k.fb_ship_type_id, k.npc, k.solo, k.awox, k.points, k.value_zkill, k.value_ours, k.value_dropped_ours, k.value_coverage, k.priced_at, k.source, k.public, k.ingested_at FROM kills k
      WHERE k.victim_corporation_id = $1::bigint
@@ -627,8 +639,8 @@ SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, vict
      LIMIT $6::bigint)
     UNION
     (SELECT k.killmail_id, k.hash, k.killmail_time, k.system_id, k.region_id, k.location_id, k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id, k.victim_faction_id, k.ship_type_id, k.damage_taken, k.attacker_count, k.fb_character_id, k.fb_corporation_id, k.fb_alliance_id, k.fb_ship_type_id, k.npc, k.solo, k.awox, k.points, k.value_zkill, k.value_ours, k.value_dropped_ours, k.value_coverage, k.priced_at, k.source, k.public, k.ingested_at FROM kills k
-     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_involvement a WHERE a.corporation_id = $1::bigint)
-       AND k.public
+     JOIN involvement_ids i ON i.killmail_id = k.killmail_id
+     WHERE k.public
        AND (k.killmail_time, k.killmail_id) < ($2::timestamptz, $3::bigint)
        AND COALESCE(k.value_ours, 0) >= $4::double precision
        AND (NOT $5::boolean OR k.solo)

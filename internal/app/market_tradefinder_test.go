@@ -73,7 +73,7 @@ func TestTradefinderMathFreshnessFiltersAndHints(t *testing.T) {
 	// the destination side is fresh.
 	// Type 38: destination figures 4 days old -- excluded even
 	// though the origin side is fresh.
-	// Type 39: margin 2% -- under the 5% default floor.
+	// Type 39: net margin ~2% -- under the 5% default floor.
 	originSeeds := []db.UpsertMarketRegionStatParams{
 		tfRegionStat(tfOrigin, 34, 0, 4, 0, 50, 0, now),
 		tfRegionStat(tfOrigin, 35, 0, 90, 0, 5, 0, now),
@@ -88,7 +88,7 @@ func TestTradefinderMathFreshnessFiltersAndHints(t *testing.T) {
 		tfRegionStat(tfDest, 36, 0, 10, 0, 100, 100, now),
 		tfRegionStat(tfDest, 37, 0, 10, 0, 100, 100, now),
 		tfRegionStat(tfDest, 38, 0, 10, 0, 100, 100, stale),
-		tfRegionStat(tfDest, 39, 0, 102, 0, 100, 100, now),
+		tfRegionStat(tfDest, 39, 0, 108, 0, 100, 100, now),
 	}
 	for _, s := range append(originSeeds, destSeeds...) {
 		if err := q.UpsertMarketRegionStat(ctx, s); err != nil {
@@ -117,11 +117,11 @@ func TestTradefinderMathFreshnessFiltersAndHints(t *testing.T) {
 		t.Fatalf("tradefinder rows: %d, want 2 (34 and 35 only): %+v", len(view.Rows), view.Rows)
 	}
 	top := view.Rows[0]
-	if top.TypeID != 34 || top.MarginPct != "150.0%" || top.SoldPerDay != "20" || top.ProfitDay != esi.FormatISK(120) || top.ProfitItem != esi.FormatISK(6) {
-		t.Fatalf("top route: %+v, want type 34, 150%%, 20/day, %s/day, %s/item", top, esi.FormatISK(120), esi.FormatISK(6))
+	if top.TypeID != 34 || top.MarginPct != "136.7%" || top.SoldPerDay != "20" || top.ProfitDay != esi.FormatISK(110.45) || top.ProfitItem != esi.FormatISK(5.52) {
+		t.Fatalf("top route: %+v, want type 34, 136.7%%, 20/day, %s/day, %s/item", top, esi.FormatISK(110.45), esi.FormatISK(5.52))
 	}
-	if view.Rows[1].TypeID != 35 || view.Rows[1].ProfitDay != esi.FormatISK(50) {
-		t.Fatalf("second route: %+v, want type 35 capped by the origin's stock at %s/day", view.Rows[1], esi.FormatISK(50))
+	if view.Rows[1].TypeID != 35 || view.Rows[1].ProfitDay != esi.FormatISK(23.62) {
+		t.Fatalf("second route: %+v, want type 35 capped by the origin's stock at %s/day", view.Rows[1], esi.FormatISK(23.62))
 	}
 	if top.OriginStation.Name == "" || top.OriginBest != esi.FormatISK(5.0) {
 		t.Fatalf("cheapest hint: %+v %q, want the 5.0 Jita station", top.OriginStation, top.OriginBest)
@@ -437,10 +437,10 @@ func TestTradefinderMarginRankingAndCapInSQL(t *testing.T) {
 			t.Fatalf("row %d: type %d, want %d (margin-desc order)", i, row.TypeID, want)
 		}
 	}
-	// Top route: margin 204/item, 10/day -> 2040/day.
-	if view.Rows[0].ProfitItem != esi.FormatISK(204) || view.Rows[0].ProfitDay != esi.FormatISK(2040) {
+	// Top route: margin 189.70/item, 10/day -> 1897.00/day.
+	if view.Rows[0].ProfitItem != esi.FormatISK(189.70) || view.Rows[0].ProfitDay != esi.FormatISK(1897.00) {
 		t.Fatalf("top route: %s/item %s/day, want %s/item %s/day",
-			view.Rows[0].ProfitItem, view.Rows[0].ProfitDay, esi.FormatISK(204), esi.FormatISK(2040))
+			view.Rows[0].ProfitItem, view.Rows[0].ProfitDay, esi.FormatISK(189.70), esi.FormatISK(1897.00))
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("tradefinder build made %d outbound calls, want 0", got)
@@ -597,15 +597,15 @@ func TestTradefinderGlobalMarketFill(t *testing.T) {
 	}
 	top := view.Rows[0]
 	if top.TypeID != 40 || top.BuyTypical != esi.FormatISK(90) || top.SellTypical != esi.FormatISK(150) ||
-		top.MarginPct != "66.7%" || top.SoldPerDay != "25" || top.ProfitDay != esi.FormatISK(1500) {
-		t.Fatalf("global-fill route: %+v, want type 40 bought at the global %s, sold at %s, 66.7%%, 25/day, %s/day",
-			top, esi.FormatISK(90), esi.FormatISK(150), esi.FormatISK(1500))
+		top.MarginPct != "57.8%" || top.SoldPerDay != "25" || top.ProfitDay != esi.FormatISK(1313.44) {
+		t.Fatalf("global-fill route: %+v, want type 40 bought at the global %s, sold at %s, 57.8%%, 25/day, %s/day",
+			top, esi.FormatISK(90), esi.FormatISK(150), esi.FormatISK(1313.44))
 	}
 	second := view.Rows[1]
-	if second.TypeID != 41 || second.BuyTypical != esi.FormatISK(100) || second.ProfitItem != esi.FormatISK(30) ||
-		second.ProfitDay != esi.FormatISK(300) {
+	if second.TypeID != 41 || second.BuyTypical != esi.FormatISK(100) || second.ProfitItem != esi.FormatISK(23.31) ||
+		second.ProfitDay != esi.FormatISK(233.13) {
 		t.Fatalf("hub-wins route: %+v, want type 41 bought at The Forge's %s (not the global %s), %s/item, %s/day",
-			second, esi.FormatISK(100), esi.FormatISK(40), esi.FormatISK(30), esi.FormatISK(300))
+			second, esi.FormatISK(100), esi.FormatISK(40), esi.FormatISK(23.31), esi.FormatISK(233.13))
 	}
 	if len(view.Pending) != 1 || view.Pending[0].TypeID != 43 ||
 		view.Pending[0].BuyTypical != esi.FormatISK(80) || view.Pending[0].SellTypical != esi.FormatISK(120) {

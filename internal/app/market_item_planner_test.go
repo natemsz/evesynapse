@@ -145,7 +145,7 @@ func TestTraderStatsWindowsAndMargin(t *testing.T) {
 
 func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
 	book := `[
-		{"order_id":1,"type_id":34,"location_id":60003760,"system_id":30000142,"is_buy_order":false,"price":11.0,"volume_remain":5,"volume_total":5},
+		{"order_id":1,"type_id":34,"location_id":60003760,"system_id":30000142,"is_buy_order":false,"price":20.0,"volume_remain":5,"volume_total":5},
 		{"order_id":2,"type_id":34,"location_id":60003760,"system_id":30000142,"is_buy_order":true,"price":10.0,"volume_remain":7,"volume_total":7}
 	]`
 	transport := &historyStub{bodies: map[int64]string{}, fail: map[int64]bool{}, bookJSON: book}
@@ -190,8 +190,8 @@ func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
 		"Last recorded days",
 		"<td>"+newest+"</td>",
 		"Trading snapshot",
-		">116.00 ISK<", // 7-day average of 113..119
-		"9.1% of the sell price",
+		">116.00 ISK<",                // 7-day average of 113..119
+		"42.5% of the net sell price", // net at the fixture's unskilled rates: buy 10, sell 20
 	)
 
 	// The chart spans the panel edge to edge — no fixed-width

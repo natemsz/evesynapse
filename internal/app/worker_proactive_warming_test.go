@@ -571,7 +571,7 @@ func TestLiveRegionFragments(t *testing.T) {
 		t.Fatalf("trader fragment (chart): status %d", code)
 	}
 	mustContain(t, "trader fragment (chart)", body,
-		`data-poll-state="chart"`, ">10.50 ISK<", "16.7% of the sell price")
+		`data-poll-state="chart"`, ">10.50 ISK<", "4.1% of the net sell price")
 	if strings.Contains(body, "data-live-region") {
 		t.Fatal("settled trader fragment still carries a live region")
 	}

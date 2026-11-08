@@ -290,40 +290,155 @@
     update();
   });
 
-  // ---- slider pairs ----------------------------------------------------
-  document.querySelectorAll("input[data-slider-for]").forEach(function (slider) {
-    var num = document.getElementById(slider.getAttribute("data-slider-for"));
-    if (!num) return;
-    slider.addEventListener("input", function () {
-      num.value = slider.value;
-    });
-    num.addEventListener("input", function () {
-      slider.value = num.value === "" ? (slider.getAttribute("data-slider-rest") || "0") : num.value;
-    });
-  });
-
-  // ---- roll band family swap ----------------------------------------------
-  // The drawer's band sliders arrive for every rollable
-  // attribute; the server shows the submitted family's set
-  // plus any banded attribute outside it. Picking a family
-  // re-derives that same split in place -- the family's
-  // sliders lead, banded ones stay visible, the rest hide
-  // and disable so nothing stale submits -- with no form
-  // submit, in the desktop drawer and the phone filters
-  // sheet alike (both are this same form). The per-family
-  // attribute lists ride the page as JSON (#cs-roll-catalog).
+  // ---- roll band catalog and dynamic sliders -----------------------------
+  // The drawer carries roll sliders per rollable attribute.
+  // The catalog carries every family's rollable attributes,
+  // value ranges, and meta variant marks as JSON (#cs-roll-catalog).
+  // Track gradients fill dynamically between min and max handles,
+  // readouts show actual rolled values with units, and clicking
+  // a meta variant mark sets the min bound to that variant.
   var rollCatalog = {};
+  var rollMetaByFamily = {};
   var rollCatalogEl = document.getElementById("cs-roll-catalog");
   if (rollCatalogEl) {
     try {
       JSON.parse(rollCatalogEl.textContent).forEach(function (g) {
-        rollCatalog[g.family] = g.attrs;
+        rollCatalog[g.family] = g.attrs || [];
+        if (g.meta && g.meta.length) {
+          var mMap = {};
+          g.meta.forEach(function (m) { mMap[m.id] = m; });
+          rollMetaByFamily[g.family] = mMap;
+        }
       });
     } catch (e) { /* a bad catalog leaves the server split in place */ }
   }
+
+  function formatRollStat(v, unit) {
+    var s;
+    if (v === Math.round(v)) {
+      s = String(v);
+    } else if (Math.abs(v) < 10) {
+      s = (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, "");
+    } else {
+      s = (Math.round(v * 10) / 10).toFixed(1).replace(/\.?0+$/, "");
+    }
+    if (unit === "x") return s + "x";
+    if (!unit) return s;
+    if (unit === "%") return s + "%";
+    return s + " " + unit;
+  }
+
   var familySelect = form.querySelector('select[name="family"]');
   var rollGrid = form.querySelector(".cs-rollgrid");
   var rollHint = form.querySelector("[data-roll-hint]");
+
+  function currentAttrMeta(attrId) {
+    var fam = familySelect ? familySelect.value : "";
+    if (fam && rollMetaByFamily[fam] && rollMetaByFamily[fam][attrId]) {
+      return rollMetaByFamily[fam][attrId];
+    }
+    for (var f in rollMetaByFamily) {
+      if (rollMetaByFamily[f] && rollMetaByFamily[f][attrId]) {
+        return rollMetaByFamily[f][attrId];
+      }
+    }
+    return null;
+  }
+
+  function updateTrackContainer(container) {
+    if (!container) return;
+    var field = container.closest("[data-roll-field]");
+    if (!field) return;
+    var attrId = Number(field.getAttribute("data-roll-field"));
+    var minInput = container.querySelector(".cs-rollslider-min");
+    var maxInput = container.querySelector(".cs-rollslider-max");
+    var minNum = document.getElementById("cs-rollmin-" + attrId);
+    var maxNum = document.getElementById("cs-rollmax-" + attrId);
+    var minReadout = container.querySelector('[data-readout-for="cs-rollmin-' + attrId + '"]');
+    var maxReadout = container.querySelector('[data-readout-for="cs-rollmax-' + attrId + '"]');
+
+    var mn = minNum && minNum.value !== "" ? Number(minNum.value) : (minInput ? Number(minInput.value) : 0);
+    var mx = maxNum && maxNum.value !== "" ? Number(maxNum.value) : (maxInput ? Number(maxInput.value) : 100);
+    if (isNaN(mn)) mn = 0;
+    if (isNaN(mx)) mx = 100;
+
+    container.style.setProperty("--min", mn + "%");
+    container.style.setProperty("--max", mx + "%");
+
+    var meta = currentAttrMeta(attrId);
+    if (minReadout) {
+      if (minNum && minNum.value === "") {
+        minReadout.textContent = "";
+      } else if (meta && meta.worst !== undefined && meta.best !== undefined) {
+        var vMin = meta.worst + (meta.best - meta.worst) * (mn / 100);
+        minReadout.textContent = formatRollStat(vMin, meta.unit);
+      } else {
+        minReadout.textContent = mn + "%";
+      }
+    }
+    if (maxReadout) {
+      if (maxNum && maxNum.value === "") {
+        maxReadout.textContent = "";
+      } else if (meta && meta.worst !== undefined && meta.best !== undefined) {
+        var vMax = meta.worst + (meta.best - meta.worst) * (mx / 100);
+        maxReadout.textContent = formatRollStat(vMax, meta.unit);
+      } else {
+        maxReadout.textContent = mx + "%";
+      }
+    }
+
+    container.querySelectorAll(".cs-roll-mark").forEach(function (mark) {
+      var pct = Number(mark.getAttribute("data-pct"));
+      var inRange = pct >= mn && pct <= mx;
+      var pip = mark.querySelector(".cs-roll-mark-pip");
+      if (pip) {
+        pip.style.borderColor = inRange ? "#ffd27a" : "var(--box-edge)";
+        pip.style.background = inRange ? "#ffd27a" : "#2a2018";
+      }
+    });
+  }
+
+  function bindTrackMarkClicks(container) {
+    if (!container) return;
+    var field = container.closest("[data-roll-field]");
+    if (!field) return;
+    var attrId = Number(field.getAttribute("data-roll-field"));
+    var minInput = container.querySelector(".cs-rollslider-min");
+    var minNum = document.getElementById("cs-rollmin-" + attrId);
+
+    container.querySelectorAll(".cs-roll-mark").forEach(function (mark) {
+      if (mark._bound) return;
+      mark._bound = true;
+      mark.addEventListener("click", function (e) {
+        e.preventDefault();
+        var pct = mark.getAttribute("data-pct");
+        if (minInput) minInput.value = pct;
+        if (minNum) minNum.value = pct;
+        updateTrackContainer(container);
+      });
+    });
+  }
+
+  // Bind slider pairs with dynamic gradient & readout updates.
+  document.querySelectorAll("input[data-slider-for]").forEach(function (slider) {
+    var num = document.getElementById(slider.getAttribute("data-slider-for"));
+    var container = slider.closest(".cs-roll-track-container");
+    if (num) {
+      slider.addEventListener("input", function () {
+        num.value = slider.value;
+        if (container) updateTrackContainer(container);
+      });
+      num.addEventListener("input", function () {
+        slider.value = num.value === "" ? (slider.getAttribute("data-slider-rest") || "0") : num.value;
+        if (container) updateTrackContainer(container);
+      });
+    }
+    if (container) {
+      bindTrackMarkClicks(container);
+      updateTrackContainer(container);
+    }
+  });
+
   function rollFieldBanded(field) {
     var set = false;
     field.querySelectorAll('input[type="number"]').forEach(function (n) {
@@ -331,6 +446,7 @@
     });
     return set;
   }
+
   function applyRollFamily() {
     if (!rollGrid || !familySelect) return;
     var fam = familySelect.value;
@@ -362,7 +478,48 @@
       rollGrid.appendChild(field);
     });
     if (rollHint) rollHint.hidden = fam !== "";
+
+    // Refresh range badges, marks, and track readouts for the active family.
+    rollGrid.querySelectorAll("[data-roll-field]").forEach(function (field) {
+      var id = Number(field.getAttribute("data-roll-field"));
+      var meta = currentAttrMeta(id);
+      var rangeBadge = field.querySelector('[data-roll-range="' + id + '"]');
+      if (rangeBadge && meta) {
+        rangeBadge.textContent = meta.range_text || "";
+      }
+      var marksContainer = field.querySelector('[data-marks-for="' + id + '"]');
+      if (marksContainer && meta && meta.marks) {
+        marksContainer.innerHTML = "";
+        meta.marks.forEach(function (m) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "cs-roll-mark";
+          btn.style.left = m.pct + "%";
+          btn.setAttribute("data-pct", m.pct);
+          btn.setAttribute("data-val", m.val);
+          btn.setAttribute("data-fmt", m.fmt);
+          btn.title = m.label + ": " + m.fmt;
+          btn.setAttribute("aria-label", m.label + ": " + m.fmt);
+
+          var pip = document.createElement("span");
+          pip.className = "cs-roll-mark-pip";
+          var tip = document.createElement("span");
+          tip.className = "cs-roll-mark-tip";
+          tip.textContent = m.label + ": " + m.fmt;
+
+          btn.appendChild(pip);
+          btn.appendChild(tip);
+          marksContainer.appendChild(btn);
+        });
+      }
+      var container = field.querySelector(".cs-roll-track-container");
+      if (container) {
+        bindTrackMarkClicks(container);
+        updateTrackContainer(container);
+      }
+    });
   }
+
   if (familySelect && rollGrid) {
     familySelect.addEventListener("change", applyRollFamily);
     applyRollFamily();

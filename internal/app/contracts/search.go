@@ -748,25 +748,56 @@ type attrOption struct {
 // same split in place when the family pick changes.
 // Min/Max are whole percentiles; a side the search left
 // unset renders empty.
+// rollMetaMark is a tick mark on a roll slider indicating
+// where a base module variant sits in the attribute's roll range.
+type rollMetaMark struct {
+	Label      string  `json:"label"`
+	Percentile int     `json:"pct"`
+	Value      float64 `json:"val"`
+	Formatted  string  `json:"fmt"`
+}
+
+// rollAttrMeta carries the range span, unit, and meta marks
+// for one attribute in a module family.
+type rollAttrMeta struct {
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Unit      string         `json:"unit"`
+	MinVal    float64        `json:"min_val"`
+	MaxVal    float64        `json:"max_val"`
+	Worst     float64        `json:"worst"`
+	Best      float64        `json:"best"`
+	HighGood  bool           `json:"high_good"`
+	RangeText string         `json:"range_text"`
+	Marks     []rollMetaMark `json:"marks"`
+}
+
 type rollSlider struct {
-	ID      int64
-	Name    string
-	Min     int
-	Max     int
-	MinSet  bool
-	MaxSet  bool
-	Visible bool
+	ID        int64
+	Name      string
+	Min       int
+	Max       int
+	MinSet    bool
+	MaxSet    bool
+	Visible   bool
+	Unit      string
+	MinVal    float64
+	MaxVal    float64
+	Worst     float64
+	Best      float64
+	HighGood  bool
+	RangeText string
+	Marks     []rollMetaMark
 }
 
 // rollFamilyGroup is one family's entry in the roll slider
 // catalog the page carries as JSON (the #plan-data
 // pattern): the attributes its mutaplasmids roll, heaviest
-// scoring weight first. contracts.js swaps the drawer's
-// visible sliders to the picked family's group without a
-// submit.
+// scoring weight first, along with their value ranges and meta marks.
 type rollFamilyGroup struct {
-	Family string  `json:"family"`
-	Attrs  []int64 `json:"attrs"`
+	Family string         `json:"family"`
+	Attrs  []int64        `json:"attrs"`
+	Meta   []rollAttrMeta `json:"meta,omitempty"`
 }
 
 // rowAbyssal is a result row's mutated-line summary for
@@ -964,6 +995,134 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 			}
 		}
 		view.RollAttrNames = names
+		// Fetch meta variants and attribute bounds for each family.
+		familyMeta := map[string]map[int64]*rollAttrMeta{}
+		if rows, err := app.queries.ListAbyssalFamilyMetaVariants(ctx); err == nil {
+			type varEntry struct {
+				name string
+				val  float64
+			}
+			type attrAccum struct {
+				unitID   int64
+				highGood bool
+				minMult  float64
+				maxMult  float64
+				sdeName  string
+				variants []varEntry
+			}
+			accum := map[string]map[int64]*attrAccum{}
+			for _, r := range rows {
+				fMap := accum[r.Family]
+				if fMap == nil {
+					fMap = map[int64]*attrAccum{}
+					accum[r.Family] = fMap
+				}
+				a := fMap[r.AttributeID]
+				if a == nil {
+					a = &attrAccum{
+						unitID:   r.UnitID,
+						highGood: r.HighIsGood != 0,
+						minMult:  r.MinMult,
+						maxMult:  r.MaxMult,
+						sdeName:  r.AttrSdeName,
+					}
+					fMap[r.AttributeID] = a
+				}
+				if r.MinMult < a.minMult {
+					a.minMult = r.MinMult
+				}
+				if r.MaxMult > a.maxMult {
+					a.maxMult = r.MaxMult
+				}
+				a.variants = append(a.variants, varEntry{name: r.SourceName, val: r.BaseValue})
+			}
+
+			for fam, aMap := range accum {
+				familyMeta[fam] = map[int64]*rollAttrMeta{}
+				for attrID, a := range aMap {
+					unit := attrUnitSymbol(attrID, a.unitID, a.sdeName)
+					attrName := names[attrID]
+					if attrName == "" {
+						attrName = attrDisplayName(attrID, a.sdeName)
+					}
+
+					minBase := a.variants[0].val
+					maxBase := a.variants[0].val
+					for _, v := range a.variants {
+						if v.val < minBase {
+							minBase = v.val
+						}
+						if v.val > maxBase {
+							maxBase = v.val
+						}
+					}
+
+					var worst, best float64
+					if a.highGood {
+						worst = minBase * a.minMult
+						best = maxBase * a.maxMult
+					} else {
+						worst = maxBase * a.maxMult
+						best = minBase * a.minMult
+					}
+
+					minVal := math.Min(worst, best)
+					maxVal := math.Max(worst, best)
+					rangeText := fmt.Sprintf("%s – %s", formatRollVal(minVal, unit), formatRollVal(maxVal, unit))
+
+					markMap := map[int]*rollMetaMark{}
+					var markPcts []int
+					span := best - worst
+					for _, v := range a.variants {
+						var pct int
+						if span != 0 {
+							pct = int(math.Round((v.val - worst) / span * 100))
+							if pct < 0 {
+								pct = 0
+							}
+							if pct > 100 {
+								pct = 100
+							}
+						} else {
+							pct = 50
+						}
+						lbl := variantShortLabel(v.name)
+						if existing, ok := markMap[pct]; ok {
+							if !strings.Contains(existing.Label, lbl) {
+								existing.Label += " / " + lbl
+							}
+						} else {
+							markPcts = append(markPcts, pct)
+							markMap[pct] = &rollMetaMark{
+								Label:      lbl,
+								Percentile: pct,
+								Value:      v.val,
+								Formatted:  formatRollVal(v.val, unit),
+							}
+						}
+					}
+					sort.Ints(markPcts)
+					var marks []rollMetaMark
+					for _, pct := range markPcts {
+						marks = append(marks, *markMap[pct])
+					}
+
+					familyMeta[fam][attrID] = &rollAttrMeta{
+						ID:        attrID,
+						Name:      attrName,
+						Unit:      unit,
+						MinVal:    minVal,
+						MaxVal:    maxVal,
+						Worst:     worst,
+						Best:      best,
+						HighGood:  a.highGood,
+						RangeText: rangeText,
+						Marks:     marks,
+					}
+				}
+			}
+		}
+
 		sliderFor := func(id int64) rollSlider {
 			name := names[id]
 			if name == "" {
@@ -975,6 +1134,18 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 			}
 			if v, ok := f.AbRollMax[id]; ok {
 				s.Max, s.MaxSet = int(math.Round(v*100)), true
+			}
+			if fm, ok := familyMeta[f.AbFamily]; ok {
+				if meta, okM := fm[id]; okM {
+					s.Unit = meta.Unit
+					s.MinVal = meta.MinVal
+					s.MaxVal = meta.MaxVal
+					s.Worst = meta.Worst
+					s.Best = meta.Best
+					s.HighGood = meta.HighGood
+					s.RangeText = meta.RangeText
+					s.Marks = meta.Marks
+				}
 			}
 			return s
 		}
@@ -998,7 +1169,19 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 		sort.Strings(famSlugs)
 		catalog := make([]rollFamilyGroup, 0, len(famSlugs))
 		for _, slug := range famSlugs {
-			catalog = append(catalog, rollFamilyGroup{Family: slug, Attrs: byFamily[slug]})
+			var metas []rollAttrMeta
+			if fm, ok := familyMeta[slug]; ok {
+				for _, attrID := range byFamily[slug] {
+					if m, okM := fm[attrID]; okM {
+						metas = append(metas, *m)
+					}
+				}
+			}
+			catalog = append(catalog, rollFamilyGroup{
+				Family: slug,
+				Attrs:  byFamily[slug],
+				Meta:   metas,
+			})
 		}
 		if payload, err := json.Marshal(catalog); err == nil {
 			view.RollCatalog = template.JS(payload)
@@ -1812,6 +1995,151 @@ func attrDisplayName(attrID int64, sdeName string) string {
 	}
 	out := strings.Join(words, " ")
 	return strings.ToUpper(out[:1]) + out[1:]
+}
+
+func attrUnitSymbol(attrID, unitID int64, sdeName string) string {
+	switch attrID {
+	case 50:
+		return "tf"
+	case 30:
+		return "MW"
+	case 6:
+		return "GJ"
+	case 73, 1795:
+		return "s"
+	case 64, 204, 213:
+		return "x"
+	case 68, 84, 1159:
+		return "HP"
+	case 67, 90, 97:
+		return "GJ"
+	case 77:
+		return "m³"
+	case 54, 459:
+		return "m"
+	case 20, 767, 351, 349, 1255, 974, 975, 976, 977, 2267, 2335, 2336, 2337, 2338:
+		return "%"
+	case 796:
+		return "kg"
+	}
+	switch unitID {
+	case 105:
+		return "%"
+	case 104:
+		return "x"
+	case 108:
+		return "m"
+	case 114:
+		return "GJ"
+	case 115:
+		return "s"
+	case 116:
+		return "m/s"
+	case 117:
+		return "m³"
+	case 120:
+		return "pts"
+	case 121:
+		return "rad/s"
+	case 124:
+		return "HP"
+	case 30:
+		return "MW"
+	case 50:
+		return "tf"
+	default:
+		return ""
+	}
+}
+
+func formatRollVal(v float64, unit string) string {
+	if unit == "x" {
+		return fmt.Sprintf("%.2fx", v)
+	}
+	formatted := formatAttrValue(v)
+	if unit == "" {
+		return formatted
+	}
+	if unit == "%" {
+		return formatted + "%"
+	}
+	return formatted + " " + unit
+}
+
+func variantShortLabel(name string) string {
+	lower := strings.ToLower(name)
+	switch {
+	case strings.Contains(lower, "compact"):
+		return "Compact"
+	case strings.Contains(lower, "enduring"):
+		return "Enduring"
+	case strings.Contains(lower, "scoped"):
+		return "Scoped"
+	case strings.Contains(lower, "ample"):
+		return "Ample"
+	case strings.Contains(lower, "restrained"):
+		return "Restrained"
+	case strings.Contains(lower, "precise"):
+		return "Precise"
+	case strings.Contains(lower, "republic fleet"):
+		return "Republic Fleet"
+	case strings.Contains(lower, "caldari navy"):
+		return "Caldari Navy"
+	case strings.Contains(lower, "federation navy"):
+		return "Fed Navy"
+	case strings.Contains(lower, "imperial navy"):
+		return "Imp Navy"
+	case strings.Contains(lower, "dark blood"):
+		return "Dark Blood"
+	case strings.Contains(lower, "true sansha"):
+		return "True Sansha"
+	case strings.Contains(lower, "dread guristas"):
+		return "Dread Guristas"
+	case strings.Contains(lower, "shadow serpentis"):
+		return "Shadow Serp"
+	case strings.Contains(lower, "domination"):
+		return "Domination"
+	case strings.Contains(lower, "a-type"):
+		for _, w := range strings.Fields(name) {
+			if strings.HasSuffix(w, "-Type") || strings.HasSuffix(w, "-type") {
+				return w
+			}
+		}
+		return "A-Type"
+	case strings.Contains(lower, "b-type"):
+		for _, w := range strings.Fields(name) {
+			if strings.HasSuffix(w, "-Type") || strings.HasSuffix(w, "-type") {
+				return w
+			}
+		}
+		return "B-Type"
+	case strings.Contains(lower, "c-type"):
+		for _, w := range strings.Fields(name) {
+			if strings.HasSuffix(w, "-Type") || strings.HasSuffix(w, "-type") {
+				return w
+			}
+		}
+		return "C-Type"
+	case strings.Contains(lower, "x-type"):
+		for _, w := range strings.Fields(name) {
+			if strings.HasSuffix(w, "-Type") || strings.HasSuffix(w, "-type") {
+				return w
+			}
+		}
+		return "X-Type"
+	case strings.Contains(lower, "modified") || strings.Contains(name, "'s"):
+		for _, w := range strings.Fields(name) {
+			if strings.HasSuffix(w, "'s") {
+				return w
+			}
+		}
+		return "Officer"
+	case strings.HasSuffix(name, " II") || strings.Contains(name, " II "):
+		return "Tech II"
+	case strings.HasSuffix(name, " I") || strings.Contains(name, " I "):
+		return "Tech I"
+	}
+	return name
 }
 
 // --- detail page -----------------------------------------------------------

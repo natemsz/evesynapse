@@ -112,7 +112,12 @@ func TestContractSearchRollSlidersOffered(t *testing.T) {
 		`name="rollmin_64"`, `name="rollmax_64"`,
 		`name="rollmin_6"`, `name="rollmax_6"`,
 		`name="rollmin_50"`, `name="rollmax_50"`,
-		`data-roll-field="64">`, `data-roll-field="6">`, `data-roll-field="50">`)
+		`data-roll-field="64">`, `data-roll-field="6">`, `data-roll-field="50">`,
+		`<span class="cs-slider-bound-label">Min</span>`,
+		`<span class="cs-slider-bound-label">Max</span>`,
+		`class="cs-roll-track-container" data-roll-track="64"`,
+		`data-roll-range="64">1.70x – 2.30x</span>`,
+		`class="cs-roll-mark" style="left: 50%;" data-pct="50"`)
 	if strings.Contains(body, `name="rollmin_999"`) {
 		t.Error("the fixed attribute (no range width) got a slider")
 	}

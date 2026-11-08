@@ -171,14 +171,22 @@
   background: #fff4e4; border: 2px solid rgba(22, 13, 6, 0.6);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55); cursor: pointer;
 }
-/* The roll band sliders wear the site's ember gradient --
-   the same gold-to-ember ramp the headings take -- on the
-   security slider's pill track, so a band's percentile
-   reads hotter as it climbs. */
+/* The roll band sliders wear the site's ember gradient on the
+   security slider's pill track, dynamically filled between --min
+   and --max so active bands read hotter as they climb. */
 .cs-rollslider {
+  --min: 0%;
+  --max: 100%;
   -webkit-appearance: none; appearance: none;
   height: 0.45rem; border-radius: 999px;
-  background: linear-gradient(to right, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
+  background: linear-gradient(to right,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.08) var(--min, 0%),
+    #ffd27a var(--min, 0%),
+    #d63c14 var(--max, 100%),
+    rgba(255, 255, 255, 0.08) var(--max, 100%),
+    rgba(255, 255, 255, 0.08) 100%);
+  transition: background 0.05s ease-out;
 }
 .cs-secval { flex: none; min-width: 2.2rem; text-align: right; font-variant-numeric: tabular-nums; }
 /* The region quick selectors wear the hunt chips' pill
@@ -318,10 +326,73 @@
    band) render hidden until the family pick swaps them
    in; the flex field rule would otherwise beat [hidden]. */
 .cs-rollgrid > .cs-field[hidden] { display: none; }
-/* The field's two bound pairs ride together at the cell's
-   bottom pin: the gap opens above the first pair only. */
-.cs-rollgrid > .cs-field > .cs-slider-pair { margin-top: 0; }
-.cs-rollgrid > .cs-field > .cs-slider-pair:first-of-type { margin-top: auto; }
+.cs-roll-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 0.5rem; margin-bottom: 0.35rem; width: 100%;
+}
+.cs-roll-name {
+  font-weight: 600; color: var(--text-bright);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cs-roll-range {
+  font-size: var(--fs-2xs); color: var(--gold);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  letter-spacing: normal; text-transform: none;
+}
+.cs-roll-track-container {
+  position: relative; display: flex; flex-direction: column; gap: 0.35rem;
+  margin-top: auto; width: 100%;
+}
+.cs-slider-row {
+  display: flex; align-items: center; gap: 0.5rem; width: 100%;
+}
+.cs-slider-bound-label {
+  flex: none; min-width: 1.8rem;
+  font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase;
+  color: var(--muted); letter-spacing: 0.04em;
+}
+.cs-slider-row input[type="range"] { flex: 1; min-width: 0; }
+.cs-slider-row input[type="number"] { width: 3.6rem; flex: none; font-size: var(--fs-xs); }
+.cs-roll-val {
+  flex: none; min-width: 4.2rem; text-align: right;
+  font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
+  color: var(--text); letter-spacing: normal; text-transform: none;
+}
+.cs-roll-marks {
+  position: relative; width: calc(100% - 1.8rem - 3.6rem - 4.2rem - 1.5rem);
+  margin-left: calc(1.8rem + 0.5rem);
+  height: 0.55rem; margin-bottom: -0.2rem;
+}
+.cs-roll-mark {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  background: none; border: none; padding: 0; margin: 0;
+  cursor: pointer; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+}
+.cs-roll-mark-pip {
+  display: block; width: 0.45rem; height: 0.45rem; border-radius: 50%;
+  background: #2a2018; border: 1.5px solid var(--box-edge);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: transform 0.1s ease, border-color 0.1s ease, background 0.1s ease;
+}
+.cs-roll-mark:hover .cs-roll-mark-pip,
+.cs-roll-mark:focus-visible .cs-roll-mark-pip {
+  transform: scale(1.35); border-color: #ffd27a; background: #ffd27a;
+}
+.cs-roll-mark-tip {
+  display: none; position: absolute; bottom: calc(100% + 4px); left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 12, 8, 0.96); color: var(--text-bright);
+  border: 1px solid var(--box-edge); border-radius: 4px;
+  padding: 0.15rem 0.45rem; font-size: var(--fs-2xs); white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); pointer-events: none; z-index: 10;
+  font-family: "Eve Sans Neue", "Inter", sans-serif; text-transform: none;
+  letter-spacing: normal;
+}
+.cs-roll-mark:hover .cs-roll-mark-tip,
+.cs-roll-mark:focus-visible .cs-roll-mark-tip {
+  display: block;
+}
 
 /* The filter labels speak in the results table's type
    voice: the box titles, the region quick links, the

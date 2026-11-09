@@ -1412,6 +1412,48 @@ func TestRunUpdateRestartsRunningServer(t *testing.T) {
 	}
 }
 
+func TestRunUpdateRestartsRunningServerWithoutPidfile(t *testing.T) {
+	sleeper := pidfiletest.StartSleep(t)
+	fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
+	sum, err := sha256FileHexBytes(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(fresh)
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "evesynapse")
+	writeTestFile(t, target, []byte("old build"), 0o755)
+	// Notice: no pidfile is written here.
+
+	oldSystemd := pidfile.SystemdMainPID
+	oldCheck := pidfile.ProcessCheck
+	defer func() {
+		pidfile.SystemdMainPID = oldSystemd
+		pidfile.ProcessCheck = oldCheck
+	}()
+	pidfile.SystemdMainPID = func(string) (int, bool) {
+		return sleeper.Process.Pid, true
+	}
+	pidfile.ProcessCheck = func(pid int, _ string) bool {
+		return pid == sleeper.Process.Pid
+	}
+
+	var out, errOut bytes.Buffer
+	if code := runUpdate(testVersion, target, []string{srv.URL, sum}, &out, &errOut); code != 0 {
+		t.Fatalf("code %d, stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "restarting on the new version") {
+		t.Fatalf("output %q missing restart confirmation", out.String())
+	}
+	if pidfile.Alive(sleeper.Process.Pid) {
+		t.Fatal("the 'server' process is still alive after the restart hand-off")
+	}
+}
+
 func TestUpdateProvider(t *testing.T) {
 	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "")
 	if got := updateProviders(); len(got) != 0 {

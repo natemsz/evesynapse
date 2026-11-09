@@ -8,8 +8,10 @@
 package pidfile
 
 import (
+	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -91,6 +93,65 @@ func FindLive(candidates []string) (pid int, pidfile string, ok bool) {
 		}
 	}
 	return 0, "", false
+}
+
+// FindProcess looks for a running process executing target when no
+// pidfile is available. It queries systemd first if available, then
+// scans /proc on Linux.
+func FindProcess(target string) (int, bool) {
+	if pid, ok := SystemdMainPID("evesynapse"); ok && ProcessCheck(pid, target) {
+		return pid, true
+	}
+	return ScanProc(target)
+}
+
+// SystemdMainPID queries systemd for the MainPID of a service.
+// A var so tests can supply their own lookup.
+var SystemdMainPID = systemdMainPID
+
+func systemdMainPID(serviceName string) (int, bool) {
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return 0, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "systemctl", "show", "-p", "MainPID", "--value", serviceName).Output()
+	if err != nil {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil || pid <= 0 {
+		return 0, false
+	}
+	if !Alive(pid) {
+		return 0, false
+	}
+	return pid, true
+}
+
+// ScanProc iterates through /proc looking for a process running target.
+// A var so tests can override or mock process scanning.
+var ScanProc = scanProc
+
+func scanProc(target string) (int, bool) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return 0, false
+	}
+	selfPID := os.Getpid()
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil || pid <= 0 || pid == selfPID {
+			continue
+		}
+		if ProcessCheck(pid, target) {
+			return pid, true
+		}
+	}
+	return 0, false
 }
 
 // ProcessCheck reports whether pid is running the program
@@ -199,8 +260,10 @@ func SignalRestart(pid int, pidfilePath string, timeout time.Duration) bool {
 		if !Alive(pid) {
 			return true
 		}
-		if _, err := os.Stat(pidfilePath); os.IsNotExist(err) {
-			return true
+		if pidfilePath != "" {
+			if _, err := os.Stat(pidfilePath); os.IsNotExist(err) {
+				return true
+			}
 		}
 		if time.Now().After(deadline) {
 			return false

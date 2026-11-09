@@ -53,6 +53,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -1240,6 +1241,7 @@ func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, 
 	}
 	syncDir(dir)
 	relabelExecutable(target)
+	ensureRuntimeDir(stdout)
 
 	if pid, pidPath, ok := pidfile.FindLive(pidfile.Candidates(dir)); ok {
 		fmt.Fprintln(stdout, "Update installed.")
@@ -1254,8 +1256,55 @@ func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, 
 		}
 		return 0
 	}
+
+	if pid, ok := pidfile.FindProcess(target); ok {
+		fmt.Fprintln(stdout, "Update installed.")
+		if pidfile.SignalRestart(pid, "", updateRestartWait) {
+			fmt.Fprintln(stdout, "EveSynapse is restarting on the new version.")
+		} else {
+			fmt.Fprintln(stdout, "EveSynapse is still finishing up. It will pick up the new version when it next restarts.")
+		}
+		return 0
+	}
+
 	fmt.Fprintln(stdout, "Update installed. EveSynapse isn't running right now. The new version will be in place next time it starts.")
 	return 0
+}
+
+func ensureRuntimeDir(w io.Writer) {
+	if os.Geteuid() != 0 {
+		return
+	}
+	const runDir = "/run/evesynapse"
+	const unitFile = "/etc/systemd/system/evesynapse.service"
+
+	serviceUser := "evesynapse"
+	if data, err := os.ReadFile(unitFile); err == nil {
+		content := string(data)
+		for _, line := range strings.Split(content, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "User=") {
+				if u := strings.TrimSpace(strings.TrimPrefix(line, "User=")); u != "" {
+					serviceUser = u
+				}
+				break
+			}
+		}
+		if !strings.Contains(content, "RuntimeDirectory=") {
+			fmt.Fprintln(w, "Notice: /etc/systemd/system/evesynapse.service is missing 'RuntimeDirectory=evesynapse'. Updating the unit file or running deploy/setup.sh is recommended.")
+		}
+	}
+
+	if u, err := user.Lookup(serviceUser); err == nil {
+		if uid, err := strconv.Atoi(u.Uid); err == nil {
+			if gid, err := strconv.Atoi(u.Gid); err == nil {
+				if err := os.MkdirAll(runDir, 0o755); err == nil {
+					_ = os.Chown(runDir, uid, gid)
+					_ = os.Chmod(runDir, 0o755)
+				}
+			}
+		}
+	}
 }
 
 // fetchUpdate copies source (an http/https URL, a file:// URL,

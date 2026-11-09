@@ -259,6 +259,30 @@ func TestRefreshRefusesWhileServerRuns(t *testing.T) {
 	}
 }
 
+func TestRunRefreshRefusesWhenProcessFoundWithoutPidfile(t *testing.T) {
+	sleeper := pidfiletest.StartSleep(t)
+	oldSystemd := pidfile.SystemdMainPID
+	oldCheck := pidfile.ProcessCheck
+	defer func() {
+		pidfile.SystemdMainPID = oldSystemd
+		pidfile.ProcessCheck = oldCheck
+	}()
+	pidfile.SystemdMainPID = func(string) (int, bool) {
+		return sleeper.Process.Pid, true
+	}
+	pidfile.ProcessCheck = func(pid int, _ string) bool {
+		return pid == sleeper.Process.Pid
+	}
+
+	var out, errOut bytes.Buffer
+	if code := RunRefresh(nil, Config{}, &out, &errOut); code != 1 {
+		t.Fatalf("RunRefresh code = %d, want 1; stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "still running") {
+		t.Fatalf("stderr %q missing still running message", errOut.String())
+	}
+}
+
 func TestRefreshMissingDatabase(t *testing.T) {
 	// A DSN naming a database that was never created: the
 	// refresh must refuse and must not create anything.

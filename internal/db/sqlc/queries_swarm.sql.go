@@ -23,7 +23,7 @@ type AddSwarmCounterParams struct {
 }
 
 func (q *Queries) AddSwarmCounter(ctx context.Context, arg AddSwarmCounterParams) error {
-	_, err := q.db.ExecContext(ctx, addSwarmCounter, arg.Name, arg.Value)
+	_, err := q.db.Exec(ctx, addSwarmCounter, arg.Name, arg.Value)
 	return err
 }
 
@@ -40,7 +40,7 @@ type AddSwarmPeerCheckParams struct {
 }
 
 func (q *Queries) AddSwarmPeerCheck(ctx context.Context, arg AddSwarmPeerCheckParams) error {
-	_, err := q.db.ExecContext(ctx, addSwarmPeerCheck, arg.InstanceID, arg.GoodChecks, arg.BadChecks)
+	_, err := q.db.Exec(ctx, addSwarmPeerCheck, arg.InstanceID, arg.GoodChecks, arg.BadChecks)
 	return err
 }
 
@@ -56,7 +56,7 @@ type BumpStagingDeferralParams struct {
 }
 
 func (q *Queries) BumpStagingDeferral(ctx context.Context, arg BumpStagingDeferralParams) (int32, error) {
-	row := q.db.QueryRowContext(ctx, bumpStagingDeferral, arg.Kind, arg.Key)
+	row := q.db.QueryRow(ctx, bumpStagingDeferral, arg.Kind, arg.Key)
 	var deferrals int32
 	err := row.Scan(&deferrals)
 	return deferrals, err
@@ -67,7 +67,7 @@ SELECT COUNT(*) FROM swarm_applied WHERE signer = $1
 `
 
 func (q *Queries) CountSwarmAppliedBySigner(ctx context.Context, signer string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSwarmAppliedBySigner, signer)
+	row := q.db.QueryRow(ctx, countSwarmAppliedBySigner, signer)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -82,7 +82,7 @@ UPDATE swarm_peers SET bad_checks = (bad_checks * 7) / 8 WHERE bad_checks > 0
 // weeks. Exclusion itself never clears here; the operator
 // re-admits, and the decayed score is the fresh start.
 func (q *Queries) DecaySwarmBadChecks(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, decaySwarmBadChecks)
+	_, err := q.db.Exec(ctx, decaySwarmBadChecks)
 	return err
 }
 
@@ -96,7 +96,7 @@ type DeleteStagingEntryParams struct {
 }
 
 func (q *Queries) DeleteStagingEntry(ctx context.Context, arg DeleteStagingEntryParams) error {
-	_, err := q.db.ExecContext(ctx, deleteStagingEntry, arg.Kind, arg.Key)
+	_, err := q.db.Exec(ctx, deleteStagingEntry, arg.Kind, arg.Key)
 	return err
 }
 
@@ -110,7 +110,7 @@ type DeleteSwarmAppliedParams struct {
 }
 
 func (q *Queries) DeleteSwarmApplied(ctx context.Context, arg DeleteSwarmAppliedParams) error {
-	_, err := q.db.ExecContext(ctx, deleteSwarmApplied, arg.Kind, arg.Key)
+	_, err := q.db.Exec(ctx, deleteSwarmApplied, arg.Kind, arg.Key)
 	return err
 }
 
@@ -125,7 +125,7 @@ DELETE FROM swarm_peers WHERE instance_id = $1
 // scratch. It is also how a dead instance leaves the list. Staged entries under its name
 // stay staged: they still face their own spot checks.
 func (q *Queries) DeleteSwarmPeer(ctx context.Context, instanceID string) error {
-	_, err := q.db.ExecContext(ctx, deleteSwarmPeer, instanceID)
+	_, err := q.db.Exec(ctx, deleteSwarmPeer, instanceID)
 	return err
 }
 
@@ -141,7 +141,7 @@ type FlagSwarmPeerKeyConflictParams struct {
 // A refused key change is marked on the peer it was aimed at,
 // for the operator to see. Nothing else about the peer changes.
 func (q *Queries) FlagSwarmPeerKeyConflict(ctx context.Context, arg FlagSwarmPeerKeyConflictParams) error {
-	_, err := q.db.ExecContext(ctx, flagSwarmPeerKeyConflict, arg.InstanceID, arg.KeyConflictAt)
+	_, err := q.db.Exec(ctx, flagSwarmPeerKeyConflict, arg.InstanceID, arg.KeyConflictAt)
 	return err
 }
 
@@ -172,7 +172,7 @@ type GetStagingEntryRow struct {
 // urgent drain settles it inline; the history pass skips the
 // ESI refetch while it is fresh.
 func (q *Queries) GetStagingEntry(ctx context.Context, arg GetStagingEntryParams) (GetStagingEntryRow, error) {
-	row := q.db.QueryRowContext(ctx, getStagingEntry, arg.Kind, arg.Key)
+	row := q.db.QueryRow(ctx, getStagingEntry, arg.Kind, arg.Key)
 	var i GetStagingEntryRow
 	err := row.Scan(
 		&i.Kind,
@@ -199,7 +199,7 @@ type GetSwarmAppliedParams struct {
 }
 
 func (q *Queries) GetSwarmApplied(ctx context.Context, arg GetSwarmAppliedParams) (SwarmApplied, error) {
-	row := q.db.QueryRowContext(ctx, getSwarmApplied, arg.Kind, arg.Key)
+	row := q.db.QueryRow(ctx, getSwarmApplied, arg.Kind, arg.Key)
 	var i SwarmApplied
 	err := row.Scan(
 		&i.Kind,
@@ -221,7 +221,7 @@ SELECT name, value FROM swarm_counters
 `
 
 func (q *Queries) GetSwarmCounters(ctx context.Context) ([]SwarmCounter, error) {
-	rows, err := q.db.QueryContext(ctx, getSwarmCounters)
+	rows, err := q.db.Query(ctx, getSwarmCounters)
 	if err != nil {
 		return nil, err
 	}
@@ -233,9 +233,6 @@ func (q *Queries) GetSwarmCounters(ctx context.Context) ([]SwarmCounter, error) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -264,7 +261,7 @@ type GetSwarmIdentityRow struct {
 // here: only public kinds (market history, type names,
 // corporation and alliance records) are staged or counted.
 func (q *Queries) GetSwarmIdentity(ctx context.Context) (GetSwarmIdentityRow, error) {
-	row := q.db.QueryRowContext(ctx, getSwarmIdentity)
+	row := q.db.QueryRow(ctx, getSwarmIdentity)
 	var i GetSwarmIdentityRow
 	err := row.Scan(
 		&i.InstanceID,
@@ -283,7 +280,7 @@ SELECT next_gossip_at FROM swarm_identity LIMIT 1
 // ends, kept across restarts. NULL (or no identity row yet)
 // means due now.
 func (q *Queries) GetSwarmNextGossip(ctx context.Context) (sql.NullTime, error) {
-	row := q.db.QueryRowContext(ctx, getSwarmNextGossip)
+	row := q.db.QueryRow(ctx, getSwarmNextGossip)
 	var next_gossip_at sql.NullTime
 	err := row.Scan(&next_gossip_at)
 	return next_gossip_at, err
@@ -298,7 +295,7 @@ WHERE instance_id = $1
 `
 
 func (q *Queries) GetSwarmPeer(ctx context.Context, instanceID string) (SwarmPeer, error) {
-	row := q.db.QueryRowContext(ctx, getSwarmPeer, instanceID)
+	row := q.db.QueryRow(ctx, getSwarmPeer, instanceID)
 	var i SwarmPeer
 	err := row.Scan(
 		&i.InstanceID,
@@ -338,7 +335,7 @@ type ListLearnedBuildsRow struct {
 // construction (two repositories, a page of releases each,
 // two binaries per release), so the whole of it loads.
 func (q *Queries) ListLearnedBuilds(ctx context.Context) ([]ListLearnedBuildsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLearnedBuilds)
+	rows, err := q.db.Query(ctx, listLearnedBuilds)
 	if err != nil {
 		return nil, err
 	}
@@ -350,9 +347,6 @@ func (q *Queries) ListLearnedBuilds(ctx context.Context) ([]ListLearnedBuildsRow
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -369,7 +363,7 @@ LIMIT $1
 `
 
 func (q *Queries) ListSwarmAllianceDemand(ctx context.Context, limit int32) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listSwarmAllianceDemand, limit)
+	rows, err := q.db.Query(ctx, listSwarmAllianceDemand, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -381,9 +375,6 @@ func (q *Queries) ListSwarmAllianceDemand(ctx context.Context, limit int32) ([]i
 			return nil, err
 		}
 		items = append(items, alliance_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -404,7 +395,7 @@ LIMIT $1
 // excluded: the rollback pass takes these back, oldest first, a
 // bounded batch at a time.
 func (q *Queries) ListSwarmAppliedToRollBack(ctx context.Context, limit int32) ([]SwarmApplied, error) {
-	rows, err := q.db.QueryContext(ctx, listSwarmAppliedToRollBack, limit)
+	rows, err := q.db.Query(ctx, listSwarmAppliedToRollBack, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -428,9 +419,6 @@ func (q *Queries) ListSwarmAppliedToRollBack(ctx context.Context, limit int32) (
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -448,7 +436,7 @@ LIMIT $1
 // Pending organization records someone followed a name to: what a
 // pull asks peers for before the worker spends ESI calls on it.
 func (q *Queries) ListSwarmCorpDemand(ctx context.Context, limit int32) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listSwarmCorpDemand, limit)
+	rows, err := q.db.Query(ctx, listSwarmCorpDemand, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -460,9 +448,6 @@ func (q *Queries) ListSwarmCorpDemand(ctx context.Context, limit int32) ([]int64
 			return nil, err
 		}
 		items = append(items, corporation_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -480,7 +465,7 @@ LIMIT 100
 `
 
 func (q *Queries) ListSwarmPeers(ctx context.Context) ([]SwarmPeer, error) {
-	rows, err := q.db.QueryContext(ctx, listSwarmPeers)
+	rows, err := q.db.Query(ctx, listSwarmPeers)
 	if err != nil {
 		return nil, err
 	}
@@ -511,9 +496,6 @@ func (q *Queries) ListSwarmPeers(ctx context.Context) ([]SwarmPeer, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -555,7 +537,7 @@ type ListSwarmPullPeersRow struct {
 // re-arms it (RearmSwarmPeerProbe). Within the rotation, least
 // recently pulled first, so no peer holds a slot every cycle.
 func (q *Queries) ListSwarmPullPeers(ctx context.Context, servedSince time.Time) ([]ListSwarmPullPeersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSwarmPullPeers, servedSince)
+	rows, err := q.db.Query(ctx, listSwarmPullPeers, servedSince)
 	if err != nil {
 		return nil, err
 	}
@@ -576,9 +558,6 @@ func (q *Queries) ListSwarmPullPeers(ctx context.Context, servedSince time.Time)
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -596,7 +575,7 @@ LIMIT $1
 // already deferred wait behind them, so an undecidable entry
 // cannot hold a check slot in front of fresh work.
 func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]SwarmStaging, error) {
-	rows, err := q.db.QueryContext(ctx, listUncheckedStaging, limit)
+	rows, err := q.db.Query(ctx, listUncheckedStaging, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -618,9 +597,6 @@ func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]Swar
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -663,7 +639,7 @@ type PutSwarmAppliedParams struct {
 // the kind has one, so a rollback can tell the swarm's copy
 // from one this instance has fetched itself since.
 func (q *Queries) PutSwarmApplied(ctx context.Context, arg PutSwarmAppliedParams) error {
-	_, err := q.db.ExecContext(ctx, putSwarmApplied,
+	_, err := q.db.Exec(ctx, putSwarmApplied,
 		arg.Kind,
 		arg.Key,
 		arg.Source,
@@ -697,7 +673,7 @@ type PutSwarmIdentityParams struct {
 }
 
 func (q *Queries) PutSwarmIdentity(ctx context.Context, arg PutSwarmIdentityParams) error {
-	_, err := q.db.ExecContext(ctx, putSwarmIdentity,
+	_, err := q.db.Exec(ctx, putSwarmIdentity,
 		arg.InstanceID,
 		arg.PublicKey,
 		arg.SealedSeed,
@@ -720,7 +696,7 @@ type RearmSwarmPeerProbeParams struct {
 // A gossip round that reached a peer not known to serve data
 // lets the next pull probe it once more.
 func (q *Queries) RearmSwarmPeerProbe(ctx context.Context, arg RearmSwarmPeerProbeParams) error {
-	_, err := q.db.ExecContext(ctx, rearmSwarmPeerProbe, arg.InstanceID, arg.ServedSince)
+	_, err := q.db.Exec(ctx, rearmSwarmPeerProbe, arg.InstanceID, arg.ServedSince)
 	return err
 }
 
@@ -735,11 +711,11 @@ type RollBackSwarmAllianceParams struct {
 }
 
 func (q *Queries) RollBackSwarmAlliance(ctx context.Context, arg RollBackSwarmAllianceParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, rollBackSwarmAlliance, arg.AllianceID, arg.RowStamp)
+	result, err := q.db.Exec(ctx, rollBackSwarmAlliance, arg.AllianceID, arg.RowStamp)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const rollBackSwarmCorporation = `-- name: RollBackSwarmCorporation :execrows
@@ -757,11 +733,11 @@ type RollBackSwarmCorporationParams struct {
 // carries the stamp the swarm apply wrote: a row this instance
 // has fetched from ESI since is its own and stays.
 func (q *Queries) RollBackSwarmCorporation(ctx context.Context, arg RollBackSwarmCorporationParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, rollBackSwarmCorporation, arg.CorporationID, arg.RowStamp)
+	result, err := q.db.Exec(ctx, rollBackSwarmCorporation, arg.CorporationID, arg.RowStamp)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const rollBackSwarmHistoryDays = `-- name: RollBackSwarmHistoryDays :execrows
@@ -780,7 +756,7 @@ type RollBackSwarmHistoryDaysParams struct {
 // History goes by the day range the entry supplied, and only
 // while the pair's fetch state still says the swarm supplied it.
 func (q *Queries) RollBackSwarmHistoryDays(ctx context.Context, arg RollBackSwarmHistoryDaysParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, rollBackSwarmHistoryDays,
+	result, err := q.db.Exec(ctx, rollBackSwarmHistoryDays,
 		arg.RegionID,
 		arg.TypeID,
 		arg.FirstDate,
@@ -789,7 +765,7 @@ func (q *Queries) RollBackSwarmHistoryDays(ctx context.Context, arg RollBackSwar
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const rollBackSwarmHistoryState = `-- name: RollBackSwarmHistoryState :execrows
@@ -803,11 +779,11 @@ type RollBackSwarmHistoryStateParams struct {
 }
 
 func (q *Queries) RollBackSwarmHistoryState(ctx context.Context, arg RollBackSwarmHistoryStateParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, rollBackSwarmHistoryState, arg.Kind, arg.RowStamp)
+	result, err := q.db.Exec(ctx, rollBackSwarmHistoryState, arg.Kind, arg.RowStamp)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const rollBackSwarmStructure = `-- name: RollBackSwarmStructure :execrows
@@ -821,11 +797,11 @@ type RollBackSwarmStructureParams struct {
 }
 
 func (q *Queries) RollBackSwarmStructure(ctx context.Context, arg RollBackSwarmStructureParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, rollBackSwarmStructure, arg.StructureID, arg.RowStamp)
+	result, err := q.db.Exec(ctx, rollBackSwarmStructure, arg.StructureID, arg.RowStamp)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const rollBackSwarmTypeName = `-- name: RollBackSwarmTypeName :execrows
@@ -835,11 +811,11 @@ DELETE FROM type_names WHERE type_id = $1
 // Type names carry no timestamp to tell copies apart, so the
 // cached name simply goes: the next reader resolves it afresh.
 func (q *Queries) RollBackSwarmTypeName(ctx context.Context, typeID int64) (int64, error) {
-	result, err := q.db.ExecContext(ctx, rollBackSwarmTypeName, typeID)
+	result, err := q.db.Exec(ctx, rollBackSwarmTypeName, typeID)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const setSwarmNextGossip = `-- name: SetSwarmNextGossip :exec
@@ -847,7 +823,7 @@ UPDATE swarm_identity SET next_gossip_at = $1
 `
 
 func (q *Queries) SetSwarmNextGossip(ctx context.Context, nextGossipAt sql.NullTime) error {
-	_, err := q.db.ExecContext(ctx, setSwarmNextGossip, nextGossipAt)
+	_, err := q.db.Exec(ctx, setSwarmNextGossip, nextGossipAt)
 	return err
 }
 
@@ -861,7 +837,7 @@ type SetSwarmPeerApprovedParams struct {
 }
 
 func (q *Queries) SetSwarmPeerApproved(ctx context.Context, arg SetSwarmPeerApprovedParams) error {
-	_, err := q.db.ExecContext(ctx, setSwarmPeerApproved, arg.InstanceID, arg.Approved)
+	_, err := q.db.Exec(ctx, setSwarmPeerApproved, arg.InstanceID, arg.Approved)
 	return err
 }
 
@@ -876,7 +852,7 @@ type SetSwarmPeerExcludedParams struct {
 }
 
 func (q *Queries) SetSwarmPeerExcluded(ctx context.Context, arg SetSwarmPeerExcludedParams) error {
-	_, err := q.db.ExecContext(ctx, setSwarmPeerExcluded, arg.InstanceID, arg.Excluded, arg.ExcludeNote)
+	_, err := q.db.Exec(ctx, setSwarmPeerExcluded, arg.InstanceID, arg.Excluded, arg.ExcludeNote)
 	return err
 }
 
@@ -912,7 +888,7 @@ type StageSwarmEntryParams struct {
 // far-future time cannot hold the slot against honest answers.
 // Staging is not serving: renders read the real tables only.
 func (q *Queries) StageSwarmEntry(ctx context.Context, arg StageSwarmEntryParams) error {
-	_, err := q.db.ExecContext(ctx, stageSwarmEntry,
+	_, err := q.db.Exec(ctx, stageSwarmEntry,
 		arg.Kind,
 		arg.Key,
 		arg.Payload,
@@ -935,7 +911,7 @@ type TouchSwarmPeerGossipParams struct {
 }
 
 func (q *Queries) TouchSwarmPeerGossip(ctx context.Context, arg TouchSwarmPeerGossipParams) error {
-	_, err := q.db.ExecContext(ctx, touchSwarmPeerGossip, arg.InstanceID, arg.LastGossip)
+	_, err := q.db.Exec(ctx, touchSwarmPeerGossip, arg.InstanceID, arg.LastGossip)
 	return err
 }
 
@@ -949,7 +925,7 @@ type TouchSwarmPeerPulledParams struct {
 }
 
 func (q *Queries) TouchSwarmPeerPulled(ctx context.Context, arg TouchSwarmPeerPulledParams) error {
-	_, err := q.db.ExecContext(ctx, touchSwarmPeerPulled, arg.InstanceID, arg.LastPulled)
+	_, err := q.db.Exec(ctx, touchSwarmPeerPulled, arg.InstanceID, arg.LastPulled)
 	return err
 }
 
@@ -963,7 +939,7 @@ type TouchSwarmPeerServedParams struct {
 }
 
 func (q *Queries) TouchSwarmPeerServed(ctx context.Context, arg TouchSwarmPeerServedParams) error {
-	_, err := q.db.ExecContext(ctx, touchSwarmPeerServed, arg.InstanceID, arg.LastServed)
+	_, err := q.db.Exec(ctx, touchSwarmPeerServed, arg.InstanceID, arg.LastServed)
 	return err
 }
 
@@ -988,7 +964,7 @@ type UpsertLearnedBuildParams struct {
 // version label. Relearning the same hash writes the same
 // values again -- the table is a remembered set, not a log.
 func (q *Queries) UpsertLearnedBuild(ctx context.Context, arg UpsertLearnedBuildParams) error {
-	_, err := q.db.ExecContext(ctx, upsertLearnedBuild,
+	_, err := q.db.Exec(ctx, upsertLearnedBuild,
 		arg.Hash,
 		arg.Kind,
 		arg.Label,
@@ -1036,7 +1012,7 @@ type UpsertSwarmPeerParams struct {
 // never touched: hearing about an instance must not approve it
 // or forgive it.
 func (q *Queries) UpsertSwarmPeer(ctx context.Context, arg UpsertSwarmPeerParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, upsertSwarmPeer,
+	result, err := q.db.Exec(ctx, upsertSwarmPeer,
 		arg.InstanceID,
 		arg.BaseUrl,
 		arg.PublicKey,
@@ -1050,5 +1026,5 @@ func (q *Queries) UpsertSwarmPeer(ctx context.Context, arg UpsertSwarmPeerParams
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }

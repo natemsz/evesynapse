@@ -11,7 +11,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -21,6 +20,8 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func TestOrdersPageOrderHealth(t *testing.T) {
@@ -263,7 +264,7 @@ func TestKillViewReadsBoardValue(t *testing.T) {
 	if strings.Contains(body, "550.00 ISK") {
 		t.Error("value rendered before the board priced the kill")
 	}
-	if _, err := q.GetGuidePriceWant(ctx); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := q.GetGuidePriceWant(ctx); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("guide-price want noted by a kill view: %v", err)
 	}
 	if got := transport.calls.Load(); got != 0 {

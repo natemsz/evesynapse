@@ -2,7 +2,6 @@ package buildplanner
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"html/template"
@@ -20,6 +19,7 @@ import (
 	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/tags"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -813,7 +813,7 @@ func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*buildplan.
 	}
 	row, err := s.app.queries.GetSDEBlueprintForProduct(s.ctx, productTypeID)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("planner: blueprint for product %d: %v", productTypeID, err)
 		}
 		s.none[productTypeID] = true

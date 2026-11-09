@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const addIntelGangGroup = `-- name: AddIntelGangGroup :exec
@@ -24,7 +22,7 @@ type AddIntelGangGroupParams struct {
 }
 
 func (q *Queries) AddIntelGangGroup(ctx context.Context, arg AddIntelGangGroupParams) error {
-	_, err := q.db.ExecContext(ctx, addIntelGangGroup, arg.GangID, arg.GroupID)
+	_, err := q.db.Exec(ctx, addIntelGangGroup, arg.GangID, arg.GroupID)
 	return err
 }
 
@@ -39,7 +37,7 @@ type CloseIntelGangParams struct {
 }
 
 func (q *Queries) CloseIntelGang(ctx context.Context, arg CloseIntelGangParams) error {
-	_, err := q.db.ExecContext(ctx, closeIntelGang, arg.ClosedAt, arg.ID)
+	_, err := q.db.Exec(ctx, closeIntelGang, arg.ClosedAt, arg.ID)
 	return err
 }
 
@@ -59,11 +57,11 @@ type CloseStaleIntelGangsParams struct {
 // where they stand: the closed moment is the sighting plus the
 // lifetime, not whenever the sweep happened to run.
 func (q *Queries) CloseStaleIntelGangs(ctx context.Context, arg CloseStaleIntelGangsParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, closeStaleIntelGangs, arg.LifetimeSecs, arg.ChannelID, arg.Before)
+	result, err := q.db.Exec(ctx, closeStaleIntelGangs, arg.LifetimeSecs, arg.ChannelID, arg.Before)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const countIntelChannelGrants = `-- name: CountIntelChannelGrants :one
@@ -71,7 +69,7 @@ SELECT COUNT(*) FROM intel_channel_grants WHERE channel_id = $1
 `
 
 func (q *Queries) CountIntelChannelGrants(ctx context.Context, channelID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countIntelChannelGrants, channelID)
+	row := q.db.QueryRow(ctx, countIntelChannelGrants, channelID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -82,7 +80,7 @@ SELECT COUNT(*) FROM intel_channel_rules WHERE channel_id = $1
 `
 
 func (q *Queries) CountIntelChannelRules(ctx context.Context, channelID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countIntelChannelRules, channelID)
+	row := q.db.QueryRow(ctx, countIntelChannelRules, channelID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -93,7 +91,7 @@ SELECT COUNT(*) FROM intel_tokens WHERE user_id = $1
 `
 
 func (q *Queries) CountIntelTokens(ctx context.Context, userID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countIntelTokens, userID)
+	row := q.db.QueryRow(ctx, countIntelTokens, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -119,7 +117,7 @@ type CreateIntelChannelParams struct {
 // Intel channels (schema 078): channels, their grants, their reports.
 // ---------------------------------------------------------------------
 func (q *Queries) CreateIntelChannel(ctx context.Context, arg CreateIntelChannelParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createIntelChannel,
+	row := q.db.QueryRow(ctx, createIntelChannel,
 		arg.OwnerUserID,
 		arg.Name,
 		arg.Description,
@@ -147,7 +145,7 @@ type CreateIntelPairingCodeParams struct {
 }
 
 func (q *Queries) CreateIntelPairingCode(ctx context.Context, arg CreateIntelPairingCodeParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createIntelPairingCode,
+	row := q.db.QueryRow(ctx, createIntelPairingCode,
 		arg.UserID,
 		arg.Name,
 		arg.CodeHash,
@@ -177,7 +175,7 @@ type CreateIntelTokenParams struct {
 
 // Posting tokens (schema 079) and Axon pairing (schema 081).
 func (q *Queries) CreateIntelToken(ctx context.Context, arg CreateIntelTokenParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createIntelToken,
+	row := q.db.QueryRow(ctx, createIntelToken,
 		arg.UserID,
 		arg.Name,
 		arg.Prefix,
@@ -196,7 +194,7 @@ DELETE FROM intel_channels WHERE id = $1
 `
 
 func (q *Queries) DeleteIntelChannel(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteIntelChannel, id)
+	_, err := q.db.Exec(ctx, deleteIntelChannel, id)
 	return err
 }
 
@@ -212,7 +210,7 @@ type DeleteIntelChannelGrantParams struct {
 }
 
 func (q *Queries) DeleteIntelChannelGrant(ctx context.Context, arg DeleteIntelChannelGrantParams) error {
-	_, err := q.db.ExecContext(ctx, deleteIntelChannelGrant, arg.ChannelID, arg.Kind, arg.TargetID)
+	_, err := q.db.Exec(ctx, deleteIntelChannelGrant, arg.ChannelID, arg.Kind, arg.TargetID)
 	return err
 }
 
@@ -228,7 +226,7 @@ type DeleteIntelChannelRuleParams struct {
 }
 
 func (q *Queries) DeleteIntelChannelRule(ctx context.Context, arg DeleteIntelChannelRuleParams) error {
-	_, err := q.db.ExecContext(ctx, deleteIntelChannelRule, arg.ChannelID, arg.RuleKind, arg.RuleRef)
+	_, err := q.db.Exec(ctx, deleteIntelChannelRule, arg.ChannelID, arg.RuleKind, arg.RuleRef)
 	return err
 }
 
@@ -241,7 +239,7 @@ DELETE FROM intel_gangs WHERE id = $1
 // rows cascade away, and the sightings live on in the winner's
 // recomputed picture.
 func (q *Queries) DeleteIntelGang(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteIntelGang, id)
+	_, err := q.db.Exec(ctx, deleteIntelGang, id)
 	return err
 }
 
@@ -250,7 +248,7 @@ DELETE FROM intel_gang_groups WHERE group_id = $1
 `
 
 func (q *Queries) DeleteIntelGangGroupMembership(ctx context.Context, groupID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteIntelGangGroupMembership, groupID)
+	_, err := q.db.Exec(ctx, deleteIntelGangGroupMembership, groupID)
 	return err
 }
 
@@ -259,7 +257,7 @@ DELETE FROM intel_gang_groups WHERE gang_id = $1
 `
 
 func (q *Queries) DeleteIntelGangGroups(ctx context.Context, gangID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteIntelGangGroups, gangID)
+	_, err := q.db.Exec(ctx, deleteIntelGangGroups, gangID)
 	return err
 }
 
@@ -268,7 +266,7 @@ DELETE FROM intel_group_composites WHERE group_id = $1
 `
 
 func (q *Queries) DeleteIntelGroupComposite(ctx context.Context, groupID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteIntelGroupComposite, groupID)
+	_, err := q.db.Exec(ctx, deleteIntelGroupComposite, groupID)
 	return err
 }
 
@@ -277,7 +275,7 @@ DELETE FROM intel_reports WHERE id = $1
 `
 
 func (q *Queries) DeleteIntelReport(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteIntelReport, id)
+	_, err := q.db.Exec(ctx, deleteIntelReport, id)
 	return err
 }
 
@@ -291,11 +289,11 @@ type DeleteIntelTokenParams struct {
 }
 
 func (q *Queries) DeleteIntelToken(ctx context.Context, arg DeleteIntelTokenParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteIntelToken, arg.ID, arg.UserID)
+	result, err := q.db.Exec(ctx, deleteIntelToken, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const deleteStaleIntelPairingCodes = `-- name: DeleteStaleIntelPairingCodes :execrows
@@ -313,11 +311,11 @@ type DeleteStaleIntelPairingCodesParams struct {
 }
 
 func (q *Queries) DeleteStaleIntelPairingCodes(ctx context.Context, arg DeleteStaleIntelPairingCodesParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteStaleIntelPairingCodes, arg.Now, arg.MaxRows)
+	result, err := q.db.Exec(ctx, deleteStaleIntelPairingCodes, arg.Now, arg.MaxRows)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const getIntelChannel = `-- name: GetIntelChannel :one
@@ -325,7 +323,7 @@ SELECT id, owner_user_id, name, description, created_at, owner_kind, owner_id FR
 `
 
 func (q *Queries) GetIntelChannel(ctx context.Context, id int64) (IntelChannel, error) {
-	row := q.db.QueryRowContext(ctx, getIntelChannel, id)
+	row := q.db.QueryRow(ctx, getIntelChannel, id)
 	var i IntelChannel
 	err := row.Scan(
 		&i.ID,
@@ -345,7 +343,7 @@ FROM intel_gangs WHERE id = $1
 `
 
 func (q *Queries) GetIntelGang(ctx context.Context, id int64) (IntelGang, error) {
-	row := q.db.QueryRowContext(ctx, getIntelGang, id)
+	row := q.db.QueryRow(ctx, getIntelGang, id)
 	var i IntelGang
 	err := row.Scan(
 		&i.ID,
@@ -377,7 +375,7 @@ type GetIntelGroupCompositeRow struct {
 }
 
 func (q *Queries) GetIntelGroupComposite(ctx context.Context, groupID int64) (GetIntelGroupCompositeRow, error) {
-	row := q.db.QueryRowContext(ctx, getIntelGroupComposite, groupID)
+	row := q.db.QueryRow(ctx, getIntelGroupComposite, groupID)
 	var i GetIntelGroupCompositeRow
 	err := row.Scan(
 		&i.GroupID,
@@ -396,7 +394,7 @@ SELECT thread_id FROM intel_group_composites WHERE group_id = $1
 `
 
 func (q *Queries) GetIntelGroupThread(ctx context.Context, groupID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getIntelGroupThread, groupID)
+	row := q.db.QueryRow(ctx, getIntelGroupThread, groupID)
 	var thread_id int64
 	err := row.Scan(&thread_id)
 	return thread_id, err
@@ -415,7 +413,7 @@ type GetIntelPairingCodeByHashRow struct {
 }
 
 func (q *Queries) GetIntelPairingCodeByHash(ctx context.Context, codeHash string) (GetIntelPairingCodeByHashRow, error) {
-	row := q.db.QueryRowContext(ctx, getIntelPairingCodeByHash, codeHash)
+	row := q.db.QueryRow(ctx, getIntelPairingCodeByHash, codeHash)
 	var i GetIntelPairingCodeByHashRow
 	err := row.Scan(
 		&i.ID,
@@ -432,7 +430,7 @@ SELECT character_id, corporation_id, alliance_id, checked_at FROM intel_pilot_af
 `
 
 func (q *Queries) GetIntelPilotAffiliation(ctx context.Context, characterID int64) (IntelPilotAffiliation, error) {
-	row := q.db.QueryRowContext(ctx, getIntelPilotAffiliation, characterID)
+	row := q.db.QueryRow(ctx, getIntelPilotAffiliation, characterID)
 	var i IntelPilotAffiliation
 	err := row.Scan(
 		&i.CharacterID,
@@ -448,7 +446,7 @@ SELECT name_lower, character_id, name, checked_at, thing FROM intel_pilot_names 
 `
 
 func (q *Queries) GetIntelPilotName(ctx context.Context, nameLower string) (IntelPilotName, error) {
-	row := q.db.QueryRowContext(ctx, getIntelPilotName, nameLower)
+	row := q.db.QueryRow(ctx, getIntelPilotName, nameLower)
 	var i IntelPilotName
 	err := row.Scan(
 		&i.NameLower,
@@ -471,7 +469,7 @@ type GetIntelReportRow struct {
 }
 
 func (q *Queries) GetIntelReport(ctx context.Context, id int64) (GetIntelReportRow, error) {
-	row := q.db.QueryRowContext(ctx, getIntelReport, id)
+	row := q.db.QueryRow(ctx, getIntelReport, id)
 	var i GetIntelReportRow
 	err := row.Scan(&i.ID, &i.ChannelID, &i.AuthorUserID)
 	return i, err
@@ -492,7 +490,7 @@ type GetIntelReportByScanIDRow struct {
 // The newest report a scan stands behind, if it was ever posted
 // to a channel: a duplicate paste opens the standing report.
 func (q *Queries) GetIntelReportByScanID(ctx context.Context, scanID string) (GetIntelReportByScanIDRow, error) {
-	row := q.db.QueryRowContext(ctx, getIntelReportByScanID, scanID)
+	row := q.db.QueryRow(ctx, getIntelReportByScanID, scanID)
 	var i GetIntelReportByScanIDRow
 	err := row.Scan(&i.ID, &i.ChannelID)
 	return i, err
@@ -507,7 +505,7 @@ WHERE id = $1
 // A report in full: the workbench page renders from the stored
 // row and its analysis.
 func (q *Queries) GetIntelReportFull(ctx context.Context, id int64) (IntelReport, error) {
-	row := q.db.QueryRowContext(ctx, getIntelReportFull, id)
+	row := q.db.QueryRow(ctx, getIntelReportFull, id)
 	var i IntelReport
 	err := row.Scan(
 		&i.ID,
@@ -544,7 +542,7 @@ type GetIntelThreadSpanRow struct {
 
 // A thread's span: its earliest and latest group moments.
 func (q *Queries) GetIntelThreadSpan(ctx context.Context, threadID int64) (GetIntelThreadSpanRow, error) {
-	row := q.db.QueryRowContext(ctx, getIntelThreadSpan, threadID)
+	row := q.db.QueryRow(ctx, getIntelThreadSpan, threadID)
 	var i GetIntelThreadSpanRow
 	err := row.Scan(&i.FirstAt, &i.LastAt)
 	return i, err
@@ -562,7 +560,7 @@ type GetIntelTokenByHashRow struct {
 }
 
 func (q *Queries) GetIntelTokenByHash(ctx context.Context, tokenHash string) (GetIntelTokenByHashRow, error) {
-	row := q.db.QueryRowContext(ctx, getIntelTokenByHash, tokenHash)
+	row := q.db.QueryRow(ctx, getIntelTokenByHash, tokenHash)
 	var i GetIntelTokenByHashRow
 	err := row.Scan(
 		&i.ID,
@@ -593,7 +591,7 @@ type GetPreviousIntelReportParams struct {
 // The report before one in its channel and system: the diff
 // view's other side.
 func (q *Queries) GetPreviousIntelReport(ctx context.Context, arg GetPreviousIntelReportParams) (IntelReport, error) {
-	row := q.db.QueryRowContext(ctx, getPreviousIntelReport,
+	row := q.db.QueryRow(ctx, getPreviousIntelReport,
 		arg.ChannelID,
 		arg.SystemID,
 		arg.BeforeAt,
@@ -641,7 +639,7 @@ type InsertIntelGangParams struct {
 }
 
 func (q *Queries) InsertIntelGang(ctx context.Context, arg InsertIntelGangParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, insertIntelGang,
+	row := q.db.QueryRow(ctx, insertIntelGang,
 		arg.ChannelID,
 		arg.FirstSeenAt,
 		arg.LastSeenAt,
@@ -686,7 +684,7 @@ type InsertIntelReportParams struct {
 }
 
 func (q *Queries) InsertIntelReport(ctx context.Context, arg InsertIntelReportParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, insertIntelReport,
+	row := q.db.QueryRow(ctx, insertIntelReport,
 		arg.ChannelID,
 		arg.SystemID,
 		arg.AuthorUserID,
@@ -730,7 +728,7 @@ type IntelReportExistsParams struct {
 // sent again (a restart, two characters in one channel), and the same
 // sighting is stored once.
 func (q *Queries) IntelReportExists(ctx context.Context, arg IntelReportExistsParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, intelReportExists,
+	row := q.db.QueryRow(ctx, intelReportExists,
 		arg.ChannelID,
 		arg.SeenAt,
 		arg.SystemID,
@@ -779,12 +777,12 @@ type ListAccessibleChannelsRow struct {
 // of its characters, their corporations and alliances, or groups they
 // are in. can_post is true for the owner and for any grant that posts.
 func (q *Queries) ListAccessibleChannels(ctx context.Context, arg ListAccessibleChannelsParams) ([]ListAccessibleChannelsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAccessibleChannels,
+	rows, err := q.db.Query(ctx, listAccessibleChannels,
 		arg.UserID,
-		pq.Array(arg.CharacterIds),
-		pq.Array(arg.CorporationIds),
-		pq.Array(arg.AllianceIds),
-		pq.Array(arg.GroupIds),
+		arg.CharacterIds,
+		arg.CorporationIds,
+		arg.AllianceIds,
+		arg.GroupIds,
 	)
 	if err != nil {
 		return nil, err
@@ -806,9 +804,6 @@ func (q *Queries) ListAccessibleChannels(ctx context.Context, arg ListAccessible
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -848,7 +843,7 @@ type ListGroupCandidateReportsRow struct {
 // is inside the caller's window; these are the reports it picks
 // from. The caller weighs overlap and nearness in Go.
 func (q *Queries) ListGroupCandidateReports(ctx context.Context, arg ListGroupCandidateReportsParams) ([]ListGroupCandidateReportsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listGroupCandidateReports,
+	rows, err := q.db.Query(ctx, listGroupCandidateReports,
 		arg.ChannelID,
 		arg.SystemID,
 		arg.Since,
@@ -876,9 +871,6 @@ func (q *Queries) ListGroupCandidateReports(ctx context.Context, arg ListGroupCa
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -892,7 +884,7 @@ ORDER BY kind, target_id
 `
 
 func (q *Queries) ListIntelChannelGrants(ctx context.Context, channelID int64) ([]IntelChannelGrant, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelChannelGrants, channelID)
+	rows, err := q.db.Query(ctx, listIntelChannelGrants, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -910,9 +902,6 @@ func (q *Queries) ListIntelChannelGrants(ctx context.Context, channelID int64) (
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -944,7 +933,7 @@ type ListIntelChannelRuleGrantsRow struct {
 // Every rule grant with its channel: judged in Go against each
 // reader's standing.
 func (q *Queries) ListIntelChannelRuleGrants(ctx context.Context) ([]ListIntelChannelRuleGrantsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelChannelRuleGrants)
+	rows, err := q.db.Query(ctx, listIntelChannelRuleGrants)
 	if err != nil {
 		return nil, err
 	}
@@ -968,9 +957,6 @@ func (q *Queries) ListIntelChannelRuleGrants(ctx context.Context) ([]ListIntelCh
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -984,7 +970,7 @@ ORDER BY rule_kind, rule_ref
 `
 
 func (q *Queries) ListIntelChannelRules(ctx context.Context, channelID int64) ([]IntelChannelRule, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelChannelRules, channelID)
+	rows, err := q.db.Query(ctx, listIntelChannelRules, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -1002,9 +988,6 @@ func (q *Queries) ListIntelChannelRules(ctx context.Context, channelID int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1034,7 +1017,7 @@ type ListIntelChannelSideCorpsParams struct {
 // owner's characters: the channel's own side, for telling friend from
 // foe by default.
 func (q *Queries) ListIntelChannelSideCorps(ctx context.Context, arg ListIntelChannelSideCorpsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelChannelSideCorps, arg.ChannelID, arg.Since)
+	rows, err := q.db.Query(ctx, listIntelChannelSideCorps, arg.ChannelID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -1046,9 +1029,6 @@ func (q *Queries) ListIntelChannelSideCorps(ctx context.Context, arg ListIntelCh
 			return nil, err
 		}
 		items = append(items, corporation_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1062,7 +1042,7 @@ ORDER BY group_id
 `
 
 func (q *Queries) ListIntelGangGroups(ctx context.Context, gangID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelGangGroups, gangID)
+	rows, err := q.db.Query(ctx, listIntelGangGroups, gangID)
 	if err != nil {
 		return nil, err
 	}
@@ -1074,9 +1054,6 @@ func (q *Queries) ListIntelGangGroups(ctx context.Context, gangID int64) ([]int6
 			return nil, err
 		}
 		items = append(items, group_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1091,7 +1068,7 @@ ORDER BY gang_id, group_id
 `
 
 func (q *Queries) ListIntelGangGroupsForGangs(ctx context.Context, gangIds []int64) ([]IntelGangGroup, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelGangGroupsForGangs, pq.Array(gangIds))
+	rows, err := q.db.Query(ctx, listIntelGangGroupsForGangs, gangIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1103,9 +1080,6 @@ func (q *Queries) ListIntelGangGroupsForGangs(ctx context.Context, gangIds []int
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1138,7 +1112,7 @@ type ListIntelGangsByGroupsRow struct {
 // Every membership of a touched gang comes back, not only the
 // page's own groups, so the gang's Groups list is whole.
 func (q *Queries) ListIntelGangsByGroups(ctx context.Context, groupIds []int64) ([]ListIntelGangsByGroupsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelGangsByGroups, pq.Array(groupIds))
+	rows, err := q.db.Query(ctx, listIntelGangsByGroups, groupIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1161,9 +1135,6 @@ func (q *Queries) ListIntelGangsByGroups(ctx context.Context, groupIds []int64) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1189,7 +1160,7 @@ type ListIntelGroupCompositesRow struct {
 // Composites for several groups at once: the feed and channel
 // pages fetch a whole page's groups in one read.
 func (q *Queries) ListIntelGroupComposites(ctx context.Context, groupIds []int64) ([]ListIntelGroupCompositesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelGroupComposites, pq.Array(groupIds))
+	rows, err := q.db.Query(ctx, listIntelGroupComposites, groupIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1209,9 +1180,6 @@ func (q *Queries) ListIntelGroupComposites(ctx context.Context, groupIds []int64
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1236,7 +1204,7 @@ type ListIntelGroupMembersParams struct {
 // composite is computed from these, and the cap keeps the
 // newest members, whose readings govern the picture.
 func (q *Queries) ListIntelGroupMembers(ctx context.Context, arg ListIntelGroupMembersParams) ([]IntelReport, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelGroupMembers, arg.GroupID, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listIntelGroupMembers, arg.GroupID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1268,9 +1236,6 @@ func (q *Queries) ListIntelGroupMembers(ctx context.Context, arg ListIntelGroupM
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1291,7 +1256,7 @@ type ListIntelPilotNamesRow struct {
 // same way (the SDE's ships and types); this is the looked-up
 // names table, read whole and kept.
 func (q *Queries) ListIntelPilotNames(ctx context.Context) ([]ListIntelPilotNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelPilotNames)
+	rows, err := q.db.Query(ctx, listIntelPilotNames)
 	if err != nil {
 		return nil, err
 	}
@@ -1303,9 +1268,6 @@ func (q *Queries) ListIntelPilotNames(ctx context.Context) ([]ListIntelPilotName
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1326,7 +1288,7 @@ type ListIntelPilotNamesByLowerRow struct {
 }
 
 func (q *Queries) ListIntelPilotNamesByLower(ctx context.Context, nameLowers []string) ([]ListIntelPilotNamesByLowerRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelPilotNamesByLower, pq.Array(nameLowers))
+	rows, err := q.db.Query(ctx, listIntelPilotNamesByLower, nameLowers)
 	if err != nil {
 		return nil, err
 	}
@@ -1343,9 +1305,6 @@ func (q *Queries) ListIntelPilotNamesByLower(ctx context.Context, nameLowers []s
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1393,7 +1352,7 @@ type ListIntelReportsRow struct {
 // A channel's reports, latest seen first: a page before a (seen_at,
 // id) key, or everything posted after after_id (the live feed's poll).
 func (q *Queries) ListIntelReports(ctx context.Context, arg ListIntelReportsParams) ([]ListIntelReportsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelReports,
+	rows, err := q.db.Query(ctx, listIntelReports,
 		arg.ChannelID,
 		arg.AfterID,
 		arg.BeforeAt,
@@ -1428,9 +1387,6 @@ func (q *Queries) ListIntelReports(ctx context.Context, arg ListIntelReportsPara
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1481,8 +1437,8 @@ type ListIntelReportsAcrossChannelsRow struct {
 // channels its reader can access (accessibleChannels), so the
 // access check stays in one place.
 func (q *Queries) ListIntelReportsAcrossChannels(ctx context.Context, arg ListIntelReportsAcrossChannelsParams) ([]ListIntelReportsAcrossChannelsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelReportsAcrossChannels,
-		pq.Array(arg.ChannelIds),
+	rows, err := q.db.Query(ctx, listIntelReportsAcrossChannels,
+		arg.ChannelIds,
 		arg.AfterID,
 		arg.BeforeAt,
 		arg.BeforeID,
@@ -1516,9 +1472,6 @@ func (q *Queries) ListIntelReportsAcrossChannels(ctx context.Context, arg ListIn
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1569,7 +1522,7 @@ type ListIntelReportsByGateSystemRow struct {
 // ListIntelReportsBySystem: the caller passes only the
 // channels its reader can access.
 func (q *Queries) ListIntelReportsByGateSystem(ctx context.Context, arg ListIntelReportsByGateSystemParams) ([]ListIntelReportsByGateSystemRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelReportsByGateSystem, pq.Array(arg.ChannelIds), arg.SystemID, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listIntelReportsByGateSystem, arg.ChannelIds, arg.SystemID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1597,9 +1550,6 @@ func (q *Queries) ListIntelReportsByGateSystem(ctx context.Context, arg ListInte
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1645,7 +1595,7 @@ type ListIntelReportsBySystemRow struct {
 // its reader can access (accessibleChannels), so the access check
 // stays in one place.
 func (q *Queries) ListIntelReportsBySystem(ctx context.Context, arg ListIntelReportsBySystemParams) ([]ListIntelReportsBySystemRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelReportsBySystem, pq.Array(arg.ChannelIds), arg.SystemID, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listIntelReportsBySystem, arg.ChannelIds, arg.SystemID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1674,9 +1624,6 @@ func (q *Queries) ListIntelReportsBySystem(ctx context.Context, arg ListIntelRep
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1696,7 +1643,7 @@ type ListIntelThreadGroupsRow struct {
 
 // A thread's groups, newest first.
 func (q *Queries) ListIntelThreadGroups(ctx context.Context, threadID int64) ([]ListIntelThreadGroupsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelThreadGroups, threadID)
+	rows, err := q.db.Query(ctx, listIntelThreadGroups, threadID)
 	if err != nil {
 		return nil, err
 	}
@@ -1708,9 +1655,6 @@ func (q *Queries) ListIntelThreadGroups(ctx context.Context, threadID int64) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1733,7 +1677,7 @@ type ListIntelTokensRow struct {
 }
 
 func (q *Queries) ListIntelTokens(ctx context.Context, userID int64) ([]ListIntelTokensRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelTokens, userID)
+	rows, err := q.db.Query(ctx, listIntelTokens, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1752,9 +1696,6 @@ func (q *Queries) ListIntelTokens(ctx context.Context, userID int64) ([]ListInte
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1782,7 +1723,7 @@ type ListOpenIntelGangsParams struct {
 // sighting has aged past the gang lifetime. Renders look gangs
 // up by the groups on the page.
 func (q *Queries) ListOpenIntelGangs(ctx context.Context, arg ListOpenIntelGangsParams) ([]IntelGang, error) {
-	rows, err := q.db.QueryContext(ctx, listOpenIntelGangs, arg.ChannelID, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listOpenIntelGangs, arg.ChannelID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1805,9 +1746,6 @@ func (q *Queries) ListOpenIntelGangs(ctx context.Context, arg ListOpenIntelGangs
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1827,7 +1765,7 @@ type ListOrgIntelChannelsParams struct {
 
 // The channels a corporation or alliance owns (schema 082).
 func (q *Queries) ListOrgIntelChannels(ctx context.Context, arg ListOrgIntelChannelsParams) ([]IntelChannel, error) {
-	rows, err := q.db.QueryContext(ctx, listOrgIntelChannels, arg.OwnerKind, arg.OwnerID)
+	rows, err := q.db.Query(ctx, listOrgIntelChannels, arg.OwnerKind, arg.OwnerID)
 	if err != nil {
 		return nil, err
 	}
@@ -1847,9 +1785,6 @@ func (q *Queries) ListOrgIntelChannels(ctx context.Context, arg ListOrgIntelChan
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1888,7 +1823,7 @@ type ListPendingIntelReportsRow struct {
 // carries the author: re-reading a report as a roster counts the
 // poster the roster names as one of its own.
 func (q *Queries) ListPendingIntelReports(ctx context.Context, arg ListPendingIntelReportsParams) ([]ListPendingIntelReportsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPendingIntelReports, arg.Since, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listPendingIntelReports, arg.Since, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1912,9 +1847,6 @@ func (q *Queries) ListPendingIntelReports(ctx context.Context, arg ListPendingIn
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1953,7 +1885,7 @@ type ListRecentIntelReportsRow struct {
 
 // The recent reports across some channels: the map's intel layer.
 func (q *Queries) ListRecentIntelReports(ctx context.Context, arg ListRecentIntelReportsParams) ([]ListRecentIntelReportsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRecentIntelReports, pq.Array(arg.ChannelIds), arg.Since)
+	rows, err := q.db.Query(ctx, listRecentIntelReports, arg.ChannelIds, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -1978,9 +1910,6 @@ func (q *Queries) ListRecentIntelReports(ctx context.Context, arg ListRecentInte
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2017,7 +1946,7 @@ type ListRecentRosterReportsRow struct {
 // way. The caller compares pilot sets in Go -- a roster sent
 // fused, spaced and plain has three texts and one set.
 func (q *Queries) ListRecentRosterReports(ctx context.Context, arg ListRecentRosterReportsParams) ([]ListRecentRosterReportsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRecentRosterReports,
+	rows, err := q.db.Query(ctx, listRecentRosterReports,
 		arg.ChannelID,
 		arg.SystemID,
 		arg.ExcludeID,
@@ -2040,9 +1969,6 @@ func (q *Queries) ListRecentRosterReports(ctx context.Context, arg ListRecentRos
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2075,7 +2001,7 @@ type ListRecentThreadsRow struct {
 // The intel dashboard's rows (intel_dashboard.go): each recent
 // thread in the given channels, by its newest group.
 func (q *Queries) ListRecentThreads(ctx context.Context, arg ListRecentThreadsParams) ([]ListRecentThreadsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRecentThreads, pq.Array(arg.ChannelIds), arg.Since)
+	rows, err := q.db.Query(ctx, listRecentThreads, arg.ChannelIds, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -2095,9 +2021,6 @@ func (q *Queries) ListRecentThreads(ctx context.Context, arg ListRecentThreadsPa
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2115,7 +2038,7 @@ type ListSDESystemNamesRow struct {
 
 // Every system's name: the chat-line reader's dictionary.
 func (q *Queries) ListSDESystemNames(ctx context.Context) ([]ListSDESystemNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDESystemNames)
+	rows, err := q.db.Query(ctx, listSDESystemNames)
 	if err != nil {
 		return nil, err
 	}
@@ -2127,9 +2050,6 @@ func (q *Queries) ListSDESystemNames(ctx context.Context) ([]ListSDESystemNamesR
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2173,7 +2093,7 @@ type ListStoredRosterCandidatesRow struct {
 // marker (the "rr" flag) in the analysis. The caller's window
 // and limit bound the pass like the pending list above.
 func (q *Queries) ListStoredRosterCandidates(ctx context.Context, arg ListStoredRosterCandidatesParams) ([]ListStoredRosterCandidatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listStoredRosterCandidates, arg.Since, arg.Until, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listStoredRosterCandidates, arg.Since, arg.Until, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -2197,9 +2117,6 @@ func (q *Queries) ListStoredRosterCandidates(ctx context.Context, arg ListStored
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2236,10 +2153,10 @@ type ListThreadCandidatesRow struct {
 // groups on the given systems whose latest moment falls inside
 // the window, the group itself left out.
 func (q *Queries) ListThreadCandidates(ctx context.Context, arg ListThreadCandidatesParams) ([]ListThreadCandidatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listThreadCandidates,
+	rows, err := q.db.Query(ctx, listThreadCandidates,
 		arg.ChannelID,
 		arg.GroupID,
-		pq.Array(arg.SystemIds),
+		arg.SystemIds,
 		arg.Since,
 		arg.Until,
 	)
@@ -2260,9 +2177,6 @@ func (q *Queries) ListThreadCandidates(ctx context.Context, arg ListThreadCandid
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2282,7 +2196,7 @@ type ListThreadsSystemsRow struct {
 // The systems of several threads' groups, for the rows' system
 // counts.
 func (q *Queries) ListThreadsSystems(ctx context.Context, threadIds []int64) ([]ListThreadsSystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listThreadsSystems, pq.Array(threadIds))
+	rows, err := q.db.Query(ctx, listThreadsSystems, threadIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2294,9 +2208,6 @@ func (q *Queries) ListThreadsSystems(ctx context.Context, threadIds []int64) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2312,11 +2223,11 @@ WHERE group_id NOT IN (SELECT group_id FROM intel_reports WHERE group_id > 0)
 // Gang claims on groups that no longer stand go first, so
 // PruneIntelGangs can take the gangs they emptied.
 func (q *Queries) PruneIntelGangGroups(ctx context.Context) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneIntelGangGroups)
+	result, err := q.db.Exec(ctx, pruneIntelGangGroups)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const pruneIntelGangs = `-- name: PruneIntelGangs :execrows
@@ -2326,11 +2237,11 @@ WHERE id NOT IN (SELECT gang_id FROM intel_gang_groups)
 
 // Gangs whose groups have all been pruned go with them.
 func (q *Queries) PruneIntelGangs(ctx context.Context) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneIntelGangs)
+	result, err := q.db.Exec(ctx, pruneIntelGangs)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const pruneIntelGroupComposites = `-- name: PruneIntelGroupComposites :execrows
@@ -2341,11 +2252,11 @@ WHERE group_id NOT IN (SELECT group_id FROM intel_reports WHERE group_id > 0)
 // Composites whose group has no reports left (the retention
 // prune took them all) go with them.
 func (q *Queries) PruneIntelGroupComposites(ctx context.Context) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneIntelGroupComposites)
+	result, err := q.db.Exec(ctx, pruneIntelGroupComposites)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const pruneIntelReports = `-- name: PruneIntelReports :execrows
@@ -2353,11 +2264,11 @@ DELETE FROM intel_reports WHERE seen_at < $1::timestamptz
 `
 
 func (q *Queries) PruneIntelReports(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneIntelReports, before)
+	result, err := q.db.Exec(ctx, pruneIntelReports, before)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const setIntelGroupThread = `-- name: SetIntelGroupThread :exec
@@ -2372,7 +2283,7 @@ type SetIntelGroupThreadParams struct {
 
 // A group's thread is set once, when it is first stored.
 func (q *Queries) SetIntelGroupThread(ctx context.Context, arg SetIntelGroupThreadParams) error {
-	_, err := q.db.ExecContext(ctx, setIntelGroupThread, arg.ThreadID, arg.GroupID)
+	_, err := q.db.Exec(ctx, setIntelGroupThread, arg.ThreadID, arg.GroupID)
 	return err
 }
 
@@ -2389,7 +2300,7 @@ type SetIntelReportAnalysisParams struct {
 }
 
 func (q *Queries) SetIntelReportAnalysis(ctx context.Context, arg SetIntelReportAnalysisParams) error {
-	_, err := q.db.ExecContext(ctx, setIntelReportAnalysis,
+	_, err := q.db.Exec(ctx, setIntelReportAnalysis,
 		arg.Kind,
 		arg.Analysis,
 		arg.AnalysisPending,
@@ -2411,7 +2322,7 @@ type SetIntelReportGroupParams struct {
 // group it computed, and a founder's row is corrected to name
 // itself once its id is known.
 func (q *Queries) SetIntelReportGroup(ctx context.Context, arg SetIntelReportGroupParams) error {
-	_, err := q.db.ExecContext(ctx, setIntelReportGroup, arg.GroupID, arg.ID)
+	_, err := q.db.Exec(ctx, setIntelReportGroup, arg.GroupID, arg.ID)
 	return err
 }
 
@@ -2435,7 +2346,7 @@ type SetIntelReportRosterParams struct {
 // the headline becomes the reading's sentence and the reading is
 // linked as its scan, as for a pasted scan.
 func (q *Queries) SetIntelReportRoster(ctx context.Context, arg SetIntelReportRosterParams) error {
-	_, err := q.db.ExecContext(ctx, setIntelReportRoster,
+	_, err := q.db.Exec(ctx, setIntelReportRoster,
 		arg.Text,
 		arg.Pilots,
 		arg.Hostiles,
@@ -2457,7 +2368,7 @@ type TouchIntelTokenParams struct {
 }
 
 func (q *Queries) TouchIntelToken(ctx context.Context, arg TouchIntelTokenParams) error {
-	_, err := q.db.ExecContext(ctx, touchIntelToken, arg.At, arg.ID)
+	_, err := q.db.Exec(ctx, touchIntelToken, arg.At, arg.ID)
 	return err
 }
 
@@ -2472,7 +2383,7 @@ type UpdateIntelChannelParams struct {
 }
 
 func (q *Queries) UpdateIntelChannel(ctx context.Context, arg UpdateIntelChannelParams) error {
-	_, err := q.db.ExecContext(ctx, updateIntelChannel, arg.Name, arg.Description, arg.ID)
+	_, err := q.db.Exec(ctx, updateIntelChannel, arg.Name, arg.Description, arg.ID)
 	return err
 }
 
@@ -2498,7 +2409,7 @@ type UpdateIntelGangParams struct {
 }
 
 func (q *Queries) UpdateIntelGang(ctx context.Context, arg UpdateIntelGangParams) error {
-	_, err := q.db.ExecContext(ctx, updateIntelGang,
+	_, err := q.db.Exec(ctx, updateIntelGang,
 		arg.FirstSeenAt,
 		arg.LastSeenAt,
 		arg.LastSystemID,
@@ -2525,7 +2436,7 @@ type UpsertIntelChannelGrantParams struct {
 }
 
 func (q *Queries) UpsertIntelChannelGrant(ctx context.Context, arg UpsertIntelChannelGrantParams) error {
-	_, err := q.db.ExecContext(ctx, upsertIntelChannelGrant,
+	_, err := q.db.Exec(ctx, upsertIntelChannelGrant,
 		arg.ChannelID,
 		arg.Kind,
 		arg.TargetID,
@@ -2550,7 +2461,7 @@ type UpsertIntelChannelRuleParams struct {
 }
 
 func (q *Queries) UpsertIntelChannelRule(ctx context.Context, arg UpsertIntelChannelRuleParams) error {
-	_, err := q.db.ExecContext(ctx, upsertIntelChannelRule,
+	_, err := q.db.Exec(ctx, upsertIntelChannelRule,
 		arg.ChannelID,
 		arg.RuleKind,
 		arg.RuleRef,
@@ -2586,7 +2497,7 @@ type UpsertIntelGroupCompositeParams struct {
 // Store a group's composite; the standing composite becomes
 // the previous one the diff view compares against.
 func (q *Queries) UpsertIntelGroupComposite(ctx context.Context, arg UpsertIntelGroupCompositeParams) error {
-	_, err := q.db.ExecContext(ctx, upsertIntelGroupComposite,
+	_, err := q.db.Exec(ctx, upsertIntelGroupComposite,
 		arg.GroupID,
 		arg.ChannelID,
 		arg.SystemID,
@@ -2612,7 +2523,7 @@ type UpsertIntelPilotAffiliationParams struct {
 }
 
 func (q *Queries) UpsertIntelPilotAffiliation(ctx context.Context, arg UpsertIntelPilotAffiliationParams) error {
-	_, err := q.db.ExecContext(ctx, upsertIntelPilotAffiliation,
+	_, err := q.db.Exec(ctx, upsertIntelPilotAffiliation,
 		arg.CharacterID,
 		arg.CorporationID,
 		arg.AllianceID,
@@ -2636,7 +2547,7 @@ type UpsertIntelPilotNameParams struct {
 }
 
 func (q *Queries) UpsertIntelPilotName(ctx context.Context, arg UpsertIntelPilotNameParams) error {
-	_, err := q.db.ExecContext(ctx, upsertIntelPilotName,
+	_, err := q.db.Exec(ctx, upsertIntelPilotName,
 		arg.NameLower,
 		arg.CharacterID,
 		arg.Name,
@@ -2657,9 +2568,9 @@ type UseIntelPairingCodeParams struct {
 }
 
 func (q *Queries) UseIntelPairingCode(ctx context.Context, arg UseIntelPairingCodeParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, useIntelPairingCode, arg.At, arg.ID)
+	result, err := q.db.Exec(ctx, useIntelPairingCode, arg.At, arg.ID)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }

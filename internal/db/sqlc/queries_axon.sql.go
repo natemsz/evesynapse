@@ -29,7 +29,7 @@ type InsertIntelSubmitLabelParams struct {
 }
 
 func (q *Queries) InsertIntelSubmitLabel(ctx context.Context, arg InsertIntelSubmitLabelParams) error {
-	_, err := q.db.ExecContext(ctx, insertIntelSubmitLabel,
+	_, err := q.db.Exec(ctx, insertIntelSubmitLabel,
 		arg.ChannelID,
 		arg.UserID,
 		arg.Raw,

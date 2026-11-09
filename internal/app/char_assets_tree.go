@@ -2,10 +2,9 @@ package app
 
 import (
 	"context"
-	"database/sql"
+	json "github.com/goccy/go-json"
 	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"net/http"
 	"sort"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -146,7 +146,7 @@ const assetSuggestLimit = 10
 func (app *Application) characterAssets(ctx context.Context, ch db.Character) (items []esi.Asset, ok bool) {
 	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapAssets})
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("assets: read snapshot for character %d: %v", ch.CharacterID, err)
 		}
 		return nil, false

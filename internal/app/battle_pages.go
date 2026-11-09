@@ -19,10 +19,9 @@ package app
 
 import (
 	"context"
-	"database/sql"
+	json "github.com/goccy/go-json"
 	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -36,6 +35,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/gamelog"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // --- The list ---
@@ -460,7 +460,7 @@ func (app *Application) ownedFight(w http.ResponseWriter, r *http.Request) (db.B
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	f, err := app.queries.GetBattleFight(ctx, id)
 	if err != nil || f.UserID != app.userID(ctx) {
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("battle reports: fight %d: %v", id, err)
 		}
 		http.NotFound(w, r)

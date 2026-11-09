@@ -9,6 +9,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // Character link states (characters.link_state): the worker-facing
@@ -64,7 +65,7 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 	case err == nil:
 		result.Moved = existing.UserID != in.UserID
 		result.OwnerChanged = ownerHashChanged(existing.OwnerHash, in.OwnerHash)
-	case errors.Is(err, sql.ErrNoRows):
+	case errors.Is(err, pgx.ErrNoRows):
 		// First time this character has ever signed in.
 	default:
 		return result, err
@@ -152,7 +153,7 @@ func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, ch
 		switch _, err := app.queries.GetUser(ctx, sessionUserID); {
 		case err == nil:
 			return sessionUserID, nil
-		case !errors.Is(err, sql.ErrNoRows):
+		case !errors.Is(err, pgx.ErrNoRows):
 			return 0, err
 		}
 		// The session's account has been removed: as a fresh session.
@@ -161,7 +162,7 @@ func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, ch
 	switch {
 	case err == nil && !ownerHashChanged(existing.OwnerHash, ownerHash):
 		return existing.UserID, nil
-	case err == nil || errors.Is(err, sql.ErrNoRows):
+	case err == nil || errors.Is(err, pgx.ErrNoRows):
 		// The one place an account comes into being, and so the one
 		// place the sign-up policy applies (auth_signup.go).
 		if err := app.mayCreateAccount(ctx, characterID, ownerHash); err != nil {
@@ -188,7 +189,7 @@ func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, ch
 func (app *Application) identityLogin(ctx context.Context, characterID int64, ownerHash string) (int64, string) {
 	ch, err := app.queries.GetCharacter(ctx, characterID)
 	switch {
-	case errors.Is(err, sql.ErrNoRows):
+	case errors.Is(err, pgx.ErrNoRows):
 		return 0, "/auth/link"
 	case err != nil:
 		logging.Errorf("identity login: read character %d: %v", characterID, err)

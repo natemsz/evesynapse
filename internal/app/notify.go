@@ -2,11 +2,10 @@ package app
 
 import (
 	"context"
-	"database/sql"
+	json "github.com/goccy/go-json"
 	"errors"
 	"evesynapse/internal/app/module"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/markethistory"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -316,7 +316,7 @@ func (app *Application) notifyKillmailEvents(ctx context.Context, c *notifyColle
 	id := b.ch.CharacterID
 	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: id, Kind: esi.SnapKillmails})
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("notify: killmails for character %d: %v", id, err)
 		}
 		return
@@ -861,7 +861,7 @@ func (p notifyPrefs) silent(ev notifyEvent) bool {
 func (app *Application) notifyPrefsFor(ctx context.Context, userID int64) notifyPrefs {
 	blob, err := app.queries.GetWidgetConfig(ctx, db.GetWidgetConfigParams{UserID: userID, WidgetID: notifyConfigID})
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("notify: settings for user %d: %v", userID, err)
 		}
 		return notifyPrefs{}
@@ -1006,11 +1006,11 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 		announce = append(announce, ev)
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("begin: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := app.queries.WithTx(tx)
 	if len(record) > 0 {
 		if err := q.InsertNotificationSeen(ctx, db.InsertNotificationSeenParams{UserID: userID, EventKeys: record, SeenAt: now}); err != nil {
@@ -1053,7 +1053,7 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 			return 0, fmt.Errorf("forget cleared states: %w", err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return 0, fmt.Errorf("commit: %w", err)
 	}
 	// Saved; now the same news goes out on the channels the account

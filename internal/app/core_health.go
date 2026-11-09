@@ -98,7 +98,7 @@ func (app *Application) healthProblems(ctx context.Context) []string {
 func (app *Application) checkHealth(ctx context.Context) (problems, logLines []string) {
 	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	if err := app.db.PingContext(pingCtx); err != nil {
+	if err := app.pool.Ping(pingCtx); err != nil {
 		logLines = append(logLines, fmt.Sprintf("healthz: database: %v", err))
 		problems = append(problems, "database: unreachable")
 	}

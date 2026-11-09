@@ -8,8 +8,6 @@ package db
 import (
 	"context"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const countAppraisalsWindow = `-- name: CountAppraisalsWindow :one
@@ -23,7 +21,7 @@ type CountAppraisalsWindowParams struct {
 }
 
 func (q *Queries) CountAppraisalsWindow(ctx context.Context, arg CountAppraisalsWindowParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countAppraisalsWindow, arg.FromTs, arg.ToTs)
+	row := q.db.QueryRow(ctx, countAppraisalsWindow, arg.FromTs, arg.ToTs)
 	var n int64
 	err := row.Scan(&n)
 	return n, err
@@ -40,7 +38,7 @@ type CountCharactersLinkedWindowParams struct {
 }
 
 func (q *Queries) CountCharactersLinkedWindow(ctx context.Context, arg CountCharactersLinkedWindowParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countCharactersLinkedWindow, arg.FromTs, arg.ToTs)
+	row := q.db.QueryRow(ctx, countCharactersLinkedWindow, arg.FromTs, arg.ToTs)
 	var n int64
 	err := row.Scan(&n)
 	return n, err
@@ -57,7 +55,7 @@ type CountFitsSavedWindowParams struct {
 }
 
 func (q *Queries) CountFitsSavedWindow(ctx context.Context, arg CountFitsSavedWindowParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countFitsSavedWindow, arg.FromTs, arg.ToTs)
+	row := q.db.QueryRow(ctx, countFitsSavedWindow, arg.FromTs, arg.ToTs)
 	var n int64
 	err := row.Scan(&n)
 	return n, err
@@ -74,7 +72,7 @@ type CountIntelReportsWindowParams struct {
 }
 
 func (q *Queries) CountIntelReportsWindow(ctx context.Context, arg CountIntelReportsWindowParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countIntelReportsWindow, arg.FromTs, arg.ToTs)
+	row := q.db.QueryRow(ctx, countIntelReportsWindow, arg.FromTs, arg.ToTs)
 	var n int64
 	err := row.Scan(&n)
 	return n, err
@@ -92,7 +90,7 @@ WHERE NOT EXISTS (SELECT 1 FROM kills k WHERE k.killmail_id = d.killmail_id)
 // without its cap; the record counts ride the drain indexes on
 // (state, ...).
 func (q *Queries) CountKillmailsToMerge(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countKillmailsToMerge)
+	row := q.db.QueryRow(ctx, countKillmailsToMerge)
 	var n int64
 	err := row.Scan(&n)
 	return n, err
@@ -103,7 +101,7 @@ SELECT count(*)::bigint AS n FROM corporation_records WHERE state = 'pending'
 `
 
 func (q *Queries) CountPendingCorporationRecords(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPendingCorporationRecords)
+	row := q.db.QueryRow(ctx, countPendingCorporationRecords)
 	var n int64
 	err := row.Scan(&n)
 	return n, err
@@ -114,7 +112,7 @@ SELECT count(*)::bigint AS n FROM pilot_records WHERE state = 'pending'
 `
 
 func (q *Queries) CountPendingPilotRecords(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPendingPilotRecords)
+	row := q.db.QueryRow(ctx, countPendingPilotRecords)
 	var n int64
 	err := row.Scan(&n)
 	return n, err
@@ -125,7 +123,7 @@ DELETE FROM stats_backlogs WHERE cycle_at < $1::timestamptz
 `
 
 func (q *Queries) DeleteStatsBacklogsRolled(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, deleteStatsBacklogsRolled, cutoff)
+	_, err := q.db.Exec(ctx, deleteStatsBacklogsRolled, cutoff)
 	return err
 }
 
@@ -134,7 +132,7 @@ DELETE FROM stats_cycle_phases WHERE cycle_at < $1::timestamptz
 `
 
 func (q *Queries) DeleteStatsCyclePhasesRolled(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, deleteStatsCyclePhasesRolled, cutoff)
+	_, err := q.db.Exec(ctx, deleteStatsCyclePhasesRolled, cutoff)
 	return err
 }
 
@@ -143,7 +141,7 @@ DELETE FROM stats_cycles WHERE at < $1::timestamptz
 `
 
 func (q *Queries) DeleteStatsCyclesRolled(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, deleteStatsCyclesRolled, cutoff)
+	_, err := q.db.Exec(ctx, deleteStatsCyclesRolled, cutoff)
 	return err
 }
 
@@ -152,7 +150,7 @@ DELETE FROM stats_durations_minute WHERE minute < $1::timestamptz
 `
 
 func (q *Queries) DeleteStatsDurationsRolled(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, deleteStatsDurationsRolled, cutoff)
+	_, err := q.db.Exec(ctx, deleteStatsDurationsRolled, cutoff)
 	return err
 }
 
@@ -161,7 +159,7 @@ DELETE FROM stats_esi_minute WHERE minute < $1::timestamptz
 `
 
 func (q *Queries) DeleteStatsESIRolled(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, deleteStatsESIRolled, cutoff)
+	_, err := q.db.Exec(ctx, deleteStatsESIRolled, cutoff)
 	return err
 }
 
@@ -170,7 +168,7 @@ DELETE FROM stats_events_minute WHERE minute < $1::timestamptz
 `
 
 func (q *Queries) DeleteStatsEventsRolled(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, deleteStatsEventsRolled, cutoff)
+	_, err := q.db.Exec(ctx, deleteStatsEventsRolled, cutoff)
 	return err
 }
 
@@ -179,7 +177,7 @@ DELETE FROM stats_host_minute WHERE minute < $1::timestamptz
 `
 
 func (q *Queries) DeleteStatsHostRolled(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, deleteStatsHostRolled, cutoff)
+	_, err := q.db.Exec(ctx, deleteStatsHostRolled, cutoff)
 	return err
 }
 
@@ -188,7 +186,7 @@ DELETE FROM stats_requests_minute WHERE minute < $1::timestamptz
 `
 
 func (q *Queries) DeleteStatsRequestsRolled(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, deleteStatsRequestsRolled, cutoff)
+	_, err := q.db.Exec(ctx, deleteStatsRequestsRolled, cutoff)
 	return err
 }
 
@@ -205,7 +203,7 @@ type InsertStatsBacklogParams struct {
 }
 
 func (q *Queries) InsertStatsBacklog(ctx context.Context, arg InsertStatsBacklogParams) error {
-	_, err := q.db.ExecContext(ctx, insertStatsBacklog, arg.CycleAt, arg.Backlog, arg.Depth)
+	_, err := q.db.Exec(ctx, insertStatsBacklog, arg.CycleAt, arg.Backlog, arg.Depth)
 	return err
 }
 
@@ -226,7 +224,7 @@ type InsertStatsCycleParams struct {
 }
 
 func (q *Queries) InsertStatsCycle(ctx context.Context, arg InsertStatsCycleParams) error {
-	_, err := q.db.ExecContext(ctx, insertStatsCycle,
+	_, err := q.db.Exec(ctx, insertStatsCycle,
 		arg.At,
 		arg.TookMs,
 		arg.Fetches,
@@ -251,7 +249,7 @@ type InsertStatsCyclePhaseParams struct {
 }
 
 func (q *Queries) InsertStatsCyclePhase(ctx context.Context, arg InsertStatsCyclePhaseParams) error {
-	_, err := q.db.ExecContext(ctx, insertStatsCyclePhase, arg.CycleAt, arg.Phase, arg.TookMs)
+	_, err := q.db.Exec(ctx, insertStatsCyclePhase, arg.CycleAt, arg.Phase, arg.TookMs)
 	return err
 }
 
@@ -260,7 +258,7 @@ DELETE FROM stats_backlogs_hourly WHERE hour < $1::timestamptz
 `
 
 func (q *Queries) PruneStatsBacklogsHourly(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneStatsBacklogsHourly, cutoff)
+	_, err := q.db.Exec(ctx, pruneStatsBacklogsHourly, cutoff)
 	return err
 }
 
@@ -269,7 +267,7 @@ DELETE FROM stats_cycle_phases_hourly WHERE hour < $1::timestamptz
 `
 
 func (q *Queries) PruneStatsCyclePhasesHourly(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneStatsCyclePhasesHourly, cutoff)
+	_, err := q.db.Exec(ctx, pruneStatsCyclePhasesHourly, cutoff)
 	return err
 }
 
@@ -278,7 +276,7 @@ DELETE FROM stats_cycles_hourly WHERE hour < $1::timestamptz
 `
 
 func (q *Queries) PruneStatsCyclesHourly(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneStatsCyclesHourly, cutoff)
+	_, err := q.db.Exec(ctx, pruneStatsCyclesHourly, cutoff)
 	return err
 }
 
@@ -287,7 +285,7 @@ DELETE FROM stats_durations_hourly WHERE hour < $1::timestamptz
 `
 
 func (q *Queries) PruneStatsDurationsHourly(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneStatsDurationsHourly, cutoff)
+	_, err := q.db.Exec(ctx, pruneStatsDurationsHourly, cutoff)
 	return err
 }
 
@@ -296,7 +294,7 @@ DELETE FROM stats_esi_hourly WHERE hour < $1::timestamptz
 `
 
 func (q *Queries) PruneStatsESIHourly(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneStatsESIHourly, cutoff)
+	_, err := q.db.Exec(ctx, pruneStatsESIHourly, cutoff)
 	return err
 }
 
@@ -305,7 +303,7 @@ DELETE FROM stats_events_hourly WHERE hour < $1::timestamptz
 `
 
 func (q *Queries) PruneStatsEventsHourly(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneStatsEventsHourly, cutoff)
+	_, err := q.db.Exec(ctx, pruneStatsEventsHourly, cutoff)
 	return err
 }
 
@@ -314,7 +312,7 @@ DELETE FROM stats_host_hourly WHERE hour < $1::timestamptz
 `
 
 func (q *Queries) PruneStatsHostHourly(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneStatsHostHourly, cutoff)
+	_, err := q.db.Exec(ctx, pruneStatsHostHourly, cutoff)
 	return err
 }
 
@@ -323,7 +321,7 @@ DELETE FROM stats_inventory WHERE hour < $1::timestamptz
 `
 
 func (q *Queries) PruneStatsInventory(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneStatsInventory, cutoff)
+	_, err := q.db.Exec(ctx, pruneStatsInventory, cutoff)
 	return err
 }
 
@@ -332,7 +330,7 @@ DELETE FROM stats_requests_hourly WHERE hour < $1::timestamptz
 `
 
 func (q *Queries) PruneStatsRequestsHourly(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneStatsRequestsHourly, cutoff)
+	_, err := q.db.Exec(ctx, pruneStatsRequestsHourly, cutoff)
 	return err
 }
 
@@ -350,7 +348,7 @@ ON CONFLICT (hour, backlog) DO UPDATE SET
 `
 
 func (q *Queries) RollupStatsBacklogs(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, rollupStatsBacklogs, cutoff)
+	_, err := q.db.Exec(ctx, rollupStatsBacklogs, cutoff)
 	return err
 }
 
@@ -365,7 +363,7 @@ ON CONFLICT (hour, phase) DO UPDATE SET
 `
 
 func (q *Queries) RollupStatsCyclePhases(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, rollupStatsCyclePhases, cutoff)
+	_, err := q.db.Exec(ctx, rollupStatsCyclePhases, cutoff)
 	return err
 }
 
@@ -383,7 +381,7 @@ ON CONFLICT (hour) DO UPDATE SET
 `
 
 func (q *Queries) RollupStatsCycles(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, rollupStatsCycles, cutoff)
+	_, err := q.db.Exec(ctx, rollupStatsCycles, cutoff)
 	return err
 }
 
@@ -397,7 +395,7 @@ DO UPDATE SET hits = stats_durations_hourly.hits + excluded.hits
 `
 
 func (q *Queries) RollupStatsDurations(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, rollupStatsDurations, cutoff)
+	_, err := q.db.Exec(ctx, rollupStatsDurations, cutoff)
 	return err
 }
 
@@ -412,7 +410,7 @@ DO UPDATE SET calls = stats_esi_hourly.calls + excluded.calls,
 `
 
 func (q *Queries) RollupStatsESI(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, rollupStatsESI, cutoff)
+	_, err := q.db.Exec(ctx, rollupStatsESI, cutoff)
 	return err
 }
 
@@ -426,7 +424,7 @@ DO UPDATE SET count = stats_events_hourly.count + excluded.count
 `
 
 func (q *Queries) RollupStatsEvents(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, rollupStatsEvents, cutoff)
+	_, err := q.db.Exec(ctx, rollupStatsEvents, cutoff)
 	return err
 }
 
@@ -452,7 +450,7 @@ ON CONFLICT (hour) DO UPDATE SET
 `
 
 func (q *Queries) RollupStatsHost(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, rollupStatsHost, cutoff)
+	_, err := q.db.Exec(ctx, rollupStatsHost, cutoff)
 	return err
 }
 
@@ -475,7 +473,7 @@ DO UPDATE SET requests = stats_requests_hourly.requests + excluded.requests
 // rolled minutes are gone before the transaction commits.
 // ---------------------------------------------------------------------
 func (q *Queries) RollupStatsRequests(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.ExecContext(ctx, rollupStatsRequests, cutoff)
+	_, err := q.db.Exec(ctx, rollupStatsRequests, cutoff)
 	return err
 }
 
@@ -484,7 +482,7 @@ SELECT count(*)::bigint AS active FROM sessions WHERE expiry > now()
 `
 
 func (q *Queries) StatsActiveSessions(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, statsActiveSessions)
+	row := q.db.QueryRow(ctx, statsActiveSessions)
 	var active int64
 	err := row.Scan(&active)
 	return active, err
@@ -508,7 +506,7 @@ type StatsBacklogsRecentRow struct {
 }
 
 func (q *Queries) StatsBacklogsRecent(ctx context.Context, perKind int32) ([]StatsBacklogsRecentRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsBacklogsRecent, perKind)
+	rows, err := q.db.Query(ctx, statsBacklogsRecent, perKind)
 	if err != nil {
 		return nil, err
 	}
@@ -520,9 +518,6 @@ func (q *Queries) StatsBacklogsRecent(ctx context.Context, perKind int32) ([]Sta
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -549,7 +544,7 @@ type StatsCyclePhasesHoursRow struct {
 }
 
 func (q *Queries) StatsCyclePhasesHours(ctx context.Context, arg StatsCyclePhasesHoursParams) ([]StatsCyclePhasesHoursRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsCyclePhasesHours, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsCyclePhasesHours, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -561,9 +556,6 @@ func (q *Queries) StatsCyclePhasesHours(ctx context.Context, arg StatsCyclePhase
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -590,7 +582,7 @@ type StatsCyclePhasesWindowRow struct {
 }
 
 func (q *Queries) StatsCyclePhasesWindow(ctx context.Context, arg StatsCyclePhasesWindowParams) ([]StatsCyclePhasesWindowRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsCyclePhasesWindow, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsCyclePhasesWindow, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -602,9 +594,6 @@ func (q *Queries) StatsCyclePhasesWindow(ctx context.Context, arg StatsCyclePhas
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -633,7 +622,7 @@ type StatsCycleSeriesRow struct {
 }
 
 func (q *Queries) StatsCycleSeries(ctx context.Context, arg StatsCycleSeriesParams) ([]StatsCycleSeriesRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsCycleSeries, arg.StepSeconds, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsCycleSeries, arg.StepSeconds, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -645,9 +634,6 @@ func (q *Queries) StatsCycleSeries(ctx context.Context, arg StatsCycleSeriesPara
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -676,7 +662,7 @@ type StatsCycleSeriesHoursRow struct {
 }
 
 func (q *Queries) StatsCycleSeriesHours(ctx context.Context, arg StatsCycleSeriesHoursParams) ([]StatsCycleSeriesHoursRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsCycleSeriesHours, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsCycleSeriesHours, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -688,9 +674,6 @@ func (q *Queries) StatsCycleSeriesHours(ctx context.Context, arg StatsCycleSerie
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -724,7 +707,7 @@ type StatsCycleSummaryRow struct {
 }
 
 func (q *Queries) StatsCycleSummary(ctx context.Context, arg StatsCycleSummaryParams) (StatsCycleSummaryRow, error) {
-	row := q.db.QueryRowContext(ctx, statsCycleSummary, arg.FromTs, arg.ToTs)
+	row := q.db.QueryRow(ctx, statsCycleSummary, arg.FromTs, arg.ToTs)
 	var i StatsCycleSummaryRow
 	err := row.Scan(
 		&i.Cycles,
@@ -761,7 +744,7 @@ type StatsCycleSummaryHoursRow struct {
 }
 
 func (q *Queries) StatsCycleSummaryHours(ctx context.Context, arg StatsCycleSummaryHoursParams) (StatsCycleSummaryHoursRow, error) {
-	row := q.db.QueryRowContext(ctx, statsCycleSummaryHours, arg.FromTs, arg.ToTs)
+	row := q.db.QueryRow(ctx, statsCycleSummaryHours, arg.FromTs, arg.ToTs)
 	var i StatsCycleSummaryHoursRow
 	err := row.Scan(
 		&i.Cycles,
@@ -791,7 +774,7 @@ type StatsDurationsAllHoursRow struct {
 }
 
 func (q *Queries) StatsDurationsAllHours(ctx context.Context, arg StatsDurationsAllHoursParams) ([]StatsDurationsAllHoursRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsDurationsAllHours, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsDurationsAllHours, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -803,9 +786,6 @@ func (q *Queries) StatsDurationsAllHours(ctx context.Context, arg StatsDurations
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -831,7 +811,7 @@ type StatsDurationsAllMinutesRow struct {
 }
 
 func (q *Queries) StatsDurationsAllMinutes(ctx context.Context, arg StatsDurationsAllMinutesParams) ([]StatsDurationsAllMinutesRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsDurationsAllMinutes, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsDurationsAllMinutes, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -843,9 +823,6 @@ func (q *Queries) StatsDurationsAllMinutes(ctx context.Context, arg StatsDuratio
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -874,7 +851,7 @@ type StatsDurationsForGroupsHoursRow struct {
 }
 
 func (q *Queries) StatsDurationsForGroupsHours(ctx context.Context, arg StatsDurationsForGroupsHoursParams) ([]StatsDurationsForGroupsHoursRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsDurationsForGroupsHours, arg.FromTs, arg.ToTs, pq.Array(arg.Groups))
+	rows, err := q.db.Query(ctx, statsDurationsForGroupsHours, arg.FromTs, arg.ToTs, arg.Groups)
 	if err != nil {
 		return nil, err
 	}
@@ -886,9 +863,6 @@ func (q *Queries) StatsDurationsForGroupsHours(ctx context.Context, arg StatsDur
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -917,7 +891,7 @@ type StatsDurationsForGroupsMinutesRow struct {
 }
 
 func (q *Queries) StatsDurationsForGroupsMinutes(ctx context.Context, arg StatsDurationsForGroupsMinutesParams) ([]StatsDurationsForGroupsMinutesRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsDurationsForGroupsMinutes, arg.FromTs, arg.ToTs, pq.Array(arg.Groups))
+	rows, err := q.db.Query(ctx, statsDurationsForGroupsMinutes, arg.FromTs, arg.ToTs, arg.Groups)
 	if err != nil {
 		return nil, err
 	}
@@ -929,9 +903,6 @@ func (q *Queries) StatsDurationsForGroupsMinutes(ctx context.Context, arg StatsD
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -958,7 +929,7 @@ type StatsESISeriesRow struct {
 }
 
 func (q *Queries) StatsESISeries(ctx context.Context, arg StatsESISeriesParams) ([]StatsESISeriesRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsESISeries, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsESISeries, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -970,9 +941,6 @@ func (q *Queries) StatsESISeries(ctx context.Context, arg StatsESISeriesParams) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1003,7 +971,7 @@ type StatsESITotalsWindowRow struct {
 // table, always bounded.
 // ---------------------------------------------------------------------
 func (q *Queries) StatsESITotalsWindow(ctx context.Context, arg StatsESITotalsWindowParams) (StatsESITotalsWindowRow, error) {
-	row := q.db.QueryRowContext(ctx, statsESITotalsWindow, arg.FromTs, arg.ToTs)
+	row := q.db.QueryRow(ctx, statsESITotalsWindow, arg.FromTs, arg.ToTs)
 	var i StatsESITotalsWindowRow
 	err := row.Scan(&i.Calls, &i.Errors)
 	return i, err
@@ -1029,7 +997,7 @@ type StatsESIWindowHoursRow struct {
 }
 
 func (q *Queries) StatsESIWindowHours(ctx context.Context, arg StatsESIWindowHoursParams) ([]StatsESIWindowHoursRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsESIWindowHours, arg.FromTs, arg.ToTs, arg.Lim)
+	rows, err := q.db.Query(ctx, statsESIWindowHours, arg.FromTs, arg.ToTs, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -1041,9 +1009,6 @@ func (q *Queries) StatsESIWindowHours(ctx context.Context, arg StatsESIWindowHou
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1071,7 +1036,7 @@ type StatsESIWindowMinutesRow struct {
 }
 
 func (q *Queries) StatsESIWindowMinutes(ctx context.Context, arg StatsESIWindowMinutesParams) ([]StatsESIWindowMinutesRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsESIWindowMinutes, arg.FromTs, arg.ToTs, arg.Lim)
+	rows, err := q.db.Query(ctx, statsESIWindowMinutes, arg.FromTs, arg.ToTs, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -1083,9 +1048,6 @@ func (q *Queries) StatsESIWindowMinutes(ctx context.Context, arg StatsESIWindowM
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1111,7 +1073,7 @@ type StatsEventsWindowHoursRow struct {
 }
 
 func (q *Queries) StatsEventsWindowHours(ctx context.Context, arg StatsEventsWindowHoursParams) ([]StatsEventsWindowHoursRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsEventsWindowHours, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsEventsWindowHours, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -1123,9 +1085,6 @@ func (q *Queries) StatsEventsWindowHours(ctx context.Context, arg StatsEventsWin
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1151,7 +1110,7 @@ type StatsEventsWindowMinutesRow struct {
 }
 
 func (q *Queries) StatsEventsWindowMinutes(ctx context.Context, arg StatsEventsWindowMinutesParams) ([]StatsEventsWindowMinutesRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsEventsWindowMinutes, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsEventsWindowMinutes, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -1163,9 +1122,6 @@ func (q *Queries) StatsEventsWindowMinutes(ctx context.Context, arg StatsEventsW
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1184,7 +1140,7 @@ type StatsFetchStatesByKindsRow struct {
 }
 
 func (q *Queries) StatsFetchStatesByKinds(ctx context.Context, kinds []string) ([]StatsFetchStatesByKindsRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsFetchStatesByKinds, pq.Array(kinds))
+	rows, err := q.db.Query(ctx, statsFetchStatesByKinds, kinds)
 	if err != nil {
 		return nil, err
 	}
@@ -1196,9 +1152,6 @@ func (q *Queries) StatsFetchStatesByKinds(ctx context.Context, kinds []string) (
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1213,7 +1166,7 @@ ORDER BY minute DESC LIMIT 1
 `
 
 func (q *Queries) StatsHostLatest(ctx context.Context) (StatsHostMinute, error) {
-	row := q.db.QueryRowContext(ctx, statsHostLatest)
+	row := q.db.QueryRow(ctx, statsHostLatest)
 	var i StatsHostMinute
 	err := row.Scan(
 		&i.Minute,
@@ -1253,7 +1206,7 @@ type StatsHostSeriesRow struct {
 }
 
 func (q *Queries) StatsHostSeries(ctx context.Context, arg StatsHostSeriesParams) ([]StatsHostSeriesRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsHostSeries, arg.StepSeconds, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsHostSeries, arg.StepSeconds, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -1270,9 +1223,6 @@ func (q *Queries) StatsHostSeries(ctx context.Context, arg StatsHostSeriesParams
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1303,7 +1253,7 @@ type StatsHostSeriesHoursRow struct {
 }
 
 func (q *Queries) StatsHostSeriesHours(ctx context.Context, arg StatsHostSeriesHoursParams) ([]StatsHostSeriesHoursRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsHostSeriesHours, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsHostSeriesHours, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -1321,9 +1271,6 @@ func (q *Queries) StatsHostSeriesHours(ctx context.Context, arg StatsHostSeriesH
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1335,7 +1282,7 @@ SELECT max(created_at) AS latest FROM intel_reports
 `
 
 func (q *Queries) StatsIntelLatest(ctx context.Context) (interface{}, error) {
-	row := q.db.QueryRowContext(ctx, statsIntelLatest)
+	row := q.db.QueryRow(ctx, statsIntelLatest)
 	var latest interface{}
 	err := row.Scan(&latest)
 	return latest, err
@@ -1355,7 +1302,7 @@ type StatsInventoryLatestRow struct {
 }
 
 func (q *Queries) StatsInventoryLatest(ctx context.Context, lim int32) ([]StatsInventoryLatestRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsInventoryLatest, lim)
+	rows, err := q.db.Query(ctx, statsInventoryLatest, lim)
 	if err != nil {
 		return nil, err
 	}
@@ -1368,9 +1315,6 @@ func (q *Queries) StatsInventoryLatest(ctx context.Context, lim int32) ([]StatsI
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1382,7 +1326,7 @@ SELECT max(attempted_at) AS latest FROM market_fetch_state WHERE starts_with(kin
 `
 
 func (q *Queries) StatsMarketHistoryLatest(ctx context.Context) (interface{}, error) {
-	row := q.db.QueryRowContext(ctx, statsMarketHistoryLatest)
+	row := q.db.QueryRow(ctx, statsMarketHistoryLatest)
 	var latest interface{}
 	err := row.Scan(&latest)
 	return latest, err
@@ -1399,7 +1343,7 @@ type StatsPubContractSweepsRow struct {
 }
 
 func (q *Queries) StatsPubContractSweeps(ctx context.Context, regions []int64) ([]StatsPubContractSweepsRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsPubContractSweeps, pq.Array(regions))
+	rows, err := q.db.Query(ctx, statsPubContractSweeps, regions)
 	if err != nil {
 		return nil, err
 	}
@@ -1412,9 +1356,6 @@ func (q *Queries) StatsPubContractSweeps(ctx context.Context, regions []int64) (
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1426,7 +1367,7 @@ SELECT count(*) AS departed FROM pub_contracts WHERE departed_at IS NOT NULL
 `
 
 func (q *Queries) StatsPubContractsDeparted(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, statsPubContractsDeparted)
+	row := q.db.QueryRow(ctx, statsPubContractsDeparted)
 	var departed int64
 	err := row.Scan(&departed)
 	return departed, err
@@ -1450,7 +1391,7 @@ type StatsSignupsByDayRow struct {
 // owning tables, each with an indexed window predicate.
 // ---------------------------------------------------------------------
 func (q *Queries) StatsSignupsByDay(ctx context.Context, fromTs time.Time) ([]StatsSignupsByDayRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsSignupsByDay, fromTs)
+	rows, err := q.db.Query(ctx, statsSignupsByDay, fromTs)
 	if err != nil {
 		return nil, err
 	}
@@ -1463,9 +1404,6 @@ func (q *Queries) StatsSignupsByDay(ctx context.Context, fromTs time.Time) ([]St
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1477,7 +1415,7 @@ SELECT max(applied_at) AS latest FROM swarm_applied
 `
 
 func (q *Queries) StatsSwarmLastApplied(ctx context.Context) (interface{}, error) {
-	row := q.db.QueryRowContext(ctx, statsSwarmLastApplied)
+	row := q.db.QueryRow(ctx, statsSwarmLastApplied)
 	var latest interface{}
 	err := row.Scan(&latest)
 	return latest, err
@@ -1502,7 +1440,7 @@ type StatsTopGroupsHoursRow struct {
 }
 
 func (q *Queries) StatsTopGroupsHours(ctx context.Context, arg StatsTopGroupsHoursParams) ([]StatsTopGroupsHoursRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsTopGroupsHours, arg.FromTs, arg.ToTs, arg.Lim)
+	rows, err := q.db.Query(ctx, statsTopGroupsHours, arg.FromTs, arg.ToTs, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -1514,9 +1452,6 @@ func (q *Queries) StatsTopGroupsHours(ctx context.Context, arg StatsTopGroupsHou
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1543,7 +1478,7 @@ type StatsTopGroupsMinutesRow struct {
 }
 
 func (q *Queries) StatsTopGroupsMinutes(ctx context.Context, arg StatsTopGroupsMinutesParams) ([]StatsTopGroupsMinutesRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsTopGroupsMinutes, arg.FromTs, arg.ToTs, arg.Lim)
+	rows, err := q.db.Query(ctx, statsTopGroupsMinutes, arg.FromTs, arg.ToTs, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -1555,9 +1490,6 @@ func (q *Queries) StatsTopGroupsMinutes(ctx context.Context, arg StatsTopGroupsM
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1586,7 +1518,7 @@ type StatsTrafficHoursRow struct {
 }
 
 func (q *Queries) StatsTrafficHours(ctx context.Context, arg StatsTrafficHoursParams) ([]StatsTrafficHoursRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsTrafficHours, arg.StepSeconds, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsTrafficHours, arg.StepSeconds, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -1598,9 +1530,6 @@ func (q *Queries) StatsTrafficHours(ctx context.Context, arg StatsTrafficHoursPa
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1635,7 +1564,7 @@ type StatsTrafficMinutesRow struct {
 // epoch math so one query serves every range.
 // ---------------------------------------------------------------------
 func (q *Queries) StatsTrafficMinutes(ctx context.Context, arg StatsTrafficMinutesParams) ([]StatsTrafficMinutesRow, error) {
-	rows, err := q.db.QueryContext(ctx, statsTrafficMinutes, arg.StepSeconds, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, statsTrafficMinutes, arg.StepSeconds, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
@@ -1648,9 +1577,6 @@ func (q *Queries) StatsTrafficMinutes(ctx context.Context, arg StatsTrafficMinut
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1662,7 +1588,7 @@ SELECT max(computed_at) AS latest FROM true_values
 `
 
 func (q *Queries) StatsTrueValuesLatest(ctx context.Context) (interface{}, error) {
-	row := q.db.QueryRowContext(ctx, statsTrueValuesLatest)
+	row := q.db.QueryRow(ctx, statsTrueValuesLatest)
 	var latest interface{}
 	err := row.Scan(&latest)
 	return latest, err
@@ -1683,7 +1609,7 @@ type UpsertStatsDurationParams struct {
 }
 
 func (q *Queries) UpsertStatsDuration(ctx context.Context, arg UpsertStatsDurationParams) error {
-	_, err := q.db.ExecContext(ctx, upsertStatsDuration,
+	_, err := q.db.Exec(ctx, upsertStatsDuration,
 		arg.Minute,
 		arg.RouteGroup,
 		arg.Bucket,
@@ -1708,7 +1634,7 @@ type UpsertStatsESIParams struct {
 }
 
 func (q *Queries) UpsertStatsESI(ctx context.Context, arg UpsertStatsESIParams) error {
-	_, err := q.db.ExecContext(ctx, upsertStatsESI,
+	_, err := q.db.Exec(ctx, upsertStatsESI,
 		arg.Minute,
 		arg.Family,
 		arg.Calls,
@@ -1731,7 +1657,7 @@ type UpsertStatsEventParams struct {
 }
 
 func (q *Queries) UpsertStatsEvent(ctx context.Context, arg UpsertStatsEventParams) error {
-	_, err := q.db.ExecContext(ctx, upsertStatsEvent, arg.Minute, arg.Kind, arg.Count)
+	_, err := q.db.Exec(ctx, upsertStatsEvent, arg.Minute, arg.Kind, arg.Count)
 	return err
 }
 
@@ -1759,7 +1685,7 @@ type UpsertStatsHostParams struct {
 }
 
 func (q *Queries) UpsertStatsHost(ctx context.Context, arg UpsertStatsHostParams) error {
-	_, err := q.db.ExecContext(ctx, upsertStatsHost,
+	_, err := q.db.Exec(ctx, upsertStatsHost,
 		arg.Minute,
 		arg.Load1,
 		arg.Load5,
@@ -1788,7 +1714,7 @@ type UpsertStatsInventoryParams struct {
 }
 
 func (q *Queries) UpsertStatsInventory(ctx context.Context, arg UpsertStatsInventoryParams) error {
-	_, err := q.db.ExecContext(ctx, upsertStatsInventory,
+	_, err := q.db.Exec(ctx, upsertStatsInventory,
 		arg.Hour,
 		arg.Name,
 		arg.RowsEst,
@@ -1819,7 +1745,7 @@ type UpsertStatsRequestParams struct {
 // Recorder flush: one transaction per minute, upserts only.
 // ---------------------------------------------------------------------
 func (q *Queries) UpsertStatsRequest(ctx context.Context, arg UpsertStatsRequestParams) error {
-	_, err := q.db.ExecContext(ctx, upsertStatsRequest,
+	_, err := q.db.Exec(ctx, upsertStatsRequest,
 		arg.Minute,
 		arg.RouteGroup,
 		arg.StatusClass,

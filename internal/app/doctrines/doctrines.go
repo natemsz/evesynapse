@@ -2,12 +2,11 @@ package doctrines
 
 import (
 	"context"
-	"database/sql"
+	json "github.com/goccy/go-json"
 	"errors"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/humanize"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"net/http"
 	"net/url"
 	"sort"
@@ -21,6 +20,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -330,7 +330,7 @@ func (app *mod) handleDoctrineCreate(w http.ResponseWriter, r *http.Request) {
 		CorporationID: corp, Name: name, Category: category, Description: description, Tags: tags,
 		CreatedBy: app.deps.CorpActorFor(ctx, userID, corp).CharacterID, CreatedAt: time.Now().UTC(),
 	})
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		back("There is already a doctrine called " + name + ".")
 		return
 	}

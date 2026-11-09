@@ -18,7 +18,7 @@ WHERE report_id = $1
 `
 
 func (q *Queries) GetResidueAttempt(ctx context.Context, reportID int64) (IntelResidueAttempt, error) {
-	row := q.db.QueryRowContext(ctx, getResidueAttempt, reportID)
+	row := q.db.QueryRow(ctx, getResidueAttempt, reportID)
 	var i IntelResidueAttempt
 	err := row.Scan(
 		&i.ReportID,
@@ -51,7 +51,7 @@ type InsertIntelResidueCallParams struct {
 // by the residue worker and read by nothing that renders; the
 // review surface is their first reader.
 func (q *Queries) InsertIntelResidueCall(ctx context.Context, arg InsertIntelResidueCallParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, insertIntelResidueCall,
+	row := q.db.QueryRow(ctx, insertIntelResidueCall,
 		arg.ReportID,
 		arg.Spans,
 		arg.Output,
@@ -81,7 +81,7 @@ type InsertIntelResidueNoteParams struct {
 }
 
 func (q *Queries) InsertIntelResidueNote(ctx context.Context, arg InsertIntelResidueNoteParams) error {
-	_, err := q.db.ExecContext(ctx, insertIntelResidueNote,
+	_, err := q.db.Exec(ctx, insertIntelResidueNote,
 		arg.ReportID,
 		arg.CallID,
 		arg.Span,
@@ -109,7 +109,7 @@ type ListIntelResidueNotesParams struct {
 }
 
 func (q *Queries) ListIntelResidueNotes(ctx context.Context, arg ListIntelResidueNotesParams) ([]IntelResidueNote, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelResidueNotes, arg.ReportID, arg.Limit)
+	rows, err := q.db.Query(ctx, listIntelResidueNotes, arg.ReportID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -132,9 +132,6 @@ func (q *Queries) ListIntelResidueNotes(ctx context.Context, arg ListIntelResidu
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -168,7 +165,7 @@ type ListResidueBacklogReportsParams struct {
 // completed pass has covered, newest first. The CASE keeps the
 // jsonb read off rows whose analysis was never stored.
 func (q *Queries) ListResidueBacklogReports(ctx context.Context, arg ListResidueBacklogReportsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listResidueBacklogReports, arg.Limit, arg.NextAttemptAt)
+	rows, err := q.db.Query(ctx, listResidueBacklogReports, arg.Limit, arg.NextAttemptAt)
 	if err != nil {
 		return nil, err
 	}
@@ -180,9 +177,6 @@ func (q *Queries) ListResidueBacklogReports(ctx context.Context, arg ListResidue
 			return nil, err
 		}
 		items = append(items, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -210,7 +204,7 @@ type MarkResidueDeadParams struct {
 }
 
 func (q *Queries) MarkResidueDead(ctx context.Context, arg MarkResidueDeadParams) error {
-	_, err := q.db.ExecContext(ctx, markResidueDead,
+	_, err := q.db.Exec(ctx, markResidueDead,
 		arg.ReportID,
 		arg.TextHash,
 		arg.Attempts,
@@ -225,7 +219,7 @@ SELECT EXISTS (SELECT 1 FROM intel_residue_calls WHERE text_hash = $1)
 `
 
 func (q *Queries) ResidueCallExistsForHash(ctx context.Context, textHash string) (bool, error) {
-	row := q.db.QueryRowContext(ctx, residueCallExistsForHash, textHash)
+	row := q.db.QueryRow(ctx, residueCallExistsForHash, textHash)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -250,7 +244,7 @@ type UpsertResidueAttemptParams struct {
 }
 
 func (q *Queries) UpsertResidueAttempt(ctx context.Context, arg UpsertResidueAttemptParams) error {
-	_, err := q.db.ExecContext(ctx, upsertResidueAttempt,
+	_, err := q.db.Exec(ctx, upsertResidueAttempt,
 		arg.ReportID,
 		arg.TextHash,
 		arg.Attempts,

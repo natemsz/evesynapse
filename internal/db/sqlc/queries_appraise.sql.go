@@ -9,8 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const deleteAnonymousAppraisalByToken = `-- name: DeleteAnonymousAppraisalByToken :execrows
@@ -19,11 +17,11 @@ WHERE share_token = $1 AND is_anonymous = true
 `
 
 func (q *Queries) DeleteAnonymousAppraisalByToken(ctx context.Context, shareToken string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteAnonymousAppraisalByToken, shareToken)
+	result, err := q.db.Exec(ctx, deleteAnonymousAppraisalByToken, shareToken)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const deleteExpiredAnonymousAppraisals = `-- name: DeleteExpiredAnonymousAppraisals :execrows
@@ -32,11 +30,11 @@ WHERE is_anonymous = true AND last_viewed_at < $1
 `
 
 func (q *Queries) DeleteExpiredAnonymousAppraisals(ctx context.Context, lastViewedAt time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteExpiredAnonymousAppraisals, lastViewedAt)
+	result, err := q.db.Exec(ctx, deleteExpiredAnonymousAppraisals, lastViewedAt)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const deleteUserAppraisal = `-- name: DeleteUserAppraisal :execrows
@@ -50,11 +48,11 @@ type DeleteUserAppraisalParams struct {
 }
 
 func (q *Queries) DeleteUserAppraisal(ctx context.Context, arg DeleteUserAppraisalParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteUserAppraisal, arg.ID, arg.UserID)
+	result, err := q.db.Exec(ctx, deleteUserAppraisal, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const getAppraisalAnonymousOwner = `-- name: GetAppraisalAnonymousOwner :one
@@ -62,7 +60,7 @@ SELECT user_id FROM appraisal_anonymous_owner WHERE id = 1
 `
 
 func (q *Queries) GetAppraisalAnonymousOwner(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getAppraisalAnonymousOwner)
+	row := q.db.QueryRow(ctx, getAppraisalAnonymousOwner)
 	var user_id int64
 	err := row.Scan(&user_id)
 	return user_id, err
@@ -73,7 +71,7 @@ SELECT secret FROM appraisal_cookie_secrets WHERE id = 1
 `
 
 func (q *Queries) GetAppraisalCookieSecret(ctx context.Context) (string, error) {
-	row := q.db.QueryRowContext(ctx, getAppraisalCookieSecret)
+	row := q.db.QueryRow(ctx, getAppraisalCookieSecret)
 	var secret string
 	err := row.Scan(&secret)
 	return secret, err
@@ -91,7 +89,7 @@ type GetUserAppraisalParams struct {
 }
 
 func (q *Queries) GetUserAppraisal(ctx context.Context, arg GetUserAppraisalParams) (UserAppraisal, error) {
-	row := q.db.QueryRowContext(ctx, getUserAppraisal, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, getUserAppraisal, arg.ID, arg.UserID)
 	var i UserAppraisal
 	err := row.Scan(
 		&i.ID,
@@ -117,7 +115,7 @@ WHERE share_token = $1
 `
 
 func (q *Queries) GetUserAppraisalByShareToken(ctx context.Context, shareToken string) (UserAppraisal, error) {
-	row := q.db.QueryRowContext(ctx, getUserAppraisalByShareToken, shareToken)
+	row := q.db.QueryRow(ctx, getUserAppraisalByShareToken, shareToken)
 	var i UserAppraisal
 	err := row.Scan(
 		&i.ID,
@@ -142,7 +140,7 @@ WHERE user_id = $1
 `
 
 func (q *Queries) GetUserAppraisalPref(ctx context.Context, userID int64) (UserAppraisalPref, error) {
-	row := q.db.QueryRowContext(ctx, getUserAppraisalPref, userID)
+	row := q.db.QueryRow(ctx, getUserAppraisalPref, userID)
 	var i UserAppraisalPref
 	err := row.Scan(
 		&i.UserID,
@@ -163,7 +161,7 @@ ON CONFLICT (id) DO NOTHING
 `
 
 func (q *Queries) InsertAppraisalAnonymousOwner(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, insertAppraisalAnonymousOwner, userID)
+	_, err := q.db.Exec(ctx, insertAppraisalAnonymousOwner, userID)
 	return err
 }
 
@@ -174,7 +172,7 @@ ON CONFLICT (id) DO NOTHING
 `
 
 func (q *Queries) InsertAppraisalCookieSecret(ctx context.Context, secret string) error {
-	_, err := q.db.ExecContext(ctx, insertAppraisalCookieSecret, secret)
+	_, err := q.db.Exec(ctx, insertAppraisalCookieSecret, secret)
 	return err
 }
 
@@ -202,7 +200,7 @@ type InsertUserAppraisalParams struct {
 // owner (schema 064), and the case-insensitive name lookup the
 // paste parser resolves against.
 func (q *Queries) InsertUserAppraisal(ctx context.Context, arg InsertUserAppraisalParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, insertUserAppraisal,
+	row := q.db.QueryRow(ctx, insertUserAppraisal,
 		arg.UserID,
 		arg.InputText,
 		arg.InputHash,
@@ -225,7 +223,7 @@ ORDER BY type_id, material_type_id
 `
 
 func (q *Queries) ListReprocessingOutputsForTypes(ctx context.Context, typeIds []int64) ([]SdeReprocessing, error) {
-	rows, err := q.db.QueryContext(ctx, listReprocessingOutputsForTypes, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listReprocessingOutputsForTypes, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -237,9 +235,6 @@ func (q *Queries) ListReprocessingOutputsForTypes(ctx context.Context, typeIds [
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -260,7 +255,7 @@ type ListSDETypesByLowerNamesRow struct {
 // Pasted names arrive in whatever case the player typed; the
 // SDE's canonical case comes back with the row.
 func (q *Queries) ListSDETypesByLowerNames(ctx context.Context, names []string) ([]ListSDETypesByLowerNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypesByLowerNames, pq.Array(names))
+	rows, err := q.db.Query(ctx, listSDETypesByLowerNames, names)
 	if err != nil {
 		return nil, err
 	}
@@ -272,9 +267,6 @@ func (q *Queries) ListSDETypesByLowerNames(ctx context.Context, names []string) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -296,7 +288,7 @@ type ListUserAppraisalsParams struct {
 }
 
 func (q *Queries) ListUserAppraisals(ctx context.Context, arg ListUserAppraisalsParams) ([]UserAppraisal, error) {
-	rows, err := q.db.QueryContext(ctx, listUserAppraisals, arg.UserID, arg.Limit)
+	rows, err := q.db.Query(ctx, listUserAppraisals, arg.UserID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -321,9 +313,6 @@ func (q *Queries) ListUserAppraisals(ctx context.Context, arg ListUserAppraisals
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -338,7 +327,7 @@ WHERE share_token = ANY($1::text[])
 `
 
 func (q *Queries) ListUserAppraisalsByShareTokens(ctx context.Context, tokens []string) ([]UserAppraisal, error) {
-	rows, err := q.db.QueryContext(ctx, listUserAppraisalsByShareTokens, pq.Array(tokens))
+	rows, err := q.db.Query(ctx, listUserAppraisalsByShareTokens, tokens)
 	if err != nil {
 		return nil, err
 	}
@@ -364,9 +353,6 @@ func (q *Queries) ListUserAppraisalsByShareTokens(ctx context.Context, tokens []
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -380,7 +366,7 @@ WHERE share_token = $1 AND is_anonymous = true
 `
 
 func (q *Queries) TouchUserAppraisalByToken(ctx context.Context, shareToken string) error {
-	_, err := q.db.ExecContext(ctx, touchUserAppraisalByToken, shareToken)
+	_, err := q.db.Exec(ctx, touchUserAppraisalByToken, shareToken)
 	return err
 }
 
@@ -402,7 +388,7 @@ type UpsertUserAppraisalPrefParams struct {
 }
 
 func (q *Queries) UpsertUserAppraisalPref(ctx context.Context, arg UpsertUserAppraisalPrefParams) error {
-	_, err := q.db.ExecContext(ctx, upsertUserAppraisalPref,
+	_, err := q.db.Exec(ctx, upsertUserAppraisalPref,
 		arg.UserID,
 		arg.HubRegion,
 		arg.Mode,
@@ -427,6 +413,6 @@ type UpsertUserAppraisalRefineParams struct {
 }
 
 func (q *Queries) UpsertUserAppraisalRefine(ctx context.Context, arg UpsertUserAppraisalRefineParams) error {
-	_, err := q.db.ExecContext(ctx, upsertUserAppraisalRefine, arg.UserID, arg.RefineRate, arg.PruneOres)
+	_, err := q.db.Exec(ctx, upsertUserAppraisalRefine, arg.UserID, arg.RefineRate, arg.PruneOres)
 	return err
 }

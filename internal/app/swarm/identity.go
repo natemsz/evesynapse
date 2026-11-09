@@ -26,7 +26,6 @@ import (
 	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -37,6 +36,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // The sealed-seed envelope: "sw:v1:" + base64(nonce | ciphertext).
@@ -72,7 +72,7 @@ func LoadSwarmIdentity(ctx context.Context, q *db.Queries, secret string) (*Swar
 			return id, nil
 		}
 		logging.Warnf("swarm: the sealed signing key does not open with the configured secret; minting a fresh instance identity")
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("swarm: read identity: %w", err)
 	}
 	id, err := MintSwarmIdentity()

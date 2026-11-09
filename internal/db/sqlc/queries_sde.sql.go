@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const countSDEAttributeTypes = `-- name: CountSDEAttributeTypes :one
@@ -18,7 +16,7 @@ SELECT COUNT(*) FROM sde_attribute_types
 `
 
 func (q *Queries) CountSDEAttributeTypes(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDEAttributeTypes)
+	row := q.db.QueryRow(ctx, countSDEAttributeTypes)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -34,7 +32,7 @@ SELECT COUNT(*) FROM sde_blueprints
 // latest values as fresher snapshots land.
 // ---------------------------------------------------------------------
 func (q *Queries) CountSDEBlueprints(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDEBlueprints)
+	row := q.db.QueryRow(ctx, countSDEBlueprints)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -45,7 +43,7 @@ SELECT COUNT(*) FROM sde_categories
 `
 
 func (q *Queries) CountSDECategories(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDECategories)
+	row := q.db.QueryRow(ctx, countSDECategories)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -56,7 +54,7 @@ SELECT COUNT(*) FROM sde_effect_modifiers
 `
 
 func (q *Queries) CountSDEEffectModifiers(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDEEffectModifiers)
+	row := q.db.QueryRow(ctx, countSDEEffectModifiers)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -67,7 +65,7 @@ SELECT COUNT(*) FROM sde_effects
 `
 
 func (q *Queries) CountSDEEffects(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDEEffects)
+	row := q.db.QueryRow(ctx, countSDEEffects)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -78,7 +76,7 @@ SELECT COUNT(*) FROM sde_groups
 `
 
 func (q *Queries) CountSDEGroups(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDEGroups)
+	row := q.db.QueryRow(ctx, countSDEGroups)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -89,7 +87,7 @@ SELECT COUNT(*) FROM sde_market_groups
 `
 
 func (q *Queries) CountSDEMarketGroups(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDEMarketGroups)
+	row := q.db.QueryRow(ctx, countSDEMarketGroups)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -100,7 +98,7 @@ SELECT COUNT(*) FROM sde_regions
 `
 
 func (q *Queries) CountSDERegions(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDERegions)
+	row := q.db.QueryRow(ctx, countSDERegions)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -111,7 +109,7 @@ SELECT COUNT(*) FROM sde_requirements
 `
 
 func (q *Queries) CountSDERequirements(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDERequirements)
+	row := q.db.QueryRow(ctx, countSDERequirements)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -128,7 +126,7 @@ SELECT COUNT(*) FROM sde_skill_meta
 // are plain CRUD.
 // ---------------------------------------------------------------------
 func (q *Queries) CountSDESkillMeta(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDESkillMeta)
+	row := q.db.QueryRow(ctx, countSDESkillMeta)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -139,7 +137,7 @@ SELECT COUNT(*) FROM sde_stations
 `
 
 func (q *Queries) CountSDEStations(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDEStations)
+	row := q.db.QueryRow(ctx, countSDEStations)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -150,7 +148,7 @@ SELECT COUNT(*) FROM sde_systems
 `
 
 func (q *Queries) CountSDESystems(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDESystems)
+	row := q.db.QueryRow(ctx, countSDESystems)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -161,7 +159,7 @@ SELECT COUNT(*) FROM sde_type_attributes
 `
 
 func (q *Queries) CountSDETypeAttributes(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDETypeAttributes)
+	row := q.db.QueryRow(ctx, countSDETypeAttributes)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -172,7 +170,7 @@ SELECT COUNT(*) FROM sde_type_effects
 `
 
 func (q *Queries) CountSDETypeEffects(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDETypeEffects)
+	row := q.db.QueryRow(ctx, countSDETypeEffects)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -183,7 +181,7 @@ SELECT COUNT(*) FROM sde_types
 `
 
 func (q *Queries) CountSDETypes(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDETypes)
+	row := q.db.QueryRow(ctx, countSDETypes)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -207,7 +205,7 @@ type CountSDETypesFilteredParams struct {
 }
 
 func (q *Queries) CountSDETypesFiltered(ctx context.Context, arg CountSDETypesFilteredParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDETypesFiltered,
+	row := q.db.QueryRow(ctx, countSDETypesFiltered,
 		arg.Q,
 		arg.PublishedOnly,
 		arg.CategoryID,
@@ -229,7 +227,7 @@ type CountSDETypesInGroupParams struct {
 }
 
 func (q *Queries) CountSDETypesInGroup(ctx context.Context, arg CountSDETypesInGroupParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDETypesInGroup, arg.GroupID, arg.Lower)
+	row := q.db.QueryRow(ctx, countSDETypesInGroup, arg.GroupID, arg.Lower)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -241,7 +239,7 @@ WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
 `
 
 func (q *Queries) CountSDETypesInMarketGroup(ctx context.Context, marketGroupID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDETypesInMarketGroup, marketGroupID)
+	row := q.db.QueryRow(ctx, countSDETypesInMarketGroup, marketGroupID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -262,7 +260,7 @@ WHERE sde_types.market_group_id IN (SELECT market_group_id FROM tree)
 // Every marketable type in a market group and all its descendant
 // groups: the basket editor's bulk add and its size label.
 func (q *Queries) CountSDETypesInMarketGroupSubtree(ctx context.Context, marketGroupID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDETypesInMarketGroupSubtree, marketGroupID)
+	row := q.db.QueryRow(ctx, countSDETypesInMarketGroupSubtree, marketGroupID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -278,7 +276,7 @@ WHERE item_id = $1
 // details from the recent-killmails snapshot; pages only read here.
 // ---------------------------------------------------------------------
 func (q *Queries) GetItemName(ctx context.Context, itemID int64) (string, error) {
-	row := q.db.QueryRowContext(ctx, getItemName, itemID)
+	row := q.db.QueryRow(ctx, getItemName, itemID)
 	var name string
 	err := row.Scan(&name)
 	return name, err
@@ -290,7 +288,7 @@ WHERE attribute_id = $1
 `
 
 func (q *Queries) GetSDEAttributeType(ctx context.Context, attributeID int64) (SdeAttributeType, error) {
-	row := q.db.QueryRowContext(ctx, getSDEAttributeType, attributeID)
+	row := q.db.QueryRow(ctx, getSDEAttributeType, attributeID)
 	var i SdeAttributeType
 	err := row.Scan(
 		&i.AttributeID,
@@ -310,7 +308,7 @@ WHERE blueprint_type_id = $1
 `
 
 func (q *Queries) GetSDEBlueprint(ctx context.Context, blueprintTypeID int64) (SdeBlueprint, error) {
-	row := q.db.QueryRowContext(ctx, getSDEBlueprint, blueprintTypeID)
+	row := q.db.QueryRow(ctx, getSDEBlueprint, blueprintTypeID)
 	var i SdeBlueprint
 	err := row.Scan(
 		&i.BlueprintTypeID,
@@ -331,7 +329,7 @@ LIMIT 1
 `
 
 func (q *Queries) GetSDEBlueprintForProduct(ctx context.Context, productTypeID int64) (SdeBlueprint, error) {
-	row := q.db.QueryRowContext(ctx, getSDEBlueprintForProduct, productTypeID)
+	row := q.db.QueryRow(ctx, getSDEBlueprintForProduct, productTypeID)
 	var i SdeBlueprint
 	err := row.Scan(
 		&i.BlueprintTypeID,
@@ -351,7 +349,7 @@ ORDER BY product_type_id, blueprint_type_id
 `
 
 func (q *Queries) GetSDEBlueprintsForProducts(ctx context.Context, productIds []int64) ([]SdeBlueprint, error) {
-	rows, err := q.db.QueryContext(ctx, getSDEBlueprintsForProducts, pq.Array(productIds))
+	rows, err := q.db.Query(ctx, getSDEBlueprintsForProducts, productIds)
 	if err != nil {
 		return nil, err
 	}
@@ -370,9 +368,6 @@ func (q *Queries) GetSDEBlueprintsForProducts(ctx context.Context, productIds []
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -385,7 +380,7 @@ WHERE category_id = $1
 `
 
 func (q *Queries) GetSDECategory(ctx context.Context, categoryID int64) (SdeCategory, error) {
-	row := q.db.QueryRowContext(ctx, getSDECategory, categoryID)
+	row := q.db.QueryRow(ctx, getSDECategory, categoryID)
 	var i SdeCategory
 	err := row.Scan(&i.CategoryID, &i.Name)
 	return i, err
@@ -397,7 +392,7 @@ WHERE effect_id = $1
 `
 
 func (q *Queries) GetSDEEffect(ctx context.Context, effectID int64) (SdeEffect, error) {
-	row := q.db.QueryRowContext(ctx, getSDEEffect, effectID)
+	row := q.db.QueryRow(ctx, getSDEEffect, effectID)
 	var i SdeEffect
 	err := row.Scan(&i.EffectID, &i.Name, &i.Category)
 	return i, err
@@ -409,7 +404,7 @@ WHERE group_id = $1
 `
 
 func (q *Queries) GetSDEGroup(ctx context.Context, groupID int64) (SdeGroup, error) {
-	row := q.db.QueryRowContext(ctx, getSDEGroup, groupID)
+	row := q.db.QueryRow(ctx, getSDEGroup, groupID)
 	var i SdeGroup
 	err := row.Scan(&i.GroupID, &i.Name, &i.CategoryID)
 	return i, err
@@ -425,7 +420,7 @@ WHERE market_group_id = $1
 // other SDE tables. Listed types keep the app-wide marketable floor
 // (published = 1 AND market_group_id > 0).
 func (q *Queries) GetSDEMarketGroup(ctx context.Context, marketGroupID int64) (SdeMarketGroup, error) {
-	row := q.db.QueryRowContext(ctx, getSDEMarketGroup, marketGroupID)
+	row := q.db.QueryRow(ctx, getSDEMarketGroup, marketGroupID)
 	var i SdeMarketGroup
 	err := row.Scan(
 		&i.MarketGroupID,
@@ -443,7 +438,7 @@ WHERE key = $1
 `
 
 func (q *Queries) GetSDEMeta(ctx context.Context, key string) (string, error) {
-	row := q.db.QueryRowContext(ctx, getSDEMeta, key)
+	row := q.db.QueryRow(ctx, getSDEMeta, key)
 	var value string
 	err := row.Scan(&value)
 	return value, err
@@ -457,7 +452,7 @@ SELECT corporation_id, faction_id FROM sde_npc_corporations WHERE corporation_id
 // math's faction standing. A corporation the SDE does not
 // know returns no row.
 func (q *Queries) GetSDENPCCorporationFaction(ctx context.Context, corporationID int64) (SdeNpcCorporation, error) {
-	row := q.db.QueryRowContext(ctx, getSDENPCCorporationFaction, corporationID)
+	row := q.db.QueryRow(ctx, getSDENPCCorporationFaction, corporationID)
 	var i SdeNpcCorporation
 	err := row.Scan(&i.CorporationID, &i.FactionID)
 	return i, err
@@ -469,7 +464,7 @@ WHERE region_id = $1
 `
 
 func (q *Queries) GetSDERegion(ctx context.Context, regionID int64) (SdeRegion, error) {
-	row := q.db.QueryRowContext(ctx, getSDERegion, regionID)
+	row := q.db.QueryRow(ctx, getSDERegion, regionID)
 	var i SdeRegion
 	err := row.Scan(&i.RegionID, &i.Name)
 	return i, err
@@ -481,7 +476,7 @@ WHERE type_id = $1
 `
 
 func (q *Queries) GetSDESkillMeta(ctx context.Context, typeID int64) (SdeSkillMetum, error) {
-	row := q.db.QueryRowContext(ctx, getSDESkillMeta, typeID)
+	row := q.db.QueryRow(ctx, getSDESkillMeta, typeID)
 	var i SdeSkillMetum
 	err := row.Scan(
 		&i.TypeID,
@@ -504,7 +499,7 @@ type GetSDEStationRow struct {
 }
 
 func (q *Queries) GetSDEStation(ctx context.Context, stationID int64) (GetSDEStationRow, error) {
-	row := q.db.QueryRowContext(ctx, getSDEStation, stationID)
+	row := q.db.QueryRow(ctx, getSDEStation, stationID)
 	var i GetSDEStationRow
 	err := row.Scan(&i.StationID, &i.Name, &i.SystemID)
 	return i, err
@@ -525,7 +520,7 @@ type GetSDEStationOwnerRow struct {
 // player structure, or a station from before the owners
 // landed) returns no row.
 func (q *Queries) GetSDEStationOwner(ctx context.Context, stationID int64) (GetSDEStationOwnerRow, error) {
-	row := q.db.QueryRowContext(ctx, getSDEStationOwner, stationID)
+	row := q.db.QueryRow(ctx, getSDEStationOwner, stationID)
 	var i GetSDEStationOwnerRow
 	err := row.Scan(&i.StationID, &i.CorporationID)
 	return i, err
@@ -544,7 +539,7 @@ type GetSDESystemRow struct {
 }
 
 func (q *Queries) GetSDESystem(ctx context.Context, systemID int64) (GetSDESystemRow, error) {
-	row := q.db.QueryRowContext(ctx, getSDESystem, systemID)
+	row := q.db.QueryRow(ctx, getSDESystem, systemID)
 	var i GetSDESystemRow
 	err := row.Scan(
 		&i.SystemID,
@@ -568,7 +563,7 @@ type GetSDESystemByNameRow struct {
 }
 
 func (q *Queries) GetSDESystemByName(ctx context.Context, lower string) (GetSDESystemByNameRow, error) {
-	row := q.db.QueryRowContext(ctx, getSDESystemByName, lower)
+	row := q.db.QueryRow(ctx, getSDESystemByName, lower)
 	var i GetSDESystemByNameRow
 	err := row.Scan(
 		&i.SystemID,
@@ -590,7 +585,7 @@ WHERE type_id = $1
 // transaction in the importer (internal/app/sde.go); reads stay sqlc.
 // ---------------------------------------------------------------------
 func (q *Queries) GetSDEType(ctx context.Context, typeID int64) (SdeType, error) {
-	row := q.db.QueryRowContext(ctx, getSDEType, typeID)
+	row := q.db.QueryRow(ctx, getSDEType, typeID)
 	var i SdeType
 	err := row.Scan(
 		&i.TypeID,
@@ -616,7 +611,7 @@ type GetSDETypeByNameRow struct {
 }
 
 func (q *Queries) GetSDETypeByName(ctx context.Context, lower string) (GetSDETypeByNameRow, error) {
-	row := q.db.QueryRowContext(ctx, getSDETypeByName, lower)
+	row := q.db.QueryRow(ctx, getSDETypeByName, lower)
 	var i GetSDETypeByNameRow
 	err := row.Scan(&i.TypeID, &i.Name)
 	return i, err
@@ -635,7 +630,7 @@ type GetTypeDetailRow struct {
 }
 
 func (q *Queries) GetTypeDetail(ctx context.Context, typeID int64) (GetTypeDetailRow, error) {
-	row := q.db.QueryRowContext(ctx, getTypeDetail, typeID)
+	row := q.db.QueryRow(ctx, getTypeDetail, typeID)
 	var i GetTypeDetailRow
 	err := row.Scan(&i.TypeID, &i.Description, &i.FetchedAt)
 	return i, err
@@ -647,7 +642,7 @@ WHERE type_id = $1
 `
 
 func (q *Queries) GetTypeName(ctx context.Context, typeID int64) (string, error) {
-	row := q.db.QueryRowContext(ctx, getTypeName, typeID)
+	row := q.db.QueryRow(ctx, getTypeName, typeID)
 	var name string
 	err := row.Scan(&name)
 	return name, err
@@ -665,7 +660,7 @@ ORDER BY t.type_id
 // manufacturing blueprint -- prize hulls and the like -- that
 // only contract evidence can price).
 func (q *Queries) ListAllSDEShipTypeIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listAllSDEShipTypeIDs)
+	rows, err := q.db.Query(ctx, listAllSDEShipTypeIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -677,9 +672,6 @@ func (q *Queries) ListAllSDEShipTypeIDs(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -693,7 +685,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
-	rows, err := q.db.QueryContext(ctx, listAllTypeNames)
+	rows, err := q.db.Query(ctx, listAllTypeNames)
 	if err != nil {
 		return nil, err
 	}
@@ -705,9 +697,6 @@ func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -726,7 +715,7 @@ type ListCelestialNamesRow struct {
 }
 
 func (q *Queries) ListCelestialNames(ctx context.Context, ids []int64) ([]ListCelestialNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listCelestialNames, pq.Array(ids))
+	rows, err := q.db.Query(ctx, listCelestialNames, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -738,9 +727,6 @@ func (q *Queries) ListCelestialNames(ctx context.Context, ids []int64) ([]ListCe
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -771,7 +757,7 @@ type ListFitChargeTypesRow struct {
 }
 
 func (q *Queries) ListFitChargeTypes(ctx context.Context, arg ListFitChargeTypesParams) ([]ListFitChargeTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFitChargeTypes, pq.Array(arg.GroupIds), arg.ChargeSize)
+	rows, err := q.db.Query(ctx, listFitChargeTypes, arg.GroupIds, arg.ChargeSize)
 	if err != nil {
 		return nil, err
 	}
@@ -783,9 +769,6 @@ func (q *Queries) ListFitChargeTypes(ctx context.Context, arg ListFitChargeTypes
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -819,7 +802,7 @@ type ListFitDroneTypesRow struct {
 }
 
 func (q *Queries) ListFitDroneTypes(ctx context.Context, arg ListFitDroneTypesParams) ([]ListFitDroneTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFitDroneTypes, arg.Q, arg.Meta, arg.Lim)
+	rows, err := q.db.Query(ctx, listFitDroneTypes, arg.Q, arg.Meta, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -831,9 +814,6 @@ func (q *Queries) ListFitDroneTypes(ctx context.Context, arg ListFitDroneTypesPa
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -866,7 +846,7 @@ type ListFitImplantTypesRow struct {
 
 // ListFitImplantTypes: implants for one slot (implantness, attribute 331).
 func (q *Queries) ListFitImplantTypes(ctx context.Context, arg ListFitImplantTypesParams) ([]ListFitImplantTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFitImplantTypes, arg.Slot, arg.Q, arg.Lim)
+	rows, err := q.db.Query(ctx, listFitImplantTypes, arg.Slot, arg.Q, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -878,9 +858,6 @@ func (q *Queries) ListFitImplantTypes(ctx context.Context, arg ListFitImplantTyp
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -914,7 +891,7 @@ type ListFitResourceImplantsRow struct {
 // bonus is the implant's own value of the modifier's attribute
 // (the ladder percent for the output families).
 func (q *Queries) ListFitResourceImplants(ctx context.Context) ([]ListFitResourceImplantsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFitResourceImplants)
+	rows, err := q.db.Query(ctx, listFitResourceImplants)
 	if err != nil {
 		return nil, err
 	}
@@ -932,9 +909,6 @@ func (q *Queries) ListFitResourceImplants(ctx context.Context) ([]ListFitResourc
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -969,7 +943,7 @@ type ListFitSlotTypesRow struct {
 }
 
 func (q *Queries) ListFitSlotTypes(ctx context.Context, arg ListFitSlotTypesParams) ([]ListFitSlotTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFitSlotTypes,
+	rows, err := q.db.Query(ctx, listFitSlotTypes,
 		arg.EffectID,
 		arg.Q,
 		arg.Meta,
@@ -987,9 +961,6 @@ func (q *Queries) ListFitSlotTypes(ctx context.Context, arg ListFitSlotTypesPara
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1002,7 +973,7 @@ ORDER BY item_id
 `
 
 func (q *Queries) ListItemNames(ctx context.Context) ([]ItemName, error) {
-	rows, err := q.db.QueryContext(ctx, listItemNames)
+	rows, err := q.db.Query(ctx, listItemNames)
 	if err != nil {
 		return nil, err
 	}
@@ -1014,9 +985,6 @@ func (q *Queries) ListItemNames(ctx context.Context) ([]ItemName, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1032,7 +1000,7 @@ WHERE item_id = ANY($1::bigint[])
 // Batched singleton-name lookup: the names for one page's item
 // IDs, without pulling the whole item_names table.
 func (q *Queries) ListItemNamesByIDs(ctx context.Context, itemIds []int64) ([]ItemName, error) {
-	rows, err := q.db.QueryContext(ctx, listItemNamesByIDs, pq.Array(itemIds))
+	rows, err := q.db.Query(ctx, listItemNamesByIDs, itemIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1044,9 +1012,6 @@ func (q *Queries) ListItemNamesByIDs(ctx context.Context, itemIds []int64) ([]It
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1060,7 +1025,7 @@ WHERE parent_group_id > 0
 `
 
 func (q *Queries) ListMarketGroupParentIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketGroupParentIDs)
+	rows, err := q.db.Query(ctx, listMarketGroupParentIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1072,9 +1037,6 @@ func (q *Queries) ListMarketGroupParentIDs(ctx context.Context) ([]int64, error)
 			return nil, err
 		}
 		items = append(items, parent_group_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1089,7 +1051,7 @@ ORDER BY attribute_id
 `
 
 func (q *Queries) ListSDEAttributeTypesByIDs(ctx context.Context, attributeIds []int64) ([]SdeAttributeType, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEAttributeTypesByIDs, pq.Array(attributeIds))
+	rows, err := q.db.Query(ctx, listSDEAttributeTypesByIDs, attributeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1109,9 +1071,6 @@ func (q *Queries) ListSDEAttributeTypesByIDs(ctx context.Context, attributeIds [
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1130,7 +1089,7 @@ type ListSDEBlueprintMaterialsRow struct {
 }
 
 func (q *Queries) ListSDEBlueprintMaterials(ctx context.Context, blueprintTypeID int64) ([]ListSDEBlueprintMaterialsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEBlueprintMaterials, blueprintTypeID)
+	rows, err := q.db.Query(ctx, listSDEBlueprintMaterials, blueprintTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1142,9 +1101,6 @@ func (q *Queries) ListSDEBlueprintMaterials(ctx context.Context, blueprintTypeID
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1159,7 +1115,7 @@ ORDER BY blueprint_type_id, material_type_id
 `
 
 func (q *Queries) ListSDEBlueprintMaterialsForBlueprints(ctx context.Context, blueprintIds []int64) ([]SdeBlueprintMaterial, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEBlueprintMaterialsForBlueprints, pq.Array(blueprintIds))
+	rows, err := q.db.Query(ctx, listSDEBlueprintMaterialsForBlueprints, blueprintIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1171,9 +1127,6 @@ func (q *Queries) ListSDEBlueprintMaterialsForBlueprints(ctx context.Context, bl
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1191,7 +1144,7 @@ type ListSDEBlueprintProductsRow struct {
 }
 
 func (q *Queries) ListSDEBlueprintProducts(ctx context.Context) ([]ListSDEBlueprintProductsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEBlueprintProducts)
+	rows, err := q.db.Query(ctx, listSDEBlueprintProducts)
 	if err != nil {
 		return nil, err
 	}
@@ -1203,9 +1156,6 @@ func (q *Queries) ListSDEBlueprintProducts(ctx context.Context) ([]ListSDEBluepr
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1225,7 +1175,7 @@ type ListSDEBlueprintProductsForBlueprintsRow struct {
 }
 
 func (q *Queries) ListSDEBlueprintProductsForBlueprints(ctx context.Context, blueprintIds []int64) ([]ListSDEBlueprintProductsForBlueprintsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEBlueprintProductsForBlueprints, pq.Array(blueprintIds))
+	rows, err := q.db.Query(ctx, listSDEBlueprintProductsForBlueprints, blueprintIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1237,9 +1187,6 @@ func (q *Queries) ListSDEBlueprintProductsForBlueprints(ctx context.Context, blu
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1259,7 +1206,7 @@ type ListSDEBlueprintSkillsRow struct {
 }
 
 func (q *Queries) ListSDEBlueprintSkills(ctx context.Context, blueprintTypeID int64) ([]ListSDEBlueprintSkillsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEBlueprintSkills, blueprintTypeID)
+	rows, err := q.db.Query(ctx, listSDEBlueprintSkills, blueprintTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1271,9 +1218,6 @@ func (q *Queries) ListSDEBlueprintSkills(ctx context.Context, blueprintTypeID in
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1288,7 +1232,7 @@ ORDER BY blueprint_type_id, level DESC, skill_type_id
 `
 
 func (q *Queries) ListSDEBlueprintSkillsForBlueprints(ctx context.Context, blueprintIds []int64) ([]SdeBlueprintSkill, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEBlueprintSkillsForBlueprints, pq.Array(blueprintIds))
+	rows, err := q.db.Query(ctx, listSDEBlueprintSkillsForBlueprints, blueprintIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1300,9 +1244,6 @@ func (q *Queries) ListSDEBlueprintSkillsForBlueprints(ctx context.Context, bluep
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1327,7 +1268,7 @@ type ListSDEBlueprintsUsingMaterialRow struct {
 }
 
 func (q *Queries) ListSDEBlueprintsUsingMaterial(ctx context.Context, materialTypeID int64) ([]ListSDEBlueprintsUsingMaterialRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEBlueprintsUsingMaterial, materialTypeID)
+	rows, err := q.db.Query(ctx, listSDEBlueprintsUsingMaterial, materialTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1344,9 +1285,6 @@ func (q *Queries) ListSDEBlueprintsUsingMaterial(ctx context.Context, materialTy
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1372,7 +1310,7 @@ type ListSDECategoriesWithCountsRow struct {
 }
 
 func (q *Queries) ListSDECategoriesWithCounts(ctx context.Context) ([]ListSDECategoriesWithCountsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDECategoriesWithCounts)
+	rows, err := q.db.Query(ctx, listSDECategoriesWithCounts)
 	if err != nil {
 		return nil, err
 	}
@@ -1389,9 +1327,6 @@ func (q *Queries) ListSDECategoriesWithCounts(ctx context.Context) ([]ListSDECat
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1416,7 +1351,7 @@ type ListSDEEffectModifiersRow struct {
 }
 
 func (q *Queries) ListSDEEffectModifiers(ctx context.Context, effectID int64) ([]ListSDEEffectModifiersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEEffectModifiers, effectID)
+	rows, err := q.db.Query(ctx, listSDEEffectModifiers, effectID)
 	if err != nil {
 		return nil, err
 	}
@@ -1437,9 +1372,6 @@ func (q *Queries) ListSDEEffectModifiers(ctx context.Context, effectID int64) ([
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1453,7 +1385,7 @@ ORDER BY effect_id, domain, func, modified_attr
 `
 
 func (q *Queries) ListSDEEffectModifiersByIDs(ctx context.Context, effectIds []int64) ([]SdeEffectModifier, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEEffectModifiersByIDs, pq.Array(effectIds))
+	rows, err := q.db.Query(ctx, listSDEEffectModifiersByIDs, effectIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1475,9 +1407,6 @@ func (q *Queries) ListSDEEffectModifiersByIDs(ctx context.Context, effectIds []i
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1491,7 +1420,7 @@ ORDER BY effect_id
 `
 
 func (q *Queries) ListSDEEffectsByIDs(ctx context.Context, effectIds []int64) ([]SdeEffect, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEEffectsByIDs, pq.Array(effectIds))
+	rows, err := q.db.Query(ctx, listSDEEffectsByIDs, effectIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1503,9 +1432,6 @@ func (q *Queries) ListSDEEffectsByIDs(ctx context.Context, effectIds []int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1531,7 +1457,7 @@ type ListSDEGroupsInCategoryRow struct {
 }
 
 func (q *Queries) ListSDEGroupsInCategory(ctx context.Context, categoryID int64) ([]ListSDEGroupsInCategoryRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEGroupsInCategory, categoryID)
+	rows, err := q.db.Query(ctx, listSDEGroupsInCategory, categoryID)
 	if err != nil {
 		return nil, err
 	}
@@ -1549,9 +1475,6 @@ func (q *Queries) ListSDEGroupsInCategory(ctx context.Context, categoryID int64)
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1568,7 +1491,7 @@ ORDER BY EXISTS (SELECT 1 FROM sde_market_groups c WHERE c.parent_group_id = g.m
 // groups sort first, name order inside each half, so a level reads
 // as subcategories over contents.
 func (q *Queries) ListSDEMarketGroupsByParent(ctx context.Context, parentGroupID int64) ([]SdeMarketGroup, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEMarketGroupsByParent, parentGroupID)
+	rows, err := q.db.Query(ctx, listSDEMarketGroupsByParent, parentGroupID)
 	if err != nil {
 		return nil, err
 	}
@@ -1586,9 +1509,6 @@ func (q *Queries) ListSDEMarketGroupsByParent(ctx context.Context, parentGroupID
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1608,7 +1528,7 @@ type ListSDERequirementsByTypeRow struct {
 }
 
 func (q *Queries) ListSDERequirementsByType(ctx context.Context, typeID int64) ([]ListSDERequirementsByTypeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDERequirementsByType, typeID)
+	rows, err := q.db.Query(ctx, listSDERequirementsByType, typeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1620,9 +1540,6 @@ func (q *Queries) ListSDERequirementsByType(ctx context.Context, typeID int64) (
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1637,7 +1554,7 @@ ORDER BY type_id, level DESC, skill_type_id
 `
 
 func (q *Queries) ListSDERequirementsByTypes(ctx context.Context, typeIds []int64) ([]SdeRequirement, error) {
-	rows, err := q.db.QueryContext(ctx, listSDERequirementsByTypes, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDERequirementsByTypes, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1649,9 +1566,6 @@ func (q *Queries) ListSDERequirementsByTypes(ctx context.Context, typeIds []int6
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1675,7 +1589,7 @@ type ListSDEShipNamesRow struct {
 // Every ship by name with its group, for reading intel reports
 // (intel_analysis.go).
 func (q *Queries) ListSDEShipNames(ctx context.Context) ([]ListSDEShipNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEShipNames)
+	rows, err := q.db.Query(ctx, listSDEShipNames)
 	if err != nil {
 		return nil, err
 	}
@@ -1687,9 +1601,6 @@ func (q *Queries) ListSDEShipNames(ctx context.Context) ([]ListSDEShipNamesRow, 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1706,7 +1617,7 @@ WHERE g.category_id = 6 AND t.type_id = ANY($1::bigint[])
 // Which of these types are ships (category 6): the assets a player
 // names. Used to decide whose names are worth asking ESI for.
 func (q *Queries) ListSDEShipTypeIDs(ctx context.Context, typeIds []int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEShipTypeIDs, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDEShipTypeIDs, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1718,9 +1629,6 @@ func (q *Queries) ListSDEShipTypeIDs(ctx context.Context, typeIds []int64) ([]in
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1748,7 +1656,7 @@ type ListSDESkillCatalogRow struct {
 // The browsable skill catalog: every published skill with its
 // group, rank and training attributes.
 func (q *Queries) ListSDESkillCatalog(ctx context.Context) ([]ListSDESkillCatalogRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDESkillCatalog)
+	rows, err := q.db.Query(ctx, listSDESkillCatalog)
 	if err != nil {
 		return nil, err
 	}
@@ -1768,9 +1676,6 @@ func (q *Queries) ListSDESkillCatalog(ctx context.Context) ([]ListSDESkillCatalo
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1783,7 +1688,7 @@ WHERE type_id = ANY($1::bigint[])
 `
 
 func (q *Queries) ListSDESkillMetaByIDs(ctx context.Context, typeIds []int64) ([]SdeSkillMetum, error) {
-	rows, err := q.db.QueryContext(ctx, listSDESkillMetaByIDs, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDESkillMetaByIDs, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1800,9 +1705,6 @@ func (q *Queries) ListSDESkillMetaByIDs(ctx context.Context, typeIds []int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1823,7 +1725,7 @@ type ListSDEStationsBySystemRow struct {
 }
 
 func (q *Queries) ListSDEStationsBySystem(ctx context.Context, systemID int64) ([]ListSDEStationsBySystemRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEStationsBySystem, systemID)
+	rows, err := q.db.Query(ctx, listSDEStationsBySystem, systemID)
 	if err != nil {
 		return nil, err
 	}
@@ -1836,9 +1738,6 @@ func (q *Queries) ListSDEStationsBySystem(ctx context.Context, systemID int64) (
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1850,7 +1749,7 @@ SELECT to_system_id FROM sde_system_jumps WHERE from_system_id = $1
 `
 
 func (q *Queries) ListSDESystemNeighbours(ctx context.Context, fromSystemID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listSDESystemNeighbours, fromSystemID)
+	rows, err := q.db.Query(ctx, listSDESystemNeighbours, fromSystemID)
 	if err != nil {
 		return nil, err
 	}
@@ -1862,9 +1761,6 @@ func (q *Queries) ListSDESystemNeighbours(ctx context.Context, fromSystemID int6
 			return nil, err
 		}
 		items = append(items, to_system_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1886,7 +1782,7 @@ type ListSDESystemsByRegionRow struct {
 
 // ListSDESystemsByRegion: one region's systems for its page.
 func (q *Queries) ListSDESystemsByRegion(ctx context.Context, regionID int64) ([]ListSDESystemsByRegionRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDESystemsByRegion, regionID)
+	rows, err := q.db.Query(ctx, listSDESystemsByRegion, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -1898,9 +1794,6 @@ func (q *Queries) ListSDESystemsByRegion(ctx context.Context, regionID int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1914,7 +1807,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListSDETopologyTypes(ctx context.Context) ([]SdeType, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETopologyTypes)
+	rows, err := q.db.Query(ctx, listSDETopologyTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -1933,9 +1826,6 @@ func (q *Queries) ListSDETopologyTypes(ctx context.Context) ([]SdeType, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1960,7 +1850,7 @@ type ListSDETypeAttributesRow struct {
 // alongside the other sde_* tables; reads live here.
 // ---------------------------------------------------------------------
 func (q *Queries) ListSDETypeAttributes(ctx context.Context, typeID int64) ([]ListSDETypeAttributesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeAttributes, typeID)
+	rows, err := q.db.Query(ctx, listSDETypeAttributes, typeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1972,9 +1862,6 @@ func (q *Queries) ListSDETypeAttributes(ctx context.Context, typeID int64) ([]Li
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1989,7 +1876,7 @@ ORDER BY type_id, attribute_id
 `
 
 func (q *Queries) ListSDETypeAttributesByIDs(ctx context.Context, typeIds []int64) ([]SdeTypeAttribute, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeAttributesByIDs, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDETypeAttributesByIDs, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2001,9 +1888,6 @@ func (q *Queries) ListSDETypeAttributesByIDs(ctx context.Context, typeIds []int6
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2025,7 +1909,7 @@ type ListSDETypeCategoriesRow struct {
 // The SDE category of each of some types, batched: type to
 // group to category in one read.
 func (q *Queries) ListSDETypeCategories(ctx context.Context, typeIds []int64) ([]ListSDETypeCategoriesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeCategories, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDETypeCategories, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2037,9 +1921,6 @@ func (q *Queries) ListSDETypeCategories(ctx context.Context, typeIds []int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2059,7 +1940,7 @@ type ListSDETypeEffectsRow struct {
 }
 
 func (q *Queries) ListSDETypeEffects(ctx context.Context, typeID int64) ([]ListSDETypeEffectsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeEffects, typeID)
+	rows, err := q.db.Query(ctx, listSDETypeEffects, typeID)
 	if err != nil {
 		return nil, err
 	}
@@ -2071,9 +1952,6 @@ func (q *Queries) ListSDETypeEffects(ctx context.Context, typeID int64) ([]ListS
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2088,7 +1966,7 @@ ORDER BY type_id, effect_id
 `
 
 func (q *Queries) ListSDETypeEffectsByIDs(ctx context.Context, typeIds []int64) ([]SdeTypeEffect, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeEffectsByIDs, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDETypeEffectsByIDs, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2100,9 +1978,6 @@ func (q *Queries) ListSDETypeEffectsByIDs(ctx context.Context, typeIds []int64) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2123,7 +1998,7 @@ type ListSDETypeGroupsRow struct {
 }
 
 func (q *Queries) ListSDETypeGroups(ctx context.Context, typeIds []int64) ([]ListSDETypeGroupsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeGroups, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDETypeGroups, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2135,9 +2010,6 @@ func (q *Queries) ListSDETypeGroups(ctx context.Context, typeIds []int64) ([]Lis
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2157,7 +2029,7 @@ type ListSDETypeGroupsByIDsRow struct {
 }
 
 func (q *Queries) ListSDETypeGroupsByIDs(ctx context.Context, typeIds []int64) ([]ListSDETypeGroupsByIDsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeGroupsByIDs, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDETypeGroupsByIDs, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2169,9 +2041,6 @@ func (q *Queries) ListSDETypeGroupsByIDs(ctx context.Context, typeIds []int64) (
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2185,7 +2054,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListSDETypeIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeIDs)
+	rows, err := q.db.Query(ctx, listSDETypeIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -2197,9 +2066,6 @@ func (q *Queries) ListSDETypeIDs(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2215,7 +2081,7 @@ WHERE type_id = ANY($1::bigint[])
 // Batched SDE hit check: which of the given type IDs the SDE
 // knows, without pulling all 53K type IDs.
 func (q *Queries) ListSDETypeIDsByIDs(ctx context.Context, typeIds []int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeIDsByIDs, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDETypeIDsByIDs, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2227,9 +2093,6 @@ func (q *Queries) ListSDETypeIDsByIDs(ctx context.Context, typeIds []int64) ([]i
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2253,7 +2116,7 @@ type ListSDETypeNamesRow struct {
 // never a pilot. Unpublished types are in: the client shows
 // them on scan (a starbase's force field, 16103).
 func (q *Queries) ListSDETypeNames(ctx context.Context) ([]ListSDETypeNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeNames)
+	rows, err := q.db.Query(ctx, listSDETypeNames)
 	if err != nil {
 		return nil, err
 	}
@@ -2265,9 +2128,6 @@ func (q *Queries) ListSDETypeNames(ctx context.Context) ([]ListSDETypeNamesRow, 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2288,7 +2148,7 @@ type ListSDETypeNamesByIDsRow struct {
 // The SDE's own names for a batch of types, for reading text
 // that names them (a fused d-scan's rows, above all).
 func (q *Queries) ListSDETypeNamesByIDs(ctx context.Context, typeIds []int64) ([]ListSDETypeNamesByIDsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeNamesByIDs, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDETypeNamesByIDs, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2300,9 +2160,6 @@ func (q *Queries) ListSDETypeNamesByIDs(ctx context.Context, typeIds []int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2317,7 +2174,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListSDETypePhysicsByIDs(ctx context.Context, typeIds []int64) ([]SdeTypePhysic, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypePhysicsByIDs, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listSDETypePhysicsByIDs, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2335,9 +2192,6 @@ func (q *Queries) ListSDETypePhysicsByIDs(ctx context.Context, typeIds []int64) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2358,7 +2212,7 @@ type ListSDETypesByNamesRow struct {
 // Name-to-type-ID lookups for the plan templates (Magic 14 &
 // friends), which name their skills the way the wiki does.
 func (q *Queries) ListSDETypesByNames(ctx context.Context, names []string) ([]ListSDETypesByNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypesByNames, pq.Array(names))
+	rows, err := q.db.Query(ctx, listSDETypesByNames, names)
 	if err != nil {
 		return nil, err
 	}
@@ -2370,9 +2224,6 @@ func (q *Queries) ListSDETypesByNames(ctx context.Context, names []string) ([]Li
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2402,7 +2253,7 @@ type ListSDETypesInGroupRow struct {
 }
 
 func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGroupParams) ([]ListSDETypesInGroupRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypesInGroup,
+	rows, err := q.db.Query(ctx, listSDETypesInGroup,
 		arg.GroupID,
 		arg.Lower,
 		arg.RowOffset,
@@ -2425,9 +2276,6 @@ func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGro
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2446,7 +2294,7 @@ type ListSDETypesInMarketGroupRow struct {
 }
 
 func (q *Queries) ListSDETypesInMarketGroup(ctx context.Context, marketGroupID int64) ([]ListSDETypesInMarketGroupRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypesInMarketGroup, marketGroupID)
+	rows, err := q.db.Query(ctx, listSDETypesInMarketGroup, marketGroupID)
 	if err != nil {
 		return nil, err
 	}
@@ -2458,9 +2306,6 @@ func (q *Queries) ListSDETypesInMarketGroup(ctx context.Context, marketGroupID i
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2489,7 +2334,7 @@ type ListSDETypesInMarketGroupPagedRow struct {
 // One page of a market group's types: the market browse tab
 // pages big groups instead of pulling thousands of rows.
 func (q *Queries) ListSDETypesInMarketGroupPaged(ctx context.Context, arg ListSDETypesInMarketGroupPagedParams) ([]ListSDETypesInMarketGroupPagedRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypesInMarketGroupPaged, arg.MarketGroupID, arg.RowOffset, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listSDETypesInMarketGroupPaged, arg.MarketGroupID, arg.RowOffset, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -2501,9 +2346,6 @@ func (q *Queries) ListSDETypesInMarketGroupPaged(ctx context.Context, arg ListSD
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2536,7 +2378,7 @@ type ListSDETypesInMarketGroupSubtreeRow struct {
 }
 
 func (q *Queries) ListSDETypesInMarketGroupSubtree(ctx context.Context, arg ListSDETypesInMarketGroupSubtreeParams) ([]ListSDETypesInMarketGroupSubtreeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypesInMarketGroupSubtree, arg.RowLimit, arg.GroupID)
+	rows, err := q.db.Query(ctx, listSDETypesInMarketGroupSubtree, arg.RowLimit, arg.GroupID)
 	if err != nil {
 		return nil, err
 	}
@@ -2548,9 +2390,6 @@ func (q *Queries) ListSDETypesInMarketGroupSubtree(ctx context.Context, arg List
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2571,7 +2410,7 @@ type ListSearchIndexAllianceRecordsRow struct {
 }
 
 func (q *Queries) ListSearchIndexAllianceRecords(ctx context.Context) ([]ListSearchIndexAllianceRecordsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSearchIndexAllianceRecords)
+	rows, err := q.db.Query(ctx, listSearchIndexAllianceRecords)
 	if err != nil {
 		return nil, err
 	}
@@ -2583,9 +2422,6 @@ func (q *Queries) ListSearchIndexAllianceRecords(ctx context.Context) ([]ListSea
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2606,7 +2442,7 @@ type ListSearchIndexCorporationRecordsRow struct {
 }
 
 func (q *Queries) ListSearchIndexCorporationRecords(ctx context.Context) ([]ListSearchIndexCorporationRecordsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSearchIndexCorporationRecords)
+	rows, err := q.db.Query(ctx, listSearchIndexCorporationRecords)
 	if err != nil {
 		return nil, err
 	}
@@ -2618,9 +2454,6 @@ func (q *Queries) ListSearchIndexCorporationRecords(ctx context.Context) ([]List
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2644,7 +2477,7 @@ type ListSearchIndexPilotRecordsRow struct {
 // name fields once, where the name searches above would decode
 // per keystroke.
 func (q *Queries) ListSearchIndexPilotRecords(ctx context.Context) ([]ListSearchIndexPilotRecordsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSearchIndexPilotRecords)
+	rows, err := q.db.Query(ctx, listSearchIndexPilotRecords)
 	if err != nil {
 		return nil, err
 	}
@@ -2656,9 +2489,6 @@ func (q *Queries) ListSearchIndexPilotRecords(ctx context.Context) ([]ListSearch
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2672,7 +2502,7 @@ ORDER BY region_id
 `
 
 func (q *Queries) ListSearchIndexRegions(ctx context.Context) ([]SdeRegion, error) {
-	rows, err := q.db.QueryContext(ctx, listSearchIndexRegions)
+	rows, err := q.db.Query(ctx, listSearchIndexRegions)
 	if err != nil {
 		return nil, err
 	}
@@ -2684,9 +2514,6 @@ func (q *Queries) ListSearchIndexRegions(ctx context.Context) ([]SdeRegion, erro
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2710,7 +2537,7 @@ type ListSearchIndexSystemsRow struct {
 }
 
 func (q *Queries) ListSearchIndexSystems(ctx context.Context) ([]ListSearchIndexSystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSearchIndexSystems)
+	rows, err := q.db.Query(ctx, listSearchIndexSystems)
 	if err != nil {
 		return nil, err
 	}
@@ -2728,9 +2555,6 @@ func (q *Queries) ListSearchIndexSystems(ctx context.Context) ([]ListSearchIndex
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2774,7 +2598,7 @@ type ListSearchIndexTypesRow struct {
 // Every published type with the facts the shared suggestion
 // feed's pools filter on.
 func (q *Queries) ListSearchIndexTypes(ctx context.Context) ([]ListSearchIndexTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSearchIndexTypes)
+	rows, err := q.db.Query(ctx, listSearchIndexTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -2795,9 +2619,6 @@ func (q *Queries) ListSearchIndexTypes(ctx context.Context) ([]ListSearchIndexTy
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2844,7 +2665,7 @@ type ListTypeDetailWantsParams struct {
 // Typing rows spend their slice highest learned rate first (see
 // ListPilotDrains in queries_market.sql).
 func (q *Queries) ListTypeDetailWants(ctx context.Context, arg ListTypeDetailWantsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listTypeDetailWants,
+	rows, err := q.db.Query(ctx, listTypeDetailWants,
 		arg.TypingPriority,
 		arg.TypingAssumed,
 		arg.TypingWeight,
@@ -2863,9 +2684,6 @@ func (q *Queries) ListTypeDetailWants(ctx context.Context, arg ListTypeDetailWan
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2886,7 +2704,7 @@ type ListTypeGroupNamesRow struct {
 
 // The group each of some types is in, by name: a ship's class.
 func (q *Queries) ListTypeGroupNames(ctx context.Context, typeIds []int64) ([]ListTypeGroupNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTypeGroupNames, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listTypeGroupNames, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2898,9 +2716,6 @@ func (q *Queries) ListTypeGroupNames(ctx context.Context, typeIds []int64) ([]Li
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2916,7 +2731,7 @@ WHERE type_id = ANY($1::bigint[])
 // Batched name-cache hit check: which of the given type IDs
 // have a resolved name, without pulling the whole table.
 func (q *Queries) ListTypeNameIDsByIDs(ctx context.Context, typeIds []int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listTypeNameIDsByIDs, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listTypeNameIDsByIDs, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2928,9 +2743,6 @@ func (q *Queries) ListTypeNameIDsByIDs(ctx context.Context, typeIds []int64) ([]
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2945,7 +2757,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListTypeNamesByExactName(ctx context.Context, name string) ([]TypeName, error) {
-	rows, err := q.db.QueryContext(ctx, listTypeNamesByExactName, name)
+	rows, err := q.db.Query(ctx, listTypeNamesByExactName, name)
 	if err != nil {
 		return nil, err
 	}
@@ -2957,9 +2769,6 @@ func (q *Queries) ListTypeNamesByExactName(ctx context.Context, name string) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2974,7 +2783,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListTypeNamesByNames(ctx context.Context, names []string) ([]TypeName, error) {
-	rows, err := q.db.QueryContext(ctx, listTypeNamesByNames, pq.Array(names))
+	rows, err := q.db.Query(ctx, listTypeNamesByNames, names)
 	if err != nil {
 		return nil, err
 	}
@@ -2986,9 +2795,6 @@ func (q *Queries) ListTypeNamesByNames(ctx context.Context, names []string) ([]T
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3012,7 +2818,7 @@ type SearchAllianceRecordsByNameRow struct {
 
 // Alliance-name search, same posture as the corporation one.
 func (q *Queries) SearchAllianceRecordsByName(ctx context.Context, lower string) ([]SearchAllianceRecordsByNameRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchAllianceRecordsByName, lower)
+	rows, err := q.db.Query(ctx, searchAllianceRecordsByName, lower)
 	if err != nil {
 		return nil, err
 	}
@@ -3024,9 +2830,6 @@ func (q *Queries) SearchAllianceRecordsByName(ctx context.Context, lower string)
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3054,7 +2857,7 @@ type SearchCorporationRecordsByNameRow struct {
 // wrapped record and a bare ESI corporation shared by a peer),
 // so the name is read from whichever shape is present.
 func (q *Queries) SearchCorporationRecordsByName(ctx context.Context, lower string) ([]SearchCorporationRecordsByNameRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchCorporationRecordsByName, lower)
+	rows, err := q.db.Query(ctx, searchCorporationRecordsByName, lower)
 	if err != nil {
 		return nil, err
 	}
@@ -3066,9 +2869,6 @@ func (q *Queries) SearchCorporationRecordsByName(ctx context.Context, lower stri
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3092,7 +2892,7 @@ type SearchManufacturableProductsRow struct {
 }
 
 func (q *Queries) SearchManufacturableProducts(ctx context.Context, lower string) ([]SearchManufacturableProductsRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchManufacturableProducts, lower)
+	rows, err := q.db.Query(ctx, searchManufacturableProducts, lower)
 	if err != nil {
 		return nil, err
 	}
@@ -3104,9 +2904,6 @@ func (q *Queries) SearchManufacturableProducts(ctx context.Context, lower string
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3136,7 +2933,7 @@ type SearchPilotRecordsByNameRow struct {
 // matches beyond it. The handler still re-checks the name
 // field for ranking before offering a row.
 func (q *Queries) SearchPilotRecordsByName(ctx context.Context, lower string) ([]SearchPilotRecordsByNameRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchPilotRecordsByName, lower)
+	rows, err := q.db.Query(ctx, searchPilotRecordsByName, lower)
 	if err != nil {
 		return nil, err
 	}
@@ -3148,9 +2945,6 @@ func (q *Queries) SearchPilotRecordsByName(ctx context.Context, lower string) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3166,7 +2960,7 @@ LIMIT 10
 `
 
 func (q *Queries) SearchSDERegions(ctx context.Context, name string) ([]SdeRegion, error) {
-	rows, err := q.db.QueryContext(ctx, searchSDERegions, name)
+	rows, err := q.db.Query(ctx, searchSDERegions, name)
 	if err != nil {
 		return nil, err
 	}
@@ -3178,9 +2972,6 @@ func (q *Queries) SearchSDERegions(ctx context.Context, name string) ([]SdeRegio
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3209,7 +3000,7 @@ type SearchSDESkillsRow struct {
 }
 
 func (q *Queries) SearchSDESkills(ctx context.Context, arg SearchSDESkillsParams) ([]SearchSDESkillsRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchSDESkills, arg.Lower, arg.Lower_2)
+	rows, err := q.db.Query(ctx, searchSDESkills, arg.Lower, arg.Lower_2)
 	if err != nil {
 		return nil, err
 	}
@@ -3221,9 +3012,6 @@ func (q *Queries) SearchSDESkills(ctx context.Context, arg SearchSDESkillsParams
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3246,7 +3034,7 @@ type SearchSDESystemsRow struct {
 }
 
 func (q *Queries) SearchSDESystems(ctx context.Context, name string) ([]SearchSDESystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchSDESystems, name)
+	rows, err := q.db.Query(ctx, searchSDESystems, name)
 	if err != nil {
 		return nil, err
 	}
@@ -3258,9 +3046,6 @@ func (q *Queries) SearchSDESystems(ctx context.Context, name string) ([]SearchSD
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3281,7 +3066,7 @@ type SearchSDETypesRow struct {
 }
 
 func (q *Queries) SearchSDETypes(ctx context.Context, name string) ([]SearchSDETypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchSDETypes, name)
+	rows, err := q.db.Query(ctx, searchSDETypes, name)
 	if err != nil {
 		return nil, err
 	}
@@ -3293,9 +3078,6 @@ func (q *Queries) SearchSDETypes(ctx context.Context, name string) ([]SearchSDET
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3352,7 +3134,7 @@ type SearchSDETypesFilteredRow struct {
 // (The relevance term names @q: a raw $1 here became a second, never-set
 // parameter, so every name counted as a prefix match and the term did nothing.)
 func (q *Queries) SearchSDETypesFiltered(ctx context.Context, arg SearchSDETypesFilteredParams) ([]SearchSDETypesFilteredRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchSDETypesFiltered,
+	rows, err := q.db.Query(ctx, searchSDETypesFiltered,
 		arg.Q,
 		arg.PublishedOnly,
 		arg.CategoryID,
@@ -3381,9 +3163,6 @@ func (q *Queries) SearchSDETypesFiltered(ctx context.Context, arg SearchSDETypes
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -3398,7 +3177,7 @@ LIMIT 20
 `
 
 func (q *Queries) SearchTypeNames(ctx context.Context, name string) ([]TypeName, error) {
-	rows, err := q.db.QueryContext(ctx, searchTypeNames, name)
+	rows, err := q.db.Query(ctx, searchTypeNames, name)
 	if err != nil {
 		return nil, err
 	}
@@ -3410,9 +3189,6 @@ func (q *Queries) SearchTypeNames(ctx context.Context, name string) ([]TypeName,
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3435,7 +3211,7 @@ type SetTypeDetailParams struct {
 }
 
 func (q *Queries) SetTypeDetail(ctx context.Context, arg SetTypeDetailParams) error {
-	_, err := q.db.ExecContext(ctx, setTypeDetail, arg.TypeID, arg.Description, arg.FetchedAt)
+	_, err := q.db.Exec(ctx, setTypeDetail, arg.TypeID, arg.Description, arg.FetchedAt)
 	return err
 }
 
@@ -3459,7 +3235,7 @@ type SuggestSDEMarketGroupsRow struct {
 // Basket editor group search: market groups whose name mentions
 // the text, prefix matches first, mirroring the type suggest.
 func (q *Queries) SuggestSDEMarketGroups(ctx context.Context, arg SuggestSDEMarketGroupsParams) ([]SuggestSDEMarketGroupsRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDEMarketGroups, arg.Q, arg.Lim)
+	rows, err := q.db.Query(ctx, suggestSDEMarketGroups, arg.Q, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -3471,9 +3247,6 @@ func (q *Queries) SuggestSDEMarketGroups(ctx context.Context, arg SuggestSDEMark
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3495,7 +3268,7 @@ type SuggestSDERegionsParams struct {
 
 // SuggestSDERegions: regions by name for the search boxes, prefix matches first.
 func (q *Queries) SuggestSDERegions(ctx context.Context, arg SuggestSDERegionsParams) ([]SdeRegion, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDERegions, arg.Q, arg.Lim)
+	rows, err := q.db.Query(ctx, suggestSDERegions, arg.Q, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -3507,9 +3280,6 @@ func (q *Queries) SuggestSDERegions(ctx context.Context, arg SuggestSDERegionsPa
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3547,7 +3317,7 @@ type SuggestSDEShipsRow struct {
 // the shared suggestion feed.
 // ---------------------------------------------------------------------
 func (q *Queries) SuggestSDEShips(ctx context.Context, arg SuggestSDEShipsParams) ([]SuggestSDEShipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDEShips, arg.Q, arg.Lim)
+	rows, err := q.db.Query(ctx, suggestSDEShips, arg.Q, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -3559,9 +3329,6 @@ func (q *Queries) SuggestSDEShips(ctx context.Context, arg SuggestSDEShipsParams
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3593,7 +3360,7 @@ type SuggestSDESystemsRow struct {
 
 // SuggestSDESystems: systems by name for the search boxes, prefix matches first.
 func (q *Queries) SuggestSDESystems(ctx context.Context, arg SuggestSDESystemsParams) ([]SuggestSDESystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDESystems, arg.Q, arg.Lim)
+	rows, err := q.db.Query(ctx, suggestSDESystems, arg.Q, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -3611,9 +3378,6 @@ func (q *Queries) SuggestSDESystems(ctx context.Context, arg SuggestSDESystemsPa
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3635,7 +3399,7 @@ type SuggestSDETypesRow struct {
 }
 
 func (q *Queries) SuggestSDETypes(ctx context.Context, lower string) ([]SuggestSDETypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDETypes, lower)
+	rows, err := q.db.Query(ctx, suggestSDETypes, lower)
 	if err != nil {
 		return nil, err
 	}
@@ -3647,9 +3411,6 @@ func (q *Queries) SuggestSDETypes(ctx context.Context, lower string) ([]SuggestS
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3672,7 +3433,7 @@ WHERE strpos(lower(t.name), lower($1)) > 0
         SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id))
   AND (CAST($2 AS TEXT) != 'skills' OR EXISTS (
         SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id))
-ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, lower(t.name), t.type_id
 LIMIT $3::bigint
 `
 
@@ -3697,7 +3458,7 @@ type SuggestSDETypesSharedRow struct {
 // promise covers items obtainable through contracts too. The
 // narrower pools keep the market floor alone.
 func (q *Queries) SuggestSDETypesShared(ctx context.Context, arg SuggestSDETypesSharedParams) ([]SuggestSDETypesSharedRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDETypesShared, arg.Q, arg.Pool, arg.Lim)
+	rows, err := q.db.Query(ctx, suggestSDETypesShared, arg.Q, arg.Pool, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -3714,9 +3475,6 @@ func (q *Queries) SuggestSDETypesShared(ctx context.Context, arg SuggestSDETypes
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3737,7 +3495,7 @@ type UpsertItemNameParams struct {
 }
 
 func (q *Queries) UpsertItemName(ctx context.Context, arg UpsertItemNameParams) error {
-	_, err := q.db.ExecContext(ctx, upsertItemName, arg.ItemID, arg.Name)
+	_, err := q.db.Exec(ctx, upsertItemName, arg.ItemID, arg.Name)
 	return err
 }
 
@@ -3754,7 +3512,7 @@ type UpsertSDEMetaParams struct {
 }
 
 func (q *Queries) UpsertSDEMeta(ctx context.Context, arg UpsertSDEMetaParams) error {
-	_, err := q.db.ExecContext(ctx, upsertSDEMeta, arg.Key, arg.Value)
+	_, err := q.db.Exec(ctx, upsertSDEMeta, arg.Key, arg.Value)
 	return err
 }
 
@@ -3773,7 +3531,7 @@ type UpsertTypeDetailWantParams struct {
 }
 
 func (q *Queries) UpsertTypeDetailWant(ctx context.Context, arg UpsertTypeDetailWantParams) error {
-	_, err := q.db.ExecContext(ctx, upsertTypeDetailWant, arg.TypeID, arg.Priority, arg.NotedAt)
+	_, err := q.db.Exec(ctx, upsertTypeDetailWant, arg.TypeID, arg.Priority, arg.NotedAt)
 	return err
 }
 
@@ -3790,6 +3548,6 @@ type UpsertTypeNameParams struct {
 }
 
 func (q *Queries) UpsertTypeName(ctx context.Context, arg UpsertTypeNameParams) error {
-	_, err := q.db.ExecContext(ctx, upsertTypeName, arg.TypeID, arg.Name)
+	_, err := q.db.Exec(ctx, upsertTypeName, arg.TypeID, arg.Name)
 	return err
 }

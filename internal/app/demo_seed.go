@@ -37,6 +37,8 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // The invented people around the demo pilots: correspondents,
@@ -155,7 +157,7 @@ func (s *demoSeed) snap(ctx context.Context, characterID int64, kind string, pay
 func (s *demoSeed) resolve(ctx context.Context) error {
 	q := s.app.queries
 
-	rows, err := s.app.db.QueryContext(ctx, `
+	rows, err := s.app.pool.Query(ctx, `
 		SELECT t.type_id, COALESCE(m.rank, 1)
 		FROM sde_types t
 		JOIN sde_groups g ON g.group_id = t.group_id
@@ -308,7 +310,7 @@ func stationKnown(ctx context.Context, conn *sql.DB, id int64) (bool, error) {
 	var found int64
 	err := conn.QueryRowContext(ctx,
 		`SELECT station_id FROM sde_stations WHERE station_id = $1`, id).Scan(&found)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
 	return err == nil, err
@@ -1019,7 +1021,7 @@ func (s *demoSeed) writePilotOneMarkets(ctx context.Context) error {
 		if err := q.UpdateOrderLifecycleBook(ctx, db.UpdateOrderLifecycleBookParams{
 			Beaten: 1, CheckedAt: now.Add(-b.beatenAgo), OutbidEvents: b.outbids,
 			BeatingPrice: b.beatPrice, BeatingVolume: b.beatVolume, SuggestedPrice: b.suggest,
-			UnitCost: b.unitCost, MarginPct: sql.NullFloat64{Float64: b.margin, Valid: true},
+			UnitCost: b.unitCost, MarginPct: pgtype.Float8{Float64: b.margin, Valid: true},
 			TaxRate: demoSalesTaxRate, CharacterID: id, OrderID: b.order.OrderID,
 		}); err != nil {
 			return err

@@ -67,6 +67,7 @@ import (
 	// decode_parity_test.go). The standard library stays for the
 	// RawMessage plumbing and the history error probe.
 	goccyjson "github.com/goccy/go-json"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -181,9 +182,9 @@ func (app *Application) killInvolvementCutoff(ctx context.Context) time.Time {
 		return app.involvementCutoff
 	}
 	var t time.Time
-	if err := app.db.QueryRowContext(ctx,
+	if err := app.pool.QueryRow(ctx,
 		`SELECT applied_at FROM schema_migrations WHERE version = 127`).Scan(&t); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Warnf("pilot activity: read involvement cutoff: %v", err)
 		}
 		return time.Time{}
@@ -230,7 +231,7 @@ func (app *Application) backfillPilot(ctx context.Context, client *http.Client, 
 	// pilot no user has linked gets no history walk, so the
 	// store never grows for strangers.
 	if _, err := app.queries.GetCharacter(ctx, id); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			logging.Infof("pilot activity: skip backfill for unregistered pilot %d", id)
 		} else {
 			logging.Warnf("pilot activity: read character %d: %v", id, err)
@@ -238,7 +239,7 @@ func (app *Application) backfillPilot(ctx context.Context, client *http.Client, 
 		return
 	}
 	prof, err := app.queries.GetPilotActivityProfile(ctx, id)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		logging.Warnf("pilot activity: read profile %d: %v", id, err)
 		return
 	}
@@ -410,22 +411,22 @@ func (app *Application) applyPilotKill(ctx context.Context, characterID int64, k
 		// the transaction, so the common case costs one
 		// indexed lookup instead of a tx that rolls back.
 		if _, err := app.queries.GetPilotActivityProfile(ctx, characterID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
+			if errors.Is(err, pgx.ErrNoRows) {
 				return false, nil
 			}
 			return false, err
 		}
 	}
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return false, err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	if _, err := q.MarkPilotKillApplied(ctx, db.MarkPilotKillAppliedParams{
 		KillmailID: km.KillmailID, CharacterID: characterID, KillmailTime: km.KillmailTime.UTC(),
 	}); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil // already folded in
 		}
 		return false, err
@@ -483,7 +484,7 @@ func (app *Application) applyPilotKill(ctx context.Context, characterID int64, k
 			return false, err
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -569,7 +570,7 @@ type pilotActivityView struct {
 func (app *Application) loadPilotActivity(ctx context.Context, id int64, names *killNames, now time.Time) *pilotActivityView {
 	prof, err := app.queries.GetPilotActivityProfile(ctx, id)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Warnf("pilot activity %d: read profile: %v", id, err)
 		}
 		return nil

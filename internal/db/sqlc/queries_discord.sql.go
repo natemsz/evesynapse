@@ -17,7 +17,7 @@ SELECT count(*) FROM characters WHERE user_id = $1 AND link_state = 'ok'
 
 // Characters of an account whose link to EVE is in good standing.
 func (q *Queries) CountLinkedCharactersByUser(ctx context.Context, userID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countLinkedCharactersByUser, userID)
+	row := q.db.QueryRow(ctx, countLinkedCharactersByUser, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -28,7 +28,7 @@ DELETE FROM discord_guilds WHERE guild_id = $1
 `
 
 func (q *Queries) DeleteDiscordGuild(ctx context.Context, guildID string) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscordGuild, guildID)
+	_, err := q.db.Exec(ctx, deleteDiscordGuild, guildID)
 	return err
 }
 
@@ -37,7 +37,7 @@ DELETE FROM discord_links WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDiscordLink(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscordLink, userID)
+	_, err := q.db.Exec(ctx, deleteDiscordLink, userID)
 	return err
 }
 
@@ -46,7 +46,7 @@ DELETE FROM discord_ops_shares WHERE corporation_id = $1
 `
 
 func (q *Queries) DeleteDiscordOpsShare(ctx context.Context, corporationID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscordOpsShare, corporationID)
+	_, err := q.db.Exec(ctx, deleteDiscordOpsShare, corporationID)
 	return err
 }
 
@@ -60,7 +60,7 @@ type DeleteDiscordRoleGrantParams struct {
 }
 
 func (q *Queries) DeleteDiscordRoleGrant(ctx context.Context, arg DeleteDiscordRoleGrantParams) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscordRoleGrant, arg.DiscordID, arg.GuildID)
+	_, err := q.db.Exec(ctx, deleteDiscordRoleGrant, arg.DiscordID, arg.GuildID)
 	return err
 }
 
@@ -77,7 +77,7 @@ type DeleteOtherDiscordLinksParams struct {
 // A Discord account belongs to whoever connected it last: any other
 // account that was linked to it is unlinked first (same transaction).
 func (q *Queries) DeleteOtherDiscordLinks(ctx context.Context, arg DeleteOtherDiscordLinksParams) error {
-	_, err := q.db.ExecContext(ctx, deleteOtherDiscordLinks, arg.DiscordID, arg.UserID)
+	_, err := q.db.Exec(ctx, deleteOtherDiscordLinks, arg.DiscordID, arg.UserID)
 	return err
 }
 
@@ -88,7 +88,7 @@ SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, ro
 
 // Servers.
 func (q *Queries) GetDiscordGuild(ctx context.Context, guildID string) (DiscordGuild, error) {
-	row := q.db.QueryRowContext(ctx, getDiscordGuild, guildID)
+	row := q.db.QueryRow(ctx, getDiscordGuild, guildID)
 	var i DiscordGuild
 	err := row.Scan(
 		&i.GuildID,
@@ -118,7 +118,7 @@ SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, d
 // and their settings, and what the bot has given.
 // ---------------------------------------------------------------------
 func (q *Queries) GetDiscordLink(ctx context.Context, userID int64) (DiscordLink, error) {
-	row := q.db.QueryRowContext(ctx, getDiscordLink, userID)
+	row := q.db.QueryRow(ctx, getDiscordLink, userID)
 	var i DiscordLink
 	err := row.Scan(
 		&i.UserID,
@@ -140,7 +140,7 @@ SELECT corporation_id, set_by, set_at FROM discord_ops_shares WHERE corporation_
 `
 
 func (q *Queries) GetDiscordOpsShare(ctx context.Context, corporationID int64) (DiscordOpsShare, error) {
-	row := q.db.QueryRowContext(ctx, getDiscordOpsShare, corporationID)
+	row := q.db.QueryRow(ctx, getDiscordOpsShare, corporationID)
 	var i DiscordOpsShare
 	err := row.Scan(&i.CorporationID, &i.SetBy, &i.SetAt)
 	return i, err
@@ -158,7 +158,7 @@ type GetDiscordRoleGrantParams struct {
 
 // What the bot has given.
 func (q *Queries) GetDiscordRoleGrant(ctx context.Context, arg GetDiscordRoleGrantParams) (DiscordRoleGrant, error) {
-	row := q.db.QueryRowContext(ctx, getDiscordRoleGrant, arg.DiscordID, arg.GuildID)
+	row := q.db.QueryRow(ctx, getDiscordRoleGrant, arg.DiscordID, arg.GuildID)
 	var i DiscordRoleGrant
 	err := row.Scan(
 		&i.DiscordID,
@@ -176,7 +176,7 @@ SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, ro
 `
 
 func (q *Queries) ListDiscordGuilds(ctx context.Context) ([]DiscordGuild, error) {
-	rows, err := q.db.QueryContext(ctx, listDiscordGuilds)
+	rows, err := q.db.Query(ctx, listDiscordGuilds)
 	if err != nil {
 		return nil, err
 	}
@@ -203,9 +203,6 @@ func (q *Queries) ListDiscordGuilds(ctx context.Context) ([]DiscordGuild, error)
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -217,7 +214,7 @@ SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, d
 `
 
 func (q *Queries) ListDiscordLinks(ctx context.Context) ([]DiscordLink, error) {
-	rows, err := q.db.QueryContext(ctx, listDiscordLinks)
+	rows, err := q.db.Query(ctx, listDiscordLinks)
 	if err != nil {
 		return nil, err
 	}
@@ -241,9 +238,6 @@ func (q *Queries) ListDiscordLinks(ctx context.Context) ([]DiscordLink, error) {
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -255,7 +249,7 @@ SELECT discord_id, guild_id, roles, is_member, checked_at, wanted FROM discord_r
 `
 
 func (q *Queries) ListDiscordRoleGrantsForDiscordID(ctx context.Context, discordID string) ([]DiscordRoleGrant, error) {
-	rows, err := q.db.QueryContext(ctx, listDiscordRoleGrantsForDiscordID, discordID)
+	rows, err := q.db.Query(ctx, listDiscordRoleGrantsForDiscordID, discordID)
 	if err != nil {
 		return nil, err
 	}
@@ -274,9 +268,6 @@ func (q *Queries) ListDiscordRoleGrantsForDiscordID(ctx context.Context, discord
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -289,7 +280,7 @@ SELECT discord_id, guild_id, roles, is_member, checked_at, wanted FROM discord_r
 `
 
 func (q *Queries) ListDiscordRoleGrantsForGuild(ctx context.Context, guildID string) ([]DiscordRoleGrant, error) {
-	rows, err := q.db.QueryContext(ctx, listDiscordRoleGrantsForGuild, guildID)
+	rows, err := q.db.Query(ctx, listDiscordRoleGrantsForGuild, guildID)
 	if err != nil {
 		return nil, err
 	}
@@ -308,9 +299,6 @@ func (q *Queries) ListDiscordRoleGrantsForGuild(ctx context.Context, guildID str
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -329,7 +317,7 @@ ORDER BY cc.corporation_id
 // The corporations of the characters of an account whose link to EVE
 // is in good standing: what its Discord roles are worked out from.
 func (q *Queries) ListLinkedCorporationsByUser(ctx context.Context, userID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listLinkedCorporationsByUser, userID)
+	rows, err := q.db.Query(ctx, listLinkedCorporationsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -341,9 +329,6 @@ func (q *Queries) ListLinkedCorporationsByUser(ctx context.Context, userID int64
 			return nil, err
 		}
 		items = append(items, corporation_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -369,7 +354,7 @@ type ListOpsToAnnounceOnDiscordParams struct {
 // cancelled. The age limit keeps a server that has just been set up
 // from being sent the whole calendar at once.
 func (q *Queries) ListOpsToAnnounceOnDiscord(ctx context.Context, arg ListOpsToAnnounceOnDiscordParams) ([]Op, error) {
-	rows, err := q.db.QueryContext(ctx, listOpsToAnnounceOnDiscord, arg.Now, arg.CreatedAfter)
+	rows, err := q.db.Query(ctx, listOpsToAnnounceOnDiscord, arg.Now, arg.CreatedAfter)
 	if err != nil {
 		return nil, err
 	}
@@ -399,9 +384,6 @@ func (q *Queries) ListOpsToAnnounceOnDiscord(ctx context.Context, arg ListOpsToA
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -419,7 +401,7 @@ LIMIT $1
 // connected to any more: the account was deleted, disconnected
 // Discord, or connected a different Discord account.
 func (q *Queries) ListOrphanDiscordRoleGrants(ctx context.Context, maxRows int32) ([]DiscordRoleGrant, error) {
-	rows, err := q.db.QueryContext(ctx, listOrphanDiscordRoleGrants, maxRows)
+	rows, err := q.db.Query(ctx, listOrphanDiscordRoleGrants, maxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -439,9 +421,6 @@ func (q *Queries) ListOrphanDiscordRoleGrants(ctx context.Context, maxRows int32
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -458,7 +437,7 @@ type SetDiscordDMNotificationsParams struct {
 }
 
 func (q *Queries) SetDiscordDMNotifications(ctx context.Context, arg SetDiscordDMNotificationsParams) error {
-	_, err := q.db.ExecContext(ctx, setDiscordDMNotifications, arg.DmNotifications, arg.UserID)
+	_, err := q.db.Exec(ctx, setDiscordDMNotifications, arg.DmNotifications, arg.UserID)
 	return err
 }
 
@@ -477,7 +456,7 @@ type SetDiscordDMProblemParams struct {
 // What went wrong with the last direct message, or ” when it went
 // through.
 func (q *Queries) SetDiscordDMProblem(ctx context.Context, arg SetDiscordDMProblemParams) error {
-	_, err := q.db.ExecContext(ctx, setDiscordDMProblem, arg.DmProblem, arg.DmProblemAt, arg.UserID)
+	_, err := q.db.Exec(ctx, setDiscordDMProblem, arg.DmProblem, arg.DmProblemAt, arg.UserID)
 	return err
 }
 
@@ -495,7 +474,7 @@ type SetDiscordGuildSettingsParams struct {
 }
 
 func (q *Queries) SetDiscordGuildSettings(ctx context.Context, arg SetDiscordGuildSettingsParams) error {
-	_, err := q.db.ExecContext(ctx, setDiscordGuildSettings,
+	_, err := q.db.Exec(ctx, setDiscordGuildSettings,
 		arg.RoleLinked,
 		arg.RoleMember,
 		arg.OpsChannel,
@@ -517,7 +496,7 @@ type SetDiscordOpsShareParams struct {
 }
 
 func (q *Queries) SetDiscordOpsShare(ctx context.Context, arg SetDiscordOpsShareParams) error {
-	_, err := q.db.ExecContext(ctx, setDiscordOpsShare, arg.CorporationID, arg.SetBy, arg.SetAt)
+	_, err := q.db.Exec(ctx, setDiscordOpsShare, arg.CorporationID, arg.SetBy, arg.SetAt)
 	return err
 }
 
@@ -531,7 +510,7 @@ type SetOpDiscordAnnouncedParams struct {
 }
 
 func (q *Queries) SetOpDiscordAnnounced(ctx context.Context, arg SetOpDiscordAnnouncedParams) error {
-	_, err := q.db.ExecContext(ctx, setOpDiscordAnnounced, arg.AnnouncedAt, arg.ID)
+	_, err := q.db.Exec(ctx, setOpDiscordAnnounced, arg.AnnouncedAt, arg.ID)
 	return err
 }
 
@@ -560,7 +539,7 @@ type UpsertDiscordGuildParams struct {
 // Adding the bot to a server again keeps the settings it had, unless
 // the server is being claimed for a different owner.
 func (q *Queries) UpsertDiscordGuild(ctx context.Context, arg UpsertDiscordGuildParams) error {
-	_, err := q.db.ExecContext(ctx, upsertDiscordGuild,
+	_, err := q.db.Exec(ctx, upsertDiscordGuild,
 		arg.GuildID,
 		arg.Name,
 		arg.OwnerKind,
@@ -588,7 +567,7 @@ type UpsertDiscordLinkParams struct {
 }
 
 func (q *Queries) UpsertDiscordLink(ctx context.Context, arg UpsertDiscordLinkParams) error {
-	_, err := q.db.ExecContext(ctx, upsertDiscordLink,
+	_, err := q.db.Exec(ctx, upsertDiscordLink,
 		arg.UserID,
 		arg.DiscordID,
 		arg.Username,
@@ -613,7 +592,7 @@ type UpsertDiscordRoleGrantParams struct {
 }
 
 func (q *Queries) UpsertDiscordRoleGrant(ctx context.Context, arg UpsertDiscordRoleGrantParams) error {
-	_, err := q.db.ExecContext(ctx, upsertDiscordRoleGrant,
+	_, err := q.db.Exec(ctx, upsertDiscordRoleGrant,
 		arg.DiscordID,
 		arg.GuildID,
 		arg.Roles,

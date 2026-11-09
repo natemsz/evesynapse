@@ -194,9 +194,9 @@ func (app *mod) handleDiscordChannelSave(w http.ResponseWriter, r *http.Request)
 		back("The channel could not be changed; the server log has the reason. Nothing was recorded, and the channel may be partly changed: save again to finish.")
 		return
 	}
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.db.Begin(ctx)
 	if err == nil {
-		defer tx.Rollback()
+		defer tx.Rollback(ctx)
 		q := app.queries.WithTx(tx)
 		err = q.DeleteDiscordChannelAccessForChannel(ctx, db.DeleteDiscordChannelAccessForChannelParams{GuildID: guild.GuildID, ChannelID: channelID})
 		for _, role := range now.list() {
@@ -208,7 +208,7 @@ func (app *mod) handleDiscordChannelSave(w http.ResponseWriter, r *http.Request)
 			})
 		}
 		if err == nil {
-			err = tx.Commit()
+			err = tx.Commit(ctx)
 		}
 	}
 	if err != nil {

@@ -283,11 +283,11 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 		Fight: f, Series: series, Parties: parties, Weapons: weapons, Kills: kills, Tackles: tackles, ShipCapacitor: capacity,
 	})
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := app.queries.WithTx(tx)
 	if err := q.DeleteBattleFightKills(ctx, id); err != nil {
 		return err
@@ -341,7 +341,7 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 	}); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // correlateRecentFights is the worker's pass: every fight a late

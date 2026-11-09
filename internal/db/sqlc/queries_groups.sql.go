@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const addOrgGroupMember = `-- name: AddOrgGroupMember :exec
@@ -27,7 +25,7 @@ type AddOrgGroupMemberParams struct {
 }
 
 func (q *Queries) AddOrgGroupMember(ctx context.Context, arg AddOrgGroupMemberParams) error {
-	_, err := q.db.ExecContext(ctx, addOrgGroupMember,
+	_, err := q.db.Exec(ctx, addOrgGroupMember,
 		arg.GroupID,
 		arg.CharacterID,
 		arg.AddedBy,
@@ -52,7 +50,7 @@ type CreateOrgGroupParams struct {
 }
 
 func (q *Queries) CreateOrgGroup(ctx context.Context, arg CreateOrgGroupParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createOrgGroup,
+	row := q.db.QueryRow(ctx, createOrgGroup,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.Name,
@@ -75,7 +73,7 @@ type DeleteDiscordChannelAccessForChannelParams struct {
 }
 
 func (q *Queries) DeleteDiscordChannelAccessForChannel(ctx context.Context, arg DeleteDiscordChannelAccessForChannelParams) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscordChannelAccessForChannel, arg.GuildID, arg.ChannelID)
+	_, err := q.db.Exec(ctx, deleteDiscordChannelAccessForChannel, arg.GuildID, arg.ChannelID)
 	return err
 }
 
@@ -86,7 +84,7 @@ DELETE FROM discord_channel_access WHERE guild_id = $1
 // A server claimed for a different owner loses the channel access
 // the previous owner set.
 func (q *Queries) DeleteDiscordChannelAccessForGuild(ctx context.Context, guildID string) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscordChannelAccessForGuild, guildID)
+	_, err := q.db.Exec(ctx, deleteDiscordChannelAccessForGuild, guildID)
 	return err
 }
 
@@ -98,7 +96,7 @@ DELETE FROM discord_role_grants WHERE discord_id = $1 AND NOT is_member AND role
 // that it is looked for again at once (it has just connected, and may
 // now be added).
 func (q *Queries) DeleteDiscordNonMemberGrants(ctx context.Context, discordID string) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscordNonMemberGrants, discordID)
+	_, err := q.db.Exec(ctx, deleteDiscordNonMemberGrants, discordID)
 	return err
 }
 
@@ -112,7 +110,7 @@ type DeleteDiscordRoleRuleParams struct {
 }
 
 func (q *Queries) DeleteDiscordRoleRule(ctx context.Context, arg DeleteDiscordRoleRuleParams) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscordRoleRule, arg.ID, arg.GuildID)
+	_, err := q.db.Exec(ctx, deleteDiscordRoleRule, arg.ID, arg.GuildID)
 	return err
 }
 
@@ -122,7 +120,7 @@ DELETE FROM discord_role_rules WHERE kind = 'group' AND ref = $1
 
 // A group that is deleted takes the rules that named it along.
 func (q *Queries) DeleteDiscordRoleRulesForGroup(ctx context.Context, groupRef string) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscordRoleRulesForGroup, groupRef)
+	_, err := q.db.Exec(ctx, deleteDiscordRoleRulesForGroup, groupRef)
 	return err
 }
 
@@ -131,7 +129,7 @@ DELETE FROM discord_role_rules WHERE guild_id = $1
 `
 
 func (q *Queries) DeleteDiscordRoleRulesForGuild(ctx context.Context, guildID string) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscordRoleRulesForGuild, guildID)
+	_, err := q.db.Exec(ctx, deleteDiscordRoleRulesForGuild, guildID)
 	return err
 }
 
@@ -140,7 +138,7 @@ DELETE FROM org_groups WHERE id = $1
 `
 
 func (q *Queries) DeleteOrgGroup(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteOrgGroup, id)
+	_, err := q.db.Exec(ctx, deleteOrgGroup, id)
 	return err
 }
 
@@ -149,7 +147,7 @@ SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, d
 `
 
 func (q *Queries) GetDiscordLinkByDiscordID(ctx context.Context, discordID string) (DiscordLink, error) {
-	row := q.db.QueryRowContext(ctx, getDiscordLinkByDiscordID, discordID)
+	row := q.db.QueryRow(ctx, getDiscordLinkByDiscordID, discordID)
 	var i DiscordLink
 	err := row.Scan(
 		&i.UserID,
@@ -171,7 +169,7 @@ SELECT id, owner_kind, owner_id, name, description, created_by, created_at FROM 
 `
 
 func (q *Queries) GetOrgGroup(ctx context.Context, id int64) (OrgGroup, error) {
-	row := q.db.QueryRowContext(ctx, getOrgGroup, id)
+	row := q.db.QueryRow(ctx, getOrgGroup, id)
 	var i OrgGroup
 	err := row.Scan(
 		&i.ID,
@@ -200,7 +198,7 @@ type InsertDiscordChannelAccessParams struct {
 }
 
 func (q *Queries) InsertDiscordChannelAccess(ctx context.Context, arg InsertDiscordChannelAccessParams) error {
-	_, err := q.db.ExecContext(ctx, insertDiscordChannelAccess,
+	_, err := q.db.Exec(ctx, insertDiscordChannelAccess,
 		arg.GuildID,
 		arg.ChannelID,
 		arg.RoleID,
@@ -226,7 +224,7 @@ type InsertDiscordRoleRuleParams struct {
 }
 
 func (q *Queries) InsertDiscordRoleRule(ctx context.Context, arg InsertDiscordRoleRuleParams) error {
-	_, err := q.db.ExecContext(ctx, insertDiscordRoleRule,
+	_, err := q.db.Exec(ctx, insertDiscordRoleRule,
 		arg.GuildID,
 		arg.Kind,
 		arg.Ref,
@@ -254,7 +252,7 @@ type ListCharactersInCorporationsRow struct {
 // Every linked character in a set of corporations: who a director can
 // put in a group.
 func (q *Queries) ListCharactersInCorporations(ctx context.Context, corporationIds []int64) ([]ListCharactersInCorporationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listCharactersInCorporations, pq.Array(corporationIds))
+	rows, err := q.db.Query(ctx, listCharactersInCorporations, corporationIds)
 	if err != nil {
 		return nil, err
 	}
@@ -266,9 +264,6 @@ func (q *Queries) ListCharactersInCorporations(ctx context.Context, corporationI
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -283,7 +278,7 @@ SELECT guild_id, channel_id, role_id, set_by, set_at FROM discord_channel_access
 
 // Channel access (schema 022).
 func (q *Queries) ListDiscordChannelAccess(ctx context.Context, guildID string) ([]DiscordChannelAccess, error) {
-	rows, err := q.db.QueryContext(ctx, listDiscordChannelAccess, guildID)
+	rows, err := q.db.Query(ctx, listDiscordChannelAccess, guildID)
 	if err != nil {
 		return nil, err
 	}
@@ -302,9 +297,6 @@ func (q *Queries) ListDiscordChannelAccess(ctx context.Context, guildID string) 
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -320,7 +312,7 @@ SELECT id, guild_id, kind, ref, role_id, created_by, created_at FROM discord_rol
 // Discord role rules and groups (schema 019).
 // ---------------------------------------------------------------------
 func (q *Queries) ListDiscordRoleRules(ctx context.Context) ([]DiscordRoleRule, error) {
-	rows, err := q.db.QueryContext(ctx, listDiscordRoleRules)
+	rows, err := q.db.Query(ctx, listDiscordRoleRules)
 	if err != nil {
 		return nil, err
 	}
@@ -340,9 +332,6 @@ func (q *Queries) ListDiscordRoleRules(ctx context.Context) ([]DiscordRoleRule, 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -355,7 +344,7 @@ SELECT id, guild_id, kind, ref, role_id, created_by, created_at FROM discord_rol
 `
 
 func (q *Queries) ListDiscordRoleRulesForGuild(ctx context.Context, guildID string) ([]DiscordRoleRule, error) {
-	rows, err := q.db.QueryContext(ctx, listDiscordRoleRulesForGuild, guildID)
+	rows, err := q.db.Query(ctx, listDiscordRoleRulesForGuild, guildID)
 	if err != nil {
 		return nil, err
 	}
@@ -375,9 +364,6 @@ func (q *Queries) ListDiscordRoleRulesForGuild(ctx context.Context, guildID stri
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -391,7 +377,7 @@ SELECT DISTINCT corporation_id FROM character_corporations ORDER BY corporation_
 
 // The corporations EveSynapse has seen linked characters in.
 func (q *Queries) ListKnownCorporations(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listKnownCorporations)
+	rows, err := q.db.Query(ctx, listKnownCorporations)
 	if err != nil {
 		return nil, err
 	}
@@ -403,9 +389,6 @@ func (q *Queries) ListKnownCorporations(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, corporation_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -435,7 +418,7 @@ type ListOrgGroupMembersRow struct {
 // has for each character that is linked here. A member that is not
 // linked has no name and no corporation.
 func (q *Queries) ListOrgGroupMembers(ctx context.Context, groupID int64) ([]ListOrgGroupMembersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listOrgGroupMembers, groupID)
+	rows, err := q.db.Query(ctx, listOrgGroupMembers, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -452,9 +435,6 @@ func (q *Queries) ListOrgGroupMembers(ctx context.Context, groupID int64) ([]Lis
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -479,7 +459,7 @@ type ListOrgGroupsByUserRow struct {
 
 // The groups each working character of an account is in.
 func (q *Queries) ListOrgGroupsByUser(ctx context.Context, userID int64) ([]ListOrgGroupsByUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, listOrgGroupsByUser, userID)
+	rows, err := q.db.Query(ctx, listOrgGroupsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -496,9 +476,6 @@ func (q *Queries) ListOrgGroupsByUser(ctx context.Context, userID int64) ([]List
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -520,7 +497,7 @@ type ListOrgGroupsForOwnerParams struct {
 
 // Groups.
 func (q *Queries) ListOrgGroupsForOwner(ctx context.Context, arg ListOrgGroupsForOwnerParams) ([]OrgGroup, error) {
-	rows, err := q.db.QueryContext(ctx, listOrgGroupsForOwner, arg.OwnerKind, arg.OwnerID)
+	rows, err := q.db.Query(ctx, listOrgGroupsForOwner, arg.OwnerKind, arg.OwnerID)
 	if err != nil {
 		return nil, err
 	}
@@ -540,9 +517,6 @@ func (q *Queries) ListOrgGroupsForOwner(ctx context.Context, arg ListOrgGroupsFo
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -566,7 +540,7 @@ type ListWorkingCharacterCorporationsByUserRow struct {
 
 // The working characters of an account, each with its corporation.
 func (q *Queries) ListWorkingCharacterCorporationsByUser(ctx context.Context, userID int64) ([]ListWorkingCharacterCorporationsByUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, listWorkingCharacterCorporationsByUser, userID)
+	rows, err := q.db.Query(ctx, listWorkingCharacterCorporationsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -578,9 +552,6 @@ func (q *Queries) ListWorkingCharacterCorporationsByUser(ctx context.Context, us
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -598,7 +569,7 @@ type RemoveOrgGroupMemberParams struct {
 }
 
 func (q *Queries) RemoveOrgGroupMember(ctx context.Context, arg RemoveOrgGroupMemberParams) error {
-	_, err := q.db.ExecContext(ctx, removeOrgGroupMember, arg.GroupID, arg.CharacterID)
+	_, err := q.db.Exec(ctx, removeOrgGroupMember, arg.GroupID, arg.CharacterID)
 	return err
 }
 
@@ -612,7 +583,7 @@ type SetDiscordGuildAutoJoinParams struct {
 }
 
 func (q *Queries) SetDiscordGuildAutoJoin(ctx context.Context, arg SetDiscordGuildAutoJoinParams) error {
-	_, err := q.db.ExecContext(ctx, setDiscordGuildAutoJoin, arg.AutoJoin, arg.GuildID)
+	_, err := q.db.Exec(ctx, setDiscordGuildAutoJoin, arg.AutoJoin, arg.GuildID)
 	return err
 }
 
@@ -629,7 +600,7 @@ type SetDiscordGuildKickParams struct {
 }
 
 func (q *Queries) SetDiscordGuildKick(ctx context.Context, arg SetDiscordGuildKickParams) error {
-	_, err := q.db.ExecContext(ctx, setDiscordGuildKick, arg.KickEnabled, arg.KickExemptRoles, arg.GuildID)
+	_, err := q.db.Exec(ctx, setDiscordGuildKick, arg.KickEnabled, arg.KickExemptRoles, arg.GuildID)
 	return err
 }
 
@@ -643,7 +614,7 @@ type SetDiscordGuildKickCheckedParams struct {
 }
 
 func (q *Queries) SetDiscordGuildKickChecked(ctx context.Context, arg SetDiscordGuildKickCheckedParams) error {
-	_, err := q.db.ExecContext(ctx, setDiscordGuildKickChecked, arg.KickCheckedAt, arg.GuildID)
+	_, err := q.db.Exec(ctx, setDiscordGuildKickChecked, arg.KickCheckedAt, arg.GuildID)
 	return err
 }
 
@@ -657,7 +628,7 @@ type SetDiscordGuildOpsChannelParams struct {
 }
 
 func (q *Queries) SetDiscordGuildOpsChannel(ctx context.Context, arg SetDiscordGuildOpsChannelParams) error {
-	_, err := q.db.ExecContext(ctx, setDiscordGuildOpsChannel, arg.OpsChannel, arg.GuildID)
+	_, err := q.db.Exec(ctx, setDiscordGuildOpsChannel, arg.OpsChannel, arg.GuildID)
 	return err
 }
 
@@ -676,7 +647,7 @@ type SetDiscordLinkTokensParams struct {
 
 // The account's Discord token, sealed; empty strings forget it.
 func (q *Queries) SetDiscordLinkTokens(ctx context.Context, arg SetDiscordLinkTokensParams) error {
-	_, err := q.db.ExecContext(ctx, setDiscordLinkTokens,
+	_, err := q.db.Exec(ctx, setDiscordLinkTokens,
 		arg.AccessToken,
 		arg.RefreshToken,
 		arg.TokenExpiry,

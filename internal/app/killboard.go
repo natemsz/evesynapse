@@ -16,14 +16,10 @@ package app
 // ---------------------------------------------------------------------------
 
 import (
-	"bytes"
 	"context"
-	"database/sql"
+	json "github.com/goccy/go-json"
 	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
-	"github.com/klauspost/compress/gzip"
-	"io"
 	"net/http"
 	"sort"
 	"strconv"
@@ -34,6 +30,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -432,7 +429,7 @@ func (app *Application) killboardHeadline(ctx context.Context, names *killNames)
 	st := killboardStats{AriaLabel: "The last day across New Eden"}
 	h, err := app.queries.GetKillboardHeadline(ctx)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("killboard: headline: %v", err)
 		}
 		return st, killboardTop{}
@@ -621,7 +618,7 @@ func (app *Application) handleKillPage(w http.ResponseWriter, r *http.Request) {
 	}
 	k, err := app.queries.GetPublicKill(ctx, id)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("killboard: kill %d: %v", id, err)
 		}
 		// Unknown, or a kill nobody posted: the page says so.
@@ -720,13 +717,9 @@ func killFitEFT(names *killNames, ship string, items []killItem) string {
 	return b.String()
 }
 
-func decodeKillDetail(gz []byte) (killmailFull, bool) {
+func decodeKillDetail(payload []byte) (killmailFull, bool) {
 	var km killmailFull
-	zr, err := gzip.NewReader(bytes.NewReader(gz))
-	if err != nil {
-		return km, false
-	}
-	raw, err := io.ReadAll(zr)
+	raw, err := killDetailRaw(payload)
 	if err != nil {
 		return km, false
 	}

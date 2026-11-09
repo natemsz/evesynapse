@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const deleteAnonymousFittingByToken = `-- name: DeleteAnonymousFittingByToken :execrows
@@ -19,11 +17,11 @@ WHERE share_token = $1 AND is_anonymous = true
 `
 
 func (q *Queries) DeleteAnonymousFittingByToken(ctx context.Context, shareToken string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteAnonymousFittingByToken, shareToken)
+	result, err := q.db.Exec(ctx, deleteAnonymousFittingByToken, shareToken)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const deleteExpiredAnonymousFittings = `-- name: DeleteExpiredAnonymousFittings :execrows
@@ -32,11 +30,11 @@ WHERE is_anonymous = true AND last_viewed_at < $1
 `
 
 func (q *Queries) DeleteExpiredAnonymousFittings(ctx context.Context, lastViewedAt sql.NullTime) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteExpiredAnonymousFittings, lastViewedAt)
+	result, err := q.db.Exec(ctx, deleteExpiredAnonymousFittings, lastViewedAt)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const getFittingAnonymousOwner = `-- name: GetFittingAnonymousOwner :one
@@ -44,7 +42,7 @@ SELECT user_id FROM fitting_anonymous_owner WHERE id = 1
 `
 
 func (q *Queries) GetFittingAnonymousOwner(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getFittingAnonymousOwner)
+	row := q.db.QueryRow(ctx, getFittingAnonymousOwner)
 	var user_id int64
 	err := row.Scan(&user_id)
 	return user_id, err
@@ -73,7 +71,7 @@ type GetFittingByShareTokenRow struct {
 }
 
 func (q *Queries) GetFittingByShareToken(ctx context.Context, shareToken string) (GetFittingByShareTokenRow, error) {
-	row := q.db.QueryRowContext(ctx, getFittingByShareToken, shareToken)
+	row := q.db.QueryRow(ctx, getFittingByShareToken, shareToken)
 	var i GetFittingByShareTokenRow
 	err := row.Scan(
 		&i.ID,
@@ -96,7 +94,7 @@ SELECT secret FROM fitting_cookie_secrets WHERE id = 1
 `
 
 func (q *Queries) GetFittingCookieSecret(ctx context.Context) (string, error) {
-	row := q.db.QueryRowContext(ctx, getFittingCookieSecret)
+	row := q.db.QueryRow(ctx, getFittingCookieSecret)
 	var secret string
 	err := row.Scan(&secret)
 	return secret, err
@@ -109,7 +107,7 @@ ON CONFLICT (id) DO NOTHING
 `
 
 func (q *Queries) InsertFittingAnonymousOwner(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, insertFittingAnonymousOwner, userID)
+	_, err := q.db.Exec(ctx, insertFittingAnonymousOwner, userID)
 	return err
 }
 
@@ -120,7 +118,7 @@ ON CONFLICT (id) DO NOTHING
 `
 
 func (q *Queries) InsertFittingCookieSecret(ctx context.Context, secret string) error {
-	_, err := q.db.ExecContext(ctx, insertFittingCookieSecret, secret)
+	_, err := q.db.Exec(ctx, insertFittingCookieSecret, secret)
 	return err
 }
 
@@ -145,7 +143,7 @@ type ListFittingsByShareTokensRow struct {
 }
 
 func (q *Queries) ListFittingsByShareTokens(ctx context.Context, tokens []string) ([]ListFittingsByShareTokensRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFittingsByShareTokens, pq.Array(tokens))
+	rows, err := q.db.Query(ctx, listFittingsByShareTokens, tokens)
 	if err != nil {
 		return nil, err
 	}
@@ -170,9 +168,6 @@ func (q *Queries) ListFittingsByShareTokens(ctx context.Context, tokens []string
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -194,7 +189,7 @@ type SetAnonymousFittingShareParams struct {
 // Anonymous fit sharing (schema 067): link-only fits under a
 // shared anonymous owner, remembered by a signed cookie.
 func (q *Queries) SetAnonymousFittingShare(ctx context.Context, arg SetAnonymousFittingShareParams) error {
-	_, err := q.db.ExecContext(ctx, setAnonymousFittingShare, arg.ID, arg.ShareToken)
+	_, err := q.db.Exec(ctx, setAnonymousFittingShare, arg.ID, arg.ShareToken)
 	return err
 }
 
@@ -205,6 +200,6 @@ WHERE share_token = $1 AND is_anonymous = true
 `
 
 func (q *Queries) TouchFittingByToken(ctx context.Context, shareToken string) error {
-	_, err := q.db.ExecContext(ctx, touchFittingByToken, shareToken)
+	_, err := q.db.Exec(ctx, touchFittingByToken, shareToken)
 	return err
 }

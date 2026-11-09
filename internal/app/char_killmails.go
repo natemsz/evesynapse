@@ -1,13 +1,9 @@
 package app
 
 import (
-	"bytes"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/klauspost/compress/gzip"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -23,6 +19,7 @@ import (
 	// encoding/json with identical results (TestAppDecoderParity
 	// in decode_parity_test.go).
 	json "github.com/goccy/go-json"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -146,7 +143,7 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 		logging.Errorf("killmails: load recent list for character %d: %v", active.CharacterID, err)
 		// No snapshot row at all = cold start: the worker is still
 		// importing this character, which the Sync page shows live.
-		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapKillmails}); errors.Is(serr, sql.ErrNoRows) {
+		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapKillmails}); errors.Is(serr, pgx.ErrNoRows) {
 			view.Warming = true
 		}
 		app.render(ctx, w, http.StatusOK, "killmails.html", data)
@@ -209,7 +206,7 @@ func (app *Application) killBoardValues(ctx context.Context, refs []esi.Killmail
 		args = append(args, ref.KillmailID)
 	}
 	b.WriteString(")")
-	rows, err := app.db.QueryContext(ctx, b.String(), args...)
+	rows, err := app.pool.Query(ctx, b.String(), args...)
 	if err != nil {
 		logging.Errorf("killmails: read board values: %v", err)
 		return out
@@ -258,7 +255,7 @@ func warmingKillmailRow(killmailID int64) killmailRow {
 func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, ref esi.KillmailRef, values map[int64]float64, placeMemo map[int64]placeRef) killmailRow {
 	stored, err := app.queries.GetKillmailDetail(ctx, ref.KillmailID)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("killmails: read detail %d: %v", ref.KillmailID, err)
 		}
 		return warmingKillmailRow(ref.KillmailID)
@@ -352,14 +349,10 @@ func (app *Application) boardKillmailRow(ctx context.Context, viewer killmailVie
 }
 
 // decodeBoardKillmail reads a board-held killmail (kill_details'
-// gzipped payload) as the ESI shape the list rows are built from.
-func decodeBoardKillmail(gz []byte) (esi.Killmail, bool) {
+// compressed payload) as the ESI shape the list rows are built from.
+func decodeBoardKillmail(payload []byte) (esi.Killmail, bool) {
 	var km esi.Killmail
-	zr, err := gzip.NewReader(bytes.NewReader(gz))
-	if err != nil {
-		return km, false
-	}
-	raw, err := io.ReadAll(zr)
+	raw, err := killDetailRaw(payload)
 	if err != nil {
 		return km, false
 	}

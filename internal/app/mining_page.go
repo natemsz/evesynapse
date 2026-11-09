@@ -345,7 +345,7 @@ func (app *Application) typeVolumes(ctx context.Context, types map[int64]bool) m
 		b.WriteString("$" + strconv.Itoa(len(args)))
 	}
 	b.WriteString(")")
-	rows, err := app.db.QueryContext(ctx, b.String(), args...)
+	rows, err := app.pool.Query(ctx, b.String(), args...)
 	if err != nil {
 		return out
 	}

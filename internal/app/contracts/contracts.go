@@ -2,12 +2,11 @@ package contracts
 
 import (
 	"context"
-	"database/sql"
+	json "github.com/goccy/go-json"
 	"errors"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/humanize"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"math"
 	"net/http"
 	"sort"
@@ -17,6 +16,7 @@ import (
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -521,7 +521,7 @@ func (app *mod) contractCharLabel(ctx context.Context, characterID int64) (strin
 func (app *mod) loadContractItems(ctx context.Context, contractID int64) (esi.ContractItems, bool, error) {
 	row, err := app.queries.GetContractDetail(ctx, contractID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, false, nil
 		}
 		return nil, false, err

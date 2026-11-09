@@ -8,8 +8,6 @@ package db
 import (
 	"context"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const clearRegionActivityStats = `-- name: ClearRegionActivityStats :exec
@@ -17,7 +15,7 @@ DELETE FROM region_activity_stats
 `
 
 func (q *Queries) ClearRegionActivityStats(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, clearRegionActivityStats)
+	_, err := q.db.Exec(ctx, clearRegionActivityStats)
 	return err
 }
 
@@ -26,7 +24,7 @@ DELETE FROM system_activity_stats
 `
 
 func (q *Queries) ClearSystemActivityStats(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, clearSystemActivityStats)
+	_, err := q.db.Exec(ctx, clearSystemActivityStats)
 	return err
 }
 
@@ -35,7 +33,7 @@ DELETE FROM system_sovereignty
 `
 
 func (q *Queries) ClearSystemSovereignty(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, clearSystemSovereignty)
+	_, err := q.db.Exec(ctx, clearSystemSovereignty)
 	return err
 }
 
@@ -99,7 +97,7 @@ JOIN regwin w ON w.region_id = r.region_id
 // use the same collection coverage, so a region's daily average is
 // its total scaled by the hours of collection behind it.
 func (q *Queries) DistillRegionActivityStats(ctx context.Context, now time.Time) error {
-	_, err := q.db.ExecContext(ctx, distillRegionActivityStats, now)
+	_, err := q.db.Exec(ctx, distillRegionActivityStats, now)
 	return err
 }
 
@@ -162,7 +160,7 @@ LEFT JOIN win w ON w.system_id = l.system_id
 // Systems with no history inside 7 days get no row: their pages
 // show the not-collected state, not stale zeros.
 func (q *Queries) DistillSystemActivityStats(ctx context.Context, now time.Time) error {
-	_, err := q.db.ExecContext(ctx, distillSystemActivityStats, now)
+	_, err := q.db.Exec(ctx, distillSystemActivityStats, now)
 	return err
 }
 
@@ -178,7 +176,7 @@ type GetMapLayersMetaRow struct {
 
 // The live layers payload (schema 073).
 func (q *Queries) GetMapLayersMeta(ctx context.Context) (GetMapLayersMetaRow, error) {
-	row := q.db.QueryRowContext(ctx, getMapLayersMeta)
+	row := q.db.QueryRow(ctx, getMapLayersMeta)
 	var i GetMapLayersMetaRow
 	err := row.Scan(&i.Sources, &i.Etag, &i.BuiltAt)
 	return i, err
@@ -194,7 +192,7 @@ type GetMapLayersPayloadRow struct {
 }
 
 func (q *Queries) GetMapLayersPayload(ctx context.Context) (GetMapLayersPayloadRow, error) {
-	row := q.db.QueryRowContext(ctx, getMapLayersPayload)
+	row := q.db.QueryRow(ctx, getMapLayersPayload)
 	var i GetMapLayersPayloadRow
 	err := row.Scan(&i.Etag, &i.Payload)
 	return i, err
@@ -212,7 +210,7 @@ type GetMapUniverseMetaRow struct {
 }
 
 func (q *Queries) GetMapUniverseMeta(ctx context.Context) (GetMapUniverseMetaRow, error) {
-	row := q.db.QueryRowContext(ctx, getMapUniverseMeta)
+	row := q.db.QueryRow(ctx, getMapUniverseMeta)
 	var i GetMapUniverseMetaRow
 	err := row.Scan(
 		&i.Version,
@@ -233,7 +231,7 @@ type GetMapUniversePayloadRow struct {
 }
 
 func (q *Queries) GetMapUniversePayload(ctx context.Context) (GetMapUniversePayloadRow, error) {
-	row := q.db.QueryRowContext(ctx, getMapUniversePayload)
+	row := q.db.QueryRow(ctx, getMapUniversePayload)
 	var i GetMapUniversePayloadRow
 	err := row.Scan(&i.Etag, &i.Payload)
 	return i, err
@@ -253,7 +251,7 @@ WHERE kind = $1::text
 // guide-prices unnest pattern), not through queries here.
 // ---------------------------------------------------------------------
 func (q *Queries) GetPlaceStatsMeta(ctx context.Context, kind string) (PlaceStatsMetum, error) {
-	row := q.db.QueryRowContext(ctx, getPlaceStatsMeta, kind)
+	row := q.db.QueryRow(ctx, getPlaceStatsMeta, kind)
 	var i PlaceStatsMetum
 	err := row.Scan(&i.Kind, &i.FetchedAt, &i.CachedUntil)
 	return i, err
@@ -269,7 +267,7 @@ WHERE region_id = $1::bigint
 `
 
 func (q *Queries) GetRegionActivityStats(ctx context.Context, regionID int64) (RegionActivityStat, error) {
-	row := q.db.QueryRowContext(ctx, getRegionActivityStats, regionID)
+	row := q.db.QueryRow(ctx, getRegionActivityStats, regionID)
 	var i RegionActivityStat
 	err := row.Scan(
 		&i.RegionID,
@@ -301,7 +299,7 @@ WHERE system_id = $1::bigint
 `
 
 func (q *Queries) GetSystemActivityStats(ctx context.Context, systemID int64) (SystemActivityStat, error) {
-	row := q.db.QueryRowContext(ctx, getSystemActivityStats, systemID)
+	row := q.db.QueryRow(ctx, getSystemActivityStats, systemID)
 	var i SystemActivityStat
 	err := row.Scan(
 		&i.SystemID,
@@ -330,7 +328,7 @@ WHERE system_id = $1::bigint
 `
 
 func (q *Queries) GetSystemSovereignty(ctx context.Context, systemID int64) (SystemSovereignty, error) {
-	row := q.db.QueryRowContext(ctx, getSystemSovereignty, systemID)
+	row := q.db.QueryRow(ctx, getSystemSovereignty, systemID)
 	var i SystemSovereignty
 	err := row.Scan(
 		&i.SystemID,
@@ -350,7 +348,7 @@ ORDER BY constellation_id
 `
 
 func (q *Queries) ListMapConstellations(ctx context.Context) ([]SdeConstellation, error) {
-	rows, err := q.db.QueryContext(ctx, listMapConstellations)
+	rows, err := q.db.Query(ctx, listMapConstellations)
 	if err != nil {
 		return nil, err
 	}
@@ -362,9 +360,6 @@ func (q *Queries) ListMapConstellations(ctx context.Context) ([]SdeConstellation
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -387,7 +382,7 @@ type ListMapJumpsRow struct {
 
 // Each stargate pair once (the dump lists both directions).
 func (q *Queries) ListMapJumps(ctx context.Context) ([]ListMapJumpsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMapJumps)
+	rows, err := q.db.Query(ctx, listMapJumps)
 	if err != nil {
 		return nil, err
 	}
@@ -399,9 +394,6 @@ func (q *Queries) ListMapJumps(ctx context.Context) ([]ListMapJumpsRow, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -416,7 +408,7 @@ ORDER BY region_id
 `
 
 func (q *Queries) ListMapRegions(ctx context.Context) ([]SdeRegion, error) {
-	rows, err := q.db.QueryContext(ctx, listMapRegions)
+	rows, err := q.db.Query(ctx, listMapRegions)
 	if err != nil {
 		return nil, err
 	}
@@ -428,9 +420,6 @@ func (q *Queries) ListMapRegions(ctx context.Context) ([]SdeRegion, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -447,7 +436,7 @@ ORDER BY 1
 // The systems holding at least one NPC station: a prominence
 // input for the map's label tiers.
 func (q *Queries) ListMapStationSystems(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listMapStationSystems)
+	rows, err := q.db.Query(ctx, listMapStationSystems)
 	if err != nil {
 		return nil, err
 	}
@@ -459,9 +448,6 @@ func (q *Queries) ListMapStationSystems(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, system_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -501,7 +487,7 @@ type ListMapSystemsRow struct {
 // pockets, none of which has a place on a stargate map.
 // ---------------------------------------------------------------------
 func (q *Queries) ListMapSystems(ctx context.Context) ([]ListMapSystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMapSystems)
+	rows, err := q.db.Query(ctx, listMapSystems)
 	if err != nil {
 		return nil, err
 	}
@@ -526,9 +512,6 @@ func (q *Queries) ListMapSystems(ctx context.Context) ([]ListMapSystemsRow, erro
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -563,7 +546,7 @@ type ListRegionSovereigntyBreakdownRow struct {
 // ListRegionSovereigntyBreakdown: a region's current holders by
 // systems held, most first; the caller bounds the list.
 func (q *Queries) ListRegionSovereigntyBreakdown(ctx context.Context, arg ListRegionSovereigntyBreakdownParams) ([]ListRegionSovereigntyBreakdownRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRegionSovereigntyBreakdown, arg.RegionID, arg.Lim)
+	rows, err := q.db.Query(ctx, listRegionSovereigntyBreakdown, arg.RegionID, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -581,9 +564,6 @@ func (q *Queries) ListRegionSovereigntyBreakdown(ctx context.Context, arg ListRe
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -613,7 +593,7 @@ type ListRegionSystemsWithActivityRow struct {
 // with each system's trailing-24h kills and jumps from the distilled
 // stats (0 until collection reaches the system).
 func (q *Queries) ListRegionSystemsWithActivity(ctx context.Context, regionID int64) ([]ListRegionSystemsWithActivityRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRegionSystemsWithActivity, regionID)
+	rows, err := q.db.Query(ctx, listRegionSystemsWithActivity, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -631,9 +611,6 @@ func (q *Queries) ListRegionSystemsWithActivity(ctx context.Context, regionID in
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -653,7 +630,7 @@ WHERE system_id = ANY($1::bigint[])
 // The same distilled figures for a set of systems at once: a
 // system's neighbours, for the workbench's gate cards.
 func (q *Queries) ListSystemActivityStatsByIDs(ctx context.Context, systemIds []int64) ([]SystemActivityStat, error) {
-	rows, err := q.db.QueryContext(ctx, listSystemActivityStatsByIDs, pq.Array(systemIds))
+	rows, err := q.db.Query(ctx, listSystemActivityStatsByIDs, systemIds)
 	if err != nil {
 		return nil, err
 	}
@@ -682,9 +659,6 @@ func (q *Queries) ListSystemActivityStatsByIDs(ctx context.Context, systemIds []
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -704,7 +678,7 @@ type ListSystemSovereigntyFactionNamesRow struct {
 // The previous pass's faction names, so a pass whose factions fetch
 // failed keeps the names it already had instead of blanking them.
 func (q *Queries) ListSystemSovereigntyFactionNames(ctx context.Context) ([]ListSystemSovereigntyFactionNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSystemSovereigntyFactionNames)
+	rows, err := q.db.Query(ctx, listSystemSovereigntyFactionNames)
 	if err != nil {
 		return nil, err
 	}
@@ -716,9 +690,6 @@ func (q *Queries) ListSystemSovereigntyFactionNames(ctx context.Context) ([]List
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -733,11 +704,11 @@ WHERE hour < $1::timestamptz
 
 // The 30-day retention, applied at ingest.
 func (q *Queries) PruneSystemActivityHours(ctx context.Context, cutoff time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneSystemActivityHours, cutoff)
+	result, err := q.db.Exec(ctx, pruneSystemActivityHours, cutoff)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const upsertMapLayers = `-- name: UpsertMapLayers :exec
@@ -757,7 +728,7 @@ type UpsertMapLayersParams struct {
 }
 
 func (q *Queries) UpsertMapLayers(ctx context.Context, arg UpsertMapLayersParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMapLayers,
+	_, err := q.db.Exec(ctx, upsertMapLayers,
 		arg.Sources,
 		arg.Etag,
 		arg.Payload,
@@ -784,7 +755,7 @@ type UpsertMapUniverseParams struct {
 }
 
 func (q *Queries) UpsertMapUniverse(ctx context.Context, arg UpsertMapUniverseParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMapUniverse,
+	_, err := q.db.Exec(ctx, upsertMapUniverse,
 		arg.Version,
 		arg.Etag,
 		arg.Payload,
@@ -808,6 +779,6 @@ type UpsertPlaceStatsMetaParams struct {
 }
 
 func (q *Queries) UpsertPlaceStatsMeta(ctx context.Context, arg UpsertPlaceStatsMetaParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPlaceStatsMeta, arg.Kind, arg.FetchedAt, arg.CachedUntil)
+	_, err := q.db.Exec(ctx, upsertPlaceStatsMeta, arg.Kind, arg.FetchedAt, arg.CachedUntil)
 	return err
 }

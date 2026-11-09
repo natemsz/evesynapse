@@ -19,7 +19,7 @@ SELECT choice FROM account_link_choices WHERE user_id = $1
 // features and opted-in enhancements, as JSON, so the next character
 // link opens with them preselected.
 func (q *Queries) GetLinkChoice(ctx context.Context, userID int64) (string, error) {
-	row := q.db.QueryRowContext(ctx, getLinkChoice, userID)
+	row := q.db.QueryRow(ctx, getLinkChoice, userID)
 	var choice string
 	err := row.Scan(&choice)
 	return choice, err
@@ -40,6 +40,6 @@ type SetLinkChoiceParams struct {
 }
 
 func (q *Queries) SetLinkChoice(ctx context.Context, arg SetLinkChoiceParams) error {
-	_, err := q.db.ExecContext(ctx, setLinkChoice, arg.UserID, arg.Choice, arg.UpdatedAt)
+	_, err := q.db.Exec(ctx, setLinkChoice, arg.UserID, arg.Choice, arg.UpdatedAt)
 	return err
 }

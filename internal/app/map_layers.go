@@ -23,9 +23,8 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	json "github.com/goccy/go-json"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -34,6 +33,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // mapLayersPayload is the layers payload, as JSON. Mirrored as a
@@ -118,7 +118,7 @@ func (app *Application) refreshMapLayers(ctx context.Context) {
 	for _, kind := range mapLayerSources {
 		s, err := app.queries.GetGlobalSnapshot(ctx, kind)
 		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
+			if !errors.Is(err, pgx.ErrNoRows) {
 				logging.Errorf("map: layers: read %s: %v", kind, err)
 			}
 			fp = append(fp, kind+"=")
@@ -271,7 +271,7 @@ func (app *Application) buildMapLayers(ctx context.Context, snaps map[string]db.
 func (app *Application) handleMapLayersJSON(w http.ResponseWriter, r *http.Request) {
 	row, err := app.queries.GetMapLayersPayload(r.Context())
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "no map layers yet", http.StatusServiceUnavailable)
 			return
 		}

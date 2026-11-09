@@ -2,10 +2,9 @@ package app
 
 import (
 	"context"
-	"database/sql"
+	json "github.com/goccy/go-json"
 	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"html/template"
 	"math"
 	"net/http"
@@ -21,6 +20,7 @@ import (
 	"evesynapse/internal/logging"
 	"evesynapse/internal/markethistory"
 	"evesynapse/internal/tradefees"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -1306,7 +1306,7 @@ type storedBook struct {
 func (app *Application) storedBook(ctx context.Context, regionID, typeID int64) (storedBook, *db.MarketRegionStat, bool) {
 	stat, err := app.queries.GetMarketRegionStat(ctx, db.GetMarketRegionStatParams{RegionID: regionID, TypeID: typeID})
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("market: region stat for type %d in region %d: %v", typeID, regionID, err)
 		}
 		return storedBook{}, nil, false

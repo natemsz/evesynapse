@@ -124,15 +124,15 @@ func TestStatsRetentionRollupAndPrune(t *testing.T) {
 	housekeep := func() {
 		t.Helper()
 		app.stats = newStatsRecorder() // reset the hourly gate
-		tx, err := app.db.BeginTx(ctx, nil)
+		tx, err := app.pool.Begin(ctx)
 		if err != nil {
 			t.Fatalf("begin: %v", err)
 		}
-		defer tx.Rollback()
+		defer tx.Rollback(ctx)
 		if err := app.statsHousekeep(ctx, app.queries.WithTx(tx), app.recorder(), now); err != nil {
 			t.Fatalf("housekeep: %v", err)
 		}
-		if err := tx.Commit(); err != nil {
+		if err := tx.Commit(ctx); err != nil {
 			t.Fatalf("commit: %v", err)
 		}
 	}

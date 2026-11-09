@@ -305,11 +305,11 @@ func (app *Application) foldLPSummary(ctx context.Context, pool ledgerPool, now 
 	if pool.ownerKind != ownerChar {
 		return nil // corporations' LP is not in ESI
 	}
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.DeleteLPStoreSummaryForPool(ctx, db.DeleteLPStoreSummaryForPoolParams{PoolKind: pool.kind, PoolID: pool.id}); err != nil {
 		return err
@@ -317,7 +317,7 @@ func (app *Application) foldLPSummary(ctx context.Context, pool ledgerPool, now 
 	if err := qtx.FoldLPStoreSummary(ctx, db.FoldLPStoreSummaryParams{PoolKind: pool.kind, PoolID: pool.id, CharacterIds: pool.members, FoldedAt: now.UTC()}); err != nil {
 		return err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 	unsold, err := app.queries.ListLPUnsoldByCorp(ctx, db.ListLPUnsoldByCorpParams{PoolKind: pool.kind, PoolID: pool.id, CharacterIds: pool.members})

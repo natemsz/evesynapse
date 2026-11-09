@@ -23,7 +23,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"errors"
 	json "github.com/goccy/go-json"
@@ -37,6 +36,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/marketwire"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -221,7 +221,7 @@ func (app *Application) marketAPIGuard(next http.Handler) http.Handler {
 		}
 		row, err := app.queries.GetLiveAPIKeyByHash(r.Context(), hashAPIKey(bearer))
 		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
+			if !errors.Is(err, pgx.ErrNoRows) {
 				logging.Errorf("market api: key lookup: %v", err)
 				writeMarketAPIError(w, http.StatusServiceUnavailable, "unavailable", "Try again shortly.")
 				return

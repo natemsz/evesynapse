@@ -2,7 +2,6 @@ package discord
 
 import (
 	"crypto/subtle"
-	"database/sql"
 	"errors"
 	"net/http"
 	"time"
@@ -10,6 +9,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	dc "evesynapse/internal/discord"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -41,7 +41,7 @@ func (app *mod) discordCanLink() bool {
 func (app *mod) discordLinkFor(r *http.Request, userID int64) (db.DiscordLink, bool) {
 	link, err := app.queries.GetDiscordLink(r.Context(), userID)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("discord: link of user %d: %v", userID, err)
 		}
 		return db.DiscordLink{}, false
@@ -132,9 +132,9 @@ func (app *mod) handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.db.Begin(ctx)
 	if err == nil {
-		defer tx.Rollback()
+		defer tx.Rollback(ctx)
 		qtx := app.queries.WithTx(tx)
 		if err = qtx.DeleteOtherDiscordLinks(ctx, db.DeleteOtherDiscordLinksParams{DiscordID: account.ID, UserID: userID}); err == nil {
 			err = qtx.UpsertDiscordLink(ctx, db.UpsertDiscordLinkParams{
@@ -142,7 +142,7 @@ func (app *mod) handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 		if err == nil {
-			err = tx.Commit()
+			err = tx.Commit(ctx)
 		}
 	}
 	if err != nil {

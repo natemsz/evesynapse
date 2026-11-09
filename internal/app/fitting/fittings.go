@@ -2,10 +2,9 @@ package fitting
 
 import (
 	"context"
-	"database/sql"
+	json "github.com/goccy/go-json"
 	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"net/http"
 	"sort"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"evesynapse/internal/fit"
 	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@ func (app *tool) handleFittingsSaved(w http.ResponseWriter, r *http.Request) {
 			logging.Errorf("fittings: load for character %d: %v", active.CharacterID, err)
 			// No snapshot row at all = cold start: the worker is still
 			// importing this character, which the Sync page shows live.
-			if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapFittings}); errors.Is(serr, sql.ErrNoRows) {
+			if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapFittings}); errors.Is(serr, pgx.ErrNoRows) {
 				view.Warming = true
 			}
 		} else {

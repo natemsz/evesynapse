@@ -28,10 +28,9 @@ package app
 
 import (
 	"context"
-	"database/sql"
+	json "github.com/goccy/go-json"
 	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"net/http"
 	"net/url"
 	"strings"
@@ -40,6 +39,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // The demo cast. Character and corporation IDs are fictional and
@@ -78,7 +78,7 @@ func (app *Application) demoUserID(ctx context.Context) int64 {
 	}
 	u, err := app.queries.GetDemoUser(ctx)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			// No demo account yet; cache that too, so a render
 			// never pays for the lookup twice. ensureDemoAccount
 			// replaces the cached value when it creates one.
@@ -238,7 +238,7 @@ func (app *Application) refreshDemoPilotName(ctx context.Context) error {
 				}
 			}
 		}
-	case errors.Is(err, sql.ErrNoRows):
+	case errors.Is(err, pgx.ErrNoRows):
 		// No record yet; the seed writes it.
 	default:
 		return fmt.Errorf("demo: read pilot record: %w", err)
@@ -248,7 +248,7 @@ func (app *Application) refreshDemoPilotName(ctx context.Context) error {
 	})
 	switch {
 	case err == nil:
-	case errors.Is(err, sql.ErrNoRows):
+	case errors.Is(err, pgx.ErrNoRows):
 		return nil // No snapshot yet; the seed writes it.
 	default:
 		return fmt.Errorf("demo: read profile snapshot: %w", err)
@@ -398,7 +398,7 @@ func (app *Application) maybeResetDemo(ctx context.Context, now time.Time) {
 	}
 	last, err := app.queries.GetDemoLastReset(ctx)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("demo: read reset clock: %v", err)
 			return
 		}

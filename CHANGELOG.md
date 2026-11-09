@@ -7,6 +7,743 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.8.0.0] - 2026-11-09
+
+Automated build of EveSynapse v0.8.0.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Block botnet traffic using protocol and client hint behavioral fingerprinting by @natemsz in #265
+
+## [v0.7.9.8] - 2026-11-08
+
+Automated build of EveSynapse v0.7.9.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Materialize entity kill involvement lookups to prevent incremental sort planner trap by @natemsz in #264
+
+## [v0.7.9.7] - 2026-11-08
+
+Automated build of EveSynapse v0.7.9.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Add Mutamarket-style roll sliders with real ranges and meta marks to abyssal search by @natemsz in #263
+
+### Other Changes
+* feat/dominion-v3-default-theme by @natemsz in #262
+
+## [v0.7.9.6] - 2026-11-08
+
+Automated build of EveSynapse v0.7.9.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Optimize ListBlueprintCopyMedianCandidates query plan by @natemsz in #261
+
+## [v0.7.9.5] - 2026-11-08
+
+Automated build of EveSynapse v0.7.9.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Refine Minmatar v3 borders and panel tones by @natemsz in #260
+
+## [v0.7.9.4] - 2026-11-08
+
+Automated build of EveSynapse v0.7.9.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Fix market tests for net-of-fees margins and sessionless contexts by @miko in #258
+* Use klauspost/compress for gzip by @miko in #256
+* Add v3 Minmatar theme, remove demo briefing cards, and make notification cards swipeable by @miko in #255
+* Show market spreads net of broker fees and sales tax by @miko in #254
+* Retry the AWS CLI download in the release mirror job by @miko in #253
+
+### Other Changes
+* Pin market scanner tests and harden sqlc freshness gate by @natemsz in #259
+* Block automated AI scrapers and update robots.txt by @natemsz in #257
+
+## [v0.7.9.3] - 2026-11-07
+
+Automated build of EveSynapse v0.7.9.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Fix recent kills showing pricing and link kill items to the market by @miko in #252
+* Read table data at --fs-sm, keeping pills and loadout chips at their size by @miko in #236
+
+## [v0.7.9.2] - 2026-11-07
+
+Automated build of EveSynapse v0.7.9.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Smooth the market history chart and add area fill and 7-day average by @miko in #250
+* Hold shared core surfaces and recent kills in memory and serve from RAM by @natemsz in #249
+
+### Other Changes
+* Document LOW_RAM_MODE in README and .env.example by @natemsz in #251
+
+## [v0.7.9.1] - 2026-11-07
+
+Automated build of EveSynapse v0.7.9.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Hold market stat pack in memory and serve from RAM by @natemsz in #248
+* Read killboard listings and stats from zKillboard live instead of the local involvement table by @miko in #245
+* Build the search index at worker startup and keep it resident by @miko in #244
+
+### Other Changes
+* Use the partial entity indexes on kill reads and index kill ingest time by @natemsz in #247
+
+## [v0.7.9.0] - 2026-11-07
+
+Automated build of EveSynapse v0.7.9.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Backfill kill history only for registered users by @miko in #241
+* Keep full kill details for one year, then metadata only by @miko in #240
+
+### Other Changes
+* Replace adjusted price card on market item page with house appraisal value by @natemsz in #243
+* Use native .l-seg security tabs and right-hand watchlist inspector on market item page by @natemsz in #242
+
+## [v0.7.8.9] - 2026-11-07
+
+Automated build of EveSynapse v0.7.8.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Add LOW_RAM_MODE flag and document every env var in .env.example by @miko in #237
+
+### Other Changes
+* Tune scheme text neutrals, secondary highlights, and panel surface contrast by @natemsz in #239
+* Lay out the market item details page in a responsive 3-tier grid with order book filtering by @natemsz in #238
+
+## [v0.7.8.8] - 2026-11-07
+
+Automated build of EveSynapse v0.7.8.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Add the owner's screenshots to the landing page gallery by @miko in #235
+* Store demo pilot records in the envelope the pilot page reads and seed pilot activity profiles by @miko in #234
+* List the shipped features the landing page was missing by @miko in #233
+* Let long API strings wrap inside the settings card by @miko in #232
+* Show the entity's record in the killmail page tiles, with an all-time and 30-day scope swap by @miko in #231
+* Add a prepared runner image with the release tools preinstalled by @miko in #230
+
+## [v0.7.8.7] - 2026-11-06
+
+Automated build of EveSynapse v0.7.8.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Walk pre-permanence pilot profiles once more to restore their pruned involvement by @miko in #229
+* Show profile-backed pilots their all-time solo kills and ISK destroyed by @miko in #228
+
+## [v0.7.8.6] - 2026-11-06
+
+Automated build of EveSynapse v0.7.8.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Keep priced kill values credited permanently through a slim involvement record by @miko in #227
+* Park the fitting module search below the sub-nav when it sticks by @miko in #226
+
+## [v0.7.8.5] - 2026-11-06
+
+Automated build of EveSynapse v0.7.8.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Page the killmail pages past their first 50 rows by @miko in #225
+* Store kills past the retention cutoff in post-prune shape at ingest by @miko in #224
+* Lay out icon suggestion rows with a gap and text centered on the icon by @miko in #223
+
+## [v0.7.8.4] - 2026-11-06
+
+Automated build of EveSynapse v0.7.8.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Show scoped stats on character, corporation and alliance killboards by @miko in #222
+* Resolve killboard entity names when a board or kill page is viewed by @miko in #221
+* Set the chip and chip on font size to the 2xs step by @miko in #220
+* Remove two stray closing braces from style.css by @miko in #219
+
+## [v0.7.8.2] - 2026-11-06
+
+Automated build of EveSynapse v0.7.8.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Serve search from an in-memory index by @miko in #218
+* Add a name search to the killboard by @miko in #217
+* Backfill pilot and corporation kill history from zKillboard into the kills store by @miko in #216
+* Replace the industry glyph with a mallet and anvil by @miko in #215
+* Draw the rail nav icons from the shared glyph sprite by @miko in #214
+
+## [v0.7.8.1] - 2026-11-06
+
+Automated build of EveSynapse v0.7.8.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Gives admin page notes the prose treatment and moves the admin pages into the prose sweep by @miko in #213
+* Shows the victim and the final blow pilot with their portraits and organisations in killboard rows by @miko in #212
+* Adds a killboard link to corporation and alliance profiles by @miko in #211
+* Always shows the item quantity in the Assets inspector by @miko in #209
+* Replaces the map, intel, install and sign out nav glyphs with cleaner drawings by @miko in #208
+* Sets pill tabs to the 2xs type size by @miko in #207
+* Marks the admin pages intro and explainer lines as prose by @miko in #206
+
+## [v0.7.7.7] - 2026-11-06
+
+Automated build of EveSynapse v0.7.7.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Gives the Ship Workbench a state-aware head: doors only until a ship is picked, fit details folded behind the toggle at every width by @miko in #205
+* Marks explanatory blocks as prose across the site and sets open prose in Rajdhani Medium by @miko in #204
+* Loads admin.css on the ESI Details tab, grids its per-family section, and moves the Admin tabs to the shared sub-nav bar by @miko in #203
+* Give prose a readable treatment and mark it on the Appraisal, Intel Channels and Swarm Cache pages by @miko in #202
+
+## [v0.7.7.6] - 2026-11-05
+
+Automated build of EveSynapse v0.7.7.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Batches the swarm history apply onto the existing unnest upsert by @miko in #201
+
+## [v0.7.7.5] - 2026-11-05
+
+Automated build of EveSynapse v0.7.7.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Applies the demo seed daily price drift to holdings instead of net worth by @miko in #200
+* Swaps the hot decode sites in internal/app to goccy/go-json by @miko in #199
+* Swaps the ESI client's JSON codec to goccy/go-json by @miko in #198
+* Adds the Admin ESI Details tab with the right-now strip, worker backlog tiles, and the per-family ESI section by @miko in #197
+* Reads CCP's per-route health from /meta/status into the ESI status verdicts by @miko in #196
+* Pins the ESI compatibility date on every client request by @miko in #195
+
+## [v0.7.7.4] - 2026-11-05
+
+Automated build of EveSynapse v0.7.7.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Refreshes the Tranquility status snapshot on its own minute ticker, off the worker cycle by @miko in #194
+* Add battle reports to the demo account seed by @miko in #193
+* Adds EVE Online status and service health links to the data freshness modal by @miko in #192
+
+## [v0.7.7.3] - 2026-11-05
+
+Automated build of EveSynapse v0.7.7.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Fills the demo account with realistic data across pages by @natemsz in #191
+
+## [v0.7.7.2] - 2026-11-05
+
+Automated build of EveSynapse v0.7.7.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Moves card, form, KPI and picker layout fixes into the shared layer by @natemsz in #190
+
+## [v0.7.7.1] - 2026-11-05
+
+Automated build of EveSynapse v0.7.7.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Slims the README to the project description, the AI disclosure, and the internals by @miko in #188
+* Breaks the Swarm Cache trust section into paragraphs by @miko in #187
+
+### 🐛 Bug Fixes
+* Fixes My Loadouts source filters and layout on phones and narrow widths by @natemsz in #189
+
+## [v0.7.7.0] - 2026-11-05
+
+Automated build of EveSynapse v0.7.7.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Rebuilds My Orders and My Contracts from the new mockups and adds Corporation Contracts by @natemsz in #184
+* Reads battle reports from game logs: upload, paste and Axon by @natemsz in #183
+
+### 🐛 Bug Fixes
+* Keeps the test harness and embedded Postgres out of the release binary by @natemsz in #185
+* Closes the tab bypass in redirect checks and drops dead code by @natemsz in #182
+* Folds the sub-nav's tabs into More after a page swap by @natemsz in #181
+
+### Other Changes
+* Maps the app's layers, modules and their dependencies in the README by @natemsz in #186
+
+## [v0.7.6.3] - 2026-11-05
+
+Automated build of EveSynapse v0.7.6.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Completes region sweeps at the end of a shrinking book by @natemsz in #180
+
+## [v0.7.6.2] - 2026-11-05
+
+Automated build of EveSynapse v0.7.6.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Adds battle reports from Axon's game log fights by @natemsz in #179
+
+## [v0.7.6.1] - 2026-11-04
+
+Automated build of EveSynapse v0.7.6.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Rebuilds the phone menu as drill-down screens and polishes phone layouts by @natemsz in #178
+
+### 🐛 Bug Fixes
+* Reads bulk ESI pages over parallel connections, backs off failed region sweeps and shrinks the page window after a failure by @natemsz in #176
+
+## [v0.7.6.0] - 2026-11-04
+
+Automated build of EveSynapse v0.7.6.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Stores basket figures where basket values are written by @natemsz in #175
+* Marks which blueprints can be built now, for one character or the whole account by @natemsz in #174
+* Stores each item's 30-day price line at sweep time and shows it as a hover on listed prices by @natemsz in #173
+* Restores legible type sizes, sets UI labels in Rajdhani and puts consoles on the panel glass by @natemsz in #171
+* Moves the Map onto the layout framework and removes the overflow clip by @natemsz in #170
+* Moves the Tools category onto the layout framework by @natemsz in #167
+
+## [v0.7.5.1] - 2026-11-04
+
+Automated build of EveSynapse v0.7.5.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Re-stamps the swept font sizes onto the current type scale by @natemsz in #169
+* Adds a Repository section naming the main home and the mirrors by @miko in #168
+
+## [v0.7.5.0] - 2026-11-04
+
+Automated build of EveSynapse v0.7.5.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Moves the Fitting category onto the layout framework by @natemsz in #166
+* Moves the Intel category onto the layout framework with a design pass and one reading face by @natemsz in #165
+* Raises the page container's opacity so consoles read as part of the page by @natemsz in #164
+* Aligns the Item details button right on the market item page by @natemsz in #163
+* Holds the briefing decks to one row with an animated pager by @natemsz in #162
+* Builds the Spread Scanner from its new mockups by @natemsz in #161
+* Moves the Corporation category onto the layout framework, mirroring the Pilot pages by @natemsz in #160
+* Sizes inspector amounts relative to their tile and extends the type-scale sweep to the framework sheets by @natemsz in #159
+* Brightens the Specialized specs tabs on Contracts by @natemsz in #158
+* Raises the small end of the type scale by @natemsz in #157
+
+## [v0.7.4.0] - 2026-11-04
+
+Automated build of EveSynapse v0.7.4.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Sets the footer in Eve Sans Neue and names Fenris Creations in the legal line by @miko in #156
+* Closes the loose ends: bounded Blueprints read, small-account briefing collapse, wallet ranges, and the type scale by @natemsz in #155
+* Moves the Market category onto the layout framework, with LP Store, Trends and Baskets built from their mockups by @natemsz in #154
+* Builds PI Planner from its mockup and moves the Build Planner onto the framework, closing out Industry by @natemsz in #153
+* Adds Copy for EVE and the finish time to Skill Plans, and closes out the Pilots category by @natemsz in #152
+* Builds Wallet from its mockup by @natemsz in #151
+* Builds Killmails from its mockup and moves the kill page onto the framework by @natemsz in #150
+
+## [v0.7.3.22] - 2026-11-04
+
+Automated build of EveSynapse v0.7.3.22. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Builds Blueprints from its mockup: product-group directory, library tiles, kind filters, and a blueprint inspector by @natemsz in #148
+* Builds Contacts' mockup additions by @natemsz in #147
+* Builds Calendar's mockup additions and moves the op pages onto the framework by @natemsz in #146
+* Builds Mail's mockup additions and moves Compose onto the framework by @natemsz in #145
+* Rebuilds My Colonies from its mockup and brings Mining Ledger to main by @natemsz in #144
+* Rebuilds Mining Ledger from its mockup on the layout framework by @natemsz in #142
+* Rebuilds My Jobs from its mockup on the layout framework by @natemsz in #141
+
+### Other Changes
+* Anchors the demo seed idempotency check to one captured time by @miko in #149
+* Replaces the Saira Semi Condensed UI face with Eve Sans Neue by @miko in #143
+* Moves the sub-nav bar into the page shell, spans it the full width beside the sidebar, and holds it in place during swaps by @miko in #140
+
+## [v0.7.3.21] - 2026-11-04
+
+Automated build of EveSynapse v0.7.3.21. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Moves Blueprints onto the layout framework by @natemsz in #139
+* Moves Contacts onto the layout framework by @natemsz in #138
+* Moves Calendar onto the layout framework with the month beside its events by @natemsz in #137
+* Moves Mail onto the layout framework as mailboxes, list and reader by @natemsz in #136
+* Moves Wallet onto the layout framework with the ledgers behind a segmented switch by @natemsz in #134
+* Moves Killmails onto the layout framework and lets a column title table cards by @natemsz in #132
+* Moves Skill Plans onto the layout framework and adds the training timeline by @natemsz in #131
+* Adds the layout framework and moves Assets and the Character overview onto it by @natemsz in #130
+
+### 🐛 Bug Fixes
+* Rewrites em dashes out of prose copy and fixes the extractor count verb by @natemsz in #129
+
+### Other Changes
+* Reads Killmails values from the killboard stored prices by @miko in #135
+* Prices kills only with EveSynapse's own appraisal by @miko in #133
+
+## [v0.7.3.19] - 2026-11-03
+
+Automated build of EveSynapse v0.7.3.19. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Provisions the database a dev .env names and unexpires the postgres account by @miko in #128
+
+## [v0.7.3.18] - 2026-11-03
+
+Automated build of EveSynapse v0.7.3.18. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Takes the home widget tables off the shared scroll-table treatment: no pinned first column and no filled headers by @miko in #126
+* Gives setup.sh --build and --build-dev modes, ships it on the releases of all three forges, and points the install docs at it by @miko in #125
+* Adds the contribution rules to the AI use disclosure by @miko in #124
+* Refreshes the README for the current app by @miko in #119
+
+## [v0.7.3.17] - 2026-11-03
+
+Automated build of EveSynapse v0.7.3.17. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Lets long skill names truncate in their cell so the name, the mastered tag and the level pips stop overlapping by @miko in #123
+* Paints the pinned first column of scrollable tables so columns scrolling under it stop showing through by @miko in #122
+
+## [v0.7.3.16] - 2026-11-03
+
+Automated build of EveSynapse v0.7.3.16. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Keeps the console panes usable in the tablet band and keeps the assets view in place when a ship or stack opens by @miko in #121
+
+## [v0.7.3.15] - 2026-11-03
+
+Automated build of EveSynapse v0.7.3.15. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Lands character surface switches at the top of the sheet window by @miko in #120
+* Keeps Assets selections in place and routes matrix row clicks through the name link by @miko in #118
+
+## [v0.7.3.14] - 2026-11-03
+
+Automated build of EveSynapse v0.7.3.14. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Wires Assets matrix row clicks on load and on content swaps by @natemsz in #117
+* Keeps the Customize resize preview faithful to the saved home by @natemsz in #116
+
+### Other Changes
+* Unifies the skill level squares, lands Assets place switches at the top, caps the station directory by @miko in #115
+* Puts the briefing first in the default home layout by @miko in #114
+
+## [v0.7.3.13] - 2026-11-03
+
+Automated build of EveSynapse v0.7.3.13. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Serves per-playstyle default home layouts by @natemsz in #113
+
+## [v0.7.3.12] - 2026-11-03
+
+Automated build of EveSynapse v0.7.3.12. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* On phones, Assets and the character sheet show their directory first and the picked place or skill group alone by @miko in #112
+
+## [v0.7.3.11] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.11. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Home resize: the grip frame starts over the module it resizes by @miko in #111
+
+## [v0.7.3.10] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.10. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Gives three column pages a shared console class by @miko in #110
+
+## [v0.7.3.9] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Pads the character console inside its border by @miko in #109
+
+## [v0.7.3.8] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Gives the character sheet console the frosted glass pane the Assets console uses by @miko in #108
+
+## [v0.7.3.7] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Moves the gate camp watched systems behind a button and modal, trims the undercut digest row to its frequency dropdown, and stacks the notification rows cleanly on phones by @miko in #107
+
+## [v0.7.3.6] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Pins the mid-view inspector sheets to the screen, gives the Assets matrix readable columns, and makes the character scope selector apply live by @miko in #106
+
+## [v0.7.3.5] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Polishes the character sheet and Assets headers, spacing, and controls by @miko in #105
+
+## [v0.7.3.4] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Keeps the table fill on the header row only by @miko in #104
+* Removes the hard offset text shadows by @miko in #103
+
+## [v0.7.3.3] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Paints the remaining surfaces with the shared theme fills, drops the redundant page wrappers and lets muted scheme glass read through by @miko in #101
+
+## [v0.7.3.2] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Size home modules inside their floor and ceiling, and backfill the grid by @natemsz in #100
+
+## [v0.7.3.1] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Fixes broken item icons for skins and blueprints by @miko in #99
+* Compact Assets entries and remove singleton and location flag displays by @miko in #98
+* Sub-category tabs take the category tab font; Assets head sits tighter to its console by @miko in #97
+* Keeps the character scope panel open while the selection is edited by @miko in #96
+* Sizes the trained banner to its content by @miko in #95
+* Gives the Assets console shell and inspector sheet the site established glass fill by @miko in #94
+* Paints the Overview cards, strips and inspector sheet with the site established fills by @miko in #93
+* Assets: two-pane console with an overlay inspector at middle widths by @miko in #92
+* Gives the Pilot Overview a middle-width layout by @miko in #91
+* Links the footer name to the Forgejo organization and the version to its release, drops the commit segment, and prints the binary hash in full by @miko in #90
+* Pins blueprint category labels during horizontal table scroll by @miko in #89
+* Centers filter chip labels vertically in their pills by @miko in #88
+* Adds the Intel watch home widget and the watched systems modal by @miko in #84
+* Pins blueprints as production lines and adds the Production Lines home widget by @miko in #83
+* Gives every notification kind its own notification and briefing card switches by @natemsz in #81
+* Adds a Competition column to My Orders from station heat by @miko in #76
+* Links take the theme's secondary tone, one shade lighter on highlight and on the card titles by @miko in #74
+* Update https://code.forgejo.org/forgejo/upload-artifact action to v5 by @renovate in #69
+
+## [v0.7.3.0] - 2026-11-02
+
+Automated build of EveSynapse v0.7.3.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Redesigns the Pilot Overview as a three-pane workspace by @miko in #87
+* Shows the running build's commit and binary hash in the footer by @miko in #86
+* Rebuilds the Assets page as a three-pane matrix by @miko in #85
+* Add the Profit pulse home widget by @miko in #82
+* Marks beaten orders inline in the Open orders table by @miko in #79
+* Adds a sell list to the appraisal tool, priced to undercut the cheapest sale order by @miko in #78
+* Re-anchors the fit tooltip onto the swapped workbench's real slot positions by @miko in #77
+* The updater check reads out the mirror with the forges by @miko in #59
+* Opens the rail Settings menu upward and gives the phone sheet the settings sections by @miko in #56
+* Filters long tables live as you type by @miko in #55
+
+## [v0.7.2.2] - 2026-11-01
+
+Automated build of EveSynapse v0.7.2.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Installs Node in the Android workflow so its actions can run by @miko in #73
+* Migrate Renovate config by @renovate in #72
+* Update module github.com/fergusstrange/embedded-postgres to v2 by @renovate in #70
+* Update https://code.forgejo.org/forgejo/download-artifact action to v7 by @renovate in #68
+* Update Gradle to v9 by @renovate in #67
+* Update Go modules by @renovate in #62
+
+## [v0.7.2.1] - 2026-11-01
+
+Automated build of EveSynapse v0.7.2.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Titles the waterfall in plain English by @miko in #54
+* Paints the waterfall gross bar in the theme ink, clear of the recycled slate by @miko in #53
+* Paints pinned first table cells with the solid panel by @miko in #52
+* Mutes the home Industry and Market widget empty states and links each to its next step by @miko in #51
+* Shows the Not explained breakdown as a tooltip instead of an expander by @miko in #50
+* Scopes the profit plot height to plot SVGs so figure info tips keep their size by @miko in #49
+* Keeps the reader's place when a link only changes the page's own query by @miko in #48
+* Draws the info glyph as a filled chip with the italic i in negative space by @miko in #47
+* Pins a chart tooltip on a plain tap so tapping off the chart dismisses it by @miko in #46
+* Replaces the swap crossfade with a live height glide and staggered draw-in by @miko in #45
+
+## [v0.7.2.0] - 2026-10-31
+
+Automated build of EveSynapse v0.7.2.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Rebuilds the Profit page around realized profit, capital flow and coverage by @miko in #44
+
+## [v0.7.1.2] - 2026-10-31
+
+Automated build of EveSynapse v0.7.1.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Labels the Profit charts, adds a day and week breakdown, and rebuilds the demo profit data by @miko in #43
+* Puts the briefing dismiss control in the card head beside the alert count by @miko in #42
+* Sizes briefing decks by the decks that fit a row at every module width by @miko in #41
+* Adds the category header to rail flyouts and keeps group rules from collapsing by @miko in #40
+* Pools the theme accent as a glow at the base of the KPI and briefing cards by @miko in #39
+
+## [v0.7.1.1] - 2026-10-31
+
+Automated build of EveSynapse v0.7.1.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Time-boxes contract appraisal and keeps it off long region sweeps by @miko in #38
+* Hides the briefing module while nothing applies by @miko in #37
+* Raises the dark theme danger tone to a readable contrast by @miko in #36
+* Names each rail flyout with its category and keeps one overlay at a time by @miko in #35
+* Moves the LP requirement total into the item tooltip and marks quantities with an x by @miko in #33
+* Draws a stepped guide line along the market category tree by @miko in #32
+* Keeps Market as one sidebar section with grouped subcategories and group icons by @miko in #31
+* Pools the theme accent as a glow at the base of the KPI and briefing cards by @miko in #30
+* Renders ISK figures in the house money format on the home KPIs and fleet table by @miko in #29
+* Publishes the GitHub release from GitHub Actions instead of the Forgejo pipeline by @miko in #28
+
+## [v0.7.1.0] - 2026-10-31
+
+Automated build of EveSynapse v0.7.1.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Reorganizes the market navigation, fixes the demo profit charts and the LP store table by @miko in #27
+
 ## [v0.7.0.8] - 2026-10-30
 
 Automated build of EveSynapse v0.7.0.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

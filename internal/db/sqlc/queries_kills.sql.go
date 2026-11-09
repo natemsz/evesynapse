@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const applyKillEntityDaily = `-- name: ApplyKillEntityDaily :exec
@@ -43,7 +41,7 @@ type ApplyKillEntityDailyParams struct {
 }
 
 func (q *Queries) ApplyKillEntityDaily(ctx context.Context, arg ApplyKillEntityDailyParams) error {
-	_, err := q.db.ExecContext(ctx, applyKillEntityDaily,
+	_, err := q.db.Exec(ctx, applyKillEntityDaily,
 		arg.Day,
 		arg.Kind,
 		arg.EntityID,
@@ -77,7 +75,7 @@ type ApplyKillEntityDailyShipParams struct {
 }
 
 func (q *Queries) ApplyKillEntityDailyShip(ctx context.Context, arg ApplyKillEntityDailyShipParams) error {
-	_, err := q.db.ExecContext(ctx, applyKillEntityDailyShip,
+	_, err := q.db.Exec(ctx, applyKillEntityDailyShip,
 		arg.Day,
 		arg.Kind,
 		arg.EntityID,
@@ -103,7 +101,7 @@ type ApplyKillEntityDailySystemParams struct {
 }
 
 func (q *Queries) ApplyKillEntityDailySystem(ctx context.Context, arg ApplyKillEntityDailySystemParams) error {
-	_, err := q.db.ExecContext(ctx, applyKillEntityDailySystem,
+	_, err := q.db.Exec(ctx, applyKillEntityDailySystem,
 		arg.Day,
 		arg.Kind,
 		arg.EntityID,
@@ -117,7 +115,7 @@ SELECT COUNT(*) FROM kills WHERE ingested_at >= $1::timestamptz
 `
 
 func (q *Queries) CountKillsSince(ctx context.Context, since time.Time) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countKillsSince, since)
+	row := q.db.QueryRow(ctx, countKillsSince, since)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -131,7 +129,7 @@ LIMIT 1
 `
 
 func (q *Queries) GetBiggestKill(ctx context.Context, since time.Time) (Kill, error) {
-	row := q.db.QueryRowContext(ctx, getBiggestKill, since)
+	row := q.db.QueryRow(ctx, getBiggestKill, since)
 	var i Kill
 	err := row.Scan(
 		&i.KillmailID,
@@ -181,7 +179,7 @@ WHERE corporation_id = $1::bigint
 // corporations do not keep.
 // ---------------------------------------------------------------------
 func (q *Queries) GetCorpKillCoverage(ctx context.Context, corporationID int64) (CorpKillCoverage, error) {
-	row := q.db.QueryRowContext(ctx, getCorpKillCoverage, corporationID)
+	row := q.db.QueryRow(ctx, getCorpKillCoverage, corporationID)
 	var i CorpKillCoverage
 	err := row.Scan(&i.CorporationID, &i.BackfilledAt)
 	return i, err
@@ -194,7 +192,7 @@ SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, vict
 // One kill whether or not it is public: our own characters' kills
 // and losses, for pages that already know the viewer owns it.
 func (q *Queries) GetKill(ctx context.Context, killmailID int64) (Kill, error) {
-	row := q.db.QueryRowContext(ctx, getKill, killmailID)
+	row := q.db.QueryRow(ctx, getKill, killmailID)
 	var i Kill
 	err := row.Scan(
 		&i.KillmailID,
@@ -235,7 +233,7 @@ SELECT payload FROM kill_details WHERE killmail_id = $1
 `
 
 func (q *Queries) GetKillDetail(ctx context.Context, killmailID int64) ([]byte, error) {
-	row := q.db.QueryRowContext(ctx, getKillDetail, killmailID)
+	row := q.db.QueryRow(ctx, getKillDetail, killmailID)
 	var payload []byte
 	err := row.Scan(&payload)
 	return payload, err
@@ -256,7 +254,7 @@ type GetKillEntityBiggestParams struct {
 }
 
 func (q *Queries) GetKillEntityBiggest(ctx context.Context, arg GetKillEntityBiggestParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getKillEntityBiggest, arg.Kind, arg.EntityID, arg.Since)
+	row := q.db.QueryRow(ctx, getKillEntityBiggest, arg.Kind, arg.EntityID, arg.Since)
 	var biggest_killmail_id int64
 	err := row.Scan(&biggest_killmail_id)
 	return biggest_killmail_id, err
@@ -287,7 +285,7 @@ type GetKillEntityStatsRow struct {
 }
 
 func (q *Queries) GetKillEntityStats(ctx context.Context, arg GetKillEntityStatsParams) (GetKillEntityStatsRow, error) {
-	row := q.db.QueryRowContext(ctx, getKillEntityStats, arg.Kind, arg.EntityID, arg.Since)
+	row := q.db.QueryRow(ctx, getKillEntityStats, arg.Kind, arg.EntityID, arg.Since)
 	var i GetKillEntityStatsRow
 	err := row.Scan(
 		&i.Kills,
@@ -310,7 +308,7 @@ type GetKillLinePricesRow struct {
 }
 
 func (q *Queries) GetKillLinePrices(ctx context.Context, killmailID int64) ([]GetKillLinePricesRow, error) {
-	rows, err := q.db.QueryContext(ctx, getKillLinePrices, killmailID)
+	rows, err := q.db.Query(ctx, getKillLinePrices, killmailID)
 	if err != nil {
 		return nil, err
 	}
@@ -322,9 +320,6 @@ func (q *Queries) GetKillLinePrices(ctx context.Context, killmailID int64) ([]Ge
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -355,7 +350,7 @@ type GetKillStatsRow struct {
 // The board's headline: every kill counts (private ones too: these
 // are totals, never a kill shown).
 func (q *Queries) GetKillStats(ctx context.Context, arg GetKillStatsParams) (GetKillStatsRow, error) {
-	row := q.db.QueryRowContext(ctx, getKillStats, arg.HourAgo, arg.DayAgo)
+	row := q.db.QueryRow(ctx, getKillStats, arg.HourAgo, arg.DayAgo)
 	var i GetKillStatsRow
 	err := row.Scan(&i.KillsHour, &i.KillsDay, &i.IskDay)
 	return i, err
@@ -374,7 +369,7 @@ type GetKillboardHeadlineRow struct {
 }
 
 func (q *Queries) GetKillboardHeadline(ctx context.Context) (GetKillboardHeadlineRow, error) {
-	row := q.db.QueryRowContext(ctx, getKillboardHeadline)
+	row := q.db.QueryRow(ctx, getKillboardHeadline)
 	var i GetKillboardHeadlineRow
 	err := row.Scan(
 		&i.KillsHour,
@@ -401,7 +396,7 @@ type GetKillfeedStateRow struct {
 // ingest from either source, the pricing pass, retention.
 // ---------------------------------------------------------------------
 func (q *Queries) GetKillfeedState(ctx context.Context) (GetKillfeedStateRow, error) {
-	row := q.db.QueryRowContext(ctx, getKillfeedState)
+	row := q.db.QueryRow(ctx, getKillfeedState)
 	var i GetKillfeedStateRow
 	err := row.Scan(&i.Sequence, &i.UpdatedAt)
 	return i, err
@@ -412,7 +407,7 @@ SELECT COALESCE(MAX(ingested_at), 'epoch'::timestamptz)::timestamptz AS latest F
 `
 
 func (q *Queries) GetLatestKillIngest(ctx context.Context) (time.Time, error) {
-	row := q.db.QueryRowContext(ctx, getLatestKillIngest)
+	row := q.db.QueryRow(ctx, getLatestKillIngest)
 	var latest time.Time
 	err := row.Scan(&latest)
 	return latest, err
@@ -423,7 +418,7 @@ SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, vict
 `
 
 func (q *Queries) GetPublicKill(ctx context.Context, killmailID int64) (Kill, error) {
-	row := q.db.QueryRowContext(ctx, getPublicKill, killmailID)
+	row := q.db.QueryRow(ctx, getPublicKill, killmailID)
 	var i Kill
 	err := row.Scan(
 		&i.KillmailID,
@@ -485,17 +480,17 @@ type InsertKillAttackersParams struct {
 }
 
 func (q *Queries) InsertKillAttackers(ctx context.Context, arg InsertKillAttackersParams) error {
-	_, err := q.db.ExecContext(ctx, insertKillAttackers,
+	_, err := q.db.Exec(ctx, insertKillAttackers,
 		arg.KillmailID,
-		pq.Array(arg.Seqs),
-		pq.Array(arg.CharacterIds),
-		pq.Array(arg.CorporationIds),
-		pq.Array(arg.AllianceIds),
-		pq.Array(arg.FactionIds),
-		pq.Array(arg.ShipTypeIds),
-		pq.Array(arg.WeaponTypeIds),
-		pq.Array(arg.DamageDones),
-		pq.Array(arg.FinalBlows),
+		arg.Seqs,
+		arg.CharacterIds,
+		arg.CorporationIds,
+		arg.AllianceIds,
+		arg.FactionIds,
+		arg.ShipTypeIds,
+		arg.WeaponTypeIds,
+		arg.DamageDones,
+		arg.FinalBlows,
 	)
 	return err
 }
@@ -513,7 +508,7 @@ type InsertKillDetailParams struct {
 }
 
 func (q *Queries) InsertKillDetail(ctx context.Context, arg InsertKillDetailParams) error {
-	_, err := q.db.ExecContext(ctx, insertKillDetail, arg.KillmailID, arg.Payload, arg.StoredAt)
+	_, err := q.db.Exec(ctx, insertKillDetail, arg.KillmailID, arg.Payload, arg.StoredAt)
 	return err
 }
 
@@ -536,7 +531,7 @@ type InsertKillEntityFeedParams struct {
 // One feed row per (entity, kill), written by the fold at
 // ingest. The board's filters ride the stored columns.
 func (q *Queries) InsertKillEntityFeed(ctx context.Context, arg InsertKillEntityFeedParams) error {
-	_, err := q.db.ExecContext(ctx, insertKillEntityFeed,
+	_, err := q.db.Exec(ctx, insertKillEntityFeed,
 		arg.Kind,
 		arg.EntityID,
 		arg.KillmailTime,
@@ -568,11 +563,11 @@ type InsertKillInvolvementParams struct {
 // whether or not the attacker detail is stored with it, so a
 // kill stored in post-prune shape still credits its value.
 func (q *Queries) InsertKillInvolvement(ctx context.Context, arg InsertKillInvolvementParams) error {
-	_, err := q.db.ExecContext(ctx, insertKillInvolvement,
+	_, err := q.db.Exec(ctx, insertKillInvolvement,
 		arg.KillmailID,
-		pq.Array(arg.CharacterIds),
-		pq.Array(arg.CorporationIds),
-		pq.Array(arg.AllianceIds),
+		arg.CharacterIds,
+		arg.CorporationIds,
+		arg.AllianceIds,
 	)
 	return err
 }
@@ -591,7 +586,7 @@ type InsertKillLinePricesParams struct {
 }
 
 func (q *Queries) InsertKillLinePrices(ctx context.Context, arg InsertKillLinePricesParams) error {
-	_, err := q.db.ExecContext(ctx, insertKillLinePrices, arg.KillmailID, pq.Array(arg.TypeIds), pq.Array(arg.UnitPrices))
+	_, err := q.db.Exec(ctx, insertKillLinePrices, arg.KillmailID, arg.TypeIds, arg.UnitPrices)
 	return err
 }
 
@@ -611,7 +606,7 @@ type ListESIKillsToMergeRow struct {
 
 // Our characters' ESI killmails the board has not stored yet.
 func (q *Queries) ListESIKillsToMerge(ctx context.Context, maxRows int64) ([]ListESIKillsToMergeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listESIKillsToMerge, maxRows)
+	rows, err := q.db.Query(ctx, listESIKillsToMerge, maxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -623,9 +618,6 @@ func (q *Queries) ListESIKillsToMerge(ctx context.Context, maxRows int64) ([]Lis
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -646,7 +638,7 @@ type ListKillAttackerShipsRow struct {
 }
 
 func (q *Queries) ListKillAttackerShips(ctx context.Context, killmailID int64) ([]ListKillAttackerShipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listKillAttackerShips, killmailID)
+	rows, err := q.db.Query(ctx, listKillAttackerShips, killmailID)
 	if err != nil {
 		return nil, err
 	}
@@ -663,9 +655,6 @@ func (q *Queries) ListKillAttackerShips(ctx context.Context, killmailID int64) (
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -696,7 +685,7 @@ type ListKillEntityShipsLostRow struct {
 }
 
 func (q *Queries) ListKillEntityShipsLost(ctx context.Context, arg ListKillEntityShipsLostParams) ([]ListKillEntityShipsLostRow, error) {
-	rows, err := q.db.QueryContext(ctx, listKillEntityShipsLost,
+	rows, err := q.db.Query(ctx, listKillEntityShipsLost,
 		arg.Kind,
 		arg.EntityID,
 		arg.Since,
@@ -713,9 +702,6 @@ func (q *Queries) ListKillEntityShipsLost(ctx context.Context, arg ListKillEntit
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -747,7 +733,7 @@ type ListKillEntityTopShipsRow struct {
 }
 
 func (q *Queries) ListKillEntityTopShips(ctx context.Context, arg ListKillEntityTopShipsParams) ([]ListKillEntityTopShipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listKillEntityTopShips,
+	rows, err := q.db.Query(ctx, listKillEntityTopShips,
 		arg.Kind,
 		arg.EntityID,
 		arg.Since,
@@ -764,9 +750,6 @@ func (q *Queries) ListKillEntityTopShips(ctx context.Context, arg ListKillEntity
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -797,7 +780,7 @@ type ListKillEntityTopSystemsRow struct {
 }
 
 func (q *Queries) ListKillEntityTopSystems(ctx context.Context, arg ListKillEntityTopSystemsParams) ([]ListKillEntityTopSystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listKillEntityTopSystems,
+	rows, err := q.db.Query(ctx, listKillEntityTopSystems,
 		arg.Kind,
 		arg.EntityID,
 		arg.Since,
@@ -814,9 +797,6 @@ func (q *Queries) ListKillEntityTopSystems(ctx context.Context, arg ListKillEnti
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -843,7 +823,7 @@ type ListKillInvolvementRow struct {
 // thing a render sums, a few hundred rows for all time.
 // ---------------------------------------------------------------------
 func (q *Queries) ListKillInvolvement(ctx context.Context, killmailID int64) ([]ListKillInvolvementRow, error) {
-	rows, err := q.db.QueryContext(ctx, listKillInvolvement, killmailID)
+	rows, err := q.db.Query(ctx, listKillInvolvement, killmailID)
 	if err != nil {
 		return nil, err
 	}
@@ -855,9 +835,6 @@ func (q *Queries) ListKillInvolvement(ctx context.Context, killmailID int64) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -884,7 +861,7 @@ type ListKillboardTopRow struct {
 }
 
 func (q *Queries) ListKillboardTop(ctx context.Context, arg ListKillboardTopParams) ([]ListKillboardTopRow, error) {
-	rows, err := q.db.QueryContext(ctx, listKillboardTop, arg.Kind, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listKillboardTop, arg.Kind, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -896,9 +873,6 @@ func (q *Queries) ListKillboardTop(ctx context.Context, arg ListKillboardTopPara
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -936,7 +910,7 @@ type ListKillsByEntityFeedParams struct {
 // materialized involvement CTE read an entity's whole history
 // on every page.
 func (q *Queries) ListKillsByEntityFeed(ctx context.Context, arg ListKillsByEntityFeedParams) ([]Kill, error) {
-	rows, err := q.db.QueryContext(ctx, listKillsByEntityFeed,
+	rows, err := q.db.Query(ctx, listKillsByEntityFeed,
 		arg.Kind,
 		arg.EntityID,
 		arg.BeforeTime,
@@ -987,9 +961,6 @@ func (q *Queries) ListKillsByEntityFeed(ctx context.Context, arg ListKillsByEnti
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1016,7 +987,7 @@ type ListKillsByRegionParams struct {
 }
 
 func (q *Queries) ListKillsByRegion(ctx context.Context, arg ListKillsByRegionParams) ([]Kill, error) {
-	rows, err := q.db.QueryContext(ctx, listKillsByRegion,
+	rows, err := q.db.Query(ctx, listKillsByRegion,
 		arg.RegionID,
 		arg.BeforeTime,
 		arg.BeforeID,
@@ -1066,9 +1037,6 @@ func (q *Queries) ListKillsByRegion(ctx context.Context, arg ListKillsByRegionPa
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1095,7 +1063,7 @@ type ListKillsByShipParams struct {
 }
 
 func (q *Queries) ListKillsByShip(ctx context.Context, arg ListKillsByShipParams) ([]Kill, error) {
-	rows, err := q.db.QueryContext(ctx, listKillsByShip,
+	rows, err := q.db.Query(ctx, listKillsByShip,
 		arg.ShipTypeID,
 		arg.BeforeTime,
 		arg.BeforeID,
@@ -1145,9 +1113,6 @@ func (q *Queries) ListKillsByShip(ctx context.Context, arg ListKillsByShipParams
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1174,7 +1139,7 @@ type ListKillsBySystemParams struct {
 }
 
 func (q *Queries) ListKillsBySystem(ctx context.Context, arg ListKillsBySystemParams) ([]Kill, error) {
-	rows, err := q.db.QueryContext(ctx, listKillsBySystem,
+	rows, err := q.db.Query(ctx, listKillsBySystem,
 		arg.SystemID,
 		arg.BeforeTime,
 		arg.BeforeID,
@@ -1224,9 +1189,6 @@ func (q *Queries) ListKillsBySystem(ctx context.Context, arg ListKillsBySystemPa
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1243,7 +1205,7 @@ LIMIT $1::bigint
 // Public kills with no feed row yet (stored before the feed
 // existed): the maintenance sweep folds these in the background.
 func (q *Queries) ListKillsMissingFeed(ctx context.Context, maxRows int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listKillsMissingFeed, maxRows)
+	rows, err := q.db.Query(ctx, listKillsMissingFeed, maxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1255,9 +1217,6 @@ func (q *Queries) ListKillsMissingFeed(ctx context.Context, maxRows int64) ([]in
 			return nil, err
 		}
 		items = append(items, killmail_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1291,7 +1250,7 @@ type ListKillsRecentParams struct {
 // shows everything; solo_only narrows to lone-attacker kills.
 // ---------------------------------------------------------------------
 func (q *Queries) ListKillsRecent(ctx context.Context, arg ListKillsRecentParams) ([]Kill, error) {
-	rows, err := q.db.QueryContext(ctx, listKillsRecent,
+	rows, err := q.db.Query(ctx, listKillsRecent,
 		arg.BeforeTime,
 		arg.BeforeID,
 		arg.MinValue,
@@ -1340,9 +1299,6 @@ func (q *Queries) ListKillsRecent(ctx context.Context, arg ListKillsRecentParams
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1360,7 +1316,7 @@ WHERE k.public AND k.ingested_at >= $1::timestamptz
 // Names the board will show: recent public kills' people, corps and
 // alliances, victim and attacker side.
 func (q *Queries) ListRecentKillEntities(ctx context.Context, since time.Time) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listRecentKillEntities, since)
+	rows, err := q.db.Query(ctx, listRecentKillEntities, since)
 	if err != nil {
 		return nil, err
 	}
@@ -1372,9 +1328,6 @@ func (q *Queries) ListRecentKillEntities(ctx context.Context, since time.Time) (
 			return nil, err
 		}
 		items = append(items, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1404,7 +1357,7 @@ type ListSystemKillAttackersRow struct {
 }
 
 func (q *Queries) ListSystemKillAttackers(ctx context.Context, arg ListSystemKillAttackersParams) ([]ListSystemKillAttackersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSystemKillAttackers, arg.SystemID, arg.Since)
+	rows, err := q.db.Query(ctx, listSystemKillAttackers, arg.SystemID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -1423,9 +1376,6 @@ func (q *Queries) ListSystemKillAttackers(ctx context.Context, arg ListSystemKil
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1442,7 +1392,7 @@ type ListSystemRegionsRow struct {
 }
 
 func (q *Queries) ListSystemRegions(ctx context.Context) ([]ListSystemRegionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSystemRegions)
+	rows, err := q.db.Query(ctx, listSystemRegions)
 	if err != nil {
 		return nil, err
 	}
@@ -1454,9 +1404,6 @@ func (q *Queries) ListSystemRegions(ctx context.Context) ([]ListSystemRegionsRow
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1487,7 +1434,7 @@ type ListSystemThreatKillsRow struct {
 }
 
 func (q *Queries) ListSystemThreatKills(ctx context.Context, arg ListSystemThreatKillsParams) ([]ListSystemThreatKillsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSystemThreatKills, arg.SystemID, arg.Since)
+	rows, err := q.db.Query(ctx, listSystemThreatKills, arg.SystemID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -1507,9 +1454,6 @@ func (q *Queries) ListSystemThreatKills(ctx context.Context, arg ListSystemThrea
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1532,7 +1476,7 @@ type ListThreatAttackersRow struct {
 }
 
 func (q *Queries) ListThreatAttackers(ctx context.Context, since time.Time) ([]ListThreatAttackersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listThreatAttackers, since)
+	rows, err := q.db.Query(ctx, listThreatAttackers, since)
 	if err != nil {
 		return nil, err
 	}
@@ -1549,9 +1493,6 @@ func (q *Queries) ListThreatAttackers(ctx context.Context, since time.Time) ([]L
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1584,7 +1525,7 @@ type ListThreatKillsRow struct {
 // from public kills only).
 // ---------------------------------------------------------------------
 func (q *Queries) ListThreatKills(ctx context.Context, since time.Time) ([]ListThreatKillsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listThreatKills, since)
+	rows, err := q.db.Query(ctx, listThreatKills, since)
 	if err != nil {
 		return nil, err
 	}
@@ -1605,9 +1546,6 @@ func (q *Queries) ListThreatKills(ctx context.Context, since time.Time) ([]ListT
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1625,7 +1563,7 @@ LIMIT $1::bigint
 `
 
 func (q *Queries) ListUnfoldedKills(ctx context.Context, maxRows int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listUnfoldedKills, maxRows)
+	rows, err := q.db.Query(ctx, listUnfoldedKills, maxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1637,9 +1575,6 @@ func (q *Queries) ListUnfoldedKills(ctx context.Context, maxRows int64) ([]int64
 			return nil, err
 		}
 		items = append(items, killmail_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1665,7 +1600,7 @@ type ListUnpricedKillsRow struct {
 // The pricing pass's slice: kills not priced yet whose full
 // killmail is still held, newest first.
 func (q *Queries) ListUnpricedKills(ctx context.Context, maxRows int64) ([]ListUnpricedKillsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUnpricedKills, maxRows)
+	rows, err := q.db.Query(ctx, listUnpricedKills, maxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1677,9 +1612,6 @@ func (q *Queries) ListUnpricedKills(ctx context.Context, maxRows int64) ([]ListU
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1699,7 +1631,7 @@ type MarkCorpKillCoverageParams struct {
 }
 
 func (q *Queries) MarkCorpKillCoverage(ctx context.Context, arg MarkCorpKillCoverageParams) error {
-	_, err := q.db.ExecContext(ctx, markCorpKillCoverage, arg.CorporationID, arg.BackfilledAt)
+	_, err := q.db.Exec(ctx, markCorpKillCoverage, arg.CorporationID, arg.BackfilledAt)
 	return err
 }
 
@@ -1718,7 +1650,7 @@ type MarkKillEntityAppliedParams struct {
 }
 
 func (q *Queries) MarkKillEntityApplied(ctx context.Context, arg MarkKillEntityAppliedParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, markKillEntityApplied,
+	row := q.db.QueryRow(ctx, markKillEntityApplied,
 		arg.KillmailID,
 		arg.Kind,
 		arg.EntityID,
@@ -1735,11 +1667,11 @@ WHERE k.killmail_id = a.killmail_id AND k.killmail_time < $1::timestamptz
 `
 
 func (q *Queries) PruneKillAttackers(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneKillAttackers, before)
+	result, err := q.db.Exec(ctx, pruneKillAttackers, before)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const pruneKillDetails = `-- name: PruneKillDetails :execrows
@@ -1753,11 +1685,11 @@ WHERE k.killmail_id = d.killmail_id AND k.killmail_time < $1::timestamptz
 // permanent; only detail ages out. Past a year a kill is metadata
 // for intel only (who, when, ship, total value), not a record.
 func (q *Queries) PruneKillDetails(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneKillDetails, before)
+	result, err := q.db.Exec(ctx, pruneKillDetails, before)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const pruneKillLinePrices = `-- name: PruneKillLinePrices :execrows
@@ -1766,11 +1698,11 @@ WHERE k.killmail_id = l.killmail_id AND k.killmail_time < $1::timestamptz
 `
 
 func (q *Queries) PruneKillLinePrices(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneKillLinePrices, before)
+	result, err := q.db.Exec(ctx, pruneKillLinePrices, before)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const replaceKillboardTop = `-- name: ReplaceKillboardTop :execrows
@@ -1789,16 +1721,16 @@ type ReplaceKillboardTopParams struct {
 }
 
 func (q *Queries) ReplaceKillboardTop(ctx context.Context, arg ReplaceKillboardTopParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, replaceKillboardTop,
+	result, err := q.db.Exec(ctx, replaceKillboardTop,
 		arg.Kind,
-		pq.Array(arg.EntityIds),
-		pq.Array(arg.KillsList),
-		pq.Array(arg.IskList),
+		arg.EntityIds,
+		arg.KillsList,
+		arg.IskList,
 	)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const setKillValue = `-- name: SetKillValue :exec
@@ -1818,7 +1750,7 @@ type SetKillValueParams struct {
 }
 
 func (q *Queries) SetKillValue(ctx context.Context, arg SetKillValueParams) error {
-	_, err := q.db.ExecContext(ctx, setKillValue,
+	_, err := q.db.Exec(ctx, setKillValue,
 		arg.ValueOurs,
 		arg.ValueDroppedOurs,
 		arg.ValueCoverage,
@@ -1840,7 +1772,7 @@ type SetKillfeedStateParams struct {
 }
 
 func (q *Queries) SetKillfeedState(ctx context.Context, arg SetKillfeedStateParams) error {
-	_, err := q.db.ExecContext(ctx, setKillfeedState, arg.Sequence, arg.UpdatedAt)
+	_, err := q.db.Exec(ctx, setKillfeedState, arg.Sequence, arg.UpdatedAt)
 	return err
 }
 
@@ -1864,7 +1796,7 @@ type TopKillSystemsRow struct {
 }
 
 func (q *Queries) TopKillSystems(ctx context.Context, arg TopKillSystemsParams) ([]TopKillSystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, topKillSystems, arg.Since, arg.MaxRows)
+	rows, err := q.db.Query(ctx, topKillSystems, arg.Since, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1876,9 +1808,6 @@ func (q *Queries) TopKillSystems(ctx context.Context, arg TopKillSystemsParams) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1912,7 +1841,7 @@ type TopKillerAlliancesRow struct {
 
 // Leaderboards over a window, public kills, NPC deaths left out.
 func (q *Queries) TopKillerAlliances(ctx context.Context, arg TopKillerAlliancesParams) ([]TopKillerAlliancesRow, error) {
-	rows, err := q.db.QueryContext(ctx, topKillerAlliances, arg.Since, arg.MaxRows)
+	rows, err := q.db.Query(ctx, topKillerAlliances, arg.Since, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1924,9 +1853,6 @@ func (q *Queries) TopKillerAlliances(ctx context.Context, arg TopKillerAlliances
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1954,7 +1880,7 @@ type TopShipsLostRow struct {
 }
 
 func (q *Queries) TopShipsLost(ctx context.Context, arg TopShipsLostParams) ([]TopShipsLostRow, error) {
-	rows, err := q.db.QueryContext(ctx, topShipsLost, arg.Since, arg.MaxRows)
+	rows, err := q.db.Query(ctx, topShipsLost, arg.Since, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1966,9 +1892,6 @@ func (q *Queries) TopShipsLost(ctx context.Context, arg TopShipsLostParams) ([]T
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2034,7 +1957,7 @@ type UpsertKillParams struct {
 // zKillboard's figures; our characters' ESI copy never makes a public
 // one private. inserted reports whether this was the first copy.
 func (q *Queries) UpsertKill(ctx context.Context, arg UpsertKillParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, upsertKill,
+	row := q.db.QueryRow(ctx, upsertKill,
 		arg.KillmailID,
 		arg.Hash,
 		arg.KillmailTime,
@@ -2084,7 +2007,7 @@ type UpsertKillboardHeadlineParams struct {
 }
 
 func (q *Queries) UpsertKillboardHeadline(ctx context.Context, arg UpsertKillboardHeadlineParams) error {
-	_, err := q.db.ExecContext(ctx, upsertKillboardHeadline,
+	_, err := q.db.Exec(ctx, upsertKillboardHeadline,
 		arg.KillsHour,
 		arg.KillsDay,
 		arg.IskDay,

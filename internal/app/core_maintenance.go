@@ -127,7 +127,7 @@ func RunSeedDemo(args []string, cfg Config, stdout, stderr io.Writer) int {
 	defer conn.Close()
 	defer pool.Close()
 
-	app := &Application{cfg: cfg, queries: db.New(conn), db: conn, pool: pool}
+	app := &Application{cfg: cfg, queries: db.New(pool), db: conn, pool: pool}
 	ctx := context.Background()
 	if err := app.ensureDemoAccount(ctx); err != nil {
 		fmt.Fprintf(stderr, "The demo account could not be prepared: %v\n", err)

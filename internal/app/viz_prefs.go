@@ -2,15 +2,15 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	json "github.com/goccy/go-json"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ func parseVizPrefs(blob string) vizPrefs {
 func (app *Application) vizPrefsFor(ctx context.Context, userID int64) vizPrefs {
 	blob, err := app.queries.GetUserVizPrefs(ctx, userID)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("viz: prefs for user %d: %v", userID, err)
 		}
 		return defaultVizPrefs()

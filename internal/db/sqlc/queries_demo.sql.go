@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const deleteDemoAppraisals = `-- name: DeleteDemoAppraisals :exec
@@ -18,7 +16,7 @@ DELETE FROM user_appraisals WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoAppraisals(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoAppraisals, userID)
+	_, err := q.db.Exec(ctx, deleteDemoAppraisals, userID)
 	return err
 }
 
@@ -29,7 +27,7 @@ DELETE FROM market_baskets WHERE user_id = $1
 // The demo account's own baskets; their items and value history
 // go with them (ON DELETE CASCADE). Presets have no user.
 func (q *Queries) DeleteDemoBaskets(ctx context.Context, userID sql.NullInt64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoBaskets, userID)
+	_, err := q.db.Exec(ctx, deleteDemoBaskets, userID)
 	return err
 }
 
@@ -42,7 +40,7 @@ DELETE FROM battle_fights WHERE user_id = $1
 // (ON DELETE CASCADE). The seed's fight times move with every
 // seed, so without this the reports would stack up.
 func (q *Queries) DeleteDemoBattleFights(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoBattleFights, userID)
+	_, err := q.db.Exec(ctx, deleteDemoBattleFights, userID)
 	return err
 }
 
@@ -51,7 +49,7 @@ DELETE FROM kill_attackers WHERE killmail_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeleteDemoBattleKillAttackers(ctx context.Context, killmailIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoBattleKillAttackers, pq.Array(killmailIds))
+	_, err := q.db.Exec(ctx, deleteDemoBattleKillAttackers, killmailIds)
 	return err
 }
 
@@ -60,7 +58,7 @@ DELETE FROM kill_details WHERE killmail_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeleteDemoBattleKillDetails(ctx context.Context, killmailIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoBattleKillDetails, pq.Array(killmailIds))
+	_, err := q.db.Exec(ctx, deleteDemoBattleKillDetails, killmailIds)
 	return err
 }
 
@@ -69,7 +67,7 @@ DELETE FROM kill_involvement WHERE killmail_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeleteDemoBattleKillInvolvement(ctx context.Context, killmailIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoBattleKillInvolvement, pq.Array(killmailIds))
+	_, err := q.db.Exec(ctx, deleteDemoBattleKillInvolvement, killmailIds)
 	return err
 }
 
@@ -78,7 +76,7 @@ DELETE FROM kill_line_prices WHERE killmail_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeleteDemoBattleKillPrices(ctx context.Context, killmailIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoBattleKillPrices, pq.Array(killmailIds))
+	_, err := q.db.Exec(ctx, deleteDemoBattleKillPrices, killmailIds)
 	return err
 }
 
@@ -92,7 +90,7 @@ DELETE FROM kills WHERE killmail_id = ANY($1::bigint[])
 // fresh times on every seed, so the wipe clears the battles'
 // mails for the battles step to merge the fresh copies back in.
 func (q *Queries) DeleteDemoBattleKills(ctx context.Context, killmailIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoBattleKills, pq.Array(killmailIds))
+	_, err := q.db.Exec(ctx, deleteDemoBattleKills, killmailIds)
 	return err
 }
 
@@ -101,7 +99,7 @@ DELETE FROM blueprint_pins WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoBlueprintPins(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoBlueprintPins, userID)
+	_, err := q.db.Exec(ctx, deleteDemoBlueprintPins, userID)
 	return err
 }
 
@@ -110,7 +108,7 @@ DELETE FROM character_corporations WHERE character_id = $1
 `
 
 func (q *Queries) DeleteDemoCharacterCorporation(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoCharacterCorporation, characterID)
+	_, err := q.db.Exec(ctx, deleteDemoCharacterCorporation, characterID)
 	return err
 }
 
@@ -119,7 +117,7 @@ DELETE FROM contract_details WHERE character_id = $1
 `
 
 func (q *Queries) DeleteDemoContractDetails(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoContractDetails, characterID)
+	_, err := q.db.Exec(ctx, deleteDemoContractDetails, characterID)
 	return err
 }
 
@@ -129,7 +127,7 @@ DELETE FROM doctrines WHERE corporation_id = $1
 
 // The demo corporation's doctrines; their fits cascade.
 func (q *Queries) DeleteDemoDoctrines(ctx context.Context, corporationID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoDoctrines, corporationID)
+	_, err := q.db.Exec(ctx, deleteDemoDoctrines, corporationID)
 	return err
 }
 
@@ -138,7 +136,7 @@ DELETE FROM local_fittings WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoFittings(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoFittings, userID)
+	_, err := q.db.Exec(ctx, deleteDemoFittings, userID)
 	return err
 }
 
@@ -147,7 +145,7 @@ DELETE FROM killmail_details WHERE character_id = $1
 `
 
 func (q *Queries) DeleteDemoKillmailDetails(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoKillmailDetails, characterID)
+	_, err := q.db.Exec(ctx, deleteDemoKillmailDetails, characterID)
 	return err
 }
 
@@ -156,7 +154,7 @@ DELETE FROM account_link_choices WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoLinkChoices(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoLinkChoices, userID)
+	_, err := q.db.Exec(ctx, deleteDemoLinkChoices, userID)
 	return err
 }
 
@@ -165,7 +163,7 @@ DELETE FROM notification_seen WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoNotificationSeen(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoNotificationSeen, userID)
+	_, err := q.db.Exec(ctx, deleteDemoNotificationSeen, userID)
 	return err
 }
 
@@ -174,7 +172,7 @@ DELETE FROM notifications WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoNotifications(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoNotifications, userID)
+	_, err := q.db.Exec(ctx, deleteDemoNotifications, userID)
 	return err
 }
 
@@ -184,7 +182,7 @@ DELETE FROM ops WHERE corporation_id = $1
 
 // The demo corporation's ops; SRP claims filed against them cascade.
 func (q *Queries) DeleteDemoOps(ctx context.Context, corporationID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoOps, corporationID)
+	_, err := q.db.Exec(ctx, deleteDemoOps, corporationID)
 	return err
 }
 
@@ -193,7 +191,7 @@ DELETE FROM order_health WHERE character_id = $1
 `
 
 func (q *Queries) DeleteDemoOrderHealth(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoOrderHealth, characterID)
+	_, err := q.db.Exec(ctx, deleteDemoOrderHealth, characterID)
 	return err
 }
 
@@ -202,7 +200,7 @@ DELETE FROM order_lifecycle WHERE character_id = $1
 `
 
 func (q *Queries) DeleteDemoOrderLifecycle(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoOrderLifecycle, characterID)
+	_, err := q.db.Exec(ctx, deleteDemoOrderLifecycle, characterID)
 	return err
 }
 
@@ -212,7 +210,7 @@ DELETE FROM org_groups WHERE owner_kind = 'corporation' AND owner_id = $1
 
 // The demo corporation's groups; their members cascade.
 func (q *Queries) DeleteDemoOrgGroups(ctx context.Context, ownerID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoOrgGroups, ownerID)
+	_, err := q.db.Exec(ctx, deleteDemoOrgGroups, ownerID)
 	return err
 }
 
@@ -221,7 +219,7 @@ DELETE FROM pilot_activity_applied WHERE character_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeleteDemoPilotActivityApplied(ctx context.Context, characterIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoPilotActivityApplied, pq.Array(characterIds))
+	_, err := q.db.Exec(ctx, deleteDemoPilotActivityApplied, characterIds)
 	return err
 }
 
@@ -230,7 +228,7 @@ DELETE FROM pilot_activity_hours WHERE character_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeleteDemoPilotActivityHours(ctx context.Context, characterIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoPilotActivityHours, pq.Array(characterIds))
+	_, err := q.db.Exec(ctx, deleteDemoPilotActivityHours, characterIds)
 	return err
 }
 
@@ -244,7 +242,7 @@ DELETE FROM pilot_activity_profiles WHERE character_id = ANY($1::bigint[])
 // are replanted with fresh times, so a reseed clears the fold
 // for the cast and folds it again.
 func (q *Queries) DeleteDemoPilotActivityProfiles(ctx context.Context, characterIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoPilotActivityProfiles, pq.Array(characterIds))
+	_, err := q.db.Exec(ctx, deleteDemoPilotActivityProfiles, characterIds)
 	return err
 }
 
@@ -253,7 +251,7 @@ DELETE FROM pilot_activity_ships WHERE character_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeleteDemoPilotActivityShips(ctx context.Context, characterIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoPilotActivityShips, pq.Array(characterIds))
+	_, err := q.db.Exec(ctx, deleteDemoPilotActivityShips, characterIds)
 	return err
 }
 
@@ -262,7 +260,7 @@ DELETE FROM pilot_activity_systems WHERE character_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeleteDemoPilotActivitySystems(ctx context.Context, characterIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoPilotActivitySystems, pq.Array(characterIds))
+	_, err := q.db.Exec(ctx, deleteDemoPilotActivitySystems, characterIds)
 	return err
 }
 
@@ -271,7 +269,7 @@ DELETE FROM push_subscriptions WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoPushSubscriptions(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoPushSubscriptions, userID)
+	_, err := q.db.Exec(ctx, deleteDemoPushSubscriptions, userID)
 	return err
 }
 
@@ -280,7 +278,7 @@ DELETE FROM restock_targets WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoRestockTargets(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoRestockTargets, userID)
+	_, err := q.db.Exec(ctx, deleteDemoRestockTargets, userID)
 	return err
 }
 
@@ -289,7 +287,7 @@ DELETE FROM skill_plans WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoSkillPlans(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoSkillPlans, userID)
+	_, err := q.db.Exec(ctx, deleteDemoSkillPlans, userID)
 	return err
 }
 
@@ -298,7 +296,7 @@ DELETE FROM character_snapshots WHERE character_id = $1
 `
 
 func (q *Queries) DeleteDemoSnapshots(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoSnapshots, characterID)
+	_, err := q.db.Exec(ctx, deleteDemoSnapshots, characterID)
 	return err
 }
 
@@ -307,7 +305,7 @@ DELETE FROM wallet_history WHERE character_id = $1
 `
 
 func (q *Queries) DeleteDemoWalletHistory(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoWalletHistory, characterID)
+	_, err := q.db.Exec(ctx, deleteDemoWalletHistory, characterID)
 	return err
 }
 
@@ -316,7 +314,7 @@ DELETE FROM market_watchlist WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoWatchlist(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoWatchlist, userID)
+	_, err := q.db.Exec(ctx, deleteDemoWatchlist, userID)
 	return err
 }
 
@@ -325,7 +323,7 @@ DELETE FROM widget_configs WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDemoWidgetConfigs(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDemoWidgetConfigs, userID)
+	_, err := q.db.Exec(ctx, deleteDemoWidgetConfigs, userID)
 	return err
 }
 
@@ -334,7 +332,7 @@ SELECT last_reset_at FROM demo_state WHERE id = 1
 `
 
 func (q *Queries) GetDemoLastReset(ctx context.Context) (time.Time, error) {
-	row := q.db.QueryRowContext(ctx, getDemoLastReset)
+	row := q.db.QueryRow(ctx, getDemoLastReset)
 	var last_reset_at time.Time
 	err := row.Scan(&last_reset_at)
 	return last_reset_at, err
@@ -354,7 +352,7 @@ SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz
 // the demo-owned rows, then writes the seed state in full.
 // ---------------------------------------------------------------------
 func (q *Queries) GetDemoUser(ctx context.Context) (User, error) {
-	row := q.db.QueryRowContext(ctx, getDemoUser)
+	row := q.db.QueryRow(ctx, getDemoUser)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -373,7 +371,7 @@ UPDATE users SET is_demo = 1 WHERE id = $1
 `
 
 func (q *Queries) MarkUserDemo(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, markUserDemo, id)
+	_, err := q.db.Exec(ctx, markUserDemo, id)
 	return err
 }
 
@@ -382,7 +380,7 @@ UPDATE users SET home_layout = '' WHERE id = $1
 `
 
 func (q *Queries) ResetDemoHomeLayout(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, resetDemoHomeLayout, id)
+	_, err := q.db.Exec(ctx, resetDemoHomeLayout, id)
 	return err
 }
 
@@ -392,6 +390,6 @@ ON CONFLICT (id) DO UPDATE SET last_reset_at = EXCLUDED.last_reset_at
 `
 
 func (q *Queries) StampDemoReset(ctx context.Context, lastResetAt time.Time) error {
-	_, err := q.db.ExecContext(ctx, stampDemoReset, lastResetAt)
+	_, err := q.db.Exec(ctx, stampDemoReset, lastResetAt)
 	return err
 }

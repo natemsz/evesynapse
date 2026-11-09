@@ -2,9 +2,8 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	json "github.com/goccy/go-json"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ func (app *Application) buildPublicFitStored(ctx context.Context, doc *fitview.F
 // last import's time ("" before any import).
 func (app *Application) publicFitSDEStamp(ctx context.Context) string {
 	stamp, err := app.sdeMeta(ctx, "imported_at")
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("public fit pages: SDE stamp: %v", err)
 	}
 	return stamp
@@ -86,7 +86,7 @@ func (app *Application) storePublicFitPage(ctx context.Context, fitID int64, ite
 func (app *Application) storePublicFitPageNow(ctx context.Context, fitID int64) {
 	row, err := app.queries.GetPublicFitting(ctx, fitID)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("public fit %d: load for its page: %v", fitID, err)
 		}
 		return
@@ -132,7 +132,7 @@ func (app *Application) loadPublicFitStored(ctx context.Context, fitID int64, up
 	var stored publicFitStored
 	page, err := app.queries.GetPublicFitPage(ctx, fitID)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("public fit %d: stored page: %v", fitID, err)
 		}
 		return stored, false

@@ -19,6 +19,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -456,7 +457,7 @@ func (app *mod) handleSRPRequest(w http.ResponseWriter, r *http.Request) {
 		LostAt: at, LossValue: srpLossValue(km, app.deps.ValuationPrices(ctx)),
 		Note: humanize.Clip(strings.TrimSpace(r.Form.Get("note")), srpNoteMax), CreatedAt: now,
 	})
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		back("That loss has already been claimed.")
 		return
 	}

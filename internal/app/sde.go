@@ -19,6 +19,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -1857,29 +1858,30 @@ func (parsed *parsedSDE) buildSkillRows() {
 // hand-rolled rather than sqlc; the meta writes do use sqlc against
 // the transaction). Returns the total imported row count.
 func (app *Application) storeSDE(ctx context.Context, base string, parsed *parsedSDE) (int64, error) {
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("begin SDE replace: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 
 	for _, table := range []string{"sde_types", "sde_type_physics", "sde_reprocessing", "sde_groups", "sde_categories", "sde_market_groups", "sde_stations", "sde_npc_corporations", "sde_systems", "sde_regions",
 		"sde_blueprints", "sde_blueprint_materials", "sde_blueprint_skills", "sde_invention", "sde_invention_materials",
 		"sde_skill_meta", "sde_requirements",
 		"sde_type_attributes", "sde_attribute_types", "sde_effects", "sde_effect_modifiers", "sde_type_effects"} {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
+		if _, err := tx.Exec(ctx, "DELETE FROM "+table); err != nil {
 			return 0, fmt.Errorf("clear %s: %w", table, err)
 		}
 	}
 
 	insert := func(query string, n int, fill func(i int) []any) error {
-		stmt, err := tx.PrepareContext(ctx, query)
-		if err != nil {
-			return err
-		}
-		defer stmt.Close()
+		batch := &pgx.Batch{}
 		for i := 0; i < n; i++ {
-			if _, err := stmt.ExecContext(ctx, fill(i)...); err != nil {
+			batch.Queue(query, fill(i)...)
+		}
+		br := tx.SendBatch(ctx, batch)
+		defer br.Close()
+		for i := 0; i < n; i++ {
+			if _, err := br.Exec(); err != nil {
 				return fmt.Errorf("insert row %d of %s: %w", i, query, err)
 			}
 		}
@@ -1944,7 +1946,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	// replace only when this import carried them, like the
 	// abyssal datasets below.
 	if len(parsed.constellations) > 0 {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM sde_constellations"); err != nil {
+		if _, err := tx.Exec(ctx, "DELETE FROM sde_constellations"); err != nil {
 			return 0, fmt.Errorf("clear sde_constellations: %w", err)
 		}
 		if err := insert("INSERT INTO sde_constellations (constellation_id, name, region_id) VALUES ($1, $2, $3)", len(parsed.constellations), func(i int) []any {
@@ -1955,7 +1957,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		}
 	}
 	if len(parsed.jumps) > 0 {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM sde_system_jumps"); err != nil {
+		if _, err := tx.Exec(ctx, "DELETE FROM sde_system_jumps"); err != nil {
 			return 0, fmt.Errorf("clear sde_system_jumps: %w", err)
 		}
 		if err := insert("INSERT INTO sde_system_jumps (from_system_id, to_system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", len(parsed.jumps), func(i int) []any {
@@ -1968,7 +1970,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	// Celestials (schema 090), replaced only when this import
 	// carried the denormalize file, like the map data above.
 	if len(parsed.celestials) > 0 {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM sde_celestials"); err != nil {
+		if _, err := tx.Exec(ctx, "DELETE FROM sde_celestials"); err != nil {
 			return 0, fmt.Errorf("clear sde_celestials: %w", err)
 		}
 		if err := insert("INSERT INTO sde_celestials (item_id, system_id, name) VALUES ($1, $2, $3)", len(parsed.celestials), func(i int) []any {
@@ -2068,7 +2070,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		if build == "" {
 			build = parsed.markers[sdeRangesFileName].etag
 		}
-		if _, err := tx.ExecContext(ctx, "DELETE FROM abyssal_ranges"); err != nil {
+		if _, err := tx.Exec(ctx, "DELETE FROM abyssal_ranges"); err != nil {
 			return 0, fmt.Errorf("clear abyssal_ranges: %w", err)
 		}
 		if err := insert("INSERT INTO abyssal_ranges (mutator_type_id, attribute_id, min_mult, max_mult, sde_build) VALUES ($1, $2, $3, $4, $5)", len(parsed.dynRanges), func(i int) []any {
@@ -2088,7 +2090,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		if build == "" {
 			build = parsed.markers[sdeMappingsFileName].etag
 		}
-		if _, err := tx.ExecContext(ctx, "DELETE FROM abyssal_mappings"); err != nil {
+		if _, err := tx.Exec(ctx, "DELETE FROM abyssal_mappings"); err != nil {
 			return 0, fmt.Errorf("clear abyssal_mappings: %w", err)
 		}
 		if err := insert("INSERT INTO abyssal_mappings (mutator_type_id, applicable_type_id, resulting_type_id, sde_build) VALUES ($1, $2, $3, $4)", len(parsed.dynMappings), func(i int) []any {
@@ -2140,7 +2142,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return 0, fmt.Errorf("commit SDE replace: %w", err)
 	}
 	return total, nil

@@ -2,14 +2,14 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	json "github.com/goccy/go-json"
+	"errors"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ func (app *Application) refreshAssetLocationValues(ctx context.Context, ch db.Ch
 		UserID: ch.UserID, CharacterID: ch.CharacterID,
 	}); err == nil && !snap.FetchedAt.After(latest) {
 		return // the stored fold already covers this snapshot
-	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("worker: asset values watermark for character %d: %v", ch.CharacterID, err)
 		return
 	}

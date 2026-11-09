@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -14,6 +13,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -518,7 +518,7 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 				if k.Public {
 					insp.PageHref = fmt.Sprintf("/intel/kill/%d/", killID)
 				}
-			case !errors.Is(err, sql.ErrNoRows):
+			case !errors.Is(err, pgx.ErrNoRows):
 				logging.Errorf("killmails: board row %d: %v", killID, err)
 			}
 			view.Insp = insp
@@ -560,7 +560,7 @@ func (app *Application) killmailTileRecord(ctx context.Context, viewer killmailV
 	if !last30 && viewer.characterID > 0 {
 		if prof, perr := app.queries.GetPilotActivityProfile(ctx, viewer.characterID); perr == nil && prof.Kills+prof.Losses > 0 {
 			rec.kills, rec.losses = prof.Kills, prof.Losses
-		} else if perr != nil && !errors.Is(perr, sql.ErrNoRows) {
+		} else if perr != nil && !errors.Is(perr, pgx.ErrNoRows) {
 			logging.Warnf("killmails: tile profile %d: %v", viewer.characterID, perr)
 		}
 	}

@@ -331,12 +331,12 @@ func (app *Application) flushStats(ctx context.Context, t workerTiming) {
 		logging.Errorf("stats: backlog records: %v / %v", perr, cerr)
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("stats: begin flush: %v", err)
 		return
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := app.queries.WithTx(tx)
 
 	for k, n := range reqs {
@@ -422,7 +422,7 @@ func (app *Application) flushStats(ctx context.Context, t workerTiming) {
 		logging.Errorf("stats: housekeeping: %v", err)
 		return
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		logging.Errorf("stats: commit flush: %v", err)
 	}
 }
@@ -447,7 +447,7 @@ func (app *Application) statsHousekeep(ctx context.Context, q *db.Queries, rec *
 	// Inventory: the largest tables from the catalog, plus the
 	// database itself under an empty name. Raw SQL: sqlc's schema
 	// input has no pg_catalog.
-	rows, err := app.db.QueryContext(ctx, `
+	rows, err := app.pool.Query(ctx, `
 		SELECT c.relname, c.reltuples::bigint, pg_total_relation_size(c.oid)
 		FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 		WHERE n.nspname = 'public' AND c.relkind = 'r'
@@ -473,7 +473,7 @@ func (app *Application) statsHousekeep(ctx context.Context, q *db.Queries, rec *
 	}
 	rows.Close()
 	var dbSize int64
-	if err := app.db.QueryRowContext(ctx, `SELECT pg_database_size(current_database())`).Scan(&dbSize); err != nil {
+	if err := app.pool.QueryRow(ctx, `SELECT pg_database_size(current_database())`).Scan(&dbSize); err != nil {
 		return fmt.Errorf("database size: %w", err)
 	}
 	if err := q.UpsertStatsInventory(ctx, db.UpsertStatsInventoryParams{

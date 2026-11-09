@@ -7,5 +7,46 @@ sql:
       go:
         package: "db"
         out: "internal/db/sqlc"
-        sql_package: "database/sql"
+        sql_package: "pgx/v5"
         emit_json_tags: true
+        # The overrides keep every generated model and parameter
+        # type identical to the database/sql generation, so only
+        # the DBTX plumbing changes: pgtype stays out of the app.
+        overrides:
+          - db_type: "timestamptz"
+            nullable: true
+            go_type: "database/sql.NullTime"
+          - db_type: "timestamptz"
+            nullable: false
+            go_type: "time.Time"
+          - db_type: "pg_catalog.float8"
+            nullable: true
+            go_type: "database/sql.NullFloat64"
+          - db_type: "pg_catalog.float8"
+            nullable: false
+            go_type: "float64"
+          - db_type: "text"
+            nullable: true
+            go_type: "database/sql.NullString"
+          - db_type: "int8"
+            nullable: true
+            go_type: "database/sql.NullInt64"
+          - db_type: "pg_catalog.int8"
+            nullable: true
+            go_type: "database/sql.NullInt64"
+          - db_type: "bool"
+            nullable: true
+            go_type: "database/sql.NullBool"
+          - db_type: "pg_catalog.float4"
+            nullable: true
+            go_type: "database/sql.NullFloat64"
+          - db_type: "date"
+            nullable: false
+            go_type: "time.Time"
+          - db_type: "date"
+            nullable: true
+            go_type: "database/sql.NullTime"
+          - db_type: "jsonb"
+            go_type: "encoding/json.RawMessage"
+          - db_type: "json"
+            go_type: "encoding/json.RawMessage"

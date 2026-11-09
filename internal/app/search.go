@@ -2,9 +2,8 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	json "github.com/goccy/go-json"
+	"errors"
 	"net/http"
 	"sort"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -317,7 +317,7 @@ func (app *Application) notePilotNameSearch(ctx context.Context, q string, itemH
 			return true, nil
 		}
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	if !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("search: read pilot name want %q: %v", normalized, err)
 		return false, nil
 	}

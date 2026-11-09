@@ -54,6 +54,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // appraisalRefreshAge is how old a stored appraisal may get
@@ -546,11 +547,11 @@ func (app *Application) appraiseOnePublicContract(ctx context.Context, contractI
 		return err
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin appraisal store: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	for i, it := range items {
 		al := res.Lines[i]
@@ -578,7 +579,7 @@ func (app *Application) appraiseOnePublicContract(ctx context.Context, contractI
 	if err := q.UpdatePublicContractAppraisal(ctx, params); err != nil {
 		return fmt.Errorf("store contract appraisal: %w", err)
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // refreshBlueprintCopyMedians is the worker pass behind the
@@ -595,7 +596,7 @@ func (app *Application) refreshBlueprintCopyMedians(ctx context.Context) int {
 		if time.Since(stamp) < appraisalRefreshAge {
 			return 0
 		}
-	case !errors.Is(err, sql.ErrNoRows):
+	case !errors.Is(err, pgx.ErrNoRows):
 		logging.Errorf("worker: copy medians: stamp: %v", err)
 		return 0
 	}
@@ -625,11 +626,11 @@ func (app *Application) recomputeBlueprintCopyMedians(ctx context.Context, now t
 	if err != nil {
 		return 0, fmt.Errorf("candidates: %w", err)
 	}
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("begin copy median store: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	if err := q.DeleteBlueprintCopyMedians(ctx); err != nil {
 		return 0, fmt.Errorf("clear stored medians: %w", err)
@@ -668,7 +669,7 @@ func (app *Application) recomputeBlueprintCopyMedians(ctx context.Context, now t
 		}
 		stored++
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return 0, fmt.Errorf("commit copy medians: %w", err)
 	}
 	return stored, nil

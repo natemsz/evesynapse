@@ -200,7 +200,7 @@ func TestWatchlistBasket(t *testing.T) {
 		}
 	}
 	// The figures the pages read are derived where values are written.
-	if err := storeBasketFigures(ctx, app.db, []int64{basketID}, time.Now().UTC()); err != nil {
+	if err := storeBasketFigures(ctx, app.pool, []int64{basketID}, time.Now().UTC()); err != nil {
 		t.Fatalf("store figures: %v", err)
 	}
 

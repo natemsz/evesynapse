@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // Freshness you can see: pages say when their data landed and,
@@ -89,7 +89,7 @@ func (app *Application) fetchReason(ctx context.Context, viewKey, kind string, e
 		default:
 			return "an event in your records"
 		}
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("freshness: foresight reason for %s: %v", viewKey, err)
 	}
 	if _, err := app.queries.GetTypingGuessNotedForEntity(ctx, db.GetTypingGuessNotedForEntityParams{
@@ -97,7 +97,7 @@ func (app *Application) fetchReason(ctx context.Context, viewKey, kind string, e
 		BoxPrefix: strconv.FormatInt(userID, 10) + "|", NotedAt: fetchedAt, Since: since,
 	}); err == nil {
 		return "your search"
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("freshness: guess reason for %s %d: %v", kind, entityID, err)
 	}
 	return ""

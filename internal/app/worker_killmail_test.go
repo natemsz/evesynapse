@@ -52,7 +52,7 @@ func seedKillmailCharacter(t *testing.T, transport http.RoundTripper, n int) (*A
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { conn.Close(); pool.Close() })
-	queries := db.New(conn)
+	queries := db.New(pool)
 
 	ctx := context.Background()
 	user, err := queries.CreateUser(ctx)

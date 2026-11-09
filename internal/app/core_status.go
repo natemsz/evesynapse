@@ -214,7 +214,7 @@ func worseStatus(a, b string) string {
 func (app *Application) statusDatabase(ctx context.Context) bool {
 	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	return app.db.PingContext(pingCtx) == nil
+	return app.pool.Ping(pingCtx) == nil
 }
 
 // statusWorker is the worker's last cycle start, under the same

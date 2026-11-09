@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/htmlsanitize"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -331,7 +331,7 @@ func (app *Application) handleAdminNotices(w http.ResponseWriter, r *http.Reques
 	if id, err := strconv.ParseInt(r.URL.Query().Get("edit"), 10, 64); err == nil && id > 0 {
 		row, err := app.queries.GetGlobalNotice(ctx, id)
 		switch {
-		case errors.Is(err, sql.ErrNoRows):
+		case errors.Is(err, pgx.ErrNoRows):
 			data.Error = "No notice has that id."
 		case err != nil:
 			logging.Errorf("notices: get %d: %v", id, err)
@@ -551,13 +551,13 @@ func (app *Application) handleAdminNoticeSave(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("notices: begin: %v", err)
 		back("Nothing was saved; check the server log.")
 		return
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := app.queries.WithTx(tx)
 	if action == "publish" {
 		id, err = q.InsertGlobalNotice(ctx, db.InsertGlobalNoticeParams{
@@ -588,7 +588,7 @@ func (app *Application) handleAdminNoticeSave(w http.ResponseWriter, r *http.Req
 		}
 	}
 	if err == nil {
-		err = tx.Commit()
+		err = tx.Commit(ctx)
 	}
 	if err != nil {
 		logging.Errorf("notices: save (%s): %v", action, err)
@@ -633,13 +633,13 @@ func (app *Application) handleAdminNoticeRetire(w http.ResponseWriter, r *http.R
 		back("Nothing changed: no notice has that id.")
 		return
 	}
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("notices: begin: %v", err)
 		back("Nothing changed; check the server log.")
 		return
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := app.queries.WithTx(tx)
 	n, err := q.RetireGlobalNotice(ctx, db.RetireGlobalNoticeParams{ID: id, Now: timeSet(now)})
 	if err == nil && n == 0 {
@@ -653,7 +653,7 @@ func (app *Application) handleAdminNoticeRetire(w http.ResponseWriter, r *http.R
 		})
 	}
 	if err == nil {
-		err = tx.Commit()
+		err = tx.Commit(ctx)
 	}
 	if err != nil {
 		logging.Errorf("notices: retire %d: %v", id, err)

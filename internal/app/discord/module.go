@@ -22,6 +22,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
@@ -163,7 +164,7 @@ type mod struct {
 	deps     module.Deps
 	queries  *db.Queries
 	sessions *scs.SessionManager
-	db       *sql.DB
+	db       *pgxpool.Pool
 	// discord is the Discord client, nil when the install has no
 	// Discord settings at all.
 	discord *dc.Client
@@ -174,7 +175,7 @@ func newMod(deps module.Deps) *mod {
 		deps:     deps,
 		queries:  deps.DB(),
 		sessions: deps.Sessions(),
-		db:       deps.SQLDB(),
+		db:       deps.PGPool(),
 		discord:  clientFor(deps),
 	}
 }

@@ -32,7 +32,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,7 +47,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5"
 )
 
 const sweepBatchSize = 2000
@@ -175,7 +174,7 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 	var out regionSweepOutcome
 	state, err := app.queries.GetMarketSweepState(ctx, regionID)
 	switch {
-	case errors.Is(err, sql.ErrNoRows):
+	case errors.Is(err, pgx.ErrNoRows):
 		if !app.marketFetchDue(ctx, regionSweepKind(regionID), regionSweepGate) {
 			return out
 		}
@@ -460,41 +459,25 @@ func sweepBookStaged(state db.MarketSweepState) bool {
 // pages the cursor says it does. Whole orders are never kept in
 // memory beyond the page being written.
 func (app *Application) stageSweepPage(ctx context.Context, state db.MarketSweepState, orders []esi.MarketOrder) error {
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
-	for start := 0; start < len(orders); start += sweepBatchSize {
-		end := start + sweepBatchSize
-		if end > len(orders) {
-			end = len(orders)
+	rows := make([][]any, len(orders))
+	for i := range orders {
+		o := &orders[i]
+		isBuy := int64(0)
+		if o.IsBuyOrder {
+			isBuy = 1
 		}
-		chunk := orders[start:end]
-		typeIDs := make([]int64, len(chunk))
-		isBuys := make([]int64, len(chunk))
-		prices := make([]float64, len(chunk))
-		vols := make([]int64, len(chunk))
-		locIDs := make([]int64, len(chunk))
-		sysIDs := make([]int64, len(chunk))
-		for i := range chunk {
-			o := &chunk[i]
-			typeIDs[i] = o.TypeID
-			if o.IsBuyOrder {
-				isBuys[i] = 1
-			}
-			prices[i] = o.Price
-			vols[i] = o.VolumeRemain
-			locIDs[i] = o.LocationID
-			sysIDs[i] = o.SystemID
-		}
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id, system_id)
-			SELECT $1, unnest($2::bigint[]), unnest($3::bigint[]), unnest($4::float8[]), unnest($5::bigint[]), unnest($6::bigint[]), unnest($7::bigint[])
-		`, state.RegionID, pq.Array(typeIDs), pq.Array(isBuys), pq.Array(prices), pq.Array(vols), pq.Array(locIDs), pq.Array(sysIDs)); err != nil {
-			return err
-		}
+		rows[i] = []any{state.RegionID, o.TypeID, isBuy, o.Price, o.VolumeRemain, o.LocationID, o.SystemID}
+	}
+	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"market_sweep_orders"},
+		[]string{"region_id", "type_id", "is_buy_order", "price", "volume_remain", "location_id", "system_id"},
+		pgx.CopyFromRows(rows)); err != nil {
+		return err
 	}
 	if err := qtx.UpdateMarketSweepState(ctx, db.UpdateMarketSweepStateParams{
 		NextPage: state.NextPage, PagesTotal: state.PagesTotal,
@@ -502,7 +485,7 @@ func (app *Application) stageSweepPage(ctx context.Context, state db.MarketSweep
 	}); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // completeRegionSweep distills one region's fully staged book
@@ -596,7 +579,7 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 	}
 	stationPrices := make(map[stationKey]*stationSidePrices)
 
-	orderRows, err := app.db.QueryContext(ctx, `
+	orderRows, err := app.pool.Query(ctx, `
 		SELECT type_id, is_buy_order, price, volume_remain, location_id, system_id
 		FROM market_sweep_orders
 		WHERE region_id = $1
@@ -678,9 +661,7 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			}
 		}
 	}
-	if err := orderRows.Close(); err != nil {
-		return 0, 0, err
-	}
+	orderRows.Close()
 	if err := orderRows.Err(); err != nil {
 		return 0, 0, err
 	}
@@ -772,18 +753,18 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 	}
 	sort.Slice(leaderKeys, func(i, j int) bool { return leaderKeys[i] < leaderKeys[j] })
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 
 	// Station heat (schema 120): the station bests this sweep is
 	// about to replace, read before the delete below, so the fresh
 	// pass can log each best that moved against the book.
 	oldBests := make(map[stationKey]stationAccum)
-	oldRows, err := tx.QueryContext(ctx, `
+	oldRows, err := tx.Query(ctx, `
 		SELECT location_id, type_id, best_sell, best_buy
 		FROM market_station_stats
 		WHERE region_id = $1
@@ -800,9 +781,7 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 		}
 		oldBests[stationKey{LocationID: loc, TypeID: typ}] = acc
 	}
-	if err := oldRows.Close(); err != nil {
-		return 0, 0, err
-	}
+	oldRows.Close()
 	if err := oldRows.Err(); err != nil {
 		return 0, 0, err
 	}
@@ -874,7 +853,7 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			buyP5s[i] = st.buy.P5
 			buyDevs[i] = st.buy.StdDev
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at,
 				sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev)
 			SELECT $1, unnest($2::bigint[]), unnest($3::float8[]), unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::float8[]), unnest($9::bigint[]), unnest($10::bigint[]), unnest($11::bigint[]), unnest($12::bigint[]), unnest($13::float8[]), $14,
@@ -900,14 +879,14 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 				buy_min          = excluded.buy_min,
 				buy_p5           = excluded.buy_p5,
 				buy_stddev       = excluded.buy_stddev
-		`, regionID, pq.Array(chunk), pq.Array(bestSells), pq.Array(typSells), pq.Array(sellBands),
-			pq.Array(bestBuys), pq.Array(typBuys), pq.Array(buyBands), pq.Array(sellOrds),
-			pq.Array(buyOrds), pq.Array(sellVols), pq.Array(buyVols), pq.Array(avgVols), now,
-			pq.Array(sellAvgs), pq.Array(sellMaxes), pq.Array(sellP5s), pq.Array(sellDevs),
-			pq.Array(buyAvgs), pq.Array(buyMins), pq.Array(buyP5s), pq.Array(buyDevs)); err != nil {
+		`, regionID, chunk, bestSells, typSells, sellBands,
+			bestBuys, typBuys, buyBands, sellOrds,
+			buyOrds, sellVols, buyVols, avgVols, now,
+			sellAvgs, sellMaxes, sellP5s, sellDevs,
+			buyAvgs, buyMins, buyP5s, buyDevs); err != nil {
 			return 0, 0, err
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume,
 				sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev)
 			SELECT $1, unnest($2::bigint[]), $3, unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::float8[]), unnest($9::float8[]), unnest($10::bigint[]), unnest($11::bigint[]), unnest($12::bigint[]), unnest($13::bigint[]),
@@ -931,11 +910,11 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 				buy_min      = excluded.buy_min,
 				buy_p5       = excluded.buy_p5,
 				buy_stddev   = excluded.buy_stddev
-		`, regionID, pq.Array(chunk), day, pq.Array(bestSells), pq.Array(typSells), pq.Array(sellBands),
-			pq.Array(bestBuys), pq.Array(typBuys), pq.Array(buyBands), pq.Array(sellOrds),
-			pq.Array(buyOrds), pq.Array(sellVols), pq.Array(buyVols),
-			pq.Array(sellAvgs), pq.Array(sellMaxes), pq.Array(sellP5s), pq.Array(sellDevs),
-			pq.Array(buyAvgs), pq.Array(buyMins), pq.Array(buyP5s), pq.Array(buyDevs)); err != nil {
+		`, regionID, chunk, day, bestSells, typSells, sellBands,
+			bestBuys, typBuys, buyBands, sellOrds,
+			buyOrds, sellVols, buyVols,
+			sellAvgs, sellMaxes, sellP5s, sellDevs,
+			buyAvgs, buyMins, buyP5s, buyDevs); err != nil {
 			return 0, 0, err
 		}
 	}
@@ -970,15 +949,15 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 	// in the same transaction, behind a savepoint: the LP rebuild is
 	// a secondary surface, and its failure must not roll back the
 	// region's whole sweep.
-	if _, err := tx.ExecContext(ctx, "SAVEPOINT lp_values"); err != nil {
+	if _, err := tx.Exec(ctx, "SAVEPOINT lp_values"); err != nil {
 		return 0, 0, err
 	}
 	if err := app.refreshLPOfferValues(ctx, qtx, regionID, now); err != nil {
 		logging.Errorf("worker: lp offer values in sweep of %s: %v", marketRegionLabel(regionID), err)
-		if _, err := tx.ExecContext(ctx, "ROLLBACK TO SAVEPOINT lp_values"); err != nil {
+		if _, err := tx.Exec(ctx, "ROLLBACK TO SAVEPOINT lp_values"); err != nil {
 			return 0, 0, fmt.Errorf("lp offer values: %w", err)
 		}
-	} else if _, err := tx.ExecContext(ctx, "RELEASE SAVEPOINT lp_values"); err != nil {
+	} else if _, err := tx.Exec(ctx, "RELEASE SAVEPOINT lp_values"); err != nil {
 		return 0, 0, err
 	}
 	// Basket values (schema 103): today's value of every basket
@@ -1016,7 +995,7 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			sellVols[i] = sacc.SellVolume
 			buyVols[i] = sacc.BuyVolume
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, typical_sell, typical_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
 			SELECT unnest($1::bigint[]), $2, unnest($3::bigint[]), unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::bigint[]), unnest($9::bigint[]), unnest($10::bigint[]), unnest($11::bigint[]), $12
 			ON CONFLICT (location_id, type_id) DO UPDATE SET
@@ -1030,9 +1009,9 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 				sell_volume  = excluded.sell_volume,
 				buy_volume   = excluded.buy_volume,
 				updated_at   = excluded.updated_at
-		`, pq.Array(locIDs), regionID, pq.Array(sTypeIDs), pq.Array(bestSells), pq.Array(bestBuys),
-			pq.Array(typSells), pq.Array(typBuys), pq.Array(sellOrds), pq.Array(buyOrds),
-			pq.Array(sellVols), pq.Array(buyVols), now); err != nil {
+		`, locIDs, regionID, sTypeIDs, bestSells, bestBuys,
+			typSells, typBuys, sellOrds, buyOrds,
+			sellVols, buyVols, now); err != nil {
 			return 0, 0, err
 		}
 	}
@@ -1056,17 +1035,17 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 		}
 	}
 	if len(beatLocs) > 0 {
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_best_beats (location_id, region_id, type_id, is_buy_order, at)
 			SELECT unnest($1::bigint[]), $2, unnest($3::bigint[]), unnest($4::bigint[]), $5
-		`, pq.Array(beatLocs), regionID, pq.Array(beatTypes), pq.Array(beatBuys), now); err != nil {
+		`, beatLocs, regionID, beatTypes, beatBuys, now); err != nil {
 			return 0, 0, err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM market_station_heat WHERE region_id = $1`, regionID); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM market_station_heat WHERE region_id = $1`, regionID); err != nil {
 		return 0, 0, err
 	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO market_station_heat (location_id, region_id, type_id, is_buy_order, beats_12h, computed_at)
 		SELECT location_id, region_id, type_id, is_buy_order, COUNT(*), $3
 		FROM market_best_beats
@@ -1075,7 +1054,7 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 	`, regionID, now.Add(-12*time.Hour), now); err != nil {
 		return 0, 0, err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM market_best_beats WHERE region_id = $1 AND at < $2`,
+	if _, err := tx.Exec(ctx, `DELETE FROM market_best_beats WHERE region_id = $1 AND at < $2`,
 		regionID, now.Add(-24*time.Hour)); err != nil {
 		return 0, 0, err
 	}
@@ -1118,10 +1097,10 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			bLocIDs[i] = fb.br.locationID
 			bSysIDs[i] = fb.br.systemID
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_book_orders (region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at)
 			SELECT $1, unnest($2::bigint[]), unnest($3::bigint[]), unnest($4::bigint[]), unnest($5::float8[]), unnest($6::bigint[]), unnest($7::bigint[]), unnest($8::bigint[]), $9
-		`, regionID, pq.Array(bTypeIDs), pq.Array(bIsBuys), pq.Array(bRanks), pq.Array(bPrices), pq.Array(bVols), pq.Array(bLocIDs), pq.Array(bSysIDs), now); err != nil {
+		`, regionID, bTypeIDs, bIsBuys, bRanks, bPrices, bVols, bLocIDs, bSysIDs, now); err != nil {
 			return 0, 0, err
 		}
 	}
@@ -1166,7 +1145,7 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			sellVals[i] = acc.sellValue
 			buyVals[i] = acc.buyValue
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_station_leaderboard (region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at)
 			SELECT $1, unnest($2::bigint[]), unnest($3::bigint[]), unnest($4::bigint[]), unnest($5::float8[]), unnest($6::float8[]), $7
 			ON CONFLICT (region_id, location_id) DO UPDATE SET
@@ -1175,12 +1154,12 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 				sell_value  = excluded.sell_value,
 				buy_value   = excluded.buy_value,
 				updated_at  = excluded.updated_at
-		`, regionID, pq.Array(locIDs), pq.Array(sellOrds), pq.Array(buyOrds),
-			pq.Array(sellVals), pq.Array(buyVals), now); err != nil {
+		`, regionID, locIDs, sellOrds, buyOrds,
+			sellVals, buyVals, now); err != nil {
 			return 0, 0, err
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return 0, 0, err
 	}
 	app.recordMarketFetch(ctx, regionSweepKind(regionID), fetchStateOK, "")

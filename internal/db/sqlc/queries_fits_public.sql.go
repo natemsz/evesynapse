@@ -23,7 +23,7 @@ type AddFitViewsParams struct {
 // AddFitViews adds a batch of counted views to one fit: the page
 // counts views in memory and the worker writes them here.
 func (q *Queries) AddFitViews(ctx context.Context, arg AddFitViewsParams) error {
-	_, err := q.db.ExecContext(ctx, addFitViews, arg.ViewCount, arg.ID)
+	_, err := q.db.Exec(ctx, addFitViews, arg.ViewCount, arg.ID)
 	return err
 }
 
@@ -44,7 +44,7 @@ type GetFitRatingRow struct {
 }
 
 func (q *Queries) GetFitRating(ctx context.Context, arg GetFitRatingParams) (GetFitRatingRow, error) {
-	row := q.db.QueryRowContext(ctx, getFitRating, arg.FitID, arg.UserID)
+	row := q.db.QueryRow(ctx, getFitRating, arg.FitID, arg.UserID)
 	var i GetFitRatingRow
 	err := row.Scan(&i.FitID, &i.UserID, &i.Stars)
 	return i, err
@@ -56,7 +56,7 @@ FROM public_fit_pages WHERE fit_id = $1
 `
 
 func (q *Queries) GetPublicFitPage(ctx context.Context, fitID int64) (PublicFitPage, error) {
-	row := q.db.QueryRowContext(ctx, getPublicFitPage, fitID)
+	row := q.db.QueryRow(ctx, getPublicFitPage, fitID)
 	var i PublicFitPage
 	err := row.Scan(
 		&i.FitID,
@@ -186,7 +186,7 @@ type ListPublicFitsRow struct {
 // browser pays one round-trip and the filter text lives in one place.
 // ---------------------------------------------------------------------
 func (q *Queries) ListPublicFits(ctx context.Context, arg ListPublicFitsParams) ([]ListPublicFitsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicFits,
+	rows, err := q.db.Query(ctx, listPublicFits,
 		arg.Sincedays,
 		arg.Q,
 		arg.Role,
@@ -229,9 +229,6 @@ func (q *Queries) ListPublicFits(ctx context.Context, arg ListPublicFitsParams) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -279,7 +276,7 @@ type ListPublicFitsForShipRow struct {
 }
 
 func (q *Queries) ListPublicFitsForShip(ctx context.Context, arg ListPublicFitsForShipParams) ([]ListPublicFitsForShipRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicFitsForShip, arg.ShipTypeID, arg.Limit)
+	rows, err := q.db.Query(ctx, listPublicFitsForShip, arg.ShipTypeID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -306,9 +303,6 @@ func (q *Queries) ListPublicFitsForShip(ctx context.Context, arg ListPublicFitsF
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -345,7 +339,7 @@ type ListPublicFitsNeedingPagesRow struct {
 // data, or built incomplete more than ten minutes ago. Missing pages
 // come first, then the most recently updated fits.
 func (q *Queries) ListPublicFitsNeedingPages(ctx context.Context, arg ListPublicFitsNeedingPagesParams) ([]ListPublicFitsNeedingPagesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicFitsNeedingPages, arg.SdeStamp, arg.Rlimit)
+	rows, err := q.db.Query(ctx, listPublicFitsNeedingPages, arg.SdeStamp, arg.Rlimit)
 	if err != nil {
 		return nil, err
 	}
@@ -357,9 +351,6 @@ func (q *Queries) ListPublicFitsNeedingPages(ctx context.Context, arg ListPublic
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -384,7 +375,7 @@ type ListPublicHubStatsRow struct {
 }
 
 func (q *Queries) ListPublicHubStats(ctx context.Context, typeID int64) ([]ListPublicHubStatsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicHubStats, typeID)
+	rows, err := q.db.Query(ctx, listPublicHubStats, typeID)
 	if err != nil {
 		return nil, err
 	}
@@ -402,9 +393,6 @@ func (q *Queries) ListPublicHubStats(ctx context.Context, typeID int64) ([]ListP
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -420,7 +408,7 @@ FOR UPDATE
 // LockPublicFitForRating takes the fit's row for the rest of the
 // transaction, so two ratings of one fit run one after the other.
 func (q *Queries) LockPublicFitForRating(ctx context.Context, id int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, lockPublicFitForRating, id)
+	row := q.db.QueryRow(ctx, lockPublicFitForRating, id)
 	var id_2 int64
 	err := row.Scan(&id_2)
 	return id_2, err
@@ -443,7 +431,7 @@ type PublicFitHullFacetsRow struct {
 }
 
 func (q *Queries) PublicFitHullFacets(ctx context.Context) ([]PublicFitHullFacetsRow, error) {
-	rows, err := q.db.QueryContext(ctx, publicFitHullFacets)
+	rows, err := q.db.Query(ctx, publicFitHullFacets)
 	if err != nil {
 		return nil, err
 	}
@@ -455,9 +443,6 @@ func (q *Queries) PublicFitHullFacets(ctx context.Context) ([]PublicFitHullFacet
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -482,7 +467,7 @@ type PublicFitTagFacetsRow struct {
 }
 
 func (q *Queries) PublicFitTagFacets(ctx context.Context) ([]PublicFitTagFacetsRow, error) {
-	rows, err := q.db.QueryContext(ctx, publicFitTagFacets)
+	rows, err := q.db.Query(ctx, publicFitTagFacets)
 	if err != nil {
 		return nil, err
 	}
@@ -494,9 +479,6 @@ func (q *Queries) PublicFitTagFacets(ctx context.Context) ([]PublicFitTagFacetsR
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -515,7 +497,7 @@ WHERE id = $1
 // holds. They are never moved by a delta: a delta is only right if
 // the read behind it is still true when it lands.
 func (q *Queries) RecountFitRatings(ctx context.Context, fitID int64) error {
-	_, err := q.db.ExecContext(ctx, recountFitRatings, fitID)
+	_, err := q.db.Exec(ctx, recountFitRatings, fitID)
 	return err
 }
 
@@ -559,11 +541,11 @@ WHERE priced.id = lf.id
 // price nothing. updated_at is left alone: a new price is not
 // an edit.
 func (q *Queries) RepriceLocalFittings(ctx context.Context) (int64, error) {
-	result, err := q.db.ExecContext(ctx, repriceLocalFittings)
+	result, err := q.db.Exec(ctx, repriceLocalFittings)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const setLocalFittingPrice = `-- name: SetLocalFittingPrice :exec
@@ -577,7 +559,7 @@ type SetLocalFittingPriceParams struct {
 }
 
 func (q *Queries) SetLocalFittingPrice(ctx context.Context, arg SetLocalFittingPriceParams) error {
-	_, err := q.db.ExecContext(ctx, setLocalFittingPrice, arg.TotalPrice, arg.ID, arg.UserID)
+	_, err := q.db.Exec(ctx, setLocalFittingPrice, arg.TotalPrice, arg.ID, arg.UserID)
 	return err
 }
 
@@ -596,7 +578,7 @@ type SitemapTopFitsRow struct {
 }
 
 func (q *Queries) SitemapTopFits(ctx context.Context) ([]SitemapTopFitsRow, error) {
-	rows, err := q.db.QueryContext(ctx, sitemapTopFits)
+	rows, err := q.db.Query(ctx, sitemapTopFits)
 	if err != nil {
 		return nil, err
 	}
@@ -608,9 +590,6 @@ func (q *Queries) SitemapTopFits(ctx context.Context) ([]SitemapTopFitsRow, erro
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -632,7 +611,7 @@ type SitemapTopItemsRow struct {
 }
 
 func (q *Queries) SitemapTopItems(ctx context.Context) ([]SitemapTopItemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, sitemapTopItems)
+	rows, err := q.db.Query(ctx, sitemapTopItems)
 	if err != nil {
 		return nil, err
 	}
@@ -644,9 +623,6 @@ func (q *Queries) SitemapTopItems(ctx context.Context) ([]SitemapTopItemsRow, er
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -669,7 +645,7 @@ type SitemapTopShipsRow struct {
 }
 
 func (q *Queries) SitemapTopShips(ctx context.Context) ([]SitemapTopShipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, sitemapTopShips)
+	rows, err := q.db.Query(ctx, sitemapTopShips)
 	if err != nil {
 		return nil, err
 	}
@@ -681,9 +657,6 @@ func (q *Queries) SitemapTopShips(ctx context.Context) ([]SitemapTopShipsRow, er
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -704,7 +677,7 @@ type UpsertFitRatingParams struct {
 }
 
 func (q *Queries) UpsertFitRating(ctx context.Context, arg UpsertFitRatingParams) error {
-	_, err := q.db.ExecContext(ctx, upsertFitRating, arg.FitID, arg.UserID, arg.Stars)
+	_, err := q.db.Exec(ctx, upsertFitRating, arg.FitID, arg.UserID, arg.Stars)
 	return err
 }
 
@@ -725,7 +698,7 @@ type UpsertPublicFitPageParams struct {
 }
 
 func (q *Queries) UpsertPublicFitPage(ctx context.Context, arg UpsertPublicFitPageParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPublicFitPage,
+	_, err := q.db.Exec(ctx, upsertPublicFitPage,
 		arg.FitID,
 		arg.FitUpdatedAt,
 		arg.SdeStamp,

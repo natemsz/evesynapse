@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const countPushSubscriptionsByUser = `-- name: CountPushSubscriptionsByUser :one
@@ -18,7 +16,7 @@ SELECT COUNT(*)::bigint FROM push_subscriptions WHERE user_id = $1
 `
 
 func (q *Queries) CountPushSubscriptionsByUser(ctx context.Context, userID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPushSubscriptionsByUser, userID)
+	row := q.db.QueryRow(ctx, countPushSubscriptionsByUser, userID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -34,7 +32,7 @@ type DeleteBriefingDismissalParams struct {
 }
 
 func (q *Queries) DeleteBriefingDismissal(ctx context.Context, arg DeleteBriefingDismissalParams) error {
-	_, err := q.db.ExecContext(ctx, deleteBriefingDismissal, arg.UserID, arg.LineKey)
+	_, err := q.db.Exec(ctx, deleteBriefingDismissal, arg.UserID, arg.LineKey)
 	return err
 }
 
@@ -48,7 +46,7 @@ type DeletePushSubscriptionParams struct {
 }
 
 func (q *Queries) DeletePushSubscription(ctx context.Context, arg DeletePushSubscriptionParams) error {
-	_, err := q.db.ExecContext(ctx, deletePushSubscription, arg.UserID, arg.Endpoint)
+	_, err := q.db.Exec(ctx, deletePushSubscription, arg.UserID, arg.Endpoint)
 	return err
 }
 
@@ -57,7 +55,7 @@ DELETE FROM push_subscriptions WHERE id = $1
 `
 
 func (q *Queries) DeletePushSubscriptionByID(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deletePushSubscriptionByID, id)
+	_, err := q.db.Exec(ctx, deletePushSubscriptionByID, id)
 	return err
 }
 
@@ -73,7 +71,7 @@ type DismissBriefingLineParams struct {
 }
 
 func (q *Queries) DismissBriefingLine(ctx context.Context, arg DismissBriefingLineParams) error {
-	_, err := q.db.ExecContext(ctx, dismissBriefingLine, arg.UserID, arg.LineKey)
+	_, err := q.db.Exec(ctx, dismissBriefingLine, arg.UserID, arg.LineKey)
 	return err
 }
 
@@ -93,7 +91,7 @@ type ForgetNotificationSeenExceptParams struct {
 // A state that has cleared is forgotten, so it is announced again
 // the next time it holds.
 func (q *Queries) ForgetNotificationSeenExcept(ctx context.Context, arg ForgetNotificationSeenExceptParams) error {
-	_, err := q.db.ExecContext(ctx, forgetNotificationSeenExcept, arg.UserID, arg.KeyPattern, pq.Array(arg.KeepKeys))
+	_, err := q.db.Exec(ctx, forgetNotificationSeenExcept, arg.UserID, arg.KeyPattern, arg.KeepKeys)
 	return err
 }
 
@@ -113,7 +111,7 @@ type InsertNotificationParams struct {
 }
 
 func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotificationParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, insertNotification,
+	row := q.db.QueryRow(ctx, insertNotification,
 		arg.UserID,
 		arg.CharacterID,
 		arg.Kind,
@@ -139,7 +137,7 @@ type InsertNotificationSeenParams struct {
 }
 
 func (q *Queries) InsertNotificationSeen(ctx context.Context, arg InsertNotificationSeenParams) error {
-	_, err := q.db.ExecContext(ctx, insertNotificationSeen, arg.UserID, pq.Array(arg.EventKeys), arg.SeenAt)
+	_, err := q.db.Exec(ctx, insertNotificationSeen, arg.UserID, arg.EventKeys, arg.SeenAt)
 	return err
 }
 
@@ -150,7 +148,7 @@ ORDER BY line_key
 `
 
 func (q *Queries) ListBriefingDismissals(ctx context.Context, userID int64) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listBriefingDismissals, userID)
+	rows, err := q.db.Query(ctx, listBriefingDismissals, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -162,9 +160,6 @@ func (q *Queries) ListBriefingDismissals(ctx context.Context, userID int64) ([]s
 			return nil, err
 		}
 		items = append(items, line_key)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -189,7 +184,7 @@ type ListNotificationSeenKeysParams struct {
 // has already considered.
 // ---------------------------------------------------------------------
 func (q *Queries) ListNotificationSeenKeys(ctx context.Context, arg ListNotificationSeenKeysParams) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listNotificationSeenKeys, arg.UserID, pq.Array(arg.EventKeys))
+	rows, err := q.db.Query(ctx, listNotificationSeenKeys, arg.UserID, arg.EventKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -201,9 +196,6 @@ func (q *Queries) ListNotificationSeenKeys(ctx context.Context, arg ListNotifica
 			return nil, err
 		}
 		items = append(items, event_key)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -224,7 +216,7 @@ type ListNotificationsParams struct {
 }
 
 func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error) {
-	rows, err := q.db.QueryContext(ctx, listNotifications, arg.UserID, arg.Limit)
+	rows, err := q.db.Query(ctx, listNotifications, arg.UserID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -246,9 +238,6 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -262,7 +251,7 @@ ORDER BY id
 `
 
 func (q *Queries) ListPushSubscriptionsByUser(ctx context.Context, userID int64) ([]PushSubscription, error) {
-	rows, err := q.db.QueryContext(ctx, listPushSubscriptionsByUser, userID)
+	rows, err := q.db.Query(ctx, listPushSubscriptionsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -283,9 +272,6 @@ func (q *Queries) ListPushSubscriptionsByUser(ctx context.Context, userID int64)
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -314,7 +300,7 @@ type ListRecentSkillNotificationsParams struct {
 // caller's window. Following a notification's link marks the
 // kind read on the way in, so a just-read row still counts.
 func (q *Queries) ListRecentSkillNotifications(ctx context.Context, arg ListRecentSkillNotificationsParams) ([]Notification, error) {
-	rows, err := q.db.QueryContext(ctx, listRecentSkillNotifications,
+	rows, err := q.db.Query(ctx, listRecentSkillNotifications,
 		arg.UserID,
 		arg.CharacterID,
 		arg.Kind,
@@ -342,9 +328,6 @@ func (q *Queries) ListRecentSkillNotifications(ctx context.Context, arg ListRece
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -369,7 +352,7 @@ type ListUnreadNotificationSummaryRow struct {
 // One row per kind with something unread: how many, and the newest
 // one's text and address. This is the top-bar icon's whole read.
 func (q *Queries) ListUnreadNotificationSummary(ctx context.Context, userID int64) ([]ListUnreadNotificationSummaryRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUnreadNotificationSummary, userID)
+	rows, err := q.db.Query(ctx, listUnreadNotificationSummary, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -386,9 +369,6 @@ func (q *Queries) ListUnreadNotificationSummary(ctx context.Context, userID int6
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -407,7 +387,7 @@ type MarkNotificationsReadParams struct {
 }
 
 func (q *Queries) MarkNotificationsRead(ctx context.Context, arg MarkNotificationsReadParams) error {
-	_, err := q.db.ExecContext(ctx, markNotificationsRead, arg.ReadAt, arg.UserID)
+	_, err := q.db.Exec(ctx, markNotificationsRead, arg.ReadAt, arg.UserID)
 	return err
 }
 
@@ -423,7 +403,7 @@ type MarkNotificationsReadByKindParams struct {
 }
 
 func (q *Queries) MarkNotificationsReadByKind(ctx context.Context, arg MarkNotificationsReadByKindParams) error {
-	_, err := q.db.ExecContext(ctx, markNotificationsReadByKind, arg.ReadAt, arg.UserID, arg.Kind)
+	_, err := q.db.Exec(ctx, markNotificationsReadByKind, arg.ReadAt, arg.UserID, arg.Kind)
 	return err
 }
 
@@ -433,7 +413,7 @@ RETURNING failures
 `
 
 func (q *Queries) MarkPushSubscriptionFailed(ctx context.Context, id int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, markPushSubscriptionFailed, id)
+	row := q.db.QueryRow(ctx, markPushSubscriptionFailed, id)
 	var failures int64
 	err := row.Scan(&failures)
 	return failures, err
@@ -449,7 +429,7 @@ type MarkPushSubscriptionOKParams struct {
 }
 
 func (q *Queries) MarkPushSubscriptionOK(ctx context.Context, arg MarkPushSubscriptionOKParams) error {
-	_, err := q.db.ExecContext(ctx, markPushSubscriptionOK, arg.At, arg.ID)
+	_, err := q.db.Exec(ctx, markPushSubscriptionOK, arg.At, arg.ID)
 	return err
 }
 
@@ -458,7 +438,7 @@ DELETE FROM notification_seen WHERE seen_at < $1
 `
 
 func (q *Queries) PruneNotificationSeen(ctx context.Context, seenBefore time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneNotificationSeen, seenBefore)
+	_, err := q.db.Exec(ctx, pruneNotificationSeen, seenBefore)
 	return err
 }
 
@@ -476,7 +456,7 @@ type PruneNotificationsParams struct {
 // Read ones go after a while; unread ones are kept longer but not
 // for ever.
 func (q *Queries) PruneNotifications(ctx context.Context, arg PruneNotificationsParams) error {
-	_, err := q.db.ExecContext(ctx, pruneNotifications, arg.ReadBefore, arg.CreatedBefore)
+	_, err := q.db.Exec(ctx, pruneNotifications, arg.ReadBefore, arg.CreatedBefore)
 	return err
 }
 
@@ -497,7 +477,7 @@ type PushDeliverySummaryRow struct {
 // many browsers are subscribed, how many of them refused their
 // last send, and when any send was last accepted (epoch: never).
 func (q *Queries) PushDeliverySummary(ctx context.Context) (PushDeliverySummaryRow, error) {
-	row := q.db.QueryRowContext(ctx, pushDeliverySummary)
+	row := q.db.QueryRow(ctx, pushDeliverySummary)
 	var i PushDeliverySummaryRow
 	err := row.Scan(&i.Total, &i.Failing, &i.LastOkAt)
 	return i, err
@@ -519,10 +499,10 @@ type TouchNotificationSeenParams struct {
 
 // Keys still current are kept alive; touched at most once a day each.
 func (q *Queries) TouchNotificationSeen(ctx context.Context, arg TouchNotificationSeenParams) error {
-	_, err := q.db.ExecContext(ctx, touchNotificationSeen,
+	_, err := q.db.Exec(ctx, touchNotificationSeen,
 		arg.SeenAt,
 		arg.UserID,
-		pq.Array(arg.EventKeys),
+		arg.EventKeys,
 		arg.StaleBefore,
 	)
 	return err
@@ -551,7 +531,7 @@ type UpsertPushSubscriptionParams struct {
 // Browser push subscriptions (schema 013).
 // ---------------------------------------------------------------------
 func (q *Queries) UpsertPushSubscription(ctx context.Context, arg UpsertPushSubscriptionParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPushSubscription,
+	_, err := q.db.Exec(ctx, upsertPushSubscription,
 		arg.UserID,
 		arg.Endpoint,
 		arg.P256dh,

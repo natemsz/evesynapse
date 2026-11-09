@@ -1,7 +1,6 @@
 package app
 
 import (
-	"database/sql"
 	"errors"
 	"evesynapse/internal/app/module"
 	"html/template"
@@ -13,6 +12,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -178,7 +178,7 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		user, uerr := app.queries.GetUser(ctx, accountID)
 		characters, cerr := app.queries.ListCharactersByUser(ctx, accountID)
 		switch {
-		case errors.Is(uerr, sql.ErrNoRows):
+		case errors.Is(uerr, pgx.ErrNoRows):
 			view.NoAccount = true
 		case uerr != nil || cerr != nil:
 			logging.Errorf("admin: account %d: %v %v", accountID, uerr, cerr)

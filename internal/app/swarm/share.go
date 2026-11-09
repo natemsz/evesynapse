@@ -48,6 +48,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // The shared kinds (plus the membership list, which signs with
@@ -273,7 +274,7 @@ func (app *Mod) ServeSwarmAlliance(ctx context.Context, key string) (string, tim
 func (app *Mod) SwarmSupplied(ctx context.Context, kind, key string, stamp sql.NullTime) bool {
 	row, err := app.Queries.GetSwarmApplied(ctx, db.GetSwarmAppliedParams{Kind: kind, Key: key})
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return false
 		}
 		logging.Errorf("swarm: provenance of %s %s: %v", kind, key, err)
@@ -858,7 +859,7 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 				}
 				return nil
 			}
-		} else if !errors.Is(err, sql.ErrNoRows) {
+		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		} else if _, derr := app.Queries.GetPublicContractDeparture(ctx, body.ContractID); derr == nil {
 			// Not live but on record: this instance saw the
@@ -868,7 +869,7 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 				logging.Errorf("swarm: apply %s %s: unstaged: %v", kind, key, err)
 			}
 			return nil
-		} else if !errors.Is(derr, sql.ErrNoRows) {
+		} else if !errors.Is(derr, pgx.ErrNoRows) {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, derr)
 		}
 		// The header lands under the region's current sweep

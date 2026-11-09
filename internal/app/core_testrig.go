@@ -19,6 +19,7 @@ import (
 
 	"github.com/alexedwards/scs/pgxstore"
 	"github.com/alexedwards/scs/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
@@ -38,7 +39,7 @@ func NewTestRig(dsn string, transport http.RoundTripper) (*TestRig, error) {
 	if err != nil {
 		return nil, err
 	}
-	queries := db.New(conn)
+	queries := db.New(pool)
 
 	sessionManager := scs.New()
 	sessionManager.Store = pgxstore.New(pool)
@@ -70,6 +71,9 @@ func (r *TestRig) Queries() *db.Queries { return r.app.queries }
 
 // DB returns the fixture database connection.
 func (r *TestRig) DB() *sql.DB { return r.app.db }
+
+// Pool returns the fixture database pool.
+func (r *TestRig) Pool() *pgxpool.Pool { return r.app.pool }
 
 // Deps returns what core hands a module at run time, so a module's
 // own tests can call its functions the way core does.

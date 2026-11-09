@@ -349,11 +349,11 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 		p.Npc, p.Solo = npc, !npc && len(km.Attackers) == 1
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return false, err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	inserted, err := q.UpsertKill(ctx, p)
 	if err != nil {
@@ -404,7 +404,7 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 			return false, fmt.Errorf("store detail %d: %w", km.KillmailID, err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return inserted, err
 	}
 	if inserted {

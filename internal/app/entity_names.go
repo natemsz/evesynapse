@@ -148,7 +148,7 @@ func upsertEntityNames(ctx context.Context, db *sql.DB, names []entityName) erro
 // loadEntityNames primes the ESI client's caches with the whole table.
 func (app *Application) loadEntityNames(ctx context.Context) {
 	start := time.Now()
-	rows, err := app.db.QueryContext(ctx, "SELECT kind, id, name FROM entity_names")
+	rows, err := app.pool.Query(ctx, "SELECT kind, id, name FROM entity_names")
 	if err != nil {
 		logging.Errorf("names: load: %v", err)
 		return
@@ -207,7 +207,7 @@ func (app *Application) namesFor(ctx context.Context, kind string, ids []int64) 
 		args = append(args, id)
 	}
 	b.WriteString(")")
-	rows, err := app.db.QueryContext(ctx, b.String(), args...)
+	rows, err := app.pool.Query(ctx, b.String(), args...)
 	if err != nil {
 		logging.Errorf("names: look up %d %s names: %v", len(missing), kind, err)
 		return out

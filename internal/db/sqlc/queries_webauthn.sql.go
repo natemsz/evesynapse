@@ -15,7 +15,7 @@ UPDATE webauthn_recovery_codes SET used_at = now() WHERE id = $1 AND used_at IS 
 `
 
 func (q *Queries) BurnWebAuthnRecoveryCode(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, burnWebAuthnRecoveryCode, id)
+	_, err := q.db.Exec(ctx, burnWebAuthnRecoveryCode, id)
 	return err
 }
 
@@ -24,7 +24,7 @@ SELECT count(*) FROM webauthn_recovery_codes WHERE user_id = $1 AND used_at IS N
 `
 
 func (q *Queries) CountUnusedWebAuthnRecoveryCodesByUser(ctx context.Context, userID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countUnusedWebAuthnRecoveryCodesByUser, userID)
+	row := q.db.QueryRow(ctx, countUnusedWebAuthnRecoveryCodesByUser, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -35,7 +35,7 @@ SELECT count(*) FROM webauthn_credentials WHERE user_id = $1
 `
 
 func (q *Queries) CountWebAuthnCredentialsByUser(ctx context.Context, userID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countWebAuthnCredentialsByUser, userID)
+	row := q.db.QueryRow(ctx, countWebAuthnCredentialsByUser, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -60,7 +60,7 @@ type CreateWebAuthnCredentialParams struct {
 
 // WebAuthn two-factor queries (auth_webauthn.go).
 func (q *Queries) CreateWebAuthnCredential(ctx context.Context, arg CreateWebAuthnCredentialParams) (WebauthnCredential, error) {
-	row := q.db.QueryRowContext(ctx, createWebAuthnCredential,
+	row := q.db.QueryRow(ctx, createWebAuthnCredential,
 		arg.UserID,
 		arg.CredentialID,
 		arg.PublicKey,
@@ -95,7 +95,7 @@ type CreateWebAuthnRecoveryCodeParams struct {
 }
 
 func (q *Queries) CreateWebAuthnRecoveryCode(ctx context.Context, arg CreateWebAuthnRecoveryCodeParams) (WebauthnRecoveryCode, error) {
-	row := q.db.QueryRowContext(ctx, createWebAuthnRecoveryCode, arg.UserID, arg.CodeHash)
+	row := q.db.QueryRow(ctx, createWebAuthnRecoveryCode, arg.UserID, arg.CodeHash)
 	var i WebauthnRecoveryCode
 	err := row.Scan(
 		&i.ID,
@@ -117,7 +117,7 @@ type DeleteWebAuthnCredentialParams struct {
 }
 
 func (q *Queries) DeleteWebAuthnCredential(ctx context.Context, arg DeleteWebAuthnCredentialParams) error {
-	_, err := q.db.ExecContext(ctx, deleteWebAuthnCredential, arg.ID, arg.UserID)
+	_, err := q.db.Exec(ctx, deleteWebAuthnCredential, arg.ID, arg.UserID)
 	return err
 }
 
@@ -126,7 +126,7 @@ DELETE FROM webauthn_recovery_codes WHERE user_id = $1
 `
 
 func (q *Queries) DeleteWebAuthnRecoveryCodesByUser(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteWebAuthnRecoveryCodesByUser, userID)
+	_, err := q.db.Exec(ctx, deleteWebAuthnRecoveryCodesByUser, userID)
 	return err
 }
 
@@ -135,7 +135,7 @@ SELECT id, user_id, credential_id, public_key, sign_count, transports, attestati
 `
 
 func (q *Queries) GetWebAuthnCredential(ctx context.Context, credentialID []byte) (WebauthnCredential, error) {
-	row := q.db.QueryRowContext(ctx, getWebAuthnCredential, credentialID)
+	row := q.db.QueryRow(ctx, getWebAuthnCredential, credentialID)
 	var i WebauthnCredential
 	err := row.Scan(
 		&i.ID,
@@ -162,7 +162,7 @@ type InsertWebAuthnEventParams struct {
 }
 
 func (q *Queries) InsertWebAuthnEvent(ctx context.Context, arg InsertWebAuthnEventParams) error {
-	_, err := q.db.ExecContext(ctx, insertWebAuthnEvent, arg.UserID, arg.Kind)
+	_, err := q.db.Exec(ctx, insertWebAuthnEvent, arg.UserID, arg.Kind)
 	return err
 }
 
@@ -171,7 +171,7 @@ SELECT id, user_id, code_hash, used_at, created_at FROM webauthn_recovery_codes 
 `
 
 func (q *Queries) ListUnusedWebAuthnRecoveryCodesByUser(ctx context.Context, userID int64) ([]WebauthnRecoveryCode, error) {
-	rows, err := q.db.QueryContext(ctx, listUnusedWebAuthnRecoveryCodesByUser, userID)
+	rows, err := q.db.Query(ctx, listUnusedWebAuthnRecoveryCodesByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -190,9 +190,6 @@ func (q *Queries) ListUnusedWebAuthnRecoveryCodesByUser(ctx context.Context, use
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -204,7 +201,7 @@ SELECT id, user_id, credential_id, public_key, sign_count, transports, attestati
 `
 
 func (q *Queries) ListWebAuthnCredentialsByUser(ctx context.Context, userID int64) ([]WebauthnCredential, error) {
-	rows, err := q.db.QueryContext(ctx, listWebAuthnCredentialsByUser, userID)
+	rows, err := q.db.Query(ctx, listWebAuthnCredentialsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -228,9 +225,6 @@ func (q *Queries) ListWebAuthnCredentialsByUser(ctx context.Context, userID int6
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -242,7 +236,7 @@ SELECT id, user_id, kind, created_at FROM webauthn_events WHERE user_id = $1 ORD
 `
 
 func (q *Queries) ListWebAuthnEventsByUser(ctx context.Context, userID int64) ([]WebauthnEvent, error) {
-	rows, err := q.db.QueryContext(ctx, listWebAuthnEventsByUser, userID)
+	rows, err := q.db.Query(ctx, listWebAuthnEventsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -260,9 +254,6 @@ func (q *Queries) ListWebAuthnEventsByUser(ctx context.Context, userID int64) ([
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -274,11 +265,11 @@ DELETE FROM webauthn_events WHERE created_at < $1::timestamptz
 `
 
 func (q *Queries) PruneWebAuthnEvents(ctx context.Context, dollar_1 time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneWebAuthnEvents, dollar_1)
+	result, err := q.db.Exec(ctx, pruneWebAuthnEvents, dollar_1)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const updateWebAuthnCredentialSignCount = `-- name: UpdateWebAuthnCredentialSignCount :exec
@@ -291,6 +282,6 @@ type UpdateWebAuthnCredentialSignCountParams struct {
 }
 
 func (q *Queries) UpdateWebAuthnCredentialSignCount(ctx context.Context, arg UpdateWebAuthnCredentialSignCountParams) error {
-	_, err := q.db.ExecContext(ctx, updateWebAuthnCredentialSignCount, arg.CredentialID, arg.SignCount)
+	_, err := q.db.Exec(ctx, updateWebAuthnCredentialSignCount, arg.CredentialID, arg.SignCount)
 	return err
 }

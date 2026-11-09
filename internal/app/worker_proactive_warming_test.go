@@ -638,7 +638,7 @@ func TestMigration016Reopen(t *testing.T) {
 		if cols != 1 {
 			t.Fatalf("priority column count = %d (pass %d), want 1", cols, i)
 		}
-		q := db.New(conn)
+		q := db.New(pool)
 		if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300001, Priority: wantViewed}); err != nil {
 			t.Fatalf("pilot want (pass %d): %v", i, err)
 		}

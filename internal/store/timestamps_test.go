@@ -213,7 +213,7 @@ func TestSchemaTimestampStepKeepsStoredTimes(t *testing.T) {
 	}
 	defer pool.Close()
 	defer conn.Close()
-	q := db.New(conn)
+	q := db.New(pool)
 	checkTimeColumns(t, conn, accountTimeColumns)
 
 	same := func(what string, got time.Time, want string) {
@@ -373,7 +373,7 @@ func TestSchemaMarketTimestampStepKeepsStoredTimes(t *testing.T) {
 	}
 	defer pool.Close()
 	defer conn.Close()
-	q := db.New(conn)
+	q := db.New(pool)
 	checkTimeColumns(t, conn, marketTimeColumns)
 
 	same := func(what string, got time.Time, want string) {
@@ -592,7 +592,7 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 	}
 	defer pool.Close()
 	defer conn.Close()
-	q := db.New(conn)
+	q := db.New(pool)
 	checkTimeColumns(t, conn, recordTimeColumns)
 
 	sameOrNever := func(what string, got sql.NullTime, want string) {
@@ -775,7 +775,7 @@ func TestStoredTimesReadBackInUTC(t *testing.T) {
 	}
 	defer pool.Close()
 	defer conn.Close()
-	q := db.New(conn)
+	q := db.New(pool)
 
 	// One connection, so the session zone set here is the one the
 	// read below runs in.

@@ -10,8 +10,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const countAbyssalItems = `-- name: CountAbyssalItems :one
@@ -19,7 +17,7 @@ SELECT COUNT(*) FROM abyssal_items
 `
 
 func (q *Queries) CountAbyssalItems(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countAbyssalItems)
+	row := q.db.QueryRow(ctx, countAbyssalItems)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -30,7 +28,7 @@ SELECT COUNT(*) FROM abyssal_ranges
 `
 
 func (q *Queries) CountAbyssalRanges(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countAbyssalRanges)
+	row := q.db.QueryRow(ctx, countAbyssalRanges)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -43,7 +41,7 @@ SELECT COUNT(*) FROM pub_contracts WHERE departed_at IS NULL
 // The sweep's count of the live corpus, stored below for the
 // search page to read. Worker only; never a render read.
 func (q *Queries) CountLivePublicContracts(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countLivePublicContracts)
+	row := q.db.QueryRow(ctx, countLivePublicContracts)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -56,7 +54,7 @@ WHERE c.departed_at IS NULL
 `
 
 func (q *Queries) CountPublicContractItems(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPublicContractItems)
+	row := q.db.QueryRow(ctx, countPublicContractItems)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -69,7 +67,7 @@ SELECT COUNT(*) FROM pub_contracts WHERE departed_at IS NULL
 // Every reader below that means open contracts leaves out the
 // departed rows (schema 096): they are a record, never a listing.
 func (q *Queries) CountPublicContracts(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPublicContracts)
+	row := q.db.QueryRow(ctx, countPublicContracts)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -281,9 +279,9 @@ type CountPublicContractsSearchParams struct {
 }
 
 func (q *Queries) CountPublicContractsSearch(ctx context.Context, arg CountPublicContractsSearchParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPublicContractsSearch,
-		pq.Array(arg.Types),
-		pq.Array(arg.RegionIds),
+	row := q.db.QueryRow(ctx, countPublicContractsSearch,
+		arg.Types,
+		arg.RegionIds,
 		arg.TitleQ,
 		arg.ItemQ,
 		arg.ItemDir,
@@ -334,7 +332,7 @@ DELETE FROM blueprint_copy_medians
 `
 
 func (q *Queries) DeleteBlueprintCopyMedians(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteBlueprintCopyMedians)
+	_, err := q.db.Exec(ctx, deleteBlueprintCopyMedians)
 	return err
 }
 
@@ -343,7 +341,7 @@ DELETE FROM pub_contract_bids WHERE contract_id = $1
 `
 
 func (q *Queries) DeletePublicContractBids(ctx context.Context, contractID int64) error {
-	_, err := q.db.ExecContext(ctx, deletePublicContractBids, contractID)
+	_, err := q.db.Exec(ctx, deletePublicContractBids, contractID)
 	return err
 }
 
@@ -353,7 +351,7 @@ WHERE contract_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeletePublicContractBidsByContracts(ctx context.Context, contractIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deletePublicContractBidsByContracts, pq.Array(contractIds))
+	_, err := q.db.Exec(ctx, deletePublicContractBidsByContracts, contractIds)
 	return err
 }
 
@@ -372,11 +370,11 @@ type DeletePublicContractIfStampedParams struct {
 // sweep has re-seen since carries a newer last_seen and is its
 // own, so the guarded delete matches nothing and reports 0.
 func (q *Queries) DeletePublicContractIfStamped(ctx context.Context, arg DeletePublicContractIfStampedParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deletePublicContractIfStamped, arg.ContractID, arg.LastSeen)
+	result, err := q.db.Exec(ctx, deletePublicContractIfStamped, arg.ContractID, arg.LastSeen)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const deletePublicContractItemsByContracts = `-- name: DeletePublicContractItemsByContracts :exec
@@ -385,7 +383,7 @@ WHERE contract_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeletePublicContractItemsByContracts(ctx context.Context, contractIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deletePublicContractItemsByContracts, pq.Array(contractIds))
+	_, err := q.db.Exec(ctx, deletePublicContractItemsByContracts, contractIds)
 	return err
 }
 
@@ -395,7 +393,7 @@ WHERE contract_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeletePublicContractsByIDs(ctx context.Context, contractIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deletePublicContractsByIDs, pq.Array(contractIds))
+	_, err := q.db.Exec(ctx, deletePublicContractsByIDs, contractIds)
 	return err
 }
 
@@ -407,7 +405,7 @@ WHERE family = $1
 `
 
 func (q *Queries) GetAbyssalFamilyFit(ctx context.Context, family string) (AbyssalFamilyFit, error) {
-	row := q.db.QueryRowContext(ctx, getAbyssalFamilyFit, family)
+	row := q.db.QueryRow(ctx, getAbyssalFamilyFit, family)
 	var i AbyssalFamilyFit
 	err := row.Scan(
 		&i.Family,
@@ -437,7 +435,7 @@ WHERE item_id = $1
 `
 
 func (q *Queries) GetAbyssalItem(ctx context.Context, itemID int64) (AbyssalItem, error) {
-	row := q.db.QueryRowContext(ctx, getAbyssalItem, itemID)
+	row := q.db.QueryRow(ctx, getAbyssalItem, itemID)
 	var i AbyssalItem
 	err := row.Scan(
 		&i.ItemID,
@@ -485,7 +483,7 @@ LIMIT 1
 // most once per its refresh age, judged by this stamp. No
 // rows yet answers no row, which the caller reads as never.
 func (q *Queries) GetBlueprintCopyMediansStamp(ctx context.Context) (time.Time, error) {
-	row := q.db.QueryRowContext(ctx, getBlueprintCopyMediansStamp)
+	row := q.db.QueryRow(ctx, getBlueprintCopyMediansStamp)
 	var computed_at time.Time
 	err := row.Scan(&computed_at)
 	return computed_at, err
@@ -504,7 +502,7 @@ WHERE contract_id = $1 AND departed_at IS NULL
 `
 
 func (q *Queries) GetPublicContract(ctx context.Context, contractID int64) (PubContract, error) {
-	row := q.db.QueryRowContext(ctx, getPublicContract, contractID)
+	row := q.db.QueryRow(ctx, getPublicContract, contractID)
 	var i PubContract
 	err := row.Scan(
 		&i.ContractID,
@@ -563,7 +561,7 @@ type GetPublicContractCorpusStatsRow struct {
 // MAX is NULL) to the zero time instead of NULL -- the
 // caller reads IsZero() as "not swept yet".
 func (q *Queries) GetPublicContractCorpusStats(ctx context.Context) (GetPublicContractCorpusStatsRow, error) {
-	row := q.db.QueryRowContext(ctx, getPublicContractCorpusStats)
+	row := q.db.QueryRow(ctx, getPublicContractCorpusStats)
 	var i GetPublicContractCorpusStatsRow
 	err := row.Scan(&i.OpenContracts, &i.LastSweepAt)
 	return i, err
@@ -584,7 +582,7 @@ type GetPublicContractDepartureRow struct {
 // reads it so a peer's copy never revives a listing this instance
 // saw leave; the tests read it to see the stamp.
 func (q *Queries) GetPublicContractDeparture(ctx context.Context, contractID int64) (GetPublicContractDepartureRow, error) {
-	row := q.db.QueryRowContext(ctx, getPublicContractDeparture, contractID)
+	row := q.db.QueryRow(ctx, getPublicContractDeparture, contractID)
 	var i GetPublicContractDepartureRow
 	err := row.Scan(&i.DepartedAt, &i.DepartKind, &i.LastSeen)
 	return i, err
@@ -605,7 +603,7 @@ type GetPublicContractItemsLedgerRow struct {
 // its item list has failed and why the last one did. The test
 // suite reads it; the columns ride no page query.
 func (q *Queries) GetPublicContractItemsLedger(ctx context.Context, contractID int64) (GetPublicContractItemsLedgerRow, error) {
-	row := q.db.QueryRowContext(ctx, getPublicContractItemsLedger, contractID)
+	row := q.db.QueryRow(ctx, getPublicContractItemsLedger, contractID)
 	var i GetPublicContractItemsLedgerRow
 	err := row.Scan(&i.ItemsState, &i.ItemsAttempts, &i.ItemsError)
 	return i, err
@@ -618,7 +616,7 @@ WHERE region_id = $1
 `
 
 func (q *Queries) GetPublicContractSweepState(ctx context.Context, regionID int64) (PubContractSweepState, error) {
-	row := q.db.QueryRowContext(ctx, getPublicContractSweepState, regionID)
+	row := q.db.QueryRow(ctx, getPublicContractSweepState, regionID)
 	var i PubContractSweepState
 	err := row.Scan(
 		&i.RegionID,
@@ -644,7 +642,7 @@ type InsertAbyssalProbeParams struct {
 }
 
 func (q *Queries) InsertAbyssalProbe(ctx context.Context, arg InsertAbyssalProbeParams) error {
-	_, err := q.db.ExecContext(ctx, insertAbyssalProbe,
+	_, err := q.db.Exec(ctx, insertAbyssalProbe,
 		arg.ItemID,
 		arg.TypeID,
 		arg.IsDynamic,
@@ -667,7 +665,7 @@ type InsertBlueprintCopyMedianParams struct {
 }
 
 func (q *Queries) InsertBlueprintCopyMedian(ctx context.Context, arg InsertBlueprintCopyMedianParams) error {
-	_, err := q.db.ExecContext(ctx, insertBlueprintCopyMedian,
+	_, err := q.db.Exec(ctx, insertBlueprintCopyMedian,
 		arg.TypeID,
 		arg.Runs,
 		arg.MedianPrice,
@@ -691,7 +689,7 @@ type InsertPublicContractBidParams struct {
 }
 
 func (q *Queries) InsertPublicContractBid(ctx context.Context, arg InsertPublicContractBidParams) error {
-	_, err := q.db.ExecContext(ctx, insertPublicContractBid,
+	_, err := q.db.Exec(ctx, insertPublicContractBid,
 		arg.BidID,
 		arg.ContractID,
 		arg.Amount,
@@ -722,7 +720,7 @@ type InsertPublicContractItemParams struct {
 }
 
 func (q *Queries) InsertPublicContractItem(ctx context.Context, arg InsertPublicContractItemParams) error {
-	_, err := q.db.ExecContext(ctx, insertPublicContractItem,
+	_, err := q.db.Exec(ctx, insertPublicContractItem,
 		arg.RecordID,
 		arg.ContractID,
 		arg.TypeID,
@@ -787,7 +785,7 @@ type ListAbyssalCorpusByGroupNamesRow struct {
 // the sighting row (their price is an opening bid), so the
 // corpus is exchange listings only.
 func (q *Queries) ListAbyssalCorpusByGroupNames(ctx context.Context, groupNames []string) ([]ListAbyssalCorpusByGroupNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalCorpusByGroupNames, pq.Array(groupNames))
+	rows, err := q.db.Query(ctx, listAbyssalCorpusByGroupNames, groupNames)
 	if err != nil {
 		return nil, err
 	}
@@ -823,9 +821,6 @@ func (q *Queries) ListAbyssalCorpusByGroupNames(ctx context.Context, groupNames 
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -839,7 +834,7 @@ ORDER BY family
 `
 
 func (q *Queries) ListAbyssalFamilies(ctx context.Context) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalFamilies)
+	rows, err := q.db.Query(ctx, listAbyssalFamilies)
 	if err != nil {
 		return nil, err
 	}
@@ -851,9 +846,6 @@ func (q *Queries) ListAbyssalFamilies(ctx context.Context) ([]string, error) {
 			return nil, err
 		}
 		items = append(items, family)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -920,7 +912,7 @@ type ListAbyssalFamilyMetaVariantsRow struct {
 // Used to render Mutamarket-style roll sliders with real attribute bounds and
 // meta variant indicators on the track.
 func (q *Queries) ListAbyssalFamilyMetaVariants(ctx context.Context) ([]ListAbyssalFamilyMetaVariantsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalFamilyMetaVariants)
+	rows, err := q.db.Query(ctx, listAbyssalFamilyMetaVariants)
 	if err != nil {
 		return nil, err
 	}
@@ -943,9 +935,6 @@ func (q *Queries) ListAbyssalFamilyMetaVariants(ctx context.Context) ([]ListAbys
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -977,7 +966,7 @@ type ListAbyssalFamilyRollAttributesRow struct {
 // weight first so the drawer's sliders lead with the rolls
 // the family is priced on.
 func (q *Queries) ListAbyssalFamilyRollAttributes(ctx context.Context, family string) ([]ListAbyssalFamilyRollAttributesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalFamilyRollAttributes, family)
+	rows, err := q.db.Query(ctx, listAbyssalFamilyRollAttributes, family)
 	if err != nil {
 		return nil, err
 	}
@@ -989,9 +978,6 @@ func (q *Queries) ListAbyssalFamilyRollAttributes(ctx context.Context, family st
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1026,7 +1012,7 @@ type ListAbyssalFamilyRollAttributesAllRow struct {
 // without a submit. Same rows as
 // ListAbyssalFamilyRollAttributes, grouped per family.
 func (q *Queries) ListAbyssalFamilyRollAttributesAll(ctx context.Context) ([]ListAbyssalFamilyRollAttributesAllRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalFamilyRollAttributesAll)
+	rows, err := q.db.Query(ctx, listAbyssalFamilyRollAttributesAll)
 	if err != nil {
 		return nil, err
 	}
@@ -1038,9 +1024,6 @@ func (q *Queries) ListAbyssalFamilyRollAttributesAll(ctx context.Context) ([]Lis
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1056,7 +1039,7 @@ ORDER BY family, attribute_id
 `
 
 func (q *Queries) ListAbyssalFamilyWeightsByFamilies(ctx context.Context, families []string) ([]AbyssalFamilyWeight, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalFamilyWeightsByFamilies, pq.Array(families))
+	rows, err := q.db.Query(ctx, listAbyssalFamilyWeightsByFamilies, families)
 	if err != nil {
 		return nil, err
 	}
@@ -1073,9 +1056,6 @@ func (q *Queries) ListAbyssalFamilyWeightsByFamilies(ctx context.Context, famili
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1097,7 +1077,7 @@ ORDER BY item_id
 `
 
 func (q *Queries) ListAbyssalItemsByIDs(ctx context.Context, itemIds []int64) ([]AbyssalItem, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalItemsByIDs, pq.Array(itemIds))
+	rows, err := q.db.Query(ctx, listAbyssalItemsByIDs, itemIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1142,9 +1122,6 @@ func (q *Queries) ListAbyssalItemsByIDs(ctx context.Context, itemIds []int64) ([
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1176,7 +1153,7 @@ type ListAbyssalItemsDueScoringRow struct {
 // The items whose score or estimate is due: never scored, or
 // scored before the caller's cutoff. Stalest first.
 func (q *Queries) ListAbyssalItemsDueScoring(ctx context.Context, arg ListAbyssalItemsDueScoringParams) ([]ListAbyssalItemsDueScoringRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalItemsDueScoring, arg.Cutoff, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listAbyssalItemsDueScoring, arg.Cutoff, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1194,9 +1171,6 @@ func (q *Queries) ListAbyssalItemsDueScoring(ctx context.Context, arg ListAbyssa
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1227,7 +1201,7 @@ type ListAbyssalLadderTypesRow struct {
 // family's ordinary modules; mutated types are not on the
 // market, so they never appear).
 func (q *Queries) ListAbyssalLadderTypes(ctx context.Context, sourceIds []int64) ([]ListAbyssalLadderTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalLadderTypes, pq.Array(sourceIds))
+	rows, err := q.db.Query(ctx, listAbyssalLadderTypes, sourceIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1239,9 +1213,6 @@ func (q *Queries) ListAbyssalLadderTypes(ctx context.Context, sourceIds []int64)
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1258,7 +1229,7 @@ ORDER BY mutator_type_id
 // Every mutaplasmid seen producing one mutated type: the
 // recreation path's other grades.
 func (q *Queries) ListAbyssalMutatorsForType(ctx context.Context, typeID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalMutatorsForType, typeID)
+	rows, err := q.db.Query(ctx, listAbyssalMutatorsForType, typeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1270,9 +1241,6 @@ func (q *Queries) ListAbyssalMutatorsForType(ctx context.Context, typeID int64) 
 			return nil, err
 		}
 		items = append(items, mutator_type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1323,7 +1291,7 @@ type ListAbyssalProbeCandidatesRow struct {
 // contract facts ride along so a hit can open its sighting
 // row without a reread.
 func (q *Queries) ListAbyssalProbeCandidates(ctx context.Context, limit int32) ([]ListAbyssalProbeCandidatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalProbeCandidates, limit)
+	rows, err := q.db.Query(ctx, listAbyssalProbeCandidates, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1346,9 +1314,6 @@ func (q *Queries) ListAbyssalProbeCandidates(ctx context.Context, limit int32) (
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1367,7 +1332,7 @@ ORDER BY attribute_id
 // Roll ranges (schema 055), kept filled by the SDE importer.
 // ---------------------------------------------------------------------
 func (q *Queries) ListAbyssalRangesForMutator(ctx context.Context, mutatorTypeID int64) ([]AbyssalRange, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalRangesForMutator, mutatorTypeID)
+	rows, err := q.db.Query(ctx, listAbyssalRangesForMutator, mutatorTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1386,9 +1351,6 @@ func (q *Queries) ListAbyssalRangesForMutator(ctx context.Context, mutatorTypeID
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1405,7 +1367,7 @@ ORDER BY attribute_id
 // range row whose band has width. The roll sliders offer
 // only these; a band on anything else is ignored.
 func (q *Queries) ListAbyssalRollAttributeIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalRollAttributeIDs)
+	rows, err := q.db.Query(ctx, listAbyssalRollAttributeIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1417,9 +1379,6 @@ func (q *Queries) ListAbyssalRollAttributeIDs(ctx context.Context) ([]int64, err
 			return nil, err
 		}
 		items = append(items, attribute_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1453,7 +1412,7 @@ type ListAbyssalSaleProbesRow struct {
 // whether they sold, newest departure first, within the window
 // ESI still answers for an accepted contract.
 func (q *Queries) ListAbyssalSaleProbes(ctx context.Context, arg ListAbyssalSaleProbesParams) ([]ListAbyssalSaleProbesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalSaleProbes, arg.Since, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listAbyssalSaleProbes, arg.Since, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1465,9 +1424,6 @@ func (q *Queries) ListAbyssalSaleProbes(ctx context.Context, arg ListAbyssalSale
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1502,7 +1458,7 @@ type ListAbyssalSightingsForItemRow struct {
 }
 
 func (q *Queries) ListAbyssalSightingsForItem(ctx context.Context, itemID int64) ([]ListAbyssalSightingsForItemRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalSightingsForItem, itemID)
+	rows, err := q.db.Query(ctx, listAbyssalSightingsForItem, itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -1529,9 +1485,6 @@ func (q *Queries) ListAbyssalSightingsForItem(ctx context.Context, itemID int64)
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1545,7 +1498,7 @@ ORDER BY source_type_id
 `
 
 func (q *Queries) ListAbyssalSourcesForMutator(ctx context.Context, mutatorTypeID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalSourcesForMutator, mutatorTypeID)
+	rows, err := q.db.Query(ctx, listAbyssalSourcesForMutator, mutatorTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1557,9 +1510,6 @@ func (q *Queries) ListAbyssalSourcesForMutator(ctx context.Context, mutatorTypeI
 			return nil, err
 		}
 		items = append(items, source_type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1573,7 +1523,7 @@ ORDER BY attribute_id
 `
 
 func (q *Queries) ListAbyssalWeightAttributeIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalWeightAttributeIDs)
+	rows, err := q.db.Query(ctx, listAbyssalWeightAttributeIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1585,9 +1535,6 @@ func (q *Queries) ListAbyssalWeightAttributeIDs(ctx context.Context) ([]int64, e
 			return nil, err
 		}
 		items = append(items, attribute_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1609,7 +1556,7 @@ ORDER BY family, attribute_id
 // in comments (the sqlc parser's known desync).
 // ---------------------------------------------------------------------
 func (q *Queries) ListAllAbyssalFamilyWeights(ctx context.Context) ([]AbyssalFamilyWeight, error) {
-	rows, err := q.db.QueryContext(ctx, listAllAbyssalFamilyWeights)
+	rows, err := q.db.Query(ctx, listAllAbyssalFamilyWeights)
 	if err != nil {
 		return nil, err
 	}
@@ -1626,9 +1573,6 @@ func (q *Queries) ListAllAbyssalFamilyWeights(ctx context.Context) ([]AbyssalFam
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1678,7 +1622,7 @@ type ListBlueprintCopyMedianCandidatesRow struct {
 // The minimum sample is the caller's: groups thinner than it
 // store nothing.
 func (q *Queries) ListBlueprintCopyMedianCandidates(ctx context.Context, minSample int64) ([]ListBlueprintCopyMedianCandidatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listBlueprintCopyMedianCandidates, minSample)
+	rows, err := q.db.Query(ctx, listBlueprintCopyMedianCandidates, minSample)
 	if err != nil {
 		return nil, err
 	}
@@ -1696,9 +1640,6 @@ func (q *Queries) ListBlueprintCopyMedianCandidates(ctx context.Context, minSamp
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1712,7 +1653,7 @@ WHERE type_id = ANY($1::bigint[])
 `
 
 func (q *Queries) ListBlueprintCopyMediansForTypes(ctx context.Context, typeIds []int64) ([]BlueprintCopyMedian, error) {
-	rows, err := q.db.QueryContext(ctx, listBlueprintCopyMediansForTypes, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listBlueprintCopyMediansForTypes, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1730,9 +1671,6 @@ func (q *Queries) ListBlueprintCopyMediansForTypes(ctx context.Context, typeIds 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1766,7 +1704,7 @@ type ListDepartedPublicContractsRow struct {
 // stale bound). depart_kind says which, for the sighting
 // history; nothing here guesses why a vanished contract left.
 func (q *Queries) ListDepartedPublicContracts(ctx context.Context, arg ListDepartedPublicContractsParams) ([]ListDepartedPublicContractsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listDepartedPublicContracts, arg.RegionID, arg.DateExpired, arg.LastCycle)
+	rows, err := q.db.Query(ctx, listDepartedPublicContracts, arg.RegionID, arg.DateExpired, arg.LastCycle)
 	if err != nil {
 		return nil, err
 	}
@@ -1778,9 +1716,6 @@ func (q *Queries) ListDepartedPublicContracts(ctx context.Context, arg ListDepar
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1803,7 +1738,7 @@ type ListPrunablePublicContractsParams struct {
 // One region's departures past the retention window: the caller
 // deletes their bids and items and then the rows themselves.
 func (q *Queries) ListPrunablePublicContracts(ctx context.Context, arg ListPrunablePublicContractsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listPrunablePublicContracts, arg.RegionID, arg.Before)
+	rows, err := q.db.Query(ctx, listPrunablePublicContracts, arg.RegionID, arg.Before)
 	if err != nil {
 		return nil, err
 	}
@@ -1815,9 +1750,6 @@ func (q *Queries) ListPrunablePublicContracts(ctx context.Context, arg ListPruna
 			return nil, err
 		}
 		items = append(items, contract_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1832,7 +1764,7 @@ ORDER BY amount DESC, date_bid ASC
 `
 
 func (q *Queries) ListPublicContractBids(ctx context.Context, contractID int64) ([]PubContractBid, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicContractBids, contractID)
+	rows, err := q.db.Query(ctx, listPublicContractBids, contractID)
 	if err != nil {
 		return nil, err
 	}
@@ -1850,9 +1782,6 @@ func (q *Queries) ListPublicContractBids(ctx context.Context, contractID int64) 
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1869,7 +1798,7 @@ ORDER BY record_id
 `
 
 func (q *Queries) ListPublicContractItems(ctx context.Context, contractID int64) ([]PubContractItem, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicContractItems, contractID)
+	rows, err := q.db.Query(ctx, listPublicContractItems, contractID)
 	if err != nil {
 		return nil, err
 	}
@@ -1896,9 +1825,6 @@ func (q *Queries) ListPublicContractItems(ctx context.Context, contractID int64)
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1919,7 +1845,7 @@ ORDER BY contract_id, record_id
 // result rows carry no lines of their own, so the page reads
 // its contracts' lines in a single bounded follow-up.
 func (q *Queries) ListPublicContractItemsForContracts(ctx context.Context, contractIds []int64) ([]PubContractItem, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicContractItemsForContracts, pq.Array(contractIds))
+	rows, err := q.db.Query(ctx, listPublicContractItemsForContracts, contractIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1946,9 +1872,6 @@ func (q *Queries) ListPublicContractItemsForContracts(ctx context.Context, contr
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1974,7 +1897,7 @@ type ListPublicContractLiveAuctionsParams struct {
 // cadence; bidders are anonymous in ESI and stay that way.
 // ---------------------------------------------------------------------
 func (q *Queries) ListPublicContractLiveAuctions(ctx context.Context, arg ListPublicContractLiveAuctionsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicContractLiveAuctions, arg.DateExpired, arg.Limit)
+	rows, err := q.db.Query(ctx, listPublicContractLiveAuctions, arg.DateExpired, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1986,9 +1909,6 @@ func (q *Queries) ListPublicContractLiveAuctions(ctx context.Context, arg ListPu
 			return nil, err
 		}
 		items = append(items, contract_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2012,7 +1932,7 @@ type ListPublicContractRegionsRow struct {
 // The regions the search can offer: the ones holding live
 // contracts, with the SDE's name where it is known.
 func (q *Queries) ListPublicContractRegions(ctx context.Context) ([]ListPublicContractRegionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicContractRegions)
+	rows, err := q.db.Query(ctx, listPublicContractRegions)
 	if err != nil {
 		return nil, err
 	}
@@ -2024,9 +1944,6 @@ func (q *Queries) ListPublicContractRegions(ctx context.Context) ([]ListPublicCo
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2058,7 +1975,7 @@ type ListPublicContractsDueAppraisalParams struct {
 // sets from the pricing inputs' cadence. Oldest appraisal
 // first, so a capped pass drains the stalest numbers first.
 func (q *Queries) ListPublicContractsDueAppraisal(ctx context.Context, arg ListPublicContractsDueAppraisalParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicContractsDueAppraisal, arg.Cutoff, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listPublicContractsDueAppraisal, arg.Cutoff, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -2070,9 +1987,6 @@ func (q *Queries) ListPublicContractsDueAppraisal(ctx context.Context, arg ListP
 			return nil, err
 		}
 		items = append(items, contract_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2104,7 +2018,7 @@ type ListPublicContractsPendingItemsRow struct {
 // 060: repeated fetch or decode failures) are out of the
 // selection for good.
 func (q *Queries) ListPublicContractsPendingItems(ctx context.Context, limit int32) ([]ListPublicContractsPendingItemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPublicContractsPendingItems, limit)
+	rows, err := q.db.Query(ctx, listPublicContractsPendingItems, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -2116,9 +2030,6 @@ func (q *Queries) ListPublicContractsPendingItems(ctx context.Context, limit int
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2138,7 +2049,7 @@ SELECT region_id FROM sde_regions ORDER BY region_id
 // them through its own queries when its pages land.
 // ---------------------------------------------------------------------
 func (q *Queries) ListSDERegionIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listSDERegionIDs)
+	rows, err := q.db.Query(ctx, listSDERegionIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -2150,9 +2061,6 @@ func (q *Queries) ListSDERegionIDs(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, region_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2174,7 +2082,7 @@ type MarkAbyssalSaleProbedParams struct {
 }
 
 func (q *Queries) MarkAbyssalSaleProbed(ctx context.Context, arg MarkAbyssalSaleProbedParams) error {
-	_, err := q.db.ExecContext(ctx, markAbyssalSaleProbed, arg.ProbedAt, arg.Status, arg.ContractID)
+	_, err := q.db.Exec(ctx, markAbyssalSaleProbed, arg.ProbedAt, arg.Status, arg.ContractID)
 	return err
 }
 
@@ -2194,7 +2102,7 @@ type MarkAbyssalSightingsSoldParams struct {
 // A finished contract seen on the public crawl: its abyssal
 // sightings become confirmed sales (schema 070).
 func (q *Queries) MarkAbyssalSightingsSold(ctx context.Context, arg MarkAbyssalSightingsSoldParams) error {
-	_, err := q.db.ExecContext(ctx, markAbyssalSightingsSold, arg.SoldAt, arg.ContractID)
+	_, err := q.db.Exec(ctx, markAbyssalSightingsSold, arg.SoldAt, arg.ContractID)
 	return err
 }
 
@@ -2217,7 +2125,7 @@ type MarkPublicContractsDepartedParams struct {
 // the record of a listing that closed, with last_seen still the
 // last sweep that saw it.
 func (q *Queries) MarkPublicContractsDeparted(ctx context.Context, arg MarkPublicContractsDepartedParams) error {
-	_, err := q.db.ExecContext(ctx, markPublicContractsDeparted, arg.DepartedAt, arg.DepartKind, pq.Array(arg.ContractIds))
+	_, err := q.db.Exec(ctx, markPublicContractsDeparted, arg.DepartedAt, arg.DepartKind, arg.ContractIds)
 	return err
 }
 
@@ -2245,7 +2153,7 @@ type NotePublicContractItemsFailureParams struct {
 // threshold -- the caller passes both, so the policy lives in
 // one named constant in the warming pass.
 func (q *Queries) NotePublicContractItemsFailure(ctx context.Context, arg NotePublicContractItemsFailureParams) error {
-	_, err := q.db.ExecContext(ctx, notePublicContractItemsFailure, arg.Reason, arg.MaxAttempts, arg.ContractID)
+	_, err := q.db.Exec(ctx, notePublicContractItemsFailure, arg.Reason, arg.MaxAttempts, arg.ContractID)
 	return err
 }
 
@@ -2278,7 +2186,7 @@ type OpenAbyssalSightingsForContractParams struct {
 // and the sweep-completion refresh below only sees listings
 // whose items were stored before it ran).
 func (q *Queries) OpenAbyssalSightingsForContract(ctx context.Context, arg OpenAbyssalSightingsForContractParams) error {
-	_, err := q.db.ExecContext(ctx, openAbyssalSightingsForContract, arg.ContractID, arg.LastSeenAt)
+	_, err := q.db.Exec(ctx, openAbyssalSightingsForContract, arg.ContractID, arg.LastSeenAt)
 	return err
 }
 
@@ -2311,7 +2219,7 @@ type RefreshAbyssalSightingsForRegionCycleParams struct {
 // completed sweep just saw gets (or refreshes) its sighting
 // row for that listing, straight from the stored tables.
 func (q *Queries) RefreshAbyssalSightingsForRegionCycle(ctx context.Context, arg RefreshAbyssalSightingsForRegionCycleParams) error {
-	_, err := q.db.ExecContext(ctx, refreshAbyssalSightingsForRegionCycle, arg.RegionID, arg.LastCycle, arg.LastSeenAt)
+	_, err := q.db.Exec(ctx, refreshAbyssalSightingsForRegionCycle, arg.RegionID, arg.LastCycle, arg.LastSeenAt)
 	return err
 }
 
@@ -2335,7 +2243,7 @@ type ReplacePublicStructuresParams struct {
 // worker refresh of ESI's public structures route. Rows the
 // new list no longer names leave in the same statement.
 func (q *Queries) ReplacePublicStructures(ctx context.Context, arg ReplacePublicStructuresParams) error {
-	_, err := q.db.ExecContext(ctx, replacePublicStructures, arg.RefreshedAt, pq.Array(arg.Ids))
+	_, err := q.db.Exec(ctx, replacePublicStructures, arg.RefreshedAt, arg.Ids)
 	return err
 }
 
@@ -2622,9 +2530,9 @@ type SearchPublicContractsRow struct {
 // bands are off below zero.
 // ---------------------------------------------------------------------
 func (q *Queries) SearchPublicContracts(ctx context.Context, arg SearchPublicContractsParams) ([]SearchPublicContractsRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchPublicContracts,
-		pq.Array(arg.Types),
-		pq.Array(arg.RegionIds),
+	rows, err := q.db.Query(ctx, searchPublicContracts,
+		arg.Types,
+		arg.RegionIds,
 		arg.TitleQ,
 		arg.ItemQ,
 		arg.ItemDir,
@@ -2711,9 +2619,6 @@ func (q *Queries) SearchPublicContracts(ctx context.Context, arg SearchPublicCon
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2730,7 +2635,7 @@ type SetPublicContractItemsStateParams struct {
 }
 
 func (q *Queries) SetPublicContractItemsState(ctx context.Context, arg SetPublicContractItemsStateParams) error {
-	_, err := q.db.ExecContext(ctx, setPublicContractItemsState, arg.ContractID, arg.ItemsState)
+	_, err := q.db.Exec(ctx, setPublicContractItemsState, arg.ContractID, arg.ItemsState)
 	return err
 }
 
@@ -2779,7 +2684,7 @@ type StampAbyssalSightingAttributionParams struct {
 // other line is counted, so the corpus can refuse a residual it
 // cannot compute.
 func (q *Queries) StampAbyssalSightingAttribution(ctx context.Context, arg StampAbyssalSightingAttributionParams) error {
-	_, err := q.db.ExecContext(ctx, stampAbyssalSightingAttribution, arg.ContractID, arg.RegionID, arg.Cycle)
+	_, err := q.db.Exec(ctx, stampAbyssalSightingAttribution, arg.ContractID, arg.RegionID, arg.Cycle)
 	return err
 }
 
@@ -2802,7 +2707,7 @@ type StampAbyssalSightingsDepartedParams struct {
 }
 
 func (q *Queries) StampAbyssalSightingsDeparted(ctx context.Context, arg StampAbyssalSightingsDepartedParams) error {
-	_, err := q.db.ExecContext(ctx, stampAbyssalSightingsDeparted, arg.DepartedAt, arg.DepartKind, pq.Array(arg.ContractIds))
+	_, err := q.db.Exec(ctx, stampAbyssalSightingsDeparted, arg.DepartedAt, arg.DepartKind, arg.ContractIds)
 	return err
 }
 
@@ -2816,7 +2721,7 @@ WHERE departed_at IS NULL AND contract_id IN (
 // A fresh score or estimate makes the contracts holding the
 // item due for repricing on the next appraisal pass.
 func (q *Queries) TouchPublicContractsForItemIDs(ctx context.Context, itemIds []int64) error {
-	_, err := q.db.ExecContext(ctx, touchPublicContractsForItemIDs, pq.Array(itemIds))
+	_, err := q.db.Exec(ctx, touchPublicContractsForItemIDs, itemIds)
 	return err
 }
 
@@ -2874,7 +2779,7 @@ type UpdateAbyssalItemEstimateParams struct {
 }
 
 func (q *Queries) UpdateAbyssalItemEstimate(ctx context.Context, arg UpdateAbyssalItemEstimateParams) error {
-	_, err := q.db.ExecContext(ctx, updateAbyssalItemEstimate,
+	_, err := q.db.Exec(ctx, updateAbyssalItemEstimate,
 		arg.Family,
 		arg.Score,
 		arg.Percentiles,
@@ -2926,7 +2831,7 @@ type UpdatePublicContractAppraisalParams struct {
 }
 
 func (q *Queries) UpdatePublicContractAppraisal(ctx context.Context, arg UpdatePublicContractAppraisalParams) error {
-	_, err := q.db.ExecContext(ctx, updatePublicContractAppraisal,
+	_, err := q.db.Exec(ctx, updatePublicContractAppraisal,
 		arg.OfferedValue,
 		arg.WantValue,
 		arg.DealRatio,
@@ -2957,7 +2862,7 @@ type UpdatePublicContractItemAppraisalParams struct {
 }
 
 func (q *Queries) UpdatePublicContractItemAppraisal(ctx context.Context, arg UpdatePublicContractItemAppraisalParams) error {
-	_, err := q.db.ExecContext(ctx, updatePublicContractItemAppraisal,
+	_, err := q.db.Exec(ctx, updatePublicContractItemAppraisal,
 		arg.UnitPrice,
 		arg.LineValue,
 		arg.PriceTier,
@@ -2996,7 +2901,7 @@ type UpsertAbyssalFamilyFitParams struct {
 }
 
 func (q *Queries) UpsertAbyssalFamilyFit(ctx context.Context, arg UpsertAbyssalFamilyFitParams) error {
-	_, err := q.db.ExecContext(ctx, upsertAbyssalFamilyFit,
+	_, err := q.db.Exec(ctx, upsertAbyssalFamilyFit,
 		arg.Family,
 		arg.Comps,
 		arg.NEff,
@@ -3035,7 +2940,7 @@ type UpsertAbyssalItemParams struct {
 // row; later sightings of the same instance only move
 // last_seen_at.
 func (q *Queries) UpsertAbyssalItem(ctx context.Context, arg UpsertAbyssalItemParams) error {
-	_, err := q.db.ExecContext(ctx, upsertAbyssalItem,
+	_, err := q.db.Exec(ctx, upsertAbyssalItem,
 		arg.ItemID,
 		arg.TypeID,
 		arg.SourceTypeID,
@@ -3074,7 +2979,7 @@ type UpsertAbyssalSightingParams struct {
 }
 
 func (q *Queries) UpsertAbyssalSighting(ctx context.Context, arg UpsertAbyssalSightingParams) error {
-	_, err := q.db.ExecContext(ctx, upsertAbyssalSighting,
+	_, err := q.db.Exec(ctx, upsertAbyssalSighting,
 		arg.ItemID,
 		arg.ContractID,
 		arg.ContractType,
@@ -3145,7 +3050,7 @@ type UpsertPublicContractParams struct {
 // items_state are deliberately not in the update: the first
 // sighting and the item-list state survive every refresh.
 func (q *Queries) UpsertPublicContract(ctx context.Context, arg UpsertPublicContractParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPublicContract,
+	_, err := q.db.Exec(ctx, upsertPublicContract,
 		arg.ContractID,
 		arg.RegionID,
 		arg.Type,
@@ -3182,7 +3087,7 @@ type UpsertPublicContractCorpusStatsParams struct {
 }
 
 func (q *Queries) UpsertPublicContractCorpusStats(ctx context.Context, arg UpsertPublicContractCorpusStatsParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPublicContractCorpusStats, arg.OpenContracts, arg.ComputedAt)
+	_, err := q.db.Exec(ctx, upsertPublicContractCorpusStats, arg.OpenContracts, arg.ComputedAt)
 	return err
 }
 
@@ -3205,7 +3110,7 @@ type UpsertPublicContractSweepStateParams struct {
 }
 
 func (q *Queries) UpsertPublicContractSweepState(ctx context.Context, arg UpsertPublicContractSweepStateParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPublicContractSweepState,
+	_, err := q.db.Exec(ctx, upsertPublicContractSweepState,
 		arg.RegionID,
 		arg.NextPage,
 		arg.TotalPages,
@@ -3281,24 +3186,24 @@ type UpsertPublicContractsParams struct {
 // distinct. A departed row the sweep lists again is live again:
 // the departure stamp clears (a vanish is only ever an absence).
 func (q *Queries) UpsertPublicContracts(ctx context.Context, arg UpsertPublicContractsParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPublicContracts,
-		pq.Array(arg.ContractIds),
+	_, err := q.db.Exec(ctx, upsertPublicContracts,
+		arg.ContractIds,
 		arg.RegionID,
-		pq.Array(arg.Types),
-		pq.Array(arg.IssuerIds),
-		pq.Array(arg.IssuerCorporationIds),
-		pq.Array(arg.ForCorporations),
-		pq.Array(arg.Titles),
-		pq.Array(arg.Prices),
-		pq.Array(arg.Buyouts),
-		pq.Array(arg.Rewards),
-		pq.Array(arg.Collaterals),
-		pq.Array(arg.Volumes),
-		pq.Array(arg.StartLocationIds),
-		pq.Array(arg.EndLocationIds),
-		pq.Array(arg.DatesIssued),
-		pq.Array(arg.DatesExpired),
-		pq.Array(arg.DaysToComplete),
+		arg.Types,
+		arg.IssuerIds,
+		arg.IssuerCorporationIds,
+		arg.ForCorporations,
+		arg.Titles,
+		arg.Prices,
+		arg.Buyouts,
+		arg.Rewards,
+		arg.Collaterals,
+		arg.Volumes,
+		arg.StartLocationIds,
+		arg.EndLocationIds,
+		arg.DatesIssued,
+		arg.DatesExpired,
+		arg.DaysToComplete,
 		arg.LastCycle,
 		arg.Seen,
 	)

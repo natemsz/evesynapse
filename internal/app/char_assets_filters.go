@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,6 +11,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ func (f assetSavedFilter) href() string {
 func (app *Application) assetFiltersFor(ctx context.Context, userID int64) []assetSavedFilter {
 	raw, err := app.queries.GetWidgetConfig(ctx, db.GetWidgetConfigParams{UserID: userID, WidgetID: assetsFiltersConfigID})
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("assets: load filters for user %d: %v", userID, err)
 		}
 		return nil

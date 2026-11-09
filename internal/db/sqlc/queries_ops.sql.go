@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const createOp = `-- name: CreateOp :one
@@ -34,7 +32,7 @@ type CreateOpParams struct {
 }
 
 func (q *Queries) CreateOp(ctx context.Context, arg CreateOpParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createOp,
+	row := q.db.QueryRow(ctx, createOp,
 		arg.CorporationID,
 		arg.Title,
 		arg.Description,
@@ -64,7 +62,7 @@ type DeleteManualAttendanceExceptParams struct {
 }
 
 func (q *Queries) DeleteManualAttendanceExcept(ctx context.Context, arg DeleteManualAttendanceExceptParams) error {
-	_, err := q.db.ExecContext(ctx, deleteManualAttendanceExcept, arg.OpID, pq.Array(arg.KeepIds))
+	_, err := q.db.Exec(ctx, deleteManualAttendanceExcept, arg.OpID, arg.KeepIds)
 	return err
 }
 
@@ -73,7 +71,7 @@ SELECT id, corporation_id, title, description, starts_at, duration_minutes, doct
 `
 
 func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
-	row := q.db.QueryRowContext(ctx, getOp, id)
+	row := q.db.QueryRow(ctx, getOp, id)
 	var i Op
 	err := row.Scan(
 		&i.ID,
@@ -110,7 +108,7 @@ type InsertManualAttendanceParams struct {
 
 // Marked by hand. Never touches a row the fleet reported.
 func (q *Queries) InsertManualAttendance(ctx context.Context, arg InsertManualAttendanceParams) error {
-	_, err := q.db.ExecContext(ctx, insertManualAttendance, arg.OpID, arg.CharacterID, arg.SeenAt)
+	_, err := q.db.Exec(ctx, insertManualAttendance, arg.OpID, arg.CharacterID, arg.SeenAt)
 	return err
 }
 
@@ -135,7 +133,7 @@ type ListCharacterCorporationsByUserRow struct {
 // ---------------------------------------------------------------------
 // The corporation of each of an account's characters.
 func (q *Queries) ListCharacterCorporationsByUser(ctx context.Context, userID int64) ([]ListCharacterCorporationsByUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, listCharacterCorporationsByUser, userID)
+	rows, err := q.db.Query(ctx, listCharacterCorporationsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -147,9 +145,6 @@ func (q *Queries) ListCharacterCorporationsByUser(ctx context.Context, userID in
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -187,7 +182,7 @@ type ListCorporationPAPsRow struct {
 // Attendance counts for a corporation's ops since a date, per
 // character: the PAP table.
 func (q *Queries) ListCorporationPAPs(ctx context.Context, arg ListCorporationPAPsParams) ([]ListCorporationPAPsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listCorporationPAPs, arg.RecentSince, arg.CorporationID, arg.Since)
+	rows, err := q.db.Query(ctx, listCorporationPAPs, arg.RecentSince, arg.CorporationID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -205,9 +200,6 @@ func (q *Queries) ListCorporationPAPs(ctx context.Context, arg ListCorporationPA
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -219,7 +211,7 @@ SELECT op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at FR
 `
 
 func (q *Queries) ListOpAttendance(ctx context.Context, opID int64) ([]OpAttendance, error) {
-	rows, err := q.db.QueryContext(ctx, listOpAttendance, opID)
+	rows, err := q.db.Query(ctx, listOpAttendance, opID)
 	if err != nil {
 		return nil, err
 	}
@@ -239,9 +231,6 @@ func (q *Queries) ListOpAttendance(ctx context.Context, opID int64) ([]OpAttenda
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -253,7 +242,7 @@ SELECT op_id, character_id, user_id, response, ship, fleet_role, note, updated_a
 `
 
 func (q *Queries) ListOpSignups(ctx context.Context, opID int64) ([]OpSignup, error) {
-	rows, err := q.db.QueryContext(ctx, listOpSignups, opID)
+	rows, err := q.db.Query(ctx, listOpSignups, opID)
 	if err != nil {
 		return nil, err
 	}
@@ -275,9 +264,6 @@ func (q *Queries) ListOpSignups(ctx context.Context, opID int64) ([]OpSignup, er
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -297,7 +283,7 @@ type ListOpSignupsForOpsRow struct {
 }
 
 func (q *Queries) ListOpSignupsForOps(ctx context.Context, opIds []int64) ([]ListOpSignupsForOpsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listOpSignupsForOps, pq.Array(opIds))
+	rows, err := q.db.Query(ctx, listOpSignupsForOps, opIds)
 	if err != nil {
 		return nil, err
 	}
@@ -314,9 +300,6 @@ func (q *Queries) ListOpSignupsForOps(ctx context.Context, opIds []int64) ([]Lis
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -338,7 +321,7 @@ type ListOpsForCorporationsBetweenParams struct {
 }
 
 func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOpsForCorporationsBetweenParams) ([]Op, error) {
-	rows, err := q.db.QueryContext(ctx, listOpsForCorporationsBetween, pq.Array(arg.CorporationIds), arg.FromTime, arg.ToTime)
+	rows, err := q.db.Query(ctx, listOpsForCorporationsBetween, arg.CorporationIds, arg.FromTime, arg.ToTime)
 	if err != nil {
 		return nil, err
 	}
@@ -367,9 +350,6 @@ func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOps
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -398,7 +378,7 @@ type ListOpsToCaptureParams struct {
 // Ops whose fleet may be up right now: not cancelled, and inside the
 // window from a little before the start to a little after the end.
 func (q *Queries) ListOpsToCapture(ctx context.Context, arg ListOpsToCaptureParams) ([]Op, error) {
-	rows, err := q.db.QueryContext(ctx, listOpsToCapture, arg.StartsBefore, arg.EndsAfter)
+	rows, err := q.db.Query(ctx, listOpsToCapture, arg.StartsBefore, arg.EndsAfter)
 	if err != nil {
 		return nil, err
 	}
@@ -428,9 +408,6 @@ func (q *Queries) ListOpsToCapture(ctx context.Context, arg ListOpsToCapturePara
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -447,7 +424,7 @@ type SetOpCancelledParams struct {
 }
 
 func (q *Queries) SetOpCancelled(ctx context.Context, arg SetOpCancelledParams) error {
-	_, err := q.db.ExecContext(ctx, setOpCancelled, arg.CancelledAt, arg.ID)
+	_, err := q.db.Exec(ctx, setOpCancelled, arg.CancelledAt, arg.ID)
 	return err
 }
 
@@ -463,7 +440,7 @@ type SetOpCaptureStatusParams struct {
 }
 
 func (q *Queries) SetOpCaptureStatus(ctx context.Context, arg SetOpCaptureStatusParams) error {
-	_, err := q.db.ExecContext(ctx, setOpCaptureStatus, arg.CaptureStatus, arg.CheckedAt, arg.ID)
+	_, err := q.db.Exec(ctx, setOpCaptureStatus, arg.CaptureStatus, arg.CheckedAt, arg.ID)
 	return err
 }
 
@@ -493,7 +470,7 @@ type UpdateOpParams struct {
 }
 
 func (q *Queries) UpdateOp(ctx context.Context, arg UpdateOpParams) error {
-	_, err := q.db.ExecContext(ctx, updateOp,
+	_, err := q.db.Exec(ctx, updateOp,
 		arg.Title,
 		arg.Description,
 		arg.StartsAt,
@@ -526,7 +503,7 @@ type UpsertFleetAttendanceParams struct {
 // Seen in the fleet. A character already marked by hand becomes a
 // fleet sighting: the fleet is the better witness.
 func (q *Queries) UpsertFleetAttendance(ctx context.Context, arg UpsertFleetAttendanceParams) error {
-	_, err := q.db.ExecContext(ctx, upsertFleetAttendance,
+	_, err := q.db.Exec(ctx, upsertFleetAttendance,
 		arg.OpID,
 		arg.CharacterID,
 		arg.ShipTypeID,
@@ -559,7 +536,7 @@ type UpsertOpSignupParams struct {
 }
 
 func (q *Queries) UpsertOpSignup(ctx context.Context, arg UpsertOpSignupParams) error {
-	_, err := q.db.ExecContext(ctx, upsertOpSignup,
+	_, err := q.db.Exec(ctx, upsertOpSignup,
 		arg.OpID,
 		arg.CharacterID,
 		arg.UserID,

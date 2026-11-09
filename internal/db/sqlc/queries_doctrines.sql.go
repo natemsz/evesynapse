@@ -8,8 +8,6 @@ package db
 import (
 	"context"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const addDoctrineFit = `-- name: AddDoctrineFit :one
@@ -30,7 +28,7 @@ type AddDoctrineFitParams struct {
 }
 
 func (q *Queries) AddDoctrineFit(ctx context.Context, arg AddDoctrineFitParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, addDoctrineFit,
+	row := q.db.QueryRow(ctx, addDoctrineFit,
 		arg.DoctrineID,
 		arg.Name,
 		arg.ShipTypeID,
@@ -50,7 +48,7 @@ SELECT COUNT(*)::bigint FROM doctrine_fits WHERE doctrine_id = $1
 `
 
 func (q *Queries) CountDoctrineFits(ctx context.Context, doctrineID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countDoctrineFits, doctrineID)
+	row := q.db.QueryRow(ctx, countDoctrineFits, doctrineID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -78,7 +76,7 @@ type CreateDoctrineParams struct {
 // Doctrines (schema 026).
 // ---------------------------------------------------------------------
 func (q *Queries) CreateDoctrine(ctx context.Context, arg CreateDoctrineParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createDoctrine,
+	row := q.db.QueryRow(ctx, createDoctrine,
 		arg.CorporationID,
 		arg.Name,
 		arg.Category,
@@ -97,7 +95,7 @@ DELETE FROM doctrines WHERE id = $1
 `
 
 func (q *Queries) DeleteDoctrine(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDoctrine, id)
+	_, err := q.db.Exec(ctx, deleteDoctrine, id)
 	return err
 }
 
@@ -111,7 +109,7 @@ type DeleteDoctrineFitParams struct {
 }
 
 func (q *Queries) DeleteDoctrineFit(ctx context.Context, arg DeleteDoctrineFitParams) error {
-	_, err := q.db.ExecContext(ctx, deleteDoctrineFit, arg.ID, arg.DoctrineID)
+	_, err := q.db.Exec(ctx, deleteDoctrineFit, arg.ID, arg.DoctrineID)
 	return err
 }
 
@@ -125,7 +123,7 @@ type DoctrineHasShipParams struct {
 }
 
 func (q *Queries) DoctrineHasShip(ctx context.Context, arg DoctrineHasShipParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, doctrineHasShip, arg.DoctrineID, arg.ShipTypeID)
+	row := q.db.QueryRow(ctx, doctrineHasShip, arg.DoctrineID, arg.ShipTypeID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -136,7 +134,7 @@ SELECT id, corporation_id, name, category, description, tags, created_by, create
 `
 
 func (q *Queries) GetDoctrine(ctx context.Context, id int64) (Doctrine, error) {
-	row := q.db.QueryRowContext(ctx, getDoctrine, id)
+	row := q.db.QueryRow(ctx, getDoctrine, id)
 	var i Doctrine
 	err := row.Scan(
 		&i.ID,
@@ -173,7 +171,7 @@ type GetDoctrineFitRow struct {
 }
 
 func (q *Queries) GetDoctrineFit(ctx context.Context, id int64) (GetDoctrineFitRow, error) {
-	row := q.db.QueryRowContext(ctx, getDoctrineFit, id)
+	row := q.db.QueryRow(ctx, getDoctrineFit, id)
 	var i GetDoctrineFitRow
 	err := row.Scan(
 		&i.ID,
@@ -199,7 +197,7 @@ ORDER BY doctrine_id, id
 
 // The fits of several doctrines, in the order they were added.
 func (q *Queries) ListDoctrineFits(ctx context.Context, doctrineIds []int64) ([]DoctrineFit, error) {
-	rows, err := q.db.QueryContext(ctx, listDoctrineFits, pq.Array(doctrineIds))
+	rows, err := q.db.Query(ctx, listDoctrineFits, doctrineIds)
 	if err != nil {
 		return nil, err
 	}
@@ -222,9 +220,6 @@ func (q *Queries) ListDoctrineFits(ctx context.Context, doctrineIds []int64) ([]
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -238,7 +233,7 @@ ORDER BY corporation_id, lower(category), lower(name)
 `
 
 func (q *Queries) ListDoctrinesForCorporations(ctx context.Context, corporationIds []int64) ([]Doctrine, error) {
-	rows, err := q.db.QueryContext(ctx, listDoctrinesForCorporations, pq.Array(corporationIds))
+	rows, err := q.db.Query(ctx, listDoctrinesForCorporations, corporationIds)
 	if err != nil {
 		return nil, err
 	}
@@ -260,9 +255,6 @@ func (q *Queries) ListDoctrinesForCorporations(ctx context.Context, corporationI
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -292,7 +284,7 @@ type UpdateDoctrineParams struct {
 }
 
 func (q *Queries) UpdateDoctrine(ctx context.Context, arg UpdateDoctrineParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, updateDoctrine,
+	result, err := q.db.Exec(ctx, updateDoctrine,
 		arg.Name,
 		arg.Category,
 		arg.Description,
@@ -303,5 +295,5 @@ func (q *Queries) UpdateDoctrine(ctx context.Context, arg UpdateDoctrineParams) 
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }

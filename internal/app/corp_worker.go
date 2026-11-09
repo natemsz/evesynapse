@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,6 +11,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 	switch {
 	case serr == nil && esi.SnapshotFresh(snap):
 		return corpFetchSkipped
-	case serr != nil && !errors.Is(serr, sql.ErrNoRows):
+	case serr != nil && !errors.Is(serr, pgx.ErrNoRows):
 		logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 
@@ -194,7 +194,7 @@ func (app *Application) corpIDForCharacter(ctx context.Context, ch db.Character)
 		}
 		return row.CorporationID, true
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	if !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("worker: read corporation mapping for character %d: %v", ch.CharacterID, err)
 	}
 	return app.refreshCorpMapping(ctx, ch)
@@ -290,7 +290,7 @@ func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character,
 		seen[it.ItemID] = true
 		if _, err := app.queries.GetItemName(ctx, it.ItemID); err == nil {
 			continue // already named
-		} else if !errors.Is(err, sql.ErrNoRows) {
+		} else if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("worker: read item name %d: %v", it.ItemID, err)
 			continue
 		}

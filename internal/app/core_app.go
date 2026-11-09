@@ -478,7 +478,7 @@ func New(cfg Config) (*Application, error) {
 		cfg:           cfg,
 		push:          pushConfigFromEnv(cfg),
 		sessions:      sessionManager,
-		queries:       db.New(dbConn),
+		queries:       db.New(pool),
 		jwks:          &jwksCache{},
 		db:            dbConn,
 		pool:          pool,
@@ -1384,7 +1384,7 @@ func (app *Application) Fragment(page, define string, data any) (template.HTML, 
 	return template.HTML(buf.String()), nil
 }
 
-func (app *Application) SQLDB() *sql.DB { return app.db }
+func (app *Application) PGPool() *pgxpool.Pool { return app.pool }
 
 func (app *Application) SealToken(plain string, userID int64, field string) (string, error) {
 	return app.tokens.seal(plain, userID, field)

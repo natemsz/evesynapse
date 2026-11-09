@@ -45,6 +45,7 @@ import (
 	// encoding/json with identical results (TestDecoderParity in
 	// decode_parity_test.go).
 	json "github.com/goccy/go-json"
+	"github.com/jackc/pgx/v5"
 )
 
 // ESI is at https://esi.evetech.net; every request carries a
@@ -2636,7 +2637,7 @@ func (c *Client) GetCached(ctx context.Context, ch db.Character, kind string, ou
 
 	snap, serr := c.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
 	haveSnap := serr == nil
-	if serr != nil && !errors.Is(serr, sql.ErrNoRows) {
+	if serr != nil && !errors.Is(serr, pgx.ErrNoRows) {
 		logging.Errorf("esi: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 

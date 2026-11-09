@@ -18,6 +18,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -348,7 +349,7 @@ func (app *Application) opFromURL(w http.ResponseWriter, r *http.Request, member
 	id, _ := strconv.ParseInt(chi.URLParam(r, "opID"), 10, 64)
 	op, err := app.queries.GetOp(r.Context(), id)
 	if err != nil || len(opInCorp(members, op.CorporationID)) == 0 {
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("ops: load op %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/calendar/", http.StatusSeeOther)

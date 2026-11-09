@@ -8,8 +8,6 @@ package db
 import (
 	"context"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const getScan = `-- name: GetScan :one
@@ -28,7 +26,7 @@ type GetScanRow struct {
 }
 
 func (q *Queries) GetScan(ctx context.Context, id string) (GetScanRow, error) {
-	row := q.db.QueryRowContext(ctx, getScan, id)
+	row := q.db.QueryRow(ctx, getScan, id)
 	var i GetScanRow
 	err := row.Scan(
 		&i.ID,
@@ -65,7 +63,7 @@ type InsertScanParams struct {
 // and probe results, unlisted, kept 90 days.
 // ---------------------------------------------------------------------
 func (q *Queries) InsertScan(ctx context.Context, arg InsertScanParams) error {
-	_, err := q.db.ExecContext(ctx, insertScan,
+	_, err := q.db.Exec(ctx, insertScan,
 		arg.ID,
 		arg.Kind,
 		arg.SystemID,
@@ -102,7 +100,7 @@ type ListOwnScansRow struct {
 // A reader's own scans, newest first: those they pasted signed in,
 // and those this session pasted (by id).
 func (q *Queries) ListOwnScans(ctx context.Context, arg ListOwnScansParams) ([]ListOwnScansRow, error) {
-	rows, err := q.db.QueryContext(ctx, listOwnScans, arg.UserID, pq.Array(arg.Ids), arg.MaxRows)
+	rows, err := q.db.Query(ctx, listOwnScans, arg.UserID, arg.Ids, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -119,9 +117,6 @@ func (q *Queries) ListOwnScans(ctx context.Context, arg ListOwnScansParams) ([]L
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -158,7 +153,7 @@ type ListPilotKillActivityRow struct {
 // in the window, the latest, and where. The local scan's "known
 // killers" column; only posted (public) kills count.
 func (q *Queries) ListPilotKillActivity(ctx context.Context, arg ListPilotKillActivityParams) ([]ListPilotKillActivityRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotKillActivity, pq.Array(arg.CharacterIds), arg.Since)
+	rows, err := q.db.Query(ctx, listPilotKillActivity, arg.CharacterIds, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -175,9 +170,6 @@ func (q *Queries) ListPilotKillActivity(ctx context.Context, arg ListPilotKillAc
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -217,7 +209,7 @@ type ListRelatedScansRow struct {
 // scan and, when it is set, every scan of its group: the
 // reading page's related-scans rail.
 func (q *Queries) ListRelatedScans(ctx context.Context, arg ListRelatedScansParams) ([]ListRelatedScansRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRelatedScans,
+	rows, err := q.db.Query(ctx, listRelatedScans,
 		arg.SystemID,
 		arg.ExcludeID,
 		arg.ExcludeGroup,
@@ -243,9 +235,6 @@ func (q *Queries) ListRelatedScans(ctx context.Context, arg ListRelatedScansPara
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -277,7 +266,7 @@ type ListScanGroupRow struct {
 // A scan group (schema 086): every scan filed under one group
 // id, oldest first -- the group's timeline on a member's page.
 func (q *Queries) ListScanGroup(ctx context.Context, arg ListScanGroupParams) ([]ListScanGroupRow, error) {
-	rows, err := q.db.QueryContext(ctx, listScanGroup, arg.GroupID, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listScanGroup, arg.GroupID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -297,9 +286,6 @@ func (q *Queries) ListScanGroup(ctx context.Context, arg ListScanGroupParams) ([
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -311,11 +297,11 @@ DELETE FROM scans WHERE created_at < $1::timestamptz
 `
 
 func (q *Queries) PruneScans(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneScans, before)
+	result, err := q.db.Exec(ctx, pruneScans, before)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const updateScanSystem = `-- name: UpdateScanSystem :exec
@@ -331,6 +317,6 @@ type UpdateScanSystemParams struct {
 // A reading's system, corrected after the paste: the column
 // and the stored reading move together.
 func (q *Queries) UpdateScanSystem(ctx context.Context, arg UpdateScanSystemParams) error {
-	_, err := q.db.ExecContext(ctx, updateScanSystem, arg.SystemID, arg.Result, arg.ID)
+	_, err := q.db.Exec(ctx, updateScanSystem, arg.SystemID, arg.Result, arg.ID)
 	return err
 }

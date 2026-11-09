@@ -8,8 +8,6 @@ package db
 import (
 	"context"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const deleteAssetLocationValuesExcept = `-- name: DeleteAssetLocationValuesExcept :exec
@@ -28,7 +26,7 @@ type DeleteAssetLocationValuesExceptParams struct {
 // on the next fold; the fold upserts the current set first, then
 // this sweep removes what it did not rewrite.
 func (q *Queries) DeleteAssetLocationValuesExcept(ctx context.Context, arg DeleteAssetLocationValuesExceptParams) error {
-	_, err := q.db.ExecContext(ctx, deleteAssetLocationValuesExcept, arg.UserID, arg.CharacterID, pq.Array(arg.KeepLocationIds))
+	_, err := q.db.Exec(ctx, deleteAssetLocationValuesExcept, arg.UserID, arg.CharacterID, arg.KeepLocationIds)
 	return err
 }
 
@@ -43,7 +41,7 @@ type DeleteAssetLocationValuesForCharacterParams struct {
 }
 
 func (q *Queries) DeleteAssetLocationValuesForCharacter(ctx context.Context, arg DeleteAssetLocationValuesForCharacterParams) error {
-	_, err := q.db.ExecContext(ctx, deleteAssetLocationValuesForCharacter, arg.UserID, arg.CharacterID)
+	_, err := q.db.Exec(ctx, deleteAssetLocationValuesForCharacter, arg.UserID, arg.CharacterID)
 	return err
 }
 
@@ -60,7 +58,7 @@ type DeleteBlueprintBuildableOlderParams struct {
 // Drops the account's verdicts the latest fold did not write: the
 // blueprints its characters no longer own.
 func (q *Queries) DeleteBlueprintBuildableOlder(ctx context.Context, arg DeleteBlueprintBuildableOlderParams) error {
-	_, err := q.db.ExecContext(ctx, deleteBlueprintBuildableOlder, arg.UserID, arg.FoldAt)
+	_, err := q.db.Exec(ctx, deleteBlueprintBuildableOlder, arg.UserID, arg.FoldAt)
 	return err
 }
 
@@ -79,7 +77,7 @@ type GetAssetLocationValueLatestParams struct {
 // The newest fold for one character, for the freshness check
 // against the snapshot it was folded from.
 func (q *Queries) GetAssetLocationValueLatest(ctx context.Context, arg GetAssetLocationValueLatestParams) (time.Time, error) {
-	row := q.db.QueryRowContext(ctx, getAssetLocationValueLatest, arg.UserID, arg.CharacterID)
+	row := q.db.QueryRow(ctx, getAssetLocationValueLatest, arg.UserID, arg.CharacterID)
 	var computed_at time.Time
 	err := row.Scan(&computed_at)
 	return computed_at, err
@@ -100,7 +98,7 @@ type GetBlueprintBuildableFoldRow struct {
 // Blueprint buildability (schema 122): per owned blueprint, folded by
 // the worker from an account's blueprint, asset and skill snapshots.
 func (q *Queries) GetBlueprintBuildableFold(ctx context.Context, userID int64) (GetBlueprintBuildableFoldRow, error) {
-	row := q.db.QueryRowContext(ctx, getBlueprintBuildableFold, userID)
+	row := q.db.QueryRow(ctx, getBlueprintBuildableFold, userID)
 	var i GetBlueprintBuildableFoldRow
 	err := row.Scan(&i.Characters, &i.ComputedAt)
 	return i, err
@@ -115,7 +113,7 @@ ORDER BY location_id, character_id
 `
 
 func (q *Queries) ListAssetLocationValuesByUser(ctx context.Context, userID int64) ([]AssetLocationValue, error) {
-	rows, err := q.db.QueryContext(ctx, listAssetLocationValuesByUser, userID)
+	rows, err := q.db.Query(ctx, listAssetLocationValuesByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -140,9 +138,6 @@ func (q *Queries) ListAssetLocationValuesByUser(ctx context.Context, userID int6
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -164,7 +159,7 @@ type ListAssetTypeMetaGroupsRow struct {
 // types, for the matrix rows' tech pips: 2 Tech II, 14 Tech III,
 // 4 faction, 6 deadspace, 5 officer, 3 storyline, 1 Tech I.
 func (q *Queries) ListAssetTypeMetaGroups(ctx context.Context, typeIds []int64) ([]ListAssetTypeMetaGroupsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAssetTypeMetaGroups, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listAssetTypeMetaGroups, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -176,9 +171,6 @@ func (q *Queries) ListAssetTypeMetaGroups(ctx context.Context, typeIds []int64) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -214,7 +206,7 @@ type ListBlueprintBuildableRow struct {
 
 // The stored verdicts for the blueprints a page shows.
 func (q *Queries) ListBlueprintBuildable(ctx context.Context, arg ListBlueprintBuildableParams) ([]ListBlueprintBuildableRow, error) {
-	rows, err := q.db.QueryContext(ctx, listBlueprintBuildable, arg.UserID, pq.Array(arg.ItemIds))
+	rows, err := q.db.Query(ctx, listBlueprintBuildable, arg.UserID, arg.ItemIds)
 	if err != nil {
 		return nil, err
 	}
@@ -237,9 +229,6 @@ func (q *Queries) ListBlueprintBuildable(ctx context.Context, arg ListBlueprintB
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -266,7 +255,7 @@ type ListSnapshotStampsRow struct {
 // When each of some characters' snapshots of some kinds was last
 // fetched, without their payloads: a fold's watermark check.
 func (q *Queries) ListSnapshotStamps(ctx context.Context, arg ListSnapshotStampsParams) ([]ListSnapshotStampsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSnapshotStamps, pq.Array(arg.CharacterIds), pq.Array(arg.Kinds))
+	rows, err := q.db.Query(ctx, listSnapshotStamps, arg.CharacterIds, arg.Kinds)
 	if err != nil {
 		return nil, err
 	}
@@ -278,9 +267,6 @@ func (q *Queries) ListSnapshotStamps(ctx context.Context, arg ListSnapshotStamps
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -329,7 +315,7 @@ type UpsertAssetLocationValueParams struct {
 // at the house order; the Assets page directory reads the rows.
 // ---------------------------------------------------------------------
 func (q *Queries) UpsertAssetLocationValue(ctx context.Context, arg UpsertAssetLocationValueParams) error {
-	_, err := q.db.ExecContext(ctx, upsertAssetLocationValue,
+	_, err := q.db.Exec(ctx, upsertAssetLocationValue,
 		arg.UserID,
 		arg.CharacterID,
 		arg.LocationID,
@@ -385,7 +371,7 @@ type UpsertBlueprintBuildableParams struct {
 }
 
 func (q *Queries) UpsertBlueprintBuildable(ctx context.Context, arg UpsertBlueprintBuildableParams) error {
-	_, err := q.db.ExecContext(ctx, upsertBlueprintBuildable,
+	_, err := q.db.Exec(ctx, upsertBlueprintBuildable,
 		arg.UserID,
 		arg.CharacterID,
 		arg.ItemID,
@@ -419,6 +405,6 @@ type UpsertBlueprintBuildableFoldParams struct {
 }
 
 func (q *Queries) UpsertBlueprintBuildableFold(ctx context.Context, arg UpsertBlueprintBuildableFoldParams) error {
-	_, err := q.db.ExecContext(ctx, upsertBlueprintBuildableFold, arg.UserID, arg.Characters, arg.ComputedAt)
+	_, err := q.db.Exec(ctx, upsertBlueprintBuildableFold, arg.UserID, arg.Characters, arg.ComputedAt)
 	return err
 }

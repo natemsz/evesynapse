@@ -47,6 +47,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -496,11 +497,11 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, pool l
 	unlock := lockLedgerPool(pool)
 	defer unlock()
 	state, err := app.queries.GetLedgerState(ctx, db.GetLedgerStateParams{OwnerKind: src.kind, OwnerID: src.ownerID})
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
 	pstate, err := app.queries.GetLedgerPoolState(ctx, db.GetLedgerPoolStateParams{PoolKind: pool.kind, PoolID: pool.id})
-	newPool := errors.Is(err, sql.ErrNoRows)
+	newPool := errors.Is(err, pgx.ErrNoRows)
 	if err != nil && !newPool {
 		return err
 	}
@@ -609,11 +610,11 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, pool l
 		fromDay = today
 	}
 	dayAt, _ := time.Parse("2006-01-02", fromDay)
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	for _, id := range members {
 		if err := foldOwnerRollups(ctx, qtx, pool.ownerKind, id, fromDay, dayAt, today); err != nil {
@@ -648,7 +649,7 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, pool l
 	if err := qtx.UpsertLedgerPoolState(ctx, ps); err != nil {
 		return err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 	if len(touchedTypes) > 0 {
@@ -698,11 +699,11 @@ func foldOwnerRollups(ctx context.Context, qtx *db.Queries, kind string, id int6
 func (app *Application) foldQuiet(ctx context.Context, src ledgerSource, today string) error {
 	asOf, err := app.queries.GetTradeItemWindowAsOf(ctx, db.GetTradeItemWindowAsOfParams{OwnerKind: src.kind, OwnerID: src.ownerID})
 	if err == nil && asOf != "" && asOf < today {
-		tx, err := app.db.BeginTx(ctx, nil)
+		tx, err := app.pool.Begin(ctx)
 		if err != nil {
 			return err
 		}
-		defer tx.Rollback()
+		defer tx.Rollback(ctx)
 		qtx := app.queries.WithTx(tx)
 		if err := qtx.DeleteTradeItemWindows(ctx, db.DeleteTradeItemWindowsParams{OwnerKind: src.kind, OwnerID: src.ownerID}); err != nil {
 			return err
@@ -710,7 +711,7 @@ func (app *Application) foldQuiet(ctx context.Context, src ledgerSource, today s
 		if err := qtx.FoldTradeItemWindows(ctx, db.FoldTradeItemWindowsParams{OwnerKind: src.kind, OwnerID: src.ownerID, AsOfDay: today}); err != nil {
 			return err
 		}
-		if err := tx.Commit(); err != nil {
+		if err := tx.Commit(ctx); err != nil {
 			return err
 		}
 	}
@@ -935,11 +936,11 @@ func (app *Application) resetPool(ctx context.Context, pool ledgerPool) error {
 // foldRemainder rewrites a character's remainder rows from a day on,
 // after a new net worth sample with no new ledger rows.
 func (app *Application) foldRemainder(ctx context.Context, characterID int64, fromDay string) error {
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.DeleteProfitRemainderFrom(ctx, db.DeleteProfitRemainderFromParams{OwnerID: characterID, FromDay: fromDay}); err != nil {
 		return err
@@ -947,7 +948,7 @@ func (app *Application) foldRemainder(ctx context.Context, characterID int64, fr
 	if err := qtx.FoldProfitRemainder(ctx, db.FoldProfitRemainderParams{CharacterID: characterID, FromDay: fromDay}); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // foldCheckpointLag is how far behind the fold's checkpoint trails:
@@ -1077,11 +1078,11 @@ func (app *Application) refoldType(ctx context.Context, pool ledgerPool, typeID,
 	sales = append(sales, salesTail...)
 	planetary, _ := app.queries.IsPlanetaryType(ctx, typeID)
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.DeleteTradeRealizedForPoolTypeFrom(ctx, db.DeleteTradeRealizedForPoolTypeFromParams{PoolKind: pool.kind, PoolID: pool.id, TypeID: typeID, FromDay: cp.UTC().Format("2006-01-02")}); err != nil {
 		return err
@@ -1153,7 +1154,7 @@ func (app *Application) refoldType(ctx context.Context, pool ledgerPool, typeID,
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // poolHoldings is what a pool holds per type now: each member's assets

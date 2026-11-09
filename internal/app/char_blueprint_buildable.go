@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"math"
 	"sort"
@@ -13,6 +12,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // Blueprint buildability (schema 122): for every blueprint an
@@ -160,7 +160,7 @@ func (app *Application) refreshBlueprintBuildable(ctx context.Context, ch db.Cha
 		if fold.Characters == key && !newest.After(fold.ComputedAt) {
 			return // the stored verdicts already cover these snapshots
 		}
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("worker: blueprint buildable fold for user %d: %v", ch.UserID, err)
 		return
 	}

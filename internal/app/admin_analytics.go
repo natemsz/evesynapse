@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"html/template"
@@ -15,6 +14,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -361,7 +361,7 @@ func (b *analyticsBuild) cycleSummary() cycleSummaryData {
 	if b.rng.Hourly {
 		row, err := b.app.queries.StatsCycleSummaryHours(b.ctx, db.StatsCycleSummaryHoursParams{FromTs: b.from, ToTs: b.to})
 		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
+			if !errors.Is(err, pgx.ErrNoRows) {
 				logging.Errorf("admin analytics: cycle summary: %v", err)
 			}
 			return cycleSummaryData{}
@@ -370,7 +370,7 @@ func (b *analyticsBuild) cycleSummary() cycleSummaryData {
 	}
 	row, err := b.app.queries.StatsCycleSummary(b.ctx, db.StatsCycleSummaryParams{FromTs: b.from, ToTs: b.to})
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("admin analytics: cycle summary: %v", err)
 		}
 		return cycleSummaryData{}
@@ -613,7 +613,7 @@ func (b *analyticsBuild) host(v *analyticsView) {
 	b.queries++
 	latest, err := b.app.queries.StatsHostLatest(b.ctx)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("admin analytics: host latest: %v", err)
 		}
 		v.HostNote = "No host samples yet. The worker samples this host once a minute; where /proc is unavailable this panel stays empty."
@@ -1017,7 +1017,7 @@ func (b *analyticsBuild) freshness(v *analyticsView) {
 		add("Killmails", row.UpdatedAt, true, 5*time.Minute, 30*time.Minute)
 	} else {
 		add("Killmails", time.Time{}, false, 0, 0)
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("admin analytics: killfeed state: %v", err)
 		}
 	}

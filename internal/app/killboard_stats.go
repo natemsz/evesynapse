@@ -15,12 +15,12 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 const killStatsSweepBatch = 200
@@ -110,11 +110,11 @@ func (app *Application) foldKillStats(ctx context.Context, killmailID int64) err
 		return nil
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	folded := map[killEntityRef]bool{}
 	feedValue := 0.0
@@ -139,7 +139,7 @@ func (app *Application) foldKillStats(ctx context.Context, killmailID int64) err
 		if _, err := q.MarkKillEntityApplied(ctx, db.MarkKillEntityAppliedParams{
 			KillmailID: killmailID, Kind: e.kind, EntityID: e.id, KillmailTime: k.KillmailTime,
 		}); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
+			if errors.Is(err, pgx.ErrNoRows) {
 				continue
 			}
 			return err
@@ -187,7 +187,7 @@ func (app *Application) foldKillStats(ctx context.Context, killmailID int64) err
 			}
 		}
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // backfillKillStats is the maintenance sweep: public kills stored

@@ -138,7 +138,7 @@ func (s *pagedBookTransport) clearFailures() {
 // exactly where the killed one stopped.
 func secondProcessApp(t *testing.T, conn *sql.DB, pool *pgxpool.Pool, transport http.RoundTripper) *Application {
 	t.Helper()
-	queries := db.New(conn)
+	queries := db.New(pool)
 	sessionManager := scs.New()
 	sessionManager.Store = pgxstore.New(pool)
 	sessionManager.Lifetime = 24 * time.Hour

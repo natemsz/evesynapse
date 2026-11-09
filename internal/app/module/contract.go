@@ -2,7 +2,6 @@ package module
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/go-chi/chi/v5"
 
@@ -1450,9 +1450,9 @@ type Deps interface {
 	// Fragment renders one named template of a page file to HTML, for a
 	// section a module contributes to a core page.
 	Fragment(page, define string, data any) (template.HTML, error)
-	// SQLDB is the database handle, for the few places that need a
+	// PGPool is the database pool, for the few places that need a
 	// transaction.
-	SQLDB() *sql.DB
+	PGPool() *pgxpool.Pool
 	// SealToken and OpenToken encrypt and decrypt a stored token.
 	SealToken(plain string, userID int64, field string) (string, error)
 	OpenToken(sealed string, userID int64, field string) (string, error)

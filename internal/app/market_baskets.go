@@ -175,11 +175,11 @@ func (app *Application) saveBasketItemsByID(ctx context.Context, basketID int64,
 // replaceBasketItems swaps a basket's contents and rebuilds its
 // value history in one transaction.
 func (app *Application) replaceBasketItems(ctx context.Context, basketID int64, order []int64, merged map[int64]int64) error {
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.DeleteMarketBasketItems(ctx, basketID); err != nil {
 		return err
@@ -198,7 +198,7 @@ func (app *Application) replaceBasketItems(ctx context.Context, basketID int64, 
 	if err := storeBasketFigures(ctx, tx, []int64{basketID}, time.Now().UTC()); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // basketDay is the stored day key for t.
@@ -207,11 +207,11 @@ func basketDay(t time.Time) string { return t.UTC().Format("2006-01-02") }
 // rebuildBasketValues replaces one basket's value history and its
 // stored figures from its region's stored rows, in one transaction.
 func (app *Application) rebuildBasketValues(ctx context.Context, basketID int64) error {
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.DeleteMarketBasketValues(ctx, basketID); err != nil {
 		return err
@@ -222,5 +222,5 @@ func (app *Application) rebuildBasketValues(ctx context.Context, basketID int64)
 	if err := storeBasketFigures(ctx, tx, []int64{basketID}, time.Now().UTC()); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }

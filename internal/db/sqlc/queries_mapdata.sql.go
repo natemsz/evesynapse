@@ -8,8 +8,6 @@ package db
 import (
 	"context"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const listAccountKillsBySystem = `-- name: ListAccountKillsBySystem :many
@@ -50,7 +48,7 @@ type ListAccountKillsBySystemRow struct {
 // they took, and the ISK of each by our appraisal (zKillboard's when
 // ours is not in yet). Their own private kills count: these are theirs.
 func (q *Queries) ListAccountKillsBySystem(ctx context.Context, arg ListAccountKillsBySystemParams) ([]ListAccountKillsBySystemRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAccountKillsBySystem, pq.Array(arg.CharacterIds), arg.Since)
+	rows, err := q.db.Query(ctx, listAccountKillsBySystem, arg.CharacterIds, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -68,9 +66,6 @@ func (q *Queries) ListAccountKillsBySystem(ctx context.Context, arg ListAccountK
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -94,7 +89,7 @@ type ListAccountScanSystemsRow struct {
 
 // An account's scans that name a system, newest first.
 func (q *Queries) ListAccountScanSystems(ctx context.Context, userID int64) ([]ListAccountScanSystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAccountScanSystems, userID)
+	rows, err := q.db.Query(ctx, listAccountScanSystems, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -111,9 +106,6 @@ func (q *Queries) ListAccountScanSystems(ctx context.Context, userID int64) ([]L
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -141,7 +133,7 @@ type ListAuthoredIntelBySystemRow struct {
 
 // The systems an account posted intel reports about since a moment.
 func (q *Queries) ListAuthoredIntelBySystem(ctx context.Context, arg ListAuthoredIntelBySystemParams) ([]ListAuthoredIntelBySystemRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAuthoredIntelBySystem, arg.UserID, arg.Since)
+	rows, err := q.db.Query(ctx, listAuthoredIntelBySystem, arg.UserID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -153,9 +145,6 @@ func (q *Queries) ListAuthoredIntelBySystem(ctx context.Context, arg ListAuthore
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -184,7 +173,7 @@ type ListLocationSystemsRow struct {
 // The system each of some locations is in: NPC stations from the SDE,
 // player structures from what structure resolution learned.
 func (q *Queries) ListLocationSystems(ctx context.Context, ids []int64) ([]ListLocationSystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLocationSystems, pq.Array(ids))
+	rows, err := q.db.Query(ctx, listLocationSystems, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -196,9 +185,6 @@ func (q *Queries) ListLocationSystems(ctx context.Context, ids []int64) ([]ListL
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

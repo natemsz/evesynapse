@@ -2,7 +2,6 @@ package publicfits
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -511,7 +511,7 @@ func (app *page) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := app.queries.GetPublicFitting(ctx, fitID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			http.NotFound(w, r)
 			return
 		}
@@ -566,7 +566,7 @@ func (app *page) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
 	if userID > 0 {
 		if mine, err := app.queries.GetFitRating(ctx, db.GetFitRatingParams{FitID: fitID, UserID: userID}); err == nil {
 			view.MyStars = int64(mine.Stars)
-		} else if !errors.Is(err, sql.ErrNoRows) {
+		} else if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("public fit %d: own rating: %v", fitID, err)
 		}
 	}
@@ -672,20 +672,20 @@ func (app *page) handlePublicFitRate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Rate 1 to 5 stars.", http.StatusBadRequest)
 		return
 	}
-	tx, err := app.deps.SQLDB().BeginTx(ctx, nil)
+	tx, err := app.deps.PGPool().Begin(ctx)
 	if err != nil {
 		logging.Errorf("public fit %d: rate tx: %v", fitID, err)
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
 		return
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	// The fit row is locked first, so ratings of one fit never
 	// interleave, and the aggregates are then recounted from the
 	// rating rows rather than moved by a delta. However often one
 	// rating is posted, the fit counts it once.
 	if _, err := qtx.LockPublicFitForRating(ctx, fitID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			http.NotFound(w, r)
 			return
 		}
@@ -703,7 +703,7 @@ func (app *page) handlePublicFitRate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
 		return
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		logging.Errorf("public fit %d: rate commit: %v", fitID, err)
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
 		return

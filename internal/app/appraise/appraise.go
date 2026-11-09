@@ -67,11 +67,14 @@ type snapLine struct {
 	// The line's pricing identity, kept so a stored snapshot
 	// can be re-priced line-faithfully (the hub-comparison
 	// strip): a copy re-prices as a copy or not at all, an
-	// abyssal line from its item's estimate. Snapshots stored
-	// before these fields existed leave them zero.
+	// improved original from its research median, an abyssal
+	// line from its item's estimate. Snapshots stored before
+	// these fields existed leave them zero.
 	ItemID int64 `json:"item_id,omitempty"`
 	Copy   bool  `json:"copy,omitempty"`
 	Runs   int64 `json:"runs,omitempty"`
+	ME     int64 `json:"me,omitempty"`
+	TE     int64 `json:"te,omitempty"`
 	// SourceRegion is the region whose swept book spoke for
 	// the line's typical price when it was not the pricing
 	// basis's region -- the global market's book for a
@@ -205,14 +208,18 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 	priceLines := make([]module.AppraisalLine, 0, len(agg))
 	for _, ln := range agg {
 		pl := module.AppraisalLine{TypeID: ln.TypeID, Quantity: ln.Qty, ItemID: ln.ItemID, Included: true}
-		if ln.Facts.HasFacts && ln.Facts.Copy {
-			// A pasted copy prices as a copy or not at all:
-			// its facts ride to the core, whose copy branch
-			// never touches the original's type-level prices.
-			// Runs is 0 when the paste stated none, which
-			// keys no stored median.
-			pl.BlueprintCopy = true
-			pl.Runs = ln.Facts.Runs
+		if ln.Facts.HasFacts {
+			// Blueprint facts ride to the core for copies
+			// and improved originals alike: a copy prices
+			// from its copy median, a researched original
+			// from its exact (type, ME, TE) research
+			// median -- each never touching the other's
+			// figure. Runs is 0 when the paste stated
+			// none, which keys no copy median.
+			if ln.Facts.Copy {
+				pl.BlueprintCopy = true
+				pl.Runs = ln.Facts.Runs
+			}
 			pl.MaterialEfficiency = ln.Facts.ME
 			pl.TimeEfficiency = ln.Facts.TE
 		}
@@ -250,6 +257,31 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 			}
 		}
 	}
+	// The stored medians behind any researched-original
+	// lines, in one batched read, so an improved original's
+	// note can say what its price stands on -- the same
+	// basis wording habit as the copy lines.
+	researchSamples := map[string]int64{}
+	{
+		var researchTypes []int64
+		seenRes := map[int64]bool{}
+		for _, ln := range agg {
+			if ln.Facts.HasFacts && !ln.Facts.Copy &&
+				(ln.Facts.ME > 0 || ln.Facts.TE > 0) && !seenRes[ln.TypeID] {
+				seenRes[ln.TypeID] = true
+				researchTypes = append(researchTypes, ln.TypeID)
+			}
+		}
+		if len(researchTypes) > 0 {
+			rows, err := app.queries.ListBlueprintResearchMediansForTypes(ctx, researchTypes)
+			if err != nil {
+				return nil, err
+			}
+			for _, row := range rows {
+				researchSamples[fmt.Sprintf("%d/%d/%d", row.TypeID, row.Me, row.Te)] = row.SampleCount
+			}
+		}
+	}
 	// Unit volumes from the SDE physics rows, in one batched
 	// read: the line and total volumes ride the snapshot.
 	volumes := map[int64]float64{}
@@ -279,9 +311,18 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 	for i, ln := range agg {
 		sl := snapLine{TypeID: ln.TypeID, Name: ln.Name, Qty: ln.Qty, Tier: module.AppraisalTierUnpriced, Note: ln.Note}
 		sl.ItemID = ln.ItemID
-		if ln.Facts.HasFacts && ln.Facts.Copy {
-			sl.Copy = true
-			sl.Runs = ln.Facts.Runs
+		if ln.Facts.HasFacts {
+			if ln.Facts.Copy {
+				sl.Copy = true
+				sl.Runs = ln.Facts.Runs
+			} else {
+				// An improved original keeps its research
+				// level, so a stored snapshot re-prices
+				// it from its research median -- never
+				// from the market's unresearched figure.
+				sl.ME = ln.Facts.ME
+				sl.TE = ln.Facts.TE
+			}
 		}
 		sl.UnitVolume = volumes[ln.TypeID]
 		sl.LineVolume = sl.UnitVolume * float64(ln.Qty)
@@ -294,6 +335,11 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 		if sl.Priced && sl.Tier == module.AppraisalTierCopyMedian {
 			if n, ok := copySamples[fmt.Sprintf("%d/%d", ln.TypeID, ln.Facts.Runs)]; ok {
 				sl.Note += fmt.Sprintf(" · median of %s copy listings", esi.FormatInt(n))
+			}
+		}
+		if sl.Priced && sl.Tier == module.AppraisalTierResearchMedian {
+			if n, ok := researchSamples[fmt.Sprintf("%d/%d/%d", ln.TypeID, ln.Facts.ME, ln.Facts.TE)]; ok {
+				sl.Note += fmt.Sprintf(" · median of %s researched listings", esi.FormatInt(n))
 			}
 		}
 		if sl.Priced {
@@ -1037,7 +1083,7 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 		v.Lines = append(v.Lines, rl)
 	}
 	var parts []string
-	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierTypicalBuy, module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierFallback} {
+	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierTypicalBuy, module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierResearchMedian, module.AppraisalTierFallback} {
 		if n := counts[tier] - globalCounts[tier]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%d × %s", n, tierLabelWithBasis(tier, basis)))
 		}
@@ -1131,8 +1177,9 @@ type hubTotal struct {
 // typical sell (stored data only, one batched pass per hub)
 // and attaches the comparison strip to a rendered result.
 // Lines re-price with their pricing identity intact: a copy
-// counts its copy median (or nothing), an abyssal line its
-// item estimate — never the original type's market price.
+// counts its copy median (or nothing), an improved original
+// its research median, an abyssal line its item estimate —
+// never the original type's market price.
 func (app *page) attachHubStrip(ctx context.Context, snap *snapshot, v *resultView) {
 	if snap == nil || len(snap.Lines) == 0 {
 		return
@@ -1153,6 +1200,7 @@ func (app *page) attachHubStrip(ctx context.Context, snap *snapshot, v *resultVi
 		lines = append(lines, module.AppraisalLine{
 			TypeID: ln.TypeID, Quantity: ln.Qty, ItemID: ln.ItemID, Included: true,
 			BlueprintCopy: ln.Copy, Runs: ln.Runs,
+			MaterialEfficiency: ln.ME, TimeEfficiency: ln.TE,
 		})
 	}
 	basis := snap.Basis.basis()

@@ -517,6 +517,8 @@ func tierLabel(tier string) string {
 		return "Our abyssal estimate"
 	case module.AppraisalTierCopyMedian:
 		return "Our copy median"
+	case module.AppraisalTierResearchMedian:
+		return "Our research median"
 	case module.AppraisalTierFallback:
 		return "Fuzzwork aggregate"
 	}
@@ -2800,6 +2802,9 @@ func (app *mod) panelFromDetail(dv *detailView, row db.PubContract, pin pinSearc
 			case l.Tier == module.AppraisalTierCopyMedian:
 				pl.BasisText = "Our copy median: " + formatShortISK(l.LineValueNum)
 				pl.BasisNote = l.TierNote
+			case l.Tier == module.AppraisalTierResearchMedian:
+				pl.BasisText = "Our research median: " + formatShortISK(l.LineValueNum)
+				pl.BasisNote = l.TierNote
 			case l.Tier == module.AppraisalTierEstimate:
 				pl.BasisText = "Estimated sell: " + formatShortISK(l.LineValueNum)
 			case l.Tier == module.AppraisalTierAbyssal:
@@ -2818,13 +2823,13 @@ func (app *mod) panelFromDetail(dv *detailView, row db.PubContract, pin pinSearc
 	out.Lines = pinMatchedLines(out.Lines, pin)
 	out.SourceLabel = drawerSourceLabel(row.Type, tiers)
 
-	// The execution summary: the effective ask (the reward
+	// The execution summary: the effective cost (the reward
 	// for a courier, the standing bid for an auction, else
-	// the price), our value where one is stored, and the
-	// spread over the full effective cost -- the ask plus a
-	// fully priced wanted side, the same cost the deal
-	// ratio judges. A courier's summary sets its reward
-	// against its collateral and shows no spread: collateral
+	// the price -- plus a fully priced wanted side on an
+	// exchange, the same cost the deal ratio judges), our
+	// value where one is stored, and the spread over that
+	// cost. A courier's summary sets its reward against
+	// its collateral and shows no spread: collateral
 	// minus reward is not a deal figure.
 	effAsk := row.Price
 	switch row.Type {
@@ -2836,21 +2841,30 @@ func (app *mod) panelFromDetail(dv *detailView, row db.PubContract, pin pinSearc
 			effAsk = dv.TopBidNum
 		}
 	}
-	out.SumAsking = formatShortISK(effAsk)
-	if row.Type != "courier" && row.PricedAt.Valid && row.PricedLines > 0 {
-		out.SumValue = formatShortISK(row.OfferedValue)
-		cost, costKnown := effAsk, true
-		if len(dv.Wanted) > 0 {
-			for _, l := range dv.Wanted {
-				if l.LineValue == "" {
-					costKnown = false
-					break
-				}
-			}
-			if costKnown {
-				cost += row.WantValue
+	// The full cost the buyer hands over: the ask plus the
+	// valued wanted side. A wanted side that is not fully
+	// priced leaves the true cost unknowable, so the asking
+	// line falls back to the ISK alone and no spread shows
+	// rather than one that omits real cost.
+	cost, costKnown := effAsk, true
+	if row.Type != "courier" && len(dv.Wanted) > 0 {
+		for _, l := range dv.Wanted {
+			if l.LineValue == "" {
+				costKnown = false
+				break
 			}
 		}
+		if costKnown {
+			cost += row.WantValue
+		}
+	}
+	if costKnown {
+		out.SumAsking = formatShortISK(cost)
+	} else {
+		out.SumAsking = formatShortISK(effAsk)
+	}
+	if row.Type != "courier" && row.PricedAt.Valid && row.PricedLines > 0 {
+		out.SumValue = formatShortISK(row.OfferedValue)
 		if costKnown && row.OfferedValue != cost {
 			// The spread runs both ways: a value under
 			// the cost is a shortfall, signed and painted
@@ -2924,7 +2938,7 @@ func drawerSourceLabel(contractType string, tiers map[string]bool) string {
 	if typical {
 		parts = append(parts, "Forge Sweep")
 	}
-	if tiers[module.AppraisalTierCopyMedian] {
+	if tiers[module.AppraisalTierCopyMedian] || tiers[module.AppraisalTierResearchMedian] {
 		if len(parts) == 0 && len(tiers) == 1 {
 			parts = append(parts, "Contract History Est.")
 		} else {

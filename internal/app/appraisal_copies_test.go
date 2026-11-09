@@ -390,6 +390,83 @@ func TestContractDetailCopyMedianLabel(t *testing.T) {
 		"Our copy median", "median of 12 copy listings")
 }
 
+// TestAppraisePublicContractsResearchedOriginalEndToEnd runs
+// the worker loop for an improved original: corpus -> median
+// pass -> appraisal pass -> stored rows. The researched BPO
+// prices from its research median while an unresearched
+// original of a type with no median falls back to its
+// typical, proving the research tier applies to improved
+// originals only.
+func TestAppraisePublicContractsResearchedOriginalEndToEnd(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 404, Body: http.NoBody, Header: make(http.Header)}, nil
+	}))
+	ctx := context.Background()
+	now := time.Now().UTC()
+	contract, item := seedCopyCorpus(t, conn)
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
+	}
+	// The trap: a fresh typical the research price must not
+	// leak from (and the fallback for the unresearched one).
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES
+		(10000002, 17483, 1000000, $1)`, now.Add(-time.Hour))
+	// Five single-line researched originals (ME 10, TE 20):
+	// the median of 1/2/3/4/5M is 3M.
+	for i, ask := range []float64{1_000_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000} {
+		id := int64(8301 + i)
+		contract(id, "item_exchange", ask)
+		item(int64(300+i), id, 17483, nil, true, false, 1)
+	}
+	if n := app.refreshBlueprintCopyMedians(ctx); n != 1 {
+		t.Fatalf("median pass stored %d rows, want 1", n)
+	}
+
+	// The targets: an improved original asked at 4M, and a
+	// bare original (no ME/TE) asked at 900K.
+	contract(9301, "item_exchange", 4_000_000)
+	item(310, 9301, 17483, nil, true, false, 1)
+	contract(9302, "item_exchange", 900_000)
+	exec(`INSERT INTO pub_contract_items (record_id, contract_id, type_id, quantity,
+		is_included, is_blueprint_copy, runs, material_efficiency, time_efficiency)
+		VALUES (311, 9302, 17483, 1, true, false, NULL, 0, 0)`)
+
+	app.appraisePublicContracts(ctx)
+
+	items, err := q.ListPublicContractItems(ctx, 9301)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("read 9301 items: %v (%d)", err, len(items))
+	}
+	if !items[0].UnitPrice.Valid || items[0].UnitPrice.Float64 != 3_000_000 ||
+		items[0].PriceTier != module.AppraisalTierResearchMedian {
+		t.Errorf("9301 line = %v/%q, want the 3000000 research median",
+			items[0].UnitPrice, items[0].PriceTier)
+	}
+	c1, err := q.GetPublicContract(ctx, 9301)
+	if err != nil {
+		t.Fatalf("read 9301: %v", err)
+	}
+	if c1.OfferedValue != 3_000_000 || c1.TierMix != "research_median:1" {
+		t.Errorf("9301 totals = %v mix %q, want 3000000 research_median:1", c1.OfferedValue, c1.TierMix)
+	}
+
+	items2, err := q.ListPublicContractItems(ctx, 9302)
+	if err != nil || len(items2) != 1 {
+		t.Fatalf("read 9302 items: %v (%d)", err, len(items2))
+	}
+	if !items2[0].UnitPrice.Valid || items2[0].UnitPrice.Float64 != 1_000_000 ||
+		items2[0].PriceTier != module.AppraisalTierTypical {
+		t.Errorf("9302 line = %v/%q, want the 1000000 typical", items2[0].UnitPrice, items2[0].PriceTier)
+	}
+
+	_, body := getAnon(t, app, "/contracts/search/9301/panel")
+	mustContain(t, "panel researched original", body,
+		"Our research median", "3.0M ISK")
+}
+
 // TestAppraisalToolBlueprintCopyMedian covers the paste
 // appraiser: a pasted copy prices from its stored median
 // under the copy label with its sample in the note; the
@@ -426,5 +503,42 @@ Rifter Blueprint`}})
 	// placeholder legitimately names "Tritanium x 1,000,000".
 	if strings.Contains(body, "1,000,000.00") {
 		t.Error("a copy with no median was priced at its original's typical")
+	}
+}
+
+// TestAppraisalToolResearchedOriginalMedian pins the improved
+// original to the same treatment copies get: a pasted BPO
+// carrying ME and TE prices from the stored research median
+// for its exact (type, ME, TE) -- never from the market's
+// unresearched figure -- while the bare original beside it
+// prices at its typical as before.
+func TestAppraisalToolResearchedOriginalMedian(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if err := q.InsertBlueprintResearchMedian(ctx, db.InsertBlueprintResearchMedianParams{
+		TypeID: 7001, Me: 10, Te: 20, MedianPrice: 2_500_000, SampleCount: 12, ComputedAt: now.Add(-time.Hour),
+	}); err != nil {
+		t.Fatalf("seed research median: %v", err)
+	}
+
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {`Rifter Blueprint (BPO, ME 10, TE 20)
+Rifter Blueprint`}})
+	mustContain(t, "paste researched original median", body,
+		"Our research median", "2,500,000.00",
+		"BPO · ME 10 · TE 20 · median of 12 researched listings",
+		"1,000,000.00", "Our Forge typical",
+		"Blueprint, priced as an original",
+		"Priced 2 of 2 lines", "3,500,000.00")
+
+	// No median at its research level: the improved
+	// original falls back to the market figure and says so.
+	body, _, _ = postAnonAppraisal(t, app, url.Values{"items": {`Rifter Blueprint (BPO, ME 9, TE 18)`}})
+	mustContain(t, "paste researched original without a median", body,
+		"1,000,000.00", "Priced 1 of 1 lines")
+	if strings.Contains(body, "Our research median") {
+		t.Error("an original with no research median was priced as a researched one")
 	}
 }

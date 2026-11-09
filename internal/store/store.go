@@ -52,11 +52,25 @@ func open(ctx context.Context, dsn string, poolSize int) (*sql.DB, *pgxpool.Pool
 	}
 	poolCfg.AfterConnect = readTimesInUTC
 	poolCfg.MaxConns = int32(poolSize)
+	// Both handles carry application queries, so both log slow ones
+	// (tracer.go), each with its own pool's load.
+	poolTracer := &slowQueryTracer{handle: "pgxpool"}
+	poolCfg.ConnConfig.Tracer = poolTracer
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return nil, nil, err
 	}
+	poolTracer.setStats(func() handleStats {
+		st := pool.Stat()
+		return handleStats{inUse: int(st.AcquiredConns()), idle: int(st.IdleConns()), max: int(st.MaxConns())}
+	})
+	sqlTracer := &slowQueryTracer{handle: "database/sql"}
+	cfg.Tracer = sqlTracer
 	conn := stdlib.OpenDB(*cfg, stdlib.OptionAfterConnect(readTimesInUTC))
+	sqlTracer.setStats(func() handleStats {
+		st := conn.Stats()
+		return handleStats{inUse: st.InUse, idle: st.Idle, max: st.MaxOpenConnections}
+	})
 	SizePool(conn, DefaultPoolSize)
 	if err := conn.PingContext(ctx); err != nil {
 		conn.Close()

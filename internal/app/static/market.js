@@ -339,6 +339,9 @@
     if (!heights.length) return;
     var locked = Math.max.apply(null, heights) + "px";
     for (var j = 0; j < panes.length; j++) {
+      // Skip a pane already at this lock: setting it again only
+      // churns layout observers for no new information.
+      if (panes[j].style.maxHeight === locked && panes[j].style.minHeight === locked) continue;
       panes[j].style.minHeight = locked;
       panes[j].style.maxHeight = locked;
     }
@@ -439,5 +442,15 @@
     clearTimeout(paneResize);
     paneResize = setTimeout(sizeOrderBookPanes, 150);
   });
+  window.addEventListener("load", sizeOrderBookPanes);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeOrderBookPanes);
+  // Row heights settle after the first measure (webfonts arrive,
+  // the sidebar lands, wrapping changes): watch the tables and
+  // re-lock whenever their height moves. Setting the lock never
+  // moves a table — it only clips its box — and the value guard
+  // above absorbs the one extra pass a new scrollbar causes.
+  if ("ResizeObserver" in window) {
+    var paneWatch = new ResizeObserver(function () { sizeOrderBookPanes(); });
+    document.querySelectorAll(".mkt-book-pane > .tw table").forEach(function (t) { paneWatch.observe(t); });
+  }
 })();

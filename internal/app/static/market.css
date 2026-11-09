@@ -289,6 +289,10 @@
   scrollbar-width: thin;
   scrollbar-color: var(--muted) transparent;
 }
+/* Every row stands two lines tall, wrapped or not: with uniform
+   rows ten entries always fill the same height on both sides,
+   and the script's lock lands on the same count everywhere. */
+.mkt-book-table tbody tr { height: 3.4rem; }
 .mkt-book-pane > .tw::-webkit-scrollbar { width: 0.45rem; height: 0.45rem; }
 .mkt-book-pane > .tw::-webkit-scrollbar-track { background: transparent; }
 .mkt-book-pane > .tw::-webkit-scrollbar-thumb { background: var(--muted); border-radius: var(--r-xs); }

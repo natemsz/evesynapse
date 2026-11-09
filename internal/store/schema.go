@@ -801,6 +801,22 @@ var pgKillAndWantIndexesSchema string
 //go:embed schema_pg/130_station_owners.sql
 var pgStationOwnersSchema string
 
+// Step 131: killboard statistics: per entity, per day kill
+// aggregates folded at ingest, plus the stored board headline.
+//
+//go:embed schema_pg/131_killboard_stats.sql
+var pgKillboardStatsSchema string
+
+// Step 132: the kill entity feed the entity boards page through.
+//
+//go:embed schema_pg/132_kill_entity_feed.sql
+var pgKillEntityFeedSchema string
+
+// Step 133: public contract corpus statistics, stored by the sweep.
+//
+//go:embed schema_pg/133_pubcontract_corpus_stats.sql
+var pgPubContractCorpusStatsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -959,6 +975,9 @@ func schemaSteps() []schemaStep {
 		{127, "kill_involvement", pgKillInvolvementSchema, ""},
 		{129, "kill_and_want_indexes", pgKillAndWantIndexesSchema, ""},
 		{130, "station_owners", pgStationOwnersSchema, ""},
+		{131, "killboard_stats", pgKillboardStatsSchema, ""},
+		{132, "kill_entity_feed", pgKillEntityFeedSchema, ""},
+		{133, "pubcontract_corpus_stats", pgPubContractCorpusStatsSchema, ""},
 	}
 }
 

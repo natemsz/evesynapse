@@ -302,6 +302,13 @@ func TestContractSearchSweepTelemetry(t *testing.T) {
 		 VALUES (10000002, 0, 3, 7, $1)`, time.Now().Add(-4*time.Minute-30*time.Second).UTC()); err != nil {
 		t.Fatalf("seed sweep state: %v", err)
 	}
+	// The sweep stores the corpus size it counts; the page
+	// only reads the stored figure.
+	if _, err := conn.ExecContext(ctx,
+		`INSERT INTO pub_contract_corpus_stats (id, open_contracts, computed_at) VALUES (1, 9, $1)`,
+		time.Now().UTC()); err != nil {
+		t.Fatalf("seed corpus stats: %v", err)
+	}
 
 	// The subtab row carries the readout: the freshest
 	// sweep stamp in the house age words and the stored

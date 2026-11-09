@@ -447,6 +447,13 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 		if err := app.priceKillLines(ctx, km); err != nil {
 			logging.Warnf("killboard: price kill %d at ingest: %v", km.KillmailID, err)
 		}
+	} else if public {
+		// A kill already stored in private shape is now public:
+		// fold it from its stored row. The applied marker keeps
+		// this to once per entity.
+		if err := app.foldKillStats(ctx, km.KillmailID); err != nil {
+			logging.Warnf("killboard stats: fold public kill %d: %v", km.KillmailID, err)
+		}
 	}
 	return inserted, nil
 }
@@ -497,6 +504,12 @@ func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, k
 		return err
 	}
 	app.noteRecentKillPrice(killmailID, total, dropped, float64(cov), now)
+	// The priced value is final for this kill: fold it into the
+	// stored entity statistics the pages read. A fold failure is
+	// left for the maintenance sweep, never failed pricing.
+	if err := app.foldKillStats(ctx, killmailID); err != nil {
+		logging.Warnf("killboard stats: fold kill %d at pricing: %v", killmailID, err)
+	}
 	return nil
 }
 
@@ -538,6 +551,9 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 	} else {
 		logging.Errorf("killboard: list ESI killmails: %v", err)
 	}
+	app.backfillKillStats(ctx)
+	app.backfillMissingKillFeeds(ctx)
+	app.refreshKillboardHeadline(ctx)
 	app.offerPilotRestorations(ctx)
 	app.warmKillNames(ctx)
 	app.resolveNotedNames(ctx)

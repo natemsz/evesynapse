@@ -455,6 +455,16 @@ func completePublicContractRegionTx(ctx context.Context, q *db.Queries, regionID
 	if err := prunePublicContractDepartures(ctx, q, regionID, now); err != nil {
 		return err
 	}
+	// The live corpus size the search page shows is counted
+	// here, once per completed region cycle, and stored: a
+	// render reads the stored figure and never counts.
+	if n, err := q.CountLivePublicContracts(ctx); err != nil {
+		return fmt.Errorf("count live contracts: %w", err)
+	} else if err := q.UpsertPublicContractCorpusStats(ctx, db.UpsertPublicContractCorpusStatsParams{
+		OpenContracts: n, ComputedAt: now,
+	}); err != nil {
+		return fmt.Errorf("store corpus stats: %w", err)
+	}
 	if err := q.RefreshAbyssalSightingsForRegionCycle(ctx, db.RefreshAbyssalSightingsForRegionCycleParams{
 		RegionID: regionID, LastCycle: cycle, LastSeenAt: now,
 	}); err != nil {

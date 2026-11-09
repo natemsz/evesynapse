@@ -379,6 +379,11 @@ func TestKillboardScopedStats(t *testing.T) {
 		VALUES (800005, $1, 30000142, 10000002, 9201, 98201, 99201, 22456, 1, 0, 0, 0, false, true, 5000000, 5000000, 'zkill', true, $1)`,
 		now.Add(-48*time.Hour))
 
+	// Stored kills reach the pages through the worker pass:
+	// the fold into the daily aggregates and the headline
+	// refresh run here, as killboardMaintenance runs them.
+	app.backfillKillStats(ctx)
+	app.refreshKillboardHeadline(ctx)
 	get := func(path string) string {
 		t.Helper()
 		rec := httptest.NewRecorder()
@@ -450,14 +455,11 @@ func TestKillboardScopedStats(t *testing.T) {
 
 	// With a stored activity profile, the character board reads
 	// its kills and losses from the profile; solo kills and ISK
-	// destroyed come from the all-time board read over the
-	// pilot's involvement (the 10M solo kill and the 30M kill
+	// destroyed come from the all-time stored aggregates (the
+	// 10M solo kill and the 30M kill
 	// seeded above), and the biggest kill stays the 30M one.
 	exec(`INSERT INTO pilot_activity_profiles (character_id, backfilled_at, updated_at, kills, losses, final_blows, gang_total, gang_samples, usual_ship_type_id, last_active_at)
 		VALUES ($1, $2, $3, 137, 42, 98, 480, 137, 22456, $3)`, pilot, now.Add(-24*time.Hour), now)
-	app.killScopedStatsMu.Lock()
-	app.killScopedStatsMemo = nil
-	app.killScopedStatsMu.Unlock()
 	profiled := get("/intel/kills/?character=9201")
 	for _, want := range []string{
 		`aria-label="Pilot #9201: every recorded kill and loss`,

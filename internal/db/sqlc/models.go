@@ -960,6 +960,52 @@ type KillDetail struct {
 	StoredAt   time.Time `json:"stored_at"`
 }
 
+type KillEntityApplied struct {
+	KillmailID   int64     `json:"killmail_id"`
+	Kind         string    `json:"kind"`
+	EntityID     int64     `json:"entity_id"`
+	KillmailTime time.Time `json:"killmail_time"`
+}
+
+type KillEntityDaily struct {
+	Day               time.Time `json:"day"`
+	Kind              string    `json:"kind"`
+	EntityID          int64     `json:"entity_id"`
+	Kills             int64     `json:"kills"`
+	Solo              int64     `json:"solo"`
+	Losses            int64     `json:"losses"`
+	IskKilled         float64   `json:"isk_killed"`
+	IskLost           float64   `json:"isk_lost"`
+	BiggestKillmailID int64     `json:"biggest_killmail_id"`
+	BiggestValue      float64   `json:"biggest_value"`
+}
+
+type KillEntityDailyShip struct {
+	Day        time.Time `json:"day"`
+	Kind       string    `json:"kind"`
+	EntityID   int64     `json:"entity_id"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	Flown      int64     `json:"flown"`
+	Lost       int64     `json:"lost"`
+}
+
+type KillEntityDailySystem struct {
+	Day      time.Time `json:"day"`
+	Kind     string    `json:"kind"`
+	EntityID int64     `json:"entity_id"`
+	SystemID int64     `json:"system_id"`
+	Events   int64     `json:"events"`
+}
+
+type KillEntityFeed struct {
+	Kind         string    `json:"kind"`
+	EntityID     int64     `json:"entity_id"`
+	KillmailTime time.Time `json:"killmail_time"`
+	KillmailID   int64     `json:"killmail_id"`
+	Solo         bool      `json:"solo"`
+	Value        float64   `json:"value"`
+}
+
 type KillInvolvement struct {
 	KillmailID    int64 `json:"killmail_id"`
 	CharacterID   int64 `json:"character_id"`
@@ -971,6 +1017,22 @@ type KillLinePrice struct {
 	KillmailID int64   `json:"killmail_id"`
 	TypeID     int64   `json:"type_id"`
 	UnitPrice  float64 `json:"unit_price"`
+}
+
+type KillboardHeadline struct {
+	ID                int32     `json:"id"`
+	KillsHour         int64     `json:"kills_hour"`
+	KillsDay          int64     `json:"kills_day"`
+	IskDay            float64   `json:"isk_day"`
+	BiggestKillmailID int64     `json:"biggest_killmail_id"`
+	ComputedAt        time.Time `json:"computed_at"`
+}
+
+type KillboardTop struct {
+	Kind     string  `json:"kind"`
+	EntityID int64   `json:"entity_id"`
+	Kills    int64   `json:"kills"`
+	Isk      float64 `json:"isk"`
 }
 
 type KillfeedState struct {
@@ -1799,6 +1861,12 @@ type PubContractBid struct {
 	ContractID int64     `json:"contract_id"`
 	Amount     float64   `json:"amount"`
 	DateBid    time.Time `json:"date_bid"`
+}
+
+type PubContractCorpusStat struct {
+	ID            int32     `json:"id"`
+	OpenContracts int64     `json:"open_contracts"`
+	ComputedAt    time.Time `json:"computed_at"`
 }
 
 type PubContractItem struct {

@@ -168,95 +168,6 @@ WHERE k.public AND k.ship_type_id = sqlc.arg(ship_type_id)::bigint
 ORDER BY k.killmail_time DESC, k.killmail_id DESC
 LIMIT sqlc.arg(max_rows)::bigint;
 
--- An entity's kills and losses: the victim side from kills, the
--- attacker side from kill_involvement (permanent).
--- Each side asks for its own newest page through its own index (the
--- victim side's (victim_*_id, killmail_time), the attacker side's
--- kill_involvement index), and the two pages merge. One query with
--- "victim = id OR killmail_id IN (attackers)" defeated both indexes
--- and walked every kill newest first: 70 ms for a pilot with one
--- kill, against 0.4 ms this way, and never slower for busy ones.
--- name: ListKillsByCharacter :many
-WITH involvement_ids AS MATERIALIZED (
-    SELECT a.killmail_id FROM kill_involvement a
-    WHERE a.character_id = sqlc.arg(entity_id)::bigint
-)
-SELECT * FROM (
-    (SELECT k.* FROM kills k
-     WHERE k.victim_character_id = sqlc.arg(entity_id)::bigint
-       AND k.public
-       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
-       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
-       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
-     ORDER BY k.killmail_time DESC, k.killmail_id DESC
-     LIMIT sqlc.arg(max_rows)::bigint)
-    UNION
-    (SELECT k.* FROM kills k
-     JOIN involvement_ids i ON i.killmail_id = k.killmail_id
-     WHERE k.public
-       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
-       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
-       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
-     ORDER BY k.killmail_time DESC, k.killmail_id DESC
-     LIMIT sqlc.arg(max_rows)::bigint)
-) u
-ORDER BY u.killmail_time DESC, u.killmail_id DESC
-LIMIT sqlc.arg(max_rows)::bigint;
-
--- name: ListKillsByCorporation :many
-WITH involvement_ids AS MATERIALIZED (
-    SELECT a.killmail_id FROM kill_involvement a
-    WHERE a.corporation_id = sqlc.arg(entity_id)::bigint
-)
-SELECT * FROM (
-    (SELECT k.* FROM kills k
-     WHERE k.victim_corporation_id = sqlc.arg(entity_id)::bigint
-       AND k.public
-       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
-       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
-       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
-     ORDER BY k.killmail_time DESC, k.killmail_id DESC
-     LIMIT sqlc.arg(max_rows)::bigint)
-    UNION
-    (SELECT k.* FROM kills k
-     JOIN involvement_ids i ON i.killmail_id = k.killmail_id
-     WHERE k.public
-       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
-       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
-       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
-     ORDER BY k.killmail_time DESC, k.killmail_id DESC
-     LIMIT sqlc.arg(max_rows)::bigint)
-) u
-ORDER BY u.killmail_time DESC, u.killmail_id DESC
-LIMIT sqlc.arg(max_rows)::bigint;
-
--- name: ListKillsByAlliance :many
-WITH involvement_ids AS MATERIALIZED (
-    SELECT a.killmail_id FROM kill_involvement a
-    WHERE a.alliance_id = sqlc.arg(entity_id)::bigint
-)
-SELECT * FROM (
-    (SELECT k.* FROM kills k
-     WHERE k.victim_alliance_id = sqlc.arg(entity_id)::bigint
-       AND k.public
-       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
-       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
-       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
-     ORDER BY k.killmail_time DESC, k.killmail_id DESC
-     LIMIT sqlc.arg(max_rows)::bigint)
-    UNION
-    (SELECT k.* FROM kills k
-     JOIN involvement_ids i ON i.killmail_id = k.killmail_id
-     WHERE k.public
-       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
-       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
-       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
-     ORDER BY k.killmail_time DESC, k.killmail_id DESC
-     LIMIT sqlc.arg(max_rows)::bigint)
-) u
-ORDER BY u.killmail_time DESC, u.killmail_id DESC
-LIMIT sqlc.arg(max_rows)::bigint;
-
 -- name: GetPublicKill :one
 SELECT * FROM kills WHERE killmail_id = $1 AND public;
 
@@ -373,3 +284,163 @@ WHERE corporation_id = sqlc.arg(corporation_id)::bigint;
 INSERT INTO corp_kill_coverage (corporation_id, backfilled_at)
 VALUES (sqlc.arg(corporation_id)::bigint, sqlc.arg(backfilled_at)::timestamptz)
 ON CONFLICT (corporation_id) DO NOTHING;
+
+-- ---------------------------------------------------------------------
+-- Killboard statistics (schema 131, killboard_stats.go): the fold
+-- at ingest and the stored reads the pages use. Nothing here
+-- aggregates the kills table; the daily buckets are the largest
+-- thing a render sums, a few hundred rows for all time.
+-- ---------------------------------------------------------------------
+
+-- name: ListKillInvolvement :many
+SELECT character_id, corporation_id, alliance_id FROM kill_involvement
+WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
+
+-- name: ListKillAttackerShips :many
+SELECT character_id, corporation_id, alliance_id, ship_type_id FROM kill_attackers
+WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
+
+-- name: MarkKillEntityApplied :one
+INSERT INTO kill_entity_applied (killmail_id, kind, entity_id, killmail_time)
+VALUES (sqlc.arg(killmail_id)::bigint, sqlc.arg(kind)::text, sqlc.arg(entity_id)::bigint, sqlc.arg(killmail_time)::timestamptz)
+ON CONFLICT DO NOTHING
+RETURNING killmail_id;
+
+-- name: ApplyKillEntityDaily :exec
+INSERT INTO kill_entity_daily (day, kind, entity_id, kills, solo, losses, isk_killed, isk_lost, biggest_killmail_id, biggest_value)
+VALUES (sqlc.arg(day)::date, sqlc.arg(kind)::text, sqlc.arg(entity_id)::bigint,
+    sqlc.arg(kills)::bigint, sqlc.arg(solo)::bigint, sqlc.arg(losses)::bigint,
+    sqlc.arg(isk_killed)::double precision, sqlc.arg(isk_lost)::double precision,
+    sqlc.arg(biggest_killmail_id)::bigint, sqlc.arg(biggest_value)::double precision)
+ON CONFLICT (day, kind, entity_id) DO UPDATE SET
+    kills = kill_entity_daily.kills + EXCLUDED.kills,
+    solo = kill_entity_daily.solo + EXCLUDED.solo,
+    losses = kill_entity_daily.losses + EXCLUDED.losses,
+    isk_killed = kill_entity_daily.isk_killed + EXCLUDED.isk_killed,
+    isk_lost = kill_entity_daily.isk_lost + EXCLUDED.isk_lost,
+    biggest_killmail_id = CASE WHEN EXCLUDED.biggest_value > kill_entity_daily.biggest_value THEN EXCLUDED.biggest_killmail_id ELSE kill_entity_daily.biggest_killmail_id END,
+    biggest_value = GREATEST(kill_entity_daily.biggest_value, EXCLUDED.biggest_value);
+
+-- name: ApplyKillEntityDailyShip :exec
+INSERT INTO kill_entity_daily_ships (day, kind, entity_id, ship_type_id, flown, lost)
+VALUES (sqlc.arg(day)::date, sqlc.arg(kind)::text, sqlc.arg(entity_id)::bigint, sqlc.arg(ship_type_id)::bigint,
+    sqlc.arg(flown)::bigint, sqlc.arg(lost)::bigint)
+ON CONFLICT (day, kind, entity_id, ship_type_id) DO UPDATE SET
+    flown = kill_entity_daily_ships.flown + EXCLUDED.flown,
+    lost = kill_entity_daily_ships.lost + EXCLUDED.lost;
+
+-- name: ApplyKillEntityDailySystem :exec
+INSERT INTO kill_entity_daily_systems (day, kind, entity_id, system_id, events)
+VALUES (sqlc.arg(day)::date, sqlc.arg(kind)::text, sqlc.arg(entity_id)::bigint, sqlc.arg(system_id)::bigint, 1)
+ON CONFLICT (day, kind, entity_id, system_id) DO UPDATE SET
+    events = kill_entity_daily_systems.events + 1;
+
+-- name: GetKillEntityStats :one
+SELECT COALESCE(SUM(kills), 0)::bigint AS kills, COALESCE(SUM(solo), 0)::bigint AS solo,
+    COALESCE(SUM(losses), 0)::bigint AS losses,
+    COALESCE(SUM(isk_killed), 0)::double precision AS isk_killed,
+    COALESCE(SUM(isk_lost), 0)::double precision AS isk_lost
+FROM kill_entity_daily
+WHERE kind = sqlc.arg(kind)::text AND entity_id = sqlc.arg(entity_id)::bigint
+  AND day >= (sqlc.arg(since)::timestamptz)::date;
+
+-- name: GetKillEntityBiggest :one
+SELECT biggest_killmail_id FROM kill_entity_daily
+WHERE kind = sqlc.arg(kind)::text AND entity_id = sqlc.arg(entity_id)::bigint
+  AND day >= (sqlc.arg(since)::timestamptz)::date AND biggest_killmail_id > 0
+ORDER BY biggest_value DESC
+LIMIT 1;
+
+-- name: ListKillEntityTopShips :many
+SELECT ship_type_id, COALESCE(SUM(flown), 0)::bigint AS flown, COALESCE(SUM(lost), 0)::bigint AS lost
+FROM kill_entity_daily_ships
+WHERE kind = sqlc.arg(kind)::text AND entity_id = sqlc.arg(entity_id)::bigint
+  AND day >= (sqlc.arg(since)::timestamptz)::date
+GROUP BY ship_type_id
+ORDER BY flown DESC, lost DESC, ship_type_id
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- name: ListKillEntityShipsLost :many
+SELECT ship_type_id, COALESCE(SUM(lost), 0)::bigint AS lost
+FROM kill_entity_daily_ships
+WHERE kind = sqlc.arg(kind)::text AND entity_id = sqlc.arg(entity_id)::bigint
+  AND day >= (sqlc.arg(since)::timestamptz)::date AND lost > 0
+GROUP BY ship_type_id
+ORDER BY lost DESC, ship_type_id
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- name: ListKillEntityTopSystems :many
+SELECT system_id, COALESCE(SUM(events), 0)::bigint AS n
+FROM kill_entity_daily_systems
+WHERE kind = sqlc.arg(kind)::text AND entity_id = sqlc.arg(entity_id)::bigint
+  AND day >= (sqlc.arg(since)::timestamptz)::date
+GROUP BY system_id
+ORDER BY n DESC, system_id
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- name: ListUnfoldedKills :many
+SELECT k.killmail_id FROM kills k
+WHERE k.public
+  AND (k.victim_character_id > 0 OR k.victim_corporation_id > 0 OR k.victim_alliance_id > 0
+    OR EXISTS (SELECT 1 FROM kill_involvement i WHERE i.killmail_id = k.killmail_id))
+  AND NOT EXISTS (SELECT 1 FROM kill_entity_applied a WHERE a.killmail_id = k.killmail_id)
+ORDER BY k.killmail_time DESC
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- One feed row per (entity, kill), written by the fold at
+-- ingest. The board's filters ride the stored columns.
+-- name: InsertKillEntityFeed :exec
+INSERT INTO kill_entity_feed (kind, entity_id, killmail_time, killmail_id, solo, value)
+VALUES (sqlc.arg(kind)::text, sqlc.arg(entity_id)::bigint, sqlc.arg(killmail_time)::timestamptz,
+    sqlc.arg(killmail_id)::bigint, sqlc.arg(solo)::boolean, sqlc.arg(value)::double precision)
+ON CONFLICT DO NOTHING;
+
+-- An entity's kills and losses, newest first: one keyset scan
+-- on the feed's page index, then the page's kills by primary
+-- key. This replaces the per kind ListKillsBy queries, whose
+-- materialized involvement CTE read an entity's whole history
+-- on every page.
+-- name: ListKillsByEntityFeed :many
+SELECT k.* FROM (
+    SELECT f.killmail_id, f.killmail_time FROM kill_entity_feed f
+    WHERE f.kind = sqlc.arg(kind)::text AND f.entity_id = sqlc.arg(entity_id)::bigint
+      AND (f.killmail_time, f.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
+      AND f.value >= sqlc.arg(min_value)::double precision
+      AND (NOT sqlc.arg(solo_only)::boolean OR f.solo)
+    ORDER BY f.killmail_time DESC, f.killmail_id DESC
+    LIMIT sqlc.arg(max_rows)::bigint
+) p
+JOIN kills k ON k.killmail_id = p.killmail_id AND k.public
+ORDER BY p.killmail_time DESC, p.killmail_id DESC;
+
+-- Public kills with no feed row yet (stored before the feed
+-- existed): the maintenance sweep folds these in the background.
+-- name: ListKillsMissingFeed :many
+SELECT k.killmail_id FROM kills k
+WHERE NOT EXISTS (SELECT 1 FROM kill_entity_feed f WHERE f.killmail_id = k.killmail_id)
+ORDER BY k.killmail_time DESC
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- name: UpsertKillboardHeadline :exec
+INSERT INTO killboard_headline (id, kills_hour, kills_day, isk_day, biggest_killmail_id, computed_at)
+VALUES (1, sqlc.arg(kills_hour)::bigint, sqlc.arg(kills_day)::bigint, sqlc.arg(isk_day)::double precision,
+    sqlc.arg(biggest_killmail_id)::bigint, sqlc.arg(computed_at)::timestamptz)
+ON CONFLICT (id) DO UPDATE SET
+    kills_hour = EXCLUDED.kills_hour, kills_day = EXCLUDED.kills_day, isk_day = EXCLUDED.isk_day,
+    biggest_killmail_id = EXCLUDED.biggest_killmail_id, computed_at = EXCLUDED.computed_at;
+
+-- name: GetKillboardHeadline :one
+SELECT kills_hour, kills_day, isk_day, biggest_killmail_id, computed_at FROM killboard_headline WHERE id = 1;
+
+-- name: ReplaceKillboardTop :execrows
+WITH del AS (DELETE FROM killboard_top WHERE kind = sqlc.arg(kind)::text)
+INSERT INTO killboard_top (kind, entity_id, kills, isk)
+SELECT sqlc.arg(kind)::text, unnest(sqlc.arg(entity_ids)::bigint[]),
+    unnest(sqlc.arg(kills_list)::bigint[]), unnest(sqlc.arg(isk_list)::double precision[])
+ON CONFLICT (kind, entity_id) DO UPDATE SET kills = EXCLUDED.kills, isk = EXCLUDED.isk;
+
+-- name: ListKillboardTop :many
+SELECT entity_id, kills, isk FROM killboard_top
+WHERE kind = sqlc.arg(kind)::text
+ORDER BY kills DESC, entity_id
+LIMIT sqlc.arg(max_rows)::bigint;

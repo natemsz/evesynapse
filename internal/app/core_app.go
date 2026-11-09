@@ -272,12 +272,6 @@ type Application struct {
 	killRegionsMu  sync.Mutex
 	killRegions    map[int64]int64
 	killLastPruned time.Time
-	killStatsMemo  *killboardStatsMemo // the feed's headline, held a minute
-	// Scoped killboard headlines, held a minute per entity and
-	// capped so a crawl across entities cannot grow the map
-	// without bound.
-	killScopedStatsMu   sync.Mutex
-	killScopedStatsMemo map[killboardScopedStatsKey]*killboardScopedStatsMemo
 	// Kill-name misses that must not be re-asked every minute,
 	// and when intel retention last pruned (channels.go). The
 	// mutex guards the map now that render-kicked resolution

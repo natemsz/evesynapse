@@ -540,9 +540,9 @@ type kmTileRecord struct {
 // character's counts come from their stored activity profile
 // when one backs them (the profile's figures cover their
 // whole recorded history) and solo and ISK from the all-time
-// stats read over the permanent involvement record, the
-// division the pilot page and the killboard headline use.
-// Without a profile the stats read carries every figure. The
+// stored aggregates, the division the pilot page and the
+// killboard headline use.
+// Without a profile the stored read carries every figure. The
 // last 30 days read the stats directly for counts and ISK
 // alike: the profile keeps no windowed counts. A nil record
 // means the entity has no stored record to read at all, and
@@ -592,21 +592,13 @@ func (app *Application) killmailTileRecord(ctx context.Context, viewer killmailV
 
 // killmailStatsAt reads one entity's kills, losses, solo
 // kills and ISK destroyed and lost since a time, from the
-// involvement stats reads (a corporation's losses sit on the
-// victim side, in their own read).
+// stored daily aggregates folded at ingest.
 func (app *Application) killmailStatsAt(ctx context.Context, viewer killmailViewer, since time.Time) (*kmTileRecord, error) {
+	kind, id := "character", viewer.characterID
 	if viewer.corporationID > 0 {
-		st, err := app.queries.CorporationKillStats(ctx, db.CorporationKillStatsParams{CorporationID: viewer.corporationID, Since: since})
-		if err != nil {
-			return nil, err
-		}
-		losses, err := app.queries.CountCorporationKillLosses(ctx, db.CountCorporationKillLossesParams{CorporationID: viewer.corporationID, Since: since})
-		if err != nil {
-			return nil, err
-		}
-		return &kmTileRecord{kills: st.Kills, losses: losses.Losses, solo: st.Solo, destroyed: st.IskKilled, lost: losses.IskLost}, nil
+		kind, id = "corporation", viewer.corporationID
 	}
-	st, err := app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: viewer.characterID, Since: since})
+	st, err := app.queries.GetKillEntityStats(ctx, db.GetKillEntityStatsParams{Kind: kind, EntityID: id, Since: since})
 	if err != nil {
 		return nil, err
 	}

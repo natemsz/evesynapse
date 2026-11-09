@@ -137,11 +137,6 @@ type pilotIntelView struct {
 	// record exists; the template labels the section with the
 	// wider scope and the profile's own freshness (UpdatedAgo).
 	ProfileBacked bool
-	// LiveFromZKill: the aggregates above were read live from
-	// zKillboard at page time (pilot_live.go) because the pilot
-	// holds no stored activity at all. Nothing was stored; the
-	// template labels the section with that source.
-	LiveFromZKill bool
 	UpdatedAgo    string
 	UsualShip     string
 	Gang          string
@@ -167,13 +162,13 @@ func likeEscape(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
-// pilotAllTimeStats reads a pilot's kill figures over their
-// whole recorded history: PilotKillStats at epoch scope, over
-// the permanent involvement record. Profile-backed surfaces
+// pilotAllTimeStats reads a pilot's solo kills and ISK
+// destroyed over their whole recorded history from the stored
+// daily aggregates folded at ingest. Profile-backed surfaces
 // take kills and losses from the stored profile, which has no
 // solo or ISK column; those two figures come from this read.
-func (app *Application) pilotAllTimeStats(ctx context.Context, id int64) (db.PilotKillStatsRow, error) {
-	return app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: id, Since: time.Unix(0, 0).UTC()})
+func (app *Application) pilotAllTimeStats(ctx context.Context, id int64) (db.GetKillEntityStatsRow, error) {
+	return app.queries.GetKillEntityStats(ctx, db.GetKillEntityStatsParams{Kind: "character", EntityID: id, Since: time.Unix(0, 0).UTC()})
 }
 
 func (app *Application) loadPilotIntel(ctx context.Context, id int64, name string) *pilotIntelView {
@@ -191,7 +186,7 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 	act := app.loadPilotActivity(ctx, id, names, now)
 	profileBacked := act != nil && act.Any
 	if !profileBacked {
-		if st, err := app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: id, Since: since}); err == nil {
+		if st, err := app.queries.GetKillEntityStats(ctx, db.GetKillEntityStatsParams{Kind: "character", EntityID: id, Since: since}); err == nil {
 			v.Kills, v.Solo, v.Losses = st.Kills, st.Solo, st.Losses
 			if st.IskKilled > 0 {
 				v.ISK = iskShortGo(st.IskKilled)
@@ -220,37 +215,20 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 		}
 	}
 	if !profileBacked {
-		if rows, err := app.queries.ListPilotShips(ctx, db.ListPilotShipsParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
+		if rows, err := app.queries.ListKillEntityTopShips(ctx, db.ListKillEntityTopShipsParams{Kind: "character", EntityID: id, Since: since, MaxRows: 8}); err == nil && len(rows) > 0 {
 			for _, r := range rows {
-				v.Ships = append(v.Ships, pilotCount{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), N: r.N, Pct: pctOf(r.N, rows[0].N)})
+				if r.Flown > 0 {
+					v.Ships = append(v.Ships, pilotCount{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), N: r.Flown, Pct: pctOf(r.Flown, rows[0].Flown)})
+				}
 			}
 		}
-		if rows, err := app.queries.ListPilotSystems(ctx, db.ListPilotSystemsParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
+		if rows, err := app.queries.ListKillEntityTopSystems(ctx, db.ListKillEntityTopSystemsParams{Kind: "character", EntityID: id, Since: since, MaxRows: 8}); err == nil && len(rows) > 0 {
 			for _, r := range rows {
 				sys := names.system(r.SystemID)
-				c := pilotCount{ID: r.SystemID, Name: sys.Name, N: r.N, Pct: pctOf(r.N, rows[0].N), Ago: ageText(now, r.LastAt)}
+				c := pilotCount{ID: r.SystemID, Name: sys.Name, N: r.N, Pct: pctOf(r.N, rows[0].N)}
 				c.SecText, c.SecTier = secRound(sys.Security)
 				v.Systems = append(v.Systems, c)
 			}
-		}
-		if rows, err := app.queries.ListPilotHours(ctx, db.ListPilotHoursParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
-			v.Hours = make([]pilotHour, 24)
-			var top int64
-			for h := range v.Hours {
-				v.Hours[h].Hour = h
-			}
-			for _, r := range rows {
-				if r.Hour >= 0 && r.Hour < 24 {
-					v.Hours[r.Hour].N = r.N
-					top = max(top, r.N)
-				}
-			}
-			for h := range v.Hours {
-				if v.Hours[h].N > 0 {
-					v.Hours[h].Pct = pctOf(v.Hours[h].N, top)
-				}
-			}
-			v.Peak = peakHours(v.Hours)
 		}
 	}
 	if rows, err := app.queries.ListPilotCompanions(ctx, db.ListPilotCompanionsParams{CharacterID: id, Since: since}); err == nil {
@@ -262,11 +240,10 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 	// The stored profile, when the pilot has one with a record:
 	// its aggregates cover the whole of their kill history and
 	// are kept current at ingest, so they take over the section's
-	// kills and losses from the 90-day board read above. Solo
+	// kills and losses from the 90-day stored read above. Solo
 	// kills and ISK destroyed have no profile column; they come
-	// from the all-time stats read over the permanent
-	// involvement record. The latest kills and the companions
-	// stay board reads either way.
+	// from the all-time stored aggregates. The latest kills and
+	// the companions stay board reads either way.
 	if profileBacked {
 		v.Kills, v.Losses = act.Kills, act.Losses
 		if st, err := app.pilotAllTimeStats(ctx, id); err == nil {
@@ -290,10 +267,11 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 		v.Gang = act.Gang
 		v.LastActive = act.LastActive
 	}
-	// No stored activity at all: ask zKillboard live. Nothing is
-	// stored; the page reads the stats off the answer.
+	// No stored activity yet: offer the pilot to the background
+	// history backfill and render what is stored. The page never
+	// fetches at render; the record fills in behind it.
 	if v.Kills+v.Losses == 0 && len(v.Recent) == 0 {
-		app.fillPilotIntelLive(ctx, v, id, names, now)
+		app.notePilotsEncountered([]int64{id})
 	}
 	v.Any = v.Kills+v.Losses > 0 || len(v.Recent) > 0
 	v.HasIntel = v.Any

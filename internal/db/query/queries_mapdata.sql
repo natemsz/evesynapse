@@ -21,15 +21,11 @@ WITH mine AS (
     SELECT k.killmail_id, k.system_id, COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk,
            (k.victim_character_id = ANY(sqlc.arg(character_ids)::bigint[])) AS lost
     FROM (
-        SELECT v.killmail_id FROM kills v
-        WHERE v.victim_character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND v.victim_character_id > 0
-          AND v.killmail_time >= sqlc.arg(since)::timestamptz
-        UNION
-        SELECT a.killmail_id FROM kill_attackers a
-        WHERE a.character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND a.character_id > 0
+        SELECT DISTINCT f.killmail_id FROM kill_entity_feed f
+        WHERE f.kind = 'character' AND f.entity_id = ANY(sqlc.arg(character_ids)::bigint[])
+          AND f.entity_id > 0 AND f.killmail_time >= sqlc.arg(since)::timestamptz
     ) m
     JOIN kills k ON k.killmail_id = m.killmail_id
-    WHERE k.killmail_time >= sqlc.arg(since)::timestamptz
 )
 SELECT system_id,
        COUNT(*) FILTER (WHERE NOT lost)::bigint AS kills,

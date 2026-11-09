@@ -280,6 +280,8 @@ func tierLabelWithBasis(tier string, b pricingBasis) string {
 		return "Our abyssal estimate"
 	case module.AppraisalTierCopyMedian:
 		return "Our copy median"
+	case module.AppraisalTierResearchMedian:
+		return "Our research median"
 	case module.AppraisalTierFallback:
 		return "Fuzzwork aggregate"
 	}

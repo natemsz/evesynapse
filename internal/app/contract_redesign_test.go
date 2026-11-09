@@ -632,6 +632,54 @@ func TestContractSearchNegativeSpread(t *testing.T) {
 	}
 }
 
+// TestContractSearchBarterSpread pins the barter cost basis:
+// an exchange asking ISK plus wanted items judges the
+// offered value against the full cost -- price plus the
+// valued wanted side -- in the row's spread and the
+// drawer's summary alike. The asking line shows that same
+// total, never the ISK alone.
+func TestContractSearchBarterSpread(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedContractCorpus(t, app, conn)
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("spread seed %q: %v", query, err)
+		}
+	}
+
+	// Offered at 2000, asking 10 ISK plus 7000 of wanted
+	// items: a 5010 shortfall against the 7010 total cost.
+	exec(`INSERT INTO pub_contracts (contract_id, region_id, type, issuer_id, issuer_corporation_id,
+		title, price, buyout, reward, collateral, volume, start_location_id, end_location_id,
+		date_issued, date_expired, days_to_complete, items_state, last_cycle, first_seen, last_seen)
+		VALUES (7031, 10000002, 'item_exchange', 9001, 9801, 'Barter Lot', 10, 0, 0, 0, 0, 60003760, 0,
+		$1, $2, 1, 'stored', 1, $1, $1)`,
+		now.Add(-time.Hour), now.Add(7*24*time.Hour))
+	exec(`INSERT INTO pub_contract_items (record_id, contract_id, type_id, quantity, is_included,
+		unit_price, line_value, price_tier, price_asof)
+		VALUES (301, 7031, 34, 20, true, 100, 2000, 'typical', $1),
+		(302, 7031, 35, 10, false, 700, 7000, 'typical', $1)`, now)
+	exec(`UPDATE pub_contracts SET offered_value=2000, want_value=7000, priced_lines=1, total_lines=1,
+		tier_mix='typical:2', priced_at=$1 WHERE contract_id=7031`, now)
+
+	_, body := getAnon(t, app, "/contracts/search/")
+	mustContain(t, "barter spread row", body, "-5010.00 ISK spread")
+	if n := strings.Count(body, `class="cs-spread neg"`); n != 1 {
+		t.Errorf("negative spread rows: got %d, want 1 (the barter exchange only)", n)
+	}
+
+	_, body = getAnon(t, app, "/contracts/search/7031/panel")
+	mustContain(t, "panel 7031", body,
+		"Asking Price:", "7010.00 ISK",
+		"EveSynapse Value:", "2000.00 ISK",
+		"Estimated Spread:", "-5010.00 ISK (-250.5%)", `cs-srow sp neg`)
+}
+
 // TestContractSearchContentsCap pins the contents cell's
 // five-line cap: offered lines first, then wanted, counted
 // together; the lines past the cap never render in the

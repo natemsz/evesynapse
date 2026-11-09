@@ -171,12 +171,6 @@ func isBlockedBot(r *http.Request) bool {
 	return false
 }
 
-// isBlockedScraper reports whether the user agent belongs to a known scraper.
-// Preserved for caller compatibility.
-func isBlockedScraper(ua string) bool {
-	return hasScraperSignature(ua, "")
-}
-
 // blockScrapers turns away automated AI scrapers, headless tools, and botnet
 // crawlers at the perimeter with 403 Forbidden before running database reads.
 func (app *Application) blockScrapers(next http.Handler) http.Handler {

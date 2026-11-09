@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -482,6 +483,34 @@ func TestBotWatchSpoofedCookies(t *testing.T) {
 	if authedApp.hasVerifiedSession(mustReqWithCookies(t, anonCookie)) {
 		t.Fatal("anonymous session verified as signed-in")
 	}
+
+	// Stores like pgxstore panic on Find and require FindCtx.
+	ctxStore := &contextOnlySessionStore{mem: store}
+	ctxSM := newSessionManager(ctxStore, Config{})
+	ctxApp := &Application{sessions: ctxSM}
+	if !ctxApp.hasVerifiedSession(mustReqWithCookies(t, sessionCookie)) {
+		t.Fatal("pgx-style context store failed to verify signed-in session")
+	}
+}
+
+type contextOnlySessionStore struct {
+	mem *memSessionStore
+}
+
+func (s *contextOnlySessionStore) Delete(token string) error {
+	panic("missing context arg")
+}
+
+func (s *contextOnlySessionStore) Find(token string) ([]byte, bool, error) {
+	panic("missing context arg")
+}
+
+func (s *contextOnlySessionStore) Commit(token string, b []byte, expiry time.Time) error {
+	panic("missing context arg")
+}
+
+func (s *contextOnlySessionStore) FindCtx(ctx context.Context, token string) ([]byte, bool, error) {
+	return s.mem.Find(token)
 }
 
 func mustReqWithCookies(t *testing.T, cookies ...*http.Cookie) *http.Request {

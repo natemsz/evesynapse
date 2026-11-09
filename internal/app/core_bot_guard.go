@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -296,7 +297,18 @@ func (app *Application) hasVerifiedSession(r *http.Request) bool {
 	if err != nil || cookie.Value == "" {
 		return false
 	}
-	data, found, err := sm.Store.Find(cookie.Value)
+	// pgxstore's plain Store methods panic by design ("missing
+	// context arg"); its real API is the Ctx variants. Prefer
+	// those, fall back to the plain Store for simple stores.
+	var data []byte
+	var found bool
+	if cs, ok := sm.Store.(interface {
+		FindCtx(context.Context, string) ([]byte, bool, error)
+	}); ok {
+		data, found, err = cs.FindCtx(r.Context(), cookie.Value)
+	} else {
+		data, found, err = sm.Store.Find(cookie.Value)
+	}
 	if err != nil || !found {
 		return false
 	}

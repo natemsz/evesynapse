@@ -453,4 +453,73 @@
     var paneWatch = new ResizeObserver(function () { sizeOrderBookPanes(); });
     document.querySelectorAll(".mkt-book-pane > .tw table").forEach(function (t) { paneWatch.observe(t); });
   }
+  // ---- Live prices (the item page's stat-pack stream) ----
+  // On an item page the console carries the type and region; a
+  // stream to /market/stream keeps the statistics table and the
+  // region strip current as region sweeps land. The order book and
+  // the KPI bests are the book's own, not the stat pack's, so the
+  // stream leaves them alone. A side with no orders keeps the
+  // row the server rendered: its next load shows "No orders".
+  var liveSource = null;
+  var liveURL = "";
+
+  function closeLiveMarket() {
+    if (liveSource) {
+      liveSource.close();
+      liveSource = null;
+      liveURL = "";
+    }
+  }
+
+  function applyMarketEvent(ev) {
+    if (!ev || ev.type == null) return;
+    var root = document.querySelector("[data-market-live]");
+    if (!root) return;
+    if (String(ev.type) !== root.getAttribute("data-type-id")) return;
+    if (String(ev.region) !== root.getAttribute("data-region-id")) return;
+    var fields = ["typical", "average", "best", "far", "edge", "dev", "orders", "volume"];
+    ["sell", "buy"].forEach(function (side) {
+      var row = document.querySelector('[data-live-side="' + side + '"]');
+      if (!row || !ev[side] || ev[side].orders === "0") return;
+      fields.forEach(function (f) {
+        var cell = row.querySelector('[data-live-field="' + f + '"]');
+        if (cell && ev[side][f] != null) cell.textContent = ev[side][f];
+      });
+    });
+    var strip = document.querySelector("[data-live-region]");
+    if (strip) {
+      var ts = strip.querySelector('[data-live-field="typical-sell"]');
+      if (ts && ev.sell) ts.textContent = ev.sell.typical && ev.sell.typical !== "0.00" ? ev.sell.typical + " ISK" : "—";
+      var tb = strip.querySelector('[data-live-field="typical-buy"]');
+      if (tb && ev.buy) tb.textContent = ev.buy.typical && ev.buy.typical !== "0.00" ? ev.buy.typical + " ISK" : "—";
+      var age = strip.querySelector('[data-live-field="age"]');
+      if (age && ev.age) age.textContent = ev.age;
+    }
+  }
+
+  function openLiveMarket() {
+    var root = document.querySelector("[data-market-live]");
+    if (!root) {
+      closeLiveMarket();
+      return;
+    }
+    var url = "/market/stream?region=" + encodeURIComponent(root.getAttribute("data-region-id")) +
+      "&type=" + encodeURIComponent(root.getAttribute("data-type-id"));
+    if (liveSource && liveURL === url) return;
+    closeLiveMarket();
+    if (!("EventSource" in window)) return;
+    liveURL = url;
+    liveSource = new EventSource(url);
+    liveSource.addEventListener("market", function (e) {
+      try {
+        applyMarketEvent(JSON.parse(e.data));
+      } catch (err) {
+        /* a bad frame is skipped */
+      }
+    });
+  }
+
+  document.addEventListener("evesynapse:content-ready", openLiveMarket);
+  document.addEventListener("evesynapse:content-will-swap", closeLiveMarket);
+  openLiveMarket();
 })();

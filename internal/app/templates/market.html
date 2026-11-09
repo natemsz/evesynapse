@@ -102,7 +102,7 @@
     </nav>
   </div>
 
-  <div class="l-console mkt-console" data-depth="{{if and .Market.Watchlist .Market.Watchlist.Query}}2{{else}}1{{end}}">
+  <div class="l-console mkt-console" data-depth="{{if and .Market.Watchlist .Market.Watchlist.Query}}2{{else}}1{{end}}" data-market-live data-type-id="{{$item.TypeID}}" data-region-id="{{$item.RegionID}}">
   <div class="l-panes">
   <div class="l-pane l-pane--main mkt-main">
   {{if $item.BookPending}}
@@ -320,13 +320,13 @@
           <thead><tr><th>Region</th><th class="num">Typical sell</th><th class="num">Typical buy</th><th class="num">7 days</th><th>Updated</th></tr></thead>
           <tbody>
             {{range $item.RegionStats}}
-            <tr>
+            <tr{{if .Active}} data-live-region="{{.RegionID}}"{{end}}>
               <td>{{if .Active}}<strong>{{.RegionName}}</strong>{{else if .Hub}}<a href="/market/?type={{$item.TypeID}}&region={{.RegionID}}">{{.RegionName}}</a>{{else}}<a href="/region/?id={{.RegionID}}">{{.RegionName}}</a>{{end}}</td>
               {{if .HasData}}
-              <td class="num">{{if .TypicalSell}}{{.TypicalSell}} ISK{{else}}—{{end}}</td>
-              <td class="num">{{if .TypicalBuy}}{{.TypicalBuy}} ISK{{else}}—{{end}}</td>
+              <td class="num"{{if .Active}} data-live-field="typical-sell"{{end}}>{{if .TypicalSell}}{{.TypicalSell}} ISK{{else}}—{{end}}</td>
+              <td class="num"{{if .Active}} data-live-field="typical-buy"{{end}}>{{if .TypicalBuy}}{{.TypicalBuy}} ISK{{else}}—{{end}}</td>
               <td class="num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
-              <td><small>{{if .Source}}{{.Source}} · {{end}}{{.Age}}</small></td>
+              <td><small>{{if .Source}}{{.Source}} · {{end}}<span{{if .Active}} data-live-field="age"{{end}}>{{.Age}}</span></small></td>
               {{else}}
               <td colspan="4"><small>No data yet</small></td>
               {{end}}
@@ -348,10 +348,10 @@
           <thead><tr><th>Side</th><th>Typical</th><th>Average</th><th>Best</th><th>Far end</th><th>5% edge</th><th>Spread of prices</th><th>Orders</th><th>Units</th><th>1 day</th><th>7 days</th><th>30 days</th></tr></thead>
           <tbody>
             {{range .Sides}}
-            <tr>
+            <tr{{if .Side}} data-live-side="{{.Side}}"{{end}}>
               <td>{{.Label}}</td>
               {{if .Has}}
-              <td>{{.Typical}}</td><td>{{.Average}}</td><td>{{.Best}}</td><td>{{.Far}}</td><td>{{.Edge}}</td><td>{{.Dev}}</td><td>{{.Orders}}</td><td>{{.Volume}}</td>
+              <td data-live-field="typical">{{.Typical}}</td><td data-live-field="average">{{.Average}}</td><td data-live-field="best">{{.Best}}</td><td data-live-field="far">{{.Far}}</td><td data-live-field="edge">{{.Edge}}</td><td data-live-field="dev">{{.Dev}}</td><td data-live-field="orders">{{.Orders}}</td><td data-live-field="volume">{{.Volume}}</td>
               <td>{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
               <td>{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
               <td>{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}—{{end}}</td>

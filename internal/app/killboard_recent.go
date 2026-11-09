@@ -49,55 +49,77 @@ func (app *Application) primeRecentKills(ctx context.Context) {
 }
 
 // noteRecentKill inserts or updates one public kill in the resident
-// ring buffer in reverse-chronological order.
-func (app *Application) noteRecentKill(k db.Kill) {
+// ring buffer in reverse-chronological order. A kill that is new to
+// the ring is also published to the live feed (livefeed.go): the row
+// is resolved once here, from the app's name caches, and fanned out
+// to the streams whose scope matches. The publish never holds the
+// ring lock and never blocks on a subscriber, so a slow browser
+// cannot stall the killfeed.
+func (app *Application) noteRecentKill(ctx context.Context, k db.Kill) {
 	if app.cfg.lowRAMMode || !k.Public {
 		return
 	}
 	r := &app.recentKills
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.loaded = true
+	isNew := true
 	for i := range r.kills {
 		if r.kills[i].KillmailID == k.KillmailID {
 			r.kills[i] = k
-			return
-		}
-	}
-	inserted := false
-	for i := range r.kills {
-		if k.KillmailTime.After(r.kills[i].KillmailTime) ||
-			(k.KillmailTime.Equal(r.kills[i].KillmailTime) && k.KillmailID > r.kills[i].KillmailID) {
-			r.kills = append(r.kills[:i], append([]db.Kill{k}, r.kills[i:]...)...)
-			inserted = true
+			isNew = false
 			break
 		}
 	}
-	if !inserted && len(r.kills) < recentKillsCapacity {
-		r.kills = append(r.kills, k)
+	if isNew {
+		inserted := false
+		for i := range r.kills {
+			if k.KillmailTime.After(r.kills[i].KillmailTime) ||
+				(k.KillmailTime.Equal(r.kills[i].KillmailTime) && k.KillmailID > r.kills[i].KillmailID) {
+				r.kills = append(r.kills[:i], append([]db.Kill{k}, r.kills[i:]...)...)
+				inserted = true
+				break
+			}
+		}
+		if !inserted && len(r.kills) < recentKillsCapacity {
+			r.kills = append(r.kills, k)
+		}
+		if len(r.kills) > recentKillsCapacity {
+			r.kills = r.kills[:recentKillsCapacity]
+		}
 	}
-	if len(r.kills) > recentKillsCapacity {
-		r.kills = r.kills[:recentKillsCapacity]
+	r.mu.Unlock()
+	if isNew {
+		app.killLive.publishKill(app.newKillNames(ctx).row(k), k)
 	}
 }
 
 // noteRecentKillPrice updates the appraisal price fields of a kill
-// currently held in the recent kills ring.
-func (app *Application) noteRecentKillPrice(killmailID int64, valueOurs, valueDropped float64, cov float64, pricedAt time.Time) {
+// currently held in the recent kills ring, and publishes the priced
+// value to the live feed so a streamed row's value cell fills in
+// without a reload. A big-only stream learns about the kill here,
+// once the appraisal makes it big. A kill the ring no longer holds
+// publishes nothing.
+func (app *Application) noteRecentKillPrice(ctx context.Context, killmailID int64, valueOurs, valueDropped float64, cov float64, pricedAt time.Time) {
 	if app.cfg.lowRAMMode {
 		return
 	}
 	r := &app.recentKills
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	var priced db.Kill
+	found := false
 	for i := range r.kills {
 		if r.kills[i].KillmailID == killmailID {
 			r.kills[i].ValueOurs = sql.NullFloat64{Float64: valueOurs, Valid: true}
 			r.kills[i].ValueDroppedOurs = sql.NullFloat64{Float64: valueDropped, Valid: true}
 			r.kills[i].ValueCoverage = sql.NullFloat64{Float64: cov, Valid: true}
 			r.kills[i].PricedAt = sql.NullTime{Time: pricedAt, Valid: true}
-			return
+			priced, found = r.kills[i], true
+			break
 		}
+	}
+	r.mu.Unlock()
+	if found {
+		app.killLive.publishKillPriced(app.newKillNames(ctx).row(priced), priced, formatISKShort(valueOurs), valueOurs >= killBigValue)
 	}
 }
 

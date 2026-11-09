@@ -21,7 +21,7 @@ type DeletePulseSeenParams struct {
 }
 
 func (q *Queries) DeletePulseSeen(ctx context.Context, arg DeletePulseSeenParams) error {
-	_, err := q.db.ExecContext(ctx, deletePulseSeen, arg.CorpID, arg.Kind, arg.Key)
+	_, err := q.db.Exec(ctx, deletePulseSeen, arg.CorpID, arg.Kind, arg.Key)
 	return err
 }
 
@@ -40,7 +40,7 @@ type InsertPulseEventParams struct {
 }
 
 func (q *Queries) InsertPulseEvent(ctx context.Context, arg InsertPulseEventParams) error {
-	_, err := q.db.ExecContext(ctx, insertPulseEvent,
+	_, err := q.db.Exec(ctx, insertPulseEvent,
 		arg.CorpID,
 		arg.Kind,
 		arg.Key,
@@ -61,7 +61,7 @@ type ListPulseEventsParams struct {
 }
 
 func (q *Queries) ListPulseEvents(ctx context.Context, arg ListPulseEventsParams) ([]PulseEvent, error) {
-	rows, err := q.db.QueryContext(ctx, listPulseEvents, arg.CorpID, arg.At)
+	rows, err := q.db.Query(ctx, listPulseEvents, arg.CorpID, arg.At)
 	if err != nil {
 		return nil, err
 	}
@@ -80,9 +80,6 @@ func (q *Queries) ListPulseEvents(ctx context.Context, arg ListPulseEventsParams
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -99,7 +96,7 @@ type ListPulseSeenParams struct {
 }
 
 func (q *Queries) ListPulseSeen(ctx context.Context, arg ListPulseSeenParams) ([]PulseSeen, error) {
-	rows, err := q.db.QueryContext(ctx, listPulseSeen, arg.CorpID, arg.Kind)
+	rows, err := q.db.Query(ctx, listPulseSeen, arg.CorpID, arg.Kind)
 	if err != nil {
 		return nil, err
 	}
@@ -117,9 +114,6 @@ func (q *Queries) ListPulseSeen(ctx context.Context, arg ListPulseSeenParams) ([
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -131,7 +125,7 @@ DELETE FROM pulse_events WHERE at < $1
 `
 
 func (q *Queries) PrunePulseEvents(ctx context.Context, at time.Time) error {
-	_, err := q.db.ExecContext(ctx, prunePulseEvents, at)
+	_, err := q.db.Exec(ctx, prunePulseEvents, at)
 	return err
 }
 
@@ -153,7 +147,7 @@ type UpsertPulseSeenParams struct {
 // 032). The worker diffs stored corp snapshots once a cycle and
 // records what changed; widgets only read.
 func (q *Queries) UpsertPulseSeen(ctx context.Context, arg UpsertPulseSeenParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPulseSeen,
+	_, err := q.db.Exec(ctx, upsertPulseSeen,
 		arg.CorpID,
 		arg.Kind,
 		arg.Key,

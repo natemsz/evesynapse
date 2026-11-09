@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const applyIndustryRecipeValues = `-- name: ApplyIndustryRecipeValues :exec
@@ -39,7 +37,7 @@ type ApplyIndustryRecipeValuesParams struct {
 // observed rates, less the job cost scaled by how the inputs' value
 // moved since the latest job.
 func (q *Queries) ApplyIndustryRecipeValues(ctx context.Context, arg ApplyIndustryRecipeValuesParams) error {
-	_, err := q.db.ExecContext(ctx, applyIndustryRecipeValues, arg.RegionID, arg.PoolKind, arg.PoolID)
+	_, err := q.db.Exec(ctx, applyIndustryRecipeValues, arg.RegionID, arg.PoolKind, arg.PoolID)
 	return err
 }
 
@@ -73,7 +71,7 @@ type CountKillmailLossesOfTypeRow struct {
 // wreck's cargo and fitting, destroyed or dropped. Each killmail once,
 // whoever fetched it.
 func (q *Queries) CountKillmailLossesOfType(ctx context.Context, arg CountKillmailLossesOfTypeParams) (CountKillmailLossesOfTypeRow, error) {
-	row := q.db.QueryRowContext(ctx, countKillmailLossesOfType, arg.TypeID, pq.Array(arg.CharacterIds), arg.Since)
+	row := q.db.QueryRow(ctx, countKillmailLossesOfType, arg.TypeID, arg.CharacterIds, arg.Since)
 	var i CountKillmailLossesOfTypeRow
 	err := row.Scan(&i.Units, &i.Killmails)
 	return i, err
@@ -89,7 +87,7 @@ type DeleteFacilityBonusParams struct {
 }
 
 func (q *Queries) DeleteFacilityBonus(ctx context.Context, arg DeleteFacilityBonusParams) error {
-	_, err := q.db.ExecContext(ctx, deleteFacilityBonus, arg.UserID, arg.FacilityID)
+	_, err := q.db.Exec(ctx, deleteFacilityBonus, arg.UserID, arg.FacilityID)
 	return err
 }
 
@@ -103,7 +101,7 @@ type DeleteIndustrySummaryForPoolParams struct {
 }
 
 func (q *Queries) DeleteIndustrySummaryForPool(ctx context.Context, arg DeleteIndustrySummaryForPoolParams) error {
-	_, err := q.db.ExecContext(ctx, deleteIndustrySummaryForPool, arg.PoolKind, arg.PoolID)
+	_, err := q.db.Exec(ctx, deleteIndustrySummaryForPool, arg.PoolKind, arg.PoolID)
 	return err
 }
 
@@ -117,7 +115,7 @@ type DeleteJobOutputLinksForPoolParams struct {
 }
 
 func (q *Queries) DeleteJobOutputLinksForPool(ctx context.Context, arg DeleteJobOutputLinksForPoolParams) error {
-	_, err := q.db.ExecContext(ctx, deleteJobOutputLinksForPool, arg.PoolKind, arg.PoolID)
+	_, err := q.db.Exec(ctx, deleteJobOutputLinksForPool, arg.PoolKind, arg.PoolID)
 	return err
 }
 
@@ -134,7 +132,7 @@ type DeleteJobOutputLinksFromParams struct {
 }
 
 func (q *Queries) DeleteJobOutputLinksFrom(ctx context.Context, arg DeleteJobOutputLinksFromParams) error {
-	_, err := q.db.ExecContext(ctx, deleteJobOutputLinksFrom,
+	_, err := q.db.Exec(ctx, deleteJobOutputLinksFrom,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.TypeID,
@@ -237,7 +235,7 @@ type FoldIndustrySummaryParams struct {
 // cost per copy run, in all three figures (today's at that cost).
 // The latest job sets the recipe (ME, bonus) today's figure reruns.
 func (q *Queries) FoldIndustrySummary(ctx context.Context, arg FoldIndustrySummaryParams) error {
-	_, err := q.db.ExecContext(ctx, foldIndustrySummary,
+	_, err := q.db.Exec(ctx, foldIndustrySummary,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.RegionID,
@@ -246,7 +244,7 @@ func (q *Queries) FoldIndustrySummary(ctx context.Context, arg FoldIndustrySumma
 		arg.BrokerRate,
 		arg.FoldedAt,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 	)
 	return err
 }
@@ -271,7 +269,7 @@ type GetPoolJobRow struct {
 }
 
 func (q *Queries) GetPoolJob(ctx context.Context, arg GetPoolJobParams) (GetPoolJobRow, error) {
-	row := q.db.QueryRowContext(ctx, getPoolJob, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.JobID)
+	row := q.db.QueryRow(ctx, getPoolJob, arg.OwnerKind, arg.OwnerIds, arg.JobID)
 	var i GetPoolJobRow
 	err := row.Scan(
 		&i.OwnerID,
@@ -301,7 +299,7 @@ type GetPoolOpenSellOrderRow struct {
 }
 
 func (q *Queries) GetPoolOpenSellOrder(ctx context.Context, arg GetPoolOpenSellOrderParams) (GetPoolOpenSellOrderRow, error) {
-	row := q.db.QueryRowContext(ctx, getPoolOpenSellOrder, pq.Array(arg.CharacterIds), arg.OrderID)
+	row := q.db.QueryRow(ctx, getPoolOpenSellOrder, arg.CharacterIds, arg.OrderID)
 	var i GetPoolOpenSellOrderRow
 	err := row.Scan(&i.CharacterID, &i.OrderID, &i.TypeID)
 	return i, err
@@ -328,7 +326,7 @@ type GetPoolSellRow struct {
 }
 
 func (q *Queries) GetPoolSell(ctx context.Context, arg GetPoolSellParams) (GetPoolSellRow, error) {
-	row := q.db.QueryRowContext(ctx, getPoolSell, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.TransactionID)
+	row := q.db.QueryRow(ctx, getPoolSell, arg.OwnerKind, arg.OwnerIds, arg.TransactionID)
 	var i GetPoolSellRow
 	err := row.Scan(
 		&i.OwnerID,
@@ -367,7 +365,7 @@ type GetPoolTradeRatesRow struct {
 // A pool's observed sales tax and broker fees against what it sold
 // over a span: the rates today's-price figures charge on output.
 func (q *Queries) GetPoolTradeRates(ctx context.Context, arg GetPoolTradeRatesParams) (GetPoolTradeRatesRow, error) {
-	row := q.db.QueryRowContext(ctx, getPoolTradeRates, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.Since)
+	row := q.db.QueryRow(ctx, getPoolTradeRates, arg.OwnerKind, arg.OwnerIds, arg.Since)
 	var i GetPoolTradeRatesRow
 	err := row.Scan(&i.Tax, &i.Broker, &i.Revenue)
 	return i, err
@@ -383,7 +381,7 @@ type GetSDEInventionParams struct {
 }
 
 func (q *Queries) GetSDEInvention(ctx context.Context, arg GetSDEInventionParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getSDEInvention, arg.BlueprintTypeID, arg.ProductTypeID)
+	row := q.db.QueryRow(ctx, getSDEInvention, arg.BlueprintTypeID, arg.ProductTypeID)
 	var runs int64
 	err := row.Scan(&runs)
 	return runs, err
@@ -406,7 +404,7 @@ type InsertJobManualEventParams struct {
 }
 
 func (q *Queries) InsertJobManualEvent(ctx context.Context, arg InsertJobManualEventParams) error {
-	_, err := q.db.ExecContext(ctx, insertJobManualEvent,
+	_, err := q.db.Exec(ctx, insertJobManualEvent,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.JobID,
@@ -434,7 +432,7 @@ type InsertJobOrderWatchParams struct {
 }
 
 func (q *Queries) InsertJobOrderWatch(ctx context.Context, arg InsertJobOrderWatchParams) error {
-	_, err := q.db.ExecContext(ctx, insertJobOrderWatch,
+	_, err := q.db.Exec(ctx, insertJobOrderWatch,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.JobID,
@@ -467,17 +465,17 @@ type InsertJobOutputLinksBatchParams struct {
 }
 
 func (q *Queries) InsertJobOutputLinksBatch(ctx context.Context, arg InsertJobOutputLinksBatchParams) error {
-	_, err := q.db.ExecContext(ctx, insertJobOutputLinksBatch,
+	_, err := q.db.Exec(ctx, insertJobOutputLinksBatch,
 		arg.PoolKind,
 		arg.PoolID,
-		pq.Array(arg.JobIds),
+		arg.JobIds,
 		arg.TypeID,
-		pq.Array(arg.LinkKinds),
-		pq.Array(arg.RefIds),
-		pq.Array(arg.OwnerIds),
-		pq.Array(arg.Ats),
-		pq.Array(arg.Units),
-		pq.Array(arg.Revenues),
+		arg.LinkKinds,
+		arg.RefIds,
+		arg.OwnerIds,
+		arg.Ats,
+		arg.Units,
+		arg.Revenues,
 	)
 	return err
 }
@@ -503,14 +501,14 @@ type InsertLedgerContractItemsBatchParams struct {
 }
 
 func (q *Queries) InsertLedgerContractItemsBatch(ctx context.Context, arg InsertLedgerContractItemsBatchParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, insertLedgerContractItemsBatch,
+	rows, err := q.db.Query(ctx, insertLedgerContractItemsBatch,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.ContractID,
-		pq.Array(arg.TypeIds),
+		arg.TypeIds,
 		arg.At,
-		pq.Array(arg.Quantities),
-		pq.Array(arg.PriceShares),
+		arg.Quantities,
+		arg.PriceShares,
 		arg.SplitBy,
 	)
 	if err != nil {
@@ -524,9 +522,6 @@ func (q *Queries) InsertLedgerContractItemsBatch(ctx context.Context, arg Insert
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -546,7 +541,7 @@ type ListAdjustedPricesRow struct {
 // CCP's adjusted prices: read only for the estimated item value the
 // game's own job cost formula uses, never to value an item.
 func (q *Queries) ListAdjustedPrices(ctx context.Context, typeIds []int64) ([]ListAdjustedPricesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAdjustedPrices, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listAdjustedPrices, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -558,9 +553,6 @@ func (q *Queries) ListAdjustedPrices(ctx context.Context, typeIds []int64) ([]Li
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -579,7 +571,7 @@ type ListIndustryRecipeKeysRow struct {
 }
 
 func (q *Queries) ListIndustryRecipeKeys(ctx context.Context, regionID int64) ([]ListIndustryRecipeKeysRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIndustryRecipeKeys, regionID)
+	rows, err := q.db.Query(ctx, listIndustryRecipeKeys, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -591,9 +583,6 @@ func (q *Queries) ListIndustryRecipeKeys(ctx context.Context, regionID int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -617,7 +606,7 @@ type ListIndustrySummaryParams struct {
 // The Industry section: blueprints for a set of pools, best realized
 // first.
 func (q *Queries) ListIndustrySummary(ctx context.Context, arg ListIndustrySummaryParams) ([]IndustryBpSummary, error) {
-	rows, err := q.db.QueryContext(ctx, listIndustrySummary, arg.PoolKind, pq.Array(arg.PoolIds), arg.RowCap)
+	rows, err := q.db.Query(ctx, listIndustrySummary, arg.PoolKind, arg.PoolIds, arg.RowCap)
 	if err != nil {
 		return nil, err
 	}
@@ -667,9 +656,6 @@ func (q *Queries) ListIndustrySummary(ctx context.Context, arg ListIndustrySumma
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -698,7 +684,7 @@ type ListJobOrderWatchesRow struct {
 }
 
 func (q *Queries) ListJobOrderWatches(ctx context.Context, arg ListJobOrderWatchesParams) ([]ListJobOrderWatchesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listJobOrderWatches, arg.PoolKind, arg.PoolID, pq.Array(arg.JobIds))
+	rows, err := q.db.Query(ctx, listJobOrderWatches, arg.PoolKind, arg.PoolID, arg.JobIds)
 	if err != nil {
 		return nil, err
 	}
@@ -716,9 +702,6 @@ func (q *Queries) ListJobOrderWatches(ctx context.Context, arg ListJobOrderWatch
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -750,7 +733,7 @@ type ListJobsAtFacilityRow struct {
 
 // Jobs whose derived materials a changed facility bonus rewrites.
 func (q *Queries) ListJobsAtFacility(ctx context.Context, arg ListJobsAtFacilityParams) ([]ListJobsAtFacilityRow, error) {
-	rows, err := q.db.QueryContext(ctx, listJobsAtFacility, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.FacilityID)
+	rows, err := q.db.Query(ctx, listJobsAtFacility, arg.OwnerKind, arg.OwnerIds, arg.FacilityID)
 	if err != nil {
 		return nil, err
 	}
@@ -769,9 +752,6 @@ func (q *Queries) ListJobsAtFacility(ctx context.Context, arg ListJobsAtFacility
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -802,7 +782,7 @@ type ListMissingRecipeKeysForPoolRow struct {
 
 // The recipes a pool's summary asks for that no stored value covers.
 func (q *Queries) ListMissingRecipeKeysForPool(ctx context.Context, arg ListMissingRecipeKeysForPoolParams) ([]ListMissingRecipeKeysForPoolRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMissingRecipeKeysForPool, arg.PoolKind, arg.PoolID)
+	rows, err := q.db.Query(ctx, listMissingRecipeKeysForPool, arg.PoolKind, arg.PoolID)
 	if err != nil {
 		return nil, err
 	}
@@ -819,9 +799,6 @@ func (q *Queries) ListMissingRecipeKeysForPool(ctx context.Context, arg ListMiss
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -851,7 +828,7 @@ type ListPoolFacilitiesRow struct {
 
 // The facilities a pool's jobs ran in, most used first.
 func (q *Queries) ListPoolFacilities(ctx context.Context, arg ListPoolFacilitiesParams) ([]ListPoolFacilitiesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPoolFacilities, arg.OwnerKind, pq.Array(arg.OwnerIds))
+	rows, err := q.db.Query(ctx, listPoolFacilities, arg.OwnerKind, arg.OwnerIds)
 	if err != nil {
 		return nil, err
 	}
@@ -863,9 +840,6 @@ func (q *Queries) ListPoolFacilities(ctx context.Context, arg ListPoolFacilities
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -928,11 +902,11 @@ type ListPoolJobsForBlueprintRow struct {
 // A blueprint's jobs in a pool, newest first, with what became of
 // each one's output.
 func (q *Queries) ListPoolJobsForBlueprint(ctx context.Context, arg ListPoolJobsForBlueprintParams) ([]ListPoolJobsForBlueprintRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPoolJobsForBlueprint,
+	rows, err := q.db.Query(ctx, listPoolJobsForBlueprint,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 		arg.BlueprintTypeID,
 	)
 	if err != nil {
@@ -969,9 +943,6 @@ func (q *Queries) ListPoolJobsForBlueprint(ctx context.Context, arg ListPoolJobs
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1002,7 +973,7 @@ type ListPoolOpenSellOrdersOfTypeRow struct {
 
 // A pool's open sell orders of an item, for watching one for a job.
 func (q *Queries) ListPoolOpenSellOrdersOfType(ctx context.Context, arg ListPoolOpenSellOrdersOfTypeParams) ([]ListPoolOpenSellOrdersOfTypeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPoolOpenSellOrdersOfType, pq.Array(arg.CharacterIds), arg.TypeID)
+	rows, err := q.db.Query(ctx, listPoolOpenSellOrdersOfType, arg.CharacterIds, arg.TypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1020,9 +991,6 @@ func (q *Queries) ListPoolOpenSellOrdersOfType(ctx context.Context, arg ListPool
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1055,7 +1023,7 @@ type ListRecentSellsOfTypeRow struct {
 
 // A pool's recent market sales of a type, for linking one to a job.
 func (q *Queries) ListRecentSellsOfType(ctx context.Context, arg ListRecentSellsOfTypeParams) ([]ListRecentSellsOfTypeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRecentSellsOfType, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.TypeID)
+	rows, err := q.db.Query(ctx, listRecentSellsOfType, arg.OwnerKind, arg.OwnerIds, arg.TypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1073,9 +1041,6 @@ func (q *Queries) ListRecentSellsOfType(ctx context.Context, arg ListRecentSells
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1101,7 +1066,7 @@ type ListRegionStatsDailyForTypesRow struct {
 }
 
 func (q *Queries) ListRegionStatsDailyForTypes(ctx context.Context, arg ListRegionStatsDailyForTypesParams) ([]ListRegionStatsDailyForTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRegionStatsDailyForTypes, arg.RegionID, arg.Day, pq.Array(arg.TypeIds))
+	rows, err := q.db.Query(ctx, listRegionStatsDailyForTypes, arg.RegionID, arg.Day, arg.TypeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1113,9 +1078,6 @@ func (q *Queries) ListRegionStatsDailyForTypes(ctx context.Context, arg ListRegi
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1133,7 +1095,7 @@ type ListSDEInventionMaterialsRow struct {
 }
 
 func (q *Queries) ListSDEInventionMaterials(ctx context.Context, blueprintTypeID int64) ([]ListSDEInventionMaterialsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEInventionMaterials, blueprintTypeID)
+	rows, err := q.db.Query(ctx, listSDEInventionMaterials, blueprintTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1145,9 +1107,6 @@ func (q *Queries) ListSDEInventionMaterials(ctx context.Context, blueprintTypeID
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1165,7 +1124,7 @@ type ListUserFacilityBonusesRow struct {
 }
 
 func (q *Queries) ListUserFacilityBonuses(ctx context.Context, userID int64) ([]ListUserFacilityBonusesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUserFacilityBonuses, userID)
+	rows, err := q.db.Query(ctx, listUserFacilityBonuses, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1177,9 +1136,6 @@ func (q *Queries) ListUserFacilityBonuses(ctx context.Context, userID int64) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1201,7 +1157,7 @@ type RecomputeJobInputsAtTimeParams struct {
 }
 
 func (q *Queries) RecomputeJobInputsAtTime(ctx context.Context, arg RecomputeJobInputsAtTimeParams) error {
-	_, err := q.db.ExecContext(ctx, recomputeJobInputsAtTime, arg.OwnerKind, arg.OwnerID, arg.JobID)
+	_, err := q.db.Exec(ctx, recomputeJobInputsAtTime, arg.OwnerKind, arg.OwnerID, arg.JobID)
 	return err
 }
 
@@ -1219,7 +1175,7 @@ type SetJobBonusParams struct {
 }
 
 func (q *Queries) SetJobBonus(ctx context.Context, arg SetJobBonusParams) error {
-	_, err := q.db.ExecContext(ctx, setJobBonus,
+	_, err := q.db.Exec(ctx, setJobBonus,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.JobID,
@@ -1244,7 +1200,7 @@ type UpdateJobMaterialFIFOParams struct {
 }
 
 func (q *Queries) UpdateJobMaterialFIFO(ctx context.Context, arg UpdateJobMaterialFIFOParams) error {
-	_, err := q.db.ExecContext(ctx, updateJobMaterialFIFO,
+	_, err := q.db.Exec(ctx, updateJobMaterialFIFO,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.JobID,
@@ -1269,7 +1225,7 @@ type UpdateJobMaterialQuantityParams struct {
 }
 
 func (q *Queries) UpdateJobMaterialQuantity(ctx context.Context, arg UpdateJobMaterialQuantityParams) error {
-	_, err := q.db.ExecContext(ctx, updateJobMaterialQuantity,
+	_, err := q.db.Exec(ctx, updateJobMaterialQuantity,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.JobID,
@@ -1292,7 +1248,7 @@ type UpsertFacilityBonusParams struct {
 }
 
 func (q *Queries) UpsertFacilityBonus(ctx context.Context, arg UpsertFacilityBonusParams) error {
-	_, err := q.db.ExecContext(ctx, upsertFacilityBonus, arg.UserID, arg.FacilityID, arg.MaterialBonus)
+	_, err := q.db.Exec(ctx, upsertFacilityBonus, arg.UserID, arg.FacilityID, arg.MaterialBonus)
 	return err
 }
 
@@ -1326,7 +1282,7 @@ type UpsertIndustryRecipeValueParams struct {
 }
 
 func (q *Queries) UpsertIndustryRecipeValue(ctx context.Context, arg UpsertIndustryRecipeValueParams) error {
-	_, err := q.db.ExecContext(ctx, upsertIndustryRecipeValue,
+	_, err := q.db.Exec(ctx, upsertIndustryRecipeValue,
 		arg.RegionID,
 		arg.BlueprintTypeID,
 		arg.Me,
@@ -1364,13 +1320,13 @@ type UpsertJobMaterialsBatchParams struct {
 }
 
 func (q *Queries) UpsertJobMaterialsBatch(ctx context.Context, arg UpsertJobMaterialsBatchParams) error {
-	_, err := q.db.ExecContext(ctx, upsertJobMaterialsBatch,
+	_, err := q.db.Exec(ctx, upsertJobMaterialsBatch,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.JobID,
-		pq.Array(arg.TypeIds),
-		pq.Array(arg.Quantities),
-		pq.Array(arg.UnitsAtTime),
+		arg.TypeIds,
+		arg.Quantities,
+		arg.UnitsAtTime,
 	)
 	return err
 }
@@ -1421,7 +1377,7 @@ type UpsertLedgerJobParams struct {
 // A job lands once with its recipe facts; a job landed before those
 // were kept (blueprint_type_id 0) takes them on its next sighting.
 func (q *Queries) UpsertLedgerJob(ctx context.Context, arg UpsertLedgerJobParams) error {
-	_, err := q.db.ExecContext(ctx, upsertLedgerJob,
+	_, err := q.db.Exec(ctx, upsertLedgerJob,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.JobID,

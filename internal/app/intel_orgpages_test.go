@@ -513,7 +513,7 @@ func TestMigration026Reopen(t *testing.T) {
 		if err != nil {
 			t.Fatalf("store.Open (pass %d): %v", i, err)
 		}
-		q := db.New(conn)
+		q := db.New(pool)
 		if err := q.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{CorporationID: 98000001, Priority: wantViewed}); err != nil {
 			t.Fatalf("corporation want (pass %d): %v", i, err)
 		}

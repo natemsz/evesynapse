@@ -208,15 +208,15 @@ func (app *mod) handleGroupDelete(w http.ResponseWriter, r *http.Request) {
 		app.groupsBack(w, r, "That group is not yours to change.")
 		return
 	}
-	tx, err := app.deps.SQLDB().BeginTx(ctx, nil)
+	tx, err := app.deps.PGPool().Begin(ctx)
 	if err == nil {
-		defer tx.Rollback()
+		defer tx.Rollback(ctx)
 		q := app.queries.WithTx(tx)
 		if err = q.DeleteDiscordRoleRulesForGroup(ctx, strconv.FormatInt(group.ID, 10)); err == nil {
 			err = q.DeleteOrgGroup(ctx, group.ID)
 		}
 		if err == nil {
-			err = tx.Commit()
+			err = tx.Commit(ctx)
 		}
 	}
 	if err != nil {

@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 
 	"evesynapse/internal/app/swarm"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // Data freshness, shared by the sidebar status modal (and, in
@@ -130,7 +130,7 @@ func (app *Application) freshnessRows(ctx context.Context, now time.Time) ([]fre
 		add(freshSource{"Killmails", "streams in as kills land", 5 * time.Minute, 30 * time.Minute}, row.UpdatedAt, true)
 	} else {
 		add(freshSource{"Killmails", "streams in as kills land", 5 * time.Minute, 30 * time.Minute}, time.Time{}, false)
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("freshness: killfeed state: %v", err)
 		}
 	}

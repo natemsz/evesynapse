@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const deleteTVContractObservation = `-- name: DeleteTVContractObservation :exec
@@ -19,7 +17,7 @@ WHERE contract_id = $1
 `
 
 func (q *Queries) DeleteTVContractObservation(ctx context.Context, contractID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteTVContractObservation, contractID)
+	_, err := q.db.Exec(ctx, deleteTVContractObservation, contractID)
 	return err
 }
 
@@ -30,7 +28,7 @@ WHERE type_id = $1
 `
 
 func (q *Queries) GetTrueValue(ctx context.Context, typeID int64) (TrueValue, error) {
-	row := q.db.QueryRowContext(ctx, getTrueValue, typeID)
+	row := q.db.QueryRow(ctx, getTrueValue, typeID)
 	var i TrueValue
 	err := row.Scan(
 		&i.TypeID,
@@ -52,7 +50,7 @@ ORDER BY last_seen_at
 `
 
 func (q *Queries) ListTVContractObservationsByRegion(ctx context.Context, regionID int64) ([]TrueValueContractObservation, error) {
-	rows, err := q.db.QueryContext(ctx, listTVContractObservationsByRegion, regionID)
+	rows, err := q.db.Query(ctx, listTVContractObservationsByRegion, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -78,9 +76,6 @@ func (q *Queries) ListTVContractObservationsByRegion(ctx context.Context, region
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -123,7 +118,7 @@ type ListTVShipSaleProbesRow struct {
 // is a sale; see pub_contracts_sales.go). Freshest departures
 // first: ESI's memory of an accepted contract fades.
 func (q *Queries) ListTVShipSaleProbes(ctx context.Context, arg ListTVShipSaleProbesParams) ([]ListTVShipSaleProbesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTVShipSaleProbes, pq.Array(arg.ShipTypeIds), arg.ProbeAfter, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listTVShipSaleProbes, arg.ShipTypeIds, arg.ProbeAfter, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -141,9 +136,6 @@ func (q *Queries) ListTVShipSaleProbes(ctx context.Context, arg ListTVShipSalePr
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -167,7 +159,7 @@ type ListTVVanishedSamplesSinceRow struct {
 }
 
 func (q *Queries) ListTVVanishedSamplesSince(ctx context.Context, vanishedAt sql.NullTime) ([]ListTVVanishedSamplesSinceRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTVVanishedSamplesSince, vanishedAt)
+	rows, err := q.db.Query(ctx, listTVVanishedSamplesSince, vanishedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -185,9 +177,6 @@ func (q *Queries) ListTVVanishedSamplesSince(ctx context.Context, vanishedAt sql
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -249,7 +238,7 @@ type ListTrueValueCorpusContractsRow struct {
 // corpus for a type on thousands of contracts: 24 ms a type against
 // 0.3 ms, and ~400 types a cycle.
 func (q *Queries) ListTrueValueCorpusContracts(ctx context.Context, arg ListTrueValueCorpusContractsParams) ([]ListTrueValueCorpusContractsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTrueValueCorpusContracts, arg.TypeID, arg.Price, arg.Limit)
+	rows, err := q.db.Query(ctx, listTrueValueCorpusContracts, arg.TypeID, arg.Price, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -272,9 +261,6 @@ func (q *Queries) ListTrueValueCorpusContracts(ctx context.Context, arg ListTrue
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -288,7 +274,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListTrueValues(ctx context.Context) ([]TrueValue, error) {
-	rows, err := q.db.QueryContext(ctx, listTrueValues)
+	rows, err := q.db.Query(ctx, listTrueValues)
 	if err != nil {
 		return nil, err
 	}
@@ -308,9 +294,6 @@ func (q *Queries) ListTrueValues(ctx context.Context) ([]TrueValue, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -326,7 +309,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListTrueValuesForTypes(ctx context.Context, dollar_1 []int64) ([]TrueValue, error) {
-	rows, err := q.db.QueryContext(ctx, listTrueValuesForTypes, pq.Array(dollar_1))
+	rows, err := q.db.Query(ctx, listTrueValuesForTypes, dollar_1)
 	if err != nil {
 		return nil, err
 	}
@@ -346,9 +329,6 @@ func (q *Queries) ListTrueValuesForTypes(ctx context.Context, dollar_1 []int64) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -373,7 +353,7 @@ type MarkTVContractObservationExitParams struct {
 // public". The row leaves the probe queues and never becomes a
 // sample; the status stays for a later reading of what 403 means.
 func (q *Queries) MarkTVContractObservationExit(ctx context.Context, arg MarkTVContractObservationExitParams) error {
-	_, err := q.db.ExecContext(ctx, markTVContractObservationExit, arg.Status, arg.ProbedAt, arg.ContractID)
+	_, err := q.db.Exec(ctx, markTVContractObservationExit, arg.Status, arg.ProbedAt, arg.ContractID)
 	return err
 }
 
@@ -390,7 +370,7 @@ type MarkTVContractObservationSoldParams struct {
 
 // A watched listing ESI confirmed accepted (schema 070).
 func (q *Queries) MarkTVContractObservationSold(ctx context.Context, arg MarkTVContractObservationSoldParams) error {
-	_, err := q.db.ExecContext(ctx, markTVContractObservationSold, arg.ContractID, arg.VanishedAt)
+	_, err := q.db.Exec(ctx, markTVContractObservationSold, arg.ContractID, arg.VanishedAt)
 	return err
 }
 
@@ -406,7 +386,7 @@ type MarkTVContractObservationVanishedParams struct {
 }
 
 func (q *Queries) MarkTVContractObservationVanished(ctx context.Context, arg MarkTVContractObservationVanishedParams) error {
-	_, err := q.db.ExecContext(ctx, markTVContractObservationVanished, arg.ContractID, arg.VanishedAt)
+	_, err := q.db.Exec(ctx, markTVContractObservationVanished, arg.ContractID, arg.VanishedAt)
 	return err
 }
 
@@ -422,7 +402,7 @@ type PurgeTVContractObservationsParams struct {
 }
 
 func (q *Queries) PurgeTVContractObservations(ctx context.Context, arg PurgeTVContractObservationsParams) error {
-	_, err := q.db.ExecContext(ctx, purgeTVContractObservations, arg.ExpiresAt, arg.VanishedAt)
+	_, err := q.db.Exec(ctx, purgeTVContractObservations, arg.ExpiresAt, arg.VanishedAt)
 	return err
 }
 
@@ -438,7 +418,7 @@ type TouchTVContractObservationParams struct {
 }
 
 func (q *Queries) TouchTVContractObservation(ctx context.Context, arg TouchTVContractObservationParams) error {
-	_, err := q.db.ExecContext(ctx, touchTVContractObservation, arg.ContractID, arg.LastSeenAt)
+	_, err := q.db.Exec(ctx, touchTVContractObservation, arg.ContractID, arg.LastSeenAt)
 	return err
 }
 
@@ -475,7 +455,7 @@ type UpsertTVContractObservationParams struct {
 // vanished (probable-sale evidence); rows are bookkeeping
 // only and are never read by a page.
 func (q *Queries) UpsertTVContractObservation(ctx context.Context, arg UpsertTVContractObservationParams) error {
-	_, err := q.db.ExecContext(ctx, upsertTVContractObservation,
+	_, err := q.db.Exec(ctx, upsertTVContractObservation,
 		arg.ContractID,
 		arg.RegionID,
 		arg.TypeID,
@@ -529,7 +509,7 @@ type UpsertTrueValueParams struct {
 // est_sell, then unpriced (the guide average is never a price).
 // Written only by the worker's true-value pass.
 func (q *Queries) UpsertTrueValue(ctx context.Context, arg UpsertTrueValueParams) error {
-	_, err := q.db.ExecContext(ctx, upsertTrueValue,
+	_, err := q.db.Exec(ctx, upsertTrueValue,
 		arg.TypeID,
 		arg.BuildCost,
 		arg.EstSell,

@@ -24,6 +24,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 type marketBasketListRow struct {
@@ -175,7 +176,7 @@ func (app *Application) loadBasketFor(ctx context.Context, idRaw string, userID 
 	}
 	b, err := app.queries.GetMarketBasket(ctx, id)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("baskets: read %d: %v", id, err)
 		}
 		return db.MarketBasket{}, false

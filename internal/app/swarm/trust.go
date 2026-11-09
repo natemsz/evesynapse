@@ -25,7 +25,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	cryptorand "crypto/rand"
-	"database/sql"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -40,6 +39,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // Trust arithmetic: a new signer starts at 0.9 (the 9-to-1
@@ -419,7 +419,7 @@ func (app *Mod) SwarmGossipDue(ctx context.Context, now time.Time) bool {
 		// No identity row, or no time drawn yet, reads as due.
 		if next, err := app.Queries.GetSwarmNextGossip(ctx); err == nil && next.Valid {
 			app.SwarmNextGossip = next.Time
-		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("swarm: read next gossip time: %v", err)
 		}
 		app.SwarmNextLoaded = true
@@ -672,7 +672,7 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 	if signer != "" && signerKey != "" {
 		peer, err := app.Queries.GetSwarmPeer(ctx, signer)
 		switch {
-		case errors.Is(err, sql.ErrNoRows):
+		case errors.Is(err, pgx.ErrNoRows):
 			// A sender never heard of is new, not broken.
 		case err != nil:
 			return err

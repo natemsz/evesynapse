@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ func (app *Application) loadStructureView(ctx context.Context, id int64) *struct
 		view.TypeID = sc.TypeID
 		view.OwnerCorpID = sc.OwnerCorporationID
 		view.SystemID = sc.SystemID
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("structure page: read context for %d: %v", id, err)
 	}
 	if view.TypeID > 0 {

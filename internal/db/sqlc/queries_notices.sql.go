@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const countGlobalNoticeAuditSince = `-- name: CountGlobalNoticeAuditSince :one
@@ -28,7 +26,7 @@ type CountGlobalNoticeAuditSinceParams struct {
 // The rate limits: one account's actions of a kind since a moment,
 // and everyone's. A user_id of 0 counts every account.
 func (q *Queries) CountGlobalNoticeAuditSince(ctx context.Context, arg CountGlobalNoticeAuditSinceParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countGlobalNoticeAuditSince, arg.Action, arg.Since, arg.UserID)
+	row := q.db.QueryRow(ctx, countGlobalNoticeAuditSince, arg.Action, arg.Since, arg.UserID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -41,7 +39,7 @@ SELECT COUNT(*)::bigint FROM global_notices WHERE urgent_sent_at >= $1
 // How many app-notification sends went out since a moment: the
 // urgent path's own, much tighter limit.
 func (q *Queries) CountGlobalNoticeUrgentSince(ctx context.Context, since sql.NullTime) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countGlobalNoticeUrgentSince, since)
+	row := q.db.QueryRow(ctx, countGlobalNoticeUrgentSince, since)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -53,7 +51,7 @@ WHERE retired_at IS NULL AND ends_at > $1
 `
 
 func (q *Queries) CountLiveGlobalNotices(ctx context.Context, now time.Time) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countLiveGlobalNotices, now)
+	row := q.db.QueryRow(ctx, countLiveGlobalNotices, now)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -66,7 +64,7 @@ WHERE id = $1
 `
 
 func (q *Queries) GetGlobalNotice(ctx context.Context, id int64) (GlobalNotice, error) {
-	row := q.db.QueryRowContext(ctx, getGlobalNotice, id)
+	row := q.db.QueryRow(ctx, getGlobalNotice, id)
 	var i GlobalNotice
 	err := row.Scan(
 		&i.ID,
@@ -104,7 +102,7 @@ type InsertGlobalNoticeParams struct {
 }
 
 func (q *Queries) InsertGlobalNotice(ctx context.Context, arg InsertGlobalNoticeParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, insertGlobalNotice,
+	row := q.db.QueryRow(ctx, insertGlobalNotice,
 		arg.Title,
 		arg.Severity,
 		arg.BodyMd,
@@ -138,7 +136,7 @@ type InsertGlobalNoticeAuditParams struct {
 }
 
 func (q *Queries) InsertGlobalNoticeAudit(ctx context.Context, arg InsertGlobalNoticeAuditParams) error {
-	_, err := q.db.ExecContext(ctx, insertGlobalNoticeAudit,
+	_, err := q.db.Exec(ctx, insertGlobalNoticeAudit,
 		arg.NoticeID,
 		arg.Action,
 		arg.UserID,
@@ -166,7 +164,7 @@ type InsertGlobalNoticeDismissalParams struct {
 }
 
 func (q *Queries) InsertGlobalNoticeDismissal(ctx context.Context, arg InsertGlobalNoticeDismissalParams) error {
-	_, err := q.db.ExecContext(ctx, insertGlobalNoticeDismissal, arg.UserID, arg.Now, arg.NoticeID)
+	_, err := q.db.Exec(ctx, insertGlobalNoticeDismissal, arg.UserID, arg.Now, arg.NoticeID)
 	return err
 }
 
@@ -191,7 +189,7 @@ type ListGlobalNoticeAuditRow struct {
 }
 
 func (q *Queries) ListGlobalNoticeAudit(ctx context.Context, rowLimit int32) ([]ListGlobalNoticeAuditRow, error) {
-	rows, err := q.db.QueryContext(ctx, listGlobalNoticeAudit, rowLimit)
+	rows, err := q.db.Query(ctx, listGlobalNoticeAudit, rowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -215,9 +213,6 @@ func (q *Queries) ListGlobalNoticeAudit(ctx context.Context, rowLimit int32) ([]
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -235,7 +230,7 @@ type ListGlobalNoticeDismissalsParams struct {
 }
 
 func (q *Queries) ListGlobalNoticeDismissals(ctx context.Context, arg ListGlobalNoticeDismissalsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listGlobalNoticeDismissals, arg.UserID, pq.Array(arg.NoticeIds))
+	rows, err := q.db.Query(ctx, listGlobalNoticeDismissals, arg.UserID, arg.NoticeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -247,9 +242,6 @@ func (q *Queries) ListGlobalNoticeDismissals(ctx context.Context, arg ListGlobal
 			return nil, err
 		}
 		items = append(items, notice_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -265,7 +257,7 @@ ORDER BY u.id
 
 // The urgent path's recipients: every account with a character.
 func (q *Queries) ListGlobalNoticeRecipients(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listGlobalNoticeRecipients)
+	rows, err := q.db.Query(ctx, listGlobalNoticeRecipients)
 	if err != nil {
 		return nil, err
 	}
@@ -277,9 +269,6 @@ func (q *Queries) ListGlobalNoticeRecipients(ctx context.Context) ([]int64, erro
 			return nil, err
 		}
 		items = append(items, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -316,7 +305,7 @@ type ListLiveGlobalNoticesRow struct {
 // ---------------------------------------------------------------------
 // The banners every page shows: live now, bounded, most severe first.
 func (q *Queries) ListLiveGlobalNotices(ctx context.Context, arg ListLiveGlobalNoticesParams) ([]ListLiveGlobalNoticesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLiveGlobalNotices, arg.Now, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listLiveGlobalNotices, arg.Now, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -335,9 +324,6 @@ func (q *Queries) ListLiveGlobalNotices(ctx context.Context, arg ListLiveGlobalN
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -369,7 +355,7 @@ type ListRecentGlobalNoticesRow struct {
 
 // The admin tab's list: newest first, live and past alike.
 func (q *Queries) ListRecentGlobalNotices(ctx context.Context, rowLimit int32) ([]ListRecentGlobalNoticesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRecentGlobalNotices, rowLimit)
+	rows, err := q.db.Query(ctx, listRecentGlobalNotices, rowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -395,9 +381,6 @@ func (q *Queries) ListRecentGlobalNotices(ctx context.Context, rowLimit int32) (
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -414,7 +397,7 @@ type MarkGlobalNoticeUrgentSentParams struct {
 }
 
 func (q *Queries) MarkGlobalNoticeUrgentSent(ctx context.Context, arg MarkGlobalNoticeUrgentSentParams) error {
-	_, err := q.db.ExecContext(ctx, markGlobalNoticeUrgentSent, arg.Now, arg.ID)
+	_, err := q.db.Exec(ctx, markGlobalNoticeUrgentSent, arg.Now, arg.ID)
 	return err
 }
 
@@ -429,11 +412,11 @@ type RetireGlobalNoticeParams struct {
 }
 
 func (q *Queries) RetireGlobalNotice(ctx context.Context, arg RetireGlobalNoticeParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, retireGlobalNotice, arg.Now, arg.ID)
+	result, err := q.db.Exec(ctx, retireGlobalNotice, arg.Now, arg.ID)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const updateGlobalNotice = `-- name: UpdateGlobalNotice :execrows
@@ -455,7 +438,7 @@ type UpdateGlobalNoticeParams struct {
 
 // A retired notice is history and is not edited again.
 func (q *Queries) UpdateGlobalNotice(ctx context.Context, arg UpdateGlobalNoticeParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, updateGlobalNotice,
+	result, err := q.db.Exec(ctx, updateGlobalNotice,
 		arg.Title,
 		arg.Severity,
 		arg.BodyMd,
@@ -467,5 +450,5 @@ func (q *Queries) UpdateGlobalNotice(ctx context.Context, arg UpdateGlobalNotice
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }

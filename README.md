@@ -33,10 +33,16 @@ This is a human-built project built for other humans, and a labor of love.
 - **Go** (module `evesynapse`; see `go.mod`)
 - **chi** (`github.com/go-chi/chi/v5`) — HTTP router
 - **alexedwards/scs v2** — sessions, stored in PostgreSQL via `pgxstore`
-- **PostgreSQL 16** — the app's database, reached through
-  **pgx/v5** (sqlc generates `database/sql` code over the pgx
-  stdlib driver; a pgxpool backs the session store)
-- **sqlc** — type-safe Go generated from hand-written SQL
+- **PostgreSQL 16 or newer** (the live deployment runs 18.6) —
+  the app's database, reached through **pgx/v5**: every query
+  runs on a pgxpool, which also backs the session store
+- **sqlc** — type-safe Go generated from hand-written SQL,
+  generated against pgx
+- **goccy/go-json** — JSON outside the swarm signing paths,
+  which stay on the standard library so signed bytes are stable
+- **klauspost/compress** — gzip response compression (gzhttp),
+  zstd for stored kill details, and brotli for precompressed
+  static assets
 - **golang.org/x/oauth2** — EVE SSO authorization-code flow
 - **github.com/golang-jwt/jwt/v5** — SSO access-token verification
   against CCP's JWKS (issuer `login.eveonline.com`)
@@ -309,9 +315,9 @@ library and third-party packages only.
 
 | Package | What it is | Imports |
 | --- | --- | --- |
-| `internal/store/` | the database: opens Postgres and brings the schema up to date at startup (`store.go`, `schema.go`). The schema itself is the numbered steps in `internal/store/schema_pg/`, which are also sqlc's input | — |
+| `internal/store/` | the database: opens PostgreSQL through a pgx pool, sizes it from `DB_MAX_CONNS`, and brings the schema up to date at startup (`store.go`, `schema.go`). The schema itself is the numbered steps in `internal/store/schema_pg/`, which are also sqlc's input | — |
 | `internal/db/query/` | hand-written queries (sqlc input) | |
-| `internal/db/sqlc/` | sqlc-generated code (do not edit) | — |
+| `internal/db/sqlc/` | sqlc-generated pgx code (do not edit) | — |
 | `internal/esi/` | the ESI client: HTTP layer, per-character snapshot cache, and the two-tier type/group/place name resolution (network tier + cache-only render tier). Never imports `internal/app`; access tokens are injected via a callback | `db/sqlc`, `logging` |
 | `internal/marketwire/` | the market API's wire format, version 1: the JSON shapes `/api/market/v1` answers with, kept apart so the format is one versioned contract | — |
 
@@ -378,7 +384,7 @@ flowchart LR
 
 ### Tests and dev-only code
 
-- `internal/pgtest/` — test-only embedded-Postgres provisioning
+- `internal/pgtest/` — test-only embedded PostgreSQL 16 provisioning
   (a fresh database per test; `go test ./...` needs no external
   database). A package whose tests use it needs a `TestMain` that
   calls `pgtest.TestMain`, which stops the server when the tests
@@ -704,12 +710,15 @@ server logs a loud warning at boot when it is on.
 
 ## Database & sqlc
 
-The app runs on PostgreSQL 16 (the live deployment is 16.15;
-tests self-provision an embedded Postgres 16, so CI needs no
-database service). Every query and the hand-rolled importer ride
-a `database/sql` handle over the pgx/v5 stdlib driver; a pgxpool
-exists only to back the scs `pgxstore` session store (sessions
-live in the `sessions` table the baseline creates).
+The app runs on PostgreSQL 16 or newer (the live deployment is
+18.6; tests self-provision an embedded Postgres 16, so CI needs
+no database service). Every query rides a pgxpool (sqlc
+generates pgx code from the hand-written SQL); the pool's
+ceiling is `DB_MAX_CONNS` (default 20), and the same pool backs
+the scs `pgxstore` session store (sessions live in the
+`sessions` table the baseline creates). A `database/sql` handle
+over the pgx stdlib driver remains for schema migration and
+raw SQL in tests.
 
 The schema is a series of numbered steps in
 `internal/store/schema_pg/`: `001_baseline.sql` is the whole schema

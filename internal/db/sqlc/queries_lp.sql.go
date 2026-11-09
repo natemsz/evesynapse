@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const countLPOfferValuesUnpriced = `-- name: CountLPOfferValuesUnpriced :one
@@ -28,7 +26,7 @@ type CountLPOfferValuesUnpricedParams struct {
 // How many of the region's offers (in the chosen store) stand
 // unpriced, for the page's honest-gap line.
 func (q *Queries) CountLPOfferValuesUnpriced(ctx context.Context, arg CountLPOfferValuesUnpricedParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countLPOfferValuesUnpriced, arg.RegionID, arg.CorporationID)
+	row := q.db.QueryRow(ctx, countLPOfferValuesUnpriced, arg.RegionID, arg.CorporationID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -39,7 +37,7 @@ DELETE FROM lp_offer_requirements WHERE corporation_id = $1
 `
 
 func (q *Queries) DeleteLPOfferRequirementsByCorp(ctx context.Context, corporationID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteLPOfferRequirementsByCorp, corporationID)
+	_, err := q.db.Exec(ctx, deleteLPOfferRequirementsByCorp, corporationID)
 	return err
 }
 
@@ -48,7 +46,7 @@ DELETE FROM lp_offer_values WHERE region_id = $1
 `
 
 func (q *Queries) DeleteLPOfferValuesByRegion(ctx context.Context, regionID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteLPOfferValuesByRegion, regionID)
+	_, err := q.db.Exec(ctx, deleteLPOfferValuesByRegion, regionID)
 	return err
 }
 
@@ -57,7 +55,7 @@ DELETE FROM lp_offers WHERE corporation_id = $1
 `
 
 func (q *Queries) DeleteLPOffersByCorp(ctx context.Context, corporationID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteLPOffersByCorp, corporationID)
+	_, err := q.db.Exec(ctx, deleteLPOffersByCorp, corporationID)
 	return err
 }
 
@@ -78,7 +76,7 @@ type InsertLPOfferParams struct {
 }
 
 func (q *Queries) InsertLPOffer(ctx context.Context, arg InsertLPOfferParams) error {
-	_, err := q.db.ExecContext(ctx, insertLPOffer,
+	_, err := q.db.Exec(ctx, insertLPOffer,
 		arg.CorporationID,
 		arg.OfferID,
 		arg.TypeID,
@@ -106,7 +104,7 @@ type InsertLPOfferRequirementParams struct {
 
 // A requirement listed twice for one offer adds up.
 func (q *Queries) InsertLPOfferRequirement(ctx context.Context, arg InsertLPOfferRequirementParams) error {
-	_, err := q.db.ExecContext(ctx, insertLPOfferRequirement,
+	_, err := q.db.Exec(ctx, insertLPOfferRequirement,
 		arg.CorporationID,
 		arg.OfferID,
 		arg.TypeID,
@@ -129,7 +127,7 @@ type ListDueLPStoreCorpsParams struct {
 
 // The stores whose offers are due a re-read, never-read first.
 func (q *Queries) ListDueLPStoreCorps(ctx context.Context, arg ListDueLPStoreCorpsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listDueLPStoreCorps, arg.Cutoff, arg.RowCap)
+	rows, err := q.db.Query(ctx, listDueLPStoreCorps, arg.Cutoff, arg.RowCap)
 	if err != nil {
 		return nil, err
 	}
@@ -141,9 +139,6 @@ func (q *Queries) ListDueLPStoreCorps(ctx context.Context, arg ListDueLPStoreCor
 			return nil, err
 		}
 		items = append(items, corporation_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -164,7 +159,7 @@ type ListLPOfferRequirementsByCorpRow struct {
 }
 
 func (q *Queries) ListLPOfferRequirementsByCorp(ctx context.Context, corporationID int64) ([]ListLPOfferRequirementsByCorpRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLPOfferRequirementsByCorp, corporationID)
+	rows, err := q.db.Query(ctx, listLPOfferRequirementsByCorp, corporationID)
 	if err != nil {
 		return nil, err
 	}
@@ -176,9 +171,6 @@ func (q *Queries) ListLPOfferRequirementsByCorp(ctx context.Context, corporation
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -199,7 +191,7 @@ type ListLPOfferRequirementsForParams struct {
 }
 
 func (q *Queries) ListLPOfferRequirementsFor(ctx context.Context, arg ListLPOfferRequirementsForParams) ([]LpOfferRequirement, error) {
-	rows, err := q.db.QueryContext(ctx, listLPOfferRequirementsFor, pq.Array(arg.CorporationIds), pq.Array(arg.OfferIds))
+	rows, err := q.db.Query(ctx, listLPOfferRequirementsFor, arg.CorporationIds, arg.OfferIds)
 	if err != nil {
 		return nil, err
 	}
@@ -216,9 +208,6 @@ func (q *Queries) ListLPOfferRequirementsFor(ctx context.Context, arg ListLPOffe
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -282,7 +271,7 @@ type ListLPOfferValuesRow struct {
 // offers over the daily-volume floor, best ISK per LP first.
 // Ranked on the sell side or the instant-sale side.
 func (q *Queries) ListLPOfferValues(ctx context.Context, arg ListLPOfferValuesParams) ([]ListLPOfferValuesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLPOfferValues,
+	rows, err := q.db.Query(ctx, listLPOfferValues,
 		arg.RegionID,
 		arg.CorporationID,
 		arg.MinVolume,
@@ -291,7 +280,7 @@ func (q *Queries) ListLPOfferValues(ctx context.Context, arg ListLPOfferValuesPa
 		arg.MaxIskLp,
 		arg.MinLp,
 		arg.MaxLp,
-		pq.Array(arg.TypeIds),
+		arg.TypeIds,
 		arg.RowCap,
 	)
 	if err != nil {
@@ -323,9 +312,6 @@ func (q *Queries) ListLPOfferValues(ctx context.Context, arg ListLPOfferValuesPa
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -348,7 +334,7 @@ type ListLPOffersByCorpRow struct {
 }
 
 func (q *Queries) ListLPOffersByCorp(ctx context.Context, corporationID int64) ([]ListLPOffersByCorpRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLPOffersByCorp, corporationID)
+	rows, err := q.db.Query(ctx, listLPOffersByCorp, corporationID)
 	if err != nil {
 		return nil, err
 	}
@@ -367,9 +353,6 @@ func (q *Queries) ListLPOffersByCorp(ctx context.Context, corporationID int64) (
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -401,7 +384,7 @@ type ListLPRequirementPricesRow struct {
 // read prices every requirement on the page, however they
 // spread across its offers.
 func (q *Queries) ListLPRequirementPrices(ctx context.Context, arg ListLPRequirementPricesParams) ([]ListLPRequirementPricesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLPRequirementPrices, arg.RegionID, pq.Array(arg.TypeIds))
+	rows, err := q.db.Query(ctx, listLPRequirementPrices, arg.RegionID, arg.TypeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -419,9 +402,6 @@ func (q *Queries) ListLPRequirementPrices(ctx context.Context, arg ListLPRequire
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -443,7 +423,7 @@ type ListLPStoreCorpsRow struct {
 
 // The page's store picker: stores that sell something.
 func (q *Queries) ListLPStoreCorps(ctx context.Context) ([]ListLPStoreCorpsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLPStoreCorps)
+	rows, err := q.db.Query(ctx, listLPStoreCorps)
 	if err != nil {
 		return nil, err
 	}
@@ -455,9 +435,6 @@ func (q *Queries) ListLPStoreCorps(ctx context.Context) ([]ListLPStoreCorpsRow, 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -473,7 +450,7 @@ LIMIT 500
 `
 
 func (q *Queries) ListUnnamedLPStoreCorps(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listUnnamedLPStoreCorps)
+	rows, err := q.db.Query(ctx, listUnnamedLPStoreCorps)
 	if err != nil {
 		return nil, err
 	}
@@ -485,9 +462,6 @@ func (q *Queries) ListUnnamedLPStoreCorps(ctx context.Context) ([]int64, error) 
 			return nil, err
 		}
 		items = append(items, corporation_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -508,7 +482,7 @@ type MarkLPStoreCorpParams struct {
 }
 
 func (q *Queries) MarkLPStoreCorp(ctx context.Context, arg MarkLPStoreCorpParams) error {
-	_, err := q.db.ExecContext(ctx, markLPStoreCorp,
+	_, err := q.db.Exec(ctx, markLPStoreCorp,
 		arg.CorporationID,
 		arg.State,
 		arg.OfferCount,
@@ -569,11 +543,11 @@ type RefreshLPOfferValuesParams struct {
 // price), when the product has no typical price, or when any
 // required item has none.
 func (q *Queries) RefreshLPOfferValues(ctx context.Context, arg RefreshLPOfferValuesParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, refreshLPOfferValues, arg.RegionID, arg.Now)
+	result, err := q.db.Exec(ctx, refreshLPOfferValues, arg.RegionID, arg.Now)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const setLPStoreCorpName = `-- name: SetLPStoreCorpName :exec
@@ -586,7 +560,7 @@ type SetLPStoreCorpNameParams struct {
 }
 
 func (q *Queries) SetLPStoreCorpName(ctx context.Context, arg SetLPStoreCorpNameParams) error {
-	_, err := q.db.ExecContext(ctx, setLPStoreCorpName, arg.CorporationID, arg.Name)
+	_, err := q.db.Exec(ctx, setLPStoreCorpName, arg.CorporationID, arg.Name)
 	return err
 }
 
@@ -602,6 +576,6 @@ ON CONFLICT (corporation_id) DO NOTHING
 // Seeds a corporation from ESI's NPC corporation list; an existing
 // row keeps its state and stamp.
 func (q *Queries) UpsertLPStoreCorp(ctx context.Context, corporationID int64) error {
-	_, err := q.db.ExecContext(ctx, upsertLPStoreCorp, corporationID)
+	_, err := q.db.Exec(ctx, upsertLPStoreCorp, corporationID)
 	return err
 }

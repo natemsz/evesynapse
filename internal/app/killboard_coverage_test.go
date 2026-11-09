@@ -7,13 +7,10 @@ package app
 // page lists a kill only the board holds.
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -139,13 +136,9 @@ func TestZkillHistoryBackfillIngests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetKillDetail: %v", err)
 	}
-	zr, err := gzip.NewReader(bytes.NewReader(payload))
+	raw, err := killDetailRaw(payload)
 	if err != nil {
-		t.Fatalf("gunzip detail: %v", err)
-	}
-	raw, err := io.ReadAll(zr)
-	if err != nil {
-		t.Fatalf("read detail: %v", err)
+		t.Fatalf("decode detail: %v", err)
 	}
 	if !strings.Contains(string(raw), `"killmail_id":800001`) {
 		t.Errorf("stored detail does not carry the killmail: %s", raw)

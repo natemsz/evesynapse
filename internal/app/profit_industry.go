@@ -335,11 +335,11 @@ func (app *Application) foldIndustrySummary(ctx context.Context, pool ledgerPool
 	}
 	prefs := app.profitPrefsFor(ctx, pool.userID)
 	tax, broker := app.industryTradeRates(ctx, pool, now)
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.DeleteIndustrySummaryForPool(ctx, db.DeleteIndustrySummaryForPoolParams{PoolKind: pool.kind, PoolID: pool.id}); err != nil {
 		return err
@@ -350,7 +350,7 @@ func (app *Application) foldIndustrySummary(ctx context.Context, pool ledgerPool
 	}); err != nil {
 		return fmt.Errorf("summary: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 	missing, err := app.queries.ListMissingRecipeKeysForPool(ctx, db.ListMissingRecipeKeysForPoolParams{PoolKind: pool.kind, PoolID: pool.id})

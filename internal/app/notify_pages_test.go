@@ -378,7 +378,7 @@ func TestNotificationSettingsHiddenSectionsStay(t *testing.T) {
 func TestNotificationSettingsDigestAndCamp(t *testing.T) {
 	f := newNotifyFixture(t)
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
-	if _, err := f.app.SQLDB().ExecContext(f.ctx,
+	if _, err := f.app.PGPool().Exec(f.ctx,
 		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9) ON CONFLICT DO NOTHING`); err != nil {
 		t.Fatalf("seed system: %v", err)
 	}

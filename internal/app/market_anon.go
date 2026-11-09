@@ -2,12 +2,12 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ func (app *Application) loadAnonMarketSetting(ctx context.Context) {
 		default:
 			logging.Warnf("market-anon: stored setting %q is not on/off; using the MARKET_ANON default", row.Value)
 		}
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("market-anon: read stored setting: %v (using the MARKET_ANON default)", err)
 	}
 	app.anonMarketOffState.Store(off)

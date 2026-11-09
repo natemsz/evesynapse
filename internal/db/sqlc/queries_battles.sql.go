@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const deleteBattleFightFindings = `-- name: DeleteBattleFightFindings :exec
@@ -18,7 +16,7 @@ DELETE FROM battle_fight_findings WHERE fight_id = $1
 `
 
 func (q *Queries) DeleteBattleFightFindings(ctx context.Context, fightID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteBattleFightFindings, fightID)
+	_, err := q.db.Exec(ctx, deleteBattleFightFindings, fightID)
 	return err
 }
 
@@ -27,7 +25,7 @@ DELETE FROM battle_fight_kills WHERE fight_id = $1
 `
 
 func (q *Queries) DeleteBattleFightKills(ctx context.Context, fightID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteBattleFightKills, fightID)
+	_, err := q.db.Exec(ctx, deleteBattleFightKills, fightID)
 	return err
 }
 
@@ -36,7 +34,7 @@ DELETE FROM battle_fight_moments WHERE fight_id = $1
 `
 
 func (q *Queries) DeleteBattleFightMoments(ctx context.Context, fightID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteBattleFightMoments, fightID)
+	_, err := q.db.Exec(ctx, deleteBattleFightMoments, fightID)
 	return err
 }
 
@@ -45,7 +43,7 @@ DELETE FROM battle_fight_parties WHERE fight_id = $1
 `
 
 func (q *Queries) DeleteBattleFightParties(ctx context.Context, fightID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteBattleFightParties, fightID)
+	_, err := q.db.Exec(ctx, deleteBattleFightParties, fightID)
 	return err
 }
 
@@ -54,7 +52,7 @@ DELETE FROM battle_fight_tackles WHERE fight_id = $1
 `
 
 func (q *Queries) DeleteBattleFightTackles(ctx context.Context, fightID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteBattleFightTackles, fightID)
+	_, err := q.db.Exec(ctx, deleteBattleFightTackles, fightID)
 	return err
 }
 
@@ -63,7 +61,7 @@ DELETE FROM battle_fight_weapons WHERE fight_id = $1
 `
 
 func (q *Queries) DeleteBattleFightWeapons(ctx context.Context, fightID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteBattleFightWeapons, fightID)
+	_, err := q.db.Exec(ctx, deleteBattleFightWeapons, fightID)
 	return err
 }
 
@@ -72,7 +70,7 @@ SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, 
 `
 
 func (q *Queries) GetBattleFight(ctx context.Context, id int64) (BattleFight, error) {
-	row := q.db.QueryRowContext(ctx, getBattleFight, id)
+	row := q.db.QueryRow(ctx, getBattleFight, id)
 	var i BattleFight
 	err := row.Scan(
 		&i.ID,
@@ -116,7 +114,7 @@ SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, 
 `
 
 func (q *Queries) GetBattleFightByToken(ctx context.Context, shareToken string) (BattleFight, error) {
-	row := q.db.QueryRowContext(ctx, getBattleFightByToken, shareToken)
+	row := q.db.QueryRow(ctx, getBattleFightByToken, shareToken)
 	var i BattleFight
 	err := row.Scan(
 		&i.ID,
@@ -165,7 +163,7 @@ type GetBattleFightMomentParams struct {
 }
 
 func (q *Queries) GetBattleFightMoment(ctx context.Context, arg GetBattleFightMomentParams) (BattleFightMoment, error) {
-	row := q.db.QueryRowContext(ctx, getBattleFightMoment, arg.FightID, arg.Seq)
+	row := q.db.QueryRow(ctx, getBattleFightMoment, arg.FightID, arg.Seq)
 	var i BattleFightMoment
 	err := row.Scan(
 		&i.FightID,
@@ -185,7 +183,7 @@ SELECT fight_id, series, slices, chart FROM battle_fight_series WHERE fight_id =
 `
 
 func (q *Queries) GetBattleFightSeries(ctx context.Context, fightID int64) (BattleFightSeries, error) {
-	row := q.db.QueryRowContext(ctx, getBattleFightSeries, fightID)
+	row := q.db.QueryRow(ctx, getBattleFightSeries, fightID)
 	var i BattleFightSeries
 	err := row.Scan(
 		&i.FightID,
@@ -208,7 +206,7 @@ type InsertBattleFightFindingParams struct {
 }
 
 func (q *Queries) InsertBattleFightFinding(ctx context.Context, arg InsertBattleFightFindingParams) error {
-	_, err := q.db.ExecContext(ctx, insertBattleFightFinding,
+	_, err := q.db.Exec(ctx, insertBattleFightFinding,
 		arg.FightID,
 		arg.Seq,
 		arg.Rule,
@@ -242,7 +240,7 @@ type InsertBattleFightKillParams struct {
 }
 
 func (q *Queries) InsertBattleFightKill(ctx context.Context, arg InsertBattleFightKillParams) error {
-	_, err := q.db.ExecContext(ctx, insertBattleFightKill,
+	_, err := q.db.Exec(ctx, insertBattleFightKill,
 		arg.FightID,
 		arg.KillmailID,
 		arg.KillmailTime,
@@ -276,7 +274,7 @@ type InsertBattleFightMomentParams struct {
 }
 
 func (q *Queries) InsertBattleFightMoment(ctx context.Context, arg InsertBattleFightMomentParams) error {
-	_, err := q.db.ExecContext(ctx, insertBattleFightMoment,
+	_, err := q.db.Exec(ctx, insertBattleFightMoment,
 		arg.FightID,
 		arg.Seq,
 		arg.Kind,
@@ -318,7 +316,7 @@ type InsertBattleFightPartyParams struct {
 }
 
 func (q *Queries) InsertBattleFightParty(ctx context.Context, arg InsertBattleFightPartyParams) error {
-	_, err := q.db.ExecContext(ctx, insertBattleFightParty,
+	_, err := q.db.Exec(ctx, insertBattleFightParty,
 		arg.FightID,
 		arg.Seq,
 		arg.Name,
@@ -354,7 +352,7 @@ type InsertBattleFightTackleParams struct {
 }
 
 func (q *Queries) InsertBattleFightTackle(ctx context.Context, arg InsertBattleFightTackleParams) error {
-	_, err := q.db.ExecContext(ctx, insertBattleFightTackle,
+	_, err := q.db.Exec(ctx, insertBattleFightTackle,
 		arg.FightID,
 		arg.Seq,
 		arg.FromName,
@@ -403,7 +401,7 @@ type InsertBattleFightWeaponParams struct {
 }
 
 func (q *Queries) InsertBattleFightWeapon(ctx context.Context, arg InsertBattleFightWeaponParams) error {
-	_, err := q.db.ExecContext(ctx, insertBattleFightWeapon,
+	_, err := q.db.Exec(ctx, insertBattleFightWeapon,
 		arg.FightID,
 		arg.PartySeq,
 		arg.Dir,
@@ -430,7 +428,7 @@ LIMIT 50
 `
 
 func (q *Queries) ListBattleFightFindings(ctx context.Context, fightID int64) ([]BattleFightFinding, error) {
-	rows, err := q.db.QueryContext(ctx, listBattleFightFindings, fightID)
+	rows, err := q.db.Query(ctx, listBattleFightFindings, fightID)
 	if err != nil {
 		return nil, err
 	}
@@ -447,9 +445,6 @@ func (q *Queries) ListBattleFightFindings(ctx context.Context, fightID int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -478,7 +473,7 @@ type ListBattleFightIDsForKillsRow struct {
 // The viewer's own fights that matched any of these mails, for the
 // killmails page's Battle report links.
 func (q *Queries) ListBattleFightIDsForKills(ctx context.Context, arg ListBattleFightIDsForKillsParams) ([]ListBattleFightIDsForKillsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listBattleFightIDsForKills, arg.UserID, pq.Array(arg.KillmailIds))
+	rows, err := q.db.Query(ctx, listBattleFightIDsForKills, arg.UserID, arg.KillmailIds)
 	if err != nil {
 		return nil, err
 	}
@@ -490,9 +485,6 @@ func (q *Queries) ListBattleFightIDsForKills(ctx context.Context, arg ListBattle
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -508,7 +500,7 @@ LIMIT 200
 `
 
 func (q *Queries) ListBattleFightKills(ctx context.Context, fightID int64) ([]BattleFightKill, error) {
-	rows, err := q.db.QueryContext(ctx, listBattleFightKills, fightID)
+	rows, err := q.db.Query(ctx, listBattleFightKills, fightID)
 	if err != nil {
 		return nil, err
 	}
@@ -534,9 +526,6 @@ func (q *Queries) ListBattleFightKills(ctx context.Context, fightID int64) ([]Ba
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -561,7 +550,7 @@ type ListBattleFightMomentsRow struct {
 }
 
 func (q *Queries) ListBattleFightMoments(ctx context.Context, fightID int64) ([]ListBattleFightMomentsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listBattleFightMoments, fightID)
+	rows, err := q.db.Query(ctx, listBattleFightMoments, fightID)
 	if err != nil {
 		return nil, err
 	}
@@ -582,9 +571,6 @@ func (q *Queries) ListBattleFightMoments(ctx context.Context, fightID int64) ([]
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -599,7 +585,7 @@ LIMIT 200
 `
 
 func (q *Queries) ListBattleFightParties(ctx context.Context, fightID int64) ([]BattleFightParty, error) {
-	rows, err := q.db.QueryContext(ctx, listBattleFightParties, fightID)
+	rows, err := q.db.Query(ctx, listBattleFightParties, fightID)
 	if err != nil {
 		return nil, err
 	}
@@ -630,9 +616,6 @@ func (q *Queries) ListBattleFightParties(ctx context.Context, fightID int64) ([]
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -647,7 +630,7 @@ LIMIT 200
 `
 
 func (q *Queries) ListBattleFightTackles(ctx context.Context, fightID int64) ([]BattleFightTackle, error) {
-	rows, err := q.db.QueryContext(ctx, listBattleFightTackles, fightID)
+	rows, err := q.db.Query(ctx, listBattleFightTackles, fightID)
 	if err != nil {
 		return nil, err
 	}
@@ -668,9 +651,6 @@ func (q *Queries) ListBattleFightTackles(ctx context.Context, fightID int64) ([]
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -685,7 +665,7 @@ LIMIT 300
 `
 
 func (q *Queries) ListBattleFightWeapons(ctx context.Context, fightID int64) ([]BattleFightWeapon, error) {
-	rows, err := q.db.QueryContext(ctx, listBattleFightWeapons, fightID)
+	rows, err := q.db.Query(ctx, listBattleFightWeapons, fightID)
 	if err != nil {
 		return nil, err
 	}
@@ -713,9 +693,6 @@ func (q *Queries) ListBattleFightWeapons(ctx context.Context, fightID int64) ([]
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -730,7 +707,7 @@ LIMIT 100
 `
 
 func (q *Queries) ListBattleFightsByUser(ctx context.Context, userID int64) ([]BattleFight, error) {
-	rows, err := q.db.QueryContext(ctx, listBattleFightsByUser, userID)
+	rows, err := q.db.Query(ctx, listBattleFightsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -775,9 +752,6 @@ func (q *Queries) ListBattleFightsByUser(ctx context.Context, userID int64) ([]B
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -800,7 +774,7 @@ type ListBattleFightsToCorrelateParams struct {
 // Fights still inside the window late mails arrive in, the ones
 // correlated longest ago (or never) first.
 func (q *Queries) ListBattleFightsToCorrelate(ctx context.Context, arg ListBattleFightsToCorrelateParams) ([]BattleFight, error) {
-	rows, err := q.db.QueryContext(ctx, listBattleFightsToCorrelate, arg.Since, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listBattleFightsToCorrelate, arg.Since, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -845,9 +819,6 @@ func (q *Queries) ListBattleFightsToCorrelate(ctx context.Context, arg ListBattl
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -871,7 +842,7 @@ type ListBattleTypeCategoriesRow struct {
 // a charge (8), a drone (18) or a fighter (87) tell a pilot's hull
 // from the things it launches.
 func (q *Queries) ListBattleTypeCategories(ctx context.Context, names []string) ([]ListBattleTypeCategoriesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listBattleTypeCategories, pq.Array(names))
+	rows, err := q.db.Query(ctx, listBattleTypeCategories, names)
 	if err != nil {
 		return nil, err
 	}
@@ -883,9 +854,6 @@ func (q *Queries) ListBattleTypeCategories(ctx context.Context, names []string) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -908,7 +876,7 @@ type ListKillAttackerCharactersRow struct {
 }
 
 func (q *Queries) ListKillAttackerCharacters(ctx context.Context, killmailIds []int64) ([]ListKillAttackerCharactersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listKillAttackerCharacters, pq.Array(killmailIds))
+	rows, err := q.db.Query(ctx, listKillAttackerCharacters, killmailIds)
 	if err != nil {
 		return nil, err
 	}
@@ -925,9 +893,6 @@ func (q *Queries) ListKillAttackerCharacters(ctx context.Context, killmailIds []
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -970,7 +935,7 @@ type ListKillsForFightRow struct {
 // The mails a character is on, as victim or attacker, in a window,
 // with the character's own damage on each.
 func (q *Queries) ListKillsForFight(ctx context.Context, arg ListKillsForFightParams) ([]ListKillsForFightRow, error) {
-	rows, err := q.db.QueryContext(ctx, listKillsForFight, arg.CharacterID, arg.FromAt, arg.ToAt)
+	rows, err := q.db.Query(ctx, listKillsForFight, arg.CharacterID, arg.FromAt, arg.ToAt)
 	if err != nil {
 		return nil, err
 	}
@@ -992,9 +957,6 @@ func (q *Queries) ListKillsForFight(ctx context.Context, arg ListKillsForFightPa
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1011,7 +973,7 @@ type SetBattleFightChartParams struct {
 }
 
 func (q *Queries) SetBattleFightChart(ctx context.Context, arg SetBattleFightChartParams) error {
-	_, err := q.db.ExecContext(ctx, setBattleFightChart, arg.FightID, arg.Chart)
+	_, err := q.db.Exec(ctx, setBattleFightChart, arg.FightID, arg.Chart)
 	return err
 }
 
@@ -1049,7 +1011,7 @@ type SetBattleFightCorrelationParams struct {
 }
 
 func (q *Queries) SetBattleFightCorrelation(ctx context.Context, arg SetBattleFightCorrelationParams) error {
-	_, err := q.db.ExecContext(ctx, setBattleFightCorrelation,
+	_, err := q.db.Exec(ctx, setBattleFightCorrelation,
 		arg.SystemID,
 		arg.SystemFrom,
 		arg.HullTypeID,
@@ -1083,7 +1045,7 @@ type SetBattleFightPartyMatchParams struct {
 }
 
 func (q *Queries) SetBattleFightPartyMatch(ctx context.Context, arg SetBattleFightPartyMatchParams) error {
-	_, err := q.db.ExecContext(ctx, setBattleFightPartyMatch,
+	_, err := q.db.Exec(ctx, setBattleFightPartyMatch,
 		arg.CharacterID,
 		arg.Died,
 		arg.HullTypeID,
@@ -1105,7 +1067,7 @@ type SetBattleFightSharedParams struct {
 }
 
 func (q *Queries) SetBattleFightShared(ctx context.Context, arg SetBattleFightSharedParams) error {
-	_, err := q.db.ExecContext(ctx, setBattleFightShared, arg.Shared, arg.ID, arg.UserID)
+	_, err := q.db.Exec(ctx, setBattleFightShared, arg.Shared, arg.ID, arg.UserID)
 	return err
 }
 
@@ -1173,7 +1135,7 @@ type UpsertBattleFightRow struct {
 // A fight posted again (Axon restarted, a retry) replaces its frame
 // and totals; its share link and sharing choice stay.
 func (q *Queries) UpsertBattleFight(ctx context.Context, arg UpsertBattleFightParams) (UpsertBattleFightRow, error) {
-	row := q.db.QueryRowContext(ctx, upsertBattleFight,
+	row := q.db.QueryRow(ctx, upsertBattleFight,
 		arg.UserID,
 		arg.CharacterID,
 		arg.Listener,
@@ -1211,6 +1173,6 @@ type UpsertBattleFightSeriesParams struct {
 }
 
 func (q *Queries) UpsertBattleFightSeries(ctx context.Context, arg UpsertBattleFightSeriesParams) error {
-	_, err := q.db.ExecContext(ctx, upsertBattleFightSeries, arg.FightID, arg.Series, arg.Slices)
+	_, err := q.db.Exec(ctx, upsertBattleFightSeries, arg.FightID, arg.Series, arg.Slices)
 	return err
 }

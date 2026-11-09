@@ -169,7 +169,7 @@ dev_postgres() {
     echo "Installing PostgreSQL..."
     if command -v dnf >/dev/null; then dnf install -y postgresql-server >/dev/null || die "could not install postgresql-server"
     elif command -v pacman >/dev/null; then pacman -S --needed --noconfirm postgresql >/dev/null || die "could not install postgresql"
-    else die "no PostgreSQL on this machine and no package manager this script knows; install PostgreSQL 16 and run this again"; fi
+    else die "no PostgreSQL on this machine and no package manager this script knows; install PostgreSQL 16 or newer and run this again"; fi
   fi
   if command -v postgresql-setup >/dev/null && [ ! -f /var/lib/pgsql/data/PG_VERSION ]; then
     postgresql-setup --initdb >/dev/null || die "postgresql-setup --initdb failed"
@@ -493,7 +493,7 @@ SQL
       || su postgres -c "createdb -O evesynapse evesynapse" || die "could not create the evesynapse database"
     echo "PostgreSQL ready: database 'evesynapse' owned by role 'evesynapse'."
   else
-    echo "NOTE: no PostgreSQL tools found on this machine. Install PostgreSQL 16,"
+    echo "NOTE: no PostgreSQL tools found on this machine. Install PostgreSQL 16 or newer,"
     echo "      create a role+database, and put its DATABASE_URL in $INSTALL_DIR/.env."
   fi
 fi

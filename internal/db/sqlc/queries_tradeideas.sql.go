@@ -30,7 +30,7 @@ type GetTradeIdeasRow struct {
 // answer was written from, as a JSON array; the reader composes
 // each idea's figures from them.
 func (q *Queries) GetTradeIdeas(ctx context.Context) (GetTradeIdeasRow, error) {
-	row := q.db.QueryRowContext(ctx, getTradeIdeas)
+	row := q.db.QueryRow(ctx, getTradeIdeas)
 	var i GetTradeIdeasRow
 	err := row.Scan(
 		&i.Body,
@@ -53,7 +53,7 @@ type GetTradeIdeasAttemptRow struct {
 
 // The last ask and the run of failures it ended (schema 043).
 func (q *Queries) GetTradeIdeasAttempt(ctx context.Context) (GetTradeIdeasAttemptRow, error) {
-	row := q.db.QueryRowContext(ctx, getTradeIdeasAttempt)
+	row := q.db.QueryRow(ctx, getTradeIdeasAttempt)
 	var i GetTradeIdeasAttemptRow
 	err := row.Scan(&i.AttemptedAt, &i.Failures)
 	return i, err
@@ -73,7 +73,7 @@ type GetTradeIdeasPageRow struct {
 
 // The Trade ideas page's own, longer answer (schema 046): row 2.
 func (q *Queries) GetTradeIdeasPage(ctx context.Context) (GetTradeIdeasPageRow, error) {
-	row := q.db.QueryRowContext(ctx, getTradeIdeasPage)
+	row := q.db.QueryRow(ctx, getTradeIdeasPage)
 	var i GetTradeIdeasPageRow
 	err := row.Scan(
 		&i.Body,
@@ -102,7 +102,7 @@ type PutTradeIdeasParams struct {
 }
 
 func (q *Queries) PutTradeIdeas(ctx context.Context, arg PutTradeIdeasParams) error {
-	_, err := q.db.ExecContext(ctx, putTradeIdeas,
+	_, err := q.db.Exec(ctx, putTradeIdeas,
 		arg.Body,
 		arg.Rows,
 		arg.AsOf,
@@ -125,7 +125,7 @@ type PutTradeIdeasAttemptParams struct {
 }
 
 func (q *Queries) PutTradeIdeasAttempt(ctx context.Context, arg PutTradeIdeasAttemptParams) error {
-	_, err := q.db.ExecContext(ctx, putTradeIdeasAttempt, arg.AttemptedAt, arg.Failures)
+	_, err := q.db.Exec(ctx, putTradeIdeasAttempt, arg.AttemptedAt, arg.Failures)
 	return err
 }
 
@@ -147,7 +147,7 @@ type PutTradeIdeasPageParams struct {
 }
 
 func (q *Queries) PutTradeIdeasPage(ctx context.Context, arg PutTradeIdeasPageParams) error {
-	_, err := q.db.ExecContext(ctx, putTradeIdeasPage,
+	_, err := q.db.Exec(ctx, putTradeIdeasPage,
 		arg.Body,
 		arg.Rows,
 		arg.AsOf,

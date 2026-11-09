@@ -39,6 +39,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/compress/zstd"
 	"io"
 	"net/http"
 	"strconv"
@@ -136,6 +137,47 @@ type killItem struct {
 }
 
 // runKillfeed follows the public stream until ctx ends.
+// Kill details are stored zstd-compressed: at killmail sizes
+// EncodeAll halves the bytes of gzip at the same speed, and
+// DecodeAll reads them back faster than a fresh gzip reader.
+// Rows stored before the switch are gzip; killDetailRaw tells
+// the two apart by magic bytes, so nothing already stored
+// needs rewriting. The shared encoder and decoder serve the
+// single-shot calls only, which is the concurrency shape
+// klauspost documents for EncodeAll and DecodeAll.
+var (
+	killZstdEnc, killZstdEncErr = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
+	killZstdDec, killZstdDecErr = zstd.NewReader(nil)
+)
+
+// compressKillDetail encodes one killmail for kill_details.
+func compressKillDetail(raw []byte) []byte {
+	if killZstdEncErr == nil {
+		return killZstdEnc.EncodeAll(raw, nil)
+	}
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	_, _ = zw.Write(raw)
+	_ = zw.Close()
+	return buf.Bytes()
+}
+
+// killDetailRaw decodes a stored kill detail, zstd or gzip.
+func killDetailRaw(payload []byte) ([]byte, error) {
+	if len(payload) >= 4 && payload[0] == 0x28 && payload[1] == 0xb5 && payload[2] == 0x2f && payload[3] == 0xfd {
+		if killZstdDecErr != nil {
+			return nil, killZstdDecErr
+		}
+		return killZstdDec.DecodeAll(payload, nil)
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+	return io.ReadAll(zr)
+}
+
 func (app *Application) runKillfeed(ctx context.Context) {
 	app.primeRecentKills(ctx)
 	if !app.cfg.KillfeedEnabled() {
@@ -349,11 +391,11 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 		p.Npc, p.Solo = npc, !npc && len(km.Attackers) == 1
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return false, err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	inserted, err := q.UpsertKill(ctx, p)
 	if err != nil {
@@ -394,17 +436,13 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 				return false, fmt.Errorf("store attackers %d: %w", km.KillmailID, err)
 			}
 		}
-		var buf bytes.Buffer
-		zw := gzip.NewWriter(&buf)
-		_, _ = zw.Write(raw)
-		_ = zw.Close()
 		if err := q.InsertKillDetail(ctx, db.InsertKillDetailParams{
-			KillmailID: km.KillmailID, Payload: buf.Bytes(), StoredAt: time.Now().UTC(),
+			KillmailID: km.KillmailID, Payload: compressKillDetail(raw), StoredAt: time.Now().UTC(),
 		}); err != nil {
 			return false, fmt.Errorf("store detail %d: %w", km.KillmailID, err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return inserted, err
 	}
 	if inserted {
@@ -636,11 +674,7 @@ func (app *Application) priceKills(ctx context.Context) (int, error) {
 	var work []pending
 	types := map[int64]bool{}
 	for _, r := range rows {
-		zr, err := gzip.NewReader(bytes.NewReader(r.Payload))
-		if err != nil {
-			continue
-		}
-		raw, err := io.ReadAll(zr)
+		raw, err := killDetailRaw(r.Payload)
 		if err != nil {
 			continue
 		}

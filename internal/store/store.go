@@ -18,19 +18,42 @@ import (
 )
 
 // Open opens Postgres at dsn and returns the two handles the app runs
-// on: a database/sql DB over the pgx stdlib driver (every query rides
-// it) and a pgxpool that only backs the scs session store. It then
+// on: a pgxpool (every generated query rides it, and the scs session
+// store) and a database/sql DB over the pgx stdlib driver (schema
+// migration and raw test access). It then
 // brings the schema up to date (migrateSchema): a fresh database gets
 // the baseline and every later numbered step, and an existing install
 // gains whichever steps it is missing.
 func Open(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, dsn)
+	return open(ctx, dsn, DefaultPoolSize)
+}
+
+// OpenSized is Open with the query pool's connection ceiling set
+// (DB_MAX_CONNS); a size at or below zero keeps DefaultPoolSize.
+// The ceiling must be set here: a pgx pool cannot be resized once
+// created, and every generated query rides it.
+func OpenSized(ctx context.Context, dsn string, size int) (*sql.DB, *pgxpool.Pool, error) {
+	if size <= 0 {
+		size = DefaultPoolSize
+	}
+	return open(ctx, dsn, size)
+}
+
+func open(ctx context.Context, dsn string, poolSize int) (*sql.DB, *pgxpool.Pool, error) {
+	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		return nil, nil, err
 	}
-	cfg, err := pgx.ParseConfig(dsn)
+	// The pool reads timestamptz in UTC too (readTimesInUTC):
+	// queries ride it now, not only the stdlib handle.
+	poolCfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		pool.Close()
+		return nil, nil, err
+	}
+	poolCfg.AfterConnect = readTimesInUTC
+	poolCfg.MaxConns = int32(poolSize)
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
+	if err != nil {
 		return nil, nil, err
 	}
 	conn := stdlib.OpenDB(*cfg, stdlib.OptionAfterConnect(readTimesInUTC))

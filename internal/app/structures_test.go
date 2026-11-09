@@ -83,7 +83,7 @@ func buildStructureTestApp(t *testing.T, transport http.RoundTripper) (*Applicat
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { conn.Close(); pool.Close() })
-	queries := db.New(conn)
+	queries := db.New(pool)
 
 	sessionManager := scs.New()
 	sessionManager.Store = pgxstore.New(pool)

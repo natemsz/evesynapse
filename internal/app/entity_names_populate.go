@@ -57,7 +57,7 @@ const populateNamesFloor = 1000
 // to empty, logging its progress. Cancelled with the worker.
 func (app *Application) populateNamesIfEmpty(ctx context.Context) {
 	var n int
-	if err := app.db.QueryRowContext(ctx, "SELECT count(*) FROM entity_names WHERE kind = 'corporation'").Scan(&n); err != nil || n >= populateNamesFloor {
+	if err := app.pool.QueryRow(ctx, "SELECT count(*) FROM entity_names WHERE kind = 'corporation'").Scan(&n); err != nil || n >= populateNamesFloor {
 		return
 	}
 	logging.Infof("names: %d corporation names stored; filling the table from ESI in the background", n)
@@ -176,7 +176,7 @@ func (app *Application) populateNames(ctx context.Context, out io.Writer) error 
 // corporations, structure owners, and corporation features (ops,
 // ship replacement, doctrines, Discord servers).
 func (app *Application) knownCorporationIDs(ctx context.Context) ([]int64, error) {
-	rows, err := app.db.QueryContext(ctx, `
+	rows, err := app.pool.Query(ctx, `
 		SELECT corporation_id FROM corporation_records
 		UNION SELECT corporation_id FROM character_corporations
 		UNION SELECT owner_corporation_id FROM structure_context

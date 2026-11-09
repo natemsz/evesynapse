@@ -8,8 +8,6 @@ package db
 import (
 	"context"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const listProfitBuckets = `-- name: ListProfitBuckets :many
@@ -40,10 +38,10 @@ type ListProfitBucketsRow struct {
 // week buckets over the span, at most about a year of buckets.
 // Income and costs per bucket and activity.
 func (q *Queries) ListProfitBuckets(ctx context.Context, arg ListProfitBucketsParams) ([]ListProfitBucketsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listProfitBuckets,
+	rows, err := q.db.Query(ctx, listProfitBuckets,
 		arg.Unit,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 		arg.FromDay,
 	)
 	if err != nil {
@@ -62,9 +60,6 @@ func (q *Queries) ListProfitBuckets(ctx context.Context, arg ListProfitBucketsPa
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -117,10 +112,10 @@ type ListProfitFeeBucketsRow struct {
 // Fees per bucket by kind, and market sell revenue to measure them
 // against.
 func (q *Queries) ListProfitFeeBuckets(ctx context.Context, arg ListProfitFeeBucketsParams) ([]ListProfitFeeBucketsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listProfitFeeBuckets,
+	rows, err := q.db.Query(ctx, listProfitFeeBuckets,
 		arg.Unit,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 		arg.FromAt,
 	)
 	if err != nil {
@@ -141,9 +136,6 @@ func (q *Queries) ListProfitFeeBuckets(ctx context.Context, arg ListProfitFeeBuc
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -176,10 +168,10 @@ type ListProfitOwnerBucketsRow struct {
 
 // Attributed net per owner and bucket, for the per-character lines.
 func (q *Queries) ListProfitOwnerBuckets(ctx context.Context, arg ListProfitOwnerBucketsParams) ([]ListProfitOwnerBucketsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listProfitOwnerBuckets,
+	rows, err := q.db.Query(ctx, listProfitOwnerBuckets,
 		arg.Unit,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 		arg.FromDay,
 	)
 	if err != nil {
@@ -193,9 +185,6 @@ func (q *Queries) ListProfitOwnerBuckets(ctx context.Context, arg ListProfitOwne
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -229,10 +218,10 @@ type ListTradeCOGSBucketsRow struct {
 // Trading's sales per bucket: all that sold, the covered part (units
 // with a known cost and a matched tax line), and what those goods cost.
 func (q *Queries) ListTradeCOGSBuckets(ctx context.Context, arg ListTradeCOGSBucketsParams) ([]ListTradeCOGSBucketsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTradeCOGSBuckets,
+	rows, err := q.db.Query(ctx, listTradeCOGSBuckets,
 		arg.Unit,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 		arg.FromDay,
 	)
 	if err != nil {
@@ -251,9 +240,6 @@ func (q *Queries) ListTradeCOGSBuckets(ctx context.Context, arg ListTradeCOGSBuc
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -290,7 +276,7 @@ type ListTradeCoverageDailyRow struct {
 // Trading's covered figures per day, for the rolling margin and the
 // uncovered days every chart marks.
 func (q *Queries) ListTradeCoverageDaily(ctx context.Context, arg ListTradeCoverageDailyParams) ([]ListTradeCoverageDailyRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTradeCoverageDaily, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.FromDay)
+	rows, err := q.db.Query(ctx, listTradeCoverageDaily, arg.OwnerKind, arg.OwnerIds, arg.FromDay)
 	if err != nil {
 		return nil, err
 	}
@@ -310,9 +296,6 @@ func (q *Queries) ListTradeCoverageDaily(ctx context.Context, arg ListTradeCover
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

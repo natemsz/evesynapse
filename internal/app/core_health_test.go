@@ -70,6 +70,7 @@ func TestHealthzReportsDatabaseAndWorker(t *testing.T) {
 	// Database gone: unhealthy, and the answer says which part
 	// without repeating the connection details the error carries.
 	conn.Close()
+	app.pool.Close()
 	bustHealthCache(app)
 	code, body = healthz(app)
 	if code != http.StatusServiceUnavailable || !strings.Contains(body, "database: unreachable") {
@@ -97,6 +98,7 @@ func TestHealthzCachesItsAnswer(t *testing.T) {
 	// answer stands — that is the point: no new ping happened,
 	// or this call would already report the loss.
 	conn.Close()
+	app.pool.Close()
 	if code, body := healthz(app); code != http.StatusOK || body != "ok\n" {
 		t.Fatalf("within the cache window: status %d, body %q; want the cached 200 ok", code, body)
 	}

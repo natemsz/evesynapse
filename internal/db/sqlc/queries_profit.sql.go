@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const clearLedgerPoolMembers = `-- name: ClearLedgerPoolMembers :exec
@@ -25,7 +23,7 @@ type ClearLedgerPoolMembersParams struct {
 // Forces the pool to refold from scratch on its next pass (a manual
 // cost basis was added).
 func (q *Queries) ClearLedgerPoolMembers(ctx context.Context, arg ClearLedgerPoolMembersParams) error {
-	_, err := q.db.ExecContext(ctx, clearLedgerPoolMembers, arg.PoolKind, arg.PoolID)
+	_, err := q.db.Exec(ctx, clearLedgerPoolMembers, arg.PoolKind, arg.PoolID)
 	return err
 }
 
@@ -41,7 +39,7 @@ type DeleteBrokerAllocFromParams struct {
 }
 
 func (q *Queries) DeleteBrokerAllocFrom(ctx context.Context, arg DeleteBrokerAllocFromParams) error {
-	_, err := q.db.ExecContext(ctx, deleteBrokerAllocFrom, arg.OwnerKind, arg.OwnerID, arg.FromAt)
+	_, err := q.db.Exec(ctx, deleteBrokerAllocFrom, arg.OwnerKind, arg.OwnerID, arg.FromAt)
 	return err
 }
 
@@ -57,7 +55,7 @@ type DeletePoolCheckpointsParams struct {
 // A pool key's checkpoints, open lots and positions, cleared before
 // it refolds from scratch.
 func (q *Queries) DeletePoolCheckpoints(ctx context.Context, arg DeletePoolCheckpointsParams) error {
-	_, err := q.db.ExecContext(ctx, deletePoolCheckpoints, arg.PoolKind, arg.PoolID)
+	_, err := q.db.Exec(ctx, deletePoolCheckpoints, arg.PoolKind, arg.PoolID)
 	return err
 }
 
@@ -71,7 +69,7 @@ type DeletePoolOpenLotsParams struct {
 }
 
 func (q *Queries) DeletePoolOpenLots(ctx context.Context, arg DeletePoolOpenLotsParams) error {
-	_, err := q.db.ExecContext(ctx, deletePoolOpenLots, arg.PoolKind, arg.PoolID)
+	_, err := q.db.Exec(ctx, deletePoolOpenLots, arg.PoolKind, arg.PoolID)
 	return err
 }
 
@@ -85,7 +83,7 @@ type DeletePoolPositionsParams struct {
 }
 
 func (q *Queries) DeletePoolPositions(ctx context.Context, arg DeletePoolPositionsParams) error {
-	_, err := q.db.ExecContext(ctx, deletePoolPositions, arg.PoolKind, arg.PoolID)
+	_, err := q.db.Exec(ctx, deletePoolPositions, arg.PoolKind, arg.PoolID)
 	return err
 }
 
@@ -100,7 +98,7 @@ type DeleteProfitDailyFromParams struct {
 }
 
 func (q *Queries) DeleteProfitDailyFrom(ctx context.Context, arg DeleteProfitDailyFromParams) error {
-	_, err := q.db.ExecContext(ctx, deleteProfitDailyFrom, arg.OwnerKind, arg.OwnerID, arg.FromDay)
+	_, err := q.db.Exec(ctx, deleteProfitDailyFrom, arg.OwnerKind, arg.OwnerID, arg.FromDay)
 	return err
 }
 
@@ -115,7 +113,7 @@ type DeleteProfitRemainderFromParams struct {
 }
 
 func (q *Queries) DeleteProfitRemainderFrom(ctx context.Context, arg DeleteProfitRemainderFromParams) error {
-	_, err := q.db.ExecContext(ctx, deleteProfitRemainderFrom, arg.OwnerID, arg.FromDay)
+	_, err := q.db.Exec(ctx, deleteProfitRemainderFrom, arg.OwnerID, arg.FromDay)
 	return err
 }
 
@@ -131,7 +129,7 @@ type DeleteSaleTaxFromParams struct {
 }
 
 func (q *Queries) DeleteSaleTaxFrom(ctx context.Context, arg DeleteSaleTaxFromParams) error {
-	_, err := q.db.ExecContext(ctx, deleteSaleTaxFrom, arg.OwnerKind, arg.OwnerID, arg.FromAt)
+	_, err := q.db.Exec(ctx, deleteSaleTaxFrom, arg.OwnerKind, arg.OwnerID, arg.FromAt)
 	return err
 }
 
@@ -146,7 +144,7 @@ type DeleteTradeItemDailyFromParams struct {
 }
 
 func (q *Queries) DeleteTradeItemDailyFrom(ctx context.Context, arg DeleteTradeItemDailyFromParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTradeItemDailyFrom, arg.OwnerKind, arg.OwnerID, arg.FromDay)
+	_, err := q.db.Exec(ctx, deleteTradeItemDailyFrom, arg.OwnerKind, arg.OwnerID, arg.FromDay)
 	return err
 }
 
@@ -160,7 +158,7 @@ type DeleteTradeItemWindowsParams struct {
 }
 
 func (q *Queries) DeleteTradeItemWindows(ctx context.Context, arg DeleteTradeItemWindowsParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTradeItemWindows, arg.OwnerKind, arg.OwnerID)
+	_, err := q.db.Exec(ctx, deleteTradeItemWindows, arg.OwnerKind, arg.OwnerID)
 	return err
 }
 
@@ -175,7 +173,7 @@ type DeleteTradeOpenLotsParams struct {
 }
 
 func (q *Queries) DeleteTradeOpenLots(ctx context.Context, arg DeleteTradeOpenLotsParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTradeOpenLots, arg.OwnerKind, arg.OwnerID, arg.TypeID)
+	_, err := q.db.Exec(ctx, deleteTradeOpenLots, arg.OwnerKind, arg.OwnerID, arg.TypeID)
 	return err
 }
 
@@ -190,7 +188,7 @@ type DeleteTradePositionParams struct {
 }
 
 func (q *Queries) DeleteTradePosition(ctx context.Context, arg DeleteTradePositionParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTradePosition, arg.OwnerKind, arg.OwnerID, arg.TypeID)
+	_, err := q.db.Exec(ctx, deleteTradePosition, arg.OwnerKind, arg.OwnerID, arg.TypeID)
 	return err
 }
 
@@ -210,11 +208,11 @@ type DeleteTradeRealizedForPoolParams struct {
 // A pool refolding from scratch: its own rows and any its members left
 // under an earlier pool.
 func (q *Queries) DeleteTradeRealizedForPool(ctx context.Context, arg DeleteTradeRealizedForPoolParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTradeRealizedForPool,
+	_, err := q.db.Exec(ctx, deleteTradeRealizedForPool,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 	)
 	return err
 }
@@ -233,7 +231,7 @@ type DeleteTradeRealizedForPoolTypeFromParams struct {
 }
 
 func (q *Queries) DeleteTradeRealizedForPoolTypeFrom(ctx context.Context, arg DeleteTradeRealizedForPoolTypeFromParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTradeRealizedForPoolTypeFrom,
+	_, err := q.db.Exec(ctx, deleteTradeRealizedForPoolTypeFrom,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.TypeID,
@@ -268,7 +266,7 @@ type FoldBrokerAllocParams struct {
 // only when exactly one of the owner's orders was placed or repriced
 // within a minute of it. The rest stay period-level.
 func (q *Queries) FoldBrokerAlloc(ctx context.Context, arg FoldBrokerAllocParams) error {
-	_, err := q.db.ExecContext(ctx, foldBrokerAlloc, arg.OwnerKind, arg.OwnerID, arg.FromAt)
+	_, err := q.db.Exec(ctx, foldBrokerAlloc, arg.OwnerKind, arg.OwnerID, arg.FromAt)
 	return err
 }
 
@@ -313,7 +311,7 @@ type FoldProfitDailyParams struct {
 // (trading), unmatched sales (planetary industry or other sales),
 // and delivered jobs (industry: output value less materials).
 func (q *Queries) FoldProfitDaily(ctx context.Context, arg FoldProfitDailyParams) error {
-	_, err := q.db.ExecContext(ctx, foldProfitDaily,
+	_, err := q.db.Exec(ctx, foldProfitDaily,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.FromAt,
@@ -350,7 +348,7 @@ type FoldProfitRemainderParams struct {
 // since its previous sampled day, less every attributed activity
 // that day. Days without both net worth samples get no row.
 func (q *Queries) FoldProfitRemainder(ctx context.Context, arg FoldProfitRemainderParams) error {
-	_, err := q.db.ExecContext(ctx, foldProfitRemainder, arg.CharacterID, arg.FromDay)
+	_, err := q.db.Exec(ctx, foldProfitRemainder, arg.CharacterID, arg.FromDay)
 	return err
 }
 
@@ -406,7 +404,7 @@ type FoldSaleTaxParams struct {
 // rate. Sells with no tax in their second, or in a failing group, are
 // stored unpaired.
 func (q *Queries) FoldSaleTax(ctx context.Context, arg FoldSaleTaxParams) error {
-	_, err := q.db.ExecContext(ctx, foldSaleTax, arg.OwnerKind, arg.OwnerID, arg.FromAt)
+	_, err := q.db.Exec(ctx, foldSaleTax, arg.OwnerKind, arg.OwnerID, arg.FromAt)
 	return err
 }
 
@@ -452,7 +450,7 @@ type FoldTradeItemDailyParams struct {
 // cost and tax share, broker fees tied to the type, and the units
 // left uncovered by reason.
 func (q *Queries) FoldTradeItemDaily(ctx context.Context, arg FoldTradeItemDailyParams) error {
-	_, err := q.db.ExecContext(ctx, foldTradeItemDaily, arg.OwnerKind, arg.OwnerID, arg.FromDay)
+	_, err := q.db.Exec(ctx, foldTradeItemDaily, arg.OwnerKind, arg.OwnerID, arg.FromDay)
 	return err
 }
 
@@ -491,7 +489,7 @@ type FoldTradeItemWindowsParams struct {
 // The daily rows summed over the last 7, 30, 90 and 365 days as of a
 // day, with the previous window of equal length beside them.
 func (q *Queries) FoldTradeItemWindows(ctx context.Context, arg FoldTradeItemWindowsParams) error {
-	_, err := q.db.ExecContext(ctx, foldTradeItemWindows, arg.OwnerKind, arg.OwnerID, arg.AsOfDay)
+	_, err := q.db.Exec(ctx, foldTradeItemWindows, arg.OwnerKind, arg.OwnerID, arg.AsOfDay)
 	return err
 }
 
@@ -511,7 +509,7 @@ type GetFirstUncoveredSaleParams struct {
 // When a pool first sold units of a type that no lot covered: a
 // manual basis is dated just before it.
 func (q *Queries) GetFirstUncoveredSale(ctx context.Context, arg GetFirstUncoveredSaleParams) (time.Time, error) {
-	row := q.db.QueryRowContext(ctx, getFirstUncoveredSale, arg.PoolKind, arg.PoolID, arg.TypeID)
+	row := q.db.QueryRow(ctx, getFirstUncoveredSale, arg.PoolKind, arg.PoolID, arg.TypeID)
 	var at time.Time
 	err := row.Scan(&at)
 	return at, err
@@ -531,7 +529,7 @@ type GetLedgerCoverageStartParams struct {
 
 // The earliest moment the ledger holds anything for these owners.
 func (q *Queries) GetLedgerCoverageStart(ctx context.Context, arg GetLedgerCoverageStartParams) (time.Time, error) {
-	row := q.db.QueryRowContext(ctx, getLedgerCoverageStart, arg.OwnerKind, pq.Array(arg.OwnerIds))
+	row := q.db.QueryRow(ctx, getLedgerCoverageStart, arg.OwnerKind, arg.OwnerIds)
 	var start time.Time
 	err := row.Scan(&start)
 	return start, err
@@ -548,7 +546,7 @@ type GetLedgerPoolStateParams struct {
 }
 
 func (q *Queries) GetLedgerPoolState(ctx context.Context, arg GetLedgerPoolStateParams) (LedgerPoolState, error) {
-	row := q.db.QueryRowContext(ctx, getLedgerPoolState, arg.PoolKind, arg.PoolID)
+	row := q.db.QueryRow(ctx, getLedgerPoolState, arg.PoolKind, arg.PoolID)
 	var i LedgerPoolState
 	err := row.Scan(
 		&i.PoolKind,
@@ -575,7 +573,7 @@ type GetLedgerStateParams struct {
 // Profit ledger (schema 104): every journal row, transaction and
 // delivered job seen per owner, and the attribution written from it.
 func (q *Queries) GetLedgerState(ctx context.Context, arg GetLedgerStateParams) (LedgerState, error) {
-	row := q.db.QueryRowContext(ctx, getLedgerState, arg.OwnerKind, arg.OwnerID)
+	row := q.db.QueryRow(ctx, getLedgerState, arg.OwnerKind, arg.OwnerID)
 	var i LedgerState
 	err := row.Scan(
 		&i.OwnerKind,
@@ -613,7 +611,7 @@ type GetObservedSalesTaxRateRow struct {
 // A character's effective sales tax rate over a span: transaction
 // tax paid over market sell revenue in the ledger.
 func (q *Queries) GetObservedSalesTaxRate(ctx context.Context, arg GetObservedSalesTaxRateParams) (GetObservedSalesTaxRateRow, error) {
-	row := q.db.QueryRowContext(ctx, getObservedSalesTaxRate, arg.CharacterID, arg.Since)
+	row := q.db.QueryRow(ctx, getObservedSalesTaxRate, arg.CharacterID, arg.Since)
 	var i GetObservedSalesTaxRateRow
 	err := row.Scan(&i.Tax, &i.Revenue)
 	return i, err
@@ -631,7 +629,7 @@ type GetTradeFoldCheckpointParams struct {
 }
 
 func (q *Queries) GetTradeFoldCheckpoint(ctx context.Context, arg GetTradeFoldCheckpointParams) (time.Time, error) {
-	row := q.db.QueryRowContext(ctx, getTradeFoldCheckpoint, arg.OwnerKind, arg.OwnerID, arg.TypeID)
+	row := q.db.QueryRow(ctx, getTradeFoldCheckpoint, arg.OwnerKind, arg.OwnerID, arg.TypeID)
 	var checkpoint_at time.Time
 	err := row.Scan(&checkpoint_at)
 	return checkpoint_at, err
@@ -647,7 +645,7 @@ type GetTradeItemWindowAsOfParams struct {
 }
 
 func (q *Queries) GetTradeItemWindowAsOf(ctx context.Context, arg GetTradeItemWindowAsOfParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, getTradeItemWindowAsOf, arg.OwnerKind, arg.OwnerID)
+	row := q.db.QueryRow(ctx, getTradeItemWindowAsOf, arg.OwnerKind, arg.OwnerID)
 	var column_1 string
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -666,7 +664,7 @@ type GetUserProfitPrefsRow struct {
 }
 
 func (q *Queries) GetUserProfitPrefs(ctx context.Context, userID int64) (GetUserProfitPrefsRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserProfitPrefs, userID)
+	row := q.db.QueryRow(ctx, getUserProfitPrefs, userID)
 	var i GetUserProfitPrefsRow
 	err := row.Scan(
 		&i.Pooled,
@@ -692,7 +690,7 @@ type InsertLedgerHoleParams struct {
 }
 
 func (q *Queries) InsertLedgerHole(ctx context.Context, arg InsertLedgerHoleParams) error {
-	_, err := q.db.ExecContext(ctx, insertLedgerHole,
+	_, err := q.db.Exec(ctx, insertLedgerHole,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.FromAt,
@@ -730,18 +728,18 @@ type InsertLedgerJournalBatchParams struct {
 // New rows only; returns the days they fall on so the fold knows
 // where to start.
 func (q *Queries) InsertLedgerJournalBatch(ctx context.Context, arg InsertLedgerJournalBatchParams) ([]time.Time, error) {
-	rows, err := q.db.QueryContext(ctx, insertLedgerJournalBatch,
+	rows, err := q.db.Query(ctx, insertLedgerJournalBatch,
 		arg.OwnerKind,
 		arg.OwnerID,
-		pq.Array(arg.EntryIds),
-		pq.Array(arg.Ats),
-		pq.Array(arg.RefTypes),
-		pq.Array(arg.Activities),
-		pq.Array(arg.Amounts),
-		pq.Array(arg.FirstParties),
-		pq.Array(arg.SecondParties),
-		pq.Array(arg.ContextIds),
-		pq.Array(arg.ContextTypes),
+		arg.EntryIds,
+		arg.Ats,
+		arg.RefTypes,
+		arg.Activities,
+		arg.Amounts,
+		arg.FirstParties,
+		arg.SecondParties,
+		arg.ContextIds,
+		arg.ContextTypes,
 	)
 	if err != nil {
 		return nil, err
@@ -754,9 +752,6 @@ func (q *Queries) InsertLedgerJournalBatch(ctx context.Context, arg InsertLedger
 			return nil, err
 		}
 		items = append(items, at)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -781,12 +776,12 @@ type InsertLedgerOrderIssuesParams struct {
 }
 
 func (q *Queries) InsertLedgerOrderIssues(ctx context.Context, arg InsertLedgerOrderIssuesParams) error {
-	_, err := q.db.ExecContext(ctx, insertLedgerOrderIssues,
+	_, err := q.db.Exec(ctx, insertLedgerOrderIssues,
 		arg.OwnerKind,
 		arg.OwnerID,
-		pq.Array(arg.OrderIds),
-		pq.Array(arg.Issueds),
-		pq.Array(arg.TypeIds),
+		arg.OrderIds,
+		arg.Issueds,
+		arg.TypeIds,
 	)
 	return err
 }
@@ -821,17 +816,17 @@ type InsertLedgerTxnBatchRow struct {
 }
 
 func (q *Queries) InsertLedgerTxnBatch(ctx context.Context, arg InsertLedgerTxnBatchParams) ([]InsertLedgerTxnBatchRow, error) {
-	rows, err := q.db.QueryContext(ctx, insertLedgerTxnBatch,
+	rows, err := q.db.Query(ctx, insertLedgerTxnBatch,
 		arg.OwnerKind,
 		arg.OwnerID,
-		pq.Array(arg.TransactionIds),
-		pq.Array(arg.Ats),
-		pq.Array(arg.TypeIds),
-		pq.Array(arg.Quantities),
-		pq.Array(arg.UnitPrices),
-		pq.Array(arg.IsBuys),
-		pq.Array(arg.LocationIds),
-		pq.Array(arg.JournalRefIds),
+		arg.TransactionIds,
+		arg.Ats,
+		arg.TypeIds,
+		arg.Quantities,
+		arg.UnitPrices,
+		arg.IsBuys,
+		arg.LocationIds,
+		arg.JournalRefIds,
 	)
 	if err != nil {
 		return nil, err
@@ -844,9 +839,6 @@ func (q *Queries) InsertLedgerTxnBatch(ctx context.Context, arg InsertLedgerTxnB
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -870,7 +862,7 @@ type InsertManualCostBasisParams struct {
 }
 
 func (q *Queries) InsertManualCostBasis(ctx context.Context, arg InsertManualCostBasisParams) error {
-	_, err := q.db.ExecContext(ctx, insertManualCostBasis,
+	_, err := q.db.Exec(ctx, insertManualCostBasis,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.TypeID,
@@ -900,14 +892,14 @@ type InsertTradeOpenLotsBatchParams struct {
 }
 
 func (q *Queries) InsertTradeOpenLotsBatch(ctx context.Context, arg InsertTradeOpenLotsBatchParams) error {
-	_, err := q.db.ExecContext(ctx, insertTradeOpenLotsBatch,
+	_, err := q.db.Exec(ctx, insertTradeOpenLotsBatch,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.TypeID,
-		pq.Array(arg.Seqs),
-		pq.Array(arg.Quantities),
-		pq.Array(arg.UnitPrices),
-		pq.Array(arg.RefIds),
+		arg.Seqs,
+		arg.Quantities,
+		arg.UnitPrices,
+		arg.RefIds,
 	)
 	return err
 }
@@ -947,21 +939,21 @@ type InsertTradeRealizedBatchParams struct {
 }
 
 func (q *Queries) InsertTradeRealizedBatch(ctx context.Context, arg InsertTradeRealizedBatchParams) error {
-	_, err := q.db.ExecContext(ctx, insertTradeRealizedBatch,
+	_, err := q.db.Exec(ctx, insertTradeRealizedBatch,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
-		pq.Array(arg.TransactionIds),
-		pq.Array(arg.Days),
+		arg.OwnerIds,
+		arg.TransactionIds,
+		arg.Days,
 		arg.TypeID,
-		pq.Array(arg.Quantities),
-		pq.Array(arg.Revenues),
-		pq.Array(arg.Costs),
-		pq.Array(arg.UnmatchedQtys),
-		pq.Array(arg.UnmatchedRevenues),
+		arg.Quantities,
+		arg.Revenues,
+		arg.Costs,
+		arg.UnmatchedQtys,
+		arg.UnmatchedRevenues,
 		arg.Planetary,
 		arg.PoolKind,
 		arg.PoolID,
-		pq.Array(arg.GapKinds),
+		arg.GapKinds,
 	)
 	return err
 }
@@ -974,7 +966,7 @@ SELECT EXISTS (
 `
 
 func (q *Queries) IsPlanetaryType(ctx context.Context, typeID int64) (bool, error) {
-	row := q.db.QueryRowContext(ctx, isPlanetaryType, typeID)
+	row := q.db.QueryRow(ctx, isPlanetaryType, typeID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -997,7 +989,7 @@ type ListLedgerHolesRow struct {
 }
 
 func (q *Queries) ListLedgerHoles(ctx context.Context, arg ListLedgerHolesParams) ([]ListLedgerHolesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLedgerHoles, arg.OwnerKind, pq.Array(arg.OwnerIds))
+	rows, err := q.db.Query(ctx, listLedgerHoles, arg.OwnerKind, arg.OwnerIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1009,9 +1001,6 @@ func (q *Queries) ListLedgerHoles(ctx context.Context, arg ListLedgerHolesParams
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1032,7 +1021,7 @@ type ListLedgerJobIDsParams struct {
 
 // Jobs already landed with their recipe facts.
 func (q *Queries) ListLedgerJobIDs(ctx context.Context, arg ListLedgerJobIDsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listLedgerJobIDs, arg.OwnerKind, arg.OwnerID, pq.Array(arg.JobIds))
+	rows, err := q.db.Query(ctx, listLedgerJobIDs, arg.OwnerKind, arg.OwnerID, arg.JobIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1044,9 +1033,6 @@ func (q *Queries) ListLedgerJobIDs(ctx context.Context, arg ListLedgerJobIDsPara
 			return nil, err
 		}
 		items = append(items, job_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1153,11 +1139,11 @@ type ListPoolLotsForTypeSinceRow struct {
 // The caller prepends the stored open lots at the checkpoint, which
 // stand in for everything older.
 func (q *Queries) ListPoolLotsForTypeSince(ctx context.Context, arg ListPoolLotsForTypeSinceParams) ([]ListPoolLotsForTypeSinceRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPoolLotsForTypeSince,
+	rows, err := q.db.Query(ctx, listPoolLotsForTypeSince,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 		arg.TypeID,
 		arg.Since,
 	)
@@ -1181,9 +1167,6 @@ func (q *Queries) ListPoolLotsForTypeSince(ctx context.Context, arg ListPoolLots
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1223,9 +1206,9 @@ type ListPoolTypesParams struct {
 
 // Every type a pool has bought, sold, built or entered a basis for.
 func (q *Queries) ListPoolTypes(ctx context.Context, arg ListPoolTypesParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listPoolTypes,
+	rows, err := q.db.Query(ctx, listPoolTypes,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 		arg.PoolKind,
 		arg.PoolID,
 	)
@@ -1240,9 +1223,6 @@ func (q *Queries) ListPoolTypes(ctx context.Context, arg ListPoolTypesParams) ([
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1270,7 +1250,7 @@ type ListPositionCostsForTypesRow struct {
 // Open position cost per unit for a pool's types: the basis a beaten
 // sell order's margin is measured against.
 func (q *Queries) ListPositionCostsForTypes(ctx context.Context, arg ListPositionCostsForTypesParams) ([]ListPositionCostsForTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPositionCostsForTypes, arg.OwnerKind, arg.OwnerID, pq.Array(arg.TypeIds))
+	rows, err := q.db.Query(ctx, listPositionCostsForTypes, arg.OwnerKind, arg.OwnerID, arg.TypeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1282,9 +1262,6 @@ func (q *Queries) ListPositionCostsForTypes(ctx context.Context, arg ListPositio
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1317,7 +1294,7 @@ type ListProfitByActivityRow struct {
 // The profit page's attribution table: per activity over a span,
 // for a set of owners of one kind.
 func (q *Queries) ListProfitByActivity(ctx context.Context, arg ListProfitByActivityParams) ([]ListProfitByActivityRow, error) {
-	rows, err := q.db.QueryContext(ctx, listProfitByActivity, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.FromDay)
+	rows, err := q.db.Query(ctx, listProfitByActivity, arg.OwnerKind, arg.OwnerIds, arg.FromDay)
 	if err != nil {
 		return nil, err
 	}
@@ -1334,9 +1311,6 @@ func (q *Queries) ListProfitByActivity(ctx context.Context, arg ListProfitByActi
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1370,7 +1344,7 @@ type ListProfitDailyRow struct {
 
 // Net per day for the chart, attributed and unattributed apart.
 func (q *Queries) ListProfitDaily(ctx context.Context, arg ListProfitDailyParams) ([]ListProfitDailyRow, error) {
-	rows, err := q.db.QueryContext(ctx, listProfitDaily, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.FromDay)
+	rows, err := q.db.Query(ctx, listProfitDaily, arg.OwnerKind, arg.OwnerIds, arg.FromDay)
 	if err != nil {
 		return nil, err
 	}
@@ -1382,9 +1356,6 @@ func (q *Queries) ListProfitDaily(ctx context.Context, arg ListProfitDailyParams
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1406,7 +1377,7 @@ type ListSoldTypesSinceParams struct {
 // Types an owner sold from a moment on: their realized rows follow a
 // change of paired tax, so the item rollups refold from there.
 func (q *Queries) ListSoldTypesSince(ctx context.Context, arg ListSoldTypesSinceParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listSoldTypesSince, arg.OwnerKind, arg.OwnerID, arg.Since)
+	rows, err := q.db.Query(ctx, listSoldTypesSince, arg.OwnerKind, arg.OwnerID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -1418,9 +1389,6 @@ func (q *Queries) ListSoldTypesSince(ctx context.Context, arg ListSoldTypesSince
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1477,9 +1445,9 @@ type ListTradeItemsRow struct {
 // covered items first, then by covered margin. Broker fees count in
 // the margin unless the player set them aside.
 func (q *Queries) ListTradeItems(ctx context.Context, arg ListTradeItemsParams) ([]ListTradeItemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTradeItems,
+	rows, err := q.db.Query(ctx, listTradeItems,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 		arg.Win,
 		arg.BrokerInMargin,
 		arg.RowCap,
@@ -1512,9 +1480,6 @@ func (q *Queries) ListTradeItems(ctx context.Context, arg ListTradeItemsParams) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1578,9 +1543,9 @@ type ListTradeItemsRangeRow struct {
 // keeping only types with units no cost covered. No previous window
 // rides along, so the delta columns stay empty under the filter.
 func (q *Queries) ListTradeItemsRange(ctx context.Context, arg ListTradeItemsRangeParams) ([]ListTradeItemsRangeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTradeItemsRange,
+	rows, err := q.db.Query(ctx, listTradeItemsRange,
 		arg.OwnerKind,
-		pq.Array(arg.OwnerIds),
+		arg.OwnerIds,
 		arg.FromDay,
 		arg.ToDay,
 		arg.OnlyUncovered,
@@ -1616,9 +1581,6 @@ func (q *Queries) ListTradeItemsRange(ctx context.Context, arg ListTradeItemsRan
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1644,7 +1606,7 @@ type ListTradeOpenLotsRow struct {
 }
 
 func (q *Queries) ListTradeOpenLots(ctx context.Context, arg ListTradeOpenLotsParams) ([]ListTradeOpenLotsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTradeOpenLots, arg.OwnerKind, arg.OwnerID, arg.TypeID)
+	rows, err := q.db.Query(ctx, listTradeOpenLots, arg.OwnerKind, arg.OwnerID, arg.TypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1656,9 +1618,6 @@ func (q *Queries) ListTradeOpenLots(ctx context.Context, arg ListTradeOpenLotsPa
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1687,7 +1646,7 @@ type ListTradePositionsRow struct {
 }
 
 func (q *Queries) ListTradePositions(ctx context.Context, arg ListTradePositionsParams) ([]ListTradePositionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTradePositions, arg.OwnerKind, pq.Array(arg.OwnerIds))
+	rows, err := q.db.Query(ctx, listTradePositions, arg.OwnerKind, arg.OwnerIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1699,9 +1658,6 @@ func (q *Queries) ListTradePositions(ctx context.Context, arg ListTradePositions
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1740,7 +1696,7 @@ type SumTradeItemsRow struct {
 
 // The Trading tab's header: the same figures over every type.
 func (q *Queries) SumTradeItems(ctx context.Context, arg SumTradeItemsParams) (SumTradeItemsRow, error) {
-	row := q.db.QueryRowContext(ctx, sumTradeItems, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.Win)
+	row := q.db.QueryRow(ctx, sumTradeItems, arg.OwnerKind, arg.OwnerIds, arg.Win)
 	var i SumTradeItemsRow
 	err := row.Scan(
 		&i.Units,
@@ -1777,7 +1733,7 @@ type SumTradingFeesFromRow struct {
 
 // Trading fees over the span, for the trading line's breakdown.
 func (q *Queries) SumTradingFeesFrom(ctx context.Context, arg SumTradingFeesFromParams) (SumTradingFeesFromRow, error) {
-	row := q.db.QueryRowContext(ctx, sumTradingFeesFrom, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.FromAt)
+	row := q.db.QueryRow(ctx, sumTradingFeesFrom, arg.OwnerKind, arg.OwnerIds, arg.FromAt)
 	var i SumTradingFeesFromRow
 	err := row.Scan(&i.SalesTax, &i.BrokerFees)
 	return i, err
@@ -1801,7 +1757,7 @@ type UpsertLedgerPoolStateParams struct {
 }
 
 func (q *Queries) UpsertLedgerPoolState(ctx context.Context, arg UpsertLedgerPoolStateParams) error {
-	_, err := q.db.ExecContext(ctx, upsertLedgerPoolState,
+	_, err := q.db.Exec(ctx, upsertLedgerPoolState,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.Members,
@@ -1835,7 +1791,7 @@ type UpsertLedgerStateParams struct {
 }
 
 func (q *Queries) UpsertLedgerState(ctx context.Context, arg UpsertLedgerStateParams) error {
-	_, err := q.db.ExecContext(ctx, upsertLedgerState,
+	_, err := q.db.Exec(ctx, upsertLedgerState,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.JournalAt,
@@ -1864,7 +1820,7 @@ type UpsertTradeFoldCheckpointParams struct {
 }
 
 func (q *Queries) UpsertTradeFoldCheckpoint(ctx context.Context, arg UpsertTradeFoldCheckpointParams) error {
-	_, err := q.db.ExecContext(ctx, upsertTradeFoldCheckpoint,
+	_, err := q.db.Exec(ctx, upsertTradeFoldCheckpoint,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.TypeID,
@@ -1890,7 +1846,7 @@ type UpsertTradePositionParams struct {
 }
 
 func (q *Queries) UpsertTradePosition(ctx context.Context, arg UpsertTradePositionParams) error {
-	_, err := q.db.ExecContext(ctx, upsertTradePosition,
+	_, err := q.db.Exec(ctx, upsertTradePosition,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.TypeID,
@@ -1919,7 +1875,7 @@ type UpsertUserProfitPrefsParams struct {
 }
 
 func (q *Queries) UpsertUserProfitPrefs(ctx context.Context, arg UpsertUserProfitPrefsParams) error {
-	_, err := q.db.ExecContext(ctx, upsertUserProfitPrefs,
+	_, err := q.db.Exec(ctx, upsertUserProfitPrefs,
 		arg.UserID,
 		arg.Pooled,
 		arg.BrokerInMargin,

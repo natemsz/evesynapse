@@ -49,8 +49,6 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
-
-	"github.com/lib/pq"
 )
 
 const (
@@ -228,12 +226,12 @@ func (app *Application) refreshFallbackPrices(ctx context.Context) bool {
 	}
 
 	now := time.Now().UTC()
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("worker: fallback prices: begin tx: %v", err)
 		return false
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.DeleteMarketStatsFallback(ctx); err != nil {
 		logging.Errorf("worker: fallback prices: clear: %v", err)
@@ -287,16 +285,16 @@ func (app *Application) refreshFallbackPrices(ctx context.Context) bool {
 				extras[k][i] = v
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_stats_fallback (region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
 				wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy)
 			SELECT unnest($1::bigint[]), unnest($2::bigint[]), unnest($3::float8[]), unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::bigint[]), unnest($8::bigint[]), unnest($9::float8[]), unnest($10::float8[]), $11, $12, $13, $14,
 				unnest($15::float8[]), unnest($16::float8[]), unnest($17::float8[]), unnest($18::float8[]), unnest($19::float8[]), unnest($20::float8[]), unnest($21::float8[]), unnest($22::float8[])
-		`, pq.Array(regIDs), pq.Array(typeIDs), pq.Array(medSells), pq.Array(fiveSells),
-			pq.Array(medBuys), pq.Array(fiveBuys), pq.Array(sellOrds), pq.Array(buyOrds),
-			pq.Array(sellVols), pq.Array(buyVols), fallbackSource, fileOrderset, asof, now,
-			pq.Array(extras[0]), pq.Array(extras[1]), pq.Array(extras[2]), pq.Array(extras[3]),
-			pq.Array(extras[4]), pq.Array(extras[5]), pq.Array(extras[6]), pq.Array(extras[7])); err != nil {
+		`, regIDs, typeIDs, medSells, fiveSells,
+			medBuys, fiveBuys, sellOrds, buyOrds,
+			sellVols, buyVols, fallbackSource, fileOrderset, asof, now,
+			extras[0], extras[1], extras[2], extras[3],
+			extras[4], extras[5], extras[6], extras[7]); err != nil {
 			logging.Errorf("worker: fallback prices: store batch: %v", err)
 			return false
 		}
@@ -309,7 +307,7 @@ func (app *Application) refreshFallbackPrices(ctx context.Context) bool {
 		logging.Errorf("worker: fallback prices: store meta: %v", err)
 		return false
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		logging.Errorf("worker: fallback prices: commit: %v", err)
 		return false
 	}

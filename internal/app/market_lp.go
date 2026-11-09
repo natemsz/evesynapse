@@ -192,12 +192,12 @@ func lpOffersSame(stored []db.ListLPOffersByCorpRow, storedReqs []db.ListLPOffer
 // changed: a refetch that returns the same set only stamps the
 // store, so the offer values are not rebuilt for a no-op.
 func (app *Application) storeLPOffers(ctx context.Context, corpID int64, offers []lpOffer, state string, now time.Time) bool {
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("worker: lp stores: begin %d: %v", corpID, err)
 		return false
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	stored, err := qtx.ListLPOffersByCorp(ctx, corpID)
 	if err != nil {
@@ -217,7 +217,7 @@ func (app *Application) storeLPOffers(ctx context.Context, corpID int64, offers 
 			return false
 		}
 		// Unchanged: the stamp above is the whole write.
-		_ = tx.Commit()
+		_ = tx.Commit(ctx)
 		return false
 	}
 	if err := qtx.DeleteLPOffersByCorp(ctx, corpID); err != nil {
@@ -258,7 +258,7 @@ func (app *Application) storeLPOffers(ctx context.Context, corpID int64, offers 
 		logging.Errorf("worker: lp stores: stamp %d: %v", corpID, err)
 		return false
 	}
-	return tx.Commit() == nil
+	return tx.Commit(ctx) == nil
 }
 
 // refreshLPOfferValues rewrites one hub region's offer values from

@@ -190,11 +190,11 @@ func (app *Application) fetchPublicWindows(ctx context.Context, paths []string, 
 // storePublicContractItems stores one contract's item list
 // and marks it fetched, in one transaction.
 func (app *Application) storePublicContractItems(ctx context.Context, contractID int64, items []esi.PublicContractItem) error {
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin items store: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	for _, item := range items {
 		if err := q.InsertPublicContractItem(ctx, db.InsertPublicContractItemParams{
@@ -228,7 +228,7 @@ func (app *Application) storePublicContractItems(ctx context.Context, contractID
 	}); err != nil {
 		return fmt.Errorf("stamp sightings %d: %w", contractID, err)
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 func (app *Application) setPublicContractItemsState(ctx context.Context, contractID int64, state string) {
@@ -330,11 +330,11 @@ func (app *Application) warmPublicContractBids(ctx context.Context, allowance *f
 // ESI returns the whole list each time, and a stored list
 // that lags the route's by a bid is worse than one replaced.
 func (app *Application) storePublicContractBids(ctx context.Context, contractID int64, bids []esi.PublicContractBid) error {
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin bids store: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	if err := q.DeletePublicContractBids(ctx, contractID); err != nil {
 		return fmt.Errorf("clear bids %d: %w", contractID, err)
@@ -350,7 +350,7 @@ func (app *Application) storePublicContractBids(ctx context.Context, contractID 
 			return fmt.Errorf("insert bid %d: %w", bid.BidID, err)
 		}
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // warmAbyssalProbes probes singleton items no probe has
@@ -417,11 +417,11 @@ func (app *Application) warmAbyssalProbes(ctx context.Context, allowance *fetchB
 // first seen when the listing was.
 func (app *Application) storeAbyssalProbeHit(ctx context.Context, cand db.ListAbyssalProbeCandidatesRow, dyn esi.DynamicItem, attrs []byte, now time.Time) error {
 	itemID := cand.ItemID.Int64
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin probe store: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	if err := q.InsertAbyssalProbe(ctx, db.InsertAbyssalProbeParams{
 		ItemID: itemID, TypeID: cand.TypeID, IsDynamic: true, ProbedAt: now,
@@ -452,5 +452,5 @@ func (app *Application) storeAbyssalProbeHit(ctx context.Context, cand db.ListAb
 	}); err != nil {
 		return fmt.Errorf("stamp sightings: %w", err)
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }

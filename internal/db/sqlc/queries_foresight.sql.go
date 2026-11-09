@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const addForesightTarget = `-- name: AddForesightTarget :execrows
@@ -40,7 +38,7 @@ type AddForesightTargetParams struct {
 // An event is acted on once: the same target for the same event adds
 // nothing.
 func (q *Queries) AddForesightTarget(ctx context.Context, arg AddForesightTargetParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, addForesightTarget,
+	result, err := q.db.Exec(ctx, addForesightTarget,
 		arg.UserID,
 		arg.CharacterID,
 		arg.EventKind,
@@ -56,7 +54,7 @@ func (q *Queries) AddForesightTarget(ctx context.Context, arg AddForesightTarget
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const countForesightLive = `-- name: CountForesightLive :one
@@ -64,7 +62,7 @@ SELECT COUNT(*)::bigint FROM foresight_targets WHERE opened_at IS NULL AND expir
 `
 
 func (q *Queries) CountForesightLive(ctx context.Context, now time.Time) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countForesightLive, now)
+	row := q.db.QueryRow(ctx, countForesightLive, now)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -92,7 +90,7 @@ type GetForesightWarmedForViewParams struct {
 // viewer's own target counts, warmed inside the window before the
 // fetch.
 func (q *Queries) GetForesightWarmedForView(ctx context.Context, arg GetForesightWarmedForViewParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, getForesightWarmedForView,
+	row := q.db.QueryRow(ctx, getForesightWarmedForView,
 		arg.ViewKey,
 		arg.UserID,
 		arg.WarmedAt,
@@ -116,7 +114,7 @@ type ListForesightPendingParams struct {
 }
 
 func (q *Queries) ListForesightPending(ctx context.Context, arg ListForesightPendingParams) ([]ForesightTarget, error) {
-	rows, err := q.db.QueryContext(ctx, listForesightPending, arg.Now, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listForesightPending, arg.Now, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -145,9 +143,6 @@ func (q *Queries) ListForesightPending(ctx context.Context, arg ListForesightPen
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -175,7 +170,7 @@ type ListForesightRatesRow struct {
 // How targets that have run their course turned out, by kind of event:
 // what the chances are learned from.
 func (q *Queries) ListForesightRates(ctx context.Context, arg ListForesightRatesParams) ([]ListForesightRatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listForesightRates, arg.Since, arg.Now)
+	rows, err := q.db.Query(ctx, listForesightRates, arg.Since, arg.Now)
 	if err != nil {
 		return nil, err
 	}
@@ -187,9 +182,6 @@ func (q *Queries) ListForesightRates(ctx context.Context, arg ListForesightRates
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -228,7 +220,7 @@ type ListForesightSummaryRow struct {
 
 // The Sync page's table.
 func (q *Queries) ListForesightSummary(ctx context.Context, arg ListForesightSummaryParams) ([]ListForesightSummaryRow, error) {
-	rows, err := q.db.QueryContext(ctx, listForesightSummary, arg.Now, arg.Since)
+	rows, err := q.db.Query(ctx, listForesightSummary, arg.Now, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -248,9 +240,6 @@ func (q *Queries) ListForesightSummary(ctx context.Context, arg ListForesightSum
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -281,7 +270,7 @@ type ListForesightUserRatesRow struct {
 
 // The same for some accounts, each on its own.
 func (q *Queries) ListForesightUserRates(ctx context.Context, arg ListForesightUserRatesParams) ([]ListForesightUserRatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listForesightUserRates, pq.Array(arg.UserIds), arg.Since, arg.Now)
+	rows, err := q.db.Query(ctx, listForesightUserRates, arg.UserIds, arg.Since, arg.Now)
 	if err != nil {
 		return nil, err
 	}
@@ -298,9 +287,6 @@ func (q *Queries) ListForesightUserRates(ctx context.Context, arg ListForesightU
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -322,7 +308,7 @@ type ListUsersInCorporationsRow struct {
 
 // The accounts with a character in one of some corporations.
 func (q *Queries) ListUsersInCorporations(ctx context.Context, corporationIds []int64) ([]ListUsersInCorporationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUsersInCorporations, pq.Array(corporationIds))
+	rows, err := q.db.Query(ctx, listUsersInCorporations, corporationIds)
 	if err != nil {
 		return nil, err
 	}
@@ -334,9 +320,6 @@ func (q *Queries) ListUsersInCorporations(ctx context.Context, corporationIds []
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -363,7 +346,7 @@ type ListWarsDeclaredSinceRow struct {
 
 // Wars declared since a date, as stored.
 func (q *Queries) ListWarsDeclaredSince(ctx context.Context, arg ListWarsDeclaredSinceParams) ([]ListWarsDeclaredSinceRow, error) {
-	rows, err := q.db.QueryContext(ctx, listWarsDeclaredSince, arg.Since, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listWarsDeclaredSince, arg.Since, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -375,9 +358,6 @@ func (q *Queries) ListWarsDeclaredSince(ctx context.Context, arg ListWarsDeclare
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -399,11 +379,11 @@ type MarkForesightOpenedParams struct {
 
 // The account opened the page a target was warmed for.
 func (q *Queries) MarkForesightOpened(ctx context.Context, arg MarkForesightOpenedParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, markForesightOpened, arg.OpenedAt, arg.UserID, arg.ViewKey)
+	result, err := q.db.Exec(ctx, markForesightOpened, arg.OpenedAt, arg.UserID, arg.ViewKey)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const markForesightWarmed = `-- name: MarkForesightWarmed :exec
@@ -417,7 +397,7 @@ type MarkForesightWarmedParams struct {
 }
 
 func (q *Queries) MarkForesightWarmed(ctx context.Context, arg MarkForesightWarmedParams) error {
-	_, err := q.db.ExecContext(ctx, markForesightWarmed, arg.WarmedAt, arg.Calls, arg.ID)
+	_, err := q.db.Exec(ctx, markForesightWarmed, arg.WarmedAt, arg.Calls, arg.ID)
 	return err
 }
 
@@ -426,6 +406,6 @@ DELETE FROM foresight_targets WHERE created_at < $1
 `
 
 func (q *Queries) PruneForesightTargets(ctx context.Context, before time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneForesightTargets, before)
+	_, err := q.db.Exec(ctx, pruneForesightTargets, before)
 	return err
 }

@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // themeConfigID is the widget_configs id the account theme lives
@@ -119,7 +119,7 @@ func parseThemePrefs(blob string) themePrefs {
 func (app *Application) themePrefsFor(ctx context.Context, userID int64) (prefs themePrefs, stored bool) {
 	blob, err := app.queries.GetWidgetConfig(ctx, db.GetWidgetConfigParams{UserID: userID, WidgetID: themeConfigID})
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("theme: settings for user %d: %v", userID, err)
 		}
 		return themePrefs{}, false

@@ -2,7 +2,6 @@ package contracts
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"evesynapse/internal/app/module"
@@ -17,6 +16,7 @@ import (
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -521,7 +521,7 @@ func (app *mod) contractCharLabel(ctx context.Context, characterID int64) (strin
 func (app *mod) loadContractItems(ctx context.Context, contractID int64) (esi.ContractItems, bool, error) {
 	row, err := app.queries.GetContractDetail(ctx, contractID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, false, nil
 		}
 		return nil, false, err

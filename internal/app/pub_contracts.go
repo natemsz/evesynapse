@@ -44,6 +44,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -166,19 +167,19 @@ func (app *Application) refreshPublicStructures(ctx context.Context, allowance *
 		app.recordMarketFetch(ctx, publicStructuresKind, fetchStateError, "public structures decode failed")
 		return 0, false
 	}
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("worker: public structures: begin: %v", err)
 		return 0, false
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	if err := db.New(tx).ReplacePublicStructures(ctx, db.ReplacePublicStructuresParams{
 		Ids: ids, RefreshedAt: time.Now().UTC(),
 	}); err != nil {
 		logging.Errorf("worker: public structures: store: %v", err)
 		return 0, false
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		logging.Errorf("worker: public structures: commit: %v", err)
 		return 0, false
 	}
@@ -224,7 +225,7 @@ func pubContractRegionOrder(regionIDs []int64) []int64 {
 func (app *Application) advancePublicContractRegion(ctx context.Context, regionID int64, allowance *fetchBudget) (pages int, limited bool) {
 	kind := pubContractRegionKind(regionID)
 	state, err := app.queries.GetPublicContractSweepState(ctx, regionID)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("worker: public contracts: sweep state %d: %v", regionID, err)
 		return 0, false
 	}
@@ -314,11 +315,11 @@ func (app *Application) fetchPublicContractPage(ctx context.Context, regionID, p
 // new cycle and its retirements land atomically.
 func (app *Application) storePublicContractPage(ctx context.Context, regionID int64, state db.PubContractSweepState, cycle int64, rows []esi.PublicContract, last bool) error {
 	now := time.Now().UTC()
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin page store: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 
 	if page := publicContractPageParams(regionID, cycle, now, rows); len(page.ContractIds) > 0 {
@@ -342,7 +343,7 @@ func (app *Application) storePublicContractPage(ctx context.Context, regionID in
 	}); err != nil {
 		return fmt.Errorf("advance sweep cursor %d: %w", regionID, err)
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // publicContractPageParams is one list page as the columns of one
@@ -401,11 +402,11 @@ func publicContractPageParams(regionID, cycle int64, now time.Time, rows []esi.P
 // one transaction.
 func (app *Application) completePublicContractRegion(ctx context.Context, regionID int64, state db.PubContractSweepState, cycle int64) error {
 	now := time.Now().UTC()
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin completion: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	if err := completePublicContractRegionTx(ctx, q, regionID, cycle, now); err != nil {
 		return err
@@ -416,7 +417,7 @@ func (app *Application) completePublicContractRegion(ctx context.Context, region
 	}); err != nil {
 		return fmt.Errorf("stamp sweep cycle %d: %w", regionID, err)
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // completePublicContractRegionTx is a completed sweep's

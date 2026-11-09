@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const addIntelWatch = `-- name: AddIntelWatch :exec
@@ -29,7 +27,7 @@ type AddIntelWatchParams struct {
 
 // Known hostiles.
 func (q *Queries) AddIntelWatch(ctx context.Context, arg AddIntelWatchParams) error {
-	_, err := q.db.ExecContext(ctx, addIntelWatch,
+	_, err := q.db.Exec(ctx, addIntelWatch,
 		arg.ChannelID,
 		arg.CharacterID,
 		arg.Note,
@@ -52,7 +50,7 @@ type ApplyPilotActivityHourParams struct {
 }
 
 func (q *Queries) ApplyPilotActivityHour(ctx context.Context, arg ApplyPilotActivityHourParams) error {
-	_, err := q.db.ExecContext(ctx, applyPilotActivityHour, arg.CharacterID, arg.Hour)
+	_, err := q.db.Exec(ctx, applyPilotActivityHour, arg.CharacterID, arg.Hour)
 	return err
 }
 
@@ -83,7 +81,7 @@ type ApplyPilotActivityKillParams struct {
 }
 
 func (q *Queries) ApplyPilotActivityKill(ctx context.Context, arg ApplyPilotActivityKillParams) error {
-	_, err := q.db.ExecContext(ctx, applyPilotActivityKill,
+	_, err := q.db.Exec(ctx, applyPilotActivityKill,
 		arg.CharacterID,
 		arg.AppliedAt,
 		arg.Kills,
@@ -114,7 +112,7 @@ type ApplyPilotActivityShipParams struct {
 }
 
 func (q *Queries) ApplyPilotActivityShip(ctx context.Context, arg ApplyPilotActivityShipParams) error {
-	_, err := q.db.ExecContext(ctx, applyPilotActivityShip,
+	_, err := q.db.Exec(ctx, applyPilotActivityShip,
 		arg.CharacterID,
 		arg.ShipTypeID,
 		arg.Flown,
@@ -139,7 +137,7 @@ type ApplyPilotActivitySystemParams struct {
 }
 
 func (q *Queries) ApplyPilotActivitySystem(ctx context.Context, arg ApplyPilotActivitySystemParams) error {
-	_, err := q.db.ExecContext(ctx, applyPilotActivitySystem, arg.CharacterID, arg.SystemID, arg.KillmailTime)
+	_, err := q.db.Exec(ctx, applyPilotActivitySystem, arg.CharacterID, arg.SystemID, arg.KillmailTime)
 	return err
 }
 
@@ -157,7 +155,7 @@ type ClaimPilotActivityProfileParams struct {
 // The backfill claims a pilot before fetching: the row's presence
 // is what lets the live stream maintain the profile meanwhile.
 func (q *Queries) ClaimPilotActivityProfile(ctx context.Context, arg ClaimPilotActivityProfileParams) error {
-	_, err := q.db.ExecContext(ctx, claimPilotActivityProfile, arg.CharacterID, arg.UpdatedAt)
+	_, err := q.db.Exec(ctx, claimPilotActivityProfile, arg.CharacterID, arg.UpdatedAt)
 	return err
 }
 
@@ -175,7 +173,7 @@ WHERE character_id = $1
 // pilot met in a reading, and the live kill stream for pilots
 // who have one.
 func (q *Queries) GetPilotActivityProfile(ctx context.Context, characterID int64) (PilotActivityProfile, error) {
-	row := q.db.QueryRowContext(ctx, getPilotActivityProfile, characterID)
+	row := q.db.QueryRow(ctx, getPilotActivityProfile, characterID)
 	var i PilotActivityProfile
 	err := row.Scan(
 		&i.CharacterID,
@@ -206,7 +204,7 @@ type ListIntelWatchRow struct {
 }
 
 func (q *Queries) ListIntelWatch(ctx context.Context, channelIds []int64) ([]ListIntelWatchRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIntelWatch, pq.Array(channelIds))
+	rows, err := q.db.Query(ctx, listIntelWatch, channelIds)
 	if err != nil {
 		return nil, err
 	}
@@ -223,9 +221,6 @@ func (q *Queries) ListIntelWatch(ctx context.Context, channelIds []int64) ([]Lis
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -245,7 +240,7 @@ type ListPilotActivityHoursRow struct {
 }
 
 func (q *Queries) ListPilotActivityHours(ctx context.Context, characterID int64) ([]ListPilotActivityHoursRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotActivityHours, characterID)
+	rows, err := q.db.Query(ctx, listPilotActivityHours, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -257,9 +252,6 @@ func (q *Queries) ListPilotActivityHours(ctx context.Context, characterID int64)
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -288,7 +280,7 @@ type ListPilotActivityShipsRow struct {
 }
 
 func (q *Queries) ListPilotActivityShips(ctx context.Context, arg ListPilotActivityShipsParams) ([]ListPilotActivityShipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotActivityShips, arg.CharacterID, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listPilotActivityShips, arg.CharacterID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -305,9 +297,6 @@ func (q *Queries) ListPilotActivityShips(ctx context.Context, arg ListPilotActiv
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -335,7 +324,7 @@ type ListPilotActivitySystemsRow struct {
 }
 
 func (q *Queries) ListPilotActivitySystems(ctx context.Context, arg ListPilotActivitySystemsParams) ([]ListPilotActivitySystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotActivitySystems, arg.CharacterID, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listPilotActivitySystems, arg.CharacterID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -347,9 +336,6 @@ func (q *Queries) ListPilotActivitySystems(ctx context.Context, arg ListPilotAct
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -382,7 +368,7 @@ type ListPilotCompanionsRow struct {
 
 // Who the pilot flies with: the pilots on the same kills, most first.
 func (q *Queries) ListPilotCompanions(ctx context.Context, arg ListPilotCompanionsParams) ([]ListPilotCompanionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotCompanions, arg.CharacterID, arg.Since)
+	rows, err := q.db.Query(ctx, listPilotCompanions, arg.CharacterID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -399,9 +385,6 @@ func (q *Queries) ListPilotCompanions(ctx context.Context, arg ListPilotCompanio
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -458,7 +441,7 @@ type ListPilotRecentKillsRow struct {
 // ---------------------------------------------------------------------
 // The pilot's latest public kills and losses, newest first.
 func (q *Queries) ListPilotRecentKills(ctx context.Context, arg ListPilotRecentKillsParams) ([]ListPilotRecentKillsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotRecentKills, arg.MaxRows, arg.CharacterID)
+	rows, err := q.db.Query(ctx, listPilotRecentKills, arg.MaxRows, arg.CharacterID)
 	if err != nil {
 		return nil, err
 	}
@@ -479,9 +462,6 @@ func (q *Queries) ListPilotRecentKills(ctx context.Context, arg ListPilotRecentK
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -519,7 +499,7 @@ type ListPilotsLastSeenRow struct {
 // Where each of some pilots was last seen on a public kill, since a
 // moment: the map's "Watched pilots".
 func (q *Queries) ListPilotsLastSeen(ctx context.Context, arg ListPilotsLastSeenParams) ([]ListPilotsLastSeenRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotsLastSeen, pq.Array(arg.CharacterIds), arg.Since)
+	rows, err := q.db.Query(ctx, listPilotsLastSeen, arg.CharacterIds, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -531,9 +511,6 @@ func (q *Queries) ListPilotsLastSeen(ctx context.Context, arg ListPilotsLastSeen
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -569,7 +546,7 @@ type ListReportsNamingRow struct {
 
 // Intel reports naming the pilot, in channels the reader can read.
 func (q *Queries) ListReportsNaming(ctx context.Context, arg ListReportsNamingParams) ([]ListReportsNamingRow, error) {
-	rows, err := q.db.QueryContext(ctx, listReportsNaming, pq.Array(arg.ChannelIds), arg.Since, arg.Pattern)
+	rows, err := q.db.Query(ctx, listReportsNaming, arg.ChannelIds, arg.Since, arg.Pattern)
 	if err != nil {
 		return nil, err
 	}
@@ -590,9 +567,6 @@ func (q *Queries) ListReportsNaming(ctx context.Context, arg ListReportsNamingPa
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -622,7 +596,7 @@ type ListScansWithPilotRow struct {
 
 // The reader's own local scans with the pilot in them.
 func (q *Queries) ListScansWithPilot(ctx context.Context, arg ListScansWithPilotParams) ([]ListScansWithPilotRow, error) {
-	rows, err := q.db.QueryContext(ctx, listScansWithPilot, arg.UserID, pq.Array(arg.Ids), arg.CharacterID)
+	rows, err := q.db.Query(ctx, listScansWithPilot, arg.UserID, arg.Ids, arg.CharacterID)
 	if err != nil {
 		return nil, err
 	}
@@ -634,9 +608,6 @@ func (q *Queries) ListScansWithPilot(ctx context.Context, arg ListScansWithPilot
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -662,7 +633,7 @@ type ListStalePilotProfilesParams struct {
 // was kept, so the restoration pass offers them for one
 // fresh walk. A bounded batch, most recently active first.
 func (q *Queries) ListStalePilotProfiles(ctx context.Context, arg ListStalePilotProfilesParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listStalePilotProfiles, arg.Before, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listStalePilotProfiles, arg.Before, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -674,9 +645,6 @@ func (q *Queries) ListStalePilotProfiles(ctx context.Context, arg ListStalePilot
 			return nil, err
 		}
 		items = append(items, character_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -696,7 +664,7 @@ type MarkPilotActivityBackfilledParams struct {
 }
 
 func (q *Queries) MarkPilotActivityBackfilled(ctx context.Context, arg MarkPilotActivityBackfilledParams) error {
-	_, err := q.db.ExecContext(ctx, markPilotActivityBackfilled, arg.BackfilledAt, arg.CharacterID)
+	_, err := q.db.Exec(ctx, markPilotActivityBackfilled, arg.BackfilledAt, arg.CharacterID)
 	return err
 }
 
@@ -716,7 +684,7 @@ type MarkPilotKillAppliedParams struct {
 // One marker per (kill, pilot) folded into the aggregates. A
 // conflict (no row back) means the kill already counted.
 func (q *Queries) MarkPilotKillApplied(ctx context.Context, arg MarkPilotKillAppliedParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, markPilotKillApplied, arg.KillmailID, arg.CharacterID, arg.KillmailTime)
+	row := q.db.QueryRow(ctx, markPilotKillApplied, arg.KillmailID, arg.CharacterID, arg.KillmailTime)
 	var killmail_id int64
 	err := row.Scan(&killmail_id)
 	return killmail_id, err
@@ -729,11 +697,11 @@ WHERE killmail_time < $1::timestamptz
 
 // Markers older than the kill details' retention go with them.
 func (q *Queries) PrunePilotActivityApplied(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, prunePilotActivityApplied, before)
+	result, err := q.db.Exec(ctx, prunePilotActivityApplied, before)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const refreshPilotUsualShip = `-- name: RefreshPilotUsualShip :exec
@@ -749,7 +717,7 @@ WHERE p.character_id = $1
 // The usual hull: the ship with the most final blows, kept on the
 // profile row so the page reads it without a sort.
 func (q *Queries) RefreshPilotUsualShip(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, refreshPilotUsualShip, characterID)
+	_, err := q.db.Exec(ctx, refreshPilotUsualShip, characterID)
 	return err
 }
 
@@ -763,6 +731,6 @@ type RemoveIntelWatchParams struct {
 }
 
 func (q *Queries) RemoveIntelWatch(ctx context.Context, arg RemoveIntelWatchParams) error {
-	_, err := q.db.ExecContext(ctx, removeIntelWatch, arg.ChannelID, arg.CharacterID)
+	_, err := q.db.Exec(ctx, removeIntelWatch, arg.ChannelID, arg.CharacterID)
 	return err
 }

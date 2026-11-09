@@ -2,17 +2,15 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
 
-	"github.com/lib/pq"
-
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -47,7 +45,7 @@ const placeActivityRetention = 30 * 24 * time.Hour
 func (app *Application) placeStatsDue(ctx context.Context, kind string, now time.Time) bool {
 	meta, err := app.queries.GetPlaceStatsMeta(ctx, kind)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("worker: place stats gate %s: %v", kind, err)
 		}
 		return true
@@ -156,12 +154,12 @@ func (app *Application) refreshPlaceActivity(ctx context.Context) (stored bool, 
 	}
 	hour := now.UTC().Truncate(time.Hour)
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("worker: place activity: begin tx: %v", err)
 		return false, false
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 
 	if len(merged) > 0 {
@@ -178,14 +176,14 @@ func (app *Application) refreshPlaceActivity(ctx context.Context) (stored bool, 
 			podKills = append(podKills, row.pod)
 			shipJumps = append(shipJumps, row.jumps)
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO system_activity_hours (system_id, hour, ship_kills, npc_kills, pod_kills, ship_jumps)
 			SELECT unnest($1::bigint[]), $2::timestamptz, unnest($3::bigint[]),
 			       unnest($4::bigint[]), unnest($5::bigint[]), unnest($6::bigint[])
 			ON CONFLICT (system_id, hour) DO UPDATE SET
 				ship_kills = EXCLUDED.ship_kills, npc_kills = EXCLUDED.npc_kills,
 				pod_kills = EXCLUDED.pod_kills, ship_jumps = EXCLUDED.ship_jumps
-		`, pq.Array(systemIDs), hour, pq.Array(shipKills), pq.Array(npcKills), pq.Array(podKills), pq.Array(shipJumps)); err != nil {
+		`, systemIDs, hour, shipKills, npcKills, podKills, shipJumps); err != nil {
 			logging.Errorf("worker: place activity: store history: %v", err)
 			return false, false
 		}
@@ -204,7 +202,7 @@ func (app *Application) refreshPlaceActivity(ctx context.Context) (stored bool, 
 		logging.Errorf("worker: place activity: store meta: %v", err)
 		return false, false
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		logging.Errorf("worker: place activity: commit: %v", err)
 		return false, false
 	}
@@ -304,12 +302,12 @@ func (app *Application) refreshPlaceSovereignty(ctx context.Context) (stored boo
 
 	cachedUntil := placeCacheUntil(header, now)
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("worker: place sovereignty: begin tx: %v", err)
 		return false, false
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.ClearSystemSovereignty(ctx); err != nil {
 		logging.Errorf("worker: place sovereignty: clear: %v", err)
@@ -333,12 +331,12 @@ func (app *Application) refreshPlaceSovereignty(ctx context.Context) (stored boo
 			factionIDs = append(factionIDs, s.FactionID)
 			factionNameList = append(factionNameList, factionNames[s.SystemID])
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO system_sovereignty (system_id, alliance_id, corporation_id, faction_id, faction_name, updated_at)
 			SELECT unnest($1::bigint[]), unnest($2::bigint[]), unnest($3::bigint[]),
 			       unnest($4::bigint[]), unnest($5::text[]), $6::timestamptz
-		`, pq.Array(systemIDs), pq.Array(allianceIDs), pq.Array(corpIDs),
-			pq.Array(factionIDs), pq.Array(factionNameList), now.UTC()); err != nil {
+		`, systemIDs, allianceIDs, corpIDs,
+			factionIDs, factionNameList, now.UTC()); err != nil {
 			logging.Errorf("worker: place sovereignty: store: %v", err)
 			return false, false
 		}
@@ -349,7 +347,7 @@ func (app *Application) refreshPlaceSovereignty(ctx context.Context) (stored boo
 		logging.Errorf("worker: place sovereignty: store meta: %v", err)
 		return false, false
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		logging.Errorf("worker: place sovereignty: commit: %v", err)
 		return false, false
 	}

@@ -474,11 +474,18 @@ func (snap *searchSnapshot) suggestTypes(q, pool string, limit int64) []suggestI
 		}
 		matches = append(matches, match{e: e, tier: tier})
 	}
+	// Order by lower(name), then id — the SQL path's ORDER BY
+	// exactly. Raw name order would follow the database
+	// collation there and byte order here, and the two disagree
+	// (under en_US, "of Elsewhere" sorts before "Skill").
 	sort.SliceStable(matches, func(i, j int) bool {
 		if matches[i].tier != matches[j].tier {
 			return matches[i].tier < matches[j].tier
 		}
-		return matches[i].e.name < matches[j].e.name
+		if matches[i].e.lower != matches[j].e.lower {
+			return matches[i].e.lower < matches[j].e.lower
+		}
+		return matches[i].e.id < matches[j].e.id
 	})
 	for _, m := range matches {
 		if int64(len(out)) >= limit {

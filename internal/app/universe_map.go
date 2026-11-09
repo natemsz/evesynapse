@@ -31,7 +31,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -46,6 +45,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // universeMapVersion is the builder's version: bump it when the
@@ -416,7 +416,7 @@ func (app *Application) ensureUniverseMap(ctx context.Context) {
 	if err == nil && meta.Version == universeMapVersion {
 		return
 	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("map: read payload meta: %v", err)
 		return
 	}
@@ -432,7 +432,7 @@ func (app *Application) ensureUniverseMap(ctx context.Context) {
 func (app *Application) handleUniverseJSON(w http.ResponseWriter, r *http.Request) {
 	row, err := app.queries.GetMapUniversePayload(r.Context())
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "the universe map has not been built yet", http.StatusServiceUnavailable)
 			return
 		}

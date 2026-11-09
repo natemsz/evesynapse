@@ -23,13 +23,13 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"net/http"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // corpBackfillQueueChan returns the corp backfill queue, making
@@ -98,7 +98,7 @@ func (app *Application) runCorpBackfill(ctx context.Context) {
 func (app *Application) backfillCorp(ctx context.Context, client *http.Client, id int64) {
 	if _, err := app.queries.GetCorpKillCoverage(ctx, id); err == nil {
 		return
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		logging.Warnf("corp coverage: read coverage %d: %v", id, err)
 		return
 	}

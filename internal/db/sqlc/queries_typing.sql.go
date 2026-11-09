@@ -8,8 +8,6 @@ package db
 import (
 	"context"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const countTypingGuesses = `-- name: CountTypingGuesses :one
@@ -17,7 +15,7 @@ SELECT COUNT(*) FROM typing_guesses WHERE box = $1
 `
 
 func (q *Queries) CountTypingGuesses(ctx context.Context, box string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countTypingGuesses, box)
+	row := q.db.QueryRow(ctx, countTypingGuesses, box)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -36,7 +34,7 @@ type DeleteTypingAllianceGuessesParams struct {
 }
 
 func (q *Queries) DeleteTypingAllianceGuesses(ctx context.Context, arg DeleteTypingAllianceGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingAllianceGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
+	_, err := q.db.Exec(ctx, deleteTypingAllianceGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
 	return err
 }
 
@@ -53,7 +51,7 @@ type DeleteTypingCorporationGuessesParams struct {
 }
 
 func (q *Queries) DeleteTypingCorporationGuesses(ctx context.Context, arg DeleteTypingCorporationGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingCorporationGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
+	_, err := q.db.Exec(ctx, deleteTypingCorporationGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
 	return err
 }
 
@@ -70,7 +68,7 @@ type DeleteTypingDetailGuessesParams struct {
 }
 
 func (q *Queries) DeleteTypingDetailGuesses(ctx context.Context, arg DeleteTypingDetailGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingDetailGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
+	_, err := q.db.Exec(ctx, deleteTypingDetailGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
 	return err
 }
 
@@ -87,7 +85,7 @@ type DeleteTypingHistoryGuessesParams struct {
 }
 
 func (q *Queries) DeleteTypingHistoryGuesses(ctx context.Context, arg DeleteTypingHistoryGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingHistoryGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
+	_, err := q.db.Exec(ctx, deleteTypingHistoryGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
 	return err
 }
 
@@ -110,7 +108,7 @@ type DeleteTypingPilotGuessesParams struct {
 // go: one the pilot opened has been bumped to viewed, and one
 // already holding data is a record now, not a guess.
 func (q *Queries) DeleteTypingPilotGuesses(ctx context.Context, arg DeleteTypingPilotGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingPilotGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
+	_, err := q.db.Exec(ctx, deleteTypingPilotGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
 	return err
 }
 
@@ -132,7 +130,7 @@ type GetTypingGuessParams struct {
 // The box's guess for one entity: the current one if there is
 // one, else the latest.
 func (q *Queries) GetTypingGuess(ctx context.Context, arg GetTypingGuessParams) (TypingGuess, error) {
-	row := q.db.QueryRowContext(ctx, getTypingGuess,
+	row := q.db.QueryRow(ctx, getTypingGuess,
 		arg.Box,
 		arg.Kind,
 		arg.EntityID,
@@ -177,7 +175,7 @@ type GetTypingGuessNotedForEntityParams struct {
 // Only a guess from this viewer's own boxes counts (box_prefix is
 // "<user id>|"), noted inside the window before the fetch.
 func (q *Queries) GetTypingGuessNotedForEntity(ctx context.Context, arg GetTypingGuessNotedForEntityParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, getTypingGuessNotedForEntity,
+	row := q.db.QueryRow(ctx, getTypingGuessNotedForEntity,
 		arg.Kind,
 		arg.EntityID,
 		arg.RegionID,
@@ -217,7 +215,7 @@ type InsertTypingGuessParams struct {
 // A guess the box is already making stays as it is (same row,
 // same noted_at): one guess, however many keystrokes kept it.
 func (q *Queries) InsertTypingGuess(ctx context.Context, arg InsertTypingGuessParams) error {
-	_, err := q.db.ExecContext(ctx, insertTypingGuess,
+	_, err := q.db.Exec(ctx, insertTypingGuess,
 		arg.Box,
 		arg.Kind,
 		arg.EntityID,
@@ -244,7 +242,7 @@ type ListTypingGuessRatesRow struct {
 // Hit rates by guess kind over a window: what the Sync page's
 // guess table shows beside the foresight one.
 func (q *Queries) ListTypingGuessRates(ctx context.Context, notedAt time.Time) ([]ListTypingGuessRatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTypingGuessRates, notedAt)
+	rows, err := q.db.Query(ctx, listTypingGuessRates, notedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -256,9 +254,6 @@ func (q *Queries) ListTypingGuessRates(ctx context.Context, notedAt time.Time) (
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -281,7 +276,7 @@ type MarkTypingGuessHitsParams struct {
 }
 
 func (q *Queries) MarkTypingGuessHits(ctx context.Context, arg MarkTypingGuessHitsParams) error {
-	_, err := q.db.ExecContext(ctx, markTypingGuessHits,
+	_, err := q.db.Exec(ctx, markTypingGuessHits,
 		arg.Kind,
 		arg.EntityID,
 		arg.RegionID,
@@ -298,7 +293,7 @@ DELETE FROM typing_guesses WHERE noted_at < $1
 // Old guesses leave by age, well outside every window that
 // reads them.
 func (q *Queries) PruneTypingGuesses(ctx context.Context, notedAt time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneTypingGuesses, notedAt)
+	_, err := q.db.Exec(ctx, pruneTypingGuesses, notedAt)
 	return err
 }
 
@@ -318,6 +313,6 @@ type SupersedeTypingGuessesParams struct {
 // longer makes. The kept ones are named "kind|entity|region".
 // Nothing is deleted, and hit_at is not touched.
 func (q *Queries) SupersedeTypingGuesses(ctx context.Context, arg SupersedeTypingGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, supersedeTypingGuesses, arg.Box, arg.SupersededAt, pq.Array(arg.Kept))
+	_, err := q.db.Exec(ctx, supersedeTypingGuesses, arg.Box, arg.SupersededAt, arg.Kept)
 	return err
 }

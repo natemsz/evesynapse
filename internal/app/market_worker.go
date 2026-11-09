@@ -20,8 +20,8 @@ import (
 	// than encoding/json with identical results
 	// (TestAppDecoderParity in decode_parity_test.go). stdjson is
 	// the standard library, kept for the contract detail decode.
+	"database/sql"
 	json "github.com/goccy/go-json"
-	"github.com/lib/pq"
 )
 
 // ---------------------------------------------------------------------------
@@ -862,7 +862,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 			if prev, seen := prevBook[lkey]; seen && prev.BeatenNow == p.Beaten && prev.OutbidEvents == p.OutbidEvents &&
 				prev.BeatingPrice == p.BeatingPrice && prev.BeatingVolume == p.BeatingVolume &&
 				prev.SuggestedPrice == p.SuggestedPrice && prev.UnitCost == p.UnitCost &&
-				prev.TaxRate == p.TaxRate && prev.MarginPct == p.MarginPct {
+				prev.TaxRate == p.TaxRate && prev.MarginPct.Valid == p.MarginPct.Valid && prev.MarginPct.Float64 == p.MarginPct.Float64 {
 				// The verdict stands: only its freshness stamp moves.
 				if err := app.queries.TouchOrderLifecycleChecked(ctx, db.TouchOrderLifecycleCheckedParams{
 					CharacterID: ref.char.CharacterID, OrderID: ref.order.OrderID, CheckedAt: now,
@@ -881,7 +881,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 					BeatenNow: p.Beaten, OutbidEvents: p.OutbidEvents,
 					BeatingPrice: p.BeatingPrice, BeatingVolume: p.BeatingVolume,
 					SuggestedPrice: p.SuggestedPrice, UnitCost: p.UnitCost,
-					TaxRate: p.TaxRate, MarginPct: p.MarginPct,
+					TaxRate: p.TaxRate, MarginPct: sql.NullFloat64{Float64: p.MarginPct.Float64, Valid: p.MarginPct.Valid},
 				}
 			}
 		}
@@ -1127,12 +1127,12 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 		}
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("worker: guide prices: begin tx: %v", err)
 		return false, false
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.DeleteGuidePrices(ctx); err != nil {
 		logging.Errorf("worker: guide prices: clear: %v", err)
@@ -1164,13 +1164,13 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 			adjPrices[i] = row.AdjustedPrice
 			avgPrices[i] = row.AveragePrice
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO guide_prices (type_id, adjusted_price, average_price)
 			SELECT unnest($1::bigint[]), unnest($2::float8[]), unnest($3::float8[])
 			ON CONFLICT (type_id) DO UPDATE SET
 				adjusted_price = excluded.adjusted_price,
 				average_price  = excluded.average_price
-		`, pq.Array(typeIDs), pq.Array(adjPrices), pq.Array(avgPrices)); err != nil {
+		`, typeIDs, adjPrices, avgPrices); err != nil {
 			logging.Errorf("worker: guide prices: store batch: %v", err)
 			return false, false
 		}
@@ -1182,7 +1182,7 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 		logging.Errorf("worker: guide prices: store meta: %v", err)
 		return false, false
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		logging.Errorf("worker: guide prices: commit: %v", err)
 		return false, false
 	}
@@ -1267,12 +1267,12 @@ func (app *Application) refreshCostIndices(ctx context.Context) (stored bool, li
 		return false, false
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("worker: cost indices: begin tx: %v", err)
 		return false, false
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	storedRows := 0
 	for _, sys := range systems {
@@ -1294,7 +1294,7 @@ func (app *Application) refreshCostIndices(ctx context.Context) (stored bool, li
 			storedRows++
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		logging.Errorf("worker: cost indices: commit: %v", err)
 		return false, false
 	}

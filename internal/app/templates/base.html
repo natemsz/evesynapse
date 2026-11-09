@@ -210,10 +210,12 @@
     </details>{{end}}
     {{if .NotifyPrompt}}{{template "notify-prompt" .NotifyPrompt}}{{end}}
     <div class="topbar-character">
-      {{range .Switcher}}{{if .Active}}<img class="portrait topbar-portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{end}}{{end}}      <span class="topbar-character-name">{{.CharacterName}}</span>{{if .Demo}} <span class="badge demo">Demo</span>{{end}}
       {{if .Switcher}}
       <details class="branch switcher topbar-switcher">
-        <summary>Switch Character</summary>
+        <summary class="topbar-character-summary">
+          {{range .Switcher}}{{if .Active}}<img class="portrait topbar-portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{end}}{{end}}
+          <span class="topbar-character-name">{{.CharacterName}}</span>
+        </summary>
         <div class="menu switcher-menu">
           {{range .Switcher}}
           <a href="/characters/switch?character={{.ID}}"{{if .Active}} class="active"{{end}}><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <small>· re-link needed</small>{{end}}</a>
@@ -221,7 +223,11 @@
           <a href="/characters/">Manage Characters</a>
         </div>
       </details>
+      {{else}}
+      {{range .Switcher}}{{if .Active}}<img class="portrait topbar-portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{end}}{{end}}
+      <span class="topbar-character-name">{{.CharacterName}}</span>
       {{end}}
+      {{if .Demo}} <span class="badge demo">Demo</span>{{end}}
     </div>
     {{end}}
     {{/* Axon's site panel: its window controls, in the top bar so the

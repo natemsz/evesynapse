@@ -130,11 +130,12 @@ html[data-theme="light"] {
 html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
 /* Main's top margin steps back when the bar rides above it. */
 .page-shell:has(> .subnav nav) > main { margin-top: 0; }
-/* The bar's own bottom margin is the one gap under it: the first
-   thing in main gives up its top margin, which used to collapse
-   with the bar's when both lived inside main. */
+/* The active sub-nav tab identifies the page; omit the redundant header
+   at the top of the page except on the home widget page. */
+.page-shell:has(> .subnav nav) #main-content > :is(h1, .h-with-action) {
+  display: none;
+}
 .page-shell:has(> .subnav nav) #main-content > h1 { margin-top: 0; }
-.page-shell:has(> .subnav nav) > main:not(:has(> h1)) > .page-body { margin-top: 0; }
 .subnav > .section-tabs,
 .subnav > .section-subtabs {
   display: flex;
@@ -260,12 +261,51 @@ html[data-theme="light"] .subnav .tabs-more-panel {
 /* Schemes paint the active tab's text in their highlight. */
 html[data-scheme] .subnav a.active { color: var(--sch-hi); }
 html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 86%, transparent); }
-/* The page body follows the sub-nav directly: no folder merge. */
-.page-shell:has(> .subnav nav) > main > .page-body {
-  margin-top: var(--space-3);
-  border-top-left-radius: var(--r-lg);
-  border-top-right-radius: var(--r-lg);
-  border-top: 1px solid var(--glass-edge);
+/* The page body is one connected column instead of a floating
+   card: it runs down to the footer on every page, and at the top
+   it hangs from whichever bar the page has, the sub-nav where
+   there is one and the top bar where there is no sub-nav and no
+   page title in the way (the Map is the title-less case). The
+   bar's bottom border and the footer's top border are its only
+   horizontal edges, and on a short page it still fills the column
+   so the footer meets it. Home keeps its open field of widget
+   cards, and a titled page keeps its title on the sky above the
+   column; both still join the footer. */
+.page-shell:not(:has(.home-grid)) > main {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.page-shell > main > .page-body:not(:has(.home-grid)) {
+  flex: 1 0 auto;
+  margin-bottom: 0;
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.page-shell:not(:has(.home-grid)) > footer { margin-top: 0; }
+/* The pull up to the sub-nav sits on main, not on the page
+   body: a swap's height glide clips main at its own top edge
+   (overflow hidden while it glides), and a body pulled above
+   that edge loses its top strip for the whole glide, which
+   reads as the column detaching from the bar until it lands. */
+.page-shell:has(> .subnav nav):not(:has(.home-grid)) > main {
+  margin-top: calc(-1 * var(--space-3));
+}
+.page-shell:has(> .subnav nav) > main > .page-body:not(:has(.home-grid)) {
+  margin-top: 0;
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.page-shell:not(:has(> .subnav nav)) > main:not(:has(> :is(h1, .page-head))) {
+  margin-top: 0;
+}
+.page-shell:not(:has(> .subnav nav)) > main:not(:has(> :is(h1, .page-head))) > .page-body:not(:has(.home-grid)) {
+  margin-top: 0;
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 /* ---- Arrangement patterns ----
@@ -511,6 +551,7 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
   background: var(--surface-inset);
 }
 .l-pane { min-width: 0; padding: var(--space-3) var(--space-4) var(--space-4); }
+.l-pane:has(> .l-pane-bar:has(> :not(.l-back))) { padding-top: 0; }
 .l-pane-bar {
   position: sticky;
   top: var(--l-top);
@@ -519,12 +560,16 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-4)) var(--space-3);
+  margin: 0 calc(-1 * var(--space-4)) var(--space-3);
   padding: var(--space-3) var(--space-4) var(--space-2);
   /* Opaque, so rows scrolling under the stuck bar stay hidden, and
      toned like the pane: the panel with the inset tint laid over. */
   background: linear-gradient(var(--surface-inset), var(--surface-inset)), var(--surface-float);
   border-bottom: 1px solid transparent;
+}
+.jb-main > .l-pane-bar,
+.bp-main > .l-pane-bar {
+  position: static;
 }
 .l-panes > .l-pane:first-child > .l-pane-bar {
   border-top-left-radius: calc(var(--r-md) - 1px);

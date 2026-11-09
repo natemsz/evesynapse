@@ -631,15 +631,27 @@
   // The blocks that draw in: the content's top-level elements.
   // A page that wraps everything in one shell element draws in
   // by the shell's children instead, so a wrapped page staggers
-  // the same way a flat one does.
+  // the same way a flat one does. The page body and the .l-page
+  // wrapper inside it are never blocks themselves: the body hangs
+  // from the bar above it, so sliding either would pull the
+  // column away from that connection for the whole draw-in. Their
+  // children draw in instead; the shell stays pinned at the
+  // connection and the height glide below draws the column in
+  // downward from it, sliding the footer as it goes.
   function drawBlocks() {
     var kids = [];
     var i, el;
-    for (i = 0; i < main.children.length; i++) {
-      el = main.children[i];
-      if (el.tagName === "SCRIPT" || el.tagName === "STYLE" || el.tagName === "TEMPLATE") continue;
-      kids.push(el);
+    // Shells expand recursively, however deep the page nests
+    // them (main > .page-body > .l-page is the usual chain).
+    function collect(node, out) {
+      if (node.tagName === "SCRIPT" || node.tagName === "STYLE" || node.tagName === "TEMPLATE") return;
+      if (node.classList && (node.classList.contains("page-body") || node.classList.contains("l-page"))) {
+        for (var j = 0; j < node.children.length; j++) collect(node.children[j], out);
+        return;
+      }
+      out.push(node);
     }
+    for (i = 0; i < main.children.length; i++) collect(main.children[i], kids);
     if (kids.length === 1 && kids[0].children.length >= 3) {
       var inner = [];
       for (i = 0; i < kids[0].children.length; i++) {
@@ -866,6 +878,12 @@
         return params.get("surface") || "sheet";
       };
       return surfOf(from) !== surfOf(to) ? "region" : "keep";
+    }
+    if (path === "/intel/kills" || path === "/killmails") {
+      // Paging older kills or switching filter scope starts the new
+      // view at the top of the feed instead of holding scroll at the
+      // bottom pager button.
+      return "top";
     }
     return "keep";
   }

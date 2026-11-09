@@ -74,6 +74,27 @@ ON CONFLICT (character_id, kind) DO UPDATE SET
 -- without its payload: all a conditional refresh needs to send.
 SELECT etag FROM character_snapshots
 WHERE character_id = $1 AND kind = $2;
+-- name: GetESIETagEntry :one
+-- One cached ESI GET answer by its key (full path scoped by a
+-- hash of the token that fetched it): the ETag, the body and the
+-- end of ESI's cache window, read without the updated_at
+-- bookkeeping.
+SELECT cache_key, etag, body, expires_at FROM esi_etag_cache
+WHERE cache_key = $1;
+-- name: UpsertESIETagEntry :exec
+-- Store a fresh ESI GET answer under its key, replacing the
+-- previous one for the same path and token scope.
+INSERT INTO esi_etag_cache (cache_key, etag, body, expires_at, updated_at)
+VALUES ($1, $2, $3, $4, now())
+ON CONFLICT (cache_key) DO UPDATE SET
+    etag       = excluded.etag,
+    body       = excluded.body,
+    expires_at = excluded.expires_at,
+    updated_at = now();
+-- name: DeleteESIETagEntry :exec
+-- Drop a cached ESI GET answer: an expired row found on lookup,
+-- never served.
+DELETE FROM esi_etag_cache WHERE cache_key = $1;
 -- name: TouchSnapshot :execrows
 -- ESI answered "not modified": the stored payload is still current,
 -- so only the bookkeeping beside it moves.

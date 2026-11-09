@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -253,5 +254,104 @@ func TestUndecodableAnswerIsAnError(t *testing.T) {
 	err := client.Get(context.Background(), "", "/status/", &out)
 	if err == nil || !strings.Contains(err.Error(), "decode") {
 		t.Fatalf("err = %v, want a decode error", err)
+	}
+}
+
+// etagStub answers GETs with an ETag and honors If-None-Match:
+// the first call returns 200 with the body, later calls offering
+// the current ETag return 304 with no body. The first call waits
+// firstCallDelay, so concurrent readers have time to join the one
+// in-flight call before it answers.
+type etagStub struct {
+	mu             sync.Mutex
+	calls          int
+	etag           string
+	body           string
+	firstCallDelay time.Duration
+	seen           []string // If-None-Match values received, in order
+}
+
+func (s *etagStub) RoundTrip(req *http.Request) (*http.Response, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls++
+	inm := req.Header.Get("If-None-Match")
+	s.seen = append(s.seen, inm)
+	h := make(http.Header)
+	h.Set("ETag", s.etag)
+	h.Set("Expires", time.Now().Add(time.Hour).UTC().Format(http.TimeFormat))
+	if s.calls == 1 && s.firstCallDelay > 0 {
+		time.Sleep(s.firstCallDelay)
+	}
+	if inm != "" && inm == s.etag {
+		return &http.Response{
+			StatusCode: http.StatusNotModified,
+			Header:     h,
+			Body:       io.NopCloser(strings.NewReader("")),
+			Request:    req,
+		}, nil
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     h,
+		Body:       io.NopCloser(strings.NewReader(s.body)),
+		Request:    req,
+	}, nil
+}
+
+// TestConcurrentGETsCollapseAndETagServesCached pins the two
+// behaviors the ESI call collapse exists for: concurrent identical
+// GETs fire one ESI call between them, and a later GET for the
+// unchanged resource revalidates with its ETag, gets a 304, and
+// serves the cached body without a fresh download.
+func TestConcurrentGETsCollapseAndETagServesCached(t *testing.T) {
+	stub := &etagStub{etag: `"v1"`, body: `{"n":1}`, firstCallDelay: 200 * time.Millisecond}
+	client := New(&http.Client{Transport: stub}, nil, nil)
+	ctx := context.Background()
+
+	const readers = 10
+	var wg sync.WaitGroup
+	bodies := make([][]byte, readers)
+	errs := make([]error, readers)
+	for i := range readers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			body, _, err := client.FetchRaw(ctx, "", "/alliances/1/")
+			bodies[i], errs[i] = body, err
+		}(i)
+	}
+	wg.Wait()
+	stub.mu.Lock()
+	calls := stub.calls
+	stub.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("ten concurrent identical GETs made %d ESI calls, want 1", calls)
+	}
+	for i := range readers {
+		if errs[i] != nil {
+			t.Fatalf("reader %d: %v", i, errs[i])
+		}
+		if string(bodies[i]) != `{"n":1}` {
+			t.Fatalf("reader %d got %q, want the shared body", i, bodies[i])
+		}
+	}
+
+	// The resource has not changed: the next GET offers the ETag,
+	// ESI answers 304, and the cached body is served.
+	body, _, err := client.FetchRaw(ctx, "", "/alliances/1/")
+	if err != nil {
+		t.Fatalf("second GET: %v", err)
+	}
+	if string(body) != `{"n":1}` {
+		t.Fatalf("second GET served %q, want the cached body", body)
+	}
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	if stub.calls != 2 {
+		t.Fatalf("second GET made %d ESI calls in total, want 2 (one fetch, one 304 revalidation)", stub.calls)
+	}
+	if len(stub.seen) != 2 || stub.seen[1] != `"v1"` {
+		t.Fatalf("second GET sent If-None-Match %q, want the stored ETag", stub.seen)
 	}
 }

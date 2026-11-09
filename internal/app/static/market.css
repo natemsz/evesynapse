@@ -293,6 +293,16 @@
    rows ten entries always fill the same height on both sides,
    and the script's lock lands on the same count everywhere. */
 .mkt-book-table tbody tr { height: 3.4rem; }
+/* The book header rides the top of its own scroll box, in the
+   same opaque panel the sticky first column uses, so rows slide
+   under it instead of through the text. */
+.mkt-book-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--panel);
+}
+.mkt-book-table thead th:first-child { z-index: 4; }
 .mkt-book-pane > .tw::-webkit-scrollbar { width: 0.45rem; height: 0.45rem; }
 .mkt-book-pane > .tw::-webkit-scrollbar-track { background: transparent; }
 .mkt-book-pane > .tw::-webkit-scrollbar-thumb { background: var(--muted); border-radius: var(--r-xs); }

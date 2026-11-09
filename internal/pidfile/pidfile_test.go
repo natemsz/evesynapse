@@ -157,6 +157,64 @@ func TestSignalServerRestartTimeout(t *testing.T) {
 	}
 }
 
+func TestFindProcessViaSystemd(t *testing.T) {
+	sleeper := pidfiletest.StartSleep(t)
+	oldSystemd := SystemdMainPID
+	oldCheck := ProcessCheck
+	defer func() {
+		SystemdMainPID = oldSystemd
+		ProcessCheck = oldCheck
+	}()
+
+	SystemdMainPID = func(serviceName string) (int, bool) {
+		if serviceName != "evesynapse" {
+			t.Fatalf("SystemdMainPID asked for service %q, want 'evesynapse'", serviceName)
+		}
+		return sleeper.Process.Pid, true
+	}
+	ProcessCheck = func(pid int, target string) bool {
+		return pid == sleeper.Process.Pid
+	}
+
+	pid, ok := FindProcess("/opt/evesynapse/evesynapse")
+	if !ok || pid != sleeper.Process.Pid {
+		t.Fatalf("FindProcess = %d, %v; want %d, true", pid, ok, sleeper.Process.Pid)
+	}
+}
+
+func TestFindProcessViaScanProc(t *testing.T) {
+	sleeper := pidfiletest.StartSleep(t)
+	oldSystemd := SystemdMainPID
+	oldScan := ScanProc
+	defer func() {
+		SystemdMainPID = oldSystemd
+		ScanProc = oldScan
+	}()
+
+	SystemdMainPID = func(string) (int, bool) { return 0, false }
+	ScanProc = func(target string) (int, bool) {
+		if target != "/opt/evesynapse/evesynapse" {
+			t.Fatalf("ScanProc asked for target %q", target)
+		}
+		return sleeper.Process.Pid, true
+	}
+
+	pid, ok := FindProcess("/opt/evesynapse/evesynapse")
+	if !ok || pid != sleeper.Process.Pid {
+		t.Fatalf("FindProcess = %d, %v; want %d, true", pid, ok, sleeper.Process.Pid)
+	}
+}
+
+func TestSignalRestartWithoutPidfilePath(t *testing.T) {
+	sleeper := pidfiletest.StartSleep(t)
+	if !SignalRestart(sleeper.Process.Pid, "", 2*time.Second) {
+		t.Fatal("SignalRestart without pidfile failed to stop sleeper process")
+	}
+	if Alive(sleeper.Process.Pid) {
+		t.Fatal("sleeper process still alive after successful SignalRestart")
+	}
+}
+
 func writeTestFile(t *testing.T, path string, data []byte, perm os.FileMode) {
 	t.Helper()
 	if err := os.WriteFile(path, data, perm); err != nil {

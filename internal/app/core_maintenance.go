@@ -72,6 +72,9 @@ func RunRefresh(args []string, cfg Config, stdout, stderr io.Writer) int {
 		// A stale pidfile whose PID now belongs to some other
 		// program does not count.
 		pidPath = live
+	} else if _, ok := pidfile.FindProcess(exe); ok {
+		fmt.Fprintln(stderr, "EveSynapse is still running. Stop it first (sudo systemctl stop evesynapse), then run this again.")
+		return 1
 	}
 	return runRefresh(cfg, pidPath, stdout, stderr)
 }

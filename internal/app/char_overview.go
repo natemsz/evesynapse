@@ -222,7 +222,6 @@ type overviewView struct {
 
 	Tabs       []ovTab
 	GroupName  string // the open group
-	CrumbCap   string
 	Hidden     []ovHiddenField
 	LevelChips []ovChip
 	PlanID     int64
@@ -893,7 +892,6 @@ func (app *Application) ovTabs(view *characterView, ov *overviewView, selectedGr
 			Href: st.with(func(c *overviewState) { c.Level = chip.level }).href(charID),
 		})
 	}
-	ov.CrumbCap = "Sheet and browse render from stored snapshots"
 }
 
 // ovTrainingStrip fills the Now Training strip from the queue

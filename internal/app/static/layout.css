@@ -136,7 +136,6 @@ html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
   display: none;
 }
 .page-shell:has(> .subnav nav) #main-content > h1 { margin-top: 0; }
-.page-shell:has(> .subnav nav) > main > .page-body { margin-top: var(--space-3); }
 .subnav > .section-tabs,
 .subnav > .section-subtabs {
   display: flex;
@@ -262,12 +261,51 @@ html[data-theme="light"] .subnav .tabs-more-panel {
 /* Schemes paint the active tab's text in their highlight. */
 html[data-scheme] .subnav a.active { color: var(--sch-hi); }
 html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 86%, transparent); }
-/* The page body follows the sub-nav directly: no folder merge. */
-.page-shell:has(> .subnav nav) > main > .page-body {
-  margin-top: var(--space-3);
-  border-top-left-radius: var(--r-lg);
-  border-top-right-radius: var(--r-lg);
-  border-top: 1px solid var(--glass-edge);
+/* The page body is one connected column instead of a floating
+   card: it runs down to the footer on every page, and at the top
+   it hangs from whichever bar the page has, the sub-nav where
+   there is one and the top bar where there is no sub-nav and no
+   page title in the way (the Map is the title-less case). The
+   bar's bottom border and the footer's top border are its only
+   horizontal edges, and on a short page it still fills the column
+   so the footer meets it. Home keeps its open field of widget
+   cards, and a titled page keeps its title on the sky above the
+   column; both still join the footer. */
+.page-shell:not(:has(.home-grid)) > main {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.page-shell > main > .page-body:not(:has(.home-grid)) {
+  flex: 1 0 auto;
+  margin-bottom: 0;
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.page-shell:not(:has(.home-grid)) > footer { margin-top: 0; }
+/* The pull up to the sub-nav sits on main, not on the page
+   body: a swap's height glide clips main at its own top edge
+   (overflow hidden while it glides), and a body pulled above
+   that edge loses its top strip for the whole glide, which
+   reads as the column detaching from the bar until it lands. */
+.page-shell:has(> .subnav nav):not(:has(.home-grid)) > main {
+  margin-top: calc(-1 * var(--space-3));
+}
+.page-shell:has(> .subnav nav) > main > .page-body:not(:has(.home-grid)) {
+  margin-top: 0;
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.page-shell:not(:has(> .subnav nav)) > main:not(:has(> :is(h1, .page-head))) {
+  margin-top: 0;
+}
+.page-shell:not(:has(> .subnav nav)) > main:not(:has(> :is(h1, .page-head))) > .page-body:not(:has(.home-grid)) {
+  margin-top: 0;
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 /* ---- Arrangement patterns ----

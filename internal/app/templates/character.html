@@ -195,7 +195,7 @@
 
     <section class="l-pane l-pane--main ov-main" aria-label="Character sheet">
       <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{if $ov.BackHref}}{{$ov.BackHref}}{{else}}/character/?character={{$v.CharacterID}}{{end}}">Skill directory</a></div>
-      <div class="crumbs"><span>Character</span><span class="crumb-sep">&rsaquo;</span>{{if $ov.BackHref}}<a href="{{$ov.BackHref}}">{{$v.CharacterName}}</a>{{else}}<span>{{$v.CharacterName}}</span>{{end}}<span class="crumb-sep">&rsaquo;</span><span class="crumb-here">{{if eq $v.State.Surface "clones"}}Clones &amp; implants{{else}}{{$ov.GroupName}}{{end}}</span><span class="crumb-cap">{{$ov.CrumbCap}}</span></div>
+      <div class="crumbs"><span>Character</span><span class="crumb-sep">&rsaquo;</span>{{if $ov.BackHref}}<a href="{{$ov.BackHref}}">{{$v.CharacterName}}</a>{{else}}<span>{{$v.CharacterName}}</span>{{end}}<span class="crumb-sep">&rsaquo;</span><span class="crumb-here">{{if eq $v.State.Surface "clones"}}Clones &amp; implants{{else}}{{$ov.GroupName}}{{end}}</span></div>
       <div class="pilltabs" role="group" aria-label="Sheet surface">
         {{range $ov.Tabs}}<a class="pilltab{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} <span class="cnt">{{.Count}}</span></a>{{end}}
       </div>

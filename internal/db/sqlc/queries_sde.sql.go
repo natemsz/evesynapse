@@ -3433,7 +3433,7 @@ WHERE strpos(lower(t.name), lower($1)) > 0
         SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id))
   AND (CAST($2 AS TEXT) != 'skills' OR EXISTS (
         SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id))
-ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, lower(t.name), t.type_id
 LIMIT $3::bigint
 `
 

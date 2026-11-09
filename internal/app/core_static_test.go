@@ -93,6 +93,17 @@ func TestStaticAssetCaching(t *testing.T) {
 	if rec.Body.Len() >= plainSize/2 {
 		t.Errorf("compressed stylesheet is %d bytes of %d: not much of a saving", rec.Body.Len(), plainSize)
 	}
+	gzipSize := rec.Body.Len()
+
+	// A browser accepting brotli gets the precompressed form,
+	// smaller than the gzip the middleware would produce.
+	rec = get("/static/style.css?v="+version, map[string]string{"Accept-Encoding": "br"})
+	if got := rec.Header().Get("Content-Encoding"); got != "br" {
+		t.Fatalf("stylesheet Content-Encoding = %q with Accept-Encoding: br", got)
+	}
+	if rec.Body.Len() >= gzipSize {
+		t.Errorf("brotli stylesheet is %d bytes, gzip was %d: not a saving", rec.Body.Len(), gzipSize)
+	}
 }
 
 // TestStaticServesMinifiedCSS: stylesheets are minified once at

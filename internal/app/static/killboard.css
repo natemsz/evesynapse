@@ -245,6 +245,19 @@
   }
   .kb-party-orgs .kb-org-n { display: none; }
   .kb-party-orgs { gap: 0.35rem; }
+  /* The orgs get their own sub-column beside the name: the party
+     info becomes name-left, icons-right, with readable icons. */
+  .kb-kill .kb-party-info {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "role role" "name orgs";
+    align-items: center;
+    column-gap: 0.5rem;
+  }
+  .kb-kill .kb-role { grid-area: role; }
+  .kb-kill .kb-party-name { grid-area: name; }
+  .kb-kill .kb-party-orgs { grid-area: orgs; }
+  .kb-kill .kb-party-orgs img { width: 20px; height: 20px; }
   /* The folded header is one centered word: the per-row labels
      above carry which side is which. */
   .kb-head { display: block; text-align: center; padding: 0.45rem 0.65rem 0.3rem; }

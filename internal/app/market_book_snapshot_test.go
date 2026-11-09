@@ -136,8 +136,9 @@ func TestAnonymousMarketStoredBookAndLiveToggle(t *testing.T) {
 		"Typical sell <b>8.00</b>",
 		"Typical buy <b>7.00</b>",
 		"Sell orders — The Forge",
-		"Showing top 5 · 7 sell orders",
-		"Showing top 5 · 7 buy orders",
+		"7 sell orders",
+		"7 buy orders",
+		"scroll for more",
 	)
 	if strings.Contains(body, "The live order book loads for signed-in visitors") {
 		t.Error("anonymous stored-book view still shows the signed-in book notice")

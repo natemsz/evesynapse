@@ -90,7 +90,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 {{with .Assets}}
 <div class="l-page">
-{{if not .Loaded}}<div class="l-head"><div class="l-head-act">{{template "charselectormulti" .Selector}}</div></div>{{end}}
+{{if not .Loaded}}<div class="l-head"><div class="l-head-pick">{{template "charselectormulti" .Selector}}</div></div>{{end}}
 {{if .Syncing}}<p><small>Not included yet: still waiting on the first sync for {{range $i, $n := .Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
 {{if .Warming}}
 <p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>

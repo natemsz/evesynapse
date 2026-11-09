@@ -123,6 +123,22 @@ ORDER BY line_key;
 
 -- name: DeleteBriefingDismissal :exec
 DELETE FROM briefing_dismissals WHERE user_id = $1 AND line_key = $2;
+
+-- name: UpsertTrainedBannerDismissal :exec
+-- The sheet banner's dismiss hides only the entries on screen:
+-- one row per dismissed notification, keyed by the
+-- notification's own title, so later finishes still announce.
+INSERT INTO trained_banner_dismissals (user_id, character_id, entry_key)
+VALUES (sqlc.arg(user_id), sqlc.arg(character_id), sqlc.arg(entry_key))
+ON CONFLICT (user_id, character_id, entry_key) DO UPDATE SET dismissed_at = now();
+
+-- name: ListTrainedBannerDismissals :many
+SELECT entry_key FROM trained_banner_dismissals
+WHERE user_id = sqlc.arg(user_id) AND character_id = sqlc.arg(character_id);
+
+-- name: DeleteTrainedBannerDismissal :exec
+DELETE FROM trained_banner_dismissals
+WHERE user_id = sqlc.arg(user_id) AND character_id = sqlc.arg(character_id) AND entry_key = sqlc.arg(entry_key);
 -- name: PushDeliverySummary :one
 -- The public status summary's push line (core_status.go): how
 -- many browsers are subscribed, how many of them refused their

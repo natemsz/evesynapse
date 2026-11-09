@@ -350,7 +350,7 @@ html[data-theme="light"] .btn.btn-quiet {
 .region-pills { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.9rem 0 1.1rem; }
 .region-pills a {
   font-family: "Rajdhani", "Inter", sans-serif; font-weight: 600; font-size: var(--fs-xs);
-  letter-spacing: 0.09em; text-transform: uppercase; text-decoration: none;
+  letter-spacing: 0.09em; text-transform: uppercase; text-decoration: none; white-space: nowrap;
   color: var(--muted); padding: 0.34rem 0.85rem; border-radius: 999px;
   background: rgba(23, 17, 13, 0.55); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   transition: filter 0.15s ease, border-color 0.15s ease, color 0.15s ease;

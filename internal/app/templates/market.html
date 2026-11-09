@@ -190,22 +190,18 @@
           <tbody>
           {{range $item.Sells}}
             <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-sell">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}</td></tr>
-          {{else}}
-            <tr><td colspan="4">No sell orders in this region.</td></tr>
           {{end}}
-          </tbody>
-          {{if $item.MoreSells}}
-          <tbody id="mkt-sells" data-wmore>
           {{range $item.MoreSells}}
             <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-sell">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}</td></tr>
           {{end}}
-          </tbody>
+          {{if and (not $item.Sells) (not $item.MoreSells)}}
+            <tr><td colspan="4">No sell orders in this region.</td></tr>
           {{end}}
+          </tbody>
         </table>
         </div>
         <div class="mkt-book-foot">
-          <p><small>Showing top {{len $item.Sells}} · {{$item.SellOrders}} sell orders · {{$item.SellVolume}} total volume</small></p>
-          {{if $item.MoreSells}}<button class="btn btn-quiet small" type="button" data-expand="mkt-sells">Show {{len $item.MoreSells}} more</button>{{end}}
+          <p><small>{{$item.SellOrders}} sell orders · {{$item.SellVolume}} total volume · scroll for more</small></p>
         </div>
       </div>
 
@@ -220,22 +216,18 @@
           <tbody>
           {{range $item.Buys}}
             <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-buy">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}{{if .Range}} <small class="muted">({{.Range}})</small>{{end}}</td></tr>
-          {{else}}
-            <tr><td colspan="4">No buy orders in this region.</td></tr>
           {{end}}
-          </tbody>
-          {{if $item.MoreBuys}}
-          <tbody id="mkt-buys" data-wmore>
           {{range $item.MoreBuys}}
             <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-buy">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}{{if .Range}} <small class="muted">({{.Range}})</small>{{end}}</td></tr>
           {{end}}
-          </tbody>
+          {{if and (not $item.Buys) (not $item.MoreBuys)}}
+            <tr><td colspan="4">No buy orders in this region.</td></tr>
           {{end}}
+          </tbody>
         </table>
         </div>
         <div class="mkt-book-foot">
-          <p><small>Showing top {{len $item.Buys}} · {{$item.BuyOrders}} buy orders · {{$item.BuyVolume}} total volume</small></p>
-          {{if $item.MoreBuys}}<button class="btn btn-quiet small" type="button" data-expand="mkt-buys">Show {{len $item.MoreBuys}} more</button>{{end}}
+          <p><small>{{$item.BuyOrders}} buy orders · {{$item.BuyVolume}} total volume · scroll for more</small></p>
         </div>
       </div>
     </div>

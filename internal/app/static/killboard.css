@@ -100,8 +100,37 @@
   padding: 0.55rem 0.85rem;
   border-top: 1px solid var(--hairline);
 }
-.kb-kill:first-child { border-top: 0; }
+.kb-list > li:first-child { border-top: 0; }
 .kb-kill:hover { background: var(--row-hover); }
+/* --- Feed header: one label per column in the site's small caps,
+   on the same grid as the rows so each label sits over its
+   column. It is hidden from assistive tech (the list's own label
+   already says what it holds) and hidden entirely where the rows
+   fold, where a stacked header would only echo the fold. */
+.kb-head {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 6.2rem;
+  grid-template-areas: "ship main atk where value";
+  gap: 0.1rem 0.85rem;
+  padding: 0.55rem 0.85rem 0.35rem;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.kb-head > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-h-detail { display: none; }
+.kb-h-ship { grid-area: ship; }
+.kb-h-main { grid-area: main; }
+.kb-h-atk { grid-area: atk; }
+.kb-h-where { grid-area: where; }
+.kb-h-value { grid-area: value; text-align: right; }
+/* The per-row role labels only read on the folded page, where the
+   column header is gone; the org icons beside them stay folded
+   away with the org names on wide pages. */
+.kb-role { display: none; }
 .kb-kill.big { box-shadow: inset 3px 0 0 var(--kb-big); }
 .kb-kill.big .kb-kill-value { color: var(--kb-big); }
 .kb-kill-ship { grid-area: ship; border-radius: var(--r-sm); background: var(--row-alt); }
@@ -201,7 +230,37 @@
   .kb-kill-meta { text-align: right; align-self: center; }
   .kb-kill-where { align-self: center; }
   .kb-kill-region { display: none; }
-  .kb-party-orgs { display: none; }
   .kb-face { width: 26px; height: 26px; }
-  .kb-att { display: none; }
+  /* The folded page names its parties in place: a role label over
+     each side's name, and the corp and alliance icons beside it.
+     The org names stay folded away; the icons link on. */
+  .kb-role {
+    display: block;
+    color: var(--muted);
+    font-family: var(--font-display);
+    font-size: var(--fs-2xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .kb-party-orgs .kb-org-n { display: none; }
+  .kb-party-orgs { gap: 0.35rem; }
+  /* The orgs get their own sub-column beside the name: the party
+     info becomes name-left, icons-right, with readable icons. */
+  .kb-kill .kb-party-info {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "role role" "name orgs";
+    align-items: center;
+    column-gap: 0.5rem;
+  }
+  .kb-kill .kb-role { grid-area: role; }
+  .kb-kill .kb-party-name { grid-area: name; }
+  .kb-kill .kb-party-orgs { grid-area: orgs; }
+  .kb-kill .kb-party-orgs img { width: 20px; height: 20px; }
+  /* The folded header is one centered word: the per-row labels
+     above carry which side is which. */
+  .kb-head { display: block; text-align: center; padding: 0.45rem 0.65rem 0.3rem; }
+  .kb-head > span { display: none; }
+  .kb-head > .kb-h-detail { display: inline; }
 }

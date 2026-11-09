@@ -454,7 +454,7 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
    the selected segment names the panel. */
 .l-seg { display: inline-flex; flex-wrap: wrap; gap: 0.2rem; margin: 0 0 var(--space-3); padding: 0.2rem; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); }
 .l-seg[hidden] { display: none; }
-.l-seg > [role="tab"] { min-height: 2.25rem; padding: 0 0.9rem; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer; }
+.l-seg > [role="tab"] { min-height: 2.25rem; padding: 0 0.9rem; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; cursor: pointer; }
 .l-seg > [role="tab"]:hover { color: var(--text); background: var(--row-hover); }
 .l-seg > [role="tab"][aria-selected="true"] { background: var(--sel-bg); color: var(--text-bright); box-shadow: inset 0 0 0 1px var(--sel-edge); }
 .l-seg > [role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

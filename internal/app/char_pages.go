@@ -693,23 +693,72 @@ const trainedBannerWindow = 10 * time.Minute
 // click-through that brought the visitor here just marked them).
 // The queue view leaves finished entries out on purpose; this is
 // where they are announced.
-func (app *Application) fillCharacterTrained(ctx context.Context, ch db.Character, view *characterView, userID int64) {
+// recentTrainedNotes lists one pilot's current trained-skill
+// notifications, oldest first: the banner's entries and the
+// dismissal's keys both derive from these.
+func (app *Application) recentTrainedNotes(ctx context.Context, userID, charID int64) ([]db.Notification, error) {
 	rows, err := app.queries.ListRecentSkillNotifications(ctx, db.ListRecentSkillNotificationsParams{
-		UserID: userID, CharacterID: ch.CharacterID, Kind: notifySkill,
+		UserID: userID, CharacterID: charID, Kind: notifySkill,
 		ReadSince: sql.NullTime{Time: time.Now().UTC().Add(-trainedBannerWindow), Valid: true}, RowLimit: 10,
 	})
+	if err != nil {
+		return nil, err
+	}
+	// Rows arrive newest first; the banner reads in the order the
+	// skills finished, so walk them backwards.
+	notes := make([]db.Notification, 0, len(rows))
+	for i := len(rows) - 1; i >= 0; i-- {
+		notes = append(notes, rows[i])
+	}
+	return notes, nil
+}
+
+func (app *Application) fillCharacterTrained(ctx context.Context, ch db.Character, view *characterView, userID int64) {
+	notes, err := app.recentTrainedNotes(ctx, userID, ch.CharacterID)
 	if err != nil {
 		logging.Errorf("character: trained banner for %d: %v", ch.CharacterID, err)
 		return
 	}
-	// Rows arrive newest first; the banner reads in the order the
-	// skills finished, so walk them backwards. The same finish
-	// announced twice (re-announced after ageing out) shows once.
+	titles := make([]string, 0, len(notes))
+	for _, n := range notes {
+		titles = append(titles, n.Title)
+	}
+	// A dismissal hides only the entries it covered: skip the
+	// dismissed titles, and prune dismissal keys whose
+	// notifications are no longer recent. Later finishes still
+	// announce, and the click-through window above is untouched.
+	dismissed := map[string]bool{}
+	if keys, err := app.queries.ListTrainedBannerDismissals(ctx, db.ListTrainedBannerDismissalsParams{
+		UserID: userID, CharacterID: ch.CharacterID,
+	}); err != nil {
+		logging.Errorf("character: trained banner dismissals for %d: %v", ch.CharacterID, err)
+	} else if len(keys) > 0 {
+		present := map[string]bool{}
+		for _, title := range titles {
+			present[title] = true
+		}
+		for _, key := range keys {
+			if !present[key] {
+				if derr := app.queries.DeleteTrainedBannerDismissal(ctx, db.DeleteTrainedBannerDismissalParams{
+					UserID: userID, CharacterID: ch.CharacterID, EntryKey: key,
+				}); derr != nil {
+					logging.Errorf("character: trained banner prune for %d: %v", ch.CharacterID, derr)
+				}
+				continue
+			}
+			dismissed[key] = true
+		}
+	}
+	// The same finish announced twice (re-announced after ageing
+	// out) shows once.
 	seen := map[string]bool{}
-	entries := make([]string, 0, len(rows))
+	entries := make([]string, 0, len(titles))
 	now := time.Now()
-	for i := len(rows) - 1; i >= 0; i-- {
-		entry, ok := trainedEntry(ch.Name, rows[i].Title)
+	for _, n := range notes {
+		if dismissed[n.Title] {
+			continue
+		}
+		entry, ok := trainedEntry(ch.Name, n.Title)
 		if !ok || seen[entry] {
 			continue
 		}
@@ -719,7 +768,7 @@ func (app *Application) fillCharacterTrained(ctx context.Context, ch db.Characte
 		// out of the pinned "<skill> <level>" entry, the finish
 		// time from the notification's own clock, and the SDE id
 		// resolved against the catalog for the quick-add.
-		be := trainedBannerEntry{When: "finished " + agoLabel(now.Sub(rows[i].CreatedAt))}
+		be := trainedBannerEntry{When: "finished " + agoLabel(now.Sub(n.CreatedAt))}
 		if j := strings.LastIndexByte(entry, ' '); j > 0 {
 			be.Skill = entry[:j]
 			be.Level = entry[j+1:]

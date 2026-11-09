@@ -2564,6 +2564,13 @@ type TradeRealized struct {
 	GapKind          string  `json:"gap_kind"`
 }
 
+type TrainedBannerDismissal struct {
+	UserID      int64     `json:"user_id"`
+	CharacterID int64     `json:"character_id"`
+	EntryKey    string    `json:"entry_key"`
+	DismissedAt time.Time `json:"dismissed_at"`
+}
+
 type TrueValue struct {
 	TypeID         int64           `json:"type_id"`
 	BuildCost      float64         `json:"build_cost"`

@@ -59,6 +59,22 @@ func (q *Queries) DeletePushSubscriptionByID(ctx context.Context, id int64) erro
 	return err
 }
 
+const deleteTrainedBannerDismissal = `-- name: DeleteTrainedBannerDismissal :exec
+DELETE FROM trained_banner_dismissals
+WHERE user_id = $1 AND character_id = $2 AND entry_key = $3
+`
+
+type DeleteTrainedBannerDismissalParams struct {
+	UserID      int64  `json:"user_id"`
+	CharacterID int64  `json:"character_id"`
+	EntryKey    string `json:"entry_key"`
+}
+
+func (q *Queries) DeleteTrainedBannerDismissal(ctx context.Context, arg DeleteTrainedBannerDismissalParams) error {
+	_, err := q.db.Exec(ctx, deleteTrainedBannerDismissal, arg.UserID, arg.CharacterID, arg.EntryKey)
+	return err
+}
+
 const dismissBriefingLine = `-- name: DismissBriefingLine :exec
 INSERT INTO briefing_dismissals (user_id, line_key)
 VALUES ($1, $2)
@@ -334,6 +350,36 @@ func (q *Queries) ListRecentSkillNotifications(ctx context.Context, arg ListRece
 	return items, nil
 }
 
+const listTrainedBannerDismissals = `-- name: ListTrainedBannerDismissals :many
+SELECT entry_key FROM trained_banner_dismissals
+WHERE user_id = $1 AND character_id = $2
+`
+
+type ListTrainedBannerDismissalsParams struct {
+	UserID      int64 `json:"user_id"`
+	CharacterID int64 `json:"character_id"`
+}
+
+func (q *Queries) ListTrainedBannerDismissals(ctx context.Context, arg ListTrainedBannerDismissalsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listTrainedBannerDismissals, arg.UserID, arg.CharacterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var entry_key string
+		if err := rows.Scan(&entry_key); err != nil {
+			return nil, err
+		}
+		items = append(items, entry_key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnreadNotificationSummary = `-- name: ListUnreadNotificationSummary :many
 SELECT DISTINCT ON (kind) kind, title, url,
        (COUNT(*) OVER (PARTITION BY kind))::bigint AS unread
@@ -538,5 +584,25 @@ func (q *Queries) UpsertPushSubscription(ctx context.Context, arg UpsertPushSubs
 		arg.Auth,
 		arg.CreatedAt,
 	)
+	return err
+}
+
+const upsertTrainedBannerDismissal = `-- name: UpsertTrainedBannerDismissal :exec
+INSERT INTO trained_banner_dismissals (user_id, character_id, entry_key)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id, character_id, entry_key) DO UPDATE SET dismissed_at = now()
+`
+
+type UpsertTrainedBannerDismissalParams struct {
+	UserID      int64  `json:"user_id"`
+	CharacterID int64  `json:"character_id"`
+	EntryKey    string `json:"entry_key"`
+}
+
+// The sheet banner's dismiss hides only the entries on screen:
+// one row per dismissed notification, keyed by the
+// notification's own title, so later finishes still announce.
+func (q *Queries) UpsertTrainedBannerDismissal(ctx context.Context, arg UpsertTrainedBannerDismissalParams) error {
+	_, err := q.db.Exec(ctx, upsertTrainedBannerDismissal, arg.UserID, arg.CharacterID, arg.EntryKey)
 	return err
 }

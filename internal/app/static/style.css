@@ -3485,7 +3485,7 @@ html[data-nav="rail"] .sidebar .branch.sidebar-settings .menu { top: auto; botto
   width: 1px;
   height: 2.25rem;
   transform: translateY(-50%);
-  background: rgba(255, 106, 26, 0.25);
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 /* The logo's centre sits on the nav icons' vertical axis, which moves
    with the nav state: expanded = the sidebar's and the link's 0.55rem
@@ -3771,7 +3771,7 @@ tbody tr.order-beaten td { background: color-mix(in srgb, var(--danger) 10%, tra
     width: 1px;
     height: 2.25rem;
     transform: translateY(-50%);
-    background: rgba(255, 106, 26, 0.25);
+    background: color-mix(in srgb, var(--accent) 25%, transparent);
   }
 }
 @media (max-width: 45rem) {

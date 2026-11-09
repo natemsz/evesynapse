@@ -462,7 +462,7 @@ func New(cfg Config) (*Application, error) {
 		logging.Infof("evesynapse: new accounts are open to anyone who can sign in with EVE (EVE_ALLOWED_*_IDS limits that)")
 	}
 
-	dbConn, pool, err := store.Open(context.Background(), cfg.databaseURL)
+	dbConn, pool, err := store.OpenSized(context.Background(), cfg.databaseURL, cfg.dbConns)
 	if err != nil {
 		return nil, fmt.Errorf("open the database: %w", err)
 	}

@@ -25,6 +25,21 @@ import (
 // the baseline and every later numbered step, and an existing install
 // gains whichever steps it is missing.
 func Open(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
+	return open(ctx, dsn, DefaultPoolSize)
+}
+
+// OpenSized is Open with the query pool's connection ceiling set
+// (DB_MAX_CONNS); a size at or below zero keeps DefaultPoolSize.
+// The ceiling must be set here: a pgx pool cannot be resized once
+// created, and every generated query rides it.
+func OpenSized(ctx context.Context, dsn string, size int) (*sql.DB, *pgxpool.Pool, error) {
+	if size <= 0 {
+		size = DefaultPoolSize
+	}
+	return open(ctx, dsn, size)
+}
+
+func open(ctx context.Context, dsn string, poolSize int) (*sql.DB, *pgxpool.Pool, error) {
 	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		return nil, nil, err
@@ -36,6 +51,7 @@ func Open(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 		return nil, nil, err
 	}
 	poolCfg.AfterConnect = readTimesInUTC
+	poolCfg.MaxConns = int32(poolSize)
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return nil, nil, err

@@ -1,9 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+
 	"fmt"
+	"github.com/klauspost/compress/gzip"
 	"testing"
 	"time"
 
@@ -146,5 +149,31 @@ func TestKillEntityFeedServesAlliancePage(t *testing.T) {
 	}
 	if again := page(bt, bid, false, 10); len(again) != 3 {
 		t.Fatalf("feed after involvement prune = %d kills, want 3", len(again))
+	}
+}
+
+// TestKillDetailRawReadsGzipAndZstd pins the stored-detail
+// decode: rows written before the zstd switch are gzip and
+// must keep reading, new rows are zstd.
+func TestKillDetailRawReadsGzipAndZstd(t *testing.T) {
+	raw := []byte(killJSON(730001))
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write(raw); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := killDetailRaw(buf.Bytes())
+	if err != nil || !bytes.Equal(got, raw) {
+		t.Fatalf("gzip detail round trip: %v, equal=%v", err, bytes.Equal(got, raw))
+	}
+	got, err = killDetailRaw(compressKillDetail(raw))
+	if err != nil || !bytes.Equal(got, raw) {
+		t.Fatalf("zstd detail round trip: %v, equal=%v", err, bytes.Equal(got, raw))
+	}
+	if _, err := killDetailRaw([]byte("not compressed")); err == nil {
+		t.Error("garbage payload decoded, want error")
 	}
 }

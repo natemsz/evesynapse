@@ -15,7 +15,7 @@ package app
 
 import (
 	"context"
-	"database/sql"
+	"errors"
 	"evesynapse/internal/htmlsanitize"
 	"fmt"
 	"io"
@@ -27,6 +27,8 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -353,7 +355,7 @@ func TestPlanetsWorkerAndScopeRefusal(t *testing.T) {
 }
 
 func errorIsNoRows(err error) bool {
-	return err != nil && err.Error() == sql.ErrNoRows.Error()
+	return errors.Is(err, pgx.ErrNoRows)
 }
 
 // TestCommsWorkerWarm proves the mail/calendar/contacts worker

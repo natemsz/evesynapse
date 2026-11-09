@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"math"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fitview"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -344,7 +347,7 @@ func TestTrueValueWorkerPass(t *testing.T) {
 	}
 
 	// The mineral is not manufacturable: no row.
-	if _, err := q.GetTrueValue(ctx, 34); err != sql.ErrNoRows {
+	if _, err := q.GetTrueValue(ctx, 34); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("mineral true value err = %v, want no row", err)
 	}
 }
@@ -420,7 +423,7 @@ func TestTrueValuePassIdlesOnUnchangedInputs(t *testing.T) {
 	// Unchanged inputs: the pass idles, so the deleted row is
 	// not recomputed.
 	app.refreshTrueValues(ctx)
-	if _, err := q.GetTrueValue(ctx, 6001); err != sql.ErrNoRows {
+	if _, err := q.GetTrueValue(ctx, 6001); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("unchanged inputs: widget row err = %v, want no row (the pass ran)", err)
 	}
 
@@ -643,7 +646,7 @@ func TestTrueValueLeafPriceHouseOrder(t *testing.T) {
 
 	// Gizmo: its only leaf prices from nothing the house
 	// trusts, so the gizmo stays unpriced — no row at all.
-	if _, err := q.GetTrueValue(ctx, 6003); err != sql.ErrNoRows {
+	if _, err := q.GetTrueValue(ctx, 6003); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("gizmo true value err = %v, want no row (guide-priced leaves price nothing)", err)
 	}
 }

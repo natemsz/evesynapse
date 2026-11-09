@@ -9,7 +9,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"io"
 	"net/http"
@@ -17,6 +16,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // placeStatsStub serves the collector's three public endpoints
@@ -162,7 +163,7 @@ func TestPlaceActivityCollectorFailureKeepsStore(t *testing.T) {
 	if rows != 0 {
 		t.Errorf("history rows = %d after failed pass, want 0", rows)
 	}
-	if _, err := app.queries.GetPlaceStatsMeta(ctx, placeStatsKindActivity); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := app.queries.GetPlaceStatsMeta(ctx, placeStatsKindActivity); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("meta after failed pass: err = %v, want no row (the pass stays due)", err)
 	}
 }
@@ -224,7 +225,7 @@ func TestPlaceSovereigntyCollector(t *testing.T) {
 	if stored, _ := app.refreshPlaceSovereignty(ctx); !stored {
 		t.Fatal("second refreshPlaceSovereignty did not store")
 	}
-	if _, err := q.GetSystemSovereignty(ctx, 30000142); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := q.GetSystemSovereignty(ctx, 30000142); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("Jita sovereignty after replacement: err = %v, want no row", err)
 	}
 }

@@ -216,7 +216,7 @@ func TestCharacterPageLinksPlaces(t *testing.T) {
 	}
 	mustContain(t, "/character/", body,
 		`<a href="/system/?system=30000142">Jita</a>`,
-		`<a href="/station/?station=60003760">Jita 4 - Moon 4 - Caldari Navy Assembly Plant</a>`)
+		`<a href="/station/?station=60003760">4 - Moon 4 - Caldari Navy Assembly Plant</a>`)
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)

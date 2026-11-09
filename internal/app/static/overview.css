@@ -36,33 +36,52 @@
 .ov-bx button:hover { color: var(--text); }
 
 /* ---- Header cards ---- */
-.ov-cards { gap: 0.9rem; }
-.ov-card { padding: 0.85rem 0.95rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--row-alt); }
-.ov-idrow { display: flex; gap: 0.8rem; }
-.ov-portrait { position: relative; flex: 0 0 auto; }
-.ov-portrait img { display: block; border-radius: var(--r-sm); }
-.ov-secchip { position: absolute; left: 50%; bottom: -0.45rem; transform: translateX(-50%); padding: 0.02rem 0.4rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--box-edge); color: var(--text); font-size: var(--fs-xs); font-weight: 700; }
-.ov-nm { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-2xl); line-height: 1.15; }
-.ov-corp { font-weight: 600; }
-.ov-meta { color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }
-.ov-chead { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; color: var(--muted-2); font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
-.ov-live { color: var(--success); text-transform: none; letter-spacing: 0; font-size: var(--fs-xs); }
+.ov-cards { gap: 0.9rem; align-items: stretch; }
+.ov-card { display: flex; flex-direction: column; padding: 0.85rem 0.95rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--row-alt); }
+.ov-chead { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; margin-bottom: 0.65rem; color: var(--muted-2); font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
+.ov-live { color: var(--success); text-transform: none; letter-spacing: 0; font-size: var(--fs-xs); font-weight: 600; }
 .ov-live.dim { color: var(--muted); }
-.ov-locline { display: flex; align-items: center; gap: 0.45rem; font-size: var(--fs-md); margin-bottom: 0.45rem; }
-.ov-sys { font-weight: 600; }
-.ov-stn { color: var(--muted); }
-.ov-shipline { color: var(--muted); font-size: var(--fs-sm); }
+
+/* Entity row: portrait or ship art paired with name and badges */
+.ov-entity { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.65rem; border-bottom: 1px solid color-mix(in srgb, var(--box-edge) 65%, transparent); }
+.ov-portrait, .ov-ship-art { position: relative; flex: 0 0 56px; width: 56px; height: 56px; }
+.ov-portrait img, .ov-ship-art img { display: block; width: 56px; height: 56px; border-radius: var(--r-sm); background: var(--input-bg); border: 1px solid var(--box-edge); object-fit: cover; }
+.ov-secchip { position: absolute; left: 50%; bottom: -0.35rem; transform: translateX(-50%); padding: 0.02rem 0.35rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--box-edge); color: var(--text); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.1; z-index: 1; }
+.ov-entity-main { min-width: 0; flex: 1 1 auto; }
+.ov-nm { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-xl); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-corp { font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-alliance { color: var(--muted); font-size: var(--fs-2xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-ship-title { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-lg); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-sn { color: var(--text); font-weight: 600; }
-.ov-trows { display: grid; gap: 0.28rem; }
-.ov-trows .tr { display: flex; justify-content: space-between; gap: 1rem; font-size: var(--fs-sm); }
-.ov-trows .k { color: var(--muted); }
-.ov-card .ok { color: var(--success); }
-.ov-card .warn { color: var(--gold); }
-.ov-pibig { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-3xl); color: var(--gold); margin-bottom: 0.3rem; }
-.ov-pisub { color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }
+.ov-st { font-weight: 700; }
+.ov-ship-group { font-size: var(--fs-xs); color: var(--muted); }
+
+/* Card key-value table rows */
+.ov-trows { display: grid; gap: 0.32rem; font-size: var(--fs-xs); }
+.ov-trows .tr { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; }
+.ov-trows .k { color: var(--muted); flex: 0 0 auto; }
+.ov-trows span:not(.k) { text-align: right; overflow-wrap: anywhere; }
+.ov-locval { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; justify-content: flex-end; }
+.ov-sys { font-weight: 600; }
+.ov-stn { color: var(--text); font-weight: 500; text-align: right; }
+.ov-sp-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--accent); }
+.ov-skills-cnt { font-family: 'Saira Semi Condensed', sans-serif; font-size: var(--fs-2xs); color: var(--muted); }
+.ov-unalloc { color: var(--gold); font-size: var(--fs-2xs); font-weight: 600; }
+.ov-wallet-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text); }
+.ov-date { font-family: 'JetBrains Mono', monospace; font-size: var(--fs-2xs); color: var(--text); }
+
+/* Status pills for card rows */
+.ov-tag-ok { display: inline-flex; align-items: center; padding: 0.08rem 0.45rem; border-radius: var(--r-sm); background: color-mix(in srgb, var(--kept) 14%, transparent); border: 1px solid var(--kept); color: var(--kept); font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.2; }
+.ov-tag-warn { display: inline-flex; align-items: center; padding: 0.08rem 0.45rem; border-radius: var(--r-sm); background: color-mix(in srgb, var(--gold) 14%, transparent); border: 1px solid var(--gold); color: var(--gold); font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.2; }
+/* Reset generic .ok and .warn inside .ov-card */
+.ov-card .ok { background: none; border: 0; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--success); }
+.ov-card .warn { background: none; border: 0; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--gold); }
+
+.ov-pibig { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-xl); color: var(--gold); margin-bottom: 0.25rem; line-height: 1.2; }
+.ov-pisub { color: var(--muted); font-size: var(--fs-xs); line-height: 1.45; }
 .ov-pisub .bad, .ov-table .bad { color: var(--danger); }
-.ov-pipills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
-.ov-pipill { padding: 0.14rem 0.5rem; border: 1px solid var(--box-edge); border-radius: 999px; font-size: var(--fs-xs); }
+.ov-pipills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
+.ov-pipill { padding: 0.12rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; font-size: var(--fs-2xs); }
 .ov-pipill.expired { border-color: var(--danger); color: var(--danger); }
 .ov-pipill.soon { border-color: var(--gold); color: var(--gold); }
 

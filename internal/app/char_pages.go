@@ -182,12 +182,16 @@ type characterView struct {
 	// Location + ship snapshots.
 	LocationKnown bool
 	SystemName    string
-	SystemID      int64    // links the system name to its page
-	SystemSec     string   // "0.9", "" when the SDE lacks the system
+	SystemID      int64 // links the system name to its page
+	SystemSec     string
+	RegionID      int64
+	RegionName    string
 	DockedAt      string   // station/structure title, "" when in space
+	DockedClean   string   // title with duplicate system name stripped
 	DockedRef     placeRef // DockedAt classified for the link policy (station, structure, or plain text)
 	ShipKnown     bool
 	ShipTypeName  string
+	ShipGroupName string
 	ShipTypeID    int64
 	ShipName      string
 
@@ -214,6 +218,7 @@ type characterView struct {
 	CorpID         int64
 	CorpName       string
 	CorpTicker     string
+	AllianceID     int64
 	AllianceName   string
 	Birthday       string
 	SecurityStatus string
@@ -366,6 +371,10 @@ func (app *Application) fillCharacterLocation(ctx context.Context, ch db.Charact
 			// The system name links to its page only while the
 			// SDE can render that page; until then it stays text.
 			view.SystemID = loc.SolarSystemID
+			view.RegionID = sys.RegionID
+			if reg, rerr := app.queries.GetSDERegion(ctx, sys.RegionID); rerr == nil && reg.Name != "" {
+				view.RegionName = reg.Name
+			}
 		}
 		if loc.StationID > 0 {
 			view.DockedAt = app.locationTitle(ctx, loc.StationID, "station")
@@ -373,6 +382,12 @@ func (app *Application) fillCharacterLocation(ctx context.Context, ch db.Charact
 		} else if loc.StructureID > 0 {
 			view.DockedAt = app.locationTitle(ctx, loc.StructureID, "structure")
 			view.DockedRef = app.linkPlace(ctx, loc.StructureID, view.DockedAt)
+		}
+		if view.DockedAt != "" && view.SystemName != "" {
+			trimmed := strings.TrimPrefix(view.DockedAt, view.SystemName+" - ")
+			trimmed = strings.TrimPrefix(trimmed, view.SystemName+" ")
+			view.DockedClean = trimmed
+			view.DockedRef.Name = trimmed
 		}
 	}
 }
@@ -386,6 +401,9 @@ func (app *Application) fillCharacterShip(ctx context.Context, ch db.Character, 
 		view.ShipTypeName = app.typeNameOrID(ctx, ship.ShipTypeID)
 		view.ShipTypeID = ship.ShipTypeID
 		view.ShipName = ship.ShipName
+		if g, err := app.queries.ListTypeGroupNames(ctx, []int64{ship.ShipTypeID}); err == nil && len(g) > 0 {
+			view.ShipGroupName = g[0].Name
+		}
 	}
 }
 
@@ -521,6 +539,7 @@ func (app *Application) fillCharacterIdentity(ctx context.Context, ch db.Charact
 			}
 		}
 		if profile.AllianceID > 0 {
+			view.AllianceID = profile.AllianceID
 			if name, ok := app.resolvedAllianceName(ctx, profile.AllianceID); ok {
 				view.AllianceName = name
 			}

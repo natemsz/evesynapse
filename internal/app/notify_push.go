@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"io"
 	"io/fs"
 	"net/http"

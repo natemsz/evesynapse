@@ -10,7 +10,7 @@ package app
 // ---------------------------------------------------------------------------
 
 import (
-	"encoding/json"
+	json "github.com/goccy/go-json"
 	"net/http"
 	"sort"
 	"strings"

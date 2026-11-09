@@ -2,9 +2,9 @@ package fitting
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"net/http"
 	"strconv"
 	"strings"

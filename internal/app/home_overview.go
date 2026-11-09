@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/balancechart"
 	"evesynapse/internal/ideas"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"io"
 	"net/http"
 	"sort"

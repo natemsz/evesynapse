@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
+	json "github.com/goccy/go-json"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"

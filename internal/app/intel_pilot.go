@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"evesynapse/internal/htmlsanitize"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"html/template"
 	"net/http"
 	"strconv"

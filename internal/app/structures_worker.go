@@ -7,9 +7,9 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"evesynapse/internal/app/module"
+	json "github.com/goccy/go-json"
 	"sort"
 	"strconv"
 	"time"

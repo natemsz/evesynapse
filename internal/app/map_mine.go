@@ -26,9 +26,9 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"net/http"
 	"sort"
 	"sync"

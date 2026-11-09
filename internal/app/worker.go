@@ -3,10 +3,10 @@ package app
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"evesynapse/internal/app/module"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"net/http"
 	"runtime/debug"
 	"sort"

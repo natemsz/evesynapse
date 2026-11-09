@@ -24,7 +24,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	json "github.com/goccy/go-json"
 	"github.com/klauspost/compress/gzip"
 	"math"
 	"net/http"

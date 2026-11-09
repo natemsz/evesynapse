@@ -15,9 +15,9 @@ package ocikms
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"io"
 	"net/http"
 	"net/url"

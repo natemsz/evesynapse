@@ -2,9 +2,9 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"evesynapse/internal/balancechart"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"

@@ -3,11 +3,11 @@ package doctrines
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/humanize"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"net/http"
 	"net/url"
 	"sort"

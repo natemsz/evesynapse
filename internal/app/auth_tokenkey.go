@@ -39,9 +39,9 @@ package app
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"io"
 	"net/http"
 	"net/url"

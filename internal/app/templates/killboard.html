@@ -44,6 +44,7 @@
 
   <div class="kb-layout">
     <ol class="kb-list" aria-label="Kills, newest first">
+      {{if .Kills}}<li class="kb-head" aria-hidden="true"><span class="kb-h-ship">Ship</span><span class="kb-h-main">Victim</span><span class="kb-h-atk">Final blow</span><span class="kb-h-where">System</span><span class="kb-h-value">Est. value</span></li>{{end}}
       {{range .Kills}}
       <li class="kb-kill{{if .Big}} big{{end}}">
         <img class="kb-kill-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=64" alt="" width="44" height="44" loading="lazy">

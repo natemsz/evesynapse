@@ -6388,7 +6388,11 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .asset-scope-btn { display: flex; align-items: center; gap: 0.5rem; width: 100%; white-space: nowrap; justify-content: space-between; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
 .asset-scope-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset-scope-caret { flex: none; color: var(--muted); font-size: var(--fs-xs); }
-.asset-scope-panel { padding: 0.4rem; }
+/* The panel is wider than its button and hangs from the button's
+   right edge: both Assets placements sit at their row's right end,
+   so the checklist's names and portraits read instead of wrapping
+   inside a button-wide strip. */
+.asset-scope-panel { left: auto; right: 0; width: 17rem; max-width: min(20rem, 85vw); padding: 0.4rem; }
 .asset-scope-search { margin-bottom: 0.4rem; }
 .asset-scope-box { flex: none; display: grid; place-items: center; width: 1.05rem; height: 1.05rem; border: 1px solid var(--box-edge); border-radius: var(--r-xs); color: transparent; font-size: var(--fs-xs); line-height: 1; }
 .asset-scope-box.on { background: var(--accent); border-color: var(--accent); color: #fff; }

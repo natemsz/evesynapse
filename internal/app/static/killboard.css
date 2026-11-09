@@ -100,8 +100,32 @@
   padding: 0.55rem 0.85rem;
   border-top: 1px solid var(--hairline);
 }
-.kb-kill:first-child { border-top: 0; }
+.kb-list > li:first-child { border-top: 0; }
 .kb-kill:hover { background: var(--row-hover); }
+/* --- Feed header: one label per column in the site's small caps,
+   on the same grid as the rows so each label sits over its
+   column. It is hidden from assistive tech (the list's own label
+   already says what it holds) and hidden entirely where the rows
+   fold, where a stacked header would only echo the fold. */
+.kb-head {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1.1fr) 6.2rem;
+  grid-template-areas: "ship main atk where value";
+  gap: 0.1rem 0.85rem;
+  padding: 0.55rem 0.85rem 0.35rem;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.kb-head > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-h-ship { grid-area: ship; }
+.kb-h-main { grid-area: main; }
+.kb-h-atk { grid-area: atk; }
+.kb-h-where { grid-area: where; }
+.kb-h-value { grid-area: value; text-align: right; }
 .kb-kill.big { box-shadow: inset 3px 0 0 var(--kb-big); }
 .kb-kill.big .kb-kill-value { color: var(--kb-big); }
 .kb-kill-ship { grid-area: ship; border-radius: var(--r-sm); background: var(--row-alt); }
@@ -204,4 +228,5 @@
   .kb-party-orgs { display: none; }
   .kb-face { width: 26px; height: 26px; }
   .kb-att { display: none; }
+  .kb-head { display: none; }
 }

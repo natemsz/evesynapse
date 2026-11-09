@@ -859,21 +859,29 @@ WHERE c.departed_at IS NULL
                    THEN c.start_location_id END)
        ), -1) >= sqlc.arg(sec_min)::double precision);
 
--- The subtab telemetry: the live corpus size (the rows not
--- stamped departed, schema 096) and the freshest sweep stamp across regions. One
--- row, two stored reads -- no corpus aggregation at render
--- beyond the count itself. The stamp expression carries a
+-- The subtab telemetry: the stored live corpus size (counted
+-- by the sweep, schema 133) and the freshest sweep stamp across regions. Two
+-- stored reads, no corpus aggregation at render. The stamp expression carries a
 -- cast and a coalesce on purpose: the pinned sqlc types a
 -- bare MAX() as interface{}, so the cast pins timestamptz,
 -- and the coalesce maps the unswept case (no sweep rows,
 -- MAX is NULL) to the zero time instead of NULL -- the
 -- caller reads IsZero() as "not swept yet".
 -- name: GetPublicContractCorpusStats :one
-SELECT COUNT(*) AS open_contracts,
+SELECT COALESCE((SELECT open_contracts FROM pub_contract_corpus_stats WHERE id = 1), 0)::bigint AS open_contracts,
        COALESCE((SELECT MAX(updated_at) FROM pub_contract_sweep_state),
-                '0001-01-01 00:00:00+00'::timestamptz)::timestamptz AS last_sweep_at
-FROM pub_contracts
-WHERE departed_at IS NULL;
+                '0001-01-01 00:00:00+00'::timestamptz)::timestamptz AS last_sweep_at;
+
+-- The sweep's count of the live corpus, stored below for the
+-- search page to read. Worker only; never a render read.
+-- name: CountLivePublicContracts :one
+SELECT COUNT(*) FROM pub_contracts WHERE departed_at IS NULL;
+
+-- name: UpsertPublicContractCorpusStats :exec
+INSERT INTO pub_contract_corpus_stats (id, open_contracts, computed_at)
+VALUES (1, sqlc.arg(open_contracts)::bigint, sqlc.arg(computed_at)::timestamptz)
+ON CONFLICT (id) DO UPDATE SET
+    open_contracts = EXCLUDED.open_contracts, computed_at = EXCLUDED.computed_at;
 
 -- The public structures set (schema 068): one replace per
 -- worker refresh of ESI's public structures route. Rows the

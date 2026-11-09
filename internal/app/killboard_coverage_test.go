@@ -152,11 +152,11 @@ func TestZkillHistoryBackfillIngests(t *testing.T) {
 	}
 	// The pilot's public feed shows the participation and the
 	// loss.
-	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+	feed, err := q.ListKillsByEntityFeed(ctx, db.ListKillsByEntityFeedParams{Kind: "character",
 		EntityID: 91000001, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
 	})
 	if err != nil {
-		t.Fatalf("ListKillsByCharacter: %v", err)
+		t.Fatalf("ListKillsByEntityFeed: %v", err)
 	}
 	ids := feedIDs(feed)
 	if !ids[800001] || !ids[800002] {
@@ -182,11 +182,11 @@ func TestZkillHistoryBackfillIngests(t *testing.T) {
 	// The corporation backfill ingests a member's participation
 	// the same way and marks the corporation covered.
 	app.backfillCorp(ctx, client, 98000002)
-	cfeed, err := q.ListKillsByCorporation(ctx, db.ListKillsByCorporationParams{
+	cfeed, err := q.ListKillsByEntityFeed(ctx, db.ListKillsByEntityFeedParams{Kind: "corporation",
 		EntityID: 98000002, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
 	})
 	if err != nil {
-		t.Fatalf("ListKillsByCorporation: %v", err)
+		t.Fatalf("ListKillsByEntityFeed: %v", err)
 	}
 	if !feedIDs(cfeed)[800003] {
 		t.Errorf("corp feed ids = %v, want 800003", feedIDs(cfeed))
@@ -400,11 +400,11 @@ func TestZkillBackfillPromotesPrivateKill(t *testing.T) {
 	if _, err := app.ingestKill(ctx, json.RawMessage(zkPartKillmail), "hash800001", nil, "esi", false, true); err != nil {
 		t.Fatalf("ingest private copy: %v", err)
 	}
-	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+	feed, err := q.ListKillsByEntityFeed(ctx, db.ListKillsByEntityFeedParams{Kind: "character",
 		EntityID: 91000001, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
 	})
 	if err != nil {
-		t.Fatalf("ListKillsByCharacter: %v", err)
+		t.Fatalf("ListKillsByEntityFeed: %v", err)
 	}
 	if feedIDs(feed)[800001] {
 		t.Fatal("private kill already shows in the public feed")
@@ -430,11 +430,11 @@ func TestZkillBackfillPromotesPrivateKill(t *testing.T) {
 	if attackers != 2 {
 		t.Errorf("attacker rows = %d, want 2 (no duplicate ingest)", attackers)
 	}
-	feed, err = q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+	feed, err = q.ListKillsByEntityFeed(ctx, db.ListKillsByEntityFeedParams{Kind: "character",
 		EntityID: 91000001, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
 	})
 	if err != nil {
-		t.Fatalf("ListKillsByCharacter: %v", err)
+		t.Fatalf("ListKillsByEntityFeed: %v", err)
 	}
 	if !feedIDs(feed)[800001] {
 		t.Error("promoted kill missing from the public feed")
@@ -493,11 +493,11 @@ func TestKillInvolvementFiling(t *testing.T) {
 		`"victim":{"character_id":9106,"corporation_id":98000101,"ship_type_id":587,"damage_taken":905,"items":[]},`+
 		`"attackers":[{"character_id":9107,"corporation_id":98000102,"ship_type_id":587,"weapon_type_id":2873,"damage_done":900,"final_blow":true},`+
 		`{"character_id":9002,"corporation_id":98000111,"ship_type_id":587,"damage_done":5,"final_blow":false}]}`)
-	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+	feed, err := q.ListKillsByEntityFeed(ctx, db.ListKillsByEntityFeedParams{Kind: "character",
 		EntityID: 9002, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
 	})
 	if err != nil {
-		t.Fatalf("ListKillsByCharacter: %v", err)
+		t.Fatalf("ListKillsByEntityFeed: %v", err)
 	}
 	ids := feedIDs(feed)
 	if !ids[800102] {
@@ -609,11 +609,11 @@ func TestKillValueSurvivesPrune(t *testing.T) {
 	}
 
 	since := at.Add(-time.Hour)
-	stats := func() db.PilotKillStatsRow {
+	stats := func() db.GetKillEntityStatsRow {
 		t.Helper()
-		row, err := q.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: 9203, Since: since})
+		row, err := q.GetKillEntityStats(ctx, db.GetKillEntityStatsParams{Kind: "character", EntityID: 9203, Since: since})
 		if err != nil {
-			t.Fatalf("PilotKillStats: %v", err)
+			t.Fatalf("GetKillEntityStats: %v", err)
 		}
 		return row
 	}
@@ -654,11 +654,11 @@ func TestKillValueSurvivesPrune(t *testing.T) {
 	if got := stats(); got.Kills != 1 || got.IskKilled != 400000 {
 		t.Errorf("stats after prune = %+v, want 1 kill and 400000 ISK destroyed", got)
 	}
-	feed, err := q.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
+	feed, err := q.ListKillsByEntityFeed(ctx, db.ListKillsByEntityFeedParams{Kind: "character",
 		EntityID: 9203, BeforeTime: time.Now().Add(time.Hour).UTC(), BeforeID: 1 << 62, MaxRows: 10,
 	})
 	if err != nil {
-		t.Fatalf("ListKillsByCharacter: %v", err)
+		t.Fatalf("ListKillsByEntityFeed: %v", err)
 	}
 	if !feedIDs(feed)[800301] {
 		t.Error("pruned kill missing from the attacker's board kills")
@@ -796,6 +796,9 @@ func TestKillmailPagesPastFifty(t *testing.T) {
 		}
 	}
 
+	// The worker sweep folds the stored kills into the feed and
+	// aggregates the pages read.
+	app.backfillKillStats(ctx)
 	cookie := sessionCookie(t, app, user.ID, 90000001, "Pager One")
 	code, body := getPage(t, app, cookie, "/killmails/?character=90000001")
 	if code != http.StatusOK {
@@ -920,6 +923,9 @@ func TestKillmailTilesScope(t *testing.T) {
 		}
 	}
 
+	// The worker sweep folds the stored kills into the daily
+	// aggregates the tiles read.
+	app.backfillKillStats(ctx)
 	cookie := sessionCookie(t, app, user.ID, 90000001, "Record Holder")
 	code, body := getPage(t, app, cookie, "/killmails/?character=90000001")
 	if code != http.StatusOK {

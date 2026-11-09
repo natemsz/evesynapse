@@ -36,6 +36,19 @@ func (q *Queries) CountAbyssalRanges(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countLivePublicContracts = `-- name: CountLivePublicContracts :one
+SELECT COUNT(*) FROM pub_contracts WHERE departed_at IS NULL
+`
+
+// The sweep's count of the live corpus, stored below for the
+// search page to read. Worker only; never a render read.
+func (q *Queries) CountLivePublicContracts(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countLivePublicContracts)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPublicContractItems = `-- name: CountPublicContractItems :one
 SELECT COUNT(*) FROM pub_contract_items i
 JOIN pub_contracts c ON c.contract_id = i.contract_id
@@ -531,11 +544,9 @@ func (q *Queries) GetPublicContract(ctx context.Context, contractID int64) (PubC
 }
 
 const getPublicContractCorpusStats = `-- name: GetPublicContractCorpusStats :one
-SELECT COUNT(*) AS open_contracts,
+SELECT COALESCE((SELECT open_contracts FROM pub_contract_corpus_stats WHERE id = 1), 0)::bigint AS open_contracts,
        COALESCE((SELECT MAX(updated_at) FROM pub_contract_sweep_state),
                 '0001-01-01 00:00:00+00'::timestamptz)::timestamptz AS last_sweep_at
-FROM pub_contracts
-WHERE departed_at IS NULL
 `
 
 type GetPublicContractCorpusStatsRow struct {
@@ -543,10 +554,9 @@ type GetPublicContractCorpusStatsRow struct {
 	LastSweepAt   time.Time `json:"last_sweep_at"`
 }
 
-// The subtab telemetry: the live corpus size (the rows not
-// stamped departed, schema 096) and the freshest sweep stamp across regions. One
-// row, two stored reads -- no corpus aggregation at render
-// beyond the count itself. The stamp expression carries a
+// The subtab telemetry: the stored live corpus size (counted
+// by the sweep, schema 133) and the freshest sweep stamp across regions. Two
+// stored reads, no corpus aggregation at render. The stamp expression carries a
 // cast and a coalesce on purpose: the pinned sqlc types a
 // bare MAX() as interface{}, so the cast pins timestamptz,
 // and the coalesce maps the unswept case (no sweep rows,
@@ -3156,6 +3166,23 @@ func (q *Queries) UpsertPublicContract(ctx context.Context, arg UpsertPublicCont
 		arg.LastCycle,
 		arg.FirstSeen,
 	)
+	return err
+}
+
+const upsertPublicContractCorpusStats = `-- name: UpsertPublicContractCorpusStats :exec
+INSERT INTO pub_contract_corpus_stats (id, open_contracts, computed_at)
+VALUES (1, $1::bigint, $2::timestamptz)
+ON CONFLICT (id) DO UPDATE SET
+    open_contracts = EXCLUDED.open_contracts, computed_at = EXCLUDED.computed_at
+`
+
+type UpsertPublicContractCorpusStatsParams struct {
+	OpenContracts int64     `json:"open_contracts"`
+	ComputedAt    time.Time `json:"computed_at"`
+}
+
+func (q *Queries) UpsertPublicContractCorpusStats(ctx context.Context, arg UpsertPublicContractCorpusStatsParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPublicContractCorpusStats, arg.OpenContracts, arg.ComputedAt)
 	return err
 }
 

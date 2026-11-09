@@ -458,12 +458,12 @@ func (app *Application) killmailUnionRows(ctx context.Context, viewer killmailVi
 	// window, newest first.
 	switch {
 	case viewer.characterID > 0:
-		board, err = app.queries.ListKillsByCharacter(ctx, db.ListKillsByCharacterParams{
-			EntityID: viewer.characterID, BeforeTime: beforeTime, BeforeID: beforeID, MaxRows: maxKillmailsShown,
+		board, err = app.queries.ListKillsByEntityFeed(ctx, db.ListKillsByEntityFeedParams{
+			Kind: "character", EntityID: viewer.characterID, BeforeTime: beforeTime, BeforeID: beforeID, MaxRows: maxKillmailsShown,
 		})
 	case viewer.corporationID > 0:
-		board, err = app.queries.ListKillsByCorporation(ctx, db.ListKillsByCorporationParams{
-			EntityID: viewer.corporationID, BeforeTime: beforeTime, BeforeID: beforeID, MaxRows: maxKillmailsShown,
+		board, err = app.queries.ListKillsByEntityFeed(ctx, db.ListKillsByEntityFeedParams{
+			Kind: "corporation", EntityID: viewer.corporationID, BeforeTime: beforeTime, BeforeID: beforeID, MaxRows: maxKillmailsShown,
 		})
 	}
 	if err != nil {

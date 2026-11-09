@@ -44,6 +44,9 @@ func TestPilotIntel(t *testing.T) {
 	kill(1, now.Add(-2*time.Hour), 92000001, 587, true, hostile, 91000002)
 	kill(2, now.Add(-1*time.Hour), hostile, 22456, true, 92000002)
 	kill(3, now.Add(-30*time.Minute), 92000003, 587, false, hostile) // private: never shown
+	// The worker sweep folds the stored kills into the daily
+	// aggregates the page reads.
+	app.backfillKillStats(ctx)
 
 	// A visitor sees the public record.
 	_, body := getPage(t, app, &http.Cookie{Name: "nobody", Value: "x"}, "/pilot/?character="+strconv.FormatInt(hostile, 10))
@@ -126,12 +129,10 @@ func TestPilotIntel(t *testing.T) {
 	}
 }
 
-// TestPilotIntelLiveFromZKill pins the on-demand lookup: a pilot
-// with no stored activity gets their stats read live from
-// zKillboard at page time, priced with EveSynapse's own appraisal,
-// and nothing is stored. A pilot with stored activity never
-// triggers the live fetch.
-func TestPilotIntelLiveFromZKill(t *testing.T) {
+// TestPilotIntelNeverFetchesLive pins the stored-only rule: a
+// pilot page never fetches from zKillboard at render, whether or
+// not the pilot has stored activity yet.
+func TestPilotIntelNeverFetchesLive(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, nil)
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -143,61 +144,45 @@ func TestPilotIntelLiveFromZKill(t *testing.T) {
 	}
 	exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9) ON CONFLICT DO NOTHING`)
 	exec(`INSERT INTO sde_types (type_id, name) VALUES (587, 'Rifter'), (22456, 'Sabre') ON CONFLICT DO NOTHING`)
-	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES (10000002, 587, 400000, now()) ON CONFLICT DO NOTHING`)
 
 	const stranger = int64(91000005)
 	const stored = int64(92000005)
 	killAt := now.Add(-2 * time.Hour).UTC().Format(time.RFC3339)
-	lossAt := now.Add(-1 * time.Hour).UTC().Format(time.RFC3339)
 	hist := newFakeZkillHistory(map[string]string{
-		"/characterID/91000005/": `[` +
-			`{"killmail_id":800011,"killmail_time":"` + killAt + `","solar_system_id":30000142,` +
-			`"victim":{"character_id":92000001,"corporation_id":98000009,"ship_type_id":587,"damage_taken":900,"items":[]},` +
-			`"attackers":[{"character_id":91000005,"corporation_id":98000002,"ship_type_id":22456,"damage_done":900,"final_blow":true,"weapon_type_id":2488}],` +
-			`"zkb":{"locationID":0,"hash":"hash800011","totalValue":10.0,"points":1,"npc":false,"solo":true,"awox":false}},` +
-			`{"killmail_id":800012,"killmail_time":"` + lossAt + `","solar_system_id":30000142,` +
-			`"victim":{"character_id":91000005,"corporation_id":98000002,"ship_type_id":587,"damage_taken":700,"items":[]},` +
-			`"attackers":[{"character_id":92000002,"corporation_id":98000004,"ship_type_id":587,"damage_done":700,"final_blow":true,"weapon_type_id":2488}],` +
-			`"zkb":{"locationID":0,"hash":"hash800012","totalValue":10.0,"points":1,"npc":false,"solo":false,"awox":false}}]`,
-		"/characterID/92000005/": `[` +
-			`{"killmail_id":800013,"killmail_time":"` + killAt + `","solar_system_id":30000142,` +
-			`"victim":{"character_id":92000003,"corporation_id":98000009,"ship_type_id":587,"damage_taken":900,"items":[]},` +
-			`"attackers":[{"character_id":92000005,"corporation_id":98000002,"ship_type_id":22456,"damage_done":900,"final_blow":true,"weapon_type_id":2488}],` +
-			`"zkb":{"locationID":0,"hash":"hash800013","totalValue":10.0,"points":1,"npc":false,"solo":true,"awox":false}}]`,
+		"/characterID/91000005/": `[{"killmail_id":800011,"killmail_time":"` + killAt + `","solar_system_id":30000142,"victim":{"character_id":92000001,"corporation_id":98000009,"ship_type_id":587,"damage_taken":900,"items":[]},"attackers":[{"character_id":91000005,"corporation_id":98000002,"ship_type_id":22456,"damage_done":900,"final_blow":true,"weapon_type_id":2488}],"zkb":{"locationID":0,"hash":"hash800011","totalValue":10.0,"points":1,"npc":false,"solo":true,"awox":false}}]`,
 	})
 	srv := httptest.NewServer(hist.handler())
 	defer srv.Close()
 	app.cfg.zkillAPIBaseURL = srv.URL + "/"
 	visitor := &http.Cookie{Name: "nobody", Value: "x"}
 
-	// The stranger has no stored activity: the page reads them
-	// live from zKillboard.
+	// The stranger has no stored activity: the page renders what
+	// is stored (nothing yet) and never fetches at render.
 	_, body := getPage(t, app, visitor, "/pilot/?character="+strconv.FormatInt(stranger, 10))
-	for _, want := range []string{"from zKill, live", "Sabre", "Jita", "ISK destroyed"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("live pilot page lacks %q", want)
-		}
+	if strings.Contains(body, "from zKill, live") {
+		t.Error("pilot page marked live from zKill, want stored only")
 	}
-	if got := hist.hitCount("/characterID/91000005/"); got != 1 {
-		t.Errorf("stranger history fetched %d times, want 1", got)
+	if got := hist.hitCount("/characterID/91000005/"); got != 0 {
+		t.Errorf("stranger history fetched %d times at render, want 0", got)
 	}
-	// Nothing was stored: no kill rows, no profile.
 	var n int
 	if err := app.db.QueryRowContext(ctx, `SELECT count(*) FROM kills`).Scan(&n); err != nil {
 		t.Fatalf("count kills: %v", err)
 	}
 	if n != 0 {
-		t.Errorf("live lookup stored %d kills, want 0", n)
+		t.Errorf("render stored %d kills, want 0", n)
 	}
 	if _, err := q.GetPilotActivityProfile(ctx, stranger); err == nil {
-		t.Error("live lookup claimed a profile, want none")
+		t.Error("render claimed a profile, want none")
 	}
 
-	// A pilot with stored activity never triggers the live fetch.
+	// A pilot with stored kills, folded by the background sweep,
+	// reads them from the stored aggregates, still with no fetch.
 	exec(`INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, ship_type_id, source, public, ingested_at, value_zkill)
 		VALUES (900001, $1, 30000142, 92000003, 587, 'stream', true, now(), 10000000)`, now.Add(-2*time.Hour))
 	exec(`INSERT INTO kill_attackers (killmail_id, seq, character_id, ship_type_id, final_blow) VALUES (900001, 0, $1, 22456, true)`, stored)
 	exec(`INSERT INTO kill_involvement (killmail_id, character_id) VALUES (900001, $1) ON CONFLICT DO NOTHING`, stored)
+	app.backfillKillStats(ctx)
 	_, body2 := getPage(t, app, visitor, "/pilot/?character="+strconv.FormatInt(stored, 10))
 	if strings.Contains(body2, "from zKill, live") {
 		t.Error("stored pilot page marked live from zKill, want stored")

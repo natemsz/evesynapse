@@ -68,18 +68,27 @@
   <div class="l-tiles ov-cards l-root">
     {{if $v.IdentityKnown}}
     <div class="ov-card">
-      <div class="ov-idrow">
+      <div class="ov-chead"><span>Pilot</span>{{if $v.OnlineKnown}}{{if $v.Online}}<span class="ov-live">Online now</span>{{else}}<span class="ov-live dim">Offline</span>{{end}}{{end}}</div>
+      <div class="ov-entity">
         <span class="ov-portrait"><img src="{{$v.PortraitURL}}" alt="" width="56" height="56">{{if $v.SecurityStatus}}<span class="ov-secchip">{{$v.SecurityStatus}}</span>{{end}}</span>
-        <div class="ov-idmain">
+        <div class="ov-entity-main">
           <div class="ov-nm">{{$v.CharacterName}}</div>
           {{if $v.CorpName}}<div class="ov-corp">{{corpLink $v.CorpID $v.CorpName}}{{if $v.CorpTicker}} [{{$v.CorpTicker}}]{{end}}</div>{{end}}
-          {{if $v.AllianceName}}<div class="ov-meta">{{$v.AllianceName}}</div>{{end}}
-          <div class="ov-meta">
-            {{if $v.Birthday}}Born {{$v.Birthday}} · {{end}}Security status {{$v.SecurityStatus}}<br>
-            {{if $v.OnlineKnown}}{{if $v.Online}}Online now{{else}}Offline{{if $v.LastLogin}} · Last login {{$v.LastLogin}}{{end}}{{end}} · {{$v.Logins}} logins<br>{{end}}
-            {{if $v.WalletKnown}}Wallet balance {{$v.ISK}} ISK{{end}}
-          </div>
+          {{if $v.AllianceName}}<div class="ov-alliance">{{allianceLink $v.AllianceID $v.AllianceName}}</div>{{end}}
         </div>
+      </div>
+      <div class="ov-trows">
+        <div class="tr"><span class="k">Status</span><span>{{if $v.Birthday}}Born {{$v.Birthday}} · {{end}}Security status {{$v.SecurityStatus}}</span></div>
+        {{if $v.OnlineKnown}}
+        <div class="tr"><span class="k">Logins</span><span>{{if not $v.Online}}{{if $v.LastLogin}}Last login {{$v.LastLogin}} · {{end}}{{end}}{{$v.Logins}} logins</span></div>
+        {{end}}
+        {{if $v.SkillsKnown}}
+        <div class="tr"><span class="k">Skill points</span><span class="ov-sp-val">{{$v.TotalSP}} SP{{if $v.SkillsCount}} <small class="ov-skills-cnt">({{$v.SkillsCount}} skills)</small>{{end}}</span></div>
+        {{if $v.UnallocatedSP}}<div class="tr"><span class="k">Unallocated SP</span><span class="ov-unalloc">{{$v.UnallocatedSP}}</span></div>{{end}}
+        {{end}}
+        {{if $v.WalletKnown}}
+        <div class="tr"><span class="k">Wallet balance</span><span class="ov-wallet-val">{{$v.ISK}} ISK</span></div>
+        {{end}}
       </div>
     </div>
     {{end}}
@@ -87,8 +96,34 @@
     {{if or $v.LocationKnown $v.ShipKnown}}
     <div class="ov-card">
       <div class="ov-chead"><span>Current location &amp; active ship</span>{{if $v.DockedAt}}<span class="ov-live">Docked</span>{{else if $v.LocationKnown}}<span class="ov-live dim">In space</span>{{end}}</div>
-      {{if $v.LocationKnown}}<div class="ov-locline">{{if $v.SystemSec}}<span class="sec-pill {{$ov.SysSecClass}}">{{$v.SystemSec}}</span>{{end}}<span class="ov-sys">{{systemLink $v.SystemID $v.SystemName}}</span>{{if $v.DockedAt}}<span class="ov-stn">· {{placeLink $v.DockedRef}}</span>{{end}}</div>{{end}}
-      {{if $v.ShipKnown}}<div class="ov-shipline"><span>{{if $v.ShipName}}<span class="ov-sn">&ldquo;{{$v.ShipName}}&rdquo;</span> {{end}}<span class="ov-st">{{itemLink $v.ShipTypeID $v.ShipTypeName}}</span></span></div>{{end}}
+      <div class="ov-entity">
+        {{if $v.ShipKnown}}
+        <span class="ov-ship-art">
+          <img src="https://images.evetech.net/types/{{$v.ShipTypeID}}/render?size=128" data-fallback-src="https://images.evetech.net/types/{{$v.ShipTypeID}}/icon?size=64" alt="{{$v.ShipTypeName}}" width="56" height="56" loading="lazy">
+        </span>
+        <div class="ov-entity-main">
+          <div class="ov-ship-title">{{if and $v.ShipName (ne $v.ShipName $v.ShipTypeName)}}<span class="ov-sn">&ldquo;{{$v.ShipName}}&rdquo;</span> {{end}}<span class="ov-st">{{itemLink $v.ShipTypeID $v.ShipTypeName}}</span></div>
+          {{if $v.ShipGroupName}}<div class="ov-ship-group muted">{{$v.ShipGroupName}}</div>{{end}}
+        </div>
+        {{else}}
+        <div class="ov-entity-main">
+          <div class="ov-nm muted">No active ship</div>
+        </div>
+        {{end}}
+      </div>
+      <div class="ov-trows">
+        {{if $v.LocationKnown}}
+        <div class="tr">
+          <span class="k">System</span>
+          <span class="ov-locval">{{if $v.SystemSec}}<span class="sec-pill {{$ov.SysSecClass}}">{{$v.SystemSec}}</span>{{end}} <span class="ov-sys">{{systemLink $v.SystemID $v.SystemName}}</span>{{if $v.RegionName}} <span class="muted">· {{regionLink $v.RegionID $v.RegionName}}</span>{{end}}</span>
+        </div>
+        {{if $v.DockedAt}}
+        <div class="tr"><span class="k">Docked</span><span class="ov-stn">{{placeLink $v.DockedRef}}</span></div>
+        {{else}}
+        <div class="tr"><span class="k">Position</span><span class="muted">In space</span></div>
+        {{end}}
+        {{end}}
+      </div>
     </div>
     {{end}}
 
@@ -97,14 +132,14 @@
       <div class="ov-chead"><span>Jump timers</span></div>
       <div class="ov-trows">
         {{if $v.FatigueKnown}}
-        <div class="tr"><span class="k">Fatigue left</span>{{if eq $v.FatigueLeft "ready"}}<span class="ok">None · ready</span>{{else}}<span class="warn">{{$v.FatigueLeft}}</span>{{end}}</div>
-        <div class="tr"><span class="k">Fatigue expires</span><span>{{if $v.FatigueUntil}}{{$v.FatigueUntil}}{{else}}-{{end}}</span></div>
-        <div class="tr"><span class="k">Last jump</span><span>{{if $v.LastJump}}{{$v.LastJump}}{{else}}-{{end}}</span></div>
+        <div class="tr"><span class="k">Fatigue left</span>{{if eq $v.FatigueLeft "ready"}}<span class="ov-tag-ok">None · ready</span>{{else}}<span class="ov-tag-warn">{{$v.FatigueLeft}}</span>{{end}}</div>
+        <div class="tr"><span class="k">Fatigue expires</span><span class="ov-date">{{if $v.FatigueUntil}}{{$v.FatigueUntil}}{{else}}-{{end}}</span></div>
+        <div class="tr"><span class="k">Last jump</span><span class="ov-date">{{if $v.LastJump}}{{$v.LastJump}}{{else}}-{{end}}</span></div>
         {{end}}
         {{if $v.ClonesKnown}}
-        <div class="tr"><span class="k">Clone jump</span>{{if eq $ov.CloneJumpLeft "ready"}}<span class="ok">Ready</span>{{else if $ov.CloneJumpLeft}}<span class="warn">Ready <span class="countdown" data-finish="{{$ov.CloneJumpRaw}}">{{$ov.CloneJumpLeft}}</span></span>{{else}}<span>-</span>{{end}}</div>
+        <div class="tr"><span class="k">Clone jump</span>{{if eq $ov.CloneJumpLeft "ready"}}<span class="ov-tag-ok">Ready</span>{{else if $ov.CloneJumpLeft}}<span class="ov-tag-warn">Ready <span class="countdown" data-finish="{{$ov.CloneJumpRaw}}">{{$ov.CloneJumpLeft}}</span></span>{{else}}<span class="ov-date">-</span>{{end}}</div>
         {{end}}
-        {{if $v.LastLogout}}<div class="tr"><span class="k">Last logout</span><span>{{$v.LastLogout}}</span></div>{{end}}
+        {{if $v.LastLogout}}<div class="tr"><span class="k">Last logout</span><span class="ov-date">{{$v.LastLogout}}</span></div>{{end}}
       </div>
     </div>
     {{end}}

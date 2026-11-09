@@ -5,7 +5,7 @@
 #
 # Build it on the runner host:
 #   docker build -t evesynapse-runner:latest .forgejo/runner-image
-FROM node:22-bookworm
+FROM node:26-bookworm
 
 # The toolbox the release workflow installs per job today.
 RUN apt-get update \

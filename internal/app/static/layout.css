@@ -646,6 +646,15 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
   .l-pane--dir { grid-column: 1; grid-row: 1; }
   .l-pane--main { grid-column: 2; grid-row: 1; border-left: 1px solid var(--hairline); }
   .l-pane--insp { grid-column: 3; grid-row: 1; border-left: 1px solid var(--hairline); }
+  /* An inspector bar holding nothing but its back and close links
+     stays out of the pane up here: both links hide at this width,
+     so the bar would hang a blank sticky strip across the pane's
+     top. Bars carrying a title, search, or filters keep theirs.
+     (At medium and narrow the close and back links show, so the
+     bar stays.) The pane keeps its own top padding, like a pane
+     whose bar never rendered. */
+  .l-pane--insp > .l-pane-bar:not(:has(> :not(.l-back, .l-close))) { display: none; }
+  .l-pane--insp:has(> .l-pane-bar:not(:has(> :not(.l-back, .l-close)))) { padding-top: var(--space-3); }
 }
 
 /* A console without a directory (a list and its reader, like the

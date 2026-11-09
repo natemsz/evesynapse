@@ -2,8 +2,8 @@ package piplanner
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"html/template"
 	"math"
 	"net/http"

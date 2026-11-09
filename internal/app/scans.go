@@ -22,9 +22,9 @@ package app
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"math/big"
 	"net/http"
 	"regexp"

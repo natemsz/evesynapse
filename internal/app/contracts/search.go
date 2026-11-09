@@ -22,9 +22,9 @@ package contracts
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"html/template"
 	"math"
 	"net/http"

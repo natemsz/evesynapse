@@ -2,10 +2,10 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"evesynapse/internal/app/module"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"strings"
 	"sync/atomic"
 	"time"

@@ -12,7 +12,7 @@ package buildplanner
 
 import (
 	"context"
-	"encoding/json"
+	json "github.com/goccy/go-json"
 	"html/template"
 	"math"
 	"net/url"

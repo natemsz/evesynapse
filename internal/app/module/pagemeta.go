@@ -1,7 +1,7 @@
 package module
 
 import (
-	"encoding/json"
+	json "github.com/goccy/go-json"
 	"html"
 	"html/template"
 	"strings"

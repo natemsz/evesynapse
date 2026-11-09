@@ -2,10 +2,10 @@ package calendar
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"evesynapse/internal/app/module"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"net/http"
 	"net/url"
 	"strconv"

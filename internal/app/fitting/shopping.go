@@ -1,9 +1,9 @@
 package fitting
 
 import (
-	"encoding/json"
 	"evesynapse/internal/app/module"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"html/template"
 	"net/http"
 	"sort"

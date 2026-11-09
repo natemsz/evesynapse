@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"sort"
 	"strconv"
 	"time"

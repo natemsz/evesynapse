@@ -370,6 +370,13 @@ type Application struct {
 	anonPageThrottle *anonThrottle
 	anonSimThrottle  *anonThrottle
 
+	// The bot guard's behavioral watches (core_bot_guard.go):
+	// per-fingerprint page/asset counts and the enumeration
+	// flood valve, made on first use.
+	botWatchOnce sync.Once
+	botWatch     *botFingerprintWatch
+	enumWatch    *enumFloodWatch
+
 	// The public service summary's cache and throttle
 	// (core_status.go).
 	status statusCache

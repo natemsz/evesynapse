@@ -90,10 +90,6 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 {{with .Assets}}
 <div class="l-page">
-<div class="l-head assets-head">
-  <p class="l-head-sum assets-count">{{.TotalItems}} items · {{.Places}} locations</p>
-  <div class="l-head-act">{{template "charselectormulti" .Selector}}</div>
-</div>
 {{if .Syncing}}<p><small>Not included yet: still waiting on the first sync for {{range $i, $n := .Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
 {{if .Warming}}
 <p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
@@ -102,8 +98,11 @@
 <div class="l-console amx" data-depth="{{$depth}}" data-land-top>
 <div class="l-panes">
   <nav class="l-pane l-pane--dir pane-dir" aria-label="Station directory">
-    <div class="l-pane-bar">
-      <h2 class="l-pane-title pane-h">Station directory <small>{{.Places}} locations</small></h2>
+    <div class="l-pane-bar pane-dir-bar">
+      <div class="pane-dir-bar-top">
+        <h2 class="l-pane-title pane-h">Stations <small>{{.Places}}</small></h2>
+        <div class="pane-dir-scope">{{template "charselectormulti" .Selector}}</div>
+      </div>
       <input id="assets-dirfilter" type="search" placeholder="Filter stations..." aria-label="Filter the station directory">
     </div>
     <div class="dirlist">
@@ -112,9 +111,10 @@
     <p class="prose">Values are stored estimates from each character's last asset snapshot, priced at the house order. Unpriced stacks count as unpriced, never as zero value.</p>
   </nav>
   <section class="l-pane l-pane--main pane-main" aria-label="Assets at the picked place">
-  <div class="l-pane-bar">
+  <div class="l-pane-bar amx-pane-bar">
     <a class="l-back" data-l-step="out" href="{{with .Matrix}}{{if .ListHref}}{{.ListHref}}{{else}}/assets/{{end}}{{else}}/assets/{{end}}">Stations</a>
     {{template "assets-tools" $.Assets}}
+    <div class="amx-scope">{{template "charselectormulti" $.Assets.Selector}}</div>
   </div>
   {{with .Search}}
     <h2 class="amx-h">{{.TotalStacks}} {{if eq .TotalStacks 1}}stack{{else}}stacks{{end}} matching "{{.Query}}"{{if .Only}} on this character{{else}} across {{.Characters}} {{if eq .Characters 1}}character{{else}}characters{{end}}{{end}}</h2>

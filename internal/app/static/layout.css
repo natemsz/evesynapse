@@ -130,11 +130,13 @@ html[data-theme="light"] {
 html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
 /* Main's top margin steps back when the bar rides above it. */
 .page-shell:has(> .subnav nav) > main { margin-top: 0; }
-/* The bar's own bottom margin is the one gap under it: the first
-   thing in main gives up its top margin, which used to collapse
-   with the bar's when both lived inside main. */
+/* The active sub-nav tab identifies the page; omit the redundant header
+   at the top of the page except on the home widget page. */
+.page-shell:has(> .subnav nav) #main-content > :is(h1, .h-with-action) {
+  display: none;
+}
 .page-shell:has(> .subnav nav) #main-content > h1 { margin-top: 0; }
-.page-shell:has(> .subnav nav) > main:not(:has(> h1)) > .page-body { margin-top: 0; }
+.page-shell:has(> .subnav nav) > main > .page-body { margin-top: var(--space-3); }
 .subnav > .section-tabs,
 .subnav > .section-subtabs {
   display: flex;
@@ -511,6 +513,7 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
   background: var(--surface-inset);
 }
 .l-pane { min-width: 0; padding: var(--space-3) var(--space-4) var(--space-4); }
+.l-pane:has(> .l-pane-bar:has(> :not(.l-back))) { padding-top: 0; }
 .l-pane-bar {
   position: sticky;
   top: var(--l-top);
@@ -519,12 +522,16 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-4)) var(--space-3);
+  margin: 0 calc(-1 * var(--space-4)) var(--space-3);
   padding: var(--space-3) var(--space-4) var(--space-2);
   /* Opaque, so rows scrolling under the stuck bar stay hidden, and
      toned like the pane: the panel with the inset tint laid over. */
   background: linear-gradient(var(--surface-inset), var(--surface-inset)), var(--surface-float);
   border-bottom: 1px solid transparent;
+}
+.jb-main > .l-pane-bar,
+.bp-main > .l-pane-bar {
+  position: static;
 }
 .l-panes > .l-pane:first-child > .l-pane-bar {
   border-top-left-radius: calc(var(--r-md) - 1px);

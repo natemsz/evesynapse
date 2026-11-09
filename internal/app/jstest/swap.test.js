@@ -91,6 +91,12 @@ test("landingFor: a character surface switch lands at the window top, picks insi
   assert.equal(swap.landingFor("/market/", params(""), params("type=34")), "keep");
 });
 
+test("landingFor: older kills or scope changes on the killboard land at the top", function () {
+  assert.equal(swap.landingFor("/intel/kills/", params(""), params("before=1700000000.100")), "top");
+  assert.equal(swap.landingFor("/intel/kills/", params("before=1700000000.100"), params("before=1699000000.50")), "top");
+  assert.equal(swap.landingFor("/killmails/", params(""), params("before=1700000000.100")), "top");
+});
+
 test("deniedTarget covers the full-navigation pages", function () {
   assert.equal(swap.deniedTarget("/fittings/"), true);
   assert.equal(swap.deniedTarget("/fittings"), true);

@@ -867,6 +867,12 @@
       };
       return surfOf(from) !== surfOf(to) ? "region" : "keep";
     }
+    if (path === "/intel/kills" || path === "/killmails") {
+      // Paging older kills or switching filter scope starts the new
+      // view at the top of the feed instead of holding scroll at the
+      // bottom pager button.
+      return "top";
+    }
     return "keep";
   }
 

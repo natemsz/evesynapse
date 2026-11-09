@@ -105,6 +105,7 @@
 .ov-dirsub { margin: 0 0 0.55rem; color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }
 .ov-dirfoot { margin-top: 1rem; color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }
 .ov-main { min-width: 0; }
+.ov-main .crumbs { padding-right: 1.5rem; }
 .ov-note { color: var(--muted); font-size: var(--fs-sm); }
 
 /* Clone cards (Clone Bay and the clones surface share these). */

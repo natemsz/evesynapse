@@ -1272,7 +1272,7 @@ td .sec-pill { font-size: var(--fs-2xs); }
 
 /* --- top bar search --- */
 .topsearch { margin: 0; }
-.searchwrap.topsearch-wrap { width: min(20rem, 34vw); }
+.searchwrap.topsearch-wrap { width: 100%; }
 .topsearch input { padding: 0.3rem 0.55rem 0.3rem 2rem; font-size: var(--fs-xs); }
 /* The magnifier sits at the field's left edge; the input's left padding
    keeps text clear of it. */
@@ -2095,11 +2095,11 @@ html[data-theme="light"] .brief-card.sev-critical { --brief-tint: #dfbab2; }
 html[data-theme="light"] .brief-card.sev-warning { --brief-tint: #e6cfa0; }
 html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
 /* Theme glow on the KPI and briefing cards: the theme accent
-   pools at the card's base and fades to clear by 70% of its
+   pools subtly at the card's base and fades to clear by 40% of its
    height. A background-image layer over each surface's own
    tint, so the briefing severity tints keep their color. */
-.kpi, .card[data-widget="glance"] .kpi, .card[data-widget="briefing"] .brief-card { background-image: linear-gradient(to top, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%); }
-.home-custom .card[data-widget="glance"] .kpi, .home-custom .card[data-widget="briefing"] .brief-card { background-image: linear-gradient(to top, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%); }
+.kpi, .card[data-widget="glance"] .kpi, .card[data-widget="briefing"] .brief-card { background-image: linear-gradient(to top, color-mix(in srgb, var(--accent) 7%, transparent), transparent 40%); }
+.home-custom .card[data-widget="glance"] .kpi, .home-custom .card[data-widget="briefing"] .brief-card { background-image: linear-gradient(to top, color-mix(in srgb, var(--accent) 7%, transparent), transparent 40%); }
 
 /* Briefing decks: one deck per kind, one painted card per deck.
    The face card sits in flow over two empty shells (the deck's
@@ -3509,8 +3509,34 @@ html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
   min-width: 0;
 }
 .topbar-portrait { flex: none; }
+.topbar-switcher > summary.topbar-character-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.topbar-switcher > summary.topbar-character-summary:hover {
+  color: var(--text-bright);
+  text-decoration: none;
+}
+.topbar-switcher > summary.topbar-character-summary::after {
+  color: var(--muted-2);
+  margin-left: 0.35rem;
+}
+.topbar-switcher > summary.topbar-character-summary:hover::after {
+  color: var(--text-bright);
+}
 .topbar-character-name {
-  max-width: 11rem;
+  max-width: 12rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3539,7 +3565,7 @@ html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
 /* The phone-bar hamburger has no resting box, like the sidebar glyph
    controls. */
 .nav-hamburger:hover { background: rgba(255, 106, 26, 0.14); }
-.topsearch { flex: 0 1 22rem; margin-left: 0; }
+.topsearch { flex: 0 1 28rem; min-width: 0; margin-left: 0; }
 .searchwrap.topsearch-wrap { flex: 1 1 auto; width: 100%; }
 .nav-hamburger:focus-visible,
 .nav-state-btn:focus-visible,
@@ -3734,7 +3760,7 @@ tbody tr.order-beaten td { background: color-mix(in srgb, var(--danger) 10%, tra
 @media (min-width: 861px) {
   .topbar-wordmark { margin-right: auto; }
   .page-sync { margin-left: 0; }
-  .topsearch { flex: 0 1 22rem; }
+  .topsearch { flex: 0 1 28rem; min-width: 0; }
   /* A 1px divider between the search field and the character switcher. */
   .topbar-character { position: relative; }
   .topbar-character::before {

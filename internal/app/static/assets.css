@@ -21,11 +21,17 @@
 /* The console's panes: this page keeps them flush against
    hairline dividers and sets its column widths. */
 .amx .l-panes { --l-dir: 18rem; --l-insp: 22rem; }
+.pane-dir-bar { display: flex; flex-direction: column; gap: 0.4rem; align-items: stretch; }
+.pane-dir-bar-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; width: 100%; }
+.pane-dir-scope .asset-scope-btn { padding: 0.2rem 0.5rem; font-size: var(--fs-xs); }
 .pane-dir #assets-dirfilter { flex: 1 1 100%; width: 100%; }
 .dir-foot { margin: 0.8rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
 
 /* The matrix pane's stacked controls: breadcrumb, hangar tabs,
    saved filters, then the search and sort toolbar. */
+.amx-pane-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+.amx-scope { margin-left: auto; }
+.amx-scope .asset-scope-btn { padding: 0.35rem 0.7rem; font-size: var(--fs-sm); }
 .pane-main .pilltabs { margin-top: 0.7rem; }
 .pane-main .fchips { margin-top: 0.7rem; }
 /* The filter pucks carry the matrix headers' text: the same

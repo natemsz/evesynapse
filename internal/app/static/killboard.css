@@ -227,6 +227,13 @@
   .kb-kill-region { display: none; }
   .kb-party-orgs { display: none; }
   .kb-face { width: 26px; height: 26px; }
-  .kb-att { display: none; }
-  .kb-head { display: none; }
+  /* The header folds with the rows: same three-line grid, one
+     label over each folded line, each pinned to its line's top. */
+  .kb-head {
+    grid-template-columns: 2.6rem minmax(0, 1fr) minmax(0, auto);
+    grid-template-areas: "ship main value" "ship atk value" "ship where meta";
+    gap: 0.1rem 0.65rem;
+    padding: 0.55rem 0.65rem 0.35rem;
+  }
+  .kb-head > span { align-self: start; }
 }

@@ -185,6 +185,24 @@ func (app *Application) handleNotificationsRead(w http.ResponseWriter, r *http.R
 	target := "/notifications/"
 	if err := r.ParseForm(); err == nil && userID != 0 {
 		app.markNotificationsRead(ctx, userID, r.FormValue("kind"))
+		if kind, ok := notifyKindByID(r.FormValue("kind")); ok && kind.ID == notifySkill {
+			if charID, cerr := strconv.ParseInt(r.FormValue("character"), 10, 64); cerr == nil && charID != 0 {
+				// The sheet banner's dismiss hides only the
+				// entries on screen: record each current one,
+				// so later finishes still announce.
+				notes, terr := app.recentTrainedNotes(ctx, userID, charID)
+				if terr != nil {
+					logging.Errorf("notifications: banner entries: %v", terr)
+				}
+				for _, n := range notes {
+					if derr := app.queries.UpsertTrainedBannerDismissal(ctx, db.UpsertTrainedBannerDismissalParams{
+						UserID: userID, CharacterID: charID, EntryKey: n.Title,
+					}); derr != nil {
+						logging.Errorf("notifications: banner dismiss: %v", derr)
+					}
+				}
+			}
+		}
 		if ret := r.FormValue("return"); strings.HasPrefix(ret, "/") && !strings.HasPrefix(ret, "//") {
 			target = ret
 		}

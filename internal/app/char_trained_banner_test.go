@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -184,6 +185,32 @@ func TestCharacterTrainedBannerStaleRead(t *testing.T) {
 	f.addSkill(f.userID, fixtureCharA, "Fixture Ceo", "Alpha Skill", 5)
 	f.markSkillRead(time.Now().UTC().Add(-3 * time.Hour))
 	f.wantNoBanner(f.sheet(fixtureCharA))
+}
+
+// The banner's dismiss hides only the entries on screen: the ×
+// posts the pilot with the kind, the sheet stays bare, and a
+// later finish still announces.
+func TestCharacterTrainedBannerDismissHidesEntry(t *testing.T) {
+	f := newTrainedBannerFixture(t)
+	f.addSkill(f.userID, fixtureCharA, "Fixture Ceo", "Alpha Skill", 5)
+	f.markSkillRead(time.Now().UTC().Add(-2 * time.Minute))
+	f.wantBanner(f.sheet(fixtureCharA), "Alpha Skill V")
+	code, _, _ := doReq(t, f.app, http.MethodPost, "/notifications/read", url.Values{
+		"kind":      {"skill"},
+		"character": {fmt.Sprint(fixtureCharA)},
+		"return":    {"/character/?character=" + fmt.Sprint(fixtureCharA)},
+	}, f.cookie)
+	if code != http.StatusSeeOther {
+		t.Fatalf("POST /notifications/read = %d, want 303", code)
+	}
+	f.wantNoBanner(f.sheet(fixtureCharA))
+	// A later finish is news again; the dismissed one stays hidden.
+	f.addSkill(f.userID, fixtureCharA, "Fixture Ceo", "Beta Skill", 4)
+	body := f.sheet(fixtureCharA)
+	f.wantBanner(body, "Beta Skill IV")
+	if strings.Contains(body, "Alpha Skill") {
+		t.Errorf("the dismissed entry reappeared with the new finish")
+	}
 }
 
 // The parse is pinned to the producer's title format: the skill

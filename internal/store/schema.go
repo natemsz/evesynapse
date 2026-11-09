@@ -823,6 +823,12 @@ var pgPubContractCorpusStatsSchema string
 //go:embed schema_pg/134_kill_entity_feed_kill_idx.sql
 var pgKillEntityFeedKillIdxSchema string
 
+// Step 135: the sheet banner's per-entry dismissals, keyed by
+// the notification's own title so later finishes still announce.
+//
+//go:embed schema_pg/135_trained_banner_dismissals.sql
+var pgTrainedBannerDismissalsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -985,6 +991,7 @@ func schemaSteps() []schemaStep {
 		{132, "kill_entity_feed", pgKillEntityFeedSchema, ""},
 		{133, "pubcontract_corpus_stats", pgPubContractCorpusStatsSchema, ""},
 		{134, "kill_entity_feed_kill_idx", pgKillEntityFeedKillIdxSchema, ""},
+		{135, "trained_banner_dismissals", pgTrainedBannerDismissalsSchema, ""},
 	}
 }
 

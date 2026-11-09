@@ -59,6 +59,7 @@
     {{end}}
     <form class="ov-bx" method="post" action="/notifications/read">
       <input type="hidden" name="kind" value="skill">
+      <input type="hidden" name="character" value="{{$v.CharacterID}}">
       <input type="hidden" name="return" value="/character/?character={{$v.CharacterID}}">
       <button type="submit" aria-label="Dismiss the trained banner">&#10005;</button>
     </form>

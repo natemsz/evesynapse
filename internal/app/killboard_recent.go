@@ -140,7 +140,11 @@ func (app *Application) getRecentKills(ctx context.Context, bt time.Time, bid in
 	if len(out) >= maxRows {
 		return out, true
 	}
-	if bt.After(time.Now().Add(30*time.Minute)) && bid >= (1<<62-1) {
+	// A short page is only complete when nothing narrows it: with
+	// a value floor or solo-only, matching kills beyond the ring
+	// still exist, so the short page must fall through to SQL or
+	// the Big kills and Solo filters read empty on a fresh page.
+	if minValue <= 0 && !solo && bt.After(time.Now().Add(30*time.Minute)) && bid >= (1<<62-1) {
 		return out, true
 	}
 	return nil, false

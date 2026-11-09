@@ -82,4 +82,14 @@ func TestRecentKillsRingPinsServingAndLowRAM(t *testing.T) {
 	if _, ok := app.getRecentKills(ctx, oldTime, 100, 0, false, killPageSize); ok {
 		t.Errorf("getRecentKills with old before-cursor = true, want false")
 	}
+
+	// 6. A narrowed front page never reads complete from a short
+	// ring: the value floor and solo-only fall back to SQL, or the
+	// Big kills and Solo filters come back empty.
+	if _, ok := app.getRecentKills(ctx, bt, bid, killBigValue, false, killPageSize); ok {
+		t.Errorf("getRecentKills with a value floor = true, want false")
+	}
+	if _, ok := app.getRecentKills(ctx, bt, bid, 0, true, killPageSize); ok {
+		t.Errorf("getRecentKills solo-only = true, want false")
+	}
 }

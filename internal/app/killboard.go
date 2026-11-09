@@ -16,14 +16,11 @@ package app
 // ---------------------------------------------------------------------------
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/klauspost/compress/gzip"
-	"io"
 	"net/http"
 	"sort"
 	"strconv"
@@ -720,13 +717,9 @@ func killFitEFT(names *killNames, ship string, items []killItem) string {
 	return b.String()
 }
 
-func decodeKillDetail(gz []byte) (killmailFull, bool) {
+func decodeKillDetail(payload []byte) (killmailFull, bool) {
 	var km killmailFull
-	zr, err := gzip.NewReader(bytes.NewReader(gz))
-	if err != nil {
-		return km, false
-	}
-	raw, err := io.ReadAll(zr)
+	raw, err := killDetailRaw(payload)
 	if err != nil {
 		return km, false
 	}

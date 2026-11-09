@@ -1,13 +1,10 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/klauspost/compress/gzip"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -352,14 +349,10 @@ func (app *Application) boardKillmailRow(ctx context.Context, viewer killmailVie
 }
 
 // decodeBoardKillmail reads a board-held killmail (kill_details'
-// gzipped payload) as the ESI shape the list rows are built from.
-func decodeBoardKillmail(gz []byte) (esi.Killmail, bool) {
+// compressed payload) as the ESI shape the list rows are built from.
+func decodeBoardKillmail(payload []byte) (esi.Killmail, bool) {
 	var km esi.Killmail
-	zr, err := gzip.NewReader(bytes.NewReader(gz))
-	if err != nil {
-		return km, false
-	}
-	raw, err := io.ReadAll(zr)
+	raw, err := killDetailRaw(payload)
 	if err != nil {
 		return km, false
 	}

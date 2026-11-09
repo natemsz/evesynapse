@@ -463,7 +463,7 @@ func New(cfg Config) (*Application, error) {
 		logging.Infof("evesynapse: new accounts are open to anyone who can sign in with EVE (EVE_ALLOWED_*_IDS limits that)")
 	}
 
-	dbConn, pool, err := store.Open(context.Background(), cfg.databaseURL)
+	dbConn, pool, err := store.OpenSized(context.Background(), cfg.databaseURL, cfg.dbConns)
 	if err != nil {
 		return nil, fmt.Errorf("open the database: %w", err)
 	}
@@ -479,7 +479,7 @@ func New(cfg Config) (*Application, error) {
 		cfg:           cfg,
 		push:          pushConfigFromEnv(cfg),
 		sessions:      sessionManager,
-		queries:       db.New(dbConn),
+		queries:       db.New(pool),
 		jwks:          &jwksCache{},
 		db:            dbConn,
 		pool:          pool,
@@ -1392,7 +1392,7 @@ func (app *Application) Fragment(page, define string, data any) (template.HTML, 
 	return template.HTML(buf.String()), nil
 }
 
-func (app *Application) SQLDB() *sql.DB { return app.db }
+func (app *Application) PGPool() *pgxpool.Pool { return app.pool }
 
 func (app *Application) SealToken(plain string, userID int64, field string) (string, error) {
 	return app.tokens.seal(plain, userID, field)

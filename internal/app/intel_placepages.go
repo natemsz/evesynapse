@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -255,7 +255,7 @@ func (app *Application) loadRegionView(ctx context.Context, id int64) *regionPag
 	view := &regionPageView{RegionID: id, State: "missing"}
 	region, err := app.queries.GetSDERegion(ctx, id)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("region page: read region %d: %v", id, err)
 		}
 		return view
@@ -288,7 +288,7 @@ func (app *Application) loadRegionView(ctx context.Context, id int64) *regionPag
 			stats.ShipKills24h, stats.PodKills24h, stats.NpcKills24h, stats.Jumps24h,
 			stats.ShipKillsDay, stats.PodKillsDay, stats.NpcKillsDay, stats.JumpsDay,
 			stats.HoursCovered)
-	} else if !errors.Is(aerr, sql.ErrNoRows) {
+	} else if !errors.Is(aerr, pgx.ErrNoRows) {
 		logging.Errorf("region page: read activity for region %d: %v", id, aerr)
 	}
 
@@ -354,7 +354,7 @@ func (app *Application) loadSystemView(ctx context.Context, id int64) *systemPag
 
 	sys, err := app.queries.GetSDESystem(ctx, id)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("system page: read system %d: %v", id, err)
 		}
 		return view
@@ -383,7 +383,7 @@ func (app *Application) loadSystemView(ctx context.Context, id int64) *systemPag
 			stats.ShipKills24h, stats.PodKills24h, stats.NpcKills24h, stats.Jumps24h,
 			stats.ShipKillsDay, stats.PodKillsDay, stats.NpcKillsDay, stats.JumpsDay,
 			stats.HoursCovered)
-	} else if !errors.Is(aerr, sql.ErrNoRows) {
+	} else if !errors.Is(aerr, pgx.ErrNoRows) {
 		logging.Errorf("system page: read activity for system %d: %v", id, aerr)
 	}
 
@@ -401,7 +401,7 @@ func (app *Application) loadSystemView(ctx context.Context, id int64) *systemPag
 				view.SovFactionName = fmt.Sprintf("Faction #%d", sov.FactionID)
 			}
 		}
-	} else if !errors.Is(verr, sql.ErrNoRows) {
+	} else if !errors.Is(verr, pgx.ErrNoRows) {
 		logging.Errorf("system page: read sovereignty for system %d: %v", id, verr)
 	}
 
@@ -621,7 +621,7 @@ func (app *Application) loadStationView(ctx context.Context, id int64) *stationP
 
 	st, err := app.queries.GetSDEStation(ctx, id)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("station page: read station %d: %v", id, err)
 		}
 		return view

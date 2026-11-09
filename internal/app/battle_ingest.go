@@ -502,11 +502,11 @@ func (app *Application) storeFight(ctx context.Context, userID, charID int64, f 
 		return 0, false, err
 	}
 
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return 0, false, err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := app.queries.WithTx(tx)
 	row, err := q.UpsertBattleFight(ctx, db.UpsertBattleFightParams{
 		UserID: userID, CharacterID: charID, Listener: f.Listener, SessionFile: truncate(f.Session, 64),
@@ -567,7 +567,7 @@ func (app *Application) storeFight(ctx context.Context, userID, charID int64, f 
 			}
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return 0, false, err
 	}
 	return row.ID, row.Inserted, nil

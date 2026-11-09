@@ -660,11 +660,11 @@ func TestPublicFitRatingCountsOnce(t *testing.T) {
 	if _, err := rig.DB().ExecContext(ctx, `DELETE FROM fit_ratings WHERE fit_id = $1`, fitID); err != nil {
 		t.Fatal(err)
 	}
-	tx, err := rig.DB().BeginTx(ctx, nil)
+	tx, err := rig.Pool().Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	qtx := q.WithTx(tx)
 	if _, err := qtx.LockPublicFitForRating(ctx, fitID); err != nil {
 		t.Fatal(err)
@@ -685,7 +685,7 @@ func TestPublicFitRatingCountsOnce(t *testing.T) {
 		t.Fatalf("the post finished (status %d) while another rating of the fit was uncommitted", code)
 	case <-time.After(500 * time.Millisecond):
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if code := <-posted; code != http.StatusSeeOther {

@@ -8,8 +8,6 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-
-	"github.com/lib/pq"
 )
 
 // Stored basket figures (schema 123). Wherever a basket's daily values
@@ -136,7 +134,7 @@ func storeBasketFigureChunk(ctx context.Context, tx db.DBTX, ids []int64, now ti
 		sLines, sDirs, sSparks = append(sLines, line), append(sDirs, dir), append(sSparks, spark)
 		sLows, sHighs, sMeans = append(sLows, lo), append(sHighs, hi), append(sMeans, mean)
 	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO market_basket_summary (basket_id, value_sell, value_buy, priced_items, item_count,
 			chg_1d, chg_7d, chg_30d, delta_1d, delta_7d, delta_30d,
 			line_30d, line_dir, spark_30d, low_30d, high_30d, mean_30d, updated_at)
@@ -156,9 +154,9 @@ func storeBasketFigureChunk(ctx context.Context, tx db.DBTX, ids []int64, now ti
 			line_30d = excluded.line_30d, line_dir = excluded.line_dir, spark_30d = excluded.spark_30d,
 			low_30d = excluded.low_30d, high_30d = excluded.high_30d, mean_30d = excluded.mean_30d,
 			updated_at = excluded.updated_at`,
-		pq.Array(sIDs), pq.Array(sSell), pq.Array(sBuy), pq.Array(sPriced), pq.Array(sCounts),
-		pq.Array(sC1), pq.Array(sC7), pq.Array(sC30), pq.Array(sD1), pq.Array(sD7), pq.Array(sD30),
-		pq.Array(sLines), pq.Array(sDirs), pq.Array(sSparks), pq.Array(sLows), pq.Array(sHighs), pq.Array(sMeans),
+		sIDs, sSell, sBuy, sPriced, sCounts,
+		sC1, sC7, sC30, sD1, sD7, sD30,
+		sLines, sDirs, sSparks, sLows, sHighs, sMeans,
 		now); err != nil {
 		return fmt.Errorf("basket summaries: %w", err)
 	}
@@ -215,7 +213,7 @@ func storeBasketFigureChunk(ctx context.Context, tx db.DBTX, ids []int64, now ti
 	if len(figs) == 0 {
 		return nil
 	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO market_basket_item_stats (basket_id, type_id, priced, unit, value, share_pct,
 			chg_1d, chg_7d, chg_30d, impact_1d, impact_7d, impact_30d)
 		SELECT u.b, u.t, u.p, u.unit, u.v, u.sh,
@@ -224,8 +222,8 @@ func storeBasketFigureChunk(ctx context.Context, tx db.DBTX, ids []int64, now ti
 		FROM unnest($1::bigint[], $2::bigint[], $3::bool[], $4::float8[], $5::float8[], $6::float8[],
 			$7::float8[], $8::float8[], $9::float8[], $10::float8[], $11::float8[], $12::float8[])
 			AS u(b, t, p, unit, v, sh, c1, c7, c30, i1, i7, i30)`,
-		pq.Array(iBaskets), pq.Array(iTypes), pq.Array(iPriced), pq.Array(iUnits), pq.Array(iValues), pq.Array(iShares),
-		pq.Array(iC1), pq.Array(iC7), pq.Array(iC30), pq.Array(iI1), pq.Array(iI7), pq.Array(iI30)); err != nil {
+		iBaskets, iTypes, iPriced, iUnits, iValues, iShares,
+		iC1, iC7, iC30, iI1, iI7, iI30); err != nil {
 		return fmt.Errorf("basket item stats: %w", err)
 	}
 	return nil

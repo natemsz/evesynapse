@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"net/http"
 	"time"
@@ -10,6 +9,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 	switch {
 	case serr == nil && esi.SnapshotFresh(snap):
 		return corpFetchSkipped
-	case serr != nil && !errors.Is(serr, sql.ErrNoRows):
+	case serr != nil && !errors.Is(serr, pgx.ErrNoRows):
 		logging.Errorf("worker: read %s snapshot for character %d: %v", esi.SnapPlanets, ch.CharacterID, serr)
 	}
 
@@ -151,7 +151,7 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 		switch {
 		case serr == nil && esi.SnapshotFresh(snap):
 			continue
-		case serr != nil && !errors.Is(serr, sql.ErrNoRows):
+		case serr != nil && !errors.Is(serr, pgx.ErrNoRows):
 			logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 			continue
 		}

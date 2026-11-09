@@ -2,12 +2,12 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 	switch {
 	case serr == nil && esi.SnapshotFresh(snap):
 		return corpFetchSkipped
-	case serr != nil && !errors.Is(serr, sql.ErrNoRows):
+	case serr != nil && !errors.Is(serr, pgx.ErrNoRows):
 		logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 

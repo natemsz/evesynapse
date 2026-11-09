@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const createSRPRequest = `-- name: CreateSRPRequest :one
@@ -38,7 +36,7 @@ type CreateSRPRequestParams struct {
 
 // A killmail is claimed once: a second request for it creates nothing.
 func (q *Queries) CreateSRPRequest(ctx context.Context, arg CreateSRPRequestParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createSRPRequest,
+	row := q.db.QueryRow(ctx, createSRPRequest,
 		arg.CorporationID,
 		arg.OpID,
 		arg.KillmailID,
@@ -78,7 +76,7 @@ type DecideSRPRequestParams struct {
 
 // Only an open request is decided, so two handlers cannot both pay one.
 func (q *Queries) DecideSRPRequest(ctx context.Context, arg DecideSRPRequestParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, decideSRPRequest,
+	result, err := q.db.Exec(ctx, decideSRPRequest,
 		arg.Status,
 		arg.Payout,
 		arg.HandledBy,
@@ -89,7 +87,7 @@ func (q *Queries) DecideSRPRequest(ctx context.Context, arg DecideSRPRequestPara
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const deleteCorpPermission = `-- name: DeleteCorpPermission :exec
@@ -102,7 +100,7 @@ type DeleteCorpPermissionParams struct {
 }
 
 func (q *Queries) DeleteCorpPermission(ctx context.Context, arg DeleteCorpPermissionParams) error {
-	_, err := q.db.ExecContext(ctx, deleteCorpPermission, arg.CorporationID, arg.Permission)
+	_, err := q.db.Exec(ctx, deleteCorpPermission, arg.CorporationID, arg.Permission)
 	return err
 }
 
@@ -121,7 +119,7 @@ type GetCorpPermissionParams struct {
 // programmes.
 // ---------------------------------------------------------------------
 func (q *Queries) GetCorpPermission(ctx context.Context, arg GetCorpPermissionParams) (CorpPermission, error) {
-	row := q.db.QueryRowContext(ctx, getCorpPermission, arg.CorporationID, arg.Permission)
+	row := q.db.QueryRow(ctx, getCorpPermission, arg.CorporationID, arg.Permission)
 	var i CorpPermission
 	err := row.Scan(
 		&i.CorporationID,
@@ -144,7 +142,7 @@ type GetOpAttendanceParams struct {
 }
 
 func (q *Queries) GetOpAttendance(ctx context.Context, arg GetOpAttendanceParams) (OpAttendance, error) {
-	row := q.db.QueryRowContext(ctx, getOpAttendance, arg.OpID, arg.CharacterID)
+	row := q.db.QueryRow(ctx, getOpAttendance, arg.OpID, arg.CharacterID)
 	var i OpAttendance
 	err := row.Scan(
 		&i.OpID,
@@ -162,7 +160,7 @@ SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user
 `
 
 func (q *Queries) GetSRPRequest(ctx context.Context, id int64) (SrpRequest, error) {
-	row := q.db.QueryRowContext(ctx, getSRPRequest, id)
+	row := q.db.QueryRow(ctx, getSRPRequest, id)
 	var i SrpRequest
 	err := row.Scan(
 		&i.ID,
@@ -192,7 +190,7 @@ SELECT corporation_id, policy, updated_at FROM srp_settings WHERE corporation_id
 `
 
 func (q *Queries) GetSRPSettings(ctx context.Context, corporationID int64) (SrpSetting, error) {
-	row := q.db.QueryRowContext(ctx, getSRPSettings, corporationID)
+	row := q.db.QueryRow(ctx, getSRPSettings, corporationID)
 	var i SrpSetting
 	err := row.Scan(&i.CorporationID, &i.Policy, &i.UpdatedAt)
 	return i, err
@@ -211,7 +209,7 @@ type ListHandledSRPRequestsParams struct {
 }
 
 func (q *Queries) ListHandledSRPRequests(ctx context.Context, arg ListHandledSRPRequestsParams) ([]SrpRequest, error) {
-	rows, err := q.db.QueryContext(ctx, listHandledSRPRequests, arg.CorporationID, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listHandledSRPRequests, arg.CorporationID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -242,9 +240,6 @@ func (q *Queries) ListHandledSRPRequests(ctx context.Context, arg ListHandledSRP
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -273,7 +268,7 @@ type ListLossDetailsRow struct {
 // The stored killmails among those named whose victim is one of the
 // characters named: a pilot's own losses.
 func (q *Queries) ListLossDetails(ctx context.Context, arg ListLossDetailsParams) ([]ListLossDetailsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLossDetails, pq.Array(arg.KillmailIds), pq.Array(arg.CharacterIds))
+	rows, err := q.db.Query(ctx, listLossDetails, arg.KillmailIds, arg.CharacterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -285,9 +280,6 @@ func (q *Queries) ListLossDetails(ctx context.Context, arg ListLossDetailsParams
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -302,7 +294,7 @@ ORDER BY created_at, id
 `
 
 func (q *Queries) ListOpenSRPRequests(ctx context.Context, corporationIds []int64) ([]SrpRequest, error) {
-	rows, err := q.db.QueryContext(ctx, listOpenSRPRequests, pq.Array(corporationIds))
+	rows, err := q.db.Query(ctx, listOpenSRPRequests, corporationIds)
 	if err != nil {
 		return nil, err
 	}
@@ -334,9 +326,6 @@ func (q *Queries) ListOpenSRPRequests(ctx context.Context, corporationIds []int6
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -348,7 +337,7 @@ SELECT killmail_id FROM srp_requests WHERE killmail_id = ANY($1::bigint[])
 `
 
 func (q *Queries) ListSRPClaimedKillmails(ctx context.Context, killmailIds []int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listSRPClaimedKillmails, pq.Array(killmailIds))
+	rows, err := q.db.Query(ctx, listSRPClaimedKillmails, killmailIds)
 	if err != nil {
 		return nil, err
 	}
@@ -360,9 +349,6 @@ func (q *Queries) ListSRPClaimedKillmails(ctx context.Context, killmailIds []int
 			return nil, err
 		}
 		items = append(items, killmail_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -380,7 +366,7 @@ type ListSRPRequestsByUserParams struct {
 }
 
 func (q *Queries) ListSRPRequestsByUser(ctx context.Context, arg ListSRPRequestsByUserParams) ([]SrpRequest, error) {
-	rows, err := q.db.QueryContext(ctx, listSRPRequestsByUser, arg.UserID, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listSRPRequestsByUser, arg.UserID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -411,9 +397,6 @@ func (q *Queries) ListSRPRequestsByUser(ctx context.Context, arg ListSRPRequests
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -435,7 +418,7 @@ type ListSRPRequestsDecidedForUserParams struct {
 // A request an account was answered on since a date: what it is told
 // about.
 func (q *Queries) ListSRPRequestsDecidedForUser(ctx context.Context, arg ListSRPRequestsDecidedForUserParams) ([]SrpRequest, error) {
-	rows, err := q.db.QueryContext(ctx, listSRPRequestsDecidedForUser, arg.UserID, arg.Since)
+	rows, err := q.db.Query(ctx, listSRPRequestsDecidedForUser, arg.UserID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -467,9 +450,6 @@ func (q *Queries) ListSRPRequestsDecidedForUser(ctx context.Context, arg ListSRP
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -482,11 +462,11 @@ WHERE id = $1 AND status <> 'open'
 `
 
 func (q *Queries) ReopenSRPRequest(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.ExecContext(ctx, reopenSRPRequest, id)
+	result, err := q.db.Exec(ctx, reopenSRPRequest, id)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const setCorpPermission = `-- name: SetCorpPermission :exec
@@ -509,7 +489,7 @@ type SetCorpPermissionParams struct {
 }
 
 func (q *Queries) SetCorpPermission(ctx context.Context, arg SetCorpPermissionParams) error {
-	_, err := q.db.ExecContext(ctx, setCorpPermission,
+	_, err := q.db.Exec(ctx, setCorpPermission,
 		arg.CorporationID,
 		arg.Permission,
 		arg.Kind,
@@ -535,7 +515,7 @@ type SetSRPSettingsParams struct {
 }
 
 func (q *Queries) SetSRPSettings(ctx context.Context, arg SetSRPSettingsParams) error {
-	_, err := q.db.ExecContext(ctx, setSRPSettings, arg.CorporationID, arg.Policy, arg.UpdatedAt)
+	_, err := q.db.Exec(ctx, setSRPSettings, arg.CorporationID, arg.Policy, arg.UpdatedAt)
 	return err
 }
 
@@ -556,7 +536,7 @@ type SumSRPPaidRow struct {
 }
 
 func (q *Queries) SumSRPPaid(ctx context.Context, arg SumSRPPaidParams) (SumSRPPaidRow, error) {
-	row := q.db.QueryRowContext(ctx, sumSRPPaid, arg.CorporationID, arg.Since)
+	row := q.db.QueryRow(ctx, sumSRPPaid, arg.CorporationID, arg.Since)
 	var i SumSRPPaidRow
 	err := row.Scan(&i.Requests, &i.Paid)
 	return i, err
@@ -573,9 +553,9 @@ type WithdrawSRPRequestParams struct {
 
 // A pilot takes back a request nobody has answered.
 func (q *Queries) WithdrawSRPRequest(ctx context.Context, arg WithdrawSRPRequestParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, withdrawSRPRequest, arg.ID, arg.UserID)
+	result, err := q.db.Exec(ctx, withdrawSRPRequest, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }

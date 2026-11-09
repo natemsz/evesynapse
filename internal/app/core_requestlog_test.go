@@ -35,6 +35,7 @@ func TestRequestLogLevels(t *testing.T) {
 	app.healthCacheResult = nil
 	app.healthMu.Unlock()
 	conn.Close()
+	app.pool.Close()
 	if code, _ := healthz(app); code != 503 {
 		t.Fatalf("database closed: status %d", code)
 	}

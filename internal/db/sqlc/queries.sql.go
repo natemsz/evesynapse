@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const adminTotals = `-- name: AdminTotals :one
@@ -38,7 +36,7 @@ type AdminTotalsRow struct {
 // The Admin page's headline counts, without reading a row of either
 // table into the page.
 func (q *Queries) AdminTotals(ctx context.Context, arg AdminTotalsParams) (AdminTotalsRow, error) {
-	row := q.db.QueryRowContext(ctx, adminTotals, arg.DayAgo, arg.WeekAgo)
+	row := q.db.QueryRow(ctx, adminTotals, arg.DayAgo, arg.WeekAgo)
 	var i AdminTotalsRow
 	err := row.Scan(
 		&i.Accounts,
@@ -88,7 +86,7 @@ type BrowsePublicFittingsRow struct {
 // Public fits for the public fits page, an account's own among them. A
 // tag matches whole, whatever its case.
 func (q *Queries) BrowsePublicFittings(ctx context.Context, arg BrowsePublicFittingsParams) ([]BrowsePublicFittingsRow, error) {
-	rows, err := q.db.QueryContext(ctx, browsePublicFittings, arg.Q, arg.Tag, arg.RowLimit)
+	rows, err := q.db.Query(ctx, browsePublicFittings, arg.Q, arg.Tag, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -111,9 +109,6 @@ func (q *Queries) BrowsePublicFittings(ctx context.Context, arg BrowsePublicFitt
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -125,7 +120,7 @@ SELECT EXISTS(SELECT 1 FROM character_corporations WHERE corporation_id = $1)
 `
 
 func (q *Queries) CorpHasRegisteredCharacter(ctx context.Context, corporationID int64) (bool, error) {
-	row := q.db.QueryRowContext(ctx, corpHasRegisteredCharacter, corporationID)
+	row := q.db.QueryRow(ctx, corpHasRegisteredCharacter, corporationID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -136,7 +131,7 @@ SELECT COUNT(*) FROM war_details
 `
 
 func (q *Queries) CountWarDetails(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countWarDetails)
+	row := q.db.QueryRow(ctx, countWarDetails)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -177,7 +172,7 @@ type CreateLocalFittingRow struct {
 // charge choices); reads/writes always scope to the owning user.
 // ---------------------------------------------------------------------
 func (q *Queries) CreateLocalFitting(ctx context.Context, arg CreateLocalFittingParams) (CreateLocalFittingRow, error) {
-	row := q.db.QueryRowContext(ctx, createLocalFitting,
+	row := q.db.QueryRow(ctx, createLocalFitting,
 		arg.UserID,
 		arg.Name,
 		arg.ShipTypeID,
@@ -222,7 +217,7 @@ type CreateSkillPlanParams struct {
 // page visit. Meta is the single bookkeeping row.
 // ---------------------------------------------------------------------
 func (q *Queries) CreateSkillPlan(ctx context.Context, arg CreateSkillPlanParams) (SkillPlan, error) {
-	row := q.db.QueryRowContext(ctx, createSkillPlan,
+	row := q.db.QueryRow(ctx, createSkillPlan,
 		arg.UserID,
 		arg.CharacterID,
 		arg.Name,
@@ -246,7 +241,7 @@ RETURNING id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, 
 `
 
 func (q *Queries) CreateUser(ctx context.Context) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser)
+	row := q.db.QueryRow(ctx, createUser)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -265,7 +260,7 @@ DELETE FROM admin_owners WHERE NOT (character_id = ANY($1::bigint[]))
 `
 
 func (q *Queries) DeleteAdminOwnersExcept(ctx context.Context, characterIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteAdminOwnersExcept, pq.Array(characterIds))
+	_, err := q.db.Exec(ctx, deleteAdminOwnersExcept, characterIds)
 	return err
 }
 
@@ -280,7 +275,7 @@ type DeleteCharacterParams struct {
 }
 
 func (q *Queries) DeleteCharacter(ctx context.Context, arg DeleteCharacterParams) error {
-	_, err := q.db.ExecContext(ctx, deleteCharacter, arg.CharacterID, arg.UserID)
+	_, err := q.db.Exec(ctx, deleteCharacter, arg.CharacterID, arg.UserID)
 	return err
 }
 
@@ -296,7 +291,7 @@ type DeleteCloneNameParams struct {
 }
 
 func (q *Queries) DeleteCloneName(ctx context.Context, arg DeleteCloneNameParams) error {
-	_, err := q.db.ExecContext(ctx, deleteCloneName, arg.UserID, arg.CharacterID, arg.CloneID)
+	_, err := q.db.Exec(ctx, deleteCloneName, arg.UserID, arg.CharacterID, arg.CloneID)
 	return err
 }
 
@@ -310,7 +305,7 @@ type DeleteLocalFittingParams struct {
 }
 
 func (q *Queries) DeleteLocalFitting(ctx context.Context, arg DeleteLocalFittingParams) error {
-	_, err := q.db.ExecContext(ctx, deleteLocalFitting, arg.ID, arg.UserID)
+	_, err := q.db.Exec(ctx, deleteLocalFitting, arg.ID, arg.UserID)
 	return err
 }
 
@@ -324,7 +319,7 @@ type DeleteSkillPlanParams struct {
 }
 
 func (q *Queries) DeleteSkillPlan(ctx context.Context, arg DeleteSkillPlanParams) error {
-	_, err := q.db.ExecContext(ctx, deleteSkillPlan, arg.ID, arg.UserID)
+	_, err := q.db.Exec(ctx, deleteSkillPlan, arg.ID, arg.UserID)
 	return err
 }
 
@@ -338,7 +333,7 @@ type DeleteSkillPlanItemParams struct {
 }
 
 func (q *Queries) DeleteSkillPlanItem(ctx context.Context, arg DeleteSkillPlanItemParams) error {
-	_, err := q.db.ExecContext(ctx, deleteSkillPlanItem, arg.PlanID, arg.SkillTypeID)
+	_, err := q.db.Exec(ctx, deleteSkillPlanItem, arg.PlanID, arg.SkillTypeID)
 	return err
 }
 
@@ -348,7 +343,7 @@ WHERE character_id = $1
 `
 
 func (q *Queries) DeleteSnapshotFetchStatesForCharacter(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteSnapshotFetchStatesForCharacter, characterID)
+	_, err := q.db.Exec(ctx, deleteSnapshotFetchStatesForCharacter, characterID)
 	return err
 }
 
@@ -358,11 +353,11 @@ DELETE FROM users WHERE id = $1
 
 // Everything the account owns goes with it (ON DELETE CASCADE).
 func (q *Queries) DeleteUser(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteUser, id)
+	result, err := q.db.Exec(ctx, deleteUser, id)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const findCharacters = `-- name: FindCharacters :many
@@ -392,7 +387,7 @@ type FindCharactersRow struct {
 // character with exactly that id. An exact name first, then names
 // that start with the text, then the rest, each alphabetically.
 func (q *Queries) FindCharacters(ctx context.Context, arg FindCharactersParams) ([]FindCharactersRow, error) {
-	rows, err := q.db.QueryContext(ctx, findCharacters, arg.Pattern, arg.Exact, arg.RowLimit)
+	rows, err := q.db.Query(ctx, findCharacters, arg.Pattern, arg.Exact, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -404,9 +399,6 @@ func (q *Queries) FindCharacters(ctx context.Context, arg FindCharactersParams) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -420,7 +412,7 @@ WHERE character_id = $1
 `
 
 func (q *Queries) GetCharacter(ctx context.Context, characterID int64) (Character, error) {
-	row := q.db.QueryRowContext(ctx, getCharacter, characterID)
+	row := q.db.QueryRow(ctx, getCharacter, characterID)
 	var i Character
 	err := row.Scan(
 		&i.CharacterID,
@@ -447,7 +439,7 @@ WHERE character_id = $1
 `
 
 func (q *Queries) GetCharacterCorporation(ctx context.Context, characterID int64) (CharacterCorporation, error) {
-	row := q.db.QueryRowContext(ctx, getCharacterCorporation, characterID)
+	row := q.db.QueryRow(ctx, getCharacterCorporation, characterID)
 	var i CharacterCorporation
 	err := row.Scan(&i.CharacterID, &i.CorporationID, &i.UpdatedAt)
 	return i, err
@@ -464,7 +456,7 @@ WHERE contract_id = $1
 // pages only read here.
 // ---------------------------------------------------------------------
 func (q *Queries) GetContractDetail(ctx context.Context, contractID int64) (ContractDetail, error) {
-	row := q.db.QueryRowContext(ctx, getContractDetail, contractID)
+	row := q.db.QueryRow(ctx, getContractDetail, contractID)
 	var i ContractDetail
 	err := row.Scan(
 		&i.ContractID,
@@ -486,7 +478,7 @@ WHERE kind = $1
 // character_snapshots; war details mirror killmail_details.
 // ---------------------------------------------------------------------
 func (q *Queries) GetGlobalSnapshot(ctx context.Context, kind string) (GlobalSnapshot, error) {
-	row := q.db.QueryRowContext(ctx, getGlobalSnapshot, kind)
+	row := q.db.QueryRow(ctx, getGlobalSnapshot, kind)
 	var i GlobalSnapshot
 	err := row.Scan(
 		&i.Kind,
@@ -504,7 +496,7 @@ WHERE killmail_id = $1
 `
 
 func (q *Queries) GetKillmailDetail(ctx context.Context, killmailID int64) (KillmailDetail, error) {
-	row := q.db.QueryRowContext(ctx, getKillmailDetail, killmailID)
+	row := q.db.QueryRow(ctx, getKillmailDetail, killmailID)
 	var i KillmailDetail
 	err := row.Scan(
 		&i.KillmailID,
@@ -539,7 +531,7 @@ type GetLocalFittingRow struct {
 }
 
 func (q *Queries) GetLocalFitting(ctx context.Context, arg GetLocalFittingParams) (GetLocalFittingRow, error) {
-	row := q.db.QueryRowContext(ctx, getLocalFitting, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, getLocalFitting, arg.ID, arg.UserID)
 	var i GetLocalFittingRow
 	err := row.Scan(
 		&i.ID,
@@ -578,7 +570,7 @@ type GetPublicFittingRow struct {
 }
 
 func (q *Queries) GetPublicFitting(ctx context.Context, id int64) (GetPublicFittingRow, error) {
-	row := q.db.QueryRowContext(ctx, getPublicFitting, id)
+	row := q.db.QueryRow(ctx, getPublicFitting, id)
 	var i GetPublicFittingRow
 	err := row.Scan(
 		&i.ID,
@@ -607,7 +599,7 @@ type GetSkillPlanParams struct {
 }
 
 func (q *Queries) GetSkillPlan(ctx context.Context, arg GetSkillPlanParams) (SkillPlan, error) {
-	row := q.db.QueryRowContext(ctx, getSkillPlan, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, getSkillPlan, arg.ID, arg.UserID)
 	var i SkillPlan
 	err := row.Scan(
 		&i.ID,
@@ -630,7 +622,7 @@ type GetSnapshotParams struct {
 }
 
 func (q *Queries) GetSnapshot(ctx context.Context, arg GetSnapshotParams) (CharacterSnapshot, error) {
-	row := q.db.QueryRowContext(ctx, getSnapshot, arg.CharacterID, arg.Kind)
+	row := q.db.QueryRow(ctx, getSnapshot, arg.CharacterID, arg.Kind)
 	var i CharacterSnapshot
 	err := row.Scan(
 		&i.CharacterID,
@@ -656,7 +648,7 @@ type GetSnapshotETagParams struct {
 // The ETag a snapshot was stored with (” when it has none), read
 // without its payload: all a conditional refresh needs to send.
 func (q *Queries) GetSnapshotETag(ctx context.Context, arg GetSnapshotETagParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, getSnapshotETag, arg.CharacterID, arg.Kind)
+	row := q.db.QueryRow(ctx, getSnapshotETag, arg.CharacterID, arg.Kind)
 	var etag string
 	err := row.Scan(&etag)
 	return etag, err
@@ -678,7 +670,7 @@ type GetSnapshotFetchStateParams struct {
 // map, and player-given item names.
 // ---------------------------------------------------------------------
 func (q *Queries) GetSnapshotFetchState(ctx context.Context, arg GetSnapshotFetchStateParams) (SnapshotFetchState, error) {
-	row := q.db.QueryRowContext(ctx, getSnapshotFetchState, arg.CharacterID, arg.Kind)
+	row := q.db.QueryRow(ctx, getSnapshotFetchState, arg.CharacterID, arg.Kind)
 	var i SnapshotFetchState
 	err := row.Scan(
 		&i.CharacterID,
@@ -696,7 +688,7 @@ WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUser, id)
+	row := q.db.QueryRow(ctx, getUser, id)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -717,7 +709,7 @@ WHERE id = $1
 
 // The Briefing module's window anchor.
 func (q *Queries) GetUserBriefingAnchor(ctx context.Context, id int64) (sql.NullTime, error) {
-	row := q.db.QueryRowContext(ctx, getUserBriefingAnchor, id)
+	row := q.db.QueryRow(ctx, getUserBriefingAnchor, id)
 	var last_briefing_at sql.NullTime
 	err := row.Scan(&last_briefing_at)
 	return last_briefing_at, err
@@ -743,7 +735,7 @@ type GetUserDraftFittingRow struct {
 }
 
 func (q *Queries) GetUserDraftFitting(ctx context.Context, userID int64) (GetUserDraftFittingRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserDraftFitting, userID)
+	row := q.db.QueryRow(ctx, getUserDraftFitting, userID)
 	var i GetUserDraftFittingRow
 	err := row.Scan(
 		&i.ID,
@@ -769,7 +761,7 @@ WHERE id = $1
 // the one batched snapshot read every widget renders from.
 // ---------------------------------------------------------------------
 func (q *Queries) GetUserHomeLayout(ctx context.Context, id int64) (string, error) {
-	row := q.db.QueryRowContext(ctx, getUserHomeLayout, id)
+	row := q.db.QueryRow(ctx, getUserHomeLayout, id)
 	var home_layout string
 	err := row.Scan(&home_layout)
 	return home_layout, err
@@ -783,7 +775,7 @@ WHERE id = $1
 // Visualization preferences (schema 111): the account's chart
 // display switches as one JSON object.
 func (q *Queries) GetUserVizPrefs(ctx context.Context, id int64) (string, error) {
-	row := q.db.QueryRowContext(ctx, getUserVizPrefs, id)
+	row := q.db.QueryRow(ctx, getUserVizPrefs, id)
 	var viz_prefs string
 	err := row.Scan(&viz_prefs)
 	return viz_prefs, err
@@ -808,7 +800,7 @@ type GetWalletHistorySampleParams struct {
 // (1 = a prefix match), no wildcard escaping to worry about.
 // ---------------------------------------------------------------------
 func (q *Queries) GetWalletHistorySample(ctx context.Context, arg GetWalletHistorySampleParams) (WalletHistory, error) {
-	row := q.db.QueryRowContext(ctx, getWalletHistorySample, arg.UserID, arg.CharacterID, arg.Day)
+	row := q.db.QueryRow(ctx, getWalletHistorySample, arg.UserID, arg.CharacterID, arg.Day)
 	var i WalletHistory
 	err := row.Scan(
 		&i.UserID,
@@ -827,7 +819,7 @@ WHERE war_id = $1
 `
 
 func (q *Queries) GetWarDetail(ctx context.Context, warID int64) (WarDetail, error) {
-	row := q.db.QueryRowContext(ctx, getWarDetail, warID)
+	row := q.db.QueryRow(ctx, getWarDetail, warID)
 	var i WarDetail
 	err := row.Scan(&i.WarID, &i.Payload, &i.FetchedAt)
 	return i, err
@@ -849,7 +841,7 @@ type GetWidgetConfigParams struct {
 // owns behaviour (the orders widget's scope + merge mode first).
 // ---------------------------------------------------------------------
 func (q *Queries) GetWidgetConfig(ctx context.Context, arg GetWidgetConfigParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, getWidgetConfig, arg.UserID, arg.WidgetID)
+	row := q.db.QueryRow(ctx, getWidgetConfig, arg.UserID, arg.WidgetID)
 	var config string
 	err := row.Scan(&config)
 	return config, err
@@ -866,7 +858,7 @@ type InsertAdminOwnerParams struct {
 }
 
 func (q *Queries) InsertAdminOwner(ctx context.Context, arg InsertAdminOwnerParams) error {
-	_, err := q.db.ExecContext(ctx, insertAdminOwner, arg.CharacterID, arg.OwnerHash)
+	_, err := q.db.Exec(ctx, insertAdminOwner, arg.CharacterID, arg.OwnerHash)
 	return err
 }
 
@@ -880,7 +872,7 @@ type ListAdminOwnersRow struct {
 }
 
 func (q *Queries) ListAdminOwners(ctx context.Context) ([]ListAdminOwnersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAdminOwners)
+	rows, err := q.db.Query(ctx, listAdminOwners)
 	if err != nil {
 		return nil, err
 	}
@@ -892,9 +884,6 @@ func (q *Queries) ListAdminOwners(ctx context.Context) ([]ListAdminOwnersRow, er
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -908,7 +897,7 @@ ORDER BY user_id, name
 `
 
 func (q *Queries) ListAllCharacters(ctx context.Context) ([]Character, error) {
-	rows, err := q.db.QueryContext(ctx, listAllCharacters)
+	rows, err := q.db.Query(ctx, listAllCharacters)
 	if err != nil {
 		return nil, err
 	}
@@ -936,9 +925,6 @@ func (q *Queries) ListAllCharacters(ctx context.Context) ([]Character, error) {
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -951,7 +937,7 @@ ORDER BY corporation_id
 `
 
 func (q *Queries) ListAllCorporationIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listAllCorporationIDs)
+	rows, err := q.db.Query(ctx, listAllCorporationIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -963,9 +949,6 @@ func (q *Queries) ListAllCorporationIDs(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, corporation_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -985,7 +968,7 @@ type ListBlueprintPinsRow struct {
 }
 
 func (q *Queries) ListBlueprintPins(ctx context.Context, userID int64) ([]ListBlueprintPinsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listBlueprintPins, userID)
+	rows, err := q.db.Query(ctx, listBlueprintPins, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -997,9 +980,6 @@ func (q *Queries) ListBlueprintPins(ctx context.Context, userID int64) ([]ListBl
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1018,7 +998,7 @@ type ListCharacterCorporationsRow struct {
 }
 
 func (q *Queries) ListCharacterCorporations(ctx context.Context, characterIds []int64) ([]ListCharacterCorporationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listCharacterCorporations, pq.Array(characterIds))
+	rows, err := q.db.Query(ctx, listCharacterCorporations, characterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1030,9 +1010,6 @@ func (q *Queries) ListCharacterCorporations(ctx context.Context, characterIds []
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1047,7 +1024,7 @@ ORDER BY name
 `
 
 func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Character, error) {
-	rows, err := q.db.QueryContext(ctx, listCharactersByUser, userID)
+	rows, err := q.db.Query(ctx, listCharactersByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1075,9 +1052,6 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1096,7 +1070,7 @@ type ListCharactersWithSnapshotsParams struct {
 }
 
 func (q *Queries) ListCharactersWithSnapshots(ctx context.Context, arg ListCharactersWithSnapshotsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listCharactersWithSnapshots, pq.Array(arg.CharacterIds), pq.Array(arg.Kinds))
+	rows, err := q.db.Query(ctx, listCharactersWithSnapshots, arg.CharacterIds, arg.Kinds)
 	if err != nil {
 		return nil, err
 	}
@@ -1108,9 +1082,6 @@ func (q *Queries) ListCharactersWithSnapshots(ctx context.Context, arg ListChara
 			return nil, err
 		}
 		items = append(items, character_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1136,7 +1107,7 @@ type ListCloneNamesRow struct {
 }
 
 func (q *Queries) ListCloneNames(ctx context.Context, arg ListCloneNamesParams) ([]ListCloneNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listCloneNames, arg.UserID, arg.CharacterID)
+	rows, err := q.db.Query(ctx, listCloneNames, arg.UserID, arg.CharacterID)
 	if err != nil {
 		return nil, err
 	}
@@ -1148,9 +1119,6 @@ func (q *Queries) ListCloneNames(ctx context.Context, arg ListCloneNamesParams) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1165,7 +1133,7 @@ ORDER BY contract_id
 `
 
 func (q *Queries) ListContractDetailIDsByCharacter(ctx context.Context, characterID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listContractDetailIDsByCharacter, characterID)
+	rows, err := q.db.Query(ctx, listContractDetailIDsByCharacter, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -1177,9 +1145,6 @@ func (q *Queries) ListContractDetailIDsByCharacter(ctx context.Context, characte
 			return nil, err
 		}
 		items = append(items, contract_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1194,7 +1159,7 @@ ORDER BY contract_id
 `
 
 func (q *Queries) ListContractDetailIDsForContracts(ctx context.Context, ids []int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listContractDetailIDsForContracts, pq.Array(ids))
+	rows, err := q.db.Query(ctx, listContractDetailIDsForContracts, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -1206,9 +1171,6 @@ func (q *Queries) ListContractDetailIDsForContracts(ctx context.Context, ids []i
 			return nil, err
 		}
 		items = append(items, contract_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1229,7 +1191,7 @@ ORDER BY cc.corporation_id
 // Scoped to one user: per-user data stays siloed, so the
 // wars page never flags another user's corporation as yours.
 func (q *Queries) ListCorporationIDsByUser(ctx context.Context, userID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listCorporationIDsByUser, userID)
+	rows, err := q.db.Query(ctx, listCorporationIDsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1241,9 +1203,6 @@ func (q *Queries) ListCorporationIDsByUser(ctx context.Context, userID int64) ([
 			return nil, err
 		}
 		items = append(items, corporation_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1267,7 +1226,7 @@ type ListEmptyUsersRow struct {
 // Accounts with no character linked: left over from an unlink, or from
 // an older build.
 func (q *Queries) ListEmptyUsers(ctx context.Context, rowLimit int64) ([]ListEmptyUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listEmptyUsers, rowLimit)
+	rows, err := q.db.Query(ctx, listEmptyUsers, rowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1279,9 +1238,6 @@ func (q *Queries) ListEmptyUsers(ctx context.Context, rowLimit int64) ([]ListEmp
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1295,7 +1251,7 @@ ORDER BY kind
 `
 
 func (q *Queries) ListGlobalSnapshots(ctx context.Context) ([]GlobalSnapshot, error) {
-	rows, err := q.db.QueryContext(ctx, listGlobalSnapshots)
+	rows, err := q.db.Query(ctx, listGlobalSnapshots)
 	if err != nil {
 		return nil, err
 	}
@@ -1314,9 +1270,6 @@ func (q *Queries) ListGlobalSnapshots(ctx context.Context) ([]GlobalSnapshot, er
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1330,7 +1283,7 @@ ORDER BY killmail_id
 `
 
 func (q *Queries) ListKillmailDetailIDsByCharacter(ctx context.Context, characterID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listKillmailDetailIDsByCharacter, characterID)
+	rows, err := q.db.Query(ctx, listKillmailDetailIDsByCharacter, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -1342,9 +1295,6 @@ func (q *Queries) ListKillmailDetailIDsByCharacter(ctx context.Context, characte
 			return nil, err
 		}
 		items = append(items, killmail_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1359,7 +1309,7 @@ ORDER BY killmail_id
 `
 
 func (q *Queries) ListKillmailDetailsByCharacter(ctx context.Context, characterID int64) ([]KillmailDetail, error) {
-	rows, err := q.db.QueryContext(ctx, listKillmailDetailsByCharacter, characterID)
+	rows, err := q.db.Query(ctx, listKillmailDetailsByCharacter, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -1377,9 +1327,6 @@ func (q *Queries) ListKillmailDetailsByCharacter(ctx context.Context, characterI
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1408,7 +1355,7 @@ type ListLiquidCoreTypesRow struct {
 }
 
 func (q *Queries) ListLiquidCoreTypes(ctx context.Context, arg ListLiquidCoreTypesParams) ([]ListLiquidCoreTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLiquidCoreTypes, arg.RegionID, arg.CoreLimit)
+	rows, err := q.db.Query(ctx, listLiquidCoreTypes, arg.RegionID, arg.CoreLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1420,9 +1367,6 @@ func (q *Queries) ListLiquidCoreTypes(ctx context.Context, arg ListLiquidCoreTyp
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1450,7 +1394,7 @@ type ListLocalFittingsRow struct {
 }
 
 func (q *Queries) ListLocalFittings(ctx context.Context, userID int64) ([]ListLocalFittingsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLocalFittings, userID)
+	rows, err := q.db.Query(ctx, listLocalFittings, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1473,9 +1417,6 @@ func (q *Queries) ListLocalFittings(ctx context.Context, userID int64) ([]ListLo
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1494,7 +1435,7 @@ type ListNameMissesSinceRow struct {
 }
 
 func (q *Queries) ListNameMissesSince(ctx context.Context, since time.Time) ([]ListNameMissesSinceRow, error) {
-	rows, err := q.db.QueryContext(ctx, listNameMissesSince, since)
+	rows, err := q.db.Query(ctx, listNameMissesSince, since)
 	if err != nil {
 		return nil, err
 	}
@@ -1506,9 +1447,6 @@ func (q *Queries) ListNameMissesSince(ctx context.Context, since time.Time) ([]L
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1533,7 +1471,7 @@ type ListNewestUsersRow struct {
 
 // The most recently created accounts, with how many characters each has.
 func (q *Queries) ListNewestUsers(ctx context.Context, rowLimit int64) ([]ListNewestUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listNewestUsers, rowLimit)
+	rows, err := q.db.Query(ctx, listNewestUsers, rowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1550,9 +1488,6 @@ func (q *Queries) ListNewestUsers(ctx context.Context, rowLimit int64) ([]ListNe
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1576,7 +1511,7 @@ type ListPlanetLayoutsForUserRow struct {
 }
 
 func (q *Queries) ListPlanetLayoutsForUser(ctx context.Context, userID int64) ([]ListPlanetLayoutsForUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPlanetLayoutsForUser, userID)
+	rows, err := q.db.Query(ctx, listPlanetLayoutsForUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1594,9 +1529,6 @@ func (q *Queries) ListPlanetLayoutsForUser(ctx context.Context, userID int64) ([
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1610,7 +1542,7 @@ LIMIT $1::bigint
 `
 
 func (q *Queries) ListRecentKillmailDetails(ctx context.Context, rowLimit int64) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listRecentKillmailDetails, rowLimit)
+	rows, err := q.db.Query(ctx, listRecentKillmailDetails, rowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1622,9 +1554,6 @@ func (q *Queries) ListRecentKillmailDetails(ctx context.Context, rowLimit int64)
 			return nil, err
 		}
 		items = append(items, payload)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1639,7 +1568,7 @@ ORDER BY position, skill_type_id
 `
 
 func (q *Queries) ListSkillPlanItems(ctx context.Context, planID int64) ([]SkillPlanItem, error) {
-	rows, err := q.db.QueryContext(ctx, listSkillPlanItems, planID)
+	rows, err := q.db.Query(ctx, listSkillPlanItems, planID)
 	if err != nil {
 		return nil, err
 	}
@@ -1656,9 +1585,6 @@ func (q *Queries) ListSkillPlanItems(ctx context.Context, planID int64) ([]Skill
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1678,7 +1604,7 @@ type ListSkillPlansParams struct {
 }
 
 func (q *Queries) ListSkillPlans(ctx context.Context, arg ListSkillPlansParams) ([]SkillPlan, error) {
-	rows, err := q.db.QueryContext(ctx, listSkillPlans, arg.UserID, arg.CharacterID)
+	rows, err := q.db.Query(ctx, listSkillPlans, arg.UserID, arg.CharacterID)
 	if err != nil {
 		return nil, err
 	}
@@ -1697,9 +1623,6 @@ func (q *Queries) ListSkillPlans(ctx context.Context, arg ListSkillPlansParams) 
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1713,7 +1636,7 @@ ORDER BY kind
 `
 
 func (q *Queries) ListSnapshotFetchStatesByCharacter(ctx context.Context, characterID int64) ([]SnapshotFetchState, error) {
-	rows, err := q.db.QueryContext(ctx, listSnapshotFetchStatesByCharacter, characterID)
+	rows, err := q.db.Query(ctx, listSnapshotFetchStatesByCharacter, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -1731,9 +1654,6 @@ func (q *Queries) ListSnapshotFetchStatesByCharacter(ctx context.Context, charac
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1758,7 +1678,7 @@ type ListSnapshotMetaByCharacterRow struct {
 // mailbox) are by far the bulk of the table, and the readers that
 // only order, count or check freshness have no use for them.
 func (q *Queries) ListSnapshotMetaByCharacter(ctx context.Context, characterID int64) ([]ListSnapshotMetaByCharacterRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSnapshotMetaByCharacter, characterID)
+	rows, err := q.db.Query(ctx, listSnapshotMetaByCharacter, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -1770,9 +1690,6 @@ func (q *Queries) ListSnapshotMetaByCharacter(ctx context.Context, characterID i
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1796,7 +1713,7 @@ type ListSnapshotMetaForCharactersRow struct {
 // Snapshot freshness for many characters at once: the worker's
 // overdue ordering over one query instead of one per character.
 func (q *Queries) ListSnapshotMetaForCharacters(ctx context.Context, characterIds []int64) ([]ListSnapshotMetaForCharactersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSnapshotMetaForCharacters, pq.Array(characterIds))
+	rows, err := q.db.Query(ctx, listSnapshotMetaForCharacters, characterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1814,9 +1731,6 @@ func (q *Queries) ListSnapshotMetaForCharacters(ctx context.Context, characterId
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1830,7 +1744,7 @@ ORDER BY kind
 `
 
 func (q *Queries) ListSnapshotsByCharacter(ctx context.Context, characterID int64) ([]CharacterSnapshot, error) {
-	rows, err := q.db.QueryContext(ctx, listSnapshotsByCharacter, characterID)
+	rows, err := q.db.Query(ctx, listSnapshotsByCharacter, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -1849,9 +1763,6 @@ func (q *Queries) ListSnapshotsByCharacter(ctx context.Context, characterID int6
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1866,7 +1777,7 @@ ORDER BY character_id
 `
 
 func (q *Queries) ListSnapshotsByKind(ctx context.Context, kind string) ([]CharacterSnapshot, error) {
-	rows, err := q.db.QueryContext(ctx, listSnapshotsByKind, kind)
+	rows, err := q.db.Query(ctx, listSnapshotsByKind, kind)
 	if err != nil {
 		return nil, err
 	}
@@ -1885,9 +1796,6 @@ func (q *Queries) ListSnapshotsByKind(ctx context.Context, kind string) ([]Chara
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1917,7 +1825,7 @@ type ListSnapshotsForUserRow struct {
 }
 
 func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsForUserParams) ([]ListSnapshotsForUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSnapshotsForUser, arg.UserID, pq.Array(arg.Kinds))
+	rows, err := q.db.Query(ctx, listSnapshotsForUser, arg.UserID, arg.Kinds)
 	if err != nil {
 		return nil, err
 	}
@@ -1935,9 +1843,6 @@ func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsFor
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1963,7 +1868,7 @@ type ListUserNetWorthDaysRow struct {
 // characters), newest first, for the KPI sparkline: one bounded
 // grouped read, never more than 31 rows.
 func (q *Queries) ListUserNetWorthDays(ctx context.Context, userID int64) ([]ListUserNetWorthDaysRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUserNetWorthDays, userID)
+	rows, err := q.db.Query(ctx, listUserNetWorthDays, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1975,9 +1880,6 @@ func (q *Queries) ListUserNetWorthDays(ctx context.Context, userID int64) ([]Lis
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1993,7 +1895,7 @@ ORDER BY day, character_id
 `
 
 func (q *Queries) ListUserWalletHistory(ctx context.Context, userID int64) ([]WalletHistory, error) {
-	rows, err := q.db.QueryContext(ctx, listUserWalletHistory, userID)
+	rows, err := q.db.Query(ctx, listUserWalletHistory, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -2013,9 +1915,6 @@ func (q *Queries) ListUserWalletHistory(ctx context.Context, userID int64) ([]Wa
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2028,7 +1927,7 @@ ORDER BY id
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, listUsers)
+	rows, err := q.db.Query(ctx, listUsers)
 	if err != nil {
 		return nil, err
 	}
@@ -2049,9 +1948,6 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2068,7 +1964,7 @@ SELECT user_id FROM discord_links
 // browser subscribed to push, or a linked Discord account (which also
 // has roles to keep right).
 func (q *Queries) ListUsersBeingNotified(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listUsersBeingNotified)
+	rows, err := q.db.Query(ctx, listUsersBeingNotified)
 	if err != nil {
 		return nil, err
 	}
@@ -2080,9 +1976,6 @@ func (q *Queries) ListUsersBeingNotified(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, user_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2100,7 +1993,7 @@ type ListUsersLastSeenRow struct {
 }
 
 func (q *Queries) ListUsersLastSeen(ctx context.Context) ([]ListUsersLastSeenRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUsersLastSeen)
+	rows, err := q.db.Query(ctx, listUsersLastSeen)
 	if err != nil {
 		return nil, err
 	}
@@ -2112,9 +2005,6 @@ func (q *Queries) ListUsersLastSeen(ctx context.Context) ([]ListUsersLastSeenRow
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2135,7 +2025,7 @@ type ListWalletHistorySamplesParams struct {
 }
 
 func (q *Queries) ListWalletHistorySamples(ctx context.Context, arg ListWalletHistorySamplesParams) ([]WalletHistory, error) {
-	rows, err := q.db.QueryContext(ctx, listWalletHistorySamples, arg.UserID, arg.CharacterID)
+	rows, err := q.db.Query(ctx, listWalletHistorySamples, arg.UserID, arg.CharacterID)
 	if err != nil {
 		return nil, err
 	}
@@ -2154,9 +2044,6 @@ func (q *Queries) ListWalletHistorySamples(ctx context.Context, arg ListWalletHi
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2178,7 +2065,7 @@ type ListWalletHistorySamplesSinceParams struct {
 }
 
 func (q *Queries) ListWalletHistorySamplesSince(ctx context.Context, arg ListWalletHistorySamplesSinceParams) ([]WalletHistory, error) {
-	rows, err := q.db.QueryContext(ctx, listWalletHistorySamplesSince, arg.UserID, arg.CharacterID, arg.Day)
+	rows, err := q.db.Query(ctx, listWalletHistorySamplesSince, arg.UserID, arg.CharacterID, arg.Day)
 	if err != nil {
 		return nil, err
 	}
@@ -2198,9 +2085,6 @@ func (q *Queries) ListWalletHistorySamplesSince(ctx context.Context, arg ListWal
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2214,7 +2098,7 @@ ORDER BY widget_id
 `
 
 func (q *Queries) ListWidgetConfigsByUser(ctx context.Context, userID int64) ([]WidgetConfig, error) {
-	rows, err := q.db.QueryContext(ctx, listWidgetConfigsByUser, userID)
+	rows, err := q.db.Query(ctx, listWidgetConfigsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -2232,9 +2116,6 @@ func (q *Queries) ListWidgetConfigsByUser(ctx context.Context, userID int64) ([]
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2246,7 +2127,7 @@ SELECT CAST(COALESCE(MAX(position), 0) + 1 AS BIGINT) FROM skill_plan_items WHER
 `
 
 func (q *Queries) NextSkillPlanPosition(ctx context.Context, planID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, nextSkillPlanPosition, planID)
+	row := q.db.QueryRow(ctx, nextSkillPlanPosition, planID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -2266,7 +2147,7 @@ type PinBlueprintParams struct {
 // Blueprint pins (schema 118): the production lines an account
 // has pinned from its Blueprints page.
 func (q *Queries) PinBlueprint(ctx context.Context, arg PinBlueprintParams) error {
-	_, err := q.db.ExecContext(ctx, pinBlueprint, arg.UserID, arg.BlueprintTypeID)
+	_, err := q.db.Exec(ctx, pinBlueprint, arg.UserID, arg.BlueprintTypeID)
 	return err
 }
 
@@ -2301,7 +2182,7 @@ type SearchLocalFittingsRow struct {
 }
 
 func (q *Queries) SearchLocalFittings(ctx context.Context, arg SearchLocalFittingsParams) ([]SearchLocalFittingsRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchLocalFittings, arg.UserID, arg.Q)
+	rows, err := q.db.Query(ctx, searchLocalFittings, arg.UserID, arg.Q)
 	if err != nil {
 		return nil, err
 	}
@@ -2324,9 +2205,6 @@ func (q *Queries) SearchLocalFittings(ctx context.Context, arg SearchLocalFittin
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2363,7 +2241,7 @@ type SearchPublicFittingsRow struct {
 }
 
 func (q *Queries) SearchPublicFittings(ctx context.Context, arg SearchPublicFittingsParams) ([]SearchPublicFittingsRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchPublicFittings, arg.UserID, arg.Q)
+	rows, err := q.db.Query(ctx, searchPublicFittings, arg.UserID, arg.Q)
 	if err != nil {
 		return nil, err
 	}
@@ -2384,9 +2262,6 @@ func (q *Queries) SearchPublicFittings(ctx context.Context, arg SearchPublicFitt
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2406,7 +2281,7 @@ type SetCharacterLinkStateParams struct {
 }
 
 func (q *Queries) SetCharacterLinkState(ctx context.Context, arg SetCharacterLinkStateParams) error {
-	_, err := q.db.ExecContext(ctx, setCharacterLinkState, arg.LinkState, arg.LinkStateAt, arg.CharacterID)
+	_, err := q.db.Exec(ctx, setCharacterLinkState, arg.LinkState, arg.LinkStateAt, arg.CharacterID)
 	return err
 }
 
@@ -2423,7 +2298,7 @@ type SetCharacterTagsParams struct {
 }
 
 func (q *Queries) SetCharacterTags(ctx context.Context, arg SetCharacterTagsParams) error {
-	_, err := q.db.ExecContext(ctx, setCharacterTags, arg.Tags, arg.CharacterID, arg.UserID)
+	_, err := q.db.Exec(ctx, setCharacterTags, arg.Tags, arg.CharacterID, arg.UserID)
 	return err
 }
 
@@ -2439,7 +2314,7 @@ type SetUserBriefingAnchorParams struct {
 }
 
 func (q *Queries) SetUserBriefingAnchor(ctx context.Context, arg SetUserBriefingAnchorParams) error {
-	_, err := q.db.ExecContext(ctx, setUserBriefingAnchor, arg.LastBriefingAt, arg.ID)
+	_, err := q.db.Exec(ctx, setUserBriefingAnchor, arg.LastBriefingAt, arg.ID)
 	return err
 }
 
@@ -2455,7 +2330,7 @@ type SetUserHomeLayoutParams struct {
 }
 
 func (q *Queries) SetUserHomeLayout(ctx context.Context, arg SetUserHomeLayoutParams) error {
-	_, err := q.db.ExecContext(ctx, setUserHomeLayout, arg.HomeLayout, arg.ID)
+	_, err := q.db.Exec(ctx, setUserHomeLayout, arg.HomeLayout, arg.ID)
 	return err
 }
 
@@ -2471,7 +2346,7 @@ type SetUserVizPrefsParams struct {
 }
 
 func (q *Queries) SetUserVizPrefs(ctx context.Context, arg SetUserVizPrefsParams) error {
-	_, err := q.db.ExecContext(ctx, setUserVizPrefs, arg.VizPrefs, arg.ID)
+	_, err := q.db.Exec(ctx, setUserVizPrefs, arg.VizPrefs, arg.ID)
 	return err
 }
 
@@ -2489,11 +2364,11 @@ type TouchGlobalSnapshotParams struct {
 
 // ESI answered "not modified": only the bookkeeping moves.
 func (q *Queries) TouchGlobalSnapshot(ctx context.Context, arg TouchGlobalSnapshotParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, touchGlobalSnapshot, arg.FetchedAt, arg.CachedUntil, arg.Kind)
+	result, err := q.db.Exec(ctx, touchGlobalSnapshot, arg.FetchedAt, arg.CachedUntil, arg.Kind)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const touchSnapshot = `-- name: TouchSnapshot :execrows
@@ -2512,7 +2387,7 @@ type TouchSnapshotParams struct {
 // ESI answered "not modified": the stored payload is still current,
 // so only the bookkeeping beside it moves.
 func (q *Queries) TouchSnapshot(ctx context.Context, arg TouchSnapshotParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, touchSnapshot,
+	result, err := q.db.Exec(ctx, touchSnapshot,
 		arg.FetchedAt,
 		arg.CachedUntil,
 		arg.CharacterID,
@@ -2521,7 +2396,7 @@ func (q *Queries) TouchSnapshot(ctx context.Context, arg TouchSnapshotParams) (i
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const touchUserSeen = `-- name: TouchUserSeen :exec
@@ -2535,7 +2410,7 @@ type TouchUserSeenParams struct {
 
 // The account was seen (worker_tiers.go writes this at most hourly).
 func (q *Queries) TouchUserSeen(ctx context.Context, arg TouchUserSeenParams) error {
-	_, err := q.db.ExecContext(ctx, touchUserSeen, arg.ID, arg.LastSeenAt)
+	_, err := q.db.Exec(ctx, touchUserSeen, arg.ID, arg.LastSeenAt)
 	return err
 }
 
@@ -2550,7 +2425,7 @@ type UnpinBlueprintParams struct {
 }
 
 func (q *Queries) UnpinBlueprint(ctx context.Context, arg UnpinBlueprintParams) error {
-	_, err := q.db.ExecContext(ctx, unpinBlueprint, arg.UserID, arg.BlueprintTypeID)
+	_, err := q.db.Exec(ctx, unpinBlueprint, arg.UserID, arg.BlueprintTypeID)
 	return err
 }
 
@@ -2568,7 +2443,7 @@ type UpdateCharacterTokensParams struct {
 }
 
 func (q *Queries) UpdateCharacterTokens(ctx context.Context, arg UpdateCharacterTokensParams) error {
-	_, err := q.db.ExecContext(ctx, updateCharacterTokens,
+	_, err := q.db.Exec(ctx, updateCharacterTokens,
 		arg.AccessToken,
 		arg.RefreshToken,
 		arg.TokenExpiry,
@@ -2595,7 +2470,7 @@ type UpdateLocalFittingParams struct {
 }
 
 func (q *Queries) UpdateLocalFitting(ctx context.Context, arg UpdateLocalFittingParams) error {
-	_, err := q.db.ExecContext(ctx, updateLocalFitting,
+	_, err := q.db.Exec(ctx, updateLocalFitting,
 		arg.Name,
 		arg.ShipTypeID,
 		arg.ItemsJson,
@@ -2619,7 +2494,7 @@ type UpdateSkillPlanItemPositionParams struct {
 }
 
 func (q *Queries) UpdateSkillPlanItemPosition(ctx context.Context, arg UpdateSkillPlanItemPositionParams) error {
-	_, err := q.db.ExecContext(ctx, updateSkillPlanItemPosition, arg.Position, arg.PlanID, arg.SkillTypeID)
+	_, err := q.db.Exec(ctx, updateSkillPlanItemPosition, arg.Position, arg.PlanID, arg.SkillTypeID)
 	return err
 }
 
@@ -2665,7 +2540,7 @@ type UpsertCharacterParams struct {
 }
 
 func (q *Queries) UpsertCharacter(ctx context.Context, arg UpsertCharacterParams) (Character, error) {
-	row := q.db.QueryRowContext(ctx, upsertCharacter,
+	row := q.db.QueryRow(ctx, upsertCharacter,
 		arg.CharacterID,
 		arg.UserID,
 		arg.Name,
@@ -2713,7 +2588,7 @@ type UpsertCharacterCorporationParams struct {
 }
 
 func (q *Queries) UpsertCharacterCorporation(ctx context.Context, arg UpsertCharacterCorporationParams) error {
-	_, err := q.db.ExecContext(ctx, upsertCharacterCorporation, arg.CharacterID, arg.CorporationID, arg.UpdatedAt)
+	_, err := q.db.Exec(ctx, upsertCharacterCorporation, arg.CharacterID, arg.CorporationID, arg.UpdatedAt)
 	return err
 }
 
@@ -2741,7 +2616,7 @@ type UpsertCloneNameParams struct {
 // Custom jump-clone names (schema 006): pilot-given labels per clone.
 // ---------------------------------------------------------------------
 func (q *Queries) UpsertCloneName(ctx context.Context, arg UpsertCloneNameParams) error {
-	_, err := q.db.ExecContext(ctx, upsertCloneName,
+	_, err := q.db.Exec(ctx, upsertCloneName,
 		arg.UserID,
 		arg.CharacterID,
 		arg.CloneID,
@@ -2767,7 +2642,7 @@ type UpsertContractDetailParams struct {
 }
 
 func (q *Queries) UpsertContractDetail(ctx context.Context, arg UpsertContractDetailParams) error {
-	_, err := q.db.ExecContext(ctx, upsertContractDetail,
+	_, err := q.db.Exec(ctx, upsertContractDetail,
 		arg.ContractID,
 		arg.CharacterID,
 		arg.Payload,
@@ -2795,7 +2670,7 @@ type UpsertGlobalSnapshotParams struct {
 }
 
 func (q *Queries) UpsertGlobalSnapshot(ctx context.Context, arg UpsertGlobalSnapshotParams) error {
-	_, err := q.db.ExecContext(ctx, upsertGlobalSnapshot,
+	_, err := q.db.Exec(ctx, upsertGlobalSnapshot,
 		arg.Kind,
 		arg.Payload,
 		arg.FetchedAt,
@@ -2824,7 +2699,7 @@ type UpsertKillmailDetailParams struct {
 }
 
 func (q *Queries) UpsertKillmailDetail(ctx context.Context, arg UpsertKillmailDetailParams) error {
-	_, err := q.db.ExecContext(ctx, upsertKillmailDetail,
+	_, err := q.db.Exec(ctx, upsertKillmailDetail,
 		arg.KillmailID,
 		arg.CharacterID,
 		arg.Hash,
@@ -2849,7 +2724,7 @@ type UpsertNameMissParams struct {
 // Durable name misses (schema 100): what ESI definitively refused
 // to name, by kind ('character', 'type').
 func (q *Queries) UpsertNameMiss(ctx context.Context, arg UpsertNameMissParams) error {
-	_, err := q.db.ExecContext(ctx, upsertNameMiss, arg.Kind, arg.EntityID, arg.MissedAt)
+	_, err := q.db.Exec(ctx, upsertNameMiss, arg.Kind, arg.EntityID, arg.MissedAt)
 	return err
 }
 
@@ -2870,7 +2745,7 @@ type UpsertSkillPlanItemParams struct {
 // leaves position to the caller: a fresh insert takes MAX(position)+1
 // (the handler supplies it).
 func (q *Queries) UpsertSkillPlanItem(ctx context.Context, arg UpsertSkillPlanItemParams) error {
-	_, err := q.db.ExecContext(ctx, upsertSkillPlanItem,
+	_, err := q.db.Exec(ctx, upsertSkillPlanItem,
 		arg.PlanID,
 		arg.SkillTypeID,
 		arg.TargetLevel,
@@ -2894,11 +2769,11 @@ type UpsertSkillPlanItemsParams struct {
 }
 
 func (q *Queries) UpsertSkillPlanItems(ctx context.Context, arg UpsertSkillPlanItemsParams) error {
-	_, err := q.db.ExecContext(ctx, upsertSkillPlanItems,
+	_, err := q.db.Exec(ctx, upsertSkillPlanItems,
 		arg.PlanID,
-		pq.Array(arg.SkillTypeIds),
-		pq.Array(arg.TargetLevels),
-		pq.Array(arg.Positions),
+		arg.SkillTypeIds,
+		arg.TargetLevels,
+		arg.Positions,
 	)
 	return err
 }
@@ -2923,7 +2798,7 @@ type UpsertSnapshotParams struct {
 }
 
 func (q *Queries) UpsertSnapshot(ctx context.Context, arg UpsertSnapshotParams) error {
-	_, err := q.db.ExecContext(ctx, upsertSnapshot,
+	_, err := q.db.Exec(ctx, upsertSnapshot,
 		arg.CharacterID,
 		arg.Kind,
 		arg.Payload,
@@ -2952,7 +2827,7 @@ type UpsertSnapshotFetchStateParams struct {
 }
 
 func (q *Queries) UpsertSnapshotFetchState(ctx context.Context, arg UpsertSnapshotFetchStateParams) error {
-	_, err := q.db.ExecContext(ctx, upsertSnapshotFetchState,
+	_, err := q.db.Exec(ctx, upsertSnapshotFetchState,
 		arg.CharacterID,
 		arg.Kind,
 		arg.State,
@@ -2981,7 +2856,7 @@ type UpsertWalletHistorySampleParams struct {
 }
 
 func (q *Queries) UpsertWalletHistorySample(ctx context.Context, arg UpsertWalletHistorySampleParams) error {
-	_, err := q.db.ExecContext(ctx, upsertWalletHistorySample,
+	_, err := q.db.Exec(ctx, upsertWalletHistorySample,
 		arg.UserID,
 		arg.CharacterID,
 		arg.Day,
@@ -3013,13 +2888,13 @@ type UpsertWalletHistorySamplesParams struct {
 }
 
 func (q *Queries) UpsertWalletHistorySamples(ctx context.Context, arg UpsertWalletHistorySamplesParams) error {
-	_, err := q.db.ExecContext(ctx, upsertWalletHistorySamples,
+	_, err := q.db.Exec(ctx, upsertWalletHistorySamples,
 		arg.UserID,
-		pq.Array(arg.CharacterIds),
-		pq.Array(arg.Days),
-		pq.Array(arg.Balances),
-		pq.Array(arg.NetWorths),
-		pq.Array(arg.SampledAts),
+		arg.CharacterIds,
+		arg.Days,
+		arg.Balances,
+		arg.NetWorths,
+		arg.SampledAts,
 	)
 	return err
 }
@@ -3039,7 +2914,7 @@ type UpsertWarDetailParams struct {
 }
 
 func (q *Queries) UpsertWarDetail(ctx context.Context, arg UpsertWarDetailParams) error {
-	_, err := q.db.ExecContext(ctx, upsertWarDetail, arg.WarID, arg.Payload, arg.FetchedAt)
+	_, err := q.db.Exec(ctx, upsertWarDetail, arg.WarID, arg.Payload, arg.FetchedAt)
 	return err
 }
 
@@ -3059,7 +2934,7 @@ type UpsertWidgetConfigParams struct {
 }
 
 func (q *Queries) UpsertWidgetConfig(ctx context.Context, arg UpsertWidgetConfigParams) error {
-	_, err := q.db.ExecContext(ctx, upsertWidgetConfig,
+	_, err := q.db.Exec(ctx, upsertWidgetConfig,
 		arg.UserID,
 		arg.WidgetID,
 		arg.Config,

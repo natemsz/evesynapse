@@ -41,7 +41,6 @@ package app
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -53,6 +52,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -267,7 +267,7 @@ func mentionsGate(text string) bool {
 func (app *Application) processResidue(ctx context.Context, eng residueEngine, reportID int64) {
 	row, err := app.queries.GetIntelReportFull(ctx, reportID)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Warnf("residue: read report %d: %v", reportID, err)
 		}
 		return
@@ -580,12 +580,12 @@ func (app *Application) applyResidueGateReading(ctx context.Context, row db.Inte
 // either way.
 func (app *Application) storeResiduePass(ctx context.Context, in residueInput, raw, textHash string, notes []residueNote) {
 	spans, _ := json.Marshal(in.Spans)
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Warnf("residue: store pass for report %d: %v", in.ReportID, err)
 		return
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	now := time.Now().UTC()
 	callID, err := q.InsertIntelResidueCall(ctx, db.InsertIntelResidueCallParams{
@@ -605,7 +605,7 @@ func (app *Application) storeResiduePass(ctx context.Context, in residueInput, r
 			return
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		logging.Warnf("residue: store pass for report %d: %v", in.ReportID, err)
 	}
 }

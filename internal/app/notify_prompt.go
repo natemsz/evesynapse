@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"net/http"
 	"net/url"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ func (app *Application) discordChannelState(ctx context.Context, userID int64) (
 	}
 	if link, err := app.queries.GetDiscordLink(ctx, userID); err == nil {
 		return true, true, link.DmNotifications, link.Username
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		logging.Errorf("notify: discord link of user %d: %v", userID, err)
 	}
 	return app.cfg.discordClientID != "" && app.cfg.DiscordClientSecret() != "", false, false, ""

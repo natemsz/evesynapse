@@ -17,7 +17,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +30,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -429,7 +429,7 @@ func (app *Application) killboardHeadline(ctx context.Context, names *killNames)
 	st := killboardStats{AriaLabel: "The last day across New Eden"}
 	h, err := app.queries.GetKillboardHeadline(ctx)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("killboard: headline: %v", err)
 		}
 		return st, killboardTop{}
@@ -618,7 +618,7 @@ func (app *Application) handleKillPage(w http.ResponseWriter, r *http.Request) {
 	}
 	k, err := app.queries.GetPublicKill(ctx, id)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("killboard: kill %d: %v", id, err)
 		}
 		// Unknown, or a kill nobody posted: the page says so.

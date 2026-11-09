@@ -28,7 +28,7 @@ func testDB(t *testing.T) (*sql.DB, *db.Queries) {
 		conn.Close()
 		pool.Close()
 	})
-	return conn, db.New(conn)
+	return conn, db.New(pool)
 }
 
 // fitFixture builds an in-memory Snapshot for engine tests.

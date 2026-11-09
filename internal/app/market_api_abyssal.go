@@ -95,11 +95,11 @@ func (app *Application) fetchAbyssalWant(ctx context.Context, itemID, typeID int
 	if err != nil {
 		return "", fmt.Errorf("encode rolls: %w", err)
 	}
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return "", err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	if err := q.InsertAbyssalProbe(ctx, db.InsertAbyssalProbeParams{ItemID: itemID, TypeID: typeID, IsDynamic: true, ProbedAt: now}); err != nil {
 		return "", err
@@ -110,7 +110,7 @@ func (app *Application) fetchAbyssalWant(ctx context.Context, itemID, typeID int
 	}); err != nil {
 		return "", err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return "", err
 	}
 	return abyssalWantFetched, nil

@@ -27,6 +27,22 @@ func TestSizePool(t *testing.T) {
 		t.Fatalf("after SizePool(8): %d connections allowed", got)
 	}
 
+	// The query pool's ceiling: pgxpool's own default is
+	// max(4, NumCPU), which silently shrank the pool queries ride
+	// when they moved off database/sql. Open must restore the
+	// default size, and OpenSized must honor DB_MAX_CONNS.
+	if got := pool.Config().MaxConns; got != DefaultPoolSize {
+		t.Fatalf("Open sizes the query pool to %d, want %d", got, DefaultPoolSize)
+	}
+	sizedConn, sizedPool, err := OpenSized(ctx, pgtest.FreshDSN(t), 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { sizedPool.Close(); sizedConn.Close() }()
+	if got := sizedPool.Config().MaxConns; got != 7 {
+		t.Fatalf("OpenSized(7) sizes the query pool to %d, want 7", got)
+	}
+
 	// Six at once, all handed back: all six are still there.
 	held := make([]*sql.Conn, 6)
 	var wg sync.WaitGroup

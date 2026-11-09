@@ -11,12 +11,12 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"math"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // priceTick is the smallest step a price may move by: EVE keeps four
@@ -178,7 +178,7 @@ func (b *beatenContext) verdict(ctx context.Context, characterID int64, o esi.Ch
 		p.UnitCost = b.unitCost(ctx, characterID, o.TypeID)
 	}
 	if m, ok := beatenMargin(p.SuggestedPrice, p.UnitCost, p.TaxRate, o.IsBuyOrder); ok {
-		p.MarginPct = sql.NullFloat64{Float64: m, Valid: true}
+		p.MarginPct = pgtype.Float8{Float64: m, Valid: true}
 	}
 	return p, true
 }

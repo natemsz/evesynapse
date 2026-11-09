@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ func (app *Application) refreshIntel(ctx context.Context, budget *warmBudget) (s
 		}
 		if snap, err := app.queries.GetGlobalSnapshot(ctx, kind); err == nil && esi.GlobalSnapshotFresh(snap) {
 			continue // still inside ESI's cache window
-		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("worker: intel: read global snapshot %s: %v", kind, err)
 		}
 
@@ -139,7 +139,7 @@ func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (f
 		}
 		need := false
 		if row, err := app.queries.GetWarDetail(ctx, warID); err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
+			if !errors.Is(err, pgx.ErrNoRows) {
 				logging.Errorf("worker: intel: read war detail %d: %v", warID, err)
 				continue
 			}

@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -14,6 +13,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/tags"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ func (app *Application) ordersConfigFor(ctx context.Context, userID int64) order
 		UserID: userID, WidgetID: widgetMarket,
 	})
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("home: widget config for user %d: %v", userID, err)
 		}
 		return defaultOrdersWidgetConfig()

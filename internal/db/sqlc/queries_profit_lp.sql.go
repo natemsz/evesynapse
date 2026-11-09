@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const confirmLPPurchase = `-- name: ConfirmLPPurchase :exec
@@ -30,7 +28,7 @@ type ConfirmLPPurchaseParams struct {
 }
 
 func (q *Queries) ConfirmLPPurchase(ctx context.Context, arg ConfirmLPPurchaseParams) error {
-	_, err := q.db.ExecContext(ctx, confirmLPPurchase,
+	_, err := q.db.Exec(ctx, confirmLPPurchase,
 		arg.ID,
 		arg.OfferID,
 		arg.Quantity,
@@ -52,7 +50,7 @@ type DeleteLPSaleLinksForPoolParams struct {
 }
 
 func (q *Queries) DeleteLPSaleLinksForPool(ctx context.Context, arg DeleteLPSaleLinksForPoolParams) error {
-	_, err := q.db.ExecContext(ctx, deleteLPSaleLinksForPool, arg.PoolKind, arg.PoolID)
+	_, err := q.db.Exec(ctx, deleteLPSaleLinksForPool, arg.PoolKind, arg.PoolID)
 	return err
 }
 
@@ -68,7 +66,7 @@ type DeleteLPSaleLinksFromParams struct {
 }
 
 func (q *Queries) DeleteLPSaleLinksFrom(ctx context.Context, arg DeleteLPSaleLinksFromParams) error {
-	_, err := q.db.ExecContext(ctx, deleteLPSaleLinksFrom,
+	_, err := q.db.Exec(ctx, deleteLPSaleLinksFrom,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.TypeID,
@@ -87,7 +85,7 @@ type DeleteLPStoreSummaryForPoolParams struct {
 }
 
 func (q *Queries) DeleteLPStoreSummaryForPool(ctx context.Context, arg DeleteLPStoreSummaryForPoolParams) error {
-	_, err := q.db.ExecContext(ctx, deleteLPStoreSummaryForPool, arg.PoolKind, arg.PoolID)
+	_, err := q.db.Exec(ctx, deleteLPStoreSummaryForPool, arg.PoolKind, arg.PoolID)
 	return err
 }
 
@@ -147,11 +145,11 @@ type FoldLPStoreSummaryParams struct {
 // brought against what they cost (ISK and required items, LP at 0)
 // with the LP behind them.
 func (q *Queries) FoldLPStoreSummary(ctx context.Context, arg FoldLPStoreSummaryParams) error {
-	_, err := q.db.ExecContext(ctx, foldLPStoreSummary,
+	_, err := q.db.Exec(ctx, foldLPStoreSummary,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.FoldedAt,
-		pq.Array(arg.CharacterIds),
+		arg.CharacterIds,
 	)
 	return err
 }
@@ -197,7 +195,7 @@ type FoldProfitLPParams struct {
 // net LP (earned less spent) on the 'lp' row. Runs after
 // FoldProfitDaily, which leaves lp_delta at 0.
 func (q *Queries) FoldProfitLP(ctx context.Context, arg FoldProfitLPParams) error {
-	_, err := q.db.ExecContext(ctx, foldProfitLP, arg.CharacterID, arg.FromDay)
+	_, err := q.db.Exec(ctx, foldProfitLP, arg.CharacterID, arg.FromDay)
 	return err
 }
 
@@ -222,7 +220,7 @@ type FoldProfitLPDeltaParams struct {
 // Just the day's net LP on a character's 'lp' rows from a day on,
 // after new balance samples with nothing else to fold.
 func (q *Queries) FoldProfitLPDelta(ctx context.Context, arg FoldProfitLPDeltaParams) error {
-	_, err := q.db.ExecContext(ctx, foldProfitLPDelta, arg.CharacterID, arg.FromDay)
+	_, err := q.db.Exec(ctx, foldProfitLPDelta, arg.CharacterID, arg.FromDay)
 	return err
 }
 
@@ -244,7 +242,7 @@ type GetBestLPOfferValueRow struct {
 // The store's best current ISK per LP selling into sell orders, from
 // the stored offer values in a region.
 func (q *Queries) GetBestLPOfferValue(ctx context.Context, arg GetBestLPOfferValueParams) (GetBestLPOfferValueRow, error) {
-	row := q.db.QueryRowContext(ctx, getBestLPOfferValue, arg.RegionID, arg.CorporationID)
+	row := q.db.QueryRow(ctx, getBestLPOfferValue, arg.RegionID, arg.CorporationID)
 	var i GetBestLPOfferValueRow
 	err := row.Scan(&i.IskPerLp, &i.AsOf)
 	return i, err
@@ -260,7 +258,7 @@ type GetLPPurchaseParams struct {
 }
 
 func (q *Queries) GetLPPurchase(ctx context.Context, arg GetLPPurchaseParams) (LpPurchase, error) {
-	row := q.db.QueryRowContext(ctx, getLPPurchase, arg.ID, pq.Array(arg.CharacterIds))
+	row := q.db.QueryRow(ctx, getLPPurchase, arg.ID, arg.CharacterIds)
 	var i LpPurchase
 	err := row.Scan(
 		&i.ID,
@@ -313,7 +311,7 @@ type InsertLPPurchaseParams struct {
 }
 
 func (q *Queries) InsertLPPurchase(ctx context.Context, arg InsertLPPurchaseParams) error {
-	_, err := q.db.ExecContext(ctx, insertLPPurchase,
+	_, err := q.db.Exec(ctx, insertLPPurchase,
 		arg.CharacterID,
 		arg.CorporationID,
 		arg.FromAt,
@@ -359,17 +357,17 @@ type InsertLPSaleLinksBatchParams struct {
 }
 
 func (q *Queries) InsertLPSaleLinksBatch(ctx context.Context, arg InsertLPSaleLinksBatchParams) error {
-	_, err := q.db.ExecContext(ctx, insertLPSaleLinksBatch,
+	_, err := q.db.Exec(ctx, insertLPSaleLinksBatch,
 		arg.PoolKind,
 		arg.PoolID,
-		pq.Array(arg.PurchaseIds),
+		arg.PurchaseIds,
 		arg.TypeID,
-		pq.Array(arg.OwnerIds),
-		pq.Array(arg.TransactionIds),
-		pq.Array(arg.Ats),
-		pq.Array(arg.Units),
-		pq.Array(arg.Revenues),
-		pq.Array(arg.Costs),
+		arg.OwnerIds,
+		arg.TransactionIds,
+		arg.Ats,
+		arg.Units,
+		arg.Revenues,
+		arg.Costs,
 	)
 	return err
 }
@@ -388,7 +386,7 @@ type InsertLPSampleParams struct {
 }
 
 func (q *Queries) InsertLPSample(ctx context.Context, arg InsertLPSampleParams) error {
-	_, err := q.db.ExecContext(ctx, insertLPSample,
+	_, err := q.db.Exec(ctx, insertLPSample,
 		arg.CharacterID,
 		arg.CorporationID,
 		arg.SampledAt,
@@ -413,7 +411,7 @@ type ListLPOfferRequirementsForOfferRow struct {
 }
 
 func (q *Queries) ListLPOfferRequirementsForOffer(ctx context.Context, arg ListLPOfferRequirementsForOfferParams) ([]ListLPOfferRequirementsForOfferRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLPOfferRequirementsForOffer, arg.CorporationID, arg.OfferID)
+	rows, err := q.db.Query(ctx, listLPOfferRequirementsForOffer, arg.CorporationID, arg.OfferID)
 	if err != nil {
 		return nil, err
 	}
@@ -425,9 +423,6 @@ func (q *Queries) ListLPOfferRequirementsForOffer(ctx context.Context, arg ListL
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -450,7 +445,7 @@ type ListLPOffersForCorpRow struct {
 }
 
 func (q *Queries) ListLPOffersForCorp(ctx context.Context, corporationID int64) ([]ListLPOffersForCorpRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLPOffersForCorp, corporationID)
+	rows, err := q.db.Query(ctx, listLPOffersForCorp, corporationID)
 	if err != nil {
 		return nil, err
 	}
@@ -468,9 +463,6 @@ func (q *Queries) ListLPOffersForCorp(ctx context.Context, corporationID int64) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -501,7 +493,7 @@ type ListLPPurchasesToPickRow struct {
 // A pool's purchases the player can settle: several offers fit, or
 // none did.
 func (q *Queries) ListLPPurchasesToPick(ctx context.Context, characterIds []int64) ([]ListLPPurchasesToPickRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLPPurchasesToPick, pq.Array(characterIds))
+	rows, err := q.db.Query(ctx, listLPPurchasesToPick, characterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -524,9 +516,6 @@ func (q *Queries) ListLPPurchasesToPick(ctx context.Context, characterIds []int6
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -546,7 +535,7 @@ type ListLPStoreSummaryParams struct {
 }
 
 func (q *Queries) ListLPStoreSummary(ctx context.Context, arg ListLPStoreSummaryParams) ([]LpStoreSummary, error) {
-	rows, err := q.db.QueryContext(ctx, listLPStoreSummary, arg.PoolKind, pq.Array(arg.PoolIds))
+	rows, err := q.db.Query(ctx, listLPStoreSummary, arg.PoolKind, arg.PoolIds)
 	if err != nil {
 		return nil, err
 	}
@@ -577,9 +566,6 @@ func (q *Queries) ListLPStoreSummary(ctx context.Context, arg ListLPStoreSummary
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -616,7 +602,7 @@ type ListLPUnsoldByCorpRow struct {
 // Units of each store's lot purchases not yet sold, per product type:
 // marked at today's stat pack after the fold.
 func (q *Queries) ListLPUnsoldByCorp(ctx context.Context, arg ListLPUnsoldByCorpParams) ([]ListLPUnsoldByCorpRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLPUnsoldByCorp, arg.PoolKind, arg.PoolID, pq.Array(arg.CharacterIds))
+	rows, err := q.db.Query(ctx, listLPUnsoldByCorp, arg.PoolKind, arg.PoolID, arg.CharacterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -628,9 +614,6 @@ func (q *Queries) ListLPUnsoldByCorp(ctx context.Context, arg ListLPUnsoldByCorp
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -654,7 +637,7 @@ type ListLatestLPSamplesRow struct {
 // LP earnings per store (schema 114): balance samples, inferred
 // purchases, what their units sold for, and the per-store summary.
 func (q *Queries) ListLatestLPSamples(ctx context.Context, characterID int64) ([]ListLatestLPSamplesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLatestLPSamples, characterID)
+	rows, err := q.db.Query(ctx, listLatestLPSamples, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -666,9 +649,6 @@ func (q *Queries) ListLatestLPSamples(ctx context.Context, characterID int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -691,7 +671,7 @@ type ListUncheckedLPPurchasesRow struct {
 
 // Inferred purchases waiting on the timed asset check.
 func (q *Queries) ListUncheckedLPPurchases(ctx context.Context, characterID int64) ([]ListUncheckedLPPurchasesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUncheckedLPPurchases, characterID)
+	rows, err := q.db.Query(ctx, listUncheckedLPPurchases, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -710,9 +690,6 @@ func (q *Queries) ListUncheckedLPPurchases(ctx context.Context, characterID int6
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -729,7 +706,7 @@ type SetLPPurchaseCheckedParams struct {
 }
 
 func (q *Queries) SetLPPurchaseChecked(ctx context.Context, arg SetLPPurchaseCheckedParams) error {
-	_, err := q.db.ExecContext(ctx, setLPPurchaseChecked, arg.ID, arg.Tier)
+	_, err := q.db.Exec(ctx, setLPPurchaseChecked, arg.ID, arg.Tier)
 	return err
 }
 
@@ -747,7 +724,7 @@ type SetLPStoreUnsoldParams struct {
 }
 
 func (q *Queries) SetLPStoreUnsold(ctx context.Context, arg SetLPStoreUnsoldParams) error {
-	_, err := q.db.ExecContext(ctx, setLPStoreUnsold,
+	_, err := q.db.Exec(ctx, setLPStoreUnsold,
 		arg.PoolKind,
 		arg.PoolID,
 		arg.CorporationID,
@@ -769,7 +746,7 @@ type SetUserLPValueParams struct {
 }
 
 func (q *Queries) SetUserLPValue(ctx context.Context, arg SetUserLPValueParams) error {
-	_, err := q.db.ExecContext(ctx, setUserLPValue, arg.UserID, arg.LpIskValue)
+	_, err := q.db.Exec(ctx, setUserLPValue, arg.UserID, arg.LpIskValue)
 	return err
 }
 
@@ -793,7 +770,7 @@ type SumLPStorePaymentsBetweenRow struct {
 
 // The journal's LP store payments inside a purchase's bracket.
 func (q *Queries) SumLPStorePaymentsBetween(ctx context.Context, arg SumLPStorePaymentsBetweenParams) (SumLPStorePaymentsBetweenRow, error) {
-	row := q.db.QueryRowContext(ctx, sumLPStorePaymentsBetween, arg.OwnerID, arg.FromAt, arg.ToAt)
+	row := q.db.QueryRow(ctx, sumLPStorePaymentsBetween, arg.OwnerID, arg.FromAt, arg.ToAt)
 	var i SumLPStorePaymentsBetweenRow
 	err := row.Scan(&i.Isk, &i.N)
 	return i, err
@@ -813,7 +790,7 @@ type SumProfitLPDeltaParams struct {
 
 // Net LP over a span, for profit at the player's ISK per LP.
 func (q *Queries) SumProfitLPDelta(ctx context.Context, arg SumProfitLPDeltaParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, sumProfitLPDelta, arg.OwnerKind, pq.Array(arg.OwnerIds), arg.FromDay)
+	row := q.db.QueryRow(ctx, sumProfitLPDelta, arg.OwnerKind, arg.OwnerIds, arg.FromDay)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err

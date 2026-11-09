@@ -2,13 +2,14 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // TestPilotActivityAggregates folds a fixture set of kills, in
@@ -166,7 +167,7 @@ func TestPilotActivityAggregates(t *testing.T) {
 	if applied, err := app.applyPilotKill(ctx, stranger, entries[0].killmailFull, true); err != nil || applied {
 		t.Fatalf("stream fold for a profileless pilot: applied %v, err %v; want neither", applied, err)
 	}
-	if _, err := q.GetPilotActivityProfile(ctx, stranger); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := q.GetPilotActivityProfile(ctx, stranger); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("stream fold made a profile for a stranger: %v", err)
 	}
 	const victim = int64(92000001)

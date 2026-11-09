@@ -38,6 +38,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/marketwire"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -108,7 +109,7 @@ func (app *Application) handleMarketAPIHealth(w http.ResponseWriter, r *http.Req
 	if marketAPIHealthBody == nil || now.Sub(marketAPIHealthAt) > 30*time.Second {
 		state := "ok"
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second)
-		if err := app.db.PingContext(ctx); err != nil {
+		if err := app.pool.Ping(ctx); err != nil {
 			state = "down"
 		} else if len(marketAPIInFlight)*4 >= cap(marketAPIInFlight)*3 {
 			state = "degraded" // three quarters of the request slots busy
@@ -509,7 +510,7 @@ func (app *Application) handleMarketAPIAbyssal(w http.ResponseWriter, r *http.Re
 				out.ScoredAt = item.ScoredAt.Time.UTC()
 			}
 		}
-	case errors.Is(err, sql.ErrNoRows):
+	case errors.Is(err, pgx.ErrNoRows):
 		out.State = app.wantAbyssal(ctx, apiKeyFrom(ctx), itemID, typeID)
 	default:
 		logging.Errorf("market api: abyssal %d: %v", itemID, err)

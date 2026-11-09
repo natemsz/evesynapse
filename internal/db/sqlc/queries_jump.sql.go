@@ -30,7 +30,7 @@ type ListJumpCoordsRow struct {
 // ---------------------------------------------------------------------
 // Every known-space system's position (metres) and region.
 func (q *Queries) ListJumpCoords(ctx context.Context) ([]ListJumpCoordsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listJumpCoords)
+	rows, err := q.db.Query(ctx, listJumpCoords)
 	if err != nil {
 		return nil, err
 	}
@@ -48,9 +48,6 @@ func (q *Queries) ListJumpCoords(ctx context.Context) ([]ListJumpCoordsRow, erro
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -83,7 +80,7 @@ type ListJumpShipsRow struct {
 // years, attribute jumpDriveRange) and, where the type carries one,
 // its jump fatigue multiplier.
 func (q *Queries) ListJumpShips(ctx context.Context) ([]ListJumpShipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listJumpShips)
+	rows, err := q.db.Query(ctx, listJumpShips)
 	if err != nil {
 		return nil, err
 	}
@@ -101,9 +98,6 @@ func (q *Queries) ListJumpShips(ctx context.Context) ([]ListJumpShipsRow, error)
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

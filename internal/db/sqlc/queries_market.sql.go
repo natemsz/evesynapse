@@ -10,7 +10,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const clearGuidePriceWant = `-- name: ClearGuidePriceWant :exec
@@ -19,7 +19,7 @@ WHERE id = 1
 `
 
 func (q *Queries) ClearGuidePriceWant(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, clearGuidePriceWant)
+	_, err := q.db.Exec(ctx, clearGuidePriceWant)
 	return err
 }
 
@@ -37,7 +37,7 @@ type CloseOrderLifecycleParams struct {
 }
 
 func (q *Queries) CloseOrderLifecycle(ctx context.Context, arg CloseOrderLifecycleParams) error {
-	_, err := q.db.ExecContext(ctx, closeOrderLifecycle,
+	_, err := q.db.Exec(ctx, closeOrderLifecycle,
 		arg.ClosedAt,
 		arg.CloseKind,
 		arg.CharacterID,
@@ -68,7 +68,7 @@ type CountMarketBrowseTypesParams struct {
 }
 
 func (q *Queries) CountMarketBrowseTypes(ctx context.Context, arg CountMarketBrowseTypesParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countMarketBrowseTypes,
+	row := q.db.QueryRow(ctx, countMarketBrowseTypes,
 		arg.RegionID,
 		arg.NameLike,
 		arg.MinVolume,
@@ -84,7 +84,7 @@ DELETE FROM guide_prices
 `
 
 func (q *Queries) DeleteGuidePrices(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteGuidePrices)
+	_, err := q.db.Exec(ctx, deleteGuidePrices)
 	return err
 }
 
@@ -103,7 +103,7 @@ WHERE region_id = $1
 // market_region_stats, these rows are only the displayed top.
 // ---------------------------------------------------------------------
 func (q *Queries) DeleteMarketBookOrdersByRegion(ctx context.Context, regionID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketBookOrdersByRegion, regionID)
+	_, err := q.db.Exec(ctx, deleteMarketBookOrdersByRegion, regionID)
 	return err
 }
 
@@ -118,7 +118,7 @@ WHERE region_id = $1
 // the fresh measures type by type. The daily table keeps one
 // snapshot row per (region, type, day) for trend work.
 func (q *Queries) DeleteMarketRegionStatsByRegion(ctx context.Context, regionID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketRegionStatsByRegion, regionID)
+	_, err := q.db.Exec(ctx, deleteMarketRegionStatsByRegion, regionID)
 	return err
 }
 
@@ -128,7 +128,7 @@ WHERE region_id = $1
 `
 
 func (q *Queries) DeleteMarketStationLeaderboardByRegion(ctx context.Context, regionID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketStationLeaderboardByRegion, regionID)
+	_, err := q.db.Exec(ctx, deleteMarketStationLeaderboardByRegion, regionID)
 	return err
 }
 
@@ -146,7 +146,7 @@ WHERE region_id = $1
 // spread scanner page reads only these rows.
 // ---------------------------------------------------------------------
 func (q *Queries) DeleteMarketStationStatsByRegion(ctx context.Context, regionID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketStationStatsByRegion, regionID)
+	_, err := q.db.Exec(ctx, deleteMarketStationStatsByRegion, regionID)
 	return err
 }
 
@@ -160,7 +160,7 @@ DELETE FROM market_stats_fallback
 // readers pick between this table and market_region_stats at
 // read time and never see a half-written snapshot.
 func (q *Queries) DeleteMarketStatsFallback(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketStatsFallback)
+	_, err := q.db.Exec(ctx, deleteMarketStatsFallback)
 	return err
 }
 
@@ -170,7 +170,7 @@ WHERE region_id = $1
 `
 
 func (q *Queries) DeleteMarketSweepOrdersByRegion(ctx context.Context, regionID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketSweepOrdersByRegion, regionID)
+	_, err := q.db.Exec(ctx, deleteMarketSweepOrdersByRegion, regionID)
 	return err
 }
 
@@ -180,7 +180,7 @@ WHERE region_id = $1
 `
 
 func (q *Queries) DeleteMarketSweepState(ctx context.Context, regionID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketSweepState, regionID)
+	_, err := q.db.Exec(ctx, deleteMarketSweepState, regionID)
 	return err
 }
 
@@ -195,7 +195,7 @@ type DeleteOrderHealthEntryParams struct {
 }
 
 func (q *Queries) DeleteOrderHealthEntry(ctx context.Context, arg DeleteOrderHealthEntryParams) error {
-	_, err := q.db.ExecContext(ctx, deleteOrderHealthEntry, arg.CharacterID, arg.OrderID)
+	_, err := q.db.Exec(ctx, deleteOrderHealthEntry, arg.CharacterID, arg.OrderID)
 	return err
 }
 
@@ -205,7 +205,7 @@ WHERE character_id = $1
 `
 
 func (q *Queries) DeleteOrderHealthForCharacter(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteOrderHealthForCharacter, characterID)
+	_, err := q.db.Exec(ctx, deleteOrderHealthForCharacter, characterID)
 	return err
 }
 
@@ -220,7 +220,7 @@ type DeleteRestockTargetParams struct {
 }
 
 func (q *Queries) DeleteRestockTarget(ctx context.Context, arg DeleteRestockTargetParams) error {
-	_, err := q.db.ExecContext(ctx, deleteRestockTarget, arg.UserID, arg.TypeID)
+	_, err := q.db.Exec(ctx, deleteRestockTarget, arg.UserID, arg.TypeID)
 	return err
 }
 
@@ -236,7 +236,7 @@ type DeleteWatchlistEntryParams struct {
 }
 
 func (q *Queries) DeleteWatchlistEntry(ctx context.Context, arg DeleteWatchlistEntryParams) error {
-	_, err := q.db.ExecContext(ctx, deleteWatchlistEntry, arg.UserID, arg.TypeID, arg.RegionID)
+	_, err := q.db.Exec(ctx, deleteWatchlistEntry, arg.UserID, arg.TypeID, arg.RegionID)
 	return err
 }
 
@@ -291,7 +291,7 @@ type DetectMarketChangesParams struct {
 // transaction after the trend figures: each stat pack row against
 // the newest stored day before today (within three days).
 func (q *Queries) DetectMarketChanges(ctx context.Context, arg DetectMarketChangesParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, detectMarketChanges,
+	result, err := q.db.Exec(ctx, detectMarketChanges,
 		arg.RegionID,
 		arg.Day,
 		arg.Now,
@@ -300,7 +300,7 @@ func (q *Queries) DetectMarketChanges(ctx context.Context, arg DetectMarketChang
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const getAllianceRecord = `-- name: GetAllianceRecord :one
@@ -318,7 +318,7 @@ type GetAllianceRecordRow struct {
 }
 
 func (q *Queries) GetAllianceRecord(ctx context.Context, allianceID int64) (GetAllianceRecordRow, error) {
-	row := q.db.QueryRowContext(ctx, getAllianceRecord, allianceID)
+	row := q.db.QueryRow(ctx, getAllianceRecord, allianceID)
 	var i GetAllianceRecordRow
 	err := row.Scan(
 		&i.AllianceID,
@@ -351,7 +351,7 @@ type GetCorporationRecordRow struct {
 // the stale cutoff, missing rows settle for good.
 // ---------------------------------------------------------------------
 func (q *Queries) GetCorporationRecord(ctx context.Context, corporationID int64) (GetCorporationRecordRow, error) {
-	row := q.db.QueryRowContext(ctx, getCorporationRecord, corporationID)
+	row := q.db.QueryRow(ctx, getCorporationRecord, corporationID)
 	var i GetCorporationRecordRow
 	err := row.Scan(
 		&i.CorporationID,
@@ -369,7 +369,7 @@ WHERE id = 1
 `
 
 func (q *Queries) GetGuidePriceWant(ctx context.Context) (GuidePriceWant, error) {
-	row := q.db.QueryRowContext(ctx, getGuidePriceWant)
+	row := q.db.QueryRow(ctx, getGuidePriceWant)
 	var i GuidePriceWant
 	err := row.Scan(&i.ID, &i.WantedAt)
 	return i, err
@@ -381,7 +381,7 @@ WHERE id = 1
 `
 
 func (q *Queries) GetGuidePricesMeta(ctx context.Context) (GuidePricesMetum, error) {
-	row := q.db.QueryRowContext(ctx, getGuidePricesMeta)
+	row := q.db.QueryRow(ctx, getGuidePricesMeta)
 	var i GuidePricesMetum
 	err := row.Scan(&i.ID, &i.FetchedAt, &i.CachedUntil)
 	return i, err
@@ -399,7 +399,7 @@ type GetIndustryCostIndexParams struct {
 }
 
 func (q *Queries) GetIndustryCostIndex(ctx context.Context, arg GetIndustryCostIndexParams) (IndustryCostIndex, error) {
-	row := q.db.QueryRowContext(ctx, getIndustryCostIndex, arg.SolarSystemID, arg.Activity)
+	row := q.db.QueryRow(ctx, getIndustryCostIndex, arg.SolarSystemID, arg.Activity)
 	var i IndustryCostIndex
 	err := row.Scan(
 		&i.SolarSystemID,
@@ -423,7 +423,7 @@ type GetIndustryCostIndicesStampRow struct {
 // The freshest cost-index write: the refresh gate (an hour's
 // cadence when ESI's Expires is missing) without pulling rows.
 func (q *Queries) GetIndustryCostIndicesStamp(ctx context.Context) (GetIndustryCostIndicesStampRow, error) {
-	row := q.db.QueryRowContext(ctx, getIndustryCostIndicesStamp)
+	row := q.db.QueryRow(ctx, getIndustryCostIndicesStamp)
 	var i GetIndustryCostIndicesStampRow
 	err := row.Scan(&i.Stamp, &i.RowCount)
 	return i, err
@@ -436,7 +436,7 @@ WHERE kind = $1
 `
 
 func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketFetchState, error) {
-	row := q.db.QueryRowContext(ctx, getMarketFetchState, kind)
+	row := q.db.QueryRow(ctx, getMarketFetchState, kind)
 	var i MarketFetchState
 	err := row.Scan(
 		&i.Kind,
@@ -463,7 +463,7 @@ type GetMarketRegionStatParams struct {
 }
 
 func (q *Queries) GetMarketRegionStat(ctx context.Context, arg GetMarketRegionStatParams) (MarketRegionStat, error) {
-	row := q.db.QueryRowContext(ctx, getMarketRegionStat, arg.RegionID, arg.TypeID)
+	row := q.db.QueryRow(ctx, getMarketRegionStat, arg.RegionID, arg.TypeID)
 	var i MarketRegionStat
 	err := row.Scan(
 		&i.RegionID,
@@ -518,7 +518,7 @@ type GetMarketRegionStatsStampRow struct {
 // The freshest region-stat write for a region: the tradefinder
 // page's "figures last gathered" stamp without pulling rows.
 func (q *Queries) GetMarketRegionStatsStamp(ctx context.Context, regionID int64) (GetMarketRegionStatsStampRow, error) {
-	row := q.db.QueryRowContext(ctx, getMarketRegionStatsStamp, regionID)
+	row := q.db.QueryRow(ctx, getMarketRegionStatsStamp, regionID)
 	var i GetMarketRegionStatsStampRow
 	err := row.Scan(&i.Stamp, &i.RowCount)
 	return i, err
@@ -544,7 +544,7 @@ type GetMarketStatChange7Row struct {
 // A watched item's 7- and 30-day change of the typical sell from the
 // stat pack, with when the row was written.
 func (q *Queries) GetMarketStatChange7(ctx context.Context, arg GetMarketStatChange7Params) (GetMarketStatChange7Row, error) {
-	row := q.db.QueryRowContext(ctx, getMarketStatChange7, arg.RegionID, arg.TypeID)
+	row := q.db.QueryRow(ctx, getMarketStatChange7, arg.RegionID, arg.TypeID)
 	var i GetMarketStatChange7Row
 	err := row.Scan(
 		&i.SellChg7d,
@@ -562,7 +562,7 @@ WHERE ($1::bigint = 0 OR region_id = $1::bigint)
 `
 
 func (q *Queries) GetMarketStationLeaderboardStamp(ctx context.Context, dollar_1 int64) (interface{}, error) {
-	row := q.db.QueryRowContext(ctx, getMarketStationLeaderboardStamp, dollar_1)
+	row := q.db.QueryRow(ctx, getMarketStationLeaderboardStamp, dollar_1)
 	var stamp interface{}
 	err := row.Scan(&stamp)
 	return stamp, err
@@ -581,7 +581,7 @@ type GetMarketStationStatsStampRow struct {
 // The freshest station-stat write for a region: the scanner
 // page's "prices as of" stamp without pulling the rows.
 func (q *Queries) GetMarketStationStatsStamp(ctx context.Context, regionID int64) (GetMarketStationStatsStampRow, error) {
-	row := q.db.QueryRowContext(ctx, getMarketStationStatsStamp, regionID)
+	row := q.db.QueryRow(ctx, getMarketStationStatsStamp, regionID)
 	var i GetMarketStationStatsStampRow
 	err := row.Scan(&i.Stamp, &i.RowCount)
 	return i, err
@@ -600,7 +600,7 @@ type GetMarketStatsFallbackParams struct {
 }
 
 func (q *Queries) GetMarketStatsFallback(ctx context.Context, arg GetMarketStatsFallbackParams) (MarketStatsFallback, error) {
-	row := q.db.QueryRowContext(ctx, getMarketStatsFallback, arg.RegionID, arg.TypeID)
+	row := q.db.QueryRow(ctx, getMarketStatsFallback, arg.RegionID, arg.TypeID)
 	var i MarketStatsFallback
 	err := row.Scan(
 		&i.RegionID,
@@ -635,7 +635,7 @@ WHERE id = 1
 `
 
 func (q *Queries) GetMarketStatsFallbackMeta(ctx context.Context) (MarketStatsFallbackMetum, error) {
-	row := q.db.QueryRowContext(ctx, getMarketStatsFallbackMeta)
+	row := q.db.QueryRow(ctx, getMarketStatsFallbackMeta)
 	var i MarketStatsFallbackMetum
 	err := row.Scan(
 		&i.ID,
@@ -662,7 +662,7 @@ WHERE region_id = $1
 // and the staging rows are deleted in that same transaction.
 // ---------------------------------------------------------------------
 func (q *Queries) GetMarketSweepState(ctx context.Context, regionID int64) (MarketSweepState, error) {
-	row := q.db.QueryRowContext(ctx, getMarketSweepState, regionID)
+	row := q.db.QueryRow(ctx, getMarketSweepState, regionID)
 	var i MarketSweepState
 	err := row.Scan(
 		&i.RegionID,
@@ -690,7 +690,7 @@ type GetMarketTrendStampRow struct {
 // How much of a region's stat pack has trend figures yet: rows with
 // a 7-day change, rows with a volatility figure, and the newest write.
 func (q *Queries) GetMarketTrendStamp(ctx context.Context, regionID int64) (GetMarketTrendStampRow, error) {
-	row := q.db.QueryRowContext(ctx, getMarketTrendStamp, regionID)
+	row := q.db.QueryRow(ctx, getMarketTrendStamp, regionID)
 	var i GetMarketTrendStampRow
 	err := row.Scan(&i.WithChange, &i.WithVolatility, &i.Stamp)
 	return i, err
@@ -708,7 +708,7 @@ type GetMarketTypePriceParams struct {
 }
 
 func (q *Queries) GetMarketTypePrice(ctx context.Context, arg GetMarketTypePriceParams) (MarketTypePrice, error) {
-	row := q.db.QueryRowContext(ctx, getMarketTypePrice, arg.RegionID, arg.TypeID)
+	row := q.db.QueryRow(ctx, getMarketTypePrice, arg.RegionID, arg.TypeID)
 	var i MarketTypePrice
 	err := row.Scan(
 		&i.RegionID,
@@ -740,7 +740,7 @@ type GetOrderLifecycleParams struct {
 // closed rows; the Orders page reads only these rows.
 // ---------------------------------------------------------------------
 func (q *Queries) GetOrderLifecycle(ctx context.Context, arg GetOrderLifecycleParams) (OrderLifecycle, error) {
-	row := q.db.QueryRowContext(ctx, getOrderLifecycle, arg.CharacterID, arg.OrderID)
+	row := q.db.QueryRow(ctx, getOrderLifecycle, arg.CharacterID, arg.OrderID)
 	var i OrderLifecycle
 	err := row.Scan(
 		&i.ID,
@@ -783,7 +783,7 @@ WHERE normalized_name = $1
 // 'missing' and 'ready' are settled states; 'error' rows wait
 // for next_try_at so a failing lookup is not re-asked per search.
 func (q *Queries) GetPilotNameWant(ctx context.Context, normalizedName string) (PilotNameWant, error) {
-	row := q.db.QueryRowContext(ctx, getPilotNameWant, normalizedName)
+	row := q.db.QueryRow(ctx, getPilotNameWant, normalizedName)
 	var i PilotNameWant
 	err := row.Scan(
 		&i.NormalizedName,
@@ -820,7 +820,7 @@ type GetPilotRecordRow struct {
 // fetched_at is a want.
 // ---------------------------------------------------------------------
 func (q *Queries) GetPilotRecord(ctx context.Context, characterID int64) (GetPilotRecordRow, error) {
-	row := q.db.QueryRowContext(ctx, getPilotRecord, characterID)
+	row := q.db.QueryRow(ctx, getPilotRecord, characterID)
 	var i GetPilotRecordRow
 	err := row.Scan(
 		&i.CharacterID,
@@ -846,7 +846,7 @@ WHERE planet_id = $1
 // 'pending' rows are always due.
 // ---------------------------------------------------------------------
 func (q *Queries) GetPlanetName(ctx context.Context, planetID int64) (PlanetName, error) {
-	row := q.db.QueryRowContext(ctx, getPlanetName, planetID)
+	row := q.db.QueryRow(ctx, getPlanetName, planetID)
 	var i PlanetName
 	err := row.Scan(
 		&i.PlanetID,
@@ -870,7 +870,7 @@ WHERE key = $1
 // row wins once it exists.
 // ---------------------------------------------------------------------
 func (q *Queries) GetSiteSetting(ctx context.Context, key string) (SiteSetting, error) {
-	row := q.db.QueryRowContext(ctx, getSiteSetting, key)
+	row := q.db.QueryRow(ctx, getSiteSetting, key)
 	var i SiteSetting
 	err := row.Scan(&i.Key, &i.Value, &i.UpdatedAt)
 	return i, err
@@ -893,7 +893,7 @@ WHERE structure_id = $1
 // structure_names under provenance rules).
 // ---------------------------------------------------------------------
 func (q *Queries) GetStructureContext(ctx context.Context, structureID int64) (StructureContext, error) {
-	row := q.db.QueryRowContext(ctx, getStructureContext, structureID)
+	row := q.db.QueryRow(ctx, getStructureContext, structureID)
 	var i StructureContext
 	err := row.Scan(
 		&i.StructureID,
@@ -928,7 +928,7 @@ WHERE structure_id = $1
 // name's provenance so ESI truth outranks any lower-trust tier.
 // ---------------------------------------------------------------------
 func (q *Queries) GetStructureName(ctx context.Context, structureID int64) (StructureName, error) {
-	row := q.db.QueryRowContext(ctx, getStructureName, structureID)
+	row := q.db.QueryRow(ctx, getStructureName, structureID)
 	var i StructureName
 	err := row.Scan(
 		&i.StructureID,
@@ -953,7 +953,7 @@ type GetWatchlistEntryParams struct {
 }
 
 func (q *Queries) GetWatchlistEntry(ctx context.Context, arg GetWatchlistEntryParams) (MarketWatchlist, error) {
-	row := q.db.QueryRowContext(ctx, getWatchlistEntry, arg.UserID, arg.TypeID, arg.RegionID)
+	row := q.db.QueryRow(ctx, getWatchlistEntry, arg.UserID, arg.TypeID, arg.RegionID)
 	var i MarketWatchlist
 	err := row.Scan(
 		&i.UserID,
@@ -983,7 +983,7 @@ type InsertMarketBookOrderParams struct {
 }
 
 func (q *Queries) InsertMarketBookOrder(ctx context.Context, arg InsertMarketBookOrderParams) error {
-	_, err := q.db.ExecContext(ctx, insertMarketBookOrder,
+	_, err := q.db.Exec(ctx, insertMarketBookOrder,
 		arg.RegionID,
 		arg.TypeID,
 		arg.IsBuyOrder,
@@ -1020,7 +1020,7 @@ type InsertMarketStatsFallbackParams struct {
 }
 
 func (q *Queries) InsertMarketStatsFallback(ctx context.Context, arg InsertMarketStatsFallbackParams) error {
-	_, err := q.db.ExecContext(ctx, insertMarketStatsFallback,
+	_, err := q.db.Exec(ctx, insertMarketStatsFallback,
 		arg.RegionID,
 		arg.TypeID,
 		arg.MedianSell,
@@ -1055,7 +1055,7 @@ type InsertMarketSweepOrderParams struct {
 }
 
 func (q *Queries) InsertMarketSweepOrder(ctx context.Context, arg InsertMarketSweepOrderParams) error {
-	_, err := q.db.ExecContext(ctx, insertMarketSweepOrder,
+	_, err := q.db.Exec(ctx, insertMarketSweepOrder,
 		arg.RegionID,
 		arg.TypeID,
 		arg.IsBuyOrder,
@@ -1079,7 +1079,7 @@ type InsertMarketSweepStateParams struct {
 }
 
 func (q *Queries) InsertMarketSweepState(ctx context.Context, arg InsertMarketSweepStateParams) error {
-	_, err := q.db.ExecContext(ctx, insertMarketSweepState, arg.RegionID, arg.StartedAt, arg.UpdatedAt)
+	_, err := q.db.Exec(ctx, insertMarketSweepState, arg.RegionID, arg.StartedAt, arg.UpdatedAt)
 	return err
 }
 
@@ -1095,7 +1095,7 @@ type InsertPilotOrbitWantParams struct {
 }
 
 func (q *Queries) InsertPilotOrbitWant(ctx context.Context, arg InsertPilotOrbitWantParams) error {
-	_, err := q.db.ExecContext(ctx, insertPilotOrbitWant, arg.CharacterID, arg.NotedAt)
+	_, err := q.db.Exec(ctx, insertPilotOrbitWant, arg.CharacterID, arg.NotedAt)
 	return err
 }
 
@@ -1106,7 +1106,7 @@ ORDER BY type_id, region_id
 `
 
 func (q *Queries) ListAllWatchlistEntries(ctx context.Context) ([]MarketWatchlist, error) {
-	rows, err := q.db.QueryContext(ctx, listAllWatchlistEntries)
+	rows, err := q.db.Query(ctx, listAllWatchlistEntries)
 	if err != nil {
 		return nil, err
 	}
@@ -1124,9 +1124,6 @@ func (q *Queries) ListAllWatchlistEntries(ctx context.Context) ([]MarketWatchlis
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1175,7 +1172,7 @@ type ListAllianceDrainsParams struct {
 // Typing rows spend their slice highest learned rate first (see
 // ListPilotDrains).
 func (q *Queries) ListAllianceDrains(ctx context.Context, arg ListAllianceDrainsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listAllianceDrains,
+	rows, err := q.db.Query(ctx, listAllianceDrains,
 		arg.TypingPriority,
 		arg.TypingAssumed,
 		arg.TypingWeight,
@@ -1195,9 +1192,6 @@ func (q *Queries) ListAllianceDrains(ctx context.Context, arg ListAllianceDrains
 			return nil, err
 		}
 		items = append(items, alliance_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1247,7 +1241,7 @@ type ListBeatenOrdersRow struct {
 // The account's open orders beaten at their own station, most
 // recently beaten first: the My Orders page's beaten section.
 func (q *Queries) ListBeatenOrders(ctx context.Context, arg ListBeatenOrdersParams) ([]ListBeatenOrdersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listBeatenOrders, arg.UserID, arg.CharacterID)
+	rows, err := q.db.Query(ctx, listBeatenOrders, arg.UserID, arg.CharacterID)
 	if err != nil {
 		return nil, err
 	}
@@ -1280,9 +1274,6 @@ func (q *Queries) ListBeatenOrders(ctx context.Context, arg ListBeatenOrdersPara
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1311,7 +1302,7 @@ type ListBestBuyStationsRow struct {
 // the tradefinder's "best buyer at" hints without pulling the
 // region's whole station grain.
 func (q *Queries) ListBestBuyStations(ctx context.Context, arg ListBestBuyStationsParams) ([]ListBestBuyStationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listBestBuyStations, arg.RegionID, pq.Array(arg.TypeIds))
+	rows, err := q.db.Query(ctx, listBestBuyStations, arg.RegionID, arg.TypeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1323,9 +1314,6 @@ func (q *Queries) ListBestBuyStations(ctx context.Context, arg ListBestBuyStatio
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1355,7 +1343,7 @@ type ListCheapestSellStationsRow struct {
 // the tradefinder's "cheapest at" hints without pulling the
 // region's whole station grain.
 func (q *Queries) ListCheapestSellStations(ctx context.Context, arg ListCheapestSellStationsParams) ([]ListCheapestSellStationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listCheapestSellStations, arg.RegionID, pq.Array(arg.TypeIds))
+	rows, err := q.db.Query(ctx, listCheapestSellStations, arg.RegionID, arg.TypeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1367,9 +1355,6 @@ func (q *Queries) ListCheapestSellStations(ctx context.Context, arg ListCheapest
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1391,7 +1376,7 @@ type ListClosedOrderLifecycleByCharacterParams struct {
 }
 
 func (q *Queries) ListClosedOrderLifecycleByCharacter(ctx context.Context, arg ListClosedOrderLifecycleByCharacterParams) ([]OrderLifecycle, error) {
-	rows, err := q.db.QueryContext(ctx, listClosedOrderLifecycleByCharacter, arg.CharacterID, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listClosedOrderLifecycleByCharacter, arg.CharacterID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1428,9 +1413,6 @@ func (q *Queries) ListClosedOrderLifecycleByCharacter(ctx context.Context, arg L
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1479,7 +1461,7 @@ type ListCorporationDrainsParams struct {
 // Typing rows spend their slice highest learned rate first (see
 // ListPilotDrains).
 func (q *Queries) ListCorporationDrains(ctx context.Context, arg ListCorporationDrainsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listCorporationDrains,
+	rows, err := q.db.Query(ctx, listCorporationDrains,
 		arg.TypingPriority,
 		arg.TypingAssumed,
 		arg.TypingWeight,
@@ -1499,9 +1481,6 @@ func (q *Queries) ListCorporationDrains(ctx context.Context, arg ListCorporation
 			return nil, err
 		}
 		items = append(items, corporation_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1524,7 +1503,7 @@ type ListDuePilotNameWantsParams struct {
 }
 
 func (q *Queries) ListDuePilotNameWants(ctx context.Context, arg ListDuePilotNameWantsParams) ([]PilotNameWant, error) {
-	rows, err := q.db.QueryContext(ctx, listDuePilotNameWants, arg.Now, arg.Lim)
+	rows, err := q.db.Query(ctx, listDuePilotNameWants, arg.Now, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -1546,9 +1525,6 @@ func (q *Queries) ListDuePilotNameWants(ctx context.Context, arg ListDuePilotNam
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1561,7 +1537,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListGuidePrices(ctx context.Context) ([]GuidePrice, error) {
-	rows, err := q.db.QueryContext(ctx, listGuidePrices)
+	rows, err := q.db.Query(ctx, listGuidePrices)
 	if err != nil {
 		return nil, err
 	}
@@ -1573,9 +1549,6 @@ func (q *Queries) ListGuidePrices(ctx context.Context) ([]GuidePrice, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1595,7 +1568,7 @@ SELECT type_id FROM market_region_stats
 // published or not). A candidate outside this set can only
 // be answered 404.
 func (q *Queries) ListHistoryFetchableTypeIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listHistoryFetchableTypeIDs)
+	rows, err := q.db.Query(ctx, listHistoryFetchableTypeIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1607,9 +1580,6 @@ func (q *Queries) ListHistoryFetchableTypeIDs(ctx context.Context) ([]int64, err
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1624,7 +1594,7 @@ ORDER BY activity, cost_index ASC
 `
 
 func (q *Queries) ListIndustryCostIndices(ctx context.Context) ([]IndustryCostIndex, error) {
-	rows, err := q.db.QueryContext(ctx, listIndustryCostIndices)
+	rows, err := q.db.Query(ctx, listIndustryCostIndices)
 	if err != nil {
 		return nil, err
 	}
@@ -1641,9 +1611,6 @@ func (q *Queries) ListIndustryCostIndices(ctx context.Context) ([]IndustryCostIn
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1679,7 +1646,7 @@ type ListMarketAvgDailyVolumesRow struct {
 // history at sweep completion; types with no recorded history
 // have no row here and read as 0.
 func (q *Queries) ListMarketAvgDailyVolumes(ctx context.Context, regionID int64) ([]ListMarketAvgDailyVolumesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketAvgDailyVolumes, regionID)
+	rows, err := q.db.Query(ctx, listMarketAvgDailyVolumes, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -1691,9 +1658,6 @@ func (q *Queries) ListMarketAvgDailyVolumes(ctx context.Context, regionID int64)
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1714,7 +1678,7 @@ type ListMarketBookOrdersParams struct {
 }
 
 func (q *Queries) ListMarketBookOrders(ctx context.Context, arg ListMarketBookOrdersParams) ([]MarketBookOrder, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBookOrders, arg.RegionID, arg.TypeID)
+	rows, err := q.db.Query(ctx, listMarketBookOrders, arg.RegionID, arg.TypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1736,9 +1700,6 @@ func (q *Queries) ListMarketBookOrders(ctx context.Context, arg ListMarketBookOr
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1805,7 +1766,7 @@ type ListMarketBrowseTypesRow struct {
 // and paged in SQL. A type with no stat row lists with no figures
 // and sorts after priced ones.
 func (q *Queries) ListMarketBrowseTypes(ctx context.Context, arg ListMarketBrowseTypesParams) ([]ListMarketBrowseTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBrowseTypes,
+	rows, err := q.db.Query(ctx, listMarketBrowseTypes,
 		arg.RegionID,
 		arg.NameLike,
 		arg.MinVolume,
@@ -1834,9 +1795,6 @@ func (q *Queries) ListMarketBrowseTypes(ctx context.Context, arg ListMarketBrows
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1872,7 +1830,7 @@ type ListMarketChangesForRegionRow struct {
 // The Trends page's change feed: a region's changes from a day on,
 // newest day first, biggest moves first within it.
 func (q *Queries) ListMarketChangesForRegion(ctx context.Context, arg ListMarketChangesForRegionParams) ([]ListMarketChangesForRegionRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketChangesForRegion, arg.RegionID, arg.Since, arg.Kind)
+	rows, err := q.db.Query(ctx, listMarketChangesForRegion, arg.RegionID, arg.Since, arg.Kind)
 	if err != nil {
 		return nil, err
 	}
@@ -1892,9 +1850,6 @@ func (q *Queries) ListMarketChangesForRegion(ctx context.Context, arg ListMarket
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1926,7 +1881,7 @@ type ListMarketChangesForTypeRow struct {
 
 // One type's recent changes in a region: the item page.
 func (q *Queries) ListMarketChangesForType(ctx context.Context, arg ListMarketChangesForTypeParams) ([]ListMarketChangesForTypeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketChangesForType, arg.RegionID, arg.TypeID)
+	rows, err := q.db.Query(ctx, listMarketChangesForType, arg.RegionID, arg.TypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1945,9 +1900,6 @@ func (q *Queries) ListMarketChangesForType(ctx context.Context, arg ListMarketCh
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1982,7 +1934,7 @@ type ListMarketChangesForWatchlistRow struct {
 // Today's changes on a user's watched items (each in its watched
 // region): the notification pass.
 func (q *Queries) ListMarketChangesForWatchlist(ctx context.Context, arg ListMarketChangesForWatchlistParams) ([]ListMarketChangesForWatchlistRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketChangesForWatchlist, arg.UserID, arg.Since)
+	rows, err := q.db.Query(ctx, listMarketChangesForWatchlist, arg.UserID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -2003,9 +1955,6 @@ func (q *Queries) ListMarketChangesForWatchlist(ctx context.Context, arg ListMar
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2021,7 +1970,7 @@ WHERE kind = ANY($1::text[])
 // The fetch states of many kinds in one read, for a pass that
 // gates thousands of candidates (a kind with no row is absent).
 func (q *Queries) ListMarketFetchStatesByKinds(ctx context.Context, kinds []string) ([]MarketFetchState, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketFetchStatesByKinds, pq.Array(kinds))
+	rows, err := q.db.Query(ctx, listMarketFetchStatesByKinds, kinds)
 	if err != nil {
 		return nil, err
 	}
@@ -2038,9 +1987,6 @@ func (q *Queries) ListMarketFetchStatesByKinds(ctx context.Context, kinds []stri
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2067,7 +2013,7 @@ type ListMarketHistoryParams struct {
 // trades, newest first, so a sparse item's stored trades are
 // never hidden by an arbitrary date cutoff.
 func (q *Queries) ListMarketHistory(ctx context.Context, arg ListMarketHistoryParams) ([]MarketHistory, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketHistory, arg.RegionID, arg.TypeID, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listMarketHistory, arg.RegionID, arg.TypeID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -2088,9 +2034,6 @@ func (q *Queries) ListMarketHistory(ctx context.Context, arg ListMarketHistoryPa
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2142,7 +2085,7 @@ type ListMarketHistoryWantsRow struct {
 // Typing rows spend their slice highest learned rate first (see
 // ListPilotDrains).
 func (q *Queries) ListMarketHistoryWants(ctx context.Context, arg ListMarketHistoryWantsParams) ([]ListMarketHistoryWantsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketHistoryWants,
+	rows, err := q.db.Query(ctx, listMarketHistoryWants,
 		arg.LastRequestedAt,
 		arg.TypingPriority,
 		arg.TypingAssumed,
@@ -2162,9 +2105,6 @@ func (q *Queries) ListMarketHistoryWants(ctx context.Context, arg ListMarketHist
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2183,7 +2123,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListMarketRegionStatsByRegion(ctx context.Context, regionID int64) ([]MarketRegionStat, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsByRegion, regionID)
+	rows, err := q.db.Query(ctx, listMarketRegionStatsByRegion, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -2231,9 +2171,6 @@ func (q *Queries) ListMarketRegionStatsByRegion(ctx context.Context, regionID in
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2253,7 +2190,7 @@ ORDER BY region_id
 `
 
 func (q *Queries) ListMarketRegionStatsByType(ctx context.Context, typeID int64) ([]MarketRegionStat, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsByType, typeID)
+	rows, err := q.db.Query(ctx, listMarketRegionStatsByType, typeID)
 	if err != nil {
 		return nil, err
 	}
@@ -2301,9 +2238,6 @@ func (q *Queries) ListMarketRegionStatsByType(ctx context.Context, typeID int64)
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2325,7 +2259,7 @@ type ListMarketRegionStatsDailyParams struct {
 }
 
 func (q *Queries) ListMarketRegionStatsDaily(ctx context.Context, arg ListMarketRegionStatsDailyParams) ([]MarketRegionStatsDaily, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsDaily, arg.RegionID, arg.TypeID)
+	rows, err := q.db.Query(ctx, listMarketRegionStatsDaily, arg.RegionID, arg.TypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -2359,9 +2293,6 @@ func (q *Queries) ListMarketRegionStatsDaily(ctx context.Context, arg ListMarket
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2400,7 +2331,7 @@ type ListMarketRegionStatsDailyRecentRow struct {
 // oldest first: the item page's book trend chart. The caller
 // bounds the window: at most row_limit rows.
 func (q *Queries) ListMarketRegionStatsDailyRecent(ctx context.Context, arg ListMarketRegionStatsDailyRecentParams) ([]ListMarketRegionStatsDailyRecentRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsDailyRecent,
+	rows, err := q.db.Query(ctx, listMarketRegionStatsDailyRecent,
 		arg.RegionID,
 		arg.TypeID,
 		arg.Since,
@@ -2428,9 +2359,6 @@ func (q *Queries) ListMarketRegionStatsDailyRecent(ctx context.Context, arg List
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2453,7 +2381,7 @@ type ListMarketRegionStatsForTypesParams struct {
 }
 
 func (q *Queries) ListMarketRegionStatsForTypes(ctx context.Context, arg ListMarketRegionStatsForTypesParams) ([]MarketRegionStat, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsForTypes, arg.RegionID, pq.Array(arg.Column2))
+	rows, err := q.db.Query(ctx, listMarketRegionStatsForTypes, arg.RegionID, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
@@ -2502,9 +2430,6 @@ func (q *Queries) ListMarketRegionStatsForTypes(ctx context.Context, arg ListMar
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2535,7 +2460,7 @@ type ListMarketStatSparksRow struct {
 // region: one bounded read per region for a whole table's hover
 // cards.
 func (q *Queries) ListMarketStatSparks(ctx context.Context, arg ListMarketStatSparksParams) ([]ListMarketStatSparksRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketStatSparks, arg.RegionID, pq.Array(arg.TypeIds))
+	rows, err := q.db.Query(ctx, listMarketStatSparks, arg.RegionID, arg.TypeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -2553,9 +2478,6 @@ func (q *Queries) ListMarketStatSparks(ctx context.Context, arg ListMarketStatSp
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2583,7 +2505,7 @@ type ListMarketStationBestsByTypesRow struct {
 // One station's current best sell for each type asked about:
 // the appraisal tool's sell list prices 0.01 under it.
 func (q *Queries) ListMarketStationBestsByTypes(ctx context.Context, arg ListMarketStationBestsByTypesParams) ([]ListMarketStationBestsByTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketStationBestsByTypes, arg.LocationID, pq.Array(arg.Column2))
+	rows, err := q.db.Query(ctx, listMarketStationBestsByTypes, arg.LocationID, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
@@ -2595,9 +2517,6 @@ func (q *Queries) ListMarketStationBestsByTypes(ctx context.Context, arg ListMar
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2618,7 +2537,7 @@ ORDER BY location_id, type_id, is_buy_order
 // the rows for its orders' stations in one bounded read; a pair
 // with no row had no beats in the window.
 func (q *Queries) ListMarketStationHeatByLocations(ctx context.Context, dollar_1 []int64) ([]MarketStationHeat, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketStationHeatByLocations, pq.Array(dollar_1))
+	rows, err := q.db.Query(ctx, listMarketStationHeatByLocations, dollar_1)
 	if err != nil {
 		return nil, err
 	}
@@ -2638,9 +2557,6 @@ func (q *Queries) ListMarketStationHeatByLocations(ctx context.Context, dollar_1
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2655,7 +2571,7 @@ ORDER BY region_id, location_id
 `
 
 func (q *Queries) ListMarketStationLeaderboard(ctx context.Context, dollar_1 int64) ([]MarketStationLeaderboard, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketStationLeaderboard, dollar_1)
+	rows, err := q.db.Query(ctx, listMarketStationLeaderboard, dollar_1)
 	if err != nil {
 		return nil, err
 	}
@@ -2676,9 +2592,6 @@ func (q *Queries) ListMarketStationLeaderboard(ctx context.Context, dollar_1 int
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2693,7 +2606,7 @@ ORDER BY location_id, type_id
 `
 
 func (q *Queries) ListMarketStationStatsByRegion(ctx context.Context, regionID int64) ([]MarketStationStat, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketStationStatsByRegion, regionID)
+	rows, err := q.db.Query(ctx, listMarketStationStatsByRegion, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -2719,9 +2632,6 @@ func (q *Queries) ListMarketStationStatsByRegion(ctx context.Context, regionID i
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2737,7 +2647,7 @@ ORDER BY region_id
 `
 
 func (q *Queries) ListMarketStatsFallbackByType(ctx context.Context, typeID int64) ([]MarketStatsFallback, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketStatsFallbackByType, typeID)
+	rows, err := q.db.Query(ctx, listMarketStatsFallbackByType, typeID)
 	if err != nil {
 		return nil, err
 	}
@@ -2772,9 +2682,6 @@ func (q *Queries) ListMarketStatsFallbackByType(ctx context.Context, typeID int6
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2796,7 +2703,7 @@ type ListMarketStatsFallbackForTypesParams struct {
 }
 
 func (q *Queries) ListMarketStatsFallbackForTypes(ctx context.Context, arg ListMarketStatsFallbackForTypesParams) ([]MarketStatsFallback, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketStatsFallbackForTypes, arg.RegionID, pq.Array(arg.Column2))
+	rows, err := q.db.Query(ctx, listMarketStatsFallbackForTypes, arg.RegionID, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
@@ -2831,9 +2738,6 @@ func (q *Queries) ListMarketStatsFallbackForTypes(ctx context.Context, arg ListM
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2862,7 +2766,7 @@ type ListMarketSweepStationAggregatesRow struct {
 }
 
 func (q *Queries) ListMarketSweepStationAggregates(ctx context.Context, regionID int64) ([]ListMarketSweepStationAggregatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketSweepStationAggregates, regionID)
+	rows, err := q.db.Query(ctx, listMarketSweepStationAggregates, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -2882,9 +2786,6 @@ func (q *Queries) ListMarketSweepStationAggregates(ctx context.Context, regionID
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2922,7 +2823,7 @@ type ListMarketSweepStationLeaderboardAggregatesRow struct {
 // region.
 // ---------------------------------------------------------------------
 func (q *Queries) ListMarketSweepStationLeaderboardAggregates(ctx context.Context, regionID int64) ([]ListMarketSweepStationLeaderboardAggregatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketSweepStationLeaderboardAggregates, regionID)
+	rows, err := q.db.Query(ctx, listMarketSweepStationLeaderboardAggregates, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -2940,9 +2841,6 @@ func (q *Queries) ListMarketSweepStationLeaderboardAggregates(ctx context.Contex
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -2957,7 +2855,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListMarketSweepTypeIDs(ctx context.Context, regionID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketSweepTypeIDs, regionID)
+	rows, err := q.db.Query(ctx, listMarketSweepTypeIDs, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -2969,9 +2867,6 @@ func (q *Queries) ListMarketSweepTypeIDs(ctx context.Context, regionID int64) ([
 			return nil, err
 		}
 		items = append(items, type_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3000,7 +2895,7 @@ type ListMarketSweepTypeOrdersRow struct {
 }
 
 func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketSweepTypeOrdersParams) ([]ListMarketSweepTypeOrdersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketSweepTypeOrders, arg.RegionID, arg.TypeID)
+	rows, err := q.db.Query(ctx, listMarketSweepTypeOrders, arg.RegionID, arg.TypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -3018,9 +2913,6 @@ func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketS
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3084,7 +2976,7 @@ type ListMarketTrendTypesRow struct {
 // orders) and real trade (30-day traded volume floor), so a
 // one-order book's swing never tops the screen.
 func (q *Queries) ListMarketTrendTypes(ctx context.Context, arg ListMarketTrendTypesParams) ([]ListMarketTrendTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketTrendTypes,
+	rows, err := q.db.Query(ctx, listMarketTrendTypes,
 		arg.Mode,
 		arg.Period,
 		arg.RegionID,
@@ -3120,9 +3012,6 @@ func (q *Queries) ListMarketTrendTypes(ctx context.Context, arg ListMarketTrendT
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -3141,7 +3030,7 @@ type ListMarketTypePricesForTypesParams struct {
 }
 
 func (q *Queries) ListMarketTypePricesForTypes(ctx context.Context, arg ListMarketTypePricesForTypesParams) ([]MarketTypePrice, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketTypePricesForTypes, arg.RegionID, pq.Array(arg.Column2))
+	rows, err := q.db.Query(ctx, listMarketTypePricesForTypes, arg.RegionID, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
@@ -3162,9 +3051,6 @@ func (q *Queries) ListMarketTypePricesForTypes(ctx context.Context, arg ListMark
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -3179,7 +3065,7 @@ ORDER BY order_id
 `
 
 func (q *Queries) ListOpenOrderLifecycleByCharacter(ctx context.Context, characterID int64) ([]OrderLifecycle, error) {
-	rows, err := q.db.QueryContext(ctx, listOpenOrderLifecycleByCharacter, characterID)
+	rows, err := q.db.Query(ctx, listOpenOrderLifecycleByCharacter, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -3217,9 +3103,6 @@ func (q *Queries) ListOpenOrderLifecycleByCharacter(ctx context.Context, charact
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -3234,7 +3117,7 @@ ORDER BY type_id, order_id
 `
 
 func (q *Queries) ListOrderHealthByCharacter(ctx context.Context, characterID int64) ([]OrderHealth, error) {
-	rows, err := q.db.QueryContext(ctx, listOrderHealthByCharacter, characterID)
+	rows, err := q.db.Query(ctx, listOrderHealthByCharacter, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -3257,9 +3140,6 @@ func (q *Queries) ListOrderHealthByCharacter(ctx context.Context, characterID in
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3276,7 +3156,7 @@ ORDER BY c.name, oh.type_id, oh.order_id
 `
 
 func (q *Queries) ListOrderHealthByUser(ctx context.Context, userID int64) ([]OrderHealth, error) {
-	rows, err := q.db.QueryContext(ctx, listOrderHealthByUser, userID)
+	rows, err := q.db.Query(ctx, listOrderHealthByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -3300,9 +3180,6 @@ func (q *Queries) ListOrderHealthByUser(ctx context.Context, userID int64) ([]Or
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -3317,7 +3194,7 @@ ORDER BY first_seen_at DESC, order_id DESC
 `
 
 func (q *Queries) ListOrderLifecycleByCharacter(ctx context.Context, characterID int64) ([]OrderLifecycle, error) {
-	rows, err := q.db.QueryContext(ctx, listOrderLifecycleByCharacter, characterID)
+	rows, err := q.db.Query(ctx, listOrderLifecycleByCharacter, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -3354,9 +3231,6 @@ func (q *Queries) ListOrderLifecycleByCharacter(ctx context.Context, characterID
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3373,7 +3247,7 @@ ORDER BY ol.closed_at DESC NULLS LAST, ol.first_seen_at DESC, ol.order_id DESC
 `
 
 func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([]OrderLifecycle, error) {
-	rows, err := q.db.QueryContext(ctx, listOrderLifecycleByUser, userID)
+	rows, err := q.db.Query(ctx, listOrderLifecycleByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -3410,9 +3284,6 @@ func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3451,7 +3322,7 @@ type ListOrderLifecycleStatesRow struct {
 // The ledger rows of many (character, order) pairs in one read: what
 // the order-health pass needs of each before it upserts them.
 func (q *Queries) ListOrderLifecycleStates(ctx context.Context, arg ListOrderLifecycleStatesParams) ([]ListOrderLifecycleStatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listOrderLifecycleStates, pq.Array(arg.CharacterIds), pq.Array(arg.OrderIds))
+	rows, err := q.db.Query(ctx, listOrderLifecycleStates, arg.CharacterIds, arg.OrderIds)
 	if err != nil {
 		return nil, err
 	}
@@ -3475,9 +3346,6 @@ func (q *Queries) ListOrderLifecycleStates(ctx context.Context, arg ListOrderLif
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3528,7 +3396,7 @@ type ListPilotDrainsParams struct {
 // with the assumed rate. Recency breaks ties; unknown pilots read
 // at the assumed rate, so a cold start drains newest first.
 func (q *Queries) ListPilotDrains(ctx context.Context, arg ListPilotDrainsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotDrains,
+	rows, err := q.db.Query(ctx, listPilotDrains,
 		arg.TypingPriority,
 		arg.TypingAssumed,
 		arg.TypingWeight,
@@ -3549,9 +3417,6 @@ func (q *Queries) ListPilotDrains(ctx context.Context, arg ListPilotDrainsParams
 		}
 		items = append(items, character_id)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -3564,7 +3429,7 @@ FROM pilot_records
 `
 
 func (q *Queries) ListPilotRecordIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotRecordIDs)
+	rows, err := q.db.Query(ctx, listPilotRecordIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -3576,9 +3441,6 @@ func (q *Queries) ListPilotRecordIDs(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, character_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3610,7 +3472,7 @@ type ListPilotRecordsByIDsRow struct {
 // Settled records for a set of pilots at once: a roster's
 // dossiers, read in one bounded pass.
 func (q *Queries) ListPilotRecordsByIDs(ctx context.Context, arg ListPilotRecordsByIDsParams) ([]ListPilotRecordsByIDsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotRecordsByIDs, pq.Array(arg.CharacterIds), arg.MaxRows)
+	rows, err := q.db.Query(ctx, listPilotRecordsByIDs, arg.CharacterIds, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -3627,9 +3489,6 @@ func (q *Queries) ListPilotRecordsByIDs(ctx context.Context, arg ListPilotRecord
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3654,7 +3513,7 @@ type ListPlanetResolutionsParams struct {
 }
 
 func (q *Queries) ListPlanetResolutions(ctx context.Context, arg ListPlanetResolutionsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listPlanetResolutions, arg.ResolvedCutoff, arg.MissingCutoff, arg.ResolutionLimit)
+	rows, err := q.db.Query(ctx, listPlanetResolutions, arg.ResolvedCutoff, arg.MissingCutoff, arg.ResolutionLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -3666,9 +3525,6 @@ func (q *Queries) ListPlanetResolutions(ctx context.Context, arg ListPlanetResol
 			return nil, err
 		}
 		items = append(items, planet_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3689,7 +3545,7 @@ type ListResolvedStructureNamesRow struct {
 }
 
 func (q *Queries) ListResolvedStructureNames(ctx context.Context) ([]ListResolvedStructureNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listResolvedStructureNames)
+	rows, err := q.db.Query(ctx, listResolvedStructureNames)
 	if err != nil {
 		return nil, err
 	}
@@ -3701,9 +3557,6 @@ func (q *Queries) ListResolvedStructureNames(ctx context.Context) ([]ListResolve
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3719,7 +3572,7 @@ ORDER BY type_id
 `
 
 func (q *Queries) ListRestockTargets(ctx context.Context, userID int64) ([]RestockTarget, error) {
-	rows, err := q.db.QueryContext(ctx, listRestockTargets, userID)
+	rows, err := q.db.Query(ctx, listRestockTargets, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -3738,9 +3591,6 @@ func (q *Queries) ListRestockTargets(ctx context.Context, userID int64) ([]Resto
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -3752,7 +3602,7 @@ SELECT region_id, name FROM sde_regions WHERE region_id = ANY($1::bigint[])
 `
 
 func (q *Queries) ListSDERegionNames(ctx context.Context, regionIds []int64) ([]SdeRegion, error) {
-	rows, err := q.db.QueryContext(ctx, listSDERegionNames, pq.Array(regionIds))
+	rows, err := q.db.Query(ctx, listSDERegionNames, regionIds)
 	if err != nil {
 		return nil, err
 	}
@@ -3764,9 +3614,6 @@ func (q *Queries) ListSDERegionNames(ctx context.Context, regionIds []int64) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3832,7 +3679,7 @@ type ListScannerOpportunitiesRow struct {
 // the least of what trades, what sellers hold, and what buyers
 // want.
 func (q *Queries) ListScannerOpportunities(ctx context.Context, arg ListScannerOpportunitiesParams) ([]ListScannerOpportunitiesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listScannerOpportunities,
+	rows, err := q.db.Query(ctx, listScannerOpportunities,
 		arg.RegionID,
 		arg.MinSpread,
 		arg.MinVolume,
@@ -3857,9 +3704,6 @@ func (q *Queries) ListScannerOpportunities(ctx context.Context, arg ListScannerO
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3886,7 +3730,7 @@ type ListStaleMarketTypePricesRow struct {
 }
 
 func (q *Queries) ListStaleMarketTypePrices(ctx context.Context, arg ListStaleMarketTypePricesParams) ([]ListStaleMarketTypePricesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listStaleMarketTypePrices, arg.Column1, arg.Limit)
+	rows, err := q.db.Query(ctx, listStaleMarketTypePrices, arg.Column1, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -3898,9 +3742,6 @@ func (q *Queries) ListStaleMarketTypePrices(ctx context.Context, arg ListStaleMa
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -3923,7 +3764,7 @@ type ListStatPackBestBeatsRow struct {
 
 // All recorded best beats for the in-memory stat pack snapshot.
 func (q *Queries) ListStatPackBestBeats(ctx context.Context) ([]ListStatPackBestBeatsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listStatPackBestBeats)
+	rows, err := q.db.Query(ctx, listStatPackBestBeats)
 	if err != nil {
 		return nil, err
 	}
@@ -3942,9 +3783,6 @@ func (q *Queries) ListStatPackBestBeats(ctx context.Context) ([]ListStatPackBest
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -3958,7 +3796,7 @@ FROM market_stats_fallback
 `
 
 func (q *Queries) ListStatPackFallbackStats(ctx context.Context) ([]MarketStatsFallback, error) {
-	rows, err := q.db.QueryContext(ctx, listStatPackFallbackStats)
+	rows, err := q.db.Query(ctx, listStatPackFallbackStats)
 	if err != nil {
 		return nil, err
 	}
@@ -3994,9 +3832,6 @@ func (q *Queries) ListStatPackFallbackStats(ctx context.Context) ([]MarketStatsF
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -4015,7 +3850,7 @@ FROM market_region_stats
 // All swept region stats for the in-memory stat pack snapshot
 // (market_stat_pack.go): loaded once at startup and kept resident.
 func (q *Queries) ListStatPackRegionStats(ctx context.Context) ([]MarketRegionStat, error) {
-	rows, err := q.db.QueryContext(ctx, listStatPackRegionStats)
+	rows, err := q.db.Query(ctx, listStatPackRegionStats)
 	if err != nil {
 		return nil, err
 	}
@@ -4064,9 +3899,6 @@ func (q *Queries) ListStatPackRegionStats(ctx context.Context) ([]MarketRegionSt
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -4080,7 +3912,7 @@ FROM market_station_stats
 
 // All station stats for the in-memory stat pack snapshot.
 func (q *Queries) ListStatPackStationStats(ctx context.Context) ([]MarketStationStat, error) {
-	rows, err := q.db.QueryContext(ctx, listStatPackStationStats)
+	rows, err := q.db.Query(ctx, listStatPackStationStats)
 	if err != nil {
 		return nil, err
 	}
@@ -4106,9 +3938,6 @@ func (q *Queries) ListStatPackStationStats(ctx context.Context) ([]MarketStation
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -4133,7 +3962,7 @@ type ListStructureResolutionsParams struct {
 }
 
 func (q *Queries) ListStructureResolutions(ctx context.Context, arg ListStructureResolutionsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listStructureResolutions, arg.ResolvedCutoff, arg.MissingCutoff, arg.ResolutionLimit)
+	rows, err := q.db.Query(ctx, listStructureResolutions, arg.ResolvedCutoff, arg.MissingCutoff, arg.ResolutionLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -4145,9 +3974,6 @@ func (q *Queries) ListStructureResolutions(ctx context.Context, arg ListStructur
 			return nil, err
 		}
 		items = append(items, structure_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -4203,7 +4029,7 @@ type ListTradefinderPendingRoutesRow struct {
 // Endpoint rows resolve exactly as in ListTradefinderRoutes: the
 // endpoint region's own row, else the type's global-market row.
 func (q *Queries) ListTradefinderPendingRoutes(ctx context.Context, arg ListTradefinderPendingRoutesParams) ([]ListTradefinderPendingRoutesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTradefinderPendingRoutes,
+	rows, err := q.db.Query(ctx, listTradefinderPendingRoutes,
 		arg.DestRegion,
 		arg.GlobalRegion,
 		arg.OriginRegion,
@@ -4223,9 +4049,6 @@ func (q *Queries) ListTradefinderPendingRoutes(ctx context.Context, arg ListTrad
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -4299,7 +4122,7 @@ type ListTradefinderRoutesRow struct {
 // global row, and the serving row's own updated_at is what the
 // freshness rule judges.
 func (q *Queries) ListTradefinderRoutes(ctx context.Context, arg ListTradefinderRoutesParams) ([]ListTradefinderRoutesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTradefinderRoutes,
+	rows, err := q.db.Query(ctx, listTradefinderRoutes,
 		arg.DestRegion,
 		arg.GlobalRegion,
 		arg.OriginRegion,
@@ -4327,9 +4150,6 @@ func (q *Queries) ListTradefinderRoutes(ctx context.Context, arg ListTradefinder
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -4344,7 +4164,7 @@ ORDER BY type_id, region_id
 `
 
 func (q *Queries) ListWatchlistByUser(ctx context.Context, userID int64) ([]MarketWatchlist, error) {
-	rows, err := q.db.QueryContext(ctx, listWatchlistByUser, userID)
+	rows, err := q.db.Query(ctx, listWatchlistByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -4362,9 +4182,6 @@ func (q *Queries) ListWatchlistByUser(ctx context.Context, userID int64) ([]Mark
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -4387,7 +4204,7 @@ ON CONFLICT (id) DO UPDATE SET
 // urgent drain with a guide refresh when ESI's window allows.
 // ---------------------------------------------------------------------
 func (q *Queries) NoteGuidePriceWant(ctx context.Context, wantedAt time.Time) error {
-	_, err := q.db.ExecContext(ctx, noteGuidePriceWant, wantedAt)
+	_, err := q.db.Exec(ctx, noteGuidePriceWant, wantedAt)
 	return err
 }
 
@@ -4401,7 +4218,7 @@ type PruneMarketChangesParams struct {
 }
 
 func (q *Queries) PruneMarketChanges(ctx context.Context, arg PruneMarketChangesParams) error {
-	_, err := q.db.ExecContext(ctx, pruneMarketChanges, arg.RegionID, arg.BeforeDay)
+	_, err := q.db.Exec(ctx, pruneMarketChanges, arg.RegionID, arg.BeforeDay)
 	return err
 }
 
@@ -4421,7 +4238,7 @@ type PruneOldOrderLifecycleParams struct {
 }
 
 func (q *Queries) PruneOldOrderLifecycle(ctx context.Context, arg PruneOldOrderLifecycleParams) error {
-	_, err := q.db.ExecContext(ctx, pruneOldOrderLifecycle, arg.ClosedBefore, arg.RowLimit)
+	_, err := q.db.Exec(ctx, pruneOldOrderLifecycle, arg.ClosedBefore, arg.RowLimit)
 	return err
 }
 
@@ -4449,7 +4266,7 @@ type RefreshMarketRegionStatAvgVolumeParams struct {
 // right after a history fetch, so the figure doesn't wait for the
 // region's next sweep.
 func (q *Queries) RefreshMarketRegionStatAvgVolume(ctx context.Context, arg RefreshMarketRegionStatAvgVolumeParams) error {
-	_, err := q.db.ExecContext(ctx, refreshMarketRegionStatAvgVolume, arg.RegionID, arg.TypeID)
+	_, err := q.db.Exec(ctx, refreshMarketRegionStatAvgVolume, arg.RegionID, arg.TypeID)
 	return err
 }
 
@@ -4480,11 +4297,11 @@ type RefreshMarketRegionStatAvgVolumesParams struct {
 // tradefinder's self-heal for pending routes whose history is stored
 // but whose sold-per-day figure has not caught up.
 func (q *Queries) RefreshMarketRegionStatAvgVolumes(ctx context.Context, arg RefreshMarketRegionStatAvgVolumesParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, refreshMarketRegionStatAvgVolumes, arg.RegionID, pq.Array(arg.TypeIds))
+	result, err := q.db.Exec(ctx, refreshMarketRegionStatAvgVolumes, arg.RegionID, arg.TypeIds)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const refreshMarketStatPackSparks = `-- name: RefreshMarketStatPackSparks :execrows
@@ -4535,11 +4352,11 @@ type RefreshMarketStatPackSparksParams struct {
 // of padding, flat lines at mid height), with their low, high and
 // mean. A type with under two such days gets an empty line.
 func (q *Queries) RefreshMarketStatPackSparks(ctx context.Context, arg RefreshMarketStatPackSparksParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, refreshMarketStatPackSparks, arg.RegionID, arg.Today)
+	result, err := q.db.Exec(ctx, refreshMarketStatPackSparks, arg.RegionID, arg.Today)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const refreshMarketStatPackTrends = `-- name: RefreshMarketStatPackTrends :execrows
@@ -4627,11 +4444,11 @@ type RefreshMarketStatPackTrendsParams struct {
 // traded volume reads market_history over the 30 days ending on
 // the type's newest recorded day.
 func (q *Queries) RefreshMarketStatPackTrends(ctx context.Context, arg RefreshMarketStatPackTrendsParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, refreshMarketStatPackTrends, arg.RegionID, arg.Today)
+	result, err := q.db.Exec(ctx, refreshMarketStatPackTrends, arg.RegionID, arg.Today)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const setAllianceRecord = `-- name: SetAllianceRecord :exec
@@ -4651,7 +4468,7 @@ type SetAllianceRecordParams struct {
 }
 
 func (q *Queries) SetAllianceRecord(ctx context.Context, arg SetAllianceRecordParams) error {
-	_, err := q.db.ExecContext(ctx, setAllianceRecord,
+	_, err := q.db.Exec(ctx, setAllianceRecord,
 		arg.AllianceID,
 		arg.Payload,
 		arg.State,
@@ -4677,7 +4494,7 @@ type SetCorporationRecordParams struct {
 }
 
 func (q *Queries) SetCorporationRecord(ctx context.Context, arg SetCorporationRecordParams) error {
-	_, err := q.db.ExecContext(ctx, setCorporationRecord,
+	_, err := q.db.Exec(ctx, setCorporationRecord,
 		arg.CorporationID,
 		arg.Payload,
 		arg.State,
@@ -4699,7 +4516,7 @@ type SetPilotNameWantErrorParams struct {
 }
 
 func (q *Queries) SetPilotNameWantError(ctx context.Context, arg SetPilotNameWantErrorParams) error {
-	_, err := q.db.ExecContext(ctx, setPilotNameWantError, arg.ResolvedAt, arg.NextTryAt, arg.NormalizedName)
+	_, err := q.db.Exec(ctx, setPilotNameWantError, arg.ResolvedAt, arg.NextTryAt, arg.NormalizedName)
 	return err
 }
 
@@ -4715,7 +4532,7 @@ type SetPilotNameWantMissingParams struct {
 }
 
 func (q *Queries) SetPilotNameWantMissing(ctx context.Context, arg SetPilotNameWantMissingParams) error {
-	_, err := q.db.ExecContext(ctx, setPilotNameWantMissing, arg.ResolvedAt, arg.NormalizedName)
+	_, err := q.db.Exec(ctx, setPilotNameWantMissing, arg.ResolvedAt, arg.NormalizedName)
 	return err
 }
 
@@ -4732,7 +4549,7 @@ type SetPilotNameWantReadyParams struct {
 }
 
 func (q *Queries) SetPilotNameWantReady(ctx context.Context, arg SetPilotNameWantReadyParams) error {
-	_, err := q.db.ExecContext(ctx, setPilotNameWantReady, arg.CharacterID, arg.ResolvedAt, arg.NormalizedName)
+	_, err := q.db.Exec(ctx, setPilotNameWantReady, arg.CharacterID, arg.ResolvedAt, arg.NormalizedName)
 	return err
 }
 
@@ -4753,7 +4570,7 @@ type SetPilotRecordParams struct {
 }
 
 func (q *Queries) SetPilotRecord(ctx context.Context, arg SetPilotRecordParams) error {
-	_, err := q.db.ExecContext(ctx, setPilotRecord,
+	_, err := q.db.Exec(ctx, setPilotRecord,
 		arg.CharacterID,
 		arg.Payload,
 		arg.State,
@@ -4779,7 +4596,7 @@ type SetPlanetNameParams struct {
 }
 
 func (q *Queries) SetPlanetName(ctx context.Context, arg SetPlanetNameParams) error {
-	_, err := q.db.ExecContext(ctx, setPlanetName,
+	_, err := q.db.Exec(ctx, setPlanetName,
 		arg.PlanetID,
 		arg.Name,
 		arg.State,
@@ -4807,7 +4624,7 @@ type SetStructureContextParams struct {
 }
 
 func (q *Queries) SetStructureContext(ctx context.Context, arg SetStructureContextParams) error {
-	_, err := q.db.ExecContext(ctx, setStructureContext,
+	_, err := q.db.Exec(ctx, setStructureContext,
 		arg.StructureID,
 		arg.OwnerCorporationID,
 		arg.SystemID,
@@ -4836,7 +4653,7 @@ type SetStructureNameParams struct {
 }
 
 func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNameParams) error {
-	_, err := q.db.ExecContext(ctx, setStructureName,
+	_, err := q.db.Exec(ctx, setStructureName,
 		arg.StructureID,
 		arg.Name,
 		arg.State,
@@ -4860,7 +4677,7 @@ type TouchOrderLifecycleCheckedParams struct {
 // The book pass re-checked this order and its verdict stands: only
 // the freshness stamp moves, not the verdict columns.
 func (q *Queries) TouchOrderLifecycleChecked(ctx context.Context, arg TouchOrderLifecycleCheckedParams) error {
-	_, err := q.db.ExecContext(ctx, touchOrderLifecycleChecked, arg.CheckedAt, arg.CharacterID, arg.OrderID)
+	_, err := q.db.Exec(ctx, touchOrderLifecycleChecked, arg.CheckedAt, arg.CharacterID, arg.OrderID)
 	return err
 }
 
@@ -4878,7 +4695,7 @@ type UpdateMarketSweepStateParams struct {
 }
 
 func (q *Queries) UpdateMarketSweepState(ctx context.Context, arg UpdateMarketSweepStateParams) error {
-	_, err := q.db.ExecContext(ctx, updateMarketSweepState,
+	_, err := q.db.Exec(ctx, updateMarketSweepState,
 		arg.NextPage,
 		arg.PagesTotal,
 		arg.UpdatedAt,
@@ -4901,7 +4718,7 @@ type UpdateOrderLifecycleBeatenParams struct {
 }
 
 func (q *Queries) UpdateOrderLifecycleBeaten(ctx context.Context, arg UpdateOrderLifecycleBeatenParams) error {
-	_, err := q.db.ExecContext(ctx, updateOrderLifecycleBeaten,
+	_, err := q.db.Exec(ctx, updateOrderLifecycleBeaten,
 		arg.BeatenNow,
 		arg.OutbidEvents,
 		arg.CharacterID,
@@ -4929,24 +4746,24 @@ WHERE character_id = $10 AND order_id = $11 AND closed_at IS NULL
 `
 
 type UpdateOrderLifecycleBookParams struct {
-	Beaten         int64           `json:"beaten"`
-	CheckedAt      time.Time       `json:"checked_at"`
-	OutbidEvents   int64           `json:"outbid_events"`
-	BeatingPrice   float64         `json:"beating_price"`
-	BeatingVolume  int64           `json:"beating_volume"`
-	SuggestedPrice float64         `json:"suggested_price"`
-	UnitCost       float64         `json:"unit_cost"`
-	MarginPct      sql.NullFloat64 `json:"margin_pct"`
-	TaxRate        float64         `json:"tax_rate"`
-	CharacterID    int64           `json:"character_id"`
-	OrderID        int64           `json:"order_id"`
+	Beaten         int64         `json:"beaten"`
+	CheckedAt      time.Time     `json:"checked_at"`
+	OutbidEvents   int64         `json:"outbid_events"`
+	BeatingPrice   float64       `json:"beating_price"`
+	BeatingVolume  int64         `json:"beating_volume"`
+	SuggestedPrice float64       `json:"suggested_price"`
+	UnitCost       float64       `json:"unit_cost"`
+	MarginPct      pgtype.Float8 `json:"margin_pct"`
+	TaxRate        float64       `json:"tax_rate"`
+	CharacterID    int64         `json:"character_id"`
+	OrderID        int64         `json:"order_id"`
 }
 
 // The order-health pass's verdict on one open order's station book
 // (schema 105): beaten state and count, when it was beaten, what
 // beat it, the suggested reprice, and the margin at that price.
 func (q *Queries) UpdateOrderLifecycleBook(ctx context.Context, arg UpdateOrderLifecycleBookParams) error {
-	_, err := q.db.ExecContext(ctx, updateOrderLifecycleBook,
+	_, err := q.db.Exec(ctx, updateOrderLifecycleBook,
 		arg.Beaten,
 		arg.CheckedAt,
 		arg.OutbidEvents,
@@ -4977,7 +4794,7 @@ type UpsertAllianceWantParams struct {
 }
 
 func (q *Queries) UpsertAllianceWant(ctx context.Context, arg UpsertAllianceWantParams) error {
-	_, err := q.db.ExecContext(ctx, upsertAllianceWant, arg.AllianceID, arg.Priority, arg.NotedAt)
+	_, err := q.db.Exec(ctx, upsertAllianceWant, arg.AllianceID, arg.Priority, arg.NotedAt)
 	return err
 }
 
@@ -4998,7 +4815,7 @@ type UpsertAllianceWantsParams struct {
 // Many alliance wants in one statement: the alliance half of
 // UpsertCorporationWants (see above).
 func (q *Queries) UpsertAllianceWants(ctx context.Context, arg UpsertAllianceWantsParams) error {
-	_, err := q.db.ExecContext(ctx, upsertAllianceWants, pq.Array(arg.AllianceIds), arg.Priority, arg.NotedAt)
+	_, err := q.db.Exec(ctx, upsertAllianceWants, arg.AllianceIds, arg.Priority, arg.NotedAt)
 	return err
 }
 
@@ -5017,7 +4834,7 @@ type UpsertCorporationWantParams struct {
 }
 
 func (q *Queries) UpsertCorporationWant(ctx context.Context, arg UpsertCorporationWantParams) error {
-	_, err := q.db.ExecContext(ctx, upsertCorporationWant, arg.CorporationID, arg.Priority, arg.NotedAt)
+	_, err := q.db.Exec(ctx, upsertCorporationWant, arg.CorporationID, arg.Priority, arg.NotedAt)
 	return err
 }
 
@@ -5039,7 +4856,7 @@ type UpsertCorporationWantsParams struct {
 // meets the same parties over and over, and noting each in its
 // own round trip is the N+1 the flush in name_harvest.go avoids.
 func (q *Queries) UpsertCorporationWants(ctx context.Context, arg UpsertCorporationWantsParams) error {
-	_, err := q.db.ExecContext(ctx, upsertCorporationWants, pq.Array(arg.CorporationIds), arg.Priority, arg.NotedAt)
+	_, err := q.db.Exec(ctx, upsertCorporationWants, arg.CorporationIds, arg.Priority, arg.NotedAt)
 	return err
 }
 
@@ -5058,7 +4875,7 @@ type UpsertGuidePriceParams struct {
 }
 
 func (q *Queries) UpsertGuidePrice(ctx context.Context, arg UpsertGuidePriceParams) error {
-	_, err := q.db.ExecContext(ctx, upsertGuidePrice, arg.TypeID, arg.AdjustedPrice, arg.AveragePrice)
+	_, err := q.db.Exec(ctx, upsertGuidePrice, arg.TypeID, arg.AdjustedPrice, arg.AveragePrice)
 	return err
 }
 
@@ -5076,7 +4893,7 @@ type UpsertGuidePricesMetaParams struct {
 }
 
 func (q *Queries) UpsertGuidePricesMeta(ctx context.Context, arg UpsertGuidePricesMetaParams) error {
-	_, err := q.db.ExecContext(ctx, upsertGuidePricesMeta, arg.FetchedAt, arg.CachedUntil)
+	_, err := q.db.Exec(ctx, upsertGuidePricesMeta, arg.FetchedAt, arg.CachedUntil)
 	return err
 }
 
@@ -5096,7 +4913,7 @@ type UpsertIndustryCostIndexParams struct {
 
 // Industry cost indices per (system, activity).
 func (q *Queries) UpsertIndustryCostIndex(ctx context.Context, arg UpsertIndustryCostIndexParams) error {
-	_, err := q.db.ExecContext(ctx, upsertIndustryCostIndex, arg.SolarSystemID, arg.Activity, arg.CostIndex)
+	_, err := q.db.Exec(ctx, upsertIndustryCostIndex, arg.SolarSystemID, arg.Activity, arg.CostIndex)
 	return err
 }
 
@@ -5117,7 +4934,7 @@ type UpsertMarketFetchStateParams struct {
 }
 
 func (q *Queries) UpsertMarketFetchState(ctx context.Context, arg UpsertMarketFetchStateParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketFetchState,
+	_, err := q.db.Exec(ctx, upsertMarketFetchState,
 		arg.Kind,
 		arg.State,
 		arg.Detail,
@@ -5154,7 +4971,7 @@ type UpsertMarketHistoryParams struct {
 // sde_* tables; only reads live here.
 // ---------------------------------------------------------------------
 func (q *Queries) UpsertMarketHistory(ctx context.Context, arg UpsertMarketHistoryParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketHistory,
+	_, err := q.db.Exec(ctx, upsertMarketHistory,
 		arg.RegionID,
 		arg.TypeID,
 		arg.Date,
@@ -5196,15 +5013,15 @@ type UpsertMarketHistoryDaysParams struct {
 // about a year of days per pair, and a statement per day was most
 // of the market pass's time. The days must be distinct.
 func (q *Queries) UpsertMarketHistoryDays(ctx context.Context, arg UpsertMarketHistoryDaysParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketHistoryDays,
+	_, err := q.db.Exec(ctx, upsertMarketHistoryDays,
 		arg.RegionID,
 		arg.TypeID,
-		pq.Array(arg.Dates),
-		pq.Array(arg.Averages),
-		pq.Array(arg.Highests),
-		pq.Array(arg.Lowests),
-		pq.Array(arg.Volumes),
-		pq.Array(arg.OrderCounts),
+		arg.Dates,
+		arg.Averages,
+		arg.Highests,
+		arg.Lowests,
+		arg.Volumes,
+		arg.OrderCounts,
 	)
 	return err
 }
@@ -5225,7 +5042,7 @@ type UpsertMarketHistoryWantParams struct {
 }
 
 func (q *Queries) UpsertMarketHistoryWant(ctx context.Context, arg UpsertMarketHistoryWantParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketHistoryWant,
+	_, err := q.db.Exec(ctx, upsertMarketHistoryWant,
 		arg.RegionID,
 		arg.TypeID,
 		arg.LastRequestedAt,
@@ -5270,7 +5087,7 @@ type UpsertMarketRegionStatParams struct {
 }
 
 func (q *Queries) UpsertMarketRegionStat(ctx context.Context, arg UpsertMarketRegionStatParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketRegionStat,
+	_, err := q.db.Exec(ctx, upsertMarketRegionStat,
 		arg.RegionID,
 		arg.TypeID,
 		arg.BestSell,
@@ -5322,7 +5139,7 @@ type UpsertMarketRegionStatDailyParams struct {
 }
 
 func (q *Queries) UpsertMarketRegionStatDaily(ctx context.Context, arg UpsertMarketRegionStatDailyParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketRegionStatDaily,
+	_, err := q.db.Exec(ctx, upsertMarketRegionStatDaily,
 		arg.RegionID,
 		arg.TypeID,
 		arg.Day,
@@ -5362,7 +5179,7 @@ type UpsertMarketStationLeaderboardParams struct {
 }
 
 func (q *Queries) UpsertMarketStationLeaderboard(ctx context.Context, arg UpsertMarketStationLeaderboardParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketStationLeaderboard,
+	_, err := q.db.Exec(ctx, upsertMarketStationLeaderboard,
 		arg.RegionID,
 		arg.LocationID,
 		arg.SellOrders,
@@ -5406,7 +5223,7 @@ type UpsertMarketStationStatParams struct {
 }
 
 func (q *Queries) UpsertMarketStationStat(ctx context.Context, arg UpsertMarketStationStatParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketStationStat,
+	_, err := q.db.Exec(ctx, upsertMarketStationStat,
 		arg.LocationID,
 		arg.RegionID,
 		arg.TypeID,
@@ -5439,7 +5256,7 @@ type UpsertMarketStatsFallbackMetaParams struct {
 }
 
 func (q *Queries) UpsertMarketStatsFallbackMeta(ctx context.Context, arg UpsertMarketStatsFallbackMetaParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketStatsFallbackMeta, arg.OrdersetID, arg.FetchedAt, arg.RowCount)
+	_, err := q.db.Exec(ctx, upsertMarketStatsFallbackMeta, arg.OrdersetID, arg.FetchedAt, arg.RowCount)
 	return err
 }
 
@@ -5466,7 +5283,7 @@ type UpsertMarketTypePriceParams struct {
 // Per-type market price TTL cache. The worker refreshes
 // only rows older than the TTL; pages read cache-only.
 func (q *Queries) UpsertMarketTypePrice(ctx context.Context, arg UpsertMarketTypePriceParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketTypePrice,
+	_, err := q.db.Exec(ctx, upsertMarketTypePrice,
 		arg.RegionID,
 		arg.TypeID,
 		arg.BuyPrice,
@@ -5505,7 +5322,7 @@ type UpsertOrderHealthParams struct {
 }
 
 func (q *Queries) UpsertOrderHealth(ctx context.Context, arg UpsertOrderHealthParams) error {
-	_, err := q.db.ExecContext(ctx, upsertOrderHealth,
+	_, err := q.db.Exec(ctx, upsertOrderHealth,
 		arg.CharacterID,
 		arg.OrderID,
 		arg.TypeID,
@@ -5549,7 +5366,7 @@ type UpsertOrderLifecycleParams struct {
 }
 
 func (q *Queries) UpsertOrderLifecycle(ctx context.Context, arg UpsertOrderLifecycleParams) error {
-	_, err := q.db.ExecContext(ctx, upsertOrderLifecycle,
+	_, err := q.db.Exec(ctx, upsertOrderLifecycle,
 		arg.CharacterID,
 		arg.OrderID,
 		arg.TypeID,
@@ -5600,16 +5417,16 @@ type UpsertOrderLifecyclesParams struct {
 // UpsertOrderLifecycle for every open order of a pass in one
 // statement. The (character, order) pairs must be distinct.
 func (q *Queries) UpsertOrderLifecycles(ctx context.Context, arg UpsertOrderLifecyclesParams) error {
-	_, err := q.db.ExecContext(ctx, upsertOrderLifecycles,
-		pq.Array(arg.CharacterIds),
-		pq.Array(arg.OrderIds),
-		pq.Array(arg.TypeIds),
-		pq.Array(arg.LocationIds),
-		pq.Array(arg.RegionIds),
-		pq.Array(arg.IsBuyOrders),
-		pq.Array(arg.ListedPrices),
-		pq.Array(arg.VolumeTotals),
-		pq.Array(arg.VolumeRemains),
+	_, err := q.db.Exec(ctx, upsertOrderLifecycles,
+		arg.CharacterIds,
+		arg.OrderIds,
+		arg.TypeIds,
+		arg.LocationIds,
+		arg.RegionIds,
+		arg.IsBuyOrders,
+		arg.ListedPrices,
+		arg.VolumeTotals,
+		arg.VolumeRemains,
 		arg.SeenAt,
 	)
 	return err
@@ -5628,7 +5445,7 @@ type UpsertPilotNameWantParams struct {
 }
 
 func (q *Queries) UpsertPilotNameWant(ctx context.Context, arg UpsertPilotNameWantParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPilotNameWant, arg.NormalizedName, arg.DisplayName, arg.RequestedAt)
+	_, err := q.db.Exec(ctx, upsertPilotNameWant, arg.NormalizedName, arg.DisplayName, arg.RequestedAt)
 	return err
 }
 
@@ -5651,7 +5468,7 @@ type UpsertPilotWantParams struct {
 // when it was last asked for. A want that is asked for again keeps
 // the closer of its priorities and takes the later time.
 func (q *Queries) UpsertPilotWant(ctx context.Context, arg UpsertPilotWantParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPilotWant, arg.CharacterID, arg.Priority, arg.NotedAt)
+	_, err := q.db.Exec(ctx, upsertPilotWant, arg.CharacterID, arg.Priority, arg.NotedAt)
 	return err
 }
 
@@ -5662,7 +5479,7 @@ ON CONFLICT DO NOTHING
 `
 
 func (q *Queries) UpsertPlanetSeen(ctx context.Context, planetID int64) error {
-	_, err := q.db.ExecContext(ctx, upsertPlanetSeen, planetID)
+	_, err := q.db.Exec(ctx, upsertPlanetSeen, planetID)
 	return err
 }
 
@@ -5684,7 +5501,7 @@ type UpsertRestockTargetParams struct {
 
 // Restock planner targets.
 func (q *Queries) UpsertRestockTarget(ctx context.Context, arg UpsertRestockTargetParams) error {
-	_, err := q.db.ExecContext(ctx, upsertRestockTarget,
+	_, err := q.db.Exec(ctx, upsertRestockTarget,
 		arg.UserID,
 		arg.TypeID,
 		arg.TargetQty,
@@ -5708,7 +5525,7 @@ type UpsertSiteSettingParams struct {
 }
 
 func (q *Queries) UpsertSiteSetting(ctx context.Context, arg UpsertSiteSettingParams) error {
-	_, err := q.db.ExecContext(ctx, upsertSiteSetting, arg.Key, arg.Value, arg.UpdatedAt)
+	_, err := q.db.Exec(ctx, upsertSiteSetting, arg.Key, arg.Value, arg.UpdatedAt)
 	return err
 }
 
@@ -5719,7 +5536,7 @@ ON CONFLICT DO NOTHING
 `
 
 func (q *Queries) UpsertStructureSeen(ctx context.Context, structureID int64) error {
-	_, err := q.db.ExecContext(ctx, upsertStructureSeen, structureID)
+	_, err := q.db.Exec(ctx, upsertStructureSeen, structureID)
 	return err
 }
 
@@ -5739,7 +5556,7 @@ type UpsertWatchlistEntryParams struct {
 }
 
 func (q *Queries) UpsertWatchlistEntry(ctx context.Context, arg UpsertWatchlistEntryParams) error {
-	_, err := q.db.ExecContext(ctx, upsertWatchlistEntry,
+	_, err := q.db.Exec(ctx, upsertWatchlistEntry,
 		arg.UserID,
 		arg.TypeID,
 		arg.RegionID,

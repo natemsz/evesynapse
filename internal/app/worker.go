@@ -18,6 +18,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -1728,7 +1729,7 @@ func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Charac
 		}
 		if _, err := app.queries.GetKillmailDetail(ctx, ref.KillmailID); err == nil {
 			continue // already stored (by any character's list)
-		} else if !errors.Is(err, sql.ErrNoRows) {
+		} else if !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("worker: warm killmail details for character %d: read detail %d: %v", ch.CharacterID, ref.KillmailID, err)
 			continue
 		}

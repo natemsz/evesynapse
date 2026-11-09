@@ -6,7 +6,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"sync"
 	"time"
@@ -19,6 +18,7 @@ import (
 	// encoding/json with identical results (TestAppDecoderParity
 	// in decode_parity_test.go).
 	json "github.com/goccy/go-json"
+	"github.com/jackc/pgx/v5"
 )
 
 // loadCorpSnapshot decodes the stored snapshot payload for
@@ -185,12 +185,12 @@ func (app *Application) loadGlobalSnapshot(ctx context.Context, kind string, out
 // storedSnapshot decodes one of a character's datasets as the worker
 // last stored it. It never fetches: a page shows what is held, and the
 // worker keeps the character somebody is looking at as fresh as ESI
-// allows (worker_tiers.go). A dataset not stored yet is sql.ErrNoRows,
+// allows (worker_tiers.go). A dataset not stored yet is pgx.ErrNoRows,
 // and puts the character at the front of the worker's next cycle.
 func (app *Application) storedSnapshot(ctx context.Context, ch db.Character, kind string, out any) error {
 	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			app.markCharacterPriority(ch.CharacterID)
 		}
 		return err

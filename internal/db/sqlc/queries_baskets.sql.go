@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const countMarketBasketsForUser = `-- name: CountMarketBasketsForUser :one
@@ -18,7 +16,7 @@ SELECT COUNT(*) FROM market_baskets WHERE user_id = $1
 `
 
 func (q *Queries) CountMarketBasketsForUser(ctx context.Context, userID sql.NullInt64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countMarketBasketsForUser, userID)
+	row := q.db.QueryRow(ctx, countMarketBasketsForUser, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -37,7 +35,7 @@ type CreateMarketBasketParams struct {
 }
 
 func (q *Queries) CreateMarketBasket(ctx context.Context, arg CreateMarketBasketParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createMarketBasket, arg.UserID, arg.Name, arg.RegionID)
+	row := q.db.QueryRow(ctx, createMarketBasket, arg.UserID, arg.Name, arg.RegionID)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -53,7 +51,7 @@ type DeleteMarketBasketParams struct {
 }
 
 func (q *Queries) DeleteMarketBasket(ctx context.Context, arg DeleteMarketBasketParams) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketBasket, arg.ID, arg.UserID)
+	_, err := q.db.Exec(ctx, deleteMarketBasket, arg.ID, arg.UserID)
 	return err
 }
 
@@ -62,7 +60,7 @@ DELETE FROM market_basket_item_stats WHERE basket_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeleteMarketBasketItemStats(ctx context.Context, basketIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketBasketItemStats, pq.Array(basketIds))
+	_, err := q.db.Exec(ctx, deleteMarketBasketItemStats, basketIds)
 	return err
 }
 
@@ -71,7 +69,7 @@ DELETE FROM market_basket_items WHERE basket_id = $1
 `
 
 func (q *Queries) DeleteMarketBasketItems(ctx context.Context, basketID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketBasketItems, basketID)
+	_, err := q.db.Exec(ctx, deleteMarketBasketItems, basketID)
 	return err
 }
 
@@ -80,7 +78,7 @@ DELETE FROM market_basket_values_daily WHERE basket_id = $1
 `
 
 func (q *Queries) DeleteMarketBasketValues(ctx context.Context, basketID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteMarketBasketValues, basketID)
+	_, err := q.db.Exec(ctx, deleteMarketBasketValues, basketID)
 	return err
 }
 
@@ -95,7 +93,7 @@ type DeleteWatchlistBasketParams struct {
 }
 
 func (q *Queries) DeleteWatchlistBasket(ctx context.Context, arg DeleteWatchlistBasketParams) error {
-	_, err := q.db.ExecContext(ctx, deleteWatchlistBasket, arg.UserID, arg.BasketID)
+	_, err := q.db.Exec(ctx, deleteWatchlistBasket, arg.UserID, arg.BasketID)
 	return err
 }
 
@@ -105,7 +103,7 @@ FROM market_baskets WHERE id = $1
 `
 
 func (q *Queries) GetMarketBasket(ctx context.Context, id int64) (MarketBasket, error) {
-	row := q.db.QueryRowContext(ctx, getMarketBasket, id)
+	row := q.db.QueryRow(ctx, getMarketBasket, id)
 	var i MarketBasket
 	err := row.Scan(
 		&i.ID,
@@ -133,7 +131,7 @@ type InsertMarketBasketItemParams struct {
 }
 
 func (q *Queries) InsertMarketBasketItem(ctx context.Context, arg InsertMarketBasketItemParams) error {
-	_, err := q.db.ExecContext(ctx, insertMarketBasketItem, arg.BasketID, arg.TypeID, arg.Quantity)
+	_, err := q.db.Exec(ctx, insertMarketBasketItem, arg.BasketID, arg.TypeID, arg.Quantity)
 	return err
 }
 
@@ -145,7 +143,7 @@ SELECT id FROM market_baskets WHERE region_id = $1 ORDER BY id
 // ---------------------------------------------------------------------
 // Stored basket figures (schema 123), derived where values are written.
 func (q *Queries) ListMarketBasketIDsForRegion(ctx context.Context, regionID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketIDsForRegion, regionID)
+	rows, err := q.db.Query(ctx, listMarketBasketIDsForRegion, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -157,9 +155,6 @@ func (q *Queries) ListMarketBasketIDsForRegion(ctx context.Context, regionID int
 			return nil, err
 		}
 		items = append(items, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -192,7 +187,7 @@ type ListMarketBasketItemStatsRow struct {
 
 // One basket's items, worth first (bounded by the basket item cap).
 func (q *Queries) ListMarketBasketItemStats(ctx context.Context, basketID int64) ([]ListMarketBasketItemStatsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketItemStats, basketID)
+	rows, err := q.db.Query(ctx, listMarketBasketItemStats, basketID)
 	if err != nil {
 		return nil, err
 	}
@@ -217,9 +212,6 @@ func (q *Queries) ListMarketBasketItemStats(ctx context.Context, basketID int64)
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -239,7 +231,7 @@ type ListMarketBasketItemsRow struct {
 }
 
 func (q *Queries) ListMarketBasketItems(ctx context.Context, basketID int64) ([]ListMarketBasketItemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketItems, basketID)
+	rows, err := q.db.Query(ctx, listMarketBasketItems, basketID)
 	if err != nil {
 		return nil, err
 	}
@@ -251,9 +243,6 @@ func (q *Queries) ListMarketBasketItems(ctx context.Context, basketID int64) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -268,7 +257,7 @@ ORDER BY basket_id, type_id
 `
 
 func (q *Queries) ListMarketBasketItemsForBaskets(ctx context.Context, basketIds []int64) ([]MarketBasketItem, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketItemsForBaskets, pq.Array(basketIds))
+	rows, err := q.db.Query(ctx, listMarketBasketItemsForBaskets, basketIds)
 	if err != nil {
 		return nil, err
 	}
@@ -280,9 +269,6 @@ func (q *Queries) ListMarketBasketItemsForBaskets(ctx context.Context, basketIds
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -317,7 +303,7 @@ type ListMarketBasketMoversRow struct {
 // The items that moved the basket most over a period, up (sign 1) or
 // down (sign -1), ranked by the ISK they moved it.
 func (q *Queries) ListMarketBasketMovers(ctx context.Context, arg ListMarketBasketMoversParams) ([]ListMarketBasketMoversRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketMovers, arg.Period, arg.BasketID, arg.Sign)
+	rows, err := q.db.Query(ctx, listMarketBasketMovers, arg.Period, arg.BasketID, arg.Sign)
 	if err != nil {
 		return nil, err
 	}
@@ -334,9 +320,6 @@ func (q *Queries) ListMarketBasketMovers(ctx context.Context, arg ListMarketBask
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -380,7 +363,7 @@ type ListMarketBasketOutsideMoversRow struct {
 // by the size of their typical-sell change over 1, 7 or 30 days,
 // with the same depth floor the Trends screen uses.
 func (q *Queries) ListMarketBasketOutsideMovers(ctx context.Context, arg ListMarketBasketOutsideMoversParams) ([]ListMarketBasketOutsideMoversRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketOutsideMovers, arg.RegionID, arg.BasketID, arg.Period)
+	rows, err := q.db.Query(ctx, listMarketBasketOutsideMovers, arg.RegionID, arg.BasketID, arg.Period)
 	if err != nil {
 		return nil, err
 	}
@@ -400,9 +383,6 @@ func (q *Queries) ListMarketBasketOutsideMovers(ctx context.Context, arg ListMar
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -419,7 +399,7 @@ type ListMarketBasketRegionsRow struct {
 }
 
 func (q *Queries) ListMarketBasketRegions(ctx context.Context, basketIds []int64) ([]ListMarketBasketRegionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketRegions, pq.Array(basketIds))
+	rows, err := q.db.Query(ctx, listMarketBasketRegions, basketIds)
 	if err != nil {
 		return nil, err
 	}
@@ -431,9 +411,6 @@ func (q *Queries) ListMarketBasketRegions(ctx context.Context, basketIds []int64
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -470,7 +447,7 @@ type ListMarketBasketSummariesRow struct {
 }
 
 func (q *Queries) ListMarketBasketSummaries(ctx context.Context, basketIds []int64) ([]ListMarketBasketSummariesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketSummaries, pq.Array(basketIds))
+	rows, err := q.db.Query(ctx, listMarketBasketSummaries, basketIds)
 	if err != nil {
 		return nil, err
 	}
@@ -501,9 +478,6 @@ func (q *Queries) ListMarketBasketSummaries(ctx context.Context, basketIds []int
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -533,7 +507,7 @@ type ListMarketBasketValuesRow struct {
 
 // A basket's value over time, oldest first, from a start day on.
 func (q *Queries) ListMarketBasketValues(ctx context.Context, arg ListMarketBasketValuesParams) ([]ListMarketBasketValuesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketValues, arg.BasketID, arg.Since)
+	rows, err := q.db.Query(ctx, listMarketBasketValues, arg.BasketID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -551,9 +525,6 @@ func (q *Queries) ListMarketBasketValues(ctx context.Context, arg ListMarketBask
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -577,7 +548,7 @@ type ListMarketBasketValuesForBasketsParams struct {
 // Recent stored values for a set of baskets at once (the list
 // page's change figures), oldest first per basket.
 func (q *Queries) ListMarketBasketValuesForBaskets(ctx context.Context, arg ListMarketBasketValuesForBasketsParams) ([]MarketBasketValuesDaily, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketValuesForBaskets, pq.Array(arg.BasketIds), arg.Since)
+	rows, err := q.db.Query(ctx, listMarketBasketValuesForBaskets, arg.BasketIds, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -596,9 +567,6 @@ func (q *Queries) ListMarketBasketValuesForBaskets(ctx context.Context, arg List
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -640,7 +608,7 @@ type ListMarketBasketsForRow struct {
 // The basket list: the presets, then the reader's own baskets
 // (user_id 0 reads presets only), each with its latest stored value.
 func (q *Queries) ListMarketBasketsFor(ctx context.Context, userID int64) ([]ListMarketBasketsForRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketsFor, userID)
+	rows, err := q.db.Query(ctx, listMarketBasketsFor, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -664,9 +632,6 @@ func (q *Queries) ListMarketBasketsFor(ctx context.Context, userID int64) ([]Lis
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -686,7 +651,7 @@ LIMIT 200
 // one created before its region's first sweep): their history is
 // rebuilt from the daily rows before today's value lands.
 func (q *Queries) ListMarketBasketsWithoutHistory(ctx context.Context, regionID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketBasketsWithoutHistory, regionID)
+	rows, err := q.db.Query(ctx, listMarketBasketsWithoutHistory, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -698,9 +663,6 @@ func (q *Queries) ListMarketBasketsWithoutHistory(ctx context.Context, regionID 
 			return nil, err
 		}
 		items = append(items, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -727,7 +689,7 @@ type ListWatchlistBasketsByUserRow struct {
 // The baskets a player watches that they can still see: their own
 // and the presets. A basket that stops being visible drops off.
 func (q *Queries) ListWatchlistBasketsByUser(ctx context.Context, userID int64) ([]ListWatchlistBasketsByUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, listWatchlistBasketsByUser, userID)
+	rows, err := q.db.Query(ctx, listWatchlistBasketsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -744,9 +706,6 @@ func (q *Queries) ListWatchlistBasketsByUser(ctx context.Context, userID int64) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -786,11 +745,11 @@ type RebuildMarketBasketValuesParams struct {
 // region (the global book's rows for a type that region does not
 // carry). Older values are never read back, so they are not rebuilt.
 func (q *Queries) RebuildMarketBasketValues(ctx context.Context, arg RebuildMarketBasketValuesParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, rebuildMarketBasketValues, arg.BasketID, arg.Since)
+	result, err := q.db.Exec(ctx, rebuildMarketBasketValues, arg.BasketID, arg.Since)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const refreshMarketBasketValuesForRegion = `-- name: RefreshMarketBasketValuesForRegion :execrows
@@ -819,11 +778,11 @@ type RefreshMarketBasketValuesForRegionParams struct {
 // Today's value of every basket priced in one region, from the stat
 // pack rows the region's sweep just wrote (inside its transaction).
 func (q *Queries) RefreshMarketBasketValuesForRegion(ctx context.Context, arg RefreshMarketBasketValuesForRegionParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, refreshMarketBasketValuesForRegion, arg.Day, arg.RegionID)
+	result, err := q.db.Exec(ctx, refreshMarketBasketValuesForRegion, arg.Day, arg.RegionID)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const resolveTypeNamesExact = `-- name: ResolveTypeNamesExact :many
@@ -841,7 +800,7 @@ type ResolveTypeNamesExactRow struct {
 // Exact, case-insensitive type names to ids (published market types
 // first) for a pasted basket list.
 func (q *Queries) ResolveTypeNamesExact(ctx context.Context, names []string) ([]ResolveTypeNamesExactRow, error) {
-	rows, err := q.db.QueryContext(ctx, resolveTypeNamesExact, pq.Array(names))
+	rows, err := q.db.Query(ctx, resolveTypeNamesExact, names)
 	if err != nil {
 		return nil, err
 	}
@@ -853,9 +812,6 @@ func (q *Queries) ResolveTypeNamesExact(ctx context.Context, names []string) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -876,7 +832,7 @@ type UpdateMarketBasketParams struct {
 }
 
 func (q *Queries) UpdateMarketBasket(ctx context.Context, arg UpdateMarketBasketParams) error {
-	_, err := q.db.ExecContext(ctx, updateMarketBasket,
+	_, err := q.db.Exec(ctx, updateMarketBasket,
 		arg.ID,
 		arg.UserID,
 		arg.Name,
@@ -899,6 +855,6 @@ type UpsertWatchlistBasketParams struct {
 }
 
 func (q *Queries) UpsertWatchlistBasket(ctx context.Context, arg UpsertWatchlistBasketParams) error {
-	_, err := q.db.ExecContext(ctx, upsertWatchlistBasket, arg.UserID, arg.BasketID, arg.ThresholdPct)
+	_, err := q.db.Exec(ctx, upsertWatchlistBasket, arg.UserID, arg.BasketID, arg.ThresholdPct)
 	return err
 }

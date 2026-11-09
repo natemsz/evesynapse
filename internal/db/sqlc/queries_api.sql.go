@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const addAPIKeyUsage = `-- name: AddAPIKeyUsage :exec
@@ -29,7 +27,7 @@ type AddAPIKeyUsageParams struct {
 }
 
 func (q *Queries) AddAPIKeyUsage(ctx context.Context, arg AddAPIKeyUsageParams) error {
-	_, err := q.db.ExecContext(ctx, addAPIKeyUsage,
+	_, err := q.db.Exec(ctx, addAPIKeyUsage,
 		arg.KeyID,
 		arg.Day,
 		arg.Requests,
@@ -54,7 +52,7 @@ type AddAbyssalWantParams struct {
 // A caller's request to price a mutated item the corpus has not
 // seen; a repeat request for the same item adds nothing.
 func (q *Queries) AddAbyssalWant(ctx context.Context, arg AddAbyssalWantParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, addAbyssalWant,
+	result, err := q.db.Exec(ctx, addAbyssalWant,
 		arg.ItemID,
 		arg.TypeID,
 		arg.KeyID,
@@ -63,7 +61,7 @@ func (q *Queries) AddAbyssalWant(ctx context.Context, arg AddAbyssalWantParams) 
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const countAPIKeysCreatedSince = `-- name: CountAPIKeysCreatedSince :one
@@ -76,7 +74,7 @@ type CountAPIKeysCreatedSinceParams struct {
 }
 
 func (q *Queries) CountAPIKeysCreatedSince(ctx context.Context, arg CountAPIKeysCreatedSinceParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countAPIKeysCreatedSince, arg.UserID, arg.Since)
+	row := q.db.QueryRow(ctx, countAPIKeysCreatedSince, arg.UserID, arg.Since)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -92,7 +90,7 @@ type CountAbyssalWantsSinceParams struct {
 }
 
 func (q *Queries) CountAbyssalWantsSince(ctx context.Context, arg CountAbyssalWantsSinceParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countAbyssalWantsSince, arg.KeyID, arg.Since)
+	row := q.db.QueryRow(ctx, countAbyssalWantsSince, arg.KeyID, arg.Since)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -103,7 +101,7 @@ SELECT COUNT(*) FROM api_keys WHERE user_id = $1 AND revoked_at IS NULL
 `
 
 func (q *Queries) CountLiveAPIKeys(ctx context.Context, userID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countLiveAPIKeys, userID)
+	row := q.db.QueryRow(ctx, countLiveAPIKeys, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -114,7 +112,7 @@ SELECT COUNT(*) FROM abyssal_wants WHERE state = 'pending'
 `
 
 func (q *Queries) CountPendingAbyssalWants(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPendingAbyssalWants)
+	row := q.db.QueryRow(ctx, countPendingAbyssalWants)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -137,7 +135,7 @@ type CreateAPIKeyParams struct {
 // Market API (schema 108): keys, usage, abyssal wants, researched
 // blueprint medians.
 func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createAPIKey,
+	row := q.db.QueryRow(ctx, createAPIKey,
 		arg.UserID,
 		arg.Name,
 		arg.Prefix,
@@ -153,7 +151,7 @@ DELETE FROM blueprint_research_medians
 `
 
 func (q *Queries) DeleteBlueprintResearchMedians(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteBlueprintResearchMedians)
+	_, err := q.db.Exec(ctx, deleteBlueprintResearchMedians)
 	return err
 }
 
@@ -167,7 +165,7 @@ type GetAPIKeyUsageParams struct {
 }
 
 func (q *Queries) GetAPIKeyUsage(ctx context.Context, arg GetAPIKeyUsageParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getAPIKeyUsage, arg.KeyID, arg.Day)
+	row := q.db.QueryRow(ctx, getAPIKeyUsage, arg.KeyID, arg.Day)
 	var requests int64
 	err := row.Scan(&requests)
 	return requests, err
@@ -185,7 +183,7 @@ type GetAbyssalWantRow struct {
 }
 
 func (q *Queries) GetAbyssalWant(ctx context.Context, itemID int64) (GetAbyssalWantRow, error) {
-	row := q.db.QueryRowContext(ctx, getAbyssalWant, itemID)
+	row := q.db.QueryRow(ctx, getAbyssalWant, itemID)
 	var i GetAbyssalWantRow
 	err := row.Scan(
 		&i.ItemID,
@@ -209,7 +207,7 @@ type GetLiveAPIKeyByHashRow struct {
 }
 
 func (q *Queries) GetLiveAPIKeyByHash(ctx context.Context, keyHash string) (GetLiveAPIKeyByHashRow, error) {
-	row := q.db.QueryRowContext(ctx, getLiveAPIKeyByHash, keyHash)
+	row := q.db.QueryRow(ctx, getLiveAPIKeyByHash, keyHash)
 	var i GetLiveAPIKeyByHashRow
 	err := row.Scan(&i.ID, &i.UserID, &i.DailyQuota)
 	return i, err
@@ -230,7 +228,7 @@ type InsertBlueprintResearchMedianParams struct {
 }
 
 func (q *Queries) InsertBlueprintResearchMedian(ctx context.Context, arg InsertBlueprintResearchMedianParams) error {
-	_, err := q.db.ExecContext(ctx, insertBlueprintResearchMedian,
+	_, err := q.db.Exec(ctx, insertBlueprintResearchMedian,
 		arg.TypeID,
 		arg.Me,
 		arg.Te,
@@ -267,7 +265,7 @@ type ListAPIKeysRow struct {
 }
 
 func (q *Queries) ListAPIKeys(ctx context.Context, arg ListAPIKeysParams) ([]ListAPIKeysRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAPIKeys, arg.Day, arg.UserID)
+	rows, err := q.db.Query(ctx, listAPIKeys, arg.Day, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -288,9 +286,6 @@ func (q *Queries) ListAPIKeys(ctx context.Context, arg ListAPIKeysParams) ([]Lis
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -309,7 +304,7 @@ type ListAbyssalWantsByItemsRow struct {
 }
 
 func (q *Queries) ListAbyssalWantsByItems(ctx context.Context, itemIds []int64) ([]ListAbyssalWantsByItemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAbyssalWantsByItems, pq.Array(itemIds))
+	rows, err := q.db.Query(ctx, listAbyssalWantsByItems, itemIds)
 	if err != nil {
 		return nil, err
 	}
@@ -326,9 +321,6 @@ func (q *Queries) ListAbyssalWantsByItems(ctx context.Context, itemIds []int64) 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -368,7 +360,7 @@ type ListBlueprintResearchMedianCandidatesRow struct {
 // researched original (ME or TE above zero), grouped by type and
 // research level, at or over the minimum sample.
 func (q *Queries) ListBlueprintResearchMedianCandidates(ctx context.Context, minSample int64) ([]ListBlueprintResearchMedianCandidatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listBlueprintResearchMedianCandidates, minSample)
+	rows, err := q.db.Query(ctx, listBlueprintResearchMedianCandidates, minSample)
 	if err != nil {
 		return nil, err
 	}
@@ -387,9 +379,6 @@ func (q *Queries) ListBlueprintResearchMedianCandidates(ctx context.Context, min
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -403,7 +392,7 @@ WHERE type_id = ANY($1::bigint[])
 `
 
 func (q *Queries) ListBlueprintResearchMediansForTypes(ctx context.Context, typeIds []int64) ([]BlueprintResearchMedian, error) {
-	rows, err := q.db.QueryContext(ctx, listBlueprintResearchMediansForTypes, pq.Array(typeIds))
+	rows, err := q.db.Query(ctx, listBlueprintResearchMediansForTypes, typeIds)
 	if err != nil {
 		return nil, err
 	}
@@ -422,9 +411,6 @@ func (q *Queries) ListBlueprintResearchMediansForTypes(ctx context.Context, type
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -451,7 +437,7 @@ type ListPendingAbyssalWantsRow struct {
 }
 
 func (q *Queries) ListPendingAbyssalWants(ctx context.Context, arg ListPendingAbyssalWantsParams) ([]ListPendingAbyssalWantsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPendingAbyssalWants, arg.RetryBefore, arg.RowCap)
+	rows, err := q.db.Query(ctx, listPendingAbyssalWants, arg.RetryBefore, arg.RowCap)
 	if err != nil {
 		return nil, err
 	}
@@ -464,9 +450,6 @@ func (q *Queries) ListPendingAbyssalWants(ctx context.Context, arg ListPendingAb
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -478,7 +461,7 @@ DELETE FROM api_key_usage WHERE day < $1::text
 `
 
 func (q *Queries) PruneAPIKeyUsage(ctx context.Context, beforeDay string) error {
-	_, err := q.db.ExecContext(ctx, pruneAPIKeyUsage, beforeDay)
+	_, err := q.db.Exec(ctx, pruneAPIKeyUsage, beforeDay)
 	return err
 }
 
@@ -487,7 +470,7 @@ DELETE FROM abyssal_wants WHERE state <> 'pending' AND tried_at < $1::timestampt
 `
 
 func (q *Queries) PruneAbyssalWants(ctx context.Context, before time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneAbyssalWants, before)
+	_, err := q.db.Exec(ctx, pruneAbyssalWants, before)
 	return err
 }
 
@@ -502,11 +485,11 @@ type RevokeAPIKeyParams struct {
 }
 
 func (q *Queries) RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, revokeAPIKey, arg.ID, arg.UserID)
+	result, err := q.db.Exec(ctx, revokeAPIKey, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 const setAbyssalWantState = `-- name: SetAbyssalWantState :exec
@@ -520,7 +503,7 @@ type SetAbyssalWantStateParams struct {
 }
 
 func (q *Queries) SetAbyssalWantState(ctx context.Context, arg SetAbyssalWantStateParams) error {
-	_, err := q.db.ExecContext(ctx, setAbyssalWantState, arg.ItemID, arg.State, arg.TriedAt)
+	_, err := q.db.Exec(ctx, setAbyssalWantState, arg.ItemID, arg.State, arg.TriedAt)
 	return err
 }
 
@@ -534,6 +517,6 @@ type TouchAPIKeyParams struct {
 }
 
 func (q *Queries) TouchAPIKey(ctx context.Context, arg TouchAPIKeyParams) error {
-	_, err := q.db.ExecContext(ctx, touchAPIKey, arg.ID, arg.LastUsedAt)
+	_, err := q.db.Exec(ctx, touchAPIKey, arg.ID, arg.LastUsedAt)
 	return err
 }

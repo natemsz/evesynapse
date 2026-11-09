@@ -468,10 +468,22 @@ func tooManyBotRequests(w http.ResponseWriter) {
 	http.Error(w, "Too many requests. Try again in a minute, or sign in.", http.StatusTooManyRequests)
 }
 
+// DisableBotGuard turns off the scraper block and the behavioral
+// watches. Only the dev entrypoint calls it (internal/devtools), so
+// browser automation such as Playwright can drive a local server.
+// It runs during route setup, before the server starts serving.
+func DisableBotGuard(app *Application) {
+	app.botGuardOff = true
+}
+
 // blockScrapers turns away automated AI scrapers, headless tools, and botnet
 // crawlers at the perimeter with 403 Forbidden before running database reads.
 func (app *Application) blockScrapers(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if app.botGuardOff {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if isBlockedBot(r) {
 			http.Error(w, "Automated scraping is not permitted.", http.StatusForbidden)
 			return

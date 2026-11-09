@@ -16,7 +16,9 @@ import (
 
 // Register mounts the dev-only routes on the application's router.
 // It matches app.RouteHook, so the dev entrypoint passes it to
-// Application.Handler. Today it registers:
+// Application.Handler. It turns off the bot guard (DisableBotGuard),
+// which otherwise refuses headless browsers such as Playwright, and
+// registers:
 //
 //	GET /dev-login — flip the session "authenticated" flag without
 //	EVE SSO, so the signed-in pages can be exercised locally. It
@@ -31,6 +33,8 @@ import (
 // !!! /dev-login hands a signed-in session to anyone who asks.
 // NEVER enable it on a deployment anyone else can reach. !!!
 func Register(r chi.Router, a *app.Application) {
+	app.DisableBotGuard(a)
+	logging.Warnf("dev server: the bot guard is OFF. Never run this binary in production.")
 	if !app.DevLoginEnabled(a) {
 		return
 	}

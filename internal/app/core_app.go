@@ -26,6 +26,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/klauspost/compress/gzhttp"
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
@@ -641,7 +642,14 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(navStateMiddleware)
 	// Pages, the stylesheet and the scripts are text and compress to
 	// a fraction of their size; fonts and images are left alone.
-	r.Use(middleware.Compress(5))
+	// gzhttp (klauspost) replaces chi's std gzip at the same level:
+	// identical output size for less CPU per response.
+	if compress, err := gzhttp.NewWrapper(gzhttp.CompressionLevel(5)); err == nil {
+		r.Use(func(next http.Handler) http.Handler { return compress(next) })
+	} else {
+		logging.Errorf("gzip middleware: %v", err)
+		r.Use(middleware.Compress(5))
+	}
 	r.Use(app.crossOriginGuard())
 	r.Use(markPrefetch)
 	r.Use(app.sessions.LoadAndSave)

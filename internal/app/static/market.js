@@ -310,9 +310,13 @@
   // is sized from its own header plus its first ten visible rows,
   // so both sides hold ten however their rows wrap. Without
   // script the panes simply grow to their full lists.
-  function sizeOrderBookPanes(root) {
-    var scope = root && root.querySelectorAll ? root : document;
-    var panes = scope.querySelectorAll(".mkt-book-pane > .tw");
+  function sizeOrderBookPanes() {
+    // The lock is page-wide on purpose: both sides share one
+    // height, so every re-run measures the pair.
+    var panes = document.querySelectorAll(".mkt-book-pane > .tw");
+    // Both sides share one height — the taller side's ten — so a
+    // thin book never sits lopsided next to a full one.
+    var heights = [];
     for (var i = 0; i < panes.length; i++) {
       var wrap = panes[i];
       var table = wrap.querySelector("table");
@@ -327,12 +331,16 @@
         height += rows[r].getBoundingClientRect().height;
         shown++;
       }
-      if (!shown) {
-        wrap.style.maxHeight = "";
-        continue;
+      if (shown) {
+        height += wrap.offsetHeight - wrap.clientHeight;
+        heights.push(Math.ceil(height));
       }
-      height += wrap.offsetHeight - wrap.clientHeight;
-      wrap.style.maxHeight = Math.ceil(height) + "px";
+    }
+    if (!heights.length) return;
+    var locked = Math.max.apply(null, heights) + "px";
+    for (var j = 0; j < panes.length; j++) {
+      panes[j].style.minHeight = locked;
+      panes[j].style.maxHeight = locked;
     }
   }
 
@@ -422,14 +430,14 @@
     }
   });
 
-  sizeOrderBookPanes(document);
-  document.addEventListener("evesynapse:content-ready", function (e) {
-    sizeOrderBookPanes(e && e.detail && e.detail.root);
+  sizeOrderBookPanes();
+  document.addEventListener("evesynapse:content-ready", function () {
+    sizeOrderBookPanes();
   });
   var paneResize = null;
   window.addEventListener("resize", function () {
     clearTimeout(paneResize);
-    paneResize = setTimeout(function () { sizeOrderBookPanes(document); }, 150);
+    paneResize = setTimeout(sizeOrderBookPanes, 150);
   });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { sizeOrderBookPanes(document); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeOrderBookPanes);
 })();

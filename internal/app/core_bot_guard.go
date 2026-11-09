@@ -1,6 +1,10 @@
 package app
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"hash/fnv"
 	"net/http"
 	"net/url"
@@ -209,10 +213,10 @@ func isBlockedBot(r *http.Request) bool {
 //   - the aggregate request stream: IDs arriving in ascending
 //     order at a rate no readership produces.
 //
-// Both watches are small, bounded and idle-expiring; signed-in
-// requests (session cookie present) are never counted or turned
-// away by them. The answers are 429, not 403: this is rate, not
-// identity.
+// Both watches are small, bounded and idle-expiring; verified
+// signed-in requests are never counted or turned away by them
+// (a merely present cookie is verified, never trusted). The
+// answers are 429, not 403: this is rate, not identity.
 // ---------------------------------------------------------------------------
 
 const (
@@ -252,6 +256,56 @@ type botFingerprintWatch struct {
 	prints    map[string]*botPrint
 	lastSweep time.Time
 	now       func() time.Time
+	// key signs the asset cookie. A cookie is client-asserted,
+	// so presence alone must exempt nobody: the value is an
+	// HMAC of the fingerprint under a per-process random key,
+	// issued only by an actual /static/ response.
+	key []byte
+}
+
+// assetCookieValue is the signed cookie value for a fingerprint.
+func (w *botFingerprintWatch) assetCookieValue(fp string) string {
+	mac := hmac.New(sha256.New, w.key)
+	_, _ = mac.Write([]byte(fp))
+	return fp + "." + hex.EncodeToString(mac.Sum(nil))
+}
+
+// validAssetCookie reports whether the request carries an asset
+// cookie this process issued for its own fingerprint.
+func (w *botFingerprintWatch) validAssetCookie(r *http.Request, fp string) bool {
+	cookie, err := r.Cookie(assetCookieName)
+	if err != nil {
+		return false
+	}
+	return hmac.Equal([]byte(cookie.Value), []byte(w.assetCookieValue(fp)))
+}
+
+// hasVerifiedSession reports whether the request's session
+// cookie names a real, signed-in session. The guard runs before
+// the session middleware, and a cookie header is client-asserted
+// (anyone can send one), so the token is checked against the
+// session store and the decoded data must carry the signed-in
+// mark. Costs one store read, only for requests claiming this
+// exemption.
+func (app *Application) hasVerifiedSession(r *http.Request) bool {
+	sm := app.sessions
+	if sm == nil || sm.Store == nil {
+		return false
+	}
+	cookie, err := r.Cookie(sm.Cookie.Name)
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+	data, found, err := sm.Store.Find(cookie.Value)
+	if err != nil || !found {
+		return false
+	}
+	_, values, err := sm.Codec.Decode(data)
+	if err != nil {
+		return false
+	}
+	authed, _ := values[sessionAuthenticated].(bool)
+	return authed
 }
 
 func (w *botFingerprintWatch) print(fp string, now time.Time) *botPrint {
@@ -354,7 +408,9 @@ func (w *enumFloodWatch) observe(id int64) bool {
 // rig builds an Application without New).
 func (app *Application) botWatches() (*botFingerprintWatch, *enumFloodWatch) {
 	app.botWatchOnce.Do(func() {
-		app.botWatch = &botFingerprintWatch{prints: make(map[string]*botPrint), now: time.Now}
+		key := make([]byte, 32)
+		_, _ = rand.Read(key)
+		app.botWatch = &botFingerprintWatch{prints: make(map[string]*botPrint), now: time.Now, key: key}
 		app.enumWatch = &enumFloodWatch{now: time.Now}
 	})
 	return app.botWatch, app.enumWatch
@@ -415,24 +471,25 @@ func (app *Application) blockScrapers(next http.Handler) http.Handler {
 			// A client that fetches assets is a browser (or a
 			// browser-driven tool); remember it across visits —
 			// caches and service workers mean later visits may
-			// fetch no assets at all.
-			http.SetCookie(w, &http.Cookie{Name: assetCookieName, Value: "1",
+			// fetch no assets at all. The value is signed (see
+			// assetCookieValue): a self-asserted cookie exempts
+			// nobody.
+			http.SetCookie(w, &http.Cookie{Name: assetCookieName, Value: prints.assetCookieValue(fp),
 				Path: "/", MaxAge: 30 * 24 * 60 * 60, SameSite: http.SameSiteLaxMode})
 			next.ServeHTTP(w, r)
 			return
 		}
-		if isHTMLPageRequest(r) {
-			_, sessionErr := r.Cookie("evesynapse_session")
-			_, assetErr := r.Cookie(assetCookieName)
-			if sessionErr != nil { // not signed in: the watches apply
-				if id, ok := enumTargetID(r); ok && floods.observe(id) {
-					tooManyBotRequests(w)
-					return
-				}
-				if assetErr != nil && prints.recordPage(fp) {
-					tooManyBotRequests(w)
-					return
-				}
+		// Cookie presence alone exempts nobody — both cookies are
+		// verified: the session against its store and signed-in
+		// mark, the asset cookie against its signature.
+		if isHTMLPageRequest(r) && !app.hasVerifiedSession(r) {
+			if id, ok := enumTargetID(r); ok && floods.observe(id) {
+				tooManyBotRequests(w)
+				return
+			}
+			if !prints.validAssetCookie(r, fp) && prints.recordPage(fp) {
+				tooManyBotRequests(w)
+				return
 			}
 		}
 		next.ServeHTTP(w, r)

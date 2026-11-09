@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 )
 
 // TestBlockScrapers pins that automated AI crawlers, headless scraping tools,
@@ -349,12 +350,31 @@ func TestBotWatchHTMLOnlyFingerprint(t *testing.T) {
 	}
 }
 
+// issuedAssetCookie performs one real /static/ fetch through h
+// and returns the signed asset cookie it sets.
+func issuedAssetCookie(t *testing.T, h http.Handler) *http.Cookie {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/static/site.css", nil)
+	req.Header.Set("User-Agent", attackChromeUA)
+	req.Header.Set("Sec-Ch-Ua", `"Chromium";v="153", "Google Chrome";v="153"`)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == assetCookieName {
+			return c
+		}
+	}
+	t.Fatal("no asset cookie issued")
+	return nil
+}
+
 // TestEnumFloodValve: IDs arriving in ascending order at volume
 // trip the valve even with the asset cookie (fingerprints vary);
 // the same volume in random order does not.
 func TestEnumFloodValve(t *testing.T) {
-	cookie := &http.Cookie{Name: assetCookieName, Value: "1"}
 	_, h := botGuardTestApp()
+	cookie := issuedAssetCookie(t, h)
 	code := 0
 	for i := 0; i < enumMinSamples+10; i++ {
 		code = htmlPage(nil, h, attackChromeUA, "/intel/kill/"+strconv.Itoa(139000000+i)+"/", "203.0.113.1:1000", cookie)
@@ -367,9 +387,10 @@ func TestEnumFloodValve(t *testing.T) {
 	}
 
 	_, h2 := botGuardTestApp()
+	cookie2 := issuedAssetCookie(t, h2)
 	for i := 0; i < enumMinSamples+10; i++ {
 		id := 139000000 + (i*7919)%500000 // deterministic scatter
-		if code := htmlPage(nil, h2, attackChromeUA, "/intel/kill/"+strconv.Itoa(id)+"/", "203.0.113.1:1000", cookie); code != http.StatusOK {
+		if code := htmlPage(nil, h2, attackChromeUA, "/intel/kill/"+strconv.Itoa(id)+"/", "203.0.113.1:1000", cookie2); code != http.StatusOK {
 			t.Fatalf("random reads %d: status %d, want 200", i, code)
 		}
 	}
@@ -377,9 +398,10 @@ func TestEnumFloodValve(t *testing.T) {
 	// The query form the origin captures show: character IDs
 	// walked in sequence across the intel surfaces.
 	_, h3 := botGuardTestApp()
+	cookie3 := issuedAssetCookie(t, h3)
 	code = 0
 	for i := 0; i < enumMinSamples+10; i++ {
-		code = htmlPage(nil, h3, attackChromeUA, "/intel/kills/?character="+strconv.Itoa(2120000000+i), "203.0.113.1:1000", cookie)
+		code = htmlPage(nil, h3, attackChromeUA, "/intel/kills/?character="+strconv.Itoa(2120000000+i), "203.0.113.1:1000", cookie3)
 		if code == http.StatusTooManyRequests {
 			break
 		}
@@ -387,4 +409,86 @@ func TestEnumFloodValve(t *testing.T) {
 	if code != http.StatusTooManyRequests {
 		t.Fatalf("sequential character sweep: last status %d, want 429", code)
 	}
+}
+
+// memSessionStore is an in-memory scs.Store for session tests.
+type memSessionStore struct{ data map[string][]byte }
+
+func (s *memSessionStore) Find(token string) ([]byte, bool, error) {
+	b, ok := s.data[token]
+	return b, ok, nil
+}
+func (s *memSessionStore) Commit(token string, b []byte, _ time.Time) error {
+	s.data[token] = b
+	return nil
+}
+func (s *memSessionStore) Delete(token string) error {
+	delete(s.data, token)
+	return nil
+}
+
+// TestBotWatchSpoofedCookies: self-asserted cookies exempt
+// nobody. A made-up session cookie and a made-up asset cookie
+// are both ignored; a session that really exists in the store
+// and carries the signed-in mark is exempt.
+func TestBotWatchSpoofedCookies(t *testing.T) {
+	fake := []*http.Cookie{
+		{Name: "evesynapse_session", Value: "forged-token"},
+		{Name: assetCookieName, Value: "1"},
+	}
+	app, h := botGuardTestApp()
+	code := 0
+	for i := 0; i < botAssetFreePages+5; i++ {
+		code = htmlPage(app, h, attackChromeUA, "/intel/kills/?character=2121821954", "203.0.113.1:1000", fake...)
+		if code == http.StatusTooManyRequests {
+			break
+		}
+	}
+	if code != http.StatusTooManyRequests {
+		t.Fatalf("spoofed cookies: last status %d, want 429", code)
+	}
+
+	// A verified signed-in session walks the same IDs freely.
+	store := &memSessionStore{data: map[string][]byte{}}
+	sm := newSessionManager(store, Config{})
+	deadline := time.Now().Add(time.Hour)
+	raw, err := sm.Codec.Encode(deadline, map[string]interface{}{sessionAuthenticated: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Commit("real-token", raw, deadline); err != nil {
+		t.Fatal(err)
+	}
+	authedApp := &Application{sessions: sm}
+	authed := authedApp.blockScrapers(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	sessionCookie := &http.Cookie{Name: "evesynapse_session", Value: "real-token"}
+	for i := 0; i < enumMinSamples+10; i++ {
+		if code := htmlPage(authedApp, authed, attackChromeUA,
+			"/intel/kill/"+strconv.Itoa(139000000+i)+"/", "203.0.113.1:1000", sessionCookie); code != http.StatusOK {
+			t.Fatalf("signed-in read %d: status %d, want 200", i, code)
+		}
+	}
+	// The same token without the signed-in mark is not exempt.
+	raw, err = sm.Codec.Encode(deadline, map[string]interface{}{"seen": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Commit("anon-token", raw, deadline); err != nil {
+		t.Fatal(err)
+	}
+	anonCookie := &http.Cookie{Name: "evesynapse_session", Value: "anon-token"}
+	if authedApp.hasVerifiedSession(mustReqWithCookies(t, anonCookie)) {
+		t.Fatal("anonymous session verified as signed-in")
+	}
+}
+
+func mustReqWithCookies(t *testing.T, cookies ...*http.Cookie) *http.Request {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	return req
 }

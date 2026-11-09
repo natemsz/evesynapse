@@ -121,11 +121,16 @@
   text-transform: uppercase;
 }
 .kb-head > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-h-detail { display: none; }
 .kb-h-ship { grid-area: ship; }
 .kb-h-main { grid-area: main; }
 .kb-h-atk { grid-area: atk; }
 .kb-h-where { grid-area: where; }
 .kb-h-value { grid-area: value; text-align: right; }
+/* The per-row role labels only read on the folded page, where the
+   column header is gone; the org icons beside them stay folded
+   away with the org names on wide pages. */
+.kb-role { display: none; }
 .kb-kill.big { box-shadow: inset 3px 0 0 var(--kb-big); }
 .kb-kill.big .kb-kill-value { color: var(--kb-big); }
 .kb-kill-ship { grid-area: ship; border-radius: var(--r-sm); background: var(--row-alt); }
@@ -225,15 +230,24 @@
   .kb-kill-meta { text-align: right; align-self: center; }
   .kb-kill-where { align-self: center; }
   .kb-kill-region { display: none; }
-  .kb-party-orgs { display: none; }
   .kb-face { width: 26px; height: 26px; }
-  /* The header folds with the rows: same three-line grid, one
-     label over each folded line, each pinned to its line's top. */
-  .kb-head {
-    grid-template-columns: 2.6rem minmax(0, 1fr) minmax(0, auto);
-    grid-template-areas: "ship main value" "ship atk value" "ship where meta";
-    gap: 0.1rem 0.65rem;
-    padding: 0.55rem 0.65rem 0.35rem;
+  /* The folded page names its parties in place: a role label over
+     each side's name, and the corp and alliance icons beside it.
+     The org names stay folded away; the icons link on. */
+  .kb-role {
+    display: block;
+    color: var(--muted);
+    font-family: var(--font-display);
+    font-size: var(--fs-2xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
-  .kb-head > span { align-self: start; }
+  .kb-party-orgs .kb-org-n { display: none; }
+  .kb-party-orgs { gap: 0.35rem; }
+  /* The folded header is one centered word: the per-row labels
+     above carry which side is which. */
+  .kb-head { display: block; text-align: center; padding: 0.45rem 0.65rem 0.3rem; }
+  .kb-head > span { display: none; }
+  .kb-head > .kb-h-detail { display: inline; }
 }

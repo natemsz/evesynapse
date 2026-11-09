@@ -280,11 +280,11 @@
 .mkt-book-foot > p {
   margin: 0;
 }
-/* The order book panes scroll on their own: each side holds ten
-   entries and the rest scrolls under the same thin bar the market
-   tree uses, so sells and buys move independently. */
+/* The order book panes scroll on their own: script sizes each
+   box to its header plus ten entries (market.js), and the rest
+   scrolls under the same thin bar the market tree uses, so sells
+   and buys move independently. */
 .mkt-book-pane > .tw {
-  max-height: 36rem;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--muted) transparent;

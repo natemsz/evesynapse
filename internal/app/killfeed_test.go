@@ -223,7 +223,7 @@ func TestKillboardPages(t *testing.T) {
 		t.Fatalf("feed: %d, public kills missing", code)
 	}
 	if head, _, _ := strings.Cut(body, `class="kb-kill-link"`); !strings.Contains(head, `<li class="kb-head"`) ||
-		!strings.Contains(head, `>Ship</span><span class="kb-h-main">Victim</span><span class="kb-h-atk">Final blow</span><span class="kb-h-where">System</span><span class="kb-h-value">Est. value</span>`) {
+		!strings.Contains(head, `<span class="kb-h-detail">Details</span><span class="kb-h-ship">Ship</span><span class="kb-h-main">Victim</span><span class="kb-h-atk">Final blow</span><span class="kb-h-where">System</span><span class="kb-h-value">Est. value</span>`) {
 		t.Errorf("the feed's header row does not label its columns ahead of the first kill")
 	}
 	if strings.Contains(body, "/intel/kill/700003/") {

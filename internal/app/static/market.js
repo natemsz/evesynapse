@@ -306,6 +306,36 @@
   });
 
   // ---- Order Book Explorer filters (security band + station/system) ----
+  // Each book pane holds ten entries and scrolls the rest: the box
+  // is sized from its own header plus its first ten visible rows,
+  // so both sides hold ten however their rows wrap. Without
+  // script the panes simply grow to their full lists.
+  function sizeOrderBookPanes(root) {
+    var scope = root && root.querySelectorAll ? root : document;
+    var panes = scope.querySelectorAll(".mkt-book-pane > .tw");
+    for (var i = 0; i < panes.length; i++) {
+      var wrap = panes[i];
+      var table = wrap.querySelector("table");
+      if (!table) continue;
+      var height = 0;
+      var head = table.querySelector("thead");
+      if (head) height += head.getBoundingClientRect().height;
+      var shown = 0;
+      var rows = table.querySelectorAll("tbody tr");
+      for (var r = 0; r < rows.length && shown < 10; r++) {
+        if (rows[r].hidden) continue;
+        height += rows[r].getBoundingClientRect().height;
+        shown++;
+      }
+      if (!shown) {
+        wrap.style.maxHeight = "";
+        continue;
+      }
+      height += wrap.offsetHeight - wrap.clientHeight;
+      wrap.style.maxHeight = Math.ceil(height) + "px";
+    }
+  }
+
   function applyOrderBookFilters() {
     var explorer = document.getElementById("mkt-order-book");
     if (!explorer) return;
@@ -313,13 +343,6 @@
     var sec = activeBtn ? activeBtn.getAttribute("data-sec-filter") : "all";
     var searchInput = document.querySelector("[data-book-filter]");
     var q = searchInput ? searchInput.value.trim().toLowerCase() : "";
-    var filtering = sec !== "all" || q !== "";
-
-    explorer.querySelectorAll("tbody[data-wmore]").forEach(function (tb) {
-      if (filtering) {
-        tb.hidden = false;
-      }
-    });
 
     explorer.querySelectorAll("tr[data-sec-band]").forEach(function (tr) {
       var rowSec = tr.getAttribute("data-sec-band") || "all";
@@ -328,6 +351,7 @@
       var locMatch = !q || rowLoc.indexOf(q) >= 0;
       tr.hidden = !(secMatch && locMatch);
     });
+    sizeOrderBookPanes(explorer);
   }
 
   function setWatchlistOpen(open) {
@@ -397,4 +421,15 @@
       applyOrderBookFilters();
     }
   });
+
+  sizeOrderBookPanes(document);
+  document.addEventListener("evesynapse:content-ready", function (e) {
+    sizeOrderBookPanes(e && e.detail && e.detail.root);
+  });
+  var paneResize = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(paneResize);
+    paneResize = setTimeout(function () { sizeOrderBookPanes(document); }, 150);
+  });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { sizeOrderBookPanes(document); });
 })();

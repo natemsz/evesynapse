@@ -817,6 +817,12 @@ var pgKillEntityFeedSchema string
 //go:embed schema_pg/133_pubcontract_corpus_stats.sql
 var pgPubContractCorpusStatsSchema string
 
+// Step 134: a killmail_id index on the entity feed, so the
+// backfill sweep's anti-join probes it instead of scanning.
+//
+//go:embed schema_pg/134_kill_entity_feed_kill_idx.sql
+var pgKillEntityFeedKillIdxSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -978,6 +984,7 @@ func schemaSteps() []schemaStep {
 		{131, "killboard_stats", pgKillboardStatsSchema, ""},
 		{132, "kill_entity_feed", pgKillEntityFeedSchema, ""},
 		{133, "pubcontract_corpus_stats", pgPubContractCorpusStatsSchema, ""},
+		{134, "kill_entity_feed_kill_idx", pgKillEntityFeedKillIdxSchema, ""},
 	}
 }
 

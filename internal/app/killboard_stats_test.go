@@ -148,3 +148,64 @@ func TestKillEntityFeedServesAlliancePage(t *testing.T) {
 		t.Fatalf("feed after involvement prune = %d kills, want 3", len(again))
 	}
 }
+
+// TestKillFeedBackfillDrainsAndBacksOff pins the legacy feed
+// sweep: a kill stored before the feed existed gets its rows
+// from the sweep, and once a pass finds less than a batch the
+// sweep is drained and does not re-scan until the recheck
+// window passes. (Without the killmail_id index, schema 134,
+// the finder query timed out every pass on a full table and
+// the legacy set never drained.)
+func TestKillFeedBackfillDrainsAndBacksOff(t *testing.T) {
+	app, conn, _ := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	if _, err := conn.Exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`); err != nil {
+		t.Fatal(err)
+	}
+	ts := time.Now().Add(-time.Hour).UTC().Format("2006-01-02T15:04:05Z")
+	raw := fmt.Sprintf(`{"killmail_id":720001,"killmail_time":%q,"solar_system_id":30000142,
+"victim":{"character_id":9001,"corporation_id":98000001,"alliance_id":99000001,"ship_type_id":587,"damage_taken":900,"items":[]},
+"attackers":[{"character_id":9002,"corporation_id":98000002,"alliance_id":99000002,"ship_type_id":11371,"weapon_type_id":2873,"damage_done":900,"final_blow":true}]}`, ts)
+	if _, err := app.ingestKill(ctx, json.RawMessage(raw), "h", &killZKB{}, "zkill", true, false); err != nil {
+		t.Fatal(err)
+	}
+	feedRows := func() int {
+		var n int
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM kill_entity_feed WHERE killmail_id = 720001`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if feedRows() == 0 {
+		t.Fatal("ingest wrote no feed rows")
+	}
+	// Legacy state: the kill exists, its feed rows do not.
+	if _, err := conn.Exec(`DELETE FROM kill_entity_feed WHERE killmail_id = 720001`); err != nil {
+		t.Fatal(err)
+	}
+	app.backfillMissingKillFeeds(ctx)
+	if feedRows() == 0 {
+		t.Fatal("backfill restored no feed rows")
+	}
+	if app.killFeedDrainedAt.IsZero() {
+		t.Fatal("short sweep did not mark the backfill drained")
+	}
+	// Drained: even with rows missing again, the sweep stays
+	// quiet inside the recheck window.
+	if _, err := conn.Exec(`DELETE FROM kill_entity_feed WHERE killmail_id = 720001`); err != nil {
+		t.Fatal(err)
+	}
+	app.backfillMissingKillFeeds(ctx)
+	if feedRows() != 0 {
+		t.Fatal("drained sweep ran inside its recheck window")
+	}
+	// Past the window it rechecks and repairs.
+	app.killFeedDrainedAt = time.Now().Add(-7 * time.Hour)
+	app.backfillMissingKillFeeds(ctx)
+	if feedRows() == 0 {
+		t.Fatal("recheck after the window restored no feed rows")
+	}
+}

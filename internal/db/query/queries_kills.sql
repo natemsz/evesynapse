@@ -418,7 +418,7 @@ ORDER BY p.killmail_time DESC, p.killmail_id DESC;
 -- name: ListKillsMissingFeed :many
 SELECT k.killmail_id FROM kills k
 WHERE NOT EXISTS (SELECT 1 FROM kill_entity_feed f WHERE f.killmail_id = k.killmail_id)
-ORDER BY k.killmail_time DESC
+ORDER BY k.killmail_time ASC
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- name: UpsertKillboardHeadline :exec

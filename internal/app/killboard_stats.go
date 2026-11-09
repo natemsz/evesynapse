@@ -212,8 +212,19 @@ func (app *Application) backfillKillStats(ctx context.Context) {
 // backfillMissingKillFeeds is the maintenance sweep for kills
 // stored before the entity feed existed: the fold writes their
 // feed rows (the aggregates' markers keep the stats counted
-// once), in the background, never at render.
+// once), in the background, never at render. The finder walks
+// oldest first (the missing kills are the legacy ones) over the
+// killmail_id index (schema 134): without that index the
+// anti-join scanned the whole kills table and timed out every
+// pass, so the sweep burned a statement timeout a minute and
+// never drained. Once a pass finds less than a batch the legacy
+// set is drained — kills folded at ingest never miss the feed —
+// and the sweep rechecks only every few hours, in case a fold
+// ever failed quietly.
 func (app *Application) backfillMissingKillFeeds(ctx context.Context) {
+	if !app.killFeedDrainedAt.IsZero() && time.Since(app.killFeedDrainedAt) < 6*time.Hour {
+		return
+	}
 	ids, err := app.queries.ListKillsMissingFeed(ctx, killStatsSweepBatch)
 	if err != nil {
 		logging.Errorf("killboard stats: list kills missing feed: %v", err)
@@ -226,6 +237,9 @@ func (app *Application) backfillMissingKillFeeds(ctx context.Context) {
 	}
 	if len(ids) > 0 {
 		logging.Infof("killboard stats: fed %d stored kills", len(ids))
+	}
+	if len(ids) < killStatsSweepBatch {
+		app.killFeedDrainedAt = time.Now()
 	}
 }
 

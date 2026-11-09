@@ -1198,7 +1198,7 @@ func (q *Queries) ListKillsBySystem(ctx context.Context, arg ListKillsBySystemPa
 const listKillsMissingFeed = `-- name: ListKillsMissingFeed :many
 SELECT k.killmail_id FROM kills k
 WHERE NOT EXISTS (SELECT 1 FROM kill_entity_feed f WHERE f.killmail_id = k.killmail_id)
-ORDER BY k.killmail_time DESC
+ORDER BY k.killmail_time ASC
 LIMIT $1::bigint
 `
 

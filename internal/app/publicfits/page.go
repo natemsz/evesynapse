@@ -2,8 +2,8 @@ package publicfits
 
 import (
 	"context"
-	json "github.com/goccy/go-json"
 	"errors"
+	json "github.com/goccy/go-json"
 	"net/http"
 	"net/url"
 	"strconv"

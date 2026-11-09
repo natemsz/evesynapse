@@ -2,11 +2,11 @@ package doctrines
 
 import (
 	"context"
-	json "github.com/goccy/go-json"
 	"errors"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/humanize"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"net/http"
 	"net/url"
 	"sort"

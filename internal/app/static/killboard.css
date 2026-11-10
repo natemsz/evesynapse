@@ -107,7 +107,7 @@
 /* The Live pill opens the row at the left; search and filters keep
    the right. On a phone it closes the filters' line at the right. */
 .kb-live-pill { order: -1; margin-right: auto; align-self: center; }
-@media (max-width: 45rem) {
+@container page (width < 45rem) {
   .kb-live-pill { order: 0; margin-right: 0; margin-left: auto; }
 }
 /* --- Feed header: one label per column in the site's small caps,

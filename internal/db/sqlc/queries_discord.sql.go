@@ -83,9 +83,12 @@ func (q *Queries) DeleteOtherDiscordLinks(ctx context.Context, arg DeleteOtherDi
 
 const getDiscordGuild = `-- name: GetDiscordGuild :one
 
+
 SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, role_member, ops_channel, auto_join, kick_enabled, kick_exempt_roles, kick_checked_at FROM discord_guilds WHERE guild_id = $1
 `
 
+// The corporations of the characters of an account whose link to EVE
+// is in good standing: what its Discord roles are worked out from.
 // Servers.
 func (q *Queries) GetDiscordGuild(ctx context.Context, guildID string) (DiscordGuild, error) {
 	row := q.db.QueryRow(ctx, getDiscordGuild, guildID)
@@ -306,36 +309,6 @@ func (q *Queries) ListDiscordRoleGrantsForGuild(ctx context.Context, guildID str
 	return items, nil
 }
 
-const listLinkedCorporationsByUser = `-- name: ListLinkedCorporationsByUser :many
-SELECT DISTINCT cc.corporation_id
-FROM characters c
-JOIN character_corporations cc ON cc.character_id = c.character_id
-WHERE c.user_id = $1 AND c.link_state = 'ok'
-ORDER BY cc.corporation_id
-`
-
-// The corporations of the characters of an account whose link to EVE
-// is in good standing: what its Discord roles are worked out from.
-func (q *Queries) ListLinkedCorporationsByUser(ctx context.Context, userID int64) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listLinkedCorporationsByUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []int64
-	for rows.Next() {
-		var corporation_id int64
-		if err := rows.Scan(&corporation_id); err != nil {
-			return nil, err
-		}
-		items = append(items, corporation_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listOpsToAnnounceOnDiscord = `-- name: ListOpsToAnnounceOnDiscord :many
 SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id FROM ops
 WHERE discord_announced_at IS NULL
@@ -457,29 +430,6 @@ type SetDiscordDMProblemParams struct {
 // through.
 func (q *Queries) SetDiscordDMProblem(ctx context.Context, arg SetDiscordDMProblemParams) error {
 	_, err := q.db.Exec(ctx, setDiscordDMProblem, arg.DmProblem, arg.DmProblemAt, arg.UserID)
-	return err
-}
-
-const setDiscordGuildSettings = `-- name: SetDiscordGuildSettings :exec
-UPDATE discord_guilds
-SET role_linked = $1, role_member = $2, ops_channel = $3
-WHERE guild_id = $4
-`
-
-type SetDiscordGuildSettingsParams struct {
-	RoleLinked string `json:"role_linked"`
-	RoleMember string `json:"role_member"`
-	OpsChannel string `json:"ops_channel"`
-	GuildID    string `json:"guild_id"`
-}
-
-func (q *Queries) SetDiscordGuildSettings(ctx context.Context, arg SetDiscordGuildSettingsParams) error {
-	_, err := q.db.Exec(ctx, setDiscordGuildSettings,
-		arg.RoleLinked,
-		arg.RoleMember,
-		arg.OpsChannel,
-		arg.GuildID,
-	)
 	return err
 }
 

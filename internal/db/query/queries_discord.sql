@@ -42,12 +42,6 @@ SELECT count(*) FROM characters WHERE user_id = $1 AND link_state = 'ok';
 
 -- The corporations of the characters of an account whose link to EVE
 -- is in good standing: what its Discord roles are worked out from.
--- name: ListLinkedCorporationsByUser :many
-SELECT DISTINCT cc.corporation_id
-FROM characters c
-JOIN character_corporations cc ON cc.character_id = c.character_id
-WHERE c.user_id = $1 AND c.link_state = 'ok'
-ORDER BY cc.corporation_id;
 
 -- Servers.
 
@@ -70,11 +64,6 @@ ON CONFLICT (guild_id) DO UPDATE SET
     ops_channel = CASE WHEN discord_guilds.owner_kind = excluded.owner_kind AND discord_guilds.owner_id = excluded.owner_id THEN discord_guilds.ops_channel ELSE '' END,
     owner_kind = excluded.owner_kind,
     owner_id = excluded.owner_id;
-
--- name: SetDiscordGuildSettings :exec
-UPDATE discord_guilds
-SET role_linked = sqlc.arg(role_linked), role_member = sqlc.arg(role_member), ops_channel = sqlc.arg(ops_channel)
-WHERE guild_id = sqlc.arg(guild_id);
 
 -- name: DeleteDiscordGuild :exec
 DELETE FROM discord_guilds WHERE guild_id = $1;

@@ -46,9 +46,6 @@ WHERE guild_id = sqlc.arg(guild_id);
 -- name: SetDiscordGuildKickChecked :exec
 UPDATE discord_guilds SET kick_checked_at = sqlc.arg(kick_checked_at) WHERE guild_id = sqlc.arg(guild_id);
 
--- name: GetDiscordLinkByDiscordID :one
-SELECT * FROM discord_links WHERE discord_id = $1;
-
 -- Channel access (schema 022).
 
 -- name: ListDiscordChannelAccess :many

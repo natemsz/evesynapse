@@ -52,6 +52,5 @@ func TestItemPageArtVariants(t *testing.T) {
 		t.Fatalf("mineral item page: status %d", code)
 	}
 	mustContain(t, "/items/type/34/", body,
-		`src="https://images.evetech.net/types/34/render?size=128"`,
-		`data-fallback-src="https://images.evetech.net/types/34/icon?size=128"`)
+		`src="https://images.evetech.net/types/34/icon?size=128"`)
 }

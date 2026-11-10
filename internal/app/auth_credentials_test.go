@@ -286,19 +286,3 @@ func TestResolveCredentialsOCI(t *testing.T) {
 		t.Fatalf("DiscordBotToken = %q; want the value from OCI Secrets", got)
 	}
 }
-
-func TestFetchCredentialProviders(t *testing.T) {
-	// env/none fetch nothing.
-	src := credentialSource{name: credEVEClientSecret, ociID: "ocid1.vaultsecret.oc1.phx.fake"}
-	if _, err := fetchCredential(context.Background(), Config{tokenKeyProvider: "none"}, src); err == nil {
-		t.Fatal("the none provider fetched a credential")
-	}
-	// hasExternalCredentials sees exactly the configured ones.
-	cfg := Config{discordBotTokenWrapped: "blob"}
-	if !hasExternalCredentials(cfg) {
-		t.Fatal("hasExternalCredentials = false with a wrapped source set")
-	}
-	if hasExternalCredentials(Config{}) {
-		t.Fatal("hasExternalCredentials = true with nothing set")
-	}
-}

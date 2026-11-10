@@ -15,7 +15,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	json "github.com/goccy/go-json"
 	"math"
@@ -594,92 +593,6 @@ func (app *Application) wbFillGang(ctx context.Context, v *workbenchView, rep db
 }
 
 // --- The scan door (built, not yet routed) ----------------------------------
-
-// handleWorkbenchScan is the workbench's second door: a
-// standalone scan from the scan tool opened in the workbench,
-// its own stored reading driving the page exactly as a
-// report's page is driven by the report's reading. It is built
-// but deliberately unrouted — no route serves it and nothing
-// links to it, so the scan tool keeps its own result page.
-// Switching the door on is: register this handler beside the
-// scan routes, and land a scan submission here instead of on
-// the classic scan page.
-func (app *Application) handleWorkbenchScan(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	data := app.publicPage(ctx)
-	w.Header().Set("X-Robots-Tag", "noindex")
-	scanID := chi.URLParam(r, "scanID")
-	var row db.GetScanRow
-	var err error
-	if validScanID(scanID) {
-		row, err = app.queries.GetScan(ctx, scanID)
-	} else {
-		err = errors.New("bad id")
-	}
-	if err != nil {
-		data.Workbench = &workbenchView{Error: "This scan does not exist, or it is more than 90 days old."}
-		app.render(ctx, w, http.StatusNotFound, "intel_workbench.html", data)
-		return
-	}
-	v := app.buildWorkbenchScan(ctx, row)
-	data.Workbench = v
-	title := v.SysName
-	if title == "" {
-		title = "Scan"
-	}
-	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: title + " · Intel Workbench", CanonicalPath: "/intel/workbench/scan/" + row.ID + "/"})
-	app.render(ctx, w, http.StatusOK, "intel_workbench.html", data)
-}
-
-// buildWorkbenchScan assembles the workbench from a standalone
-// scan's stored reading: the same fills a report's page gets,
-// minus the channel's frame (no channel, no reporter, no
-// previous report to diff against — a scan has none of those).
-// Standing buckets are read with no channel's perspective: the
-// watch list and side are empty, so a pilot reads as their
-// affiliation alone says.
-func (app *Application) buildWorkbenchScan(ctx context.Context, row db.GetScanRow) *workbenchView {
-	names := app.newKillNames(ctx)
-	var res scanResult
-	_ = json.Unmarshal([]byte(row.Result), &res)
-	systemID := row.SystemID
-	if systemID == 0 {
-		systemID = res.SystemID
-	}
-	v := &workbenchView{
-		FromScan: true, ScanID: row.ID, ScanURL: "/intel/scan/" + row.ID + "/",
-		SystemID: systemID, Headline: scanTitle(res),
-		Ago: ageText(time.Now(), row.CreatedAt),
-	}
-	label := wbScanKindLabel(res.Kind)
-	v.Snapshot = label
-	if systemID > 0 {
-		sys := names.system(systemID)
-		v.SysName = sys.Name
-		v.SecText, v.SecTier = secRound(sys.Security)
-		region := names.region(sys.RegionID)
-		if sys.Name != "" {
-			v.Snapshot = sys.Name + " " + label
-		}
-		if region != "" {
-			v.SysLine = region + " · " + secClassWord(sys.Security)
-			v.Snapshot += " (" + region + ")"
-		}
-	}
-	var rawRows []scan.DScanRow
-	if p, err := scan.Parse(row.Raw); err == nil && p.Kind == scan.KindDScan {
-		rawRows = p.DScan
-	}
-	if res.DScan != nil {
-		app.wbFillDScan(ctx, v, res.DScan, rawRows)
-	}
-	var noAnalysis intelanalyze.Analysis
-	app.wbFillLocal(ctx, v, 0, systemID, &noAnalysis, res.Local, names)
-	if systemID > 0 {
-		app.wbFillSystem(ctx, v, systemID, names)
-	}
-	return v
-}
 
 // wbScanKindLabel names a scan's kind the way the page does.
 func wbScanKindLabel(k scan.Kind) string {

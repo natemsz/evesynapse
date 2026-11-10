@@ -173,19 +173,6 @@ func credentialFetcherFor(cfg Config) (credentialFetcher, string, error) {
 	}
 }
 
-// fetchCredential fetches one credential from its external
-// source: credentialFetcherFor for a single call.
-func fetchCredential(ctx context.Context, cfg Config, src credentialSource) (string, error) {
-	fetch, provider, err := credentialFetcherFor(cfg)
-	if err != nil {
-		return "", err
-	}
-	if fetch == nil {
-		return "", fmt.Errorf("the %s provider fetches no credentials", provider)
-	}
-	return fetch(ctx, src)
-}
-
 // credStore is the application's credential store, created on
 // first use: a Config built by hand (tests do this) may not carry
 // one, where LoadConfig always does.

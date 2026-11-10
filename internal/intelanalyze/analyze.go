@@ -34,31 +34,6 @@ const (
 	KindChatter  = "chatter"
 )
 
-// Rank orders kinds by how pressing they are: lower is more.
-func Rank(kind string) int {
-	switch kind {
-	case KindCapital:
-		return 0
-	case KindCamp:
-		return 1
-	case KindBubble:
-		return 2
-	case KindFleet:
-		return 3
-	case KindSighting:
-		return 4
-	case KindLocal:
-		return 5
-	case KindFriendly:
-		return 6
-	case KindClear:
-		return 7
-	case KindQuestion:
-		return 8
-	}
-	return 9
-}
-
 // Ship classes the analysis acts on (from the SDE's group names).
 const (
 	ClassCapital   = "capital"

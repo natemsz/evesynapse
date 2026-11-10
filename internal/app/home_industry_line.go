@@ -3,10 +3,11 @@ package app
 import (
 	"context"
 	"sort"
-	"strconv"
 	"time"
 
+	"evesynapse/internal/app/contracts"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -39,11 +40,10 @@ const (
 )
 
 type prodLineBuyRow struct {
-	Name        string
-	TypeID      int64
-	Qty         string
-	Art         string // the type's render on the EVE image server
-	ArtFallback string // the type's icon, swapped in when no render exists
+	Name   string
+	TypeID int64
+	Qty    string
+	Art    string // the type's icon on the EVE image server
 }
 
 type prodLineRow struct {
@@ -59,16 +59,6 @@ type prodLineRow struct {
 	BarLabel      string // the timing line under the bar: the note for a due line, "Ends in ..." for a healthy one
 	Runner        string // largest size: who runs the line's next job, and when it ends
 	Missing       []prodLineBuyRow
-}
-
-// typeArtURLs follows the item page's art pattern: the type's
-// render on the EVE image server first, its icon as the fallback
-// the templates swap in when the type has no render.
-func typeArtURLs(typeID int64, size int) (string, string) {
-	id := strconv.FormatInt(typeID, 10)
-	sz := strconv.Itoa(size)
-	return "https://images.evetech.net/types/" + id + "/render?size=" + sz,
-		"https://images.evetech.net/types/" + id + "/icon?size=" + sz
 }
 
 // prodLineBar fills the row's progress bar from a job's stored
@@ -250,6 +240,15 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 		}
 	}
 	names := app.esi.CachedTypeNames(ctx, nameIDs)
+	// The products' SDE categories pick each line's picture.
+	categories := map[int64]int64{}
+	if rows, err := app.queries.ListSDETypeCategories(ctx, nameIDs); err != nil {
+		logging.Errorf("home: production line: type categories: %v", err)
+	} else {
+		for _, row := range rows {
+			categories[row.TypeID] = row.CategoryID
+		}
+	}
 	for i := range judged {
 		name := names[products[judged[i].bp]]
 		if name == "" {
@@ -259,8 +258,8 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 			name = "Blueprint " + esi.FormatInt(judged[i].bp)
 		}
 		judged[i].row.Product = name
-		if judged[i].row.ProductTypeID != 0 {
-			judged[i].row.Art, judged[i].row.ArtFallback = typeArtURLs(judged[i].row.ProductTypeID, 64)
+		if pid := judged[i].row.ProductTypeID; pid != 0 {
+			judged[i].row.Art, judged[i].row.ArtFallback = contracts.TypeArtURLs(pid, categories[pid], 64)
 		}
 	}
 
@@ -333,8 +332,7 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 						if name == "" {
 							name = "Item " + esi.FormatInt(id)
 						}
-						art, artFallback := typeArtURLs(id, 64)
-						rows = append(rows, prodLineBuyRow{Name: name, TypeID: id, Qty: esi.FormatInt(left), Art: art, ArtFallback: artFallback})
+						rows = append(rows, prodLineBuyRow{Name: name, TypeID: id, Qty: esi.FormatInt(left), Art: contracts.TypeCategoryIconURL(id, 0, 64)})
 					}
 				}
 				return rows

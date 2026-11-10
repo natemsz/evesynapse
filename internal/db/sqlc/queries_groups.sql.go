@@ -142,28 +142,6 @@ func (q *Queries) DeleteOrgGroup(ctx context.Context, id int64) error {
 	return err
 }
 
-const getDiscordLinkByDiscordID = `-- name: GetDiscordLinkByDiscordID :one
-SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, dm_problem_at, access_token, refresh_token, token_expiry FROM discord_links WHERE discord_id = $1
-`
-
-func (q *Queries) GetDiscordLinkByDiscordID(ctx context.Context, discordID string) (DiscordLink, error) {
-	row := q.db.QueryRow(ctx, getDiscordLinkByDiscordID, discordID)
-	var i DiscordLink
-	err := row.Scan(
-		&i.UserID,
-		&i.DiscordID,
-		&i.Username,
-		&i.LinkedAt,
-		&i.DmNotifications,
-		&i.DmProblem,
-		&i.DmProblemAt,
-		&i.AccessToken,
-		&i.RefreshToken,
-		&i.TokenExpiry,
-	)
-	return i, err
-}
-
 const getOrgGroup = `-- name: GetOrgGroup :one
 SELECT id, owner_kind, owner_id, name, description, created_by, created_at FROM org_groups WHERE id = $1
 `

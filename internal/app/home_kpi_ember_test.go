@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -11,34 +9,6 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 )
-
-// TestNetWorthSparkTotals: the sparkline series is each day's total
-// net worth summed across the account's characters, ascending,
-// capped at the last 31 days; days with no computed net worth stay
-// off, exactly like the chart series.
-func TestNetWorthSparkTotals(t *testing.T) {
-	rows := []db.WalletHistory{
-		{CharacterID: 1, Day: "2026-03-01", NetWorth: nw(1000)},
-		{CharacterID: 2, Day: "2026-03-01", NetWorth: nw(250)},
-		{CharacterID: 1, Day: "2026-03-02", NetWorth: sql.NullFloat64{}},
-		{CharacterID: 2, Day: "2026-03-02", NetWorth: nw(300)},
-		{CharacterID: 1, Day: "2026-03-03", NetWorth: nw(200)},
-	}
-	if got := netWorthSparkTotals(rows); fmt.Sprint(got) != "[1250 300 200]" {
-		t.Errorf("totals = %v, want [1250 300 200]", got)
-	}
-
-	many := make([]db.WalletHistory, 0, 40)
-	base := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	for d := 0; d < 40; d++ {
-		many = append(many, db.WalletHistory{CharacterID: 1,
-			Day: base.AddDate(0, 0, d).Format("2006-01-02"), NetWorth: nw(float64(d + 1))})
-	}
-	got := netWorthSparkTotals(many)
-	if len(got) != 31 || got[0] != 10 || got[30] != 40 {
-		t.Errorf("capped totals = %v, want the last 31 days (10..40)", got)
-	}
-}
 
 // TestSparklineSVG: the shaped SVG — and no SVG at all under two
 // days, so the KPI never draws a placeholder line.

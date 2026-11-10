@@ -1363,39 +1363,6 @@ func (q *Queries) ListProfitDaily(ctx context.Context, arg ListProfitDailyParams
 	return items, nil
 }
 
-const listSoldTypesSince = `-- name: ListSoldTypesSince :many
-SELECT DISTINCT type_id FROM ledger_txns
-WHERE owner_kind = $1 AND owner_id = $2 AND NOT is_buy AND at >= $3::timestamptz
-`
-
-type ListSoldTypesSinceParams struct {
-	OwnerKind string    `json:"owner_kind"`
-	OwnerID   int64     `json:"owner_id"`
-	Since     time.Time `json:"since"`
-}
-
-// Types an owner sold from a moment on: their realized rows follow a
-// change of paired tax, so the item rollups refold from there.
-func (q *Queries) ListSoldTypesSince(ctx context.Context, arg ListSoldTypesSinceParams) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listSoldTypesSince, arg.OwnerKind, arg.OwnerID, arg.Since)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []int64
-	for rows.Next() {
-		var type_id int64
-		if err := rows.Scan(&type_id); err != nil {
-			return nil, err
-		}
-		items = append(items, type_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listTradeItems = `-- name: ListTradeItems :many
 SELECT type_id,
        SUM(units)::bigint AS units, SUM(revenue)::float8 AS revenue,

@@ -32,27 +32,6 @@ func storeCardsOff(t *testing.T, app *Application, ctx context.Context, userID i
 	}
 }
 
-// TestBriefingCardKindMappingRoundTrips: every kind with a card
-// maps to exactly one card kind and back, and kinds without a card
-// stay out of the mapping.
-func TestBriefingCardKindMappingRoundTrips(t *testing.T) {
-	for _, kind := range notifyKindList() {
-		card, ok := briefingCardKindFor(kind.ID)
-		back, backOK := notifyKindForBriefingCard(card)
-		switch kind.ID {
-		case notifyMail, notifySkill, notifyPI, notifyIndustry, notifyCalendar,
-			notifyWatch, notifyContract, notifyRelink, notifyCamp, notifyUndercut:
-			if !ok || !backOK || back != kind.ID {
-				t.Errorf("kind %s maps to card %q and back to %q", kind.ID, card, back)
-			}
-		default:
-			if ok || backOK {
-				t.Errorf("kind %s has no card but maps to %q", kind.ID, card)
-			}
-		}
-	}
-}
-
 // TestBriefingCardSwitchHidesCard: switching a kind's card off
 // keeps its lines off the deck, while other kinds still show.
 func TestBriefingCardSwitchHidesCard(t *testing.T) {

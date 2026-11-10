@@ -498,7 +498,8 @@ func LoadSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*Snapsho
 
 	loadedTypes := make(map[int64]bool)
 	loadedEffects := make(map[int64]bool)
-	pending := dedupeSortedIDs(typeIDs)
+	// A copy: the caller keeps its slice in the order it built it.
+	pending := dedupeSortedIDs(append([]int64(nil), typeIDs...))
 
 	for round := 0; round < 6; round++ {
 		var fresh []int64

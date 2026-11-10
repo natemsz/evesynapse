@@ -122,9 +122,6 @@ WHERE k.killmail_id = l.killmail_id AND k.killmail_time < sqlc.arg(before)::time
 -- name: ListSystemRegions :many
 SELECT system_id, region_id FROM sde_systems;
 
--- name: CountKillsSince :one
-SELECT COUNT(*) FROM kills WHERE ingested_at >= sqlc.arg(since)::timestamptz;
-
 -- ---------------------------------------------------------------------
 -- The killboard pages: public kills only, newest first, one query per
 -- scope so each rides its own index. Paging is keyset: the page after

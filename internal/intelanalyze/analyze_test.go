@@ -226,15 +226,6 @@ func TestAnalyzeLocalSentence(t *testing.T) {
 	}
 }
 
-func TestRank(t *testing.T) {
-	order := []string{KindCapital, KindCamp, KindBubble, KindFleet, KindSighting, KindLocal, KindFriendly, KindClear, KindQuestion, KindChatter}
-	for i := 1; i < len(order); i++ {
-		if Rank(order[i-1]) >= Rank(order[i]) {
-			t.Errorf("%s should rank before %s", order[i-1], order[i])
-		}
-	}
-}
-
 // TestAnalyzeResidue pins the residue capture: text the
 // analysis settles as nothing it knows (looked up, and no
 // pilot, ship, gate or keyword) is kept as residue spans,

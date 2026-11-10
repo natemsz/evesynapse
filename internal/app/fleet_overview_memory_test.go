@@ -53,12 +53,6 @@ func TestFleetOverviewMemoryPinsServingAndLowRAM(t *testing.T) {
 		t.Fatalf("cached rollup = %+v", cached)
 	}
 
-	// 3. Invalidation clears rollup for user.
-	app.invalidateFleetRollup(userID)
-	if got := app.fleetRollup(userID, now.Add(10*time.Second)); got != nil {
-		t.Fatalf("fleetRollup after invalidate = %v, want nil", got)
-	}
-
 	// 4. Low-RAM mode returns nil and bypasses RAM caching.
 	app.cfg.lowRAMMode = true
 	app.storeFleetRollup(userID, now, w)

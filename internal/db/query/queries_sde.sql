@@ -6,11 +6,6 @@ INSERT INTO type_names (type_id, name)
 VALUES ($1, $2)
 ON CONFLICT (type_id) DO UPDATE SET
     name = excluded.name;
--- name: SearchTypeNames :many
-SELECT type_id, name FROM type_names
-WHERE name ILIKE $1
-ORDER BY name
-LIMIT 20;
 -- name: ListTypeNamesByExactName :many
 SELECT type_id, name FROM type_names
 WHERE lower(name) = lower(sqlc.arg(name))
@@ -18,9 +13,6 @@ ORDER BY type_id;
 -- name: ListTypeNamesByNames :many
 SELECT type_id, name FROM type_names
 WHERE name = ANY(sqlc.arg(names)::text[])
-ORDER BY type_id;
--- name: ListAllTypeNames :many
-SELECT type_id, name FROM type_names
 ORDER BY type_id;
 -- name: ListTypeNameIDsByIDs :many
 -- Batched name-cache hit check: which of the given type IDs
@@ -113,19 +105,11 @@ SELECT region_id, name FROM sde_regions
 WHERE strpos(lower(name), lower(@q::text)) > 0
 ORDER BY CASE WHEN strpos(lower(name), lower(@q::text)) = 1 THEN 0 ELSE 1 END, name
 LIMIT @lim::bigint;
--- ListSDESystemsByRegion: one region's systems for its page.
--- name: ListSDESystemsByRegion :many
-SELECT system_id, name, security FROM sde_systems
-WHERE region_id = $1
-ORDER BY name;
 -- name: SearchSDETypes :many
 SELECT type_id, name FROM sde_types
 WHERE name ILIKE $1
 ORDER BY name
 LIMIT 20;
--- name: ListSDETypeIDs :many
-SELECT type_id FROM sde_types
-ORDER BY type_id;
 -- name: CountSDETypes :one
 SELECT COUNT(*) FROM sde_types;
 -- name: CountSDEGroups :one
@@ -153,20 +137,6 @@ WHERE market_group_id = $1;
 SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups g
 WHERE g.parent_group_id = $1
 ORDER BY EXISTS (SELECT 1 FROM sde_market_groups c WHERE c.parent_group_id = g.market_group_id) DESC, name;
--- name: ListSDETypesInMarketGroup :many
-SELECT type_id, name FROM sde_types
-WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
-ORDER BY name;
--- name: ListSDETypesInMarketGroupPaged :many
--- One page of a market group's types: the market browse tab
--- pages big groups instead of pulling thousands of rows.
-SELECT type_id, name FROM sde_types
-WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
-ORDER BY name
-LIMIT sqlc.arg(row_limit)::bigint OFFSET sqlc.arg(row_offset)::bigint;
--- name: CountSDETypesInMarketGroup :one
-SELECT COUNT(*) FROM sde_types
-WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0;
 -- name: SuggestSDEMarketGroups :many
 -- Basket editor group search: market groups whose name mentions
 -- the text, prefix matches first, mirroring the type suggest.
@@ -239,9 +209,6 @@ DELETE FROM sde_override WHERE id = 1 AND sha256 = $1;
 -- name: GetItemName :one
 SELECT name FROM item_names
 WHERE item_id = $1;
--- name: ListItemNames :many
-SELECT item_id, name FROM item_names
-ORDER BY item_id;
 -- name: ListItemNamesByIDs :many
 -- Batched singleton-name lookup: the names for one page's item
 -- IDs, without pulling the whole item_names table.
@@ -507,9 +474,6 @@ ORDER BY g.name, t.name;
 -- name: GetSDESkillMeta :one
 SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
 WHERE type_id = $1;
--- name: ListSDESkillMetaByIDs :many
-SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
-WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);
 -- name: ListSDERequirementsByType :many
 SELECT skill_type_id, level FROM sde_requirements
 WHERE type_id = $1
@@ -610,9 +574,6 @@ ORDER BY effect_id;
 SELECT type_id, effect_id, is_default FROM sde_type_effects
 WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[])
 ORDER BY type_id, effect_id;
--- name: GetSDEEffect :one
-SELECT effect_id, name, category FROM sde_effects
-WHERE effect_id = $1;
 -- name: ListSDEEffectsByIDs :many
 SELECT effect_id, name, category FROM sde_effects
 WHERE effect_id = ANY(sqlc.arg(effect_ids)::bigint[])

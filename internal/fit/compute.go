@@ -317,6 +317,48 @@ func (f *fitting) checkShipRestrictions() {
 	sort.Slice(f.res.OverGroupLimit, func(i, j int) bool { return f.res.OverGroupLimit[i].GroupID < f.res.OverGroupLimit[j].GroupID })
 }
 
+// skillSelf stands for "the skill carrying the effect" in a
+// skillCodeEffects modifier's SkillTypeID.
+const skillSelf = -1
+
+// skillCodeEffect is a skill effect the SDE carries with no
+// modifier rows (the game applies it in code), written out as the
+// modifiers it stands for.
+type skillCodeEffect struct {
+	Effect
+	modifiers []Modifier
+}
+
+// skillCodeEffects are the skill bonuses CCP ships without
+// modifiers: missile damage by missile skill, T2 launcher rate of
+// fire by specialization, drone damage by drone skill. Each skill
+// already scales its bonus by level in a modifier effect of its own
+// (152 or 146 for damageMultiplierBonus 292, 163 for rofBonus 293),
+// so the bonus applies as folded.
+var skillCodeEffects = map[int64]skillCodeEffect{
+	660: missileSkillDamage("missileEMDmgBonus", AttrDamageEM),
+	661: missileSkillDamage("missileExplosiveDmgBonus", AttrDamageExplosive),
+	662: missileSkillDamage("missileThermalDmgBonus", AttrDamageThermal),
+	668: missileSkillDamage("missileKineticDmgBonus2", AttrDamageKinetic),
+	1730: {Effect: Effect{Name: "droneDmgBonus"}, modifiers: []Modifier{
+		{Domain: "charID", Func: "OwnerRequiredSkillModifier", ModifiedAttr: AttrDamageMultiplier, ModifyingAttr: attrDamageMultiplierBonus, Operation: 6, SkillTypeID: skillSelf},
+	}},
+	1851: {Effect: Effect{Name: "selfRof"}, modifiers: []Modifier{
+		{Domain: "shipID", Func: "LocationRequiredSkillModifier", ModifiedAttr: AttrSpeed, ModifyingAttr: attrRofBonus, Operation: 6, SkillTypeID: skillSelf},
+	}},
+}
+
+const (
+	attrDamageMultiplierBonus = 292
+	attrRofBonus              = 293
+)
+
+func missileSkillDamage(name string, attr int64) skillCodeEffect {
+	return skillCodeEffect{Effect: Effect{Name: name}, modifiers: []Modifier{
+		{Domain: "charID", Func: "OwnerRequiredSkillModifier", ModifiedAttr: attr, ModifyingAttr: attrDamageMultiplierBonus, Operation: 6, SkillTypeID: skillSelf},
+	}}
+}
+
 // bindModifiers walks every entity's effects and binds each
 // modifier to the entities it applies to, filling f.apps.
 func (f *fitting) bindModifiers() {
@@ -360,6 +402,17 @@ func (f *fitting) bindModifiers() {
 		}
 		for _, effectID := range snap.TypeEffects[source.typeID] {
 			eff := snap.Effects[effectID]
+			if source.kind == entSkill && (eff == nil || len(eff.Modifiers) == 0) {
+				if code, ok := skillCodeEffects[effectID]; ok {
+					for _, m := range code.modifiers {
+						if m.SkillTypeID == skillSelf {
+							m.SkillTypeID = source.typeID
+						}
+						f.bind(atShip, source, effectID, &code.Effect, m)
+					}
+					continue
+				}
+			}
 			if eff == nil {
 				continue // carries no modifiers; nothing to apply
 			}
@@ -496,7 +549,13 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 			f.note(shape + ": domain not modeled")
 			return
 		}
-		for _, t := range f.drones {
+		// The character owns its drones and every loaded charge
+		// and missile: this is how hull and skill bonuses reach
+		// missile damage (Drake, Naga Navy Issue, Heavy Missiles).
+		for _, t := range f.entities {
+			if t.kind != entDrone && t.kind != entCharge && t.kind != entMissile {
+				continue
+			}
 			if m.SkillTypeID != 0 && snap.requiresSkill(t.typeID, m.SkillTypeID) {
 				targets(t)
 			}

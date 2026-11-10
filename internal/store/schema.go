@@ -842,6 +842,12 @@ var pgPlaceStatsSourceEtagSchema string
 //go:embed schema_pg/137_true_value_asks.sql
 var pgTrueValueAsksSchema string
 
+// Step 139: an uploaded static data dump the importer reads in place
+// of the regular dump until that dump catches up.
+//
+//go:embed schema_pg/139_sde_override.sql
+var pgSDEOverrideSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1007,6 +1013,7 @@ func schemaSteps() []schemaStep {
 		{135, "trained_banner_dismissals", pgTrainedBannerDismissalsSchema, ""},
 		{136, "place_stats_source_etag", pgPlaceStatsSourceEtagSchema, ""},
 		{137, "true_value_asks", pgTrueValueAsksSchema, ""},
+		{139, "sde_override", pgSDEOverrideSchema, ""},
 	}
 }
 

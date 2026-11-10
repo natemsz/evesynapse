@@ -6,7 +6,6 @@ import (
 	"fmt"
 	json "github.com/goccy/go-json"
 	"sort"
-	"strconv"
 	"time"
 
 	"evesynapse/internal/buildplan"
@@ -22,9 +21,8 @@ import (
 // blueprints, The Forge's swept typicals, the stored guide --
 // plus contract evidence for the types the market cannot
 // price: the stored public-contract corpus mined at
-// evaluation time, one bounded crawl of ESI's public
-// contracts per cycle behind it, exit probes over the
-// corpus's departed ship listings (truevalue_sales.go), and
+// evaluation time, exit probes over the corpus's departed
+// listings (truevalue_sales.go), and
 // a bounded walk of ship types with no blueprint at all.
 // Thin non-ship types price from their samples by evidence
 // tier; thin ships price the abyssal way, by a learned
@@ -56,13 +54,9 @@ type tvPassState struct {
 	graph          *tvBlueprintGraph
 	profile        trueValueProfile
 
-	samples   map[int64][]tvContractSample // thin type -> contract samples
-	lastCrawl map[int64]time.Time          // region -> last crawl
-	crawlNext int                          // next region to try crawling
-
 	// The certain tier (schema 052): sale samples harvested
 	// from linked characters' own contracts that ESI reports
-	// finished, kept apart from the crawl's listing samples.
+	// finished, kept apart from the corpus's listing samples.
 	fulfilled     map[int64][]tvContractSample // thin type -> fulfilled-sale samples
 	fulfilledSeen map[int64]bool               // contract IDs already harvested
 	snapshotSeen  map[int64]time.Time          // character -> contracts snapshot vintage last harvested
@@ -97,8 +91,8 @@ type tvContractSample struct {
 
 // tvSampleWindow is how long a sample stays meaningful
 // for the TIERED estimate (thin non-ship types): contracts
-// turn over fast, and a fortnight covers the crawl's
-// rotation several times over. Ship evidence is not cut
+// turn over fast, and a fortnight holds several turnovers
+// of the corpus. Ship evidence is not cut
 // off at this window -- the learned fit weights age
 // instead (tvSampleWeight) -- and is kept to
 // tvEvidenceRetention.
@@ -196,21 +190,6 @@ func (app *Application) loadTVBlueprintGraph(ctx context.Context) (*tvBlueprintG
 	return graph, nil
 }
 
-// tvCrawlDue reports whether a region the crawl has already
-// visited is past its re-check interval. A region never
-// crawled in this process has no watched listings, so it
-// does not hold the gate open; its first crawl rides the
-// next pass an input move or the staleness bound starts.
-func tvCrawlDue(st *tvPassState, now time.Time) bool {
-	for _, regionID := range tvContractRegions {
-		last := st.lastCrawl[regionID]
-		if !last.IsZero() && now.Sub(last) >= tvContractCrawlInterval {
-			return true
-		}
-	}
-	return false
-}
-
 // refreshTrueValues runs one bounded chunk of the pass. It is
 // called from refreshCycle behind the guide refresh and the
 // cost-index refresh, whose outputs are its inputs.
@@ -221,24 +200,25 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	}
 	st := &app.trueValuePass
 
+	// Departed listings get their exit probes every cycle,
+	// ahead of the gate below: ESI remembers an accepted
+	// contract only for a while, and a sale confirmed now
+	// already counts in this cycle's reads (truevalue_sales.go).
+	app.probeContractExits(ctx, time.Now())
+
 	// A pass runs when its inputs have moved since the last
 	// completed pass, and the cycle idles otherwise. The
 	// fingerprint is read cheaply (the guide's meta row and
 	// the sweep's stamp query), and a cycle that finds it
-	// unchanged returns before the stats rows, the graph, the
-	// exit probes and the evidence reads are loaded at all:
-	// rerunning them on frozen inputs only recomputes the
-	// values already stored. A completed pass also ages out:
+	// unchanged returns before the stats rows, the graph and
+	// the evidence reads are loaded at all: rerunning them
+	// on frozen inputs only recomputes the values already
+	// stored. A completed pass also ages out:
 	// inputs frozen past trueValueStaleAfter (a stalled
 	// sweep, a dead ESI) start a fresh pass anyway, so the
 	// rows keep the staleness bound the age rule promises.
-	// The crawl is the one duty the gate never holds back:
-	// when a visited region's re-check comes due, the pass
-	// runs, because vanished listings are evidence only a
-	// crawl collects.
 	if st.fingerprint != "" && st.cursor == 0 &&
-		time.Since(st.passDoneAt) < trueValueStaleAfter &&
-		!tvCrawlDue(st, time.Now()) {
+		time.Since(st.passDoneAt) < trueValueStaleAfter {
 		if stamp, err := app.queries.GetMarketRegionStatsStamp(ctx, defaultMarketRegion); err == nil {
 			var statsStamp time.Time
 			if t, ok := stamp.Stamp.(time.Time); ok {
@@ -255,10 +235,6 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	guide := app.storedGuidePrices(ctx)
 	if guide == nil {
 		return // no guide yet: nothing honest to price from
-	}
-	if st.samples == nil {
-		st.samples = make(map[int64][]tvContractSample)
-		st.lastCrawl = make(map[int64]time.Time)
 	}
 	if st.fulfilled == nil {
 		st.fulfilled = make(map[int64][]tvContractSample)
@@ -306,11 +282,6 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	}
 	graph := st.graph
 
-	// Departed ship listings get their exit probes first, so
-	// a sale confirmed this cycle already counts as evidence
-	// in the reads below (truevalue_sales.go).
-	app.probeShipContractSales(ctx, graph.allShips, time.Now())
-
 	existing := make(map[int64]db.TrueValue)
 	if rows, err := app.queries.ListTrueValues(ctx); err == nil {
 		for _, row := range rows {
@@ -322,9 +293,8 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 
 	// The stored-price lookup the contract sampler nets a
 	// fitted contract's other items out at, and the probable
-	// tier: listings the crawl watched vanish before expiry,
-	// read back from the observation table (they outlive the
-	// process, unlike the listing samples in memory).
+	// tier: watched listings that left before expiry, read
+	// back from the observation table.
 	priceOf := tvStoredPricerFrom(typicalSell, existing, guide)
 	vanished := make(map[int64][]tvContractSample)
 	if rows, err := app.queries.ListTVVanishedSamplesSince(ctx, sql.NullTime{Time: time.Now().Add(-tvEvidenceRetention), Valid: true}); err == nil {
@@ -469,16 +439,13 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 				pendingShips = append(pendingShips, typeID)
 				continue
 			}
-			// The corpus speaks first (its copy of a contract
-			// is the durable one); the crawl's in-memory
-			// samples, the vanished tier and the fulfilled
-			// tier follow. The tiered rules judge the samples
+			// The corpus speaks first; the vanished tier and
+			// the fulfilled tier follow. The tiered rules judge the samples
 			// that corroborate the build-cost anchor. An
 			// estimate is stored only when the evidence
 			// produces one -- never the build cost standing
 			// in for a price.
 			samples := freshContractSamples(app.corpusListingSamples(ctx, typeID, thinSubjects, graph.shipsAll, priceOf, now), now)
-			samples = append(samples, freshContractSamples(st.samples[typeID], now)...)
 			samples = append(samples, freshContractSamples(vanished[typeID], now)...)
 			samples = append(samples, freshContractSamples(st.fulfilled[typeID], now)...)
 			samples = dedupeSamplesByContract(samples)
@@ -517,7 +484,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	}
 
 	// Thin types whose stored rows predate this chunk still
-	// feed the contracts crawl's band check.
+	// feed the fulfilled harvest's band check.
 	for typeID, row := range existing {
 		if _, done := thinCosts[typeID]; !done && row.BuildCost > 0 && isThinType(guide, dailyVolume, typeID) {
 			thinCosts[typeID] = row.BuildCost
@@ -525,7 +492,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	}
 	app.priceThinShips(ctx, pendingShips, evidenceTypes, existing, thinSubjects, thinCosts, vanished, graph, priceOf, inputsChanged, now)
 	app.harvestFulfilledSamples(ctx, thinCosts, graph.ships, priceOf, now)
-	app.crawlPublicContracts(ctx, thinCosts, graph.ships, priceOf, now)
+	app.purgeContractObservations(ctx, now)
 }
 
 // isThinType reports whether a type lacks a real market: no
@@ -612,17 +579,14 @@ const tvCorpusMaxContracts = 40
 // corpus for one thin type's listing-tier samples. The
 // corpus is the contract sweep's own store of live contracts
 // (every region, continuously), so this reads the evidence
-// the whole market is showing -- where the crawl below sees
-// one region at a time through a narrow fetch budget, and
-// held its samples in memory. A sample's stamp is its
+// the whole market is showing. A sample's stamp is its
 // contract's last-seen time: the ask stands now. Contracts
-// are judged by the same shape rules the crawl applies
-// (tvContractSampleShape) but NOT banded: banding is the
-// estimate step's business, against the type's current
-// anchor.
+// are judged by the shape rules (tvContractSampleShape) but
+// NOT banded: banding is the estimate step's business,
+// against the type's current anchor.
 //
-// An accepted contract for a SHIP type is also recorded as
-// an observation, the crawl's longitudinal memory, so when
+// An accepted contract is also recorded as an observation,
+// the pass's longitudinal memory, so when
 // the listing leaves the corpus its exit can be probed and
 // the sample promoted to a likely or confirmed sale
 // (truevalue_sales.go): the corpus connection is what lets
@@ -654,7 +618,7 @@ func (app *Application) corpusListingSamples(ctx context.Context, typeID int64, 
 			return
 		}
 		out = append(out, tvContractSample{price: unit, at: lastSeen, source: tvSampleListing, contractID: contractID})
-		if ships[typeID] && !expiresAt.IsZero() {
+		if !expiresAt.IsZero() {
 			if err := app.queries.UpsertTVContractObservation(ctx, db.UpsertTVContractObservationParams{
 				ContractID: contractID, RegionID: regionID, TypeID: typeID, Shape: shape,
 				ListedPrice: price, SamplePrice: unit, FirstSeenAt: firstSeen, ExpiresAt: expiresAt,
@@ -678,8 +642,8 @@ func (app *Application) corpusListingSamples(ctx context.Context, typeID int64, 
 
 // dedupeSamplesByContract makes one contract speak once, at
 // its strongest tier: the same contract can surface as a
-// live ask in the corpus, a watched listing in the crawl,
-// and -- once its exit is probed -- a confirmed sale in the
+// live ask in the corpus and -- once its exit is probed --
+// a likely or confirmed sale in the
 // observation store, and counting it at every tier would let
 // one contract outvote the market.
 func dedupeSamplesByContract(samples []tvContractSample) []tvContractSample {
@@ -726,8 +690,8 @@ const tvEvidenceChunk = 100
 // keep the walk's bounded discipline.
 //
 // Evidence assembly per type mirrors the tiered path's: the
-// corpus speaks first, then the crawl's in-memory samples,
-// the vanished/confirmed tier read back from the
+// corpus speaks first, then the vanished/confirmed tier
+// read back from the
 // observation store, and the fulfilled harvest -- deduped
 // by contract at the strongest tier.
 func (app *Application) priceThinShips(ctx context.Context, pending []int64, evidenceTypes []int64, existing map[int64]db.TrueValue, subjects map[int64]bool, ladders map[int64]float64, vanished map[int64][]tvContractSample, graph *tvBlueprintGraph, priceOf tvStoredPricer, inputsChanged bool, now time.Time) {
@@ -771,7 +735,6 @@ func (app *Application) priceThinShips(ctx context.Context, pending []int64, evi
 		// hard window the tiered path keeps is what let
 		// real ship estimates lapse.
 		samples := app.corpusListingSamples(ctx, typeID, subjects, graph.shipsAll, priceOf, now)
-		samples = append(samples, st.samples[typeID]...)
 		samples = append(samples, vanished[typeID]...)
 		samples = append(samples, st.fulfilled[typeID]...)
 		samplesByType[typeID] = dedupeSamplesByContract(samples)
@@ -880,14 +843,12 @@ func tvStoredPricerFrom(typicalSell map[int64]float64, stored map[int64]db.TrueV
 // exists the price must sit within its band. The listing
 // tier's main source is the stored public-contract corpus,
 // mined at evaluation time (corpusListingSamples), which
-// also records the ship listings it accepts as observations;
-// the crawl below is its watched companion in eight regions.
-// Departed listings -- the crawl's watched ones and the
-// corpus's recorded ones alike -- get one exit probe apiece
-// (reconcileContractObservations, probeShipContractSales),
-// which is how listings graduate to the vanished and
-// fulfilled tiers the corpus, holding only live contracts,
-// can never see leave. The tiers are the evidence's
+// also records the listings it accepts as observations. The
+// public contract sweep owns every fetch of the public
+// routes; the pass reads what it stored. A departed listing
+// gets one exit probe (probeContractExits), which is how
+// listings graduate to the vanished and fulfilled tiers the
+// corpus, holding only live contracts, can never see leave. The tiers are the evidence's
 // provenance and its weight: thin non-ship types price from
 // the strongest tier holding two samples; thin ships feed
 // every tier into the learned correction
@@ -896,32 +857,14 @@ func tvStoredPricerFrom(typicalSell map[int64]float64, stored map[int64]db.TrueV
 //   fulfilled -- contracts of linked characters that ESI
 //     reports finished: certain sales, harvested from the
 //     sync's own stores (harvestFulfilledSamples).
-//   vanished -- public listings the crawl accepted and later
-//     watched disappear before expiry: likely sold. An
+//   vanished -- public listings the corpus accepted and that
+//     left before expiry: likely sold. An
 //     issuer can delete a listing instead, so this tier is
 //     probable, never certain, and is labelled that way.
 //   listing -- live public listings: asks, as before.
 // ---------------------------------------------------------------------------
 
-// tvContractRegions: the five hub regions, then the regions
-// contract-traded capital ships actually change hands in.
-var tvContractRegions = []int64{
-	10000002, // The Forge
-	10000043, // Domain
-	10000032, // Sinq Laison
-	10000030, // Heimatar
-	10000042, // Metropolis
-	10000060, // Delve
-	10000058, // Fountain
-	10000050, // Querious
-}
-
 const (
-	// One region per cycle at most, each at most twice a day:
-	// the crawl is a background signal, not a feed.
-	tvContractCrawlInterval  = 12 * time.Hour
-	tvContractMaxPages       = 25
-	tvContractMaxItemFetches = 150
 	// Below this a contract is parts and noise, not a thin
 	// capital or collectible changing hands.
 	tvContractMinPrice = 1_000_000
@@ -936,233 +879,28 @@ const (
 	// vanishing inside the margin are inconclusive and are
 	// forgotten instead of counted.
 	tvContractVanishMargin = 24 * time.Hour
-	// Per-crawl cap on re-checking watched listings, inside
-	// the same item-fetch budget the candidates spend from.
-	tvContractMaxProbes = 50
 )
 
-// tvPublicContract is one header row of GET
-// /contracts/public/{region}/ (only the fields used).
-type tvPublicContract struct {
-	ContractID  int64   `json:"contract_id"`
-	Price       float64 `json:"price"`
-	Status      string  `json:"status"`
-	Type        string  `json:"type"`
-	DateExpired string  `json:"date_expired"`
-}
-
-// tvPublicContractItem is one row of GET
-// /contracts/public/items/{contract}/ (only the fields used).
+// tvPublicContractItem is one item row of a public contract,
+// as the corpus stores it and ESI's items route answers it.
 type tvPublicContractItem struct {
 	TypeID     int64 `json:"type_id"`
 	Quantity   int64 `json:"quantity"`
 	IsIncluded bool  `json:"is_included"`
 }
 
-// crawlPublicContracts advances the crawl by at most one due
-// region. Samples accumulate in the pass state; evaluation
-// (above) consumes them.
-func (app *Application) crawlPublicContracts(ctx context.Context, thinCosts map[int64]float64, ships map[int64]bool, priceOf tvStoredPricer, now time.Time) {
-	st := &app.trueValuePass
-	for typeID, samples := range st.samples {
-		if samples = retainedContractSamples(samples, now); len(samples) == 0 {
-			delete(st.samples, typeID)
-		} else {
-			st.samples[typeID] = samples
-		}
-	}
-	// Observation housekeeping: a watched listing that
-	// expired without ever vanishing can never become
-	// evidence now, and an exited row is kept to the
-	// evidence retention horizon -- ship fits still count
-	// its sale, age-weighted, long after it leaves.
+// purgeContractObservations is the observation store's
+// housekeeping: a watched listing that expired without ever
+// vanishing can never become evidence now, and an exited row
+// is kept to the evidence retention horizon -- ship fits
+// still count its sale, age-weighted, long after it leaves.
+func (app *Application) purgeContractObservations(ctx context.Context, now time.Time) {
 	if err := app.queries.PurgeTVContractObservations(ctx, db.PurgeTVContractObservationsParams{
 		ExpiresAt:  now.Add(-tvContractVanishMargin),
 		VanishedAt: sql.NullTime{Time: now.Add(-tvEvidenceRetention), Valid: true},
 	}); err != nil {
 		logging.Errorf("true values: purge observations: %v", err)
 	}
-	if len(thinCosts) == 0 {
-		return
-	}
-	costs := make([]float64, 0, len(thinCosts))
-	for _, bc := range thinCosts {
-		if bc > 0 {
-			costs = append(costs, bc)
-		}
-	}
-	sort.Float64s(costs)
-
-	for i := 0; i < len(tvContractRegions); i++ {
-		idx := (st.crawlNext + i) % len(tvContractRegions)
-		regionID := tvContractRegions[idx]
-		if now.Sub(st.lastCrawl[regionID]) < tvContractCrawlInterval {
-			continue
-		}
-		st.crawlNext = idx + 1
-		st.lastCrawl[regionID] = now
-		app.crawlContractRegion(ctx, regionID, costs, thinCosts, ships, priceOf, now)
-		return
-	}
-}
-
-// crawlContractRegion reads one region's public contracts:
-// first the watched listings from earlier crawls are
-// re-checked (a listing that has vanished from the public
-// endpoint is the probable tier's raw material), then headers
-// (paginated, capped), the band filter over them, and item
-// lists for the survivors (capped). Probes and candidate item
-// fetches spend from one budget.
-func (app *Application) crawlContractRegion(ctx context.Context, regionID int64, sortedCosts []float64, thinCosts map[int64]float64, ships map[int64]bool, priceOf tvStoredPricer, now time.Time) {
-	st := &app.trueValuePass
-	fetched := app.reconcileContractObservations(ctx, regionID, now)
-	var candidates []tvPublicContract
-	for page := 1; page <= tvContractMaxPages; page++ {
-		body, header, err := app.esi.FetchRaw(ctx, "", fmt.Sprintf("/contracts/public/%d/?page=%d", regionID, page))
-		if err != nil {
-			logging.Warnf("true values: contracts region %d page %d: %v", regionID, page, err)
-			return
-		}
-		var rows []tvPublicContract
-		if err := json.Unmarshal(body, &rows); err != nil {
-			logging.Warnf("true values: contracts region %d decode: %v", regionID, err)
-			return
-		}
-		for _, c := range rows {
-			if tvContractHeaderCandidate(c, sortedCosts) {
-				candidates = append(candidates, c)
-			}
-		}
-		pages := 1
-		if xp := header.Get("X-Pages"); xp != "" {
-			if n, aerr := strconv.Atoi(xp); aerr == nil && n > 1 {
-				pages = n
-			}
-		}
-		if page >= pages {
-			break
-		}
-	}
-	sampled := 0
-	for _, c := range candidates {
-		if fetched >= tvContractMaxItemFetches {
-			break
-		}
-		fetched++
-		body, _, err := app.esi.FetchRaw(ctx, "", fmt.Sprintf("/contracts/public/items/%d/", c.ContractID))
-		if err != nil {
-			continue
-		}
-		var items []tvPublicContractItem
-		if err := json.Unmarshal(body, &items); err != nil {
-			continue
-		}
-		if typeID, unit, shape, ok := tvContractSampleFor(c.Price, items, thinCosts, ships, priceOf); ok {
-			st.samples[typeID] = append(st.samples[typeID], tvContractSample{price: unit, at: now, source: tvSampleListing, contractID: c.ContractID})
-			sampled++
-			app.observeContract(ctx, c, regionID, typeID, unit, shape, now)
-		}
-	}
-	if sampled > 0 {
-		logging.Infof("true values: contracts region %d: %d candidates, %d samples", regionID, len(candidates), sampled)
-	}
-}
-
-// observeContract records (or refreshes) the crawl's memory
-// of an accepted listing, so a later crawl can tell whether
-// it is still there. Without a parseable expiry the listing
-// cannot take part in vanish detection and is not watched.
-func (app *Application) observeContract(ctx context.Context, c tvPublicContract, regionID, typeID int64, unit float64, shape string, now time.Time) {
-	expires, err := time.Parse(time.RFC3339, c.DateExpired)
-	if err != nil {
-		return
-	}
-	if err := app.queries.UpsertTVContractObservation(ctx, db.UpsertTVContractObservationParams{
-		ContractID: c.ContractID, RegionID: regionID, TypeID: typeID, Shape: shape,
-		ListedPrice: c.Price, SamplePrice: unit, FirstSeenAt: now, ExpiresAt: expires.UTC(),
-	}); err != nil {
-		logging.Errorf("true values: observe contract %d: %v", c.ContractID, err)
-	}
-}
-
-// reconcileContractObservations re-checks this region's
-// watched listings against the public items endpoint (the
-// listing's own endpoint: gone from it means gone from the
-// public market). A listing still there is touched; one that
-// answers 204 before its expiry was accepted -- a recorded
-// sale (pub_contracts_sales.go); one that answers 404 vanished
-// -- marked vanished when that happened well before its
-// expiry (the probable tier: deleted, or accepted too long ago
-// for ESI to say), deleted when expiry itself is explanation
-// enough. Any other answer is inconclusive and leaves the row
-// for the next crawl. It returns the item fetches spent,
-// against the crawl budget.
-func (app *Application) reconcileContractObservations(ctx context.Context, regionID int64, now time.Time) (spent int) {
-	st := &app.trueValuePass
-	rows, err := app.queries.ListTVContractObservationsByRegion(ctx, regionID)
-	if err != nil {
-		logging.Errorf("true values: list observations region %d: %v", regionID, err)
-		return 0
-	}
-	for _, obs := range rows {
-		if spent >= tvContractMaxProbes || spent >= tvContractMaxItemFetches {
-			break
-		}
-		spent++
-		exit, status, err := app.probeContractExit(ctx, obs.ContractID, obs.ExpiresAt, now)
-		if err != nil {
-			break // ESI's error limit: the rest wait for the next crawl
-		}
-		switch exit {
-		case exitLive:
-			if err := app.queries.TouchTVContractObservation(ctx, db.TouchTVContractObservationParams{
-				ContractID: obs.ContractID, LastSeenAt: now,
-			}); err != nil {
-				logging.Errorf("true values: touch observation %d: %v", obs.ContractID, err)
-			}
-			continue
-		case exitSold:
-			if err := app.queries.MarkTVContractObservationSold(ctx, db.MarkTVContractObservationSoldParams{
-				ContractID: obs.ContractID, VanishedAt: sql.NullTime{Time: now, Valid: true},
-			}); err != nil {
-				logging.Errorf("true values: mark observation %d sold: %v", obs.ContractID, err)
-				continue
-			}
-			st.samples[obs.TypeID] = dropContractSample(st.samples[obs.TypeID], obs)
-			logging.Infof("true values: contract %d (type %d) accepted before expiry; counted as a recorded sale", obs.ContractID, obs.TypeID)
-			continue
-		case exitClosed:
-			// Final, but neither a sale nor a vanish: the row
-			// leaves the crawl's watch without joining any
-			// evidence tier, and its listing copy leaves the ask
-			// tier, since the contract is no longer listed.
-			if err := app.queries.MarkTVContractObservationExit(ctx, db.MarkTVContractObservationExitParams{
-				Status: status, ProbedAt: now, ContractID: obs.ContractID,
-			}); err != nil {
-				logging.Errorf("true values: settle observation %d: %v", obs.ContractID, err)
-				continue
-			}
-			st.samples[obs.TypeID] = dropContractSample(st.samples[obs.TypeID], obs)
-			continue
-		case exitUnknown:
-			continue // a transient answer says nothing either way
-		}
-		if tvVanishedBeforeExpiry(now, obs.ExpiresAt) {
-			if err := app.queries.MarkTVContractObservationVanished(ctx, db.MarkTVContractObservationVanishedParams{
-				ContractID: obs.ContractID, VanishedAt: sql.NullTime{Time: now, Valid: true},
-			}); err != nil {
-				logging.Errorf("true values: mark observation %d vanished: %v", obs.ContractID, err)
-				continue
-			}
-			// The listing copy of this sample leaves the ask
-			// tier: the same contract now speaks as probable.
-			st.samples[obs.TypeID] = dropContractSample(st.samples[obs.TypeID], obs)
-			logging.Infof("true values: contract %d (type %d) vanished before expiry; counted as likely sold", obs.ContractID, obs.TypeID)
-		} else if err := app.queries.DeleteTVContractObservation(ctx, obs.ContractID); err != nil {
-			logging.Errorf("true values: forget observation %d: %v", obs.ContractID, err)
-		}
-	}
-	return spent
 }
 
 // tvVanishedBeforeExpiry reports whether a listing seen gone
@@ -1172,59 +910,17 @@ func tvVanishedBeforeExpiry(now, expiresAt time.Time) bool {
 	return now.Before(expiresAt.Add(-tvContractVanishMargin))
 }
 
-// dropContractSample removes the listing-tier sample one
-// observation originally produced (same price, recorded at
-// the moment the listing was first seen) from a sample list.
-func dropContractSample(samples []tvContractSample, obs db.TrueValueContractObservation) []tvContractSample {
-	out := samples[:0]
-	for _, s := range samples {
-		if s.source == tvSampleListing && s.price == obs.SamplePrice &&
-			s.at.Sub(obs.FirstSeenAt) >= 0 && s.at.Sub(obs.FirstSeenAt) < time.Minute {
-			continue
-		}
-		out = append(out, s)
-	}
-	return out
-}
-
-// tvContractHeaderCandidate is the cheap first filter, run on
-// header fields alone: an outstanding item exchange, priced
-// like something real, within the band of at least one thin
-// type's build cost.
-func tvContractHeaderCandidate(c tvPublicContract, sortedCosts []float64) bool {
-	if c.Type != "item_exchange" {
-		return false
-	}
-	if c.Status != "" && c.Status != "outstanding" {
-		return false
-	}
-	if c.Price < tvContractMinPrice {
-		return false
-	}
-	return tvPriceInBand(sortedCosts, c.Price)
-}
-
-// tvPriceInBand reports whether any build cost in the sorted
-// slice could anchor this price: some bc with
-// price in [bandLow*bc, bandHigh*bc].
-func tvPriceInBand(sortedCosts []float64, price float64) bool {
-	lo := price / tvContractBandHigh
-	hi := price / tvContractBandLow
-	i := sort.Search(len(sortedCosts), func(i int) bool { return sortedCosts[i] >= lo })
-	return i < len(sortedCosts) && sortedCosts[i] <= hi
-}
-
 // The shapes tvContractSampleFor accepts.
 const (
 	tvContractShapeSingle = "single"
 	tvContractShapeFitted = "fitted"
 )
 
-// tvContractSampleFor is the strict second filter, run on a
-// fetched item list: the shape test (tvContractSampleShape),
-// plus the band around the subject's build cost. The crawl
-// and the fulfilled harvest admit samples through it; the
-// stored-corpus miner runs the shape test alone and leaves
+// tvContractSampleFor is the strict filter, run on a contract's
+// item list: the shape test (tvContractSampleShape), plus the
+// band around the subject's build cost. The fulfilled harvest
+// admits samples through it; the stored-corpus miner runs the
+// shape test alone and leaves
 // banding to the estimate step, which is what lets contract
 // evidence that flatly contradicts an anchor (or a type with
 // no anchor at all) still be heard there.
@@ -1310,7 +1006,7 @@ func tvContractSampleShape(price float64, items []tvPublicContractItem, subjects
 }
 
 // ---------------------------------------------------------------------------
-// Fulfilled contracts: the certain tier. The public crawl can
+// Fulfilled contracts: the certain tier. The public corpus can
 // only ever see asks; a sale is visible exactly once -- in
 // the contract lists of the characters involved, which the
 // sync already stores. A finished item_exchange contract

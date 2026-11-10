@@ -63,8 +63,8 @@ const (
 	// rather than paged forever.
 	pubContractMaxPagesTotal = 200
 	// pubContractDepartureRetention is how long a departed
-	// contract stays on record (schema 096). The true values
-	// crawl reads departures on its 12h per-region cadence, so a
+	// contract stays on record (schema 096). The true-value exit
+	// probes read departures within half a day of expiry, so a
 	// week covers that with days of slack for a stopped worker,
 	// while a month would hold several times the live corpus in
 	// every live reader's scan.

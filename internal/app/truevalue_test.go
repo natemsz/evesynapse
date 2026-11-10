@@ -30,28 +30,6 @@ import (
 func TestTrueValueContractFilters(t *testing.T) {
 	thin := map[int64]float64{11567: 550e9, 2001: 2e6}
 	ships := map[int64]bool{11567: true}
-	costs := []float64{2e6, 550e9}
-
-	// Header band: a price at 0.1x of the Avatar's build cost
-	// anchors nothing (scam range); one at 590B sits inside
-	// [0.2x, 5x] of 550B.
-	scam := tvPublicContract{ContractID: 1, Type: "item_exchange", Status: "outstanding", Price: 55e9}
-	if tvContractHeaderCandidate(scam, costs) {
-		t.Error("0.1x header passed the band filter")
-	}
-	real := tvPublicContract{ContractID: 2, Type: "item_exchange", Status: "outstanding", Price: 590e9}
-	if !tvContractHeaderCandidate(real, costs) {
-		t.Error("in-band header rejected")
-	}
-	if tvContractHeaderCandidate(tvPublicContract{Type: "auction", Status: "outstanding", Price: 590e9}, costs) {
-		t.Error("an auction header passed")
-	}
-	if tvContractHeaderCandidate(tvPublicContract{Type: "item_exchange", Status: "finished", Price: 590e9}, costs) {
-		t.Error("a finished contract passed")
-	}
-	if tvContractHeaderCandidate(tvPublicContract{Type: "item_exchange", Status: "outstanding", Price: 500_000}, costs) {
-		t.Error("a sub-floor header passed")
-	}
 
 	// The netting pricer: stored prices in the house order
 	// (Forge typical sell, then the stored estimated sell,
@@ -114,16 +92,16 @@ func TestTrueValueContractFilters(t *testing.T) {
 	item := func(id int64, qty int64) tvPublicContractItem {
 		return tvPublicContractItem{TypeID: id, Quantity: qty, IsIncluded: true}
 	}
-	if id, unit, shape, ok := tvContractSampleFor(real.Price, []tvPublicContractItem{item(11567, 1)}, thin, ships, priceOf); !ok || id != 11567 || unit != 590e9 || shape != tvContractShapeSingle {
+	if id, unit, shape, ok := tvContractSampleFor(590e9, []tvPublicContractItem{item(11567, 1)}, thin, ships, priceOf); !ok || id != 11567 || unit != 590e9 || shape != tvContractShapeSingle {
 		t.Errorf("clean hull contract = (%d, %v, %q, %v), want (11567, 590e9, single, true)", id, unit, shape, ok)
 	}
-	if _, _, _, ok := tvContractSampleFor(scam.Price, []tvPublicContractItem{item(11567, 1)}, thin, ships, priceOf); ok {
+	if _, _, _, ok := tvContractSampleFor(55e9, []tvPublicContractItem{item(11567, 1)}, thin, ships, priceOf); ok {
 		t.Error("scam-priced hull contract sampled")
 	}
-	if _, _, _, ok := tvContractSampleFor(real.Price, []tvPublicContractItem{item(11567, 2)}, thin, ships, priceOf); ok {
+	if _, _, _, ok := tvContractSampleFor(590e9, []tvPublicContractItem{item(11567, 2)}, thin, ships, priceOf); ok {
 		t.Error("two-hull contract sampled (ships sample at quantity 1)")
 	}
-	if _, _, _, ok := tvContractSampleFor(real.Price, []tvPublicContractItem{item(9999, 1)}, thin, ships, priceOf); ok {
+	if _, _, _, ok := tvContractSampleFor(590e9, []tvPublicContractItem{item(9999, 1)}, thin, ships, priceOf); ok {
 		t.Error("contract for a non-thin type sampled")
 	}
 	// A non-ship thin type samples per unit across quantity.
@@ -139,7 +117,7 @@ func TestTrueValueContractFilters(t *testing.T) {
 	if id, unit, shape, ok := tvContractSampleFor(590e9, fitted, thin, ships, priceOf); !ok || id != 11567 || unit != 590e9-635 || shape != tvContractShapeFitted {
 		t.Errorf("fitted hull contract = (%d, %v, %q, %v), want (11567, %v, fitted, true)", id, unit, shape, ok, 590e9-635)
 	}
-	if id, unit, shape, ok := tvContractSampleFor(real.Price, []tvPublicContractItem{item(11567, 1), item(34, 500)}, thin, ships, priceOf); !ok || id != 11567 || unit != 590e9-2750 || shape != tvContractShapeFitted {
+	if id, unit, shape, ok := tvContractSampleFor(590e9, []tvPublicContractItem{item(11567, 1), item(34, 500)}, thin, ships, priceOf); !ok || id != 11567 || unit != 590e9-2750 || shape != tvContractShapeFitted {
 		t.Errorf("hull plus minerals = (%d, %v, %q, %v), want (11567, %v, fitted, true)", id, unit, shape, ok, 590e9-2750)
 	}
 	// The residual must still land in the band: netting 30B

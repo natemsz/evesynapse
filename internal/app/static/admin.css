@@ -37,7 +37,7 @@
    drops under the name when it would not. */
 .an-bar-row { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; margin: .34rem 0; font-size: var(--fs-xs); }
 .an-bar-name { flex: 1 1 8rem; max-width: 11.5rem; min-width: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.an-mono { font-family: 'JetBrains Mono', monospace; font-size: var(--fs-xs); }
+.an-mono { font-family: var(--font-mono); font-size: var(--fs-xs); }
 .an-bar-svg { flex: 999 1 6rem; min-width: 0; height: .62rem; display: block; border-radius: .3rem; overflow: hidden; }
 .an-bar-bg { fill: var(--row); }
 .an-grad-a { stop-color: var(--danger); }
@@ -49,7 +49,7 @@
 .an-fresh { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .55rem; }
 .an-feed { border: 1px solid var(--glass-edge); border-radius: .55rem; padding: .55rem .7rem; background: var(--glass); }
 .an-feed .f-n { font-size: var(--fs-xs); color: var(--text); }
-.an-feed .f-a { float: right; font-family: 'JetBrains Mono', monospace; font-size: var(--fs-xs); }
+.an-feed .f-a { float: right; font-family: var(--font-mono); font-size: var(--fs-xs); }
 .an-ok { color: var(--success); }
 .an-warn-t { color: var(--gold); }
 .an-bad-t { color: var(--danger); }
@@ -95,7 +95,7 @@
 .gn-field { display: grid; gap: 0.3rem; min-width: 0; }
 .gn-field > span { font-size: var(--fs-xs); color: var(--muted); }
 .gn-field input[type="text"], .gn-field textarea, .gn-field select, .gn-field input[type="datetime-local"] { width: 100%; box-sizing: border-box; }
-.gn-field textarea { font-family: 'JetBrains Mono', monospace; font-size: var(--fs-xs); min-height: 14rem; resize: vertical; }
+.gn-field textarea { font-family: var(--font-mono); font-size: var(--fs-xs); min-height: 14rem; resize: vertical; }
 .gn-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.85rem; }
 .gn-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
 .gn-preview {

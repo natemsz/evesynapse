@@ -12,8 +12,8 @@ import (
 // near 1500px; the Home widget squeezes it under 500px), so the
 // axis type is sized by the chart's own width: bg.css makes
 // .pchart a container and steps the unit size per width band so
-// the rendered labels stay near the UI's small-text floor
-// (~12px). The old viewport step-downs (7 units at 1200px+, 6 at
+// the rendered labels stay between about 11 and 15px up to an
+// 820px box. The old viewport step-downs (7 units at 1200px+, 6 at
 // 1700px+) rendered the Home chart's labels at 3–4px — too small
 // to read — while the full-width chart read fine.
 func TestBalanceChartTextStaysReadable(t *testing.T) {
@@ -40,11 +40,14 @@ func TestBalanceChartTextStaysReadable(t *testing.T) {
 	}
 	for _, want := range []string{
 		".pchart { container-type: inline-size; }",
-		".pchart text { font-size: var(--fs-4xl); }", // box up to 360px
-		".pchart text { font-size: var(--fs-3xl); }", // 361–520px
-		".pchart text { font-size: var(--fs-md); }",  // 521–800px
-		".pchart text { font-size: var(--fs-2xs); }", // 801–1150px
-		".pchart text { font-size: var(--fs-2xs); }", // 1151px and up
+		"@container (max-width: 330px) {\n  .pchart text { font-size: var(--fs-5xl); }\n}",
+		"@container (min-width: 331px) and (max-width: 400px) {\n  .pchart text { font-size: var(--fs-4xl); }\n}",
+		"@container (min-width: 401px) and (max-width: 480px) {\n  .pchart text { font-size: var(--fs-3xl); }\n}",
+		"@container (min-width: 481px) and (max-width: 560px) {\n  .pchart text { font-size: var(--fs-xl); }\n}",
+		"@container (min-width: 561px) and (max-width: 640px) {\n  .pchart text { font-size: var(--fs-md); }\n}",
+		"@container (min-width: 641px) and (max-width: 720px) {\n  .pchart text { font-size: var(--fs-sm); }\n}",
+		"@container (min-width: 721px) and (max-width: 820px) {\n  .pchart text { font-size: var(--fs-xs); }\n}",
+		"@container (min-width: 821px) {\n  .pchart text { font-size: var(--fs-2xs); }\n}",
 	} {
 		if !strings.Contains(bg, want) {
 			t.Errorf("bg.css missing chart text rule %q", want)

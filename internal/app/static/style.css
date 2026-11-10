@@ -398,6 +398,9 @@ h4 { font-size: var(--fs-sm); }
 /* Secondary text: quieter in colour, nearly the size of the text around
    it (the browser's own "smaller" is under 11px here). */
 small { color: var(--muted); font-size: var(--fs-rel-small); }
+/* A button takes the family of the text around it. Left alone it
+   takes the system's, which showed on icon-only buttons. */
+button { font-family: inherit; }
 footer small { font-size: var(--fs-rel-small); }
 
 /* --- top bar --- */
@@ -2402,6 +2405,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   text-transform: uppercase;
 }
 .legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+.legend-item small { font-size: inherit; }
 .legend-swatch {
   display: inline-block;
   width: 1.4rem;
@@ -2660,11 +2664,14 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 }
 .chart-gridline { stroke: #241708; stroke-width: 1; }
 .volume-gridline { stroke: #2a1408; stroke-dasharray: 3 3; }
+/* An axis label sits on its gridline and knocks the line out behind
+   it: the outline is wide enough to close the gaps between glyphs,
+   so the line never reads as a strike through the figure. */
 .chart-axis-label {
   fill: var(--note);
   paint-order: stroke;
-  stroke: #151515;
-  stroke-width: 3px;
+  stroke: var(--panel);
+  stroke-width: 6px;
   stroke-linejoin: round;
 }
 .volume-axis { fill: #d98a6a; text-anchor: end; }

@@ -88,7 +88,13 @@ test("landingFor: a character surface switch lands at the window top, picks insi
   assert.equal(swap.landingFor("/character/", params("surface=clones"), params("")), "region");
   assert.equal(swap.landingFor("/character/", params("surface=clones"), params("surface=clones&clone=3")), "keep");
   assert.equal(swap.landingFor("/character/", params("group=2"), params("group=5")), "keep");
-  assert.equal(swap.landingFor("/market/", params(""), params("type=34")), "keep");
+});
+
+test("landingFor: opening a market item lands at the top, changes on its page keep the place", function () {
+  assert.equal(swap.landingFor("/market/", params("group=4"), params("type=34")), "top");
+  assert.equal(swap.landingFor("/market/", params("type=34"), params("type=35")), "top");
+  assert.equal(swap.landingFor("/market/", params("type=34"), params("type=34&region=10000043")), "keep");
+  assert.equal(swap.landingFor("/market/", params("group=4"), params("group=9")), "keep");
 });
 
 test("landingFor: older kills or scope changes on the killboard land at the top", function () {

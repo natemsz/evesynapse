@@ -152,7 +152,8 @@
   <section class="l-panel mkt-explorer" id="mkt-order-book">
     <div class="mkt-explorer-head">
       <div class="mkt-explorer-title">
-        <h2>Order book <span class="badge kill" data-live-pill role="status" hidden>Live</span></h2>
+        <h2>Order book</h2>
+        <span class="badge kill" data-live-pill role="status" hidden>Live</span>
         <span class="mkt-explorer-meta">{{$item.RegionName}} · {{$item.SellOrders}} sell / {{$item.BuyOrders}} buy orders{{if $item.BookStoredAt}} · swept {{$item.BookStoredAt}}{{end}}</span>
       </div>
       <button class="btn btn-quiet small" type="button" data-sheet-open="mkt-book-filters" hidden>Filter orders</button>
@@ -353,11 +354,11 @@
           </tbody>
         </table>
         </div>
-        <p><small>{{if .Volatility}}Typical sell moves {{.Volatility}} on average over the last 30 days. {{else}}Not enough days stored yet to measure how much the price moves. {{end}}{{.HistoryDays}} {{if eq .HistoryDays 1}}day{{else}}days{{end}} of book history in the last 30.{{if .TradedPerDay}} About {{.TradedPerDay}} units traded a day.{{end}} Prices in ISK. The 5% edge is the price the best 5 in 100 orders beat.</small></p>
+        <p class="prose">{{if .Volatility}}Over the last 30 days the typical sell price moved about {{.Volatility}}.{{else}}Too few days stored yet to say how much the price moves.{{end}} {{.HistoryDays}} of the last 30 days have order book data.{{if .TradedPerDay}} About {{.TradedPerDay}} units change hands each day.{{end}} 5% edge: only 5 in every 100 orders offer a better price than this.</p>
         {{if .Changes}}
         <h4>Recent changes</h4>
         <ul class="mt-changes">
-        {{range .Changes}}<li><span class="mt-chg {{.Dir}}">{{.Label}}</span> <small>{{.Day}}</small><br><small class="mt-reqs">{{.Detail}}</small></li>{{end}}
+        {{range .Changes}}<li><span class="mt-chg {{.Dir}}">{{.Label}}</span> <small>{{.Day}}</small><br><span class="prose">{{.Detail}}.</span></li>{{end}}
         </ul>
         {{end}}
         {{else}}

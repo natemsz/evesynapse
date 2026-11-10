@@ -145,6 +145,7 @@ const (
 	AttrAgility            = 70
 	AttrDuration           = 73
 	AttrReactivationDelay  = 669
+	AttrMaxGroupFitted     = 1544
 	AttrMaxTargetRange     = 76
 	AttrStructureDamageAmt = 83
 	AttrArmorDamageAmount  = 84
@@ -814,6 +815,18 @@ type Result struct {
 	// attributes forbid the current hull. The engine flags them
 	// as fit errors; it does not silently drop them.
 	Restricted []Restriction
+
+	// OverGroupLimit lists module groups fitted more times than
+	// their maxGroupFitted (1544) allows, such as a second
+	// synchronizer rig or damage control.
+	OverGroupLimit []GroupLimit
+}
+
+// GroupLimit is one module group over its per-ship limit.
+type GroupLimit struct {
+	GroupID int64
+	Allowed int
+	Fitted  int
 }
 
 // Restriction is one ship-restricted module on an

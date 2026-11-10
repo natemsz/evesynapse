@@ -1032,7 +1032,8 @@ func TestFitEnginePerWeaponFigures(t *testing.T) {
 // 12980, 13071): each navy module adds 1 to the rig's module count,
 // the count adds to the rig's damage bonus, the bonus raises the
 // rig's hidden multiplier, and the multiplier scales turret damage.
-// Every link must be final before the next one reads it.
+// Every link must be final before the next one reads it, and only
+// one synchronizer may be fitted (maxGroupFitted 1).
 func TestFitEngineSynchronizerChain(t *testing.T) {
 	const (
 		ship    = 1003
@@ -1047,7 +1048,7 @@ func TestFitEngineSynchronizerChain(t *testing.T) {
 		group(ship, 25).group(navy, navyGrp).group(rig, rigGrp).group(turret, gunGrp).
 		attrs(ship, map[int64]float64{14: 3, 13: 3, 12: 3, 1137: 3}).
 		attrs(navy, map[int64]float64{6312: 1}).
-		attrs(rig, map[int64]float64{6405: 5, 6316: 0, 6529: 1}).
+		attrs(rig, map[int64]float64{6405: 5, 6316: 0, 6529: 1, AttrMaxGroupFitted: 1}).
 		attrs(turret, map[int64]float64{64: 3}).
 		flag(navy, 13).flag(rig, EffectRigSlot).flag(turret, 12).
 		effect(navy, 12963, 0, fitModGroup(6316, 6312, 2, rigGrp)).
@@ -1061,6 +1062,16 @@ func TestFitEngineSynchronizerChain(t *testing.T) {
 	res := Compute(f.snap, ship, items, nil, nil, nil)
 	near(t, "rig module count", res.ItemAttrs[rig][6316], 2, 1e-9)
 	near(t, "turret damage multiplier", res.ItemAttrs[turret][64], 3.21, 1e-9)
+	if len(res.OverGroupLimit) != 0 {
+		t.Fatalf("one rig flagged over its group limit: %+v", res.OverGroupLimit)
+	}
+
+	// One synchronizer per ship: a second is a fit error.
+	items[1].Quantity = 2
+	res = Compute(f.snap, ship, items, nil, nil, nil)
+	if want := (GroupLimit{GroupID: rigGrp, Allowed: 1, Fitted: 2}); len(res.OverGroupLimit) != 1 || res.OverGroupLimit[0] != want {
+		t.Fatalf("group limits = %+v, want [%+v]", res.OverGroupLimit, want)
+	}
 }
 
 // TestFitEngineReactivationDelaySpreadsCapUse pins sustained rates

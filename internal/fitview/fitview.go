@@ -1438,6 +1438,21 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 		view.Notes = append(view.Notes,
 			fmt.Sprintf("%s can only be fitted to %s.", nameOf(r.TypeID), app.FitRestrictionLabel(ctx, r)))
 	}
+	if len(res.OverGroupLimit) > 0 {
+		gids := make([]int64, 0, len(res.OverGroupLimit))
+		for _, g := range res.OverGroupLimit {
+			gids = append(gids, g.GroupID)
+		}
+		names := app.env.CachedGroupNames(ctx, gids)
+		for _, g := range res.OverGroupLimit {
+			name := names[g.GroupID]
+			if name == "" {
+				name = "module of this group"
+			}
+			view.Notes = append(view.Notes,
+				fmt.Sprintf("Only %d %s can be fitted per ship; %d are fitted.", g.Allowed, name, g.Fitted))
+		}
+	}
 	return view
 }
 
@@ -2051,6 +2066,9 @@ func FitProblems(res *fit.Result) []string {
 		if s.used > s.max {
 			out = append(out, fmt.Sprintf("%s %d / %d", s.label, s.used, s.max))
 		}
+	}
+	for _, g := range res.OverGroupLimit {
+		out = append(out, fmt.Sprintf("Group limit %d / %d", g.Fitted, g.Allowed))
 	}
 	return out
 }

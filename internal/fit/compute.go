@@ -290,14 +290,31 @@ func (f *fitting) addImplants(implants []int64) {
 }
 
 // checkShipRestrictions flags the fit errors: modules carrying
-// canFitShipGroup*/canFitShipType* may only fly on the named hulls.
+// canFitShipGroup*/canFitShipType* may only fly on the named hulls,
+// and a group may not be fitted past its maxGroupFitted.
 func (f *fitting) checkShipRestrictions() {
 	shipGroup := f.snap.Groups[f.shipTypeID]
+	fitted := map[int64]int{}
+	allowed := map[int64]int{}
 	for _, ent := range f.fitted {
 		if r := restrictionFor(f.snap, f.shipTypeID, shipGroup, ent.typeID); r != nil {
 			f.res.Restricted = append(f.res.Restricted, *r)
 		}
+		if ent.kind != entModule && ent.kind != entRig && ent.kind != entSubsystem {
+			continue
+		}
+		g := f.snap.Groups[ent.typeID]
+		fitted[g] += maxInt(ent.instances, 1)
+		if n := int(f.snap.Attrs[ent.typeID][AttrMaxGroupFitted]); n > 0 && (allowed[g] == 0 || n < allowed[g]) {
+			allowed[g] = n
+		}
 	}
+	for g, n := range allowed {
+		if fitted[g] > n {
+			f.res.OverGroupLimit = append(f.res.OverGroupLimit, GroupLimit{GroupID: g, Allowed: n, Fitted: fitted[g]})
+		}
+	}
+	sort.Slice(f.res.OverGroupLimit, func(i, j int) bool { return f.res.OverGroupLimit[i].GroupID < f.res.OverGroupLimit[j].GroupID })
 }
 
 // bindModifiers walks every entity's effects and binds each

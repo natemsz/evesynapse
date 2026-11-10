@@ -12,7 +12,7 @@ import (
 // module declares its own scopes, snapshot kinds and activities on
 // its module.Module (single source; moduleDefs reads the registry
 // first). What remains here is core's own declaration of the features
-// whose data core itself reads — the character picture (skills,
+// whose data core itself reads, the character picture (skills,
 // wallet, assets, ...), the corporation snapshot feed, and the
 // derived aggregates over them. Only "wallet" and "market" appear in
 // both places, because net worth reads the wallet and the open

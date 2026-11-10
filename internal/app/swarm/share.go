@@ -17,7 +17,7 @@ package swarm
 //
 // Two rules keep poison out of the tables. First, an instance
 // serves only what its own worker fetched from ESI and still
-// considers fresh — the same gates the worker fetches by. A row
+// considers fresh, the same gates the worker fetches by. A row
 // a peer supplied is never served onward: this instance would
 // be signing another's data as its own, and the row would look
 // newly fetched at every hop. An applied row also keeps the
@@ -108,8 +108,8 @@ func ParseSwarmID(part string) (int64, bool) {
 // peer pull. It serves only rows this instance fetched itself
 // and holds fresh: history inside its refetch gate, records in
 // the ready state, resolved structure names, any held type
-// name. A row a peer supplied is a miss like anything else — the
-// asker pulls it from its source or fetches it itself — so the
+// name. A row a peer supplied is a miss like anything else, the
+// asker pulls it from its source or fetches it itself, so the
 // swarm never moves stale or second-hand data sideways.
 func (app *Mod) ServeSwarmKey(ctx context.Context, kind, key string) (payload string, fetchedAt time.Time, ok bool) {
 	switch kind {
@@ -314,7 +314,7 @@ func (app *Mod) ServeSwarmStructure(ctx context.Context, key string) (string, ti
 // SwarmContractPayload is public_contract on the wire: the
 // header facts as plain values (dates as unix seconds, the way
 // the envelope carries time), then the full item list. The
-// storm node copies this struct field for field — names and
+// storm node copies this struct field for field, names and
 // order are the protocol.
 type SwarmContractPayload struct {
 	ContractID          int64               `json:"contract_id"`
@@ -383,7 +383,7 @@ func (app *Mod) ServeSwarmContract(ctx context.Context, key string) (string, tim
 		return "", time.Time{}, false
 	}
 	// Contract items are immutable once issued, so the header's
-	// own last_seen is the entry's freshness stamp — and the
+	// own last_seen is the entry's freshness stamp, and the
 	// stamp the provenance check binds to, as for records.
 	if app.SwarmSupplied(ctx, SwarmKindContract, key, timeSet(rec.LastSeen)) {
 		return "", time.Time{}, false
@@ -452,11 +452,11 @@ func SwarmHistoryDayAfter(payload string, fetchedAt time.Time) (string, bool) {
 // StageSwarmEntry verifies one pulled entry and stages it for a
 // spot check. The signature is checked against the signer's
 // pinned key, the payload is strictly decoded into its row
-// shape, and the IDs inside must match the signed key — a valid
+// shape, and the IDs inside must match the signed key, a valid
 // signature replayed onto another key dies here. Attribution is
 // split where it belongs: transport faults (unknown signer, bad
 // signature) count against the peer that served the entry, which
-// is the only identity verified so far — counting them against
+// is the only identity verified so far, counting them against
 // the claimed signer would let a peer frame anyone by naming
 // them. Content lies (a valid signature over a lying payload)
 // count against the signer, whose key proved authorship.
@@ -519,7 +519,7 @@ func (app *Mod) StageSwarmEntry(ctx context.Context, entry SwarmSignedEntry, fro
 // row shape and binds it to the signed key: every ID inside
 // must match, every number must be in range, every day row must
 // be shaped like the table row it would become. This is format
-// validation against the existing row shapes, not sanitizing —
+// validation against the existing row shapes, not sanitizing,
 // the values stay exactly what the signer sent, for the spot
 // check to judge.
 func CheckSwarmPayload(kind, key, payload string) error {
@@ -593,7 +593,7 @@ func CheckSwarmPayload(kind, key, payload string) error {
 			return fmt.Errorf("swarm: stage %s %s: record body is not JSON", kind, key)
 		}
 		// It must also name the record it claims to be, in
-		// either dialect the app reads — this app's wrapped
+		// either dialect the app reads, this app's wrapped
 		// shape or a bare ESI record. A body naming nothing
 		// under either dialect is shape, not data: refused
 		// here, it never reaches a spot check that could
@@ -671,7 +671,7 @@ type SwarmOrigin struct {
 
 // ApplySwarmEntry writes one entry to the real tables through
 // the existing upserts, and settles the fetch state the worker
-// gates on — so a swarm-supplied row stops the worker fetching
+// gates on, so a swarm-supplied row stops the worker fetching
 // it itself, which is the saved ESI Call. Only the trust pass
 // calls this, on a passed check or a trust-earned skip.
 //
@@ -843,14 +843,14 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 		if err := dec.Decode(&body); err != nil {
 			return err
 		}
-		// A contract whose item list is already settled here —
+		// A contract whose item list is already settled here,
 		// stored by this instance's own drain, or marked
-		// private, gone or parked — takes no writes at all:
+		// private, gone or parked, takes no writes at all:
 		// the entry is consumed, and the header refresh stays
 		// the instance's own sweep's job, the same precedent as
 		// a structure name a better source already resolved.
 		// Only a pending row (header swept, contents not yet
-		// fetched — the exact gap this kind exists to close)
+		// fetched, the exact gap this kind exists to close)
 		// or no row at all is written.
 		if existing, err := app.Queries.GetPublicContract(ctx, body.ContractID); err == nil {
 			if existing.ItemsState != "pending" {
@@ -887,8 +887,8 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 		}
 		// The header lands under the region's current sweep
 		// cycle (0 when the region has no sweep state yet), with
-		// the entry stamp as both first and last seen — the
-		// $19 the upsert writes twice — so the row reads exactly
+		// the entry stamp as both first and last seen, the
+		// $19 the upsert writes twice, so the row reads exactly
 		// as old as its source, and the provenance stamp below
 		// compares equal to the last_seen written here.
 		var cycle int64
@@ -965,7 +965,7 @@ const MaxSwarmRollBackPerCycle = 200
 // other half, for the ones already applied (most of which went
 // in unchecked, on the signer's reputation). Each provenance row
 // under an excluded signer is undone where the live row is
-// still the swarm's copy — a record goes back to pending, a
+// still the swarm's copy, a record goes back to pending, a
 // name is cleared, history loses the days the entry supplied
 // and its fetch state, so the worker fetches the truth from ESI
 // like any other missing datum. A row this instance has fetched
@@ -1106,7 +1106,7 @@ func (app *Mod) DropSwarmEntry(ctx context.Context, kind, key, signer, reason st
 }
 
 // DiscardSwarmEntry drops one staged entry that failed its spot
-// check — ESI was asked and the entry was wrong — and counts it
+// check, ESI was asked and the entry was wrong, and counts it
 // against the signer. The row never reaches the real tables:
 // failed checks are discarded, never served. Nothing else comes
 // through here (see DropSwarmEntry).

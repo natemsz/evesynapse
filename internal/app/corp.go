@@ -27,7 +27,7 @@ import (
 // the in-game role. The worker records that in snapshot_fetch_state
 // (schema 005) instead of retrying every cycle, and the pages
 // render a plain "needs the role" state from it. Handlers read
-// snapshots and local tables only — never ESI.
+// snapshots and local tables only, never ESI.
 // ---------------------------------------------------------------------------
 
 // walletDivisionCount is EVE's fixed corporation wallet division

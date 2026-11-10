@@ -47,7 +47,7 @@ func (app *Application) storeStructureName(ctx context.Context, structureID int6
 // corpStructureIndex distils the corporation-structure snapshots
 // the worker already keeps into a name/owner index. The corp
 // list carries names directly (tier 2), and knowing the owning
-// corporation lets tier 1 ask corp-mates first — a character in
+// corporation lets tier 1 ask corp-mates first, a character in
 // the owning corp is the most likely to hold docking access.
 type corpStructureIndex struct {
 	names map[int64]string
@@ -83,7 +83,7 @@ func (app *Application) corpStructureIndex(ctx context.Context) corpStructureInd
 // token_dead / owner_changed links are never fetched) whose
 // login granted the structure scope. Corp-mates of the owning
 // corporation go first, then most recently active; a login
-// predating the scope simply doesn't qualify — the queue waits
+// predating the scope simply doesn't qualify, the queue waits
 // for a re-link, and pages keep the "#<id>" fallback meanwhile.
 func (app *Application) structureResolverCandidates(ctx context.Context, characters []db.Character, ownerCorpID int64) []db.Character {
 	var out []db.Character
@@ -139,7 +139,7 @@ idsLoop:
 			break
 		}
 		// Tier 2: the corporation structure list already names
-		// this one — no per-structure ESI call needed.
+		// this one, no per-structure ESI call needed.
 		if name, ok := corpIdx.names[id]; ok {
 			if app.storeStructureName(ctx, id, name, esi.StructureResolved, esi.StructureSourceCorp, now) {
 				app.esi.StoreStructureName(id, name)

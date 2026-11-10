@@ -116,7 +116,7 @@ func init() {
 	// fallback; a caller with an imported SDE passes its volumes
 	// in Settings.Volumes and those win. TestTierVolumes pins them.
 	//
-	// R0 — volume 0.005 m3, taxable 5 ISK.
+	// R0, volume 0.005 m3, taxable 5 ISK.
 	for _, n := range []string{
 		"Aqueous Liquids", "Autotrophs", "Base Metals", "Carbon Compounds",
 		"Complex Organisms", "Felsic Magma", "Heavy Metals", "Ionic Solutions",
@@ -125,7 +125,7 @@ func init() {
 	} {
 		add(n, TierRaw, 0.005, 5)
 	}
-	// P1 — volume 0.19 m3, taxable 400 ISK.
+	// P1, volume 0.19 m3, taxable 400 ISK.
 	for _, n := range []string{
 		"Bacteria", "Biofuels", "Biomass", "Chiral Structures", "Electrolytes",
 		"Industrial Fibers", "Oxidizing Compound", "Oxygen", "Plasmoids",
@@ -134,7 +134,7 @@ func init() {
 	} {
 		add(n, TierP1, 0.19, 400)
 	}
-	// P2 — volume 0.75 m3, taxable 7200 ISK.
+	// P2, volume 0.75 m3, taxable 7200 ISK.
 	for _, n := range []string{
 		"Biocells", "Construction Blocks", "Consumer Electronics", "Coolant",
 		"Enriched Uranium", "Fertilizer", "Genetically Enhanced Livestock",
@@ -146,7 +146,7 @@ func init() {
 	} {
 		add(n, TierP2, 0.75, 7200)
 	}
-	// P3 — volume 3 m3, taxable 60000 ISK.
+	// P3, volume 3 m3, taxable 60000 ISK.
 	for _, n := range []string{
 		"Biotech Research Reports", "Camera Drones", "Condensates",
 		"Cryoprotectant Solution", "Data Chips", "Gel-Matrix Biopaste",
@@ -158,7 +158,7 @@ func init() {
 	} {
 		add(n, TierP3, 3, 60000)
 	}
-	// P4 — volume 50 m3 (all eight), taxable 1,200,000 ISK.
+	// P4, volume 50 m3 (all eight), taxable 1,200,000 ISK.
 	for _, n := range []string{
 		"Broadcast Node", "Integrity Response Drones", "Nano-Factory",
 		"Organic Mortar Applicators", "Recursive Computing Module",

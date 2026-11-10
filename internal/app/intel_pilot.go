@@ -20,7 +20,7 @@ import (
 // ---------------------------------------------------------------------------
 // Public pilot page (/pilot/): what EveSynapse shows for a
 // character who is NOT one of the signed-in user's linked
-// characters — the destination every resolved stranger name links
+// characters, the destination every resolved stranger name links
 // to (wallet counterparties, contract issuers, mail senders, …).
 //
 // Everything on it is public ESI data: the character profile
@@ -34,7 +34,7 @@ import (
 // endpoints inside the cycle budget and stores one assembled
 // payload (corp/alliance/faction names baked in, so renders never
 // chase names). Ready records go stale after a week and refresh
-// in the background — the page keeps showing the last known
+// in the background, the page keeps showing the last known
 // record meanwhile. An ESI 404 settles as 'missing'.
 //
 // This file is the page. The worker's side (draining the queue,
@@ -48,7 +48,7 @@ const (
 	pilotStateMissing = "missing"
 )
 
-// Drain bounds: a handful of strangers per cycle is plenty —
+// Drain bounds: a handful of strangers per cycle is plenty,
 // these are lookups a human just asked for, not fleet sync.
 const (
 	pilotStaleAfter             = 7 * 24 * time.Hour

@@ -709,7 +709,7 @@ var FitGauges = (function () {
   }
 
   // The type icon a suggestion or picker row leads with. Shared
-  // by the suggester and the module picker — the picker called
+  // by the suggester and the module picker, the picker called
   // it while it was still scoped inside makeSuggester, which
   // threw on every non-empty picker result set.
   function suggestIcon(id) {
@@ -1067,7 +1067,7 @@ var FitGauges = (function () {
     drawer.setAttribute("data-fit-drawer-for", weapon);
     var head = document.createElement("div");
     head.className = "fit-charge-drawer-head";
-    head.textContent = "Charges — " + (chip.getAttribute("data-tip-name") || "module");
+    head.textContent = "Charges: " + (chip.getAttribute("data-tip-name") || "module");
     drawer.appendChild(head);
     var list = document.createElement("div");
     list.className = "fit-charge-list";
@@ -1123,7 +1123,7 @@ var FitGauges = (function () {
   // The Doesn't-fit ribbon's button asks the server which
   // hardwiring makes the fit legal; the answer renders in place,
   // and Apply writes the picks into the document's implant
-  // overrides — a simulation overlay on the clone, cleared by the
+  // overrides, a simulation overlay on the clone, cleared by the
   // same reset the implant chips already carry.
   var solvePicks = null;
   function fmtISK(v) {
@@ -1171,7 +1171,7 @@ var FitGauges = (function () {
         var nm = document.createElement("strong");
         nm.textContent = p.name;
         line.appendChild(nm);
-        var detail = " — slot " + p.slot + " · +" + p.bonus + "% " + p.resource;
+        var detail = ", slot " + p.slot + " · +" + p.bonus + "% " + p.resource;
         if (p.priceKnown) detail += " · " + fmtISK(p.price);
         if (p.replacesName) detail += " · replaces your " + p.replacesName + " in this simulation";
         var detailEl = document.createElement("span");
@@ -1405,8 +1405,8 @@ var FitGauges = (function () {
   // The picker is a modal: it opens over the workbench,
   // scoped to the family of the slot (or search result) that
   // summoned it, with its own quick search. What it lists is
-  // what can go on this hull — the family feed plus the
-  // ship-restriction filter in applyFittable — regardless of
+  // what can go on this hull, the family feed plus the
+  // ship-restriction filter in applyFittable, regardless of
   // remaining CPU/PG, which the workbench reports after the
   // fact like the game does.
   function openPicker(family, seedQ) {
@@ -1417,7 +1417,7 @@ var FitGauges = (function () {
       pickerFamily.value = family;
       if (pickerTitle) {
         var opt = pickerFamily.options[pickerFamily.selectedIndex];
-        pickerTitle.textContent = opt ? "Add module — " + opt.textContent : "Add module";
+        pickerTitle.textContent = opt ? "Add module: " + opt.textContent : "Add module";
       }
     }
     if (pickerQ) pickerQ.value = seedQ || "";
@@ -1446,7 +1446,7 @@ var FitGauges = (function () {
         if (it.kind) li.setAttribute("data-kind", it.kind);
         // Tap adds (handled by the pointer controller); press-and-
         // drag moves it onto a slot. No mousedown+preventDefault
-        // here — that kills the drag gesture before it starts.
+        // here, that kills the drag gesture before it starts.
         li.appendChild(suggestIcon(it.id));
         var name = document.createElement("span");
         name.textContent = it.name;
@@ -1697,7 +1697,7 @@ var FitGauges = (function () {
     if (!d.active) {
       if (Math.sqrt(dx * dx + dy * dy) < DRAG_PX) return;
       // A mostly-vertical press on a picker row is a list scroll,
-      // not a drag — hand it back to the browser.
+      // not a drag, hand it back to the browser.
       if (d.mayScroll && Math.abs(dy) > Math.abs(dx) * 1.4) { dragState = null; return; }
       startPointerDrag(ev, d);
       return;
@@ -1802,7 +1802,7 @@ var FitGauges = (function () {
   // One tooltip at a time. tipAnchor is the slot it belongs to;
   // a re-render replaces every slot, so reanchorTip() moves the
   // open tooltip onto the new element with the same data-tip-key
-  // (or closes it) — nothing may keep pointing at the old DOM.
+  // (or closes it), nothing may keep pointing at the old DOM.
   var tipEl = null;
   var tipAnchor = null;
   var tipHoverSlot = null;
@@ -2114,7 +2114,7 @@ var FitGauges = (function () {
   // toggle: at phone width every secondary control folds; on
   // desktop the strip controls (fit name, Save to EVE) stay on
   // the bar and the rest fold. fit.css hides them only while the
-  // editor carries fit-armed, which is added here — without JS
+  // editor carries fit-armed, which is added here, without JS
   // the toggle never renders and nothing is ever hidden.
   var headEl = editor.querySelector(".fit-head");
   var headToggle = editor.querySelector("[data-fit-head-toggle]");
@@ -2163,7 +2163,7 @@ var FitGauges = (function () {
   //   1. The "Your fits" search forks any non-owned fit via POST
   //      /fittings/fork/ before the editor ever sees it (yfLoad),
   //      so the editor only ever holds the signed-in user's own
-  //      fits — public fits are read-only here and never edited
+  //      fits, public fits are read-only here and never edited
   //      in place.
   //   2. Every save carries the fit's local id (data-fit-local-id,
   //      mirrored in the hidden #fit-local-id), and the server
@@ -2507,7 +2507,7 @@ var FitGauges = (function () {
 // --- read-only workbench tooltips ---------------------------
 // A public fit's page renders the same workbench without the
 // editor, and the editor block above bails when there is no
-// #fit-editor — so read-only surfaces get their own wiring
+// #fit-editor, so read-only surfaces get their own wiring
 // here. It only ever touches .fit-ro elements, shows the
 // shared tooltip (FitTipUI) with no state handler, and is
 // delegated from the document so content swaps can't

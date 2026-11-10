@@ -2,8 +2,8 @@ package app
 
 // Topbar pilot-name warming: a character name no local tier
 // knows must not silently miss. The search notes one
-// name-resolution want, answers with a "searching" row, and —
-// once the worker has stored the pilot record — returns the
+// name-resolution want, answers with a "searching" row, and,
+// once the worker has stored the pilot record, returns the
 // real pilot suggestion. The handler itself never fetches.
 
 import (

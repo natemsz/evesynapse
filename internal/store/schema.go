@@ -133,7 +133,7 @@ var pgTypingGuessesSchema string
 //go:embed schema_pg/029_foresight.sql
 var pgForesightSchema string
 
-// Step 030: the shared cache across instances — this instance's
+// Step 030: the shared cache across instances, this instance's
 // identity, the peers it has heard of with their reputation
 // ledger, staged entries waiting on a spot check, and the Sync
 // page's counters.
@@ -870,7 +870,7 @@ type schemaStep struct {
 	// legacyProbe counts the objects the step creates. It exists
 	// for databases that predate schema_migrations: a step whose
 	// objects are already there is recorded as applied instead of
-	// being run again. Steps added from here on leave it empty —
+	// being run again. Steps added from here on leave it empty,
 	// the record alone decides.
 	legacyProbe string
 }
@@ -1058,7 +1058,7 @@ func migrateSchema(ctx context.Context, conn *sql.DB) error {
 // its schema_migrations row commit together or not at all (DDL is
 // transactional in Postgres). A step that fails halfway therefore
 // leaves nothing behind for the next boot to mistake for a
-// finished schema — it simply runs again. The advisory lock keeps
+// finished schema, it simply runs again. The advisory lock keeps
 // two processes starting at the same moment (the server and a
 // maintenance run) from applying the same step twice; it is
 // released with the transaction.

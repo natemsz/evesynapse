@@ -19,24 +19,24 @@ import (
 // ---------------------------------------------------------------------------
 // Search & findability (Next-1): one local-SDE suggestion feed
 // behind every autocomplete box in the app, plus the top banner's
-// global search. Everything here reads local tables only — no
-// ESI, no token — so handlers keep the zero-outbound-call rule.
+// global search. Everything here reads local tables only, no
+// ESI, no token, so handlers keep the zero-outbound-call rule.
 //
 // Suggestion pools pick which slice of the type table a box
 // searches. Every pool shares one floor: published
-// types with a market group — things a player can actually
+// types with a market group, things a player can actually
 // obtain on the market or through contracts. Unpublished and
 // untradeable database rows never surface in a search box; the
 // Items DB explorer keeps its own explicit toggle for digging
 // through those. The broad pool widens the floor in one place:
-// blueprint-category types (SDE category 9 — blueprints and
+// blueprint-category types (SDE category 9, blueprints and
 // reaction formulas) carry no market group because they change
 // hands through contracts alone, so 'all' admits their
 // published rows too. On top of the floor:
-//   market  — the floor alone (the Market page's behaviour)
-//   planner — types a blueprint builds
-//   skills  — skill types (the skill-plan add box)
-//   all     — the floor plus contract-only blueprint types,
+//   market, the floor alone (the Market page's behaviour)
+//   planner, types a blueprint builds
+//   skills, skill types (the skill-plan add box)
+//   all, the floor plus contract-only blueprint types,
 //             broadly labelled (Items DB, top banner)
 // ---------------------------------------------------------------------------
 
@@ -196,7 +196,7 @@ func (app *Application) noteSuggested(ctx context.Context, box, pool string, ite
 // user's own characters, and strangers whose public records have
 // already been warmed. When a full pilot name isn't in the local
 // data yet, the search notes a name-resolution want (a queue
-// write only — the request path still makes no outbound calls)
+// write only, the request path still makes no outbound calls)
 // and answers with a "searching" row; the worker resolves the
 // name and warms the pilot record, and a later search turns the
 // row into the real pilot suggestion.

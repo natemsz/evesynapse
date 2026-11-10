@@ -431,7 +431,7 @@ func TestSchemaMarketTimestampStepKeepsStoredTimes(t *testing.T) {
 		t.Fatalf("list closed orders: %v", err)
 	}
 	wantIDs("closed orders, newest first", orderIDs(done), 3, 2)
-	// Newest close first, the open order after every closed one —
+	// Newest close first, the open order after every closed one,
 	// where '' used to sort.
 	all, err := q.ListOrderLifecycleByUser(ctx, 101)
 	if err != nil {

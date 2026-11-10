@@ -4,7 +4,7 @@ package app
 // Embedded static assets and how browsers are told to cache them.
 //
 // The files are embedded in the binary, which gives them no
-// modification time, so the file server sends no Last-Modified —
+// modification time, so the file server sends no Last-Modified,
 // and with no caching header either, a browser had nothing to go
 // on: the stylesheet, the scripts and the wallpaper were fetched in
 // full on every page view. Now:
@@ -16,7 +16,7 @@ package app
 //   - Stylesheets cannot carry the build token for the wallpaper
 //     files they reference (their own text is fixed when written),
 //     so those url()s carry the file's own content hash as ?v=
-//     instead — the same hash the file's ETag carries. That URL
+//     instead, the same hash the file's ETag carries. That URL
 //     likewise names exactly those bytes, so it caches the same
 //     way. TestStaticWallpaperVersionTokens pins the tokens in the
 //     stylesheets and the base template to the files' hashes, so

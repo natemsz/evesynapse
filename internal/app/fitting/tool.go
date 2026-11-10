@@ -525,7 +525,7 @@ var fitESIFlagFamilies = []struct {
 // body: one flag per fitted module instance (HiSlot0-7 and
 // friends), charges riding the same flag as their weapon's slot,
 // drones to DroneBay and cargo to Cargo. Items beyond the family's
-// slot count are an error — ESI has no flag for them, so the
+// slot count are an error, ESI has no flag for them, so the
 // handler reports it instead of silently dropping them.
 func fitESIFittingBody(name string, doc *fitview.FitDoc, familyOf map[int64]string) (esiFittingBody, error) {
 	body := esiFittingBody{

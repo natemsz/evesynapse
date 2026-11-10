@@ -156,7 +156,7 @@ type cacheExpiry struct {
 
 // expireCaches rewinds every cache the worker consults to the
 // epoch and reports what it did, one human sentence per store.
-// Payloads are kept — only the freshness stamps move — so pages
+// Payloads are kept, only the freshness stamps move, so pages
 // keep showing the last known data until the fresh copies land,
 // and anything the worker can't refetch (a parked character, a
 // settled "not there" answer) simply stays as it was.

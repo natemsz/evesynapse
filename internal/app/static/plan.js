@@ -1,4 +1,4 @@
-// plan.js — the build planner's client side. It reads the plan
+// plan.js, the build planner's client side. It reads the plan
 // data the page carries (#plan-data; ?format=json when absent),
 // renders the four tabs, and recomputes on make/buy toggles without
 // a round trip.
@@ -411,7 +411,7 @@ function setPreset(name) {
 }
 
 // --- decision map ---
-// Bottleneck: a built branch whose own job runs long — over six
+// Bottleneck: a built branch whose own job runs long, over six
 // hours or over a sixth of the current elapsed time.
 function bottleneck(n, elapsed) {
   if (!n.build || n.short <= 0) return false;
@@ -1130,7 +1130,7 @@ function wireStatic() {
 }
 
 // Place pickers (build system, market region): fetched
-// autocomplete in the same shape as the judge picker — type to
+// autocomplete in the same shape as the judge picker, type to
 // search, click to fill. The system box submits the picked NAME
 // (the server resolves names as before); the market box fills
 // a hidden field with the region id, "guide" for the pinned

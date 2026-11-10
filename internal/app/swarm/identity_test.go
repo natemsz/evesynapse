@@ -2,8 +2,8 @@ package swarm
 
 // White-box tests for swarm identity and entry signatures: a
 // sealed seed round-trips under the right secret only, entries
-// verify under the pinned key only, and any tampering —
-// payload, key, signer, signature — fails closed.
+// verify under the pinned key only, and any tampering,
+// payload, key, signer, signature, fails closed.
 
 import (
 	"strings"

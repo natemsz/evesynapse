@@ -1,7 +1,7 @@
 package scanner
 
 // Spread scanner: the station-trading screen. It reads only stored rows
-// — the per-station book statistics (market_station_stats) and the
+//, the per-station book statistics (market_station_stats) and the
 // stored 7-day average traded volume per type, both filled by the
 // whole-region sweeps. The filter math, profit estimate and ranking
 // happen in one SQL query capped at rowCap rows, so a page load

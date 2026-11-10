@@ -25,7 +25,7 @@ import (
 
 // ---------------------------------------------------------------------------
 // Market: public ESI price guide + regional order books. Nothing on
-// this page needs a character token — search, prices and orders are
+// this page needs a character token, search, prices and orders are
 // all unauthenticated endpoints.
 // ---------------------------------------------------------------------------
 
@@ -129,7 +129,7 @@ type marketOrderRow struct {
 
 // marketItem is the item view: guide prices from /markets/prices/
 // plus the order book for one region, the stored
-// price history (chart + changes, from market_history only — the
+// price history (chart + changes, from market_history only, the
 // worker fills it) and the watch state for "Watch this item".
 type marketItem struct {
 	TypeID      int64
@@ -190,7 +190,7 @@ type marketItem struct {
 	// HistoryState is computed by attachHistory from the stored
 	// rows plus the fetch-state record: markethistory.StatePending (no
 	// rows yet, fetch not settled), markethistory.StateEmpty (worker
-	// fetched, ESI had no trades), markethistory.StateFew (a few rows —
+	// fetched, ESI had no trades), markethistory.StateFew (a few rows,
 	// summary only, no chart), or markethistory.StateChart (enough rows
 	// for the chart). The template renders a deliberate body for
 	// every state; there is no blank state.
@@ -232,7 +232,7 @@ type marketItem struct {
 
 	// RegionStats is the hub-regions strip (P1): one row per hub
 	// region from the worker's stored sweep stats, filled by
-	// attachRegionStats straight from the database — rendering
+	// attachRegionStats straight from the database, rendering
 	// a region never triggers a fetch. Empty until the item view
 	// is built with a type.
 	RegionStats []marketRegionStatRow
@@ -292,7 +292,7 @@ func spreadBand(pct float64) string {
 // TraderPollURL is the trading snapshot's live-region target:
 // the region/type plus the order book's best prices, which the
 // page itself already fetched live. The fragment handler stays
-// cache-only — the bests ride along from the render that had
+// cache-only, the bests ride along from the render that had
 // them, so the margin survives the live-fill swap unchanged
 // instead of flickering back to a dash.
 func (item *marketItem) TraderPollURL() string {
@@ -312,9 +312,9 @@ type watchlistRow struct {
 	Name      string
 	RegionID  int64
 	Region    string
-	Current   string        // latest daily average, "—" when unknown
+	Current   string        // latest daily average, ", " when unknown
 	Spark     template.HTML // hover card for Current (storedSparkCard), empty renders plain
-	Change7   string        // "+8.2%", "—" when not computable
+	Change7   string        // "+8.2%", ", " when not computable
 	Change30  string
 	Moving    bool   // currently past the user's threshold
 	MoveText  string // "up 8.2% over 7 days", Moving only
@@ -600,24 +600,24 @@ func (app *Application) vizSetup(ctx context.Context, item *marketItem, rangeKey
 // rows (never the network) and sets HistoryState, which the
 // template turns into a deliberate body:
 //
-//   - pending: no rows and the worker hasn't settled the fetch —
+//   - pending: no rows and the worker hasn't settled the fetch,
 //     the section says history is on its way, and the view leaves
 //     a want for the worker.
 //   - empty: the worker fetched and ESI returned no trades at
-//     all — the section says so and the want settles (the 20h
+//     all, the section says so and the want settles (the 20h
 //     refetch gate, keyed on the fetch-state record, is what
 //     re-checks later; repeat views do not re-arm the want).
-//   - few: some trades but not enough to draw — the section shows
+//   - few: some trades but not enough to draw, the section shows
 //     the summary numbers instead of a chart.
-//   - chart: enough rows — the chart plus stats; when the newest
+//   - chart: enough rows, the chart plus stats; when the newest
 //     row is stale, HistoryLastDay captions when trading stopped.
 //
-// A nil item (the live item view failed) still records the want —
+// A nil item (the live item view failed) still records the want,
 // noteSearchHistoryWants records history wants for every type a
 // search just rendered, so whichever result the user taps has its
 // fetch already queued at top priority. Bounded by the number of
 // matches shown (capped at maxSearchPrefetchWants); the handler
-// only writes rows — the urgent drain and the cycle do the
+// only writes rows, the urgent drain and the cycle do the
 // fetching, never this.
 func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int64, matches []marketMatch) {
 	now := time.Now().UTC()
@@ -764,7 +764,7 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 }
 
 // historyFetchSettled reports whether the worker has ever
-// completed a history fetch for this (region, type) — the marker
+// completed a history fetch for this (region, type), the marker
 // that distinguishes "ESI has no trades for this" (empty state)
 // from "never asked" (pending state).
 func (app *Application) historyFetchSettled(ctx context.Context, regionID, typeID int64) bool {
@@ -924,7 +924,7 @@ func (app *Application) marketPrices(ctx context.Context) (map[int64]esi.MarketP
 
 // cachedPrices returns the in-memory /markets/prices/ cache when a
 // Market visit has populated it, nil otherwise. It never fetches:
-// render-path consumers (killmail values) show "—" until the cache
+// render-path consumers (killmail values) show ", " until the cache
 // exists rather than blocking a page on the price guide.
 func (app *Application) cachedPrices() map[int64]esi.MarketPrice {
 	app.pricesMu.Lock()
@@ -1169,12 +1169,12 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 
 	// The spread card: typical against typical, net of broker
 	// fees and sales tax at the region hub's station, for the
-	// viewer — and only from a book deep enough for a median to
+	// viewer, and only from a book deep enough for a median to
 	// mean anything. At three or fewer orders a side the
 	// "typical" is still one order's price wearing a median's
 	// clothes, so the card names the thin book instead of
 	// printing a percentage the extremes manufactured (one
-	// hopeful ask over a deep bid side used to read as a 2000%
+	// hopeful ask over a deep bid side would read as a 2000%
 	// spread). The raw gap stays as the card's secondary line.
 	if item.SellOrders > 0 && item.BuyOrders > 0 {
 		switch {
@@ -1694,7 +1694,7 @@ func orderHealthText(myPrice float64, status string, stationBest, regionBest flo
 
 // handleMarketWatch applies one watchlist change (POST
 // /market/watch): add (from an item page or the watch search),
-// threshold update, or removal. Thresholds clamp to 1–50 — the
+// threshold update, or removal. Thresholds clamp to 1–50, the
 // number users type is a percent, and a 0 would alert on every
 // flicker while 500 would never fire.
 func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request) {

@@ -228,7 +228,7 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 
 // econStubTransport serves the economy endpoints for the worker
 // test. Journal page 1 has 150 entries with X-Pages: 2, page 2 has
-// 200 more — the stored window must trim to 300 in 2 calls.
+// 200 more, the stored window must trim to 300 in 2 calls.
 type econStubTransport struct {
 	calls   atomic.Int64
 	journal atomic.Int64
@@ -359,7 +359,7 @@ func TestRefreshEconomySnapshots(t *testing.T) {
 		t.Fatalf("load contract items: %+v ok=%v err=%v (detail %+v)", items, ok, err, detail)
 	}
 
-	// Second pass: everything fresh, detail stored — zero calls.
+	// Second pass: everything fresh, detail stored, zero calls.
 	before := transport.calls.Load()
 	app.refreshEconomySnapshots(ctx, ch)
 	if fetched, _ := app.warmContractItems(ctx, ch); fetched != 0 {

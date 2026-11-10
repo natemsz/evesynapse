@@ -442,7 +442,7 @@
   {{if .Moves}}<ul class="attention">{{range .Moves}}<li>Division {{.Division}}: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
   {{if .Added}}<ul class="attention">{{range .Added}}<li>Anchored: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
   {{if .Removed}}<ul class="attention">{{range .Removed}}<li>Removed: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
-  {{if .Timers}}<ul class="attention">{{range .Timers}}<li>{{.Name}} — {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
+  {{if .Timers}}<ul class="attention">{{range .Timers}}<li>{{.Name}}: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
   </div>
   {{end}}
   {{else}}
@@ -491,7 +491,7 @@
   <p><small>{{.Count}} deadline{{if ne .Count 1}}s{{end}}{{if .Urgent}} · <strong>{{.Urgent}} past due</strong>{{end}}</small></p>
   {{range .Corps}}
   <h4>{{.Name}}</h4>
-  <ul class="attention">{{range $i, $it := .Items}}<li{{if ge $i $cap}} data-wmore{{end}}>{{if .Urgent}}<strong>{{.Name}} — {{.Text}}</strong>{{else}}{{.Name}} — {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
+  <ul class="attention">{{range $i, $it := .Items}}<li{{if ge $i $cap}} data-wmore{{end}}>{{if .Urgent}}<strong>{{.Name}}: {{.Text}}</strong>{{else}}{{.Name}}: {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
   {{end}}
   {{else}}
   <p><small>All structures are fueled, or none of your characters has the Station Manager or Director role needed to check.</small></p>

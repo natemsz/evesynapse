@@ -3,7 +3,7 @@ package swarm
 // ---------------------------------------------------------------------------
 // Seed announcements: how the mesh tells the Cloudflare seed
 // worker (swarm-seed/) who is listening where. Discovery needs
-// no new code path — seeds are dialed like peers — but the
+// no new code path, seeds are dialed like peers, but the
 // worker cannot discover anyone by itself, so every gossip
 // round ends with one heartbeat per seed: this instance's
 // self-signed announce entry (kind "announce", key and signer
@@ -44,8 +44,8 @@ type SeedAnnouncePayload struct {
 	IssuedAt int64  `json:"issued_at"`
 	// Build is the sender's self-reported build claim
 	// (build.go): display metadata the receiver files on the
-	// peer row. It is outside the signed address tuple — the
-	// signature beside it covers the address, not the claim —
+	// peer row. It is outside the signed address tuple, the
+	// signature beside it covers the address, not the claim,
 	// and nothing anywhere acts on it.
 	Build string `json:"build,omitempty"`
 }
@@ -119,7 +119,7 @@ func (app *Mod) SwarmAnnounceToSeeds(ctx context.Context, now time.Time) {
 // dedicated warming node: a node that is not a configured seed
 // verifies pull signatures against its own seed directory
 // (the register endpoint is how a puller gets listed there),
-// and a puller that only ever gossips with it is never listed —
+// and a puller that only ever gossips with it is never listed,
 // every signed pull it sends falls back to the bearer. The
 // coverage refresh calls this when it (re)learns what the node
 // warms, so the listing is renewed on that cadence, well

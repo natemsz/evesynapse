@@ -13,7 +13,7 @@ import (
 // The stored market guide (schema 021). GET /markets/prices/ is one
 // public call covering every type in the game, so the worker keeps it
 // mirrored in the guide_prices table on ESI's own cache window. Asset
-// valuation reads the table through here — it does not depend on
+// valuation reads the table through here, it does not depend on
 // someone having visited the Market page first (the in-memory copy the
 // Market page fetches live still wins when present: freshest first).
 //
@@ -34,7 +34,7 @@ func (app *Application) guideMeta(ctx context.Context) (db.GuidePricesMetum, boo
 // storedGuidePrices returns the worker-stored price guide as a
 // map, reloading from the table only when a refresh has landed
 // since the last read (the fetched_at stamp is the version).
-// Nil when nothing has been stored yet — "no guide at all" is
+// Nil when nothing has been stored yet, "no guide at all" is
 // distinct from "a guide that lacks this type".
 func (app *Application) storedGuidePrices(ctx context.Context) map[int64]esi.MarketPrice {
 	meta, ok := app.guideMeta(ctx)
@@ -78,13 +78,13 @@ func (app *Application) valuationPrices(ctx context.Context) map[int64]esi.Marke
 	return app.storedGuidePrices(ctx)
 }
 
-// TypicalSells returns the swept typical sell per type —
+// TypicalSells returns the swept typical sell per type,
 // the first tier of the house price order (own swept typicals,
 // then the stored true-value estimated sell, then unpriced; the
 // guide's average is banned as a price source, owner doctrine
 // 2026-10-17). The Forge's book is the base map; a type The
 // Forge carries no typical for fills from its own global-market
-// row (globalMarketRegion) when the sweep holds one — the
+// row (globalMarketRegion) when the sweep holds one, the
 // global book is that type's own market (PLEX), never another
 // hub's, and a Forge row always wins where both exist. Only
 // types with a usable typical sell appear.
@@ -93,7 +93,7 @@ func (app *Application) valuationPrices(ctx context.Context) map[int64]esi.Marke
 // Fuzzwork fallback slots into later, below the estimated sell.
 //
 // Bounded read: the stats table carries one row per type traded
-// in the region — the same whole-table read the true-value pass
+// in the region, the same whole-table read the true-value pass
 // already makes of it each cycle. The global region's table is
 // a handful of rows on top.
 func (app *Application) TypicalSells(ctx context.Context) map[int64]float64 {

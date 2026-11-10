@@ -128,9 +128,9 @@ func (f *fakeMetadata) handler(t *testing.T) http.Handler {
 }
 
 // fakeFederation validates the exchange request against the real
-// endpoint's protocol — path, DER-base64 material, the ephemeral
+// endpoint's protocol, path, DER-base64 material, the ephemeral
 // session key, and the instance key's signature under the
-// tenancy/fed-x509-sha256 keyId — and answers a token whose expiry
+// tenancy/fed-x509-sha256 keyId, and answers a token whose expiry
 // the test controls per call. The session public key it captures
 // is shared with the fake KMS, which verifies call signatures
 // against it.
@@ -377,7 +377,7 @@ func TestTokenRefreshWhenNearExpiry(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The first token expired inside the refresh margin, so the
-	// second call exchanges again — and its long-lived answer is
+	// second call exchanges again, and its long-lived answer is
 	// then cached.
 	if _, err := s.client.Decrypt(ctx, "eA=="); err != nil {
 		t.Fatal(err)

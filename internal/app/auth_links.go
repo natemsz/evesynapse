@@ -14,7 +14,7 @@ import (
 
 // Character link states (characters.link_state): the worker-facing
 // health of a linked character. Anything but ok stops syncing
-// until the user signs the character in again — a fresh verified
+// until the user signs the character in again, a fresh verified
 // SSO login always lands back on ok (or owner_changed, below).
 const (
 	linkStateOK           = "ok"
@@ -144,7 +144,7 @@ func ownerHashChanged(stored, verified string) bool {
 // accounts since it was linked (ownerHash is the sign-in's verified
 // owner hash). Whoever signs it in now is not the person who built
 // the account it sits on, and adopting would hand that person the
-// previous owner's whole account — every other character linked to
+// previous owner's whole account, every other character linked to
 // it, their data and their tokens. The new owner gets a fresh
 // account instead, and linkVerifiedCharacter moves the character
 // onto it.
@@ -205,7 +205,7 @@ func (app *Application) identityLogin(ctx context.Context, characterID int64, ow
 // markCharacterTokenDead flags a character token_dead: CCP has
 // definitively rejected its refresh token, so syncing stops until
 // the user signs the character in again. Only an ok link can go
-// dead this way — an owner_changed flag is the stronger signal and
+// dead this way, an owner_changed flag is the stronger signal and
 // is left alone. Best-effort: a failed write here only means the
 // next cycle classifies the failure again.
 func (app *Application) markCharacterTokenDead(ctx context.Context, characterID int64) {

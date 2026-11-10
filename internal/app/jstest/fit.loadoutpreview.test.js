@@ -213,7 +213,7 @@ test("hover opens unpinned on fine pointers; leaving closes; click pins", async 
 // Models the geometry of the right-hand card in a two-column
 // grid: the wrapper spans the given viewport range and the panel
 // is geo.width wide. The rect follows the panel's CSS the way a
-// browser resolves it — left:0 by default, right:0 under
+// browser resolves it, left:0 by default, right:0 under
 // align-right, and an inline left wins over both.
 function modelRightCard(env, geo) {
   const panel = env.b.panel;
@@ -238,7 +238,7 @@ test("a right-aligned panel wider than its anchor space is shifted back on scree
   // viewport; the panel is 950 wide. Default placement overflows
   // the right edge (140 + 950), so the panel right-aligns to the
   // wrapper's right edge, which would leave its left edge at
-  // -50 — off screen — without the correction.
+  // -50, off screen, without the correction.
   const panel = modelRightCard(env, { wrapLeft: 140, wrapRight: 900, width: 950 });
   env.fire("click", env.b.btn);
   assert.equal(panel.hidden, false);

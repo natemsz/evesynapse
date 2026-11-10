@@ -1016,8 +1016,8 @@ func TestSwarmStagingRefusesImpossibleDays(t *testing.T) {
 }
 
 // TestSwarmVerifyOrgRecordDialects: the corporation and
-// alliance verifiers read the record in either dialect —
-// this app's wrapped shape or a bare ESI record — through
+// alliance verifiers read the record in either dialect,
+// this app's wrapped shape or a bare ESI record, through
 // the tolerant decoders, and compare the fields actually
 // sent. Matching records pass in both dialects, wrong
 // identity fields fail in both, and a body naming nothing
@@ -1066,7 +1066,7 @@ func TestSwarmVerifyOrgRecordDialects(t *testing.T) {
 
 // TestSwarmStagingRefusesNamelessOrgRecords: a corporation or
 // alliance record body that names nothing under either dialect
-// never stages — the shape gate binds the body to a record
+// never stages, the shape gate binds the body to a record
 // shape, not just to JSON. The refusal is the flat shape
 // reject every malformed entry gets: one mark per refusal, no
 // failure streak, and a peer in good standing stays admitted.
@@ -1771,8 +1771,8 @@ func TestSwarmDirectoryLeavesTheDataRotation(t *testing.T) {
 }
 
 // TestSwarmUpgradeDropsTheLegacySeedRow: the schema step that
-// brings signed addresses removes the peer every seed used to
-// share, so nobody has to clear it by hand.
+// brings signed addresses removes the peer row every earlier
+// seed shared, so nobody has to clear it by hand.
 func TestSwarmUpgradeDropsTheLegacySeedRow(t *testing.T) {
 	ctx := context.Background()
 	app := swarmTestApp(t)

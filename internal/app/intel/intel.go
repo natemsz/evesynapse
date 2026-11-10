@@ -296,7 +296,7 @@ type incursionRow struct {
 	Constellation string
 	Staging       module.PlaceRef // staging solar system (linked when the SDE knows it)
 	// The staging system's security pill (the fleet overview's
-	// badge): staging only — the affected systems carry none.
+	// badge): staging only, the affected systems carry none.
 	StagingSecKnown bool
 	StagingSecText  string
 	StagingSecTier  int

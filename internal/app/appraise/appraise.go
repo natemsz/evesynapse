@@ -2,7 +2,7 @@ package appraise
 
 // The appraisal flow: parse a paste, resolve its names against
 // the item database, price the lines through core's appraisal
-// seam, and shape the snapshot every surface renders from —
+// seam, and shape the snapshot every surface renders from,
 // the fresh result, a saved appraisal, and the shared view are
 // the same snapshot, so a shared page can never drift from
 // what its owner saw. Stored reads only: pricing is the core's
@@ -35,7 +35,7 @@ import (
 
 // typicalFreshAge mirrors the appraisal core's own fresh
 // window for a swept typical: past it, the line's as-of is
-// shown with its age (the floor rule — a stale own row still
+// shown with its age (the floor rule, a stale own row still
 // speaks, and says how old it is).
 const typicalFreshAge = 3 * time.Hour
 
@@ -428,7 +428,7 @@ func (app *page) resolveList(ctx context.Context, parsed pasteResult) ([]resolve
 
 // resolveLinked resolves one showinfo item-link line, and
 // the abyssal corpus decides how: an item with a stored
-// estimate prices from that estimate — its item id rides to
+// estimate prices from that estimate, its item id rides to
 // the appraisal core, which reads the same stored figure the
 // contract pages show; a recorded item with no estimate yet
 // prices its known source (base) type exactly; an item the
@@ -639,7 +639,7 @@ func abyssalEstimateNote(ab *db.AbyssalItem) string {
 
 // lineNote words a line's special facts: blueprint facts the
 // paste carried (or, for a bare blueprint name, that it prices
-// as an original), and the mutated-item labels — a linked
+// as an original), and the mutated-item labels, a linked
 // item priced from its stored estimate carries the estimate's
 // range and basis; a mutation priced without its rolls
 // prices the base item and says why.
@@ -1139,7 +1139,7 @@ type hubTotal struct {
 // and attaches the comparison strip to a rendered result.
 // Lines re-price with their pricing identity intact: a copy
 // counts its copy median (or nothing), an improved original
-// its research median, an abyssal line its item estimate —
+// its research median, an abyssal line its item estimate,
 // never the original type's market price.
 func (app *page) attachHubStrip(ctx context.Context, snap *snapshot, v *resultView) {
 	if snap == nil || len(snap.Lines) == 0 {
@@ -1224,7 +1224,7 @@ func (app *page) storedResult(ctx context.Context, row db.UserAppraisal) (*resul
 
 // savedBasisText words a stored row's pricing basis for the
 // saved table ("The Forge • Typical sell"), from the snapshot
-// the list query already read — no extra read. Snapshots
+// the list query already read, no extra read. Snapshots
 // stored before the basis was kept have none to show.
 func (app *page) savedBasisText(row db.UserAppraisal) string {
 	snap := storedSnapshot(row)
@@ -1299,8 +1299,8 @@ func (app *page) anonSavedList(ctx context.Context, tokens []string) []savedRow 
 // --- handlers --------------------------------------------------------------
 
 // consoleView builds the page body with the paste console
-// populated — the basis in its controls and the hub choices
-// for its select — so every rendering of the tool (the form
+// populated, the basis in its controls and the hub choices
+// for its select, so every rendering of the tool (the form
 // page, a shared snapshot, an error) offers a working console
 // for the next appraisal, not just the form page itself.
 func (app *page) consoleView(data *PageData, basis pricingBasis) *appraiseView {
@@ -1348,10 +1348,10 @@ func (app *page) handleAppraisePage(w http.ResponseWriter, r *http.Request) {
 
 // handleAppraiseSubmit computes one paste. A paste that
 // resolves to no item lines is rejected with an error and
-// nothing is stored. Otherwise the appraisal is saved — for
+// nothing is stored. Otherwise the appraisal is saved, for
 // a signed-in user under their account, for an anonymous
 // visitor under the anonymous owner with its token remembered
-// in the history cookie — and the page redirects to the
+// in the history cookie, and the page redirects to the
 // stored snapshot, so a reload shows what was saved.
 func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

@@ -19,14 +19,14 @@ import (
 //
 // The colonies endpoint is gated by esi-planets.manage_planets.v1,
 // which the app did not always request (CCP publishes
-// no read scope for it — see auth.go). A character linked before
+// no read scope for it, see auth.go). A character linked before
 // that gets a refusal: ESI answers 403 for some scope failures and
 // 401 for others (a token lacking the scope is "unauthorized" for
 // the endpoint), so both statuses classify as the scope missing.
 // The refusal is recorded in snapshot_fetch_state like the
 // economy stale-scope refusals, the kind settles under the
 // shared refusal policy (fetch_refusal.go) instead of retrying
-// every minute, and the pages say "PI not enabled — re-link"
+// every minute, and the pages say "PI not enabled, re-link"
 // from the record. It is
 // never a dead token: the cycle's validAccessToken gate runs
 // before this pass, so a 401 here means the (valid) token simply
@@ -50,9 +50,9 @@ const maxPlanetLayoutsPerCycle = 80
 // piScopeRefusal reports whether an ESI failure on a planetary
 // endpoint means "this login never granted the planetary scope"
 // rather than a broken token or a transient error. CCP answers
-// scope-gated endpoints inconsistently — 403 for some, 401 for
+// scope-gated endpoints inconsistently, 403 for some, 401 for
 // others (verified live: the colonies endpoint answers 401 to a
-// token without esi-planets.manage_planets.v1) — so both statuses
+// token without esi-planets.manage_planets.v1), so both statuses
 // classify the same way here. This is deliberately NOT the
 // token-dead path: it only ever records the scope-missing state.
 func piScopeRefusal(err error) bool {
@@ -94,7 +94,7 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 		logging.Errorf("worker: read %s snapshot for character %d: %v", esi.SnapPlanets, ch.CharacterID, serr)
 	}
 
-	// A recorded scope refusal backs the kind off — unless the
+	// A recorded scope refusal backs the kind off, unless the
 	// character has since re-linked with the scope, in which
 	// case retrying now is exactly what the user is waiting for.
 	if !characterHasScope(ch, planetScope) && app.refusalSettled(ctx, ch.CharacterID, esi.SnapPlanets) {

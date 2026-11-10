@@ -236,12 +236,12 @@
         </div>
         {{end}}
         <section role="tabpanel" id="mkt-tab-price">
-          <h3>Price history — {{$item.RegionName}}</h3>
+          <h3>Price history, {{$item.RegionName}}</h3>
           {{template "history-section" $item}}
         </section>
         {{if and $item.Pack $item.Pack.Chart}}
         <section role="tabpanel" id="mkt-tab-book">
-          <h3 class="l-tab-h">Order book history — {{$item.RegionName}}</h3>
+          <h3 class="l-tab-h">Order book history, {{$item.RegionName}}</h3>
           {{with $item.Pack}}{{with .Chart}}{{$bc := .}}
           <div class="mt-chart pchart" data-chart-scrub="true">
             <div class="chart-legend">
@@ -295,7 +295,7 @@
 
       {{if $item.Trader}}
       <section class="l-panel foldable">
-        <h3>Trading snapshot — {{$item.RegionName}}</h3>
+        <h3>Trading snapshot, {{$item.RegionName}}</h3>
         {{template "trader-section" $item}}
       </section>
       {{end}}

@@ -11,7 +11,7 @@
 -- rows are re-queued (or dropped, when they hold nothing yet)
 -- and only the latest keystroke's guesses keep the typing ring.
 -- hit_at records a guess the pilot opened within minutes of it
--- being noted — the tuning signal for what is worth guessing.
+-- being noted, the tuning signal for what is worth guessing.
 -- Unhit guesses stay small: one box holds only its latest
 -- keystroke, so the table grows with boxes, not keystrokes.
 --

@@ -1,4 +1,4 @@
-/* Backdrop: the ember sunrise art is the whole sky — it carries
+/* Backdrop: the ember sunrise art is the whole sky, it carries
    its own stars, so there is no synthetic starfield layer.
    style.css paints the standard backdrop on body::before;
    this file centers it (the composition the design mockup
@@ -18,11 +18,11 @@
 /* Every tier paints over a small copy of the same art
    (bg-thumb.jpg, the last background layer). On a full
    navigation the new document paints before the tier image has
-   decoded — the JXL tiers take far longer to decode than the
-   JPEGs they replaced — and until it landed the viewport showed
+   decoded, the JXL tiers take far longer to decode than the
+   JPEGs they replaced, and until it landed the viewport showed
    the flat body background: a black flash, worst where the most
    sky shows (short pages, and the destinations that always load
-   whole — the fitting workbench, the PI planner). The thumb
+   whole, the fitting workbench, the PI planner). The thumb
    decodes almost immediately at the same cover/center geometry
    and the tier covers it seamlessly when it arrives. */
 /* The app interior wears the calm sky: stars and soft nebula
@@ -294,8 +294,8 @@ html[data-theme="light"] .btn.btn-quiet {
   background: rgba(253, 251, 246, 0.72);
   border-color: #d3c7ae;
 }
-/* Inside glass that already blurs — the page panel, the
-   notify menu — the quiet pill keeps its paint and drops the
+/* Inside glass that already blurs, the page panel, the
+   notify menu, the quiet pill keeps its paint and drops the
    second blur: blur belongs only over unblurred content.
    Over the sky (the home bar) the blur above is its frost. */
 .page-body:not(:has(.home-grid)) .btn.btn-quiet,
@@ -321,7 +321,7 @@ html[data-theme="light"] .btn.btn-quiet {
 
 /* The home header row: the page title and its action bar (Link
    another character, Overview settings) sit together above the
-   panel, the title left, the bar right — the arrangement the
+   panel, the title left, the bar right, the arrangement the
    header had before the title moved out on its own. The left
    padding repeats .page-body's 1.25rem content inset, so the
    title's left edge aligns with the panel content under the
@@ -383,8 +383,8 @@ html[data-theme="light"] .btn.btn-quiet {
 
 /* Price chart text: the chart SVG is 720 units wide and scales
    with its box, and the box is placement-driven, not viewport-
-   driven — a full-width page renders the chart near 1500px
-   while the Home widget squeezes it under 500px — so the axis
+   driven, a full-width page renders the chart near 1500px
+   while the Home widget squeezes it under 500px, so the axis
    type is sized by the chart's own width via container queries.
    Each band steps the units so the rendered labels stay between
    about 11 and 15px up to an 820px box: narrow boxes step up,
@@ -425,7 +425,7 @@ html[data-theme="light"] .btn.btn-quiet {
 }
 
 /* Home KPI glyphs: the mockup's little Lucide mark in each
-   tile's top right (wallet, coins, package, book) — the same
+   tile's top right (wallet, coins, package, book), the same
    16px ember treatment the briefing cards carry (.brief-icon
    in style.css). The glyphs ride inline in the template (the
    .kpi-spark precedent): bg.css bans SVG data URIs outright

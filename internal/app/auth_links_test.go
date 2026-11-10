@@ -237,7 +237,7 @@ func TestPilotPageStatesAndDrain(t *testing.T) {
 	mustContain(t, "/pilot/ (missing)", body, "EVE has no public record for that character")
 
 	// A 422 (ESI's validation refusal: the ID is never a
-	// character) settles 'missing' too — and stays settled: the
+	// character) settles 'missing' too, and stays settled: the
 	// next drain spends no call on it.
 	if err := q2.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300098, Priority: wantViewed}); err != nil {
 		t.Fatalf("enqueue refused pilot: %v", err)
@@ -331,7 +331,7 @@ func TestItemDetailsPageAndTypeDetailDrain(t *testing.T) {
 	ctx := context.Background()
 
 	// Render layer: unknown type bounces, known type renders the
-	// filling-in state and notes the want — zero outbound calls.
+	// filling-in state and notes the want, zero outbound calls.
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)
 	user, err := q.CreateUser(ctx)
@@ -412,7 +412,7 @@ func TestItemDetailsPageAndTypeDetailDrain(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // Kill contexts: strangers to zKillboard, own chars in-app, ships
-// to item details — and item links are uniform across pages.
+// to item details, and item links are uniform across pages.
 // ---------------------------------------------------------------------------
 
 func TestKillmailAndWalletLinks(t *testing.T) {
@@ -488,7 +488,7 @@ func TestKillmailAndWalletLinks(t *testing.T) {
 		// Victim ships go to item details.
 		`<a href="/items/type/587/">Rifter</a>`,
 	)
-	// The own character — victim of 7002, final blow of 7001 —
+	// The own character, victim of 7002, final blow of 7001,
 	// stays in-app even in a kill context.
 	ownLink := `<a href="/character/?character=90000001">Fixture Ceo</a>`
 	if n := strings.Count(body, ownLink); n != 2 {

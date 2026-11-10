@@ -1,7 +1,7 @@
 // Browser-path tests for ../static/swap.js: the click interceptor,
 // fetch-to-swap flow, fallbacks and history, driven through a small
 // DOM stub (no browser needed). Async waits poll for the expected
-// condition with a deadline — never a fixed sleep — so the suite
+// condition with a deadline, never a fixed sleep, so the suite
 // runs as fast as the code allows and fails deterministically.
 // Absence assertions (no fetch fired) drain the task queue instead:
 // the denied paths are fully synchronous, so once the queue is
@@ -263,7 +263,7 @@ function makeEnv(opts) {
   win.DOMParser.prototype.parseFromString = function (html) { return fetchedDoc(html); };
   // A start page whose main carries a modal backdrop (opts.modal):
   // the fake modal lives in main until the shell hoists it to the
-  // body, and main's innerHTML reads as the live tree would — the
+  // body, and main's innerHTML reads as the live tree would, the
   // modal's markup is in it exactly while the modal is in main.
   let modalEl = null;
   let bodyEl = null;
@@ -590,7 +590,7 @@ test("an adopted sheet is pruned on the next swap and restored on back", async f
 
 test("the boot page's own sheet is pruned when the shell swaps away", async function () {
   // The session booted on the killboard (a full load): its sheet
-  // is part of the boot document, yet it is still a page sheet —
+  // is part of the boot document, yet it is still a page sheet,
   // swapping to a page that does not carry it prunes it, while
   // the shell sheets every page lists stay.
   const env = makeEnv({

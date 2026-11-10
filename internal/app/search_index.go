@@ -22,7 +22,7 @@ import (
 //
 // Freshness keeps today's contract: a record is searchable as
 // soon as it is stored (the store paths upsert into the live
-// snapshot in the same pass — see the noteSearch*Record hooks),
+// snapshot in the same pass, see the noteSearch*Record hooks),
 // and the SDE part is invalidated where an import lands
 // (importSDE). The snapshot is built once at worker startup
 // (runWorker kicks off the build) and stays resident; whole
@@ -474,7 +474,7 @@ func (snap *searchSnapshot) suggestTypes(q, pool string, limit int64) []suggestI
 		}
 		matches = append(matches, match{e: e, tier: tier})
 	}
-	// Order by lower(name), then id — the SQL path's ORDER BY
+	// Order by lower(name), then id, the SQL path's ORDER BY
 	// exactly. Raw name order would follow the database
 	// collation there and byte order here, and the two disagree
 	// (under en_US, "of Elsewhere" sorts before "Skill").

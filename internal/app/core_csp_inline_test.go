@@ -10,7 +10,7 @@ import (
 // TestNoInlineCodeInTemplatesOrScripts: the Content-Security-Policy
 // allows no inline scripts, style attributes, or event handlers, so
 // any of them in a template (or built by a static script into the
-// markup it injects) is silently dead in the browser — a missing
+// markup it injects) is silently dead in the browser, a missing
 // meter, a button that does nothing. This reads every embedded
 // template and script, so a page the other tests never render is
 // still covered. Dynamic geometry goes through data-* attributes

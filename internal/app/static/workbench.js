@@ -190,8 +190,8 @@
       var parseBtn = parser.querySelector("[data-wb-parse]");
       parseBtn.addEventListener("click", function () {
         // One box, unsorted: the ingest classifies the paste
-        // itself — d-scan rows, a local list, probe results,
-        // or a mix — exactly as a channel paste is classified.
+        // itself, d-scan rows, a local list, probe results,
+        // or a mix, exactly as a channel paste is classified.
         var paste = pasteTa.value;
         if (!paste.trim()) { showMsg("Paste a scan first."); return; }
         if (parser.getAttribute("data-mode") === "scan") {

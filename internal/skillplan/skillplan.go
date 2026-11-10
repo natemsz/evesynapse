@@ -225,7 +225,7 @@ type DroppedTarget struct {
 
 // Outcome is a computed plan: ordered steps plus totals.
 // Unknown lists skills with no SDE meta (cannot be timed) that
-// expansion met along the way — handlers surface them rather than
+// expansion met along the way, handlers surface them rather than
 // inventing numbers.
 type Outcome struct {
 	Steps       []Step
@@ -366,7 +366,7 @@ func Compute(g Graph, targets []Target, char CharTraining, attrs AttrSet, now ti
 		targetSP := SPForLevel(meta.Rank, w.level)
 
 		// Effective trained state: snapshot SP, raised to the
-		// queued completion when the queue gets further — the
+		// queued completion when the queue gets further, the
 		// plan trains after the queue, so it starts from there.
 		// Partial SP (mid-level progress) counts through the SP.
 		basisSP := char.SP[skillID]
@@ -501,7 +501,7 @@ func FitSkillClosure(g Graph, typeIDs []int64) []Target {
 
 	// Topo-order like the plan engine: reuse Compute's
 	// expansion ordering by feeding empty training state and
-	// taking its ordered wants — simpler: run the expansion sort
+	// taking its ordered wants, simpler: run the expansion sort
 	// directly over the requirement edges.
 	indegree := make(map[int64]int, len(required))
 	dependents := make(map[int64][]int64)

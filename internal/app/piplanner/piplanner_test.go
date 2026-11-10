@@ -44,7 +44,7 @@ func TestPIPlannerRendersChain(t *testing.T) {
 	}
 	apptest.SeedCharacter(t, q, user.ID, apptest.FixtureCharA, "Fixture Ceo")
 	// Colonies on Gas + Storm: Coolant (Water+Electrolytes) needs
-	// Aqueous Liquids + Ionic Solutions, both on Gas — covered.
+	// Aqueous Liquids + Ionic Solutions, both on Gas, covered.
 	apptest.SeedSnapshot(t, q, apptest.FixtureCharA, esi.SnapPlanets, esi.Colonies{
 		{PlanetID: 401, SolarSystemID: 30000142, PlanetType: "gas", UpgradeLevel: 5, NumPins: 10},
 		{PlanetID: 402, SolarSystemID: 30000142, PlanetType: "storm", UpgradeLevel: 5, NumPins: 8},

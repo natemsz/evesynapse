@@ -120,7 +120,7 @@ type sitemapSet struct {
 // buildSitemap renders the sitemap from the database: core public
 // pages (the landing page, the public fits browser and simulator,
 // the item browser, the public build and PI planners, and the
-// Intel pages — the same surfaces robots.txt names), the top
+// Intel pages, the same surfaces robots.txt names), the top
 // public fits by weighted rating (LIMIT 1000), the top items by
 // swept volume (LIMIT 1000), and the ships with the most public
 // fits (LIMIT 200). Authed paths never appear.

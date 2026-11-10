@@ -207,7 +207,7 @@ func (h *nameHarvest) corpStructures(ctx context.Context, payload string) {
 		}
 		// The corp's own structures arrive already named:
 		// seed the structure-name cache for free (tier 2,
-		// provenance 'corp' — ESI truth, below only the
+		// provenance 'corp', ESI truth, below only the
 		// per-structure lookup itself).
 		if s.Name != "" {
 			if _, ok := h.app.esi.CachedStructureName(ctx, s.StructureID); !ok {

@@ -208,8 +208,8 @@ func TestEveryResponseFeedsTheErrorBudget(t *testing.T) {
 		t.Fatal("budget reads low before any response was seen")
 	}
 
-	// A healthy budget, reported on a public POST — the one helper
-	// that used to skip the bookkeeping.
+	// A healthy budget, reported on a public POST: that helper
+	// keeps the bookkeeping too.
 	stub.headers = map[string]string{"X-Esi-Error-Limit-Remain": "80", "X-Esi-Error-Limit-Reset": "30"}
 	if err := client.PostJSON(ctx, "/universe/ids/", []string{"x"}, &out); err != nil {
 		t.Fatalf("PostJSON: %v", err)

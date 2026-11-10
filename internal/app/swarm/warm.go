@@ -289,7 +289,7 @@ func (app *Mod) SwarmNoteDemand(ctx context.Context, kind, key string) {
 	// contracts route is by region, so a node cannot fetch a
 	// header from a contract ID alone, and its own sweep covers
 	// discovery anyway. What a node can warm is the item list
-	// once its sweep has seen the header — that demand travels
+	// once its sweep has seen the header, that demand travels
 	// as its own pending queue, like every main's.
 	var err error
 	switch kind {

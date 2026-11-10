@@ -1,4 +1,4 @@
-/* EveSynapse — the touch and phone layer (mobile pass 4).
+/* EveSynapse, the touch and phone layer (mobile pass 4).
 
    base.html links this sheet last, behind a media attribute
    ((max-width: 45rem), (hover: none), (pointer: coarse)), so a
@@ -15,13 +15,13 @@
                  phones, tablets, foldables at any size: tap
                  targets, field sizing, press feedback, safe
                  areas
-     phone       (max-width: 45rem) — the canon phone band
+     phone       (max-width: 45rem), the canon phone band
                  (style.css's head): flatter surfaces, swipeable
                  tab rows, stacked forms, sheets
      short       (max-height: 30rem) and (orientation: landscape)
-                 and (pointer: coarse) — phones on their side:
+                 and (pointer: coarse), phones on their side:
                  the chrome scrolls away so height goes to content
-     phone+short (max-width: 45rem) and the short query — the
+     phone+short (max-width: 45rem) and the short query, the
                  bottom bar slims to a single-line row
 
    A new feature that needs phone treatment adds its rules to the
@@ -49,7 +49,7 @@
   a, button, summary, label, select, input, .btn { touch-action: manipulation; }
 
   /* Press feedback: hover never fires on touch, so controls
-     answer the finger directly — a brief dip in scale and a lift
+     answer the finger directly, a brief dip in scale and a lift
      in brightness, the same on every control family. */
   .btn, .chip, .seg > *, .phone-bar-item, .foldbtn,
   .subnav a {
@@ -154,7 +154,7 @@
   .mkt-kpis > .kpi:has(.typical) { flex-basis: 100%; }
 
   /* Labelled forms (a <label> wrapping its caption, bare text or
-     <small>, and its field — the site's form idiom), whether the
+     <small>, and its field, the site's form idiom), whether the
      labels sit in the form or in one of its <p> rows: each field
      stacks its caption over it and the fields share the row
      two-up; the submit takes the full width under them, where a
@@ -198,7 +198,7 @@
   .tw table[data-cards="off"]:not(.cal) td { white-space: normal; overflow-wrap: anywhere; }
   /* Phone sheets (app.js "Phone sheets"): a data-sheet block
      leaves the page flow and rises from the bottom edge when its
-     trigger is tapped — the sections sheet's glass, head and
+     trigger is tapped, the sections sheet's glass, head and
      reach. It scrolls inside itself; the page behind holds still. */
   /* A closed sheet is out of the page whatever else styles the
      block (the labelled-form rule lays a sheet of fields out as a

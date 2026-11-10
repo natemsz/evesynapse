@@ -32,7 +32,7 @@ type orderRow struct {
 	Issued   string
 	// Expires: open orders ("" for history rows).
 	Expires string
-	// Status: open sell rows only — the same order-health
+	// Status: open sell rows only, the same order-health
 	// verdict the Market page's "Your orders" section shows
 	// ("" until the worker's first book pass; buy rows and
 	// closed history carry none, by design).
@@ -43,14 +43,14 @@ type orderRow struct {
 	Tone  string
 	State string // history rows: humanized state
 	Corp  bool   // placed for the corporation
-	// Beaten: open rows only — the order is beaten at its own
+	// Beaten: open rows only, the order is beaten at its own
 	// station per the stored lifecycle verdicts (both sides;
 	// the Status text above is sell-only). Drives the inline
 	// highlight and the Beaten only filter.
 	Beaten bool
 	// LocID is the station the heat lookup keys on; not rendered.
 	LocID int64
-	// Heat: open rows only — how competitive the item is at this
+	// Heat: open rows only, how competitive the item is at this
 	// order's station, in heat words, from how often the station's
 	// best price on the order's side was beaten in the trailing
 	// 12 hours (schema 120). HeatNote is the count behind the
@@ -326,7 +326,7 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 	var open esi.CharOrders
 	view.Open = app.deps.EconSection(ctx, active.CharacterID, esi.SnapOrders, &open)
 	if view.Open.Loaded {
-		// Open sell rows carry the stored order-health verdict —
+		// Open sell rows carry the stored order-health verdict,
 		// the same rows and wording the Market page's "Your
 		// orders" section renders (market.go buildYourOrders).
 		// Buy rows and the history below carry none: health is a

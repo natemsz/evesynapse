@@ -128,7 +128,7 @@ func TestWarmMissingTypeNamesSwarmFirst(t *testing.T) {
 
 // TestWarmMissingTypeNamesNoPeer: with no peer at all the
 // warming cycle resolves names from ESI exactly as it always
-// has — the swarm note is inert and nothing waits on a peer.
+// has, the swarm note is inert and nothing waits on a peer.
 func TestWarmMissingTypeNamesNoPeer(t *testing.T) {
 	p := newSwarmPair(t, swarm.SwarmOpen)
 	ctx := context.Background()

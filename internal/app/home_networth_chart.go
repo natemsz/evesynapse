@@ -87,7 +87,7 @@ const (
 
 // sparklineSVG shapes daily totals into an inline SVG sparkline: a
 // polyline and its soft area fill, in viewBox coordinates. ok=false
-// under two days — no line is drawn at all, never a placeholder.
+// under two days, no line is drawn at all, never a placeholder.
 func sparklineSVG(totals []float64) (line, area string, ok bool) {
 	if len(totals) < 2 {
 		return "", "", false

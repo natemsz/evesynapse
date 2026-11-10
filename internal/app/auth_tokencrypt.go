@@ -5,8 +5,8 @@ package app
 // and refresh tokens sit in the characters table, and a refresh
 // token is a standing credential: with it, whoever holds a copy of
 // the database (a dump, a backup, a stolen disk) can read that
-// character's data and use the write scopes the app requests —
-// send mail, save fittings — for as long as the character stays
+// character's data and use the write scopes the app requests,
+// send mail, save fittings, for as long as the character stays
 // linked.
 //
 // With TOKEN_ENCRYPTION_KEY set, both tokens are stored encrypted
@@ -242,15 +242,15 @@ func (b *tokenBox) openTokens(ch db.Character) (access, refresh string, err erro
 // prepareStoredTokens runs once at boot, before the worker starts,
 // and brings the stored tokens in line with the configured key.
 //
-// Every encrypted token must open with it. If one does not — the
-// key was changed, or removed — the app refuses to start: running
+// Every encrypted token must open with it. If one does not, the
+// key was changed, or removed, the app refuses to start: running
 // on would fail every sync, and every fresh sign-in would add
 // tokens under a second key. The error says how to recover.
 //
 // With a key set, tokens stored before it was (plain text) are
 // encrypted in place, and tokens under a retired envelope (v1)
-// are re-sealed as v2, so switching encryption on — or the KDF
-// under it — takes effect at the next start rather than a refresh
+// are re-sealed as v2, so switching encryption on, or the KDF
+// under it, takes effect at the next start rather than a refresh
 // at a time.
 const (
 	discordAccessField  = "discord_access"

@@ -3,7 +3,7 @@ package app
 // Hermetic tests for the widget overview home. Same
 // contract as the corp/intel suites: seeded snapshots drive the
 // real router against a counting transport, and the transport
-// must observe zero outbound calls — the overview renders
+// must observe zero outbound calls, the overview renders
 // cache-only, across every linked character.
 
 import (
@@ -41,7 +41,7 @@ func seedOverviewCharacter(t *testing.T, q *db.Queries, userID, characterID int6
 func rfc(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
 // TestHomeOverviewMultiChar: one default-layout Home render over
-// three characters in different states — training + wallet +
+// three characters in different states, training + wallet +
 // asset + order data (Alpha), empty queue (Bravo), dead link
 // (Charlie). Asserts fleet rows, the Briefing's re-link line,
 // net-worth arithmetic, industry/market cards, and zero network.
@@ -211,7 +211,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 }
 
 // TestHomeOverviewEmptyAccount: a signed-in account with no
-// characters gets the link-your-first-character state, cleanly —
+// characters gets the link-your-first-character state, cleanly,
 // and so does the dev-login-style userless session.
 func TestHomeOverviewEmptyAccount(t *testing.T) {
 	transport := &countingTransport{}
@@ -239,7 +239,7 @@ func TestHomeOverviewEmptyAccount(t *testing.T) {
 }
 
 // TestHomeLayoutRoundTrip: the Customize controls persist via
-// POST /home/layout — toggle, reorder up/down, reset — and a
+// POST /home/layout, toggle, reorder up/down, reset, and a
 // hand-corrupted layout (unknown ids, duplicates) renders the
 // surviving widgets instead of failing.
 func TestHomeLayoutRoundTrip(t *testing.T) {
@@ -380,7 +380,7 @@ func doLayoutPost(t *testing.T, app *Application, form url.Values, cookie *http.
 }
 
 // TestHomeLayoutOrderAction: the drag-save action accepts the
-// whole arrangement at once — reorders persist, unknown and
+// whole arrangement at once, reorders persist, unknown and
 // duplicate ids normalize away server-side, XHR callers get a
 // bare 200 instead of the redirect, and anonymous POSTs bounce.
 func TestHomeLayoutOrderAction(t *testing.T) {
@@ -463,7 +463,7 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 }
 
 // TestHomeLayoutToggleRoundTrips: the two saves behind the
-// customize-mode controls — × removal (toggle off) and
+// customize-mode controls, × removal (toggle off) and
 // add-from-catalog (toggle on, appends at the end).
 func TestHomeLayoutToggleRoundTrips(t *testing.T) {
 	transport := &countingTransport{}
@@ -671,9 +671,9 @@ func TestHomeLayoutPlaystylePresets(t *testing.T) {
 
 // TestHomeLayoutSizeOnPreset: resizing a widget that stands on
 // the home only through the account's preset (nothing saved yet)
-// stores the committed size against the preset. The layout POST
-// used to start from the generic default, where the widget is
-// absent, and answer ok without storing anything.
+// stores the committed size against the preset: the layout POST
+// starts from the account's preset, not the generic default,
+// where the widget is absent.
 func TestHomeLayoutSizeOnPreset(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
@@ -864,7 +864,7 @@ func TestHomePresetLayoutsTile(t *testing.T) {
 
 // TestHomeCustomizeSurface: customize mode renders the live
 // widget grid (draggable cards, add-module pop-up) on top of the
-// plain no-JS module list, with end-user copy only — the old
+// plain no-JS module list, with end-user copy only, the old
 // implementation-flavored hint is gone everywhere on Home.
 func TestHomeCustomizeSurface(t *testing.T) {
 	transport := &countingTransport{}
@@ -933,7 +933,7 @@ func TestHomeCustomizeSurface(t *testing.T) {
 	}
 }
 
-// identity, wallet, skills, training — renders at /character/
+// identity, wallet, skills, training, renders at /character/
 // purely from worker-warmed snapshots (profile included), with
 // zero outbound calls. This is the page that absorbed the old
 // home sheet, fetch-free.
@@ -1023,9 +1023,9 @@ func TestMigration010Reopen(t *testing.T) {
 }
 
 // TestWidgetSizeBounds: a stored size is held inside the
-// module's floor and ceiling alike — a band drawn 3 tall still
+// module's floor and ceiling alike, a band drawn 3 tall still
 // stands one row, a KPI stack drawn 3 wide still stands one
-// column — and every catalog module's ceiling clears its floor.
+// column, and every catalog module's ceiling clears its floor.
 func TestWidgetSizeBounds(t *testing.T) {
 	for _, c := range []struct {
 		item         homeLayoutItem
@@ -1098,7 +1098,7 @@ func TestHomeLayoutSizeCeiling(t *testing.T) {
 	}
 
 	// Net Worth is one column wide however it is drawn: w=3 is
-	// past its ceiling — refused, nothing saved.
+	// past its ceiling, refused, nothing saved.
 	if code, body := postSize(widgetNetWorth, "3", "1"); code != http.StatusBadRequest || !strings.Contains(body, `"ok":false`) {
 		t.Fatalf("oversize POST: status %d body %q, want 400 ok:false", code, body)
 	}

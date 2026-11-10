@@ -135,12 +135,12 @@
   })();
 
   // --- Modal dialogs ---------------------------------------------
-  // One implementation behind every pop-up — add a module, the fit
+  // One implementation behind every pop-up, add a module, the fit
   // picker, the planner's ME and settings dialogs, quick jump: a
   // .modal-backdrop around a .modal, opened and closed through
   // EveSynapseModal. open() shows the backdrop in the browser's top
-  // layer (a manual popover), so its blur covers the whole page —
-  // top bar and sidebar included — whatever stacking the content
+  // layer (a manual popover), so its blur covers the whole page,
+  // top bar and sidebar included, whatever stacking the content
   // sits in, without moving the dialog out of its form. It
   // remembers the focus to give back and moves focus in; close()
   // hides it and gives the focus back. A click on the backdrop
@@ -293,7 +293,7 @@
   // a second row or scrolling away: the fit is measured, never a
   // breakpoint, so every strip folds exactly where it runs out
   // of room. Tabs fold from the end of the row, in order; the
-  // active tab never folds — if the fold reaches it, the nearest
+  // active tab never folds, if the fold reaches it, the nearest
   // earlier tab folds instead, so the current page's tab is
   // always in the row. Should the active tab ever be found in
   // the panel anyway, the More button takes its label and its
@@ -588,7 +588,7 @@
   // Pure: given the current section key and the section keys the
   // bar and the sheet carry, say which bar slot is active (""
   // for none) and whether the Sections button carries the mark
-  // instead — the current section lives only in the sheet, the
+  // instead, the current section lives only in the sheet, the
   // same reflection the tab strip's More button gives a folded
   // active tab.
   function phoneSectionState(section, barSections, sheetSections) {
@@ -969,11 +969,11 @@
   //     fold independently, section by section;
   //   - .card widgets fold whole (Home widgets, Sync cards);
   //   - the page .panel itself folds whole only when it wraps no
-  //     .foldable section and no cards — single-block pages like
+  //     .foldable section and no cards, single-block pages like
   //     Killmails or Wars, where the whole window IS the section.
   // Sections marked data-fold="closed" start folded; that state
   // is applied here, on load, so with JavaScript disabled every
-  // section is simply visible — folding is pure enhancement and
+  // section is simply visible, folding is pure enhancement and
   // nothing is ever hidden in the raw markup.
   function setFolded(container, btn, folded) {
     container.classList.toggle("folded", folded);
@@ -1417,7 +1417,7 @@
         if (btn) btn.click();
       });
     }
-    // The KPI band's idle count ("N idle — show them") is a link to
+    // The KPI band's idle count ("N idle, show them") is a link to
     // the Characters page; with the Fleet Overview on the page it
     // filters the fleet to the idle pilots and brings the module into
     // view instead.
@@ -1815,7 +1815,7 @@
   //
   // Pure: given each module's column span in page order and the
   // column count, the indexes of the modules that close a row
-  // short — each widens to finish its row.
+  // short, each widens to finish its row.
   function homeFillPlan(spans, cols) {
     var fill = [], used = 0, last = -1;
     for (var i = 0; i < spans.length; i++) {
@@ -1847,10 +1847,10 @@
     module.exports.homeSizeAllowed = homeSizeAllowed;
   }
 
-  // The resize frame's size: it starts exactly over the module —
+  // The resize frame's size: it starts exactly over the module,
   // the module's real size, not the pointer's inset on the grip
   // and not its nominal cells (a module can stand taller than its
-  // rows) — and follows the pointer's movement from there, held
+  // rows), and follows the pointer's movement from there, held
   // between half a cell and the module's ceiling, and never below
   // the size it started at: taking the grip must not draw a frame
   // smaller than the module being resized.
@@ -1956,7 +1956,7 @@
   // --- Home customize: drag, resize, remove, add module --------
   // Layered over the plain customize forms, never replacing them:
   // this runs only on the customize view (the data-customize grid)
-  // and stores through the same /home/layout endpoint — a drag
+  // and stores through the same /home/layout endpoint, a drag
   // saves once, on drop, and the server stays the normalizer of
   // whatever order it is handed. The grid itself is solved, not
   // stretched: the mirror solver below recomputes every module's
@@ -2053,8 +2053,8 @@
     // module is drawn right now (mid-animation included), stop
     // whatever it was doing, apply the change, measure the new
     // layout, and play each module from where it was drawn to its
-    // new cell. Moves are translate-only — scaling a module to
-    // fake its size change squashes its text — and every module
+    // new cell. Moves are translate-only, scaling a module to
+    // fake its size change squashes its text, and every module
     // runs at most one animation, cancelled before the next change
     // is measured, so overlapping changes never fight, jump back or
     // replay. The measured layout (page coordinates, no transforms)
@@ -2406,7 +2406,7 @@
         // never smaller than the module at the grab. The snapped
         // size still comes from the module's cells: width from its
         // real edge, height from how far the pointer has moved
-        // since the press, added to the rows the module had — a
+        // since the press, added to the rows the module had, a
         // module standing taller than its rows (its content needs
         // the room) must not jump to that height the moment the
         // grip is taken.
@@ -2471,7 +2471,7 @@
     // --- dragging --------------------------------------------------
     // Lifting a card puts a glowing slot into its place, with its
     // size, and takes the card out of the grid (position: fixed) at
-    // exactly the spot it occupied — nothing under the pointer moves
+    // exactly the spot it occupied, nothing under the pointer moves
     // at lift-off. The card then follows the pointer by transform
     // alone, so it tracks without lag. The slot moves when the
     // pointer is over another module: before it if the pointer is in
@@ -2694,7 +2694,7 @@
         // Widget markup is server-rendered; lift the new card
         // out of a fresh copy of this page rather than rebuilding
         // it client-side. If anything about that fails, a reload
-        // lands in the same place — the add already saved.
+        // lands in the same place, the add already saved.
         fetch("/?customize=1", { headers: { "Accept": "text/html" } }).then(function (resp) {
           return resp.ok ? resp.text() : "";
         }).then(function (html) {
@@ -3371,8 +3371,8 @@
 
 // --- Market history chart: day-point tooltips ---------------
 // Hover (mouse) or focus (keyboard) follows the point; a tap
-// pins the tip so it can be read, and the next tap — the same
-// point again, or anywhere else — lets it go. Pressing and
+// pins the tip so it can be read, and the next tap, the same
+// point again, or anywhere else, lets it go. Pressing and
 // dragging across the chart scrubs to the nearest recorded day
 // while the tip follows the pointer. Delegation on document
 // throughout, so the live-region fragment swap that replaces
@@ -3717,7 +3717,7 @@
 // Page-sync indicator: while this page still has data on the
 // way (names, descriptions, price history it asked for), the
 // top banner shows a small ember ring with the count. It polls
-// a cache-only status endpoint — never the data itself — and
+// a cache-only status endpoint, never the data itself, and
 // hides the moment the page has everything. Polling never
 // gives up while the page is still waiting: fast at first,
 // then a slower steady cadence for as long as the status says
@@ -3914,7 +3914,7 @@
       // Arrive in the rail clean: categories opened in the
       // wide sidebar keep their <details open> state across
       // the switch, and each one would paint its own tall
-      // flyout in the rail column — a merged stack under a
+      // flyout in the rail column, a merged stack under a
       // row of lit-up icons. Fold them all; from here the
       // rail opens one flyout at a time.
       closeCategoryBranches(null);
@@ -3959,11 +3959,11 @@
   }
   // In the rail the flyouts also follow the pointer: hovering a
   // category brings its flyout up, and the flyout folds when the
-  // pointer leaves — no waiting for a click somewhere else.
+  // pointer leaves, no waiting for a click somewhere else.
   // Click keeps working too (touch, and the plain toggle); the
   // one adjustment is that a pointer click on a flyout the
   // pointer itself opened does not toggle it shut under the
-  // cursor — in the rail, leaving is what closes it. Keyboard
+  // cursor, in the rail, leaving is what closes it. Keyboard
   // activation (a click with detail 0) keeps the native toggle
   // in both directions, and Escape still folds a branch (the
   // handler near the top of this file). The wide sidebar and
@@ -4137,7 +4137,7 @@
   }
   // A page that loads straight into the rail (the saved choice
   // the head script applied, a restored page) starts with
-  // every category folded too — no flyout stack waiting under
+  // every category folded too, no flyout stack waiting under
   // the icons.
   if (railActive()) {
     closeCategoryBranches(null);
@@ -4455,8 +4455,8 @@
     });
   }
 
-  // Ctrl+K / Cmd+K from anywhere — including inside a form
-  // field, which is the point — opens or closes the palette.
+  // Ctrl+K / Cmd+K from anywhere, including inside a form
+  // field, which is the point, opens or closes the palette.
   // Plain typing never does; the modifiers are the trigger.
   document.addEventListener("keydown", function (ev) {
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey &&
@@ -4632,7 +4632,7 @@
   // position (a full reload went back to the top). With JavaScript
   // off, a <noscript> meta-refresh does the same. The refresh waits
   // out typing in a field and hidden tabs, and never runs for readers
-  // who asked for reduced motion — they get the page as it loaded,
+  // who asked for reduced motion, they get the page as it loaded,
   // plus the Sync page's own manual controls. A swap away stops the chain:
   // without this the old page's timer would reload the new one.
   // (Swaps onto an auto-refresh page fall back to a full load, so
@@ -5128,8 +5128,8 @@
   // The search above the list of plans narrows it as you type (Enter
   // opens the first match, the arrow keys walk the list, Escape clears
   // it); without JavaScript the same search is a form that reloads the
-  // page with ?pq=. The delete button on a row asks in place — the row
-  // turns into "Delete this plan? [Delete] [Keep]" — where a plain link
+  // page with ?pq=. The delete button on a row asks in place, the row
+  // turns into "Delete this plan? [Delete] [Keep]", where a plain link
   // goes to the page's own confirmation.
   function initPlanPicker(root) {
     var picker = root.querySelector("[data-plan-picker]");
@@ -5529,7 +5529,7 @@
 // The server renders it open on the first view of a session for an
 // account that has not answered (and never again once it has); this
 // only gives it the bell list's motion, a way to close it without
-// answering (the close is this visit only — answering is the form),
+// answering (the close is this visit only, answering is the form),
 // and the bell list's "Notification choices" entry as a way back
 // in. The form itself is an ordinary post and works without this.
 (function () {
@@ -6200,7 +6200,7 @@
 // Compact figures on phones (mobile pass 2): where a wide exact
 // figure cannot fit its narrow card, the headline shows the
 // compact form and the exact figure moves to a small line
-// beneath it — the same treatment the appraisal hero card gets
+// beneath it, the same treatment the appraisal hero card gets
 // in CSS from its server-rendered pair. Two surfaces carry
 // figures with no compact form in the markup: the appraisal
 // buy card (its raw total rides the copy button) and the home

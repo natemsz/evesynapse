@@ -26,7 +26,7 @@ import (
 // Killmails page: the character's most recent kills and losses.
 // The recent list is a snapshot; the detail payloads behind it are
 // warmed into the killmail_details store by the worker. This page
-// reads the store only — a detail that has not landed yet renders
+// reads the store only, a detail that has not landed yet renders
 // as a "details warming" row instead of blocking on ESI.
 // ---------------------------------------------------------------------------
 
@@ -37,8 +37,8 @@ const maxKillmailsShown = 50
 // killmailRow is one list line. Rows without a stored detail yet
 // carry Warming=true and placeholder fields.
 type killmailRow struct {
-	KillmailID  int64    // set even while warming — the zKillboard link never waits
-	Time        string   // formatted kill time, "—" while warming
+	KillmailID  int64    // set even while warming, the zKillboard link never waits
+	Time        string   // formatted kill time, ", " while warming
 	System      placeRef // link-ified per the place policy; text when the SDE doesn't know it
 	Kill        bool     // badge: victim is someone else
 	Loss        bool     // badge: victim is the viewing character
@@ -48,8 +48,8 @@ type killmailRow struct {
 	ShipTypeID  int64
 	FinalBlow   string // final-blow attacker display
 	FinalBlowID int64
-	Involved    string // attacker count, "—" while warming
-	Value       string // the killboard's stored value for the kill, bare number; "—" while the board has not priced it
+	Involved    string // attacker count, ", " while warming
+	Value       string // the killboard's stored value for the kill, bare number; ", " while the board has not priced it
 	Warming     bool
 
 	// Facts the summary, the panels and the filters read.
@@ -70,7 +70,7 @@ type killmailRow struct {
 // killmailsView is the killmails page body; one shape serves both
 // the character view and the corporation view, which share this
 // page and the killmail_details
-// store — only the kill/loss test differs (see killmailViewer).
+// store, only the kill/loss test differs (see killmailViewer).
 type killmailsView struct {
 	CharacterName string // viewing character (switcher + copy)
 	Title         string // page heading
@@ -189,7 +189,7 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 // killBoardValues reads the killboard's stored value for each
 // of a page's kills in one bounded query. The board prices every
 // kill at ingest through the house price order; kills it has not
-// priced yet are absent from the map and their rows show "—".
+// priced yet are absent from the map and their rows show ", ".
 func (app *Application) killBoardValues(ctx context.Context, refs []esi.KillmailRef) map[int64]float64 {
 	out := make(map[int64]float64, len(refs))
 	if len(refs) == 0 || app.db == nil {
@@ -324,7 +324,7 @@ func (app *Application) killmailRowFor(ctx context.Context, viewer killmailViewe
 	}
 	row.Solo = row.Kill && players == 1
 
-	// The killboard's stored price for this kill, or "—" while
+	// The killboard's stored price for this kill, or ", " while
 	// the board has not priced it.
 	if priced {
 		row.Value = esi.FormatISK(value)

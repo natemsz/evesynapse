@@ -3,7 +3,7 @@ package fit
 import "sort"
 
 // Implant solving: when a fit runs over its CPU or powergrid
-// budget, the cheapest fix in the game is usually a hardwiring —
+// budget, the cheapest fix in the game is usually a hardwiring,
 // a 'Gnome' CPU Tuning or 'Squire' Power Grid implant that raises
 // the ship's output by a few percent. SolveImplants searches the
 // ladder for the smallest sufficient implant per over-budget
@@ -66,11 +66,11 @@ func resourceOver(res *Result, resource int64) bool {
 //
 // The search solves CPU first, then powergrid (the owner's
 // order), and retries in the opposite order when the first pass
-// fails — the two ladders can share a slot, and one order can
+// fails, the two ladders can share a slot, and one order can
 // succeed where the other cannot. Success returns the picks
 // (CPU's first) and no unsolved resources; failure returns the
-// picks that were not enough — none, the search is
-// all-or-nothing — plus the resources still over budget.
+// picks that were not enough, none, the search is
+// all-or-nothing, plus the resources still over budget.
 func SolveImplants(compute func(implants []int64) *Result, base []int64, baseSlots map[int]int64, candidates []ResourceImplant) (picks []SolvePick, unsolved []int64) {
 	baseRes := compute(base)
 	var over []int64
@@ -152,7 +152,7 @@ func solveInOrder(compute func(implants []int64) *Result, base []int64, baseSlot
 
 // ladderFor is one resource's candidates in pick order: the
 // smallest bonus first (the least implant that can do the job),
-// the cheapest first among equals — the ladder grades share
+// the cheapest first among equals, the ladder grades share
 // percents, and the low-grade is the cheap one. An unknown price
 // sorts after every known one at the same bonus.
 func ladderFor(candidates []ResourceImplant, resource int64) []ResourceImplant {

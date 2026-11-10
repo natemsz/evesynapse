@@ -1,4 +1,4 @@
-# EveSynapse — dev tasks
+# EveSynapse, dev tasks
 
 .PHONY: modules build build-arm64 build-amd64 build-dev run tidy gen clean assets test fmt check
 

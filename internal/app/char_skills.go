@@ -17,7 +17,7 @@ import (
 
 // skillsView is the Skill Sheet page body for one character.
 // Loaded is false when the skills snapshot could not be produced
-// at all; Warming marks the cold-start case (no snapshot yet —
+// at all; Warming marks the cold-start case (no snapshot yet,
 // the worker is still importing), which gets friendlier copy
 // than a hard failure. Queue data degrades independently: a
 // failed queue fetch leaves Queue empty and Training blank.
@@ -83,7 +83,7 @@ type browseSkillRow struct {
 	TypeID     int64
 	Name       string
 	Rank       string // "2x"
-	Trained    string // roman level, "—" when untrained
+	Trained    string // roman level, ", " when untrained
 	TrainedLvl int    // numeric trained level, 0 when untrained
 	SP         string // formatted SP in skill, "" when untrained
 	Primary    string // attribute name

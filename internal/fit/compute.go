@@ -13,7 +13,7 @@ import (
 // entities so their own effects (ItemModifier on the ship, the
 // charID LocationGroupModifier that builds pirate set bonuses)
 // flow through the same three-pass fold as everything else.
-// Implant sources never join the stacking-penalty group —
+// Implant sources never join the stacking-penalty group,
 // pirate set totals are documented unpenalized (a full
 // High-grade Snake set is +24.73% velocity, which only the
 // unpenalized product reproduces).
@@ -218,7 +218,7 @@ func (f *fitting) addItems(items []ItemInput) {
 // addCharges builds the charge entities (missile entities for
 // launchers), paired with the weapon type that carries them. A
 // charge is only modeled when at least one weapon of its type is
-// cycling — a loaded charge in an offline or inactive weapon
+// cycling, a loaded charge in an offline or inactive weapon
 // does nothing (the doc still remembers it).
 func (f *fitting) addCharges(charges map[int64]int64) {
 	for weaponType, chargeType := range charges {
@@ -442,7 +442,7 @@ func (f *fitting) bindModifiers() {
 			}
 			if !allowed[eff.Category] {
 				// A heatable module that simply isn't heated is
-				// a fitting choice, not a modeling gap — skip
+				// a fitting choice, not a modeling gap, skip
 				// silently so the heat note only fires for
 				// genuinely unmodeled categories.
 				if eff.Category == catOverload && source.kind == entModule {

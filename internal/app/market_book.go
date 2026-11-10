@@ -154,7 +154,7 @@ func (app *Application) fetchOrderBookFresh(ctx context.Context, key marketKey, 
 // bookStats summarizes one side of a regional order book so the
 // item page can quote prices a lone joke order cannot poison:
 // the median (typical) order and the band the bulk of orders sit
-// in. Prices are per order row — each order counts once,
+// in. Prices are per order row, each order counts once,
 // whatever its volume.
 type bookStats struct {
 	Median float64 // typical order price

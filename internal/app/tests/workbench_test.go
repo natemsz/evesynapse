@@ -1,7 +1,7 @@
 package tests
 
 // The intel workbench's report door (/intel/workbench/{id}/):
-// a channel report opened up — its stored scan reading broken
+// a channel report opened up, its stored scan reading broken
 // down, its roster with the pilots' settled records, the diff
 // against the channel's previous report in the system, and the
 // system's gates. A signed-in account with no access to the

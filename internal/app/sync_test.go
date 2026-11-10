@@ -70,8 +70,8 @@ func TestSyncNameCoverageFromBatchedLookups(t *testing.T) {
 // /sync/: the Sync page (a tab of the Admin page now, at
 // /admin/sync/) and its buttons are admin-only, and its old
 // address only redirects an admin onward, while
-// /sync/page-status — the banner indicator's poll, which every
-// signed-in page makes — answers any signed-in user. Gating the
+// /sync/page-status, the banner indicator's poll, which every
+// signed-in page makes, answers any signed-in user. Gating the
 // poll on admin left every other user's pages polling a 403
 // forever.
 func TestSyncAdminOnlyButPageStatusForEveryone(t *testing.T) {

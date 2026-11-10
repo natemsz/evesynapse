@@ -18,7 +18,7 @@ import (
 // Industry build planner: BOM expansion over the local
 // SDE industry tables (schema 011), priced from the market guide
 // cache and measured against the user's owned blueprints and
-// stockpiles. The engine below is pure — it reads no database and
+// stockpiles. The engine below is pure, it reads no database and
 // makes no calls; the handler feeds it. Formulae follow the
 // canonical EVE manufacturing model:
 //
@@ -104,7 +104,7 @@ type Input struct {
 	// (engineering-complex role bonus × rig bonus, the caller
 	// resolving both from SDE data): multipliers on material
 	// quantities, job time, and job cost. Zero means no
-	// facility (×1) — an NPC station.
+	// facility (×1), an NPC station.
 	FacilityMatFactor  float64
 	FacilityTimeFactor float64
 	FacilityCostFactor float64
@@ -158,7 +158,7 @@ type Node struct {
 	// JobCost is the installation fee for this node's runs:
 	// ME-discounted direct materials at adjusted price times
 	// the system index. JobKnown is false when the index is
-	// unknown or any direct material lacks an adjusted price —
+	// unknown or any direct material lacks an adjusted price,
 	// then JobCost is incomplete, never a real zero.
 	// ResearchSaving is what researching this node's blueprint
 	// to ME10 would save on its direct materials at current
@@ -253,7 +253,7 @@ func JobSeconds(baseSeconds, runs int64, te int) int64 {
 
 // UnitPrice picks the market-guide price for one type: the average
 // price when usable, the adjusted price behind it. ok=false when
-// the cache has nothing usable — callers say "no price data" and
+// the cache has nothing usable, callers say "no price data" and
 // never price at an invented zero.
 func UnitPrice(prices map[int64]esi.MarketPrice, typeID int64) (price float64, ok bool) {
 	p, hit := prices[typeID]
@@ -429,7 +429,7 @@ type builder struct {
 // resolveME picks a node's ME/TE: an explicit override wins on ME,
 // an owned copy supplies both otherwise, and the fallback is an
 // unresearched blueprint (ME 0 / TE 0, "assumed"). An override over
-// an owned copy keeps the copy's TE — it is the same physical
+// an owned copy keeps the copy's TE, it is the same physical
 // blueprint, only hand-tuned.
 func (b *builder) resolveME(bp *Blueprint) (me, te int, source string) {
 	source = "assumed"
@@ -505,7 +505,7 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 			node.BuyCost = node.LineCost
 			// Leaves can't be built; BvB not applicable.
 			// The blueprint guard: if this leaf IS a
-			// blueprint type, market prices are BPO not BPC — BvB
+			// blueprint type, market prices are BPO not BPC, BvB
 			// would be meaningless, so mark inapplicable.
 			node.BvBApplicable = false
 		} else {

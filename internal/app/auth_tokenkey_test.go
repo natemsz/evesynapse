@@ -5,7 +5,7 @@ package app
 // the http provider's boot-time configuration is validated in the
 // open, the unwrap call speaks the protocol, and an Application
 // whose endpoint is down at boot reports sealed rows as
-// key-missing — then unlocks, and can seal and open, once the
+// key-missing, then unlocks, and can seal and open, once the
 // endpoint answers.
 
 import (
@@ -234,7 +234,7 @@ func TestTokenKeyUnlockLoop(t *testing.T) {
 // http provider's whole arc: endpoint down at boot (sealed rows
 // report their key missing), endpoint up (the box unlocks with the
 // fetched key, proven by sealing and opening), and the two answers
-// that must never install — a short secret and a wrong key.
+// that must never install, a short secret and a wrong key.
 func TestTokenKeyUnlockEndToEnd(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()

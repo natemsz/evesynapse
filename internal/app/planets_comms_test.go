@@ -179,7 +179,7 @@ func TestPlanetsPagesRenderFromSnapshots(t *testing.T) {
 
 	// The character sheet's PI section is cache-only too, but the
 	// legacy sheet fetches its other sections (online, clones,
-	// implants) live when their snapshots are absent — pre-existing
+	// implants) live when their snapshots are absent, pre-existing
 	// behavior, deliberately out of scope for this phase.
 	code, body = getPage(t, app, cookie, "/character/?character=90000001")
 	if code != http.StatusOK {

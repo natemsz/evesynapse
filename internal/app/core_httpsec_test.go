@@ -230,7 +230,7 @@ func TestSignOutIsAPost(t *testing.T) {
 }
 
 // TestContentSecurityPolicyNamesOnlySelf: the policy allows the
-// app's own origin and nothing else — no Cloudflare hosts (its
+// app's own origin and nothing else, no Cloudflare hosts (its
 // analytics beacon and Rocket Loader were once allowed by name)
 // and no per-response nonce (once carried for Cloudflare's inline
 // scripts; the app itself never used it). The only third-party

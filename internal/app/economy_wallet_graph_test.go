@@ -2,7 +2,7 @@ package app
 
 // Wallet graphs: series building from journal +
 // sampler + current snapshot, the chart's states, the live-fill
-// fragment, and the home net-worth aggregation — all over
+// fragment, and the home net-worth aggregation, all over
 // stored rows with a transport that must stay silent.
 
 import (
@@ -99,7 +99,7 @@ func TestBuildBalanceChartStates(t *testing.T) {
 		t.Fatal("no points charted")
 	}
 	if _, ok := balancechart.BuildBalanceChart([]balancechart.BalancePoint{at(1, 100)}); ok {
-		t.Fatal("one point charted — a fact is not a shape")
+		t.Fatal("one point charted: a fact is not a shape")
 	}
 	chart, ok := balancechart.BuildBalanceChart([]balancechart.BalancePoint{at(1, 100), at(2, 250), at(3, 200)})
 	if !ok {
@@ -136,7 +136,7 @@ func TestBuildBalanceChartStates(t *testing.T) {
 
 // The wallet graph's states over a live app: pending while the
 // journal warms, few at one settled point, empty when settled
-// with nothing, chart once the journal lands — and the fragment
+// with nothing, chart once the journal lands, and the fragment
 // fills in without a single outbound call.
 func TestWalletGraphStatesAndFragment(t *testing.T) {
 	transport := &countingTransport{}

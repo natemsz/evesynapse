@@ -214,7 +214,7 @@ func (app *Application) runKillfeed(ctx context.Context) {
 		case status == http.StatusOK:
 			if err := app.ingestKillPackage(ctx, body); err != nil {
 				// The cursor does not advance past a kill
-				// that did not land: advancing here used to
+				// that did not land: advancing here would
 				// skip it silently and permanently. The same
 				// sequence is retried after the idle wait;
 				// ingest is idempotent, and a package that
@@ -232,7 +232,7 @@ func (app *Application) runKillfeed(ctx context.Context) {
 			killfeedSleep(ctx, killfeedStepWait)
 		case status == http.StatusNotFound:
 			// Not written yet, or expired: the latest says
-			// which — but asking on every 404 doubles the
+			// which, but asking on every 404 doubles the
 			// idle request rate forever; the latest only
 			// matters when a gap may have expired, so it is
 			// re-asked at most every half minute.

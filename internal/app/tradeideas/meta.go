@@ -5,8 +5,8 @@ package tradeideas
 // api.meta.ai), the alternative to Gemma on Cloudflare Workers AI.
 // With MODEL_API_KEY set, the refresh asks Muse Wonder; without it,
 // Gemma, as before. Same contract as the Cloudflare call: the key
-// travels in the Authorization header only — never a URL, never a
-// log line — and the answer is capped before it is stored.
+// travels in the Authorization header only, never a URL, never a
+// log line, and the answer is capped before it is stored.
 // ---------------------------------------------------------------------------
 
 import (

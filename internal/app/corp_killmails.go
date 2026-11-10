@@ -11,7 +11,7 @@ import (
 // Corporation killmails: the corp's recent kills and losses. The
 // recent list is a corp_* snapshot; the details behind it share
 // the killmail_details store and the Killmails page rendering with
-// the character view — only the kill/loss test changes (a victim
+// the character view, only the kill/loss test changes (a victim
 // in this corporation is a loss).
 // ---------------------------------------------------------------------------
 

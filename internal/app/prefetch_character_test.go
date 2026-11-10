@@ -3,7 +3,7 @@ package app
 // The acting character moves only on a real view, never on a
 // swap.js hover prefetch. A prefetch renders a per-pilot
 // ?character= page ahead of time so the click is instant, but it
-// changes nothing a view would (core_prefetch.go) — including
+// changes nothing a view would (core_prefetch.go), including
 // the session's character pin. These tests pin that down after
 // the owner watched his active character flip from Burzrujat to
 // Timorsham Vot on a plain home -> overview navigation: the
@@ -112,7 +112,7 @@ func TestPrefetchCharacterPageDoesNotRepinActingCharacter(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("prefetch status = %d, want 200", code)
 	}
-	// The prefetch still renders Timorsham's page — the swap
+	// The prefetch still renders Timorsham's page, the swap
 	// cache needs the requested pilot's content, not the pinned
 	// one's.
 	if got := overviewSubjectName(body); got != "Timorsham Vot" {

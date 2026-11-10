@@ -6,7 +6,7 @@
 -- the answer references its rows ("(#n)") and the page composes the
 -- figure segment from the stored row set: the CSV rows as sent
 -- (number, item, station, buy, sell, spread, sold/day, daily
--- profit — the pre-formatted strings), as one JSON array in a
+-- profit, the pre-formatted strings), as one JSON array in a
 -- nullable TEXT column. Answers written before this step have no
 -- row set and render verbatim, exactly as they do today. Additive
 -- only: a rollback binary ignores the column, like step 048.

@@ -7,8 +7,8 @@ import (
 )
 
 // The fixtures below are in the GitLab API's own shapes for
-// the three calls the learner makes — a project's releases,
-// its generic packages, and one package's files — carrying
+// the three calls the learner makes, a project's releases,
+// its generic packages, and one package's files, carrying
 // the same releases and build hashes the projects published
 // on GitHub: storm v0.1.1 and v0.1.0, the app v0.5.7.3. The
 // hashes moved; the wire shape is GitLab's.
@@ -80,7 +80,7 @@ func fixtureFetch(t *testing.T, src releaseSource, releases, packages string, fi
 }
 
 // TestLearnSourceStorm: the storm source records exactly the
-// four binary builds — two architectures on two releases —
+// four binary builds, two architectures on two releases,
 // under their tags, and nothing else: the bundles, the
 // checksum file and its signature ride in the same packages
 // and are not builds.
@@ -179,8 +179,8 @@ func TestLearnSourceSkips(t *testing.T) {
 }
 
 // TestClassifyLearnedBuild: a hash only the learned set knows
-// classifies as Mainline with its learned label — the storm
-// v0.1.1 case — while a seeded hash still resolves, a
+// classifies as Mainline with its learned label, the storm
+// v0.1.1 case, while a seeded hash still resolves, a
 // learned entry wins over a seeded one for the same hash,
 // and an unknown hash stays a Fork.
 func TestClassifyLearnedBuild(t *testing.T) {

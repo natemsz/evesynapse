@@ -50,7 +50,7 @@ func TestSkillLevelQueuedRowShowsOwnLevelRange(t *testing.T) {
 	}
 }
 
-// Training Power Grid to V from scratch — five
+// Training Power Grid to V from scratch, five
 // queue rows. Each row must show queued only up to its own level,
 // not all five boxes blue on every row.
 func TestSkillLevelQueuedRowOnlyToOwnLevel(t *testing.T) {
@@ -66,7 +66,7 @@ func TestSkillLevelQueuedRowOnlyToOwnLevel(t *testing.T) {
 	}
 }
 
-// The training row pulses only the level actually training —
+// The training row pulses only the level actually training,
 // never a later queued level.
 func TestSkillLevelTrainingPulsesOwnLevel(t *testing.T) {
 	got := boxClasses(t, 3, 4, "training")

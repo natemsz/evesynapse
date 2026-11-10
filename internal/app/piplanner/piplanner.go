@@ -24,7 +24,7 @@ import (
 // ---------------------------------------------------------------------------
 // PI Planner (/industry/pi/): full planetary-interaction simulator
 // under the Industry hub. Pick a P1–P4
-// product, set how much to make, and get the whole chain — raw
+// product, set how much to make, and get the whole chain, raw
 // needs, factory counts, extractor colonies, CPU/Power fit,
 // POCO taxes and market economics. Prices follow the house order:
 // The Forge's swept typical sell, then the stored estimated sell,

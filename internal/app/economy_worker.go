@@ -105,7 +105,7 @@ func (app *Application) fetchCharKind(ctx context.Context, ch db.Character, kind
 // Contract item warming. The contracts list is a snapshot; the
 // item list behind each contract is immutable once posted, so the
 // worker fills the contract_details store once per contract
-// (bounded per cycle) and pages render from the store only — the
+// (bounded per cycle) and pages render from the store only, the
 // killmail-detail pattern exactly.
 // ---------------------------------------------------------------------------
 

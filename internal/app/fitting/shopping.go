@@ -89,7 +89,7 @@ func (app *tool) handleFitShopping(w http.ResponseWriter, r *http.Request) {
 
 	// Aggregate typeID → qty: ship × 1 + modules × qty + charges.
 	// Charges carry no count in fitview.FitDoc (type per weapon only), so we
-	// default to 1,000 rounds per charge type — a sane shopping
+	// default to 1,000 rounds per charge type, a sane shopping
 	// default the user can adjust.
 	qtyByType := make(map[int64]int64)
 	if doc.ShipTypeID > 0 {

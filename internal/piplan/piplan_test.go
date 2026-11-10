@@ -52,7 +52,7 @@ func TestChainBroadcastNode(t *testing.T) {
 func TestCoverageAndMinimalPlanets(t *testing.T) {
 	// Coolant needs Water + Electrolytes raws: Aqueous Liquids + Ionic Solutions.
 	// Gas alone yields both, so single-planet must be Gas (or Storm? Storm has
-	// Ionic + Aqueous too — either is fine, just require completeness).
+	// Ionic + Aqueous too, either is fine, just require completeness).
 	cov := CoverageFor("Coolant", []string{"Gas"})
 	if !cov.Complete {
 		t.Fatalf("Gas should cover Coolant, got %+v", cov)

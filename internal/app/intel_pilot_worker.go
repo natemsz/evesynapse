@@ -62,8 +62,8 @@ func (app *Application) refreshPilotRecords(ctx context.Context, allowance *fetc
 // searches for names no local tier knew) inside the cycle
 // allowance. Each due name costs one public POST /universe/ids/
 // lookup; an exact character match queues that character's pilot
-// record at viewed priority, so the ordinary pilot drain — in
-// the same pass — fills the record the search is waiting on. A
+// record at viewed priority, so the ordinary pilot drain, in
+// the same pass, fills the record the search is waiting on. A
 // name with no exact character match settles as 'missing' and is
 // never asked about again; transient failures back off instead
 // of being re-asked on every cycle. Holds the shared fetch lock
@@ -220,7 +220,7 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 
 	payload := pilotPayload{Profile: profile}
 
-	// Current corporation (name + ticker), alliance, faction —
+	// Current corporation (name + ticker), alliance, faction,
 	// each is one public GET, skipped when the profile has none.
 	if profile.CorporationID > 0 && allowance.take() {
 		var corp esi.Corporation
@@ -331,16 +331,16 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 }
 
 // notePilotOrbit proactively notes pilot records for every
-// character who appears in the deployment's own data — wallet
+// character who appears in the deployment's own data, wallet
 // counterparties, contract parties, contacts, mail senders and
 // recipients, corporation rosters, corp wallet clients and
-// parties — so their /pilot/ page is already warm when a user
+// parties, so their /pilot/ page is already warm when a user
 // follows a name. Killmail participants are deliberately absent:
 // kill contexts link to zKillboard, never here. Records already
 // noted or settled are skipped, the user's own characters are
 // skipped (their names go to the full sheet), and noting is
 // bounded per cycle; the drain order (viewed wants first, then
-// the orbit) lives in the drain query. Notes only — no fetches
+// the orbit) lives in the drain query. Notes only, no fetches
 // here. Called from refreshCycle ahead of the pilot drain.
 func (app *Application) notePilotOrbit(ctx context.Context) {
 	characters, err := app.queries.ListAllCharacters(ctx)
@@ -365,9 +365,9 @@ func (app *Application) notePilotOrbit(ctx context.Context) {
 	// A character's orbit can only gain counterparties when
 	// one of the snapshots it is read from is refreshed, so a
 	// character whose newest orbit snapshot stamp is unchanged
-	// since the last scan is skipped: the ungated pass used to
-	// re-walk every ledger, roster, and division of every
-	// character every minute and re-note what it found.
+	// since the last scan is skipped, instead of re-walking
+	// every ledger, roster, and division of every character
+	// every minute and re-noting what it found.
 	orbitKinds := map[string]bool{
 		esi.SnapWalletJournal: true, esi.SnapWalletTxns: true,
 		esi.SnapContracts: true, esi.SnapContacts: true,
@@ -439,7 +439,7 @@ func (app *Application) pilotCounterpartyIDs(ctx context.Context, characterID in
 		}
 	}
 	// Contacts carry an explicit kind, so a character contact is
-	// a character even with a pre-90M ID (the oldest pilots) —
+	// a character even with a pre-90M ID (the oldest pilots),
 	// those names must warm too, not just ledger counterparties.
 	addAny := func(id int64) {
 		if id > 0 {

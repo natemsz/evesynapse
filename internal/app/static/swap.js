@@ -9,7 +9,7 @@
 // What qualifies for a swap (see shouldSwapClick): an unmodified
 // left-click on a same-origin link with no target/download marker.
 // A swap adopts whatever the fetched page carries that the shell
-// lacks — its page stylesheet (the fetched <head> does not survive
+// lacks, its page stylesheet (the fetched <head> does not survive
 // a <main>-only swap, so its links are re-created in the shell's
 // head and pruned again when a later page does not carry them) and
 // its page scripts (loaded in document order against the
@@ -17,7 +17,7 @@
 // would follow them with). Pages that redirect (an expired session
 // bounces to /), pages without a <main>, auto-refresh pages, and
 // pages whose assets fail to load always fall back to a full
-// navigation — a failed swap must never strand anyone on stale,
+// navigation, a failed swap must never strand anyone on stale,
 // half-styled or inert content.
 (function () {
   "use strict";
@@ -104,7 +104,7 @@
 
   // Pure: one comparison form for a script src. Both the
   // fetched page's list and the live document's list run through
-  // this, so a script present on both sides always cancels out —
+  // this, so a script present on both sides always cancels out,
   // including absolute cross-origin URLs, whose pathname form
   // would otherwise never equal the raw src.
   function scriptKey(src) {
@@ -132,8 +132,8 @@
       var key = scriptKey(needed[i]);
       // Edge-injected scripts (Rocket Loader, the challenge
       // platform) ride along in the fetched HTML but are never
-      // in the live document — the loader takes its own tag back
-      // out once it has run — and they are not the page's to
+      // in the live document, the loader takes its own tag back
+      // out once it has run, and they are not the page's to
       // load. Counting them here failed every swap.
       if (key.indexOf("/cdn-cgi/") === 0) continue;
       if (!seen[key] && out.indexOf(key) === -1) out.push(key);
@@ -144,7 +144,7 @@
   // Pure: the stylesheets a fetched page carries that the live
   // document does not. needed entries are { path } objects (or
   // plain path strings); loaded is a list of hrefs/pathnames in
-  // any form — both sides run through scriptKey, so the versioned
+  // any form, both sides run through scriptKey, so the versioned
   // ?v= href and the bare pathname compare equal. Edge-injected
   // sheets are never a page requirement, mirroring scriptsMissing.
   function stylesMissing(needed, loaded) {
@@ -205,7 +205,7 @@
     return true;
   }
 
-  // Pure: has this image already finished loading — and failed?
+  // Pure: has this image already finished loading, and failed?
   // A completed image holding no pixels will never fire another
   // event worth waiting for, so it is swept rather than listened
   // for.
@@ -275,7 +275,7 @@
   // tile). A resource error does not bubble, so the listener
   // sits in the capture phase; images that already failed
   // before this script ran are swept once here. Templates
-  // cannot do this themselves — the CSP allows no inline event
+  // cannot do this themselves, the CSP allows no inline event
   // handlers, which is why the swap lives here.
   document.addEventListener("error", function (ev) {
     var t = ev.target;
@@ -361,7 +361,7 @@
   }
 
   // A document's stylesheet links as { href, path, media }, in
-  // document order — the page assets a <main>-only swap would
+  // document order, the page assets a <main>-only swap would
   // otherwise throw away with the fetched <head>.
   function pageStyles(doc) {
     var out = [];
@@ -444,7 +444,7 @@
   }
 
   // adoptStyles(styles): load every sheet the page carries that
-  // the live document lacks, and wait for them — the swap paints
+  // the live document lacks, and wait for them, the swap paints
   // only once the new page's styles are in, so it never flashes
   // unstyled. Rejects when a sheet fails or stalls.
   function adoptStyles(styles) {
@@ -455,7 +455,7 @@
   }
 
   // pruneStyles(styles): drop the sheets the incoming page does
-  // not carry — adopted ones and the boot page's own alike. The
+  // not carry, adopted ones and the boot page's own alike. The
   // shell's sheets survive every prune because every page's head
   // lists them; a page sheet (the killboard's, the map's) leaves
   // with its page, so the shell does not accumulate every sheet
@@ -503,7 +503,7 @@
   // one-time initialization sees its own page, exactly as on a
   // full load, and the content-ready dispatch that follows it
   // reboots the ones that listen for it. Rejects when a script
-  // fails or stalls. Scripts are never unloaded — once adopted,
+  // fails or stalls. Scripts are never unloaded, once adopted,
   // a script stays for the session and scriptsMissing simply
   // stops asking for it.
   function adoptScripts(scripts) {
@@ -721,8 +721,8 @@
       drawer.checked = false;
       drawer.dispatchEvent(new CustomEvent("change", { bubbles: true }));
     }
-    // The scroll lands with the paint — inside the transition
-    // update callback, or immediately without one — so back and
+    // The scroll lands with the paint, inside the transition
+    // update callback, or immediately without one, so back and
     // forward arrive at the saved offset with no second jump.
     var paint = function () {
       dropHoistedModals();
@@ -759,7 +759,7 @@
     // its motion (if any) is under way. The content-ready
     // dispatch is not its tail any more: performSwap fires it
     // after the page's scripts are adopted, so a page script is
-    // listening (or has run) by the time widgets reboot — the
+    // listening (or has run) by the time widgets reboot, the
     // sequence a full load produces.
     return new Promise(function (resolve) {
       var after = function () {
@@ -783,7 +783,7 @@
     });
   }
 
-  // performSwap(url, entry, push, isCurrent) — one complete swap:
+  // performSwap(url, entry, push, isCurrent), one complete swap:
   // adopt the page's stylesheets, paint, adopt its missing
   // scripts, prune the sheets the new page does not carry, then
   // fire content-ready. An asset that fails or stalls hands the

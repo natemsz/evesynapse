@@ -35,7 +35,7 @@ const tradeIdeasPrompt = "Find the best trade opportunities from this CSV format
 
 // tradeIdeasPagePrompt is the Trade ideas page's own ask: the same
 // strategies, references and slim format as the module's, differing
-// in one way — up to twenty ideas a strategy, where the module
+// in one way, up to twenty ideas a strategy, where the module
 // lists its short top picks. The figures come from the referenced
 // rows, never from the model's text.
 const tradeIdeasPagePrompt = "Find the best trade opportunities from this CSV format list of fictional video game items for the video game EVE Online.\n\nMake it list format across four to six different categories/types of trade strategies, with up to twenty ideas in each category, best first.\n\nFormat the answer as plain markdown only: one ### header per strategy category (two to four words) with a one-line *italic description* under it, then one * bullet per idea on a single line, exactly in this shape: * **Item name** (#n) — reason. The item name must match the row it is about, and (#n) is that row's number in the first (#) column. Do NOT repeat any prices, spreads, volumes or profits in your answer — the page prints the figures from the row beside your reason, so the reason carries the judgment only: why this item, why this strategy, in one line. No tables and no other formatting."

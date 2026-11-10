@@ -343,7 +343,7 @@ test("null preset lists (empty shopping/jobs marshal) still render first load", 
   // Go marshals a nil slice as null, not []: a preset whose mask
   // leaves nothing to buy (or nothing to build) arrives with
   // shopping: null, and first load must degrade to the honest
-  // empty states — not die into the fail note. Regression pin
+  // empty states, not die into the fail note. Regression pin
   // for the capital first-load bug (crossCheck read .length on
   // the null inside setPayload, before any view could paint).
   const p = capitalPayload();
@@ -388,7 +388,7 @@ test("a plan swapped in after a page without one renders", async function () {
 // onRecalc. These tests pin that flow: the fetch carries the
 // form's values plus the submitter, a successful swap retires
 // the parked dialogs, and any failure falls back to exactly one
-// native submission that keeps its submitter — a judge pick
+// native submission that keeps its submitter, a judge pick
 // rides on the submitter, and a bare form.submit() would drop it.
 function installRecalc(opts) {
   opts = opts || {};

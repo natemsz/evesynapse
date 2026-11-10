@@ -75,7 +75,7 @@ type mailView struct {
 	UnreadKnown   bool
 	LabelChips    []mailLabelChip
 	LabelFilter   int64  // 0 = all labels
-	Box           string // inbox | sent | all — which side of the mailbox the list shows
+	Box           string // inbox | sent | all, which side of the mailbox the list shows
 	Selected      bool   // a mail is open below the list
 	Detail        *mailDetail
 	DetailID      int64 // open mail's ID, for the mark-as-read form
@@ -251,7 +251,7 @@ func (app *mod) mailRecipientDisplay(ctx context.Context, rcpt esi.MailRecipient
 // handleMailMarkRead serves POST /mail/read/: mark one
 // mail read in-game via PUT /characters/{id}/mail/{mail_id}/,
 // which needs the esi-mail.organize_mail.v1 scope. A 403 means
-// the character was linked before that scope existed — reported
+// the character was linked before that scope existed, reported
 // as "sign in again", never silently swallowed.
 func (app *mod) handleMailMarkRead(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -467,8 +467,8 @@ func (app *mod) mailRows(ctx context.Context, ch db.Character, headers esi.MailH
 	var rows []mailRow
 	for _, h := range headers {
 		// A header whose sender is the viewing character is
-		// his own copy of a mail he sent — list mail keeps
-		// one, flagged unread — never incoming mail.
+		// his own copy of a mail he sent, list mail keeps
+		// one, flagged unread, never incoming mail.
 		sent := h.From == ch.CharacterID
 		switch box {
 		case "sent":

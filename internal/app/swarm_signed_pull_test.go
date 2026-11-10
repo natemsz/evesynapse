@@ -4,7 +4,7 @@ package app
 // itself with the puller's own key on top of the shared-secret
 // bearer, and the server counts which way it let each served
 // pull in. A failed signature falls back to the bearer and is
-// never a trust verdict — authentication is not data.
+// never a trust verdict, authentication is not data.
 
 import (
 	"context"
@@ -103,7 +103,7 @@ func TestSwarmPullSignedAuth(t *testing.T) {
 	}
 
 	// An instance this server has never pinned cannot sign its
-	// way in, bearer or none — signed-only here, so 403.
+	// way in, bearer or none, signed-only here, so 403.
 	stranger, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint stranger: %v", err)

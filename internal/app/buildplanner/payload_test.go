@@ -212,7 +212,7 @@ func TestPlanShoppingKnownNodeCoversPricedLines(t *testing.T) {
 
 // TestPlanShoppingExcludesRoot: when optimized buys the finished
 // product outright (its price undercuts the build cost), the
-// product itself must not appear as a shopping line — the buy
+// product itself must not appear as a shopping line, the buy
 // verdict lives in the header, and the Avatar is not an input to
 // its own build. The bought cost still accrues to the money
 // totals; only the aggregation skips the root, on both sides of
@@ -347,7 +347,7 @@ func TestPlanSkillsAreOneCharacters(t *testing.T) {
 	}
 }
 
-// TestPlanPayloadOrigins: leaf origins ride the payload — a PI
+// TestPlanPayloadOrigins: leaf origins ride the payload, a PI
 // commodity by name (tier from the PI planner's own table), a
 // reaction product by SDE group, ordinary minerals unclassified,
 // buildable nodes unclassified.

@@ -13,7 +13,7 @@ import (
 // Blueprint pins: the production lines an account keeps. A pin is
 // set from the Blueprints page (/industry/), one toggle on each
 // blueprint row, and stored per account (blueprint_pins, schema
-// 118) — the same set whichever character's library set it. The
+// 118), the same set whichever character's library set it. The
 // home Production Lines widget reads the pins; nothing else does.
 // ---------------------------------------------------------------------------
 

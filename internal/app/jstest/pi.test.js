@@ -1,7 +1,7 @@
 "use strict";
 // Live-coverage harness for pi.js: ticking planet checkboxes must
 // recompute the coverage verdict and the missing-tile flags in
-// place — the exact behavior whose absence left the server-rendered
+// place, the exact behavior whose absence left the server-rendered
 // banner contradicting the map.
 const assert = require("node:assert");
 const test = require("node:test");
@@ -142,7 +142,7 @@ function install(opts) {
 
 test("coverage verdict and missing flags follow the checkboxes live", function () {
   const { tiles, boxes, verdict } = install();
-  // Boot state: Barren ticked, Temperate not — Autotrophs (Temperate
+  // Boot state: Barren ticked, Temperate not, Autotrophs (Temperate
   // only) is missing, and its P1 child flags with it.
   assert.match(verdict.textContent, /^Not covered: 0 of 1 raw resources available\. Missing: Autotrophs$/);
   assert.strictEqual(verdict.className, "pi-coverage neg");

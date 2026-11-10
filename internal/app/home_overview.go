@@ -249,7 +249,7 @@ type homeLayoutItem struct {
 // parseHomeLayout normalizes a persisted layout: unknown ids
 // dropped, duplicates dropped, order preserved. Empty storage
 // (or unparseable JSON) yields the default layout; a saved empty
-// array is honored — the user turned everything off.
+// array is honored, the user turned everything off.
 //
 // Three storage formats load: v1, the bare id array (["fleet", ...]);
 // v2, objects with a span preference ({"id":"market","span":"wide"}),
@@ -308,7 +308,7 @@ func parseHomeLayoutEntry(entry json.RawMessage) (homeLayoutItem, bool) {
 	return item, true
 }
 
-// encodeHomeLayout serializes a normalized layout for storage —
+// encodeHomeLayout serializes a normalized layout for storage,
 // always in the v3 object format (size omitted while default).
 func encodeHomeLayout(items []homeLayoutItem) string {
 	if items == nil {
@@ -350,7 +350,7 @@ func homeCap(h int) int { return 3 + 5*(h-1) }
 // ---------------------------------------------------------------------------
 // Snapshot store: one batched read of the kinds the visible
 // widgets need, decoded per character on demand. Rendering never
-// calls esi.Get/GetCached — a stale or missing snapshot dims its
+// calls esi.Get/GetCached, a stale or missing snapshot dims its
 // own widget, exactly like every other page.
 // ---------------------------------------------------------------------------
 
@@ -373,7 +373,7 @@ var widgetSnapshotKinds = map[string][]string{
 }
 
 // charSnaps is one character's decoded snapshot bundle. Fields
-// stay nil/false when the snapshot is absent or undecodable —
+// stay nil/false when the snapshot is absent or undecodable,
 // builders treat that as "unknown", never as an error.
 type charSnaps struct {
 	ch db.Character
@@ -638,8 +638,8 @@ func (b *charSnaps) corpID() int64 {
 	return 0
 }
 
-// currentEntry returns the queue's head entry (position 0) — the
-// skill training right now — or nil.
+// currentEntry returns the queue's head entry (position 0), the
+// skill training right now, or nil.
 // queueState summarizes a character's training: known is false
 // until the skillqueue snapshot exists; training is true when a
 // future-dated entry remains; finishedAt is the last finish when
@@ -1038,7 +1038,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	var asOf time.Time
 	// Valuation prices resolve in the house order (truevalue.go):
 	// The Forge's swept typical sells, then the stored true-value
-	// estimated sell — a contract-traded hull in a hangar values
+	// estimated sell, a contract-traded hull in a hangar values
 	// at its estimated sell, not CCP's fossil. The guide's
 	// average prices nothing.
 	typicals := app.TypicalSells(ctx)
@@ -1125,7 +1125,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	}
 	// Net worth over time from the daily sampler (schema 019):
 	// a chart once two sampled days exist, a "building"
-	// note before that. Stored rows only — no fetching here.
+	// note before that. Stored rows only, no fetching here.
 	app.attachNetWorthHistory(ctx, w, userID)
 	app.attachNetWorthSpark(ctx, w, userID)
 	return w
@@ -1413,7 +1413,7 @@ func (app *Application) marketHealthLine(ctx context.Context, shared *homeMarket
 // buildPI assembles the planetary-industry widget: colonies
 // across the fleet, how many extractor heads have stopped, and
 // the soonest extractor deadlines (expired first, most overdue
-// leading). Deadlines come from layout expiry fields only —
+// leading). Deadlines come from layout expiry fields only,
 // fixed at install time, the one PI number ESI keeps honest.
 func (app *Application) buildPI(ctx context.Context, bundles []*charSnaps) *piWidget {
 	now := time.Now()
@@ -1488,11 +1488,10 @@ func (app *Application) buildPI(ctx context.Context, bundles []*charSnaps) *piWi
 // builds the same widgets (they render live under the arrange
 // controls) and adds the catalog state on top.
 // homeMarketShared carries one home render's order-health and
-// watchlist rows. The Briefing, the market widget and the
-// watchlist widget each used to query both tables for themselves,
-// so a default-layout render read them up to three times; here
-// each is fetched at most once, on first use, and a failed fetch
-// reads as no rows for every consumer alike.
+// watchlist rows for the Briefing, the market widget and the
+// watchlist widget: each table is fetched at most once, on first
+// use, and a failed fetch reads as no rows for every consumer
+// alike.
 type homeMarketShared struct {
 	app       *Application
 	userID    int64
@@ -1860,7 +1859,7 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 		case "size":
 			// Resize one widget on the home; both sizes must be
 			// whole cells inside the module's bounds (its floor
-			// and ceiling), else nothing changes — and a scripted
+			// and ceiling), else nothing changes, and a scripted
 			// caller is told so, so it can put the size back.
 			wv, werr := strconv.Atoi(r.FormValue("w"))
 			hv, herr := strconv.Atoi(r.FormValue("h"))

@@ -24,7 +24,7 @@ import (
 // contents amounts and last_cycle_start are only recalculated when the
 // colony is viewed in the game client, so they are never shown; the
 // page footnotes why. A character whose login predates the planetary
-// scope sees the recorded "not enabled — re-link" state.
+// scope sees the recorded "not enabled, re-link" state.
 // ---------------------------------------------------------------------------
 
 // extractorInfo is one extractor pin distilled for display and
@@ -125,8 +125,8 @@ func (app *Application) characterPISummary(ctx context.Context, ch db.Character)
 // durable planet_names table), the id fallback until
 // then. An unresolved id is noted as a want so the worker
 // resolves it in the background; the page never waits on it.
-// Every PI surface — colonies page, home widget, attention and
-// briefing lines — renders planets through here.
+// Every PI surface, colonies page, home widget, attention and
+// briefing lines, renders planets through here.
 func (app *Application) planetDisplayName(ctx context.Context, planetID int64) string {
 	if name, ok := app.esi.CachedPlanetName(ctx, planetID); ok && name != "" {
 		return name
@@ -357,7 +357,7 @@ func (app *Application) colonyRowsFor(ctx context.Context, ch db.Character, now 
 
 // colonyLayoutRows distills one layout into display rows: the
 // extractors (with expiry state), the factories (schematic names
-// from the warmed schematic cache — ESI exposes no input/output
+// from the warmed schematic cache, ESI exposes no input/output
 // bill for a schematic, so none is invented), and a tally of the
 // remaining pins by type.
 func (app *Application) colonyLayoutRows(ctx context.Context, layout esi.PlanetLayout, now time.Time) ([]extractorRow, []factoryRow, string) {

@@ -52,7 +52,7 @@ func TestSessionCharIDMissing(t *testing.T) {
 	}
 }
 
-// TestPickCharacterViewDoesNotPin: a view pick (?view=1 — the
+// TestPickCharacterViewDoesNotPin: a view pick (?view=1, the
 // links notifications and the briefing carry) renders the named
 // character's page without moving the session's acting character.
 // A plain pick still pins: the character switcher relies on it.
@@ -81,10 +81,10 @@ func TestPickCharacterViewDoesNotPin(t *testing.T) {
 	}
 
 	if active, pin := run("/character/?character=90000002&view=1"); active != fixtureCharB || pin != fixtureCharA {
-		t.Errorf("view pick: active %d, pin %d — want Bravo (%d) shown with the pin still on Alpha (%d)",
+		t.Errorf("view pick: active %d, pin %d, want Bravo (%d) shown with the pin still on Alpha (%d)",
 			active, pin, fixtureCharB, fixtureCharA)
 	}
 	if active, pin := run("/character/?character=90000002"); active != fixtureCharB || pin != fixtureCharB {
-		t.Errorf("plain pick: active %d, pin %d — want both on Bravo (%d)", active, pin, fixtureCharB)
+		t.Errorf("plain pick: active %d, pin %d, want both on Bravo (%d)", active, pin, fixtureCharB)
 	}
 }

@@ -20,8 +20,8 @@ func closeFloat(t *testing.T, what string, got, want float64) {
 }
 
 // Foresight (foresight.go): the worker warms data because something
-// happened in the game — a docking, a job finishing, an undercut,
-// an empty skill queue, a war — scored by learned chance times
+// happened in the game, a docking, a job finishing, an undercut,
+// an empty skill queue, a war, scored by learned chance times
 // staleness over cost, and settled free when already fresh.
 
 func foresightPendingTargets(t *testing.T, q *db.Queries, now time.Time) []db.ForesightTarget {

@@ -1,7 +1,7 @@
 package app
 
 // Tests for who counts as an administrator: the account, through
-// any of its characters listed in EVE_ADMIN_CHARACTER_IDS — not
+// any of its characters listed in EVE_ADMIN_CHARACTER_IDS, not
 // only while that character is the one selected in the header.
 
 import (

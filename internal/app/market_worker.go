@@ -28,7 +28,7 @@ import (
 // Market worker pass: keeps market_history warm for a maintained
 // coverage set, warmed before anyone clicks, and computes
 // per-order health from regional order books. Everything here is
-// public ESI — no character token. It spends from the market
+// public ESI, no character token. It spends from the market
 // pass's own fetch lane (maxMarketFetchesPerCycle), never the
 // character pass's budget, and a 420/429 stops it until the
 // next cycle.
@@ -36,17 +36,17 @@ import (
 // What gets history, in priority order (the first tiers win the
 // per-cycle fetch cap on a cold start; everything eventually
 // converges and stays fresh):
-//   1. item-page "wants" (a user opened a type with no rows yet —
+//   1. item-page "wants" (a user opened a type with no rows yet,
 //      someone is staring at that page, the strongest signal),
-//   2. watchlist entries (any user's — the alerts read them),
+//   2. watchlist entries (any user's, the alerts read them),
 //   3. types with open orders on file (their regions ride along),
 //   4. the liquid core: top types by ISK velocity in The Forge,
 //      ranked from our own stored history (with a cold-start
 //      supplement from recent killmail details),
-//   5. the orbit: everything the deployment's characters touch —
+//   5. the orbit: everything the deployment's characters touch,
 //      asset inventories, industry job products and their
 //      blueprint products, saved-fitting types, contract item
-//      types — kept at The Forge.
+//      types, kept at The Forge.
 // A pair is refetched at most once per 20h; CCP's aggregates are
 // daily, so fresher would be waste. Order books gate at 10
 // minutes on the same fetch-state table (orders Expires on the
@@ -241,7 +241,7 @@ func (app *Application) fetchHistoryWindow(ctx context.Context, keys []marketKey
 
 // fetchAndStoreHistory downloads one pair's daily aggregates,
 // upserts them, and settles the fetch state. fetched reports a
-// successful read (even an empty one — that still settles the
+// successful read (even an empty one, that still settles the
 // pair); limited reports ESI's stop signal. Shared by the cycle's
 // history pass and the urgent want drain.
 func (app *Application) fetchAndStoreHistory(ctx context.Context, key marketKey) (fetched, limited bool) {
@@ -336,7 +336,7 @@ func (app *Application) historyFetchableTypes(ctx context.Context) map[int64]boo
 }
 
 // historyCandidates builds the prioritized fetch queue: viewed-item
-// wants first (someone is staring at that page — the strongest
+// wants first (someone is staring at that page, the strongest
 // signal the app gets), then watchlist pairs, then types with open
 // orders (the region each order sits in). A type outside the
 // fetchable set (historyFetchableTypes) is never queued: ESI
@@ -440,7 +440,7 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 // summed over the region's newest seven stored days, capped at
 // liquidCoreSize. Before any history exists the ranking is empty,
 // so the tail is supplemented from the types in recent killmail
-// details — the ships and modules the deployment actually loses —
+// details, the ships and modules the deployment actually loses,
 // until the stored ranking can stand on its own.
 //
 // The ranking scans the region's whole stored history (seconds,
@@ -937,11 +937,11 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 
 // computeOrderHealth judges one open sell order against a
 // regional book's sell side. The book includes the user's own
-// orders — ESI doesn't say which are whose — so the semantics are
+// orders, ESI doesn't say which are whose, so the semantics are
 // deliberately simple: an undercut is any book price at least
 // 0.01 ISK below the order's own price. (The user's own orders can
 // never sit below the order being judged, so a cheaper entry is
-// always somebody else's — possibly another of the user's own
+// always somebody else's, possibly another of the user's own
 // characters, which still means this order is not the front of
 // the queue.)
 //

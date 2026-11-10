@@ -375,7 +375,7 @@ func TestContractSearchCardRows(t *testing.T) {
 // swap contract: an in-page swap replaces the results DOM
 // without re-running the script, so the page wiring must
 // re-run on the shell's content-ready event (guarded by the
-// form's identity, like pi.js) — without it, row expansion
+// form's identity, like pi.js), without it, row expansion
 // and every other wired behavior are dead after any
 // same-page navigation such as a quick-hunt click.
 func TestContractSearchSwapRewiring(t *testing.T) {
@@ -397,7 +397,7 @@ func TestContractSearchSwapRewiring(t *testing.T) {
 // TestContractSearchDrawerGrid pins the spec drawers'
 // deterministic grid in contracts.css: fixed tracks and
 // per-field spans, never the auto-fit rule whose column
-// widths depended on field count — and the deals box's
+// widths depended on field count, and the deals box's
 // resting green identity.
 func TestContractSearchDrawerGrid(t *testing.T) {
 	raw, err := fs.ReadFile(staticFS, "static/contracts.css")
@@ -489,7 +489,7 @@ func TestContractPanelAbyssal(t *testing.T) {
 // TestContractSearchAbyssalInline pins the mutaplasmid
 // stats presentation after the redesign: the row carries
 // the score pill alone and the rolls render inline in the
-// expansion drawer's attributes card — the popup the old
+// expansion drawer's attributes card, the popup the old
 // design opened over the results is retired from the
 // search page entirely, markup, wiring and paint alike.
 // (The contract detail page keeps its own full inline

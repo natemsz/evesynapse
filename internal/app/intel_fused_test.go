@@ -18,8 +18,8 @@ import (
 )
 
 // The fixture pilots: the production fused blob's roster, the
-// spaced roster's extra names, the fragment pilots the plain
-// reading used to tag inside longer names, and a mini roster
+// spaced roster's extra names, the fragment pilots whose names
+// sit inside longer names, and a mini roster
 // nobody has looked up yet. IDs and corporations are fixture
 // values; the names are the production ones.
 type fusedPilot struct {

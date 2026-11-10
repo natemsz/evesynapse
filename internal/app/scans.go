@@ -2099,7 +2099,7 @@ type scanPageView struct {
 	// or their session) and may fix its system.
 	CanCorrect bool
 	// HasRail: the reading renders with the group, related
-	// and tools rail beside it — set when any of them shows.
+	// and tools rail beside it, set when any of them shows.
 	HasRail bool
 	// TypeValues is a d-scan's priced hulls, biggest first;
 	// ValueText the total, short.
@@ -2116,7 +2116,7 @@ type scanPageView struct {
 // scanStripSeg is one segment of a proportional strip: its
 // label, its count, its share of the whole in percent
 // (the legend's figure; the segment's width is its count
-// against the others, set by flex), and its tone — an
+// against the others, set by flex), and its tone, an
 // index into the strip palette classes in scans.css (the
 // CSP keeps style attributes out of the markup, so colors
 // and widths arrive as classes and custom properties).

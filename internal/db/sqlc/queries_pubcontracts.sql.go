@@ -925,7 +925,7 @@ type ListAbyssalFamilyMetaVariantsRow struct {
 
 // Every family's rollable attributes with their mutator multiplier spans,
 // base modules (observed sources and ordinary group ladder types), and base values.
-// Used to render Mutamarket-style roll sliders with real attribute bounds and
+// The roll sliders read these for real attribute bounds and
 // meta variant indicators on the track.
 func (q *Queries) ListAbyssalFamilyMetaVariants(ctx context.Context) ([]ListAbyssalFamilyMetaVariantsRow, error) {
 	rows, err := q.db.Query(ctx, listAbyssalFamilyMetaVariants)

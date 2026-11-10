@@ -54,7 +54,7 @@ func defaultOrdersWidgetConfig() ordersWidgetConfig {
 }
 
 // parseOrdersWidgetConfig decodes a stored blob, normalizing
-// every field back to the default when it is missing or junk —
+// every field back to the default when it is missing or junk,
 // a corrupted config must degrade to the default scope, never
 // break the home.
 func parseOrdersWidgetConfig(blob string) ordersWidgetConfig {
@@ -151,8 +151,8 @@ func userTags(chars []db.Character) []string { return tags.InUse(chars) }
 
 // handleWidgetConfig saves one widget's settings (POST
 // /home/widget-config, today only the orders widget's scope and
-// merge mode). The choices are validated against the account —
-// a character must be linked, a tag must be in use — so a stale
+// merge mode). The choices are validated against the account,
+// a character must be linked, a tag must be in use, so a stale
 // or hand-crafted form falls back to the all-characters scope
 // instead of stranding the widget on nothing. Like the layout
 // handler, XHR callers get a bare 200 and plain forms bounce

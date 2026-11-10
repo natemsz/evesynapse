@@ -239,7 +239,7 @@ func TestContractDetailPages(t *testing.T) {
 	// note names the excess instead of a share over the
 	// whole. (The 85% "of value" wording is pinned above.)
 	// The results row carries no asking-framing note at
-	// all after the redesign — value, coverage and a
+	// all after the redesign, value, coverage and a
 	// positive spread are its whole vocabulary.
 	if _, err := conn.ExecContext(context.Background(),
 		`UPDATE pub_contracts SET deal_ratio=1.54 WHERE contract_id=7001`); err != nil {

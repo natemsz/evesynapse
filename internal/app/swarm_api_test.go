@@ -230,7 +230,7 @@ func TestSwarmStagingGate(t *testing.T) {
 	}
 
 	// Unknown signer, served by peer-a: no pinned key, no
-	// stage — and the serving peer is at fault, not the named
+	// stage, and the serving peer is at fault, not the named
 	// stranger (naming someone else must never frame them).
 	other, err := swarm.MintSwarmIdentity()
 	if err != nil {
@@ -246,7 +246,7 @@ func TestSwarmStagingGate(t *testing.T) {
 	}
 
 	// Wrong key: another instance's signature under peer-a's
-	// name, served by peer-a — peer-a's ledger takes it.
+	// name, served by peer-a, peer-a's ledger takes it.
 	forged, err := swarm.SignSwarmEntry(other, "peer-a", swarm.SwarmKindTypeName, "36", `{"type_id":36,"name":"Mexallon"}`, now)
 	if err != nil {
 		t.Fatalf("sign forged: %v", err)
@@ -321,7 +321,7 @@ func TestSwarmGoodRecordNeverExcludes(t *testing.T) {
 	if got.Excluded {
 		t.Fatalf("good peer excluded")
 	}
-	// 30 good checks: (30+9)/(30+10) = 0.975 — the prior
+	// 30 good checks: (30+9)/(30+10) = 0.975, the prior
 	// keeps a good peer near the top without ever calling it
 	// perfect.
 	if trust := swarm.SwarmTrust(got.GoodChecks, got.BadChecks); trust < 0.975 {

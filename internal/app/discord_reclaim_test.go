@@ -7,7 +7,7 @@ import (
 )
 
 // TestDiscordServerReclaimClearsPreviousOwnersRules: a server the
-// bot is added to again for a DIFFERENT owner starts clean — the
+// bot is added to again for a DIFFERENT owner starts clean, the
 // recorded owner's role rules, channel access, auto-join and
 // removals do not stay in force under the new owner. A re-add by
 // the same owner changes nothing.

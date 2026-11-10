@@ -1,6 +1,6 @@
 // Package appraise is the Appraisal module (/market/appraise/):
-// paste a list of items — a fit, a cargo scan, an asset window,
-// a loot haul — and get every line priced by the appraisal core
+// paste a list of items, a fit, a cargo scan, an asset window,
+// a loot haul, and get every line priced by the appraisal core
 // (core's house price order over stored data only), with the
 // tier that spoke and its as-of on each line, and coverage next
 // to every total. Appraisals are saved as snapshots (schema

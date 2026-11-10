@@ -20,8 +20,8 @@ func StartSleep(t *testing.T) *exec.Cmd {
 	}
 	// One goroutine reaps the process the moment it dies, whoever
 	// kills it. An unreaped child lingers as a zombie that still
-	// answers signal-0 — exactly why the real deployment relies on
-	// the service manager reaping promptly — and waiting on the
+	// answers signal-0, exactly why the real deployment relies on
+	// the service manager reaping promptly, and waiting on the
 	// same Cmd from two places is a data race.
 	reaped := make(chan struct{})
 	go func() {

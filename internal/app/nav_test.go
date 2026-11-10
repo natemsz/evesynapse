@@ -323,7 +323,7 @@ func TestSectionGroups(t *testing.T) {
 // the same map the tab strip renders from: each grouped
 // section's menu carries its group headings in map order, each
 // group's pages in nav order, and every page appears under
-// exactly one heading — a grouping that exists in the strip but
+// exactly one heading, a grouping that exists in the strip but
 // not the menu (or the other way round) fails here. Ungrouped
 // sections get no menu groups at all.
 func TestNavGroupsMirror(t *testing.T) {

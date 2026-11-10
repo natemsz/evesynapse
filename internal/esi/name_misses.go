@@ -2,12 +2,12 @@ package esi
 
 // ---------------------------------------------------------------------------
 // Durable name misses (schema 100). The negative caches for names ESI
-// has definitively refused (charNameMisses, typeIDMisses) used to
-// live in-process only, so every restart re-asked every known-bad ID
-// once: deleted characters (404), invalid ids (422), type ids the
-// universe route refuses. Each miss is now written to esi_name_misses
-// as well, and a process loads the recent ones the first time it
-// asks. A miss is trusted for nameMissTrust, then asked once more.
+// has definitively refused (charNameMisses, typeIDMisses) are also
+// written to esi_name_misses, and a process loads the recent ones the
+// first time it asks, so a restart does not re-ask every known-bad
+// ID: deleted characters (404), invalid ids (422), type ids the
+// universe route refuses. A miss is trusted for nameMissTrust, then
+// asked once more.
 // ---------------------------------------------------------------------------
 
 import (
@@ -30,7 +30,7 @@ const (
 
 // loadNameMisses fills the negative caches from the stored misses,
 // once per process. A failed read leaves them as they are: the
-// worst case is the old behaviour, each bad id asked once more.
+// worst case is each bad id asked once more.
 func (c *Client) loadNameMisses() {
 	c.nameMissOnce.Do(func() {
 		if c.queries == nil {

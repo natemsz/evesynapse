@@ -2,7 +2,7 @@ package appraise
 
 // The paste parsers. A paste arrives as one of the shapes
 // players actually copy: an EFT fit (handled by the fitting
-// tool's own parser, see appraise.go), or a line list — plain
+// tool's own parser, see appraise.go), or a line list, plain
 // lists, multibuy lines, cargo-scan and asset-window copies.
 // The list parser is deliberately liberal: it does not decide
 // what a line means, it produces name candidates in precedence
@@ -122,7 +122,7 @@ func parseQtyToken(s string) (int64, bool) {
 }
 
 // isNumberToken reports whether a token is all digits and
-// commas — including "000", a thousand group that is not a
+// commas, including "000", a thousand group that is not a
 // quantity by itself. A whole decimal ("20.0") counts too.
 func isNumberToken(s string) bool {
 	s = strings.ReplaceAll(s, ",", "")
@@ -212,7 +212,7 @@ func stripAnnotation(work string) (string, *pasteLine) {
 }
 
 // trailingReadings reads quantities off the end of a name:
-// the trailing run of number tokens, in two readings — the
+// the trailing run of number tokens, in two readings, the
 // whole run as one thousand-grouped number ("Tritanium
 // 1 000 000"), and just the last token ("Widget 5 250": the
 // type is "Widget 5", the quantity 250). Both are candidates;
@@ -290,7 +290,7 @@ func candidates(name string, qty int64, qtyExplicit bool) []nameCandidate {
 // linkCandidates builds a linked line's name readings: a
 // link names one unique (usually mutated) item, so when its
 // rolls cannot price it the honest fallback is its base
-// item — the mutation-stripped reading goes first, the name
+// item, the mutation-stripped reading goes first, the name
 // as linked second. Quantity is 1: the link is one item,
 // whatever quantity text surrounds it.
 func linkCandidates(name string) []nameCandidate {

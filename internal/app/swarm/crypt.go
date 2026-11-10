@@ -8,7 +8,7 @@ package swarm
 // 1. The /swarm/members endpoint is bearer-gated (swarm/api.go),
 //    so only secret-holders can fetch it at all. On top of that
 //    the list payload itself is sealed under a key derived from
-//    the shared secret — a leaked, cached, or logged response
+//    the shared secret, a leaked, cached, or logged response
 //    still decodes for members alone.
 //
 // 2. Pages never show raw instance IDs or addresses for peers

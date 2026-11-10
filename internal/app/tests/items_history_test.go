@@ -9,7 +9,7 @@ import (
 )
 
 // The item browser's price history is the Market page's history
-// section — same chart, same states, same warming — not the bare
+// section, same chart, same states, same warming, not the bare
 // sparkline it used to draw. These tests pin both ends of that
 // contract: stored rows render the full chart, and no rows render
 // the live pending section that polls the shared fragment while
@@ -98,7 +98,7 @@ func TestItemPageHistoryPendingQueuesWant(t *testing.T) {
 		t.Fatalf("item page status = %d", code)
 	}
 	// No stored history: the section is the market's live pending
-	// state — it names the shared fragment it will poll until the
+	// state, it names the shared fragment it will poll until the
 	// chart swaps in, without the reader going anywhere.
 	apptest.MustContain(t, "/items/type/34/ (pending)", body,
 		"Price history, The Forge",

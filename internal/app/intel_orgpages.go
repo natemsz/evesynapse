@@ -40,7 +40,7 @@ const (
 // Drain bounds: the seeded universe (every alliance, every
 // roster corporation) drains through the same queues as lookups
 // a human just asked for, so the per-cycle cap is sized for the
-// backlog — the shared fetch allowance stays the real governor.
+// backlog, the shared fetch allowance stays the real governor.
 // A drain is one or two of ESI's cheapest public calls, which it
 // answers far faster than this ever asks (the bulk name fill pulls
 // hundreds a second without complaint), so organization records get
@@ -462,8 +462,8 @@ func (app *Application) corpNamePending(ctx context.Context, corpID int64) bool 
 }
 
 // corpDisplayName resolves a corporation's display name from the
-// local tiers — the in-process cache, then a ready organization
-// record — noting a viewed-priority want while it is unresolved
+// local tiers, the in-process cache, then a ready organization
+// record, noting a viewed-priority want while it is unresolved
 // so the name (and its page) warm in the background. The
 // "Corporation #<id>" fallback is the answer until then. Shared
 // by every surface that renders a corporation name.

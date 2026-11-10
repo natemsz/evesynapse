@@ -17,7 +17,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// The Briefing home module — a since-you-last-looked
+// The Briefing home module, a since-you-last-looked
 // digest computed entirely from cached data. A background worker
 // keeps every snapshot this reads warm, so the facts are already
 // here when the user arrives; the module only reads local tables
@@ -37,9 +37,9 @@ import (
 //     extractors running dry, calendar events, courier deadlines.
 //
 // The window is anchored per account (users.last_briefing_at,
-// migration 017): it starts at the previous anchor — the last 24
+// migration 017): it starts at the previous anchor, the last 24
 // hours when the module has never rendered, never more than 7
-// days back — and advances after a normal home render that
+// days back, and advances after a normal home render that
 // included the module. A home without the module never moves
 // the anchor, and neither does a Customize pass.
 // ---------------------------------------------------------------------------
@@ -130,7 +130,7 @@ type briefingWidget struct {
 	Dismissed  []briefingItem
 	Counts     briefingCounts
 	More       int    // qualifying lines hidden past the cap
-	SinceLabel string // "Oct 2, 21:41" — window start as shown
+	SinceLabel string // "Oct 2, 21:41", window start as shown
 }
 
 // briefingItem is one rendered line and its severity.
@@ -448,7 +448,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 		return lines[i].At.Before(lines[j].At)
 	})
 	// Dismissals: a line the account hid moves out of the stacks
-	// into the dismissed list while it still applies — hiding is
+	// into the dismissed list while it still applies, hiding is
 	// not deleting, the line is recomputed on every render. A
 	// stored dismissal whose line no longer applies is pruned
 	// here, so the stored set only ever holds live hides.

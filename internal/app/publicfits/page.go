@@ -327,7 +327,7 @@ func (app *page) handlePublicFits(w http.ResponseWriter, r *http.Request) {
 	// One query serves the page: the filtered total rides every row
 	// (COUNT(*) OVER()). A page past the end returns no rows to read
 	// the total from, so probe the first page once, then clamp and
-	// list the clamped page — the same page the old count-first flow
+	// list the clamped page, the same page the old count-first flow
 	// rendered for an out-of-range request.
 	rows, err := app.queries.ListPublicFits(ctx, filters.listParams(publicFitsPerPage))
 	if err != nil {
@@ -560,7 +560,7 @@ func (app *page) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
 	view.Sections, view.Sim, view.EFT, view.Preparing = body.Sections, body.Sim, body.EFT, body.Preparing
 	// Links out need an absolute address to point back at.
 	if view.PageURL != "" {
-		view.ShareDiscord = row.Name + " (" + ship + ") — " + view.PageURL
+		view.ShareDiscord = row.Name + " (" + ship + "): " + view.PageURL
 		view.ShareReddit = "https://www.reddit.com/submit?url=" + url.QueryEscape(view.PageURL) + "&title=" + url.QueryEscape(row.Name+" ("+ship+")")
 	}
 	if userID > 0 {
@@ -628,7 +628,7 @@ func (app *page) handleSharedFitPage(w http.ResponseWriter, r *http.Request) {
 	}
 	view.Sections, view.Sim, view.EFT, view.Preparing = body.Sections, body.Sim, body.EFT, body.Preparing
 	if view.PageURL != "" {
-		view.ShareDiscord = row.Name + " (" + ship + ") — " + view.PageURL
+		view.ShareDiscord = row.Name + " (" + ship + "): " + view.PageURL
 		view.ShareReddit = "https://www.reddit.com/submit?url=" + url.QueryEscape(view.PageURL) + "&title=" + url.QueryEscape(row.Name+" ("+ship+")")
 	}
 	// The creator is whoever's browser holds the fitting

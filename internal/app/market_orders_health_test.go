@@ -163,9 +163,9 @@ func TestCorpOrdersHealthAndLocation(t *testing.T) {
 
 	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpInfo, `{"name":"Fixture Corp","ticker":"FXC","member_count":3}`)
 	// 800: placed by the CEO char, health-checked (undercut).
-	// 801: placed by a corp mate the app doesn't sync — blank.
+	// 801: placed by a corp mate the app doesn't sync, blank.
 	// 802: placed by the account's second char, not checked yet.
-	// 803: a buy from the CEO char — no verdict by design.
+	// 803: a buy from the CEO char, no verdict by design.
 	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpOrders, []esi.CorpOrder{
 		{OrderID: 800, TypeID: 587, LocationID: 60003760, RegionID: 10000002, Price: 1000000, VolumeTotal: 5, VolumeRemain: 3, Duration: 90, Issued: issued, IssuedBy: fixtureCharA},
 		{OrderID: 801, TypeID: 587, LocationID: 60003760, RegionID: 10000002, Price: 1000000, VolumeTotal: 5, VolumeRemain: 3, Duration: 90, Issued: issued, IssuedBy: fixtureMember},

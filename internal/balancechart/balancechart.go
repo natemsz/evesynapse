@@ -25,7 +25,7 @@ type BalancePoint struct {
 //   - journal entries contribute their post-transaction balance
 //     (fine-grained, recent window);
 //   - daily samples contribute one point per sampled day, but
-//     only for the stretch *before* the journal window opens —
+//     only for the stretch *before* the journal window opens,
 //     inside the window the journal's own points are strictly
 //     better, so a sample landing there is dropped (the seam);
 //   - the current wallet snapshot ("now") extends the line to
@@ -152,7 +152,7 @@ type BalanceDot struct {
 }
 
 // BuildBalanceChart turns an ascending series into SVG
-// geometry. ok=false under two points — one point is a fact,
+// geometry. ok=false under two points, one point is a fact,
 // not a shape, and the UI says so instead of drawing one.
 func BuildBalanceChart(points []BalancePoint) (BalanceChart, bool) {
 	if len(points) < 2 {

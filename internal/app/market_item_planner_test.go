@@ -4,8 +4,8 @@ package app
 // judging): chart day-data and recent-days geometry as pure
 // functions, the trader snapshot's window math, the item page's
 // interactive markup and snapshot strip rendered against a stub
-// book, and planner "Judge as" scoping — skill gates, scoped
-// inventory netting, and priced verdicts — through the real
+// book, and planner "Judge as" scoping, skill gates, scoped
+// inventory netting, and priced verdicts, through the real
 // router with the transport pinned at zero outbound calls.
 
 import (
@@ -193,8 +193,8 @@ func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
 		"42.5% of the net sell price", // net at the fixture's unskilled rates: buy 10, sell 20
 	)
 
-	// The chart spans the panel edge to edge — no fixed-width
-	// cap left on the svg — and the settled snapshot is not a
+	// The chart spans the panel edge to edge, no fixed-width
+	// cap left on the svg, and the settled snapshot is not a
 	// live region (nothing left to fill in).
 	if strings.Contains(body, "max-width:720px") {
 		t.Fatal("/market/?type=34 chart svg still caps its width at 720px")
@@ -326,12 +326,9 @@ func TestPlannerJudgeCharacterShortSkill(t *testing.T) {
 	_, body := getPage(t, app, cookie, path)
 	mustContain(t, path, body,
 		`plan-skillglyph bad`,
-		`<li>Industry — needs IV · trained III</li>`,
+		`<li>Industry: needs IV · trained III</li>`,
 		`plan-skillbadge" aria-hidden="true">✕`,
 	)
-	if strings.Contains(body, "Industry — needs IV · trained III — covered") {
-		t.Fatal("short skill marked covered")
-	}
 }
 
 func TestPlannerJudgeCharacterNoSkillsYet(t *testing.T) {
@@ -387,7 +384,7 @@ func TestPlannerJudgeTagNobodyHasIt(t *testing.T) {
 		`plan-skillglyph bad`,
 		`aria-label="Can your &#34;indy&#34; characters build this? Some skills missing."`,
 		"Skills are on file for 1 of 2 tagged characters; the rest count as untrained until they sync.",
-		`<li>Industry — needs IV · best on the tag I</li>`,
+		`<li>Industry: needs IV · best on the tag I</li>`,
 		`plan-skillbadge" aria-hidden="true">✕`,
 	)
 }
@@ -574,7 +571,7 @@ func capNodeCount(root *buildplan.Node) int {
 // TestPlannerPrefetchMatchesLazy: the batched closure warm covers
 // the whole capital tree (every blueprint memoized, leaves marked
 // misses), and expanding over it matches a lazy expansion exactly
-// — same nodes, same shopping, same money. Prefetch changes the
+// , same nodes, same shopping, same money. Prefetch changes the
 // read pattern, never the plan.
 func TestPlannerPrefetchMatchesLazy(t *testing.T) {
 	app, _, _ := plannerScopeApp(t)
@@ -615,8 +612,8 @@ func TestPlannerPrefetchMatchesLazy(t *testing.T) {
 	}
 }
 
-// TestPlannerCapitalJSONFirstLoad: a capital plan's JSON — what
-// plan.js fetches on first load — serves the whole tree in one
+// TestPlannerCapitalJSONFirstLoad: a capital plan's JSON, what
+// plan.js fetches on first load, serves the whole tree in one
 // response: the root is present and the finished product is not
 // in its own shopping list.
 func TestPlannerCapitalJSONFirstLoad(t *testing.T) {

@@ -72,7 +72,7 @@ func TestPolishNavAndFavicon(t *testing.T) {
 	mustContain(t, "/character/", body, `<details class="branch active"`)
 
 	// Intel page: a different branch marked (wars lists as empty
-	// state here — only the header marking matters).
+	// state here, only the header marking matters).
 	code, body = getPage(t, app, cookie, "/intel/wars/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /intel/wars/: status %d", code)

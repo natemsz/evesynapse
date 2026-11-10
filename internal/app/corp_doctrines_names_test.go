@@ -11,7 +11,7 @@ import (
 )
 
 // TestDoctrineFitBrowserSearchesItemNames: the corporate fits
-// browser finds a fit by the names of the modules it carries —
+// browser finds a fit by the names of the modules it carries,
 // the search text behind each card is built from the names
 // resolved for the listed fits (items and loaded-charge weapons
 // alike).

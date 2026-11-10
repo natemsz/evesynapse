@@ -8,7 +8,7 @@ import (
 )
 
 // TestFitESIFittingBody: the editor document maps to the ESI
-// fitting body — one flag per module instance (HiSlot0-7 etc.),
+// fitting body, one flag per module instance (HiSlot0-7 etc.),
 // charges riding their weapon's slot, drones to DroneBay and cargo
 // to Cargo. Over-slot documents are an error, never silently
 // truncated.

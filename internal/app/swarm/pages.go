@@ -29,7 +29,7 @@ import (
 // see: the real address for instances the operator added by
 // hand or configured as seeds, and a stable alias
 // (adjective.noun.number) for everyone learned through gossip
-// or seeds — member addresses are not shown to casual readers.
+// or seeds, member addresses are not shown to casual readers.
 type SwarmPeerRow struct {
 	ID          string
 	Display     string
@@ -39,7 +39,7 @@ type SwarmPeerRow struct {
 	Approved    bool
 	Excluded    bool
 	Role        string // Seed, Cache, Seed+Cache: what the peer functions as
-	Build       string // rendered build claim: "Mainline · <release>", "Fork", "—" (build.go)
+	Build       string // rendered build claim: "Mainline · <release>", "Fork", ", " (build.go)
 	State       string // Approved, Waiting, Excluded (+ auto note)
 	KeyConflict string // "another key was refused on 2026-10-13", empty when none was
 	Trust       string // trust percent
@@ -83,8 +83,8 @@ func ShortenSwarmID(id string) string {
 
 // SwarmDisplayPeer names one peer for the pages: the real
 // address when the operator added it by hand or configured it
-// as a seed (evesynapse.app) — both already known to the
-// operator — and the stable alias otherwise, so gossip-learned
+// as a seed (evesynapse.app), both already known to the
+// operator, and the stable alias otherwise, so gossip-learned
 // members never show their addresses to casual readers.
 func (app *Mod) SwarmDisplayPeer(instanceID, baseURL, source string) string {
 	if source == "manual" || app.SwarmIsSeed(baseURL) {
@@ -225,7 +225,7 @@ func (app *Mod) LoadSwarmMetrics(ctx context.Context) *SwarmMetricsView {
 }
 
 // LoadSwarmAdmin builds the Admin section: the settings (from
-// the environment — changing them restarts the instance) and
+// the environment, changing them restarts the instance) and
 // the swarm itself with its actions.
 func (app *Mod) LoadSwarmAdmin(ctx context.Context) *SwarmAdminView {
 	view := &SwarmAdminView{SecretSet: app.Cfg.Secret != ""}
@@ -306,7 +306,7 @@ func (app *Mod) HandleSwarmExclude(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleSwarmAdmit re-admits one excluded peer (POST
-// /admin/swarm/admit). Trust starts where the ledger left it —
+// /admin/swarm/admit). Trust starts where the ledger left it,
 // admitting does not forgive, it only re-opens the door.
 func (app *Mod) HandleSwarmAdmit(w http.ResponseWriter, r *http.Request) {
 	back := app.Deps.FlashBack(w, r, "/admin/")
@@ -335,7 +335,7 @@ func (app *Mod) HandleSwarmAdmit(w http.ResponseWriter, r *http.Request) {
 // HandleSwarmAddPeer learns one instance by address (POST
 // /admin/swarm/add): the operator types a bare origin
 // (https://evesynapse.app), and the instance asks it for its
-// membership list — the same round as gossip, on demand. The
+// membership list, the same round as gossip, on demand. The
 // address joins under trust on first use like any seed; in
 // allowlist mode it still waits for approval. Refused while
 // sharing is off, and refused for anything but an https origin
@@ -378,7 +378,7 @@ func ApprovalNote(app *Mod) string {
 // HandleSwarmRemove forgets one peer entirely (POST
 // /admin/swarm/remove): address, pinned key, approval,
 // exclusion, and the ledger. Removing is how a peer's key is
-// rotated — the next gossip pins the new one from scratch —
+// rotated, the next gossip pins the new one from scratch,
 // and how dead instances leave the list. Like account removal
 // it asks twice: the instance in the form, and typed out by
 // hand. Never the instance itself.

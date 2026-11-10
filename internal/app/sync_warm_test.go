@@ -14,8 +14,7 @@ func warmIDs(app *Application) []int64 {
 }
 
 // TestSyncWarmInvalidCharacterWarmsNothing: garbage in
-// ?character= used to warm every linked character (the parse
-// error was ignored and want stayed 0); now it warms nothing and
+// ?character= warms nothing (never every linked character) and
 // still bounces back to the Sync page.
 func TestSyncWarmInvalidCharacterWarmsNothing(t *testing.T) {
 	transport := &countingTransport{}

@@ -18,7 +18,7 @@ import (
 
 // NewCorpTestApp builds an Application over a fresh embedded-
 // Postgres test database with a stub ESI transport (no worker
-// goroutine — tests drive worker functions directly).
+// goroutine, tests drive worker functions directly).
 func NewCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, *sql.DB, *db.Queries) {
 	t.Helper()
 	conn, pool, err := store.Open(context.Background(), pgtest.FreshDSN(t))

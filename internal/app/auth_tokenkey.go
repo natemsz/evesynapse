@@ -4,23 +4,23 @@ package app
 // Where the token box's key comes from (auth_tokencrypt.go holds
 // the box itself). TOKEN_KEY_PROVIDER chooses:
 //
-//   env  — TOKEN_ENCRYPTION_KEY from the environment, as always.
-//   http — the root secret is fetched at startup from a key
+//   env, TOKEN_ENCRYPTION_KEY from the environment, as always.
+//   http, the root secret is fetched at startup from a key
 //          service: the service holds the wrapping key, this
 //          machine stores only the wrapped blob (TOKEN_KEY_WRAPPED)
 //          and asks the endpoint (TOKEN_KEY_UNWRAP_URL, with the
 //          bearer TOKEN_KEY_UNWRAP_CREDENTIAL) to unwrap it. The
 //          secret then lives in memory only, so a copy of this
-//          machine's files — database, .env and all — cannot open
+//          machine's files, database, .env and all, cannot open
 //          the stored tokens. Any HTTPS endpoint speaking the
 //          two-call protocol works; the reference service is a
 //          Cloudflare Worker (github.com/natemsz/cloudflare-kms).
-//   oci  — the root secret is wrapped by a key in an OCI Vault
+//   oci, the root secret is wrapped by a key in an OCI Vault
 //          (TOKEN_KEY_WRAPPED holds that key's ciphertext) and
 //          unwrapped at startup by KMS Decrypt, authenticated by
-//          the instance's own identity — no cloud credential is
+//          the instance's own identity, no cloud credential is
 //          stored on the machine at all (internal/ocikms).
-//   none — no key; tokens are stored unencrypted, as before.
+//   none, no key; tokens are stored unencrypted, as before.
 //
 // With no TOKEN_KEY_PROVIDER set, a configured TOKEN_ENCRYPTION_KEY
 // means env and no key means none, so existing installs behave
@@ -30,7 +30,7 @@ package app
 // serves at once and a background loop retries the unwrap with
 // backoff until it succeeds. Until then the box has no key, so sealed rows report
 // their key missing (errTokenKeyMissing) and everything that does
-// not need a stored token — the public pages included — works as
+// not need a stored token, the public pages included, works as
 // usual. A fetched secret is installed only after it has been shown
 // to open every stored token, the same check prepareStoredTokens
 // runs at boot for the other providers.
@@ -234,7 +234,7 @@ func unwrapTokenSecret(ctx context.Context, cfg Config) (string, error) {
 }
 
 // unwrapViaKeyService asks the configured endpoint to unwrap one
-// blob — the token key's or a working credential's (phase 2,
+// blob, the token key's or a working credential's (phase 2,
 // auth_credentials.go); the protocol is the same two-call shape
 // for any small secret. The answer is only ever returned to the
 // caller: never logged, never written anywhere.
@@ -328,8 +328,8 @@ func (app *Application) tryTokenKeyUnlock(ctx context.Context) bool {
 	}
 	app.tokens.install(candidate)
 	// With the box able to open rows, bring the stored tokens in
-	// line — sealing anything written while the box was locked and
-	// re-sealing retired envelopes — the same pass the other
+	// line, sealing anything written while the box was locked and
+	// re-sealing retired envelopes, the same pass the other
 	// providers get at boot. A failure here is logged, not fatal:
 	// the app is already serving, and the next start re-runs it.
 	if err := app.prepareStoredTokens(ctx); err != nil {
@@ -340,8 +340,8 @@ func (app *Application) tryTokenKeyUnlock(ctx context.Context) bool {
 	return true
 }
 
-// checkStoredTokensOpen reports whether every stored token pair —
-// EVE characters and Discord links alike — opens with box. It is
+// checkStoredTokensOpen reports whether every stored token pair,
+// EVE characters and Discord links alike, opens with box. It is
 // the unlock's pre-flight: a fetched key that fails here is never
 // installed, so the running app is never left sealing new tokens
 // under a key that cannot read the old ones.

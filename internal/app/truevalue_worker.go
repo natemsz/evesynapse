@@ -365,7 +365,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	// average is banned as a price source (owner doctrine,
 	// 2026-10-17) and the adjusted price is not one either: a
 	// leaf no house source knows is unpriced, and whatever
-	// builds from it stays unpriced with it — an honest gap,
+	// builds from it stays unpriced with it, an honest gap,
 	// never a fossil. The EIV base for job fees follows the
 	// planner: adjusted where present, average behind it
 	// (fees only).

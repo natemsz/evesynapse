@@ -6,8 +6,8 @@ package swarm
 //
 // On a slow cadence the learner fetches the recent releases
 // of the owner's two GitLab projects and records every binary
-// build's SHA-256 — the Packages API reports one per package
-// file — in the release_builds table, under the release's
+// build's SHA-256, the Packages API reports one per package
+// file, in the release_builds table, under the release's
 // tag and the project's product kind. A recorded hash is
 // remembered for good: it stays known after its release
 // scrolls off the API's first page, so the library keeps
@@ -17,15 +17,15 @@ package swarm
 // The projects are hardcoded to the owner's because
 // "mainline" is defined by his releases: a build is mainline
 // when one of these two projects published it. A fork
-// self-hosting EveSynapse learns the same library — the
+// self-hosting EveSynapse learns the same library, the
 // upstream's builds are the mainline whatever instance asks.
 //
 // Failure tolerance is the shape of the thing: a fetch or
 // parse failure changes nothing (the previously recorded
 // builds stay recorded, the in-memory snapshot stays as it
 // was) and the pass is simply due again later. The cadence
-// is deliberately slow — once a day after a success, no
-// sooner than six hours after a failure — which the
+// is deliberately slow, once a day after a success, no
+// sooner than six hours after a failure, which the
 // unauthenticated GitLab API allowance absorbs without
 // noticing. Nothing here is on a render path, and the
 // recorded data feeds the same display-only classification
@@ -189,7 +189,7 @@ func parseReleasePackages(src releaseSource, body []byte) (map[string]int64, err
 // parsePackageBuilds reads one package's files payload and
 // returns the build of every binary file in it. A binary
 // file is the product's own executable for one architecture
-// — evesynapse-amd64, storm-arm64 — named exactly; checksum
+// , evesynapse-amd64, storm-arm64, named exactly; checksum
 // files, signatures and manifests ride in the same package
 // and are not builds, so they are skipped by name, never
 // recorded. A file whose checksum is missing or not a
@@ -322,7 +322,7 @@ func (m *Mod) LearnReleases(ctx context.Context) error {
 
 // MaybeLearnReleases is the worker job's pass: when a learn
 // is due it runs beside the cycle (Background), never inside
-// it — a slow or hung fetch must not hold the cycle up. A
+// it, a slow or hung fetch must not hold the cycle up. A
 // learn is due at startup, then a day after a successful
 // pass and no sooner than six hours after a failed one.
 func (m *Mod) MaybeLearnReleases(ctx context.Context) {

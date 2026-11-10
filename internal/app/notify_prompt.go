@@ -20,9 +20,9 @@ import (
 // account, remembered in the account's settings, so the answer
 // follows the person and not the browser), and afterwards it waits
 // behind the bell's "Notification choices" entry. The choices it
-// offers are the same ones the settings page offers — the in-app
+// offers are the same ones the settings page offers, the in-app
 // and browser channels of notifyPrefs, and the Discord switch on
-// the account's Discord link — never a store of their own.
+// the account's Discord link, never a store of their own.
 // ---------------------------------------------------------------------------
 
 // sessionNotifyPromptShown marks a session that has already been
@@ -35,7 +35,7 @@ const sessionNotifyPromptShown = "notify_prompt_shown"
 // bell. A row is offered only when this install can honor it: a
 // channel nobody here can deliver is not a choice to offer.
 type notifyPromptView struct {
-	// AutoOpen: the card renders open — the account has not answered
+	// AutoOpen: the card renders open, the account has not answered
 	// and this session has not been shown it yet.
 	AutoOpen bool
 	Answered bool
@@ -117,7 +117,7 @@ func (app *Application) handleNotifyPrompt(w http.ResponseWriter, r *http.Reques
 			desktopOn = r.FormValue("desktop") == "1"
 		}
 		prefs.OffChannels = offChannels(r.FormValue("inapp") == "1", desktopOn)
-		// The Discord switch is the one on the account's link — the
+		// The Discord switch is the one on the account's link, the
 		// same value the settings page's Discord box writes. Without
 		// a link there is nothing to write.
 		if r.FormValue("discord_shown") == "1" && app.ModuleEnabled("discord") {

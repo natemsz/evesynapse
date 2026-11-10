@@ -14,8 +14,8 @@ import (
 // Urgent want drain: a short-cadence loop alongside the minute
 // cycle that treats fresh wants as urgent. Proactive coverage
 // (market coverage tiers, pilot orbit) should mean a user almost
-// never sees a pending state at all; when they do — a type
-// outside the coverage set, a pilot id typed directly — the
+// never sees a pending state at all; when they do, a type
+// outside the coverage set, a pilot id typed directly, the
 // click notes a want, and this loop picks it up within seconds
 // instead of the click waiting on the next minute cycle.
 //
@@ -23,7 +23,7 @@ import (
 // gates (20h history refetch gate, priority-ordered pilot drain)
 // and the shared fetch lock, and an ESI error limit both stops
 // the nudge and silences the loop for urgentErrorBackoff. Per
-// nudge the caps are small — a burst of wants drains
+// nudge the caps are small, a burst of wants drains
 // first-in-line-first, a few per tick.
 // ---------------------------------------------------------------------------
 
@@ -85,7 +85,7 @@ func (app *Application) urgentDrain(ctx context.Context) {
 // (gate-respecting), then a couple of type descriptions, and
 // finally the guide-price want a kill view left behind (schema
 // 027). Every pass spends from the same small allowances as
-// before — urgency reorders the work, it never widens it.
+// before, urgency reorders the work, it never widens it.
 // Returns ESI's stop signal: the error limit only; a rate limit
 // stops just the pass that met it. Everything after the
 // organizations runs under the shared fetch lock, taken only if
@@ -258,7 +258,7 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 // kill view noted (schema 027): refresh the stored guide when
 // ESI's cache window allows, then clear the note. The refresh
 // self-gates on the meta row's cached_until, so a want noted
-// while the guide is still fresh costs no call — and the note
+// while the guide is still fresh costs no call, and the note
 // clears as soon as prices are held by any route. Reports
 // whether ESI's error limit stopped the refresh.
 func (app *Application) drainGuidePriceWant(ctx context.Context) (limited bool) {

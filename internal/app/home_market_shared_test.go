@@ -1,11 +1,10 @@
 package app
 
-// Audit 3.2.4 (home half): the Briefing's market lines, the
-// market widget's health line and the watchlist widget used to
-// query order health and the watchlist separately, so one home
-// render read both tables up to three times. They now share the
-// render's single lazy fetch: repeat reads serve the snapshot
-// the first read took, even if the tables move underneath.
+// The Briefing's market lines, the market widget's health line
+// and the watchlist widget share one home render's single lazy
+// fetch of order health and the watchlist: repeat reads serve
+// the snapshot the first read took, even if the tables move
+// underneath.
 
 import (
 	"context"

@@ -16,7 +16,7 @@ import (
 
 // newSessionManager builds the session manager the app runs on.
 // The cookie is HTTP-only and SameSite=Lax, and marked Secure
-// whenever the site's public address is https — so a session
+// whenever the site's public address is https, so a session
 // cookie issued over TLS is never sent in the clear.
 func newSessionManager(store scs.Store, cfg Config) *scs.SessionManager {
 	sm := scs.New()
@@ -57,7 +57,7 @@ func warnIfServedInTheClear(cfg Config) {
 // No inline scripts, styles, or event handlers anywhere: every
 // script is a versioned file under /static/ (boot.js, app.js,
 // fit.js), and styling is the stylesheet plus CSSOM writes from
-// those files — so neither script-src nor style-src needs
+// those files, so neither script-src nor style-src needs
 // 'unsafe-inline'. Keep it that way: an inline <script> or style
 // attribute added to a template will silently not run.
 //
@@ -84,7 +84,7 @@ func contentSecurityPolicy() string {
 
 // securityHeaders sets the response headers that harden every
 // page: no MIME sniffing, no framing, no referrer leaking to other
-// sites (same-origin referrers are kept — the character switcher
+// sites (same-origin referrers are kept, the character switcher
 // returns to the page it came from), the content security policy,
 // and HSTS when the site is served over https.
 func (app *Application) securityHeaders(next http.Handler) http.Handler {

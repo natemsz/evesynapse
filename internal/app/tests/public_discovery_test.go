@@ -308,7 +308,7 @@ func TestPublicFitsBrowser(t *testing.T) {
 	apptest.MustContain(t, "include=Nope", body, "that filter was ignored")
 
 	// Faction filter: Any shows everything, No faction modules
-	// drops every fit with a faction-meta module — including the
+	// drops every fit with a faction-meta module, including the
 	// Rich Rifter, which mixes a faction extender with a T2 one.
 	_, body = get("/fittings/public/?faction=any")
 	apptest.MustContain(t, "faction=any", body, "Fleet Rifter", "Rich Rifter")
@@ -595,9 +595,9 @@ func TestPublicFitRating(t *testing.T) {
 }
 
 // TestPublicFitRatingCountsOnce: a rating is counted once however it
-// arrives. One account's first rating posted many times at once (a
-// double click, a retried form) used to add one to the fit for each
-// post, because every post read "no rating yet" before any wrote.
+// arrives: one account's first rating posted many times at once (a
+// double click, a retried form) adds one to the fit, not one per
+// post.
 func TestPublicFitRatingCountsOnce(t *testing.T) {
 	transport := &apptest.CountingTransport{}
 	rig := apptest.Build(t, transport)
@@ -808,7 +808,7 @@ func TestPublicItemAndShipPages(t *testing.T) {
 		`data-fallback-src="https://images.evetech.net/types/587/icon?size=128"`,
 	)
 	// The description leads the page now, in its card beside the
-	// type icon — it used to sit below the price history.
+	// type icon, it used to sit below the price history.
 	if i, j := strings.Index(body, "The Rifter is a frigate."), strings.Index(body, "Hub prices"); i < 0 || j < 0 || i > j {
 		t.Error("item page: the description does not lead (it belongs above the hub prices)")
 	}

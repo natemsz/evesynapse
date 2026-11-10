@@ -119,7 +119,7 @@ func TestFullLoadsCarryEachStylesheetOnce(t *testing.T) {
 
 	// The full document is the swap's contract for page assets:
 	// the swap adopts exactly the stylesheet links it carries, so
-	// each one must appear exactly once — and each page must
+	// each one must appear exactly once, and each page must
 	// carry its own sheet.
 	pages := map[string]string{
 		"/intel/kills/":      "/static/killboard.css",
@@ -161,7 +161,7 @@ func TestSwapExcludedPagesKeepPageScripts(t *testing.T) {
 	version := staticAssetVersion()
 
 	// The simulator and saved fits always load whole (the swap
-	// denylist names them), so their full documents keep fit.js —
+	// denylist names them), so their full documents keep fit.js,
 	// and the shell around them, swap script included. The
 	// planner's full document carries plan.js the same way; a
 	// swap adopts it when the shell does not have it yet.

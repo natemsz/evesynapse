@@ -115,7 +115,7 @@ func IsStatus(err error, status int) bool {
 }
 
 // NewVerifier returns a fresh PKCE code_verifier (RFC 7636): 32
-// random bytes, base64url-encoded without padding — 43 characters,
+// random bytes, base64url-encoded without padding, 43 characters,
 // inside the RFC's 43-128 range and drawn from its unreserved set.
 // The verifier never leaves the server; only its challenge (see
 // CodeChallenge) goes in the sign-in address, and the verifier is

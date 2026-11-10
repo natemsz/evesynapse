@@ -6,7 +6,7 @@ package swarm
 // is verified on every read").
 //
 // Each instance owns an Ed25519 keypair (crypto/ed25519 from the
-// standard library — no handrolled crypto anywhere in this
+// standard library, no handrolled crypto anywhere in this
 // module). The seed is sealed at rest under a key derived from
 // the operator's shared secret (HKDF-SHA-256, AES-256-GCM, the
 // same construction as the token box), so a copy of the database

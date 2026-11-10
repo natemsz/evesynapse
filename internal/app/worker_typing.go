@@ -13,7 +13,7 @@ import (
 
 // Typing-intent guesses (schema 028): while someone types in a
 // search box, the top suggestions are queued ahead of the pick at
-// the typing ring — below a record somebody has open, above the
+// the typing ring, below a record somebody has open, above the
 // proactive orbit. Each keystroke replaces the previous one for
 // that box, so queued guesses never accumulate (the ledger of
 // what was guessed and what was opened does, by design); what they fetch still
@@ -228,7 +228,7 @@ func (app *Application) noteTypingDetailGuess(ctx context.Context, box string, t
 }
 
 // markGuessHit records a guess the pilot opened: called from the
-// entity page handlers (warm or cold — the open is what counts),
+// entity page handlers (warm or cold, the open is what counts),
 // never from the guessing itself. Only the first open inside the
 // window counts.
 func (app *Application) markGuessHit(ctx context.Context, kind pageWantKind, entityID, regionID int64) {

@@ -28,7 +28,7 @@ func TestReleaseLibraryStormEntries(t *testing.T) {
 
 	// No collision: an app entry in the same library still
 	// resolves as an app build and renders with the plain
-	// release label — the product kinds share one map without
+	// release label, the product kinds share one map without
 	// bleeding into each other.
 	checked, stormSeeded := 0, 0
 	for sha, entry := range ReleaseLibrary {

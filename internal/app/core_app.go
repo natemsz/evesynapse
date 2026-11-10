@@ -546,7 +546,7 @@ func New(cfg Config) (*Application, error) {
 	// Before anything reads a token: check the stored ones open
 	// with the configured key, and encrypt any that predate it.
 	// A remote provider's key has not arrived yet (it comes from
-	// the network, in the background — see startTokenKeyUnlock),
+	// the network, in the background, see startTokenKeyUnlock),
 	// so its pass runs at unlock instead; the app serves meanwhile.
 	if tokenKeyFetchedRemotely(tokenKeyProvider) {
 		logging.Infof("evesynapse: the token encryption key comes from the %s provider; stored tokens unlock when it answers", tokenKeyProvider)
@@ -613,7 +613,7 @@ func New(cfg Config) (*Application, error) {
 	}
 
 	// One-shot reachability probe so phone (Termux) logs immediately
-	// show whether CCP is reachable — DNS trouble there otherwise only
+	// show whether CCP is reachable, DNS trouble there otherwise only
 	// surfaces midway through a login attempt.
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
@@ -992,7 +992,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 
 	// Solar system & station pages: an SDE place record, the
 	// destination every system/station name links to. Nothing to
-	// warm — both render from the local SDE.
+	// warm, both render from the local SDE.
 	r.Route("/system", func(r chi.Router) {
 		r.Use(anonPages)
 		r.Get("/", app.handleSystemPage)

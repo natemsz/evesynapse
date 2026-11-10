@@ -94,7 +94,7 @@ func TestCoreOnlyHasNoModuleWidgetsOrKinds(t *testing.T) {
 }
 
 // TestCoreOnlyHasNoBriefingTopics: with no module built in, no module's
-// briefing lines are on — the digest keeps only core's lines.
+// briefing lines are on, the digest keeps only core's lines.
 func TestCoreOnlyHasNoBriefingTopics(t *testing.T) {
 	for _, topic := range []string{"orders", "contracts", "calendar", "mail"} {
 		if briefingTopicBuiltIn(topic) {

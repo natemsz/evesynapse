@@ -627,8 +627,8 @@ func TestDemoResetRestoresSeedState(t *testing.T) {
 // TestDemoPilotNameRefreshReachesSeededInstalls pins the
 // bootstrap's name refresh: on an install whose seed already
 // landed, every stored copy of the lead pilot's name follows
-// the constant — the character row, the entity name, the pilot
-// record and the profile snapshot — with the rest of each
+// the constant, the character row, the entity name, the pilot
+// record and the profile snapshot, with the rest of each
 // payload preserved and no other pilot's rows touched.
 func TestDemoPilotNameRefreshReachesSeededInstalls(t *testing.T) {
 	app, conn, queries := demoTestApp(t)

@@ -13,9 +13,9 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Wallet graphs: balance over time from data the app already stores —
+// Wallet graphs: balance over time from data the app already stores,
 // the wallet journal's running balances for the recent window and the
-// daily wallet-history samples for the longer tail — plus an account
+// daily wallet-history samples for the longer tail, plus an account
 // net-worth history summed from the same samples. Pure functions over
 // stored rows and cache-only handlers. A thin history says it is
 // building.
@@ -24,7 +24,7 @@ import (
 // ---------------------------------------------------------------------------
 // The chart: the market history chart's geometry and language
 // (720×240 viewBox, ember line, compact-ISK axis, date ticks,
-// scrub dots) with the volume band left out — a balance has one
+// scrub dots) with the volume band left out, a balance has one
 // series, so the line gets the whole plot.
 // ---------------------------------------------------------------------------
 
@@ -36,7 +36,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	walletGraphPending = "pending" // journal still warming — live region
+	walletGraphPending = "pending" // journal still warming, live region
 	walletGraphEmpty   = "empty"   // settled, nothing recorded yet
 	walletGraphFew     = "few"     // one point: a fact, not a shape
 	walletGraphChart   = "chart"   // enough points to draw

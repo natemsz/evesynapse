@@ -10,7 +10,7 @@ import (
 	"evesynapse/internal/esi"
 )
 
-// TestSparklineSVG: the shaped SVG — and no SVG at all under two
+// TestSparklineSVG: the shaped SVG, and no SVG at all under two
 // days, so the KPI never draws a placeholder line.
 func TestSparklineSVG(t *testing.T) {
 	line, area, ok := sparklineSVG([]float64{100, 150, 125})
@@ -74,8 +74,8 @@ func TestHomeKPISparkAndPricedBar(t *testing.T) {
 }
 
 // TestHomeKPIGlyphs: each of the four glance KPI tiles carries
-// its mockup glyph span (wallet, coins, package, book) — the
-// briefing-card icon treatment at tile scale — and no other tile
+// its mockup glyph span (wallet, coins, package, book), the
+// briefing-card icon treatment at tile scale, and no other tile
 // on the page grows one.
 func TestHomeKPIGlyphs(t *testing.T) {
 	transport := &countingTransport{}

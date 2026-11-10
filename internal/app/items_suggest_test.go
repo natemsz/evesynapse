@@ -119,7 +119,7 @@ func TestMarketSuggestAndItemsExplorer(t *testing.T) {
 
 // TestItemsAndSuggestOnEmptySDE: before the first import lands,
 // the explorer renders its empty state and suggestions are an
-// empty array — neither page may error.
+// empty array, neither page may error.
 func TestItemsAndSuggestOnEmptySDE(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)

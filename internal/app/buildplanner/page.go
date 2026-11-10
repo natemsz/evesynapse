@@ -26,8 +26,8 @@ import (
 // Build Planner page (/planner/): pick a manufacturable product,
 // get its full build chain with owned-blueprint ME/TE prefilled,
 // your stockpile netted against requirements, and a priced
-// shopping list. Everything reads local state — the SDE industry
-// tables, the blueprint/asset snapshots, and the price cache — so
+// shopping list. Everything reads local state, the SDE industry
+// tables, the blueprint/asset snapshots, and the price cache, so
 // the handler never touches ESI.
 // ---------------------------------------------------------------------------
 
@@ -129,7 +129,7 @@ type skillsJudge struct {
 
 // planVerdict is the worth-making economics of a scoped plan.
 type planVerdict struct {
-	Heading   string // "Worth it? — judged as …"
+	Heading   string // "Worth it?, judged as …"
 	Cost      string // net buy cost after stock, "" when unpriceable
 	SellValue string // expected value of the output, "" when unknown
 	Profit    string // whole plan before job fees, "" unless both sides known
@@ -844,7 +844,7 @@ func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*buildplan.
 	return bp, true
 }
 
-// plannerAccountChars lists the signed-in user's characters —
+// plannerAccountChars lists the signed-in user's characters,
 // the universe the planner's scopes pick from. A dev-login
 // session (no user) simply has none.
 func (app *planner) plannerAccountChars(ctx context.Context) []db.Character {
@@ -873,7 +873,7 @@ type plannerScopeData struct {
 
 // plannerInputsForChars aggregates owned blueprints (best copy
 // per blueprint type), total stockpile, and trained skills over
-// exactly the given characters — the whole account for the
+// exactly the given characters, the whole account for the
 // general view, one character or one tag's members when judged.
 func (app *planner) plannerInputsForChars(ctx context.Context, chars []db.Character) plannerScopeData {
 	data := plannerScopeData{
@@ -959,7 +959,7 @@ const judgeAllV = "allv"
 // resolveJudgeScope validates a raw `judge` parameter against
 // the account and builds the picker's options with the current
 // pick marked. Anything stale or foreign degrades to the
-// general view — never an empty judgment.
+// general view, never an empty judgment.
 func defaultJudgeParam(chars []db.Character, actingID int64) string {
 	for _, ch := range chars {
 		if ch.CharacterID == actingID {
@@ -1125,13 +1125,13 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 		line := skillJudgeLine{OK: ok}
 		switch {
 		case scope.Kind == "tag" && have == 0:
-			line.Text = fmt.Sprintf("%s — needs %s · nobody with this tag has it trained", nameOf(id), esi.RomanLevel(int(need)))
+			line.Text = fmt.Sprintf("%s: needs %s · nobody with this tag has it trained", nameOf(id), esi.RomanLevel(int(need)))
 		case scope.Kind == "tag":
-			line.Text = fmt.Sprintf("%s — needs %s · best on the tag %s", nameOf(id), esi.RomanLevel(int(need)), esi.RomanLevel(int(have)))
+			line.Text = fmt.Sprintf("%s: needs %s · best on the tag %s", nameOf(id), esi.RomanLevel(int(need)), esi.RomanLevel(int(have)))
 		case have == 0:
-			line.Text = fmt.Sprintf("%s — needs %s · not trained", nameOf(id), esi.RomanLevel(int(need)))
+			line.Text = fmt.Sprintf("%s: needs %s · not trained", nameOf(id), esi.RomanLevel(int(need)))
 		default:
-			line.Text = fmt.Sprintf("%s — needs %s · trained %s", nameOf(id), esi.RomanLevel(int(need)), esi.RomanLevel(int(have)))
+			line.Text = fmt.Sprintf("%s: needs %s · trained %s", nameOf(id), esi.RomanLevel(int(need)), esi.RomanLevel(int(have)))
 		}
 		judge.Lines = append(judge.Lines, line)
 		if !ok {
@@ -1163,7 +1163,7 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 
 // planVerdictFor prices a scoped plan's judgement: the net buy
 // cost after stock against the expected sell value of what
-// comes out. Unknown prices stay unknown — the verdict says so
+// comes out. Unknown prices stay unknown, the verdict says so
 // instead of pricing missing inputs at zero.
 func planVerdictFor(res *buildplan.Result, prices map[int64]esi.MarketPrice, productID int64) *planVerdict {
 	root := res.Root

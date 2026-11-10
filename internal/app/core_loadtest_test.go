@@ -16,7 +16,7 @@ package app
 // item page in production additionally waits on a live book
 // fetch per view; that external wait is not in these figures.
 // Client and server share one process here, so the load
-// generator competes with the server for CPU — treat the
+// generator competes with the server for CPU, treat the
 // absolute rates as conservative and the latency-vs-concurrency
 // shape as the transferable result.
 
@@ -420,7 +420,7 @@ func TestLoadWebTier(t *testing.T) {
 
 	// Diagnostics: snapshots were seeded with FetchedAt
 	// 2026-01-01T00:00:00Z, so any row stamped otherwise was
-	// rewritten by a render during the run — a direct count of
+	// rewritten by a render during the run, a direct count of
 	// render-path writes. The loudest handler log lines show
 	// which pages were logging failures.
 	var overwritten int64

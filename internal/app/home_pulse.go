@@ -548,7 +548,7 @@ func (app *Application) pulseMoves(ctx context.Context, ref pulseCorpRef, now ti
 			}
 			text := e.RefType
 			if e.Description != "" {
-				text += " — " + e.Description
+				text += ": " + e.Description
 			}
 			all = append(all, candidate{
 				move: pulseMove{

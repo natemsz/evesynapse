@@ -32,7 +32,7 @@ Automated build of EveSynapse v0.7.9.7. Update with: evesynapse -update -arm64 (
 ## What's Changed
 
 ### 🚀 Features
-* Add Mutamarket-style roll sliders with real ranges and meta marks to abyssal search by @natemsz in #263
+* Add roll sliders with real ranges and meta marks to abyssal search by @natemsz in #263
 
 ### Other Changes
 * feat/dominion-v3-default-theme by @natemsz in #262

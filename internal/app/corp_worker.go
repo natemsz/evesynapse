@@ -329,8 +329,8 @@ func (app *Application) seedStructurePlaceNames(ctx context.Context, ch db.Chara
 // maxCorpAssetNameItemsPerCycle unresolved items per cycle. The
 // names POST needs the same Director role as the assets list;
 // outcomes are recorded under the corp_asset_names pseudo-kind so
-// a refusal — or a 404 batch rejection — backs off instead of
-// retrying every minute. CCP reports "None" for unnamed items —
+// a refusal, or a 404 batch rejection, backs off instead of
+// retrying every minute. CCP reports "None" for unnamed items,
 // those are skipped (and retried next time the item still lacks
 // a name, which costs nothing while the cycle cap holds).
 func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character, corpID int64) {

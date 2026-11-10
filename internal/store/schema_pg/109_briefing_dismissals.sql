@@ -1,5 +1,5 @@
 -- Briefing dismissals (schema 101, home_briefing.go): the briefing
--- lines an account has hidden. A dismissal is not a deletion — the
+-- lines an account has hidden. A dismissal is not a deletion, the
 -- line is recomputed on every home render, and while it still
 -- applies it renders in the briefing's dismissed list (behind the
 -- modal) instead of the stacks. Rows whose line no longer applies

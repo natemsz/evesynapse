@@ -6,7 +6,7 @@ package app
 // want drain, so the whole path has to carry a global-region
 // want verbatim: queue, candidate build, fetch, store. Any
 // step that quietly remapped or dropped a non-hub region
-// would starve the strip's first mover forever — this test
+// would starve the strip's first mover forever, this test
 // walks a (19000001, 44992) want end to end against the stub
 // transport and checks the rows land under the global region.
 

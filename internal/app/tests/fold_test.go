@@ -4,7 +4,7 @@ package tests
 // on the SECTION headings of multi-section pages (each
 // <section class="foldable"> in the markup), not on the page
 // window itself. Sections that start folded do so via
-// data-fold="closed", which the served app.js applies on load —
+// data-fold="closed", which the served app.js applies on load,
 // the raw markup never hides content, so no-JS readers see
 // everything. The foldable sections themselves are pinned on
 // the pages that use them (the assets and PI tests); the two

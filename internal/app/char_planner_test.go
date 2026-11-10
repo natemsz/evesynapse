@@ -4,7 +4,7 @@ package app
 //
 //   - Importer: the five Fuzzwork industry files parse with the
 //     manufacturing-activity filter and join into blueprint rows.
-//   - Engine: BOM expansion against fixture recipes — the EVE
+//   - Engine: BOM expansion against fixture recipes, the EVE
 //     material formula (ME curve, base-1 floor), whole-run child
 //     production, cycle guard, node cap, owned-blueprint ME/TE
 //     autofill vs explicit overrides, single-allocation stockpile
@@ -99,7 +99,7 @@ func TestIndustryCSVImportJoinsBlueprints(t *testing.T) {
 		t.Errorf("blueprint 2002 time: got %d, want 300", parsed.blueprints[1].manufacturingTimeSeconds)
 	}
 
-	// Materials: manufacturing only — the activity-11 row (34×7
+	// Materials: manufacturing only, the activity-11 row (34×7
 	// under 2003) must not appear.
 	mats := map[[2]int64]int64{}
 	for _, m := range parsed.bpMaterials {
@@ -112,7 +112,7 @@ func TestIndustryCSVImportJoinsBlueprints(t *testing.T) {
 		t.Error("reaction material (activity 11) leaked into the planner tables")
 	}
 
-	// Skills: manufacturing only — the invention skill (activity
+	// Skills: manufacturing only, the invention skill (activity
 	// 8) under 2001 must not appear.
 	skills := map[[2]int64]int64{}
 	for _, s := range parsed.bpSkills {

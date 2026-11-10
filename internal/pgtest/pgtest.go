@@ -91,7 +91,7 @@ const templateName = "evetest_template"
 // TestMainWithTemplate is TestMain for packages whose tests all open
 // the full schema: prepare runs once, on the first FreshDSN, against a
 // template database (typically store.Open, closed again), and every
-// FreshDSN after that is a copy of it — a file copy, not 40-odd schema
+// FreshDSN after that is a copy of it, a file copy, not 40-odd schema
 // steps per test. Packages that test the migrations themselves use
 // TestMain and get empty databases.
 func TestMainWithTemplate(m *testing.M, prep func(dsn string) error) int {
@@ -115,8 +115,8 @@ func TestMainWithTemplate(m *testing.M, prep func(dsn string) error) int {
 }
 
 // FreshDSN creates a database for one test on the shared embedded
-// server — empty, or a copy of the template under
-// TestMainWithTemplate — and registers its drop. Cleanup runs after the
+// server, empty, or a copy of the template under
+// TestMainWithTemplate, and registers its drop. Cleanup runs after the
 // test's own cleanups (LIFO), so handles opened on the DSN should
 // be closed by cleanups the test registers after this call;
 // DROP ... WITH (FORCE) covers any stragglers regardless.
@@ -141,9 +141,9 @@ func FreshDSN(t *testing.T) string {
 	return fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/%s?sslmode=disable", port, name)
 }
 
-// ensureTemplate builds the template database once — created empty,
+// ensureTemplate builds the template database once, created empty,
 // handed to prepare, then left with no connections so it can be
-// copied — and starts the producer that keeps copies ready.
+// copied, and starts the producer that keeps copies ready.
 func ensureTemplate(t *testing.T) {
 	t.Helper()
 	templateOnce.Do(func() {

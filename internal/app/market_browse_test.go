@@ -7,7 +7,7 @@ package app
 //     along) and the store round-trip into sde_market_groups.
 //   - The Market page browser: top-level groups with glyphs,
 //     drill-down with breadcrumbs, and leaf type listings held
-//     to the published/marketable floor — all cache-only.
+//     to the published/marketable floor, all cache-only.
 
 import (
 	"context"

@@ -8,7 +8,7 @@ import (
 )
 
 // TestItemPageArtVariants: the item page's art is the type's
-// render with its icon as fallback — except blueprint-category
+// render with its icon as fallback, except blueprint-category
 // types (blueprints, reaction formulas), which have neither
 // asset on the image server and must use the /bp image with no
 // fallback.

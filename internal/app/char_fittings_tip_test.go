@@ -9,7 +9,7 @@ import (
 )
 
 // TestFitTipLinesByModuleKind: each kind of module shows what it
-// changes — a hardener its four resists in their colors (heated
+// changes, a hardener its four resists in their colors (heated
 // figures when overheated), a subsystem the slots it adds, a passive
 // module its bonus, an MWD its boost and signature bloom.
 func TestFitTipLinesByModuleKind(t *testing.T) {

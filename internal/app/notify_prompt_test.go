@@ -102,7 +102,7 @@ func TestNotifyPromptAnswerStoresTheChannels(t *testing.T) {
 	}
 
 	// The settings page shows the same state, and its own save can
-	// change it back — one store, two writers.
+	// change it back, one store, two writers.
 	_, body := getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings after the answer", body,
 		`<input type="checkbox" name="channel_inapp" value="1">`,
@@ -171,7 +171,7 @@ func TestNotifyChannelsGateDelivery(t *testing.T) {
 		t.Fatalf("subscribe: %d %q", code, msg)
 	}
 
-	// Both channels off: the news is not stored, not pushed — and
+	// Both channels off: the news is not stored, not pushed, and
 	// still recorded as seen.
 	if err := f.app.storeNotifyPrefs(f.ctx, f.userID, notifyPrefs{OffChannels: []string{notifyChannelInApp, notifyChannelDesktop}}); err != nil {
 		t.Fatal(err)

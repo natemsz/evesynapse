@@ -127,7 +127,7 @@ func TestStructureMultiCharacterFirstSuccessWins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	// Alpha is the most recently active, so Alpha is asked first —
+	// Alpha is the most recently active, so Alpha is asked first,
 	// and cannot name it. Bravo (a different user's character) can.
 	alpha := scopedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha", "2026-06-01T00:00:00Z")
 	bravo := scopedCharacter(t, q, user.ID, fixtureCharB, "Fixture Bravo", "2026-01-01T00:00:00Z")

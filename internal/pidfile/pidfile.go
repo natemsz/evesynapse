@@ -26,7 +26,7 @@ const Name = "evesynapse.pid"
 // serverRuntimeDir is the server's own writable directory under
 // the service unit (RuntimeDirectory=evesynapse). The install
 // directory and the program in it belong to root, so the service
-// account cannot write there — which is the point: root runs that
+// account cannot write there, which is the point: root runs that
 // program for `evesynapse -update`, so the account the server runs
 // as must never be able to replace it.
 const serverRuntimeDir = "/run/evesynapse"
@@ -35,7 +35,7 @@ const serverRuntimeDir = "/run/evesynapse"
 // live, most preferred first: the runtime directory systemd hands
 // the service ($RUNTIME_DIRECTORY), that directory's fixed address
 // (how a maintenance run, which has no such variable, finds it),
-// and next to the executable — where it has always been, and still
+// and next to the executable, where it has always been, and still
 // is for a server started by hand or under an older unit.
 func Candidates(exeDir string) []string {
 	var dirs []string
@@ -59,7 +59,7 @@ func Candidates(exeDir string) []string {
 
 // Start records the server's PID in the first
 // pidfile location it can write and returns that path ("" when
-// none is writable — the server keeps running either way; only the
+// none is writable, the server keeps running either way; only the
 // self-restart hand-off loses its grip). Called once at startup.
 func Start() string {
 	exe, err := os.Executable()
@@ -245,7 +245,7 @@ func LivePID(pidfilePath string) (int, bool) {
 
 // SignalRestart asks the running server to stop (SIGTERM,
 // the same signal the service manager sends) and waits for it to
-// go away — process exited or pidfile removed, whichever the
+// go away, process exited or pidfile removed, whichever the
 // watcher sees first. Reports whether it stopped in time.
 func SignalRestart(pid int, pidfilePath string, timeout time.Duration) bool {
 	proc, err := os.FindProcess(pid)

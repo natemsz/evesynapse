@@ -22,9 +22,9 @@ import (
 // ---------------------------------------------------------------------------
 // Skill plans: the /skills/plans pages, plan CRUD,
 // plan-from-fit, and the data loaders the skill
-// pages share. Everything renders from local state — the schema-012
+// pages share. Everything renders from local state, the schema-012
 // SDE graph and the worker-warmed skills/skillqueue/attributes
-// snapshots — so no handler ever calls ESI (loadCorpSnapshot reads
+// snapshots, so no handler ever calls ESI (loadCorpSnapshot reads
 // the snapshot table only).
 // ---------------------------------------------------------------------------
 
@@ -1266,7 +1266,7 @@ func (app *plans) uniquePlanName(ctx context.Context, userID, characterID int64,
 // ---------------------------------------------------------------------------
 // Plan from fit: preview the skill closure of a saved fitting,
 // then create on confirm. The closure always recomputes from the
-// fitting snapshot server-side — the posted form only names the
+// fitting snapshot server-side, the posted form only names the
 // fitting, never the skill list.
 // ---------------------------------------------------------------------------
 

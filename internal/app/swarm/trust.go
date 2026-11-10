@@ -9,7 +9,7 @@ package swarm
 // what this instance already wants from approved peers, and
 // spot-checks staged entries against ESI. Peer-to-peer traffic
 // spends no ESI budget; only the spot checks do, a few calls a
-// cycle from the cycle's shared allowance — urgency reorders,
+// cycle from the cycle's shared allowance, urgency reorders,
 // never widens.
 //
 // Reputation is per signer, from this instance's own checks
@@ -378,7 +378,7 @@ func (app *Mod) SwarmEnforceTrust(ctx context.Context, signer string, streak int
 // passes: demand is genuine at pull time, and anything a peer
 // serves settles the fetch state before the worker spends an
 // ESI Call on the same datum. The spot checks stay in the later
-// SwarmCycle — they spend ESI, so they wait behind the passes
+// SwarmCycle, they spend ESI, so they wait behind the passes
 // whose pages are watching.
 func (app *Mod) SwarmFetchPhase(ctx context.Context, now time.Time) {
 	if !app.Cfg.Enabled() || app.SwarmID == nil || app.SwarmCli == nil {
@@ -447,7 +447,7 @@ func (app *Mod) SwarmGossipDone(ctx context.Context, now time.Time) {
 
 // SwarmGossip exchanges membership with seeds and known peers.
 // Learned members are recorded (trust on first use, behind the
-// shared secret); approval follows the mode — open trusts every
+// shared secret); approval follows the mode, open trusts every
 // secret-holder, allowlist waits for the operator. Excluded
 // peers are neither contacted nor propagated.
 func (app *Mod) SwarmGossip(ctx context.Context, now time.Time) {
@@ -520,7 +520,7 @@ func (app *Mod) SwarmGossip(ctx context.Context, now time.Time) {
 // records what it learns: the one gossip round, shared by seeds,
 // known peers, and operator-added addresses alike. A known peer
 // must serve under its pinned identity; an address with no
-// pinned key yet is trust-on-first-use — the shared secret
+// pinned key yet is trust-on-first-use, the shared secret
 // already proved membership, and the key proves possession from
 // here on. Nil means the address answered and its list was
 // learned; ErrSwarmKeyChanged means it answered as an instance
@@ -563,7 +563,7 @@ func (app *Mod) SwarmAbsorbMembers(ctx context.Context, baseURL, peerID, source 
 
 // SwarmFetchMembers asks one URL for its membership list. A
 // known peer must serve under its pinned key; a seed (no pinned
-// key yet) is trust-on-first-use — the shared secret already
+// key yet) is trust-on-first-use, the shared secret already
 // proved membership, and the key proves possession from here on.
 func (app *Mod) SwarmFetchMembers(ctx context.Context, baseURL, peerID, peerKey string) (members []SwarmMember, signer, key string, err error) {
 	var body struct {
@@ -582,8 +582,8 @@ func (app *Mod) SwarmFetchMembers(ctx context.Context, baseURL, peerID, peerKey 
 		}
 		return DecodeSwarmMembers(app.Cfg.Secret, entry.Payload, entry.Signer, peerKey)
 	}
-	// Trust on first use: the shared secret opens the list —
-	// only a member could have sealed it — then the signer's
+	// Trust on first use: the shared secret opens the list,
+	// only a member could have sealed it, then the signer's
 	// listed key must verify the signature, proving the key's
 	// holder sent it.
 	opened, err := OpenSwarmMembers(entry.Payload, app.Cfg.Secret)
@@ -653,7 +653,7 @@ func (app *Mod) SwarmFlagKeyConflict(ctx context.Context, instanceID, heardFrom 
 // A new member is stored only if that signature verifies; a
 // known member's address moves only on a tuple whose signature
 // verifies under the pinned key and which was issued later than
-// the one held, whoever relayed it — an older tuple, however
+// the one held, whoever relayed it, an older tuple, however
 // valid, is ignored, so a stale address cannot be replayed. The
 // tuple is stored as it arrived, to be relayed unchanged. The one
 // address taken without a signature is the one this instance
@@ -663,7 +663,7 @@ func (app *Mod) SwarmFlagKeyConflict(ctx context.Context, instanceID, heardFrom 
 //
 // Build claims ride the tuple and are filed with it, under
 // the same rule as the address (the owner's own signed word,
-// newer than the one held) — and there the claim's influence
+// newer than the one held), and there the claim's influence
 // ends: it is display text for the Admin page, and no trust
 // state in this function or anywhere else reads it.
 //
@@ -745,7 +745,7 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 // SwarmDemandKeys gathers what this instance already wants, for
 // peers to serve before the worker spends ESI calls: names
 // first (type names readers found missing, structure names the
-// resolver has due — few, and cheap to carry), then due history
+// resolver has due, few, and cheap to carry), then due history
 // pairs, then pending organization records, then public
 // contracts whose item lists are still pending. A pull stages only
 // what it asked for, so every kind the swarm carries has to be
@@ -895,7 +895,7 @@ func (app *Mod) SwarmPullOne(ctx context.Context, kind, key string) int {
 // and only that: an entry is kept when it names a key this pull
 // asked the peer for, is signed by the peer itself, and is the
 // first answer for its key. Everything else in the response is
-// dropped unread — data moves on request, so a peer cannot hand
+// dropped unread, data moves on request, so a peer cannot hand
 // over records nobody asked it for. Entries under another
 // signer are skipped without blame (a forwarder cannot spend
 // another signer's reputation, or its own on another's lies);
@@ -1124,7 +1124,7 @@ func (app *Mod) SwarmPull(ctx context.Context, now time.Time) {
 }
 
 // SwarmSpotCheck verifies staged entries against ESI and applies
-// the ones that pass — the only path anything staged reaches
+// the ones that pass, the only path anything staged reaches
 // the real tables. At most a few ESI calls a cycle, from the
 // shared allowance; ESI's stop signal pauses the pass like any
 // other. Only an entry ESI contradicts is a failure: it is
@@ -1267,7 +1267,7 @@ const (
 // On a pass, confirmed is the payload to apply: the entry's own
 // for most kinds, and for history only the days ESI confirmed.
 // stop reports ESI's error-limit signal. Anything less than a
-// clean fetch is deferred, never failed — only ESI's own answer
+// clean fetch is deferred, never failed, only ESI's own answer
 // convicts.
 func (app *Mod) SwarmVerifyAgainstESI(ctx context.Context, allowance module.Budget, characters []db.Character, kind, key, payload string) (verdict SwarmCheckVerdict, confirmed string, stop bool) {
 	switch kind {
@@ -1296,7 +1296,7 @@ func (app *Mod) SwarmTake(allowance module.Budget) bool {
 }
 
 // SwarmVerifyHistory checks one staged history entry against a
-// fresh ESI fetch, over the whole span the two share — not just
+// fresh ESI fetch, over the whole span the two share, not just
 // the days that happen to appear in both. Inside that span the
 // day sets must be identical and every figure equal: a staged
 // day ESI does not have was made up, and a day ESI has that the
@@ -1418,8 +1418,8 @@ func (app *Mod) SwarmVerifyCorporation(ctx context.Context, allowance module.Bud
 	if err := DecodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.ID != id {
 		return SwarmCheckFail, false
 	}
-	// The record travels in either dialect — this app's wrapped
-	// shape or a bare ESI corporation — so it is read through
+	// The record travels in either dialect, this app's wrapped
+	// shape or a bare ESI corporation, so it is read through
 	// the same tolerant decoder the apply path uses, and the
 	// fields compared are the ones actually sent. A body naming
 	// no corporation under either dialect is a shape problem,
@@ -1530,15 +1530,15 @@ func swarmPtrEqual(a, b *int64) bool {
 }
 
 // SwarmVerifyContract checks one staged contract entry against
-// the public items route. Only the items are compared — they
+// the public items route. Only the items are compared, they
 // are the contents this kind exists to move. The header fields
 // are deliberately not compared: the demanding instance already
 // holds the header from its own sweep (that is what made the
 // contract pending and worth demanding), and the signer's copy
 // of it adds nothing ESI could settle here.
 //
-// The item sets must match exactly. A 404 defers — the contract
-// ended, and an honest entry cannot be convicted by its expiry —
+// The item sets must match exactly. A 404 defers, the contract
+// ended, and an honest entry cannot be convicted by its expiry,
 // while a 400 fails: contents the public route refuses (courier
 // cargo claimed as an item list, say) are not public data, and
 // an entry carrying them is wrong however it was signed.

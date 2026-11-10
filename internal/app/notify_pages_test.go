@@ -303,7 +303,7 @@ func TestNotificationSettings(t *testing.T) {
 }
 
 // TestNotificationSettingsAllOff: a settings form submitted with
-// every box unticked still saves as all off — the shown markers
+// every box unticked still saves as all off, the shown markers
 // tell an empty form apart from a form without the switches.
 func TestNotificationSettingsAllOff(t *testing.T) {
 	f := newNotifyFixture(t)
@@ -341,7 +341,7 @@ func TestNotificationSettingsAllOff(t *testing.T) {
 }
 
 // TestNotificationSettingsHiddenSectionsStay: a form without the
-// shown markers — a module's own boxes, say — changes neither the
+// shown markers, a module's own boxes, say, changes neither the
 // kind switches nor the card switches.
 func TestNotificationSettingsHiddenSectionsStay(t *testing.T) {
 	f := newNotifyFixture(t)

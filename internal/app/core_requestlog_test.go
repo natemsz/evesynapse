@@ -12,7 +12,7 @@ import (
 )
 
 // TestRequestLogLevels: a request is routine (info) unless the
-// server itself failed it (5xx), which is an error — so a log
+// server itself failed it (5xx), which is an error, so a log
 // filtered to errors still shows the requests that went wrong.
 func TestRequestLogLevels(t *testing.T) {
 	app, conn, _ := buildCorpTestApp(t, &countingTransport{})

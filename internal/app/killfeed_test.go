@@ -480,7 +480,7 @@ func TestKillboardScopedStats(t *testing.T) {
 }
 
 // TestKillfeedRetriesFailedIngest: a package whose ingest
-// fails is not skipped — the cursor stays on its sequence and
+// fails is not skipped, the cursor stays on its sequence and
 // the same file is asked again until it lands.
 func TestKillfeedRetriesFailedIngest(t *testing.T) {
 	var mu sync.Mutex

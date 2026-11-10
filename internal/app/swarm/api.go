@@ -72,7 +72,7 @@ const SwarmHTTPTimeout = 15 * time.Second
 // SwarmPullSignatureWindow is how far a signed pull's timestamp
 // may sit from this clock, either way. Pulls are made on demand,
 // never queued for later, so five minutes is drift and delay
-// together with room to spare — and a captured signature is
+// together with room to spare, and a captured signature is
 // useless outside it.
 const SwarmPullSignatureWindow = 5 * time.Minute
 
@@ -81,7 +81,7 @@ const SwarmPullSignatureWindow = 5 * time.Minute
 // it sends + "\n" + the lowercase hex SHA-256 of the exact
 // request body bytes. The body hash binds the signature to this
 // one request (the keys it asks for), the timestamp bounds its
-// life, and the instance ID is the signer's own — a signature
+// life, and the instance ID is the signer's own, a signature
 // lifted onto another instance's header names another message.
 // The storm node builds the same bytes; changing them is a flag
 // day for every puller and server.
@@ -97,7 +97,7 @@ func SignSwarmPull(id *SwarmIdentity, timestamp int64, body []byte) string {
 
 // VerifySwarmPullSignature checks one pull signature against
 // the claimed instance's pinned public key. Every failure is
-// false, with no reason given — the caller logs that a signature
+// false, with no reason given, the caller logs that a signature
 // failed, never which part of it.
 func VerifySwarmPullSignature(publicKey, instanceID string, timestamp int64, body []byte, signature string) bool {
 	pub, err := base64.StdEncoding.DecodeString(publicKey)
@@ -127,8 +127,8 @@ type SwarmMember struct {
 	IssuedAt   int64  `json:"issued_at"`
 	// Build is the member's self-reported build claim
 	// (build.go), carried for the Admin page only. It is not
-	// part of the signed address tuple — the signature
-	// covers ID, address and IssuedAt — so a relay passes on
+	// part of the signed address tuple, the signature
+	// covers ID, address and IssuedAt, so a relay passes on
 	// the newest claim it heard beside a tuple it relayed,
 	// and a receiver files it as display text. Nothing in
 	// the trust model reads it.
@@ -171,8 +171,8 @@ const (
 // timestamp is inside SwarmPullSignatureWindow of this clock,
 // and the signature verifies under the peer's pinned key.
 //
-// A signature that fails is logged — a peer whose clock or key
-// has drifted should be visible in the log, not mysterious — but
+// A signature that fails is logged, a peer whose clock or key
+// has drifted should be visible in the log, not mysterious, but
 // it is never anything more: no trust verdict, no shape reject.
 // Authentication is not data, and a broken signature proves a
 // broken peer setup, not a lying one. The request falls back to
@@ -218,7 +218,7 @@ func (app *Mod) verifySwarmPull(ctx context.Context, instance, stamp, signature 
 }
 
 // HandleSwarmMembers serves GET /swarm/members: the signed
-// membership list — this instance plus every non-excluded peer
+// membership list, this instance plus every non-excluded peer
 // it knows, so the caller learns the swarm one hop at a time.
 func (app *Mod) HandleSwarmMembers(w http.ResponseWriter, r *http.Request) {
 	if !app.Cfg.Enabled() || app.SwarmID == nil {
@@ -356,7 +356,7 @@ func (app *Mod) HandleSwarmSeedRegister(w http.ResponseWriter, r *http.Request) 
 }
 
 // SwarmPullRequest is one pull: the keys the caller already
-// wants (demand-driven — a peer only ever serves what the caller
+// wants (demand-driven, a peer only ever serves what the caller
 // asked for, never what it chose to send).
 type SwarmPullRequest struct {
 	Keys []SwarmPullKey `json:"keys"`
@@ -371,7 +371,7 @@ type SwarmPullKey struct {
 // HandleSwarmPull serves POST /swarm/pull: the signed entries
 // for the requested keys this instance holds. Unknown kinds and
 // keys it does not hold are skipped silently, so the response
-// never says what is missing — only what is shared.
+// never says what is missing, only what is shared.
 func (app *Mod) HandleSwarmPull(w http.ResponseWriter, r *http.Request) {
 	if !app.Cfg.Enabled() || app.SwarmID == nil {
 		http.NotFound(w, r)
@@ -419,7 +419,7 @@ func (app *Mod) HandleSwarmPull(w http.ResponseWriter, r *http.Request) {
 		}
 		entries = append(entries, entry)
 	}
-	// Counted here, once per request actually served — never
+	// Counted here, once per request actually served, never
 	// per key, and a refused pull counts nowhere.
 	switch auth {
 	case SwarmPullAuthSigned:
@@ -484,8 +484,8 @@ type SwarmClient struct {
 	// ID is this instance's signing identity, set when the
 	// client is built for a running instance (module.go). With
 	// it, pulls are signed as well as bearer-authed (dual-send
-	// through the transition); without it — tests and any path
-	// built outside an instance — pulls send the bearer only.
+	// through the transition); without it, tests and any path
+	// built outside an instance, pulls send the bearer only.
 	ID *SwarmIdentity
 }
 
@@ -522,7 +522,7 @@ func (c *SwarmClient) Call(ctx context.Context, method, url string, body, into a
 
 // do sends one already-marshaled body (nil for none) with the
 // bearer header and any extra headers the caller computed over
-// those exact bytes — a pull signature must cover the bytes that
+// those exact bytes, a pull signature must cover the bytes that
 // go on the wire, so the marshaling happens once, in the caller.
 func (c *SwarmClient) do(ctx context.Context, method, url string, raw []byte, extra map[string]string, into any) error {
 	if !ValidSwarmBaseURL(url) {

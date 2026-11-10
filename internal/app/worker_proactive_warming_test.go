@@ -564,7 +564,7 @@ func TestLiveRegionFragments(t *testing.T) {
 	}
 
 	// Trader fragment once rows exist: the averages populate
-	// and the margin comes from the passed-along bests — the
+	// and the margin comes from the passed-along bests, the
 	// whole snapshot settles with the chart, no refresh needed.
 	code, body = frag("/market/trader-fragment?region=10000002&type=34&bs=12&bb=10")
 	if code != http.StatusOK {

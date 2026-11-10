@@ -118,7 +118,7 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 }
 
 // warmMailBodies fetches the bodies behind the character's stored
-// mail headers that are not stored yet — unread mail first, then
+// mail headers that are not stored yet, unread mail first, then
 // the rest newest-first (headers arrive newest-first), at most
 // maxMailBodiesPerCycle per cycle. Bodies never change once
 // delivered, so a stored body is never refetched; presence of the
@@ -150,7 +150,7 @@ func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, all
 
 	// Which bodies already stand, in one query for the whole
 	// mailbox: bodies are immutable, so existence is all the
-	// loop below needs — not one snapshot read per header.
+	// loop below needs, not one snapshot read per header.
 	have := map[string]bool{}
 	if metas, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID); err == nil {
 		for _, m := range metas {

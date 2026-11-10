@@ -96,10 +96,9 @@ func (f *planFixture) planIDs(characterID int64) []db.SkillPlan {
 }
 
 // TestSkillPlanActionsLandOnARealPage: every plan action does its work
-// and then redirects; the redirect must go to a page that exists. They
-// used to go to /skills/plans/ (with a slash) while the route is
-// /skills/plans, so creating a plan, moving a skill or deleting a plan all ended on a
-// 404 after succeeding.
+// and then redirects; the redirect must go to a page that exists. The
+// route is /skills/plans, with no trailing slash, so creating a plan,
+// moving a skill and deleting a plan must all land there.
 func TestSkillPlanActionsLandOnARealPage(t *testing.T) {
 	f := newPlanFixture(t)
 	const char = "90000001"

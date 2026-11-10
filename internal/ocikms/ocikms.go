@@ -2,8 +2,8 @@
 // Management's Encrypt/Decrypt calls, authenticated by instance
 // principal. It exists so EveSynapse can hold its token encryption
 // key wrapped by a key that lives in an OCI Vault (HSM-backed,
-// non-exportable) while no usable key material — and no cloud
-// credential at all — sits on the machine: the app's identity is
+// non-exportable) while no usable key material, and no cloud
+// credential at all, sits on the machine: the app's identity is
 // the instance's own, minted by the metadata service and good for
 // about an hour at a time (see principal.go).
 //
@@ -32,7 +32,7 @@ import (
 // CryptoEndpoint and KeyID are the deployment's values (the
 // vault's cryptographic endpoint and the key's OCID). The two
 // base URLs default to the real services; they are configurable
-// so tests — and only tests, in practice — can point the client
+// so tests, and only tests, in practice, can point the client
 // at fakes.
 type Config struct {
 	CryptoEndpoint    string

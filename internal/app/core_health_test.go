@@ -95,7 +95,7 @@ func TestHealthzCachesItsAnswer(t *testing.T) {
 	}
 
 	// The database goes away. Inside the cache window the last
-	// answer stands — that is the point: no new ping happened,
+	// answer stands, that is the point: no new ping happened,
 	// or this call would already report the loss.
 	conn.Close()
 	app.pool.Close()

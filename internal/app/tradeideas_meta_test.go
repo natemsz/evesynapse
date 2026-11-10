@@ -65,9 +65,9 @@ func TestTradeIdeasConfiguredWithMetaKey(t *testing.T) {
 }
 
 // TestTradeIdeasModelSwitchRefreshesNow: a fresh Gemma answer does
-// not hold off Muse Wonder once MODEL_API_KEY is set — the answer
+// not hold off Muse Wonder once MODEL_API_KEY is set, the answer
 // another model gave is asked again on the next cycle, not 12 hours
-// later — and the new model's fresh answer then holds as usual.
+// later, and the new model's fresh answer then holds as usual.
 func TestTradeIdeasModelSwitchRefreshesNow(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()

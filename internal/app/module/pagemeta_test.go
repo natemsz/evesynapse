@@ -7,7 +7,7 @@ import (
 
 // TestRenderPageMetaEscapesHostileValues: quotes, angle brackets
 // and ampersands in a name are escaped in every context the helper
-// emits — no value can break out of its attribute or element.
+// emits, no value can break out of its attribute or element.
 func TestRenderPageMetaEscapesHostileValues(t *testing.T) {
 	hostile := `Bad " <script>alert(1)</script> & Co`
 	out := string(RenderPageMeta(PageMeta{
@@ -27,7 +27,7 @@ func TestRenderPageMetaEscapesHostileValues(t *testing.T) {
 }
 
 // TestCanonicalURL pins the canonical rules: the evesynapse.app
-// host always, the clean path only — query strings and fragments
+// host always, the clean path only, query strings and fragments
 // never survive.
 func TestCanonicalURL(t *testing.T) {
 	for in, want := range map[string]string{
@@ -84,7 +84,7 @@ func TestRenderPageMetaKeepsTheFitPageTags(t *testing.T) {
 
 // The fit page's own absolute address wins over a path-built
 // canonical, and a page with neither emits no canonical and no
-// og:url at all — the unnamed-install behavior the fit page has
+// og:url at all, the unnamed-install behavior the fit page has
 // always shipped.
 func TestRenderPageMetaCanonicalURLWins(t *testing.T) {
 	out := string(RenderPageMeta(PageMeta{

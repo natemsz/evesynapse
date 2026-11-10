@@ -2,8 +2,8 @@ package app
 
 // The item <-> contract discovery loop: the top banner search
 // finds contract-only item types (blueprints and reaction
-// formulas carry no market group, so the suggestion feed's
-// market floor used to hide them), every item page links into
+// formulas carry no market group, and the suggestion feed
+// must still offer them), every item page links into
 // Contract Search filtered to its type, and the contract
 // search honors that item_type deep link with an exact type
 // match (the name search stays a substring convenience).

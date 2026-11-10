@@ -4,7 +4,7 @@
 # (`evesynapse -update`) restart the app onto a new build: the
 # updater swaps the program file in place, asks the running server
 # to stop, and this unit brings it straight back up on the new
-# version — an explicit `systemctl stop evesynapse` still stays
+# version, an explicit `systemctl stop evesynapse` still stays
 # stopped. StartLimitBurst keeps a broken build from
 # restart-looping forever: after 5 starts in a minute the unit
 # gives up and waits for a human.
@@ -22,7 +22,7 @@
 #   sudo systemctl daemon-reload
 
 [Unit]
-Description=EveSynapse — EVE Online companion
+Description=EveSynapse: EVE Online companion
 After=network-online.target postgresql.service
 Wants=network-online.target
 StartLimitIntervalSec=60

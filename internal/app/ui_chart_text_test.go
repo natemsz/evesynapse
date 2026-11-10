@@ -14,8 +14,8 @@ import (
 // .pchart a container and steps the unit size per width band so
 // the rendered labels stay between about 11 and 15px up to an
 // 820px box. The old viewport step-downs (7 units at 1200px+, 6 at
-// 1700px+) rendered the Home chart's labels at 3–4px — too small
-// to read — while the full-width chart read fine.
+// 1700px+) rendered the Home chart's labels at 3–4px, too small
+// to read, while the full-width chart read fine.
 func TestBalanceChartTextStaysReadable(t *testing.T) {
 	read := func(name string) string {
 		raw, err := fs.ReadFile(staticFS, "static/"+name)

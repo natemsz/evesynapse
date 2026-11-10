@@ -7,7 +7,7 @@ package app
 // corporations, and every corporation ID already in the database. ESI
 // has no list of all corporations, so a player corporation in no
 // alliance that the app has never met still arrives the usual way. A starting server runs it once by itself when the
-// table is next to empty (a fresh install); run it by hand any time —
+// table is next to empty (a fresh install); run it by hand any time,
 // it is safe while the server runs. Characters have no
 // public list, so their names keep arriving as the app meets them.
 

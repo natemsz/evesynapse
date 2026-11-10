@@ -2,7 +2,7 @@ package app
 
 // ---------------------------------------------------------------------------
 // Training horizon: the next finishes across every character's
-// whole skill queue, plus who is sitting idle — second and third
+// whole skill queue, plus who is sitting idle, second and third
 // queued skills included, so one glance replaces opening every
 // character's queue. At one row high the module is compact (what
 // the retired Skills module was): each character's next finish only,

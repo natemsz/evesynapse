@@ -34,10 +34,10 @@ func newESITransport() *http.Transport {
 }
 
 // NewHTTPClient builds the HTTP client production ESI requests ride.
-// ESI used to share the SSO/JWKS client — a bare http.Client with no
-// Transport, so esi.evetech.net got Go's default of two idle
-// connections per host and the worker's parallel fetches queued
-// behind each other. This client is ESI's own, tuned the way the
+// A bare http.Client with no Transport gives esi.evetech.net Go's
+// default of two idle connections per host, and the worker's
+// parallel fetches queue behind each other. This client is ESI's
+// own (not the SSO/JWKS client), tuned the way the
 // swarm peer client is: a real idle pool, HTTP/2 where offered, and
 // short handshake and header waits under the same 10s overall
 // request timeout the worker's pacing assumes. The login/SSO client

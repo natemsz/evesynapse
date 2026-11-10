@@ -76,8 +76,8 @@ func TestSanitizeFitDocCapsHostileFit(t *testing.T) {
 	}
 }
 
-// TestSanitizeFitDocKeepsLegitFit: a real fit — a full rack of
-// one gun, a bay of drones, a T3 subsystem set — passes through
+// TestSanitizeFitDocKeepsLegitFit: a real fit, a full rack of
+// one gun, a bay of drones, a T3 subsystem set, passes through
 // the caps unchanged.
 func TestSanitizeFitDocKeepsLegitFit(t *testing.T) {
 	doc := &FitDoc{ShipTypeID: 587, Items: []FitDocItem{
@@ -99,7 +99,7 @@ func TestSanitizeFitDocKeepsLegitFit(t *testing.T) {
 
 // TestSanitizeFitDocBoundsStateGrowth: without a snapshot the
 // quantities keep the legacy bulk clamp, but the per-instance
-// state array no longer grows to the claimed quantity — the
+// state array no longer grows to the claimed quantity, the
 // sanitize step itself must not be the amplifier.
 func TestSanitizeFitDocBoundsStateGrowth(t *testing.T) {
 	doc := &FitDoc{ShipTypeID: 587, Items: []FitDocItem{

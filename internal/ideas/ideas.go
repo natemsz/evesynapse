@@ -22,8 +22,8 @@ import (
 // the model's "(#n)" references name, and the pre-formatted figure
 // strings (never re-derived numbers). The answer stores its rows
 // beside its body (trade_ideas.rows), and Parse composes each idea's
-// figure segment from them, so the model never transcribes — and
-// never slips on — the figures it used to copy out of the CSV.
+// figure segment from them, so the model never transcribes, and
+// never slips on, the figures it used to copy out of the CSV.
 type Row struct {
 	N       int    `json:"n"`
 	Item    string `json:"item"`
@@ -148,8 +148,8 @@ const maxOutLines = 400
 
 // Parse reads the stored markdown-shaped answer (###
 // headers, * bullets, **bold**, *italic* lines) into one group per
-// strategy. An idea in the current answer shape —
-// "* **Item** (#n) — reason" — is composed at parse time: the
+// strategy. An idea in the current answer shape,
+// "* **Item** (#n), reason", is composed at parse time: the
 // "(#n)" reference (never rendered) names a row of the answer's
 // stored row set, and the displayed line takes its item name and
 // figure segment from that row, in the exact format the model used
@@ -224,9 +224,9 @@ func Parse(body string, rows []Row) []Group {
 }
 
 // composeIdea resolves one idea bullet against the answer's stored
-// row set. The current shape is "**Item** (#n) — reason": the
+// row set. The current shape is "**Item** (#n), reason": the
 // reference is extracted (never rendered), and a reference that
-// lands composes the display line from the ROW — its item name, not
+// lands composes the display line from the ROW, its item name, not
 // the model's, and its figure strings in the format the model used
 // to transcribe. No row set, no reference, an unparseable reference,
 // or one out of range leaves the model's own item and reason with
@@ -301,7 +301,7 @@ const briefMax = 44
 
 // brief shortens one idea line (markdown) for the compact
 // module: the bolded item, then the first clause of what follows it
-// (up to the first " · ", " — ", "; " or ". "), cut at a word near
+// (up to the first " · ", ", ", "; " or ". "), cut at a word near
 // briefMax with an ellipsis. A line with no bold item keeps
 // its own first clause.
 func brief(line string) string {

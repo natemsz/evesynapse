@@ -371,7 +371,7 @@
     // The lock is page-wide on purpose: both sides share one
     // height, so every re-run measures the pair.
     var panes = document.querySelectorAll(".mkt-book-pane > .tw");
-    // Both sides share one height — the taller side's ten — so a
+    // Both sides share one height, the taller side's ten, so a
     // thin book never sits lopsided next to a full one.
     var heights = [];
     for (var i = 0; i < panes.length; i++) {
@@ -504,7 +504,7 @@
   // Row heights settle after the first measure (webfonts arrive,
   // the sidebar lands, wrapping changes): watch the tables and
   // re-lock whenever their height moves. Setting the lock never
-  // moves a table — it only clips its box — and the value guard
+  // moves a table, it only clips its box, and the value guard
   // above absorbs the one extra pass a new scrollbar causes.
   if ("ResizeObserver" in window) {
     var paneWatch = new ResizeObserver(function () { sizeOrderBookPanes(); });

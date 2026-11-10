@@ -9,7 +9,7 @@ import (
 // TestPhoneBarRules pins the measured phone fix in the stylesheet:
 // a 15px root at <=480px (font-size, never the zoom property, whose
 // media queries can oscillate at the boundary), and the Overview bar
-// compressed onto one row — dot-only ESI pill, gear-only Overview
+// compressed onto one row, dot-only ESI pill, gear-only Overview
 // summary, full "Link another character" text. The widths themselves
 // were verified in a browser rig; this keeps the rules from quietly
 // dropping out of the CSS.

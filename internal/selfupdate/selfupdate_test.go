@@ -1,7 +1,7 @@
 package selfupdate
 
 // Hermetic tests for -update: the download/verify/swap path (against
-// httptest servers and local files only — never the network) and the
+// httptest servers and local files only, never the network) and the
 // restart hand-off (against a throwaway `sleep` process).
 //
 // None of these depends on which release the repository is at: the
@@ -51,9 +51,9 @@ func fakeELF(machine uint16, size int) []byte {
 }
 
 // ownAndOtherELFMachine returns the ELF machine kind of the
-// computer running the tests — what the explicit-source update
+// computer running the tests, what the explicit-source update
 // form expects of a build, since it installs one this computer can
-// run — and a kind it is not.
+// run, and a kind it is not.
 func ownAndOtherELFMachine(t *testing.T) (own, other uint16) {
 	t.Helper()
 	own, ok := elfMachineForArch(ownReleaseArch())
@@ -157,7 +157,7 @@ func TestLoadInstallEnv(t *testing.T) {
 }
 
 // TestLoadInstallEnvUnreadable: an install .env that exists but
-// cannot be read is an error — it may carry the update channel,
+// cannot be read is an error, it may carry the update channel,
 // and updating from the wrong channel is worse than not
 // updating. A directory in place of the file reads as one on
 // every platform.
@@ -205,9 +205,8 @@ func TestCompareVersions(t *testing.T) {
 		{"0.3.17.10", "0.3.17.2", 1},
 		// A -dev suffix is not part of the number: the numbers
 		// decide first, and on a tie the plain release is newer.
-		// (Made-up numbers on purpose: these cases used to carry
-		// the current release, and a release bump's search and
-		// replace changed what they compared.)
+		// (Made-up numbers on purpose: a release bump's search
+		// and replace must not change what these compare.)
 		{"1.4.1.002-dev", "1.4.2.001-dev", -1},
 		{"1.4.2.001-dev", "1.4.1.002-dev", 1},
 		{"1.4.2.001-dev", "1.4.2.001-dev", 0},
@@ -492,8 +491,8 @@ func TestReleaseUpdateX86Alias(t *testing.T) {
 }
 
 // TestReleaseUpdateLeavesDevBuildsAlone: a development build that
-// ends up published under a plain release tag — its manifest
-// naming the development version — is never installed by a plain
+// ends up published under a plain release tag, its manifest
+// naming the development version, is never installed by a plain
 // -update, whatever its number: nothing is even downloaded. The
 // channel's own selection already keeps -dev tags out; this is
 // the guard behind it, on the signed manifest itself.
@@ -568,7 +567,7 @@ func devChannel(mux *http.ServeMux, devSigned bool) {
 // TestDevUpdateInstallsTheDevReleasesOwnBinary: -update -dev takes
 // the manifest, its signature and the binary from the same -dev
 // release. The plain release's binary is a different build here,
-// so downloading from there — what -dev first did — could only
+// so downloading from there, what -dev first did, could only
 // ever fail the dev manifest's checksum.
 func TestDevUpdateInstallsTheDevReleasesOwnBinary(t *testing.T) {
 	key := trustTestKey(t)
@@ -697,8 +696,8 @@ func attemptUpdate(t *testing.T, mux *http.ServeMux, args ...string) (code int, 
 }
 
 // TestReleaseUpdateRefusesWhatItCannotVerify: every case is a release
-// that would install — a newer version, a build matching the
-// checksum in its manifest — except that the manifest cannot be shown
+// that would install, a newer version, a build matching the
+// checksum in its manifest, except that the manifest cannot be shown
 // to come from the release key. None is installed, and none is even
 // downloaded: the refusal comes before the build is fetched.
 func TestReleaseUpdateRefusesWhatItCannotVerify(t *testing.T) {

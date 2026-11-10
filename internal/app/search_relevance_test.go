@@ -10,10 +10,9 @@ import (
 
 // TestSearchFeedsPutPrefixMatchesFirst: every search feed that orders by
 // relevance lists the names that start with the query before the names
-// that merely contain it, then alphabetically inside each tier. The
-// relevance term used to be written with a raw $1 beside the named @q, which
-// sqlc turned into a second parameter nobody set; it stayed empty, every
-// name "started with" it, and the ordering collapsed to plain alphabetical.
+// that merely contain it, then alphabetically inside each tier. (A raw
+// $1 beside the named @q in the relevance term becomes a second parameter
+// nobody sets, and the ordering collapses to plain alphabetical.)
 // The fixture is built so that alphabetical and relevance order disagree:
 // "Fleet Rifter" sorts before "Rifter" but only contains the query (and the
 // module and drone names are chosen the same way).

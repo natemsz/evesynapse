@@ -257,8 +257,8 @@ var navGroupIcons = map[string]template.HTML{
 
 // sectionTabsGrouped is a page's tab strip data: for an ungrouped
 // section, its pages and no sub-row. For a grouped one, the strip
-// shows the groups — labelled by cluster, linking at the cluster's
-// first page in the group's declared order, active when one of its pages is — and
+// shows the groups, labelled by cluster, linking at the cluster's
+// first page in the group's declared order, active when one of its pages is, and
 // the sub-row shows the active group's pages. A group with no
 // compiled-in pages is skipped. A strip the group map does not
 // cover exactly falls back to the flat strip whole, so a page no
@@ -309,7 +309,7 @@ func sectionTabsGrouped(links map[string][]navLink, section string) ([]navLink, 
 // navGroupsFor is the sidebar's view of sectionGroups: each
 // grouped section's flat links bucketed under their group
 // headings, in map order, pages inside a group in the group's
-// declared order —
+// declared order,
 // the tab strip's grouping mirrored, not a second opinion of
 // it. A section the map does not cover exactly (a page no
 // group claims, a group with no compiled-in pages) is left
@@ -369,8 +369,8 @@ func baseHref(href string) string {
 // ---------------------------------------------------------------------------
 // The phone bottom bar and its menu: the primary nav restated
 // for the phone band. The bar's fixed slots and the menu's
-// section order are the two lists below — one line each
-// to change — and every destination derives from the same
+// section order are the two lists below, one line each
+// to change, and every destination derives from the same
 // sectionNav the sidebar renders, so the three can never
 // disagree. A section's landing is its first nav page.
 // ---------------------------------------------------------------------------
@@ -475,7 +475,7 @@ func bottomNavFor(links map[string][]navLink, groups map[string][]module.NavGrou
 
 // sheetSwitcherCells is the phone sheet's character grid size:
 // two columns of three. The grid is the sheet's one unbounded
-// input — an account can link any number of pilots — so past
+// input, an account can link any number of pilots, so past
 // the cap the grid's last cell is a "+N more" tile to the
 // character management page, and the sheet's account block is
 // one bounded height however many pilots the account carries.

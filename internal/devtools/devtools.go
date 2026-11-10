@@ -20,7 +20,7 @@ import (
 // which otherwise refuses headless browsers such as Playwright, and
 // registers:
 //
-//	GET /dev-login — flip the session "authenticated" flag without
+//	GET /dev-login, flip the session "authenticated" flag without
 //	EVE SSO, so the signed-in pages can be exercised locally. It
 //	lands on the home page: the dev session has no account, so it
 //	is never an admin.

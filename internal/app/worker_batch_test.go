@@ -10,7 +10,7 @@ import (
 )
 
 // TestOrderByDuePrefersUnfetched: a character with no snapshots is
-// most overdue, ahead of one whose core snapshots are fresh — and
+// most overdue, ahead of one whose core snapshots are fresh, and
 // the ordering holds with the batched freshness read.
 func TestOrderByDuePrefersUnfetched(t *testing.T) {
 	transport := &countingTransport{}
@@ -52,9 +52,9 @@ func TestOrderByDuePrefersUnfetched(t *testing.T) {
 	}
 }
 
-// TestRouteJournalParty: counterparties sort by party_type —
-// characters to the name harvest, orgs to the flush sets — and an
-// characters to the name harvest, orgs to the flush sets — and an
+// TestRouteJournalParty: counterparties sort by party_type,
+// characters to the name harvest, orgs to the flush sets, and an
+// characters to the name harvest, orgs to the flush sets, and an
 // untyped party is left alone.
 func TestRouteJournalParty(t *testing.T) {
 	chars, corps, alliances := map[int64]bool{}, map[int64]bool{}, map[int64]bool{}

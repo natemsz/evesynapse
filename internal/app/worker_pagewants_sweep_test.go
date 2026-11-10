@@ -7,7 +7,7 @@ import (
 
 // TestSweepPageWants: expired wants are forgotten in every
 // scope, fresh ones are kept, and a scope emptied by the sweep
-// goes with them — including scopes nobody polls any more,
+// goes with them, including scopes nobody polls any more,
 // which pendingPageWantCount never gets the chance to settle.
 func TestSweepPageWants(t *testing.T) {
 	now := time.Now()

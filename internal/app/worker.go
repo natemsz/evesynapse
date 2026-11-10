@@ -23,8 +23,8 @@ import (
 
 // ---------------------------------------------------------------------------
 // Panic containment. The HTTP recoverer only covers request
-// handlers; a panic on any worker goroutine — a payload shape ESI
-// never sent before, a nil the code didn't expect — would end the
+// handlers; a panic on any worker goroutine, a payload shape ESI
+// never sent before, a nil the code didn't expect, would end the
 // whole process and take the site down with it. Every worker
 // goroutine and pass therefore runs under one of the guards
 // below: the panic is logged with its stack and the work is
@@ -138,7 +138,7 @@ func (app *Application) workerStatusText() string {
 // name caches (types, groups, places) from the fresh snapshots so
 // page renders never wait on ESI. If ESI answers with its
 // error-limit status (420/429) the cycle stops and the next tick
-// retries — CCP asks clients to back off instead of hammering.
+// retries, CCP asks clients to back off instead of hammering.
 //
 // Logging is deliberately quiet: one summary line per cycle only when
 // something was refreshed or failed, plus a 10-minute heartbeat so
@@ -223,7 +223,7 @@ func (app *Application) runWorker(ctx context.Context) {
 
 	// SDE maintenance runs alongside the ESI cycle: a first import
 	// when the static-data tables are empty, then a daily update
-	// check — see sdeMaintenance in sde.go. It
+	// check, see sdeMaintenance in sde.go. It
 	// only ever starts background operations, so it never delays
 	// snapshot refreshes.
 	go func() {
@@ -381,8 +381,8 @@ func (app *Application) refreshCycle(ctx context.Context) {
 
 	// The market guide: one public call mirrors into
 	// the stored table on ESI's cache window, ahead of the
-	// character pass so asset valuation — the net-worth card
-	// and the daily sampler below — always has prices to work
+	// character pass so asset valuation, the net-worth card
+	// and the daily sampler below, always has prices to work
 	// with. Fresh tables cost nothing here.
 	if stored, gLimited := app.refreshGuidePrices(ctx); stored {
 		c.refreshed++
@@ -652,7 +652,7 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	// revoked refresh token means this character needs a fresh
 	// login, and fetching would only fail three more times.
 	// (A definitive rejection parks the character inside
-	// validAccessToken — see auth_links.go.)
+	// validAccessToken, see auth_links.go.)
 	if _, err := app.validAccessToken(ctx, ch); err != nil {
 		logging.Warnf("worker: token for character %d unusable: %v", ch.CharacterID, err)
 		c.failed++
@@ -720,7 +720,7 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	})
 
 	// Daily wallet history (schema 019): record today from
-	// the snapshots just stored. Pure local reads — no fetch
+	// the snapshots just stored. Pure local reads, no fetch
 	// budget spent, no extra ESI calls.
 	app.sampleWalletHistory(ctx, ch, time.Now())
 
@@ -896,7 +896,7 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	})
 
 	// Planet names: resolve the due slice of the planet queue
-	// (public endpoint, no token — planets_names.go).
+	// (public endpoint, no token, planets_names.go).
 	c.pass("resolving planet names", func() (int, bool) {
 		return app.resolvePlanetNames(ctx, c.allowance)
 	})
@@ -939,9 +939,9 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 func (c *cycleState) warmNames(ctx context.Context, characters []db.Character) {
 	app := c.app
 
-	// Name warm-up: resolve whatever the local caches still lack —
+	// Name warm-up: resolve whatever the local caches still lack,
 	// type names (persisted in type_names), type→group links, group
-	// names, station/system names — from the characters' latest
+	// names, station/system names, from the characters' latest
 	// snapshots, so renders resolve from memory/DB only. Bounded
 	// per cycle; whatever doesn't fit converges over later cycles.
 	budget := &warmBudget{left: maxWarmLookupsPerCycle}
@@ -965,7 +965,7 @@ func (c *cycleState) warmNames(ctx context.Context, characters []db.Character) {
 	// Intel (public data): global snapshots, war details and the
 	// public name caches, spending whatever of the cycle's lookup
 	// budget the character pass left. Runs with zero characters
-	// linked too — none of it needs a token.
+	// linked too, none of it needs a token.
 	if !c.limited {
 		iStored, iNames, iLimited := app.refreshIntel(ctx, budget)
 		c.refreshed += iStored
@@ -1276,11 +1276,11 @@ func guardedWarm(ctx context.Context, id int64, work func(context.Context, int64
 // warmCharacterNames resolves every name the local caches still lack
 // for one character, derived from its latest skills + assets
 // snapshots: type names, type→group links, group names, and
-// station/system names — plus character names for the victims and
+// station/system names, plus character names for the victims and
 // final-blow attackers in its stored killmail details. It returns
 // how many entries were resolved.
 // (Structure ids met in snapshots are noted for the background
-// structure-name queue — see structures.go — never fetched here;
+// structure-name queue, see structures.go, never fetched here;
 // pages render "Structure #<id>" until the queue lands a name.)
 func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character, budget *warmBudget) int {
 	snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID)
@@ -1298,7 +1298,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 
 	// Structure ids met in this character's snapshots join the
 	// background resolution queue (structures.go). A plain queue
-	// note, no fetches — resolution runs once per cycle.
+	// note, no fetches, resolution runs once per cycle.
 	if len(wants.structures) > 0 {
 		ids := make([]int64, 0, len(wants.structures))
 		for id := range wants.structures {
@@ -1363,7 +1363,7 @@ func (app *Application) warmMissingTypeNames(ctx context.Context, typeIDs []int6
 		app.esi.NoteTypeNameMiss(id)
 		// A dedicated node's budget before this one's: defer
 		// only while a covering peer may deliver, never past
-		// the grace — the own fetch below is the fallback and
+		// the grace, the own fetch below is the fallback and
 		// it is not made to wait on a peer that cannot serve.
 		if app.deferFetch(ctx, module.FetchKindTypeName, strconv.FormatInt(id, 10), now) {
 			continue
@@ -1691,7 +1691,7 @@ func (app *Application) warmSchematic(ctx context.Context, budget *warmBudget, i
 // Killmail detail warming. The recent-killmails list is a snapshot;
 // the detail payloads behind it are immutable, so the worker fills
 // the killmail_details store once per killmail (bounded per cycle)
-// and pages render from the store only — never from the network.
+// and pages render from the store only, never from the network.
 // ---------------------------------------------------------------------------
 
 // maxKillmailDetailsPerCycle bounds detail fetches per character

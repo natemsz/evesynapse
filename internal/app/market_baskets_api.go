@@ -62,7 +62,7 @@ func (app *Application) basketTypicalPrices(ctx context.Context, regionID int64,
 }
 
 // handleMarketBasketItemsJSON serves GET
-// /market/baskets/{basketID}/items.json: the owner's editor seed —
+// /market/baskets/{basketID}/items.json: the owner's editor seed,
 // the basket's name, region and items with current typical prices.
 func (app *Application) handleMarketBasketItemsJSON(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

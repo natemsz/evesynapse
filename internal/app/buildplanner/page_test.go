@@ -10,7 +10,7 @@ import (
 	"evesynapse/internal/esi"
 )
 
-// TestPlanMESummary: the ME wall compresses to one line — the
+// TestPlanMESummary: the ME wall compresses to one line, the
 // all-default count, otherwise each non-default blueprint with
 // the rest in one tail.
 func TestPlanMESummary(t *testing.T) {
@@ -55,7 +55,7 @@ func TestDefaultJudgeParam(t *testing.T) {
 }
 
 // An empty preset (the mask buys the finished product, or stock
-// covers everything) must marshal its lists as [], never null —
+// covers everything) must marshal its lists as [], never null,
 // the client dereferences both on first load, and a null shopping
 // list is what blanked capital plans until a preset was clicked.
 func TestPlannerEmptyPresetMarshalsLists(t *testing.T) {

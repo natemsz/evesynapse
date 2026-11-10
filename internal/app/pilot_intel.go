@@ -113,7 +113,7 @@ type pilotIntelView struct {
 	CharacterID int64
 	Name        string
 	Any         bool
-	// HasIntel: the section holds actual intel on this pilot —
+	// HasIntel: the section holds actual intel on this pilot,
 	// killboard activity, or the reader's channel reports, scans or
 	// watched lists naming them. The page gives such a section the
 	// rail placement (pilot.html); an empty section keeps the plain

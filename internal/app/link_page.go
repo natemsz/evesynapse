@@ -278,8 +278,8 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 	}
 	if view.Step == "reveal" && !submitted && !view.Remembered && len(choice.Activities) > 0 {
 		// Arriving from the playstyle cards: every permission of the
-		// chosen features starts ticked, the ones that used to be
-		// offered as extras included. They are part of how the
+		// chosen features starts ticked, the optional ones
+		// included. They are part of how the
 		// features are expected to work, so the summary lists them
 		// like any other permission; unticking stays the player's
 		// move. A submitted or remembered choice is taken as sent.
@@ -549,8 +549,8 @@ func (app *Application) rememberLink(ctx context.Context, userID int64, c linkCh
 // linkChoiceFromQuery reads a choice from /auth/eve: repeated feature,
 // enhance and activity parameters, or full=1 for every feature and every
 // extra permission (the link as it was before the chooser). ok is true
-// when a choice was submitted at all — the chooser's submitted=1 marker
-// or any choice parameter — even when everything was unticked. Only a
+// when a choice was submitted at all, the chooser's submitted=1 marker
+// or any choice parameter, even when everything was unticked. Only a
 // request with no choice in it at all is "no choice" (the full link);
 // an empty submitted choice is a choice of nothing and never widens.
 func (app *Application) linkChoiceFromQuery(q url.Values) (linkChoice, bool) {

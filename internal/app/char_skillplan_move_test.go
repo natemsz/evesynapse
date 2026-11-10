@@ -250,8 +250,8 @@ func TestAddingAPlannedSkillNeverLowersIt(t *testing.T) {
 // TestPlanPickerListsSearchesAndDeletes: every saved plan is listed with
 // what is left to train in it, the picker's search narrows the list (the
 // no-JavaScript form), the plan chosen is the one open, and a plan can
-// be deleted from the list — through the page's own confirmation without
-// JavaScript — leaving the others alone.
+// be deleted from the list, through the page's own confirmation without
+// JavaScript, leaving the others alone.
 func TestPlanPickerListsSearchesAndDeletes(t *testing.T) {
 	f := newPlanFixture(t)
 	const char = "90000001"

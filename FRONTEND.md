@@ -3,7 +3,7 @@
 How the browser side of EveSynapse works, for anyone changing it.
 The short version: the server renders finished HTML, JavaScript
 only ever *enhances* it, and there is no build step. If you are
-looking for the framework, this document is it — the conventions
+looking for the framework, this document is it, the conventions
 below are the framework, and the test suite enforces the load-
 bearing ones.
 
@@ -26,14 +26,14 @@ bearing ones.
 
 ## The files (internal/app/static/)
 
-- `boot.js` — a plain script in `<head>`, not deferred, so a saved
+- `boot.js`, a plain script in `<head>`, not deferred, so a saved
   theme/nav state applies before first paint. Dependency-free and
   tiny on purpose: every byte here delays first paint.
-- `swap.js` — the persistent shell. Intercepts navigation,
+- `swap.js`, the persistent shell. Intercepts navigation,
   fetches the next page, replaces `#main-content`, and fires the
   lifecycle events below. The sidebar, top bar and shell survive
   across pages.
-- `app.js` — shell behavior that binds once (quick jump, theme
+- `app.js`, shell behavior that binds once (quick jump, theme
   toggle, search suggestions, the modal implementation, the
   content-ready bus itself) plus the generic widget kit.
 - Per-surface files, loaded only where they belong (base.html
@@ -47,12 +47,12 @@ bearing ones.
   `content-ready`, so it runs once for the document as it stands
   and subscribes with `onReady` for later swaps (`plan.js` and
   `map.js` show the shape).
-- `sw.js` — the service worker.
+- `sw.js`, the service worker.
 - CSS: `layout.css` (the layout framework: where page regions go
   and how they collapse; see "Layout" below), `style.css` (the
   core; it is at the practical size ceiling,
   so a feature with substantial styles gets its own file, linked
-  in base.html after `plan.css` — see `plan.css`,
+  in base.html after `plan.css`, see `plan.css`,
   `tradeideas.css`), `bg.css` (wallpaper). Both themes are one
   stylesheet: dark by default, light under
   `html[data-theme="light"]`.
@@ -63,7 +63,7 @@ bearing ones.
 
 Navigation does not reload the page. swap.js fires, in order:
 
-1. `evesynapse:content-will-swap` on document — teardown time.
+1. `evesynapse:content-will-swap` on document, teardown time.
 2. `#main-content` is replaced.
 3. `evesynapse:content-ready` on document, with `detail.root` set
    to the new fragment.
@@ -83,7 +83,7 @@ Rules that follow from this:
   double-binding or torn down on `content-will-swap` (the
   countdown ticker and the page-sync loop are the worked
   examples in app.js).
-- **Shell code binds once and never re-runs** — if it needs to
+- **Shell code binds once and never re-runs**, if it needs to
   react to new content (the modal closer, the character-selector
   pruner), it listens for the lifecycle events itself.
 - A dialog open inside content being swapped out closes with it.
@@ -92,7 +92,7 @@ Rules that follow from this:
   scripts the shell hasn't loaded (in document order, against
   the swapped-in content, before content-ready), and prunes the
   stylesheet again when a later page doesn't carry it. Only an
-  asset that fails to load falls back to a full navigation —
+  asset that fails to load falls back to a full navigation,
   plus the pages whose JS holds state (the fitting simulator
   and saved fits always load whole regardless). That's what
   makes per-surface files safe: gate the file in base.html and
@@ -101,7 +101,7 @@ Rules that follow from this:
 ## The common pieces
 
 Everything below already exists. Use these; don't build a
-second one. Markup contracts are the whole API — if you change
+second one. Markup contracts are the whole API, if you change
 one side, the other side and its tests change in the same
 commit.
 
@@ -112,11 +112,11 @@ planner dialogs, quick jump). Markup: a `.modal-backdrop`
 wrapping a `.modal`, rendered hidden. Drive it through
 `EveSynapseModal`:
 
-- `open(el, {onClose, focus})` — shows the backdrop in the
+- `open(el, {onClose, focus})`, shows the backdrop in the
   browser's top layer (manual popover, so the blur covers top
   bar and sidebar), captures focus and moves it in.
   `focus: false` opts out.
-- `close(el)`, `isOpen(el)` — close returns focus to whatever
+- `close(el)`, `isOpen(el)`, close returns focus to whatever
   had it; `onClose` runs on every close, however it came.
 - Backdrop click, any `[data-close-modal]` inside, or Escape
   closes the topmost. Dialogs inside swapped-out content close
@@ -125,9 +125,9 @@ wrapping a `.modal`, rendered hidden. Drive it through
 ### Tabs
 
 A strategy/tabbed block is a `[data-tabs]` container whose
-tablist renders `hidden` and whose panels — `role="tabpanel"`,
+tablist renders `hidden` and whose panels, `role="tabpanel"`,
 each with an `id`, each tab a `role="tab"` button with
-`aria-controls` naming its panel and `id="<panel>-tab"` — all
+`aria-controls` naming its panel and `id="<panel>-tab"`, all
 render stacked under their own headings. That's the no-JS page.
 JS unhides the list, shows one panel at a time, and adds
 `.tabs-on` to the container so CSS can drop the per-panel
@@ -184,14 +184,14 @@ suggestion endpoint. Markup: a form whose input carries
 `role="combobox"`, `aria-controls` naming a
 `<ul class="suggest" role="listbox" hidden>` beside it. The
 surface's JS calls `attachSuggest(input, list, endpoint,
-onPick)`: the box names its feed (items, pilots, types, … — a
+onPick)`: the box names its feed (items, pilots, types, …, a
 pool of the one endpoint) and what a pick does (navigate, fill
 a hidden id, add a row). Without JS, or without a feed, the
 plain form submits exactly as before.
 
 ### Quick jump
 
-Ctrl+K opens the palette — a modal over two sources: pages,
+Ctrl+K opens the palette, a modal over two sources: pages,
 from `quickJumpPages` in app.js (which must mirror `sectionNav`
 exactly; `TestQuickJumpPagesMatchNav` enforces it), and
 entities (Pages / Characters / Items / Corporations /
@@ -205,7 +205,7 @@ recipe under "Adding things".
   `.btn-danger` the destructive one. Disabled is the native
   attribute / `aria-disabled`.
 - A button that navigates carries `data-href="/path"` (same-
-  site paths only) — CSP allows no inline handlers, so there is
+  site paths only), CSP allows no inline handlers, so there is
   no `onclick`, ever.
 - A form that needs a confirm carries `data-confirm="…"`; the
   ask happens before submit, and the form still works without
@@ -230,14 +230,14 @@ instead of the name. The fragment endpoints exist per kind
 stops polling and leaves the plain `#<id>` text. A whole page
 still loading uses the same mechanism on a wrapper with the
 page's own fragment URL. Once resolved, names render through
-the link helpers (`charLink`, `corpLink`, …) — a resolved name
+the link helpers (`charLink`, `corpLink`, …), a resolved name
 is a link to its page, never bare text.
 
 ### Countdowns
 
 Any element with `data-finish="<RFC3339>"` counts down to that
-moment. The server renders the static remainder as the text —
-that's the no-JS fallback and the pre-JS paint — and one shared
+moment. The server renders the static remainder as the text,
+that's the no-JS fallback and the pre-JS paint, and one shared
 ticker updates all of them, stopping on will-swap and starting
 on content-ready.
 
@@ -261,9 +261,9 @@ A widget is three registrations and a body:
   grid bounds (W/H, MinW/MinH);
 - a block in home.html keyed by widget id.
 
-home.html renders the shell for every widget —
+home.html renders the shell for every widget,
 `<section class="card" data-widget data-gw data-gh …>` with an
-`<h3>` title and a `.card-body` — and the block fills
+`<h3>` title and a `.card-body`, and the block fills
 `.card-body` from stored data only. Long lists render in full
 and mark rows beyond the widget's cap with `data-wmore`; the
 expander machinery (above) supplies the More/Less toggle and
@@ -280,7 +280,7 @@ list: a filterable dropdown of `?character=` links. Picking
 one reloads the page under that character, and the page's
 section links carry the parameter from there. Character-
 scoped pages take the selected character from the shared page
-data — don't parse the parameter or build a second picker.
+data, don't parse the parameter or build a second picker.
 
 ### Auto-refresh pages
 
@@ -288,7 +288,7 @@ A page that refreshes itself sets `data-autorefresh` on the
 body (the page data's AutoRefresh flag) and ships a
 `<noscript>` meta-refresh doing the same. The JS reload waits
 out typing in a field and hidden tabs, never runs for
-reduced-motion readers, and dies on swap-away — swaps *onto*
+reduced-motion readers, and dies on swap-away, swaps *onto*
 an auto-refresh page fall back to a full load, so the chain
 only ever starts on first paint. Sync is the worked example.
 
@@ -385,7 +385,7 @@ away, and the token follows it.
 CSP forbids inline `style`, so per-element numbers ride
 attributes and app.js applies them through the CSSOM:
 `data-w` (bar fill width, %), `data-left` / `data-top`
-(position, %), `data-rot` (rotation, deg — the element is also
+(position, %), `data-rot` (rotation, deg, the element is also
 centered on its point), `data-pad-left` (indent, px). Applied
 at load and again for injected markup. If a number describes
 an element, it goes in one of these, never in a style
@@ -393,7 +393,7 @@ attribute.
 
 ### Tooltips
 
-Shell controls (nav, top bar) use `data-tip="…"` — CSS-only,
+Shell controls (nav, top bar) use `data-tip="…"`, CSS-only,
 positioned by the shell's styles. Rich content tooltips (fit
 modules, market chart points) are surface code (fit.js, the
 chart code in app.js) with their own anchoring rules; don't
@@ -549,7 +549,7 @@ returns, and search is where the thumb expects it.
 ## Components are Go partials
 
 Reusable UI is a shared template with a documented data shape,
-rendered by the server — `templates/fit_workbench.html` is the
+rendered by the server, `templates/fit_workbench.html` is the
 model (the simulator and the read-only public copies render the
 same markup). The shared set lives in `pageSharedTemplates`
 (core_pages.go): base, notifybell, balancechart, walletflow,
@@ -563,7 +563,7 @@ to it:
 
 - **Navigation:** `sectionNav` in nav.go drives the sidebar menus
   AND the section tab strip. The quick-jump palette in app.js
-  (`quickJumpPages`) must carry the same labels —
+  (`quickJumpPages`) must carry the same labels,
   `TestQuickJumpPagesMatchNav` fails otherwise.
 - **Home widgets:** the module manifest (module_manifest.go) and
   the overview registry (home_overview.go) define each widget's
@@ -575,7 +575,7 @@ to it:
 - Data reaches JS as `data-*` attributes for small facts and as a
   JSON payload for structured state (the planner). The contract
   lives on the Go DTO: invariants are written there (planner
-  payload lists are never null — they are coerced in
+  payload lists are never null, they are coerced in
   `planFinishPreset`, because Go nil slices marshal to `null`
   and plan.js dereferences them) and mirrored in the JS, which
   normalizes defensively in one place (`setPayload`).
@@ -592,7 +592,7 @@ to it:
 - **A page:** template in `templates/`, route + section wiring,
   and if it needs its own JS, a per-surface file gated in
   base.html on the section or NavPage. No executable inline
-  scripts in templates — CSP serves scripts from 'self' plus a
+  scripts in templates, CSP serves scripts from 'self' plus a
   per-request nonce, and no template uses one; the single
   inline pattern is a `<script type="application/json">` data
   block (the planner's `plan-data`), which is data, not code.
@@ -600,7 +600,7 @@ to it:
   `// --- Name ---` banners are the table of contents), an
   `onReady` subscription scoped to `root`, teardown on
   will-swap for anything global, and a node test in
-  `internal/app/jstest/` if it carries logic worth pinning —
+  `internal/app/jstest/` if it carries logic worth pinning,
   the pipeline's JS step names its files explicitly, so add new
   test files to `.gitlab-ci.yml` too.
 - **A home widget:** manifest entry, registry entry, template
@@ -613,7 +613,7 @@ to it:
 Mirror CI exactly before pushing: `make assets`, `gofmt -l cmd
 internal`, `go vet ./...`, `go test ./...`, and the node list
 from the workflow. Tests ship in the same commit as the behavior
-change — every historical CI failure here was tests lagging the
+change, every historical CI failure here was tests lagging the
 code, never the reverse. While iterating, run the affected
 package only; run the full gate once, on the final tree.
 

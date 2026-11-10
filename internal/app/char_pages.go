@@ -61,7 +61,7 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 		// A view pick (?view=1) is the exception: notification
 		// and briefing links carry it, because following news
 		// about a character shows that character's page for
-		// this view only — the acting character moves only
+		// this view only, the acting character moves only
 		// when the pilot picks one in the switcher.
 		if !viewPick(r) {
 			app.pinSessionCharacter(ctx, active.CharacterID, active.Name)
@@ -211,8 +211,8 @@ type characterView struct {
 	JumpClones       []jumpCloneView
 
 	// Identity: name, birthday, security and corporation, from the
-	// worker-warmed profile snapshot, so this page — like every other
-	// — renders cache-only.
+	// worker-warmed profile snapshot, so this page, like every other
+	//, renders cache-only.
 	IdentityKnown  bool
 	PortraitURL    string
 	CorpID         int64
@@ -243,7 +243,7 @@ type characterView struct {
 	SkillLevels     map[int64]int   // trained level per skill
 	Catalog         []skillCatalogEntry
 	QueueKnown      bool
-	Training        string // "Skill V — finishes …", "" = not training
+	Training        string // "Skill V, finishes …", "" = not training
 	TrainingFinish  string // raw finish, drives the live countdown
 	TrainingLeft    string
 	TrainingSkillID int64 // skill currently training, 0 when idle

@@ -83,8 +83,8 @@ package fit
 // OwnerRequiredSkillModifier (drones, charges and missiles), plus
 // the modifier-less effects in codeEffects. Domains
 // targetID / target / structureID, the EffectStopper func, effect
-// categories outside {0 passive, 1 active, 4 online} — except 5 =
-// overload, which binds for overheated modules — and charge/group
+// categories outside {0 passive, 1 active, 4 online}, except 5 =
+// overload, which binds for overheated modules, and charge/group
 // shapes that target nothing listed here are skipped and reported
 // in Result.Unmodeled, never silently dropped. A heatable
 // module that simply isn't overheated skips its overload effects
@@ -107,7 +107,7 @@ package fit
 // and hardpoints through their hiSlotModifier / medSlotModifier /
 // lowSlotModifier / hardPointModifier attributes (summed directly;
 // the dump's slotModifier effect 3774 carries no dogma modifiers,
-// so there is no modifier machinery to run — verified against the
+// so there is no modifier machinery to run, verified against the
 // live dump 2026-10-05); their PG/CPU and role bonuses flow through
 // the normal modifier machinery.
 // ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ const (
 	// Cap-warfare amounts (dgmAttributeTypes): neutralizers drain
 	// via energyNeutralizerAmount (97); nosferatu via
 	// powerTransferAmount (90), which remote capacitor
-	// transmitters (group 67) share — group 68 is the nosferatu
+	// transmitters (group 67) share, group 68 is the nosferatu
 	// group, so the engine only counts 68 as offensive drain.
 	AttrEnergyNeutralizerAmount = 97
 	AttrPowerTransferAmount     = 90
@@ -236,7 +236,7 @@ const (
 )
 
 // Effect categories (dgmEffects): 5 is the overload/heat
-// category — the one heating a module engages.
+// category, the one heating a module engages.
 // Ancillary armor repairers, spool-up weapons, Breacher pods and the
 // Reactive Armor Hardener.
 const (
@@ -425,7 +425,7 @@ func (snap *Snapshot) typeEffectCats(typeID int64) map[int64]bool {
 // ModuleValidStates lists the states a fitted module may take,
 // derived from SDE data, never per-module hardcoding: rigs,
 // subsystems, drones and cargo have no states; a module is
-// activatable with an active-category effect — or as a weapon
+// activatable with an active-category effect, or as a weapon
 // (turret/launcher fitted markers are passive in SDE, but weapons
 // cycle via F1 in-game); overheatable only with an
 // overload-category effect on top of that (heat is applied to a
@@ -731,7 +731,7 @@ func AllVSkillLevels(snap *Snapshot, shipTypeID int64, itemTypeIDs []int64) map[
 // ---------------------------------------------------------------------------
 
 // ItemInput is one fitted item line: a type, how many of
-// it the fit carries (drones especially), and — for modules —
+// it the fit carries (drones especially), and, for modules,
 // the module state ("", online/active/offline/overheated; ""
 // resolves to the type's default).
 type ItemInput struct {
@@ -875,12 +875,12 @@ type Result struct {
 	ItemAttrs map[int64]map[int64]float64
 	// StateAttrs holds per-(type, state) attributes for module
 	// entities whose state isn't the default, keyed by
-	// StateAttrKey — so a tooltip can show an overheated
+	// StateAttrKey, so a tooltip can show an overheated
 	// module's heated numbers rather than its resting ones.
 	StateAttrs map[string]map[int64]float64
 	// WeaponDPS and WeaponVolley hold one fitted weapon's own
 	// damage figures (a single module instance, not the rack
-	// total), keyed by StateAttrKey — the module tooltip reads
+	// total), keyed by StateAttrKey, the module tooltip reads
 	// its own gun's numbers from here. Recorded by offense()
 	// alongside the totals so the tooltip can never drift
 	// from the math the stats panel shows.

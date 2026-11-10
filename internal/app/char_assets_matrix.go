@@ -319,8 +319,7 @@ func parseAssetPageState(q url.Values, characters []db.Character, active db.Char
 		st.scopeAll, st.scopeIDs = false, []int64{}
 	} else if s != "" && s != "all" {
 		// The scope is a set of character IDs, comma-separated;
-		// a lone ID is the one-character case the pills used to
-		// link to. Unknown IDs drop out, and a set covering the
+		// a lone ID is the one-character case. Unknown IDs drop out, and a set covering the
 		// whole account (or nothing valid) reads as all.
 		picked := make(map[int64]bool)
 		for _, part := range strings.Split(s, ",") {

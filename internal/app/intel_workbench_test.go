@@ -2,7 +2,7 @@ package app
 
 // The workbench's scan door: a standalone scan's stored reading
 // drives the same page model a report's reading drives. The
-// door is built but not routed — the first test exercises the
+// door is built but not routed, the first test exercises the
 // builder and the handler directly, the second proves the real
 // router does not serve it yet.
 
@@ -100,7 +100,7 @@ func seedWorkbenchScan(t *testing.T) (*Application, *db.Queries, db.GetScanRow) 
 
 // TestWorkbenchScanDoorDark pins the shipped state the owner
 // ordered: the scan door exists in the tree but the real router
-// does not serve it — the scan tool keeps its own result page
+// does not serve it, the scan tool keeps its own result page
 // until the door is switched on.
 func TestWorkbenchScanDoorDark(t *testing.T) {
 	app, _, _ := seedWorkbenchScan(t)
@@ -115,7 +115,7 @@ func TestWorkbenchScanDoorDark(t *testing.T) {
 // drawer's one-box contract: the box sends one unsorted blob as
 // the report's text, and a combined d-scan + local paste sent
 // that way lands the same report the drawer's earlier two boxes
-// landed from the same content — their values joined with a
+// landed from the same content, their values joined with a
 // newline, which is the exact string posted for channel A. The
 // single box's own shape (channel B) differs only by a blank
 // line between the blocks and a trailing newline: same report

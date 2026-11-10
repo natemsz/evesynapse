@@ -240,7 +240,7 @@ func TestModuleDeclaredCatalogsKeepTheirOrder(t *testing.T) {
 
 // TestBriefingTopicsAreDeclarations: the briefing line families a module
 // owns are declared on that module, once each, and the briefing reads
-// them from the registry — a topic no built-in module declares is off.
+// them from the registry, a topic no built-in module declares is off.
 func TestBriefingTopicsAreDeclarations(t *testing.T) {
 	owners := map[string]string{}
 	for _, m := range registeredModules {

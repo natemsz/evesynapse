@@ -165,8 +165,8 @@ func hasClientHintAnomaly(ua, secChUa, secChUaPlatform string) bool {
 // Chromium browser but sends neither of the header sets Chromium
 // sends on every request: Client Hints (Sec-Ch-Ua) and Fetch
 // Metadata (Sec-Fetch-*). A copied User-Agent on a plain HTTP
-// client — the compromised-agent pattern: browser UA, script
-// transport — sends neither.
+// client, the compromised-agent pattern: browser UA, script
+// transport, sends neither.
 func hasMissingBrowserHeaders(r *http.Request) bool {
 	ua := strings.ToLower(r.UserAgent())
 	if !strings.Contains(ua, "chrome/") && !strings.Contains(ua, "chromium/") && !strings.Contains(ua, "edg/") {
@@ -202,8 +202,8 @@ func isBlockedBot(r *http.Request) bool {
 //
 // The botnet pattern behind these (compromised agent accounts
 // fetching through residential proxies, per DataDome's Galileo
-// writeup): browser User-Agents on script transports, only HTML —
-// never CSS, JS or fonts — and IDs enumerated in sequence, 500+
+// writeup): browser User-Agents on script transports, only HTML,
+// never CSS, JS or fonts, and IDs enumerated in sequence, 500+
 // requests a minute spread over thousands of IPs. Per-address
 // throttles cannot see it (each address asks once), so the
 // watches key on what the botnet cannot cheaply diversify:
@@ -497,7 +497,7 @@ func (app *Application) blockScrapers(next http.Handler) http.Handler {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/static/") {
 			prints.recordAsset(fp)
 			// A client that fetches assets is a browser (or a
-			// browser-driven tool); remember it across visits —
+			// browser-driven tool); remember it across visits,
 			// caches and service workers mean later visits may
 			// fetch no assets at all. The value is signed (see
 			// assetCookieValue): a self-asserted cookie exempts
@@ -507,7 +507,7 @@ func (app *Application) blockScrapers(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// Cookie presence alone exempts nobody — both cookies are
+		// Cookie presence alone exempts nobody, both cookies are
 		// verified: the session against its store and signed-in
 		// mark, the asset cookie against its signature.
 		if isHTMLPageRequest(r) && !app.hasVerifiedSession(r) {

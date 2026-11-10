@@ -13,7 +13,7 @@ import (
 // handleFitSolveImplants serves POST /fittings/solve-implants/:
 // the posted fit is over its CPU or powergrid budget, so search
 // the hardwiring ladder for the smallest implants that make it
-// legal and answer with the picks. Nothing is applied here — the
+// legal and answer with the picks. Nothing is applied here, the
 // editor applies a pick by writing it into the document's
 // implant overrides (the ordinary simulate path), which is a
 // simulation overlay: the pilot's real clone is never touched.
@@ -178,7 +178,7 @@ func solveResourceName(resource int64) string {
 }
 
 // solveFailureNote explains, per unsolved resource, how far over
-// the fit sits and what the strongest hardwiring adds — or that
+// the fit sits and what the strongest hardwiring adds, or that
 // the two ladders collide in a single slot.
 func solveFailureNote(baseRes *fit.Result, unsolved []int64, strongest map[int64]float64, ladderSlots map[int64]map[int]bool) string {
 	if len(unsolved) == 2 {

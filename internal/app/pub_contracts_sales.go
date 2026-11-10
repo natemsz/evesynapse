@@ -8,18 +8,18 @@ package app
 // deleted by its issuer (or gone too long for ESI to say). A
 // contract asked about before its expiry date cannot have
 // expired, so a 204 then is an acceptance: a sale at the
-// listing's price, as certain as the public route allows. Every
-// pass that used to read "left early" as a likely sale asks this
-// once instead (probeContractExit), and only a 204 is ever read
-// as sold; a 404 is never read as "not sold", only as no answer.
+// listing's price, as certain as the public route allows. A
+// contract that left early is asked about once (probeContractExit),
+// and only a 204 is ever read as sold; a 404 is never read as
+// "not sold", only as no answer.
 //
 // ESI also answers 403 "Contract not public" for most departed
 // contracts (9 of 12 sampled on 2026-10-28, none answering 204).
 // That answer is final, since a contract never becomes public
 // again, but it says nothing about a sale: it settles the probe as
-// closed, which ends the asking and adds no evidence either way.
-// Read as transient it was asked again every cycle until the probe
-// window closed, about 80 refused calls a minute. Each final
+// closed, which ends the asking and adds no evidence either way
+// (read as transient it would be asked again every cycle until the
+// probe window closed, about 80 refused calls a minute). Each final
 // answer's status is stored with the probe (schema 099), so a later
 // finding about what 403 means can be read back from the record.
 // ---------------------------------------------------------------------------

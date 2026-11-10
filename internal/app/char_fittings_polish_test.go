@@ -93,8 +93,8 @@ func postSolve(t *testing.T, app *Application, cookie *http.Cookie, payload stri
 }
 
 // TestFitSolveImplantsEndToEnd: the hog fit (156 tf on a 150 tf
-// hull) is solved by the +4% hardwiring — not the +3% (154.5,
-// still over) and not the +5% — and the pick carries its Forge
+// hull) is solved by the +4% hardwiring, not the +3% (154.5,
+// still over) and not the +5%, and the pick carries its Forge
 // typical price.
 func TestFitSolveImplantsEndToEnd(t *testing.T) {
 	app, cookie := fitTestApp(t)
@@ -123,7 +123,7 @@ func TestFitSolveImplantsEndToEnd(t *testing.T) {
 	}
 	// The round trip: posting the pick as a document implant
 	// override through the ordinary simulator makes the fit
-	// legal — the overlay is the whole mechanism.
+	// legal, the overlay is the whole mechanism.
 	code, body := postFitJSON(t, app, cookie, "/fittings/simulate/",
 		`{"shipTypeId":1001,"items":[{"typeId":3010,"qty":1}],"charges":{},"implants":{"6":7104},"pilot":0}`)
 	if code != http.StatusOK {
@@ -188,7 +188,7 @@ func TestFitPolishSimRender(t *testing.T) {
 	}
 
 	// Drones: two fixture drones use 20 of 25 Mbit/s and 10 of
-	// 30 m3 of bay — the gauge source rows, with the drone group
+	// 30 m3 of bay, the gauge source rows, with the drone group
 	// the gauges attach to.
 	code, body = postFitJSON(t, app, cookie, "/fittings/simulate/",
 		`{"shipTypeId":1001,"items":[{"typeId":5001,"qty":2}],"charges":{},"pilot":90000001}`)

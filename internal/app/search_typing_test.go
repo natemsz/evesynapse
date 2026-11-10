@@ -285,7 +285,7 @@ func TestDrainOrderViewedTypingOrbit(t *testing.T) {
 }
 
 // TestTypingSliceSpendsLearnedRateFirst: when typing rows overflow
-// their slice, the ones pilots actually opened survive — even ahead
+// their slice, the ones pilots actually opened survive, even ahead
 // of newer guesses with no record. Viewed rows still beat every
 // guess whatever the rates say.
 func TestTypingSliceSpendsLearnedRateFirst(t *testing.T) {
@@ -293,7 +293,7 @@ func TestTypingSliceSpendsLearnedRateFirst(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	// Winner: guessed once, opened once — but noted first.
+	// Winner: guessed once, opened once, but noted first.
 	if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{
 		CharacterID: 93600001, Priority: wantTyping, NotedAt: timeSet(now.Add(-2 * time.Minute)),
 	}); err != nil {
@@ -504,7 +504,7 @@ func TestGuessHitWindowStale(t *testing.T) {
 
 // TestTypingBoxIgnoresUnknownPools: the items feed answers unknown
 // pools from the full feed, and the guess box is the same
-// normalized one — otherwise each junk pool value mints an orphan
+// normalized one, otherwise each junk pool value mints an orphan
 // box whose guesses no keystroke ever replaces.
 func TestTypingBoxIgnoresUnknownPools(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, &countingTransport{})
@@ -545,7 +545,7 @@ func TestTypingBoxIgnoresUnknownPools(t *testing.T) {
 }
 
 // TestTypingConcurrentKeystrokesDoNotMix: two keystrokes landing
-// in one box at once must read as two whole steps — the ledger
+// in one box at once must read as two whole steps, the ledger
 // ends holding exactly one keystroke's guesses, never a mixture
 // of both.
 func TestTypingConcurrentKeystrokesDoNotMix(t *testing.T) {

@@ -224,7 +224,7 @@ func (app *Application) backfillKillStats(ctx context.Context) {
 // anti-join scanned the whole kills table and timed out every
 // pass, so the sweep burned a statement timeout a minute and
 // never drained. Once a pass finds less than a batch the legacy
-// set is drained — kills folded at ingest never miss the feed —
+// set is drained, kills folded at ingest never miss the feed,
 // and the sweep rechecks only every few hours, in case a fold
 // ever failed quietly.
 func (app *Application) backfillMissingKillFeeds(ctx context.Context) {

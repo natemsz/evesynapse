@@ -11,7 +11,7 @@ import (
 // Player structure names. GET /universe/structures/{id}/ answers
 // 401 without a token and needs esi-universe.read_structures.v1
 // (in eveScopes since the build), so names can only ever
-// come from a background lookup — pages must never wait on one.
+// come from a background lookup, pages must never wait on one.
 // The queue lives in the structure_names table: worker-computed
 // views and the market book view note the structure ids they meet
 // (noteStructureIDs), the worker resolves the due ones in the
@@ -22,16 +22,16 @@ import (
 // structures aren't re-asked every cycle.
 //
 // Resolution tiers:
-//  1. Multi-character attempts — every linked character whose
+//  1. Multi-character attempts, every linked character whose
 //     login granted the scope may be asked, corp-mates of the
 //     owning corporation first, then most recently active. One
 //     character's 403 never poisons the cache: a negative answer
 //     is recorded only after every candidate has answered no.
 //     The first success warms the shared cache for everyone.
-//  2. Corporation structures — the corp structure list already
+//  2. Corporation structures, the corp structure list already
 //     carries names, so a due id the list covers resolves with
 //     no per-structure call at all (provenance 'corp').
-//  3. Community dataset — plumbed only: cached names record
+//  3. Community dataset, plumbed only: cached names record
 //     their provenance ('source', schema 023) and ESI truth
 //     outranks the community tier, but no dataset ships and no
 //     name is ever invented. Unresolved ids keep the honest
@@ -88,7 +88,7 @@ func (app *Application) resolvedStructureTitle(ctx context.Context, structureID 
 // structureLinkable reports whether the structure page has
 // something real to show for this id: a resolved name, or stored
 // context (owner/system/type) from a corporation snapshot. The
-// link policy only links structure titles then — an unresolved
+// link policy only links structure titles then, an unresolved
 // "Structure #<id>" stays text rather than pointing at a page
 // that would only say "not yet". Cache-only.
 func (app *Application) structureLinkable(ctx context.Context, structureID int64) bool {

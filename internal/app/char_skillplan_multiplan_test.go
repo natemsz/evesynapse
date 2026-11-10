@@ -12,7 +12,7 @@ import (
 
 // TestSkillPlansPageAcrossPlans: one render of the plans page
 // computes the selected plan's detail, the picker's summaries
-// for the character's other plans, and the editor search — the
+// for the character's other plans, and the editor search, the
 // output each plan produces is the output it produces on its
 // own.
 func TestSkillPlansPageAcrossPlans(t *testing.T) {

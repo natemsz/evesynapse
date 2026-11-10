@@ -250,8 +250,8 @@ func (app *Application) markNotificationsRead(ctx context.Context, userID int64,
 
 // safeLocalNext reports whether n is safe to hand to http.Redirect
 // as an on-site target: a path beginning with a single slash. The
-// second byte matters as much as the first — browsers treat "//"
-// and "/\" as scheme-relative addresses and leave the site — so a
+// second byte matters as much as the first, browsers treat "//"
+// and "/\" as scheme-relative addresses and leave the site, so a
 // backslash is rejected anywhere in the value. Control characters
 // are rejected too: CR/LF would let the value break out of the
 // Location header, and browsers strip tab and newline from a URL
@@ -300,7 +300,7 @@ type notifySettingsView struct {
 	Desktop bool
 	// Discord direct messages: the switch in the channels list,
 	// naming the linked account. It is the one on the account's
-	// Discord link — the same value the prompt's switch writes, so
+	// Discord link, the same value the prompt's switch writes, so
 	// the two never disagree about what is stored. The Discord
 	// section below the form connects the account; it carries no
 	// switch of its own. Offered follows discordChannelState:
@@ -594,7 +594,7 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 	// The prompt's answer and the channel switches are this form's
 	// to carry, not to reset: the answer is kept as it was, and the
 	// channels follow the form's own boxes when it showed them
-	// (channels_shown) — a form without them changes nothing there.
+	// (channels_shown), a form without them changes nothing there.
 	prefs.PromptAnswered = before.PromptAnswered
 	prefs.OffChannels = before.OffChannels
 	if r.Form.Get("channels_shown") == "1" {

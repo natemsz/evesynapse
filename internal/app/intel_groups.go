@@ -311,11 +311,11 @@ func (app *Application) refreshGroupComposite(ctx context.Context, groupID int64
 	// One bounded pass per change: the composite is derived
 	// from the stored member inputs, and when those inputs
 	// are unchanged since the standing composite was built
-	// the rebuild — every member re-read, re-decoded, and
-	// re-weighed — is skipped. A drain settling ten reports
-	// of one group used to rebuild the whole group ten
-	// times (quadratic over the group's life); now it
-	// builds once and the rest compare a fingerprint.
+	// the rebuild, every member re-read, re-decoded, and
+	// re-weighed, is skipped. A drain settling ten reports
+	// of one group builds it once and the rest compare a
+	// fingerprint, instead of ten rebuilds (quadratic over
+	// the group's life).
 	inputsHash := groupInputsHash(members)
 	if cur, _, ok := app.loadGroupComposite(ctx, groupID); ok && cur.InputsHash == inputsHash {
 		// No rebuild, but gang fusion is time-based (stale

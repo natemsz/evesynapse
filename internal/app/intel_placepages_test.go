@@ -4,7 +4,7 @@ package app
 // pages and the place-name linking sweep: the helpers'
 // policy, the SDE-backed page renders (fields, security
 // formatting, station lists, unknown-id states), and the
-// surfaces that now link system/station names — character
+// surfaces that now link system/station names, character
 // location, home fleet, colonies, assets, orders, courier
 // contracts. Every render runs against the counting transport,
 // which must stay at zero calls.
@@ -89,7 +89,7 @@ func TestSystemAndStationPages(t *testing.T) {
 	seedPlaceSDE(t, app)
 
 	// System page: name, EVE-rounded security (0.946 -> 0.9),
-	// region, and its own stations — linked — but not the
+	// region, and its own stations, linked, but not the
 	// station next door.
 	code, body := getPage(t, app, cookie, "/system/?system=30000142")
 	if code != http.StatusOK {

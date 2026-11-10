@@ -9,18 +9,18 @@ package swarm
 // page's Build column looks the hash up in the release
 // library below: a hash the library knows renders as
 // Mainline with that release's version label, a hash it does
-// not know renders as Fork, and no claim at all renders as —.
+// not know renders as Fork, and no claim at all renders as , .
 //
 // The claim is still self-reported metadata for the
 // operator's situational awareness: a hash is the sender's
 // word about its own binary (nothing stops a modified build
-// from copying an official hash), and it gates nothing — the
+// from copying an official hash), and it gates nothing, the
 // trust model (trust.go) never reads it, so approval,
 // exclusion, spot-check sampling and the reputation ledger
 // are blind to what build a peer runs or claims to run.
 // Trust persists across releases: a peer that changes its
-// claim — an upgrade, a downgrade, a flip between the
-// mainline and fork labels below — keeps its trust row
+// claim, an upgrade, a downgrade, a flip between the
+// mainline and fork labels below, keeps its trust row
 // exactly as it was, and earns or loses trust at the same
 // rate as every other instance.
 //
@@ -44,7 +44,7 @@ import (
 // BuildClaim is this instance's own build claim: the SHA-256
 // (hex) of the running binary, hashed once at startup from
 // the executable file. Empty when the executable cannot be
-// read — an instance that cannot name its build makes no
+// read, an instance that cannot name its build makes no
 // claim, and its peers show it as unknown.
 func BuildClaim() string {
 	ownBuildHashOnce.Do(func() {
@@ -87,8 +87,8 @@ const (
 )
 
 // ReleaseKind names which product a release library entry
-// belongs to. The swarm carries two kinds of instance — the
-// EveSynapse app and the Storm warming node — and their
+// belongs to. The swarm carries two kinds of instance, the
+// EveSynapse app and the Storm warming node, and their
 // release lines are numbered independently, so an entry's
 // label means nothing without the product it belongs to.
 type ReleaseKind string
@@ -110,7 +110,7 @@ type ReleaseBuild struct {
 // of that release. The entries below are the official
 // evesynapse binaries (both architectures) of the v0.5.2.x
 // line, seeded from the asset digests the GitHub releases API
-// reports for each release — every digest verified there,
+// reports for each release, every digest verified there,
 // none computed or guessed locally.
 //
 // Storm entries follow the app entries: the v0.1.0 digests
@@ -125,7 +125,7 @@ type ReleaseBuild struct {
 // set first, then this map. Official releases before the
 // v0.5.2.x line are not seeded; a peer running one shows as a
 // fork unless the learner has recorded it. The library
-// decides a display label only — absence is not a verdict
+// decides a display label only, absence is not a verdict
 // about the peer, just a fact about the library.
 var ReleaseLibrary = map[string]ReleaseBuild{
 	// v0.5.2.11
@@ -203,8 +203,8 @@ func LearnedBuilds() map[string]ReleaseBuild {
 
 // ReleaseFor looks one claim up in the release library: the
 // entry it names, and whether it names any. The learned set
-// is consulted first — it is the newer word on any hash the
-// two halves disagree about — then the seeded map.
+// is consulted first, it is the newer word on any hash the
+// two halves disagree about, then the seeded map.
 func ReleaseFor(claim string) (ReleaseBuild, bool) {
 	claim = strings.TrimSpace(claim)
 	learnedBuilds.RLock()
@@ -220,7 +220,7 @@ func ReleaseFor(claim string) (ReleaseBuild, bool) {
 // ClassifyBuild sorts one peer's claim for the Admin page:
 // no claim is Unknown, a claim the release library names is
 // Mainline, and any other claimed hash is a Fork (a build no
-// official release produced — a fact, not an accusation).
+// official release produced, a fact, not an accusation).
 func ClassifyBuild(claim string) BuildClass {
 	claim = strings.TrimSpace(claim)
 	if claim == "" {
@@ -233,10 +233,10 @@ func ClassifyBuild(claim string) BuildClass {
 }
 
 // BuildLabel renders one peer's Build cell: the class and
-// what backs it — "Mainline · v0.5.2.11" for an app release
+// what backs it, "Mainline · v0.5.2.11" for an app release
 // (the release's label, not the raw hash), "Mainline · Storm
 // v1.0.0" for a storm release, "Fork" for a hash no release
-// matches, or "—" when the peer has never made a claim.
+// matches, or ", " when the peer has never made a claim.
 func BuildLabel(claim string) string {
 	claim = strings.TrimSpace(claim)
 	switch ClassifyBuild(claim) {

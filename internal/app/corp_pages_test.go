@@ -58,8 +58,7 @@ func (s *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 
 // emptyESI is a fixture EVE that knows exactly one pilot: "Bad
 // Guy", the name the channel tests report, who is a real EVE
-// character (2117455235, corporation 1000170) the suite used to
-// resolve against the live servers. Every other name resolves to
+// character (2117455235, corporation 1000170). Every other name resolves to
 // nothing and every other affiliation comes back blank, the
 // answers ESI gives for names and pilots it does not know. Any
 // other path is a test bug, so it answers 500 and the failure
@@ -110,7 +109,7 @@ func (emptyESI) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // buildCorpTestApp builds an Application over a fresh embedded-
 // Postgres test database with a stub ESI transport (no worker
-// goroutine — tests drive the worker functions directly).
+// goroutine, tests drive the worker functions directly).
 func buildCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, *sql.DB, *db.Queries) {
 	t.Helper()
 	conn, pool, err := store.Open(context.Background(), pgtest.FreshDSN(t))
@@ -349,8 +348,8 @@ func TestCorpPagesRenderFromSnapshots(t *testing.T) {
 		{ItemID: 1002, TypeID: 34, LocationID: 60003760, LocationType: "station", LocationFlag: "CorpSAG1", Quantity: 5000},
 		{ItemID: 1003, TypeID: 587, LocationID: structureID, LocationType: "item", LocationFlag: "CorpHangar", Quantity: 2},
 	})
-	// The character's own recent list (for the cluster-1 page
-	// regression render below): same two mails, both kills from
+	// The character's own recent list (for the character page
+	// render below): same two mails, both kills from
 	// the character's point of view.
 	seedSnapshot(t, q, fixtureCharA, esi.SnapKillmails, []esi.KillmailRef{
 		{KillmailID: 7001, KillmailHash: "aaa"},
@@ -584,7 +583,7 @@ func TestRefreshCorpSnapshotsRoleMissing(t *testing.T) {
 	}
 
 	// Member tracking: role-missing recorded, and crucially no
-	// snapshot row — a 403 must not poison the cache.
+	// snapshot row, a 403 must not poison the cache.
 	state, err := q.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: fixtureCharA, Kind: esi.SnapCorpMemberTracking})
 	if err != nil {
 		t.Fatalf("membertracking fetch state: %v", err)

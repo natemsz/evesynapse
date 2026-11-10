@@ -51,7 +51,7 @@ func postWidgetConfig(t *testing.T, app *Application, cookie *http.Cookie, form 
 }
 
 // TestOrdersWidgetScopeAndMerge: the Market orders widget reads
-// its scope + merge mode from the stored widget config —
+// its scope + merge mode from the stored widget config,
 // defaults (all/both) out of the box, then character scope, tag
 // scope in both merge modes, an invalid scope falling back to
 // all, and the config surviving layout moves.
@@ -316,11 +316,11 @@ func TestWatchlistWidgetHome(t *testing.T) {
 }
 
 // TestNetWorthHousePrices: net worth prices assets in the house
-// order — The Forge's swept typical sells, then stored estimated
+// order, The Forge's swept typical sells, then stored estimated
 // sells. The guide's average prices nothing (owner doctrine,
 // 2026-10-17): with only the guide present the card shows a
-// real assets number with honest coverage — never "prices not
-// loaded yet" — and the daily sampler's net worth rides the
+// real assets number with honest coverage, never "prices not
+// loaded yet", and the daily sampler's net worth rides the
 // same sources.
 func TestNetWorthHousePrices(t *testing.T) {
 	transport := &countingTransport{}
@@ -341,7 +341,7 @@ func TestNetWorthHousePrices(t *testing.T) {
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	// No price source anywhere yet: still a real number
-	// (0 priced), with the coverage spelled out — and never
+	// (0 priced), with the coverage spelled out, and never
 	// the old copy.
 	code, body := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
@@ -437,7 +437,7 @@ func (s *pricesTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // refresh now reprices the stored fits in the house order: hull
 // plus modules at The Forge's swept typical sells, the same sum
 // the save handler makes. The guide fixture below carries decoy
-// adjusted prices — if anything priced from the guide, the
+// adjusted prices, if anything priced from the guide, the
 // totals would change.
 func TestFitPricesFollowStoredPrices(t *testing.T) {
 	transport := &pricesTransport{body: `[

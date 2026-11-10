@@ -1,7 +1,7 @@
 /* Public contract search + detail. Loaded only on the
    contract pages. The page composes the shared inset
-   components from style.css — .box groups, the .seg
-   segmented control, the full-width .band — all painted
+   components from style.css, .box groups, the .seg
+   segmented control, the full-width .band, all painted
    from the one --row-alt / --box-edge recipe and the
    --r-xs small radius; this file carries only what is
    contract-search-specific: the zone layout, the aligned
@@ -35,7 +35,7 @@
 .cs-hunt svg { width: 0.85rem; height: 0.85rem; flex: none; }
 /* Icon palette: each family glyph carries its own hue
    across the hunt chips, the spec tabs and the drawer
-   sub-heads — ember for the Jita flame, teal for the
+   sub-heads, ember for the Jita flame, teal for the
    abyssal swirl, gold for blueprint layers, deal-green
    for the courier truck. Recoloring a family is a
    one-line edit here (or at the two tokens above). */
@@ -69,8 +69,8 @@
    leaked 0.5rem top margin shoved the segments down in
    their control, which read as off-center labels that no
    padding trade could fix. Scoped back to the shared
-   control's own metrics — no top margin, and the .seg
-   padding symmetric top and bottom — the segments fill
+   control's own metrics, no top margin, and the .seg
+   padding symmetric top and bottom, the segments fill
    the control and align-items centers their line boxes
    on the row's center. */
 .cs-types > .cs-pill {
@@ -83,8 +83,8 @@
 .cs-pill:has(> input:checked) { background: var(--accent); color: #16100b; }
 .cs-pill:has(> input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* Deals only: its own .box at the band's right, color-coded
-   in the deal green at rest — green edge, green label, a
-   green-tinted switch — so it reads as a deal filter before
+   in the deal green at rest, green edge, green label, a
+   green-tinted switch, so it reads as a deal filter before
    it is touched. Switching it on is the step up: the edge
    goes full strength, the soft glow arrives and the switch
    fills green. */
@@ -191,7 +191,7 @@
 .cs-secval { flex: none; min-width: 2.2rem; text-align: right; font-variant-numeric: tabular-nums; }
 /* The region quick selectors wear the hunt chips' pill
    paint on real buttons: transparent row-alt fill, thin
-   edge, full radius, the controls' Rajdhani capitals —
+   edge, full radius, the controls' Rajdhani capitals,
    and no underline in any state. */
 .cs-region-quick { display: inline-flex; gap: 0.35rem; white-space: nowrap; }
 .cs-region-quick button {
@@ -1007,9 +1007,9 @@
 
 /* ---- touch targets ----
    The coarse-pointer floor from the shared system (style.css):
-   this page's own controls — the hunt chips, spec tabs, active
+   this page's own controls, the hunt chips, spec tabs, active
    filter chips, the deals switch, the region and capital quick
-   buttons, the row copy button and the pager links — grow to
+   buttons, the row copy button and the pager links, grow to
    the same 2.5rem so a fingertip lands on them first try.
    Fine pointers keep the compact metrics untouched. */
 @media (hover: none), (pointer: coarse) {

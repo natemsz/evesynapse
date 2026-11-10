@@ -131,8 +131,8 @@ func (app *Application) refreshMapLayers(ctx context.Context) {
 	fp = append(fp, app.threatFingerprint(ctx, now))
 	sources := strings.Join(fp, ";")
 	// The fingerprint above is cheap (snapshot stamps plus
-	// one latest-kill read); the build below it — the threat
-	// load and the layer build with their decodes and sorts —
+	// one latest-kill read); the build below it, the threat
+	// load and the layer build with their decodes and sorts,
 	// is not, and most cycles nothing it reads has moved.
 	// Compare first and build only on change: the payload is
 	// rebuilt from the same inputs at the same moment it

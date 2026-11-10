@@ -1,18 +1,18 @@
 package app
 
 // ---------------------------------------------------------------------------
-// Where the working credentials come from — phase 2 of the key
+// Where the working credentials come from, phase 2 of the key
 // design (auth_tokenkey.go is phase 1, the token key itself). The
-// four credentials the app presents as itself — EVE_CLIENT_SECRET,
-// DISCORD_CLIENT_SECRET, DISCORD_BOT_TOKEN, MODEL_API_KEY — can
+// four credentials the app presents as itself, EVE_CLIENT_SECRET,
+// DISCORD_CLIENT_SECRET, DISCORD_BOT_TOKEN, MODEL_API_KEY, can
 // be supplied from outside the machine and held in memory only:
 //
-//   oci  — each lives in OCI Secrets; .env carries only its
+//   oci, each lives in OCI Secrets; .env carries only its
 //          secret OCID (<name>_OCI_SECRET_ID), and the app reads
 //          it at startup with the instance's own identity
-//          (internal/ocikms) — no credential is stored on the
+//          (internal/ocikms), no credential is stored on the
 //          machine at all.
-//   http — each is stored in .env wrapped by the key service
+//   http, each is stored in .env wrapped by the key service
 //          (<name>_WRAPPED) and unwrapped at startup through the
 //          same endpoint that unwraps the token key.
 //
@@ -109,7 +109,7 @@ func hasExternalCredentials(cfg Config) bool {
 // sources against the token key provider and the transport each
 // source rides, under phase 1's rule: a source named under the
 // wrong provider, or with its transport pieces missing, is a boot
-// error naming the variable — never a silent fall back to a
+// error naming the variable, never a silent fall back to a
 // weaker arrangement than the operator asked for.
 func validateCredentialSources(cfg Config) error {
 	provider, err := resolveTokenKeyProvider(cfg)

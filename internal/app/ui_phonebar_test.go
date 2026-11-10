@@ -11,7 +11,7 @@ import (
 // TestTabsMoreWrapperGuard pins the More wrapper's own [hidden]
 // guard in layout.css. The wrapper is a flex item carrying an author
 // display of its own (its measuring state), and in some engines
-// that display wins over the UA's [hidden] rule — a visible More
+// that display wins over the UA's [hidden] rule, a visible More
 // button with an empty panel behind it, whose tap does nothing.
 // The panel has always carried this guard; the wrapper must too,
 // with the measuring state carved out (measuring a hidden

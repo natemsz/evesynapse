@@ -755,7 +755,7 @@ func TestFitEngineShipRestricted(t *testing.T) {
 // total as +24.73% velocity, and its stated formula (set
 // multiplier = product of all set bonuses; each effect bonus
 // times that; the results multiplied together) is exactly what
-// this SDE mechanism computes — no special-case code.
+// this SDE mechanism computes, no special-case code.
 func snakeSetFixture() (*fitFixture, int64) {
 	fx := newFitFixture()
 	ship := int64(1001)

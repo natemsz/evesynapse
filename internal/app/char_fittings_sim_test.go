@@ -184,7 +184,7 @@ func TestFitSimulateStatsFragment(t *testing.T) {
 // TestFitChipControlsCluster: a fitted module's row carries its
 // name as plain text (clicking it must never remove), with the
 // state and the - / + stepper grouped in the row's right-hand
-// control cluster — exactly one remove and one add per row.
+// control cluster, exactly one remove and one add per row.
 func TestFitChipControlsCluster(t *testing.T) {
 	app, cookie := fitTestApp(t)
 
@@ -449,7 +449,7 @@ func TestFitVisualMetaName(t *testing.T) {
 // TestFitBuildVisualTooltips pins the tooltip contract: meta comes
 // from the static SDE metaGroupID (a Tech II module reads Tech
 // II), CPU/PG come from the engine's effective attributes (skills
-// and bonuses applied — not the raw SDE row), and a loaded charge
+// and bonuses applied, not the raw SDE row), and a loaded charge
 // rides the slot for the badge and the tooltip.
 func TestFitBuildVisualTooltips(t *testing.T) {
 	const gunID = int64(3001)
@@ -846,7 +846,7 @@ func TestFitSimulateImplants(t *testing.T) {
 }
 
 // TestFitSimulateTooltipLines: a fitted weapon's slot (and
-// chip) carries the tooltip's computed stat rows — the
+// chip) carries the tooltip's computed stat rows, the
 // engine's own per-gun figures plus the fitting costs.
 func TestFitSimulateTooltipLines(t *testing.T) {
 	app, cookie := fitTestApp(t)
@@ -863,7 +863,7 @@ func TestFitSimulateTooltipLines(t *testing.T) {
 		`data-tip-lines="DPS|20|;Volley|100|;CPU|15 tf|;PG|10 MW|"`)
 }
 
-// TestFitTipLinesColors: rows tint by effective-vs-base — a
+// TestFitTipLinesColors: rows tint by effective-vs-base, a
 // bonused-down CPU and a bonused-up range read good, an
 // unchanged cost stays neutral.
 func TestFitTipLinesColors(t *testing.T) {
@@ -887,7 +887,7 @@ func TestFitTipLinesColors(t *testing.T) {
 }
 
 // TestFitEditorPickerModal: the module picker is a modal
-// dialog with its own quick search — the add-slot buttons
+// dialog with its own quick search, the add-slot buttons
 // open it over the workbench instead of scrolling away to
 // a detached panel at the module search's old location.
 func TestFitEditorPickerModal(t *testing.T) {

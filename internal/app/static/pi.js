@@ -1,4 +1,4 @@
-// pi.js — PI Planner map interactions. Server renders the plan;
+// pi.js, PI Planner map interactions. Server renders the plan;
 // this file moves the highlight and recalculates in place. Amounts,
 // factories and taxes always come from the server render: a pick or
 // a Recalculate fetches the page for the new settings and swaps the
@@ -147,7 +147,7 @@
     });
 
     // Live coverage: selected planets glow, chain tiles your
-    // planets cannot supply flag, and the verdict line recomputes —
+    // planets cannot supply flag, and the verdict line recomputes,
     // all without a round trip, mirroring the server's check.
     var tierOf = {};
     var rawPlanets = {};

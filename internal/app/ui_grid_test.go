@@ -3,7 +3,7 @@ package app
 // Tests for the home grid: module sizes (catalog defaults and
 // stored sizes), the layout storage formats (v1 ids, v2 spans, v3
 // sizes), the size action, and the classes the server renders. Same hermetic
-// contract as the overview suite — seeded snapshots, counting
+// contract as the overview suite, seeded snapshots, counting
 // transport, zero outbound calls.
 
 import (

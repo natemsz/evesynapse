@@ -57,7 +57,7 @@ func portraitURL(characterID int64, size int) string {
 // switcherEntries builds the header switcher model for the
 // signed-in account: every linked character, the acting one
 // marked. The acting character is the session's pick when it is
-// still linked, else the first linked character — the same
+// still linked, else the first linked character, the same
 // fallback the per-character pages use. A nil result (signed out,
 // dev session, no characters, DB trouble) hides the switcher.
 func (app *Application) switcherEntries(ctx context.Context) []switcherEntry {
@@ -314,9 +314,9 @@ func normalizeTags(raw string) string {
 // POST is the destructive half. The confirm form's revoke box
 // (ticked by default) asks for full disconnection as well: the
 // character's refresh token is revoked at CCP before the local
-// delete — best-effort, never blocking the unlink. If the
+// delete, best-effort, never blocking the unlink. If the
 // character was the acting one, the session falls back to the
-// first remaining character — or to a clean empty state when it
+// first remaining character, or to a clean empty state when it
 // was the last one.
 func (app *Application) handleCharacterUnlink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -337,7 +337,7 @@ func (app *Application) handleCharacterUnlink(w http.ResponseWriter, r *http.Req
 
 	// Full disconnection when the confirm form's revoke box was
 	// ticked: revoke the character's refresh token at CCP before
-	// its local rows go. Only for a character this account owns —
+	// its local rows go. Only for a character this account owns,
 	// the delete below no-ops on anyone else's, and their token is
 	// never ours to revoke.
 	if _, revoke := r.Form["revoke_token"]; revoke {

@@ -15,8 +15,8 @@ import (
 
 // ---------------------------------------------------------------------------
 // Intel worker pass: keeps the global
-// public-data store warm. Everything here is public ESI — no
-// character token — so unlike the other passes this one runs
+// public-data store warm. Everything here is public ESI, no
+// character token, so unlike the other passes this one runs
 // even with no characters linked (the Home status line works
 // before a first login).
 //
@@ -120,7 +120,7 @@ func (app *Application) noteWarDetail(warID int64, finished bool) {
 // missing ones, plus active wars whose stored payload has aged
 // past warDetailMaxAge, at most maxWarDetailsPerCycle fetches.
 // It reports how many were stored and whether ESI's error limit
-// stopped the pass. Finished wars are immutable — once a stored
+// stopped the pass. Finished wars are immutable, once a stored
 // payload carries a finish time it is never refetched.
 func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (fetched int, limited bool) {
 	for _, warID := range list {
@@ -192,9 +192,9 @@ func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (f
 }
 
 // warmIntelNames resolves the public names the Intel pages still
-// lack — war-party corporations and alliances (from the stored
+// lack, war-party corporations and alliances (from the stored
 // war details behind the rendered head of the list) and incursion
-// constellations — through the shared warm budget and pool.
+// constellations, through the shared warm budget and pool.
 func (app *Application) warmIntelNames(ctx context.Context, budget *warmBudget) int {
 	corpIDs := make(map[int64]bool)
 	allianceIDs := make(map[int64]bool)

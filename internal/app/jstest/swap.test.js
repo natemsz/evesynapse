@@ -1,7 +1,7 @@
 // Unit tests for the swap predicate and fallback rules in
 // ../static/swap.js. Run with: node --test "internal/app/jstest/*.test.js"
-// (CI runs the same command). The functions under test are pure —
-// plain data in, verdict out — so no DOM or browser is needed.
+// (CI runs the same command). The functions under test are pure,
+// plain data in, verdict out, so no DOM or browser is needed.
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");

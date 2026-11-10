@@ -67,7 +67,7 @@ a.pi-stat:hover { border-color: var(--accent); }
 /* --- Sheet + intel layout (pilot.html) ---
  * With actual intel on the pilot, the page lays out as the record
  * and its employment history in the main column and the intel
- * section in a right rail — the killboard's kb-layout shape. Below
+ * section in a right rail, the killboard's kb-layout shape. Below
  * the rail breakpoint the grid gives up and the source order
  * stacks: record, intel, employment history. No intel, no rail:
  * the wrapper stays a plain stack, exactly as the page has

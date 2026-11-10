@@ -232,7 +232,7 @@ func (app *mod) handleWallet(w http.ResponseWriter, r *http.Request) {
 // journalParty resolves one journal counterparty to its display
 // name and kind, so the template links it by the name policy.
 // The kind comes from ESI's party_type when the snapshot carries
-// it; older snapshots fall back to the local name tiers — a
+// it; older snapshots fall back to the local name tiers, a
 // character hit means character, a corporation hit corporation,
 // and anything else renders through the character fallback (text
 // whenever it never resolves to a linkable name).

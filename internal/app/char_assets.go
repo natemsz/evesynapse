@@ -44,7 +44,7 @@ const maxAssetRowsPerLocation = 25
 // It is the corporation assets page's flat layout (the character
 // page's matrix lives in char_assets_matrix.go and
 // char_assets_panes.go), with two additions for it:
-//   - extraTitles names locations from outside the place cache —
+//   - extraTitles names locations from outside the place cache,
 //     the corp's own structures, which the corp assets endpoint
 //     reports as location_type "item"/"other" with no structure
 //     label, so the structure IDs must be recognised explicitly;

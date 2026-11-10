@@ -20,7 +20,7 @@ import (
 
 // ---------------------------------------------------------------------------
 // Item database explorer: browse the local SDE category → group →
-// type tree. Every read is a local SDE query — no ESI, no token.
+// type tree. Every read is a local SDE query, no ESI, no token.
 // Types link into the Market item view.
 // ---------------------------------------------------------------------------
 
@@ -170,7 +170,7 @@ func (v *itemsView) Depth() int {
 }
 
 // itemTypeDetail is one item's details page: identity, guide
-// prices, its (worker-warmed) description, and where it fits —
+// prices, its (worker-warmed) description, and where it fits,
 // what it builds into and what builds it.
 type itemTypeDetail struct {
 	ID       int64
@@ -182,7 +182,7 @@ type itemTypeDetail struct {
 	// The page's art: the type's render, with its icon as the
 	// fallback the template wires through data-fallback-src.
 	// Blueprint-category types have neither on the image
-	// server — their art is the /bp image and there is no
+	// server, their art is the /bp image and there is no
 	// fallback (ArtFallback "").
 	ArtURL      string
 	ArtFallback string
@@ -205,9 +205,9 @@ type itemTypeDetail struct {
 	HasDescription     bool
 	Description        template.HTML // sanitized like mail bodies
 	DescriptionPending bool          // asked for; fills in on a coming sync cycle
-	DescState          string        // "ready" | "empty" | "pending" — drives the live-region fragment
+	DescState          string        // "ready" | "empty" | "pending", drives the live-region fragment
 
-	BlueprintID int64           // != 0: manufacturable — link the planner
+	BlueprintID int64           // != 0: manufacturable, link the planner
 	UsedIn      []itemUsedInRow // blueprints consuming this type, capped
 	UsedInMore  bool            // more blueprints use it than are listed
 
@@ -220,7 +220,7 @@ type itemTypeDetail struct {
 
 	// Market sections, filled by the type-page handler for
 	// market-traded types only: swept hub prices and the price
-	// history section — the same marketItem view the Market page
+	// history section, the same marketItem view the Market page
 	// renders its history from, so both pages chart identically
 	// and warm the same way.
 	Hubs        []publicHubPrice
@@ -283,7 +283,7 @@ func (app *Application) itemsPageData(r *http.Request) pageData {
 
 // handleItems renders the explorer's top level: every SDE
 // category with the number of types under it. With any search
-// parameter present it renders the global search instead — the
+// parameter present it renders the global search instead, the
 // two share the URL the way the planner shares its plan URLs.
 // publishedOnlyParam reads the published-only switch from a
 // request: published=1 today; market=1 is still accepted from
@@ -356,7 +356,7 @@ var featuredItemCategories = []string{"Ship", "Module", "Charge", "Drone", "Impl
 
 // handleItemsSearch renders the global item search: a name
 // substring over the whole local type table, narrowable to
-// published items only (the SDE published flag — unpublished
+// published items only (the SDE published flag, unpublished
 // types drop out, marketable or not) and to one category or
 // group of the browse tree. Every control is a plain GET
 // parameter, so a search is a shareable link and the form
@@ -592,7 +592,7 @@ func (app *Application) descriptionState(ctx context.Context, typeID int64) (sta
 
 // itemDescription resolves one type's description state: the
 // local SDE dump first (bulk-cached for every type by the weekly
-// import), then the type_details queue — "ready" with sanitized
+// import), then the type_details queue, "ready" with sanitized
 // HTML when text exists, "empty" once ESI settled with none, and
 // "pending" while the description is still on its way (noting the
 // want so the worker fills it). Shared by the item page and its
@@ -621,7 +621,7 @@ func (app *Application) itemDescription(ctx context.Context, typeID int64) (stri
 	}
 }
 
-// handleItemType renders one item's details page — the target of
+// handleItemType renders one item's details page, the target of
 // every item link in EveSynapse (planner rows, wallet entries,
 // market watchlists, skill names…). Identity and "used in" facts
 // are local SDE reads; the description comes from the type_details

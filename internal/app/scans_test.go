@@ -125,7 +125,7 @@ func TestGroupLocal(t *testing.T) {
 }
 
 // TestScanPricesFromAppraisal: a scan's stored prices, total and
-// coverage come from the priced appraisal lines only — an unpriced
+// coverage come from the priced appraisal lines only, an unpriced
 // hull contributes nothing, not even its count.
 func TestScanPricesFromAppraisal(t *testing.T) {
 	asOf := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)

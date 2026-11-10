@@ -8,15 +8,15 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Planet names. GET /universe/planets/{planet_id}/ is public —
-// no token, no scope — and planet names never change, so the
+// Planet names. GET /universe/planets/{planet_id}/ is public,
+// no token, no scope, and planet names never change, so the
 // queue in the planet_names table only needs to converge once:
 // PI surfaces note the planet ids they meet (notePlanetIDs),
 // the worker resolves the due ones in the background
 // (resolvePlanetNames), and every "Planet #<id>" fallback in
 // the render layer reads the cache first. Resolved names
 // re-check after 90 days (they never change; the re-check is
-// hygiene, not a schedule); a 404 negative-caches for 7 days —
+// hygiene, not a schedule); a 404 negative-caches for 7 days,
 // colony planet ids always exist, so a 404 means a bad id, and
 // the fallback stays until it ages out.
 //

@@ -141,10 +141,8 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 	// fees and sales tax at perfect rates: type 34's typicals
 	// give a 136.7% net spread, profit 5.52*20=110.45.
 	// Type 35: 5.2% net spread, profit 4.73*5=23.62.
-	// Type 36: no buy side -- never a row. (These seeds used to
-	// carry one order a side and still list: that pinned the old
-	// extremes basis and its missing depth gate, and is exactly
-	// the behaviour the credibility fix removes.)
+	// Type 36: no buy side -- never a row. Every listed seed
+	// carries enough orders a side to pass the depth gate.
 	for _, seed := range []db.UpsertMarketStationStatParams{
 		{LocationID: stationA, RegionID: 10000002, TypeID: 34, BestSell: 10, BestBuy: 4, TypicalSell: 10, TypicalBuy: 4, SellOrders: 5, BuyOrders: 5, SellVolume: 100, BuyVolume: 50, UpdatedAt: now},
 		{LocationID: stationA, RegionID: 10000002, TypeID: 35, BestSell: 100, BestBuy: 90, TypicalSell: 100, TypicalBuy: 90, SellOrders: 5, BuyOrders: 5, SellVolume: 10, BuyVolume: 5, UpdatedAt: now},

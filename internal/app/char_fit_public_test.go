@@ -14,8 +14,8 @@ import (
 )
 
 // TestPublicFitPageMirrorsTool: the public fit page renders the
-// fitting tool's own layout read-only — ship centerpiece, slot
-// groups, headline stats at All-V — with the page's extras (EFT,
+// fitting tool's own layout read-only, ship centerpiece, slot
+// groups, headline stats at All-V, with the page's extras (EFT,
 // share links) intact and none of the editor's controls.
 func TestPublicFitPageMirrorsTool(t *testing.T) {
 	transport := &countingTransport{}
@@ -85,8 +85,8 @@ func TestPublicFitPageMirrorsTool(t *testing.T) {
 }
 
 // TestPublicFitPageTooltips: the public page's modules carry
-// the tooltip's computed rows — the same figures the fitting
-// tool shows — and none of the editor's state plumbing:
+// the tooltip's computed rows, the same figures the fitting
+// tool shows, and none of the editor's state plumbing:
 // viewing a fit is information-only.
 func TestPublicFitPageTooltips(t *testing.T) {
 	transport := &countingTransport{}
@@ -197,7 +197,7 @@ func TestPrefetchIsNotAView(t *testing.T) {
 // and in the fitting tool's own stats panel. Prices resolve in the
 // house order: The Forge's swept typical sell wins where the sweep
 // has one, and a type with only a stored estimated sell falls back
-// to it. The guide fixture carries decoys — if the average or the
+// to it. The guide fixture carries decoys, if the average or the
 // adjusted priced anything, the total would move.
 func TestPublicFitCostIsHullPlusParts(t *testing.T) {
 	transport := &pricesTransport{body: `[

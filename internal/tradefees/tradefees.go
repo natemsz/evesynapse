@@ -125,8 +125,7 @@ func NetMarginPct(buy, sell, broker, salesTax float64) float64 {
 }
 
 // GrossSpreadPct is the raw price gap as a percentage of the
-// buy price, the figure the spread card used to quote and now
-// keeps as its secondary line.
+// buy price, the spread card's secondary line.
 func GrossSpreadPct(buy, sell float64) float64 {
 	if buy == 0 {
 		return 0

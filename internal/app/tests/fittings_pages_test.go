@@ -1,7 +1,7 @@
 package tests
 
-// Fittings page split: /fittings/ is the fit simulator only — no
-// saved-fits list underneath it — and /fittings/saved/ carries the
+// Fittings page split: /fittings/ is the fit simulator only, no
+// saved-fits list underneath it, and /fittings/saved/ carries the
 // character's EVE fittings list. Hermetic: fixture snapshots; the
 // only outbound call is the warming path's single read-through.
 

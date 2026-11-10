@@ -1,7 +1,7 @@
 package app
 
 // Hermetic tests for the Briefing home module: seeded
-// snapshots drive the real router against a counting transport —
+// snapshots drive the real router against a counting transport,
 // the digest renders cache-only (zero outbound calls), its lines
 // fire and stay quiet on the rule fixtures, the cap and the
 // per-character dedupe hold, and the "since you last looked"
@@ -138,7 +138,7 @@ func TestBriefingDigestRules(t *testing.T) {
 		"<a href=\"/items/type/34/\">Tritanium</a> moved up 8.0% over 7 days",
 		"Since ",
 		// Deep links: every card lands on the character-scoped
-		// page for the thing it warns about — the undercut line
+		// page for the thing it warns about, the undercut line
 		// on that character's orders (not the market front page),
 		// skill lines on the sheet's skills section, and the
 		// per-character pages for jobs, planets, contracts,
@@ -545,8 +545,8 @@ func TestBriefingAggregatesAcrossCharacters(t *testing.T) {
 }
 
 // Aggregated cards link each character's segment to that
-// character's own destination for the warning — their planets,
-// their unread mail — not to the character sheet.
+// character's own destination for the warning, their planets,
+// their unread mail, not to the character sheet.
 func TestBriefingAggregatesDeepLinks(t *testing.T) {
 	mk := func(rule string, count int, name, href string) briefingLine {
 		return briefingLine{html: "detail", Rank: 1, key: rule + name,

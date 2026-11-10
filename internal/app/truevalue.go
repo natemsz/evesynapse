@@ -150,7 +150,7 @@ func (app *Application) AskEvidence(ctx context.Context, typeID int64) (module.A
 // pickValuationPrice resolves one unit's price in the house
 // order: The Forge's swept typical sell, then the true-value
 // estimated sell (estSell, 0 when none is stored). ok=false
-// when neither knows the type — CCP's guide average is banned
+// when neither knows the type, CCP's guide average is banned
 // as a price source (owner doctrine, 2026-10-17) and the
 // adjusted price survives only as the EIV input to job fees,
 // never as a price.

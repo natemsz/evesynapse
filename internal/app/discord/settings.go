@@ -43,8 +43,8 @@ func (app *mod) settingsViewFor(r *http.Request, userID int64) discordSettingsVi
 // settingsChannel is what the module says inside the settings form:
 // word when the last direct message failed, so the person it concerns
 // sees it on this page and not only in the server's log. The switch
-// itself is the channels list's box at the top of the page — one
-// switch, one place — and settingsSave below stores its answer, as
+// itself is the channels list's box at the top of the page, one
+// switch, one place, and settingsSave below stores its answer, as
 // it did when the box was rendered here.
 func settingsChannel(ctx context.Context, deps module.Deps, r *http.Request, userID int64) template.HTML {
 	view := newMod(deps).settingsViewFor(r, userID)

@@ -1,4 +1,4 @@
-/* EveSynapse — EVE Dominion (2009) re-skin, modern implementation.
+/* EveSynapse, EVE Dominion (2009) re-skin, modern implementation.
    Molten-orange eclipse palette: ember red and flare gold accents on
    neutral near-black grey containers. Single dependency-free stylesheet. */
 
@@ -928,7 +928,7 @@ h3 + .tw > table, h3 + table {
   backdrop-filter: blur(var(--glass-blur)) saturate(0.9); }
 .foldable.has-fold > h2:first-child, .foldable.has-fold > h3:first-child { padding-right: 2.2rem; position: relative; }
 /* Any heading carrying a fold button is that button's frame, so
-   the button centers on its own heading — not on a card whose
+   the button centers on its own heading, not on a card whose
    heading follows an intro paragraph. */
 :is(h2, h3, h4):has(> .foldbtn) { position: relative; padding-right: 2.6rem; }
 /* A quiet link riding a section head's right end, where a fold
@@ -1144,7 +1144,7 @@ tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
 /* The notice takes the pill buttons' treatment (.btn-quiet,
    .region-pills): their dark glass paint under the amber tint,
    and their backdrop blur at the same level. The paint layer is
-   the half that shows everywhere — where the panel glass is
+   the half that shows everywhere, where the panel glass is
    stripped (home) the bar rides the raw sky, and a backdrop
    filter samples nothing over the fixed sky layer in some
    engines, the same failure the header documents; the pills
@@ -1199,8 +1199,8 @@ img.portrait {
 /* --- form inputs + market search suggestions --- */
 /* Fields share one look and one height (--control-h) with the buttons
    beside them. One control family: text fields, selects and
-   textareas all wear the same surface — the --input-bg paint and the
-   accent-tinted --glass-edge border every panel and card uses — so a
+   textareas all wear the same surface, the --input-bg paint and the
+   accent-tinted --glass-edge border every panel and card uses, so a
    field reads as a tint of the page glass, not a neutral slab pasted
    onto it. */
 input[type="text"], input[type="search"], input[type="number"], select, textarea {
@@ -1418,8 +1418,8 @@ tr.is-live > :first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 /* --- footer --- */
 footer {
-  /* Black glass: the top bar's gradient inverted — the dark stop
-     meets the content, the lighter stop the page's bottom edge —
+  /* Black glass: the top bar's gradient inverted, the dark stop
+     meets the content, the lighter stop the page's bottom edge,
      and deeper than the bar, near-black at 90% over the same
      backdrop blur. The paint alone is the no-blur fallback. */
   background: linear-gradient(to bottom, rgba(5, 5, 5, 0.9), rgba(18, 18, 18, 0.9));
@@ -1526,7 +1526,7 @@ footer .hash-pop {
 .fleet-tools { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .fleet-tools input[type="search"] { background: var(--row); color: var(--text); border: 1px solid #333; padding: 0.4rem 0.6rem; border-radius: var(--r-sm); }
 /* Fleet header tags: the tag filters ride in the widget's header
-   band, right-aligned beside the title — the concept's TAGS line.
+   band, right-aligned beside the title, the concept's TAGS line.
    They position against the card, so the markup stays inside the
    card body. Below 70rem they drop into the flow under the title
    and wrap. Customize mode clears the band for the widget's own
@@ -1539,13 +1539,13 @@ footer .hash-pop {
 .home-custom .fleet-tags { display: none; }
 /* The fleet search row is divided from the pilot table by a rule. */
 .fleet-tools { border-bottom: 1px solid var(--glass-edge); padding-bottom: 1.03rem; margin-top: 0.35rem; margin-bottom: 0; }
-/* At a Glance floats: no enclosing panel in normal view — the
+/* At a Glance floats: no enclosing panel in normal view, the
    tiles carry the glass themselves over the sky. Customize mode
    brings the container back so the band stays grabbable, and the
    tiles return to flat tints over it (one blur layer either way). */
 .card[data-widget="glance"] { background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* Normal view only: the band has no container of its own, so the
-   tiles are the surface — they span the full column width, their
+   tiles are the surface, they span the full column width, their
    edges lined up with the panels below, instead of sitting inset
    inside the card's padding and border. Customize mode keeps the
    padded container so the band stays a grabbable panel. */
@@ -1556,7 +1556,7 @@ footer .hash-pop {
 #main-content .grid.home-grid.home-custom > .card[data-widget="glance"] > h3:first-child { display: flex; }
 .home-custom .card[data-widget="glance"] .kpi { background: rgba(255, 255, 255, 0.03); border-color: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* Briefing floats the same way: no enclosing panel in normal
-   view — the brief cards carry the glass themselves over the
+   view, the brief cards carry the glass themselves over the
    sky. The title and the severity filters stay where they are,
    so the section keeps its padding and its heading. Customize
    mode brings the container back so the widget stays
@@ -1677,7 +1677,7 @@ html[data-theme="light"] .widget-scope select {
    height: a module drawn taller shows more rows in its lists
    (homeCap) and spans more grid rows beside its neighbours, so a
    size change always shows, but a module never stands taller than
-   what it holds and what its row-mates need — a fixed row floor
+   what it holds and what its row-mates need, a fixed row floor
    left a two-row module holding three items mostly empty. The
    modules sharing a row stretch to match; every module keeps a
    modest minimum so a one-line module is not a sliver. Nothing scrolls inside a
@@ -1990,7 +1990,7 @@ td.pos, .pos { color: #28c76f; }
   /* A figure wraps at its spaces only (value, unit, trend are
      separate units): it never breaks inside the number itself.
      Bands that cannot fit the figure rewrap as whole cards
-     instead — see the 70rem rule below. */
+     instead, see the 70rem rule below. */
   overflow-wrap: normal;
 }
 .kpis-small .kpi-v { font-size: var(--fs-md); overflow-wrap: normal; white-space: nowrap; }
@@ -2078,7 +2078,7 @@ table.cards-on .spark-hover[data-spark-fallback] { border-bottom: 1px dotted var
 .linkbtn:hover { color: var(--gold); text-decoration: underline; }
 
 /* Briefing filters ride in the widget's header band, right-aligned
-   beside the title — the fleet header-tags pattern. Below 70rem
+   beside the title, the fleet header-tags pattern. Below 70rem
    they drop into the flow under the title and wrap; customize
    mode clears the band for the widget's own controls. */
 .brief-tabs { position: absolute; top: 0; right: 1rem; height: 2.94rem; display: flex; align-items: center; gap: 0.4rem; margin: 0; flex-wrap: wrap; }
@@ -2129,12 +2129,12 @@ ul.brief-cards::-webkit-scrollbar { display: none; }
   flex-direction: column;
   /* Cards fill the widget's row and cap at a third of its
      content width (the two gaps excluded), however few of them
-     there are — a lone card never balloons past its third. */
+     there are, a lone card never balloons past its third. */
   flex: 1 1 0;
   min-width: min(100%, 22rem);
   max-width: calc((100% - 1.5rem) / 3);
   padding: 1rem 1.1rem;
-  /* Briefing glass: the shared recipe at tile scale — one solid
+  /* Briefing glass: the shared recipe at tile scale, one solid
      translucent surface, no own blur (tiles sit inside the glass
      card; one blur layer is enough). The tint is the stack's
      severity color, darker and quieter than its text: the glass
@@ -2147,7 +2147,7 @@ ul.brief-cards::-webkit-scrollbar { display: none; }
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
 /* Briefing card head: the severity chip at the left, and at the
-   right the category glyph with the card's tally — the digest
+   right the category glyph with the card's tally, the digest
    cards read like the briefing mockup: chip, tally, big title,
    then the line itself. */
 .brief-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
@@ -2919,7 +2919,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
    queries re-derive under zoom and can oscillate at the boundary;
    font-size has no such loop. 15px against the 16px default shrinks
    every rem-sized element on the page by about 6%, which is the
-   point — and the risk: KPI stacks, fleet tables and the briefing
+   point, and the risk: KPI stacks, fleet tables and the briefing
    ride along, so they are re-checked at phone widths, not just
    this bar. */
 @media (max-width: 480px) {
@@ -4605,8 +4605,8 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 }
 .fit-modsearchwrap { display: block; width: 100%; }
 .fit-modsearch .fit-searchrow { margin: 0.5rem 0 0.4rem; }
-/* Shared search panel: the module search box's treatment — a dark
-   gradient panel holding the search field and its filter row —
+/* Shared search panel: the module search box's treatment, a dark
+   gradient panel holding the search field and its filter row,
    applied to the page-level search areas (planner, market, the
    fit lists, assets, the workbench's own ship fields). */
 .searchpanel {
@@ -5464,7 +5464,7 @@ td.cal-day:hover .cal-add, .cal-add:focus-visible { opacity: 1; }
 @container calmonth (width < 46rem) {
   /* The month grid reads as an agenda once its panel is too narrow
      for seven readable columns (a phone, or a narrow column beside the
-     event list): only today and the days carrying ops or events show, one row each — the weekday over the date on
+     event list): only today and the days carrying ops or events show, one row each, the weekday over the date on
      the left, the day's entries stacked on the right. The
      upcoming list under it is unchanged. */
   .cal-wrap { overflow: visible; }
@@ -6040,7 +6040,7 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
    the briefing and filter chips, segmented controls, the
    appraisal presets, hub strip and sample buttons, and small
    buttons. The rule lives entirely inside the coarse-pointer
-   query — fine pointers keep the compact metrics untouched. */
+   query, fine pointers keep the compact metrics untouched. */
 @media (hover: none), (pointer: coarse) {
   .chip, .seg > *, .ap-preset, .ap-hub, .ap-samplebtn, .btn.small { min-height: 2.5rem; }
   .chip, .ap-preset, .ap-hub, .ap-samplebtn { display: inline-flex; align-items: center; justify-content: center; }
@@ -6054,10 +6054,10 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
 
 /* --- the phone shell: bottom bar and sections sheet ------------
    (mobile pass 3) In the phone band the shell's navigation is a
-   fixed bottom bar in the sidebar's glass — Home, the primary
+   fixed bottom bar in the sidebar's glass, Home, the primary
    sections, and a Sections button opening a bottom sheet with
    every section, its groups, the character switcher and the
-   account actions — while the hamburger, the off-canvas drawer
+   account actions, while the hamburger, the off-canvas drawer
    and the reopen button stand down: everything they reached
    lives in the bar, the sheet, the top bar (search, quick jump,
    notifications) or the page's own sub-tab row. Outside the band

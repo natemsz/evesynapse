@@ -7,7 +7,7 @@ import "testing"
 // exactly 11.5), one that eats 1040 MW, and two implant ladders.
 // CPU hardwirings (slot 6) post-percent the ship's cpuOutput by
 // their bonus attribute 9601; powergrid hardwirings (slot 7) do
-// the same to powerOutput via 9602 — the shape the real 'Gnome'
+// the same to powerOutput via 9602, the shape the real 'Gnome'
 // and 'Squire' effects have in the SDE (ItemModifier on the ship,
 // operation 6).
 const (
@@ -84,7 +84,7 @@ func pickIDs(picks []SolvePick) []int64 {
 
 // The Pilgrim case: over CPU by exactly 11.5 tf on a 575 tf
 // output. +1% gives 580.75 (not enough), +2% gives exactly
-// 586.5 (legal), so the smallest sufficient implant is the 2% —
+// 586.5 (legal), so the smallest sufficient implant is the 2%,
 // and between the two 2% grades, the cheaper one wins.
 func TestSolveImplantsPilgrimCPU(t *testing.T) {
 	fx := solverFixture()
@@ -149,7 +149,7 @@ func TestSolveImplantsNoneSuffices(t *testing.T) {
 }
 
 // Both ladders living in one slot (the real 'Gnome'/'Squire'
-// situation is two families, one slot each in these fixtures —
+// situation is two families, one slot each in these fixtures,
 // here they collide): with both resources over, one slot cannot
 // hold both fixes, so the honest answer is no solution.
 func TestSolveImplantsSlotConflict(t *testing.T) {

@@ -12,7 +12,7 @@
 // touches the network, so page renders can never block on ESI.
 //
 // "Local" now means, in order: the in-process maps, the SDE static
-// data tables (sde_types/sde_groups/sde_stations/sde_systems — the
+// data tables (sde_types/sde_groups/sde_stations/sde_systems, the
 // app's local copy of CCP's data dump, the primary source), then
 // the type_names drip-feed table. The network tier still exists
 // below all three for anything the SDE lacks (notably
@@ -148,7 +148,7 @@ const (
 	// Economy: character economy
 	// endpoints. Journal/transactions are bounded recent windows
 	// the worker merges (see fetchJournalWindow/fetchTxnsWindow);
-	// contract *items* are not a snapshot at all — they warm into
+	// contract *items* are not a snapshot at all, they warm into
 	// the contract_details table (schema 006), like killmail
 	// details.
 	SnapWalletJournal = "wallet_journal"
@@ -165,7 +165,7 @@ const (
 
 	// Planetary industry: the colonies list, plus one
 	// layout snapshot per planet keyed by planet id in the kind
-	// (planet_layout_<planet id>) — the same suffix keying the
+	// (planet_layout_<planet id>), the same suffix keying the
 	// corporation wallet divisions use (corp_journal_3).
 	SnapPlanets            = "planets"
 	SnapPlanetLayoutPrefix = "planet_layout_"
@@ -195,7 +195,7 @@ const (
 	SnapCorpRoles = "corp_roles"
 
 	// Skill plans: the character's five attributes,
-	// warmed alongside the skills snapshots — the plan engine
+	// warmed alongside the skills snapshots, the plan engine
 	// times every step against these, so the plans pages must
 	// read them from the cache like everything else.
 	SnapAttributes = "attributes"
@@ -203,7 +203,7 @@ const (
 
 // Global snapshot kinds stored in global_snapshots (schema 007):
 // the Intel pages' data. Everything here is public
-// ESI data — no character token — so it lives in a global store
+// ESI data, no character token, so it lives in a global store
 // rather than the per-character snapshot table. War *details*
 // are not a global snapshot; they warm into the war_details
 // table like killmail details (see the worker).
@@ -442,7 +442,7 @@ type Client struct {
 	// cycle time) for the planetary-industry pages. Schematics
 	// are stable public data; the worker warms the cache from the
 	// factory pins in colony layouts, and renders read it
-	// cache-only. In-process only — the full schematic universe
+	// cache-only. In-process only, the full schematic universe
 	// is ~90 entries, so a restart re-warms in a cycle or two.
 	schematicsMu sync.RWMutex
 	schematics   map[int64]Schematic
@@ -718,7 +718,7 @@ type MarketPrice struct {
 }
 
 // MarketHistoryDay is one row of GET /markets/{region_id}/history/
-// — CCP's daily aggregate for a type in a region. Date is the ESI
+// , CCP's daily aggregate for a type in a region. Date is the ESI
 // day ("2006-01-02").
 type MarketHistoryDay struct {
 	Date       string  `json:"date"`
@@ -1167,7 +1167,7 @@ type ContractItem struct {
 type ContractItems []ContractItem
 
 // PublicContract is one entry of GET /contracts/public/{region}/:
-// the public route's shape — no status, no assignee, nothing
+// the public route's shape, no status, no assignee, nothing
 // about a viewer, because there is none.
 type PublicContract struct {
 	ContractID          int64   `json:"contract_id"`
@@ -1216,7 +1216,7 @@ type PublicContractBid struct {
 }
 
 // DynamicItem is GET /dogma/dynamic/items/{type}/{item}/: one
-// abyssal (mutaplasmid-rolled) item instance — its mutator, the
+// abyssal (mutaplasmid-rolled) item instance, its mutator, the
 // type it was rolled from, and its complete attribute set at
 // its rolled values. Non-dynamic items answer 404.
 type DynamicItem struct {
@@ -1493,7 +1493,7 @@ type Constellation struct {
 
 // ---------------------------------------------------------------------------
 // Planetary industry payloads (auth scope
-// esi-planets.manage_planets.v1 — the only scope CCP publishes for
+// esi-planets.manage_planets.v1, the only scope CCP publishes for
 // the two colony GETs). Shapes verified against CCP's ESI OpenAPI
 // document (components/schemas CharactersCharacterIdPlanets*,
 // UniverseSchematicsSchematicIdGet). Dates are RFC3339 strings.
@@ -1537,7 +1537,7 @@ type PlanetFactory struct {
 
 // PlanetPinContent is one stored commodity of a pin. ESI only
 // recalculates amounts when the colony is viewed through the game
-// client, so readers must not present them as live truth — the PI
+// client, so readers must not present them as live truth, the PI
 // pages omit them entirely (see planets.go).
 type PlanetPinContent struct {
 	TypeID int64 `json:"type_id"`
@@ -1597,7 +1597,7 @@ type Schematic struct {
 
 // ---------------------------------------------------------------------------
 // Mail payloads (auth scope esi-mail.read_mail.v1, the
-// only mail scope this app requests — no organize/send).
+// only mail scope this app requests, no organize/send).
 // Shapes verified against CCP's ESI OpenAPI document
 // (components/schemas CharactersCharacterIdMail*).
 // ---------------------------------------------------------------------------
@@ -2111,7 +2111,7 @@ func (c *Client) ErrorBudgetStatus() (remain int, resetUnix int64) {
 // PostJSON POSTs payload as JSON to a public ESI endpoint and
 // decodes the 200 response into out. Used by POST /universe/ids/
 // for exact name → ID resolution and POST /characters/affiliation/;
-// no token — the endpoints are public.
+// no token, the endpoints are public.
 func (c *Client) PostJSON(ctx context.Context, path string, payload any, out any) error {
 	body, _, err := c.request(ctx, http.MethodPost, "", path, payload, http.StatusOK)
 	if err != nil {
@@ -2126,8 +2126,8 @@ func (c *Client) PostJSON(ctx context.Context, path string, payload any, out any
 // callers can tell a missing scope from a bad payload.
 //
 // The response is decoded into out; pass nil when the caller has
-// no use for it. What a 201 carries differs by endpoint — an object
-// for a new fitting, a bare number for a new mail — and a caller
+// no use for it. What a 201 carries differs by endpoint, an object
+// for a new fitting, a bare number for a new mail, and a caller
 // that does not need it should not fail on its shape.
 func (c *Client) PostJSONAuthed(ctx context.Context, accessToken, path string, payload any, out any) error {
 	body, _, err := c.request(ctx, http.MethodPost, accessToken, path, payload, http.StatusCreated)
@@ -2292,7 +2292,7 @@ func (c *Client) FetchAndStoreSnapshot(ctx context.Context, ch db.Character, kin
 // the outcome: the fresh payload, or notModified when ESI said the
 // stored one is still current (the payload is then not returned;
 // the caller already has it or does not need it). conditional false
-// forces a full download — for a stored copy that turned out to be
+// forces a full download, for a stored copy that turned out to be
 // unusable, which a 304 would only confirm.
 func (c *Client) refreshSnapshot(ctx context.Context, ch db.Character, kind string, conditional bool) (body []byte, notModified bool, err error) {
 	path := snapshotPath(ch.CharacterID, kind)
@@ -2361,7 +2361,7 @@ func (c *Client) refreshSnapshot(ctx context.Context, ch db.Character, kind stri
 
 // storedSnapshotETag is the ETag the stored snapshot came with, or
 // "" when there is no snapshot, it has none, or it cannot be read
-// — every one of which simply means "fetch it in full".
+// , every one of which simply means "fetch it in full".
 func (c *Client) storedSnapshotETag(ctx context.Context, characterID int64, kind string) string {
 	etag, err := c.queries.GetSnapshotETag(ctx, db.GetSnapshotETagParams{CharacterID: characterID, Kind: kind})
 	if err != nil {
@@ -2446,7 +2446,7 @@ func parseDivisionKind(kind, prefix string) (int64, bool) {
 // FetchAndStoreCorpSnapshot is FetchAndStoreSnapshot for the
 // corporation endpoints: the payload is fetched with ch's access
 // token against ch's corporation and stored under ch's character
-// ID + kind (corp data rides the per-character snapshot table —
+// ID + kind (corp data rides the per-character snapshot table,
 // see the SnapCorp* kind comments). A 403 comes back as a
 // StatusError (see IsForbidden): the caller records the missing
 // in-game role and leaves the cache untouched.
@@ -2890,7 +2890,7 @@ func (c *Client) GetCached(ctx context.Context, ch db.Character, kind string, ou
 
 // ---------------------------------------------------------------------------
 // Global public-data store (Intel cluster). The datasets here are
-// public ESI — no character token — so they live in the
+// public ESI, no character token, so they live in the
 // global_snapshots table under the same cache contract as the
 // per-character snapshots (raw payload + Expires as cached_until,
 // 5-minute fallback). Handlers read the table directly and never
@@ -3068,8 +3068,8 @@ func (c *Client) FetchAndStoreRouteStatus(ctx context.Context) error {
 // TypeName, PlaceName) fetches and caches what the local caches
 // lack, capped per call; the cache-only tier (CachedTypeNames,
 // CachedTypeGroups, CachedGroupNames, CachedPlaceName) consults the
-// in-process maps and the type_names table ONLY — never the network
-// — so page renders can't block on ESI. Misses are simply absent
+// in-process maps and the type_names table ONLY, never the network
+//, so page renders can't block on ESI. Misses are simply absent
 // (or reported unknown), and the worker's warm-up pass fills the
 // gaps.
 // ---------------------------------------------------------------------------
@@ -3191,7 +3191,7 @@ func (c *Client) StoreTypeName(ctx context.Context, id int64, t Type) {
 
 // cacheType records a name (and its group link, when known) in the
 // in-process caches only. Unlike StoreTypeName it writes nothing to
-// the type_names table — SDE-derived names already live in
+// the type_names table, SDE-derived names already live in
 // sde_types.
 func (c *Client) cacheType(id int64, name string, groupID int64) {
 	if name != "" {
@@ -3209,7 +3209,7 @@ func (c *Client) cacheType(id int64, name string, groupID int64) {
 // ---------------------------------------------------------------------------
 // SDE lookups: the local static-data tables are the primary name
 // source now. Every helper treats a miss (or no import yet) as a
-// plain "not found" — the type_names table and the network tier
+// plain "not found", the type_names table and the network tier
 // remain below as fallback.
 // ---------------------------------------------------------------------------
 
@@ -3236,7 +3236,7 @@ func (c *Client) sdeGroupName(ctx context.Context, id int64) (string, bool) {
 }
 
 // sdePlaceName looks a station or system ID up in the SDE tables
-// (stations first — asset locations are usually stations; the ID
+// (stations first, asset locations are usually stations; the ID
 // spaces don't collide in practice), filling the place cache on a
 // hit.
 func (c *Client) sdePlaceName(ctx context.Context, id int64) (string, bool) {
@@ -3322,7 +3322,7 @@ const maxGroupNameLookups = 40
 // ResolveGroupNames resolves skill-group ID → display name from the
 // in-process cache, then the SDE tables, then GET
 // /universe/groups/{id}/ (public), capped per call. This is the
-// network tier — page renders use CachedGroupNames instead;
+// network tier, page renders use CachedGroupNames instead;
 // unresolved groups are absent from the result and the caller
 // falls back to "Group #<id>".
 func (c *Client) ResolveGroupNames(ctx context.Context, ids []int64) map[int64]string {
@@ -3375,7 +3375,7 @@ func (c *Client) ResolveGroupNames(ctx context.Context, ids []int64) map[int64]s
 
 // PlaceName resolves a station or solar-system ID to its name,
 // consulting the in-process cache, then the SDE tables, then
-// public ESI (successes cached in-process — the data is stable).
+// public ESI (successes cached in-process, the data is stable).
 // This is the network tier: renders use CachedPlaceName instead;
 // the market page's interactive order lookups still come here.
 func (c *Client) PlaceName(ctx context.Context, path string, id int64, fallback string) string {
@@ -3416,7 +3416,7 @@ func (c *Client) PlaceName(ctx context.Context, path string, id int64, fallback 
 
 // ---------------------------------------------------------------------------
 // Cache-only resolution: the render-path tier. These consult the
-// in-process maps, the SDE tables, and the type_names table ONLY —
+// in-process maps, the SDE tables, and the type_names table ONLY,
 // never the network.
 // ---------------------------------------------------------------------------
 
@@ -3597,8 +3597,8 @@ const (
 )
 
 // StructureSource values for the structure_names.source column
-// (schema 023): where a cached name came from. ESI truth — the
-// authenticated lookup or a corporation structure list — always
+// (schema 023): where a cached name came from. ESI truth, the
+// authenticated lookup or a corporation structure list, always
 // outranks the community tier; the app layer enforces that order
 // when storing. Community is plumbed but inactive: no dataset
 // ships yet, and no name is ever invented to fill the tier.
@@ -3611,7 +3611,7 @@ const (
 // FetchStructure resolves one structure id with a character's
 // token (network tier). A 403 means the token can see the
 // structure exists but not its name (no docking access); 404
-// means it is gone. One character's 403 is not the final word —
+// means it is gone. One character's 403 is not the final word,
 // callers try every eligible character and record a negative
 // answer only once the whole set has answered no.
 func (c *Client) FetchStructure(ctx context.Context, ch db.Character, structureID int64) (UniverseStructure, error) {
@@ -3655,8 +3655,8 @@ func (c *Client) StoreStructureName(structureID int64, name string) {
 // Planet names. GET /universe/planets/{planet_id}/ is public (no
 // token), and planet names never change, so resolution is cheap
 // and durable: FetchPlanet is the network tier (worker only),
-// CachedPlanetName is the render tier — in-process place cache,
-// then the durable planet_names table — and never fetches.
+// CachedPlanetName is the render tier, in-process place cache,
+// then the durable planet_names table, and never fetches.
 // ---------------------------------------------------------------------------
 
 // UniversePlanet is GET /universe/planets/{planet_id}/ (public).
@@ -3679,7 +3679,7 @@ const (
 
 // FetchPlanet resolves one planet id (network tier; the endpoint
 // is public, so no token is involved). A 404 means the id is not
-// a planet — colony planet ids always exist, so callers treat a
+// a planet, colony planet ids always exist, so callers treat a
 // 404 as a rare negative and back it off rather than failing.
 func (c *Client) FetchPlanet(ctx context.Context, planetID int64) (UniversePlanet, error) {
 	var out UniversePlanet
@@ -3718,7 +3718,7 @@ func (c *Client) StorePlanetName(planetID int64, name string) {
 // Character-name resolution: killmail victims and final-blow
 // attackers. Same two tiers as places: CharacterName is the network
 // tier (public GET /characters/{id}/), CachedCharacterName is the
-// render tier and never touches the network — the worker warms the
+// render tier and never touches the network, the worker warms the
 // cache from killmail details.
 // ---------------------------------------------------------------------------
 
@@ -3734,8 +3734,8 @@ func (c *Client) CharacterName(ctx context.Context, id int64) (string, error) {
 	}
 	var ch Character
 	if err := c.Get(ctx, "", fmt.Sprintf("/characters/%d/", id), &ch); err != nil {
-		// A 404/422 here is definitive — the ID belongs to some
-		// other entity kind (or nothing) — so remember it instead
+		// A 404/422 here is definitive, the ID belongs to some
+		// other entity kind (or nothing), so remember it instead
 		// of letting the caller re-ask every cycle.
 		if code, ok := StatusCode(err); ok && (code == http.StatusNotFound || code == 422) {
 			c.StoreCharacterNameMiss(id)
@@ -3797,7 +3797,7 @@ func (c *Client) StoreCharacterNameMiss(id int64) {
 
 // ---------------------------------------------------------------------------
 // Organization and constellation names: war parties and
-// incursion constellations. Same two tiers as character names —
+// incursion constellations. Same two tiers as character names,
 // the Cached* accessors never touch the network; the worker warms
 // the caches from war details and the incursions snapshot.
 // ---------------------------------------------------------------------------
@@ -3953,7 +3953,7 @@ func (c *Client) StoreConstellationName(id int64, name string) {
 }
 
 // ---------------------------------------------------------------------------
-// PI schematics: same two tiers as the name caches — FetchSchematic
+// PI schematics: same two tiers as the name caches, FetchSchematic
 // is the network tier (public GET /universe/schematics/{id}/, no
 // token) for the worker's warm-up pass; CachedSchematic is the
 // render tier and never touches the network.

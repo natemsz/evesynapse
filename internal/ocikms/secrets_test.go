@@ -2,7 +2,7 @@ package ocikms
 
 // The Secrets read end to end against fakes: the same metadata
 // and federation fakes as the KMS tests, plus a Secrets service
-// fake that verifies the request the way the real service would —
+// fake that verifies the request the way the real service would,
 // GET method, the /20190301/secretbundles/<id> path, and an
 // Authorization signature that verifies under the session key the
 // federation exchange issued, with the keyId "ST$<token>".

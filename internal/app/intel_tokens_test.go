@@ -150,7 +150,7 @@ func TestIntelTokens(t *testing.T) {
 		t.Fatalf("lines: %d %s", r.Code, r.Body.String())
 	}
 	// The same lines again, signed a second later the way Axon
-	// re-signs a retry: still a duplicate — while a byte-identical
+	// re-signs a retry: still a duplicate, while a byte-identical
 	// replay of the first request is refused (TestAxonReplay).
 	if r := apiAt(http.MethodPost, path, lines, token, priv, time.Now().Add(time.Second)); !strings.Contains(r.Body.String(), `"posted":0`) || !strings.Contains(r.Body.String(), `"duplicates":1`) {
 		t.Errorf("the same lines again are stored once: %s", r.Body.String())
@@ -232,7 +232,7 @@ func TestAxonReplay(t *testing.T) {
 		t.Fatalf("the first signed request: %d %s", rec.Code, rec.Body.String())
 	}
 	if rec := send(at); rec.Code != http.StatusUnauthorized {
-		t.Errorf("the identical request sent again: %d, want 401 — a signed request is single-use", rec.Code)
+		t.Errorf("the identical request sent again: %d, want 401: a signed request is single-use", rec.Code)
 	}
 	if rec := send(at.Add(time.Second)); rec.Code != http.StatusOK {
 		t.Errorf("the request signed afresh: %d %s", rec.Code, rec.Body.String())

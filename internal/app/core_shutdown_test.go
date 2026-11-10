@@ -1,11 +1,9 @@
 package app
 
-// Close-ordering regression test: the updater-driven restart on
-// the live box used to flood the log with "sql: database is
-// closed" because Close cancelled the worker and immediately
-// closed the handle while worker passes were still querying it.
-// The contract now is: cancel, wait for the worker to fully
-// stop, then close the handles.
+// Close ordering: Close cancels the worker, waits for it to
+// fully stop, then closes the database handles, so no worker
+// pass ever queries a closed handle (an updater-driven restart
+// would otherwise fill the log with "sql: database is closed").
 
 import (
 	"bytes"

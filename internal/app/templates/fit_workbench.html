@@ -263,7 +263,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     <div class="fit-missing">
       <h4>Skills you're missing</h4>
       <ul>
-      {{range $.Missing}}<li>{{.Name}} — {{.Have}} → {{.Need}}</li>{{end}}
+      {{range $.Missing}}<li>{{.Name}}: {{.Have}} → {{.Need}}</li>{{end}}
       </ul>
     </div>
     {{end}}
@@ -287,7 +287,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     {{$group := .}}
     {{$fold := and (eq $group.Key "cargo") (gt (len $group.Chips) 5)}}
     <div class="fit-group{{if $fold}} fit-fold{{end}}" data-fit-group="{{$group.Key}}" data-fit-used="{{$group.Used}}" data-fit-max="{{$group.Max}}">
-      <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
+      <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}}, doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
         <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}>

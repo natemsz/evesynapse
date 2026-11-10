@@ -42,7 +42,7 @@ import (
 // industry tables the build planner (schema 011) reads.
 // industryActivitySkills.csv is deliberately NOT in this list: it
 // only seasons the planner with required skills, so a dump or
-// mirror lacking it must not fail the whole import — importSDE
+// mirror lacking it must not fail the whole import, importSDE
 // fetches it best-effort instead.
 var sdeFileNames = []string{
 	"invTypes.csv",
@@ -458,7 +458,7 @@ func (app *Application) importSDEFrom(ctx context.Context, ov *sdeArchive) error
 
 	// The skills file is best-effort (see sdeFileNames): its
 	// absence or a parse hiccup must not fail an otherwise good
-	// import — the planner just shows no required skills.
+	// import, the planner just shows no required skills.
 	if marker, err := app.parseSDESource(ctx, ov, base, sdeSkillsFileName, parsed); err != nil {
 		logging.Warnf("sde: optional %s unavailable, continuing without it: %v", sdeSkillsFileName, err)
 	} else {
@@ -826,7 +826,7 @@ type sdeCategoryRow struct {
 // sdeMarketGroupRow is one invMarketGroups row (schema 024): the
 // market browse tree. parentGroupID is 0 at the top level; the
 // dump spells the parent column parentMarketGroupID (older
-// references shorten it to parentGroupID — the parser accepts
+// references shorten it to parentGroupID, the parser accepts
 // both).
 type sdeMarketGroupRow struct {
 	marketGroupID int64
@@ -1080,7 +1080,7 @@ func csvFieldOrEmpty(rec []string, idx map[string]int, name string) string {
 
 // eachCSVRow walks the remaining records of a dump file. Rows whose
 // primary key doesn't parse are skipped (counted), other parse
-// errors abort the import — a dump we can't read whole is not a
+// errors abort the import, a dump we can't read whole is not a
 // dump to half-store.
 func eachCSVRow(cr *csv.Reader, fn func(rec []string) error) (skipped int, err error) {
 	for {
@@ -1684,18 +1684,18 @@ func (parsed *parsedSDE) buildIndustryRows() {
 // dgmAttributeTypes names and live rows (Gunnery 3300: 180=167
 // Perception, 181=168 Willpower, 275=1.0):
 //
-//   275 skillTimeConstant   — the skill rank multiplier
-//   180 primaryAttribute    — value is a character attribute ID
+//   275 skillTimeConstant, the skill rank multiplier
+//   180 primaryAttribute, value is a character attribute ID
 //   181 secondaryAttribute    (164-168: charisma/intelligence/
 //                             memory/perception/willpower)
 //
-// Required skills come in (skill, level) attribute pairs — five
+// Required skills come in (skill, level) attribute pairs, five
 // pairs carry rows in the current dump; the sixth pair exists in
 // the attribute table but is unused so far. Every pair found is
 // honored, so a ship listing five prerequisites expands fully:
 //
 //   182/277, 183/278, 184/279, 1285/1286, 1289/1287, 1290/1288
-//          (requiredSkillN / requiredSkillNLevel — note pair 5's
+//          (requiredSkillN / requiredSkillNLevel, note pair 5's
 //          level attribute has the smaller number)
 // ---------------------------------------------------------------------------
 
@@ -2001,7 +2001,7 @@ func parseSDETypeEffects(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) 
 
 // buildSkillRows flattens the filtered dogma rows into the
 // schema-012 tables. Skill meta covers published category-16
-// types (the EVE skill category) that carry a skillTimeConstant —
+// types (the EVE skill category) that carry a skillTimeConstant,
 // dogma's own definition of a trainable skill. Requirements cover
 // every type in the dump (modules/ships/charges carry their own
 // required skills), with duplicate (type, skill) rows across the
@@ -2072,7 +2072,7 @@ func (parsed *parsedSDE) buildSkillRows() {
 
 // storeSDE replaces the sde_* contents with the parsed dump in one
 // transaction: deletes, then bulk inserts via prepared statements
-// (importer volume — tens of thousands of rows — is why these are
+// (importer volume, tens of thousands of rows, is why these are
 // hand-rolled rather than sqlc; the meta writes do use sqlc against
 // the transaction). Returns the total imported row count.
 func (app *Application) storeSDE(ctx context.Context, base string, parsed *parsedSDE) (int64, error) {
@@ -2423,7 +2423,7 @@ type sdeTableCount struct {
 // sdeFileMarker is one dump file's stored remote Last-Modified.
 type sdeFileMarker struct {
 	File         string
-	LastModified string // "—" when unknown
+	LastModified string // ", " when unknown
 }
 
 // sdeView is the Sync page's static-data block.

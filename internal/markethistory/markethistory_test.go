@@ -3,7 +3,7 @@ package markethistory
 // First tests for the pure history math: the change figures, the
 // axis formatting, the chart geometry, and the trader snapshot.
 // Everything here is a pure function over stored rows, so the
-// tests are too — no database, no network.
+// tests are too, no database, no network.
 
 import (
 	"fmt"
@@ -45,7 +45,7 @@ func TestChangePct(t *testing.T) {
 		t.Fatal("one row reported a change")
 	}
 	// Jan 1 and Jan 8 only, asking for 3 days: the target is Jan
-	// 5, four days from the only candidate — past tolerance.
+	// 5, four days from the only candidate, past tolerance.
 	sparse := []db.MarketHistory{rows[0], rows[len(rows)-1]}
 	if _, ok := ChangePct(sparse, 3); ok {
 		t.Fatal("a change bridged a hole past tolerance")

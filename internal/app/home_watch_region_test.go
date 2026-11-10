@@ -1,9 +1,9 @@
 package app
 
-// Audit 2.8e, Home half: a watched global-market type (PLEX)
+// Home half: a watched global-market type (PLEX)
 // stores its history in the global region, whatever region the
 // watch was saved under. The Home market health line and the
-// briefing watch-move line must read — and name — that region,
+// briefing watch-move line must read, and name, that region,
 // like the Market page does, not the watch's saved region.
 
 import (

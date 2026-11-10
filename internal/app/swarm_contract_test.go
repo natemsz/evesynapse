@@ -176,7 +176,7 @@ func TestSwarmContractServe(t *testing.T) {
 		t.Fatalf("singleton item served wrong: %+v", served.Items[1])
 	}
 
-	// Stored but swarm-supplied: a miss — a peer's row is never
+	// Stored but swarm-supplied: a miss, a peer's row is never
 	// re-served under this instance's signature.
 	supplied := swarmContractFixture(7102, issued, expires)
 	stamp := now.Add(-20 * time.Minute)
@@ -329,7 +329,7 @@ func TestSwarmContractVerifyDeferAndFail(t *testing.T) {
 		}
 		return verdict
 	}
-	// No stub entry: the route 404s — the contract ended, which
+	// No stub entry: the route 404s, the contract ended, which
 	// convicts nobody; the entry defers.
 	if got := verify(); got != swarm.SwarmCheckDefer {
 		t.Fatalf("404 verdict %d, want Defer", got)
@@ -413,7 +413,7 @@ func TestSwarmContractApplyNoRowAndRollback(t *testing.T) {
 	}
 
 	// Applied again, then re-seen by this instance's own sweep:
-	// the stamp no longer matches, and rollback refuses — the
+	// the stamp no longer matches, and rollback refuses, the
 	// row is this instance's own now.
 	if err := swarm.StateFor(app).ApplySwarmEntry(ctx, swarm.SwarmKindContract, "7501",
 		swarmContractJSON(t, body), origin, now); err != nil {

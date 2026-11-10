@@ -1138,11 +1138,11 @@ type Deps interface {
 	KillmailLossValue(ctx context.Context, killmailID int64, payload string) float64
 	// TypicalSells is the swept typical sell per type (The
 	// Forge's book, global-market types filled from their own
-	// global book) —
+	// global book),
 	// the first tier of the house price order.
 	TypicalSells(ctx context.Context) map[int64]float64
 	// TrueValues is the stored true-value estimated sell per
-	// type (thin types only) — the order's second tier.
+	// type (thin types only), the order's second tier.
 	TrueValues(ctx context.Context) map[int64]float64
 	// AskEvidence is the live single-item contract asks behind a
 	// type the true-value pass could not price: shown beside the

@@ -536,8 +536,8 @@ func TestTrueValueCorpusPricing(t *testing.T) {
 }
 
 // TestTrueValueLeafPriceHouseOrder: a BOM leaf prices in the
-// house order inside the pass itself — the stored estimated
-// sell when the sweep has no typical for it — and a leaf only
+// house order inside the pass itself, the stored estimated
+// sell when the sweep has no typical for it, and a leaf only
 // the guide knows (average and adjusted both present) prices
 // nothing, leaving the product that builds from it unpriced
 // rather than fossil-priced.
@@ -569,8 +569,8 @@ func TestTrueValueLeafPriceHouseOrder(t *testing.T) {
 			t.Fatalf("seed sde: %v", err)
 		}
 	}
-	// The fossil leaf carries the guide's full hand — an
-	// average and an adjusted — and nothing else.
+	// The fossil leaf carries the guide's full hand, an
+	// average and an adjusted, and nothing else.
 	if err := q.UpsertGuidePrice(ctx, db.UpsertGuidePriceParams{
 		TypeID: 7002, AveragePrice: 50, AdjustedPrice: 40,
 	}); err != nil {
@@ -603,7 +603,7 @@ func TestTrueValueLeafPriceHouseOrder(t *testing.T) {
 	}
 
 	// Gizmo: its only leaf prices from nothing the house
-	// trusts, so the gizmo stays unpriced — no row at all.
+	// trusts, so the gizmo stays unpriced, no row at all.
 	if _, err := q.GetTrueValue(ctx, 6003); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("gizmo true value err = %v, want no row (guide-priced leaves price nothing)", err)
 	}

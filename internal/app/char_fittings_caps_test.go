@@ -1,6 +1,6 @@
 package app
 
-// Audit 1.4, import path: a hostile EFT paste must not turn
+// Import path: a hostile EFT paste must not turn
 // into unbounded database work. ParseEFT bounds the paste
 // (64 KiB / 500 lines) and memoizes name lookups, so a 20,000
 // line paste resolves against a bounded prefix and the same

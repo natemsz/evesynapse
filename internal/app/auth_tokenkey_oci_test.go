@@ -3,7 +3,7 @@ package app
 // Tests for the oci token key provider (auth_tokenkey.go over
 // internal/ocikms): an Application pointed at fakes of the OCI
 // metadata service, federation endpoint and KMS unlocks with the
-// key KMS returns — and refuses a wrong one — while
+// key KMS returns, and refuses a wrong one, while
 // -wrap-token-key speaks the encrypt side of the same path.
 // Every endpoint in these configs is an httptest server: nothing
 // here can reach the real metadata address or Oracle.

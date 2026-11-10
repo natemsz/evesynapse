@@ -82,7 +82,7 @@ const (
 	// updateRestartWait bounds the wait for the old server to
 	// stop after SIGTERM.
 	updateRestartWait = 20 * time.Second
-	// elfMachineAArch64 is ELF e_machine for 64-bit ARM — the
+	// elfMachineAArch64 is ELF e_machine for 64-bit ARM, the
 	// only computer the deployed binary ever runs on.
 	elfMachineAArch64 = 183
 )
@@ -94,13 +94,13 @@ var providerCheckTimeout = 10 * time.Second
 
 // ---------------------------------------------------------------------------
 // The release channel: CI publishes every build as a release
-// whose assets are the package files — a tiny manifest per CPU
+// whose assets are the package files, a tiny manifest per CPU
 // kind (the version it names and the checksum of the binary
 // beside it) and that manifest's signature. Where the updater
 // reads them from is a provider. Which providers an install
 // reads, and in what order, is the install's own
 // configuration: EVESYNAPSE_UPDATE_PROVIDER names one or
-// more, and those are consulted in the order listed — the
+// more, and those are consulted in the order listed, the
 // listed order is the only preference there is, so a fork
 // points the updater at its own sources by listing them. The
 // newest genuine (signature-checked) release among the
@@ -108,10 +108,10 @@ var providerCheckTimeout = 10 * time.Second
 // version, the earlier-listed provider is the source, and the
 // manifest, its signature and the binary all come from that
 // one provider's release. An install that names none walks
-// an out-of-box fallback list — the three forges below, then
+// an out-of-box fallback list, the three forges below, then
 // the mirror:
 //
-//	github: the repository's releases on GitHub — the stable
+//	github: the repository's releases on GitHub, the stable
 //	    channel from its "latest" download address, the dev
 //	    channel from its API.
 //	gitlab: the project's releases on a GitLab, listed through
@@ -129,7 +129,7 @@ var providerCheckTimeout = 10 * time.Second
 // ---------------------------------------------------------------------------
 
 const (
-	// elfMachineAMD64 is ELF e_machine for x86-64 — the desktop
+	// elfMachineAMD64 is ELF e_machine for x86-64, the desktop
 	// build's counterpart to elfMachineAArch64.
 	elfMachineAMD64 = 62
 )
@@ -227,7 +227,7 @@ func elfMachineForArch(arch string) (uint16, bool) {
 //
 // A development build's suffix ("0.4.1.4-dev") is not part of the number:
 // the numbers are compared first, and when they tie the plain
-// release is the newer of the two — a dev build leads up to the
+// release is the newer of the two, a dev build leads up to the
 // release that carries its number.
 func compareVersions(a, b string) int {
 	pa, pb := versionParts(a), versionParts(b)
@@ -362,7 +362,7 @@ func selectRelease(releases []gitlabRelease, dev bool) (gitlabRelease, bool) {
 // updateProviders resolves which providers the updater reads
 // releases from: EVESYNAPSE_UPDATE_PROVIDER, in the
 // environment or the install's .env file, holds one name or a
-// comma-separated list of them, walked in the order named —
+// comma-separated list of them, walked in the order named,
 // that order is the install's configuration, and the only
 // preference the updater has. An install that names none
 // reads the fallback list (see fetchReleaseManifest).
@@ -1064,8 +1064,8 @@ func runUpdate(current, target string, args []string, stdout, stderr io.Writer) 
 	// This runs as root and replaces the program root runs, so a
 	// build fetched over the network is only ever installed against
 	// a checksum the operator supplies: without one, whatever the
-	// address answered with — over plain http, whatever anyone on
-	// the path answered with — would be installed. A file already
+	// address answered with, over plain http, whatever anyone on
+	// the path answered with, would be installed. A file already
 	// on this computer is the operator's own and needs none.
 	if updateSourceIsRemote(source) && wantHash == "" {
 		fmt.Fprintln(stderr, "A download address needs the checksum published with that build, so the download can be checked before it is installed:\n  evesynapse -update <download address> <sha256>\nNothing was changed.")
@@ -1372,7 +1372,7 @@ func fetchUpdate(ctx context.Context, source, dstPath string, display *downloadD
 }
 
 // verifyExecutableMachine checks that path is an ELF program
-// built for the given machine kind — the one check that keeps a
+// built for the given machine kind, the one check that keeps a
 // wrong download (error page, build for another kind of
 // computer) from ever replacing the working copy.
 func verifyExecutableMachine(path string, wantMachine uint16) error {

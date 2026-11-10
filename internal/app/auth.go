@@ -65,7 +65,7 @@ func putSessionCharID(sm *scs.SessionManager, ctx context.Context, id int64) {
 }
 
 // pinSessionCharacter makes id/name the session's acting
-// character — except on a hover prefetch. A prefetch changes
+// character, except on a hover prefetch. A prefetch changes
 // nothing a view would (core_prefetch.go): it still renders the
 // requested character's page for the swap cache, but the acting
 // character only moves when the pilot actually opens the page.
@@ -123,11 +123,11 @@ const (
 // exceptions below. The list is
 // generated from the OAuth2 scope catalog in CCP's ESI OpenAPI document
 // (GET https://esi.evetech.net/meta/openapi.json →
-// components.securitySchemes), minus every mutating scope — anything
+// components.securitySchemes), minus every mutating scope, anything
 // whose name contains write_, send_, respond_, organize_, manage_ or
 // open_window (2 scopes excluded: write_contacts, write_fleet;
 // esi-planets.manage_planets.v1
-// is the one deliberate manage exception — see below). The user's
+// is the one deliberate manage exception, see below). The user's
 // developer-portal application has the same scopes enabled, so
 // SSO grants exactly what is requested here. Already-linked
 // characters keep their previously granted scopes until re-linked.
@@ -141,7 +141,7 @@ const (
 // One deliberate exception: esi-ui.open_window.v1 IS requested,
 // powering the contract pages' "View in game" button (POST
 // /ui/openwindow/contract/). It moves the player's own client
-// window and nothing else — no game state changes hands — and
+// window and nothing else, no game state changes hands, and
 // the developer-portal application has it enabled. Characters
 // linked before this scope was added hold no grant for it,
 // which the handler reports as "sign in again to enable View in
@@ -157,7 +157,7 @@ const (
 // "sign in again to send routes to the game".
 //
 // One deliberate exception: esi-planets.manage_planets.v1
-// IS requested. CCP publishes no read scope for planetary industry —
+// IS requested. CCP publishes no read scope for planetary industry,
 // manage_planets is the only scope gating the two colony GETs
 // (/characters/{id}/planets and /characters/{id}/planets/{planet_id}),
 // and no write endpoint hangs off it in the current ESI surface.
@@ -227,7 +227,7 @@ var eveScopes = []string{
 	"esi-markets.read_character_orders.v1",
 	"esi-markets.read_corporation_orders.v1",
 	"esi-markets.structure_markets.v1",
-	// The only "manage_" scope requested — see the eveScopes
+	// The only "manage_" scope requested, see the eveScopes
 	// comment: it gates the colony GETs and nothing else.
 	"esi-planets.manage_planets.v1",
 	"esi-planets.read_customs_offices.v1",
@@ -265,7 +265,7 @@ func eveOAuthConfig(cfg Config) *oauth2.Config {
 
 // handleEVELogin starts the EVE SSO flow: it stores a random state in
 // the session and redirects to CCP's authorize page. Also used by the
-// "Link another character" button — the callback attaches the character
+// "Link another character" button, the callback attaches the character
 // to whichever account the session already holds.
 func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 	if !app.cfg.SSOConfigured() {
@@ -283,7 +283,7 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 	if choice, ok := app.linkChoiceFromQuery(r.URL.Query()); ok {
 		if choice.empty() {
 			// A submitted choice with everything unticked: the chooser
-			// again at zero. Never the full link — that is only for a
+			// again at zero. Never the full link, that is only for a
 			// request with no choice in it at all.
 			target := "/auth/link?submitted=1"
 			if cid := r.URL.Query().Get("character"); cid != "" {
@@ -350,7 +350,7 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 // trip that asks for no scopes at all, so it proves only who the
 // pilot is. The callback (finishIdentityLogin) lands a character
 // that is already linked on its existing account and leaves its
-// stored tokens and granted scopes untouched — logging in must
+// stored tokens and granted scopes untouched, logging in must
 // never widen or narrow what sign-up chose. A character with no
 // account yet is sent to the chooser to sign up properly.
 func (app *Application) handleEVELoginIdentity(w http.ResponseWriter, r *http.Request) {
@@ -424,7 +424,7 @@ func newOAuthState() (string, error) {
 }
 
 // newPKCEVerifier returns a fresh PKCE code_verifier (RFC 7636):
-// 32 random bytes, base64url-encoded without padding — 43
+// 32 random bytes, base64url-encoded without padding, 43
 // characters, inside the RFC's 43–128 range and drawn from its
 // unreserved set.
 func newPKCEVerifier() (string, error) {
@@ -554,7 +554,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	// Land on the account this sign-in belongs to: the session's
 	// account when it holds one ("link another character"), else
 	// the account the character is already linked to, else a fresh
-	// account — for a first-ever sign-in, and for a character that
+	// account, for a first-ever sign-in, and for a character that
 	// changed EVE accounts since it was linked (its new owner must
 	// never inherit the previous owner's account).
 	userID, err := app.resolveSignInUser(ctx, app.userID(ctx), characterID, ownerHash)

@@ -24,13 +24,13 @@ import (
 
 // sampleWalletHistory records (or refreshes) today's wallet
 // history row for one character. Best-effort: every failure is a
-// quiet return — history must never break the sync cycle.
+// quiet return, history must never break the sync cycle.
 func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character, now time.Time) {
 	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{
 		CharacterID: ch.CharacterID, Kind: esi.SnapWallet,
 	})
 	if err != nil {
-		return // no wallet snapshot yet — nothing to record
+		return // no wallet snapshot yet, nothing to record
 	}
 	var balance float64
 	if err := json.Unmarshal([]byte(snap.Payload), &balance); err != nil {
@@ -50,7 +50,7 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 
 	netWorth := sql.NullFloat64{}
 	// Net worth is sampled only when a house price source exists
-	// at all — swept typicals or stored estimated sells — so a
+	// at all, swept typicals or stored estimated sells, so a
 	// day with no prices leaves net worth unset rather than
 	// storing a bare balance.
 	if typicals := app.TypicalSells(ctx); len(typicals) > 0 || len(app.TrueValues(ctx)) > 0 {
@@ -75,7 +75,7 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 // worth widget does: wallet balance, plus assets at house
 // prices, plus buy-order escrow. ok=false when the stored data
 // can't support the estimate (no asset or order snapshot, or
-// assets none of the price sources can value) — the caller then
+// assets none of the price sources can value), the caller then
 // leaves the day's net worth unset rather than storing a
 // balance wearing a net-worth label.
 func (app *Application) characterNetWorth(ctx context.Context, characterID int64, balance float64, typicals map[int64]float64) (float64, bool) {

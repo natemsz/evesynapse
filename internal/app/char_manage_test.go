@@ -339,7 +339,7 @@ func TestCharacterUnlinkFlow(t *testing.T) {
 
 // revokeStubTransport stands in for CCP's revocation endpoint:
 // it records what it was sent (and whether the character still
-// existed when the call arrived — the revoke must precede the
+// existed when the call arrived, the revoke must precede the
 // local delete) and answers with a fixed status.
 type revokeStubTransport struct {
 	mu          sync.Mutex
@@ -429,8 +429,8 @@ func seedUnlinkRevokeFixture(t *testing.T, stub *revokeStubTransport) (*Applicat
 
 // TestCharacterUnlinkRevokesTokenWhenChecked: the confirm page
 // offers the revoke option ticked by default, and a checked
-// unlink revokes the character's stored refresh token at CCP —
-// with the app's Basic credentials — before the local delete.
+// unlink revokes the character's stored refresh token at CCP,
+// with the app's Basic credentials, before the local delete.
 func TestCharacterUnlinkRevokesTokenWhenChecked(t *testing.T) {
 	stub := &revokeStubTransport{}
 	app, q, _, cookie := seedUnlinkRevokeFixture(t, stub)
@@ -705,7 +705,7 @@ func TestResolveSignInUser(t *testing.T) {
 // TestTransferredCharacterNeverInheritsTheAccount: a character that
 // changed EVE accounts (sold, traded) signs in from a fresh session.
 // Its new owner must not land on the account the previous owner
-// built — that would hand over every other character linked there.
+// built, that would hand over every other character linked there.
 // They get a fresh account, the character moves onto it healthy, and
 // the previous owner's account keeps everything else.
 func TestTransferredCharacterNeverInheritsTheAccount(t *testing.T) {

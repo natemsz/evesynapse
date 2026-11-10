@@ -10,7 +10,7 @@
 // --- shared module tooltip ------------------------------------
 // One tooltip builder for every surface that shows a fitted
 // module: the workbench editor and the read-only workbenches
-// (a public fit's page). The content is identical everywhere —
+// (a public fit's page). The content is identical everywhere,
 // name, group, meta, the server's computed stat rows
 // (data-tip-lines: "label|value|class" rows, the class good or
 // bad when the effective value beats or trails the module's
@@ -130,8 +130,8 @@ var FitTipUI = (function () {
   }
   // Anchors the (already appended) tooltip. A ring slot's tooltip
   // sits beside the slot, offset outward by where the slot is on the
-  // ring — right of a slot on the right, above one at the top,
-  // diagonally out from one in between — the way the game places
+  // ring, right of a slot on the right, above one at the top,
+  // diagonally out from one in between, the way the game places
   // it: never over the neighboring slots, never in the middle. It
   // may run past the workbench over the panels beside it, as in
   // game; it is only kept inside the window's width. A list chip's sits

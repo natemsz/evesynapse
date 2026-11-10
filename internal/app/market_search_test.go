@@ -13,7 +13,7 @@ import (
 )
 
 // Market search exact hits: read from the stored type_names
-// cache, with ESI resolution happening in the background —
+// cache, with ESI resolution happening in the background,
 // never on the request thread.
 
 // idsTransport answers every request as a /universe/ids/

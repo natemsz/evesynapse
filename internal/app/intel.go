@@ -76,7 +76,7 @@ func (app *Application) orgDisplay(ctx context.Context, corporationID, allianceI
 
 // serverStatusView is the Home page's Tranquility line. Nil on
 // pageData until the first status refresh lands the status
-// snapshot — Home renders exactly as before without it.
+// snapshot, Home renders exactly as before without it.
 type serverStatusView struct {
 	Players string // formatted
 }

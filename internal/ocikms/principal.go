@@ -4,8 +4,8 @@ package ocikms
 // library alone. The flow (Oracle's federation protocol for
 // instance principals):
 //
-//  1. The instance's identity material — leaf certificate, private
-//     key, intermediate certificates — comes from the link-local
+//  1. The instance's identity material, leaf certificate, private
+//     key, intermediate certificates, comes from the link-local
 //     metadata service (169.254.169.254/opc/v2/identity/), which
 //     only processes on the instance itself can read.
 //  2. The leaf certificate is presented to the region's federation
@@ -182,8 +182,8 @@ func tenancyOCIDFromCert(cert *x509.Certificate) string {
 }
 
 // The federation endpoint's wire shapes: the certificate material
-// travels as the base64 of its DER bytes — a PEM with its header,
-// footer and line breaks removed — and the answer is the token.
+// travels as the base64 of its DER bytes, a PEM with its header,
+// footer and line breaks removed, and the answer is the token.
 type federationRequest struct {
 	Certificate              string   `json:"certificate"`
 	IntermediateCertificates []string `json:"intermediateCertificates"`

@@ -15,7 +15,7 @@ import (
 // overview renders from stored data and never fetches at render
 // (cluster rule, see TestCorpPagesRenderFromSnapshots: pages render
 // cache-only). It replaces the stale concurrency test, which
-// asserted render-time ESI lookups — a design deliberately removed
+// asserted render-time ESI lookups, a design deliberately removed
 // when the overview moved to stored records filled by the worker.
 // Cold, the block shows the pending placeholder and leaves a
 // corporation want behind; once the record lands, the stored name

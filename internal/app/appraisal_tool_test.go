@@ -263,8 +263,8 @@ Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)`}})
 	// carries the estimate's range and basis in the contract
 	// pages' words. The blueprint copy prices NOWHERE: no
 	// copy medians are stored in this fixture, and a copy
-	// never takes its original's price (the old behavior
-	// priced this line at the original's 1,000,000 typical).
+	// never takes its original's price (the original's
+	// typical here is 1,000,000).
 	mustContain(t, "abyssal item link", body,
 		"205,000,650.00", "Priced 2 of 3 lines",
 		"Our abyssal estimate", "205,000,000.00",
@@ -454,8 +454,8 @@ func TestAppraisalToolPageAndBadShare(t *testing.T) {
 
 // mustHubOptions asserts the paste console's Valuation hub
 // select carries all five hub options, with the given region
-// selected. Every rendering of the page — the form page, a
-// shared snapshot, an error — must offer a populated console,
+// selected. Every rendering of the page, the form page, a
+// shared snapshot, an error, must offer a populated console,
 // or the next appraisal cannot be run from it.
 func mustHubOptions(t *testing.T, what, body, selected string) {
 	t.Helper()

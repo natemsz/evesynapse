@@ -195,7 +195,7 @@ func TestAppraisalPhoneTreatment(t *testing.T) {
 		}
 	}
 	// The dock's copy actions are the page's existing ones, on the
-	// shared copy hooks — and nothing else: no invented actions.
+	// shared copy hooks, and nothing else: no invented actions.
 	dock := tpl[strings.Index(tpl, "ap-dock"):]
 	if !strings.Contains(dock, `data-copy-from="ap-multisell"`) || !strings.Contains(dock, `data-copy data-copy-text="{{$r.ShareURL}}"`) {
 		t.Error("the dock lost the existing copy actions it re-surfaces")
@@ -221,7 +221,7 @@ func TestAppraisalPhoneTreatment(t *testing.T) {
 // TestContractsPhoneCards pins mobile pass 2's contracts
 // surface: at phone widths the results table renders as a
 // card list (the row markup restyled in contracts.css, the
-// appraisal item's pure-CSS pattern) — the contract cell as
+// appraisal item's pure-CSS pattern), the contract cell as
 // the card head with the issuer line the form adds, contents
 // under it, price and value side by side under their labels,
 // location as the foot, the drawer as a band under its card;

@@ -1,6 +1,6 @@
 # EveSynapse CI on GitLab: the same gates and the same release
 # contract the GitHub workflow (.github/workflows/release.yml)
-# enforced — every merge request and branch push is checked,
+# enforced, every merge request and branch push is checked,
 # and only main and evesynapse-dev pushes go on to build and
 # publish. The GitHub workflow stays in the tree, inert, for
 # the return to GitHub.
@@ -8,7 +8,7 @@
 # A release publishes the way it always has: the version in
 # internal/app/version.txt is the release event, a version
 # publishes once, plain versions publish only from main, and
-# only a signed release is published — the manifests are
+# only a signed release is published, the manifests are
 # signed with RELEASE_SIGNING_KEY (a protected CI/CD
 # variable), and `evesynapse -update` installs nothing whose
 # manifest is not signed by a release key compiled into it.
@@ -437,13 +437,13 @@ release:
 # provider. The mirror carries the release's own signed
 # manifests, so an updater trusting the mirror trusts exactly
 # what it trusts from any provider: the signature, not the
-# host. Files land in the same order the updater relies on —
+# host. Files land in the same order the updater relies on,
 # the version's archive first, the channel's binaries next,
 # and the channel pointer manifests last, so a pointer never
 # names a file that is not there yet. The R2 variables
 # (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
 # R2_BUCKET) are the maintainer's to set; without them, and on
-# any mirror failure, the job reports and steps aside — the
+# any mirror failure, the job reports and steps aside, the
 # release itself is already published by then, and a mirror
 # problem must not fail its pipeline.
 mirror:
@@ -484,7 +484,7 @@ mirror:
       echo "Mirrored v$VERSION to the $CH channel."
 
 # After a release publishes from main, its notes join
-# CHANGELOG.md on a merge request for review — the GitLab
+# CHANGELOG.md on a merge request for review, the GitLab
 # form of the update-changelog workflow. The token is the
 # job token when the project's settings let it push and open
 # merge requests, and the CHANGELOG_TOKEN variable (a project

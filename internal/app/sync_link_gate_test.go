@@ -12,7 +12,7 @@ import (
 // else is a dead end for every other signed-in user: every
 // href="/admin/sync/" in a template must sit inside the true
 // branch of an {{if .IsAdmin}}. admin.html and sync.html are
-// exempt — both pages are themselves behind requireAdmin, so
+// exempt, both pages are themselves behind requireAdmin, so
 // their links cannot dead-end.
 func TestSyncLinksAreAdminGated(t *testing.T) {
 	entries, err := fs.ReadDir(templatesFS, "templates")

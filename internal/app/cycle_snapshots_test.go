@@ -11,7 +11,7 @@ import (
 
 // TestCycleSnapshotCacheSharesOneRead: under a cycle context the
 // stored snapshot behind a (character, kind) is read and decoded
-// once however many passes ask — proved by deleting the stored
+// once however many passes ask, proved by deleting the stored
 // row after the first read: the cycle still serves the shared
 // decode, while a cache-free read no longer finds anything.
 func TestCycleSnapshotCacheSharesOneRead(t *testing.T) {
@@ -59,8 +59,8 @@ func TestCycleSnapshotCacheSharesOneRead(t *testing.T) {
 }
 
 // TestWarmContractItemsSkipsStoredDetails: a contract whose item
-// list is stored already — by any character's list, since the
-// detail store is keyed by contract — is never fetched again;
+// list is stored already, by any character's list, since the
+// detail store is keyed by contract, is never fetched again;
 // one that is not stored is fetched for (and here stays unstored:
 // the transport refuses everything).
 func TestWarmContractItemsSkipsStoredDetails(t *testing.T) {

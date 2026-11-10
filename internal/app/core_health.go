@@ -120,8 +120,8 @@ func (app *Application) checkHealth(ctx context.Context) (problems, logLines []s
 
 // NewHTTPServer builds the server both entrypoints run. Every
 // phase of a request is bounded, so a client that connects and
-// then stalls — sending its request a byte at a time, or never
-// reading the answer — cannot hold a connection open indefinitely.
+// then stalls, sending its request a byte at a time, or never
+// reading the answer, cannot hold a connection open indefinitely.
 // The write limit leaves room for the slowest real responses:
 // handlers that make live calls to EVE, each capped at ten
 // seconds.

@@ -391,7 +391,7 @@ func formControls(t *testing.T, body string) url.Values {
 
 // TestRevealStartsWithEveryPermissionTicked: coming from the playstyle
 // cards, the summary ticks every permission of the chosen features,
-// the ones that used to be offered as extras included, and Complete
+// the optional ones included, and Complete
 // sign up carries all of them to EVE.
 func TestRevealStartsWithEveryPermissionTicked(t *testing.T) {
 	app := linkApp(t)

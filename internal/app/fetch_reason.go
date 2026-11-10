@@ -14,8 +14,8 @@ import (
 
 // Freshness you can see: pages say when their data landed and,
 // when a prefetch caused it, why. The ledgers the worker already
-// keeps are the record — foresight targets carry their event,
-// guesses carry their box — so resolving a reason is two bounded
+// keeps are the record, foresight targets carry their event,
+// guesses carry their box, so resolving a reason is two bounded
 // reads and no new columns.
 
 // ageText renders how long before now t was, for people: "just

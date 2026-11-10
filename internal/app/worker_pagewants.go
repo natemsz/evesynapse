@@ -21,7 +21,7 @@ import (
 // fetched first. Render code notes a "page want" for every entity
 // it had to render unresolved; the note both enqueues the matching
 // background queue at viewed priority (pilot records, type
-// details, structure names, market history — handlers only write
+// details, structure names, market history, handlers only write
 // queue rows, they never fetch) and registers the want against
 // the page so the top-banner sync indicator can count what this
 // page is still waiting on. The urgent drain already runs viewed
@@ -221,8 +221,8 @@ func (app *Application) notePageWantFromContext(ctx context.Context, kind pageWa
 }
 
 // resolvedCharacterName answers a character's name from every
-// local tier — in-process cache, a ready pilot record, a linked
-// character row — without fetching. settled reports whether the
+// local tier, in-process cache, a ready pilot record, a linked
+// character row, without fetching. settled reports whether the
 // local tiers have a final answer (a name, or a record that the
 // character does not answer), so callers can stop waiting.
 func (app *Application) resolvedCharacterName(ctx context.Context, characterID int64) (name string, settled bool) {
@@ -319,7 +319,7 @@ func (app *Application) pageWantSettled(ctx context.Context, want pageWant) bool
 // expired wants of the one scope being polled, but a page nobody
 // looks at again (a closed tab, a view given up on) is never
 // polled again, so without a sweep its wants would be remembered
-// forever. The TTL is the whole test here — settled-checking is
+// forever. The TTL is the whole test here, settled-checking is
 // the poll's job; the sweep just bounds how long an abandoned
 // want can linger. Called once a worker cycle.
 func (app *Application) sweepPageWants(now time.Time) {

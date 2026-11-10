@@ -159,8 +159,8 @@ type skillRow struct {
 
 // sectionForPage maps a template file to the top-nav branch that
 // contains it (see templates/base.html). Handlers whose page lives
-// in a different branch than its template suggests — the corp
-// killmails view reuses killmails.html — set pageData.Section
+// in a different branch than its template suggests, the corp
+// killmails view reuses killmails.html, set pageData.Section
 // explicitly and render leaves it alone.
 func sectionForPage(page string) string {
 	if p, ok := registeredPages[page]; ok && p.Section != "" {
@@ -370,7 +370,7 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 }
 
 // friendlyLoginError maps the ?error= codes produced by the SSO
-// callback to safe, human messages. Unknown codes render nothing — the
+// callback to safe, human messages. Unknown codes render nothing, the
 // raw parameter is never echoed back to the page.
 func friendlyLoginError(code string) string {
 	switch code {

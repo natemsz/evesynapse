@@ -70,7 +70,7 @@ func TestItemsGlobalSearchAndPublishedOnly(t *testing.T) {
 	seedNext1SDE(t, conn)
 
 	// Unfiltered search sees every published state and market
-	// state — the database is the whole database.
+	// state, the database is the whole database.
 	code, body := getPage(t, app, cookie, "/items/?q=tritanium")
 	if code != http.StatusOK {
 		t.Fatalf("GET search: status %d", code)
@@ -82,9 +82,8 @@ func TestItemsGlobalSearchAndPublishedOnly(t *testing.T) {
 	}
 
 	// Published-only: the SDE published flag alone decides.
-	// Unpublished types drop out; Secret Tritanium stays — it
-	// is published even though it has no market group, which
-	// the old marketable criterion used to exclude.
+	// Unpublished types drop out; Secret Tritanium stays, it
+	// is published even though it has no market group.
 	code, body = getPage(t, app, cookie, "/items/?q=tritanium&published=1")
 	if code != http.StatusOK {
 		t.Fatalf("GET search published-only: status %d", code)
@@ -159,7 +158,7 @@ func TestItemsGlobalSearchAndPublishedOnly(t *testing.T) {
 		t.Error("categories with published=1: branches with published types must stay visible")
 	}
 
-	// Category page: the same counts ride on the group rows —
+	// Category page: the same counts ride on the group rows,
 	// the mixed group at 4, the unpublished-only group at 0.
 	code, body = getPage(t, app, cookie, "/items/category/900/")
 	if code != http.StatusOK {
@@ -270,7 +269,7 @@ func TestSharedSuggestPools(t *testing.T) {
 	}
 
 	// Every pool shares the tradeable floor now:
-	// published with a market group — the skill type carries a
+	// published with a market group, the skill type carries a
 	// market group too (skill books trade), so it clears the
 	// floor in the broad pools.
 	all := ids(get("/items/search.json?q=trit"))
@@ -309,7 +308,7 @@ func TestSharedSuggestPools(t *testing.T) {
 		t.Errorf("pool=skills = %v, want only the skill", skills)
 	}
 
-	// Planner pool: published blueprint products only — the
+	// Planner pool: published blueprint products only, the
 	// unpublished product (38, blueprint seeded) stays out.
 	planner := ids(get("/items/search.json?q=trit&pool=planner"))
 	if !planner[35] || len(planner) != 1 {
@@ -595,13 +594,11 @@ func TestWalletHistorySamplerOneRowPerDay(t *testing.T) {
 	}
 }
 
-// Audit 2.5: the record name searches used to substring-match
-// the whole JSON payload and take the first 100 by ID, so a
-// query like "pro" (which the payload's own "profile" key
-// matches) filled the window with the lowest IDs and a real
-// name match beyond them never surfaced. The match now runs on
-// the payload's name field: noise payloads that merely mention
-// the text elsewhere no longer crowd out a genuine match.
+// The record name searches match on the payload's name field,
+// not the whole JSON payload: a query like "pro" (which the
+// payload's own "profile" key would match) must not fill the
+// 100-row window with the lowest IDs and crowd out a genuine
+// name match beyond them.
 func TestTopbarSearchRecordNameWindow(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)

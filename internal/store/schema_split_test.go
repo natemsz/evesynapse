@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestSplitSchemaStatements: the splitter is lexically aware —
+// TestSplitSchemaStatements: the splitter is lexically aware,
 // semicolons inside literals, quoted identifiers, comments, and
 // dollar-quoted bodies do not end a statement, and comments are
 // stripped. The old splitter cut on every ";" outside full-line

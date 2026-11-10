@@ -113,7 +113,7 @@ const (
 // charges for weapons no longer fitted dropped. When the
 // caller passes the engine snapshot, fitted-slot lines are
 // also capped at what a hull can actually carry (see the
-// bounds above); drones and cargo keep bulk quantities — a
+// bounds above); drones and cargo keep bulk quantities, a
 // bay or a hold legitimately stacks high.
 func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 	if doc == nil {
@@ -250,7 +250,7 @@ func FitFamilyFitted(family string) bool {
 
 // FitSlotChip is one fitted item line in the slot grid. State
 // is the uniform resolved state when every instance shares one
-// ("" when mixed or stateless) — for the state visuals.
+// ("" when mixed or stateless), for the state visuals.
 // StatesCSV is the comma-joined list of states the line's
 // modules may take (slot families only; "" for stateless kinds),
 // for the phone racks' tap-to-cycle.
@@ -468,7 +468,7 @@ func FitSegPath(a0, a1, rIn, rOut float64) string {
 // FitMetaGroupID is the SDE attribute carrying the inv meta group.
 const FitMetaGroupID = 1692
 
-// FitVisualMetaOf reads the static SDE meta group for a type —
+// FitVisualMetaOf reads the static SDE meta group for a type,
 // meta level is a property of the type itself, never modified by
 // skills or bonuses, so it comes from the raw snapshot, not the
 // effective attribute map. Returns "" when unknown.
@@ -562,7 +562,7 @@ func FitEffAttrs(res *fit.Result, snap *fit.Snapshot, typeID int64, state string
 }
 
 // FitTipCycle is a module's cycle time in seconds from an
-// attribute set (duration, falling back to speed — the same
+// attribute set (duration, falling back to speed, the same
 // rule the engine's cycleSeconds applies).
 func FitTipCycle(attrs map[int64]float64) float64 {
 	if attrs == nil {
@@ -593,8 +593,8 @@ func FitTipDamage(attrs map[int64]float64) float64 {
 // bonuses, colored where that differs from the unmodified
 // module. Weapon damage comes from the engine's per-weapon
 // record, so the figures are the stats panel's own. Rows
-// are ordered the way a pilot reads them — output, reach,
-// cost — and capped so the tooltip stays a quick look.
+// are ordered the way a pilot reads them, output, reach,
+// cost, and capped so the tooltip stays a quick look.
 func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64, state string, eff map[int64]float64) []FitTipLine {
 	if eff == nil {
 		return nil
@@ -2230,7 +2230,7 @@ func (app *Builder) ParseEFT(ctx context.Context, text string) (*FitDoc, []strin
 	// The paste is bounded before any line is read: a real fit
 	// is a few dozen lines, so 64 KiB / 500 lines is generous
 	// headroom, and anything past it is not a fit. Name lookups
-	// are memoized per call — a pasted fit repeats its modules
+	// are memoized per call, a pasted fit repeats its modules
 	// line after line, and each distinct name costs one query.
 	if len(text) > 64<<10 {
 		text = text[:64<<10]
@@ -2504,7 +2504,7 @@ type FitCostView struct {
 // The Forge carries no row for it), then the
 // stored true-value estimated sell (trueValues, nil when the
 // worker has stored none). A type neither source knows is
-// unpriced — CCP's guide average is banned as a price source
+// unpriced, CCP's guide average is banned as a price source
 // (owner doctrine, 2026-10-17) and its adjusted price is not
 // one either; it survives only as the EIV input to job fees.
 // The estimated sell is what gives a supercapital hull an

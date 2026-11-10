@@ -160,7 +160,7 @@ func TestRefreshExpiresCachesKeepsEarnedData(t *testing.T) {
 	if got := queryStamp(t, conn2, `SELECT attempted_at FROM market_fetch_state WHERE kind = 'history_10000002_34'`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("market_fetch_state.attempted_at = %q, want epoch", got)
 	}
-	// Pilot records: ready rewound, missing settled, pending queued — as they were.
+	// Pilot records: ready rewound, missing settled, pending queued, as they were.
 	if got := queryStamp(t, conn2, `SELECT fetched_at FROM pilot_records WHERE character_id = 777`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("pilot ready fetched_at = %q, want epoch", got)
 	}

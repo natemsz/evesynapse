@@ -107,7 +107,7 @@ func TestAuthorizeRedirectsCarryPKCE(t *testing.T) {
 
 // pkceTokenStub stands in for CCP's endpoints during a callback:
 // the token endpoint records its form and answers a token set;
-// anything else (discovery, JWKS) fails, which is fine — the
+// anything else (discovery, JWKS) fails, which is fine, the
 // exchange has already happened by then.
 type pkceTokenStub struct {
 	calls int
@@ -144,8 +144,8 @@ func stubLoginClient(t *testing.T, stub *pkceTokenStub) {
 // TestCallbackExchangeSendsPKCEVerifier runs a full round trip:
 // start the login, then present the returned code and state to
 // the callback. The token endpoint must be presented the session's
-// verifier — the one whose challenge the authorize redirect
-// carried — alongside the code.
+// verifier, the one whose challenge the authorize redirect
+// carried, alongside the code.
 func TestCallbackExchangeSendsPKCEVerifier(t *testing.T) {
 	app := linkApp(t)
 	stub := &pkceTokenStub{}
@@ -161,7 +161,7 @@ func TestCallbackExchangeSendsPKCEVerifier(t *testing.T) {
 
 	rec = get(app, cookie, "/auth/callback?code=fixture-code&state="+state)
 	// The stub's access token is not a real JWT, so the flow ends
-	// at verification — proof it got past the exchange.
+	// at verification, proof it got past the exchange.
 	if got := rec.Header().Get("Location"); got != "/?error=verify" {
 		t.Fatalf("callback redirect = %q, want /?error=verify (past the exchange)", got)
 	}

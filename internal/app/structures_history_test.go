@@ -555,7 +555,7 @@ func TestHistoryEmptySettlesToNoHistoryCopy(t *testing.T) {
 		t.Fatalf("empty drain: stored=%d, want 1", stored)
 	}
 
-	// The section now settles to the no-history copy — not
+	// The section now settles to the no-history copy, not
 	// loading, not blank.
 	_, body = getPage(t, app, cookie, "/market/?type=34")
 	mustContain(t, "/market/?type=34 (settled empty)", body,
@@ -563,7 +563,7 @@ func TestHistoryEmptySettlesToNoHistoryCopy(t *testing.T) {
 	if strings.Contains(body, "This item is queued") {
 		t.Fatal("settled-empty page still claims loading")
 	}
-	if idx := strings.Index(body, "Price history — The Forge"); idx >= 0 {
+	if idx := strings.Index(body, "Price history, The Forge"); idx >= 0 {
 		section := body[idx:]
 		if end := strings.Index(section, "</section>"); end >= 0 {
 			section = section[:end]
@@ -803,7 +803,7 @@ func TestPlanets401ClassifierBoundary(t *testing.T) {
 			t.Errorf("piScopeRefusal(%v): got %v, want %v", tc.err, got, tc.want)
 		}
 	}
-	// Regression: generic 401 handling elsewhere is untouched —
+	// Regression: generic 401 handling elsewhere is untouched,
 	// the shared token-death test still classifies a 401 as
 	// definitive for the endpoints it serves.
 	if !isDefinitiveTokenFailure(&esi.StatusError{Method: "GET", Path: "/characters/1/skills/", Code: 401}) {

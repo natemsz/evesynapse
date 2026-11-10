@@ -12,7 +12,7 @@
 
 /* The app shell lays body out as its sidebar grid (style.css);
    the landing is a standalone document, so it takes plain block
-   flow back — otherwise the footer lands in the sidebar column. */
+   flow back, otherwise the footer lands in the sidebar column. */
 body { display: block; padding-top: 0; position: relative; background: #040202; }
 /* The sunrise art lives at the top of the page: a band behind
    the hero, dimmed at the layer itself (never the content) and
@@ -397,7 +397,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
    carries the base tier at every viewport size, as the approved
    design does: the art sits dimmed, blurred, and veiled, so the
    wide high-resolution tiers the interior pages escalate to
-   (bg.css, untouched) buy nothing here but decode cost — the
+   (bg.css, untouched) buy nothing here but decode cost, the
    top tier decodes a 5120px raster where the base tier's
    2000px reads identically through the treatment. */
 body::before {

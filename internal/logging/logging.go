@@ -1,7 +1,7 @@
 // Package logging gives every log line a level.
 //
-// Call sites say what kind of line they are writing — Errorf, Warnf,
-// Infof, Debugf — and LOG_LEVEL decides which kinds are written.
+// Call sites say what kind of line they are writing, Errorf, Warnf,
+// Infof, Debugf, and LOG_LEVEL decides which kinds are written.
 //
 // What the levels mean here:
 //

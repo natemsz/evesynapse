@@ -10,7 +10,7 @@ import (
 
 // TestDiscordSyncRolesWithoutRules: a server with no role rules
 // owes nobody anything, and the pass still settles a member who
-// is due — one written down holding a role, checked long ago —
+// is due, one written down holding a role, checked long ago,
 // by taking the role back; a member written down holding
 // nothing and checked recently costs the pass no Discord calls
 // at all.

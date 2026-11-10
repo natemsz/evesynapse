@@ -15,9 +15,9 @@ import (
 // ---------------------------------------------------------------------------
 // One refusal policy for per-character ESI fetches.
 //
-// When ESI definitively refuses a (character, kind) — a 401 or 403
+// When ESI definitively refuses a (character, kind), a 401 or 403
 // for a scope the login never granted, a token ESI rejects, or an
-// in-game role the character lacks — the refusal is recorded once
+// in-game role the character lacks, the refusal is recorded once
 // in snapshot_fetch_state and every fetch path consults that record
 // before spending fetch allowance, so the want is not retried every
 // cycle. The record clears when the character re-links (a fresh

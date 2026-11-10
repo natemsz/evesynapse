@@ -89,7 +89,7 @@ func (app *Application) handleMarketHistoryFragment(w http.ResponseWriter, r *ht
 // snapshot of the market item view from stored rows, so the
 // averages fill in alongside the chart instead of waiting for
 // a manual refresh. The order book's best prices ride in from
-// the page render (bs/bb query params — numbers the page had
+// the page render (bs/bb query params, numbers the page had
 // already fetched) purely so the margin row survives the swap;
 // the handler itself never fetches.
 func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *http.Request) {
@@ -121,8 +121,8 @@ func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *htt
 	app.renderFragment(w, "market.html", "trader-section", item)
 }
 
-// handlePilotFragment re-renders just the pilot record — head and
-// employment history (the pilot-fragment define) — from the
+// handlePilotFragment re-renders just the pilot record, head and
+// employment history (the pilot-fragment define), from the
 // pilot_records queue. One of the viewer's own characters
 // gets a settled pointer to the full sheet (the page itself
 // redirects; the fragment cannot).

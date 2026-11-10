@@ -220,7 +220,7 @@ func (app *mod) handleContacts(w http.ResponseWriter, r *http.Request) {
 // handleContactNameFragment re-renders one contact's name cell
 // from the local caches: the resolved name as a pilot link once
 // it lands, a settled plain fallback when ESI has no such
-// character, and the pending live region until then. Cache-only —
+// character, and the pending live region until then. Cache-only,
 // the contacts page already left the want; this read never
 // enqueues and never fetches.
 func (app *mod) handleContactNameFragment(w http.ResponseWriter, r *http.Request) {

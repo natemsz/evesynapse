@@ -35,7 +35,7 @@ type PageMeta struct {
 	CanonicalPath string
 	// CanonicalURL, when set, is the canonical address verbatim
 	// and wins over CanonicalPath. It exists for pages that have
-	// always carried their own absolute address — the public fit
+	// always carried their own absolute address, the public fit
 	// page, whose og:url is the install's configured origin and
 	// is omitted entirely where the install has none. Moving it
 	// onto the helper must not change that output.

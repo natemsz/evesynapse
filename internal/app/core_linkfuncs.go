@@ -10,22 +10,22 @@ import (
 )
 
 // =====================================================================
-// Name links — one policy, every page
+// Name links, one policy, every page
 //
 // EveSynapse's names exist to be followed. Anywhere a resolved name
 // appears it renders as a link to the page that describes it:
 //
 //   - Items link to the item details page (/items/type/<typeID>/).
 //   - The signed-in user's own linked characters link to their
-//     character sheet (/character/?character=<id>) — everywhere,
+//     character sheet (/character/?character=<id>), everywhere,
 //     including kill contexts.
 //   - Everyone else links to the public pilot page
-//     (/pilot/?character=<id>) — in kill contexts too: the pilot
+//     (/pilot/?character=<id>), in kill contexts too: the pilot
 //     page serves any character, settling unknown ones from the
 //     worker's queue, so no name ever leaves the site.
 //   - Corporations link to the public corporation page
 //     (/corporation/?corporation=<id>) and alliances to the public
-//     alliance page (/alliance/?alliance=<id>) — in every context,
+//     alliance page (/alliance/?alliance=<id>), in every context,
 //     kill pages included: only characters change destination in
 //     kill contexts, organizations stay in-app.
 //   - Solar systems link to the system page (/system/?system=<id>)
@@ -40,7 +40,7 @@ import (
 // render) taking the page's ViewerChars set, so templates phrase
 // every link identically and the policy lives in exactly one place.
 // All of them degrade to plain escaped text when the id is unknown
-// (<= 0) or the name unresolved — an unresolvable name stays text
+// (<= 0) or the name unresolved, an unresolvable name stays text
 // instead of becoming a dead link.
 // =====================================================================
 
@@ -54,7 +54,7 @@ func itemLink(typeID int64, name string) template.HTML {
 }
 
 // publicItemLink is the link the crawler-safe templates use.
-// It targets the same Item Database type page as itemLink —
+// It targets the same Item Database type page as itemLink,
 // that page is public, so anonymous readers land on the one
 // canonical item page rather than a public twin.
 func publicItemLink(typeID int64, name string) template.HTML {
@@ -99,8 +99,8 @@ func charLink(viewer map[int64]bool, charID int64, name string) template.HTML {
 }
 
 // killCharLink is charLink for kill contexts (killmail listings,
-// kill pages). The destination is the same as anywhere else —
-// the character's own sheet or the public pilot page — kept as
+// kill pages). The destination is the same as anywhere else,
+// the character's own sheet or the public pilot page, kept as
 // its own helper so kill templates name the context they mean.
 func killCharLink(viewer map[int64]bool, charID int64, name string) template.HTML {
 	return charLink(viewer, charID, name)
@@ -215,7 +215,7 @@ func stationLink(stationID int64, name string) template.HTML {
 
 // structureLink renders a player structure's resolved name as a
 // link to the structure page. Plain text when either side is
-// missing — callers pass the id only once resolution has landed,
+// missing, callers pass the id only once resolution has landed,
 // so an unresolved "Structure #<id>" stays text.
 func structureLink(structureID int64, name string) template.HTML {
 	if structureID <= 0 || name == "" {
@@ -226,9 +226,9 @@ func structureLink(structureID int64, name string) template.HTML {
 
 // placeRef is one rendered location: its display title (resolved
 // with the usual fallbacks) plus the page it links to when the
-// location is a kind the link policy covers — StationID for an
+// location is a kind the link policy covers, StationID for an
 // NPC station, SystemID for a solar system, StructureID for a
-// player structure whose name or context the app holds — all 0
+// player structure whose name or context the app holds, all 0
 // for containers and unresolved ids, which stay text.
 type placeRef = module.PlaceRef
 

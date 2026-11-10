@@ -4,7 +4,7 @@
 // wrapping; the active tab never folds; widening restores.
 // app.js runs under a small DOM stub whose elements carry the
 // widths the layout measures, so the geometry is exercised end
-// to end — init, fold, restore, disclosure — plus the two pure
+// to end, init, fold, restore, disclosure, plus the two pure
 // helpers app.js exports for node (planTabFold, tabMoreState).
 "use strict";
 const test = require("node:test");

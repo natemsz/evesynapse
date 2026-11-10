@@ -345,12 +345,12 @@ jobs:
   # resort. The mirror carries the release's own signed
   # manifests, so an updater trusting the mirror trusts exactly
   # what it trusts from any provider: the signature, not the
-  # host. Files land in the same order the updater relies on —
+  # host. Files land in the same order the updater relies on,
   # the version's archive first, the channel's binaries next,
   # and the channel pointer manifests last, so a pointer never
   # names a file that is not there yet. The R2 secrets are the
   # maintainer's to set; without them, and on any mirror
-  # failure, the job reports and steps aside — the release
+  # failure, the job reports and steps aside, the release
   # itself is already published by then, and a mirror problem
   # must not fail its pipeline.
   mirror:
@@ -417,7 +417,7 @@ jobs:
   # the way the mirror job is gated on its R2 secrets:
   # without one, the leg logs that it is skipped and steps
   # aside. A leg that fails logs it and fails only its own
-  # step — the Forgejo release is already published by then,
+  # step, the Forgejo release is already published by then,
   # and trouble copying it must not fail its pipeline.
   # The GitHub release is not made here: GitHub publishes its
   # own from .github/workflows/release.yml, with its built-in

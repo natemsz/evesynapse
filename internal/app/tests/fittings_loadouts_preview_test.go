@@ -5,7 +5,7 @@ package tests
 // trigger button plus the grouped lists) instead of a <details>
 // block that expands the card in place. The fitting JS opens the
 // panel as a floating preview; these tests pin the markup it
-// drives. Doctrine pages keep their in-place <details> block —
+// drives. Doctrine pages keep their in-place <details> block,
 // that side is pinned in the doctrines test in internal/app.
 
 import (

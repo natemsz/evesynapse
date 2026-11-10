@@ -25,7 +25,7 @@ var MailAllowedTags = map[string]bool{
 }
 
 // MailDropWithContents tags vanish together with everything up to
-// their matching close tag (active or embedding content —
+// their matching close tag (active or embedding content,
 // including images, which are also external beacons).
 var MailDropWithContents = map[string]bool{
 	"script": true, "style": true, "iframe": true, "object": true,
@@ -51,8 +51,8 @@ const MailMaxDepth = 64
 // shows: pilot bios, corporation descriptions, item descriptions.
 //
 // The output is always well-formed on its own. Every tag written is
-// closed again — by its own close tag, by the close of an element
-// around it, or at the end — and a close tag with nothing open to
+// closed again, by its own close tag, by the close of an element
+// around it, or at the end, and a close tag with nothing open to
 // match is dropped. A hostile body therefore cannot close the
 // page's own containers and draw outside the box it is shown in.
 func Sanitize(raw string) template.HTML { return SanitizeLinked(raw, nil) }

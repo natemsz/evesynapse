@@ -40,8 +40,8 @@ func syncDisplayKinds() []string {
 type syncSnapshotRow struct {
 	Kind        string
 	State       string // "Fresh" | "Stale" | "Missing"
-	FetchedAt   string // "—" when missing
-	CachedUntil string // "—" when missing/unset
+	FetchedAt   string // ", " when missing
+	CachedUntil string // ", " when missing/unset
 }
 
 // syncCharacterView is the one character the Sync page is showing:
@@ -304,7 +304,7 @@ func (app *Application) loadGlobalView(ctx context.Context) []syncSnapshotRow {
 }
 
 // snapshotTypeIDs collects the distinct type IDs a character's
-// latest skills + assets snapshots reference — the denominator of
+// latest skills + assets snapshots reference, the denominator of
 // the Sync page's name-coverage figure. Undecodable payloads are
 // skipped (the worker will refetch them in due course).
 func snapshotTypeIDs(byKind map[string]db.CharacterSnapshot) map[int64]bool {

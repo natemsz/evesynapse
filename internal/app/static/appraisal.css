@@ -312,7 +312,7 @@
 /* --- appraisal on phones (mobile pass 2) -------------------------
    Phone widths turn the appraisal bench into a native-feeling
    two-view surface: a sticky segmented switch (Paste Input /
-   Valuation, wired in app.js — both render hidden and stay
+   Valuation, wired in app.js, both render hidden and stay
    display:none until it unhides them, so without JavaScript the
    page is the stacked bench it always was), the summary cards
    as a compact 2x2 grid whose hero leads with its compact

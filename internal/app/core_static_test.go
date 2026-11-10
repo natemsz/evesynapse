@@ -45,8 +45,7 @@ func TestStaticAssetCaching(t *testing.T) {
 	plainSize := rec.Body.Len()
 
 	// The head bootstrap serves versioned and immutable, like the
-	// other scripts, and carries the nav/theme first-paint code
-	// that used to be inline in every page.
+	// other scripts, and carries the nav/theme first-paint code.
 	rec = get("/static/boot.js?v="+version, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("versioned boot script: status %d", rec.Code)
@@ -343,7 +342,7 @@ func TestPagesLinkVersionedAssets(t *testing.T) {
 	version := staticAssetVersion()
 
 	// An ordinary page: stylesheet and the shared script, both by
-	// version, and no fitting script — it only drives the fitting
+	// version, and no fitting script, it only drives the fitting
 	// pages and is as large as the shared one.
 	_, body := getPage(t, app, cookie, "/characters/")
 	mustContain(t, "/characters/", body,
@@ -362,7 +361,7 @@ func TestPagesLinkVersionedAssets(t *testing.T) {
 		t.Error("/characters/ loads the fitting script")
 	}
 	// No inline scripts or style attributes anywhere: the CSP
-	// allows none, so a regression here would silently not run.
+	// allows none, so an inline script would silently not run.
 	// Every script tag must load an external /static/ file.
 	for _, forbidden := range []string{"<script>", "style=\"", "onclick="} {
 		if strings.Contains(body, forbidden) {
@@ -496,7 +495,7 @@ var wallpaperRef = regexp.MustCompile(`/static/(bg-[^"')?\s]+|bg\.(?:jpg|jxl)|st
 // stylesheets and the base template put on the wallpaper files
 // to those files' current content hashes. Replacing the art
 // without refreshing a token fails here, with the hash to paste
-// in the message — a stale token would drop the file back to
+// in the message, a stale token would drop the file back to
 // per-view revalidation, and a wrong immutable would be worse.
 func TestStaticWallpaperVersionTokens(t *testing.T) {
 	idx := loadStaticIndex()
@@ -517,7 +516,7 @@ func TestStaticWallpaperVersionTokens(t *testing.T) {
 	for src, text := range sources {
 		refs := wallpaperRef.FindAllStringSubmatch(text, -1)
 		if len(refs) == 0 {
-			t.Errorf("%s: no wallpaper references found — the pin has nothing to check", src)
+			t.Errorf("%s: no wallpaper references found: the pin has nothing to check", src)
 			continue
 		}
 		for _, m := range refs {

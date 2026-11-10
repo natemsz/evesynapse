@@ -116,15 +116,15 @@ type Config struct {
 	residueModelAddr         string         // RESIDUE_MODEL_ADDR: where the local reader listens (loopback only)
 	adminCharIDs             map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
 	tokenKey                 string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
-	tokenKeyProvider         string         // TOKEN_KEY_PROVIDER: where the token key comes from — env, http, oci or none ("" = derive: a set TOKEN_ENCRYPTION_KEY means env, none set means none)
+	tokenKeyProvider         string         // TOKEN_KEY_PROVIDER: where the token key comes from, env, http, oci or none ("" = derive: a set TOKEN_ENCRYPTION_KEY means env, none set means none)
 	tokenKeyWrapped          string         // TOKEN_KEY_WRAPPED: the token key wrapped by the key service (http provider) or the KMS key (oci provider)
 	tokenKeyUnwrapURL        string         // TOKEN_KEY_UNWRAP_URL: the key service's unwrap endpoint (http provider)
 	tokenKeyCred             string         // TOKEN_KEY_UNWRAP_CREDENTIAL: bearer credential for the unwrap endpoint (http provider)
 	tokenKeyOCIKeyID         string         // TOKEN_KEY_OCI_KEY_ID: the OCI KMS key that wrapped the token key (oci provider)
 	tokenKeyOCIEndpoint      string         // TOKEN_KEY_OCI_CRYPTO_ENDPOINT: the vault's cryptographic endpoint (oci provider)
-	tokenKeyOCIMetadataURL   string         // TOKEN_KEY_OCI_METADATA_URL: the instance metadata base (oci provider; "" = the link-local default — an override for tests)
+	tokenKeyOCIMetadataURL   string         // TOKEN_KEY_OCI_METADATA_URL: the instance metadata base (oci provider; "" = the link-local default, an override for tests)
 	tokenKeyOCIFederationURL string         // TOKEN_KEY_OCI_FEDERATION_URL: the region federation endpoint (oci provider; "" = derived from the crypto endpoint)
-	tokenKeyOCISecretsURL    string         // TOKEN_KEY_OCI_SECRETS_URL: the OCI Secrets service base (oci provider; "" = derived from the crypto endpoint's region — an override for tests)
+	tokenKeyOCISecretsURL    string         // TOKEN_KEY_OCI_SECRETS_URL: the OCI Secrets service base (oci provider; "" = derived from the crypto endpoint's region, an override for tests)
 
 	// The working credentials' external sources (auth_credentials.go):
 	// for each of EVE_CLIENT_SECRET, DISCORD_CLIENT_SECRET,
@@ -185,8 +185,8 @@ func (c Config) SSOConfigured() bool {
 
 // The working credentials in force. Each accessor returns the
 // value fetched from the credential's external source once one
-// has landed (auth_credentials.go); until then — and for a
-// credential with no external source — it is the plain env value
+// has landed (auth_credentials.go); until then, and for a
+// credential with no external source, it is the plain env value
 // the field has always held. Callers must read through these, not
 // the fields, so a credential that arrives after boot takes
 // effect without a restart.
@@ -244,8 +244,8 @@ func (c Config) DatabaseLabel() string {
 
 // publicOrigin returns the scheme://host[:port] the site is served
 // at. The one place the operator states the site's public address
-// is EVE_CALLBACK_URL — it has to match what is registered with
-// CCP character for character — so that is where it is read from.
+// is EVE_CALLBACK_URL, it has to match what is registered with
+// CCP character for character, so that is where it is read from.
 // "" when the URL cannot be read as an http(s) address.
 func (c Config) publicOrigin() string {
 	u, err := url.Parse(c.eveCallbackURL)
@@ -486,8 +486,8 @@ func loadEnvFile() error {
 }
 
 // esiUserAgent builds the User-Agent every ESI request carries:
-// the product and its version, where the code lives, and — when
-// the operator set ESI_CONTACT — how to reach whoever runs this
+// the product and its version, where the code lives, and, when
+// the operator set ESI_CONTACT, how to reach whoever runs this
 // instance. CCP asks for exactly that, so that a client causing
 // trouble gets a message rather than a block.
 func (c Config) esiUserAgent() string {

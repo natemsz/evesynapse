@@ -3,7 +3,7 @@ package ocikms
 // Reading one secret's value out of OCI Secrets (the Vault
 // service's secrets side): GET /20190301/secretbundles/{secretId}
 // against https://secrets.vaults.<region>.oci.oraclecloud.com,
-// authenticated exactly like the KMS calls — the instance
+// authenticated exactly like the KMS calls, the instance
 // principal's security token, spent with the ephemeral session
 // key under the keyId "ST$<token>". The endpoint template, the
 // path and the answer's shape are Oracle's Secrets API as its own

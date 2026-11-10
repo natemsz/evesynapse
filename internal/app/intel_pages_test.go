@@ -6,9 +6,9 @@ package app
 //   - Render tests: seeded global snapshots, war_details rows and
 //     in-process name caches drive the real chi router with a
 //     counting stub transport, proving the Intel pages and the
-//     Home status line render fixture content — including a
+//     Home status line render fixture content, including a
 //     highlighted user-corporation war and an incursion influence
-//     bar — and that no handler makes an outbound call.
+//     bar, and that no handler makes an outbound call.
 //   - Worker tests: a path-routing stub transport stands in for
 //     ESI, proving refreshIntel stores the global snapshots it
 //     owns, warms war details and public names through the shared budget, and
@@ -179,7 +179,7 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 
 	// The systems table's default order is region-major (system
 	// name within a region): Domain's Urlen leads, then The
-	// Forge's Jita before Perimeter — even though Perimeter is
+	// Forge's Jita before Perimeter, even though Perimeter is
 	// the most contested of the three.
 	fwTable := body[strings.Index(body, "Contested systems"):]
 	iUrlen := strings.Index(fwTable, "Urlen")
@@ -190,7 +190,7 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	}
 
 	// Home signed in: the Overview bar's ESI pill. The seeded
-	// status is months old — ESI has stopped answering — so the
+	// status is months old, ESI has stopped answering, so the
 	// pill reads down, with no player count.
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
@@ -380,7 +380,7 @@ func TestRefreshIntel(t *testing.T) {
 	}
 
 	// Second pass: fresh snapshots, fresh/finished details and
-	// cached names — no calls at all.
+	// cached names, no calls at all.
 	before := transport.calls.Load()
 	if _, _, limited := app.refreshIntel(ctx, budget); limited {
 		t.Fatal("second pass: unexpectedly error-limited")
@@ -459,7 +459,7 @@ func TestUserCorporationIDsAreScopedToTheUser(t *testing.T) {
 }
 
 // TestIntelSecPills: the fleet overview's security pill rides along
-// on the Intel pages — every FW system row carries it, and on the
+// on the Intel pages, every FW system row carries it, and on the
 // Incursions page the staging system carries it while the affected
 // systems (even ones whose security is known) do not. A system the
 // SDE has no row for renders no pill, the fleet badge's own guard.
@@ -498,8 +498,8 @@ func TestIntelSecPills(t *testing.T) {
 	})
 	app.esi.StoreConstellationName(20000002, "Fixture Constellation")
 
-	// Incursions: exactly one pill on the page — the staging
-	// system's — even though both other affected systems have
+	// Incursions: exactly one pill on the page, the staging
+	// system's, even though both other affected systems have
 	// known security.
 	code, body := getPage(t, app, cookie, "/intel/incursions/")
 	if code != http.StatusOK {

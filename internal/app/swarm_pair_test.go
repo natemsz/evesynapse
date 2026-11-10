@@ -5,7 +5,7 @@ package app
 // httptest), and a canned ESI transport plays CCP's truth for
 // the spot checks. They prove sharing works, poison never lands
 // in the tables, sustained lies exile the liar, and the crypto
-// checks hold — at a bounded ESI cost.
+// checks hold, at a bounded ESI cost.
 
 import (
 	"context"
@@ -185,7 +185,7 @@ func TestSwarmPairSharesNames(t *testing.T) {
 	if err != nil || name != "Tritanium" {
 		t.Fatalf("B holds %q err %v, want Tritanium", name, err)
 	}
-	// One shared entry cost one ESI swarm.Call to verify — the pass is
+	// One shared entry cost one ESI swarm.Call to verify, the pass is
 	// bounded, not per-row chatty.
 	if p.stubB.calls != 1 {
 		t.Fatalf("spot check cost %d ESI calls, want 1", p.stubB.calls)
@@ -481,7 +481,7 @@ func TestSwarmPairStructureDefersWithoutScope(t *testing.T) {
 	p := newSwarmPair(t, swarm.SwarmOpen)
 	ctx := context.Background()
 	// A serves a resolved structure name; B links no character
-	// with the structure scope, so the entry waits staged —
+	// with the structure scope, so the entry waits staged,
 	// never applied blind, never costing ESI.
 	if err := p.a.queries.SetStructureName(ctx, db.SetStructureNameParams{
 		StructureID: 1044752365771, Name: "Holding", State: esi.StructureResolved,
@@ -528,8 +528,8 @@ func TestSwarmPairCorpRecord(t *testing.T) {
 }
 
 // TestSwarmPairCorpRecordBareDialect: a peer whose stored
-// record is the bare ESI corporation — the dialect storm
-// serves — is checked on the fields it actually sent. The
+// record is the bare ESI corporation, the dialect storm
+// serves, is checked on the fields it actually sent. The
 // record matches ESI, so it passes and applies, and its
 // signer earns no mark. Read against the wrapped shape alone
 // it decoded to empty fields and failed every check, which
@@ -562,7 +562,7 @@ func TestSwarmPairCorpRecordBareDialect(t *testing.T) {
 }
 
 // TestSwarmPairCorpRecordBareDialectLie: the same bare dialect
-// carrying a wrong identity still convicts — the tolerant read
+// carrying a wrong identity still convicts, the tolerant read
 // compares the real fields, so a name ESI does not have fails
 // the check, nothing applies, and the signer takes the mark.
 func TestSwarmPairCorpRecordBareDialectLie(t *testing.T) {

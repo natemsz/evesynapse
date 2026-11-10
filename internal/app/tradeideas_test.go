@@ -129,10 +129,10 @@ func TestTradeIdeasCSVBounded(t *testing.T) {
 	}
 }
 
-// TestTradeIdeasCSVSkipsJokeStationBook: the audit's Offender A
-// book -- one fishing bid at 5.25 under one hopeful ask at
-// 110.25 at a minor Forge station, for a type trading 40,000 a
-// day at Jita typicals -- used to reach the model as a 2000.0%
+// TestTradeIdeasCSVSkipsJokeStationBook: a joke book -- one
+// fishing bid at 5.25 under one hopeful ask at 110.25 at a minor
+// Forge station, for a type trading 40,000 a day at Jita
+// typicals -- must never reach the model as a 2000.0%
 // "opportunity". Trade Ideas reads the scanner's query, so the
 // depth gate keeps it out of the CSV entirely: no rows, no ask.
 func TestTradeIdeasCSVSkipsJokeStationBook(t *testing.T) {
@@ -340,8 +340,8 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 		t.Fatalf("model text rendered unescaped on the home page")
 	}
 
-	// Once the page's own answer lands, the page shows it — every
-	// idea with its figures — while the module keeps its short one.
+	// Once the page's own answer lands, the page shows it, every
+	// idea with its figures, while the module keeps its short one.
 	if err := q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{
 		Body:  "### Hauling Arbitrage\n* **Pyerite** · Jita IV-4 · buy 9.10 · sell 10.40 · 14.3% · 2,000/day · 2.6M ISK/day — thin spread, deep volume",
 		AsOf:  time.Now().UTC(),
@@ -367,7 +367,7 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 }
 
 // TestTradeIdeasPageComposesFromRows: a new-format answer and its
-// stored row set render the composed line — figures from the rows,
+// stored row set render the composed line, figures from the rows,
 // in the legacy format, no reference shown.
 func TestTradeIdeasPageComposesFromRows(t *testing.T) {
 	transport := &countingTransport{}

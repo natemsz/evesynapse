@@ -10,7 +10,7 @@ import (
 // shipped stylesheets: the glass recipe on the shared surfaces, the
 // art-only sky, the briefing glow and pulse, and the motion/blur
 // discipline. Atmosphere lives in the shared classes; if a rule
-// drops out of the CSS, every page loses it at once — this says so.
+// drops out of the CSS, every page loses it at once, this says so.
 func TestEmberGlassAndSkyRules(t *testing.T) {
 	read := func(name string) string {
 		raw, err := fs.ReadFile(staticFS, "static/"+name)
@@ -157,8 +157,8 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	}
 	// The home KPI tiles carry the mockup's Lucide glyphs in their
 	// top right (the .brief-icon treatment at tile scale). The
-	// rules live in bg.css — style.css has outgrown a whole-file
-	// push — pinned here so a merge cannot silently drop them.
+	// rules live in bg.css, style.css has outgrown a whole-file
+	// push, pinned here so a merge cannot silently drop them.
 	for _, want := range []string{
 		".kpi { position: relative; }",
 		".kpi:has(> .kpi-icon) .kpi-k { padding-right: 1.5rem; }",
@@ -255,7 +255,7 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 	// The landing keeps the dramatic art at its base tier only:
 	// landing.css (linked only by the landing template, after
 	// bg.css) restores the sunrise art with its thumb underlay
-	// and never escalates to the wide tiers — the art sits
+	// and never escalates to the wide tiers, the art sits
 	// dimmed, blurred, and veiled there (see also
 	// TestLandingMockupFidelity).
 	landingRaw, err := fs.ReadFile(staticFS, "static/landing.css")
@@ -307,7 +307,7 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 // the site's full-strength one, the landing dim text tone, the
 // JetBrains Mono footer, and the preview's flat KPI/brief
 // treatment. If one drops out, the landing quietly stops
-// looking like the approved design — this says so.
+// looking like the approved design, this says so.
 func TestLandingMockupFidelity(t *testing.T) {
 	raw, err := fs.ReadFile(staticFS, "static/landing.css")
 	if err != nil {
@@ -387,7 +387,7 @@ func TestLandingStarTileStaysTiny(t *testing.T) {
 // selection paint made from the theme's accent over the solid
 // panel, so the row follows every scheme and the light theme and
 // the pinned cell is as opaque as any other row's. A fixed colour
-// here is the regression: the row would ignore the account's scheme.
+// here would make the row ignore the account's scheme.
 func TestCharactersActiveRowTint(t *testing.T) {
 	raw, err := fs.ReadFile(staticFS, "static/layout.css")
 	if err != nil {
@@ -412,8 +412,8 @@ func TestCharactersActiveRowTint(t *testing.T) {
 	}
 }
 
-// TestNoNestedBlurInsidePageGlass pins the blur ruling — blur
-// belongs only over unblurred content — for the small glass
+// TestNoNestedBlurInsidePageGlass pins the blur ruling, blur
+// belongs only over unblurred content, for the small glass
 // pieces living inside the page panel: the quiet pill flattens
 // there and in the notify menu, the alert bars flatten inside
 // the panel, and the PI planner's Recalculate pill carries no

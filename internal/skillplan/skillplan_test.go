@@ -35,10 +35,10 @@ func TestSPTable(t *testing.T) {
 
 // fixtureGraph is a tiny hand-built skill graph:
 //
-//	A (rank 1, Int/Mem) — no prereqs
-//	B (rank 2, Int/Mem) — requires A III
-//	C (rank 1, Per/Wil) — no prereqs
-//	M (a module type)   — requires B II
+//	A (rank 1, Int/Mem), no prereqs
+//	B (rank 2, Int/Mem), requires A III
+//	C (rank 1, Per/Wil), no prereqs
+//	M (a module type), requires B II
 type fixtureGraph struct{}
 
 func (fixtureGraph) Meta(id int64) (SkillMeta, bool) {

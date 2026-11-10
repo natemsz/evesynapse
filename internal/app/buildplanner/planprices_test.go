@@ -2,11 +2,10 @@ package buildplanner
 
 // Price-source tests: the resolved price map behind every plan
 // figure (the house order), and a supercarrier-shaped payload
-// priced from it -- the P0-2 regression. The fixture product
-// trades only by contract, like a supercarrier: its guide row
-// carries no average, only CCP's adjusted figure, so the old
-// guide-fed planner used that one stale number as the hull's
-// buy price, its sell value and its verdict input at once.
+// priced from it. The fixture product trades only by contract,
+// like a supercarrier: its guide row carries no average, only
+// CCP's adjusted figure, which must never stand in as the hull's
+// buy price, its sell value or its verdict input.
 
 import (
 	"testing"
@@ -85,7 +84,7 @@ func TestResolvePlanPricesHouseOrder(t *testing.T) {
 	}
 }
 
-// TestPlanCarrierValueIsStoredEstSell is the Hel regression:
+// TestPlanCarrierValueIsStoredEstSell:
 // priced from the resolved map, the plan's market value for a
 // contract-only hull is the stored estimated sell -- the same
 // figure the item page renders from true_values -- and the

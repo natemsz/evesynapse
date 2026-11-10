@@ -4,7 +4,7 @@ package app
 // (the SHA-256 of its own binary), the members gossip
 // carrying and filing claims, the Admin classification
 // against the release library, and the invariant the feature
-// stands on — a claim is display metadata, so trust persists
+// stands on, a claim is display metadata, so trust persists
 // across releases: changing a peer's claim (upgrade,
 // downgrade, a mainline/fork flip) moves nothing in its
 // trust row.
@@ -32,7 +32,7 @@ const (
 )
 
 // TestBuildClaimIsOwnHash: this instance's claim is the hash
-// of the binary the test itself runs as — a well-formed
+// of the binary the test itself runs as, a well-formed
 // SHA-256 hex string, and (the test binary being no release)
 // a Fork by the library.
 func TestBuildClaimIsOwnHash(t *testing.T) {
@@ -52,7 +52,7 @@ func TestBuildClaimIsOwnHash(t *testing.T) {
 // TestClassifyBuild pins the classifier against the release
 // library: a seeded release hash is Mainline and renders
 // with the release's label, any other hash is a Fork, and
-// no claim — a peer that predates claims — is Unknown.
+// no claim, a peer that predates claims, is Unknown.
 func TestClassifyBuild(t *testing.T) {
 	if len(swarm.ReleaseLibrary) == 0 {
 		t.Fatal("the release library is empty")
@@ -79,8 +79,8 @@ func TestClassifyBuild(t *testing.T) {
 	}
 }
 
-// TestClassifyBuildStorm: a storm-typed library entry — the
-// kind the first storm release will add — classifies as
+// TestClassifyBuildStorm: a storm-typed library entry, the
+// kind the first storm release will add, classifies as
 // Mainline and renders with the Storm product named, while an
 // app entry beside it keeps its plain release rendering.
 func TestClassifyBuildStorm(t *testing.T) {
@@ -229,8 +229,8 @@ func TestSwarmLearnMembersFilesBuild(t *testing.T) {
 }
 
 // TestBuildClaimChangeLeavesTrustAlone is the invariant: a
-// peer's claim changing — here from one official release to
-// a build no release matches, the full classification flip —
+// peer's claim changing, here from one official release to
+// a build no release matches, the full classification flip,
 // updates the label on its row and nothing else. Approval,
 // exclusion, the check counters and the key-conflict mark
 // are exactly what they were; only the address tuple's

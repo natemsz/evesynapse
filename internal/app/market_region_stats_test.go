@@ -482,7 +482,7 @@ func TestRegionSweepWaitsForTheGateAndTheWindowRollover(t *testing.T) {
 	}
 }
 
-// Audit 3.1 (leaderboard remainder): the station leaderboard
+// The station leaderboard
 // distilled from the staged book is written batched alongside
 // the other sweep outputs; the stored rows are the per-location
 // order counts and open values the leaderboard page ranks by.

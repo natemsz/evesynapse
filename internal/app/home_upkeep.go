@@ -2,7 +2,7 @@ package app
 
 // ---------------------------------------------------------------------------
 // Upkeep & fuel: the lose-something-irreplaceable deadlines in
-// one place — structures low on fuel, unanchoring, or running a
+// one place, structures low on fuel, unanchoring, or running a
 // state timer. Station Managers and Directors only: the
 // structures endpoint needs the in-game role, so anyone else
 // simply gets no section. Rendered reads over the stored corp

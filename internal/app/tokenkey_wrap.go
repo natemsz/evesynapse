@@ -3,11 +3,11 @@ package app
 // `evesynapse -wrap-token-key`: the oci provider's one setup
 // step. The token encryption key that today sits in .env as
 // TOKEN_ENCRYPTION_KEY is wrapped by the vault key named in
-// TOKEN_KEY_OCI_KEY_ID, and the resulting ciphertext — the value
-// to store as TOKEN_KEY_WRAPPED — is printed to stdout, alone.
+// TOKEN_KEY_OCI_KEY_ID, and the resulting ciphertext, the value
+// to store as TOKEN_KEY_WRAPPED, is printed to stdout, alone.
 // The wrap authenticates as the instance itself (instance
 // principal), so the command only does anything on the machine
-// whose tokens the key protects — which is the point: the
+// whose tokens the key protects, which is the point: the
 // plaintext is read from the environment on that machine, sent to
 // the vault over TLS, and never logged or written anywhere here.
 

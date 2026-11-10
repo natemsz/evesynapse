@@ -2,8 +2,8 @@
 // ../static/fittip.js, the wiring in ../static/fit.js):
 // on a public fit's page (a .fit-ro workbench, no editor),
 // hovering or tapping a module shows the shared themed
-// tooltip — name, the server's computed stat rows with their
-// good/bad classes, the loaded charge — and never state
+// tooltip, name, the server's computed stat rows with their
+// good/bad classes, the loaded charge, and never state
 // buttons. Driven through a small DOM stub; fit.js's editor
 // block bails in this environment (no #fit-editor), which is
 // exactly the public-page situation.

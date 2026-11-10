@@ -20,11 +20,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Market price history — ESI's daily aggregates, stored
+// Market price history, ESI's daily aggregates, stored
 // typed in market_history and charted server-side. Everything in
 // this file is a pure function over stored rows: change math,
 // summary stats, and the hand-computed SVG chart (no chart
-// library, no JavaScript — the page carries the finished SVG).
+// library, no JavaScript, the page carries the finished SVG).
 // ---------------------------------------------------------------------------
 
 // DateLayout is the ESI history day format.
@@ -56,10 +56,10 @@ const (
 // it: (latest − base) / base × 100, where base is the stored day
 // nearest the target date. The nearest day must sit within a
 // tolerance window around the target (3 days for the 7-day move,
-// 5 for the 30-day) — older aggregates have gaps, and bridging a
+// 5 for the 30-day), older aggregates have gaps, and bridging a
 // two-week hole with a "7-day change" would be a lie. Too little
 // history (one row, a zero base, or nothing near the target)
-// reports ok=false and the UI shows "—".
+// reports ok=false and the UI shows ", ".
 func ChangePct(rows []db.MarketHistory, days int) (float64, bool) {
 	if len(rows) < 2 {
 		return 0, false
@@ -301,7 +301,7 @@ type Bar struct {
 
 // FormatCompactAxisNumber renders an axis value in the short
 // form a dense chart can carry: 950 stays 950, 12,345 becomes
-// 12.3K, 3,400,000 becomes 3.4M. It labels scales only — the exact
+// 12.3K, 3,400,000 becomes 3.4M. It labels scales only, the exact
 // figures stay in the tooltips and the recent-days table.
 func FormatCompactAxisNumber(v float64) string {
 	if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -725,14 +725,14 @@ func barWidth(n int) int {
 // ---------------------------------------------------------------------------
 // Trader snapshot: windowed averages and daily volume from the
 // same stored rows the chart draws, plus the live book's margin
-// when both sides exist. Everything derives from stored data —
+// when both sides exist. Everything derives from stored data,
 // the only live inputs are the best buy/sell the item view
-// already fetched — and whatever can't be computed renders as
+// already fetched, and whatever can't be computed renders as
 // a dash, never an invented number.
 // ---------------------------------------------------------------------------
 
 // TraderStats is the item view's trading snapshot, display-ready.
-// Empty fields render as "—".
+// Empty fields render as ", ".
 type TraderStats struct {
 	Avg7      string // mean daily average over the latest 7 recorded days
 	Avg30     string // mean daily average over the latest 30 recorded days

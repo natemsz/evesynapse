@@ -16,8 +16,8 @@ import (
 // character at CCP instead of only deleting the local copy.
 //
 // Best-effort by design: it runs before the local delete, and every
-// failure — the stored token will not open, there is no token, the
-// request fails, CCP answers an error — is logged and swallowed.
+// failure, the stored token will not open, there is no token, the
+// request fails, CCP answers an error, is logged and swallowed.
 // Revocation never blocks or fails an unlink. Token values are
 // never logged; errors carry the character ID only.
 func (app *Application) revokeCharacterTokenAtCCP(ctx context.Context, ch db.Character) {

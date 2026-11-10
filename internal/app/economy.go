@@ -22,7 +22,7 @@ type econSectionState = module.EconSectionState
 // econSection resolves one economy section's display state: a
 // decoded snapshot wins; otherwise the recorded fetch state
 // decides between the warming note and the failure note. (The
-// loader is loadCorpSnapshot — a plain snapshot-row decode
+// loader is loadCorpSnapshot, a plain snapshot-row decode
 // despite the name; it never fetches.)
 func (app *Application) econSection(ctx context.Context, characterID int64, kind string, out any) econSectionState {
 	if at, ok := app.loadSnapshotAt(ctx, characterID, kind, out); ok {

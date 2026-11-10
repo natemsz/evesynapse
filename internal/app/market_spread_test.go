@@ -1,6 +1,6 @@
 package app
 
-// Item-page spread tests (spread audit, P0-3): the Spread card
+// Item-page spread tests: the Spread card
 // is priced from the typicals the page already displays, and a
 // book too thin for a median to mean anything renders a
 // thin-book state instead of a percentage manufactured from

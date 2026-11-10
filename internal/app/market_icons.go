@@ -13,11 +13,11 @@ import (
 // shared nav-glyph-gradient, with the solid flare-gold CSS fill on
 // .market-group-icon as the fallback when gradient paint fails).
 // They are simple geometric compositions inspired by the market's
-// subject matter — never CCP artwork.
+// subject matter, never CCP artwork.
 //
 // Mapping is by the real group names in the imported
 // invMarketGroups data (plus the one verified ID anchor below).
-// Anything unmapped — most subgroups included — takes the generic
+// Anything unmapped, most subgroups included, takes the generic
 // mark; a handful of child-name patterns (drones, charges, rigs…)
 // reuse the child-appropriate glyph so deep tree levels still read
 // consistently.

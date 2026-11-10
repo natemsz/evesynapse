@@ -23,7 +23,7 @@ import (
 
 // loadCorpSnapshot decodes the stored snapshot payload for
 // (character, kind) into out. It reports false when there is no
-// snapshot row or the payload doesn't decode — callers then render
+// snapshot row or the payload doesn't decode, callers then render
 // the warming/role states. It never touches the network, unlike
 // esi.GetCached (which refetches stale snapshots); the worker keeps
 // these snapshots warm.
@@ -140,7 +140,7 @@ func loadSnapshot[T any](app *Application, ctx context.Context, characterID int6
 				return typed, true
 			}
 			// A kind is only ever decoded as one type; a mismatch
-			// means that stopped being true — decode afresh below
+			// means that stopped being true, decode afresh below
 			// rather than handing back the wrong shape.
 		}
 	}
@@ -172,7 +172,7 @@ func (app *Application) loadOrdersSnapshot(ctx context.Context, characterID int6
 
 // loadGlobalSnapshot decodes a stored global payload into out. It
 // reports false when there is no row or the payload doesn't
-// decode. DB only — unlike esi.GetCached it never refetches; the
+// decode. DB only, unlike esi.GetCached it never refetches; the
 // worker keeps the global store warm.
 func (app *Application) loadGlobalSnapshot(ctx context.Context, kind string, out any) bool {
 	snap, err := app.queries.GetGlobalSnapshot(ctx, kind)

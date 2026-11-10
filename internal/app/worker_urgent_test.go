@@ -5,7 +5,7 @@ package app
 //   - Contacts acceptance case: unresolved (including pre-90M)
 //     character contacts enqueue viewed-priority pilot wants,
 //     render a non-blank pending live region, and swap in the
-//     resolved pilot link once the worker stores the name —
+//     resolved pilot link once the worker stores the name,
 //     with zero outbound calls from pages, fragments, and the
 //     status endpoint throughout.
 //   - Contracts (the non-contacts page): an unresolved

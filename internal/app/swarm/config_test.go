@@ -1,7 +1,7 @@
 package swarm
 
 // White-box tests for the shared-cache configuration: off by
-// default, explicit modes, and fail-closed validation —
+// default, explicit modes, and fail-closed validation,
 // enabling without a strong secret, or with an unsafe seed,
 // refuses to start rather than sharing in the clear.
 

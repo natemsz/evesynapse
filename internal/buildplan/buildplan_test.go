@@ -158,7 +158,7 @@ func TestPlanFacilityFactors(t *testing.T) {
 		t.Fatalf("buildPlan: %v", err)
 	}
 	// Mineral: widget 10 × 0.9702 → 10 (ceil 9.702); component
-	// 5 × 2 × 0.9702 → 10 (ceil 9.702). Total 20 — the ceiling
+	// 5 × 2 × 0.9702 → 10 (ceil 9.702). Total 20, the ceiling
 	// eats the bonus at this scale, so drop runs up: at 10 runs
 	// the widget needs ceil(100 × 0.9702) = 98, not 100.
 	if req, _ := leafQty(res.Root, 34); req != 20 {
@@ -261,7 +261,7 @@ func TestPlanOwnedBlueprintAutofillAndOverridePrecedence(t *testing.T) {
 func TestPlanStockpileSingleAllocation(t *testing.T) {
 	// 15 Mineral on hand: the root's own line (materials walk in
 	// type-ID order) claims 10, the component's line gets the
-	// remaining 5 — the stockpile is never promised twice.
+	// remaining 5, the stockpile is never promised twice.
 	res, err := Build(fixtureRecipes(), 1001, Input{
 		Runs:  1,
 		Stock: map[int64]int64{34: 15, 1002: 1},

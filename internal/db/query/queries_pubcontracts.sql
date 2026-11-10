@@ -168,7 +168,7 @@ SELECT contract_id, region_id, type, issuer_id, issuer_corporation_id,
     days_to_complete, items_state, last_cycle, first_seen, last_seen,
     offered_value, want_value, deal_ratio, priced_lines, total_lines,
     tier_mix, priced_at, items_attempts, items_error,
-    departed_at, depart_kind
+    departed_at, depart_kind, items_stored_at
 FROM pub_contracts
 WHERE contract_id = $1 AND departed_at IS NULL;
 
@@ -196,8 +196,13 @@ INSERT INTO pub_contract_items (
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (record_id) DO NOTHING;
 
+-- A list that lands as stored is stamped (schema 138): the
+-- true-value pass mines the types whose corpus gained a contract.
 -- name: SetPublicContractItemsState :exec
-UPDATE pub_contracts SET items_state = $2 WHERE contract_id = $1;
+UPDATE pub_contracts
+SET items_state = $2,
+    items_stored_at = CASE WHEN $2 = 'stored' THEN now() ELSE items_stored_at END
+WHERE contract_id = $1;
 
 -- One failed item-list attempt (fetch, decode or store), on
 -- the record: the counter rises, the reason is kept, and the

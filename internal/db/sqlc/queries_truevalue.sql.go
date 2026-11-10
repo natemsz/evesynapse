@@ -87,6 +87,79 @@ func (q *Queries) ListTVContractObservationsByRegion(ctx context.Context, region
 	return items, nil
 }
 
+const listTVCorpusArrivals = `-- name: ListTVCorpusArrivals :many
+SELECT c.contract_id, c.items_stored_at::timestamptz AS stored_at,
+       array_agg(DISTINCT i.type_id)::bigint[] AS type_ids
+FROM pub_contracts c
+JOIN pub_contract_items i ON i.contract_id = c.contract_id AND i.is_included
+WHERE c.items_stored_at > $1::timestamptz
+  AND c.type = 'item_exchange' AND c.departed_at IS NULL
+GROUP BY c.contract_id, c.items_stored_at
+ORDER BY c.contract_id
+`
+
+type ListTVCorpusArrivalsRow struct {
+	ContractID int64     `json:"contract_id"`
+	StoredAt   time.Time `json:"stored_at"`
+	TypeIds    []int64   `json:"type_ids"`
+}
+
+// Item exchanges whose item list was stored after a moment (schema
+// 138), with the types they carry: the true-value pass mines those
+// types again, since their corpus gained a contract.
+func (q *Queries) ListTVCorpusArrivals(ctx context.Context, since time.Time) ([]ListTVCorpusArrivalsRow, error) {
+	rows, err := q.db.Query(ctx, listTVCorpusArrivals, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTVCorpusArrivalsRow
+	for rows.Next() {
+		var i ListTVCorpusArrivalsRow
+		if err := rows.Scan(&i.ContractID, &i.StoredAt, &i.TypeIds); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTVCorpusContractsLive = `-- name: ListTVCorpusContractsLive :many
+SELECT contract_id, last_seen FROM pub_contracts
+WHERE contract_id = ANY($1::bigint[]) AND departed_at IS NULL
+ORDER BY contract_id
+`
+
+type ListTVCorpusContractsLiveRow struct {
+	ContractID int64     `json:"contract_id"`
+	LastSeen   time.Time `json:"last_seen"`
+}
+
+// The cached corpus contracts that are still live, with the sweep's
+// latest sighting: a contract missing here has left the live set.
+func (q *Queries) ListTVCorpusContractsLive(ctx context.Context, contractIds []int64) ([]ListTVCorpusContractsLiveRow, error) {
+	rows, err := q.db.Query(ctx, listTVCorpusContractsLive, contractIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTVCorpusContractsLiveRow
+	for rows.Next() {
+		var i ListTVCorpusContractsLiveRow
+		if err := rows.Scan(&i.ContractID, &i.LastSeen); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTVExitProbes = `-- name: ListTVExitProbes :many
 SELECT o.contract_id, o.expires_at, o.type_id, o.sample_price, o.first_seen_at
 FROM true_value_contract_observations o
@@ -462,11 +535,15 @@ func (q *Queries) TouchTVContractObservation(ctx context.Context, arg TouchTVCon
 	return err
 }
 
-const upsertTVContractObservation = `-- name: UpsertTVContractObservation :exec
+const upsertTVContractObservations = `-- name: UpsertTVContractObservations :exec
 
 INSERT INTO true_value_contract_observations
     (contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)
+SELECT o.contract_id, o.region_id, o.type_id, o.shape, o.listed_price, o.sample_price, o.first_seen_at, o.first_seen_at, o.expires_at
+FROM (SELECT unnest($1::bigint[]) AS contract_id, unnest($2::bigint[]) AS region_id,
+             unnest($3::bigint[]) AS type_id, unnest($4::text[]) AS shape,
+             unnest($5::float8[]) AS listed_price, unnest($6::float8[]) AS sample_price,
+             unnest($7::timestamptz[]) AS first_seen_at, unnest($8::timestamptz[]) AS expires_at) o
 ON CONFLICT (contract_id) DO UPDATE SET
     region_id = EXCLUDED.region_id,
     type_id = EXCLUDED.type_id,
@@ -477,15 +554,15 @@ ON CONFLICT (contract_id) DO UPDATE SET
     expires_at = EXCLUDED.expires_at
 `
 
-type UpsertTVContractObservationParams struct {
-	ContractID  int64     `json:"contract_id"`
-	RegionID    int64     `json:"region_id"`
-	TypeID      int64     `json:"type_id"`
-	Shape       string    `json:"shape"`
-	ListedPrice float64   `json:"listed_price"`
-	SamplePrice float64   `json:"sample_price"`
-	FirstSeenAt time.Time `json:"first_seen_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
+type UpsertTVContractObservationsParams struct {
+	ContractIds  []int64     `json:"contract_ids"`
+	RegionIds    []int64     `json:"region_ids"`
+	TypeIds      []int64     `json:"type_ids"`
+	Shapes       []string    `json:"shapes"`
+	ListedPrices []float64   `json:"listed_prices"`
+	SamplePrices []float64   `json:"sample_prices"`
+	FirstSeenAts []time.Time `json:"first_seen_ats"`
+	ExpiresAts   []time.Time `json:"expires_ats"`
 }
 
 // Contract observations (schema 052): the crawl's memory of
@@ -494,24 +571,30 @@ type UpsertTVContractObservationParams struct {
 // listing that disappears well before its expiry is marked
 // vanished (probable-sale evidence); rows are bookkeeping
 // only and are never read by a page.
-func (q *Queries) UpsertTVContractObservation(ctx context.Context, arg UpsertTVContractObservationParams) error {
-	_, err := q.db.Exec(ctx, upsertTVContractObservation,
-		arg.ContractID,
-		arg.RegionID,
-		arg.TypeID,
-		arg.Shape,
-		arg.ListedPrice,
-		arg.SamplePrice,
-		arg.FirstSeenAt,
-		arg.ExpiresAt,
+// The pass's observation writes in one statement: the listings
+// whose shape or sample moved since it last wrote them.
+func (q *Queries) UpsertTVContractObservations(ctx context.Context, arg UpsertTVContractObservationsParams) error {
+	_, err := q.db.Exec(ctx, upsertTVContractObservations,
+		arg.ContractIds,
+		arg.RegionIds,
+		arg.TypeIds,
+		arg.Shapes,
+		arg.ListedPrices,
+		arg.SamplePrices,
+		arg.FirstSeenAts,
+		arg.ExpiresAts,
 	)
 	return err
 }
 
-const upsertTrueValue = `-- name: UpsertTrueValue :exec
+const upsertTrueValues = `-- name: UpsertTrueValues :exec
 
 INSERT INTO true_values (type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+SELECT r.type_id, r.build_cost, CASE WHEN r.has_est THEN r.est_sell END, r.sell_samples,
+       $1::timestamptz, $2::bigint, r.sell_source
+FROM (SELECT unnest($3::bigint[]) AS type_id, unnest($4::float8[]) AS build_cost,
+             unnest($5::float8[]) AS est_sell, unnest($6::bool[]) AS has_est,
+             unnest($7::bigint[]) AS sell_samples, unnest($8::text[]) AS sell_source) r
 ON CONFLICT (type_id) DO UPDATE SET
     build_cost = EXCLUDED.build_cost,
     est_sell = EXCLUDED.est_sell,
@@ -521,14 +604,15 @@ ON CONFLICT (type_id) DO UPDATE SET
     sell_source = EXCLUDED.sell_source
 `
 
-type UpsertTrueValueParams struct {
-	TypeID         int64           `json:"type_id"`
-	BuildCost      float64         `json:"build_cost"`
-	EstSell        sql.NullFloat64 `json:"est_sell"`
-	SellSamples    int64           `json:"sell_samples"`
-	ComputedAt     time.Time       `json:"computed_at"`
-	ProfileVersion int64           `json:"profile_version"`
-	SellSource     string          `json:"sell_source"`
+type UpsertTrueValuesParams struct {
+	ComputedAt     time.Time `json:"computed_at"`
+	ProfileVersion int64     `json:"profile_version"`
+	TypeIds        []int64   `json:"type_ids"`
+	BuildCosts     []float64 `json:"build_costs"`
+	EstSells       []float64 `json:"est_sells"`
+	HasEsts        []bool    `json:"has_ests"`
+	SellSamples    []int64   `json:"sell_samples"`
+	SellSources    []string  `json:"sell_sources"`
 }
 
 // True values (schema 051): the worker's bottom-up price per
@@ -548,15 +632,19 @@ type UpsertTrueValueParams struct {
 // Consumers resolve: The Forge's swept typical sell, then
 // est_sell, then unpriced (the guide average is never a price).
 // Written only by the worker's true-value pass.
-func (q *Queries) UpsertTrueValue(ctx context.Context, arg UpsertTrueValueParams) error {
-	_, err := q.db.Exec(ctx, upsertTrueValue,
-		arg.TypeID,
-		arg.BuildCost,
-		arg.EstSell,
-		arg.SellSamples,
+// The pass's writes in one statement: the rows whose values moved.
+// An estimate is present where has_est is set (arrays carry no
+// nulls).
+func (q *Queries) UpsertTrueValues(ctx context.Context, arg UpsertTrueValuesParams) error {
+	_, err := q.db.Exec(ctx, upsertTrueValues,
 		arg.ComputedAt,
 		arg.ProfileVersion,
-		arg.SellSource,
+		arg.TypeIds,
+		arg.BuildCosts,
+		arg.EstSells,
+		arg.HasEsts,
+		arg.SellSamples,
+		arg.SellSources,
 	)
 	return err
 }

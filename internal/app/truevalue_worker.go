@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	json "github.com/goccy/go-json"
+	"slices"
 	"sort"
 	"time"
 
@@ -16,43 +17,62 @@ import (
 
 // ---------------------------------------------------------------------------
 // The true-value pass: the worker side of true values
-// (truevalue.go). One bounded chunk of manufacturable types
-// per cycle, priced bottom-up from stored inputs -- SDE
-// blueprints, The Forge's swept typicals, the stored guide --
-// plus contract evidence for the types the market cannot
-// price: the stored public-contract corpus mined at
-// evaluation time, exit probes over the corpus's departed
-// listings (truevalue_sales.go), and
-// a bounded walk of ship types with no blueprint at all.
-// Thin non-ship types price from their samples by evidence
-// tier; thin ships price the abyssal way, by a learned
-// correction over their build cost (truevalue_learn.go). An
-// estimated sell is stored only when the evidence produces
-// one; a build cost is never stored as one. Pages never
-// compute any of this; they read the stored rows.
+// (truevalue.go). Every manufacturable type is priced
+// bottom-up from stored inputs -- SDE blueprints, The Forge's
+// swept typicals, the stored guide -- plus contract evidence
+// for the types the market cannot price: the stored
+// public-contract corpus, exit probes over the corpus's
+// departed listings (truevalue_sales.go), and ship types with
+// no blueprint at all. Thin non-ship types price from their
+// samples by evidence tier; thin ships price the abyssal way,
+// by a learned correction over their build cost
+// (truevalue_learn.go). An estimated sell is stored only when
+// the evidence produces one; a build cost is never stored as
+// one. Pages never compute any of this; they read the stored
+// rows.
 //
-// A stored row goes stale when the profile version moves,
-// when the inputs it was computed from move (the guide's
-// fetched_at or the Forge sweep's stamp, fingerprinted
-// below), or when it ages past trueValueStaleAfter. The sweep
-// walks products in type order behind a cursor, so a full
-// pass over the ~4,800 manufacturable types takes a dozen
-// cycles and then idles on fresh rows.
+// A pass runs when its inputs move (the profile, the guide's
+// fetched_at, the Forge sweep's stamp, the SDE import) or when
+// contract evidence moves (a listing arrives or leaves, an exit
+// probe settles, a sale is harvested). The arithmetic is cheap
+// and runs whole; the corpus reads are not, so each type's
+// mined contracts are cached and read again only when its
+// evidence moves, and only changed rows are written.
 // ---------------------------------------------------------------------------
 
-// tvPassChunk bounds one cycle's evaluations.
-const tvPassChunk = 400
+// tvMinePerCycle bounds one cycle's corpus reads: the types
+// whose cached contracts are missing. A warm pass reads only
+// the types that gained a contract since the last one; a cold
+// start (process start, or the cache's renewal) fills over a
+// handful of cycles, ship hulls first, since the ship fit
+// waits for every hull's evidence.
+const tvMinePerCycle = 600
 
-// tvPassState is the pass's progress between cycles. Only the
+// tvArrivalOverlap is how far each check for newly stored
+// contracts reaches back past the newest one already handled,
+// so a stamp written by a transaction that committed late is
+// still seen. Contracts already handled are skipped by ID.
+const tvArrivalOverlap = 10 * time.Minute
+
+// tvPassState is the pass's memory between cycles. Only the
 // worker touches it (refreshCycle is serial), so it needs no
 // lock of its own.
 type tvPassState struct {
-	cursor         int       // next product index to evaluate
-	evidenceCursor int       // next evidence-only type to evaluate
-	fingerprint    string    // inputs the stored rows were computed under
-	passDoneAt     time.Time // when the walk last completed a pass
-	graph          *tvBlueprintGraph
-	profile        trueValueProfile
+	fingerprint   string // inputs the stored rows were last computed under
+	evidenceMoved bool   // contract evidence changed since the last pass
+	graph         *tvBlueprintGraph
+	graphStamp    string // SDE import stamp the graph was loaded under
+
+	// The corpus cache: each thin type's mined live contracts.
+	// A type absent from corpus is mined on the next pass; a
+	// type whose corpus gained a contract is dropped from it.
+	// The cache is emptied at start and again after
+	// trueValueStaleAfter, so no missed signal outlives that.
+	corpus        map[int64][]*tvCorpusContract
+	cacheStarted  time.Time
+	arrivalsSince time.Time                                 // newest stored-items stamp handled
+	arrivalsSeen  map[int64]time.Time                       // contract -> stamp, inside the overlap
+	observed      map[int64]db.TrueValueContractObservation // contract -> observation last written
 
 	// The certain tier (schema 052): sale samples harvested
 	// from linked characters' own contracts that ESI reports
@@ -60,6 +80,21 @@ type tvPassState struct {
 	fulfilled     map[int64][]tvContractSample // thin type -> fulfilled-sale samples
 	fulfilledSeen map[int64]bool               // contract IDs already harvested
 	snapshotSeen  map[int64]time.Time          // character -> contracts snapshot vintage last harvested
+}
+
+// tvCorpusContract is one live item exchange the corpus miner
+// read for a thin type, kept so later passes can judge it
+// again against current prices without reading it again.
+// lastSeen follows the contract sweep's sightings
+// (refreshTVCorpusLive).
+type tvCorpusContract struct {
+	id        int64
+	regionID  int64
+	price     float64
+	firstSeen time.Time
+	lastSeen  time.Time
+	expiresAt time.Time
+	items     []tvPublicContractItem
 }
 
 // The evidence tiers behind an estimated sell, weakest last
@@ -140,7 +175,9 @@ func (app *Application) loadTVBlueprintGraph(ctx context.Context) (*tvBlueprintG
 	for _, row := range rows {
 		productIDs = append(productIDs, row.ProductTypeID)
 	}
-	sort.Slice(productIDs, func(i, j int) bool { return productIDs[i] < productIDs[j] })
+	// A product several blueprints make is listed once.
+	slices.Sort(productIDs)
+	productIDs = slices.Compact(productIDs)
 	graph.products = productIDs
 
 	blueprints, err := app.queries.GetSDEBlueprintsForProducts(ctx, productIDs)
@@ -190,56 +227,71 @@ func (app *Application) loadTVBlueprintGraph(ctx context.Context) (*tvBlueprintG
 	return graph, nil
 }
 
-// refreshTrueValues runs one bounded chunk of the pass. It is
+// refreshTrueValues runs the pass when its inputs moved. It is
 // called from refreshCycle behind the guide refresh and the
 // cost-index refresh, whose outputs are its inputs.
+//
+// Every pass computes every manufacturable type's build cost
+// (all in memory: the recipe book, the swept typicals and the
+// guide's adjusted prices) and judges every thin type's
+// contract evidence from the corpus cache, then writes only
+// the rows whose values differ from the stored ones, in one
+// statement. The corpus is read again only for the types whose
+// evidence moved; that read was the pass's cost, not the math.
 func (app *Application) refreshTrueValues(ctx context.Context) {
 	meta, ok := app.guideMeta(ctx)
 	if !ok {
 		return // no guide yet: nothing honest to price from
 	}
 	st := &app.trueValuePass
-
-	// Departed listings get their exit probes every cycle,
-	// ahead of the gate below: ESI remembers an accepted
-	// contract only for a while, and a sale confirmed now
-	// already counts in this cycle's reads (truevalue_sales.go).
-	app.probeContractExits(ctx, time.Now())
-
-	// A pass runs when its inputs have moved since the last
-	// completed pass, and the cycle idles otherwise. The
-	// fingerprint is read cheaply (the guide's meta row and
-	// the sweep's stamp query), and a cycle that finds it
-	// unchanged returns before the stats rows, the graph and
-	// the evidence reads are loaded at all: rerunning them
-	// on frozen inputs only recomputes the values already
-	// stored. A completed pass also ages out:
-	// inputs frozen past trueValueStaleAfter (a stalled
-	// sweep, a dead ESI) start a fresh pass anyway, so the
-	// rows keep the staleness bound the age rule promises.
-	if st.fingerprint != "" && st.cursor == 0 &&
-		time.Since(st.passDoneAt) < trueValueStaleAfter {
-		if stamp, err := app.queries.GetMarketRegionStatsStamp(ctx, defaultMarketRegion); err == nil {
-			var statsStamp time.Time
-			if t, ok := stamp.Stamp.(time.Time); ok {
-				statsStamp = t
-			}
-			fingerprint := fmt.Sprintf("%d|%s|%d", trueValueProfileVersion,
-				meta.FetchedAt.UTC().Format(time.RFC3339Nano), statsStamp.Unix())
-			if fingerprint == st.fingerprint {
-				return
-			}
-		}
-	}
-
-	guide := app.storedGuidePrices(ctx)
-	if guide == nil {
-		return // no guide yet: nothing honest to price from
+	now := time.Now()
+	if st.corpus == nil || now.Sub(st.cacheStarted) >= trueValueStaleAfter {
+		st.corpus = make(map[int64][]*tvCorpusContract)
+		st.observed = make(map[int64]db.TrueValueContractObservation)
+		st.arrivalsSeen = make(map[int64]time.Time)
+		st.cacheStarted = now
+		st.arrivalsSince = now
+		st.fingerprint = ""
 	}
 	if st.fulfilled == nil {
 		st.fulfilled = make(map[int64][]tvContractSample)
 		st.fulfilledSeen = make(map[int64]bool)
 		st.snapshotSeen = make(map[int64]time.Time)
+	}
+
+	// Evidence first, every cycle, ahead of the gate: departed
+	// listings get their exit probes (ESI remembers an accepted
+	// contract only for a while), contracts that left the live
+	// set leave the cache, and types whose corpus gained a
+	// contract are queued to be mined again.
+	app.probeContractExits(ctx, now)
+	app.refreshTVCorpusLive(ctx)
+	app.noteTVCorpusArrivals(ctx)
+
+	// The pass runs when its inputs moved: the profile, the
+	// guide's vintage, the sweep's stamp, the SDE import, or
+	// the contract evidence. Otherwise the cycle idles.
+	profile := app.resolveTrueValueProfile(ctx)
+	sdeStamp, _ := app.sdeMeta(ctx, "imported_at")
+	stamp, err := app.queries.GetMarketRegionStatsStamp(ctx, defaultMarketRegion)
+	if err != nil {
+		logging.Errorf("true values: forge stats stamp: %v", err)
+		return
+	}
+	var statsStamp time.Time
+	if t, ok := stamp.Stamp.(time.Time); ok {
+		statsStamp = t
+	}
+	fingerprint := fmt.Sprintf("%d|%s|%d|%s|%v", trueValueProfileVersion,
+		meta.FetchedAt.UTC().Format(time.RFC3339Nano), statsStamp.UnixNano(), sdeStamp, profile)
+	if fingerprint == st.fingerprint && !st.evidenceMoved {
+		return
+	}
+	st.evidenceMoved = false
+
+	guide := app.storedGuidePrices(ctx)
+	if guide == nil {
+		return // no guide yet: nothing honest to price from
 	}
 
 	// The Forge's swept stats are the input price book: a
@@ -251,24 +303,14 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	}
 	typicalSell := make(map[int64]float64, len(statsRows))
 	dailyVolume := make(map[int64]float64, len(statsRows))
-	var statsStamp time.Time
 	for _, row := range statsRows {
 		if row.TypicalSell > 0 {
 			typicalSell[row.TypeID] = row.TypicalSell
 		}
 		dailyVolume[row.TypeID] = row.AvgDailyVolume
-		if row.UpdatedAt.After(statsStamp) {
-			statsStamp = row.UpdatedAt
-		}
 	}
 
-	// The fingerprint of everything a stored row was computed
-	// from: profile version, guide vintage, sweep vintage.
-	fingerprint := fmt.Sprintf("%d|%s|%d", trueValueProfileVersion,
-		meta.FetchedAt.UTC().Format(time.RFC3339Nano), statsStamp.Unix())
-	inputsChanged := fingerprint != st.fingerprint
-
-	if st.graph == nil || st.cursor == 0 {
+	if st.graph == nil || st.graphStamp != sdeStamp {
 		graph, err := app.loadTVBlueprintGraph(ctx)
 		if err != nil {
 			logging.Errorf("true values: %v", err)
@@ -277,8 +319,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 		if len(graph.products) == 0 {
 			return // SDE not imported yet
 		}
-		st.graph = graph
-		st.profile = app.resolveTrueValueProfile(ctx)
+		st.graph, st.graphStamp = graph, sdeStamp
 	}
 	graph := st.graph
 
@@ -297,7 +338,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	// back from the observation table.
 	priceOf := tvStoredPricerFrom(typicalSell, existing)
 	vanished := make(map[int64][]tvContractSample)
-	if rows, err := app.queries.ListTVVanishedSamplesSince(ctx, sql.NullTime{Time: time.Now().Add(-tvEvidenceRetention), Valid: true}); err == nil {
+	if rows, err := app.queries.ListTVVanishedSamplesSince(ctx, sql.NullTime{Time: now.Add(-tvEvidenceRetention), Valid: true}); err == nil {
 		for _, row := range rows {
 			if row.VanishedAt.Valid {
 				// A listing ESI confirmed accepted is a recorded
@@ -351,15 +392,15 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 			adjusted[id] = p.AveragePrice
 		}
 	}
-	// One coster for the chunk: hulls price through RootCost
+	// One coster for the pass: hulls price through RootCost
 	// (their own blueprint at hull ME), everything else
 	// through UnitCost (component ME throughout).
 	coster := buildplan.NewUnitCoster(graph, leafPrice, adjusted, buildplan.CostProfile{
 		RootME:      trueValueShipME,
 		ComponentME: trueValueComponentME,
-		MatFactor:   st.profile.matFactor,
-		CostFactor:  st.profile.costFactor,
-		CostIndex:   st.profile.costIndex,
+		MatFactor:   profile.matFactor,
+		CostFactor:  profile.costFactor,
+		CostIndex:   profile.costIndex,
 		FacilityTax: buildplan.NPCFacilityTax,
 	})
 
@@ -379,7 +420,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	// walk can never reach them -- no blueprint, no build
 	// cost, no row -- yet contracts price them every day.
 	// They join the thin set as sampler subjects and are
-	// evaluated from contract evidence alone below.
+	// priced from contract evidence alone below.
 	var evidenceTypes []int64
 	for _, id := range graph.allShips {
 		if _, manufacturable := graph.byProduct[id]; manufacturable {
@@ -391,27 +432,21 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 		}
 	}
 
-	now := time.Now()
-	start := st.cursor
-	if start >= len(graph.products) {
-		start = 0
-	}
-	end := start + tvPassChunk
-	if end > len(graph.products) {
-		end = len(graph.products)
-	}
-	computed, unpriced := 0, 0
-	thinCosts := make(map[int64]float64)
-	var pendingShips []int64 // thin ships this chunk owes a row: priced below, by the learned fit
-	for _, typeID := range graph.products[start:end] {
-		if row, ok := existing[typeID]; ok && !inputsChanged &&
-			row.ProfileVersion == trueValueProfileVersion &&
-			now.Sub(row.ComputedAt) < trueValueStaleAfter {
-			if isThinType(dailyVolume, typeID) {
-				thinCosts[typeID] = row.BuildCost
-			}
-			continue
+	mined, waiting := app.mineTVCorpus(ctx, thinSubjects, graph.shipsAll)
+	observed := make(map[int64]db.TrueValueContractObservation)
+	listingsOf := func(typeID int64) ([]tvContractSample, bool) {
+		contracts, ok := st.corpus[typeID]
+		if !ok {
+			return nil, false
 		}
+		return corpusListingSamples(typeID, contracts, thinSubjects, graph.shipsAll, priceOf, observed), true
+	}
+
+	var rows []db.TrueValue
+	unpriced := 0
+	thinCosts := make(map[int64]float64)
+	var pendingShips []int64 // thin hulls owed a row: priced below, by the learned fit
+	for _, typeID := range graph.products {
 		var buildCost float64
 		var ok bool
 		if graph.ships[typeID] {
@@ -423,7 +458,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 			unpriced++
 			continue
 		}
-		row := db.UpsertTrueValueParams{
+		row := db.TrueValue{
 			TypeID:         typeID,
 			BuildCost:      buildCost,
 			ComputedAt:     now,
@@ -434,10 +469,14 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 			st.fulfilled[typeID] = retainedContractSamples(st.fulfilled[typeID], now)
 			if graph.ships[typeID] {
 				// Ships price from the learned fit, not the
-				// tiered median: the pricing step below writes
+				// tiered median: the ship step below writes
 				// this hull's row from the family model.
 				pendingShips = append(pendingShips, typeID)
 				continue
+			}
+			listings, ok := listingsOf(typeID)
+			if !ok {
+				continue // its row waits for its corpus to be mined
 			}
 			// The corpus speaks first; the vanished tier and
 			// the fulfilled tier follow. The tiered rules judge the samples
@@ -445,7 +484,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 			// estimate is stored only when the evidence
 			// produces one -- never the build cost standing
 			// in for a price.
-			samples := freshContractSamples(app.corpusListingSamples(ctx, typeID, thinSubjects, graph.shipsAll, priceOf, now), now)
+			samples := freshContractSamples(listings, now)
 			samples = append(samples, freshContractSamples(vanished[typeID], now)...)
 			samples = append(samples, freshContractSamples(st.fulfilled[typeID], now)...)
 			samples = dedupeSamplesByContract(samples)
@@ -465,32 +504,30 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 				row.EstSell = sql.NullFloat64{Float64: est, Valid: true}
 			}
 		}
-		if err := app.queries.UpsertTrueValue(ctx, row); err != nil {
-			logging.Errorf("true values: store %d: %v", typeID, err)
-			continue
-		}
-		app.noteStatPackTrueValue(trueValueFromUpsert(row))
-		computed++
-	}
-	st.cursor = end
-	if end >= len(graph.products) {
-		st.cursor = 0
-		st.fingerprint = fingerprint
-		st.passDoneAt = now
-	}
-	if computed > 0 || unpriced > 0 {
-		logging.Infof("true values: priced %d types (%d unpriced) at chunk %d-%d of %d",
-			computed, unpriced, start, end, len(graph.products))
+		rows = append(rows, row)
 	}
 
-	// Thin types whose stored rows predate this chunk still
-	// feed the fulfilled harvest's band check.
+	// Thin types the coster cannot price this pass still feed
+	// the fit's ladders and the fulfilled harvest's band check
+	// at their stored build cost.
 	for typeID, row := range existing {
 		if _, done := thinCosts[typeID]; !done && row.BuildCost > 0 && isThinType(dailyVolume, typeID) {
 			thinCosts[typeID] = row.BuildCost
 		}
 	}
-	app.priceThinShips(ctx, pendingShips, evidenceTypes, existing, thinSubjects, thinCosts, vanished, graph, priceOf, inputsChanged, now)
+	rows = append(rows, app.priceThinShips(ctx, pendingShips, evidenceTypes, thinSubjects, thinCosts, vanished, graph, listingsOf, now)...)
+	written := app.storeTrueValues(ctx, rows, existing, now)
+	app.storeTVObservations(ctx, observed)
+	if waiting == 0 {
+		st.fingerprint = fingerprint
+	} else {
+		st.evidenceMoved = true // the rest of the corpus is mined next cycle
+	}
+	if written > 0 || mined > 0 {
+		logging.Infof("true values: %d rows changed (%d types unpriced), corpus read for %d types (%d waiting)",
+			written, unpriced, mined, waiting)
+	}
+
 	app.harvestFulfilledSamples(ctx, thinCosts, graph.ships, priceOf, now)
 	app.purgeContractObservations(ctx, now)
 	// The live asks behind unpriced types, from the observations
@@ -498,6 +535,247 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	// a price.
 	if err := app.queries.RefreshTrueValueAsks(ctx); err != nil {
 		logging.Errorf("true values: asks: %v", err)
+	}
+}
+
+// refreshTVCorpusLive brings the corpus cache in line with the
+// contract sweep: each cached contract takes the sweep's latest
+// sighting as its stamp, the way a fresh read would, and a
+// contract that left the live set leaves the cache. A type
+// whose cached list was full is mined again, so an older
+// contract the cap held back can take the free place.
+func (app *Application) refreshTVCorpusLive(ctx context.Context) {
+	st := &app.trueValuePass
+	byID := make(map[int64][]*tvCorpusContract)
+	for _, contracts := range st.corpus {
+		for _, c := range contracts {
+			byID[c.id] = append(byID[c.id], c)
+		}
+	}
+	if len(byID) == 0 {
+		return
+	}
+	ids := make([]int64, 0, len(byID))
+	for id := range byID {
+		ids = append(ids, id)
+	}
+	live, err := app.queries.ListTVCorpusContractsLive(ctx, ids)
+	if err != nil {
+		logging.Errorf("true values: corpus sightings: %v", err)
+		return
+	}
+	alive := make(map[int64]bool, len(live))
+	for _, row := range live {
+		alive[row.ContractID] = true
+		for _, c := range byID[row.ContractID] {
+			c.lastSeen = row.LastSeen
+		}
+	}
+	if len(alive) == len(byID) {
+		return
+	}
+	for typeID, contracts := range st.corpus {
+		kept := contracts[:0]
+		for _, c := range contracts {
+			if alive[c.id] {
+				kept = append(kept, c)
+			}
+		}
+		switch {
+		case len(kept) == len(contracts):
+			continue
+		case len(contracts) >= tvCorpusMaxContracts:
+			delete(st.corpus, typeID)
+		default:
+			st.corpus[typeID] = kept
+		}
+		st.evidenceMoved = true
+	}
+	for id := range byID {
+		if !alive[id] {
+			delete(st.observed, id)
+		}
+	}
+}
+
+// noteTVCorpusArrivals drops from the corpus cache every type
+// a newly stored contract carries, so the next pass mines it
+// with the new listing among its asks.
+func (app *Application) noteTVCorpusArrivals(ctx context.Context) {
+	st := &app.trueValuePass
+	rows, err := app.queries.ListTVCorpusArrivals(ctx, st.arrivalsSince.Add(-tvArrivalOverlap))
+	if err != nil {
+		logging.Errorf("true values: corpus arrivals: %v", err)
+		return
+	}
+	for _, row := range rows {
+		if _, seen := st.arrivalsSeen[row.ContractID]; seen {
+			continue
+		}
+		st.arrivalsSeen[row.ContractID] = row.StoredAt
+		if row.StoredAt.After(st.arrivalsSince) {
+			st.arrivalsSince = row.StoredAt
+		}
+		for _, typeID := range row.TypeIds {
+			if _, cached := st.corpus[typeID]; cached {
+				delete(st.corpus, typeID)
+				st.evidenceMoved = true
+			}
+		}
+	}
+	for id, at := range st.arrivalsSeen {
+		if at.Before(st.arrivalsSince.Add(-tvArrivalOverlap)) {
+			delete(st.arrivalsSeen, id)
+		}
+	}
+}
+
+// mineTVCorpus reads the corpus for the thin types the cache
+// lacks, at most tvMinePerCycle of them, hulls first. It
+// returns how many it read and how many still wait.
+func (app *Application) mineTVCorpus(ctx context.Context, subjects map[int64]bool, ships map[int64]bool) (mined, waiting int) {
+	st := &app.trueValuePass
+	for typeID := range st.corpus {
+		if !subjects[typeID] {
+			delete(st.corpus, typeID) // no longer thin: contracts need not speak for it
+		}
+	}
+	var due []int64
+	for typeID := range subjects {
+		if _, cached := st.corpus[typeID]; !cached {
+			due = append(due, typeID)
+		}
+	}
+	sort.Slice(due, func(i, j int) bool {
+		if ships[due[i]] != ships[due[j]] {
+			return ships[due[i]]
+		}
+		return due[i] < due[j]
+	})
+	for _, typeID := range due {
+		if mined == tvMinePerCycle {
+			break
+		}
+		contracts, err := app.readTVCorpus(ctx, typeID)
+		if err != nil {
+			logging.Errorf("true values: corpus %d: %v", typeID, err)
+			break
+		}
+		st.corpus[typeID] = contracts
+		mined++
+	}
+	return mined, len(due) - mined
+}
+
+// readTVCorpus reads one type's live corpus contracts with
+// every stored item line of each (ListTrueValueCorpusContracts).
+func (app *Application) readTVCorpus(ctx context.Context, typeID int64) ([]*tvCorpusContract, error) {
+	rows, err := app.queries.ListTrueValueCorpusContracts(ctx, db.ListTrueValueCorpusContractsParams{
+		TypeID: typeID, Price: tvContractMinPrice, Limit: tvCorpusMaxContracts,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := []*tvCorpusContract{}
+	var cur *tvCorpusContract
+	for _, row := range rows {
+		if cur == nil || cur.id != row.ContractID {
+			cur = &tvCorpusContract{
+				id: row.ContractID, regionID: row.RegionID, price: row.Price,
+				firstSeen: row.FirstSeen, lastSeen: row.LastSeen, expiresAt: row.DateExpired,
+			}
+			out = append(out, cur)
+		}
+		cur.items = append(cur.items, tvPublicContractItem{TypeID: row.TypeID, Quantity: row.Quantity, IsIncluded: row.IsIncluded})
+	}
+	return out, nil
+}
+
+// storeTrueValues writes the rows whose values differ from the
+// stored ones, in one statement per batch, and returns how
+// many it wrote. An unchanged row keeps its stored stamp.
+func (app *Application) storeTrueValues(ctx context.Context, rows []db.TrueValue, existing map[int64]db.TrueValue, now time.Time) int {
+	const batch = 1000
+	written := 0
+	var p db.UpsertTrueValuesParams
+	flush := func() {
+		if len(p.TypeIds) == 0 {
+			return
+		}
+		p.ComputedAt, p.ProfileVersion = now, trueValueProfileVersion
+		if err := app.queries.UpsertTrueValues(ctx, p); err != nil {
+			logging.Errorf("true values: store %d rows: %v", len(p.TypeIds), err)
+		} else {
+			written += len(p.TypeIds)
+		}
+		p = db.UpsertTrueValuesParams{}
+	}
+	for _, row := range rows {
+		if old, ok := existing[row.TypeID]; ok && !tvRowChanged(old, row) {
+			continue
+		}
+		p.TypeIds = append(p.TypeIds, row.TypeID)
+		p.BuildCosts = append(p.BuildCosts, row.BuildCost)
+		p.EstSells = append(p.EstSells, row.EstSell.Float64)
+		p.HasEsts = append(p.HasEsts, row.EstSell.Valid)
+		p.SellSamples = append(p.SellSamples, row.SellSamples)
+		p.SellSources = append(p.SellSources, row.SellSource)
+		app.noteStatPackTrueValue(row)
+		if len(p.TypeIds) == batch {
+			flush()
+		}
+	}
+	flush()
+	return written
+}
+
+// tvRowChanged reports whether a computed row says something
+// the stored one does not.
+func tvRowChanged(old, row db.TrueValue) bool {
+	return old.BuildCost != row.BuildCost || old.EstSell != row.EstSell ||
+		old.SellSamples != row.SellSamples || old.SellSource != row.SellSource ||
+		old.ProfileVersion != row.ProfileVersion
+}
+
+// tvObservationSame reports whether two observations of a
+// contract record the same thing.
+func tvObservationSame(a, b db.TrueValueContractObservation) bool {
+	return a.ContractID == b.ContractID && a.RegionID == b.RegionID && a.TypeID == b.TypeID &&
+		a.Shape == b.Shape && a.ListedPrice == b.ListedPrice && a.SamplePrice == b.SamplePrice &&
+		a.FirstSeenAt.Equal(b.FirstSeenAt) && a.ExpiresAt.Equal(b.ExpiresAt)
+}
+
+// storeTVObservations records the corpus listings the pass
+// accepted, writing only those whose shape or sample moved
+// since it last wrote them.
+func (app *Application) storeTVObservations(ctx context.Context, observed map[int64]db.TrueValueContractObservation) {
+	st := &app.trueValuePass
+	var p db.UpsertTVContractObservationsParams
+	for id, o := range observed {
+		if old, ok := st.observed[id]; ok && tvObservationSame(old, o) {
+			continue
+		}
+		p.ContractIds = append(p.ContractIds, o.ContractID)
+		p.RegionIds = append(p.RegionIds, o.RegionID)
+		p.TypeIds = append(p.TypeIds, o.TypeID)
+		p.Shapes = append(p.Shapes, o.Shape)
+		p.ListedPrices = append(p.ListedPrices, o.ListedPrice)
+		p.SamplePrices = append(p.SamplePrices, o.SamplePrice)
+		p.FirstSeenAts = append(p.FirstSeenAts, o.FirstSeenAt)
+		p.ExpiresAts = append(p.ExpiresAts, o.ExpiresAt)
+	}
+	if len(p.ContractIds) == 0 {
+		return
+	}
+	if err := app.queries.UpsertTVContractObservations(ctx, p); err != nil {
+		logging.Errorf("true values: observe %d corpus contracts: %v", len(p.ContractIds), err)
+		return
+	}
+	if st.observed == nil {
+		st.observed = make(map[int64]db.TrueValueContractObservation)
+	}
+	for id, o := range observed {
+		st.observed[id] = o
 	}
 }
 
@@ -579,68 +857,37 @@ func estimatedSellTiered(samples []tvContractSample) (est float64, source string
 // one type at one evaluation: its newest-seen live asks.
 const tvCorpusMaxContracts = 40
 
-// corpusListingSamples mines the stored public-contract
-// corpus for one thin type's listing-tier samples. The
-// corpus is the contract sweep's own store of live contracts
-// (every region, continuously), so this reads the evidence
-// the whole market is showing. A sample's stamp is its
-// contract's last-seen time: the ask stands now. Contracts
-// are judged by the shape rules (tvContractSampleShape) but
-// NOT banded: banding is the estimate step's business,
-// against the type's current anchor.
+// corpusListingSamples judges one thin type's cached corpus
+// contracts into its listing-tier samples. The corpus is the
+// contract sweep's own store of live contracts (every region,
+// continuously), so this reads the evidence the whole market
+// is showing. A sample's stamp is its contract's last-seen
+// time: the ask stands now. Contracts are judged by the shape
+// rules (tvContractSampleShape) at current prices but NOT
+// banded: banding is the estimate step's business, against
+// the type's current anchor.
 //
-// An accepted contract is also recorded as an observation,
-// the pass's longitudinal memory, so when
-// the listing leaves the corpus its exit can be probed and
-// the sample promoted to a likely or confirmed sale
+// An accepted contract is also noted as an observation in
+// observed, the pass's longitudinal memory, so when the
+// listing leaves the corpus its exit can be probed and the
+// sample promoted to a likely or confirmed sale
 // (truevalue_sales.go): the corpus connection is what lets
 // sale evidence accumulate at corpus scale.
-func (app *Application) corpusListingSamples(ctx context.Context, typeID int64, subjects map[int64]bool, ships map[int64]bool, priceOf tvStoredPricer, now time.Time) []tvContractSample {
-	rows, err := app.queries.ListTrueValueCorpusContracts(ctx, db.ListTrueValueCorpusContractsParams{
-		TypeID: typeID, Price: tvContractMinPrice, Limit: tvCorpusMaxContracts,
-	})
-	if err != nil {
-		logging.Errorf("true values: corpus samples %d: %v", typeID, err)
-		return nil
-	}
+func corpusListingSamples(typeID int64, contracts []*tvCorpusContract, subjects map[int64]bool, ships map[int64]bool, priceOf tvStoredPricer, observed map[int64]db.TrueValueContractObservation) []tvContractSample {
 	var out []tvContractSample
-	var (
-		contractID int64
-		price      float64
-		lastSeen   time.Time
-		firstSeen  time.Time
-		expiresAt  time.Time
-		regionID   int64
-		items      []tvPublicContractItem
-	)
-	flush := func() {
-		if contractID == 0 {
-			return
-		}
-		subject, unit, shape, ok := tvContractSampleShape(price, items, subjects, ships, priceOf)
+	for _, c := range contracts {
+		subject, unit, shape, ok := tvContractSampleShape(c.price, c.items, subjects, ships, priceOf)
 		if !ok || subject != typeID {
-			return
+			continue
 		}
-		out = append(out, tvContractSample{price: unit, at: lastSeen, source: tvSampleListing, contractID: contractID})
-		if !expiresAt.IsZero() {
-			if err := app.queries.UpsertTVContractObservation(ctx, db.UpsertTVContractObservationParams{
-				ContractID: contractID, RegionID: regionID, TypeID: typeID, Shape: shape,
-				ListedPrice: price, SamplePrice: unit, FirstSeenAt: firstSeen, ExpiresAt: expiresAt,
-			}); err != nil {
-				logging.Errorf("true values: observe corpus contract %d: %v", contractID, err)
+		out = append(out, tvContractSample{price: unit, at: c.lastSeen, source: tvSampleListing, contractID: c.id})
+		if !c.expiresAt.IsZero() {
+			observed[c.id] = db.TrueValueContractObservation{
+				ContractID: c.id, RegionID: c.regionID, TypeID: typeID, Shape: shape,
+				ListedPrice: c.price, SamplePrice: unit, FirstSeenAt: c.firstSeen, ExpiresAt: c.expiresAt,
 			}
 		}
 	}
-	for _, row := range rows {
-		if row.ContractID != contractID {
-			flush()
-			contractID, price, lastSeen = row.ContractID, row.Price, row.LastSeen
-			firstSeen, expiresAt, regionID = row.FirstSeen, row.DateExpired, row.RegionID
-			items = items[:0]
-		}
-		items = append(items, tvPublicContractItem{TypeID: row.TypeID, Quantity: row.Quantity, IsIncluded: row.IsIncluded})
-	}
-	flush()
 	return out
 }
 
@@ -679,26 +926,21 @@ func dedupeSamplesByContract(samples []tvContractSample) []tvContractSample {
 	return out
 }
 
-// tvEvidenceChunk bounds one cycle's evidence-only
-// evaluations (types with no blueprint to walk).
-const tvEvidenceChunk = 100
-
 // priceThinShips is the ship side of the pass: it fits the
 // learned pricing model (truevalue_learn.go) over every thin
-// ship type's contract evidence and writes the rows this
-// cycle owes -- the main walk's thin ships (pending) and one
-// rotating chunk of the evidence-only types (no blueprint,
-// hence no build cost and no ladder: priced by their learned
-// level inside the same fit). The fit itself is rebuilt from
-// the cycle's assembled samples each cycle; the row writes
-// keep the walk's bounded discipline.
+// ship type's contract evidence and returns the rows for the
+// pass's thin hulls (pending) and the evidence-only types (no
+// blueprint, hence no build cost and no ladder: priced by
+// their learned level inside the same fit). The fit waits
+// until every hull's corpus is in the cache: a family fitted
+// on part of its evidence would price its hulls wrong.
 //
 // Evidence assembly per type mirrors the tiered path's: the
 // corpus speaks first, then the vanished/confirmed tier
 // read back from the
 // observation store, and the fulfilled harvest -- deduped
 // by contract at the strongest tier.
-func (app *Application) priceThinShips(ctx context.Context, pending []int64, evidenceTypes []int64, existing map[int64]db.TrueValue, subjects map[int64]bool, ladders map[int64]float64, vanished map[int64][]tvContractSample, graph *tvBlueprintGraph, priceOf tvStoredPricer, inputsChanged bool, now time.Time) {
+func (app *Application) priceThinShips(ctx context.Context, pending []int64, evidenceTypes []int64, subjects map[int64]bool, ladders map[int64]float64, vanished map[int64][]tvContractSample, graph *tvBlueprintGraph, listingsOf func(int64) ([]tvContractSample, bool), now time.Time) []db.TrueValue {
 	st := &app.trueValuePass
 	shipSubjects := make(map[int64]bool, len(subjects))
 	subjectIDs := make([]int64, 0, len(subjects))
@@ -709,9 +951,26 @@ func (app *Application) priceThinShips(ctx context.Context, pending []int64, evi
 		}
 	}
 	if len(shipSubjects) == 0 {
-		return
+		return nil
 	}
 	sort.Slice(subjectIDs, func(i, j int) bool { return subjectIDs[i] < subjectIDs[j] })
+
+	samplesByType := make(map[int64][]tvContractSample, len(subjectIDs))
+	for _, typeID := range subjectIDs {
+		// No freshness filter here, deliberately: hulls
+		// move slowly, and the fit ages every sample by
+		// weight (tvSampleWeight) -- a confirmed sale from
+		// weeks ago still counts, discounted. The 14-day
+		// hard window the tiered path keeps is what let
+		// real ship estimates lapse.
+		samples, ok := listingsOf(typeID)
+		if !ok {
+			return nil // a hull's corpus is still to be mined
+		}
+		samples = append(samples, vanished[typeID]...)
+		samples = append(samples, st.fulfilled[typeID]...)
+		samplesByType[typeID] = dedupeSamplesByContract(samples)
+	}
 
 	// The family of a hull is its class: the SDE group name.
 	// A type the SDE does not group stands alone as its own
@@ -729,80 +988,27 @@ func (app *Application) priceThinShips(ctx context.Context, pending []int64, evi
 	} else {
 		logging.Errorf("true values: ship families: %v", err)
 	}
-
-	samplesByType := make(map[int64][]tvContractSample, len(subjectIDs))
-	for _, typeID := range subjectIDs {
-		// No freshness filter here, deliberately: hulls
-		// move slowly, and the fit ages every sample by
-		// weight (tvSampleWeight) -- a confirmed sale from
-		// weeks ago still counts, discounted. The 14-day
-		// hard window the tiered path keeps is what let
-		// real ship estimates lapse.
-		samples := app.corpusListingSamples(ctx, typeID, subjects, graph.shipsAll, priceOf, now)
-		samples = append(samples, vanished[typeID]...)
-		samples = append(samples, st.fulfilled[typeID]...)
-		samplesByType[typeID] = dedupeSamplesByContract(samples)
-	}
 	pricing := buildTVShipPricing(shipSubjects, ladders, samplesByType, families, now)
-	learned := 0
-	for _, fam := range pricing.families {
-		if fam.useModel {
-			learned++
-		}
-	}
 
-	due := make(map[int64]bool, len(pending)+tvEvidenceChunk)
-	for _, typeID := range pending {
-		due[typeID] = true
-	}
-	if len(evidenceTypes) > 0 {
-		start := st.evidenceCursor
-		if start >= len(evidenceTypes) {
-			start = 0
-		}
-		end := start + tvEvidenceChunk
-		if end > len(evidenceTypes) {
-			end = len(evidenceTypes)
-		}
-		for _, typeID := range evidenceTypes[start:end] {
-			if row, ok := existing[typeID]; ok && !inputsChanged &&
-				row.ProfileVersion == trueValueProfileVersion &&
-				now.Sub(row.ComputedAt) < trueValueStaleAfter {
-				continue
+	rows := make([]db.TrueValue, 0, len(pending)+len(evidenceTypes))
+	for _, list := range [][]int64{pending, evidenceTypes} {
+		for _, typeID := range list {
+			est, source, count, ok := pricing.price(typeID)
+			row := db.TrueValue{
+				TypeID:         typeID,
+				BuildCost:      ladders[typeID],
+				ComputedAt:     now,
+				ProfileVersion: trueValueProfileVersion,
+				SellSamples:    int64(count),
+				SellSource:     source,
 			}
-			due[typeID] = true
-		}
-		st.evidenceCursor = end
-		if end >= len(evidenceTypes) {
-			st.evidenceCursor = 0
+			if ok {
+				row.EstSell = sql.NullFloat64{Float64: est, Valid: true}
+			}
+			rows = append(rows, row)
 		}
 	}
-
-	written := 0
-	for typeID := range due {
-		est, source, count, ok := pricing.price(typeID)
-		row := db.UpsertTrueValueParams{
-			TypeID:         typeID,
-			BuildCost:      ladders[typeID],
-			ComputedAt:     now,
-			ProfileVersion: trueValueProfileVersion,
-			SellSamples:    int64(count),
-			SellSource:     source,
-		}
-		if ok {
-			row.EstSell = sql.NullFloat64{Float64: est, Valid: true}
-		}
-		if err := app.queries.UpsertTrueValue(ctx, row); err != nil {
-			logging.Errorf("true values: store ship %d: %v", typeID, err)
-			continue
-		}
-		app.noteStatPackTrueValue(trueValueFromUpsert(row))
-		written++
-	}
-	if written > 0 {
-		logging.Infof("true values: priced %d ship types from contract evidence (%d families fitted, %d learned)",
-			written, len(pricing.families), learned)
-	}
+	return rows
 }
 
 // tvStoredPricer prices a type from stored data alone, in
@@ -1074,6 +1280,7 @@ func (app *Application) harvestFulfilledSamples(ctx context.Context, thinCosts m
 					price: unit, at: completed, source: tvSampleFulfilled, contractID: c.ContractID,
 				})
 				st.fulfilledSeen[c.ContractID] = true
+				st.evidenceMoved = true
 			}
 		}
 	}
@@ -1104,14 +1311,4 @@ func tvContractCompletedAt(c esi.Contract) time.Time {
 		}
 	}
 	return time.Time{}
-}
-
-// trueValueFromUpsert is the stored row an upsert writes, for the
-// stat pack index. The asks columns are not the upsert's to write
-// (RefreshTrueValueAsks owns them), so they stay empty here.
-func trueValueFromUpsert(p db.UpsertTrueValueParams) db.TrueValue {
-	return db.TrueValue{
-		TypeID: p.TypeID, BuildCost: p.BuildCost, EstSell: p.EstSell, SellSamples: p.SellSamples,
-		ComputedAt: p.ComputedAt, ProfileVersion: p.ProfileVersion, SellSource: p.SellSource,
-	}
 }

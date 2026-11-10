@@ -511,7 +511,7 @@ SELECT contract_id, region_id, type, issuer_id, issuer_corporation_id,
     days_to_complete, items_state, last_cycle, first_seen, last_seen,
     offered_value, want_value, deal_ratio, priced_lines, total_lines,
     tier_mix, priced_at, items_attempts, items_error,
-    departed_at, depart_kind
+    departed_at, depart_kind, items_stored_at
 FROM pub_contracts
 WHERE contract_id = $1 AND departed_at IS NULL
 `
@@ -552,6 +552,7 @@ func (q *Queries) GetPublicContract(ctx context.Context, contractID int64) (PubC
 		&i.ItemsError,
 		&i.DepartedAt,
 		&i.DepartKind,
+		&i.ItemsStoredAt,
 	)
 	return i, err
 }
@@ -2641,7 +2642,10 @@ func (q *Queries) SearchPublicContracts(ctx context.Context, arg SearchPublicCon
 }
 
 const setPublicContractItemsState = `-- name: SetPublicContractItemsState :exec
-UPDATE pub_contracts SET items_state = $2 WHERE contract_id = $1
+UPDATE pub_contracts
+SET items_state = $2,
+    items_stored_at = CASE WHEN $2 = 'stored' THEN now() ELSE items_stored_at END
+WHERE contract_id = $1
 `
 
 type SetPublicContractItemsStateParams struct {
@@ -2649,6 +2653,8 @@ type SetPublicContractItemsStateParams struct {
 	ItemsState string `json:"items_state"`
 }
 
+// A list that lands as stored is stamped (schema 138): the
+// true-value pass mines the types whose corpus gained a contract.
 func (q *Queries) SetPublicContractItemsState(ctx context.Context, arg SetPublicContractItemsStateParams) error {
 	_, err := q.db.Exec(ctx, setPublicContractItemsState, arg.ContractID, arg.ItemsState)
 	return err

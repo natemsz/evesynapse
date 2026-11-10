@@ -933,130 +933,26 @@ func (b *analyticsBuild) topPages(v *analyticsView) {
 
 func (b *analyticsBuild) freshness(v *analyticsView) {
 	now := b.now
-	var stalest time.Duration
-	haveStalest := false
-	add := func(name string, at time.Time, ok bool, okUnder, warnUnder time.Duration) {
-		if !ok {
-			v.Fresh = append(v.Fresh, analyticsFresh{Name: name, Age: "no data", Class: "an-bad-t"})
-			return
+	readings, t, queries := b.app.freshnessReadings(b.ctx, now, true)
+	b.queries += queries
+	class := map[string]string{"ok": "an-ok", "warn": "an-warn-t", "bad": "an-bad-t", "none": "an-bad-t"}
+	for _, r := range readings {
+		age := "no data"
+		switch {
+		case r.never:
+			age = "never fetched"
+		case r.ok:
+			d := now.Sub(r.at)
+			if d < 0 {
+				d = 0
+			}
+			age = shortDuration(d)
 		}
-		age := now.Sub(at)
-		if age < 0 {
-			age = 0
-		}
-		class := "an-ok"
-		if age > warnUnder {
-			class = "an-bad-t"
-		} else if age > okUnder {
-			class = "an-warn-t"
-		}
-		v.Fresh = append(v.Fresh, analyticsFresh{Name: name, Age: shortDuration(age), Class: class})
-		if !haveStalest || age > stalest {
-			stalest, haveStalest = age, true
-		}
-	}
-
-	// Market orders, per hub region.
-	kinds := make([]string, 0, len(marketRegions))
-	regionIDs := make([]int64, 0, len(marketRegions))
-	for _, r := range marketRegions {
-		kinds = append(kinds, regionSweepKind(r.ID))
-		regionIDs = append(regionIDs, r.ID)
-	}
-	b.queries++
-	swept := map[string]time.Time{}
-	if rs, err := b.app.queries.StatsFetchStatesByKinds(b.ctx, kinds); err == nil {
-		for _, r := range rs {
-			swept[r.Kind] = r.AttemptedAt
-		}
-	} else {
-		logging.Errorf("admin analytics: fetch states: %v", err)
-	}
-	for _, r := range marketRegions {
-		at, ok := swept[regionSweepKind(r.ID)]
-		add("Market orders · "+r.Name, at, ok, 10*time.Minute, 45*time.Minute)
-	}
-
-	// Public contracts, per hub region.
-	b.queries++
-	contractAt := map[int64]time.Time{}
-	if rs, err := b.app.queries.StatsPubContractSweeps(b.ctx, regionIDs); err == nil {
-		for _, r := range rs {
-			contractAt[r.RegionID] = r.UpdatedAt
-		}
-	} else {
-		logging.Errorf("admin analytics: contract sweeps: %v", err)
-	}
-	for _, r := range marketRegions {
-		at, ok := contractAt[r.ID]
-		add("Public contracts · "+r.Name, at, ok, 45*time.Minute, 2*time.Hour)
-	}
-
-	// Character sync, from the live worker status: the stalest
-	// active pilot's overdue figure at the last cycle, plus the
-	// time since that cycle ran.
-	status := b.app.snapshotWorkerStatus()
-	t := status.Timing
-	switch {
-	case t.At.IsZero():
-		add("Character sync · stalest active pilot", time.Time{}, false, 0, 0)
-	case t.NeverFetched:
-		v.Fresh = append(v.Fresh, analyticsFresh{
-			Name:  "Character sync · stalest active pilot",
-			Age:   "never fetched",
-			Class: "an-bad-t",
-		})
-		haveStalest, stalest = true, time.Duration(1)<<62
-	default:
-		age := t.Overdue + now.Sub(t.At)
-		add("Character sync · stalest active pilot", now.Add(-age), true, 5*time.Minute, 30*time.Minute)
-	}
-
-	b.queries++
-	if row, err := b.app.queries.GetKillfeedState(b.ctx); err == nil {
-		add("Killmails", row.UpdatedAt, true, 5*time.Minute, 30*time.Minute)
-	} else {
-		add("Killmails", time.Time{}, false, 0, 0)
-		if !errors.Is(err, pgx.ErrNoRows) {
-			logging.Errorf("admin analytics: killfeed state: %v", err)
-		}
-	}
-
-	b.queries++
-	if at, ok := latestOf(b.app.queries.StatsTrueValuesLatest(b.ctx)); ok {
-		add("True values", at, true, 30*time.Minute, 13*time.Hour)
-	} else {
-		add("True values", time.Time{}, false, 0, 0)
-	}
-	b.queries++
-	if at, ok := latestOf(b.app.queries.StatsMarketHistoryLatest(b.ctx)); ok {
-		add("Market history", at, true, 2*time.Hour, 6*time.Hour)
-	} else {
-		add("Market history", time.Time{}, false, 0, 0)
-	}
-	b.queries++
-	if snap, err := b.app.queries.GetGlobalSnapshot(b.ctx, esi.GlobalSovMap); err == nil {
-		add("Sovereignty", snap.FetchedAt, true, 30*time.Minute, 3*time.Hour)
-	} else {
-		add("Sovereignty", time.Time{}, false, 0, 0)
-	}
-	if swarm.StateFor(b.app).Cfg.Enabled() {
-		b.queries++
-		if at, ok := latestOf(b.app.queries.StatsSwarmLastApplied(b.ctx)); ok {
-			add("Swarm pull", at, true, 15*time.Minute, 2*time.Hour)
-		} else {
-			add("Swarm pull", time.Time{}, false, 0, 0)
-		}
-	}
-	b.queries++
-	if at, ok := latestOf(b.app.queries.StatsIntelLatest(b.ctx)); ok {
-		add("Intel reports", at, true, time.Hour, 24*time.Hour)
-	} else {
-		add("Intel reports", time.Time{}, false, 0, 0)
+		v.Fresh = append(v.Fresh, analyticsFresh{Name: r.name, Age: age, Class: class[r.state(now)]})
 	}
 
 	parts := []string{}
-	if haveStalest && stalest < time.Duration(1)<<60 {
+	if stalest, have, never := stalestReading(readings, now); have && !never {
 		parts = append(parts, "Stalest active data right now: "+shortDuration(stalest)+".")
 	}
 	backlog := []string{}

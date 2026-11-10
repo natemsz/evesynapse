@@ -44,13 +44,12 @@ const (
 	statusDown     = "down"
 )
 
-// How stale the region sweeps may get. A region is swept again
-// every regionSweepGate and a sweep takes a few minutes, so the
-// stalest region passing an hour and a half means the sweeps are
-// lagging, and six hours means they have stopped.
-const (
-	marketLagAfter  = 90 * time.Minute
-	marketDownAfter = 6 * time.Hour
+// How stale the region sweeps may get: past the market orders
+// cadence's outer bound (cadence.go) the sweeps are lagging, and at
+// twelve sweep gates they have stopped.
+var (
+	marketLagAfter  = cadenceMarketOrders.warnUnder
+	marketDownAfter = 12 * regionSweepGate
 )
 
 // workerLagAfter is how long the worker may go without starting a

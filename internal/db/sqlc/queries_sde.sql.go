@@ -899,6 +899,55 @@ func (q *Queries) ListFitDroneTypes(ctx context.Context, arg ListFitDroneTypesPa
 	return items, nil
 }
 
+const listFitFighterTypes = `-- name: ListFitFighterTypes :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_type_attributes a ON a.type_id = t.type_id AND a.attribute_id = 2215 AND a.value > 0
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_type_attributes meta ON meta.type_id = t.type_id AND meta.attribute_id = 1692
+WHERE t.published = 1 AND t.market_group_id > 0
+  AND NOT EXISTS (SELECT 1 FROM sde_type_attributes s
+                  WHERE s.type_id = t.type_id AND s.attribute_id IN (2740, 2741, 2742) AND s.value > 0)
+  AND ($1 = '' OR strpos(lower(t.name), lower($1)) > 0)
+  AND ($2::bigint = 0 OR ($2::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR ($2::bigint > 1 AND meta.value = $2::bigint))
+ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT $3::bigint
+`
+
+type ListFitFighterTypesParams struct {
+	Q    interface{} `json:"q"`
+	Meta int64       `json:"meta"`
+	Lim  int64       `json:"lim"`
+}
+
+type ListFitFighterTypesRow struct {
+	TypeID    int64  `json:"type_id"`
+	Name      string `json:"name"`
+	GroupName string `json:"group_name"`
+}
+
+// ListFitFighterTypes: fighters a carrier can launch (squadron size,
+// attribute 2215), without the structure-only squadrons (2740-2742).
+func (q *Queries) ListFitFighterTypes(ctx context.Context, arg ListFitFighterTypesParams) ([]ListFitFighterTypesRow, error) {
+	rows, err := q.db.Query(ctx, listFitFighterTypes, arg.Q, arg.Meta, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFitFighterTypesRow
+	for rows.Next() {
+		var i ListFitFighterTypesRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFitImplantTypes = `-- name: ListFitImplantTypes :many
 SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
 FROM sde_types t

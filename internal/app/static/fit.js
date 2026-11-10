@@ -445,7 +445,7 @@ var FitGauges = (function () {
     }
     normItems();
     markDirty();
-    pendingFlash = fam === "drone" || fam === "cargo"
+    pendingFlash = fam === "drone" || fam === "fighter" || fam === "cargo"
       ? { type: "group", family: fam }
       : { type: "slot", id: typeID };
     simulate();
@@ -544,7 +544,7 @@ var FitGauges = (function () {
       var addEl = t.closest("[data-fit-add]");
       var add = addEl ? addEl.getAttribute("data-fit-add") : "";
       if (add) {
-        if (add === "drone") { focusModuleSearch("drone"); return; }
+        if (add === "drone" || add === "fighter") { focusModuleSearch(add); return; }
         openPicker(add);
         return;
       }
@@ -655,10 +655,10 @@ var FitGauges = (function () {
   // Ship search: ships only. Module search: modules/drones/rigs/subs
   // only, with the kind-labeled suggestions and the filter row.
   var modFamily = "all";
-  var kindOrder = ["high", "medium", "low", "rig", "subsystem", "drone", "charge"];
+  var kindOrder = ["high", "medium", "low", "rig", "subsystem", "drone", "fighter", "charge"];
   var kindLabels = {
     high: "High slots", medium: "Mid slots", low: "Low slots",
-    rig: "Rigs", subsystem: "Subsystems", drone: "Drones", charge: "Charges"
+    rig: "Rigs", subsystem: "Subsystems", drone: "Drones", fighter: "Fighters", charge: "Charges"
   };
 
   function filterQuery() {
@@ -691,6 +691,8 @@ var FitGauges = (function () {
     }
     var bw = parseFloat(wb.getAttribute("data-fit-bandwidth") || "0") || 0;
     if (bw > 0) ok["drone"] = true;
+    var tubes = parseInt(wb.getAttribute("data-fit-tubes") || "0", 10) || 0;
+    if (tubes > 0) ok["fighter"] = true;
     ok["ship"] = true;
     return ok;
   }
@@ -892,7 +894,7 @@ var FitGauges = (function () {
     var kind = it.kind || "";
     if (kind === "charge") { pickCharge(it); return; }
     if (kind === "high" || kind === "medium" || kind === "low" ||
-        kind === "rig" || kind === "subsystem" || kind === "drone") {
+        kind === "rig" || kind === "subsystem" || kind === "drone" || kind === "fighter") {
       if (checkRestricted(it.id, it.name)) return;
       addItem(it.id, 1);
       return;
@@ -1020,7 +1022,7 @@ var FitGauges = (function () {
       var wid = chip.getAttribute("data-fit-rowtype");
       var input = byWeapon[wid];
       if (!input) continue;
-      // Slot rows only: bay chips (drones, cargo) take no charges,
+      // Slot rows only: bay chips (drones, fighters, cargo) take no charges,
       // and the ammunition section's own chips hold the input.
       if (!chip.closest || !chip.closest(".fit-slots")) continue;
       if (chip.querySelector("[data-fit-charge-for]")) continue;

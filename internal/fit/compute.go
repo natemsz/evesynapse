@@ -41,6 +41,7 @@ func Compute(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int
 	f.slotsAndHardpoints()
 	f.capacitor()
 	f.offense()
+	f.fighterStats()
 	f.droneStats()
 	f.tank()
 	f.mobilityAndTargeting()
@@ -69,6 +70,7 @@ type fitting struct {
 	fitted       []*entity
 	fittedByType map[int64][]*entity
 	drones       []*entity // the drones among fitted
+	fighters     []*entity // the fighters among fitted
 	// weaponCharge is each weapon type's loaded charge or missile.
 	weaponCharge map[int64]*entity
 	skills       map[int64]*entity
@@ -145,12 +147,14 @@ func (f *fitting) addItems(items []ItemInput) {
 			kind = entRig
 		case snap.HasEffect(it.TypeID, EffectSubsystemSlot):
 			kind = entSubsystem
+		case snap.Attrs[it.TypeID][AttrFighterSquadronMaxSize] > 0:
+			kind = entFighter
 		case snap.Attrs[it.TypeID][AttrDroneBandwidthUsed] > 0:
 			kind = entDrone
 		}
 		if qty <= 0 {
 			qty = 1
-			if kind == entDrone {
+			if kind == entDrone || kind == entFighter {
 				qty = 0 // a drone line with no count carries nothing
 			}
 		}
@@ -202,8 +206,11 @@ func (f *fitting) addItems(items []ItemInput) {
 		f.fittedByType[it.TypeID] = append(f.fittedByType[it.TypeID], ent)
 		f.fitted = append(f.fitted, ent)
 		f.entities = append(f.entities, ent)
-		if kind == entDrone {
+		switch kind {
+		case entDrone:
 			f.drones = append(f.drones, ent)
+		case entFighter:
+			f.fighters = append(f.fighters, ent)
 		}
 	}
 }
@@ -430,7 +437,7 @@ func (f *fitting) bindModifiers() {
 					continue
 				}
 			}
-			if eff == nil {
+			if eff == nil || len(eff.Modifiers) == 0 {
 				continue // carries no modifiers; nothing to apply
 			}
 			if !allowed[eff.Category] {
@@ -566,11 +573,11 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 			f.note(shape + ": domain not modeled")
 			return
 		}
-		// The character owns its drones and every loaded charge
-		// and missile: this is how hull and skill bonuses reach
+		// The character owns its drones, fighters and every
+		// loaded charge and missile: this is how hull and skill bonuses reach
 		// missile damage (Drake, Naga Navy Issue, Heavy Missiles).
 		for _, t := range f.entities {
-			if t.kind != entDrone && t.kind != entCharge && t.kind != entMissile {
+			if t.kind != entDrone && t.kind != entFighter && t.kind != entCharge && t.kind != entMissile {
 				continue
 			}
 			if m.SkillTypeID != 0 && snap.requiresSkill(t.typeID, m.SkillTypeID) {
@@ -899,11 +906,74 @@ func (f *fitting) droneStats() {
 			res.DroneDPS += float64(fly) * volley / cycle
 		}
 	}
-	res.DPS = res.TurretDPS + res.MissileDPS + res.DroneDPS + res.SmartbombDPS
+	res.DPS = res.TurretDPS + res.MissileDPS + res.DroneDPS + res.SmartbombDPS + res.FighterDPS
 	if f.spoolExtra > 0 {
 		res.SpooledDPS = res.DPS + f.spoolExtra
 	}
-	res.Volley = res.TurretVolley + res.MissileVolley + res.DroneVolley + res.SmartbombVolley
+	res.Volley = res.TurretVolley + res.MissileVolley + res.DroneVolley + res.SmartbombVolley + res.FighterVolley
+}
+
+// fighterStats launches the hangar's fighters, a squadron per tube
+// within the hull's light, support and heavy slots, in the order
+// they were added, and totals the launched squadrons' sustained
+// attack and their missile salvo.
+func (f *fitting) fighterStats() {
+	snap, res := f.snap, f.res
+	res.FighterTubes = int(f.shipAttr(AttrFighterTubes))
+	res.FighterLightSlots = int(f.shipAttr(AttrFighterLightSlots))
+	res.FighterSupportSlots = int(f.shipAttr(AttrFighterSupportSlots))
+	res.FighterHeavySlots = int(f.shipAttr(AttrFighterHeavySlots))
+	res.FighterHangarCapacity = f.shipAttr(AttrFighterCapacity)
+	tubes := res.FighterTubes
+	for _, ent := range f.fighters {
+		carried := ent.instances
+		res.FightersCarried += carried
+		if phys, ok := snap.Physics[ent.typeID]; ok {
+			res.FighterHangarUsed += phys.Volume * float64(carried)
+		}
+		size := int(ent.get(snap, AttrFighterSquadronMaxSize))
+		if size < 1 {
+			size = 1
+		}
+		var used *int
+		var slots int
+		switch {
+		case ent.base[AttrFighterSquadronIsHeavy] > 0:
+			used, slots = &res.FighterHeavyUsed, res.FighterHeavySlots
+		case ent.base[AttrFighterSquadronIsSupport] > 0:
+			used, slots = &res.FighterSupportUsed, res.FighterSupportSlots
+		default:
+			used, slots = &res.FighterLightUsed, res.FighterLightSlots
+		}
+		attackVolley, attackCycle := fighterAbility(ent, snap, fighterAttackMissileDamage, AttrFighterAttackMissileMult, AttrFighterAttackMissileDuration)
+		if attackVolley == 0 {
+			attackVolley, attackCycle = fighterAbility(ent, snap, fighterAttackTurretDamage, AttrFighterAttackTurretMult, AttrFighterAttackTurretDuration)
+		}
+		salvo, salvoCycle := fighterAbility(ent, snap, fighterMissilesDamage, AttrFighterMissilesMult, AttrFighterMissilesDuration)
+		for left := carried; left > 0 && tubes > 0 && *used < slots; left -= size {
+			members := float64(min(size, left))
+			tubes--
+			*used++
+			res.SquadronsLaunched++
+			if attackCycle > 0 {
+				res.FighterVolley += members * attackVolley
+				res.FighterDPS += members * attackVolley / attackCycle
+			}
+			if salvoCycle > 0 && salvo > 0 {
+				res.FighterSalvo += members * salvo
+				res.FighterSalvoSeconds = math.Max(res.FighterSalvoSeconds, salvoCycle)
+			}
+		}
+	}
+}
+
+// fighterAbility is one fighter's damage per activation of an
+// ability and the ability's cycle in seconds.
+func fighterAbility(ent *entity, snap *Snapshot, damage []int64, mult, duration int64) (volley, cycle float64) {
+	for _, a := range damage {
+		volley += ent.get(snap, a)
+	}
+	return volley * ent.get(snap, mult), ent.get(snap, duration) / 1000
 }
 
 // tank works out hit points and effective hit points per layer,

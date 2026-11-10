@@ -1802,6 +1802,7 @@ type PlaceStatsMetum struct {
 	Kind        string    `json:"kind"`
 	FetchedAt   time.Time `json:"fetched_at"`
 	CachedUntil time.Time `json:"cached_until"`
+	SourceEtag  string    `json:"source_etag"`
 }
 
 type PlanetName struct {

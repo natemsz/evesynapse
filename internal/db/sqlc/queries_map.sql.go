@@ -239,7 +239,7 @@ func (q *Queries) GetMapUniversePayload(ctx context.Context) (GetMapUniversePayl
 
 const getPlaceStatsMeta = `-- name: GetPlaceStatsMeta :one
 
-SELECT kind, fetched_at, cached_until FROM place_stats_meta
+SELECT kind, fetched_at, cached_until, source_etag FROM place_stats_meta
 WHERE kind = $1::text
 `
 
@@ -253,7 +253,12 @@ WHERE kind = $1::text
 func (q *Queries) GetPlaceStatsMeta(ctx context.Context, kind string) (PlaceStatsMetum, error) {
 	row := q.db.QueryRow(ctx, getPlaceStatsMeta, kind)
 	var i PlaceStatsMetum
-	err := row.Scan(&i.Kind, &i.FetchedAt, &i.CachedUntil)
+	err := row.Scan(
+		&i.Kind,
+		&i.FetchedAt,
+		&i.CachedUntil,
+		&i.SourceEtag,
+	)
 	return i, err
 }
 
@@ -766,19 +771,26 @@ func (q *Queries) UpsertMapUniverse(ctx context.Context, arg UpsertMapUniversePa
 }
 
 const upsertPlaceStatsMeta = `-- name: UpsertPlaceStatsMeta :exec
-INSERT INTO place_stats_meta (kind, fetched_at, cached_until)
-VALUES ($1::text, $2::timestamptz, $3::timestamptz)
+INSERT INTO place_stats_meta (kind, fetched_at, cached_until, source_etag)
+VALUES ($1::text, $2::timestamptz, $3::timestamptz, $4::text)
 ON CONFLICT (kind) DO UPDATE SET
-    fetched_at = EXCLUDED.fetched_at, cached_until = EXCLUDED.cached_until
+    fetched_at = EXCLUDED.fetched_at, cached_until = EXCLUDED.cached_until,
+    source_etag = EXCLUDED.source_etag
 `
 
 type UpsertPlaceStatsMetaParams struct {
 	Kind        string    `json:"kind"`
 	FetchedAt   time.Time `json:"fetched_at"`
 	CachedUntil time.Time `json:"cached_until"`
+	SourceEtag  string    `json:"source_etag"`
 }
 
 func (q *Queries) UpsertPlaceStatsMeta(ctx context.Context, arg UpsertPlaceStatsMetaParams) error {
-	_, err := q.db.Exec(ctx, upsertPlaceStatsMeta, arg.Kind, arg.FetchedAt, arg.CachedUntil)
+	_, err := q.db.Exec(ctx, upsertPlaceStatsMeta,
+		arg.Kind,
+		arg.FetchedAt,
+		arg.CachedUntil,
+		arg.SourceEtag,
+	)
 	return err
 }

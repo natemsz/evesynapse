@@ -218,7 +218,7 @@ const (
 	// and jumps per system, and who holds each null-sec system.
 	GlobalSystemKills = "system_kills" // GET /universe/system_kills/
 	GlobalSystemJumps = "system_jumps" // GET /universe/system_jumps/
-	GlobalSovMap      = "sov_map"      // GET /sovereignty/map/
+	GlobalSovMap      = "sov_map"      // GET /sovereignty/systems/
 	// CCP's per-route health (GET /meta/status/), holding only
 	// the routes CCP does not report as OK. The generic fetch
 	// stores payloads whole, so this kind has its own writer
@@ -515,7 +515,25 @@ type Character struct {
 	Birthday       string  `json:"birthday"` // RFC3339
 	SecurityStatus float64 `json:"security_status"`
 	Description    string  `json:"description"`
-	Title          string  `json:"title"`
+	Title          string  `json:"corporation_title"`
+}
+
+// UnmarshalJSON reads the corporation title from corporation_title,
+// or from title in a sheet stored before ESI renamed the field.
+func (c *Character) UnmarshalJSON(b []byte) error {
+	type sheet Character
+	var raw struct {
+		sheet
+		LegacyTitle string `json:"title"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	*c = Character(raw.sheet)
+	if c.Title == "" {
+		c.Title = raw.LegacyTitle
+	}
+	return nil
 }
 
 // CorpHistoryEntry is one entry of GET
@@ -546,6 +564,27 @@ type Corporation struct {
 	DateFounded   string  `json:"date_founded"` // RFC3339
 	Description   string  `json:"description"`  // contains EVE-flavored HTML
 	URL           string  `json:"url"`
+}
+
+// UnmarshalJSON reads the ISK tax rate from tax_rates.isk, which ESI
+// gives in percent, into TaxRate as a fraction. A record stored
+// before ESI moved the field carries tax_rate as a fraction already.
+func (c *Corporation) UnmarshalJSON(b []byte) error {
+	type record Corporation
+	var raw struct {
+		record
+		TaxRates *struct {
+			ISK float64 `json:"isk"`
+		} `json:"tax_rates"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	*c = Corporation(raw.record)
+	if raw.TaxRates != nil {
+		c.TaxRate = raw.TaxRates.ISK / 100
+	}
+	return nil
 }
 
 // Alliance is GET /alliances/{id}/ (the slice we consume).
@@ -1380,14 +1419,65 @@ type SystemJumps []struct {
 	ShipJumps int64 `json:"ship_jumps"`
 }
 
-// SovMap is GET /sovereignty/map/: each system's holder. Null-sec
+// SovMap is GET /sovereignty/systems/: each system's holder. Null-sec
 // systems name an alliance (and its holding corporation) when one
 // holds them; NPC null-sec and empire space name a faction.
-type SovMap []struct {
+type SovMap []SovSystem
+
+// SovSystem is one system's holder in a SovMap. Fields that do not
+// apply are 0: an unallied corporation has no alliance, a faction
+// holder has no alliance or corporation, an unclaimed system has
+// none of them.
+type SovSystem struct {
 	SystemID      int64 `json:"system_id"`
 	AllianceID    int64 `json:"alliance_id"`
 	CorporationID int64 `json:"corporation_id"`
 	FactionID     int64 `json:"faction_id"`
+}
+
+// UnmarshalJSON reads GET /sovereignty/systems/, which wraps the
+// systems in solar_systems and nests each holder under claim, and
+// also the flat array GET /sovereignty/map/ gave, which payloads
+// stored before the move still hold.
+func (m *SovMap) UnmarshalJSON(b []byte) error {
+	if t := bytes.TrimSpace(b); len(t) > 0 && t[0] == '[' {
+		var flat []SovSystem
+		if err := json.Unmarshal(t, &flat); err != nil {
+			return err
+		}
+		*m = flat
+		return nil
+	}
+	var wrapped struct {
+		SolarSystems []struct {
+			SolarSystemID int64 `json:"solar_system_id"`
+			Claim         struct {
+				Alliance *struct {
+					AllianceID    int64 `json:"alliance_id"`
+					CorporationID int64 `json:"corporation_id"`
+				} `json:"alliance"`
+				Faction *struct {
+					FactionID int64 `json:"faction_id"`
+				} `json:"faction"`
+			} `json:"claim"`
+		} `json:"solar_systems"`
+	}
+	if err := json.Unmarshal(b, &wrapped); err != nil {
+		return err
+	}
+	out := make(SovMap, 0, len(wrapped.SolarSystems))
+	for _, s := range wrapped.SolarSystems {
+		row := SovSystem{SystemID: s.SolarSystemID}
+		if a := s.Claim.Alliance; a != nil {
+			row.AllianceID, row.CorporationID = a.AllianceID, a.CorporationID
+		}
+		if f := s.Claim.Faction; f != nil {
+			row.FactionID = f.FactionID
+		}
+		out = append(out, row)
+	}
+	*m = out
+	return nil
 }
 
 // Constellation is GET /universe/constellations/{id}/ (the slice
@@ -2702,7 +2792,7 @@ func globalSnapshotPath(kind string) string {
 	case GlobalSystemJumps:
 		return "/universe/system_jumps/"
 	case GlobalSovMap:
-		return "/sovereignty/map/"
+		return "/sovereignty/systems/"
 	}
 	return ""
 }

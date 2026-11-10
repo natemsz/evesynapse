@@ -229,6 +229,12 @@ type Application struct {
 	sweepPaceMu sync.Mutex
 	sweepPace   map[int64]*sweepRegionPace
 
+	// globalRetryAt holds, per global snapshot kind, when a failed
+	// refresh may be tried again (string -> time.Time), so a route
+	// that keeps failing is asked once per marketFetchErrorGate
+	// instead of every cycle.
+	globalRetryAt sync.Map
+
 	// pubContractMu serializes public-contract sweep passes
 	// (pub_contracts.go): one pass walks every region's cursor,
 	// and passes never overlap.

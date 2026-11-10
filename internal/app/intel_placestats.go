@@ -198,6 +198,7 @@ func (app *Application) refreshPlaceActivity(ctx context.Context) (stored bool, 
 	}
 	if err := qtx.UpsertPlaceStatsMeta(ctx, db.UpsertPlaceStatsMetaParams{
 		Kind: placeStatsKindActivity, FetchedAt: now.UTC(), CachedUntil: cachedUntil.UTC(),
+		SourceEtag: "",
 	}); err != nil {
 		logging.Errorf("worker: place activity: store meta: %v", err)
 		return false, false
@@ -226,92 +227,68 @@ func distillPlaceActivity(ctx context.Context, q *db.Queries, now time.Time) err
 	return q.DistillRegionActivityStats(ctx, now)
 }
 
-// esiSovereigntySystem is one row of GET /sovereignty/map/: the
-// system's current holder. Fields beyond system_id are absent
-// when they do not apply (an unallied corporation has no
-// alliance_id; an NPC-held system carries faction_id instead).
-type esiSovereigntySystem struct {
-	SystemID      int64 `json:"system_id"`
-	AllianceID    int64 `json:"alliance_id"`
-	CorporationID int64 `json:"corporation_id"`
-	FactionID     int64 `json:"faction_id"`
-}
-
-// refreshPlaceSovereignty mirrors the sovereignty map into
-// system_sovereignty, replacing the previous set wholesale: a
-// system the payload no longer names has lost its holder.
-// Reports whether it stored, and whether ESI's error limit
-// stopped it.
-func (app *Application) refreshPlaceSovereignty(ctx context.Context) (stored bool, limited bool) {
-	now := time.Now()
-	if !app.placeStatsDue(ctx, placeStatsKindSovereignty, now) {
-		return false, false // still inside ESI's cache window
-	}
-
-	body, header, err := app.esi.FetchRaw(ctx, "", "/sovereignty/map/")
+// refreshPlaceSovereignty mirrors the stored sovereignty snapshot
+// into system_sovereignty, replacing the previous set wholesale: a
+// system the payload no longer names has lost its holder. The
+// global snapshot pass owns the ESI fetch (GlobalSovMap, on its
+// own cache window); this pass only distills, and only when the
+// snapshot changed since the set was last written. Reports whether
+// it stored.
+func (app *Application) refreshPlaceSovereignty(ctx context.Context) bool {
+	snap, err := app.queries.GetGlobalSnapshot(ctx, esi.GlobalSovMap)
 	if err != nil {
-		if errors.Is(err, esi.ErrErrorLimit) {
-			return false, true
+		if !errors.Is(err, pgx.ErrNoRows) {
+			logging.Errorf("worker: place sovereignty: read snapshot: %v", err)
 		}
-		if ctx.Err() == nil {
-			logging.Errorf("worker: place sovereignty: %v", err)
-		}
-		return false, false
+		return false // nothing fetched yet
 	}
-	var systems []esiSovereigntySystem
-	if err := json.Unmarshal(body, &systems); err != nil {
+	if meta, err := app.queries.GetPlaceStatsMeta(ctx, placeStatsKindSovereignty); err == nil {
+		if snap.Etag != "" && meta.SourceEtag == snap.Etag {
+			return false // the stored set already holds this answer
+		}
+		if snap.Etag == "" && !snap.FetchedAt.After(meta.FetchedAt) {
+			return false
+		}
+	}
+	var systems esi.SovMap
+	if err := json.Unmarshal([]byte(snap.Payload), &systems); err != nil {
 		logging.Errorf("worker: place sovereignty: decode: %v", err)
-		return false, false
+		return false
 	}
 
-	// Faction holders need names, and there is no stored
-	// faction-name tier: resolve them in this pass from the one
-	// public factions call. If that call fails, the previous
-	// pass's stored names carry over by system.
+	// Faction holders need names, from the stored factions
+	// snapshot. Without one, the previous set's stored names carry
+	// over by system.
 	factionNames := make(map[int64]string)
-	needsFactions := false
-	for _, s := range systems {
-		if s.FactionID > 0 {
-			needsFactions = true
-			break
+	var factions esi.Factions
+	if app.loadGlobalSnapshot(ctx, esi.GlobalFactions, &factions) && len(factions) > 0 {
+		byID := make(map[int64]string, len(factions))
+		for _, f := range factions {
+			byID[f.FactionID] = f.Name
 		}
-	}
-	if needsFactions {
-		var factions []esi.Faction
-		if err := app.esi.Get(ctx, "", "/universe/factions/", &factions); err != nil {
-			if ctx.Err() == nil {
-				logging.Errorf("worker: place sovereignty factions: %v (keeping stored names)", err)
+		for _, s := range systems {
+			if s.FactionID > 0 {
+				factionNames[s.SystemID] = byID[s.FactionID]
 			}
-			if prev, perr := app.queries.ListSystemSovereigntyFactionNames(ctx); perr == nil {
-				for _, row := range prev {
-					factionNames[row.SystemID] = row.FactionName
-				}
-			}
-		} else {
-			byID := make(map[int64]string, len(factions))
-			for _, f := range factions {
-				byID[f.FactionID] = f.Name
-			}
-			for _, s := range systems {
-				if s.FactionID > 0 {
-					factionNames[s.SystemID] = byID[s.FactionID]
-				}
-			}
+		}
+	} else if prev, perr := app.queries.ListSystemSovereigntyFactionNames(ctx); perr == nil {
+		for _, row := range prev {
+			factionNames[row.SystemID] = row.FactionName
 		}
 	}
 
-	cachedUntil := placeCacheUntil(header, now)
+	now := time.Now()
 
 	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("worker: place sovereignty: begin tx: %v", err)
-		return false, false
+		return false
 	}
 	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.ClearSystemSovereignty(ctx); err != nil {
 		logging.Errorf("worker: place sovereignty: clear: %v", err)
-		return false, false
+		return false
 	}
 	if len(systems) > 0 {
 		systemIDs := make([]int64, 0, len(systems))
@@ -338,20 +315,20 @@ func (app *Application) refreshPlaceSovereignty(ctx context.Context) (stored boo
 		`, systemIDs, allianceIDs, corpIDs,
 			factionIDs, factionNameList, now.UTC()); err != nil {
 			logging.Errorf("worker: place sovereignty: store: %v", err)
-			return false, false
+			return false
 		}
 	}
 	if err := qtx.UpsertPlaceStatsMeta(ctx, db.UpsertPlaceStatsMetaParams{
-		Kind: placeStatsKindSovereignty, FetchedAt: now.UTC(), CachedUntil: cachedUntil.UTC(),
+		Kind: placeStatsKindSovereignty, FetchedAt: snap.FetchedAt.UTC(), CachedUntil: snap.CachedUntil.UTC(),
+		SourceEtag: snap.Etag,
 	}); err != nil {
 		logging.Errorf("worker: place sovereignty: store meta: %v", err)
-		return false, false
+		return false
 	}
 	if err := tx.Commit(ctx); err != nil {
 		logging.Errorf("worker: place sovereignty: commit: %v", err)
-		return false, false
+		return false
 	}
-	logging.Infof("worker: place sovereignty stored (%d systems, fresh until %s)",
-		len(systems), cachedUntil.UTC().Format(time.RFC3339))
-	return true, false
+	logging.Infof("worker: place sovereignty stored (%d systems)", len(systems))
+	return true
 }

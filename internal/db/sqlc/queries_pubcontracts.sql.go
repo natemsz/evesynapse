@@ -489,6 +489,21 @@ func (q *Queries) GetBlueprintCopyMediansStamp(ctx context.Context) (time.Time, 
 	return computed_at, err
 }
 
+const getNewestPublicContractID = `-- name: GetNewestPublicContractID :one
+SELECT COALESCE(MAX(contract_id), 0)::bigint AS newest FROM pub_contracts
+`
+
+// The highest contract id the corpus holds: the contract search's
+// live feed compares it between checks to learn that a sweep added
+// contracts, without running the search. A primary key max is an
+// index read.
+func (q *Queries) GetNewestPublicContractID(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, getNewestPublicContractID)
+	var newest int64
+	err := row.Scan(&newest)
+	return newest, err
+}
+
 const getPublicContract = `-- name: GetPublicContract :one
 SELECT contract_id, region_id, type, issuer_id, issuer_corporation_id,
     for_corporation, title, price, buyout, reward, collateral, volume,

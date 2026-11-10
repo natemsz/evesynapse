@@ -1,4 +1,4 @@
-{{define "title"}}Public contracts · EveSynapse{{end}}
+{{define "title"}}Public contracts{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Public contracts</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
@@ -232,6 +232,7 @@
 
 <div class="cs-countbar">
   <p class="cs-count"><strong>{{$s.TotalText}}</strong> contracts match • Page {{$s.Page}} of {{$s.Pages}}</p>
+  {{if $s.Live}}<span class="badge kill cs-live-pill" data-live-pill role="status" hidden>Live</span>{{end}}
   {{with $.SubTabNote}}<p class="cs-sweepnote">{{.}}</p>{{end}}
   <p class="cs-counthint">Click any row to inspect line-by-line Forge appraisal &amp; mutaplasmid stats</p>
 </div>
@@ -243,8 +244,38 @@
 <table class="cs-table" data-nosort data-cards="off">
   <colgroup><col class="cs-c1"><col class="cs-c2"><col class="cs-c3"><col class="cs-c4"><col class="cs-c5"></colgroup>
   <thead><tr><th>Contract</th><th>Contents &amp; Specs</th><th><a class="cs-sorthead{{if $s.PriceSorted}} on{{end}}" href="{{$s.PriceSortURL}}" aria-label="Sort by price or reward">Price / Reward <span class="cs-sortchev" aria-hidden="true">{{$s.PriceChev}}</span></a></th><th><a class="cs-sorthead{{if $s.ValueSorted}} on{{end}}" href="{{$s.ValueSortURL}}" aria-label="Sort by our value and spread">Our Value &amp; Spread <span class="cs-sortchev" aria-hidden="true">{{$s.ValueChev}}</span></a></th><th>Location</th></tr></thead>
-  <tbody>
-{{range $s.Rows}}
+  <tbody{{if $s.Live}} data-cs-live-rows{{end}}>
+{{range $s.Rows}}{{template "cs-result-row" .}}{{end}}
+  </tbody>
+</table>
+<p class="cs-pager">
+  {{if $s.PrevURL}}<a href="{{$s.PrevURL}}">← Newer page</a>{{end}}
+  {{if $s.NextURL}}<a href="{{$s.NextURL}}">Next page →</a>{{end}}
+</p>
+{{else}}
+<p class="cs-none">No public contracts match those filters right now. Our sweepers cover every region on the game's own cadence, so newly listed contracts appear within the hour.</p>
+{{end}}
+</section>
+</div>
+
+{{end}}
+{{end}}
+
+{{define "contractpanel"}}
+{{with .ContractPanel}}
+<div class="cs-panel">
+  <div class="cs-pgrid">
+{{template "contract-cards" .}}
+  </div>
+</div>
+{{end}}
+{{end}}
+
+{{/* One contract in the results: its row and the drawer row under it.
+     The page renders it per result; the live feed for the unfiltered
+     listing (contracts/live.go) renders the same define for contracts
+     a sweep adds. */}}
+{{define "cs-result-row"}}
     <tr class="cs-row{{if .IsDeal}} deal{{end}}" data-contract="{{.ContractID}}" tabindex="0" role="button" aria-expanded="false" aria-label="Inspect contract {{.ContractID}}">
       <td class="cs-c1">
         <span class="cs-type {{if eq .TypeLabel "Item exchange"}}t-exchange{{else if eq .TypeLabel "Auction"}}t-auction{{else}}t-courier{{end}}">{{.TypeLabel}}</span>{{if .IsDeal}} <span class="cs-deal">↗ Deal -{{.DealPct}}%</span>{{end}}
@@ -277,28 +308,4 @@
       </td>
     </tr>
     <tr class="cs-drow"><td colspan="5"><div class="cs-panel-slot" hidden></div></td></tr>
-{{end}}
-  </tbody>
-</table>
-<p class="cs-pager">
-  {{if $s.PrevURL}}<a href="{{$s.PrevURL}}">← Newer page</a>{{end}}
-  {{if $s.NextURL}}<a href="{{$s.NextURL}}">Next page →</a>{{end}}
-</p>
-{{else}}
-<p class="cs-none">No public contracts match those filters right now. Our sweepers cover every region on the game's own cadence, so newly listed contracts appear within the hour.</p>
-{{end}}
-</section>
-</div>
-
-{{end}}
-{{end}}
-
-{{define "contractpanel"}}
-{{with .ContractPanel}}
-<div class="cs-panel">
-  <div class="cs-pgrid">
-{{template "contract-cards" .}}
-  </div>
-</div>
-{{end}}
 {{end}}

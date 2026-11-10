@@ -135,37 +135,41 @@ func (n *killNames) region(id int64) string {
 	return r.Name
 }
 
-// killRow is one kill in the feed.
+// killRow is one kill in the feed. The JSON tags carry it over the
+// live feed (livefeed.go): the browser builds a new row from the
+// same fields the server renders.
 type killRow struct {
-	ID                int64
-	ShipTypeID        int64
-	ShipName          string
-	VictimID          int64
-	VictimName        string
-	CorpID            int64
-	CorpName          string
-	AllianceID        int64
-	AllianceName      string
-	SystemID          int64
-	SystemName        string
-	SecText           string
-	SecTier           int
-	RegionID          int64
-	RegionName        string
-	Value             string // short ISK, "" while unpriced
-	Big               bool
-	When              string // "14:02" EVE time
-	Ago               string
-	Time              time.Time
-	Attackers         int
-	FinalName         string
-	FinalID           int64
-	FinalCorpID       int64
-	FinalCorpName     string
-	FinalAllianceID   int64
-	FinalAllianceName string
-	Solo, NPC, Awox   bool
-	VictimIsStructure bool
+	ID                int64     `json:"id"`
+	ShipTypeID        int64     `json:"shipType"`
+	ShipName          string    `json:"ship"`
+	VictimID          int64     `json:"victim"`
+	VictimName        string    `json:"victimName"`
+	CorpID            int64     `json:"corp"`
+	CorpName          string    `json:"corpName"`
+	AllianceID        int64     `json:"alliance"`
+	AllianceName      string    `json:"allianceName"`
+	SystemID          int64     `json:"system"`
+	SystemName        string    `json:"systemName"`
+	SecText           string    `json:"sec"`
+	SecTier           int       `json:"secTier"`
+	RegionID          int64     `json:"region"`
+	RegionName        string    `json:"regionName"`
+	Value             string    `json:"value"` // short ISK, "" while unpriced
+	Big               bool      `json:"big"`
+	When              string    `json:"when"` // "14:02" EVE time
+	Ago               string    `json:"ago"`
+	Time              time.Time `json:"time"`
+	Attackers         int       `json:"attackers"`
+	FinalName         string    `json:"finalName"`
+	FinalID           int64     `json:"final"`
+	FinalCorpID       int64     `json:"finalCorp"`
+	FinalCorpName     string    `json:"finalCorpName"`
+	FinalAllianceID   int64     `json:"finalAlliance"`
+	FinalAllianceName string    `json:"finalAllianceName"`
+	Solo              bool      `json:"solo"`
+	NPC               bool      `json:"npc"`
+	Awox              bool      `json:"awox"`
+	VictimIsStructure bool      `json:"structure"`
 }
 
 func (n *killNames) row(k db.Kill) killRow {

@@ -120,6 +120,11 @@ type marketOrderRow struct {
 	SecTier int    // 0..10 for .sec-N
 	HasSec  bool
 	SecBand string // "highsec", "lowsec", "nullsec", or "all"
+	// The live order book (livefeed.go) matches rows by Key, the
+	// order's price at its location, and slots new rows by PriceRaw.
+	Key      string
+	PriceRaw float64
+	Buy      bool
 }
 
 // marketItem is the item view: guide prices from /markets/prices/
@@ -1244,15 +1249,18 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 			}
 		}
 		return marketOrderRow{
-			Price:   esi.FormatISK(o.Price) + " ISK",
-			Volume:  esi.FormatInt(o.VolumeRemain),
-			Loc:     app.orderPlace(ctx, o.LocationID, o.SystemID),
-			VsBest:  vsBest,
-			Range:   rng,
-			SecText: sec.text,
-			SecTier: sec.tier,
-			HasSec:  sec.ok,
-			SecBand: sec.band,
+			Price:    esi.FormatISK(o.Price) + " ISK",
+			Volume:   esi.FormatInt(o.VolumeRemain),
+			Loc:      app.orderPlace(ctx, o.LocationID, o.SystemID),
+			VsBest:   vsBest,
+			Range:    rng,
+			SecText:  sec.text,
+			SecTier:  sec.tier,
+			HasSec:   sec.ok,
+			SecBand:  sec.band,
+			Key:      strconv.FormatFloat(o.Price, 'f', -1, 64) + "@" + strconv.FormatInt(o.LocationID, 10),
+			PriceRaw: o.Price,
+			Buy:      isBuy,
 		}
 	}
 

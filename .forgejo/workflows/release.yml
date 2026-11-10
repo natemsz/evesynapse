@@ -7,11 +7,12 @@
 # updater reads as its last resort.
 #
 # Publishing rules, the same as the GitLab pipeline's: a
-# version publishes once (an existing release is left as it
-# is); plain versions publish from main only, a suffixed
-# version (0.4.1.4-dev) publishes from the dev branch and is
-# reached with `evesynapse -update -dev`; nothing publishes
-# unsigned. The release object is the commit point the
+# version publishes once (an existing published release is
+# left as it is; an existing draft is resumed); plain versions
+# publish from main only, a suffixed version (0.4.1.4-dev)
+# publishes from the dev branch and is reached with
+# `evesynapse -update -dev`; nothing publishes unsigned.
+# The release object is the commit point the
 # updater reads: it is created as a draft, the seven assets are
 # uploaded to it, and only then is it published, so no reader
 # ever sees a release whose files are not all there.
@@ -111,7 +112,10 @@ jobs:
       # -dev`. Plain versions are releases and are only ever
       # published from main, so another branch can't claim a
       # release's tag first. A version publishes once: when the
-      # release exists, the push published nothing.
+      # release exists and is published, the push published
+      # nothing. When the release exists as a draft, a run left
+      # it half done, so this push resumes it: it uploads the
+      # files the draft is still missing and publishes it.
       - name: Decide whether this push publishes
         id: decide
         run: |
@@ -123,8 +127,15 @@ jobs:
           if [ "$publish" = "true" ]; then
             code="$(curl -s -o /dev/null -w '%{http_code}' --header "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/releases/tags/v$VERSION")"
             if [ "$code" = "200" ]; then
-              echo "Release v$VERSION already exists; leaving it as it is."
-              publish=false
+              rel="$(curl -fsS --header "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/releases/tags/v$VERSION")"
+              if printf '%s' "$rel" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("draft") else 1)'; then
+                release_id="$(printf '%s' "$rel" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+                echo "Release v$VERSION exists as a draft; resuming it (id $release_id)."
+                echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+              else
+                echo "Release v$VERSION already exists and is published; leaving it as it is."
+                publish=false
+              fi
             elif [ "$code" != "404" ]; then
               echo "The releases API answered $code; not publishing on a guess."
               exit 1
@@ -213,7 +224,11 @@ jobs:
       # The release is created as a draft, the seven files are
       # uploaded to it, and then it is published: the publish
       # is the commit point, and the updater skips drafts, so
-      # no reader can see a half-uploaded release.
+      # no reader can see a half-uploaded release. When a draft
+      # already exists, this run resumes it instead: it refreshes
+      # the notes, uploads only the files the draft is still
+      # missing, and publishes it. Uploads retry on transient
+      # failures, so one stalled upload cannot strand a release.
       # The release tag is made here, before the release is
       # created on it: a signed annotated tag, signed by the
       # release key in the OpenSSH form git signs with, authored
@@ -251,6 +266,8 @@ jobs:
           git tag -v "v$VERSION"
           git push origin "refs/tags/v$VERSION"
       - name: Publish the release
+        env:
+          RESUME_RELEASE_ID: ${{ steps.decide.outputs.release_id }}
         run: |
           if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "No release to create."; exit 0; fi
           if [ "$VERSION" != "${VERSION%%-*}" ]; then PRERELEASE=true; else PRERELEASE=false; fi
@@ -260,27 +277,47 @@ jobs:
 
           api = os.environ["FORGEJO_API"]
           version = os.environ["VERSION"]
-          body = {
-              "tag_name": "v" + version,
-              "target_commitish": os.environ["GITHUB_SHA"],
-              "name": "EveSynapse v" + version,
-              "body": open("release-notes.md").read(),
-              "draft": True,
-              "prerelease": os.environ["PRERELEASE"] == "true",
-          }
-          req = urllib.request.Request(
-              api + "/releases", data=json.dumps(body).encode(), method="POST",
-              headers={"Authorization": "token " + os.environ["FORGEJO_TOKEN"],
-                       "Content-Type": "application/json",
-                       "User-Agent": "evesynapse-release-workflow"})
-          rel = json.load(urllib.request.urlopen(req))
+          resume_id = os.environ.get("RESUME_RELEASE_ID", "")
+
+          def call(path, data=None, method="GET"):
+              req = urllib.request.Request(
+                  api + path, data=data, method=method,
+                  headers={"Authorization": "token " + os.environ["FORGEJO_TOKEN"],
+                           "Content-Type": "application/json",
+                           "User-Agent": "evesynapse-release-workflow"})
+              return json.load(urllib.request.urlopen(req))
+
+          if resume_id:
+              rel = call("/releases/" + resume_id)
+              call("/releases/" + resume_id,
+                   data=json.dumps({"body": open("release-notes.md").read()}).encode(),
+                   method="PATCH")
+              print("Resuming draft release v%s (id %s); notes refreshed." % (version, rel["id"]))
+          else:
+              body = {
+                  "tag_name": "v" + version,
+                  "target_commitish": os.environ["GITHUB_SHA"],
+                  "name": "EveSynapse v" + version,
+                  "body": open("release-notes.md").read(),
+                  "draft": True,
+                  "prerelease": os.environ["PRERELEASE"] == "true",
+              }
+              rel = call("/releases", data=json.dumps(body).encode(), method="POST")
+              print("Draft release v%s created (id %s)." % (version, rel["id"]))
           with open("release-id.txt", "w") as fh:
               fh.write(str(rel["id"]))
-          print("Draft release v%s created (id %s)." % (version, rel["id"]))
+          assets = call("/releases/%s/assets" % rel["id"])
+          with open("release-assets.txt", "w") as fh:
+              for a in assets:
+                  fh.write(a["name"] + "\n")
           PYEOF
           REL_ID="$(cat release-id.txt)"
           for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh; do
-            curl -fsS --header "Authorization: token $FORGEJO_TOKEN" \
+            if grep -qx "$f" release-assets.txt; then
+              echo "$f: already on the draft; skipping."
+              continue
+            fi
+            curl -fsS --retry 5 --retry-delay 10 --retry-all-errors --header "Authorization: token $FORGEJO_TOKEN" \
               -F "attachment=@dist/$f" \
               "$FORGEJO_API/releases/$REL_ID/assets?name=$f" > /dev/null
             echo "$f: uploaded."

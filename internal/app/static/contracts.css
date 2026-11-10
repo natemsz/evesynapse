@@ -513,6 +513,8 @@
    badges keep the shared .cs-count pill above. */
 .cs-countbar .cs-count { padding: 0.25rem 0.52rem; font-weight: 500; border-radius: 8px; }
 .cs-counthint { margin: 0; font-size: var(--fs-2xs); color: var(--muted); }
+/* The live pill sits beside the count; the hint keeps the far end. */
+.cs-live-pill { margin-right: auto; margin-left: -0.5rem; }
 .cs-results { padding: 0 0 0.4rem; }
 .cs-none { margin: 0; padding: 0.7rem 0.85rem 0.6rem; }
 .cs-active { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.7rem 0.85rem 0; }

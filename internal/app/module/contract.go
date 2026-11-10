@@ -524,6 +524,9 @@ type AppraisedLine struct {
 	// that no stored research median covers, so it priced at the
 	// unresearched original's figure; readers say so.
 	ResearchUnmatched bool
+	// SampleCount is how many listings the stored copy or research
+	// median behind the price stands on; zero for every other tier.
+	SampleCount int64
 }
 
 // Appraisal is a priced line list: the lines, the offered and
@@ -1082,6 +1085,17 @@ type PriceSpark struct {
 // swept book, so a figure priced from it keys its hover card here.
 const TheForgeRegionID int64 = 10000002
 
+// LiveFeed is one named Server-Sent Events broadcast: Serve holds a
+// stream open for one browser (onOpen runs once the subscriber is
+// counted, so a feed's producer can start on its first viewer),
+// Publish sends one event to every open stream without blocking,
+// and Subscribers says how many are open.
+type LiveFeed interface {
+	Serve(w http.ResponseWriter, r *http.Request, onOpen func())
+	Publish(event string, payload []byte)
+	Subscribers() int
+}
+
 type Deps interface {
 	DB() *db.Queries
 	// NoteActivity ticks one analytics event counter (a contract
@@ -1233,6 +1247,12 @@ type Deps interface {
 	StoredSnapshot(ctx context.Context, ch db.Character, kind string, out any) error
 	// RenderFragment answers with one named template of a page file.
 	RenderFragment(w http.ResponseWriter, page, define string, data any)
+	// ExecuteFragment renders one named template of a page file
+	// into a string, for a live feed to send.
+	ExecuteFragment(page, define string, data any) (string, error)
+	// LiveFeed is the named Server-Sent Events broadcast every
+	// caller with the same name shares (livefeed.go).
+	LiveFeed(name string) LiveFeed
 	// SuggestTypes is the shared item search over the stored types; pool
 	// narrows it ("market" for anything sold).
 	SuggestTypes(ctx context.Context, query, pool string, limit int64) []SuggestItem

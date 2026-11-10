@@ -6485,3 +6485,125 @@
   });
   load();
 })();
+
+// esLive: the shared live-feed treatment (killboard, market item
+// page, public contracts). A row that streamed in gets .is-live: it
+// glows in, keeps the theme's accent tint until it has been on
+// screen in a visible tab for a few seconds, then fades back to
+// normal and reports itself seen. A value that changed in place
+// flashes (.live-changed, with data-dir "up" or "down"). The pill
+// ([data-live-pill]) says whether a page's stream is open.
+(function () {
+  "use strict";
+  if (typeof window === "undefined" || window.esLive) return;
+  var HOLD_MS = 6000;
+  var FADE_MS = 1500;
+  var FLASH_MS = 1600;
+  var watcher = null;
+
+  function fade(row) {
+    if (watcher) watcher.unobserve(row);
+    row.classList.remove("is-live");
+    row.classList.add("is-fading");
+    setTimeout(function () { row.classList.remove("is-fading"); }, FADE_MS);
+    if (row._liveSeen) row._liveSeen(row);
+  }
+
+  // arm runs a live row's hold timer only while the row is on
+  // screen in a visible tab.
+  function arm(row) {
+    var viewing = row._liveOnScreen && document.visibilityState === "visible";
+    if (viewing && !row._liveTimer) {
+      row._liveTimer = setTimeout(function () { row._liveTimer = 0; fade(row); }, HOLD_MS);
+    } else if (!viewing && row._liveTimer) {
+      clearTimeout(row._liveTimer);
+      row._liveTimer = 0;
+    }
+  }
+
+  function mark(row, onSeen) {
+    row.classList.add("is-live");
+    row._liveSeen = onSeen || null;
+    if (!("IntersectionObserver" in window)) {
+      row._liveOnScreen = true;
+      arm(row);
+      return;
+    }
+    if (!watcher) {
+      watcher = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          e.target._liveOnScreen = e.isIntersecting;
+          arm(e.target);
+        });
+      }, { threshold: 0.5 });
+    }
+    watcher.observe(row);
+  }
+
+  // drop forgets a row that left the page before it was seen.
+  function drop(row) {
+    if (watcher) watcher.unobserve(row);
+    clearTimeout(row._liveTimer);
+    row._liveTimer = 0;
+  }
+
+  // reset stops watching every row: the page is being swapped out.
+  function reset() {
+    if (watcher) {
+      watcher.disconnect();
+      watcher = null;
+    }
+  }
+
+  // flash marks a value that changed in place; dir is "up", "down"
+  // or "" when the change has no direction worth showing.
+  function flash(el, dir) {
+    el.classList.remove("live-changed");
+    void el.offsetWidth; // restart the animation on a repeat change
+    if (dir) el.setAttribute("data-dir", dir);
+    else el.removeAttribute("data-dir");
+    el.classList.add("live-changed");
+    clearTimeout(el._liveFlash);
+    el._liveFlash = setTimeout(function () { el.classList.remove("live-changed"); }, FLASH_MS);
+  }
+
+  // pill shows a stream's state: "live" while it is open, "retry"
+  // while the browser reconnects, "down" once it has given up.
+  function pill(el, state) {
+    if (!el) return;
+    el.hidden = false;
+    el.setAttribute("data-state", state);
+    el.textContent = state === "live" ? "Live" : state === "retry" ? "Reconnecting" : "Offline";
+  }
+
+  // stream opens an EventSource and drives a pill from it. handlers
+  // maps event names to functions taking the parsed payload; a bad
+  // frame is skipped.
+  function stream(url, pillEl, handlers) {
+    if (!("EventSource" in window)) return null;
+    var src = new EventSource(url);
+    src.addEventListener("open", function () { pill(pillEl, "live"); });
+    src.addEventListener("error", function () {
+      pill(pillEl, src.readyState === EventSource.CLOSED ? "down" : "retry");
+    });
+    Object.keys(handlers).forEach(function (name) {
+      src.addEventListener(name, function (e) {
+        var data;
+        try {
+          data = JSON.parse(e.data);
+        } catch (err) {
+          return;
+        }
+        handlers[name](data);
+      });
+    });
+    return src;
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    document.querySelectorAll(".is-live").forEach(arm);
+  });
+  document.addEventListener("evesynapse:content-will-swap", reset);
+
+  window.esLive = { mark: mark, drop: drop, reset: reset, flash: flash, pill: pill, stream: stream };
+})();

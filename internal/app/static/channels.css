@@ -80,8 +80,6 @@
 .ch-paste textarea { width: 100%; box-sizing: border-box; font: var(--fs-md)/1.4 var(--font-body); resize: vertical; }
 
 /* --- The feed --- */
-[data-ch-live]::before { content: ""; display: inline-block; width: 0.4rem; height: 0.4rem; margin-right: 0.3rem; border-radius: 50%; background: currentColor; vertical-align: 0.05rem; animation: ch-pulse 2s ease-in-out infinite; }
-@keyframes ch-pulse { 50% { opacity: 0.25; } }
 .ch-feed { margin: 0 0 0.75rem; padding: 0; list-style: none; }
 .ch-rep {
   display: grid;
@@ -143,7 +141,7 @@ a.ch-tag:hover { border-color: var(--accent); }
 .ch-x { width: 1.6rem; height: 1.6rem; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer; }
 .ch-x:hover { color: var(--text-bright); background: var(--row-hover); }
 .ch-empty { margin: 0; padding: 0.45rem 0.3rem; }
-@media (prefers-reduced-motion: reduce) { [data-ch-live]::before, .ch-rep.new { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .ch-rep.new { animation: none !important; } }
 
 /* --- EveSynapse Axon --- */
 .ch-axon-cols { --l-min: 46rem; --l-gap: var(--space-5); }

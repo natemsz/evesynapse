@@ -50,7 +50,7 @@
   </details>
   {{end}}
 
-  <h2>Reports <span class="badge kill" data-ch-live hidden>Live</span></h2>
+  <h2>Reports <span class="badge kill" data-live-pill hidden>Live</span></h2>
   <ol class="ch-feed" data-ch-feed="/intel/channels/{{.ID}}/feed.json" data-ch-after="{{.LastID}}" data-ch-id="{{.ID}}">
     {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty ch-hint" data-ch-empty>No reports yet.</li>{{end}}
   </ol>

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"io/fs"
 	"regexp"
 	"strings"
 	"testing"
@@ -46,6 +47,48 @@ func TestFrameworkPageSheetsMeasureTheirOwnSpace(t *testing.T) {
 		}
 		if strings.Contains(css, "position: fixed") {
 			t.Errorf("%s positions something fixed; inside .l-page use the console drawer or the top layer", name)
+		}
+	}
+}
+
+// TestNoHasInsideHas enforces the :has() rule every sheet must keep:
+// a :has() never sits inside another :has(). Browsers reject the
+// whole selector, so the rule is dropped without a word and the
+// layout it was written for never applies.
+func TestNoHasInsideHas(t *testing.T) {
+	sheets, _ := fs.Glob(staticFS, "static/*.css")
+	comment := regexp.MustCompile(`(?s)/\*.*?\*/`)
+	for _, name := range sheets {
+		raw, err := fs.ReadFile(staticFS, name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		// Comments are blanked to their newlines, so lines stay true.
+		css := comment.ReplaceAllStringFunc(string(raw), func(c string) string {
+			return strings.Repeat("\n", strings.Count(c, "\n"))
+		})
+		var open []bool // per open paren: does it belong to a :has(
+		inHas := 0
+		for i := 0; i < len(css); i++ {
+			switch {
+			case strings.HasPrefix(css[i:], ":has("):
+				if inHas > 0 {
+					line := strings.Count(css[:i], "\n") + 1
+					t.Errorf("%s:%d: :has() nested inside :has(), which browsers drop", name, line)
+				}
+				open = append(open, true)
+				inHas++
+				i += len(":has(") - 1
+			case css[i] == '(':
+				open = append(open, false)
+			case css[i] == ')' && len(open) > 0:
+				if open[len(open)-1] {
+					inHas--
+				}
+				open = open[:len(open)-1]
+			case css[i] == '}':
+				open, inHas = open[:0], 0
+			}
 		}
 	}
 }

@@ -249,7 +249,6 @@ func (app *Application) refreshStatPackRegion(ctx context.Context, regionID int6
 
 	idx := &app.statPackIdx
 	idx.mu.Lock()
-	defer idx.mu.Unlock()
 	if idx.snap == nil {
 		if !idx.building && app.workerCtx != nil {
 			idx.building = true
@@ -262,6 +261,7 @@ func (app *Application) refreshStatPackRegion(ctx context.Context, regionID int6
 				_ = app.buildStatPack(app.workerCtx)
 			}()
 		}
+		idx.mu.Unlock()
 		return
 	}
 
@@ -287,6 +287,14 @@ func (app *Application) refreshStatPackRegion(ctx context.Context, regionID int6
 		snap.stationStats[stationKey{LocationID: s.LocationID, TypeID: s.TypeID}] = s
 	}
 	idx.stale = false
+	idx.mu.Unlock()
+	// The snapshot is current; fan the refreshed rows out to the
+	// live market streams. The publish runs after the unlock so a
+	// subscriber can never hold up a reader of the snapshot, and
+	// it formats an event only for a row a stream is watching.
+	for _, r := range rRows {
+		app.publishMarketStatRow(r)
+	}
 }
 
 // refreshStatPackTypes updates the resident snapshot after a sweep

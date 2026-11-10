@@ -184,13 +184,20 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 // corp-level data, so asking once per window is enough. Access stays
 // per member, and ESI keeps deciding it: ch may copy only while its
 // own last ESI fetch of the kind succeeded within corpOwnFetchMaxAge,
-// so a member who lost the role in-game hits ESI's 403 on its next
-// own fetch within that bound and stops seeing the data. Reports
-// whether it copied.
+// so a member who lost the role in-game, or left the corporation,
+// hits ESI's 403 on its next own fetch within that bound and stops
+// seeing the data. The public corporation sheet (SnapCorpInfo)
+// carries no access to prove and copies freely. Reports whether it
+// copied.
 func (app *Application) copySiblingCorpSnapshot(ctx context.Context, ch db.Character, corpID int64, kind string) bool {
-	state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind})
-	if err != nil || state.State != fetchStateOK || time.Since(state.AttemptedAt) >= corpOwnFetchMaxAge {
-		return false
+	// The corporation's public sheet is readable by anyone, so no
+	// access needs proving to copy it. Every other kind is read by
+	// role or by membership, which leaving the corporation revokes.
+	if kind != esi.SnapCorpInfo {
+		state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind})
+		if err != nil || state.State != fetchStateOK || time.Since(state.AttemptedAt) >= corpOwnFetchMaxAge {
+			return false
+		}
 	}
 	now := time.Now().UTC()
 	sib, err := app.queries.GetFreshSiblingCorpSnapshot(ctx, db.GetFreshSiblingCorpSnapshotParams{

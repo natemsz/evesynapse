@@ -80,8 +80,9 @@ package fit
 // domains, plus charge->weapon otherID), LocationModifier,
 // LocationGroupModifier (invGroups group match),
 // LocationRequiredSkillModifier (sde_requirements match), and
-// OwnerRequiredSkillModifier (drone targets). Domains targetID /
-// target / structureID, the EffectStopper func, effect
+// OwnerRequiredSkillModifier (drones, charges and missiles), plus
+// the modifier-less skill effects in skillCodeEffects. Domains
+// targetID / target / structureID, the EffectStopper func, effect
 // categories outside {0 passive, 1 active, 4 online} — except 5 =
 // overload, which binds for overheated modules — and charge/group
 // shapes that target nothing listed here are skipped and reported

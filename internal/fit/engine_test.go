@@ -644,6 +644,41 @@ func TestFitEngineDPSVolley(t *testing.T) {
 	near(t, "total volley", res.Volley, 560, 1e-9)
 }
 
+// TestFitEngineHullAndSkillBonusesReachMissiles pins both ways a
+// loaded missile gains damage: the Drake's kinetic hull bonus (a
+// charID OwnerRequiredSkillModifier, effect 5340) and the Heavy
+// Missiles skill's bonus, which the SDE carries as effect 668 with
+// no modifier rows.
+func TestFitEngineHullAndSkillBonusesReachMissiles(t *testing.T) {
+	const (
+		ship     = 1001
+		launcher = 3002
+		missile  = 4002
+		skill    = 3324
+	)
+	f := newFitFixture().
+		group(ship, 419).group(launcher, 510).group(missile, 385).
+		attrs(ship, map[int64]float64{14: 2, 743: 10}).
+		attrs(launcher, map[int64]float64{51: 10000}).
+		attrs(missile, map[int64]float64{117: 100}).
+		attrs(skill, map[int64]float64{292: 5}).
+		requires(missile, SkillReq{SkillTypeID: skill, Level: 1}).
+		meta(64, false, 1).meta(212, false, 1).meta(117, true, 0).
+		effect(ship, 5340, 0, Modifier{Domain: "charID", Func: "OwnerRequiredSkillModifier", ModifiedAttr: 117, ModifyingAttr: 743, Operation: 6, SkillTypeID: skill}).
+		effect(skill, 152, 0, fitMod("itemID", "ItemModifier", 292, 280, 0)).
+		flag(skill, 668).
+		flag(launcher, EffectHiPower).
+		flag(launcher, EffectLauncherFitted)
+
+	items := []ItemInput{{TypeID: launcher, Quantity: 2}}
+	res := Compute(f.snap, ship, items, map[int64]int{skill: 5}, map[int64]int64{launcher: missile}, nil)
+
+	// Kinetic 100 x 1.10 (hull) x 1.25 (skill 5 x 5%) = 137.5 per
+	// volley; two launchers on a 10 s cycle = 27.5 DPS.
+	near(t, "missile volley", res.MissileVolley, 275, 1e-9)
+	near(t, "missile DPS", res.MissileDPS, 27.5, 1e-9)
+}
+
 // TestFitEngineCapWarfare pins neutralizer and nosferatu drain.
 // Remote capacitor transmitters (group 67) are logistics, not
 // offensive drain, even though they share powerTransferAmount.

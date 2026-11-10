@@ -16,6 +16,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1247,7 +1248,11 @@ func (app *Application) requireAdmin(next http.Handler) http.Handler {
 // is deliberately never logged: /auth/callback carries an OAuth
 // authorization code and error details that don't belong in logs.
 // A request the server itself failed (5xx) is logged as an error;
-// every other request, refusals included, is routine.
+// every other request, refusals included, is routine. An arrival
+// from another site is the only signal for how a new player found
+// us, so an external referrer on an entry page is logged with the
+// request, as its origin only (no path or query). Same-origin
+// referrers are navigation inside the app, not arrivals.
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -1262,8 +1267,16 @@ func requestLogger(next http.Handler) http.Handler {
 			// it would bury everything else in the log.
 			logf = logging.Debugf
 		}
-		logf("%s %s -> %d (%s)", r.Method, r.URL.Path, ww.Status(),
-			time.Since(start).Round(time.Millisecond))
+		referrer := ""
+		if r.URL.Path == "/" || r.URL.Path == "/auth/link" {
+			if ref := r.Referer(); ref != "" && !isSameOriginReferer(ref, r.Host) && !isSameOriginReferer(ref, r.Header.Get("X-Forwarded-Host")) {
+				if u, err := url.Parse(ref); err == nil && u.Host != "" {
+					referrer = " referrer " + u.Scheme + "://" + u.Host
+				}
+			}
+		}
+		logf("%s %s -> %d (%s)%s", r.Method, r.URL.Path, ww.Status(),
+			time.Since(start).Round(time.Millisecond), referrer)
 	})
 }
 

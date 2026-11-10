@@ -1034,6 +1034,12 @@ func (b *analyticsBuild) freshness(v *analyticsView) {
 	} else {
 		add("Market history", time.Time{}, false, 0, 0)
 	}
+	b.queries++
+	if snap, err := b.app.queries.GetGlobalSnapshot(b.ctx, esi.GlobalSovMap); err == nil {
+		add("Sovereignty", snap.FetchedAt, true, 30*time.Minute, 3*time.Hour)
+	} else {
+		add("Sovereignty", time.Time{}, false, 0, 0)
+	}
 	if swarm.StateFor(b.app).Cfg.Enabled() {
 		b.queries++
 		if at, ok := latestOf(b.app.queries.StatsSwarmLastApplied(b.ctx)); ok {

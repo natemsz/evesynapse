@@ -63,15 +63,20 @@ func (app *Application) refreshIntel(ctx context.Context, budget *warmBudget) (s
 		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			logging.Errorf("worker: intel: read global snapshot %s: %v", kind, err)
 		}
+		if at, ok := app.globalRetryAt.Load(kind); ok && time.Now().Before(at.(time.Time)) {
+			continue // failed lately; waits out its retry gate
+		}
 
 		if err := app.esi.FetchAndStoreGlobalSnapshot(ctx, kind); err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				logging.Warnf("worker: intel: ESI error limit hit refreshing %s; backing off until next cycle", kind)
 				return stored, names, true
 			}
-			logging.Errorf("worker: intel: refresh %s: %v", kind, err)
+			app.globalRetryAt.Store(kind, time.Now().Add(marketFetchErrorGate))
+			logging.Errorf("worker: intel: refresh %s: %v (next try in %s)", kind, err, shortDuration(marketFetchErrorGate))
 			continue
 		}
+		app.globalRetryAt.Delete(kind)
 		stored++
 	}
 

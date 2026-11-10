@@ -317,8 +317,8 @@ func (s *intelStubTransport) RoundTrip(req *http.Request) (*http.Response, error
 		return respond(http.StatusOK, `[{"system_id":30000142,"ship_kills":2,"pod_kills":1,"npc_kills":0}]`)
 	case path == "/universe/system_jumps/":
 		return respond(http.StatusOK, `[{"system_id":30000142,"ship_jumps":3000}]`)
-	case path == "/sovereignty/map/":
-		return respond(http.StatusOK, `[]`)
+	case path == "/sovereignty/systems/":
+		return respond(http.StatusOK, `{"solar_systems":[]}`)
 	case path == fmt.Sprintf("/corporations/%d/", fixtureCorpA):
 		return respond(http.StatusOK, `{"name":"Fixture Corp","ticker":"FXC"}`)
 	case path == "/corporations/99000001/":

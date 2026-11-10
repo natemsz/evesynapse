@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"evesynapse/internal/app/swarm"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"github.com/jackc/pgx/v5"
 )
@@ -143,6 +144,12 @@ func (app *Application) freshnessRows(ctx context.Context, now time.Time) ([]fre
 		add(freshSource{"Market history", "ESI publishes it daily; fetched every few hours", 2 * time.Hour, 6 * time.Hour}, at, true)
 	} else {
 		add(freshSource{"Market history", "ESI publishes it daily; fetched every few hours", 2 * time.Hour, 6 * time.Hour}, time.Time{}, false)
+	}
+	sovSrc := freshSource{"Sovereignty", "checked each time ESI updates it", 30 * time.Minute, 3 * time.Hour}
+	if snap, err := app.queries.GetGlobalSnapshot(ctx, esi.GlobalSovMap); err == nil {
+		add(sovSrc, snap.FetchedAt, true)
+	} else {
+		add(sovSrc, time.Time{}, false)
 	}
 	if swarm.StateFor(app).Cfg.Enabled() {
 		if at, ok := latestOf(app.queries.StatsSwarmLastApplied(ctx)); ok {

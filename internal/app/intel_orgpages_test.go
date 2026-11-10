@@ -195,7 +195,7 @@ func TestCorporationPageStatesAndDrain(t *testing.T) {
 	stub := &orgStub{
 		corps: map[int64]string{
 			98000001: `{"name":"Fixture Corp","ticker":"FXC","member_count":42,"ceo_id":90000001,` +
-				`"alliance_id":99000001,"home_station_id":60003760,"tax_rate":0.075,` +
+				`"alliance_id":99000001,"home_station_id":60003760,"tax_rates":{"isk":7.5,"loyalty_point":5},` +
 				`"date_founded":"2012-03-04T05:06:07Z","description":"Hello <b>capsuleer</b><script>alert(1)</script>"}`,
 		},
 		alliances: map[int64]string{

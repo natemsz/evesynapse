@@ -76,14 +76,15 @@ ON CONFLICT (id) DO UPDATE SET
 -- ---------------------------------------------------------------------
 
 -- name: GetPlaceStatsMeta :one
-SELECT kind, fetched_at, cached_until FROM place_stats_meta
+SELECT kind, fetched_at, cached_until, source_etag FROM place_stats_meta
 WHERE kind = sqlc.arg(kind)::text;
 
 -- name: UpsertPlaceStatsMeta :exec
-INSERT INTO place_stats_meta (kind, fetched_at, cached_until)
-VALUES (sqlc.arg(kind)::text, sqlc.arg(fetched_at)::timestamptz, sqlc.arg(cached_until)::timestamptz)
+INSERT INTO place_stats_meta (kind, fetched_at, cached_until, source_etag)
+VALUES (sqlc.arg(kind)::text, sqlc.arg(fetched_at)::timestamptz, sqlc.arg(cached_until)::timestamptz, sqlc.arg(source_etag)::text)
 ON CONFLICT (kind) DO UPDATE SET
-    fetched_at = EXCLUDED.fetched_at, cached_until = EXCLUDED.cached_until;
+    fetched_at = EXCLUDED.fetched_at, cached_until = EXCLUDED.cached_until,
+    source_etag = EXCLUDED.source_etag;
 
 -- The 30-day retention, applied at ingest.
 -- name: PruneSystemActivityHours :execrows

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"evesynapse/internal/esi"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -54,7 +55,7 @@ func (s *placeStatsStub) RoundTrip(req *http.Request) (*http.Response, error) {
 		return s.respond(http.StatusOK, s.kills), nil
 	case "/universe/system_jumps/":
 		return s.respond(http.StatusOK, s.jumps), nil
-	case "/sovereignty/map/":
+	case "/sovereignty/systems/":
 		return s.respond(http.StatusOK, s.sov), nil
 	case "/universe/factions/":
 		return s.respond(http.StatusOK, s.factions), nil
@@ -171,17 +172,27 @@ func TestPlaceActivityCollectorFailureKeepsStore(t *testing.T) {
 func TestPlaceSovereigntyCollector(t *testing.T) {
 	ctx := context.Background()
 	stub := &placeStatsStub{
-		sov: `[{"system_id":30000142,"alliance_id":99000001,"corporation_id":98000001},` +
-			`{"system_id":30000143,"corporation_id":98000002},` +
-			`{"system_id":30000144,"faction_id":500001}]`,
+		sov: `{"solar_systems":[` +
+			`{"solar_system_id":30000142,"claim":{"alliance":{"alliance_id":99000001,"corporation_id":98000001}}},` +
+			`{"solar_system_id":30000143,"claim":{"alliance":{"corporation_id":98000002}}},` +
+			`{"solar_system_id":30000144,"claim":{"faction":{"faction_id":500001}}},` +
+			`{"solar_system_id":30000145,"claim":{"unclaimed":true}}]}`,
 		factions: `[{"faction_id":500001,"name":"Caldari State","corporation_id":98000003}]`,
 		expires:  time.Now().Add(2 * time.Hour).UTC().Format(http.TimeFormat),
 	}
 	app, _, q := buildCorpTestApp(t, stub)
+	fetch := func() {
+		t.Helper()
+		for _, kind := range []string{esi.GlobalSovMap, esi.GlobalFactions} {
+			if err := app.esi.FetchAndStoreGlobalSnapshot(ctx, kind); err != nil {
+				t.Fatalf("fetch %s: %v", kind, err)
+			}
+		}
+	}
+	fetch()
 
-	stored, limited := app.refreshPlaceSovereignty(ctx)
-	if !stored || limited {
-		t.Fatalf("refreshPlaceSovereignty = (%v, %v), want (true, false)", stored, limited)
+	if !app.refreshPlaceSovereignty(ctx) {
+		t.Fatal("refreshPlaceSovereignty did not store")
 	}
 	jita, err := q.GetSystemSovereignty(ctx, 30000142)
 	if err != nil {
@@ -206,23 +217,22 @@ func TestPlaceSovereigntyCollector(t *testing.T) {
 		t.Errorf("faction holder = %d %q, want 500001 Caldari State", faction.FactionID, faction.FactionName)
 	}
 
-	// Gated inside the cache window.
+	// The pass only distills: it never calls ESI, and an unchanged
+	// snapshot is not written again.
 	calls := stub.calls.Load()
-	if stored, _ := app.refreshPlaceSovereignty(ctx); stored {
-		t.Fatal("gated refreshPlaceSovereignty stored, want false")
+	if app.refreshPlaceSovereignty(ctx) {
+		t.Fatal("refreshPlaceSovereignty stored an unchanged snapshot, want false")
 	}
 	if got := stub.calls.Load(); got != calls {
-		t.Errorf("gated pass made %d more calls, want 0", got-calls)
+		t.Errorf("distill pass made %d ESI calls, want 0", got-calls)
 	}
 
-	// Wholesale replacement: reopen the gate by hand, drop Jita
-	// from the payload, and its row must go.
-	if _, err := app.db.ExecContext(ctx, `UPDATE place_stats_meta SET cached_until = $1 WHERE kind = $2`,
-		time.Now().Add(-time.Hour), placeStatsKindSovereignty); err != nil {
-		t.Fatalf("reopen gate: %v", err)
-	}
-	stub.sov = `[{"system_id":30000143,"corporation_id":98000002}]`
-	if stored, _ := app.refreshPlaceSovereignty(ctx); !stored {
+	// Wholesale replacement: a newer snapshot without Jita drops
+	// its row.
+	stub.sov = `{"solar_systems":[{"solar_system_id":30000143,"claim":{"alliance":{"corporation_id":98000002}}}]}`
+	time.Sleep(10 * time.Millisecond)
+	fetch()
+	if !app.refreshPlaceSovereignty(ctx) {
 		t.Fatal("second refreshPlaceSovereignty did not store")
 	}
 	if _, err := q.GetSystemSovereignty(ctx, 30000142); !errors.Is(err, pgx.ErrNoRows) {

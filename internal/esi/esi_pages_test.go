@@ -32,9 +32,9 @@ func TestFetchAllPagesKeepsExistingQuery(t *testing.T) {
 		},
 	}
 	c := New(&http.Client{Transport: transport}, nil, nil)
-	body, _, err := c.fetchAllPages(context.Background(), "tok", "/x/?type_id=34")
+	body, _, _, _, err := c.fetchAllPagesIfChanged(context.Background(), "tok", "/x/?type_id=34", "")
 	if err != nil {
-		t.Fatalf("fetchAllPages: %v", err)
+		t.Fatalf("fetchAllPagesIfChanged: %v", err)
 	}
 	if string(body) != `[{"id":1},{"id":2}]` {
 		t.Fatalf("merged = %s", body)
@@ -55,8 +55,50 @@ func TestFetchAllPagesCapsMergedSize(t *testing.T) {
 		{status: http.StatusOK, header: pages, body: big},
 	}}
 	c := New(&http.Client{Transport: transport}, nil, nil)
-	_, _, err := c.fetchAllPages(context.Background(), "tok", "/x/")
+	_, _, _, _, err := c.fetchAllPagesIfChanged(context.Background(), "tok", "/x/", "")
 	if err == nil || !strings.Contains(err.Error(), "exceed") {
 		t.Fatalf("70MB merge = %v, want a size error", err)
+	}
+}
+
+// TestFetchAllPagesIfChangedReadsAChangedSetWhole: a paginated set
+// whose every page answers 304 is unchanged, with no body; when any
+// page changed, the pages that answered 304 are read again so the
+// stored set is the whole new book, with every page's new ETag.
+func TestFetchAllPagesIfChangedReadsAChangedSetWhole(t *testing.T) {
+	pages := func(etag string) http.Header {
+		return http.Header{"X-Pages": []string{"2"}, "Etag": []string{etag}}
+	}
+	stored := encodePagedETags([]string{`"a1"`, `"b1"`})
+
+	unchanged := &scriptedTransport{steps: []scriptedStep{
+		{status: http.StatusNotModified, header: pages(`"a1"`)},
+		{status: http.StatusNotModified, header: pages(`"b1"`)},
+	}}
+	c := New(&http.Client{Transport: unchanged}, nil, nil)
+	body, _, etag, notModified, err := c.fetchAllPagesIfChanged(context.Background(), "tok", "/x/", stored)
+	if err != nil || !notModified || body != nil || etag != stored {
+		t.Fatalf("unchanged set: body=%q etag=%q notModified=%v err=%v, want no body, the stored ETags, notModified", body, etag, notModified, err)
+	}
+
+	var seen []string
+	changed := &scriptedTransport{seen: &seen, steps: []scriptedStep{
+		{status: http.StatusNotModified, header: pages(`"a1"`)},
+		{status: http.StatusOK, header: pages(`"b2"`), body: `[{"id":3}]`},
+		{status: http.StatusOK, header: pages(`"a1"`), body: `[{"id":1}]`},
+	}}
+	c = New(&http.Client{Transport: changed}, nil, nil)
+	body, _, etag, notModified, err = c.fetchAllPagesIfChanged(context.Background(), "tok", "/x/", stored)
+	if err != nil || notModified {
+		t.Fatalf("changed set: notModified=%v err=%v, want a fresh read", notModified, err)
+	}
+	if string(body) != `[{"id":1},{"id":3}]` {
+		t.Fatalf("changed set merged = %s, want page 1 re-read and page 2's new entries", body)
+	}
+	if etag != encodePagedETags([]string{`"a1"`, `"b2"`}) {
+		t.Fatalf("stored ETags = %q, want page 1's and page 2's new one", etag)
+	}
+	if len(seen) != 3 {
+		t.Fatalf("requests = %q, want page 1, page 2, then page 1 again", seen)
 	}
 }

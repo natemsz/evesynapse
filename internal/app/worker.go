@@ -741,7 +741,9 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 }
 
 // refreshCoreSnapshots fetches the character's core datasets that are
-// not fresh (coreFreshness), stopping at the first failure. A kind
+// not fresh (coreFreshness), stopping at the first failure; the
+// failed kind waits coreRetryAfterError, so a kind that keeps failing
+// never holds back the ones after it. A kind
 // ESI has definitively refused settles instead (fetch_refusal.go):
 // it is recorded once and skipped from then on, and the pass moves
 // to the next kind rather than ending on it.
@@ -778,6 +780,10 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 		if state, ok := states[kind]; ok && fetchStateSettled(state) {
 			continue // refused before and still settled: no fetch, no log
 		}
+		if state, ok := states[kind]; ok && state.State == fetchStateError && !refusalDetail(state.Detail) &&
+			time.Since(state.AttemptedAt) < coreRetryAfterError {
+			continue // failed lately: the kinds after it get their turn meanwhile
+		}
 
 		if c.stopped() || !c.allowance.take() {
 			break
@@ -799,12 +805,24 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 				logging.Warnf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
 			} else {
 				logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+				// Recorded, so the next cycle passes over this
+				// kind for coreRetryAfterError and refreshes the
+				// ones after it instead of failing on it again.
+				app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, err.Error())
 			}
 			break // don't keep pushing this character this cycle
+		}
+		if state, ok := states[kind]; ok && state.State == fetchStateError && !refusalDetail(state.Detail) {
+			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateOK, "")
 		}
 		c.refreshed++
 	}
 }
+
+// coreRetryAfterError is how long a core kind whose fetch failed
+// (not a refusal, not the error limit) waits before it is asked
+// again.
+const coreRetryAfterError = 10 * time.Minute
 
 // refreshPublicData runs the passes that are not about one
 // character: market data, the name queues, and the public records

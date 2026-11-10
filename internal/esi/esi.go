@@ -2277,11 +2277,12 @@ func CacheWindowOpen(cachedUntil sql.NullTime) bool {
 // and stores the raw payload, honoring the response Expires header as
 // cached_until (fallback: now + 5 minutes when ESI doesn't send one).
 //
-// A dataset that comes in one response is fetched conditionally:
-// ESI is offered the ETag the stored copy came with, and when
-// nothing has changed it answers 304 with no body. The payload then
-// stays as it is and only its cache window is renewed. Datasets
-// that span several pages are downloaded in full, as before.
+// Every dataset is fetched conditionally: ESI is offered the ETag
+// the stored copy came with (one per page for a paginated set,
+// page 1's for the newest-first wallet windows), and when nothing
+// has changed it answers 304 with no body. The payload then stays
+// as it is, only its cache window is renewed, and the character is
+// not marked changed, so nothing downstream recomputes.
 func (c *Client) FetchAndStoreSnapshot(ctx context.Context, ch db.Character, kind string) error {
 	_, _, err := c.refreshSnapshot(ctx, ch, kind, true)
 	return err
@@ -2304,26 +2305,32 @@ func (c *Client) refreshSnapshot(ctx context.Context, ch db.Character, kind stri
 		return nil, false, err
 	}
 
+	// Every dataset is fetched conditionally against the ETag the
+	// stored copy came with: one ETag for a single response, one per
+	// page for a paginated set, and page 1's for the newest-first
+	// wallet windows. An unchanged answer renews the window only.
+	etag := ""
+	if conditional {
+		etag = c.storedSnapshotETag(ctx, ch.CharacterID, kind)
+	}
 	var header http.Header
-	singleResponse := false
+	newETag := ""
 	switch kind {
 	case SnapAssets, SnapContracts, SnapBlueprints, SnapMining, SnapContacts:
 		// Paginated; the stored snapshot is the merged array so
 		// downstream code sees one flat list.
-		body, header, err = c.fetchAllPages(ctx, token, path)
+		body, header, newETag, notModified, err = c.fetchAllPagesIfChanged(ctx, token, path, etag)
 	case SnapWalletJournal:
 		// Paginated, but only a bounded recent window is stored.
-		body, header, err = c.fetchJournalWindow(ctx, token, path)
+		body, header, newETag, notModified, err = c.fetchJournalWindow(ctx, token, path, etag)
 	case SnapWalletTxns:
 		// Steps backward via from_id; bounded recent window.
-		body, header, err = c.fetchTxnsWindow(ctx, token, path)
+		body, header, newETag, notModified, err = c.fetchTxnsWindow(ctx, token, path, etag)
 	default:
-		singleResponse = true
-		etag := ""
-		if conditional {
-			etag = c.storedSnapshotETag(ctx, ch.CharacterID, kind)
-		}
 		body, header, notModified, err = c.fetchIfChanged(ctx, token, path, etag)
+		if err == nil {
+			newETag = header.Get("ETag")
+		}
 	}
 	if err != nil {
 		return nil, false, err
@@ -2338,19 +2345,13 @@ func (c *Client) refreshSnapshot(ctx context.Context, ch db.Character, kind stri
 		return nil, true, nil
 	}
 
-	// Only a single-response dataset has one ETag that stands for
-	// all of it; a merged multi-page payload is stored without.
-	etag := ""
-	if singleResponse {
-		etag = header.Get("ETag")
-	}
 	if err := c.queries.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
 		CharacterID: ch.CharacterID,
 		Kind:        kind,
 		Payload:     string(body),
 		FetchedAt:   now,
 		CachedUntil: sql.NullTime{Time: cachedUntil, Valid: true},
-		Etag:        etag,
+		Etag:        newETag,
 	}); err != nil {
 		return nil, false, fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
 	}
@@ -2465,10 +2466,15 @@ func (c *Client) FetchAndStoreCorpSnapshot(ctx context.Context, ch db.Character,
 	var body []byte
 	var header http.Header
 	notModified := false
+	etag := ""
+	stored := c.storedSnapshotETag(ctx, ch.CharacterID, kind)
 	if paginated {
-		body, header, err = c.fetchAllPages(ctx, token, path)
+		body, header, etag, notModified, err = c.fetchAllPagesIfChanged(ctx, token, path, stored)
 	} else {
-		body, header, notModified, err = c.fetchIfChanged(ctx, token, path, c.storedSnapshotETag(ctx, ch.CharacterID, kind))
+		body, header, notModified, err = c.fetchIfChanged(ctx, token, path, stored)
+		if err == nil {
+			etag = header.Get("ETag")
+		}
 	}
 	if err != nil {
 		return err
@@ -2480,10 +2486,6 @@ func (c *Client) FetchAndStoreCorpSnapshot(ctx context.Context, ch db.Character,
 		return c.keepSnapshot(ctx, ch.CharacterID, kind, now, cachedUntil)
 	}
 
-	etag := ""
-	if !paginated {
-		etag = header.Get("ETag")
-	}
 	if err := c.queries.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
 		CharacterID: ch.CharacterID,
 		Kind:        kind,
@@ -2542,62 +2544,123 @@ func (c *Client) FetchCharacterAssetNames(ctx context.Context, ch db.Character, 
 	return out, nil
 }
 
-// fetchAllPages GETs every page of a paginated ESI endpoint (page
-// count from the X-Pages header of the first response) and returns
-// the entries merged into a single JSON array, plus the first
-// response's headers (whose Expires drives snapshot bookkeeping).
-func (c *Client) fetchAllPages(ctx context.Context, token, path string) ([]byte, http.Header, error) {
-	body, header, err := c.fetchRawDirect(ctx, token, path)
-	if err != nil {
-		return nil, nil, err
-	}
+// pagedETagPrefix marks a stored ETag that lists one ETag per page
+// of a paginated dataset, newline separated, in page order.
+const pagedETagPrefix = "pages:"
 
+// encodePagedETags packs per-page ETags for storage; "" when any
+// page came without one (the dataset is then fetched in full).
+func encodePagedETags(etags []string) string {
+	for _, e := range etags {
+		if e == "" {
+			return ""
+		}
+	}
+	return pagedETagPrefix + strings.Join(etags, "\n")
+}
+
+// decodePagedETags unpacks encodePagedETags; nil for anything else.
+func decodePagedETags(stored string) []string {
+	if !strings.HasPrefix(stored, pagedETagPrefix) {
+		return nil
+	}
+	return strings.Split(strings.TrimPrefix(stored, pagedETagPrefix), "\n")
+}
+
+// fetchAllPagesIfChanged GETs every page of a paginated ESI endpoint
+// (page count from the X-Pages header of the first response),
+// offering ESI each page's stored ETag; with none stored it is a
+// plain read of every page. When every page answers 304 and the page count is the
+// one stored, the dataset is unchanged: notModified is true and no
+// body is returned. Once a page has changed, the rest are asked in
+// full, and pages that answered 304 are read again for the merge.
+// It returns the merged array, page 1's headers and the per-page
+// ETags to store.
+func (c *Client) fetchAllPagesIfChanged(ctx context.Context, token, path, stored string) (body []byte, header http.Header, etag string, notModified bool, err error) {
+	prev := decodePagedETags(stored)
+	ifNoneMatch := func(page int, changed bool) string {
+		if changed || page > len(prev) {
+			return ""
+		}
+		return prev[page-1]
+	}
+	pageBody, header, nm, err := c.fetchIfChanged(ctx, token, path, ifNoneMatch(1, false))
+	if err != nil {
+		return nil, nil, "", false, err
+	}
 	pages := 1
 	if xp := header.Get("X-Pages"); xp != "" {
 		if n, aerr := strconv.Atoi(xp); aerr == nil && n > 1 {
 			pages = n
 		}
 	}
-	if pages == 1 {
-		return body, header, nil
-	}
-
-	// Each page arrived capped at 8MB, but the merge itself is
-	// capped too: without a total, a runaway page count
-	// (or a lying X-Pages) would balloon memory for one dataset.
+	// Each page arrives capped at 8MB, and the pages together are
+	// capped too, counted as they arrive: a runaway page count (or
+	// a lying X-Pages) must not balloon memory for one dataset.
 	const maxMergedBytes = 64 << 20
+	total := len(pageBody)
+	tooBig := func() error {
+		return fmt.Errorf("ESI GET %s: merged pages exceed %d bytes", path, maxMergedBytes)
+	}
+	bodies := make([][]byte, pages)
+	etags := make([]string, pages)
+	unchanged := make([]bool, pages)
+	bodies[0], etags[0], unchanged[0] = pageBody, header.Get("ETag"), nm
+	if nm {
+		etags[0] = prev[0]
+	}
+	changed := !nm || pages != len(prev)
+	for page := 2; page <= pages; page++ {
+		b, h, nm, err := c.fetchIfChanged(ctx, token, withPageParam(path, page), ifNoneMatch(page, changed))
+		if err != nil {
+			return nil, nil, "", false, err
+		}
+		bodies[page-1], etags[page-1], unchanged[page-1] = b, h.Get("ETag"), nm
+		if total += len(b); total > maxMergedBytes {
+			return nil, nil, "", false, tooBig()
+		}
+		if nm {
+			etags[page-1] = prev[page-1]
+		} else {
+			changed = true
+		}
+	}
+	if !changed {
+		return nil, header, stored, true, nil
+	}
+	for i := range bodies {
+		if !unchanged[i] {
+			continue
+		}
+		p := path
+		if i > 0 {
+			p = withPageParam(path, i+1)
+		}
+		b, h, err := c.fetchRawDirect(ctx, token, p)
+		if err != nil {
+			return nil, nil, "", false, err
+		}
+		bodies[i], etags[i] = b, h.Get("ETag")
+		if total += len(b); total > maxMergedBytes {
+			return nil, nil, "", false, tooBig()
+		}
+	}
+	if pages == 1 {
+		return bodies[0], header, encodePagedETags(etags), false, nil
+	}
 	merged := []json.RawMessage{}
-	total := 0
-	appendPage := func(b []byte) error {
+	for _, b := range bodies {
 		var entries []json.RawMessage
 		if err := json.Unmarshal(b, &entries); err != nil {
-			return fmt.Errorf("ESI GET %s: decode page: %w", path, err)
-		}
-		total += len(b)
-		if total > maxMergedBytes {
-			return fmt.Errorf("ESI GET %s: merged pages exceed %d bytes", path, maxMergedBytes)
+			return nil, nil, "", false, fmt.Errorf("ESI GET %s: decode page: %w", path, err)
 		}
 		merged = append(merged, entries...)
-		return nil
 	}
-	if err := appendPage(body); err != nil {
-		return nil, nil, err
-	}
-	for page := 2; page <= pages; page++ {
-		b, _, err := c.fetchRawDirect(ctx, token, withPageParam(path, page))
-		if err != nil {
-			return nil, nil, err
-		}
-		if err := appendPage(b); err != nil {
-			return nil, nil, err
-		}
-	}
-
 	combined, err := json.Marshal(merged)
 	if err != nil {
-		return nil, nil, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
+		return nil, nil, "", false, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
 	}
-	return combined, header, nil
+	return combined, header, encodePagedETags(etags), false, nil
 }
 
 // withPageParam sets the page query parameter on an ESI path,
@@ -2631,25 +2694,39 @@ const (
 
 // fetchJournalWindow GETs journal pages (newest first) until the
 // window is full or the endpoint runs out of pages, and returns
-// the merged array plus the first response's headers.
-func (c *Client) fetchJournalWindow(ctx context.Context, token, path string) ([]byte, http.Header, error) {
+// the merged array, the first response's headers and its ETag.
+// Page 1 is asked with the stored ETag: the journal is newest
+// first, so an unchanged page 1 means nothing was added, and the
+// stored window stands (notModified).
+func (c *Client) fetchJournalWindow(ctx context.Context, token, path, etag string) ([]byte, http.Header, string, bool, error) {
 	merged := []json.RawMessage{}
 	var firstHeader http.Header
+	firstETag := ""
 	for page := 1; page <= maxJournalPages; page++ {
-		p := path
-		if page > 1 {
-			p = withPageParam(path, page)
-		}
-		body, header, err := c.fetchRawDirect(ctx, token, p)
-		if err != nil {
-			return nil, nil, err
-		}
+		var (
+			body   []byte
+			header http.Header
+			err    error
+		)
 		if page == 1 {
-			firstHeader = header
+			var nm bool
+			body, header, nm, err = c.fetchIfChanged(ctx, token, path, etag)
+			if err != nil {
+				return nil, nil, "", false, err
+			}
+			if nm {
+				return nil, header, etag, true, nil // nothing newer than the stored window
+			}
+			firstHeader, firstETag = header, header.Get("ETag")
+		} else {
+			body, header, err = c.fetchRawDirect(ctx, token, withPageParam(path, page))
+			if err != nil {
+				return nil, nil, "", false, err
+			}
 		}
 		var entries []json.RawMessage
 		if err := json.Unmarshal(body, &entries); err != nil {
-			return nil, nil, fmt.Errorf("ESI GET %s: decode page: %w", path, err)
+			return nil, nil, "", false, fmt.Errorf("ESI GET %s: decode page: %w", path, err)
 		}
 		merged = append(merged, entries...)
 		if len(merged) >= maxJournalEntries {
@@ -2670,34 +2747,46 @@ func (c *Client) fetchJournalWindow(ctx context.Context, token, path string) ([]
 	}
 	combined, err := json.Marshal(merged)
 	if err != nil {
-		return nil, nil, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
+		return nil, nil, "", false, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
 	}
-	return combined, firstHeader, nil
+	return combined, firstHeader, firstETag, false, nil
 }
 
 // fetchTxnsWindow GETs wallet transactions newest-first, stepping
 // backward with from_id (each response covers the transactions
 // older than the given one) until the window is full or the
-// endpoint runs dry, at most maxTxnRequests calls.
-func (c *Client) fetchTxnsWindow(ctx context.Context, token, path string) ([]byte, http.Header, error) {
+// endpoint runs dry, at most maxTxnRequests calls. The first call
+// is asked with the stored ETag, like the journal's page 1.
+func (c *Client) fetchTxnsWindow(ctx context.Context, token, path, etag string) ([]byte, http.Header, string, bool, error) {
 	merged := []json.RawMessage{}
 	var firstHeader http.Header
+	firstETag := ""
 	var fromID int64
 	for call := 0; call < maxTxnRequests; call++ {
-		p := path
-		if fromID > 0 {
-			p = fmt.Sprintf("%s?from_id=%d", path, fromID)
-		}
-		body, header, err := c.fetchRawDirect(ctx, token, p)
-		if err != nil {
-			return nil, nil, err
-		}
+		var (
+			body   []byte
+			header http.Header
+			err    error
+		)
 		if call == 0 {
-			firstHeader = header
+			var nm bool
+			body, header, nm, err = c.fetchIfChanged(ctx, token, path, etag)
+			if err != nil {
+				return nil, nil, "", false, err
+			}
+			if nm {
+				return nil, header, etag, true, nil // nothing newer than the stored window
+			}
+			firstHeader, firstETag = header, header.Get("ETag")
+		} else {
+			body, _, err = c.fetchRawDirect(ctx, token, fmt.Sprintf("%s?from_id=%d", path, fromID))
+			if err != nil {
+				return nil, nil, "", false, err
+			}
 		}
 		var entries []json.RawMessage
 		if err := json.Unmarshal(body, &entries); err != nil {
-			return nil, nil, fmt.Errorf("ESI GET %s: decode page: %w", path, err)
+			return nil, nil, "", false, fmt.Errorf("ESI GET %s: decode page: %w", path, err)
 		}
 		if len(entries) == 0 {
 			break
@@ -2720,9 +2809,9 @@ func (c *Client) fetchTxnsWindow(ctx context.Context, token, path string) ([]byt
 	}
 	combined, err := json.Marshal(merged)
 	if err != nil {
-		return nil, nil, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
+		return nil, nil, "", false, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
 	}
-	return combined, firstHeader, nil
+	return combined, firstHeader, firstETag, false, nil
 }
 
 // FetchContractItems GETs one contract's item list with the

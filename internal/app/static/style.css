@@ -86,6 +86,60 @@
   font-display: swap;
   src: url('/static/fonts/evesansneue-bolditalic.woff2') format('woff2');
 }
+/* Eve Sans Neue's own space is 0.47em, nearly as wide as its n, so
+   sentences read as loose columns of words. These faces carry one
+   empty glyph, the space, at 0.3em, and take over that one character
+   in every weight and style above. They copy Eve Sans Neue's
+   vertical metrics and its zero's width, so line boxes and the ch
+   unit stay where they were. */
+@font-face {
+  font-family: 'Eve Sans Neue';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/evesansneue-space-regular.woff2') format('woff2');
+  unicode-range: U+0020;
+}
+@font-face {
+  font-family: 'Eve Sans Neue';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/static/fonts/evesansneue-space-regular.woff2') format('woff2');
+  unicode-range: U+0020;
+}
+@font-face {
+  font-family: 'Eve Sans Neue';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/static/fonts/evesansneue-space-bold.woff2') format('woff2');
+  unicode-range: U+0020;
+}
+@font-face {
+  font-family: 'Eve Sans Neue';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/static/fonts/evesansneue-space-bold.woff2') format('woff2');
+  unicode-range: U+0020;
+}
+@font-face {
+  font-family: 'Eve Sans Neue';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/evesansneue-space-regular.woff2') format('woff2');
+  unicode-range: U+0020;
+}
+@font-face {
+  font-family: 'Eve Sans Neue';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/static/fonts/evesansneue-space-bold.woff2') format('woff2');
+  unicode-range: U+0020;
+}
 /* The heading face: Rajdhani SemiBold (and Bold), set in capitals.
    Regular rides along for the dropdown menu items, and Medium
    reads the open prose. SIL Open Font License; self-hosted
@@ -1382,7 +1436,6 @@ footer .version {
   font-weight: 600;
   font-size: var(--fs-xs);
   line-height: 1.5;
-  word-spacing: 0.175em;
   text-wrap: balance;
 }
 /* The version line once set its text in Pixelify and its number in

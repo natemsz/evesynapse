@@ -3,3 +3,5 @@ Eve Sans Neue (evesansneue-regular/bold/italic/bolditalic.woff2.b64) is the site
 Eve Sans Neue is EVE Online's interface typeface, drawn for CCP Games by Sveinbjörn Pálsson (2014) for legibility at small sizes. EVE Online and all associated material are the intellectual property of CCP Games hf and are used with permission.
 
 The family carries two weights: Regular also serves the 500 slot, and Bold also serves the 600 slot.
+
+evesansneue-space-regular/bold.woff2.b64 are EveSynapse's own files, not part of the family. Each holds one empty glyph, the space, 0.3em wide, plus Eve Sans Neue's vertical metrics and the width of its zero, and the stylesheet uses them for the space character only. Eve Sans Neue's own files are unchanged.

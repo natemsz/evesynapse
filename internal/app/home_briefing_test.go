@@ -395,6 +395,7 @@ func TestBriefingFontPreloadAndFooter(t *testing.T) {
 	}
 	mustContain(t, "home head", body,
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/evesansneue-regular.woff2" crossorigin>`,
+		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/evesansneue-space-regular.woff2" crossorigin>`,
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/jetbrains-mono.woff2" crossorigin>`,
 		`<link rel="stylesheet" href="/static/style.css?v=`+staticAssetVersion()+`">`,
 		// The footer's version line: its ends are pinned here and

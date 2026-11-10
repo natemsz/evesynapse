@@ -393,6 +393,9 @@ type Application struct {
 	botWatchOnce sync.Once
 	botWatch     *botFingerprintWatch
 	enumWatch    *enumFloodWatch
+	// botGuardOff is set only by the dev entrypoint
+	// (DisableBotGuard) during route setup.
+	botGuardOff bool
 
 	// The public service summary's cache and throttle
 	// (core_status.go).

@@ -70,6 +70,9 @@ var Module = module.Module{
 		// so it is signed-in only.
 		auth.Post("/ui/openwindow/contract/{contractID}", h((*mod).handleOpenContractInGame))
 	},
+	WorkerJobs: []module.WorkerJob{
+		{Name: "roll catalog", After: module.AfterMarket, Start: refreshRollCatalog},
+	},
 	Pages: []module.Page{
 		{Template: "contracts.html", Section: "market"},
 		{Template: "contract_search.html", Section: "market"},

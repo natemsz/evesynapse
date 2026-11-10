@@ -18,8 +18,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="EveSynapse">
+{{/* The backdrop preload names the art the page will paint: the full art for the Full backdrop and the Minmatar full tier, the muted twins otherwise, none for the glow backdrop (bg.css). */}}
+{{if or (and (not .ThemeScheme) (eq .ThemeBackdrop "full")) (and (or (eq .ThemeScheme "minmatar") (eq .ThemeScheme "minmatar-v3")) (eq .ThemeTier "full"))}}
 <link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-uhd.jxl?v=afdbe38df4d5f595" media="(min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx)">
 <link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-4k.jxl?v=e6653b67c49cd641" media="((min-width: 1501px) and (max-width: 3200px) and (max-resolution: 1.99dppx)), ((min-width: 751px) and (max-width: 1600px) and (min-resolution: 2dppx))">
+{{else if not (and (not .ThemeScheme) (eq .ThemeBackdrop "glow"))}}
+<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-muted-uhd.jxl?v=b7e4118004978f2e" media="(min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx)">
+<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-muted-4k.jxl?v=73ff76cacb449b10" media="((min-width: 1501px) and (max-width: 3200px) and (max-resolution: 1.99dppx)), ((min-width: 751px) and (max-width: 1600px) and (min-resolution: 2dppx))">
+{{end}}
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/evesansneue-regular.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/evesansneue-space-regular.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/jetbrains-mono.woff2" crossorigin>

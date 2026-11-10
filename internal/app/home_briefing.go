@@ -1269,9 +1269,9 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 	}
 
 	for _, e := range shared.watchlist(ctx) {
-		rows := app.recentHistoryRows(ctx, marketRegionForType(e.TypeID, e.RegionID), e.TypeID, markethistory.ChartRows)
-		pct, ok := markethistory.ChangePct(rows, 7)
-		if !ok || absFloat(pct) < e.ThresholdPct {
+		m := shared.watchMove(ctx, e)
+		pct := m.Chg7
+		if !m.Has7 || absFloat(pct) < e.ThresholdPct {
 			continue
 		}
 		line := template.HTML(fmt.Sprintf("%s moved %s over 7 days in %s, past your %s watch. <a href=\"/market/\">Watchlist</a>",

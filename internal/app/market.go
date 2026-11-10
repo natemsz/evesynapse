@@ -1071,6 +1071,12 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		// from ESI by the sweep moments ago.
 		sells, buys = hs, hb
 		item.BookStoredAt = ageText(time.Now(), sweptAt)
+	} else if stored, stat, ok := app.storedBook(ctx, regionID, typeID); ok {
+		// No hub book in memory (a fresh start, or sweeps running
+		// late): the last sweep's stored top orders, with their age.
+		sells, buys = stored.sells, stored.buys
+		fromSnapshot = stat
+		item.BookStoredAt = ageText(time.Now(), stat.UpdatedAt)
 	} else {
 		var err error
 		if sells, buys, truncated, err = app.fetchOrderBook(ctx, regionID, typeID); err != nil {
@@ -1452,7 +1458,7 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 		logging.Errorf("market: list watchlist for user %d: %v", userID, err)
 		return view
 	}
-	view.Rows = app.watchlistRows(ctx, entries, app.vizPrefsFor(ctx, userID).SparkHover)
+	view.Rows = app.watchlistRows(ctx, entries, app.entryWatchMove, app.vizPrefsFor(ctx, userID).SparkHover)
 	return view
 }
 
@@ -1506,11 +1512,16 @@ func (app *Application) watchlistBasketRows(ctx context.Context, watched []db.Li
 	return out
 }
 
+// entryWatchMove is watchMove for one watchlist entry.
+func (app *Application) entryWatchMove(ctx context.Context, e db.MarketWatchlist) watchMove {
+	return app.watchMove(ctx, e.TypeID, marketRegionForType(e.TypeID, e.RegionID))
+}
+
 // watchlistRows renders stored watchlist entries: latest
 // average, 7/30-day moves, and the moving flag past the user's
 // line. Split from buildWatchlistView so Home's watchlist widget
 // renders the render's shared fetch instead of asking again.
-func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWatchlist, sparkOn bool) []watchlistRow {
+func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWatchlist, move func(context.Context, db.MarketWatchlist) watchMove, sparkOn bool) []watchlistRow {
 	var out []watchlistRow
 	for _, e := range entries {
 		row := watchlistRow{
@@ -1526,7 +1537,7 @@ func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWa
 		// The stat pack's typical sell where a sweep covers the
 		// region, the traded averages elsewhere (watchMove): the
 		// same figures the watch alerts fire on.
-		m := app.watchMove(ctx, e.TypeID, marketRegionForType(e.TypeID, e.RegionID))
+		m := move(ctx, e)
 		if m.Has {
 			row.Current = esi.FormatISK(m.Current)
 		}

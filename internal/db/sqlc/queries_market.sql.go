@@ -54,10 +54,11 @@ WITH RECURSIVE tree AS (
     SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
 )
 SELECT COUNT(*) FROM sde_types t
-LEFT JOIN market_region_stats s ON s.region_id = $1::bigint AND s.type_id = t.type_id
+LEFT JOIN market_region_stats rs ON rs.region_id = $1::bigint AND rs.type_id = t.type_id
+LEFT JOIN market_region_stats gs ON gs.region_id = 19000001 AND gs.type_id = t.type_id AND rs.type_id IS NULL
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND ($2::text = '' OR t.name ILIKE $2::text)
-  AND COALESCE(s.avg_daily_volume_30d, 0) >= $3::float8
+  AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= $3::float8
 `
 
 type CountMarketBrowseTypesParams struct {
@@ -1715,26 +1716,28 @@ WITH RECURSIVE tree AS (
     SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
 )
 SELECT t.type_id, t.name,
-       COALESCE(s.typical_sell, 0)::float8 AS typical_sell,
-       COALESCE(s.typical_buy, 0)::float8 AS typical_buy,
-       s.sell_chg_7d, s.volatility_30d,
-       COALESCE(s.avg_daily_volume_30d, 0)::float8 AS traded_per_day,
-       COALESCE(s.sell_orders, 0)::bigint AS sell_orders
+       COALESCE(rs.typical_sell, gs.typical_sell, 0)::float8 AS typical_sell,
+       COALESCE(rs.typical_buy, gs.typical_buy, 0)::float8 AS typical_buy,
+       COALESCE(rs.sell_chg_7d, gs.sell_chg_7d) AS sell_chg_7d,
+       COALESCE(rs.volatility_30d, gs.volatility_30d) AS volatility_30d,
+       COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0)::float8 AS traded_per_day,
+       COALESCE(rs.sell_orders, gs.sell_orders, 0)::bigint AS sell_orders
 FROM sde_types t
-LEFT JOIN market_region_stats s ON s.region_id = $1::bigint AND s.type_id = t.type_id
+LEFT JOIN market_region_stats rs ON rs.region_id = $1::bigint AND rs.type_id = t.type_id
+LEFT JOIN market_region_stats gs ON gs.region_id = 19000001 AND gs.type_id = t.type_id AND rs.type_id IS NULL
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND ($2::text = '' OR t.name ILIKE $2::text)
-  AND COALESCE(s.avg_daily_volume_30d, 0) >= $3::float8
+  AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= $3::float8
 ORDER BY
   CASE WHEN $4::text = 'name' THEN t.name END,
-  CASE WHEN $4::text = 'price' THEN s.typical_sell END DESC NULLS LAST,
-  CASE WHEN $4::text = 'cheap' THEN NULLIF(s.typical_sell, 0) END ASC NULLS LAST,
-  CASE WHEN $4::text = 'buy' THEN s.typical_buy END DESC NULLS LAST,
-  CASE WHEN $4::text = 'buycheap' THEN NULLIF(s.typical_buy, 0) END ASC NULLS LAST,
-  CASE WHEN $4::text = 'rising' THEN s.sell_chg_7d END DESC NULLS LAST,
-  CASE WHEN $4::text = 'falling' THEN s.sell_chg_7d END ASC NULLS LAST,
-  CASE WHEN $4::text = 'volume' THEN s.avg_daily_volume_30d END DESC NULLS LAST,
-  CASE WHEN $4::text = 'volatile' THEN s.volatility_30d END DESC NULLS LAST,
+  CASE WHEN $4::text = 'price' THEN COALESCE(rs.typical_sell, gs.typical_sell) END DESC NULLS LAST,
+  CASE WHEN $4::text = 'cheap' THEN NULLIF(COALESCE(rs.typical_sell, gs.typical_sell), 0) END ASC NULLS LAST,
+  CASE WHEN $4::text = 'buy' THEN COALESCE(rs.typical_buy, gs.typical_buy) END DESC NULLS LAST,
+  CASE WHEN $4::text = 'buycheap' THEN NULLIF(COALESCE(rs.typical_buy, gs.typical_buy), 0) END ASC NULLS LAST,
+  CASE WHEN $4::text = 'rising' THEN COALESCE(rs.sell_chg_7d, gs.sell_chg_7d) END DESC NULLS LAST,
+  CASE WHEN $4::text = 'falling' THEN COALESCE(rs.sell_chg_7d, gs.sell_chg_7d) END ASC NULLS LAST,
+  CASE WHEN $4::text = 'volume' THEN COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d) END DESC NULLS LAST,
+  CASE WHEN $4::text = 'volatile' THEN COALESCE(rs.volatility_30d, gs.volatility_30d) END DESC NULLS LAST,
   t.name, t.type_id
 LIMIT $6::bigint OFFSET $5::bigint
 `
@@ -1764,7 +1767,9 @@ type ListMarketBrowseTypesRow struct {
 // market group (its whole subtree; 0 = every group), joined to the
 // region's stat pack row, filtered by name and traded volume, sorted
 // and paged in SQL. A type with no stat row lists with no figures
-// and sorts after priced ones.
+// and sorts after priced ones. A type the region does not carry
+// reads the global market's row (region 19000001: PLEX trades there
+// and nowhere else).
 func (q *Queries) ListMarketBrowseTypes(ctx context.Context, arg ListMarketBrowseTypesParams) ([]ListMarketBrowseTypesRow, error) {
 	rows, err := q.db.Query(ctx, listMarketBrowseTypes,
 		arg.RegionID,

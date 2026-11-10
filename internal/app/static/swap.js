@@ -879,6 +879,13 @@
       };
       return surfOf(from) !== surfOf(to) ? "region" : "keep";
     }
+    if (path === "/market") {
+      // The browser and every item page share one path: opening an
+      // item, or a different one, is a new page and starts at the
+      // top. Changes on one item's page (region, range) keep the
+      // reader's place.
+      return (from.get("type") || "") !== (to.get("type") || "") ? "top" : "keep";
+    }
     if (path === "/intel/kills" || path === "/killmails") {
       // Paging older kills or switching filter scope starts the new
       // view at the top of the feed instead of holding scroll at the

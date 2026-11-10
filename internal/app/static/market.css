@@ -173,6 +173,9 @@
   align-items: center;
   gap: 0.35rem 0.75rem;
 }
+/* The title's box hugs its capitals, so centering lines the pill
+   up with the letters themselves, not the title's uneven line box. */
+.mkt-explorer-title > h2 { text-box: trim-both cap alphabetic; }
 .mkt-explorer-title > h2 {
   margin: 0;
   font-size: var(--fs-lg);

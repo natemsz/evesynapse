@@ -293,9 +293,18 @@ SELECT attribute_id, name, stackable, high_is_good, unit_id, default_value FROM 
 WHERE attribute_id = $1
 `
 
-func (q *Queries) GetSDEAttributeType(ctx context.Context, attributeID int64) (SdeAttributeType, error) {
+type GetSDEAttributeTypeRow struct {
+	AttributeID  int64   `json:"attribute_id"`
+	Name         string  `json:"name"`
+	Stackable    int64   `json:"stackable"`
+	HighIsGood   int64   `json:"high_is_good"`
+	UnitID       int64   `json:"unit_id"`
+	DefaultValue float64 `json:"default_value"`
+}
+
+func (q *Queries) GetSDEAttributeType(ctx context.Context, attributeID int64) (GetSDEAttributeTypeRow, error) {
 	row := q.db.QueryRow(ctx, getSDEAttributeType, attributeID)
-	var i SdeAttributeType
+	var i GetSDEAttributeTypeRow
 	err := row.Scan(
 		&i.AttributeID,
 		&i.Name,
@@ -1072,6 +1081,114 @@ func (q *Queries) ListItemNamesByIDs(ctx context.Context, itemIds []int64) ([]It
 	return items, nil
 }
 
+const listItemSheetAttributes = `-- name: ListItemSheetAttributes :many
+SELECT ta.attribute_id, ta.value, a.name, a.display_name, a.category_id,
+       a.unit_id, a.high_is_good, a.display_when_zero,
+       COALESCE(u.display_name, '')::text AS unit_name
+FROM sde_type_attributes ta
+JOIN sde_attribute_types a ON a.attribute_id = ta.attribute_id
+LEFT JOIN sde_units u ON u.unit_id = a.unit_id
+WHERE ta.type_id = $1 AND a.published = 1
+ORDER BY ta.attribute_id
+`
+
+type ListItemSheetAttributesRow struct {
+	AttributeID     int64   `json:"attribute_id"`
+	Value           float64 `json:"value"`
+	Name            string  `json:"name"`
+	DisplayName     string  `json:"display_name"`
+	CategoryID      int64   `json:"category_id"`
+	UnitID          int64   `json:"unit_id"`
+	HighIsGood      int64   `json:"high_is_good"`
+	DisplayWhenZero int64   `json:"display_when_zero"`
+	UnitName        string  `json:"unit_name"`
+}
+
+// ---------------------------------------------------------------------
+// Item sheet (schema 140): one type's shown attributes, bonuses and
+// variation family, each read by the type's key.
+// ---------------------------------------------------------------------
+// The published attributes one type carries, with how the game
+// labels and shows each.
+func (q *Queries) ListItemSheetAttributes(ctx context.Context, typeID int64) ([]ListItemSheetAttributesRow, error) {
+	rows, err := q.db.Query(ctx, listItemSheetAttributes, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListItemSheetAttributesRow
+	for rows.Next() {
+		var i ListItemSheetAttributesRow
+		if err := rows.Scan(
+			&i.AttributeID,
+			&i.Value,
+			&i.Name,
+			&i.DisplayName,
+			&i.CategoryID,
+			&i.UnitID,
+			&i.HighIsGood,
+			&i.DisplayWhenZero,
+			&i.UnitName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemSheetTraits = `-- name: ListItemSheetTraits :many
+SELECT t.skill_id, t.bonus, t.bonus_text, t.unit_id,
+       COALESCE(u.display_name, '')::text AS unit_name,
+       COALESCE(st.name, '')::text AS skill_name
+FROM sde_traits t
+LEFT JOIN sde_units u ON u.unit_id = t.unit_id
+LEFT JOIN sde_types st ON st.type_id = t.skill_id
+WHERE t.type_id = $1
+ORDER BY (t.skill_id < 0), abs(t.skill_id), t.importance, t.trait_id
+`
+
+type ListItemSheetTraitsRow struct {
+	SkillID   int64           `json:"skill_id"`
+	Bonus     sql.NullFloat64 `json:"bonus"`
+	BonusText string          `json:"bonus_text"`
+	UnitID    int64           `json:"unit_id"`
+	UnitName  string          `json:"unit_name"`
+	SkillName string          `json:"skill_name"`
+}
+
+// One type's bonus lines: per-level skill bonuses first, in skill
+// order, then the role bonus (skill_id -1), then other bonuses (-2).
+func (q *Queries) ListItemSheetTraits(ctx context.Context, typeID int64) ([]ListItemSheetTraitsRow, error) {
+	rows, err := q.db.Query(ctx, listItemSheetTraits, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListItemSheetTraitsRow
+	for rows.Next() {
+		var i ListItemSheetTraitsRow
+		if err := rows.Scan(
+			&i.SkillID,
+			&i.Bonus,
+			&i.BonusText,
+			&i.UnitID,
+			&i.UnitName,
+			&i.SkillName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketGroupParentIDs = `-- name: ListMarketGroupParentIDs :many
 SELECT DISTINCT parent_group_id FROM sde_market_groups
 WHERE parent_group_id > 0
@@ -1103,15 +1220,24 @@ WHERE attribute_id = ANY($1::bigint[])
 ORDER BY attribute_id
 `
 
-func (q *Queries) ListSDEAttributeTypesByIDs(ctx context.Context, attributeIds []int64) ([]SdeAttributeType, error) {
+type ListSDEAttributeTypesByIDsRow struct {
+	AttributeID  int64   `json:"attribute_id"`
+	Name         string  `json:"name"`
+	Stackable    int64   `json:"stackable"`
+	HighIsGood   int64   `json:"high_is_good"`
+	UnitID       int64   `json:"unit_id"`
+	DefaultValue float64 `json:"default_value"`
+}
+
+func (q *Queries) ListSDEAttributeTypesByIDs(ctx context.Context, attributeIds []int64) ([]ListSDEAttributeTypesByIDsRow, error) {
 	rows, err := q.db.Query(ctx, listSDEAttributeTypesByIDs, attributeIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SdeAttributeType
+	var items []ListSDEAttributeTypesByIDsRow
 	for rows.Next() {
-		var i SdeAttributeType
+		var i ListSDEAttributeTypesByIDsRow
 		if err := rows.Scan(
 			&i.AttributeID,
 			&i.Name,
@@ -1482,6 +1608,36 @@ func (q *Queries) ListSDEEffectsByIDs(ctx context.Context, effectIds []int64) ([
 	for rows.Next() {
 		var i SdeEffect
 		if err := rows.Scan(&i.EffectID, &i.Name, &i.Category); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEGroupNamesByIDs = `-- name: ListSDEGroupNamesByIDs :many
+SELECT group_id, name FROM sde_groups
+WHERE group_id = ANY($1::bigint[])
+`
+
+type ListSDEGroupNamesByIDsRow struct {
+	GroupID int64  `json:"group_id"`
+	Name    string `json:"name"`
+}
+
+func (q *Queries) ListSDEGroupNamesByIDs(ctx context.Context, groupIds []int64) ([]ListSDEGroupNamesByIDsRow, error) {
+	rows, err := q.db.Query(ctx, listSDEGroupNamesByIDs, groupIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEGroupNamesByIDsRow
+	for rows.Next() {
+		var i ListSDEGroupNamesByIDsRow
+		if err := rows.Scan(&i.GroupID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

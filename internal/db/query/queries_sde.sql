@@ -759,3 +759,36 @@ SELECT station_id, corporation_id FROM sde_stations WHERE station_id = $1;
 -- know returns no row.
 -- name: GetSDENPCCorporationFaction :one
 SELECT corporation_id, faction_id FROM sde_npc_corporations WHERE corporation_id = $1;
+
+-- ---------------------------------------------------------------------
+-- Item sheet (schema 140): one type's shown attributes, bonuses and
+-- variation family, each read by the type's key.
+-- ---------------------------------------------------------------------
+-- name: ListItemSheetAttributes :many
+-- The published attributes one type carries, with how the game
+-- labels and shows each.
+SELECT ta.attribute_id, ta.value, a.name, a.display_name, a.category_id,
+       a.unit_id, a.high_is_good, a.display_when_zero,
+       COALESCE(u.display_name, '')::text AS unit_name
+FROM sde_type_attributes ta
+JOIN sde_attribute_types a ON a.attribute_id = ta.attribute_id
+LEFT JOIN sde_units u ON u.unit_id = a.unit_id
+WHERE ta.type_id = $1 AND a.published = 1
+ORDER BY ta.attribute_id;
+
+-- name: ListItemSheetTraits :many
+-- One type's bonus lines: per-level skill bonuses first, in skill
+-- order, then the role bonus (skill_id -1), then other bonuses (-2).
+SELECT t.skill_id, t.bonus, t.bonus_text, t.unit_id,
+       COALESCE(u.display_name, '')::text AS unit_name,
+       COALESCE(st.name, '')::text AS skill_name
+FROM sde_traits t
+LEFT JOIN sde_units u ON u.unit_id = t.unit_id
+LEFT JOIN sde_types st ON st.type_id = t.skill_id
+WHERE t.type_id = $1
+ORDER BY (t.skill_id < 0), abs(t.skill_id), t.importance, t.trait_id;
+
+-- name: ListSDEGroupNamesByIDs :many
+SELECT group_id, name FROM sde_groups
+WHERE group_id = ANY(sqlc.arg(group_ids)::bigint[]);
+

@@ -3311,7 +3311,7 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 	if ab.CapAttributeID > 0 {
 		attrIDs = append(attrIDs, ab.CapAttributeID)
 	}
-	names := map[int64]db.SdeAttributeType{}
+	names := map[int64]db.ListSDEAttributeTypesByIDsRow{}
 	if rows, err := app.queries.ListSDEAttributeTypesByIDs(ctx, attrIDs); err == nil {
 		for _, row := range rows {
 			names[row.AttributeID] = row

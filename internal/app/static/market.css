@@ -165,10 +165,12 @@
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--hairline);
 }
+/* Title, Live pill and the book's facts sit on one centre line,
+   an equal gap apart. */
 .mkt-explorer-title {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 0.35rem 0.75rem;
 }
 .mkt-explorer-title > h2 {

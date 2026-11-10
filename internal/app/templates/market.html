@@ -152,7 +152,8 @@
   <section class="l-panel mkt-explorer" id="mkt-order-book">
     <div class="mkt-explorer-head">
       <div class="mkt-explorer-title">
-        <h2>Order book <span class="badge kill" data-live-pill role="status" hidden>Live</span></h2>
+        <h2>Order book</h2>
+        <span class="badge kill" data-live-pill role="status" hidden>Live</span>
         <span class="mkt-explorer-meta">{{$item.RegionName}} · {{$item.SellOrders}} sell / {{$item.BuyOrders}} buy orders{{if $item.BookStoredAt}} · swept {{$item.BookStoredAt}}{{end}}</span>
       </div>
       <button class="btn btn-quiet small" type="button" data-sheet-open="mkt-book-filters" hidden>Filter orders</button>

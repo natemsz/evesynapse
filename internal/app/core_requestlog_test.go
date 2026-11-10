@@ -3,6 +3,8 @@ package app
 import (
 	"bytes"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -43,5 +45,48 @@ func TestRequestLogLevels(t *testing.T) {
 		if !strings.Contains(logs.String(), want) {
 			t.Errorf("log %q is missing %q", logs.String(), want)
 		}
+	}
+}
+
+// TestRequestLogReferrer: an external referrer on an entry page is
+// logged as its origin, so a new player's discovery channel can be
+// read from the log. Same-origin referrers are navigation inside
+// the app, and other pages are not entry points, so neither logs
+// a referrer.
+func TestRequestLogReferrer(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	defer log.SetOutput(os.Stderr)
+
+	get := func(path, referer string) {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Host = "evesynapse.app"
+		if referer != "" {
+			req.Header.Set("Referer", referer)
+		}
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+	}
+
+	get("/", "https://www.google.com/search?q=evesynapse")
+	if !strings.Contains(logs.String(), "referrer https://www.google.com") {
+		t.Errorf("log %q does not record the external referrer", logs.String())
+	}
+	if strings.Contains(logs.String(), "search?q=") {
+		t.Errorf("log %q leaks the referrer query string", logs.String())
+	}
+
+	logs.Reset()
+	get("/", "https://evesynapse.app/market/")
+	if strings.Contains(logs.String(), "referrer") {
+		t.Errorf("log %q records a same-origin referrer", logs.String())
+	}
+
+	logs.Reset()
+	get("/healthz", "https://www.google.com/")
+	if strings.Contains(logs.String(), "referrer") {
+		t.Errorf("log %q records a referrer on a non-entry page", logs.String())
 	}
 }

@@ -567,7 +567,7 @@ type UpsertTVContractObservationsParams struct {
 
 // Contract observations (schema 052): the crawl's memory of
 // every public contract the sampler accepted, kept so later
-// crawls can tell whether the listing is still there. A
+// exit probes can tell whether the listing sold. A
 // listing that disappears well before its expiry is marked
 // vanished (probable-sale evidence); rows are bookkeeping
 // only and are never read by a page.

@@ -144,6 +144,7 @@ const (
 	AttrShieldBonus        = 68
 	AttrAgility            = 70
 	AttrDuration           = 73
+	AttrReactivationDelay  = 669
 	AttrMaxTargetRange     = 76
 	AttrStructureDamageAmt = 83
 	AttrArmorDamageAmount  = 84
@@ -1104,16 +1105,20 @@ func restrictionFor(snap *Snapshot, shipTypeID, shipGroup, moduleTypeID int64) *
 	return r
 }
 
-// cycleSeconds is an item's activation cycle in seconds:
-// duration (73) wins, speed (51) is the weapon/drone fallback.
+// cycleSeconds is an item's repeat interval in seconds, the basis
+// of every per-second rate: duration (73) wins, speed (51) is the
+// weapon/drone fallback, and a reactivation delay (669) adds the
+// wait before the module can run again.
 func cycleSeconds(e *entity, snap *Snapshot) float64 {
+	var c float64
 	if d := e.get(snap, AttrDuration); d > 0 {
-		return d / 1000
+		c = d / 1000
+	} else if s := e.get(snap, AttrSpeed); s > 0 {
+		c = s / 1000
+	} else {
+		return 0
 	}
-	if s := e.get(snap, AttrSpeed); s > 0 {
-		return s / 1000
-	}
-	return 0
+	return c + e.get(snap, AttrReactivationDelay)/1000
 }
 
 // layerEHP computes a tank layer's EHP per damage type from

@@ -1062,3 +1062,19 @@ func TestFitEngineSynchronizerChain(t *testing.T) {
 	near(t, "rig module count", res.ItemAttrs[rig][6316], 2, 1e-9)
 	near(t, "turret damage multiplier", res.ItemAttrs[turret][64], 3.21, 1e-9)
 }
+
+// TestFitEngineReactivationDelaySpreadsCapUse pins sustained rates
+// for a module that must wait before running again (the Aberrant
+// 'Vital' modules: 20 s burst, 120 s reactivation delay): its cap
+// need spreads over duration plus delay.
+func TestFitEngineReactivationDelaySpreadsCapUse(t *testing.T) {
+	const ship, mod = 1004, 6201
+	f := newFitFixture().
+		attrs(ship, map[int64]float64{482: 1000, 55: 100000, 13: 1}).
+		attrs(mod, map[int64]float64{AttrCapacitorNeed: 70, AttrDuration: 20000, AttrReactivationDelay: 120000}).
+		flag(mod, 13).
+		effect(mod, 9101, 1)
+	res := Compute(f.snap, ship, []ItemInput{{TypeID: mod, Quantity: 1}}, nil, nil, nil)
+	// 70 GJ every 20 s + 120 s = 0.5 GJ/s.
+	near(t, "capacitor draw", res.CapacitorDraw, 0.5, 1e-9)
+}

@@ -427,11 +427,8 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// mirrored and distilled for the system and region pages. Self-gated
 	// on ESI's cache windows like the mirrors above, so a fresh
 	// collection costs this cycle nothing.
-	if stored, aLimited := app.refreshPlaceActivity(ctx); stored {
+	if app.refreshPlaceActivity(ctx) {
 		c.refreshed++
-	} else if aLimited {
-		logging.Warnf("worker: ESI error limit hit collecting place activity; backing off until next cycle")
-		c.limited = true
 	}
 	if app.refreshPlaceSovereignty(ctx) {
 		c.refreshed++

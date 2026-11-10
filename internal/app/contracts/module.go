@@ -63,6 +63,7 @@ var Module = module.Module{
 		// other public market surfaces.
 		anon := r.With(deps.AnonPages())
 		anon.Get("/contracts/search/", h((*mod).handleContractSearch))
+		anon.Get("/contracts/search/stream", h((*mod).handleSearchStream))
 		anon.Get("/contracts/search/{contractID}/", h((*mod).handleContractDetail))
 		anon.Get("/contracts/search/{contractID}/panel", h((*mod).handleContractPanel))
 		// View in game acts as one of the reader's characters,

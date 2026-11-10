@@ -135,7 +135,7 @@ func TestAnonymousMarketStoredBookAndLiveToggle(t *testing.T) {
 		"5.00 <small>ISK</small>",
 		"Typical sell <b>8.00</b>",
 		"Typical buy <b>7.00</b>",
-		"Sell orders — The Forge",
+		"Sell orders in The Forge",
 		"7 sell orders",
 		"7 buy orders",
 		"scroll for more",

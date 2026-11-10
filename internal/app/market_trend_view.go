@@ -46,6 +46,7 @@ func newTrendFigure(v sql.NullFloat64) trendFigure {
 // statSideRow is one side of the book as the statistics table shows it.
 type statSideRow struct {
 	Label                                  string
+	Side                                   string // "sell" or "buy", for the live feed's in-place updates
 	Typical, Average, Best, Far, Edge, Dev string
 	Orders, Volume                         string
 	Has                                    bool
@@ -145,7 +146,7 @@ func (app *Application) attachStatPack(ctx context.Context, item *marketItem, vi
 		view.Source = "Global PLEX market"
 	}
 	sell := statSideRow{
-		Label: "Sell orders", Has: own.SellOrders > 0,
+		Label: "Sell orders", Side: "sell", Has: own.SellOrders > 0,
 		Typical: esi.FormatISK(own.TypicalSell), Average: esi.FormatISK(own.SellAvg),
 		Best: esi.FormatISK(own.BestSell), Far: esi.FormatISK(own.SellMax),
 		Edge: esi.FormatISK(own.SellP5), Dev: esi.FormatISK(own.SellStddev),
@@ -153,7 +154,7 @@ func (app *Application) attachStatPack(ctx context.Context, item *marketItem, vi
 		Chg1: newTrendFigure(own.SellChg1d), Chg7: newTrendFigure(own.SellChg7d), Chg30: newTrendFigure(own.SellChg30d),
 	}
 	buy := statSideRow{
-		Label: "Buy orders", Has: own.BuyOrders > 0,
+		Label: "Buy orders", Side: "buy", Has: own.BuyOrders > 0,
 		Typical: esi.FormatISK(own.TypicalBuy), Average: esi.FormatISK(own.BuyAvg),
 		Best: esi.FormatISK(own.BestBuy), Far: esi.FormatISK(own.BuyMin),
 		Edge: esi.FormatISK(own.BuyP5), Dev: esi.FormatISK(own.BuyStddev),

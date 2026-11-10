@@ -450,7 +450,7 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 		// finishes by calling noteRecentKillPrice, which can only
 		// fill the price into an entry that already exists.
 		if public {
-			app.noteRecentKill(db.Kill{
+			app.noteRecentKill(ctx, db.Kill{
 				KillmailID:          km.KillmailID,
 				Hash:                hash,
 				KillmailTime:        km.KillmailTime.UTC(),
@@ -541,7 +541,7 @@ func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, k
 	}); err != nil {
 		return err
 	}
-	app.noteRecentKillPrice(killmailID, total, dropped, float64(cov), now)
+	app.noteRecentKillPrice(ctx, killmailID, total, dropped, float64(cov), now)
 	// The priced value is final for this kill: fold it into the
 	// stored entity statistics the pages read. A fold failure is
 	// left for the maintenance sweep, never failed pricing.

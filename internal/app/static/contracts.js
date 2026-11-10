@@ -727,6 +727,11 @@
     });
   });
 
+  openRow = null;
+  document.querySelectorAll(".cs-row").forEach(bindRow);
+  openLiveContracts();
+  }
+
   // ---- results accordion -------------------------------------------------
   // Exactly one row open at a time; clicking the open row
   // closes it. The expansion lives in the drawer row right
@@ -780,7 +785,12 @@
       slot.innerHTML = '<p class="muted cs-panel-loading">Could not load the appraisal. The contract page carries the same detail.</p>';
     });
   }
-  document.querySelectorAll(".cs-row").forEach(function (row) {
+
+  // bindRow wires one result row's drawer toggles, once: on load,
+  // and for each row the live feed adds.
+  function bindRow(row) {
+    if (row.dataset.csBound) return;
+    row.dataset.csBound = "1";
     row.addEventListener("click", function (e) {
       if (e.target.closest("a, button, input, select, textarea, label")) return;
       if (openRow === row) closeRow(row);
@@ -793,24 +803,129 @@
       if (openRow === row) closeRow(row);
       else openRowPanel(row);
     });
-  });
-  // The contents cell caps at five lines: the "And N
-  // more items" line under the head never reveals lines
-  // in the cell -- it toggles the row's drawer, where
-  // the full contents list, and collapses it again.
-  // It is a button, so the row's own click guard already
-  // keeps the click from double-toggling; it runs the
-  // same open/close pair a row click runs.
-  document.querySelectorAll("[data-more-toggle]").forEach(function (btn) {
-    btn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      var row = btn.closest(".cs-row");
-      if (!row) return;
-      if (openRow === row) closeRow(row);
-      else openRowPanel(row);
-    });
-  });
+    // The contents cell caps at five lines: the "And N
+    // more items" line under the head never reveals lines
+    // in the cell -- it toggles the row's drawer, where
+    // the full contents list, and collapses it again.
+    // It is a button, so the row's own click guard already
+    // keeps the click from double-toggling; it runs the
+    // same open/close pair a row click runs.
+    var btn = row.querySelector("[data-more-toggle]");
+    if (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (openRow === row) closeRow(row);
+        else openRowPanel(row);
+      });
+    }
   }
+
+  // ---- live feed (the unfiltered listing) ---------------------------------
+  // The default listing, newest first, streams the contracts a
+  // sweep adds (/contracts/search/stream). Each new contract slots
+  // in at its place in the server's order and stays highlighted
+  // until it has been seen; the page keeps its page size, so the
+  // oldest rows drop off the bottom. The newest contract seen is
+  // remembered, so coming back highlights what arrived meanwhile.
+  var SEEN_KEY = "cs-seen";
+  var liveSource = null;
+
+  function readSeen() {
+    try {
+      var v = localStorage.getItem(SEEN_KEY);
+      return v === null ? null : +v || 0;
+    } catch (err) {
+      return null;
+    }
+  }
+  function noteSeen(id) {
+    try {
+      var prev = readSeen();
+      if (prev === null || id > prev) localStorage.setItem(SEEN_KEY, String(id));
+    } catch (err) {
+      /* storage off: highlights still fade, nothing is remembered */
+    }
+  }
+  function contractID(row) {
+    return +row.getAttribute("data-contract") || 0;
+  }
+  function markLive(row) {
+    window.esLive.mark(row, function (r) { noteSeen(contractID(r)); });
+  }
+
+  // markUnseen highlights the rows that arrived since the listing
+  // was last seen; a first visit starts the record at the newest.
+  function markUnseen(body) {
+    if (body.getAttribute("data-cs-seen") === "1") return;
+    body.setAttribute("data-cs-seen", "1");
+    var prev = readSeen();
+    var newest = 0;
+    body.querySelectorAll("tr.cs-row").forEach(function (row) {
+      var id = contractID(row);
+      if (id > newest) newest = id;
+      if (prev !== null && id > prev) markLive(row);
+    });
+    if (prev === null && newest) noteSeen(newest);
+  }
+
+  function applyLiveRows(ev) {
+    var body = document.querySelector("[data-cs-live-rows]");
+    if (!body || !ev || !ev.rows) return;
+    var have = {};
+    body.querySelectorAll("tr.cs-row").forEach(function (row) { have[contractID(row)] = row; });
+    var size = body.querySelectorAll("tr.cs-row").length;
+    // Walk the server's order from the bottom up, so each new
+    // contract goes in just above the next one the page has.
+    var anchor = null;
+    for (var i = ev.rows.length - 1; i >= 0; i--) {
+      var r = ev.rows[i];
+      if (have[r.id]) {
+        anchor = have[r.id];
+        continue;
+      }
+      if (!anchor) continue; // older than everything shown here
+      var holder = document.createElement("tbody");
+      holder.innerHTML = r.html;
+      var row = holder.querySelector("tr.cs-row");
+      if (!row) continue;
+      var nodes = Array.prototype.slice.call(holder.children);
+      nodes.forEach(function (n) { body.insertBefore(n, anchor); });
+      bindRow(row);
+      markLive(row);
+      anchor = row;
+    }
+    var rows = body.querySelectorAll("tr.cs-row");
+    for (var j = size; j < rows.length; j++) {
+      var gone = rows[j];
+      if (gone === openRow) closeRow(gone);
+      window.esLive.drop(gone);
+      if (gone.nextElementSibling && gone.nextElementSibling.classList.contains("cs-drow")) gone.nextElementSibling.remove();
+      gone.remove();
+    }
+  }
+
+  function openLiveContracts() {
+    var body = document.querySelector("[data-cs-live-rows]");
+    if (!body) {
+      if (liveSource) {
+        liveSource.close();
+        liveSource = null;
+      }
+      return;
+    }
+    markUnseen(body);
+    if (liveSource) return;
+    liveSource = window.esLive.stream("/contracts/search/stream", document.querySelector("[data-live-pill]"), {
+      contracts: applyLiveRows
+    });
+  }
+
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    if (liveSource) {
+      liveSource.close();
+      liveSource = null;
+    }
+  });
   init();
   document.addEventListener("evesynapse:content-ready", init);
 })();

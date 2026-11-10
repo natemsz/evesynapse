@@ -191,7 +191,8 @@ func (app *Application) finishWalletFlow(w *walletFlowWidget, dayNet map[time.Ti
 	}
 	if chart, ok := balancechart.BuildBalanceChart(points); ok {
 		chart.Label = "Cumulative net flow, ISK per day"
-		chart.LegendNote = "Net income minus spend, per day"
+		chart.Legend = []balancechart.ChartLegendItem{{Class: "legend-price", Label: "Net flow"}}
+		chart.LegendNote = "Running total of income minus spend, in ISK"
 		w.Chart = chart
 		w.HasChart = true
 	}

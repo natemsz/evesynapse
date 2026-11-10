@@ -863,7 +863,7 @@
   border-top: 1px solid var(--box-edge);
   color: var(--muted); font-size: var(--fs-xs);
 }
-.cs-tel-id code { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--text); }
+.cs-tel-id code { font-family: var(--font-mono); color: var(--text); }
 .cs-dfoot-full { font-size: var(--fs-xs); }
 
 /* ---- the abyssal pricing explainer ----
@@ -903,7 +903,7 @@
 .ab-howto-math {
   display: block; margin-top: 0.5rem; padding-top: 0.4rem;
   border-top: 1px solid var(--box-edge);
-  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--fs-xs);
+  font-family: var(--font-mono); font-size: var(--fs-xs);
   color: var(--gold);
 }
 

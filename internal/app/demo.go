@@ -289,6 +289,11 @@ func (app *Application) demoSeedPresent(ctx context.Context) bool {
 // account, one per visitor, with no EVE SSO involved.
 func (app *Application) handleDemoSignIn(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	if app.sessions.GetBool(ctx, sessionAuthenticated) && !app.sessionIsDemo(ctx) {
+		// A member's own session is never swapped for the demo.
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
 	if err := app.ensureDemoAccount(ctx); err != nil {
 		logging.Errorf("demo: sign-in could not prepare the demo account: %v", err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -381,7 +386,7 @@ func demoBackTarget(r *http.Request) string {
 	if referer == "" {
 		return "/"
 	}
-	if u, err := url.Parse(referer); err == nil && u.Host == r.Host && u.Path != "" {
+	if u, err := url.Parse(referer); err == nil && u.Host == r.Host && safeLocalNext(u.Path) {
 		return u.Path
 	}
 	return "/"

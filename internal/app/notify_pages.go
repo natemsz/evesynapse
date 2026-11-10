@@ -203,7 +203,7 @@ func (app *Application) handleNotificationsRead(w http.ResponseWriter, r *http.R
 				}
 			}
 		}
-		if ret := r.FormValue("return"); strings.HasPrefix(ret, "/") && !strings.HasPrefix(ret, "//") {
+		if ret := r.FormValue("return"); safeLocalNext(ret) {
 			target = ret
 		}
 	}

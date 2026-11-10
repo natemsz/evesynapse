@@ -205,7 +205,8 @@ func (app *Application) popCeremony(ctx context.Context, key string) (webauthn.S
 
 // factorGate is where a pending session may go: the factor
 // and enrollment pages and their ceremonies, sign-out, and
-// the SSO round trip itself (signing in again re-arms). The
+// the SSO round trip itself (signing in again re-arms), plus
+// the static files those pages load and the health check. The
 // link chooser and demo sign-in wait for a full session.
 // Blocked requests are sent to the factor page, or to forced
 // enrollment for an admin with no credential yet. A session
@@ -221,7 +222,11 @@ func (app *Application) factorGate(r *http.Request) (target string, blocked bool
 		r.URL.Path == "/auth/logout",
 		r.URL.Path == "/auth/eve",
 		r.URL.Path == "/auth/login",
-		r.URL.Path == "/auth/callback":
+		r.URL.Path == "/auth/callback",
+		strings.HasPrefix(r.URL.Path, "/static/"),
+		r.URL.Path == "/favicon.ico",
+		r.URL.Path == "/sw.js",
+		r.URL.Path == "/healthz":
 		return "", false
 	}
 	if app.sessions.GetBool(ctx, session2FAMustEnroll) {

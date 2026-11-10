@@ -132,7 +132,7 @@ func vizReturnPath(r *http.Request) string {
 		return "/market/"
 	}
 	u, err := url.Parse(ref)
-	if err != nil || u.Path == "" || !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") {
+	if err != nil || !safeLocalNext(u.Path) {
 		return "/market/"
 	}
 	if u.Host != "" && u.Host != r.Host {

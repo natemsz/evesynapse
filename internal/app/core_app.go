@@ -699,6 +699,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(markPrefetch)
 	r.Use(app.sessions.LoadAndSave)
 	r.Use(app.slideSession)
+	r.Use(app.holdPendingFactor)
 	r.Use(app.trackActivity)
 	r.Use(app.pageWantScopeMiddleware)
 	// The demo account's write safeguards (demo.go): turns away
@@ -755,7 +756,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/auth/login", app.handleEVELoginIdentity)
 	// The landing page's Try it now: a session on the shared
 	// demo account, no EVE SSO (demo.go).
-	r.Get("/auth/demo", app.handleDemoSignIn)
+	r.With(anonPages).Get("/auth/demo", app.handleDemoSignIn)
 	r.Get("/auth/callback", app.handleEVECallback)
 	// Signing out changes state, so it is a POST: a link or an image
 	// tag on another page cannot sign the visitor out.
@@ -1195,15 +1196,29 @@ func (app *Application) requireAuth(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
-		if target, blocked := app.factorGate(r); blocked {
-			// A pending second factor: only the factor
-			// pages and sign-out are reachable until the
-			// ceremony completes (auth_webauthn.go).
+		next.ServeHTTP(w, r)
+	})
+}
+
+// holdPendingFactor keeps a session that still owes its second
+// factor on the factor pages (factorGate, auth_webauthn.go). It
+// runs for every route, because a pending session already carries
+// its account: a page outside requireAuth would otherwise render
+// for that account. A page request goes to the factor page;
+// anything else is refused.
+func (app *Application) holdPendingFactor(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target, blocked := app.factorGate(r)
+		if !blocked {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/html") {
 			app.rememberReturnTo(r)
 			http.Redirect(w, r, target, http.StatusSeeOther)
 			return
 		}
-		next.ServeHTTP(w, r)
+		http.Error(w, "Finish signing in first.", http.StatusForbidden)
 	})
 }
 
@@ -1215,7 +1230,8 @@ func (app *Application) requireAuth(next http.Handler) http.Handler {
 // an alt in the header switcher must not make the Admin and Sync
 // pages disappear.
 func (app *Application) isAdmin(ctx context.Context) bool {
-	if len(app.cfg.adminCharIDs) == 0 || !app.sessions.GetBool(ctx, sessionAuthenticated) {
+	if len(app.cfg.adminCharIDs) == 0 || !app.sessions.GetBool(ctx, sessionAuthenticated) ||
+		app.sessions.GetBool(ctx, session2FAPending) {
 		return false
 	}
 	return app.adminAmong(app.sessionCharacters(ctx))

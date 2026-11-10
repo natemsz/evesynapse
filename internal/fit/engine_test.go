@@ -1026,3 +1026,66 @@ func TestFitEnginePerWeaponFigures(t *testing.T) {
 		t.Errorf("non-weapon type 519 has a per-weapon DPS entry")
 	}
 }
+
+// TestFitEngineSynchronizerChain pins a four-deep modifier chain in
+// the shape of the Imperial Navy Synchronizer (effects 12963, 12982,
+// 12980, 13071): each navy module adds 1 to the rig's module count,
+// the count adds to the rig's damage bonus, the bonus raises the
+// rig's hidden multiplier, and the multiplier scales turret damage.
+// Every link must be final before the next one reads it, and only
+// one synchronizer may be fitted (maxGroupFitted 1).
+func TestFitEngineSynchronizerChain(t *testing.T) {
+	const (
+		ship    = 1003
+		navy    = 6101 // navy module, carries the count attribute
+		rig     = 6102
+		turret  = 6103
+		rigGrp  = 5140
+		gunGrp  = 53
+		navyGrp = 52
+	)
+	f := newFitFixture().
+		group(ship, 25).group(navy, navyGrp).group(rig, rigGrp).group(turret, gunGrp).
+		attrs(ship, map[int64]float64{14: 3, 13: 3, 12: 3, 1137: 3}).
+		attrs(navy, map[int64]float64{6312: 1}).
+		attrs(rig, map[int64]float64{6405: 5, 6316: 0, 6529: 1, AttrMaxGroupFitted: 1}).
+		attrs(turret, map[int64]float64{64: 3}).
+		flag(navy, 13).flag(rig, EffectRigSlot).flag(turret, 12).
+		effect(navy, 12963, 0, fitModGroup(6316, 6312, 2, rigGrp)).
+		effect(rig, 12982, 0, fitMod("itemID", "ItemModifier", 6405, 6316, 2)).
+		effect(rig, 12980, 0, fitModGroup(6529, 6405, 6, rigGrp)).
+		effect(rig, 13071, 0, fitModGroup(64, 6529, 4, gunGrp))
+	items := []ItemInput{{TypeID: navy, Quantity: 2}, {TypeID: rig, Quantity: 1}, {TypeID: turret, Quantity: 1}}
+
+	// Two navy modules: count 2, bonus 5 + 2 = 7%, multiplier 1.07,
+	// turret damage multiplier 3 x 1.07 = 3.21.
+	res := Compute(f.snap, ship, items, nil, nil, nil)
+	near(t, "rig module count", res.ItemAttrs[rig][6316], 2, 1e-9)
+	near(t, "turret damage multiplier", res.ItemAttrs[turret][64], 3.21, 1e-9)
+	if len(res.OverGroupLimit) != 0 {
+		t.Fatalf("one rig flagged over its group limit: %+v", res.OverGroupLimit)
+	}
+
+	// One synchronizer per ship: a second is a fit error.
+	items[1].Quantity = 2
+	res = Compute(f.snap, ship, items, nil, nil, nil)
+	if want := (GroupLimit{GroupID: rigGrp, Allowed: 1, Fitted: 2}); len(res.OverGroupLimit) != 1 || res.OverGroupLimit[0] != want {
+		t.Fatalf("group limits = %+v, want [%+v]", res.OverGroupLimit, want)
+	}
+}
+
+// TestFitEngineReactivationDelaySpreadsCapUse pins sustained rates
+// for a module that must wait before running again (the Aberrant
+// 'Vital' modules: 20 s burst, 120 s reactivation delay): its cap
+// need spreads over duration plus delay.
+func TestFitEngineReactivationDelaySpreadsCapUse(t *testing.T) {
+	const ship, mod = 1004, 6201
+	f := newFitFixture().
+		attrs(ship, map[int64]float64{482: 1000, 55: 100000, 13: 1}).
+		attrs(mod, map[int64]float64{AttrCapacitorNeed: 70, AttrDuration: 20000, AttrReactivationDelay: 120000}).
+		flag(mod, 13).
+		effect(mod, 9101, 1)
+	res := Compute(f.snap, ship, []ItemInput{{TypeID: mod, Quantity: 1}}, nil, nil, nil)
+	// 70 GJ every 20 s + 120 s = 0.5 GJ/s.
+	near(t, "capacitor draw", res.CapacitorDraw, 0.5, 1e-9)
+}

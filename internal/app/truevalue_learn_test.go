@@ -203,8 +203,9 @@ func TestTVShipOldEvidenceStillCounts(t *testing.T) {
 
 // TestTVCorpusSampleAging: the corpus miner returns a live
 // ask the sweep last saw 30 days ago -- stamped at its
-// last-seen time for the fit to age-weight -- and records
-// its observation; no freshness gate drops it on the floor.
+// last-seen time for the fit to age-weight -- and its
+// observation is recorded; no freshness gate drops it on the
+// floor.
 func TestTVCorpusSampleAging(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)
@@ -222,9 +223,14 @@ func TestTVCorpusSampleAging(t *testing.T) {
 		 VALUES (1, 9101, 5005, 1, true)`); err != nil {
 		t.Fatalf("seed contract item: %v", err)
 	}
-	priceOf := tvStoredPricerFrom(nil, nil)
-	samples := app.corpusListingSamples(ctx, 5005,
-		map[int64]bool{5005: true}, map[int64]bool{5005: true}, priceOf, now)
+	contracts, err := app.readTVCorpus(ctx, 5005)
+	if err != nil {
+		t.Fatalf("read corpus: %v", err)
+	}
+	observed := make(map[int64]db.TrueValueContractObservation)
+	samples := corpusListingSamples(5005, contracts,
+		map[int64]bool{5005: true}, map[int64]bool{5005: true}, tvStoredPricerFrom(nil, nil), observed)
+	app.storeTVObservations(ctx, observed)
 	if len(samples) != 1 || samples[0].price != 5e10 || math.Abs(samples[0].at.Sub(lastSeen).Seconds()) > 1 || samples[0].source != tvSampleListing {
 		t.Fatalf("corpus samples = %+v, want the 30-day-old ask at its last-seen stamp", samples)
 	}
@@ -369,12 +375,10 @@ func TestTVExitProbes(t *testing.T) {
 
 	observe := func(id, typeID int64, expires time.Time) {
 		t.Helper()
-		if err := q.UpsertTVContractObservation(ctx, db.UpsertTVContractObservationParams{
+		seedTVObservation(t, q, db.TrueValueContractObservation{
 			ContractID: id, RegionID: 10000002, TypeID: typeID, Shape: tvContractShapeSingle,
 			ListedPrice: 5e9, SamplePrice: 5e9, FirstSeenAt: now.Add(-24 * time.Hour), ExpiresAt: expires,
-		}); err != nil {
-			t.Fatalf("seed observation %d: %v", id, err)
-		}
+		})
 	}
 	observe(7001, 5003, now.Add(10*24*time.Hour)) // accepted before expiry
 	observe(7002, 5003, now.Add(10*24*time.Hour)) // gone before expiry

@@ -16,9 +16,16 @@
 -- est_sell, then unpriced (the guide average is never a price).
 -- Written only by the worker's true-value pass.
 
--- name: UpsertTrueValue :exec
+-- The pass's writes in one statement: the rows whose values moved.
+-- An estimate is present where has_est is set (arrays carry no
+-- nulls).
+-- name: UpsertTrueValues :exec
 INSERT INTO true_values (type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+SELECT r.type_id, r.build_cost, CASE WHEN r.has_est THEN r.est_sell END, r.sell_samples,
+       sqlc.arg(computed_at)::timestamptz, sqlc.arg(profile_version)::bigint, r.sell_source
+FROM (SELECT unnest(sqlc.arg(type_ids)::bigint[]) AS type_id, unnest(sqlc.arg(build_costs)::float8[]) AS build_cost,
+             unnest(sqlc.arg(est_sells)::float8[]) AS est_sell, unnest(sqlc.arg(has_ests)::bool[]) AS has_est,
+             unnest(sqlc.arg(sell_samples)::bigint[]) AS sell_samples, unnest(sqlc.arg(sell_sources)::text[]) AS sell_source) r
 ON CONFLICT (type_id) DO UPDATE SET
     build_cost = EXCLUDED.build_cost,
     est_sell = EXCLUDED.est_sell,
@@ -65,15 +72,21 @@ WHERE v.type_id = w.type_id
 
 -- Contract observations (schema 052): the crawl's memory of
 -- every public contract the sampler accepted, kept so later
--- crawls can tell whether the listing is still there. A
+-- exit probes can tell whether the listing sold. A
 -- listing that disappears well before its expiry is marked
 -- vanished (probable-sale evidence); rows are bookkeeping
 -- only and are never read by a page.
 
--- name: UpsertTVContractObservation :exec
+-- The pass's observation writes in one statement: the listings
+-- whose shape or sample moved since it last wrote them.
+-- name: UpsertTVContractObservations :exec
 INSERT INTO true_value_contract_observations
     (contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)
+SELECT o.contract_id, o.region_id, o.type_id, o.shape, o.listed_price, o.sample_price, o.first_seen_at, o.first_seen_at, o.expires_at
+FROM (SELECT unnest(sqlc.arg(contract_ids)::bigint[]) AS contract_id, unnest(sqlc.arg(region_ids)::bigint[]) AS region_id,
+             unnest(sqlc.arg(type_ids)::bigint[]) AS type_id, unnest(sqlc.arg(shapes)::text[]) AS shape,
+             unnest(sqlc.arg(listed_prices)::float8[]) AS listed_price, unnest(sqlc.arg(sample_prices)::float8[]) AS sample_price,
+             unnest(sqlc.arg(first_seen_ats)::timestamptz[]) AS first_seen_at, unnest(sqlc.arg(expires_ats)::timestamptz[]) AS expires_at) o
 ON CONFLICT (contract_id) DO UPDATE SET
     region_id = EXCLUDED.region_id,
     type_id = EXCLUDED.type_id,
@@ -178,6 +191,26 @@ SELECT cand.contract_id, cand.price, cand.last_seen, cand.region_id, cand.date_e
 FROM cand
 JOIN pub_contract_items i ON i.contract_id = cand.contract_id
 ORDER BY cand.contract_id, i.type_id;
+
+-- Item exchanges whose item list was stored after a moment (schema
+-- 138), with the types they carry: the true-value pass mines those
+-- types again, since their corpus gained a contract.
+-- name: ListTVCorpusArrivals :many
+SELECT c.contract_id, c.items_stored_at::timestamptz AS stored_at,
+       array_agg(DISTINCT i.type_id)::bigint[] AS type_ids
+FROM pub_contracts c
+JOIN pub_contract_items i ON i.contract_id = c.contract_id AND i.is_included
+WHERE c.items_stored_at > sqlc.arg(since)::timestamptz
+  AND c.type = 'item_exchange' AND c.departed_at IS NULL
+GROUP BY c.contract_id, c.items_stored_at
+ORDER BY c.contract_id;
+
+-- The cached corpus contracts that are still live, with the sweep's
+-- latest sighting: a contract missing here has left the live set.
+-- name: ListTVCorpusContractsLive :many
+SELECT contract_id, last_seen FROM pub_contracts
+WHERE contract_id = ANY(sqlc.arg(contract_ids)::bigint[]) AND departed_at IS NULL
+ORDER BY contract_id;
 
 -- A watched listing whose exit probe got a final answer that is
 -- neither a sale nor a vanish (schema 099): a 403, "Contract not

@@ -47,6 +47,19 @@ func seedTVCorpusContract(t *testing.T, conn *sql.DB, id int64, price float64, s
 	}
 }
 
+// seedTVObservation records one watched listing the way the
+// corpus miner leaves it.
+func seedTVObservation(t *testing.T, q *db.Queries, o db.TrueValueContractObservation) {
+	t.Helper()
+	if err := q.UpsertTVContractObservations(context.Background(), db.UpsertTVContractObservationsParams{
+		ContractIds: []int64{o.ContractID}, RegionIds: []int64{o.RegionID}, TypeIds: []int64{o.TypeID},
+		Shapes: []string{o.Shape}, ListedPrices: []float64{o.ListedPrice}, SamplePrices: []float64{o.SamplePrice},
+		FirstSeenAts: []time.Time{o.FirstSeenAt}, ExpiresAts: []time.Time{o.ExpiresAt},
+	}); err != nil {
+		t.Fatalf("seed observation %d: %v", o.ContractID, err)
+	}
+}
+
 // seedTVEvidenceFixture installs the SDE and price fixtures
 // the evidence tests price from (see the file comment for
 // the arithmetic).
@@ -200,6 +213,51 @@ func TestTrueValueFittedListings(t *testing.T) {
 	}
 }
 
+// TestTrueValueCorpusFollowsEvidence: the pass keeps each
+// type's mined corpus and runs again when that evidence moves,
+// with no price input moving: a listing whose items are stored
+// after the cache is warm joins the supercarrier's asks, and
+// listings that leave the live set stop counting.
+func TestTrueValueCorpusFollowsEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	expires := now.Add(10 * 24 * time.Hour)
+	app, conn, q := buildCorpTestApp(t, &tvExitTransport{codes: map[int64]int{}})
+	ctx := context.Background()
+	seed := seedTVEvidenceFixture(t, conn, q)
+	seedTVCorpusContract(t, conn, 9003, 2.6e9, now, expires, []tvPublicContractItem{{TypeID: 5004, Quantity: 1, IsIncluded: true}})
+	seedTVCorpusContract(t, conn, 9004, 2.5e9, now, expires, []tvPublicContractItem{{TypeID: 5004, Quantity: 1, IsIncluded: true}})
+	bumpTVGuideMeta(t, q, seed)
+	app.refreshTrueValues(ctx)
+	samples := func() int64 {
+		t.Helper()
+		row, err := q.GetTrueValue(ctx, 5004)
+		if err != nil {
+			t.Fatalf("supercarrier true value: %v", err)
+		}
+		return row.SellSamples
+	}
+	if got := samples(); got != 2 {
+		t.Fatalf("supercarrier samples = %d, want 2", got)
+	}
+
+	seedTVCorpusContract(t, conn, 9005, 2.55e9, now, expires, []tvPublicContractItem{{TypeID: 5004, Quantity: 1, IsIncluded: true}})
+	if err := q.SetPublicContractItemsState(ctx, db.SetPublicContractItemsStateParams{ContractID: 9005, ItemsState: "stored"}); err != nil {
+		t.Fatalf("store items: %v", err)
+	}
+	app.refreshTrueValues(ctx)
+	if got := samples(); got != 3 {
+		t.Errorf("after a stored listing: supercarrier samples = %d, want 3", got)
+	}
+
+	if _, err := conn.ExecContext(ctx, `UPDATE pub_contracts SET departed_at = $1 WHERE contract_id IN (9003, 9004)`, now); err != nil {
+		t.Fatalf("depart corpus contracts: %v", err)
+	}
+	app.refreshTrueValues(ctx)
+	if got := samples(); got != 1 {
+		t.Errorf("after two departures: supercarrier samples = %d, want 1", got)
+	}
+}
+
 // TestTrueValueVanishedListings: both watched titan listings
 // leave the corpus long before expiry and the exit probe finds
 // them gone from the public market, so they
@@ -219,13 +277,11 @@ func TestTrueValueVanishedListings(t *testing.T) {
 
 	app.refreshTrueValues(ctx)
 	// A third watched listing, expiring inside the margin.
-	if err := q.UpsertTVContractObservation(ctx, db.UpsertTVContractObservationParams{
+	seedTVObservation(t, q, db.TrueValueContractObservation{
 		ContractID: 9009, RegionID: 10000002, TypeID: 5003, Shape: tvContractShapeFitted,
 		ListedPrice: 5.5e9, SamplePrice: 5.4e9, FirstSeenAt: now,
 		ExpiresAt: now.Add(12 * time.Hour),
-	}); err != nil {
-		t.Fatalf("seed observation: %v", err)
-	}
+	})
 
 	// All three listings leave the public market: the sweep
 	// stamps the corpus pair departed, and ESI answers 404.

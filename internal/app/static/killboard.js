@@ -11,6 +11,8 @@
 // The newest kill seen is remembered per scope in localStorage, so
 // coming back to the page highlights the kills that arrived while
 // you were away. The "Live" pill says whether the stream is open.
+// The headline figures and the leaders rail refresh from the
+// stream's stats events, about once a minute.
 // The server-rendered first paint is untouched; without script the
 // page is the list it always was.
 (function () {
@@ -216,6 +218,25 @@
     }
   }
 
+  // setStats swaps in the board's headline band and leaders rail
+  // from a stats event, rendered by the server through the page's
+  // own defines. A figure that changed flashes once.
+  function setStats(ev) {
+    [["kb-stats", ev.stats], ["kb-side", ev.side]].forEach(function (pair) {
+      var old = document.querySelector("." + pair[0]);
+      if (!old || !pair[1]) return;
+      var holder = document.createElement("div");
+      holder.innerHTML = pair[1];
+      var next = holder.firstElementChild;
+      if (!next || next.outerHTML === old.outerHTML) return;
+      var was = old.querySelectorAll(".l-stat-value");
+      next.querySelectorAll(".l-stat-value").forEach(function (v, i) {
+        if (!was[i] || was[i].textContent !== v.textContent) window.esLive.flash(v);
+      });
+      old.replaceWith(next);
+    });
+  }
+
   function streamURLFor() {
     var params = new URLSearchParams(location.search);
     var out = new URLSearchParams();
@@ -254,7 +275,8 @@
     streamURL = url;
     source = window.esLive.stream(url, document.querySelector("[data-live-pill]"), {
       kill: addKill,
-      "kill-price": setKillPrice
+      "kill-price": setKillPrice,
+      stats: setStats
     });
   }
 

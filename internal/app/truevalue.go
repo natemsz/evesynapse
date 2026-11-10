@@ -66,8 +66,9 @@ const (
 	// market.
 	trueValueHealthyDailyVolume = 10.0
 
-	// How long a stored row stays fresh when its inputs have
-	// not moved.
+	// How long the pass trusts its corpus cache before it
+	// reads every thin type's contracts afresh: the bound
+	// under the signals that keep the cache current.
 	trueValueStaleAfter = 48 * time.Hour
 
 	// Renders reload the table at most this often.

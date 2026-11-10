@@ -290,14 +290,31 @@ func (f *fitting) addImplants(implants []int64) {
 }
 
 // checkShipRestrictions flags the fit errors: modules carrying
-// canFitShipGroup*/canFitShipType* may only fly on the named hulls.
+// canFitShipGroup*/canFitShipType* may only fly on the named hulls,
+// and a group may not be fitted past its maxGroupFitted.
 func (f *fitting) checkShipRestrictions() {
 	shipGroup := f.snap.Groups[f.shipTypeID]
+	fitted := map[int64]int{}
+	allowed := map[int64]int{}
 	for _, ent := range f.fitted {
 		if r := restrictionFor(f.snap, f.shipTypeID, shipGroup, ent.typeID); r != nil {
 			f.res.Restricted = append(f.res.Restricted, *r)
 		}
+		if ent.kind != entModule && ent.kind != entRig && ent.kind != entSubsystem {
+			continue
+		}
+		g := f.snap.Groups[ent.typeID]
+		fitted[g] += maxInt(ent.instances, 1)
+		if n := int(f.snap.Attrs[ent.typeID][AttrMaxGroupFitted]); n > 0 && (allowed[g] == 0 || n < allowed[g]) {
+			allowed[g] = n
+		}
 	}
+	for g, n := range allowed {
+		if fitted[g] > n {
+			f.res.OverGroupLimit = append(f.res.OverGroupLimit, GroupLimit{GroupID: g, Allowed: n, Fitted: fitted[g]})
+		}
+	}
+	sort.Slice(f.res.OverGroupLimit, func(i, j int) bool { return f.res.OverGroupLimit[i].GroupID < f.res.OverGroupLimit[j].GroupID })
 }
 
 // bindModifiers walks every entity's effects and binds each
@@ -489,9 +506,9 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 	}
 }
 
-// foldAttributes groups the applications per (target, attribute),
-// then recomputes from base a few times so cross-entity chains
-// converge (skill -> ship bonus attribute -> module percent).
+// foldAttributes groups the applications per (target, attribute)
+// and folds every modified attribute from base, each source value
+// resolved before the attribute that reads it.
 func (f *fitting) foldAttributes() {
 	type appKey struct {
 		target *entity
@@ -502,14 +519,34 @@ func (f *fitting) foldAttributes() {
 		k := appKey{app.target, app.mod.ModifiedAttr}
 		grouped[k] = append(grouped[k], app)
 	}
-	for pass := 0; pass < 3; pass++ {
-		for k, list := range grouped {
-			base, ok := k.target.base[k.attr]
-			if !ok {
-				base = f.snap.attrDefault(k.attr)
-			}
-			k.target.calc[k.attr] = foldAttribute(f.snap, k.target, base, list)
+	// Each modified attribute is resolved on demand: a modifier's
+	// source value is folded before the attribute it feeds, however
+	// deep the chain (a synchronizer rig's module count feeds its
+	// bonus, which feeds a hidden turret multiplier, which feeds
+	// the turret's damage). A cycle reads the value as it stands.
+	const (
+		pending = 1
+		done    = 2
+	)
+	state := make(map[appKey]int, len(grouped))
+	var resolve func(e *entity, attr int64) float64
+	resolve = func(e *entity, attr int64) float64 {
+		k := appKey{e, attr}
+		list, ok := grouped[k]
+		if !ok || state[k] != 0 {
+			return e.get(f.snap, attr)
 		}
+		state[k] = pending
+		base, ok := e.base[attr]
+		if !ok {
+			base = f.snap.attrDefault(attr)
+		}
+		e.calc[attr] = foldAttribute(f.snap, base, list, resolve)
+		state[k] = done
+		return e.calc[attr]
+	}
+	for _, app := range f.apps {
+		resolve(app.target, app.mod.ModifiedAttr)
 	}
 }
 

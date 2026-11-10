@@ -651,10 +651,10 @@ func seedTrueValue(t *testing.T, q *db.Queries, typeID int64, build, est float64
 	if est > 0 && samples >= 2 {
 		source = tvSampleListing
 	}
-	if err := q.UpsertTrueValue(context.Background(), db.UpsertTrueValueParams{
-		TypeID: typeID, BuildCost: build, EstSell: estv, SellSamples: samples,
+	if err := q.UpsertTrueValues(context.Background(), db.UpsertTrueValuesParams{
+		TypeIds: []int64{typeID}, BuildCosts: []float64{build}, EstSells: []float64{estv.Float64},
+		HasEsts: []bool{estv.Valid}, SellSamples: []int64{samples}, SellSources: []string{source},
 		ComputedAt: time.Now().UTC(), ProfileVersion: trueValueProfileVersion,
-		SellSource: source,
 	}); err != nil {
 		t.Fatalf("seed true value %d: %v", typeID, err)
 	}

@@ -842,6 +842,12 @@ var pgPlaceStatsSourceEtagSchema string
 //go:embed schema_pg/137_true_value_asks.sql
 var pgTrueValueAsksSchema string
 
+// Step 138: when a public contract's item list was stored, so the
+// true-value pass can mine only the types whose evidence moved.
+//
+//go:embed schema_pg/138_pub_contract_items_stored_at.sql
+var pgPubContractItemsStoredAtSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1007,6 +1013,7 @@ func schemaSteps() []schemaStep {
 		{135, "trained_banner_dismissals", pgTrainedBannerDismissalsSchema, ""},
 		{136, "place_stats_source_etag", pgPlaceStatsSourceEtagSchema, ""},
 		{137, "true_value_asks", pgTrueValueAsksSchema, ""},
+		{138, "pub_contract_items_stored_at", pgPubContractItemsStoredAtSchema, ""},
 	}
 }
 

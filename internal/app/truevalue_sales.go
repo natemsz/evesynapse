@@ -75,6 +75,7 @@ func (app *Application) probeContractExits(ctx context.Context, now time.Time) {
 				continue
 			}
 			sold++
+			app.trueValuePass.evidenceMoved = true
 		case exitLive:
 			if err := app.queries.TouchTVContractObservation(ctx, db.TouchTVContractObservationParams{
 				ContractID: d.ContractID, LastSeenAt: now,
@@ -90,6 +91,7 @@ func (app *Application) probeContractExits(ctx context.Context, now time.Time) {
 					logging.Errorf("true values: exit probes: mark %d vanished: %v", d.ContractID, err)
 					continue
 				}
+				app.trueValuePass.evidenceMoved = true
 			} else if err := app.queries.DeleteTVContractObservation(ctx, d.ContractID); err != nil {
 				logging.Errorf("true values: exit probes: forget %d: %v", d.ContractID, err)
 				continue

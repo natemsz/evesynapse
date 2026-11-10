@@ -10,7 +10,9 @@
 // to normal a few seconds after it is on screen in a visible tab.
 // The newest kill seen is remembered per scope in localStorage, so
 // coming back to the page highlights the kills that arrived while
-// you were away. The "Live" pill says whether the stream is open.
+// you were away. Only the newest few are highlighted at once, so a
+// long absence or a busy hour never paints the whole list. The
+// "Live" pill says whether the stream is open.
 // The headline figures and the leaders rail refresh from the
 // stream's stats events, about once a minute.
 // The server-rendered first paint is untouched; without script the
@@ -22,6 +24,7 @@
 
   var PAGE_SIZE = 40; // killPageSize in killboard.go
   var SEEN_PREFIX = "kb-seen:";
+  var LIVE_MAX = 5; // rows highlighted at once
   var source = null;
   var streamURL = "";
 
@@ -140,19 +143,31 @@
     window.esLive.mark(row, function (r) { noteSeen(rowID(r)); });
   }
 
-  // markUnseen highlights the rows that arrived since this scope's
-  // list was last seen. A first visit highlights nothing and starts
-  // the record from the newest row on the page.
+  // capLive keeps the highlight to the newest LIVE_MAX rows: an
+  // older highlighted row settles as seen. The list is newest first.
+  function capLive(list) {
+    var live = list.querySelectorAll("li.kb-kill.is-live");
+    for (var i = LIVE_MAX; i < live.length; i++) window.esLive.settle(live[i]);
+  }
+
+  // markUnseen highlights the newest rows that arrived since this
+  // scope's list was last seen, LIVE_MAX at most. A first visit
+  // highlights nothing and starts the record from the newest row on
+  // the page.
   function markUnseen(list) {
     if (list.getAttribute("data-kb-seen") === "1") return;
     list.setAttribute("data-kb-seen", "1");
     var rows = list.querySelectorAll("li.kb-kill");
     var prev = readSeen();
     var newest = 0;
+    var marked = 0;
     rows.forEach(function (row) {
       var id = rowID(row);
       if (id > newest) newest = id;
-      if (prev !== null && id > prev) markLive(row);
+      if (prev !== null && id > prev && marked < LIVE_MAX) {
+        markLive(row);
+        marked++;
+      }
     });
     if (prev === null && newest) noteSeen(newest);
   }
@@ -198,6 +213,7 @@
     if (before) before.before(row);
     else list.append(row);
     markLive(row);
+    capLive(list);
     rows = list.querySelectorAll("li.kb-kill");
     for (var j = PAGE_SIZE; j < rows.length; j++) {
       window.esLive.drop(rows[j]);

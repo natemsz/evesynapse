@@ -49,8 +49,10 @@ const (
 	// corpOwnFetchMaxAge bounds how long a member's own successful
 	// fetch of a corporation kind lets it copy a fellow member's
 	// fresh answer instead of asking ESI: past it the member asks
-	// ESI itself, which re-checks its in-game role.
-	corpOwnFetchMaxAge = time.Hour
+	// ESI itself, which re-checks its in-game role. It is also the
+	// longest a role revoked in-game can keep showing that
+	// member's corporation data, so it stays at ten minutes.
+	corpOwnFetchMaxAge = 10 * time.Minute
 	// maxCorpAssetNameItemsPerCycle caps the singleton-name POST
 	// batches per character per cycle (ESI accepts 1,000 IDs per
 	// call, so one cycle is at most one call).

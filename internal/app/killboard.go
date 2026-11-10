@@ -369,16 +369,7 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		q = append(q, fmt.Sprintf("before=%d.%d", last.KillmailTime.Unix(), last.KillmailID))
 		v.Older = "/intel/kills/?" + strings.Join(q, "&")
 	}
-	switch v.ScopeKind {
-	case "character", "corporation", "alliance":
-		v.Stats, v.Top = app.killboardScopedHeadline(ctx, names, v.ScopeKind, v.ScopeID)
-		v.Stats.AriaLabel = v.ScopeName + ": " + v.Stats.ScopeNote
-		if v.Stats.ScopeUpdatedAgo != "" {
-			v.Stats.AriaLabel += " · updated " + v.Stats.ScopeUpdatedAgo
-		}
-	default:
-		v.Stats, v.Top = app.killboardHeadline(ctx, names)
-	}
+	v.Stats, v.Top = app.killboardBoardStats(ctx, names, v.ScopeKind, v.ScopeID, v.ScopeName)
 	data.Killboard = v
 	title := "Killboard"
 	if v.ScopeName != "" {
@@ -463,6 +454,30 @@ func (app *Application) killboardHeadline(ctx context.Context, names *killNames)
 			sec, tier := secRound(s.Security)
 			top.Systems = append(top.Systems, killTopRow{ID: r.EntityID, Name: s.Name, Count: r.Kills, Note: sec, Tier: tier})
 		}
+	}
+	return st, top
+}
+
+// killStatsEntity reports whether a scope kind has a headline of its
+// own; every other scope (none, a system, a region, a ship) shows New
+// Eden's.
+func killStatsEntity(kind string) bool {
+	return kind == "character" || kind == "corporation" || kind == "alliance"
+}
+
+// killboardBoardStats is a board's headline and leaders rail: the
+// scoped entity's own for a character, corporation or alliance,
+// New Eden's for every other scope. The page render and the live
+// stats event (publishKillboardStats) both read it, from stored
+// rows only.
+func (app *Application) killboardBoardStats(ctx context.Context, names *killNames, kind string, id int64, scopeName string) (killboardStats, killboardTop) {
+	if !killStatsEntity(kind) {
+		return app.killboardHeadline(ctx, names)
+	}
+	st, top := app.killboardScopedHeadline(ctx, names, kind, id)
+	st.AriaLabel = scopeName + ": " + st.ScopeNote
+	if st.ScopeUpdatedAgo != "" {
+		st.AriaLabel += " · updated " + st.ScopeUpdatedAgo
 	}
 	return st, top
 }

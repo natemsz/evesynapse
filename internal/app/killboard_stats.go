@@ -187,7 +187,13 @@ func (app *Application) foldKillStats(ctx context.Context, killmailID int64) err
 			}
 		}
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	for e := range folded {
+		app.killLive.noteEntityStats(e.kind, e.id)
+	}
+	return nil
 }
 
 // backfillKillStats is the maintenance sweep: public kills stored

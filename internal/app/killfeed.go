@@ -600,6 +600,7 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 	} else if n > 0 {
 		logging.Infof("killboard: priced %d kills", n)
 	}
+	app.publishKillboardStats(ctx)
 	if time.Since(app.killLastPruned) >= 24*time.Hour {
 		app.killLastPruned = time.Now()
 		before := time.Now().UTC().Add(-killDetailRetention)

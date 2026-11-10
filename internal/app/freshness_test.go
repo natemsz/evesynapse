@@ -16,7 +16,8 @@ import (
 // TestStatusFreshnessEndpoint: the sidebar status modal's feed.
 // A signed-in reader gets ESI's state and one framed row per
 // dataset (an age plus the cadence it is read against, never a
-// bare age); a signed-out reader is sent away.
+// bare age, both taken from the dataset's cadence in cadence.go);
+// a signed-out reader is sent away.
 func TestStatusFreshnessEndpoint(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
@@ -29,7 +30,7 @@ func TestStatusFreshnessEndpoint(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
 		Kind: regionSweepKind(10000002), State: "ok",
-		AttemptedAt: now.Add(-12 * time.Minute),
+		AttemptedAt: now.Add(-(cadenceMarketOrders.okUnder + 5*time.Minute)),
 	}); err != nil {
 		t.Fatalf("seed fetch state: %v", err)
 	}
@@ -94,8 +95,8 @@ func TestStatusFreshnessEndpoint(t *testing.T) {
 	if forge == nil {
 		t.Fatalf("no Market orders · The Forge row in %+v", body.Rows)
 	}
-	if forge.State != "warn" || !strings.Contains(forge.Text, "ago · sweeps hourly") {
-		t.Errorf("forge row = %+v, want the seeded age framed against the hourly sweep", forge)
+	if forge.State != "warn" || !strings.Contains(forge.Text, "ago · "+cadenceMarketOrders.words) {
+		t.Errorf("forge row = %+v, want a late age framed against %q", forge, cadenceMarketOrders.words)
 	}
 
 	anon := get(nil)

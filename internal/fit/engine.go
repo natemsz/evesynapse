@@ -81,7 +81,7 @@ package fit
 // LocationGroupModifier (invGroups group match),
 // LocationRequiredSkillModifier (sde_requirements match), and
 // OwnerRequiredSkillModifier (drones, charges and missiles), plus
-// the modifier-less skill effects in skillCodeEffects. Domains
+// the modifier-less effects in codeEffects. Domains
 // targetID / target / structureID, the EffectStopper func, effect
 // categories outside {0 passive, 1 active, 4 online} — except 5 =
 // overload, which binds for overheated modules — and charge/group
@@ -237,6 +237,24 @@ const (
 
 // Effect categories (dgmEffects): 5 is the overload/heat
 // category — the one heating a module engages.
+// Ancillary armor repairers, spool-up weapons, Breacher pods and the
+// Reactive Armor Hardener.
+const (
+	// AttrChargedArmorDamageMult is an ancillary armor repairer's
+	// multiplier while it has Nanite Repair Paste loaded.
+	AttrChargedArmorDamageMult = 1886
+	// Spool-up weapons: damage bonus gained per cycle and its cap.
+	AttrSpoolBonusPerCycle = 2733
+	AttrSpoolBonusMax      = 2734
+	// Breacher pod damage over time (on the charge).
+	AttrDotDuration            = 5735
+	AttrDotMaxDamagePerTick    = 5736
+	AttrDotMaxHPPercentPerTick = 5737
+	// EffectAdaptiveArmorHardener is the Reactive Armor Hardener's
+	// adaptation (no modifier rows; see codeEffects).
+	EffectAdaptiveArmorHardener = 4928
+)
+
 const catOverload = 5
 
 // Module states: the values ItemInput.State carries, and a saved
@@ -747,6 +765,17 @@ type Result struct {
 	DroneDPS     float64
 	SmartbombDPS float64
 	DPS          float64
+	// SpooledDPS is DPS with every spool-up weapon (entropic
+	// disintegrators) at its full damage bonus, reached after
+	// SpoolSeconds of continuous fire; both 0 without one.
+	SpooledDPS   float64
+	SpoolSeconds float64
+	// Breacher pods: up to BreacherMaxPerSec HP a second, or
+	// BreacherHPPercent of the target's hit points a second when
+	// that is lower, for BreacherSeconds per pod. Not in DPS.
+	BreacherMaxPerSec float64
+	BreacherHPPercent float64
+	BreacherSeconds   float64
 
 	// Volley damage per weapon cycle, broken down like DPS.
 	TurretVolley    float64

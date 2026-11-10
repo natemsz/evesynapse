@@ -670,6 +670,9 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 	}
 	for _, repAttr := range []int64{fit.AttrShieldBonus, fit.AttrArmorDamageAmount} {
 		if amt := eff[repAttr]; amt > 0 {
+			if mult := eff[fit.AttrChargedArmorDamageMult]; repAttr == fit.AttrArmorDamageAmount && mult > 0 && doc.Charges[typeID] > 0 {
+				amt *= mult // paste loaded
+			}
 			if cyc := FitTipCycle(eff); cyc > 0 {
 				class := ""
 				if bc := FitTipCycle(base); bc > 0 {
@@ -1100,6 +1103,9 @@ type FitStatsView struct {
 	DroneDPS      string
 	SmartbombDPS  string // "" when no smartbomb is fitted
 	TotalDPS      string
+	SpooledDPS    string // "" without a spool-up weapon
+	SpoolTime     string
+	Breacher      string // "" without a breacher pod loaded
 	TurretVolley  string
 	MissileVolley string
 	DroneVolley   string
@@ -1942,6 +1948,14 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 		st.SmartbombDPS = FitFmt1(res.SmartbombDPS)
 	}
 	st.TotalDPS = FitFmt1(res.DPS)
+	if res.BreacherMaxPerSec > 0 {
+		st.Breacher = fmt.Sprintf("%s HP/s or %s%% of the target's hit points a second, whichever is lower, for %s",
+			FitFmt1(res.BreacherMaxPerSec), FitFmt1(res.BreacherHPPercent), FitSeconds(res.BreacherSeconds))
+	}
+	if res.SpooledDPS > 0 {
+		st.SpooledDPS = FitFmt1(res.SpooledDPS)
+		st.SpoolTime = FitSeconds(res.SpoolSeconds)
+	}
 
 	st.TurretVolley = FitFmt1(res.TurretVolley)
 	st.MissileVolley = FitFmt1(res.MissileVolley)

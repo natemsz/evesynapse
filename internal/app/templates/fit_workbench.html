@@ -154,6 +154,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <span class="fit-headline-num">{{.TotalDPS}}</span>
         <span class="fit-headline-label"><abbr title="Damage per second">DPS</abbr></span>
         <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}{{if .SmartbombDPS}} · smartbombs {{.SmartbombDPS}}{{end}}</span>
+        {{if .SpooledDPS}}<span class="fit-headline-sub">{{.SpooledDPS}} at full spool, after {{.SpoolTime}} of firing</span>{{end}}
       </div>
       <div class="fit-headline-volley">
         <span class="fit-headline-num">{{.TotalVolley}}</span>
@@ -161,7 +162,8 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}</span>
       </div>
     </div>
-    {{if or .NeutDrain .NosDrain}}<dl class="fit-kv fit-kv-drain">
+    {{if or .NeutDrain .NosDrain .Breacher}}<dl class="fit-kv fit-kv-drain">
+      {{if .Breacher}}<div><dt>Breacher pod</dt><dd>{{.Breacher}}</dd></div>{{end}}
       {{if .NeutDrain}}<div><dt>Neutralizer drain</dt><dd>{{.NeutDrain}}</dd></div>{{end}}
       {{if .NosDrain}}<div><dt>Nosferatu drain</dt><dd>{{.NosDrain}}</dd></div>{{end}}
     </dl>{{end}}

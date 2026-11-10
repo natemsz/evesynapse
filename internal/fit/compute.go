@@ -33,6 +33,7 @@ func Compute(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int
 	// attributes are folded to their final values.
 	f.bindModifiers()
 	f.foldAttributes()
+	f.adaptReactiveHardeners()
 	f.recordAttrs()
 
 	// The statistics are read off the folded attributes.
@@ -78,6 +79,9 @@ type fitting struct {
 
 	// unmodeled collects what the engine met and does not model.
 	unmodeled map[string]bool
+
+	// spoolExtra is the DPS spool-up weapons add at full spool.
+	spoolExtra float64
 }
 
 // damageAttrs are the four damage types a charge, missile or drone
@@ -318,24 +322,27 @@ func (f *fitting) checkShipRestrictions() {
 }
 
 // skillSelf stands for "the skill carrying the effect" in a
-// skillCodeEffects modifier's SkillTypeID.
+// codeEffects modifier's SkillTypeID.
 const skillSelf = -1
 
-// skillCodeEffect is a skill effect the SDE carries with no
-// modifier rows (the game applies it in code), written out as the
-// modifiers it stands for.
-type skillCodeEffect struct {
+// codeEffect is an effect the SDE carries with no modifier rows
+// (the game applies it in code), written out as the modifiers it
+// stands for. Effect.Category gates it like any other effect.
+type codeEffect struct {
 	Effect
 	modifiers []Modifier
 }
 
-// skillCodeEffects are the skill bonuses CCP ships without
-// modifiers: missile damage by missile skill, T2 launcher rate of
-// fire by specialization, drone damage by drone skill. Each skill
+// codeEffects are the effects CCP ships without modifiers that
+// change a fit's own numbers: missile damage by missile skill, T2
+// launcher rate of fire by specialization, drone damage by drone
+// skill, and the Reactive Armor Hardener's resistances. Each skill
 // already scales its bonus by level in a modifier effect of its own
 // (152 or 146 for damageMultiplierBonus 292, 163 for rofBonus 293),
-// so the bonus applies as folded.
-var skillCodeEffects = map[int64]skillCodeEffect{
+// so the bonus applies as folded. The hardener applies its adapted
+// split (adaptReactiveHardeners), stacking-penalized with the other
+// armor hardeners.
+var codeEffects = map[int64]codeEffect{
 	660: missileSkillDamage("missileEMDmgBonus", AttrDamageEM),
 	661: missileSkillDamage("missileExplosiveDmgBonus", AttrDamageExplosive),
 	662: missileSkillDamage("missileThermalDmgBonus", AttrDamageThermal),
@@ -346,15 +353,22 @@ var skillCodeEffects = map[int64]skillCodeEffect{
 	1851: {Effect: Effect{Name: "selfRof"}, modifiers: []Modifier{
 		{Domain: "shipID", Func: "LocationRequiredSkillModifier", ModifiedAttr: AttrSpeed, ModifyingAttr: attrRofBonus, Operation: 6, SkillTypeID: skillSelf},
 	}},
+	EffectAdaptiveArmorHardener: {Effect: Effect{Name: "adaptiveArmorHardener", Category: 1}, modifiers: []Modifier{
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrArmorEM, ModifyingAttr: AttrArmorEM, Operation: opPostMult},
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrArmorExplosive, ModifyingAttr: AttrArmorExplosive, Operation: opPostMult},
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrArmorKinetic, ModifyingAttr: AttrArmorKinetic, Operation: opPostMult},
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrArmorThermal, ModifyingAttr: AttrArmorThermal, Operation: opPostMult},
+	}},
 }
 
 const (
 	attrDamageMultiplierBonus = 292
 	attrRofBonus              = 293
+	attrResistanceShift       = 1849
 )
 
-func missileSkillDamage(name string, attr int64) skillCodeEffect {
-	return skillCodeEffect{Effect: Effect{Name: name}, modifiers: []Modifier{
+func missileSkillDamage(name string, attr int64) codeEffect {
+	return codeEffect{Effect: Effect{Name: name}, modifiers: []Modifier{
 		{Domain: "charID", Func: "OwnerRequiredSkillModifier", ModifiedAttr: attr, ModifyingAttr: attrDamageMultiplierBonus, Operation: 6, SkillTypeID: skillSelf},
 	}}
 }
@@ -402,8 +416,11 @@ func (f *fitting) bindModifiers() {
 		}
 		for _, effectID := range snap.TypeEffects[source.typeID] {
 			eff := snap.Effects[effectID]
-			if source.kind == entSkill && (eff == nil || len(eff.Modifiers) == 0) {
-				if code, ok := skillCodeEffects[effectID]; ok {
+			if eff == nil || len(eff.Modifiers) == 0 {
+				if code, ok := codeEffects[effectID]; ok {
+					if !allowed[code.Category] {
+						continue
+					}
 					for _, m := range code.modifiers {
 						if m.SkillTypeID == skillSelf {
 							m.SkillTypeID = source.typeID
@@ -792,8 +809,20 @@ func (f *fitting) offense() {
 			volley *= ent.get(snap, AttrDamageMultiplier)
 			res.TurretVolley += n * volley
 			res.TurretDPS += n * volley / cycle
+			if maxBonus, step := ent.get(snap, AttrSpoolBonusMax), ent.get(snap, AttrSpoolBonusPerCycle); maxBonus > 0 && step > 0 {
+				f.spoolExtra += n * volley * maxBonus / cycle
+				res.SpoolSeconds = math.Max(res.SpoolSeconds, math.Ceil(maxBonus/step-1e-9)*cycle)
+			}
 			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
 			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
+		case charge != nil && charge.get(snap, AttrDotMaxDamagePerTick) > 0:
+			// Breacher pods: one damage-over-time effect per
+			// target, a tick a second, the lower of a flat cap and
+			// a share of the target's hit points. It depends on the
+			// target, so it stays out of the DPS totals.
+			res.BreacherMaxPerSec = math.Max(res.BreacherMaxPerSec, charge.get(snap, AttrDotMaxDamagePerTick))
+			res.BreacherHPPercent = math.Max(res.BreacherHPPercent, charge.get(snap, AttrDotMaxHPPercentPerTick))
+			res.BreacherSeconds = math.Max(res.BreacherSeconds, charge.get(snap, AttrDotDuration)/1000)
 		case snap.HasEffect(ent.typeID, EffectLauncherFitted):
 			if charge == nil {
 				f.note(fmt.Sprintf("launcher type %d has no missile selected; damage not counted", ent.typeID))
@@ -871,6 +900,9 @@ func (f *fitting) droneStats() {
 		}
 	}
 	res.DPS = res.TurretDPS + res.MissileDPS + res.DroneDPS + res.SmartbombDPS
+	if f.spoolExtra > 0 {
+		res.SpooledDPS = res.DPS + f.spoolExtra
+	}
 	res.Volley = res.TurretVolley + res.MissileVolley + res.DroneVolley + res.SmartbombVolley
 }
 
@@ -912,6 +944,9 @@ func (f *fitting) tank() {
 			res.ShieldBoostRate += n * amt / cycle
 		}
 		if amt := ent.get(snap, AttrArmorDamageAmount); amt > 0 {
+			if mult := ent.get(snap, AttrChargedArmorDamageMult); mult > 0 && f.weaponCharge[ent.typeID] != nil {
+				amt *= mult // paste loaded
+			}
 			res.ArmorRepairRate += n * amt / cycle
 		}
 		if amt := ent.get(snap, AttrStructureDamageAmt); amt > 0 {

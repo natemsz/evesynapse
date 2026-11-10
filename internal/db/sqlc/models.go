@@ -1981,12 +1981,17 @@ type Scan struct {
 }
 
 type SdeAttributeType struct {
-	AttributeID  int64   `json:"attribute_id"`
-	Name         string  `json:"name"`
-	Stackable    int64   `json:"stackable"`
-	HighIsGood   int64   `json:"high_is_good"`
-	UnitID       int64   `json:"unit_id"`
-	DefaultValue float64 `json:"default_value"`
+	AttributeID     int64   `json:"attribute_id"`
+	Name            string  `json:"name"`
+	Stackable       int64   `json:"stackable"`
+	HighIsGood      int64   `json:"high_is_good"`
+	UnitID          int64   `json:"unit_id"`
+	DefaultValue    float64 `json:"default_value"`
+	DisplayName     string  `json:"display_name"`
+	Published       int64   `json:"published"`
+	DisplayWhenZero int64   `json:"display_when_zero"`
+	CategoryID      int64   `json:"category_id"`
+	IconID          int64   `json:"icon_id"`
 }
 
 type SdeBlueprint struct {
@@ -2069,6 +2074,17 @@ type SdeMarketGroup struct {
 	HasTypes      int64  `json:"has_types"`
 }
 
+type SdeMetaGroup struct {
+	MetaGroupID int64  `json:"meta_group_id"`
+	Name        string `json:"name"`
+}
+
+type SdeMetaType struct {
+	TypeID       int64 `json:"type_id"`
+	ParentTypeID int64 `json:"parent_type_id"`
+	MetaGroupID  int64 `json:"meta_group_id"`
+}
+
 type SdeMetum struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
@@ -2141,6 +2157,16 @@ type SdeSystemJump struct {
 	ToSystemID   int64 `json:"to_system_id"`
 }
 
+type SdeTrait struct {
+	TraitID    int64           `json:"trait_id"`
+	TypeID     int64           `json:"type_id"`
+	SkillID    int64           `json:"skill_id"`
+	Bonus      sql.NullFloat64 `json:"bonus"`
+	BonusText  string          `json:"bonus_text"`
+	UnitID     int64           `json:"unit_id"`
+	Importance int64           `json:"importance"`
+}
+
 type SdeType struct {
 	TypeID        int64  `json:"type_id"`
 	Name          string `json:"name"`
@@ -2168,6 +2194,11 @@ type SdeTypePhysic struct {
 	Volume      float64 `json:"volume"`
 	Capacity    float64 `json:"capacity"`
 	PortionSize int64   `json:"portion_size"`
+}
+
+type SdeUnit struct {
+	UnitID      int64  `json:"unit_id"`
+	DisplayName string `json:"display_name"`
 }
 
 type Session struct {

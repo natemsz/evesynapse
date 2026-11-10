@@ -854,6 +854,12 @@ var pgPubContractItemsStoredAtSchema string
 //go:embed schema_pg/139_sde_override.sql
 var pgSDEOverrideSchema string
 
+// Step 140: attribute display metadata, units, ship traits and
+// variation links, for the item sheet.
+//
+//go:embed schema_pg/140_item_sheet.sql
+var pgItemSheetSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1021,6 +1027,7 @@ func schemaSteps() []schemaStep {
 		{137, "true_value_asks", pgTrueValueAsksSchema, ""},
 		{138, "pub_contract_items_stored_at", pgPubContractItemsStoredAtSchema, ""},
 		{139, "sde_override", pgSDEOverrideSchema, ""},
+		{140, "item_sheet", pgItemSheetSchema, ""},
 	}
 }
 

@@ -104,6 +104,20 @@ const (
 	sdeJumpsFileName          = "mapSolarSystemJumps.csv"
 )
 
+// The item sheet's files (schema 140): attribute units, ship and
+// subsystem bonuses, and the variation links with their tier names.
+// Best-effort like the map files: a mirror or uploaded dump lacking
+// one keeps the previous rows, and the sheet shows less.
+const (
+	sdeUnitsFileName      = "eveUnits.csv"
+	sdeTraitsFileName     = "invTraits.csv"
+	sdeMetaTypesFileName  = "invMetaTypes.csv"
+	sdeMetaGroupsFileName = "invMetaGroups.csv"
+)
+
+// sdeSheetFileNames lists the item sheet's optional files.
+var sdeSheetFileNames = []string{sdeUnitsFileName, sdeTraitsFileName, sdeMetaTypesFileName, sdeMetaGroupsFileName}
+
 // The celestials file (schema 090): every named place in every
 // system, most of which the import drops -- it keeps the groups
 // a kill's location can point at (sun, planet, moon, asteroid
@@ -282,7 +296,8 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// lack the mutaplasmid applicability mappings,
 	// imports before version 11 lack the universe map's
 	// geometry, and imports before version 13 lack the
-	// celestials a kill's location resolves against, so
+	// celestials a kill's location resolves against, and
+	// imports before version 15 lack the item sheet's data, so
 	// re-import once (the store writes the marker when it
 	// lands). Retries on later ticks while an import keeps
 	// failing.
@@ -314,7 +329,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 
 // sdeImportVersion is the importer's column-set marker (see
 // sdeMaintenance): an import stored under an older one re-imports.
-const sdeImportVersion = "14"
+const sdeImportVersion = "15"
 
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
@@ -473,6 +488,13 @@ func (app *Application) importSDEFrom(ctx context.Context, ov *sdeArchive) error
 			parsed.markers[name] = marker
 		}
 	}
+	for _, name := range sdeSheetFileNames {
+		if marker, err := app.parseSDESource(ctx, ov, base, name, parsed); err != nil {
+			logging.Warnf("sde: optional %s unavailable, keeping the previous item sheet data: %v", name, err)
+		} else {
+			parsed.markers[name] = marker
+		}
+	}
 	parsed.buildIndustryRows()
 	parsed.buildInventionRows()
 	parsed.buildSkillRows()
@@ -622,6 +644,45 @@ type parsedSDE struct {
 	// kill's location can point at. Empty when the dump lacks
 	// the file.
 	celestials []sdeCelestialRow
+
+	// The item sheet (schema 140): units, traits, variation links
+	// and tier names. Each is empty when the dump lacks its file.
+	units      []sdeUnitRow
+	traits     []sdeTraitRow
+	metaTypes  []sdeMetaTypeRow
+	metaGroups []sdeMetaGroupRow
+}
+
+// sdeUnitRow is one attribute unit and the label the game shows.
+type sdeUnitRow struct {
+	unitID      int64
+	displayName string
+}
+
+// sdeTraitRow is one ship or subsystem bonus line. skillID -1 is a
+// role bonus; hasBonus is false for a line with no figure.
+type sdeTraitRow struct {
+	traitID    int64
+	typeID     int64
+	skillID    int64
+	bonus      float64
+	hasBonus   bool
+	bonusText  string
+	unitID     int64
+	importance int64
+}
+
+// sdeMetaTypeRow links a variation to its base type (0 for a base).
+type sdeMetaTypeRow struct {
+	typeID       int64
+	parentTypeID int64
+	metaGroupID  int64
+}
+
+// sdeMetaGroupRow names one variation tier.
+type sdeMetaGroupRow struct {
+	metaGroupID int64
+	name        string
 }
 
 // sdeReprocessRow is one reprocessing output: the quantity of
@@ -663,6 +724,14 @@ type sdeAttributeTypeRow struct {
 	highIsGood   int64
 	unitID       int64
 	defaultValue float64
+	// The item sheet's columns (schema 140): the name the game
+	// shows, whether it shows the attribute at all and at zero,
+	// its section and its icon.
+	displayName     string
+	published       int64
+	displayWhenZero int64
+	categoryID      int64
+	iconID          int64
 }
 
 type sdeEffectRow struct {
@@ -928,6 +997,14 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		err = parseSDEJumps(cr, idx, parsed)
 	case sdeCelestialsFileName:
 		err = parseSDEDenormalize(cr, idx, parsed)
+	case sdeUnitsFileName:
+		err = parseSDEUnits(cr, idx, parsed)
+	case sdeTraitsFileName:
+		err = parseSDETraits(cr, idx, parsed)
+	case sdeMetaTypesFileName:
+		err = parseSDEMetaTypes(cr, idx, parsed)
+	case sdeMetaGroupsFileName:
+		err = parseSDEMetaGroups(cr, idx, parsed)
 	case "dgmTypeAttributes.csv":
 		err = parseSDEDogmaAttributes(cr, idx, parsed)
 	case "dgmAttributeTypes.csv":
@@ -989,6 +1066,16 @@ func csvIDOrZero(rec []string, idx map[string]int, name string) int64 {
 	}
 	n, _ := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
 	return n
+}
+
+// csvFieldOrEmpty returns the named column trimmed, or "" when the
+// file has no such column.
+func csvFieldOrEmpty(rec []string, idx map[string]int, name string) string {
+	raw, err := csvField(rec, idx, name)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(raw)
 }
 
 // eachCSVRow walks the remaining records of a dump file. Rows whose
@@ -1257,6 +1344,81 @@ func parseSDEConstellations(cr *csv.Reader, idx map[string]int, parsed *parsedSD
 		parsed.constellations = append(parsed.constellations, sdeConstellationRow{
 			constellationID: id, name: name, regionID: csvIDOrZero(rec, idx, "regionID"),
 		})
+		return nil
+	})
+	return err
+}
+
+// parseSDEUnits reads eveUnits.csv: each unit's display label.
+func parseSDEUnits(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "unitID")
+		if err != nil {
+			return errSkipRow
+		}
+		parsed.units = append(parsed.units, sdeUnitRow{unitID: id, displayName: csvFieldOrEmpty(rec, idx, "displayName")})
+		return nil
+	})
+	return err
+}
+
+// parseSDETraits reads invTraits.csv: the bonus lines on ships and
+// subsystems.
+func parseSDETraits(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "traitID")
+		if err != nil {
+			return errSkipRow
+		}
+		typeID, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		row := sdeTraitRow{
+			traitID:    id,
+			typeID:     typeID,
+			skillID:    csvIDOrZero(rec, idx, "skillID"),
+			bonusText:  csvFieldOrEmpty(rec, idx, "bonusText"),
+			unitID:     csvIDOrZero(rec, idx, "unitID"),
+			importance: csvIDOrZero(rec, idx, "importance"),
+		}
+		if raw := csvFieldOrEmpty(rec, idx, "bonus"); raw != "" {
+			if v, perr := strconv.ParseFloat(raw, 64); perr == nil {
+				row.bonus, row.hasBonus = v, true
+			}
+		}
+		parsed.traits = append(parsed.traits, row)
+		return nil
+	})
+	return err
+}
+
+// parseSDEMetaTypes reads invMetaTypes.csv: each variation's base
+// type and tier.
+func parseSDEMetaTypes(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		parsed.metaTypes = append(parsed.metaTypes, sdeMetaTypeRow{
+			typeID:       id,
+			parentTypeID: csvIDOrZero(rec, idx, "parentTypeID"),
+			metaGroupID:  csvIDOrZero(rec, idx, "metaGroupID"),
+		})
+		return nil
+	})
+	return err
+}
+
+// parseSDEMetaGroups reads invMetaGroups.csv: the tier names.
+func parseSDEMetaGroups(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "metaGroupID")
+		if err != nil {
+			return errSkipRow
+		}
+		parsed.metaGroups = append(parsed.metaGroups, sdeMetaGroupRow{metaGroupID: id, name: csvFieldOrEmpty(rec, idx, "metaGroupName")})
 		return nil
 	})
 	return err
@@ -1707,6 +1869,12 @@ func parseSDEAttributeTypes(cr *csv.Reader, idx map[string]int) ([]sdeAttributeT
 			highIsGood:   csvBoolOrOne(rec, idx, "highIsGood"),
 			unitID:       csvIDOrZero(rec, idx, "unitID"),
 			defaultValue: defaultValue,
+
+			displayName:     csvFieldOrEmpty(rec, idx, "displayName"),
+			published:       csvIDOrZero(rec, idx, "published"),
+			displayWhenZero: csvIDOrZero(rec, idx, "displayWhenZero"),
+			categoryID:      csvIDOrZero(rec, idx, "categoryID"),
+			iconID:          csvIDOrZero(rec, idx, "iconID"),
 		})
 		return nil
 	})
@@ -2017,6 +2185,47 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 			return 0, err
 		}
 	}
+	// The item sheet's tables (schema 140), each replaced only when
+	// this import carried its file, like the map data.
+	sheetTables := []struct {
+		table string
+		n     int
+		query string
+		fill  func(i int) []any
+	}{
+		{"sde_units", len(parsed.units), "INSERT INTO sde_units (unit_id, display_name) VALUES ($1, $2) ON CONFLICT DO NOTHING", func(i int) []any {
+			r := parsed.units[i]
+			return []any{r.unitID, r.displayName}
+		}},
+		{"sde_traits", len(parsed.traits), "INSERT INTO sde_traits (trait_id, type_id, skill_id, bonus, bonus_text, unit_id, importance) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING", func(i int) []any {
+			r := parsed.traits[i]
+			var bonus *float64
+			if r.hasBonus {
+				bonus = &r.bonus
+			}
+			return []any{r.traitID, r.typeID, r.skillID, bonus, r.bonusText, r.unitID, r.importance}
+		}},
+		{"sde_meta_types", len(parsed.metaTypes), "INSERT INTO sde_meta_types (type_id, parent_type_id, meta_group_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", func(i int) []any {
+			r := parsed.metaTypes[i]
+			return []any{r.typeID, r.parentTypeID, r.metaGroupID}
+		}},
+		{"sde_meta_groups", len(parsed.metaGroups), "INSERT INTO sde_meta_groups (meta_group_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING", func(i int) []any {
+			r := parsed.metaGroups[i]
+			return []any{r.metaGroupID, r.name}
+		}},
+	}
+	for _, st := range sheetTables {
+		if st.n == 0 {
+			continue
+		}
+		if _, err := tx.Exec(ctx, "DELETE FROM "+st.table); err != nil {
+			return 0, fmt.Errorf("clear %s: %w", st.table, err)
+		}
+		if err := insert(st.query, st.n, st.fill); err != nil {
+			return 0, err
+		}
+	}
+
 	// Celestials (schema 090), replaced only when this import
 	// carried the denormalize file, like the map data above.
 	if len(parsed.celestials) > 0 {
@@ -2084,9 +2293,9 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_attribute_types (attribute_id, name, stackable, high_is_good, unit_id, default_value) VALUES ($1, $2, $3, $4, $5, $6)", len(parsed.attrTypes), func(i int) []any {
+	if err := insert("INSERT INTO sde_attribute_types (attribute_id, name, stackable, high_is_good, unit_id, default_value, display_name, published, display_when_zero, category_id, icon_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)", len(parsed.attrTypes), func(i int) []any {
 		r := parsed.attrTypes[i]
-		return []any{r.attributeID, r.name, r.stackable, r.highIsGood, r.unitID, r.defaultValue}
+		return []any{r.attributeID, r.name, r.stackable, r.highIsGood, r.unitID, r.defaultValue, r.displayName, r.published, r.displayWhenZero, r.categoryID, r.iconID}
 	}); err != nil {
 		return 0, err
 	}
@@ -2158,7 +2367,8 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		len(parsed.skillMeta) + len(parsed.skillReqs) +
 		len(parsed.typeAttrs) + len(parsed.attrTypes) + len(parsed.effects) +
 		len(parsed.modifiers) + len(parsed.typeEffects) + len(parsed.dynRanges) +
-		len(parsed.dynMappings))
+		len(parsed.dynMappings) +
+		len(parsed.units) + len(parsed.traits) + len(parsed.metaTypes) + len(parsed.metaGroups))
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	tq := db.New(tx)
@@ -2176,8 +2386,10 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		// the mutaplasmid roll ranges (schema 055) from 9, and
 		// the mutaplasmid applicability mappings (schema 063)
 		// from 10, and the universe map's geometry and stargate
-		// graph (schema 072) from 11 (sdeMaintenance backfills
-		// once when it's behind).
+		// graph (schema 072) from 11, and the item sheet's
+		// attribute columns, units, traits and variation links
+		// (schema 140) from 15 (sdeMaintenance backfills once when
+		// it's behind).
 		{Key: "sde_import_version", Value: sdeImportVersion},
 	}
 	for name, m := range parsed.markers {

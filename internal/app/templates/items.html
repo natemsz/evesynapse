@@ -148,12 +148,10 @@
   </div>
 </section>
 
-{{if or $d.BuyAt $d.SellAt $d.AveragePrice $d.AdjustedPrice $d.BuildCost $d.EstimatedSell}}
+{{if or $d.BuyAt $d.SellAt $d.BuildCost $d.EstimatedSell}}
 <div class="l-tiles">
   {{with $d.BuyAt}}<div class="l-stat"><span class="l-stat-label">Lowest sell</span><span class="l-stat-value">{{.BestSell}}</span><span class="l-stat-sub">ISK, buy it in {{.Region}}</span></div>{{end}}
   {{with $d.SellAt}}<div class="l-stat"><span class="l-stat-label">Highest buy</span><span class="l-stat-value">{{.BestBuy}}</span><span class="l-stat-sub">ISK, sell it in {{.Region}}</span></div>{{end}}
-  {{if $d.AveragePrice}}<div class="l-stat"><span class="l-stat-label">Average price</span><span class="l-stat-value">{{$d.AveragePrice}}</span><span class="l-stat-sub">ISK, the game's guide average</span></div>{{end}}
-  {{if $d.AdjustedPrice}}<div class="l-stat"><span class="l-stat-label">Adjusted price</span><span class="l-stat-value">{{$d.AdjustedPrice}}</span><span class="l-stat-sub">ISK, the basis for industry fees</span></div>{{end}}
   {{if $d.BuildCost}}<div class="l-stat"><span class="l-stat-label">Build cost</span><span class="l-stat-value">{{$d.BuildCost}}</span><span class="l-stat-sub">ISK in materials</span></div>{{end}}
   {{if $d.EstimatedSell}}<div class="l-stat"><span class="l-stat-label">Estimated sell</span><span class="l-stat-value">{{$d.EstimatedSell}}</span><span class="l-stat-sub">ISK, {{$d.EstimatedSellNote}}</span></div>{{end}}
 </div>

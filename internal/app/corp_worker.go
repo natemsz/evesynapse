@@ -11,6 +11,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	json "github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -45,6 +46,13 @@ const (
 	// character granted a role in-game sees data within hours,
 	// not a minute.
 	roleMissingBackoff = 6 * time.Hour
+	// corpOwnFetchMaxAge bounds how long a member's own successful
+	// fetch of a corporation kind lets it copy a fellow member's
+	// fresh answer instead of asking ESI: past it the member asks
+	// ESI itself, which re-checks its in-game role. It is also the
+	// longest a role revoked in-game can keep showing that
+	// member's corporation data, so it stays at fifteen minutes.
+	corpOwnFetchMaxAge = 15 * time.Minute
 	// maxCorpAssetNameItemsPerCycle caps the singleton-name POST
 	// batches per character per cycle (ESI accepts 1,000 IDs per
 	// call, so one cycle is at most one call).
@@ -135,6 +143,12 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 		return corpFetchSkipped
 	}
 
+	// Another member of the corporation may already hold this
+	// window's answer: copy it rather than ask ESI again.
+	if app.copySiblingCorpSnapshot(ctx, ch, corpID, kind) {
+		return corpFetchOK
+	}
+
 	if err := app.esi.FetchAndStoreCorpSnapshot(ctx, ch, corpID, kind); err != nil {
 		switch {
 		case errors.Is(err, esi.ErrErrorLimit):
@@ -164,6 +178,48 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 	return corpFetchOK
 }
 
+// copySiblingCorpSnapshot stores, as ch's own, a corporation dataset
+// another member of ch's corporation fetched inside its current ESI
+// cache window: every member's corporation endpoints answer the same
+// corp-level data, so asking once per window is enough. Access stays
+// per member, and ESI keeps deciding it: ch may copy only while its
+// own last ESI fetch of the kind succeeded within corpOwnFetchMaxAge,
+// so a member who lost the role in-game, or left the corporation,
+// hits ESI's 403 on its next own fetch within that bound and stops
+// seeing the data. The public corporation sheet (SnapCorpInfo)
+// carries no access to prove and copies freely. Reports whether it
+// copied.
+func (app *Application) copySiblingCorpSnapshot(ctx context.Context, ch db.Character, corpID int64, kind string) bool {
+	// The corporation's public sheet is readable by anyone, so no
+	// access needs proving to copy it. Every other kind is read by
+	// role or by membership, which leaving the corporation revokes.
+	if kind != esi.SnapCorpInfo {
+		state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind})
+		if err != nil || state.State != fetchStateOK || time.Since(state.AttemptedAt) >= corpOwnFetchMaxAge {
+			return false
+		}
+	}
+	now := time.Now().UTC()
+	sib, err := app.queries.GetFreshSiblingCorpSnapshot(ctx, db.GetFreshSiblingCorpSnapshotParams{
+		CorporationID: corpID, Kind: kind, CharacterID: ch.CharacterID, Now: now,
+	})
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			logging.Errorf("worker: read sibling %s snapshot for corporation %d: %v", kind, corpID, err)
+		}
+		return false
+	}
+	if err := app.queries.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
+		CharacterID: ch.CharacterID, Kind: kind, Payload: sib.Payload,
+		FetchedAt: sib.FetchedAt, CachedUntil: sib.CachedUntil, Etag: sib.Etag,
+	}); err != nil {
+		logging.Errorf("worker: copy %s snapshot to character %d: %v", kind, ch.CharacterID, err)
+		return false
+	}
+	app.esi.NoteCharacterChanged(ch.CharacterID)
+	return true
+}
+
 // recordCorpFetchState upserts one fetch-outcome row (best-effort:
 // a logging failure must not break the pass).
 func (app *Application) recordCorpFetchState(ctx context.Context, characterID int64, kind, state, detail string) {
@@ -189,6 +245,9 @@ func (app *Application) corpIDForCharacter(ctx context.Context, ch db.Character)
 		if time.Since(row.UpdatedAt) < corpMappingMaxAge {
 			return row.CorporationID, true
 		}
+		if newID, ok := app.corpMappingFromProfile(ctx, ch); ok {
+			return newID, true
+		}
 		if newID, ok := app.refreshCorpMapping(ctx, ch); ok {
 			return newID, true
 		}
@@ -198,6 +257,27 @@ func (app *Application) corpIDForCharacter(ctx context.Context, ch db.Character)
 		logging.Errorf("worker: read corporation mapping for character %d: %v", ch.CharacterID, err)
 	}
 	return app.refreshCorpMapping(ctx, ch)
+}
+
+// corpMappingFromProfile renews the mapping from the character's
+// stored profile snapshot while it is inside its ESI cache window:
+// the core pass already fetched the same /characters/{id}/ sheet,
+// so the mapping needs no call of its own.
+func (app *Application) corpMappingFromProfile(ctx context.Context, ch db.Character) (int64, bool) {
+	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapProfile})
+	if err != nil || !esi.SnapshotFresh(snap) {
+		return 0, false
+	}
+	var profile esi.Character
+	if json.Unmarshal([]byte(snap.Payload), &profile) != nil || profile.CorporationID <= 0 {
+		return 0, false
+	}
+	if err := app.queries.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
+		CharacterID: ch.CharacterID, CorporationID: profile.CorporationID, UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		logging.Errorf("worker: store corporation mapping for character %d: %v", ch.CharacterID, err)
+	}
+	return profile.CorporationID, true
 }
 
 // refreshCorpMapping re-reads the character's corporation from the

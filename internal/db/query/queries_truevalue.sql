@@ -28,14 +28,40 @@ ON CONFLICT (type_id) DO UPDATE SET
     sell_source = EXCLUDED.sell_source;
 
 -- name: GetTrueValue :one
-SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source
+SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source,
+       ask_low, ask_high, ask_count
 FROM true_values
 WHERE type_id = $1;
 
 -- name: ListTrueValues :many
-SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source
+SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source,
+       ask_low, ask_high, ask_count
 FROM true_values
 ORDER BY type_id;
+
+-- name: RefreshTrueValueAsks :exec
+-- The live single-item asks behind every type the pass left
+-- unpriced (schema 137): lowest, highest and count of the public
+-- contracts still listed. Priced types and types with no live ask
+-- carry none. Readers show these as unverified asks, never as a
+-- price. Only rows whose asks moved are written.
+WITH asks AS (
+    SELECT o.type_id, MIN(o.listed_price) AS lo, MAX(o.listed_price) AS hi, COUNT(*) AS n
+    FROM true_value_contract_observations o
+    WHERE o.vanished_at IS NULL AND o.expires_at > now()
+      AND o.shape = 'single' AND o.listed_price > 0
+    GROUP BY o.type_id
+),
+want AS (
+    SELECT t.type_id, a.lo, a.hi, COALESCE(a.n, 0) AS n
+    FROM true_values t
+    LEFT JOIN asks a ON a.type_id = t.type_id AND t.est_sell IS NULL
+)
+UPDATE true_values v
+SET ask_low = w.lo, ask_high = w.hi, ask_count = w.n
+FROM want w
+WHERE v.type_id = w.type_id
+  AND (v.ask_count <> w.n OR v.ask_low IS DISTINCT FROM w.lo OR v.ask_high IS DISTINCT FROM w.hi);
 
 -- Contract observations (schema 052): the crawl's memory of
 -- every public contract the sampler accepted, kept so later
@@ -113,7 +139,8 @@ WHERE (vanished_at IS NULL AND expires_at < $1)
    OR (vanished_at IS NOT NULL AND vanished_at < $2);
 
 -- name: ListTrueValuesForTypes :many
-SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source
+SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source,
+       ask_low, ask_high, ask_count
 FROM true_values
 WHERE type_id = ANY($1::bigint[])
 ORDER BY type_id;

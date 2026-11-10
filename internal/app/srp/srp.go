@@ -117,19 +117,6 @@ func srpDuring(op db.Op, at time.Time) bool {
 	return !op.CancelledAt.Valid && !at.Before(op.StartsAt.Add(-module.OpCaptureLead)) && !at.After(module.OpEnd(op).Add(module.OpCaptureTail))
 }
 
-// srpLossValue estimates what a loss cost the pilot: the hull and
-// everything fitted or carried, dropped or destroyed, at CCP's average
-// prices. Whatever has no price counts for nothing.
-func srpLossValue(km esi.Killmail, prices map[int64]esi.MarketPrice) float64 {
-	total := prices[km.Victim.ShipTypeID].AveragePrice
-	for _, it := range km.Victim.Items {
-		if qty := it.QuantityDestroyed + it.QuantityDropped; qty > 0 {
-			total += float64(qty) * prices[it.ItemTypeID].AveragePrice
-		}
-	}
-	return total
-}
-
 // srpISK writes an amount in whole ISK; nothing where there is none.
 func srpISK(v float64) string {
 	if v <= 0 {
@@ -454,7 +441,7 @@ func (app *mod) handleSRPRequest(w http.ResponseWriter, r *http.Request) {
 	id, err := app.queries.CreateSRPRequest(ctx, db.CreateSRPRequestParams{
 		CorporationID: op.CorporationID, OpID: op.ID, KillmailID: km.KillmailID, KillmailHash: stored.Hash,
 		CharacterID: pilot.CharacterID, UserID: userID, ShipTypeID: km.Victim.ShipTypeID, SolarSystemID: km.SolarSystemID,
-		LostAt: at, LossValue: srpLossValue(km, app.deps.ValuationPrices(ctx)),
+		LostAt: at, LossValue: app.deps.KillmailLossValue(ctx, km.KillmailID, stored.Payload),
 		Note: humanize.Clip(strings.TrimSpace(r.Form.Get("note")), srpNoteMax), CreatedAt: now,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {

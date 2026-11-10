@@ -677,6 +677,7 @@ ORDER BY day;
 -- days as polyline points in the 100 by 28 sparkline box (2 units
 -- of padding, flat lines at mid height), with their low, high and
 -- mean. A type with under two such days gets an empty line.
+-- type_ids narrows it to the items a sweep wrote; empty means all.
 UPDATE market_region_stats s SET
     sell_spark_30d = COALESCE(t.pts, ''),
     sell_low_30d   = COALESCE(t.lo, 0),
@@ -702,12 +703,14 @@ FROM (
             WHERE dd.region_id = sqlc.arg(region_id)
               AND dd.day > to_char(sqlc.arg(today)::date - 30, 'YYYY-MM-DD')
               AND dd.typical_sell > 0
+              AND (COALESCE(cardinality(sqlc.arg(type_ids)::bigint[]), 0) = 0 OR dd.type_id = ANY(sqlc.arg(type_ids)::bigint[]))
             WINDOW w AS (PARTITION BY dd.type_id ORDER BY dd.day)
         ) x
         WHERE x.n >= 2
         GROUP BY x.type_id
     ) p ON p.type_id = r.type_id
     WHERE r.region_id = sqlc.arg(region_id)
+      AND (COALESCE(cardinality(sqlc.arg(type_ids)::bigint[]), 0) = 0 OR r.type_id = ANY(sqlc.arg(type_ids)::bigint[]))
 ) t
 WHERE s.region_id = sqlc.arg(region_id) AND s.type_id = t.type_id;
 
@@ -731,7 +734,8 @@ WHERE region_id = sqlc.arg(region_id) AND type_id = ANY(sqlc.arg(type_ids)::bigi
 -- deviation of the typical sell's daily log returns over the last
 -- 30 days, in percent, NULL under seven returns. The 30-day
 -- traded volume reads market_history over the 30 days ending on
--- the type's newest recorded day.
+-- the type's newest recorded day. type_ids narrows it to the items a
+-- sweep wrote; empty means all.
 UPDATE market_region_stats s SET
     sell_chg_1d          = CASE WHEN s.typical_sell > 0 AND t.s1 > 0 THEN (s.typical_sell - t.s1) / t.s1 * 100 END,
     sell_chg_7d          = CASE WHEN s.typical_sell > 0 AND t.s7 > 0 THEN (s.typical_sell - t.s7) / t.s7 * 100 END,
@@ -781,6 +785,7 @@ FROM (
             WHERE dd.region_id = sqlc.arg(region_id)
               AND dd.day > to_char(sqlc.arg(today)::date - 30, 'YYYY-MM-DD')
               AND dd.typical_sell > 0
+              AND (COALESCE(cardinality(sqlc.arg(type_ids)::bigint[]), 0) = 0 OR dd.type_id = ANY(sqlc.arg(type_ids)::bigint[]))
         ) x
         GROUP BY x.type_id
     ) v ON v.type_id = r.type_id
@@ -795,6 +800,7 @@ FROM (
           )
     ) h ON true
     WHERE r.region_id = sqlc.arg(region_id)
+      AND (COALESCE(cardinality(sqlc.arg(type_ids)::bigint[]), 0) = 0 OR r.type_id = ANY(sqlc.arg(type_ids)::bigint[]))
 ) t
 WHERE s.region_id = sqlc.arg(region_id) AND s.type_id = t.type_id;
 
@@ -1109,50 +1115,10 @@ WHERE id IN (
 );
 
 -- ---------------------------------------------------------------------
--- Sweep staging (schema 034): disk-staged whole-region
--- sweeps. A market_sweep_state row means a sweep is in progress
--- for that region and next_page is its resume cursor; each
--- fetched page's orders land in market_sweep_orders in the same
--- transaction that advances the cursor. At completion the
--- staged book is distilled into the region/station stats above
--- and the staging rows are deleted in that same transaction.
--- ---------------------------------------------------------------------
--- name: GetMarketSweepState :one
-SELECT region_id, next_page, pages_total, started_at, updated_at
-FROM market_sweep_state
-WHERE region_id = $1;
--- name: InsertMarketSweepState :exec
-INSERT INTO market_sweep_state (region_id, next_page, pages_total, started_at, updated_at)
-VALUES ($1, 1, 0, $2, $3);
--- name: UpdateMarketSweepState :exec
-UPDATE market_sweep_state
-SET next_page = $1, pages_total = $2, updated_at = $3
-WHERE region_id = $4;
--- name: DeleteMarketSweepState :exec
-DELETE FROM market_sweep_state
-WHERE region_id = $1;
--- name: InsertMarketSweepOrder :exec
-INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id, system_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
--- name: DeleteMarketSweepOrdersByRegion :exec
-DELETE FROM market_sweep_orders
-WHERE region_id = $1;
--- name: ListMarketSweepTypeIDs :many
-SELECT DISTINCT type_id
-FROM market_sweep_orders
-WHERE region_id = $1
-ORDER BY type_id;
--- name: ListMarketSweepTypeOrders :many
-SELECT is_buy_order, price, volume_remain, location_id, system_id
-FROM market_sweep_orders
-WHERE region_id = $1 AND type_id = $2
-ORDER BY is_buy_order, price;
-
--- ---------------------------------------------------------------------
 -- Stored book (schema 050): the top orders per side a completed
 -- sweep keeps, so the Market page can show an order book to
 -- visitors who never fetch (anonymous readers among them). The
--- sweep completion transaction replaces a region's rows whole,
+-- sweep's store replaces the rows of every item it writes,
 -- exactly like the region stats distilled beside them; figures
 -- over the whole book (best, typical, depth) stay on
 -- market_region_stats, these rows are only the displayed top.
@@ -1185,14 +1151,6 @@ VALUES ($1, $2, $3)
 ON CONFLICT (key) DO UPDATE SET
     value      = excluded.value,
     updated_at = excluded.updated_at;
--- name: ListMarketSweepStationAggregates :many
-SELECT location_id, type_id, is_buy_order,
-       CAST(MIN(price) AS DOUBLE PRECISION) AS min_price, CAST(MAX(price) AS DOUBLE PRECISION) AS max_price,
-       COUNT(*) AS order_count, CAST(SUM(volume_remain) AS BIGINT) AS total_volume
-FROM market_sweep_orders
-WHERE region_id = $1 AND location_id > 0
-GROUP BY location_id, type_id, is_buy_order
-ORDER BY location_id, type_id, is_buy_order;
 
 -- ---------------------------------------------------------------------
 -- Station leaderboard (schema_pg 002): per-station open-order
@@ -1200,20 +1158,13 @@ ORDER BY location_id, type_id, is_buy_order;
 -- whole-region sweeps as the stats above. A completed sweep
 -- replaces the region's leaderboard rows inside the sweep
 -- transaction: delete the region, then upsert the fresh measures
--- station by station. The aggregates read the staged book like
--- the station stats do, but grouped only by place: the open
--- value needs price times remaining volume per order, which the
--- type-grain aggregates cannot reconstruct. The leaderboard page
+-- station by station. The sweep sums them from the book it read,
+-- grouped only by place: the open value needs price times
+-- remaining volume per order, which the type-grain aggregates
+-- cannot reconstruct. The leaderboard page
 -- reads only these rows. A region argument of 0 means every
 -- region.
 -- ---------------------------------------------------------------------
--- name: ListMarketSweepStationLeaderboardAggregates :many
-SELECT location_id, is_buy_order,
-       COUNT(*) AS order_count, CAST(SUM(price * volume_remain) AS DOUBLE PRECISION) AS open_value
-FROM market_sweep_orders
-WHERE region_id = $1 AND location_id > 0
-GROUP BY location_id, is_buy_order
-ORDER BY location_id, is_buy_order;
 -- name: DeleteMarketStationLeaderboardByRegion :exec
 DELETE FROM market_station_leaderboard
 WHERE region_id = $1;
@@ -1348,7 +1299,9 @@ SELECT region_id, name FROM sde_regions WHERE region_id = ANY(sqlc.arg(region_id
 -- market group (its whole subtree; 0 = every group), joined to the
 -- region's stat pack row, filtered by name and traded volume, sorted
 -- and paged in SQL. A type with no stat row lists with no figures
--- and sorts after priced ones.
+-- and sorts after priced ones. A type the region does not carry
+-- reads the global market's row (region 19000001: PLEX trades there
+-- and nowhere else).
 WITH RECURSIVE tree AS (
     SELECT g.market_group_id FROM sde_market_groups g
     WHERE (sqlc.arg(group_id)::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = sqlc.arg(group_id)::bigint
@@ -1356,26 +1309,28 @@ WITH RECURSIVE tree AS (
     SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
 )
 SELECT t.type_id, t.name,
-       COALESCE(s.typical_sell, 0)::float8 AS typical_sell,
-       COALESCE(s.typical_buy, 0)::float8 AS typical_buy,
-       s.sell_chg_7d, s.volatility_30d,
-       COALESCE(s.avg_daily_volume_30d, 0)::float8 AS traded_per_day,
-       COALESCE(s.sell_orders, 0)::bigint AS sell_orders
+       COALESCE(rs.typical_sell, gs.typical_sell, 0)::float8 AS typical_sell,
+       COALESCE(rs.typical_buy, gs.typical_buy, 0)::float8 AS typical_buy,
+       COALESCE(rs.sell_chg_7d, gs.sell_chg_7d) AS sell_chg_7d,
+       COALESCE(rs.volatility_30d, gs.volatility_30d) AS volatility_30d,
+       COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0)::float8 AS traded_per_day,
+       COALESCE(rs.sell_orders, gs.sell_orders, 0)::bigint AS sell_orders
 FROM sde_types t
-LEFT JOIN market_region_stats s ON s.region_id = sqlc.arg(region_id)::bigint AND s.type_id = t.type_id
+LEFT JOIN market_region_stats rs ON rs.region_id = sqlc.arg(region_id)::bigint AND rs.type_id = t.type_id
+LEFT JOIN market_region_stats gs ON gs.region_id = 19000001 AND gs.type_id = t.type_id AND rs.type_id IS NULL
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND (sqlc.arg(name_like)::text = '' OR t.name ILIKE sqlc.arg(name_like)::text)
-  AND COALESCE(s.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8
+  AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8
 ORDER BY
   CASE WHEN sqlc.arg(sort)::text = 'name' THEN t.name END,
-  CASE WHEN sqlc.arg(sort)::text = 'price' THEN s.typical_sell END DESC NULLS LAST,
-  CASE WHEN sqlc.arg(sort)::text = 'cheap' THEN NULLIF(s.typical_sell, 0) END ASC NULLS LAST,
-  CASE WHEN sqlc.arg(sort)::text = 'buy' THEN s.typical_buy END DESC NULLS LAST,
-  CASE WHEN sqlc.arg(sort)::text = 'buycheap' THEN NULLIF(s.typical_buy, 0) END ASC NULLS LAST,
-  CASE WHEN sqlc.arg(sort)::text = 'rising' THEN s.sell_chg_7d END DESC NULLS LAST,
-  CASE WHEN sqlc.arg(sort)::text = 'falling' THEN s.sell_chg_7d END ASC NULLS LAST,
-  CASE WHEN sqlc.arg(sort)::text = 'volume' THEN s.avg_daily_volume_30d END DESC NULLS LAST,
-  CASE WHEN sqlc.arg(sort)::text = 'volatile' THEN s.volatility_30d END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'price' THEN COALESCE(rs.typical_sell, gs.typical_sell) END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'cheap' THEN NULLIF(COALESCE(rs.typical_sell, gs.typical_sell), 0) END ASC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'buy' THEN COALESCE(rs.typical_buy, gs.typical_buy) END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'buycheap' THEN NULLIF(COALESCE(rs.typical_buy, gs.typical_buy), 0) END ASC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'rising' THEN COALESCE(rs.sell_chg_7d, gs.sell_chg_7d) END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'falling' THEN COALESCE(rs.sell_chg_7d, gs.sell_chg_7d) END ASC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'volume' THEN COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d) END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'volatile' THEN COALESCE(rs.volatility_30d, gs.volatility_30d) END DESC NULLS LAST,
   t.name, t.type_id
 LIMIT sqlc.arg(row_limit)::bigint OFFSET sqlc.arg(row_offset)::bigint;
 -- name: CountMarketBrowseTypes :one
@@ -1386,10 +1341,11 @@ WITH RECURSIVE tree AS (
     SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
 )
 SELECT COUNT(*) FROM sde_types t
-LEFT JOIN market_region_stats s ON s.region_id = sqlc.arg(region_id)::bigint AND s.type_id = t.type_id
+LEFT JOIN market_region_stats rs ON rs.region_id = sqlc.arg(region_id)::bigint AND rs.type_id = t.type_id
+LEFT JOIN market_region_stats gs ON gs.region_id = 19000001 AND gs.type_id = t.type_id AND rs.type_id IS NULL
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND (sqlc.arg(name_like)::text = '' OR t.name ILIKE sqlc.arg(name_like)::text)
-  AND COALESCE(s.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8;
+  AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8;
 -- name: UpdateOrderLifecycleBook :exec
 -- The order-health pass's verdict on one open order's station book
 -- (schema 105): beaten state and count, when it was beaten, what
@@ -1431,6 +1387,7 @@ LIMIT 100;
 -- The change feed (schema 106) for one region, inside its sweep
 -- transaction after the trend figures: each stat pack row against
 -- the newest stored day before today (within three days).
+-- type_ids narrows it to the items a sweep wrote; empty means all.
 INSERT INTO market_changes (region_id, type_id, day, kind, before, after, pct, detected_at)
 SELECT sqlc.arg(region_id)::bigint, c.type_id, sqlc.arg(day)::text, c.kind, c.before, c.after, c.pct, sqlc.arg(now)::timestamptz
 FROM (
@@ -1456,6 +1413,7 @@ FROM (
               THEN ((s.typical_sell - s.typical_buy) / s.typical_buy - (d.typical_sell - d.typical_buy) / d.typical_buy) * 100 END)
     ) AS k (kind, before, after, pct)
     WHERE s.region_id = sqlc.arg(region_id)::bigint
+      AND (COALESCE(cardinality(sqlc.arg(type_ids)::bigint[]), 0) = 0 OR s.type_id = ANY(sqlc.arg(type_ids)::bigint[]))
       AND s.sell_orders >= 5 AND s.avg_daily_volume_30d >= 1
       AND s.typical_sell > 0 AND d.typical_sell > 0
 ) c

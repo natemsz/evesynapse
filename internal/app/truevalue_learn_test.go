@@ -222,7 +222,7 @@ func TestTVCorpusSampleAging(t *testing.T) {
 		 VALUES (1, 9101, 5005, 1, true)`); err != nil {
 		t.Fatalf("seed contract item: %v", err)
 	}
-	priceOf := tvStoredPricerFrom(nil, nil, nil)
+	priceOf := tvStoredPricerFrom(nil, nil)
 	samples := app.corpusListingSamples(ctx, 5005,
 		map[int64]bool{5005: true}, map[int64]bool{5005: true}, priceOf, now)
 	if len(samples) != 1 || samples[0].price != 5e10 || math.Abs(samples[0].at.Sub(lastSeen).Seconds()) > 1 || samples[0].source != tvSampleListing {

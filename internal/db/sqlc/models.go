@@ -2580,6 +2580,9 @@ type TrueValue struct {
 	ComputedAt     time.Time       `json:"computed_at"`
 	ProfileVersion int64           `json:"profile_version"`
 	SellSource     string          `json:"sell_source"`
+	AskLow         sql.NullFloat64 `json:"ask_low"`
+	AskHigh        sql.NullFloat64 `json:"ask_high"`
+	AskCount       int64           `json:"ask_count"`
 }
 
 type TrueValueContractObservation struct {

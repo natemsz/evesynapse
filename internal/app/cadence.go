@@ -63,17 +63,18 @@ func everyWords(d time.Duration) string {
 }
 
 var (
-	// Hub order books: a region re-sweeps once its stats are
-	// regionSweepGate old, and a sweep takes well under a minute.
+	// Hub order books: a region re-sweeps on the first ESI window
+	// rollover once its stats are regionSweepGate old, and a sweep
+	// takes well under a minute. One missed rollover still reads ok.
 	cadenceMarketOrders = datasetCadence{
-		words:     "swept " + everyWords(regionSweepGate),
-		okUnder:   regionSweepGate + 15*time.Minute,
-		warnUnder: 3 * regionSweepGate,
+		words:     "swept " + everyWords(regionSweepGate) + ", as ESI updates",
+		okUnder:   2*regionSweepGate + 5*time.Minute,
+		warnUnder: 6 * regionSweepGate,
 	}
-	// Public contracts: each hub's list re-sweeps on
-	// pubContractSweepGate.
+	// Public contracts: each hub's list re-sweeps when its
+	// pubContractSweepGate-long ESI window rolls over.
 	cadencePublicContracts = datasetCadence{
-		words:     "swept " + everyWords(pubContractSweepGate),
+		words:     "swept " + everyWords(pubContractSweepGate) + ", as ESI updates",
 		okUnder:   pubContractSweepGate + 15*time.Minute,
 		warnUnder: 4 * pubContractSweepGate,
 	}

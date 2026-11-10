@@ -69,6 +69,19 @@ ON CONFLICT (character_id, kind) DO UPDATE SET
     fetched_at   = excluded.fetched_at,
     cached_until = excluded.cached_until,
     etag         = excluded.etag;
+-- name: GetFreshSiblingCorpSnapshot :one
+-- A corporation dataset another member of the same corporation
+-- holds inside its ESI cache window: the corp pass copies it
+-- instead of asking ESI the same question again (corp_worker.go).
+SELECT s.character_id, s.payload, s.fetched_at, s.cached_until, s.etag
+FROM character_snapshots s
+JOIN character_corporations m ON m.character_id = s.character_id
+WHERE m.corporation_id = sqlc.arg(corporation_id)::bigint
+  AND s.kind = sqlc.arg(kind)::text
+  AND s.character_id <> sqlc.arg(character_id)::bigint
+  AND s.cached_until > sqlc.arg(now)::timestamptz
+ORDER BY s.fetched_at DESC
+LIMIT 1;
 -- name: GetSnapshotETag :one
 -- The ETag a snapshot was stored with ('' when it has none), read
 -- without its payload: all a conditional refresh needs to send.

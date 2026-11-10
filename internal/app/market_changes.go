@@ -50,13 +50,13 @@ func describeMarketChange(kind string, before, after, pct float64) (label, detai
 		if kind == "price_down" {
 			label, dir = "Price dropped", "down"
 		}
-		detail = fmt.Sprintf("Typical sell %s to %s ISK (%+.1f%%)", esi.FormatISK(before), esi.FormatISK(after), pct)
+		detail = fmt.Sprintf("Typical sell went from %s to %s ISK (%+.1f%%)", esi.FormatISK(before), esi.FormatISK(after), pct)
 	case "supply_down":
 		label, dir = "Supply fell", "down"
-		detail = fmt.Sprintf("Units on sale %s to %s (%+.0f%%)", esi.FormatInt(int64(before)), esi.FormatInt(int64(after)), pct)
+		detail = fmt.Sprintf("Units for sale went from %s to %s (%+.0f%%)", esi.FormatInt(int64(before)), esi.FormatInt(int64(after)), pct)
 	case "spread_wide":
 		label, dir = "Spread widened", "up"
-		detail = fmt.Sprintf("Gap between typical sell and buy %.1f%% to %.1f%%", before, after)
+		detail = fmt.Sprintf("Gap between typical sell and buy grew from %.1f%% to %.1f%%", before, after)
 	default:
 		label = kind
 	}

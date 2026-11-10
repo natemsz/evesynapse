@@ -20,6 +20,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fitview"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/standing"
 )
 
@@ -502,6 +503,30 @@ type AppraisalLine struct {
 // AppraisedLine is one line after pricing: the unit price its
 // tier gave (0 when unpriced), the line value, the tier, and
 // when that tier's figure was current.
+// AskEvidence is what live public contracts ask for a type no
+// house tier prices: the lowest and highest single-item ask and
+// how many contracts ask. Asks are what sellers want, not what
+// anything sold for, so no total, sort or estimate reads them.
+type AskEvidence struct {
+	Low, High float64
+	Count     int64
+}
+
+// Note words the asks for the line beside an unpriced item, with
+// the warning that they are not a price.
+func (a AskEvidence) Note() string {
+	span := humanize.ISKCompact(a.Low)
+	if hi := humanize.ISKCompact(a.High); hi != span {
+		span += " to " + hi
+	}
+	verb := "ask"
+	if a.Count == 1 {
+		verb = "asks"
+	}
+	return fmt.Sprintf("%s %s %s ISK. Asking prices only, not a price: do not rely on them.",
+		humanize.Plural(int(a.Count), "live contract"), verb, span)
+}
+
 type AppraisedLine struct {
 	TypeID    int64
 	Quantity  int64
@@ -1105,6 +1130,12 @@ type Deps interface {
 	// bytes-served counter uses it with byte counts.
 	NoteActivityN(kind string, n int64)
 	ValuationPrices(ctx context.Context) map[int64]esi.MarketPrice
+	// KillmailLossValue is what a loss cost, in the killboard's own
+	// pricing: the kill's stored value when the killboard has priced
+	// it, else the same appraisal over the stored payload's lines
+	// (hull and every item destroyed or dropped). 0 when nothing
+	// prices.
+	KillmailLossValue(ctx context.Context, killmailID int64, payload string) float64
 	// TypicalSells is the swept typical sell per type (The
 	// Forge's book, global-market types filled from their own
 	// global book) —
@@ -1113,6 +1144,11 @@ type Deps interface {
 	// TrueValues is the stored true-value estimated sell per
 	// type (thin types only) — the order's second tier.
 	TrueValues(ctx context.Context) map[int64]float64
+	// AskEvidence is the live single-item contract asks behind a
+	// type the true-value pass could not price: shown beside the
+	// gap with a warning, never used as a price. ok is false when
+	// the type is priced or nobody is asking.
+	AskEvidence(ctx context.Context, typeID int64) (AskEvidence, bool)
 	LoadCorpSnapshot(ctx context.Context, characterID int64, kind string, out any) bool
 	PINotEnabled(ctx context.Context, ch db.Character) bool
 	PublicShell(ctx context.Context) ShellData

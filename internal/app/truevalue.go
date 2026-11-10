@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 )
@@ -60,9 +61,9 @@ const (
 	// indices with a cluster-median fallback.
 	trueValueReferenceSystemID = 30004759
 
-	// A type has a real market when the guide carries an
-	// average for it and The Forge trades at least this many
-	// units a day; below that, contracts are the market.
+	// A type has a real market when The Forge trades at least
+	// this many units a day; below that, contracts are the
+	// market.
 	trueValueHealthyDailyVolume = 10.0
 
 	// How long a stored row stays fresh when its inputs have
@@ -130,6 +131,19 @@ func (app *Application) TrueValues(ctx context.Context) map[int64]float64 {
 		}
 	}
 	return out
+}
+
+// AskEvidence reads the stored live asks behind an unpriced
+// type (schema 137) from the cached true-value rows.
+func (app *Application) AskEvidence(ctx context.Context, typeID int64) (module.AskEvidence, bool) {
+	tv, ok := app.storedTrueValues(ctx)[typeID]
+	if !ok || tv.AskCount <= 0 || !tv.AskLow.Valid || !tv.AskHigh.Valid {
+		return module.AskEvidence{}, false
+	}
+	if _, priced := storedEstimate(tv); priced {
+		return module.AskEvidence{}, false
+	}
+	return module.AskEvidence{Low: tv.AskLow.Float64, High: tv.AskHigh.Float64, Count: tv.AskCount}, true
 }
 
 // pickValuationPrice resolves one unit's price in the house

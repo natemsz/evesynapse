@@ -165,12 +165,17 @@
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--hairline);
 }
+/* Title, Live pill and the book's facts sit on one centre line,
+   an equal gap apart. */
 .mkt-explorer-title {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 0.35rem 0.75rem;
 }
+/* The title's box hugs its capitals, so centering lines the pill
+   up with the letters themselves, not the title's uneven line box. */
+.mkt-explorer-title > h2 { text-box: trim-both cap alphabetic; }
 .mkt-explorer-title > h2 {
   margin: 0;
   font-size: var(--fs-lg);
@@ -539,6 +544,16 @@ td.mt-reqs { max-width: 12rem; }
 .mb-toggle:hover { color: var(--accent); }
 .mb-node.open > .mb-row .mb-toggle::before { transform: rotate(45deg); }
 .mb-toggle-none { flex: none; width: 1.05rem; }
+/* The "All items in" row opens a category's list where a tap on the
+   name only unfolds it (one pane); side by side the name does that. */
+.mb-node.mb-all { display: none; }
+@container console (width < 46rem) {
+  .mb-node.mb-all { display: list-item; }
+  .mb-node.mb-all > .mb-row > a { color: var(--accent); }
+  .mb-row > a { padding-block: 0.55rem; }
+  .mb-toggle { width: 2rem; height: 2rem; }
+  .mb-toggle::before { inset: 0.75rem; }
+}
 .mb-items { transition: opacity 0.15s; }
 [data-browse-items][aria-busy="true"] { opacity: 0.6; }
 /* The row above the browser: the search form takes whatever

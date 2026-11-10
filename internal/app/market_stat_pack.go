@@ -278,6 +278,11 @@ func (app *Application) refreshStatPackRegion(ctx context.Context, regionID int6
 	for _, r := range snap.regionStats {
 		snap.byType[r.TypeID] = append(snap.byType[r.TypeID], r)
 	}
+	for k, s := range snap.stationStats {
+		if s.RegionID == regionID {
+			delete(snap.stationStats, k)
+		}
+	}
 	for _, s := range sRows {
 		snap.stationStats[stationKey{LocationID: s.LocationID, TypeID: s.TypeID}] = s
 	}
@@ -290,6 +295,90 @@ func (app *Application) refreshStatPackRegion(ctx context.Context, regionID int6
 	for _, r := range rRows {
 		app.publishMarketStatRow(r)
 	}
+}
+
+// refreshStatPackTypes updates the resident snapshot after a sweep
+// that wrote only some items: the written items' region rows are
+// read back (their trend figures are derived in SQL), their station
+// rows come from the sweep itself, and the removed items leave. The
+// rest of the snapshot is untouched.
+func (app *Application) refreshStatPackTypes(ctx context.Context, regionID int64, changed, gone []int64, stations []db.MarketStationStat) {
+	if app.cfg.lowRAMMode {
+		return
+	}
+	var rRows []db.MarketRegionStat
+	if len(changed) > 0 {
+		rows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{RegionID: regionID, Column2: changed})
+		if err != nil {
+			logging.Warnf("stat pack: refresh region %d types: %v", regionID, err)
+			app.statPackIdx.mu.Lock()
+			app.statPackIdx.stale = true
+			app.statPackIdx.mu.Unlock()
+			return
+		}
+		rRows = make([]db.MarketRegionStat, 0, len(rows))
+		for _, r := range rows {
+			rRows = append(rRows, db.MarketRegionStat(r))
+		}
+	}
+
+	if !app.patchStatPackTypes(regionID, changed, gone, rRows, stations) {
+		return // no snapshot yet: the first build reads the stored rows whole
+	}
+	// As after a full region refresh: fan the written rows out to the
+	// live market streams, after the unlock.
+	for _, r := range rRows {
+		app.publishMarketStatRow(r)
+	}
+}
+
+// patchStatPackTypes applies refreshStatPackTypes' rows to the
+// resident snapshot under its lock, reporting false when no snapshot
+// has landed yet.
+func (app *Application) patchStatPackTypes(regionID int64, changed, gone []int64, rRows []db.MarketRegionStat, stations []db.MarketStationStat) bool {
+	idx := &app.statPackIdx
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	snap := idx.snap
+	if snap == nil {
+		return false
+	}
+	touched := make(map[int64]bool, len(changed)+len(gone))
+	for _, t := range changed {
+		touched[t] = true
+	}
+	for _, t := range gone {
+		touched[t] = true
+		delete(snap.regionStats, statPackKey{regionID: regionID, typeID: t})
+	}
+	for _, r := range rRows {
+		snap.regionStats[statPackKey{regionID: r.RegionID, typeID: r.TypeID}] = r
+	}
+	for t := range touched {
+		var list []db.MarketRegionStat
+		for _, r := range snap.byType[t] {
+			if r.RegionID != regionID {
+				list = append(list, r)
+			}
+		}
+		if r, ok := snap.regionStats[statPackKey{regionID: regionID, typeID: t}]; ok {
+			list = append(list, r)
+		}
+		if len(list) == 0 {
+			delete(snap.byType, t)
+		} else {
+			snap.byType[t] = list
+		}
+	}
+	for k, s := range snap.stationStats {
+		if s.RegionID == regionID && touched[k.TypeID] {
+			delete(snap.stationStats, k)
+		}
+	}
+	for _, s := range stations {
+		snap.stationStats[stationKey{LocationID: s.LocationID, TypeID: s.TypeID}] = s
+	}
+	return true
 }
 
 // statPack is one type's canonical market figures in one region.

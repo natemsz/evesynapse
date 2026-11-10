@@ -128,11 +128,17 @@ func TestSRPRequest(t *testing.T) {
 		t.Fatalf("%d request(s) made from somebody else's loss, a loss outside the op, or a kill", len(rows))
 	}
 
+	// The loss is valued at our own prices: the hull's Forge
+	// typical sell, never CCP's published average.
+	seedOwnStat(t, f.q, 10000002, 587, 345678, 0, time.Now())
 	f.post(f.pilot, "/srp/request", url.Values{"loss": {f.claim(srpLossOnOp)}, "note": {"primaried on landing"}})
 	f.post(f.pilot, "/srp/request", url.Values{"loss": {f.claim(srpLossOnOp)}})
 	req := f.request()
 	if req.CharacterID != fixtureCharB || req.OpID != f.op || req.KillmailHash != "abc" || req.ShipTypeID != 587 || req.Status != srpOpen {
 		t.Fatalf("request %+v", req)
+	}
+	if req.LossValue != 345678 {
+		t.Fatalf("loss value %v, want the hull's own typical sell 345678", req.LossValue)
 	}
 	_, body = getPage(t, f.app, f.pilot, srpPath)
 	mustContain(t, "srp page after asking", body, "Your requests", "OPEN", "Withdraw")

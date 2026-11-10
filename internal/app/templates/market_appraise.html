@@ -214,7 +214,7 @@ Pyerite 250000</pre>
         <td class="ap-r" data-th="Qty">{{.Qty}}</td>
         {{if .Priced}}<td class="ap-r" data-th="Unit price"><span class="ap-num">{{.UnitPrice}}</span></td><td class="ap-r" data-th="Line total"><span class="ap-num strong">{{.LineValue}}</span></td>{{else}}<td class="ap-r" data-th="Unit price">—</td><td class="ap-r" data-th="Line total">—</td>{{end}}
         <td class="ap-r" data-th="Volume">{{if .LineVol}}{{.LineVol}} m³{{if .UnitVol}}<br><small>{{.UnitVol}} m³ each</small>{{end}}{{else}}—{{end}}</td>
-        <td data-th="Basis &amp; freshness">{{.TierLabel}}</td>
+        <td data-th="Basis &amp; freshness">{{.TierLabel}}{{if .AskNote}}<br><small class="ap-asks">{{.AskNote}}</small>{{end}}</td>
         <td data-th="As of">{{.AsOf}}</td>
       </tr>
     {{end}}

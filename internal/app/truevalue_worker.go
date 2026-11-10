@@ -295,7 +295,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	// fitted contract's other items out at, and the probable
 	// tier: watched listings that left before expiry, read
 	// back from the observation table.
-	priceOf := tvStoredPricerFrom(typicalSell, existing, guide)
+	priceOf := tvStoredPricerFrom(typicalSell, existing)
 	vanished := make(map[int64][]tvContractSample)
 	if rows, err := app.queries.ListTVVanishedSamplesSince(ctx, sql.NullTime{Time: time.Now().Add(-tvEvidenceRetention), Valid: true}); err == nil {
 		for _, row := range rows {
@@ -370,7 +370,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	// ambiguous there too).
 	thinSubjects := make(map[int64]bool, len(graph.products))
 	for _, id := range graph.products {
-		if isThinType(guide, dailyVolume, id) {
+		if isThinType(dailyVolume, id) {
 			thinSubjects[id] = true
 		}
 	}
@@ -385,7 +385,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 		if _, manufacturable := graph.byProduct[id]; manufacturable {
 			continue
 		}
-		if isThinType(guide, dailyVolume, id) {
+		if isThinType(dailyVolume, id) {
 			thinSubjects[id] = true
 			evidenceTypes = append(evidenceTypes, id)
 		}
@@ -407,7 +407,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 		if row, ok := existing[typeID]; ok && !inputsChanged &&
 			row.ProfileVersion == trueValueProfileVersion &&
 			now.Sub(row.ComputedAt) < trueValueStaleAfter {
-			if isThinType(guide, dailyVolume, typeID) {
+			if isThinType(dailyVolume, typeID) {
 				thinCosts[typeID] = row.BuildCost
 			}
 			continue
@@ -429,7 +429,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 			ComputedAt:     now,
 			ProfileVersion: trueValueProfileVersion,
 		}
-		if isThinType(guide, dailyVolume, typeID) {
+		if isThinType(dailyVolume, typeID) {
 			thinCosts[typeID] = buildCost
 			st.fulfilled[typeID] = retainedContractSamples(st.fulfilled[typeID], now)
 			if graph.ships[typeID] {
@@ -469,7 +469,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 			logging.Errorf("true values: store %d: %v", typeID, err)
 			continue
 		}
-		app.noteStatPackTrueValue(db.TrueValue(row))
+		app.noteStatPackTrueValue(trueValueFromUpsert(row))
 		computed++
 	}
 	st.cursor = end
@@ -486,23 +486,27 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	// Thin types whose stored rows predate this chunk still
 	// feed the fulfilled harvest's band check.
 	for typeID, row := range existing {
-		if _, done := thinCosts[typeID]; !done && row.BuildCost > 0 && isThinType(guide, dailyVolume, typeID) {
+		if _, done := thinCosts[typeID]; !done && row.BuildCost > 0 && isThinType(dailyVolume, typeID) {
 			thinCosts[typeID] = row.BuildCost
 		}
 	}
 	app.priceThinShips(ctx, pendingShips, evidenceTypes, existing, thinSubjects, thinCosts, vanished, graph, priceOf, inputsChanged, now)
 	app.harvestFulfilledSamples(ctx, thinCosts, graph.ships, priceOf, now)
 	app.purgeContractObservations(ctx, now)
+	// The live asks behind unpriced types, from the observations
+	// the corpus pass just updated: shown beside the gap, never
+	// a price.
+	if err := app.queries.RefreshTrueValueAsks(ctx); err != nil {
+		logging.Errorf("true values: asks: %v", err)
+	}
 }
 
-// isThinType reports whether a type lacks a real market: no
-// guide average, or a Forge presence below the healthy line.
-// Thin types are the ones contracts have to speak for.
-func isThinType(guide map[int64]esi.MarketPrice, dailyVolume map[int64]float64, typeID int64) bool {
-	p, ok := guide[typeID]
-	if !ok || p.AveragePrice <= 0 {
-		return true
-	}
+// isThinType reports whether a type lacks a real market: The
+// Forge trades fewer than trueValueHealthyDailyVolume units of it
+// a day (none at all when the sweep holds no row for it). Thin
+// types are the ones contracts have to speak for. Only our own
+// swept and recorded data decides it.
+func isThinType(dailyVolume map[int64]float64, typeID int64) bool {
 	return dailyVolume[typeID] < trueValueHealthyDailyVolume
 }
 
@@ -792,7 +796,7 @@ func (app *Application) priceThinShips(ctx context.Context, pending []int64, evi
 			logging.Errorf("true values: store ship %d: %v", typeID, err)
 			continue
 		}
-		app.noteStatPackTrueValue(db.TrueValue(row))
+		app.noteStatPackTrueValue(trueValueFromUpsert(row))
 		written++
 	}
 	if written > 0 {
@@ -805,15 +809,13 @@ func (app *Application) priceThinShips(ctx context.Context, pending []int64, evi
 // the house order: The Forge's swept typical sell, then the
 // stored true-value estimated sell, then the stored build
 // cost (a cost input to the netting arithmetic, quoted as
-// nobody's price), then CCP's adjusted price. The guide's
-// average is not a price source here (or anywhere in the
-// sampler): it is too stale to net real fittings against.
-// The contract sampler nets a fitted contract's other items
-// out at these prices; ok=false when none of them knows the
-// type, which rejects the sample rather than guessing.
+// nobody's price). CCP's published prices are never a price
+// here. The contract sampler nets a fitted contract's other
+// items out at these prices; ok=false when none of them knows
+// the type, which rejects the sample rather than guessing.
 type tvStoredPricer func(typeID int64) (float64, bool)
 
-func tvStoredPricerFrom(typicalSell map[int64]float64, stored map[int64]db.TrueValue, guide map[int64]esi.MarketPrice) tvStoredPricer {
+func tvStoredPricerFrom(typicalSell map[int64]float64, stored map[int64]db.TrueValue) tvStoredPricer {
 	return func(typeID int64) (float64, bool) {
 		if v := typicalSell[typeID]; v > 0 {
 			return v, true
@@ -825,9 +827,6 @@ func tvStoredPricerFrom(typicalSell map[int64]float64, stored map[int64]db.TrueV
 			if tv.BuildCost > 0 {
 				return tv.BuildCost, true
 			}
-		}
-		if p, ok := guide[typeID]; ok && p.AdjustedPrice > 0 {
-			return p.AdjustedPrice, true
 		}
 		return 0, false
 	}
@@ -1105,4 +1104,14 @@ func tvContractCompletedAt(c esi.Contract) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+// trueValueFromUpsert is the stored row an upsert writes, for the
+// stat pack index. The asks columns are not the upsert's to write
+// (RefreshTrueValueAsks owns them), so they stay empty here.
+func trueValueFromUpsert(p db.UpsertTrueValueParams) db.TrueValue {
+	return db.TrueValue{
+		TypeID: p.TypeID, BuildCost: p.BuildCost, EstSell: p.EstSell, SellSamples: p.SellSamples,
+		ComputedAt: p.ComputedAt, ProfileVersion: p.ProfileVersion, SellSource: p.SellSource,
+	}
 }

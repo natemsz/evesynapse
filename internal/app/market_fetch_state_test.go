@@ -123,11 +123,11 @@ func TestFetchAndStoreHistoryDefinitiveFailureSettles(t *testing.T) {
 	}
 }
 
-func TestRefreshMarketDataRunsSweepOnItsOwnLane(t *testing.T) {
+func TestRegionSweepRunsOffTheMarketPass(t *testing.T) {
 	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	for _, region := range marketRegions {
+	for _, region := range sweptRegions {
 		if region.ID != 10000002 {
 			markRegionFresh(t, q, region.ID)
 		}
@@ -138,21 +138,17 @@ func TestRefreshMarketDataRunsSweepOnItsOwnLane(t *testing.T) {
 			{OrderID: 2, TypeID: 34, IsBuyOrder: true, Price: 4.0, VolumeRemain: 50},
 		},
 	}
-	for i := 0; i < 10; i++ {
-		if _, limited := app.refreshMarketData(ctx, nil); limited {
-			t.Fatal("market pass hit the error limit on a healthy stub")
-		}
-		var open int
-		if err := app.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM market_sweep_state`).Scan(&open); err != nil {
-			t.Fatalf("count in-progress sweeps: %v", err)
-		}
-		if open == 0 {
-			break
-		}
+	// The cycle's market pass leaves the due region to the lane.
+	if _, limited := app.refreshMarketData(ctx, nil); limited {
+		t.Fatal("market pass hit the error limit on a healthy stub")
 	}
-	rows, err := q.ListMarketRegionStatsByType(ctx, 34)
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("stats for type 34 after market pass: rows=%d err=%v, want 1", len(rows), err)
+	if rows, err := q.ListMarketRegionStatsByType(ctx, 34); err != nil || len(rows) != 0 {
+		t.Fatalf("the market pass swept a region: rows=%d err=%v, want none", len(rows), err)
+	}
+	// The lane's pass sweeps it.
+	sweepUntilIdle(t, app)
+	if rows, err := q.ListMarketRegionStatsByType(ctx, 34); err != nil || len(rows) != 1 {
+		t.Fatalf("stats for type 34 after the sweep pass: rows=%d err=%v, want 1", len(rows), err)
 	}
 }
 

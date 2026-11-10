@@ -14,6 +14,37 @@
 
   var pending = null;
 
+  // onePane reports whether the console shows one pane at a time
+  // (the narrow layout), where the tree is the reader's whole
+  // screen and a category tap must not swap it away.
+  function onePane(con) {
+    return !!con && con.clientWidth < 46 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+  }
+
+  // addAllRow gives an open category, as its first child, a row
+  // that opens the category's whole item list. On a narrow page a
+  // tap on a category name only unfolds it, so this row is how its
+  // list opens there; side by side the name itself opens the list
+  // and market.css hides the row.
+  function addAllRow(li) {
+    var ul = li.querySelector(":scope > ul.mb-children");
+    var link = li.querySelector(":scope > .mb-row > a[data-browse-link]");
+    if (!ul || !link || ul.querySelector(":scope > .mb-all")) return;
+    var name = link.querySelector(".market-group-name");
+    var row = document.createElement("li");
+    row.className = "mb-node mb-all";
+    row.innerHTML = '<span class="mb-row"><span class="mb-toggle-none"></span><a data-browse-link></a></span>';
+    var a = row.querySelector("a");
+    a.href = link.href;
+    a.textContent = "All items in " + (name ? name.textContent : link.textContent).trim();
+    ul.insertBefore(row, ul.firstChild);
+  }
+
+  function addAllRows() {
+    var open = document.querySelectorAll(".mb-tree .mb-node.open");
+    for (var i = 0; i < open.length; i++) addAllRow(open[i]);
+  }
+
   function markChosen(groupID) {
     var root = document.querySelector("[data-browse-root]");
     if (!root) return;
@@ -65,7 +96,7 @@
           var depth = box.querySelector("[data-awaiting-pick]") ? "0" : "1";
           var moved = con.getAttribute("data-depth") !== depth;
           con.setAttribute("data-depth", depth);
-          if (moved && con.clientWidth < 46 * parseFloat(getComputedStyle(document.documentElement).fontSize)) {
+          if (moved && onePane(con)) {
             con.scrollIntoView({ block: "start" });
           }
         }
@@ -180,7 +211,10 @@
   function slide(ul, opening, li) {
     var btn = li.querySelector(":scope > .mb-row [data-browse-toggle]");
     if (btn) btn.setAttribute("aria-expanded", opening ? "true" : "false");
-    if (opening) li.classList.add("open");
+    if (opening) {
+      li.classList.add("open");
+      addAllRow(li);
+    }
     if (!ul.animate) {
       ul.hidden = !opening;
       if (!opening) li.classList.remove("open");
@@ -249,15 +283,34 @@
       toggleNode(btn);
       return;
     }
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    // Narrow, the list's back link returns to the tree as the reader
+    // left it (open branches and all) instead of loading a fresh,
+    // folded one.
+    var back = e.target.closest(".mb-console .l-back");
+    if (back && onePane(back.closest(".l-console"))) {
+      e.preventDefault();
+      e.stopPropagation();
+      var bq = new URLSearchParams(location.search);
+      var keep = new URLSearchParams();
+      ["region", "sort"].forEach(function (k) { if (bq.get(k)) keep.set(k, bq.get(k)); });
+      var qs = keep.toString();
+      loadItems("/market/" + (qs ? "?" + qs : ""), true);
+      return;
+    }
     var a = e.target.closest("a[data-browse-link]");
-    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (!a) return;
     e.preventDefault();
     e.stopPropagation();
     var li = a.closest(".mb-node");
-    if (li && !li.classList.contains("open")) {
-      var tgl = li.querySelector(":scope > .mb-row [data-browse-toggle]");
-      if (tgl) toggleNode(tgl);
+    var tgl = li && !li.classList.contains("mb-all") ? li.querySelector(":scope > .mb-row [data-browse-toggle]") : null;
+    if (tgl && a.closest(".mb-tree") && onePane(a.closest(".l-console"))) {
+      // Narrow, a category with subcategories unfolds or folds in
+      // place; its "All items" row opens the list.
+      toggleNode(tgl);
+      return;
     }
+    if (tgl && !li.classList.contains("open")) toggleNode(tgl);
     loadItems(a.href, true);
   }, true);
 
@@ -291,7 +344,11 @@
     loadItems("/market/?" + params.toString(), mode);
   }, true);
 
-  document.addEventListener("evesynapse:content-ready", drawGuides);
+  document.addEventListener("evesynapse:content-ready", function () {
+    addAllRows();
+    drawGuides();
+  });
+  addAllRows();
   window.addEventListener("resize", drawGuides);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawGuides);
   drawGuides();

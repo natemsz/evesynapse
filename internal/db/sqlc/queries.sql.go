@@ -467,6 +467,54 @@ func (q *Queries) GetContractDetail(ctx context.Context, contractID int64) (Cont
 	return i, err
 }
 
+const getFreshSiblingCorpSnapshot = `-- name: GetFreshSiblingCorpSnapshot :one
+SELECT s.character_id, s.payload, s.fetched_at, s.cached_until, s.etag
+FROM character_snapshots s
+JOIN character_corporations m ON m.character_id = s.character_id
+WHERE m.corporation_id = $1::bigint
+  AND s.kind = $2::text
+  AND s.character_id <> $3::bigint
+  AND s.cached_until > $4::timestamptz
+ORDER BY s.fetched_at DESC
+LIMIT 1
+`
+
+type GetFreshSiblingCorpSnapshotParams struct {
+	CorporationID int64     `json:"corporation_id"`
+	Kind          string    `json:"kind"`
+	CharacterID   int64     `json:"character_id"`
+	Now           time.Time `json:"now"`
+}
+
+type GetFreshSiblingCorpSnapshotRow struct {
+	CharacterID int64        `json:"character_id"`
+	Payload     string       `json:"payload"`
+	FetchedAt   time.Time    `json:"fetched_at"`
+	CachedUntil sql.NullTime `json:"cached_until"`
+	Etag        string       `json:"etag"`
+}
+
+// A corporation dataset another member of the same corporation
+// holds inside its ESI cache window: the corp pass copies it
+// instead of asking ESI the same question again (corp_worker.go).
+func (q *Queries) GetFreshSiblingCorpSnapshot(ctx context.Context, arg GetFreshSiblingCorpSnapshotParams) (GetFreshSiblingCorpSnapshotRow, error) {
+	row := q.db.QueryRow(ctx, getFreshSiblingCorpSnapshot,
+		arg.CorporationID,
+		arg.Kind,
+		arg.CharacterID,
+		arg.Now,
+	)
+	var i GetFreshSiblingCorpSnapshotRow
+	err := row.Scan(
+		&i.CharacterID,
+		&i.Payload,
+		&i.FetchedAt,
+		&i.CachedUntil,
+		&i.Etag,
+	)
+	return i, err
+}
+
 const getGlobalSnapshot = `-- name: GetGlobalSnapshot :one
 SELECT kind, payload, fetched_at, cached_until, etag FROM global_snapshots
 WHERE kind = $1

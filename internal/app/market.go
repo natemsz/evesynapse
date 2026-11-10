@@ -1056,12 +1056,21 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 			}
 			sells, buys = stored.sells, stored.buys
 			fromSnapshot = stat
-			item.BookStoredAt = ageText(time.Now(), stat.UpdatedAt)
+			sweptAt := stat.UpdatedAt
+			if b := app.heldHubBook(regionID); b != nil && b.sweptAt.After(sweptAt) {
+				sweptAt = b.sweptAt // the row is unchanged since; the sweep confirmed it
+			}
+			item.BookStoredAt = ageText(time.Now(), sweptAt)
 		} else {
 			item.BookPending = true
 			app.attachEstimatedValue(ctx, item, 0)
 			return item, nil
 		}
+	} else if hs, hb, sweptAt, ok := app.hubOrderBook(regionID, typeID); ok {
+		// A swept hub: the whole book from the held hub book, read
+		// from ESI by the sweep moments ago.
+		sells, buys = hs, hb
+		item.BookStoredAt = ageText(time.Now(), sweptAt)
 	} else {
 		var err error
 		if sells, buys, truncated, err = app.fetchOrderBook(ctx, regionID, typeID); err != nil {

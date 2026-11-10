@@ -2448,7 +2448,10 @@ type detailLine struct {
 	LineValueNum float64
 	TierLabel    string
 	TierNote     string // provenance as-of, fallback only spoken aloud
-	Abyssal      *abyssalPanel
+	// AskNote words the live contract asks behind an unpriced
+	// line, with the warning that they are not a price.
+	AskNote string
+	Abyssal *abyssalPanel
 }
 
 type abyssalRoll struct {
@@ -2799,6 +2802,7 @@ func (app *mod) panelFromDetail(dv *detailView, row db.PubContract, pin pinSearc
 			case !pl.Priced:
 				pl.BasisText = "Not priced"
 				pl.BasisAmber = true
+				pl.BasisNote = l.AskNote
 			case l.Tier == module.AppraisalTierFallback:
 				pl.BasisText = "Outside Aggregate Est: " + formatShortISK(l.LineValueNum)
 				pl.BasisAmber = true
@@ -3248,6 +3252,11 @@ func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal m
 	if it.ItemID.Valid {
 		if ab, ok := abyssal[it.ItemID.Int64]; ok {
 			line.Abyssal = app.abyssalPanel(ctx, ab)
+		}
+	}
+	if line.LineValue == "" && line.Abyssal == nil {
+		if asks, ok := app.deps.AskEvidence(ctx, it.TypeID); ok {
+			line.AskNote = asks.Note()
 		}
 	}
 	return line

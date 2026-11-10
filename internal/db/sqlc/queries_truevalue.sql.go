@@ -22,7 +22,8 @@ func (q *Queries) DeleteTVContractObservation(ctx context.Context, contractID in
 }
 
 const getTrueValue = `-- name: GetTrueValue :one
-SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source
+SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source,
+       ask_low, ask_high, ask_count
 FROM true_values
 WHERE type_id = $1
 `
@@ -38,6 +39,9 @@ func (q *Queries) GetTrueValue(ctx context.Context, typeID int64) (TrueValue, er
 		&i.ComputedAt,
 		&i.ProfileVersion,
 		&i.SellSource,
+		&i.AskLow,
+		&i.AskHigh,
+		&i.AskCount,
 	)
 	return i, err
 }
@@ -266,7 +270,8 @@ func (q *Queries) ListTrueValueCorpusContracts(ctx context.Context, arg ListTrue
 }
 
 const listTrueValues = `-- name: ListTrueValues :many
-SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source
+SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source,
+       ask_low, ask_high, ask_count
 FROM true_values
 ORDER BY type_id
 `
@@ -288,6 +293,9 @@ func (q *Queries) ListTrueValues(ctx context.Context) ([]TrueValue, error) {
 			&i.ComputedAt,
 			&i.ProfileVersion,
 			&i.SellSource,
+			&i.AskLow,
+			&i.AskHigh,
+			&i.AskCount,
 		); err != nil {
 			return nil, err
 		}
@@ -300,7 +308,8 @@ func (q *Queries) ListTrueValues(ctx context.Context) ([]TrueValue, error) {
 }
 
 const listTrueValuesForTypes = `-- name: ListTrueValuesForTypes :many
-SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source
+SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source,
+       ask_low, ask_high, ask_count
 FROM true_values
 WHERE type_id = ANY($1::bigint[])
 ORDER BY type_id
@@ -323,6 +332,9 @@ func (q *Queries) ListTrueValuesForTypes(ctx context.Context, dollar_1 []int64) 
 			&i.ComputedAt,
 			&i.ProfileVersion,
 			&i.SellSource,
+			&i.AskLow,
+			&i.AskHigh,
+			&i.AskCount,
 		); err != nil {
 			return nil, err
 		}
@@ -401,6 +413,36 @@ type PurgeTVContractObservationsParams struct {
 
 func (q *Queries) PurgeTVContractObservations(ctx context.Context, arg PurgeTVContractObservationsParams) error {
 	_, err := q.db.Exec(ctx, purgeTVContractObservations, arg.ExpiresAt, arg.VanishedAt)
+	return err
+}
+
+const refreshTrueValueAsks = `-- name: RefreshTrueValueAsks :exec
+WITH asks AS (
+    SELECT o.type_id, MIN(o.listed_price) AS lo, MAX(o.listed_price) AS hi, COUNT(*) AS n
+    FROM true_value_contract_observations o
+    WHERE o.vanished_at IS NULL AND o.expires_at > now()
+      AND o.shape = 'single' AND o.listed_price > 0
+    GROUP BY o.type_id
+),
+want AS (
+    SELECT t.type_id, a.lo, a.hi, COALESCE(a.n, 0) AS n
+    FROM true_values t
+    LEFT JOIN asks a ON a.type_id = t.type_id AND t.est_sell IS NULL
+)
+UPDATE true_values v
+SET ask_low = w.lo, ask_high = w.hi, ask_count = w.n
+FROM want w
+WHERE v.type_id = w.type_id
+  AND (v.ask_count <> w.n OR v.ask_low IS DISTINCT FROM w.lo OR v.ask_high IS DISTINCT FROM w.hi)
+`
+
+// The live single-item asks behind every type the pass left
+// unpriced (schema 137): lowest, highest and count of the public
+// contracts still listed. Priced types and types with no live ask
+// carry none. Readers show these as unverified asks, never as a
+// price. Only rows whose asks moved are written.
+func (q *Queries) RefreshTrueValueAsks(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, refreshTrueValueAsks)
 	return err
 }
 

@@ -640,6 +640,31 @@ func killLines(km killmailFull) []killLine {
 	return lines
 }
 
+// KillmailLossValue values one loss the way the killboard values
+// kills: its stored value when the killboard priced it, else the
+// same appraisal over the payload's lines.
+func (app *Application) KillmailLossValue(ctx context.Context, killmailID int64, payload string) float64 {
+	if k, err := app.queries.GetKill(ctx, killmailID); err == nil && k.ValueOurs.Valid {
+		return k.ValueOurs.Float64
+	}
+	var km killmailFull
+	if json.Unmarshal([]byte(payload), &km) != nil {
+		return 0
+	}
+	lines := killLines(km)
+	types := make(map[int64]bool, len(lines))
+	for _, l := range lines {
+		types[l.typeID] = true
+	}
+	price, err := app.killUnitPrices(ctx, types)
+	if err != nil {
+		logging.Errorf("killboard: price loss %d: %v", killmailID, err)
+		return 0
+	}
+	total, _, _ := killValue(lines, price)
+	return total
+}
+
 // killValue totals a kill's lines at unit prices: the whole value,
 // the dropped share, and the share of lines that had a price.
 func killValue(lines []killLine, price map[int64]float64) (total, dropped float64, coverage float64) {

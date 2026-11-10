@@ -50,7 +50,9 @@ import (
 const (
 	// pubContractSweepGate is the list route's own cache
 	// window, measured on the live route: a region swept more
-	// recently than this has nothing new to say.
+	// recently than this has nothing new to say. Once a region's
+	// page 1 has given its Expires, the sweep waits for that
+	// instead (windowDue).
 	pubContractSweepGate = 30 * time.Minute
 	// pubContractFetchesPerCycle is the pass's own fetch lane:
 	// room for a full universe pass every cadence (~155 list
@@ -148,13 +150,14 @@ const publicStructuresKind = "pubcontracts_public_structures"
 // stored set untouched: a torn read must never unpublish
 // every public citadel at once.
 func (app *Application) refreshPublicStructures(ctx context.Context, allowance *fetchBudget) (stored int, limited bool) {
-	if !app.marketFetchDue(ctx, publicStructuresKind, pubContractSweepGate) {
+	if !app.windowDue(ctx, publicStructuresKind, pubContractSweepGate) {
 		return 0, false
 	}
 	if !allowance.Take() {
 		return 0, false
 	}
-	body, _, err := app.esi.FetchRaw(ctx, "", "/universe/structures/")
+	body, header, err := app.esi.FetchRaw(ctx, "", "/universe/structures/")
+	app.noteExpires(publicStructuresKind, header)
 	if err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
 			return 0, true
@@ -230,7 +233,7 @@ func (app *Application) advancePublicContractRegion(ctx context.Context, regionI
 		return 0, false
 	}
 	if state.NextPage == 0 {
-		if !app.marketFetchDue(ctx, kind, pubContractSweepGate) {
+		if !app.windowDue(ctx, kind, pubContractSweepGate) {
 			return 0, false
 		}
 		state = db.PubContractSweepState{
@@ -294,6 +297,9 @@ func (app *Application) fetchPublicContractPage(ctx context.Context, regionID, p
 	body, header, err := app.esi.FetchRaw(ctx, "", path)
 	if err != nil {
 		return nil, 0, err
+	}
+	if page == 1 {
+		app.noteExpires(pubContractRegionKind(regionID), header)
 	}
 	totalPages := 1
 	if raw := header.Get("X-Pages"); raw != "" {

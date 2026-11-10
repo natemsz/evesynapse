@@ -97,25 +97,15 @@ const (
 type marketKey = module.MarketKey
 
 // refreshMarketData runs one market pass, reporting how many
-// payloads it stored (history downloads + book reads + region
-// sweep pages) and whether ESI's error limit stopped it.
+// payloads it stored (history downloads + book reads) and whether
+// ESI's error limit stopped it. The region sweep runs on its own
+// lane (runMarketLane), not in this pass.
 func (app *Application) refreshMarketData(ctx context.Context, characters []db.Character) (stored int, limited bool) {
 	// The market pass spends from its own lane, not the
 	// character pass's budget: the character pass can spend
-	// its whole allowance in a busy cycle, and a sweep
-	// starved of fetches logs nothing while it waits (the
-	// empty Scanner/Tradefinder stall of 2026-10-04).
+	// its whole allowance in a busy cycle.
 	allowance := &fetchBudget{left: maxMarketFetchesPerCycle}
-	stored, limited = app.refreshMarketWarm(ctx, characters, allowance)
-	if limited {
-		return stored, true
-	}
-	// Region stats: advance the whole-region book sweep with
-	// what is left of the cycle's allowance. Additive -- the
-	// passes above are untouched.
-	sPages, ltd := app.sweepRegionStats(ctx, allowance)
-	stored += sPages
-	return stored, ltd
+	return app.refreshMarketWarm(ctx, characters, allowance)
 }
 
 // refreshMarketWarm is the market pass ahead of the region
@@ -1005,6 +995,35 @@ func (app *Application) marketFetchDue(ctx context.Context, kind string, gate ti
 		return true // no record (or unreadable): try
 	}
 	return marketFetchStateDue(state, gate, time.Now())
+}
+
+// windowDue is marketFetchDue for a kind paced by ESI's own cache
+// window: once this process has seen the kind's Expires, the kind
+// is due as soon as that passes, so it is fetched as the window
+// rolls over instead of a fixed gate after the last fetch. Before
+// that (a fresh start), the gate applies. A transient failure still
+// waits out marketFetchErrorGate.
+func (app *Application) windowDue(ctx context.Context, kind string, gate time.Duration) bool {
+	state, err := app.queries.GetMarketFetchState(ctx, kind)
+	if err != nil {
+		return true
+	}
+	now := time.Now()
+	if state.State == fetchStateError {
+		return now.Sub(state.AttemptedAt) >= marketFetchErrorGate
+	}
+	if v, ok := app.esiExpires.Load(kind); ok {
+		return !now.Before(v.(time.Time).Add(sweepStartAfter))
+	}
+	return now.Sub(state.AttemptedAt) >= gate
+}
+
+// noteExpires remembers the Expires of an answer for kind, for
+// windowDue.
+func (app *Application) noteExpires(kind string, h http.Header) {
+	if t := windowOf(h).expires; !t.IsZero() {
+		app.esiExpires.Store(kind, t)
+	}
 }
 
 // marketFetchStateDue is marketFetchDue's rule for a record already

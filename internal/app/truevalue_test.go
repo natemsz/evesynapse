@@ -31,15 +31,14 @@ func TestTrueValueContractFilters(t *testing.T) {
 	thin := map[int64]float64{11567: 550e9, 2001: 2e6}
 	ships := map[int64]bool{11567: true}
 
-	// The netting pricer: stored prices in the house order
-	// (Forge typical sell, then the stored estimated sell,
-	// then the stored build cost, then adjusted). The guide's
-	// average is never a source: 3005 carries one and nothing
-	// else, and must come back unpriced. 3010 carries all
-	// three real sources and the typical must win; 3002 only
-	// an estimated sell; 3003 an estimate and an adjusted
-	// (estimate first); 3004 only an adjusted; 3006 only a
-	// build cost (a cost input to the netting arithmetic,
+	// The netting pricer: our own stored prices in the house
+	// order (Forge typical sell, then the stored estimated
+	// sell, then the stored build cost). 3010 carries both
+	// real sources and the typical must win; 3002 only an
+	// estimated sell; 3004 is in no house source and stays
+	// unpriced (CCP's published prices are never a price, so
+	// the pricer does not take them); 3006 only
+	// a build cost (a cost input to the netting arithmetic,
 	// quoted as nobody's price); 3007 a legacy anchored row
 	// -- its figure names no evidence tier, so it is no
 	// estimate, and it too nets at its build cost.
@@ -47,29 +46,19 @@ func TestTrueValueContractFilters(t *testing.T) {
 		map[int64]float64{34: 5.5, 3001: 250, 3010: 100, 3011: 1e10},
 		map[int64]db.TrueValue{
 			3002: {TypeID: 3002, EstSell: sql.NullFloat64{Float64: 45, Valid: true}, SellSource: tvSampleListing},
-			3003: {TypeID: 3003, EstSell: sql.NullFloat64{Float64: 50, Valid: true}, SellSource: tvSampleListing},
 			3006: {TypeID: 3006, BuildCost: 33},
 			3007: {TypeID: 3007, BuildCost: 70, EstSell: sql.NullFloat64{Float64: 70, Valid: true}},
 			3010: {TypeID: 3010, EstSell: sql.NullFloat64{Float64: 90, Valid: true}, SellSource: tvSampleListing},
-		},
-		map[int64]esi.MarketPrice{
-			34:   {AveragePrice: 6, AdjustedPrice: 4},
-			3001: {AveragePrice: 260, AdjustedPrice: 200},
-			3003: {AdjustedPrice: 40},
-			3004: {AdjustedPrice: 40},
-			3005: {AveragePrice: 777},
-			3010: {AveragePrice: 110, AdjustedPrice: 80},
 		})
-	for id, want := range map[int64]float64{34: 5.5, 3001: 250, 3002: 45, 3003: 50, 3004: 40, 3006: 33, 3007: 70, 3010: 100} {
+	for id, want := range map[int64]float64{34: 5.5, 3001: 250, 3002: 45, 3006: 33, 3007: 70, 3010: 100} {
 		if got, ok := priceOf(id); !ok || got != want {
 			t.Errorf("priceOf(%d) = (%v, %v), want (%v, true)", id, got, ok, want)
 		}
 	}
-	if _, ok := priceOf(9999); ok {
-		t.Error("priceOf priced a type nothing stored knows")
-	}
-	if _, ok := priceOf(3005); ok {
-		t.Error("priceOf priced a type from the guide average, which is never a price source")
+	for _, id := range []int64{3004, 9999} {
+		if _, ok := priceOf(id); ok {
+			t.Errorf("priceOf priced %d, which nothing of ours knows", id)
+		}
 	}
 
 	// The stored-estimate invariant: a figure counts as an
@@ -192,19 +181,10 @@ func TestTrueValueContractFilters(t *testing.T) {
 		t.Error("vanished after expiry counted")
 	}
 
-	// Thin: no average at all, or an average over a market
-	// that barely trades.
-	guide := map[int64]esi.MarketPrice{
-		1: {AveragePrice: 0, AdjustedPrice: 10},
-		2: {AveragePrice: 10, AdjustedPrice: 9},
-		3: {AveragePrice: 10, AdjustedPrice: 9},
-	}
+	// Thin: The Forge trades too little of it, or nothing at all.
 	volume := map[int64]float64{2: 3, 3: 5000}
-	if !isThinType(guide, volume, 1) || !isThinType(guide, volume, 2) || isThinType(guide, volume, 3) {
-		t.Error("thin classification wrong (no-average thin, low-volume thin, healthy not)")
-	}
-	if !isThinType(guide, volume, 9999) {
-		t.Error("a type the guide does not carry is thin")
+	if !isThinType(volume, 2) || isThinType(volume, 3) || !isThinType(volume, 9999) {
+		t.Error("thin classification wrong (low-volume thin, healthy not, untraded thin)")
 	}
 }
 
@@ -792,7 +772,6 @@ func TestTrueValueItemPage(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("tritanium page: status %d", code)
 	}
-	mustContain(t, "/items/type/34/", body, "Average price", "5.90", "Adjusted price", "5.00")
 	if strings.Contains(body, "Build cost") || strings.Contains(body, "Estimated sell") {
 		t.Error("healthy type's page gained true-value rows")
 	}

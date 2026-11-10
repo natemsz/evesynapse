@@ -1130,6 +1130,12 @@ type Deps interface {
 	// bytes-served counter uses it with byte counts.
 	NoteActivityN(kind string, n int64)
 	ValuationPrices(ctx context.Context) map[int64]esi.MarketPrice
+	// KillmailLossValue is what a loss cost, in the killboard's own
+	// pricing: the kill's stored value when the killboard has priced
+	// it, else the same appraisal over the stored payload's lines
+	// (hull and every item destroyed or dropped). 0 when nothing
+	// prices.
+	KillmailLossValue(ctx context.Context, killmailID int64, payload string) float64
 	// TypicalSells is the swept typical sell per type (The
 	// Forge's book, global-market types filled from their own
 	// global book) —

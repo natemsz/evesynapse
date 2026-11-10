@@ -794,7 +794,6 @@ func TestTrueValueItemPage(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("tritanium page: status %d", code)
 	}
-	mustContain(t, "/items/type/34/", body, "Average price", "5.90", "Adjusted price", "5.00")
 	if strings.Contains(body, "Build cost") || strings.Contains(body, "Estimated sell") {
 		t.Error("healthy type's page gained true-value rows")
 	}

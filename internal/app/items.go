@@ -187,7 +187,9 @@ type itemTypeDetail struct {
 	ArtURL      string
 	ArtFallback string
 
-	AveragePrice  string // guide prices, "" when unknown
+	// CCP's published prices, shown on the public ship page only:
+	// the rates insurance is paid against. Never a price elsewhere.
+	AveragePrice  string // "" when unknown
 	AdjustedPrice string
 
 	// The worker's true value (truevalue.go), present only

@@ -255,6 +255,35 @@ const (
 	EffectAdaptiveArmorHardener = 4928
 )
 
+// Fighters: squadron shape, the carrier's tubes and role slots,
+// and the two damage abilities. Attack is sustained (missile-style
+// or turret-style by fighter); the missile ability is a salvo with
+// limited charges, kept out of DPS.
+const (
+	AttrFighterCapacity          = 2055
+	AttrFighterSquadronIsLight   = 2212
+	AttrFighterSquadronIsSupport = 2213
+	AttrFighterSquadronIsHeavy   = 2214
+	AttrFighterSquadronMaxSize   = 2215
+	AttrFighterTubes             = 2216
+	AttrFighterLightSlots        = 2217
+	AttrFighterSupportSlots      = 2218
+	AttrFighterHeavySlots        = 2219
+
+	AttrFighterAttackMissileMult     = 2226
+	AttrFighterAttackMissileDuration = 2233
+	AttrFighterAttackTurretMult      = 2178
+	AttrFighterAttackTurretDuration  = 2177
+	AttrFighterMissilesMult          = 2130
+	AttrFighterMissilesDuration      = 2182
+)
+
+var (
+	fighterAttackMissileDamage = []int64{2227, 2228, 2229, 2230}
+	fighterAttackTurretDamage  = []int64{2171, 2172, 2173, 2174}
+	fighterMissilesDamage      = []int64{2131, 2132, 2133, 2134}
+)
+
 const catOverload = 5
 
 // Module states: the values ItemInput.State carries, and a saved
@@ -764,6 +793,7 @@ type Result struct {
 	MissileDPS   float64
 	DroneDPS     float64
 	SmartbombDPS float64
+	FighterDPS   float64 // launched squadrons' sustained attack
 	DPS          float64
 	// SpooledDPS is DPS with every spool-up weapon (entropic
 	// disintegrators) at its full damage bonus, reached after
@@ -782,7 +812,27 @@ type Result struct {
 	MissileVolley   float64
 	DroneVolley     float64
 	SmartbombVolley float64
+	FighterVolley   float64
 	Volley          float64
+
+	// Fighters: what the hangar carries, what launches (one
+	// squadron per tube, within the hull's light, support and heavy
+	// slots), and the launched squadrons' missile salvo: limited
+	// charges, so not in DPS. Every figure is 0 on a hull without
+	// fighter tubes.
+	FightersCarried       int
+	SquadronsLaunched     int
+	FighterTubes          int
+	FighterLightUsed      int
+	FighterLightSlots     int
+	FighterSupportUsed    int
+	FighterSupportSlots   int
+	FighterHeavyUsed      int
+	FighterHeavySlots     int
+	FighterHangarUsed     float64 // m3
+	FighterHangarCapacity float64 // m3
+	FighterSalvo          float64 // damage of one salvo from every launched squadron
+	FighterSalvoSeconds   float64 // the longest salvo cycle among them
 
 	// Capacitor warfare: neutralizer and nosferatu drain, per
 	// cycle and per second, from fitted modules.
@@ -882,6 +932,7 @@ const (
 	entMissile
 	entCharge
 	entImplant
+	entFighter
 )
 
 // entity is one thing whose attributes get computed: the ship,

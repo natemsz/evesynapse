@@ -71,6 +71,7 @@ var fittingSlotCategories = []struct {
 	{"RigSlot", "Rig slots"},
 	{"SubSystemSlot", "Subsystem slots"},
 	{"DroneBay", "Drone bay"},
+	{"FighterBay", "Fighter bay"},
 	{"Cargo", "Cargo hold"},
 	{"FuelBay", "Fuel bay"},
 }
@@ -268,7 +269,7 @@ func localFitGroups(doc *fitview.FitDoc, familyOf map[int64]string, nameOf func(
 	familyLabel := map[string]string{
 		fitview.FitFamilyHigh: "High slots", fitview.FitFamilyMedium: "Medium slots",
 		fitview.FitFamilyLow: "Low slots", fitview.FitFamilyRig: "Rig slots",
-		fitview.FitFamilySubsystem: "Subsystem slots", fitview.FitFamilyDrone: "Drone bay",
+		fitview.FitFamilySubsystem: "Subsystem slots", fitview.FitFamilyDrone: "Drone bay", fitview.FitFamilyFighter: "Fighter bay",
 		fitview.FitFamilyCargo: "Cargo hold",
 	}
 	byFamily := map[string][]fitview.FittingItemRow{}
@@ -283,7 +284,7 @@ func localFitGroups(doc *fitview.FitDoc, familyOf map[int64]string, nameOf func(
 		})
 	}
 	ordered := []string{fitview.FitFamilyHigh, fitview.FitFamilyMedium, fitview.FitFamilyLow,
-		fitview.FitFamilyRig, fitview.FitFamilySubsystem, fitview.FitFamilyDrone, fitview.FitFamilyCargo, "other"}
+		fitview.FitFamilyRig, fitview.FitFamilySubsystem, fitview.FitFamilyDrone, fitview.FitFamilyFighter, fitview.FitFamilyCargo, "other"}
 	var groups []fitview.FittingGroup
 	for _, family := range ordered {
 		items, ok := byFamily[family]

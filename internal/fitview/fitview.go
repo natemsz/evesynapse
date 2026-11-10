@@ -43,6 +43,7 @@ const (
 	FitFamilyRig       = "rig"
 	FitFamilySubsystem = "subsystem"
 	FitFamilyDrone     = "drone"
+	FitFamilyFighter   = "fighter"
 	FitFamilyCargo     = "cargo"
 )
 
@@ -227,6 +228,8 @@ func FitSlotFamilyOf(snap *fit.Snapshot, typeID int64) string {
 		return FitFamilyRig
 	case snap.HasEffect(typeID, fit.EffectSubsystemSlot):
 		return FitFamilySubsystem
+	case snap.Attrs[typeID][fit.AttrFighterSquadronMaxSize] > 0:
+		return FitFamilyFighter
 	case snap.Attrs[typeID][fit.AttrDroneBandwidthUsed] > 0:
 		return FitFamilyDrone
 	case snap.HasEffect(typeID, fit.EffectHiPower):
@@ -279,7 +282,7 @@ type FitSlotGroup struct {
 // FitBayGroup reports whether a group holds a bay's contents (drones,
 // cargo) rather than fitted slots: the workbench shows bays under the
 // ring on a wide screen, slots beside it.
-func FitBayGroup(key string) bool { return key == "drone" || key == "cargo" }
+func FitBayGroup(key string) bool { return key == "drone" || key == "fighter" || key == "cargo" }
 
 // ImplantsUsed counts the filled implant slots.
 func (v *FitSimView) ImplantsUsed() int {
@@ -1126,6 +1129,11 @@ type FitStatsView struct {
 	DroneBW       string
 	DroneBay      string
 	DronesUp      string
+	FighterDPS    string // "" on a hull without fighter tubes
+	FighterVolley string
+	Fighters      string // squadrons launched and tubes
+	FighterHangar string
+	FighterSalvo  string // "" without a salvo ability launched
 	Hardpoints    string // "Turrets 3/4 · Launchers 0/0"
 	HPOver        bool
 	Calibration   string
@@ -1188,11 +1196,12 @@ type FitSimView struct {
 	Implants    []FitImplantSlot
 	ImplantNote string
 	// ImplantEffects is what the implants change on this fit's stats.
-	ImplantEffects []FitImplantEffect
-	Groups         []FitSlotGroup
-	Visual         *FitVisualView // in-game-style ship + slot rings
-	DroneBWNum     float64        // drone bandwidth (for the fittable filter)
-	DroneBayNum    float64        // drone bay m3 (for the fittable filter)
+	ImplantEffects  []FitImplantEffect
+	Groups          []FitSlotGroup
+	Visual          *FitVisualView // in-game-style ship + slot rings
+	DroneBWNum      float64        // drone bandwidth (for the fittable filter)
+	DroneBayNum     float64        // drone bay m3 (for the fittable filter)
+	FighterTubesNum int            // fighter tubes (for the fittable filter)
 	// SupportsSubsystems: the hull is a strategic cruiser (SDE
 	// group), so the subsystem ring, group, and search family show.
 	SupportsSubsystems bool
@@ -1430,6 +1439,7 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 	view.Visual = FitBuildVisual(res, doc, snap, familyOf, nameOf, view.SupportsSubsystems)
 	view.DroneBWNum = res.DroneBandwidth
 	view.DroneBayNum = res.DroneBayCapacity
+	view.FighterTubesNum = res.FighterTubes
 	view.ChargeSets = app.FitBuildChargeSets(ctx, doc, snap, nameOf)
 	view.Stats = FitBuildStats(res)
 	// Implants count toward the pilot's missing skills like modules.
@@ -1650,8 +1660,8 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 				break
 			}
 		}
-		if !uniform {
-			st = ""
+		if !uniform || FitBayGroup(fam) {
+			st = "" // bay items (drones, fighters, cargo) carry no module state
 		}
 		lines := FitTipLines(res, snap, doc, it.TypeID, st, FitEffAttrs(res, snap, it.TypeID, st))
 		chip := FitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: qty, State: st,
@@ -1686,6 +1696,10 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 	for _, c := range chips[FitFamilyDrone] {
 		droneUsed += c.Qty
 	}
+	fighterCount := 0
+	for _, c := range chips[FitFamilyFighter] {
+		fighterCount += c.Qty
+	}
 	cargoCount := 0
 	for _, c := range chips[FitFamilyCargo] {
 		cargoCount += c.Qty
@@ -1702,10 +1716,12 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 	if supportsSubsystems || len(chips[FitFamilySubsystem]) > 0 {
 		groups = append(groups, mk(FitFamilySubsystem, "Subsystems", len(chips[FitFamilySubsystem]), 0, false))
 	}
-	groups = append(groups,
-		mk(FitFamilyDrone, "Drones", droneUsed, 0, false),
-		mk(FitFamilyCargo, "Cargo", cargoCount, 0, false),
-	)
+	groups = append(groups, mk(FitFamilyDrone, "Drones", droneUsed, 0, false))
+	// Fighters only on carriers (or when a fit already lists some).
+	if res.FighterTubes > 0 || fighterCount > 0 {
+		groups = append(groups, mk(FitFamilyFighter, "Fighters", fighterCount, 0, false))
+	}
+	groups = append(groups, mk(FitFamilyCargo, "Cargo", cargoCount, 0, false))
 	return groups
 }
 
@@ -2011,6 +2027,15 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 	st.DroneBW = fmt.Sprintf("%s / %s Mbit/s", FitFmt1(res.DroneBandwidthUsed), FitFmt1(res.DroneBandwidth))
 	st.DroneBay = fmt.Sprintf("%s / %s m³", FitFmt1(res.DroneBayUsed), FitFmt1(res.DroneBayCapacity))
 	st.DronesUp = fmt.Sprintf("%d in space of %d carried", res.DronesActive, res.DronesFitted)
+	if res.FighterTubes > 0 || res.FightersCarried > 0 {
+		st.FighterDPS = FitFmt1(res.FighterDPS)
+		st.FighterVolley = FitFmt1(res.FighterVolley)
+		st.Fighters = fmt.Sprintf("%d of %d squadrons launched, %d fighters carried", res.SquadronsLaunched, res.FighterTubes, res.FightersCarried)
+		st.FighterHangar = fmt.Sprintf("%s / %s m³", FitFmt1(res.FighterHangarUsed), FitFmt1(res.FighterHangarCapacity))
+		if res.FighterSalvo > 0 {
+			st.FighterSalvo = fmt.Sprintf("%s damage every %s while their charges last", FitFmt0(res.FighterSalvo), FitSeconds(res.FighterSalvoSeconds))
+		}
+	}
 
 	st.Hardpoints = fmt.Sprintf("Turrets %d/%d · Launchers %d/%d",
 		res.TurretHardpointsUsed, res.TurretHardpoints, res.LauncherHardpointsUsed, res.LauncherHardpoints)
@@ -2341,7 +2366,7 @@ func (app *Builder) FormatEFT(ctx context.Context, doc *FitDoc) string {
 			sections = append(sections, strings.Join(lines, "\n"))
 		}
 	}
-	for _, family := range []string{FitFamilyDrone, FitFamilyCargo} {
+	for _, family := range []string{FitFamilyDrone, FitFamilyFighter, FitFamilyCargo} {
 		var lines []string
 		for _, it := range doc.Items {
 			if familyOf[it.TypeID] != family {
@@ -2356,7 +2381,7 @@ func (app *Builder) FormatEFT(ctx context.Context, doc *FitDoc) string {
 	// Anything unclassified (no snapshot) keeps its place.
 	var rest []string
 	known := map[string]bool{FitFamilyLow: true, FitFamilyMedium: true, FitFamilyHigh: true,
-		FitFamilyRig: true, FitFamilySubsystem: true, FitFamilyDrone: true, FitFamilyCargo: true}
+		FitFamilyRig: true, FitFamilySubsystem: true, FitFamilyDrone: true, FitFamilyFighter: true, FitFamilyCargo: true}
 	for _, it := range doc.Items {
 		if known[familyOf[it.TypeID]] {
 			continue
@@ -2411,7 +2436,7 @@ func (app *Builder) PublicFitSections(ctx context.Context, doc *FitDoc) []Fittin
 	familyLabel := map[string]string{
 		FitFamilyHigh: "High slots", FitFamilyMedium: "Medium slots",
 		FitFamilyLow: "Low slots", FitFamilyRig: "Rig slots",
-		FitFamilySubsystem: "Subsystem slots", FitFamilyDrone: "Drone bay",
+		FitFamilySubsystem: "Subsystem slots", FitFamilyDrone: "Drone bay", FitFamilyFighter: "Fighter bay",
 		FitFamilyCargo: "Cargo hold",
 	}
 	byFamily := map[string][]FittingItemRow{}
@@ -2429,7 +2454,7 @@ func (app *Builder) PublicFitSections(ctx context.Context, doc *FitDoc) []Fittin
 			Quantity: esi.FormatInt(int64(it.Qty)),
 		})
 	}
-	ordered := []string{FitFamilyHigh, FitFamilyMedium, FitFamilyLow, FitFamilyRig, FitFamilySubsystem, FitFamilyDrone, FitFamilyCargo}
+	ordered := []string{FitFamilyHigh, FitFamilyMedium, FitFamilyLow, FitFamilyRig, FitFamilySubsystem, FitFamilyDrone, FitFamilyFighter, FitFamilyCargo}
 	seen := map[string]bool{}
 	var sections []FittingGroup
 	for _, family := range ordered {

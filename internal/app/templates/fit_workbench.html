@@ -4,7 +4,7 @@ drift. ReadOnly keeps the look and drops every affordance: slots
 are plain spans with their tooltips, nothing adds, removes or
 retunes, and the root carries fit-ro for the read-only tooltips. */}}
 {{define "fit-workbench"}}
-{{if .ReadOnly}}<div class="fit-wb fit-ro">{{else}}<div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}" data-fit-subsystems="{{if .SupportsSubsystems}}1{{else}}0{{end}}" data-fit-restricted='{{.RestrictedJSON}}'>{{end}}
+{{if .ReadOnly}}<div class="fit-wb fit-ro">{{else}}<div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}" data-fit-tubes="{{.FighterTubesNum}}" data-fit-subsystems="{{if .SupportsSubsystems}}1{{else}}0{{end}}" data-fit-restricted='{{.RestrictedJSON}}'>{{end}}
 {{$problems := false}}{{if and .HasShip .Stats}}{{if .Stats.Problems}}{{$problems = true}}{{end}}{{end}}
 {{if or .DataNote $problems}}
 <div class="fit-top">
@@ -99,7 +99,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     {{range .SlotGroups}}{{template "fit-group" .}}{{end}}
   </div>
   <div class="fit-bays">
-    {{range .BayGroups}}{{if eq .Key "drone"}}{{template "fit-group" .}}{{end}}{{end}}
+    {{range .BayGroups}}{{if or (eq .Key "drone") (eq .Key "fighter")}}{{template "fit-group" .}}{{end}}{{end}}
     {{if .ChargeSets}}
     <div class="fit-group fit-ammo-group" data-fit-group="ammo">
       <h4><span>Ammunition</span></h4>
@@ -123,7 +123,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       </div>
     </div>
     {{end}}
-    {{range .BayGroups}}{{if ne .Key "drone"}}{{template "fit-group" .}}{{end}}{{end}}
+    {{range .BayGroups}}{{if eq .Key "cargo"}}{{template "fit-group" .}}{{end}}{{end}}
     {{if or (not .ReadOnly) .ImplantsUsed}}
     <div class="fit-group fit-implant-group" data-fit-group="implant">
       <h4><span>Implants</span> <small class="fit-count">{{.ImplantsUsed}}/10</small></h4>
@@ -153,13 +153,13 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <div class="fit-headline-dps">
         <span class="fit-headline-num">{{.TotalDPS}}</span>
         <span class="fit-headline-label"><abbr title="Damage per second">DPS</abbr></span>
-        <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}{{if .SmartbombDPS}} · smartbombs {{.SmartbombDPS}}{{end}}</span>
+        <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}{{if .FighterDPS}} · fighters {{.FighterDPS}}{{end}}{{if .SmartbombDPS}} · smartbombs {{.SmartbombDPS}}{{end}}</span>
         {{if .SpooledDPS}}<span class="fit-headline-sub">{{.SpooledDPS}} at full spool, after {{.SpoolTime}} of firing</span>{{end}}
       </div>
       <div class="fit-headline-volley">
         <span class="fit-headline-num">{{.TotalVolley}}</span>
         <span class="fit-headline-label"><abbr title="Volley damage">volley</abbr></span>
-        <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}</span>
+        <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}{{if .FighterVolley}} · fighters {{.FighterVolley}}{{end}}</span>
       </div>
     </div>
     {{if or .NeutDrain .NosDrain .Breacher}}<dl class="fit-kv fit-kv-drain">
@@ -241,6 +241,9 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <div><dt>Drone bandwidth</dt><dd>{{.DroneBW}}</dd></div>
         <div><dt>Drone bay</dt><dd>{{.DroneBay}}</dd></div>
         <div><dt>Drones</dt><dd>{{.DronesUp}}</dd></div>
+        {{if .Fighters}}<div><dt>Fighters</dt><dd>{{.Fighters}}</dd></div>
+        <div><dt>Fighter hangar</dt><dd>{{.FighterHangar}}</dd></div>{{end}}
+        {{if .FighterSalvo}}<div><dt>Fighter missile salvo</dt><dd>{{.FighterSalvo}}</dd></div>{{end}}
         <div><dt>Cargo hold</dt><dd>{{.Cargo}}</dd></div>
       </dl>
     </section>
@@ -295,7 +298,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
           <span class="fit-chip-main">
             <span class="fit-chip-name">{{.Name}}</span>
             {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
-            {{if eq $group.Key "drone"}}<input type="number" class="fit-qty" data-fit-qty="{{.TypeID}}" value="{{.Qty}}" min="0" max="10000" title="How many">{{end}}
+            {{if or (eq $group.Key "drone") (eq $group.Key "fighter")}}<input type="number" class="fit-qty" data-fit-qty="{{.TypeID}}" value="{{.Qty}}" min="0" max="10000" title="How many">{{end}}
           </span>
           <span class="fit-chip-ctl">
             {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{else}}<span class="fit-chip-state fit-chip-state-ph" aria-hidden="true"></span>{{end}}
@@ -313,6 +316,9 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         {{end}}
         {{if and (not .HasMax) (eq .Key "drone")}}
         <button type="button" class="fit-slot-empty" data-fit-add="drone">+ Add drones</button>
+        {{end}}
+        {{if and (not .HasMax) (eq .Key "fighter")}}
+        <button type="button" class="fit-slot-empty" data-fit-add="fighter">+ Add fighters</button>
         {{end}}
         {{if and (not .HasMax) (eq .Key "cargo")}}
         <button type="button" class="fit-slot-empty" data-fit-add="any">+ Add to cargo</button>

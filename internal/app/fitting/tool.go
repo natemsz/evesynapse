@@ -272,6 +272,13 @@ func (app *tool) handleFitPickerJSON(w http.ResponseWriter, r *http.Request) {
 		} else {
 			logging.Errorf("fittings picker: drones: %v", err)
 		}
+		if rows, err := app.queries.ListFitFighterTypes(ctx, db.ListFitFighterTypesParams{Q: query, Lim: 6, Meta: meta}); err == nil {
+			for _, row := range rows {
+				out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "fighter"})
+			}
+		} else {
+			logging.Errorf("fittings picker: fighters: %v", err)
+		}
 	case family == "ship":
 		rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: query, Lim: 12})
 		if err != nil {
@@ -289,6 +296,15 @@ func (app *tool) handleFitPickerJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, row := range rows {
 			out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "drone"})
+		}
+	case family == fitview.FitFamilyFighter:
+		rows, err := app.queries.ListFitFighterTypes(ctx, db.ListFitFighterTypesParams{Q: query, Lim: 25, Meta: meta})
+		if err != nil {
+			logging.Errorf("fittings picker: fighters: %v", err)
+			break
+		}
+		for _, row := range rows {
+			out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "fighter"})
 		}
 	case family == "implant":
 		// One slot's implants. Every one lists; those the pilot
@@ -546,6 +562,8 @@ func fitESIFittingBody(name string, doc *fitview.FitDoc, familyOf map[int64]stri
 		switch familyOf[it.TypeID] {
 		case fitview.FitFamilyDrone:
 			body.Items = append(body.Items, esiFittingItem{Flag: "DroneBay", Quantity: int64(it.Qty), TypeID: it.TypeID})
+		case fitview.FitFamilyFighter:
+			body.Items = append(body.Items, esiFittingItem{Flag: "FighterBay", Quantity: int64(it.Qty), TypeID: it.TypeID})
 		case fitview.FitFamilyCargo:
 			body.Items = append(body.Items, esiFittingItem{Flag: "Cargo", Quantity: int64(it.Qty), TypeID: it.TypeID})
 		}

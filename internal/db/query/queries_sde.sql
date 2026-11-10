@@ -688,6 +688,21 @@ WHERE t.published = 1 AND t.market_group_id > 0
   AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
 ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint;
+-- ListFitFighterTypes: fighters a carrier can launch (squadron size,
+-- attribute 2215), without the structure-only squadrons (2740-2742).
+-- name: ListFitFighterTypes :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_type_attributes a ON a.type_id = t.type_id AND a.attribute_id = 2215 AND a.value > 0
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_type_attributes meta ON meta.type_id = t.type_id AND meta.attribute_id = 1692
+WHERE t.published = 1 AND t.market_group_id > 0
+  AND NOT EXISTS (SELECT 1 FROM sde_type_attributes s
+                  WHERE s.type_id = t.type_id AND s.attribute_id IN (2740, 2741, 2742) AND s.value > 0)
+  AND (@q = '' OR strpos(lower(t.name), lower(@q)) > 0)
+  AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
+ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT @lim::bigint;
 -- ListFitImplantTypes: implants for one slot (implantness, attribute 331).
 -- name: ListFitImplantTypes :many
 SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name

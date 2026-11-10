@@ -82,6 +82,10 @@ type snapLine struct {
 	// zero means the basis region's own book (or a
 	// basis-independent tier) spoke.
 	SourceRegion int64 `json:"source_region,omitempty"`
+	// AskNote words the live contract asks behind an unpriced
+	// line when the snapshot was taken, with the warning that
+	// they are not a price. Never counted in any total.
+	AskNote string `json:"ask_note,omitempty"`
 }
 
 // snapUnresolved is one pasted line no name candidate could
@@ -291,6 +295,11 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 				case module.AppraisalTierResearchMedian:
 					sl.Note += fmt.Sprintf(" · median of %s researched listings", esi.FormatInt(al.SampleCount))
 				}
+			}
+		}
+		if !sl.Priced && !sl.Copy {
+			if asks, ok := app.deps.AskEvidence(ctx, ln.TypeID); ok {
+				sl.AskNote = asks.Note()
 			}
 		}
 		if sl.Priced {
@@ -757,6 +766,7 @@ type resultLine struct {
 	UnitPrice string
 	LineValue string
 	TierLabel string
+	AskNote   string // live contract asks behind an unpriced line, with the warning
 	Note      string
 	AsOf      string
 	Priced    bool
@@ -1006,7 +1016,7 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 	for _, ln := range snap.Lines {
 		rl := resultLine{
 			TypeID: ln.TypeID, Name: ln.Name, Qty: esi.FormatInt(ln.Qty),
-			TierLabel: tierLabelForLine(ln.Tier, basis, ln.SourceRegion), Note: ln.Note, Priced: ln.Priced,
+			TierLabel: tierLabelForLine(ln.Tier, basis, ln.SourceRegion), AskNote: ln.AskNote, Note: ln.Note, Priced: ln.Priced,
 		}
 		if ln.UnitVolume > 0 {
 			rl.UnitVol = formatVolume(ln.UnitVolume)

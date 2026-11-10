@@ -502,7 +502,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 			logging.Errorf("true values: store %d: %v", typeID, err)
 			continue
 		}
-		app.noteStatPackTrueValue(db.TrueValue(row))
+		app.noteStatPackTrueValue(trueValueFromUpsert(row))
 		computed++
 	}
 	st.cursor = end
@@ -526,6 +526,11 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	app.priceThinShips(ctx, pendingShips, evidenceTypes, existing, thinSubjects, thinCosts, vanished, graph, priceOf, inputsChanged, now)
 	app.harvestFulfilledSamples(ctx, thinCosts, graph.ships, priceOf, now)
 	app.crawlPublicContracts(ctx, thinCosts, graph.ships, priceOf, now)
+	// The live asks behind unpriced types, from the observations
+	// the crawl just updated: shown beside the gap, never a price.
+	if err := app.queries.RefreshTrueValueAsks(ctx); err != nil {
+		logging.Errorf("true values: asks: %v", err)
+	}
 }
 
 // isThinType reports whether a type lacks a real market: no
@@ -829,7 +834,7 @@ func (app *Application) priceThinShips(ctx context.Context, pending []int64, evi
 			logging.Errorf("true values: store ship %d: %v", typeID, err)
 			continue
 		}
-		app.noteStatPackTrueValue(db.TrueValue(row))
+		app.noteStatPackTrueValue(trueValueFromUpsert(row))
 		written++
 	}
 	if written > 0 {
@@ -1409,4 +1414,14 @@ func tvContractCompletedAt(c esi.Contract) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+// trueValueFromUpsert is the stored row an upsert writes, for the
+// stat pack index. The asks columns are not the upsert's to write
+// (RefreshTrueValueAsks owns them), so they stay empty here.
+func trueValueFromUpsert(p db.UpsertTrueValueParams) db.TrueValue {
+	return db.TrueValue{
+		TypeID: p.TypeID, BuildCost: p.BuildCost, EstSell: p.EstSell, SellSamples: p.SellSamples,
+		ComputedAt: p.ComputedAt, ProfileVersion: p.ProfileVersion, SellSource: p.SellSource,
+	}
 }

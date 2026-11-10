@@ -54,7 +54,7 @@ func TestHomeWatchlistGlobalTypeReadsGlobalRegion(t *testing.T) {
 	}
 
 	shared := &homeMarketShared{app: app, userID: user.ID}
-	if line := app.marketHealthLine(ctx, shared.orderHealth(ctx), shared.watchlist(ctx)); !strings.Contains(line, "watchlist: 1 moving") {
+	if line := app.marketHealthLine(ctx, shared); !strings.Contains(line, "watchlist: 1 moving") {
 		t.Fatalf("market health line = %q, want the PLEX watch counted as moving", line)
 	}
 

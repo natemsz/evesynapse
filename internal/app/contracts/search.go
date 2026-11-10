@@ -1056,7 +1056,7 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 		familySizes := map[string][]string{}
 		familyModules := map[string]map[string][]string{}
 
-		if rows, err := app.queries.ListAbyssalFamilyMetaVariants(ctx); err == nil {
+		if rows, err := app.familyMetaVariants(ctx); err == nil {
 			type varEntry struct {
 				name string
 				val  float64

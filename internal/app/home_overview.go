@@ -17,7 +17,6 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
-	"evesynapse/internal/markethistory"
 	"evesynapse/internal/tags"
 )
 
@@ -1365,7 +1364,7 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, c
 	// an account-wide summary, so it only reads under the
 	// all-characters scope it describes.
 	if cfg.ScopeType == scopeAll && len(bundles) > 0 {
-		w.Health = app.marketHealthLine(ctx, shared.orderHealth(ctx), shared.watchlist(ctx))
+		w.Health = app.marketHealthLine(ctx, shared)
 	}
 	return w
 }
@@ -1374,7 +1373,7 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, c
 // the same stored rows the Market page renders: latest average,
 // 7/30-day moves, and the moving flag past the user's line.
 func (app *Application) buildWatchlistWidget(ctx context.Context, shared *homeMarketShared) *watchlistWidget {
-	return &watchlistWidget{Rows: app.watchlistRows(ctx, shared.watchlist(ctx), app.vizPrefsFor(ctx, shared.userID).SparkHover)}
+	return &watchlistWidget{Rows: app.watchlistRows(ctx, shared.watchlist(ctx), shared.watchMove, app.vizPrefsFor(ctx, shared.userID).SparkHover)}
 }
 
 // marketHealthLine sums the market widget's one-line health
@@ -1383,7 +1382,8 @@ func (app *Application) buildWatchlistWidget(ctx context.Context, shared *homeMa
 // render's shared order-health and watchlist fetches, so the
 // line always agrees with the Briefing and the watchlist widget
 // built beside it.
-func (app *Application) marketHealthLine(ctx context.Context, health []db.OrderHealth, entries []db.MarketWatchlist) string {
+func (app *Application) marketHealthLine(ctx context.Context, shared *homeMarketShared) string {
+	health, entries := shared.orderHealth(ctx), shared.watchlist(ctx)
 	var parts []string
 	undercut := 0
 	for _, h := range health {
@@ -1400,8 +1400,7 @@ func (app *Application) marketHealthLine(ctx context.Context, health []db.OrderH
 	}
 	moving := 0
 	for _, e := range entries {
-		rows := app.recentHistoryRows(ctx, marketRegionForType(e.TypeID, e.RegionID), e.TypeID, markethistory.ChartRows)
-		if pct, ok := markethistory.ChangePct(rows, 7); ok && absFloat(pct) >= e.ThresholdPct {
+		if m := shared.watchMove(ctx, e); m.Has7 && absFloat(m.Chg7) >= e.ThresholdPct {
 			moving++
 		}
 	}
@@ -1501,6 +1500,23 @@ type homeMarketShared struct {
 	healthSet bool
 	watch     []db.MarketWatchlist
 	watchSet  bool
+	moves     map[[2]int64]watchMove
+}
+
+// watchMove is one watchlist entry's stored price move, read at
+// most once per render: the Briefing, the health line and the
+// watchlist widget all judge "moving" on the same figures.
+func (s *homeMarketShared) watchMove(ctx context.Context, e db.MarketWatchlist) watchMove {
+	key := [2]int64{e.TypeID, e.RegionID}
+	if m, ok := s.moves[key]; ok {
+		return m
+	}
+	m := s.app.watchMove(ctx, e.TypeID, marketRegionForType(e.TypeID, e.RegionID))
+	if s.moves == nil {
+		s.moves = map[[2]int64]watchMove{}
+	}
+	s.moves[key] = m
+	return m
 }
 
 func (s *homeMarketShared) orderHealth(ctx context.Context) []db.OrderHealth {

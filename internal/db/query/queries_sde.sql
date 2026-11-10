@@ -208,6 +208,29 @@ INSERT INTO sde_meta (key, value)
 VALUES ($1, $2)
 ON CONFLICT (key) DO UPDATE SET
     value = excluded.value;
+-- name: GetSDEOverride :one
+SELECT label, archive, sha256, size_bytes, files, uploaded_by, uploaded_at
+FROM sde_override
+WHERE id = 1;
+-- name: GetSDEOverrideInfo :one
+SELECT label, sha256, size_bytes, files, uploaded_by, uploaded_at
+FROM sde_override
+WHERE id = 1;
+-- name: PutSDEOverride :exec
+INSERT INTO sde_override (id, label, archive, sha256, size_bytes, files, uploaded_by, uploaded_at)
+VALUES (1, $1, $2, $3, $4, $5, $6, now())
+ON CONFLICT (id) DO UPDATE SET
+    label = excluded.label,
+    archive = excluded.archive,
+    sha256 = excluded.sha256,
+    size_bytes = excluded.size_bytes,
+    files = excluded.files,
+    uploaded_by = excluded.uploaded_by,
+    uploaded_at = excluded.uploaded_at;
+-- name: DeleteSDEOverride :exec
+DELETE FROM sde_override WHERE id = 1;
+-- name: DeleteSDEOverrideIfSHA :exec
+DELETE FROM sde_override WHERE id = 1 AND sha256 = $1;
 
 -- ---------------------------------------------------------------------
 -- Killmail detail store. The worker warms

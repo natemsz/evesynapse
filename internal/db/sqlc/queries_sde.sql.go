@@ -266,6 +266,24 @@ func (q *Queries) CountSDETypesInMarketGroupSubtree(ctx context.Context, marketG
 	return count, err
 }
 
+const deleteSDEOverride = `-- name: DeleteSDEOverride :exec
+DELETE FROM sde_override WHERE id = 1
+`
+
+func (q *Queries) DeleteSDEOverride(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteSDEOverride)
+	return err
+}
+
+const deleteSDEOverrideIfSHA = `-- name: DeleteSDEOverrideIfSHA :exec
+DELETE FROM sde_override WHERE id = 1 AND sha256 = $1
+`
+
+func (q *Queries) DeleteSDEOverrideIfSHA(ctx context.Context, sha256 string) error {
+	_, err := q.db.Exec(ctx, deleteSDEOverrideIfSHA, sha256)
+	return err
+}
+
 const getItemName = `-- name: GetItemName :one
 SELECT name FROM item_names
 WHERE item_id = $1
@@ -455,6 +473,66 @@ func (q *Queries) GetSDENPCCorporationFaction(ctx context.Context, corporationID
 	row := q.db.QueryRow(ctx, getSDENPCCorporationFaction, corporationID)
 	var i SdeNpcCorporation
 	err := row.Scan(&i.CorporationID, &i.FactionID)
+	return i, err
+}
+
+const getSDEOverride = `-- name: GetSDEOverride :one
+SELECT label, archive, sha256, size_bytes, files, uploaded_by, uploaded_at
+FROM sde_override
+WHERE id = 1
+`
+
+type GetSDEOverrideRow struct {
+	Label      string    `json:"label"`
+	Archive    []byte    `json:"archive"`
+	Sha256     string    `json:"sha256"`
+	SizeBytes  int64     `json:"size_bytes"`
+	Files      string    `json:"files"`
+	UploadedBy int64     `json:"uploaded_by"`
+	UploadedAt time.Time `json:"uploaded_at"`
+}
+
+func (q *Queries) GetSDEOverride(ctx context.Context) (GetSDEOverrideRow, error) {
+	row := q.db.QueryRow(ctx, getSDEOverride)
+	var i GetSDEOverrideRow
+	err := row.Scan(
+		&i.Label,
+		&i.Archive,
+		&i.Sha256,
+		&i.SizeBytes,
+		&i.Files,
+		&i.UploadedBy,
+		&i.UploadedAt,
+	)
+	return i, err
+}
+
+const getSDEOverrideInfo = `-- name: GetSDEOverrideInfo :one
+SELECT label, sha256, size_bytes, files, uploaded_by, uploaded_at
+FROM sde_override
+WHERE id = 1
+`
+
+type GetSDEOverrideInfoRow struct {
+	Label      string    `json:"label"`
+	Sha256     string    `json:"sha256"`
+	SizeBytes  int64     `json:"size_bytes"`
+	Files      string    `json:"files"`
+	UploadedBy int64     `json:"uploaded_by"`
+	UploadedAt time.Time `json:"uploaded_at"`
+}
+
+func (q *Queries) GetSDEOverrideInfo(ctx context.Context) (GetSDEOverrideInfoRow, error) {
+	row := q.db.QueryRow(ctx, getSDEOverrideInfo)
+	var i GetSDEOverrideInfoRow
+	err := row.Scan(
+		&i.Label,
+		&i.Sha256,
+		&i.SizeBytes,
+		&i.Files,
+		&i.UploadedBy,
+		&i.UploadedAt,
+	)
 	return i, err
 }
 
@@ -2800,6 +2878,40 @@ func (q *Queries) ListTypeNamesByNames(ctx context.Context, names []string) ([]T
 		return nil, err
 	}
 	return items, nil
+}
+
+const putSDEOverride = `-- name: PutSDEOverride :exec
+INSERT INTO sde_override (id, label, archive, sha256, size_bytes, files, uploaded_by, uploaded_at)
+VALUES (1, $1, $2, $3, $4, $5, $6, now())
+ON CONFLICT (id) DO UPDATE SET
+    label = excluded.label,
+    archive = excluded.archive,
+    sha256 = excluded.sha256,
+    size_bytes = excluded.size_bytes,
+    files = excluded.files,
+    uploaded_by = excluded.uploaded_by,
+    uploaded_at = excluded.uploaded_at
+`
+
+type PutSDEOverrideParams struct {
+	Label      string `json:"label"`
+	Archive    []byte `json:"archive"`
+	Sha256     string `json:"sha256"`
+	SizeBytes  int64  `json:"size_bytes"`
+	Files      string `json:"files"`
+	UploadedBy int64  `json:"uploaded_by"`
+}
+
+func (q *Queries) PutSDEOverride(ctx context.Context, arg PutSDEOverrideParams) error {
+	_, err := q.db.Exec(ctx, putSDEOverride,
+		arg.Label,
+		arg.Archive,
+		arg.Sha256,
+		arg.SizeBytes,
+		arg.Files,
+		arg.UploadedBy,
+	)
+	return err
 }
 
 const searchAllianceRecordsByName = `-- name: SearchAllianceRecordsByName :many

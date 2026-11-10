@@ -181,6 +181,18 @@
 </table>
 </div>
 <form method="post" action="/admin/sync/sde"><button class="btn" type="submit">Check for SDE update</button></form>
+{{with .Sync.SDE.Override}}
+<p>Using an uploaded dump: <strong>{{.Label}}</strong>, uploaded {{.UploadedAt}} ({{.Size}}, sha256 {{.SHA}}).
+<br><small>Files from the upload: {{.Files}}. Every other file comes from the regular dump. The upload is retired when the regular dump changes.</small></p>
+<form method="post" action="/admin/sync/sde/upload/clear"><button class="btn" type="submit">Stop using the upload</button></form>
+{{end}}
+<h3>Upload a dump</h3>
+<p><small>A zip of dump CSV files (plain or .bz2) named as in the regular dump, for when the game changed before the regular dump did. Files the zip lacks come from the regular dump. Up to 96 MB.</small></p>
+<form method="post" action="/admin/sync/sde/upload" enctype="multipart/form-data">
+<label>Label <input type="text" name="label" maxlength="200" placeholder="Fractured Skies, built from ESI"></label>
+<label>File <input type="file" name="archive" accept=".zip,application/zip" required></label>
+<button class="btn" type="submit">Upload and import</button>
+</form>
 </section>
 {{end}}
 {{end}}

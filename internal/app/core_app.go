@@ -87,6 +87,10 @@ type Application struct {
 	// the subscribers watching /market/stream for stat-pack updates.
 	marketLive marketLiveHub
 
+	// liveFeeds holds the named broadcast feeds modules open
+	// through Deps.LiveFeed (livefeed.go), by name.
+	liveFeeds sync.Map
+
 	// sdeTopology is the in-memory universe topology (sde_memory.go):
 	// systems, regions, and types held in RAM for immediate resolution.
 	sdeTopology sdeTopologyState

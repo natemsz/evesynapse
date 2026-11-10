@@ -113,18 +113,8 @@
 
   <div class="kpis mkt-kpis">
     {{if not $item.BookPending}}
-    <div class="kpi">
-      <span class="kpi-k">Best sell</span>
-      <span class="kpi-v">{{if $item.BestSell}}{{$item.BestSell}} <small>ISK</small>{{else}}—{{end}}</span>
-      {{if $item.BestSellLoc.Name}}<span class="kpi-sub place">{{if $item.BestSellVol}}<b>{{$item.BestSellVol}}</b> units at {{end}}{{placeLink $item.BestSellLoc}}</span>{{end}}
-      {{if $item.TypicalSell}}<span class="typical">Typical sell <b>{{$item.TypicalSell}}</b> · 9 in 10 sell orders at or under {{$item.SellBand}} ISK</span>{{end}}
-    </div>
-    <div class="kpi">
-      <span class="kpi-k">Best buy</span>
-      <span class="kpi-v">{{if $item.BestBuy}}{{$item.BestBuy}} <small>ISK</small>{{else}}—{{end}}</span>
-      {{if $item.BestBuyLoc.Name}}<span class="kpi-sub place">{{if $item.BestBuyVol}}<b>{{$item.BestBuyVol}}</b> units at {{end}}{{placeLink $item.BestBuyLoc}}</span>{{end}}
-      {{if $item.TypicalBuy}}<span class="typical">Typical buy <b>{{$item.TypicalBuy}}</b> · 9 in 10 buy orders at or over {{$item.BuyBand}} ISK</span>{{end}}
-    </div>
+    <div class="kpi" data-kpi="best-sell">{{template "mkt-kpi-best-sell" $item}}</div>
+    <div class="kpi" data-kpi="best-buy">{{template "mkt-kpi-best-buy" $item}}</div>
     {{if $item.Spread}}
     <div class="kpi sp-{{$item.SpreadBand}}">
       <span class="kpi-k">Spread</span>
@@ -162,7 +152,7 @@
   <section class="l-panel mkt-explorer" id="mkt-order-book">
     <div class="mkt-explorer-head">
       <div class="mkt-explorer-title">
-        <h2>Order book</h2>
+        <h2>Order book <span class="badge kill" data-live-pill role="status" hidden>Live</span></h2>
         <span class="mkt-explorer-meta">{{$item.RegionName}} · {{$item.SellOrders}} sell / {{$item.BuyOrders}} buy orders{{if $item.BookStoredAt}} · swept {{$item.BookStoredAt}}{{end}}</span>
       </div>
       <button class="btn btn-quiet small" type="button" data-sheet-open="mkt-book-filters" hidden>Filter orders</button>
@@ -181,18 +171,18 @@
     <div class="l-switcher mkt-book-split">
       <div class="mkt-book-pane" data-book-side="sell">
         <div class="mkt-pane-head">
-          <h3>Sell orders — {{$item.RegionName}}</h3>
+          <h3>Sell orders in {{$item.RegionName}}</h3>
           <span class="mkt-pane-stats">Units: <b>{{$item.SellVolume}}</b>{{if $item.TypicalSell}} · Typical: <b>{{$item.TypicalSell}}</b>{{end}}{{if $item.SellBand}} · 90% band: <b>{{$item.SellBand}}</b>{{end}}</span>
         </div>
         <div class="tw">
         <table class="mkt-book-table" data-cards="off">
           <thead><tr><th>Price</th><th class="num mkt-col-vs">vs Best</th><th class="num">Volume</th><th>Location</th></tr></thead>
-          <tbody>
+          <tbody data-book-rows="sell">
           {{range $item.Sells}}
-            <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-sell">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}</td></tr>
+            {{template "mkt-book-row" .}}
           {{end}}
           {{range $item.MoreSells}}
-            <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-sell">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}</td></tr>
+            {{template "mkt-book-row" .}}
           {{end}}
           {{if and (not $item.Sells) (not $item.MoreSells)}}
             <tr><td colspan="4">No sell orders in this region.</td></tr>
@@ -207,18 +197,18 @@
 
       <div class="mkt-book-pane" data-book-side="buy">
         <div class="mkt-pane-head">
-          <h3>Buy orders — {{$item.RegionName}}</h3>
+          <h3>Buy orders in {{$item.RegionName}}</h3>
           <span class="mkt-pane-stats">Units: <b>{{$item.BuyVolume}}</b>{{if $item.TypicalBuy}} · Typical: <b>{{$item.TypicalBuy}}</b>{{end}}{{if $item.BuyBand}} · 90% band: <b>{{$item.BuyBand}}</b>{{end}}</span>
         </div>
         <div class="tw">
         <table class="mkt-book-table" data-cards="off">
           <thead><tr><th>Price</th><th class="num mkt-col-vs">vs Best</th><th class="num">Volume</th><th>Location</th></tr></thead>
-          <tbody>
+          <tbody data-book-rows="buy">
           {{range $item.Buys}}
-            <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-buy">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}{{if .Range}} <small class="muted">({{.Range}})</small>{{end}}</td></tr>
+            {{template "mkt-book-row" .}}
           {{end}}
           {{range $item.MoreBuys}}
-            <tr data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="mkt-price-buy">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}{{if .Range}} <small class="muted">({{.Range}})</small>{{end}}</td></tr>
+            {{template "mkt-book-row" .}}
           {{end}}
           {{if and (not $item.Buys) (not $item.MoreBuys)}}
             <tr><td colspan="4">No buy orders in this region.</td></tr>
@@ -320,7 +310,7 @@
           <thead><tr><th>Region</th><th class="num">Typical sell</th><th class="num">Typical buy</th><th class="num">7 days</th><th>Updated</th></tr></thead>
           <tbody>
             {{range $item.RegionStats}}
-            <tr{{if .Active}} data-live-region="{{.RegionID}}"{{end}}>
+            <tr{{if .Active}} data-mkt-region="{{.RegionID}}"{{end}}>
               <td>{{if .Active}}<strong>{{.RegionName}}</strong>{{else if .Hub}}<a href="/market/?type={{$item.TypeID}}&region={{.RegionID}}">{{.RegionName}}</a>{{else}}<a href="/region/?id={{.RegionID}}">{{.RegionName}}</a>{{end}}</td>
               {{if .HasData}}
               <td class="num"{{if .Active}} data-live-field="typical-sell"{{end}}>{{if .TypicalSell}}{{.TypicalSell}} ISK{{else}}—{{end}}</td>
@@ -654,3 +644,21 @@
 <p><small>No items here match those filters.</small></p>
 {{end}}
 {{end}}
+
+{{/* The item page's live pieces: the top figures and one order book
+     row. The page renders them inline; the live market stream
+     (livefeed.go) renders the same defines when a region sweep lands,
+     so a streamed update matches the page exactly. */}}
+{{define "mkt-kpi-best-sell"}}{{$item := .}}
+      <span class="kpi-k">Best sell</span>
+      <span class="kpi-v" data-raw="{{$item.BestSellRaw}}">{{if $item.BestSell}}{{$item.BestSell}} <small>ISK</small>{{else}}—{{end}}</span>
+      {{if $item.BestSellLoc.Name}}<span class="kpi-sub place">{{if $item.BestSellVol}}<b>{{$item.BestSellVol}}</b> units at {{end}}{{placeLink $item.BestSellLoc}}</span>{{end}}
+      {{if $item.TypicalSell}}<span class="typical">Typical sell <b>{{$item.TypicalSell}}</b> · 9 in 10 sell orders at or under {{$item.SellBand}} ISK</span>{{end}}
+{{end}}
+{{define "mkt-kpi-best-buy"}}{{$item := .}}
+      <span class="kpi-k">Best buy</span>
+      <span class="kpi-v" data-raw="{{$item.BestBuyRaw}}">{{if $item.BestBuy}}{{$item.BestBuy}} <small>ISK</small>{{else}}—{{end}}</span>
+      {{if $item.BestBuyLoc.Name}}<span class="kpi-sub place">{{if $item.BestBuyVol}}<b>{{$item.BestBuyVol}}</b> units at {{end}}{{placeLink $item.BestBuyLoc}}</span>{{end}}
+      {{if $item.TypicalBuy}}<span class="typical">Typical buy <b>{{$item.TypicalBuy}}</b> · 9 in 10 buy orders at or over {{$item.BuyBand}} ISK</span>{{end}}
+{{end}}
+{{define "mkt-book-row"}}<tr data-ok="{{.Key}}" data-price="{{.PriceRaw}}" data-sec-band="{{.SecBand}}" data-loc-text="{{.Loc.Name}}"><td class="{{if .Buy}}mkt-price-buy{{else}}mkt-price-sell{{end}}">{{.Price}}</td><td class="num mkt-col-vs">{{.VsBest}}</td><td class="num">{{.Volume}}</td><td>{{if .HasSec}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}{{if .Range}} <small class="muted">({{.Range}})</small>{{end}}</td></tr>{{end}}

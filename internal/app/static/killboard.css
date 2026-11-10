@@ -102,21 +102,8 @@
 }
 .kb-list > li:first-child { border-top: 0; }
 .kb-kill:hover { background: var(--row-hover); }
-/* A live kill: one that streamed in, or arrived since the list was
-   last seen. It glows in, holds the theme's accent tint and edge
-   until it has been on screen a few seconds (killboard.js), then
-   fades back to normal. */
-.kb-kill.is-live {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  box-shadow: inset 3px 0 0 var(--accent);
-  animation: kb-live-in 1.6s ease-out;
-}
-.kb-kill.is-fading { transition: background 1.5s ease, box-shadow 1.5s ease; }
-@keyframes kb-live-in { from { background: color-mix(in srgb, var(--accent) 32%, transparent); } }
-@media (prefers-reduced-motion: reduce) {
-  .kb-kill.is-live { animation: none; }
-  .kb-kill.is-fading { transition: none; }
-}
+/* A live kill row takes the shared .is-live treatment (style.css). */
+.kb-kill.is-live { box-shadow: inset 3px 0 0 var(--accent); }
 .kb-live-pill { margin-left: auto; align-self: center; }
 /* --- Feed header: one label per column in the site's small caps,
    on the same grid as the rows so each label sits over its

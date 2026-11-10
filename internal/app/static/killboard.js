@@ -19,12 +19,9 @@
   window.esKillboardLive = true;
 
   var PAGE_SIZE = 40; // killPageSize in killboard.go
-  var HOLD_MS = 6000; // how long a seen row keeps its highlight
-  var FADE_MS = 1500; // the fade back to normal (killboard.css)
   var SEEN_PREFIX = "kb-seen:";
   var source = null;
   var streamURL = "";
-  var watcher = null;
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -135,47 +132,10 @@
     return +row.getAttribute("data-kill-id") || 0;
   }
 
-  // fade returns a seen row to normal and records it as seen.
-  function fade(row) {
-    if (watcher) watcher.unobserve(row);
-    row.classList.remove("is-live");
-    row.classList.add("is-fading");
-    setTimeout(function () { row.classList.remove("is-fading"); }, FADE_MS);
-    noteSeen(rowID(row));
-  }
-
-  // arm starts or stops a live row's hold timer: it runs only while
-  // the row is on screen in a visible tab.
-  function arm(row) {
-    var viewing = row._kbOnScreen && document.visibilityState === "visible";
-    if (viewing && !row._kbTimer) {
-      row._kbTimer = setTimeout(function () { row._kbTimer = 0; fade(row); }, HOLD_MS);
-    } else if (!viewing && row._kbTimer) {
-      clearTimeout(row._kbTimer);
-      row._kbTimer = 0;
-    }
-  }
-
+  // markLive highlights a row until it has been seen (esLive in
+  // app.js), then records it as seen for this scope.
   function markLive(row) {
-    row.classList.add("is-live");
-    if (!watcher) {
-      if (!("IntersectionObserver" in window)) {
-        row._kbOnScreen = true;
-        arm(row);
-        return;
-      }
-      watcher = new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) {
-          e.target._kbOnScreen = e.isIntersecting;
-          arm(e.target);
-        });
-      }, { threshold: 0.5 });
-    }
-    watcher.observe(row);
-  }
-
-  function rearmAll() {
-    document.querySelectorAll(".kb-kill.is-live").forEach(arm);
+    window.esLive.mark(row, function (r) { noteSeen(rowID(r)); });
   }
 
   // markUnseen highlights the rows that arrived since this scope's
@@ -238,8 +198,7 @@
     markLive(row);
     rows = list.querySelectorAll("li.kb-kill");
     for (var j = PAGE_SIZE; j < rows.length; j++) {
-      if (watcher) watcher.unobserve(rows[j]);
-      clearTimeout(rows[j]._kbTimer);
+      window.esLive.drop(rows[j]);
       rows[j].remove();
     }
   }
@@ -271,26 +230,11 @@
     return "/intel/kills/stream" + (q ? "?" + q : "");
   }
 
-  // setPill shows the stream's state: "Live" while it is open,
-  // "Reconnecting" while the browser retries, "Offline" once it
-  // has given up (the server turned the stream away).
-  function setPill(state) {
-    var pill = document.querySelector("[data-live-pill]");
-    if (!pill) return;
-    pill.hidden = false;
-    pill.setAttribute("data-state", state);
-    pill.textContent = state === "live" ? "Live" : state === "retry" ? "Reconnecting" : "Offline";
-  }
-
   function closeStream() {
     if (source) {
       source.close();
       source = null;
       streamURL = "";
-    }
-    if (watcher) {
-      watcher.disconnect();
-      watcher = null;
     }
   }
 
@@ -307,32 +251,14 @@
       source.close();
       source = null;
     }
-    if (!("EventSource" in window)) return;
     streamURL = url;
-    source = new EventSource(url);
-    source.addEventListener("open", function () { setPill("live"); });
-    source.addEventListener("error", function () {
-      if (!source) return;
-      setPill(source.readyState === EventSource.CLOSED ? "down" : "retry");
-    });
-    source.addEventListener("kill", function (e) {
-      try {
-        addKill(JSON.parse(e.data));
-      } catch (err) {
-        /* a bad frame is skipped */
-      }
-    });
-    source.addEventListener("kill-price", function (e) {
-      try {
-        setKillPrice(JSON.parse(e.data));
-      } catch (err) {
-        /* a bad frame is skipped */
-      }
+    source = window.esLive.stream(url, document.querySelector("[data-live-pill]"), {
+      kill: addKill,
+      "kill-price": setKillPrice
     });
   }
 
   document.addEventListener("evesynapse:content-ready", openStream);
   document.addEventListener("evesynapse:content-will-swap", closeStream);
-  document.addEventListener("visibilitychange", rearmAll);
   openStream();
 })();

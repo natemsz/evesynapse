@@ -11,6 +11,7 @@ package app
 // after load.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -484,4 +486,178 @@ func (app *Application) publishMarketStatRow(row db.MarketRegionStat) {
 	}
 	frame := sseFrame("market", payload)
 	app.marketLive.publish(row.RegionID, row.TypeID, frame)
+	go app.publishMarketBook(row.RegionID, row.TypeID)
+}
+
+// marketBookEvent is the payload of a book event: the stored top
+// of the book the region sweep just wrote, as the item page renders
+// it. Rows carry their match key and raw price so the browser can
+// slot new orders in, update changed ones and drop filled ones
+// within the window the sweep covers; Best* are the new best prices
+// and KPIs the top figures' inner markup by data-kpi name.
+type marketBookEvent struct {
+	TypeID   int64             `json:"type"`
+	RegionID int64             `json:"region"`
+	BestSell float64           `json:"bestSell"`
+	BestBuy  float64           `json:"bestBuy"`
+	Sells    []marketBookRow   `json:"sells"`
+	Buys     []marketBookRow   `json:"buys"`
+	KPIs     map[string]string `json:"kpis"`
+}
+
+// marketBookRow is one rendered order book row.
+type marketBookRow struct {
+	Key   string  `json:"key"`
+	Price float64 `json:"price"`
+	HTML  string  `json:"html"`
+}
+
+// marketBookTimeout bounds one book render for the stream.
+const marketBookTimeout = 10 * time.Second
+
+// publishMarketBook renders the item page's top figures and stored
+// book for one (region, type) a stream is watching, through the
+// page's own template defines, and sends them as one book event.
+// It reads stored data only (the anonymous item view: the sweep's
+// stored book and stats, never ESI) and runs only when a subscriber
+// waits, so the cost is bounded by the open streams.
+func (app *Application) publishMarketBook(regionID, typeID int64) {
+	if !app.marketLive.hasSubscriber(regionID, typeID) {
+		return
+	}
+	parent := app.workerCtx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, marketBookTimeout)
+	defer cancel()
+	item, err := app.loadMarketItem(ctx, typeID, regionID, true, nil)
+	if err != nil || item == nil || item.BookPending {
+		return
+	}
+	ev := marketBookEvent{
+		TypeID: typeID, RegionID: regionID,
+		BestSell: item.BestSellRaw, BestBuy: item.BestBuyRaw,
+		KPIs: map[string]string{},
+	}
+	render := func(define string, data any) (string, bool) {
+		buf, err := executeFragment("market.html", define, data)
+		if err != nil {
+			logging.Errorf("live feed: %v", err)
+			return "", false
+		}
+		return buf.String(), true
+	}
+	for _, rows := range []struct {
+		src []marketOrderRow
+		dst *[]marketBookRow
+	}{
+		{append(append([]marketOrderRow(nil), item.Sells...), item.MoreSells...), &ev.Sells},
+		{append(append([]marketOrderRow(nil), item.Buys...), item.MoreBuys...), &ev.Buys},
+	} {
+		for _, row := range rows.src {
+			html, ok := render("mkt-book-row", row)
+			if !ok {
+				return
+			}
+			*rows.dst = append(*rows.dst, marketBookRow{Key: row.Key, Price: row.PriceRaw, HTML: html})
+		}
+	}
+	for name, define := range map[string]string{"best-sell": "mkt-kpi-best-sell", "best-buy": "mkt-kpi-best-buy"} {
+		html, ok := render(define, item)
+		if !ok {
+			return
+		}
+		ev.KPIs[name] = html
+	}
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		logging.Errorf("live feed: marshal book for type %d: %v", typeID, err)
+		return
+	}
+	app.marketLive.publish(regionID, typeID, sseFrame("book", payload))
+}
+
+// broadcastHub is a named feed's fan-out (module.LiveFeed): every
+// subscriber gets every event, bounded like the kill and market
+// hubs.
+type broadcastHub struct {
+	mu   sync.Mutex
+	subs map[chan []byte]struct{}
+}
+
+func (h *broadcastHub) subscribe() (chan []byte, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.subs) >= maxLiveFeedSubscribers {
+		return nil, false
+	}
+	if h.subs == nil {
+		h.subs = make(map[chan []byte]struct{})
+	}
+	ch := make(chan []byte, liveFeedChanCap)
+	h.subs[ch] = struct{}{}
+	return ch, true
+}
+
+func (h *broadcastHub) unsubscribe(ch chan []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.subs, ch)
+}
+
+// Subscribers is how many streams are open on the feed.
+func (h *broadcastHub) Subscribers() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.subs)
+}
+
+// Publish sends one event to every open stream; a full channel drops
+// the event instead of blocking the publisher.
+func (h *broadcastHub) Publish(event string, payload []byte) {
+	frame := sseFrame(event, payload)
+	h.mu.Lock()
+	subs := make([]chan []byte, 0, len(h.subs))
+	for ch := range h.subs {
+		subs = append(subs, ch)
+	}
+	h.mu.Unlock()
+	for _, ch := range subs {
+		select {
+		case ch <- frame:
+		default:
+		}
+	}
+}
+
+// Serve holds one stream open until the browser leaves.
+func (h *broadcastHub) Serve(w http.ResponseWriter, r *http.Request, onOpen func()) {
+	ch, ok := h.subscribe()
+	if !ok {
+		http.Error(w, "Too many live feeds are open right now. Try again shortly.", http.StatusServiceUnavailable)
+		return
+	}
+	defer h.unsubscribe(ch)
+	if onOpen != nil {
+		onOpen()
+	}
+	serveSSE(w, r, ch)
+}
+
+// LiveFeed returns the named broadcast feed, creating it on first
+// use (module.Deps).
+func (app *Application) LiveFeed(name string) module.LiveFeed {
+	h, _ := app.liveFeeds.LoadOrStore(name, &broadcastHub{})
+	return h.(*broadcastHub)
+}
+
+// ExecuteFragment renders one named template of a page into a
+// string (module.Deps).
+func (app *Application) ExecuteFragment(page, define string, data any) (string, error) {
+	buf, err := executeFragment(page, define, data)
+	if err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }

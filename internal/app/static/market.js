@@ -453,13 +453,19 @@
     var paneWatch = new ResizeObserver(function () { sizeOrderBookPanes(); });
     document.querySelectorAll(".mkt-book-pane > .tw table").forEach(function (t) { paneWatch.observe(t); });
   }
-  // ---- Live prices (the item page's stat-pack stream) ----
+  // ---- Live market (the item page's stream) ----
   // On an item page the console carries the type and region; a
-  // stream to /market/stream keeps the statistics table and the
-  // region strip current as region sweeps land. The order book and
-  // the KPI bests are the book's own, not the stat pack's, so the
-  // stream leaves them alone. A side with no orders keeps the
-  // row the server rendered: its next load shows "No orders".
+  // stream to /market/stream keeps the page current as region
+  // sweeps land. A "market" event refreshes the statistics table
+  // and the region strip; a "book" event carries the sweep's stored
+  // top of the book and the best-price figures, rendered by the
+  // server from the page's own templates. Within the window the
+  // sweep covers (best price to the worst stored order), new orders
+  // slot in by price and stay highlighted until seen, changed ones
+  // flash, and filled ones drop out; deeper rows the page loaded
+  // stay as they are. Changed figures along the top flash, tinted
+  // by direction. A side with no orders keeps the row the server
+  // rendered: its next load shows "No orders".
   var liveSource = null;
   var liveURL = "";
 
@@ -471,30 +477,130 @@
     }
   }
 
-  function applyMarketEvent(ev) {
-    if (!ev || ev.type == null) return;
+  function liveRoot(ev) {
     var root = document.querySelector("[data-market-live]");
-    if (!root) return;
-    if (String(ev.type) !== root.getAttribute("data-type-id")) return;
-    if (String(ev.region) !== root.getAttribute("data-region-id")) return;
+    if (!root || !ev || ev.type == null) return null;
+    if (String(ev.type) !== root.getAttribute("data-type-id")) return null;
+    if (String(ev.region) !== root.getAttribute("data-region-id")) return null;
+    return root;
+  }
+
+  // setLive writes a value into a cell and flashes it when it moved.
+  function setLive(cell, text) {
+    if (!cell || text == null || cell.textContent === text) return;
+    cell.textContent = text;
+    window.esLive.flash(cell, "");
+  }
+
+  function applyMarketEvent(ev) {
+    if (!liveRoot(ev)) return;
     var fields = ["typical", "average", "best", "far", "edge", "dev", "orders", "volume"];
     ["sell", "buy"].forEach(function (side) {
       var row = document.querySelector('[data-live-side="' + side + '"]');
       if (!row || !ev[side] || ev[side].orders === "0") return;
       fields.forEach(function (f) {
-        var cell = row.querySelector('[data-live-field="' + f + '"]');
-        if (cell && ev[side][f] != null) cell.textContent = ev[side][f];
+        setLive(row.querySelector('[data-live-field="' + f + '"]'), ev[side][f]);
       });
     });
-    var strip = document.querySelector("[data-live-region]");
+    var strip = document.querySelector("[data-mkt-region]");
     if (strip) {
-      var ts = strip.querySelector('[data-live-field="typical-sell"]');
-      if (ts && ev.sell) ts.textContent = ev.sell.typical && ev.sell.typical !== "0.00" ? ev.sell.typical + " ISK" : "—";
-      var tb = strip.querySelector('[data-live-field="typical-buy"]');
-      if (tb && ev.buy) tb.textContent = ev.buy.typical && ev.buy.typical !== "0.00" ? ev.buy.typical + " ISK" : "—";
+      if (ev.sell) setLive(strip.querySelector('[data-live-field="typical-sell"]'), ev.sell.typical && ev.sell.typical !== "0.00" ? ev.sell.typical + " ISK" : "—");
+      if (ev.buy) setLive(strip.querySelector('[data-live-field="typical-buy"]'), ev.buy.typical && ev.buy.typical !== "0.00" ? ev.buy.typical + " ISK" : "—");
       var age = strip.querySelector('[data-live-field="age"]');
       if (age && ev.age) age.textContent = ev.age;
     }
+  }
+
+  // applyKPIs swaps in the best-price figures that changed and
+  // flashes their value, up or down.
+  function applyKPIs(root, kpis) {
+    Object.keys(kpis || {}).forEach(function (name) {
+      var card = root.querySelector('[data-kpi="' + name + '"]');
+      if (!card) return;
+      var holder = document.createElement("div");
+      holder.innerHTML = kpis[name];
+      if (holder.textContent.replace(/\s+/g, " ").trim() === card.textContent.replace(/\s+/g, " ").trim()) return;
+      var oldV = card.querySelector("[data-raw]");
+      var was = oldV ? +oldV.getAttribute("data-raw") : 0;
+      card.innerHTML = kpis[name];
+      var v = card.querySelector("[data-raw]");
+      if (!v) return;
+      var now = +v.getAttribute("data-raw");
+      window.esLive.flash(v, was && now ? (now > was ? "up" : now < was ? "down" : "") : "");
+    });
+  }
+
+  function vsBest(price, best, isBuy) {
+    if (!(best > 0)) return "";
+    var pct = (price - best) / best * 100;
+    if (Math.abs(pct) < 0.05) return "Best";
+    return (isBuy ? "" : "+") + pct.toFixed(1) + "%";
+  }
+
+  function rowFrom(html) {
+    var holder = document.createElement("tbody");
+    holder.innerHTML = html;
+    return holder.firstElementChild;
+  }
+
+  // applyBookSide merges one side's streamed rows into its table.
+  function applyBookSide(side, rows, best) {
+    var body = document.querySelector('[data-book-rows="' + side + '"]');
+    if (!body || !rows || !rows.length) return;
+    var isBuy = side === "buy";
+    var worse = function (a, b) { return isBuy ? a < b : a > b; };
+    var edge = rows[rows.length - 1].price;
+    var incoming = {};
+    rows.forEach(function (r) { incoming[r.key] = r; });
+    body.querySelectorAll("tr:not([data-ok])").forEach(function (tr) { tr.remove(); });
+    var have = {};
+    body.querySelectorAll("tr[data-ok]").forEach(function (tr) {
+      var key = tr.getAttribute("data-ok");
+      var price = +tr.getAttribute("data-price");
+      if (!incoming[key] && !worse(price, edge)) {
+        window.esLive.drop(tr);
+        tr.remove();
+        return;
+      }
+      have[key] = tr;
+    });
+    rows.forEach(function (r) {
+      var next = rowFrom(r.html);
+      if (!next) return;
+      var cur = have[r.key];
+      if (cur) {
+        var oldVol = cur.children[2], newVol = next.children[2];
+        if (oldVol && newVol && oldVol.textContent !== newVol.textContent) {
+          var was = +oldVol.textContent.replace(/[^0-9.]/g, ""), now = +newVol.textContent.replace(/[^0-9.]/g, "");
+          oldVol.textContent = newVol.textContent;
+          window.esLive.flash(oldVol, now > was ? "up" : now < was ? "down" : "");
+        }
+        return;
+      }
+      var after = null;
+      var trs = body.querySelectorAll("tr[data-ok]");
+      for (var i = 0; i < trs.length; i++) {
+        if (worse(+trs[i].getAttribute("data-price"), r.price)) {
+          after = trs[i];
+          break;
+        }
+      }
+      body.insertBefore(next, after);
+      window.esLive.mark(next);
+    });
+    body.querySelectorAll("tr[data-price]").forEach(function (tr) {
+      var cell = tr.querySelector(".mkt-col-vs");
+      if (cell) cell.textContent = vsBest(+tr.getAttribute("data-price"), best, isBuy);
+    });
+  }
+
+  function applyBookEvent(ev) {
+    var root = liveRoot(ev);
+    if (!root) return;
+    applyKPIs(root, ev.kpis);
+    applyBookSide("sell", ev.sells, ev.bestSell);
+    applyBookSide("buy", ev.buys, ev.bestBuy);
+    applyOrderBookFilters();
   }
 
   function openLiveMarket() {
@@ -507,15 +613,10 @@
       "&type=" + encodeURIComponent(root.getAttribute("data-type-id"));
     if (liveSource && liveURL === url) return;
     closeLiveMarket();
-    if (!("EventSource" in window)) return;
     liveURL = url;
-    liveSource = new EventSource(url);
-    liveSource.addEventListener("market", function (e) {
-      try {
-        applyMarketEvent(JSON.parse(e.data));
-      } catch (err) {
-        /* a bad frame is skipped */
-      }
+    liveSource = window.esLive.stream(url, document.querySelector("#mkt-order-book [data-live-pill]"), {
+      market: applyMarketEvent,
+      book: applyBookEvent
     });
   }
 

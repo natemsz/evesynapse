@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -31,15 +32,9 @@ func (app *Application) renderFragment(w http.ResponseWriter, page, define strin
 // choosing (the planner answers a refused move with a 409 and the editor
 // carrying the reason).
 func (app *Application) renderFragmentStatus(w http.ResponseWriter, status int, page, define string, data any) {
-	ts, err := parsedTemplate(&fragmentTemplates, "fragment", page, "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html")
+	buf, err := executeFragment(page, define, data)
 	if err != nil {
-		logging.Errorf("parse fragment template %s: %v", page, err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	buf := new(bytes.Buffer)
-	if err := ts.ExecuteTemplate(buf, define, data); err != nil {
-		logging.Errorf("execute fragment %s/%s: %v", page, define, err)
+		logging.Errorf("%v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -47,6 +42,22 @@ func (app *Application) renderFragmentStatus(w http.ResponseWriter, status int, 
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_, _ = buf.WriteTo(w)
+}
+
+// executeFragment renders one define of a page's template set, with
+// the shared partials every fragment may call, into a buffer: the
+// fragment handlers write it out, the live feeds (livefeed.go) send
+// it down a stream.
+func executeFragment(page, define string, data any) (*bytes.Buffer, error) {
+	ts, err := parsedTemplate(&fragmentTemplates, "fragment", page, "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse fragment template %s: %w", page, err)
+	}
+	buf := new(bytes.Buffer)
+	if err := ts.ExecuteTemplate(buf, define, data); err != nil {
+		return nil, fmt.Errorf("execute fragment %s/%s: %w", page, define, err)
+	}
+	return buf, nil
 }
 
 // handleMarketHistoryFragment re-renders just the price-history

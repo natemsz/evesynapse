@@ -1331,6 +1331,26 @@ input[type="search"]:not(.topsearch input),
 [data-live-pill]:is([data-state="retry"], [data-state="down"])::before { animation: none; opacity: 0.5; }
 @keyframes live-pulse { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { [data-live-pill]::before { animation: none; } }
+/* Live rows and values (esLive in app.js). A row that streamed in
+   glows in and holds the theme's accent tint until it has been on
+   screen a few seconds, then fades back. A table row carries its
+   accent edge on its first cell. A value that changed in place
+   flashes, tinted by direction when it has one. */
+.is-live {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  animation: live-in 1.6s ease-out;
+}
+tr.is-live > :first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.is-fading, tr.is-fading > :first-child { transition: background 1.5s ease, box-shadow 1.5s ease; }
+@keyframes live-in { from { background: color-mix(in srgb, var(--accent) 32%, transparent); } }
+.live-changed { animation: live-flash 1.6s ease-out; }
+.live-changed[data-dir="up"] { --live-flash: var(--kept, var(--success)); }
+.live-changed[data-dir="down"] { --live-flash: var(--lost, var(--danger)); }
+@keyframes live-flash { from { background: color-mix(in srgb, var(--live-flash, var(--accent)) 30%, transparent); } }
+@media (prefers-reduced-motion: reduce) {
+  .is-live, .live-changed { animation: none; }
+  .is-fading { transition: none; }
+}
 
 /* --- intel: wars involving one of the user's corporations ---
    Highlighted rows (tr.yours) take the theme's selection paint

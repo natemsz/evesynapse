@@ -859,6 +859,19 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 				}
 				return nil
 			}
+			// The header this instance swept from ESI stays.
+			// A peer supplies the item list only: the spot
+			// check compares items, so header fields from a
+			// peer (price, buyout, issuer, title) would land
+			// with nothing ever checking them.
+			body.RegionID, body.Type = existing.RegionID, existing.Type
+			body.IssuerID, body.IssuerCorporationID = existing.IssuerID, existing.IssuerCorporationID
+			body.ForCorporation, body.Title = existing.ForCorporation, existing.Title
+			body.Price, body.Buyout, body.Reward = existing.Price, existing.Buyout, existing.Reward
+			body.Collateral, body.Volume = existing.Collateral, existing.Volume
+			body.StartLocationID, body.EndLocationID = existing.StartLocationID, existing.EndLocationID
+			body.DateIssued, body.DateExpired = existing.DateIssued.Unix(), existing.DateExpired.Unix()
+			body.DaysToComplete = existing.DaysToComplete
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		} else if _, derr := app.Queries.GetPublicContractDeparture(ctx, body.ContractID); derr == nil {

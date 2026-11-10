@@ -1,0 +1,478 @@
+# EveSynapse releases built on GitHub Actions: a temporary runner
+# while the Forgejo runner's home ISP is having issues. The build
+# runs on GitHub's ubuntu-latest, signs with the same release key,
+# and publishes the release to Forgejo (the home forge), so the
+# updater, the GitHub release mirror, and the R2/GitLab legs see
+# exactly what the Forgejo-built release would have been. When
+# the ISP is healthy again, heavy-gates goes back to dispatching
+# the Forgejo release workflow and this file can be removed.
+#
+# Publishing rules, the same as the Forgejo release workflow:
+# a version publishes once (an existing published release is
+# left as it is; an existing draft is resumed); plain versions
+# publish from main only, a suffixed version (0.4.1.4-dev)
+# publishes from the dev branch and is reached with
+# `evesynapse -update -dev`; nothing publishes unsigned.
+# The release object is the commit point the updater reads:
+# it is created as a draft, the seven assets are uploaded to
+# it, and only then is it published, so no reader ever sees a
+# release whose files are not all there.
+#
+# Forgejo also reads .github/workflows, so the jobs carry the
+# same guard as heavy-gates: they only run on GitHub itself
+# and skip on Forgejo. The release needs a FORGEJO_TOKEN
+# repository secret (a Forgejo token with repository write
+# scope) and the RELEASE_SIGNING_KEY secret; without them the
+# run fails loudly, since a release that was never handed over
+# must not read as a success.
+
+name: release-build
+
+on:
+  workflow_dispatch:
+
+# One release per branch at a time: two pushes in quick
+# succession must not both try to create the same release.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  GOCACHE: ${{ github.workspace }}/.cache/go-build
+  GOMODCACHE: ${{ github.workspace }}/.cache/gomod
+
+jobs:
+  release:
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.decide.outputs.version }}
+      publish: ${{ steps.decide.outputs.publish }}
+    env:
+      FORGEJO_API: https://natems.dev/api/v1/repos/EveSynapse/evesynapse
+      FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache Go builds and modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/go-build
+            .cache/gomod
+            .cache/dl
+          key: go-${{ hashFiles('go.sum') }}
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Install the toolbox
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Build the release files
+        run: |
+          make assets
+          VERSION="$(tr -d '[:space:]' < internal/app/version.txt)"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
+          cp deploy/setup.sh dist/setup.sh
+          cd dist
+          for a in arm64 amd64; do
+            sha=$(sha256sum "evesynapse-$a" | cut -d' ' -f1)
+            printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "$VERSION" "$a" "$sha" > "latest-$a.json"
+          done
+      # A version carrying a suffix (0.4.1.4-dev) is a
+      # development build, reached with `evesynapse -update
+      # -dev`. Plain versions are releases and are only ever
+      # published from main, so another branch can't claim a
+      # release's tag first. A version publishes once: when the
+      # release exists and is published, the push published
+      # nothing. When the release exists as a draft, a run left
+      # it half done, so this push resumes it: it uploads the
+      # files the draft is still missing and publishes it.
+      - name: Decide whether this push publishes
+        id: decide
+        run: |
+          publish=true
+          if [ "$VERSION" = "${VERSION%%-*}" ] && [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "Not publishing: $GITHUB_REF_NAME carries the plain version $VERSION, and plain versions are released from main only. Give this branch a suffixed version (for example $VERSION-dev) to publish development builds."
+            publish=false
+          fi
+          if [ "$publish" = "true" ]; then
+            code="$(curl -s -o /dev/null -w '%{http_code}' --header "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/releases/tags/v$VERSION")"
+            if [ "$code" = "200" ]; then
+              rel="$(curl -fsS --header "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/releases/tags/v$VERSION")"
+              if printf '%s' "$rel" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("draft") else 1)'; then
+                release_id="$(printf '%s' "$rel" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+                echo "Release v$VERSION exists as a draft; resuming it (id $release_id)."
+                echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+              else
+                echo "Release v$VERSION already exists and is published; leaving it as it is."
+                publish=false
+              fi
+            elif [ "$code" != "404" ]; then
+              echo "The releases API answered $code; not publishing on a guess."
+              exit 1
+            fi
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      # Only a signed release is published. The step fails, and
+      # nothing is published, when the key is missing or is not
+      # the other half of a key listed in
+      # internal/releasesig/trusted_keys.pem. The secret holds
+      # the key base64-encoded and releasesign reads it in that
+      # form; a value that is a path to a file is read from that
+      # file instead, as in the GitLab job.
+      - name: Sign the manifests
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "Nothing to sign."; exit 0; fi
+          if [ -n "$RELEASE_SIGNING_KEY" ] && [ -f "$RELEASE_SIGNING_KEY" ]; then
+            RELEASE_SIGNING_KEY="$(cat "$RELEASE_SIGNING_KEY")"
+            export RELEASE_SIGNING_KEY
+          fi
+          go run ./cmd/releasesign sign dist/latest-arm64.json dist/latest-amd64.json
+      # The release notes: the pull requests merged since the
+      # previous release, grouped by label the way
+      # .github/release.yml groups them.
+      - name: Write the release notes
+        run: |
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "No notes to write."; exit 0; fi
+          HOW="evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers)"
+          if [ "$VERSION" != "${VERSION%%-*}" ]; then HOW="evesynapse -update -dev"; fi
+          printf 'Automated build of EveSynapse v%s. Update with: %s.\n' "$VERSION" "$HOW" > release-notes.md
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+
+          api = os.environ["FORGEJO_API"]
+          token = os.environ["FORGEJO_TOKEN"]
+          version = os.environ["VERSION"]
+
+          def get(path):
+              req = urllib.request.Request(api + path,
+                                           headers={"Authorization": "token " + token,
+                                                    "User-Agent": "evesynapse-release-workflow"})
+              return json.load(urllib.request.urlopen(req))
+
+          def vkey(tag):
+              parts = []
+              for piece in tag.lstrip("v").split("-")[0].split("."):
+                  parts.append(int(piece) if piece.isdigit() else 0)
+              return parts
+
+          releases = get("/releases?limit=100")
+          others = [r for r in releases if r["tag_name"] != "v" + version]
+          since = None
+          if others:
+              prev = max(others, key=lambda r: vkey(r["tag_name"]))
+              since = prev.get("published_at") or prev.get("created_at")
+          merged = [p for p in get("/pulls?state=closed&limit=100&sort=updated&order=desc")
+                    if p.get("merged")]
+          cats = [("🚀 Features", {"feature", "enhancement"}),
+                  ("🐛 Bug Fixes", {"fix", "bug"}),
+                  ("🧰 Maintenance & Dependencies", {"chore", "dependencies"}),
+                  ("Other Changes", None)]
+          groups = {name: [] for name, _ in cats}
+          for pr in merged:
+              if since and (pr.get("merged_at") or "") <= since:
+                  continue
+              labels = {l["name"] for l in pr.get("labels") or []}
+              for name, wanted in cats:
+                  if wanted is None or labels & wanted:
+                      groups[name].append(pr)
+                      break
+          notes = []
+          for name, _ in cats:
+              if not groups[name]:
+                  continue
+              notes.append("### " + name)
+              for pr in groups[name]:
+                  notes.append("* %s by @%s in #%s" % (pr["title"], pr["user"]["login"], pr["number"]))
+              notes.append("")
+          if notes:
+              with open("release-notes.md", "a") as fh:
+                  fh.write("\n## What's Changed\n\n" + "\n".join(notes))
+          PYEOF
+      # The release is created as a draft, the seven files are
+      # uploaded to it, and then it is published: the publish
+      # is the commit point, and the updater skips drafts, so
+      # no reader can see a half-uploaded release. When a draft
+      # already exists, this run resumes it instead: it refreshes
+      # the notes, uploads only the files the draft is still
+      # missing, and publishes it. Uploads retry on transient
+      # failures, so one stalled upload cannot strand a release.
+      # The release tag is made here, before the release is
+      # created on it: a signed annotated tag, signed by the
+      # release key in the OpenSSH form git signs with, authored
+      # by the key's owner. The tag lives on Forgejo (the home
+      # forge), so it is pushed there, not to GitHub. Publishing
+      # then attaches the release to this tag instead of the API
+      # minting an unsigned lightweight one. A tag a died run
+      # left behind is reused when it is this commit's signed
+      # tag, and stops the run when it is anything else.
+      - name: Sign the release tag
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "No tag to sign."; exit 0; fi
+          if [ -n "$RELEASE_SIGNING_KEY" ] && [ -f "$RELEASE_SIGNING_KEY" ]; then
+            RELEASE_SIGNING_KEY="$(cat "$RELEASE_SIGNING_KEY")"
+            export RELEASE_SIGNING_KEY
+          fi
+          go run ./cmd/releasesign openssh -out "$RUNNER_TEMP/release-key"
+          printf 'nate@evesynapse.app %s\n' "$(cat "$RUNNER_TEMP/release-key.pub")" > "$RUNNER_TEMP/allowed-signers"
+          git config gpg.ssh.allowedSignersFile "$RUNNER_TEMP/allowed-signers"
+          FORGEJO_GIT="https://natems.dev/EveSynapse/evesynapse.git"
+          if git ls-remote --exit-code "$FORGEJO_GIT" "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            git fetch "$FORGEJO_GIT" "refs/tags/v$VERSION:refs/tags/v$VERSION"
+            if [ "$(git cat-file -t "v$VERSION")" = "tag" ] && [ "$(git rev-list -n 1 "v$VERSION")" = "$GITHUB_SHA" ] && git tag -v "v$VERSION" >/dev/null 2>&1; then
+              echo "The signed tag v$VERSION is already pushed for this commit; reusing it."
+              exit 0
+            fi
+            echo "A tag v$VERSION already exists and is not the signed tag for this commit; not publishing over it."
+            exit 1
+          fi
+          git config user.name "Nate"
+          git config user.email "nate@evesynapse.app"
+          git config gpg.format ssh
+          git config user.signingkey "$RUNNER_TEMP/release-key"
+          git tag -s "v$VERSION" -m "EveSynapse v$VERSION" "$GITHUB_SHA"
+          git tag -v "v$VERSION"
+          git -c "http.https://natems.dev/.extraheader=Authorization: token $FORGEJO_TOKEN" push "$FORGEJO_GIT" "refs/tags/v$VERSION"
+      - name: Publish the release
+        env:
+          RESUME_RELEASE_ID: ${{ steps.decide.outputs.release_id }}
+        run: |
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "No release to create."; exit 0; fi
+          if [ "$VERSION" != "${VERSION%%-*}" ]; then PRERELEASE=true; else PRERELEASE=false; fi
+          export PRERELEASE
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+
+          api = os.environ["FORGEJO_API"]
+          version = os.environ["VERSION"]
+          resume_id = os.environ.get("RESUME_RELEASE_ID", "")
+
+          def call(path, data=None, method="GET"):
+              req = urllib.request.Request(
+                  api + path, data=data, method=method,
+                  headers={"Authorization": "token " + os.environ["FORGEJO_TOKEN"],
+                           "Content-Type": "application/json",
+                           "User-Agent": "evesynapse-release-workflow"})
+              return json.load(urllib.request.urlopen(req))
+
+          if resume_id:
+              rel = call("/releases/" + resume_id)
+              call("/releases/" + resume_id,
+                   data=json.dumps({"body": open("release-notes.md").read()}).encode(),
+                   method="PATCH")
+              print("Resuming draft release v%s (id %s); notes refreshed." % (version, rel["id"]))
+          else:
+              body = {
+                  "tag_name": "v" + version,
+                  "target_commitish": os.environ["GITHUB_SHA"],
+                  "name": "EveSynapse v" + version,
+                  "body": open("release-notes.md").read(),
+                  "draft": True,
+                  "prerelease": os.environ["PRERELEASE"] == "true",
+              }
+              rel = call("/releases", data=json.dumps(body).encode(), method="POST")
+              print("Draft release v%s created (id %s)." % (version, rel["id"]))
+          with open("release-id.txt", "w") as fh:
+              fh.write(str(rel["id"]))
+          assets = call("/releases/%s/assets" % rel["id"])
+          with open("release-assets.txt", "w") as fh:
+              for a in assets:
+                  fh.write(a["name"] + "\n")
+          PYEOF
+          REL_ID="$(cat release-id.txt)"
+          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh; do
+            if grep -qx "$f" release-assets.txt; then
+              echo "$f: already on the draft; skipping."
+              continue
+            fi
+            curl -fsS --retry 5 --retry-delay 10 --retry-all-errors --header "Authorization: token $FORGEJO_TOKEN" \
+              -F "attachment=@dist/$f" \
+              "$FORGEJO_API/releases/$REL_ID/assets?name=$f" > /dev/null
+            echo "$f: uploaded."
+          done
+          curl -fsS -X PATCH --header "Authorization: token $FORGEJO_TOKEN" \
+            --header "Content-Type: application/json" \
+            -d '{"draft": false}' \
+            "$FORGEJO_API/releases/$REL_ID" > /dev/null
+          echo "Release v$VERSION published."
+      - name: Add the release notes to the kept files
+        if: steps.decide.outputs.publish == 'true'
+        run: cp release-notes.md dist/release-notes.md
+      - name: Keep the built files for the follow-on jobs
+        if: always() && steps.decide.outputs.publish == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  # Every published release is mirrored to the project's own
+  # static mirror (a Cloudflare R2 bucket served from
+  # cdn.synap6.io), which the updater reads when an install
+  # names the mirror provider, and as the default chain's last
+  # resort. The R2 secrets are not set on GitHub, so this job
+  # steps aside for now; the Forgejo mirror job covers it when
+  # releases run there again.
+  mirror:
+    if: github.server_url == 'https://github.com' && needs.release.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    needs: release
+    continue-on-error: true
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+    steps:
+      - name: Fetch the built files
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Install the AWS CLI
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates unzip >/dev/null
+          case "$(uname -m)" in
+            aarch64) aws_arch=aarch64 ;;
+            *) aws_arch=x86_64 ;;
+          esac
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-${aws_arch}.zip"
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          /tmp/aws/install
+          aws --version
+      - name: Mirror the release to R2
+        run: |
+          if [ -z "${R2_ACCOUNT_ID:-}" ] || [ -z "${R2_ACCESS_KEY_ID:-}" ] || [ -z "${R2_SECRET_ACCESS_KEY:-}" ] || [ -z "${R2_BUCKET:-}" ]; then
+            echo "The R2 mirror secrets are not set; skipping the mirror."
+            exit 0
+          fi
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+          EP="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
+          FILES="evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh"
+          for f in $FILES; do
+            aws s3 cp "dist/$f" "s3://$R2_BUCKET/evesynapse/v$VERSION/$f" --endpoint-url "$EP"
+          done
+          if [ "$VERSION" = "${VERSION%%-*}" ]; then CH="latest"; else CH="latest-dev"; fi
+          for a in arm64 amd64; do
+            aws s3 cp "dist/evesynapse-$a" "s3://$R2_BUCKET/$CH/evesynapse-$a" --endpoint-url "$EP"
+          done
+          for a in arm64 amd64; do
+            aws s3 cp "dist/latest-$a.json" "s3://$R2_BUCKET/$CH-$a.json" --endpoint-url "$EP" --content-type "application/json"
+            aws s3 cp "dist/latest-$a.json.sig" "s3://$R2_BUCKET/$CH-$a.json.sig" --endpoint-url "$EP"
+          done
+          echo "Mirrored v$VERSION to the $CH channel."
+
+  # Every published release is also created on GitLab, under
+  # the signed tag the push mirrors already carried there,
+  # with the same release notes and the same files, so the
+  # updater finds the same release whichever forge it asks.
+  # The GL_TOKEN secret is not set on GitHub, so this job
+  # steps aside for now; the Forgejo forges job covers it when
+  # releases run there again. The GitHub release itself is not
+  # made here: GitHub publishes its own from
+  # .github/workflows/release.yml, with its built-in token, so
+  # no GitHub credential is stored on any other forge.
+  forges:
+    if: github.server_url == 'https://github.com' && needs.release.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    needs: release
+    continue-on-error: true
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      GITLAB_TOKEN: ${{ secrets.GL_TOKEN }}
+    steps:
+      - name: Fetch the built files
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Install the toolbox
+        run: |
+          if command -v curl >/dev/null && command -v git >/dev/null && command -v make >/dev/null && command -v python3 >/dev/null; then
+            echo "curl, git, make and python3 are already installed; skipping the apt-get install."
+          else
+            apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates python3 >/dev/null
+          fi
+      - name: Create the GitLab release
+        continue-on-error: true
+        run: |
+          if [ -z "${GITLAB_TOKEN:-}" ]; then
+            echo "The GL_TOKEN secret is not set; skipping the GitLab release."
+            exit 0
+          fi
+          GL_API="https://gitlab.com/api/v4"
+          GL_PROJECT="natemsz%2Fevesynapse"
+          code="$(curl -s -o /dev/null -w '%{http_code}' --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$GL_API/projects/$GL_PROJECT/releases/v$VERSION")"
+          if [ "$code" = "200" ]; then
+            echo "Release v$VERSION already exists on GitLab; leaving it as it is."
+            exit 0
+          fi
+          if [ "$code" != "404" ]; then
+            echo "The GitLab releases API answered $code; not creating the release on a guess."
+            exit 1
+          fi
+          PKG_BASE="$GL_API/projects/$GL_PROJECT/packages/generic/evesynapse/v$VERSION"
+          existing="$(curl -fsS --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$GL_API/projects/$GL_PROJECT/packages?package_type=generic&package_name=evesynapse&per_page=100" || echo '[]')"
+          pkg_id="$(printf '%s' "$existing" | VERSION="$VERSION" python3 -c 'import json,os,sys; pkgs=json.load(sys.stdin); print(next((p["id"] for p in pkgs if p.get("version")=="v"+os.environ["VERSION"]), ""))')"
+          declare -A have=()
+          if [ -n "$pkg_id" ]; then
+            files_json="$(curl -fsS --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$GL_API/projects/$GL_PROJECT/packages/$pkg_id/package_files?per_page=100")"
+            while IFS='=' read -r fname fsha; do
+              [ -n "$fname" ] && have["$fname"]="$fsha"
+            done < <(printf '%s' "$files_json" | python3 -c 'import json,sys; [print(f["file_name"]+"="+f["file_sha256"]) for f in json.load(sys.stdin)]')
+          fi
+          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh; do
+            sha="$(sha256sum "dist/$f" | cut -d' ' -f1)"
+            if [ "${have[$f]:-}" = "$sha" ]; then
+              echo "$f: already in the GitLab registry under the same hash; skipping."
+              continue
+            fi
+            if [ -n "${have[$f]:-}" ]; then
+              echo "$f: the GitLab registry holds a different build under this version; refusing to replace it."
+              exit 1
+            fi
+            curl -fsS --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --upload-file "dist/$f" "$PKG_BASE/$f"
+            echo "$f: uploaded."
+          done
+          GL_API="$GL_API" GL_PROJECT="$GL_PROJECT" VERSION="$VERSION" GITHUB_SHA="$GITHUB_SHA" python3 - <<'PYEOF' || { echo "The GitLab release leg FAILED; the Forgejo release stands. See the error above."; exit 1; }
+          import json, os, urllib.request
+
+          version = os.environ["VERSION"]
+          files = ["evesynapse-arm64", "evesynapse-amd64",
+                   "latest-arm64.json", "latest-amd64.json",
+                   "latest-arm64.json.sig", "latest-amd64.json.sig",
+                   "setup.sh"]
+          api = os.environ["GL_API"]
+          project = os.environ["GL_PROJECT"]
+          body = {
+              "tag_name": "v" + version,
+              "ref": os.environ["GITHUB_SHA"],
+              "name": "EveSynapse v" + version,
+              "description": open("dist/release-notes.md").read(),
+              "assets": {"links": [
+                  {"name": f, "url": "%s/projects/%s/packages/generic/evesynapse/v%s/%s" % (
+                      api, project, version, f),
+                   "direct_asset_path": "/" + f, "link_type": "package"}
+                  for f in files]},
+          }
+          req = urllib.request.Request(
+              api + "/projects/" + project + "/releases",
+              data=json.dumps(body).encode(), method="POST",
+              headers={"PRIVATE-TOKEN": os.environ["GITLAB_TOKEN"], "Content-Type": "application/json"})
+          urllib.request.urlopen(req)
+          print("Release v%s created on GitLab." % version)
+          PYEOF

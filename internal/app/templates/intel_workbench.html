@@ -345,7 +345,7 @@
 </div>
 {{with .IntelDashboard}}
 <section class="l-panel wbd-log">
-  <h2>Activity <span class="badge kill" data-ch-live hidden>Live</span></h2>
+  <h2>Activity <span class="badge kill" data-live-pill hidden>Live</span></h2>
   <ol class="ch-feed wbd-feed" data-ch-feed="/intel/feed.json" data-ch-after="{{.LastID}}">
     {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty hint" data-ch-empty>No reports yet.</li>{{end}}
   </ol>

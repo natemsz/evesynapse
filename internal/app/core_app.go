@@ -79,6 +79,18 @@ type Application struct {
 	// on the /intel/kills/ front page without touching Postgres.
 	recentKills recentKillsState
 
+	// killLive is the live kill feed's fan-out (livefeed.go): the
+	// subscribers watching /intel/kills/stream for new kills.
+	killLive killLiveHub
+
+	// marketLive is the live market feed's fan-out (livefeed.go):
+	// the subscribers watching /market/stream for stat-pack updates.
+	marketLive marketLiveHub
+
+	// liveFeeds holds the named broadcast feeds modules open
+	// through Deps.LiveFeed (livefeed.go), by name.
+	liveFeeds sync.Map
+
 	// sdeTopology is the in-memory universe topology (sde_memory.go):
 	// systems, regions, and types held in RAM for immediate resolution.
 	sdeTopology sdeTopologyState
@@ -387,6 +399,9 @@ type Application struct {
 	botWatchOnce sync.Once
 	botWatch     *botFingerprintWatch
 	enumWatch    *enumFloodWatch
+	// botGuardOff is set only by the dev entrypoint
+	// (DisableBotGuard) during route setup.
+	botGuardOff bool
 
 	// The public service summary's cache and throttle
 	// (core_status.go).
@@ -877,6 +892,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// even that the admin can switch off live (market_anon.go).
 		// The personal pieces (restock, watches) stay signed-in.
 		r.With(anonPages).Get("/", app.handleMarket)
+		r.With(anonPages).Get("/stream", app.handleMarketStream)
 		r.With(anonPages).Get("/suggest", app.handleMarketSuggest)
 		r.With(anonPages).Get("/history-fragment", app.handleMarketHistoryFragment)
 		r.With(anonPages).Get("/trader-fragment", app.handleMarketTraderFragment)
@@ -978,6 +994,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// The killboard (killboard.go): core pages in the Intel section,
 	// beside the Intel module's /intel routes.
 	r.With(anonPages).Get("/intel/kills/", app.handleKillboard)
+	r.With(anonPages).Get("/intel/kills/stream", app.handleKillStream)
 	r.With(anonPages).Get("/intel/kills/suggest", app.handleKillboardSuggest)
 	r.With(anonPages).Get("/intel/kill/{id}/", app.handleKillPage)
 	// Battle reports (battle_pages.go): the account's own, and a

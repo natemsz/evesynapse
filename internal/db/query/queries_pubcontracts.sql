@@ -1219,3 +1219,10 @@ SELECT family, comps, n_eff, holdout_n, sales_n, mae_ladder, mae_model,
     bias_model, use_model, fitted_at
 FROM abyssal_family_fit
 WHERE family = $1;
+
+-- name: GetNewestPublicContractID :one
+-- The highest contract id the corpus holds: the contract search's
+-- live feed compares it between checks to learn that a sweep added
+-- contracts, without running the search. A primary key max is an
+-- index read.
+SELECT COALESCE(MAX(contract_id), 0)::bigint AS newest FROM pub_contracts;

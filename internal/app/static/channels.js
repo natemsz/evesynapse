@@ -218,7 +218,7 @@
     var doc = root.ownerDocument || root;
     var url = feed.getAttribute("data-ch-feed");
     var after = +feed.getAttribute("data-ch-after") || 0;
-    var live = doc.querySelector("[data-ch-live]");
+    var live = doc.querySelector("[data-live-pill]");
     // Only the first page is live; an older page stays as it is.
     if (/[?&]before=/.test(location.search)) return;
     if (live) live.hidden = false;

@@ -39,6 +39,7 @@
     <nav class="kb-chips" aria-label="Show">
       {{range .Chips}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}
     </nav>
+    <span class="badge kill kb-live-pill" data-live-pill role="status" hidden>Live</span>
   </div>
   {{if .SearchQ}}<p class="kb-search-note" role="status">No pilot, corporation, alliance, system, region or ship matches “{{.SearchQ}}”.</p>{{end}}
 
@@ -46,7 +47,7 @@
     <ol class="kb-list" aria-label="Kills, newest first">
       {{if .Kills}}<li class="kb-head" aria-hidden="true"><span class="kb-h-detail">Details</span><span class="kb-h-ship">Ship</span><span class="kb-h-main">Victim</span><span class="kb-h-atk">Final blow</span><span class="kb-h-where">System</span><span class="kb-h-value">Est. value</span></li>{{end}}
       {{range .Kills}}
-      <li class="kb-kill{{if .Big}} big{{end}}">
+      <li class="kb-kill{{if .Big}} big{{end}}" data-kill-id="{{.ID}}">
         <img class="kb-kill-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=64" alt="" width="44" height="44" loading="lazy">
         <div class="kb-kill-main">
           <a class="kb-kill-link" href="/intel/kill/{{.ID}}/">{{.ShipName}}</a>

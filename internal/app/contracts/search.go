@@ -900,7 +900,10 @@ type searchView struct {
 	// Redesign furniture: active-filter chips, per-drawer
 	// active counts, the drawer the page opens with, and the
 	// quick-hunt preset URLs.
-	Chips        []filterChip
+	Chips []filterChip
+	// Live marks the unfiltered first page, newest first: the one
+	// listing the live feed (live.go) keeps current.
+	Live         bool
 	BPCount      int
 	AbCount      int
 	CourierCount int
@@ -955,7 +958,7 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 	f := parseSearchFilters(q)
 	now := time.Now().UTC()
 	view := &searchView{Filters: f, Raw: q, Sorts: searchSorts, Page: f.Page,
-		Echo: map[string]string{}, TypeSet: map[string]bool{}}
+		Echo: map[string]string{}, TypeSet: map[string]bool{}, Live: unfilteredSearch(q)}
 	for k, vs := range q {
 		if len(vs) > 0 {
 			view.Echo[k] = vs[0]

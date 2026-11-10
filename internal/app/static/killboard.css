@@ -102,6 +102,9 @@
 }
 .kb-list > li:first-child { border-top: 0; }
 .kb-kill:hover { background: var(--row-hover); }
+/* A live kill row takes the shared .is-live treatment (style.css). */
+.kb-kill.is-live { box-shadow: inset 3px 0 0 var(--accent); }
+.kb-live-pill { margin-left: auto; align-self: center; }
 /* --- Feed header: one label per column in the site's small caps,
    on the same grid as the rows so each label sits over its
    column. It is hidden from assistive tech (the list's own label

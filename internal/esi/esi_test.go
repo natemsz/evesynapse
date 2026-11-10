@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -253,5 +254,121 @@ func TestUndecodableAnswerIsAnError(t *testing.T) {
 	err := client.Get(context.Background(), "", "/status/", &out)
 	if err == nil || !strings.Contains(err.Error(), "decode") {
 		t.Fatalf("err = %v, want a decode error", err)
+	}
+}
+
+// etagStub answers GETs with an ETag and honors If-None-Match: a
+// call offering the current ETag gets a 304 with no body, any other
+// a 200 with the body. Each answer's cache window ends window from
+// now. The first call waits firstCallDelay, so concurrent readers
+// have time to join the one in-flight call before it answers.
+type etagStub struct {
+	mu             sync.Mutex
+	calls          int
+	etag           string
+	body           string
+	window         time.Duration
+	firstCallDelay time.Duration
+	seen           []string // If-None-Match values received, in order
+}
+
+func (s *etagStub) RoundTrip(req *http.Request) (*http.Response, error) {
+	s.mu.Lock()
+	s.calls++
+	first := s.calls == 1
+	inm := req.Header.Get("If-None-Match")
+	s.seen = append(s.seen, inm)
+	h := make(http.Header)
+	h.Set("ETag", s.etag)
+	h.Set("Expires", time.Now().Add(s.window).UTC().Format(http.TimeFormat))
+	status, body := http.StatusOK, s.body
+	if inm != "" && inm == s.etag {
+		status, body = http.StatusNotModified, ""
+	}
+	s.mu.Unlock()
+	if first && s.firstCallDelay > 0 {
+		select {
+		case <-time.After(s.firstCallDelay):
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
+		}
+	}
+	return &http.Response{StatusCode: status, Header: h, Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+}
+
+func (s *etagStub) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
+
+// TestConcurrentGETsCollapseAndETagServesCached pins what the ESI
+// call collapse and ETag cache exist for: concurrent identical GETs
+// fire one ESI call, and the first caller leaving does not fail the
+// others; inside ESI's cache window a repeat GET is served without a
+// call; past the window it revalidates with its ETag and a 304
+// serves the held body.
+func TestConcurrentGETsCollapseAndETagServesCached(t *testing.T) {
+	stub := &etagStub{etag: `"v1"`, body: `{"n":1}`, window: time.Hour, firstCallDelay: 200 * time.Millisecond}
+	client := New(&http.Client{Transport: stub}, nil, nil)
+	ctx := context.Background()
+
+	// The first caller gives up while nine others wait on its call.
+	leaderCtx, cancelLeader := context.WithCancel(ctx)
+	leaderDone := make(chan struct{})
+	go func() {
+		defer close(leaderDone)
+		_, _, _ = client.FetchRaw(leaderCtx, "", "/alliances/1/")
+	}()
+	time.Sleep(20 * time.Millisecond)
+	const readers = 9
+	var wg sync.WaitGroup
+	bodies := make([][]byte, readers)
+	errs := make([]error, readers)
+	for i := range readers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			body, _, err := client.FetchRaw(ctx, "", "/alliances/1/")
+			bodies[i], errs[i] = body, err
+		}(i)
+	}
+	time.Sleep(20 * time.Millisecond)
+	cancelLeader()
+	<-leaderDone
+	wg.Wait()
+	if n := stub.count(); n != 1 {
+		t.Fatalf("ten concurrent identical GETs made %d ESI calls, want 1", n)
+	}
+	for i := range readers {
+		if errs[i] != nil {
+			t.Fatalf("reader %d failed when the first caller left: %v", i, errs[i])
+		}
+		if string(bodies[i]) != `{"n":1}` {
+			t.Fatalf("reader %d got %q, want the shared body", i, bodies[i])
+		}
+	}
+
+	// Inside the window: served from memory, no call.
+	if body, _, err := client.FetchRaw(ctx, "", "/alliances/1/"); err != nil || string(body) != `{"n":1}` {
+		t.Fatalf("GET inside the window = %q, %v; want the held body", body, err)
+	}
+	if n := stub.count(); n != 1 {
+		t.Fatalf("GET inside the window made %d ESI calls in total, want 1", n)
+	}
+
+	// Past the window: one conditional call, 304, the held body.
+	client.getCache.mu.Lock()
+	for _, e := range client.getCache.entries {
+		e.expires = time.Now().Add(-time.Second)
+	}
+	client.getCache.mu.Unlock()
+	if body, _, err := client.FetchRaw(ctx, "", "/alliances/1/"); err != nil || string(body) != `{"n":1}` {
+		t.Fatalf("GET past the window = %q, %v; want the held body", body, err)
+	}
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	if stub.calls != 2 || stub.seen[1] != `"v1"` {
+		t.Fatalf("GET past the window made %d calls with If-None-Match %q, want 2 with the held ETag", stub.calls, stub.seen)
 	}
 }

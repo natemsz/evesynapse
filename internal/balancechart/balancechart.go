@@ -93,35 +93,6 @@ func SamplePoint(s db.WalletHistory) BalancePoint {
 	return BalancePoint{At: s.SampledAt, Balance: s.Balance}
 }
 
-// NetWorthHistoryPoints sums the sampler's net-worth column
-// across one user's characters, one point per sampled day. A
-// day contributes the characters that have a computed net worth
-// that day; days with none stay off the chart rather than
-// reading as a crash to zero.
-func NetWorthHistoryPoints(rows []db.WalletHistory) []BalancePoint {
-	byDay := make(map[string]float64)
-	for _, r := range rows {
-		if !r.NetWorth.Valid {
-			continue
-		}
-		byDay[r.Day] += r.NetWorth.Float64
-	}
-	days := make([]string, 0, len(byDay))
-	for d := range byDay {
-		days = append(days, d)
-	}
-	sort.Strings(days)
-	points := make([]BalancePoint, 0, len(days))
-	for _, d := range days {
-		t, err := time.Parse(markethistory.DateLayout, d)
-		if err != nil {
-			continue
-		}
-		points = append(points, BalancePoint{At: t, Balance: byDay[d]})
-	}
-	return points
-}
-
 // WalletChartMaxDots caps the rendered points: a busy journal
 // window holds thousands of entries, and past a few hundred
 // dots the polyline reads the same while the page bloats.

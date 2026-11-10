@@ -77,23 +77,6 @@ func netWorthBreakdownDays(rows []db.WalletHistory) []netWorthDay {
 	return out
 }
 
-// netWorthSparkTotals is the sparkline series over sampled history
-// rows: each day's total net worth summed across the account's
-// characters (the breakdown rule), ascending, capped at the last 31
-// days. The KPI reads its series through the bounded grouped query
-// (ListUserNetWorthDays); this shaping is the same math over rows.
-func netWorthSparkTotals(rows []db.WalletHistory) []float64 {
-	days := netWorthBreakdownDays(rows)
-	totals := make([]float64, 0, len(days))
-	for _, d := range days {
-		totals = append(totals, d.Total())
-	}
-	if len(totals) > 31 {
-		totals = totals[len(totals)-31:]
-	}
-	return totals
-}
-
 // The KPI sparkline's box: viewBox units, polyline points inset so
 // the stroke is never clipped.
 const (

@@ -54,14 +54,3 @@ func (app *Application) storeFleetRollup(userID int64, now time.Time, widget *fl
 		widget:  widget,
 	}
 }
-
-// invalidateFleetRollup removes the cached rollup for a user when character
-// links or settings change.
-func (app *Application) invalidateFleetRollup(userID int64) {
-	s := &app.fleetOverview
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.rollups != nil {
-		delete(s.rollups, userID)
-	}
-}

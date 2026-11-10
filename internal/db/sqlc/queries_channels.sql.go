@@ -26,21 +26,6 @@ func (q *Queries) AddIntelGangGroup(ctx context.Context, arg AddIntelGangGroupPa
 	return err
 }
 
-const closeIntelGang = `-- name: CloseIntelGang :exec
-UPDATE intel_gangs SET closed_at = $1::timestamptz
-WHERE id = $2 AND closed_at IS NULL
-`
-
-type CloseIntelGangParams struct {
-	ClosedAt time.Time `json:"closed_at"`
-	ID       int64     `json:"id"`
-}
-
-func (q *Queries) CloseIntelGang(ctx context.Context, arg CloseIntelGangParams) error {
-	_, err := q.db.Exec(ctx, closeIntelGang, arg.ClosedAt, arg.ID)
-	return err
-}
-
 const closeStaleIntelGangs = `-- name: CloseStaleIntelGangs :execrows
 UPDATE intel_gangs SET closed_at = last_seen_at + ($1::bigint * interval '1 second')
 WHERE channel_id = $2 AND closed_at IS NULL
@@ -252,15 +237,6 @@ func (q *Queries) DeleteIntelGangGroupMembership(ctx context.Context, groupID in
 	return err
 }
 
-const deleteIntelGangGroups = `-- name: DeleteIntelGangGroups :exec
-DELETE FROM intel_gang_groups WHERE gang_id = $1
-`
-
-func (q *Queries) DeleteIntelGangGroups(ctx context.Context, gangID int64) error {
-	_, err := q.db.Exec(ctx, deleteIntelGangGroups, gangID)
-	return err
-}
-
 const deleteIntelGroupComposite = `-- name: DeleteIntelGroupComposite :exec
 DELETE FROM intel_group_composites WHERE group_id = $1
 `
@@ -455,23 +431,6 @@ func (q *Queries) GetIntelPilotName(ctx context.Context, nameLower string) (Inte
 		&i.CheckedAt,
 		&i.Thing,
 	)
-	return i, err
-}
-
-const getIntelReport = `-- name: GetIntelReport :one
-SELECT id, channel_id, author_user_id FROM intel_reports WHERE id = $1
-`
-
-type GetIntelReportRow struct {
-	ID           int64 `json:"id"`
-	ChannelID    int64 `json:"channel_id"`
-	AuthorUserID int64 `json:"author_user_id"`
-}
-
-func (q *Queries) GetIntelReport(ctx context.Context, id int64) (GetIntelReportRow, error) {
-	row := q.db.QueryRow(ctx, getIntelReport, id)
-	var i GetIntelReportRow
-	err := row.Scan(&i.ID, &i.ChannelID, &i.AuthorUserID)
 	return i, err
 }
 
@@ -1630,38 +1589,6 @@ func (q *Queries) ListIntelReportsBySystem(ctx context.Context, arg ListIntelRep
 	return items, nil
 }
 
-const listIntelThreadGroups = `-- name: ListIntelThreadGroups :many
-SELECT group_id, system_id, latest_at FROM intel_group_composites
-WHERE thread_id = $1 ORDER BY latest_at DESC
-`
-
-type ListIntelThreadGroupsRow struct {
-	GroupID  int64        `json:"group_id"`
-	SystemID int64        `json:"system_id"`
-	LatestAt sql.NullTime `json:"latest_at"`
-}
-
-// A thread's groups, newest first.
-func (q *Queries) ListIntelThreadGroups(ctx context.Context, threadID int64) ([]ListIntelThreadGroupsRow, error) {
-	rows, err := q.db.Query(ctx, listIntelThreadGroups, threadID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListIntelThreadGroupsRow
-	for rows.Next() {
-		var i ListIntelThreadGroupsRow
-		if err := rows.Scan(&i.GroupID, &i.SystemID, &i.LatestAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listIntelTokens = `-- name: ListIntelTokens :many
 SELECT id, name, prefix, created_at, last_used_at, device FROM intel_tokens
 WHERE user_id = $1 ORDER BY created_at DESC, id DESC
@@ -1977,6 +1904,7 @@ func (q *Queries) ListRecentRosterReports(ctx context.Context, arg ListRecentRos
 }
 
 const listRecentThreads = `-- name: ListRecentThreads :many
+
 SELECT DISTINCT ON (thread_id) thread_id, group_id, channel_id, system_id, latest_at, composite
 FROM intel_group_composites
 WHERE channel_id = ANY($1::bigint[]) AND thread_id > 0
@@ -1998,6 +1926,7 @@ type ListRecentThreadsRow struct {
 	Composite string       `json:"composite"`
 }
 
+// A thread's groups, newest first.
 // The intel dashboard's rows (intel_dashboard.go): each recent
 // thread in the given channels, by its newest group.
 func (q *Queries) ListRecentThreads(ctx context.Context, arg ListRecentThreadsParams) ([]ListRecentThreadsRow, error) {

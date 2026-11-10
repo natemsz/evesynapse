@@ -110,17 +110,6 @@ func (q *Queries) ApplyKillEntityDailySystem(ctx context.Context, arg ApplyKillE
 	return err
 }
 
-const countKillsSince = `-- name: CountKillsSince :one
-SELECT COUNT(*) FROM kills WHERE ingested_at >= $1::timestamptz
-`
-
-func (q *Queries) CountKillsSince(ctx context.Context, since time.Time) (int64, error) {
-	row := q.db.QueryRow(ctx, countKillsSince, since)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const getBiggestKill = `-- name: GetBiggestKill :one
 SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM kills
 WHERE public AND killmail_time >= $1::timestamptz AND value_ours IS NOT NULL

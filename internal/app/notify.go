@@ -743,34 +743,6 @@ func briefingCardKindFor(kind string) (string, bool) {
 	return "", false
 }
 
-// notifyKindForBriefingCard is briefingCardKindFor read the other
-// way: the notification kind whose card switch gates a card kind.
-func notifyKindForBriefingCard(cardKind string) (string, bool) {
-	switch cardKind {
-	case "mail":
-		return notifyMail, true
-	case "skills":
-		return notifySkill, true
-	case "pi":
-		return notifyPI, true
-	case "industry":
-		return notifyIndustry, true
-	case "calendar":
-		return notifyCalendar, true
-	case "market":
-		return notifyWatch, true
-	case "contract":
-		return notifyContract, true
-	case "link":
-		return notifyRelink, true
-	case "camp":
-		return notifyCamp, true
-	case "orders":
-		return notifyUndercut, true
-	}
-	return "", false
-}
-
 // cardOff reports whether a kind's briefing card is switched off.
 func (p notifyPrefs) cardOff(kind string) bool {
 	for _, id := range p.CardsOff {

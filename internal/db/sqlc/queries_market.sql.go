@@ -666,32 +666,6 @@ func (q *Queries) GetMarketTrendStamp(ctx context.Context, regionID int64) (GetM
 	return i, err
 }
 
-const getMarketTypePrice = `-- name: GetMarketTypePrice :one
-SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
-FROM market_type_prices
-WHERE region_id = $1 AND type_id = $2
-`
-
-type GetMarketTypePriceParams struct {
-	RegionID int64 `json:"region_id"`
-	TypeID   int64 `json:"type_id"`
-}
-
-func (q *Queries) GetMarketTypePrice(ctx context.Context, arg GetMarketTypePriceParams) (MarketTypePrice, error) {
-	row := q.db.QueryRow(ctx, getMarketTypePrice, arg.RegionID, arg.TypeID)
-	var i MarketTypePrice
-	err := row.Scan(
-		&i.RegionID,
-		&i.TypeID,
-		&i.BuyPrice,
-		&i.SellPrice,
-		&i.BuyVolume,
-		&i.SellVolume,
-		&i.FetchedAt,
-	)
-	return i, err
-}
-
 const getOrderLifecycle = `-- name: GetOrderLifecycle :one
 SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
 FROM order_lifecycle
@@ -933,38 +907,6 @@ func (q *Queries) GetWatchlistEntry(ctx context.Context, arg GetWatchlistEntryPa
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const insertMarketBookOrder = `-- name: InsertMarketBookOrder :exec
-INSERT INTO market_book_orders (region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-`
-
-type InsertMarketBookOrderParams struct {
-	RegionID     int64     `json:"region_id"`
-	TypeID       int64     `json:"type_id"`
-	IsBuyOrder   int64     `json:"is_buy_order"`
-	Rank         int64     `json:"rank"`
-	Price        float64   `json:"price"`
-	VolumeRemain int64     `json:"volume_remain"`
-	LocationID   int64     `json:"location_id"`
-	SystemID     int64     `json:"system_id"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
-
-func (q *Queries) InsertMarketBookOrder(ctx context.Context, arg InsertMarketBookOrderParams) error {
-	_, err := q.db.Exec(ctx, insertMarketBookOrder,
-		arg.RegionID,
-		arg.TypeID,
-		arg.IsBuyOrder,
-		arg.Rank,
-		arg.Price,
-		arg.VolumeRemain,
-		arg.LocationID,
-		arg.SystemID,
-		arg.UpdatedAt,
-	)
-	return err
 }
 
 const insertMarketStatsFallback = `-- name: InsertMarketStatsFallback :exec
@@ -3466,44 +3408,6 @@ func (q *Queries) ListScannerOpportunities(ctx context.Context, arg ListScannerO
 	return items, nil
 }
 
-const listStaleMarketTypePrices = `-- name: ListStaleMarketTypePrices :many
-SELECT region_id, type_id
-FROM market_type_prices
-WHERE fetched_at < now() - ($1::int * INTERVAL '1 second')
-ORDER BY fetched_at ASC
-LIMIT $2
-`
-
-type ListStaleMarketTypePricesParams struct {
-	Column1 int32 `json:"column_1"`
-	Limit   int32 `json:"limit"`
-}
-
-type ListStaleMarketTypePricesRow struct {
-	RegionID int64 `json:"region_id"`
-	TypeID   int64 `json:"type_id"`
-}
-
-func (q *Queries) ListStaleMarketTypePrices(ctx context.Context, arg ListStaleMarketTypePricesParams) ([]ListStaleMarketTypePricesRow, error) {
-	rows, err := q.db.Query(ctx, listStaleMarketTypePrices, arg.Column1, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListStaleMarketTypePricesRow
-	for rows.Next() {
-		var i ListStaleMarketTypePricesRow
-		if err := rows.Scan(&i.RegionID, &i.TypeID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listStatPackBestBeats = `-- name: ListStatPackBestBeats :many
 SELECT location_id, region_id, type_id, is_buy_order, at
 FROM market_best_beats
@@ -4441,29 +4345,6 @@ type TouchOrderLifecycleCheckedParams struct {
 // the freshness stamp moves, not the verdict columns.
 func (q *Queries) TouchOrderLifecycleChecked(ctx context.Context, arg TouchOrderLifecycleCheckedParams) error {
 	_, err := q.db.Exec(ctx, touchOrderLifecycleChecked, arg.CheckedAt, arg.CharacterID, arg.OrderID)
-	return err
-}
-
-const updateOrderLifecycleBeaten = `-- name: UpdateOrderLifecycleBeaten :exec
-UPDATE order_lifecycle
-SET beaten_now = $1, outbid_events = $2
-WHERE character_id = $3 AND order_id = $4 AND closed_at IS NULL
-`
-
-type UpdateOrderLifecycleBeatenParams struct {
-	BeatenNow    int64 `json:"beaten_now"`
-	OutbidEvents int64 `json:"outbid_events"`
-	CharacterID  int64 `json:"character_id"`
-	OrderID      int64 `json:"order_id"`
-}
-
-func (q *Queries) UpdateOrderLifecycleBeaten(ctx context.Context, arg UpdateOrderLifecycleBeatenParams) error {
-	_, err := q.db.Exec(ctx, updateOrderLifecycleBeaten,
-		arg.BeatenNow,
-		arg.OutbidEvents,
-		arg.CharacterID,
-		arg.OrderID,
-	)
 	return err
 }
 

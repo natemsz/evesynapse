@@ -1101,35 +1101,6 @@ func TestDevUpdateRefusesWhatItCannotVerify(t *testing.T) {
 	}
 }
 
-func TestVerifyARMExecutable(t *testing.T) {
-	dir := t.TempDir()
-	cases := []struct {
-		name string
-		data []byte
-		ok   bool
-	}{
-		{"arm", fakeELF(elfMachineAArch64, 64), true},
-		{"x86-64", fakeELF(62, 64), false},
-		{"arm32", fakeELF(40, 64), false},
-		{"html error page", []byte("<!DOCTYPE html><html>404</html>"), false},
-		{"truncated", fakeELF(elfMachineAArch64, 64)[:10], false},
-		{"empty", nil, false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			path := filepath.Join(dir, "candidate")
-			writeTestFile(t, path, tc.data, 0o644)
-			err := verifyARMExecutable(path)
-			if tc.ok && err != nil {
-				t.Fatalf("verifyARMExecutable: %v, want success", err)
-			}
-			if !tc.ok && err == nil {
-				t.Fatal("verifyARMExecutable succeeded, want refusal")
-			}
-		})
-	}
-}
-
 func TestRunUpdateUsageErrors(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "evesynapse")
 	var out, errOut bytes.Buffer

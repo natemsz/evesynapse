@@ -200,8 +200,8 @@ func TestProdLineWidgetSizes(t *testing.T) {
 		"Fixture Component", "healthy",
 		"Fixture Alpha · ends",
 		"prodline-missing",
-		`<li class="prodline-buyrow"><img class="prodline-buyart" src="https://images.evetech.net/types/1002/render?size=64" data-fallback-src="https://images.evetech.net/types/1002/icon?size=64" alt="" width="24" height="24" loading="lazy"><span class="prodline-buyname">Fixture Component</span> <span class="prodline-qty">1</span></li>`,
-		`<li class="prodline-buyrow"><img class="prodline-buyart" src="https://images.evetech.net/types/34/render?size=64" data-fallback-src="https://images.evetech.net/types/34/icon?size=64" alt="" width="24" height="24" loading="lazy"><span class="prodline-buyname">Tritanium</span> <span class="prodline-qty">6</span></li>`,
+		`<li class="prodline-buyrow"><img class="prodline-buyart" src="https://images.evetech.net/types/1002/icon?size=64" alt="" width="24" height="24" loading="lazy"><span class="prodline-buyname">Fixture Component</span> <span class="prodline-qty">1</span></li>`,
+		`<li class="prodline-buyrow"><img class="prodline-buyart" src="https://images.evetech.net/types/34/icon?size=64" alt="" width="24" height="24" loading="lazy"><span class="prodline-buyname">Tritanium</span> <span class="prodline-qty">6</span></li>`,
 		`<span class="prodline-buyname">Tritanium</span> <span class="prodline-qty">16</span>`,
 	)
 }

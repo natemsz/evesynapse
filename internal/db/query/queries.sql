@@ -211,9 +211,6 @@ VALUES ($1, $2, $3)
 ON CONFLICT (character_id) DO UPDATE SET
     corporation_id = excluded.corporation_id,
     updated_at     = excluded.updated_at;
--- name: ListAllCorporationIDs :many
-SELECT DISTINCT corporation_id FROM character_corporations
-ORDER BY corporation_id;
 -- name: CorpHasRegisteredCharacter :one
 SELECT EXISTS(SELECT 1 FROM character_corporations WHERE corporation_id = $1);
 -- name: ListCorporationIDsByUser :many
@@ -372,10 +369,6 @@ VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id, widget_id) DO UPDATE SET
     config     = excluded.config,
     updated_at = excluded.updated_at;
--- name: ListWidgetConfigsByUser :many
-SELECT user_id, widget_id, config, updated_at FROM widget_configs
-WHERE user_id = $1
-ORDER BY widget_id;
 
 -- ---------------------------------------------------------------------
 -- Stored market guide (schema 021): the worker mirrors
@@ -477,21 +470,6 @@ ORDER BY lf.updated_at DESC, lf.id DESC
 LIMIT 20;
 -- Public fits for the public fits page, an account's own among them. A
 -- tag matches whole, whatever its case.
--- name: BrowsePublicFittings :many
-SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at, lf.total_price,
-       COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
-       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
-FROM local_fittings lf
-LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
-LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
-WHERE lf.is_public AND NOT lf.is_draft
-  AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || sqlc.arg(q)::text || '%')
-  AND (sqlc.arg(tag)::text = '' OR EXISTS (
-        SELECT 1 FROM jsonb_array_elements_text(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
-        WHERE lower(t.tag) = lower(sqlc.arg(tag)::text)))
-ORDER BY lf.updated_at DESC, lf.id DESC
-LIMIT sqlc.arg(row_limit)::bigint;
 
 -- ---------------------------------------------------------------------
 -- Market history + alerts (schema 013): daily aggregates, wants,

@@ -48,73 +48,6 @@ func (q *Queries) AdminTotals(ctx context.Context, arg AdminTotalsParams) (Admin
 	return i, err
 }
 
-const browsePublicFittings = `-- name: BrowsePublicFittings :many
-SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at, lf.total_price,
-       COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
-       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
-FROM local_fittings lf
-LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
-LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
-WHERE lf.is_public AND NOT lf.is_draft
-  AND ($1::text = '' OR lf.name ILIKE '%' || $1::text || '%' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || $1::text || '%')
-  AND ($2::text = '' OR EXISTS (
-        SELECT 1 FROM jsonb_array_elements_text(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
-        WHERE lower(t.tag) = lower($2::text)))
-ORDER BY lf.updated_at DESC, lf.id DESC
-LIMIT $3::bigint
-`
-
-type BrowsePublicFittingsParams struct {
-	Q        string `json:"q"`
-	Tag      string `json:"tag"`
-	RowLimit int64  `json:"row_limit"`
-}
-
-type BrowsePublicFittingsRow struct {
-	ID         int64     `json:"id"`
-	UserID     int64     `json:"user_id"`
-	Name       string    `json:"name"`
-	ShipTypeID int64     `json:"ship_type_id"`
-	ItemsJson  string    `json:"items_json"`
-	UpdatedAt  time.Time `json:"updated_at"`
-	TotalPrice float64   `json:"total_price"`
-	ShipName   string    `json:"ship_name"`
-	AuthorName string    `json:"author_name"`
-}
-
-// Public fits for the public fits page, an account's own among them. A
-// tag matches whole, whatever its case.
-func (q *Queries) BrowsePublicFittings(ctx context.Context, arg BrowsePublicFittingsParams) ([]BrowsePublicFittingsRow, error) {
-	rows, err := q.db.Query(ctx, browsePublicFittings, arg.Q, arg.Tag, arg.RowLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []BrowsePublicFittingsRow
-	for rows.Next() {
-		var i BrowsePublicFittingsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Name,
-			&i.ShipTypeID,
-			&i.ItemsJson,
-			&i.UpdatedAt,
-			&i.TotalPrice,
-			&i.ShipName,
-			&i.AuthorName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const corpHasRegisteredCharacter = `-- name: CorpHasRegisteredCharacter :one
 SELECT EXISTS(SELECT 1 FROM character_corporations WHERE corporation_id = $1)
 `
@@ -972,31 +905,6 @@ func (q *Queries) ListAllCharacters(ctx context.Context) ([]Character, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listAllCorporationIDs = `-- name: ListAllCorporationIDs :many
-SELECT DISTINCT corporation_id FROM character_corporations
-ORDER BY corporation_id
-`
-
-func (q *Queries) ListAllCorporationIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listAllCorporationIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []int64
-	for rows.Next() {
-		var corporation_id int64
-		if err := rows.Scan(&corporation_id); err != nil {
-			return nil, err
-		}
-		items = append(items, corporation_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2139,37 +2047,6 @@ func (q *Queries) ListWalletHistorySamplesSince(ctx context.Context, arg ListWal
 	return items, nil
 }
 
-const listWidgetConfigsByUser = `-- name: ListWidgetConfigsByUser :many
-SELECT user_id, widget_id, config, updated_at FROM widget_configs
-WHERE user_id = $1
-ORDER BY widget_id
-`
-
-func (q *Queries) ListWidgetConfigsByUser(ctx context.Context, userID int64) ([]WidgetConfig, error) {
-	rows, err := q.db.Query(ctx, listWidgetConfigsByUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []WidgetConfig
-	for rows.Next() {
-		var i WidgetConfig
-		if err := rows.Scan(
-			&i.UserID,
-			&i.WidgetID,
-			&i.Config,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const nextSkillPlanPosition = `-- name: NextSkillPlanPosition :one
 SELECT CAST(COALESCE(MAX(position), 0) + 1 AS BIGINT) FROM skill_plan_items WHERE plan_id = $1
 `
@@ -2643,6 +2520,7 @@ func (q *Queries) UpsertCharacterCorporation(ctx context.Context, arg UpsertChar
 const upsertCloneName = `-- name: UpsertCloneName :exec
 
 
+
 INSERT INTO clone_names (user_id, character_id, clone_id, custom_name, updated_at)
 VALUES ($1, $2, $3, $4, now())
 ON CONFLICT (user_id, character_id, clone_id)
@@ -2656,6 +2534,8 @@ type UpsertCloneNameParams struct {
 	CustomName  string `json:"custom_name"`
 }
 
+// Public fits for the public fits page, an account's own among them. A
+// tag matches whole, whatever its case.
 // ---------------------------------------------------------------------
 // Market history + alerts (schema 013): daily aggregates, wants,
 // fetch state, the watchlist, and worker-computed order health.

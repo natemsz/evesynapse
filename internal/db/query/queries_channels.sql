@@ -243,9 +243,6 @@ WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
 ORDER BY seen_at DESC, id DESC
 LIMIT sqlc.arg(max_rows)::int;
 
--- name: GetIntelReport :one
-SELECT id, channel_id, author_user_id FROM intel_reports WHERE id = $1;
-
 -- A report in full: the workbench page renders from the stored
 -- row and its analysis.
 -- name: GetIntelReportFull :one
@@ -371,10 +368,6 @@ UPDATE intel_gangs SET
     snapshot = sqlc.arg(snapshot)
 WHERE id = sqlc.arg(id);
 
--- name: CloseIntelGang :exec
-UPDATE intel_gangs SET closed_at = sqlc.arg(closed_at)::timestamptz
-WHERE id = sqlc.arg(id) AND closed_at IS NULL;
-
 -- A provisional gang (below) is deleted when its only group
 -- moves to the gang it actually belongs to: its membership
 -- rows cascade away, and the sightings live on in the winner's
@@ -402,9 +395,6 @@ ORDER BY gang_id, group_id;
 -- name: AddIntelGangGroup :exec
 INSERT INTO intel_gang_groups (gang_id, group_id) VALUES (sqlc.arg(gang_id), sqlc.arg(group_id))
 ON CONFLICT DO NOTHING;
-
--- name: DeleteIntelGangGroups :exec
-DELETE FROM intel_gang_groups WHERE gang_id = sqlc.arg(gang_id);
 
 -- name: DeleteIntelGangGroupMembership :exec
 DELETE FROM intel_gang_groups WHERE group_id = sqlc.arg(group_id);
@@ -512,9 +502,6 @@ UPDATE intel_group_composites SET thread_id = sqlc.arg(thread_id)
 WHERE group_id = sqlc.arg(group_id) AND thread_id = 0;
 
 -- A thread's groups, newest first.
--- name: ListIntelThreadGroups :many
-SELECT group_id, system_id, latest_at FROM intel_group_composites
-WHERE thread_id = $1 ORDER BY latest_at DESC;
 
 -- The intel dashboard's rows (intel_dashboard.go): each recent
 -- thread in the given channels, by its newest group.

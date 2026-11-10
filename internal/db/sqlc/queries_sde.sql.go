@@ -233,18 +233,6 @@ func (q *Queries) CountSDETypesInGroup(ctx context.Context, arg CountSDETypesInG
 	return count, err
 }
 
-const countSDETypesInMarketGroup = `-- name: CountSDETypesInMarketGroup :one
-SELECT COUNT(*) FROM sde_types
-WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
-`
-
-func (q *Queries) CountSDETypesInMarketGroup(ctx context.Context, marketGroupID int64) (int64, error) {
-	row := q.db.QueryRow(ctx, countSDETypesInMarketGroup, marketGroupID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countSDETypesInMarketGroupSubtree = `-- name: CountSDETypesInMarketGroupSubtree :one
 WITH RECURSIVE tree AS (
   SELECT sde_market_groups.market_group_id FROM sde_market_groups WHERE sde_market_groups.market_group_id = $1
@@ -401,18 +389,6 @@ func (q *Queries) GetSDECategory(ctx context.Context, categoryID int64) (SdeCate
 	row := q.db.QueryRow(ctx, getSDECategory, categoryID)
 	var i SdeCategory
 	err := row.Scan(&i.CategoryID, &i.Name)
-	return i, err
-}
-
-const getSDEEffect = `-- name: GetSDEEffect :one
-SELECT effect_id, name, category FROM sde_effects
-WHERE effect_id = $1
-`
-
-func (q *Queries) GetSDEEffect(ctx context.Context, effectID int64) (SdeEffect, error) {
-	row := q.db.QueryRow(ctx, getSDEEffect, effectID)
-	var i SdeEffect
-	err := row.Scan(&i.EffectID, &i.Name, &i.Category)
 	return i, err
 }
 
@@ -757,31 +733,6 @@ func (q *Queries) ListAllSDEShipTypeIDs(ctx context.Context) ([]int64, error) {
 	return items, nil
 }
 
-const listAllTypeNames = `-- name: ListAllTypeNames :many
-SELECT type_id, name FROM type_names
-ORDER BY type_id
-`
-
-func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
-	rows, err := q.db.Query(ctx, listAllTypeNames)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []TypeName
-	for rows.Next() {
-		var i TypeName
-		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listCelestialNames = `-- name: ListCelestialNames :many
 SELECT item_id, name FROM sde_celestials
 WHERE item_id = ANY($1::bigint[])
@@ -1084,31 +1035,6 @@ func (q *Queries) ListFitSlotTypes(ctx context.Context, arg ListFitSlotTypesPara
 	for rows.Next() {
 		var i ListFitSlotTypesRow
 		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listItemNames = `-- name: ListItemNames :many
-SELECT item_id, name FROM item_names
-ORDER BY item_id
-`
-
-func (q *Queries) ListItemNames(ctx context.Context) ([]ItemName, error) {
-	rows, err := q.db.Query(ctx, listItemNames)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ItemName
-	for rows.Next() {
-		var i ItemName
-		if err := rows.Scan(&i.ItemID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1809,36 +1735,6 @@ func (q *Queries) ListSDESkillCatalog(ctx context.Context) ([]ListSDESkillCatalo
 	return items, nil
 }
 
-const listSDESkillMetaByIDs = `-- name: ListSDESkillMetaByIDs :many
-SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
-WHERE type_id = ANY($1::bigint[])
-`
-
-func (q *Queries) ListSDESkillMetaByIDs(ctx context.Context, typeIds []int64) ([]SdeSkillMetum, error) {
-	rows, err := q.db.Query(ctx, listSDESkillMetaByIDs, typeIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []SdeSkillMetum
-	for rows.Next() {
-		var i SdeSkillMetum
-		if err := rows.Scan(
-			&i.TypeID,
-			&i.Rank,
-			&i.PrimaryAttr,
-			&i.SecondaryAttr,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSDEStationsBySystem = `-- name: ListSDEStationsBySystem :many
 SELECT station_id, name, system_id FROM sde_stations
 WHERE system_id = $1
@@ -1888,39 +1784,6 @@ func (q *Queries) ListSDESystemNeighbours(ctx context.Context, fromSystemID int6
 			return nil, err
 		}
 		items = append(items, to_system_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSDESystemsByRegion = `-- name: ListSDESystemsByRegion :many
-SELECT system_id, name, security FROM sde_systems
-WHERE region_id = $1
-ORDER BY name
-`
-
-type ListSDESystemsByRegionRow struct {
-	SystemID int64   `json:"system_id"`
-	Name     string  `json:"name"`
-	Security float64 `json:"security"`
-}
-
-// ListSDESystemsByRegion: one region's systems for its page.
-func (q *Queries) ListSDESystemsByRegion(ctx context.Context, regionID int64) ([]ListSDESystemsByRegionRow, error) {
-	rows, err := q.db.Query(ctx, listSDESystemsByRegion, regionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListSDESystemsByRegionRow
-	for rows.Next() {
-		var i ListSDESystemsByRegionRow
-		if err := rows.Scan(&i.SystemID, &i.Name, &i.Security); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2175,31 +2038,6 @@ func (q *Queries) ListSDETypeGroupsByIDs(ctx context.Context, typeIds []int64) (
 	return items, nil
 }
 
-const listSDETypeIDs = `-- name: ListSDETypeIDs :many
-SELECT type_id FROM sde_types
-ORDER BY type_id
-`
-
-func (q *Queries) ListSDETypeIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listSDETypeIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []int64
-	for rows.Next() {
-		var type_id int64
-		if err := rows.Scan(&type_id); err != nil {
-			return nil, err
-		}
-		items = append(items, type_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSDETypeIDsByIDs = `-- name: ListSDETypeIDsByIDs :many
 SELECT type_id FROM sde_types
 WHERE type_id = ANY($1::bigint[])
@@ -2399,77 +2237,6 @@ func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGro
 			&i.MarketGroupID,
 			&i.Published,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSDETypesInMarketGroup = `-- name: ListSDETypesInMarketGroup :many
-SELECT type_id, name FROM sde_types
-WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
-ORDER BY name
-`
-
-type ListSDETypesInMarketGroupRow struct {
-	TypeID int64  `json:"type_id"`
-	Name   string `json:"name"`
-}
-
-func (q *Queries) ListSDETypesInMarketGroup(ctx context.Context, marketGroupID int64) ([]ListSDETypesInMarketGroupRow, error) {
-	rows, err := q.db.Query(ctx, listSDETypesInMarketGroup, marketGroupID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListSDETypesInMarketGroupRow
-	for rows.Next() {
-		var i ListSDETypesInMarketGroupRow
-		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSDETypesInMarketGroupPaged = `-- name: ListSDETypesInMarketGroupPaged :many
-SELECT type_id, name FROM sde_types
-WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
-ORDER BY name
-LIMIT $3::bigint OFFSET $2::bigint
-`
-
-type ListSDETypesInMarketGroupPagedParams struct {
-	MarketGroupID int64 `json:"market_group_id"`
-	RowOffset     int64 `json:"row_offset"`
-	RowLimit      int64 `json:"row_limit"`
-}
-
-type ListSDETypesInMarketGroupPagedRow struct {
-	TypeID int64  `json:"type_id"`
-	Name   string `json:"name"`
-}
-
-// One page of a market group's types: the market browse tab
-// pages big groups instead of pulling thousands of rows.
-func (q *Queries) ListSDETypesInMarketGroupPaged(ctx context.Context, arg ListSDETypesInMarketGroupPagedParams) ([]ListSDETypesInMarketGroupPagedRow, error) {
-	rows, err := q.db.Query(ctx, listSDETypesInMarketGroupPaged, arg.MarketGroupID, arg.RowOffset, arg.RowLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListSDETypesInMarketGroupPagedRow
-	for rows.Next() {
-		var i ListSDETypesInMarketGroupPagedRow
-		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -3320,33 +3087,6 @@ func (q *Queries) SearchSDETypesFiltered(ctx context.Context, arg SearchSDETypes
 			&i.CategoryID,
 			&i.CategoryName,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const searchTypeNames = `-- name: SearchTypeNames :many
-SELECT type_id, name FROM type_names
-WHERE name ILIKE $1
-ORDER BY name
-LIMIT 20
-`
-
-func (q *Queries) SearchTypeNames(ctx context.Context, name string) ([]TypeName, error) {
-	rows, err := q.db.Query(ctx, searchTypeNames, name)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []TypeName
-	for rows.Next() {
-		var i TypeName
-		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

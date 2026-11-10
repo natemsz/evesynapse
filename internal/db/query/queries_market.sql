@@ -19,7 +19,6 @@ ON CONFLICT (id) DO UPDATE SET
     fetched_at   = excluded.fetched_at,
     cached_until = excluded.cached_until;
 
-
 -- ---------------------------------------------------------------------
 -- Guide-price wants (schema 027): the durable note a
 -- kill view leaves when it has no prices to value with. One
@@ -1075,10 +1074,6 @@ ON CONFLICT (character_id, order_id) DO UPDATE SET
     volume_total       = excluded.volume_total,
     volume_remain_last = excluded.volume_remain_last,
     last_seen_at       = excluded.last_seen_at;
--- name: UpdateOrderLifecycleBeaten :exec
-UPDATE order_lifecycle
-SET beaten_now = $1, outbid_events = $2
-WHERE character_id = $3 AND order_id = $4 AND closed_at IS NULL;
 -- name: CloseOrderLifecycle :exec
 UPDATE order_lifecycle
 SET closed_at = sqlc.arg(closed_at)::timestamptz, close_kind = sqlc.arg(close_kind), beaten_now = 0
@@ -1126,9 +1121,6 @@ WHERE id IN (
 -- name: DeleteMarketBookOrdersByRegion :exec
 DELETE FROM market_book_orders
 WHERE region_id = $1;
--- name: InsertMarketBookOrder :exec
-INSERT INTO market_book_orders (region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 -- name: ListMarketBookOrders :many
 SELECT region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at
 FROM market_book_orders
@@ -1198,16 +1190,6 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
     buy_volume  = excluded.buy_volume,
     sell_volume = excluded.sell_volume,
     fetched_at  = excluded.fetched_at;
--- name: GetMarketTypePrice :one
-SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
-FROM market_type_prices
-WHERE region_id = $1 AND type_id = $2;
--- name: ListStaleMarketTypePrices :many
-SELECT region_id, type_id
-FROM market_type_prices
-WHERE fetched_at < now() - ($1::int * INTERVAL '1 second')
-ORDER BY fetched_at ASC
-LIMIT $2;
 -- name: ListMarketTypePricesForTypes :many
 SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
 FROM market_type_prices

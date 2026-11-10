@@ -19,8 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/scan"
 )
@@ -98,55 +96,6 @@ func seedWorkbenchScan(t *testing.T) (*Application, *db.Queries, db.GetScanRow) 
 		t.Fatal(err)
 	}
 	return app, q, row
-}
-
-func TestWorkbenchScanDoorBuilder(t *testing.T) {
-	app, _, row := seedWorkbenchScan(t)
-	v := app.buildWorkbenchScan(context.Background(), row)
-	if !v.FromScan || v.ScanID != "wbscan000009" {
-		t.Fatalf("view is not the scan door's: FromScan=%v ScanID=%q", v.FromScan, v.ScanID)
-	}
-	if v.SysName != "1DQ1-A" || !v.HasDScan || v.Hulls != 3 || v.PilotsN != 2 {
-		t.Errorf("view from the stored reading: SysName=%q HasDScan=%v Hulls=%d PilotsN=%d",
-			v.SysName, v.HasDScan, v.Hulls, v.PilotsN)
-	}
-	if len(v.Types) != 2 || v.Types[0].Name != "Sabre" {
-		t.Fatalf("types from the reading: %+v", v.Types)
-	}
-	var sabre *wbHullDrawer
-	for i := range v.HullDrawers {
-		if v.HullDrawers[i].TypeID == 22456 {
-			sabre = &v.HullDrawers[i]
-		}
-	}
-	if sabre == nil {
-		t.Fatal("no drawer for the Sabre")
-	}
-	if sabre.Slots != "5H / 4M / 6L / 3R" || sabre.Warp != "7.5 AU/s" {
-		t.Errorf("drawer from stored attributes: slots %q warp %q", sabre.Slots, sabre.Warp)
-	}
-	if len(sabre.Instances) != 2 || sabre.Instances[0].Dist != "850 m" {
-		t.Errorf("drawer instances from the paste: %+v", sabre.Instances)
-	}
-
-	// The handler renders the same page (mounted here only —
-	// the shipped router does not mount it).
-	r := chi.NewRouter()
-	r.Use(app.sessions.LoadAndSave)
-	r.Get("/intel/workbench/scan/{scanID}/", app.handleWorkbenchScan)
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/intel/workbench/scan/wbscan000009/", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("scan door handler: status %d, want 200", rec.Code)
-	}
-	if body := rec.Body.String(); !strings.Contains(body, "1DQ1-A") || !strings.Contains(body, "Sabre") {
-		t.Errorf("scan door handler: body missing the reading's contents")
-	}
-	rec = httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/intel/workbench/scan/nope00000000/", nil))
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("scan door handler, unknown scan: status %d, want 404", rec.Code)
-	}
 }
 
 // TestWorkbenchScanDoorDark pins the shipped state the owner

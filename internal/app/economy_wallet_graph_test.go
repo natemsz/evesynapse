@@ -211,19 +211,6 @@ func TestWalletGraphStatesAndFragment(t *testing.T) {
 	}
 }
 
-func TestNetWorthHistoryPoints(t *testing.T) {
-	rows := []db.WalletHistory{
-		{CharacterID: 1, Day: "2026-03-01", NetWorth: sql.NullFloat64{Float64: 100, Valid: true}},
-		{CharacterID: 2, Day: "2026-03-01", NetWorth: sql.NullFloat64{Float64: 50, Valid: true}},
-		{CharacterID: 1, Day: "2026-03-02", NetWorth: sql.NullFloat64{}}, // unknown: day stays off
-		{CharacterID: 1, Day: "2026-03-03", NetWorth: sql.NullFloat64{Float64: 400, Valid: true}},
-	}
-	points := balancechart.NetWorthHistoryPoints(rows)
-	if len(points) != 2 || points[0].Balance != 150 || points[1].Balance != 400 {
-		t.Fatalf("points = %+v, want [150 400] with the unknown day skipped", points)
-	}
-}
-
 // Home module: two sampled days chart; one day reads "building".
 func TestAttachNetWorthHistory(t *testing.T) {
 	transport := &countingTransport{}

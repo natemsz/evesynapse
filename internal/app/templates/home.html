@@ -242,13 +242,13 @@
   {{if .QuietNote}}<p><small>{{.QuietNote}}</small></p>{{end}}
   {{if .Lines}}
   <ul class="prodline-lines">
-  {{range $i, $r := .Lines}}<li{{if ge $i $cap}} data-wmore{{end}}><div class="prodline-line">{{if .Art}}<img class="prodline-art" src="{{.Art}}" data-fallback-src="{{.ArtFallback}}" alt="" width="40" height="40" loading="lazy">{{end}}<div class="prodline-main"><div class="prodline-top"><span class="prodline-prod">{{if .ProductTypeID}}{{itemLink .ProductTypeID .Product}}{{else}}{{.Product}}{{end}}</span> <span class="prodline-chip prodline-{{.State}}">{{.Chip}}</span></div>{{if .HasBar}}<div class="meter prodline-meter prodline-meter-{{.State}}"><span data-w="{{.BarPct}}"></span></div>{{end}}{{if .BarLabel}}<div class="prodline-barlabel">{{.BarLabel}}</div>{{end}}{{if .Runner}}<small class="prodline-runner">{{.Runner}}</small>{{end}}{{if .Missing}}<ul class="prodline-missing">{{range .Missing}}<li class="prodline-buyrow">{{if .Art}}<img class="prodline-buyart" src="{{.Art}}" data-fallback-src="{{.ArtFallback}}" alt="" width="24" height="24" loading="lazy">{{end}}<span class="prodline-buyname">{{.Name}}</span> <span class="prodline-qty">{{.Qty}}</span></li>{{end}}</ul>{{end}}</div></div></li>{{end}}
+  {{range $i, $r := .Lines}}<li{{if ge $i $cap}} data-wmore{{end}}><div class="prodline-line">{{if .Art}}<img class="prodline-art" src="{{.Art}}"{{if .ArtFallback}} data-fallback-src="{{.ArtFallback}}"{{end}} alt="" width="40" height="40" loading="lazy">{{end}}<div class="prodline-main"><div class="prodline-top"><span class="prodline-prod">{{if .ProductTypeID}}{{itemLink .ProductTypeID .Product}}{{else}}{{.Product}}{{end}}</span> <span class="prodline-chip prodline-{{.State}}">{{.Chip}}</span></div>{{if .HasBar}}<div class="meter prodline-meter prodline-meter-{{.State}}"><span data-w="{{.BarPct}}"></span></div>{{end}}{{if .BarLabel}}<div class="prodline-barlabel">{{.BarLabel}}</div>{{end}}{{if .Runner}}<small class="prodline-runner">{{.Runner}}</small>{{end}}{{if .Missing}}<ul class="prodline-missing">{{range .Missing}}<li class="prodline-buyrow">{{if .Art}}<img class="prodline-buyart" src="{{.Art}}" alt="" width="24" height="24" loading="lazy">{{end}}<span class="prodline-buyname">{{.Name}}</span> <span class="prodline-qty">{{.Qty}}</span></li>{{end}}</ul>{{end}}</div></div></li>{{end}}
   </ul>
   {{end}}
   {{if and .ShowBuy .Buy}}
   <h4>Buy for the next run</h4>
   <ul class="prodline-buy">
-  {{range .Buy}}<li class="prodline-buyrow">{{if .Art}}<img class="prodline-buyart" src="{{.Art}}" data-fallback-src="{{.ArtFallback}}" alt="" width="24" height="24" loading="lazy">{{end}}<span class="prodline-buyname">{{.Name}}</span> <span class="prodline-qty">{{.Qty}}</span></li>{{end}}
+  {{range .Buy}}<li class="prodline-buyrow">{{if .Art}}<img class="prodline-buyart" src="{{.Art}}" alt="" width="24" height="24" loading="lazy">{{end}}<span class="prodline-buyname">{{.Name}}</span> <span class="prodline-qty">{{.Qty}}</span></li>{{end}}
   </ul>
   <p><small>One run of each due or idle line, less what your characters already hold.</small></p>
   {{end}}

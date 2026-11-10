@@ -677,6 +677,25 @@ func TypeCategoryIconURL(typeID, categoryID int64, size int) string {
 	return fmt.Sprintf("https://images.evetech.net/types/%d/icon?size=%d", typeID, size)
 }
 
+// renderCategories are the SDE categories whose types have a 3D
+// model, and so a /render on the image server: ships, drones,
+// deployables, starbases, structures and fighters. Every other
+// type serves an icon only and answers 400 to /render.
+var renderCategories = map[int64]bool{6: true, 18: true, 22: true, 23: true, 65: true, 87: true}
+
+// TypeArtURLs is the large picture for a type whose SDE category
+// is known: the render for a type that has a model, with its icon
+// as the fallback the page swaps in should the render be missing;
+// for everything else the category's own icon (TypeCategoryIconURL)
+// and no fallback. A type of unknown category (0) asks for the icon.
+func TypeArtURLs(typeID, categoryID int64, size int) (src, fallback string) {
+	if renderCategories[categoryID] {
+		return fmt.Sprintf("https://images.evetech.net/types/%d/render?size=%d", typeID, size),
+			fmt.Sprintf("https://images.evetech.net/types/%d/icon?size=%d", typeID, size)
+	}
+	return TypeCategoryIconURL(typeID, categoryID, size), ""
+}
+
 // blueprintNote words a line's blueprint facts, "" for a plain
 // item line.
 func blueprintNote(it db.PubContractItem) string {

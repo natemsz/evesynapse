@@ -42,7 +42,6 @@ RETURNING at, type_id;
 SELECT job_id FROM ledger_jobs
 WHERE owner_kind = $1 AND owner_id = $2 AND job_id = ANY(sqlc.arg(job_ids)::bigint[]) AND blueprint_type_id > 0;
 
-
 -- name: GetUserProfitPrefs :one
 SELECT pooled, broker_in_margin, industry_region, industry_side, lp_isk_value FROM user_profit_prefs WHERE user_id = $1;
 
@@ -261,12 +260,6 @@ SELECT DISTINCT type_id FROM (
     WHERE m.pool_kind = sqlc.arg(pool_kind) AND m.pool_id = sqlc.arg(pool_id)
 ) x
 ORDER BY type_id;
-
--- name: ListSoldTypesSince :many
--- Types an owner sold from a moment on: their realized rows follow a
--- change of paired tax, so the item rollups refold from there.
-SELECT DISTINCT type_id FROM ledger_txns
-WHERE owner_kind = $1 AND owner_id = $2 AND NOT is_buy AND at >= sqlc.arg(since)::timestamptz;
 
 -- name: DeleteTradeRealizedForPool :exec
 -- A pool refolding from scratch: its own rows and any its members left

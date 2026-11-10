@@ -1371,13 +1371,6 @@ func fetchUpdate(ctx context.Context, source, dstPath string, display *downloadD
 	return out.Sync()
 }
 
-// verifyARMExecutable checks that path is an ELF program built
-// for 64-bit ARM. Kept for the explicit-address update form,
-// whose downloads are always the ARM build.
-func verifyARMExecutable(path string) error {
-	return verifyExecutableMachine(path, elfMachineAArch64)
-}
-
 // verifyExecutableMachine checks that path is an ELF program
 // built for the given machine kind — the one check that keeps a
 // wrong download (error page, build for another kind of

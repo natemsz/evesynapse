@@ -18,6 +18,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fit"
 	"evesynapse/internal/logging"
 	"github.com/jackc/pgx/v5"
 )
@@ -511,6 +512,7 @@ func (app *Application) importSDEFrom(ctx context.Context, ov *sdeArchive) error
 	// synchronizer) lands here, so this one hook covers them.
 	app.invalidateSearchIndexSDE()
 	app.invalidateSDETopology()
+	fit.ResetSkillDogma()
 	// The universe map is built from what just landed.
 	if err := app.rebuildUniverseMap(ctx); err != nil {
 		logging.Errorf("map: rebuild after import: %v", err)

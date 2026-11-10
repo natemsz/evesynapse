@@ -298,9 +298,10 @@ func TestFactorRegistrationAndAssertion(t *testing.T) {
 	}
 }
 
-// A pending session reaches only /auth/*: ordinary pages
-// bounce to the factor page (or to enrollment for a
-// must-enroll admin), and satisfying the factor unlocks them.
+// A pending session reaches only /auth/* on every route, gated
+// or not: pages bounce to the factor page (or to enrollment for
+// a must-enroll admin), other requests are refused, the session
+// is no administrator, and satisfying the factor unlocks it.
 func TestFactorPendingGate(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	userID := factorTestUser(t, q)
@@ -317,17 +318,32 @@ func TestFactorPendingGate(t *testing.T) {
 		app.sessions.Put(ctx, session2FAPending, true)
 		app.sessions.Put(ctx, session2FAPendingAt, time.Now().Unix())
 	})
-	if rr := serveFactor(t, app, &jar, app.requireAuth(final).ServeHTTP, get("/settings")); rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/auth/factor" {
+	if rr := serveFactor(t, app, &jar, app.holdPendingFactor(final).ServeHTTP, get("/settings")); rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/auth/factor" {
 		t.Fatalf("pending settings: status %d, location %q", rr.Code, rr.Header().Get("Location"))
 	}
-	if rr := serveFactor(t, app, &jar, app.requireAuth(final).ServeHTTP, get("/auth/factor")); rr.Code != http.StatusOK {
+	if rr := serveFactor(t, app, &jar, app.holdPendingFactor(final).ServeHTTP, get("/auth/factor")); rr.Code != http.StatusOK {
 		t.Fatalf("pending factor page: status %d", rr.Code)
 	}
-	if rr := serveFactor(t, app, &jar, app.requireAuth(final).ServeHTTP, get("/auth/eve")); rr.Code != http.StatusOK {
+	if rr := serveFactor(t, app, &jar, app.holdPendingFactor(final).ServeHTTP, get("/auth/eve")); rr.Code != http.StatusOK {
 		t.Fatalf("pending re-sign-in: status %d", rr.Code)
 	}
-	if rr := serveFactor(t, app, &jar, app.requireAuth(final).ServeHTTP, get("/auth/link")); rr.Code != http.StatusSeeOther {
+	if rr := serveFactor(t, app, &jar, app.holdPendingFactor(final).ServeHTTP, get("/auth/link")); rr.Code != http.StatusSeeOther {
 		t.Fatalf("pending chooser: status %d, want a bounce to the factor page", rr.Code)
+	}
+	post := httptest.NewRequest(http.MethodPost, "https://example.com/admin/accounts/remove", nil)
+	post.TLS = &tls.ConnectionState{}
+	if rr := serveFactor(t, app, &jar, app.holdPendingFactor(final).ServeHTTP, post); rr.Code != http.StatusForbidden {
+		t.Fatalf("pending post: status %d, want 403", rr.Code)
+	}
+	app.cfg.adminCharIDs = map[int64]bool{90000001: true}
+	if _, err := app.linkVerifiedCharacter(context.Background(), linkCharacterInput{
+		UserID: userID, CharacterID: 90000001, Name: "Factor Pilot", OwnerHash: "owner-factor",
+		AccessToken: "fixture", RefreshToken: "fixture",
+	}); err != nil {
+		t.Fatalf("link admin character: %v", err)
+	}
+	if rr := serveFactor(t, app, &jar, app.requireAdmin(final).ServeHTTP, get("/admin/")); rr.Code != http.StatusForbidden {
+		t.Fatalf("pending admin: status %d, want 403", rr.Code)
 	}
 
 	var enrollJar factorJar
@@ -336,14 +352,14 @@ func TestFactorPendingGate(t *testing.T) {
 		app.sessions.Put(ctx, session2FAMustEnroll, true)
 		app.sessions.Put(ctx, session2FAPendingAt, time.Now().Unix())
 	})
-	if rr := serveFactor(t, app, &enrollJar, app.requireAuth(final).ServeHTTP, get("/")); rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/auth/enroll" {
+	if rr := serveFactor(t, app, &enrollJar, app.holdPendingFactor(final).ServeHTTP, get("/")); rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/auth/enroll" {
 		t.Fatalf("must-enroll home: status %d, location %q", rr.Code, rr.Header().Get("Location"))
 	}
 
 	serveFactor(t, app, &jar, func(w http.ResponseWriter, r *http.Request) {
 		app.satisfyFactor(r.Context())
 	}, get("/auth/factor"))
-	if rr := serveFactor(t, app, &jar, app.requireAuth(final).ServeHTTP, get("/settings")); rr.Code != http.StatusOK {
+	if rr := serveFactor(t, app, &jar, app.holdPendingFactor(final).ServeHTTP, get("/settings")); rr.Code != http.StatusOK {
 		t.Fatalf("satisfied settings: status %d", rr.Code)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	json "github.com/goccy/go-json"
 	"math/big"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -286,7 +287,7 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 			// request with no choice in it at all.
 			target := "/auth/link?submitted=1"
 			if cid := r.URL.Query().Get("character"); cid != "" {
-				target += "&character=" + cid
+				target += "&character=" + url.QueryEscape(cid)
 			}
 			http.Redirect(w, r, target, http.StatusFound)
 			return

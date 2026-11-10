@@ -135,7 +135,9 @@ func clientAddr(r *http.Request) string {
 func (app *Application) throttleAnon(t *anonThrottle) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if app.sessions.GetBool(r.Context(), sessionAuthenticated) {
+			// The shared demo account is open to anyone, so its
+			// sessions spend from the address's bucket too.
+			if app.sessions.GetBool(r.Context(), sessionAuthenticated) && !app.sessionIsDemo(r.Context()) {
 				next.ServeHTTP(w, r)
 				return
 			}

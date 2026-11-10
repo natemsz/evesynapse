@@ -317,6 +317,10 @@ func (app *Application) hasVerifiedSession(r *http.Request) bool {
 		return false
 	}
 	authed, _ := values[sessionAuthenticated].(bool)
+	if userID, _ := values[sessionUserID].(int); authed && app.isDemoUser(r.Context(), int64(userID)) {
+		// Anyone can open a demo session: it proves no account.
+		return false
+	}
 	return authed
 }
 

@@ -1,8 +1,8 @@
 package app
 
 // Region stats platform tests: the whole-region sweep
-// (aggregation from paged fixtures, incremental page budget,
-// cadence gate, vanished-type cleanup, daily upsert), and the
+// (aggregation from paged fixtures, cadence gate, writes of only
+// the changed items, vanished-type cleanup, daily upsert), and the
 // item page regions ribbon proven to render from stored rows
 // with zero outbound calls.
 
@@ -87,32 +87,19 @@ func markRegionFresh(t *testing.T, q *db.Queries, regionID int64) {
 	}
 }
 
-// sweepUntilIdle drives sweepRegionStats until no region has a
-// sweep in progress. Sweep progress lives in market_sweep_state
-// now (schema 034), so idleness is a database question, not a
-// memory one. A region that lost a page is in backoff for
-// minutes; the driver fast-forwards that wait (the backoff hold
-// itself is pinned by its own tests).
+// sweepUntilIdle runs one sweep pass with every region's failure
+// backoff cleared (the backoff hold itself is pinned by its own
+// tests): a pass reads each due region's whole book and stores it.
 func sweepUntilIdle(t *testing.T, app *Application) {
 	t.Helper()
-	for i := 0; i < 10; i++ {
-		app.sweepPaceMu.Lock()
-		for _, pace := range app.sweepPace {
-			pace.nextAttempt = time.Time{}
-		}
-		app.sweepPaceMu.Unlock()
-		if _, limited := app.sweepRegionStats(context.Background(), &fetchBudget{left: 1000}); limited {
-			t.Fatal("sweep hit the error limit on a healthy stub")
-		}
-		var open int
-		if err := app.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM market_sweep_state`).Scan(&open); err != nil {
-			t.Fatalf("count in-progress sweeps: %v", err)
-		}
-		if open == 0 {
-			return
-		}
+	app.sweepPaceMu.Lock()
+	for _, pace := range app.sweepPace {
+		pace.nextAttempt = time.Time{}
 	}
-	t.Fatal("sweep never completed")
+	app.sweepPaceMu.Unlock()
+	if _, limited := app.sweepRegionStats(context.Background(), &fetchBudget{left: 1000}); limited {
+		t.Fatal("sweep hit the error limit on a healthy stub")
+	}
 }
 
 func TestRegionSweepStoresStatsAndCleansVanished(t *testing.T) {
@@ -137,10 +124,20 @@ func TestRegionSweepStoresStatsAndCleansVanished(t *testing.T) {
 			{OrderID: 5, TypeID: 34, IsBuyOrder: false, Price: 7.0, VolumeRemain: 300},
 			{OrderID: 6, TypeID: 35, IsBuyOrder: false, Price: 100.0, VolumeRemain: 10},
 			{OrderID: 7, TypeID: 35, IsBuyOrder: true, Price: 90.0, VolumeRemain: 5},
+			{OrderID: 9, TypeID: 36, IsBuyOrder: false, Price: 40.0, VolumeRemain: 3},
 		},
 	}
 
 	sweepUntilIdle(t, app)
+	stamp36 := func() time.Time {
+		t.Helper()
+		var at time.Time
+		if err := conn.QueryRow(`SELECT updated_at FROM market_region_stats WHERE region_id = 10000002 AND type_id = 36`).Scan(&at); err != nil {
+			t.Fatalf("read type 36 stats: %v", err)
+		}
+		return at
+	}
+	first36 := stamp36()
 
 	rows, err := q.ListMarketRegionStatsByType(ctx, 34)
 	if err != nil || len(rows) != 1 {
@@ -185,11 +182,13 @@ func TestRegionSweepStoresStatsAndCleansVanished(t *testing.T) {
 			stored, limited, callsBefore, transport.calls.Load())
 	}
 
-	// Type 35 vanishes from the book; a re-sweep (gate aged past)
-	// drops its live row and still upserts just one daily row.
+	// Type 35 vanishes from the book and type 34 changes; a re-sweep
+	// (gate aged past) drops 35's live row, rewrites 34 (still one
+	// daily row), and leaves unchanged 36 as it was.
 	transport.books[10000002] = [][]esi.MarketOrder{
 		{
 			{OrderID: 8, TypeID: 34, IsBuyOrder: false, Price: 6.5, VolumeRemain: 10},
+			{OrderID: 9, TypeID: 36, IsBuyOrder: false, Price: 40.0, VolumeRemain: 3},
 		},
 	}
 	if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
@@ -218,87 +217,12 @@ func TestRegionSweepStoresStatsAndCleansVanished(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].TypicalSell != 6.5 {
 		t.Fatalf("live stats after re-sweep: %+v err=%v, want typical sell 6.5", rows, err)
 	}
-}
-
-func TestRegionSweepIncrementalPageBudget(t *testing.T) {
-	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
-	app, conn, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-
-	// Aim the sweep at Domain with a book ten pages past what one
-	// cycle may read: every other swept region (the global market
-	// included) is settled fresh.
-	for _, region := range sweptRegions {
-		if region.ID != 10000043 {
-			markRegionFresh(t, q, region.ID)
-		}
-	}
-	n := maxRegionSweepPagesPerCycle + 10
-	pages := make([][]esi.MarketOrder, n)
-	for i := range pages {
-		pages[i] = []esi.MarketOrder{
-			{OrderID: int64(1000 + i), TypeID: 34, IsBuyOrder: false, Price: float64(10 + i), VolumeRemain: 1},
-		}
-	}
-	transport.books[10000043] = pages
-
-	stored, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 4 * n})
-	if limited {
-		t.Fatal("sweep reported the error limit on a healthy stub")
-	}
-	if stored != maxRegionSweepPagesPerCycle {
-		t.Fatalf("first cycle read %d pages, want the %d-page budget", stored, maxRegionSweepPagesPerCycle)
-	}
-	var live int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_region_stats WHERE region_id = 10000043`).Scan(&live); err != nil {
-		t.Fatalf("count live stats: %v", err)
-	}
-	if live != 0 {
-		t.Fatalf("partial sweep stored %d stats rows, want 0 (writes land only on completion)", live)
-	}
-	// Progress lives on disk: the cursor sits one past the cap with
-	// the first cycle's pages staged behind it.
-	var nextPage int64
-	if err := conn.QueryRow(`SELECT next_page FROM market_sweep_state WHERE region_id = 10000043`).Scan(&nextPage); err != nil {
-		t.Fatalf("read sweep cursor: %v", err)
-	}
-	if nextPage != int64(maxRegionSweepPagesPerCycle+1) {
-		t.Fatalf("sweep cursor at page %d, want %d", nextPage, maxRegionSweepPagesPerCycle+1)
-	}
-	var staged int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_orders WHERE region_id = 10000043`).Scan(&staged); err != nil {
-		t.Fatalf("count staged orders: %v", err)
-	}
-	if staged != maxRegionSweepPagesPerCycle {
-		t.Fatalf("staged orders after one cycle: %d, want %d (one per page)", staged, maxRegionSweepPagesPerCycle)
-	}
-
-	sweepUntilIdle(t, app)
-	rows, err := q.ListMarketRegionStatsByType(ctx, 34)
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("stats after full sweep: rows=%d err=%v, want 1", len(rows), err)
-	}
-	// Prices run 10 .. 10+n-1, one order a page: the middle is 10 + (n-1)/2.
-	if wantTypical := 10 + float64(n-1)/2; rows[0].SellOrders != int64(n) || rows[0].TypicalSell != wantTypical {
-		t.Fatalf("%d-page book: %d sell orders, typical %v, want %d / %v", n, rows[0].SellOrders, rows[0].TypicalSell, n, wantTypical)
-	}
-	// Completion cleared the staging and the cursor.
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_orders WHERE region_id = 10000043`).Scan(&staged); err != nil {
-		t.Fatalf("count staged orders after completion: %v", err)
-	}
-	if staged != 0 {
-		t.Fatalf("staged orders after completion: %d, want 0", staged)
-	}
-	var stateRows int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_state WHERE region_id = 10000043`).Scan(&stateRows); err != nil {
-		t.Fatalf("count sweep state after completion: %v", err)
-	}
-	if stateRows != 0 {
-		t.Fatalf("sweep state rows after completion: %d, want 0", stateRows)
+	if again := stamp36(); !again.Equal(first36) {
+		t.Errorf("unchanged type 36 was rewritten (updated_at %v -> %v), want it left as it was", first36, again)
 	}
 }
 
-func TestRegionSweepErrorLimitKeepsProgress(t *testing.T) {
+func TestRegionSweepErrorLimitStoresNothing(t *testing.T) {
 	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}, failWith: 420}
 	app, conn, q := buildCorpTestApp(t, transport)
 	for _, region := range marketRegions {
@@ -321,18 +245,7 @@ func TestRegionSweepErrorLimitKeepsProgress(t *testing.T) {
 	if live != 0 {
 		t.Fatalf("error-limited sweep stored %d rows, want 0", live)
 	}
-	// The sweep itself is not lost: its cursor waits on disk at
-	// page 1, so recovery resumes this sweep instead of starting
-	// over.
-	var open int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_state WHERE region_id = 10000002`).Scan(&open); err != nil {
-		t.Fatalf("count sweep state: %v", err)
-	}
-	if open != 1 {
-		t.Fatalf("error-limited sweep left %d sweep state rows, want 1 (the resumable cursor)", open)
-	}
-
-	// ESI recovers: the same sweep finishes and stores.
+	// ESI recovers: the next pass reads the book again and stores.
 	transport.failWith = 0
 	sweepUntilIdle(t, app)
 	rows, err := q.ListMarketRegionStatsByType(context.Background(), 34)
@@ -509,9 +422,9 @@ func TestRegionSweepStoresAvgDailyVolume(t *testing.T) {
 // is due again -- under the old hourly gate it was not -- and
 // one 15 minutes old is not. The constant itself is pinned so
 // a silent drift back fails here first.
-func TestRegionSweepGateIsThirtyMinutes(t *testing.T) {
-	if regionSweepGate != 30*time.Minute {
-		t.Fatalf("regionSweepGate = %v, want 30m", regionSweepGate)
+func TestRegionSweepWaitsForTheGateAndTheWindowRollover(t *testing.T) {
+	if regionSweepGate != 10*time.Minute {
+		t.Fatalf("regionSweepGate = %v, want 10m", regionSweepGate)
 	}
 
 	transport := &pagedBookTransport{books: map[int64][][]esi.MarketOrder{}}
@@ -526,6 +439,20 @@ func TestRegionSweepGateIsThirtyMinutes(t *testing.T) {
 			t.Fatalf("stamp Forge sweep record: %v", err)
 		}
 	}
+	window := func(expiredAgo time.Duration) {
+		exp := time.Now().Add(-expiredAgo)
+		app.hubBooksMu.Lock()
+		app.hubWindows = map[int64]esiWindow{10000002: {lastModified: exp.Add(-5 * time.Minute), expires: exp}}
+		app.hubBooksMu.Unlock()
+	}
+	sweep := func() []int64 {
+		t.Helper()
+		transport.drainRequests()
+		if _, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 1000}); limited {
+			t.Fatal("sweep hit the error limit on a healthy stub")
+		}
+		return transport.pagesFor(10000002)
+	}
 
 	// Every other hub is fresh; only The Forge's age is in play.
 	for _, region := range marketRegions {
@@ -537,23 +464,21 @@ func TestRegionSweepGateIsThirtyMinutes(t *testing.T) {
 		{{OrderID: 1, TypeID: 34, IsBuyOrder: false, Price: 5.0, VolumeRemain: 100}},
 	}
 
-	// 15 minutes old: inside the gate, nothing is fetched.
-	stamp(time.Now().UTC().Add(-15 * time.Minute))
-	if _, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 1000}); limited {
-		t.Fatal("sweep hit the error limit on a healthy stub")
+	// 5 minutes old: inside the gate, nothing is fetched.
+	stamp(time.Now().UTC().Add(-5 * time.Minute))
+	if pages := sweep(); len(pages) != 0 {
+		t.Fatalf("5-minute-old stats were re-swept: fetched pages %v", pages)
 	}
-	if pages := transport.pagesFor(10000002); len(pages) != 0 {
-		t.Fatalf("15-minute-old stats were re-swept: fetched pages %v", pages)
+	// Past the gate but in the middle of ESI's window: it waits.
+	stamp(time.Now().UTC().Add(-12 * time.Minute))
+	window(2*time.Minute + 30*time.Second)
+	if pages := sweep(); len(pages) != 0 {
+		t.Fatalf("a sweep started mid-window: fetched pages %v", pages)
 	}
-
-	// 45 minutes old: past the 30-minute gate (under the old
-	// hourly gate this still waited), the sweep runs.
-	stamp(time.Now().UTC().Add(-45 * time.Minute))
-	if _, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 1000}); limited {
-		t.Fatal("sweep hit the error limit on a healthy stub")
-	}
-	if pages := transport.pagesFor(10000002); len(pages) == 0 {
-		t.Fatal("45-minute-old stats were not re-swept under the 30-minute gate")
+	// Just after the window rolled over: the sweep runs.
+	window(10 * time.Second)
+	if pages := sweep(); len(pages) == 0 {
+		t.Fatal("a due region was not swept just after the window rollover")
 	}
 }
 
@@ -666,10 +591,10 @@ func TestAttachRegionStatsGlobalMarketFill(t *testing.T) {
 	}
 }
 
-// Pages are read a window at a time but staged in order: a page that
-// fails stops the cursor at it, the pages before it stay staged, and
-// the next pass resumes there and completes the whole book.
-func TestRegionSweepWindowStopsAtFailedPage(t *testing.T) {
+// A page that goes missing mid-read means ESI's book changed under
+// the read: nothing is stored, and the next pass reads the whole
+// book again and stores every item.
+func TestRegionSweepRereadsAfterAMissingPage(t *testing.T) {
 	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -685,23 +610,23 @@ func TestRegionSweepWindowStopsAtFailedPage(t *testing.T) {
 	transport.books[10000002] = book
 	transport.failOnce.Store(5)
 
+	count := func() int {
+		t.Helper()
+		var types int
+		if err := app.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM market_region_stats WHERE region_id = 10000002`).Scan(&types); err != nil {
+			t.Fatal(err)
+		}
+		return types
+	}
 	if _, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 1000}); limited {
 		t.Fatal("limited on a 404")
 	}
-	state, err := q.GetMarketSweepState(ctx, 10000002)
-	if err != nil {
-		t.Fatalf("sweep state after the failed page: %v", err)
-	}
-	if state.NextPage != 5 {
-		t.Fatalf("cursor at page %d, want 5 (stopped at the failed page)", state.NextPage)
+	if n := count(); n != 0 {
+		t.Fatalf("a read with a missing page stored %d types, want 0", n)
 	}
 	sweepUntilIdle(t, app)
-	var types int
-	if err := app.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM market_region_stats WHERE region_id = 10000002`).Scan(&types); err != nil {
-		t.Fatal(err)
-	}
-	if types != 10 {
-		t.Fatalf("stored %d types, want all 10 pages' types", types)
+	if n := count(); n != 10 {
+		t.Fatalf("stored %d types, want all 10 pages' types", n)
 	}
 }
 
@@ -1013,42 +938,5 @@ func TestRegionSweepWindowDropsAndRecovers(t *testing.T) {
 	app.noteSweepWindowClean(10000002)
 	if got := app.sweepWindow(10000002); got != sweepPageWindow {
 		t.Fatalf("window grew past the full window: %d, want %d", got, sweepPageWindow)
-	}
-
-	// The same drop happens on the real sweep path: a book whose
-	// fifth page fails once leaves the region on a one-page
-	// window, and the resumed sweep climbs back above it.
-	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
-	live, _, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-	for _, region := range marketRegions {
-		if region.ID != 10000002 {
-			markRegionFresh(t, q, region.ID)
-		}
-	}
-	var book [][]esi.MarketOrder
-	for i := int64(0); i < 10; i++ {
-		book = append(book, []esi.MarketOrder{{OrderID: 1 + i, TypeID: 1000 + i, Price: 5, VolumeRemain: 1, LocationID: 60003760, SystemID: 30000142}})
-	}
-	transport.books[10000002] = book
-	transport.failOnce.Store(5)
-
-	if _, limited := live.sweepRegionStats(ctx, &fetchBudget{left: 1000}); limited {
-		t.Fatal("limited on a 404")
-	}
-	if got := live.sweepWindow(10000002); got != 1 {
-		t.Fatalf("window after the failed page = %d, want 1", got)
-	}
-	expireSweepBackoff(live, 10000002)
-	sweepUntilIdle(t, live)
-	if got := live.sweepWindow(10000002); got <= 1 || got > sweepPageWindow {
-		t.Fatalf("window after the clean resume = %d, want between 2 and %d", got, sweepPageWindow)
-	}
-	var types int
-	if err := live.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM market_region_stats WHERE region_id = 10000002`).Scan(&types); err != nil {
-		t.Fatal(err)
-	}
-	if types != 10 {
-		t.Fatalf("stored %d types, want all 10 pages' types", types)
 	}
 }

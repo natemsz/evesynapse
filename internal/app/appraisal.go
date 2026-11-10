@@ -74,11 +74,6 @@ const appraisalBatchPerCycle = 400
 // due for the next cycle instead of stretching this one.
 const appraisalBudgetPerCycle = 20 * time.Second
 
-// appraisalSweepDeferAbove is the region sweep length after
-// which the appraisal pass sits the cycle out: the two
-// heaviest passes never stack in one cycle.
-const appraisalSweepDeferAbove = 30 * time.Second
-
 // copyMedianMinSample is the thinnest corpus slice a stored
 // copy median may stand on -- the abyssal corpus's bucket
 // minimum, kept here too: below it a median is an anecdote,

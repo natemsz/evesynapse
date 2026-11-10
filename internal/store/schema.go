@@ -836,6 +836,12 @@ var pgTrainedBannerDismissalsSchema string
 //go:embed schema_pg/136_place_stats_source_etag.sql
 var pgPlaceStatsSourceEtagSchema string
 
+// Step 137: the region sweep stores from memory, so its disk
+// staging tables go.
+//
+//go:embed schema_pg/137_drop_market_sweep_staging.sql
+var pgDropMarketSweepStagingSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1000,6 +1006,7 @@ func schemaSteps() []schemaStep {
 		{134, "kill_entity_feed_kill_idx", pgKillEntityFeedKillIdxSchema, ""},
 		{135, "trained_banner_dismissals", pgTrainedBannerDismissalsSchema, ""},
 		{136, "place_stats_source_etag", pgPlaceStatsSourceEtagSchema, ""},
+		{137, "drop_market_sweep_staging", pgDropMarketSweepStagingSchema, ""},
 	}
 }
 

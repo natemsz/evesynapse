@@ -179,7 +179,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(8)
+	children.Add(10)
 
 	// The public killmail stream (killfeed.go) is its own paced
 	// loop: one file every 100 ms while kills arrive, six seconds
@@ -246,6 +246,18 @@ func (app *Application) runWorker(ctx context.Context) {
 	go func() {
 		defer children.Done()
 		runGuarded("server status refresh", func() { app.runServerStatusRefresh(ctx) })
+	}()
+
+	// The public sweep lanes (market_lanes.go): hub order books and
+	// public contracts, each on ESI's own cache windows and off the
+	// cycle, so a long sweep never holds the cycle behind it.
+	go func() {
+		defer children.Done()
+		app.runMarketLane(ctx)
+	}()
+	go func() {
+		defer children.Done()
+		app.runContractLane(ctx)
 	}()
 	defer func() {
 		children.Wait()
@@ -805,20 +817,15 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 
 	// Market pass: price-history warming for
 	// watchlists/wants/order types, and per-order health from
-	// regional books. Public data, spending from its own lane
-	// (one market allowance shared by both steps). The clock
-	// marks the steps apart -- history and books, then the
-	// region sweep -- so the public-data block's time shows
-	// its split on the Sync page instead of one figure.
+	// regional books. Public data, spending from its own
+	// allowance. The region sweep and the public contract
+	// sweeps run on lanes of their own (runMarketLane,
+	// runContractLane), so a long sweep never holds this cycle.
 	marketAllowance := &fetchBudget{left: maxMarketFetchesPerCycle}
 	c.pass("refreshing market data", func() (int, bool) {
 		return app.refreshMarketWarm(ctx, characters, marketAllowance)
 	})
 	clock.mark("market data", time.Now())
-	c.pass("sweeping region stats", func() (int, bool) {
-		return app.sweepRegionStats(ctx, marketAllowance)
-	})
-	clock.mark("region sweep", time.Now())
 
 	// LP stores (schema 102): the NPC loyalty stores on a daily
 	// gate and a fetch lane of their own; their offer values are
@@ -827,17 +834,6 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	c.pass("refreshing LP stores", func() (int, bool) {
 		return app.refreshLPStores(ctx)
 	})
-
-	// Public contracts (schema 055): the region list sweeps and
-	// their item/bid/probe warming, on the routes' own cache
-	// cadence and a fetch lane of their own, so the contract
-	// corpus is as fresh as ESI allows without ever bidding
-	// against the market pass for fetches.
-	contractAllowance := &fetchBudget{left: pubContractFetchesPerCycle}
-	c.pass("refreshing public contracts", func() (int, bool) {
-		return app.refreshPublicContracts(ctx, contractAllowance)
-	})
-	clock.mark("public contracts", time.Now())
 
 	// Abyssal scoring (schema 057): rolls become scores and
 	// stored estimates, so the appraisal pass below can
@@ -867,14 +863,10 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	// Contract appraisal (schema 056): prices the due slice of
 	// stored contract lines from stored pricing inputs alone
 	// (appraisal.go), so the search pages only ever read
-	// finished numbers. The pass runs on a wall-clock budget,
-	// and after a long region sweep it sits the cycle out, so
-	// the two heaviest passes never stack in one cycle.
-	if clock.took("region sweep") <= appraisalSweepDeferAbove {
-		c.pass("appraising public contracts", func() (int, bool) {
-			return app.appraisePublicContractsWithin(ctx, appraisalBudgetPerCycle), false
-		})
-	}
+	// finished numbers. The pass runs on a wall-clock budget.
+	c.pass("appraising public contracts", func() (int, bool) {
+		return app.appraisePublicContractsWithin(ctx, appraisalBudgetPerCycle), false
+	})
 	clock.mark("contract appraisal", time.Now())
 
 	// Module jobs that follow the market pass (Trade Ideas' model

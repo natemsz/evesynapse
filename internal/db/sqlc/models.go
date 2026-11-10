@@ -1582,24 +1582,6 @@ type MarketStatsFallbackMetum struct {
 	RowCount   int64        `json:"row_count"`
 }
 
-type MarketSweepOrder struct {
-	RegionID     int64   `json:"region_id"`
-	TypeID       int64   `json:"type_id"`
-	IsBuyOrder   int64   `json:"is_buy_order"`
-	Price        float64 `json:"price"`
-	VolumeRemain int64   `json:"volume_remain"`
-	LocationID   int64   `json:"location_id"`
-	SystemID     int64   `json:"system_id"`
-}
-
-type MarketSweepState struct {
-	RegionID   int64     `json:"region_id"`
-	NextPage   int64     `json:"next_page"`
-	PagesTotal int64     `json:"pages_total"`
-	StartedAt  time.Time `json:"started_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
-}
-
 type MarketTypePrice struct {
 	RegionID   int64     `json:"region_id"`
 	TypeID     int64     `json:"type_id"`

@@ -83,9 +83,13 @@ func (c *bookCache) put(key marketKey, e bookEntry) {
 const maxOrderPages = 20
 
 // fetchOrderBook reads one region's orders for a type, following
-// X-Pages up to maxOrderPages. Split into sides, unsorted. A book
-// fetched in the last bookCacheTTL is served from memory.
+// X-Pages up to maxOrderPages. Split into sides, unsorted. A swept
+// hub's book comes from the held hub book (market_hub_book.go), and
+// a book fetched in the last bookCacheTTL is served from memory.
 func (app *Application) fetchOrderBook(ctx context.Context, regionID, typeID int64) (sells, buys []esi.MarketOrder, truncated bool, err error) {
+	if s, b, _, ok := app.hubOrderBook(regionID, typeID); ok {
+		return s, b, false, nil // a swept hub: the held book is ESI's latest answer
+	}
 	key := marketKey{RegionID: regionID, TypeID: typeID}
 	if held, ok := app.books.get(key, time.Now()); ok {
 		return append([]esi.MarketOrder(nil), held.sells...), append([]esi.MarketOrder(nil), held.buys...), held.truncated, nil
@@ -94,11 +98,15 @@ func (app *Application) fetchOrderBook(ctx context.Context, regionID, typeID int
 }
 
 // fetchOrderBookFresh reads the book from ESI even when the memory
-// cache still holds it. The order-health pass uses this: its own
+// cache still holds it (a swept hub still answers from its held
+// hub book, which is as fresh as the sweep gate). The order-health pass uses this: its own
 // market_fetch_state gate already decided a re-read is due, and the
 // memory cache must not shadow that decision. What it fetches is
 // still stored, so pages keep serving it warm.
 func (app *Application) fetchOrderBookFresh(ctx context.Context, key marketKey, regionID, typeID int64) (sells, buys []esi.MarketOrder, truncated bool, err error) {
+	if s, b, _, ok := app.hubOrderBook(regionID, typeID); ok {
+		return s, b, false, nil // the sweep read this book within its gate
+	}
 	bookPages := 0
 	defer func() {
 		if err == nil {

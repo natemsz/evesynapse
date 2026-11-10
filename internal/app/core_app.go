@@ -229,6 +229,18 @@ type Application struct {
 	sweepPaceMu sync.Mutex
 	sweepPace   map[int64]*sweepRegionPace
 
+	// hubBooksMu guards hubBooks, each swept region's whole order
+	// book from its last sweep (market_hub_book.go), and
+	// hubWindows, ESI's cache window on each region's last page 1.
+	hubBooksMu sync.RWMutex
+	hubBooks   map[int64]*hubBook
+	hubWindows map[int64]esiWindow
+
+	// esiExpires holds, per fetch kind, the Expires ESI gave the
+	// last answer (string -> time.Time), for the passes that wait
+	// out ESI's own cache window instead of a fixed gate.
+	esiExpires sync.Map
+
 	// globalRetryAt holds, per global snapshot kind, when a failed
 	// refresh may be tried again (string -> time.Time), so a route
 	// that keeps failing is asked once per marketFetchErrorGate

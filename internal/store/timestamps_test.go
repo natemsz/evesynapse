@@ -87,8 +87,6 @@ var marketTimeColumns = []timeColumn{
 	{"order_lifecycle", "closed_at", true},
 	{"market_region_stats", "updated_at", false},
 	{"market_station_stats", "updated_at", false},
-	{"market_sweep_state", "started_at", false},
-	{"market_sweep_state", "updated_at", false},
 	{"market_station_leaderboard", "updated_at", false},
 }
 
@@ -358,8 +356,6 @@ func TestSchemaMarketTimestampStepKeepsStoredTimes(t *testing.T) {
 		`INSERT INTO market_region_stats (region_id, type_id, updated_at) VALUES
 		   (10000002, 34, '2026-10-01T12:30:00Z'),
 		   (10000002, 35, '2026-10-01T12:45:00Z')`,
-		`INSERT INTO market_sweep_state (region_id, started_at, updated_at) VALUES
-		   (10000002, '2026-10-01T12:00:00Z', '2026-10-01T12:10:00Z')`,
 	} {
 		if _, err := old.ExecContext(ctx, stmt); err != nil {
 			t.Fatalf("seed the old schema: %v\n%s", err, stmt)

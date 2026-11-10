@@ -331,7 +331,7 @@ jobs:
         if: steps.decide.outputs.publish == 'true'
         run: cp release-notes.md dist/release-notes.md
       - name: Keep the built files for the follow-on jobs
-        if: steps.decide.outputs.publish == 'true'
+        if: always() && steps.decide.outputs.publish == 'true'
         uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: dist

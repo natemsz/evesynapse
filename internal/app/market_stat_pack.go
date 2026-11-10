@@ -322,12 +322,26 @@ func (app *Application) refreshStatPackTypes(ctx context.Context, regionID int64
 		}
 	}
 
+	if !app.patchStatPackTypes(regionID, changed, gone, rRows, stations) {
+		return // no snapshot yet: the first build reads the stored rows whole
+	}
+	// As after a full region refresh: fan the written rows out to the
+	// live market streams, after the unlock.
+	for _, r := range rRows {
+		app.publishMarketStatRow(r)
+	}
+}
+
+// patchStatPackTypes applies refreshStatPackTypes' rows to the
+// resident snapshot under its lock, reporting false when no snapshot
+// has landed yet.
+func (app *Application) patchStatPackTypes(regionID int64, changed, gone []int64, rRows []db.MarketRegionStat, stations []db.MarketStationStat) bool {
 	idx := &app.statPackIdx
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	snap := idx.snap
 	if snap == nil {
-		return // the first build reads the stored rows whole
+		return false
 	}
 	touched := make(map[int64]bool, len(changed)+len(gone))
 	for _, t := range changed {
@@ -364,6 +378,7 @@ func (app *Application) refreshStatPackTypes(ctx context.Context, regionID int64
 	for _, s := range stations {
 		snap.stationStats[stationKey{LocationID: s.LocationID, TypeID: s.TypeID}] = s
 	}
+	return true
 }
 
 // statPack is one type's canonical market figures in one region.

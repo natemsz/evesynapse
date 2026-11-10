@@ -31,7 +31,7 @@ type pagedBookTransport struct {
 	books       map[int64][][]esi.MarketOrder
 	failPages   map[[2]int64]int    // (region, page) -> status answered instead of the book
 	modified    map[[2]int64]string // (region, page) -> Last-Modified answered, when set
-	delay       time.Duration    // artificial latency per request
+	delay       time.Duration       // artificial latency per request
 	requests    [][2]int64
 	inFlight    atomic.Int64
 	maxInFlight atomic.Int64
@@ -113,21 +113,6 @@ func (s *pagedBookTransport) drainRequests() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.requests = nil
-}
-
-func (s *pagedBookTransport) failPage(regionID, page int64, status int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.failPages == nil {
-		s.failPages = map[[2]int64]int{}
-	}
-	s.failPages[[2]int64{regionID, page}] = status
-}
-
-func (s *pagedBookTransport) clearFailures() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.failPages = nil
 }
 
 func TestSweepConcurrentRegionsBothComplete(t *testing.T) {

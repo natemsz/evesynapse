@@ -60,16 +60,6 @@ func shrinkingBook(pages int) [][]esi.MarketOrder {
 	return book
 }
 
-func sweepFetchState(t *testing.T, app *Application) string {
-	t.Helper()
-	var state string
-	if err := app.db.QueryRowContext(context.Background(),
-		`SELECT state FROM market_fetch_state WHERE kind = $1`, regionSweepKind(10000002)).Scan(&state); err != nil {
-		t.Fatalf("read sweep fetch state: %v", err)
-	}
-	return state
-}
-
 // liveStats counts The Forge's stored stats rows.
 func liveStats(t *testing.T, app *Application) int {
 	t.Helper()

@@ -160,7 +160,18 @@ func (app *Application) sweepRegion(ctx context.Context, regionID int64, allowan
 	if !allowance.take() {
 		return out
 	}
-	first, total, header, err := app.fetchRegionBookPage(ctx, regionID, 1)
+	var (
+		first  []esi.MarketOrder
+		total  int
+		header http.Header
+		err    error
+	)
+	for attempt := 0; attempt < sweepPageAttempts; attempt++ {
+		first, total, header, err = app.fetchRegionBookPage(ctx, regionID, 1)
+		if !sweepPageRetryable(ctx, err) {
+			break
+		}
+	}
 	if err != nil {
 		return app.sweepFailed(ctx, regionID, 1, err, limitHit, out)
 	}
@@ -203,13 +214,7 @@ func (app *Application) sweepRegion(ctx context.Context, regionID int64, allowan
 			defer wg.Done()
 			defer func() { <-sem }()
 			defer recoverWorkerPanic("region sweep page")
-			orders, _, h, err := app.fetchRegionBookPage(ctx, regionID, page)
-			if err == nil && !windowOf(h).lastModified.Equal(win.lastModified) {
-				err = errSweepTorn
-			}
-			if err != nil && page > 1 && sweepPageMissing(err) {
-				err = errSweepTorn // the book shrank: a new window began mid-read
-			}
+			orders, err := app.fetchSweepPage(ctx, regionID, page, win)
 			pages[page-1], errs[page-1] = orders, err
 			if err == nil {
 				read.Add(1)
@@ -263,6 +268,45 @@ func (app *Application) sweepFailed(ctx context.Context, regionID int64, page in
 		logging.Errorf("worker: region sweep: %s page %d: %v (next try in %s)", label, page, err, shortDuration(wait))
 	}
 	return out
+}
+
+// sweepPageAttempts is how many times one page is asked for before
+// the read gives up on it: a slow or failed page is retried at once,
+// inside the same window, rather than losing the whole read.
+const sweepPageAttempts = 3
+
+// sweepPageRetryable reports whether a failed page read is worth
+// asking for again within the read: not the error limit, not a page
+// past the book's end, not a shutdown.
+func sweepPageRetryable(ctx context.Context, err error) bool {
+	return err != nil && ctx.Err() == nil && !errors.Is(err, esi.ErrErrorLimit) && !sweepPageMissing(err)
+}
+
+// fetchSweepPage reads one page past page 1 of a read, retrying a
+// transient failure, and checks it came from the read's window: a
+// page from another window, or a page past the book's end (the book
+// shrank as a new window began), is errSweepTorn.
+func (app *Application) fetchSweepPage(ctx context.Context, regionID int64, page int, win esiWindow) ([]esi.MarketOrder, error) {
+	var (
+		orders []esi.MarketOrder
+		h      http.Header
+		err    error
+	)
+	for attempt := 0; attempt < sweepPageAttempts; attempt++ {
+		orders, _, h, err = app.fetchRegionBookPage(ctx, regionID, page)
+		if !sweepPageRetryable(ctx, err) {
+			break
+		}
+	}
+	switch {
+	case err != nil && sweepPageMissing(err):
+		return nil, errSweepTorn
+	case err != nil:
+		return nil, err
+	case !windowOf(h).lastModified.Equal(win.lastModified):
+		return nil, errSweepTorn
+	}
+	return orders, nil
 }
 
 // sweepPageMissing reports a 404: past page 1 it means the book

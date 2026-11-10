@@ -60,9 +60,9 @@ const (
 	// indices with a cluster-median fallback.
 	trueValueReferenceSystemID = 30004759
 
-	// A type has a real market when the guide carries an
-	// average for it and The Forge trades at least this many
-	// units a day; below that, contracts are the market.
+	// A type has a real market when The Forge trades at least
+	// this many units a day; below that, contracts are the
+	// market.
 	trueValueHealthyDailyVolume = 10.0
 
 	// How long a stored row stays fresh when its inputs have

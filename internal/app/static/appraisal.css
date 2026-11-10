@@ -437,3 +437,6 @@
   border-top: 1px solid var(--box-edge);
 }
 .ap-honest p { margin: 0.25rem 0; }
+/* Live contract asks behind an unpriced line: readable, in the
+   warning tone, because they are not a price. */
+.ap-asks { display: inline-block; margin-top: 0.15rem; font-size: var(--fs-xs); color: #fbbf24; }

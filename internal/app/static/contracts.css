@@ -708,6 +708,7 @@
 .cs-tp { font-size: var(--fs-2xs); color: #34d399; text-align: right; flex: none; }
 .cs-tp.un { color: #fbbf24; }
 .cs-tnote { display: block; color: var(--muted); font-size: var(--fs-2xs); }
+.cs-tp.un .cs-tnote { color: inherit; font-size: var(--fs-xs); }
 .cs-srow {
   display: flex; justify-content: space-between; gap: 1rem;
   font-size: var(--fs-xs); padding: 0.2rem 0;

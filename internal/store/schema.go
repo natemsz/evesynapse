@@ -836,6 +836,12 @@ var pgTrainedBannerDismissalsSchema string
 //go:embed schema_pg/136_place_stats_source_etag.sql
 var pgPlaceStatsSourceEtagSchema string
 
+// Step 137: live contract asks behind a type the true-value pass
+// cannot price, shown beside the gap as unverified asks.
+//
+//go:embed schema_pg/137_true_value_asks.sql
+var pgTrueValueAsksSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1000,6 +1006,7 @@ func schemaSteps() []schemaStep {
 		{134, "kill_entity_feed_kill_idx", pgKillEntityFeedKillIdxSchema, ""},
 		{135, "trained_banner_dismissals", pgTrainedBannerDismissalsSchema, ""},
 		{136, "place_stats_source_etag", pgPlaceStatsSourceEtagSchema, ""},
+		{137, "true_value_asks", pgTrueValueAsksSchema, ""},
 	}
 }
 

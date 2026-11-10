@@ -63,6 +63,7 @@ func (app *Application) noteRecentKill(ctx context.Context, k db.Kill) {
 	r.mu.Lock()
 	r.loaded = true
 	isNew := true
+	inserted := false
 	for i := range r.kills {
 		if r.kills[i].KillmailID == k.KillmailID {
 			r.kills[i] = k
@@ -71,7 +72,6 @@ func (app *Application) noteRecentKill(ctx context.Context, k db.Kill) {
 		}
 	}
 	if isNew {
-		inserted := false
 		for i := range r.kills {
 			if k.KillmailTime.After(r.kills[i].KillmailTime) ||
 				(k.KillmailTime.Equal(r.kills[i].KillmailTime) && k.KillmailID > r.kills[i].KillmailID) {
@@ -82,13 +82,17 @@ func (app *Application) noteRecentKill(ctx context.Context, k db.Kill) {
 		}
 		if !inserted && len(r.kills) < recentKillsCapacity {
 			r.kills = append(r.kills, k)
+			inserted = true
 		}
 		if len(r.kills) > recentKillsCapacity {
 			r.kills = r.kills[:recentKillsCapacity]
 		}
 	}
 	r.mu.Unlock()
-	if isNew {
+	// Only a kill that made the ring is recent enough to stream: a
+	// late arrival older than the ring's tail is not news. Names are
+	// resolved only when a stream is open.
+	if inserted && app.killLive.count() > 0 {
 		app.killLive.publishKill(app.newKillNames(ctx).row(k), k)
 	}
 }
@@ -118,7 +122,7 @@ func (app *Application) noteRecentKillPrice(ctx context.Context, killmailID int6
 		}
 	}
 	r.mu.Unlock()
-	if found {
+	if found && app.killLive.count() > 0 {
 		app.killLive.publishKillPriced(app.newKillNames(ctx).row(priced), priced, formatISKShort(valueOurs), valueOurs >= killBigValue)
 	}
 }

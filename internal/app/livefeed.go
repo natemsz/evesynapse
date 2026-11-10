@@ -236,16 +236,6 @@ type marketLiveHub struct {
 	byKey map[marketLiveKey]map[*marketLiveSub]struct{}
 }
 
-func (h *marketLiveHub) count() int {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	n := 0
-	for _, subs := range h.byKey {
-		n += len(subs)
-	}
-	return n
-}
-
 func (h *marketLiveHub) subscribe(regionID, typeID int64) (*marketLiveSub, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -380,6 +370,14 @@ func serveSSE(w http.ResponseWriter, r *http.Request, ch <-chan []byte) {
 	fmt.Fprintf(w, "retry: %d\n\n", liveFeedRetry.Milliseconds())
 	flusher.Flush()
 
+	// The server's WriteTimeout bounds a whole response, which would
+	// cut every stream at that mark. Each write instead gets its own
+	// deadline, two heartbeats out, so a live stream stays open and a
+	// browser that stops reading is still dropped.
+	rc := http.NewResponseController(w)
+	extend := func() { _ = rc.SetWriteDeadline(time.Now().Add(2 * liveFeedHeartbeat)) }
+	extend()
+
 	ctx := r.Context()
 	beat := time.NewTicker(liveFeedHeartbeat)
 	defer beat.Stop()
@@ -388,6 +386,7 @@ func serveSSE(w http.ResponseWriter, r *http.Request, ch <-chan []byte) {
 		case <-ctx.Done():
 			return
 		case <-beat.C:
+			extend()
 			if _, err := w.Write([]byte(": ping\n\n")); err != nil {
 				return
 			}
@@ -396,6 +395,7 @@ func serveSSE(w http.ResponseWriter, r *http.Request, ch <-chan []byte) {
 			if !ok {
 				return
 			}
+			extend()
 			if _, err := w.Write(frame); err != nil {
 				return
 			}

@@ -476,6 +476,9 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 	if m.ModifiedAttr == AttrSkillLevel {
 		return // skill levels are engine inputs
 	}
+	if m.Domain == "structureID" {
+		return // structure skills and bonuses never reach a ship
+	}
 	snap := f.snap
 	targets := func(list ...*entity) {
 		for _, t := range list {

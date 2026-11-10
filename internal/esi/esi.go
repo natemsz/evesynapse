@@ -471,6 +471,9 @@ type Client struct {
 	// changes is which characters have had new data stored
 	// (changed.go).
 	changes changeLog
+
+	// getCache is the GET collapse and ETag cache (getcache.go).
+	getCache getCache
 }
 
 // New builds a Client. httpClient performs every ESI request (in
@@ -1657,8 +1660,11 @@ func (c *Client) Get(ctx context.Context, accessToken, path string, out any) err
 // header. Token values are never logged; errors carry the method,
 // path and status only.
 func (c *Client) request(ctx context.Context, method, accessToken, path string, payload any, want ...int) ([]byte, http.Header, error) {
-	body, header, _, err := c.send(ctx, c.http, method, accessToken, path, payload, "", want...)
-	return body, header, err
+	if method != http.MethodGet {
+		body, header, _, err := c.send(ctx, c.http, method, accessToken, path, payload, "", want...)
+		return body, header, err
+	}
+	return c.cachedGet(ctx, accessToken, path, want...)
 }
 
 // requestLong is request on the bulk client (FetchRawLong's path):
@@ -1666,6 +1672,18 @@ func (c *Client) request(ctx context.Context, method, accessToken, path string, 
 // client's fast one.
 func (c *Client) requestLong(ctx context.Context, method, accessToken, path string, payload any, want ...int) ([]byte, http.Header, error) {
 	body, header, _, err := c.send(ctx, c.bulkClient(), method, accessToken, path, payload, "", want...)
+	return body, header, err
+}
+
+// requestDirect is request without the singleflight collapse and
+// the ETag cache: straight to send, with the same retry,
+// error-budget and rate-limit handling. The snapshot pipeline's
+// paginated and windowed fetches ride it, because a per-page ETag
+// does not stand for the merged whole and those datasets are
+// always downloaded in full (see
+// TestPaginatedSnapshotsAreNeverConditional).
+func (c *Client) requestDirect(ctx context.Context, method, accessToken, path string, payload any, want ...int) ([]byte, http.Header, error) {
+	body, header, _, err := c.send(ctx, c.http, method, accessToken, path, payload, "", want...)
 	return body, header, err
 }
 
@@ -1880,11 +1898,20 @@ func (c *Client) fetchIfChanged(ctx context.Context, accessToken, path, etag str
 }
 
 // cacheWindowEnd is when a response stops being current: its
-// Expires header, or five minutes from now when ESI sent none.
+// Expires header, else the max-age in its Cache-Control, else
+// five minutes from now when ESI sent neither.
 func cacheWindowEnd(header http.Header) time.Time {
 	if exp := header.Get("Expires"); exp != "" {
 		if t, err := http.ParseTime(exp); err == nil {
 			return t
+		}
+	}
+	for _, part := range strings.Split(header.Get("Cache-Control"), ",") {
+		part = strings.TrimSpace(part)
+		if v, ok := strings.CutPrefix(part, "max-age="); ok {
+			if secs, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && secs >= 0 {
+				return time.Now().Add(time.Duration(secs) * time.Second)
+			}
 		}
 	}
 	return time.Now().Add(5 * time.Minute)
@@ -1906,6 +1933,15 @@ func (c *Client) FetchRaw(ctx context.Context, accessToken, path string) ([]byte
 // and the /markets/prices/ guide.
 func (c *Client) FetchRawLong(ctx context.Context, accessToken, path string) ([]byte, http.Header, error) {
 	return c.requestLong(ctx, http.MethodGet, accessToken, path, nil, http.StatusOK)
+}
+
+// fetchRawDirect is FetchRaw without the singleflight collapse
+// and the ETag cache: one plain GET, always downloaded in full.
+// Only the snapshot pipeline's paginated and windowed fetches
+// use it (fetchAllPages, fetchJournalWindow, fetchTxnsWindow);
+// every other reader wants the cache.
+func (c *Client) fetchRawDirect(ctx context.Context, accessToken, path string) ([]byte, http.Header, error) {
+	return c.requestDirect(ctx, http.MethodGet, accessToken, path, nil, http.StatusOK)
 }
 
 // trackErrorBudget records ESI's X-Esi-Error-Limit-Remain/Reset
@@ -2421,7 +2457,7 @@ func (c *Client) FetchCharacterAssetNames(ctx context.Context, ch db.Character, 
 // the entries merged into a single JSON array, plus the first
 // response's headers (whose Expires drives snapshot bookkeeping).
 func (c *Client) fetchAllPages(ctx context.Context, token, path string) ([]byte, http.Header, error) {
-	body, header, err := c.FetchRaw(ctx, token, path)
+	body, header, err := c.fetchRawDirect(ctx, token, path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2458,7 +2494,7 @@ func (c *Client) fetchAllPages(ctx context.Context, token, path string) ([]byte,
 		return nil, nil, err
 	}
 	for page := 2; page <= pages; page++ {
-		b, _, err := c.FetchRaw(ctx, token, withPageParam(path, page))
+		b, _, err := c.fetchRawDirect(ctx, token, withPageParam(path, page))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -2514,7 +2550,7 @@ func (c *Client) fetchJournalWindow(ctx context.Context, token, path string) ([]
 		if page > 1 {
 			p = withPageParam(path, page)
 		}
-		body, header, err := c.FetchRaw(ctx, token, p)
+		body, header, err := c.fetchRawDirect(ctx, token, p)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -2562,7 +2598,7 @@ func (c *Client) fetchTxnsWindow(ctx context.Context, token, path string) ([]byt
 		if fromID > 0 {
 			p = fmt.Sprintf("%s?from_id=%d", path, fromID)
 		}
-		body, header, err := c.FetchRaw(ctx, token, p)
+		body, header, err := c.fetchRawDirect(ctx, token, p)
 		if err != nil {
 			return nil, nil, err
 		}

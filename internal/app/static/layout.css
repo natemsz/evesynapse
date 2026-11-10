@@ -551,7 +551,7 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
   background: var(--surface-inset);
 }
 .l-pane { min-width: 0; padding: var(--space-3) var(--space-4) var(--space-4); }
-.l-pane:has(> .l-pane-bar:has(> :not(.l-back))) { padding-top: 0; }
+.l-pane:has(> .l-pane-bar > :not(.l-back)) { padding-top: 0; }
 .l-pane-bar {
   position: sticky;
   top: var(--l-top);
@@ -654,7 +654,7 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
      bar stays.) The pane keeps its own top padding, like a pane
      whose bar never rendered. */
   .l-pane--insp > .l-pane-bar:not(:has(> :not(.l-back, .l-close))) { display: none; }
-  .l-pane--insp:has(> .l-pane-bar:not(:has(> :not(.l-back, .l-close)))) { padding-top: var(--space-3); }
+  .l-pane--insp:not(:has(> .l-pane-bar > :not(.l-back, .l-close))) { padding-top: var(--space-3); }
 }
 
 /* A console without a directory (a list and its reader, like the

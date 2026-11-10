@@ -347,6 +347,7 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 			al.Tier = module.AppraisalTierResearchMedian
 			al.AsOf = rm.ComputedAt
 			al.Priced = true
+			al.SampleCount = rm.SampleCount
 		} else if ln.BlueprintCopy {
 			if cm, ok := copyMedians[copyMedianKey{ln.TypeID, ln.Runs}]; ok {
 				al.UnitPrice = cm.MedianPrice
@@ -354,6 +355,7 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 				al.Tier = module.AppraisalTierCopyMedian
 				al.AsOf = cm.ComputedAt
 				al.Priced = true
+				al.SampleCount = cm.SampleCount
 			}
 		} else if ab, ok := abyssalByItem[ln.ItemID]; ok && ln.ItemID > 0 {
 			al.UnitPrice = ab.EstValue.Float64

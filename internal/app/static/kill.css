@@ -161,7 +161,7 @@ a.kp-a-name:hover, .kp-a-org a:hover { color: var(--accent); }
 }
 @container page (max-width: 45rem) {
   .kp-hero { grid-template-columns: minmax(0, 1fr); padding: 0.8rem; gap: 0.8rem; }
-  .kp-ship { display: flex; justify-content: center; }
+  .kp-ship { display: flex; flex-direction: column; align-items: center; }
   .kp-ship img { width: 9.5rem; height: 9.5rem; }
   .kp-shipline { text-align: center; }
   .kp-facts > div { grid-template-columns: 6.5rem minmax(0, 1fr); }

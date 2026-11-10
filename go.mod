@@ -15,7 +15,7 @@ require (
 	github.com/klauspost/compress v1.20.3
 	github.com/tdewolff/minify/v2 v2.24.24
 	golang.org/x/crypto v0.58.0
-	golang.org/x/oauth2 v0.37.0
+	golang.org/x/oauth2 v0.38.0
 )
 
 require (

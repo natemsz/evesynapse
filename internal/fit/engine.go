@@ -144,6 +144,8 @@ const (
 	AttrShieldBonus        = 68
 	AttrAgility            = 70
 	AttrDuration           = 73
+	AttrReactivationDelay  = 669
+	AttrMaxGroupFitted     = 1544
 	AttrMaxTargetRange     = 76
 	AttrStructureDamageAmt = 83
 	AttrArmorDamageAmount  = 84
@@ -813,6 +815,18 @@ type Result struct {
 	// attributes forbid the current hull. The engine flags them
 	// as fit errors; it does not silently drop them.
 	Restricted []Restriction
+
+	// OverGroupLimit lists module groups fitted more times than
+	// their maxGroupFitted (1544) allows, such as a second
+	// synchronizer rig or damage control.
+	OverGroupLimit []GroupLimit
+}
+
+// GroupLimit is one module group over its per-ship limit.
+type GroupLimit struct {
+	GroupID int64
+	Allowed int
+	Fitted  int
 }
 
 // Restriction is one ship-restricted module on an
@@ -962,15 +976,13 @@ func stackingEffectiveness(rank int) float64 {
 
 // foldAttribute computes one attribute's final value from its
 // base under the bound applications, in dogma stage order.
-// Source attribute values are read live, so earlier stages feed
-// later ones (skill pre-multipliers before percent bonuses).
+// Source attribute values come from val, which resolves them to
+// their own final values first.
 // Multiplicative stages: non-penalized
 // multipliers apply at full strength; penalized ones are split
 // into bonus (>1) and penalty (<1) chains, each ordered by
-// impact descending and damped independently. The caller passes
-// the base value explicitly: fold passes always recompute from
-// base, never from an earlier pass result.
-func foldAttribute(snap *Snapshot, target *entity, base float64, apps []application) float64 {
+// impact descending and damped independently.
+func foldAttribute(snap *Snapshot, base float64, apps []application, val func(*entity, int64) float64) float64 {
 	value := base
 
 	applyStage := func(ops ...int64) {
@@ -987,7 +999,7 @@ func foldAttribute(snap *Snapshot, target *entity, base float64, apps []applicat
 			if !match {
 				continue
 			}
-			raw := app.source.get(snap, app.mod.ModifyingAttr)
+			raw := val(app.source, app.mod.ModifyingAttr)
 			switch op {
 			case opPreAssign, opPostAssign:
 				value = raw
@@ -1020,7 +1032,7 @@ func foldAttribute(snap *Snapshot, target *entity, base float64, apps []applicat
 		if op != opPostMult && op != opPostDivide && op != opPostPercent {
 			continue
 		}
-		v := app.source.get(snap, app.mod.ModifyingAttr)
+		v := val(app.source, app.mod.ModifyingAttr)
 		factor := multFactor(op, v)
 		if !app.penaltySubject(snap) {
 			value *= factor
@@ -1106,16 +1118,20 @@ func restrictionFor(snap *Snapshot, shipTypeID, shipGroup, moduleTypeID int64) *
 	return r
 }
 
-// cycleSeconds is an item's activation cycle in seconds:
-// duration (73) wins, speed (51) is the weapon/drone fallback.
+// cycleSeconds is an item's repeat interval in seconds, the basis
+// of every per-second rate: duration (73) wins, speed (51) is the
+// weapon/drone fallback, and a reactivation delay (669) adds the
+// wait before the module can run again.
 func cycleSeconds(e *entity, snap *Snapshot) float64 {
+	var c float64
 	if d := e.get(snap, AttrDuration); d > 0 {
-		return d / 1000
+		c = d / 1000
+	} else if s := e.get(snap, AttrSpeed); s > 0 {
+		c = s / 1000
+	} else {
+		return 0
 	}
-	if s := e.get(snap, AttrSpeed); s > 0 {
-		return s / 1000
-	}
-	return 0
+	return c + e.get(snap, AttrReactivationDelay)/1000
 }
 
 // layerEHP computes a tank layer's EHP per damage type from

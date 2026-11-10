@@ -489,9 +489,9 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 	}
 }
 
-// foldAttributes groups the applications per (target, attribute),
-// then recomputes from base a few times so cross-entity chains
-// converge (skill -> ship bonus attribute -> module percent).
+// foldAttributes groups the applications per (target, attribute)
+// and folds every modified attribute from base, each source value
+// resolved before the attribute that reads it.
 func (f *fitting) foldAttributes() {
 	type appKey struct {
 		target *entity
@@ -502,14 +502,34 @@ func (f *fitting) foldAttributes() {
 		k := appKey{app.target, app.mod.ModifiedAttr}
 		grouped[k] = append(grouped[k], app)
 	}
-	for pass := 0; pass < 3; pass++ {
-		for k, list := range grouped {
-			base, ok := k.target.base[k.attr]
-			if !ok {
-				base = f.snap.attrDefault(k.attr)
-			}
-			k.target.calc[k.attr] = foldAttribute(f.snap, k.target, base, list)
+	// Each modified attribute is resolved on demand: a modifier's
+	// source value is folded before the attribute it feeds, however
+	// deep the chain (a synchronizer rig's module count feeds its
+	// bonus, which feeds a hidden turret multiplier, which feeds
+	// the turret's damage). A cycle reads the value as it stands.
+	const (
+		pending = 1
+		done    = 2
+	)
+	state := make(map[appKey]int, len(grouped))
+	var resolve func(e *entity, attr int64) float64
+	resolve = func(e *entity, attr int64) float64 {
+		k := appKey{e, attr}
+		list, ok := grouped[k]
+		if !ok || state[k] != 0 {
+			return e.get(f.snap, attr)
 		}
+		state[k] = pending
+		base, ok := e.base[attr]
+		if !ok {
+			base = f.snap.attrDefault(attr)
+		}
+		e.calc[attr] = foldAttribute(f.snap, base, list, resolve)
+		state[k] = done
+		return e.calc[attr]
+	}
+	for _, app := range f.apps {
+		resolve(app.target, app.mod.ModifiedAttr)
 	}
 }
 

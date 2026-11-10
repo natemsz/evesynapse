@@ -1026,3 +1026,39 @@ func TestFitEnginePerWeaponFigures(t *testing.T) {
 		t.Errorf("non-weapon type 519 has a per-weapon DPS entry")
 	}
 }
+
+// TestFitEngineSynchronizerChain pins a four-deep modifier chain in
+// the shape of the Imperial Navy Synchronizer (effects 12963, 12982,
+// 12980, 13071): each navy module adds 1 to the rig's module count,
+// the count adds to the rig's damage bonus, the bonus raises the
+// rig's hidden multiplier, and the multiplier scales turret damage.
+// Every link must be final before the next one reads it.
+func TestFitEngineSynchronizerChain(t *testing.T) {
+	const (
+		ship    = 1003
+		navy    = 6101 // navy module, carries the count attribute
+		rig     = 6102
+		turret  = 6103
+		rigGrp  = 5140
+		gunGrp  = 53
+		navyGrp = 52
+	)
+	f := newFitFixture().
+		group(ship, 25).group(navy, navyGrp).group(rig, rigGrp).group(turret, gunGrp).
+		attrs(ship, map[int64]float64{14: 3, 13: 3, 12: 3, 1137: 3}).
+		attrs(navy, map[int64]float64{6312: 1}).
+		attrs(rig, map[int64]float64{6405: 5, 6316: 0, 6529: 1}).
+		attrs(turret, map[int64]float64{64: 3}).
+		flag(navy, 13).flag(rig, EffectRigSlot).flag(turret, 12).
+		effect(navy, 12963, 0, fitModGroup(6316, 6312, 2, rigGrp)).
+		effect(rig, 12982, 0, fitMod("itemID", "ItemModifier", 6405, 6316, 2)).
+		effect(rig, 12980, 0, fitModGroup(6529, 6405, 6, rigGrp)).
+		effect(rig, 13071, 0, fitModGroup(64, 6529, 4, gunGrp))
+	items := []ItemInput{{TypeID: navy, Quantity: 2}, {TypeID: rig, Quantity: 1}, {TypeID: turret, Quantity: 1}}
+
+	// Two navy modules: count 2, bonus 5 + 2 = 7%, multiplier 1.07,
+	// turret damage multiplier 3 x 1.07 = 3.21.
+	res := Compute(f.snap, ship, items, nil, nil, nil)
+	near(t, "rig module count", res.ItemAttrs[rig][6316], 2, 1e-9)
+	near(t, "turret damage multiplier", res.ItemAttrs[turret][64], 3.21, 1e-9)
+}

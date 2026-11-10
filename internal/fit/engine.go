@@ -962,15 +962,13 @@ func stackingEffectiveness(rank int) float64 {
 
 // foldAttribute computes one attribute's final value from its
 // base under the bound applications, in dogma stage order.
-// Source attribute values are read live, so earlier stages feed
-// later ones (skill pre-multipliers before percent bonuses).
+// Source attribute values come from val, which resolves them to
+// their own final values first.
 // Multiplicative stages: non-penalized
 // multipliers apply at full strength; penalized ones are split
 // into bonus (>1) and penalty (<1) chains, each ordered by
-// impact descending and damped independently. The caller passes
-// the base value explicitly: fold passes always recompute from
-// base, never from an earlier pass result.
-func foldAttribute(snap *Snapshot, target *entity, base float64, apps []application) float64 {
+// impact descending and damped independently.
+func foldAttribute(snap *Snapshot, base float64, apps []application, val func(*entity, int64) float64) float64 {
 	value := base
 
 	applyStage := func(ops ...int64) {
@@ -987,7 +985,7 @@ func foldAttribute(snap *Snapshot, target *entity, base float64, apps []applicat
 			if !match {
 				continue
 			}
-			raw := app.source.get(snap, app.mod.ModifyingAttr)
+			raw := val(app.source, app.mod.ModifyingAttr)
 			switch op {
 			case opPreAssign, opPostAssign:
 				value = raw
@@ -1020,7 +1018,7 @@ func foldAttribute(snap *Snapshot, target *entity, base float64, apps []applicat
 		if op != opPostMult && op != opPostDivide && op != opPostPercent {
 			continue
 		}
-		v := app.source.get(snap, app.mod.ModifyingAttr)
+		v := val(app.source, app.mod.ModifyingAttr)
 		factor := multFactor(op, v)
 		if !app.penaltySubject(snap) {
 			value *= factor

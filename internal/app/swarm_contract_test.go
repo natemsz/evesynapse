@@ -256,13 +256,24 @@ func TestSwarmContractCheckPassApplies(t *testing.T) {
 	now := time.Now().UTC()
 	body := swarmContractFixture(7301, now.Add(-time.Hour), now.Add(24*time.Hour))
 	p.stubB.contractItems = map[int64]string{7301: swarmContractESIItems}
-	stageContractOnB(t, p, body)
+	// The peer's entry carries the right items under a header of
+	// its own making; only the items are taken.
+	seedSwarmContract(t, p.b, body, "pending", now)
+	sent := body
+	sent.Title, sent.Price, sent.IssuerID = "peer title", 1, 99
+	entry := signedBy(t, swarm.StateFor(p.a).SwarmID, swarm.SwarmKindContract, "7301", swarmContractJSON(t, sent), now)
+	if err := swarm.StateFor(p.b).StageSwarmEntry(ctx, entry, "instance-a", now); err != nil {
+		t.Fatalf("stage contract: %v", err)
+	}
 	if got := p.spotRuns(t); got != 1 {
 		t.Fatalf("applied %d, want 1", got)
 	}
 	row, err := p.b.queries.GetPublicContract(ctx, 7301)
 	if err != nil || row.ItemsState != "stored" {
 		t.Fatalf("applied contract: %+v err %v, want items stored", row, err)
+	}
+	if row.Title != body.Title || row.Price != body.Price || row.IssuerID != body.IssuerID {
+		t.Fatalf("applied header: title %q price %v issuer %d, want this instance's own swept header", row.Title, row.Price, row.IssuerID)
 	}
 	items, err := p.b.queries.ListPublicContractItems(ctx, 7301)
 	if err != nil || len(items) != 2 {

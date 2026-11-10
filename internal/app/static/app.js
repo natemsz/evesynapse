@@ -6540,6 +6540,14 @@
     watcher.observe(row);
   }
 
+  // settle ends a row's highlight now and reports it seen: for a
+  // page that keeps only so many rows highlighted at once.
+  function settle(row) {
+    clearTimeout(row._liveTimer);
+    row._liveTimer = 0;
+    if (row.classList.contains("is-live")) fade(row);
+  }
+
   // drop forgets a row that left the page before it was seen.
   function drop(row) {
     if (watcher) watcher.unobserve(row);
@@ -6605,5 +6613,5 @@
   });
   document.addEventListener("evesynapse:content-will-swap", reset);
 
-  window.esLive = { mark: mark, drop: drop, reset: reset, flash: flash, pill: pill, stream: stream };
+  window.esLive = { mark: mark, settle: settle, drop: drop, reset: reset, flash: flash, pill: pill, stream: stream };
 })();

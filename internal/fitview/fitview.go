@@ -1213,17 +1213,27 @@ func FitDocTypeIDs(doc *FitDoc) []int64 {
 }
 
 // FitPilotLevels resolves the simulate request's pilot levels:
-// pilotID 0 is the All-V view; otherwise the pilot's trained
+// pilotID 0 is the All-V view (every published skill at V); otherwise the pilot's trained
 // skills load from their stored snapshot. The second return is a
 // note when the pilot's skill snapshot hasn't landed yet. The
 // caller owns pilot labeling and ownership checks.
 func (app *Builder) FitPilotLevels(ctx context.Context, pilotID int64, snap *fit.Snapshot, doc *FitDoc) (map[int64]int, string) {
+	// Every skill's dogma joins the snapshot, so support skills the
+	// fit's items never name still apply.
+	allSkills, err := fit.WithAllSkills(ctx, app.queries, snap)
+	if err != nil {
+		logging.Errorf("fittings sim: load skill dogma: %v", err)
+	}
 	if pilotID == 0 {
 		itemIDs := make([]int64, 0, len(doc.Items))
 		for _, it := range doc.Items {
 			itemIDs = append(itemIDs, it.TypeID)
 		}
-		return fit.AllVSkillLevels(snap, doc.ShipTypeID, itemIDs), ""
+		levels := fit.AllVSkillLevels(snap, doc.ShipTypeID, itemIDs)
+		for _, id := range allSkills {
+			levels[id] = 5
+		}
+		return levels, ""
 	}
 	var skills esi.Skills
 	if !app.env.LoadSnapshot(ctx, pilotID, esi.SnapSkills, &skills) {

@@ -10,22 +10,7 @@
      to its own feed. On a narrow page a row folds and the
      leaderboards drop below the list. */}}
 <div class="l-page kb">
-  <div class="l-tiles kb-stats" aria-label="{{.Stats.AriaLabel}}">
-    {{if .Stats.Scoped}}
-    <div class="l-stat"><span class="l-stat-label">Kills</span><span class="l-stat-value">{{.Stats.Kills}}</span><span class="l-stat-sub">{{if .Stats.HasSolo}}{{.Stats.Solo}} solo · {{end}}{{.Stats.ScopeNote}}</span></div>
-    <div class="l-stat"><span class="l-stat-label">Losses</span><span class="l-stat-value">{{.Stats.Losses}}</span><span class="l-stat-sub">{{.Stats.ScopeNote}}</span></div>
-    {{if .Stats.ISKDestroyed}}<div class="l-stat"><span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">{{.Stats.ISKDestroyed}}</span><span class="l-stat-sub">{{.Stats.ScopeNote}}</span></div>{{end}}
-    {{else}}
-    <div class="l-stat"><span class="l-stat-label">Last hour</span><span class="l-stat-value">{{.Stats.KillsHour}}</span><span class="l-stat-sub">kills</span></div>
-    <div class="l-stat"><span class="l-stat-label">Last day</span><span class="l-stat-value">{{.Stats.KillsDay}}</span><span class="l-stat-sub">kills</span></div>
-    <div class="l-stat"><span class="l-stat-label">Destroyed today</span><span class="l-stat-value">{{if .Stats.ISKDay}}{{.Stats.ISKDay}}{{else}}0{{end}}</span><span class="l-stat-sub">ISK in the last day</span></div>
-    {{end}}
-    {{with .Stats.Biggest}}<a class="l-stat kb-big" href="/intel/kill/{{.ID}}/">
-      <span class="l-stat-label">Biggest kill</span>
-      <span class="kb-big-row"><img src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=64" alt="" width="36" height="36" loading="lazy"><span class="l-stat-value">{{.Value}}</span></span>
-      <span class="l-stat-sub">{{.ShipName}}</span>
-    </a>{{end}}
-  </div>
+  {{template "kb-stats" .}}
 
   <div class="l-cluster kb-bar">
     <form method="get" action="/intel/kills/" class="kb-search" role="search">
@@ -82,37 +67,63 @@
       {{end}}
     </ol>
 
-    <aside class="kb-side" aria-label="{{if .Stats.Scoped}}{{.ScopeName}}: leaders, last 90 days{{else}}The last day's leaders{{end}}">
-      {{if .Stats.Scoped}}
-      {{if .Top.TopShips}}<section class="kb-top">
-        <h2>Top ships</h2>
-        <ol>{{range .Top.TopShips}}<li><a href="/intel/kills/?ship={{.ID}}"><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
-      </section>{{end}}
-      {{if .Top.Ships}}<section class="kb-top">
-        <h2>Most lost</h2>
-        <ol>{{range .Top.Ships}}<li><a href="/intel/kills/?ship={{.ID}}"><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
-      </section>{{end}}
-      {{if .Top.Systems}}<section class="kb-top">
-        <h2>Top systems</h2>
-        <ol>{{range .Top.Systems}}<li><a href="/intel/kills/?system={{.ID}}"><span class="kb-top-sec sec sec-{{.Tier}}">{{.Note}}</span><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
-      </section>{{end}}
-      {{else}}
-      {{if .Top.Alliances}}<section class="kb-top">
-        <h2>Top killers</h2>
-        <ol>{{range .Top.Alliances}}<li><a href="/intel/kills/?alliance={{.ID}}"><img src="https://images.evetech.net/alliances/{{.ID}}/logo?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
-      </section>{{end}}
-      {{if .Top.Ships}}<section class="kb-top">
-        <h2>Most lost</h2>
-        <ol>{{range .Top.Ships}}<li><a href="/intel/kills/?ship={{.ID}}"><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
-      </section>{{end}}
-      {{if .Top.Systems}}<section class="kb-top">
-        <h2>Hottest systems</h2>
-        <ol>{{range .Top.Systems}}<li><a href="/intel/kills/?system={{.ID}}"><span class="kb-top-sec sec sec-{{.Tier}}">{{.Note}}</span><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
-      </section>{{end}}
-      {{end}}
-    </aside>
+    {{template "kb-side" .}}
   </div>
   {{if .Older}}<p class="kb-more"><a class="btn" href="{{.Older}}">Older kills</a></p>{{end}}
 </div>
 {{end}}
+{{end}}
+
+{{/* The board's headline band and leaders rail. The page renders
+     them in place; the live stats event (publishKillboardStats in
+     livefeed.go) renders them again for open streams. */}}
+{{define "kb-stats"}}
+<div class="l-tiles kb-stats" aria-label="{{.Stats.AriaLabel}}">
+  {{if .Stats.Scoped}}
+  <div class="l-stat"><span class="l-stat-label">Kills</span><span class="l-stat-value">{{.Stats.Kills}}</span><span class="l-stat-sub">{{if .Stats.HasSolo}}{{.Stats.Solo}} solo · {{end}}{{.Stats.ScopeNote}}</span></div>
+  <div class="l-stat"><span class="l-stat-label">Losses</span><span class="l-stat-value">{{.Stats.Losses}}</span><span class="l-stat-sub">{{.Stats.ScopeNote}}</span></div>
+  {{if .Stats.ISKDestroyed}}<div class="l-stat"><span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">{{.Stats.ISKDestroyed}}</span><span class="l-stat-sub">{{.Stats.ScopeNote}}</span></div>{{end}}
+  {{else}}
+  <div class="l-stat"><span class="l-stat-label">Last hour</span><span class="l-stat-value">{{.Stats.KillsHour}}</span><span class="l-stat-sub">kills</span></div>
+  <div class="l-stat"><span class="l-stat-label">Last day</span><span class="l-stat-value">{{.Stats.KillsDay}}</span><span class="l-stat-sub">kills</span></div>
+  <div class="l-stat"><span class="l-stat-label">Destroyed today</span><span class="l-stat-value">{{if .Stats.ISKDay}}{{.Stats.ISKDay}}{{else}}0{{end}}</span><span class="l-stat-sub">ISK in the last day</span></div>
+  {{end}}
+  {{with .Stats.Biggest}}<a class="l-stat kb-big" href="/intel/kill/{{.ID}}/">
+    <span class="l-stat-label">Biggest kill</span>
+    <span class="kb-big-row"><img src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=64" alt="" width="36" height="36" loading="lazy"><span class="l-stat-value">{{.Value}}</span></span>
+    <span class="l-stat-sub">{{.ShipName}}</span>
+  </a>{{end}}
+</div>
+{{end}}
+
+{{define "kb-side"}}
+<aside class="kb-side" aria-label="{{if .Stats.Scoped}}{{.ScopeName}}: leaders, last 90 days{{else}}The last day's leaders{{end}}">
+  {{if .Stats.Scoped}}
+  {{if .Top.TopShips}}<section class="kb-top">
+    <h2>Top ships</h2>
+    <ol>{{range .Top.TopShips}}<li><a href="/intel/kills/?ship={{.ID}}"><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+  </section>{{end}}
+  {{if .Top.Ships}}<section class="kb-top">
+    <h2>Most lost</h2>
+    <ol>{{range .Top.Ships}}<li><a href="/intel/kills/?ship={{.ID}}"><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+  </section>{{end}}
+  {{if .Top.Systems}}<section class="kb-top">
+    <h2>Top systems</h2>
+    <ol>{{range .Top.Systems}}<li><a href="/intel/kills/?system={{.ID}}"><span class="kb-top-sec sec sec-{{.Tier}}">{{.Note}}</span><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+  </section>{{end}}
+  {{else}}
+  {{if .Top.Alliances}}<section class="kb-top">
+    <h2>Top killers</h2>
+    <ol>{{range .Top.Alliances}}<li><a href="/intel/kills/?alliance={{.ID}}"><img src="https://images.evetech.net/alliances/{{.ID}}/logo?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+  </section>{{end}}
+  {{if .Top.Ships}}<section class="kb-top">
+    <h2>Most lost</h2>
+    <ol>{{range .Top.Ships}}<li><a href="/intel/kills/?ship={{.ID}}"><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+  </section>{{end}}
+  {{if .Top.Systems}}<section class="kb-top">
+    <h2>Hottest systems</h2>
+    <ol>{{range .Top.Systems}}<li><a href="/intel/kills/?system={{.ID}}"><span class="kb-top-sec sec sec-{{.Tier}}">{{.Note}}</span><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+  </section>{{end}}
+  {{end}}
+</aside>
 {{end}}

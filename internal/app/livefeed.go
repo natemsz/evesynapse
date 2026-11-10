@@ -11,6 +11,7 @@ package app
 // after load.
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -58,6 +59,12 @@ type killLiveSub struct {
 type killLiveHub struct {
 	mu   sync.Mutex
 	subs map[*killLiveSub]struct{}
+	// statsDirty holds the entity boards with an open stream whose
+	// stored stats a kill fold changed since the last stats event;
+	// lastStats is the last global stats frame sent, so an unchanged
+	// headline is not sent again.
+	statsDirty map[killEntityRef]bool
+	lastStats  []byte
 }
 
 func (h *killLiveHub) count() int {
@@ -214,6 +221,123 @@ func (h *killLiveHub) publishKillPriced(row killRow, k db.Kill, value string, bi
 		case sub.ch <- priceFrame:
 		default:
 		}
+	}
+}
+
+// noteEntityStats marks an entity's board for a stats event when a
+// stream is open on it. A kill fold calls it for every entity whose
+// stored stats it changed; with no stream open it costs a lock and
+// a scan of the open subscribers.
+func (h *killLiveHub) noteEntityStats(kind string, id int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for sub := range h.subs {
+		if sub.kind == kind && sub.id == id {
+			if h.statsDirty == nil {
+				h.statsDirty = make(map[killEntityRef]bool)
+			}
+			h.statsDirty[killEntityRef{kind, id}] = true
+			return
+		}
+	}
+}
+
+// statsTargets reports whether any open stream shows New Eden's
+// headline, and takes the entity boards marked since the last call.
+func (h *killLiveHub) statsTargets() (global bool, entities []killEntityRef) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for sub := range h.subs {
+		if !killStatsEntity(sub.kind) {
+			global = true
+			break
+		}
+	}
+	for e := range h.statsDirty {
+		entities = append(entities, e)
+	}
+	h.statsDirty = nil
+	if !global {
+		h.lastStats = nil
+	}
+	return global, entities
+}
+
+// publishStats sends one stats frame to the streams showing that
+// headline: an entity board's own streams, or for the zero ref
+// every stream on New Eden's. A global frame equal to the last one
+// sent is skipped.
+func (h *killLiveHub) publishStats(e killEntityRef, frame []byte) {
+	h.mu.Lock()
+	if e.kind == "" {
+		if bytes.Equal(frame, h.lastStats) {
+			h.mu.Unlock()
+			return
+		}
+		h.lastStats = frame
+	}
+	subs := make([]*killLiveSub, 0, len(h.subs))
+	for sub := range h.subs {
+		if e.kind == "" && !killStatsEntity(sub.kind) || e.kind != "" && sub.kind == e.kind && sub.id == e.id {
+			subs = append(subs, sub)
+		}
+	}
+	h.mu.Unlock()
+	for _, sub := range subs {
+		select {
+		case sub.ch <- frame:
+		default:
+		}
+	}
+}
+
+// killStatsLiveEvent is the payload of a stats event: the board's
+// headline band and leaders rail, rendered through the page's own
+// defines, so the browser swaps them in whole.
+type killStatsLiveEvent struct {
+	Stats string `json:"stats"`
+	Side  string `json:"side"`
+}
+
+// publishKillboardStats runs at the end of the worker's killboard
+// pass, after the headline refresh and the pricing folds: open
+// streams on New Eden's headline get it fresh (the hour and day
+// windows move even without a new kill), and each entity board a
+// fold changed gets its own. It reads the stored rows the page
+// reads and renders only for headlines a stream is watching.
+func (app *Application) publishKillboardStats(ctx context.Context) {
+	global, entities := app.killLive.statsTargets()
+	if !global && len(entities) == 0 {
+		return
+	}
+	names := app.newKillNames(ctx)
+	send := func(e killEntityRef) {
+		v := &killboardView{ScopeKind: e.kind, ScopeID: e.id}
+		if e.kind != "" {
+			v.ScopeName = names.scopeName(e.kind, e.id)
+		}
+		v.Stats, v.Top = app.killboardBoardStats(ctx, names, e.kind, e.id, v.ScopeName)
+		stats, err := executeFragment("killboard.html", "kb-stats", v)
+		if err != nil {
+			logging.Errorf("live feed: %v", err)
+			return
+		}
+		side, err := executeFragment("killboard.html", "kb-side", v)
+		if err != nil {
+			logging.Errorf("live feed: %v", err)
+			return
+		}
+		payload, err := json.Marshal(killStatsLiveEvent{Stats: stats.String(), Side: side.String()})
+		if err != nil {
+			return
+		}
+		app.killLive.publishStats(e, sseFrame("stats", payload))
+	}
+	if global {
+		send(killEntityRef{})
+	}
+	for _, e := range entities {
+		send(e)
 	}
 }
 

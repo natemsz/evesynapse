@@ -295,17 +295,6 @@ func (q *Queries) DeleteCloneName(ctx context.Context, arg DeleteCloneNameParams
 	return err
 }
 
-const deleteESIETagEntry = `-- name: DeleteESIETagEntry :exec
-DELETE FROM esi_etag_cache WHERE cache_key = $1
-`
-
-// Drop a cached ESI GET answer: an expired row found on lookup,
-// never served.
-func (q *Queries) DeleteESIETagEntry(ctx context.Context, cacheKey string) error {
-	_, err := q.db.Exec(ctx, deleteESIETagEntry, cacheKey)
-	return err
-}
-
 const deleteLocalFitting = `-- name: DeleteLocalFitting :exec
 DELETE FROM local_fittings WHERE id = $1 AND user_id = $2
 `
@@ -474,34 +463,6 @@ func (q *Queries) GetContractDetail(ctx context.Context, contractID int64) (Cont
 		&i.CharacterID,
 		&i.Payload,
 		&i.FetchedAt,
-	)
-	return i, err
-}
-
-const getESIETagEntry = `-- name: GetESIETagEntry :one
-SELECT cache_key, etag, body, expires_at FROM esi_etag_cache
-WHERE cache_key = $1
-`
-
-type GetESIETagEntryRow struct {
-	CacheKey  string    `json:"cache_key"`
-	Etag      string    `json:"etag"`
-	Body      []byte    `json:"body"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
-
-// One cached ESI GET answer by its key (full path scoped by a
-// hash of the token that fetched it): the ETag, the body and the
-// end of ESI's cache window, read without the updated_at
-// bookkeeping.
-func (q *Queries) GetESIETagEntry(ctx context.Context, cacheKey string) (GetESIETagEntryRow, error) {
-	row := q.db.QueryRow(ctx, getESIETagEntry, cacheKey)
-	var i GetESIETagEntryRow
-	err := row.Scan(
-		&i.CacheKey,
-		&i.Etag,
-		&i.Body,
-		&i.ExpiresAt,
 	)
 	return i, err
 }
@@ -2686,35 +2647,6 @@ func (q *Queries) UpsertContractDetail(ctx context.Context, arg UpsertContractDe
 		arg.CharacterID,
 		arg.Payload,
 		arg.FetchedAt,
-	)
-	return err
-}
-
-const upsertESIETagEntry = `-- name: UpsertESIETagEntry :exec
-INSERT INTO esi_etag_cache (cache_key, etag, body, expires_at, updated_at)
-VALUES ($1, $2, $3, $4, now())
-ON CONFLICT (cache_key) DO UPDATE SET
-    etag       = excluded.etag,
-    body       = excluded.body,
-    expires_at = excluded.expires_at,
-    updated_at = now()
-`
-
-type UpsertESIETagEntryParams struct {
-	CacheKey  string    `json:"cache_key"`
-	Etag      string    `json:"etag"`
-	Body      []byte    `json:"body"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
-
-// Store a fresh ESI GET answer under its key, replacing the
-// previous one for the same path and token scope.
-func (q *Queries) UpsertESIETagEntry(ctx context.Context, arg UpsertESIETagEntryParams) error {
-	_, err := q.db.Exec(ctx, upsertESIETagEntry,
-		arg.CacheKey,
-		arg.Etag,
-		arg.Body,
-		arg.ExpiresAt,
 	)
 	return err
 }

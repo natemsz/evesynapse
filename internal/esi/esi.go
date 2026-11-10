@@ -27,9 +27,7 @@ package esi
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -48,7 +46,6 @@ import (
 	// decode_parity_test.go).
 	json "github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/sync/singleflight"
 )
 
 // ESI is at https://esi.evetech.net; every request carries a
@@ -475,20 +472,8 @@ type Client struct {
 	// (changed.go).
 	changes changeLog
 
-	// flight collapses concurrent identical GETs into one
-	// in-flight ESI call, so ten readers of the same alliance
-	// page share one request instead of firing ten.
-	flight singleflight.Group
-
-	// In-process tier of the general ETag cache for GETs: path
-	// (scoped by the token that fetched it) → the ETag ESI
-	// answered with, the body that came with it, and the end of
-	// ESI's cache window. Guarded by etagMu; capped (see
-	// maxETagCacheEntries) so a flood of distinct paths cannot
-	// grow it without bound. Bodies are treated as immutable:
-	// every reader shares the stored slice, nobody mutates it.
-	etagMu    sync.Mutex
-	etagCache map[string]etagEntry
+	// getCache is the GET collapse and ETag cache (getcache.go).
+	getCache getCache
 }
 
 // New builds a Client. httpClient performs every ESI request (in
@@ -513,7 +498,6 @@ func New(httpClient *http.Client, queries *db.Queries, tokens TokenFunc) *Client
 		constellationNames: make(map[int64]string),
 		schematics:         make(map[int64]Schematic),
 		structNames:        make(map[int64]string),
-		etagCache:          make(map[string]etagEntry),
 	}
 }
 
@@ -1680,211 +1664,7 @@ func (c *Client) request(ctx context.Context, method, accessToken, path string, 
 		body, header, _, err := c.send(ctx, c.http, method, accessToken, path, payload, "", want...)
 		return body, header, err
 	}
-	// GETs collapse while one is in flight: concurrent identical
-	// reads share one ESI call, and the shared answer still goes
-	// through the retry, error-budget and rate-limit handling
-	// inside send. A waiter whose context ends first gives up
-	// without cancelling the shared call.
-	ch := c.flight.DoChan(flightKey(accessToken, path, want), func() (any, error) {
-		body, header, err := c.getConditional(ctx, accessToken, path, want...)
-		if err != nil {
-			return nil, err
-		}
-		return getResult{body: body, header: header}, nil
-	})
-	select {
-	case res := <-ch:
-		if res.Err != nil {
-			return nil, nil, res.Err
-		}
-		out := res.Val.(getResult)
-		return out.body, out.header, nil
-	case <-ctx.Done():
-		return nil, nil, fmt.Errorf("ESI GET %s: %w", path, ctx.Err())
-	}
-}
-
-// getResult is the shared answer of one collapsed GET: the body
-// and the response headers, handed to every waiter.
-type getResult struct {
-	body   []byte
-	header http.Header
-}
-
-// flightKey is the singleflight key for a GET: the full path
-// including its query string, scoped by the access token that
-// would send it, so two characters never share one in-flight
-// call. The token enters only as a hash (see etagCacheKey), and
-// the wanted statuses keep callers that accept different
-// answers apart.
-func flightKey(accessToken, path string, want []int) string {
-	return etagCacheKey(accessToken, path) + "\x00" + fmt.Sprint(want)
-}
-
-// etagEntry is one cached GET answer: the ETag ESI answered
-// with, the body that came with it, and the end of ESI's cache
-// window. Served only inside that window.
-type etagEntry struct {
-	etag    string
-	body    []byte
-	expires time.Time
-}
-
-// maxETagCacheEntries bounds the in-memory ETag cache: entries
-// are evicted oldest-window-first past it, so a flood of distinct
-// paths cannot grow the map without bound.
-const maxETagCacheEntries = 1024
-
-// maxETagCacheBody bounds one cached answer: the big bodies (whole
-// market books, long lists) ride FetchRawLong and the snapshot
-// paths, not this cache, so anything larger is fetched fresh
-// every time instead of being held in memory and in Postgres.
-const maxETagCacheBody = 256 << 10
-
-// etagCacheKey is the key an ETag entry is stored under: the full
-// path including its query string, scoped by the access token that
-// fetched it, so two characters never share a cached answer. The
-// token enters only as a hash of itself: a raw token must never be
-// written to the database or held in a map beyond the call.
-func etagCacheKey(accessToken, path string) string {
-	if accessToken == "" {
-		return "public\x00" + path
-	}
-	sum := sha256.Sum256([]byte(accessToken))
-	return "token:" + hex.EncodeToString(sum[:8]) + "\x00" + path
-}
-
-// getConditional is the GET behind request: it offers a cached
-// ETag when one is held for the path, serves the cached body on
-// a 304, and stores a fresh 200 under its new ETag. A 304 is not
-// an error and costs no error budget; a 200 without an ETag is
-// not cached.
-func (c *Client) getConditional(ctx context.Context, accessToken, path string, want ...int) ([]byte, http.Header, error) {
-	if entry, ok := c.etagLookup(ctx, accessToken, path); ok {
-		want304 := append(append([]int(nil), want...), http.StatusNotModified)
-		body, header, status, err := c.send(ctx, c.http, http.MethodGet, accessToken, path, nil, entry.etag, want304...)
-		if err != nil {
-			return nil, nil, err
-		}
-		if status == http.StatusNotModified {
-			return entry.body, header, nil
-		}
-		c.etagStore(ctx, accessToken, path, header, body)
-		return body, header, nil
-	}
-	body, header, _, err := c.send(ctx, c.http, http.MethodGet, accessToken, path, nil, "", want...)
-	if err != nil {
-		return nil, nil, err
-	}
-	c.etagStore(ctx, accessToken, path, header, body)
-	return body, header, nil
-}
-
-// etagLookup finds the cached answer for a GET: the in-memory
-// tier first, then the durable table, which repopulates the
-// memory tier. An expired entry is dropped, never served. A
-// client without a database (tests) reads memory only. Any
-// durable-tier failure degrades to a plain fetch.
-func (c *Client) etagLookup(ctx context.Context, accessToken, path string) (etagEntry, bool) {
-	key := etagCacheKey(accessToken, path)
-	if e, ok := c.etagGet(key); ok {
-		return e, true
-	}
-	if c.queries == nil {
-		return etagEntry{}, false
-	}
-	row, err := c.queries.GetESIETagEntry(ctx, key)
-	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			logging.Warnf("esi: read ETag cache for %s: %v", path, err)
-		}
-		return etagEntry{}, false
-	}
-	if row.Etag == "" || len(row.Body) == 0 {
-		return etagEntry{}, false
-	}
-	e := etagEntry{etag: row.Etag, body: row.Body, expires: row.ExpiresAt}
-	if time.Now().After(e.expires) {
-		if err := c.queries.DeleteESIETagEntry(ctx, key); err != nil {
-			logging.Warnf("esi: drop expired ETag cache for %s: %v", path, err)
-		}
-		return etagEntry{}, false
-	}
-	c.etagPut(key, e)
-	return e, true
-}
-
-// etagGet reads one entry from the in-memory tier, dropping it
-// when its window has ended.
-func (c *Client) etagGet(key string) (etagEntry, bool) {
-	c.etagMu.Lock()
-	defer c.etagMu.Unlock()
-	e, ok := c.etagCache[key]
-	if !ok {
-		return etagEntry{}, false
-	}
-	if time.Now().After(e.expires) {
-		delete(c.etagCache, key)
-		return etagEntry{}, false
-	}
-	return e, true
-}
-
-// etagPut stores one entry in the in-memory tier, evicting past
-// the cap: expired entries first, then the entry whose window
-// ends first.
-func (c *Client) etagPut(key string, e etagEntry) {
-	c.etagMu.Lock()
-	defer c.etagMu.Unlock()
-	if _, ok := c.etagCache[key]; !ok && len(c.etagCache) >= maxETagCacheEntries {
-		now := time.Now()
-		for k, old := range c.etagCache {
-			if now.After(old.expires) {
-				delete(c.etagCache, k)
-			}
-		}
-		if len(c.etagCache) >= maxETagCacheEntries {
-			var oldestKey string
-			var oldest time.Time
-			for k, old := range c.etagCache {
-				if oldestKey == "" || old.expires.Before(oldest) {
-					oldestKey, oldest = k, old.expires
-				}
-			}
-			if oldestKey != "" {
-				delete(c.etagCache, oldestKey)
-			}
-		}
-	}
-	c.etagCache[key] = e
-}
-
-// etagStore records a fresh 200 under its ETag in both tiers. A
-// response without an ETag, an oversized body, or a window that
-// has already ended is not stored. A durable-tier failure only
-// loses the restart-proof copy; the memory tier already holds it.
-func (c *Client) etagStore(ctx context.Context, accessToken, path string, header http.Header, body []byte) {
-	etag := header.Get("ETag")
-	if etag == "" || len(body) == 0 || len(body) > maxETagCacheBody {
-		return
-	}
-	expires := cacheWindowEnd(header)
-	if time.Now().After(expires) {
-		return
-	}
-	key := etagCacheKey(accessToken, path)
-	c.etagPut(key, etagEntry{etag: etag, body: body, expires: expires})
-	if c.queries == nil {
-		return
-	}
-	if err := c.queries.UpsertESIETagEntry(ctx, db.UpsertESIETagEntryParams{
-		CacheKey:  key,
-		Etag:      etag,
-		Body:      body,
-		ExpiresAt: expires,
-	}); err != nil {
-		logging.Warnf("esi: store ETag cache for %s: %v", path, err)
-	}
+	return c.cachedGet(ctx, accessToken, path, want...)
 }
 
 // requestLong is request on the bulk client (FetchRawLong's path):

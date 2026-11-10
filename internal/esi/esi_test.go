@@ -257,59 +257,71 @@ func TestUndecodableAnswerIsAnError(t *testing.T) {
 	}
 }
 
-// etagStub answers GETs with an ETag and honors If-None-Match:
-// the first call returns 200 with the body, later calls offering
-// the current ETag return 304 with no body. The first call waits
-// firstCallDelay, so concurrent readers have time to join the one
-// in-flight call before it answers.
+// etagStub answers GETs with an ETag and honors If-None-Match: a
+// call offering the current ETag gets a 304 with no body, any other
+// a 200 with the body. Each answer's cache window ends window from
+// now. The first call waits firstCallDelay, so concurrent readers
+// have time to join the one in-flight call before it answers.
 type etagStub struct {
 	mu             sync.Mutex
 	calls          int
 	etag           string
 	body           string
+	window         time.Duration
 	firstCallDelay time.Duration
 	seen           []string // If-None-Match values received, in order
 }
 
 func (s *etagStub) RoundTrip(req *http.Request) (*http.Response, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.calls++
+	first := s.calls == 1
 	inm := req.Header.Get("If-None-Match")
 	s.seen = append(s.seen, inm)
 	h := make(http.Header)
 	h.Set("ETag", s.etag)
-	h.Set("Expires", time.Now().Add(time.Hour).UTC().Format(http.TimeFormat))
-	if s.calls == 1 && s.firstCallDelay > 0 {
-		time.Sleep(s.firstCallDelay)
-	}
+	h.Set("Expires", time.Now().Add(s.window).UTC().Format(http.TimeFormat))
+	status, body := http.StatusOK, s.body
 	if inm != "" && inm == s.etag {
-		return &http.Response{
-			StatusCode: http.StatusNotModified,
-			Header:     h,
-			Body:       io.NopCloser(strings.NewReader("")),
-			Request:    req,
-		}, nil
+		status, body = http.StatusNotModified, ""
 	}
-	return &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     h,
-		Body:       io.NopCloser(strings.NewReader(s.body)),
-		Request:    req,
-	}, nil
+	s.mu.Unlock()
+	if first && s.firstCallDelay > 0 {
+		select {
+		case <-time.After(s.firstCallDelay):
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
+		}
+	}
+	return &http.Response{StatusCode: status, Header: h, Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
 }
 
-// TestConcurrentGETsCollapseAndETagServesCached pins the two
-// behaviors the ESI call collapse exists for: concurrent identical
-// GETs fire one ESI call between them, and a later GET for the
-// unchanged resource revalidates with its ETag, gets a 304, and
-// serves the cached body without a fresh download.
+func (s *etagStub) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
+
+// TestConcurrentGETsCollapseAndETagServesCached pins what the ESI
+// call collapse and ETag cache exist for: concurrent identical GETs
+// fire one ESI call, and the first caller leaving does not fail the
+// others; inside ESI's cache window a repeat GET is served without a
+// call; past the window it revalidates with its ETag and a 304
+// serves the held body.
 func TestConcurrentGETsCollapseAndETagServesCached(t *testing.T) {
-	stub := &etagStub{etag: `"v1"`, body: `{"n":1}`, firstCallDelay: 200 * time.Millisecond}
+	stub := &etagStub{etag: `"v1"`, body: `{"n":1}`, window: time.Hour, firstCallDelay: 200 * time.Millisecond}
 	client := New(&http.Client{Transport: stub}, nil, nil)
 	ctx := context.Background()
 
-	const readers = 10
+	// The first caller gives up while nine others wait on its call.
+	leaderCtx, cancelLeader := context.WithCancel(ctx)
+	leaderDone := make(chan struct{})
+	go func() {
+		defer close(leaderDone)
+		_, _, _ = client.FetchRaw(leaderCtx, "", "/alliances/1/")
+	}()
+	time.Sleep(20 * time.Millisecond)
+	const readers = 9
 	var wg sync.WaitGroup
 	bodies := make([][]byte, readers)
 	errs := make([]error, readers)
@@ -321,37 +333,42 @@ func TestConcurrentGETsCollapseAndETagServesCached(t *testing.T) {
 			bodies[i], errs[i] = body, err
 		}(i)
 	}
+	time.Sleep(20 * time.Millisecond)
+	cancelLeader()
+	<-leaderDone
 	wg.Wait()
-	stub.mu.Lock()
-	calls := stub.calls
-	stub.mu.Unlock()
-	if calls != 1 {
-		t.Fatalf("ten concurrent identical GETs made %d ESI calls, want 1", calls)
+	if n := stub.count(); n != 1 {
+		t.Fatalf("ten concurrent identical GETs made %d ESI calls, want 1", n)
 	}
 	for i := range readers {
 		if errs[i] != nil {
-			t.Fatalf("reader %d: %v", i, errs[i])
+			t.Fatalf("reader %d failed when the first caller left: %v", i, errs[i])
 		}
 		if string(bodies[i]) != `{"n":1}` {
 			t.Fatalf("reader %d got %q, want the shared body", i, bodies[i])
 		}
 	}
 
-	// The resource has not changed: the next GET offers the ETag,
-	// ESI answers 304, and the cached body is served.
-	body, _, err := client.FetchRaw(ctx, "", "/alliances/1/")
-	if err != nil {
-		t.Fatalf("second GET: %v", err)
+	// Inside the window: served from memory, no call.
+	if body, _, err := client.FetchRaw(ctx, "", "/alliances/1/"); err != nil || string(body) != `{"n":1}` {
+		t.Fatalf("GET inside the window = %q, %v; want the held body", body, err)
 	}
-	if string(body) != `{"n":1}` {
-		t.Fatalf("second GET served %q, want the cached body", body)
+	if n := stub.count(); n != 1 {
+		t.Fatalf("GET inside the window made %d ESI calls in total, want 1", n)
+	}
+
+	// Past the window: one conditional call, 304, the held body.
+	client.getCache.mu.Lock()
+	for _, e := range client.getCache.entries {
+		e.expires = time.Now().Add(-time.Second)
+	}
+	client.getCache.mu.Unlock()
+	if body, _, err := client.FetchRaw(ctx, "", "/alliances/1/"); err != nil || string(body) != `{"n":1}` {
+		t.Fatalf("GET past the window = %q, %v; want the held body", body, err)
 	}
 	stub.mu.Lock()
 	defer stub.mu.Unlock()
-	if stub.calls != 2 {
-		t.Fatalf("second GET made %d ESI calls in total, want 2 (one fetch, one 304 revalidation)", stub.calls)
-	}
-	if len(stub.seen) != 2 || stub.seen[1] != `"v1"` {
-		t.Fatalf("second GET sent If-None-Match %q, want the stored ETag", stub.seen)
+	if stub.calls != 2 || stub.seen[1] != `"v1"` {
+		t.Fatalf("GET past the window made %d calls with If-None-Match %q, want 2 with the held ETag", stub.calls, stub.seen)
 	}
 }

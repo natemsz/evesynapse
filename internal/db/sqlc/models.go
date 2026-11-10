@@ -528,14 +528,6 @@ type EntityName struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-type EsiEtagCache struct {
-	CacheKey  string    `json:"cache_key"`
-	Etag      string    `json:"etag"`
-	Body      []byte    `json:"body"`
-	ExpiresAt time.Time `json:"expires_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 type EsiNameMiss struct {
 	Kind     string    `json:"kind"`
 	EntityID int64     `json:"entity_id"`

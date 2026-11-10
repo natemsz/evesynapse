@@ -233,55 +233,6 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 			return nil, err
 		}
 	}
-	// The stored medians behind any copy-priced lines, in one
-	// batched read, so a copy line's note can say what its
-	// price stands on -- the same basis wording habit as the
-	// abyssal estimate's note.
-	copySamples := map[string]int64{}
-	{
-		var copyTypes []int64
-		seenType := map[int64]bool{}
-		for _, ln := range agg {
-			if ln.Facts.HasFacts && ln.Facts.Copy && !seenType[ln.TypeID] {
-				seenType[ln.TypeID] = true
-				copyTypes = append(copyTypes, ln.TypeID)
-			}
-		}
-		if len(copyTypes) > 0 {
-			rows, err := app.queries.ListBlueprintCopyMediansForTypes(ctx, copyTypes)
-			if err != nil {
-				return nil, err
-			}
-			for _, row := range rows {
-				copySamples[fmt.Sprintf("%d/%d", row.TypeID, row.Runs)] = row.SampleCount
-			}
-		}
-	}
-	// The stored medians behind any researched-original
-	// lines, in one batched read, so an improved original's
-	// note can say what its price stands on -- the same
-	// basis wording habit as the copy lines.
-	researchSamples := map[string]int64{}
-	{
-		var researchTypes []int64
-		seenRes := map[int64]bool{}
-		for _, ln := range agg {
-			if ln.Facts.HasFacts && !ln.Facts.Copy &&
-				(ln.Facts.ME > 0 || ln.Facts.TE > 0) && !seenRes[ln.TypeID] {
-				seenRes[ln.TypeID] = true
-				researchTypes = append(researchTypes, ln.TypeID)
-			}
-		}
-		if len(researchTypes) > 0 {
-			rows, err := app.queries.ListBlueprintResearchMediansForTypes(ctx, researchTypes)
-			if err != nil {
-				return nil, err
-			}
-			for _, row := range rows {
-				researchSamples[fmt.Sprintf("%d/%d/%d", row.TypeID, row.Me, row.Te)] = row.SampleCount
-			}
-		}
-	}
 	// Unit volumes from the SDE physics rows, in one batched
 	// read: the line and total volumes ride the snapshot.
 	volumes := map[int64]float64{}
@@ -331,15 +282,15 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 			al := res.Lines[i]
 			sl.UnitPrice, sl.LineValue, sl.Tier, sl.AsOf, sl.Priced = al.UnitPrice, al.LineValue, al.Tier, al.AsOf, al.Priced
 			sl.SourceRegion = al.SourceRegionID
-		}
-		if sl.Priced && sl.Tier == module.AppraisalTierCopyMedian {
-			if n, ok := copySamples[fmt.Sprintf("%d/%d", ln.TypeID, ln.Facts.Runs)]; ok {
-				sl.Note += fmt.Sprintf(" · median of %s copy listings", esi.FormatInt(n))
-			}
-		}
-		if sl.Priced && sl.Tier == module.AppraisalTierResearchMedian {
-			if n, ok := researchSamples[fmt.Sprintf("%d/%d/%d", ln.TypeID, ln.Facts.ME, ln.Facts.TE)]; ok {
-				sl.Note += fmt.Sprintf(" · median of %s researched listings", esi.FormatInt(n))
+			// A copy or research median says what it stands on,
+			// the same basis wording habit as the abyssal note.
+			if sl.Priced && al.SampleCount > 0 {
+				switch sl.Tier {
+				case module.AppraisalTierCopyMedian:
+					sl.Note += fmt.Sprintf(" · median of %s copy listings", esi.FormatInt(al.SampleCount))
+				case module.AppraisalTierResearchMedian:
+					sl.Note += fmt.Sprintf(" · median of %s researched listings", esi.FormatInt(al.SampleCount))
+				}
 			}
 		}
 		if sl.Priced {

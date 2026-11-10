@@ -524,6 +524,9 @@ type AppraisedLine struct {
 	// that no stored research median covers, so it priced at the
 	// unresearched original's figure; readers say so.
 	ResearchUnmatched bool
+	// SampleCount is how many listings the stored copy or research
+	// median behind the price stands on; zero for every other tier.
+	SampleCount int64
 }
 
 // Appraisal is a priced line list: the lines, the offered and

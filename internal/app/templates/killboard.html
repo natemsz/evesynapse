@@ -39,6 +39,7 @@
     <nav class="kb-chips" aria-label="Show">
       {{range .Chips}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}
     </nav>
+    <span class="badge kill kb-live-pill" data-live-pill role="status" hidden>Live</span>
   </div>
   {{if .SearchQ}}<p class="kb-search-note" role="status">No pilot, corporation, alliance, system, region or ship matches “{{.SearchQ}}”.</p>{{end}}
 

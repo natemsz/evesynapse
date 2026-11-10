@@ -1,19 +1,30 @@
 // Killboard live feed: opens an EventSource to /intel/kills/stream
-// (carrying the page's scope, if any) and prepends each kill that
-// arrives after load as a row at the top of the list, in the same
-// markup the server renders. The list never grows past the page
-// size: rows past 40 drop off the bottom. A kill that lands
-// unpriced shows "pricing…" until its price event fills the value
-// in. The server-rendered first paint is untouched; without script
-// the page is the list it always was.
+// (carrying the page's scope, if any) and slots each kill that
+// arrives after load into the list by kill time, in the same markup
+// the server renders. The list never grows past the page size: rows
+// past 40 drop off the bottom. A kill that lands unpriced shows
+// "pricing…" until its price event fills the value in. Only the
+// first page is live; an older page (?before=) stays as it is.
+//
+// New kills stay highlighted until they are seen: a row fades back
+// to normal a few seconds after it is on screen in a visible tab.
+// The newest kill seen is remembered per scope in localStorage, so
+// coming back to the page highlights the kills that arrived while
+// you were away. The "Live" pill says whether the stream is open.
+// The server-rendered first paint is untouched; without script the
+// page is the list it always was.
 (function () {
   "use strict";
   if (window.esKillboardLive) return;
   window.esKillboardLive = true;
 
   var PAGE_SIZE = 40; // killPageSize in killboard.go
+  var HOLD_MS = 6000; // how long a seen row keeps its highlight
+  var FADE_MS = 1500; // the fade back to normal (killboard.css)
+  var SEEN_PREFIX = "kb-seen:";
   var source = null;
   var streamURL = "";
+  var watcher = null;
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -96,10 +107,119 @@
       "</li>";
   }
 
+  // --- Seen tracking ---------------------------------------------
+
+  function seenKey() {
+    return SEEN_PREFIX + streamURLFor();
+  }
+
+  function readSeen() {
+    try {
+      var v = localStorage.getItem(seenKey());
+      return v === null ? null : +v || 0;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function noteSeen(id) {
+    try {
+      var prev = readSeen();
+      if (prev === null || id > prev) localStorage.setItem(seenKey(), String(id));
+    } catch (err) {
+      /* storage off: highlights still fade, nothing is remembered */
+    }
+  }
+
+  function rowID(row) {
+    return +row.getAttribute("data-kill-id") || 0;
+  }
+
+  // fade returns a seen row to normal and records it as seen.
+  function fade(row) {
+    if (watcher) watcher.unobserve(row);
+    row.classList.remove("is-live");
+    row.classList.add("is-fading");
+    setTimeout(function () { row.classList.remove("is-fading"); }, FADE_MS);
+    noteSeen(rowID(row));
+  }
+
+  // arm starts or stops a live row's hold timer: it runs only while
+  // the row is on screen in a visible tab.
+  function arm(row) {
+    var viewing = row._kbOnScreen && document.visibilityState === "visible";
+    if (viewing && !row._kbTimer) {
+      row._kbTimer = setTimeout(function () { row._kbTimer = 0; fade(row); }, HOLD_MS);
+    } else if (!viewing && row._kbTimer) {
+      clearTimeout(row._kbTimer);
+      row._kbTimer = 0;
+    }
+  }
+
+  function markLive(row) {
+    row.classList.add("is-live");
+    if (!watcher) {
+      if (!("IntersectionObserver" in window)) {
+        row._kbOnScreen = true;
+        arm(row);
+        return;
+      }
+      watcher = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          e.target._kbOnScreen = e.isIntersecting;
+          arm(e.target);
+        });
+      }, { threshold: 0.5 });
+    }
+    watcher.observe(row);
+  }
+
+  function rearmAll() {
+    document.querySelectorAll(".kb-kill.is-live").forEach(arm);
+  }
+
+  // markUnseen highlights the rows that arrived since this scope's
+  // list was last seen. A first visit highlights nothing and starts
+  // the record from the newest row on the page.
+  function markUnseen(list) {
+    if (list.getAttribute("data-kb-seen") === "1") return;
+    list.setAttribute("data-kb-seen", "1");
+    var rows = list.querySelectorAll("li.kb-kill");
+    var prev = readSeen();
+    var newest = 0;
+    rows.forEach(function (row) {
+      var id = rowID(row);
+      if (id > newest) newest = id;
+      if (prev !== null && id > prev) markLive(row);
+    });
+    if (prev === null && newest) noteSeen(newest);
+  }
+
+  // --- Rows --------------------------------------------------------
+
+  function killTime(row) {
+    var t = row.querySelector("time[datetime]");
+    return t ? Date.parse(t.getAttribute("datetime")) || 0 : 0;
+  }
+
+  // addKill slots a streamed kill into the list by kill time, newest
+  // first, the order the server renders. A kill older than every
+  // row on a full page is not news here and is skipped.
   function addKill(ev) {
     var list = document.querySelector(".kb-list");
     if (!list || !ev || !ev.id) return;
     if (list.querySelector('[data-kill-id="' + ev.id + '"]')) return;
+    var at = Date.parse(ev.time) || 0;
+    var rows = list.querySelectorAll("li.kb-kill");
+    var before = null;
+    for (var i = 0; i < rows.length; i++) {
+      var t = killTime(rows[i]);
+      if (at > t || (at === t && ev.id > rowID(rows[i]))) {
+        before = rows[i];
+        break;
+      }
+    }
+    if (!before && rows.length >= PAGE_SIZE) return;
     var empty = list.querySelector("li.prose");
     if (empty) empty.remove();
     var head = list.querySelector("li.kb-head");
@@ -112,9 +232,16 @@
     }
     var holder = document.createElement("div");
     holder.innerHTML = rowHTML(ev);
-    head.after(holder.firstChild);
-    var rows = list.querySelectorAll("li.kb-kill");
-    for (var i = PAGE_SIZE; i < rows.length; i++) rows[i].remove();
+    var row = holder.firstChild;
+    if (before) before.before(row);
+    else list.append(row);
+    markLive(row);
+    rows = list.querySelectorAll("li.kb-kill");
+    for (var j = PAGE_SIZE; j < rows.length; j++) {
+      if (watcher) watcher.unobserve(rows[j]);
+      clearTimeout(rows[j]._kbTimer);
+      rows[j].remove();
+    }
   }
 
   function setKillPrice(ev) {
@@ -144,25 +271,50 @@
     return "/intel/kills/stream" + (q ? "?" + q : "");
   }
 
+  // setPill shows the stream's state: "Live" while it is open,
+  // "Reconnecting" while the browser retries, "Offline" once it
+  // has given up (the server turned the stream away).
+  function setPill(state) {
+    var pill = document.querySelector("[data-live-pill]");
+    if (!pill) return;
+    pill.hidden = false;
+    pill.setAttribute("data-state", state);
+    pill.textContent = state === "live" ? "Live" : state === "retry" ? "Reconnecting" : "Offline";
+  }
+
   function closeStream() {
     if (source) {
       source.close();
       source = null;
       streamURL = "";
     }
+    if (watcher) {
+      watcher.disconnect();
+      watcher = null;
+    }
   }
 
   function openStream() {
-    if (!document.querySelector(".kb-list")) {
+    var list = document.querySelector(".kb-list");
+    if (!list || /[?&]before=/.test(location.search)) {
       closeStream();
       return;
     }
+    markUnseen(list);
     var url = streamURLFor();
     if (source && streamURL === url) return;
-    closeStream();
+    if (source) {
+      source.close();
+      source = null;
+    }
     if (!("EventSource" in window)) return;
     streamURL = url;
     source = new EventSource(url);
+    source.addEventListener("open", function () { setPill("live"); });
+    source.addEventListener("error", function () {
+      if (!source) return;
+      setPill(source.readyState === EventSource.CLOSED ? "down" : "retry");
+    });
     source.addEventListener("kill", function (e) {
       try {
         addKill(JSON.parse(e.data));
@@ -181,5 +333,6 @@
 
   document.addEventListener("evesynapse:content-ready", openStream);
   document.addEventListener("evesynapse:content-will-swap", closeStream);
+  document.addEventListener("visibilitychange", rearmAll);
   openStream();
 })();

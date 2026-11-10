@@ -231,7 +231,8 @@
 </form>
 
 <div class="cs-countbar">
-  <p class="cs-count"><strong>{{$s.TotalText}}</strong> contracts match • Page {{$s.Page}} of {{$s.Pages}}{{if $s.Live}} <span class="badge kill" data-live-pill role="status" hidden>Live</span>{{end}}</p>
+  <p class="cs-count"><strong>{{$s.TotalText}}</strong> contracts match • Page {{$s.Page}} of {{$s.Pages}}</p>
+  {{if $s.Live}}<span class="badge kill cs-live-pill" data-live-pill role="status" hidden>Live</span>{{end}}
   {{with $.SubTabNote}}<p class="cs-sweepnote">{{.}}</p>{{end}}
   <p class="cs-counthint">Click any row to inspect line-by-line Forge appraisal &amp; mutaplasmid stats</p>
 </div>

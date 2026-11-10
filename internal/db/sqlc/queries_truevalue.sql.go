@@ -87,25 +87,23 @@ func (q *Queries) ListTVContractObservationsByRegion(ctx context.Context, region
 	return items, nil
 }
 
-const listTVShipSaleProbes = `-- name: ListTVShipSaleProbes :many
+const listTVExitProbes = `-- name: ListTVExitProbes :many
 SELECT o.contract_id, o.expires_at, o.type_id, o.sample_price, o.first_seen_at
 FROM true_value_contract_observations o
 WHERE o.vanished_at IS NULL AND o.exit_probed_at IS NULL
-  AND o.type_id = ANY($1::bigint[])
-  AND o.expires_at > $2::timestamptz
+  AND o.expires_at > $1::timestamptz
   AND NOT EXISTS (SELECT 1 FROM pub_contracts c WHERE c.contract_id = o.contract_id
                   AND c.departed_at IS NULL)
 ORDER BY o.last_seen_at DESC
-LIMIT $3::bigint
+LIMIT $2::bigint
 `
 
-type ListTVShipSaleProbesParams struct {
-	ShipTypeIds []int64   `json:"ship_type_ids"`
-	ProbeAfter  time.Time `json:"probe_after"`
-	MaxRows     int64     `json:"max_rows"`
+type ListTVExitProbesParams struct {
+	ProbeAfter time.Time `json:"probe_after"`
+	MaxRows    int64     `json:"max_rows"`
 }
 
-type ListTVShipSaleProbesRow struct {
+type ListTVExitProbesRow struct {
 	ContractID  int64     `json:"contract_id"`
 	ExpiresAt   time.Time `json:"expires_at"`
 	TypeID      int64     `json:"type_id"`
@@ -113,23 +111,23 @@ type ListTVShipSaleProbesRow struct {
 	FirstSeenAt time.Time `json:"first_seen_at"`
 }
 
-// Departed ship contracts awaiting their exit probe: watched
-// observations (the crawl's, and the ones the corpus miner
-// records) whose contract has left the stored public-contract
+// Departed contracts awaiting their exit probe: watched
+// observations (the ones the corpus miner records) whose
+// contract has left the stored public-contract
 // corpus -- gone from it, or kept there stamped departed
 // (schema 096) -- and whose expiry is still near enough for
 // ESI to answer whether it was accepted (a 204 before expiry
 // is a sale; see pub_contracts_sales.go). Freshest departures
 // first: ESI's memory of an accepted contract fades.
-func (q *Queries) ListTVShipSaleProbes(ctx context.Context, arg ListTVShipSaleProbesParams) ([]ListTVShipSaleProbesRow, error) {
-	rows, err := q.db.Query(ctx, listTVShipSaleProbes, arg.ShipTypeIds, arg.ProbeAfter, arg.MaxRows)
+func (q *Queries) ListTVExitProbes(ctx context.Context, arg ListTVExitProbesParams) ([]ListTVExitProbesRow, error) {
+	rows, err := q.db.Query(ctx, listTVExitProbes, arg.ProbeAfter, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListTVShipSaleProbesRow
+	var items []ListTVExitProbesRow
 	for rows.Next() {
-		var i ListTVShipSaleProbesRow
+		var i ListTVExitProbesRow
 		if err := rows.Scan(
 			&i.ContractID,
 			&i.ExpiresAt,

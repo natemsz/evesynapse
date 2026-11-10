@@ -411,7 +411,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// True values ride behind both: the bottom-up price of
 	// everything manufacturable, computed from the stored
 	// guide, the Forge sweep and the cost indices above
-	// (plus the bounded public-contracts crawl), ahead of
+	// (plus the stored public-contract corpus), ahead of
 	// the character pass so valuation reads fresh rows.
 	app.refreshTrueValues(ctx)
 	clock.mark("true values", time.Now())

@@ -4,11 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"io"
 	"math"
 	"net/http"
-	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -17,10 +14,10 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// True-value evidence tiers (schema 052): the crawl's fitted
-// listings teach a titan an estimated sell, a watched listing
-// that vanishes before expiry graduates to the probable
-// tier, and a linked character's finished contracts are the
+// True-value evidence tiers (schema 052): fitted listings in
+// the stored public-contract corpus teach a titan an estimated
+// sell, a watched listing that leaves before expiry graduates
+// to the probable tier, and a linked character's finished contracts are the
 // certain tier -- recorded sales. The tiers are the evidence
 // ships price from (truevalue_learn.go): every tier feeds
 // the learned correction, confirmed sales weighted highest.
@@ -32,48 +29,22 @@ import (
 // netting module's swept typical is 1e8.
 // ---------------------------------------------------------------------------
 
-// tvCrawlTransport serves the public-contracts endpoints from
-// fixtures: region header pages and per-contract item lists.
-// A contract ID in gone answers 404, as the endpoint does
-// once a listing leaves the public market.
-type tvCrawlTransport struct {
-	headers map[int64][]tvPublicContract
-	items   map[int64][]tvPublicContractItem
-	gone    map[int64]bool
-}
-
-func (s *tvCrawlTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	header := make(http.Header)
-	respond := func(code int, body string) (*http.Response, error) {
-		return &http.Response{StatusCode: code, Header: header,
-			Body: io.NopCloser(strings.NewReader(body))}, nil
+// seedTVCorpusContract stores one live item exchange in The
+// Forge's public-contract corpus, with its items, the way the
+// contract sweep leaves it, last seen at seen.
+func seedTVCorpusContract(t *testing.T, conn *sql.DB, id int64, price float64, seen, expires time.Time, items []tvPublicContractItem) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, `INSERT INTO pub_contracts (contract_id, region_id, type, price, date_issued, date_expired, items_state, first_seen, last_seen)
+		VALUES ($1, 10000002, 'item_exchange', $2, $3, $4, 'stored', $3, $3)`, id, price, seen, expires); err != nil {
+		t.Fatalf("seed corpus contract %d: %v", id, err)
 	}
-	path := req.URL.Path
-	if strings.HasPrefix(path, "/contracts/public/items/") {
-		id, err := strconv.ParseInt(strings.Trim(strings.TrimPrefix(path, "/contracts/public/items/"), "/"), 10, 64)
-		if err != nil {
-			return respond(http.StatusBadRequest, `{}`)
+	for i, it := range items {
+		if _, err := conn.ExecContext(ctx, `INSERT INTO pub_contract_items (record_id, contract_id, type_id, quantity, is_included)
+			VALUES ($1, $2, $3, $4, $5)`, id*100+int64(i), id, it.TypeID, it.Quantity, it.IsIncluded); err != nil {
+			t.Fatalf("seed corpus item %d/%d: %v", id, it.TypeID, err)
 		}
-		if s.gone[id] {
-			return respond(http.StatusNotFound, `{"error":"contract not found"}`)
-		}
-		body, _ := json.Marshal(s.items[id])
-		return respond(http.StatusOK, string(body))
 	}
-	if strings.HasPrefix(path, "/contracts/public/") {
-		region, err := strconv.ParseInt(strings.Trim(strings.TrimPrefix(path, "/contracts/public/"), "/"), 10, 64)
-		if err != nil {
-			return respond(http.StatusBadRequest, `{}`)
-		}
-		header.Set("X-Pages", "1")
-		rows := s.headers[region]
-		if rows == nil {
-			rows = []tvPublicContract{}
-		}
-		body, _ := json.Marshal(rows)
-		return respond(http.StatusOK, string(body))
-	}
-	return respond(http.StatusInternalServerError, `{"error":"fixture"}`)
 }
 
 // seedTVEvidenceFixture installs the SDE and price fixtures
@@ -155,15 +126,8 @@ func bumpTVGuideMeta(t *testing.T, q *db.Queries, at time.Time) {
 	}
 }
 
-func tvHeader(id int64, price float64, expires time.Time) tvPublicContract {
-	return tvPublicContract{
-		ContractID: id, Price: price, Status: "outstanding", Type: "item_exchange",
-		DateExpired: expires.UTC().Format(time.RFC3339),
-	}
-}
-
 // TestTrueValueFittedListings: titans trade fitted, so the
-// crawl's fitted samples (residuals after netting the fit at
+// corpus's fitted samples (residuals after netting the fit at
 // stored prices) give the fixture titan a listing-tier
 // estimated sell; the supercarrier's bare listings price it
 // the same way. Both hulls price through their own bounded
@@ -173,29 +137,18 @@ func tvHeader(id int64, price float64, expires time.Time) tvPublicContract {
 func TestTrueValueFittedListings(t *testing.T) {
 	now := time.Now().UTC()
 	expires := now.Add(10 * 24 * time.Hour)
-	transport := &tvCrawlTransport{
-		headers: map[int64][]tvPublicContract{10000002: {
-			tvHeader(9001, 5.6e9, expires),
-			tvHeader(9002, 6.1e9, expires),
-			tvHeader(9003, 2.6e9, expires),
-			tvHeader(9004, 2.5e9, expires),
-		}},
-		items: map[int64][]tvPublicContractItem{
-			9001: {{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 3, IsIncluded: true}},
-			9002: {{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 1, IsIncluded: true}},
-			9003: {{TypeID: 5004, Quantity: 1, IsIncluded: true}},
-			9004: {{TypeID: 5004, Quantity: 1, IsIncluded: true}},
-		},
-		gone: map[int64]bool{},
-	}
-	app, conn, q := buildCorpTestApp(t, transport)
+	app, conn, q := buildCorpTestApp(t, &tvExitTransport{codes: map[int64]int{}})
 	ctx := context.Background()
 	seed := seedTVEvidenceFixture(t, conn, q)
+	seedTVCorpusContract(t, conn, 9001, 5.6e9, now, expires, []tvPublicContractItem{{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 3, IsIncluded: true}})
+	seedTVCorpusContract(t, conn, 9002, 6.1e9, now, expires, []tvPublicContractItem{{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 1, IsIncluded: true}})
+	seedTVCorpusContract(t, conn, 9003, 2.6e9, now, expires, []tvPublicContractItem{{TypeID: 5004, Quantity: 1, IsIncluded: true}})
+	seedTVCorpusContract(t, conn, 9004, 2.5e9, now, expires, []tvPublicContractItem{{TypeID: 5004, Quantity: 1, IsIncluded: true}})
 	bumpTVGuideMeta(t, q, seed)
 
 	app.refreshTrueValues(ctx)
 
-	// The crawl watched all four listings, shapes recorded.
+	// The pass watches all four corpus listings, shapes recorded.
 	obs, err := q.ListTVContractObservationsByRegion(ctx, 10000002)
 	if err != nil {
 		t.Fatalf("list observations: %v", err)
@@ -248,33 +201,23 @@ func TestTrueValueFittedListings(t *testing.T) {
 }
 
 // TestTrueValueVanishedListings: both watched titan listings
-// leave the public market long before expiry, so they
+// leave the corpus long before expiry and the exit probe finds
+// them gone from the public market, so they
 // graduate to the probable tier and the estimate rests on
 // likely sales; a third listing that vanishes inside the
 // expiry margin is forgotten, not counted.
 func TestTrueValueVanishedListings(t *testing.T) {
 	now := time.Now().UTC()
 	expires := now.Add(10 * 24 * time.Hour)
-	transport := &tvCrawlTransport{
-		headers: map[int64][]tvPublicContract{10000002: {
-			tvHeader(9001, 5.6e9, expires),
-			tvHeader(9002, 6.1e9, expires),
-		}},
-		items: map[int64][]tvPublicContractItem{
-			9001: {{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 3, IsIncluded: true}},
-			9002: {{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 1, IsIncluded: true}},
-		},
-		gone: map[int64]bool{},
-	}
+	transport := &tvExitTransport{codes: map[int64]int{}}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 	seed := seedTVEvidenceFixture(t, conn, q)
+	seedTVCorpusContract(t, conn, 9001, 5.6e9, now, expires, []tvPublicContractItem{{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 3, IsIncluded: true}})
+	seedTVCorpusContract(t, conn, 9002, 6.1e9, now, expires, []tvPublicContractItem{{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 1, IsIncluded: true}})
 	bumpTVGuideMeta(t, q, seed)
 
 	app.refreshTrueValues(ctx)
-	if got := len(app.trueValuePass.samples[5003]); got != 2 {
-		t.Fatalf("listing samples after crawl = %d, want 2", got)
-	}
 	// A third watched listing, expiring inside the margin.
 	if err := q.UpsertTVContractObservation(ctx, db.UpsertTVContractObservationParams{
 		ContractID: 9009, RegionID: 10000002, TypeID: 5003, Shape: tvContractShapeFitted,
@@ -284,13 +227,14 @@ func TestTrueValueVanishedListings(t *testing.T) {
 		t.Fatalf("seed observation: %v", err)
 	}
 
-	// All three listings leave the public market; The Forge
-	// comes due again.
-	transport.gone[9001] = true
-	transport.gone[9002] = true
-	transport.gone[9009] = true
-	app.trueValuePass.lastCrawl[10000002] = now.Add(-13 * time.Hour)
-	app.trueValuePass.crawlNext = 0
+	// All three listings leave the public market: the sweep
+	// stamps the corpus pair departed, and ESI answers 404.
+	if _, err := conn.ExecContext(ctx, `UPDATE pub_contracts SET departed_at = $1 WHERE contract_id IN (9001, 9002)`, now); err != nil {
+		t.Fatalf("depart corpus contracts: %v", err)
+	}
+	transport.codes[9001] = http.StatusNotFound
+	transport.codes[9002] = http.StatusNotFound
+	transport.codes[9009] = http.StatusNotFound
 	app.refreshTrueValues(ctx)
 
 	vanished, err := q.ListTVVanishedSamplesSince(ctx, sql.NullTime{Time: now.Add(-time.Hour), Valid: true})
@@ -306,9 +250,6 @@ func TestTrueValueVanishedListings(t *testing.T) {
 	}
 	if len(live) != 0 {
 		t.Errorf("live observations = %d, want 0 (9009 forgotten, 9001/9002 vanished)", len(live))
-	}
-	if got := len(app.trueValuePass.samples[5003]); got != 0 {
-		t.Errorf("listing samples after vanish = %d, want 0 (the contracts now speak as likely sales)", got)
 	}
 
 	bumpTVGuideMeta(t, q, seed.Add(2*time.Hour))
@@ -338,20 +279,11 @@ func TestTrueValueVanishedListings(t *testing.T) {
 func TestTrueValueFulfilledSales(t *testing.T) {
 	now := time.Now().UTC()
 	expires := now.Add(10 * 24 * time.Hour)
-	transport := &tvCrawlTransport{
-		headers: map[int64][]tvPublicContract{10000002: {
-			tvHeader(9001, 5.6e9, expires),
-			tvHeader(9002, 6.1e9, expires),
-		}},
-		items: map[int64][]tvPublicContractItem{
-			9001: {{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 3, IsIncluded: true}},
-			9002: {{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 1, IsIncluded: true}},
-		},
-		gone: map[int64]bool{},
-	}
-	app, conn, q := buildCorpTestApp(t, transport)
+	app, conn, q := buildCorpTestApp(t, &tvExitTransport{codes: map[int64]int{}})
 	ctx := context.Background()
 	seed := seedTVEvidenceFixture(t, conn, q)
+	seedTVCorpusContract(t, conn, 9001, 5.6e9, now, expires, []tvPublicContractItem{{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 3, IsIncluded: true}})
+	seedTVCorpusContract(t, conn, 9002, 6.1e9, now, expires, []tvPublicContractItem{{TypeID: 5003, Quantity: 1, IsIncluded: true}, {TypeID: 6002, Quantity: 1, IsIncluded: true}})
 	bumpTVGuideMeta(t, q, seed)
 
 	user, err := q.CreateUser(ctx)

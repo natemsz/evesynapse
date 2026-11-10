@@ -354,14 +354,14 @@ func (s *tvExitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return &http.Response{StatusCode: code, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
 }
 
-// TestTVShipSaleProbes: the corpus-scale exit probe. A
-// departed ship listing ESI confirms accepted (204 before
-// expiry) is stamped a confirmed sale; one that answers 404
+// TestTVExitProbes: the corpus-scale exit probe. A departed
+// listing ESI confirms accepted (204 before expiry) is stamped
+// a confirmed sale, whatever its type; one that answers 404
 // well before expiry graduates to likely; one that leaves
 // inside the expiry margin is forgotten; one still listed is
-// left alone. Listings for other types, and listings still
-// in the corpus, are never asked about.
-func TestTVShipSaleProbes(t *testing.T) {
+// left alone. Listings still in the corpus are never asked
+// about.
+func TestTVExitProbes(t *testing.T) {
 	transport := &tvExitTransport{codes: map[int64]int{7001: 204, 7002: 404, 7003: 404, 7004: 200, 7005: 204, 7006: 204, 7007: 403}}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -380,7 +380,7 @@ func TestTVShipSaleProbes(t *testing.T) {
 	observe(7002, 5003, now.Add(10*24*time.Hour)) // gone before expiry
 	observe(7003, 5003, now.Add(time.Hour))       // gone inside the margin
 	observe(7004, 5003, now.Add(10*24*time.Hour)) // still listed
-	observe(7005, 9999, now.Add(10*24*time.Hour)) // not a ship type: never due
+	observe(7005, 9999, now.Add(10*24*time.Hour)) // a non-ship type, accepted before expiry
 	observe(7006, 5003, now.Add(10*24*time.Hour)) // still in the corpus: not departed
 	observe(7007, 5003, now.Add(10*24*time.Hour)) // no longer public: settled, no evidence
 	if _, err := conn.ExecContext(ctx,
@@ -390,10 +390,10 @@ func TestTVShipSaleProbes(t *testing.T) {
 		t.Fatalf("seed corpus contract: %v", err)
 	}
 
-	app.probeShipContractSales(ctx, []int64{5003}, now)
+	app.probeContractExits(ctx, now)
 
-	if transport.calls[7005] != 0 || transport.calls[7006] != 0 {
-		t.Errorf("probes asked about 7005 x%d, 7006 x%d; want neither asked", transport.calls[7005], transport.calls[7006])
+	if transport.calls[7006] != 0 {
+		t.Errorf("probes asked about 7006 x%d; a listing still in the corpus must not be asked", transport.calls[7006])
 	}
 	vanished, err := q.ListTVVanishedSamplesSince(ctx, sql.NullTime{Time: now.Add(-time.Hour), Valid: true})
 	if err != nil {
@@ -405,6 +405,9 @@ func TestTVShipSaleProbes(t *testing.T) {
 	}
 	if row, ok := byID[7001]; !ok || !row.Sold {
 		t.Errorf("contract 7001 = %+v (present %v), want a confirmed sale", row, ok)
+	}
+	if row, ok := byID[7005]; !ok || !row.Sold {
+		t.Errorf("contract 7005 = %+v (present %v), want a confirmed sale for the non-ship type", row, ok)
 	}
 	if row, ok := byID[7002]; !ok || row.Sold {
 		t.Errorf("contract 7002 = %+v (present %v), want a likely sale", row, ok)
@@ -420,7 +423,7 @@ func TestTVShipSaleProbes(t *testing.T) {
 	for _, o := range live {
 		liveIDs[o.ContractID] = true
 	}
-	for _, id := range []int64{7004, 7005, 7006} {
+	for _, id := range []int64{7004, 7006} {
 		if !liveIDs[id] {
 			t.Errorf("observation %d missing from the live set, want it watched still", id)
 		}
@@ -441,7 +444,7 @@ func TestTVShipSaleProbes(t *testing.T) {
 	if err := conn.QueryRowContext(ctx, `SELECT exit_status FROM true_value_contract_observations WHERE contract_id = 7007`).Scan(&exitStatus); err != nil || exitStatus.Int64 != 403 {
 		t.Errorf("contract 7007 exit_status = %v (err %v), want 403 kept on the record", exitStatus, err)
 	}
-	app.probeShipContractSales(ctx, []int64{5003}, now.Add(time.Minute))
+	app.probeContractExits(ctx, now.Add(time.Minute))
 	if transport.calls[7007] != 1 {
 		t.Errorf("contract 7007 asked %d times over two passes, want once", transport.calls[7007])
 	}

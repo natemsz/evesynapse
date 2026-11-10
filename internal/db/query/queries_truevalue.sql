@@ -115,19 +115,18 @@ FROM true_value_contract_observations
 WHERE vanished_at IS NOT NULL AND vanished_at >= $1
 ORDER BY type_id, vanished_at;
 
--- Departed ship contracts awaiting their exit probe: watched
--- observations (the crawl's, and the ones the corpus miner
--- records) whose contract has left the stored public-contract
+-- Departed contracts awaiting their exit probe: watched
+-- observations (the ones the corpus miner records) whose
+-- contract has left the stored public-contract
 -- corpus -- gone from it, or kept there stamped departed
 -- (schema 096) -- and whose expiry is still near enough for
 -- ESI to answer whether it was accepted (a 204 before expiry
 -- is a sale; see pub_contracts_sales.go). Freshest departures
 -- first: ESI's memory of an accepted contract fades.
--- name: ListTVShipSaleProbes :many
+-- name: ListTVExitProbes :many
 SELECT o.contract_id, o.expires_at, o.type_id, o.sample_price, o.first_seen_at
 FROM true_value_contract_observations o
 WHERE o.vanished_at IS NULL AND o.exit_probed_at IS NULL
-  AND o.type_id = ANY(sqlc.arg(ship_type_ids)::bigint[])
   AND o.expires_at > sqlc.arg(probe_after)::timestamptz
   AND NOT EXISTS (SELECT 1 FROM pub_contracts c WHERE c.contract_id = o.contract_id
                   AND c.departed_at IS NULL)

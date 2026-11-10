@@ -211,10 +211,11 @@ func TestGetCachedUsesTheStoredCopyOnNotModified(t *testing.T) {
 	}
 }
 
-// TestPaginatedSnapshotsAreNeverConditional: a dataset spread over
-// several pages has an ETag per page and none for the whole, so it
-// is stored without one and always downloaded in full.
-func TestPaginatedSnapshotsAreNeverConditional(t *testing.T) {
+// TestPaginatedSnapshotsAreConditionalPerPage: a dataset spread over
+// pages is stored with one ETag per page and offered back page by
+// page; when every page answers 304 the stored set stands and only
+// its window renews.
+func TestPaginatedSnapshotsAreConditionalPerPage(t *testing.T) {
 	stub := &etagESI{etag: `"page-one"`, body: `[{"item_id":1,"type_id":34}]`, expires: time.Now().Add(time.Hour), pages: "1"}
 	app, _, q := buildCorpTestApp(t, stub)
 	ctx := context.Background()
@@ -224,16 +225,27 @@ func TestPaginatedSnapshotsAreNeverConditional(t *testing.T) {
 	}
 	ch := seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 
-	for fetch := 1; fetch <= 2; fetch++ {
-		if err := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapAssets); err != nil {
-			t.Fatalf("assets fetch %d: %v", fetch, err)
-		}
-		if got := stub.last(t); got.ifNoneMatch != "" {
-			t.Fatalf("assets fetch %d sent If-None-Match %q", fetch, got.ifNoneMatch)
-		}
+	if err := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapAssets); err != nil {
+		t.Fatalf("first assets fetch: %v", err)
 	}
-	if got := mustSnapshot(t, q, fixtureCharA, esi.SnapAssets).Etag; got != "" {
-		t.Fatalf("a paginated snapshot was stored with ETag %q", got)
+	if got := stub.last(t); got.ifNoneMatch != "" {
+		t.Fatalf("first assets fetch sent If-None-Match %q", got.ifNoneMatch)
+	}
+	first := mustSnapshot(t, q, fixtureCharA, esi.SnapAssets)
+	if first.Etag == "" {
+		t.Fatal("a paginated snapshot was stored without its page ETags")
+	}
+
+	stub.set(`"page-one"`, `[{"item_id":1,"type_id":34}]`, time.Now().Add(2*time.Hour))
+	if err := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapAssets); err != nil {
+		t.Fatalf("second assets fetch: %v", err)
+	}
+	if got := stub.last(t); got.ifNoneMatch != `"page-one"` || got.status != http.StatusNotModified {
+		t.Fatalf("second assets fetch = %+v, want the stored page ETag offered and a 304", got)
+	}
+	again := mustSnapshot(t, q, fixtureCharA, esi.SnapAssets)
+	if again.Payload != first.Payload || !again.CachedUntil.Time.After(first.CachedUntil.Time) {
+		t.Fatalf("unchanged set: payload kept %v, window renewed %v -> %v", again.Payload == first.Payload, first.CachedUntil.Time, again.CachedUntil.Time)
 	}
 }
 

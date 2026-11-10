@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	json "github.com/goccy/go-json"
-	"net/http"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -40,31 +39,6 @@ const (
 // are distilled from; the distillation window itself is 7 days.
 const placeActivityRetention = 30 * 24 * time.Hour
 
-// placeStatsDue reports whether a dataset's cache window has
-// closed. No gate row yet means due.
-func (app *Application) placeStatsDue(ctx context.Context, kind string, now time.Time) bool {
-	meta, err := app.queries.GetPlaceStatsMeta(ctx, kind)
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			logging.Errorf("worker: place stats gate %s: %v", kind, err)
-		}
-		return true
-	}
-	return !now.Before(meta.CachedUntil)
-}
-
-// placeCacheUntil reads ESI's Expires header, with an hour's
-// fallback when it is missing or unparseable.
-func placeCacheUntil(header http.Header, now time.Time) time.Time {
-	until := now.Add(time.Hour)
-	if exp := header.Get("Expires"); exp != "" {
-		if t, err := http.ParseTime(exp); err == nil {
-			until = t
-		}
-	}
-	return until
-}
-
 // esiSystemKills is one row of GET /universe/system_kills/: the
 // system's kills over the hour the response covers.
 type esiSystemKills struct {
@@ -80,45 +54,43 @@ type esiSystemJumps struct {
 	ShipJumps int64 `json:"ship_jumps"`
 }
 
-// refreshPlaceActivity mirrors the kills and jumps aggregates
-// into the hourly history and re-distills the page figures.
-// Reports whether it stored, and whether ESI's error limit
-// stopped it.
-func (app *Application) refreshPlaceActivity(ctx context.Context) (stored bool, limited bool) {
+// refreshPlaceActivity mirrors the stored kills and jumps snapshots
+// into the hourly history and re-distills the page figures. The
+// global snapshot pass owns both ESI fetches (GlobalSystemKills,
+// GlobalSystemJumps, on their own cache windows); this pass only
+// distills, and only when either snapshot changed since the last
+// distillation. Reports whether it stored.
+func (app *Application) refreshPlaceActivity(ctx context.Context) bool {
 	now := time.Now()
-	if !app.placeStatsDue(ctx, placeStatsKindActivity, now) {
-		return false, false // still inside ESI's cache window
+	killsSnap, kerr := app.queries.GetGlobalSnapshot(ctx, esi.GlobalSystemKills)
+	jumpsSnap, jerr := app.queries.GetGlobalSnapshot(ctx, esi.GlobalSystemJumps)
+	if kerr != nil || jerr != nil {
+		for _, err := range []error{kerr, jerr} {
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				logging.Errorf("worker: place activity: read snapshot: %v", err)
+			}
+		}
+		return false // not both fetched yet
 	}
-
-	killsBody, killsHeader, err := app.esi.FetchRaw(ctx, "", "/universe/system_kills/")
-	if err != nil {
-		if errors.Is(err, esi.ErrErrorLimit) {
-			return false, true
+	source := killsSnap.Etag + "|" + jumpsSnap.Etag
+	if meta, err := app.queries.GetPlaceStatsMeta(ctx, placeStatsKindActivity); err == nil {
+		if killsSnap.Etag != "" && jumpsSnap.Etag != "" && meta.SourceEtag == source {
+			return false // the stored history already holds these answers
 		}
-		if ctx.Err() == nil {
-			logging.Errorf("worker: place activity kills: %v", err)
+		if (killsSnap.Etag == "" || jumpsSnap.Etag == "") &&
+			!killsSnap.FetchedAt.After(meta.FetchedAt) && !jumpsSnap.FetchedAt.After(meta.FetchedAt) {
+			return false
 		}
-		return false, false
-	}
-	jumpsBody, jumpsHeader, err := app.esi.FetchRaw(ctx, "", "/universe/system_jumps/")
-	if err != nil {
-		if errors.Is(err, esi.ErrErrorLimit) {
-			return false, true
-		}
-		if ctx.Err() == nil {
-			logging.Errorf("worker: place activity jumps: %v", err)
-		}
-		return false, false
 	}
 	var kills []esiSystemKills
-	if err := json.Unmarshal(killsBody, &kills); err != nil {
+	if err := json.Unmarshal([]byte(killsSnap.Payload), &kills); err != nil {
 		logging.Errorf("worker: place activity kills: decode: %v", err)
-		return false, false
+		return false
 	}
 	var jumps []esiSystemJumps
-	if err := json.Unmarshal(jumpsBody, &jumps); err != nil {
+	if err := json.Unmarshal([]byte(jumpsSnap.Payload), &jumps); err != nil {
 		logging.Errorf("worker: place activity jumps: decode: %v", err)
-		return false, false
+		return false
 	}
 
 	// One history row per system named by either payload; a system
@@ -148,16 +120,20 @@ func (app *Application) refreshPlaceActivity(ctx context.Context) (stored bool, 
 		row.jumps = j.ShipJumps
 	}
 
-	cachedUntil := placeCacheUntil(killsHeader, now)
-	if u := placeCacheUntil(jumpsHeader, now); u.Before(cachedUntil) {
-		cachedUntil = u // the earlier window governs the next pass
+	cachedUntil := killsSnap.CachedUntil
+	if jumpsSnap.CachedUntil.Before(cachedUntil) {
+		cachedUntil = jumpsSnap.CachedUntil
+	}
+	fetchedAt := killsSnap.FetchedAt
+	if jumpsSnap.FetchedAt.After(fetchedAt) {
+		fetchedAt = jumpsSnap.FetchedAt
 	}
 	hour := now.UTC().Truncate(time.Hour)
 
 	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		logging.Errorf("worker: place activity: begin tx: %v", err)
-		return false, false
+		return false
 	}
 	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
@@ -185,31 +161,30 @@ func (app *Application) refreshPlaceActivity(ctx context.Context) (stored bool, 
 				pod_kills = EXCLUDED.pod_kills, ship_jumps = EXCLUDED.ship_jumps
 		`, systemIDs, hour, shipKills, npcKills, podKills, shipJumps); err != nil {
 			logging.Errorf("worker: place activity: store history: %v", err)
-			return false, false
+			return false
 		}
 	}
 	if _, err := qtx.PruneSystemActivityHours(ctx, now.UTC().Add(-placeActivityRetention)); err != nil {
 		logging.Errorf("worker: place activity: prune history: %v", err)
-		return false, false
+		return false
 	}
 	if err := distillPlaceActivity(ctx, qtx, now.UTC()); err != nil {
 		logging.Errorf("worker: place activity: distill: %v", err)
-		return false, false
+		return false
 	}
 	if err := qtx.UpsertPlaceStatsMeta(ctx, db.UpsertPlaceStatsMetaParams{
-		Kind: placeStatsKindActivity, FetchedAt: now.UTC(), CachedUntil: cachedUntil.UTC(),
-		SourceEtag: "",
+		Kind: placeStatsKindActivity, FetchedAt: fetchedAt.UTC(), CachedUntil: cachedUntil.UTC(),
+		SourceEtag: source,
 	}); err != nil {
 		logging.Errorf("worker: place activity: store meta: %v", err)
-		return false, false
+		return false
 	}
 	if err := tx.Commit(ctx); err != nil {
 		logging.Errorf("worker: place activity: commit: %v", err)
-		return false, false
+		return false
 	}
-	logging.Infof("worker: place activity stored (%d systems, fresh until %s)",
-		len(merged), cachedUntil.UTC().Format(time.RFC3339))
-	return true, false
+	logging.Infof("worker: place activity stored (%d systems)", len(merged))
+	return true
 }
 
 // distillPlaceActivity rebuilds both stats tables from the hourly

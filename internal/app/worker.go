@@ -179,7 +179,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(8)
+	children.Add(10)
 
 	// The public killmail stream (killfeed.go) is its own paced
 	// loop: one file every 100 ms while kills arrive, six seconds
@@ -246,6 +246,18 @@ func (app *Application) runWorker(ctx context.Context) {
 	go func() {
 		defer children.Done()
 		runGuarded("server status refresh", func() { app.runServerStatusRefresh(ctx) })
+	}()
+
+	// The public sweep lanes (market_lanes.go): hub order books and
+	// public contracts, each on ESI's own cache windows and off the
+	// cycle, so a long sweep never holds the cycle behind it.
+	go func() {
+		defer children.Done()
+		app.runMarketLane(ctx)
+	}()
+	go func() {
+		defer children.Done()
+		app.runContractLane(ctx)
 	}()
 	defer func() {
 		children.Wait()
@@ -415,11 +427,8 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// mirrored and distilled for the system and region pages. Self-gated
 	// on ESI's cache windows like the mirrors above, so a fresh
 	// collection costs this cycle nothing.
-	if stored, aLimited := app.refreshPlaceActivity(ctx); stored {
+	if app.refreshPlaceActivity(ctx) {
 		c.refreshed++
-	} else if aLimited {
-		logging.Warnf("worker: ESI error limit hit collecting place activity; backing off until next cycle")
-		c.limited = true
 	}
 	if app.refreshPlaceSovereignty(ctx) {
 		c.refreshed++
@@ -732,7 +741,9 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 }
 
 // refreshCoreSnapshots fetches the character's core datasets that are
-// not fresh (coreFreshness), stopping at the first failure. A kind
+// not fresh (coreFreshness), stopping at the first failure; the
+// failed kind waits coreRetryAfterError, so a kind that keeps failing
+// never holds back the ones after it. A kind
 // ESI has definitively refused settles instead (fetch_refusal.go):
 // it is recorded once and skipped from then on, and the pass moves
 // to the next kind rather than ending on it.
@@ -769,6 +780,10 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 		if state, ok := states[kind]; ok && fetchStateSettled(state) {
 			continue // refused before and still settled: no fetch, no log
 		}
+		if state, ok := states[kind]; ok && state.State == fetchStateError && !refusalDetail(state.Detail) &&
+			time.Since(state.AttemptedAt) < coreRetryAfterError {
+			continue // failed lately: the kinds after it get their turn meanwhile
+		}
 
 		if c.stopped() || !c.allowance.take() {
 			break
@@ -790,12 +805,24 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 				logging.Warnf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
 			} else {
 				logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+				// Recorded, so the next cycle passes over this
+				// kind for coreRetryAfterError and refreshes the
+				// ones after it instead of failing on it again.
+				app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, err.Error())
 			}
 			break // don't keep pushing this character this cycle
+		}
+		if state, ok := states[kind]; ok && state.State == fetchStateError && !refusalDetail(state.Detail) {
+			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateOK, "")
 		}
 		c.refreshed++
 	}
 }
+
+// coreRetryAfterError is how long a core kind whose fetch failed
+// (not a refusal, not the error limit) waits before it is asked
+// again.
+const coreRetryAfterError = 10 * time.Minute
 
 // refreshPublicData runs the passes that are not about one
 // character: market data, the name queues, and the public records
@@ -805,20 +832,15 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 
 	// Market pass: price-history warming for
 	// watchlists/wants/order types, and per-order health from
-	// regional books. Public data, spending from its own lane
-	// (one market allowance shared by both steps). The clock
-	// marks the steps apart -- history and books, then the
-	// region sweep -- so the public-data block's time shows
-	// its split on the Sync page instead of one figure.
+	// regional books. Public data, spending from its own
+	// allowance. The region sweep and the public contract
+	// sweeps run on lanes of their own (runMarketLane,
+	// runContractLane), so a long sweep never holds this cycle.
 	marketAllowance := &fetchBudget{left: maxMarketFetchesPerCycle}
 	c.pass("refreshing market data", func() (int, bool) {
 		return app.refreshMarketWarm(ctx, characters, marketAllowance)
 	})
 	clock.mark("market data", time.Now())
-	c.pass("sweeping region stats", func() (int, bool) {
-		return app.sweepRegionStats(ctx, marketAllowance)
-	})
-	clock.mark("region sweep", time.Now())
 
 	// LP stores (schema 102): the NPC loyalty stores on a daily
 	// gate and a fetch lane of their own; their offer values are
@@ -827,17 +849,6 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	c.pass("refreshing LP stores", func() (int, bool) {
 		return app.refreshLPStores(ctx)
 	})
-
-	// Public contracts (schema 055): the region list sweeps and
-	// their item/bid/probe warming, on the routes' own cache
-	// cadence and a fetch lane of their own, so the contract
-	// corpus is as fresh as ESI allows without ever bidding
-	// against the market pass for fetches.
-	contractAllowance := &fetchBudget{left: pubContractFetchesPerCycle}
-	c.pass("refreshing public contracts", func() (int, bool) {
-		return app.refreshPublicContracts(ctx, contractAllowance)
-	})
-	clock.mark("public contracts", time.Now())
 
 	// Abyssal scoring (schema 057): rolls become scores and
 	// stored estimates, so the appraisal pass below can
@@ -867,14 +878,10 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	// Contract appraisal (schema 056): prices the due slice of
 	// stored contract lines from stored pricing inputs alone
 	// (appraisal.go), so the search pages only ever read
-	// finished numbers. The pass runs on a wall-clock budget,
-	// and after a long region sweep it sits the cycle out, so
-	// the two heaviest passes never stack in one cycle.
-	if clock.took("region sweep") <= appraisalSweepDeferAbove {
-		c.pass("appraising public contracts", func() (int, bool) {
-			return app.appraisePublicContractsWithin(ctx, appraisalBudgetPerCycle), false
-		})
-	}
+	// finished numbers. The pass runs on a wall-clock budget.
+	c.pass("appraising public contracts", func() (int, bool) {
+		return app.appraisePublicContractsWithin(ctx, appraisalBudgetPerCycle), false
+	})
 	clock.mark("contract appraisal", time.Now())
 
 	// Module jobs that follow the market pass (Trade Ideas' model

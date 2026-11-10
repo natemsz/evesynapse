@@ -98,7 +98,7 @@ WHERE region_id = $1
 // Stored book (schema 050): the top orders per side a completed
 // sweep keeps, so the Market page can show an order book to
 // visitors who never fetch (anonymous readers among them). The
-// sweep completion transaction replaces a region's rows whole,
+// sweep's store replaces the rows of every item it writes,
 // exactly like the region stats distilled beside them; figures
 // over the whole book (best, typical, depth) stay on
 // market_region_stats, these rows are only the displayed top.
@@ -128,6 +128,19 @@ DELETE FROM market_station_leaderboard
 WHERE region_id = $1
 `
 
+// ---------------------------------------------------------------------
+// Station leaderboard (schema_pg 002): per-station open-order
+// counts and open ISK value per side, distilled by the same
+// whole-region sweeps as the stats above. A completed sweep
+// replaces the region's leaderboard rows inside the sweep
+// transaction: delete the region, then upsert the fresh measures
+// station by station. The sweep sums them from the book it read,
+// grouped only by place: the open value needs price times
+// remaining volume per order, which the type-grain aggregates
+// cannot reconstruct. The leaderboard page
+// reads only these rows. A region argument of 0 means every
+// region.
+// ---------------------------------------------------------------------
 func (q *Queries) DeleteMarketStationLeaderboardByRegion(ctx context.Context, regionID int64) error {
 	_, err := q.db.Exec(ctx, deleteMarketStationLeaderboardByRegion, regionID)
 	return err
@@ -162,26 +175,6 @@ DELETE FROM market_stats_fallback
 // read time and never see a half-written snapshot.
 func (q *Queries) DeleteMarketStatsFallback(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteMarketStatsFallback)
-	return err
-}
-
-const deleteMarketSweepOrdersByRegion = `-- name: DeleteMarketSweepOrdersByRegion :exec
-DELETE FROM market_sweep_orders
-WHERE region_id = $1
-`
-
-func (q *Queries) DeleteMarketSweepOrdersByRegion(ctx context.Context, regionID int64) error {
-	_, err := q.db.Exec(ctx, deleteMarketSweepOrdersByRegion, regionID)
-	return err
-}
-
-const deleteMarketSweepState = `-- name: DeleteMarketSweepState :exec
-DELETE FROM market_sweep_state
-WHERE region_id = $1
-`
-
-func (q *Queries) DeleteMarketSweepState(ctx context.Context, regionID int64) error {
-	_, err := q.db.Exec(ctx, deleteMarketSweepState, regionID)
 	return err
 }
 
@@ -267,11 +260,12 @@ FROM (
               THEN ((s.typical_sell - s.typical_buy) / s.typical_buy - (d.typical_sell - d.typical_buy) / d.typical_buy) * 100 END)
     ) AS k (kind, before, after, pct)
     WHERE s.region_id = $1::bigint
+      AND (COALESCE(cardinality($4::bigint[]), 0) = 0 OR s.type_id = ANY($4::bigint[]))
       AND s.sell_orders >= 5 AND s.avg_daily_volume_30d >= 1
       AND s.typical_sell > 0 AND d.typical_sell > 0
 ) c
 WHERE c.before IS NOT NULL AND c.after IS NOT NULL AND c.pct IS NOT NULL AND (
-       (c.kind IN ('price_up', 'price_down') AND ABS(c.pct) >= GREATEST($4::float8,
+       (c.kind IN ('price_up', 'price_down') AND ABS(c.pct) >= GREATEST($5::float8,
             3 * COALESCE((SELECT v.volatility_30d FROM market_region_stats v
                           WHERE v.region_id = $1::bigint AND v.type_id = c.type_id), 0)))
     OR (c.kind = 'supply_down' AND c.before >= 10 AND c.pct <= -50)
@@ -285,17 +279,20 @@ type DetectMarketChangesParams struct {
 	RegionID int64     `json:"region_id"`
 	Day      string    `json:"day"`
 	Now      time.Time `json:"now"`
+	TypeIds  []int64   `json:"type_ids"`
 	MinMove  float64   `json:"min_move"`
 }
 
 // The change feed (schema 106) for one region, inside its sweep
 // transaction after the trend figures: each stat pack row against
 // the newest stored day before today (within three days).
+// type_ids narrows it to the items a sweep wrote; empty means all.
 func (q *Queries) DetectMarketChanges(ctx context.Context, arg DetectMarketChangesParams) (int64, error) {
 	result, err := q.db.Exec(ctx, detectMarketChanges,
 		arg.RegionID,
 		arg.Day,
 		arg.Now,
+		arg.TypeIds,
 		arg.MinMove,
 	)
 	if err != nil {
@@ -643,34 +640,6 @@ func (q *Queries) GetMarketStatsFallbackMeta(ctx context.Context) (MarketStatsFa
 		&i.OrdersetID,
 		&i.FetchedAt,
 		&i.RowCount,
-	)
-	return i, err
-}
-
-const getMarketSweepState = `-- name: GetMarketSweepState :one
-SELECT region_id, next_page, pages_total, started_at, updated_at
-FROM market_sweep_state
-WHERE region_id = $1
-`
-
-// ---------------------------------------------------------------------
-// Sweep staging (schema 034): disk-staged whole-region
-// sweeps. A market_sweep_state row means a sweep is in progress
-// for that region and next_page is its resume cursor; each
-// fetched page's orders land in market_sweep_orders in the same
-// transaction that advances the cursor. At completion the
-// staged book is distilled into the region/station stats above
-// and the staging rows are deleted in that same transaction.
-// ---------------------------------------------------------------------
-func (q *Queries) GetMarketSweepState(ctx context.Context, regionID int64) (MarketSweepState, error) {
-	row := q.db.QueryRow(ctx, getMarketSweepState, regionID)
-	var i MarketSweepState
-	err := row.Scan(
-		&i.RegionID,
-		&i.NextPage,
-		&i.PagesTotal,
-		&i.StartedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -1037,50 +1006,6 @@ func (q *Queries) InsertMarketStatsFallback(ctx context.Context, arg InsertMarke
 		arg.SourceAsof,
 		arg.FetchedAt,
 	)
-	return err
-}
-
-const insertMarketSweepOrder = `-- name: InsertMarketSweepOrder :exec
-INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id, system_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-`
-
-type InsertMarketSweepOrderParams struct {
-	RegionID     int64   `json:"region_id"`
-	TypeID       int64   `json:"type_id"`
-	IsBuyOrder   int64   `json:"is_buy_order"`
-	Price        float64 `json:"price"`
-	VolumeRemain int64   `json:"volume_remain"`
-	LocationID   int64   `json:"location_id"`
-	SystemID     int64   `json:"system_id"`
-}
-
-func (q *Queries) InsertMarketSweepOrder(ctx context.Context, arg InsertMarketSweepOrderParams) error {
-	_, err := q.db.Exec(ctx, insertMarketSweepOrder,
-		arg.RegionID,
-		arg.TypeID,
-		arg.IsBuyOrder,
-		arg.Price,
-		arg.VolumeRemain,
-		arg.LocationID,
-		arg.SystemID,
-	)
-	return err
-}
-
-const insertMarketSweepState = `-- name: InsertMarketSweepState :exec
-INSERT INTO market_sweep_state (region_id, next_page, pages_total, started_at, updated_at)
-VALUES ($1, 1, 0, $2, $3)
-`
-
-type InsertMarketSweepStateParams struct {
-	RegionID  int64     `json:"region_id"`
-	StartedAt time.Time `json:"started_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-func (q *Queries) InsertMarketSweepState(ctx context.Context, arg InsertMarketSweepStateParams) error {
-	_, err := q.db.Exec(ctx, insertMarketSweepState, arg.RegionID, arg.StartedAt, arg.UpdatedAt)
 	return err
 }
 
@@ -2750,181 +2675,6 @@ func (q *Queries) ListMarketStatsFallbackForTypes(ctx context.Context, arg ListM
 	return items, nil
 }
 
-const listMarketSweepStationAggregates = `-- name: ListMarketSweepStationAggregates :many
-SELECT location_id, type_id, is_buy_order,
-       CAST(MIN(price) AS DOUBLE PRECISION) AS min_price, CAST(MAX(price) AS DOUBLE PRECISION) AS max_price,
-       COUNT(*) AS order_count, CAST(SUM(volume_remain) AS BIGINT) AS total_volume
-FROM market_sweep_orders
-WHERE region_id = $1 AND location_id > 0
-GROUP BY location_id, type_id, is_buy_order
-ORDER BY location_id, type_id, is_buy_order
-`
-
-type ListMarketSweepStationAggregatesRow struct {
-	LocationID  int64   `json:"location_id"`
-	TypeID      int64   `json:"type_id"`
-	IsBuyOrder  int64   `json:"is_buy_order"`
-	MinPrice    float64 `json:"min_price"`
-	MaxPrice    float64 `json:"max_price"`
-	OrderCount  int64   `json:"order_count"`
-	TotalVolume int64   `json:"total_volume"`
-}
-
-func (q *Queries) ListMarketSweepStationAggregates(ctx context.Context, regionID int64) ([]ListMarketSweepStationAggregatesRow, error) {
-	rows, err := q.db.Query(ctx, listMarketSweepStationAggregates, regionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListMarketSweepStationAggregatesRow
-	for rows.Next() {
-		var i ListMarketSweepStationAggregatesRow
-		if err := rows.Scan(
-			&i.LocationID,
-			&i.TypeID,
-			&i.IsBuyOrder,
-			&i.MinPrice,
-			&i.MaxPrice,
-			&i.OrderCount,
-			&i.TotalVolume,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMarketSweepStationLeaderboardAggregates = `-- name: ListMarketSweepStationLeaderboardAggregates :many
-SELECT location_id, is_buy_order,
-       COUNT(*) AS order_count, CAST(SUM(price * volume_remain) AS DOUBLE PRECISION) AS open_value
-FROM market_sweep_orders
-WHERE region_id = $1 AND location_id > 0
-GROUP BY location_id, is_buy_order
-ORDER BY location_id, is_buy_order
-`
-
-type ListMarketSweepStationLeaderboardAggregatesRow struct {
-	LocationID int64   `json:"location_id"`
-	IsBuyOrder int64   `json:"is_buy_order"`
-	OrderCount int64   `json:"order_count"`
-	OpenValue  float64 `json:"open_value"`
-}
-
-// ---------------------------------------------------------------------
-// Station leaderboard (schema_pg 002): per-station open-order
-// counts and open ISK value per side, distilled by the same
-// whole-region sweeps as the stats above. A completed sweep
-// replaces the region's leaderboard rows inside the sweep
-// transaction: delete the region, then upsert the fresh measures
-// station by station. The aggregates read the staged book like
-// the station stats do, but grouped only by place: the open
-// value needs price times remaining volume per order, which the
-// type-grain aggregates cannot reconstruct. The leaderboard page
-// reads only these rows. A region argument of 0 means every
-// region.
-// ---------------------------------------------------------------------
-func (q *Queries) ListMarketSweepStationLeaderboardAggregates(ctx context.Context, regionID int64) ([]ListMarketSweepStationLeaderboardAggregatesRow, error) {
-	rows, err := q.db.Query(ctx, listMarketSweepStationLeaderboardAggregates, regionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListMarketSweepStationLeaderboardAggregatesRow
-	for rows.Next() {
-		var i ListMarketSweepStationLeaderboardAggregatesRow
-		if err := rows.Scan(
-			&i.LocationID,
-			&i.IsBuyOrder,
-			&i.OrderCount,
-			&i.OpenValue,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMarketSweepTypeIDs = `-- name: ListMarketSweepTypeIDs :many
-SELECT DISTINCT type_id
-FROM market_sweep_orders
-WHERE region_id = $1
-ORDER BY type_id
-`
-
-func (q *Queries) ListMarketSweepTypeIDs(ctx context.Context, regionID int64) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listMarketSweepTypeIDs, regionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []int64
-	for rows.Next() {
-		var type_id int64
-		if err := rows.Scan(&type_id); err != nil {
-			return nil, err
-		}
-		items = append(items, type_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMarketSweepTypeOrders = `-- name: ListMarketSweepTypeOrders :many
-SELECT is_buy_order, price, volume_remain, location_id, system_id
-FROM market_sweep_orders
-WHERE region_id = $1 AND type_id = $2
-ORDER BY is_buy_order, price
-`
-
-type ListMarketSweepTypeOrdersParams struct {
-	RegionID int64 `json:"region_id"`
-	TypeID   int64 `json:"type_id"`
-}
-
-type ListMarketSweepTypeOrdersRow struct {
-	IsBuyOrder   int64   `json:"is_buy_order"`
-	Price        float64 `json:"price"`
-	VolumeRemain int64   `json:"volume_remain"`
-	LocationID   int64   `json:"location_id"`
-	SystemID     int64   `json:"system_id"`
-}
-
-func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketSweepTypeOrdersParams) ([]ListMarketSweepTypeOrdersRow, error) {
-	rows, err := q.db.Query(ctx, listMarketSweepTypeOrders, arg.RegionID, arg.TypeID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListMarketSweepTypeOrdersRow
-	for rows.Next() {
-		var i ListMarketSweepTypeOrdersRow
-		if err := rows.Scan(
-			&i.IsBuyOrder,
-			&i.Price,
-			&i.VolumeRemain,
-			&i.LocationID,
-			&i.SystemID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listMarketTrendTypes = `-- name: ListMarketTrendTypes :many
 SELECT type_id, typical_sell, typical_buy, sell_orders, avg_daily_volume_30d,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, volatility_30d, history_days, updated_at,
@@ -4335,12 +4085,14 @@ FROM (
             WHERE dd.region_id = $1
               AND dd.day > to_char($2::date - 30, 'YYYY-MM-DD')
               AND dd.typical_sell > 0
+              AND (COALESCE(cardinality($3::bigint[]), 0) = 0 OR dd.type_id = ANY($3::bigint[]))
             WINDOW w AS (PARTITION BY dd.type_id ORDER BY dd.day)
         ) x
         WHERE x.n >= 2
         GROUP BY x.type_id
     ) p ON p.type_id = r.type_id
     WHERE r.region_id = $1
+      AND (COALESCE(cardinality($3::bigint[]), 0) = 0 OR r.type_id = ANY($3::bigint[]))
 ) t
 WHERE s.region_id = $1 AND s.type_id = t.type_id
 `
@@ -4348,6 +4100,7 @@ WHERE s.region_id = $1 AND s.type_id = t.type_id
 type RefreshMarketStatPackSparksParams struct {
 	RegionID int64     `json:"region_id"`
 	Today    time.Time `json:"today"`
+	TypeIds  []int64   `json:"type_ids"`
 }
 
 // The stat pack's 30-day price line (schema 121), derived for one
@@ -4356,8 +4109,9 @@ type RefreshMarketStatPackSparksParams struct {
 // days as polyline points in the 100 by 28 sparkline box (2 units
 // of padding, flat lines at mid height), with their low, high and
 // mean. A type with under two such days gets an empty line.
+// type_ids narrows it to the items a sweep wrote; empty means all.
 func (q *Queries) RefreshMarketStatPackSparks(ctx context.Context, arg RefreshMarketStatPackSparksParams) (int64, error) {
-	result, err := q.db.Exec(ctx, refreshMarketStatPackSparks, arg.RegionID, arg.Today)
+	result, err := q.db.Exec(ctx, refreshMarketStatPackSparks, arg.RegionID, arg.Today, arg.TypeIds)
 	if err != nil {
 		return 0, err
 	}
@@ -4414,6 +4168,7 @@ FROM (
             WHERE dd.region_id = $1
               AND dd.day > to_char($2::date - 30, 'YYYY-MM-DD')
               AND dd.typical_sell > 0
+              AND (COALESCE(cardinality($3::bigint[]), 0) = 0 OR dd.type_id = ANY($3::bigint[]))
         ) x
         GROUP BY x.type_id
     ) v ON v.type_id = r.type_id
@@ -4428,6 +4183,7 @@ FROM (
           )
     ) h ON true
     WHERE r.region_id = $1
+      AND (COALESCE(cardinality($3::bigint[]), 0) = 0 OR r.type_id = ANY($3::bigint[]))
 ) t
 WHERE s.region_id = $1 AND s.type_id = t.type_id
 `
@@ -4435,6 +4191,7 @@ WHERE s.region_id = $1 AND s.type_id = t.type_id
 type RefreshMarketStatPackTrendsParams struct {
 	RegionID int64     `json:"region_id"`
 	Today    time.Time `json:"today"`
+	TypeIds  []int64   `json:"type_ids"`
 }
 
 // The stat pack's trend figures (schema 101), derived for one
@@ -4447,9 +4204,10 @@ type RefreshMarketStatPackTrendsParams struct {
 // deviation of the typical sell's daily log returns over the last
 // 30 days, in percent, NULL under seven returns. The 30-day
 // traded volume reads market_history over the 30 days ending on
-// the type's newest recorded day.
+// the type's newest recorded day. type_ids narrows it to the items a
+// sweep wrote; empty means all.
 func (q *Queries) RefreshMarketStatPackTrends(ctx context.Context, arg RefreshMarketStatPackTrendsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, refreshMarketStatPackTrends, arg.RegionID, arg.Today)
+	result, err := q.db.Exec(ctx, refreshMarketStatPackTrends, arg.RegionID, arg.Today, arg.TypeIds)
 	if err != nil {
 		return 0, err
 	}
@@ -4683,29 +4441,6 @@ type TouchOrderLifecycleCheckedParams struct {
 // the freshness stamp moves, not the verdict columns.
 func (q *Queries) TouchOrderLifecycleChecked(ctx context.Context, arg TouchOrderLifecycleCheckedParams) error {
 	_, err := q.db.Exec(ctx, touchOrderLifecycleChecked, arg.CheckedAt, arg.CharacterID, arg.OrderID)
-	return err
-}
-
-const updateMarketSweepState = `-- name: UpdateMarketSweepState :exec
-UPDATE market_sweep_state
-SET next_page = $1, pages_total = $2, updated_at = $3
-WHERE region_id = $4
-`
-
-type UpdateMarketSweepStateParams struct {
-	NextPage   int64     `json:"next_page"`
-	PagesTotal int64     `json:"pages_total"`
-	UpdatedAt  time.Time `json:"updated_at"`
-	RegionID   int64     `json:"region_id"`
-}
-
-func (q *Queries) UpdateMarketSweepState(ctx context.Context, arg UpdateMarketSweepStateParams) error {
-	_, err := q.db.Exec(ctx, updateMarketSweepState,
-		arg.NextPage,
-		arg.PagesTotal,
-		arg.UpdatedAt,
-		arg.RegionID,
-	)
 	return err
 }
 

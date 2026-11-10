@@ -77,10 +77,14 @@ func TestPlaceActivityCollector(t *testing.T) {
 	}
 	app, conn, q := buildCorpTestApp(t, stub)
 	seedPlaceSDE(t, app)
+	for _, kind := range []string{esi.GlobalSystemKills, esi.GlobalSystemJumps} {
+		if err := app.esi.FetchAndStoreGlobalSnapshot(ctx, kind); err != nil {
+			t.Fatalf("fetch %s: %v", kind, err)
+		}
+	}
 
-	stored, limited := app.refreshPlaceActivity(ctx)
-	if !stored || limited {
-		t.Fatalf("refreshPlaceActivity = (%v, %v), want (true, false)", stored, limited)
+	if !app.refreshPlaceActivity(ctx) {
+		t.Fatal("refreshPlaceActivity did not store")
 	}
 
 	// History: one merged row per system named by either payload.
@@ -129,15 +133,14 @@ func TestPlaceActivityCollector(t *testing.T) {
 			region.ShipKills1h, region.NpcKills1h, region.Jumps1h)
 	}
 
-	// The gate: inside ESI's cache window a second pass fetches
-	// nothing.
+	// The pass only distills: it never calls ESI, and unchanged
+	// snapshots are not distilled again.
 	calls := stub.calls.Load()
-	stored, limited = app.refreshPlaceActivity(ctx)
-	if stored || limited {
-		t.Fatalf("gated refreshPlaceActivity = (%v, %v), want (false, false)", stored, limited)
+	if app.refreshPlaceActivity(ctx) {
+		t.Fatal("refreshPlaceActivity stored unchanged snapshots, want false")
 	}
 	if got := stub.calls.Load(); got != calls {
-		t.Errorf("gated pass made %d more calls, want 0", got-calls)
+		t.Errorf("distill pass made %d ESI calls, want 0", got-calls)
 	}
 	meta, err := q.GetPlaceStatsMeta(ctx, placeStatsKindActivity)
 	if err != nil {
@@ -152,10 +155,15 @@ func TestPlaceActivityCollectorFailureKeepsStore(t *testing.T) {
 	ctx := context.Background()
 	stub := &placeStatsStub{killsStatus: http.StatusInternalServerError}
 	app, conn, _ := buildCorpTestApp(t, stub)
+	if err := app.esi.FetchAndStoreGlobalSnapshot(ctx, esi.GlobalSystemKills); err == nil {
+		t.Fatal("the failing kills fetch stored a snapshot")
+	}
+	if err := app.esi.FetchAndStoreGlobalSnapshot(ctx, esi.GlobalSystemJumps); err != nil {
+		t.Fatalf("fetch jumps: %v", err)
+	}
 
-	stored, limited := app.refreshPlaceActivity(ctx)
-	if stored || limited {
-		t.Fatalf("failing refreshPlaceActivity = (%v, %v), want (false, false)", stored, limited)
+	if app.refreshPlaceActivity(ctx) {
+		t.Fatal("refreshPlaceActivity stored without a kills snapshot, want false")
 	}
 	var rows int
 	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM system_activity_hours`).Scan(&rows); err != nil {

@@ -71,7 +71,7 @@ func TestPillMarketLaggingShowsSyncBehind(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 	seedPillSnapshot(t, q, now)
-	seedPillMarket(t, q, now.Add(-5*time.Hour-12*time.Minute))
+	seedPillMarket(t, q, now.Add(-(marketLagAfter+marketDownAfter)/2))
 	seedPillWorker(app, now)
 
 	view := app.esiHealth(ctx)
@@ -81,7 +81,7 @@ func TestPillMarketLaggingShowsSyncBehind(t *testing.T) {
 	if view.Players != "23,456" {
 		t.Fatalf("players = %q, want 23,456 (ESI is answering)", view.Players)
 	}
-	if !strings.Contains(view.Title, "Market orders are 5h12m old") {
+	if !strings.Contains(view.Title, "Market orders are "+pillAge((marketLagAfter+marketDownAfter)/2)+" old") {
 		t.Fatalf("title = %q, want it to name the market age", view.Title)
 	}
 	if !strings.Contains(view.Title, "ESI itself is answering normally") {
@@ -128,7 +128,7 @@ func TestPillLimitedPlusLaggingNamesBoth(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 	seedPillSnapshot(t, q, now)
-	seedPillMarket(t, q, now.Add(-2*time.Hour))
+	seedPillMarket(t, q, now.Add(-(marketLagAfter+marketDownAfter)/2))
 	seedPillWorker(app, now)
 	if _, _, err := app.esi.FetchRaw(ctx, "", "/status/"); err != nil {
 		t.Fatalf("prime error budget: %v", err)
@@ -253,7 +253,7 @@ func TestStoredRouteStatusDegradesESIReads(t *testing.T) {
 
 	// Our sync falls behind. With the route report as witness,
 	// the headline blames ESI, not our sync.
-	seedPillMarket(t, q, now.Add(-5*time.Hour-12*time.Minute))
+	seedPillMarket(t, q, now.Add(-(marketLagAfter+marketDownAfter)/2))
 	seedRouteStatus(t, q, now)
 	view = app.esiHealth(ctx)
 	if view.State != "degraded" || view.Label != "ESI degraded" {

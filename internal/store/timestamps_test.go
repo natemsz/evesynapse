@@ -525,12 +525,12 @@ func TestSchemaMarketTimestampStepKeepsStoredTimes(t *testing.T) {
 		t.Errorf("a region with no stats reports %v over %d rows", none.Stamp, none.RowCount)
 	}
 
-	sweep, err := q.GetMarketSweepState(ctx, 10000002)
-	if err != nil {
+	var sweepStarted, sweepUpdated time.Time
+	if err := conn.QueryRowContext(ctx, `SELECT started_at, updated_at FROM market_sweep_state WHERE region_id = 10000002`).Scan(&sweepStarted, &sweepUpdated); err != nil {
 		t.Fatalf("read sweep state: %v", err)
 	}
-	same("sweep started_at", sweep.StartedAt, "2026-10-01T12:00:00Z")
-	same("sweep updated_at", sweep.UpdatedAt, "2026-10-01T12:10:00Z")
+	same("sweep started_at", sweepStarted, "2026-10-01T12:00:00Z")
+	same("sweep updated_at", sweepUpdated, "2026-10-01T12:10:00Z")
 }
 
 // TestSchemaRecordTimestampStepKeepsStoredTimes: the same upgrade

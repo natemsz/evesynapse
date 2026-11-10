@@ -15,59 +15,37 @@ package app
 // alerts and trade ideas all read one canonical row per
 // (region, type) instead of deriving their own.
 //
-// The sweep is incremental and disk-staged (schema 034): every
-// hub region may sweep at once, each advancing at most
-// maxRegionSweepPagesPerCycle pages per worker cycle. Every
-// fetched page lands in market_sweep_orders in the same
-// transaction that advances the region's resume cursor
-// (market_sweep_state), so a process restart resumes a sweep at
-// its next page instead of page 1, and no book is ever held in
-// memory. When a book is fully staged it is distilled into the
-// stored stats and the staging is deleted in the same
-// transaction, so readers never see a half-written region. A
-// completed region re-sweeps once its data is regionSweepGate
-// old (tracked in market_fetch_state under sweep_<region_id>,
-// the same fetched-state bookkeeping the other market passes
-// use); an in-progress sweep resumes regardless of that gate.
+// The sweep (market_region_sweep.go) reads a region's whole book
+// inside one of ESI's cache windows on its own lane, and the store
+// below writes only the items whose orders changed since the
+// region's held book (market_hub_book.go), in one transaction, so
+// readers never see a half-written region. The first sweep after a
+// restart, and the first of each UTC day, writes every item. A
+// region re-sweeps once its data is regionSweepGate old (tracked in
+// market_fetch_state under sweep_<region_id>, the same fetched-state
+// bookkeeping the other market passes use).
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
-	"net/http"
 	"sort"
 	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
-
-	"github.com/jackc/pgx/v5"
 )
 
 const sweepBatchSize = 2000
 
 const (
 	// regionSweepGate is how stale a region's stored stats may
-	// get before the worker sweeps that region again.
-	regionSweepGate = 30 * time.Minute
-	// maxRegionSweepPagesPerCycle bounds how many whole-book
-	// pages one worker cycle may advance EACH region's sweep
-	// by -- the whole-book cousin of maxBookFetchesPerCycle. At
-	// the one-minute cycle cadence even The Forge's book (~a
-	// few hundred pages) finishes inside a few minutes per
-	// region, and no single cycle bursts hundreds of requests
-	// at ESI.
-	maxRegionSweepPagesPerCycle = 500
+	// get before the lane sweeps that region again: two of ESI's
+	// five-minute windows on the market order route.
+	regionSweepGate = 10 * time.Minute
 	// maxRegionSweepPagesTotal is a safety stop far beyond any
 	// real book: if a region ever reported more pages than
-	// this, the sweep stores what it has rather than page
-	// forever.
+	// this, the sweep reads only this many.
 	maxRegionSweepPagesTotal = 2000
 )
 
@@ -115,187 +93,6 @@ type stationAccum struct {
 	BuyOrders   int64
 	SellVolume  int64
 	BuyVolume   int64
-}
-
-// regionSweepOutcome is one region's advance in a sweep pass:
-// how many pages it read and whether ESI's error limit stopped
-// it.
-type regionSweepOutcome struct {
-	pages   int
-	limited bool
-}
-
-// sweepRegionStats is the pass, called from refreshMarketData
-// after the existing history and order-health passes; it spends
-// what is left of the cycle's allowance. Every swept region with a
-// sweep in progress resumes it (whatever the freshness gate
-// says), and every region whose stored stats went stale starts
-// one; all of them advance in parallel, each bounded to
-// maxRegionSweepPagesPerCycle pages and all drawing on the one
-// shared cycle allowance, so ESI's error-limit backoff stays
-// global. It returns how many pages it read, and whether ESI
-// cut the cycle short.
-func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBudget) (stored int, limited bool) {
-	app.sweepMu.Lock()
-	defer app.sweepMu.Unlock()
-
-	var limitHit atomic.Bool
-	outcomes := make([]regionSweepOutcome, len(sweptRegions))
-	var wg sync.WaitGroup
-	for i, region := range sweptRegions {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			defer recoverWorkerPanic("region sweep")
-			outcomes[i] = app.advanceRegionSweep(ctx, region.ID, allowance, &limitHit)
-		}()
-	}
-	wg.Wait()
-	for _, outcome := range outcomes {
-		stored += outcome.pages
-		if outcome.limited {
-			limited = true
-		}
-	}
-	return stored, limited
-}
-
-// advanceRegionSweep moves one region's sweep forward under its
-// staged cursor. A region with no state row has no sweep under
-// way: one starts only when the stored stats are due
-// (regionSweepGate), and thereafter the state row's presence is
-// what the sweep resumes from -- the gate is not consulted again
-// until the sweep completes and the row is deleted.
-//
-// Fetches stop at the shared error-limit signal, the cycle
-// allowance, or the per-region page budget, whichever comes
-// first; whatever was staged stays staged for the next cycle.
-func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, allowance *fetchBudget, limitHit *atomic.Bool) regionSweepOutcome {
-	var out regionSweepOutcome
-	state, err := app.queries.GetMarketSweepState(ctx, regionID)
-	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		if !app.marketFetchDue(ctx, regionSweepKind(regionID), regionSweepGate) {
-			return out
-		}
-		now := time.Now().UTC()
-		if err := app.queries.InsertMarketSweepState(ctx, db.InsertMarketSweepStateParams{
-			RegionID: regionID, StartedAt: now, UpdatedAt: now,
-		}); err != nil {
-			logging.Errorf("worker: region sweep: start %s: %v", marketRegionLabel(regionID), err)
-			return out
-		}
-		state = db.MarketSweepState{RegionID: regionID, NextPage: 1, StartedAt: now, UpdatedAt: now}
-		logging.Infof("worker: region sweep: starting %s (%d)", marketRegionLabel(regionID), regionID)
-	case err != nil:
-		logging.Errorf("worker: region sweep: read %s sweep state: %v", marketRegionLabel(regionID), err)
-		return out
-	}
-
-	// The whole book is already staged but its store never
-	// landed (crash, or the store failed): finish it before
-	// fetching anything new.
-	if sweepBookStaged(state) || state.NextPage > maxRegionSweepPagesTotal {
-		app.completeRegionSweep(ctx, state)
-		return out
-	}
-
-	// A region whose last page fetch failed waits out its
-	// backoff before trying again: it spends no fetch allowance
-	// here and stays silent (the failure already logged its one
-	// line when the backoff was entered).
-	if app.sweepBackedOff(regionID, time.Now()) {
-		return out
-	}
-
-pageLoop:
-	for out.pages < maxRegionSweepPagesPerCycle {
-		if ctx.Err() != nil || limitHit.Load() {
-			break
-		}
-		// The next few pages are read at once and staged in page
-		// order, so a book of hundreds of pages is not hundreds of
-		// round trips one after another. The window is the
-		// region's current one: a region that just lost a page
-		// reads one at a time until a full window lands clean.
-		window := app.sweepWindow(regionID)
-		pages := make([]sweepPage, 0, window)
-		for n := 0; n < sweepPageCount(state, maxRegionSweepPagesPerCycle-out.pages, window) && allowance.take(); n++ {
-			pages = append(pages, sweepPage{page: int(state.NextPage) + n})
-		}
-		if len(pages) == 0 {
-			break
-		}
-		var wg sync.WaitGroup
-		for i := range pages {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer recoverWorkerPanic("region sweep page")
-				p := &pages[i]
-				p.err = errSweepPageLost
-				p.orders, p.totalPages, p.err = app.fetchRegionBookPage(ctx, regionID, p.page)
-			}()
-		}
-		wg.Wait()
-		for _, p := range pages {
-			if p.err != nil {
-				if errors.Is(p.err, esi.ErrErrorLimit) {
-					limitHit.Store(true)
-					logging.Warnf("worker: region sweep: %s cut short by ESI error limit on page %d", marketRegionLabel(regionID), p.page)
-					out.limited = true
-					return out
-				}
-				// A 404 after page 1 is the end of a book that
-				// shrank while it was read: the first missing page
-				// is where the book now ends. Complete with the
-				// pages already staged, corrected to the landed
-				// count so sweepBookStaged agrees with them, and
-				// enter no backoff. Pages after it in the window
-				// are not staged, as with any stopped page.
-				if p.page > 1 && sweepPageMissing(p.err) {
-					if landed := state.NextPage - 1; landed > 0 {
-						state.PagesTotal = landed
-						break pageLoop
-					}
-				}
-				// Transient failure: the pages staged before it
-				// stay staged, the cursor stops at it, and nothing
-				// after it is stored. The region then backs off
-				// (and drops to a one-page window) instead of
-				// retrying the same page every cycle; this log
-				// line is the only one the backoff produces.
-				delay := app.noteSweepPageFailure(regionID, time.Now())
-				logging.Warnf("worker: region sweep: %s page %d unavailable: %v (backing off %s)", marketRegionLabel(regionID), p.page, p.err, delay)
-				break pageLoop
-			}
-			if int64(p.totalPages) > state.PagesTotal {
-				state.PagesTotal = int64(p.totalPages)
-			}
-			state.NextPage++
-			if err := app.stageSweepPage(ctx, state, p.orders); err != nil {
-				logging.Errorf("worker: region sweep: stage %s page %d: %v", marketRegionLabel(regionID), p.page, err)
-				break pageLoop
-			}
-			app.noteSweepPageSuccess(regionID)
-			out.pages++
-			if sweepBookStaged(state) {
-				break pageLoop
-			}
-			if state.NextPage > maxRegionSweepPagesTotal {
-				logging.Warnf("worker: region sweep: %s passed the %d-page safety stop; storing what was read", marketRegionLabel(regionID), maxRegionSweepPagesTotal)
-				break pageLoop
-			}
-		}
-		// The whole window landed clean (any failure above
-		// breaks out of the page loop): a region on a reduced
-		// window steps one page back toward the full window.
-		app.noteSweepWindowClean(regionID)
-	}
-	if sweepBookStaged(state) || state.NextPage > maxRegionSweepPagesTotal {
-		app.completeRegionSweep(ctx, state)
-	}
-	return out
 }
 
 // sweepPageWindow is how many of one region's book pages are read
@@ -409,302 +206,184 @@ func (app *Application) noteSweepWindowClean(regionID int64) {
 	}
 }
 
-// sweepPage is one book page read in a window: the page asked for
-// and its answer.
-type sweepPage struct {
-	page       int
-	orders     []esi.MarketOrder
-	totalPages int
-	err        error
+// marketRegionLabel names a region for logs; hub IDs resolve to
+// their marketRegions name, anything else is just the ID.
+func marketRegionLabel(regionID int64) string {
+	if name, ok := marketRegionName(regionID); ok {
+		return name
+	}
+	return strconv.FormatInt(regionID, 10)
 }
 
-// errSweepPageLost stands for a page whose read panicked, so it is
-// treated as unavailable rather than staged empty.
-var errSweepPageLost = errors.New("page read did not finish")
-
-// sweepPageCount is how many pages the next window asks for: one
-// while the book's size is unknown (page 1 tells it), then up to
-// the region's current window, never past the book's end, the
-// safety stop, or the left pages of this cycle's per-region
-// budget.
-func sweepPageCount(state db.MarketSweepState, left, window int) int {
-	if state.PagesTotal == 0 {
-		return min(1, left)
-	}
-	n := min(window, left, int(state.PagesTotal-state.NextPage+1), int(maxRegionSweepPagesTotal-state.NextPage+1))
-	return max(n, 1)
+// regionStoreResult is what one stored sweep wrote: whether it was a
+// full write, the items written and the items removed, and the
+// station rows written, which the stat pack takes in place.
+type regionStoreResult struct {
+	full        bool
+	written     int
+	stationRows int
+	changed     []int64
+	gone        []int64
+	stations    []db.MarketStationStat
 }
 
-// sweepPageMissing reports whether err is ESI's 404 for a page
-// that does not exist: its "Requested page does not exist"
-// answer, not any other 404 a page fetch can return.
-func sweepPageMissing(err error) bool {
-	var se *esi.StatusError
-	if !errors.As(err, &se) || se.Code != http.StatusNotFound {
-		return false
-	}
-	return strings.HasPrefix(strings.TrimSpace(se.Detail), "Requested page does not exist")
+// regionTypeStats is one item's region figures from its book.
+type regionTypeStats struct {
+	sell, buy             sideStats
+	sellVolume, buyVolume int64
 }
 
-// sweepBookStaged reports whether the staged rows cover the
-// region's whole book: page 1 reports the book's size, and once
-// the cursor has moved past it every page has landed.
-func sweepBookStaged(state db.MarketSweepState) bool {
-	return state.PagesTotal > 0 && state.NextPage > state.PagesTotal
+// bookRow is one stored-book row: the top orders per side the sweep
+// keeps for the Market page (schema 050), in display order (sells
+// price-ascending, buys price-descending).
+type bookRow struct {
+	isBuy                int64
+	rank                 int64
+	price                float64
+	volumeRemain         int64
+	locationID, systemID int64
 }
 
-// stageSweepPage lands one fetched page on disk: the page's
-// orders and the advanced resume cursor commit in ONE
-// transaction, so the staged book always holds exactly the
-// pages the cursor says it does. Whole orders are never kept in
-// memory beyond the page being written.
-func (app *Application) stageSweepPage(ctx context.Context, state db.MarketSweepState, orders []esi.MarketOrder) error {
-	tx, err := app.pool.Begin(ctx)
-	if err != nil {
-		return err
+// typeFigures distills one item's book into its region figures and
+// its top orders.
+func typeFigures(tb *typeBook) (regionTypeStats, []bookRow) {
+	var st regionTypeStats
+	sellPrices := make([]float64, len(tb.sells))
+	for i, o := range tb.sells {
+		sellPrices[i] = o.Price
+		st.sellVolume += o.VolumeRemain
 	}
-	defer tx.Rollback(ctx)
-	qtx := app.queries.WithTx(tx)
-	rows := make([][]any, len(orders))
-	for i := range orders {
-		o := &orders[i]
-		isBuy := int64(0)
-		if o.IsBuyOrder {
-			isBuy = 1
-		}
-		rows[i] = []any{state.RegionID, o.TypeID, isBuy, o.Price, o.VolumeRemain, o.LocationID, o.SystemID}
+	buyPrices := make([]float64, len(tb.buys))
+	for i, o := range tb.buys {
+		buyPrices[i] = o.Price
+		st.buyVolume += o.VolumeRemain
 	}
-	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"market_sweep_orders"},
-		[]string{"region_id", "type_id", "is_buy_order", "price", "volume_remain", "location_id", "system_id"},
-		pgx.CopyFromRows(rows)); err != nil {
-		return err
+	st.sell = summarizeSide(sellPrices, false)
+	st.buy = summarizeSide(buyPrices, true)
+	var top []bookRow
+	for i := 0; i < len(tb.sells) && i < topMarketOrders; i++ {
+		o := tb.sells[i]
+		top = append(top, bookRow{isBuy: 0, rank: int64(i), price: o.Price, volumeRemain: o.VolumeRemain, locationID: o.LocationID, systemID: o.SystemID})
 	}
-	if err := qtx.UpdateMarketSweepState(ctx, db.UpdateMarketSweepStateParams{
-		NextPage: state.NextPage, PagesTotal: state.PagesTotal,
-		UpdatedAt: time.Now().UTC(), RegionID: state.RegionID,
-	}); err != nil {
-		return err
+	for i := 0; i < len(tb.buys) && i < topMarketOrders; i++ {
+		o := tb.buys[len(tb.buys)-1-i]
+		top = append(top, bookRow{isBuy: 1, rank: int64(i), price: o.Price, volumeRemain: o.VolumeRemain, locationID: o.LocationID, systemID: o.SystemID})
 	}
-	return tx.Commit(ctx)
+	return st, top
 }
 
-// completeRegionSweep distills one region's fully staged book
-// into the stored stats. A failed store leaves the staging and
-// the cursor untouched, so the next cycle finishes the same
-// sweep without re-reading a page.
-func (app *Application) completeRegionSweep(ctx context.Context, state db.MarketSweepState) {
-	types, stations, err := app.storeRegionSweepState(ctx, state)
-	if err != nil {
-		logging.Errorf("worker: region sweep: store %s: %v", marketRegionLabel(state.RegionID), err)
-		return
-	}
-	logging.Infof("worker: region sweep: %s done: %d types, %d station rows over %d pages", marketRegionLabel(state.RegionID), types, stations, state.NextPage-1)
-	// Freshness for the in-memory stat pack (market_stat_pack.go):
-	// update the resident snapshot with the newly swept rows so
-	// memory never serves staler data than the SQL path just committed.
-	app.refreshStatPackRegion(ctx, state.RegionID)
-	// Industry recipe values (schema 111) read the stat pack just
-	// committed: today's figure on every blueprint priced here.
-	app.refreshIndustryRecipeValues(ctx, state.RegionID, time.Now())
-}
-
-// fetchRegionBookPage reads one page of a region's whole book
-// (no type filter) and reports the total page count from the
-// X-Pages header. Auth-free public data, like the per-type book
-// fetches. The read rides the ESI client's bulk path: a whole-book
-// page is the one payload large enough that a slow route needs
-// the long deadline, not the shared client's fast failure.
-func (app *Application) fetchRegionBookPage(ctx context.Context, regionID int64, page int) ([]esi.MarketOrder, int, error) {
-	path := fmt.Sprintf("/markets/%d/orders/?order_type=all&page=%d", regionID, page)
-	body, header, err := app.esi.FetchRawLong(ctx, "", path)
-	if err != nil {
-		return nil, 0, err
-	}
-	totalPages := 1
-	if raw := header.Get("X-Pages"); raw != "" {
-		if n, perr := strconv.Atoi(raw); perr == nil && n > 0 {
-			totalPages = n
+// typeStations distills one item's book per place: bests, counts,
+// volumes and the typical (median) price on each side, over orders
+// with a known place.
+func typeStations(tb *typeBook) map[int64]*stationAccum {
+	out := make(map[int64]*stationAccum)
+	sells := make(map[int64][]float64)
+	buys := make(map[int64][]float64)
+	for _, o := range tb.sells {
+		if o.LocationID <= 0 {
+			continue
 		}
-	}
-	var orders []esi.MarketOrder
-	if err := json.Unmarshal(body, &orders); err != nil {
-		return nil, 0, fmt.Errorf("region book page: decode: %w", err)
-	}
-	return orders, totalPages, nil
-}
-
-// storeRegionSweepState distills a completed sweep from its staged
-// book: the region's rows are replaced wholesale inside one
-// transaction (a type that left the book loses its row), the
-// top orders per side are kept as the stored book the Market
-// page serves (market_book_orders, schema 050), the
-// station-grain rows for the spread scanner are replaced in the
-// same transaction, today's daily snapshot rows are upserted
-// alongside, the sweep's staging rows and cursor are deleted,
-// and the sweep's fetch-state row is marked ok so the region
-// waits out regionSweepGate before the next sweep. Per-type
-// figures reuse summarizePrices over the staged price lists --
-// the exact median / 9-in-10 math the item page quotes live.
-// The same completion also stores each type's 7-day average
-// daily traded volume (from market_history) on its region row,
-// so the scanner and tradefinder read a stored figure instead
-// of recomputing it per render.
-func (app *Application) storeRegionSweepState(ctx context.Context, state db.MarketSweepState) (typeCount, stationCount int, err error) {
-	regionID := state.RegionID
-	now := time.Now().UTC()
-	day := now.Format("2006-01-02")
-
-	// Stream all staged orders for the region ordered by type_id,
-	// is_buy_order, price so each type's book is summarized in one
-	// single sequential read instead of 15,000 per-type queries.
-	var typeIDs []int64
-	type regionTypeStats struct {
-		sell, buy             sideStats
-		sellVolume, buyVolume int64
-	}
-	// bookRow is one stored-book row: the top orders per side the
-	// sweep keeps for the Market page (schema 050), in display
-	// order (sells price-ascending, buys price-descending).
-	type bookRow struct {
-		isBuy                int64
-		rank                 int64
-		price                float64
-		volumeRemain         int64
-		locationID, systemID int64
-	}
-	bookByType := make(map[int64][]bookRow)
-	statsByType := make(map[int64]*regionTypeStats)
-	type stationSidePrices struct {
-		sells, buys []float64
-	}
-	stationPrices := make(map[stationKey]*stationSidePrices)
-
-	orderRows, err := app.pool.Query(ctx, `
-		SELECT type_id, is_buy_order, price, volume_remain, location_id, system_id
-		FROM market_sweep_orders
-		WHERE region_id = $1
-		ORDER BY type_id, is_buy_order, price
-	`, regionID)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer orderRows.Close()
-
-	var (
-		curTypeID             int64
-		hasCurType            bool
-		curSt                 *regionTypeStats
-		sellPrices, buyPrices []float64
-		sells, buys           []bookRow
-	)
-	flushType := func() {
-		if !hasCurType {
-			return
-		}
-		typeIDs = append(typeIDs, curTypeID)
-		var top []bookRow
-		for i := 0; i < len(sells) && i < topMarketOrders; i++ {
-			sells[i].rank = int64(i)
-			top = append(top, sells[i])
-		}
-		for i := 0; i < len(buys) && i < topMarketOrders; i++ {
-			b := buys[len(buys)-1-i]
-			b.rank = int64(i)
-			top = append(top, b)
-		}
-		bookByType[curTypeID] = top
-		curSt.sell = summarizeSide(sellPrices, false) // sorts in place
-		curSt.buy = summarizeSide(buyPrices, true)    // sorts in place
-		statsByType[curTypeID] = curSt
-	}
-
-	for orderRows.Next() {
-		var typeID int64
-		var row db.ListMarketSweepTypeOrdersRow
-		if err := orderRows.Scan(&typeID, &row.IsBuyOrder, &row.Price, &row.VolumeRemain, &row.LocationID, &row.SystemID); err != nil {
-			return 0, 0, err
-		}
-		if !hasCurType || typeID != curTypeID {
-			flushType()
-			curTypeID = typeID
-			hasCurType = true
-			curSt = &regionTypeStats{}
-			sellPrices = sellPrices[:0]
-			buyPrices = buyPrices[:0]
-			sells = sells[:0]
-			buys = buys[:0]
-		}
-		br := bookRow{
-			isBuy: row.IsBuyOrder, price: row.Price, volumeRemain: row.VolumeRemain,
-			locationID: row.LocationID, systemID: row.SystemID,
-		}
-		if row.IsBuyOrder == 1 {
-			buyPrices = append(buyPrices, row.Price)
-			curSt.buyVolume += row.VolumeRemain
-			buys = append(buys, br)
-		} else {
-			sellPrices = append(sellPrices, row.Price)
-			curSt.sellVolume += row.VolumeRemain
-			sells = append(sells, br)
-		}
-		if row.LocationID > 0 {
-			key := stationKey{LocationID: row.LocationID, TypeID: typeID}
-			sp := stationPrices[key]
-			if sp == nil {
-				sp = &stationSidePrices{}
-				stationPrices[key] = sp
-			}
-			if row.IsBuyOrder == 1 {
-				sp.buys = append(sp.buys, row.Price)
-			} else {
-				sp.sells = append(sp.sells, row.Price)
-			}
-		}
-	}
-	orderRows.Close()
-	if err := orderRows.Err(); err != nil {
-		return 0, 0, err
-	}
-	flushType()
-
-	// Station grain (P2): the staged book aggregated per place
-	// and type, so the spread scanner never re-reads a book. The
-	// aggregates carry the bests, counts and volumes; the
-	// typicals distilled in the per-type pass above join them
-	// here, so the scanner can price a station's book the way
-	// the region's is priced -- median against median.
-	stationRows, err := app.queries.ListMarketSweepStationAggregates(ctx, regionID)
-	if err != nil {
-		return 0, 0, err
-	}
-	stations := make(map[stationKey]*stationAccum)
-	for _, row := range stationRows {
-		key := stationKey{LocationID: row.LocationID, TypeID: row.TypeID}
-		acc := stations[key]
+		acc := out[o.LocationID]
 		if acc == nil {
 			acc = &stationAccum{}
-			stations[key] = acc
+			out[o.LocationID] = acc
 		}
-		if row.IsBuyOrder == 1 {
-			acc.BestBuy = row.MaxPrice
-			acc.BuyOrders = row.OrderCount
-			acc.BuyVolume = row.TotalVolume
-		} else {
-			acc.BestSell = row.MinPrice
-			acc.SellOrders = row.OrderCount
-			acc.SellVolume = row.TotalVolume
+		if acc.SellOrders == 0 || o.Price < acc.BestSell {
+			acc.BestSell = o.Price
+		}
+		acc.SellOrders++
+		acc.SellVolume += o.VolumeRemain
+		sells[o.LocationID] = append(sells[o.LocationID], o.Price)
+	}
+	for _, o := range tb.buys {
+		if o.LocationID <= 0 {
+			continue
+		}
+		acc := out[o.LocationID]
+		if acc == nil {
+			acc = &stationAccum{}
+			out[o.LocationID] = acc
+		}
+		if acc.BuyOrders == 0 || o.Price > acc.BestBuy {
+			acc.BestBuy = o.Price
+		}
+		acc.BuyOrders++
+		acc.BuyVolume += o.VolumeRemain
+		buys[o.LocationID] = append(buys[o.LocationID], o.Price)
+	}
+	for loc, p := range sells {
+		out[loc].TypicalSell = summarizePrices(p).Median
+	}
+	for loc, p := range buys {
+		out[loc].TypicalBuy = summarizePrices(p).Median
+	}
+	return out
+}
+
+// storeRegionBook writes a swept book into the stored stats. With
+// the region's previous book (ob) in hand and the same UTC day, it
+// writes only the items whose orders or stored sold-per-day figure
+// changed and removes the items that left the book; otherwise it
+// rewrites the region whole. Every derived set the sweep feeds
+// (daily rows, trends, price lines, change feed, LP values, basket
+// values, station rows and heat, the stored top orders, the station
+// leaderboard) is written in the same transaction, so a reader never
+// sees one figure beside another from a different sweep. Per-item
+// figures reuse summarizeSide over the book's own prices -- the exact
+// median / 9-in-10 math the item page quotes.
+func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb, ob *hubBook) (regionStoreResult, error) {
+	var res regionStoreResult
+	now := time.Now().UTC()
+	day := now.Format("2006-01-02")
+	nb.sweptAt, nb.day = now, day
+
+	// Sold per day per type, distilled from market_history in one
+	// aggregate pass and stored on the region rows -- the 7-day
+	// average the scanner and tradefinder read. Types with no
+	// recorded history are absent here and store 0.
+	avgRows, err := app.queries.ListMarketAvgDailyVolumes(ctx, regionID)
+	if err != nil {
+		return res, err
+	}
+	nb.avgVolume = make(map[int64]float64, len(avgRows))
+	for _, row := range avgRows {
+		nb.avgVolume[row.TypeID] = row.AvgDailyVolume
+	}
+
+	res.full = ob == nil || ob.day != day
+	if res.full {
+		for typeID := range nb.types {
+			res.changed = append(res.changed, typeID)
+		}
+	} else {
+		for typeID, tb := range nb.types {
+			if !sameTypeBook(ob.types[typeID], tb) || ob.avgVolume[typeID] != nb.avgVolume[typeID] {
+				res.changed = append(res.changed, typeID)
+			}
+		}
+		for typeID := range ob.types {
+			if nb.types[typeID] == nil {
+				res.gone = append(res.gone, typeID)
+			}
 		}
 	}
-	for key, sp := range stationPrices {
-		acc := stations[key]
-		if acc == nil {
-			continue // no aggregate row: not a station book the scanner reads
-		}
-		if len(sp.sells) > 0 {
-			acc.TypicalSell = summarizePrices(sp.sells).Median // sorts in place
-		}
-		if len(sp.buys) > 0 {
-			acc.TypicalBuy = summarizePrices(sp.buys).Median // sorts in place
+	sort.Slice(res.changed, func(i, j int) bool { return res.changed[i] < res.changed[j] })
+	sort.Slice(res.gone, func(i, j int) bool { return res.gone[i] < res.gone[j] })
+	res.written = len(res.changed)
+	if !res.full && len(res.changed) == 0 && len(res.gone) == 0 {
+		app.recordMarketFetch(ctx, regionSweepKind(regionID), fetchStateOK, "")
+		return res, nil
+	}
+	touched := append(append([]int64(nil), res.changed...), res.gone...)
+
+	statsByType := make(map[int64]regionTypeStats, len(res.changed))
+	bookByType := make(map[int64][]bookRow, len(res.changed))
+	stations := make(map[stationKey]*stationAccum)
+	for _, typeID := range res.changed {
+		tb := nb.types[typeID]
+		statsByType[typeID], bookByType[typeID] = typeFigures(tb)
+		for loc, acc := range typeStations(tb) {
+			stations[stationKey{LocationID: loc, TypeID: typeID}] = acc
 		}
 	}
 	stationKeys := make([]stationKey, 0, len(stations))
@@ -718,33 +397,33 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 		return stationKeys[i].TypeID < stationKeys[j].TypeID
 	})
 
-	// Station leaderboard figures (P5) come from the same staged
-	// book, distilled here so the leaderboard page never
-	// aggregates at render time: one row per station with the
-	// open-order count and the open ISK value per side, where
-	// the open value needs price times remaining volume per
-	// order, which the type-grain aggregates cannot reconstruct.
+	// Station leaderboard figures (P5), from the whole book: one row
+	// per station with the open-order count and the open ISK value
+	// per side, so the leaderboard page never aggregates at render.
 	type stationLeaderAccum struct {
 		sellOrders, buyOrders int64
 		sellValue, buyValue   float64
 	}
 	leaderAcc := make(map[int64]*stationLeaderAccum)
-	leaderRows, err := app.queries.ListMarketSweepStationLeaderboardAggregates(ctx, regionID)
-	if err != nil {
-		return 0, 0, fmt.Errorf("leaderboard aggregates: %w", err)
-	}
-	for _, row := range leaderRows {
-		acc := leaderAcc[row.LocationID]
-		if acc == nil {
-			acc = &stationLeaderAccum{}
-			leaderAcc[row.LocationID] = acc
-		}
-		if row.IsBuyOrder == 1 {
-			acc.buyOrders = row.OrderCount
-			acc.buyValue = row.OpenValue
-		} else {
-			acc.sellOrders = row.OrderCount
-			acc.sellValue = row.OpenValue
+	for _, tb := range nb.types {
+		for _, side := range [][]bookOrder{tb.sells, tb.buys} {
+			for _, o := range side {
+				if o.LocationID <= 0 {
+					continue
+				}
+				acc := leaderAcc[o.LocationID]
+				if acc == nil {
+					acc = &stationLeaderAccum{}
+					leaderAcc[o.LocationID] = acc
+				}
+				if o.IsBuy {
+					acc.buyOrders++
+					acc.buyValue += o.Price * float64(o.VolumeRemain)
+				} else {
+					acc.sellOrders++
+					acc.sellValue += o.Price * float64(o.VolumeRemain)
+				}
+			}
 		}
 	}
 	leaderKeys := make([]int64, 0, len(leaderAcc))
@@ -753,64 +432,78 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 	}
 	sort.Slice(leaderKeys, func(i, j int) bool { return leaderKeys[i] < leaderKeys[j] })
 
+	// Station heat (schema 120): the station bests this sweep
+	// replaces. From the previous book when one is held, otherwise
+	// from the stored rows.
+	oldBests := make(map[stationKey]stationAccum)
+	if ob != nil {
+		for _, typeID := range res.changed {
+			if tb := ob.types[typeID]; tb != nil {
+				for loc, acc := range typeStations(tb) {
+					oldBests[stationKey{LocationID: loc, TypeID: typeID}] = *acc
+				}
+			}
+		}
+	}
+
 	tx, err := app.pool.Begin(ctx)
 	if err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
 
-	// Station heat (schema 120): the station bests this sweep is
-	// about to replace, read before the delete below, so the fresh
-	// pass can log each best that moved against the book.
-	oldBests := make(map[stationKey]stationAccum)
-	oldRows, err := tx.Query(ctx, `
-		SELECT location_id, type_id, best_sell, best_buy
-		FROM market_station_stats
-		WHERE region_id = $1
-	`, regionID)
-	if err != nil {
-		return 0, 0, err
-	}
-	for oldRows.Next() {
-		var loc, typ int64
-		var acc stationAccum
-		if err := oldRows.Scan(&loc, &typ, &acc.BestSell, &acc.BestBuy); err != nil {
-			oldRows.Close()
-			return 0, 0, err
+	if ob == nil {
+		oldRows, err := tx.Query(ctx, `
+			SELECT location_id, type_id, best_sell, best_buy
+			FROM market_station_stats
+			WHERE region_id = $1
+		`, regionID)
+		if err != nil {
+			return res, err
 		}
-		oldBests[stationKey{LocationID: loc, TypeID: typ}] = acc
-	}
-	oldRows.Close()
-	if err := oldRows.Err(); err != nil {
-		return 0, 0, err
+		for oldRows.Next() {
+			var loc, typ int64
+			var acc stationAccum
+			if err := oldRows.Scan(&loc, &typ, &acc.BestSell, &acc.BestBuy); err != nil {
+				oldRows.Close()
+				return res, err
+			}
+			oldBests[stationKey{LocationID: loc, TypeID: typ}] = acc
+		}
+		oldRows.Close()
+		if err := oldRows.Err(); err != nil {
+			return res, err
+		}
 	}
 
-	// Sold per day per type, distilled from market_history in one
-	// aggregate pass and stored on the region rows below -- the 7-day
-	// average the scanner and tradefinder read. Types with no recorded
-	// history are absent here and store 0.
-	avgRows, err := qtx.ListMarketAvgDailyVolumes(ctx, regionID)
-	if err != nil {
-		return 0, 0, err
-	}
-	avgDailyVolume := make(map[int64]float64, len(avgRows))
-	for _, row := range avgRows {
-		avgDailyVolume[row.TypeID] = row.AvgDailyVolume
+	if res.full {
+		if err := qtx.DeleteMarketRegionStatsByRegion(ctx, regionID); err != nil {
+			return res, err
+		}
+		if err := qtx.DeleteMarketStationStatsByRegion(ctx, regionID); err != nil {
+			return res, err
+		}
+		if err := qtx.DeleteMarketBookOrdersByRegion(ctx, regionID); err != nil {
+			return res, err
+		}
+	} else {
+		if len(res.gone) > 0 {
+			if _, err := tx.Exec(ctx, `DELETE FROM market_region_stats WHERE region_id = $1 AND type_id = ANY($2::bigint[])`, regionID, res.gone); err != nil {
+				return res, err
+			}
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM market_station_stats WHERE region_id = $1 AND type_id = ANY($2::bigint[])`, regionID, touched); err != nil {
+			return res, err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM market_book_orders WHERE region_id = $1 AND type_id = ANY($2::bigint[])`, regionID, touched); err != nil {
+			return res, err
+		}
 	}
 
-	if err := qtx.DeleteMarketRegionStatsByRegion(ctx, regionID); err != nil {
-		return 0, 0, err
-	}
-	if err := qtx.DeleteMarketStationStatsByRegion(ctx, regionID); err != nil {
-		return 0, 0, err
-	}
-	for start := 0; start < len(typeIDs); start += sweepBatchSize {
-		end := start + sweepBatchSize
-		if end > len(typeIDs) {
-			end = len(typeIDs)
-		}
-		chunk := typeIDs[start:end]
+	for start := 0; start < len(res.changed); start += sweepBatchSize {
+		end := min(start+sweepBatchSize, len(res.changed))
+		chunk := res.changed[start:end]
 		n := len(chunk)
 		bestSells := make([]float64, n)
 		typSells := make([]float64, n)
@@ -843,7 +536,7 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			buyOrds[i] = st.buy.Orders
 			sellVols[i] = st.sellVolume
 			buyVols[i] = st.buyVolume
-			avgVols[i] = avgDailyVolume[typeID]
+			avgVols[i] = nb.avgVolume[typeID]
 			sellAvgs[i] = st.sell.Avg
 			sellMaxes[i] = st.sell.Far
 			sellP5s[i] = st.sell.P5
@@ -884,7 +577,7 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			buyOrds, sellVols, buyVols, avgVols, now,
 			sellAvgs, sellMaxes, sellP5s, sellDevs,
 			buyAvgs, buyMins, buyP5s, buyDevs); err != nil {
-			return 0, 0, err
+			return res, err
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume,
@@ -915,61 +608,65 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			buyOrds, sellVols, buyVols,
 			sellAvgs, sellMaxes, sellP5s, sellDevs,
 			buyAvgs, buyMins, buyP5s, buyDevs); err != nil {
-			return 0, 0, err
+			return res, err
 		}
 	}
-	// The stat pack's trend figures (schema 101) derive from the
-	// daily rows just written, inside the same transaction, so a
-	// reader never sees today's prices beside yesterday's trends.
-	if _, err := qtx.RefreshMarketStatPackTrends(ctx, db.RefreshMarketStatPackTrendsParams{
-		RegionID: regionID, Today: now,
-	}); err != nil {
-		return 0, 0, fmt.Errorf("stat pack trends: %w", err)
+
+	// The figures derived from the daily rows, for the written items
+	// (every item on a full write: an empty list means all).
+	scope := res.changed
+	if res.full {
+		scope = []int64{}
 	}
-	// The 30-day price line every hover card reads (schema 121),
-	// from the same daily rows, in the same transaction.
-	if _, err := qtx.RefreshMarketStatPackSparks(ctx, db.RefreshMarketStatPackSparksParams{
-		RegionID: regionID, Today: now,
-	}); err != nil {
-		return 0, 0, fmt.Errorf("stat pack sparks: %w", err)
-	}
-	// The change feed (schema 106) compares the rows just written
-	// with their last stored day, and forgets what is a month old.
-	if _, err := qtx.DetectMarketChanges(ctx, db.DetectMarketChangesParams{
-		RegionID: regionID, Day: day, Now: now, MinMove: marketChangeMinMove,
-	}); err != nil {
-		return 0, 0, fmt.Errorf("change feed: %w", err)
+	if len(res.changed) > 0 {
+		// The stat pack's trend figures (schema 101), so a reader
+		// never sees today's prices beside yesterday's trends.
+		if _, err := qtx.RefreshMarketStatPackTrends(ctx, db.RefreshMarketStatPackTrendsParams{
+			RegionID: regionID, Today: now, TypeIds: scope,
+		}); err != nil {
+			return res, fmt.Errorf("stat pack trends: %w", err)
+		}
+		// The 30-day price line every hover card reads (schema 121).
+		if _, err := qtx.RefreshMarketStatPackSparks(ctx, db.RefreshMarketStatPackSparksParams{
+			RegionID: regionID, Today: now, TypeIds: scope,
+		}); err != nil {
+			return res, fmt.Errorf("stat pack sparks: %w", err)
+		}
+		// The change feed (schema 106) compares the rows just
+		// written with their last stored day.
+		if _, err := qtx.DetectMarketChanges(ctx, db.DetectMarketChangesParams{
+			RegionID: regionID, Day: day, Now: now, MinMove: marketChangeMinMove, TypeIds: scope,
+		}); err != nil {
+			return res, fmt.Errorf("change feed: %w", err)
+		}
 	}
 	if err := qtx.PruneMarketChanges(ctx, db.PruneMarketChangesParams{
 		RegionID: regionID, BeforeDay: now.AddDate(0, 0, -marketChangeKeepDays).Format("2006-01-02"),
 	}); err != nil {
-		return 0, 0, fmt.Errorf("change feed prune: %w", err)
+		return res, fmt.Errorf("change feed prune: %w", err)
 	}
 	// LP offer values (schema 102) read the stat pack just written,
-	// in the same transaction, behind a savepoint: the LP rebuild is
-	// a secondary surface, and its failure must not roll back the
-	// region's whole sweep.
+	// behind a savepoint: the LP rebuild is a secondary surface, and
+	// its failure must not roll back the region's whole sweep.
 	if _, err := tx.Exec(ctx, "SAVEPOINT lp_values"); err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	if err := app.refreshLPOfferValues(ctx, qtx, regionID, now); err != nil {
 		logging.Errorf("worker: lp offer values in sweep of %s: %v", marketRegionLabel(regionID), err)
 		if _, err := tx.Exec(ctx, "ROLLBACK TO SAVEPOINT lp_values"); err != nil {
-			return 0, 0, fmt.Errorf("lp offer values: %w", err)
+			return res, fmt.Errorf("lp offer values: %w", err)
 		}
 	} else if _, err := tx.Exec(ctx, "RELEASE SAVEPOINT lp_values"); err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	// Basket values (schema 103): today's value of every basket
 	// priced in this region, from the same rows.
 	if err := refreshBasketValues(ctx, tx, regionID, day); err != nil {
-		return 0, 0, fmt.Errorf("basket values: %w", err)
+		return res, fmt.Errorf("basket values: %w", err)
 	}
+
 	for start := 0; start < len(stationKeys); start += sweepBatchSize {
-		end := start + sweepBatchSize
-		if end > len(stationKeys) {
-			end = len(stationKeys)
-		}
+		end := min(start+sweepBatchSize, len(stationKeys))
 		chunk := stationKeys[start:end]
 		n := len(chunk)
 		locIDs := make([]int64, n)
@@ -994,6 +691,13 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			buyOrds[i] = sacc.BuyOrders
 			sellVols[i] = sacc.SellVolume
 			buyVols[i] = sacc.BuyVolume
+			res.stations = append(res.stations, db.MarketStationStat{
+				LocationID: k.LocationID, RegionID: regionID, TypeID: k.TypeID,
+				BestSell: sacc.BestSell, BestBuy: sacc.BestBuy,
+				SellOrders: sacc.SellOrders, BuyOrders: sacc.BuyOrders,
+				SellVolume: sacc.SellVolume, BuyVolume: sacc.BuyVolume,
+				TypicalSell: sacc.TypicalSell, TypicalBuy: sacc.TypicalBuy, UpdatedAt: now,
+			})
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, typical_sell, typical_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
@@ -1012,9 +716,10 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 		`, locIDs, regionID, sTypeIDs, bestSells, bestBuys,
 			typSells, typBuys, sellOrds, buyOrds,
 			sellVols, buyVols, now); err != nil {
-			return 0, 0, err
+			return res, err
 		}
 	}
+	res.stationRows = len(stationKeys)
 	// Station heat (schema 120): a station's fresh best sell below
 	// the best it replaces, or its fresh best buy above it, is one
 	// beat against the book there. Log this pass's beats, restate
@@ -1039,11 +744,11 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			INSERT INTO market_best_beats (location_id, region_id, type_id, is_buy_order, at)
 			SELECT unnest($1::bigint[]), $2, unnest($3::bigint[]), unnest($4::bigint[]), $5
 		`, beatLocs, regionID, beatTypes, beatBuys, now); err != nil {
-			return 0, 0, err
+			return res, err
 		}
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM market_station_heat WHERE region_id = $1`, regionID); err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO market_station_heat (location_id, region_id, type_id, is_buy_order, beats_12h, computed_at)
@@ -1052,33 +757,27 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 		WHERE region_id = $1 AND at >= $2
 		GROUP BY location_id, region_id, type_id, is_buy_order
 	`, regionID, now.Add(-12*time.Hour), now); err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM market_best_beats WHERE region_id = $1 AND at < $2`,
 		regionID, now.Add(-24*time.Hour)); err != nil {
-		return 0, 0, err
+		return res, err
 	}
-	// The stored book replaces wholesale in the same transaction:
-	// the region's snapshot rows go, then each type's top orders
-	// land beside the stats distilled from the same staged book.
-	if err := qtx.DeleteMarketBookOrdersByRegion(ctx, regionID); err != nil {
-		return 0, 0, err
-	}
+
+	// The stored top orders of every written item, beside the stats
+	// distilled from the same book.
 	type flatBookRow struct {
 		typeID int64
 		br     bookRow
 	}
 	var allBookRows []flatBookRow
-	for _, typeID := range typeIDs {
+	for _, typeID := range res.changed {
 		for _, br := range bookByType[typeID] {
 			allBookRows = append(allBookRows, flatBookRow{typeID: typeID, br: br})
 		}
 	}
 	for start := 0; start < len(allBookRows); start += sweepBatchSize {
-		end := start + sweepBatchSize
-		if end > len(allBookRows) {
-			end = len(allBookRows)
-		}
+		end := min(start+sweepBatchSize, len(allBookRows))
 		chunk := allBookRows[start:end]
 		n := len(chunk)
 		bTypeIDs := make([]int64, n)
@@ -1101,35 +800,15 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 			INSERT INTO market_book_orders (region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at)
 			SELECT $1, unnest($2::bigint[]), unnest($3::bigint[]), unnest($4::bigint[]), unnest($5::float8[]), unnest($6::bigint[]), unnest($7::bigint[]), unnest($8::bigint[]), $9
 		`, regionID, bTypeIDs, bIsBuys, bRanks, bPrices, bVols, bLocIDs, bSysIDs, now); err != nil {
-			return 0, 0, err
+			return res, err
 		}
 	}
-	if err := qtx.DeleteMarketSweepOrdersByRegion(ctx, regionID); err != nil {
-		return 0, 0, err
-	}
-	// The stored total agrees with the pages actually staged
-	// before the cursor goes, in this same transaction: a book
-	// that shrank mid-read completes on its landed count, not
-	// the total page 1 reported.
-	if state.NextPage > 0 {
-		if err := qtx.UpdateMarketSweepState(ctx, db.UpdateMarketSweepStateParams{
-			NextPage: state.NextPage, PagesTotal: state.NextPage - 1,
-			UpdatedAt: now, RegionID: regionID,
-		}); err != nil {
-			return 0, 0, err
-		}
-	}
-	if err := qtx.DeleteMarketSweepState(ctx, regionID); err != nil {
-		return 0, 0, err
-	}
+
 	if err := qtx.DeleteMarketStationLeaderboardByRegion(ctx, regionID); err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	for start := 0; start < len(leaderKeys); start += sweepBatchSize {
-		end := start + sweepBatchSize
-		if end > len(leaderKeys) {
-			end = len(leaderKeys)
-		}
+		end := min(start+sweepBatchSize, len(leaderKeys))
 		chunk := leaderKeys[start:end]
 		n := len(chunk)
 		locIDs := make([]int64, n)
@@ -1156,21 +835,12 @@ func (app *Application) storeRegionSweepState(ctx context.Context, state db.Mark
 				updated_at  = excluded.updated_at
 		`, regionID, locIDs, sellOrds, buyOrds,
 			sellVals, buyVals, now); err != nil {
-			return 0, 0, err
+			return res, err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	app.recordMarketFetch(ctx, regionSweepKind(regionID), fetchStateOK, "")
-	return len(typeIDs), len(stationKeys), nil
-}
-
-// marketRegionLabel names a region for logs; hub IDs resolve to
-// their marketRegions name, anything else is just the ID.
-func marketRegionLabel(regionID int64) string {
-	if name, ok := marketRegionName(regionID); ok {
-		return name
-	}
-	return strconv.FormatInt(regionID, 10)
+	return res, nil
 }

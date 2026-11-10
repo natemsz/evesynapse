@@ -614,3 +614,64 @@ func TestRefreshCorpSnapshotsRoleMissing(t *testing.T) {
 		t.Fatalf("second pass made %d calls, want 0 (fresh/backoff)", got-before)
 	}
 }
+
+// TestCorpKindCopiesAFellowMembersAnswerOnlyWithItsOwnAccess: a
+// member whose own ESI fetch of a corporation dataset succeeded
+// within corpOwnFetchMaxAge takes a fellow member's fresh copy
+// without asking ESI; a member with no such fetch of its own asks
+// ESI itself, so ESI still decides every member's access.
+func TestCorpKindCopiesAFellowMembersAnswerOnlyWithItsOwnAccess(t *testing.T) {
+	transport := &corpStubTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	b := seedCharacter(t, q, user.ID, 93300001, "Fixture Member")
+	for _, id := range []int64{a.CharacterID, b.CharacterID} {
+		if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
+			CharacterID: id, CorporationID: fixtureCorpA, UpdatedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	kind := esi.SnapCorpWallets
+	fetch := func(ch db.Character) int64 {
+		t.Helper()
+		before := transport.calls.Load()
+		if got := app.fetchCorpKind(ctx, ch, fixtureCorpA, kind); got != corpFetchOK {
+			t.Fatalf("fetchCorpKind for %d = %v, want ok", ch.CharacterID, got)
+		}
+		return transport.calls.Load() - before
+	}
+	expire := func(ch db.Character) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx, `UPDATE character_snapshots SET cached_until = now() - interval '1 minute' WHERE character_id = $1 AND kind = $2`, ch.CharacterID, kind); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if n := fetch(a); n == 0 {
+		t.Fatal("the first member's fetch made no ESI call")
+	}
+	// B has never fetched the kind itself: it asks ESI, whatever A holds.
+	if n := fetch(b); n == 0 {
+		t.Fatal("a member with no fetch of its own copied a fellow member's answer")
+	}
+	// B's copy runs out while A's is fresh: B copies A's.
+	expire(b)
+	if n := fetch(b); n != 0 {
+		t.Fatalf("a member with a recent own fetch made %d ESI calls, want 0 (copy)", n)
+	}
+	// B's own fetch is older than the bound: B asks ESI again.
+	expire(b)
+	if _, err := app.db.ExecContext(ctx, `UPDATE snapshot_fetch_state SET attempted_at = $1 WHERE character_id = $2 AND kind = $3`,
+		time.Now().Add(-2*corpOwnFetchMaxAge), b.CharacterID, kind); err != nil {
+		t.Fatal(err)
+	}
+	if n := fetch(b); n == 0 {
+		t.Fatal("a member whose own fetch is past the bound copied instead of asking ESI")
+	}
+}

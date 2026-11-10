@@ -1502,6 +1502,17 @@ var FitGauges = (function () {
   // too. One pointer controller serves both. Slots carry
   // data-v-family / data-v-index (doc order); the reorder applies
   // against state.items directly.
+  // swap.js hoists the picker modal to <body>, out of the editor,
+  // so the pointer controller listens on both. The picker's copy
+  // runs only while the picker sits outside the editor, so no
+  // event is handled twice.
+  function onDragRoots(type, fn, capture) {
+    editor.addEventListener(type, fn, capture);
+    if (!picker) return;
+    picker.addEventListener(type, function (ev) {
+      if (!editor.contains(picker)) fn(ev);
+    }, capture);
+  }
   var DRAG_PX = 12;
   var dragState = null; // pending or active pointer drag
   var eatNextClick = false; // the synthetic click after a drag-source pointerup
@@ -1655,7 +1666,7 @@ var FitGauges = (function () {
     }
     if (!checkRestricted(d.typeID, "")) addItem(d.typeID, 1);
   }
-  editor.addEventListener("pointerdown", function (ev) {
+  onDragRoots("pointerdown", function (ev) {
     if (ev.button !== undefined && ev.button > 0) return;
     if (dragState) return;
     var t = dragSourceAt(ev);
@@ -1679,7 +1690,7 @@ var FitGauges = (function () {
     var v = pickerFamily ? pickerFamily.value : "";
     return v === "any" ? "" : v;
   }
-  editor.addEventListener("pointermove", function (ev) {
+  onDragRoots("pointermove", function (ev) {
     var d = dragState;
     if (!d || ev.pointerId !== d.pid) return;
     var dx = ev.clientX - d.x0, dy = ev.clientY - d.y0;
@@ -1705,8 +1716,8 @@ var FitGauges = (function () {
     if (d.active) endPointerDrag(ev, d);
     else tapDragSource(ev, d);
   }
-  editor.addEventListener("pointerup", releasePointerDrag);
-  editor.addEventListener("pointercancel", function (ev) {
+  onDragRoots("pointerup", releasePointerDrag);
+  onDragRoots("pointercancel", function (ev) {
     var d = dragState;
     if (!d || ev.pointerId !== d.pid) return;
     dragState = null;
@@ -1721,8 +1732,8 @@ var FitGauges = (function () {
   // (its close button) always pass through. Any fresh press
   // clears the flag first, so a click that never arrives can't
   // eat a later genuine one.
-  editor.addEventListener("pointerdown", function () { eatNextClick = false; }, true);
-  editor.addEventListener("click", function (ev) {
+  onDragRoots("pointerdown", function () { eatNextClick = false; }, true);
+  onDragRoots("click", function (ev) {
     if (eatNextClick) {
       eatNextClick = false;
       if (ev.target && ev.target.closest && ev.target.closest(".fit-tip")) return;
@@ -1732,7 +1743,7 @@ var FitGauges = (function () {
   }, true);
 
   // A long-press must never pop the context menu mid-drag.
-  editor.addEventListener("contextmenu", function (ev) {
+  onDragRoots("contextmenu", function (ev) {
     var t = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot,[data-fit-pick]") : null;
     if (t) ev.preventDefault();
   });

@@ -8,6 +8,8 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"os"
 	"testing"
 
 	"evesynapse/internal/pgtest"
@@ -20,6 +22,26 @@ func recordedSchemaSteps(t *testing.T, conn *sql.DB) int {
 		t.Fatalf("count schema_migrations: %v", err)
 	}
 	return n
+}
+
+// TestEverySchemaFileIsAStep: a file in schema_pg that schemaSteps does
+// not list never runs, and nothing else notices until the table it
+// creates is missing in production.
+func TestEverySchemaFileIsAStep(t *testing.T) {
+	steps := map[int]bool{}
+	for _, s := range schemaSteps() {
+		steps[s.version] = true
+	}
+	files, err := os.ReadDir("schema_pg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		var v int
+		if _, err := fmt.Sscanf(f.Name(), "%03d_", &v); err != nil || !steps[v] {
+			t.Errorf("schema_pg/%s is not a step in schemaSteps", f.Name())
+		}
+	}
 }
 
 func publicTableCount(t *testing.T, conn *sql.DB, table string) int {

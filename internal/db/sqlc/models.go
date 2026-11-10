@@ -2079,6 +2079,17 @@ type SdeNpcCorporation struct {
 	FactionID     int64 `json:"faction_id"`
 }
 
+type SdeOverride struct {
+	ID         int16     `json:"id"`
+	Label      string    `json:"label"`
+	Archive    []byte    `json:"archive"`
+	Sha256     string    `json:"sha256"`
+	SizeBytes  int64     `json:"size_bytes"`
+	Files      string    `json:"files"`
+	UploadedBy int64     `json:"uploaded_by"`
+	UploadedAt time.Time `json:"uploaded_at"`
+}
+
 type SdeRegion struct {
 	RegionID int64  `json:"region_id"`
 	Name     string `json:"name"`

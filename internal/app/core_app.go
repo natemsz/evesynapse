@@ -797,6 +797,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/sync/", app.handleSync)
 		r.Post("/sync/warm", app.handleSyncWarm)
 		r.Post("/sync/sde", app.handleSyncSDE)
+		// An uploaded dump in place of the regular one (sde_override.go).
+		r.Post("/sync/sde/upload", app.handleSDEOverrideUpload)
+		r.Post("/sync/sde/upload/clear", app.handleSDEOverrideClear)
 		// What the Sync and Admin search boxes suggest while typing.
 		r.Get("/suggest", app.handleCharacterSuggest)
 		r.Post("/accounts/remove", app.handleAdminAccountRemove)

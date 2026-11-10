@@ -234,10 +234,17 @@ func (app *Application) startSDECheck(reason string) bool {
 			return
 		}
 		logging.Infof("sde: remote dump changed; importing (%s)", reason)
-		if err := app.importSDE(ctx); err != nil {
+		// The regular dump moved past an upload: import it whole
+		// and retire the upload.
+		ov := app.loadSDEOverride(ctx)
+		if err := app.importSDEFrom(ctx, nil); err != nil {
 			logging.Errorf("sde: import failed: %v", err)
 			app.updateSDEStatus(func(s *sdeStatus) { s.LastError = err.Error() })
 			return
+		}
+		if ov != nil {
+			app.dropSDEOverride(ctx, ov.sha)
+			logging.Infof("sde: regular dump changed after upload %q; upload retired", ov.label)
 		}
 		app.updateSDEStatus(func(s *sdeStatus) { s.LastError = "" })
 	}()
@@ -399,7 +406,26 @@ func (app *Application) headSDEFile(ctx context.Context, name string) (fileMarke
 // ---------------------------------------------------------------------------
 
 func (app *Application) importSDE(ctx context.Context) error {
+	ov := app.loadSDEOverride(ctx)
+	err := app.importSDEFrom(ctx, ov)
+	if err != nil && ov != nil {
+		// A broken upload must not block every later import: drop
+		// it, so the next one reads the regular dump.
+		app.dropSDEOverride(ctx, ov.sha)
+		return fmt.Errorf("uploaded dump %q dropped: %w", ov.label, err)
+	}
+	return err
+}
+
+// importSDEFrom imports the dump, reading each file from the upload
+// ov when it holds it and from the regular dump otherwise (ov nil:
+// the regular dump only).
+func (app *Application) importSDEFrom(ctx context.Context, ov *sdeArchive) error {
 	base := app.cfg.SDEBaseURL()
+	source := base
+	if ov != nil {
+		source = ov.source(base)
+	}
 
 	parsed := &parsedSDE{markers: make(map[string]fileMarker)}
 	for i, name := range sdeFileNames {
@@ -407,7 +433,7 @@ func (app *Application) importSDE(ctx context.Context) error {
 			s.Phase = "downloading"
 			s.Progress = fmt.Sprintf("Downloading %s (%d of %d)…", name, i+1, len(sdeFileNames))
 		})
-		marker, err := app.fetchAndParseSDEFile(ctx, base, name, parsed)
+		marker, err := app.parseSDESource(ctx, ov, base, name, parsed)
 		if err != nil {
 			return err
 		}
@@ -417,7 +443,7 @@ func (app *Application) importSDE(ctx context.Context) error {
 	// The skills file is best-effort (see sdeFileNames): its
 	// absence or a parse hiccup must not fail an otherwise good
 	// import — the planner just shows no required skills.
-	if marker, err := app.fetchAndParseSDEFile(ctx, base, sdeSkillsFileName, parsed); err != nil {
+	if marker, err := app.parseSDESource(ctx, ov, base, sdeSkillsFileName, parsed); err != nil {
 		logging.Warnf("sde: optional %s unavailable, continuing without it: %v", sdeSkillsFileName, err)
 	} else {
 		parsed.markers[sdeSkillsFileName] = marker
@@ -425,7 +451,7 @@ func (app *Application) importSDE(ctx context.Context) error {
 	// The mutaplasmid ranges file is best-effort the same way
 	// (see sdeRangesFileName): its absence leaves the previous
 	// ranges in place and is reported, never papered over.
-	if marker, err := app.fetchAndParseSDEFile(ctx, base, sdeRangesFileName, parsed); err != nil {
+	if marker, err := app.parseSDESource(ctx, ov, base, sdeRangesFileName, parsed); err != nil {
 		logging.Warnf("sde: optional %s unavailable, keeping previous roll ranges: %v", sdeRangesFileName, err)
 	} else {
 		parsed.markers[sdeRangesFileName] = marker
@@ -434,13 +460,13 @@ func (app *Application) importSDE(ctx context.Context) error {
 	// way (see sdeMappingsFileName): its absence leaves the
 	// previous mappings in place and is reported, never
 	// papered over.
-	if marker, err := app.fetchAndParseSDEFile(ctx, base, sdeMappingsFileName, parsed); err != nil {
+	if marker, err := app.parseSDESource(ctx, ov, base, sdeMappingsFileName, parsed); err != nil {
 		logging.Warnf("sde: optional %s unavailable, keeping previous mutaplasmid mappings: %v", sdeMappingsFileName, err)
 	} else {
 		parsed.markers[sdeMappingsFileName] = marker
 	}
 	for _, name := range []string{sdeConstellationsFileName, sdeJumpsFileName, sdeCelestialsFileName} {
-		if marker, err := app.fetchAndParseSDEFile(ctx, base, name, parsed); err != nil {
+		if marker, err := app.parseSDESource(ctx, ov, base, name, parsed); err != nil {
 			logging.Warnf("sde: optional %s unavailable, keeping the previous map data: %v", name, err)
 		} else {
 			parsed.markers[name] = marker
@@ -476,7 +502,7 @@ func (app *Application) importSDE(ctx context.Context) error {
 			esi.FormatInt(int64(len(parsed.stations))),
 			esi.FormatInt(int64(len(parsed.systems))))
 	})
-	total, err := app.storeSDE(ctx, base, parsed)
+	total, err := app.storeSDE(ctx, source, parsed)
 	if err != nil {
 		return err
 	}
@@ -490,10 +516,32 @@ func (app *Application) importSDE(ctx context.Context) error {
 		logging.Errorf("map: rebuild after import: %v", err)
 	}
 
-	msg := fmt.Sprintf("Imported %s rows from %s", esi.FormatInt(total), base)
+	msg := fmt.Sprintf("Imported %s rows from %s", esi.FormatInt(total), source)
 	logging.Infof("sde: %s", msg)
 	app.updateSDEStatus(func(s *sdeStatus) { s.Message = msg })
 	return nil
+}
+
+// parseSDESource parses one dump file from the upload when it holds
+// the file, else from the regular dump. A file read from the upload
+// records the regular dump's current marker, so the update check
+// sees a change only once the regular dump moves past the upload.
+func (app *Application) parseSDESource(ctx context.Context, ov *sdeArchive, base, name string, parsed *parsedSDE) (fileMarker, error) {
+	if ov != nil {
+		found, err := ov.parse(name, parsed)
+		if found {
+			if err != nil {
+				return fileMarker{}, err
+			}
+			if marker, herr := app.headSDEFile(ctx, name); herr == nil {
+				return marker, nil
+			}
+			etag, _ := app.sdeMeta(ctx, "etag:"+name)
+			lm, _ := app.sdeMeta(ctx, "last_modified:"+name)
+			return fileMarker{etag: etag, lastModified: lm}, nil
+		}
+	}
+	return app.fetchAndParseSDEFile(ctx, base, name, parsed)
 }
 
 // parsedSDE holds one full dump in memory, ready for the replace
@@ -2176,6 +2224,7 @@ type sdeView struct {
 	LastError  string
 	Tables     []sdeTableCount
 	Files      []sdeFileMarker
+	Override   *sdeOverrideView // the active upload, nil when none
 }
 
 // loadSDEView builds the Sync page's SDE block from the tables, the
@@ -2222,6 +2271,7 @@ func (app *Application) loadSDEView(ctx context.Context) *sdeView {
 		}
 	}
 
+	view.Override = app.loadSDEOverrideView(ctx)
 	if importedAt, err := app.sdeMeta(ctx, "imported_at"); err == nil {
 		view.ImportedAt = importedAt
 	}

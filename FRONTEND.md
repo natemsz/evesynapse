@@ -473,6 +473,9 @@ properties as knobs and no media queries:
 - `.l-tiles`: a row of stat tiles that steps 4, 2, 1 (or 3, 1, or
   6, 3, 1). It counts its own tiles, so conditional tiles need
   nothing extra, and a row never splits 3 and 1.
+  `.l-tiles--cards` is the same row for detail cards (a heading
+  over rows of keys and values): one to a row until the page is
+  34rem wide, because a pair of them on a phone breaks figures.
 - `.l-grid`: the 12-track grid (Home's widget grid, generalized).
   Cells take `.s3` to `.s9` (full width otherwise); under 52rem it
   is 6 tracks with every cell at least half, under 34rem one

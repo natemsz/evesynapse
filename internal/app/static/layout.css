@@ -386,10 +386,13 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
    odd count leads with one full-width tile over pairs, and only a
    page too narrow for pairs stacks them one by one. The row counts
    its own tiles, so a template that renders some of them
-   conditionally needs nothing extra. */
+   conditionally needs nothing extra. .l-tiles--cards is the row for
+   detail cards (a heading over rows of keys and values), which need
+   more room than a stat: they stay one to a row until the page fits
+   a pair at a readable width. */
 .l-tiles { --l-n: 1; display: grid; gap: var(--space-3); grid-template-columns: repeat(var(--l-cols, 1), minmax(0, 1fr)); }
 @container page (min-width: 19rem) {
-  .l-tiles:not(:has(> :only-child)) { --l-cols: 2; }
+  .l-tiles:not(.l-tiles--cards):not(:has(> :only-child)) { --l-cols: 2; }
   .l-tiles:has(> :nth-child(3):last-child) > :first-child,
   .l-tiles:has(> :nth-child(5):last-child) > :first-child { grid-column: 1 / -1; }
 }
@@ -400,6 +403,7 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-tiles:has(> :nth-child(5):last-child) { --l-n: 5; }
 .l-tiles:has(> :nth-child(6):last-child) { --l-n: 6; }
 @container page (min-width: 34rem) {
+  .l-tiles--cards:not(:has(> :only-child)) { --l-cols: 2; }
   .l-tiles:has(> :nth-child(2):last-child),
   .l-tiles:has(> :nth-child(4):last-child) { --l-cols: 2; }
   .l-tiles:has(> :nth-child(6):last-child) { --l-cols: 3; }

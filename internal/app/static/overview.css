@@ -16,7 +16,7 @@
 .ov-picker { flex: 1 1 20rem; max-width: 26rem; }
 .ov-picker .charselector { margin: 0; max-width: none; }
 .ov-total { text-align: right; }
-.ov-total-v { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-4xl); line-height: 1.1; color: var(--accent); }
+.ov-total-v { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-4xl); line-height: 1.1; color: var(--accent); }
 .ov-total-l { font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; color: var(--muted-2); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; }
 .ov-total-u { margin-top: 0.15rem; font-size: var(--fs-xs); color: var(--gold); }
 
@@ -48,10 +48,10 @@
 .ov-portrait img, .ov-ship-art img { display: block; width: 56px; height: 56px; border-radius: var(--r-sm); background: var(--input-bg); border: 1px solid var(--box-edge); object-fit: cover; }
 .ov-secchip { position: absolute; left: 50%; bottom: -0.35rem; transform: translateX(-50%); padding: 0.02rem 0.35rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--box-edge); color: var(--text); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.1; z-index: 1; }
 .ov-entity-main { min-width: 0; flex: 1 1 auto; }
-.ov-nm { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-xl); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-nm { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-xl); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-corp { font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-alliance { color: var(--muted); font-size: var(--fs-2xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ov-ship-title { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-lg); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-ship-title { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-sn { color: var(--text); font-weight: 600; }
 .ov-st { font-weight: 700; }
 .ov-ship-group { font-size: var(--fs-xs); color: var(--muted); }
@@ -64,11 +64,11 @@
 .ov-locval { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; justify-content: flex-end; }
 .ov-sys { font-weight: 600; }
 .ov-stn { color: var(--text); font-weight: 500; text-align: right; }
-.ov-sp-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--accent); }
-.ov-skills-cnt { font-family: 'Saira Semi Condensed', sans-serif; font-size: var(--fs-2xs); color: var(--muted); }
+.ov-sp-val { font-family: var(--font-num); font-weight: 600; color: var(--accent); }
+.ov-skills-cnt { font-family: var(--font-body); font-size: var(--fs-2xs); color: var(--muted); }
 .ov-unalloc { color: var(--gold); font-size: var(--fs-2xs); font-weight: 600; }
-.ov-wallet-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text); }
-.ov-date { font-family: 'JetBrains Mono', monospace; font-size: var(--fs-2xs); color: var(--text); }
+.ov-wallet-val { font-family: var(--font-num); font-weight: 600; color: var(--text); }
+.ov-date { font-family: var(--font-num); font-size: var(--fs-2xs); color: var(--text); }
 
 /* Status pills for card rows */
 .ov-tag-ok { display: inline-flex; align-items: center; padding: 0.08rem 0.45rem; border-radius: var(--r-sm); background: color-mix(in srgb, var(--kept) 14%, transparent); border: 1px solid var(--kept); color: var(--kept); font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.2; }
@@ -77,7 +77,7 @@
 .ov-card .ok { background: none; border: 0; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--success); }
 .ov-card .warn { background: none; border: 0; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--gold); }
 
-.ov-pibig { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-xl); color: var(--gold); margin-bottom: 0.25rem; line-height: 1.2; }
+.ov-pibig { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-xl); color: var(--gold); margin-bottom: 0.25rem; line-height: 1.2; }
 .ov-pisub { color: var(--muted); font-size: var(--fs-xs); line-height: 1.45; }
 .ov-pisub .bad, .ov-table .bad { color: var(--danger); }
 .ov-pipills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
@@ -201,7 +201,7 @@
 .ov-table tr.sel td { background: var(--glass); }
 .ov-cell { display: flex; align-items: center; gap: 0.6rem; color: var(--text); }
 .ov-cell:hover { text-decoration: none; }
-.ov-lvl { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; border-radius: var(--r-sm); background: var(--glass); border: 1px solid var(--box-edge); font-family: 'Rajdhani', sans-serif; font-weight: 700; }
+.ov-lvl { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; border-radius: var(--r-sm); background: var(--glass); border: 1px solid var(--box-edge); font-family: var(--font-display); font-weight: 700; }
 .ov-lvl.zero { color: var(--muted); }
 .ov-nm { font-weight: 600; }
 .ov-tag { margin-left: 0.45rem; padding: 0.05rem 0.4rem; border-radius: 999px; font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -224,7 +224,7 @@ html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #
 /* ---- Inspector ---- */
 .ov-ranktile { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 3.2rem; height: 3.2rem; border: 1px solid var(--gold); border-radius: var(--r-sm); }
 .ov-ranktile .rl { font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; color: var(--muted-2); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; }
-.ov-ranktile .rv { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-xl); color: var(--gold); }
+.ov-ranktile .rv { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-xl); color: var(--gold); }
 .ov-itype { margin: 0.2rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
 .ov-eft { padding: 0.35rem 0.6rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); font-weight: 600; white-space: nowrap; }
 .ov-idesc { color: var(--muted); font-size: var(--fs-sm); line-height: 1.55; }

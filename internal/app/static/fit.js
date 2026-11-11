@@ -442,6 +442,7 @@ var FitGauges = (function () {
     previewRow = li || null;
     if (!previewOK || !state.shipTypeId || !previewKinds[it.kind || ""]) return;
     if (restrictionFor(it.id) || Date.now() < previewPausedUntil) return;
+    if (it.kind === "subsystem" && subsystemTaken(it.id)) return;
     var base = JSON.stringify(simPayload(state.items));
     if (base !== previewCacheFor) { previewCache = {}; previewCacheFor = base; }
     if (previewCache[it.id]) {
@@ -598,14 +599,30 @@ var FitGauges = (function () {
   }
 
   // --- ship-restricted modules -------------------------------------
-  // The workbench carries data-fit-restricted: {typeID: "Dreadnoughts"}.
+  // The workbench carries data-fit-restricted for fitted modules:
+  // {typeID: "Dreadnoughts"}. Search and picker rows carry the same
+  // for the hull they were asked about (it.only, it.subslot); rowSeen
+  // keeps them so a pick or a drag from a row is checked before it
+  // lands.
+  var rowSeen = {};
+  var rowSeenShip = 0;
+  function noteRow(it) {
+    if (!it || !it.id) return;
+    if (rowSeenShip !== state.shipTypeId) { rowSeen = {}; rowSeenShip = state.shipTypeId; }
+    rowSeen[it.id] = it;
+  }
+  function seenRow(typeID) {
+    return rowSeenShip === state.shipTypeId ? rowSeen[typeID] || null : null;
+  }
   function restrictionFor(typeID) {
     var wb = workbench();
     if (!wb) return "";
     try {
       var m = JSON.parse(wb.getAttribute("data-fit-restricted") || "{}");
-      return m[String(typeID)] || "";
-    } catch (e) { return ""; }
+      if (m[String(typeID)]) return m[String(typeID)];
+    } catch (e) { /* fall through to the rows */ }
+    var row = seenRow(typeID);
+    return row && row.only ? row.only : "";
   }
   function restrictedSet() {
     var wb = workbench();
@@ -628,9 +645,25 @@ var FitGauges = (function () {
 
   // Slot families with a fixed maximum: adding past it is a
   // plain-language refusal, never a silent no-op.
-  var fitFamLabels = { high: "high", medium: "mid", low: "low", rig: "rig" };
+  var fitFamLabels = { high: "high", medium: "mid", low: "low", rig: "rig", subsystem: "subsystem" };
+  // A hull takes one subsystem of each kind: the fitted subsystem of
+  // the same kind as typeID, or null.
+  function subsystemTaken(typeID) {
+    var row = seenRow(typeID);
+    var own = editor.querySelector('.fit-chip[data-fit-rowtype="' + typeID + '"][data-fit-subslot]');
+    var kind = (row && row.subslot) || (own && own.getAttribute("data-fit-subslot"));
+    if (!kind) return null;
+    return editor.querySelector('.fit-chip[data-fit-subslot="' + kind + '"]');
+  }
   function addItem(typeID, qty, famHint) {
     var fam = familyOfType(typeID) || famHint || "";
+    if (fam === "subsystem") {
+      var taken = subsystemTaken(typeID);
+      if (taken) {
+        rackRefuse(fam, "This hull already has " + (taken.getAttribute("data-tip-name") || "a subsystem of that kind") + ". Remove it first.");
+        return;
+      }
+    }
     if (fitFamLabels[fam]) {
       var max = 0;
       var g = editor.querySelector('.fit-group[data-fit-group="' + fam + '"]');
@@ -754,7 +787,11 @@ var FitGauges = (function () {
       var decEl = t.closest("[data-fit-dec]");
       if (decEl) { decItem(parseInt(decEl.getAttribute("data-fit-dec"), 10) || 0); return; }
       var incEl = t.closest("[data-fit-inc]");
-      if (incEl) { addItem(parseInt(incEl.getAttribute("data-fit-inc"), 10) || 0, 1); return; }
+      if (incEl) {
+        var incID = parseInt(incEl.getAttribute("data-fit-inc"), 10) || 0;
+        if (!checkRestricted(incID, typeNameOf(incID), "")) addItem(incID, 1);
+        return;
+      }
       var addEl = t.closest("[data-fit-add]");
       var add = addEl ? addEl.getAttribute("data-fit-add") : "";
       if (add) {
@@ -884,7 +921,8 @@ var FitGauges = (function () {
   // passes family=ship and ignores them server-side.
   function pickerURL(family, q) {
     return "/fittings/picker.json?family=" + encodeURIComponent(family) +
-      "&q=" + encodeURIComponent(q) + filterQuery();
+      "&q=" + encodeURIComponent(q) + filterQuery() +
+      (state.shipTypeId ? "&ship=" + state.shipTypeId : "");
   }
 
   // Fittable-only: kinds with free capacity on the current hull,
@@ -917,7 +955,7 @@ var FitGauges = (function () {
     if (!ok) return rows;
     var restricted = restrictedSet();
     return (rows || []).filter(function (it) {
-      if (restricted && restricted[it.id]) return false;
+      if ((restricted && restricted[it.id]) || it.only) return false;
       return !!ok[it.kind || ""];
     });
   }
@@ -930,8 +968,10 @@ var FitGauges = (function () {
   function rowReason(it) {
     var wb = workbench();
     if (!wb || !it || it.kind === "ship" || it.kind === "charge") return "";
+    noteRow(it);
     var req = restrictionFor(it.id);
     if (req) return "Only fits " + req;
+    if (it.kind === "subsystem" && subsystemTaken(it.id)) return "Its kind is already fitted";
     if (rackKinds[it.kind]) {
       var g = wb.querySelector('.fit-group[data-fit-group="' + it.kind + '"]');
       if (g) {
@@ -1861,7 +1901,7 @@ var FitGauges = (function () {
   }
   function highlightForDrag(d) {
     clearDragMarks();
-    if (restrictionFor(d.typeID)) return; // lights up nothing
+    if (!d.fromFit && restrictionFor(d.typeID)) return; // lights up nothing
     var slots = editor.querySelectorAll(".fit-vslot");
     for (var i = 0; i < slots.length; i++) {
       var s = slots[i];
@@ -1880,7 +1920,9 @@ var FitGauges = (function () {
     }
   }
   function startPointerDrag(ev, d) {
-    if (restrictionFor(d.typeID)) { dragState = null; return; }
+    // A restricted module cannot be dragged on; one already fitted
+    // (an import, an older fit) still drags off or along its rack.
+    if (!d.fromFit && restrictionFor(d.typeID)) { dragState = null; return; }
     d.active = true;
     // A drag out of the picker needs the workbench visible:
     // the modal backdrop would swallow every drop target.
@@ -1905,7 +1947,7 @@ var FitGauges = (function () {
           d.dropIndex = parseInt(slot.getAttribute("data-v-index") || "-1", 10);
           if (!(d.dropIndex >= 0)) d.dropIndex = -1;
         }
-      } else if (d.family && fam === d.family && !restrictionFor(d.typeID)) {
+      } else if (d.family && fam === d.family && (d.fromFit || !restrictionFor(d.typeID))) {
         d.dropIndex = parseInt(slot.getAttribute("data-v-index") || "-1", 10);
         if (!(d.dropIndex >= 0)) d.dropIndex = -1;
       }

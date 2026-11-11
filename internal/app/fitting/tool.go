@@ -370,7 +370,8 @@ func (app *tool) writePickRows(w http.ResponseWriter, r *http.Request, rows []mo
 			ids = append(ids, row.ID)
 		}
 	}
-	stats := app.deps.FitBuilder().FitPickStats(r.Context(), ids)
+	ship, _ := strconv.ParseInt(r.URL.Query().Get("ship"), 10, 64)
+	stats := app.deps.FitBuilder().FitPickStats(r.Context(), ids, ship)
 	out := make([]pickRow, 0, len(rows))
 	for _, row := range rows {
 		pr := pickRow{SuggestItem: row}

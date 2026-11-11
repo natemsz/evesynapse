@@ -290,7 +290,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}}, doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
-        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}>
+        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}"{{if .SubSlot}} data-fit-subslot="{{.SubSlot}}"{{end}} data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}>
           {{if $group.ReadOnly}}<span class="fit-chip-name">{{.Name}}</span>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
           {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}

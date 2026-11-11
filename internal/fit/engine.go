@@ -212,6 +212,10 @@ const (
 	AttrCanFitShipGroup04 = 1301
 	AttrCanFitShipType1   = 1302
 	AttrCanFitShipType4   = 1305
+	// Subsystems name their one hull in fitsToShipType (1380) and
+	// their slot in subSystemSlot (1366): one subsystem per slot.
+	AttrFitsToShipType = 1380
+	AttrSubSystemSlot  = 1366
 	// Cap-warfare amounts (dgmAttributeTypes): neutralizers drain
 	// via energyNeutralizerAmount (97); nosferatu via
 	// powerTransferAmount (90), which remote capacitor
@@ -1163,10 +1167,17 @@ func finalAttrs(snap *Snapshot, e *entity) map[int64]float64 {
 	return out
 }
 
+// RestrictionFor reports whether a module may go on the hull: nil
+// when it may, else what it needs. The snapshot must hold both types.
+func RestrictionFor(snap *Snapshot, shipTypeID, moduleTypeID int64) *Restriction {
+	return restrictionFor(snap, shipTypeID, snap.Groups[shipTypeID], moduleTypeID)
+}
+
 // restrictionFor returns the restriction for a module on the
 // given hull, or nil when the module fits. A module is
 // restricted when it carries any canFitShipGroup01-04
-// (1298-1301) or canFitShipType1-4 (1302-1305) attribute; it is
+// (1298-1301), canFitShipType1-4 (1302-1305) or fitsToShipType
+// (1380) attribute; it is
 // allowed when the hull's type or group matches any named one.
 func restrictionFor(snap *Snapshot, shipTypeID, shipGroup, moduleTypeID int64) *Restriction {
 	attrs := snap.Attrs[moduleTypeID]
@@ -1183,6 +1194,9 @@ func restrictionFor(snap *Snapshot, shipTypeID, shipGroup, moduleTypeID int64) *
 		if t := int64(attrs[a]); t > 0 {
 			r.NeedType = append(r.NeedType, t)
 		}
+	}
+	if t := int64(attrs[AttrFitsToShipType]); t > 0 {
+		r.NeedType = append(r.NeedType, t)
 	}
 	if len(r.NeedGroup) == 0 && len(r.NeedType) == 0 {
 		return nil

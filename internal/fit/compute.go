@@ -106,7 +106,7 @@ func newFitting(snap *Snapshot, shipTypeID int64, levels map[int64]int) *fitting
 		}
 	}
 	ship := &entity{key: "ship", kind: entShip, typeID: shipTypeID, instances: 1, base: shipBase, calc: map[int64]float64{}}
-	char := &entity{key: "char", kind: entChar, base: map[int64]float64{}, calc: map[int64]float64{}}
+	char := &entity{key: "char", kind: entChar, base: cloneAttrMap(snap.Attrs[CharacterTypeID]), calc: map[int64]float64{}}
 	return &fitting{
 		snap:       snap,
 		shipTypeID: shipTypeID,
@@ -365,7 +365,8 @@ type codeEffect struct {
 // codeEffects are the effects CCP ships without modifiers that
 // change a fit's own numbers: missile damage by missile skill, T2
 // launcher rate of fire by specialization, drone damage by drone
-// skill, and the Reactive Armor Hardener's resistances. Each skill
+// skill, a running propulsion module's mass and signature, and the
+// Reactive Armor Hardener's resistances. Each skill
 // already scales its bonus by level in a modifier effect of its own
 // (152 or 146 for damageMultiplierBonus 292, 163 for rofBonus 293),
 // so the bonus applies as folded. The hardener applies its adapted
@@ -382,6 +383,17 @@ var codeEffects = map[int64]codeEffect{
 	1851: {Effect: Effect{Name: "selfRof"}, modifiers: []Modifier{
 		{Domain: "shipID", Func: "LocationRequiredSkillModifier", ModifiedAttr: AttrSpeed, ModifyingAttr: attrRofBonus, Operation: 6, SkillTypeID: skillSelf},
 	}},
+	// Propulsion: a running afterburner or microwarpdrive adds its
+	// mass to the ship, and a microwarpdrive blooms the signature.
+	// The speed boost itself reads the ship's mass with the module's
+	// added (mobilityAndTargeting).
+	effectMicrowarpdrive: {Effect: Effect{Name: "moduleBonusMicrowarpdrive", Category: 1}, modifiers: []Modifier{
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrMass, ModifyingAttr: AttrMassAddition, Operation: opModAdd},
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrSignatureRadius, ModifyingAttr: attrSignatureRadiusBonus, Operation: opPostPercent},
+	}},
+	effectAfterburner: {Effect: Effect{Name: "moduleBonusAfterburner", Category: 1}, modifiers: []Modifier{
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrMass, ModifyingAttr: AttrMassAddition, Operation: opModAdd},
+	}},
 	EffectAdaptiveArmorHardener: {Effect: Effect{Name: "adaptiveArmorHardener", Category: 1}, modifiers: []Modifier{
 		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrArmorEM, ModifyingAttr: AttrArmorEM, Operation: opPostMult},
 		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrArmorExplosive, ModifyingAttr: AttrArmorExplosive, Operation: opPostMult},
@@ -394,6 +406,10 @@ const (
 	attrDamageMultiplierBonus = 292
 	attrRofBonus              = 293
 	attrResistanceShift       = 1849
+	attrSignatureRadiusBonus  = 554
+
+	effectMicrowarpdrive = 6730
+	effectAfterburner    = 6731
 )
 
 func missileSkillDamage(name string, attr int64) codeEffect {
@@ -760,8 +776,8 @@ func (f *fitting) slotsAndHardpoints() {
 }
 
 // capacitor works out capacity, peak recharge, what the cycling
-// modules draw, and whether the capacitor holds (and where) or
-// how long it lasts.
+// modules draw and capacitor boosters put back, and whether the
+// capacitor holds (and where) or how long it lasts.
 func (f *fitting) capacitor() {
 	snap, res := f.snap, f.res
 	res.CapacitorCapacity = f.shipAttr(AttrCapacitorCapacity)
@@ -773,25 +789,45 @@ func (f *fitting) capacitor() {
 		if ent.kind == entDrone || !ent.cycling() {
 			continue
 		}
+		n := float64(maxInt(ent.instances, 1))
 		need := ent.get(snap, AttrCapacitorNeed)
 		cycle := cycleSeconds(ent, snap)
 		if need > 0 && cycle > 0 {
-			res.CapacitorDraw += need / cycle * float64(maxInt(ent.instances, 1))
+			res.CapacitorDraw += need / cycle * n
+		}
+		if charge := f.weaponCharge[ent.typeID]; charge != nil && cycle > 0 {
+			if bonus := charge.get(snap, AttrCapacitorBonus); bonus > 0 {
+				res.CapacitorInjection += n * capBoosterRate(bonus, cycle,
+					snap.Physics[ent.typeID].Capacity, snap.Physics[charge.typeID].Volume,
+					ent.get(snap, AttrReloadTime)/1000)
+			}
 		}
 	}
-	if res.CapacitorCapacity > 0 && res.CapacitorDraw > 0 {
-		if res.CapacitorDraw <= res.CapacitorPeakRecharge {
+	net := res.CapacitorDraw - res.CapacitorInjection
+	if res.CapacitorCapacity > 0 && net > 0 {
+		if net <= res.CapacitorPeakRecharge {
 			res.CapacitorStable = true
 			res.CapacitorStablePercent = capacitorEquilibriumPercent(
-				res.CapacitorCapacity, capRechargeSecs, res.CapacitorDraw)
+				res.CapacitorCapacity, capRechargeSecs, net)
 		} else {
 			res.CapacitorDepletionSecs = capacitorDepletionSeconds(
-				res.CapacitorCapacity, capRechargeSecs, res.CapacitorDraw)
+				res.CapacitorCapacity, capRechargeSecs, net)
 		}
 	} else {
 		res.CapacitorStable = true
 		res.CapacitorStablePercent = 100
 	}
+}
+
+// capBoosterRate is a capacitor booster's sustained injection in
+// GJ/s: a clip of charges (as many as the module holds), one per
+// cycle, then the reload before the next clip.
+func capBoosterRate(bonus, cycle, holds, chargeVolume, reload float64) float64 {
+	clip := 1.0
+	if holds > 0 && chargeVolume > 0 {
+		clip = math.Max(1, math.Floor(holds/chargeVolume+1e-9))
+	}
+	return clip * bonus / (clip*cycle + reload)
 }
 
 // offense totals what the cycling modules do to a target: turret
@@ -1075,7 +1111,12 @@ func (f *fitting) mobilityAndTargeting() {
 	res.ScanResolution = f.shipAttr(AttrScanResolution)
 	res.SensorStrength = math.Max(math.Max(f.shipAttr(AttrScanRadar), f.shipAttr(AttrScanLadar)),
 		math.Max(f.shipAttr(AttrScanMagnetometric), f.shipAttr(AttrScanGravimetric)))
+	// The ship and the pilot each cap how many targets lock; the
+	// lower one holds.
 	res.MaxLockedTargets = f.shipAttr(AttrMaxLockedTargets)
+	if pilot := f.char.get(snap, AttrMaxLockedTargets); pilot > 0 && pilot < res.MaxLockedTargets {
+		res.MaxLockedTargets = pilot
+	}
 	res.CargoCapacity = f.shipAttr(AttrCapacity)
 	if res.CargoCapacity == 0 {
 		if phys, ok := snap.Physics[f.shipTypeID]; ok {

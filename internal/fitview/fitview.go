@@ -1201,6 +1201,7 @@ type FitStatsView struct {
 	Capacitor     string // capacity
 	CapPeak       string
 	CapDraw       string
+	CapInject     string // capacitor boosters, empty without one
 	CapState      string
 	CapStable     bool
 	TurretDPS     string
@@ -1277,6 +1278,7 @@ func fitFigures(res *fit.Result) []FitFigure {
 		{"cap", res.CapacitorCapacity, "GJ", 0, true},
 		{"cappeak", res.CapacitorPeakRecharge, "GJ/s", 1, true},
 		{"capuse", res.CapacitorDraw, "GJ/s", 1, false},
+		{"capinject", res.CapacitorInjection, "GJ/s", 1, true},
 		{"ehp", res.EHP.Omni, "EHP", 0, true},
 		{"shieldhp", res.ShieldHP, "HP", 0, true},
 		{"armorhp", res.ArmorHP, "HP", 0, true},
@@ -2193,6 +2195,9 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 	st.Capacitor = FitFmt1(res.CapacitorCapacity) + " GJ"
 	st.CapPeak = FitFmt1(res.CapacitorPeakRecharge) + " GJ/s"
 	st.CapDraw = FitFmt1(res.CapacitorDraw) + " GJ/s"
+	if res.CapacitorInjection > 0 {
+		st.CapInject = "+" + FitFmt1(res.CapacitorInjection) + " GJ/s"
+	}
 	if res.CapacitorStable {
 		st.CapStable = true
 		if res.CapacitorStablePercent >= 99.95 {

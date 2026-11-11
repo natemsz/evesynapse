@@ -1486,42 +1486,43 @@ func (q *Queries) ListIndustryCostIndices(ctx context.Context) ([]IndustryCostIn
 	return items, nil
 }
 
-const listMarketAvgDailyVolumes = `-- name: ListMarketAvgDailyVolumes :many
+const listMarketAvgDailyVolumesForTypes = `-- name: ListMarketAvgDailyVolumesForTypes :many
 SELECT h.type_id AS type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
 FROM market_history h
 JOIN (
     SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD') AS window_start
     FROM market_history m
-    WHERE m.region_id = $1
+    WHERE m.region_id = $1 AND m.type_id = ANY($2::bigint[])
     GROUP BY m.type_id
 ) w ON w.type_id = h.type_id
-WHERE h.region_id = $1
+WHERE h.region_id = $1 AND h.type_id = ANY($2::bigint[])
   AND h.date >= w.window_start
 GROUP BY h.type_id
-ORDER BY h.type_id
 `
 
-type ListMarketAvgDailyVolumesRow struct {
+type ListMarketAvgDailyVolumesForTypesParams struct {
+	RegionID int64   `json:"region_id"`
+	TypeIds  []int64 `json:"type_ids"`
+}
+
+type ListMarketAvgDailyVolumesForTypesRow struct {
 	TypeID         int64   `json:"type_id"`
 	AvgDailyVolume float64 `json:"avg_daily_volume"`
 }
 
-// The sold-per-day figure the sweep stores on each region stat:
+// The sold-per-day figure for types a region's book has just gained:
 // the mean recorded daily volume over the seven calendar days
-// ending on the type's newest recorded day (the newest day and
-// the six before it), which is exactly what historyWindow(rows,
-// 7) averages at render time. One pass over the region's whole
-// history at sweep completion; types with no recorded history
-// have no row here and read as 0.
-func (q *Queries) ListMarketAvgDailyVolumes(ctx context.Context, regionID int64) ([]ListMarketAvgDailyVolumesRow, error) {
-	rows, err := q.db.Query(ctx, listMarketAvgDailyVolumes, regionID)
+// ending on the type's newest recorded day, read by key per type.
+// Types with no recorded history have no row and read as 0.
+func (q *Queries) ListMarketAvgDailyVolumesForTypes(ctx context.Context, arg ListMarketAvgDailyVolumesForTypesParams) ([]ListMarketAvgDailyVolumesForTypesRow, error) {
+	rows, err := q.db.Query(ctx, listMarketAvgDailyVolumesForTypes, arg.RegionID, arg.TypeIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListMarketAvgDailyVolumesRow
+	var items []ListMarketAvgDailyVolumesForTypesRow
 	for rows.Next() {
-		var i ListMarketAvgDailyVolumesRow
+		var i ListMarketAvgDailyVolumesForTypesRow
 		if err := rows.Scan(&i.TypeID, &i.AvgDailyVolume); err != nil {
 			return nil, err
 		}
@@ -1973,6 +1974,39 @@ func (q *Queries) ListMarketHistoryWants(ctx context.Context, arg ListMarketHist
 	for rows.Next() {
 		var i ListMarketHistoryWantsRow
 		if err := rows.Scan(&i.RegionID, &i.TypeID, &i.LastRequestedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketRegionAvgVolumes = `-- name: ListMarketRegionAvgVolumes :many
+SELECT type_id, avg_daily_volume FROM market_region_stats WHERE region_id = $1
+`
+
+type ListMarketRegionAvgVolumesRow struct {
+	TypeID         int64   `json:"type_id"`
+	AvgDailyVolume float64 `json:"avg_daily_volume"`
+}
+
+// The sold-per-day figure each of a region's stats rows carries:
+// kept current at history ingest (RefreshMarketRegionStatAvgVolume),
+// so the sweep reads it instead of recomputing it from the whole
+// history table.
+func (q *Queries) ListMarketRegionAvgVolumes(ctx context.Context, regionID int64) ([]ListMarketRegionAvgVolumesRow, error) {
+	rows, err := q.db.Query(ctx, listMarketRegionAvgVolumes, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketRegionAvgVolumesRow
+	for rows.Next() {
+		var i ListMarketRegionAvgVolumesRow
+		if err := rows.Scan(&i.TypeID, &i.AvgDailyVolume); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

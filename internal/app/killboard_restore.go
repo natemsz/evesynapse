@@ -14,7 +14,8 @@ package app
 // cache (FetchRawOnce), a few at a time, and back off while ESI's
 // error budget is low. A kill ESI cannot serve is asked of
 // zKillboard by id, one at a time at its requested pace. Once a
-// pass finds nothing left the loop rechecks every few hours.
+// pass finds nothing left the loop runs the one time stats rebuild
+// (killboard_rebuild.go) and then rechecks every few hours.
 // ---------------------------------------------------------------------------
 
 import (
@@ -47,10 +48,6 @@ const (
 	killRestoreBackoff = time.Minute
 )
 
-// killPruneEnabled gates the daily retention prune. It stays off
-// until the stats rebuild has counted the restored attacker rows.
-const killPruneEnabled = false
-
 // runKillAttackerRestore is the restore loop. It returns when ctx
 // ends.
 func (app *Application) runKillAttackerRestore(ctx context.Context) {
@@ -79,6 +76,20 @@ func (app *Application) runKillAttackerRestore(ctx context.Context) {
 			if restored+missing > 0 {
 				logging.Infof("killboard restore: done, %d kills restored, %d ESI could not serve, in %s",
 					restored, missing, time.Since(started).Round(time.Minute))
+			}
+			// Every kill has its attacker rows: the stats rebuild
+			// can count them (killboard_rebuild.go). A failed
+			// rebuild is retried after a short pause, from its
+			// stored cursor.
+			if err := app.rebuildKillStats(ctx); err != nil {
+				if ctx.Err() == nil {
+					logging.Errorf("killboard stats rebuild: %v", err)
+				}
+				cursor = math.MaxInt64
+				if !killfeedSleepCtx(ctx, killRestoreBackoff) {
+					return
+				}
+				continue
 			}
 			restored, missing, cursor, started = 0, 0, math.MaxInt64, time.Now()
 			if !killfeedSleepCtx(ctx, killRestoreRecheck) {

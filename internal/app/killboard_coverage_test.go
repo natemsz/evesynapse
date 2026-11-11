@@ -800,7 +800,7 @@ func TestKillmailPagesPastFifty(t *testing.T) {
 
 	// The worker sweep folds the stored kills into the feed and
 	// aggregates the pages read.
-	app.backfillKillStats(ctx)
+	countStoredKills(t, app, ctx)
 	cookie := sessionCookie(t, app, user.ID, 90000001, "Pager One")
 	code, body := getPage(t, app, cookie, "/killmails/?character=90000001")
 	if code != http.StatusOK {
@@ -927,7 +927,7 @@ func TestKillmailTilesScope(t *testing.T) {
 
 	// The worker sweep folds the stored kills into the daily
 	// aggregates the tiles read.
-	app.backfillKillStats(ctx)
+	countStoredKills(t, app, ctx)
 	cookie := sessionCookie(t, app, user.ID, 90000001, "Record Holder")
 	code, body := getPage(t, app, cookie, "/killmails/?character=90000001")
 	if code != http.StatusOK {

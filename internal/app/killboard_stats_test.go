@@ -238,3 +238,15 @@ func TestKillFeedBackfillDrainsAndBacksOff(t *testing.T) {
 		t.Fatal("recheck after the window restored no feed rows")
 	}
 }
+
+// countStoredKills brings kills a test wrote straight into the kills
+// table onto the pages, as production does for kills stored before
+// the counting queue: the feed sweep writes their feed rows and the
+// one time rebuild counts them into the daily aggregates.
+func countStoredKills(t *testing.T, app *Application, ctx context.Context) {
+	t.Helper()
+	app.backfillMissingKillFeeds(ctx)
+	if err := app.rebuildKillStats(ctx); err != nil {
+		t.Fatalf("rebuild kill stats: %v", err)
+	}
+}

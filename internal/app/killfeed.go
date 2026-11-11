@@ -55,6 +55,7 @@ import (
 	// The standard library stays for the stream envelope and the
 	// RawMessage plumbing.
 	goccyjson "github.com/goccy/go-json"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -415,9 +416,27 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 	}
 	defer tx.Rollback(ctx)
 	q := db.New(tx)
+	// A public copy queues the kill for the stats fold when it is
+	// new or was stored private until now; a kill already public
+	// was queued (or counted) before and is not queued twice.
+	wasPublic := false
+	if public {
+		if was, err := q.GetKillPublicForUpdate(ctx, km.KillmailID); err == nil {
+			wasPublic = was
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return false, fmt.Errorf("read kill %d: %w", km.KillmailID, err)
+		}
+	}
 	inserted, err := q.UpsertKill(ctx, p)
 	if err != nil {
 		return false, fmt.Errorf("store kill %d: %w", km.KillmailID, err)
+	}
+	if public && !wasPublic {
+		if err := q.InsertKillStatsPending(ctx, db.InsertKillStatsPendingParams{
+			KillmailID: km.KillmailID, KillmailTime: km.KillmailTime.UTC(),
+		}); err != nil {
+			return false, fmt.Errorf("queue kill %d for stats: %w", km.KillmailID, err)
+		}
 	}
 	if inserted {
 		// The permanent involvement record lands on every first
@@ -498,10 +517,10 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 		if err := app.priceKillLines(ctx, km); err != nil {
 			logging.Warnf("killboard: price kill %d at ingest: %v", km.KillmailID, err)
 		}
-	} else if public {
+	} else if public && !wasPublic {
 		// A kill already stored in private shape is now public:
-		// fold it from its stored row. The applied marker keeps
-		// this to once per entity.
+		// fold it from its stored row. Its queue row keeps this to
+		// once.
 		if err := app.foldKillStats(ctx, km.KillmailID); err != nil {
 			logging.Warnf("killboard stats: fold public kill %d: %v", km.KillmailID, err)
 		}
@@ -617,7 +636,7 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 	// The retention prune waits for the stats rebuild: the attacker
 	// rows the restorer reads back (killboard_restore.go) must
 	// stay until the rebuild has counted their ships.
-	if killPruneEnabled && time.Since(app.killLastPruned) >= 24*time.Hour {
+	if time.Since(app.killLastPruned) >= 24*time.Hour && app.killStatsRebuilt(ctx) {
 		app.killLastPruned = time.Now()
 		before := time.Now().UTC().Add(-killDetailRetention)
 		d, err1 := app.queries.PruneKillDetails(ctx, before)

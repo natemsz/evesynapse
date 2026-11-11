@@ -848,6 +848,7 @@
   // remembered, so coming back highlights what arrived meanwhile.
   var seenStore = window.esLive.seen("cs-seen");
   var liveSource = null;
+  var LIVE_MAX = 5; // rows highlighted at once, as on the killboard
 
   function contractID(row) {
     return +row.getAttribute("data-contract") || 0;
@@ -856,12 +857,21 @@
     seenStore.live(row, contractID);
   }
 
-  // markUnseen highlights the rows that arrived since the listing
-  // was last seen; a first visit starts the record at the newest.
+  // capLive keeps the highlight to the newest LIVE_MAX rows: an
+  // older highlighted row settles as seen. The listing is newest
+  // first.
+  function capLive(body) {
+    var live = body.querySelectorAll("tr.cs-row.is-live");
+    for (var i = LIVE_MAX; i < live.length; i++) window.esLive.settle(live[i]);
+  }
+
+  // markUnseen highlights the newest rows that arrived since the
+  // listing was last seen, LIVE_MAX at most; a first visit starts
+  // the record at the newest.
   function markUnseen(body) {
     if (body.getAttribute("data-cs-seen") === "1") return;
     body.setAttribute("data-cs-seen", "1");
-    seenStore.markNew(body.querySelectorAll("tr.cs-row"), contractID, 0);
+    seenStore.markNew(body.querySelectorAll("tr.cs-row"), contractID, LIVE_MAX);
   }
 
   function applyLiveRows(ev) {
@@ -898,6 +908,7 @@
       if (gone.nextElementSibling && gone.nextElementSibling.classList.contains("cs-drow")) gone.nextElementSibling.remove();
       gone.remove();
     }
+    capLive(body);
   }
 
   function openLiveContracts() {

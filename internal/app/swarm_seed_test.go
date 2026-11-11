@@ -266,12 +266,11 @@ func TestSwarmSeedRegisterAccepts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint peer: %v", err)
 	}
-	kp.ID = "peer-1"
 	code, ok := seedTestRegister(t, app, seedTestHeartbeat(t, kp, "https://peer-1.example"), swarmTestSecret)
 	if code != http.StatusOK || !ok {
 		t.Fatalf("register: status %d ok %v", code, ok)
 	}
-	peer, err := app.queries.GetSwarmPeer(ctx, "peer-1")
+	peer, err := app.queries.GetSwarmPeer(ctx, kp.ID)
 	if err != nil {
 		t.Fatalf("peer not filed: %v", err)
 	}
@@ -288,12 +287,11 @@ func TestSwarmSeedRegisterAccepts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint peer: %v", err)
 	}
-	kp2.ID = "peer-2"
 	code, ok = seedTestRegister(t, listed, seedTestHeartbeat(t, kp2, "https://peer-2.example"), swarmTestSecret)
 	if code != http.StatusOK || !ok {
 		t.Fatalf("register in allowlist mode: status %d ok %v", code, ok)
 	}
-	peer2, err := listed.queries.GetSwarmPeer(ctx, "peer-2")
+	peer2, err := listed.queries.GetSwarmPeer(ctx, kp2.ID)
 	if err != nil {
 		t.Fatalf("peer not filed in allowlist mode: %v", err)
 	}

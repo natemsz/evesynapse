@@ -707,9 +707,14 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != ed25519.PublicKeySize {
 			continue
 		}
-		// One list adds a bounded number of instances this one
-		// has never seen; the rest wait for a later round.
+		// An instance this one has never seen is pinned only under
+		// the ID its key certifies, so nobody can take another's
+		// name; and one list adds a bounded number of them, the
+		// rest waiting for a later round.
 		if _, err := app.Queries.GetSwarmPeer(ctx, m.InstanceID); errors.Is(err, pgx.ErrNoRows) {
+			if !SwarmIDMatchesKey(m.InstanceID, m.PublicKey) {
+				continue
+			}
 			if added >= MaxSwarmNewPeersPerRound {
 				continue
 			}

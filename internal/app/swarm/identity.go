@@ -69,6 +69,18 @@ func (id *SwarmIdentity) PublicString() string {
 func LoadSwarmIdentity(ctx context.Context, q *db.Queries, secret string) (*SwarmIdentity, error) {
 	if row, err := q.GetSwarmIdentity(ctx); err == nil {
 		if id, ok := OpenSwarmIdentity(row.InstanceID, row.PublicKey, row.SealedSeed, secret); ok {
+			// An identity minted before IDs were derived from the
+			// key keeps its key and takes the ID the key certifies;
+			// peers meet it as a new member under that ID.
+			if derived := SwarmIDForKey(id.Public); id.ID != derived {
+				if err := q.PutSwarmIdentity(ctx, db.PutSwarmIdentityParams{
+					InstanceID: derived, PublicKey: row.PublicKey, SealedSeed: row.SealedSeed, CreatedAt: row.CreatedAt,
+				}); err != nil {
+					return nil, fmt.Errorf("swarm: store derived instance ID: %w", err)
+				}
+				logging.Warnf("swarm: instance ID %s is now %s, the ID its key certifies", ShortenSwarmID(id.ID), ShortenSwarmID(derived))
+				id.ID = derived
+			}
 			return id, nil
 		}
 		logging.Warnf("swarm: the sealed signing key does not open with the configured secret; minting a fresh instance identity")
@@ -95,18 +107,34 @@ func LoadSwarmIdentity(ctx context.Context, q *db.Queries, secret string) (*Swar
 	return id, nil
 }
 
-// MintSwarmIdentity generates one fresh instance ID and keypair.
-func MintSwarmIdentity() (*SwarmIdentity, error) {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return nil, fmt.Errorf("swarm: mint identity: %w", err)
+// SwarmIDForKey is the instance ID a public key certifies: the
+// first 16 bytes of its SHA-256, URL-safe base64. An ID that is
+// the hash of the key cannot be claimed by anyone holding another
+// key, so nobody can register or gossip as an instance it is not.
+func SwarmIDForKey(pub ed25519.PublicKey) string {
+	sum := sha256.Sum256(pub)
+	return base64.RawURLEncoding.EncodeToString(sum[:16])
+}
+
+// SwarmIDMatchesKey reports whether an instance ID is the one its
+// public key (as it travels, standard base64) certifies.
+func SwarmIDMatchesKey(instanceID, publicKey string) bool {
+	raw, err := base64.StdEncoding.DecodeString(publicKey)
+	if err != nil || len(raw) != ed25519.PublicKeySize {
+		return false
 	}
+	return instanceID == SwarmIDForKey(ed25519.PublicKey(raw))
+}
+
+// MintSwarmIdentity generates one fresh keypair and the instance
+// ID it certifies.
+func MintSwarmIdentity() (*SwarmIdentity, error) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("swarm: mint identity: %w", err)
 	}
 	return &SwarmIdentity{
-		ID:      base64.RawURLEncoding.EncodeToString(raw[:]),
+		ID:      SwarmIDForKey(pub),
 		Public:  pub,
 		Private: priv,
 	}, nil

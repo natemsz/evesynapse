@@ -123,15 +123,14 @@ func TestSwarmGossipCannotIntroduceALoopbackAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
-	inward.ID, outward.ID = "instance-inward", "instance-outward"
 	// Both tuples are properly signed by their owners: only the
 	// address differs.
 	for id, row := range map[string]struct {
 		url string
 		kp  *swarm.SwarmIdentity
 	}{
-		"instance-inward":  {"http://127.0.0.1:5432", inward},
-		"instance-outward": {"https://outward.example", outward},
+		inward.ID:  {"http://127.0.0.1:5432", inward},
+		outward.ID: {"https://outward.example", outward},
 	} {
 		if _, err := p.a.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 			InstanceID: id, BaseUrl: row.url, PublicKey: row.kp.PublicString(), Source: "gossip", FirstSeen: now,
@@ -140,17 +139,17 @@ func TestSwarmGossipCannotIntroduceALoopbackAddress(t *testing.T) {
 			t.Fatalf("list %s in A: %v", id, err)
 		}
 	}
-	if err := swarm.StateFor(p.b).SwarmContactPeer(ctx, p.urlA, "instance-a", swarm.StateFor(p.a).SwarmID.PublicString(), "gossip", now); err != nil {
+	if err := swarm.StateFor(p.b).SwarmContactPeer(ctx, p.urlA, p.idA, swarm.StateFor(p.a).SwarmID.PublicString(), "gossip", now); err != nil {
 		t.Fatalf("gossip with A: %v", err)
 	}
-	if _, err := p.b.queries.GetSwarmPeer(ctx, "instance-inward"); err == nil {
+	if _, err := p.b.queries.GetSwarmPeer(ctx, inward.ID); err == nil {
 		t.Fatalf("gossip introduced a peer at a loopback address")
 	}
-	if _, err := p.b.queries.GetSwarmPeer(ctx, "instance-outward"); err != nil {
+	if _, err := p.b.queries.GetSwarmPeer(ctx, outward.ID); err != nil {
 		t.Fatalf("an ordinary gossip-learned peer was dropped too: %v", err)
 	}
 	// A itself was dialed at a loopback address by this test, and stays.
-	if peer, err := p.b.queries.GetSwarmPeer(ctx, "instance-a"); err != nil || peer.BaseUrl != p.urlA {
+	if peer, err := p.b.queries.GetSwarmPeer(ctx, p.idA); err != nil || peer.BaseUrl != p.urlA {
 		t.Fatalf("the dialed peer lost its address: %+v err=%v", peer, err)
 	}
 }

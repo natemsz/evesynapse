@@ -131,7 +131,6 @@ func TestSwarmSeedRegisterFilesBuild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint peer: %v", err)
 	}
-	kp.ID = "peer-build-1"
 	issued := time.Now().Unix()
 	payload := string(mustJSON(t, swarm.SeedAnnouncePayload{
 		BaseURL: "https://peer-build-1.example", PublicKey: kp.PublicString(),
@@ -145,7 +144,7 @@ func TestSwarmSeedRegisterFilesBuild(t *testing.T) {
 	if code, ok := seedTestRegister(t, app, entry, swarmTestSecret); code != http.StatusOK || !ok {
 		t.Fatalf("register: status %d ok %v", code, ok)
 	}
-	peer, err := app.queries.GetSwarmPeer(ctx, "peer-build-1")
+	peer, err := app.queries.GetSwarmPeer(ctx, kp.ID)
 	if err != nil {
 		t.Fatalf("peer not filed: %v", err)
 	}
@@ -209,17 +208,16 @@ func TestSwarmLearnMembersFilesBuild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint member: %v", err)
 	}
-	memberKP.ID = "member-1"
 	issued := time.Now().Unix()
 	member := swarm.SwarmMember{
-		InstanceID: "member-1", BaseURL: "https://member-1.example",
+		InstanceID: memberKP.ID, BaseURL: "https://member-1.example",
 		PublicKey: memberKP.PublicString(), IssuedAt: issued, Build: claimKnownB,
 	}
 	member.URLSig = swarm.SignSwarmMember(memberKP, member.BaseURL, issued)
 	if err := swarm.StateFor(app).SwarmLearnMembers(ctx, []swarm.SwarmMember{member}, sender.ID, sender.PublicString(), "", "gossip", time.Now()); err != nil {
 		t.Fatalf("learn members: %v", err)
 	}
-	peer, err := app.queries.GetSwarmPeer(ctx, "member-1")
+	peer, err := app.queries.GetSwarmPeer(ctx, memberKP.ID)
 	if err != nil {
 		t.Fatalf("member not filed: %v", err)
 	}

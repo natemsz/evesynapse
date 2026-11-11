@@ -223,7 +223,6 @@ func TestSwarmManualAdd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint local: %v", err)
 	}
-	local.ID = "local-manual"
 	swarm.StateFor(app).SwarmID = local
 	swarm.StateFor(app).SwarmCli = swarm.NewSwarmClient(swarmTestSecret)
 
@@ -234,7 +233,6 @@ func TestSwarmManualAdd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint peer: %v", err)
 	}
-	remote.ID = "peer-manual"
 	swarm.StateFor(peer).SwarmID = remote
 	swarm.StateFor(peer).SwarmCli = swarm.NewSwarmClient(swarmTestSecret)
 	srv := httptest.NewServer(peer.Handler())
@@ -252,7 +250,7 @@ func TestSwarmManualAdd(t *testing.T) {
 	if code, _ := postForm(t, app, cookie, "/admin/swarm/add", url.Values{"url": {srv.URL}}); code != http.StatusSeeOther {
 		t.Fatalf("add: status %d, want 303", code)
 	}
-	got, err := app.queries.GetSwarmPeer(context.Background(), "peer-manual")
+	got, err := app.queries.GetSwarmPeer(context.Background(), remote.ID)
 	if err != nil {
 		t.Fatalf("manual add did not learn the peer: %v", err)
 	}

@@ -31,22 +31,22 @@ This is a human-built project built for other humans, and a labor of love.
 ## Stack
 
 - **Go** (module `evesynapse`; see `go.mod`)
-- **chi** (`github.com/go-chi/chi/v5`) — HTTP router
-- **alexedwards/scs v2** — sessions, stored in PostgreSQL via `pgxstore`
-- **PostgreSQL 16 or newer** (the live deployment runs 18.6) —
+- **chi** (`github.com/go-chi/chi/v5`): HTTP router
+- **alexedwards/scs v2**: sessions, stored in PostgreSQL via `pgxstore`
+- **PostgreSQL 16 or newer** (the live deployment runs 18.6):
   the app's database, reached through **pgx/v5**: every query
   runs on a pgxpool, which also backs the session store
-- **sqlc** — type-safe Go generated from hand-written SQL,
+- **sqlc**: type-safe Go generated from hand-written SQL,
   generated against pgx
-- **goccy/go-json** — JSON outside the swarm signing paths,
+- **goccy/go-json**: JSON outside the swarm signing paths,
   which stay on the standard library so signed bytes are stable
-- **klauspost/compress** — gzip response compression (gzhttp),
+- **klauspost/compress**: gzip response compression (gzhttp),
   zstd for stored kill details, and brotli for precompressed
   static assets
-- **golang.org/x/oauth2** — EVE SSO authorization-code flow
-- **github.com/golang-jwt/jwt/v5** — SSO access-token verification
+- **golang.org/x/oauth2**: EVE SSO authorization-code flow
+- **github.com/golang-jwt/jwt/v5**: SSO access-token verification
   against CCP's JWKS (issuer `login.eveonline.com`)
-- **html/template** + `embed.FS` — server-rendered pages
+- **html/template** + `embed.FS`: server-rendered pages
 
 
 ## Documentation
@@ -66,18 +66,18 @@ the running system works.
 
 The code is in four layers, and imports only point down:
 
-1. **Entry points** (`cmd/`) — thin `main` packages: the server, the
+1. **Entry points** (`cmd/`): thin `main` packages: the server, the
    dev server and the maintainer tools.
-2. **Core** (`internal/app`) — the application: sign-in, routing,
+2. **Core** (`internal/app`): the application: sign-in, routing,
    page rendering, the background worker and every page that is not
    an optional module.
-3. **Modules** (`internal/app/<module>/`) — the optional features.
+3. **Modules** (`internal/app/<module>/`): the optional features.
    Each one is a package that registers a `module.Module` and reaches
    the rest of the app only through the contract in
    `internal/app/module` (`module.Deps`). A build contains exactly the
    modules `internal/app/modules_enabled.go` imports (see "Choosing
    the modules in a build" below).
-4. **Foundation** (`internal/*`) — the database, the ESI client and
+4. **Foundation** (`internal/*`): the database, the ESI client and
    the engines and helpers that core and modules share. Most of them
    are pure: no store, no network, no configuration.
 
@@ -158,7 +158,7 @@ go list -f '{{.ImportPath}}:{{range .Imports}} {{.}}{{end}}' ./... |
 | Package | What it is | Imports |
 | --- | --- | --- |
 | `cmd/evesynapse/` | the release server: thin wiring (config → app → HTTP server). It does not import `internal/devtools`, so the release binary contains no dev-login code and `DEV_LOGIN=1` has no effect on it | `app`, `logging`, `pidfile`, `selfupdate` |
-| `cmd/evesynapse-dev/` | the dev server: identical wiring plus the dev-only routes (`/dev-login`). Local testing only — never deploy this binary | as above, plus `devtools` |
+| `cmd/evesynapse-dev/` | the dev server: identical wiring plus the dev-only routes (`/dev-login`). Local testing only; never deploy this binary | as above, plus `devtools` |
 | `cmd/modbuild/` | the module build tool: lists the modules, what each requires and the scopes it declares, and writes `internal/app/modules_enabled.go` for a selection | `app/module`, `app/modulecatalog` |
 | `cmd/releasesign/` | the maintainer's release-signing tool: makes the release key, signs the update manifests in the release job, checks a signature by hand. Never deployed | `releasesig` |
 | `cmd/residue-corpus/` | builds labeled training examples for the intel residue reader from production exports (the residue calls and the reports they fed), with labels taken only from verified outcomes. A maintainer tool; never deployed | `intelanalyze` |
@@ -222,13 +222,13 @@ sits beside the code it tests with the same prefix.
 A `*_worker.go` file under another prefix is the fetching behind
 that group of pages. Beside the Go files:
 
-- `internal/app/templates/` — embedded html/templates (`base.html`
+- `internal/app/templates/`: embedded html/templates (`base.html`
   layout)
-- `internal/app/static/` — embedded assets: the 2013 wallpaper
+- `internal/app/static/`: embedded assets: the 2013 wallpaper
   (`bg.jpg`) and the dependency-free stylesheet (`style.css`), served
   at `/static/`
-- `internal/app/jstest/` — tests for the page scripts in `static/`
-- `internal/app/seo/` — `robots.txt`
+- `internal/app/jstest/`: tests for the page scripts in `static/`
+- `internal/app/seo/`: `robots.txt`
 
 Core imports the module contract, every module the build selects, and
 nearly all of foundation: `store`, `db/sqlc`, `esi`, `logging`,
@@ -255,30 +255,30 @@ and scopes from the modules themselves.
 
 | Module id | Package | Requires module | Foundation it uses | ESI scopes it needs |
 | --- | --- | --- | --- | --- |
-| `buildplanner` | `buildplanner/` — Build Planner: its page, JSON payload and recipe source over the SDE | | `buildplan`, `piplan`, `humanize`, `tags` | `read_blueprints` |
-| `fitting` | `fitting/` — Fitting: workbench, saved loadouts, import/export, save to the game, shopping list | | `fit`, `fitview` | `read_fittings`, `write_fittings` |
-| `publicfits` | `publicfits/` — Public Fits: browser, fit pages, ratings and the jobs that keep them stored-only; the flag and storage stay core | `fitting` | (no `esi`) | |
-| `skillplans` | `skillplans/` — Skill Plans: plan pages, plan-from-fit and plan editing | | `skillplan`, `fitview`, `humanize` | |
-| `wallet` | `wallet/` — Wallet | | `humanize` | `read_character_wallet` |
-| `mail` | `mail/` — Mail | | `htmlsanitize`, `humanize` | `read_mail`, `organize_mail`, `send_mail` |
-| `calendar` | `calendar/` — Calendar | | `humanize` | `read_calendar_events`, `respond_calendar_events` |
-| `contacts` | `contacts/` — Contacts | | | `read_contacts` |
-| `scanner` | `scanner/` — Spread Scanner | | | |
-| `tradefinder` | `tradefinder/` — Trade Finder | | | |
-| `leaderboard` | `leaderboard/` — Top Stations | | | |
-| `restock` | `restock/` — Restock Planner | | | |
-| `market` | `orders/` — Market orders | | `humanize` | `read_character_orders`, `structure_markets` |
-| `contracts` | `contracts/` — Contracts | | `humanize` | `read_character_contracts` |
-| `appraise` | `appraise/` — Appraisal / Multi-Sell | | `fitview` | |
-| `corpdata` | `corpdata/` — Corporation Data: member, wallet, order, asset and structure pages | | `balancechart`, `standing`, `humanize` | |
-| `doctrines` | `doctrines/` — Doctrines and corporate loadouts | `fitting` | `fitview`, `humanize` | |
-| `srp` | `srp/` — Ship Replacement | | `standing`, `humanize` | |
-| `groups` | `groups/` — Groups | | `standing`, `humanize` (no `esi`) | |
-| `discord` | `discord/` — Discord: connecting an account, the bot's servers (roles by rule, members, private channels, ops announced) and direct-message notifications | | `discord` (the API client), `standing` (no `esi`) | |
-| `swarm` | `swarm/` — Shared Cache: the signed, spot-checked sharing of public data between instances (see the wiki's [Swarm Cache](https://natems.dev/EveSynapse/evesynapse/wiki/Swarm-Cache) page) | | `humanize` | |
-| `intel` | `intel/` — Intel: the killboard, the d-scan and intel parsers' pages, intel channels, the synthesized feed and workbench, pilot dossiers, and the public wars, incursions and faction-warfare pages. The parsers and synthesis live in core and the `intelanalyze`/`intelchat` packages; the module is their pages | | `humanize` (no `db/sqlc`) | |
-| `piplanner` | `piplanner/` — PI Planner: colony chain layouts over the SDE, beside the core colonies pages | | `piplan` | |
-| `tradeideas` | `tradeideas/` — Trade Ideas: the page and the stored model answers the worker refreshes | | `ideas` | |
+| `buildplanner` | `buildplanner/`: Build Planner: its page, JSON payload and recipe source over the SDE | | `buildplan`, `piplan`, `humanize`, `tags` | `read_blueprints` |
+| `fitting` | `fitting/`: Fitting: workbench, saved loadouts, import/export, save to the game, shopping list | | `fit`, `fitview` | `read_fittings`, `write_fittings` |
+| `publicfits` | `publicfits/`: Public Fits: browser, fit pages, ratings and the jobs that keep them stored-only; the flag and storage stay core | `fitting` | (no `esi`) | |
+| `skillplans` | `skillplans/`: Skill Plans: plan pages, plan-from-fit and plan editing | | `skillplan`, `fitview`, `humanize` | |
+| `wallet` | `wallet/`: Wallet | | `humanize` | `read_character_wallet` |
+| `mail` | `mail/`: Mail | | `htmlsanitize`, `humanize` | `read_mail`, `organize_mail`, `send_mail` |
+| `calendar` | `calendar/`: Calendar | | `humanize` | `read_calendar_events`, `respond_calendar_events` |
+| `contacts` | `contacts/`: Contacts | | | `read_contacts` |
+| `scanner` | `scanner/`: Spread Scanner | | | |
+| `tradefinder` | `tradefinder/`: Trade Finder | | | |
+| `leaderboard` | `leaderboard/`: Top Stations | | | |
+| `restock` | `restock/`: Restock Planner | | | |
+| `market` | `orders/`: Market orders | | `humanize` | `read_character_orders`, `structure_markets` |
+| `contracts` | `contracts/`: Contracts | | `humanize` | `read_character_contracts` |
+| `appraise` | `appraise/`: Appraisal / Multi-Sell | | `fitview` | |
+| `corpdata` | `corpdata/`: Corporation Data: member, wallet, order, asset and structure pages | | `balancechart`, `standing`, `humanize` | |
+| `doctrines` | `doctrines/`: Doctrines and corporate loadouts | `fitting` | `fitview`, `humanize` | |
+| `srp` | `srp/`: Ship Replacement | | `standing`, `humanize` | |
+| `groups` | `groups/`: Groups | | `standing`, `humanize` (no `esi`) | |
+| `discord` | `discord/`: Discord: connecting an account, the bot's servers (roles by rule, members, private channels, ops announced) and direct-message notifications | | `discord` (the API client), `standing` (no `esi`) | |
+| `swarm` | `swarm/`: Shared Cache: the signed, spot-checked sharing of public data between instances (see the wiki's [Swarm Cache](https://natems.dev/EveSynapse/evesynapse/wiki/Swarm-Cache) page) | | `humanize` | |
+| `intel` | `intel/`: Intel: the killboard, the d-scan and intel parsers' pages, intel channels, the synthesized feed and workbench, pilot dossiers, and the public wars, incursions and faction-warfare pages. The parsers and synthesis live in core and the `intelanalyze`/`intelchat` packages; the module is their pages | | `humanize` (no `db/sqlc`) | |
+| `piplanner` | `piplanner/`: PI Planner: colony chain layouts over the SDE, beside the core colonies pages | | `piplan` | |
+| `tradeideas` | `tradeideas/`: Trade Ideas: the page and the stored model answers the worker refreshes | | `ideas` | |
 
 Scopes are shortened (`read_blueprints` is
 `esi-characters.read_blueprints.v1`). A module also lists scopes it
@@ -384,30 +384,30 @@ flowchart LR
 
 ### Tests and dev-only code
 
-- `internal/pgtest/` — test-only embedded PostgreSQL 16 provisioning
+- `internal/pgtest/`: test-only embedded PostgreSQL 16 provisioning
   (a fresh database per test; `go test ./...` needs no external
   database). A package whose tests use it needs a `TestMain` that
   calls `pgtest.TestMain`, which stops the server when the tests
   finish; without one pgtest refuses to start a server
-- `internal/apptest/` — shared fixtures for the black-box page tests
+- `internal/apptest/`: shared fixtures for the black-box page tests
   in `internal/app/tests/`: the counting stub transport, fixture IDs,
   page and assertion helpers, and seeders over exported sqlc queries
   (imports `app`, `db/sqlc`, `pgtest`). White-box tests stay in
   package `app` beside the code
-- `internal/app/core_testrig.go` — `TestRig`, the one exported seam
+- `internal/app/core_testrig.go`: `TestRig`, the one exported seam
   those tests build a fixture application through. It takes a DSN
   and returns errors rather than a `*testing.T`, so the server links
   no test code; `internal/apptest` wraps it with `pgtest`
-- `internal/devtools/` — dev-only routes (`/dev-login`), imported
+- `internal/devtools/`: dev-only routes (`/dev-login`), imported
   solely by `cmd/evesynapse-dev`
 
 ### Outside the Go module
 
-- `android/` — the Android app (see "The Android app" on the wiki's [Notifications](https://natems.dev/EveSynapse/evesynapse/wiki/Notifications) page)
-- `deploy/` — the install script (`setup.sh`) and the systemd unit
-- `ci-assets/` — the fonts and wallpaper, base64-encoded; `make assets`
+- `android/`: the Android app (see "The Android app" on the wiki's [Notifications](https://natems.dev/EveSynapse/evesynapse/wiki/Notifications) page)
+- `deploy/`: the install script (`setup.sh`) and the systemd unit
+- `ci-assets/`: the fonts and wallpaper, base64-encoded; `make assets`
   decodes them into `internal/app/static/`
-- `sqlc.yaml`, `Makefile`, `FRONTEND.md` — sqlc's configuration, the
+- `sqlc.yaml`, `Makefile`, `FRONTEND.md`: sqlc's configuration, the
   common commands, and the front-end conventions
 
 ## Build from source
@@ -496,7 +496,7 @@ evesynapse -h                       show this list
    signed in) attaches characters to the same account. The session
    token is rotated at sign-in.
 5. **Character pull**: the signed-in home page shows the character
-   sheet — identity (name, portrait, corporation, birthday, security
+   sheet: identity (name, portrait, corporation, birthday, security
    status), ISK wallet balance, total/unallocated SP, the currently
    training skill, and the 25 heaviest skills with names resolved via
    `GET /universe/types/{id}/` (cached in-process and in the
@@ -526,14 +526,14 @@ immutable, so the worker warms them once per killmail into the
 per character per cycle) and pages read the store only. Corporation
 datasets (module sweep cluster 2) ride the
 same snapshot table as `corp_*` kinds, fetched with each viewing
-character's token against that character's corporation — so pages
+character's token against that character's corporation, so pages
 follow the selected character's corp, and character/corporation ID
 collisions can never cross-contaminate. Role-gated corporation
 endpoints answer 403 when the character lacks the in-game role;
 the worker records that in `snapshot_fetch_state` (state
 `role_missing` plus the role label), backs the kind off for six
 hours instead of retrying every minute, and never writes a
-snapshot for a refused kind — the subpages and the Sync page
+snapshot for a refused kind. The subpages and the Sync page
 render the recorded state ("Needs the Director role in-game")
 until a fetch succeeds. Corp asset singleton names come from
 `POST /corporations/{id}/assets/names/` (bounded to 1,000 items
@@ -555,17 +555,17 @@ full each time. `evesynapse -refresh` clears the stored ETags, so
 everything really is downloaded again.
 
 Name resolution is split in two tiers. Page renders resolve type,
-group and place names from local data only — the in-process maps,
-the SDE static-data tables (below), and the `type_names` fallback
-table — a render never waits on ESI; anything still missing shows
+group and place names from local data only (the in-process maps,
+the SDE static-data tables below, and the `type_names` fallback
+table), so a render never waits on ESI; anything still missing shows
 as `Type #<id>` (or an "Ungrouped" skill section) until the
 worker's warm-up pass fills it in. The interactive Market lookup
 is the one exception: it may make a single name fetch for an item
 nobody has cached yet.
 
-The Intel cluster (module sweep cluster 4) is public ESI data —
-wars, incursions, faction
-warfare and Tranquility status — so it doesn't ride the
+The Intel cluster (module sweep cluster 4) is public ESI data
+(wars, incursions, faction
+warfare and Tranquility status), so it doesn't ride the
 per-character snapshot table. The worker keeps it in a small
 global store instead: `global_snapshots` (one raw payload per
 dataset, same `Expires`/`cached_until` contract) plus a
@@ -576,7 +576,7 @@ alliance names and incursion constellation names warm into
 in-process caches through the worker cycle's shared lookup
 budget; faction names come from the stored factions list itself.
 The Intel pages and the Home page's Tranquility line render from
-the store only — and the worker pass runs even with no characters
+the store only, and the worker pass runs even with no characters
 linked, since none of it needs a token.
 
 ## Static data (SDE)
@@ -586,7 +586,7 @@ local copy of CCP's static data export (the SDE), stored in the
 `sde_*` tables: types,
 groups, categories, NPC stations, solar systems and regions. The
 ESI drip-feed caches remain only as fallback for anything the SDE
-lacks — notably player-structure names, which aren't in the dump.
+lacks, notably player-structure names, which aren't in the dump.
 
 - **Source**: [Fuzzwork's community CSV conversion](https://www.fuzzwork.co.uk/dump/)
   of the SDE. The six tables are fetched from
@@ -595,7 +595,7 @@ lacks — notably player-structure names, which aren't in the dump.
   with `EVE_SDE_BASE_URL` to use a mirror.
 - **Import**: on first boot with empty SDE tables the worker
   imports automatically. The import downloads and parses all six
-  files first, then replaces the tables in a single transaction —
+  files first, then replaces the tables in a single transaction:
   a failed import leaves the previous data untouched.
 - **Cadence**: static data changes on patch days, not on ESI's
   cache clock. The worker checks the remote files' ETag /
@@ -609,7 +609,7 @@ lacks — notably player-structure names, which aren't in the dump.
 
 Every 60 seconds the worker walks all linked characters: it ensures
 each access token is usable (refreshing when needed) and re-fetches
-any snapshot whose `cached_until` has passed — a first pass runs at
+any snapshot whose `cached_until` has passed. A first pass runs at
 boot. It also warms killmail details behind each character's recent
 list and contract item lists behind the contracts list (both
 bounded per cycle) so those pages never wait on ESI. The same
@@ -665,7 +665,7 @@ only those lines without changing what is logged.
 ## Performance principles
 
 EveSynapse is built to stay lightweight, lean, fast, and efficient at
-scale — without compromising features, power, or security. Two rules
+scale, without compromising features, power, or security. Two rules
 govern how data moves:
 
 1. **Precompute at ingest, never at render.** Expensive work (medians,
@@ -702,7 +702,7 @@ The dev build (`cmd/evesynapse-dev`, `make build-dev`) registers
 signed-in without EVE SSO so the signed-in pages can be exercised
 locally (it is never an admin: the dev session has no account). The
 handler lives in `internal/devtools` and is only wired into the dev
-entrypoint — the release binary (`cmd/evesynapse`) doesn't contain
+entrypoint: the release binary (`cmd/evesynapse`) doesn't contain
 the code, and `DEV_LOGIN=1` has no effect on it. `/dev-login` hands
 a session to anyone who asks: **never enable it on a deployment
 anyone else can reach, and never deploy the dev build.** The dev

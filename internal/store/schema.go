@@ -871,6 +871,12 @@ var pgItemVariationsSchema string
 //go:embed schema_pg/142_fit_browse.sql
 var pgFitBrowseSchema string
 
+// Step 143: the Browse tree's types by market group, for the All
+// view.
+//
+//go:embed schema_pg/143_fit_browse_by_group.sql
+var pgFitBrowseByGroupSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1041,6 +1047,7 @@ func schemaSteps() []schemaStep {
 		{140, "item_sheet", pgItemSheetSchema, ""},
 		{141, "item_variations", pgItemVariationsSchema, ""},
 		{142, "fit_browse", pgFitBrowseSchema, ""},
+		{143, "fit_browse_by_group", pgFitBrowseByGroupSchema, ""},
 	}
 }
 

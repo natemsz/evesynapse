@@ -4580,6 +4580,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   --k-drones: #8fd1c0; --k-fitting: #a9a39a; --k-miscellaneous: var(--muted);
   --k-cpu: #6fb6e8; --k-powergrid: #f29a4a; --k-calibration: #d98ad0;
   --k-optimal: #c79bff; --k-falloff: #9c8ad8; --k-tracking: #b5e06f;
+  --k-repair: var(--k-armor); --k-shieldboost: var(--k-shield);
 }
 .fit-tip-g, .fit-g {
   width: 0.95rem; height: 0.95rem; flex: none; vertical-align: -0.15em;
@@ -4592,6 +4593,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .k-fitting { --k: var(--k-fitting); } .k-miscellaneous { --k: var(--k-miscellaneous); }
 .k-cpu { --k: var(--k-cpu); } .k-powergrid { --k: var(--k-powergrid); } .k-calibration { --k: var(--k-calibration); }
 .k-optimal { --k: var(--k-optimal); } .k-falloff { --k: var(--k-falloff); } .k-tracking { --k: var(--k-tracking); }
+.k-repair { --k: var(--k-repair); } .k-shieldboost { --k: var(--k-shieldboost); }
 [class*=" k-"] > .fit-tip-v:not(.good):not(.bad):not([class*="res-"]) { color: color-mix(in srgb, var(--k) 70%, var(--text)); }
 /* A layer's resists: four damage-type cells, each filled to its figure. */
 .fit-tip-res { display: grid; grid-template-columns: 0.95rem 3.4rem repeat(4, minmax(2.2rem, 1fr)); align-items: center; gap: 0 0.3rem; font-size: var(--fs-xs); margin: 0.05rem 0; }
@@ -4664,14 +4666,12 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-ghost-cost { font-family: var(--font-num); font-size: var(--fs-xs); color: var(--muted); }
 .fit-ghost-why { font-size: var(--fs-xs); color: var(--danger); }
 .fit-drag-ghost.fit-ghost-off { border-color: var(--box-edge); box-shadow: none; }
-/* Module search: sticky above the workbench. The surface is the
-   shared .searchpanel glass (the template carries both classes);
-   only the sticky placement lives here. It parks on the shared
-   line under the top bar and the sub-nav (--l-top), like every
-   other in-page sticky bar. */
+/* Module search: the panel above the workbench. The surface is
+   the shared .searchpanel glass (the template carries both
+   classes). It scrolls with the page, so it never covers the
+   ring; its stacking keeps the result list over the workbench. */
 .fit-modsearch {
-  position: sticky;
-  top: calc(var(--l-top) + 0.5rem);
+  position: relative;
   z-index: 9;
 }
 .fit-modsearchwrap { display: block; width: 100%; }
@@ -4709,7 +4709,6 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
 .fit-notice.err { border-color: var(--danger); background: rgba(198, 47, 16, 0.08); }
 @media (max-width: 480px) {
   .fit-vship { width: 44%; }
-  .fit-modsearch { top: calc(var(--sticky-top) + 0.15rem); }
 }
 /* Unified search row: family chips + filters. */
 .fit-searchwrap { flex: 2 1 20rem; }

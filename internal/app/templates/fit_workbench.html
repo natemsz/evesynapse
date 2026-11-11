@@ -240,10 +240,10 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         {{end}}
       </div>
       <dl class="fit-kv fit-kv-2">
-        <div><dt>Shield recharge</dt><dd data-fit-fig="shieldreg">{{.ShieldReg}} at peak</dd></div>
-        <div><dt>Shield boosting</dt><dd data-fit-fig="shieldboost">{{.ShieldBoost}}</dd></div>
-        <div><dt>Armor repair</dt><dd data-fit-fig="armorrep">{{.ArmorRep}}</dd></div>
-        <div><dt>Hull repair</dt><dd data-fit-fig="hullrep">{{.HullRep}}</dd></div>
+        <div><dt class="k-shield">{{template "fit-g" "shield"}}Shield recharge</dt><dd data-fit-fig="shieldreg">{{.ShieldReg}} at peak</dd></div>
+        <div><dt class="k-shieldboost">{{template "fit-g" "shieldboost"}}Shield boosting</dt><dd data-fit-fig="shieldboost">{{.ShieldBoost}}</dd></div>
+        <div><dt class="k-repair">{{template "fit-g" "repair"}}Armor repair</dt><dd data-fit-fig="armorrep">{{.ArmorRep}}</dd></div>
+        <div><dt class="k-repair">{{template "fit-g" "repair"}}Hull repair</dt><dd data-fit-fig="hullrep">{{.HullRep}}</dd></div>
       </dl>
     </section>
 

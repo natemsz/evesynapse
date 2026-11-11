@@ -44,7 +44,7 @@
   /* The view tab bar carries Browse here, and Browse is a view
      of its own: the tree flows with the page instead of
      scrolling inside it. */
-  .fit-lefttabs { display: none; }
+  .fit-wb .fit-lefttabs { display: none; }
   .fit-browse-tree { max-height: none; overflow: visible; }
 
   /* --- ship header --- */

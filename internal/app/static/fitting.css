@@ -287,16 +287,6 @@
 .fit-lefttabs > button:hover { color: var(--text); }
 .fit-lefttabs > button.on { color: var(--text-bright); border-bottom-color: var(--accent); }
 .fit-browse { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
-.fit-browse-fams { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.fit-browse-fams button {
-  padding: 0.2rem 0.5rem; border: 1px solid var(--box-edge); border-radius: 999px;
-  background: var(--surface-inset); color: var(--muted); cursor: pointer;
-  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
-  text-transform: uppercase; letter-spacing: 0.06em; touch-action: manipulation;
-}
-.fit-browse-fams button.on { border-color: var(--accent); color: var(--text); background: #1d1710; }
-.fit-browse-searchwrap { display: block; }
-.fit-browse-searchwrap input { width: 100%; }
 .fit-browse-hint { margin: 0; color: var(--muted); font-size: var(--fs-xs); }
 .fit-browse-tree, .fit-browse-tree ul { list-style: none; margin: 0; padding: 0; }
 .fit-browse-tree {
@@ -345,6 +335,10 @@
 .fit-chip.drop-ok, .fit-slot-empty.drop-ok { border-color: var(--success); }
 .fit-chip.drop-dim, .fit-slot-empty.drop-dim { opacity: 0.45; }
 .fit-vslot.drop-over { box-shadow: 0 0 16px rgba(255, 184, 77, 0.9); }
+/* A new module over the ring's face: it lands in its own rack. */
+/* A figure's glyph before its label in the stats column's lists. */
+.fit-kv dt > .fit-g { margin-right: 0.35rem; }
+.fit-visual.drop-over { border-radius: 50%; box-shadow: 0 0 0 2px var(--success), 0 0 24px color-mix(in srgb, var(--success) 35%, transparent); }
 .fit-chip[data-fit-rowtype] { cursor: grab; }
 .fit-chip.drag-src { opacity: 0.4; }
 .suggest.fit-list-dragging { opacity: 0; pointer-events: none; }
@@ -395,7 +389,7 @@ html.fit-dragging, html.fit-dragging * { -webkit-user-select: none; user-select:
 /* The stats column's summary: parked under the module search once
    the headline figures scroll away (fit.js adds .on). It takes no
    room in the column. */
-.fit-sum { position: sticky; top: var(--fit-sum-top, var(--l-top)); z-index: 8; height: 0; }
+.fit-sum { position: sticky; top: calc(var(--l-top) + 0.4rem); z-index: 8; height: 0; }
 .fit-sum-in {
   display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 0.8rem;
   padding: 0.45rem 0.65rem; border: 1px solid var(--glass-edge); border-radius: var(--r-md);

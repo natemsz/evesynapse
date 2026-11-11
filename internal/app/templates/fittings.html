@@ -84,7 +84,7 @@
   </span>
   <div class="fit-searchrow">
     <div class="fit-famchips" id="fit-famchips" role="group" aria-label="Kind filter">
-      <button type="button" data-fam="all" class="on">All</button><button type="button" data-fam="high">High</button><button type="button" data-fam="medium">Mid</button><button type="button" data-fam="low">Low</button><button type="button" data-fam="rig">Rigs</button><button type="button" data-fam="subsystem">Subs</button><button type="button" data-fam="drone">Drones</button><button type="button" data-fam="fighter">Fighters</button>
+      <button type="button" data-fam="all" class="on" aria-pressed="true">All</button><button type="button" data-fam="high" aria-pressed="false">High</button><button type="button" data-fam="medium" aria-pressed="false">Mid</button><button type="button" data-fam="low" aria-pressed="false">Low</button><button type="button" data-fam="rig" aria-pressed="false">Rigs</button><button type="button" data-fam="subsystem" aria-pressed="false">Subs</button><button type="button" data-fam="drone" aria-pressed="false">Drones</button><button type="button" data-fam="fighter" aria-pressed="false">Fighters</button><button type="button" data-fam="charge" aria-pressed="false">Charges</button><button type="button" data-fam="any" aria-pressed="false">Cargo</button>
     </div>
     <label class="fit-check"><input type="checkbox" id="fit-fittable"> Fittable only</label>
     <label class="fit-check"><input type="checkbox" id="fit-usable"> Usable by pilot</label>
@@ -108,14 +108,9 @@
 
 {{/* The workbench's Browse pane: one panel for the page, moved
      into the left column's slot after every re-render so its open
-     branches and search survive edits. */}}
+     branches survive edits. The module search and its kind filter
+     above the workbench drive it. */}}
 <div class="fit-browse" id="fit-browse" hidden>
-  <div class="fit-browse-fams" id="fit-browse-fams" role="group" aria-label="What to browse">
-    <button type="button" data-browse-fam="high" class="on">High</button><button type="button" data-browse-fam="medium">Mid</button><button type="button" data-browse-fam="low">Low</button><button type="button" data-browse-fam="rig">Rigs</button><button type="button" data-browse-fam="subsystem">Subs</button><button type="button" data-browse-fam="drone">Drones</button><button type="button" data-browse-fam="fighter">Fighters</button><button type="button" data-browse-fam="charge">Charges</button><button type="button" data-browse-fam="any">Cargo</button>
-  </div>
-  <span class="searchwrap fit-browse-searchwrap">
-    <input type="search" id="fit-browse-q" placeholder="Search high slot modules" autocomplete="off" aria-label="Search this list" aria-controls="fit-browse-tree">
-  </span>
   <p class="fit-browse-hint" id="fit-browse-hint">Tap to fit, or drag onto a slot.</p>
   <ul class="fit-browse-tree" id="fit-browse-tree" role="tree" aria-label="Market groups"></ul>
 </div>

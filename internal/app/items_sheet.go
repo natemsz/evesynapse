@@ -405,6 +405,19 @@ func (app *Application) handleItemSheetJSON(w http.ResponseWriter, r *http.Reque
 // instead of their section's.
 var sheetFigureKinds = map[string]string{
 	"maxRange": "optimal", "falloff": "falloff", "trackingSpeed": "tracking",
+	// Repairs read as a wrench, shield boosts as a shield with a plus.
+	"armorDamageAmount":             "repair",
+	"structureDamageAmount":         "repair",
+	"repairBonus":                   "repair",
+	"armorDamageAmountBonus":        "repair",
+	"displayArmorDamageAmountBonus": "repair",
+	"overloadArmorDamageAmount":     "repair",
+	"chargedArmorDamageMultiplier":  "repair",
+	"shieldBonus":                   "shieldboost",
+	"shieldBoostMultiplier":         "shieldboost",
+	"displayShieldBoostMultiplier":  "shieldboost",
+	"overloadShieldBonus":           "shieldboost",
+	"shieldBonusDurationBonus":      "shieldboost",
 }
 
 // sheetTopRows is the start of a type's sheet as a tooltip shows it:

@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -524,6 +525,53 @@ func TestSwarmPairProvenanceEndToEnd(t *testing.T) {
 	}
 	if time.Since(row.FetchedAt) > time.Hour || row.FetchedAt.After(time.Now().Add(time.Minute)) {
 		t.Fatalf("fetched_at %v is not the time A signed", row.FetchedAt)
+	}
+}
+
+// TestSwarmCaughtLieStartsProbation: a signer ESI catches lying
+// has its next entries all verified, whatever its trust, and what
+// it had applied unchecked in the days before is taken back, while
+// its verified applies and older ones stay.
+func TestSwarmCaughtLieStartsProbation(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	liar := swarmTestPeer(t, app, "peer-liar")
+	now := time.Now().UTC()
+	// A long honest record: sampling would verify few of its entries.
+	if err := app.queries.AddSwarmPeerCheck(ctx, db.AddSwarmPeerCheckParams{InstanceID: liar.ID, GoodChecks: 500}); err != nil {
+		t.Fatalf("seed trust: %v", err)
+	}
+	apply := func(key, name string, verified bool, at time.Time) {
+		t.Helper()
+		origin := swarm.SwarmOrigin{Source: liar.ID, Signer: liar.ID, FetchedAt: at, Verified: verified}
+		if err := swarm.StateFor(app).ApplySwarmEntry(ctx, swarm.SwarmKindCorporation, key, orgEntry(t, mustAtoi(t, key), `{"corp":{"name":"`+name+`"}}`), origin, at); err != nil {
+			t.Fatalf("apply %s: %v", key, err)
+		}
+	}
+	apply("98000011", "Unchecked Lately", false, now.Add(-24*time.Hour))
+	apply("98000012", "Checked Lately", true, now.Add(-24*time.Hour))
+	apply("98000013", "Unchecked Long Ago", false, now.Add(-10*24*time.Hour))
+
+	swarm.StateFor(app).DiscardSwarmEntry(ctx, swarm.SwarmKindCorporation, "98000099", liar.ID, swarm.SwarmDiscardMismatch)
+	peer, err := app.queries.GetSwarmPeer(ctx, liar.ID)
+	if err != nil || peer.ProbationChecks != swarm.SwarmProbationChecks || peer.Excluded {
+		t.Fatalf("after a caught lie: %+v err %v, want probation, not exclusion", peer, err)
+	}
+	if got := swarm.StateFor(app).SwarmRollBack(ctx); got != 1 {
+		t.Fatalf("took back %d rows, want 1 (the unchecked apply from the days before)", got)
+	}
+	if rec, err := app.queries.GetCorporationRecord(ctx, 98000011); err != nil || rec.State != orgStatePending {
+		t.Fatalf("the recent unchecked apply still stands: %+v err %v", rec, err)
+	}
+	for _, id := range []int64{98000012, 98000013} {
+		if rec, err := app.queries.GetCorporationRecord(ctx, id); err != nil || rec.State != orgStateReady {
+			t.Fatalf("corporation %d was taken back: %+v err %v", id, rec, err)
+		}
+	}
+	// Every verified check spends one of the probation's entries.
+	swarm.StateFor(app).CountSwarmCheck(ctx, liar.ID, true)
+	if peer, _ := app.queries.GetSwarmPeer(ctx, liar.ID); peer.ProbationChecks != swarm.SwarmProbationChecks-1 {
+		t.Fatalf("probation left %d after a check, want %d", peer.ProbationChecks, swarm.SwarmProbationChecks-1)
 	}
 }
 
@@ -1851,4 +1899,13 @@ func TestSwarmUncheckableEntriesTakeNoCheckSlot(t *testing.T) {
 	if _, bad := ledgerOf(t, p.b, "instance-a"); bad != 0 {
 		t.Fatalf("uncheckable entries cost the signer %d marks", bad)
 	}
+}
+
+func mustAtoi(t *testing.T, s string) int64 {
+	t.Helper()
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		t.Fatalf("parse %q: %v", s, err)
+	}
+	return n
 }

@@ -871,6 +871,11 @@ var pgItemVariationsSchema string
 //go:embed schema_pg/142_fit_browse.sql
 var pgFitBrowseSchema string
 
+// Step 144: probation for a swarm signer caught lying.
+//
+//go:embed schema_pg/144_swarm_probation.sql
+var pgSwarmProbationSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1041,6 +1046,7 @@ func schemaSteps() []schemaStep {
 		{140, "item_sheet", pgItemSheetSchema, ""},
 		{141, "item_variations", pgItemVariationsSchema, ""},
 		{142, "fit_browse", pgFitBrowseSchema, ""},
+		{144, "swarm_probation", pgSwarmProbationSchema, ""},
 	}
 }
 

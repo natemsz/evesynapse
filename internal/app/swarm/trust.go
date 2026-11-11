@@ -324,6 +324,9 @@ func (app *Mod) SwarmStreakBump(signer string, good bool) (streak int, weight in
 // SwarmEnforceTrust with the streak, the same single
 // implementation every ledger path shares.
 func (app *Mod) CountSwarmCheck(ctx context.Context, signer string, good bool) {
+	if err := app.Queries.SpendSwarmPeerProbation(ctx, signer); err != nil {
+		logging.Errorf("swarm: probation for %s: %v", signer, err)
+	}
 	streak, weight := app.SwarmStreakBump(signer, good)
 	var goodN, badN int64
 	if good {
@@ -971,7 +974,8 @@ func (app *Mod) SwarmSettleUrgent(ctx context.Context, kind, key string) bool {
 		return false
 	}
 	now := time.Now().UTC()
-	if !app.SwarmSampled(peer.GoodChecks, peer.BadChecks) {
+	// A signer on probation has every entry verified.
+	if peer.ProbationChecks == 0 && !app.SwarmSampled(peer.GoodChecks, peer.BadChecks) {
 		// Trust-earned, like the spot pass below: the entry
 		// applies on reputation with the ledger untouched.
 		// Only an ESI verdict counts for or against.
@@ -1180,7 +1184,8 @@ func (app *Mod) SwarmSpotCheck(ctx context.Context, allowance module.Budget, cha
 			app.DropSwarmEntry(ctx, row.Kind, row.Key, row.Signer, SwarmDropLowTrust)
 			continue
 		}
-		if !app.SwarmSampled(peer.GoodChecks, peer.BadChecks) {
+		// A signer on probation has every entry verified.
+		if peer.ProbationChecks == 0 && !app.SwarmSampled(peer.GoodChecks, peer.BadChecks) {
 			// Trust-earned: signature and shape already
 			// verified at staging, and the sample skipped
 			// ESI. The entry applies on reputation, but an
@@ -1643,4 +1648,28 @@ func swarmOrgConfirmed(id int64, record any) string {
 		return ""
 	}
 	return string(outer)
+}
+
+// A signer ESI catches lying goes on probation: its next
+// SwarmProbationChecks entries are all verified, whatever its
+// trust, and what it had applied unchecked in the
+// SwarmProbationLookbackDays before the catch is taken back
+// (SwarmRollBack), so the worker fetches the truth. A signer that
+// lies on a fraction of entries otherwise stays above the floor
+// and most of its lies would apply unverified.
+const (
+	SwarmProbationChecks       = 50
+	SwarmProbationLookbackDays = 3
+)
+
+// StartSwarmProbation puts a signer on probation from now, or
+// renews it.
+func (app *Mod) StartSwarmProbation(ctx context.Context, signer string, now time.Time) {
+	if err := app.Queries.StartSwarmPeerProbation(ctx, db.StartSwarmPeerProbationParams{
+		InstanceID: signer, ProbationChecks: SwarmProbationChecks, ProbationSince: timeSet(now),
+	}); err != nil {
+		logging.Errorf("swarm: start probation for %s: %v", signer, err)
+		return
+	}
+	logging.Warnf("swarm: %s on probation: its next %d entries are verified", ShortenSwarmID(signer), SwarmProbationChecks)
 }

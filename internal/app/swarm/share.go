@@ -960,7 +960,9 @@ const SwarmFetchDetail = "swarm"
 // worker cycle is not the place to undo them all at once.
 const MaxSwarmRollBackPerCycle = 200
 
-// SwarmRollBack takes back what excluded signers supplied.
+// SwarmRollBack takes back what excluded signers supplied, and
+// what a signer on probation had applied unchecked in the days
+// before ESI caught it lying (SwarmProbationLookbackDays).
 // Excluding a signer stops its entries arriving; this is the
 // other half, for the ones already applied (most of which went
 // in unchecked, on the signer's reputation). Each provenance row
@@ -972,7 +974,7 @@ const MaxSwarmRollBackPerCycle = 200
 // itself since is its own and stays. Local writes only; it
 // returns how many live rows were taken back.
 func (app *Mod) SwarmRollBack(ctx context.Context) int {
-	rows, err := app.Queries.ListSwarmAppliedToRollBack(ctx, MaxSwarmRollBackPerCycle)
+	rows, err := app.Queries.ListSwarmAppliedToRollBack(ctx, db.ListSwarmAppliedToRollBackParams{LookbackDays: SwarmProbationLookbackDays, Lim: MaxSwarmRollBackPerCycle})
 	if err != nil {
 		logging.Errorf("swarm: roll back: list: %v", err)
 		return 0
@@ -994,7 +996,7 @@ func (app *Mod) SwarmRollBack(ctx context.Context) int {
 	}
 	if undone > 0 {
 		app.AddSwarmCounter(ctx, SwarmCounterRolledBack, int64(undone))
-		logging.Warnf("swarm: took back %d entries supplied by excluded signers", undone)
+		logging.Warnf("swarm: took back %d entries supplied by excluded or probation signers", undone)
 	}
 	return undone
 }
@@ -1118,4 +1120,7 @@ func (app *Mod) DiscardSwarmEntry(ctx context.Context, kind, key, signer, reason
 	}
 	app.CountSwarmCheck(ctx, signer, false)
 	app.AddSwarmCounter(ctx, SwarmCounterSpotFailed, 1)
+	if reason == SwarmDiscardMismatch {
+		app.StartSwarmProbation(ctx, signer, time.Now().UTC())
+	}
 }

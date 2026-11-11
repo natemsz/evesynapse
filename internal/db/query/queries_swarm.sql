@@ -62,9 +62,20 @@ UPDATE swarm_peers SET key_conflict_at = $2 WHERE instance_id = $1;
 -- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served, build
+    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served, build,
+    probation_checks, probation_since
 FROM swarm_peers
 WHERE instance_id = $1;
+
+-- A signer ESI caught lying: its next checks entries are all
+-- verified, and since marks the catch (schema 144).
+-- name: StartSwarmPeerProbation :exec
+UPDATE swarm_peers SET probation_checks = $2, probation_since = $3 WHERE instance_id = $1;
+
+-- One verified check spends one of a probation's entries.
+-- name: SpendSwarmPeerProbation :exec
+UPDATE swarm_peers SET probation_checks = probation_checks - 1
+WHERE instance_id = $1 AND probation_checks > 0;
 
 -- name: ListSwarmPeers :many
 SELECT instance_id, base_url, public_key, source, approved, excluded,
@@ -244,8 +255,10 @@ SELECT a.kind, a.key, a.source, a.signer, a.fetched_at, a.applied_at, a.verified
 FROM swarm_applied a
 JOIN swarm_peers p ON p.instance_id = a.signer
 WHERE p.excluded
+   OR (p.probation_checks > 0 AND NOT a.verified
+       AND a.applied_at >= p.probation_since - make_interval(days => sqlc.arg(lookback_days)::int))
 ORDER BY a.applied_at, a.kind, a.key
-LIMIT $1;
+LIMIT sqlc.arg(lim);
 
 -- name: CountSwarmAppliedBySigner :one
 SELECT COUNT(*) FROM swarm_applied WHERE signer = $1;

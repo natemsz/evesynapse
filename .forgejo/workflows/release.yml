@@ -66,18 +66,18 @@ jobs:
           # The prepared runner image (.forgejo/runner-image) carries
           # this Go already; use it when it is there, and install
           # exactly as before when it is not.
-          if command -v go >/dev/null 2>&1 && [ "$(go version 2>/dev/null | awk '{print $3}')" = "go1.27.3" ]; then
+          if command -v go >/dev/null 2>&1 && [ "$(go version 2>/dev/null | awk '{print $3}')" = "go1.27.4" ]; then
             echo "Go is already installed: $(go version). Skipping the download and extract."
             echo "/usr/local/go/bin" >> "$GITHUB_PATH"
             exit 0
           fi
           case "$(uname -m)" in
-            aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
-            *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
+            aarch64) go_arch=arm64; go_sum="3392582988a273a87ab5043ee1b2c9c17a2c3c00580bf9326c47a2e0aaaeac92" ;;
+            *) go_arch=amd64; go_sum="7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840" ;;
           esac
           mkdir -p .cache/dl
           if [ ! -f .cache/dl/go.tar.gz ]; then
-            curl -fsSL -o .cache/dl/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+            curl -fsSL -o .cache/dl/go.tar.gz "https://go.dev/dl/go1.27.4.linux-${go_arch}.tar.gz"
           fi
           echo "$go_sum  .cache/dl/go.tar.gz" | sha256sum -c -
           tar -xzf .cache/dl/go.tar.gz -C /usr/local

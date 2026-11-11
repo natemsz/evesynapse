@@ -49,7 +49,7 @@ variables:
 # work in the publish steps) the same pinned way the GitHub
 # workflow fetched sqlc.
 .toolbox:
-  image: golang:1.27.3-bookworm
+  image: golang:1.27.4-bookworm
   before_script:
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates python3 >/dev/null
     # The checkout lands owned by the runner host's user; root's
@@ -61,7 +61,7 @@ variables:
 test:
   stage: check
   extends: .go-cache
-  image: golang:1.27.3-bookworm
+  image: golang:1.27.4-bookworm
   before_script:
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates xz-utils git make >/dev/null
     - git config --global --add safe.directory "$CI_PROJECT_DIR"

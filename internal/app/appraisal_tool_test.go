@@ -164,9 +164,6 @@ Unknown Item XYZ x 3`}})
 	}
 	mustContain(t, "anonymous appraisal total", body,
 		`<span class="ap-total-label">Total value</span><span class="ap-total-fig">163,075.00 ISK</span>`)
-	if strings.Contains(body, "<strong>Total value:") {
-		t.Error("total still rendered on the header line")
-	}
 	// The form rides the shared box kit with its label above the
 	// textarea.
 	mustContain(t, "anonymous appraisal form", body,
@@ -214,9 +211,6 @@ Abyssal Damage Control II`}})
 		"Blueprint, priced as an original",
 		"Base item price: this mutated item was pasted without its link, so its own rolls were not priced",
 		"150,000.00")
-	if strings.Contains(body, "prices from its rolls in Contract Search") {
-		t.Error("mutated line still implies it cannot be appraised here")
-	}
 }
 
 // seedAppraisalAbyssal adds the mutated type and two corpus

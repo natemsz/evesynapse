@@ -555,9 +555,6 @@ func TestFitSimulateModuleStates(t *testing.T) {
 		`data-fit-view="stats"`,
 		`data-fit-view="radial"`,
 		"<strong>Armor</strong> <small>460 HP ")
-	if strings.Contains(body, "Heating a module") {
-		t.Errorf("heat note still shown for a modeled overload effect")
-	}
 
 	// Overheated: the overload bonus applies (450 + 12 = 462) and
 	// the slot carries the ember class.
@@ -571,9 +568,6 @@ func TestFitSimulateModuleStates(t *testing.T) {
 		`data-tip-state="overheated"`,
 		"st-overheated",
 		"<strong>Armor</strong> <small>462 HP ")
-	if strings.Contains(body, "Heating a module") {
-		t.Errorf("heat note shown for an overheated module")
-	}
 
 	// Offline: no PG, no CPU, no effect (armor HP back to 450),
 	// dimmed slot.

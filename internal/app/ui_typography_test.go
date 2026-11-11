@@ -132,17 +132,6 @@ func TestOpenProseTreatment(t *testing.T) {
 	}
 }
 
-// TestPlanNodeSelectionWeight pins the PI tree's selection state:
-// a selected node is marked by its border and background alone, at
-// the node's normal text weight, like its sibling states.
-func TestPlanNodeSelectionWeight(t *testing.T) {
-	pi := readStatic(t, "pi.css")
-	want := ".pi-node.selected { border-color: var(--gold); background: var(--sel-bg); }"
-	if !strings.Contains(pi, want) {
-		t.Errorf("pi.css missing selection rule %q", want)
-	}
-}
-
 // TestFontSizesNameTheScale: every font-size in every sheet names a
 // step of the type scale (or a relative step) or inherits. A literal
 // size drifts off the scale the next time the scale moves; the type

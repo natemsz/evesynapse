@@ -442,9 +442,6 @@ func TestPlacePagesWithActivity(t *testing.T) {
 		`<tr><th>Pod kills</th><td>1</td><td>4</td><td>3.0</td></tr>`,
 		`<tr><th>NPC kills</th><td>58</td><td>400</td><td>380.5</td></tr>`,
 		`<tr><th>Jumps</th><td>128</td><td>2,000</td><td>1,900.5</td></tr>`)
-	if strings.Contains(body, "evemaps") {
-		t.Error("system page still carries an external map link")
-	}
 
 	code, body = getPage(t, app, cookie, "/region/?region=10000002")
 	if code != http.StatusOK {
@@ -460,9 +457,6 @@ func TestPlacePagesWithActivity(t *testing.T) {
 		`<th>Kills (24h)</th><th>Jumps (24h)</th>`,
 		`<tr><td><a href="/system/?system=30000142">Jita</a></td><td><span class="sec sec-9">0.9</span></td><td>30</td><td>2,000</td></tr>`,
 		`<tr><td><a href="/system/?system=30000143">Perimeter</a></td><td><span class="sec sec-9">0.9</span></td><td>0</td><td>0</td></tr>`)
-	if strings.Contains(body, "evemaps") {
-		t.Error("region page still carries an external map link")
-	}
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)

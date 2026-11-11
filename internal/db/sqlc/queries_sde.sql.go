@@ -1214,6 +1214,105 @@ func (q *Queries) ListItemSheetTraits(ctx context.Context, typeID int64) ([]List
 	return items, nil
 }
 
+const listItemVariationColumns = `-- name: ListItemVariationColumns :many
+SELECT c.ord, c.attribute_id, a.display_name, a.unit_id, a.high_is_good,
+       COALESCE(u.display_name, '')::text AS unit_name
+FROM sde_variations v
+JOIN sde_variation_columns c ON c.root_type_id = v.root_type_id
+JOIN sde_attribute_types a ON a.attribute_id = c.attribute_id
+LEFT JOIN sde_units u ON u.unit_id = a.unit_id
+WHERE v.type_id = $1
+ORDER BY c.ord
+`
+
+type ListItemVariationColumnsRow struct {
+	Ord         int16  `json:"ord"`
+	AttributeID int64  `json:"attribute_id"`
+	DisplayName string `json:"display_name"`
+	UnitID      int64  `json:"unit_id"`
+	HighIsGood  int64  `json:"high_is_good"`
+	UnitName    string `json:"unit_name"`
+}
+
+// The compare columns of the variation family one type is in.
+func (q *Queries) ListItemVariationColumns(ctx context.Context, typeID int64) ([]ListItemVariationColumnsRow, error) {
+	rows, err := q.db.Query(ctx, listItemVariationColumns, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListItemVariationColumnsRow
+	for rows.Next() {
+		var i ListItemVariationColumnsRow
+		if err := rows.Scan(
+			&i.Ord,
+			&i.AttributeID,
+			&i.DisplayName,
+			&i.UnitID,
+			&i.HighIsGood,
+			&i.UnitName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemVariationRows = `-- name: ListItemVariationRows :many
+SELECT m.type_id, t.name, m.meta_group_id, m.meta_level,
+       COALESCE(g.name, '')::text AS meta_group_name, m.vals
+FROM sde_variations v
+JOIN sde_variations m ON m.root_type_id = v.root_type_id
+JOIN sde_types t ON t.type_id = m.type_id
+LEFT JOIN sde_meta_groups g ON g.meta_group_id = m.meta_group_id
+WHERE v.type_id = $1
+ORDER BY m.meta_level, t.name
+LIMIT 60
+`
+
+type ListItemVariationRowsRow struct {
+	TypeID        int64     `json:"type_id"`
+	Name          string    `json:"name"`
+	MetaGroupID   int64     `json:"meta_group_id"`
+	MetaLevel     float64   `json:"meta_level"`
+	MetaGroupName string    `json:"meta_group_name"`
+	Vals          []float64 `json:"vals"`
+}
+
+// The members of the variation family one type is in, in the game's
+// order (meta level), with their column values. Families hold at most
+// a few dozen types.
+func (q *Queries) ListItemVariationRows(ctx context.Context, typeID int64) ([]ListItemVariationRowsRow, error) {
+	rows, err := q.db.Query(ctx, listItemVariationRows, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListItemVariationRowsRow
+	for rows.Next() {
+		var i ListItemVariationRowsRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.MetaGroupID,
+			&i.MetaLevel,
+			&i.MetaGroupName,
+			&i.Vals,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketGroupParentIDs = `-- name: ListMarketGroupParentIDs :many
 SELECT DISTINCT parent_group_id FROM sde_market_groups
 WHERE parent_group_id > 0

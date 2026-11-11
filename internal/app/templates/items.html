@@ -144,6 +144,7 @@
       {{if $d.OnMarket}}<a href="/market/?type={{$d.ID}}">Orders &amp; price history</a>{{end}}
       <a href="{{$d.ContractSearchURL}}">Find contracts for this item</a>
       {{if $d.BlueprintID}}<a href="/planner/?product={{$d.ID}}">Plan manufacturing</a>{{end}}
+      {{with $d.Sheet}}{{if .WorkbenchURL}}<a href="{{.WorkbenchURL}}">Open in the workbench</a>{{end}}{{end}}
     </div>
   </div>
 </section>
@@ -156,6 +157,8 @@
   {{if $d.EstimatedSell}}<div class="l-stat"><span class="l-stat-label">Estimated sell</span><span class="l-stat-value">{{$d.EstimatedSell}}</span><span class="l-stat-sub">ISK, {{$d.EstimatedSellNote}}</span></div>{{end}}
 </div>
 {{end}}
+
+{{template "item-sheet" $d.Sheet}}
 
 {{$desc := or (eq $d.DescState "ready") (eq $d.DescState "pending")}}
 {{if or $desc $d.Hubs}}

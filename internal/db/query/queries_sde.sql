@@ -816,3 +816,28 @@ ORDER BY (t.skill_id < 0), abs(t.skill_id), t.importance, t.trait_id;
 SELECT group_id, name FROM sde_groups
 WHERE group_id = ANY(sqlc.arg(group_ids)::bigint[]);
 
+
+-- name: ListItemVariationColumns :many
+-- The compare columns of the variation family one type is in.
+SELECT c.ord, c.attribute_id, a.display_name, a.unit_id, a.high_is_good,
+       COALESCE(u.display_name, '')::text AS unit_name
+FROM sde_variations v
+JOIN sde_variation_columns c ON c.root_type_id = v.root_type_id
+JOIN sde_attribute_types a ON a.attribute_id = c.attribute_id
+LEFT JOIN sde_units u ON u.unit_id = a.unit_id
+WHERE v.type_id = $1
+ORDER BY c.ord;
+
+-- name: ListItemVariationRows :many
+-- The members of the variation family one type is in, in the game's
+-- order (meta level), with their column values. Families hold at most
+-- a few dozen types.
+SELECT m.type_id, t.name, m.meta_group_id, m.meta_level,
+       COALESCE(g.name, '')::text AS meta_group_name, m.vals
+FROM sde_variations v
+JOIN sde_variations m ON m.root_type_id = v.root_type_id
+JOIN sde_types t ON t.type_id = m.type_id
+LEFT JOIN sde_meta_groups g ON g.meta_group_id = m.meta_group_id
+WHERE v.type_id = $1
+ORDER BY m.meta_level, t.name
+LIMIT 60;

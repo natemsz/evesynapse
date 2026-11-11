@@ -15,6 +15,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fit"
 	"evesynapse/internal/fitview"
+	"evesynapse/internal/itemsheet"
 	"evesynapse/internal/logging"
 )
 
@@ -884,6 +885,7 @@ func (app *tool) attachFitEditor(ctx context.Context, r *http.Request, data *Pag
 	esiID, _ := strconv.ParseInt(q.Get("esi"), 10, 64)
 	publicID, _ := strconv.ParseInt(q.Get("public"), 10, 64)
 	doctrineFitID, _ := strconv.ParseInt(q.Get("doctrine"), 10, 64)
+	shipID, _ := strconv.ParseInt(q.Get("ship"), 10, 64)
 	switch {
 	case localID > 0 && userID > 0:
 		if row, err := app.queries.GetLocalFitting(ctx, db.GetLocalFittingParams{ID: localID, UserID: userID}); err == nil {
@@ -919,6 +921,11 @@ func (app *tool) attachFitEditor(ctx context.Context, r *http.Request, data *Pag
 		// A fit of one of the account's corporations' doctrines, likewise.
 		if stored, ok := app.deps.DoctrineFitDoc(ctx, userID, doctrineFitID); ok {
 			doc = stored
+		}
+	case shipID > 0:
+		// An empty fit of one hull, from its item page.
+		if cats, err := app.queries.ListSDETypeCategories(ctx, []int64{shipID}); err == nil && len(cats) == 1 && cats[0].CategoryID == itemsheet.CategoryShip {
+			doc.ShipTypeID = shipID
 		}
 	default:
 		if raw := app.deps.Sessions().GetString(ctx, sessionFitStash); raw != "" {

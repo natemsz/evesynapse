@@ -32,6 +32,9 @@ type Querier interface {
 	ListSDEGroupNamesByIDs(ctx context.Context, groupIds []int64) ([]db.ListSDEGroupNamesByIDsRow, error)
 }
 
+// CategoryShip is the dump's ship category.
+const CategoryShip = 6
+
 // ErrNotFound means the static data has no such type.
 var ErrNotFound = errors.New("itemsheet: unknown type")
 
@@ -71,15 +74,17 @@ type Section struct {
 	Rows  []Row
 }
 
-// Row is one attribute as shown. Link is set when the value names a
-// type or a group.
+// Row is one attribute as shown. When the value names a type or a
+// group, RefID is that id and Link its item page.
 type Row struct {
 	AttributeID int64
+	Name        string // the dogma name, e.g. chargeGroup1
 	Label       string
 	Value       string
 	Link        string
 	Raw         float64
 	HighIsGood  bool
+	RefID       int64
 
 	names int64 // unitTypeID or unitGroupID: Value is named after the read
 }
@@ -130,6 +135,21 @@ var shownAnyway = map[int64]string{
 	1544: "Fitting", // max modules of this group fitted
 }
 
+// sectionOf names the section an attribute shows under; false means
+// the sheet never shows it.
+func sectionOf(categoryID, attributeID int64) (string, bool) {
+	if s, ok := shownAnyway[attributeID]; ok {
+		return s, true
+	}
+	if hiddenCategory[categoryID] {
+		return "", false
+	}
+	if s := sectionOfCategory[categoryID]; s != "" {
+		return s, true
+	}
+	return "Miscellaneous", true
+}
+
 // The skill tree stops at five levels of prerequisites and sixty
 // lines, more than any type in the game needs.
 const (
@@ -175,24 +195,15 @@ func (sh *Sheet) buildSections(ctx context.Context, q Querier, attrs []db.ListIt
 	bySection := map[string][]Row{}
 	var typeIDs, groupIDs []int64
 	for _, a := range attrs {
-		section, ok := shownAnyway[a.AttributeID]
-		if !ok {
-			if hiddenCategory[a.CategoryID] {
-				continue
-			}
-			section = sectionOfCategory[a.CategoryID]
-			if section == "" {
-				section = "Miscellaneous"
-			}
-		}
-		if a.DisplayName == "" {
+		section, ok := sectionOf(a.CategoryID, a.AttributeID)
+		if !ok || a.DisplayName == "" {
 			continue
 		}
 		if a.Value == 0 && a.DisplayWhenZero == 0 {
 			continue
 		}
 		sh.values[a.AttributeID] = a.Value
-		row := Row{AttributeID: a.AttributeID, Label: a.DisplayName, Raw: a.Value, HighIsGood: a.HighIsGood != 0}
+		row := Row{AttributeID: a.AttributeID, Name: a.Name, Label: a.DisplayName, Raw: a.Value, HighIsGood: a.HighIsGood != 0}
 		switch a.UnitID {
 		case unitTypeID:
 			typeIDs = append(typeIDs, int64(a.Value))
@@ -237,13 +248,14 @@ func (sh *Sheet) buildSections(ctx context.Context, q Querier, attrs []db.ListIt
 				if !ok {
 					continue
 				}
-				r.Value, r.Link = name, "/items/type/"+strconv.FormatInt(id, 10)+"/"
+				r.Value, r.RefID, r.Link = name, id, "/items/type/"+strconv.FormatInt(id, 10)+"/"
 			case unitGroupID:
-				name, ok := groupNames[int64(r.Raw)]
+				id := int64(r.Raw)
+				name, ok := groupNames[id]
 				if !ok {
 					continue
 				}
-				r.Value = name
+				r.Value, r.RefID, r.Link = name, id, "/items/group/"+strconv.FormatInt(id, 10)+"/"
 			}
 			kept = append(kept, r)
 		}

@@ -1,0 +1,71 @@
+{{/* The item sheet: a type's stats as the item page and the public
+     ship page show them (items_sheet.go). Takes an *itemSheetView;
+     renders nothing for nil. */}}
+{{define "item-sheet"}}{{with .}}
+{{if .Slots}}<div class="l-tiles is-slots" aria-label="Slots">
+  {{range .Slots}}<div class="l-stat"><span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span></div>{{end}}
+</div>{{end}}
+
+{{if or .Bonuses .Resists}}<div class="is-pair">
+  {{if .Bonuses}}<section class="l-panel is-bonuses">
+    <h3>Bonuses</h3>
+    {{range .Bonuses}}<div class="is-bonus">
+      <h4>{{.Title}}</h4>
+      <ul>{{range .Lines}}<li><b class="is-fig">{{.Figure}}</b><span>{{.Text}}</span></li>{{end}}</ul>
+    </div>{{end}}
+  </section>{{end}}
+  {{if .Resists}}<section class="l-panel is-defense">
+    <h3>Defense</h3>
+    <div class="fit-resists">
+      <div class="fit-res-head" aria-hidden="true"><span></span><span class="res-em">EM</span><span class="res-th">TH</span><span class="res-kin">KIN</span><span class="res-exp">EXP</span></div>
+      {{range .Resists}}<div class="fit-res-row">
+        <div class="fit-res-layer"><strong>{{.Layer}}</strong>{{if .HP}} <small>{{.HP}}</small>{{end}}</div>
+        {{range .Cells}}<span class="fit-res res-{{.Kind}}" title="{{.Text}}"><svg class="is-res-bar" viewBox="0 0 100 1" preserveAspectRatio="none" aria-hidden="true"><rect width="{{printf "%.1f" .Pct}}" height="1"/></svg><b>{{.Text}}</b></span>{{end}}
+      </div>{{end}}
+    </div>
+  </section>{{end}}
+</div>{{end}}
+
+{{if .FitsTo}}<section class="l-panel is-fits">
+  <h3>Fits to</h3>
+  <dl class="is-dl">
+    {{range .FitsTo}}<div><dt>{{.Label}}</dt><dd class="l-cluster">{{range .Tags}}{{if .Link}}<a class="ib-tag" href="{{.Link}}">{{.Label}}</a>{{else}}<span class="ib-tag">{{.Label}}</span>{{end}}{{end}}</dd></div>{{end}}
+  </dl>
+</section>{{end}}
+
+{{if .Sections}}<section class="l-panel is-attrs">
+  <h3>Attributes</h3>
+  <div class="is-sections">
+    {{range .Sections}}<div class="is-sec">
+      <h4>{{.Title}}</h4>
+      <dl class="is-dl">{{range .Rows}}<div><dt>{{.Label}}</dt><dd>{{if .Link}}<a href="{{.Link}}">{{.Value}}</a>{{else}}{{.Value}}{{end}}</dd></div>{{end}}</dl>
+    </div>{{end}}
+  </div>
+</section>{{end}}
+
+{{with .Variations}}<section class="l-panel is-vars">
+  <h3>Variations <small>{{len .Rows}}</small></h3>
+  {{$cols := .Columns}}
+  <div class="tw">
+  <table class="is-vtable">
+    <thead><tr><th scope="col">Item</th><th scope="col">Tier</th>{{range $cols}}<th scope="col" class="num">{{.}}</th>{{end}}<th scope="col" class="num">Price</th></tr></thead>
+    <tbody>
+    {{range .Rows}}<tr{{if .Current}} class="is-cur" aria-current="true"{{end}}>
+      <th scope="row"><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></th>
+      <td>{{.Tier}}</td>
+      {{range $v := .Values}}<td class="num">{{if $v}}{{$v}}{{else}}-{{end}}</td>{{end}}
+      <td class="num">{{if .Price}}{{.Price}}{{if .PriceNote}}<small>{{.PriceNote}}</small>{{end}}{{else}}<small>No price</small>{{end}}</td>
+    </tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="ib-note">Prices at The Forge from our own swept orders. Any other source is named under the figure.</p>
+</section>{{end}}
+
+{{if .Skills}}<section class="l-panel is-skills">
+  <h3>Required skills{{if .SkillPilot}} <small>checked against {{.SkillPilot}}</small>{{end}}</h3>
+  <ul class="is-tree">
+    {{range .Skills}}<li class="is-d{{.Depth}}{{if .Mark}} is-{{.Mark}}{{end}}"><a href="/items/type/{{.SkillID}}/">{{.Name}}</a> <span class="is-lvl">Level {{.Level}}</span>{{if eq .Mark "ok"}} <span class="is-mark">Trained</span>{{else if eq .Mark "short"}} <span class="is-mark">{{if .Trained}}At level {{.Trained}}{{else}}Not trained{{end}}</span>{{end}}</li>{{end}}
+  </ul>
+</section>{{end}}
+{{end}}{{end}}

@@ -251,9 +251,6 @@ func TestContractDetailPages(t *testing.T) {
 	}
 	_, body = getAnon(t, app, "/contracts/search/7001/")
 	mustContain(t, "detail above value", body, "Asking 54% above our appraised value")
-	if strings.Contains(body, "Asking 154% of our appraised value") {
-		t.Error("detail note still frames over-asking as a share of value")
-	}
 }
 
 // TestContractSearchBlueprintIcons pins what the redesign

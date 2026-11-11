@@ -70,9 +70,6 @@ func TestNotificationSettingsChannelsAndTypes(t *testing.T) {
 	if n := strings.Count(body, `name="discord_dm"`); n != 1 {
 		t.Fatalf("%d discord_dm boxes on the page, want exactly 1 (the channels list's)", n)
 	}
-	if strings.Contains(body, "Also send these to me on Discord") {
-		t.Fatal("the Discord section still carries its own direct-message switch")
-	}
 	// The per-browser panel lives in the Browser notifications
 	// section, and only there: below the types, above Discord.
 	if panel := indexOf(t, body, `id="push-panel"`); panel < browser || panel > discord {

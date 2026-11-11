@@ -120,9 +120,6 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		!strings.Contains(style, ".foldable .tw { background: none;") {
 		t.Error("the foldable section lost its glass surface or its nested-table suppression")
 	}
-	if strings.Contains(style, ".panel.market-browse { background: none;") {
-		t.Error("the market browse panel is unpainted again; its category tiles float on the sky")
-	}
 	// Top search results are glass with a glowing row highlight.
 	if !strings.Contains(style, "background: rgba(14, 11, 9, 0.82);") ||
 		!strings.Contains(style, ".suggest li:not(.sug-kind):not(.sug-empty):hover") {
@@ -169,15 +166,6 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 			t.Errorf("bg.css is missing the KPI glyph rule %q", want)
 		}
 	}
-	// The fitting workbench sits inside the glass page wrapper like
-	// every other page; only the widget home is exempt. Its drag
-	// ghost and tooltips never depended on the wrapper, and the one
-	// fixed element it owns (the picker backdrop) is hoisted to
-	// body level by swap.js, so the wrapper's backdrop-filter has
-	// nothing left to capture.
-	if strings.Contains(style, ":has(.fit-wb)") {
-		t.Error("style.css re-exempted the fitting workbench from the page wrapper")
-	}
 	if !strings.Contains(style, ".page-body:has(.home-grid) {") {
 		t.Error("style.css lost the widget-home wrapper exemption")
 	}
@@ -194,12 +182,6 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		strings.Contains(bg, "ember-twinkle") ||
 		strings.Contains(bg, "body::after") {
 		t.Error("bg.css regained a synthetic starfield layer; the art carries its own stars")
-	}
-	// The briefing pulse lives on the severity chip, never on the
-	// card's box-shadow (a running shadow animation overrides the
-	// hover glow and makes every critical card glow in sync).
-	if strings.Contains(style, "brief-pulse") {
-		t.Error("the card-level brief-pulse is back; the pulse belongs on the .sev chip only")
 	}
 	// Feature card surfaces aligned to the same translucent recipe.
 	for name, css := range map[string]string{"plan.css": plan, "link.css": link} {

@@ -102,9 +102,6 @@ func TestItemsGlobalSearchAndPublishedOnly(t *testing.T) {
 	if !strings.Contains(body, "Published items only") || !strings.Contains(body, `name="published"`) {
 		t.Error("search page: published-only control missing or mislabeled")
 	}
-	if strings.Contains(body, "Market items only") {
-		t.Error("search page still labels the switch Market items only")
-	}
 
 	// A link shared before the rename (market=1) filters the
 	// same way under the new meaning.

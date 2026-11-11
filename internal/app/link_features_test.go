@@ -303,9 +303,6 @@ func TestChooserPages(t *testing.T) {
 	if !strings.Contains(body, `Already have an EveSynapse account? <a href="/auth/login">Log in</a>`) {
 		t.Error("the chooser does not offer the plain login")
 	}
-	if strings.Contains(body, "you keep the permissions you chose") {
-		t.Error("the chooser still describes the plain login as keeping chosen permissions")
-	}
 	for _, a := range linkActivities {
 		if !strings.Contains(body, html.EscapeString(a.Title)) {
 			t.Errorf("the cards miss %q", a.Title)

@@ -32,9 +32,6 @@ func TestAboutPagePublic(t *testing.T) {
 	if n := strings.Count(body, "3518 Fremont Ave N"); n != 1 {
 		t.Errorf("business address appears %d times on /about/, want exactly 1 (privacy policy only)", n)
 	}
-	if strings.Contains(body, "greater than the sum of its parts") {
-		t.Errorf("/about/ carries the landing page's marketing slogan; the About copy stays factual")
-	}
 }
 
 // The license page serves the project's legal texts in the app

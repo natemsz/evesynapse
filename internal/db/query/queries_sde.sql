@@ -817,3 +817,9 @@ LEFT JOIN sde_meta_groups g ON g.meta_group_id = m.meta_group_id
 WHERE v.type_id = $1
 ORDER BY m.meta_level, t.name
 LIMIT 60;
+
+-- name: ListSDEMetaGroupsByTypes :many
+-- Each of some types' meta group (Tech II, faction, deadspace and so
+-- on) from the dump's meta types; a type with no row is Tech I.
+SELECT type_id, meta_group_id FROM sde_meta_types
+WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);

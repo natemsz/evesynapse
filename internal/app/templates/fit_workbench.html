@@ -4,7 +4,7 @@ drift. ReadOnly keeps the look and drops every affordance: slots
 are plain spans with their tooltips, nothing adds, removes or
 retunes, and the root carries fit-ro for the read-only tooltips. */}}
 {{define "fit-workbench"}}
-{{if .ReadOnly}}<div class="fit-wb fit-ro">{{else}}<div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}" data-fit-tubes="{{.FighterTubesNum}}" data-fit-subsystems="{{if .SupportsSubsystems}}1{{else}}0{{end}}" data-fit-restricted='{{.RestrictedJSON}}'>{{end}}
+{{if .ReadOnly}}<div class="fit-wb fit-ro">{{else}}<div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}" data-fit-tubes="{{.FighterTubesNum}}" data-fit-left="{{printf "%.2f" .CPULeftNum}},{{printf "%.2f" .PGLeftNum}},{{printf "%.0f" .CalLeftNum}}" data-fit-subsystems="{{if .SupportsSubsystems}}1{{else}}0{{end}}" data-fit-restricted='{{.RestrictedJSON}}'>{{end}}
 {{$problems := false}}{{if and .HasShip .Stats}}{{if .Stats.Problems}}{{$problems = true}}{{end}}{{end}}
 {{if or .DataNote $problems}}
 <div class="fit-top">
@@ -69,7 +69,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   <div class="fit-vring-outer" aria-hidden="true"></div>
   <div class="fit-vring" aria-hidden="true"></div>
   {{if .Visual.Segs}}<svg class="fit-vsegs" viewBox="0 0 100 100" aria-hidden="true">{{range .Visual.Segs}}<path d="{{.D}}" class="fit-vseg"/>{{end}}</svg>{{end}}
-  <div class="fit-vship"><img src="https://images.evetech.net/types/{{.Visual.ShipID}}/render?size=512" alt="{{.Visual.ShipName}}" draggable="false"></div>
+  <div class="fit-vship"><button type="button" class="fit-vship-info" data-fit-info="{{.Visual.ShipID}}" title="Ship details"><img src="https://images.evetech.net/types/{{.Visual.ShipID}}/render?size=512" alt="{{.Visual.ShipName}} details" draggable="false"></button></div>
   {{if not .ReadOnly}}<div class="fit-vhistory" role="group" aria-label="Undo and redo">
     <button type="button" class="fit-vhist" data-fit-undo title="Undo" aria-label="Undo" disabled>↩</button>
     <button type="button" class="fit-vhist" data-fit-redo title="Redo" aria-label="Redo" disabled>↪</button>
@@ -81,8 +81,8 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   <div class="fit-vsep" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-rot="{{printf "%.0f" .Rot}}" aria-hidden="true"></div>
   {{end}}
   {{range .Visual.Slots}}
-  {{if $.ReadOnly}}{{if .Filled}}<span class="fit-vslot filled{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-lines="{{.TipLines}}"{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}</span>{{else}}<span class="fit-vslot" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" aria-hidden="true"></span>{{end}}{{else}}
-  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}" data-tip-lines="{{.TipLines}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
+  {{if $.ReadOnly}}{{if .Filled}}<span class="fit-vslot filled{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-lines="{{.TipLines}}"{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}</span>{{else}}<span class="fit-vslot" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" aria-hidden="true"></span>{{end}}{{else}}
+  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}" data-tip-lines="{{.TipLines}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
     {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}}. Click to change ammunition"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
   </button>
   {{end}}
@@ -290,7 +290,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}}, doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
-        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}>
+        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}>
           {{if $group.ReadOnly}}<span class="fit-chip-name">{{.Name}}</span>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
           {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}

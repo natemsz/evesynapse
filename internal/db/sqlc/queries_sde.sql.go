@@ -1824,6 +1824,38 @@ func (q *Queries) ListSDEMarketGroupsByParent(ctx context.Context, parentGroupID
 	return items, nil
 }
 
+const listSDEMetaGroupsByTypes = `-- name: ListSDEMetaGroupsByTypes :many
+SELECT type_id, meta_group_id FROM sde_meta_types
+WHERE type_id = ANY($1::bigint[])
+`
+
+type ListSDEMetaGroupsByTypesRow struct {
+	TypeID      int64 `json:"type_id"`
+	MetaGroupID int64 `json:"meta_group_id"`
+}
+
+// Each of some types' meta group (Tech II, faction, deadspace and so
+// on) from the dump's meta types; a type with no row is Tech I.
+func (q *Queries) ListSDEMetaGroupsByTypes(ctx context.Context, typeIds []int64) ([]ListSDEMetaGroupsByTypesRow, error) {
+	rows, err := q.db.Query(ctx, listSDEMetaGroupsByTypes, typeIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEMetaGroupsByTypesRow
+	for rows.Next() {
+		var i ListSDEMetaGroupsByTypesRow
+		if err := rows.Scan(&i.TypeID, &i.MetaGroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDERequirementsByType = `-- name: ListSDERequirementsByType :many
 SELECT skill_type_id, level FROM sde_requirements
 WHERE type_id = $1

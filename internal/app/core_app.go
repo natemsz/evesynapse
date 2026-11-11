@@ -941,6 +941,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// only (a description not stored yet is not queued).
 		r.With(anonPages).Get("/", app.handleItems)
 		r.With(anonPages).Get("/type/{typeID}/", app.handleItemType)
+		r.With(anonPages).Get("/sheet/{file}", app.handleItemSheetJSON)
 		r.With(anonPages).Get("/search.json", app.handleItemSearchJSON)
 		r.With(anonPages).Get("/description-fragment", app.handleItemDescriptionFragment)
 		r.With(anonPages).Get("/category/{categoryID}/", app.handleItemsCategory)

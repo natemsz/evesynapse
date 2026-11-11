@@ -87,7 +87,9 @@ func ISKCompact(v float64) string {
 		div    float64
 		suffix string
 	}{{1e12, "T"}, {1e9, "B"}, {1e6, "M"}, {1e3, "K"}} {
-		if v >= u.div {
+		// 999,960 is "1.0M", never "1000K": a figure that rounds up
+		// to a whole unit takes that unit.
+		if v >= u.div*0.9995 {
 			out = strconv.FormatFloat(v/u.div, 'f', 1, 64) + u.suffix
 			if v/u.div >= 100 {
 				out = strconv.FormatFloat(v/u.div, 'f', 0, 64) + u.suffix

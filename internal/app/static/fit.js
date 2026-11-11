@@ -696,16 +696,88 @@ var FitGauges = (function () {
     ok["ship"] = true;
     return ok;
   }
+  // "Fittable only" hides what cannot go on this hull now; without
+  // it every row lists, and rowReason says why one will not fit.
   function applyFittable(rows) {
     var ok = fittableKinds();
+    if (!ok) return rows;
     var restricted = restrictedSet();
-    if (!ok && !restricted) return rows;
     return (rows || []).filter(function (it) {
-      // Ship-restricted modules never list under "Fittable only"
-      // for an incompatible hull.
       if (restricted && restricted[it.id]) return false;
-      return !ok || !!ok[it.kind || ""];
+      return !!ok[it.kind || ""];
     });
+  }
+
+  // rowReason is why a search row will not fit the loaded hull
+  // right now, in words, or "" when it will (or no hull is loaded).
+  // Over-budget modules can still be added, as in game; the stats
+  // panel then shows what is over.
+  var rackKinds = { high: 1, medium: 1, low: 1, rig: 1, subsystem: 1 };
+  function rowReason(it) {
+    var wb = workbench();
+    if (!wb || !it || it.kind === "ship" || it.kind === "charge") return "";
+    var req = restrictionFor(it.id);
+    if (req) return "Only fits " + req;
+    if (rackKinds[it.kind]) {
+      var g = wb.querySelector('.fit-group[data-fit-group="' + it.kind + '"]');
+      if (g) {
+        var used = parseInt(g.getAttribute("data-fit-used") || "0", 10) || 0;
+        var max = parseInt(g.getAttribute("data-fit-max") || "0", 10) || 0;
+        if (max <= used) return max ? "No free slot" : "This hull has no slot for it";
+      }
+    }
+    if (it.kind === "fighter" && !(parseInt(wb.getAttribute("data-fit-tubes") || "0", 10) > 0)) return "This hull has no fighter tubes";
+    var left = (wb.getAttribute("data-fit-left") || "").split(",");
+    var cpuLeft = parseFloat(left[0]), pgLeft = parseFloat(left[1]), calLeft = parseFloat(left[2]);
+    if (it.cpu > 0 && !isNaN(cpuLeft) && it.cpu > cpuLeft + 1e-6) return "Needs " + fmtNum(it.cpu) + " tf CPU, " + fmtNum(Math.max(0, cpuLeft)) + " left";
+    if (it.pg > 0 && !isNaN(pgLeft) && it.pg > pgLeft + 1e-6) return "Needs " + fmtNum(it.pg) + " MW, " + fmtNum(Math.max(0, pgLeft)) + " left";
+    if (it.cal > 0 && !isNaN(calLeft) && it.cal > calLeft + 1e-6) return "Needs " + fmtNum(it.cal) + " calibration, " + fmtNum(Math.max(0, calLeft)) + " left";
+    return "";
+  }
+  function fmtNum(v) {
+    return Math.round(v) === v ? String(v) : v.toFixed(1);
+  }
+  // rowFacts is the right side of a search or picker row: tier, CPU,
+  // powergrid or calibration, the headline figure and the price,
+  // then the Info control. It returns null for a row with nothing
+  // to say.
+  function rowFacts(it) {
+    var box = document.createElement("span");
+    box.className = "sug-facts";
+    function fact(text, cls) {
+      var f = document.createElement("span");
+      f.className = "sug-fact" + (cls ? " " + cls : "");
+      f.textContent = text;
+      box.appendChild(f);
+    }
+    if (it.tier) fact(it.tier, "sug-tier");
+    if (it.stat) fact(it.stat, "sug-stat");
+    if (it.cpu) fact(fmtNum(it.cpu) + " tf");
+    if (it.pg) fact(fmtNum(it.pg) + " MW");
+    if (it.cal) fact(fmtNum(it.cal) + " cal");
+    if (it.price) fact(it.price + (it.est ? " est." : ""), "sug-price");
+    if (it.id) {
+      var info = document.createElement("button");
+      info.type = "button";
+      info.className = "sug-info";
+      info.setAttribute("data-fit-info", String(it.id));
+      info.setAttribute("aria-label", "Details of " + (it.name || "this item"));
+      info.textContent = "Info";
+      // A press on Info must not pick the row or start a drag.
+      info.addEventListener("mousedown", function (ev) { ev.stopPropagation(); ev.preventDefault(); });
+      info.addEventListener("pointerdown", function (ev) { ev.stopPropagation(); });
+      box.appendChild(info);
+    }
+    return box;
+  }
+  function markReason(li, it) {
+    var why = rowReason(it);
+    if (!why) return null;
+    li.classList.add("sug-wontfit");
+    var r = document.createElement("span");
+    r.className = "sug-why";
+    r.textContent = why;
+    return r;
   }
 
   // The type icon a suggestion or picker row leads with. Shared
@@ -795,7 +867,10 @@ var FitGauges = (function () {
             lab.textContent = it.label;
             text.appendChild(lab);
           }
+          var why = markReason(li, it);
+          if (why) text.appendChild(why);
           li.appendChild(text);
+          li.appendChild(rowFacts(it));
           rows.push({ it: it, li: li });
           li.addEventListener("mousedown", function (ev) {
             ev.preventDefault();
@@ -1404,11 +1479,9 @@ var FitGauges = (function () {
   // --- module picker -------------------------------------------
   // The picker is a modal: it opens over the workbench,
   // scoped to the family of the slot (or search result) that
-  // summoned it, with its own quick search. What it lists is
-  // what can go on this hull, the family feed plus the
-  // ship-restriction filter in applyFittable, regardless of
-  // remaining CPU/PG, which the workbench reports after the
-  // fact like the game does.
+  // summoned it, with its own quick search. Rows that will not
+  // fit now (rowReason) list dimmed with the reason; "Fittable
+  // only" hides them.
   function openPicker(family, seedQ) {
     if (!picker) return;
     if (window.EveSynapseModal) window.EveSynapseModal.open(picker, { focus: false });
@@ -1448,15 +1521,21 @@ var FitGauges = (function () {
         // drag moves it onto a slot. No mousedown+preventDefault
         // here, that kills the drag gesture before it starts.
         li.appendChild(suggestIcon(it.id));
+        var text = document.createElement("span");
+        text.className = "sug-text";
         var name = document.createElement("span");
         name.textContent = it.name;
-        li.appendChild(name);
+        text.appendChild(name);
         if (it.label) {
           var lab = document.createElement("span");
           lab.className = "sug-label";
           lab.textContent = it.label;
-          li.appendChild(lab);
+          text.appendChild(lab);
         }
+        var why = markReason(li, it);
+        if (why) text.appendChild(why);
+        li.appendChild(text);
+        li.appendChild(rowFacts(it));
         pickerList.appendChild(li);
       });
       if (!rows || rows.length === 0) {
@@ -1517,6 +1596,7 @@ var FitGauges = (function () {
   var dragState = null; // pending or active pointer drag
   var eatNextClick = false; // the synthetic click after a drag-source pointerup
   function dragSourceAt(ev) {
+    if (ev.target && ev.target.closest && ev.target.closest("[data-fit-info]")) return null;
     var t = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot.filled,[data-fit-pick]") : null;
     return t;
   }

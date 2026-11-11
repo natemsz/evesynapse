@@ -274,7 +274,7 @@ func localFitGroups(doc *fitview.FitDoc, familyOf map[int64]string, nameOf func(
 	}
 	byFamily := map[string][]fitview.FittingItemRow{}
 	for _, it := range doc.Items {
-		family := familyOf[it.TypeID]
+		family := it.FamilyIn(familyOf)
 		if _, ok := familyLabel[family]; !ok {
 			family = "other"
 		}

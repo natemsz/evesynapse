@@ -823,3 +823,23 @@ LIMIT 60;
 -- on) from the dump's meta types; a type with no row is Tech I.
 SELECT type_id, meta_group_id FROM sde_meta_types
 WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);
+-- ListFitBrowseGroups: one level of a family's Browse tree (schema
+-- 142); parent 0 is the top.
+-- name: ListFitBrowseGroups :many
+SELECT market_group_id, name, type_count
+FROM fit_browse_groups
+WHERE family = @family AND parent_group_id = @parent_group_id
+ORDER BY name
+LIMIT 200;
+-- ListFitBrowseTypes: the types a family lists directly in one
+-- market group, with the meta filter the picker search uses.
+-- name: ListFitBrowseTypes :many
+SELECT b.type_id, b.name, COALESCE(g.name, '') AS group_name
+FROM fit_browse_types b
+JOIN sde_types t ON t.type_id = b.type_id
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_type_attributes meta ON meta.type_id = b.type_id AND meta.attribute_id = 1692
+WHERE b.family = @family AND b.market_group_id = @market_group_id
+  AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
+ORDER BY b.name
+LIMIT 200;

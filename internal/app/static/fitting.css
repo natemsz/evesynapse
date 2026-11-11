@@ -195,11 +195,10 @@
 .l-page .fit-bar-row .fit-bar { grid-column: 1 / -1; grid-row: 2; width: auto; min-width: 0; }
 
 /* --- item details: search rows, tooltips, the info drawer ---
-   A search or picker row says what the item is before it is
+   A search or Browse row says what the item is before it is
    fitted (tier, headline figure, CPU, powergrid, price) and why it
    will not fit now; Info opens the type's sheet in the drawer. */
-.suggest li:has(> .sug-facts), .fit-picker-list li:has(> .sug-facts) { display: flex; align-items: center; gap: 0.55rem; }
-.fit-picker-list .sug-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.suggest li:has(> .sug-facts) { display: flex; align-items: center; gap: 0.55rem; }
 .suggest .sug-text { flex: 1 1 auto; }
 .sug-facts {
   flex: 0 1 auto; margin-left: auto; min-width: 0;
@@ -265,3 +264,84 @@
 .fit-info-close::before { content: "\2039\00a0"; }
 .fit-info-body { display: grid; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-5); }
 .fit-info-body > .l-panel, .fit-info-body .is-pair > .l-panel { margin: 0; }
+
+/* --- the left column: Fit / Browse ---
+   Two tabs over the racks; Browse is the market tree of one slot
+   family with a search on top. Phones use the view tab bar
+   instead (fit.css hides these tabs there). */
+.fit-lefttabs {
+  display: flex; gap: 0; margin-bottom: 0.6rem;
+  border-bottom: 1px solid var(--hairline);
+}
+.fit-lefttabs > button {
+  flex: 1 1 0; padding: 0.45rem 0.6rem; background: none; border: 0;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer;
+  color: var(--muted); font-family: var(--font-display); font-weight: 600;
+  font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em;
+}
+.fit-lefttabs > button:hover { color: var(--text); }
+.fit-lefttabs > button.on { color: var(--text-bright); border-bottom-color: var(--accent); }
+.fit-browse { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.fit-browse-fams { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.fit-browse-fams button {
+  padding: 0.2rem 0.5rem; border: 1px solid var(--box-edge); border-radius: 999px;
+  background: var(--surface-inset); color: var(--muted); cursor: pointer;
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  text-transform: uppercase; letter-spacing: 0.06em; touch-action: manipulation;
+}
+.fit-browse-fams button.on { border-color: var(--accent); color: var(--text); background: #1d1710; }
+.fit-browse-searchwrap { display: block; }
+.fit-browse-searchwrap input { width: 100%; }
+.fit-browse-hint { margin: 0; color: var(--muted); font-size: var(--fs-xs); }
+.fit-browse-tree, .fit-browse-tree ul { list-style: none; margin: 0; padding: 0; }
+.fit-browse-tree {
+  max-height: 34rem; overflow-y: auto; overscroll-behavior: contain;
+  border-top: 1px solid var(--hairline); padding-top: 0.25rem;
+}
+.fit-browse-tree ul { padding-left: 0.85rem; border-left: 1px solid var(--hairline); margin-left: 0.45rem; }
+.fbt-toggle {
+  display: flex; align-items: baseline; gap: 0.5rem; width: 100%;
+  padding: 0.35rem 0.4rem; background: none; border: 0; border-radius: var(--r-sm);
+  color: var(--text); cursor: pointer; text-align: left; font-size: var(--fs-sm);
+}
+.fbt-toggle::before {
+  content: "\25B8"; flex: none; color: var(--muted); font-size: var(--fs-rel-small);
+  transition: transform 0.12s ease;
+}
+.fbt-node[aria-expanded="true"] > .fbt-toggle::before { transform: rotate(90deg); }
+.fbt-toggle:hover { background: var(--row-hover); }
+.fbt-name { flex: 1 1 auto; min-width: 0; }
+.fbt-count { color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); }
+/* A row is the icon beside its name and group, the facts on a line
+   of their own beneath: the column is narrow. */
+.fbt-row {
+  display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 0.55rem; row-gap: 0.1rem;
+  align-items: center;
+  padding: 0.35rem 0.4rem; border-radius: var(--r-sm); cursor: grab;
+  font-size: var(--fs-sm);
+  /* Vertical scroll stays native; a sideways press or a long press
+     becomes a drag onto a slot. */
+  touch-action: pan-y;
+}
+.fbt-row:hover, .fbt-row:focus-visible { background: var(--row-hover); }
+.fbt-row .sug-icon { width: 32px; height: 32px; grid-row: 1 / span 2; align-self: start; }
+.fbt-row .sug-text { display: flex; flex-direction: column; min-width: 0; }
+.fbt-row .sug-facts { grid-column: 2; justify-content: flex-start; margin-left: 0; }
+.fbt-row .sug-label { color: var(--muted); font-size: var(--fs-xs); }
+.fbt-row.sug-wontfit { opacity: 0.62; }
+.fbt-empty { padding: 0.5rem 0.4rem; color: var(--muted); font-size: var(--fs-sm); }
+.fit-racks[hidden], .fit-browse-slot[hidden], .fit-browse[hidden] { display: none; }
+
+/* --- drag targets ---
+   While something is dragged, the places that take it glow and
+   the rest dim; the one under the pointer is marked. */
+.fit-group.drop-ok { outline: 1px dashed var(--success); outline-offset: 2px; }
+.fit-group.drop-over, .fit-chip.drop-over, .fit-slot-empty.drop-over { outline: 2px solid var(--success); outline-offset: 1px; }
+.fit-chip.drop-ok, .fit-slot-empty.drop-ok { border-color: var(--success); }
+.fit-chip.drop-dim, .fit-slot-empty.drop-dim { opacity: 0.45; }
+.fit-vslot.drop-over { box-shadow: 0 0 16px rgba(255, 184, 77, 0.9); }
+.fit-chip[data-fit-rowtype] { cursor: grab; }
+.fit-chip.drag-src { opacity: 0.4; }
+.suggest.fit-list-dragging { opacity: 0; pointer-events: none; }
+.fbt-row, .fit-chip[data-fit-rowtype] { -webkit-user-select: none; user-select: none; }
+html.fit-dragging, html.fit-dragging * { -webkit-user-select: none; user-select: none; cursor: grabbing; }

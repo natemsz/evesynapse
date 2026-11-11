@@ -446,11 +446,13 @@ test("phone views: section map and state cycle", () => {
   const FitPhoneViews = global.FitPhoneViews;
 
   assert.deepEqual(FitPhoneViews.sections("radial"),
-    { center: true, slots: false, bays: false, stats: false });
+    { center: true, slots: false, bays: false, stats: false, browse: false });
   assert.deepEqual(FitPhoneViews.sections("racks"),
-    { center: false, slots: true, bays: true, stats: false });
+    { center: false, slots: true, bays: true, stats: false, browse: false });
   assert.deepEqual(FitPhoneViews.sections("stats"),
-    { center: false, slots: false, bays: false, stats: true });
+    { center: false, slots: false, bays: false, stats: true, browse: false });
+  assert.deepEqual(FitPhoneViews.sections("browse"),
+    { center: false, slots: true, bays: false, stats: false, browse: true });
 
   const all = "offline,online,active,overheated";
   assert.equal(FitPhoneViews.nextState(all, "online"), "active");

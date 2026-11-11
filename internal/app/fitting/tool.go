@@ -132,6 +132,105 @@ func (app *tool) fitPilotLabel(ctx context.Context, userID, pilotID int64) (stri
 	return "", false
 }
 
+// pickFilter is the picker's pilot filter: the pilot whose skills
+// "Usable by pilot" checks, when the signed-in account owns them.
+type pickFilter struct {
+	app        *tool
+	ctx        context.Context
+	pilotID    int64
+	usableOnly bool
+}
+
+// newPickFilter reads the pilot and usable query parameters; a pilot
+// the account does not own counts as none.
+func (app *tool) newPickFilter(r *http.Request) *pickFilter {
+	ctx := r.Context()
+	q := r.URL.Query()
+	pilotID, _ := strconv.ParseInt(q.Get("pilot"), 10, 64)
+	usableOnly := q.Get("usable") == "1" && pilotID > 0 && app.deps.UserID(ctx) > 0
+	if pilotID > 0 {
+		if _, owned := app.fitPilotLabel(ctx, app.deps.UserID(ctx), pilotID); !owned {
+			pilotID = 0
+			usableOnly = false
+		}
+	}
+	return &pickFilter{app: app, ctx: ctx, pilotID: pilotID, usableOnly: usableOnly}
+}
+
+// canUse answers, for the rows given, whether the pilot can
+// actually use each: every skill requirement (transitively) met by
+// their levels. Nil when that can't be told (skills not warmed).
+func (pf *pickFilter) canUse(rows []module.SuggestItem) func(int64) bool {
+	app, ctx, pilotID := pf.app, pf.ctx, pf.pilotID
+	var skills esi.Skills
+	if !app.deps.LoadCorpSnapshot(ctx, pilotID, esi.SnapSkills, &skills) {
+		return nil
+	}
+	levels := fitview.ActiveSkillLevels(skills)
+	ids := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	// Requirement closure over a few rounds (module -> skill -> skill).
+	reqs := make(map[int64][]db.SdeRequirement)
+	pending := ids
+	for round := 0; round < 4 && len(pending) > 0; round++ {
+		batch, err := app.queries.ListSDERequirementsByTypes(ctx, pending)
+		if err != nil {
+			logging.Errorf("fittings picker: requirements: %v", err)
+			return nil
+		}
+		var next []int64
+		seen := make(map[int64]bool)
+		for _, b := range batch {
+			reqs[b.TypeID] = append(reqs[b.TypeID], b)
+			if !seen[b.SkillTypeID] {
+				seen[b.SkillTypeID] = true
+				next = append(next, b.SkillTypeID)
+			}
+		}
+		pending = next
+	}
+	usable := func(typeID int64) bool {
+		seen := make(map[int64]bool)
+		queue := []int64{typeID}
+		for len(queue) > 0 {
+			id := queue[0]
+			queue = queue[1:]
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			for _, req := range reqs[id] {
+				if int64(levels[req.SkillTypeID]) < req.Level {
+					return false
+				}
+				queue = append(queue, req.SkillTypeID)
+			}
+		}
+		return true
+	}
+	return usable
+}
+
+// filter keeps the rows the pilot can use when "Usable by pilot" is on.
+func (pf *pickFilter) filter(rows []module.SuggestItem) []module.SuggestItem {
+	if !pf.usableOnly || len(rows) == 0 {
+		return rows
+	}
+	usable := pf.canUse(rows)
+	if usable == nil {
+		return rows // skills not warmed yet: don't hide everything
+	}
+	out := rows[:0]
+	for _, row := range rows {
+		if usable(row.ID) {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
 // handleFitPickerJSON serves GET /fittings/picker.json: the
 // editor's item feeds (ships, slot families, drones, charges, or
 // the shared marketable pool), all local SDE reads.
@@ -141,86 +240,10 @@ func (app *tool) handleFitPickerJSON(w http.ResponseWriter, r *http.Request) {
 	family := q.Get("family")
 	query := q.Get("q")
 	meta, _ := strconv.ParseInt(q.Get("meta"), 10, 64)
-	pilotID, _ := strconv.ParseInt(q.Get("pilot"), 10, 64)
-	usableOnly := q.Get("usable") == "1" && pilotID > 0 && app.deps.UserID(ctx) > 0
-	if pilotID > 0 {
-		if _, owned := app.fitPilotLabel(ctx, app.deps.UserID(ctx), pilotID); !owned {
-			pilotID = 0
-			usableOnly = false
-		}
-	}
-
-	// pilotCanUse answers, for the rows given, whether the pilot can
-	// actually use each: every skill requirement (transitively) met by
-	// their levels. Nil when that can't be told (skills not warmed).
-	pilotCanUse := func(rows []module.SuggestItem) func(int64) bool {
-		var skills esi.Skills
-		if !app.deps.LoadCorpSnapshot(ctx, pilotID, esi.SnapSkills, &skills) {
-			return nil
-		}
-		levels := fitview.ActiveSkillLevels(skills)
-		ids := make([]int64, 0, len(rows))
-		for _, row := range rows {
-			ids = append(ids, row.ID)
-		}
-		// Requirement closure over a few rounds (module -> skill -> skill).
-		reqs := make(map[int64][]db.SdeRequirement)
-		pending := ids
-		for round := 0; round < 4 && len(pending) > 0; round++ {
-			batch, err := app.queries.ListSDERequirementsByTypes(ctx, pending)
-			if err != nil {
-				logging.Errorf("fittings picker: requirements: %v", err)
-				return nil
-			}
-			var next []int64
-			seen := make(map[int64]bool)
-			for _, b := range batch {
-				reqs[b.TypeID] = append(reqs[b.TypeID], b)
-				if !seen[b.SkillTypeID] {
-					seen[b.SkillTypeID] = true
-					next = append(next, b.SkillTypeID)
-				}
-			}
-			pending = next
-		}
-		usable := func(typeID int64) bool {
-			seen := make(map[int64]bool)
-			queue := []int64{typeID}
-			for len(queue) > 0 {
-				id := queue[0]
-				queue = queue[1:]
-				if seen[id] {
-					continue
-				}
-				seen[id] = true
-				for _, req := range reqs[id] {
-					if int64(levels[req.SkillTypeID]) < req.Level {
-						return false
-					}
-					queue = append(queue, req.SkillTypeID)
-				}
-			}
-			return true
-		}
-		return usable
-	}
-	// usableByPilot filters suggestions to what the pilot can use.
-	usableByPilot := func(rows []module.SuggestItem) []module.SuggestItem {
-		if !usableOnly || len(rows) == 0 {
-			return rows
-		}
-		usable := pilotCanUse(rows)
-		if usable == nil {
-			return rows // skills not warmed yet: don't hide everything
-		}
-		out := rows[:0]
-		for _, row := range rows {
-			if usable(row.ID) {
-				out = append(out, row)
-			}
-		}
-		return out
-	}
+	pf := app.newPickFilter(r)
+	pilotID := pf.pilotID
+	pilotCanUse := pf.canUse
+	usableByPilot := pf.filter
 
 	slotKinds := []struct {
 		family string
@@ -364,6 +387,14 @@ type pickRow struct {
 // hull carries its fitting cost, headline figure, tier and price,
 // read for the whole result list at once.
 func (app *tool) writePickRows(w http.ResponseWriter, r *http.Request, rows []module.SuggestItem) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, max-age=30")
+	_ = json.NewEncoder(w).Encode(app.pickRows(r, rows))
+}
+
+// pickRows joins each row with its fitting facts (tier, CPU,
+// powergrid, headline figure, price) in one batch read.
+func (app *tool) pickRows(r *http.Request, rows []module.SuggestItem) []pickRow {
 	ids := make([]int64, 0, len(rows))
 	for _, row := range rows {
 		if row.Kind != "ship" {
@@ -379,6 +410,48 @@ func (app *tool) writePickRows(w http.ResponseWriter, r *http.Request, rows []mo
 			pr.FitPickStat = stats[row.ID]
 		}
 		out = append(out, pr)
+	}
+	return out
+}
+
+// browseGroup is one market group row of the Browse tree.
+type browseGroup struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Count int32  `json:"count"`
+}
+
+// handleFitBrowseJSON serves GET /fittings/browse.json: one level of
+// a slot family's Browse tree (schema 142), the subgroups of
+// ?group= (0 = the top) and the types listed directly in it, each
+// with the picker's facts. Two keyed reads, at most 200 rows each.
+func (app *tool) handleFitBrowseJSON(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	q := r.URL.Query()
+	family := q.Get("family")
+	group, _ := strconv.ParseInt(q.Get("group"), 10, 64)
+	meta, _ := strconv.ParseInt(q.Get("meta"), 10, 64)
+	out := struct {
+		Groups []browseGroup `json:"groups"`
+		Types  []pickRow     `json:"types"`
+	}{Groups: []browseGroup{}, Types: []pickRow{}}
+	groups, err := app.queries.ListFitBrowseGroups(ctx, db.ListFitBrowseGroupsParams{Family: family, ParentGroupID: group})
+	if err != nil {
+		logging.Errorf("fittings browse: groups: %v", err)
+	}
+	for _, g := range groups {
+		out.Groups = append(out.Groups, browseGroup{ID: g.MarketGroupID, Name: g.Name, Count: g.TypeCount})
+	}
+	if group > 0 {
+		rows, err := app.queries.ListFitBrowseTypes(ctx, db.ListFitBrowseTypesParams{Family: family, MarketGroupID: group, Meta: meta})
+		if err != nil {
+			logging.Errorf("fittings browse: types: %v", err)
+		}
+		items := make([]module.SuggestItem, 0, len(rows))
+		for _, row := range rows {
+			items = append(items, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: family})
+		}
+		out.Types = app.pickRows(r, app.newPickFilter(r).filter(items))
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "private, max-age=30")
@@ -568,10 +641,10 @@ func fitESIFittingBody(name string, doc *fitview.FitDoc, familyOf map[int64]stri
 	}
 	byFamily := map[string][]int64{}
 	for _, it := range doc.Items {
-		switch familyOf[it.TypeID] {
+		switch it.FamilyIn(familyOf) {
 		case fitview.FitFamilyHigh, fitview.FitFamilyMedium, fitview.FitFamilyLow, fitview.FitFamilyRig, fitview.FitFamilySubsystem:
 			for i := 0; i < it.Qty; i++ {
-				byFamily[familyOf[it.TypeID]] = append(byFamily[familyOf[it.TypeID]], it.TypeID)
+				byFamily[it.FamilyIn(familyOf)] = append(byFamily[it.FamilyIn(familyOf)], it.TypeID)
 			}
 		}
 	}
@@ -592,7 +665,7 @@ func fitESIFittingBody(name string, doc *fitview.FitDoc, familyOf map[int64]stri
 		}
 	}
 	for _, it := range doc.Items {
-		switch familyOf[it.TypeID] {
+		switch it.FamilyIn(familyOf) {
 		case fitview.FitFamilyDrone:
 			body.Items = append(body.Items, esiFittingItem{Flag: "DroneBay", Quantity: int64(it.Qty), TypeID: it.TypeID})
 		case fitview.FitFamilyFighter:

@@ -146,8 +146,7 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 func solveEngineItems(snap *fit.Snapshot, doc *fitview.FitDoc) []fit.ItemInput {
 	engineItems := make([]fit.ItemInput, 0, len(doc.Items))
 	for _, it := range doc.Items {
-		fam := fitview.FitSlotFamilyOf(snap, it.TypeID)
-		if !fitview.FitFamilyFitted(fam) {
+		if it.Cargo || !fitview.FitFamilyFitted(fitview.FitSlotFamilyOf(snap, it.TypeID)) {
 			continue
 		}
 		byState := make(map[string]int, 2)

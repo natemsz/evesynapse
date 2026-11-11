@@ -772,6 +772,93 @@ func (q *Queries) ListCelestialNames(ctx context.Context, ids []int64) ([]ListCe
 	return items, nil
 }
 
+const listFitBrowseGroups = `-- name: ListFitBrowseGroups :many
+SELECT market_group_id, name, type_count
+FROM fit_browse_groups
+WHERE family = $1 AND parent_group_id = $2
+ORDER BY name
+LIMIT 200
+`
+
+type ListFitBrowseGroupsParams struct {
+	Family        string `json:"family"`
+	ParentGroupID int64  `json:"parent_group_id"`
+}
+
+type ListFitBrowseGroupsRow struct {
+	MarketGroupID int64  `json:"market_group_id"`
+	Name          string `json:"name"`
+	TypeCount     int32  `json:"type_count"`
+}
+
+// ListFitBrowseGroups: one level of a family's Browse tree (schema
+// 142); parent 0 is the top.
+func (q *Queries) ListFitBrowseGroups(ctx context.Context, arg ListFitBrowseGroupsParams) ([]ListFitBrowseGroupsRow, error) {
+	rows, err := q.db.Query(ctx, listFitBrowseGroups, arg.Family, arg.ParentGroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFitBrowseGroupsRow
+	for rows.Next() {
+		var i ListFitBrowseGroupsRow
+		if err := rows.Scan(&i.MarketGroupID, &i.Name, &i.TypeCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFitBrowseTypes = `-- name: ListFitBrowseTypes :many
+SELECT b.type_id, b.name, COALESCE(g.name, '') AS group_name
+FROM fit_browse_types b
+JOIN sde_types t ON t.type_id = b.type_id
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_type_attributes meta ON meta.type_id = b.type_id AND meta.attribute_id = 1692
+WHERE b.family = $1 AND b.market_group_id = $2
+  AND ($3::bigint = 0 OR ($3::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR ($3::bigint > 1 AND meta.value = $3::bigint))
+ORDER BY b.name
+LIMIT 200
+`
+
+type ListFitBrowseTypesParams struct {
+	Family        string `json:"family"`
+	MarketGroupID int64  `json:"market_group_id"`
+	Meta          int64  `json:"meta"`
+}
+
+type ListFitBrowseTypesRow struct {
+	TypeID    int64  `json:"type_id"`
+	Name      string `json:"name"`
+	GroupName string `json:"group_name"`
+}
+
+// ListFitBrowseTypes: the types a family lists directly in one
+// market group, with the meta filter the picker search uses.
+func (q *Queries) ListFitBrowseTypes(ctx context.Context, arg ListFitBrowseTypesParams) ([]ListFitBrowseTypesRow, error) {
+	rows, err := q.db.Query(ctx, listFitBrowseTypes, arg.Family, arg.MarketGroupID, arg.Meta)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFitBrowseTypesRow
+	for rows.Next() {
+		var i ListFitBrowseTypesRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFitChargeTypes = `-- name: ListFitChargeTypes :many
 SELECT t.type_id, t.name
 FROM sde_types t

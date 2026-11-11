@@ -4550,12 +4550,6 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   box-shadow: 0 0 10px rgba(255, 184, 77, 0.6);
 }
 .fit-vslot.drag-src { opacity: 0.35; }
-/* Drag highlight: slots the dragged module fits glow; cleared on drop. */
-.fit-vslot.drop-valid {
-  border-color: var(--success);
-  border-style: solid;
-  box-shadow: 0 0 12px rgba(255, 184, 77, 0.55);
-}
 .fit-vslot.drop-dim { opacity: 0.3; }
 /* Module quick-look tooltip, positioned by JS just outside the slot. */
 .fit-tip {
@@ -4640,43 +4634,29 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   border-color: #ff6a1a; color: #ffd9a8;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
 }
-.fit-picker-modal .fit-picker-list { max-height: 52vh; }
-.fit-picker-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-.fit-picker-head input[type="text"] { flex: 1 1 14rem; }
-.fit-picker-list { list-style: none; margin: 0.6rem 0 0; padding: 0; max-height: 16rem; overflow-y: auto; }
-.fit-picker-list li {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.4rem 0.5rem;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  /* Vertical scroll stays native; a mostly-horizontal press
-     becomes a pointer drag onto a slot. */
-  touch-action: pan-y;
-}
-.fit-picker-list li:hover { background: var(--row-hover); }
-.fit-picker-list .sug-label { color: var(--muted); font-size: var(--fs-xs); }
-/* The module icon that follows the pointer mid-drag. */
+/* What follows the pointer mid-drag: the module's icon, its name
+   and fitting cost, and why the spot under it will not take it. */
 .fit-drag-ghost {
   position: fixed;
   z-index: 200;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 2px solid #ffb84d;
-  background: rgba(10, 10, 10, 0.9);
-  box-shadow: 0 0 16px rgba(255, 106, 26, 0.7);
-  pointer-events: none;
-  overflow: hidden;
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--success);
-  font-size: var(--fs-2xs);
+  gap: 0.5rem;
+  max-width: 18rem;
+  padding: 0.2rem 0.7rem 0.2rem 0.2rem;
+  border: 2px solid #ffb84d;
+  border-radius: 999px;
+  background: rgba(10, 10, 10, 0.92);
+  box-shadow: 0 0 16px rgba(255, 106, 26, 0.7);
+  pointer-events: none;
+  color: var(--text);
 }
-.fit-drag-ghost img { width: 88%; height: 88%; border-radius: 50%; }
-.fit-picker-hint { color: var(--muted); font-size: var(--fs-xs); }
+.fit-drag-ghost img { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+.fit-ghost-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.fit-ghost-name { font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fit-ghost-cost { font-family: var(--font-num); font-size: var(--fs-xs); color: var(--muted); }
+.fit-ghost-why { font-size: var(--fs-xs); color: var(--danger); }
+.fit-drag-ghost.fit-ghost-off { border-color: var(--box-edge); box-shadow: none; }
 /* Module search: sticky above the workbench. The surface is the
    shared .searchpanel glass (the template carries both classes);
    only the sticky placement lives here. It parks on the shared

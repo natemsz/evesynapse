@@ -865,6 +865,12 @@ var pgItemSheetSchema string
 //go:embed schema_pg/141_item_variations.sql
 var pgItemVariationsSchema string
 
+// Step 142: the workbench's Browse tree per slot family, built at
+// import.
+//
+//go:embed schema_pg/142_fit_browse.sql
+var pgFitBrowseSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1034,6 +1040,7 @@ func schemaSteps() []schemaStep {
 		{139, "sde_override", pgSDEOverrideSchema, ""},
 		{140, "item_sheet", pgItemSheetSchema, ""},
 		{141, "item_variations", pgItemVariationsSchema, ""},
+		{142, "fit_browse", pgFitBrowseSchema, ""},
 	}
 }
 

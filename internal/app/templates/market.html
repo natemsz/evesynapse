@@ -51,8 +51,9 @@
       <input type="hidden" name="region" id="market-region" value="{{$m.Region}}">
       <button class="btn" type="submit">Search</button>
     </form>
+    {{with $m.Selector}}<div class="l-head-pick mkt-top-pick">{{template "charselectormulti" .}}</div>{{end}}
     <div class="l-cluster mkt-top-actions">
-      {{with $m.Selector}}<div class="l-head-pick">{{template "charselectormulti" .}}</div>{{end}}
+      <span class="mkt-top-group">
       {{if $item.Anonymous}}
       {{else if $item.Watched}}
       <form method="post" action="/market/watch" class="mkt-watch-inline">
@@ -60,17 +61,16 @@
         <input type="hidden" name="type" value="{{$item.TypeID}}">
         <input type="hidden" name="region" value="{{$item.RegionID}}">
         <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
-        <label class="mkt-watch-label"><small>Watching (±% 7d)</small>
-          <input type="number" name="threshold" min="1" max="50" step="any" value="{{$item.WatchThreshold}}" size="3">
-        </label>
-        <button class="btn small" type="submit">Update watch</button>
+        <label class="mkt-watch-label" for="mkt-watch-threshold">Watching (±% 7d)</label>
+        <input type="number" id="mkt-watch-threshold" class="mkt-watch-threshold" name="threshold" min="1" max="50" step="any" value="{{$item.WatchThreshold}}" size="3">
+        <button class="btn" type="submit">Update watch</button>
       </form>
       <form method="post" action="/market/watch" class="mkt-watch-inline">
         <input type="hidden" name="action" value="remove">
         <input type="hidden" name="type" value="{{$item.TypeID}}">
         <input type="hidden" name="region" value="{{$item.RegionID}}">
         <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
-        <button class="btn btn-quiet small" type="submit">Stop watching</button>
+        <button class="btn btn-quiet" type="submit">Stop watching</button>
       </form>
       {{else}}
       <form method="post" action="/market/watch" class="mkt-watch-inline">
@@ -82,10 +82,13 @@
         <button class="btn btn-quiet" type="submit">Watch this item</button>
       </form>
       {{end}}
+      </span>
+      <span class="mkt-top-group">
       {{if .Market.Watchlist}}
       <a class="btn btn-quiet" href="#market-watchlist" data-watchlist-open aria-controls="market-watchlist" aria-expanded="{{if .Market.Watchlist.Query}}true{{else}}false{{end}}">Watchlist{{if .Market.Watchlist.Rows}} <span class="mkt-badge">{{len .Market.Watchlist.Rows}}</span>{{end}}</a>
       {{end}}
       <a class="btn btn-quiet" href="/items/type/{{$item.TypeID}}/"><svg class="glyph" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15.5 11 10l3 2.6 4.2-5.4"/><path d="M18.2 7.2h-3M18.2 7.2v3"/></g></svg>Item details</a>
+      </span>
     </div>
   </div>
 
@@ -108,7 +111,7 @@
   {{if $item.BookPending}}
   <p class="notice"><small>The live order book loads for signed-in visitors. The hub prices below come from the latest region sweep.{{if $.SSOConfigured}} <a href="/auth/eve">Sign in with EVE</a> for the full book, price alerts and your own orders.{{end}}</small></p>
   {{else if $item.BookStoredAt}}
-  <p class="notice"><small>Order book from the latest region sweep · swept {{$item.BookStoredAt}}.{{if and $item.Anonymous $.SSOConfigured}} <a href="/auth/eve">Sign in with EVE</a> for the live book, price alerts and your own orders.{{end}}</small></p>
+  <p class="notice"><small>Order book from the latest region sweep · swept <time datetime="{{rfc3339 $item.BookSweptAt}}" data-live-ago data-book-swept>{{$item.BookStoredAt}}</time>.{{if and $item.Anonymous $.SSOConfigured}} <a href="/auth/eve">Sign in with EVE</a> for the live book, price alerts and your own orders.{{end}}</small></p>
   {{end}}
 
   <div class="kpis mkt-kpis">
@@ -154,7 +157,7 @@
       <div class="mkt-explorer-title">
         <h2>Order book</h2>
         <span class="badge kill" data-live-pill role="status" hidden>Live</span>
-        <span class="mkt-explorer-meta">{{$item.RegionName}} · {{$item.SellOrders}} sell / {{$item.BuyOrders}} buy orders{{if $item.BookStoredAt}} · swept {{$item.BookStoredAt}}{{end}}</span>
+        <span class="mkt-explorer-meta">{{$item.RegionName}} · {{$item.SellOrders}} sell / {{$item.BuyOrders}} buy orders{{if $item.BookStoredAt}} · swept <time datetime="{{rfc3339 $item.BookSweptAt}}" data-live-ago data-book-swept>{{$item.BookStoredAt}}</time>{{end}}</span>
       </div>
       <button class="btn btn-quiet small" type="button" data-sheet-open="mkt-book-filters" hidden>Filter orders</button>
       <div class="mkt-explorer-controls" id="mkt-book-filters" data-sheet data-sheet-title="Order book filters">
@@ -317,7 +320,7 @@
               <td class="num"{{if .Active}} data-live-field="typical-sell"{{end}}>{{if .TypicalSell}}{{.TypicalSell}} ISK{{else}}—{{end}}</td>
               <td class="num"{{if .Active}} data-live-field="typical-buy"{{end}}>{{if .TypicalBuy}}{{.TypicalBuy}} ISK{{else}}—{{end}}</td>
               <td class="num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
-              <td><small>{{if .Source}}{{.Source}} · {{end}}<span{{if .Active}} data-live-field="age"{{end}}>{{.Age}}</span></small></td>
+              <td><small>{{if .Source}}{{.Source}} · {{end}}<time datetime="{{rfc3339 .At}}" data-live-ago{{if .Active}} data-live-field="age"{{end}}>{{.Age}}</time></small></td>
               {{else}}
               <td colspan="4"><small>No data yet</small></td>
               {{end}}

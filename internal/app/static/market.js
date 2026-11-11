@@ -563,8 +563,7 @@
     if (strip) {
       if (ev.sell) setLive(strip.querySelector('[data-live-field="typical-sell"]'), ev.sell.typical && ev.sell.typical !== "0.00" ? ev.sell.typical + " ISK" : "—");
       if (ev.buy) setLive(strip.querySelector('[data-live-field="typical-buy"]'), ev.buy.typical && ev.buy.typical !== "0.00" ? ev.buy.typical + " ISK" : "—");
-      var age = strip.querySelector('[data-live-field="age"]');
-      if (age && ev.age) age.textContent = ev.age;
+      window.esLive.retime(strip.querySelector('[data-live-field="age"]'), ev.at);
     }
   }
 
@@ -655,6 +654,7 @@
     var root = liveRoot(ev);
     if (!root) return;
     applyKPIs(root, ev.kpis);
+    document.querySelectorAll("[data-book-swept]").forEach(function (el) { window.esLive.retime(el, ev.at); });
     applyBookSide("sell", ev.sells, ev.bestSell);
     applyBookSide("buy", ev.buys, ev.bestBuy);
     applyOrderBookFilters();

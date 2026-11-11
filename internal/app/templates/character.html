@@ -100,7 +100,7 @@
       <div class="ov-entity">
         {{if $v.ShipKnown}}
         <span class="ov-ship-art">
-          <img src="https://images.evetech.net/types/{{$v.ShipTypeID}}/render?size=128" data-fallback-src="https://images.evetech.net/types/{{$v.ShipTypeID}}/icon?size=64" alt="{{$v.ShipTypeName}}" width="56" height="56" loading="lazy">
+          <img src="{{typeRender $v.ShipTypeID 128}}" data-fallback-src="https://images.evetech.net/types/{{$v.ShipTypeID}}/icon?size=64" alt="{{$v.ShipTypeName}}" width="56" height="56" loading="lazy">
         </span>
         <div class="ov-entity-main">
           <div class="ov-ship-title">{{if and $v.ShipName (ne $v.ShipName $v.ShipTypeName)}}<span class="ov-sn">&ldquo;{{$v.ShipName}}&rdquo;</span> {{end}}<span class="ov-st">{{itemLink $v.ShipTypeID $v.ShipTypeName}}</span></div>

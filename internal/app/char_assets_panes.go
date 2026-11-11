@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/eveimg"
 	"fmt"
 	"sort"
 	"strconv"
@@ -37,7 +38,7 @@ type assetLookups struct {
 // nothing and get the placeholder).
 func assetRowIconURL(lk assetLookups, typeID int64) string {
 	if lk.shipTypes[typeID] {
-		return "https://images.evetech.net/types/" + strconv.FormatInt(typeID, 10) + "/render?size=64"
+		return eveimg.TypeRender(typeID, 64)
 	}
 	var categoryID int64
 	if lk.categoryOf != nil {
@@ -613,7 +614,7 @@ func (app *Application) buildAssetInspector(ctx context.Context, cd *assetCharDa
 		Name:      name,
 		TypeName:  typeName,
 		GroupName: lk.groupOf(ship.TypeID),
-		IconURL:   "https://images.evetech.net/types/" + strconv.FormatInt(ship.TypeID, 10) + "/render?size=128",
+		IconURL:   eveimg.TypeRender(ship.TypeID, 128),
 		OwnerName: cd.ch.Name,
 		CloseHref: st.href(map[string]string{"ship": "", "item": ""}),
 	}

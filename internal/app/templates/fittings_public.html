@@ -72,7 +72,7 @@
 <div class="fit-cards pb-cards">
 {{range .Cards}}
 <article class="fit-card pb-card">
-  {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
+  {{if .ShipTypeID}}<img class="fit-card-ship" src="{{typeRender .ShipTypeID 64}}" width="64" height="64" alt="" loading="lazy">{{end}}
   <div class="fit-card-body">
     <h4><a href="{{.FitURL}}">{{.Name}}</a></h4>
     <p class="fit-card-line">{{publicItemSublink .ShipTypeID .Ship}}{{if .Hull}} <small>{{.Hull}}</small>{{end}}</p>

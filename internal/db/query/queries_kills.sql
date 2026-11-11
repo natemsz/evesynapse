@@ -107,17 +107,24 @@ WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 -- involvement record stay. Values and who they credit are
 -- permanent; only detail ages out. Past a year a kill is metadata
 -- for intel only (who, when, ship, total value), not a record.
+-- Raw kill rows past retention go only once the kill is counted
+-- into the daily statistics (an applied marker exists): the fold
+-- reads the attacker rows for ships flown, so pruning first would
+-- lose them from the stats for good.
 -- name: PruneKillDetails :execrows
 DELETE FROM kill_details d USING kills k
-WHERE k.killmail_id = d.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz;
+WHERE k.killmail_id = d.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz
+  AND EXISTS (SELECT 1 FROM kill_entity_applied a WHERE a.killmail_id = k.killmail_id);
 
 -- name: PruneKillAttackers :execrows
 DELETE FROM kill_attackers a USING kills k
-WHERE k.killmail_id = a.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz;
+WHERE k.killmail_id = a.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz
+  AND EXISTS (SELECT 1 FROM kill_entity_applied m WHERE m.killmail_id = k.killmail_id);
 
 -- name: PruneKillLinePrices :execrows
 DELETE FROM kill_line_prices l USING kills k
-WHERE k.killmail_id = l.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz;
+WHERE k.killmail_id = l.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz
+  AND EXISTS (SELECT 1 FROM kill_entity_applied a WHERE a.killmail_id = k.killmail_id);
 
 -- name: ListSystemRegions :many
 SELECT system_id, region_id FROM sde_systems;

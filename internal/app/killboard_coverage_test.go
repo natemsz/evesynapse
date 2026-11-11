@@ -442,7 +442,7 @@ func TestZkillBackfillPromotesPrivateKill(t *testing.T) {
 // walk reaches back without a depth cap: a walked kill past the
 // retention cutoff lands in its post-prune shape (summary row
 // and priced lines, no attackers, no stored killmail), while a
-// walked kill inside the year lands with full detail.
+// walked kill inside two years lands with full detail.
 func TestKillInvolvementFiling(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, nil)
 	ctx := context.Background()
@@ -500,9 +500,10 @@ func TestKillInvolvementFiling(t *testing.T) {
 		t.Error("a kill the character never touched is in their board kills")
 	}
 
-	// The history walk: one page holding a kill inside the year
-	// and a loss three years back. The old one still arrives
-	// (no depth cap) but lands pruned; the young one lands whole.
+	// The history walk: one page holding a recent kill and a loss
+	// three years back. The old one still arrives (no depth cap)
+	// in post-prune shape, attackers kept for the stats fold; the
+	// young one lands whole.
 	youngAt := time.Now().UTC().AddDate(0, 0, -2).Format("2006-01-02T15:04:05Z")
 	oldAt := time.Now().UTC().AddDate(-3, 0, 0).Format("2006-01-02T15:04:05Z")
 	youngEntry := fmt.Sprintf(`{"killmail_id":800201,"killmail_time":%q,"solar_system_id":30000142,`+
@@ -535,7 +536,7 @@ func TestKillInvolvementFiling(t *testing.T) {
 		t.Fatalf("old kill line prices: %v", err)
 	}
 	if len(lines) != 0 {
-		t.Errorf("old kill stored %d priced lines, want none: past a year a kill keeps only its total", len(lines))
+		t.Errorf("old kill stored %d priced lines, want none: past two years a kill keeps only its total", len(lines))
 	}
 	if !old.ValueOurs.Valid || old.ValueOurs.Float64 != 400000 {
 		t.Errorf("old kill value_ours = %v, want 400000: the total is what per-player stats read", old.ValueOurs)
@@ -545,8 +546,16 @@ func TestKillInvolvementFiling(t *testing.T) {
 		`SELECT count(*) FROM kill_attackers WHERE killmail_id = 800202`).Scan(&attackers); err != nil {
 		t.Fatalf("count old kill attackers: %v", err)
 	}
-	if attackers != 0 {
-		t.Errorf("old kill stored %d attacker rows, want none", attackers)
+	if attackers != 1 {
+		t.Errorf("old kill stored %d attacker rows, want 1: the stats fold reads them for ships flown", attackers)
+	}
+	var flown int64
+	if err := app.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(flown), 0) FROM kill_entity_daily_ships WHERE kind = 'character' AND entity_id = 9110 AND ship_type_id = 587`).Scan(&flown); err != nil {
+		t.Fatalf("old kill attacker ships: %v", err)
+	}
+	if flown != 1 {
+		t.Errorf("old kill's attacker ship counted %d times, want 1", flown)
 	}
 	if _, err := q.GetKillDetail(ctx, 800202); err == nil {
 		t.Error("old kill stored its full killmail, want post-prune shape only")

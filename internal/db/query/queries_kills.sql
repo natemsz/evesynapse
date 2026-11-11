@@ -398,6 +398,9 @@ INSERT INTO kill_stats_pending (killmail_id, killmail_time)
 VALUES (sqlc.arg(killmail_id)::bigint, sqlc.arg(killmail_time)::timestamptz)
 ON CONFLICT DO NOTHING;
 
+-- name: KillStatsQueued :one
+SELECT EXISTS (SELECT 1 FROM kill_stats_pending WHERE killmail_id = sqlc.arg(killmail_id)::bigint) AS queued;
+
 -- name: ClaimKillStatsPending :execrows
 DELETE FROM kill_stats_pending WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 

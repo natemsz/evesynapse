@@ -60,7 +60,8 @@ func (app *Application) foldKillStats(ctx context.Context, killmailID int64) err
 		return err
 	}
 	value := killValueOf(k)
-	day := time.Date(k.KillmailTime.Year(), k.KillmailTime.Month(), k.KillmailTime.Day(), 0, 0, 0, 0, time.UTC)
+	kt := k.KillmailTime.UTC()
+	day := time.Date(kt.Year(), kt.Month(), kt.Day(), 0, 0, 0, 0, time.UTC)
 	victim := map[string]int64{"character": k.VictimCharacterID, "corporation": k.VictimCorporationID, "alliance": k.VictimAllianceID}
 
 	// One combined delta per entity: an entity can sit on both
@@ -210,6 +211,63 @@ func (app *Application) foldKillStats(ctx context.Context, killmailID int64) err
 		app.killLive.noteEntityStats(e.kind, e.id)
 	}
 	return nil
+}
+
+// adjustKillStatsValue moves a counted kill's ISK in the daily
+// aggregates from its old value to its new one: ISK destroyed for
+// the attackers the fold credited, ISK lost for the victim. A kill
+// still queued (or private) is left alone: its fold counts the new
+// value. A raised value can also become the day's biggest kill.
+func (app *Application) adjustKillStatsValue(ctx context.Context, k db.Kill, oldValue, newValue float64) error {
+	delta := newValue - oldValue
+	if delta == 0 || !k.Public || app.killStatsRebuilding.Load() {
+		return nil
+	}
+	tx, err := app.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared($1)", killStatsLockKey); err != nil {
+		return err
+	}
+	q := db.New(tx)
+	if queued, err := q.KillStatsQueued(ctx, k.KillmailID); err != nil || queued {
+		return err
+	}
+	kt := k.KillmailTime.UTC()
+	day := time.Date(kt.Year(), kt.Month(), kt.Day(), 0, 0, 0, 0, time.UTC)
+	victim := map[string]int64{"character": k.VictimCharacterID, "corporation": k.VictimCorporationID, "alliance": k.VictimAllianceID}
+	if !k.Npc {
+		inv, err := q.ListKillInvolvement(ctx, k.KillmailID)
+		if err != nil {
+			return err
+		}
+		seen := map[killEntityRef]bool{}
+		for _, a := range inv {
+			for _, e := range []killEntityRef{{"character", a.CharacterID}, {"corporation", a.CorporationID}, {"alliance", a.AllianceID}} {
+				if e.id <= 0 || e.id == victim[e.kind] || seen[e] {
+					continue
+				}
+				seen[e] = true
+				if err := q.ApplyKillEntityDaily(ctx, db.ApplyKillEntityDailyParams{
+					Day: day, Kind: e.kind, EntityID: e.id, IskKilled: delta,
+					BiggestKillmailID: k.KillmailID, BiggestValue: newValue,
+				}); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	for kind, id := range victim {
+		if id <= 0 {
+			continue
+		}
+		if err := q.ApplyKillEntityDaily(ctx, db.ApplyKillEntityDailyParams{Day: day, Kind: kind, EntityID: id, IskLost: delta}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 // backfillKillStats is the maintenance sweep: queued public kills

@@ -638,6 +638,17 @@ func (q *Queries) InsertKillStatsPending(ctx context.Context, arg InsertKillStat
 	return err
 }
 
+const killStatsQueued = `-- name: KillStatsQueued :one
+SELECT EXISTS (SELECT 1 FROM kill_stats_pending WHERE killmail_id = $1::bigint) AS queued
+`
+
+func (q *Queries) KillStatsQueued(ctx context.Context, killmailID int64) (bool, error) {
+	row := q.db.QueryRow(ctx, killStatsQueued, killmailID)
+	var queued bool
+	err := row.Scan(&queued)
+	return queued, err
+}
+
 const killStatsRebuildChunkEnd = `-- name: KillStatsRebuildChunkEnd :one
 
 SELECT COALESCE(MAX(c.killmail_id), 0)::bigint AS through_id FROM (

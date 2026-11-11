@@ -1653,6 +1653,7 @@ func (q *Queries) MarkKillEntityApplied(ctx context.Context, arg MarkKillEntityA
 const pruneKillAttackers = `-- name: PruneKillAttackers :execrows
 DELETE FROM kill_attackers a USING kills k
 WHERE k.killmail_id = a.killmail_id AND k.killmail_time < $1::timestamptz
+  AND EXISTS (SELECT 1 FROM kill_entity_applied m WHERE m.killmail_id = k.killmail_id)
 `
 
 func (q *Queries) PruneKillAttackers(ctx context.Context, before time.Time) (int64, error) {
@@ -1666,6 +1667,7 @@ func (q *Queries) PruneKillAttackers(ctx context.Context, before time.Time) (int
 const pruneKillDetails = `-- name: PruneKillDetails :execrows
 DELETE FROM kill_details d USING kills k
 WHERE k.killmail_id = d.killmail_id AND k.killmail_time < $1::timestamptz
+  AND EXISTS (SELECT 1 FROM kill_entity_applied a WHERE a.killmail_id = k.killmail_id)
 `
 
 // Retention: attacker detail, full killmails and per-item priced
@@ -1673,6 +1675,10 @@ WHERE k.killmail_id = d.killmail_id AND k.killmail_time < $1::timestamptz
 // involvement record stay. Values and who they credit are
 // permanent; only detail ages out. Past a year a kill is metadata
 // for intel only (who, when, ship, total value), not a record.
+// Raw kill rows past retention go only once the kill is counted
+// into the daily statistics (an applied marker exists): the fold
+// reads the attacker rows for ships flown, so pruning first would
+// lose them from the stats for good.
 func (q *Queries) PruneKillDetails(ctx context.Context, before time.Time) (int64, error) {
 	result, err := q.db.Exec(ctx, pruneKillDetails, before)
 	if err != nil {
@@ -1684,6 +1690,7 @@ func (q *Queries) PruneKillDetails(ctx context.Context, before time.Time) (int64
 const pruneKillLinePrices = `-- name: PruneKillLinePrices :execrows
 DELETE FROM kill_line_prices l USING kills k
 WHERE k.killmail_id = l.killmail_id AND k.killmail_time < $1::timestamptz
+  AND EXISTS (SELECT 1 FROM kill_entity_applied a WHERE a.killmail_id = k.killmail_id)
 `
 
 func (q *Queries) PruneKillLinePrices(ctx context.Context, before time.Time) (int64, error) {

@@ -70,7 +70,7 @@ const (
 	// is past the files' day-long retention; it jumps to the latest.
 	killfeedJumpGap = 20000
 
-	killDetailRetention = 365 * 24 * time.Hour
+	killDetailRetention = 2 * 365 * 24 * time.Hour
 	killPriceBatch      = 300
 	killMergeBatch      = 500
 )
@@ -348,9 +348,9 @@ func (app *Application) ingestKillPackage(ctx context.Context, body []byte) erro
 // killmail, gzipped. It reports whether this was the first copy.
 // With pruneAged set, a
 // first copy already past the retention cutoff is stored in its
-// post-prune shape instead: the summary row and its priced
-// lines, without attackers or the killmail, exactly as if its
-// detail had aged out in place. The stream passes pruneAged
+// post-prune shape instead: the summary row, its involvement and
+// its attackers (for the stats fold, pruned once counted),
+// without the killmail or per-line prices. The stream passes pruneAged
 // false: its kills are always young.
 func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, hash string, z *killZKB, source string, public bool, pruneAged bool) (bool, error) {
 	var km killmailFull
@@ -418,7 +418,11 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 			}
 		}
 	}
-	if inserted && !prunedShape {
+	if inserted {
+		// Attacker rows land on every first copy, a kill past
+		// retention included: the stats fold reads them for ships
+		// flown, and the prune removes them only once the kill is
+		// counted.
 		ap := db.InsertKillAttackersParams{KillmailID: km.KillmailID}
 		for i, a := range km.Attackers {
 			ap.Seqs = append(ap.Seqs, int32(i))
@@ -436,6 +440,8 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 				return false, fmt.Errorf("store attackers %d: %w", km.KillmailID, err)
 			}
 		}
+	}
+	if inserted && !prunedShape {
 		if err := q.InsertKillDetail(ctx, db.InsertKillDetailParams{
 			KillmailID: km.KillmailID, Payload: compressKillDetail(raw), StoredAt: time.Now().UTC(),
 		}); err != nil {
@@ -513,7 +519,7 @@ func (app *Application) priceKillLines(ctx context.Context, km killmailFull) err
 
 // storeKillPrices persists one kill's totals from an appraisal's
 // unit prices, and its per-line prices only while the kill is
-// within retention. Past a year a kill is metadata for intel
+// within retention. Past two years a kill is metadata for intel
 // only, so its lines are never stored; the total still lands on
 // the kills row, which is what per-player value stats read.
 func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, killTime time.Time, lines []killLine, price map[int64]float64, now time.Time) error {
@@ -611,7 +617,7 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 		if err := errors.Join(err1, err2, err3, err4); err != nil {
 			logging.Errorf("killboard: prune: %v", err)
 		} else if d+a+l > 0 {
-			logging.Infof("killboard: pruned %d killmails, %d attacker rows and %d priced lines past a year", d, a, l)
+			logging.Infof("killboard: pruned %d killmails, %d attacker rows and %d priced lines past two years", d, a, l)
 		}
 	}
 }

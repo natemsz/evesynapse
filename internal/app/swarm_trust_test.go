@@ -1783,12 +1783,18 @@ func TestSwarmDirectoryLeavesTheDataRotation(t *testing.T) {
 	sourceURL := serve(source.ID, func() []swarm.SwarmSignedEntry {
 		return []swarm.SwarmSignedEntry{signedBy(t, source, swarm.SwarmKindCorporation, "98000001", orgEntry(t, 98000001, `{"corp":{"name":"Test Corp"}}`), time.Now())}
 	})
-	for id, row := range map[string]struct{ url, key string }{
-		"peer-directory": {directoryURL, strings.Repeat("A", 44)},
-		source.ID:        {sourceURL, source.PublicString()},
+	// Fresh peers are probed most recently seen first, so the
+	// directory takes the first cycle's probe and the source the
+	// second.
+	for id, row := range map[string]struct {
+		url, key string
+		seen     time.Time
+	}{
+		"peer-directory": {directoryURL, strings.Repeat("A", 44), now},
+		source.ID:        {sourceURL, source.PublicString(), now.Add(-time.Minute)},
 	} {
 		if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
-			InstanceID: id, BaseUrl: row.url, PublicKey: row.key, Source: "manual", FirstSeen: now,
+			InstanceID: id, BaseUrl: row.url, PublicKey: row.key, Source: "manual", FirstSeen: row.seen,
 		}); err != nil {
 			t.Fatalf("pin %s: %v", id, err)
 		}

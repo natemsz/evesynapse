@@ -49,21 +49,22 @@
    bar shows only the doors (ship search, saved fits); fit.js
    keeps fit-noship on the editor in step with the state. */
 .fw-bar { display: flex; flex-direction: column; gap: var(--space-3); }
-.fw-bar .fit-head { margin: 0; gap: var(--space-2) var(--space-3); }
+.fw-bar .fit-head { margin: 0; gap: var(--space-2) var(--space-3); align-items: center; }
 .fw-bar .fit-head .fit-searchwrap { flex: 1 1 16rem; max-width: none; }
 .fw-bar .fit-head label:has(> #fit-name) { flex: 1 1 12rem; min-width: 0; }
 .fw-bar .fit-head #fit-name { width: 100%; }
 .fw-bar .fit-meta { flex: 1 1 100%; margin: 0; }
 .fw-bar .fit-head .fw-hint { flex: 1 1 100%; margin: 0; }
-.fw-bar .fit-utilrow {
-  flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center;
-  gap: var(--space-2) var(--space-3);
-  padding-top: var(--space-3); border-top: 1px solid var(--hairline);
-}
+.fw-bar .fit-head .fit-saverow { flex-wrap: wrap; }
+/* The fold's contents each take a full line under the strip. */
+.fw-bar .fit-head .fit-publicchk { flex: 1 1 100%; }
+.fw-bar .fit-pilotrow { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.fw-bar .fit-head .fit-check { display: inline-flex; align-items: center; gap: 0.4rem; }
 .fw-bar .fit-yourfits {
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
-  margin: 0; border: 0; border-radius: 0; background: none;
+  flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
+  margin: 0; padding-top: var(--space-3); border: 0; border-top: 1px solid var(--hairline); border-radius: 0; background: none;
 }
+#fit-editor.fit-noship .fw-bar .fit-yourfits { padding-top: 0; border-top: 0; }
 .fw-bar .fit-yourfitswrap { flex: 1 1 16rem; min-width: 0; }
 #fit-editor.fit-noship .fit-shiponly { display: none !important; }
 .fit-shipblock { display: flex; flex-direction: column; gap: var(--l-gap, var(--space-3)); }
@@ -95,6 +96,9 @@
   .fit-wb {
     display: grid;
     grid-template-columns: minmax(14rem, 1fr) clamp(20rem, 32cqi, 34rem) minmax(21rem, 1.25fr);
+    /* The last row takes the height the spanning columns need
+       beyond the ring, so the bays sit right under the ring. */
+    grid-template-rows: auto 1fr;
     gap: var(--space-4);
     align-items: start;
   }
@@ -110,6 +114,7 @@
   .fit-wb > .fit-cols > .fit-slots { grid-column: 1; grid-row: 1 / span 2; }
   .fit-wb > .fit-cols > .fit-stats { grid-column: 3; grid-row: 1 / span 2; }
   .fit-wb > .fit-cols > .fit-bays { grid-column: 2; grid-row: 2; }
+  .fit-wb:has(> .fit-top) { grid-template-rows: auto auto 1fr; }
   .fit-wb:has(> .fit-top) > .fit-center { grid-row: 2; }
   .fit-wb:has(> .fit-top) > .fit-cols > .fit-slots,
   .fit-wb:has(> .fit-top) > .fit-cols > .fit-stats { grid-row: 2 / span 2; }
@@ -345,3 +350,76 @@
 .suggest.fit-list-dragging { opacity: 0; pointer-events: none; }
 .fbt-row, .fit-chip[data-fit-rowtype] { -webkit-user-select: none; user-select: none; }
 html.fit-dragging, html.fit-dragging * { -webkit-user-select: none; user-select: none; cursor: grabbing; }
+
+/* --- usability pass ------------------------------------------- */
+/* A rack row's name is the link to its details. */
+.fit-chip .fit-chip-name {
+  padding: 0; border: 0; background: none; font: inherit; text-align: left;
+  color: var(--text); cursor: pointer;
+}
+.fit-chip .fit-chip-name:hover, .fit-chip .fit-chip-name:focus-visible { color: var(--gold); text-decoration: underline; text-underline-offset: 0.15em; }
+.fit-chip[data-fit-rowtype] .fit-chip-name { cursor: pointer; }
+/* Its stat line: each figure behind its glyph. */
+.fit-chip-sub { display: flex; flex-wrap: wrap; gap: 0.1rem 0.8rem; }
+.fit-fig { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.fit-fig > b { font-weight: 500; color: color-mix(in srgb, var(--k, var(--muted)) 70%, var(--text)); font-variant-numeric: tabular-nums; }
+.fit-fig > b.good { color: var(--success); }
+.fit-fig > b.bad { color: var(--danger); }
+/* One add line per rack for its free slots. */
+.fit-racks .fit-slot-empty { flex: 1 1 100%; text-align: left; }
+/* Glyphs beside the Fitting card's bar labels and the search rows' facts. */
+.fit-bar-label { display: inline-flex; align-items: center; gap: 0.35rem; }
+.sug-fact[class*="k-"] { display: inline-flex; align-items: center; gap: 0.2rem; }
+.sug-fact[class*="k-"] > .fit-tip-g { width: 0.85rem; height: 0.85rem; }
+
+/* The fit's value, split by part: a proportion bar and a legend. */
+.fit-cost { display: grid; gap: 0.35rem; margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px solid var(--hairline); }
+.fit-cost-head { display: flex; align-items: baseline; justify-content: space-between; margin: 0; }
+.fit-cost-head > span {
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.fit-cost-total { font-family: var(--font-num); font-variant-numeric: tabular-nums; color: var(--gold); }
+.fit-cost-bar { display: block; width: 100%; height: 0.4rem; border-radius: var(--r-xs); overflow: hidden; background: rgb(255 255 255 / 0.05); }
+.fit-cost-parts { display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; margin: 0; padding: 0; list-style: none; font-size: var(--fs-xs); }
+.fit-cost-parts li { display: inline-flex; align-items: baseline; gap: 0.35rem; }
+.fit-cost-parts li::before { content: ""; align-self: center; width: 0.55rem; height: 0.55rem; border-radius: 2px; background: var(--fc); }
+.fit-cost-parts span { color: var(--muted); }
+.fit-cost-parts b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.fit-cost-parts small { color: var(--muted); }
+.fit-cost-gap { margin: 0; font-size: var(--fs-xs); color: var(--note); }
+.fc-hull { --fc: var(--gold); } .fc-module { --fc: var(--k-cpu); } .fc-rig { --fc: var(--k-calibration); }
+.fc-drone { --fc: var(--k-drones); } .fc-cargo { --fc: var(--k-fitting); }
+.fit-cost-bar rect { fill: var(--fc); }
+
+/* The stats column's summary: parked under the module search once
+   the headline figures scroll away (fit.js adds .on). It takes no
+   room in the column. */
+.fit-sum { position: sticky; top: var(--fit-sum-top, var(--l-top)); z-index: 8; height: 0; }
+.fit-sum-in {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 0.8rem;
+  padding: 0.45rem 0.65rem; border: 1px solid var(--glass-edge); border-radius: var(--r-md);
+  background: var(--glass); -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
+  font-size: var(--fs-xs); color: var(--muted);
+  opacity: 0; visibility: hidden; transform: translateY(-0.3rem);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0.15s;
+}
+.fit-sum.on .fit-sum-in { opacity: 1; visibility: visible; transform: none; transition: opacity 0.15s ease, transform 0.15s ease; }
+.fit-sum-in > span { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.fit-sum-in b { font-family: var(--font-num); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.fit-sum-in .fit-over b { color: var(--danger); }
+@media (prefers-reduced-motion: reduce) { .fit-sum-in, .fit-sum.on .fit-sum-in { transition: none; transform: none; } }
+
+/* Implants: one line while they are the clone's own set. */
+.fit-imp-fold {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; width: 100%;
+  padding: 0.35rem 0.5rem; border: 1px solid var(--hairline); border-radius: var(--r-sm);
+  background: var(--row-alt); color: var(--text); font: inherit; cursor: pointer; text-align: left;
+}
+.fit-imp-fold:hover { background: var(--row-hover); }
+.fit-imp-fold-act {
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
+}
+.fit-imp-folded:not(.fit-imp-open) > .fit-chips { display: none; }
+.fit-imp-folded.fit-imp-open > .fit-imp-fold { margin-bottom: 0.45rem; }

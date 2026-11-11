@@ -122,40 +122,19 @@ var FitSheet = (function () {
 // tooltips are information-only by construction.
 var FitTipUI = (function () {
   // Glyphs: one small line drawing per kind of figure, coloured by
-  // the kind (fitting.css), so a tooltip reads at a glance.
-  var GLYPHS = {
-    shield: "M8 1.5 13.5 3.5v4c0 3.3-2.3 5.8-5.5 7-3.2-1.2-5.5-3.7-5.5-7v-4z",
-    armor: "M8 1.5l5.6 3.25v6.5L8 14.5l-5.6-3.25v-6.5zM8 5.2l2.6 1.5v3L8 11.2 5.4 9.7v-3z",
-    structure: "M2.5 2.5h11v11h-11zM2.5 8h11M8 2.5v11",
-    bonus: "M8 1.5 13.5 3.5v4c0 3.3-2.3 5.8-5.5 7-3.2-1.2-5.5-3.7-5.5-7v-4zM8 5v5M5.5 7.5h5",
-    capacitor: "M9.5 1.5 3.5 9H8l-1.5 5.5L12.5 7H8z",
-    targeting: "M8 3a5 5 0 1 0 0 10A5 5 0 1 0 8 3zM8 .5v4M8 11.5v4M.5 8h4M11.5 8h4",
-    navigation: "M1.5 8h11M9 4.5 12.5 8 9 11.5M1.5 4.5h4M1.5 11.5h4",
-    weapon: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5zM8 .5v3M8 12.5v3M.5 8h3M12.5 8h3M3 3l2 2M11 11l2 2M13 3l-2 2M5 11l-2 2",
-    drones: "M8 6a2 2 0 1 0 0 4 2 2 0 1 0 0-4zM3 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3zM13 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3zM3 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3zM13 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3zM4.3 4.3l2.3 2.3M11.7 4.3 9.4 6.6M4.3 11.7l2.3-2.3M11.7 11.7 9.4 9.4",
-    fitting: "M4.5 4.5h7v7h-7zM6.5 1.5v3M9.5 1.5v3M6.5 11.5v3M9.5 11.5v3M1.5 6.5h3M1.5 9.5h3M11.5 6.5h3M11.5 9.5h3",
-    miscellaneous: "M8 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3z"
-  };
-  // The curated rows' labels (fitview.FitTipLines) by kind.
-  var LABEL_KIND = {
-    DPS: "weapon", Volley: "weapon", Optimal: "targeting", Falloff: "targeting", Tracking: "targeting",
-    "Rate of fire": "weapon", Damage: "weapon",
-    Neuts: "capacitor", Cap: "capacitor", Capacitor: "capacitor", "Cap recharge": "capacitor",
-    "Armor HP": "armor", "Shield HP": "shield", "Shield recharge": "shield",
-    Boost: "navigation", Strength: "navigation", Signature: "navigation",
-    CPU: "fitting", PG: "fitting", "High slots": "fitting", "Mid slots": "fitting", "Low slots": "fitting",
-    Turrets: "fitting", Launchers: "fitting"
-  };
+  // the kind. The drawings are the shared fg-* symbols in base.html,
+  // the same ones the workbench's templates use; the kind of each
+  // row comes from the server (fitview.FitGlyphKind).
   var SVGNS = "http://www.w3.org/2000/svg";
   function glyph(kind) {
     var svg = document.createElementNS(SVGNS, "svg");
     svg.setAttribute("viewBox", "0 0 16 16");
     svg.setAttribute("aria-hidden", "true");
     svg.setAttribute("class", "fit-tip-g");
-    if (GLYPHS[kind]) {
-      var path = document.createElementNS(SVGNS, "path");
-      path.setAttribute("d", GLYPHS[kind]);
-      svg.appendChild(path);
+    if (kind) {
+      var use = document.createElementNS(SVGNS, "use");
+      use.setAttribute("href", "#fg-" + kind);
+      svg.appendChild(use);
     }
     return svg;
   }
@@ -228,11 +207,7 @@ var FitTipUI = (function () {
       linesAttr.split(";").forEach(function (row) {
         var f = row.split("|");
         if (f.length < 2 || !f[0]) return;
-        var kind = LABEL_KIND[f[0]] || (/\bres-/.test(f[2] || "") ? "bonus" : "");
-        // Repairs take the layer they repair: shield boosters sit in
-        // mid slots, armor and hull repairers in lows.
-        if (f[0] === "Reps") kind = /^Mid/.test(sub) ? "shield" : "armor";
-        rows.appendChild(lineRow(f[0], f[1], kind, f[2]));
+        rows.appendChild(lineRow(f[0], f[1], f[3] || "", f[2]));
       });
       tipEl.appendChild(rows);
     } else {
@@ -414,7 +389,7 @@ var FitTipUI = (function () {
     tipEl.style.left = Math.round(tx) + "px";
     tipEl.style.top = Math.round(ty) + "px";
   }
-  return { build: build, place: place };
+  return { build: build, place: place, glyph: glyph };
 })();
 
 // --- requirement icon tooltips -------------------------------

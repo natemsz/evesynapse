@@ -334,9 +334,8 @@ func TestFittingPhoneViews(t *testing.T) {
 	for _, want := range []string{
 		`data-fit-head-toggle`,
 		`data-fit-search-close`,
-		`<label class="fit-head-sec fit-shiponly">Pilot`,
-		`<label class="fit-clonepick fit-head-sec fit-shiponly">Clone`,
-		`<label class="fit-head-sec fit-shiponly fit-stripsec">Fit name`,
+		`<div class="fit-pilotrow fit-head-sec fit-shiponly">`,
+		`<label class="fit-head-sec fit-shiponly fit-stripsec fit-namefield">`,
 		`id="fit-save-eve" data-fit-eve-char`,
 	} {
 		if !strings.Contains(page, want) {
@@ -344,7 +343,7 @@ func TestFittingPhoneViews(t *testing.T) {
 		}
 	}
 	if n := strings.Count(page, "fit-head-sec"); n < 4 {
-		t.Errorf("fittings.html carries %d fit-head-sec controls, want at least 4 (pilot, clone, name, save-to-EVE)", n)
+		t.Errorf("fittings.html carries %d fit-head-sec controls, want at least 4 (pilot and clone, name, save-to-EVE, saved fits)", n)
 	}
 
 	css := readStatic(t, "fit.css")
@@ -356,7 +355,7 @@ func TestFittingPhoneViews(t *testing.T) {
 		".fit-mhead {", ".fit-mtabs {", ".fit-wb .fv-off",
 		"#fit-modsearch.fit-collapsible { display: none; }",
 		"#fit-modsearch.fit-collapsible.open",
-		"#fit-editor.fit-armed .fit-head:not(.fit-open) .fit-head-sec { display: none; }",
+		"#fit-editor.fit-armed:not(.fit-noship) .fit-head:not(.fit-open) .fit-head-sec { display: none; }",
 	} {
 		if !strings.Contains(block, want) {
 			t.Errorf("the fit.css phone block is missing %q", want)

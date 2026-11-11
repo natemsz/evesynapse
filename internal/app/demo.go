@@ -316,8 +316,10 @@ func (app *Application) handleDemoSignIn(w http.ResponseWriter, r *http.Request)
 // use: signing out, and the read-only tools whose answers are
 // computed from what the visitor pastes or picks, never stored
 // against an account (the appraiser, the fitting workbench's
-// simulate/solve/export, and the anonymous-fit share flow, which
-// is token-addressed exactly as it is for signed-out visitors).
+// simulate/solve/export and EFT import, which only parks the
+// parsed fit in the visitor's own session, and the anonymous-fit
+// share flow, which is token-addressed exactly as it is for
+// signed-out visitors).
 func demoPostAllowed(path string) bool {
 	if path == "/auth/logout" {
 		return true
@@ -326,6 +328,7 @@ func demoPostAllowed(path string) bool {
 		"/fittings/simulate/",
 		"/fittings/solve-implants/",
 		"/fittings/export/",
+		"/fittings/import/",
 		"/fittings/save-anonymous/",
 		"/market/appraise/",
 	} {

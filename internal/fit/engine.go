@@ -895,6 +895,9 @@ type Result struct {
 	// skipped (deduped, sorted): domains/funcs it cannot target,
 	// overload-category effects, and similar.
 	Unmodeled []string
+	// UnmodeledBy is the fitted types (modules, rigs, the hull,
+	// implants, charges) whose effects Unmodeled is about, sorted.
+	UnmodeledBy []int64
 
 	// Restricted lists fitted modules whose canFitShip*
 	// attributes forbid the current hull. The engine flags them

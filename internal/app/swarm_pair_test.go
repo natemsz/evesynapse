@@ -101,6 +101,9 @@ type swarmPair struct {
 	stubA  *swarmESISStub
 	stubB  *swarmESISStub
 	secret string
+	// idA and idB are the two instances' IDs, the ones their keys
+	// certify.
+	idA, idB string
 }
 
 func newSwarmPair(t *testing.T, modeB string) *swarmPair {
@@ -110,19 +113,30 @@ func newSwarmPair(t *testing.T, modeB string) *swarmPair {
 	ta, _, _ := buildCorpTestApp(t, stubA)
 	swarm.StateFor(ta).Cfg = swarm.SwarmConfig{Mode: swarm.SwarmOpen, Secret: secret, GossipHours: swarm.DefaultSwarmGossipHours}
 	swarm.StateFor(ta).SwarmID, _ = swarm.MintSwarmIdentity()
-	swarm.StateFor(ta).SwarmID.ID = "instance-a"
 	swarm.StateFor(ta).SwarmCli = swarm.NewSwarmClient(secret)
 
 	stubB := &swarmESISStub{}
 	tb, _, _ := buildCorpTestApp(t, stubB)
 	swarm.StateFor(tb).Cfg = swarm.SwarmConfig{Mode: modeB, Secret: secret, GossipHours: swarm.DefaultSwarmGossipHours}
 	swarm.StateFor(tb).SwarmID, _ = swarm.MintSwarmIdentity()
-	swarm.StateFor(tb).SwarmID.ID = "instance-b"
 	swarm.StateFor(tb).SwarmCli = swarm.NewSwarmClient(secret)
+
+	// Each client signs its pulls as its own instance, as in
+	// production, and A knows B's key the way gossip leaves it, so
+	// B's pulls verify.
+	swarm.StateFor(ta).SwarmCli.ID = swarm.StateFor(ta).SwarmID
+	swarm.StateFor(tb).SwarmCli.ID = swarm.StateFor(tb).SwarmID
+	if _, err := ta.queries.UpsertSwarmPeer(context.Background(), db.UpsertSwarmPeerParams{
+		InstanceID: swarm.StateFor(tb).SwarmID.ID, BaseUrl: "http://127.0.0.1:9", PublicKey: swarm.StateFor(tb).SwarmID.PublicString(),
+		Source: "manual", FirstSeen: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("pin B on A: %v", err)
+	}
 
 	srv := httptest.NewServer(ta.Handler())
 	t.Cleanup(srv.Close)
-	return &swarmPair{a: ta, b: tb, urlA: srv.URL, stubA: stubA, stubB: stubB, secret: secret}
+	return &swarmPair{a: ta, b: tb, urlA: srv.URL, stubA: stubA, stubB: stubB, secret: secret,
+		idA: swarm.StateFor(ta).SwarmID.ID, idB: swarm.StateFor(tb).SwarmID.ID}
 }
 
 // pinA records A's identity in B as an approved peer, the way
@@ -131,12 +145,12 @@ func (p *swarmPair) pinA(t *testing.T) {
 	t.Helper()
 	now := time.Now().UTC()
 	if _, err := p.b.queries.UpsertSwarmPeer(context.Background(), db.UpsertSwarmPeerParams{
-		InstanceID: "instance-a", BaseUrl: p.urlA, PublicKey: swarm.StateFor(p.a).SwarmID.PublicString(),
+		InstanceID: p.idA, BaseUrl: p.urlA, PublicKey: swarm.StateFor(p.a).SwarmID.PublicString(),
 		Source: "manual", FirstSeen: now,
 	}); err != nil {
 		t.Fatalf("pin A: %v", err)
 	}
-	if err := p.b.queries.SetSwarmPeerApproved(context.Background(), db.SetSwarmPeerApprovedParams{InstanceID: "instance-a", Approved: true}); err != nil {
+	if err := p.b.queries.SetSwarmPeerApproved(context.Background(), db.SetSwarmPeerApprovedParams{InstanceID: p.idA, Approved: true}); err != nil {
 		t.Fatalf("approve A: %v", err)
 	}
 }
@@ -153,7 +167,7 @@ func (p *swarmPair) pullStages(t *testing.T, keys []swarm.SwarmPullKey) {
 	if len(entries) == 0 {
 		t.Fatalf("pull: no entries served")
 	}
-	if got := swarm.StateFor(p.b).SwarmStagePulled(ctx, "instance-a", p.urlA, keys, entries, time.Now().UTC()); got != len(entries) {
+	if got := swarm.StateFor(p.b).SwarmStagePulled(ctx, p.idA, p.urlA, keys, entries, time.Now().UTC()); got != len(entries) {
 		t.Fatalf("staged %d of %d served entries", got, len(entries))
 	}
 }
@@ -302,7 +316,9 @@ func TestSwarmPullAsksADirectoryLikeAnyPeer(t *testing.T) {
 	if err := p.b.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: "seed", Approved: true}); err != nil {
 		t.Fatalf("approve seed: %v", err)
 	}
+	// Both are fresh, so their probes take a cycle each.
 	swarm.StateFor(p.b).SwarmPull(ctx, now)
+	swarm.StateFor(p.b).SwarmPull(ctx, now.Add(time.Minute))
 	// A seed is a member like any other: it is asked in its
 	// turn, answers with nothing, and costs nobody anything.
 	if seedHits != 1 {
@@ -347,7 +363,7 @@ func TestSwarmPairPoisonNeverServed(t *testing.T) {
 	}
 	// And the signer is flagged: one bad check on its ledger, one
 	// failed spot check on the Sync counters.
-	peer, err := p.b.queries.GetSwarmPeer(ctx, "instance-a")
+	peer, err := p.b.queries.GetSwarmPeer(ctx, p.idA)
 	if err != nil || peer.BadChecks != 1 {
 		t.Fatalf("A bad checks: %+v err %v, want 1", peer, err)
 	}
@@ -382,7 +398,7 @@ func TestSwarmPairSustainedPoisonExcludes(t *testing.T) {
 			t.Fatalf("round %d: applied poison", i)
 		}
 	}
-	peer, err := p.b.queries.GetSwarmPeer(ctx, "instance-a")
+	peer, err := p.b.queries.GetSwarmPeer(ctx, p.idA)
 	if err != nil || !peer.Excluded {
 		t.Fatalf("sustained poisoner not excluded: %+v err %v", peer, err)
 	}
@@ -391,7 +407,7 @@ func TestSwarmPairSustainedPoisonExcludes(t *testing.T) {
 		t.Fatalf("pull peers: %v", err)
 	}
 	for _, pr := range pull {
-		if pr.InstanceID == "instance-a" {
+		if pr.InstanceID == p.idA {
 			t.Fatalf("excluded A still pulled from")
 		}
 	}
@@ -418,22 +434,22 @@ func TestSwarmPairCryptoChecks(t *testing.T) {
 	// staging even under the right signer name.
 	p.pinA(t)
 	now := time.Now().UTC()
-	entry, err := swarm.SignSwarmEntry(swarm.StateFor(p.a).SwarmID, "instance-a", swarm.SwarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now)
+	entry, err := swarm.SignSwarmEntry(swarm.StateFor(p.a).SwarmID, p.idA, swarm.SwarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
 	entry.Payload = `{"type_id":34,"name":"Scordite"}`
-	wantStageRefused(t, swarm.StateFor(p.b).StageSwarmEntry(context.Background(), entry, "instance-a", now), "signature does not verify")
+	wantStageRefused(t, swarm.StateFor(p.b).StageSwarmEntry(context.Background(), entry, p.idA, now), "signature does not verify")
 	// A replay onto another key fails too: the signature covers
 	// the key it was minted for. (The payload names type 34, so
 	// the payload check would refuse it as well; the reason shows
 	// the signature caught it first.)
-	entry, err = swarm.SignSwarmEntry(swarm.StateFor(p.a).SwarmID, "instance-a", swarm.SwarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now)
+	entry, err = swarm.SignSwarmEntry(swarm.StateFor(p.a).SwarmID, p.idA, swarm.SwarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
 	entry.Key = "35"
-	wantStageRefused(t, swarm.StateFor(p.b).StageSwarmEntry(context.Background(), entry, "instance-a", now), "signature does not verify")
+	wantStageRefused(t, swarm.StateFor(p.b).StageSwarmEntry(context.Background(), entry, p.idA, now), "signature does not verify")
 }
 
 func TestSwarmPairGossipLearns(t *testing.T) {
@@ -442,7 +458,7 @@ func TestSwarmPairGossipLearns(t *testing.T) {
 	// (trust on first use) and approve it in open mode.
 	swarm.StateFor(p.b).Cfg.Seeds = []string{p.urlA}
 	swarm.StateFor(p.b).SwarmGossip(context.Background(), time.Now().UTC())
-	peer, err := p.b.queries.GetSwarmPeer(context.Background(), "instance-a")
+	peer, err := p.b.queries.GetSwarmPeer(context.Background(), p.idA)
 	if err != nil {
 		t.Fatalf("gossip did not learn A: %v", err)
 	}
@@ -458,7 +474,7 @@ func TestSwarmPairAllowlistWaits(t *testing.T) {
 	p := newSwarmPair(t, swarm.SwarmAllowlist)
 	swarm.StateFor(p.b).Cfg.Seeds = []string{p.urlA}
 	swarm.StateFor(p.b).SwarmGossip(context.Background(), time.Now().UTC())
-	peer, err := p.b.queries.GetSwarmPeer(context.Background(), "instance-a")
+	peer, err := p.b.queries.GetSwarmPeer(context.Background(), p.idA)
 	if err != nil {
 		t.Fatalf("gossip did not learn A: %v", err)
 	}
@@ -471,7 +487,7 @@ func TestSwarmPairAllowlistWaits(t *testing.T) {
 		t.Fatalf("pull peers: %v", err)
 	}
 	for _, pr := range pull {
-		if pr.InstanceID == "instance-a" {
+		if pr.InstanceID == p.idA {
 			t.Fatalf("unapproved peer in the pull set")
 		}
 	}
@@ -509,8 +525,11 @@ func TestSwarmPairCorpRecord(t *testing.T) {
 	const corpID = int64(98000001)
 	// ESI's truth for the identity fields.
 	p.stubB.corps = map[int64]string{corpID: `{"name":"Fixture Corp","ticker":"FIX","member_count":42,"ceo_id":1,"creator_id":1,"alliance_id":0,"home_station_id":60003760,"tax_rate":0.1,"date_founded":"2020-01-01T00:00:00Z","description":"","url":""}`}
-	// A holds the assembled record the worker stores.
-	record := fmt.Sprintf(`{"corp":%s,"alliance":{"name":"","ticker":"","creator_id":0,"creator_corporation_id":0,"executor_corporation_id":0,"date_founded":""}}`, p.stubB.corps[corpID])
+	// A holds the assembled record the worker stores, with a
+	// description ESI does not have: identity fields match, so the
+	// check passes, and B must store ESI's record, not A's text.
+	peerCorp := strings.Replace(p.stubB.corps[corpID], `"description":""`, `"description":"Peer text"`, 1)
+	record := fmt.Sprintf(`{"corp":%s,"alliance":{"name":"","ticker":"","creator_id":0,"creator_corporation_id":0,"executor_corporation_id":0,"date_founded":""}}`, peerCorp)
 	if err := p.a.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
 		CorporationID: corpID, Payload: record, State: orgStateReady, FetchedAt: timeSet(time.Now().UTC()),
 	}); err != nil {
@@ -524,6 +543,9 @@ func TestSwarmPairCorpRecord(t *testing.T) {
 	rec, err := p.b.queries.GetCorporationRecord(ctx, corpID)
 	if err != nil || rec.State != orgStateReady || !strings.Contains(rec.Payload, "Fixture Corp") {
 		t.Fatalf("B record: %+v err %v", rec, err)
+	}
+	if strings.Contains(rec.Payload, "Peer text") {
+		t.Fatalf("B stored the peer's unchecked description: %s", rec.Payload)
 	}
 }
 
@@ -555,7 +577,7 @@ func TestSwarmPairCorpRecordBareDialect(t *testing.T) {
 	if err != nil || rec.State != orgStateReady || !strings.Contains(rec.Payload, "Fixture Corp") {
 		t.Fatalf("B record: %+v err %v", rec, err)
 	}
-	peer, err := p.b.queries.GetSwarmPeer(ctx, "instance-a")
+	peer, err := p.b.queries.GetSwarmPeer(ctx, p.idA)
 	if err != nil || peer.BadChecks != 0 {
 		t.Fatalf("an honest bare record cost its signer %d bad checks (err %v), want 0", peer.BadChecks, err)
 	}
@@ -584,7 +606,7 @@ func TestSwarmPairCorpRecordBareDialectLie(t *testing.T) {
 	if rec, err := p.b.queries.GetCorporationRecord(ctx, corpID); err == nil && rec.State == orgStateReady {
 		t.Fatalf("the lying record stands on B: %+v", rec)
 	}
-	peer, err := p.b.queries.GetSwarmPeer(ctx, "instance-a")
+	peer, err := p.b.queries.GetSwarmPeer(ctx, p.idA)
 	if err != nil || peer.BadChecks < 1 {
 		t.Fatalf("the lie cost its signer %d bad checks (err %v), want at least 1", peer.BadChecks, err)
 	}

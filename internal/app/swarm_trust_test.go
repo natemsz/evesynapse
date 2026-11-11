@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -84,7 +85,7 @@ func TestSwarmGossipCannotReplacePinnedKey(t *testing.T) {
 		t.Fatalf("plant the lie in A: %v", err)
 	}
 
-	if err := swarm.StateFor(p.b).SwarmContactPeer(ctx, p.urlA, "instance-a", swarm.StateFor(p.a).SwarmID.PublicString(), "gossip", now); err != nil {
+	if err := swarm.StateFor(p.b).SwarmContactPeer(ctx, p.urlA, p.idA, swarm.StateFor(p.a).SwarmID.PublicString(), "gossip", now); err != nil {
 		t.Fatalf("gossip with A: %v", err)
 	}
 
@@ -145,7 +146,7 @@ func TestSwarmAddressMovesOnlyOnItsOwnersSignature(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("plant the tuple in A: %v", err)
 		}
-		if err := swarm.StateFor(p.b).SwarmContactPeer(ctx, p.urlA, "instance-a", swarm.StateFor(p.a).SwarmID.PublicString(), "gossip", now); err != nil {
+		if err := swarm.StateFor(p.b).SwarmContactPeer(ctx, p.urlA, p.idA, swarm.StateFor(p.a).SwarmID.PublicString(), "gossip", now); err != nil {
 			t.Fatalf("gossip with A: %v", err)
 		}
 	}
@@ -209,13 +210,13 @@ func TestSwarmSenderUnderAnotherKeyTeachesNothing(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	// B knows "instance-a" under another key, at another address.
+	// B knows A's ID under another key, at another address.
 	pinned, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint pinned: %v", err)
 	}
 	if _, err := p.b.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
-		InstanceID: "instance-a", BaseUrl: "https://real-a.example", PublicKey: pinned.PublicString(),
+		InstanceID: p.idA, BaseUrl: "https://real-a.example", PublicKey: pinned.PublicString(),
 		Source: "gossip", FirstSeen: now.Add(-48 * time.Hour),
 	}); err != nil {
 		t.Fatalf("pin the real A: %v", err)
@@ -239,7 +240,7 @@ func TestSwarmSenderUnderAnotherKeyTeachesNothing(t *testing.T) {
 	if !errors.Is(err, swarm.ErrSwarmKeyChanged) {
 		t.Fatalf("contact: err = %v, want swarm.ErrSwarmKeyChanged", err)
 	}
-	peer, err := p.b.queries.GetSwarmPeer(ctx, "instance-a")
+	peer, err := p.b.queries.GetSwarmPeer(ctx, p.idA)
 	if err != nil {
 		t.Fatalf("pinned peer lost: %v", err)
 	}
@@ -285,32 +286,44 @@ func TestSwarmRegisterUnderAnotherKeyConflicts(t *testing.T) {
 	}
 }
 
-// TestSwarmRemovedPeerPinsAfresh: removing a peer is the one
-// way its key changes. The next sighting pins what it brings,
-// with no mark carried over.
+// TestSwarmRemovedPeerPinsAfresh: removing a peer clears its row,
+// conflict mark included, and its next heartbeat pins it afresh. An
+// impostor claiming its ID under another key is refused while the row
+// stands and is never pinned once it is gone: the ID is the hash of
+// the real key.
 func TestSwarmRemovedPeerPinsAfresh(t *testing.T) {
 	ctx := context.Background()
 	app := swarmTestApp(t)
-	swarmTestPeer(t, app, "peer-6")
-	rotated, err := swarm.MintSwarmIdentity()
+	real, err := swarm.MintSwarmIdentity()
 	if err != nil {
-		t.Fatalf("mint rotated: %v", err)
+		t.Fatalf("mint: %v", err)
 	}
-	rotated.ID = "peer-6"
-	if code, _ := seedTestRegister(t, app, seedTestHeartbeat(t, rotated, "https://peer-6.example"), swarmTestSecret); code != http.StatusConflict {
-		t.Fatalf("new key before removal: status %d, want 409", code)
+	impostor, err := swarm.MintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint impostor: %v", err)
 	}
-	if err := app.queries.DeleteSwarmPeer(ctx, "peer-6"); err != nil {
+	impostor.ID = real.ID
+	if code, ok := seedTestRegister(t, app, seedTestHeartbeat(t, real, "https://real.example"), swarmTestSecret); code != http.StatusOK || !ok {
+		t.Fatalf("first heartbeat: status %d ok %v", code, ok)
+	}
+	if code, _ := seedTestRegister(t, app, seedTestHeartbeat(t, impostor, "https://impostor.example"), swarmTestSecret); code != http.StatusConflict {
+		t.Fatalf("impostor while pinned: status %d, want 409", code)
+	}
+	if err := app.queries.DeleteSwarmPeer(ctx, real.ID); err != nil {
 		t.Fatalf("remove peer: %v", err)
 	}
-	if code, ok := seedTestRegister(t, app, seedTestHeartbeat(t, rotated, "https://peer-6.example"), swarmTestSecret); code != http.StatusOK || !ok {
-		t.Fatalf("new key after removal: status %d ok %v", code, ok)
+	seedTestRegister(t, app, seedTestHeartbeat(t, impostor, "https://impostor.example"), swarmTestSecret)
+	if _, err := app.queries.GetSwarmPeer(ctx, real.ID); err == nil {
+		t.Fatal("an impostor pinned the removed peer's ID under its own key")
 	}
-	peer, err := app.queries.GetSwarmPeer(ctx, "peer-6")
+	if code, ok := seedTestRegister(t, app, seedTestHeartbeat(t, real, "https://real.example"), swarmTestSecret); code != http.StatusOK || !ok {
+		t.Fatalf("heartbeat after removal: status %d ok %v", code, ok)
+	}
+	peer, err := app.queries.GetSwarmPeer(ctx, real.ID)
 	if err != nil {
 		t.Fatalf("peer not re-pinned: %v", err)
 	}
-	if peer.PublicKey != rotated.PublicString() || peer.KeyConflictAt.Valid {
+	if peer.PublicKey != real.PublicString() || peer.KeyConflictAt.Valid {
 		t.Fatalf("re-pinned row wrong: %+v", peer)
 	}
 }
@@ -519,11 +532,58 @@ func TestSwarmPairProvenanceEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no provenance after a pull and a check: %v", err)
 	}
-	if row.Source != "instance-a" || row.Signer != "instance-a" || !row.Verified {
+	if row.Source != p.idA || row.Signer != p.idA || !row.Verified {
 		t.Fatalf("provenance wrong: %+v", row)
 	}
 	if time.Since(row.FetchedAt) > time.Hour || row.FetchedAt.After(time.Now().Add(time.Minute)) {
 		t.Fatalf("fetched_at %v is not the time A signed", row.FetchedAt)
+	}
+}
+
+// TestSwarmCaughtLieStartsProbation: a signer ESI catches lying
+// has its next entries all verified, whatever its trust, and what
+// it had applied unchecked in the days before is taken back, while
+// its verified applies and older ones stay.
+func TestSwarmCaughtLieStartsProbation(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	liar := swarmTestPeer(t, app, "peer-liar")
+	now := time.Now().UTC()
+	// A long honest record: sampling would verify few of its entries.
+	if err := app.queries.AddSwarmPeerCheck(ctx, db.AddSwarmPeerCheckParams{InstanceID: liar.ID, GoodChecks: 500}); err != nil {
+		t.Fatalf("seed trust: %v", err)
+	}
+	apply := func(key, name string, verified bool, at time.Time) {
+		t.Helper()
+		origin := swarm.SwarmOrigin{Source: liar.ID, Signer: liar.ID, FetchedAt: at, Verified: verified}
+		if err := swarm.StateFor(app).ApplySwarmEntry(ctx, swarm.SwarmKindCorporation, key, orgEntry(t, mustAtoi(t, key), `{"corp":{"name":"`+name+`"}}`), origin, at); err != nil {
+			t.Fatalf("apply %s: %v", key, err)
+		}
+	}
+	apply("98000011", "Unchecked Lately", false, now.Add(-24*time.Hour))
+	apply("98000012", "Checked Lately", true, now.Add(-24*time.Hour))
+	apply("98000013", "Unchecked Long Ago", false, now.Add(-10*24*time.Hour))
+
+	swarm.StateFor(app).DiscardSwarmEntry(ctx, swarm.SwarmKindCorporation, "98000099", liar.ID, swarm.SwarmDiscardMismatch)
+	peer, err := app.queries.GetSwarmPeer(ctx, liar.ID)
+	if err != nil || peer.ProbationChecks != swarm.SwarmProbationChecks || peer.Excluded {
+		t.Fatalf("after a caught lie: %+v err %v, want probation, not exclusion", peer, err)
+	}
+	if got := swarm.StateFor(app).SwarmRollBack(ctx); got != 1 {
+		t.Fatalf("took back %d rows, want 1 (the unchecked apply from the days before)", got)
+	}
+	if rec, err := app.queries.GetCorporationRecord(ctx, 98000011); err != nil || rec.State != orgStatePending {
+		t.Fatalf("the recent unchecked apply still stands: %+v err %v", rec, err)
+	}
+	for _, id := range []int64{98000012, 98000013} {
+		if rec, err := app.queries.GetCorporationRecord(ctx, id); err != nil || rec.State != orgStateReady {
+			t.Fatalf("corporation %d was taken back: %+v err %v", id, rec, err)
+		}
+	}
+	// Every verified check spends one of the probation's entries.
+	swarm.StateFor(app).CountSwarmCheck(ctx, liar.ID, true)
+	if peer, _ := app.queries.GetSwarmPeer(ctx, liar.ID); peer.ProbationChecks != swarm.SwarmProbationChecks-1 {
+		t.Fatalf("probation left %d after a check, want %d", peer.ProbationChecks, swarm.SwarmProbationChecks-1)
 	}
 }
 
@@ -1187,7 +1247,7 @@ func TestSwarmHistoryAppliesOnlyConfirmedDays(t *testing.T) {
 	entry := signedBy(t, swarm.StateFor(p.a).SwarmID, swarm.SwarmKindHistory, "10000002/34",
 		historyDays(day(15), day(3), day(2), day(1), fetched.Format(time.DateOnly)), fetched)
 	asked := []swarm.SwarmPullKey{{Kind: swarm.SwarmKindHistory, Key: "10000002/34"}}
-	if got := swarm.StateFor(p.b).SwarmStagePulled(ctx, "instance-a", p.urlA, asked, []swarm.SwarmSignedEntry{entry}, now); got != 1 {
+	if got := swarm.StateFor(p.b).SwarmStagePulled(ctx, p.idA, p.urlA, asked, []swarm.SwarmSignedEntry{entry}, now); got != 1 {
 		t.Fatalf("staged %d entries, want 1", got)
 	}
 	if got := p.spotRuns(t); got != 1 {
@@ -1585,12 +1645,10 @@ func TestSwarmIntroductionNeedsItsOwnersSignature(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
-	real.ID = "instance-real"
 	forged, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
-	forged.ID = "instance-forged"
 	someoneElse, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint: %v", err)
@@ -1606,7 +1664,7 @@ func TestSwarmIntroductionNeedsItsOwnersSignature(t *testing.T) {
 			t.Fatalf("list %s in A: %v", row.InstanceID, err)
 		}
 	}
-	if err := swarm.StateFor(p.b).SwarmContactPeer(ctx, p.urlA, "instance-a", swarm.StateFor(p.a).SwarmID.PublicString(), "gossip", now); err != nil {
+	if err := swarm.StateFor(p.b).SwarmContactPeer(ctx, p.urlA, p.idA, swarm.StateFor(p.a).SwarmID.PublicString(), "gossip", now); err != nil {
 		t.Fatalf("gossip with A: %v", err)
 	}
 	if peer, err := p.b.queries.GetSwarmPeer(ctx, real.ID); err != nil || peer.BaseUrl != "https://real.example" || peer.UrlSig == "" {
@@ -1637,9 +1695,9 @@ func TestSwarmRegisterNeedsAnAddressSignature(t *testing.T) {
 	}
 }
 
-// TestSwarmPullTakesPeersInTurn: with more unprobed peers than
-// one cycle asks, the next cycle starts with the ones not yet
-// asked, and each gets exactly its one probe.
+// TestSwarmPullTakesPeersInTurn: unprobed peers are probed one a
+// cycle (fresh rows never take the turns of peers that serve), in
+// turn, and each gets exactly its one probe.
 func TestSwarmPullTakesPeersInTurn(t *testing.T) {
 	ctx := context.Background()
 	app := swarmTestApp(t)
@@ -1675,17 +1733,19 @@ func TestSwarmPullTakesPeersInTurn(t *testing.T) {
 	for _, n := range hits {
 		asked += n
 	}
-	if asked != swarm.MaxSwarmPullPeersPerCycle {
-		t.Fatalf("first cycle asked %d peers, want %d", asked, swarm.MaxSwarmPullPeersPerCycle)
+	if asked != swarm.MaxSwarmProbesPerCycle {
+		t.Fatalf("first cycle asked %d peers, want %d", asked, swarm.MaxSwarmProbesPerCycle)
 	}
-	swarm.StateFor(app).SwarmPull(ctx, now.Add(time.Minute))
+	for c := 1; c < total; c++ {
+		swarm.StateFor(app).SwarmPull(ctx, now.Add(time.Duration(c)*time.Minute))
+	}
 	for i := 0; i < total; i++ {
 		if hits[fmt.Sprintf("peer-%d", i)] != 1 {
-			t.Fatalf("after two cycles peer-%d has been asked %d times, want its one probe: %v", i, hits[fmt.Sprintf("peer-%d", i)], hits)
+			t.Fatalf("after %d cycles peer-%d has been asked %d times, want its one probe: %v", total, i, hits[fmt.Sprintf("peer-%d", i)], hits)
 		}
 	}
 	// None of them served anything: none is asked for data again.
-	swarm.StateFor(app).SwarmPull(ctx, now.Add(2*time.Minute))
+	swarm.StateFor(app).SwarmPull(ctx, now.Add(time.Duration(total)*time.Minute))
 	for id, n := range hits {
 		if n != 1 {
 			t.Fatalf("%s served nothing and was asked again (%d times)", id, n)
@@ -1723,12 +1783,18 @@ func TestSwarmDirectoryLeavesTheDataRotation(t *testing.T) {
 	sourceURL := serve(source.ID, func() []swarm.SwarmSignedEntry {
 		return []swarm.SwarmSignedEntry{signedBy(t, source, swarm.SwarmKindCorporation, "98000001", orgEntry(t, 98000001, `{"corp":{"name":"Test Corp"}}`), time.Now())}
 	})
-	for id, row := range map[string]struct{ url, key string }{
-		"peer-directory": {directoryURL, strings.Repeat("A", 44)},
-		source.ID:        {sourceURL, source.PublicString()},
+	// Fresh peers are probed most recently seen first, so the
+	// directory takes the first cycle's probe and the source the
+	// second.
+	for id, row := range map[string]struct {
+		url, key string
+		seen     time.Time
+	}{
+		"peer-directory": {directoryURL, strings.Repeat("A", 44), now},
+		source.ID:        {sourceURL, source.PublicString(), now.Add(-time.Minute)},
 	} {
 		if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
-			InstanceID: id, BaseUrl: row.url, PublicKey: row.key, Source: "manual", FirstSeen: now,
+			InstanceID: id, BaseUrl: row.url, PublicKey: row.key, Source: "manual", FirstSeen: row.seen,
 		}); err != nil {
 			t.Fatalf("pin %s: %v", id, err)
 		}
@@ -1748,8 +1814,10 @@ func TestSwarmDirectoryLeavesTheDataRotation(t *testing.T) {
 	if hits["peer-directory"] != 1 {
 		t.Fatalf("the directory was asked for data %d times in four cycles, want its one probe", hits["peer-directory"])
 	}
-	if hits[source.ID] != 4 {
-		t.Fatalf("the peer that serves was asked %d times in four cycles, want 4", hits[source.ID])
+	// The two fresh peers take a cycle each for their probe; from
+	// its probe on, the peer that serves is asked every cycle.
+	if hits[source.ID] != 3 {
+		t.Fatalf("the peer that serves was asked %d times in four cycles, want 3", hits[source.ID])
 	}
 
 	// A gossip round that reaches the directory lets it be probed once more.
@@ -1765,8 +1833,8 @@ func TestSwarmDirectoryLeavesTheDataRotation(t *testing.T) {
 	if hits["peer-directory"] != 2 {
 		t.Fatalf("after a re-arm the directory was asked %d times in all, want 2", hits["peer-directory"])
 	}
-	if hits[source.ID] != 6 {
-		t.Fatalf("the serving peer was asked %d times in six cycles, want 6 (re-arming must not disturb it)", hits[source.ID])
+	if hits[source.ID] != 5 {
+		t.Fatalf("the serving peer was asked %d times in six cycles, want 5 (its turn every cycle from its probe on; re-arming must not disturb it)", hits[source.ID])
 	}
 }
 
@@ -1816,7 +1884,7 @@ func TestSwarmUncheckableEntriesTakeNoCheckSlot(t *testing.T) {
 	for i := 0; i < swarm.MaxSwarmSpotPerCycle; i++ {
 		id := fmt.Sprintf("%d", 1035000000001+i)
 		entry := signedBy(t, swarm.StateFor(p.a).SwarmID, swarm.SwarmKindStructure, id, `{"structure_id":`+id+`,"name":"Structure `+id+`"}`, now.Add(-2*time.Hour))
-		if err := swarm.StateFor(p.b).StageSwarmEntry(ctx, entry, "instance-a", now.Add(-time.Hour)); err != nil {
+		if err := swarm.StateFor(p.b).StageSwarmEntry(ctx, entry, p.idA, now.Add(-time.Hour)); err != nil {
 			t.Fatalf("stage structure: %v", err)
 		}
 	}
@@ -1825,7 +1893,7 @@ func TestSwarmUncheckableEntriesTakeNoCheckSlot(t *testing.T) {
 		id := fmt.Sprintf("%d", typeID)
 		p.stubB.types[typeID] = `{"name":"Type ` + id + `","group_id":18}`
 		entry := signedBy(t, swarm.StateFor(p.a).SwarmID, swarm.SwarmKindTypeName, id, `{"type_id":`+id+`,"name":"Type `+id+`"}`, now)
-		if err := swarm.StateFor(p.b).StageSwarmEntry(ctx, entry, "instance-a", now); err != nil {
+		if err := swarm.StateFor(p.b).StageSwarmEntry(ctx, entry, p.idA, now); err != nil {
 			t.Fatalf("stage type name: %v", err)
 		}
 	}
@@ -1844,7 +1912,16 @@ func TestSwarmUncheckableEntriesTakeNoCheckSlot(t *testing.T) {
 			t.Fatalf("left in staging: %s %s with %d deferrals, want a structure name deferred once", row.Kind, row.Key, row.Deferrals)
 		}
 	}
-	if _, bad := ledgerOf(t, p.b, "instance-a"); bad != 0 {
+	if _, bad := ledgerOf(t, p.b, p.idA); bad != 0 {
 		t.Fatalf("uncheckable entries cost the signer %d marks", bad)
 	}
+}
+
+func mustAtoi(t *testing.T, s string) int64 {
+	t.Helper()
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		t.Fatalf("parse %q: %v", s, err)
+	}
+	return n
 }

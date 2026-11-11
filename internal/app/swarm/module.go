@@ -75,6 +75,19 @@ type Mod struct {
 	// SwarmCover is what peers warm for the swarm and which misses
 	// have been left to them (warm.go).
 	SwarmCover SwarmCoverage
+	// SwarmDemandMu guards each puller's demand allowance: how
+	// many misses it has turned into wants this hour (warm.go).
+	SwarmDemandMu   sync.Mutex
+	SwarmDemandSeen map[string]*swarmDemandWindow
+	// SwarmIntroMu guards when this instance last re-sent its
+	// heartbeat to each peer that refused its pull (seed.go).
+	SwarmIntroMu sync.Mutex
+	SwarmIntroAt map[string]time.Time
+	// SwarmRegMu guards the hour's count of first heartbeats
+	// filed from /swarm/seed/register (api.go).
+	SwarmRegMu    sync.Mutex
+	SwarmRegStart time.Time
+	SwarmRegCount int
 
 	// ReleaseFetch fetches one URL's body for the release
 	// learner (releases.go); nil uses the built-in HTTP fetch.

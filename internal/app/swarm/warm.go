@@ -278,11 +278,52 @@ func (app *Mod) SwarmPruneAsked(now time.Time) {
 	}
 }
 
-// SwarmNoteDemand is a dedicated node taking a pull's miss as demand:
-// the key joins its own queue at viewed priority, so its worker
-// fetches it on its own budget and a later pull finds it served.
-func (app *Mod) SwarmNoteDemand(ctx context.Context, kind, key string) {
-	if !app.SwarmSelfWarms(kind) {
+// SwarmDemandPerHour is how many misses one puller may turn into
+// wants on this node in an hour: enough for a main's real browsing,
+// too few for made-up keys to spend the node's ESI error budget.
+const SwarmDemandPerHour = 120
+
+// swarmDemandWindow is one puller's demand count in the current hour.
+type swarmDemandWindow struct {
+	start time.Time
+	n     int
+}
+
+// swarmDemandAllowed spends one of a puller's hourly allowance,
+// reporting false once it is used up.
+func (app *Mod) swarmDemandAllowed(puller string, now time.Time) bool {
+	app.SwarmDemandMu.Lock()
+	defer app.SwarmDemandMu.Unlock()
+	if app.SwarmDemandSeen == nil {
+		app.SwarmDemandSeen = map[string]*swarmDemandWindow{}
+	}
+	w := app.SwarmDemandSeen[puller]
+	if w == nil || now.Sub(w.start) >= time.Hour {
+		// Old windows go as new ones open, so the book holds only
+		// pullers seen this hour.
+		for id, old := range app.SwarmDemandSeen {
+			if now.Sub(old.start) >= time.Hour {
+				delete(app.SwarmDemandSeen, id)
+			}
+		}
+		w = &swarmDemandWindow{start: now}
+		app.SwarmDemandSeen[puller] = w
+	}
+	if w.n >= SwarmDemandPerHour {
+		return false
+	}
+	w.n++
+	return true
+}
+
+// SwarmNoteDemand is a dedicated node taking a verified puller's miss
+// as demand: the key joins its own queue at viewed priority, so its
+// worker fetches it on its own budget and a later pull finds it
+// served. Each puller has an hourly allowance, and a market history
+// key must name a region and a market type the SDE knows, so made-up
+// keys cannot spend the node's ESI calls.
+func (app *Mod) SwarmNoteDemand(ctx context.Context, puller, kind, key string) {
+	if puller == "" || !app.SwarmSelfWarms(kind) {
 		return
 	}
 	// public_contract deliberately has no case here: the public
@@ -296,6 +337,12 @@ func (app *Mod) SwarmNoteDemand(ctx context.Context, kind, key string) {
 	case SwarmKindCorporation, SwarmKindAlliance, SwarmKindTypeName, SwarmKindStructure:
 		id, perr := strconv.ParseInt(key, 10, 64)
 		if perr != nil || id <= 0 {
+			return
+		}
+		if kind == SwarmKindStructure && !module.IsStructureID(id) {
+			return
+		}
+		if !app.swarmDemandAllowed(puller, time.Now()) {
 			return
 		}
 		switch kind {
@@ -313,6 +360,15 @@ func (app *Mod) SwarmNoteDemand(ctx context.Context, kind, key string) {
 	case SwarmKindHistory:
 		var regionID, typeID int64
 		if _, serr := fmt.Sscanf(key, "%d/%d", &regionID, &typeID); serr != nil || regionID <= 0 || typeID <= 0 {
+			return
+		}
+		if _, rerr := app.Queries.GetSDERegion(ctx, regionID); rerr != nil {
+			return
+		}
+		if t, terr := app.Queries.GetSDEType(ctx, typeID); terr != nil || t.Published == 0 || t.MarketGroupID <= 0 {
+			return
+		}
+		if !app.swarmDemandAllowed(puller, time.Now()) {
 			return
 		}
 		err = app.Queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{

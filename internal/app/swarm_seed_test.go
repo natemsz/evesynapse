@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -266,12 +267,11 @@ func TestSwarmSeedRegisterAccepts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint peer: %v", err)
 	}
-	kp.ID = "peer-1"
 	code, ok := seedTestRegister(t, app, seedTestHeartbeat(t, kp, "https://peer-1.example"), swarmTestSecret)
 	if code != http.StatusOK || !ok {
 		t.Fatalf("register: status %d ok %v", code, ok)
 	}
-	peer, err := app.queries.GetSwarmPeer(ctx, "peer-1")
+	peer, err := app.queries.GetSwarmPeer(ctx, kp.ID)
 	if err != nil {
 		t.Fatalf("peer not filed: %v", err)
 	}
@@ -288,12 +288,11 @@ func TestSwarmSeedRegisterAccepts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint peer: %v", err)
 	}
-	kp2.ID = "peer-2"
 	code, ok = seedTestRegister(t, listed, seedTestHeartbeat(t, kp2, "https://peer-2.example"), swarmTestSecret)
 	if code != http.StatusOK || !ok {
 		t.Fatalf("register in allowlist mode: status %d ok %v", code, ok)
 	}
-	peer2, err := listed.queries.GetSwarmPeer(ctx, "peer-2")
+	peer2, err := listed.queries.GetSwarmPeer(ctx, kp2.ID)
 	if err != nil {
 		t.Fatalf("peer not filed in allowlist mode: %v", err)
 	}
@@ -383,5 +382,61 @@ func TestSwarmSeedRegisterNeverForgives(t *testing.T) {
 	}
 	if peer.BaseUrl != "https://peer-7.example" {
 		t.Fatalf("the owner's signed heartbeat did not move its address: %q", peer.BaseUrl)
+	}
+}
+
+// TestSwarmPullRefusalIntroducesThisInstance: a peer that refuses a
+// pull (it has not pinned this instance yet) is sent this instance's
+// heartbeat, so it can pin it and serve the next signed pull; a second
+// refusal inside SwarmReannounceEvery sends nothing more.
+func TestSwarmPullRefusalIntroducesThisInstance(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	app.cfg.eveCallbackURL = "https://node.example.org/auth/callback"
+	var mu sync.Mutex
+	registers := 0
+	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/swarm/pull":
+			http.Error(w, "forbidden", http.StatusForbidden)
+		case "/swarm/seed/register":
+			mu.Lock()
+			registers++
+			mu.Unlock()
+			swarm.WriteSwarmJSON(w, map[string]any{"ok": true})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(peer.Close)
+	kp, err := swarm.MintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+		InstanceID: kp.ID, BaseUrl: peer.URL, PublicKey: kp.PublicString(), Source: "manual", FirstSeen: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("pin peer: %v", err)
+	}
+	if err := app.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: kp.ID, Approved: true}); err != nil {
+		t.Fatalf("approve peer: %v", err)
+	}
+	count := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return registers
+	}
+	swarm.StateFor(app).SwarmPullOne(ctx, swarm.SwarmKindTypeName, "34")
+	deadline := time.Now().Add(3 * time.Second)
+	for count() == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if n := count(); n != 1 {
+		t.Fatalf("heartbeats after a refused pull: %d, want 1", n)
+	}
+	swarm.StateFor(app).SwarmPullOne(ctx, swarm.SwarmKindTypeName, "34")
+	time.Sleep(200 * time.Millisecond)
+	if n := count(); n != 1 {
+		t.Fatalf("heartbeats after a second refusal: %d, want still 1", n)
 	}
 }

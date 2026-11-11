@@ -157,7 +157,7 @@ func TestSwarmWarmPeerLearnsPuller(t *testing.T) {
 	p.b.cfg.eveCallbackURL = "https://b.example.org/auth/callback"
 	p.pinA(t)
 	swarm.StateFor(p.b).SwarmRefreshCoverage(ctx, now)
-	peer, err := p.a.queries.GetSwarmPeer(ctx, "instance-b")
+	peer, err := p.a.queries.GetSwarmPeer(ctx, p.idB)
 	if err != nil {
 		t.Fatalf("warm peer did not learn the puller: %v", err)
 	}

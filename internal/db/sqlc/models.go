@@ -2521,24 +2521,26 @@ type SwarmIdentity struct {
 }
 
 type SwarmPeer struct {
-	InstanceID    string       `json:"instance_id"`
-	BaseUrl       string       `json:"base_url"`
-	PublicKey     string       `json:"public_key"`
-	Source        string       `json:"source"`
-	Approved      bool         `json:"approved"`
-	Excluded      bool         `json:"excluded"`
-	ExcludeNote   string       `json:"exclude_note"`
-	GoodChecks    int64        `json:"good_checks"`
-	BadChecks     int64        `json:"bad_checks"`
-	FirstSeen     time.Time    `json:"first_seen"`
-	LastSeen      time.Time    `json:"last_seen"`
-	LastGossip    sql.NullTime `json:"last_gossip"`
-	KeyConflictAt sql.NullTime `json:"key_conflict_at"`
-	UrlSig        string       `json:"url_sig"`
-	UrlIssuedAt   int64        `json:"url_issued_at"`
-	LastPulled    sql.NullTime `json:"last_pulled"`
-	LastServed    sql.NullTime `json:"last_served"`
-	Build         string       `json:"build"`
+	InstanceID      string       `json:"instance_id"`
+	BaseUrl         string       `json:"base_url"`
+	PublicKey       string       `json:"public_key"`
+	Source          string       `json:"source"`
+	Approved        bool         `json:"approved"`
+	Excluded        bool         `json:"excluded"`
+	ExcludeNote     string       `json:"exclude_note"`
+	GoodChecks      int64        `json:"good_checks"`
+	BadChecks       int64        `json:"bad_checks"`
+	FirstSeen       time.Time    `json:"first_seen"`
+	LastSeen        time.Time    `json:"last_seen"`
+	LastGossip      sql.NullTime `json:"last_gossip"`
+	KeyConflictAt   sql.NullTime `json:"key_conflict_at"`
+	UrlSig          string       `json:"url_sig"`
+	UrlIssuedAt     int64        `json:"url_issued_at"`
+	LastPulled      sql.NullTime `json:"last_pulled"`
+	LastServed      sql.NullTime `json:"last_served"`
+	Build           string       `json:"build"`
+	ProbationChecks int32        `json:"probation_checks"`
+	ProbationSince  sql.NullTime `json:"probation_since"`
 }
 
 type SwarmStaging struct {

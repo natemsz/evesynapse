@@ -100,12 +100,21 @@ const SwarmUrgentPullTimeout = 3 * time.Second
 const (
 	MaxSwarmSpotPerCycle      = 5
 	MaxSwarmPullPeersPerCycle = 3
-	MaxSwarmDemandKeys        = 50
-	MaxSwarmGossipPeers       = 10
-	MaxSwarmHistoryDemand     = 30
-	MaxSwarmOrgDemand         = 10
-	MaxSwarmNameDemand        = 5 // per name kind
-	MaxSwarmContractDemand    = 10
+	// MaxSwarmProbesPerCycle is how many of a cycle's rotation
+	// turns may go to peers never asked before: fresh rows cannot
+	// take the turns of peers that serve.
+	MaxSwarmProbesPerCycle = 1
+	// MaxSwarmNewPeersPerRound is how many unknown instances one
+	// member list may add; MaxSwarmNewRegistrationsPerHour how
+	// many first heartbeats this instance files in an hour.
+	MaxSwarmNewPeersPerRound        = 10
+	MaxSwarmNewRegistrationsPerHour = 12
+	MaxSwarmDemandKeys              = 50
+	MaxSwarmGossipPeers             = 10
+	MaxSwarmHistoryDemand           = 30
+	MaxSwarmOrgDemand               = 10
+	MaxSwarmNameDemand              = 5 // per name kind
+	MaxSwarmContractDemand          = 10
 )
 
 // Staged entries older than this never apply: an entry nobody
@@ -127,7 +136,6 @@ const (
 	SwarmCounterPullsOK          = "pulls_ok"
 	SwarmCounterPullsFailed      = "pulls_failed"
 	SwarmCounterPullsAuthSigned  = "pulls_auth_signed"
-	SwarmCounterPullsAuthLegacy  = "pulls_auth_legacy"
 	SwarmCounterRolledBack       = "rolled_back"
 	SwarmCounterDroppedUnchecked = "dropped_unchecked"
 )
@@ -316,6 +324,9 @@ func (app *Mod) SwarmStreakBump(signer string, good bool) (streak int, weight in
 // SwarmEnforceTrust with the streak, the same single
 // implementation every ledger path shares.
 func (app *Mod) CountSwarmCheck(ctx context.Context, signer string, good bool) {
+	if err := app.Queries.SpendSwarmPeerProbation(ctx, signer); err != nil {
+		logging.Errorf("swarm: probation for %s: %v", signer, err)
+	}
 	streak, weight := app.SwarmStreakBump(signer, good)
 	var goodN, badN int64
 	if good {
@@ -688,12 +699,29 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 	if signer != "" && signerKey != "" && !seen[signer] {
 		members = append(members, SwarmMember{InstanceID: signer, PublicKey: signerKey})
 	}
+	added := 0
+	var introduce []string
 	for _, m := range members {
 		if m.InstanceID == "" || m.InstanceID == app.SwarmID.ID {
 			continue
 		}
 		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != ed25519.PublicKeySize {
 			continue
+		}
+		// An instance this one has never seen is pinned only under
+		// the ID its key certifies, so nobody can take another's
+		// name; and one list adds a bounded number of them, the
+		// rest waiting for a later round.
+		isNew := false
+		if _, err := app.Queries.GetSwarmPeer(ctx, m.InstanceID); errors.Is(err, pgx.ErrNoRows) {
+			if !SwarmIDMatchesKey(m.InstanceID, m.PublicKey) {
+				continue
+			}
+			if added >= MaxSwarmNewPeersPerRound {
+				continue
+			}
+			added++
+			isNew = true
 		}
 		signed := m.BaseURL != "" && VerifySwarmMember(m)
 		if !signed {
@@ -733,12 +761,17 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 			app.SwarmFlagKeyConflict(ctx, m.InstanceID, signer, now)
 			continue
 		}
+		if isNew {
+			introduce = append(introduce, m.BaseURL)
+		}
 		if !app.Cfg.Allowlisted() {
 			if err := app.Queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: m.InstanceID, Approved: true}); err != nil {
 				return err
 			}
 		}
 	}
+	// Peers pinned just now hear from this instance in turn.
+	app.SwarmIntroduce(introduce, now)
 	return nil
 }
 
@@ -880,6 +913,7 @@ func (app *Mod) SwarmPullOne(ctx context.Context, kind, key string) int {
 		keys := []SwarmPullKey{{Kind: kind, Key: key}}
 		entries, err := app.SwarmCli.PullEntries(ctx, p.BaseUrl, keys)
 		if err != nil {
+			app.swarmReannounceOnRefusal(p.InstanceID, p.BaseUrl, err, time.Now())
 			app.noteSwarmPullFailure(p.InstanceID, time.Now())
 			app.noteSwarmPullOutcome(ctx, false)
 			continue
@@ -954,7 +988,8 @@ func (app *Mod) SwarmSettleUrgent(ctx context.Context, kind, key string) bool {
 		return false
 	}
 	now := time.Now().UTC()
-	if !app.SwarmSampled(peer.GoodChecks, peer.BadChecks) {
+	// A signer on probation has every entry verified.
+	if peer.ProbationChecks == 0 && !app.SwarmSampled(peer.GoodChecks, peer.BadChecks) {
 		// Trust-earned, like the spot pass below: the entry
 		// applies on reputation with the ledger untouched.
 		// Only an ESI verdict counts for or against.
@@ -1075,7 +1110,7 @@ func (app *Mod) SwarmPull(ctx context.Context, now time.Time) {
 		}
 	}
 	var picked []db.ListSwarmPullPeersRow
-	rotation, warmTaken := 0, 0
+	rotation, warmTaken, probes := 0, 0, 0
 	for _, p := range peers {
 		if !SwarmPeerPullable(p.GoodChecks, p.BadChecks) {
 			continue
@@ -1091,6 +1126,12 @@ func (app *Mod) SwarmPull(ctx context.Context, now time.Time) {
 		} else {
 			if rotation >= MaxSwarmPullPeersPerCycle {
 				continue
+			}
+			if !p.LastPulled.Valid && !p.LastServed.Valid {
+				if probes >= MaxSwarmProbesPerCycle {
+					continue
+				}
+				probes++
 			}
 			rotation++
 		}
@@ -1113,6 +1154,7 @@ func (app *Mod) SwarmPull(ctx context.Context, now time.Time) {
 	})
 	for i, p := range picked {
 		if answers[i].Err != nil {
+			app.swarmReannounceOnRefusal(p.InstanceID, p.BaseUrl, answers[i].Err, now)
 			app.noteSwarmPullFailure(p.InstanceID, now)
 			app.noteSwarmPullOutcome(ctx, false)
 			continue
@@ -1157,7 +1199,8 @@ func (app *Mod) SwarmSpotCheck(ctx context.Context, allowance module.Budget, cha
 			app.DropSwarmEntry(ctx, row.Kind, row.Key, row.Signer, SwarmDropLowTrust)
 			continue
 		}
-		if !app.SwarmSampled(peer.GoodChecks, peer.BadChecks) {
+		// A signer on probation has every entry verified.
+		if peer.ProbationChecks == 0 && !app.SwarmSampled(peer.GoodChecks, peer.BadChecks) {
 			// Trust-earned: signature and shape already
 			// verified at staging, and the sample skipped
 			// ESI. The entry applies on reputation, but an
@@ -1276,9 +1319,9 @@ func (app *Mod) SwarmVerifyAgainstESI(ctx context.Context, allowance module.Budg
 	case SwarmKindTypeName:
 		verdict, stop = app.SwarmVerifyTypeName(ctx, allowance, key, payload)
 	case SwarmKindCorporation:
-		verdict, stop = app.SwarmVerifyCorporation(ctx, allowance, key, payload)
+		return app.SwarmVerifyCorporation(ctx, allowance, key, payload)
 	case SwarmKindAlliance:
-		verdict, stop = app.SwarmVerifyAlliance(ctx, allowance, key, payload)
+		return app.SwarmVerifyAlliance(ctx, allowance, key, payload)
 	case SwarmKindStructure:
 		verdict, stop = app.SwarmVerifyStructure(ctx, allowance, characters, key, payload)
 	case SwarmKindContract:
@@ -1409,14 +1452,14 @@ func (app *Mod) SwarmVerifyTypeName(ctx context.Context, allowance module.Budget
 	return SwarmCheckPass, false
 }
 
-func (app *Mod) SwarmVerifyCorporation(ctx context.Context, allowance module.Budget, key, payload string) (SwarmCheckVerdict, bool) {
+func (app *Mod) SwarmVerifyCorporation(ctx context.Context, allowance module.Budget, key, payload string) (SwarmCheckVerdict, string, bool) {
 	id, ok := ParseSwarmID(key)
 	if !ok {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
 	var staged SwarmOrgPayload
 	if err := DecodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.ID != id {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
 	// The record travels in either dialect, this app's wrapped
 	// shape or a bare ESI corporation, so it is read through
@@ -1427,10 +1470,10 @@ func (app *Mod) SwarmVerifyCorporation(ctx context.Context, allowance module.Bud
 	// a mark rather than failing its signer.
 	body, ok := module.DecodeCorpPayload(staged.Payload)
 	if !ok {
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	if !app.SwarmTake(allowance) {
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	// Identity fields only: names, tickers and alliance homes
 	// move slowly; member counts and descriptions drift daily
@@ -1438,52 +1481,56 @@ func (app *Mod) SwarmVerifyCorporation(ctx context.Context, allowance module.Bud
 	var corp esi.Corporation
 	if err := app.Deps.ESIGet(ctx, fmt.Sprintf("/corporations/%d/", id), &corp); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
-			return SwarmCheckDefer, true
+			return SwarmCheckDefer, "", true
 		}
 		if code, has := esi.StatusCode(err); has && code == 404 {
-			return SwarmCheckFail, false
+			return SwarmCheckFail, "", false
 		}
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	if corp.Name != body.Corp.Name || corp.Ticker != body.Corp.Ticker || corp.AllianceID != body.Corp.AllianceID {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
-	return SwarmCheckPass, false
+	// The record stored is the one ESI just returned, never the
+	// peer's: its unchecked fields (description, CEO, members,
+	// the alliance block) do not ride in on a passed identity.
+	return SwarmCheckPass, swarmOrgConfirmed(id, module.CorporationRecordPayload{Corp: corp}), false
 }
 
-func (app *Mod) SwarmVerifyAlliance(ctx context.Context, allowance module.Budget, key, payload string) (SwarmCheckVerdict, bool) {
+func (app *Mod) SwarmVerifyAlliance(ctx context.Context, allowance module.Budget, key, payload string) (SwarmCheckVerdict, string, bool) {
 	id, ok := ParseSwarmID(key)
 	if !ok {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
 	var staged SwarmOrgPayload
 	if err := DecodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.ID != id {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
 	// Either dialect, as for corporations: read through the
 	// tolerant decoder, and a body naming no alliance under
 	// either dialect defers rather than fails.
 	body, ok := module.DecodeAlliancePayload(staged.Payload)
 	if !ok {
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	if !app.SwarmTake(allowance) {
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	var alliance esi.Alliance
 	if err := app.Deps.ESIGet(ctx, fmt.Sprintf("/alliances/%d/", id), &alliance); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
-			return SwarmCheckDefer, true
+			return SwarmCheckDefer, "", true
 		}
 		if code, has := esi.StatusCode(err); has && code == 404 {
-			return SwarmCheckFail, false
+			return SwarmCheckFail, "", false
 		}
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	if alliance.Name != body.Alliance.Name || alliance.Ticker != body.Alliance.Ticker {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
-	return SwarmCheckPass, false
+	// ESI's record, without the peer's unchecked member list.
+	return SwarmCheckPass, swarmOrgConfirmed(id, module.AllianceRecordPayload{Alliance: alliance}), false
 }
 
 func (app *Mod) SwarmVerifyStructure(ctx context.Context, allowance module.Budget, characters []db.Character, key, payload string) (SwarmCheckVerdict, bool) {
@@ -1602,4 +1649,42 @@ func (app *Mod) SwarmVerifyContract(ctx context.Context, allowance module.Budget
 		}
 	}
 	return SwarmCheckPass, false
+}
+
+// swarmOrgConfirmed wraps a record ESI returned in the envelope the
+// apply path reads.
+func swarmOrgConfirmed(id int64, record any) string {
+	inner, err := json.Marshal(record)
+	if err != nil {
+		return ""
+	}
+	outer, err := json.Marshal(SwarmOrgPayload{ID: id, Payload: string(inner)})
+	if err != nil {
+		return ""
+	}
+	return string(outer)
+}
+
+// A signer ESI catches lying goes on probation: its next
+// SwarmProbationChecks entries are all verified, whatever its
+// trust, and what it had applied unchecked in the
+// SwarmProbationLookbackDays before the catch is taken back
+// (SwarmRollBack), so the worker fetches the truth. A signer that
+// lies on a fraction of entries otherwise stays above the floor
+// and most of its lies would apply unverified.
+const (
+	SwarmProbationChecks       = 50
+	SwarmProbationLookbackDays = 3
+)
+
+// StartSwarmProbation puts a signer on probation from now, or
+// renews it.
+func (app *Mod) StartSwarmProbation(ctx context.Context, signer string, now time.Time) {
+	if err := app.Queries.StartSwarmPeerProbation(ctx, db.StartSwarmPeerProbationParams{
+		InstanceID: signer, ProbationChecks: SwarmProbationChecks, ProbationSince: timeSet(now),
+	}); err != nil {
+		logging.Errorf("swarm: start probation for %s: %v", signer, err)
+		return
+	}
+	logging.Warnf("swarm: %s on probation: its next %d entries are verified", ShortenSwarmID(signer), SwarmProbationChecks)
 }

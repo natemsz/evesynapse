@@ -243,7 +243,7 @@ func stageContractOnB(t *testing.T, p *swarmPair, body swarm.SwarmContractPayloa
 	now := time.Now().UTC()
 	entry := signedBy(t, swarm.StateFor(p.a).SwarmID, swarm.SwarmKindContract,
 		fmt.Sprintf("%d", body.ContractID), swarmContractJSON(t, body), now)
-	if err := swarm.StateFor(p.b).StageSwarmEntry(ctx, entry, "instance-a", now); err != nil {
+	if err := swarm.StateFor(p.b).StageSwarmEntry(ctx, entry, p.idA, now); err != nil {
 		t.Fatalf("stage contract: %v", err)
 	}
 	return now
@@ -262,7 +262,7 @@ func TestSwarmContractCheckPassApplies(t *testing.T) {
 	sent := body
 	sent.Title, sent.Price, sent.IssuerID = "peer title", 1, 99
 	entry := signedBy(t, swarm.StateFor(p.a).SwarmID, swarm.SwarmKindContract, "7301", swarmContractJSON(t, sent), now)
-	if err := swarm.StateFor(p.b).StageSwarmEntry(ctx, entry, "instance-a", now); err != nil {
+	if err := swarm.StateFor(p.b).StageSwarmEntry(ctx, entry, p.idA, now); err != nil {
 		t.Fatalf("stage contract: %v", err)
 	}
 	if got := p.spotRuns(t); got != 1 {

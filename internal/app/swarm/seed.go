@@ -149,3 +149,49 @@ func (app *Mod) announceTo(ctx context.Context, entry SwarmSignedEntry, urls []s
 	}
 	return kept
 }
+
+// SwarmReannounceEvery is how often this instance re-sends its
+// heartbeat to a peer that refused its pull.
+const SwarmReannounceEvery = 6 * time.Hour
+
+// SwarmIntroduce sends this instance's heartbeat to peers it just
+// pinned, so they pin it in turn and serve its signed pulls without
+// waiting for their next gossip round with a seed. In the
+// background: it is called from gossip and from the register
+// handler, and a refusal only logs.
+func (app *Mod) SwarmIntroduce(urls []string, now time.Time) {
+	if len(urls) == 0 || app.SwarmCli == nil {
+		return
+	}
+	entry, ok := app.BuildSeedAnnounce(now)
+	if !ok {
+		return
+	}
+	app.Deps.Background(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*SwarmHTTPTimeout)
+		defer cancel()
+		app.announceTo(ctx, entry, urls)
+	})
+}
+
+// swarmReannounceOnRefusal answers a pull refused with 403: the
+// peer has not pinned this instance (it joined after the peer's last
+// gossip round, or the peer dropped its row), so this instance sends
+// it its heartbeat, at most once every SwarmReannounceEvery per peer.
+func (app *Mod) swarmReannounceOnRefusal(peerID, baseURL string, err error, now time.Time) {
+	if !swarmRefused(err) {
+		return
+	}
+	app.SwarmIntroMu.Lock()
+	if app.SwarmIntroAt == nil {
+		app.SwarmIntroAt = map[string]time.Time{}
+	}
+	last, seen := app.SwarmIntroAt[peerID]
+	if seen && now.Sub(last) < SwarmReannounceEvery {
+		app.SwarmIntroMu.Unlock()
+		return
+	}
+	app.SwarmIntroAt[peerID] = now
+	app.SwarmIntroMu.Unlock()
+	app.SwarmIntroduce([]string{baseURL}, now)
+}

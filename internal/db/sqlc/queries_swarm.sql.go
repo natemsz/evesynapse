@@ -289,7 +289,8 @@ func (q *Queries) GetSwarmNextGossip(ctx context.Context) (sql.NullTime, error) 
 const getSwarmPeer = `-- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served, build
+    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served, build,
+    probation_checks, probation_since
 FROM swarm_peers
 WHERE instance_id = $1
 `
@@ -316,6 +317,8 @@ func (q *Queries) GetSwarmPeer(ctx context.Context, instanceID string) (SwarmPee
 		&i.LastPulled,
 		&i.LastServed,
 		&i.Build,
+		&i.ProbationChecks,
+		&i.ProbationSince,
 	)
 	return i, err
 }
@@ -387,15 +390,22 @@ SELECT a.kind, a.key, a.source, a.signer, a.fetched_at, a.applied_at, a.verified
 FROM swarm_applied a
 JOIN swarm_peers p ON p.instance_id = a.signer
 WHERE p.excluded
+   OR (p.probation_checks > 0 AND NOT a.verified
+       AND a.applied_at >= p.probation_since - make_interval(days => $1::int))
 ORDER BY a.applied_at, a.kind, a.key
-LIMIT $1
+LIMIT $2
 `
+
+type ListSwarmAppliedToRollBackParams struct {
+	LookbackDays int32 `json:"lookback_days"`
+	Lim          int32 `json:"lim"`
+}
 
 // What is still in the tables from signers that have since been
 // excluded: the rollback pass takes these back, oldest first, a
 // bounded batch at a time.
-func (q *Queries) ListSwarmAppliedToRollBack(ctx context.Context, limit int32) ([]SwarmApplied, error) {
-	rows, err := q.db.Query(ctx, listSwarmAppliedToRollBack, limit)
+func (q *Queries) ListSwarmAppliedToRollBack(ctx context.Context, arg ListSwarmAppliedToRollBackParams) ([]SwarmApplied, error) {
+	rows, err := q.db.Query(ctx, listSwarmAppliedToRollBack, arg.LookbackDays, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -460,19 +470,40 @@ SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
     key_conflict_at, url_sig, url_issued_at, last_pulled, last_served, build
 FROM swarm_peers
-ORDER BY last_seen DESC
+ORDER BY last_served DESC NULLS LAST, last_seen DESC
 LIMIT 100
 `
 
-func (q *Queries) ListSwarmPeers(ctx context.Context) ([]SwarmPeer, error) {
+type ListSwarmPeersRow struct {
+	InstanceID    string       `json:"instance_id"`
+	BaseUrl       string       `json:"base_url"`
+	PublicKey     string       `json:"public_key"`
+	Source        string       `json:"source"`
+	Approved      bool         `json:"approved"`
+	Excluded      bool         `json:"excluded"`
+	ExcludeNote   string       `json:"exclude_note"`
+	GoodChecks    int64        `json:"good_checks"`
+	BadChecks     int64        `json:"bad_checks"`
+	FirstSeen     time.Time    `json:"first_seen"`
+	LastSeen      time.Time    `json:"last_seen"`
+	LastGossip    sql.NullTime `json:"last_gossip"`
+	KeyConflictAt sql.NullTime `json:"key_conflict_at"`
+	UrlSig        string       `json:"url_sig"`
+	UrlIssuedAt   int64        `json:"url_issued_at"`
+	LastPulled    sql.NullTime `json:"last_pulled"`
+	LastServed    sql.NullTime `json:"last_served"`
+	Build         string       `json:"build"`
+}
+
+func (q *Queries) ListSwarmPeers(ctx context.Context) ([]ListSwarmPeersRow, error) {
 	rows, err := q.db.Query(ctx, listSwarmPeers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SwarmPeer
+	var items []ListSwarmPeersRow
 	for rows.Next() {
-		var i SwarmPeer
+		var i ListSwarmPeersRow
 		if err := rows.Scan(
 			&i.InstanceID,
 			&i.BaseUrl,
@@ -856,6 +887,17 @@ func (q *Queries) SetSwarmPeerExcluded(ctx context.Context, arg SetSwarmPeerExcl
 	return err
 }
 
+const spendSwarmPeerProbation = `-- name: SpendSwarmPeerProbation :exec
+UPDATE swarm_peers SET probation_checks = probation_checks - 1
+WHERE instance_id = $1 AND probation_checks > 0
+`
+
+// One verified check spends one of a probation's entries.
+func (q *Queries) SpendSwarmPeerProbation(ctx context.Context, instanceID string) error {
+	_, err := q.db.Exec(ctx, spendSwarmPeerProbation, instanceID)
+	return err
+}
+
 const stageSwarmEntry = `-- name: StageSwarmEntry :exec
 INSERT INTO swarm_staging (kind, key, payload, signer, signature, fetched_at, received_at, source)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -898,6 +940,23 @@ func (q *Queries) StageSwarmEntry(ctx context.Context, arg StageSwarmEntryParams
 		arg.ReceivedAt,
 		arg.Source,
 	)
+	return err
+}
+
+const startSwarmPeerProbation = `-- name: StartSwarmPeerProbation :exec
+UPDATE swarm_peers SET probation_checks = $2, probation_since = $3 WHERE instance_id = $1
+`
+
+type StartSwarmPeerProbationParams struct {
+	InstanceID      string       `json:"instance_id"`
+	ProbationChecks int32        `json:"probation_checks"`
+	ProbationSince  sql.NullTime `json:"probation_since"`
+}
+
+// A signer ESI caught lying: its next checks entries are all
+// verified, and since marks the catch (schema 144).
+func (q *Queries) StartSwarmPeerProbation(ctx context.Context, arg StartSwarmPeerProbationParams) error {
+	_, err := q.db.Exec(ctx, startSwarmPeerProbation, arg.InstanceID, arg.ProbationChecks, arg.ProbationSince)
 	return err
 }
 

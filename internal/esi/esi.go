@@ -3916,6 +3916,21 @@ func (c *Client) heardName(kind string, id int64, name string, changed bool) {
 	}
 }
 
+// NameCacheCounts reports how many character, corporation and
+// alliance names the client holds in memory.
+func (c *Client) NameCacheCounts() (characters, corporations, alliances int) {
+	c.charNamesMu.RLock()
+	characters = len(c.charNames)
+	c.charNamesMu.RUnlock()
+	c.corpNamesMu.RLock()
+	corporations = len(c.corpNames)
+	c.corpNamesMu.RUnlock()
+	c.allianceNamesMu.RLock()
+	alliances = len(c.allianceNames)
+	c.allianceNamesMu.RUnlock()
+	return characters, corporations, alliances
+}
+
 // PrimeName puts a stored name into its cache without telling the
 // sink: the startup load from entity_names.
 func (c *Client) PrimeName(kind string, id int64, name string) {

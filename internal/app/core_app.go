@@ -483,6 +483,7 @@ type Application struct {
 // background worker and the one-shot SSO reachability probe.
 // Call Close to stop the worker and release the database.
 func New(cfg Config) (*Application, error) {
+	applyMemoryLimit()
 	tokens, tokenKeyProvider, err := tokenBoxForConfig(cfg)
 	if err != nil {
 		return nil, err

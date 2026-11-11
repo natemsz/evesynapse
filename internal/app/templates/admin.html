@@ -38,6 +38,7 @@
 </div>
 {{if .HostFacts}}<div class="an-legend">{{range .HostFacts}}<span>{{.}}</span>{{end}}</div>{{end}}
 {{end}}
+{{if .MemoryFacts}}<div class="an-legend an-memory" aria-label="Held in memory">{{range .MemoryFacts}}<span>{{.}}</span>{{end}}</div>{{end}}
 </section>
 
 <div class="an-grid2">

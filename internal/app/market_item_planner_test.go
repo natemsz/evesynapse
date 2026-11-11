@@ -25,77 +25,8 @@ import (
 	"evesynapse/internal/tradefees"
 )
 
-// ---------------------------------------------------------------------------
-// Chart data + trader math (pure)
-// ---------------------------------------------------------------------------
-
 func tradeRow(date string, avg, high, low float64, vol int64) db.MarketHistory {
 	return db.MarketHistory{RegionID: 10000002, TypeID: 34, Date: date, Average: avg, Highest: high, Lowest: low, Volume: vol, OrderCount: 10}
-}
-
-func TestBuildPriceChartCarriesDayData(t *testing.T) {
-	rows := []db.MarketHistory{
-		tradeRow("2026-09-30", 10.0, 11.0, 9.0, 123456),
-		tradeRow("2026-10-01", 10.5, 11.5, 9.5, 100000),
-		tradeRow("2026-10-02", 10.2, 11.2, 9.2, 90000),
-	}
-	chart, ok := markethistory.BuildPriceChart(rows)
-	if !ok {
-		t.Fatal("chart: ok=false with rows")
-	}
-	if len(chart.Dots) != 3 {
-		t.Fatalf("dots: got %d, want 3", len(chart.Dots))
-	}
-	last := chart.Dots[2]
-	if last.Date != "2026-10-02" || last.Average != "10.20" || last.Highest != "11.20" || last.Lowest != "9.20" || last.Volume != "90,000" {
-		t.Fatalf("dot day data: %+v", last.Day)
-	}
-	if !strings.Contains(last.Title, "2026-10-02") || !strings.Contains(last.Title, "10.20") {
-		t.Fatalf("dot title: %q", last.Title)
-	}
-	if len(chart.Bars) != 3 || !strings.Contains(chart.Bars[0].Title, "volume 123,456") {
-		t.Fatalf("bars: %+v", chart.Bars)
-	}
-	// Axes: price carries max/mid/min in compact ISK, volume
-	// carries max/mid/zero on its own scale, and the x axis is
-	// anchored at the first, middle, and last recorded days.
-	if len(chart.PriceTicks) != 3 ||
-		chart.PriceTicks[0].Label != "10.5 ISK" ||
-		chart.PriceTicks[1].Label != "10.25 ISK" ||
-		chart.PriceTicks[2].Label != "10 ISK" {
-		t.Fatalf("price ticks: %+v", chart.PriceTicks)
-	}
-	if len(chart.VolumeTicks) != 3 ||
-		chart.VolumeTicks[0].Label != "123K" ||
-		chart.VolumeTicks[1].Label != "61.7K" ||
-		chart.VolumeTicks[2].Label != "0" {
-		t.Fatalf("volume ticks: %+v", chart.VolumeTicks)
-	}
-	if len(chart.DateTicks) != 3 ||
-		chart.DateTicks[0].Label != "2026-09-30" || chart.DateTicks[0].Anchor != "start" ||
-		chart.DateTicks[1].Label != "2026-10-01" || chart.DateTicks[1].Anchor != "middle" ||
-		chart.DateTicks[2].Label != "2026-10-02" || chart.DateTicks[2].Anchor != "end" ||
-		chart.DateTicks[1].X <= chart.DateTicks[0].X || chart.DateTicks[2].X <= chart.DateTicks[1].X {
-		t.Fatalf("date ticks: %+v", chart.DateTicks)
-	}
-	// Recent days: newest first, same figures.
-	if len(chart.Recent) != 3 || chart.Recent[0].Date != "2026-10-02" || chart.Recent[2].Date != "2026-09-30" {
-		t.Fatalf("recent: %+v", chart.Recent)
-	}
-
-	// The recent table caps at markethistory.RecentChartDays.
-	var many []db.MarketHistory
-	base := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	for i := 0; i < 30; i++ {
-		many = append(many, tradeRow(base.AddDate(0, 0, i).Format(markethistory.DateLayout), float64(100+i), 0, 0, 100))
-	}
-	chart, _ = markethistory.BuildPriceChart(many)
-	if len(chart.Recent) != markethistory.RecentChartDays {
-		t.Fatalf("recent cap: got %d, want %d", len(chart.Recent), markethistory.RecentChartDays)
-	}
-	if chart.Recent[0].Date != "2026-08-30" {
-		t.Fatalf("recent newest: %q, want 2026-08-30", chart.Recent[0].Date)
-	}
 }
 
 func TestTraderStatsWindowsAndMargin(t *testing.T) {

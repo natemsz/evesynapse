@@ -84,7 +84,7 @@ func TestCredentialAccessors(t *testing.T) {
 	if !cfg.SSOConfigured() {
 		t.Fatal("SSOConfigured = false with the plain secret set")
 	}
-	if !cfg.TradeIdeasConfigured() || !cfg.tradeIdeasUsesMeta() {
+	if !cfg.TradeIdeasConfigured() || !(cfg.MetaAIKey() != "") {
 		t.Fatal("trade ideas should read as Meta-configured from the plain key")
 	}
 	// A landed value replaces the plain one through every reader.

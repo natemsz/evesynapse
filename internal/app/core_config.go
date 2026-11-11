@@ -173,10 +173,6 @@ func (c Config) TradeIdeasConfigured() bool {
 	return c.MetaAIKey() != "" || (c.cloudflareAccountID != "" && c.cloudflareAuthToken != "")
 }
 
-// tradeIdeasUsesMeta reports whether the refresh asks Muse Wonder
-// (MODEL_API_KEY set) rather than Gemma.
-func (c Config) tradeIdeasUsesMeta() bool { return c.MetaAIKey() != "" }
-
 // SSOConfigured reports whether EVE SSO can run: it needs both the
 // client ID (login redirect) and the secret (token exchange).
 func (c Config) SSOConfigured() bool {

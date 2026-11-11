@@ -244,12 +244,6 @@ func buildWarRow(ctx context.Context, deps module.Deps, warID int64, yourCorps m
 	return row
 }
 
-// warPartyRecord formats a war side's kill record.
-func warPartyRecord(p esi.WarParty) string {
-	return fmt.Sprintf("%s ships · %s ISK destroyed",
-		esi.FormatInt(p.ShipsKilled), esi.FormatISK(p.ISKDestroyed))
-}
-
 // warFilters are the Wars page's tile filters (?show=).
 var warFilters = map[string]bool{"active": true, "yours": true, "allies": true, "ended": true}
 

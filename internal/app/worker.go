@@ -1069,17 +1069,6 @@ func (b *fetchBudget) exhausted() bool {
 	return b.left <= 0
 }
 
-// orderByDue stably orders characters most-overdue first: a
-// character's due key is the earliest cached_until among the core
-// snapshot kinds (a kind with no snapshot yet is due immediately,
-// key zero). The sort is stable, so callers can layer the
-// priority-flag ordering on top. Freshness for every character
-// comes from one batched query, not one per character.
-func (app *Application) orderByDue(ctx context.Context, characters []db.Character) []db.Character {
-	out, _ := app.orderByDueTimed(ctx, characters)
-	return out
-}
-
 // orderByDueTimed is orderByDue, also reporting each character's due
 // moment: the earliest time at which any of its core data could have
 // been refreshed, zero when something has never been fetched. The map

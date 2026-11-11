@@ -178,12 +178,6 @@ type linkRoleOptIn struct {
 	Chosen  bool
 }
 
-// resolveLink works a choice out: the features it names (an activity names
-// the features that declare it), the closure over what they require, the
-// scopes those declare, and the opted-in enhancements. An unknown activity,
-// feature or an enhancement that belongs to no chosen feature is an error.
-func resolveLink(c linkChoice) (linkResolved, error) { return resolveLinkWith(c, nil) }
-
 // resolveLink is the package function with what this server offers on top.
 func (app *Application) resolveLink(c linkChoice) (linkResolved, error) {
 	return resolveLinkWith(c, app.linkServerExtras())
@@ -351,9 +345,6 @@ func resolveLinkWith(c linkChoice, extras []linkEnhancement) (linkResolved, erro
 	return res, nil
 }
 
-// fullLinkChoice is every feature with every enhancement: today's link.
-func fullLinkChoice() linkChoice { return fullLinkChoiceWith(nil) }
-
 func fullLinkChoiceWith(extras []linkEnhancement) linkChoice {
 	c := linkChoice{Activities: []string{activityEverything}}
 	add := func(scope string) {
@@ -374,11 +365,6 @@ func fullLinkChoiceWith(extras []linkEnhancement) linkChoice {
 	}
 	return c
 }
-
-// requestableScopes is every scope this build can ask for: the full link.
-// In a build with every module it is eveScopes; a build without a module
-// leaves that module's scopes out.
-func requestableScopes() []string { return requestableScopesWith(nil) }
 
 func (app *Application) requestableScopes() []string {
 	return requestableScopesWith(app.linkServerExtras())

@@ -4,7 +4,6 @@ import (
 	"context"
 	"evesynapse/internal/app/module"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -98,15 +97,6 @@ func (app *Application) pickOwner(ctx context.Context, r *http.Request, offered 
 		options = append(options, corpOption{ID: owner.ID, Name: name, Active: owner == active, Param: "owner", Value: owner.Key()})
 	}
 	return active, options, true
-}
-
-// ownerAddress is such a page's address for one owner, named by its
-// key; the plain page where the key is not one.
-func ownerAddress(path, key string) string {
-	if _, ok := parseOrgOwner(key); !ok {
-		return path
-	}
-	return path + "?owner=" + url.QueryEscape(key)
 }
 
 // corpAddress is a corporation page's address for one corporation.

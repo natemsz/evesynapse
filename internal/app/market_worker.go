@@ -96,18 +96,6 @@ const (
 // marketKey is one (region, type) pair to warm.
 type marketKey = module.MarketKey
 
-// refreshMarketData runs one market pass, reporting how many
-// payloads it stored (history downloads + book reads) and whether
-// ESI's error limit stopped it. The region sweep runs on its own
-// lane (runMarketLane), not in this pass.
-func (app *Application) refreshMarketData(ctx context.Context, characters []db.Character) (stored int, limited bool) {
-	// The market pass spends from its own lane, not the
-	// character pass's budget: the character pass can spend
-	// its whole allowance in a busy cycle.
-	allowance := &fetchBudget{left: maxMarketFetchesPerCycle}
-	return app.refreshMarketWarm(ctx, characters, allowance)
-}
-
 // refreshMarketWarm is the market pass ahead of the region
 // sweep: history warming, then per-order health from the
 // regional books, both drawing on the pass's shared allowance.

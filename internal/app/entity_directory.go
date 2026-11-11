@@ -189,10 +189,3 @@ func (app *Application) allianceName(id int64) (string, bool) {
 	}
 	return "", false
 }
-
-func (app *Application) structureName(id int64) (string, bool) {
-	if e, ok := app.entityLookup(id); ok && e.Kind == "structure" && e.Name != "" {
-		return e.Name, true
-	}
-	return "", false
-}

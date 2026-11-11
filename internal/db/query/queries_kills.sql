@@ -102,10 +102,21 @@ UPDATE kills SET value_ours = sqlc.arg(value_ours)::double precision,
     priced_at = sqlc.arg(priced_at)::timestamptz
 WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 
+-- Kills whose attacker rows are gone (pruned before the stats fold
+-- counted their ships), newest first below a keyset cursor, for the
+-- restorer to read back from ESI by hash.
+-- name: ListKillsMissingAttackers :many
+SELECT k.killmail_id, k.hash, k.killmail_time FROM kills k
+WHERE k.killmail_id < sqlc.arg(before_id)::bigint
+  AND k.attacker_count > 0 AND k.hash <> ''
+  AND NOT EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id)
+ORDER BY k.killmail_id DESC
+LIMIT sqlc.arg(max_rows)::bigint;
+
 -- Retention: attacker detail, full killmails and per-item priced
 -- lines older than the cutoff go; the summary row and the
 -- involvement record stay. Values and who they credit are
--- permanent; only detail ages out. Past a year a kill is metadata
+-- permanent; only detail ages out. Past two years a kill is metadata
 -- for intel only (who, when, ship, total value), not a record.
 -- Raw kill rows past retention go only once the kill is counted
 -- into the daily statistics (an applied marker exists): the fold

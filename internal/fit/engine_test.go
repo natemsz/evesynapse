@@ -192,6 +192,22 @@ func TestFitEngineOperationSemantics(t *testing.T) {
 		near(t, "premul-then-percent", res.ShipAttrs[267], 0.34, 1e-9)
 	})
 
+	t.Run("pre-multiply modules stack-penalize (Ballistic Control shape)", func(t *testing.T) {
+		fx := newFitFixture()
+		fx.attrs(ship, map[int64]float64{212: 1})
+		fx.meta(212, false, 1)
+		for _, mod := range []int64{2013, 2014} {
+			fx.attrs(mod, map[int64]float64{213: 1.1})
+			// Effect 763's shape: missile damage multiplier
+			// pre-multiplied by the module's bonus (op 0).
+			fx.effect(mod, 763, 4, fitMod("shipID", "ItemModifier", 212, 213, 0))
+		}
+		res := Compute(fx.snap, ship, []ItemInput{{TypeID: 2013}, {TypeID: 2014}}, nil, nil, nil)
+		// 1.1 * (1 + 0.1 * exp(-1/7.1289)), not 1.1 * 1.1.
+		want := 1.1 * (1 + 0.1*math.Exp(-1.0/7.1289))
+		near(t, "missile damage multiplier", res.ShipAttrs[212], want, 1e-9)
+	})
+
 	t.Run("assign / subtract / divide operations", func(t *testing.T) {
 		fx := newFitFixture()
 		fx.attrs(ship, map[int64]float64{192: 2, 714: 100, 76: 20000})

@@ -147,7 +147,7 @@ type PublicFitBody struct {
 	Preparing bool
 }
 
-// PublicFitCard is one fit on the browser, a ship page or the fit page
+// PublicFitCard is one fit on the browser, a ship's item page or the fit page
 // header: stored aggregates only, never a per-render computation.
 type PublicFitCard struct {
 	ID          int64

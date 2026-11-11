@@ -44,9 +44,9 @@ func TestSEOFrontPage(t *testing.T) {
 }
 
 // TestSEOItemAndShipPages: the item explorer, an item detail (its
-// breadcrumb trail becomes the BreadcrumbList) and a ship detail
-// each carry their title, the pattern description and the
-// canonical.
+// breadcrumb trail becomes the BreadcrumbList) and a ship's item page
+// each carry their title, the pattern description and the canonical;
+// the /ships/ address search engines hold moves to the item page.
 func TestSEOItemAndShipPages(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)
@@ -82,14 +82,16 @@ func TestSEOItemAndShipPages(t *testing.T) {
 		`"@type":"BreadcrumbList"`, `"name":"Fixture Category"`, `"name":"Fixture Minerals"`,
 		`"item":"https://evesynapse.app/items/type/34/"`)
 
-	rec = get(app, nil, "/ships/587/")
+	rec = get(app, nil, "/items/type/587/")
 	body = rec.Body.String()
-	mustContain(t, "/ships/587/", body,
+	mustContain(t, "/items/type/587/", body,
 		"<title>Rifter · EveSynapse</title>",
-		"Rifter stats, market prices and community fittings",
-		`<link rel="canonical" href="https://evesynapse.app/ships/587/">`)
-	if strings.Contains(body, "BreadcrumbList") {
-		t.Error("the ship page displays no breadcrumb trail but emitted one")
+		"Rifter stats, bonuses, market prices and community fittings",
+		`<link rel="canonical" href="https://evesynapse.app/items/type/587/">`)
+
+	rec = get(app, nil, "/ships/587/")
+	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/items/type/587/" {
+		t.Errorf("/ships/587/ = %d to %q, want 301 to the item page", rec.Code, rec.Header().Get("Location"))
 	}
 }
 

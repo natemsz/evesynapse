@@ -1,6 +1,6 @@
 // Package itemsheet turns one type's static data into the sheet the
-// item page, the public ship page and the fitting workbench's
-// tooltips and info drawer show: bonuses, attributes in the game's
+// item page and the fitting workbench's tooltips and info drawer
+// show: bonuses, attributes in the game's
 // sections with the game's units, and required skills. Every read is
 // by the type's key (a type carries at most about a hundred
 // attributes), so building a sheet never scans a table.

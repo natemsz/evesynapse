@@ -145,7 +145,6 @@ func TestPublicSEOFiles(t *testing.T) {
 		"https://node.example.org/intel/fw/</loc>",
 		"https://node.example.org/fittings/public/fit/"+fmt.Sprintf("%d", fitID)+"/",
 		"https://node.example.org/items/type/587/",
-		"https://node.example.org/ships/587/",
 	)
 	if strings.Contains(body, "evesynapse.app") {
 		t.Errorf("sitemap names another site")
@@ -836,21 +835,14 @@ func TestPublicItemAndShipPages(t *testing.T) {
 		t.Errorf("non-market item page shows hub prices")
 	}
 
-	code, body = apptest.GetPage(t, rig, nil, "/ships/587/")
+	code, body = apptest.GetPage(t, rig, nil, "/items/type/587/")
 	if code != 200 {
-		t.Fatalf("ship status = %d", code)
+		t.Fatalf("ship item page status = %d", code)
 	}
-	apptest.MustContain(t, "/ships/587/", body,
-		"Rifter", "Solo Rifter",
+	apptest.MustContain(t, "/items/type/587/", body,
+		"Rifter", "Public fits for this hull", "Solo Rifter",
 		"/fittings/public/fit/", "og:title",
 	)
-	// Modules are not ships.
-	if code, _ := apptest.GetPage(t, rig, nil, "/ships/1238/"); code != 404 {
-		t.Errorf("module ship status = %d, want 404", code)
-	}
-	if code, _ := apptest.GetPage(t, rig, nil, "/ships/424242/"); code != 404 {
-		t.Errorf("unknown ship status = %d, want 404", code)
-	}
 	if transport.Calls.Load() != 0 {
 		t.Errorf("item/ship pages made %d outbound calls", transport.Calls.Load())
 	}

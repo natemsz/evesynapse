@@ -161,3 +161,7 @@
 .is-mark { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs); letter-spacing: 0.06em; text-transform: uppercase; }
 .is-ok .is-mark { color: var(--kept); }
 .is-short .is-mark { color: var(--lost); }
+
+/* A hull's public fits: the shared fit cards, without a picture
+   (every card is this hull). */
+.ib-fit { grid-template-columns: minmax(0, 1fr); }

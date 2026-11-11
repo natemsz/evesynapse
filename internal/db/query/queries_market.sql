@@ -629,26 +629,28 @@ FROM market_station_stats;
 -- name: ListStatPackBestBeats :many
 SELECT location_id, region_id, type_id, is_buy_order, at
 FROM market_best_beats;
--- name: ListMarketAvgDailyVolumes :many
--- The sold-per-day figure the sweep stores on each region stat:
+-- name: ListMarketRegionAvgVolumes :many
+-- The sold-per-day figure each of a region's stats rows carries:
+-- kept current at history ingest (RefreshMarketRegionStatAvgVolume),
+-- so the sweep reads it instead of recomputing it from the whole
+-- history table.
+SELECT type_id, avg_daily_volume FROM market_region_stats WHERE region_id = $1;
+-- name: ListMarketAvgDailyVolumesForTypes :many
+-- The sold-per-day figure for types a region's book has just gained:
 -- the mean recorded daily volume over the seven calendar days
--- ending on the type's newest recorded day (the newest day and
--- the six before it), which is exactly what historyWindow(rows,
--- 7) averages at render time. One pass over the region's whole
--- history at sweep completion; types with no recorded history
--- have no row here and read as 0.
+-- ending on the type's newest recorded day, read by key per type.
+-- Types with no recorded history have no row and read as 0.
 SELECT h.type_id AS type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
 FROM market_history h
 JOIN (
     SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD') AS window_start
     FROM market_history m
-    WHERE m.region_id = $1
+    WHERE m.region_id = sqlc.arg(region_id) AND m.type_id = ANY(sqlc.arg(type_ids)::bigint[])
     GROUP BY m.type_id
 ) w ON w.type_id = h.type_id
-WHERE h.region_id = $1
+WHERE h.region_id = sqlc.arg(region_id) AND h.type_id = ANY(sqlc.arg(type_ids)::bigint[])
   AND h.date >= w.window_start
-GROUP BY h.type_id
-ORDER BY h.type_id;
+GROUP BY h.type_id;
 -- name: UpsertMarketRegionStatDaily :exec
 INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)

@@ -127,7 +127,6 @@ const (
 	SwarmCounterPullsOK          = "pulls_ok"
 	SwarmCounterPullsFailed      = "pulls_failed"
 	SwarmCounterPullsAuthSigned  = "pulls_auth_signed"
-	SwarmCounterPullsAuthLegacy  = "pulls_auth_legacy"
 	SwarmCounterRolledBack       = "rolled_back"
 	SwarmCounterDroppedUnchecked = "dropped_unchecked"
 )
@@ -1276,9 +1275,9 @@ func (app *Mod) SwarmVerifyAgainstESI(ctx context.Context, allowance module.Budg
 	case SwarmKindTypeName:
 		verdict, stop = app.SwarmVerifyTypeName(ctx, allowance, key, payload)
 	case SwarmKindCorporation:
-		verdict, stop = app.SwarmVerifyCorporation(ctx, allowance, key, payload)
+		return app.SwarmVerifyCorporation(ctx, allowance, key, payload)
 	case SwarmKindAlliance:
-		verdict, stop = app.SwarmVerifyAlliance(ctx, allowance, key, payload)
+		return app.SwarmVerifyAlliance(ctx, allowance, key, payload)
 	case SwarmKindStructure:
 		verdict, stop = app.SwarmVerifyStructure(ctx, allowance, characters, key, payload)
 	case SwarmKindContract:
@@ -1409,14 +1408,14 @@ func (app *Mod) SwarmVerifyTypeName(ctx context.Context, allowance module.Budget
 	return SwarmCheckPass, false
 }
 
-func (app *Mod) SwarmVerifyCorporation(ctx context.Context, allowance module.Budget, key, payload string) (SwarmCheckVerdict, bool) {
+func (app *Mod) SwarmVerifyCorporation(ctx context.Context, allowance module.Budget, key, payload string) (SwarmCheckVerdict, string, bool) {
 	id, ok := ParseSwarmID(key)
 	if !ok {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
 	var staged SwarmOrgPayload
 	if err := DecodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.ID != id {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
 	// The record travels in either dialect, this app's wrapped
 	// shape or a bare ESI corporation, so it is read through
@@ -1427,10 +1426,10 @@ func (app *Mod) SwarmVerifyCorporation(ctx context.Context, allowance module.Bud
 	// a mark rather than failing its signer.
 	body, ok := module.DecodeCorpPayload(staged.Payload)
 	if !ok {
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	if !app.SwarmTake(allowance) {
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	// Identity fields only: names, tickers and alliance homes
 	// move slowly; member counts and descriptions drift daily
@@ -1438,52 +1437,56 @@ func (app *Mod) SwarmVerifyCorporation(ctx context.Context, allowance module.Bud
 	var corp esi.Corporation
 	if err := app.Deps.ESIGet(ctx, fmt.Sprintf("/corporations/%d/", id), &corp); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
-			return SwarmCheckDefer, true
+			return SwarmCheckDefer, "", true
 		}
 		if code, has := esi.StatusCode(err); has && code == 404 {
-			return SwarmCheckFail, false
+			return SwarmCheckFail, "", false
 		}
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	if corp.Name != body.Corp.Name || corp.Ticker != body.Corp.Ticker || corp.AllianceID != body.Corp.AllianceID {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
-	return SwarmCheckPass, false
+	// The record stored is the one ESI just returned, never the
+	// peer's: its unchecked fields (description, CEO, members,
+	// the alliance block) do not ride in on a passed identity.
+	return SwarmCheckPass, swarmOrgConfirmed(id, module.CorporationRecordPayload{Corp: corp}), false
 }
 
-func (app *Mod) SwarmVerifyAlliance(ctx context.Context, allowance module.Budget, key, payload string) (SwarmCheckVerdict, bool) {
+func (app *Mod) SwarmVerifyAlliance(ctx context.Context, allowance module.Budget, key, payload string) (SwarmCheckVerdict, string, bool) {
 	id, ok := ParseSwarmID(key)
 	if !ok {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
 	var staged SwarmOrgPayload
 	if err := DecodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.ID != id {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
 	// Either dialect, as for corporations: read through the
 	// tolerant decoder, and a body naming no alliance under
 	// either dialect defers rather than fails.
 	body, ok := module.DecodeAlliancePayload(staged.Payload)
 	if !ok {
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	if !app.SwarmTake(allowance) {
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	var alliance esi.Alliance
 	if err := app.Deps.ESIGet(ctx, fmt.Sprintf("/alliances/%d/", id), &alliance); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
-			return SwarmCheckDefer, true
+			return SwarmCheckDefer, "", true
 		}
 		if code, has := esi.StatusCode(err); has && code == 404 {
-			return SwarmCheckFail, false
+			return SwarmCheckFail, "", false
 		}
-		return SwarmCheckDefer, false
+		return SwarmCheckDefer, "", false
 	}
 	if alliance.Name != body.Alliance.Name || alliance.Ticker != body.Alliance.Ticker {
-		return SwarmCheckFail, false
+		return SwarmCheckFail, "", false
 	}
-	return SwarmCheckPass, false
+	// ESI's record, without the peer's unchecked member list.
+	return SwarmCheckPass, swarmOrgConfirmed(id, module.AllianceRecordPayload{Alliance: alliance}), false
 }
 
 func (app *Mod) SwarmVerifyStructure(ctx context.Context, allowance module.Budget, characters []db.Character, key, payload string) (SwarmCheckVerdict, bool) {
@@ -1602,4 +1605,18 @@ func (app *Mod) SwarmVerifyContract(ctx context.Context, allowance module.Budget
 		}
 	}
 	return SwarmCheckPass, false
+}
+
+// swarmOrgConfirmed wraps a record ESI returned in the envelope the
+// apply path reads.
+func swarmOrgConfirmed(id int64, record any) string {
+	inner, err := json.Marshal(record)
+	if err != nil {
+		return ""
+	}
+	outer, err := json.Marshal(SwarmOrgPayload{ID: id, Payload: string(inner)})
+	if err != nil {
+		return ""
+	}
+	return string(outer)
 }

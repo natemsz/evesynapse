@@ -120,6 +120,18 @@ func newSwarmPair(t *testing.T, modeB string) *swarmPair {
 	swarm.StateFor(tb).SwarmID.ID = "instance-b"
 	swarm.StateFor(tb).SwarmCli = swarm.NewSwarmClient(secret)
 
+	// Each client signs its pulls as its own instance, as in
+	// production, and A knows B's key the way gossip leaves it, so
+	// B's pulls verify.
+	swarm.StateFor(ta).SwarmCli.ID = swarm.StateFor(ta).SwarmID
+	swarm.StateFor(tb).SwarmCli.ID = swarm.StateFor(tb).SwarmID
+	if _, err := ta.queries.UpsertSwarmPeer(context.Background(), db.UpsertSwarmPeerParams{
+		InstanceID: "instance-b", BaseUrl: "http://127.0.0.1:9", PublicKey: swarm.StateFor(tb).SwarmID.PublicString(),
+		Source: "manual", FirstSeen: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("pin B on A: %v", err)
+	}
+
 	srv := httptest.NewServer(ta.Handler())
 	t.Cleanup(srv.Close)
 	return &swarmPair{a: ta, b: tb, urlA: srv.URL, stubA: stubA, stubB: stubB, secret: secret}
@@ -509,8 +521,11 @@ func TestSwarmPairCorpRecord(t *testing.T) {
 	const corpID = int64(98000001)
 	// ESI's truth for the identity fields.
 	p.stubB.corps = map[int64]string{corpID: `{"name":"Fixture Corp","ticker":"FIX","member_count":42,"ceo_id":1,"creator_id":1,"alliance_id":0,"home_station_id":60003760,"tax_rate":0.1,"date_founded":"2020-01-01T00:00:00Z","description":"","url":""}`}
-	// A holds the assembled record the worker stores.
-	record := fmt.Sprintf(`{"corp":%s,"alliance":{"name":"","ticker":"","creator_id":0,"creator_corporation_id":0,"executor_corporation_id":0,"date_founded":""}}`, p.stubB.corps[corpID])
+	// A holds the assembled record the worker stores, with a
+	// description ESI does not have: identity fields match, so the
+	// check passes, and B must store ESI's record, not A's text.
+	peerCorp := strings.Replace(p.stubB.corps[corpID], `"description":""`, `"description":"Peer text"`, 1)
+	record := fmt.Sprintf(`{"corp":%s,"alliance":{"name":"","ticker":"","creator_id":0,"creator_corporation_id":0,"executor_corporation_id":0,"date_founded":""}}`, peerCorp)
 	if err := p.a.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
 		CorporationID: corpID, Payload: record, State: orgStateReady, FetchedAt: timeSet(time.Now().UTC()),
 	}); err != nil {
@@ -524,6 +539,9 @@ func TestSwarmPairCorpRecord(t *testing.T) {
 	rec, err := p.b.queries.GetCorporationRecord(ctx, corpID)
 	if err != nil || rec.State != orgStateReady || !strings.Contains(rec.Payload, "Fixture Corp") {
 		t.Fatalf("B record: %+v err %v", rec, err)
+	}
+	if strings.Contains(rec.Payload, "Peer text") {
+		t.Fatalf("B stored the peer's unchecked description: %s", rec.Payload)
 	}
 }
 

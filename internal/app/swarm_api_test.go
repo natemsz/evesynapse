@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +34,7 @@ func swarmTestApp(t *testing.T) *Application {
 	id.ID = "test-local"
 	swarm.StateFor(app).SwarmID = id
 	swarm.StateFor(app).SwarmCli = swarm.NewSwarmClient(swarmTestSecret)
+	swarm.StateFor(app).SwarmCli.ID = id
 	return app
 }
 
@@ -56,6 +58,20 @@ func swarmTestPeer(t *testing.T, app *Application, id string) *swarm.SwarmIdenti
 	}
 	return kp
 }
+
+// swarmTestPuller is the peer a test's pulls are signed as, pinned on
+// first use.
+func swarmTestPuller(t *testing.T, app *Application) *swarm.SwarmIdentity {
+	t.Helper()
+	if id, ok := swarmTestPullers.Load(app); ok {
+		return id.(*swarm.SwarmIdentity)
+	}
+	id := swarmTestPeer(t, app, "test-puller")
+	swarmTestPullers.Store(app, id)
+	return id
+}
+
+var swarmTestPullers sync.Map // *Application -> *swarm.SwarmIdentity
 
 // wantStageRefused fails unless staging refused the entry for
 // the reason named: any error would let a test pass on a check
@@ -81,6 +97,13 @@ func swarmServe(t *testing.T, app *Application, method, path, body, secret strin
 	req := httptest.NewRequest(method, path, reader)
 	if secret != "" {
 		req.Header.Set("Authorization", "Bearer "+secret)
+	}
+	// A pull is signed: a test pulling with the secret pulls as a
+	// pinned peer, the way a real instance does.
+	if method == http.MethodPost && path == "/swarm/pull" && secret != "" {
+		for name, value := range swarmPullHeaders(swarmTestPuller(t, app), body, time.Now().Unix()) {
+			req.Header.Set(name, value)
+		}
 	}
 	if method == http.MethodPost {
 		req.Header.Set("Content-Type", "application/json")

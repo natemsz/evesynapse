@@ -71,6 +71,26 @@ type FitDocItem struct {
 	TypeID int64    `json:"typeId"`
 	Qty    int      `json:"qty"`
 	States []string `json:"states,omitempty"`
+	// Cargo carries a module, rig, drone or the like in the cargo
+	// hold instead of on the hull (a refit set). Items that only
+	// ever sit in cargo leave it false.
+	Cargo bool `json:"cargo,omitempty"`
+}
+
+// FamilyIn is the line's editor family given the types' natural
+// families: cargo for a line carried in the hold, else its type's.
+func (it FitDocItem) FamilyIn(familyOf map[int64]string) string {
+	if it.Cargo {
+		return FitFamilyCargo
+	}
+	return familyOf[it.TypeID]
+}
+
+// fitDocLineKey is what makes two lines the same line: the type and
+// whether it rides in cargo.
+type fitDocLineKey struct {
+	typeID int64
+	cargo  bool
 }
 
 // FitDoc is one fitting: the editor's working state and the
@@ -120,10 +140,16 @@ func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 		return
 	}
 	merged := make([]FitDocItem, 0, len(doc.Items))
-	index := make(map[int64]int, len(doc.Items))
+	index := make(map[fitDocLineKey]int, len(doc.Items))
 	for _, it := range doc.Items {
 		if it.TypeID <= 0 {
 			continue
+		}
+		if it.Cargo && len(snap) > 0 && snap[0] != nil && FitSlotFamilyOf(snap[0], it.TypeID) == FitFamilyCargo {
+			it.Cargo = false // a hold-only type needs no flag
+		}
+		if it.Cargo {
+			it.States = nil // nothing in the hold is active
 		}
 		if it.Qty < 1 {
 			it.Qty = 1
@@ -131,14 +157,15 @@ func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 		if it.Qty > 10000 {
 			it.Qty = 10000
 		}
-		if j, ok := index[it.TypeID]; ok {
+		key := fitDocLineKey{it.TypeID, it.Cargo}
+		if j, ok := index[key]; ok {
 			merged[j].Qty += it.Qty
 			if merged[j].Qty > 10000 {
 				merged[j].Qty = 10000
 			}
 			continue
 		}
-		index[it.TypeID] = len(merged)
+		index[key] = len(merged)
 		merged = append(merged, it)
 		if len(merged) >= 300 {
 			break
@@ -149,7 +176,11 @@ func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 		fittedTotal := 0
 		kept := merged[:0]
 		for _, it := range merged {
-			switch FitSlotFamilyOf(snap[0], it.TypeID) {
+			fam := FitSlotFamilyOf(snap[0], it.TypeID)
+			if it.Cargo {
+				fam = FitFamilyCargo
+			}
+			switch fam {
 			case FitFamilyHigh, FitFamilyMedium, FitFamilyLow, FitFamilyRig, FitFamilySubsystem:
 				if it.Qty > maxFittedPerLine {
 					it.Qty = maxFittedPerLine
@@ -207,7 +238,9 @@ func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 	}
 	fitted := make(map[int64]bool, len(merged))
 	for _, it := range merged {
-		fitted[it.TypeID] = true
+		if !it.Cargo {
+			fitted[it.TypeID] = true // a weapon in the hold loads nothing
+		}
 	}
 	for weapon := range doc.Charges {
 		if !fitted[weapon] || doc.Charges[weapon] <= 0 {
@@ -263,6 +296,10 @@ type FitSlotChip struct {
 	TipLines  string // serialized FitTipLine rows for the tooltip
 	StatesCSV string
 	SubSlot   int64 // a subsystem's slot kind (subSystemSlot), 0 for anything else
+	// Home is the rack a cargo line's module fits in ("" for a line
+	// on the hull, or for a type that only ever sits in cargo), so
+	// the editor can drag it back onto its rack.
+	Home string
 }
 
 // FitSlotGroup is one row of the slot grid.
@@ -811,7 +848,7 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 	fitted := map[string][]fitPlacedModule{}
 	ordinals := map[int64]int{}
 	for _, it := range doc.Items {
-		fam := familyOf[it.TypeID]
+		fam := it.FamilyIn(familyOf)
 		if _, ok := FitVisualArcs[fam]; !ok {
 			continue
 		}
@@ -1463,9 +1500,8 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 	familyOf := make(map[int64]string, len(doc.Items))
 	engineItems := make([]fit.ItemInput, 0, len(doc.Items))
 	for _, it := range doc.Items {
-		fam := FitSlotFamilyOf(snap, it.TypeID)
-		familyOf[it.TypeID] = fam
-		if !FitFamilyFitted(fam) {
+		familyOf[it.TypeID] = FitSlotFamilyOf(snap, it.TypeID)
+		if !FitFamilyFitted(it.FamilyIn(familyOf)) {
 			continue
 		}
 		byState := make(map[string]int, 2)
@@ -1723,7 +1759,7 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 	chips := map[string][]FitSlotChip{}
 	slotTotals := map[string]int{}
 	for _, it := range doc.Items {
-		fam := familyOf[it.TypeID]
+		fam := it.FamilyIn(familyOf)
 		// Slot families chip at most a rack's worth per line and
 		// a bounded total per family, whatever the document
 		// claims; bay and cargo lines keep their real counts.
@@ -1774,6 +1810,9 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 		}
 		if fam == FitFamilySubsystem && snap != nil {
 			chip.SubSlot = int64(snap.Attrs[it.TypeID][fit.AttrSubSystemSlot])
+		}
+		if it.Cargo && familyOf[it.TypeID] != FitFamilyCargo {
+			chip.Home = familyOf[it.TypeID]
 		}
 		chips[fam] = append(chips[fam], chip)
 	}
@@ -1869,7 +1908,7 @@ func (app *Builder) FitBuildChargeSets(ctx context.Context, doc *FitDoc, snap *f
 	var sets []FitChargeSet
 	seen := map[int64]bool{}
 	for _, it := range doc.Items {
-		if seen[it.TypeID] {
+		if it.Cargo || seen[it.TypeID] {
 			continue
 		}
 		seen[it.TypeID] = true
@@ -2270,8 +2309,9 @@ func (app *Builder) FitDocFromESI(ctx context.Context, f esi.Fitting) *FitDoc {
 		if qty < 1 {
 			qty = 1
 		}
-		doc.Items = append(doc.Items, FitDocItem{TypeID: it.TypeID, Qty: qty})
-		if strings.HasPrefix(it.Flag, "Cargo") {
+		inCargo := strings.HasPrefix(it.Flag, "Cargo")
+		doc.Items = append(doc.Items, FitDocItem{TypeID: it.TypeID, Qty: qty, Cargo: inCargo})
+		if inCargo {
 			cargoIDs = append(cargoIDs, it.TypeID)
 		}
 	}
@@ -2283,10 +2323,11 @@ func (app *Builder) FitDocFromESI(ctx context.Context, f esi.Fitting) *FitDoc {
 	if err != nil {
 		return doc
 	}
+	SanitizeFitDoc(doc, snap) // hold-only types drop the cargo flag
 	var weapons []int64
 	seenWeapon := map[int64]bool{}
 	for _, it := range doc.Items {
-		if seenWeapon[it.TypeID] {
+		if it.Cargo || seenWeapon[it.TypeID] {
 			continue
 		}
 		if snap.HasEffect(it.TypeID, fit.EffectTurretFitted) || snap.HasEffect(it.TypeID, fit.EffectLauncherFitted) {
@@ -2379,6 +2420,9 @@ func (app *Builder) ParseEFT(ctx context.Context, text string) (*FitDoc, []strin
 	}
 
 	seenUnknown := map[string]bool{}
+	// EFT writes fitted modules one per line; a module with an
+	// "x N" count is carried in the cargo hold.
+	counted := map[int]bool{}
 	for ; idx < len(lines); idx++ {
 		line := strings.TrimSpace(lines[idx])
 		if line == "" || line == "[empty]" {
@@ -2393,6 +2437,9 @@ func (app *Builder) ParseEFT(ctx context.Context, text string) (*FitDoc, []strin
 			}
 		}
 		if id, ok := lookup(body); ok {
+			if body != line {
+				counted[len(doc.Items)] = true
+			}
 			doc.Items = append(doc.Items, FitDocItem{TypeID: id, Qty: qty})
 			continue
 		}
@@ -2409,6 +2456,19 @@ func (app *Builder) ParseEFT(ctx context.Context, text string) (*FitDoc, []strin
 		if !seenUnknown[line] {
 			seenUnknown[line] = true
 			notes = append(notes, "Couldn't place: "+line)
+		}
+	}
+	if len(counted) > 0 {
+		if snap, err := fit.LoadSnapshot(ctx, app.queries, FitDocTypeIDs(doc)); err == nil {
+			for i := range doc.Items {
+				if !counted[i] {
+					continue
+				}
+				switch FitSlotFamilyOf(snap, doc.Items[i].TypeID) {
+				case FitFamilyHigh, FitFamilyMedium, FitFamilyLow, FitFamilyRig, FitFamilySubsystem:
+					doc.Items[i].Cargo = true
+				}
+			}
 		}
 	}
 	SanitizeFitDoc(doc)
@@ -2461,7 +2521,7 @@ func (app *Builder) FormatEFT(ctx context.Context, doc *FitDoc) string {
 	for _, family := range []string{FitFamilyLow, FitFamilyMedium, FitFamilyHigh, FitFamilyRig, FitFamilySubsystem} {
 		var lines []string
 		for _, it := range doc.Items {
-			if familyOf[it.TypeID] != family {
+			if it.FamilyIn(familyOf) != family {
 				continue
 			}
 			for i := 0; i < it.Qty; i++ {
@@ -2475,7 +2535,7 @@ func (app *Builder) FormatEFT(ctx context.Context, doc *FitDoc) string {
 	for _, family := range []string{FitFamilyDrone, FitFamilyFighter, FitFamilyCargo} {
 		var lines []string
 		for _, it := range doc.Items {
-			if familyOf[it.TypeID] != family {
+			if it.FamilyIn(familyOf) != family {
 				continue
 			}
 			lines = append(lines, fmt.Sprintf("%s x%d", nameOf(it.TypeID), it.Qty))
@@ -2489,7 +2549,7 @@ func (app *Builder) FormatEFT(ctx context.Context, doc *FitDoc) string {
 	known := map[string]bool{FitFamilyLow: true, FitFamilyMedium: true, FitFamilyHigh: true,
 		FitFamilyRig: true, FitFamilySubsystem: true, FitFamilyDrone: true, FitFamilyFighter: true, FitFamilyCargo: true}
 	for _, it := range doc.Items {
-		if known[familyOf[it.TypeID]] {
+		if known[it.FamilyIn(familyOf)] {
 			continue
 		}
 		rest = append(rest, fmt.Sprintf("%s x%d", nameOf(it.TypeID), it.Qty))
@@ -2548,7 +2608,7 @@ func (app *Builder) PublicFitSections(ctx context.Context, doc *FitDoc) []Fittin
 	byFamily := map[string][]FittingItemRow{}
 	order := []string{}
 	for _, it := range doc.Items {
-		family := familyOf[it.TypeID]
+		family := it.FamilyIn(familyOf)
 		if _, ok := familyLabel[family]; !ok {
 			family = "other"
 		}

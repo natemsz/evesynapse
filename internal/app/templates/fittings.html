@@ -108,27 +108,18 @@
   <p>Pick a ship to start fitting. Your saved fits and the community browser are one search away, above.</p>
 </section>
 
-<div class="modal-backdrop" id="fit-picker" hidden>
-  <div class="modal fit-picker-modal" role="dialog" aria-modal="true" aria-labelledby="fit-picker-title">
-    <div class="modal-head">
-      <h2 id="fit-picker-title">Add module</h2>
-      <button type="button" class="modal-close" id="fit-picker-close" aria-label="Close">×</button>
-    </div>
-    <div class="fit-picker-head">
-      <select id="fit-picker-family" aria-label="Slot family">
-        <option value="high">High slots</option>
-        <option value="medium">Mid slots</option>
-        <option value="low">Low slots</option>
-        <option value="rig">Rigs</option>
-        <option value="subsystem">Subsystems</option>
-        <option value="charge">Ammunition</option>
-        <option value="any">Any item</option>
-      </select>
-      <input type="text" id="fit-picker-q" placeholder="Search modules…" autocomplete="off" aria-label="Search modules">
-      <span class="fit-picker-hint" id="fit-picker-hint" hidden></span>
-    </div>
-    <ul class="fit-picker-list" id="fit-picker-list"></ul>
+{{/* The workbench's Browse pane: one panel for the page, moved
+     into the left column's slot after every re-render so its open
+     branches and search survive edits. */}}
+<div class="fit-browse" id="fit-browse" hidden>
+  <div class="fit-browse-fams" id="fit-browse-fams" role="group" aria-label="What to browse">
+    <button type="button" data-browse-fam="high" class="on">High</button><button type="button" data-browse-fam="medium">Mid</button><button type="button" data-browse-fam="low">Low</button><button type="button" data-browse-fam="rig">Rigs</button><button type="button" data-browse-fam="subsystem">Subs</button><button type="button" data-browse-fam="drone">Drones</button><button type="button" data-browse-fam="fighter">Fighters</button><button type="button" data-browse-fam="charge">Charges</button><button type="button" data-browse-fam="any">Cargo</button>
   </div>
+  <span class="searchwrap fit-browse-searchwrap">
+    <input type="search" id="fit-browse-q" placeholder="Search high slot modules" autocomplete="off" aria-label="Search this list" aria-controls="fit-browse-tree">
+  </span>
+  <p class="fit-browse-hint" id="fit-browse-hint">Tap to fit, or drag onto a slot.</p>
+  <ul class="fit-browse-tree" id="fit-browse-tree" role="tree" aria-label="Market groups"></ul>
 </div>
 
 <div class="l-switcher fw-eft">

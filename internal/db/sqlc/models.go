@@ -534,6 +534,21 @@ type EsiNameMiss struct {
 	MissedAt time.Time `json:"missed_at"`
 }
 
+type FitBrowseGroup struct {
+	Family        string `json:"family"`
+	MarketGroupID int64  `json:"market_group_id"`
+	ParentGroupID int64  `json:"parent_group_id"`
+	Name          string `json:"name"`
+	TypeCount     int32  `json:"type_count"`
+}
+
+type FitBrowseType struct {
+	Family        string `json:"family"`
+	TypeID        int64  `json:"type_id"`
+	MarketGroupID int64  `json:"market_group_id"`
+	Name          string `json:"name"`
+}
+
 type FitRating struct {
 	FitID     int64     `json:"fit_id"`
 	UserID    int64     `json:"user_id"`

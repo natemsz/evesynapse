@@ -232,7 +232,8 @@ func TestFitSimulateMissingSkills(t *testing.T) {
 }
 
 // TestFitEFTRoundTrip: EFT text parses into the document and
-// exports back to equivalent text.
+// exports back to equivalent text; a module with a count is carried
+// in the cargo hold, not fitted.
 func TestFitEFTRoundTrip(t *testing.T) {
 	app, _ := fitTestApp(t)
 	ctx := context.Background()
@@ -243,6 +244,7 @@ func TestFitEFTRoundTrip(t *testing.T) {
 		"Fixture Blaster, Fixture Charge S\n\n" +
 		"Fixture Drone x3\n\n" +
 		"Fixture Charge S x100\n" +
+		"Fixture Plate x2\n" +
 		"Not A Real Module\n"
 	doc, notes := app.fitBuilder().ParseEFT(ctx, text)
 	if doc.ShipTypeID != fitShipID || doc.Name != "Test Fit" {
@@ -254,18 +256,25 @@ func TestFitEFTRoundTrip(t *testing.T) {
 	if len(notes) != 1 || !strings.Contains(notes[0], "Not A Real Module") {
 		t.Fatalf("notes = %v, want the unknown line reported", notes)
 	}
-	qty := map[int64]int{}
+	qty, held := map[int64]int{}, map[int64]int{}
 	for _, it := range doc.Items {
-		qty[it.TypeID] = it.Qty
+		if it.Cargo {
+			held[it.TypeID] = it.Qty
+		} else {
+			qty[it.TypeID] = it.Qty
+		}
 	}
 	if qty[fitBlasterID] != 2 || qty[fitPlateID] != 1 || qty[fitDroneID] != 3 || qty[fitChargeID] != 100 {
 		t.Fatalf("parsed quantities = %v", qty)
+	}
+	if held[fitPlateID] != 2 {
+		t.Fatalf("plates in cargo = %d, want 2 (held %v)", held[fitPlateID], held)
 	}
 
 	out := app.fitBuilder().FormatEFT(ctx, doc)
 	for _, want := range []string{
 		"[Fixture Frigate, Test Fit]", "Fixture Plate",
-		"Fixture Blaster, Fixture Charge S", "Fixture Drone x3", "Fixture Charge S x100",
+		"Fixture Blaster, Fixture Charge S", "Fixture Drone x3", "Fixture Charge S x100", "Fixture Plate x2",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("export missing %q in:\n%s", want, out)
@@ -286,7 +295,12 @@ func TestFitEFTRoundTrip(t *testing.T) {
 func canonFitDoc(doc *fitview.FitDoc) string {
 	cp := *doc
 	fitview.SanitizeFitDoc(&cp)
-	sort.Slice(cp.Items, func(i, j int) bool { return cp.Items[i].TypeID < cp.Items[j].TypeID })
+	sort.Slice(cp.Items, func(i, j int) bool {
+		if cp.Items[i].TypeID != cp.Items[j].TypeID {
+			return cp.Items[i].TypeID < cp.Items[j].TypeID
+		}
+		return !cp.Items[i].Cargo && cp.Items[j].Cargo
+	})
 	raw, _ := json.Marshal(cp)
 	return string(raw)
 }
@@ -886,19 +900,18 @@ func TestFitTipLinesColors(t *testing.T) {
 	}
 }
 
-// TestFitEditorPickerModal: the module picker is a modal
-// dialog with its own quick search, the add-slot buttons
-// open it over the workbench instead of scrolling away to
-// a detached panel at the module search's old location.
-func TestFitEditorPickerModal(t *testing.T) {
+// TestFitEditorBrowsePanel: the editor carries the Browse pane the
+// left column's Browse tab and the add-slot buttons open, with its
+// family chips, its search and its tree.
+func TestFitEditorBrowsePanel(t *testing.T) {
 	app, cookie := fitTestApp(t)
 	code, body := getPage(t, app, cookie, "/fittings/")
 	if code != http.StatusOK {
 		t.Fatalf("editor status = %d", code)
 	}
-	mustContain(t, "picker modal", body,
-		`class="modal-backdrop" id="fit-picker"`,
-		`aria-modal="true"`,
-		`id="fit-picker-title"`,
-		`id="fit-picker-q"`)
+	mustContain(t, "browse panel", body,
+		`id="fit-browse"`,
+		`data-browse-fam="high"`,
+		`id="fit-browse-q"`,
+		`id="fit-browse-tree"`)
 }

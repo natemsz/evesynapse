@@ -54,6 +54,7 @@ var Module = module.Module{
 		r.With(deps.AnonSim()).Post("/fittings/simulate/", h((*tool).handleFitSimulate))
 		r.With(deps.AnonSim()).Post("/fittings/solve-implants/", h((*tool).handleFitSolveImplants))
 		r.With(deps.AnonPages()).Get("/fittings/picker.json", h((*tool).handleFitPickerJSON))
+		r.With(deps.AnonPages()).Get("/fittings/browse.json", h((*tool).handleFitBrowseJSON))
 		auth := r.With(deps.RequireAuth())
 		auth.Get("/fittings/saved/", h((*tool).handleFittingsSaved))
 		auth.Get("/fittings/clones.json", h((*tool).handleFitClonesJSON))

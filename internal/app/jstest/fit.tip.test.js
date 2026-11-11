@@ -290,6 +290,9 @@ class EEl {
     return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null;
   }
   removeAttribute(k) { delete this.attrs[k]; }
+  hasAttribute(k) { return this.getAttribute(k) !== null; }
+  get firstChild() { return this.children[0] || null; }
+  remove() { if (this.parentNode) this.parentNode.removeChild(this); }
   appendChild(c) {
     if (c.parentNode) c.parentNode.removeChild(c);
     c.parentNode = this;
@@ -401,6 +404,17 @@ function buildWorkbench(env, ro) {
   for (let i = 0; i < 9; i++) {
     visual.appendChild(ringSlot(env, -40 + i * 40, { class: "fit-vslot", "data-fit-add": "med", "data-v-index": i, "data-v-family": "med" }));
   }
+  const slots = new EEl("div", env);
+  slots.className = "fit-slots";
+  const racks = new EEl("div", env);
+  racks.className = "fit-racks";
+  slots.appendChild(racks);
+  const browseSlot = new EEl("div", env);
+  browseSlot.className = "fit-browse-slot";
+  browseSlot.setAttribute("data-fit-browse-slot", "");
+  browseSlot.hidden = true;
+  slots.appendChild(browseSlot);
+  wb.appendChild(slots);
   return wb;
 }
 
@@ -412,31 +426,15 @@ function makeEditorEnv() {
   const editor = new EEl("div", env);
   editor.id = "fit-editor";
   body.appendChild(editor);
-  const picker = new EEl("div", env);
-  picker.id = "fit-picker";
-  picker.hidden = true;
-  const pickerTitle = new EEl("div", env);
-  pickerTitle.id = "fit-picker-title";
-  picker.appendChild(pickerTitle);
-  const pickerFamily = new EEl("select", env);
-  pickerFamily.id = "fit-picker-family";
-  pickerFamily.options = [{ textContent: "High slots" }, { textContent: "Mid slots" }];
-  pickerFamily.selectedIndex = 0;
-  pickerFamily.value = "high";
-  picker.appendChild(pickerFamily);
-  const pickerQ = new EEl("input", env);
-  pickerQ.id = "fit-picker-q";
-  picker.appendChild(pickerQ);
-  const pickerHint = new EEl("div", env);
-  pickerHint.id = "fit-picker-hint";
-  picker.appendChild(pickerHint);
-  const pickerList = new EEl("ul", env);
-  pickerList.id = "fit-picker-list";
-  picker.appendChild(pickerList);
-  const pickerClose = new EEl("button", env);
-  pickerClose.id = "fit-picker-close";
-  picker.appendChild(pickerClose);
-  editor.appendChild(picker);
+  const browse = new EEl("div", env);
+  browse.id = "fit-browse";
+  browse.hidden = true;
+  for (const id of ["fit-browse-fams", "fit-browse-q", "fit-browse-hint", "fit-browse-tree"]) {
+    const el = new EEl(id === "fit-browse-q" ? "input" : "div", env);
+    el.id = id;
+    browse.appendChild(el);
+  }
+  editor.appendChild(browse);
   editor.appendChild(buildWorkbench(env, false));
   env.html.SIM = function () { return buildWorkbench(env, false); };
   const docListeners = [];
@@ -488,7 +486,7 @@ function makeEditorEnv() {
   };
   loadFitScripts();
   env.editor = editor;
-  env.picker = picker;
+  env.browse = browse;
   env.dispatch = dispatch;
   env.wb = function () { return editor.querySelector(".fit-wb"); };
   env.slot = function (name) { return env.wb().querySelector('.fit-vslot[data-tip-name="' + name + '"]'); };
@@ -518,44 +516,56 @@ function makeEditorEnv() {
 // Longer than the editor's tooltip close delay.
 const PAST_CLOSE = 480;
 
-test("an empty slot opens the picker from anywhere on it, not just its border", function () {
+test("an empty slot opens the Browse pane from anywhere on it, not just its border", function () {
   const env = makeEditorEnv();
   const empty = env.wb().querySelector('.fit-vslot[data-fit-add="high"]');
+  const slot = function () { return env.wb().querySelector("[data-fit-browse-slot]"); };
   env.tap(empty.children[0]); // the "+" glyph that fills the slot's middle
-  assert.equal(env.picker.hidden, false, "a click on the slot's glyph opens the picker");
-  env.picker.hidden = true;
+  assert.equal(env.browse.parentNode, slot(), "the Browse panel moves into the left column");
+  assert.equal(slot().hidden, false, "a click on the slot's glyph shows it");
+  assert.equal(env.wb().querySelector(".fit-racks").hidden, true, "in place of the racks");
+  slot().hidden = true;
   env.tap(empty);
-  assert.equal(env.picker.hidden, false, "a click on the slot itself still opens it");
+  assert.equal(slot().hidden, false, "a click on the slot itself shows it too");
 });
 
-// Audit 2.4: the picker rendered its rows through a helper
-// that only existed inside the search suggester's scope, so
-// every non-empty result set threw and the picker stayed
-// empty. The feed answers one module here; the row must
-// render, icon first.
-test("the slot picker renders result rows with their icons", async function () {
+// A branch of the Browse tree opens to its rows: each says what
+// it is (icon first, the module's name) and carries what a tap
+// or a drag adds.
+test("a Browse branch renders its rows with their icons", async function () {
   const env = makeEditorEnv();
   const baseFetch = global.fetch;
   global.fetch = function (url) {
-    if (String(url).indexOf("/fittings/picker.json") === 0) {
+    const u = String(url);
+    if (u.indexOf("/fittings/browse.json") === 0) {
+      const top = u.indexOf("&group=0&") >= 0;
       return Promise.resolve({
         ok: true,
-        json() { return Promise.resolve([{ id: 4242, name: "Fixture Cannon", kind: "module" }]); },
+        json() {
+          return Promise.resolve(top
+            ? { groups: [{ id: 7, name: "Fixture Weapons", count: 1 }], types: [] }
+            : { groups: [], types: [{ id: 4242, name: "Fixture Cannon", kind: "high" }] });
+        },
       });
     }
     return baseFetch(url);
   };
-  const empty = env.wb().querySelector('.fit-vslot[data-fit-add="high"]');
-  env.tap(empty);
+  env.tap(env.wb().querySelector('.fit-vslot[data-fit-add="high"]'));
   await delay(20);
-  const list = env.picker.querySelector("#fit-picker-list");
-  assert.equal(list.children.length, 1, "one result row renders");
-  const row = list.children[0];
+  const tree = env.browse.querySelector("#fit-browse-tree");
+  const node = findByClass(tree, "fbt-node")[0];
+  assert.ok(node, "the family's top groups list");
+  env.dispatch(findByClass(node, "fbt-toggle")[0], "click");
+  await delay(20);
+  const row = findByClass(node, "fbt-row")[0];
+  assert.ok(row, "the opened branch lists its module");
   assert.equal(row.getAttribute("data-fit-pick"), "4242");
+  assert.equal(row.getAttribute("data-kind"), "high");
   const icons = findByClass(row, "sug-icon");
   assert.equal(icons.length, 1, "the row leads with its type icon");
   assert.equal(icons[0].tagName, "IMG");
   assert.ok(row.textContent.indexOf("Fixture Cannon") >= 0, "the row names the module");
+  global.fetch = baseFetch;
 });
 
 test("moving from one module to the next keeps the next module's tooltip up", async function () {

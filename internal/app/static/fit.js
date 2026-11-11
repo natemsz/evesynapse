@@ -19,9 +19,10 @@ var FitPhoneViews = (function () {
   function sections(view) {
     return {
       center: view === "radial",
-      slots: view === "racks",
+      slots: view === "racks" || view === "browse",
       bays: view === "racks",
-      stats: view === "stats"
+      stats: view === "stats",
+      browse: view === "browse"
     };
   }
   function nextState(validCSV, current) {
@@ -127,12 +128,11 @@ var FitGauges = (function () {
   var fittableChk = document.getElementById("fit-fittable");
   var usableChk = document.getElementById("fit-usable");
   var metaSel = document.getElementById("fit-meta");
-  var picker = document.getElementById("fit-picker");
-  var pickerHint = document.getElementById("fit-picker-hint");
-  var pickerList = document.getElementById("fit-picker-list");
-  var pickerFamily = document.getElementById("fit-picker-family");
-  var pickerQ = document.getElementById("fit-picker-q");
-  var pickerTitle = document.getElementById("fit-picker-title");
+  var browse = document.getElementById("fit-browse");
+  var browseFams = document.getElementById("fit-browse-fams");
+  var browseQ = document.getElementById("fit-browse-q");
+  var browseTree = document.getElementById("fit-browse-tree");
+  var browseHint = document.getElementById("fit-browse-hint");
   var saveBtn = document.getElementById("fit-save");
   var exportBtn = document.getElementById("fit-export-btn");
   var exportOut = document.getElementById("fit-eft-out");
@@ -261,7 +261,13 @@ var FitGauges = (function () {
       syncFilterUI();
       syncSubsystemUI();
       syncUndoButtons();
+      if (beforeShip !== shipOf(fresh)) {
+        // Rows answer for the hull they were fetched for.
+        browseCache = {};
+        if (browseTree) browseTree.innerHTML = "";
+      }
       applyFitView();
+      refreshBrowseRows();
       runPendingFlash();
       // Same hull: show what the edit moved. A new hull is a new
       // fit, so nothing is compared.
@@ -454,7 +460,7 @@ var FitGauges = (function () {
       var items = JSON.parse(JSON.stringify(state.items || []));
       var found = false;
       for (var i = 0; i < items.length; i++) {
-        if (items[i].typeId === it.id) { items[i].qty += 1; items[i].states.push(""); found = true; break; }
+        if (items[i].typeId === it.id && !items[i].cargo) { items[i].qty += 1; items[i].states.push(""); found = true; break; }
       }
       if (!found) items.push({ typeId: it.id, qty: 1, states: [] });
       var ctl = window.AbortController ? new AbortController() : null;
@@ -510,9 +516,11 @@ var FitGauges = (function () {
     }
   }
 
-  function findItem(typeID) {
+  // A line is a type and where it rides: on the hull (or in its
+  // natural hold) or carried in cargo as a refit (cargo: true).
+  function findItem(typeID, cargo) {
     for (var i = 0; i < state.items.length; i++) {
-      if (state.items[i].typeId === typeID) return i;
+      if (state.items[i].typeId === typeID && !!state.items[i].cargo === !!cargo) return i;
     }
     return -1;
   }
@@ -600,7 +608,7 @@ var FitGauges = (function () {
 
   // --- ship-restricted modules -------------------------------------
   // The workbench carries data-fit-restricted for fitted modules:
-  // {typeID: "Dreadnoughts"}. Search and picker rows carry the same
+  // {typeID: "Dreadnoughts"}. Search and Browse rows carry the same
   // for the hull they were asked about (it.only, it.subslot); rowSeen
   // keeps them so a pick or a drag from a row is checked before it
   // lands.
@@ -655,8 +663,8 @@ var FitGauges = (function () {
     if (!kind) return null;
     return editor.querySelector('.fit-chip[data-fit-subslot="' + kind + '"]');
   }
-  function addItem(typeID, qty, famHint) {
-    var fam = familyOfType(typeID) || famHint || "";
+  function addItem(typeID, qty, famHint, cargo) {
+    var fam = cargo ? "cargo" : (familyOfType(typeID) || famHint || "");
     if (fam === "subsystem") {
       var taken = subsystemTaken(typeID);
       if (taken) {
@@ -670,6 +678,7 @@ var FitGauges = (function () {
       if (g) max = parseInt(g.getAttribute("data-fit-max") || "0", 10) || 0;
       var count = 0;
       for (var i = 0; i < state.items.length; i++) {
+        if (state.items[i].cargo) continue;
         if ((familyOfType(state.items[i].typeId) || "") === fam) count += state.items[i].qty || 1;
       }
       if (max > 0 && count >= max) {
@@ -678,12 +687,14 @@ var FitGauges = (function () {
       }
     }
     pushHistory();
-    var i = findItem(typeID);
+    var i = findItem(typeID, cargo);
     if (i >= 0) {
       state.items[i].qty += qty;
       for (var k = 0; k < qty; k++) state.items[i].states.push("");
     } else {
-      state.items.push({ typeId: typeID, qty: qty, states: [] });
+      var line = { typeId: typeID, qty: qty, states: [] };
+      if (cargo) line.cargo = true;
+      state.items.push(line);
     }
     normItems();
     markDirty();
@@ -700,11 +711,11 @@ var FitGauges = (function () {
     markDirty();
     simulate();
   }
-  function decItem(typeID) {
-    pushHistory();
-    var i = findItem(typeID);
+  function decItem(typeID, cargo) {
+    var i = findItem(typeID, cargo);
     if (i < 0) return;
-    var fam = familyOfType(typeID) || "";
+    pushHistory();
+    var fam = cargo ? "cargo" : (familyOfType(typeID) || "");
     var name = typeNameOf(typeID);
     state.items[i].qty -= 1;
     state.items[i].states.pop();
@@ -733,6 +744,101 @@ var FitGauges = (function () {
     }
     markDirty();
     simulate();
+  }
+
+  // --- moves between the hull and the cargo hold --------------------
+  // A rack row or bay row carried in cargo carries data-fit-cargo.
+  function inCargo(el) {
+    return !!(el && el.closest && el.closest("[data-fit-cargo]"));
+  }
+  // takeOne and putOne edit one instance of a line in a copy of the
+  // items, so a move lands as one edit (one undo step, one simulate).
+  function takeOne(items, typeID, cargo) {
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it.typeId !== typeID || !!it.cargo !== !!cargo) continue;
+      it.qty -= 1;
+      if (it.states) it.states.pop();
+      if (it.qty <= 0) items.splice(i, 1);
+      return true;
+    }
+    return false;
+  }
+  function putOne(items, typeID, cargo) {
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it.typeId !== typeID || !!it.cargo !== !!cargo) continue;
+      it.qty += 1;
+      if (!cargo) (it.states = it.states || []).push("");
+      return;
+    }
+    var line = { typeId: typeID, qty: 1, states: cargo ? [] : [""] };
+    if (cargo) line.cargo = true;
+    items.push(line);
+  }
+  // roomIn says why a rack has no room for one more, or "" when it
+  // has (bays and the hold always have room).
+  function roomIn(fam) {
+    if (!fitFamLabels[fam]) return "";
+    var g = editor.querySelector('.fit-group[data-fit-group="' + fam + '"]');
+    if (!g) return "This hull has no " + fitFamLabels[fam] + " slots.";
+    var used = parseInt(g.getAttribute("data-fit-used") || "0", 10) || 0;
+    var max = parseInt(g.getAttribute("data-fit-max") || "0", 10) || 0;
+    return used < max ? "" : "No free " + fitFamLabels[fam] + " slots. Remove something first.";
+  }
+  // moveToCargo puts one fitted module (or bay item) in the hold.
+  function moveToCargo(typeID) {
+    var items = JSON.parse(JSON.stringify(state.items));
+    if (!takeOne(items, typeID, false)) return;
+    putOne(items, typeID, true);
+    pendingFlash = { type: "group", family: "cargo" };
+    setItems(items);
+  }
+  // moveFromCargo fits one module the hold carries, when its rack
+  // has room and the hull takes it.
+  function moveFromCargo(typeID, fam) {
+    if (checkRestricted(typeID, typeNameOf(typeID), fam)) return;
+    var full = roomIn(fam);
+    if (full) { rackRefuse(fam, full); return; }
+    if (fam === "subsystem" && subsystemTaken(typeID)) {
+      rackRefuse(fam, "This hull already has a subsystem of that kind. Remove it first.");
+      return;
+    }
+    var items = JSON.parse(JSON.stringify(state.items));
+    if (!takeOne(items, typeID, true)) return;
+    putOne(items, typeID, false);
+    pendingFlash = fitFamLabels[fam] ? { type: "slot", id: typeID, landed: true } : { type: "group", family: fam };
+    setItems(items);
+  }
+  // swapWithCargo: a module from the hold dropped on a filled slot
+  // of its rack takes that slot; the fitted one goes to the hold.
+  function swapWithCargo(cargoID, fittedID, fam) {
+    if (cargoID === fittedID) return;
+    if (checkRestricted(cargoID, typeNameOf(cargoID), fam)) return;
+    if (fam === "subsystem") {
+      var taken = subsystemTaken(cargoID);
+      if (taken && taken.getAttribute("data-fit-rowtype") !== String(fittedID)) {
+        rackRefuse(fam, "This hull already has a subsystem of that kind. Remove it first.");
+        return;
+      }
+    }
+    var items = JSON.parse(JSON.stringify(state.items));
+    if (!takeOne(items, cargoID, true) || !takeOne(items, fittedID, false)) return;
+    putOne(items, cargoID, false);
+    putOne(items, fittedID, true);
+    pendingFlash = { type: "slot", id: cargoID, landed: true };
+    setItems(items);
+  }
+  // swapFitted trades the places of two fitted lines of one rack.
+  function swapFitted(a, b) {
+    var ia = findItem(a, false), ib = findItem(b, false);
+    if (ia < 0 || ib < 0 || ia === ib) return;
+    var items = state.items.slice();
+    var t = items[ia];
+    items[ia] = items[ib];
+    items[ib] = t;
+    pendingFlash = { type: "slot", id: a };
+    setItems(items);
   }
   function setShip(typeID, name) {
     pushHistory();
@@ -785,18 +891,18 @@ var FitGauges = (function () {
       var impClear = t.closest("[data-fit-imp-clear]");
       if (impClear) { setImplant(impClear.getAttribute("data-fit-imp-clear"), 0); return; }
       var decEl = t.closest("[data-fit-dec]");
-      if (decEl) { decItem(parseInt(decEl.getAttribute("data-fit-dec"), 10) || 0); return; }
+      if (decEl) { decItem(parseInt(decEl.getAttribute("data-fit-dec"), 10) || 0, inCargo(decEl)); return; }
       var incEl = t.closest("[data-fit-inc]");
       if (incEl) {
         var incID = parseInt(incEl.getAttribute("data-fit-inc"), 10) || 0;
-        if (!checkRestricted(incID, typeNameOf(incID), "")) addItem(incID, 1);
+        if (inCargo(incEl)) addItem(incID, 1, "", true);
+        else if (!checkRestricted(incID, typeNameOf(incID), "")) addItem(incID, 1);
         return;
       }
       var addEl = t.closest("[data-fit-add]");
       var add = addEl ? addEl.getAttribute("data-fit-add") : "";
       if (add) {
-        if (add === "drone" || add === "fighter") { focusModuleSearch(add); return; }
-        openPicker(add);
+        openBrowse(add === "med" ? "medium" : add, true);
         return;
       }
       // On the phone, in Slot Racks, a tap on a fitted module's
@@ -991,7 +1097,7 @@ var FitGauges = (function () {
   function fmtNum(v) {
     return Math.round(v) === v ? String(v) : v.toFixed(1);
   }
-  // rowFacts is the right side of a search or picker row: tier, CPU,
+  // rowFacts is the right side of a search or Browse row: tier, CPU,
   // powergrid or calibration, the headline figure and the price,
   // then the Info control. It returns null for a row with nothing
   // to say.
@@ -1034,10 +1140,7 @@ var FitGauges = (function () {
     return r;
   }
 
-  // The type icon a suggestion or picker row leads with. Shared
-  // by the suggester and the module picker, the picker called
-  // it while it was still scoped inside makeSuggester, which
-  // threw on every non-empty picker result set.
+  // The type icon a suggestion or Browse row leads with.
   function suggestIcon(id) {
     var img = document.createElement("img");
     img.className = "sug-icon";
@@ -1127,10 +1230,22 @@ var FitGauges = (function () {
           li.appendChild(text);
           li.appendChild(rowFacts(it));
           rows.push({ it: it, li: li });
-          li.addEventListener("mousedown", function (ev) {
-            ev.preventDefault();
-            cfg.pick(it, ev.shiftKey);
-          });
+          if (cfg.dragRows && it.kind && it.kind !== "ship") {
+            // A drag source too (the editor's pointer controller):
+            // the press keeps focus in the field, the click picks.
+            li.setAttribute("data-fit-pick", String(it.id));
+            li.setAttribute("data-kind", browseRowKind(it));
+            if (it.cpu) li.setAttribute("data-cpu", fmtNum(it.cpu));
+            if (it.pg) li.setAttribute("data-pg", fmtNum(it.pg));
+            li._fitRow = it;
+            li.addEventListener("mousedown", function (ev) { ev.preventDefault(); });
+            li.addEventListener("click", function (ev) { cfg.pick(it, ev.shiftKey); });
+          } else {
+            li.addEventListener("mousedown", function (ev) {
+              ev.preventDefault();
+              cfg.pick(it, ev.shiftKey);
+            });
+          }
           if (cfg.preview) {
             li.addEventListener("mouseenter", function () { cfg.preview(it, li); });
             li.addEventListener("mouseleave", function () { cfg.preview(null); });
@@ -1181,21 +1296,21 @@ var FitGauges = (function () {
     return { query: query, close: close };
   }
 
-  // Charges can't be fitted as items: set them on a fitted weapon's
-  // ammunition select when one takes them, else fall back to the
-  // picker so the user can browse.
+  // A charge loads into every fitted weapon that takes it; with no
+  // such weapon it goes in the cargo hold.
   function pickCharge(it) {
     var rows = editor.querySelectorAll("[data-fit-ammo-for]");
+    var weapons = [];
     for (var i = 0; i < rows.length; i++) {
       var ids = (rows[i].getAttribute("data-fit-ammo-ids") || "").split(",");
-      if (ids.indexOf(String(it.id)) >= 0) {
-        setCharge(rows[i].getAttribute("data-fit-ammo-for"), it.id);
-        if (modInput) modInput.value = "";
-        return;
-      }
+      if (ids.indexOf(String(it.id)) >= 0) weapons.push(rows[i].getAttribute("data-fit-ammo-for"));
     }
-    if (modInput) modInput.value = it.name;
-    openPicker("any", it.name);
+    if (!weapons.length) { addItem(it.id, 1, "cargo", true); return; }
+    pushHistory();
+    for (var w = 0; w < weapons.length; w++) state.charges[weapons[w]] = it.id;
+    markDirty();
+    pendingFlash = { type: "charge", id: weapons[0] };
+    simulate();
   }
 
   var shipSearch = makeSuggester(shipInput, shipList, {
@@ -1217,6 +1332,7 @@ var FitGauges = (function () {
   var modSearch = makeSuggester(modInput, modList, {
     family: function () { return modFamily; },
     dropShips: true,
+    dragRows: true,
     // A pick closes the list (and the phone search panel, a no-op
     // above the band) so the fit is in view; Shift+click or
     // Ctrl+Enter keeps it open to add several.
@@ -1240,9 +1356,8 @@ var FitGauges = (function () {
       addItem(it.id, 1, kind);
       return;
     }
-    // Anything else (e.g. cargo items): jump the picker to it.
-    if (modInput) modInput.value = it.name;
-    openPicker("any", it.name);
+    // Anything else goes in the cargo hold.
+    addItem(it.id, 1, "cargo", true);
   }
 
   if (famChips) {
@@ -1250,9 +1365,6 @@ var FitGauges = (function () {
       var b = ev.target && ev.target.closest ? ev.target.closest("button[data-fam]") : null;
       if (!b) return;
       setFamChip(b.getAttribute("data-fam"));
-      // The user took the wheel: a chip set by the drone-add flow
-      // no longer restores.
-      modSearchReturnFam = null;
     });
   }
   function setFamChip(fam) {
@@ -1265,37 +1377,11 @@ var FitGauges = (function () {
     }
     modSearch.query();
   }
-  // Drones flow: the "+ Add drones"
-  // control focuses the module search with the Drones chip
-  // pre-selected; drones are picked from the normal results. When
-  // the user clears the search or picks another chip, the previous
-  // filter state restores automatically.
-  var modSearchReturnFam = null;
-  function focusModuleSearch(fam) {
-    // On the phone the search lives behind its toggle: open the
-    // panel so the field being focused is actually on screen.
-    if (phoneOn()) setSearchOpen(true, false);
-    if (modSearchReturnFam === null) modSearchReturnFam = modFamily;
-    if (modInput) modInput.value = "";
-    setFamChip(fam);
-    modSearch.query(true); // empty query lists the whole family
-    if (modInput) {
-      if (modInput.scrollIntoView) modInput.scrollIntoView({ block: "center" });
-      try { modInput.focus({ preventScroll: true }); } catch (e) { modInput.focus(); }
-    }
-  }
-  if (modInput) {
-    modInput.addEventListener("input", function () {
-      if (modInput.value.trim() === "" && modSearchReturnFam !== null) {
-        var back = modSearchReturnFam;
-        modSearchReturnFam = null;
-        setFamChip(back);
-      }
-    });
-  }
   function filtersChanged() {
     modSearch.query();
-    if (picker && !picker.hidden) queryPicker();
+    browseCache = {};
+    if (browseTree) browseTree.innerHTML = "";
+    if (browseShown()) renderBrowse();
   }
   // --- implants: one search per clone slot --------------------------
   // Each slot's box searches only that slot's implants; picks
@@ -1742,134 +1828,488 @@ var FitGauges = (function () {
     sortSel.addEventListener("change", apply);
   })();
 
-  // --- module picker -------------------------------------------
-  // The picker is a modal: it opens over the workbench,
-  // scoped to the family of the slot (or search result) that
-  // summoned it, with its own quick search. Rows that will not
-  // fit now (rowReason) list dimmed with the reason; "Fittable
-  // only" hides them.
-  function openPicker(family, seedQ) {
-    if (!picker) return;
-    if (window.EveSynapseModal) window.EveSynapseModal.open(picker, { focus: false });
-    else picker.hidden = false;
-    if (pickerFamily && family) {
-      pickerFamily.value = family;
-      if (pickerTitle) {
-        var opt = pickerFamily.options[pickerFamily.selectedIndex];
-        pickerTitle.textContent = opt ? "Add module: " + opt.textContent : "Add module";
+  // --- Browse pane ---------------------------------------------------
+  // The left column's second tab (a fourth view on phones): the
+  // market groups of one slot family as a tree, with a search on
+  // top. The page has one panel; mountBrowse moves it into every
+  // fresh workbench, so open branches and the search survive edits.
+  // Rows that will not fit now list dimmed with the reason (the
+  // module search's rowReason); "Fittable only" hides them.
+  var leftPane = "fit";
+  var browseFam = "high";
+  var browseCache = {};
+  var browseOpen = {};
+  var browseScroll = 0;
+  var browseTimer = null;
+  var browseRackFams = { high: 1, medium: 1, low: 1, rig: 1, subsystem: 1, drone: 1, fighter: 1 };
+  var browseNames = {
+    high: "high slot modules", medium: "mid slot modules", low: "low slot modules",
+    rig: "rigs", subsystem: "subsystems", drone: "drones", fighter: "fighters",
+    charge: "ammunition and charges", any: "any item for the cargo hold"
+  };
+  function browseShown() {
+    return phoneOn() ? fitView === "browse" : leftPane === "browse";
+  }
+  function mountBrowse() {
+    var wb = workbench();
+    if (!wb || !browse) return;
+    var slot = wb.querySelector("[data-fit-browse-slot]");
+    var racks = wb.querySelector(".fit-racks");
+    var shown = browseShown();
+    if (slot && browse.parentNode !== slot) {
+      slot.appendChild(browse);
+      if (browseTree) browseTree.scrollTop = browseScroll;
+    }
+    browse.hidden = false;
+    if (slot) slot.hidden = !shown;
+    if (racks) racks.hidden = shown;
+    var tabs = wb.querySelectorAll("[data-fit-pane]");
+    for (var i = 0; i < tabs.length; i++) {
+      var on = tabs[i].getAttribute("data-fit-pane") === (shown ? "browse" : "fit");
+      tabs[i].classList.toggle("on", on);
+      tabs[i].setAttribute("aria-selected", on ? "true" : "false");
+    }
+    if (shown && browseTree && !browseTree.firstChild) renderBrowse();
+  }
+  function setLeftPane(pane) {
+    leftPane = pane === "browse" ? "browse" : "fit";
+    mountBrowse();
+  }
+  // openBrowse shows the Browse pane on one family (the "+" of an
+  // empty slot, a bay's add button).
+  function openBrowse(fam, focus) {
+    if (!browseNames[fam]) fam = "high";
+    if (fam !== browseFam || (browseQ && browseQ.value)) {
+      if (browseQ) browseQ.value = "";
+      setBrowseFam(fam);
+    }
+    if (phoneOn()) {
+      setSearchOpen(false, false);
+      setFitView("browse");
+    } else {
+      setLeftPane("browse");
+    }
+    if (browse && browse.scrollIntoView) browse.scrollIntoView({ block: "nearest" });
+    if (focus && !phoneOn() && browseQ) {
+      try { browseQ.focus({ preventScroll: true }); } catch (e) { browseQ.focus(); }
+    }
+  }
+  function setBrowseFam(fam) {
+    browseFam = fam;
+    if (browseFams) {
+      var btns = browseFams.querySelectorAll("button[data-browse-fam]");
+      for (var i = 0; i < btns.length; i++) {
+        var on = btns[i].getAttribute("data-browse-fam") === fam;
+        btns[i].classList.toggle("on", on);
+        btns[i].setAttribute("aria-pressed", on ? "true" : "false");
       }
     }
-    if (pickerQ) pickerQ.value = seedQ || "";
-    queryPicker();
-    var q = pickerQ || modInput;
-    if (q && q.focus) q.focus();
+    if (browseQ) browseQ.placeholder = "Search " + browseNames[fam];
+    browseScroll = 0;
+    renderBrowse();
   }
-  function closePicker() {
-    if (!picker) return;
-    if (window.EveSynapseModal) window.EveSynapseModal.close(picker);
-    else picker.hidden = true;
+  function browseURL(group) {
+    return "/fittings/browse.json?family=" + encodeURIComponent(browseFam) +
+      "&group=" + group + filterQuery() +
+      (state.shipTypeId ? "&ship=" + state.shipTypeId : "");
   }
-  function queryPicker() {
-    if (!pickerList) return;
-    var family = pickerFamily ? pickerFamily.value : "any";
-    var q = pickerQ ? pickerQ.value.trim() : (modInput ? modInput.value.trim() : "");
-    fetch(pickerURL(family, q), {
-      cache: "no-store", headers: { "Accept": "application/json" }
-    }).then(function (resp) {
-      return resp.ok ? resp.json() : [];
-    }).then(function (rows) {
-      pickerList.innerHTML = "";
-      (applyFittable(rows) || []).forEach(function (it) {
-        var li = document.createElement("li");
-        li.setAttribute("data-fit-pick", String(it.id));
-        if (it.kind) li.setAttribute("data-kind", it.kind);
-        // Tap adds (handled by the pointer controller); press-and-
-        // drag moves it onto a slot. No mousedown+preventDefault
-        // here, that kills the drag gesture before it starts.
-        li.appendChild(suggestIcon(it.id));
-        var text = document.createElement("span");
-        text.className = "sug-text";
-        var name = document.createElement("span");
-        name.textContent = it.name;
-        text.appendChild(name);
-        if (it.label) {
-          var lab = document.createElement("span");
-          lab.className = "sug-label";
-          lab.textContent = it.label;
-          text.appendChild(lab);
-        }
-        var why = markReason(li, it);
-        if (why) text.appendChild(why);
-        li.appendChild(text);
-        li.appendChild(rowFacts(it));
-        pickerList.appendChild(li);
-      });
-      if (!rows || rows.length === 0) {
-        var li = document.createElement("li");
-        li.textContent = "Nothing found. Try a different search.";
-        pickerList.appendChild(li);
-      }
-      if (pickerHint) {
-        if (q.length >= 2) {
-          pickerHint.textContent = "matching \u201c" + q + "\u201d";
-          pickerHint.hidden = false;
-        } else {
-          pickerHint.hidden = true;
-        }
-      }
-    }).catch(function () {});
-  }
-  if (pickerFamily) pickerFamily.addEventListener("change", queryPicker);
-  var pickerClose = document.getElementById("fit-picker-close");
-  if (pickerClose) pickerClose.addEventListener("click", closePicker);
-  if (pickerQ) {
-    var pickerQTimer = null;
-    pickerQ.addEventListener("input", function () {
-      if (pickerQTimer) clearTimeout(pickerQTimer);
-      pickerQTimer = setTimeout(queryPicker, 160);
+  function fetchBrowse(group) {
+    var url = browseURL(group);
+    if (browseCache[url]) return Promise.resolve(browseCache[url]);
+    return fetch(url, { headers: { "Accept": "application/json" } }).then(function (resp) {
+      return resp.ok ? resp.json() : { groups: [], types: [] };
+    }).then(function (data) {
+      browseCache[url] = data;
+      return data;
     });
   }
-  // Backdrop click and Escape are the shared modal's (app.js
-  // EveSynapseModal), as on the app's other dialogs.
+  // browseRowKind is what a row is to the drag and tap rules: its
+  // slot family, "charge", or "cargo" for anything else.
+  function browseRowKind(it) {
+    var k = it.kind || "";
+    if (browseRackFams[k] || k === "charge") return k;
+    return "cargo";
+  }
+  function browseRow(it) {
+    var li = document.createElement("li");
+    li.className = "fbt-row";
+    li.setAttribute("role", "treeitem");
+    li.tabIndex = 0;
+    li.setAttribute("data-fit-pick", String(it.id));
+    li.setAttribute("data-kind", browseRowKind(it));
+    if (it.cpu) li.setAttribute("data-cpu", fmtNum(it.cpu));
+    if (it.pg) li.setAttribute("data-pg", fmtNum(it.pg));
+    li._fitRow = it;
+    li.appendChild(suggestIcon(it.id));
+    var text = document.createElement("span");
+    text.className = "sug-text";
+    var name = document.createElement("span");
+    name.className = "sug-name";
+    name.textContent = it.name;
+    text.appendChild(name);
+    if (it.label) {
+      var lab = document.createElement("span");
+      lab.className = "sug-label";
+      lab.textContent = it.label;
+      text.appendChild(lab);
+    }
+    li.appendChild(text);
+    li.appendChild(rowFacts(it));
+    markBrowseRow(li);
+    return li;
+  }
+  // markBrowseRow (re)states why a row will not fit the fit as it
+  // stands; every simulate calls it again over the open rows.
+  function markBrowseRow(li) {
+    var it = li._fitRow;
+    if (!it) return;
+    li.classList.remove("sug-wontfit");
+    var old = li.querySelector(".sug-why");
+    if (old) old.remove();
+    var why = markReason(li, it);
+    var text = li.querySelector(".sug-text");
+    if (why && text) text.appendChild(why);
+  }
+  function refreshBrowseRows() {
+    if (!browseTree) return;
+    var rows = browseTree.querySelectorAll(".fbt-row");
+    for (var i = 0; i < rows.length; i++) markBrowseRow(rows[i]);
+  }
+  function browseEmpty(ul, msg) {
+    var li = document.createElement("li");
+    li.className = "fbt-empty";
+    li.textContent = msg;
+    ul.appendChild(li);
+  }
+  function fillLevel(ul, data) {
+    ul.innerHTML = "";
+    var open = browseOpen[browseFam] || (browseOpen[browseFam] = {});
+    (data.groups || []).forEach(function (g) {
+      var li = document.createElement("li");
+      li.className = "fbt-node";
+      li.setAttribute("role", "treeitem");
+      li.setAttribute("aria-expanded", "false");
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "fbt-toggle";
+      btn.setAttribute("data-browse-group", String(g.id));
+      var nm = document.createElement("span");
+      nm.className = "fbt-name";
+      nm.textContent = g.name;
+      var n = document.createElement("span");
+      n.className = "fbt-count";
+      n.textContent = String(g.count);
+      btn.appendChild(nm);
+      btn.appendChild(n);
+      li.appendChild(btn);
+      var sub = document.createElement("ul");
+      sub.setAttribute("role", "group");
+      sub.hidden = true;
+      li.appendChild(sub);
+      ul.appendChild(li);
+      if (open[g.id]) toggleBrowseNode(li, true);
+    });
+    var rows = data.types || [];
+    if (browseRackFams[browseFam]) rows = applyFittable(rows);
+    rows.forEach(function (it) { ul.appendChild(browseRow(it)); });
+    if (!ul.firstChild) browseEmpty(ul, "Nothing here with these filters.");
+  }
+  function toggleBrowseNode(li, want) {
+    var btn = li.querySelector(".fbt-toggle");
+    var sub = li.querySelector("ul");
+    if (!btn || !sub) return;
+    var id = parseInt(btn.getAttribute("data-browse-group"), 10) || 0;
+    var open = browseOpen[browseFam] || (browseOpen[browseFam] = {});
+    var on = want === undefined ? li.getAttribute("aria-expanded") !== "true" : want;
+    li.setAttribute("aria-expanded", on ? "true" : "false");
+    sub.hidden = !on;
+    if (on) open[id] = true; else delete open[id];
+    if (on && !sub.firstChild) {
+      var fam = browseFam;
+      fetchBrowse(id).then(function (data) {
+        if (fam !== browseFam) return;
+        fillLevel(sub, data);
+        if (want === undefined) revealBranch(li);
+      }).catch(function () {});
+    } else if (on && want === undefined) {
+      revealBranch(li);
+    }
+  }
+  // revealBranch scrolls the tree so a branch the user just opened
+  // shows its first rows.
+  function revealBranch(li) {
+    if (!browseTree || !li.getBoundingClientRect) return;
+    if (browseTree.scrollHeight <= browseTree.clientHeight) {
+      // The tree flows with the page (phones): scroll the page.
+      if (li.scrollIntoView) li.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    var box = browseTree.getBoundingClientRect();
+    var r = li.getBoundingClientRect();
+    if (r.bottom > box.bottom) {
+      browseTree.scrollTop += Math.min(r.top - box.top, r.bottom - box.bottom);
+    }
+  }
+  function renderBrowse() {
+    if (!browseTree) return;
+    var q = browseQ ? browseQ.value.trim() : "";
+    var fam = browseFam;
+    if (browseHint) {
+      browseHint.textContent = fam === "any"
+        ? "Search any item to carry in the cargo hold."
+        : fam === "charge" ? "Tap to load every weapon that takes it, or drag onto a weapon."
+        : "Tap to fit, or drag onto an empty slot.";
+    }
+    if (q.length >= 2 || fam === "any") {
+      browseTree.setAttribute("role", "listbox");
+      browseTree.innerHTML = "";
+      if (q.length < 2) return;
+      fetch(pickerURL(fam, q), { headers: { "Accept": "application/json" } }).then(function (resp) {
+        return resp.ok ? resp.json() : [];
+      }).then(function (rows) {
+        if (fam !== browseFam || (browseQ && browseQ.value.trim() !== q)) return;
+        browseTree.innerHTML = "";
+        rows = rows || [];
+        if (browseRackFams[fam]) rows = applyFittable(rows);
+        rows.forEach(function (it) {
+          if (it.kind === "ship") return;
+          browseTree.appendChild(browseRow(it));
+        });
+        if (!browseTree.firstChild) browseEmpty(browseTree, "Nothing found. Try a different search.");
+      }).catch(function () {});
+      return;
+    }
+    browseTree.setAttribute("role", "tree");
+    fetchBrowse(0).then(function (data) {
+      if (fam !== browseFam || (browseQ && browseQ.value.trim().length >= 2)) return;
+      fillLevel(browseTree, data);
+      browseTree.scrollTop = browseScroll;
+    }).catch(function () {});
+  }
+  // pickRow adds what a Browse row (or a module search row) is: a
+  // module or drone to its rack or bay, a charge into the weapons
+  // that take it, anything else to the cargo hold. On a phone the
+  // pick goes back to the racks so the change is in view.
+  function pickRow(typeID, kind, name) {
+    if (kind === "charge") pickCharge({ id: typeID, name: name });
+    else if (kind === "cargo") addItem(typeID, 1, "cargo", true);
+    else if (!checkRestricted(typeID, name, kind)) addItem(typeID, 1, kind);
+    else return;
+    if (phoneOn() && fitView === "browse") setFitView("racks");
+  }
+  if (browse) {
+    if (browseFams) {
+      browseFams.addEventListener("click", function (ev) {
+        var b = ev.target && ev.target.closest ? ev.target.closest("button[data-browse-fam]") : null;
+        if (!b) return;
+        if (browseQ) browseQ.value = "";
+        setBrowseFam(b.getAttribute("data-browse-fam"));
+      });
+    }
+    if (browseQ) {
+      browseQ.addEventListener("input", function () {
+        if (browseTimer) clearTimeout(browseTimer);
+        browseTimer = setTimeout(renderBrowse, 160);
+      });
+    }
+    if (browseTree) {
+      browseTree.addEventListener("scroll", function () { browseScroll = browseTree.scrollTop; });
+    }
+    browse.addEventListener("click", function (ev) {
+      var t = ev.target && ev.target.closest ? ev.target.closest(".fbt-toggle") : null;
+      if (t) toggleBrowseNode(t.closest(".fbt-node"));
+    });
+    browse.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Enter") return;
+      var row = ev.target && ev.target.closest ? ev.target.closest(".fbt-row") : null;
+      if (!row) return;
+      ev.preventDefault();
+      var it = row._fitRow || {};
+      pickRow(it.id, row.getAttribute("data-kind") || "", it.name || "");
+    });
+  }
+  // The Fit / Browse tabs ride the re-rendered fragment: one
+  // delegated listener on the editor.
+  editor.addEventListener("click", function (ev) {
+    var b = ev.target && ev.target.closest ? ev.target.closest("[data-fit-pane]") : null;
+    if (b) setLeftPane(b.getAttribute("data-fit-pane"));
+  });
 
   // --- pointer drag and drop --------------------------------------
-  // In-game behavior, on mouse AND touch: tap shows the tooltip
-  // (never deletes); drag moves between slots. Dropping on an
-  // empty highlighted slot moves the module there; on an occupied
-  // highlighted slot the two swap. Invalid drops cancel;
-  // drag-off-to-delete still removes (the chip's minus button
-  // stays the explicit touch path).
+  // In-game behavior, on mouse AND touch: a tap shows the tooltip or
+  // adds the row; a drag moves things. Sources: ring slots, rack,
+  // bay and cargo rows, Browse rows and module search rows. What a
+  // drop does is dropAction's call; a drop that would replace or
+  // remove a module it was not asked to is never one (owner,
+  // 2026-11-10: on a filled slot, swap places if they can,
+  // otherwise nothing happens).
   //
-  // Why Pointer Events and not HTML5 drag-and-drop: mobile
-  // browsers never fire dragstart/dragover/drop for touch, so the
-  // old HTML5 wiring was dead on phones; and the picker's
-  // mousedown+preventDefault killed the native drag on desktop
-  // too. One pointer controller serves both. Slots carry
-  // data-v-family / data-v-index (doc order); the reorder applies
-  // against state.items directly.
-  // swap.js hoists the picker modal to <body>, out of the editor,
-  // so the pointer controller listens on both. The picker's copy
-  // runs only while the picker sits outside the editor, so no
-  // event is handled twice.
-  function onDragRoots(type, fn, capture) {
-    editor.addEventListener(type, fn, capture);
-    if (!picker) return;
-    picker.addEventListener(type, function (ev) {
-      if (!editor.contains(picker)) fn(ev);
-    }, capture);
-  }
+  // Pointer Events, not HTML5 drag-and-drop: mobile browsers never
+  // fire dragstart/dragover/drop for touch. One controller serves
+  // mouse and touch; on touch a long press starts a drag too.
   var DRAG_PX = 12;
+  var LONG_PRESS_MS = 450;
   var dragState = null; // pending or active pointer drag
   var eatNextClick = false; // the synthetic click after a drag-source pointerup
+  var rackFams = { high: 1, medium: 1, low: 1, rig: 1, subsystem: 1 };
+  var bayFams = { drone: 1, fighter: 1 };
+  var famWords = { high: "high slots", medium: "mid slots", low: "low slots", rig: "rig slots", subsystem: "subsystem slots", drone: "the drone bay", fighter: "the fighter bay", cargo: "the cargo hold" };
   function dragSourceAt(ev) {
-    if (ev.target && ev.target.closest && ev.target.closest("[data-fit-info]")) return null;
-    var t = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot.filled,[data-fit-pick]") : null;
-    return t;
+    var t = ev.target;
+    if (!t || !t.closest) return null;
+    if (t.closest("[data-fit-info], .fit-tip")) return null;
+    var row = t.closest(".fit-vslot.filled, [data-fit-pick]");
+    if (row) return row;
+    // A rack, bay or cargo row drags from anywhere but its own
+    // controls (steppers, count field).
+    if (t.closest("button, input, select, textarea, a")) return null;
+    return t.closest(".fit-group .fit-chip[data-fit-rowtype]");
   }
-  function slotAtPoint(x, y) {
+  // sourceOf describes what is being dragged: where it comes from
+  // ("fit" on the hull or in a bay, "cargo" carried in the hold,
+  // "new" from a list) and the family it belongs to.
+  function sourceOf(el) {
+    var id = parseInt(el.getAttribute("data-fit-vslot") || el.getAttribute("data-fit-pick") || el.getAttribute("data-fit-rowtype") || "0", 10) || 0;
+    if (!id) return null;
+    if (el.hasAttribute("data-fit-vslot")) {
+      return { typeID: id, origin: "fit", family: el.getAttribute("data-v-family") || "", kind: "" };
+    }
+    if (el.hasAttribute("data-fit-pick")) {
+      var kind = el.getAttribute("data-kind") || "cargo";
+      return { typeID: id, origin: "new", family: kind === "charge" ? "" : kind, kind: kind };
+    }
+    if (el.hasAttribute("data-fit-cargo")) {
+      return { typeID: id, origin: "cargo", family: el.getAttribute("data-fit-home") || "", kind: "" };
+    }
+    var g = el.closest(".fit-group");
+    var fam = g ? g.getAttribute("data-fit-group") || "" : "";
+    return { typeID: id, origin: fam === "cargo" ? "hold" : "fit", family: fam, kind: "" };
+  }
+  // targetAt reads what is under the pointer: a slot (ring circle,
+  // rack row, empty-slot button) of a family, a group (rack, bay,
+  // cargo hold), nothing on the workbench, or off it.
+  function targetAt(x, y) {
     var el = document.elementFromPoint ? document.elementFromPoint(x, y) : null;
-    var t = el && el.closest ? el.closest(".fit-vslot") : null;
-    return t;
+    if (!el || !el.closest) return { off: true };
+    if (browse && browse.contains(el)) return { none: true };
+    var wb = workbench();
+    var slot = el.closest(".fit-vslot");
+    if (slot) {
+      var filled = slot.classList.contains("filled");
+      return {
+        el: slot, slot: true, family: slot.getAttribute("data-v-family") || "", filled: filled,
+        typeID: filled ? parseInt(slot.getAttribute("data-fit-vslot") || "0", 10) || 0 : 0,
+        index: parseInt(slot.getAttribute("data-v-index") || "-1", 10)
+      };
+    }
+    var group = el.closest(".fit-group[data-fit-group]");
+    if (group && wb && wb.contains(group)) {
+      var fam = group.getAttribute("data-fit-group") || "";
+      var chip = el.closest(".fit-chip[data-fit-rowtype]");
+      if (rackFams[fam] && chip) {
+        return { el: chip, slot: true, family: fam, filled: true, typeID: parseInt(chip.getAttribute("data-fit-rowtype"), 10) || 0, index: -1 };
+      }
+      var empty = el.closest(".fit-slot-empty");
+      if (rackFams[fam] && empty) return { el: empty, slot: true, family: fam, filled: false, typeID: 0, index: -1 };
+      return { el: group, group: true, family: fam };
+    }
+    if (wb && wb.contains(el)) return { none: true };
+    if (editor.contains(el) && el.closest(".fit-shipblock")) return { none: true };
+    return { off: true };
+  }
+  // dropAction decides what a drop of d on t does: { act } to do
+  // it, or { why } saying why not ("" when there is nothing to
+  // say). copy is Ctrl held: a fitted module dropped on an empty
+  // slot of its rack is copied there.
+  function dropAction(d, t, copy) {
+    var id = d.typeID;
+    if (t.off) {
+      if (d.origin === "fit" || d.origin === "hold") return { act: function () { decItem(id); } };
+      if (d.origin === "cargo") return { act: function () { decItem(id, true); } };
+      return { why: "" };
+    }
+    if (t.none) return { why: "" };
+    if (d.kind === "charge") {
+      if (t.slot && t.filled) return { act: function () { loadChargeOn(id, t); } };
+      if (t.group && t.family === "cargo") return { act: function () { addItem(id, 1, "cargo", true); } };
+      return { why: "Drop ammunition on a weapon" };
+    }
+    var fam = t.family;
+    if (t.group && fam === "cargo") {
+      if (d.origin === "fit") return { act: function () { moveToCargo(id); } };
+      if (d.origin === "new") return { act: function () { addItem(id, 1, "cargo", true); } };
+      return { why: "" };
+    }
+    if (d.origin === "hold") return { why: "" };
+    if (!d.family || d.family !== fam) {
+      if (d.family && d.family !== "cargo") return { why: "Goes in " + famWords[d.family] };
+      return { why: "Goes in the cargo hold" };
+    }
+    if (d.origin !== "fit" && restrictionFor(id)) return { why: "Only fits " + restrictionFor(id) };
+    if (bayFams[fam]) {
+      if (d.origin === "new") return { act: function () { addItem(id, 1, fam); } };
+      if (d.origin === "cargo") return { act: function () { moveFromCargo(id, fam); } };
+      return { why: "" };
+    }
+    // A rack: its slots and its group.
+    if (d.origin === "new") {
+      if (t.slot && t.filled) return { why: "Drop on an empty slot" };
+      var full = roomIn(fam);
+      if (full) return { why: full };
+      return { act: function () { if (!checkRestricted(id, "", fam)) addItem(id, 1, fam); } };
+    }
+    if (d.origin === "cargo") {
+      if (t.slot && t.filled) return { act: function () { swapWithCargo(id, t.typeID, fam); } };
+      var room = roomIn(fam);
+      if (room) return { why: room };
+      return { act: function () { moveFromCargo(id, fam); } };
+    }
+    // d.origin === "fit": along its own rack.
+    if (t.slot && t.filled) {
+      if (t.typeID === id) return { why: "" };
+      return { act: function () { swapFitted(id, t.typeID); } };
+    }
+    if (copy) {
+      var none = roomIn(fam);
+      if (none) return { why: none };
+      return { act: function () { addItem(id, 1, fam); } };
+    }
+    if (t.index >= 0) return { act: function () { pendingFlash = { type: "slot", id: id }; moveItemTo(id, fam, t.index); } };
+    return { why: "" };
+  }
+  // loadChargeOn checks the charge against the weapon under it (the
+  // picker's charge list for that weapon) and loads it, or flashes
+  // the slot when the weapon cannot take it.
+  function loadChargeOn(chargeID, t) {
+    var weaponID = t.typeID;
+    if (!(weaponID > 0)) return;
+    fetch("/fittings/picker.json?family=charge&weapon=" + weaponID, {
+      headers: { "Accept": "application/json" }
+    }).then(function (resp) {
+      return resp.ok ? resp.json() : [];
+    }).then(function (charges) {
+      var ok = (charges || []).some(function (ch) { return ch.id === chargeID; });
+      if (ok) { setCharge(String(weaponID), chargeID); return; }
+      var el = editor.querySelector('.fit-vslot[data-fit-vslot="' + weaponID + '"]') || t.el;
+      if (!el) return;
+      el.classList.add("fit-invalid");
+      setTimeout(function () { el.classList.remove("fit-invalid"); }, 1000);
+    }).catch(function () {});
+  }
+  // The ghost carries the module's icon, name and fitting cost, and
+  // says why the spot under it will not take it.
+  function costOf(d) {
+    var el = d.el;
+    var cpu = el.getAttribute("data-tip-cpu") || el.getAttribute("data-cpu") || "";
+    var pg = el.getAttribute("data-tip-pg") || el.getAttribute("data-pg") || "";
+    if (!cpu && !pg) {
+      var v = editor.querySelector('.fit-vslot[data-fit-vslot="' + d.typeID + '"]');
+      if (v) { cpu = v.getAttribute("data-tip-cpu") || ""; pg = v.getAttribute("data-tip-pg") || ""; }
+    }
+    var parts = [];
+    if (cpu && cpu !== "0") parts.push(cpu.replace(/\s*tf$/, "") + " tf");
+    if (pg && pg !== "0") parts.push(pg.replace(/\s*MW$/, "") + " MW");
+    return parts.join(" · ");
   }
   function dragGhost(d) {
     var g = document.createElement("div");
@@ -1881,10 +2321,28 @@ var FitGauges = (function () {
       c.alt = "";
       c.draggable = false;
       g.appendChild(c);
-    } else {
-      g.textContent = d.el.textContent;
     }
+    var txt = document.createElement("span");
+    txt.className = "fit-ghost-text";
+    var nm = document.createElement("span");
+    nm.className = "fit-ghost-name";
+    nm.textContent = typeNameOf(d.typeID) !== "a module" ? typeNameOf(d.typeID)
+      : (d.el._fitRow && d.el._fitRow.name) || d.el.getAttribute("data-tip-name") || "";
+    txt.appendChild(nm);
+    var cost = costOf(d);
+    if (cost) {
+      var cs = document.createElement("span");
+      cs.className = "fit-ghost-cost";
+      cs.textContent = cost;
+      txt.appendChild(cs);
+    }
+    var why = document.createElement("span");
+    why.className = "fit-ghost-why";
+    why.hidden = true;
+    txt.appendChild(why);
+    g.appendChild(txt);
     document.body.appendChild(g);
+    d.ghostWhy = why;
     return g;
   }
   function moveGhost(d, x, y) {
@@ -1892,196 +2350,192 @@ var FitGauges = (function () {
     d.ghost.style.left = (x - 22) + "px";
     d.ghost.style.top = (y - 22) + "px";
   }
+  var dropCandidates = ".fit-vslot, .fit-group[data-fit-group], .fit-slots .fit-chip[data-fit-rowtype], .fit-slot-empty";
   function clearDragMarks() {
-    var marks = editor.querySelectorAll(".fit-vslot.drop-ok,.fit-vslot.drop-dim");
+    var marks = editor.querySelectorAll(".drop-ok, .drop-dim, .drop-over");
     for (var i = 0; i < marks.length; i++) {
       marks[i].classList.remove("drop-ok");
       marks[i].classList.remove("drop-dim");
+      marks[i].classList.remove("drop-over");
     }
   }
+  // Valid targets light, the rest dim; the target under the pointer
+  // is marked on top.
   function highlightForDrag(d) {
     clearDragMarks();
-    if (!d.fromFit && restrictionFor(d.typeID)) return; // lights up nothing
-    var slots = editor.querySelectorAll(".fit-vslot");
-    for (var i = 0; i < slots.length; i++) {
-      var s = slots[i];
-      if (d.kind === "charge") {
-        // Charge drag: highlight filled weapon slots (Issue 2)
-        if (s.classList.contains("filled") && s.getAttribute("data-fit-vslot")) {
-          s.classList.add("drop-ok");
-        } else {
-          s.classList.add("drop-dim");
-        }
-      } else {
-        var fam = s.getAttribute("data-v-family") || "";
-        if (d.family && fam === d.family) s.classList.add("drop-ok");
-        else s.classList.add("drop-dim");
-      }
+    var wb = workbench();
+    if (!wb) return;
+    var els = wb.querySelectorAll(dropCandidates);
+    for (var i = 0; i < els.length; i++) {
+      var t = elementTarget(els[i]);
+      var a = t ? dropAction(d, t, false) : { why: "" };
+      els[i].classList.add(a.act ? "drop-ok" : "drop-dim");
     }
   }
+  // elementTarget is targetAt for one element.
+  function elementTarget(el) {
+    if (el.classList.contains("fit-vslot")) {
+      var filled = el.classList.contains("filled");
+      return { el: el, slot: true, family: el.getAttribute("data-v-family") || "", filled: filled,
+        typeID: filled ? parseInt(el.getAttribute("data-fit-vslot") || "0", 10) || 0 : 0,
+        index: parseInt(el.getAttribute("data-v-index") || "-1", 10) };
+    }
+    var g = el.closest(".fit-group[data-fit-group]");
+    var fam = g ? g.getAttribute("data-fit-group") || "" : "";
+    if (el.classList.contains("fit-chip") && rackFams[fam]) {
+      return { el: el, slot: true, family: fam, filled: true, typeID: parseInt(el.getAttribute("data-fit-rowtype"), 10) || 0, index: -1 };
+    }
+    if (el.classList.contains("fit-slot-empty") && rackFams[fam]) {
+      return { el: el, slot: true, family: fam, filled: false, typeID: 0, index: -1 };
+    }
+    if (el.classList.contains("fit-group")) return { el: el, group: true, family: fam };
+    return null;
+  }
+  function dragClass(on) {
+    var root = document.documentElement;
+    if (root) root.classList.toggle("fit-dragging", on);
+  }
   function startPointerDrag(ev, d) {
-    // A restricted module cannot be dragged on; one already fitted
-    // (an import, an older fit) still drags off or along its rack.
-    if (!d.fromFit && restrictionFor(d.typeID)) { dragState = null; return; }
+    if (d.lp) { clearTimeout(d.lp); d.lp = null; }
+    var src = sourceOf(d.el);
+    if (!src) { dragState = null; return; }
+    for (var k in src) d[k] = src[k];
     d.active = true;
-    // A drag out of the picker needs the workbench visible:
-    // the modal backdrop would swallow every drop target.
-    if (!d.fromFit && picker) closePicker();
     closeTip();
+    endPreview();
+    // A mouse press that turned into a drag must not leave text
+    // selected behind it.
+    if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (e) { /* not critical */ } }
+    dragClass(true);
     try { d.el.setPointerCapture(ev.pointerId); } catch (e) { /* not critical */ }
     d.ghost = dragGhost(d);
     moveGhost(d, ev.clientX, ev.clientY);
     d.el.classList.add("drag-src");
+    // A drag out of the module search: its list stops covering the
+    // workbench (it stays in the page, it holds the pointer).
+    d.list = d.el.closest(".suggest");
+    if (d.list) d.list.classList.add("fit-list-dragging");
     highlightForDrag(d);
     movePointerDrag(ev, d);
   }
   function movePointerDrag(ev, d) {
     moveGhost(d, ev.clientX, ev.clientY);
-    var slot = slotAtPoint(ev.clientX, ev.clientY);
-    d.dropIndex = -1;
-    if (slot) {
-      var fam = slot.getAttribute("data-v-family") || "";
-      if (d.kind === "charge") {
-        // Charge drag: highlight filled weapon slots (Issue 2)
-        if (slot.classList.contains("filled") && slot.getAttribute("data-fit-vslot")) {
-          d.dropIndex = parseInt(slot.getAttribute("data-v-index") || "-1", 10);
-          if (!(d.dropIndex >= 0)) d.dropIndex = -1;
-        }
-      } else if (d.family && fam === d.family && (d.fromFit || !restrictionFor(d.typeID))) {
-        d.dropIndex = parseInt(slot.getAttribute("data-v-index") || "-1", 10);
-        if (!(d.dropIndex >= 0)) d.dropIndex = -1;
-      }
+    var t = targetAt(ev.clientX, ev.clientY);
+    var a = dropAction(d, t, !!(ev.ctrlKey || ev.metaKey));
+    if (d.overEl && d.overEl !== t.el) d.overEl.classList.remove("drop-over");
+    d.overEl = t.el || null;
+    if (d.overEl && a.act) d.overEl.classList.add("drop-over");
+    if (d.ghostWhy) {
+      d.ghostWhy.textContent = a.why || "";
+      d.ghostWhy.hidden = !a.why;
     }
+    if (d.ghost) d.ghost.classList.toggle("fit-ghost-off", !a.act);
   }
   function endPointerDrag(ev, d) {
     if (d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
     d.el.classList.remove("drag-src");
     clearDragMarks();
-    // The synthetic click lands right after pointerup; eat exactly it.
+    if (d.list) { d.list.classList.remove("fit-list-dragging"); modSearch.close(); }
+    dragClass(false);
     eatNextClick = true;
-    var typeID = d.typeID, fam = d.family, idx = d.dropIndex, fromFit = d.fromFit;
-    if (idx >= 0) {
-      if (fromFit) {
-        pendingFlash = { type: "slot", id: typeID };
-        moveItemTo(typeID, fam, idx);
-      } else if (d.kind === "charge") {
-        // Charge dropped on a weapon slot: validate then set as ammo (Issue 2)
-        var slotEl = editor.querySelector('.fit-vslot[data-v-index="' + idx + '"]');
-        if (slotEl) {
-          var weaponID = parseInt(slotEl.getAttribute("data-fit-vslot") || "0", 10);
-          if (weaponID > 0) {
-            // Validate charge compatibility via the picker API
-            fetch("/fittings/picker.json?family=charge&weapon=" + weaponID, {
-              headers: { "Accept": "application/json" }
-            }).then(function(resp) {
-              return resp.ok ? resp.json() : [];
-            }).then(function(charges) {
-              var valid = charges.some(function(ch) { return ch.id === typeID; });
-              if (valid) {
-                state.charges[weaponID] = typeID;
-                pendingFlash = { type: "charge", id: weaponID };
-                simulate();
-              } else {
-                // Invalid charge for this weapon - flash the slot red
-                slotEl.classList.add("fit-invalid");
-                setTimeout(function() { slotEl.classList.remove("fit-invalid"); }, 1000);
-              }
-            }).catch(function() {
-              // On error, allow it (backend will handle)
-              state.charges[weaponID] = typeID;
-              pendingFlash = { type: "charge", id: weaponID };
-              simulate();
-            });
-          }
-        }
-      } else if (!checkRestricted(typeID, "", fam)) {
-        addItem(typeID, 1, fam); // arms its own flash
-      }
-    } else if (fromFit) {
-      // Dropped off the display: same as the minus button.
-      decItem(typeID);
+    var t = targetAt(ev.clientX, ev.clientY);
+    var a = dropAction(d, t, !!(ev.ctrlKey || ev.metaKey));
+    if (a.act) {
+      a.act();
+      if (d.origin === "new" && phoneOn() && fitView === "browse") setFitView("racks");
     }
-    // A picker drag to nowhere simply cancels.
   }
-  // Tap (press without drag): slot toggles the tooltip, the ammo
-  // badge jumps to the charge picker, a picker row adds its item.
+  // A tap (press without a drag): a ring slot toggles its tooltip,
+  // its ammo badge jumps to the charge picker, a Browse row adds
+  // its item. Rack rows and search rows keep their own click.
   function tapDragSource(ev, d) {
     var ammo = ev.target && ev.target.closest ? ev.target.closest("[data-fit-ammo]") : null;
     if (ammo) { jumpToCharge(ammo.getAttribute("data-fit-ammo")); return; }
-    if (d.fromFit) {
-      toggleTip(d.el);
-      return;
-    }
-    if (!checkRestricted(d.typeID, "", d.family)) addItem(d.typeID, 1, d.family);
+    if (d.el.hasAttribute("data-fit-vslot")) { toggleTip(d.el); return; }
+    var it = d.el._fitRow || {};
+    pickRow(parseInt(d.el.getAttribute("data-fit-pick"), 10) || 0, d.el.getAttribute("data-kind") || "", it.name || "");
   }
-  onDragRoots("pointerdown", function (ev) {
+  // Rack rows and module search rows answer taps with their own
+  // click handlers; the controller only takes their drags.
+  function ownsTap(el) {
+    return !el.hasAttribute("data-fit-vslot") && !el.classList.contains("fbt-row");
+  }
+  editor.addEventListener("pointerdown", function (ev) {
     if (ev.button !== undefined && ev.button > 0) return;
     if (dragState) return;
     var t = dragSourceAt(ev);
     if (!t) return;
-    var vslot = t.getAttribute("data-fit-vslot");
-    var pick = t.getAttribute("data-fit-pick");
-    var typeID = parseInt(vslot || pick || "0", 10) || 0;
-    if (!typeID) return;
-    dragState = {
-      el: t, typeID: typeID, fromFit: !!vslot,
-      family: vslot ? (t.getAttribute("data-v-family") || "") : pickerDropFamily(),
-      kind: t.getAttribute("data-kind") || "",
-      x0: ev.clientX, y0: ev.clientY, pid: ev.pointerId,
-      active: false, dropIndex: -1, ghost: null,
-      mayScroll: !vslot // picker rows live in a scrollable list
+    var d = {
+      el: t, typeID: 0, x0: ev.clientX, y0: ev.clientY, pid: ev.pointerId,
+      active: false, ghost: null, lp: null,
+      // Rows live in scrolling lists (and the page): a mostly
+      // vertical swipe on one is a scroll, not a drag.
+      mayScroll: !t.hasAttribute("data-fit-vslot")
     };
+    if (ev.pointerType === "touch") {
+      d.lp = setTimeout(function () {
+        d.lp = null;
+        if (dragState === d && !d.active) {
+          d.mayScroll = false;
+          startPointerDrag({ pointerId: d.pid, clientX: d.x0, clientY: d.y0 }, d);
+        }
+      }, LONG_PRESS_MS);
+    }
+    dragState = d;
   });
-  // The bottom picker's family select is the drop family for picker
-  // drags ("any" has no slot family, so those taps only).
-  function pickerDropFamily() {
-    var v = pickerFamily ? pickerFamily.value : "";
-    return v === "any" ? "" : v;
-  }
-  onDragRoots("pointermove", function (ev) {
+  editor.addEventListener("pointermove", function (ev) {
     var d = dragState;
     if (!d || ev.pointerId !== d.pid) return;
     var dx = ev.clientX - d.x0, dy = ev.clientY - d.y0;
     if (!d.active) {
       if (Math.sqrt(dx * dx + dy * dy) < DRAG_PX) return;
-      // A mostly-vertical press on a picker row is a list scroll,
-      // not a drag, hand it back to the browser.
-      if (d.mayScroll && Math.abs(dy) > Math.abs(dx) * 1.4) { dragState = null; return; }
+      if (d.mayScroll && Math.abs(dy) > Math.abs(dx) * 1.4) {
+        if (d.lp) clearTimeout(d.lp);
+        dragState = null;
+        return;
+      }
       startPointerDrag(ev, d);
       return;
     }
     movePointerDrag(ev, d);
   });
+  // Once a touch drag runs, the page must not scroll under it.
+  editor.addEventListener("touchmove", function (ev) {
+    if (dragState && dragState.active) ev.preventDefault();
+  }, { passive: false });
   function releasePointerDrag(ev) {
     var d = dragState;
     if (!d || ev.pointerId !== d.pid) return;
     dragState = null;
+    if (d.lp) clearTimeout(d.lp);
+    if (d.active) { endPointerDrag(ev, d); return; }
+    if (ownsTap(d.el)) return;
     // Eat the synthetic click after pointerup so a tap never
-    // double-fires (show-then-dismiss) and a drag never leaks a
-    // click into the workbench handlers. A fresh press clears it,
+    // double-fires (show-then-dismiss). A fresh press clears it,
     // so a cancelled click can't eat a later real one.
     eatNextClick = true;
-    if (d.active) endPointerDrag(ev, d);
-    else tapDragSource(ev, d);
+    tapDragSource(ev, d);
   }
-  onDragRoots("pointerup", releasePointerDrag);
-  onDragRoots("pointercancel", function (ev) {
+  editor.addEventListener("pointerup", releasePointerDrag);
+  editor.addEventListener("pointercancel", function (ev) {
     var d = dragState;
     if (!d || ev.pointerId !== d.pid) return;
     dragState = null;
+    if (d.lp) clearTimeout(d.lp);
     if (d.active) {
       if (d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
       d.el.classList.remove("drag-src");
+      if (d.list) d.list.classList.remove("fit-list-dragging");
+      dragClass(false);
       clearDragMarks();
     }
   });
   // A real drag ends in a click; eat exactly that one so taps and
   // drags never double-fire. Clicks inside the tooltip itself
   // (its close button) always pass through. Any fresh press
-  // clears the flag first, so a click that never arrives can't
-  // eat a later genuine one.
-  onDragRoots("pointerdown", function () { eatNextClick = false; }, true);
-  onDragRoots("click", function (ev) {
+  // clears the flag first.
+  editor.addEventListener("pointerdown", function () { eatNextClick = false; }, true);
+  editor.addEventListener("click", function (ev) {
     if (eatNextClick) {
       eatNextClick = false;
       if (ev.target && ev.target.closest && ev.target.closest(".fit-tip")) return;
@@ -2089,11 +2543,22 @@ var FitGauges = (function () {
       ev.preventDefault();
     }
   }, true);
-
-  // A long-press must never pop the context menu mid-drag.
-  onDragRoots("contextmenu", function (ev) {
-    var t = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot,[data-fit-pick]") : null;
+  // A long press must never pop the context menu mid-drag.
+  editor.addEventListener("contextmenu", function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot, [data-fit-pick], .fit-chip[data-fit-rowtype]") : null;
     if (t) ev.preventDefault();
+  });
+  // Delete or Backspace on a focused fitted slot or rack row
+  // removes one, like its minus button.
+  editor.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Delete" && ev.key !== "Backspace") return;
+    var t = ev.target;
+    if (!t || !t.closest || t.closest("input, select, textarea")) return;
+    var el = t.closest(".fit-vslot.filled, .fit-chip[data-fit-rowtype]");
+    if (!el) return;
+    ev.preventDefault();
+    var id = parseInt(el.getAttribute("data-fit-vslot") || el.getAttribute("data-fit-rowtype") || "0", 10) || 0;
+    if (id) decItem(id, inCargo(el));
   });
 
   // moveItemTo relocates one instance of typeID within its slot
@@ -2104,13 +2569,14 @@ var FitGauges = (function () {
   function moveItemTo(typeID, fam, idx) {
     var famIdx = [];
     for (var i = 0; i < state.items.length; i++) {
+      if (state.items[i].cargo) continue;
       if ((familyOfType(state.items[i].typeId) || "") === fam) famIdx.push(i);
     }
     var fromPos = -1;
     for (var p = 0; p < famIdx.length; p++) {
       if (state.items[famIdx[p]].typeId === typeID) { fromPos = p; break; }
     }
-    if (fromPos < 0) { addItem(typeID, 1); return; }
+    if (fromPos < 0) return;
     // Clamp the target into the family's item range; an empty
     // slot beyond the last item means "end of family".
     if (idx > famIdx.length) idx = famIdx.length;
@@ -2121,6 +2587,7 @@ var FitGauges = (function () {
     // the target position (which may now be the end).
     var after = [];
     for (var j = 0; j < items.length; j++) {
+      if (items[j].cargo) continue;
       if ((familyOfType(items[j].typeId) || "") === fam) after.push(j);
     }
     var at = idx < after.length ? after[idx] : items.length;
@@ -2132,14 +2599,19 @@ var FitGauges = (function () {
   function familyOfType(typeID) {
     var wb = workbench();
     if (!wb) return "";
-    var rows = wb.querySelectorAll("[data-fit-rowtype]");
+    // The hull's own line says it; a type only carried in cargo
+    // answers with the rack it fits (data-fit-home).
+    var rows = wb.querySelectorAll('[data-fit-rowtype="' + typeID + '"]');
+    var home = "";
     for (var i = 0; i < rows.length; i++) {
-      if (rows[i].getAttribute("data-fit-rowtype") === String(typeID)) {
-        var g = rows[i].closest(".fit-group");
-        return g ? (g.getAttribute("data-fit-group") || "") : "";
+      if (rows[i].hasAttribute("data-fit-cargo")) {
+        home = home || rows[i].getAttribute("data-fit-home") || "";
+        continue;
       }
+      var g = rows[i].closest(".fit-group");
+      return g ? (g.getAttribute("data-fit-group") || "") : "";
     }
-    return "";
+    return home;
   }
   // --- slot tooltips ----------------------------------------------
   // Hover (desktop) or tap (mobile) on a fitted icon shows the
@@ -2417,6 +2889,7 @@ var FitGauges = (function () {
     vis(wb.querySelector(".fit-slots"), show.slots);
     vis(wb.querySelector(".fit-bays"), show.bays);
     vis(wb.querySelector(".fit-stats"), show.stats);
+    mountBrowse();
     var tabs = wb.querySelectorAll("[data-fit-view]");
     for (var i = 0; i < tabs.length; i++) {
       var active = on && tabs[i].getAttribute("data-fit-view") === fitView;
@@ -2426,7 +2899,7 @@ var FitGauges = (function () {
     syncSearchChrome();
   }
   function setFitView(view) {
-    if (view !== "racks" && view !== "stats" && view !== "radial") return;
+    if (view !== "racks" && view !== "stats" && view !== "radial" && view !== "browse") return;
     fitView = view;
     applyFitView();
   }
@@ -2502,8 +2975,9 @@ var FitGauges = (function () {
     var ok = wb && wb.getAttribute("data-fit-subsystems") === "1";
     var chip = document.querySelector('#fit-famchips button[data-fam="subsystem"]');
     if (chip) chip.hidden = !ok;
-    var opt = document.querySelector('#fit-picker-family option[value="subsystem"]');
-    if (opt) opt.hidden = !ok;
+    var bchip = document.querySelector('#fit-browse-fams button[data-browse-fam="subsystem"]');
+    if (bchip) bchip.hidden = !ok;
+    if (!ok && browseFam === "subsystem") setBrowseFam("high");
   }
 
   // --- save / export --------------------------------------------

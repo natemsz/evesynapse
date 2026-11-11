@@ -37,6 +37,11 @@
   /* fit.js hides the sections outside the current view with
      this class; it only ever applies at phone widths. */
   .fit-wb .fv-off { display: none !important; }
+  /* The view tab bar carries Browse here, and Browse is a view
+     of its own: the tree flows with the page instead of
+     scrolling inside it. */
+  .fit-lefttabs { display: none; }
+  .fit-browse-tree { max-height: none; overflow: visible; }
 
   /* --- ship header --- */
   .fit-mhead {
@@ -87,7 +92,7 @@
     background: none; border: 0; cursor: pointer;
     color: var(--muted); font-family: var(--font-display);
     font-weight: 500; text-transform: uppercase; letter-spacing: normal;
-    font-size: var(--fs-xs); white-space: nowrap;
+    font-size: var(--fs-xs); min-width: 0; text-align: center; line-height: 1.15;
   }
   .fit-mtabs > button + button { border-left: 1px solid var(--box-edge); }
   .fit-mtabs > button.on { background: var(--accent); color: #16100b; }

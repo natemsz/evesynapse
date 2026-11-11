@@ -35,6 +35,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   <button type="button" role="tab" data-fit-view="racks" aria-selected="false">Slot Racks</button>
   <button type="button" role="tab" data-fit-view="stats" aria-selected="false">Resists &amp; Cap</button>
   <button type="button" role="tab" data-fit-view="radial" aria-selected="true">Radial</button>
+  <button type="button" role="tab" data-fit-view="browse" aria-selected="false">Browse</button>
   <button type="button" class="fit-msearch-btn" data-fit-search-btn aria-expanded="false" aria-controls="fit-modsearch" aria-label="Search modules" title="Search modules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 L21 21"/></svg></button>
 </div>
 <div class="fit-mhead">
@@ -96,7 +97,19 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
        ammunition under it on a wide screen (style.css), after the
        slots on a narrow one. */}}
   <div class="fit-slots">
+    {{if not .ReadOnly}}
+    {{/* Fit / Browse: the racks, or the market browser to add from
+         (fit.js keeps which one shows and moves the page's one
+         browser panel into the slot after every re-render). */}}
+    <div class="fit-lefttabs" role="tablist" aria-label="Left column">
+      <button type="button" role="tab" data-fit-pane="fit" aria-selected="true">Fit</button>
+      <button type="button" role="tab" data-fit-pane="browse" aria-selected="false">Browse</button>
+    </div>
+    {{end}}
+    <div class="fit-racks">
     {{range .SlotGroups}}{{template "fit-group" .}}{{end}}
+    </div>
+    {{if not .ReadOnly}}<div class="fit-browse-slot" data-fit-browse-slot hidden></div>{{end}}
   </div>
   <div class="fit-bays">
     {{range .BayGroups}}{{if or (eq .Key "drone") (eq .Key "fighter")}}{{template "fit-group" .}}{{end}}{{end}}
@@ -290,7 +303,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}}, doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
-        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}"{{if .SubSlot}} data-fit-subslot="{{.SubSlot}}"{{end}} data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}>
+        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}"{{if .Home}} data-fit-cargo="1" data-fit-home="{{.Home}}"{{end}}{{if .SubSlot}} data-fit-subslot="{{.SubSlot}}"{{end}} data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}>
           {{if $group.ReadOnly}}<span class="fit-chip-name">{{.Name}}</span>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
           {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}

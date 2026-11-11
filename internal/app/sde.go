@@ -298,7 +298,8 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// geometry, and imports before version 13 lack the
 	// celestials a kill's location resolves against, and
 	// imports before version 15 lack the item sheet's data, and
-	// imports before version 16 lack the variation tables, so
+	// imports before version 16 lack the variation tables, and
+	// imports before version 17 lack the Browse tree, so
 	// re-import once (the store writes the marker when it
 	// lands). Retries on later ticks while an import keeps
 	// failing.
@@ -330,7 +331,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 
 // sdeImportVersion is the importer's column-set marker (see
 // sdeMaintenance): an import stored under an older one re-imports.
-const sdeImportVersion = "16"
+const sdeImportVersion = "17"
 
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
@@ -2244,6 +2245,29 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		if err := insert("INSERT INTO sde_variations (type_id, root_type_id, meta_group_id, meta_level, vals) VALUES ($1, $2, $3, $4, $5)", len(varRows), func(i int) []any {
 			r := varRows[i]
 			return []any{r.typeID, r.rootTypeID, r.metaGroupID, r.metaLevel, r.vals}
+		}); err != nil {
+			return 0, err
+		}
+	}
+
+	// The workbench's Browse tree (schema 142), rebuilt whenever
+	// the import carried the dogma effects it sorts types by.
+	if len(parsed.typeEffects) > 0 {
+		browseGroups, browseTypes := buildFitBrowse(parsed)
+		for _, table := range []string{"fit_browse_groups", "fit_browse_types"} {
+			if _, err := tx.Exec(ctx, "DELETE FROM "+table); err != nil {
+				return 0, fmt.Errorf("clear %s: %w", table, err)
+			}
+		}
+		if err := insert("INSERT INTO fit_browse_groups (family, market_group_id, parent_group_id, name, type_count) VALUES ($1, $2, $3, $4, $5)", len(browseGroups), func(i int) []any {
+			g := browseGroups[i]
+			return []any{g.family, g.marketGroupID, g.parentGroupID, g.name, g.typeCount}
+		}); err != nil {
+			return 0, err
+		}
+		if err := insert("INSERT INTO fit_browse_types (family, type_id, market_group_id, name) VALUES ($1, $2, $3, $4)", len(browseTypes), func(i int) []any {
+			t := browseTypes[i]
+			return []any{t.family, t.typeID, t.marketGroupID, t.name}
 		}); err != nil {
 			return 0, err
 		}

@@ -857,3 +857,46 @@ WHERE (@family::text = 'all' OR b.family = @family::text) AND b.market_group_id 
   AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
 ORDER BY b.name
 LIMIT 200;
+
+-- name: ListSDEDbuffs :many
+-- Every buff collection: what a command burst's buff id means. Read
+-- once per process and cached (fit.cachedBursts).
+SELECT dbuff_id, display_name, aggregate, operation
+FROM sde_dbuffs
+ORDER BY dbuff_id;
+
+-- name: ListSDEDbuffModifiers :many
+-- Every buff's attribute changes, cached with ListSDEDbuffs.
+SELECT dbuff_id, kind, attribute_id, group_id, skill_id
+FROM sde_dbuff_modifiers
+ORDER BY dbuff_id, kind, attribute_id, group_id, skill_id;
+
+-- name: ListBurstBoosters :many
+-- Hulls and implants that raise command burst strength (a modifier on
+-- warfareBuff1Value, attribute 2469), with the burst skill each one
+-- bonuses: the fleet boost picker's booster and mindlink choices.
+SELECT DISTINCT t.type_id, t.name, g.category_id, m.skill_type_id
+FROM sde_effect_modifiers m
+JOIN sde_type_effects te ON te.effect_id = m.effect_id
+JOIN sde_types t ON t.type_id = te.type_id AND t.published = 1
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE m.modified_attr = 2469 AND m.skill_type_id > 0 AND g.category_id IN (6, 20)
+ORDER BY t.name, m.skill_type_id;
+
+-- name: ListBurstTypes :many
+-- Command burst modules (group 1770) and the charges they load (the
+-- types in the modules' charge groups, attribute 604; some charges
+-- carry an old launcher group, so 137 is no guide), with each type's
+-- charge group and first required skill (182).
+SELECT t.type_id, t.name, t.group_id,
+       COALESCE(cg.value, 0)::bigint AS charge_group,
+       COALESCE(rs.value, 0)::bigint AS required_skill
+FROM sde_types t
+LEFT JOIN sde_type_attributes cg ON cg.type_id = t.type_id AND cg.attribute_id = 604
+LEFT JOIN sde_type_attributes rs ON rs.type_id = t.type_id AND rs.attribute_id = 182
+WHERE t.published = 1
+  AND (t.group_id = 1770 OR t.group_id IN (
+        SELECT mg.value::bigint FROM sde_type_attributes mg
+        JOIN sde_types m ON m.type_id = mg.type_id AND m.group_id = 1770 AND m.published = 1
+        WHERE mg.attribute_id = 604))
+ORDER BY t.name;

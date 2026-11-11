@@ -498,3 +498,30 @@ html.fit-dragging, html.fit-dragging * { -webkit-user-select: none; user-select:
 }
 .fit-range-table td { text-align: right; padding: 0.2rem 0.4rem; border-top: 1px solid var(--hairline); }
 .fit-range-table th:first-child, .fit-range-table td:first-child { text-align: left; }
+/* --- fleet boosts ---
+   One row per booster: charge, hull, skills and mindlink pickers,
+   what the burst gives, and a remove control. */
+.fit-boost {
+  position: relative; display: grid; gap: 0.35rem;
+  padding: 0.5rem 2rem 0.5rem 0.5rem; margin-bottom: 0.4rem;
+  border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--row-alt);
+}
+.fit-boost-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr)); gap: 0.35rem 0.5rem; }
+.fit-boost-fields label { display: grid; gap: 0.15rem; min-width: 0; }
+.fit-boost-fields label > span {
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.fit-boost-fields select {
+  width: 100%; min-width: 0; padding: 0.3rem 0.4rem; font: inherit; font-size: var(--fs-sm);
+  color: var(--text); background: var(--input-bg); border: 1px solid var(--glass-edge); border-radius: var(--r-sm);
+}
+.fit-boost-effects { margin: 0; font-size: var(--fs-sm); color: var(--text); }
+.fit-boost-remove { position: absolute; top: 0.4rem; right: 0.4rem; }
+.fit-boost-ro { margin: 0 0 0.3rem; font-size: var(--fs-sm); }
+.fit-boost-acting { margin-top: 0.5rem; font-size: var(--fs-sm); }
+.fit-boost-acting h5 {
+  margin: 0 0 0.2rem; font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.fit-boost-acting ul { margin: 0; padding-left: 1.1rem; }

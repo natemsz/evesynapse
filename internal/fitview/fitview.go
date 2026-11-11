@@ -107,6 +107,8 @@ type FitDoc struct {
 	// -> implant type, 0 = slot left empty. Slots not listed keep
 	// whatever the selected clone has plugged in.
 	Implants map[int]int64 `json:"implants,omitempty"`
+	// Boosts are fleet boosts acting on the fit (FitFleetBoosts).
+	Boosts []FitBoost `json:"boosts,omitempty"`
 }
 
 // FitImplantSlots is how many implant slots a clone has.
@@ -140,6 +142,7 @@ func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 	if doc == nil {
 		return
 	}
+	sanitizeBoosts(doc)
 	merged := make([]FitDocItem, 0, len(doc.Items))
 	index := make(map[fitDocLineKey]int, len(doc.Items))
 	for _, it := range doc.Items {
@@ -1362,6 +1365,12 @@ type FitSimView struct {
 	PilotID    int64
 	PilotLabel string
 	StateJSON  string // canonical fit document for the editor script
+	// Boosts are the fleet boost picker rows; BuffsActing says what
+	// every burst acting on the fit does, the fit's own included.
+	Boosts      []FitBoostRow
+	BuffsActing []string
+	// BoostDefault is the charge a new fleet boost starts with.
+	BoostDefault int64
 	// CloneID is the selected clone (0 = active clone); Clones
 	// feeds the Clone dropdown; Implants is the ten slots (clone
 	// plus the fit's overrides); ImplantNote covers warming /
@@ -1539,6 +1548,11 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 			typeIDs = append(typeIDs, id)
 		}
 	}
+	bursts, err := fit.Bursts(ctx, app.queries)
+	if err != nil {
+		logging.Errorf("fittings sim: load burst data: %v", err)
+	}
+	typeIDs = append(typeIDs, FitBoostTypeIDs(doc, bursts)...)
 	snap, err := fit.LoadSnapshot(ctx, app.queries, typeIDs)
 	if err != nil {
 		logging.Errorf("fittings sim: load snapshot for ship %d: %v", doc.ShipTypeID, err)
@@ -1598,9 +1612,26 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 			engineItems = append(engineItems, fit.ItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st})
 		}
 	}
-	res := fit.Compute(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs)
+	snap.Bursts = bursts
+	fleet, boostRows := FitFleetBoosts(snap, doc, app.fitAllSkillIDs(ctx, snap))
+	view.Boosts = boostRows
+	if bursts != nil && len(bursts.Charges) > 0 {
+		view.BoostDefault = bursts.Charges[0].TypeID
+	}
+	if len(doc.Boosts) > 0 {
+		state, _ := json.Marshal(doc) // checked boosts
+		view.StateJSON = string(state)
+	}
+	res := fit.ComputeFleet(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs, fleet)
+	for _, b := range res.Buffs {
+		w := FitBuffWord(bursts, b.ID, b.Value)
+		if !b.Fleet {
+			w += " (this fit's burst)"
+		}
+		view.BuffsActing = append(view.BuffsActing, w)
+	}
 	if len(implantIDs) > 0 {
-		base := fit.Compute(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, nil)
+		base := fit.ComputeFleet(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, nil, fleet)
 		view.ImplantEffects = FitImplantEffects(base, res)
 	}
 

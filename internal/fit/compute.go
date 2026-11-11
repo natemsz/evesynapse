@@ -18,6 +18,13 @@ import (
 // High-grade Snake set is +24.73% velocity, which only the
 // unpenalized product reproduces).
 func Compute(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int64]int, charges map[int64]int64, implants []int64) *Result {
+	return ComputeFleet(snap, shipTypeID, items, levels, charges, implants, nil)
+}
+
+// ComputeFleet is Compute with fleet boosts acting on the fit: the
+// buffs other ships' bursts give (BoosterBuffs), alongside the fit's
+// own bursts.
+func ComputeFleet(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int64]int, charges map[int64]int64, implants []int64, fleet []BuffValue) *Result {
 	f := newFitting(snap, shipTypeID, levels)
 
 	// What is being computed: the hull, the pilot, and everything
@@ -33,6 +40,7 @@ func Compute(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int
 	// attributes are folded to their final values.
 	f.bindModifiers()
 	f.foldAttributes()
+	f.applyBuffs(fleet)
 	f.adaptReactiveHardeners()
 	f.recordAttrs()
 

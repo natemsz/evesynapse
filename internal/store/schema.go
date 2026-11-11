@@ -877,6 +877,11 @@ var pgFitBrowseSchema string
 //go:embed schema_pg/143_fit_browse_by_group.sql
 var pgFitBrowseByGroupSchema string
 
+// Step 145: the game's buff tables, what command bursts do.
+//
+//go:embed schema_pg/145_sde_dbuffs.sql
+var pgSDEDbuffsSchema string
+
 // Step 146: killboard statistics counted once per kill through a
 // pending queue, and the tables for their one time rebuild.
 //
@@ -1059,6 +1064,7 @@ func schemaSteps() []schemaStep {
 		{141, "item_variations", pgItemVariationsSchema, ""},
 		{142, "fit_browse", pgFitBrowseSchema, ""},
 		{143, "fit_browse_by_group", pgFitBrowseByGroupSchema, ""},
+		{145, "sde_dbuffs", pgSDEDbuffsSchema, ""},
 		{146, "kill_stats_rebuild", pgKillStatsRebuildSchema, ""},
 		{147, "drop_unused_kill_indexes", pgDropUnusedKillIndexesSchema, ""},
 	}

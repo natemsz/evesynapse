@@ -159,6 +159,27 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       </div>
     </div>
     {{end}}
+    {{if or (not .ReadOnly) .Boosts .BuffsActing}}
+    <div class="fit-group fit-boost-group" data-fit-group="boosts">
+      <h4><span>Fleet boosts</span></h4>
+      {{range .Boosts}}
+      {{if $.ReadOnly}}<p class="fit-boost-ro"><b>{{.Label}}</b> {{.Effects}}</p>{{else}}
+      <div class="fit-boost" data-fit-boost="{{.Index}}">
+        <div class="fit-boost-fields">
+          <label><span>Burst charge</span><select data-fit-boost-field="charge">{{range .Families}}<optgroup label="{{.Name}}">{{range .Charges}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</optgroup>{{end}}</select></label>
+          <label><span>Booster hull</span><select data-fit-boost-field="hull">{{range .Hulls}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+          <label><span>Booster skills</span><select data-fit-boost-field="level">{{range .Levels}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+          <label><span>Mindlink</span><select data-fit-boost-field="mindlink">{{range .Mindlinks}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+        </div>
+        <p class="fit-boost-effects">{{.Effects}}</p>
+        <button type="button" class="fit-chip-btn fit-boost-remove" data-fit-boost-remove="{{.Index}}" title="Remove this boost" aria-label="Remove this boost">×</button>
+      </div>
+      {{end}}
+      {{end}}
+      {{if and (not .ReadOnly) .BoostDefault}}<button type="button" class="fit-slot-empty fit-boost-add" data-fit-boost-add="{{.BoostDefault}}">+ Add a fleet boost</button>{{end}}
+      {{if .BuffsActing}}<div class="fit-boost-acting"><h5>Acting on this fit</h5><ul>{{range .BuffsActing}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+    </div>
+    {{end}}
   </div>
   {{with .Stats}}
   <div class="fit-stats" data-fit-figures="{{.Figures}}"{{if .RangeJSON}} data-fit-range="{{.RangeJSON}}"{{end}}>

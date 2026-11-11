@@ -200,6 +200,7 @@ var FitGauges = (function () {
       items: items,
       charges: state.charges,
       implants: state.implants || {},
+      boosts: state.boosts || [],
       pilot: pilotID(),
       clone: cloneID()
     };
@@ -538,7 +539,8 @@ var FitGauges = (function () {
       shipName: shipInput ? shipInput.value : "",
       items: JSON.parse(JSON.stringify(state.items || [])),
       charges: JSON.parse(JSON.stringify(state.charges || {})),
-      implants: JSON.parse(JSON.stringify(state.implants || {}))
+      implants: JSON.parse(JSON.stringify(state.implants || {})),
+      boosts: JSON.parse(JSON.stringify(state.boosts || []))
     };
   }
   function applySnap(s) {
@@ -546,6 +548,7 @@ var FitGauges = (function () {
     state.items = JSON.parse(JSON.stringify(s.items || []));
     state.charges = JSON.parse(JSON.stringify(s.charges || {}));
     state.implants = JSON.parse(JSON.stringify(s.implants || {}));
+    state.boosts = JSON.parse(JSON.stringify(s.boosts || []));
     if (shipInput) shipInput.value = s.shipName || "";
     markDirty();
     simulate();
@@ -859,6 +862,10 @@ var FitGauges = (function () {
       // it neither toggles the row's tooltip nor picks anything.
       if (t.closest("[data-fit-info]")) { closeTip(); return; }
       if (t.closest("[data-fit-undo]")) { undo(); return; }
+      var boostAdd = t.closest("[data-fit-boost-add]");
+      if (boostAdd) { addBoost(parseInt(boostAdd.getAttribute("data-fit-boost-add"), 10) || 0); return; }
+      var boostRemove = t.closest("[data-fit-boost-remove]");
+      if (boostRemove) { removeBoost(parseInt(boostRemove.getAttribute("data-fit-boost-remove"), 10)); return; }
       if (t.closest("[data-fit-redo]")) { redo(); return; }
       var searchBtn = t.closest("[data-fit-search-btn]");
       if (searchBtn) { setSearchOpen(!searchOpen); return; }
@@ -936,6 +943,11 @@ var FitGauges = (function () {
     var qtyFor = t.getAttribute("data-fit-qty");
     if (qtyFor) {
       setItemQty(parseInt(qtyFor, 10) || 0, parseInt(t.value, 10) || 0);
+    }
+    var boostField = t.getAttribute("data-fit-boost-field");
+    var boostRow = boostField && t.closest("[data-fit-boost]");
+    if (boostRow) {
+      setBoost(parseInt(boostRow.getAttribute("data-fit-boost"), 10), boostField, parseInt(t.value, 10) || 0);
     }
   });
 
@@ -1457,6 +1469,41 @@ var FitGauges = (function () {
     markDirty();
     simulate();
   }
+  // Fleet boosts: a booster's burst charge, hull, skill level and
+  // mindlink acting on the fit. The server checks each choice.
+  function addBoost(charge) {
+    if (!charge) return;
+    pushHistory();
+    state.boosts = (state.boosts || []).concat([{ charge: charge, level: 5 }]);
+    pendingFlash = { type: "group", family: "boosts" };
+    markDirty();
+    simulate();
+  }
+  function setBoost(index, field, value) {
+    var list = state.boosts || [];
+    if (!list[index]) return;
+    pushHistory();
+    var next = {};
+    for (var k in list[index]) next[k] = list[index][k];
+    next[field] = value;
+    // A new charge may belong to another family: its hull and
+    // mindlink choices start over.
+    if (field === "charge") { delete next.hull; delete next.mindlink; }
+    list = list.slice();
+    list[index] = next;
+    state.boosts = list;
+    markDirty();
+    simulate();
+  }
+  function removeBoost(index) {
+    var list = (state.boosts || []).slice();
+    if (!list[index]) return;
+    pushHistory();
+    list.splice(index, 1);
+    state.boosts = list;
+    markDirty();
+    simulate();
+  }
   // Weapon ammunition: id 0 unloads.
   function setCharge(weapon, id) {
     pushHistory();
@@ -1615,6 +1662,7 @@ var FitGauges = (function () {
       items: state.items,
       charges: state.charges,
       implants: state.implants || {},
+      boosts: state.boosts || [],
       pilot: pilotID(),
       clone: cloneID()
     };
@@ -3221,7 +3269,8 @@ var FitGauges = (function () {
           shipTypeId: state.shipTypeId,
           items: state.items,
           charges: state.charges,
-          implants: state.implants || {}
+          implants: state.implants || {},
+          boosts: state.boosts || []
         }
       };
       fetch("/fittings/save/", {
@@ -3260,7 +3309,8 @@ var FitGauges = (function () {
             shipTypeId: state.shipTypeId,
             items: state.items,
             charges: state.charges,
-            implants: state.implants || {}
+            implants: state.implants || {},
+            boosts: state.boosts || []
           }
         })
       }).then(function (resp) {

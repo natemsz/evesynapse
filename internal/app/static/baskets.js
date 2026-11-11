@@ -196,7 +196,11 @@
     search.addEventListener("keydown", function (e) {
       if (e.key === "Escape") hideSuggest();
     });
-    document.addEventListener("click", function (e) {
+    // A click outside the editor closes its suggestions; an editor
+    // that has left the page (a closed edit row, a swapped page)
+    // drops its listener.
+    document.addEventListener("click", function onDocClick(e) {
+      if (!root.isConnected) { document.removeEventListener("click", onDocClick); return; }
       if (!root.contains(e.target)) hideSuggest();
     });
 

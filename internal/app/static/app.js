@@ -6608,10 +6608,54 @@
     return src;
   }
 
+  // seen remembers the newest row id a feed has shown (key is a
+  // string or a function returning one), so a later visit
+  // highlights what arrived meanwhile. Storage off: highlights
+  // still fade, nothing is remembered.
+  function seen(key) {
+    function k() { return typeof key === "function" ? key() : key; }
+    function read() {
+      try {
+        var v = localStorage.getItem(k());
+        return v === null ? null : +v || 0;
+      } catch (err) {
+        return null;
+      }
+    }
+    function note(id) {
+      try {
+        var prev = read();
+        if (prev === null || id > prev) localStorage.setItem(k(), String(id));
+      } catch (err) { /* not critical */ }
+    }
+    // live highlights a row until it has been seen, then records it.
+    function live(row, idOf) {
+      mark(row, function (r) { note(idOf(r)); });
+    }
+    // markNew highlights the rows newer than the record, max at most
+    // (0: no cap). A first visit highlights nothing and starts the
+    // record at the newest row.
+    function markNew(rows, idOf, max) {
+      var prev = read();
+      var newest = 0;
+      var marked = 0;
+      rows.forEach(function (row) {
+        var id = idOf(row);
+        if (id > newest) newest = id;
+        if (prev !== null && id > prev && (!max || marked < max)) {
+          live(row, idOf);
+          marked++;
+        }
+      });
+      if (prev === null && newest) note(newest);
+    }
+    return { read: read, note: note, live: live, markNew: markNew };
+  }
+
   document.addEventListener("visibilitychange", function () {
     document.querySelectorAll(".is-live").forEach(arm);
   });
   document.addEventListener("evesynapse:content-will-swap", reset);
 
-  window.esLive = { mark: mark, settle: settle, drop: drop, reset: reset, flash: flash, pill: pill, stream: stream };
+  window.esLive = { mark: mark, settle: settle, drop: drop, reset: reset, flash: flash, pill: pill, stream: stream, seen: seen };
 })();

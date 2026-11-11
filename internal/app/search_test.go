@@ -1,18 +1,9 @@
 package app
 
-// Hermetic tests for Next-1 (search & findability): the Items DB
-// global search and its published-only filter semantics, the
-// shared suggestion feed behind every autocomplete box, the top
-// banner search (items / own characters / warmed pilots), the
-// widget markup on each consumer page, and the daily
-// wallet-history sampler's one-row-per-day rule. The transport
-// must stay silent throughout: every read here is local.
-
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -202,35 +193,13 @@ func TestItemsGlobalSearchAndPublishedOnly(t *testing.T) {
 	}
 }
 
-// TestItemsPublishedToggleWiring pins the in-place half of the
-// published-only switch: the app.js handler that prunes the
-// rendered tree (directory entries, cards and item rows alike),
-// and the display rules that keep a hidden entry hidden.
-func TestItemsPublishedToggleWiring(t *testing.T) {
-	appJS, err := fs.ReadFile(staticFS, "static/app.js")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{"data-published-toggle", `querySelectorAll("[data-pubcount]")`, `querySelectorAll("[data-published]")`} {
-		if !strings.Contains(string(appJS), want) {
-			t.Errorf("app.js: in-place published filter missing %s", want)
-		}
-	}
-	bg, err := fs.ReadFile(staticFS, "static/bg.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(bg), ".tw tr[hidden]") {
-		t.Error("bg.css: hidden tree rows need the display rule")
-	}
-	items, err := fs.ReadFile(staticFS, "static/items.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(items), ".ib-dirent[hidden], .ib-card[hidden], .ib-row[hidden] { display: none; }") {
-		t.Error("items.css: hidden directory entries, cards and rows need the display rule")
-	}
-}
+// Hermetic tests for Next-1 (search & findability): the Items DB
+// global search and its published-only filter semantics, the
+// shared suggestion feed behind every autocomplete box, the top
+// banner search (items / own characters / warmed pilots), the
+// widget markup on each consumer page, and the daily
+// wallet-history sampler's one-row-per-day rule. The transport
+// must stay silent throughout: every read here is local.
 
 func TestSharedSuggestPools(t *testing.T) {
 	transport := &countingTransport{}

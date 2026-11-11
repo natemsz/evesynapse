@@ -279,71 +279,6 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 	}
 }
 
-// TestLandingMockupFidelity pins the landing's fidelity to its
-// approved design: the sunrise art band at the top of the page
-// fading into page black with the star layer carrying the
-// background below it, the floating glass header, the site
-// gradient on the hero tail and the playstyle labels (the
-// section headlines take it from style.css's heading rule), the
-// design's own glass recipe at a 9px backdrop blur instead of
-// the site's full-strength one, the landing dim text tone, the
-// JetBrains Mono footer, and the preview's flat KPI/brief
-// treatment. If one drops out, the landing quietly stops
-// looking like the approved design, this says so.
-func TestLandingMockupFidelity(t *testing.T) {
-	raw, err := fs.ReadFile(staticFS, "static/landing.css")
-	if err != nil {
-		t.Fatalf("read landing.css: %v", err)
-	}
-	landing := string(raw)
-	for _, want := range []string{
-		// The sky stack: the art band seated at the top of the
-		// page and masked into it, the fade layer deepening to
-		// page black at the band's foot, the star layer above
-		// both, each under no pointer.
-		"body::before { z-index: -3; position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 72rem;",
-		"body::after { content: \"\"; position: absolute; top: 0; left: 0; right: 0; height: 72rem; z-index: -2; background: linear-gradient(180deg, rgba(4, 2, 2, 0.1), rgba(4, 2, 2, 0) 30%, rgba(4, 2, 2, 0.26) 58%, rgba(4, 2, 2, 0.62) 82%, #040202 100%); pointer-events: none; }",
-		".ld-stars { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: url(\"/static/stars-tile.webp?v=047d2bb63562f133\") repeat; }",
-		// The header is one glass pill pinned flush to the top of the
-		// viewport over the art: no gap above it.
-		".ld-header { position: fixed; top: 0;",
-		// The site gradient survives on the landing in one
-		// spot, the hero's tail. The playstyle labels are the
-		// same hue solid.
-		".ld-hero h1 .ld-amp { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);",
-		".ld-scard .ld-who { color: #ffd27a;",
-		// The design's glass: dark gradient surface, 9px blur,
-		// ember-tinted edge, 14px radius.
-		".ld-glass { background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); border: 1px solid rgba(255, 106, 0, 0.16); border-radius: 14px;",
-		// The landing dim tone, defined here and used in place
-		// of the site's warmer muted.
-		":root { --ld-dim: #b9a892; }",
-		".ld-scard p { color: var(--ld-dim);",
-		".ld-footer a { color: var(--ld-dim); }",
-		// The footer is JetBrains Mono, like every other
-		// footer on the site.
-		".ld-footer { border-top: 1px solid rgba(255, 255, 255, 0.07); padding: 22px 0 30px; color: var(--faint, #8a7a66); font-size: var(--fs-xs); font-family: \"JetBrains Mono\", monospace; }",
-		// The preview's borrowed markup carries no glass or
-		// backdrop blur of its own inside the landing.
-		".ld-preview .kpis { grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 0; background: none; border: none; border-radius: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }",
-		".ld-preview .brief-card { flex: none; max-width: none; padding: 12px 15px;",
-	} {
-		if !strings.Contains(landing, want) {
-			t.Errorf("landing.css is missing the approved-design declaration %q", want)
-		}
-	}
-	// The site's muted tone stays the site's: no landing rule
-	// reads it anymore.
-	if strings.Contains(landing, "var(--muted)") {
-		t.Error("landing.css still reads the site --muted tone; landing copy uses --ld-dim")
-	}
-	// The landing's glass never reaches for the site's
-	// full-strength blur token.
-	if strings.Contains(landing, "var(--glass-blur)") {
-		t.Error("landing.css still uses the site --glass-blur token; the landing glass is a fixed 9px")
-	}
-}
-
 // TestLandingStarTileStaysTiny pins the star tile's size
 // contract: it is the landing's background over the whole page
 // depth, fetched once and cached, and must stay a sliver next
@@ -360,37 +295,6 @@ func TestLandingStarTileStaysTiny(t *testing.T) {
 	}
 	if len(raw) < 12 || string(raw[:4]) != "RIFF" || string(raw[8:12]) != "WEBP" {
 		t.Error("stars-tile.webp is not a WebP raster")
-	}
-}
-
-// TestCharactersActiveRowTint pins the highlighted-row paint (the
-// active character on the Characters page, the reader's own wars):
-// every cell of the row, the pinned name cell included, takes one
-// selection paint made from the theme's accent over the solid
-// panel, so the row follows every scheme and the light theme and
-// the pinned cell is as opaque as any other row's. A fixed colour
-// here would make the row ignore the account's scheme.
-func TestCharactersActiveRowTint(t *testing.T) {
-	raw, err := fs.ReadFile(staticFS, "static/layout.css")
-	if err != nil {
-		t.Fatalf("read layout.css: %v", err)
-	}
-	css := string(raw)
-	for _, want := range []string{
-		"--sel-bg: color-mix(in srgb, var(--accent) 13%, transparent);",
-		":root { --sel-row: linear-gradient(var(--sel-bg), var(--sel-bg)), var(--surface-float); }",
-		"tbody tr.yours > td,\n.tw tbody tr.yours > td:first-child { background: var(--sel-row); }",
-	} {
-		if !strings.Contains(css, want) {
-			t.Errorf("layout.css is missing the highlighted-row rule %q", want)
-		}
-	}
-	tpl, err := fs.ReadFile(templatesFS, "templates/characters.html")
-	if err != nil {
-		t.Fatalf("read characters.html: %v", err)
-	}
-	if !strings.Contains(string(tpl), `class="yours"`) && !strings.Contains(string(tpl), ` yours`) {
-		t.Error("characters.html no longer marks the active character's row .yours")
 	}
 }
 

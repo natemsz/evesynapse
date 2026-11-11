@@ -47,6 +47,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"io"
 	"net/http"
 	"strconv"
@@ -318,6 +319,12 @@ func (app *Mod) HandleSwarmSeedRegister(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	now := time.Now()
 	if entry.Signer != app.SwarmID.ID {
+		// A first heartbeat spends the hour's allowance of new
+		// rows; a known instance's heartbeat never does.
+		if _, err := app.Queries.GetSwarmPeer(ctx, entry.Signer); errors.Is(err, pgx.ErrNoRows) && !app.swarmNewRegistrationAllowed(now) {
+			http.Error(w, "too many registrations, try later", http.StatusTooManyRequests)
+			return
+		}
 		if err := app.SwarmLearnMembers(ctx, []SwarmMember{tuple}, entry.Signer, payload.PublicKey, "", "gossip", now); err != nil {
 			if errors.Is(err, ErrSwarmKeyChanged) {
 				// Registered before under another key: the
@@ -577,4 +584,19 @@ func (c *SwarmClient) PullEntries(ctx context.Context, baseURL string, keys []Sw
 		return nil, err
 	}
 	return body.Entries, nil
+}
+
+// swarmNewRegistrationAllowed spends one of the hour's first-heartbeat
+// allowance, reporting false once it is used up.
+func (app *Mod) swarmNewRegistrationAllowed(now time.Time) bool {
+	app.SwarmRegMu.Lock()
+	defer app.SwarmRegMu.Unlock()
+	if now.Sub(app.SwarmRegStart) >= time.Hour {
+		app.SwarmRegStart, app.SwarmRegCount = now, 0
+	}
+	if app.SwarmRegCount >= MaxSwarmNewRegistrationsPerHour {
+		return false
+	}
+	app.SwarmRegCount++
+	return true
 }

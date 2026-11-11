@@ -100,12 +100,21 @@ const SwarmUrgentPullTimeout = 3 * time.Second
 const (
 	MaxSwarmSpotPerCycle      = 5
 	MaxSwarmPullPeersPerCycle = 3
-	MaxSwarmDemandKeys        = 50
-	MaxSwarmGossipPeers       = 10
-	MaxSwarmHistoryDemand     = 30
-	MaxSwarmOrgDemand         = 10
-	MaxSwarmNameDemand        = 5 // per name kind
-	MaxSwarmContractDemand    = 10
+	// MaxSwarmProbesPerCycle is how many of a cycle's rotation
+	// turns may go to peers never asked before: fresh rows cannot
+	// take the turns of peers that serve.
+	MaxSwarmProbesPerCycle = 1
+	// MaxSwarmNewPeersPerRound is how many unknown instances one
+	// member list may add; MaxSwarmNewRegistrationsPerHour how
+	// many first heartbeats this instance files in an hour.
+	MaxSwarmNewPeersPerRound        = 10
+	MaxSwarmNewRegistrationsPerHour = 12
+	MaxSwarmDemandKeys              = 50
+	MaxSwarmGossipPeers             = 10
+	MaxSwarmHistoryDemand           = 30
+	MaxSwarmOrgDemand               = 10
+	MaxSwarmNameDemand              = 5 // per name kind
+	MaxSwarmContractDemand          = 10
 )
 
 // Staged entries older than this never apply: an entry nobody
@@ -687,12 +696,21 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 	if signer != "" && signerKey != "" && !seen[signer] {
 		members = append(members, SwarmMember{InstanceID: signer, PublicKey: signerKey})
 	}
+	added := 0
 	for _, m := range members {
 		if m.InstanceID == "" || m.InstanceID == app.SwarmID.ID {
 			continue
 		}
 		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != ed25519.PublicKeySize {
 			continue
+		}
+		// One list adds a bounded number of instances this one
+		// has never seen; the rest wait for a later round.
+		if _, err := app.Queries.GetSwarmPeer(ctx, m.InstanceID); errors.Is(err, pgx.ErrNoRows) {
+			if added >= MaxSwarmNewPeersPerRound {
+				continue
+			}
+			added++
 		}
 		signed := m.BaseURL != "" && VerifySwarmMember(m)
 		if !signed {
@@ -1074,7 +1092,7 @@ func (app *Mod) SwarmPull(ctx context.Context, now time.Time) {
 		}
 	}
 	var picked []db.ListSwarmPullPeersRow
-	rotation, warmTaken := 0, 0
+	rotation, warmTaken, probes := 0, 0, 0
 	for _, p := range peers {
 		if !SwarmPeerPullable(p.GoodChecks, p.BadChecks) {
 			continue
@@ -1090,6 +1108,12 @@ func (app *Mod) SwarmPull(ctx context.Context, now time.Time) {
 		} else {
 			if rotation >= MaxSwarmPullPeersPerCycle {
 				continue
+			}
+			if !p.LastPulled.Valid && !p.LastServed.Valid {
+				if probes >= MaxSwarmProbesPerCycle {
+					continue
+				}
+				probes++
 			}
 			rotation++
 		}

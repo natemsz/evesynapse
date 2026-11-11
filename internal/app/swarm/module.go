@@ -79,6 +79,11 @@ type Mod struct {
 	// many misses it has turned into wants this hour (warm.go).
 	SwarmDemandMu   sync.Mutex
 	SwarmDemandSeen map[string]*swarmDemandWindow
+	// SwarmRegMu guards the hour's count of first heartbeats
+	// filed from /swarm/seed/register (api.go).
+	SwarmRegMu    sync.Mutex
+	SwarmRegStart time.Time
+	SwarmRegCount int
 
 	// ReleaseFetch fetches one URL's body for the release
 	// learner (releases.go); nil uses the built-in HTTP fetch.

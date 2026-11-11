@@ -460,7 +460,7 @@ SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
     key_conflict_at, url_sig, url_issued_at, last_pulled, last_served, build
 FROM swarm_peers
-ORDER BY last_seen DESC
+ORDER BY last_served DESC NULLS LAST, last_seen DESC
 LIMIT 100
 `
 

@@ -314,7 +314,9 @@ func TestSwarmPullAsksADirectoryLikeAnyPeer(t *testing.T) {
 	if err := p.b.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: "seed", Approved: true}); err != nil {
 		t.Fatalf("approve seed: %v", err)
 	}
+	// Both are fresh, so their probes take a cycle each.
 	swarm.StateFor(p.b).SwarmPull(ctx, now)
+	swarm.StateFor(p.b).SwarmPull(ctx, now.Add(time.Minute))
 	// A seed is a member like any other: it is asked in its
 	// turn, answers with nothing, and costs nobody anything.
 	if seedHits != 1 {

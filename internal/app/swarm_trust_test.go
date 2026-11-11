@@ -1637,9 +1637,9 @@ func TestSwarmRegisterNeedsAnAddressSignature(t *testing.T) {
 	}
 }
 
-// TestSwarmPullTakesPeersInTurn: with more unprobed peers than
-// one cycle asks, the next cycle starts with the ones not yet
-// asked, and each gets exactly its one probe.
+// TestSwarmPullTakesPeersInTurn: unprobed peers are probed one a
+// cycle (fresh rows never take the turns of peers that serve), in
+// turn, and each gets exactly its one probe.
 func TestSwarmPullTakesPeersInTurn(t *testing.T) {
 	ctx := context.Background()
 	app := swarmTestApp(t)
@@ -1675,17 +1675,19 @@ func TestSwarmPullTakesPeersInTurn(t *testing.T) {
 	for _, n := range hits {
 		asked += n
 	}
-	if asked != swarm.MaxSwarmPullPeersPerCycle {
-		t.Fatalf("first cycle asked %d peers, want %d", asked, swarm.MaxSwarmPullPeersPerCycle)
+	if asked != swarm.MaxSwarmProbesPerCycle {
+		t.Fatalf("first cycle asked %d peers, want %d", asked, swarm.MaxSwarmProbesPerCycle)
 	}
-	swarm.StateFor(app).SwarmPull(ctx, now.Add(time.Minute))
+	for c := 1; c < total; c++ {
+		swarm.StateFor(app).SwarmPull(ctx, now.Add(time.Duration(c)*time.Minute))
+	}
 	for i := 0; i < total; i++ {
 		if hits[fmt.Sprintf("peer-%d", i)] != 1 {
-			t.Fatalf("after two cycles peer-%d has been asked %d times, want its one probe: %v", i, hits[fmt.Sprintf("peer-%d", i)], hits)
+			t.Fatalf("after %d cycles peer-%d has been asked %d times, want its one probe: %v", total, i, hits[fmt.Sprintf("peer-%d", i)], hits)
 		}
 	}
 	// None of them served anything: none is asked for data again.
-	swarm.StateFor(app).SwarmPull(ctx, now.Add(2*time.Minute))
+	swarm.StateFor(app).SwarmPull(ctx, now.Add(time.Duration(total)*time.Minute))
 	for id, n := range hits {
 		if n != 1 {
 			t.Fatalf("%s served nothing and was asked again (%d times)", id, n)
@@ -1748,8 +1750,10 @@ func TestSwarmDirectoryLeavesTheDataRotation(t *testing.T) {
 	if hits["peer-directory"] != 1 {
 		t.Fatalf("the directory was asked for data %d times in four cycles, want its one probe", hits["peer-directory"])
 	}
-	if hits[source.ID] != 4 {
-		t.Fatalf("the peer that serves was asked %d times in four cycles, want 4", hits[source.ID])
+	// The two fresh peers take a cycle each for their probe; from
+	// its probe on, the peer that serves is asked every cycle.
+	if hits[source.ID] != 3 {
+		t.Fatalf("the peer that serves was asked %d times in four cycles, want 3", hits[source.ID])
 	}
 
 	// A gossip round that reaches the directory lets it be probed once more.
@@ -1765,8 +1769,8 @@ func TestSwarmDirectoryLeavesTheDataRotation(t *testing.T) {
 	if hits["peer-directory"] != 2 {
 		t.Fatalf("after a re-arm the directory was asked %d times in all, want 2", hits["peer-directory"])
 	}
-	if hits[source.ID] != 6 {
-		t.Fatalf("the serving peer was asked %d times in six cycles, want 6 (re-arming must not disturb it)", hits[source.ID])
+	if hits[source.ID] != 5 {
+		t.Fatalf("the serving peer was asked %d times in six cycles, want 5 (its turn every cycle from its probe on; re-arming must not disturb it)", hits[source.ID])
 	}
 }
 

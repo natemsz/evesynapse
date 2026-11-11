@@ -2444,7 +2444,7 @@ func (s *demoSeed) writeAccountRows(ctx context.Context) error {
 		url   string
 		when  time.Time
 	}{
-		{notifyWatch, "Watch list: PLEX moved 6.2% in The Forge", "/market/", now.Add(-5 * hour)},
+		{notifyWatch, "Watch list: PLEX moved 6.2% in the global PLEX market", "/market/?type=44992&region=19000001", now.Add(-5 * hour)},
 		{notifyKillmail, "New killmail: Ilya Sorin's Punisher", "/killmails/", now.Add(-26 * hour)},
 		{notifyIndustry, "Industry job complete: Damage Control II (20 runs)", "/industry/", now.Add(-8 * day)},
 	}

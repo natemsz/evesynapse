@@ -4,63 +4,69 @@ package swarm
 // The release learner: the release library's second,
 // self-keeping half (build.go has the first, seeded one).
 //
-// On a slow cadence the learner fetches the recent releases
-// of the owner's two GitLab projects and records every binary
-// build's SHA-256, the Packages API reports one per package
-// file, in the release_builds table, under the release's
-// tag and the project's product kind. A recorded hash is
-// remembered for good: it stays known after its release
-// scrolls off the API's first page, so the library keeps
-// itself current without anyone seeding new hashes by hand
-// when a release ships.
+// On a slow cadence the learner reads the recent releases of the
+// owner's two Forgejo projects and records every binary build's
+// SHA-256 in the release_builds table, under the release's tag and
+// the project's product kind. An app release carries a signed
+// manifest per architecture (latest-<arch>.json and its .sig): the
+// learner takes the hash from the manifest, and only when the
+// signature verifies under the release keys this build trusts. A
+// storm release carries a SHA256SUMS file. A recorded hash is
+// remembered for good: it stays known after its release scrolls off
+// the first page, so the library keeps itself current without
+// anyone seeding new hashes by hand.
 //
-// The projects are hardcoded to the owner's because
-// "mainline" is defined by his releases: a build is mainline
-// when one of these two projects published it. A fork
-// self-hosting EveSynapse learns the same library, the
-// upstream's builds are the mainline whatever instance asks.
+// When Forgejo cannot be read, the app's builds are learned from
+// the project's static mirror (cdn.synap6.io) instead: its channel
+// manifests name the current builds, and they are taken only when
+// their signatures verify, so the mirror's host is never trusted.
 //
-// Failure tolerance is the shape of the thing: a fetch or
-// parse failure changes nothing (the previously recorded
-// builds stay recorded, the in-memory snapshot stays as it
-// was) and the pass is simply due again later. The cadence
-// is deliberately slow, once a day after a success, no
-// sooner than six hours after a failure, which the
-// unauthenticated GitLab API allowance absorbs without
-// noticing. Nothing here is on a render path, and the
-// recorded data feeds the same display-only classification
-// as the seeded library: the trust model never reads it.
+// The projects are hardcoded to the owner's because "mainline" is
+// defined by his releases: a fork self-hosting EveSynapse learns
+// the same library.
+//
+// Failure tolerance is the shape of the thing: a fetch or parse
+// failure changes nothing (recorded builds stay recorded, the
+// in-memory snapshot stays as it was) and the pass is simply due
+// again later: once a day after a success, no sooner than six hours
+// after a failure. Nothing here is on a render path, and the
+// recorded data feeds the same display-only classification as the
+// seeded library: the trust model never reads it.
 // ---------------------------------------------------------------------------
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/releasesig"
 )
 
-// releaseSource is one GitLab project the learner reads:
-// where it lives, the product name its binary files carry,
-// and the library kind its builds belong to.
+// releaseSource is one Forgejo project the learner reads: where it
+// lives, the product name its binary files carry, the library kind
+// its builds belong to, and whether its manifests are signed with
+// the app's release keys (and mirrored on the CDN).
 type releaseSource struct {
-	project string
+	repo    string
 	product string
 	kind    ReleaseKind
+	signed  bool
 }
 
-// releaseSources are the learner's projects: the app and
-// the storm node, the two products the swarm carries.
+// releaseSources are the learner's projects: the app and the storm
+// node, the two products the swarm carries.
 var releaseSources = []releaseSource{
-	{"natemsz/evesynapse", "evesynapse", ReleaseEveSynapse},
-	{"natemsz/evesynapse-storm", "storm", ReleaseStorm},
+	{"EveSynapse/evesynapse", "evesynapse", ReleaseEveSynapse, true},
+	{"EveSynapse/evesynapse-storm", "storm", ReleaseStorm, false},
 }
 
 const (
@@ -71,39 +77,35 @@ const (
 	releaseRetryInterval = 6 * time.Hour
 	releaseFetchTimeout  = 30 * time.Second
 	releasePerPage       = 10
+	releaseMaxBodyBytes  = 1 << 20
 )
 
-// gitlabAPIBaseURL is the GitLab API root the learner reads
-// from. A var so tests can point it at a local server.
-var gitlabAPIBaseURL = "https://gitlab.com/api/v4"
+// releaseArches are the architectures a release builds.
+var releaseArches = []string{"amd64", "arm64"}
 
-// gitlabProjectAPI is the API path prefix for one source's
-// project: the project path, URL-escaped as the GitLab API
-// wants it.
-func gitlabProjectAPI(src releaseSource) string {
-	return fmt.Sprintf("%s/projects/%s", gitlabAPIBaseURL, url.PathEscape(src.project))
+// forgejoBaseURL is the forge the projects live on, and
+// releaseMirrorBaseURL the app's static release mirror. Vars so
+// tests can point them at local servers.
+var (
+	forgejoBaseURL       = "https://natems.dev"
+	releaseMirrorBaseURL = "https://cdn.synap6.io"
+)
+
+// releaseTrustedKeys is the set of keys an app manifest has to be
+// signed with: the ones compiled into this build. A var so tests
+// can stand in a key of their own.
+var releaseTrustedKeys = releasesig.Trusted
+
+// releaseListURL is one project's recent releases.
+func releaseListURL(src releaseSource) string {
+	return fmt.Sprintf("%s/api/v1/repos/%s/releases?limit=%d", forgejoBaseURL, src.repo, releasePerPage)
 }
 
-// releaseReleasesURL lists a source's recent releases.
-func releaseReleasesURL(src releaseSource) string {
-	return fmt.Sprintf("%s/releases?per_page=%d", gitlabProjectAPI(src), releasePerPage)
-}
+// errReleaseNotFound is a file the server does not have.
+var errReleaseNotFound = errors.New("not found")
 
-// releasePackagesURL lists the source's generic packages
-// under its product name: one package per published
-// release, its version the release's tag.
-func releasePackagesURL(src releaseSource) string {
-	return fmt.Sprintf("%s/packages?package_type=generic&package_name=%s&per_page=100",
-		gitlabProjectAPI(src), url.QueryEscape(src.product))
-}
-
-// releasePackageFilesURL lists one package's files.
-func releasePackageFilesURL(src releaseSource, packageID int64) string {
-	return fmt.Sprintf("%s/packages/%d/package_files?per_page=100", gitlabProjectAPI(src), packageID)
-}
-
-// httpReleaseFetch is the built-in ReleaseFetch: one GET,
-// the body capped well past any real API page.
+// httpReleaseFetch is the learner's default fetch: one
+// unauthenticated GET, bounded by the context and the body cap.
 func httpReleaseFetch(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -115,33 +117,34 @@ func httpReleaseFetch(ctx context.Context, url string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitLab API answered %s", resp.Status)
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, errReleaseNotFound
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s answered %s", url, resp.Status)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, releaseMaxBodyBytes))
 }
 
-// gitlabRelease is one release in the API's payload, cut to
-// the fields the learner reads.
-type gitlabRelease struct {
-	TagName  string `json:"tag_name"`
-	Upcoming bool   `json:"upcoming_release"`
+// forgejoRelease is one release in the API's payload, cut to the
+// fields the learner reads.
+type forgejoRelease struct {
+	TagName string         `json:"tag_name"`
+	Draft   bool           `json:"draft"`
+	Assets  []forgejoAsset `json:"assets"`
 }
 
-// gitlabPackage is one generic package in the API's payload:
-// a published release's files live under the package whose
-// name is the product and whose version is the release's tag.
-type gitlabPackage struct {
-	ID      int64  `json:"id"`
-	Name    string `json:"name"`
+// forgejoAsset is one file attached to a release.
+type forgejoAsset struct {
+	Name string `json:"name"`
+	URL  string `json:"browser_download_url"`
+}
+
+// releaseManifest is a signed per-architecture manifest.
+type releaseManifest struct {
 	Version string `json:"version"`
-}
-
-// gitlabPackageFile is one file in a package, with the
-// SHA-256 the API reports for it, bare hex.
-type gitlabPackageFile struct {
-	Name   string `json:"file_name"`
-	SHA256 string `json:"file_sha256"`
+	Arch    string `json:"arch"`
+	SHA256  string `json:"sha256"`
 }
 
 // learnedBuild is one (hash, entry) pair read off a release.
@@ -150,113 +153,132 @@ type learnedBuild struct {
 	entry ReleaseBuild
 }
 
-// parseReleaseTags reads one project's releases payload and
-// returns the tags of the releases that are out: a release
-// still upcoming is announced, not published, and an
-// untagged entry is not a release at all.
-func parseReleaseTags(src releaseSource, body []byte) ([]string, error) {
-	var rels []gitlabRelease
-	if err := json.Unmarshal(body, &rels); err != nil {
-		return nil, fmt.Errorf("releases payload for %s: %w", src.project, err)
+// validSHA256 reports whether s is a hex SHA-256.
+func validSHA256(s string) bool {
+	if len(s) != 64 {
+		return false
 	}
-	var tags []string
-	for _, rel := range rels {
-		if rel.Upcoming || rel.TagName == "" {
+	_, err := hex.DecodeString(s)
+	return err == nil
+}
+
+// manifestBuild reads one signed manifest: the build it names when
+// the signature verifies under trusted and the manifest is the
+// architecture it was asked for, ok false otherwise.
+func manifestBuild(src releaseSource, label, arch string, manifest, sig []byte, trusted []ed25519.PublicKey) (learnedBuild, bool) {
+	if err := releasesig.Verify(trusted, manifest, sig); err != nil {
+		return learnedBuild{}, false
+	}
+	var m releaseManifest
+	if err := json.Unmarshal(manifest, &m); err != nil || m.Arch != arch || !validSHA256(m.SHA256) {
+		return learnedBuild{}, false
+	}
+	if label == "" {
+		label = "v" + m.Version
+	}
+	return learnedBuild{hash: strings.ToLower(m.SHA256), entry: ReleaseBuild{Kind: src.kind, Label: label}}, true
+}
+
+// parseSHA256Sums reads a SHA256SUMS file: the builds of the
+// product's own binaries ("<hash>  storm-amd64"); archives and
+// anything else listed beside them are not builds.
+func parseSHA256Sums(src releaseSource, tag string, body []byte) []learnedBuild {
+	var out []learnedBuild
+	for _, line := range strings.Split(string(body), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 || !validSHA256(fields[0]) {
 			continue
 		}
-		tags = append(tags, rel.TagName)
-	}
-	return tags, nil
-}
-
-// parseReleasePackages reads one project's packages payload
-// and returns its packages by version, keeping only the ones
-// named for the source's product.
-func parseReleasePackages(src releaseSource, body []byte) (map[string]int64, error) {
-	var pkgs []gitlabPackage
-	if err := json.Unmarshal(body, &pkgs); err != nil {
-		return nil, fmt.Errorf("packages payload for %s: %w", src.project, err)
-	}
-	byVersion := make(map[string]int64, len(pkgs))
-	for _, p := range pkgs {
-		if p.Name == src.product && p.Version != "" {
-			byVersion[p.Version] = p.ID
+		name := strings.TrimPrefix(fields[1], "*")
+		for _, arch := range releaseArches {
+			if name == src.product+"-"+arch {
+				out = append(out, learnedBuild{hash: strings.ToLower(fields[0]), entry: ReleaseBuild{Kind: src.kind, Label: tag}})
+			}
 		}
 	}
-	return byVersion, nil
+	return out
 }
 
-// parsePackageBuilds reads one package's files payload and
-// returns the build of every binary file in it. A binary
-// file is the product's own executable for one architecture
-// , evesynapse-amd64, storm-arm64, named exactly; checksum
-// files, signatures and manifests ride in the same package
-// and are not builds, so they are skipped by name, never
-// recorded. A file whose checksum is missing or not a
-// SHA-256 is skipped the same way.
-func parsePackageBuilds(src releaseSource, tag string, body []byte) ([]learnedBuild, error) {
-	var files []gitlabPackageFile
-	if err := json.Unmarshal(body, &files); err != nil {
-		return nil, fmt.Errorf("package files payload for %s %s: %w", src.project, tag, err)
+// learnSource reads one source's builds off its recent published
+// releases on Forgejo. An asset is only fetched from the forge
+// itself. A release without readable manifests contributes nothing;
+// a failure to read the release list fails the source, and the
+// caller keeps what it recorded before.
+func learnSource(ctx context.Context, fetch func(context.Context, string) ([]byte, error), src releaseSource, trusted []ed25519.PublicKey) ([]learnedBuild, error) {
+	body, err := fetch(ctx, releaseListURL(src))
+	if err != nil {
+		return nil, err
+	}
+	var rels []forgejoRelease
+	if err := json.Unmarshal(body, &rels); err != nil {
+		return nil, fmt.Errorf("releases payload for %s: %w", src.repo, err)
 	}
 	var out []learnedBuild
-	for _, f := range files {
-		if f.Name != src.product+"-amd64" && f.Name != src.product+"-arm64" {
+	for _, rel := range rels {
+		if rel.Draft || rel.TagName == "" {
 			continue
 		}
-		if len(f.SHA256) != 64 {
+		assets := map[string]string{}
+		for _, a := range rel.Assets {
+			if strings.HasPrefix(a.URL, forgejoBaseURL+"/") {
+				assets[a.Name] = a.URL
+			}
+		}
+		if src.signed {
+			for _, arch := range releaseArches {
+				name := "latest-" + arch + ".json"
+				if assets[name] == "" || assets[name+releasesig.SigSuffix] == "" {
+					continue
+				}
+				manifest, err := fetch(ctx, assets[name])
+				if err != nil {
+					return nil, err
+				}
+				sig, err := fetch(ctx, assets[name+releasesig.SigSuffix])
+				if err != nil {
+					return nil, err
+				}
+				if b, ok := manifestBuild(src, rel.TagName, arch, manifest, sig, trusted); ok {
+					out = append(out, b)
+				}
+			}
 			continue
 		}
-		if _, err := hex.DecodeString(f.SHA256); err != nil {
-			continue
+		if url := assets["SHA256SUMS"]; url != "" {
+			sums, err := fetch(ctx, url)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, parseSHA256Sums(src, rel.TagName, sums)...)
 		}
-		out = append(out, learnedBuild{
-			hash:  strings.ToLower(f.SHA256),
-			entry: ReleaseBuild{Kind: src.kind, Label: tag},
-		})
 	}
 	return out, nil
 }
 
-// learnSource reads one source's builds: the tags of its
-// published releases, the package standing behind each tag,
-// and the binary files in those packages. A release with no
-// package behind it has published no files the learner can
-// hash, so it contributes nothing; any fetch or parse
-// failure fails the source, and the caller keeps what it
-// recorded before.
-func learnSource(ctx context.Context, fetch func(context.Context, string) ([]byte, error), src releaseSource) ([]learnedBuild, error) {
-	body, err := fetch(ctx, releaseReleasesURL(src))
-	if err != nil {
-		return nil, err
-	}
-	tags, err := parseReleaseTags(src, body)
-	if err != nil {
-		return nil, err
-	}
-	body, err = fetch(ctx, releasePackagesURL(src))
-	if err != nil {
-		return nil, err
-	}
-	packages, err := parseReleasePackages(src, body)
-	if err != nil {
-		return nil, err
-	}
+// learnMirror reads the app's current builds off the static
+// mirror's channel manifests (latest and latest-dev), taken only
+// when their signatures verify. A channel the mirror does not carry
+// is skipped.
+func learnMirror(ctx context.Context, fetch func(context.Context, string) ([]byte, error), src releaseSource, trusted []ed25519.PublicKey) ([]learnedBuild, error) {
 	var out []learnedBuild
-	for _, tag := range tags {
-		packageID, ok := packages[tag]
-		if !ok {
-			continue
+	for _, channel := range []string{"latest", "latest-dev"} {
+		for _, arch := range releaseArches {
+			url := releaseMirrorBaseURL + "/" + channel + "-" + arch + ".json"
+			manifest, err := fetch(ctx, url)
+			if errors.Is(err, errReleaseNotFound) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			sig, err := fetch(ctx, url+releasesig.SigSuffix)
+			if err != nil {
+				return nil, err
+			}
+			if b, ok := manifestBuild(src, "", arch, manifest, sig, trusted); ok {
+				out = append(out, b)
+			}
 		}
-		body, err := fetch(ctx, releasePackageFilesURL(src, packageID))
-		if err != nil {
-			return nil, err
-		}
-		pairs, err := parsePackageBuilds(src, tag, body)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, pairs...)
 	}
 	return out, nil
 }
@@ -277,22 +299,31 @@ func (m *Mod) LoadLearnedBuilds(ctx context.Context) error {
 	return nil
 }
 
-// LearnReleases runs one learn pass: fetch both projects'
-// recent releases, record every binary build's hash, and
-// refresh the in-memory snapshot from what is stored. A
-// source that fails to fetch, parse or store keeps its
-// previously recorded builds; the pass reports the first
-// failure it met after giving every source its chance.
+// LearnReleases runs one learn pass: read both projects' recent
+// releases (the app's from the mirror when Forgejo cannot be
+// read), record every binary build's hash, and refresh the
+// in-memory snapshot from what is stored. A source that fails to
+// fetch, parse or store keeps its previously recorded builds; the
+// pass reports the first failure it met after giving every source
+// its chance.
 func (m *Mod) LearnReleases(ctx context.Context) error {
 	fetch := m.ReleaseFetch
 	if fetch == nil {
 		fetch = httpReleaseFetch
 	}
+	trusted, err := releaseTrustedKeys()
+	if err != nil {
+		return fmt.Errorf("release keys: %w", err)
+	}
 	var firstErr error
 	learned := 0
 	for _, src := range releaseSources {
 		fctx, cancel := context.WithTimeout(ctx, releaseFetchTimeout)
-		pairs, err := learnSource(fctx, fetch, src)
+		pairs, err := learnSource(fctx, fetch, src, trusted)
+		if err != nil && src.signed {
+			logging.Warnf("swarm: release learner: %s on Forgejo: %v; reading the mirror", src.repo, err)
+			pairs, err = learnMirror(fctx, fetch, src, trusted)
+		}
 		cancel()
 		for _, p := range pairs {
 			if err != nil {

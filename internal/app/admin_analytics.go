@@ -112,6 +112,9 @@ type analyticsView struct {
 	HostMemNote   string
 	HostFacts     []string
 	HostNote      string // set when no host samples exist
+	// MemoryFacts is the Go heap against its limit and what each
+	// in-memory surface holds (admin_memory.go).
+	MemoryFacts []string
 
 	GrowthChart template.HTML
 	GrowthNote  string
@@ -610,6 +613,7 @@ func uptimeText(since time.Time) string {
 }
 
 func (b *analyticsBuild) host(v *analyticsView) {
+	v.MemoryFacts = b.app.memoryFacts()
 	b.queries++
 	latest, err := b.app.queries.StatsHostLatest(b.ctx)
 	if err != nil {

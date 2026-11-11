@@ -975,14 +975,20 @@ type KillDetail struct {
 	StoredAt   time.Time `json:"stored_at"`
 }
 
-type KillEntityApplied struct {
-	KillmailID   int64     `json:"killmail_id"`
-	Kind         string    `json:"kind"`
-	EntityID     int64     `json:"entity_id"`
-	KillmailTime time.Time `json:"killmail_time"`
+type KillEntityDaily struct {
+	Day               time.Time `json:"day"`
+	Kind              string    `json:"kind"`
+	EntityID          int64     `json:"entity_id"`
+	Kills             int64     `json:"kills"`
+	Solo              int64     `json:"solo"`
+	Losses            int64     `json:"losses"`
+	IskKilled         float64   `json:"isk_killed"`
+	IskLost           float64   `json:"isk_lost"`
+	BiggestKillmailID int64     `json:"biggest_killmail_id"`
+	BiggestValue      float64   `json:"biggest_value"`
 }
 
-type KillEntityDaily struct {
+type KillEntityDailyRebuild struct {
 	Day               time.Time `json:"day"`
 	Kind              string    `json:"kind"`
 	EntityID          int64     `json:"entity_id"`
@@ -1004,7 +1010,24 @@ type KillEntityDailyShip struct {
 	Lost       int64     `json:"lost"`
 }
 
+type KillEntityDailyShipsRebuild struct {
+	Day        time.Time `json:"day"`
+	Kind       string    `json:"kind"`
+	EntityID   int64     `json:"entity_id"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	Flown      int64     `json:"flown"`
+	Lost       int64     `json:"lost"`
+}
+
 type KillEntityDailySystem struct {
+	Day      time.Time `json:"day"`
+	Kind     string    `json:"kind"`
+	EntityID int64     `json:"entity_id"`
+	SystemID int64     `json:"system_id"`
+	Events   int64     `json:"events"`
+}
+
+type KillEntityDailySystemsRebuild struct {
 	Day      time.Time `json:"day"`
 	Kind     string    `json:"kind"`
 	EntityID int64     `json:"entity_id"`
@@ -1032,6 +1055,18 @@ type KillLinePrice struct {
 	KillmailID int64   `json:"killmail_id"`
 	TypeID     int64   `json:"type_id"`
 	UnitPrice  float64 `json:"unit_price"`
+}
+
+type KillStatsPending struct {
+	KillmailID   int64     `json:"killmail_id"`
+	KillmailTime time.Time `json:"killmail_time"`
+}
+
+type KillStatsRebuildState struct {
+	ID        int32        `json:"id"`
+	Cursor    int64        `json:"cursor"`
+	StartedAt sql.NullTime `json:"started_at"`
+	DoneAt    sql.NullTime `json:"done_at"`
 }
 
 type KillboardHeadline struct {

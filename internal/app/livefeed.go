@@ -447,14 +447,14 @@ type marketLiveEvent struct {
 	RegionID int64          `json:"region"`
 	Sell     marketLiveSide `json:"sell"`
 	Buy      marketLiveSide `json:"buy"`
-	Age      string         `json:"age"`
+	At       string         `json:"at"` // RFC 3339 time of the stats row, for the page's age ticker
 }
 
 // marketLiveEventFor formats one refreshed stat row as a market
 // event. The strings match the item page's statistics table and
 // region strip, so the browser can write them into the cells
 // without formatting anything itself.
-func marketLiveEventFor(row db.MarketRegionStat, now time.Time) marketLiveEvent {
+func marketLiveEventFor(row db.MarketRegionStat) marketLiveEvent {
 	return marketLiveEvent{
 		TypeID:   row.TypeID,
 		RegionID: row.RegionID,
@@ -470,7 +470,7 @@ func marketLiveEventFor(row db.MarketRegionStat, now time.Time) marketLiveEvent 
 			Edge: esi.FormatISK(row.BuyP5), Dev: esi.FormatISK(row.BuyStddev),
 			Orders: esi.FormatInt(row.BuyOrders), Volume: esi.FormatInt(row.BuyVolume),
 		},
-		Age: ageText(now, row.UpdatedAt),
+		At: row.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -602,7 +602,7 @@ func (app *Application) publishMarketStatRow(row db.MarketRegionStat) {
 	if !app.marketLive.hasSubscriber(row.RegionID, row.TypeID) {
 		return
 	}
-	ev := marketLiveEventFor(row, time.Now())
+	ev := marketLiveEventFor(row)
 	payload, err := json.Marshal(ev)
 	if err != nil {
 		logging.Errorf("live feed: marshal market event for type %d: %v", row.TypeID, err)
@@ -627,6 +627,7 @@ type marketBookEvent struct {
 	Sells    []marketBookRow   `json:"sells"`
 	Buys     []marketBookRow   `json:"buys"`
 	KPIs     map[string]string `json:"kpis"`
+	At       string            `json:"at,omitempty"` // RFC 3339 time of the sweep the book came from
 }
 
 // marketBookRow is one rendered order book row.
@@ -663,6 +664,9 @@ func (app *Application) publishMarketBook(regionID, typeID int64) {
 		TypeID: typeID, RegionID: regionID,
 		BestSell: item.BestSellRaw, BestBuy: item.BestBuyRaw,
 		KPIs: map[string]string{},
+	}
+	if !item.BookSweptAt.IsZero() {
+		ev.At = item.BookSweptAt.UTC().Format(time.RFC3339)
 	}
 	render := func(define string, data any) (string, bool) {
 		buf, err := executeFragment("market.html", define, data)

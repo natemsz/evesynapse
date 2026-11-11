@@ -383,10 +383,10 @@ func TestKillboardScopedStats(t *testing.T) {
 		VALUES (800005, $1, 30000142, 10000002, 9201, 98201, 99201, 22456, 1, 0, 0, 0, false, true, 5000000, 5000000, 'zkill', true, $1)`,
 		now.Add(-48*time.Hour))
 
-	// Stored kills reach the pages through the worker pass:
-	// the fold into the daily aggregates and the headline
-	// refresh run here, as killboardMaintenance runs them.
-	app.backfillKillStats(ctx)
+	// Stored kills reach the pages through the worker: their
+	// count into the daily aggregates and the headline refresh
+	// run here.
+	countStoredKills(t, app, ctx)
 	app.refreshKillboardHeadline(ctx)
 	get := func(path string) string {
 		t.Helper()

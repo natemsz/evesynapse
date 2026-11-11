@@ -204,7 +204,7 @@ func TestAdminAnalyticsRenders(t *testing.T) {
 		t.Fatalf("GET /admin/: status %d, want 200", code)
 	}
 	mustContain(t, "/admin/ (empty)", body,
-		"Analytics", "No analytics yet", "Data freshness", "Analytics section:")
+		"Analytics", "No analytics yet", "Data freshness", "Analytics section:", "Go heap in use")
 
 	// Seed the stored aggregates the section reads.
 	now := time.Now().UTC()

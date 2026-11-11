@@ -2025,6 +2025,14 @@ func (c *Client) FetchRawLong(ctx context.Context, accessToken, path string) ([]
 	return c.requestLong(ctx, http.MethodGet, accessToken, path, nil, http.StatusOK)
 }
 
+// FetchRawOnce is one plain GET outside the shared cache: for bulk
+// reads of immutable documents (a killmail by id and hash) that no
+// other reader will ask for again, so they never push live entries
+// out of the bounded cache.
+func (c *Client) FetchRawOnce(ctx context.Context, path string) ([]byte, http.Header, error) {
+	return c.fetchRawDirect(ctx, "", path)
+}
+
 // fetchRawDirect is FetchRaw without the singleflight collapse
 // and the ETag cache: one plain GET, always downloaded in full.
 // Only the snapshot pipeline's paginated and windowed fetches
@@ -3914,6 +3922,21 @@ func (c *Client) heardName(kind string, id int64, name string, changed bool) {
 	if changed && name != "" && c.nameSink != nil {
 		c.nameSink(kind, id, name)
 	}
+}
+
+// NameCacheCounts reports how many character, corporation and
+// alliance names the client holds in memory.
+func (c *Client) NameCacheCounts() (characters, corporations, alliances int) {
+	c.charNamesMu.RLock()
+	characters = len(c.charNames)
+	c.charNamesMu.RUnlock()
+	c.corpNamesMu.RLock()
+	corporations = len(c.corpNames)
+	c.corpNamesMu.RUnlock()
+	c.allianceNamesMu.RLock()
+	alliances = len(c.allianceNames)
+	c.allianceNamesMu.RUnlock()
+	return characters, corporations, alliances
 }
 
 // PrimeName puts a stored name into its cache without telling the

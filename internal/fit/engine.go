@@ -116,6 +116,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -226,6 +227,17 @@ const (
 	groupRemoteCapTransmitter   = 67
 	groupNosferatu              = 68
 	groupSmartbomb              = 72
+)
+
+// CharacterTypeID is the SDE's Character type: the pilot's base
+// attributes, before skills and implants.
+const CharacterTypeID = 1373
+
+// Capacitor boosters: the charge's injection, and the module's
+// reload between clips.
+const (
+	AttrCapacitorBonus = 67
+	AttrReloadTime     = 1795
 )
 
 // Slot / fitting effect IDs (dgmEffects names verified live).
@@ -532,7 +544,9 @@ func LoadSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*Snapsho
 	loadedTypes := make(map[int64]bool)
 	loadedEffects := make(map[int64]bool)
 	// A copy: the caller keeps its slice in the order it built it.
-	pending := dedupeSortedIDs(append([]int64(nil), typeIDs...))
+	// The character type rides along: its attributes are the
+	// pilot's own base values (two locked targets before skills).
+	pending := dedupeSortedIDs(append(append([]int64(nil), typeIDs...), CharacterTypeID))
 
 	for round := 0; round < 6; round++ {
 		var fresh []int64
@@ -787,9 +801,13 @@ type Result struct {
 	DroneBayUsed       float64 // m3 of fitted drones
 	DroneBayCapacity   float64 // m3
 
-	CapacitorCapacity      float64
-	CapacitorPeakRecharge  float64 // GJ/s at the curve's peak
-	CapacitorDraw          float64 // GJ/s with everything cycling
+	CapacitorCapacity     float64
+	CapacitorPeakRecharge float64 // GJ/s at the curve's peak
+	CapacitorDraw         float64 // GJ/s with everything cycling
+	// CapacitorInjection is what fitted capacitor boosters put back,
+	// GJ/s sustained over their reloads. Stability reads the draw
+	// less this.
+	CapacitorInjection     float64
 	CapacitorStable        bool
 	CapacitorStablePercent float64 // equilibrium % when stable
 	CapacitorDepletionSecs float64 // approx seconds to empty; 0 when stable
@@ -997,12 +1015,14 @@ type application struct {
 	mod      Modifier
 }
 
-// penaltySubject reports whether this application sits in the
-// stacking-penalty group for its attribute: multiplicative op,
-// non-stackable attribute, fitted-module source.
+// penaltySubject reports whether this application sits in a
+// stacking-penalty chain for its attribute: multiplicative op
+// (pre or post), non-stackable attribute, fitted module or rig.
+// Two Ballistic Control Systems are the pre-multiply case.
+// Subsystems, like the hull, skills and implants, are exempt.
 func (app application) penaltySubject(snap *Snapshot) bool {
 	switch app.mod.Operation {
-	case opPostMult, opPostDivide, opPostPercent:
+	case opPreMultiply, opPreDivide, opPostMult, opPostDivide, opPostPercent:
 	default:
 		return false
 	}
@@ -1010,7 +1030,7 @@ func (app application) penaltySubject(snap *Snapshot) bool {
 		return false
 	}
 	switch app.source.kind {
-	case entModule, entRig, entSubsystem:
+	case entModule, entRig:
 		return true
 	}
 	return false
@@ -1022,9 +1042,9 @@ func (app application) penaltySubject(snap *Snapshot) bool {
 func impact(op int64, v float64) float64 {
 	var factor float64
 	switch op {
-	case opPostMult:
+	case opPreMultiply, opPostMult:
 		factor = v
-	case opPostDivide:
+	case opPreDivide, opPostDivide:
 		factor = 1 / v
 	case opPostPercent:
 		factor = 1 + v/100
@@ -1041,9 +1061,9 @@ func impact(op int64, v float64) float64 {
 // equivalent multiplier on the target attribute.
 func multFactor(op int64, v float64) float64 {
 	switch op {
-	case opPostMult:
+	case opPreMultiply, opPostMult:
 		return v
-	case opPostDivide:
+	case opPreDivide, opPostDivide:
 		if v != 0 {
 			return 1 / v
 		}
@@ -1066,11 +1086,9 @@ func stackingEffectiveness(rank int) float64 {
 // foldAttribute computes one attribute's final value from its
 // base under the bound applications, in dogma stage order.
 // Source attribute values come from val, which resolves them to
-// their own final values first.
-// Multiplicative stages: non-penalized
-// multipliers apply at full strength; penalized ones are split
-// into bonus (>1) and penalty (<1) chains, each ordered by
-// impact descending and damped independently.
+// their own final values first. Each multiplicative stage
+// (pre-multiply, pre-divide, then the post stages together)
+// penalizes its own fitted-module modifiers.
 func foldAttribute(snap *Snapshot, base float64, apps []application, val func(*entity, int64) float64) float64 {
 	value := base
 
@@ -1092,12 +1110,6 @@ func foldAttribute(snap *Snapshot, base float64, apps []application, val func(*e
 			switch op {
 			case opPreAssign, opPostAssign:
 				value = raw
-			case opPreMultiply:
-				value *= raw
-			case opPreDivide:
-				if raw != 0 {
-					value /= raw
-				}
 			case opModAdd:
 				value += raw
 			case opModSub:
@@ -1106,41 +1118,45 @@ func foldAttribute(snap *Snapshot, base float64, apps []application, val func(*e
 		}
 	}
 
+	// multStage applies one multiplicative stage: non-penalized
+	// multipliers at full strength, penalized ones split into
+	// bonus (>1) and penalty (<1) chains, each ordered by impact
+	// descending and damped independently.
+	multStage := func(ops ...int64) {
+		var bonuses, penalties []multEntry
+		for i := range apps {
+			app := &apps[i]
+			op := app.mod.Operation
+			if !slices.Contains(ops, op) {
+				continue
+			}
+			v := val(app.source, app.mod.ModifyingAttr)
+			factor := multFactor(op, v)
+			if !app.penaltySubject(snap) {
+				value *= factor
+				continue
+			}
+			entry := multEntry{factor: factor, impact: impact(op, v)}
+			if factor >= 1 {
+				bonuses = append(bonuses, entry)
+			} else {
+				penalties = append(penalties, entry)
+			}
+		}
+		for _, chain := range [][]multEntry{bonuses, penalties} {
+			sort.SliceStable(chain, func(i, j int) bool { return chain[i].impact > chain[j].impact })
+			for rank, entry := range chain {
+				value *= 1 + (entry.factor-1)*stackingEffectiveness(rank)
+			}
+		}
+	}
+
 	applyStage(opPreAssign)
-	applyStage(opPreMultiply)
-	applyStage(opPreDivide)
+	multStage(opPreMultiply)
+	multStage(opPreDivide)
 	applyStage(opModAdd, opModSub)
-
-	// Multiplicative stages (PostMultiply, PostDivide,
-	// PostPercent): convert to plain multipliers, apply
-	// non-penalized ones fully, then the penalized chains.
-	var bonuses, penalties []multEntry
-	for i := range apps {
-		app := &apps[i]
-		op := app.mod.Operation
-		if op != opPostMult && op != opPostDivide && op != opPostPercent {
-			continue
-		}
-		v := val(app.source, app.mod.ModifyingAttr)
-		factor := multFactor(op, v)
-		if !app.penaltySubject(snap) {
-			value *= factor
-			continue
-		}
-		entry := multEntry{factor: factor, impact: impact(op, v)}
-		if factor >= 1 {
-			bonuses = append(bonuses, entry)
-		} else {
-			penalties = append(penalties, entry)
-		}
-	}
-	for _, chain := range [][]multEntry{bonuses, penalties} {
-		sort.SliceStable(chain, func(i, j int) bool { return chain[i].impact > chain[j].impact })
-		for rank, entry := range chain {
-			value *= 1 + (entry.factor-1)*stackingEffectiveness(rank)
-		}
-	}
-
+	// PostMultiply, PostDivide and PostPercent share one chain.
+	multStage(opPostMult, opPostDivide, opPostPercent)
 	applyStage(opPostAssign)
 	return value
 }

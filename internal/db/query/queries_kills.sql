@@ -102,22 +102,40 @@ UPDATE kills SET value_ours = sqlc.arg(value_ours)::double precision,
     priced_at = sqlc.arg(priced_at)::timestamptz
 WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 
+-- Kills whose attacker rows are gone (pruned before the stats fold
+-- counted their ships), newest first below a keyset cursor, for the
+-- restorer to read back from ESI by hash.
+-- name: ListKillsMissingAttackers :many
+SELECT k.killmail_id, k.hash, k.killmail_time FROM kills k
+WHERE k.killmail_id < sqlc.arg(before_id)::bigint
+  AND k.attacker_count > 0 AND k.hash <> ''
+  AND NOT EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id)
+ORDER BY k.killmail_id DESC
+LIMIT sqlc.arg(max_rows)::bigint;
+
 -- Retention: attacker detail, full killmails and per-item priced
 -- lines older than the cutoff go; the summary row and the
 -- involvement record stay. Values and who they credit are
--- permanent; only detail ages out. Past a year a kill is metadata
+-- permanent; only detail ages out. Past two years a kill is metadata
 -- for intel only (who, when, ship, total value), not a record.
+-- Raw kill rows past retention go only once the kill is counted
+-- into the daily statistics (it is not waiting in
+-- kill_stats_pending): the fold reads the attacker rows for ships
+-- flown, so pruning first would lose them from the stats for good.
 -- name: PruneKillDetails :execrows
 DELETE FROM kill_details d USING kills k
-WHERE k.killmail_id = d.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz;
+WHERE k.killmail_id = d.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id);
 
 -- name: PruneKillAttackers :execrows
 DELETE FROM kill_attackers a USING kills k
-WHERE k.killmail_id = a.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz;
+WHERE k.killmail_id = a.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id);
 
 -- name: PruneKillLinePrices :execrows
 DELETE FROM kill_line_prices l USING kills k
-WHERE k.killmail_id = l.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz;
+WHERE k.killmail_id = l.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id);
 
 -- name: ListSystemRegions :many
 SELECT system_id, region_id FROM sde_systems;
@@ -297,12 +315,6 @@ WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 SELECT character_id, corporation_id, alliance_id, ship_type_id FROM kill_attackers
 WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 
--- name: MarkKillEntityApplied :one
-INSERT INTO kill_entity_applied (killmail_id, kind, entity_id, killmail_time)
-VALUES (sqlc.arg(killmail_id)::bigint, sqlc.arg(kind)::text, sqlc.arg(entity_id)::bigint, sqlc.arg(killmail_time)::timestamptz)
-ON CONFLICT DO NOTHING
-RETURNING killmail_id;
-
 -- name: ApplyKillEntityDaily :exec
 INSERT INTO kill_entity_daily (day, kind, entity_id, kills, solo, losses, isk_killed, isk_lost, biggest_killmail_id, biggest_value)
 VALUES (sqlc.arg(day)::date, sqlc.arg(kind)::text, sqlc.arg(entity_id)::bigint,
@@ -375,14 +387,186 @@ GROUP BY system_id
 ORDER BY n DESC, system_id
 LIMIT sqlc.arg(max_rows)::bigint;
 
--- name: ListUnfoldedKills :many
-SELECT k.killmail_id FROM kills k
-WHERE k.public
-  AND (k.victim_character_id > 0 OR k.victim_corporation_id > 0 OR k.victim_alliance_id > 0
-    OR EXISTS (SELECT 1 FROM kill_involvement i WHERE i.killmail_id = k.killmail_id))
-  AND NOT EXISTS (SELECT 1 FROM kill_entity_applied a WHERE a.killmail_id = k.killmail_id)
-ORDER BY k.killmail_time DESC
+-- The counting queue (schema 146): public kills not yet folded into
+-- the daily aggregates. The fold claims a kill by deleting its row in
+-- the aggregates' transaction; no row, no count.
+-- name: GetKillPublicForUpdate :one
+SELECT public FROM kills WHERE killmail_id = sqlc.arg(killmail_id)::bigint FOR UPDATE;
+
+-- name: InsertKillStatsPending :exec
+INSERT INTO kill_stats_pending (killmail_id, killmail_time)
+VALUES (sqlc.arg(killmail_id)::bigint, sqlc.arg(killmail_time)::timestamptz)
+ON CONFLICT DO NOTHING;
+
+-- name: KillStatsQueued :one
+SELECT EXISTS (SELECT 1 FROM kill_stats_pending WHERE killmail_id = sqlc.arg(killmail_id)::bigint) AS queued;
+
+-- name: ClaimKillStatsPending :execrows
+DELETE FROM kill_stats_pending WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
+
+-- name: ListKillStatsPending :many
+SELECT killmail_id FROM kill_stats_pending
+ORDER BY killmail_time DESC
 LIMIT sqlc.arg(max_rows)::bigint;
+
+-- The one time rebuild (killboard_rebuild.go): the daily aggregates
+-- counted again from complete kill rows, a chunk of killmail ids at
+-- a time, into the _rebuild tables. Each chunk applies exactly the
+-- fold's rules (foldKillStats): public kills only; attackers from
+-- the involvement record, minus the victim's own character,
+-- corporation or alliance, and none on an NPC kill; ships flown
+-- from the attacker rows; value_ours, else zKillboard's value. A
+-- kill waiting in kill_stats_pending is left for the live fold.
+
+-- name: KillStatsRebuildChunkEnd :one
+SELECT COALESCE(MAX(c.killmail_id), 0)::bigint AS through_id FROM (
+    SELECT killmail_id FROM kills
+    WHERE killmail_id > sqlc.arg(after_id)::bigint
+    ORDER BY killmail_id
+    LIMIT sqlc.arg(max_rows)::bigint
+) c;
+
+-- name: RebuildKillEntityDailyChunk :exec
+WITH k AS MATERIALIZED (
+    SELECT kl.killmail_id, (kl.killmail_time AT TIME ZONE 'UTC')::date AS day, kl.npc, kl.solo,
+        kl.victim_character_id AS vc, kl.victim_corporation_id AS vco, kl.victim_alliance_id AS val,
+        COALESCE(kl.value_ours, kl.value_zkill, 0)::double precision AS v
+    FROM kills kl
+    WHERE kl.public AND kl.killmail_id > sqlc.arg(after_id)::bigint AND kl.killmail_id <= sqlc.arg(through_id)::bigint
+      AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = kl.killmail_id)
+), src AS MATERIALIZED (
+    SELECT k.killmail_id, k.vc, k.vco, k.val, t.character_id, t.corporation_id, t.alliance_id
+    FROM k CROSS JOIN LATERAL (
+        SELECT i.character_id, i.corporation_id, i.alliance_id FROM kill_involvement i WHERE i.killmail_id = k.killmail_id OFFSET 0
+    ) t
+    WHERE NOT k.npc
+), att AS (
+    SELECT x.killmail_id, 'character'::text AS kind, x.character_id AS id FROM src x
+    WHERE x.character_id > 0 AND x.character_id <> x.vc
+    UNION
+    SELECT x.killmail_id, 'corporation'::text AS kind, x.corporation_id AS id FROM src x
+    WHERE x.corporation_id > 0 AND x.corporation_id <> x.vco
+    UNION
+    SELECT x.killmail_id, 'alliance'::text AS kind, x.alliance_id AS id FROM src x
+    WHERE x.alliance_id > 0 AND x.alliance_id <> x.val
+), r AS (
+    SELECT k.day, a.kind, a.id AS entity_id, 1::bigint AS kills,
+        (CASE WHEN k.solo THEN 1 ELSE 0 END)::bigint AS solo, 0::bigint AS losses,
+        k.v AS isk_killed, 0::double precision AS isk_lost, k.killmail_id AS bid, k.v AS bval
+    FROM att a JOIN k ON k.killmail_id = a.killmail_id
+    UNION ALL
+    SELECT k.day, 'character'::text, k.vc, 0::bigint, 0::bigint, 1::bigint, 0::double precision, k.v, 0::bigint, 0::double precision
+    FROM k
+    WHERE k.vc > 0
+    UNION ALL
+    SELECT k.day, 'corporation'::text, k.vco, 0::bigint, 0::bigint, 1::bigint, 0::double precision, k.v, 0::bigint, 0::double precision
+    FROM k
+    WHERE k.vco > 0
+    UNION ALL
+    SELECT k.day, 'alliance'::text, k.val, 0::bigint, 0::bigint, 1::bigint, 0::double precision, k.v, 0::bigint, 0::double precision
+    FROM k
+    WHERE k.val > 0
+)
+INSERT INTO kill_entity_daily_rebuild (day, kind, entity_id, kills, solo, losses, isk_killed, isk_lost, biggest_killmail_id, biggest_value)
+SELECT r.day, r.kind, r.entity_id, SUM(r.kills)::bigint, SUM(r.solo)::bigint, SUM(r.losses)::bigint,
+    SUM(r.isk_killed)::double precision, SUM(r.isk_lost)::double precision,
+    COALESCE((ARRAY_AGG(r.bid ORDER BY r.bval DESC) FILTER (WHERE r.kills = 1))[1], 0)::bigint,
+    COALESCE(MAX(r.bval) FILTER (WHERE r.kills = 1), 0)::double precision
+FROM r
+GROUP BY r.day, r.kind, r.entity_id
+ON CONFLICT (day, kind, entity_id) DO UPDATE SET
+    kills = kill_entity_daily_rebuild.kills + EXCLUDED.kills,
+    solo = kill_entity_daily_rebuild.solo + EXCLUDED.solo,
+    losses = kill_entity_daily_rebuild.losses + EXCLUDED.losses,
+    isk_killed = kill_entity_daily_rebuild.isk_killed + EXCLUDED.isk_killed,
+    isk_lost = kill_entity_daily_rebuild.isk_lost + EXCLUDED.isk_lost,
+    biggest_killmail_id = CASE WHEN EXCLUDED.biggest_value > kill_entity_daily_rebuild.biggest_value THEN EXCLUDED.biggest_killmail_id ELSE kill_entity_daily_rebuild.biggest_killmail_id END,
+    biggest_value = GREATEST(kill_entity_daily_rebuild.biggest_value, EXCLUDED.biggest_value);
+
+-- name: RebuildKillEntityDailySystemsChunk :exec
+WITH k AS MATERIALIZED (
+    SELECT kl.killmail_id, (kl.killmail_time AT TIME ZONE 'UTC')::date AS day, kl.npc, kl.system_id,
+        kl.victim_character_id AS vc, kl.victim_corporation_id AS vco, kl.victim_alliance_id AS val
+    FROM kills kl
+    WHERE kl.public AND kl.killmail_id > sqlc.arg(after_id)::bigint AND kl.killmail_id <= sqlc.arg(through_id)::bigint
+      AND kl.system_id > 0 AND NOT kl.npc
+      AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = kl.killmail_id)
+), src AS MATERIALIZED (
+    SELECT k.killmail_id, k.vc, k.vco, k.val, k.day, k.system_id, t.character_id, t.corporation_id, t.alliance_id
+    FROM k CROSS JOIN LATERAL (
+        SELECT i.character_id, i.corporation_id, i.alliance_id FROM kill_involvement i WHERE i.killmail_id = k.killmail_id OFFSET 0
+    ) t
+    WHERE TRUE
+), att AS (
+    SELECT x.killmail_id, x.day, x.system_id, 'character'::text AS kind, x.character_id AS id FROM src x
+    WHERE x.character_id > 0 AND x.character_id <> x.vc
+    UNION
+    SELECT x.killmail_id, x.day, x.system_id, 'corporation'::text AS kind, x.corporation_id AS id FROM src x
+    WHERE x.corporation_id > 0 AND x.corporation_id <> x.vco
+    UNION
+    SELECT x.killmail_id, x.day, x.system_id, 'alliance'::text AS kind, x.alliance_id AS id FROM src x
+    WHERE x.alliance_id > 0 AND x.alliance_id <> x.val
+)
+INSERT INTO kill_entity_daily_systems_rebuild (day, kind, entity_id, system_id, events)
+SELECT att.day, att.kind, att.id, att.system_id, COUNT(*)::bigint
+FROM att
+GROUP BY att.day, att.kind, att.id, att.system_id
+ON CONFLICT (day, kind, entity_id, system_id) DO UPDATE SET
+    events = kill_entity_daily_systems_rebuild.events + EXCLUDED.events;
+
+-- name: RebuildKillEntityDailyShipsChunk :exec
+WITH k AS MATERIALIZED (
+    SELECT kl.killmail_id, (kl.killmail_time AT TIME ZONE 'UTC')::date AS day, kl.npc, kl.ship_type_id,
+        kl.victim_character_id AS vc, kl.victim_corporation_id AS vco, kl.victim_alliance_id AS val
+    FROM kills kl
+    WHERE kl.public AND kl.killmail_id > sqlc.arg(after_id)::bigint AND kl.killmail_id <= sqlc.arg(through_id)::bigint
+      AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = kl.killmail_id)
+), src AS MATERIALIZED (
+    SELECT k.killmail_id, k.vc, k.vco, k.val, k.day, t.character_id, t.corporation_id, t.alliance_id, t.ship_type_id
+    FROM k CROSS JOIN LATERAL (
+        SELECT a.character_id, a.corporation_id, a.alliance_id, a.ship_type_id FROM kill_attackers a WHERE a.killmail_id = k.killmail_id OFFSET 0
+    ) t
+    WHERE NOT k.npc AND t.ship_type_id > 0
+), flown AS (
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'character'::text AS kind, x.character_id AS id FROM src x
+    WHERE x.character_id > 0 AND x.character_id <> x.vc
+    UNION
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'corporation'::text AS kind, x.corporation_id AS id FROM src x
+    WHERE x.corporation_id > 0 AND x.corporation_id <> x.vco
+    UNION
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'alliance'::text AS kind, x.alliance_id AS id FROM src x
+    WHERE x.alliance_id > 0 AND x.alliance_id <> x.val
+), r AS (
+    SELECT f.day, f.kind, f.id AS entity_id, f.ship_type_id, 1::bigint AS flown, 0::bigint AS lost FROM flown f
+    UNION ALL
+    SELECT k.day, 'character'::text, k.vc, k.ship_type_id, 0::bigint, 1::bigint
+    FROM k
+    WHERE k.vc > 0 AND k.ship_type_id > 0
+    UNION ALL
+    SELECT k.day, 'corporation'::text, k.vco, k.ship_type_id, 0::bigint, 1::bigint
+    FROM k
+    WHERE k.vco > 0 AND k.ship_type_id > 0
+    UNION ALL
+    SELECT k.day, 'alliance'::text, k.val, k.ship_type_id, 0::bigint, 1::bigint
+    FROM k
+    WHERE k.val > 0 AND k.ship_type_id > 0
+)
+INSERT INTO kill_entity_daily_ships_rebuild (day, kind, entity_id, ship_type_id, flown, lost)
+SELECT r.day, r.kind, r.entity_id, r.ship_type_id, SUM(r.flown)::bigint, SUM(r.lost)::bigint
+FROM r
+GROUP BY r.day, r.kind, r.entity_id, r.ship_type_id
+ON CONFLICT (day, kind, entity_id, ship_type_id) DO UPDATE SET
+    flown = kill_entity_daily_ships_rebuild.flown + EXCLUDED.flown,
+    lost = kill_entity_daily_ships_rebuild.lost + EXCLUDED.lost;
+
+-- name: GetKillStatsRebuildState :one
+SELECT cursor, started_at, done_at FROM kill_stats_rebuild_state WHERE id = 1;
+
+-- name: StartKillStatsRebuild :exec
+UPDATE kill_stats_rebuild_state SET cursor = 0, started_at = sqlc.arg(started_at)::timestamptz, done_at = NULL WHERE id = 1;
+
+-- name: SetKillStatsRebuildCursor :exec
+UPDATE kill_stats_rebuild_state SET cursor = sqlc.arg(cursor)::bigint WHERE id = 1;
 
 -- One feed row per (entity, kill), written by the fold at
 -- ingest. The board's filters ride the stored columns.

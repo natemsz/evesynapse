@@ -55,6 +55,7 @@ import (
 	// The standard library stays for the stream envelope and the
 	// RawMessage plumbing.
 	goccyjson "github.com/goccy/go-json"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -70,7 +71,7 @@ const (
 	// is past the files' day-long retention; it jumps to the latest.
 	killfeedJumpGap = 20000
 
-	killDetailRetention = 365 * 24 * time.Hour
+	killDetailRetention = 2 * 365 * 24 * time.Hour
 	killPriceBatch      = 300
 	killMergeBatch      = 500
 )
@@ -124,6 +125,24 @@ type killmailFull struct {
 		DamageDone    int64 `json:"damage_done"`
 		FinalBlow     bool  `json:"final_blow"`
 	} `json:"attackers"`
+}
+
+// killAttackersParams is one kill's attacker rows, in killmail
+// order.
+func killAttackersParams(km killmailFull) db.InsertKillAttackersParams {
+	ap := db.InsertKillAttackersParams{KillmailID: km.KillmailID}
+	for i, a := range km.Attackers {
+		ap.Seqs = append(ap.Seqs, int32(i))
+		ap.CharacterIds = append(ap.CharacterIds, a.CharacterID)
+		ap.CorporationIds = append(ap.CorporationIds, a.CorporationID)
+		ap.AllianceIds = append(ap.AllianceIds, a.AllianceID)
+		ap.FactionIds = append(ap.FactionIds, a.FactionID)
+		ap.ShipTypeIds = append(ap.ShipTypeIds, a.ShipTypeID)
+		ap.WeaponTypeIds = append(ap.WeaponTypeIds, a.WeaponTypeID)
+		ap.DamageDones = append(ap.DamageDones, a.DamageDone)
+		ap.FinalBlows = append(ap.FinalBlows, a.FinalBlow)
+	}
+	return ap
 }
 
 // killItem is one victim item line; containers nest their contents.
@@ -348,9 +367,9 @@ func (app *Application) ingestKillPackage(ctx context.Context, body []byte) erro
 // killmail, gzipped. It reports whether this was the first copy.
 // With pruneAged set, a
 // first copy already past the retention cutoff is stored in its
-// post-prune shape instead: the summary row and its priced
-// lines, without attackers or the killmail, exactly as if its
-// detail had aged out in place. The stream passes pruneAged
+// post-prune shape instead: the summary row, its involvement and
+// its attackers (for the stats fold, pruned once counted),
+// without the killmail or per-line prices. The stream passes pruneAged
 // false: its kills are always young.
 func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, hash string, z *killZKB, source string, public bool, pruneAged bool) (bool, error) {
 	var km killmailFull
@@ -397,9 +416,27 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 	}
 	defer tx.Rollback(ctx)
 	q := db.New(tx)
+	// A public copy queues the kill for the stats fold when it is
+	// new or was stored private until now; a kill already public
+	// was queued (or counted) before and is not queued twice.
+	wasPublic := false
+	if public {
+		if was, err := q.GetKillPublicForUpdate(ctx, km.KillmailID); err == nil {
+			wasPublic = was
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return false, fmt.Errorf("read kill %d: %w", km.KillmailID, err)
+		}
+	}
 	inserted, err := q.UpsertKill(ctx, p)
 	if err != nil {
 		return false, fmt.Errorf("store kill %d: %w", km.KillmailID, err)
+	}
+	if public && !wasPublic {
+		if err := q.InsertKillStatsPending(ctx, db.InsertKillStatsPendingParams{
+			KillmailID: km.KillmailID, KillmailTime: km.KillmailTime.UTC(),
+		}); err != nil {
+			return false, fmt.Errorf("queue kill %d for stats: %w", km.KillmailID, err)
+		}
 	}
 	if inserted {
 		// The permanent involvement record lands on every first
@@ -418,24 +455,19 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 			}
 		}
 	}
-	if inserted && !prunedShape {
-		ap := db.InsertKillAttackersParams{KillmailID: km.KillmailID}
-		for i, a := range km.Attackers {
-			ap.Seqs = append(ap.Seqs, int32(i))
-			ap.CharacterIds = append(ap.CharacterIds, a.CharacterID)
-			ap.CorporationIds = append(ap.CorporationIds, a.CorporationID)
-			ap.AllianceIds = append(ap.AllianceIds, a.AllianceID)
-			ap.FactionIds = append(ap.FactionIds, a.FactionID)
-			ap.ShipTypeIds = append(ap.ShipTypeIds, a.ShipTypeID)
-			ap.WeaponTypeIds = append(ap.WeaponTypeIds, a.WeaponTypeID)
-			ap.DamageDones = append(ap.DamageDones, a.DamageDone)
-			ap.FinalBlows = append(ap.FinalBlows, a.FinalBlow)
-		}
+	if inserted {
+		// Attacker rows land on every first copy, a kill past
+		// retention included: the stats fold reads them for ships
+		// flown, and the prune removes them only once the kill is
+		// counted.
+		ap := killAttackersParams(km)
 		if len(ap.Seqs) > 0 {
 			if err := q.InsertKillAttackers(ctx, ap); err != nil {
 				return false, fmt.Errorf("store attackers %d: %w", km.KillmailID, err)
 			}
 		}
+	}
+	if inserted && !prunedShape {
 		if err := q.InsertKillDetail(ctx, db.InsertKillDetailParams{
 			KillmailID: km.KillmailID, Payload: compressKillDetail(raw), StoredAt: time.Now().UTC(),
 		}); err != nil {
@@ -485,10 +517,10 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 		if err := app.priceKillLines(ctx, km); err != nil {
 			logging.Warnf("killboard: price kill %d at ingest: %v", km.KillmailID, err)
 		}
-	} else if public {
+	} else if public && !wasPublic {
 		// A kill already stored in private shape is now public:
-		// fold it from its stored row. The applied marker keeps
-		// this to once per entity.
+		// fold it from its stored row. Its queue row keeps this to
+		// once.
 		if err := app.foldKillStats(ctx, km.KillmailID); err != nil {
 			logging.Warnf("killboard stats: fold public kill %d: %v", km.KillmailID, err)
 		}
@@ -513,7 +545,7 @@ func (app *Application) priceKillLines(ctx context.Context, km killmailFull) err
 
 // storeKillPrices persists one kill's totals from an appraisal's
 // unit prices, and its per-line prices only while the kill is
-// within retention. Past a year a kill is metadata for intel
+// within retention. Past two years a kill is metadata for intel
 // only, so its lines are never stored; the total still lands on
 // the kills row, which is what per-player value stats read.
 func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, killTime time.Time, lines []killLine, price map[int64]float64, now time.Time) error {
@@ -535,11 +567,20 @@ func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, k
 		}
 	}
 	total, dropped, cov := killValue(lines, price)
+	before, err := app.queries.GetKill(ctx, killmailID)
+	if err != nil {
+		return err
+	}
 	if err := app.queries.SetKillValue(ctx, db.SetKillValueParams{
 		KillmailID: killmailID, ValueOurs: total, ValueDroppedOurs: dropped,
 		ValueCoverage: float32(cov), PricedAt: now,
 	}); err != nil {
 		return err
+	}
+	// A kill already counted carries its old value in the stats:
+	// move them by the difference (killboard_stats.go).
+	if err := app.adjustKillStatsValue(ctx, before, killValueOf(before), total); err != nil {
+		logging.Warnf("killboard stats: reprice kill %d: %v", killmailID, err)
 	}
 	app.noteRecentKillPrice(ctx, killmailID, total, dropped, float64(cov), now)
 	// The priced value is final for this kill: fold it into the
@@ -601,7 +642,10 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 		logging.Infof("killboard: priced %d kills", n)
 	}
 	app.publishKillboardStats(ctx)
-	if time.Since(app.killLastPruned) >= 24*time.Hour {
+	// The retention prune waits for the stats rebuild: the attacker
+	// rows the restorer reads back (killboard_restore.go) must
+	// stay until the rebuild has counted their ships.
+	if time.Since(app.killLastPruned) >= 24*time.Hour && app.killStatsRebuilt(ctx) {
 		app.killLastPruned = time.Now()
 		before := time.Now().UTC().Add(-killDetailRetention)
 		d, err1 := app.queries.PruneKillDetails(ctx, before)
@@ -611,7 +655,7 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 		if err := errors.Join(err1, err2, err3, err4); err != nil {
 			logging.Errorf("killboard: prune: %v", err)
 		} else if d+a+l > 0 {
-			logging.Infof("killboard: pruned %d killmails, %d attacker rows and %d priced lines past a year", d, a, l)
+			logging.Infof("killboard: pruned %d killmails, %d attacker rows and %d priced lines past two years", d, a, l)
 		}
 	}
 }
@@ -688,6 +732,12 @@ func killValue(lines []killLine, price map[int64]float64) (total, dropped float6
 // priceKills prices one batch of unpriced kills with our own
 // appraisal, one AppraiseLines call for every type in the batch.
 func (app *Application) priceKills(ctx context.Context) (int, error) {
+	// A repriced kill's stats move by the difference, which the
+	// one time rebuild would miss for a chunk it already counted:
+	// the pass waits the few minutes the rebuild runs.
+	if app.killStatsRebuilding.Load() {
+		return 0, nil
+	}
 	rows, err := app.queries.ListUnpricedKills(ctx, killPriceBatch)
 	if err != nil || len(rows) == 0 {
 		return 0, err

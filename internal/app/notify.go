@@ -600,7 +600,7 @@ func (app *Application) notifyWatchEvents(ctx context.Context, c *notifyCollecto
 			Title: fmt.Sprintf("%s moved %s over 7 days in %s, past your %s watch",
 				app.typeNameOrID(ctx, e.TypeID), markethistory.ChangeDirection(pct), app.marketRegionLabel(ctx, regionID),
 				markethistory.FormatChangePct(e.ThresholdPct)),
-			URL: "/market/",
+			URL: fmt.Sprintf("/market/?type=%d&region=%d", e.TypeID, regionID),
 		})
 	}
 }

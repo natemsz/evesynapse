@@ -882,6 +882,17 @@ var pgFitBrowseByGroupSchema string
 //go:embed schema_pg/144_swarm_probation.sql
 var pgSwarmProbationSchema string
 
+// Step 146: killboard statistics counted once per kill through a
+// pending queue, and the tables for their one time rebuild.
+//
+//go:embed schema_pg/146_kill_stats_rebuild.sql
+var pgKillStatsRebuildSchema string
+
+// Step 147: drop the killboard indexes no query reads.
+//
+//go:embed schema_pg/147_drop_unused_kill_indexes.sql
+var pgDropUnusedKillIndexesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1054,6 +1065,8 @@ func schemaSteps() []schemaStep {
 		{142, "fit_browse", pgFitBrowseSchema, ""},
 		{143, "fit_browse_by_group", pgFitBrowseByGroupSchema, ""},
 		{144, "swarm_probation", pgSwarmProbationSchema, ""},
+		{146, "kill_stats_rebuild", pgKillStatsRebuildSchema, ""},
+		{147, "drop_unused_kill_indexes", pgDropUnusedKillIndexesSchema, ""},
 	}
 }
 

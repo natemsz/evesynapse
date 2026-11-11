@@ -225,6 +225,9 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <div><dt>Capacity</dt><dd data-fit-fig="cap">{{.Capacitor}}</dd></div>
         <div><dt>Peak recharge</dt><dd data-fit-fig="cappeak">{{.CapPeak}}</dd></div>
         <div><dt>Use</dt><dd data-fit-fig="capuse">{{.CapDraw}}</dd></div>
+        {{- if .CapInject}}
+        <div><dt>Boosters</dt><dd data-fit-fig="capinject">{{.CapInject}}</dd></div>
+        {{- end}}
       </dl>
     </section>
 

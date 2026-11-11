@@ -69,6 +69,46 @@ func TestKillboardStatsStoredAtIngest(t *testing.T) {
 	_ = q
 }
 
+// TestRepricedKillMovesCountedISK: a kill counted at one value and
+// priced again later moves ISK destroyed (attackers) and ISK lost
+// (victim) to the new value, without counting the kill twice.
+func TestRepricedKillMovesCountedISK(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	if _, err := conn.Exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9)`); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
+	raw := fmt.Sprintf(`{"killmail_id":710101,"killmail_time":%q,"solar_system_id":30000142,
+"victim":{"character_id":9101,"corporation_id":98000101,"ship_type_id":587,"damage_taken":900,"items":[]},
+"attackers":[{"character_id":9102,"corporation_id":98000102,"ship_type_id":11371,"weapon_type_id":2873,"damage_done":900,"final_blow":true}]}`,
+		at.Format("2006-01-02T15:04:05Z"))
+	if _, err := app.ingestKill(ctx, json.RawMessage(raw), "h", &killZKB{}, "zkill", true, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.foldKillStats(ctx, 710101); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.storeKillPrices(ctx, 710101, at, []killLine{{typeID: 587, destroyed: 1}}, map[int64]float64{587: 5_000_000}, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	since := at.Add(-24 * time.Hour)
+	killer, err := q.GetKillEntityStats(ctx, db.GetKillEntityStatsParams{Kind: "corporation", EntityID: 98000102, Since: since})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if killer.Kills != 1 || killer.IskKilled != 5_000_000 {
+		t.Errorf("attacker corp kills=%d isk_killed=%v, want 1 and 5000000", killer.Kills, killer.IskKilled)
+	}
+	victim, err := q.GetKillEntityStats(ctx, db.GetKillEntityStatsParams{Kind: "corporation", EntityID: 98000101, Since: since})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if victim.Losses != 1 || victim.IskLost != 5_000_000 {
+		t.Errorf("victim corp losses=%d isk_lost=%v, want 1 and 5000000", victim.Losses, victim.IskLost)
+	}
+}
+
 // TestKillEntityFeedServesAlliancePage pins the stored feed the
 // entity boards page through: kills land on it at ingest, pages
 // follow the (time, id) cursor, and it serves after the
@@ -236,5 +276,17 @@ func TestKillFeedBackfillDrainsAndBacksOff(t *testing.T) {
 	app.backfillMissingKillFeeds(ctx)
 	if feedRows() == 0 {
 		t.Fatal("recheck after the window restored no feed rows")
+	}
+}
+
+// countStoredKills brings kills a test wrote straight into the kills
+// table onto the pages, as production does for kills stored before
+// the counting queue: the feed sweep writes their feed rows and the
+// one time rebuild counts them into the daily aggregates.
+func countStoredKills(t *testing.T, app *Application, ctx context.Context) {
+	t.Helper()
+	app.backfillMissingKillFeeds(ctx)
+	if err := app.rebuildKillStats(ctx); err != nil {
+		t.Fatalf("rebuild kill stats: %v", err)
 	}
 }

@@ -379,6 +379,9 @@ type Snapshot struct {
 	Effects      map[int64]*Effect // every effect; Modifiers may be empty
 	TypeEffects  map[int64][]int64 // type -> effect IDs (sorted)
 	Requirements map[int64][]SkillReq
+	// Bursts is the command burst data (WithBursts); nil leaves
+	// bursts without effect.
+	Bursts *BurstData
 }
 
 // attrDefault returns the value an attribute starts from when a
@@ -945,6 +948,10 @@ type Result struct {
 	// from the math the stats panel shows.
 	WeaponDPS    map[string]float64
 	WeaponVolley map[string]float64
+
+	// Buffs are the command burst buffs acting on the fit, the fit's
+	// own and the fleet's, by buff id.
+	Buffs []AppliedBuff
 
 	// Weapons is each fitted weapon group's damage with what its
 	// reach and application depend on, in fitting order: the

@@ -2046,6 +2046,21 @@ type SdeConstellation struct {
 	RegionID        int64  `json:"region_id"`
 }
 
+type SdeDbuff struct {
+	DbuffID     int64  `json:"dbuff_id"`
+	DisplayName string `json:"display_name"`
+	Aggregate   string `json:"aggregate"`
+	Operation   string `json:"operation"`
+}
+
+type SdeDbuffModifier struct {
+	DbuffID     int64  `json:"dbuff_id"`
+	Kind        string `json:"kind"`
+	AttributeID int64  `json:"attribute_id"`
+	GroupID     int64  `json:"group_id"`
+	SkillID     int64  `json:"skill_id"`
+}
+
 type SdeEffect struct {
 	EffectID int64  `json:"effect_id"`
 	Name     string `json:"name"`

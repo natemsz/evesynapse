@@ -11,6 +11,8 @@ package app
 import (
 	"context"
 	"database/sql"
+	"html"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -121,10 +123,9 @@ func TestContractSearchRollSlidersOffered(t *testing.T) {
 	if strings.Contains(body, `name="rollmin_999"`) {
 		t.Error("the fixed attribute (no range width) got a slider")
 	}
-	// The page carries the per-family slider catalog,
-	// attributes heaviest weight first.
-	mustContain(t, "roll catalog", body, `id="cs-roll-catalog"`,
-		`"family":"test_damage_thing","attrs":[64,50,6]`)
+	// The page links the per-family slider catalog by its
+	// version; the file lists attributes heaviest weight first.
+	mustContain(t, "roll catalog", rollCatalogOf(t, app, body), `"family":"test_damage_thing","attrs":[64,50,6]`)
 	// No family and no band: the guidance shows, and every
 	// slider renders hidden and disabled, so the submitted
 	// form carries no band -- the picker's swap enables
@@ -173,6 +174,18 @@ func seedSecondRollFamily(t *testing.T, conn *sql.DB) {
 		'corpus', 'module', 4, 1, 0, '', $1)`, now)
 }
 
+// rollCatalogOf follows a search page's link to its slider catalog
+// and returns the file.
+func rollCatalogOf(t *testing.T, app *Application, page string) string {
+	t.Helper()
+	m := regexp.MustCompile(`id="cs-roll-catalog" data-src="(/contracts/search/rolls\.json\?v=[0-9a-f]+)"`).FindStringSubmatch(page)
+	if m == nil {
+		t.Fatal("the search page does not link its roll catalog")
+	}
+	_, catalog := getAnon(t, app, html.UnescapeString(m[1]))
+	return catalog
+}
+
 func TestContractSearchRollSliderCatalog(t *testing.T) {
 	tr := &openWindowTransport{}
 	app, conn, _ := buildCorpTestApp(t, tr)
@@ -183,7 +196,7 @@ func TestContractSearchRollSliderCatalog(t *testing.T) {
 	// attributes, so the drawer can swap slider sets as
 	// families are picked without a submit.
 	_, body := getAnon(t, app, "/contracts/search/")
-	mustContain(t, "two-family catalog", body,
+	mustContain(t, "two-family catalog", rollCatalogOf(t, app, body),
 		`"family":"test_damage_thing","attrs":[64,50,6]`,
 		`"family":"test_other_thing","attrs":[77]`)
 

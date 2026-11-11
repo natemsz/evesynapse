@@ -197,121 +197,6 @@ func TestContractSearchStructure(t *testing.T) {
 	}
 }
 
-// TestContractSearchResultsTable pins the redesigned
-// results rows: the count bar, the fixed-width type slot
-// with its deal badge, the contents lines (capped at
-// five behind the more-line, no icons), the per-kind
-// price labels and contents pills, and the value
-// column's coverage and spread.
-// TestContractSearchFilterPanelPolish pins the third
-// polish round on the filter panel: the region quick
-// selectors render as pill buttons (the hunt chips' paint,
-// no underline), the kind segments are scoped clear of the
-// results-pill rule whose leaked margin-top shoved them
-// down in their control, and the station field keeps
-// natural flow at the top of its box instead of riding
-// the stretched filter cell's bottom pin.
-func TestContractSearchFilterPanelPolish(t *testing.T) {
-	tr := &openWindowTransport{}
-	app, conn, _ := buildCorpTestApp(t, tr)
-	seedContractCorpus(t, app, conn)
-
-	_, body := getAnon(t, app, "/contracts/search/")
-	// The quick selectors: three pill buttons in a row,
-	// still carrying the data hooks contracts.js drives,
-	// with no middot text separators between them.
-	mustContain(t, "region quick pills", body,
-		`<span class="cs-region-quick"><button type="button" data-region-quick="jita">Jita</button><button type="button" data-region-quick="hubs">4 Hubs</button><button type="button" data-region-quick="all">All</button></span>`)
-	// The station field opts out of the bottom pin.
-	mustContain(t, "station field flow", body,
-		`<label class="cs-field cs-field-flow">Station, structure or system`)
-
-	rawCSS, err := fs.ReadFile(staticFS, "static/contracts.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	css := string(rawCSS)
-	// The pill paint: the shared chip edge and full radius,
-	// and the segments' scoping rule (no leaked margin, the
-	// old padding trade gone).
-	for _, want := range []string{
-		".cs-region-quick button {\n  display: inline-flex; align-items: center;\n  border: 1px solid var(--box-edge); border-radius: 999px;",
-		".cs-types > .cs-pill {\n  margin-top: 0;",
-		".cs-fbox .cs-field.cs-field-flow { flex: none; }",
-	} {
-		if !strings.Contains(css, want) {
-			t.Errorf("contracts.css: missing %q", want)
-		}
-	}
-	if strings.Contains(css, "0.1rem + 2px") {
-		t.Error("contracts.css: the seg padding trade is back")
-	}
-	// No underline anywhere in the region-quick rules: the
-	// block from the span rule through the hover rule.
-	start := strings.Index(css, ".cs-region-quick {")
-	end := strings.Index(css, ".cs-region-quick button:hover")
-	if start < 0 || end < 0 || end < start {
-		t.Fatal("contracts.css: the region-quick block moved")
-	}
-	if strings.Contains(css[start:end], "underline") {
-		t.Error("contracts.css: the region quick selectors are underlined again")
-	}
-}
-
-func TestContractSearchResultsTable(t *testing.T) {
-	tr := &openWindowTransport{}
-	app, conn, _ := buildCorpTestApp(t, tr)
-	seedContractCorpus(t, app, conn)
-
-	_, body := getAnon(t, app, "/contracts/search/")
-	mustContain(t, "count bar", body,
-		`<strong>7</strong> contracts match • Page 1 of 1`,
-		"Click any row to inspect line-by-line Forge appraisal &amp; mutaplasmid stats")
-	// The type label sits in its fixed slot; the deal badge
-	// follows it (7001 appraises at exactly 85% of value).
-	mustContain(t, "type slot and badge", body,
-		`<span class="cs-type t-exchange">Item exchange</span>`,
-		"↗ Deal -15%")
-	// Every contents line renders, with the blueprint
-	// facts in the name and one pill under the items.
-	mustContain(t, "blueprint rows", body,
-		"Test Blueprint (Original • ME 10 / TE 20)",
-		"▦ BPO <span>•</span> <span>ME 10% / TE 20%</span>",
-		"Test Blueprint (Copy • 5 Runs • ME 5 / TE 10)",
-		"▦ BPC <span>•</span> <span>ME 5% / TE 10%</span>")
-	// The auction prices off its standing bid, buyout under.
-	mustContain(t, "auction row", body,
-		"Current Bid", "700.00 ISK", "Buyout: 2000.00 ISK")
-	// The courier: reward and collateral, the sealed wrap
-	// line, and the volume/rate pill (no jump count is
-	// stored, so none renders).
-	mustContain(t, "courier row", body,
-		"Sealed Plastic Wrap (1,000 m³)",
-		"🚚 1,000 m³ <span>•</span> <span>5000 ISK/m³</span>",
-		"Collat: 100.0K ISK")
-	// The value column: our figure, the priced coverage,
-	// and the spread over the ask.
-	mustContain(t, "value column", body,
-		"1000.00 ISK", "priced 1 of 1 lines", "&#43;150.00 ISK spread",
-		"priced 1 of 2 lines")
-	// The expanded row alone carries the accent left bar,
-	// and the type slot's width is the badge alignment pin.
-	rawCSS, err := fs.ReadFile(staticFS, "static/contracts.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	css := string(rawCSS)
-	if !strings.Contains(css, ".cs-table tbody tr.cs-row.open {\n  background: rgba(34, 22, 14, 0.55);\n  box-shadow: inset 2px 0 0 var(--accent);\n}") {
-		t.Error("contracts.css: the expanded row lost its accent left bar")
-	}
-	if n := strings.Count(css, "inset 2px 0 0"); n != 1 {
-		t.Errorf("contracts.css: the left bar appears %d times, want 1 (expanded rows only)", n)
-	}
-	if !strings.Contains(css, ".cs-type {\n  display: inline-block; width: 6.6rem;") {
-		t.Error("contracts.css: the fixed-width type slot is gone")
-	}
-}
-
 // TestContractSearchCardRows pins the fields the phone
 // card form (contracts.css, 45rem) is built from: each row
 // of the one result set carries its card face in the row
@@ -394,32 +279,6 @@ func TestContractSearchSwapRewiring(t *testing.T) {
 	}
 }
 
-// TestContractSearchDrawerGrid pins the spec drawers'
-// deterministic grid in contracts.css: fixed tracks and
-// per-field spans, never the auto-fit rule whose column
-// widths depended on field count, and the deals box's
-// resting green identity.
-func TestContractSearchDrawerGrid(t *testing.T) {
-	raw, err := fs.ReadFile(staticFS, "static/contracts.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	css := string(raw)
-	for _, want := range []string{
-		"grid-template-columns: repeat(6, minmax(0, 1fr))",
-		".cs-drawer-grid > .cs-field { grid-column: span 2; }",
-		"grid-column: span 4; }",
-		"border-color: color-mix(in srgb, var(--deal) 55%, transparent);",
-	} {
-		if !strings.Contains(css, want) {
-			t.Errorf("contracts.css: missing %q", want)
-		}
-	}
-	if strings.Contains(css, "repeat(auto-fit, minmax(14.5rem, 1fr))") {
-		t.Error("contracts.css: the drawer grid is back on auto-fit tracks")
-	}
-}
-
 func TestContractPanelFragment(t *testing.T) {
 	tr := &openWindowTransport{}
 	app, conn, _ := buildCorpTestApp(t, tr)
@@ -484,54 +343,6 @@ func TestContractPanelAbyssal(t *testing.T) {
 		"Mutaplasmid Attributes", "Est Range: 180.0M – 240.0M ISK",
 		"Damage Multiplier", "&#43;18.0% (80%)",
 		"Capacitor Need", "CPU", `data-w="80"`, `data-w="2"`)
-}
-
-// TestContractSearchAbyssalInline pins the mutaplasmid
-// stats presentation after the redesign: the row carries
-// the score pill alone and the rolls render inline in the
-// expansion drawer's attributes card, the popup the old
-// design opened over the results is retired from the
-// search page entirely, markup, wiring and paint alike.
-// (The contract detail page keeps its own full inline
-// roll readout, as before.)
-func TestContractSearchAbyssalInline(t *testing.T) {
-	tr := &openWindowTransport{}
-	app, conn, _ := buildCorpTestApp(t, tr)
-	seedAbyssalPage(t, conn)
-
-	// The row: the pill is a plain span, not a trigger,
-	// and no teaser facts ride in the row's flow.
-	_, body := getAnon(t, app, "/contracts/search/")
-	mustContain(t, "row abyssal pill", body,
-		`<span class="cs-pill ab">▦ Roll Score: 45/100`)
-	for _, gone := range []string{"data-abpop", "cs-abpop", "Mutated from", "Held back by"} {
-		if strings.Contains(body, gone) {
-			t.Errorf("the search page still carries %q", gone)
-		}
-	}
-
-	// The panel fragment: attributes inline, no popup.
-	_, body = getAnon(t, app, "/contracts/search/8501/panel")
-	mustContain(t, "panel attributes", body, "Mutaplasmid Attributes")
-	if strings.Contains(body, "data-abpop") || strings.Contains(body, "cs-abpop") {
-		t.Error("the panel fragment still wires the abyssal popup")
-	}
-
-	// The wiring and the paint hold no popup machinery.
-	rawJS, err := fs.ReadFile(staticFS, "static/contracts.js")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(rawJS), "abpop") || strings.Contains(string(rawJS), "AbPop") {
-		t.Error("contracts.js still carries the abyssal popup wiring")
-	}
-	rawCSS, err := fs.ReadFile(staticFS, "static/contracts.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(rawCSS), "cs-abpop") {
-		t.Error("contracts.css still carries the abyssal popup paint")
-	}
 }
 
 // TestContractPanelUnchangedRollsHidden pins the

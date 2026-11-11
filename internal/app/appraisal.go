@@ -80,11 +80,6 @@ const appraisalBudgetPerCycle = 20 * time.Second
 // and the copy stays unpriced instead.
 const copyMedianMinSample = 5
 
-// dealFlagMaxRatio is the deal flag's line: an asking price at
-// or under this share of the appraised value flags the
-// contract as priced under our numbers.
-const dealFlagMaxRatio = 0.85
-
 // appraisalPrice is one type's resolved unit price: the
 // figure, the tier that spoke, and when that tier's figure was
 // current. ok is false when no tier could speak.
@@ -449,24 +444,6 @@ func appraisalDealRatio(contract db.PubContract, res module.Appraisal) (float64,
 		return contract.Buyout / res.OfferedValue, true
 	}
 	return 0, false
-}
-
-// appraisalDealFlag says whether a stored deal ratio flags:
-// at or under the deal line. The stored ratio already implies
-// full coverage (see appraisalDealRatio), so the flag is the
-// threshold alone.
-func appraisalDealFlag(ratio sql.NullFloat64) bool {
-	return ratio.Valid && ratio.Float64 <= dealFlagMaxRatio
-}
-
-// appraisePublicContracts is the worker pass: it prices the
-// due slice of live contracts (item list stored; never priced,
-// or priced before the refresh age) and stores the per-line
-// and per-contract results in one transaction per contract.
-// Stored reads and writes only -- no ESI -- so it runs after
-// the public contracts pass in the same cycle.
-func (app *Application) appraisePublicContracts(ctx context.Context) int {
-	return app.appraisePublicContractsWithin(ctx, 0)
 }
 
 // appraisePublicContractsWithin is the pass with a wall-clock

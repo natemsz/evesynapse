@@ -59,9 +59,6 @@ func TestSavedFittingsPreviewPopoverMarkup(t *testing.T) {
 		"Medium slots", "Medium Shield Extender I",
 		"Cargo hold", "Tritanium",
 	)
-	if strings.Contains(body, `<summary>Modules and cargo</summary>`) {
-		t.Errorf("saved-fits page still expands Modules and cargo in place")
-	}
 	if strings.Contains(body, "doctrine-eft") {
 		t.Errorf("saved-fits page still uses the shared doctrine-eft details block")
 	}

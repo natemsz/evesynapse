@@ -37,16 +37,6 @@ type cloudflareAIResponse struct {
 	} `json:"result"`
 }
 
-// callCloudflareAI runs one Workers AI chat call and returns the
-// answer text, truncated to tradeIdeasBodyCap. The account ID is
-// charset-checked (it becomes URL path), the token travels in
-// the Authorization header only, and every error keeps the token
-// out of it. apiBase is a parameter for tests; production passes
-// tradeIdeasAPIBase.
-func callCloudflareAI(ctx context.Context, client *http.Client, apiBase, accountID, token, model, prompt string) (string, error) {
-	return callCloudflareAIWith(ctx, client, apiBase, accountID, token, model, prompt, tradeIdeasBodyCap, 0)
-}
-
 // callCloudflareAIWith is callCloudflareAI with the answer capped to
 // bodyCap and, when maxTokens is set, the model allowed that many
 // output tokens (the page's long answer needs more than the default).

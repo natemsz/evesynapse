@@ -15,6 +15,7 @@ type FitPickStat struct {
 	PG          float64 `json:"pg,omitempty"`
 	Calibration float64 `json:"cal,omitempty"`
 	Stat        string  `json:"stat,omitempty"`    // "Optimal 24 km"
+	StatKind    string  `json:"statk,omitempty"`   // the stat's glyph kind (FitGlyphKind)
 	Tier        string  `json:"tier,omitempty"`    // "" for Tech I
 	Price       string  `json:"price,omitempty"`   // compact ISK, "" when unpriced
 	Estimate    bool    `json:"est,omitempty"`     // price is a stored estimate, not a swept sell
@@ -65,6 +66,7 @@ func (app *Builder) FitPickStats(ctx context.Context, typeIDs []int64, shipTypeI
 		for _, l := range FitTipLines(empty, snap, doc, id, "", attrs) {
 			if l.Label != "CPU" && l.Label != "PG" { // the row states those itself
 				st.Stat = l.Label + " " + l.Value
+				st.StatKind = l.Kind
 				break
 			}
 		}

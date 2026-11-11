@@ -111,36 +111,15 @@
 
   // --- Seen tracking ---------------------------------------------
 
-  function seenKey() {
-    return SEEN_PREFIX + streamURLFor();
-  }
-
-  function readSeen() {
-    try {
-      var v = localStorage.getItem(seenKey());
-      return v === null ? null : +v || 0;
-    } catch (err) {
-      return null;
-    }
-  }
-
-  function noteSeen(id) {
-    try {
-      var prev = readSeen();
-      if (prev === null || id > prev) localStorage.setItem(seenKey(), String(id));
-    } catch (err) {
-      /* storage off: highlights still fade, nothing is remembered */
-    }
-  }
+  // The newest kill seen, per scope (esLive.seen in app.js).
+  var seenStore = window.esLive.seen(function () { return SEEN_PREFIX + streamURLFor(); });
 
   function rowID(row) {
     return +row.getAttribute("data-kill-id") || 0;
   }
 
-  // markLive highlights a row until it has been seen (esLive in
-  // app.js), then records it as seen for this scope.
   function markLive(row) {
-    window.esLive.mark(row, function (r) { noteSeen(rowID(r)); });
+    seenStore.live(row, rowID);
   }
 
   // capLive keeps the highlight to the newest LIVE_MAX rows: an
@@ -157,19 +136,7 @@
   function markUnseen(list) {
     if (list.getAttribute("data-kb-seen") === "1") return;
     list.setAttribute("data-kb-seen", "1");
-    var rows = list.querySelectorAll("li.kb-kill");
-    var prev = readSeen();
-    var newest = 0;
-    var marked = 0;
-    rows.forEach(function (row) {
-      var id = rowID(row);
-      if (id > newest) newest = id;
-      if (prev !== null && id > prev && marked < LIVE_MAX) {
-        markLive(row);
-        marked++;
-      }
-    });
-    if (prev === null && newest) noteSeen(newest);
+    seenStore.markNew(list.querySelectorAll("li.kb-kill"), rowID, LIVE_MAX);
   }
 
   // --- Rows --------------------------------------------------------

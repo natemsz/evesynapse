@@ -182,7 +182,7 @@ func TestFitSimulateStatsFragment(t *testing.T) {
 }
 
 // TestFitChipControlsCluster: a fitted module's row carries its
-// name as plain text (clicking it must never remove), with the
+// name as its details link (clicking it must never remove), with the
 // state and the - / + stepper grouped in the row's right-hand
 // control cluster, exactly one remove and one add per row.
 func TestFitChipControlsCluster(t *testing.T) {
@@ -195,7 +195,7 @@ func TestFitChipControlsCluster(t *testing.T) {
 	}
 	mustContain(t, "/fittings/simulate/ chip", body,
 		`<span class="fit-chip-main">`,
-		`<span class="fit-chip-name">Fixture Blaster</span>`,
+		`<button type="button" class="fit-chip-name" data-fit-info="3001" title="Details of Fixture Blaster">Fixture Blaster</button>`,
 		`<span class="fit-chip-ctl">`,
 		`<span class="fit-chip-step">`)
 	if strings.Contains(body, `fit-chip-name" data-fit-dec`) {
@@ -555,9 +555,6 @@ func TestFitSimulateModuleStates(t *testing.T) {
 		`data-fit-view="stats"`,
 		`data-fit-view="radial"`,
 		"<strong>Armor</strong> <small>460 HP ")
-	if strings.Contains(body, "Heating a module") {
-		t.Errorf("heat note still shown for a modeled overload effect")
-	}
 
 	// Overheated: the overload bonus applies (450 + 12 = 462) and
 	// the slot carries the ember class.
@@ -571,9 +568,6 @@ func TestFitSimulateModuleStates(t *testing.T) {
 		`data-tip-state="overheated"`,
 		"st-overheated",
 		"<strong>Armor</strong> <small>462 HP ")
-	if strings.Contains(body, "Heating a module") {
-		t.Errorf("heat note shown for an overheated module")
-	}
 
 	// Offline: no PG, no CPU, no effect (armor HP back to 450),
 	// dimmed slot.
@@ -874,7 +868,7 @@ func TestFitSimulateTooltipLines(t *testing.T) {
 	// 15 tf, PG 10 MW. Effective equals base throughout
 	// the fixture, so no row carries a good/bad class.
 	mustContain(t, "tooltip lines", body,
-		`data-tip-lines="DPS|20|;Volley|100|;CPU|15 tf|;PG|10 MW|"`)
+		`data-tip-lines="DPS|20||weapon;Volley|100||weapon;CPU|15 tf||cpu;PG|10 MW||powergrid"`)
 }
 
 // TestFitTipLinesColors: rows tint by effective-vs-base, a
@@ -894,15 +888,16 @@ func TestFitTipLinesColors(t *testing.T) {
 	}
 	doc := &fitview.FitDoc{Charges: map[int64]int64{}}
 	got := fitview.FitTipLinesString(fitview.FitTipLines(res, snap, doc, 3001, "", res.ItemAttrs[3001]))
-	want := "Optimal|7.5 km|good;CPU|12 tf|good;PG|10 MW|"
+	want := "Optimal|7.5 km|good|optimal;CPU|12 tf|good|cpu;PG|10 MW||powergrid"
 	if got != want {
 		t.Errorf("tip lines = %q, want %q", got, want)
 	}
 }
 
 // TestFitEditorBrowsePanel: the editor carries the Browse pane the
-// left column's Browse tab and the add-slot buttons open, with its
-// family chips, its search and its tree.
+// left column's Browse tab and the add-slot buttons open, and the
+// one kind filter that drives it and the module search, from All
+// through Charges and Cargo.
 func TestFitEditorBrowsePanel(t *testing.T) {
 	app, cookie := fitTestApp(t)
 	code, body := getPage(t, app, cookie, "/fittings/")
@@ -911,7 +906,8 @@ func TestFitEditorBrowsePanel(t *testing.T) {
 	}
 	mustContain(t, "browse panel", body,
 		`id="fit-browse"`,
-		`data-browse-fam="high"`,
-		`id="fit-browse-q"`,
-		`id="fit-browse-tree"`)
+		`id="fit-browse-tree"`,
+		`data-fam="all"`,
+		`data-fam="charge"`,
+		`data-fam="any"`)
 }

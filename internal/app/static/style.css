@@ -4159,19 +4159,18 @@ html[data-theme="light"] .fit-head select {
   white-space: nowrap;
   color: var(--text);
 }
-/* The right-hand control cluster, the same width on every row:
-   the module state on its own line, the - / + stepper directly
-   under it, so the buttons form one aligned column down the
-   list. The state line is always reserved (an invisible
-   placeholder when a row has no uniform state) so the stepper
-   never shifts up on stateless rows. */
+/* The right-hand control cluster, one row on every width: the
+   module state, then the - / + stepper. The state takes a fixed
+   width (an invisible placeholder when a row has no uniform
+   state), so the steppers form one aligned column down the list. */
 .fit-chip-ctl {
   flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.12rem;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto; /* right-aligned when it wraps under a long name */
 }
+.fit-chip-ctl > .fit-chip-state { min-width: 7em; text-align: center; }
 .fit-chip-step { display: flex; gap: 0.25rem; }
 .fit-chip-step .fit-chip-btn {
   min-width: 1.9rem;
@@ -4571,20 +4570,30 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-tip-stats { color: var(--muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
 .fit-tip-lines { margin-top: 0.3rem; display: grid; gap: 0.12rem; }
 .fit-tip-line { display: grid; grid-template-columns: 0.95rem minmax(0, 1fr) auto; align-items: center; gap: 0 0.45rem; font-size: var(--fs-xs); }
-/* Tooltip glyphs and colours: one per kind of figure (fittip.js). */
-.fit-tip {
+/* Figure glyphs and colours: one per kind of figure, the fg-*
+   symbols in base.html, used by the tooltips (fittip.js), the rack
+   rows, the stats column and the search and Browse rows. A kind
+   class (k-cpu) sets --k for everything inside it. */
+:root {
   --k-shield: #5fc9e8; --k-armor: #e0a060; --k-structure: #b9b2a6; --k-bonus: #9fd8ff;
   --k-capacitor: #f2d04a; --k-targeting: #c79bff; --k-navigation: #7dc96f; --k-weapon: #ff8a5c;
   --k-drones: #8fd1c0; --k-fitting: #a9a39a; --k-miscellaneous: var(--muted);
+  --k-cpu: #6fb6e8; --k-powergrid: #f29a4a; --k-calibration: #d98ad0;
+  --k-optimal: #c79bff; --k-falloff: #9c8ad8; --k-tracking: #b5e06f;
+  --k-repair: var(--k-armor); --k-shieldboost: var(--k-shield);
 }
-.fit-tip-g { width: 0.95rem; height: 0.95rem; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); }
-.k-capacitor > .fit-tip-g path { fill: currentColor; stroke: none; }
-.k-shield > .fit-tip-g path, .k-bonus > .fit-tip-g path { fill: currentColor; fill-opacity: 0.18; }
+.fit-tip-g, .fit-g {
+  width: 0.95rem; height: 0.95rem; flex: none; vertical-align: -0.15em;
+  fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round;
+  color: var(--k, var(--muted));
+}
 .k-shield { --k: var(--k-shield); } .k-armor { --k: var(--k-armor); } .k-structure { --k: var(--k-structure); }
 .k-bonus { --k: var(--k-bonus); } .k-capacitor { --k: var(--k-capacitor); } .k-targeting { --k: var(--k-targeting); }
 .k-navigation { --k: var(--k-navigation); } .k-weapon { --k: var(--k-weapon); } .k-drones { --k: var(--k-drones); }
 .k-fitting { --k: var(--k-fitting); } .k-miscellaneous { --k: var(--k-miscellaneous); }
-[class*=" k-"] > .fit-tip-g { color: var(--k); }
+.k-cpu { --k: var(--k-cpu); } .k-powergrid { --k: var(--k-powergrid); } .k-calibration { --k: var(--k-calibration); }
+.k-optimal { --k: var(--k-optimal); } .k-falloff { --k: var(--k-falloff); } .k-tracking { --k: var(--k-tracking); }
+.k-repair { --k: var(--k-repair); } .k-shieldboost { --k: var(--k-shieldboost); }
 [class*=" k-"] > .fit-tip-v:not(.good):not(.bad):not([class*="res-"]) { color: color-mix(in srgb, var(--k) 70%, var(--text)); }
 /* A layer's resists: four damage-type cells, each filled to its figure. */
 .fit-tip-res { display: grid; grid-template-columns: 0.95rem 3.4rem repeat(4, minmax(2.2rem, 1fr)); align-items: center; gap: 0 0.3rem; font-size: var(--fs-xs); margin: 0.05rem 0; }
@@ -4657,14 +4666,12 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-ghost-cost { font-family: var(--font-num); font-size: var(--fs-xs); color: var(--muted); }
 .fit-ghost-why { font-size: var(--fs-xs); color: var(--danger); }
 .fit-drag-ghost.fit-ghost-off { border-color: var(--box-edge); box-shadow: none; }
-/* Module search: sticky above the workbench. The surface is the
-   shared .searchpanel glass (the template carries both classes);
-   only the sticky placement lives here. It parks on the shared
-   line under the top bar and the sub-nav (--l-top), like every
-   other in-page sticky bar. */
+/* Module search: the panel above the workbench. The surface is
+   the shared .searchpanel glass (the template carries both
+   classes). It scrolls with the page, so it never covers the
+   ring; its stacking keeps the result list over the workbench. */
 .fit-modsearch {
-  position: sticky;
-  top: calc(var(--l-top) + 0.5rem);
+  position: relative;
   z-index: 9;
 }
 .fit-modsearchwrap { display: block; width: 100%; }
@@ -4702,7 +4709,6 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
 .fit-notice.err { border-color: var(--danger); background: rgba(198, 47, 16, 0.08); }
 @media (max-width: 480px) {
   .fit-vship { width: 44%; }
-  .fit-modsearch { top: calc(var(--sticky-top) + 0.15rem); }
 }
 /* Unified search row: family chips + filters. */
 .fit-searchwrap { flex: 2 1 20rem; }

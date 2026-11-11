@@ -23,9 +23,9 @@ package contracts
 import (
 	"context"
 	"errors"
+	"evesynapse/internal/eveimg"
 	"fmt"
 	json "github.com/goccy/go-json"
-	"html/template"
 	"math"
 	"net/http"
 	"net/url"
@@ -133,6 +133,11 @@ var searchSorts = []struct{ Key, Label string }{
 	{"reward_m3_desc", "Courier reward per m3"},
 	{"score_desc", "Abyssal score, high to low"},
 }
+
+// DealMaxRatio is the deal line: a contract asking at or under this
+// share of its appraised value is priced under our numbers. The
+// contract search queries hold the same line in SQL.
+const DealMaxRatio = 0.85
 
 func validSort(key string) bool {
 	for _, s := range searchSorts {
@@ -640,22 +645,6 @@ const SkinCategoryID = 91
 // picture that fails for any other reason lands here too.
 const ItemPlaceholderPath = "/static/img/item.svg"
 
-// TypeIconURL is the image-server URL of one contract line's
-// item picture. Blueprint-category types have no /icon asset
-// on the image server (it answers 400 for them, formulas
-// included): originals serve /bp, copies serve /bpc. Every
-// other type serves /icon.
-func TypeIconURL(typeID int64, blueprintClass, copy bool, size int) string {
-	variant := "icon"
-	if blueprintClass {
-		variant = "bp"
-		if copy {
-			variant = "bpc"
-		}
-	}
-	return fmt.Sprintf("https://images.evetech.net/types/%d/%s?size=%d", typeID, variant, size)
-}
-
 // TypeCategoryIconURL is the picture URL of one type on the
 // surfaces that know the type's SDE category but hold no
 // contract line (asset rows, LP store requirements, and the
@@ -690,7 +679,7 @@ var renderCategories = map[int64]bool{6: true, 18: true, 22: true, 23: true, 65:
 // and no fallback. A type of unknown category (0) asks for the icon.
 func TypeArtURLs(typeID, categoryID int64, size int) (src, fallback string) {
 	if renderCategories[categoryID] {
-		return fmt.Sprintf("https://images.evetech.net/types/%d/render?size=%d", typeID, size),
+		return eveimg.TypeRender(typeID, size),
 			fmt.Sprintf("https://images.evetech.net/types/%d/icon?size=%d", typeID, size)
 	}
 	return TypeCategoryIconURL(typeID, categoryID, size), ""
@@ -902,20 +891,20 @@ type searchView struct {
 	// RollSliders are the abyssal drawer's per-attribute
 	// percentile bands, one per rollable attribute;
 	// RollAttrNames names every rollable attribute for the
-	// band chips. RollCatalog is the per-family slider
-	// catalog as JSON for contracts.js.
-	RollSliders   []rollSlider
-	RollAttrNames map[int64]string
-	RollCatalog   template.JS
-	Sorts         []struct{ Key, Label string }
-	Rows          []searchRow
-	Total         int64
-	TotalText     string
-	Page          int
-	Pages         int
-	PrevURL       string
-	NextURL       string
-	HasRows       bool
+	// band chips. RollCatalogURL is where contracts.js reads
+	// the per-family slider catalog (JSON, versioned).
+	RollSliders    []rollSlider
+	RollAttrNames  map[int64]string
+	RollCatalogURL string
+	Sorts          []struct{ Key, Label string }
+	Rows           []searchRow
+	Total          int64
+	TotalText      string
+	Page           int
+	Pages          int
+	PrevURL        string
+	NextURL        string
+	HasRows        bool
 	// Redesign furniture: active-filter chips, per-drawer
 	// active counts, the drawer the page opens with, and the
 	// quick-hunt preset URLs.
@@ -1393,7 +1382,7 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 			}
 		}
 		if payload, err := json.Marshal(catalog); err == nil {
-			view.RollCatalog = template.JS(payload)
+			view.RollCatalogURL = "/contracts/search/rolls.json?v=" + app.storeRollCatalog(payload)
 		}
 
 		// The family in scope's own rollable attributes,
@@ -1985,7 +1974,7 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		out.PricedText = fmt.Sprintf("priced %d of %d lines", row.PricedLines, row.TotalLines)
 		if row.PricedLines == row.TotalLines && row.DealRatio.Valid {
 			pct := int(row.DealRatio.Float64*100 + 0.5)
-			out.IsDeal = row.DealRatio.Float64 <= 0.85
+			out.IsDeal = row.DealRatio.Float64 <= DealMaxRatio
 			if out.IsDeal {
 				out.DealPct = 100 - pct
 			}
@@ -3194,7 +3183,7 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 			} else {
 				v.DealNote = fmt.Sprintf("Asking %d%% of our appraised value", pct)
 			}
-			v.IsDeal = c.DealRatio.Float64 <= 0.85
+			v.IsDeal = c.DealRatio.Float64 <= DealMaxRatio
 		}
 	}
 

@@ -33,7 +33,7 @@
   <div id="fit-esi-list" class="fit-cards lo-cards">
   {{range .Fittings.Fittings}}
   <article class="fit-card lo-card" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}" data-fit-items="{{range .Groups}}{{range .Items}}{{.Name}},{{end}}{{end}}">
-    {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
+    {{if .ShipTypeID}}<img class="fit-card-ship" src="{{typeRender .ShipTypeID 64}}" width="64" height="64" alt="" loading="lazy">{{end}}
     <div class="fit-card-body">
       {{if eq .Source "local"}}
       <h4><a href="/fittings/?local={{.LocalID}}#fit-editor">{{.Name}}</a></h4>

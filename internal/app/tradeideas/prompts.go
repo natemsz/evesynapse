@@ -73,15 +73,6 @@ func tradeIdeasDue(now, answeredAt, attemptedAt time.Time, failures int) bool {
 	return true
 }
 
-// tradeIdeasPromptFor wraps the scanner CSV for the model. Station
-// names in it can be player structures, named by players: the rows go
-// in only as data, fenced between markers the model is told to read
-// as data and never as instructions, and no cell can contain a
-// marker (tradeIdeasCell).
-func tradeIdeasPromptFor(csvText string) string {
-	return tradeIdeasWrap(tradeIdeasPrompt, csvText)
-}
-
 // tradeIdeasWrap puts one of the asks in front of the fenced CSV.
 func tradeIdeasWrap(prompt, csvText string) string {
 	return prompt + "\n\n" +

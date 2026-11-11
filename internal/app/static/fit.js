@@ -129,8 +129,6 @@ var FitGauges = (function () {
   var usableChk = document.getElementById("fit-usable");
   var metaSel = document.getElementById("fit-meta");
   var browse = document.getElementById("fit-browse");
-  var browseFams = document.getElementById("fit-browse-fams");
-  var browseQ = document.getElementById("fit-browse-q");
   var browseTree = document.getElementById("fit-browse-tree");
   var browseHint = document.getElementById("fit-browse-hint");
   var saveBtn = document.getElementById("fit-save");
@@ -256,6 +254,8 @@ var FitGauges = (function () {
       }
       reanchorTip();
       syncFold();
+      syncImpFold();
+      syncSummary();
       syncDroneGauges();
       syncChargeButtons();
       syncFilterUI();
@@ -854,6 +854,9 @@ var FitGauges = (function () {
     if (!t || !t.getAttribute) return;
     var wb = workbench();
     if (wb && wb.contains(t)) {
+      // A module's name opens its details (fittip.js's drawer);
+      // it neither toggles the row's tooltip nor picks anything.
+      if (t.closest("[data-fit-info]")) { closeTip(); return; }
       if (t.closest("[data-fit-undo]")) { undo(); return; }
       if (t.closest("[data-fit-redo]")) { redo(); return; }
       var searchBtn = t.closest("[data-fit-search-btn]");
@@ -884,6 +887,7 @@ var FitGauges = (function () {
         return;
       }
       if (t.closest("[data-fit-solve-apply]")) { applySolvePicks(); return; }
+      if (t.closest("[data-fit-imp-fold]")) { impOpen = !impOpen; syncImpFold(); return; }
       var fold = t.closest("[data-fit-fold]");
       if (fold) { foldOpen[fold.closest(".fit-group").getAttribute("data-fit-group")] = !fold.closest(".fit-group").classList.contains("open"); syncFold(); return; }
       var impReset = t.closest("[data-fit-imp-reset]");
@@ -910,8 +914,9 @@ var FitGauges = (function () {
       // steppers above, form fields) keep their behavior, and
       // the state pill is part of the card, not a control.
       var cycChip = t.closest(".fit-chip[data-fit-states]");
-      if (cycChip && phoneOn() && fitView === "racks" &&
+      if (cycChip && ((phoneOn() && fitView === "racks") || ev.shiftKey) &&
           !t.closest("button, input, select, textarea, a")) {
+        if (ev.shiftKey) closeTip();
         cycleChipState(cycChip);
         return;
       }
@@ -1012,10 +1017,11 @@ var FitGauges = (function () {
   // Ship search: ships only. Module search: modules/drones/rigs/subs
   // only, with the kind-labeled suggestions and the filter row.
   var modFamily = "all";
-  var kindOrder = ["high", "medium", "low", "rig", "subsystem", "drone", "fighter", "charge"];
+  var kindOrder = ["high", "medium", "low", "rig", "subsystem", "drone", "fighter", "charge", "cargo"];
   var kindLabels = {
     high: "High slots", medium: "Mid slots", low: "Low slots",
-    rig: "Rigs", subsystem: "Subsystems", drone: "Drones", fighter: "Fighters", charge: "Charges"
+    rig: "Rigs", subsystem: "Subsystems", drone: "Drones", fighter: "Fighters", charge: "Charges",
+    cargo: "Cargo"
   };
 
   function filterQuery() {
@@ -1052,6 +1058,7 @@ var FitGauges = (function () {
     var tubes = parseInt(wb.getAttribute("data-fit-tubes") || "0", 10) || 0;
     if (tubes > 0) ok["fighter"] = true;
     ok["ship"] = true;
+    ok["charge"] = true;
     return ok;
   }
   // "Fittable only" hides what cannot go on this hull now; without
@@ -1104,17 +1111,19 @@ var FitGauges = (function () {
   function rowFacts(it) {
     var box = document.createElement("span");
     box.className = "sug-facts";
-    function fact(text, cls) {
+    // kind is the figure's glyph (the shared fg-* symbols).
+    function fact(text, cls, kind) {
       var f = document.createElement("span");
-      f.className = "sug-fact" + (cls ? " " + cls : "");
-      f.textContent = text;
+      f.className = "sug-fact" + (cls ? " " + cls : "") + (kind ? " k-" + kind : "");
+      if (kind && window.FitTipUI) f.appendChild(FitTipUI.glyph(kind));
+      f.appendChild(document.createTextNode(text));
       box.appendChild(f);
     }
     if (it.tier) fact(it.tier, "sug-tier");
-    if (it.stat) fact(it.stat, "sug-stat");
-    if (it.cpu) fact(fmtNum(it.cpu) + " tf");
-    if (it.pg) fact(fmtNum(it.pg) + " MW");
-    if (it.cal) fact(fmtNum(it.cal) + " cal");
+    if (it.stat) fact(it.stat, "sug-stat", it.statk || "");
+    if (it.cpu) fact(fmtNum(it.cpu) + " tf", "", "cpu");
+    if (it.pg) fact(fmtNum(it.pg) + " MW", "", "powergrid");
+    if (it.cal) fact(fmtNum(it.cal) + " cal", "", "calibration");
     if (it.price) fact(it.price + (it.est ? " est." : ""), "sug-price");
     if (it.id) {
       var info = document.createElement("button");
@@ -1168,6 +1177,7 @@ var FitGauges = (function () {
     function query(force) {
       if (!input || !list) return;
       var q = input.value.trim();
+      if (cfg.elsewhere && cfg.elsewhere()) { close(); return; }
       if (q.length < 2 && !force) { close(); return; }
       fetch(cfg.url ? cfg.url(q) : pickerURL(cfg.family(), q), {
         cache: "no-store", headers: { "Accept": "application/json" }
@@ -1190,6 +1200,9 @@ var FitGauges = (function () {
       (data || []).forEach(function (it) {
         var k = it.kind || "";
         if (cfg.kinds && cfg.kinds.indexOf(k) < 0) return;
+        // Anything that is not a slot family, drone, fighter or
+        // charge is carried in the cargo hold.
+        if (!cfg.kinds && kindOrder.indexOf(k) < 0) k = "cargo";
         if (!groups[k]) groups[k] = [];
         groups[k].push(it);
       });
@@ -1331,6 +1344,13 @@ var FitGauges = (function () {
   });
   var modSearch = makeSuggester(modInput, modList, {
     family: function () { return modFamily; },
+    // While the Browse pane is in view the search filters its
+    // list in place instead of opening a dropdown over it.
+    elsewhere: function () {
+      if (!browseShown()) return false;
+      renderBrowse();
+      return true;
+    },
     dropShips: true,
     dragRows: true,
     // A pick closes the list (and the phone search panel, a no-op
@@ -1367,15 +1387,23 @@ var FitGauges = (function () {
       setFamChip(b.getAttribute("data-fam"));
     });
   }
+  // One kind filter drives the search and the Browse pane: All
+  // lists every family (the search leaves out charges, which need
+  // a weapon to land), Cargo searches any marketable item.
   function setFamChip(fam) {
+    if (!famNames[fam]) fam = "all";
     modFamily = fam;
     if (famChips) {
       var btns = famChips.querySelectorAll("button[data-fam]");
       for (var i = 0; i < btns.length; i++) {
-        btns[i].classList.toggle("on", btns[i].getAttribute("data-fam") === fam);
+        var on = btns[i].getAttribute("data-fam") === fam;
+        btns[i].classList.toggle("on", on);
+        btns[i].setAttribute("aria-pressed", on ? "true" : "false");
       }
     }
-    modSearch.query();
+    syncSearchPlaceholder();
+    browseScroll = 0;
+    if (browseShown()) renderBrowse(); else modSearch.query();
   }
   function filtersChanged() {
     modSearch.query();
@@ -1390,6 +1418,20 @@ var FitGauges = (function () {
   // Folded lists (cargo past five items) keep their open state
   // across re-renders.
   var foldOpen = {};
+  // Implants fold to one line while they are the clone's own set
+  // (the server folds them); Edit opens the slots, and they stay
+  // open across re-renders until folded again.
+  var impOpen = false;
+  function syncImpFold() {
+    var g = editor.querySelector(".fit-implant-group");
+    if (!g) return;
+    var btn = g.querySelector("[data-fit-imp-fold]");
+    if (!btn) return; // edited sets render open
+    g.classList.toggle("fit-imp-open", impOpen);
+    btn.setAttribute("aria-expanded", impOpen ? "true" : "false");
+    var act = btn.querySelector(".fit-imp-fold-act");
+    if (act) act.textContent = impOpen ? "Done" : "Edit";
+  }
   function syncFold() {
     var groups = editor.querySelectorAll(".fit-fold");
     for (var i = 0; i < groups.length; i++) {
@@ -1470,10 +1512,10 @@ var FitGauges = (function () {
         btn.title = "Load a charge";
         btn.classList.add("fit-charge-btn-empty");
       }
-      // The button rides at the end of the row's name block,
-      // beside the name it loads charges for.
-      var host = chip.querySelector(".fit-chip-main") || chip;
-      host.appendChild(btn);
+      // The button leads the row's controls, on one line with the
+      // module state and the stepper.
+      var host = chip.querySelector(".fit-chip-ctl");
+      if (host) host.insertBefore(btn, host.firstChild); else chip.appendChild(btn);
     }
   }
   var chargeDrawerFor = "";
@@ -1836,16 +1878,14 @@ var FitGauges = (function () {
   // Rows that will not fit now list dimmed with the reason (the
   // module search's rowReason); "Fittable only" hides them.
   var leftPane = "fit";
-  var browseFam = "high";
   var browseCache = {};
   var browseOpen = {};
   var browseScroll = 0;
-  var browseTimer = null;
   var browseRackFams = { high: 1, medium: 1, low: 1, rig: 1, subsystem: 1, drone: 1, fighter: 1 };
-  var browseNames = {
-    high: "high slot modules", medium: "mid slot modules", low: "low slot modules",
-    rig: "rigs", subsystem: "subsystems", drone: "drones", fighter: "fighters",
-    charge: "ammunition and charges", any: "any item for the cargo hold"
+  var famNames = {
+    all: "modules, drones, rigs", high: "high slot modules", medium: "mid slot modules",
+    low: "low slot modules", rig: "rigs", subsystem: "subsystems", drone: "drones",
+    fighter: "fighters", charge: "ammunition and charges", any: "any item for the cargo hold"
   };
   function browseShown() {
     return phoneOn() ? fitView === "browse" : leftPane === "browse";
@@ -1871,45 +1911,49 @@ var FitGauges = (function () {
     }
     if (shown && browseTree && !browseTree.firstChild) renderBrowse();
   }
+  // Switching panes hands the search over: Browse lists it in
+  // place, Fit answers it with the dropdown again.
   function setLeftPane(pane) {
+    var was = browseShown();
     leftPane = pane === "browse" ? "browse" : "fit";
     mountBrowse();
+    if (was !== browseShown()) searchHandover();
+  }
+  // Outside Browse the search keeps its own wording; in Browse it
+  // names what the list holds.
+  function syncSearchPlaceholder() {
+    if (!modInput) return;
+    if (!modInput.hasAttribute("data-fit-ph")) modInput.setAttribute("data-fit-ph", modInput.placeholder);
+    modInput.placeholder = browseShown() ? "Search " + famNames[modFamily] : modInput.getAttribute("data-fit-ph");
+  }
+  function searchHandover() {
+    syncSearchPlaceholder();
+    if (browseShown()) {
+      modSearch.close();
+      renderBrowse();
+    } else if (modInput && modInput.value.trim().length >= 2) {
+      if (browseTree) browseTree.innerHTML = "";
+    }
   }
   // openBrowse shows the Browse pane on one family (the "+" of an
   // empty slot, a bay's add button).
   function openBrowse(fam, focus) {
-    if (!browseNames[fam]) fam = "high";
-    if (fam !== browseFam || (browseQ && browseQ.value)) {
-      if (browseQ) browseQ.value = "";
-      setBrowseFam(fam);
-    }
+    if (modInput) modInput.value = "";
+    modSearch.close();
     if (phoneOn()) {
       setSearchOpen(false, false);
       setFitView("browse");
     } else {
       setLeftPane("browse");
     }
+    setFamChip(fam);
     if (browse && browse.scrollIntoView) browse.scrollIntoView({ block: "nearest" });
-    if (focus && !phoneOn() && browseQ) {
-      try { browseQ.focus({ preventScroll: true }); } catch (e) { browseQ.focus(); }
+    if (focus && !phoneOn() && modInput) {
+      try { modInput.focus({ preventScroll: true }); } catch (e) { modInput.focus(); }
     }
-  }
-  function setBrowseFam(fam) {
-    browseFam = fam;
-    if (browseFams) {
-      var btns = browseFams.querySelectorAll("button[data-browse-fam]");
-      for (var i = 0; i < btns.length; i++) {
-        var on = btns[i].getAttribute("data-browse-fam") === fam;
-        btns[i].classList.toggle("on", on);
-        btns[i].setAttribute("aria-pressed", on ? "true" : "false");
-      }
-    }
-    if (browseQ) browseQ.placeholder = "Search " + browseNames[fam];
-    browseScroll = 0;
-    renderBrowse();
   }
   function browseURL(group) {
-    return "/fittings/browse.json?family=" + encodeURIComponent(browseFam) +
+    return "/fittings/browse.json?family=" + encodeURIComponent(modFamily) +
       "&group=" + group + filterQuery() +
       (state.shipTypeId ? "&ship=" + state.shipTypeId : "");
   }
@@ -1981,9 +2025,14 @@ var FitGauges = (function () {
     li.textContent = msg;
     ul.appendChild(li);
   }
+  // Rows whose kind is a rack or bay family answer to Fittable
+  // only; charges and cargo never do.
+  function browseFittable(rows) {
+    return (browseRackFams[modFamily] || modFamily === "all") ? applyFittable(rows) : rows;
+  }
   function fillLevel(ul, data) {
     ul.innerHTML = "";
-    var open = browseOpen[browseFam] || (browseOpen[browseFam] = {});
+    var open = browseOpen[modFamily] || (browseOpen[modFamily] = {});
     (data.groups || []).forEach(function (g) {
       var li = document.createElement("li");
       li.className = "fbt-node";
@@ -2009,8 +2058,7 @@ var FitGauges = (function () {
       ul.appendChild(li);
       if (open[g.id]) toggleBrowseNode(li, true);
     });
-    var rows = data.types || [];
-    if (browseRackFams[browseFam]) rows = applyFittable(rows);
+    var rows = browseFittable(data.types || []);
     rows.forEach(function (it) { ul.appendChild(browseRow(it)); });
     if (!ul.firstChild) browseEmpty(ul, "Nothing here with these filters.");
   }
@@ -2019,15 +2067,15 @@ var FitGauges = (function () {
     var sub = li.querySelector("ul");
     if (!btn || !sub) return;
     var id = parseInt(btn.getAttribute("data-browse-group"), 10) || 0;
-    var open = browseOpen[browseFam] || (browseOpen[browseFam] = {});
+    var open = browseOpen[modFamily] || (browseOpen[modFamily] = {});
     var on = want === undefined ? li.getAttribute("aria-expanded") !== "true" : want;
     li.setAttribute("aria-expanded", on ? "true" : "false");
     sub.hidden = !on;
     if (on) open[id] = true; else delete open[id];
     if (on && !sub.firstChild) {
-      var fam = browseFam;
+      var fam = modFamily;
       fetchBrowse(id).then(function (data) {
-        if (fam !== browseFam) return;
+        if (fam !== modFamily) return;
         fillLevel(sub, data);
         if (want === undefined) revealBranch(li);
       }).catch(function () {});
@@ -2050,10 +2098,11 @@ var FitGauges = (function () {
       browseTree.scrollTop += Math.min(r.top - box.top, r.bottom - box.bottom);
     }
   }
+  function browseQuery() { return modInput ? modInput.value.trim() : ""; }
   function renderBrowse() {
     if (!browseTree) return;
-    var q = browseQ ? browseQ.value.trim() : "";
-    var fam = browseFam;
+    var q = browseQuery();
+    var fam = modFamily;
     if (browseHint) {
       browseHint.textContent = fam === "any"
         ? "Search any item to carry in the cargo hold."
@@ -2067,10 +2116,9 @@ var FitGauges = (function () {
       fetch(pickerURL(fam, q), { headers: { "Accept": "application/json" } }).then(function (resp) {
         return resp.ok ? resp.json() : [];
       }).then(function (rows) {
-        if (fam !== browseFam || (browseQ && browseQ.value.trim() !== q)) return;
+        if (fam !== modFamily || browseQuery() !== q) return;
         browseTree.innerHTML = "";
-        rows = rows || [];
-        if (browseRackFams[fam]) rows = applyFittable(rows);
+        rows = browseFittable(rows || []);
         rows.forEach(function (it) {
           if (it.kind === "ship") return;
           browseTree.appendChild(browseRow(it));
@@ -2081,7 +2129,7 @@ var FitGauges = (function () {
     }
     browseTree.setAttribute("role", "tree");
     fetchBrowse(0).then(function (data) {
-      if (fam !== browseFam || (browseQ && browseQ.value.trim().length >= 2)) return;
+      if (fam !== modFamily || browseQuery().length >= 2) return;
       fillLevel(browseTree, data);
       browseTree.scrollTop = browseScroll;
     }).catch(function () {});
@@ -2098,20 +2146,6 @@ var FitGauges = (function () {
     if (phoneOn() && fitView === "browse") setFitView("racks");
   }
   if (browse) {
-    if (browseFams) {
-      browseFams.addEventListener("click", function (ev) {
-        var b = ev.target && ev.target.closest ? ev.target.closest("button[data-browse-fam]") : null;
-        if (!b) return;
-        if (browseQ) browseQ.value = "";
-        setBrowseFam(b.getAttribute("data-browse-fam"));
-      });
-    }
-    if (browseQ) {
-      browseQ.addEventListener("input", function () {
-        if (browseTimer) clearTimeout(browseTimer);
-        browseTimer = setTimeout(renderBrowse, 160);
-      });
-    }
     if (browseTree) {
       browseTree.addEventListener("scroll", function () { browseScroll = browseTree.scrollTop; });
     }
@@ -2157,12 +2191,15 @@ var FitGauges = (function () {
   function dragSourceAt(ev) {
     var t = ev.target;
     if (!t || !t.closest) return null;
-    if (t.closest("[data-fit-info], .fit-tip")) return null;
+    // A row's name is its details link on a click, and still a
+    // handle to drag the row by.
+    var byName = t.closest(".fit-chip > .fit-chip-main > .fit-chip-name");
+    if (!byName && t.closest("[data-fit-info], .fit-tip")) return null;
     var row = t.closest(".fit-vslot.filled, [data-fit-pick]");
     if (row) return row;
     // A rack, bay or cargo row drags from anywhere but its own
     // controls (steppers, count field).
-    if (t.closest("button, input, select, textarea, a")) return null;
+    if (!byName && t.closest("button, input, select, textarea, a")) return null;
     return t.closest(".fit-group .fit-chip[data-fit-rowtype]");
   }
   // sourceOf describes what is being dragged: where it comes from
@@ -2187,11 +2224,13 @@ var FitGauges = (function () {
   }
   // targetAt reads what is under the pointer: a slot (ring circle,
   // rack row, empty-slot button) of a family, a group (rack, bay,
-  // cargo hold), nothing on the workbench, or off it.
+  // cargo hold), the ring's own face, or off the fit,
+  // which is everywhere else, the Browse list and the rest of the
+  // workbench included: like the game, a module dragged off the
+  // fit comes off.
   function targetAt(x, y) {
     var el = document.elementFromPoint ? document.elementFromPoint(x, y) : null;
     if (!el || !el.closest) return { off: true };
-    if (browse && browse.contains(el)) return { none: true };
     var wb = workbench();
     var slot = el.closest(".fit-vslot");
     if (slot) {
@@ -2213,8 +2252,10 @@ var FitGauges = (function () {
       if (rackFams[fam] && empty) return { el: empty, slot: true, family: fam, filled: false, typeID: 0, index: -1 };
       return { el: group, group: true, family: fam };
     }
-    if (wb && wb.contains(el)) return { none: true };
-    if (editor.contains(el) && el.closest(".fit-shipblock")) return { none: true };
+    // The ring's face: a new module lands in its own rack there; a
+    // short drag of a fitted one that ends on it changes nothing.
+    var face = wb && wb.contains(el) ? el.closest(".fit-visual") : null;
+    if (face) return { el: face, ring: true };
     return { off: true };
   }
   // dropAction decides what a drop of d on t does: { act } to do
@@ -2224,11 +2265,12 @@ var FitGauges = (function () {
   function dropAction(d, t, copy) {
     var id = d.typeID;
     if (t.off) {
-      if (d.origin === "fit" || d.origin === "hold") return { act: function () { decItem(id); } };
-      if (d.origin === "cargo") return { act: function () { decItem(id, true); } };
+      if (d.origin === "fit" || d.origin === "hold") return { act: function () { decItem(id); }, why: "Release to remove" };
+      if (d.origin === "cargo") return { act: function () { decItem(id, true); }, why: "Release to remove" };
       return { why: "" };
     }
     if (t.none) return { why: "" };
+    if (t.ring) return ringDrop(d);
     if (d.kind === "charge") {
       if (t.slot && t.filled) return { act: function () { loadChargeOn(id, t); } };
       if (t.group && t.family === "cargo") return { act: function () { addItem(id, 1, "cargo", true); } };
@@ -2276,6 +2318,27 @@ var FitGauges = (function () {
     }
     if (t.index >= 0) return { act: function () { pendingFlash = { type: "slot", id: id }; moveItemTo(id, fam, t.index); } };
     return { why: "" };
+  }
+  // ringDrop is a drop on the ring's face: a module or drone from a
+  // list, or one carried in the hold, goes to its own rack or bay
+  // (the first free slot); a charge loads into every weapon that
+  // takes it. Fitted modules stay where they are.
+  function ringDrop(d) {
+    var id = d.typeID;
+    if (d.origin === "fit" || d.origin === "hold") return { why: "" };
+    if (d.kind === "charge") {
+      if (d.origin !== "new") return { why: "" };
+      return { act: function () { pickCharge({ id: id }); } };
+    }
+    var fam = d.family;
+    if (!rackFams[fam] && !bayFams[fam]) return { why: "Goes in the cargo hold" };
+    if (d.origin !== "fit" && restrictionFor(id)) return { why: "Only fits " + restrictionFor(id) };
+    if (rackFams[fam]) {
+      var full = roomIn(fam);
+      if (full) return { why: full };
+    }
+    if (d.origin === "cargo") return { act: function () { moveFromCargo(id, fam); } };
+    return { act: function () { if (!checkRestricted(id, "", fam)) addItem(id, 1, fam); } };
   }
   // loadChargeOn checks the charge against the weapon under it (the
   // picker's charge list for that weapon) and loads it, or flashes
@@ -2350,7 +2413,7 @@ var FitGauges = (function () {
     d.ghost.style.left = (x - 22) + "px";
     d.ghost.style.top = (y - 22) + "px";
   }
-  var dropCandidates = ".fit-vslot, .fit-group[data-fit-group], .fit-slots .fit-chip[data-fit-rowtype], .fit-slot-empty";
+  var dropCandidates = ".fit-vslot, .fit-visual, .fit-group[data-fit-group], .fit-slots .fit-chip[data-fit-rowtype], .fit-slot-empty";
   function clearDragMarks() {
     var marks = editor.querySelectorAll(".drop-ok, .drop-dim, .drop-over");
     for (var i = 0; i < marks.length; i++) {
@@ -2369,11 +2432,14 @@ var FitGauges = (function () {
     for (var i = 0; i < els.length; i++) {
       var t = elementTarget(els[i]);
       var a = t ? dropAction(d, t, false) : { why: "" };
+      // The ring's face holds the slots: it only ever lights up.
+      if (t && t.ring && !a.act) continue;
       els[i].classList.add(a.act ? "drop-ok" : "drop-dim");
     }
   }
   // elementTarget is targetAt for one element.
   function elementTarget(el) {
+    if (el.classList.contains("fit-visual")) return { el: el, ring: true };
     if (el.classList.contains("fit-vslot")) {
       var filled = el.classList.contains("filled");
       return { el: el, slot: true, family: el.getAttribute("data-v-family") || "", filled: filled,
@@ -2451,7 +2517,11 @@ var FitGauges = (function () {
   function tapDragSource(ev, d) {
     var ammo = ev.target && ev.target.closest ? ev.target.closest("[data-fit-ammo]") : null;
     if (ammo) { jumpToCharge(ammo.getAttribute("data-fit-ammo")); return; }
-    if (d.el.hasAttribute("data-fit-vslot")) { toggleTip(d.el); return; }
+    if (d.el.hasAttribute("data-fit-vslot")) {
+      if (ev.shiftKey) { closeTip(); cycleSlotState(d.el); return; }
+      toggleTip(d.el);
+      return;
+    }
     var it = d.el._fitRow || {};
     pickRow(parseInt(d.el.getAttribute("data-fit-pick"), 10) || 0, d.el.getAttribute("data-kind") || "", it.name || "");
   }
@@ -2547,6 +2617,19 @@ var FitGauges = (function () {
   editor.addEventListener("contextmenu", function (ev) {
     var t = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot, [data-fit-pick], .fit-chip[data-fit-rowtype]") : null;
     if (t) ev.preventDefault();
+  });
+  // A double-click on a fitted module steps it to its next state
+  // (online, active, overheated, offline, as the module allows):
+  // a ring slot its own instance, a rack row its whole line. The
+  // two clicks before it toggle the tooltip on and off again.
+  editor.addEventListener("dblclick", function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest || ev.shiftKey) return;
+    if (t.closest(".fit-tip, button:not(.fit-vslot), input, select, textarea, a, [data-fit-info]")) return;
+    var slot = t.closest(".fit-vslot.filled[data-tip-states]");
+    if (slot) { closeTip(); cycleSlotState(slot); return; }
+    var chip = t.closest(".fit-chip[data-fit-states]");
+    if (chip && !phoneOn()) { closeTip(); cycleChipState(chip); }
   });
   // Delete or Backspace on a focused fitted slot or rack row
   // removes one, like its minus button.
@@ -2681,13 +2764,26 @@ var FitGauges = (function () {
     row.classList.add("flash");
     window.setTimeout(function () { row.classList.remove("flash"); }, 750);
   }
+  // The tooltip rules, the same on the ring and the rack rows:
+  // it shows the module under the pointer; leaving the module (or
+  // the tooltip) closes it after a short delay; a click pins it,
+  // so it stays after the pointer leaves, until a second click on
+  // the module, a click elsewhere, its close button or Escape.
+  // Hovering another module shows that one instead.
+  function tipAnchorAt(node) {
+    return node && node.closest ? node.closest(".fit-vslot[data-tip-name], .fit-chip[data-tip-name]") : null;
+  }
+  function tipPinned() { return !!(tipEl && tipEl.getAttribute("data-for")); }
   editor.addEventListener("mouseover", function (ev) {
     if (dragState && dragState.active) return; // no tooltips mid-drag
-    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name], .fit-chip[data-tip-name]") : null;
-    if (slot && slot !== tipHoverSlot) {
-      tipHoverSlot = slot;
-      showTip(slot);
-    }
+    var slot = tipAnchorAt(ev.target);
+    if (!slot) return;
+    // Moving between a module's own parts (icon, ammo badge,
+    // name) is not leaving it.
+    if (slot === tipHoverSlot) { cancelTipClose(); return; }
+    tipHoverSlot = slot;
+    if (tipEl && tipAnchor === slot) { cancelTipClose(); return; }
+    showTip(slot);
   });
   // The close timer belongs to the tooltip it was armed for:
   // showTip cancels it, and it never closes a later tooltip
@@ -2697,21 +2793,24 @@ var FitGauges = (function () {
   var TIP_CLOSE_MS = 400;
   function scheduleTipClose() {
     cancelTipClose();
+    if (tipPinned()) return;
     var forTip = tipEl;
     tipCloseTimer = setTimeout(function() {
       tipCloseTimer = null;
-      // Only close if mouse is not over the tooltip
-      if (tipEl && tipEl === forTip && !tipEl.matches(':hover')) {
-        tipHoverSlot = null;
-        closeTip();
-      }
+      if (!tipEl || tipEl !== forTip || tipPinned()) return;
+      // The pointer came back to the tooltip or its module.
+      if (tipEl.matches(":hover") || (tipAnchor && tipAnchor.matches(":hover"))) return;
+      tipHoverSlot = null;
+      closeTip();
     }, TIP_CLOSE_MS);
   }
   editor.addEventListener("mouseout", function (ev) {
-    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name], .fit-chip[data-tip-name]") : null;
-    if (slot && slot === tipHoverSlot) {
-      scheduleTipClose();
-    }
+    var slot = tipAnchorAt(ev.target);
+    if (!slot || slot !== tipHoverSlot) return;
+    var to = ev.relatedTarget;
+    if (to && slot.contains(to)) return;
+    tipHoverSlot = null;
+    scheduleTipClose();
   });
   // Keep tooltip open when hovering over it
   document.addEventListener("mouseover", function(ev) {
@@ -2743,13 +2842,18 @@ var FitGauges = (function () {
     return "chip:" + (g ? g.getAttribute("data-fit-group") || "" : "") + ":" +
       (el.getAttribute("data-fit-rowtype") || "");
   }
+  // toggleTip is a click on a module: it pins the tooltip (the
+  // hover one stays where it is), or closes a pinned one.
   function toggleTip(slot) {
     var key = tipKeyFor(slot);
     if (tipEl && tipEl.getAttribute("data-for") === key) {
       closeTip();
-    } else {
-      showTip(slot);
-      if (tipEl) tipEl.setAttribute("data-for", key);
+      return;
+    }
+    if (!tipEl || tipAnchor !== slot) showTip(slot);
+    if (tipEl) {
+      cancelTipClose();
+      tipEl.setAttribute("data-for", key);
     }
   }
   // Commits a state change for one fitted line's instances:
@@ -2788,6 +2892,13 @@ var FitGauges = (function () {
   // line to the next state the module allows (the card shows one
   // state for the line), through the same commit the desktop
   // tooltip's state buttons use.
+  // A ring slot steps its own instance to the next state, the
+  // way a double-click or Shift+click on it does.
+  function cycleSlotState(slot) {
+    var next = FitPhoneViews.nextState(slot.getAttribute("data-tip-states"),
+      slot.getAttribute("data-tip-state"));
+    if (next) setModuleState(slot.getAttribute("data-tip-key"), next);
+  }
   function cycleChipState(chip) {
     var typeID = parseInt(chip.getAttribute("data-fit-rowtype"), 10) || 0;
     if (!typeID) return;
@@ -2846,7 +2957,7 @@ var FitGauges = (function () {
     var ms = document.getElementById("fit-modsearch");
     if (!ms) return;
     var btn = searchButton();
-    if (phoneOn() && btn) {
+    if (phoneOn() && btn && fitView !== "browse") {
       ms.classList.add("fit-collapsible");
       ms.classList.toggle("open", searchOpen);
       showSearchLayer(ms, searchOpen);
@@ -2854,9 +2965,9 @@ var FitGauges = (function () {
       btn.classList.toggle("on", searchOpen);
     } else {
       showSearchLayer(ms, false);
-      // Above the band, or no tab bar to toggle it (no ship
-      // picked yet): the search is the plain in-flow panel it is
-      // on desktop, always reachable.
+      // Above the band, no tab bar to toggle it (no ship picked
+      // yet), or the phone's Browse view, which it filters: the
+      // search is the plain in-flow panel it is on desktop.
       ms.classList.remove("fit-collapsible");
       ms.classList.remove("open");
       if (btn) {
@@ -2900,8 +3011,10 @@ var FitGauges = (function () {
   }
   function setFitView(view) {
     if (view !== "racks" && view !== "stats" && view !== "radial" && view !== "browse") return;
+    var was = browseShown();
     fitView = view;
     applyFitView();
+    if (was !== browseShown()) searchHandover();
   }
   if (phoneMQ && phoneMQ.addEventListener) {
     phoneMQ.addEventListener("change", applyFitView);
@@ -2946,6 +3059,46 @@ var FitGauges = (function () {
       headToggle.setAttribute("aria-expanded", open ? "true" : "false");
     });
   }
+  // --- paste to import ---------------------------------------------
+  // EFT text pasted anywhere on the page outside a text field opens
+  // as the fit, through the Import form's own route. Replacing a
+  // fit with unsaved changes asks first.
+  var eftHead = /^\s*\[[^,\]\n]+,[^\]\n]*\]/;
+  document.addEventListener("paste", function (ev) {
+    if (!document.body.contains(editor)) return;
+    var t = ev.target;
+    if (t && t.closest && t.closest("input, textarea, select, [contenteditable]")) return;
+    var text = ev.clipboardData ? ev.clipboardData.getData("text/plain") : "";
+    if (!text || !eftHead.test(text)) return;
+    ev.preventDefault();
+    if (dirty && state.shipTypeId && !window.confirm("Replace this fit with the pasted one? Unsaved changes are lost.")) return;
+    var importArea = document.getElementById("fit-eft-in");
+    var form = importArea && importArea.form;
+    if (!form) return;
+    importArea.value = text;
+    if (form.requestSubmit) form.requestSubmit(); else form.submit();
+  });
+
+  // --- sticky summary ----------------------------------------------
+  // The stats column's one-line summary shows once its headline
+  // figures scroll out of view, parked on the sticky line under
+  // the top bar (fitting.css).
+  var sumObserver = null;
+  function syncSummary() {
+    if (sumObserver) { sumObserver.disconnect(); sumObserver = null; }
+    var sum = editor.querySelector(".fit-sum");
+    var head = editor.querySelector(".fit-stats .fit-headline");
+    if (!sum || !head || !window.IntersectionObserver) return;
+    var stack = Math.round(parseFloat(getComputedStyle(sum).top) || 0);
+    sumObserver = new IntersectionObserver(function (entries) {
+      var e = entries[entries.length - 1];
+      sum.classList.toggle("on", !e.isIntersecting && e.boundingClientRect.top < stack);
+    }, { rootMargin: "-" + stack + "px 0px 0px 0px" });
+    sumObserver.observe(head);
+  }
+  syncSummary();
+  if (window.addEventListener) window.addEventListener("resize", function () { syncSummary(); });
+
   syncShipGate();
   editor.addEventListener("keydown", function (ev) {
     if (ev.key !== "Enter" && ev.key !== " ") return;
@@ -2955,8 +3108,9 @@ var FitGauges = (function () {
     toggleTip(slot);
   });
   // A click on a tooltip anchor is the anchor's own business
-  // (a tap toggles it), never a dismissal.
-  editor.addEventListener("click", function (ev) {
+  // (a tap toggles it), never a dismissal; a click anywhere else on
+  // the page closes the tooltip.
+  document.addEventListener("click", function (ev) {
     if (!tipEl) return;
     var t = ev.target;
     if (t && t.closest && t.closest(".fit-tip")) return;
@@ -2975,9 +3129,7 @@ var FitGauges = (function () {
     var ok = wb && wb.getAttribute("data-fit-subsystems") === "1";
     var chip = document.querySelector('#fit-famchips button[data-fam="subsystem"]');
     if (chip) chip.hidden = !ok;
-    var bchip = document.querySelector('#fit-browse-fams button[data-browse-fam="subsystem"]');
-    if (bchip) bchip.hidden = !ok;
-    if (!ok && browseFam === "subsystem") setBrowseFam("high");
+    if (!ok && modFamily === "subsystem") setFamChip("all");
   }
 
   // --- save / export --------------------------------------------
@@ -3338,14 +3490,17 @@ var FitGauges = (function () {
   var tipEl = null;
   var hoverEl = null;
   var closeTimer = null;
+  var pinned = false;
   // Drone gauges on every workbench already on the page (the
   // editor re-applies its own after each re-render).
   var gaugeWbs = document.querySelectorAll(".fit-wb");
   for (var gi = 0; gi < gaugeWbs.length; gi++) FitGauges.apply(gaugeWbs[gi]);
   function closeTip() {
+    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
     if (tipEl && tipEl.parentNode) tipEl.parentNode.removeChild(tipEl);
     tipEl = null;
     hoverEl = null;
+    pinned = false;
   }
   function showTip(el) {
     closeTip();
@@ -3359,12 +3514,18 @@ var FitGauges = (function () {
     FitTipUI.place(tipEl, el, wb);
     tipEl.style.visibility = "";
   }
+  // The editor's rules: hover shows, leaving closes after a short
+  // delay, a click pins until a second click, a click elsewhere,
+  // the close button or Escape.
   function scheduleClose() {
     if (closeTimer) clearTimeout(closeTimer);
+    if (pinned) return;
     closeTimer = setTimeout(function () {
       closeTimer = null;
-      if (tipEl && !tipEl.matches(":hover")) closeTip();
-    }, 150);
+      if (!tipEl || pinned) return;
+      if (tipEl.matches(":hover") || (hoverEl && hoverEl.matches(":hover"))) return;
+      closeTip();
+    }, 400);
   }
   function roTarget(ev) {
     var t = ev.target && ev.target.closest ? ev.target.closest(".fit-ro [data-tip-name]") : null;
@@ -3384,7 +3545,11 @@ var FitGauges = (function () {
   });
   document.addEventListener("mouseout", function (ev) {
     var el = roTarget(ev);
-    if (el && el === hoverEl) { scheduleClose(); return; }
+    if (el && el === hoverEl) {
+      var into = ev.relatedTarget;
+      if (!(into && el.contains(into))) scheduleClose();
+      return;
+    }
     if (tipEl && ev.target && ev.target.closest && ev.target.closest(".fit-tip")) {
       var to = ev.relatedTarget;
       if (!to || !to.closest || !to.closest(".fit-tip")) scheduleClose();
@@ -3407,8 +3572,11 @@ var FitGauges = (function () {
       return;
     }
     var el = roTarget(ev);
+    if (el && ev.target.closest("[data-fit-info]")) { closeTip(); return; } // the details drawer opens instead
     if (el) {
-      if (hoverEl === el && tipEl) closeTip(); else showTip(el);
+      if (hoverEl === el && tipEl && pinned) { closeTip(); return; }
+      if (hoverEl !== el || !tipEl) showTip(el);
+      if (tipEl) pinned = true;
       return;
     }
     if (tipEl && !(ev.target && ev.target.closest && ev.target.closest(".fit-tip"))) closeTip();

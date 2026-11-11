@@ -871,6 +871,12 @@ var pgItemVariationsSchema string
 //go:embed schema_pg/142_fit_browse.sql
 var pgFitBrowseSchema string
 
+// Step 143: the Browse tree's types by market group, for the All
+// view.
+//
+//go:embed schema_pg/143_fit_browse_by_group.sql
+var pgFitBrowseByGroupSchema string
+
 // Step 144: probation for a swarm signer caught lying.
 //
 //go:embed schema_pg/144_swarm_probation.sql
@@ -1046,6 +1052,7 @@ func schemaSteps() []schemaStep {
 		{140, "item_sheet", pgItemSheetSchema, ""},
 		{141, "item_variations", pgItemVariationsSchema, ""},
 		{142, "fit_browse", pgFitBrowseSchema, ""},
+		{143, "fit_browse_by_group", pgFitBrowseByGroupSchema, ""},
 		{144, "swarm_probation", pgSwarmProbationSchema, ""},
 	}
 }

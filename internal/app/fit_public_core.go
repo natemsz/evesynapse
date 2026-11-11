@@ -46,7 +46,7 @@ func (app *Application) PublicFitBody(ctx context.Context, fitID int64, updatedA
 	if doc.ShipTypeID == 0 {
 		doc.ShipTypeID = shipTypeID
 	}
-	cost := app.fitBuilder().FitCost(ctx, &doc)
+	cost := app.fitBuilder().FitCost(ctx, &doc, nil)
 	body := module.PublicFitBody{PriceKnown: cost.Known, PriceRaw: cost.TotalRaw, PriceTotal: cost.Total}
 	if stored, ok := app.loadPublicFitStored(ctx, fitID, updatedAt); ok {
 		body.Sections, body.EFT = stored.Sections, stored.EFT
@@ -55,7 +55,7 @@ func (app *Application) PublicFitBody(ctx context.Context, fitID int64, updatedA
 			// a copy, as the tool's own workbench made read-only.
 			sim := *stored.Sim
 			sim.ReadOnly = true
-			sim.Cost = cost
+			sim.Cost = app.fitBuilder().FitCost(ctx, &doc, sim.FamilyOf())
 			body.Sim = &sim
 		}
 	} else {

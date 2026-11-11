@@ -13,6 +13,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fit"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 )
 
@@ -292,14 +293,30 @@ type FitSlotChip struct {
 	Name      string
 	Qty       int
 	State     string
-	Sub       string // the first stats from the tooltip, one line under the name
-	TipLines  string // serialized FitTipLine rows for the tooltip
+	Sub       []FitTipLine // the first stats from the tooltip, one line under the name
+	TipLines  string       // serialized FitTipLine rows for the tooltip
 	StatesCSV string
 	SubSlot   int64 // a subsystem's slot kind (subSystemSlot), 0 for anything else
 	// Home is the rack a cargo line's module fits in ("" for a line
 	// on the hull, or for a type that only ever sits in cargo), so
 	// the editor can drag it back onto its rack.
 	Home string
+}
+
+// fitAddLabels names what a rack's add line adds.
+var fitAddLabels = map[string]string{
+	FitFamilyHigh: "a high slot module", FitFamilyMedium: "a mid slot module",
+	FitFamilyLow: "a low slot module", FitFamilyRig: "a rig", FitFamilySubsystem: "a subsystem",
+}
+
+// EmptyLine is the rack's one line for its free slots:
+// "5 free, add a high slot module".
+func (g FitSlotGroup) EmptyLine() string {
+	what := fitAddLabels[g.Key]
+	if what == "" {
+		what = "an item"
+	}
+	return fmt.Sprintf("%d free, add %s", len(g.Empty), what)
 }
 
 // FitSlotGroup is one row of the slot grid.
@@ -311,7 +328,7 @@ type FitSlotGroup struct {
 	HasMax bool
 	Over   bool
 	Chips  []FitSlotChip
-	Empty  []int // empty slot buttons to render (slot ordinals)
+	Empty  []int // the free slots (ordinals); the rack shows one add line for them
 	// ReadOnly mirrors the workbench's, so the shared group template
 	// (fit_workbench.html "fit-group") can drop editing controls.
 	ReadOnly bool
@@ -321,6 +338,18 @@ type FitSlotGroup struct {
 // cargo) rather than fitted slots: the workbench shows bays under the
 // ring on a wide screen, slots beside it.
 func FitBayGroup(key string) bool { return key == "drone" || key == "fighter" || key == "cargo" }
+
+// ImplantsEdited reports whether the implant slots differ from
+// the clone's own set or need the pilot's attention, which keeps
+// the implant list open instead of folded to one line.
+func (v *FitSimView) ImplantsEdited() bool {
+	for _, s := range v.Implants {
+		if s.Overridden || s.Missing {
+			return true
+		}
+	}
+	return false
+}
 
 // ImplantsUsed counts the filled implant slots.
 func (v *FitSimView) ImplantsUsed() int {
@@ -536,21 +565,22 @@ type FitTipLine struct {
 	Label string
 	Value string
 	Class string
+	Kind  string // the glyph and colour the figure wears (FitGlyphKind)
 }
 
 // FitChipSub is a module row's one-line summary: its first two
 // tooltip stats ("Optimal 2.4 km · Falloff 8.4 km").
-func FitChipSub(lines []FitTipLine) string {
-	var parts []string
+func FitChipSub(lines []FitTipLine) []FitTipLine {
+	var out []FitTipLine
 	for _, l := range lines {
-		if len(parts) == 2 {
+		if len(out) == 2 {
 			break
 		}
 		if l.Label != "" && l.Value != "" {
-			parts = append(parts, l.Label+" "+l.Value)
+			out = append(out, l)
 		}
 	}
-	return strings.Join(parts, " · ")
+	return out
 }
 
 // FitTipLinesString serializes tooltip rows for the data
@@ -561,10 +591,29 @@ func FitChipSub(lines []FitTipLine) string {
 func FitTipLinesString(lines []FitTipLine) string {
 	parts := make([]string, len(lines))
 	for i, l := range lines {
-		parts[i] = l.Label + "|" + l.Value + "|" + l.Class
+		parts[i] = l.Label + "|" + l.Value + "|" + l.Class + "|" + l.Kind
 	}
 	return strings.Join(parts, ";")
 }
+
+// fitGlyphKinds maps a figure's label to its glyph kind. One map
+// for every surface that shows these figures: tooltips, rack rows,
+// search and Browse rows, the stats column.
+var fitGlyphKinds = map[string]string{
+	"DPS": "weapon", "Volley": "weapon", "Rate of fire": "weapon", "Damage": "weapon",
+	"Optimal": "optimal", "Falloff": "falloff", "Tracking": "tracking",
+	"Neuts": "capacitor", "Cap": "capacitor", "Capacitor": "capacitor", "Cap recharge": "capacitor",
+	"Armor HP": "armor", "Shield HP": "shield", "Shield recharge": "shield",
+	"Armor repair": "repair", "Shield boosting": "shieldboost",
+	"Boost": "navigation", "Strength": "navigation", "Signature": "navigation",
+	"CPU": "cpu", "PG": "powergrid", "Powergrid": "powergrid", "Calibration": "calibration",
+	"High slots": "fitting", "Mid slots": "fitting", "Low slots": "fitting",
+	"Turrets": "fitting", "Launchers": "fitting",
+}
+
+// FitGlyphKind is the glyph kind for a figure's label, "" when it
+// has none.
+func FitGlyphKind(label string) string { return fitGlyphKinds[label] }
 
 // FitTipClass colors an effective value against its base:
 // higherBetter says which direction counts as an improvement
@@ -646,7 +695,11 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 	var lines []FitTipLine
 	add := func(label, value, class string) {
 		if len(lines) < FitTipMaxLines {
-			lines = append(lines, FitTipLine{label, value, class})
+			kind := FitGlyphKind(label)
+			if kind == "" && strings.HasPrefix(class, "res-") {
+				kind = "bonus" // a resist bonus row
+			}
+			lines = append(lines, FitTipLine{label, value, class, kind})
 		}
 	}
 	// A subsystem's mark on the hull: the slots and hardpoints it
@@ -722,6 +775,12 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 					class = FitTipClass(amt/cyc, base[repAttr]/bc, true)
 				}
 				add("Reps", FitVisualNum(amt/cyc)+" HP/s", class)
+				if n := len(lines); n > 0 && lines[n-1].Label == "Reps" {
+					lines[n-1].Kind = "repair" // a wrench for repairs
+					if repAttr == fit.AttrShieldBonus {
+						lines[n-1].Kind = "shieldboost"
+					}
+				}
 			}
 			break
 		}
@@ -1177,8 +1236,6 @@ type FitStatsView struct {
 	Fighters      string // squadrons launched and tubes
 	FighterHangar string
 	FighterSalvo  string // "" without a salvo ability launched
-	Hardpoints    string // "Turrets 3/4 · Launchers 0/0"
-	HPOver        bool
 	Calibration   string
 	CalibOver     bool
 	SlotLine      string // "High 3/3 · Medium 2/3 · Low 1/2 · Rigs 0/3"
@@ -1443,7 +1500,8 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 	state, _ := json.Marshal(doc)
 	view.StateJSON = string(state)
 	// What the fit costs, the one composition every page shows.
-	view.Cost = app.FitCost(ctx, doc)
+	// (split by part once the lines' families are known, below).
+	view.Cost = app.FitCost(ctx, doc, nil)
 	if doc.ShipTypeID <= 0 {
 		return view
 	}
@@ -1545,6 +1603,7 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 	}
 
 	view.Groups = FitBuildGroups(res, doc, snap, familyOf, nameOf, view.SupportsSubsystems)
+	view.Cost = app.FitCost(ctx, doc, func(id int64) string { return familyOf[id] })
 	view.Visual = FitBuildVisual(res, doc, snap, familyOf, nameOf, view.SupportsSubsystems)
 	view.DroneBWNum = res.DroneBandwidth
 	view.DroneBayNum = res.DroneBayCapacity
@@ -1560,7 +1619,7 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 		skillItems = append(skillItems, fit.ItemInput{TypeID: id, Quantity: 1})
 	}
 	view.Missing = FitMissingList(ctx, app, snap, doc, skillItems, levels, pilotID)
-	view.Notes = FitPlainNotes(res.Unmodeled)
+	view.Notes = FitPlainNotes(res.Unmodeled, res.UnmodeledBy, nameOf)
 	view.RestrictedJSON = app.FitRestrictedJSON(ctx, res.Restricted, nameOf)
 	for _, r := range res.Restricted {
 		view.Notes = append(view.Notes,
@@ -1944,7 +2003,7 @@ func (app *Builder) FitBuildChargeSets(ctx context.Context, doc *FitDoc, snap *f
 
 // FitPlainNotes turns the engine's unmodeled-shape list into a
 // few plain-language lines (never the raw engine strings).
-func FitPlainNotes(raw []string) []string {
+func FitPlainNotes(raw []string, by []int64, nameOf func(int64) string) []string {
 	var notes []string
 	add := func(s string) {
 		for _, n := range notes {
@@ -1954,18 +2013,64 @@ func FitPlainNotes(raw []string) []string {
 		}
 		notes = append(notes, s)
 	}
+	// names lists the distinct names of ids, at most three, then
+	// "and N more".
+	names := func(ids []int64) (string, int) {
+		var list []string
+		seen := map[string]bool{}
+		for _, id := range ids {
+			if n := nameOf(id); n != "" && !seen[n] {
+				seen[n] = true
+				list = append(list, n)
+			}
+		}
+		more := 0
+		if len(list) > 3 {
+			more = len(list) - 3
+			list = list[:3]
+		}
+		out := strings.Join(list, ", ")
+		if more > 0 {
+			out += fmt.Sprintf(" and %d more", more)
+		}
+		return out, len(list) + more
+	}
+	its := func(n int) string {
+		if n > 1 {
+			return "their"
+		}
+		return "its"
+	}
+	// The engine's no-charge notes carry the weapon's type ID.
+	var turrets, launchers []int64
+	generic := false
 	for _, s := range raw {
+		var id int64
 		switch {
 		case strings.Contains(s, "has no charge selected"):
-			add("Damage from turrets with no ammunition picked isn't counted yet. Pick an ammo type to include it.")
+			if _, err := fmt.Sscanf(s, "turret type %d", &id); err == nil {
+				turrets = append(turrets, id)
+			}
 		case strings.Contains(s, "has no missile selected"):
-			add("Damage from launchers with no missiles picked isn't counted yet. Pick a missile type to include it.")
+			if _, err := fmt.Sscanf(s, "launcher type %d", &id); err == nil {
+				launchers = append(launchers, id)
+			}
 		default:
-			add("A few effects on this fit aren't fully calculated yet, so some bonuses may be missing.")
+			generic = true
 		}
 	}
-	if len(notes) > 4 {
-		notes = notes[:4]
+	if who, n := names(turrets); n > 0 {
+		add("No ammunition picked for " + who + ", so " + its(n) + " damage isn't counted yet.")
+	}
+	if who, n := names(launchers); n > 0 {
+		add("No missiles picked for " + who + ", so " + its(n) + " damage isn't counted yet.")
+	}
+	if generic {
+		if who, _ := names(by); who != "" {
+			add("Some effects of " + who + " aren't fully calculated yet, so those bonuses may be missing.")
+		} else {
+			add("A few effects on this fit aren't fully calculated yet, so some bonuses may be missing.")
+		}
 	}
 	return notes
 }
@@ -2179,9 +2284,6 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 		}
 	}
 
-	st.Hardpoints = fmt.Sprintf("Turrets %d/%d · Launchers %d/%d",
-		res.TurretHardpointsUsed, res.TurretHardpoints, res.LauncherHardpointsUsed, res.LauncherHardpoints)
-	st.HPOver = res.TurretHardpointsUsed > res.TurretHardpoints || res.LauncherHardpointsUsed > res.LauncherHardpoints
 	st.Calibration = fmt.Sprintf("%s / %s", FitFmt0(res.CalibrationUsed), FitFmt0(res.CalibrationMax))
 	st.CalibOver = res.CalibrationUsed > res.CalibrationMax && res.CalibrationMax > 0
 	st.SlotLine = fmt.Sprintf("High %d/%d · Mid %d/%d · Low %d/%d · Rigs %d/%d",
@@ -2652,6 +2754,19 @@ type FitCostView struct {
 	HullRaw  float64
 	PartsRaw float64
 	Unpriced int // lines no house price source knows (hull included)
+	// Lines is the total split by part (hull, modules, rigs,
+	// drones, cargo), each with its share of the total; empty
+	// parts are left out.
+	Lines []FitCostLine
+}
+
+// FitCostLine is one part of a fit's cost.
+type FitCostLine struct {
+	Key   string // hull, module, rig, drone, cargo
+	Label string
+	Value string  // compact ISK
+	Pct   float64 // share of the total, 0 to 100
+	X     float64 // where its bar segment starts, 0 to 100
 }
 
 // FitUnitPrice resolves one unit's price for fit valuation in
@@ -2682,7 +2797,7 @@ func FitUnitPrice(typicals, trueValues map[int64]float64, typeID int64) (float64
 // hull plus every item line. Known is false when nothing in it
 // is priced (no sweep or estimate stored yet); the browser
 // treats a 0 total as unknown.
-func (app *Builder) FitCost(ctx context.Context, doc *FitDoc) *FitCostView {
+func (app *Builder) FitCost(ctx context.Context, doc *FitDoc, familyOf func(int64) string) *FitCostView {
 	c := &FitCostView{}
 	typicals := app.env.TypicalSells(ctx)
 	trueValues := app.env.TrueValues(ctx)
@@ -2694,12 +2809,20 @@ func (app *Builder) FitCost(ctx context.Context, doc *FitDoc) *FitCostView {
 	} else {
 		c.Unpriced++
 	}
+	part := map[string]float64{}
 	for _, it := range doc.Items {
-		if p, ok := FitUnitPrice(typicals, trueValues, it.TypeID); ok {
-			c.PartsRaw += float64(it.Qty) * p
-		} else {
+		p, ok := FitUnitPrice(typicals, trueValues, it.TypeID)
+		if !ok {
 			c.Unpriced++
+			continue
 		}
+		v := float64(it.Qty) * p
+		c.PartsRaw += v
+		key := "other"
+		if familyOf != nil {
+			key = fitCostPart(familyOf(it.TypeID), it.Cargo)
+		}
+		part[key] += v
 	}
 	c.TotalRaw = c.HullRaw + c.PartsRaw
 	if c.TotalRaw > 0 {
@@ -2707,8 +2830,58 @@ func (app *Builder) FitCost(ctx context.Context, doc *FitDoc) *FitCostView {
 		c.Hull = esi.FormatISK(c.HullRaw)
 		c.Parts = esi.FormatISK(c.PartsRaw)
 		c.Total = esi.FormatISK(c.TotalRaw)
+		line := func(key, label string, v float64) {
+			if v > 0 {
+				x := 0.0
+				if n := len(c.Lines); n > 0 {
+					x = c.Lines[n-1].X + c.Lines[n-1].Pct
+				}
+				c.Lines = append(c.Lines, FitCostLine{Key: key, Label: label, Value: humanize.ISKCompact(v), Pct: v * 100 / c.TotalRaw, X: x})
+			}
+		}
+		line("hull", "Hull", c.HullRaw)
+		line("module", "Modules", part["module"])
+		line("rig", "Rigs", part["rig"])
+		line("drone", "Drones", part["drone"])
+		line("cargo", "Cargo", part["cargo"])
+		line("module", "Fittings", part["other"])
 	}
 	return c
+}
+
+// fitCostPart is the cost part a line counts toward.
+func fitCostPart(family string, cargo bool) string {
+	switch {
+	case cargo:
+		return "cargo"
+	case family == FitFamilyHigh || family == FitFamilyMedium || family == FitFamilyLow || family == FitFamilySubsystem:
+		return "module"
+	case family == FitFamilyRig:
+		return "rig"
+	case family == FitFamilyDrone || family == FitFamilyFighter:
+		return "drone"
+	case family == FitFamilyCargo:
+		return "cargo"
+	}
+	return "other"
+}
+
+// FamilyOf reads each line's family back from the view's slot
+// groups, for a cost split without the engine (nil for a view
+// that has none).
+func (v *FitSimView) FamilyOf() func(int64) string {
+	if v == nil || len(v.Groups) == 0 {
+		return nil
+	}
+	fam := map[int64]string{}
+	for _, g := range v.Groups {
+		for _, c := range g.Chips {
+			if _, seen := fam[c.TypeID]; !seen {
+				fam[c.TypeID] = g.Key
+			}
+		}
+	}
+	return func(id int64) string { return fam[id] }
 }
 
 // FitDocPrice is FitCost's total, stored on the fit for the
@@ -2716,7 +2889,7 @@ func (app *Builder) FitCost(ctx context.Context, doc *FitDoc) *FitCostView {
 // makes the same sum in SQL whenever prices refresh
 // (RepriceLocalFittings): change both together.
 func (app *Builder) FitDocPrice(ctx context.Context, doc *FitDoc) float64 {
-	return app.FitCost(ctx, doc).TotalRaw
+	return app.FitCost(ctx, doc, nil).TotalRaw
 }
 
 // Env is what the foundation needs from the application that is not the

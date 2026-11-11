@@ -875,12 +875,6 @@ const (
 // notifyPrunedAt is when the clean-up last ran (unix seconds).
 var notifyPrunedAt atomic.Int64
 
-// notifyPass runs after a refresh cycle: for every account with
-// characters, turn what is newly true into notifications.
-func (app *Application) notifyPass(ctx context.Context, characters []db.Character, now time.Time) (created int) {
-	return app.notifyAccounts(ctx, characters, now, nil)
-}
-
 // notifyAccounts is the pass itself. quiet, when given, says which
 // accounts need only their ops looked at this time (notify_quiet.go).
 func (app *Application) notifyAccounts(ctx context.Context, characters []db.Character, now time.Time, quiet func(userID int64, chars []db.Character) bool) (created int) {

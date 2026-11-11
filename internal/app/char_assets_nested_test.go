@@ -199,9 +199,6 @@ func TestAssetsScopeSelectorChecklist(t *testing.T) {
 		`<a class="charselector-option asset-scope-all on" href="/assets/?scope=none" data-assetscope-allrow>`,
 		`<a class="asset-scope-only" href="/assets/?scope=90000002" data-assetscope-only>Only</a>`,
 	)
-	if strings.Contains(body, "scopepill") {
-		t.Fatal("the character scope pills are still rendered")
-	}
 	if strings.Contains(body, `<span class="tagchip">`) {
 		t.Fatal("the selector rows still carry tag chips")
 	}

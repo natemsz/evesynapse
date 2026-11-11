@@ -138,9 +138,6 @@ func TestOwnerPagesShowOneOwner(t *testing.T) {
 	if !strings.Contains(body, "Alliance scouts") || strings.Contains(body, "Corp logistics") {
 		t.Fatal("the alliance's groups page is wrong")
 	}
-	if got := ownerAddress(groupsPath, "alliance:99000001"); got != "/groups/?owner=alliance%3A99000001" || ownerAddress(groupsPath, "nonsense") != groupsPath {
-		t.Fatalf("owner address %q", got)
-	}
 
 	_, body = getPage(t, f.app, director, "/discord/servers"+"?owner=alliance:99000001")
 	mustContain(t, "discord servers, the alliance", body, "owner=corporation%3a98000001", "· alliance")

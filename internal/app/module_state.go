@@ -4,8 +4,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-
-	db "evesynapse/internal/db/sqlc"
 )
 
 // moduleState says how much of a module a character's granted scopes
@@ -66,19 +64,6 @@ func (m moduleDef) statusFor(granted map[string]bool) moduleStatus {
 	return st
 }
 
-// characterModuleStates returns every manifest module's status for ch,
-// keyed by module id. Corp modules reflect the token's scopes only;
-// the in-corporation role they also need is not visible in scopes.
-func characterModuleStates(ch db.Character) map[string]moduleStatus {
-	granted := scopeSet(ch.Scopes)
-	defs := moduleDefs()
-	out := make(map[string]moduleStatus, len(defs))
-	for _, m := range defs {
-		out[m.ID] = m.statusFor(granted)
-	}
-	return out
-}
-
 // lockedNotice is the view model for the "locked-notice" template
 // partial: what a locked or limited module is missing and what
 // granting it adds.
@@ -88,26 +73,6 @@ type lockedNotice struct {
 	Scopes        []scopeUse // the missing scopes whose Unlocks text is listed
 	CharacterName string
 	RelinkURL     string
-}
-
-// notice builds the partial's view model for module m on character
-// name, or nil when the module is fully enabled and there is nothing
-// to say. A locked module lists its missing required scopes; a limited
-// one lists the optional scopes that would light up more of it.
-func (st moduleStatus) notice(m moduleDef, characterID int64, name string) *lockedNotice {
-	n := &lockedNotice{CharacterName: name, RelinkURL: relinkURL(m.ID, characterID)}
-	switch st.State {
-	case moduleLocked:
-		n.Locked = true
-		n.Heading = m.Title + " is locked for this character."
-		n.Scopes = st.MissingRequired
-	case moduleLimited:
-		n.Heading = m.Title + " is limited for this character."
-		n.Scopes = st.MissingOptional
-	default:
-		return nil
-	}
-	return n
 }
 
 // relinkURL is the sign-in link that asks for just module id's scopes

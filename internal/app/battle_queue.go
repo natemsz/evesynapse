@@ -265,13 +265,6 @@ func (q *battleQueue) run(ctx context.Context, n int, read func(context.Context,
 	wg.Wait()
 }
 
-// drain reads every waiting log in the calling goroutine.
-func (q *battleQueue) drain(ctx context.Context, read func(context.Context, *battleJob) battleResult) {
-	for j := q.next(); j != nil; j = q.next() {
-		q.read(ctx, j, read)
-	}
-}
-
 func (q *battleQueue) read(ctx context.Context, j *battleJob, read func(context.Context, *battleJob) battleResult) {
 	rctx, cancel := context.WithTimeout(ctx, battleReadTimeout)
 	defer cancel()

@@ -2,6 +2,7 @@ package app
 
 import (
 	"evesynapse/internal/app/module"
+	"evesynapse/internal/eveimg"
 	"fmt"
 	"html"
 	"html/template"
@@ -319,6 +320,8 @@ func linkFuncMap() template.FuncMap {
 		"structureLink":     structureLink,
 		"placeLink":         placeLink,
 		"skillLevel":        skillLevel,
+		// Not a link: a type's 3D render on the image server.
+		"typeRender": eveimg.TypeRender,
 		// Not links: a formatted ISK amount in the house money
 		// format (see core_iskfig.go).
 		"iskFig":  iskFig,

@@ -202,7 +202,7 @@
           </div>{{end}}
         </div>
       </div>
-      {{if $s.RollCatalog}}<script type="application/json" id="cs-roll-catalog">{{$s.RollCatalog}}</script>{{end}}{{end}}
+      {{if $s.RollCatalogURL}}<template id="cs-roll-catalog" data-src="{{$s.RollCatalogURL}}"></template>{{end}}{{end}}
     </section>
 
     <section class="cs-drawer" data-drawer-panel="couriers"{{if ne $s.OpenDrawer "couriers"}} hidden{{end}}>

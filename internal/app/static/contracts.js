@@ -5,6 +5,18 @@
 // every control is a real form field, and everything the JS
 // arranges still submits through the one search form.
 (function () {
+  // fetchRollCatalog reads a catalog file once per address for the
+  // page's life (swaps reuse it); a failed read resolves empty.
+  var rollCatalogFetches = {};
+  function fetchRollCatalog(src) {
+    if (!src) return Promise.resolve([]);
+    if (!rollCatalogFetches[src]) {
+      rollCatalogFetches[src] = fetch(src, { credentials: "same-origin" }).then(function (r) {
+        return r.ok ? r.json() : [];
+      }).catch(function () { delete rollCatalogFetches[src]; return []; });
+    }
+    return rollCatalogFetches[src];
+  }
   "use strict";
 
   function applyMeters(root) {
@@ -298,17 +310,22 @@
   // ---- roll band catalog and dynamic sliders -----------------------------
   // The drawer carries roll sliders per rollable attribute.
   // The catalog carries every family's rollable attributes,
-  // value ranges, and meta variant marks as JSON (#cs-roll-catalog).
+  // value ranges, and meta variant marks as JSON, read from the
+  // versioned file #cs-roll-catalog links (browsers keep it). Until
+  // it arrives, or if it never does, the server-drawn drawer stays
+  // as it is.
   // Track gradients fill dynamically between min and max handles,
   // readouts show actual rolled values with units, and clicking
   // a meta variant mark sets the min bound to that variant.
   var catalogByFamily = {};
   var rollCatalog = {};
   var rollMetaByFamily = {};
+  var rollCatalogReady = false;
   var rollCatalogEl = document.getElementById("cs-roll-catalog");
-  if (rollCatalogEl) {
-    try {
-      JSON.parse(rollCatalogEl.textContent).forEach(function (g) {
+  var rollCatalogLoad = null;
+  if (rollCatalogEl && window.fetch) {
+    rollCatalogLoad = fetchRollCatalog(rollCatalogEl.getAttribute("data-src")).then(function (list) {
+      (list || []).forEach(function (g) {
         catalogByFamily[g.family] = g;
         rollCatalog[g.family] = g.attrs || [];
         if (g.meta && g.meta.length) {
@@ -317,7 +334,8 @@
           rollMetaByFamily[g.family] = mMap;
         }
       });
-    } catch (e) { /* a bad catalog leaves the server split in place */ }
+      rollCatalogReady = true;
+    });
   }
 
   function formatRollStat(v, unit) {
@@ -572,6 +590,7 @@
   }
 
   function syncAbyssalState(sourceChange) {
+    if (!rollCatalogReady) return;
     var fam = familySelect ? familySelect.value : "";
     var g = catalogByFamily[fam];
     var hasFamily = Boolean(fam && g);
@@ -710,8 +729,8 @@
       syncAbyssalState(true);
     });
   }
-  if (familySelect) {
-    syncAbyssalState(false);
+  if (familySelect && rollCatalogLoad) {
+    rollCatalogLoad.then(function () { syncAbyssalState(false); });
   }
 
   // ---- security floor readout -------------------------------------------
@@ -827,30 +846,14 @@
   // until it has been seen; the page keeps its page size, so the
   // oldest rows drop off the bottom. The newest contract seen is
   // remembered, so coming back highlights what arrived meanwhile.
-  var SEEN_KEY = "cs-seen";
+  var seenStore = window.esLive.seen("cs-seen");
   var liveSource = null;
 
-  function readSeen() {
-    try {
-      var v = localStorage.getItem(SEEN_KEY);
-      return v === null ? null : +v || 0;
-    } catch (err) {
-      return null;
-    }
-  }
-  function noteSeen(id) {
-    try {
-      var prev = readSeen();
-      if (prev === null || id > prev) localStorage.setItem(SEEN_KEY, String(id));
-    } catch (err) {
-      /* storage off: highlights still fade, nothing is remembered */
-    }
-  }
   function contractID(row) {
     return +row.getAttribute("data-contract") || 0;
   }
   function markLive(row) {
-    window.esLive.mark(row, function (r) { noteSeen(contractID(r)); });
+    seenStore.live(row, contractID);
   }
 
   // markUnseen highlights the rows that arrived since the listing
@@ -858,14 +861,7 @@
   function markUnseen(body) {
     if (body.getAttribute("data-cs-seen") === "1") return;
     body.setAttribute("data-cs-seen", "1");
-    var prev = readSeen();
-    var newest = 0;
-    body.querySelectorAll("tr.cs-row").forEach(function (row) {
-      var id = contractID(row);
-      if (id > newest) newest = id;
-      if (prev !== null && id > prev) markLive(row);
-    });
-    if (prev === null && newest) noteSeen(newest);
+    seenStore.markNew(body.querySelectorAll("tr.cs-row"), contractID, 0);
   }
 
   function applyLiveRows(ev) {

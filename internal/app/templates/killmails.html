@@ -99,7 +99,7 @@
   <aside class="l-pane l-pane--insp insp km-insp" aria-label="Kill">
     <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{.CloseHref}}">Killmails</a><a class="l-close" href="{{.CloseHref}}" aria-label="Close the kill">&#10005;</a></div>
     <div class="insp-head">
-      <span class="amx-art big"><img src="https://images.evetech.net/types/{{.Row.ShipTypeID}}/render?size=128" alt="" width="72" height="72" loading="lazy"></span>
+      <span class="amx-art big"><img src="{{typeRender .Row.ShipTypeID 128}}" alt="" width="72" height="72" loading="lazy"></span>
       <div class="insp-titles"><h3>{{itemLink .Row.ShipTypeID .Row.Ship}}</h3><p class="amx-msub">{{if .Row.Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}} {{with .Page}}{{if .ShipGroup}}{{.ShipGroup}} · {{end}}{{end}}{{.Row.Time}}</p></div>
     </div>
     {{with .Page}}

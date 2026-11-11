@@ -15,6 +15,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/itemsheet"
 	"evesynapse/internal/logging"
 )
 
@@ -187,10 +188,21 @@ type itemTypeDetail struct {
 	ArtURL      string
 	ArtFallback string
 
-	// CCP's published prices, shown on the public ship page only:
-	// the rates insurance is paid against. Never a price elsewhere.
+	// IsShip marks a hull: the page adds its Insurance figures and
+	// its public fits.
+	IsShip bool
+
+	// CCP's published prices, shown for ships only, under
+	// Insurance: the rates insurance is paid against. Never a
+	// price anywhere.
 	AveragePrice  string // "" when unknown
 	AdjustedPrice string
+
+	// ShipFits are the hull's most-viewed public fits and
+	// ShipFitsURL the fit browser filtered to the hull; both empty
+	// unless the public fits module is compiled in.
+	ShipFits    []publicFitCard
+	ShipFitsURL string
 
 	// The worker's true value (truevalue.go), present only
 	// for types the market cannot price: the build cost and
@@ -266,6 +278,9 @@ func (app *Application) itemsHeadMeta(view *itemsView) template.HTML {
 		if d := view.TypeDetail; d != nil {
 			title = d.Name
 			desc = "Market orders, price history and trade data for " + d.Name + ", refreshed from ESI. Part of EveSynapse's EVE Online market tools."
+			if d.IsShip {
+				desc = d.Name + " stats, bonuses, market prices and community fittings in EveSynapse's EVE Online fitting and market tools."
+			}
 			path = "/items/type/" + idString(d.ID) + "/"
 			crumbs = []module.Breadcrumb{{Name: "Item Database", Path: "/items/"}}
 			if d.Category != nil {
@@ -707,6 +722,18 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if detail.IsShip && moduleCompiledIn("publicfits") {
+		detail.ShipFitsURL = publicFitsPath + "?hullq=" + url.QueryEscape(detail.Name)
+		rows, err := app.queries.ListPublicFitsForShip(ctx, db.ListPublicFitsForShipParams{ShipTypeID: typeID, Limit: 12})
+		if err != nil {
+			logging.Errorf("items: public fits for %d: %v", typeID, err)
+		}
+		userID := app.userID(ctx)
+		for _, row := range rows {
+			detail.ShipFits = append(detail.ShipFits, publicFitCardOf(db.ListPublicFitsRow(row), userID))
+		}
+	}
+
 	view.TypeDetail = detail
 	data.Items = view
 	data.HeadMeta = app.itemsHeadMeta(view)
@@ -750,7 +777,11 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 	detail.HasDescription = detail.DescState == "ready"
 	detail.DescriptionPending = detail.DescState == "pending"
 
-	if p, ok := app.cachedPrices()[typeID]; ok {
+	// CCP's figures, for a hull's Insurance only: the live guide
+	// or the worker's stored copy (the live one is empty after a
+	// restart until the next refresh window).
+	isShip := detail.Category != nil && detail.Category.ID == itemsheet.CategoryShip
+	if p, ok := app.valuationPrices(ctx)[typeID]; ok && isShip {
 		if p.AveragePrice > 0 {
 			detail.AveragePrice = esi.FormatISK(p.AveragePrice)
 		}
@@ -781,6 +812,7 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 	if detail.Category != nil {
 		categoryID = detail.Category.ID
 	}
+	detail.IsShip = isShip
 	detail.Sheet = app.buildItemSheetView(ctx, typeID, categoryID)
 
 	if bp, berr := app.queries.GetSDEBlueprintForProduct(ctx, typeID); berr == nil {

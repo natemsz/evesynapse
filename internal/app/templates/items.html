@@ -194,6 +194,32 @@
 </section>
 {{end}}
 
+{{if and $d.IsShip (or $d.AveragePrice $d.AdjustedPrice)}}
+<section class="l-panel ib-insure">
+  <h3>Insurance</h3>
+  <dl class="is-dl">
+    {{if $d.AveragePrice}}<div><dt>CCP average price</dt><dd>{{$d.AveragePrice}}</dd></div>{{end}}
+    {{if $d.AdjustedPrice}}<div><dt>CCP adjusted price</dt><dd>{{$d.AdjustedPrice}}</dd></div>{{end}}
+  </dl>
+  <p class="ib-note">CCP's published figures for this hull, the rates insurance pays against. They are not market prices.</p>
+</section>
+{{end}}
+
+{{if $d.ShipFitsURL}}
+<section class="l-panel">
+  <h3>Public fits for this hull{{if $d.ShipFits}} <small>{{len $d.ShipFits}}</small>{{end}}</h3>
+  {{if $d.ShipFits}}<div class="fit-cards">
+  {{range $d.ShipFits}}<article class="fit-card ib-fit">
+    <div class="fit-card-body">
+      <h4><a href="{{.FitURL}}">{{.Name}}</a></h4>
+      <p class="fit-card-line">{{if .StarCount}}<span class="badge wait">{{printf "%.1f" .Stars}} ★ ({{.StarCount}})</span> {{end}}<small>{{.Views}} views</small>{{if .PriceKnown}} <small>{{.PriceLine}}</small>{{end}}{{if .Mine}} <small>Yours</small>{{else if .Author}} <small>by {{.Author}}</small>{{end}}</p>
+    </div>
+  </article>{{end}}
+  </div>{{else}}<p class="ib-empty">No public fits for this hull yet.</p>{{end}}
+  <p class="ib-note"><a href="{{$d.ShipFitsURL}}">All {{$d.Name}} fits in the fit browser</a></p>
+</section>
+{{end}}
+
 {{if $d.UsedIn}}
 <section class="l-panel">
   <h3>Used in <small>{{len $d.UsedIn}}{{if $d.UsedInMore}}+{{end}} products</small></h3>

@@ -16,8 +16,8 @@ import (
 	"evesynapse/internal/logging"
 )
 
-// itemSheetView is a type's stats as the item page and the public
-// ship page show them, built from its stored item sheet.
+// itemSheetView is a type's stats as the item page shows them, built
+// from its stored item sheet.
 type itemSheetView struct {
 	IsShip       bool
 	Slots        []itemSlotTile

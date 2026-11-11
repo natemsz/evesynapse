@@ -27,7 +27,7 @@ func (app *Application) publicPage(ctx context.Context) pageData {
 // canonical and twitter card the mechanism adds).
 
 // publicFitsPath, publicFitCard and publicFitCardOf are the public fits
-// module's card, read by the ship pages.
+// module's card, read by the item page of a ship.
 const publicFitsPath = module.PublicFitsPath
 
 type publicFitCard = module.PublicFitCard

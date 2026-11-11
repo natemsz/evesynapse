@@ -59,9 +59,6 @@ type pageData struct {
 	// Link is the sign-up and character-link chooser (/auth/link).
 	Link *linkView
 
-	// PublicShip is one /ships/ page.
-	PublicShip *publicShipView
-
 	// CorpSettings is the /corporations/settings/ page (corp_select.go).
 	CorpSettings *corpSettingsView
 
@@ -178,7 +175,7 @@ func sectionForPage(page string) string {
 	case "market.html", "market_trends.html", "market_lp.html", "market_baskets.html", "market_basket.html",
 		"profit.html", "system.html", "station.html", "structure.html", "region.html":
 		return "market"
-	case "items.html", "ship_public.html":
+	case "items.html":
 		return "tools"
 	case "corporations.html", "corporation.html", "alliance.html", "corp_settings.html":
 		return "corporation"

@@ -155,7 +155,10 @@ func (app *Application) buildSitemap(ctx context.Context, origin string) ([]byte
 	if err != nil {
 		return nil, err
 	}
+	// Hulls with public fits are listed with the busiest items, once.
+	listed := make(map[int64]bool, len(items))
 	for _, it := range items {
+		listed[it.TypeID] = true
 		urls = append(urls, sitemapURL{
 			Loc:        origin + "/items/type/" + idString(it.TypeID) + "/",
 			ChangeFreq: "weekly",
@@ -167,8 +170,11 @@ func (app *Application) buildSitemap(ctx context.Context, origin string) ([]byte
 		return nil, err
 	}
 	for _, sh := range ships {
+		if listed[sh.ShipTypeID] {
+			continue
+		}
 		urls = append(urls, sitemapURL{
-			Loc:        origin + "/ships/" + idString(sh.ShipTypeID) + "/",
+			Loc:        origin + "/items/type/" + idString(sh.ShipTypeID) + "/",
 			ChangeFreq: "weekly",
 			Priority:   "0.6",
 		})

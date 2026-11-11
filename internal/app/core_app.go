@@ -1119,7 +1119,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/sitemap.xml", app.handleSitemap)
 
 	r.Route("/ships", func(r chi.Router) {
-		r.With(anonPages).Get("/{typeID}/", app.handlePublicShip)
+		r.With(anonPages).Get("/{typeID}/", app.handleShipRedirect)
 	})
 
 	r.Route("/killmails", func(r chi.Router) {

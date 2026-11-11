@@ -1444,7 +1444,7 @@
     var box = root.querySelector("[data-beaten-filter]");
     if (!box || box.hasAttribute("data-beaten-ready")) return;
     box.setAttribute("data-beaten-ready", "1");
-    var section = box.closest("section");
+    var section = document.getElementById(box.getAttribute("data-beaten-filter")) || box.closest("section");
     if (!section) return;
     var rows = section.querySelectorAll("tbody tr");
     box.addEventListener("change", function () {

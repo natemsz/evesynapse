@@ -262,6 +262,7 @@ type FitSlotChip struct {
 	Sub       string // the first stats from the tooltip, one line under the name
 	TipLines  string // serialized FitTipLine rows for the tooltip
 	StatesCSV string
+	SubSlot   int64 // a subsystem's slot kind (subSystemSlot), 0 for anything else
 }
 
 // FitSlotGroup is one row of the slot grid.
@@ -833,12 +834,14 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 			ordinals[it.TypeID]++
 		}
 	}
+	// A strategic cruiser shows its four subsystem slots; any other
+	// hull shows only subsystems an import put there.
 	maxOf[FitFamilySubsystem] = 0
-	if supportsSubsystems || len(fitted[FitFamilySubsystem]) > 0 {
-		maxOf[FitFamilySubsystem] = len(fitted[FitFamilySubsystem])
-		if maxOf[FitFamilySubsystem] > 8 {
-			maxOf[FitFamilySubsystem] = 8
-		}
+	if supportsSubsystems {
+		maxOf[FitFamilySubsystem] = FitSubsystemSlots
+	}
+	if n := len(fitted[FitFamilySubsystem]); n > maxOf[FitFamilySubsystem] {
+		maxOf[FitFamilySubsystem] = min(n, 8)
 	}
 	rendered := map[string]bool{}
 	for _, fam := range []string{FitFamilyHigh, FitFamilyMedium, FitFamilyLow, FitFamilyRig, FitFamilySubsystem} {
@@ -1555,7 +1558,7 @@ func (app *Builder) FitRestrictionLabel(ctx context.Context, r fit.Restriction) 
 		names := app.env.CachedGroupNames(ctx, gids)
 		for _, g := range r.NeedGroup {
 			if n, ok := names[g]; ok && n != "" {
-				parts = append(parts, n+"s")
+				parts = append(parts, pluralGroup(n))
 			}
 		}
 	}
@@ -1569,6 +1572,15 @@ func (app *Builder) FitRestrictionLabel(ctx context.Context, r fit.Restriction) 
 		return "specific ships"
 	}
 	return strings.Join(parts, " or ")
+}
+
+// pluralGroup names a ship group in the plural: "Dreadnoughts",
+// "Force Auxiliaries".
+func pluralGroup(n string) string {
+	if len(n) > 1 && strings.HasSuffix(n, "y") && !strings.ContainsRune("aeiou", rune(n[len(n)-2])) {
+		return n[:len(n)-1] + "ies"
+	}
+	return n + "s"
 }
 
 // FitRestrictedJSON builds the client-side restriction map:
@@ -1692,6 +1704,19 @@ func FitMissingList(ctx context.Context, app *Builder, snap *fit.Snapshot, doc *
 	return out
 }
 
+// FitSubsystemSlots is a strategic cruiser's subsystem count: one
+// per kind (the hull's maxSubSystems attribute still says 5 from the
+// old five-kind design).
+const FitSubsystemSlots = 4
+
+func subsystemCount(chips []FitSlotChip) int {
+	n := 0
+	for _, c := range chips {
+		n += c.Qty
+	}
+	return n
+}
+
 // FitBuildGroups shapes the slot grid from the engine result and
 // the document's own lines.
 func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) []FitSlotGroup {
@@ -1747,6 +1772,9 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 				chip.StatesCSV = strings.Join(vs, ",")
 			}
 		}
+		if fam == FitFamilySubsystem && snap != nil {
+			chip.SubSlot = int64(snap.Attrs[it.TypeID][fit.AttrSubSystemSlot])
+		}
 		chips[fam] = append(chips[fam], chip)
 	}
 	for fam := range chips {
@@ -1787,7 +1815,9 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 	// Fitted subsystems still show on any hull so an import never
 	// hides modules, but the empty group does not.
 	if supportsSubsystems || len(chips[FitFamilySubsystem]) > 0 {
-		groups = append(groups, mk(FitFamilySubsystem, "Subsystems", len(chips[FitFamilySubsystem]), 0, false))
+		// A strategic cruiser takes one subsystem of each of the four
+		// kinds (core, defensive, offensive, propulsion).
+		groups = append(groups, mk(FitFamilySubsystem, "Subsystems", subsystemCount(chips[FitFamilySubsystem]), FitSubsystemSlots, true))
 	}
 	groups = append(groups, mk(FitFamilyDrone, "Drones", droneUsed, 0, false))
 	// Fighters only on carriers (or when a fit already lists some).

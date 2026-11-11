@@ -301,8 +301,9 @@ func (f *fitting) addImplants(implants []int64) {
 }
 
 // checkShipRestrictions flags the fit errors: modules carrying
-// canFitShipGroup*/canFitShipType* may only fly on the named hulls,
-// and a group may not be fitted past its maxGroupFitted.
+// canFitShipGroup*/canFitShipType*/fitsToShipType may only fly on the
+// named hulls, a group may not be fitted past its maxGroupFitted, and
+// a hull takes one subsystem per subsystem slot.
 func (f *fitting) checkShipRestrictions() {
 	shipGroup := f.snap.Groups[f.shipTypeID]
 	fitted := map[int64]int{}
@@ -316,7 +317,11 @@ func (f *fitting) checkShipRestrictions() {
 		}
 		g := f.snap.Groups[ent.typeID]
 		fitted[g] += maxInt(ent.instances, 1)
-		if n := int(f.snap.Attrs[ent.typeID][AttrMaxGroupFitted]); n > 0 && (allowed[g] == 0 || n < allowed[g]) {
+		n := int(f.snap.Attrs[ent.typeID][AttrMaxGroupFitted])
+		if ent.kind == entSubsystem && f.snap.Attrs[ent.typeID][AttrSubSystemSlot] > 0 {
+			n = 1 // each subsystem slot is its own group: one per hull
+		}
+		if n > 0 && (allowed[g] == 0 || n < allowed[g]) {
 			allowed[g] = n
 		}
 	}

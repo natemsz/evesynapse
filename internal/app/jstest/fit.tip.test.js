@@ -137,6 +137,7 @@ function makeEnv() {
     },
     getElementById() { return null; },
     createElement(tag) { return new El(tag); },
+    createElementNS(ns, tag) { return new El(tag); },
     querySelector() { return null; },
     querySelectorAll() { return []; },
   };
@@ -447,6 +448,7 @@ function makeEditorEnv() {
       return root.querySelector("#" + id);
     },
     createElement(tag) { return new EEl(tag, env); },
+    createElementNS(ns, tag) { return new EEl(tag, env); },
     querySelector(sel) { return root.querySelector(sel); },
     querySelectorAll(sel) { return root.querySelectorAll(sel); },
   };

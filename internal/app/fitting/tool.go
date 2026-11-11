@@ -329,7 +329,7 @@ func (app *tool) handleFitPickerJSON(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		app.deps.WriteSuggest(w, out)
+		app.writePickRows(w, r, out)
 		return
 	case family == "charge":
 		weaponID, _ := strconv.ParseInt(q.Get("weapon"), 10, 64)
@@ -350,7 +350,38 @@ func (app *tool) handleFitPickerJSON(w http.ResponseWriter, r *http.Request) {
 		app.deps.WriteSuggest(w, usableByPilot(app.deps.SuggestTypes(ctx, query, "market", 12)))
 		return
 	}
-	app.deps.WriteSuggest(w, usableByPilot(out))
+	app.writePickRows(w, r, usableByPilot(out))
+}
+
+// pickRow is one row of the editor's item feeds: the suggestion
+// plus what the row says about the item before it is fitted.
+type pickRow struct {
+	module.SuggestItem
+	fitview.FitPickStat
+}
+
+// writePickRows answers the editor's item feeds. Every row but a
+// hull carries its fitting cost, headline figure, tier and price,
+// read for the whole result list at once.
+func (app *tool) writePickRows(w http.ResponseWriter, r *http.Request, rows []module.SuggestItem) {
+	ids := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		if row.Kind != "ship" {
+			ids = append(ids, row.ID)
+		}
+	}
+	stats := app.deps.FitBuilder().FitPickStats(r.Context(), ids)
+	out := make([]pickRow, 0, len(rows))
+	for _, row := range rows {
+		pr := pickRow{SuggestItem: row}
+		if row.Kind != "ship" {
+			pr.FitPickStat = stats[row.ID]
+		}
+		out = append(out, pr)
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, max-age=30")
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 // handleFitSave serves POST /fittings/save/: create or update one

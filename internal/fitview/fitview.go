@@ -427,6 +427,8 @@ func FitVisualMetaName(group int) string {
 		return "Officer"
 	case 6:
 		return "Deadspace"
+	case 14:
+		return "Tech III"
 	default:
 		return "Tech I"
 	}
@@ -1202,6 +1204,8 @@ type FitSimView struct {
 	DroneBWNum      float64        // drone bandwidth (for the fittable filter)
 	DroneBayNum     float64        // drone bay m3 (for the fittable filter)
 	FighterTubesNum int            // fighter tubes (for the fittable filter)
+	// What the hull has left, for the search rows that will not fit.
+	CPULeftNum, PGLeftNum, CalLeftNum float64
 	// SupportsSubsystems: the hull is a strategic cruiser (SDE
 	// group), so the subsystem ring, group, and search family show.
 	SupportsSubsystems bool
@@ -1450,6 +1454,9 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 	view.DroneBWNum = res.DroneBandwidth
 	view.DroneBayNum = res.DroneBayCapacity
 	view.FighterTubesNum = res.FighterTubes
+	view.CPULeftNum = res.CPUMax - res.CPUUsed
+	view.PGLeftNum = res.PowergridMax - res.PowergridUsed
+	view.CalLeftNum = res.CalibrationMax - res.CalibrationUsed
 	view.ChargeSets = app.FitBuildChargeSets(ctx, doc, snap, nameOf)
 	view.Stats = FitBuildStats(res)
 	// Implants count toward the pilot's missing skills like modules.

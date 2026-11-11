@@ -7,6 +7,108 @@
 // it; its tooltip is appended to the body, clear of any
 // scrolling pane.
 
+// --- item sheets and the info drawer -----------------------------
+// FitSheet fetches a type's static sheet (/items/sheet/{id}.json:
+// the tooltip's rows and the full sheet's HTML) once per page and
+// keeps it. FitSheet.open shows the full sheet in the info drawer, a
+// manual popover in the top layer: a side panel, the whole screen
+// on a phone, with its close control on top. Any element carrying
+// data-fit-info="<type id>" opens it.
+var FitSheet = (function () {
+  var cache = {};
+  function get(id) {
+    id = String(id || "");
+    if (!/^[0-9]+$/.test(id)) return Promise.resolve(null);
+    if (!cache[id]) {
+      cache[id] = fetch("/items/sheet/" + id + ".json", { headers: { "Accept": "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; })
+        .then(function (d) { if (!d) delete cache[id]; return d; });
+    }
+    return cache[id];
+  }
+  var drawer = null, title = null, sub = null, link = null, body = null, opener = null, want = "";
+  function build() {
+    drawer = document.createElement("aside");
+    drawer.className = "fit-info";
+    drawer.setAttribute("popover", "manual");
+    drawer.setAttribute("aria-labelledby", "fit-info-title");
+    var head = document.createElement("div");
+    head.className = "fit-info-head";
+    var close = document.createElement("button");
+    close.type = "button";
+    close.className = "fit-info-close";
+    close.textContent = "Back";
+    close.addEventListener("click", hide);
+    var names = document.createElement("div");
+    names.className = "fit-info-names";
+    title = document.createElement("h2");
+    title.id = "fit-info-title";
+    sub = document.createElement("span");
+    sub.className = "fit-info-sub";
+    names.appendChild(title);
+    names.appendChild(sub);
+    link = document.createElement("a");
+    link.className = "fit-info-link";
+    link.textContent = "Item page";
+    head.appendChild(close);
+    head.appendChild(names);
+    head.appendChild(link);
+    body = document.createElement("div");
+    body.className = "fit-info-body";
+    drawer.appendChild(head);
+    drawer.appendChild(body);
+    document.body.appendChild(drawer);
+  }
+  function isOpen() { return !!drawer && drawer.matches(":popover-open"); }
+  function hide() {
+    if (!isOpen()) return;
+    drawer.hidePopover();
+    if (opener && opener.isConnected && opener.focus) {
+      try { opener.focus({ preventScroll: true }); } catch (e) {}
+    }
+    opener = null;
+  }
+  function open(id, from) {
+    if (!drawer) build();
+    if (!drawer.showPopover) return;
+    want = String(id);
+    opener = from || document.activeElement;
+    title.textContent = "Loading";
+    sub.textContent = "";
+    link.removeAttribute("href");
+    link.hidden = true;
+    body.textContent = "";
+    if (!isOpen()) drawer.showPopover();
+    drawer.scrollTop = 0;
+    get(id).then(function (d) {
+      if (want !== String(id)) return; // a later open won
+      if (!d) {
+        title.textContent = "Details unavailable";
+        body.textContent = "This item's details couldn't be loaded. Try again in a moment.";
+        return;
+      }
+      title.textContent = d.name;
+      sub.textContent = d.group || "";
+      link.href = d.url;
+      link.hidden = false;
+      // The server's own escaped template output (itemsheet.html).
+      body.innerHTML = d.html;
+      try { drawer.querySelector(".fit-info-close").focus({ preventScroll: true }); } catch (e) {}
+    });
+  }
+  document.addEventListener("click", function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest("[data-fit-info]") : null;
+    if (!t) return;
+    ev.preventDefault();
+    open(t.getAttribute("data-fit-info"), t);
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && isOpen()) hide();
+  });
+  return { get: get, open: open, close: hide };
+})();
+
 // --- shared module tooltip ------------------------------------
 // One tooltip builder for every surface that shows a fitted
 // module: the workbench editor and the read-only workbenches
@@ -19,6 +121,88 @@
 // carries states; read-only surfaces do neither, so their
 // tooltips are information-only by construction.
 var FitTipUI = (function () {
+  // Glyphs: one small line drawing per kind of figure, coloured by
+  // the kind (fitting.css), so a tooltip reads at a glance.
+  var GLYPHS = {
+    shield: "M8 1.5 13.5 3.5v4c0 3.3-2.3 5.8-5.5 7-3.2-1.2-5.5-3.7-5.5-7v-4z",
+    armor: "M8 1.5l5.6 3.25v6.5L8 14.5l-5.6-3.25v-6.5zM8 5.2l2.6 1.5v3L8 11.2 5.4 9.7v-3z",
+    structure: "M2.5 2.5h11v11h-11zM2.5 8h11M8 2.5v11",
+    bonus: "M8 1.5 13.5 3.5v4c0 3.3-2.3 5.8-5.5 7-3.2-1.2-5.5-3.7-5.5-7v-4zM8 5v5M5.5 7.5h5",
+    capacitor: "M9.5 1.5 3.5 9H8l-1.5 5.5L12.5 7H8z",
+    targeting: "M8 3a5 5 0 1 0 0 10A5 5 0 1 0 8 3zM8 .5v4M8 11.5v4M.5 8h4M11.5 8h4",
+    navigation: "M1.5 8h11M9 4.5 12.5 8 9 11.5M1.5 4.5h4M1.5 11.5h4",
+    weapon: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5zM8 .5v3M8 12.5v3M.5 8h3M12.5 8h3M3 3l2 2M11 11l2 2M13 3l-2 2M5 11l-2 2",
+    drones: "M8 6a2 2 0 1 0 0 4 2 2 0 1 0 0-4zM3 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3zM13 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3zM3 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3zM13 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3zM4.3 4.3l2.3 2.3M11.7 4.3 9.4 6.6M4.3 11.7l2.3-2.3M11.7 11.7 9.4 9.4",
+    fitting: "M4.5 4.5h7v7h-7zM6.5 1.5v3M9.5 1.5v3M6.5 11.5v3M9.5 11.5v3M1.5 6.5h3M1.5 9.5h3M11.5 6.5h3M11.5 9.5h3",
+    miscellaneous: "M8 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3z"
+  };
+  // The curated rows' labels (fitview.FitTipLines) by kind.
+  var LABEL_KIND = {
+    DPS: "weapon", Volley: "weapon", Optimal: "targeting", Falloff: "targeting", Tracking: "targeting",
+    "Rate of fire": "weapon", Damage: "weapon",
+    Neuts: "capacitor", Cap: "capacitor", Capacitor: "capacitor", "Cap recharge": "capacitor",
+    "Armor HP": "armor", "Shield HP": "shield", "Shield recharge": "shield",
+    Boost: "navigation", Strength: "navigation", Signature: "navigation",
+    CPU: "fitting", PG: "fitting", "High slots": "fitting", "Mid slots": "fitting", "Low slots": "fitting",
+    Turrets: "fitting", Launchers: "fitting"
+  };
+  var SVGNS = "http://www.w3.org/2000/svg";
+  function glyph(kind) {
+    var svg = document.createElementNS(SVGNS, "svg");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("class", "fit-tip-g");
+    if (GLYPHS[kind]) {
+      var path = document.createElementNS(SVGNS, "path");
+      path.setAttribute("d", GLYPHS[kind]);
+      svg.appendChild(path);
+    }
+    return svg;
+  }
+  // One label/figure row; kind picks its glyph and colour.
+  function lineRow(label, value, kind, cls) {
+    var r = document.createElement("div");
+    r.className = "fit-tip-line" + (kind ? " k-" + kind : "");
+    r.appendChild(glyph(kind));
+    var k = document.createElement("span");
+    k.className = "fit-tip-k";
+    k.textContent = label;
+    var v = document.createElement("span");
+    v.className = "fit-tip-v" + (cls ? " " + cls : "");
+    v.textContent = value;
+    r.appendChild(k);
+    r.appendChild(v);
+    return r;
+  }
+  // A layer's resists: glyph, layer name, then four damage-type
+  // cells, each filled to its figure.
+  var RES_KINDS = ["em", "th", "kin", "exp"];
+  var LAYER_NAMES = { shield: "Shield", armor: "Armor", structure: "Hull", bonus: "Resist bonus" };
+  function resistRow(layer, figs) {
+    var r = document.createElement("div");
+    r.className = "fit-tip-res k-" + layer;
+    r.appendChild(glyph(layer));
+    var k = document.createElement("span");
+    k.className = "fit-tip-k";
+    k.textContent = LAYER_NAMES[layer] || layer;
+    r.appendChild(k);
+    for (var i = 0; i < 4; i++) {
+      var raw = String(figs[i] || "0");
+      var n = Math.abs(parseFloat(raw)) || 0;
+      var c = document.createElement("span");
+      c.className = "fit-tip-rc res-" + RES_KINDS[i];
+      c.title = RES_KINDS[i].toUpperCase() + " " + raw + "%";
+      var bar = document.createElement("span");
+      bar.className = "fit-tip-rbar";
+      bar.style.width = Math.min(100, n) + "%";
+      var t = document.createElement("span");
+      t.textContent = raw.charAt(0) === "+" ? raw : String(Math.round(n * 10) / 10);
+      c.appendChild(bar);
+      c.appendChild(t);
+      r.appendChild(c);
+    }
+    return r;
+  }
   function build(slot, opts) {
     opts = opts || {};
     var name = slot.getAttribute("data-tip-name") || "";
@@ -44,17 +228,11 @@ var FitTipUI = (function () {
       linesAttr.split(";").forEach(function (row) {
         var f = row.split("|");
         if (f.length < 2 || !f[0]) return;
-        var r = document.createElement("div");
-        r.className = "fit-tip-line";
-        var k = document.createElement("span");
-        k.className = "fit-tip-k";
-        k.textContent = f[0];
-        var v = document.createElement("span");
-        v.className = "fit-tip-v" + (f[2] ? " " + f[2] : "");
-        v.textContent = f[1];
-        r.appendChild(k);
-        r.appendChild(v);
-        rows.appendChild(r);
+        var kind = LABEL_KIND[f[0]] || (/\bres-/.test(f[2] || "") ? "bonus" : "");
+        // Repairs take the layer they repair: shield boosters sit in
+        // mid slots, armor and hull repairers in lows.
+        if (f[0] === "Reps") kind = /^Mid/.test(sub) ? "shield" : "armor";
+        rows.appendChild(lineRow(f[0], f[1], kind, f[2]));
       });
       tipEl.appendChild(rows);
     } else {
@@ -73,6 +251,30 @@ var FitTipUI = (function () {
         d.textContent = lines.join(" · ");
         tipEl.appendChild(d);
       }
+    }
+    // The type's own sheet: its top rows when the curated rows say
+    // only what the module costs (CPU, powergrid, capacitor) or there
+    // are none (rigs, damage controls, implants, charges), and an
+    // Info control that opens the full sheet. Curated rows that say
+    // what the module does are the fitted, skill-adjusted figures,
+    // so the sheet's base figures are not repeated under them.
+    var typeID = slot.getAttribute("data-tip-type") || "";
+    var costOnly = !linesAttr || linesAttr.split(";").every(function (row) {
+      var label = row.split("|")[0];
+      return !label || label === "CPU" || label === "PG" || label === "Cap";
+    });
+    if (typeID && costOnly) {
+      var sheetRows = document.createElement("div");
+      sheetRows.className = "fit-tip-lines";
+      tipEl.appendChild(sheetRows);
+      FitSheet.get(typeID).then(function (d) {
+        if (!d || !d.top || !d.top.length || !tipEl.isConnected) return;
+        d.top.forEach(function (row) {
+          if (row.r && row.l) sheetRows.appendChild(resistRow(row.l, row.r));
+          else sheetRows.appendChild(lineRow(row.k, row.v, row.s || "", ""));
+        });
+        if (tipEl._replace) tipEl._replace();
+      });
     }
     var charge = slot.getAttribute("data-tip-charge") || "";
     if (charge) {
@@ -120,6 +322,20 @@ var FitTipUI = (function () {
       });
       tipEl.appendChild(row);
     }
+    if (typeID) {
+      var info = document.createElement("button");
+      info.type = "button";
+      info.className = "fit-tip-info";
+      info.textContent = "Info";
+      info.setAttribute("aria-label", "Details of " + name);
+      info.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+        if (opts.onClose) opts.onClose();
+        FitSheet.open(typeID, slot);
+      });
+      tipEl.appendChild(info);
+    }
     var x = document.createElement("button");
     x.className = "fit-tip-x";
     x.setAttribute("aria-label", "Close");
@@ -138,6 +354,8 @@ var FitTipUI = (function () {
   // beside its row, inside the workbench. Positions are relative to
   // the workbench, the offset parent (position: relative).
   function place(tipEl, slot, wb) {
+    // Rows that arrive later (the sheet) re-place the tooltip.
+    tipEl._replace = function () { if (tipEl.isConnected && slot.isConnected) place(tipEl, slot, wb); };
     var wr = wb.getBoundingClientRect();
     var sr = slot.getBoundingClientRect();
     var ring = slot.closest ? slot.closest(".fit-visual") : null;

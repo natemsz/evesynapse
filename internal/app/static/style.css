@@ -4510,7 +4510,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   padding: 0.45rem 2rem 0.45rem 0.6rem;
   font-size: var(--fs-xs);
   line-height: 1.35;
-  max-width: 15rem;
+  max-width: 17.5rem;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 106, 26, 0.25);
 }
 .fit-tip-name { font-weight: 600; color: var(--text); margin-bottom: 0.15rem; }
@@ -4519,7 +4519,34 @@ select.flash { animation: fit-flash 0.7s ease-out; }
    must never grow a sideways scrollbar for a long ammo name. */
 .fit-tip-stats { color: var(--muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
 .fit-tip-lines { margin-top: 0.3rem; display: grid; gap: 0.12rem; }
-.fit-tip-line { display: flex; justify-content: space-between; gap: 1rem; font-size: var(--fs-xs); }
+.fit-tip-line { display: grid; grid-template-columns: 0.95rem minmax(0, 1fr) auto; align-items: center; gap: 0 0.45rem; font-size: var(--fs-xs); }
+/* Tooltip glyphs and colours: one per kind of figure (fittip.js). */
+.fit-tip {
+  --k-shield: #5fc9e8; --k-armor: #e0a060; --k-structure: #b9b2a6; --k-bonus: #9fd8ff;
+  --k-capacitor: #f2d04a; --k-targeting: #c79bff; --k-navigation: #7dc96f; --k-weapon: #ff8a5c;
+  --k-drones: #8fd1c0; --k-fitting: #a9a39a; --k-miscellaneous: var(--muted);
+}
+.fit-tip-g { width: 0.95rem; height: 0.95rem; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); }
+.k-capacitor > .fit-tip-g path { fill: currentColor; stroke: none; }
+.k-shield > .fit-tip-g path, .k-bonus > .fit-tip-g path { fill: currentColor; fill-opacity: 0.18; }
+.k-shield { --k: var(--k-shield); } .k-armor { --k: var(--k-armor); } .k-structure { --k: var(--k-structure); }
+.k-bonus { --k: var(--k-bonus); } .k-capacitor { --k: var(--k-capacitor); } .k-targeting { --k: var(--k-targeting); }
+.k-navigation { --k: var(--k-navigation); } .k-weapon { --k: var(--k-weapon); } .k-drones { --k: var(--k-drones); }
+.k-fitting { --k: var(--k-fitting); } .k-miscellaneous { --k: var(--k-miscellaneous); }
+[class*=" k-"] > .fit-tip-g { color: var(--k); }
+[class*=" k-"] > .fit-tip-v:not(.good):not(.bad):not([class*="res-"]) { color: color-mix(in srgb, var(--k) 70%, var(--text)); }
+/* A layer's resists: four damage-type cells, each filled to its figure. */
+.fit-tip-res { display: grid; grid-template-columns: 0.95rem 3.4rem repeat(4, minmax(2.2rem, 1fr)); align-items: center; gap: 0 0.3rem; font-size: var(--fs-xs); margin: 0.05rem 0; }
+.fit-tip-rc {
+  position: relative; overflow: hidden; text-align: center; border-radius: var(--r-xs);
+  background: rgb(255 255 255 / 0.05); font-family: var(--font-num); font-variant-numeric: tabular-nums; line-height: 1.5;
+}
+.fit-tip-rc > span:last-child { position: relative; }
+.fit-tip-rbar { position: absolute; inset: 0 auto 0 0; background: currentColor; opacity: 0.28; }
+.fit-tip-rc.res-em { color: #6fb6ff; }
+.fit-tip-rc.res-th { color: #ff7a5c; }
+.fit-tip-rc.res-kin { color: #c9c2b8; }
+.fit-tip-rc.res-exp { color: #ffc266; }
 .fit-tip-k { color: var(--muted); }
 .fit-tip-v { color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fit-tip-v.good { color: #7dc96f; }

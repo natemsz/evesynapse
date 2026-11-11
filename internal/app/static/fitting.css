@@ -186,9 +186,82 @@
    sheet; .btn's display must not bring it back before that. */
 .pb-filters [data-sheet-open][hidden] { display: none; }
 .lo-card .fit-card-actions { gap: var(--space-2) var(--space-4); }
-/* Bar rows (powergrid, CPU, calibration): when the column is too
-   narrow for label, bar and figures on one line, the figures wrap
-   under the bar, right-aligned, instead of running out of it. */
-.l-page .fit-bar-row { flex-wrap: wrap; row-gap: 0.15rem; }
-.l-page .fit-bar-row .fit-bar { flex: 1 1 4rem; min-width: 4rem; }
-.l-page .fit-bar-row .fit-bar-nums { flex: 0 1 auto; margin-left: auto; text-align: right; white-space: normal; }
+/* Bar rows (powergrid, CPU, calibration): the label and the figures
+   share the top line, the bar runs the full width beneath, so every
+   bar is the same length whatever its figures say. */
+.l-page .fit-bar-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.25rem 0.6rem; align-items: baseline; }
+.l-page .fit-bar-row .fit-bar-label { grid-column: 1; grid-row: 1; }
+.l-page .fit-bar-row .fit-bar-nums { grid-column: 2; grid-row: 1; text-align: right; white-space: normal; }
+.l-page .fit-bar-row .fit-bar { grid-column: 1 / -1; grid-row: 2; width: auto; min-width: 0; }
+
+/* --- item details: search rows, tooltips, the info drawer ---
+   A search or picker row says what the item is before it is
+   fitted (tier, headline figure, CPU, powergrid, price) and why it
+   will not fit now; Info opens the type's sheet in the drawer. */
+.suggest li:has(> .sug-facts), .fit-picker-list li:has(> .sug-facts) { display: flex; align-items: center; gap: 0.55rem; }
+.fit-picker-list .sug-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.suggest .sug-text { flex: 1 1 auto; }
+.sug-facts {
+  flex: 0 1 auto; margin-left: auto; min-width: 0;
+  display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0.15rem 0.6rem;
+  white-space: normal; color: var(--muted);
+  font-family: var(--font-num); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
+}
+.sug-fact { white-space: nowrap; }
+.sug-stat, .sug-price { color: var(--text); }
+.sug-tier {
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold);
+}
+.suggest .sug-text > .sug-why, .sug-why { color: var(--note); font-size: var(--fs-xs); }
+.sug-wontfit > .sug-icon, .sug-wontfit > .sug-text > span:first-child, .sug-wontfit .sug-fact { opacity: 0.6; }
+.sug-info, .fit-tip-info {
+  flex: none; padding: 0.15rem 0.45rem; cursor: pointer;
+  border: 1px solid var(--hairline); border-radius: var(--r-sm); background: transparent; color: var(--muted);
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.sug-info:hover, .sug-info:focus-visible, .fit-tip-info:hover, .fit-tip-info:focus-visible { border-color: var(--accent); color: var(--text); }
+.fit-tip-info { display: inline-block; margin-top: 0.4rem; }
+
+/* The hull picture in the ring opens the hull's sheet. */
+.fit-vship-info {
+  display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 50%;
+  background: none; cursor: pointer; pointer-events: auto;
+}
+.fit-vship-info:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* The info drawer: a manual popover in the top layer, on the right
+   edge, as wide as the screen when the screen is narrow. */
+.fit-info {
+  inset: 0 0 0 auto; margin: 0; padding: 0;
+  width: min(32rem, 100%); max-width: none; height: 100%; max-height: none;
+  overflow-y: auto; overscroll-behavior: contain;
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 0; border-left: 1px solid var(--flyout-edge);
+  box-shadow: var(--flyout-shadow);
+  -webkit-backdrop-filter: var(--flyout-frost);
+  backdrop-filter: var(--flyout-frost);
+}
+.fit-info::backdrop { background: rgb(0 0 0 / 0.35); }
+.fit-info-head {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  border-bottom: 1px solid var(--hairline);
+}
+.fit-info-names { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.fit-info-names h2 { margin: 0; font-size: var(--fs-lg); overflow-wrap: anywhere; }
+.fit-info-sub { color: var(--muted); font-size: var(--fs-sm); }
+.fit-info-close, .fit-info-link {
+  flex: none; padding: 0.3rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm);
+  background: transparent; color: var(--muted); cursor: pointer; text-decoration: none;
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.fit-info-close:hover, .fit-info-close:focus-visible, .fit-info-link:hover, .fit-info-link:focus-visible { border-color: var(--accent); color: var(--text); }
+.fit-info-close::before { content: "\2039\00a0"; }
+.fit-info-body { display: grid; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-5); }
+.fit-info-body > .l-panel, .fit-info-body .is-pair > .l-panel { margin: 0; }

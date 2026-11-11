@@ -808,12 +808,8 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 		}
 	}
 
-	categoryID := int64(0)
-	if detail.Category != nil {
-		categoryID = detail.Category.ID
-	}
 	detail.IsShip = isShip
-	detail.Sheet = app.buildItemSheetView(ctx, typeID, categoryID)
+	detail.Sheet = app.buildItemSheetView(ctx, typeID)
 
 	if bp, berr := app.queries.GetSDEBlueprintForProduct(ctx, typeID); berr == nil {
 		detail.BlueprintID = bp.BlueprintTypeID

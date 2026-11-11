@@ -877,6 +877,12 @@ var pgFitBrowseSchema string
 //go:embed schema_pg/143_fit_browse_by_group.sql
 var pgFitBrowseByGroupSchema string
 
+// Step 146: killboard statistics counted once per kill through a
+// pending queue, and the tables for their one time rebuild.
+//
+//go:embed schema_pg/146_kill_stats_rebuild.sql
+var pgKillStatsRebuildSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1048,6 +1054,7 @@ func schemaSteps() []schemaStep {
 		{141, "item_variations", pgItemVariationsSchema, ""},
 		{142, "fit_browse", pgFitBrowseSchema, ""},
 		{143, "fit_browse_by_group", pgFitBrowseByGroupSchema, ""},
+		{146, "kill_stats_rebuild", pgKillStatsRebuildSchema, ""},
 	}
 }
 

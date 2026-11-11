@@ -46,7 +46,7 @@ func TestPilotIntel(t *testing.T) {
 	kill(3, now.Add(-30*time.Minute), 92000003, 587, false, hostile) // private: never shown
 	// The worker sweep folds the stored kills into the daily
 	// aggregates the page reads.
-	app.backfillKillStats(ctx)
+	countStoredKills(t, app, ctx)
 
 	// A visitor sees the public record.
 	_, body := getPage(t, app, &http.Cookie{Name: "nobody", Value: "x"}, "/pilot/?character="+strconv.FormatInt(hostile, 10))
@@ -182,7 +182,7 @@ func TestPilotIntelNeverFetchesLive(t *testing.T) {
 		VALUES (900001, $1, 30000142, 92000003, 587, 'stream', true, now(), 10000000)`, now.Add(-2*time.Hour))
 	exec(`INSERT INTO kill_attackers (killmail_id, seq, character_id, ship_type_id, final_blow) VALUES (900001, 0, $1, 22456, true)`, stored)
 	exec(`INSERT INTO kill_involvement (killmail_id, character_id) VALUES (900001, $1) ON CONFLICT DO NOTHING`, stored)
-	app.backfillKillStats(ctx)
+	countStoredKills(t, app, ctx)
 	_, body2 := getPage(t, app, visitor, "/pilot/?character="+strconv.FormatInt(stored, 10))
 	if strings.Contains(body2, "from zKill, live") {
 		t.Error("stored pilot page marked live from zKill, want stored")

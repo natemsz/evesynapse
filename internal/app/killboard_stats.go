@@ -15,12 +15,10 @@ package app
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
-	"github.com/jackc/pgx/v5"
 )
 
 const killStatsSweepBatch = 200
@@ -41,10 +39,13 @@ func killValueOf(k db.Kill) float64 {
 }
 
 // foldKillStats folds one stored public kill into the daily
-// entity aggregates, exactly once per entity: the applied marker
-// is written in the same transaction as the aggregates, so the
-// ingest fold, the pricing pass and the maintenance sweep can
-// never count a kill twice.
+// entity aggregates exactly once: the fold claims the kill's row in
+// kill_stats_pending in the same transaction as the aggregates, so
+// the ingest fold, the pricing pass and the maintenance sweep can
+// never count a kill twice, and a kill no one queued is never
+// counted here (the rebuild counted it). Feed rows land either way.
+// While the one time rebuild runs, the fold writes feed rows only
+// and leaves the kill queued for after the swap.
 func (app *Application) foldKillStats(ctx context.Context, killmailID int64) error {
 	k, err := app.queries.GetKill(ctx, killmailID)
 	if err != nil {
@@ -107,6 +108,13 @@ func (app *Application) foldKillStats(ctx context.Context, killmailID int64) err
 		d.p.IskLost = value
 	}
 	if len(deltas) == 0 {
+		// Nothing to count (no character, corporation or alliance
+		// on either side): the kill leaves the queue all the same.
+		if k.Public && !app.killStatsRebuilding.Load() {
+			if _, err := app.queries.ClaimKillStatsPending(ctx, killmailID); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 
@@ -116,6 +124,21 @@ func (app *Application) foldKillStats(ctx context.Context, killmailID int64) err
 	}
 	defer tx.Rollback(ctx)
 	q := db.New(tx)
+	// The fold holds the stats lock shared while it decides to
+	// count: the rebuild takes it once, exclusively, after raising
+	// its flag, so no fold that missed the flag is still running
+	// when the rebuild starts counting (killboard_rebuild.go).
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared($1)", killStatsLockKey); err != nil {
+		return err
+	}
+	counting := false
+	if k.Public && !app.killStatsRebuilding.Load() {
+		n, err := q.ClaimKillStatsPending(ctx, killmailID)
+		if err != nil {
+			return err
+		}
+		counting = n > 0
+	}
 	folded := map[killEntityRef]bool{}
 	feedValue := 0.0
 	if k.ValueOurs.Valid {
@@ -130,19 +153,12 @@ func (app *Application) foldKillStats(ctx context.Context, killmailID int64) err
 		}); err != nil {
 			return err
 		}
-		// The daily aggregates count public kills only: a
-		// private kill gets its feed rows (its owner's pages
-		// read them) and nothing else until it turns public.
-		if !k.Public {
+		// The daily aggregates count a claimed public kill only: a
+		// private kill gets its feed rows (its owner's pages read
+		// them) and nothing else until it turns public and is
+		// queued.
+		if !counting {
 			continue
-		}
-		if _, err := q.MarkKillEntityApplied(ctx, db.MarkKillEntityAppliedParams{
-			KillmailID: killmailID, Kind: e.kind, EntityID: e.id, KillmailTime: k.KillmailTime,
-		}); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				continue
-			}
-			return err
 		}
 		folded[e] = true
 		if err := q.ApplyKillEntityDaily(ctx, d.p); err != nil {
@@ -196,13 +212,17 @@ func (app *Application) foldKillStats(ctx context.Context, killmailID int64) err
 	return nil
 }
 
-// backfillKillStats is the maintenance sweep: public kills stored
-// before the daily aggregates existed (or whose fold failed) are
-// folded here, in the background, never at render.
+// backfillKillStats is the maintenance sweep: queued public kills
+// whose fold did not run at ingest (pricing failed, or the kill
+// turned public later) are folded here, in the background, never at
+// render. It waits while the one time rebuild runs.
 func (app *Application) backfillKillStats(ctx context.Context) {
-	ids, err := app.queries.ListUnfoldedKills(ctx, killStatsSweepBatch)
+	if app.killStatsRebuilding.Load() {
+		return
+	}
+	ids, err := app.queries.ListKillStatsPending(ctx, killStatsSweepBatch)
 	if err != nil {
-		logging.Errorf("killboard stats: list unfolded kills: %v", err)
+		logging.Errorf("killboard stats: list queued kills: %v", err)
 		return
 	}
 	for _, id := range ids {

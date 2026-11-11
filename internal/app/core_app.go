@@ -304,6 +304,10 @@ type Application struct {
 	killRegionsMu  sync.Mutex
 	killRegions    map[int64]int64
 	killLastPruned time.Time
+	// killStatsRebuilding is set while the one time stats rebuild
+	// (killboard_rebuild.go) runs: the fold writes feed rows only
+	// and leaves kills queued until the swap.
+	killStatsRebuilding atomic.Bool
 	// When the legacy kill-feed backfill last found less than a
 	// batch to do: it is drained, and rechecked only rarely
 	// (killboard_stats.go).
@@ -483,6 +487,7 @@ type Application struct {
 // background worker and the one-shot SSO reachability probe.
 // Call Close to stop the worker and release the database.
 func New(cfg Config) (*Application, error) {
+	applyMemoryLimit()
 	tokens, tokenKeyProvider, err := tokenBoxForConfig(cfg)
 	if err != nil {
 		return nil, err

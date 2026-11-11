@@ -1444,7 +1444,7 @@
     var box = root.querySelector("[data-beaten-filter]");
     if (!box || box.hasAttribute("data-beaten-ready")) return;
     box.setAttribute("data-beaten-ready", "1");
-    var section = box.closest("section");
+    var section = document.getElementById(box.getAttribute("data-beaten-filter")) || box.closest("section");
     if (!section) return;
     var rows = section.querySelectorAll("tbody tr");
     box.addEventListener("change", function () {
@@ -6657,5 +6657,39 @@
   });
   document.addEventListener("evesynapse:content-will-swap", reset);
 
-  window.esLive = { mark: mark, settle: settle, drop: drop, reset: reset, flash: flash, pill: pill, stream: stream, seen: seen };
+  // Live ages: a <time datetime data-live-ago> rewords itself as it
+  // ages ("just now", "4 minutes ago"), the same words the server
+  // renders (ageText), so a page left open keeps telling the truth.
+  // retime moves one to a newer moment, e.g. when a stream says a new
+  // sweep landed.
+  function ageWords(ms) {
+    var s = ms / 1000;
+    if (s < 90) return "just now";
+    if (s < 3600) { var m = Math.floor(s / 60); return m === 1 ? "1 minute ago" : m + " minutes ago"; }
+    if (s < 172800) { var h = Math.floor(s / 3600); return h === 1 ? "1 hour ago" : h + " hours ago"; }
+    return Math.floor(s / 86400) + " days ago";
+  }
+  function tickAge(el) {
+    var t = Date.parse(el.getAttribute("datetime"));
+    if (!(t > 0)) return;
+    var words = ageWords(Math.max(0, Date.now() - t));
+    if (el.textContent !== words) el.textContent = words;
+  }
+  function tickAges() {
+    document.querySelectorAll("time[data-live-ago]").forEach(tickAge);
+  }
+  function retime(el, iso) {
+    if (!el || !iso) return;
+    var next = Date.parse(iso), cur = Date.parse(el.getAttribute("datetime"));
+    if (!(next > 0) || (cur > 0 && next <= cur)) return;
+    el.setAttribute("datetime", iso);
+    var was = el.textContent;
+    tickAge(el);
+    if (el.textContent !== was) flash(el, "");
+  }
+  setInterval(function () { if (!document.hidden) tickAges(); }, 30000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) tickAges(); });
+  document.addEventListener("evesynapse:content-ready", tickAges);
+
+  window.esLive = { mark: mark, settle: settle, drop: drop, reset: reset, flash: flash, pill: pill, stream: stream, seen: seen, retime: retime };
 })();

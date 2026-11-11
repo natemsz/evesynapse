@@ -110,6 +110,18 @@ func (q *Queries) ApplyKillEntityDailySystem(ctx context.Context, arg ApplyKillE
 	return err
 }
 
+const claimKillStatsPending = `-- name: ClaimKillStatsPending :execrows
+DELETE FROM kill_stats_pending WHERE killmail_id = $1::bigint
+`
+
+func (q *Queries) ClaimKillStatsPending(ctx context.Context, killmailID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, claimKillStatsPending, killmailID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getBiggestKill = `-- name: GetBiggestKill :one
 SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM kills
 WHERE public AND killmail_time >= $1::timestamptz AND value_ours IS NOT NULL
@@ -316,6 +328,20 @@ func (q *Queries) GetKillLinePrices(ctx context.Context, killmailID int64) ([]Ge
 	return items, nil
 }
 
+const getKillPublicForUpdate = `-- name: GetKillPublicForUpdate :one
+SELECT public FROM kills WHERE killmail_id = $1::bigint FOR UPDATE
+`
+
+// The counting queue (schema 146): public kills not yet folded into
+// the daily aggregates. The fold claims a kill by deleting its row in
+// the aggregates' transaction; no row, no count.
+func (q *Queries) GetKillPublicForUpdate(ctx context.Context, killmailID int64) (bool, error) {
+	row := q.db.QueryRow(ctx, getKillPublicForUpdate, killmailID)
+	var public bool
+	err := row.Scan(&public)
+	return public, err
+}
+
 const getKillStats = `-- name: GetKillStats :one
 SELECT
     COUNT(*) FILTER (WHERE killmail_time >= $1::timestamptz)::bigint AS kills_hour,
@@ -342,6 +368,23 @@ func (q *Queries) GetKillStats(ctx context.Context, arg GetKillStatsParams) (Get
 	row := q.db.QueryRow(ctx, getKillStats, arg.HourAgo, arg.DayAgo)
 	var i GetKillStatsRow
 	err := row.Scan(&i.KillsHour, &i.KillsDay, &i.IskDay)
+	return i, err
+}
+
+const getKillStatsRebuildState = `-- name: GetKillStatsRebuildState :one
+SELECT cursor, started_at, done_at FROM kill_stats_rebuild_state WHERE id = 1
+`
+
+type GetKillStatsRebuildStateRow struct {
+	Cursor    int64        `json:"cursor"`
+	StartedAt sql.NullTime `json:"started_at"`
+	DoneAt    sql.NullTime `json:"done_at"`
+}
+
+func (q *Queries) GetKillStatsRebuildState(ctx context.Context) (GetKillStatsRebuildStateRow, error) {
+	row := q.db.QueryRow(ctx, getKillStatsRebuildState)
+	var i GetKillStatsRebuildStateRow
+	err := row.Scan(&i.Cursor, &i.StartedAt, &i.DoneAt)
 	return i, err
 }
 
@@ -577,6 +620,63 @@ type InsertKillLinePricesParams struct {
 func (q *Queries) InsertKillLinePrices(ctx context.Context, arg InsertKillLinePricesParams) error {
 	_, err := q.db.Exec(ctx, insertKillLinePrices, arg.KillmailID, arg.TypeIds, arg.UnitPrices)
 	return err
+}
+
+const insertKillStatsPending = `-- name: InsertKillStatsPending :exec
+INSERT INTO kill_stats_pending (killmail_id, killmail_time)
+VALUES ($1::bigint, $2::timestamptz)
+ON CONFLICT DO NOTHING
+`
+
+type InsertKillStatsPendingParams struct {
+	KillmailID   int64     `json:"killmail_id"`
+	KillmailTime time.Time `json:"killmail_time"`
+}
+
+func (q *Queries) InsertKillStatsPending(ctx context.Context, arg InsertKillStatsPendingParams) error {
+	_, err := q.db.Exec(ctx, insertKillStatsPending, arg.KillmailID, arg.KillmailTime)
+	return err
+}
+
+const killStatsQueued = `-- name: KillStatsQueued :one
+SELECT EXISTS (SELECT 1 FROM kill_stats_pending WHERE killmail_id = $1::bigint) AS queued
+`
+
+func (q *Queries) KillStatsQueued(ctx context.Context, killmailID int64) (bool, error) {
+	row := q.db.QueryRow(ctx, killStatsQueued, killmailID)
+	var queued bool
+	err := row.Scan(&queued)
+	return queued, err
+}
+
+const killStatsRebuildChunkEnd = `-- name: KillStatsRebuildChunkEnd :one
+
+SELECT COALESCE(MAX(c.killmail_id), 0)::bigint AS through_id FROM (
+    SELECT killmail_id FROM kills
+    WHERE killmail_id > $1::bigint
+    ORDER BY killmail_id
+    LIMIT $2::bigint
+) c
+`
+
+type KillStatsRebuildChunkEndParams struct {
+	AfterID int64 `json:"after_id"`
+	MaxRows int64 `json:"max_rows"`
+}
+
+// The one time rebuild (killboard_rebuild.go): the daily aggregates
+// counted again from complete kill rows, a chunk of killmail ids at
+// a time, into the _rebuild tables. Each chunk applies exactly the
+// fold's rules (foldKillStats): public kills only; attackers from
+// the involvement record, minus the victim's own character,
+// corporation or alliance, and none on an NPC kill; ships flown
+// from the attacker rows; value_ours, else zKillboard's value. A
+// kill waiting in kill_stats_pending is left for the live fold.
+func (q *Queries) KillStatsRebuildChunkEnd(ctx context.Context, arg KillStatsRebuildChunkEndParams) (int64, error) {
+	row := q.db.QueryRow(ctx, killStatsRebuildChunkEnd, arg.AfterID, arg.MaxRows)
+	var through_id int64
+	err := row.Scan(&through_id)
+	return through_id, err
 }
 
 const listESIKillsToMerge = `-- name: ListESIKillsToMerge :many
@@ -824,6 +924,32 @@ func (q *Queries) ListKillInvolvement(ctx context.Context, killmailID int64) ([]
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listKillStatsPending = `-- name: ListKillStatsPending :many
+SELECT killmail_id FROM kill_stats_pending
+ORDER BY killmail_time DESC
+LIMIT $1::bigint
+`
+
+func (q *Queries) ListKillStatsPending(ctx context.Context, maxRows int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listKillStatsPending, maxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var killmail_id int64
+		if err := rows.Scan(&killmail_id); err != nil {
+			return nil, err
+		}
+		items = append(items, killmail_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1174,6 +1300,49 @@ func (q *Queries) ListKillsBySystem(ctx context.Context, arg ListKillsBySystemPa
 			&i.Public,
 			&i.IngestedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listKillsMissingAttackers = `-- name: ListKillsMissingAttackers :many
+SELECT k.killmail_id, k.hash, k.killmail_time FROM kills k
+WHERE k.killmail_id < $1::bigint
+  AND k.attacker_count > 0 AND k.hash <> ''
+  AND NOT EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id)
+ORDER BY k.killmail_id DESC
+LIMIT $2::bigint
+`
+
+type ListKillsMissingAttackersParams struct {
+	BeforeID int64 `json:"before_id"`
+	MaxRows  int64 `json:"max_rows"`
+}
+
+type ListKillsMissingAttackersRow struct {
+	KillmailID   int64     `json:"killmail_id"`
+	Hash         string    `json:"hash"`
+	KillmailTime time.Time `json:"killmail_time"`
+}
+
+// Kills whose attacker rows are gone (pruned before the stats fold
+// counted their ships), newest first below a keyset cursor, for the
+// restorer to read back from ESI by hash.
+func (q *Queries) ListKillsMissingAttackers(ctx context.Context, arg ListKillsMissingAttackersParams) ([]ListKillsMissingAttackersRow, error) {
+	rows, err := q.db.Query(ctx, listKillsMissingAttackers, arg.BeforeID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListKillsMissingAttackersRow
+	for rows.Next() {
+		var i ListKillsMissingAttackersRow
+		if err := rows.Scan(&i.KillmailID, &i.Hash, &i.KillmailTime); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1541,36 +1710,6 @@ func (q *Queries) ListThreatKills(ctx context.Context, since time.Time) ([]ListT
 	return items, nil
 }
 
-const listUnfoldedKills = `-- name: ListUnfoldedKills :many
-SELECT k.killmail_id FROM kills k
-WHERE k.public
-  AND (k.victim_character_id > 0 OR k.victim_corporation_id > 0 OR k.victim_alliance_id > 0
-    OR EXISTS (SELECT 1 FROM kill_involvement i WHERE i.killmail_id = k.killmail_id))
-  AND NOT EXISTS (SELECT 1 FROM kill_entity_applied a WHERE a.killmail_id = k.killmail_id)
-ORDER BY k.killmail_time DESC
-LIMIT $1::bigint
-`
-
-func (q *Queries) ListUnfoldedKills(ctx context.Context, maxRows int64) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listUnfoldedKills, maxRows)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []int64
-	for rows.Next() {
-		var killmail_id int64
-		if err := rows.Scan(&killmail_id); err != nil {
-			return nil, err
-		}
-		items = append(items, killmail_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUnpricedKills = `-- name: ListUnpricedKills :many
 SELECT k.killmail_id, k.ship_type_id, d.payload
 FROM kills k
@@ -1624,35 +1763,10 @@ func (q *Queries) MarkCorpKillCoverage(ctx context.Context, arg MarkCorpKillCove
 	return err
 }
 
-const markKillEntityApplied = `-- name: MarkKillEntityApplied :one
-INSERT INTO kill_entity_applied (killmail_id, kind, entity_id, killmail_time)
-VALUES ($1::bigint, $2::text, $3::bigint, $4::timestamptz)
-ON CONFLICT DO NOTHING
-RETURNING killmail_id
-`
-
-type MarkKillEntityAppliedParams struct {
-	KillmailID   int64     `json:"killmail_id"`
-	Kind         string    `json:"kind"`
-	EntityID     int64     `json:"entity_id"`
-	KillmailTime time.Time `json:"killmail_time"`
-}
-
-func (q *Queries) MarkKillEntityApplied(ctx context.Context, arg MarkKillEntityAppliedParams) (int64, error) {
-	row := q.db.QueryRow(ctx, markKillEntityApplied,
-		arg.KillmailID,
-		arg.Kind,
-		arg.EntityID,
-		arg.KillmailTime,
-	)
-	var killmail_id int64
-	err := row.Scan(&killmail_id)
-	return killmail_id, err
-}
-
 const pruneKillAttackers = `-- name: PruneKillAttackers :execrows
 DELETE FROM kill_attackers a USING kills k
 WHERE k.killmail_id = a.killmail_id AND k.killmail_time < $1::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id)
 `
 
 func (q *Queries) PruneKillAttackers(ctx context.Context, before time.Time) (int64, error) {
@@ -1666,13 +1780,18 @@ func (q *Queries) PruneKillAttackers(ctx context.Context, before time.Time) (int
 const pruneKillDetails = `-- name: PruneKillDetails :execrows
 DELETE FROM kill_details d USING kills k
 WHERE k.killmail_id = d.killmail_id AND k.killmail_time < $1::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id)
 `
 
 // Retention: attacker detail, full killmails and per-item priced
 // lines older than the cutoff go; the summary row and the
 // involvement record stay. Values and who they credit are
-// permanent; only detail ages out. Past a year a kill is metadata
+// permanent; only detail ages out. Past two years a kill is metadata
 // for intel only (who, when, ship, total value), not a record.
+// Raw kill rows past retention go only once the kill is counted
+// into the daily statistics (it is not waiting in
+// kill_stats_pending): the fold reads the attacker rows for ships
+// flown, so pruning first would lose them from the stats for good.
 func (q *Queries) PruneKillDetails(ctx context.Context, before time.Time) (int64, error) {
 	result, err := q.db.Exec(ctx, pruneKillDetails, before)
 	if err != nil {
@@ -1684,6 +1803,7 @@ func (q *Queries) PruneKillDetails(ctx context.Context, before time.Time) (int64
 const pruneKillLinePrices = `-- name: PruneKillLinePrices :execrows
 DELETE FROM kill_line_prices l USING kills k
 WHERE k.killmail_id = l.killmail_id AND k.killmail_time < $1::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id)
 `
 
 func (q *Queries) PruneKillLinePrices(ctx context.Context, before time.Time) (int64, error) {
@@ -1692,6 +1812,172 @@ func (q *Queries) PruneKillLinePrices(ctx context.Context, before time.Time) (in
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const rebuildKillEntityDailyChunk = `-- name: RebuildKillEntityDailyChunk :exec
+WITH k AS MATERIALIZED (
+    SELECT kl.killmail_id, (kl.killmail_time AT TIME ZONE 'UTC')::date AS day, kl.npc, kl.solo,
+        kl.victim_character_id AS vc, kl.victim_corporation_id AS vco, kl.victim_alliance_id AS val,
+        COALESCE(kl.value_ours, kl.value_zkill, 0)::double precision AS v
+    FROM kills kl
+    WHERE kl.public AND kl.killmail_id > $1::bigint AND kl.killmail_id <= $2::bigint
+      AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = kl.killmail_id)
+), src AS MATERIALIZED (
+    SELECT k.killmail_id, k.vc, k.vco, k.val, t.character_id, t.corporation_id, t.alliance_id
+    FROM k CROSS JOIN LATERAL (
+        SELECT i.character_id, i.corporation_id, i.alliance_id FROM kill_involvement i WHERE i.killmail_id = k.killmail_id OFFSET 0
+    ) t
+    WHERE NOT k.npc
+), att AS (
+    SELECT x.killmail_id, 'character'::text AS kind, x.character_id AS id FROM src x
+    WHERE x.character_id > 0 AND x.character_id <> x.vc
+    UNION
+    SELECT x.killmail_id, 'corporation'::text AS kind, x.corporation_id AS id FROM src x
+    WHERE x.corporation_id > 0 AND x.corporation_id <> x.vco
+    UNION
+    SELECT x.killmail_id, 'alliance'::text AS kind, x.alliance_id AS id FROM src x
+    WHERE x.alliance_id > 0 AND x.alliance_id <> x.val
+), r AS (
+    SELECT k.day, a.kind, a.id AS entity_id, 1::bigint AS kills,
+        (CASE WHEN k.solo THEN 1 ELSE 0 END)::bigint AS solo, 0::bigint AS losses,
+        k.v AS isk_killed, 0::double precision AS isk_lost, k.killmail_id AS bid, k.v AS bval
+    FROM att a JOIN k ON k.killmail_id = a.killmail_id
+    UNION ALL
+    SELECT k.day, 'character'::text, k.vc, 0::bigint, 0::bigint, 1::bigint, 0::double precision, k.v, 0::bigint, 0::double precision
+    FROM k
+    WHERE k.vc > 0
+    UNION ALL
+    SELECT k.day, 'corporation'::text, k.vco, 0::bigint, 0::bigint, 1::bigint, 0::double precision, k.v, 0::bigint, 0::double precision
+    FROM k
+    WHERE k.vco > 0
+    UNION ALL
+    SELECT k.day, 'alliance'::text, k.val, 0::bigint, 0::bigint, 1::bigint, 0::double precision, k.v, 0::bigint, 0::double precision
+    FROM k
+    WHERE k.val > 0
+)
+INSERT INTO kill_entity_daily_rebuild (day, kind, entity_id, kills, solo, losses, isk_killed, isk_lost, biggest_killmail_id, biggest_value)
+SELECT r.day, r.kind, r.entity_id, SUM(r.kills)::bigint, SUM(r.solo)::bigint, SUM(r.losses)::bigint,
+    SUM(r.isk_killed)::double precision, SUM(r.isk_lost)::double precision,
+    COALESCE((ARRAY_AGG(r.bid ORDER BY r.bval DESC) FILTER (WHERE r.kills = 1))[1], 0)::bigint,
+    COALESCE(MAX(r.bval) FILTER (WHERE r.kills = 1), 0)::double precision
+FROM r
+GROUP BY r.day, r.kind, r.entity_id
+ON CONFLICT (day, kind, entity_id) DO UPDATE SET
+    kills = kill_entity_daily_rebuild.kills + EXCLUDED.kills,
+    solo = kill_entity_daily_rebuild.solo + EXCLUDED.solo,
+    losses = kill_entity_daily_rebuild.losses + EXCLUDED.losses,
+    isk_killed = kill_entity_daily_rebuild.isk_killed + EXCLUDED.isk_killed,
+    isk_lost = kill_entity_daily_rebuild.isk_lost + EXCLUDED.isk_lost,
+    biggest_killmail_id = CASE WHEN EXCLUDED.biggest_value > kill_entity_daily_rebuild.biggest_value THEN EXCLUDED.biggest_killmail_id ELSE kill_entity_daily_rebuild.biggest_killmail_id END,
+    biggest_value = GREATEST(kill_entity_daily_rebuild.biggest_value, EXCLUDED.biggest_value)
+`
+
+type RebuildKillEntityDailyChunkParams struct {
+	AfterID   int64 `json:"after_id"`
+	ThroughID int64 `json:"through_id"`
+}
+
+func (q *Queries) RebuildKillEntityDailyChunk(ctx context.Context, arg RebuildKillEntityDailyChunkParams) error {
+	_, err := q.db.Exec(ctx, rebuildKillEntityDailyChunk, arg.AfterID, arg.ThroughID)
+	return err
+}
+
+const rebuildKillEntityDailyShipsChunk = `-- name: RebuildKillEntityDailyShipsChunk :exec
+WITH k AS MATERIALIZED (
+    SELECT kl.killmail_id, (kl.killmail_time AT TIME ZONE 'UTC')::date AS day, kl.npc, kl.ship_type_id,
+        kl.victim_character_id AS vc, kl.victim_corporation_id AS vco, kl.victim_alliance_id AS val
+    FROM kills kl
+    WHERE kl.public AND kl.killmail_id > $1::bigint AND kl.killmail_id <= $2::bigint
+      AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = kl.killmail_id)
+), src AS MATERIALIZED (
+    SELECT k.killmail_id, k.vc, k.vco, k.val, k.day, t.character_id, t.corporation_id, t.alliance_id, t.ship_type_id
+    FROM k CROSS JOIN LATERAL (
+        SELECT a.character_id, a.corporation_id, a.alliance_id, a.ship_type_id FROM kill_attackers a WHERE a.killmail_id = k.killmail_id OFFSET 0
+    ) t
+    WHERE NOT k.npc AND t.ship_type_id > 0
+), flown AS (
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'character'::text AS kind, x.character_id AS id FROM src x
+    WHERE x.character_id > 0 AND x.character_id <> x.vc
+    UNION
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'corporation'::text AS kind, x.corporation_id AS id FROM src x
+    WHERE x.corporation_id > 0 AND x.corporation_id <> x.vco
+    UNION
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'alliance'::text AS kind, x.alliance_id AS id FROM src x
+    WHERE x.alliance_id > 0 AND x.alliance_id <> x.val
+), r AS (
+    SELECT f.day, f.kind, f.id AS entity_id, f.ship_type_id, 1::bigint AS flown, 0::bigint AS lost FROM flown f
+    UNION ALL
+    SELECT k.day, 'character'::text, k.vc, k.ship_type_id, 0::bigint, 1::bigint
+    FROM k
+    WHERE k.vc > 0 AND k.ship_type_id > 0
+    UNION ALL
+    SELECT k.day, 'corporation'::text, k.vco, k.ship_type_id, 0::bigint, 1::bigint
+    FROM k
+    WHERE k.vco > 0 AND k.ship_type_id > 0
+    UNION ALL
+    SELECT k.day, 'alliance'::text, k.val, k.ship_type_id, 0::bigint, 1::bigint
+    FROM k
+    WHERE k.val > 0 AND k.ship_type_id > 0
+)
+INSERT INTO kill_entity_daily_ships_rebuild (day, kind, entity_id, ship_type_id, flown, lost)
+SELECT r.day, r.kind, r.entity_id, r.ship_type_id, SUM(r.flown)::bigint, SUM(r.lost)::bigint
+FROM r
+GROUP BY r.day, r.kind, r.entity_id, r.ship_type_id
+ON CONFLICT (day, kind, entity_id, ship_type_id) DO UPDATE SET
+    flown = kill_entity_daily_ships_rebuild.flown + EXCLUDED.flown,
+    lost = kill_entity_daily_ships_rebuild.lost + EXCLUDED.lost
+`
+
+type RebuildKillEntityDailyShipsChunkParams struct {
+	AfterID   int64 `json:"after_id"`
+	ThroughID int64 `json:"through_id"`
+}
+
+func (q *Queries) RebuildKillEntityDailyShipsChunk(ctx context.Context, arg RebuildKillEntityDailyShipsChunkParams) error {
+	_, err := q.db.Exec(ctx, rebuildKillEntityDailyShipsChunk, arg.AfterID, arg.ThroughID)
+	return err
+}
+
+const rebuildKillEntityDailySystemsChunk = `-- name: RebuildKillEntityDailySystemsChunk :exec
+WITH k AS MATERIALIZED (
+    SELECT kl.killmail_id, (kl.killmail_time AT TIME ZONE 'UTC')::date AS day, kl.npc, kl.system_id,
+        kl.victim_character_id AS vc, kl.victim_corporation_id AS vco, kl.victim_alliance_id AS val
+    FROM kills kl
+    WHERE kl.public AND kl.killmail_id > $1::bigint AND kl.killmail_id <= $2::bigint
+      AND kl.system_id > 0 AND NOT kl.npc
+      AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = kl.killmail_id)
+), src AS MATERIALIZED (
+    SELECT k.killmail_id, k.vc, k.vco, k.val, k.day, k.system_id, t.character_id, t.corporation_id, t.alliance_id
+    FROM k CROSS JOIN LATERAL (
+        SELECT i.character_id, i.corporation_id, i.alliance_id FROM kill_involvement i WHERE i.killmail_id = k.killmail_id OFFSET 0
+    ) t
+    WHERE TRUE
+), att AS (
+    SELECT x.killmail_id, x.day, x.system_id, 'character'::text AS kind, x.character_id AS id FROM src x
+    WHERE x.character_id > 0 AND x.character_id <> x.vc
+    UNION
+    SELECT x.killmail_id, x.day, x.system_id, 'corporation'::text AS kind, x.corporation_id AS id FROM src x
+    WHERE x.corporation_id > 0 AND x.corporation_id <> x.vco
+    UNION
+    SELECT x.killmail_id, x.day, x.system_id, 'alliance'::text AS kind, x.alliance_id AS id FROM src x
+    WHERE x.alliance_id > 0 AND x.alliance_id <> x.val
+)
+INSERT INTO kill_entity_daily_systems_rebuild (day, kind, entity_id, system_id, events)
+SELECT att.day, att.kind, att.id, att.system_id, COUNT(*)::bigint
+FROM att
+GROUP BY att.day, att.kind, att.id, att.system_id
+ON CONFLICT (day, kind, entity_id, system_id) DO UPDATE SET
+    events = kill_entity_daily_systems_rebuild.events + EXCLUDED.events
+`
+
+type RebuildKillEntityDailySystemsChunkParams struct {
+	AfterID   int64 `json:"after_id"`
+	ThroughID int64 `json:"through_id"`
+}
+
+func (q *Queries) RebuildKillEntityDailySystemsChunk(ctx context.Context, arg RebuildKillEntityDailySystemsChunkParams) error {
+	_, err := q.db.Exec(ctx, rebuildKillEntityDailySystemsChunk, arg.AfterID, arg.ThroughID)
+	return err
 }
 
 const replaceKillboardTop = `-- name: ReplaceKillboardTop :execrows
@@ -1720,6 +2006,15 @@ func (q *Queries) ReplaceKillboardTop(ctx context.Context, arg ReplaceKillboardT
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setKillStatsRebuildCursor = `-- name: SetKillStatsRebuildCursor :exec
+UPDATE kill_stats_rebuild_state SET cursor = $1::bigint WHERE id = 1
+`
+
+func (q *Queries) SetKillStatsRebuildCursor(ctx context.Context, cursor int64) error {
+	_, err := q.db.Exec(ctx, setKillStatsRebuildCursor, cursor)
+	return err
 }
 
 const setKillValue = `-- name: SetKillValue :exec
@@ -1762,6 +2057,15 @@ type SetKillfeedStateParams struct {
 
 func (q *Queries) SetKillfeedState(ctx context.Context, arg SetKillfeedStateParams) error {
 	_, err := q.db.Exec(ctx, setKillfeedState, arg.Sequence, arg.UpdatedAt)
+	return err
+}
+
+const startKillStatsRebuild = `-- name: StartKillStatsRebuild :exec
+UPDATE kill_stats_rebuild_state SET cursor = 0, started_at = $1::timestamptz, done_at = NULL WHERE id = 1
+`
+
+func (q *Queries) StartKillStatsRebuild(ctx context.Context, startedAt time.Time) error {
+	_, err := q.db.Exec(ctx, startKillStatsRebuild, startedAt)
 	return err
 }
 

@@ -25,6 +25,7 @@ type marketRegionStatRow struct {
 	TypicalSell string      // esi.FormatISK, "" when no sell orders
 	TypicalBuy  string      // esi.FormatISK, "" when no buy orders
 	Age         string      // "12 minutes ago", "" when HasData is false
+	At          time.Time   // the time Age counts from
 	Source      string      // fallbackSourceLabel on fallback rows, "Global PLEX market" on global-book rows, "" on our own
 	Hub         bool        // a hub region (its market page exists); the all-regions strip also lists others
 	Chg7        trendFigure // 7-day change of the typical sell, from the stat pack (own rows only)
@@ -83,7 +84,7 @@ func (app *Application) attachRegionStats(ctx context.Context, item *marketItem)
 			if res.TypicalBuy > 0 {
 				row.TypicalBuy = esi.FormatISK(res.TypicalBuy)
 			}
-			row.Age = ageText(now, res.AsOf)
+			row.Age, row.At = ageText(now, res.AsOf), res.AsOf
 			if res.Fallback {
 				row.Source = fallbackSourceLabel
 			} else if fromGlobal {

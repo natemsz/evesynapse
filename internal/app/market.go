@@ -143,7 +143,8 @@ type marketItem struct {
 	// anonymous-market switch is off).
 	Anonymous    bool
 	BookPending  bool
-	BookStoredAt string // age of the stored sweep book shown, "" unless it came from one
+	BookStoredAt string    // age of the stored sweep book shown, "" unless it came from one
+	BookSweptAt  time.Time // when that sweep ran; the page ticks BookStoredAt from it
 	// The house appraisal value (resolveAppraisalPrice) and its
 	// basis line: The Forge swept typical sell, stored true-value
 	// estimated sell, or Fuzzwork fallback with provenance.
@@ -1060,7 +1061,7 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 			if b := app.heldHubBook(regionID); b != nil && b.sweptAt.After(sweptAt) {
 				sweptAt = b.sweptAt // the row is unchanged since; the sweep confirmed it
 			}
-			item.BookStoredAt = ageText(time.Now(), sweptAt)
+			item.BookStoredAt, item.BookSweptAt = ageText(time.Now(), sweptAt), sweptAt
 		} else {
 			item.BookPending = true
 			app.attachEstimatedValue(ctx, item, 0)
@@ -1070,13 +1071,13 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		// A swept hub: the whole book from the held hub book, read
 		// from ESI by the sweep moments ago.
 		sells, buys = hs, hb
-		item.BookStoredAt = ageText(time.Now(), sweptAt)
+		item.BookStoredAt, item.BookSweptAt = ageText(time.Now(), sweptAt), sweptAt
 	} else if stored, stat, ok := app.storedBook(ctx, regionID, typeID); ok {
 		// No hub book in memory (a fresh start, or sweeps running
 		// late): the last sweep's stored top orders, with their age.
 		sells, buys = stored.sells, stored.buys
 		fromSnapshot = stat
-		item.BookStoredAt = ageText(time.Now(), stat.UpdatedAt)
+		item.BookStoredAt, item.BookSweptAt = ageText(time.Now(), stat.UpdatedAt), stat.UpdatedAt
 	} else {
 		var err error
 		if sells, buys, truncated, err = app.fetchOrderBook(ctx, regionID, typeID); err != nil {

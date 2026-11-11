@@ -7,18 +7,22 @@
 .mkt-item-actions { display: flex; justify-content: flex-end; }
 
 /* ---- Market Item Details Layout (layout.css adaptation) ---- */
+/* The item page's top bar: search, character picker, then the watch
+   and details buttons. Mid widths give search its own row and set the
+   picker and buttons below it; wide widths hold all three on one row.
+   When the buttons outgrow the picker's row they take a row of their
+   own rather than squeezing the picker. */
 .mkt-topbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 0.65rem 1rem;
 }
 .mkt-top-search {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex: 1 1 20rem;
+  flex: 1 1 100%;
   min-width: 0;
   margin: 0;
 }
@@ -29,13 +33,33 @@
 .mkt-top-search > .searchwrap > input {
   width: 100%;
 }
+.mkt-topbar > .mkt-top-pick { flex: 1 1 14rem; width: auto; max-width: 26rem; }
 .mkt-top-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.45rem;
   margin-left: auto;
 }
+.mkt-top-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+.mkt-top-group:not(:has(*)) { display: none; }
+.mkt-topbar:not(:has(> .mkt-top-pick)) > .mkt-top-search { flex-basis: 20rem; }
+/* One row once search, picker and buttons all fit; the longer
+   watching controls need more room before they join it. */
+@container page (width >= 80rem) {
+  .mkt-topbar:not(:has(.mkt-watch-label)) > .mkt-top-search { flex-basis: 18rem; min-width: 24rem; }
+  .mkt-topbar:not(:has(.mkt-watch-label)) > .mkt-top-pick { flex: 0 1 20rem; }
+}
+@container page (width >= 104rem) {
+  .mkt-topbar > .mkt-top-search { flex-basis: 18rem; min-width: 24rem; }
+  .mkt-topbar > .mkt-top-pick { flex: 0 1 20rem; }
+}
+@container page (width < 36rem) {
+  .mkt-topbar > .mkt-top-pick { flex-basis: 100%; max-width: none; }
+  .mkt-top-actions { justify-content: flex-start; margin-left: 0; }
+}
+
 .mkt-watch-inline {
   display: inline-flex;
   align-items: center;
@@ -50,9 +74,7 @@
   color: var(--muted);
   white-space: nowrap;
 }
-.mkt-watch-label input {
-  width: 3.6rem;
-}
+.mkt-watch-threshold { width: 4.2rem; }
 .mkt-badge {
   display: inline-flex;
   align-items: center;
@@ -397,17 +419,6 @@
 }
 
 @container page (width < 45rem) {
-  .mkt-topbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .mkt-top-search {
-    flex: 1 1 auto;
-  }
-  .mkt-top-actions {
-    margin-left: 0;
-    justify-content: flex-start;
-  }
   .mkt-hero-head {
     flex-direction: column;
     align-items: stretch;

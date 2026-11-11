@@ -40,9 +40,10 @@ const sweepBatchSize = 2000
 
 const (
 	// regionSweepGate is how stale a region's stored stats may
-	// get before the lane sweeps that region again: two of ESI's
-	// five-minute windows on the market order route.
-	regionSweepGate = 10 * time.Minute
+	// get before the lane sweeps that region again: one of ESI's
+	// five-minute windows on the market order route, so each hub
+	// is read once per copy ESI publishes and never twice.
+	regionSweepGate = 5 * time.Minute
 	// maxRegionSweepPagesTotal is a safety stop far beyond any
 	// real book: if a region ever reported more pages than
 	// this, the sweep reads only this many.
@@ -337,17 +338,34 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	day := now.Format("2006-01-02")
 	nb.sweptAt, nb.day = now, day
 
-	// Sold per day per type, distilled from market_history in one
-	// aggregate pass and stored on the region rows -- the 7-day
-	// average the scanner and tradefinder read. Types with no
-	// recorded history are absent here and store 0.
-	avgRows, err := app.queries.ListMarketAvgDailyVolumes(ctx, regionID)
+	// Sold per day per type, the 7-day average the scanner and
+	// tradefinder read. History ingest keeps it current on the
+	// region's stats rows (RefreshMarketRegionStatAvgVolume), so the
+	// sweep reads those; only types the region's book has just
+	// gained are computed here, by key. Types with no recorded
+	// history store 0.
+	avgRows, err := app.queries.ListMarketRegionAvgVolumes(ctx, regionID)
 	if err != nil {
 		return res, err
 	}
-	nb.avgVolume = make(map[int64]float64, len(avgRows))
+	nb.avgVolume = make(map[int64]float64, len(nb.types))
 	for _, row := range avgRows {
 		nb.avgVolume[row.TypeID] = row.AvgDailyVolume
+	}
+	var gained []int64
+	for typeID := range nb.types {
+		if _, ok := nb.avgVolume[typeID]; !ok {
+			gained = append(gained, typeID)
+		}
+	}
+	if len(gained) > 0 {
+		newRows, err := app.queries.ListMarketAvgDailyVolumesForTypes(ctx, db.ListMarketAvgDailyVolumesForTypesParams{RegionID: regionID, TypeIds: gained})
+		if err != nil {
+			return res, err
+		}
+		for _, row := range newRows {
+			nb.avgVolume[row.TypeID] = row.AvgDailyVolume
+		}
 	}
 
 	res.full = ob == nil || ob.day != day

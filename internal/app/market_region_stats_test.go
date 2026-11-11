@@ -417,14 +417,13 @@ func TestRegionSweepStoresAvgDailyVolume(t *testing.T) {
 	}
 }
 
-// The hub sweep cadence is 30 minutes (owner ruling
-// 2026-10-17): a region whose stored stats are 45 minutes old
-// is due again -- under the old hourly gate it was not -- and
-// one 15 minutes old is not. The constant itself is pinned so
-// a silent drift back fails here first.
+// The hub sweep reads each region once per ESI market window (five
+// minutes): stats younger than the gate are left alone, and a region
+// past the gate waits for the window to roll over before it starts.
+// The constant itself is pinned so a drift fails here first.
 func TestRegionSweepWaitsForTheGateAndTheWindowRollover(t *testing.T) {
-	if regionSweepGate != 10*time.Minute {
-		t.Fatalf("regionSweepGate = %v, want 10m", regionSweepGate)
+	if regionSweepGate != 5*time.Minute {
+		t.Fatalf("regionSweepGate = %v, want 5m", regionSweepGate)
 	}
 
 	transport := &pagedBookTransport{books: map[int64][][]esi.MarketOrder{}}
@@ -464,13 +463,13 @@ func TestRegionSweepWaitsForTheGateAndTheWindowRollover(t *testing.T) {
 		{{OrderID: 1, TypeID: 34, IsBuyOrder: false, Price: 5.0, VolumeRemain: 100}},
 	}
 
-	// 5 minutes old: inside the gate, nothing is fetched.
-	stamp(time.Now().UTC().Add(-5 * time.Minute))
+	// 2 minutes old: inside the gate, nothing is fetched.
+	stamp(time.Now().UTC().Add(-2 * time.Minute))
 	if pages := sweep(); len(pages) != 0 {
-		t.Fatalf("5-minute-old stats were re-swept: fetched pages %v", pages)
+		t.Fatalf("2-minute-old stats were re-swept: fetched pages %v", pages)
 	}
 	// Past the gate but in the middle of ESI's window: it waits.
-	stamp(time.Now().UTC().Add(-12 * time.Minute))
+	stamp(time.Now().UTC().Add(-6 * time.Minute))
 	window(2*time.Minute + 30*time.Second)
 	if pages := sweep(); len(pages) != 0 {
 		t.Fatalf("a sweep started mid-window: fetched pages %v", pages)

@@ -13,14 +13,27 @@
 
 /* Tabs: the framework's segmented control; each count is a quiet
    chip, the Beaten one in the danger tone while anything is beaten. */
-.fo-seg { margin: 0 0 var(--space-3); }
+/* The tabs and the open orders' beaten filter share one toolbar:
+   one row when both fit, the filter under the tabs when not. The
+   filter only speaks for the Open tab, so it leaves with it. */
+.fo-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); }
+.fo-bar > .fo-seg, .fo-bar > .fo-key { margin: 0; }
+.fo-tabs:has(.fo-bar.tabs-on #fo-open-tab[aria-selected="false"]) .fo-bar > .fo-key { display: none; }
+/* A tab is a flex box (every button is), which drops the spaces
+   between its words: the gap puts them back. */
+.fo-seg > [role="tab"] { align-items: center; column-gap: 0.35rem; }
+.fo-seg .fo-cnt { margin-left: 0; }
+@container page (max-width: 34rem) {
+  .fo-bar > .fo-seg { display: flex; flex-wrap: nowrap; width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .fo-seg > [role="tab"] { flex: 1 1 auto; justify-content: center; padding: 0 0.4rem; column-gap: 0.25rem; }
+}
 /* On a phone the tab names drop their qualifiers to stay one row. */
 @container page (max-width: 34rem) { .fo-long { display: none; } }
 .fo-cnt { display: inline-block; min-width: 1.4em; margin-left: 0.35rem; padding: 0 0.35em; border-radius: 999px; background: var(--hairline); color: var(--text); font-family: var(--font-num); font-size: var(--fs-2xs); text-align: center; }
 .fo-cnt.bad { background: color-mix(in srgb, var(--danger) 30%, transparent); color: var(--text-bright); }
 .fo-h { margin: 0 0 var(--space-3); color: var(--gold); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .fo-tabs > [role="tabpanel"] + [role="tabpanel"] { margin-top: var(--space-5); }
-.fo-tabs.tabs-on > [role="tabpanel"] + [role="tabpanel"] { margin-top: 0; }
+.fo-bar.tabs-on ~ [role="tabpanel"] + [role="tabpanel"] { margin-top: 0; }
 .fo-lead { max-width: 70ch; margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--fs-sm); }
 .fo-note { margin: var(--space-3) 0 0; color: var(--muted); }
 .fo-key { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); }

@@ -1017,8 +1017,9 @@ type application struct {
 
 // penaltySubject reports whether this application sits in a
 // stacking-penalty chain for its attribute: multiplicative op
-// (pre or post), non-stackable attribute, fitted-module source.
+// (pre or post), non-stackable attribute, fitted module or rig.
 // Two Ballistic Control Systems are the pre-multiply case.
+// Subsystems, like the hull, skills and implants, are exempt.
 func (app application) penaltySubject(snap *Snapshot) bool {
 	switch app.mod.Operation {
 	case opPreMultiply, opPreDivide, opPostMult, opPostDivide, opPostPercent:
@@ -1029,7 +1030,7 @@ func (app application) penaltySubject(snap *Snapshot) bool {
 		return false
 	}
 	switch app.source.kind {
-	case entModule, entRig, entSubsystem:
+	case entModule, entRig:
 		return true
 	}
 	return false

@@ -1193,15 +1193,20 @@ type FitTile struct {
 
 // FitStatsView is the fitting stat panel, preformatted.
 type FitStatsView struct {
-	Powergrid     FitBarRow
-	CPU           FitBarRow
-	Align         string
-	Velocity      string
-	Signature     string
-	Capacitor     string // capacity
-	CapPeak       string
-	CapDraw       string
-	CapInject     string // capacitor boosters, empty without one
+	Powergrid FitBarRow
+	CPU       FitBarRow
+	Align     string
+	Velocity  string
+	Signature string
+	Capacitor string // capacity
+	CapPeak   string
+	CapDraw   string
+	CapInject string // capacitor boosters, empty without one
+	// The damage-at-range chart (FitRange): its data, the inline
+	// sparkline's points and the axis end; empty without damage.
+	RangeJSON     string
+	RangeSpark    string
+	RangeEnd      string
 	CapState      string
 	CapStable     bool
 	TurretDPS     string
@@ -1615,6 +1620,10 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 	view.CalLeftNum = res.CalibrationMax - res.CalibrationUsed
 	view.ChargeSets = app.FitBuildChargeSets(ctx, doc, snap, nameOf)
 	view.Stats = FitBuildStats(res)
+	if rd, js, spark := FitRange(res, nameOf); rd != nil {
+		view.Stats.RangeJSON, view.Stats.RangeSpark = js, spark
+		view.Stats.RangeEnd = FitFmt1(rd.EndKm) + " km"
+	}
 	// Implants count toward the pilot's missing skills like modules.
 	skillItems := append([]fit.ItemInput{}, engineItems...)
 	for _, id := range implantIDs {

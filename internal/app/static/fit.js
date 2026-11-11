@@ -253,6 +253,7 @@ var FitGauges = (function () {
         normItems();
       }
       reanchorTip();
+      if (window.FitRange) window.FitRange.refresh();
       syncFold();
       syncImpFold();
       syncSummary();

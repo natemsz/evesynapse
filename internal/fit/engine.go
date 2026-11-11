@@ -909,6 +909,11 @@ type Result struct {
 	WeaponDPS    map[string]float64
 	WeaponVolley map[string]float64
 
+	// Weapons is each fitted weapon group's damage with what its
+	// reach and application depend on, in fitting order: the
+	// damage-at-range chart's input (WeaponReach.DamageAt).
+	Weapons []WeaponReach
+
 	// Unmodeled lists modifier shapes the engine deliberately
 	// skipped (deduped, sorted): domains/funcs it cannot target,
 	// overload-category effects, and similar.

@@ -498,6 +498,3 @@ html.fit-dragging, html.fit-dragging * { -webkit-user-select: none; user-select:
 }
 .fit-range-table td { text-align: right; padding: 0.2rem 0.4rem; border-top: 1px solid var(--hairline); }
 .fit-range-table th:first-child, .fit-range-table td:first-child { text-align: left; }
-@media (max-width: 40rem) {
-  .fit-range { width: 100%; height: 100%; max-height: none; border-radius: 0; border: 0; }
-}

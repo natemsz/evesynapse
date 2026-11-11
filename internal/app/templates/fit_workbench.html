@@ -187,8 +187,10 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}{{if .FighterVolley}} · fighters {{.FighterVolley}}{{end}}</span>
       </div>
     </div>
-    {{if or .NeutDrain .NosDrain .Breacher}}<dl class="fit-kv fit-kv-drain">
+    {{if or .NeutDrain .NosDrain .Breacher .Bomb .Doomsday}}<dl class="fit-kv fit-kv-drain">
       {{if .Breacher}}<div><dt>Breacher pod</dt><dd>{{.Breacher}}</dd></div>{{end}}
+      {{if .Bomb}}<div><dt>Bomb</dt><dd>{{.Bomb}}</dd></div>{{end}}
+      {{if .Doomsday}}<div><dt>Doomsday</dt><dd>{{.Doomsday}}</dd></div>{{end}}
       {{if .NeutDrain}}<div><dt>Neutralizer drain</dt><dd>{{.NeutDrain}}</dd></div>{{end}}
       {{if .NosDrain}}<div><dt>Nosferatu drain</dt><dd>{{.NosDrain}}</dd></div>{{end}}
     </dl>{{end}}
@@ -232,8 +234,32 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         {{- if .CapInject}}
         <div><dt>Boosters</dt><dd data-fit-fig="capinject">{{.CapInject}}</dd></div>
         {{- end}}
+        {{- if .CapNosState}}
+        <div><dt>With nosferatu</dt><dd>{{.CapNosState}}</dd></div>
+        {{- end}}
       </dl>
     </section>
+
+    {{if or .LogiShield .LogiArmor .LogiHull .LogiCap}}<section class="fit-panel" aria-label="Logistics">
+      <h5>Logistics <span class="fit-panel-side">on another ship</span></h5>
+      <dl class="fit-kv">
+        {{if .LogiShield}}<div><dt>Shield repair</dt><dd>{{.LogiShield}}</dd></div>{{end}}
+        {{if .LogiArmor}}<div><dt>Armor repair</dt><dd>{{.LogiArmor}}</dd></div>{{end}}
+        {{if .LogiArmorSpool}}<div><dt>Armor, ramped up</dt><dd>{{.LogiArmorSpool}}</dd></div>{{end}}
+        {{if .LogiHull}}<div><dt>Hull repair</dt><dd>{{.LogiHull}}</dd></div>{{end}}
+        {{if .LogiCap}}<div><dt>Capacitor transfer</dt><dd>{{.LogiCap}}</dd></div>{{end}}
+      </dl>
+    </section>{{end}}
+
+    {{if or .MineOre .MineIce .MineGas}}<section class="fit-panel" aria-label="Mining">
+      <h5>Mining</h5>
+      <dl class="fit-kv">
+        {{if .MineOre}}<div><dt>Ore</dt><dd>{{.MineOre}}</dd></div>{{end}}
+        {{if .MineIce}}<div><dt>Ice</dt><dd>{{.MineIce}}</dd></div>{{end}}
+        {{if .MineGas}}<div><dt>Gas</dt><dd>{{.MineGas}}</dd></div>{{end}}
+        {{if .MineWaste}}<div><dt>Waste</dt><dd>{{.MineWaste}}</dd></div>{{end}}
+      </dl>
+    </section>{{end}}
 
     <section class="fit-panel" aria-label="Defense">
       <h5>Defense <span class="fit-panel-side"><span class="fit-ehp" data-fit-fig="ehp">{{.EHPOmni}}</span> <abbr title="Effective hit points">EHP</abbr></span></h5>

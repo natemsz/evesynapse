@@ -863,6 +863,43 @@ type Result struct {
 	NeutDrainPerSec   float64
 	NosDrainPerCycle  float64
 	NosDrainPerSec    float64
+	// The capacitor with nosferatu running against a target whose
+	// capacitor is fuller, so the drain comes back as capacitor.
+	// Set only with nosferatu fitted.
+	CapacitorNosStable        bool
+	CapacitorNosPercent       float64
+	CapacitorNosDepletionSecs float64
+
+	// Logistics: what the fit repairs or transfers on another ship,
+	// from remote modules and repair drones, a second. A
+	// mutadaptive remote repairer ramps up: RemoteArmorSpooled is
+	// the armor rate at its full bonus, reached after
+	// RemoteArmorSpoolSeconds (both 0 without one).
+	RemoteShieldRate        float64
+	RemoteArmorRate         float64
+	RemoteArmorSpooled      float64
+	RemoteArmorSpoolSeconds float64
+	RemoteHullRate          float64
+	RemoteCapRate           float64
+
+	// Mining: m3 a second of ore, ice and gas, crits counted, and
+	// the highest chance a cycle wastes part of its yield (%).
+	MiningOre          float64
+	MiningIce          float64
+	MiningGas          float64
+	MiningWastePercent float64
+
+	// A bomb launcher's bomb (damage, blast radius m, seconds
+	// between bombs) and a doomsday's strike (damage per hit,
+	// seconds between uses; a lance or reaper hits DoomsdayTicks
+	// times, a second apart, in DoomsdayRadius m). Not in DPS.
+	BombDamage      float64
+	BombRadius      float64
+	BombSeconds     float64
+	DoomsdayDamage  float64
+	DoomsdaySeconds float64
+	DoomsdayTicks   int
+	DoomsdayRadius  float64
 
 	ShieldHP float64
 	ArmorHP  float64

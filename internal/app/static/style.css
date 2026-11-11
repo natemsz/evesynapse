@@ -1975,6 +1975,12 @@ td, dd, .kpi-v, .fit-headline-num, .fit-bar-nums, .fit-count, .fit-chip-qty, .fi
   font-family: "Synapse Numerals", "Eve Sans Neue", "Inter", "Segoe UI", sans-serif;
 }
 .prose-figs { font-family: "Eve Sans Neue", "Inter", "Segoe UI", sans-serif; }
+/* A pill, tag or badge in a cell is a label with a figure in it
+   ("BPC · ME 9% / TE 18%", "Deal -87%"): its digits read with its
+   words, in the body face. A pill that holds a bare figure (security
+   status, a count) keeps the numeral face, and a pill that names its
+   own face keeps it (no specificity here, so any class rule wins). */
+:where(td, dd) :where([class*="pill"], [class*="badge"], [class*="tag"], .cs-rolltag):where(:not(.sec-pill, .mkt-badge, [class*="stag"])) { font-family: var(--font-body); }
 /* Money in and out: losses soft red, gains muted green. */
 td.neg, .neg { color: #ff4d4d; }
 td.pos, .pos { color: #28c76f; }

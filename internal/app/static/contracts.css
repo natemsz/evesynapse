@@ -599,6 +599,10 @@
 .cs-itemline { display: flex; align-items: center; gap: 0.5rem; font-size: var(--fs-xs); margin-bottom: 0.25rem; }
 .cs-itemline:last-child { margin-bottom: 0; }
 .cs-line-name { color: var(--text-bright); font-weight: 500; }
+/* A row's words (title, issuer line, item names, "priced 86 of 86
+   lines", expiry) keep the body face's digits; prices, values and
+   quantities stay in the numeral face their cells give them. */
+.cs-row :is(.cs-row-title, .cs-row-meta, .cs-row-issuer, .cs-line-name, .cs-morelines, .cs-priced, .cs-expires, .cs-place) { font-family: var(--font-body); }
 .cs-qty { color: #ff9848; }
 .cs-wants {
   color: var(--muted); font-weight: 700; font-size: var(--fs-2xs);

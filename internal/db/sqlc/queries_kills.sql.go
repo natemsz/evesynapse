@@ -1184,6 +1184,49 @@ func (q *Queries) ListKillsBySystem(ctx context.Context, arg ListKillsBySystemPa
 	return items, nil
 }
 
+const listKillsMissingAttackers = `-- name: ListKillsMissingAttackers :many
+SELECT k.killmail_id, k.hash, k.killmail_time FROM kills k
+WHERE k.killmail_id < $1::bigint
+  AND k.attacker_count > 0 AND k.hash <> ''
+  AND NOT EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id)
+ORDER BY k.killmail_id DESC
+LIMIT $2::bigint
+`
+
+type ListKillsMissingAttackersParams struct {
+	BeforeID int64 `json:"before_id"`
+	MaxRows  int64 `json:"max_rows"`
+}
+
+type ListKillsMissingAttackersRow struct {
+	KillmailID   int64     `json:"killmail_id"`
+	Hash         string    `json:"hash"`
+	KillmailTime time.Time `json:"killmail_time"`
+}
+
+// Kills whose attacker rows are gone (pruned before the stats fold
+// counted their ships), newest first below a keyset cursor, for the
+// restorer to read back from ESI by hash.
+func (q *Queries) ListKillsMissingAttackers(ctx context.Context, arg ListKillsMissingAttackersParams) ([]ListKillsMissingAttackersRow, error) {
+	rows, err := q.db.Query(ctx, listKillsMissingAttackers, arg.BeforeID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListKillsMissingAttackersRow
+	for rows.Next() {
+		var i ListKillsMissingAttackersRow
+		if err := rows.Scan(&i.KillmailID, &i.Hash, &i.KillmailTime); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listKillsMissingFeed = `-- name: ListKillsMissingFeed :many
 SELECT k.killmail_id FROM kills k
 WHERE NOT EXISTS (SELECT 1 FROM kill_entity_feed f WHERE f.killmail_id = k.killmail_id)
@@ -1673,7 +1716,7 @@ WHERE k.killmail_id = d.killmail_id AND k.killmail_time < $1::timestamptz
 // Retention: attacker detail, full killmails and per-item priced
 // lines older than the cutoff go; the summary row and the
 // involvement record stay. Values and who they credit are
-// permanent; only detail ages out. Past a year a kill is metadata
+// permanent; only detail ages out. Past two years a kill is metadata
 // for intel only (who, when, ship, total value), not a record.
 // Raw kill rows past retention go only once the kill is counted
 // into the daily statistics (an applied marker exists): the fold

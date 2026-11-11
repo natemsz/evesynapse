@@ -316,6 +316,8 @@ type zkillHistoryKind string
 const (
 	zkillHistoryCharacter   zkillHistoryKind = "characterID"
 	zkillHistoryCorporation zkillHistoryKind = "corporationID"
+	// zkillHistoryKill reads one kill by id: a one-entry page.
+	zkillHistoryKill zkillHistoryKind = "killID"
 )
 
 // zkillHistoryEntry is one killmail from zKillboard's history

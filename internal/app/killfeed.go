@@ -126,6 +126,24 @@ type killmailFull struct {
 	} `json:"attackers"`
 }
 
+// killAttackersParams is one kill's attacker rows, in killmail
+// order.
+func killAttackersParams(km killmailFull) db.InsertKillAttackersParams {
+	ap := db.InsertKillAttackersParams{KillmailID: km.KillmailID}
+	for i, a := range km.Attackers {
+		ap.Seqs = append(ap.Seqs, int32(i))
+		ap.CharacterIds = append(ap.CharacterIds, a.CharacterID)
+		ap.CorporationIds = append(ap.CorporationIds, a.CorporationID)
+		ap.AllianceIds = append(ap.AllianceIds, a.AllianceID)
+		ap.FactionIds = append(ap.FactionIds, a.FactionID)
+		ap.ShipTypeIds = append(ap.ShipTypeIds, a.ShipTypeID)
+		ap.WeaponTypeIds = append(ap.WeaponTypeIds, a.WeaponTypeID)
+		ap.DamageDones = append(ap.DamageDones, a.DamageDone)
+		ap.FinalBlows = append(ap.FinalBlows, a.FinalBlow)
+	}
+	return ap
+}
+
 // killItem is one victim item line; containers nest their contents.
 type killItem struct {
 	ItemTypeID        int64      `json:"item_type_id"`
@@ -423,18 +441,7 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 		// retention included: the stats fold reads them for ships
 		// flown, and the prune removes them only once the kill is
 		// counted.
-		ap := db.InsertKillAttackersParams{KillmailID: km.KillmailID}
-		for i, a := range km.Attackers {
-			ap.Seqs = append(ap.Seqs, int32(i))
-			ap.CharacterIds = append(ap.CharacterIds, a.CharacterID)
-			ap.CorporationIds = append(ap.CorporationIds, a.CorporationID)
-			ap.AllianceIds = append(ap.AllianceIds, a.AllianceID)
-			ap.FactionIds = append(ap.FactionIds, a.FactionID)
-			ap.ShipTypeIds = append(ap.ShipTypeIds, a.ShipTypeID)
-			ap.WeaponTypeIds = append(ap.WeaponTypeIds, a.WeaponTypeID)
-			ap.DamageDones = append(ap.DamageDones, a.DamageDone)
-			ap.FinalBlows = append(ap.FinalBlows, a.FinalBlow)
-		}
+		ap := killAttackersParams(km)
 		if len(ap.Seqs) > 0 {
 			if err := q.InsertKillAttackers(ctx, ap); err != nil {
 				return false, fmt.Errorf("store attackers %d: %w", km.KillmailID, err)
@@ -607,7 +614,10 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 		logging.Infof("killboard: priced %d kills", n)
 	}
 	app.publishKillboardStats(ctx)
-	if time.Since(app.killLastPruned) >= 24*time.Hour {
+	// The retention prune waits for the stats rebuild: the attacker
+	// rows the restorer reads back (killboard_restore.go) must
+	// stay until the rebuild has counted their ships.
+	if killPruneEnabled && time.Since(app.killLastPruned) >= 24*time.Hour {
 		app.killLastPruned = time.Now()
 		before := time.Now().UTC().Add(-killDetailRetention)
 		d, err1 := app.queries.PruneKillDetails(ctx, before)

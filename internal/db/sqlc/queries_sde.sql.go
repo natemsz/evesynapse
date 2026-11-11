@@ -814,12 +814,12 @@ func (q *Queries) ListFitBrowseGroups(ctx context.Context, arg ListFitBrowseGrou
 }
 
 const listFitBrowseTypes = `-- name: ListFitBrowseTypes :many
-SELECT b.type_id, b.name, COALESCE(g.name, '') AS group_name
+SELECT b.type_id, b.name, b.family, COALESCE(g.name, '') AS group_name
 FROM fit_browse_types b
 JOIN sde_types t ON t.type_id = b.type_id
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_type_attributes meta ON meta.type_id = b.type_id AND meta.attribute_id = 1692
-WHERE b.family = $1 AND b.market_group_id = $2
+WHERE ($1::text = 'all' OR b.family = $1::text) AND b.market_group_id = $2
   AND ($3::bigint = 0 OR ($3::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR ($3::bigint > 1 AND meta.value = $3::bigint))
 ORDER BY b.name
 LIMIT 200
@@ -834,11 +834,13 @@ type ListFitBrowseTypesParams struct {
 type ListFitBrowseTypesRow struct {
 	TypeID    int64  `json:"type_id"`
 	Name      string `json:"name"`
+	Family    string `json:"family"`
 	GroupName string `json:"group_name"`
 }
 
 // ListFitBrowseTypes: the types a family lists directly in one
-// market group, with the meta filter the picker search uses.
+// market group, with the meta filter the picker search uses. The
+// family 'all' lists every family's types in the group.
 func (q *Queries) ListFitBrowseTypes(ctx context.Context, arg ListFitBrowseTypesParams) ([]ListFitBrowseTypesRow, error) {
 	rows, err := q.db.Query(ctx, listFitBrowseTypes, arg.Family, arg.MarketGroupID, arg.Meta)
 	if err != nil {
@@ -848,7 +850,12 @@ func (q *Queries) ListFitBrowseTypes(ctx context.Context, arg ListFitBrowseTypes
 	var items []ListFitBrowseTypesRow
 	for rows.Next() {
 		var i ListFitBrowseTypesRow
-		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.Family,
+			&i.GroupName,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -3168,6 +3175,59 @@ func (q *Queries) SearchCorporationRecordsByName(ctx context.Context, lower stri
 	for rows.Next() {
 		var i SearchCorporationRecordsByNameRow
 		if err := rows.Scan(&i.CorporationID, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchFitBrowseTypes = `-- name: SearchFitBrowseTypes :many
+SELECT b.type_id, b.name, COALESCE(g.name, '') AS group_name
+FROM fit_browse_types b
+JOIN sde_types t ON t.type_id = b.type_id
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_type_attributes meta ON meta.type_id = b.type_id AND meta.attribute_id = 1692
+WHERE b.family = $1 AND strpos(lower(b.name), lower($2)) > 0
+  AND ($3::bigint = 0 OR ($3::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR ($3::bigint > 1 AND meta.value = $3::bigint))
+ORDER BY CASE WHEN strpos(lower(b.name), lower($2)) = 1 THEN 0 ELSE 1 END, b.name
+LIMIT $4::bigint
+`
+
+type SearchFitBrowseTypesParams struct {
+	Family string `json:"family"`
+	Q      string `json:"q"`
+	Meta   int64  `json:"meta"`
+	Lim    int64  `json:"lim"`
+}
+
+type SearchFitBrowseTypesRow struct {
+	TypeID    int64  `json:"type_id"`
+	Name      string `json:"name"`
+	GroupName string `json:"group_name"`
+}
+
+// SearchFitBrowseTypes: one family's Browse types by name (the
+// charge search when no weapon is named), with the picker's meta
+// filter.
+func (q *Queries) SearchFitBrowseTypes(ctx context.Context, arg SearchFitBrowseTypesParams) ([]SearchFitBrowseTypesRow, error) {
+	rows, err := q.db.Query(ctx, searchFitBrowseTypes,
+		arg.Family,
+		arg.Q,
+		arg.Meta,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchFitBrowseTypesRow
+	for rows.Next() {
+		var i SearchFitBrowseTypesRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

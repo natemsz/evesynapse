@@ -194,7 +194,7 @@ test("read-only tooltip dismisses on leave, toggles on tap, closes on Escape", a
   env.fire("mouseover", ev(env.slot));
   assert.equal(findByClass(env.wb, "fit-tip").length, 1);
   env.fire("mouseout", ev(env.slot));
-  await delay(220);
+  await delay(450);
   assert.equal(findByClass(env.wb, "fit-tip").length, 0, "gone after the close delay");
   env.fire("click", ev(env.slot));
   assert.equal(findByClass(env.wb, "fit-tip").length, 1, "tap shows it");

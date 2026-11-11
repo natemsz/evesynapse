@@ -831,15 +831,29 @@ FROM fit_browse_groups
 WHERE family = @family AND parent_group_id = @parent_group_id
 ORDER BY name
 LIMIT 200;
--- ListFitBrowseTypes: the types a family lists directly in one
--- market group, with the meta filter the picker search uses.
--- name: ListFitBrowseTypes :many
+-- SearchFitBrowseTypes: one family's Browse types by name (the
+-- charge search when no weapon is named), with the picker's meta
+-- filter.
+-- name: SearchFitBrowseTypes :many
 SELECT b.type_id, b.name, COALESCE(g.name, '') AS group_name
 FROM fit_browse_types b
 JOIN sde_types t ON t.type_id = b.type_id
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_type_attributes meta ON meta.type_id = b.type_id AND meta.attribute_id = 1692
-WHERE b.family = @family AND b.market_group_id = @market_group_id
+WHERE b.family = @family AND strpos(lower(b.name), lower(@q)) > 0
+  AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
+ORDER BY CASE WHEN strpos(lower(b.name), lower(@q)) = 1 THEN 0 ELSE 1 END, b.name
+LIMIT @lim::bigint;
+-- ListFitBrowseTypes: the types a family lists directly in one
+-- market group, with the meta filter the picker search uses. The
+-- family 'all' lists every family's types in the group.
+-- name: ListFitBrowseTypes :many
+SELECT b.type_id, b.name, b.family, COALESCE(g.name, '') AS group_name
+FROM fit_browse_types b
+JOIN sde_types t ON t.type_id = b.type_id
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_type_attributes meta ON meta.type_id = b.type_id AND meta.attribute_id = 1692
+WHERE (@family::text = 'all' OR b.family = @family::text) AND b.market_group_id = @market_group_id
   AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
 ORDER BY b.name
 LIMIT 200;

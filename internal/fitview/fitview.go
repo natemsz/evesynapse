@@ -604,6 +604,7 @@ var fitGlyphKinds = map[string]string{
 	"Optimal": "optimal", "Falloff": "falloff", "Tracking": "tracking",
 	"Neuts": "capacitor", "Cap": "capacitor", "Capacitor": "capacitor", "Cap recharge": "capacitor",
 	"Armor HP": "armor", "Shield HP": "shield", "Shield recharge": "shield",
+	"Armor repair": "repair", "Shield boosting": "shieldboost",
 	"Boost": "navigation", "Strength": "navigation", "Signature": "navigation",
 	"CPU": "cpu", "PG": "powergrid", "Powergrid": "powergrid", "Calibration": "calibration",
 	"High slots": "fitting", "Mid slots": "fitting", "Low slots": "fitting",
@@ -775,9 +776,9 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 				}
 				add("Reps", FitVisualNum(amt/cyc)+" HP/s", class)
 				if n := len(lines); n > 0 && lines[n-1].Label == "Reps" {
-					lines[n-1].Kind = "armor" // the layer it repairs
+					lines[n-1].Kind = "repair" // a wrench for repairs
 					if repAttr == fit.AttrShieldBonus {
-						lines[n-1].Kind = "shield"
+						lines[n-1].Kind = "shieldboost"
 					}
 				}
 			}

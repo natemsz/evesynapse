@@ -901,8 +901,9 @@ func TestFitTipLinesColors(t *testing.T) {
 }
 
 // TestFitEditorBrowsePanel: the editor carries the Browse pane the
-// left column's Browse tab and the add-slot buttons open, with its
-// family chips, its search and its tree.
+// left column's Browse tab and the add-slot buttons open, and the
+// one kind filter that drives it and the module search, from All
+// through Charges and Cargo.
 func TestFitEditorBrowsePanel(t *testing.T) {
 	app, cookie := fitTestApp(t)
 	code, body := getPage(t, app, cookie, "/fittings/")
@@ -911,7 +912,8 @@ func TestFitEditorBrowsePanel(t *testing.T) {
 	}
 	mustContain(t, "browse panel", body,
 		`id="fit-browse"`,
-		`data-browse-fam="high"`,
-		`id="fit-browse-q"`,
-		`id="fit-browse-tree"`)
+		`id="fit-browse-tree"`,
+		`data-fam="all"`,
+		`data-fam="charge"`,
+		`data-fam="any"`)
 }

@@ -34,6 +34,11 @@ var fitBrowseFamilies = []string{
 	fitview.FitFamilyDrone, fitview.FitFamilyFighter, "charge",
 }
 
+// fitBrowseAll is the tree with no family filter: the groups of
+// every family's types laid out as one tree. Its types are not
+// stored again; they are read across the families by group.
+const fitBrowseAll = "all"
+
 // The dump's categories of ammunition and other charges, and of
 // structure modules and rigs (not for ships, so not in the tree).
 const (
@@ -133,29 +138,32 @@ func buildFitBrowse(parsed *parsedSDE) ([]fitBrowseGroup, []fitBrowseType) {
 			continue
 		}
 		types = append(types, fitBrowseType{family: fam, typeID: t.typeID, marketGroupID: t.marketGroupID, name: t.name})
-		if counts[fam] == nil {
-			counts[fam] = map[int64]int{}
-		}
 		// Walk to the top; the guard stops a malformed parent loop.
-		for id, hops := t.marketGroupID, 0; id != 0 && hops < 16; hops++ {
-			g, ok := mg[id]
-			if !ok {
-				break
+		// Every type also counts toward the All tree.
+		for _, into := range []string{fam, fitBrowseAll} {
+			if counts[into] == nil {
+				counts[into] = map[int64]int{}
 			}
-			counts[fam][id]++
-			id = g.parentGroupID
+			for id, hops := t.marketGroupID, 0; id != 0 && hops < 16; hops++ {
+				g, ok := mg[id]
+				if !ok {
+					break
+				}
+				counts[into][id]++
+				id = g.parentGroupID
+			}
 		}
 	}
 
 	var groups []fitBrowseGroup
-	for _, fam := range fitBrowseFamilies {
+	for _, fam := range append(fitBrowseFamilies, fitBrowseAll) {
 		c := counts[fam]
 		if len(c) == 0 {
 			continue
 		}
 		direct := map[int64]bool{}
 		for _, t := range types {
-			if t.family == fam {
+			if t.family == fam || fam == fitBrowseAll {
 				direct[t.marketGroupID] = true
 			}
 		}
@@ -168,10 +176,12 @@ func buildFitBrowse(parsed *parsedSDE) ([]fitBrowseGroup, []fitBrowseType) {
 			children[p] = append(children[p], id)
 		}
 		// Roots without types of their own give way to their
-		// children, then single-child tops do the same.
+		// children, then single-child tops do the same. The All
+		// tree keeps the market's roots: they are what tell its
+		// families apart.
 		var tops []int64
 		for _, id := range children[0] {
-			if direct[id] || len(children[id]) == 0 {
+			if fam == fitBrowseAll || direct[id] || len(children[id]) == 0 {
 				tops = append(tops, id)
 				continue
 			}

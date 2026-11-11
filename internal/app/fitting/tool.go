@@ -364,6 +364,19 @@ func (app *tool) handleFitPickerJSON(w http.ResponseWriter, r *http.Request) {
 				}
 				out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Kind: "charge"})
 			}
+			break
+		}
+		// No weapon named: charges by name, for the Charges filter.
+		if strings.TrimSpace(query) == "" {
+			break
+		}
+		rows, err := app.queries.SearchFitBrowseTypes(ctx, db.SearchFitBrowseTypesParams{Family: "charge", Q: query, Meta: meta, Lim: 40})
+		if err != nil {
+			logging.Errorf("fittings picker: charges: %v", err)
+			break
+		}
+		for _, row := range rows {
+			out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "charge"})
 		}
 	default:
 		if _, isSlot := fitview.FitSlotEffectByFamily[family]; isSlot {
@@ -422,7 +435,8 @@ type browseGroup struct {
 }
 
 // handleFitBrowseJSON serves GET /fittings/browse.json: one level of
-// a slot family's Browse tree (schema 142), the subgroups of
+// a slot family's Browse tree (schema 142; family "all" is the tree
+// with no family filter), the subgroups of
 // ?group= (0 = the top) and the types listed directly in it, each
 // with the picker's facts. Two keyed reads, at most 200 rows each.
 func (app *tool) handleFitBrowseJSON(w http.ResponseWriter, r *http.Request) {
@@ -449,7 +463,7 @@ func (app *tool) handleFitBrowseJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		items := make([]module.SuggestItem, 0, len(rows))
 		for _, row := range rows {
-			items = append(items, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: family})
+			items = append(items, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: row.Family})
 		}
 		out.Types = app.pickRows(r, app.newPickFilter(r).filter(items))
 	}

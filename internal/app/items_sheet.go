@@ -400,6 +400,13 @@ func (app *Application) handleItemSheetJSON(w http.ResponseWriter, r *http.Reque
 	_ = json.NewEncoder(w).Encode(out)
 }
 
+// sheetFigureKinds gives the figures with a glyph of their own
+// (fitview.FitGlyphKind's optimal, falloff, tracking) that kind
+// instead of their section's.
+var sheetFigureKinds = map[string]string{
+	"maxRange": "optimal", "falloff": "falloff", "trackingSpeed": "tracking",
+}
+
 // sheetTopRows is the start of a type's sheet as a tooltip shows it:
 // the first rows after the Fitting section (the tooltip states CPU
 // and powergrid already), without a module's own hitpoints, its tech
@@ -444,7 +451,11 @@ func sheetTopRows(v *itemSheetView) []itemSheetTopRow {
 				continue
 			}
 			if len(top) < itemSheetTopRows {
-				top = append(top, itemSheetTopRow{Label: row.Label, Value: row.Value, Section: strings.ToLower(sec.Title)})
+				kind := sheetFigureKinds[row.Name]
+				if kind == "" {
+					kind = strings.ToLower(sec.Title)
+				}
+				top = append(top, itemSheetTopRow{Label: row.Label, Value: row.Value, Section: kind})
 			}
 		}
 	}

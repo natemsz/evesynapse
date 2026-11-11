@@ -256,6 +256,8 @@ var FitGauges = (function () {
       }
       reanchorTip();
       syncFold();
+      syncImpFold();
+      syncSummary();
       syncDroneGauges();
       syncChargeButtons();
       syncFilterUI();
@@ -854,6 +856,9 @@ var FitGauges = (function () {
     if (!t || !t.getAttribute) return;
     var wb = workbench();
     if (wb && wb.contains(t)) {
+      // A module's name opens its details (fittip.js's drawer);
+      // it neither toggles the row's tooltip nor picks anything.
+      if (t.closest("[data-fit-info]")) { closeTip(); return; }
       if (t.closest("[data-fit-undo]")) { undo(); return; }
       if (t.closest("[data-fit-redo]")) { redo(); return; }
       var searchBtn = t.closest("[data-fit-search-btn]");
@@ -884,6 +889,7 @@ var FitGauges = (function () {
         return;
       }
       if (t.closest("[data-fit-solve-apply]")) { applySolvePicks(); return; }
+      if (t.closest("[data-fit-imp-fold]")) { impOpen = !impOpen; syncImpFold(); return; }
       var fold = t.closest("[data-fit-fold]");
       if (fold) { foldOpen[fold.closest(".fit-group").getAttribute("data-fit-group")] = !fold.closest(".fit-group").classList.contains("open"); syncFold(); return; }
       var impReset = t.closest("[data-fit-imp-reset]");
@@ -1104,17 +1110,19 @@ var FitGauges = (function () {
   function rowFacts(it) {
     var box = document.createElement("span");
     box.className = "sug-facts";
-    function fact(text, cls) {
+    // kind is the figure's glyph (the shared fg-* symbols).
+    function fact(text, cls, kind) {
       var f = document.createElement("span");
-      f.className = "sug-fact" + (cls ? " " + cls : "");
-      f.textContent = text;
+      f.className = "sug-fact" + (cls ? " " + cls : "") + (kind ? " k-" + kind : "");
+      if (kind && window.FitTipUI) f.appendChild(FitTipUI.glyph(kind));
+      f.appendChild(document.createTextNode(text));
       box.appendChild(f);
     }
     if (it.tier) fact(it.tier, "sug-tier");
-    if (it.stat) fact(it.stat, "sug-stat");
-    if (it.cpu) fact(fmtNum(it.cpu) + " tf");
-    if (it.pg) fact(fmtNum(it.pg) + " MW");
-    if (it.cal) fact(fmtNum(it.cal) + " cal");
+    if (it.stat) fact(it.stat, "sug-stat", it.statk || "");
+    if (it.cpu) fact(fmtNum(it.cpu) + " tf", "", "cpu");
+    if (it.pg) fact(fmtNum(it.pg) + " MW", "", "powergrid");
+    if (it.cal) fact(fmtNum(it.cal) + " cal", "", "calibration");
     if (it.price) fact(it.price + (it.est ? " est." : ""), "sug-price");
     if (it.id) {
       var info = document.createElement("button");
@@ -1390,6 +1398,20 @@ var FitGauges = (function () {
   // Folded lists (cargo past five items) keep their open state
   // across re-renders.
   var foldOpen = {};
+  // Implants fold to one line while they are the clone's own set
+  // (the server folds them); Edit opens the slots, and they stay
+  // open across re-renders until folded again.
+  var impOpen = false;
+  function syncImpFold() {
+    var g = editor.querySelector(".fit-implant-group");
+    if (!g) return;
+    var btn = g.querySelector("[data-fit-imp-fold]");
+    if (!btn) return; // edited sets render open
+    g.classList.toggle("fit-imp-open", impOpen);
+    btn.setAttribute("aria-expanded", impOpen ? "true" : "false");
+    var act = btn.querySelector(".fit-imp-fold-act");
+    if (act) act.textContent = impOpen ? "Done" : "Edit";
+  }
   function syncFold() {
     var groups = editor.querySelectorAll(".fit-fold");
     for (var i = 0; i < groups.length; i++) {
@@ -1470,10 +1492,10 @@ var FitGauges = (function () {
         btn.title = "Load a charge";
         btn.classList.add("fit-charge-btn-empty");
       }
-      // The button rides at the end of the row's name block,
-      // beside the name it loads charges for.
-      var host = chip.querySelector(".fit-chip-main") || chip;
-      host.appendChild(btn);
+      // The button leads the row's controls, on one line with the
+      // module state and the stepper.
+      var host = chip.querySelector(".fit-chip-ctl");
+      if (host) host.insertBefore(btn, host.firstChild); else chip.appendChild(btn);
     }
   }
   var chargeDrawerFor = "";
@@ -2157,12 +2179,15 @@ var FitGauges = (function () {
   function dragSourceAt(ev) {
     var t = ev.target;
     if (!t || !t.closest) return null;
-    if (t.closest("[data-fit-info], .fit-tip")) return null;
+    // A row's name is its details link on a click, and still a
+    // handle to drag the row by.
+    var byName = t.closest(".fit-chip > .fit-chip-main > .fit-chip-name");
+    if (!byName && t.closest("[data-fit-info], .fit-tip")) return null;
     var row = t.closest(".fit-vslot.filled, [data-fit-pick]");
     if (row) return row;
     // A rack, bay or cargo row drags from anywhere but its own
     // controls (steppers, count field).
-    if (t.closest("button, input, select, textarea, a")) return null;
+    if (!byName && t.closest("button, input, select, textarea, a")) return null;
     return t.closest(".fit-group .fit-chip[data-fit-rowtype]");
   }
   // sourceOf describes what is being dragged: where it comes from
@@ -2946,6 +2971,50 @@ var FitGauges = (function () {
       headToggle.setAttribute("aria-expanded", open ? "true" : "false");
     });
   }
+  // --- paste to import ---------------------------------------------
+  // EFT text pasted anywhere on the page outside a text field opens
+  // as the fit, through the Import form's own route. Replacing a
+  // fit with unsaved changes asks first.
+  var eftHead = /^\s*\[[^,\]\n]+,[^\]\n]*\]/;
+  document.addEventListener("paste", function (ev) {
+    if (!document.body.contains(editor)) return;
+    var t = ev.target;
+    if (t && t.closest && t.closest("input, textarea, select, [contenteditable]")) return;
+    var text = ev.clipboardData ? ev.clipboardData.getData("text/plain") : "";
+    if (!text || !eftHead.test(text)) return;
+    ev.preventDefault();
+    if (dirty && state.shipTypeId && !window.confirm("Replace this fit with the pasted one? Unsaved changes are lost.")) return;
+    var importArea = document.getElementById("fit-eft-in");
+    var form = importArea && importArea.form;
+    if (!form) return;
+    importArea.value = text;
+    if (form.requestSubmit) form.requestSubmit(); else form.submit();
+  });
+
+  // --- sticky summary ----------------------------------------------
+  // The stats column's one-line summary shows once its headline
+  // figures scroll out of view, parked under the module search.
+  var sumObserver = null;
+  function syncSummary() {
+    if (sumObserver) { sumObserver.disconnect(); sumObserver = null; }
+    var sum = editor.querySelector(".fit-sum");
+    var head = editor.querySelector(".fit-stats .fit-headline");
+    if (!sum || !head || !window.IntersectionObserver) return;
+    // The line the summary parks on: under the stuck module search.
+    var ms = document.getElementById("fit-modsearch");
+    var stack = 0;
+    if (ms && ms.offsetParent) stack = (parseFloat(getComputedStyle(ms).top) || 0) + ms.getBoundingClientRect().height;
+    stack = Math.round(stack);
+    editor.style.setProperty("--fit-sum-top", (stack + 6) + "px");
+    sumObserver = new IntersectionObserver(function (entries) {
+      var e = entries[entries.length - 1];
+      sum.classList.toggle("on", !e.isIntersecting && e.boundingClientRect.top < stack);
+    }, { rootMargin: "-" + stack + "px 0px 0px 0px" });
+    sumObserver.observe(head);
+  }
+  syncSummary();
+  if (window.addEventListener) window.addEventListener("resize", function () { syncSummary(); });
+
   syncShipGate();
   editor.addEventListener("keydown", function (ev) {
     if (ev.key !== "Enter" && ev.key !== " ") return;
@@ -3407,6 +3476,7 @@ var FitGauges = (function () {
       return;
     }
     var el = roTarget(ev);
+    if (el && ev.target.closest("[data-fit-info]")) { closeTip(); return; } // the details drawer opens instead
     if (el) {
       if (hoverEl === el && tipEl) closeTip(); else showTip(el);
       return;

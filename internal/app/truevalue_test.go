@@ -709,7 +709,7 @@ func TestTrueValueFitPricing(t *testing.T) {
 		ShipTypeID: 11567,
 		Items:      []fitview.FitDocItem{{TypeID: 3001, Qty: 2}, {TypeID: 3002, Qty: 3}, {TypeID: 3005, Qty: 1}},
 	}
-	cost := app.FitBuilder().FitCost(ctx, doc)
+	cost := app.FitBuilder().FitCost(ctx, doc, nil)
 	if cost.HullRaw != 590e9 || cost.TotalRaw != want {
 		t.Errorf("FitCost hull/total = %v / %v, want 590e9 / %v", cost.HullRaw, cost.TotalRaw, want)
 	}
@@ -933,7 +933,7 @@ func TestFitPricingGlobalMarketFill(t *testing.T) {
 		ShipTypeID: 3010,
 		Items:      []fitview.FitDocItem{{TypeID: 3007, Qty: 2}, {TypeID: 3008, Qty: 3}},
 	}
-	cost := app.FitBuilder().FitCost(ctx, doc)
+	cost := app.FitBuilder().FitCost(ctx, doc, nil)
 	if cost.HullRaw != 7_500_000 || cost.TotalRaw != want {
 		t.Errorf("FitCost hull/total = %v / %v, want 7500000 / %v (the global fill, same as the reprice)", cost.HullRaw, cost.TotalRaw, want)
 	}

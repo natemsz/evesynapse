@@ -47,6 +47,10 @@ func Compute(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int
 	f.mobilityAndTargeting()
 
 	f.res.Unmodeled = f.unmodeledList()
+	for id := range f.unmodeledBy {
+		f.res.UnmodeledBy = append(f.res.UnmodeledBy, id)
+	}
+	sort.Slice(f.res.UnmodeledBy, func(i, j int) bool { return f.res.UnmodeledBy[i] < f.res.UnmodeledBy[j] })
 	return f.res
 }
 
@@ -79,8 +83,10 @@ type fitting struct {
 	// apps is every modifier bound to a target (bindModifiers).
 	apps []application
 
-	// unmodeled collects what the engine met and does not model.
-	unmodeled map[string]bool
+	// unmodeled collects what the engine met and does not model;
+	// unmodeledBy the types whose effects those were.
+	unmodeled   map[string]bool
+	unmodeledBy map[int64]bool
 
 	// spoolExtra is the DPS spool-up weapons add at full spool.
 	spoolExtra float64
@@ -119,11 +125,22 @@ func newFitting(snap *Snapshot, shipTypeID int64, levels map[int64]int) *fitting
 		weaponCharge: make(map[int64]*entity),
 		skills:       make(map[int64]*entity),
 		unmodeled:    make(map[string]bool),
+		unmodeledBy:  make(map[int64]bool),
 	}
 }
 
 // note records something the engine met and does not model.
 func (f *fitting) note(s string) { f.unmodeled[s] = true }
+
+// noteFrom is note for an effect a fitted item (or the hull, an
+// implant, a charge) carries, so the gap can name what it is about.
+// Skills and the character are no single item to name.
+func (f *fitting) noteFrom(source *entity, s string) {
+	f.note(s)
+	if source != nil && source.kind != entSkill && source.kind != entChar && source.typeID != 0 {
+		f.unmodeledBy[source.typeID] = true
+	}
+}
 
 // shipAttr is one of the hull's attributes after the fold.
 func (f *fitting) shipAttr(attr int64) float64 { return f.ship.get(f.snap, attr) }
@@ -453,7 +470,7 @@ func (f *fitting) bindModifiers() {
 				if eff.Category == catOverload && source.kind == entModule {
 					continue
 				}
-				f.note(fmt.Sprintf("effect %d %s: category %d skipped (overload/system/target mechanics not modeled)", effectID, eff.Name, eff.Category))
+				f.noteFrom(source, fmt.Sprintf("effect %d %s: category %d skipped (overload/system/target mechanics not modeled)", effectID, eff.Name, eff.Category))
 				continue
 			}
 			for _, m := range eff.Modifiers {
@@ -511,10 +528,10 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 					}
 				}
 			} else {
-				f.note(shape + ": no charge host")
+				f.noteFrom(source, shape+": no charge host")
 			}
 		default:
-			f.note(shape + ": domain not modeled")
+			f.noteFrom(source, shape+": domain not modeled")
 		}
 	case "LocationModifier":
 		switch m.Domain {
@@ -532,7 +549,7 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 			// this is modeling completeness, not behavior.
 			targets(f.char)
 		default:
-			f.note(shape + ": domain not modeled")
+			f.noteFrom(source, shape+": domain not modeled")
 			return
 		}
 	case "LocationGroupModifier":
@@ -560,12 +577,12 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 				}
 			}
 		default:
-			f.note(shape + ": domain not modeled")
+			f.noteFrom(source, shape+": domain not modeled")
 			return
 		}
 	case "LocationRequiredSkillModifier":
 		if m.Domain != "shipID" {
-			f.note(shape + ": domain not modeled")
+			f.noteFrom(source, shape+": domain not modeled")
 			return
 		}
 		for _, t := range atShip {
@@ -578,7 +595,7 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 		}
 	case "OwnerRequiredSkillModifier":
 		if m.Domain != "charID" {
-			f.note(shape + ": domain not modeled")
+			f.noteFrom(source, shape+": domain not modeled")
 			return
 		}
 		// The character owns its drones, fighters and every
@@ -593,7 +610,7 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 			}
 		}
 	default:
-		f.note(shape + ": modifier func not modeled")
+		f.noteFrom(source, shape+": modifier func not modeled")
 	}
 }
 

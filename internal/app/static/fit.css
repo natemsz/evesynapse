@@ -20,7 +20,8 @@
    fold itself is width-specific: the phone block below folds
    every .fit-head-sec control; the desktop fold spares the strip
    controls (.fit-stripsec: fit name, Save to EVE), which stay on
-   the bar beside the ship search and Save fit. */
+   the bar beside the ship search and Save fit. With no ship
+   picked nothing folds: the saved-fit search is the way in. */
 #fit-editor.fit-armed .fit-head-toggle {
   display: inline-flex; align-items: center; justify-content: center;
   min-height: 2.5rem; padding: 0.45rem 0.6rem;
@@ -30,10 +31,13 @@
   text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-xs);
 }
 @media (min-width: 45.01rem) {
-  #fit-editor.fit-armed .fit-head:not(.fit-open) .fit-head-sec:not(.fit-stripsec) { display: none; }
+  #fit-editor.fit-armed:not(.fit-noship) .fit-head:not(.fit-open) .fit-head-sec:not(.fit-stripsec) { display: none; }
 }
 
 @media (max-width: 45rem) {
+  /* The stats view is a page of its own here, and the ship
+     header carries the headline figures: no summary bar. */
+  .fit-sum { display: none; }
   /* fit.js hides the sections outside the current view with
      this class; it only ever applies at phone widths. */
   .fit-wb .fv-off { display: none !important; }
@@ -142,7 +146,7 @@
      shows. The toggle's own treatment is the shared rule above
      this block; here it stretches across the utility row. */
   #fit-editor.fit-armed .fit-head-toggle { flex: 1 1 100%; }
-  #fit-editor.fit-armed .fit-head:not(.fit-open) .fit-head-sec { display: none; }
+  #fit-editor.fit-armed:not(.fit-noship) .fit-head:not(.fit-open) .fit-head-sec { display: none; }
   #fit-editor .fit-head { row-gap: 0.5rem; }
   #fit-editor .fit-head .fit-searchwrap { flex: 1 1 9rem; min-width: 0; }
 

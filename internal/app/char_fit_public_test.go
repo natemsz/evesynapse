@@ -119,7 +119,7 @@ func TestPublicFitPageTooltips(t *testing.T) {
 	// multiplier 5, cycle 5 s -> volley 100, DPS 20; CPU
 	// 15 tf, PG 10 MW.
 	mustContain(t, "public fit tooltips", body,
-		`data-tip-lines="DPS|20|;Volley|100|;CPU|15 tf|;PG|10 MW|"`)
+		`data-tip-lines="DPS|20||weapon;Volley|100||weapon;CPU|15 tf||cpu;PG|10 MW||powergrid"`)
 	for _, editorOnly := range []string{"data-tip-states", "data-tip-key", "data-fit-states", "fit-mhead", "fit-mtabs", "data-fit-search-btn"} {
 		if strings.Contains(body, editorOnly) {
 			t.Errorf("public fit page carries editor-only %q", editorOnly)
@@ -244,15 +244,17 @@ func TestPublicFitCostIsHullPlusParts(t *testing.T) {
 		t.Fatalf("built %d public fit pages, want 1", n)
 	}
 
-	// Hull 1,000 (typical) + 2 x 250 (estimated sell) + 3 x 40 (typical).
-	const hull, parts, total = 1000.0, 620.0, 1620.0
+	// Hull 1,000 (typical) + 2 x 250 (estimated sell) + 3 x 40 (typical),
+	// the hull's part of it 62%.
+	const total = 1620.0
+	const hullLine = `<li class="fc-hull"><span>Hull</span> <b>1.0K</b> <small>62%</small></li>`
 	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
 	if code != http.StatusOK {
 		t.Fatalf("public fit page: status %d", code)
 	}
 	mustContain(t, "public fit page", body,
 		esi.FormatISK(total)+" ISK",
-		"hull "+esi.FormatISK(hull)+" + fittings "+esi.FormatISK(parts),
+		hullLine,
 		`data-fit-cost="1620"`,
 	)
 	if got, err := q.GetPublicFitting(ctx, row.ID); err != nil || got.TotalPrice != total {
@@ -266,6 +268,5 @@ func TestPublicFitCostIsHullPlusParts(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("simulate: status %d", code)
 	}
-	mustContain(t, "fitting tool stats", tool, `data-fit-cost="1620"`,
-		"hull "+esi.FormatISK(hull)+" + fittings "+esi.FormatISK(parts))
+	mustContain(t, "fitting tool stats", tool, `data-fit-cost="1620"`, hullLine)
 }

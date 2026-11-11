@@ -138,8 +138,9 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     {{end}}
     {{range .BayGroups}}{{if eq .Key "cargo"}}{{template "fit-group" .}}{{end}}{{end}}
     {{if or (not .ReadOnly) .ImplantsUsed}}
-    <div class="fit-group fit-implant-group" data-fit-group="implant">
+    <div class="fit-group fit-implant-group{{if and (not .ReadOnly) (not .ImplantsEdited)}} fit-imp-folded{{end}}" data-fit-group="implant">
       <h4><span>Implants</span> <small class="fit-count">{{.ImplantsUsed}}/10</small></h4>
+      {{if and (not .ReadOnly) (not .ImplantsEdited)}}<button type="button" class="fit-imp-fold" data-fit-imp-fold aria-expanded="false"><span>{{if .ImplantsUsed}}The clone's {{.ImplantsUsed}} implant{{if ne .ImplantsUsed 1}}s{{end}}{{else}}No implants{{end}}</span> <span class="fit-imp-fold-act">Edit</span></button>{{end}}
       {{if .ImplantNote}}<p class="fit-note">{{.ImplantNote}}</p>{{end}}
       <div class="fit-chips">
         {{range .Implants}}
@@ -161,6 +162,13 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   </div>
   {{with .Stats}}
   <div class="fit-stats" data-fit-figures="{{.Figures}}">
+    {{if not $.ReadOnly}}<div class="fit-sum" aria-hidden="true"><div class="fit-sum-in">
+      <span class="k-weapon">{{template "fit-g" "weapon"}}<b>{{.TotalDPS}}</b> DPS</span>
+      <span class="k-armor">{{template "fit-g" "armor"}}<b>{{.EHPOmni}}</b> EHP</span>
+      <span class="k-capacitor{{if not .CapStable}} fit-over{{end}}">{{template "fit-g" "capacitor"}}<b>{{.CapState}}</b></span>
+      <span class="k-cpu{{if .CPU.Over}} fit-over{{end}}">{{template "fit-g" "cpu"}}<b>{{.CPU.Left}}</b> left</span>
+      <span class="k-powergrid{{if .Powergrid.Over}} fit-over{{end}}">{{template "fit-g" "powergrid"}}<b>{{.Powergrid.Left}}</b> left</span>
+    </div></div>{{end}}
     <h4>{{$.ShipName}} <small>with {{$.PilotLabel}}'s skills</small></h4>
     <div class="fit-headline">
       <div class="fit-headline-dps">
@@ -184,26 +192,30 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     <section class="fit-panel" aria-label="Fitting">
       <h5>Fitting</h5>
       <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
-        <span class="fit-bar-label">Powergrid</span>
+        <span class="fit-bar-label k-powergrid">{{template "fit-g" "powergrid"}}Powergrid</span>
         <span class="fit-bar"><span data-w="{{printf "%.1f" .Powergrid.Pct}}"></span></span>
         <span class="fit-bar-nums" data-fit-fig="pg">{{.Powergrid.Used}} of {{.Powergrid.Max}} ({{.Powergrid.Left}} left)</span>
       </div>
       <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
-        <span class="fit-bar-label">CPU</span>
+        <span class="fit-bar-label k-cpu">{{template "fit-g" "cpu"}}CPU</span>
         <span class="fit-bar"><span data-w="{{printf "%.1f" .CPU.Pct}}"></span></span>
         <span class="fit-bar-nums" data-fit-fig="cpu">{{.CPU.Used}} of {{.CPU.Max}} ({{.CPU.Left}} left)</span>
       </div>
       {{if ne .Calib.Max "0"}}<div class="fit-bar-row{{if .Calib.Over}} over{{else}} good{{end}}">
-        <span class="fit-bar-label">Calibration</span>
+        <span class="fit-bar-label k-calibration">{{template "fit-g" "calibration"}}Calibration</span>
         <span class="fit-bar"><span data-w="{{printf "%.1f" .Calib.Pct}}"></span></span>
         <span class="fit-bar-nums" data-fit-fig="cal">{{.Calib.Used}} of {{.Calib.Max}} ({{.Calib.Left}} left)</span>
       </div>{{end}}
       <dl class="fit-kv">
         <div><dt>Slots</dt><dd class="prose-figs {{if .SlotsOver}}fit-over{{else}}fit-good{{end}}">{{.SlotLine}}</dd></div>
-        <div><dt>Hardpoints</dt><dd class="prose-figs {{if .HPOver}}fit-over{{else}}fit-good{{end}}">{{.Hardpoints}}</dd></div>
       </dl>
       {{with $.Cost}}{{if .Known}}
-      <p class="fit-cost" data-fit-cost="{{.TotalRaw}}"><span class="fit-cost-total">{{.Total}} ISK</span> <small>hull {{.Hull}} + fittings {{.Parts}}{{if .Unpriced}} · {{.Unpriced}} item{{if ne .Unpriced 1}}s{{end}} unpriced{{end}}</small></p>
+      <div class="fit-cost" data-fit-cost="{{.TotalRaw}}">
+        <p class="fit-cost-head"><span>Value</span> <strong class="fit-cost-total">{{.Total}} ISK</strong></p>
+        {{if .Lines}}<svg class="fit-cost-bar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">{{range .Lines}}<rect class="fc-{{.Key}}" x="{{printf "%.2f" .X}}" y="0" width="{{printf "%.2f" .Pct}}" height="4"/>{{end}}</svg>
+        <ul class="fit-cost-parts">{{range .Lines}}<li class="fc-{{.Key}}"><span>{{.Label}}</span> <b>{{.Value}}</b> <small>{{printf "%.0f" .Pct}}%</small></li>{{end}}</ul>{{end}}
+        {{if .Unpriced}}<p class="fit-cost-gap">{{.Unpriced}} item{{if ne .Unpriced 1}}s{{end}} without a price, not counted.</p>{{end}}
+      </div>
       {{end}}{{end}}
     </section>
 
@@ -304,12 +316,12 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <div class="fit-chips">
         {{range .Chips}}
         <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}"{{if .Home}} data-fit-cargo="1" data-fit-home="{{.Home}}"{{end}}{{if .SubSlot}} data-fit-subslot="{{.SubSlot}}"{{end}} data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}>
-          {{if $group.ReadOnly}}<span class="fit-chip-name">{{.Name}}</span>
+          {{if $group.ReadOnly}}<button type="button" class="fit-chip-name" data-fit-info="{{.TypeID}}" title="Details of {{.Name}}">{{.Name}}</button>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
           {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}
-          {{if .Sub}}<span class="fit-chip-sub">{{.Sub}}</span>{{end}}{{else}}
+          {{if .Sub}}{{template "fit-chip-sub" .Sub}}{{end}}{{else}}
           <span class="fit-chip-main">
-            <span class="fit-chip-name">{{.Name}}</span>
+            <button type="button" class="fit-chip-name" data-fit-info="{{.TypeID}}" title="Details of {{.Name}}">{{.Name}}</button>
             {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
             {{if or (eq $group.Key "drone") (eq $group.Key "fighter")}}<input type="number" class="fit-qty" data-fit-qty="{{.TypeID}}" value="{{.Qty}}" min="0" max="10000" title="How many">{{end}}
           </span>
@@ -320,13 +332,11 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
               <button type="button" class="fit-chip-btn" data-fit-inc="{{.TypeID}}" title="Add another">+</button>
             </span>
           </span>
-          {{if .Sub}}<span class="fit-chip-sub">{{.Sub}}</span>{{end}}{{end}}
+          {{if .Sub}}{{template "fit-chip-sub" .Sub}}{{end}}{{end}}
         </span>
         {{end}}
         {{if not $group.ReadOnly}}
-        {{range .Empty}}
-        <button type="button" class="fit-slot-empty" data-fit-add="{{$group.Key}}">+ Empty {{$group.Label}} slot</button>
-        {{end}}
+        {{with .Empty}}<button type="button" class="fit-slot-empty" data-fit-add="{{$group.Key}}">{{$group.EmptyLine}}</button>{{end}}
         {{if and (not .HasMax) (eq .Key "drone")}}
         <button type="button" class="fit-slot-empty" data-fit-add="drone">+ Add drones</button>
         {{end}}
@@ -344,3 +354,9 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       {{if $fold}}<button type="button" class="fit-fold-more" data-fit-fold aria-expanded="false"><span>{{len $group.Chips}} items · show all</span></button>{{end}}
     </div>
 {{end}}
+
+{{/* A rack row's stat line: each figure with its glyph. */}}
+{{define "fit-chip-sub"}}<span class="fit-chip-sub">{{range .}}<span class="fit-fig{{if .Kind}} k-{{.Kind}}{{end}}">{{if .Kind}}{{template "fit-g" .Kind}}{{end}}{{.Label}} <b class="{{.Class}}">{{.Value}}</b></span>{{end}}</span>{{end}}
+
+{{/* One figure glyph from the shared defs (base.html, fg-*). */}}
+{{define "fit-g"}}<svg class="fit-g" viewBox="0 0 16 16" aria-hidden="true"><use href="#fg-{{.}}"/></svg>{{end}}

@@ -567,11 +567,20 @@ func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, k
 		}
 	}
 	total, dropped, cov := killValue(lines, price)
+	before, err := app.queries.GetKill(ctx, killmailID)
+	if err != nil {
+		return err
+	}
 	if err := app.queries.SetKillValue(ctx, db.SetKillValueParams{
 		KillmailID: killmailID, ValueOurs: total, ValueDroppedOurs: dropped,
 		ValueCoverage: float32(cov), PricedAt: now,
 	}); err != nil {
 		return err
+	}
+	// A kill already counted carries its old value in the stats:
+	// move them by the difference (killboard_stats.go).
+	if err := app.adjustKillStatsValue(ctx, before, killValueOf(before), total); err != nil {
+		logging.Warnf("killboard stats: reprice kill %d: %v", killmailID, err)
 	}
 	app.noteRecentKillPrice(ctx, killmailID, total, dropped, float64(cov), now)
 	// The priced value is final for this kill: fold it into the
@@ -723,6 +732,12 @@ func killValue(lines []killLine, price map[int64]float64) (total, dropped float6
 // priceKills prices one batch of unpriced kills with our own
 // appraisal, one AppraiseLines call for every type in the batch.
 func (app *Application) priceKills(ctx context.Context) (int, error) {
+	// A repriced kill's stats move by the difference, which the
+	// one time rebuild would miss for a chunk it already counted:
+	// the pass waits the few minutes the rebuild runs.
+	if app.killStatsRebuilding.Load() {
+		return 0, nil
+	}
 	rows, err := app.queries.ListUnpricedKills(ctx, killPriceBatch)
 	if err != nil || len(rows) == 0 {
 		return 0, err

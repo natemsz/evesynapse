@@ -22,11 +22,14 @@
 </div>
 
 <div class="l-panel fo-tabs">
+  <div class="fo-bar">
   <div class="l-seg fo-seg" role="tablist" aria-label="Orders" data-tabs hidden>
     <button type="button" role="tab" id="fo-open-tab" aria-controls="fo-open" aria-selected="true">Open <span class="fo-cnt">{{len .Orders.OpenRows}}</span></button>
     <button type="button" role="tab" id="fo-beaten-tab" aria-controls="fo-beaten" aria-selected="false">Beaten <span class="fo-cnt{{if .Orders.Beaten}} bad{{end}}">{{len .Orders.Beaten}}</span></button>
     <button type="button" role="tab" id="fo-recent-tab" aria-controls="fo-recent" aria-selected="false">Recent <span class="fo-long">history</span> <span class="fo-cnt">{{len .Orders.HistoryRows}}</span></button>
     <button type="button" role="tab" id="fo-life-tab" aria-controls="fo-life" aria-selected="false"><span class="fo-long">Your order</span> history <span class="fo-cnt">{{len .Orders.LifecycleRows}}</span></button>
+  </div>
+  {{if and (not .Orders.Open.Note) (not .Orders.Open.Warming) .Orders.OpenRows .Orders.HasBeaten}}<p class="fo-key"><label><input type="checkbox" data-beaten-filter="fo-open"> <small>Show beaten orders only</small></label><span class="beaten-key"><span class="beaten-swatch" aria-hidden="true"></span> <small>Beaten at its station</small></span></p>{{end}}
   </div>
 
   <section role="tabpanel" id="fo-open" aria-labelledby="fo-open-tab">
@@ -36,7 +39,6 @@
 {{else if .Orders.Open.Warming}}
 <p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Orders.OpenRows}}
-{{if .Orders.HasBeaten}}<p class="fo-key"><label><input type="checkbox" data-beaten-filter> <small>Show beaten orders only</small></label><span class="beaten-key"><span class="beaten-swatch" aria-hidden="true"></span> <small>Beaten at its station</small></span></p>{{end}}
 <div class="tw">
 <table class="fo-table fo-open">
   <thead><tr><th class="card-title">Item</th><th>Side</th><th class="mt-num">Price</th><th class="opt">Trend, 30 days</th><th>Status</th><th>Competition</th><th class="mt-num">Left</th><th>Location</th><th>Expires</th></tr></thead>

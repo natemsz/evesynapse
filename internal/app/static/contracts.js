@@ -827,30 +827,14 @@
   // until it has been seen; the page keeps its page size, so the
   // oldest rows drop off the bottom. The newest contract seen is
   // remembered, so coming back highlights what arrived meanwhile.
-  var SEEN_KEY = "cs-seen";
+  var seenStore = window.esLive.seen("cs-seen");
   var liveSource = null;
 
-  function readSeen() {
-    try {
-      var v = localStorage.getItem(SEEN_KEY);
-      return v === null ? null : +v || 0;
-    } catch (err) {
-      return null;
-    }
-  }
-  function noteSeen(id) {
-    try {
-      var prev = readSeen();
-      if (prev === null || id > prev) localStorage.setItem(SEEN_KEY, String(id));
-    } catch (err) {
-      /* storage off: highlights still fade, nothing is remembered */
-    }
-  }
   function contractID(row) {
     return +row.getAttribute("data-contract") || 0;
   }
   function markLive(row) {
-    window.esLive.mark(row, function (r) { noteSeen(contractID(r)); });
+    seenStore.live(row, contractID);
   }
 
   // markUnseen highlights the rows that arrived since the listing
@@ -858,14 +842,7 @@
   function markUnseen(body) {
     if (body.getAttribute("data-cs-seen") === "1") return;
     body.setAttribute("data-cs-seen", "1");
-    var prev = readSeen();
-    var newest = 0;
-    body.querySelectorAll("tr.cs-row").forEach(function (row) {
-      var id = contractID(row);
-      if (id > newest) newest = id;
-      if (prev !== null && id > prev) markLive(row);
-    });
-    if (prev === null && newest) noteSeen(newest);
+    seenStore.markNew(body.querySelectorAll("tr.cs-row"), contractID, 0);
   }
 
   function applyLiveRows(ev) {

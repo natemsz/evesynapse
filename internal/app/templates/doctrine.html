@@ -15,7 +15,7 @@
 <div class="co-cards">
 {{range .Fits}}
 <article class="l-panel co-card co-fit">
-  {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
+  {{if .ShipTypeID}}<img class="fit-card-ship" src="{{typeRender .ShipTypeID 64}}" width="64" height="64" alt="" loading="lazy">{{end}}
   <div class="co-fit-body">
     <h3><a href="/fittings/?doctrine={{.ID}}#fit-editor">{{.Name}}</a></h3>
     <p class="fit-card-line">{{itemSublink .ShipTypeID .Ship}}</p>

@@ -9,7 +9,7 @@
 {{if not .Shared}}<p class="browse-back"><a href="/fittings/public/">← Public fits</a></p>{{end}}
 <div class="fit-pubhead">
   <section class="l-panel fit-pubmeta" aria-label="About this fit">
-    {{if .Card.ShipTypeID}}<img class="fp-ship" src="https://images.evetech.net/types/{{.Card.ShipTypeID}}/render?size=128" width="96" height="96" alt="">{{end}}
+    {{if .Card.ShipTypeID}}<img class="fp-ship" src="{{typeRender .Card.ShipTypeID 128}}" width="96" height="96" alt="">{{end}}
     <div class="fp-id">
       <p class="fp-ship-line">{{publicItemLink .Card.ShipTypeID .Card.Ship}}{{if .Card.Hull}} <small>{{.Card.Hull}}</small>{{end}}{{if .Card.Author}} <span class="fp-by">by {{.Card.Author}}</span>{{end}}</p>
       {{if .Description}}<p class="fp-desc">{{.Description}}</p>{{end}}

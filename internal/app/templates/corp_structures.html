@@ -38,7 +38,7 @@
   {{$tone := .StateTone}}{{if not $tone}}{{$tone = .FuelTone}}{{end}}
   <article class="l-panel co-struct{{if $tone}} co-{{$tone}}{{end}}">
     <div class="co-struct-head">
-      <img src="https://images.evetech.net/types/{{.TypeID}}/render?size=64" alt="" width="56" height="56" loading="lazy" data-fallback-src="/static/img/item.svg">
+      <img src="{{typeRender .TypeID 64}}" alt="" width="56" height="56" loading="lazy" data-fallback-src="/static/img/item.svg">
       <div class="co-struct-id">
         <h3>{{structureLink .LinkID .Name}}</h3>
         <p class="co-dim">{{itemLink .TypeID .Type}} · {{.System}}</p>

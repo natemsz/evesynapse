@@ -23,6 +23,7 @@ package contracts
 import (
 	"context"
 	"errors"
+	"evesynapse/internal/eveimg"
 	"fmt"
 	json "github.com/goccy/go-json"
 	"math"
@@ -678,7 +679,7 @@ var renderCategories = map[int64]bool{6: true, 18: true, 22: true, 23: true, 65:
 // and no fallback. A type of unknown category (0) asks for the icon.
 func TypeArtURLs(typeID, categoryID int64, size int) (src, fallback string) {
 	if renderCategories[categoryID] {
-		return fmt.Sprintf("https://images.evetech.net/types/%d/render?size=%d", typeID, size),
+		return eveimg.TypeRender(typeID, size),
 			fmt.Sprintf("https://images.evetech.net/types/%d/icon?size=%d", typeID, size)
 	}
 	return TypeCategoryIconURL(typeID, categoryID, size), ""

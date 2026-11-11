@@ -70,7 +70,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   <div class="fit-vring-outer" aria-hidden="true"></div>
   <div class="fit-vring" aria-hidden="true"></div>
   {{if .Visual.Segs}}<svg class="fit-vsegs" viewBox="0 0 100 100" aria-hidden="true">{{range .Visual.Segs}}<path d="{{.D}}" class="fit-vseg"/>{{end}}</svg>{{end}}
-  <div class="fit-vship"><button type="button" class="fit-vship-info" data-fit-info="{{.Visual.ShipID}}" title="Ship details"><img src="https://images.evetech.net/types/{{.Visual.ShipID}}/render?size=512" alt="{{.Visual.ShipName}} details" draggable="false"></button></div>
+  <div class="fit-vship"><button type="button" class="fit-vship-info" data-fit-info="{{.Visual.ShipID}}" title="Ship details"><img src="{{typeRender .Visual.ShipID 512}}" alt="{{.Visual.ShipName}} details" draggable="false"></button></div>
   {{if not .ReadOnly}}<div class="fit-vhistory" role="group" aria-label="Undo and redo">
     <button type="button" class="fit-vhist" data-fit-undo title="Undo" aria-label="Undo" disabled>↩</button>
     <button type="button" class="fit-vhist" data-fit-redo title="Redo" aria-label="Redo" disabled>↪</button>

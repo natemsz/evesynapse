@@ -40,9 +40,10 @@ const sweepBatchSize = 2000
 
 const (
 	// regionSweepGate is how stale a region's stored stats may
-	// get before the lane sweeps that region again: two of ESI's
-	// five-minute windows on the market order route.
-	regionSweepGate = 10 * time.Minute
+	// get before the lane sweeps that region again: one of ESI's
+	// five-minute windows on the market order route, so each hub
+	// is read once per copy ESI publishes and never twice.
+	regionSweepGate = 5 * time.Minute
 	// maxRegionSweepPagesTotal is a safety stop far beyond any
 	// real book: if a region ever reported more pages than
 	// this, the sweep reads only this many.

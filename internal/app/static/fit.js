@@ -195,6 +195,18 @@ var FitGauges = (function () {
     if (empty) empty.hidden = hasShip;
   }
 
+  function simPayload(items) {
+    return {
+      name: state.name,
+      shipTypeId: state.shipTypeId,
+      items: items,
+      charges: state.charges,
+      implants: state.implants || {},
+      pilot: pilotID(),
+      clone: cloneID()
+    };
+  }
+
   function simulate() {
     syncShipGate();
     // Coalesce bursts: one request in flight at a time; a change
@@ -204,15 +216,8 @@ var FitGauges = (function () {
     simInFlight = true;
     state.name = nameInput ? nameInput.value : (state.name || "");
     var seq = ++simSeq;
-    var payload = {
-      name: state.name,
-      shipTypeId: state.shipTypeId,
-      items: state.items,
-      charges: state.charges,
-      implants: state.implants || {},
-      pilot: pilotID(),
-      clone: cloneID()
-    };
+    var payload = simPayload(state.items);
+    endPreview();
     function simDone() {
       simInFlight = false;
       if (simQueued) { simQueued = false; simulate(); }
@@ -230,6 +235,8 @@ var FitGauges = (function () {
       var fresh = tmp.querySelector(".fit-wb");
       var current = workbench();
       if (!fresh || !current) { simDone(); return; }
+      var before = readFigures(current);
+      var beforeShip = shipOf(current);
       current.replaceWith(fresh);
       // The fresh fragment's slot positions ride data-left /
       // data-top until app.js's geometry pass applies them; its
@@ -256,6 +263,11 @@ var FitGauges = (function () {
       syncUndoButtons();
       applyFitView();
       runPendingFlash();
+      // Same hull: show what the edit moved. A new hull is a new
+      // fit, so nothing is compared.
+      if (before && beforeShip && beforeShip === shipOf(fresh)) {
+        showDeltas(fresh, figureDeltas(before, readFigures(fresh)));
+      }
       simDone();
     }).catch(function () { simDone(); /* the static copy stays honest */ });
   }
@@ -275,10 +287,207 @@ var FitGauges = (function () {
       if (el && el.closest) el = el.closest(".fit-imp");
       if (!el) el = editor.querySelector('.fit-vslot[data-fit-vslot="' + f.id + '"] .fit-vammo');
     }
+    if (f.undo && f.family) rackNote(f.family, "Removed " + f.undo + ".", false, true);
     if (!el) return;
     el.classList.add("flash");
     if (el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
     window.setTimeout(function () { el.classList.remove("flash"); }, 750);
+    if (f.landed) {
+      // The new module lands in its slot and its rack row slides in.
+      el.classList.add("landed");
+      var row = editor.querySelector('.fit-chip[data-fit-rowtype="' + f.id + '"]');
+      if (row) row.classList.add("landed");
+      window.setTimeout(function () {
+        el.classList.remove("landed");
+        if (row) row.classList.remove("landed");
+      }, 600);
+    }
+  }
+
+  // The fitted module's name, read from the rendered rack.
+  function typeNameOf(typeID) {
+    var el = editor.querySelector('[data-tip-type="' + typeID + '"][data-tip-name]');
+    return el ? el.getAttribute("data-tip-name") : "a module";
+  }
+
+  // A short line under a rack's heading: a refusal (err) or the
+  // Undo offer after a removal. A re-render drops it; otherwise it
+  // goes after a few seconds.
+  function rackNote(fam, msg, isErr, withUndo) {
+    var g = fam ? editor.querySelector('.fit-group[data-fit-group="' + fam + '"]') : null;
+    if (!g) {
+      if (isErr) fitNotice(msg, true, false);
+      return null;
+    }
+    var old = g.querySelector(".fit-racknote");
+    if (old) old.remove();
+    var p = document.createElement("p");
+    p.className = "fit-racknote" + (isErr ? " err" : "");
+    p.setAttribute("role", isErr ? "alert" : "status");
+    p.textContent = msg;
+    if (withUndo) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "fit-racknote-undo";
+      b.setAttribute("data-fit-undo", "");
+      b.textContent = "Undo";
+      p.appendChild(document.createTextNode(" "));
+      p.appendChild(b);
+    }
+    var head = g.querySelector("h4");
+    if (head) head.insertAdjacentElement("afterend", p);
+    else g.insertBefore(p, g.firstChild);
+    window.setTimeout(function () { if (p.isConnected) p.remove(); }, withUndo ? 8000 : 5000);
+    return g;
+  }
+  // A refused add: the rack's heading shakes and says why.
+  function rackRefuse(fam, msg) {
+    var g = rackNote(fam, msg, true, false);
+    if (!g) return;
+    var head = g.querySelector("h4");
+    if (!head) return;
+    head.classList.remove("refused");
+    void head.offsetWidth; // restart the animation on a repeat refusal
+    head.classList.add("refused");
+    if (head.scrollIntoView) head.scrollIntoView({ block: "nearest" });
+  }
+
+  // --- stat changes -------------------------------------------------
+  // Every simulation carries its headline figures as numbers
+  // (data-fit-figures). The editor compares two of them to show what
+  // an edit moved, or what a resting search row would move.
+  function shipOf(wb) {
+    try {
+      var st = JSON.parse(wb.getAttribute("data-fit-state") || "{}");
+      return st.shipTypeId || 0;
+    } catch (e) { return 0; }
+  }
+  function readFigures(root) {
+    var el = root && root.querySelector("[data-fit-figures]");
+    if (!el) return null;
+    try {
+      var list = JSON.parse(el.getAttribute("data-fit-figures") || "[]");
+      var m = {};
+      for (var i = 0; i < list.length; i++) m[list[i].k] = list[i];
+      return m;
+    } catch (e) { return null; }
+  }
+  function figureDeltas(a, b) {
+    var out = [];
+    if (!a || !b) return out;
+    Object.keys(b).forEach(function (k) {
+      if (!a[k]) return;
+      var f = b[k];
+      var d = f.v - a[k].v;
+      if (Math.abs(d) < 0.5 * Math.pow(10, -f.d)) return;
+      out.push({ k: k, d: d, f: f });
+    });
+    return out;
+  }
+  var deltaFmt = {};
+  function deltaText(x) {
+    var nf = deltaFmt[x.f.d] || (deltaFmt[x.f.d] = new Intl.NumberFormat("en-US", { maximumFractionDigits: x.f.d }));
+    return (x.d > 0 ? "+" : "\u2212") + nf.format(Math.abs(x.d)) + (x.f.u ? " " + x.f.u : "");
+  }
+  // Chips beside each moved figure, green or red by whether the
+  // change helps; they fade after about three seconds.
+  function showDeltas(root, deltas) {
+    var old = root.querySelectorAll(".fit-delta");
+    for (var j = 0; j < old.length; j++) old[j].remove();
+    deltas.forEach(function (x) {
+      var anchors = root.querySelectorAll('[data-fit-fig="' + x.k + '"]');
+      for (var i = 0; i < anchors.length; i++) {
+        var chip = document.createElement("span");
+        chip.className = "fit-delta " + ((x.d > 0) === x.f.hi ? "good" : "bad");
+        chip.textContent = deltaText(x);
+        anchors[i].appendChild(chip);
+        (function (c) { window.setTimeout(function () { c.remove(); }, 3200); })(chip);
+      }
+    });
+  }
+
+  // --- hover preview ------------------------------------------------
+  // Resting 300 ms on a search row shows what the fit would become:
+  // one simulation of the fit plus that module, its changes shown as
+  // chips in the row itself (the open list covers the stat panel).
+  // Leaving the row cancels it. Desktop pointers only.
+  var previewTimer = null;
+  var previewAbort = null;
+  var previewOK = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+  var previewKinds = { high: 1, medium: 1, low: 1, rig: 1, subsystem: 1, drone: 1, fighter: 1 };
+  // Answers are kept per fit state, so sweeping back over a row costs
+  // no second call; a throttled answer (429) pauses previews for a
+  // minute so they never use up the edits' share.
+  var previewCache = {};
+  var previewCacheFor = "";
+  var previewPausedUntil = 0;
+  var previewRow = null;
+  function showRowPreview(li, deltas) {
+    var box = document.createElement("span");
+    box.className = "sug-preview";
+    if (!deltas.length) {
+      box.textContent = "No change to the stats shown";
+    }
+    deltas.forEach(function (x) {
+      var chip = document.createElement("span");
+      chip.className = "fit-delta preview " + ((x.d > 0) === x.f.hi ? "good" : "bad");
+      chip.textContent = deltaText(x);
+      box.appendChild(chip);
+    });
+    var text = li.querySelector(".sug-text") || li;
+    text.appendChild(box);
+  }
+  function startPreview(it, li) {
+    endPreview();
+    previewRow = li || null;
+    if (!previewOK || !state.shipTypeId || !previewKinds[it.kind || ""]) return;
+    if (restrictionFor(it.id) || Date.now() < previewPausedUntil) return;
+    var base = JSON.stringify(simPayload(state.items));
+    if (base !== previewCacheFor) { previewCache = {}; previewCacheFor = base; }
+    if (previewCache[it.id]) {
+      if (li) showRowPreview(li, figureDeltas(readFigures(workbench()), previewCache[it.id]));
+      return;
+    }
+    previewTimer = window.setTimeout(function () {
+      previewTimer = null;
+      var items = JSON.parse(JSON.stringify(state.items || []));
+      var found = false;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].typeId === it.id) { items[i].qty += 1; items[i].states.push(""); found = true; break; }
+      }
+      if (!found) items.push({ typeId: it.id, qty: 1, states: [] });
+      var ctl = window.AbortController ? new AbortController() : null;
+      previewAbort = ctl;
+      fetch("/fittings/simulate/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "text/html" },
+        body: JSON.stringify(simPayload(items)),
+        signal: ctl ? ctl.signal : undefined
+      }).then(function (resp) {
+        if (resp.status === 429) previewPausedUntil = Date.now() + 60000;
+        return resp.ok ? resp.text() : "";
+      }).then(function (html) {
+        if (previewAbort !== ctl || !html) return;
+        previewAbort = null;
+        var tmp = document.createElement("div");
+        tmp.innerHTML = html;
+        var figs = readFigures(tmp);
+        if (!figs) return;
+        if (previewCacheFor === base) previewCache[it.id] = figs;
+        if (li && previewRow === li && li.isConnected) {
+          showRowPreview(li, figureDeltas(readFigures(workbench()), figs));
+        }
+      }).catch(function () { /* cancelled or offline: no preview */ });
+    }, 300);
+  }
+  function endPreview() {
+    if (previewTimer) { window.clearTimeout(previewTimer); previewTimer = null; }
+    if (previewAbort) { previewAbort.abort(); previewAbort = null; }
+    if (previewRow) {
+      var old = previewRow.querySelectorAll(".sug-preview");
+      for (var i = 0; i < old.length; i++) old[i].remove();
+      previewRow = null;
+    }
   }
 
   // --- filter controls: enabled states follow ship/pilot ----------
@@ -408,10 +617,10 @@ var FitGauges = (function () {
   }
   // Plain-language refusal when the user tries to add a module
   // this hull cannot fit. Returns true when blocked.
-  function checkRestricted(typeID, name) {
+  function checkRestricted(typeID, name, fam) {
     var req = restrictionFor(typeID);
     if (req) {
-      fitNotice((name || "That module") + " can only be fitted to " + req + ".", true, false);
+      rackRefuse(fam || familyOfType(typeID), (name || "That module") + " can only be fitted to " + req + ".");
       return true;
     }
     return false;
@@ -420,8 +629,8 @@ var FitGauges = (function () {
   // Slot families with a fixed maximum: adding past it is a
   // plain-language refusal, never a silent no-op.
   var fitFamLabels = { high: "high", medium: "mid", low: "low", rig: "rig" };
-  function addItem(typeID, qty) {
-    var fam = familyOfType(typeID) || "";
+  function addItem(typeID, qty, famHint) {
+    var fam = familyOfType(typeID) || famHint || "";
     if (fitFamLabels[fam]) {
       var max = 0;
       var g = editor.querySelector('.fit-group[data-fit-group="' + fam + '"]');
@@ -431,7 +640,7 @@ var FitGauges = (function () {
         if ((familyOfType(state.items[i].typeId) || "") === fam) count += state.items[i].qty || 1;
       }
       if (max > 0 && count >= max) {
-        fitNotice("No free " + fitFamLabels[fam] + " slots. Remove something first.", true, false);
+        rackRefuse(fam, "No free " + fitFamLabels[fam] + " slots. Remove something first.");
         return;
       }
     }
@@ -447,7 +656,7 @@ var FitGauges = (function () {
     markDirty();
     pendingFlash = fam === "drone" || fam === "fighter" || fam === "cargo"
       ? { type: "group", family: fam }
-      : { type: "slot", id: typeID };
+      : { type: "slot", id: typeID, landed: true };
     simulate();
   }
   // addItemAt inserts one module at a doc-order position (drag
@@ -463,20 +672,25 @@ var FitGauges = (function () {
     var i = findItem(typeID);
     if (i < 0) return;
     var fam = familyOfType(typeID) || "";
+    var name = typeNameOf(typeID);
     state.items[i].qty -= 1;
     state.items[i].states.pop();
     if (state.items[i].qty <= 0) state.items.splice(i, 1);
     markDirty();
     // The removed module is gone; flash its group so the removal
-    // reads as an action, not a glitch.
-    pendingFlash = fam ? { type: "group", family: fam } : null;
+    // reads as an action, not a glitch, and offer to take it back.
+    pendingFlash = fam ? { type: "group", family: fam, undo: name } : null;
     simulate();
   }
   function setItemQty(typeID, qty) {
     pushHistory();
     var i = findItem(typeID);
     if (qty <= 0) {
-      if (i >= 0) state.items.splice(i, 1);
+      if (i >= 0) {
+        var fam = familyOfType(typeID) || "";
+        if (fam) pendingFlash = { type: "group", family: fam, undo: typeNameOf(typeID) };
+        state.items.splice(i, 1);
+      }
     } else if (i >= 0) {
       state.items[i].qty = qty;
       normItems();
@@ -806,6 +1020,7 @@ var FitGauges = (function () {
       if (list) list.hidden = true;
       if (input) input.setAttribute("aria-expanded", "false");
       active = -1;
+      if (cfg.preview) cfg.preview(null);
     }
     function query(force) {
       if (!input || !list) return;
@@ -874,8 +1089,12 @@ var FitGauges = (function () {
           rows.push({ it: it, li: li });
           li.addEventListener("mousedown", function (ev) {
             ev.preventDefault();
-            cfg.pick(it);
+            cfg.pick(it, ev.shiftKey);
           });
+          if (cfg.preview) {
+            li.addEventListener("mouseenter", function () { cfg.preview(it, li); });
+            li.addEventListener("mouseleave", function () { cfg.preview(null); });
+          }
           list.appendChild(li);
         });
       });
@@ -909,7 +1128,7 @@ var FitGauges = (function () {
         } else if (ev.key === "Enter") {
           if (active >= 0 && rows[active]) {
             ev.preventDefault();
-            cfg.pick(rows[active].it);
+            cfg.pick(rows[active].it, ev.ctrlKey || ev.metaKey);
           }
         } else if (ev.key === "Escape") {
           close();
@@ -958,11 +1177,18 @@ var FitGauges = (function () {
   var modSearch = makeSuggester(modInput, modList, {
     family: function () { return modFamily; },
     dropShips: true,
-    pick: function (it) {
+    // A pick closes the list (and the phone search panel, a no-op
+    // above the band) so the fit is in view; Shift+click or
+    // Ctrl+Enter keeps it open to add several.
+    pick: function (it, keep) {
+      endPreview();
       pickModule(it);
-      // A pick ends the phone search: the panel closes over the
-      // updated workbench (a no-op above the band).
+      if (keep) return;
+      modSearch.close();
       setSearchOpen(false, false);
+    },
+    preview: function (it, li) {
+      if (it) startPreview(it, li); else endPreview();
     }
   });
   function pickModule(it) {
@@ -970,8 +1196,8 @@ var FitGauges = (function () {
     if (kind === "charge") { pickCharge(it); return; }
     if (kind === "high" || kind === "medium" || kind === "low" ||
         kind === "rig" || kind === "subsystem" || kind === "drone" || kind === "fighter") {
-      if (checkRestricted(it.id, it.name)) return;
-      addItem(it.id, 1);
+      if (checkRestricted(it.id, it.name, kind)) return;
+      addItem(it.id, 1, kind);
       return;
     }
     // Anything else (e.g. cargo items): jump the picker to it.
@@ -1726,8 +1952,8 @@ var FitGauges = (function () {
             });
           }
         }
-      } else if (!checkRestricted(typeID, "")) {
-        addItem(typeID, 1); // arms its own flash
+      } else if (!checkRestricted(typeID, "", fam)) {
+        addItem(typeID, 1, fam); // arms its own flash
       }
     } else if (fromFit) {
       // Dropped off the display: same as the minus button.
@@ -1744,7 +1970,7 @@ var FitGauges = (function () {
       toggleTip(d.el);
       return;
     }
-    if (!checkRestricted(d.typeID, "")) addItem(d.typeID, 1);
+    if (!checkRestricted(d.typeID, "", d.family)) addItem(d.typeID, 1, d.family);
   }
   onDragRoots("pointerdown", function (ev) {
     if (ev.button !== undefined && ev.button > 0) return;

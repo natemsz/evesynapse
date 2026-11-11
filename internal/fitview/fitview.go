@@ -1067,6 +1067,7 @@ type FitBarRow struct {
 // FitResistRow is one tank layer's line.
 type FitResistRow struct {
 	Layer     string
+	Fig       string // the layer's FitFigure key
 	HP        string
 	EM        string
 	Thermal   string
@@ -1145,6 +1146,61 @@ type FitStatsView struct {
 	Calib         FitBarRow // calibration as a bar beside powergrid and CPU
 	Tiles         []FitTile // turrets, launchers, calibration under the ring
 	Problems      []string  // why the fit doesn't fit, one short line each
+	// Figures is the headline stats as numbers (JSON), so the
+	// editor can show what an edit moved and preview a candidate.
+	Figures string
+}
+
+// FitFigure is one stat the editor compares between two
+// simulations: key matches a data-fit-fig anchor in the stat
+// panel, Unit and Dec format the change, Hi says a rise is good.
+type FitFigure struct {
+	Key  string  `json:"k"`
+	V    float64 `json:"v"`
+	Unit string  `json:"u"`
+	Dec  int     `json:"d"`
+	Hi   bool    `json:"hi"`
+}
+
+// fitFigures lists the stats an edit can visibly move, in the
+// order the stat panel shows them.
+func fitFigures(res *fit.Result) []FitFigure {
+	fin := func(v float64) float64 {
+		if math.IsInf(v, 0) || math.IsNaN(v) {
+			return 0
+		}
+		return v
+	}
+	f := []FitFigure{
+		{"dps", res.DPS, "DPS", 1, true},
+		{"volley", res.Volley, "volley", 0, true},
+		{"pg", res.PowergridMax - res.PowergridUsed, "MW", 1, true},
+		{"cpu", res.CPUMax - res.CPUUsed, "tf", 1, true},
+		{"cal", res.CalibrationMax - res.CalibrationUsed, "calibration", 0, true},
+		{"cap", res.CapacitorCapacity, "GJ", 0, true},
+		{"cappeak", res.CapacitorPeakRecharge, "GJ/s", 1, true},
+		{"capuse", res.CapacitorDraw, "GJ/s", 1, false},
+		{"ehp", res.EHP.Omni, "EHP", 0, true},
+		{"shieldhp", res.ShieldHP, "HP", 0, true},
+		{"armorhp", res.ArmorHP, "HP", 0, true},
+		{"hullhp", res.HullHP, "HP", 0, true},
+		{"shieldreg", res.ShieldRegenPeak, "HP/s", 1, true},
+		{"shieldboost", res.ShieldBoostRate, "HP/s", 1, true},
+		{"armorrep", res.ArmorRepairRate, "HP/s", 1, true},
+		{"hullrep", res.HullRepairRate, "HP/s", 1, true},
+		{"speed", res.Velocity, "m/s", 0, true},
+		{"align", res.AlignSeconds, "s", 1, false},
+		{"sig", res.SignatureRadius, "m", 0, false},
+		{"range", res.MaxTargetRange / 1000, "km", 1, true},
+		{"scanres", res.ScanResolution, "mm", 0, true},
+		{"sensor", res.SensorStrength, "", 1, true},
+		{"locks", res.MaxLockedTargets, "", 0, true},
+		{"cargo", res.CargoCapacity, "m³", 1, true},
+	}
+	for i := range f {
+		f[i].V = fin(f[i].V)
+	}
+	return f
 }
 
 // FitMissingSkill is one unmet requirement for the chosen pilot.
@@ -2005,18 +2061,18 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 	}
 
 	st.Tank = []FitResistRow{
-		{Layer: "Shield", HP: FitFmt0(res.ShieldHP),
+		{Layer: "Shield", Fig: "shieldhp", HP: FitFmt0(res.ShieldHP),
 			EM: FitResist(ResistOf(res, 0, true)), Thermal: FitResist(ResistOf(res, 1, true)),
 			Kinetic: FitResist(ResistOf(res, 2, true)), Explosive: FitResist(ResistOf(res, 3, true)),
 			EHP: FitEHPText(res.ShieldEHP.Omni)},
-		{Layer: "Armor", HP: FitFmt0(res.ArmorHP),
+		{Layer: "Armor", Fig: "armorhp", HP: FitFmt0(res.ArmorHP),
 			EM: FitResist(ResistOf(res, 0, false)), Thermal: FitResist(ResistOf(res, 1, false)),
 			Kinetic: FitResist(ResistOf(res, 2, false)), Explosive: FitResist(ResistOf(res, 3, false)),
 			EHP: FitEHPText(res.ArmorEHP.Omni)},
 	}
 	// Hull resists ride the generic resonance attributes in the
 	// engine's ShipAttrs; the layer row uses EHP only for resists.
-	st.Tank = append(st.Tank, FitResistRow{Layer: "Hull", HP: FitFmt0(res.HullHP),
+	st.Tank = append(st.Tank, FitResistRow{Layer: "Hull", Fig: "hullhp", HP: FitFmt0(res.HullHP),
 		EM: FitResist(res.ShipAttrs[fit.AttrResonanceEM]), Thermal: FitResist(res.ShipAttrs[fit.AttrResonanceThermal]),
 		Kinetic: FitResist(res.ShipAttrs[fit.AttrResonanceKinetic]), Explosive: FitResist(res.ShipAttrs[fit.AttrResonanceExplosive]),
 		EHP: FitEHPText(res.HullEHP.Omni)})
@@ -2085,6 +2141,9 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 		}
 	}
 	st.Problems = FitProblems(res)
+	if b, err := json.Marshal(fitFigures(res)); err == nil {
+		st.Figures = string(b)
+	}
 	return st
 }
 

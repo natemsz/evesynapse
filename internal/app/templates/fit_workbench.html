@@ -51,12 +51,12 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
       <span class="fit-bar-label">CPU</span>
       <span class="fit-bar"><span data-w="{{printf "%.1f" .CPU.Pct}}"></span></span>
-      <span class="fit-bar-nums">{{.CPU.Used}} / {{.CPU.Max}}</span>
+      <span class="fit-bar-nums" data-fit-fig="cpu">{{.CPU.Used}} / {{.CPU.Max}}</span>
     </div>
     <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
       <span class="fit-bar-label">Powergrid</span>
       <span class="fit-bar"><span data-w="{{printf "%.1f" .Powergrid.Pct}}"></span></span>
-      <span class="fit-bar-nums">{{.Powergrid.Used}} / {{.Powergrid.Max}}</span>
+      <span class="fit-bar-nums" data-fit-fig="pg">{{.Powergrid.Used}} / {{.Powergrid.Max}}</span>
     </div>
   </div>
   {{end}}
@@ -147,17 +147,17 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     {{end}}
   </div>
   {{with .Stats}}
-  <div class="fit-stats">
+  <div class="fit-stats" data-fit-figures="{{.Figures}}">
     <h4>{{$.ShipName}} <small>with {{$.PilotLabel}}'s skills</small></h4>
     <div class="fit-headline">
       <div class="fit-headline-dps">
-        <span class="fit-headline-num">{{.TotalDPS}}</span>
+        <span class="fit-headline-num" data-fit-fig="dps">{{.TotalDPS}}</span>
         <span class="fit-headline-label"><abbr title="Damage per second">DPS</abbr></span>
         <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}{{if .FighterDPS}} · fighters {{.FighterDPS}}{{end}}{{if .SmartbombDPS}} · smartbombs {{.SmartbombDPS}}{{end}}</span>
         {{if .SpooledDPS}}<span class="fit-headline-sub">{{.SpooledDPS}} at full spool, after {{.SpoolTime}} of firing</span>{{end}}
       </div>
       <div class="fit-headline-volley">
-        <span class="fit-headline-num">{{.TotalVolley}}</span>
+        <span class="fit-headline-num" data-fit-fig="volley">{{.TotalVolley}}</span>
         <span class="fit-headline-label"><abbr title="Volley damage">volley</abbr></span>
         <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}{{if .FighterVolley}} · fighters {{.FighterVolley}}{{end}}</span>
       </div>
@@ -173,17 +173,17 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
         <span class="fit-bar-label">Powergrid</span>
         <span class="fit-bar"><span data-w="{{printf "%.1f" .Powergrid.Pct}}"></span></span>
-        <span class="fit-bar-nums">{{.Powergrid.Used}} of {{.Powergrid.Max}} ({{.Powergrid.Left}} left)</span>
+        <span class="fit-bar-nums" data-fit-fig="pg">{{.Powergrid.Used}} of {{.Powergrid.Max}} ({{.Powergrid.Left}} left)</span>
       </div>
       <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
         <span class="fit-bar-label">CPU</span>
         <span class="fit-bar"><span data-w="{{printf "%.1f" .CPU.Pct}}"></span></span>
-        <span class="fit-bar-nums">{{.CPU.Used}} of {{.CPU.Max}} ({{.CPU.Left}} left)</span>
+        <span class="fit-bar-nums" data-fit-fig="cpu">{{.CPU.Used}} of {{.CPU.Max}} ({{.CPU.Left}} left)</span>
       </div>
       {{if ne .Calib.Max "0"}}<div class="fit-bar-row{{if .Calib.Over}} over{{else}} good{{end}}">
         <span class="fit-bar-label">Calibration</span>
         <span class="fit-bar"><span data-w="{{printf "%.1f" .Calib.Pct}}"></span></span>
-        <span class="fit-bar-nums">{{.Calib.Used}} of {{.Calib.Max}} ({{.Calib.Left}} left)</span>
+        <span class="fit-bar-nums" data-fit-fig="cal">{{.Calib.Used}} of {{.Calib.Max}} ({{.Calib.Left}} left)</span>
       </div>{{end}}
       <dl class="fit-kv">
         <div><dt>Slots</dt><dd class="prose-figs {{if .SlotsOver}}fit-over{{else}}fit-good{{end}}">{{.SlotLine}}</dd></div>
@@ -197,41 +197,41 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     <section class="fit-panel" aria-label="Capacitor">
       <h5>Capacitor <span class="fit-panel-side {{if .CapStable}}fit-good{{else}}fit-over{{end}}">{{.CapState}}</span></h5>
       <dl class="fit-kv fit-kv-3">
-        <div><dt>Capacity</dt><dd>{{.Capacitor}}</dd></div>
-        <div><dt>Peak recharge</dt><dd>{{.CapPeak}}</dd></div>
-        <div><dt>Use</dt><dd>{{.CapDraw}}</dd></div>
+        <div><dt>Capacity</dt><dd data-fit-fig="cap">{{.Capacitor}}</dd></div>
+        <div><dt>Peak recharge</dt><dd data-fit-fig="cappeak">{{.CapPeak}}</dd></div>
+        <div><dt>Use</dt><dd data-fit-fig="capuse">{{.CapDraw}}</dd></div>
       </dl>
     </section>
 
     <section class="fit-panel" aria-label="Defense">
-      <h5>Defense <span class="fit-panel-side"><span class="fit-ehp">{{.EHPOmni}}</span> <abbr title="Effective hit points">EHP</abbr></span></h5>
+      <h5>Defense <span class="fit-panel-side"><span class="fit-ehp" data-fit-fig="ehp">{{.EHPOmni}}</span> <abbr title="Effective hit points">EHP</abbr></span></h5>
       <div class="fit-resists">
         <div class="fit-res-head" aria-hidden="true"><span></span><span class="res-em">EM</span><span class="res-th">TH</span><span class="res-kin">KIN</span><span class="res-exp">EXP</span></div>
         {{range .Tank}}
         <div class="fit-res-row">
-          <div class="fit-res-layer"><strong>{{.Layer}}</strong> <small>{{.HP}} HP · {{.EHP}} EHP</small></div>
+          <div class="fit-res-layer" data-fit-fig="{{.Fig}}"><strong>{{.Layer}}</strong> <small>{{.HP}} HP · {{.EHP}} EHP</small></div>
           {{range .Resists}}<span class="fit-res res-{{.Kind}}" title="{{.Text}}"><span data-w="{{printf "%.1f" .Pct}}"></span><b>{{.Text}}</b></span>{{end}}
         </div>
         {{end}}
       </div>
       <dl class="fit-kv fit-kv-2">
-        <div><dt>Shield recharge</dt><dd>{{.ShieldReg}} at peak</dd></div>
-        <div><dt>Shield boosting</dt><dd>{{.ShieldBoost}}</dd></div>
-        <div><dt>Armor repair</dt><dd>{{.ArmorRep}}</dd></div>
-        <div><dt>Hull repair</dt><dd>{{.HullRep}}</dd></div>
+        <div><dt>Shield recharge</dt><dd data-fit-fig="shieldreg">{{.ShieldReg}} at peak</dd></div>
+        <div><dt>Shield boosting</dt><dd data-fit-fig="shieldboost">{{.ShieldBoost}}</dd></div>
+        <div><dt>Armor repair</dt><dd data-fit-fig="armorrep">{{.ArmorRep}}</dd></div>
+        <div><dt>Hull repair</dt><dd data-fit-fig="hullrep">{{.HullRep}}</dd></div>
       </dl>
     </section>
 
     <section class="fit-panel" aria-label="Navigation and targeting">
       <h5>Navigation &amp; targeting</h5>
       <dl class="fit-kv fit-kv-2">
-        <div><dt>Speed</dt><dd>{{.Velocity}}</dd></div>
-        <div><dt>Align time</dt><dd>{{.Align}}</dd></div>
-        <div><dt>Signature radius</dt><dd>{{.Signature}}</dd></div>
-        <div><dt>Targeting range</dt><dd>{{.TargetRng}}</dd></div>
-        <div><dt>Scan resolution</dt><dd>{{.ScanRes}}</dd></div>
-        <div><dt>Sensor strength</dt><dd>{{.Sensor}}</dd></div>
-        <div><dt>Locked targets</dt><dd>up to {{.LockedTgts}}</dd></div>
+        <div><dt>Speed</dt><dd data-fit-fig="speed">{{.Velocity}}</dd></div>
+        <div><dt>Align time</dt><dd data-fit-fig="align">{{.Align}}</dd></div>
+        <div><dt>Signature radius</dt><dd data-fit-fig="sig">{{.Signature}}</dd></div>
+        <div><dt>Targeting range</dt><dd data-fit-fig="range">{{.TargetRng}}</dd></div>
+        <div><dt>Scan resolution</dt><dd data-fit-fig="scanres">{{.ScanRes}}</dd></div>
+        <div><dt>Sensor strength</dt><dd data-fit-fig="sensor">{{.Sensor}}</dd></div>
+        <div><dt>Locked targets</dt><dd data-fit-fig="locks">up to {{.LockedTgts}}</dd></div>
       </dl>
     </section>
 
@@ -244,7 +244,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         {{if .Fighters}}<div><dt>Fighters</dt><dd>{{.Fighters}}</dd></div>
         <div><dt>Fighter hangar</dt><dd>{{.FighterHangar}}</dd></div>{{end}}
         {{if .FighterSalvo}}<div><dt>Fighter missile salvo</dt><dd>{{.FighterSalvo}}</dd></div>{{end}}
-        <div><dt>Cargo hold</dt><dd>{{.Cargo}}</dd></div>
+        <div><dt>Cargo hold</dt><dd data-fit-fig="cargo">{{.Cargo}}</dd></div>
       </dl>
     </section>
     {{if $.ImplantsUsed}}

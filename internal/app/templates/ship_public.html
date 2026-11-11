@@ -4,7 +4,6 @@
 {{with .PublicShip}}
 {{$d := .Detail}}
 {{if moduleOn "publicfits"}}<p><small><a href="/fittings/public/">Public fits</a></small></p>{{end}}
-{{with $d.Sheet}}{{if .WorkbenchURL}}<p><a class="btn" href="{{.WorkbenchURL}}">Open in the workbench</a></p>{{end}}{{end}}
 
 <div class="tw">
 <table>
@@ -16,8 +15,6 @@
   </tbody>
 </table>
 </div>
-
-{{with $d.Sheet}}<div class="l-page">{{template "item-sheet" .}}</div>{{end}}
 
 {{if .Hubs}}
 <h3>Hub prices</h3>

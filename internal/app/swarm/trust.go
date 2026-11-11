@@ -700,6 +700,7 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 		members = append(members, SwarmMember{InstanceID: signer, PublicKey: signerKey})
 	}
 	added := 0
+	var introduce []string
 	for _, m := range members {
 		if m.InstanceID == "" || m.InstanceID == app.SwarmID.ID {
 			continue
@@ -711,6 +712,7 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 		// the ID its key certifies, so nobody can take another's
 		// name; and one list adds a bounded number of them, the
 		// rest waiting for a later round.
+		isNew := false
 		if _, err := app.Queries.GetSwarmPeer(ctx, m.InstanceID); errors.Is(err, pgx.ErrNoRows) {
 			if !SwarmIDMatchesKey(m.InstanceID, m.PublicKey) {
 				continue
@@ -719,6 +721,7 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 				continue
 			}
 			added++
+			isNew = true
 		}
 		signed := m.BaseURL != "" && VerifySwarmMember(m)
 		if !signed {
@@ -758,12 +761,17 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 			app.SwarmFlagKeyConflict(ctx, m.InstanceID, signer, now)
 			continue
 		}
+		if isNew {
+			introduce = append(introduce, m.BaseURL)
+		}
 		if !app.Cfg.Allowlisted() {
 			if err := app.Queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: m.InstanceID, Approved: true}); err != nil {
 				return err
 			}
 		}
 	}
+	// Peers pinned just now hear from this instance in turn.
+	app.SwarmIntroduce(introduce, now)
 	return nil
 }
 
@@ -905,6 +913,7 @@ func (app *Mod) SwarmPullOne(ctx context.Context, kind, key string) int {
 		keys := []SwarmPullKey{{Kind: kind, Key: key}}
 		entries, err := app.SwarmCli.PullEntries(ctx, p.BaseUrl, keys)
 		if err != nil {
+			app.swarmReannounceOnRefusal(p.InstanceID, p.BaseUrl, err, time.Now())
 			app.noteSwarmPullFailure(p.InstanceID, time.Now())
 			app.noteSwarmPullOutcome(ctx, false)
 			continue
@@ -1145,6 +1154,7 @@ func (app *Mod) SwarmPull(ctx context.Context, now time.Time) {
 	})
 	for i, p := range picked {
 		if answers[i].Err != nil {
+			app.swarmReannounceOnRefusal(p.InstanceID, p.BaseUrl, answers[i].Err, now)
 			app.noteSwarmPullFailure(p.InstanceID, now)
 			app.noteSwarmPullOutcome(ctx, false)
 			continue

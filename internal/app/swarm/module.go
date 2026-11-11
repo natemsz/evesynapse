@@ -79,6 +79,10 @@ type Mod struct {
 	// many misses it has turned into wants this hour (warm.go).
 	SwarmDemandMu   sync.Mutex
 	SwarmDemandSeen map[string]*swarmDemandWindow
+	// SwarmIntroMu guards when this instance last re-sent its
+	// heartbeat to each peer that refused its pull (seed.go).
+	SwarmIntroMu sync.Mutex
+	SwarmIntroAt map[string]time.Time
 	// SwarmRegMu guards the hour's count of first heartbeats
 	// filed from /swarm/seed/register (api.go).
 	SwarmRegMu    sync.Mutex

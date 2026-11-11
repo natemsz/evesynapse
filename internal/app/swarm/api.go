@@ -534,7 +534,7 @@ func (c *SwarmClient) do(ctx context.Context, method, url string, raw []byte, ex
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("swarm: %s %s: status %d", method, url, resp.StatusCode)
+		return &SwarmStatusError{Method: method, URL: url, Status: resp.StatusCode}
 	}
 	if err := DecodeSwarmStrict(io.LimitReader(resp.Body, MaxSwarmBodyBytes), into); err != nil {
 		return fmt.Errorf("swarm: %s %s: %w", method, url, err)
@@ -599,4 +599,21 @@ func (app *Mod) swarmNewRegistrationAllowed(now time.Time) bool {
 	}
 	app.SwarmRegCount++
 	return true
+}
+
+// SwarmStatusError is a peer answering with anything but 200.
+type SwarmStatusError struct {
+	Method, URL string
+	Status      int
+}
+
+func (e *SwarmStatusError) Error() string {
+	return fmt.Sprintf("swarm: %s %s: status %d", e.Method, e.URL, e.Status)
+}
+
+// swarmRefused reports whether err is a peer refusing the request
+// (403): for a pull, a peer that has not pinned this instance yet.
+func swarmRefused(err error) bool {
+	var se *SwarmStatusError
+	return errors.As(err, &se) && se.Status == http.StatusForbidden
 }

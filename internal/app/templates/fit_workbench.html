@@ -161,7 +161,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     {{end}}
   </div>
   {{with .Stats}}
-  <div class="fit-stats" data-fit-figures="{{.Figures}}">
+  <div class="fit-stats" data-fit-figures="{{.Figures}}"{{if .RangeJSON}} data-fit-range="{{.RangeJSON}}"{{end}}>
     {{if not $.ReadOnly}}<div class="fit-sum" aria-hidden="true"><div class="fit-sum-in">
       <span class="k-weapon">{{template "fit-g" "weapon"}}<b>{{.TotalDPS}}</b> DPS</span>
       <span class="k-armor">{{template "fit-g" "armor"}}<b>{{.EHPOmni}}</b> EHP</span>
@@ -176,6 +176,10 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <span class="fit-headline-label"><abbr title="Damage per second">DPS</abbr></span>
         <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}{{if .FighterDPS}} · fighters {{.FighterDPS}}{{end}}{{if .SmartbombDPS}} · smartbombs {{.SmartbombDPS}}{{end}}</span>
         {{if .SpooledDPS}}<span class="fit-headline-sub">{{.SpooledDPS}} at full spool, after {{.SpoolTime}} of firing</span>{{end}}
+        {{if .RangeSpark}}<button type="button" class="fit-range-spark" data-fit-range-open aria-haspopup="dialog">
+          <svg viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{.RangeSpark}}"/></svg>
+          <span>Damage at range, out to {{.RangeEnd}}</span>
+        </button>{{end}}
       </div>
       <div class="fit-headline-volley">
         <span class="fit-headline-num" data-fit-fig="volley">{{.TotalVolley}}</span>

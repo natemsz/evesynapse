@@ -883,6 +883,17 @@ func (f *fitting) offense() {
 			}
 			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
 			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
+			reach := WeaponReach{TypeID: ent.typeID, Kind: ReachTurret, Count: int(n), DPS: n * volley / cycle,
+				Optimal: ent.get(snap, AttrMaxRange), Falloff: ent.get(snap, AttrFalloff),
+				Tracking: ent.get(snap, AttrTrackingSpeed), SigResolution: ent.get(snap, attrOptimalSigRadius)}
+			if r := ent.get(snap, attrAoeCloudSize); r > 0 {
+				// Vorton projectors apply like missiles.
+				reach.Kind = ReachArea
+				reach.ExplosionRadius = r
+				reach.ExplosionVelocity = ent.get(snap, attrAoeVelocity)
+				reach.DamageReduction = ent.get(snap, attrAoeDamageReduction)
+			}
+			res.Weapons = append(res.Weapons, reach)
 		case charge != nil && charge.get(snap, AttrDotMaxDamagePerTick) > 0:
 			// Breacher pods: one damage-over-time effect per
 			// target, a tick a second, the lower of a flat cap and
@@ -906,6 +917,11 @@ func (f *fitting) offense() {
 			res.MissileDPS += n * volley / cycle
 			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
 			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
+			res.Weapons = append(res.Weapons, WeaponReach{TypeID: ent.typeID, Kind: ReachMissile, Count: int(n), DPS: n * volley / cycle,
+				Range:             charge.get(snap, AttrMaxVelocity) * charge.get(snap, attrExplosionDelay) / 1000,
+				ExplosionRadius:   charge.get(snap, attrAoeCloudSize),
+				ExplosionVelocity: charge.get(snap, attrAoeVelocity),
+				DamageReduction:   charge.get(snap, attrAoeDamageReduction)})
 		case snap.Groups[ent.typeID] == groupSmartbomb:
 			// A smartbomb's damage rides on the module itself;
 			// there is no charge and no damage multiplier.
@@ -918,6 +934,8 @@ func (f *fitting) offense() {
 			}
 			res.SmartbombVolley += n * volley
 			res.SmartbombDPS += n * volley / cycle
+			res.Weapons = append(res.Weapons, WeaponReach{TypeID: ent.typeID, Kind: ReachSmartbomb, Count: int(n),
+				DPS: n * volley / cycle, Range: ent.get(snap, attrEmpFieldRange)})
 			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
 			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
 		}
@@ -965,6 +983,14 @@ func (f *fitting) droneStats() {
 			volley *= ent.get(snap, AttrDamageMultiplier)
 			res.DroneVolley += float64(fly) * volley
 			res.DroneDPS += float64(fly) * volley / cycle
+			reach := WeaponReach{TypeID: ent.typeID, Kind: ReachDrone, Count: fly, DPS: float64(fly) * volley / cycle,
+				Optimal: ent.get(snap, AttrMaxRange), Falloff: ent.get(snap, AttrFalloff),
+				Tracking: ent.get(snap, AttrTrackingSpeed), SigResolution: ent.get(snap, attrOptimalSigRadius),
+				Range: f.char.get(snap, attrDroneControlDistance), Speed: ent.get(snap, AttrMaxVelocity)}
+			if reach.Speed < 1 {
+				reach.Kind = ReachSentry // sentries do not move
+			}
+			res.Weapons = append(res.Weapons, reach)
 		}
 	}
 	res.DPS = res.TurretDPS + res.MissileDPS + res.DroneDPS + res.SmartbombDPS + res.FighterDPS
@@ -1011,7 +1037,10 @@ func (f *fitting) fighterStats() {
 			attackVolley, attackCycle = fighterAbility(ent, snap, fighterAttackTurretDamage, AttrFighterAttackTurretMult, AttrFighterAttackTurretDuration)
 		}
 		salvo, salvoCycle := fighterAbility(ent, snap, fighterMissilesDamage, AttrFighterMissilesMult, AttrFighterMissilesDuration)
+		dpsBefore := res.FighterDPS
+		launched := 0
 		for left := carried; left > 0 && tubes > 0 && *used < slots; left -= size {
+			launched += min(size, left)
 			members := float64(min(size, left))
 			tubes--
 			*used++
@@ -1024,6 +1053,15 @@ func (f *fitting) fighterStats() {
 				res.FighterSalvo += members * salvo
 				res.FighterSalvoSeconds = math.Max(res.FighterSalvoSeconds, salvoCycle)
 			}
+		}
+		if dps := res.FighterDPS - dpsBefore; dps > 0 {
+			reach := WeaponReach{TypeID: ent.typeID, Kind: ReachFighter, Count: launched, DPS: dps,
+				ExplosionRadius:   ent.get(snap, attrFighterAttackExpRadius),
+				ExplosionVelocity: ent.get(snap, attrFighterAttackExpVel)}
+			if rf, rs := ent.get(snap, attrFighterAttackReduction), ent.get(snap, attrFighterAttackSensitivity); rf > 0 && rs > 1 {
+				reach.DamageReduction = math.Log(rf) / math.Log(rs)
+			}
+			res.Weapons = append(res.Weapons, reach)
 		}
 	}
 }

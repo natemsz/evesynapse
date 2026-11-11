@@ -2201,6 +2201,20 @@ type SdeUnit struct {
 	DisplayName string `json:"display_name"`
 }
 
+type SdeVariation struct {
+	TypeID      int64     `json:"type_id"`
+	RootTypeID  int64     `json:"root_type_id"`
+	MetaGroupID int64     `json:"meta_group_id"`
+	MetaLevel   float64   `json:"meta_level"`
+	Vals        []float64 `json:"vals"`
+}
+
+type SdeVariationColumn struct {
+	RootTypeID  int64 `json:"root_type_id"`
+	Ord         int16 `json:"ord"`
+	AttributeID int64 `json:"attribute_id"`
+}
+
 type Session struct {
 	Token  string    `json:"token"`
 	Data   []byte    `json:"data"`

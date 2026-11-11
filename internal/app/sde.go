@@ -297,7 +297,8 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// imports before version 11 lack the universe map's
 	// geometry, and imports before version 13 lack the
 	// celestials a kill's location resolves against, and
-	// imports before version 15 lack the item sheet's data, so
+	// imports before version 15 lack the item sheet's data, and
+	// imports before version 16 lack the variation tables, so
 	// re-import once (the store writes the marker when it
 	// lands). Retries on later ticks while an import keeps
 	// failing.
@@ -329,7 +330,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 
 // sdeImportVersion is the importer's column-set marker (see
 // sdeMaintenance): an import stored under an older one re-imports.
-const sdeImportVersion = "15"
+const sdeImportVersion = "16"
 
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
@@ -2225,6 +2226,28 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 			return 0, err
 		}
 	}
+	// Variation compare tables (schema 141), rebuilt whenever the
+	// import carried the variation links.
+	if len(parsed.metaTypes) > 0 {
+		varCols, varRows := buildVariations(parsed)
+		for _, table := range []string{"sde_variation_columns", "sde_variations"} {
+			if _, err := tx.Exec(ctx, "DELETE FROM "+table); err != nil {
+				return 0, fmt.Errorf("clear %s: %w", table, err)
+			}
+		}
+		if err := insert("INSERT INTO sde_variation_columns (root_type_id, ord, attribute_id) VALUES ($1, $2, $3)", len(varCols), func(i int) []any {
+			c := varCols[i]
+			return []any{c.rootTypeID, c.ord, c.attributeID}
+		}); err != nil {
+			return 0, err
+		}
+		if err := insert("INSERT INTO sde_variations (type_id, root_type_id, meta_group_id, meta_level, vals) VALUES ($1, $2, $3, $4, $5)", len(varRows), func(i int) []any {
+			r := varRows[i]
+			return []any{r.typeID, r.rootTypeID, r.metaGroupID, r.metaLevel, r.vals}
+		}); err != nil {
+			return 0, err
+		}
+	}
 
 	// Celestials (schema 090), replaced only when this import
 	// carried the denormalize file, like the map data above.
@@ -2388,7 +2411,8 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		// from 10, and the universe map's geometry and stargate
 		// graph (schema 072) from 11, and the item sheet's
 		// attribute columns, units, traits and variation links
-		// (schema 140) from 15 (sdeMaintenance backfills once when
+		// (schema 140) from 15, and the variation compare tables
+		// (schema 141) from 16 (sdeMaintenance backfills once when
 		// it's behind).
 		{Key: "sde_import_version", Value: sdeImportVersion},
 	}

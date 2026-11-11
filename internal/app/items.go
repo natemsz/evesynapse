@@ -231,6 +231,12 @@ type itemTypeDetail struct {
 	// hub quotes that side.
 	BuyAt  *publicHubPrice
 	SellAt *publicHubPrice
+
+	// Sheet is the type's stats from its stored item sheet: bonuses,
+	// slots, resistances, attributes, fitting rules, required
+	// skills and, for modules, the variation table. Nil when the
+	// static data has no sheet for it.
+	Sheet *itemSheetView
 }
 
 type itemUsedInRow struct {
@@ -771,23 +777,37 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 		}
 	}
 
+	categoryID := int64(0)
+	if detail.Category != nil {
+		categoryID = detail.Category.ID
+	}
+	detail.Sheet = app.buildItemSheetView(ctx, typeID, categoryID)
+
 	if bp, berr := app.queries.GetSDEBlueprintForProduct(ctx, typeID); berr == nil {
 		detail.BlueprintID = bp.BlueprintTypeID
 	}
 
 	if rows, uerr := app.queries.ListSDEBlueprintsUsingMaterial(ctx, typeID); uerr == nil {
+		if len(rows) > 50 {
+			rows, detail.UsedInMore = rows[:50], true
+		}
+		ids := make([]int64, 0, len(rows))
 		for _, row := range rows {
-			if len(detail.UsedIn) >= 50 {
-				detail.UsedInMore = true
-				break
+			ids = append(ids, row.ProductTypeID)
+		}
+		names := map[int64]string{}
+		if nrows, nerr := app.queries.ListSDETypeNamesByIDs(ctx, ids); nerr == nil {
+			for _, n := range nrows {
+				names[n.TypeID] = n.Name
 			}
-			product, perr := app.queries.GetSDEType(ctx, row.ProductTypeID)
-			if perr != nil || product.Name == "" {
+		}
+		for _, row := range rows {
+			if names[row.ProductTypeID] == "" {
 				continue
 			}
 			detail.UsedIn = append(detail.UsedIn, itemUsedInRow{
 				ProductID:   row.ProductTypeID,
-				ProductName: product.Name,
+				ProductName: names[row.ProductTypeID],
 				PerRun:      esi.FormatInt(row.MaterialQuantity),
 			})
 		}

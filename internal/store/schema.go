@@ -860,6 +860,11 @@ var pgSDEOverrideSchema string
 //go:embed schema_pg/140_item_sheet.sql
 var pgItemSheetSchema string
 
+// Step 141: each variation family's compare table, built at import.
+//
+//go:embed schema_pg/141_item_variations.sql
+var pgItemVariationsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1028,6 +1033,7 @@ func schemaSteps() []schemaStep {
 		{138, "pub_contract_items_stored_at", pgPubContractItemsStoredAtSchema, ""},
 		{139, "sde_override", pgSDEOverrideSchema, ""},
 		{140, "item_sheet", pgItemSheetSchema, ""},
+		{141, "item_variations", pgItemVariationsSchema, ""},
 	}
 }
 

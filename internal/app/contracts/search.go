@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	json "github.com/goccy/go-json"
-	"html/template"
 	"math"
 	"net/http"
 	"net/url"
@@ -891,20 +890,20 @@ type searchView struct {
 	// RollSliders are the abyssal drawer's per-attribute
 	// percentile bands, one per rollable attribute;
 	// RollAttrNames names every rollable attribute for the
-	// band chips. RollCatalog is the per-family slider
-	// catalog as JSON for contracts.js.
-	RollSliders   []rollSlider
-	RollAttrNames map[int64]string
-	RollCatalog   template.JS
-	Sorts         []struct{ Key, Label string }
-	Rows          []searchRow
-	Total         int64
-	TotalText     string
-	Page          int
-	Pages         int
-	PrevURL       string
-	NextURL       string
-	HasRows       bool
+	// band chips. RollCatalogURL is where contracts.js reads
+	// the per-family slider catalog (JSON, versioned).
+	RollSliders    []rollSlider
+	RollAttrNames  map[int64]string
+	RollCatalogURL string
+	Sorts          []struct{ Key, Label string }
+	Rows           []searchRow
+	Total          int64
+	TotalText      string
+	Page           int
+	Pages          int
+	PrevURL        string
+	NextURL        string
+	HasRows        bool
 	// Redesign furniture: active-filter chips, per-drawer
 	// active counts, the drawer the page opens with, and the
 	// quick-hunt preset URLs.
@@ -1382,7 +1381,7 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 			}
 		}
 		if payload, err := json.Marshal(catalog); err == nil {
-			view.RollCatalog = template.JS(payload)
+			view.RollCatalogURL = "/contracts/search/rolls.json?v=" + app.storeRollCatalog(payload)
 		}
 
 		// The family in scope's own rollable attributes,

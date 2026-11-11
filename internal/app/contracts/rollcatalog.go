@@ -2,6 +2,9 @@ package contracts
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
 	"sync"
 	"time"
 
@@ -25,6 +28,10 @@ type rollCatalogRows struct {
 	mu     sync.Mutex
 	rows   []db.ListAbyssalFamilyMetaVariantsRow
 	readAt time.Time
+	// payload is the slider catalog JSON the search page links to
+	// (/contracts/search/rolls.json), version its content hash.
+	payload []byte
+	version string
 }
 
 // rollCatalogs holds one application's rows, keyed by its query
@@ -87,4 +94,43 @@ func refreshRollCatalog(ctx context.Context, deps module.Deps) {
 			logging.Errorf("contracts: roll catalog: %v", err)
 		}
 	})
+}
+
+// storeRollCatalog holds the slider catalog JSON and returns its
+// version (a content hash), for the page's link to it. The same
+// bytes keep their version, so browsers cache the file for good.
+func (app *mod) storeRollCatalog(payload []byte) string {
+	sum := sha256.Sum256(payload)
+	version := hex.EncodeToString(sum[:8])
+	c := rollCatalogFor(app.queries)
+	c.mu.Lock()
+	if c.version != version {
+		c.payload, c.version = payload, version
+	}
+	c.mu.Unlock()
+	return version
+}
+
+// handleRollCatalog serves GET /contracts/search/rolls.json: the
+// slider catalog the last search render built. Asked for by its
+// current version it is cached for good; a page that names an
+// older version gets the current file, briefly cached. Before any
+// render there is none, and the page keeps its server-drawn
+// sliders.
+func (app *mod) handleRollCatalog(w http.ResponseWriter, r *http.Request) {
+	c := rollCatalogFor(app.queries)
+	c.mu.Lock()
+	payload, version := c.payload, c.version
+	c.mu.Unlock()
+	if len(payload) == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if r.URL.Query().Get("v") == version {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=60")
+	}
+	_, _ = w.Write(payload)
 }

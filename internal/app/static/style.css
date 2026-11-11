@@ -4485,8 +4485,65 @@ look, none of its affordances. */
   100% { box-shadow: 0 0 0 0 rgba(255, 184, 77, 0), 0 0 0 rgba(255, 106, 26, 0); }
 }
 .fit-vslot.flash { animation: fit-flash 0.7s ease-out; border-color: var(--success); }
-.fit-group.flash h3, .fit-imp.flash { animation: fit-flash 0.7s ease-out; border-radius: var(--r-sm); }
+.fit-group.flash > h4, .fit-imp.flash { animation: fit-flash 0.7s ease-out; border-radius: var(--r-sm); }
 select.flash { animation: fit-flash 0.7s ease-out; }
+/* A new module lands in its slot and its rack row slides in. */
+@keyframes fit-land { from { scale: 0.4; opacity: 0; } 70% { scale: 1.08; opacity: 1; } }
+@keyframes fit-row-in { from { translate: -0.8rem 0; opacity: 0; } }
+.fit-vslot.landed { animation: fit-land 0.35s ease-out, fit-flash 0.7s ease-out; }
+.fit-chip.landed { animation: fit-row-in 0.3s ease-out; }
+/* What an edit moved, beside the figure: good or bad by direction.
+   Preview chips (a resting search row) are outlined, not filled. */
+.fit-delta {
+  display: inline-block;
+  margin-left: 0.4em;
+  padding: 0 0.35em;
+  border-radius: var(--r-sm);
+  font-family: var(--font-num);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0;
+  vertical-align: middle;
+  white-space: nowrap;
+  animation: fit-delta 3.2s ease-out forwards;
+}
+.fit-delta.good { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
+.fit-delta.bad { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.fit-delta.preview { animation: none; background: none; outline: 1px dashed currentColor; outline-offset: -1px; }
+/* The resting search row's preview: one wrapped line of chips. */
+.sug-preview { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.2rem; font-size: var(--fs-xs); color: var(--muted); }
+.sug-preview .fit-delta { margin-left: 0; }
+@keyframes fit-delta { from { opacity: 0; translate: 0 0.3em; } 8% { opacity: 1; translate: 0 0; } 80% { opacity: 1; } to { opacity: 0; } }
+/* Notes under a rack heading: the Undo offer and refused adds. */
+.fit-racknote {
+  margin: -0.2rem 0 0.45rem;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.fit-racknote.err { color: var(--danger); }
+.fit-racknote-undo {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+.fit-racknote-undo:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+@keyframes fit-refuse { 20%, 60% { translate: -4px 0; } 40%, 80% { translate: 4px 0; } }
+.fit-group > h4.refused { animation: fit-refuse 0.4s ease-in-out; color: var(--danger); }
+@media (prefers-reduced-motion: reduce) {
+  .fit-vslot.landed, .fit-chip.landed, .fit-group > h4.refused { animation: none; }
+  .fit-delta { animation: fit-delta-still 3.2s step-end forwards; }
+  .fit-delta.preview { animation: none; }
+}
+@keyframes fit-delta-still { to { opacity: 0; } }
 .fit-vslot.drop-ok {
   border-color: var(--success);
   border-style: solid;

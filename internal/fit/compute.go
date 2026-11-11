@@ -18,6 +18,13 @@ import (
 // High-grade Snake set is +24.73% velocity, which only the
 // unpenalized product reproduces).
 func Compute(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int64]int, charges map[int64]int64, implants []int64) *Result {
+	return ComputeFleet(snap, shipTypeID, items, levels, charges, implants, nil)
+}
+
+// ComputeFleet is Compute with fleet boosts acting on the fit: the
+// buffs other ships' bursts give (BoosterBuffs), alongside the fit's
+// own bursts.
+func ComputeFleet(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int64]int, charges map[int64]int64, implants []int64, fleet []BuffValue) *Result {
 	f := newFitting(snap, shipTypeID, levels)
 
 	// What is being computed: the hull, the pilot, and everything
@@ -33,6 +40,7 @@ func Compute(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int
 	// attributes are folded to their final values.
 	f.bindModifiers()
 	f.foldAttributes()
+	f.applyBuffs(fleet)
 	f.adaptReactiveHardeners()
 	f.recordAttrs()
 
@@ -43,6 +51,7 @@ func Compute(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int
 	f.offense()
 	f.fighterStats()
 	f.droneStats()
+	f.support()
 	f.tank()
 	f.mobilityAndTargeting()
 
@@ -90,6 +99,15 @@ type fitting struct {
 
 	// spoolExtra is the DPS spool-up weapons add at full spool.
 	spoolExtra float64
+
+	// droneFlying is each drone type with how many of it launch
+	// (droneStats), for what drones do besides damage.
+	droneFlying []droneLaunch
+}
+
+type droneLaunch struct {
+	ent *entity
+	n   int
 }
 
 // damageAttrs are the four damage types a charge, missile or drone
@@ -365,7 +383,8 @@ type codeEffect struct {
 // codeEffects are the effects CCP ships without modifiers that
 // change a fit's own numbers: missile damage by missile skill, T2
 // launcher rate of fire by specialization, drone damage by drone
-// skill, a running propulsion module's mass and signature, and the
+// skill, a running propulsion module's mass and signature, a running
+// warp disruption field generator or Emergency Hull Energizer, and the
 // Reactive Armor Hardener's resistances. Each skill
 // already scales its bonus by level in a modifier effect of its own
 // (152 or 146 for damageMultiplierBonus 292, 163 for rofBonus 293),
@@ -394,6 +413,21 @@ var codeEffects = map[int64]codeEffect{
 	effectAfterburner: {Effect: Effect{Name: "moduleBonusAfterburner", Category: 1}, modifiers: []Modifier{
 		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrMass, ModifyingAttr: AttrMassAddition, Operation: opModAdd},
 	}},
+	// A running warp disruption field generator blooms the
+	// signature and can change mass and top speed.
+	effectWarpDisruptSphere: {Effect: Effect{Name: "warpDisruptSphere", Category: 1}, modifiers: []Modifier{
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrSignatureRadius, ModifyingAttr: attrSignatureRadiusBonus, Operation: opPostPercent},
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrMass, ModifyingAttr: attrMassBonusPercentage, Operation: opPostPercent},
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrMaxVelocity, ModifyingAttr: attrMaxVelocityMultiplier, Operation: opPostMult},
+	}},
+	// A running Emergency Hull Energizer sets the hull's
+	// resistances from its own.
+	effectEmergencyHullEnergizer: {Effect: Effect{Name: "emergencyHullEnergizer", Category: 1}, modifiers: []Modifier{
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrResonanceEM, ModifyingAttr: attrHullEmResonance, Operation: opPostMult},
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrResonanceExplosive, ModifyingAttr: attrHullExplosiveResonance, Operation: opPostMult},
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrResonanceKinetic, ModifyingAttr: attrHullKineticResonance, Operation: opPostMult},
+		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrResonanceThermal, ModifyingAttr: attrHullThermalResonance, Operation: opPostMult},
+	}},
 	EffectAdaptiveArmorHardener: {Effect: Effect{Name: "adaptiveArmorHardener", Category: 1}, modifiers: []Modifier{
 		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrArmorEM, ModifyingAttr: AttrArmorEM, Operation: opPostMult},
 		{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: AttrArmorExplosive, ModifyingAttr: AttrArmorExplosive, Operation: opPostMult},
@@ -407,6 +441,11 @@ const (
 	attrRofBonus              = 293
 	attrResistanceShift       = 1849
 	attrSignatureRadiusBonus  = 554
+
+	attrHullEmResonance        = 974
+	attrHullExplosiveResonance = 975
+	attrHullKineticResonance   = 976
+	attrHullThermalResonance   = 977
 
 	effectMicrowarpdrive = 6730
 	effectAfterburner    = 6731
@@ -572,8 +611,8 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 		switch m.Domain {
 		case "shipID":
 			for _, t := range atShip {
-				if t.kind == entCharge {
-					continue // contained in its weapon, not at the ship
+				if !locatedInShip(t) {
+					continue
 				}
 				if snap.Groups[t.typeID] == m.GroupID && m.GroupID != 0 {
 					targets(t)
@@ -602,7 +641,7 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 			return
 		}
 		for _, t := range atShip {
-			if t.kind == entCharge {
+			if !locatedInShip(t) {
 				continue
 			}
 			if m.SkillTypeID != 0 && snap.requiresSkill(t.typeID, m.SkillTypeID) {
@@ -628,6 +667,18 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 	default:
 		f.noteFrom(source, shape+": modifier func not modeled")
 	}
+}
+
+// locatedInShip reports whether a ship-located selector reaches t: a
+// loaded charge sits in its weapon, and launched drones and fighters
+// are in space, so the ship's own and its modules' location bonuses
+// (Mining and Astrogeology, a hull's ECM strength) never reach them.
+func locatedInShip(t *entity) bool {
+	switch t.kind {
+	case entCharge, entDrone, entFighter:
+		return false
+	}
+	return true
 }
 
 // foldAttributes groups the applications per (target, attribute)
@@ -867,7 +918,10 @@ func (f *fitting) offense() {
 		switch {
 		case snap.HasEffect(ent.typeID, EffectTurretFitted):
 			if charge == nil {
-				f.note(fmt.Sprintf("turret type %d has no charge selected; damage not counted", ent.typeID))
+				// Mining lasers fit as turrets and fire no charge.
+				if miningKind(snap, ent.typeID) == "" {
+					f.note(fmt.Sprintf("turret type %d has no charge selected; damage not counted", ent.typeID))
+				}
 				continue
 			}
 			volley := 0.0
@@ -883,6 +937,17 @@ func (f *fitting) offense() {
 			}
 			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
 			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
+			reach := WeaponReach{TypeID: ent.typeID, Kind: ReachTurret, Count: int(n), DPS: n * volley / cycle,
+				Optimal: ent.get(snap, AttrMaxRange), Falloff: ent.get(snap, AttrFalloff),
+				Tracking: ent.get(snap, AttrTrackingSpeed), SigResolution: ent.get(snap, attrOptimalSigRadius)}
+			if r := ent.get(snap, attrAoeCloudSize); r > 0 {
+				// Vorton projectors apply like missiles.
+				reach.Kind = ReachArea
+				reach.ExplosionRadius = r
+				reach.ExplosionVelocity = ent.get(snap, attrAoeVelocity)
+				reach.DamageReduction = ent.get(snap, attrAoeDamageReduction)
+			}
+			res.Weapons = append(res.Weapons, reach)
 		case charge != nil && charge.get(snap, AttrDotMaxDamagePerTick) > 0:
 			// Breacher pods: one damage-over-time effect per
 			// target, a tick a second, the lower of a flat cap and
@@ -906,6 +971,11 @@ func (f *fitting) offense() {
 			res.MissileDPS += n * volley / cycle
 			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
 			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
+			res.Weapons = append(res.Weapons, WeaponReach{TypeID: ent.typeID, Kind: ReachMissile, Count: int(n), DPS: n * volley / cycle,
+				Range:             charge.get(snap, AttrMaxVelocity) * charge.get(snap, attrExplosionDelay) / 1000,
+				ExplosionRadius:   charge.get(snap, attrAoeCloudSize),
+				ExplosionVelocity: charge.get(snap, attrAoeVelocity),
+				DamageReduction:   charge.get(snap, attrAoeDamageReduction)})
 		case snap.Groups[ent.typeID] == groupSmartbomb:
 			// A smartbomb's damage rides on the module itself;
 			// there is no charge and no damage multiplier.
@@ -918,6 +988,8 @@ func (f *fitting) offense() {
 			}
 			res.SmartbombVolley += n * volley
 			res.SmartbombDPS += n * volley / cycle
+			res.Weapons = append(res.Weapons, WeaponReach{TypeID: ent.typeID, Kind: ReachSmartbomb, Count: int(n),
+				DPS: n * volley / cycle, Range: ent.get(snap, attrEmpFieldRange)})
 			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
 			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
 		}
@@ -955,6 +1027,9 @@ func (f *fitting) droneStats() {
 		}
 		activeBudget -= fly
 		res.DronesActive += fly
+		if fly > 0 {
+			f.droneFlying = append(f.droneFlying, droneLaunch{ent: ent, n: fly})
+		}
 		res.DroneBandwidthUsed += perDroneBW * float64(fly)
 		cycle := cycleSeconds(ent, snap)
 		if fly > 0 && cycle > 0 {
@@ -965,6 +1040,14 @@ func (f *fitting) droneStats() {
 			volley *= ent.get(snap, AttrDamageMultiplier)
 			res.DroneVolley += float64(fly) * volley
 			res.DroneDPS += float64(fly) * volley / cycle
+			reach := WeaponReach{TypeID: ent.typeID, Kind: ReachDrone, Count: fly, DPS: float64(fly) * volley / cycle,
+				Optimal: ent.get(snap, AttrMaxRange), Falloff: ent.get(snap, AttrFalloff),
+				Tracking: ent.get(snap, AttrTrackingSpeed), SigResolution: ent.get(snap, attrOptimalSigRadius),
+				Range: f.char.get(snap, attrDroneControlDistance), Speed: ent.get(snap, AttrMaxVelocity)}
+			if reach.Speed < 1 {
+				reach.Kind = ReachSentry // sentries do not move
+			}
+			res.Weapons = append(res.Weapons, reach)
 		}
 	}
 	res.DPS = res.TurretDPS + res.MissileDPS + res.DroneDPS + res.SmartbombDPS + res.FighterDPS
@@ -1011,7 +1094,10 @@ func (f *fitting) fighterStats() {
 			attackVolley, attackCycle = fighterAbility(ent, snap, fighterAttackTurretDamage, AttrFighterAttackTurretMult, AttrFighterAttackTurretDuration)
 		}
 		salvo, salvoCycle := fighterAbility(ent, snap, fighterMissilesDamage, AttrFighterMissilesMult, AttrFighterMissilesDuration)
+		dpsBefore := res.FighterDPS
+		launched := 0
 		for left := carried; left > 0 && tubes > 0 && *used < slots; left -= size {
+			launched += min(size, left)
 			members := float64(min(size, left))
 			tubes--
 			*used++
@@ -1024,6 +1110,15 @@ func (f *fitting) fighterStats() {
 				res.FighterSalvo += members * salvo
 				res.FighterSalvoSeconds = math.Max(res.FighterSalvoSeconds, salvoCycle)
 			}
+		}
+		if dps := res.FighterDPS - dpsBefore; dps > 0 {
+			reach := WeaponReach{TypeID: ent.typeID, Kind: ReachFighter, Count: launched, DPS: dps,
+				ExplosionRadius:   ent.get(snap, attrFighterAttackExpRadius),
+				ExplosionVelocity: ent.get(snap, attrFighterAttackExpVel)}
+			if rf, rs := ent.get(snap, attrFighterAttackReduction), ent.get(snap, attrFighterAttackSensitivity); rf > 0 && rs > 1 {
+				reach.DamageReduction = math.Log(rf) / math.Log(rs)
+			}
+			res.Weapons = append(res.Weapons, reach)
 		}
 	}
 }
@@ -1064,6 +1159,11 @@ func (f *fitting) tank() {
 	}
 	for _, ent := range f.fitted {
 		if ent.kind != entModule || ent.instances < 1 || !ent.cycling() {
+			continue
+		}
+		// Remote repairers carry the same amounts but repair
+		// someone else (support).
+		if remoteKind(snap, ent.typeID) != "" {
 			continue
 		}
 		cycle := cycleSeconds(ent, snap)

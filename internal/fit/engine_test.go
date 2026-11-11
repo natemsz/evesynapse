@@ -433,6 +433,15 @@ func TestFitEngineDrones(t *testing.T) {
 		t.Fatalf("drones active = %d, want 2", res.DronesActive)
 	}
 	near(t, "drone DPS (II)", res.DroneDPS, 19.2, 0.001)
+
+	// Launched drones are in space, not in the ship: a hull bonus
+	// to everything in the ship requiring Drones (the shape of the
+	// Mining skill's yield bonus) leaves them alone.
+	fx.requires(2456, SkillReq{SkillTypeID: 3436, Level: 1})
+	fx.snap.Attrs[1002][9001] = 50
+	fx.effect(1002, 9006, 0, fitModSkill(64, 9001, 6, 3436))
+	res = Compute(fx.snap, 1002, fit, map[int64]int{3436: 5}, nil, nil)
+	near(t, "drone DPS with a ship-located bonus", res.DroneDPS, 48, 0.001)
 }
 
 // TestFitEngineCapacitorEquilibrium pins the cap

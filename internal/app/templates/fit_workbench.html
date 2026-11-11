@@ -159,9 +159,30 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       </div>
     </div>
     {{end}}
+    {{if or (not .ReadOnly) .Boosts .BuffsActing}}
+    <div class="fit-group fit-boost-group" data-fit-group="boosts">
+      <h4><span>Fleet boosts</span></h4>
+      {{range .Boosts}}
+      {{if $.ReadOnly}}<p class="fit-boost-ro"><b>{{.Label}}</b> {{.Effects}}</p>{{else}}
+      <div class="fit-boost" data-fit-boost="{{.Index}}">
+        <div class="fit-boost-fields">
+          <label><span>Burst charge</span><select data-fit-boost-field="charge">{{range .Families}}<optgroup label="{{.Name}}">{{range .Charges}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</optgroup>{{end}}</select></label>
+          <label><span>Booster hull</span><select data-fit-boost-field="hull">{{range .Hulls}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+          <label><span>Booster skills</span><select data-fit-boost-field="level">{{range .Levels}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+          <label><span>Mindlink</span><select data-fit-boost-field="mindlink">{{range .Mindlinks}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+        </div>
+        <p class="fit-boost-effects">{{.Effects}}</p>
+        <button type="button" class="fit-chip-btn fit-boost-remove" data-fit-boost-remove="{{.Index}}" title="Remove this boost" aria-label="Remove this boost">×</button>
+      </div>
+      {{end}}
+      {{end}}
+      {{if and (not .ReadOnly) .BoostDefault}}<button type="button" class="fit-slot-empty fit-boost-add" data-fit-boost-add="{{.BoostDefault}}">+ Add a fleet boost</button>{{end}}
+      {{if .BuffsActing}}<div class="fit-boost-acting"><h5>Acting on this fit</h5><ul>{{range .BuffsActing}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+    </div>
+    {{end}}
   </div>
   {{with .Stats}}
-  <div class="fit-stats" data-fit-figures="{{.Figures}}">
+  <div class="fit-stats" data-fit-figures="{{.Figures}}"{{if .RangeJSON}} data-fit-range="{{.RangeJSON}}"{{end}}>
     {{if not $.ReadOnly}}<div class="fit-sum" aria-hidden="true"><div class="fit-sum-in">
       <span class="k-weapon">{{template "fit-g" "weapon"}}<b>{{.TotalDPS}}</b> DPS</span>
       <span class="k-armor">{{template "fit-g" "armor"}}<b>{{.EHPOmni}}</b> EHP</span>
@@ -176,6 +197,10 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <span class="fit-headline-label"><abbr title="Damage per second">DPS</abbr></span>
         <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}{{if .FighterDPS}} · fighters {{.FighterDPS}}{{end}}{{if .SmartbombDPS}} · smartbombs {{.SmartbombDPS}}{{end}}</span>
         {{if .SpooledDPS}}<span class="fit-headline-sub">{{.SpooledDPS}} at full spool, after {{.SpoolTime}} of firing</span>{{end}}
+        {{if .RangeSpark}}<button type="button" class="fit-range-spark" data-fit-range-open aria-haspopup="dialog">
+          <svg viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{.RangeSpark}}"/></svg>
+          <span>Damage at range, out to {{.RangeEnd}}</span>
+        </button>{{end}}
       </div>
       <div class="fit-headline-volley">
         <span class="fit-headline-num" data-fit-fig="volley">{{.TotalVolley}}</span>
@@ -183,8 +208,10 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}{{if .FighterVolley}} · fighters {{.FighterVolley}}{{end}}</span>
       </div>
     </div>
-    {{if or .NeutDrain .NosDrain .Breacher}}<dl class="fit-kv fit-kv-drain">
+    {{if or .NeutDrain .NosDrain .Breacher .Bomb .Doomsday}}<dl class="fit-kv fit-kv-drain">
       {{if .Breacher}}<div><dt>Breacher pod</dt><dd>{{.Breacher}}</dd></div>{{end}}
+      {{if .Bomb}}<div><dt>Bomb</dt><dd>{{.Bomb}}</dd></div>{{end}}
+      {{if .Doomsday}}<div><dt>Doomsday</dt><dd>{{.Doomsday}}</dd></div>{{end}}
       {{if .NeutDrain}}<div><dt>Neutralizer drain</dt><dd>{{.NeutDrain}}</dd></div>{{end}}
       {{if .NosDrain}}<div><dt>Nosferatu drain</dt><dd>{{.NosDrain}}</dd></div>{{end}}
     </dl>{{end}}
@@ -228,8 +255,32 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         {{- if .CapInject}}
         <div><dt>Boosters</dt><dd data-fit-fig="capinject">{{.CapInject}}</dd></div>
         {{- end}}
+        {{- if .CapNosState}}
+        <div><dt>With nosferatu</dt><dd>{{.CapNosState}}</dd></div>
+        {{- end}}
       </dl>
     </section>
+
+    {{if or .LogiShield .LogiArmor .LogiHull .LogiCap}}<section class="fit-panel" aria-label="Logistics">
+      <h5>Logistics <span class="fit-panel-side">on another ship</span></h5>
+      <dl class="fit-kv">
+        {{if .LogiShield}}<div><dt>Shield repair</dt><dd>{{.LogiShield}}</dd></div>{{end}}
+        {{if .LogiArmor}}<div><dt>Armor repair</dt><dd>{{.LogiArmor}}</dd></div>{{end}}
+        {{if .LogiArmorSpool}}<div><dt>Armor, ramped up</dt><dd>{{.LogiArmorSpool}}</dd></div>{{end}}
+        {{if .LogiHull}}<div><dt>Hull repair</dt><dd>{{.LogiHull}}</dd></div>{{end}}
+        {{if .LogiCap}}<div><dt>Capacitor transfer</dt><dd>{{.LogiCap}}</dd></div>{{end}}
+      </dl>
+    </section>{{end}}
+
+    {{if or .MineOre .MineIce .MineGas}}<section class="fit-panel" aria-label="Mining">
+      <h5>Mining</h5>
+      <dl class="fit-kv">
+        {{if .MineOre}}<div><dt>Ore</dt><dd>{{.MineOre}}</dd></div>{{end}}
+        {{if .MineIce}}<div><dt>Ice</dt><dd>{{.MineIce}}</dd></div>{{end}}
+        {{if .MineGas}}<div><dt>Gas</dt><dd>{{.MineGas}}</dd></div>{{end}}
+        {{if .MineWaste}}<div><dt>Waste</dt><dd>{{.MineWaste}}</dd></div>{{end}}
+      </dl>
+    </section>{{end}}
 
     <section class="fit-panel" aria-label="Defense">
       <h5>Defense <span class="fit-panel-side"><span class="fit-ehp" data-fit-fig="ehp">{{.EHPOmni}}</span> <abbr title="Effective hit points">EHP</abbr></span></h5>

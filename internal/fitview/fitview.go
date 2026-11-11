@@ -107,6 +107,8 @@ type FitDoc struct {
 	// -> implant type, 0 = slot left empty. Slots not listed keep
 	// whatever the selected clone has plugged in.
 	Implants map[int]int64 `json:"implants,omitempty"`
+	// Boosts are fleet boosts acting on the fit (FitFleetBoosts).
+	Boosts []FitBoost `json:"boosts,omitempty"`
 }
 
 // FitImplantSlots is how many implant slots a clone has.
@@ -140,6 +142,7 @@ func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 	if doc == nil {
 		return
 	}
+	sanitizeBoosts(doc)
 	merged := make([]FitDocItem, 0, len(doc.Items))
 	index := make(map[fitDocLineKey]int, len(doc.Items))
 	for _, it := range doc.Items {
@@ -1193,15 +1196,20 @@ type FitTile struct {
 
 // FitStatsView is the fitting stat panel, preformatted.
 type FitStatsView struct {
-	Powergrid     FitBarRow
-	CPU           FitBarRow
-	Align         string
-	Velocity      string
-	Signature     string
-	Capacitor     string // capacity
-	CapPeak       string
-	CapDraw       string
-	CapInject     string // capacitor boosters, empty without one
+	Powergrid FitBarRow
+	CPU       FitBarRow
+	Align     string
+	Velocity  string
+	Signature string
+	Capacitor string // capacity
+	CapPeak   string
+	CapDraw   string
+	CapInject string // capacitor boosters, empty without one
+	// The damage-at-range chart (FitRange): its data, the inline
+	// sparkline's points and the axis end; empty without damage.
+	RangeJSON     string
+	RangeSpark    string
+	RangeEnd      string
 	CapState      string
 	CapStable     bool
 	TurretDPS     string
@@ -1218,32 +1226,45 @@ type FitStatsView struct {
 	TotalVolley   string
 	NeutDrain     string
 	NosDrain      string
-	Tank          []FitResistRow
-	EHPOmni       string
-	ShieldReg     string
-	ShieldBoost   string
-	ArmorRep      string
-	HullRep       string
-	TargetRng     string
-	ScanRes       string
-	Sensor        string
-	LockedTgts    string
-	Cargo         string
-	DroneBW       string
-	DroneBay      string
-	DronesUp      string
-	FighterDPS    string // "" on a hull without fighter tubes
-	FighterVolley string
-	Fighters      string // squadrons launched and tubes
-	FighterHangar string
-	FighterSalvo  string // "" without a salvo ability launched
-	Calibration   string
-	CalibOver     bool
-	SlotLine      string // "High 3/3 · Medium 2/3 · Low 1/2 · Rigs 0/3"
-	SlotsOver     bool
-	Calib         FitBarRow // calibration as a bar beside powergrid and CPU
-	Tiles         []FitTile // turrets, launchers, calibration under the ring
-	Problems      []string  // why the fit doesn't fit, one short line each
+	CapNosState   string // the capacitor with nosferatu gaining; "" without
+	Bomb          string
+	Doomsday      string
+	// Logistics and mining rows; each "" when the fit does none.
+	LogiShield     string
+	LogiArmor      string
+	LogiArmorSpool string
+	LogiHull       string
+	LogiCap        string
+	MineOre        string
+	MineIce        string
+	MineGas        string
+	MineWaste      string
+	Tank           []FitResistRow
+	EHPOmni        string
+	ShieldReg      string
+	ShieldBoost    string
+	ArmorRep       string
+	HullRep        string
+	TargetRng      string
+	ScanRes        string
+	Sensor         string
+	LockedTgts     string
+	Cargo          string
+	DroneBW        string
+	DroneBay       string
+	DronesUp       string
+	FighterDPS     string // "" on a hull without fighter tubes
+	FighterVolley  string
+	Fighters       string // squadrons launched and tubes
+	FighterHangar  string
+	FighterSalvo   string // "" without a salvo ability launched
+	Calibration    string
+	CalibOver      bool
+	SlotLine       string // "High 3/3 · Medium 2/3 · Low 1/2 · Rigs 0/3"
+	SlotsOver      bool
+	Calib          FitBarRow // calibration as a bar beside powergrid and CPU
+	Tiles          []FitTile // turrets, launchers, calibration under the ring
+	Problems       []string  // why the fit doesn't fit, one short line each
 	// Figures is the headline stats as numbers (JSON), so the
 	// editor can show what an edit moved and preview a candidate.
 	Figures string
@@ -1344,6 +1365,12 @@ type FitSimView struct {
 	PilotID    int64
 	PilotLabel string
 	StateJSON  string // canonical fit document for the editor script
+	// Boosts are the fleet boost picker rows; BuffsActing says what
+	// every burst acting on the fit does, the fit's own included.
+	Boosts      []FitBoostRow
+	BuffsActing []string
+	// BoostDefault is the charge a new fleet boost starts with.
+	BoostDefault int64
 	// CloneID is the selected clone (0 = active clone); Clones
 	// feeds the Clone dropdown; Implants is the ten slots (clone
 	// plus the fit's overrides); ImplantNote covers warming /
@@ -1521,6 +1548,11 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 			typeIDs = append(typeIDs, id)
 		}
 	}
+	bursts, err := fit.Bursts(ctx, app.queries)
+	if err != nil {
+		logging.Errorf("fittings sim: load burst data: %v", err)
+	}
+	typeIDs = append(typeIDs, FitBoostTypeIDs(doc, bursts)...)
 	snap, err := fit.LoadSnapshot(ctx, app.queries, typeIDs)
 	if err != nil {
 		logging.Errorf("fittings sim: load snapshot for ship %d: %v", doc.ShipTypeID, err)
@@ -1580,9 +1612,26 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 			engineItems = append(engineItems, fit.ItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st})
 		}
 	}
-	res := fit.Compute(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs)
+	snap.Bursts = bursts
+	fleet, boostRows := FitFleetBoosts(snap, doc, app.fitAllSkillIDs(ctx, snap))
+	view.Boosts = boostRows
+	if bursts != nil && len(bursts.Charges) > 0 {
+		view.BoostDefault = bursts.Charges[0].TypeID
+	}
+	if len(doc.Boosts) > 0 {
+		state, _ := json.Marshal(doc) // checked boosts
+		view.StateJSON = string(state)
+	}
+	res := fit.ComputeFleet(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs, fleet)
+	for _, b := range res.Buffs {
+		w := FitBuffWord(bursts, b.ID, b.Value)
+		if !b.Fleet {
+			w += " (this fit's burst)"
+		}
+		view.BuffsActing = append(view.BuffsActing, w)
+	}
 	if len(implantIDs) > 0 {
-		base := fit.Compute(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, nil)
+		base := fit.ComputeFleet(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, nil, fleet)
 		view.ImplantEffects = FitImplantEffects(base, res)
 	}
 
@@ -1615,6 +1664,10 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 	view.CalLeftNum = res.CalibrationMax - res.CalibrationUsed
 	view.ChargeSets = app.FitBuildChargeSets(ctx, doc, snap, nameOf)
 	view.Stats = FitBuildStats(res)
+	if rd, js, spark := FitRange(res, nameOf); rd != nil {
+		view.Stats.RangeJSON, view.Stats.RangeSpark = js, spark
+		view.Stats.RangeEnd = FitFmt1(rd.EndKm) + " km"
+	}
 	// Implants count toward the pilot's missing skills like modules.
 	skillItems := append([]fit.ItemInput{}, engineItems...)
 	for _, id := range implantIDs {
@@ -2235,8 +2288,60 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 			FitFmt1(res.NeutDrainPerSec), FitFmt1(res.NeutDrainPerCycle))
 	}
 	if res.NosDrainPerSec > 0 {
-		st.NosDrain = fmt.Sprintf("%s GJ/s (%s GJ per cycle)",
+		st.NosDrain = fmt.Sprintf("%s GJ/s (%s GJ per cycle), yours while the target's capacitor is fuller",
 			FitFmt1(res.NosDrainPerSec), FitFmt1(res.NosDrainPerCycle))
+		switch {
+		case res.CapacitorDraw-res.CapacitorInjection <= 0:
+			// Nothing draws: the capacitor holds either way.
+		case !res.CapacitorNosStable:
+			st.CapNosState = "Runs out in " + FitSeconds(res.CapacitorNosDepletionSecs)
+		case res.CapacitorNosPercent >= 99.95:
+			st.CapNosState = "Stable"
+		default:
+			st.CapNosState = "Stable at " + FitFmt1(res.CapacitorNosPercent) + "%"
+		}
+	}
+	if res.BombDamage > 0 {
+		st.Bomb = fmt.Sprintf("%s damage in a %s km blast, one bomb every %s",
+			FitFmt0(res.BombDamage), FitFmt1(res.BombRadius/1000), FitSeconds(res.BombSeconds))
+	}
+	if res.DoomsdayDamage > 0 {
+		if res.DoomsdayTicks > 1 {
+			st.Doomsday = fmt.Sprintf("%s damage a second for %d seconds in a %s km area, every %s",
+				FitFmt0(res.DoomsdayDamage), res.DoomsdayTicks, FitFmt1(res.DoomsdayRadius/1000), FitSeconds(res.DoomsdaySeconds))
+		} else {
+			st.Doomsday = fmt.Sprintf("%s damage to one target, every %s",
+				FitFmt0(res.DoomsdayDamage), FitSeconds(res.DoomsdaySeconds))
+		}
+	}
+	hps := func(v float64) string { return FitFmt1(v) + " HP/s" }
+	if res.RemoteShieldRate > 0 {
+		st.LogiShield = hps(res.RemoteShieldRate)
+	}
+	if res.RemoteArmorRate > 0 {
+		st.LogiArmor = hps(res.RemoteArmorRate)
+		if res.RemoteArmorSpooled > 0 {
+			st.LogiArmorSpool = fmt.Sprintf("%s at full ramp, after %s", hps(res.RemoteArmorSpooled), FitSeconds(res.RemoteArmorSpoolSeconds))
+		}
+	}
+	if res.RemoteHullRate > 0 {
+		st.LogiHull = hps(res.RemoteHullRate)
+	}
+	if res.RemoteCapRate > 0 {
+		st.LogiCap = FitFmt1(res.RemoteCapRate) + " GJ/s"
+	}
+	perHour := func(v float64) string { return FitFmt0(v*3600) + " m³ an hour" }
+	if res.MiningOre > 0 {
+		st.MineOre = perHour(res.MiningOre)
+	}
+	if res.MiningIce > 0 {
+		st.MineIce = perHour(res.MiningIce)
+	}
+	if res.MiningGas > 0 {
+		st.MineGas = perHour(res.MiningGas)
+	}
+	if res.MiningWastePercent > 0 && (res.MiningOre > 0 || res.MiningIce > 0 || res.MiningGas > 0) {
+		st.MineWaste = FitFmt1(res.MiningWastePercent) + "% of cycles"
 	}
 
 	st.Tank = []FitResistRow{

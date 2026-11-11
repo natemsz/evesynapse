@@ -118,6 +118,20 @@ const (
 // sdeSheetFileNames lists the item sheet's optional files.
 var sdeSheetFileNames = []string{sdeUnitsFileName, sdeTraitsFileName, sdeMetaTypesFileName, sdeMetaGroupsFileName}
 
+// The buff tables (schema 145): what a command burst's buff ids do.
+// Best-effort like the sheet files: a dump lacking them keeps the
+// previous rows, and bursts change nothing.
+const (
+	sdeDbuffsFileName        = "dbuffCollections.csv"
+	sdeDbuffItemFileName     = "dbuffItemModifiers.csv"
+	sdeDbuffLocationFileName = "dbuffLocationModifiers.csv"
+	sdeDbuffGroupFileName    = "dbuffLocationGroupModifiers.csv"
+	sdeDbuffSkillFileName    = "dbuffLocationRequiredSkillModifiers.csv"
+)
+
+// sdeDbuffFileNames lists the buff tables' optional files.
+var sdeDbuffFileNames = []string{sdeDbuffsFileName, sdeDbuffItemFileName, sdeDbuffLocationFileName, sdeDbuffGroupFileName, sdeDbuffSkillFileName}
+
 // The celestials file (schema 090): every named place in every
 // system, most of which the import drops -- it keeps the groups
 // a kill's location can point at (sun, planet, moon, asteroid
@@ -299,7 +313,8 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// celestials a kill's location resolves against, and
 	// imports before version 15 lack the item sheet's data, and
 	// imports before version 16 lack the variation tables, and
-	// imports before version 17 lack the Browse tree, so
+	// imports before version 17 lack the Browse tree, and
+	// imports before version 20 lack the buff tables, so
 	// re-import once (the store writes the marker when it
 	// lands). Retries on later ticks while an import keeps
 	// failing.
@@ -331,7 +346,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 
 // sdeImportVersion is the importer's column-set marker (see
 // sdeMaintenance): an import stored under an older one re-imports.
-const sdeImportVersion = "19"
+const sdeImportVersion = "20"
 
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
@@ -497,6 +512,21 @@ func (app *Application) importSDEFrom(ctx context.Context, ov *sdeArchive) error
 			parsed.markers[name] = marker
 		}
 	}
+	// The buff tables go in together or not at all: modifiers
+	// without their collections (or the reverse) would leave bursts
+	// half described.
+	dbuffComplete := true
+	for _, name := range sdeDbuffFileNames {
+		if marker, err := app.parseSDESource(ctx, ov, base, name, parsed); err != nil {
+			logging.Warnf("sde: optional %s unavailable, keeping the previous buff tables: %v", name, err)
+			dbuffComplete = false
+		} else {
+			parsed.markers[name] = marker
+		}
+	}
+	if !dbuffComplete {
+		parsed.dbuffs, parsed.dbuffMods = nil, nil
+	}
 	parsed.buildIndustryRows()
 	parsed.buildInventionRows()
 	parsed.buildSkillRows()
@@ -537,6 +567,7 @@ func (app *Application) importSDEFrom(ctx context.Context, ov *sdeArchive) error
 	app.invalidateSearchIndexSDE()
 	app.invalidateSDETopology()
 	fit.ResetSkillDogma()
+	fit.ResetBurstData()
 	// The universe map is built from what just landed.
 	if err := app.rebuildUniverseMap(ctx); err != nil {
 		logging.Errorf("map: rebuild after import: %v", err)
@@ -653,6 +684,30 @@ type parsedSDE struct {
 	traits     []sdeTraitRow
 	metaTypes  []sdeMetaTypeRow
 	metaGroups []sdeMetaGroupRow
+
+	// The buff tables (schema 145): empty when the dump lacks them.
+	dbuffs    []sdeDbuffRow
+	dbuffMods []sdeDbuffModRow
+}
+
+// sdeDbuffRow is one buff collection: its name, how several values
+// of it combine, and its operation.
+type sdeDbuffRow struct {
+	dbuffID     int64
+	displayName string
+	aggregate   string
+	operation   string
+}
+
+// sdeDbuffModRow is one attribute a buff changes: kind "item" (the
+// ship), "location" (everything fitted), "group" (fitted modules of
+// groupID) or "skill" (fitted modules requiring skillID).
+type sdeDbuffModRow struct {
+	dbuffID     int64
+	kind        string
+	attributeID int64
+	groupID     int64
+	skillID     int64
 }
 
 // sdeUnitRow is one attribute unit and the label the game shows.
@@ -1003,6 +1058,10 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		err = parseSDEUnits(cr, idx, parsed)
 	case sdeTraitsFileName:
 		err = parseSDETraits(cr, idx, parsed)
+	case sdeDbuffsFileName:
+		err = parseSDEDbuffs(cr, idx, parsed)
+	case sdeDbuffItemFileName, sdeDbuffLocationFileName, sdeDbuffGroupFileName, sdeDbuffSkillFileName:
+		err = parseSDEDbuffModifiers(cr, idx, parsed, name)
 	case sdeMetaTypesFileName:
 		err = parseSDEMetaTypes(cr, idx, parsed)
 	case sdeMetaGroupsFileName:
@@ -1390,6 +1449,55 @@ func parseSDETraits(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error
 			}
 		}
 		parsed.traits = append(parsed.traits, row)
+		return nil
+	})
+	return err
+}
+
+// parseSDEDbuffs reads dbuffCollections.csv: each buff's name,
+// aggregate mode and operation.
+func parseSDEDbuffs(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "dbuffID")
+		if err != nil {
+			return errSkipRow
+		}
+		parsed.dbuffs = append(parsed.dbuffs, sdeDbuffRow{
+			dbuffID:     id,
+			displayName: csvFieldOrEmpty(rec, idx, "displayName"),
+			aggregate:   csvFieldOrEmpty(rec, idx, "aggregateMode"),
+			operation:   csvFieldOrEmpty(rec, idx, "operationName"),
+		})
+		return nil
+	})
+	return err
+}
+
+// parseSDEDbuffModifiers reads one of the four buff modifier files;
+// the file says which kind of target its rows reach.
+func parseSDEDbuffModifiers(cr *csv.Reader, idx map[string]int, parsed *parsedSDE, name string) error {
+	kind := map[string]string{
+		sdeDbuffItemFileName:     "item",
+		sdeDbuffLocationFileName: "location",
+		sdeDbuffGroupFileName:    "group",
+		sdeDbuffSkillFileName:    "skill",
+	}[name]
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "dbuffID")
+		if err != nil {
+			return errSkipRow
+		}
+		attr, err := csvID(rec, idx, "dogmaAttributeID")
+		if err != nil {
+			return errSkipRow
+		}
+		parsed.dbuffMods = append(parsed.dbuffMods, sdeDbuffModRow{
+			dbuffID:     id,
+			kind:        kind,
+			attributeID: attr,
+			groupID:     csvIDOrZero(rec, idx, "groupID"),
+			skillID:     csvIDOrZero(rec, idx, "skillID"),
+		})
 		return nil
 	})
 	return err
@@ -2227,6 +2335,27 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 			return 0, err
 		}
 	}
+	// The buff tables (schema 145), replaced together when this
+	// import carried all five files.
+	if len(parsed.dbuffs) > 0 {
+		for _, table := range []string{"sde_dbuffs", "sde_dbuff_modifiers"} {
+			if _, err := tx.Exec(ctx, "DELETE FROM "+table); err != nil {
+				return 0, fmt.Errorf("clear %s: %w", table, err)
+			}
+		}
+		if err := insert("INSERT INTO sde_dbuffs (dbuff_id, display_name, aggregate, operation) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING", len(parsed.dbuffs), func(i int) []any {
+			r := parsed.dbuffs[i]
+			return []any{r.dbuffID, r.displayName, r.aggregate, r.operation}
+		}); err != nil {
+			return 0, err
+		}
+		if err := insert("INSERT INTO sde_dbuff_modifiers (dbuff_id, kind, attribute_id, group_id, skill_id) VALUES ($1, $2, $3, $4, $5)", len(parsed.dbuffMods), func(i int) []any {
+			r := parsed.dbuffMods[i]
+			return []any{r.dbuffID, r.kind, r.attributeID, r.groupID, r.skillID}
+		}); err != nil {
+			return 0, err
+		}
+	}
 	// Variation compare tables (schema 141), rebuilt whenever the
 	// import carried the variation links.
 	if len(parsed.metaTypes) > 0 {
@@ -2415,7 +2544,8 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		len(parsed.typeAttrs) + len(parsed.attrTypes) + len(parsed.effects) +
 		len(parsed.modifiers) + len(parsed.typeEffects) + len(parsed.dynRanges) +
 		len(parsed.dynMappings) +
-		len(parsed.units) + len(parsed.traits) + len(parsed.metaTypes) + len(parsed.metaGroups))
+		len(parsed.units) + len(parsed.traits) + len(parsed.metaTypes) + len(parsed.metaGroups) +
+		len(parsed.dbuffs) + len(parsed.dbuffMods))
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	tq := db.New(tx)
@@ -2436,7 +2566,8 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		// graph (schema 072) from 11, and the item sheet's
 		// attribute columns, units, traits and variation links
 		// (schema 140) from 15, and the variation compare tables
-		// (schema 141) from 16 (sdeMaintenance backfills once when
+		// (schema 141) from 16, and the buff tables (schema 145)
+		// from 20 (sdeMaintenance backfills once when
 		// it's behind).
 		{Key: "sde_import_version", Value: sdeImportVersion},
 	}

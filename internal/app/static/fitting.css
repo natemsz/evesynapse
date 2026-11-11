@@ -417,3 +417,111 @@ html.fit-dragging, html.fit-dragging * { -webkit-user-select: none; user-select:
 }
 .fit-imp-folded:not(.fit-imp-open) > .fit-chips { display: none; }
 .fit-imp-folded.fit-imp-open > .fit-imp-fold { margin-bottom: 0.45rem; }
+
+/* --- damage at range ---
+   The sparkline under the DPS headline opens the chart (fitrange.js):
+   a manual popover in the top layer, centred, the whole screen on a
+   phone. Series colours are a fixed order validated for colour-blind
+   separation on the panel surface; the total wears the text colour. */
+.fit-stats {
+  --fr-1: #e0682f; --fr-2: #2b9f84; --fr-3: #9672e0; --fr-4: #b58f12;
+}
+.fit-range {
+  --fr-1: #e0682f; --fr-2: #2b9f84; --fr-3: #9672e0; --fr-4: #b58f12;
+  inset: 0; margin: auto; padding: 0;
+  width: min(56rem, calc(100% - 2rem)); max-width: none; max-height: calc(100% - 2rem);
+  overflow-y: auto; overscroll-behavior: contain;
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--flyout-edge); border-radius: var(--r-lg);
+  box-shadow: var(--flyout-shadow);
+  -webkit-backdrop-filter: var(--flyout-frost);
+  backdrop-filter: var(--flyout-frost);
+}
+.fit-range-spark {
+  flex-basis: 100%; display: flex; flex-direction: column; gap: 0.15rem;
+  margin-top: 0.3rem; padding: 0.3rem 0.4rem; text-align: left;
+  border: 1px solid var(--hairline); border-radius: var(--r-sm);
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.fit-range-spark:hover, .fit-range-spark:focus-visible { border-color: var(--accent); color: var(--text); }
+.fit-range-spark svg { display: block; width: 100%; height: 28px; overflow: visible; }
+.fit-range-spark polyline { fill: none; stroke: var(--k-weapon); stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.fit-range-spark span {
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.fit-range-body { display: grid; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-4); }
+.fit-range-targets { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr)); gap: 0.4rem; }
+.fit-range-target {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem;
+  padding: 0.35rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm);
+  background: transparent; color: var(--muted); cursor: pointer; text-align: left;
+}
+.fit-range-target b {
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-xs);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text);
+}
+.fit-range-target small { font-size: var(--fs-xs); }
+.fit-range-target:hover, .fit-range-target:focus-visible { border-color: var(--accent); }
+.fit-range-target[aria-pressed="true"] { border-color: var(--accent); background: var(--row-hover); color: var(--text); }
+.fit-range-readout { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; margin: 0; font-size: var(--fs-sm); min-height: 1.4em; }
+.fit-range-at { color: var(--muted); }
+.fit-range-val { display: inline-flex; align-items: center; gap: 0.35rem; }
+.fit-range-val b { color: var(--text-bright); font-variant-numeric: tabular-nums; }
+.fit-range-plot { min-width: 0; }
+.fit-range-svg { display: block; max-width: 100%; height: auto; touch-action: pan-y; }
+.fit-range-svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fit-range-grid { stroke: var(--hairline); stroke-width: 1; }
+.fit-range-tick { fill: var(--muted); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.fit-range-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.fit-range-cross { stroke: var(--muted); stroke-width: 1; }
+.fit-range-hit { fill: transparent; cursor: crosshair; }
+.fr-total { stroke: var(--text); }
+.fr-s1 { stroke: var(--fr-1); } .fr-s2 { stroke: var(--fr-2); } .fr-s3 { stroke: var(--fr-3); } .fr-s4 { stroke: var(--fr-4); }
+.fit-range-key { flex: none; width: 1rem; height: 0.3rem; }
+.fit-range-key line { stroke-width: 3; stroke-linecap: round; }
+.fit-range-legend { display: grid; gap: 0.3rem; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.fit-range-legend li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.2rem 0.5rem; }
+.fit-range-legend .fit-range-key { align-self: center; }
+.fit-range-legend small { color: var(--muted); font-size: var(--fs-xs); }
+.fit-range-tablewrap summary {
+  cursor: pointer; color: var(--muted);
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.fit-range-table { width: 100%; margin-top: 0.4rem; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.fit-range-table th {
+  text-align: right; color: var(--muted); padding: 0.2rem 0.4rem;
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.fit-range-table td { text-align: right; padding: 0.2rem 0.4rem; border-top: 1px solid var(--hairline); }
+.fit-range-table th:first-child, .fit-range-table td:first-child { text-align: left; }
+/* --- fleet boosts ---
+   One row per booster: charge, hull, skills and mindlink pickers,
+   what the burst gives, and a remove control. */
+.fit-boost {
+  position: relative; display: grid; gap: 0.35rem;
+  padding: 0.5rem 2rem 0.5rem 0.5rem; margin-bottom: 0.4rem;
+  border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--row-alt);
+}
+.fit-boost-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr)); gap: 0.35rem 0.5rem; }
+.fit-boost-fields label { display: grid; gap: 0.15rem; min-width: 0; }
+.fit-boost-fields label > span {
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.fit-boost-fields select {
+  width: 100%; min-width: 0; padding: 0.3rem 0.4rem; font: inherit; font-size: var(--fs-sm);
+  color: var(--text); background: var(--input-bg); border: 1px solid var(--glass-edge); border-radius: var(--r-sm);
+}
+.fit-boost-effects { margin: 0; font-size: var(--fs-sm); color: var(--text); }
+.fit-boost-remove { position: absolute; top: 0.4rem; right: 0.4rem; }
+.fit-boost-ro { margin: 0 0 0.3rem; font-size: var(--fs-sm); }
+.fit-boost-acting { margin-top: 0.5rem; font-size: var(--fs-sm); }
+.fit-boost-acting h5 {
+  margin: 0 0 0.2rem; font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.fit-boost-acting ul { margin: 0; padding-left: 1.1rem; }

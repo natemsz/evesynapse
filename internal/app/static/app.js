@@ -6675,8 +6675,17 @@
     var words = ageWords(Math.max(0, Date.now() - t));
     if (el.textContent !== words) el.textContent = words;
   }
+  // The 30 second tick runs only while the page shows a live age.
+  var ageTimer = 0;
   function tickAges() {
-    document.querySelectorAll("time[data-live-ago]").forEach(tickAge);
+    var els = document.querySelectorAll("time[data-live-ago]");
+    els.forEach(tickAge);
+    if (els.length && !ageTimer) {
+      ageTimer = setInterval(function () { if (!document.hidden) tickAges(); }, 30000);
+    } else if (!els.length && ageTimer) {
+      clearInterval(ageTimer);
+      ageTimer = 0;
+    }
   }
   function retime(el, iso) {
     if (!el || !iso) return;
@@ -6687,7 +6696,7 @@
     tickAge(el);
     if (el.textContent !== was) flash(el, "");
   }
-  setInterval(function () { if (!document.hidden) tickAges(); }, 30000);
+  tickAges();
   document.addEventListener("visibilitychange", function () { if (!document.hidden) tickAges(); });
   document.addEventListener("evesynapse:content-ready", tickAges);
 

@@ -198,20 +198,6 @@ type Model struct {
 // Kinds are the span labels the tagger reads, as intelsynth labels them.
 var Kinds = []string{"system", "gate", "dest", "area", "location", "pilot", "ship", "count", "activity", "state"}
 
-// NewModel makes an empty model over Kinds.
-func NewModel() *Model {
-	m := &Model{Labels: []string{"O"}, W: map[string][]float32{}}
-	for _, k := range Kinds {
-		m.Labels = append(m.Labels, "B-"+k, "I-"+k)
-	}
-	L := len(m.Labels)
-	m.Trans = make([][]float32, L+1)
-	for i := range m.Trans {
-		m.Trans[i] = make([]float32, L)
-	}
-	return m
-}
-
 // allowed is whether label to may follow label from (len(Labels)
 // for the start): an inside label only continues its own kind.
 func (m *Model) allowed(from, to int) bool {

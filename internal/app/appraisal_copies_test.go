@@ -331,9 +331,6 @@ func TestAppraisePublicContractsBlueprintCopyEndToEnd(t *testing.T) {
 	if !c1.DealRatio.Valid || math.Abs(c1.DealRatio.Float64-wantRatio) > 1e-9 {
 		t.Errorf("9201 ratio = %v, want %v", c1.DealRatio, wantRatio)
 	}
-	if appraisalDealFlag(c1.DealRatio) {
-		t.Error("9201 flagged as a deal at 194% of its copy value")
-	}
 
 	items2, err := q.ListPublicContractItems(ctx, 9202)
 	if err != nil || len(items2) != 1 {

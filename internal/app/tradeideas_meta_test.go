@@ -55,11 +55,11 @@ func TestTradeIdeasRefreshUsesMeta(t *testing.T) {
 
 func TestTradeIdeasConfiguredWithMetaKey(t *testing.T) {
 	c := Config{metaAIKey: "meta-test-key"}
-	if !c.TradeIdeasConfigured() || !c.tradeIdeasUsesMeta() {
+	if !c.TradeIdeasConfigured() || !(c.MetaAIKey() != "") {
 		t.Fatal("a Meta key alone should configure trade ideas through Muse Wonder")
 	}
 	c = Config{cloudflareAccountID: "abcdef0123456789abcdef0123456789", cloudflareAuthToken: "tok"}
-	if !c.TradeIdeasConfigured() || c.tradeIdeasUsesMeta() {
+	if !c.TradeIdeasConfigured() || (c.MetaAIKey() != "") {
 		t.Fatal("Cloudflare credentials alone should configure trade ideas through Gemma")
 	}
 }

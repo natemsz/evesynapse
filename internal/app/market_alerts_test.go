@@ -58,60 +58,6 @@ func TestHistoryChangePct(t *testing.T) {
 	}
 }
 
-func TestBuildPriceChart(t *testing.T) {
-	if _, ok := markethistory.BuildPriceChart(nil); ok {
-		t.Fatal("empty rows: got ok, want false")
-	}
-
-	flat := []db.MarketHistory{
-		histRow("2026-09-29", 10), histRow("2026-09-30", 10), histRow("2026-10-01", 10),
-	}
-	chart, ok := markethistory.BuildPriceChart(flat)
-	if !ok {
-		t.Fatal("flat: chart not built")
-	}
-	if chart.Points == "" {
-		t.Fatal("flat: empty polyline")
-	}
-	y0 := chart.Dots[0].Y
-	for _, d := range chart.Dots {
-		if d.Y != y0 {
-			t.Fatalf("flat: dot y %d, want all %d", d.Y, y0)
-		}
-		if d.Y <= chart.TopY || d.Y >= chart.BaseY {
-			t.Fatalf("flat: dot y %d outside band (%d..%d)", d.Y, chart.TopY, chart.BaseY)
-		}
-	}
-	if len(chart.Bars) != 3 {
-		t.Fatalf("flat: got %d volume bars, want 3", len(chart.Bars))
-	}
-
-	rising := []db.MarketHistory{histRow("2026-09-30", 5), histRow("2026-10-01", 15)}
-	chart, _ = markethistory.BuildPriceChart(rising)
-	if chart.Dots[0].Y != chart.BaseY || chart.Dots[1].Y != chart.TopY {
-		t.Fatalf("rising: dots at (%d, %d), want (%d, %d)",
-			chart.Dots[0].Y, chart.Dots[1].Y, chart.BaseY, chart.TopY)
-	}
-
-	single := []db.MarketHistory{histRow("2026-10-01", 42)}
-	chart, ok = markethistory.BuildPriceChart(single)
-	if !ok || chart.Points != "" || len(chart.Dots) != 1 {
-		t.Fatalf("single: ok=%v points=%q dots=%d, want a lone dot", ok, chart.Points, len(chart.Dots))
-	}
-
-	noVolume := []db.MarketHistory{
-		{RegionID: 10000002, TypeID: 34, Date: "2026-09-30", Average: 5},
-		{RegionID: 10000002, TypeID: 34, Date: "2026-10-01", Average: 6},
-	}
-	chart, _ = markethistory.BuildPriceChart(noVolume)
-	if len(chart.Bars) != 0 {
-		t.Fatalf("zero volume: got %d bars, want 0", len(chart.Bars))
-	}
-	if chart.From != "2026-09-30" || chart.To != "2026-10-01" {
-		t.Fatalf("labels: %s → %s", chart.From, chart.To)
-	}
-}
-
 func postForm(t *testing.T, app *Application, cookie *http.Cookie, path string, form url.Values) (int, string) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))

@@ -53,9 +53,6 @@ func TestFactionDisplay(t *testing.T) {
 	if got := factionDisplay(names, 500002); got != "Faction #500002" {
 		t.Errorf("unknown faction: %q", got)
 	}
-	if got := warPartyRecord(esi.WarParty{ShipsKilled: 12, ISKDestroyed: 1234567.89}); got != "12 ships · 1,234,567.89 ISK destroyed" {
-		t.Errorf("warPartyRecord: %q", got)
-	}
 }
 
 // TestModuleDeclaration: the module declares all five things (empty

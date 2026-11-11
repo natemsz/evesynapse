@@ -134,6 +134,11 @@ var searchSorts = []struct{ Key, Label string }{
 	{"score_desc", "Abyssal score, high to low"},
 }
 
+// DealMaxRatio is the deal line: a contract asking at or under this
+// share of its appraised value is priced under our numbers. The
+// contract search queries hold the same line in SQL.
+const DealMaxRatio = 0.85
+
 func validSort(key string) bool {
 	for _, s := range searchSorts {
 		if s.Key == key {
@@ -639,22 +644,6 @@ const SkinCategoryID = 91
 // assets templates name it as their data-fallback-src, so a
 // picture that fails for any other reason lands here too.
 const ItemPlaceholderPath = "/static/img/item.svg"
-
-// TypeIconURL is the image-server URL of one contract line's
-// item picture. Blueprint-category types have no /icon asset
-// on the image server (it answers 400 for them, formulas
-// included): originals serve /bp, copies serve /bpc. Every
-// other type serves /icon.
-func TypeIconURL(typeID int64, blueprintClass, copy bool, size int) string {
-	variant := "icon"
-	if blueprintClass {
-		variant = "bp"
-		if copy {
-			variant = "bpc"
-		}
-	}
-	return fmt.Sprintf("https://images.evetech.net/types/%d/%s?size=%d", typeID, variant, size)
-}
 
 // TypeCategoryIconURL is the picture URL of one type on the
 // surfaces that know the type's SDE category but hold no
@@ -1985,7 +1974,7 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		out.PricedText = fmt.Sprintf("priced %d of %d lines", row.PricedLines, row.TotalLines)
 		if row.PricedLines == row.TotalLines && row.DealRatio.Valid {
 			pct := int(row.DealRatio.Float64*100 + 0.5)
-			out.IsDeal = row.DealRatio.Float64 <= 0.85
+			out.IsDeal = row.DealRatio.Float64 <= DealMaxRatio
 			if out.IsDeal {
 				out.DealPct = 100 - pct
 			}
@@ -3194,7 +3183,7 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 			} else {
 				v.DealNote = fmt.Sprintf("Asking %d%% of our appraised value", pct)
 			}
-			v.IsDeal = c.DealRatio.Float64 <= 0.85
+			v.IsDeal = c.DealRatio.Float64 <= DealMaxRatio
 		}
 	}
 

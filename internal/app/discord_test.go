@@ -993,3 +993,13 @@ func TestDiscordServerRemoval(t *testing.T) {
 		t.Fatalf("the bot left %q, want the removed server", fake.left)
 	}
 }
+
+// ownerAddress is an owner page's address for one owner key, the
+// plain page where the key is not one (the redirect the handlers
+// send back).
+func ownerAddress(path, key string) string {
+	if _, ok := parseOrgOwner(key); !ok {
+		return path
+	}
+	return path + "?owner=" + url.QueryEscape(key)
+}

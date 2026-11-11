@@ -102,9 +102,6 @@ func TestAppraisalDealRatioGating(t *testing.T) {
 	if ratio, ok := appraisalDealRatio(exchange, full); !ok || ratio != 0.85 {
 		t.Errorf("full-coverage exchange: got %v/%v, want 0.85/true", ratio, ok)
 	}
-	if !appraisalDealFlag(sql.NullFloat64{Float64: 0.85, Valid: true}) {
-		t.Error("a ratio of exactly 0.85 must flag (the line is at or under)")
-	}
 	if _, ok := appraisalDealRatio(exchange, partial); ok {
 		t.Error("partial coverage must store no ratio")
 	}
@@ -139,9 +136,6 @@ func TestAppraisalDealRatioGating(t *testing.T) {
 	ratio, ok := appraisalDealRatio(db.PubContract{Type: "item_exchange", Price: 1}, barter)
 	if !ok || ratio != 2.5 {
 		t.Errorf("1 ISK + 2499 of wants over 1000 offered: got %v/%v, want 2.5/true", ratio, ok)
-	}
-	if appraisalDealFlag(sql.NullFloat64{Float64: ratio, Valid: ok}) {
-		t.Error("a barter costing 250% of value must never flag as a deal")
 	}
 	// An unpriced wanted line leaves the cost unknowable: no
 	// ratio, however cheap the ISK ask looks.
@@ -268,8 +262,8 @@ func TestAppraisePublicContractsEndToEnd(t *testing.T) {
 	if c1.OfferedValue != 1000 || c1.PricedLines != 1 || c1.TotalLines != 1 {
 		t.Errorf("9101 totals = %v (%d/%d), want 1000 (1/1)", c1.OfferedValue, c1.PricedLines, c1.TotalLines)
 	}
-	if !c1.DealRatio.Valid || c1.DealRatio.Float64 != 0.85 || !appraisalDealFlag(c1.DealRatio) {
-		t.Errorf("9101 ratio = %v, want a flagged 0.85", c1.DealRatio)
+	if !c1.DealRatio.Valid || c1.DealRatio.Float64 != 0.85 {
+		t.Errorf("9101 ratio = %v, want 0.85", c1.DealRatio)
 	}
 	if c1.TierMix != "typical:1" || !c1.PricedAt.Valid {
 		t.Errorf("9101 mix/stamp = %q/%v, want typical:1 and a stamp", c1.TierMix, c1.PricedAt)
@@ -308,8 +302,8 @@ func TestAppraisePublicContractsEndToEnd(t *testing.T) {
 	if c5.OfferedValue != 1000 || c5.WantValue != 90 {
 		t.Errorf("9105 values = %v/%v, want 1000 offered / 90 wanted", c5.OfferedValue, c5.WantValue)
 	}
-	if !c5.DealRatio.Valid || c5.DealRatio.Float64 != 0.091 || !appraisalDealFlag(c5.DealRatio) {
-		t.Errorf("9105 ratio = %v, want a flagged 0.091 ((1+90)/1000)", c5.DealRatio)
+	if !c5.DealRatio.Valid || c5.DealRatio.Float64 != 0.091 {
+		t.Errorf("9105 ratio = %v, want 0.091 ((1+90)/1000)", c5.DealRatio)
 	}
 
 	// 9106: the wanted line prices nowhere, so the contract

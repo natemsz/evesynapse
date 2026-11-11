@@ -335,14 +335,6 @@ func FormatCompactAxisNumber(v float64) string {
 	return fmt.Sprintf("%.0f", v)
 }
 
-// BuildPriceChart turns stored daily aggregates into SVG
-// geometry. ok=false only when there are no rows at all; a single
-// row yields a lone dot (no polyline can be drawn through one
-// point, and faking one would invent shape).
-func BuildPriceChart(rows []db.MarketHistory) (PriceChart, bool) {
-	return buildChart(rows, len(rows), ChartOptions{VolumeStrip: true}, true)
-}
-
 // BuildPriceChartRange builds the item page chart over the last
 // `display` rows of rows (ascending). Rows before the displayed
 // window are warmup: the moving averages and the Donchian channel

@@ -89,17 +89,6 @@ func NetHaul(buy, sell, buyBroker, sellBroker, salesTax float64) (profit, buyCos
 	return proceeds - buyCost, buyCost
 }
 
-// NetHaulMarginPct is the net margin on a cross-station round
-// trip as a percentage of the net buy cost: the figure Trade
-// Finder quotes.
-func NetHaulMarginPct(buy, sell, buyBroker, sellBroker, salesTax float64) float64 {
-	profit, buyCost := NetHaul(buy, sell, buyBroker, sellBroker, salesTax)
-	if buyCost == 0 {
-		return 0
-	}
-	return profit / buyCost * 100
-}
-
 // NetSpreadPct is the net spread on a round trip as a
 // percentage of the net buy cost: the figure the spread card
 // and the scanner quote.

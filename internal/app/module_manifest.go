@@ -333,14 +333,3 @@ func moduleByID(id string) (moduleDef, bool) {
 	}
 	return moduleDef{}, false
 }
-
-// requiredScopes lists the scopes the module cannot run without.
-func (m moduleDef) requiredScopes() []string {
-	var out []string
-	for _, s := range m.Scopes {
-		if !s.Optional {
-			out = append(out, s.Scope)
-		}
-	}
-	return out
-}

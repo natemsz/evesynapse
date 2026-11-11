@@ -74,7 +74,4 @@ func TestNetRoundTrip(t *testing.T) {
 	if !close(profit, 95.625-89.61) {
 		t.Errorf("NetHaul profit = %v, want %v", profit, 95.625-89.61)
 	}
-	if got := NetHaulMarginPct(87, 100, 0.03, 0.01, 0.03375); got < 6.71 || got > 6.72 {
-		t.Errorf("NetHaulMarginPct = %v, want about 6.71", got)
-	}
 }

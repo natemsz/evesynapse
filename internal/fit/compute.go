@@ -215,9 +215,23 @@ func (f *fitting) addItems(items []ItemInput) {
 		if kind == entModule {
 			state = NormalizeModuleState(snap, it.TypeID, it.State)
 		}
+		// A fighter line carries its switched-on abilities; nil
+		// is the type's defaults. Lines with different abilities
+		// stay apart, like modules in different states.
+		var abilities []string
+		if kind == entFighter {
+			if it.Abilities != nil {
+				abilities = FighterAbilitiesOn(snap, it.TypeID, it.Abilities, nil)
+				// on lists the whole set: what it leaves out is off.
+				abilities = fighterOnlyListed(abilities, it.Abilities)
+			} else {
+				abilities = FighterAbilitiesOn(snap, it.TypeID, nil, nil)
+			}
+		}
+		abilityKey := fighterAbilityKey(abilities)
 		var ent *entity
 		for _, e := range f.fittedByType[it.TypeID] {
-			if e.state == state {
+			if e.state == state && fighterAbilityKey(e.abilities) == abilityKey {
 				ent = e
 				break
 			}
@@ -230,11 +244,12 @@ func (f *fitting) addItems(items []ItemInput) {
 			continue
 		}
 		ent = &entity{
-			key:       fmt.Sprintf("fit:%d:%s", it.TypeID, state),
+			key:       fmt.Sprintf("fit:%d:%s:%s", it.TypeID, state, abilityKey),
 			kind:      kind,
 			typeID:    it.TypeID,
 			instances: qty,
 			state:     state,
+			abilities: abilities,
 			base:      cloneAttrMap(snap.Attrs[it.TypeID]),
 			calc:      map[int64]float64{},
 		}
@@ -1055,81 +1070,6 @@ func (f *fitting) droneStats() {
 		res.SpooledDPS = res.DPS + f.spoolExtra
 	}
 	res.Volley = res.TurretVolley + res.MissileVolley + res.DroneVolley + res.SmartbombVolley + res.FighterVolley
-}
-
-// fighterStats launches the hangar's fighters, a squadron per tube
-// within the hull's light, support and heavy slots, in the order
-// they were added, and totals the launched squadrons' sustained
-// attack and their missile salvo.
-func (f *fitting) fighterStats() {
-	snap, res := f.snap, f.res
-	res.FighterTubes = int(f.shipAttr(AttrFighterTubes))
-	res.FighterLightSlots = int(f.shipAttr(AttrFighterLightSlots))
-	res.FighterSupportSlots = int(f.shipAttr(AttrFighterSupportSlots))
-	res.FighterHeavySlots = int(f.shipAttr(AttrFighterHeavySlots))
-	res.FighterHangarCapacity = f.shipAttr(AttrFighterCapacity)
-	tubes := res.FighterTubes
-	for _, ent := range f.fighters {
-		carried := ent.instances
-		res.FightersCarried += carried
-		if phys, ok := snap.Physics[ent.typeID]; ok {
-			res.FighterHangarUsed += phys.Volume * float64(carried)
-		}
-		size := int(ent.get(snap, AttrFighterSquadronMaxSize))
-		if size < 1 {
-			size = 1
-		}
-		var used *int
-		var slots int
-		switch {
-		case ent.base[AttrFighterSquadronIsHeavy] > 0:
-			used, slots = &res.FighterHeavyUsed, res.FighterHeavySlots
-		case ent.base[AttrFighterSquadronIsSupport] > 0:
-			used, slots = &res.FighterSupportUsed, res.FighterSupportSlots
-		default:
-			used, slots = &res.FighterLightUsed, res.FighterLightSlots
-		}
-		attackVolley, attackCycle := fighterAbility(ent, snap, fighterAttackMissileDamage, AttrFighterAttackMissileMult, AttrFighterAttackMissileDuration)
-		if attackVolley == 0 {
-			attackVolley, attackCycle = fighterAbility(ent, snap, fighterAttackTurretDamage, AttrFighterAttackTurretMult, AttrFighterAttackTurretDuration)
-		}
-		salvo, salvoCycle := fighterAbility(ent, snap, fighterMissilesDamage, AttrFighterMissilesMult, AttrFighterMissilesDuration)
-		dpsBefore := res.FighterDPS
-		launched := 0
-		for left := carried; left > 0 && tubes > 0 && *used < slots; left -= size {
-			launched += min(size, left)
-			members := float64(min(size, left))
-			tubes--
-			*used++
-			res.SquadronsLaunched++
-			if attackCycle > 0 {
-				res.FighterVolley += members * attackVolley
-				res.FighterDPS += members * attackVolley / attackCycle
-			}
-			if salvoCycle > 0 && salvo > 0 {
-				res.FighterSalvo += members * salvo
-				res.FighterSalvoSeconds = math.Max(res.FighterSalvoSeconds, salvoCycle)
-			}
-		}
-		if dps := res.FighterDPS - dpsBefore; dps > 0 {
-			reach := WeaponReach{TypeID: ent.typeID, Kind: ReachFighter, Count: launched, DPS: dps,
-				ExplosionRadius:   ent.get(snap, attrFighterAttackExpRadius),
-				ExplosionVelocity: ent.get(snap, attrFighterAttackExpVel)}
-			if rf, rs := ent.get(snap, attrFighterAttackReduction), ent.get(snap, attrFighterAttackSensitivity); rf > 0 && rs > 1 {
-				reach.DamageReduction = math.Log(rf) / math.Log(rs)
-			}
-			res.Weapons = append(res.Weapons, reach)
-		}
-	}
-}
-
-// fighterAbility is one fighter's damage per activation of an
-// ability and the ability's cycle in seconds.
-func fighterAbility(ent *entity, snap *Snapshot, damage []int64, mult, duration int64) (volley, cycle float64) {
-	for _, a := range damage {
-		volley += ent.get(snap, a)
-	}
-	return volley * ent.get(snap, mult), ent.get(snap, duration) / 1000
 }
 
 // tank works out hit points and effective hit points per layer,

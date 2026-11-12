@@ -752,6 +752,33 @@ var FitGauges = (function () {
     pendingFlash = fam ? { type: "group", family: fam, undo: name } : null;
     simulate();
   }
+  // toggleFighterAbility switches one ability on a fighter line.
+  // The line stores only what differs from the type's defaults
+  // (abilitiesOn, abilitiesOff); a squadron runs one movement
+  // ability at a time, so switching one on drops the others from
+  // abilitiesOn (the server keeps the last one named).
+  function toggleFighterAbility(typeID, btn) {
+    var i = findItem(typeID);
+    if (i < 0) return;
+    var key = btn.getAttribute("data-fit-ability");
+    var on = btn.getAttribute("aria-pressed") !== "true";
+    var def = btn.getAttribute("data-fit-ability-default") === "1";
+    pushHistory();
+    var it = state.items[i];
+    var drop = function (list, k) { return (list || []).filter(function (x) { return x !== k; }); };
+    it.abilitiesOn = drop(it.abilitiesOn, key);
+    it.abilitiesOff = drop(it.abilitiesOff, key);
+    if (on && btn.getAttribute("data-fit-ability-prop") === "1") {
+      var props = btn.closest(".fit-ftr-abil").querySelectorAll('[data-fit-ability-prop="1"]');
+      for (var p = 0; p < props.length; p++) it.abilitiesOn = drop(it.abilitiesOn, props[p].getAttribute("data-fit-ability"));
+    }
+    if (on && !def) it.abilitiesOn.push(key);
+    if (!on && def) it.abilitiesOff.push(key);
+    if (!it.abilitiesOn.length) delete it.abilitiesOn;
+    if (!it.abilitiesOff.length) delete it.abilitiesOff;
+    markDirty();
+    simulate();
+  }
   function setItemQty(typeID, qty) {
     pushHistory();
     var i = findItem(typeID);
@@ -980,6 +1007,12 @@ var FitGauges = (function () {
       if (impReset) { setImplant(impReset.getAttribute("data-fit-imp-reset"), null); return; }
       var impClear = t.closest("[data-fit-imp-clear]");
       if (impClear) { setImplant(impClear.getAttribute("data-fit-imp-clear"), 0); return; }
+      var abEl = t.closest("[data-fit-ability]");
+      if (abEl) {
+        var abRow = abEl.closest("[data-fit-rowtype]");
+        if (abRow) toggleFighterAbility(parseInt(abRow.getAttribute("data-fit-rowtype"), 10) || 0, abEl);
+        return;
+      }
       var decEl = t.closest("[data-fit-dec]");
       if (decEl) { decItem(parseInt(decEl.getAttribute("data-fit-dec"), 10) || 0, inCargo(decEl)); return; }
       var incEl = t.closest("[data-fit-inc]");

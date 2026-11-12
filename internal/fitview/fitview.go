@@ -76,6 +76,11 @@ type FitDocItem struct {
 	// hold instead of on the hull (a refit set). Items that only
 	// ever sit in cargo leave it false.
 	Cargo bool `json:"cargo,omitempty"`
+	// AbilitiesOn and AbilitiesOff switch a fighter line's
+	// abilities away from the type's defaults (damage and
+	// electronic warfare on, movement off). Empty on anything else.
+	AbilitiesOn  []string `json:"abilitiesOn,omitempty"`
+	AbilitiesOff []string `json:"abilitiesOff,omitempty"`
 }
 
 // FamilyIn is the line's editor family given the types' natural
@@ -155,6 +160,7 @@ func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 		if it.Cargo {
 			it.States = nil // nothing in the hold is active
 		}
+		sanitizeFighterAbilities(&it)
 		if it.Qty < 1 {
 			it.Qty = 1
 		}
@@ -300,6 +306,9 @@ type FitSlotChip struct {
 	TipLines  string       // serialized FitTipLine rows for the tooltip
 	StatesCSV string
 	SubSlot   int64 // a subsystem's slot kind (subSystemSlot), 0 for anything else
+	// Fighter is a fighter line's launch report and ability
+	// switches; nil for anything else.
+	Fighter *FitFighterChip
 	// Home is the rack a cargo line's module fits in ("" for a line
 	// on the hull, or for a type that only ever sits in cargo), so
 	// the editor can drag it back onto its rack.
@@ -332,6 +341,9 @@ type FitSlotGroup struct {
 	Over   bool
 	Chips  []FitSlotChip
 	Empty  []int // the free slots (ordinals); the rack shows one add line for them
+	// Limits are the Fighters bay's launch tubes, squadron slots and
+	// hangar; nil for every other group.
+	Limits []FitFighterLimit
 	// ReadOnly mirrors the workbench's, so the shared group template
 	// (fit_workbench.html "fit-group") can drop editing controls.
 	ReadOnly bool
@@ -1643,7 +1655,8 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 			byState[st]++
 		}
 		for _, st := range order {
-			engineItems = append(engineItems, fit.ItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st})
+			engineItems = append(engineItems, fit.ItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st,
+				Abilities: FitFighterAbilitiesOf(snap, it)})
 		}
 	}
 	snap.Bursts = bursts
@@ -1956,6 +1969,9 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 				chip.StatesCSV = strings.Join(vs, ",")
 			}
 		}
+		if fam == FitFamilyFighter {
+			chip.Fighter = fitFighterChip(res, snap, it.TypeID)
+		}
 		if fam == FitFamilySubsystem && snap != nil {
 			chip.SubSlot = int64(snap.Attrs[it.TypeID][fit.AttrSubSystemSlot])
 		}
@@ -2009,7 +2025,9 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 	groups = append(groups, mk(FitFamilyDrone, "Drones", droneUsed, 0, false))
 	// Fighters only on carriers (or when a fit already lists some).
 	if res.FighterTubes > 0 || fighterCount > 0 {
-		groups = append(groups, mk(FitFamilyFighter, "Fighters", fighterCount, 0, false))
+		g := mk(FitFamilyFighter, "Fighters", fighterCount, 0, false)
+		g.Limits = FitFighterLimits(res)
+		groups = append(groups, g)
 	}
 	groups = append(groups, mk(FitFamilyCargo, "Cargo", cargoCount, 0, false))
 	return groups

@@ -1153,13 +1153,16 @@ func TestFitEngineReactivationDelaySpreadsCapUse(t *testing.T) {
 }
 
 // TestFitEngineFighterSquadrons pins fighter launch and damage: a
-// hull with two tubes and one light slot launches one light
-// squadron of six from 18 carried, so attack DPS is 6 x 100 / 5 s
-// = 120, and the missile salvo (limited charges) stays out of DPS.
+// hull with two tubes, one light slot and no heavy slots launches
+// one light squadron of six from 18 carried. With its abilities at
+// their defaults, attack (6 x 100 / 5 s = 120) and the missile
+// salvo (6 x 200 / 14 s) both count toward DPS; switching missiles
+// off leaves the attack. A heavy line never launches and says why.
 func TestFitEngineFighterSquadrons(t *testing.T) {
 	const (
 		carrier = 1001
 		fighter = 4003
+		heavy   = 4004
 	)
 	f := newFitFixture().
 		attrs(carrier, map[int64]float64{AttrFighterTubes: 2, AttrFighterLightSlots: 1}).
@@ -1167,12 +1170,23 @@ func TestFitEngineFighterSquadrons(t *testing.T) {
 			AttrFighterSquadronMaxSize: 6, AttrFighterSquadronIsLight: 1,
 			2227: 100, AttrFighterAttackMissileMult: 1, AttrFighterAttackMissileDuration: 5000,
 			2131: 200, AttrFighterMissilesMult: 1, AttrFighterMissilesDuration: 14000,
-		})
-	res := Compute(f.snap, carrier, []ItemInput{{TypeID: fighter, Quantity: 18}}, nil, nil, nil)
-	if res.SquadronsLaunched != 1 || res.FightersCarried != 18 {
-		t.Fatalf("launched %d squadrons of %d carried, want 1 of 18", res.SquadronsLaunched, res.FightersCarried)
+		}).
+		flag(fighter, EffectFighterAttack).flag(fighter, EffectFighterMissiles).
+		attrs(heavy, map[int64]float64{AttrFighterSquadronMaxSize: 3, AttrFighterSquadronIsHeavy: 1}).
+		flag(heavy, EffectFighterAttack)
+	res := Compute(f.snap, carrier, []ItemInput{{TypeID: fighter, Quantity: 18}, {TypeID: heavy, Quantity: 3}}, nil, nil, nil)
+	if res.SquadronsLaunched != 1 || res.FightersCarried != 21 {
+		t.Fatalf("launched %d squadrons of %d carried, want 1 of 21", res.SquadronsLaunched, res.FightersCarried)
 	}
-	near(t, "fighter DPS", res.FighterDPS, 120, 1e-9)
-	near(t, "total DPS", res.DPS, 120, 1e-9)
+	salvoDPS := 6 * 200 / 14.0
+	near(t, "fighter DPS", res.FighterDPS, 120+salvoDPS, 1e-9)
+	near(t, "total DPS", res.DPS, 120+salvoDPS, 1e-9)
 	near(t, "salvo", res.FighterSalvo, 1200, 1e-9)
+	if len(res.FighterLines) != 2 || res.FighterLines[0].Held != FighterSlotsFull || res.FighterLines[0].Launched != 6 ||
+		res.FighterLines[1].Held != FighterNoSlots || res.FighterLines[1].Launched != 0 {
+		t.Fatalf("launch report = %+v, want light 6 launched with the slots full, heavy held for want of slots", res.FighterLines)
+	}
+
+	res = Compute(f.snap, carrier, []ItemInput{{TypeID: fighter, Quantity: 6, Abilities: []string{FighterAbilityAttack}}}, nil, nil, nil)
+	near(t, "attack only", res.FighterDPS, 120, 1e-9)
 }

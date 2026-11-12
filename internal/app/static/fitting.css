@@ -557,3 +557,37 @@ html.fit-dragging, html.fit-dragging * { -webkit-user-select: none; user-select:
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
 }
 .fit-boost-acting ul { margin: 0; padding-left: 1.1rem; }
+
+/* --- fighters ---
+   The Fighters bay states its limits under the heading (launch
+   tubes, each squadron class's slots, the hangar), and each
+   fighter line says how many squadrons launch, why any stay in
+   the hangar, and carries its ability switches. Damage abilities
+   count toward DPS while on. */
+.fit-ftr-limits { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 0.5rem; }
+.fit-ftr-limit {
+  padding: 0.12rem 0.45rem; border: 1px solid var(--box-edge); border-radius: var(--r-xs);
+  background: var(--row-alt); color: var(--muted-2);
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+}
+.fit-ftr-limit b { color: var(--text); font-family: var(--font-num); font-weight: 600; letter-spacing: 0; }
+.fit-ftr-limit.full b { color: var(--gold); }
+.fit-ftr-limit.over { border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.fit-ftr-limit.over b { color: var(--danger); }
+.fit-ftr { flex-basis: 100%; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.2rem; }
+.fit-ftr-note { font-size: var(--fs-xs); color: var(--prose); }
+.fit-ftr-note b { margin-left: 0.5rem; color: var(--text); font-family: var(--font-num); font-weight: 600; }
+.fit-ftr-note.held { color: var(--danger); }
+.fit-ftr-abil { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.fit-ftr-ab {
+  appearance: none; min-height: 0; padding: 0.1rem 0.45rem;
+  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
+  background: transparent; color: var(--muted);
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+}
+button.fit-ftr-ab:hover, button.fit-ftr-ab:focus-visible { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.fit-ftr-ab.on { color: var(--text); border-color: color-mix(in srgb, var(--muted-2) 55%, transparent); background: var(--row-alt); }
+.fit-ftr-ab.dmg.on { color: var(--text-bright); border-color: color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+span.fit-ftr-ab { cursor: default; }

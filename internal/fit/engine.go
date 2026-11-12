@@ -276,9 +276,9 @@ const (
 )
 
 // Fighters: squadron shape, the carrier's tubes and role slots,
-// and the two damage abilities. Attack is sustained (missile-style
-// or turret-style by fighter); the missile ability is a salvo with
-// limited charges, kept out of DPS.
+// and the attack and missile abilities (the rest of the abilities
+// are in fighters.go). Attack is missile-style or turret-style by
+// fighter.
 const (
 	AttrFighterCapacity          = 2055
 	AttrFighterSquadronIsLight   = 2212
@@ -711,6 +711,11 @@ func LoadSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*Snapsho
 					next = append(next, r.SkillTypeID)
 				}
 			}
+			// A heavy fighter's bomb is a type of its own: its
+			// damage and blast size live on the bomb.
+			if bomb := int64(snap.Attrs[id][AttrFighterBombType]); bomb > 0 && !loadedTypes[bomb] {
+				next = append(next, bomb)
+			}
 		}
 		for _, eff := range snap.Effects {
 			for _, m := range eff.Modifiers {
@@ -788,6 +793,10 @@ type ItemInput struct {
 	TypeID   int64
 	Quantity int
 	State    string
+	// Abilities is a fighter line's switched-on abilities, the
+	// whole set (FighterAbilitiesOn resolves one); nil is the
+	// fighter type's defaults. Ignored for anything else.
+	Abilities []string
 }
 
 // EHPProfile is effective HP against a damage profile.
@@ -848,7 +857,7 @@ type Result struct {
 	MissileDPS   float64
 	DroneDPS     float64
 	SmartbombDPS float64
-	FighterDPS   float64 // launched squadrons' sustained attack
+	FighterDPS   float64 // launched squadrons' switched-on damage abilities
 	DPS          float64
 	// SpooledDPS is DPS with every spool-up weapon (entropic
 	// disintegrators) at its full damage bonus, reached after
@@ -872,9 +881,12 @@ type Result struct {
 
 	// Fighters: what the hangar carries, what launches (one
 	// squadron per tube, within the hull's light, support and heavy
-	// slots), and the launched squadrons' missile salvo: limited
-	// charges, so not in DPS. Every figure is 0 on a hull without
-	// fighter tubes.
+	// slots, the standup slots on a structure), and the launched
+	// squadrons' missile salvo. FighterDPS and FighterVolley count
+	// every switched-on damage ability: attack, missiles and bombs
+	// (missiles and bombs at their rate while charges last).
+	// FighterLines is the launch report per fighter line. Every
+	// figure is 0 on a hull without fighter tubes.
 	FightersCarried       int
 	SquadronsLaunched     int
 	FighterTubes          int
@@ -888,6 +900,8 @@ type Result struct {
 	FighterHangarCapacity float64 // m3
 	FighterSalvo          float64 // damage of one salvo from every launched squadron
 	FighterSalvoSeconds   float64 // the longest salvo cycle among them
+	FighterStandup        bool    // the slots are a structure's standup slots
+	FighterLines          []FighterLine
 
 	// Capacitor warfare: neutralizer and nosferatu drain, per
 	// cycle and per second, from fitted modules.
@@ -1049,7 +1063,8 @@ type entity struct {
 	kind      entityKind
 	typeID    int64
 	instances int
-	state     string // module state, "" for other kinds
+	state     string   // module state, "" for other kinds
+	abilities []string // a fighter's switched-on abilities
 	base      map[int64]float64
 	calc      map[int64]float64 // attributes touched by modifiers, post-pass
 }

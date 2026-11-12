@@ -162,7 +162,8 @@ func solveEngineItems(snap *fit.Snapshot, doc *fitview.FitDoc) []fit.ItemInput {
 			byState[st]++
 		}
 		for _, st := range order {
-			engineItems = append(engineItems, fit.ItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st})
+			engineItems = append(engineItems, fit.ItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st,
+				Abilities: fitview.FitFighterAbilitiesOf(snap, it)})
 		}
 	}
 	return engineItems

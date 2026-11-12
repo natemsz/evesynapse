@@ -382,13 +382,14 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     {{$fold := and (eq $group.Key "cargo") (gt (len $group.Chips) 5)}}
     <div class="fit-group{{if $fold}} fit-fold{{end}}" data-fit-group="{{$group.Key}}" data-fit-used="{{$group.Used}}" data-fit-max="{{$group.Max}}">
       <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}}, doesn't fit{{end}}</small>{{end}}</h4>
+      {{with .Limits}}<div class="fit-ftr-limits">{{range .}}<span class="fit-ftr-limit{{if .Full}} full{{end}}{{if .Over}} over{{end}}">{{.Label}} <b>{{.Value}}</b></span>{{end}}</div>{{end}}
       <div class="fit-chips">
         {{range .Chips}}
         <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}"{{if .Home}} data-fit-cargo="1" data-fit-home="{{.Home}}"{{end}}{{if .SubSlot}} data-fit-subslot="{{.SubSlot}}"{{end}} data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}>
           {{if $group.ReadOnly}}<button type="button" class="fit-chip-name" data-fit-info="{{.TypeID}}" title="Details of {{.Name}}">{{.Name}}</button>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
           {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}
-          {{if .Sub}}{{template "fit-chip-sub" .Sub}}{{end}}{{else}}
+          {{if .Sub}}{{template "fit-chip-sub" .Sub}}{{end}}{{with .Fighter}}{{template "fit-fighter-ro" .}}{{end}}{{else}}
           <span class="fit-chip-main">
             <button type="button" class="fit-chip-name" data-fit-info="{{.TypeID}}" title="Details of {{.Name}}">{{.Name}}</button>
             {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
@@ -401,7 +402,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
               <button type="button" class="fit-chip-btn" data-fit-inc="{{.TypeID}}" title="Add another">+</button>
             </span>
           </span>
-          {{if .Sub}}{{template "fit-chip-sub" .Sub}}{{end}}{{end}}
+          {{if .Sub}}{{template "fit-chip-sub" .Sub}}{{end}}{{with .Fighter}}{{template "fit-fighter" .}}{{end}}{{end}}
         </span>
         {{end}}
         {{if not $group.ReadOnly}}
@@ -425,6 +426,18 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
 {{end}}
 
 {{/* A rack row's stat line: each figure with its glyph. */}}
+{{/* A fighter line's launch report and its ability switches. */}}
+{{define "fit-fighter"}}<span class="fit-ftr">
+  <span class="fit-ftr-note{{if .Held}} held{{end}}">{{.Note}}{{if .DPS}}<b>{{.DPS}}</b>{{end}}</span>
+  {{if .Abilities}}<span class="fit-ftr-abil" role="group" aria-label="Abilities">{{range .Abilities}}<button type="button" class="fit-ftr-ab{{if .On}} on{{end}}{{if .Damage}} dmg{{end}}" data-fit-ability="{{.Key}}"{{if .Default}} data-fit-ability-default="1"{{end}}{{if .Prop}} data-fit-ability-prop="1"{{end}} aria-pressed="{{if .On}}true{{else}}false{{end}}" title="{{if .Damage}}Counts toward DPS when on{{else if .Prop}}One movement ability runs at a time{{else}}Switch on or off{{end}}">{{.Name}}</button>{{end}}</span>{{end}}
+</span>{{end}}
+
+{{/* The same report on a read-only page: the abilities that are on. */}}
+{{define "fit-fighter-ro"}}<span class="fit-ftr">
+  <span class="fit-ftr-note{{if .Held}} held{{end}}">{{.Note}}{{if .DPS}}<b>{{.DPS}}</b>{{end}}</span>
+  {{if .Abilities}}<span class="fit-ftr-abil">{{range .Abilities}}{{if .On}}<span class="fit-ftr-ab on{{if .Damage}} dmg{{end}}">{{.Name}}</span>{{end}}{{end}}</span>{{end}}
+</span>{{end}}
+
 {{define "fit-chip-sub"}}<span class="fit-chip-sub">{{range .}}<span class="fit-fig{{if .Kind}} k-{{.Kind}}{{end}}">{{if .Kind}}{{template "fit-g" .Kind}}{{end}}{{.Label}} <b class="{{.Class}}">{{.Value}}</b></span>{{end}}</span>{{end}}
 
 {{/* One figure glyph from the shared defs (base.html, fg-*). */}}

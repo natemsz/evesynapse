@@ -1292,6 +1292,10 @@ type Deps interface {
 	// SuggestTypes is the shared item search over the stored types; pool
 	// narrows it ("market" for anything sold).
 	SuggestTypes(ctx context.Context, query, pool string, limit int64) []SuggestItem
+	// CorrectSearch is a query with its misspellings fixed against
+	// the static data names (items, systems, regions), for a search
+	// that found nothing as typed; ok is false when nothing changed.
+	CorrectSearch(query string) (string, bool)
 	// AccessToken is a valid access token for one of the account's
 	// characters, refreshed if it was about to lapse.
 	AccessToken(ctx context.Context, ch db.Character) (string, error)

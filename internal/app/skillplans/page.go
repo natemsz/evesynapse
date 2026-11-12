@@ -283,6 +283,7 @@ type skillPlansView struct {
 	PlanPicked    bool             // the reader opened Plan (?plan=); false when it is the default first plan
 	FitPreview    *fitPreview      // plan-from-fit preview state
 	SearchQuery   string
+	SearchFix     string // the corrected query the hits answer when SearchQuery as typed found nothing
 	SearchResults []skillSearchRow
 	Message       string // set on a refused move, shown inside the editor
 }
@@ -463,6 +464,13 @@ func (app *plans) handleSkillPlans(w http.ResponseWriter, r *http.Request) {
 	view.SearchQuery = strings.TrimSpace(r.URL.Query().Get("q"))
 	if view.SearchQuery != "" && selected != nil {
 		hits, err := app.queries.SearchSDESkills(ctx, db.SearchSDESkillsParams{Lower: view.SearchQuery, Lower_2: view.SearchQuery})
+		if err == nil && len(hits) == 0 {
+			if fix, ok := app.deps.CorrectSearch(view.SearchQuery); ok {
+				if hits, err = app.queries.SearchSDESkills(ctx, db.SearchSDESkillsParams{Lower: fix, Lower_2: fix}); err == nil && len(hits) > 0 {
+					view.SearchFix = fix
+				}
+			}
+		}
 		if err != nil {
 			logging.Errorf("skill plans: search %q: %v", view.SearchQuery, err)
 		}

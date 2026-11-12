@@ -118,6 +118,7 @@ type searchSnapshot struct {
 	corps     map[int64]searchIndexOrg
 	alliances map[int64]searchIndexOrg
 	pilots    map[int64]searchIndexPilot
+	vocab     *searchVocab // the static data names' words (search_typos.go)
 }
 
 type searchRecordKind uint8
@@ -281,6 +282,7 @@ func (app *Application) buildSearchIndex(ctx context.Context) error {
 	for _, row := range regionRows {
 		snap.regions = append(snap.regions, searchIndexRegion{id: row.RegionID, name: row.Name, lower: strings.ToLower(row.Name)})
 	}
+	snap.vocab = buildSearchVocab(snap)
 	for _, row := range pilotRows {
 		if name, corpName, ok := searchPilotEntry(row.Payload); ok {
 			snap.pilots[row.CharacterID] = searchIndexPilot{name: name, lower: strings.ToLower(name), corpName: corpName}

@@ -87,29 +87,43 @@ type suggestItem struct {
 // or blank queries return an empty (never nil) slice so JSON
 // responses encode as [].
 func (app *Application) suggestTypes(ctx context.Context, q, pool string, limit int64) []suggestItem {
+	out, _ := app.suggestTypesFix(ctx, q, pool, limit)
+	return out
+}
+
+// suggestTypesFix is suggestTypes plus the corrected query its rows
+// answer when the query as typed found nothing ("" when they answer
+// the query as typed).
+func (app *Application) suggestTypesFix(ctx context.Context, q, pool string, limit int64) ([]suggestItem, string) {
 	out := []suggestItem{}
 	q = strings.TrimSpace(q)
 	if len(q) < 2 {
-		return out
+		return out, ""
 	}
 	pool = normalizeSuggestPool(pool)
 	if limit < 1 || limit > 25 {
 		limit = suggestDefaultLimit
 	}
 	if snap := app.searchSnapshot(); snap != nil {
-		return snap.suggestTypes(q, pool, limit)
+		out = snap.suggestTypes(q, pool, limit)
+		if len(out) == 0 && snap.vocab != nil {
+			if fix, ok := snap.vocab.correct(q); ok {
+				return snap.suggestTypes(fix, pool, limit), fix
+			}
+		}
+		return out, ""
 	}
 	rows, err := app.queries.SuggestSDETypesShared(ctx, db.SuggestSDETypesSharedParams{
 		Q: q, Pool: pool, Lim: limit,
 	})
 	if err != nil {
 		logging.Errorf("search: suggest %q (pool %s): %v", q, pool, err)
-		return out
+		return out, ""
 	}
 	for _, row := range rows {
 		out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: suggestLabel(row.CategoryName, row.GroupName)})
 	}
-	return out
+	return out, ""
 }
 
 // suggestLabel composes the "Category · Group" context shown

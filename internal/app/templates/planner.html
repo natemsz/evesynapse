@@ -30,6 +30,7 @@
 <section class="l-panel bpl-results" aria-label="Matches">
 {{if .Planner.Results}}
 <h2 class="bpl-h">Matches <small>{{len .Planner.Results}}</small></h2>
+{{if .Planner.Fix}}<p class="muted"><small>Nothing matches “{{.Planner.Query}}”. Showing matches for “{{.Planner.Fix}}”.</small></p>{{end}}
 <ul class="bpl-matches">
 {{range .Planner.Results}}<li><a href="{{.URL}}">{{.Name}}</a></li>{{end}}
 </ul>

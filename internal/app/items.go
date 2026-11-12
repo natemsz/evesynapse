@@ -139,6 +139,7 @@ type itemsView struct {
 	// tree's published-only toggle): shareable through GET
 	// parameters, exactly like the planner's plan URLs.
 	SearchQuery    string
+	SearchFix      string // the corrected query the results answer when SearchQuery as typed found nothing
 	PublishedOnly  bool
 	CategoryID     int64
 	GroupID        int64
@@ -424,9 +425,20 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 	if view.PublishedOnly {
 		publishedOnly = 1
 	}
+	search := view.SearchQuery
 	total, err := app.queries.CountSDETypesFiltered(ctx, db.CountSDETypesFilteredParams{
-		Q: view.SearchQuery, PublishedOnly: publishedOnly, CategoryID: view.CategoryID, GroupID: view.GroupID,
+		Q: search, PublishedOnly: publishedOnly, CategoryID: view.CategoryID, GroupID: view.GroupID,
 	})
+	if err == nil && total == 0 && search != "" {
+		// Nothing as typed: read it with its misspellings fixed.
+		if fix, ok := app.correctSearch(search); ok {
+			if n, ferr := app.queries.CountSDETypesFiltered(ctx, db.CountSDETypesFilteredParams{
+				Q: fix, PublishedOnly: publishedOnly, CategoryID: view.CategoryID, GroupID: view.GroupID,
+			}); ferr == nil && n > 0 {
+				search, total, view.SearchFix = fix, n, fix
+			}
+		}
+	}
 	if err != nil {
 		logging.Errorf("items: count search %q: %v", view.SearchQuery, err)
 		data.Error = "Item database unavailable right now. Check the server log."
@@ -448,7 +460,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 	view.NextPage = view.Page + 1
 
 	rows, err := app.queries.SearchSDETypesFiltered(ctx, db.SearchSDETypesFilteredParams{
-		Q: view.SearchQuery, PublishedOnly: publishedOnly, CategoryID: view.CategoryID, GroupID: view.GroupID,
+		Q: search, PublishedOnly: publishedOnly, CategoryID: view.CategoryID, GroupID: view.GroupID,
 		Lim: itemsTypesPerPage, Off: int64((view.Page - 1) * itemsTypesPerPage),
 	})
 	if err != nil {

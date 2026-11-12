@@ -88,8 +88,9 @@
 {{if eq $v.Mode "search"}}
   <div class="l-pane-bar">
     <a class="l-back" data-l-step="out" href="/items/{{if $v.PublishedOnly}}?published=1{{end}}">Categories</a>
-    <h2 class="l-pane-title">{{if $v.SearchQuery}}Results for "{{$v.SearchQuery}}"{{else}}Items{{end}} <small>{{$v.TotalTypes}}</small></h2>
+    <h2 class="l-pane-title">{{if $v.SearchFix}}Results for "{{$v.SearchFix}}"{{else if $v.SearchQuery}}Results for "{{$v.SearchQuery}}"{{else}}Items{{end}} <small>{{$v.TotalTypes}}</small></h2>
   </div>
+  {{if $v.SearchFix}}<p class="ib-note">Nothing matches "{{$v.SearchQuery}}". Showing results for "{{$v.SearchFix}}".</p>{{end}}
   {{if $v.SearchResults}}
   {{range $v.SearchSections}}
   <h3 class="item-section ib-sub">{{if .CategoryID}}<a href="/items/category/{{.CategoryID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.CategoryName}}</a>{{else}}No category{{end}}{{if .GroupID}} › <a href="/items/group/{{.GroupID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.GroupName}}</a>{{end}}</h3>

@@ -28,6 +28,7 @@
 {{else if lt (len $v.Query) 2}}
 <p><small>Type at least two letters.</small></p>
 {{else}}
+{{if $v.Fix}}<p class="muted"><small>No items, systems or regions match “{{$v.Query}}”. Showing them for “{{$v.Fix}}”.</small></p>{{end}}
 {{if $v.Pending}}<p class="muted"><small><span class="loading-pulse" aria-hidden="true"></span> Looking up “{{$v.Query}}” as a pilot. It shows here in a moment; <a href="">check again</a>.</small></p>{{end}}
 
 {{range $v.Sections}}

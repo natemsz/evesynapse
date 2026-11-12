@@ -36,6 +36,7 @@ type plannerView struct {
 	Warming  bool // planner tables empty: SDE industry import outstanding
 	Query    string
 	Searched bool
+	Fix      string // the corrected query the results answer when Query as typed found nothing
 	Results  []plannerResultRow
 	Notice   string // soft dead-end (pick can't be manufactured, plan too large)
 	Plan     *planView
@@ -223,7 +224,18 @@ func handlePlannerSuggest(deps module.Deps) http.HandlerFunc {
 func (app *planner) suggest(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	out := []module.SuggestItem{}
-	if len(q) >= 2 {
+	for attempt := 0; len(q) >= 2 && attempt < 2; attempt++ {
+		if attempt == 1 {
+			if len(out) > 0 {
+				break
+			}
+			// Nothing as typed: read it with its misspellings fixed.
+			fix, ok := app.deps.CorrectSearch(q)
+			if !ok {
+				break
+			}
+			q = fix
+		}
 		pattern := "%" + q + "%"
 		switch r.URL.Query().Get("kind") {
 		case "region":
@@ -280,6 +292,13 @@ func (app *planner) page(w http.ResponseWriter, r *http.Request) {
 	if view.Query != "" {
 		view.Searched = true
 		hits, err := app.queries.SearchManufacturableProducts(ctx, view.Query)
+		if err == nil && len(hits) == 0 {
+			if fix, ok := app.deps.CorrectSearch(view.Query); ok {
+				if hits, err = app.queries.SearchManufacturableProducts(ctx, fix); err == nil && len(hits) > 0 {
+					view.Fix = fix
+				}
+			}
+		}
 		if err != nil {
 			logging.Errorf("planner: search %q: %v", view.Query, err)
 			data.Error = "Search failed; check the server log."

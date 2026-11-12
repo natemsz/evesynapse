@@ -95,6 +95,31 @@ func TestOptimizeBuildsFittingColonies(t *testing.T) {
 	}
 }
 
+// TestBuyMissingBuysOnlyWhatCannotBeMade holds the "only what my
+// planets cannot make" setting to its word: with only Barren planets
+// in reach, Coolant's Electrolytes side (Ionic Solutions comes from
+// Gas and Storm) is bought, and the Water side is made even when
+// buying Water is cheaper.
+func TestBuyMissingBuysOnlyWhatCannotBeMade(t *testing.T) {
+	sol, err := Optimize(Request{
+		Target: "Coolant", TaxRate: 0.1, BuyMissing: true,
+		Characters: []Character{{ID: 1, Name: "Pilot", MaxPlanets: 6, CCLevel: 5}},
+		Candidates: []Candidate{{PlanetID: 1, Name: "B1", Type: "Barren", RadiusKm: 4000}, {PlanetID: 2, Name: "B2", Type: "Barren", RadiusKm: 4000}},
+		Prices:     map[string]float64{"Coolant": 15000, "Water": 1, "Electrolytes": 400, "Aqueous Liquids": 1, "Ionic Solutions": 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sol.PerDay < 1 {
+		t.Fatalf("no Coolant made: %q", sol.Short)
+	}
+	for _, f := range sol.Flows {
+		if f.From == -1 && (f.Item == "Water" || f.Item == "Aqueous Liquids") {
+			t.Errorf("bought %s, which the Barren planets make", f.Item)
+		}
+	}
+}
+
 // TestFitLeavesOutRemovedStructures holds a changed colony's budget to
 // what stands after the change: a structure marked for removal draws
 // no CPU or power.

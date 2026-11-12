@@ -317,7 +317,7 @@ func TestWatchlistWidgetHome(t *testing.T) {
 
 // TestNetWorthHousePrices: net worth prices assets in the house
 // order, The Forge's swept typical sells, then stored estimated
-// sells. The guide's average prices nothing (owner doctrine,
+// sells. The guide's average prices nothing (my ruling,
 // 2026-10-17): with only the guide present the card shows a
 // real assets number with honest coverage, never "prices not
 // loaded yet", and the daily sampler's net worth rides the

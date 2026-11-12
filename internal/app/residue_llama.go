@@ -197,7 +197,7 @@ func (e *llamaEngine) Complete(ctx context.Context, prompt string) (string, erro
 // context, so it outlives any one pass and dies with the
 // worker. A server found dead is started fresh for the pass
 // that finds it. A missing runtime or model file marks the
-// engine absent for the process's life (the owner installs,
+// engine absent for the process's life (an admin installs,
 // then restarts the service); a failed start is retried at
 // most every five minutes.
 func (e *llamaEngine) ensureStarted(ctx context.Context) error {

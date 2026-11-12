@@ -6213,7 +6213,7 @@
 // in CSS from its server-rendered pair. Two surfaces carry
 // figures with no compact form in the markup: the appraisal
 // buy card (its raw total rides the copy button) and the home
-// KPI band (the owner's clipped liquid-wallets figure; its
+// KPI band (my clipped liquid-wallets figure; its
 // rendered money figure carries the value in data-v). The
 // compact format mirrors formatCompactISK in the appraisal
 // handler exactly; the exact figure always stays on the card,

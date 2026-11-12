@@ -1,5 +1,5 @@
 -- Builds the release learner has recorded (schema 084): the
--- SHA-256 of every binary asset on the owner's published
+-- SHA-256 of every binary asset on my published
 -- GitHub releases, fetched by the swarm module's learner
 -- (internal/app/swarm/releases.go) and kept for good -- a hash
 -- learned here stays known after its release scrolls off the

@@ -190,7 +190,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		}
 	}
 	// One corner-radius scale: components take the radius tokens,
-	// never a raw 3/4/5px (the squarish look the owner rejected).
+	// never a raw 3/4/5px (the squarish look I rejected).
 	for _, raw := range []string{"border-radius: 3px", "border-radius: 4px", "border-radius: 5px"} {
 		if strings.Contains(style, raw) {
 			t.Errorf("style.css regained a raw %s; use the --r-* tokens", raw)

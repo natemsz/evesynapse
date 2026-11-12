@@ -4,8 +4,8 @@ package swarm
 // The release learner: the release library's second,
 // self-keeping half (build.go has the first, seeded one).
 //
-// On a slow cadence the learner reads the recent releases of the
-// owner's two Forgejo projects and records every binary build's
+// On a slow cadence the learner reads the recent releases of
+// my two Forgejo projects and records every binary build's
 // SHA-256 in the release_builds table, under the release's tag and
 // the project's product kind. An app release carries a signed
 // manifest per architecture (latest-<arch>.json and its .sig): the
@@ -23,8 +23,8 @@ package swarm
 // manifests name the current builds, and they are taken only when
 // their signatures verify, so the mirror's host is never trusted.
 //
-// The projects are hardcoded to the owner's because "mainline" is
-// defined by his releases: a fork self-hosting EveSynapse learns
+// The projects are hardcoded to mine because "mainline" is
+// defined by my releases: a fork self-hosting EveSynapse learns
 // the same library.
 //
 // Failure tolerance is the shape of the thing: a fetch or parse

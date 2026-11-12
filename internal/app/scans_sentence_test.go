@@ -8,7 +8,7 @@ import (
 	"evesynapse/internal/scan"
 )
 
-// The owner's Teonusude paste, as the scan parser reads it: a
+// My Teonusude paste, as the scan parser reads it: a
 // tower and a force field on grid, a station at 0 m, and two
 // ships off grid named for their pilots. The sentence anchors on
 // the station, counts the ships alone, and attributes them.
@@ -37,7 +37,7 @@ func TestDscanSentence(t *testing.T) {
 	}
 }
 
-// The owner's local form: 27 in local, the paster among the
+// My local form: 27 in local, the paster among the
 // friendlies, hostile name clusters read for alts, and the gap
 // stated -- no scan attached, ships unknown.
 func TestLocalSentence(t *testing.T) {

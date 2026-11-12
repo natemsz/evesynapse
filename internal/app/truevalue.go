@@ -19,8 +19,8 @@ import (
 // market history that barely exists for them, so an Avatar
 // "adjusts" to ~65B against a ~600B real value -- and it used to
 // be the fallback behind the guide average everywhere a price
-// was needed. Prices now resolve in the house order (owner
-// doctrine, 2026-10-17):
+// was needed. Prices now resolve in the house order (my
+// ruling, 2026-10-17):
 //
 //     Forge swept typical sell  ->  true-value estimated sell
 //     ->  unpriced
@@ -136,7 +136,7 @@ func (app *Application) TrueValues(ctx context.Context) map[int64]float64 {
 
 // BuildCosts is the fit foundation's view of the same table
 // (fitview.Env): the stored build cost by type, the house
-// order's last tier (owner ruling, 2026-11-12). Every computed
+// order's last tier (my ruling, 2026-11-12). Every computed
 // row carries one, whether or not an estimate stands behind it.
 func (app *Application) BuildCosts(ctx context.Context) map[int64]float64 {
 	rows := app.storedTrueValues(ctx)
@@ -168,10 +168,10 @@ func (app *Application) AskEvidence(ctx context.Context, typeID int64) (module.A
 // pickValuationPrice resolves one unit's price in the house
 // order: The Forge's swept typical sell, then the true-value
 // estimated sell (estSell, 0 when none is stored), then the
-// stored build cost (owner ruling, 2026-11-12: enough when it
+// stored build cost (my ruling, 2026-11-12: enough when it
 // is all we have). ok=false when no tier knows the type,
-// CCP's guide average is banned as a price source (owner
-// doctrine, 2026-10-17) and the adjusted price survives only
+// CCP's guide average is banned as a price source (my
+// ruling, 2026-10-17) and the adjusted price survives only
 // as the EIV input to job fees, never as a price.
 func pickValuationPrice(typicalSell, estSell, buildCost float64) (float64, bool) {
 	if typicalSell > 0 {

@@ -170,7 +170,7 @@ var ReleaseLibrary = map[string]ReleaseBuild{
 }
 
 // The learned half of the library: the builds the release
-// learner (releases.go) has recorded from the owner's GitHub
+// learner (releases.go) has recorded from my GitHub
 // releases and stored in release_builds. The learner keeps
 // this snapshot current; classification reads it instead of
 // the table, so rendering the Admin page never queries per

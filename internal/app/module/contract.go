@@ -448,7 +448,7 @@ const (
 	// inside its hard expiry, with its as-of stamp.
 	AppraisalTierFallback = "fallback"
 	// AppraisalTierBuildCost: the stored true-value build
-	// cost, the last resort (owner ruling, 2026-11-12): it
+	// cost, the last resort (my ruling, 2026-11-12): it
 	// speaks only when no market, estimate or fallback price
 	// exists, and every figure it touches is asterisked and
 	// labeled as build cost where it is shown.
@@ -1156,7 +1156,7 @@ type Deps interface {
 	// type (thin types only), the order's second tier.
 	TrueValues(ctx context.Context) map[int64]float64
 	// BuildCosts is the stored true-value build cost per
-	// type, the order's last tier (owner ruling, 2026-11-12).
+	// type, the order's last tier (my ruling, 2026-11-12).
 	BuildCosts(ctx context.Context) map[int64]float64
 	// AskEvidence is the live single-item contract asks behind a
 	// type the true-value pass could not price: shown beside the

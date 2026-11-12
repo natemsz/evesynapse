@@ -62,7 +62,7 @@ import (
 // from real channel traffic, like the group window's.
 const (
 	// gangLifetime is how long a gang stands without a new
-	// sighting before it is closed (owner-set default).
+	// sighting before it is closed (a default I set).
 	gangLifetime = 2 * time.Hour
 	// gangMinSharedPilots is the least identified pilots two
 	// sightings must share before they can be the same gang.

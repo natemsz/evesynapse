@@ -498,7 +498,7 @@ var pgIntelChannelOrgsSchema string
 var pgIntelAnalysisSchema string
 
 // Step 084: the release builds the swarm's learner has
-// recorded from the owner's GitHub releases.
+// recorded from my GitHub releases.
 //
 //go:embed schema_pg/084_release_builds.sql
 var pgReleaseBuildsSchema string

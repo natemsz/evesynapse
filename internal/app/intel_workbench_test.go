@@ -98,7 +98,7 @@ func seedWorkbenchScan(t *testing.T) (*Application, *db.Queries, db.GetScanRow) 
 	return app, q, row
 }
 
-// TestWorkbenchScanDoorDark pins the shipped state the owner
+// TestWorkbenchScanDoorDark pins the shipped state I
 // ordered: the scan door exists in the tree but the real router
 // does not serve it, the scan tool keeps its own result page
 // until the door is switched on.

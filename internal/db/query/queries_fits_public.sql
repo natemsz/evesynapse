@@ -169,7 +169,7 @@ UPDATE local_fittings SET total_price = $1 WHERE id = $2 AND user_id = $3;
 -- price for types the market cannot price, supercapital hulls
 -- above all; an anchored row, one with no sell source, is not
 -- an estimate and never reads as one), then the stored build
--- cost when neither market nor estimate could speak (owner
+-- cost when neither market nor estimate could speak (my
 -- ruling, 2026-11-12) (fitview.FitUnitPrice), the sum
 -- FitDocPrice makes when a fit is saved (0 when nothing in the
 -- fit is priced).

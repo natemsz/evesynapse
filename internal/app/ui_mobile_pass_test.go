@@ -62,7 +62,7 @@ func TestResponsiveCanon(t *testing.T) {
 }
 
 // TestKPIFiguresNeverBreakMidNumber pins the Fold-width defect
-// from the owner's screenshots: the home KPI figures wrapped
+// from my screenshots: the home KPI figures wrapped
 // inside the number ("176,032,199,750." / "38 ISK"). Figures now
 // wrap at their spaces only, and in the intermediate band the
 // glance band rewraps as whole cards, two across.

@@ -261,7 +261,7 @@ func TestAnalyzeResidue(t *testing.T) {
 // through chat): the rows are read as rows, and a name span
 // standing in a row's name column -- a player-set ship or
 // structure name -- is never minted as a pilot, an unknown or
-// residue, however it shreds. The two blobs are the owner's
+// residue, however it shreds. The two blobs are my
 // reported cards, reconstructed.
 func TestAnalyzeScanBlobNames(t *testing.T) {
 	d := dict()

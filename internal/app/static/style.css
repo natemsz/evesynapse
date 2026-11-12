@@ -6038,7 +6038,7 @@ input[type="url"]:hover, select:hover, textarea:hover {
 .suggest li:not(.sug-kind):not(.sug-empty):hover, .suggest li.sel { background: rgba(255, 110, 0, 0.13); box-shadow: inset 0 0 0 1px rgba(255, 130, 20, 0.45), 0 0 14px rgba(255, 95, 0, 0.18); color: var(--text-bright); }
 html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[data-theme="light"] .suggest li.sel { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px rgba(190, 120, 30, 0.15); }
 
-/* The page wrapper (owner, 2026-10-16): normal pages sit inside
+/* The page wrapper (my ruling, 2026-10-16): normal pages sit inside
    ONE large glass surface instead of a scatter of floating items
    each with its own transparency, its own blur, or nothing at
    all. Sections inside step DOWN a tier: whisper fills, hairline

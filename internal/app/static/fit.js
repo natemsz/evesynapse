@@ -2405,7 +2405,7 @@ var FitGauges = (function () {
   // adds the row; a drag moves things. Sources: ring slots, rack,
   // bay and cargo rows, Browse rows and module search rows. What a
   // drop does is dropAction's call; a drop that would replace or
-  // remove a module it was not asked to is never one (owner,
+  // remove a module it was not asked to is never one (my ruling,
   // 2026-11-10: on a filled slot, swap places if they can,
   // otherwise nothing happens).
   //

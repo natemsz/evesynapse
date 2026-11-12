@@ -15,7 +15,7 @@ bearing ones.
   unfolded. Every script is progressive enhancement, never a
   requirement.
 - **No framework, no bundler, no TypeScript, no npm.** This is
-  deliberate and settled (owner doctrine): the deploy artifact is
+  deliberate and settled (my ruling): the deploy artifact is
   one Go binary with the assets embedded, and nothing in the
   deploy path may depend on a Node toolchain or a package
   registry. CI runs Node only to execute the JS tests.

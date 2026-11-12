@@ -118,7 +118,8 @@ func LinkFit(km float64, level int) PinFit {
 func LinkBandwidthAt(level int) float64 { return LinkBandwidth * math.Pow(2, float64(level)) }
 
 // Fit works out the colony's CPU and power use against its command
-// center level.
+// center level, once the planned changes are made: structures marked
+// for removal no longer draw on it.
 func (c *Colony) Fit() Fit {
 	lvl := c.CCLevel
 	if lvl < 0 || lvl >= len(CommandCenters) {
@@ -126,6 +127,9 @@ func (c *Colony) Fit() Fit {
 	}
 	f := Fit{CPUCap: CommandCenters[lvl].CPU, PGCap: CommandCenters[lvl].PG}
 	for _, p := range c.Pins {
+		if p.Keep == ChangeRemove {
+			continue
+		}
 		pf := PinFits[p.Kind]
 		f.CPUUsed += pf.CPU
 		f.PGUsed += pf.PG

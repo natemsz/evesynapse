@@ -119,3 +119,17 @@ func TestBuyMissingBuysOnlyWhatCannotBeMade(t *testing.T) {
 		}
 	}
 }
+
+// TestFitLeavesOutRemovedStructures holds a changed colony's budget to
+// what stands after the change: a structure marked for removal draws
+// no CPU or power.
+func TestFitLeavesOutRemovedStructures(t *testing.T) {
+	c := &Colony{PlanetType: "Barren", RadiusKm: 5000, CCLevel: 1, Pins: []Pin{
+		{Kind: PinCommandCenter, Keep: ChangeKeep},
+		{Kind: PinLaunchpad, Keep: ChangeKeep},
+		{Kind: PinLaunchpad, Keep: ChangeRemove},
+	}}
+	if f := c.Fit(); f.CPUUsed != PinFits[PinLaunchpad].CPU || !f.Fits() {
+		t.Errorf("fit counts the removed launchpad: %+v", f)
+	}
+}

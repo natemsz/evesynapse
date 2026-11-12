@@ -1046,6 +1046,16 @@ func TestFitModuleValidStates(t *testing.T) {
 	if vs := ModuleValidStates(fx.snap, 2004); len(vs) != 0 {
 		t.Errorf("rig states = %v, want none", vs)
 	}
+	// A targeted module (nosferatu, web, warp disruptor) carries
+	// only a target-category effect: it still cycles, heats, and by
+	// default draws capacitor, 5 GJ every 5 s.
+	fx.attrs(2005, map[int64]float64{50: 10, 30: 10, 6: 5, 73: 5000})
+	fx.effect(2005, 9006, 2)
+	fx.effect(2005, 9007, 5)
+	fx.effect(2005, EffectOnline, 1)
+	eq("targeted", ModuleValidStates(fx.snap, 2005), []string{"offline", "online", "active", "overheated"})
+	res := Compute(fx.snap, 1001, []ItemInput{{TypeID: 2005, Quantity: 1}}, nil, nil, nil)
+	near(t, "targeted module cap draw", res.CapacitorDraw, 1, 1e-9)
 }
 
 func TestFitNormalizeModuleState(t *testing.T) {

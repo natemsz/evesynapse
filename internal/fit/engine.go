@@ -320,7 +320,15 @@ var (
 	fighterMissilesDamage      = []int64{2131, 2132, 2133, 2134}
 )
 
-const catOverload = 5
+// Effect categories the module states read: active (the module's
+// own cycle), target (it acts on a locked target), area (it acts
+// around the ship, smartbombs and the like) and overload (heat).
+const (
+	catActive   = 1
+	catTarget   = 2
+	catArea     = 3
+	catOverload = 5
+)
 
 // Module states: the values ItemInput.State carries, and a saved
 // fit stores per module:
@@ -461,15 +469,19 @@ func (snap *Snapshot) typeEffectCats(typeID int64) map[int64]bool {
 	return out
 }
 
-// moduleActivatable reports whether a module cycles: an
-// active-category effect other than the onlining effect every
-// module carries, or a turret or launcher fitting.
+// moduleActivatable reports whether a module cycles: an active,
+// targeted or area effect other than the onlining effect every
+// module carries, or a turret or launcher fitting. Targeted
+// modules (nosferatu, neutralizers, warp disruptors and
+// scramblers, webs, remote repairers, electronic warfare, mining
+// lasers) carry only a target-category effect, and still cycle
+// and use capacitor like any active module.
 func (snap *Snapshot) moduleActivatable(typeID int64) bool {
 	for _, eid := range snap.TypeEffects[typeID] {
 		if eid == EffectOnline {
 			continue
 		}
-		if eff := snap.Effects[eid]; eff != nil && eff.Category == 1 {
+		if eff := snap.Effects[eid]; eff != nil && (eff.Category == catActive || eff.Category == catTarget || eff.Category == catArea) {
 			return true
 		}
 	}
@@ -479,7 +491,7 @@ func (snap *Snapshot) moduleActivatable(typeID int64) bool {
 // ModuleValidStates lists the states a fitted module may take,
 // derived from SDE data, never per-module hardcoding: rigs,
 // subsystems, drones and cargo have no states; a module is
-// activatable with an active-category effect, or as a weapon
+// activatable with an active, targeted or area effect, or as a weapon
 // (turret/launcher fitted markers are passive in SDE, but weapons
 // cycle via F1 in-game); overheatable only with an
 // overload-category effect on top of that (heat is applied to a

@@ -7,7 +7,7 @@
    contract-search-specific: the zone layout, the aligned
    field grids, and the deals-green state. */
 
-:root { --deal: #28c76f; --icon-ember: #ff8c3a; --icon-abyss: #2dd4bf; }
+:root { --deal: var(--v-good, #28c76f); --neg: var(--v-bad, #ff4d4d); --icon-ember: #ff8c3a; --icon-abyss: #2dd4bf; }
 
 .cs-form input[type="checkbox"],
 .cs-form input[type="range"] { accent-color: var(--accent); }
@@ -635,7 +635,7 @@
 .cs-psub.amber { color: #fbbf24; }
 .cs-psub.gray { color: var(--muted); }
 .cs-priced { font-size: var(--fs-2xs); color: var(--muted); margin-top: 0.15rem; }
-.cs-spread { font-size: var(--fs-2xs); color: #34d399; margin-top: 0.15rem; }
+.cs-spread { font-size: var(--fs-2xs); color: var(--v-good, #34d399); margin-top: 0.15rem; }
 .cs-spread.neg { color: var(--neg); }
 .cs-c5 .sec-pill { margin-left: 0; border-radius: var(--r-xs); }
 .cs-place {
@@ -709,7 +709,7 @@
   background: rgba(255, 240, 220, 0.09); color: #d8c6b2;
 }
 .cs-aq { color: #ff882e; }
-.cs-tp { font-size: var(--fs-2xs); color: #34d399; text-align: right; flex: none; }
+.cs-tp { font-size: var(--fs-2xs); color: var(--v-good, #34d399); text-align: right; flex: none; }
 .cs-tp.un { color: #fbbf24; }
 .cs-tnote { display: block; color: var(--muted); font-size: var(--fs-2xs); }
 .cs-tp.un .cs-tnote { color: inherit; font-size: var(--fs-xs); }
@@ -723,7 +723,7 @@
   border-top: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
   padding-top: 0.35rem; margin-top: 0.2rem;
 }
-.cs-srow.sp .cs-sv { color: #34d399; font-weight: 700; }
+.cs-srow.sp .cs-sv { color: var(--v-good, #34d399); font-weight: 700; }
 .cs-srow.sp.neg .cs-sv { color: var(--neg); }
 .cs-dfoot { margin-top: auto; padding-top: 0.5rem; }
 .cs-dfoot-in {
@@ -777,7 +777,7 @@
 .cd-fig { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .cd-figsub { font-size: var(--fs-xs); color: var(--muted); }
 .cd-spread { color: var(--deal); }
-.cd-spread.neg { color: var(--neg, #ff4d4d); }
+.cd-spread.neg { color: var(--neg); }
 .cd-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.8rem; }
 .cd-actions form { margin: 0; }
 .cd-note { margin: 0.6rem 0 0; color: var(--muted); font-size: var(--fs-xs); }

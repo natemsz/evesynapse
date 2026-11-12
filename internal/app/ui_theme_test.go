@@ -97,6 +97,25 @@ func TestAccountThemeSaveAndRender(t *testing.T) {
 	mustContain(t, "default backdrop rendered", body,
 		`<html lang="en" data-nav="rail" data-backdrop="muted">`)
 	mustContain(t, "default still stored", body, `<meta name="es-theme-account" content="stored">`)
+
+	// The colour-blind mode saves beside the scheme and renders onto
+	// <html>; a post that leaves the field out keeps the stored mode,
+	// and a mode the picker cannot produce is refused.
+	if code := post(cookieA, url.Values{"scheme": {"caldari"}, "tier": {"muted"}, "backdrop": {"muted"}, "vision": {"redgreen"}}); code != http.StatusOK {
+		t.Fatalf("vision save: status %d", code)
+	}
+	if code := post(cookieA, url.Values{"scheme": {"gallente"}, "tier": {"muted"}, "backdrop": {"muted"}}); code != http.StatusOK {
+		t.Fatalf("save without vision: status %d", code)
+	}
+	code, body = getPage(t, app, cookieA, "/characters/")
+	if code != http.StatusOK {
+		t.Fatalf("characters after vision save: status %d", code)
+	}
+	mustContain(t, "vision rendered beside the scheme", body,
+		`<html lang="en" data-nav="rail" data-scheme="gallente" data-tier="muted" data-vision="redgreen">`)
+	if code := post(cookieA, url.Values{"scheme": {""}, "tier": {""}, "backdrop": {"muted"}, "vision": {"sepia"}}); code != http.StatusBadRequest {
+		t.Fatalf("unknown vision: status %d, want 400", code)
+	}
 }
 
 // TestSignupThemePrefs: the sign-up theme step's two answers map

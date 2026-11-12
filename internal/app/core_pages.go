@@ -257,6 +257,7 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 				shell.ThemeScheme = prefs.Scheme
 				shell.ThemeTier = prefs.Tier
 				shell.ThemeBackdrop = prefs.Backdrop
+				shell.ThemeVision = prefs.Vision
 			}
 		}
 	}

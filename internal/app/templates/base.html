@@ -1,5 +1,5 @@
 {{define "base"}}<!DOCTYPE html>
-<html lang="en"{{if .NavState}} data-nav="{{.NavState}}"{{end}}{{if .ThemeScheme}} data-scheme="{{.ThemeScheme}}" data-tier="{{.ThemeTier}}"{{else if .ThemeBackdrop}} data-backdrop="{{.ThemeBackdrop}}"{{end}}>
+<html lang="en"{{if .NavState}} data-nav="{{.NavState}}"{{end}}{{if .ThemeScheme}} data-scheme="{{.ThemeScheme}}" data-tier="{{.ThemeTier}}"{{else if .ThemeBackdrop}} data-backdrop="{{.ThemeBackdrop}}"{{end}}{{if .ThemeVision}} data-vision="{{.ThemeVision}}"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">

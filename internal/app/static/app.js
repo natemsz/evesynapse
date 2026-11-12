@@ -93,6 +93,9 @@
     function backdropWire(value) {
       return value === "muted" || value === "glow" || value === "full" ? value : "";
     }
+    function visionWire(value) {
+      return value === "redgreen" || value === "blueyellow" ? value : "";
+    }
     if (meta.getAttribute("content") === "stored") {
       var scheme = root.getAttribute("data-scheme");
       if (scheme) {
@@ -103,6 +106,7 @@
         store("evesynapse-tier", null);
         store("evesynapse-backdrop", backdropWire(root.getAttribute("data-backdrop")) || "muted");
       }
+      store("evesynapse-vision", visionWire(root.getAttribute("data-vision")) || null);
       store("evesynapse-theme-src", "account");
       return;
     }
@@ -120,9 +124,14 @@
       body.set("scheme", "");
       body.set("tier", "");
       body.set("backdrop", backdropWire(read("evesynapse-backdrop")));
+    } else if (visionWire(read("evesynapse-vision"))) {
+      body.set("scheme", "");
+      body.set("tier", "");
+      body.set("backdrop", "");
     } else {
       return; // no local choice to adopt
     }
+    body.set("vision", visionWire(read("evesynapse-vision")));
     fetch("/settings/theme", {
       method: "POST",
       headers: { "X-Requested-With": "XMLHttpRequest" },

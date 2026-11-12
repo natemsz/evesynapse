@@ -813,6 +813,12 @@ func (app *Application) searchTypes(ctx context.Context, query string, localOnly
 		logging.Errorf("market: local search for %q: %v", query, err)
 		return matches
 	}
+	if len(rows) == 0 && len(matches) == 0 {
+		// Nothing as typed: read it with its misspellings fixed.
+		if fix, ok := app.correctSearch(query); ok {
+			rows, _ = app.queries.SearchSDETypes(ctx, "%"+fix+"%")
+		}
+	}
 	for _, row := range rows {
 		if seen[row.TypeID] {
 			continue

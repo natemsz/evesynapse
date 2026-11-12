@@ -59,6 +59,7 @@ type marketBrowseView struct {
 	Tree         []marketBrowseNode
 	Types        []marketBrowseType
 	Query        string
+	Fix          string // the corrected name the list answers when Query as typed found nothing
 	MinVolume    int64
 	Sort         string
 	GroupID      int64
@@ -351,18 +352,34 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 		return view
 	}
 
-	like, prefix := "", ""
-	if view.Query != "" {
-		escaped := strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(view.Query)
-		like = "%" + escaped + "%"
-		prefix = strings.ToLower(escaped) + "%"
+	// search is the name the list answers: the query as typed, or
+	// with its misspellings fixed when as typed it finds nothing.
+	search := view.Query
+	patterns := func(text string) (like, prefix string) {
+		if text == "" {
+			return "", ""
+		}
+		escaped := strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(text)
+		return "%" + escaped + "%", strings.ToLower(escaped) + "%"
 	}
+	like, prefix := patterns(search)
 	total, err := app.queries.CountMarketBrowseTypes(ctx, db.CountMarketBrowseTypesParams{
 		GroupID: view.GroupID, RegionID: region, NameLike: like, MinVolume: float64(view.MinVolume),
 	})
 	if err != nil {
 		logging.Errorf("market: count browse types under %d: %v", view.GroupID, err)
 		return view
+	}
+	if total == 0 && search != "" {
+		if fix, ok := app.correctSearch(search); ok {
+			fixLike, fixPrefix := patterns(fix)
+			if n, ferr := app.queries.CountMarketBrowseTypes(ctx, db.CountMarketBrowseTypesParams{
+				GroupID: view.GroupID, RegionID: region, NameLike: fixLike, MinVolume: float64(view.MinVolume),
+			}); ferr == nil && n > 0 {
+				search, like, prefix, total = fix, fixLike, fixPrefix, n
+				view.Fix = fix
+			}
+		}
 	}
 	view.TotalTypes = total
 	view.TotalPages = max(int((total+marketBrowseTypesPerPage-1)/marketBrowseTypesPerPage), 1)
@@ -375,7 +392,7 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 	}
 	rows, err := app.queries.ListMarketBrowseTypes(ctx, db.ListMarketBrowseTypesParams{
 		GroupID: view.GroupID, RegionID: region, NameLike: like, MinVolume: float64(view.MinVolume),
-		Sort: view.Sort, MatchName: strings.ToLower(view.Query), MatchPrefix: prefix, MatchWords: marketMatchWords(view.Query),
+		Sort: view.Sort, MatchName: strings.ToLower(search), MatchPrefix: prefix, MatchWords: marketMatchWords(search),
 		RowLimit: marketBrowseTypesPerPage, RowOffset: int64((view.Page - 1) * marketBrowseTypesPerPage),
 	})
 	if err != nil {

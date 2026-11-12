@@ -62,10 +62,11 @@ func (app *Application) killboardSearch(ctx context.Context, q string, userID in
 		return nil, false
 	}
 	var cands []kbSearchCand
-	add := func(items []kbSearchItem) {
+	// addFor ranks one kind's hits against the query they answer.
+	addFor := func(mq string, items []kbSearchItem) {
 		sort.SliceStable(items, func(i, j int) bool {
-			ti, _ := nameMatchTier(items[i].Name, q)
-			tj, _ := nameMatchTier(items[j].Name, q)
+			ti, _ := nameMatchTier(items[i].Name, mq)
+			tj, _ := nameMatchTier(items[j].Name, mq)
 			if ti != tj {
 				return ti < tj
 			}
@@ -75,43 +76,63 @@ func (app *Application) killboardSearch(ctx context.Context, q string, userID in
 			items = items[:kbSearchLimit]
 		}
 		for _, it := range items {
-			tier, _ := nameMatchTier(it.Name, q)
+			tier, _ := nameMatchTier(it.Name, mq)
 			cands = append(cands, kbSearchCand{item: it, tier: tier})
 		}
 	}
+	add := func(items []kbSearchItem) { addFor(q, items) }
 
-	if rows, err := app.queries.SuggestSDESystems(ctx, db.SuggestSDESystemsParams{Q: q, Lim: kbSearchLimit}); err == nil {
-		var items []kbSearchItem
-		for _, row := range rows {
-			if _, ok := nameMatchTier(row.Name, q); !ok {
-				continue
-			}
-			sec, tier := secRound(row.Security)
-			items = append(items, kbSearchItem{Kind: "system", ID: row.SystemID, Name: row.Name, Sub: row.RegionName, Sec: sec, SecTier: tier})
-		}
-		add(items)
-	} else {
-		logging.Errorf("killboard search: systems for %q: %v", q, err)
-	}
-	if rows, err := app.queries.SuggestSDERegions(ctx, db.SuggestSDERegionsParams{Q: q, Lim: kbSearchLimit}); err == nil {
-		var items []kbSearchItem
-		for _, row := range rows {
-			items = append(items, kbSearchItem{Kind: "region", ID: row.RegionID, Name: row.Name})
-		}
-		add(items)
-	} else {
-		logging.Errorf("killboard search: regions for %q: %v", q, err)
-	}
+	// The static data kinds: systems, regions, ships. When none
+	// match as typed they are read again with the misspellings
+	// fixed (search_typos.go); people are never corrected.
 	var shipHits []searchHit
-	if rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: q, Lim: kbSearchLimit}); err == nil {
-		var items []kbSearchItem
-		for _, row := range rows {
-			items = append(items, kbSearchItem{Kind: "ship", ID: row.TypeID, Name: row.Name, Sub: row.GroupName})
-			shipHits = append(shipHits, searchHit{Kind: "item", ID: row.TypeID, Name: row.Name})
+	sdeKinds := func(mq string) int {
+		found := 0
+		if rows, err := app.queries.SuggestSDESystems(ctx, db.SuggestSDESystemsParams{Q: mq, Lim: kbSearchLimit}); err == nil {
+			var items []kbSearchItem
+			for _, row := range rows {
+				if _, ok := nameMatchTier(row.Name, mq); !ok {
+					continue
+				}
+				sec, tier := secRound(row.Security)
+				items = append(items, kbSearchItem{Kind: "system", ID: row.SystemID, Name: row.Name, Sub: row.RegionName, Sec: sec, SecTier: tier})
+			}
+			found += len(items)
+			addFor(mq, items)
+		} else {
+			logging.Errorf("killboard search: systems for %q: %v", mq, err)
 		}
-		add(items)
-	} else {
-		logging.Errorf("killboard search: ships for %q: %v", q, err)
+		if rows, err := app.queries.SuggestSDERegions(ctx, db.SuggestSDERegionsParams{Q: mq, Lim: kbSearchLimit}); err == nil {
+			var items []kbSearchItem
+			for _, row := range rows {
+				items = append(items, kbSearchItem{Kind: "region", ID: row.RegionID, Name: row.Name})
+			}
+			found += len(items)
+			addFor(mq, items)
+		} else {
+			logging.Errorf("killboard search: regions for %q: %v", mq, err)
+		}
+		if rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: mq, Lim: kbSearchLimit}); err == nil {
+			var items []kbSearchItem
+			for _, row := range rows {
+				items = append(items, kbSearchItem{Kind: "ship", ID: row.TypeID, Name: row.Name, Sub: row.GroupName})
+				if mq == q {
+					// Only a ship named as typed tells the pilot
+					// lookup the text is not a pilot's name.
+					shipHits = append(shipHits, searchHit{Kind: "item", ID: row.TypeID, Name: row.Name})
+				}
+			}
+			found += len(items)
+			addFor(mq, items)
+		} else {
+			logging.Errorf("killboard search: ships for %q: %v", mq, err)
+		}
+		return found
+	}
+	if sdeKinds(q) == 0 {
+		if fix, ok := app.correctSearch(q); ok {
+			sdeKinds(fix)
+		}
 	}
 
 	charHit := false

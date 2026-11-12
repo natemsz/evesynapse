@@ -273,118 +273,143 @@ func (app *tool) handleFitPickerJSON(w http.ResponseWriter, r *http.Request) {
 		return out
 	}
 
+	// A query that finds nothing as typed is read once more with its
+	// misspellings fixed (the app's static data typo tolerance).
+	retried := false
+	retry := func(found int) bool {
+		if retried || found > 0 || strings.TrimSpace(query) == "" {
+			return false
+		}
+		retried = true
+		fix, ok := app.deps.CorrectSearch(query)
+		if ok {
+			query = fix
+		}
+		return ok
+	}
 	out := []module.SuggestItem{}
-	switch {
-	case family == "all":
-		// Unified search: ships plus every module family, grouped
-		// by kind client-side. Charges are deliberately excluded:
-		// without a fitted weapon they cannot be placed.
-		if rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: query, Lim: 6}); err == nil {
+pick:
+	for {
+		out = out[:0]
+		switch {
+		case family == "all":
+			// Unified search: ships plus every module family, grouped
+			// by kind client-side. Charges are deliberately excluded:
+			// without a fitted weapon they cannot be placed.
+			if rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: query, Lim: 6}); err == nil {
+				for _, row := range rows {
+					out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "ship"})
+				}
+			} else {
+				logging.Errorf("fittings picker: ships: %v", err)
+			}
+			for _, sk := range slotKinds {
+				out = append(out, querySlotFamily(sk.family, sk.kind, sk.lim)...)
+			}
+			if rows, err := app.queries.ListFitDroneTypes(ctx, db.ListFitDroneTypesParams{Q: query, Lim: 6, Meta: meta}); err == nil {
+				for _, row := range rows {
+					out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "drone"})
+				}
+			} else {
+				logging.Errorf("fittings picker: drones: %v", err)
+			}
+			if rows, err := app.queries.ListFitFighterTypes(ctx, db.ListFitFighterTypesParams{Q: query, Lim: 6, Meta: meta}); err == nil {
+				for _, row := range rows {
+					out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "fighter"})
+				}
+			} else {
+				logging.Errorf("fittings picker: fighters: %v", err)
+			}
+		case family == "ship":
+			rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: query, Lim: 12})
+			if err != nil {
+				logging.Errorf("fittings picker: ships: %v", err)
+				break
+			}
 			for _, row := range rows {
 				out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "ship"})
 			}
-		} else {
-			logging.Errorf("fittings picker: ships: %v", err)
-		}
-		for _, sk := range slotKinds {
-			out = append(out, querySlotFamily(sk.family, sk.kind, sk.lim)...)
-		}
-		if rows, err := app.queries.ListFitDroneTypes(ctx, db.ListFitDroneTypesParams{Q: query, Lim: 6, Meta: meta}); err == nil {
+		case family == fitview.FitFamilyDrone:
+			rows, err := app.queries.ListFitDroneTypes(ctx, db.ListFitDroneTypesParams{Q: query, Lim: 25, Meta: meta})
+			if err != nil {
+				logging.Errorf("fittings picker: drones: %v", err)
+				break
+			}
 			for _, row := range rows {
 				out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "drone"})
 			}
-		} else {
-			logging.Errorf("fittings picker: drones: %v", err)
-		}
-		if rows, err := app.queries.ListFitFighterTypes(ctx, db.ListFitFighterTypesParams{Q: query, Lim: 6, Meta: meta}); err == nil {
+		case family == fitview.FitFamilyFighter:
+			rows, err := app.queries.ListFitFighterTypes(ctx, db.ListFitFighterTypesParams{Q: query, Lim: 25, Meta: meta})
+			if err != nil {
+				logging.Errorf("fittings picker: fighters: %v", err)
+				break
+			}
 			for _, row := range rows {
 				out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "fighter"})
 			}
-		} else {
-			logging.Errorf("fittings picker: fighters: %v", err)
-		}
-	case family == "ship":
-		rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: query, Lim: 12})
-		if err != nil {
-			logging.Errorf("fittings picker: ships: %v", err)
-			break
-		}
-		for _, row := range rows {
-			out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "ship"})
-		}
-	case family == fitview.FitFamilyDrone:
-		rows, err := app.queries.ListFitDroneTypes(ctx, db.ListFitDroneTypesParams{Q: query, Lim: 25, Meta: meta})
-		if err != nil {
-			logging.Errorf("fittings picker: drones: %v", err)
-			break
-		}
-		for _, row := range rows {
-			out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "drone"})
-		}
-	case family == fitview.FitFamilyFighter:
-		rows, err := app.queries.ListFitFighterTypes(ctx, db.ListFitFighterTypesParams{Q: query, Lim: 25, Meta: meta})
-		if err != nil {
-			logging.Errorf("fittings picker: fighters: %v", err)
-			break
-		}
-		for _, row := range rows {
-			out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "fighter"})
-		}
-	case family == "implant":
-		// One slot's implants. Every one lists; those the pilot
-		// can't use yet are marked rather than hidden.
-		slot, _ := strconv.ParseInt(q.Get("slot"), 10, 64)
-		if slot < 1 || slot > fitview.FitImplantSlots {
-			break
-		}
-		rows, err := app.queries.ListFitImplantTypes(ctx, db.ListFitImplantTypesParams{Slot: slot, Q: query, Lim: 60})
-		if err != nil {
-			logging.Errorf("fittings picker: implants: %v", err)
-			break
-		}
-		for _, row := range rows {
-			out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "implant"})
-		}
-		if _, owned := app.fitPilotLabel(ctx, app.deps.UserID(ctx), pilotID); owned && len(out) > 0 {
-			if usable := pilotCanUse(out); usable != nil {
-				for i := range out {
-					out[i].Missing = !usable(out[i].ID)
+		case family == "implant":
+			// One slot's implants. Every one lists; those the pilot
+			// can't use yet are marked rather than hidden.
+			slot, _ := strconv.ParseInt(q.Get("slot"), 10, 64)
+			if slot < 1 || slot > fitview.FitImplantSlots {
+				break
+			}
+			rows, err := app.queries.ListFitImplantTypes(ctx, db.ListFitImplantTypesParams{Slot: slot, Q: query, Lim: 60})
+			if err != nil {
+				logging.Errorf("fittings picker: implants: %v", err)
+				break
+			}
+			for _, row := range rows {
+				out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "implant"})
+			}
+			if _, owned := app.fitPilotLabel(ctx, app.deps.UserID(ctx), pilotID); owned && len(out) > 0 {
+				if usable := pilotCanUse(out); usable != nil {
+					for i := range out {
+						out[i].Missing = !usable(out[i].ID)
+					}
 				}
 			}
-		}
-		app.writePickRows(w, r, out)
-		return
-	case family == "charge":
-		weaponID, _ := strconv.ParseInt(q.Get("weapon"), 10, 64)
-		if weaponID > 0 {
-			needle := strings.ToLower(strings.TrimSpace(query))
-			for _, row := range app.deps.FitBuilder().FitChargeCandidates(ctx, weaponID) {
-				if needle != "" && !strings.Contains(strings.ToLower(row.Name), needle) {
-					continue
-				}
-				out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Kind: "charge"})
+			if retry(len(out)) {
+				continue pick
 			}
-			break
+			app.writePickRows(w, r, out)
+			return
+		case family == "charge":
+			weaponID, _ := strconv.ParseInt(q.Get("weapon"), 10, 64)
+			if weaponID > 0 {
+				needle := strings.ToLower(strings.TrimSpace(query))
+				for _, row := range app.deps.FitBuilder().FitChargeCandidates(ctx, weaponID) {
+					if needle != "" && !strings.Contains(strings.ToLower(row.Name), needle) {
+						continue
+					}
+					out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Kind: "charge"})
+				}
+				break
+			}
+			// No weapon named: charges by name, for the Charges filter.
+			if strings.TrimSpace(query) == "" {
+				break
+			}
+			rows, err := app.queries.SearchFitBrowseTypes(ctx, db.SearchFitBrowseTypesParams{Family: "charge", Q: query, Meta: meta, Lim: 40})
+			if err != nil {
+				logging.Errorf("fittings picker: charges: %v", err)
+				break
+			}
+			for _, row := range rows {
+				out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "charge"})
+			}
+		default:
+			if _, isSlot := fitview.FitSlotEffectByFamily[family]; isSlot {
+				out = append(out, querySlotFamily(family, family, 25)...)
+				break
+			}
+			app.deps.WriteSuggest(w, usableByPilot(app.deps.SuggestTypes(ctx, query, "market", 12)))
+			return
 		}
-		// No weapon named: charges by name, for the Charges filter.
-		if strings.TrimSpace(query) == "" {
-			break
+		if retry(len(out)) {
+			continue pick
 		}
-		rows, err := app.queries.SearchFitBrowseTypes(ctx, db.SearchFitBrowseTypesParams{Family: "charge", Q: query, Meta: meta, Lim: 40})
-		if err != nil {
-			logging.Errorf("fittings picker: charges: %v", err)
-			break
-		}
-		for _, row := range rows {
-			out = append(out, module.SuggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "charge"})
-		}
-	default:
-		if _, isSlot := fitview.FitSlotEffectByFamily[family]; isSlot {
-			out = append(out, querySlotFamily(family, family, 25)...)
-			break
-		}
-		app.deps.WriteSuggest(w, usableByPilot(app.deps.SuggestTypes(ctx, query, "market", 12)))
-		return
+		break
 	}
 	app.writePickRows(w, r, usableByPilot(out))
 }

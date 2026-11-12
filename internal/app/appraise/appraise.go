@@ -474,6 +474,16 @@ func resolveLinked(pl pasteLine, row *db.AbyssalItem,
 func (app *page) suggestName(ctx context.Context, name string) string {
 	esc := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(name)
 	rows, err := app.queries.SearchSDETypes(ctx, "%"+esc+"%")
+	if err == nil && len(rows) == 0 {
+		// Nothing contains the text: try it with its misspellings
+		// fixed. It stays a suggestion; the line is never priced
+		// as the corrected item.
+		if fix, ok := app.deps.CorrectSearch(name); ok {
+			name = fix
+			esc = strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(fix)
+			rows, err = app.queries.SearchSDETypes(ctx, "%"+esc+"%")
+		}
+	}
 	if err != nil || len(rows) == 0 {
 		return ""
 	}

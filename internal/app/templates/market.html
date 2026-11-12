@@ -610,12 +610,12 @@
 {{/* The item list column: heading, the volume filter, and the
      items. Sorting runs from the table headers. */}}
 {{define "market-browse-items"}}
-<div class="l-pane-bar"><a class="l-back" data-l-step="out" href="/market/">Categories</a><h2 class="l-pane-title">{{if .Current}}{{.Current.Name}}{{else if .Query}}Matching “{{.Query}}”{{else}}Browse categories{{end}}</h2></div>
+<div class="l-pane-bar"><a class="l-back" data-l-step="out" href="/market/">Categories</a><h2 class="l-pane-title">{{if .Current}}{{.Current.Name}}{{else if .Fix}}Matching “{{.Fix}}”{{else if .Query}}Matching “{{.Query}}”{{else}}Browse categories{{end}}</h2></div>
 {{if .AwaitingPick}}<span data-awaiting-pick hidden></span>{{end}}
 {{if .Current}}
 <p class="market-crumbs"><small><a href="/market/" data-browse-link>Market</a>{{range .Breadcrumbs}} › <a href="/market/?group={{.ID}}&region={{$.Region}}" data-browse-link>{{.Name}}</a>{{end}} › {{.Current.Name}}</small></p>
 {{end}}
-{{if .Query}}<p class="mb-filter-note"><small>Matching “{{.Query}}”</small> <a href="{{.ClearQueryHref}}" data-browse-link><small>Clear</small></a></p>{{end}}
+{{if .Query}}<p class="mb-filter-note"><small>{{if .Fix}}Nothing matches “{{.Query}}”. Showing matches for “{{.Fix}}”.{{else}}Matching “{{.Query}}”{{end}}</small> <a href="{{.ClearQueryHref}}" data-browse-link><small>Clear</small></a></p>{{end}}
 {{if .AwaitingPick}}
 <p><small>Pick a category from the tree to see its items, or search by name above.</small></p>
 {{else if .Types}}

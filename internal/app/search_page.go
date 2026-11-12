@@ -57,6 +57,9 @@ type searchPageView struct {
 	Total       int
 	// Pending is a name still being looked up as a pilot.
 	Pending bool
+	// Fix is the corrected query the items, systems and regions
+	// answer when the query as typed found none of them.
+	Fix string
 	// ItemsURL opens the Item Database's search for the query,
 	// with its item filters.
 	ItemsURL string
@@ -93,6 +96,7 @@ func (app *Application) handleSearchPage(w http.ResponseWriter, r *http.Request)
 		set = app.searchAll(ctx, view.Query, userID, searchPageLimits)
 	}
 	view.Pending = set.Pending
+	view.Fix = set.Fix
 
 	// Systems: the regions they lie in, for the region filter, then
 	// the filters themselves.

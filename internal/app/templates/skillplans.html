@@ -147,6 +147,7 @@
 {{end}}
 
 {{if $.SearchResults}}
+{{if $.SearchFix}}<p class="muted"><small>Nothing matches “{{$.SearchQuery}}”. Showing skills for “{{$.SearchFix}}”.</small></p>{{end}}
 <div class="tw sp-results">
 <table>
   <thead><tr><th>Skill</th><th>Rank</th><th>Target</th><th></th></tr></thead>

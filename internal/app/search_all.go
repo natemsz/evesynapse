@@ -39,6 +39,11 @@ type searchSet struct {
 	Characters, Items, Regions, Corporations, Alliances, Pilots []searchHit
 	Systems                                                     []searchSystem
 	Pending                                                     bool
+	// Fix is the corrected query the static data tiers answer when
+	// the query as typed found none of them (search_typos.go); "" when
+	// they answer it as typed. People and organizations are never
+	// corrected.
+	Fix string
 	// guesses are the pages a pick is likely to open next, for the
 	// typing warm-up (setTypingGuesses).
 	guesses []typingGuess
@@ -79,6 +84,7 @@ func (app *Application) searchAll(ctx context.Context, q string, userID int64, l
 	}
 
 	var (
+		itemFix, systemFix, regionFix     string
 		itemHits, regionHits              []searchHit
 		corpHits, allianceHits, pilotHits []searchHit
 		systems                           []searchSystem
@@ -89,15 +95,15 @@ func (app *Application) searchAll(ctx context.Context, q string, userID int64, l
 	wg.Add(6)
 	go func() {
 		defer wg.Done()
-		itemHits, itemGuesses = app.searchItemTier(ctx, q, lim.items)
+		itemHits, itemGuesses, itemFix = app.searchItemTier(ctx, q, lim.items)
 	}()
 	go func() {
 		defer wg.Done()
-		systems = app.searchSystemTier(ctx, q, lim.systems)
+		systems, systemFix = app.searchSystemTier(ctx, q, lim.systems)
 	}()
 	go func() {
 		defer wg.Done()
-		regionHits = app.searchRegionTier(ctx, q, lim.regions)
+		regionHits, regionFix = app.searchRegionTier(ctx, q, lim.regions)
 	}()
 	go func() {
 		defer wg.Done()
@@ -115,6 +121,12 @@ func (app *Application) searchAll(ctx context.Context, q string, userID int64, l
 
 	set.Items = itemHits
 	set.Systems = systems
+	for _, fix := range []string{itemFix, systemFix, regionFix} {
+		if fix != "" {
+			set.Fix = fix
+			break
+		}
+	}
 	set.Regions = regionHits
 	set.Corporations = corpHits
 	set.Alliances = allianceHits
@@ -142,21 +154,28 @@ func (app *Application) searchAll(ctx context.Context, q string, userID int64, l
 // plus the warming guesses landing on any of these should trigger
 // (a jump to a result should land on a warming chart, not a cold
 // one).
-func (app *Application) searchItemTier(ctx context.Context, q string, limItems int) (hits []searchHit, guesses []typingGuess) {
-	for i, it := range app.suggestTypes(ctx, q, suggestPoolAll, int64(limItems)) {
+func (app *Application) searchItemTier(ctx context.Context, q string, limItems int) (hits []searchHit, guesses []typingGuess, fix string) {
+	items, fix := app.suggestTypesFix(ctx, q, suggestPoolAll, int64(limItems))
+	for i, it := range items {
 		hits = append(hits, searchHit{Kind: "item", ID: it.ID, Name: it.Name, Label: it.Label})
 		if i < suggestedWarmed {
 			guesses = append(guesses, typingGuess{kind: pageWantHistory, id: it.ID, region: defaultMarketRegion})
 		}
 	}
-	return hits, guesses
+	return hits, guesses, fix
 }
 
 // searchSystemTier is the systems tier: the local star map. A
 // system names its region and carries its security status.
-func (app *Application) searchSystemTier(ctx context.Context, q string, limSystems int) []searchSystem {
+func (app *Application) searchSystemTier(ctx context.Context, q string, limSystems int) ([]searchSystem, string) {
 	if snap := app.searchSnapshot(); snap != nil {
-		return snap.searchSystems(q, int64(limSystems))
+		out := snap.searchSystems(q, int64(limSystems))
+		if len(out) == 0 && snap.vocab != nil {
+			if fix, ok := snap.vocab.correct(q); ok {
+				return snap.searchSystems(fix, int64(limSystems)), fix
+			}
+		}
+		return out, ""
 	}
 	var out []searchSystem
 	if rows, err := app.queries.SuggestSDESystems(ctx, db.SuggestSDESystemsParams{Q: q, Lim: int64(limSystems)}); err == nil {
@@ -171,12 +190,18 @@ func (app *Application) searchSystemTier(ctx context.Context, q string, limSyste
 	} else {
 		logging.Errorf("search: systems for %q: %v", q, err)
 	}
-	return out
+	return out, ""
 }
 
-func (app *Application) searchRegionTier(ctx context.Context, q string, limRegions int) []searchHit {
+func (app *Application) searchRegionTier(ctx context.Context, q string, limRegions int) ([]searchHit, string) {
 	if snap := app.searchSnapshot(); snap != nil {
-		return snap.searchRegions(q, int64(limRegions))
+		out := snap.searchRegions(q, int64(limRegions))
+		if len(out) == 0 && snap.vocab != nil {
+			if fix, ok := snap.vocab.correct(q); ok {
+				return snap.searchRegions(fix, int64(limRegions)), fix
+			}
+		}
+		return out, ""
 	}
 	var out []searchHit
 	if rows, err := app.queries.SuggestSDERegions(ctx, db.SuggestSDERegionsParams{Q: q, Lim: int64(limRegions)}); err == nil {
@@ -186,7 +211,7 @@ func (app *Application) searchRegionTier(ctx context.Context, q string, limRegio
 	} else {
 		logging.Errorf("search: regions for %q: %v", q, err)
 	}
-	return out
+	return out, ""
 }
 
 // searchCorporationTier is the corporations tier: the warmed

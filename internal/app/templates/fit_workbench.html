@@ -74,7 +74,21 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   {{if not .ReadOnly}}<div class="fit-vhistory" role="group" aria-label="Undo and redo">
     <button type="button" class="fit-vhist" data-fit-undo title="Undo" aria-label="Undo" disabled>↩</button>
     <button type="button" class="fit-vhist" data-fit-redo title="Redo" aria-label="Redo" disabled>↪</button>
-  </div>{{end}}
+    <button type="button" class="fit-vhist fit-vkeys-btn" popovertarget="fit-vkeys" title="Mouse and keyboard" aria-label="Mouse and keyboard">?</button>
+  </div>
+  <section class="fit-vkeys" id="fit-vkeys" popover aria-label="Mouse and keyboard">
+    <h2>Mouse and keyboard</h2>
+    <dl>
+      <div><dt>Click</dt><dd>Switch a module on or off</dd></div>
+      <div><dt>Shift click</dt><dd>Overheat on or off</dd></div>
+      <div><dt>Ctrl click</dt><dd>Put offline or back online</dd></div>
+      <div><dt>Double-click</dt><dd>Show details</dd></div>
+      <div><dt>Right-click · hover</dt><dd>Module card with every state</dd></div>
+      <div><dt>Drag</dt><dd>Move or swap; drag off the ring to remove</dd></div>
+      <div><dt>Ctrl drag</dt><dd>Fit a copy</dd></div>
+      <div><dt>Delete</dt><dd>Remove one</dd></div>
+    </dl>
+  </section>{{end}}
   {{range .Visual.Labels}}
   <div class="fit-vlabel" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" aria-hidden="true">{{.Text}}</div>
   {{end}}

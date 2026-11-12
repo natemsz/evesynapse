@@ -31,7 +31,29 @@ var FitPhoneViews = (function () {
     if (!order.length) return "";
     return order[(order.indexOf(current || "") + 1) % order.length];
   }
-  return { sections: sections, nextState: nextState };
+  // clickState is the desktop mouse's state change, after the
+  // in-game module controls: a click switches a module on or off
+  // (active and online for one that cycles, online and offline for
+  // a passive one), Shift+click toggles overheat, Ctrl+click puts
+  // it offline or back online. "" means the click changes nothing.
+  function clickState(validCSV, current, shift, ctrl) {
+    var valid = (validCSV || "").split(",").filter(function (s) { return !!s; });
+    var has = function (s) { return valid.indexOf(s) >= 0; };
+    var on = has("active") ? "active" : "online";
+    var next = "";
+    if (shift) {
+      if (!has("overheated")) return "";
+      next = current === "overheated" ? "active" : "overheated";
+    } else if (ctrl) {
+      next = current === "offline" ? on : "offline";
+    } else if (has("active")) {
+      next = (current === "active" || current === "overheated") ? "online" : "active";
+    } else {
+      next = current === "offline" ? "online" : "offline";
+    }
+    return has(next) && next !== current ? next : "";
+  }
+  return { sections: sections, nextState: nextState, clickState: clickState };
 })();
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { FitPhoneViews: FitPhoneViews };
@@ -922,11 +944,9 @@ var FitGauges = (function () {
       // steppers above, form fields) keep their behavior, and
       // the state pill is part of the card, not a control.
       var cycChip = t.closest(".fit-chip[data-fit-states]");
-      if (cycChip && ((phoneOn() && fitView === "racks") || ev.shiftKey) &&
-          !t.closest("button, input, select, textarea, a")) {
-        if (ev.shiftKey) closeTip();
-        cycleChipState(cycChip);
-        return;
+      if (cycChip && !t.closest("button, input, select, textarea, a")) {
+        if (phoneOn() && fitView === "racks") { cycleChipState(cycChip); return; }
+        if (!phoneOn()) { closeTip(); queueStateClick(cycChip, ev); return; }
       }
       // A click anywhere else on a fitted module's row toggles
       // its tooltip, the same one hover shows; it never removes.
@@ -2567,7 +2587,11 @@ var FitGauges = (function () {
     var ammo = ev.target && ev.target.closest ? ev.target.closest("[data-fit-ammo]") : null;
     if (ammo) { jumpToCharge(ammo.getAttribute("data-fit-ammo")); return; }
     if (d.el.hasAttribute("data-fit-vslot")) {
-      if (ev.shiftKey) { closeTip(); cycleSlotState(d.el); return; }
+      if (ev.pointerType !== "touch" && d.el.hasAttribute("data-tip-states")) {
+        closeTip();
+        queueStateClick(d.el, ev);
+        return;
+      }
       toggleTip(d.el);
       return;
     }
@@ -2662,23 +2686,30 @@ var FitGauges = (function () {
       ev.preventDefault();
     }
   }, true);
-  // A long press must never pop the context menu mid-drag.
+  // A long press must never pop the context menu mid-drag. A
+  // right-click on a fitted module opens its tooltip instead, with
+  // the state buttons, the way the in-game module menu does.
   editor.addEventListener("contextmenu", function (ev) {
     var t = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot, [data-fit-pick], .fit-chip[data-fit-rowtype]") : null;
-    if (t) ev.preventDefault();
+    if (!t) return;
+    ev.preventDefault();
+    if (ev.target.closest("input, select, textarea")) return;
+    var mod = t.closest(".fit-vslot.filled, .fit-chip[data-tip-name]");
+    if (mod && !phoneOn()) { cancelStateClick(); showTip(mod); }
   });
-  // A double-click on a fitted module steps it to its next state
-  // (online, active, overheated, offline, as the module allows):
-  // a ring slot its own instance, a rack row its whole line. The
-  // two clicks before it toggle the tooltip on and off again.
+  // A double-click on a fitted module opens its details, like Show
+  // Info in game; the single click it starts with is held back
+  // (queueStateClick) so it never also switches the module.
   editor.addEventListener("dblclick", function (ev) {
     var t = ev.target;
-    if (!t || !t.closest || ev.shiftKey) return;
+    if (!t || !t.closest) return;
     if (t.closest(".fit-tip, button:not(.fit-vslot), input, select, textarea, a, [data-fit-info]")) return;
-    var slot = t.closest(".fit-vslot.filled[data-tip-states]");
-    if (slot) { closeTip(); cycleSlotState(slot); return; }
-    var chip = t.closest(".fit-chip[data-fit-states]");
-    if (chip && !phoneOn()) { closeTip(); cycleChipState(chip); }
+    var mod = t.closest(".fit-vslot.filled, .fit-chip[data-fit-rowtype]");
+    if (!mod || phoneOn()) return;
+    cancelStateClick();
+    closeTip();
+    var id = mod.getAttribute("data-fit-vslot") || mod.getAttribute("data-fit-rowtype");
+    if (id && window.FitSheet) window.FitSheet.open(id, mod);
   });
   // Delete or Backspace on a focused fitted slot or rack row
   // removes one, like its minus button.
@@ -2941,12 +2972,39 @@ var FitGauges = (function () {
   // line to the next state the module allows (the card shows one
   // state for the line), through the same commit the desktop
   // tooltip's state buttons use.
-  // A ring slot steps its own instance to the next state, the
-  // way a double-click or Shift+click on it does.
-  function cycleSlotState(slot) {
-    var next = FitPhoneViews.nextState(slot.getAttribute("data-tip-states"),
-      slot.getAttribute("data-tip-state"));
-    if (next) setModuleState(slot.getAttribute("data-tip-key"), next);
+  // A mouse click on a fitted module waits one double-click span
+  // before it switches the module (clickState), so a double-click
+  // reads as one gesture: details, with no state change.
+  var STATE_CLICK_MS = 260;
+  var stateClickTimer = 0;
+  function cancelStateClick() {
+    if (stateClickTimer) { clearTimeout(stateClickTimer); stateClickTimer = 0; }
+  }
+  function queueStateClick(el, ev) {
+    cancelStateClick();
+    if (ev.detail > 1) return; // the second click of a double-click
+    var shift = !!ev.shiftKey, ctrl = !!(ev.ctrlKey || ev.metaKey);
+    stateClickTimer = setTimeout(function () {
+      stateClickTimer = 0;
+      applyStateClick(el, shift, ctrl);
+    }, STATE_CLICK_MS);
+  }
+  function applyStateClick(el, shift, ctrl) {
+    if (!el.isConnected) return;
+    if (el.hasAttribute("data-fit-vslot")) {
+      var next = FitPhoneViews.clickState(el.getAttribute("data-tip-states"), el.getAttribute("data-tip-state"), shift, ctrl);
+      if (next) setModuleState(el.getAttribute("data-tip-key"), next);
+      return;
+    }
+    var typeID = parseInt(el.getAttribute("data-fit-rowtype"), 10) || 0;
+    var i = typeID ? findItem(typeID) : -1;
+    if (i < 0) return;
+    var lineNext = FitPhoneViews.clickState(el.getAttribute("data-fit-states"), el.getAttribute("data-fit-state"), shift, ctrl);
+    if (!lineNext) return;
+    normItems();
+    var ordinals = [];
+    for (var o = 0; o < state.items[i].states.length; o++) ordinals.push(o);
+    commitModuleStates(typeID, ordinals, lineNext);
   }
   function cycleChipState(chip) {
     var typeID = parseInt(chip.getAttribute("data-fit-rowtype"), 10) || 0;

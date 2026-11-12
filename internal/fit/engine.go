@@ -242,7 +242,11 @@ const (
 
 // Slot / fitting effect IDs (dgmEffects names verified live).
 const (
-	EffectLoPower        = 11
+	EffectLoPower = 11
+	// EffectOnline is the onlining effect every module carries; the
+	// dump files it in the active category (1), so it never makes a
+	// module activatable on its own.
+	EffectOnline         = 16
 	EffectHiPower        = 12
 	EffectMedPower       = 13
 	EffectLauncherFitted = 40
@@ -441,6 +445,21 @@ func (snap *Snapshot) typeEffectCats(typeID int64) map[int64]bool {
 	return out
 }
 
+// moduleActivatable reports whether a module cycles: an
+// active-category effect other than the onlining effect every
+// module carries, or a turret or launcher fitting.
+func (snap *Snapshot) moduleActivatable(typeID int64) bool {
+	for _, eid := range snap.TypeEffects[typeID] {
+		if eid == EffectOnline {
+			continue
+		}
+		if eff := snap.Effects[eid]; eff != nil && eff.Category == 1 {
+			return true
+		}
+	}
+	return snap.HasEffect(typeID, EffectTurretFitted) || snap.HasEffect(typeID, EffectLauncherFitted)
+}
+
 // ModuleValidStates lists the states a fitted module may take,
 // derived from SDE data, never per-module hardcoding: rigs,
 // subsystems, drones and cargo have no states; a module is
@@ -460,11 +479,8 @@ func ModuleValidStates(snap *Snapshot, typeID int64) []string {
 	if len(cats) == 0 {
 		return nil
 	}
-	activatable := cats[1] ||
-		snap.HasEffect(typeID, EffectTurretFitted) ||
-		snap.HasEffect(typeID, EffectLauncherFitted)
 	states := []string{StateOffline, StateOnline}
-	if activatable {
+	if snap.moduleActivatable(typeID) {
 		states = append(states, StateActive)
 		if cats[catOverload] {
 			states = append(states, StateOverheated)
@@ -478,10 +494,7 @@ func ModuleValidStates(snap *Snapshot, typeID int64) []string {
 // engine's historical behavior (everything online and cycling)
 // for fits that predate states.
 func defaultModuleState(snap *Snapshot, typeID int64) string {
-	cats := snap.typeEffectCats(typeID)
-	if cats[1] ||
-		snap.HasEffect(typeID, EffectTurretFitted) ||
-		snap.HasEffect(typeID, EffectLauncherFitted) {
+	if snap.moduleActivatable(typeID) {
 		return StateActive
 	}
 	return StateOnline

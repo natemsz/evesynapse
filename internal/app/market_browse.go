@@ -79,7 +79,26 @@ type marketBrowseCrumb struct {
 // marketBrowseSortKeys are the item list's sort keys, picked by
 // clicking the table headers (see SortHref and its toggles).
 var marketBrowseSortKeys = []string{
-	"name", "price", "cheap", "buy", "buycheap", "volume", "rising", "falling", "volatile",
+	"match", "name", "price", "cheap", "buy", "buycheap", "volume", "rising", "falling", "volatile",
+}
+
+// marketMatchWords is a name reduced to lowercase words split by
+// single spaces, the way the best-match sort compares names.
+func marketMatchWords(s string) string {
+	var b strings.Builder
+	space := false
+	for _, r := range strings.ToLower(s) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if space && b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			space = false
+			b.WriteRune(r)
+			continue
+		}
+		space = true
+	}
+	return b.String()
 }
 
 // handleMarketBrowseFragment answers the browser's item-list swaps:
@@ -270,6 +289,9 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 	if v, err := strconv.ParseInt(q.Get("minvol"), 10, 64); err == nil && v > 0 {
 		view.MinVolume = v
 	}
+	if view.Query != "" {
+		view.Sort = "match" // a name search lists its best matches first
+	}
 	for _, key := range marketBrowseSortKeys {
 		if q.Get("sort") == key {
 			view.Sort = key
@@ -329,9 +351,11 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 		return view
 	}
 
-	like := ""
+	like, prefix := "", ""
 	if view.Query != "" {
-		like = "%" + strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(view.Query) + "%"
+		escaped := strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(view.Query)
+		like = "%" + escaped + "%"
+		prefix = strings.ToLower(escaped) + "%"
 	}
 	total, err := app.queries.CountMarketBrowseTypes(ctx, db.CountMarketBrowseTypesParams{
 		GroupID: view.GroupID, RegionID: region, NameLike: like, MinVolume: float64(view.MinVolume),
@@ -351,7 +375,8 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 	}
 	rows, err := app.queries.ListMarketBrowseTypes(ctx, db.ListMarketBrowseTypesParams{
 		GroupID: view.GroupID, RegionID: region, NameLike: like, MinVolume: float64(view.MinVolume),
-		Sort: view.Sort, RowLimit: marketBrowseTypesPerPage, RowOffset: int64((view.Page - 1) * marketBrowseTypesPerPage),
+		Sort: view.Sort, MatchName: strings.ToLower(view.Query), MatchPrefix: prefix, MatchWords: marketMatchWords(view.Query),
+		RowLimit: marketBrowseTypesPerPage, RowOffset: int64((view.Page - 1) * marketBrowseTypesPerPage),
 	})
 	if err != nil {
 		logging.Errorf("market: browse types under %d: %v", view.GroupID, err)

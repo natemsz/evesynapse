@@ -23,7 +23,7 @@
     {{if .GroupID}}<input type="hidden" name="group" value="{{.GroupID}}">{{end}}
     <input type="hidden" name="region" value="{{.Region}}">
     {{if .Query}}<input type="hidden" name="bq" value="{{.Query}}">{{end}}
-    {{if ne .Sort "name"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
+    {{if and (ne .Sort "name") (ne .Sort "match")}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
     <label class="mb-minvol"><span>At least traded per day</span> <input type="number" name="minvol" min="0" step="1" value="{{if .MinVolume}}{{.MinVolume}}{{end}}" size="6"></label>
     <button class="btn" type="submit">Apply</button>
   </form>
@@ -622,7 +622,7 @@
 <div class="tw">
 <table>
   <thead><tr>
-    <th><a class="mb-sorthead{{if eq .Sort "name"}} on{{end}}" href="{{.SortHref "name"}}" data-browse-link>Item <span class="mb-sortchev">{{if eq .Sort "name"}}▲{{else}}⇅{{end}}</span></a></th>
+    <th><a class="mb-sorthead{{if eq .Sort "name"}} on{{end}}" href="{{.SortHref "name"}}" data-browse-link>Item <span class="mb-sortchev">{{if eq .Sort "name"}}▲{{else if eq .Sort "match"}}best match{{else}}⇅{{end}}</span></a></th>
     <th class="mt-num"><a class="mb-sorthead{{if or (eq .Sort "price") (eq .Sort "cheap")}} on{{end}}" href="{{.SellSortHref}}" data-browse-link>Typical sell <span class="mb-sortchev">{{if eq .Sort "price"}}▼{{else if eq .Sort "cheap"}}▲{{else}}⇅{{end}}</span></a></th>
     <th class="mt-num"><a class="mb-sorthead{{if or (eq .Sort "buy") (eq .Sort "buycheap")}} on{{end}}" href="{{.BuySortHref}}" data-browse-link>Typical buy <span class="mb-sortchev">{{if eq .Sort "buy"}}▼{{else if eq .Sort "buycheap"}}▲{{else}}⇅{{end}}</span></a></th>
     <th class="mt-num"><a class="mb-sorthead{{if or (eq .Sort "rising") (eq .Sort "falling")}} on{{end}}" href="{{.ChgSortHref}}" data-browse-link>7 days <span class="mb-sortchev">{{if eq .Sort "rising"}}▼{{else if eq .Sort "falling"}}▲{{else}}⇅{{end}}</span></a></th>

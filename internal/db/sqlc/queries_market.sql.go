@@ -1579,7 +1579,7 @@ func (q *Queries) ListMarketBookOrders(ctx context.Context, arg ListMarketBookOr
 const listMarketBrowseTypes = `-- name: ListMarketBrowseTypes :many
 WITH RECURSIVE tree AS (
     SELECT g.market_group_id FROM sde_market_groups g
-    WHERE ($7::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = $7::bigint
+    WHERE ($10::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = $10::bigint
     UNION ALL
     SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
 )
@@ -1597,6 +1597,18 @@ WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree
   AND ($2::text = '' OR t.name ILIKE $2::text)
   AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= $3::float8
 ORDER BY
+  -- Best match (a name search's default): the exact name, then names
+  -- that start with the words, then a word in the name that starts
+  -- with them, then any name holding them; blueprints after their
+  -- items unless the search asks for one; then what trades the most
+  -- ISK a day.
+  CASE WHEN $4::text = 'match' THEN
+    CASE WHEN lower(t.name) = $5::text THEN 0
+         WHEN lower(t.name) LIKE $6::text THEN 1
+         WHEN strpos(' ' || regexp_replace(lower(t.name), '[^a-z0-9]+', ' ', 'g'), ' ' || $7::text) > 0 THEN 2
+         ELSE 3 END END,
+  CASE WHEN $4::text = 'match' AND strpos($5::text, 'blueprint') = 0 AND lower(t.name) LIKE '% blueprint' THEN 1 END NULLS FIRST,
+  CASE WHEN $4::text = 'match' THEN NULLIF(COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) * COALESCE(rs.typical_sell, gs.typical_sell, 0), 0) END DESC NULLS LAST,
   CASE WHEN $4::text = 'name' THEN t.name END,
   CASE WHEN $4::text = 'price' THEN COALESCE(rs.typical_sell, gs.typical_sell) END DESC NULLS LAST,
   CASE WHEN $4::text = 'cheap' THEN NULLIF(COALESCE(rs.typical_sell, gs.typical_sell), 0) END ASC NULLS LAST,
@@ -1607,17 +1619,20 @@ ORDER BY
   CASE WHEN $4::text = 'volume' THEN COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d) END DESC NULLS LAST,
   CASE WHEN $4::text = 'volatile' THEN COALESCE(rs.volatility_30d, gs.volatility_30d) END DESC NULLS LAST,
   t.name, t.type_id
-LIMIT $6::bigint OFFSET $5::bigint
+LIMIT $9::bigint OFFSET $8::bigint
 `
 
 type ListMarketBrowseTypesParams struct {
-	RegionID  int64   `json:"region_id"`
-	NameLike  string  `json:"name_like"`
-	MinVolume float64 `json:"min_volume"`
-	Sort      string  `json:"sort"`
-	RowOffset int64   `json:"row_offset"`
-	RowLimit  int64   `json:"row_limit"`
-	GroupID   int64   `json:"group_id"`
+	RegionID    int64   `json:"region_id"`
+	NameLike    string  `json:"name_like"`
+	MinVolume   float64 `json:"min_volume"`
+	Sort        string  `json:"sort"`
+	MatchName   string  `json:"match_name"`
+	MatchPrefix string  `json:"match_prefix"`
+	MatchWords  string  `json:"match_words"`
+	RowOffset   int64   `json:"row_offset"`
+	RowLimit    int64   `json:"row_limit"`
+	GroupID     int64   `json:"group_id"`
 }
 
 type ListMarketBrowseTypesRow struct {
@@ -1644,6 +1659,9 @@ func (q *Queries) ListMarketBrowseTypes(ctx context.Context, arg ListMarketBrows
 		arg.NameLike,
 		arg.MinVolume,
 		arg.Sort,
+		arg.MatchName,
+		arg.MatchPrefix,
+		arg.MatchWords,
 		arg.RowOffset,
 		arg.RowLimit,
 		arg.GroupID,

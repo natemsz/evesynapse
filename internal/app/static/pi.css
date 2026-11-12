@@ -120,6 +120,7 @@
 .pi-board, .pi-view, .pi-card, .pi-card-open { min-width: 0; }
 .pi-view { position: sticky; top: calc(var(--sticky-top, 4rem) + var(--space-2)); display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
 .pi-view-back { display: none; }
+.pi-view[hidden] { display: none; }
 .pi-view { scroll-margin-top: calc(var(--sticky-top, 4rem) + var(--space-2)); }
 @container page (width < 60rem) {
   .pi-plan-grid, .pi-plan-grid.viewing { grid-template-columns: minmax(0, 1fr); }
@@ -173,6 +174,7 @@
 .pi-warn { margin: 0; color: var(--danger); font-size: var(--fs-sm); }
 .pi-stage { position: relative; border: 1px solid var(--hairline); border-radius: var(--r-md); overflow: hidden; }
 .pi-canvas { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: 70vh; touch-action: none; }
+.pi-jump-cc { position: absolute; top: var(--space-2); right: var(--space-2); z-index: 1; padding: 0.15rem 0.5rem; font-size: var(--fs-2xs); background: rgb(8 13 22 / 0.75); }
 .pi-canvas:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 .pi-stage-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; padding: var(--space-2); border-top: 1px solid var(--hairline); background: var(--surface-inset); }
 .pi-stage-tools::before { content: "Add"; margin-right: 0.3rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; }

@@ -24,25 +24,72 @@
     return Math.round(n).toLocaleString("en-US");
   }
 
-  // Deterministic value noise for the planet surface.
+  // Deterministic value noise for the planet surface. The lattice wraps
+  // at a period so the texture tiles without seams or mirrored shapes.
   function hash(x, y, seed) {
     var h = (x * 374761393 + y * 668265263 + seed * 2147483647) | 0;
     h = (h ^ (h >>> 13)) * 1274126177;
     return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
   }
   function smooth(t) { return t * t * (3 - 2 * t); }
-  function noise(x, y, seed) {
+  function wrap(i, p) { return ((i % p) + p) % p; }
+  function noise(x, y, seed, p) {
     var xi = Math.floor(x), yi = Math.floor(y);
     var xf = x - xi, yf = y - yi;
-    var a = hash(xi, yi, seed), b = hash(xi + 1, yi, seed);
-    var c = hash(xi, yi + 1, seed), d = hash(xi + 1, yi + 1, seed);
+    var x0 = wrap(xi, p), x1 = wrap(xi + 1, p), y0 = wrap(yi, p), y1 = wrap(yi + 1, p);
+    var a = hash(x0, y0, seed), b = hash(x1, y0, seed);
+    var c = hash(x0, y1, seed), d = hash(x1, y1, seed);
     var u = smooth(xf), v = smooth(yf);
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   }
-  function fbm(x, y, seed) {
-    var s = 0, amp = 0.5, f = 1;
-    for (var i = 0; i < 5; i++) { s += amp * noise(x * f, y * f, seed + i); f *= 2; amp *= 0.5; }
-    return s;
+  // fbm over [0,1) x [0,1), tiling with base period p.
+  function fbm(x, y, seed, p, ridged) {
+    var s = 0, amp = 0.5, f = p, norm = 0;
+    for (var i = 0; i < 5; i++) {
+      var n = noise(x * f, y * f, seed + i * 31, f);
+      if (ridged) n = 1 - Math.abs(2 * n - 1);
+      s += amp * n; norm += amp; f *= 2; amp *= 0.5;
+    }
+    return s / norm;
+  }
+  function mix(a, b, t) {
+    t = Math.max(0, Math.min(1, t));
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  }
+  function mul(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+  function band(t, lo, hi) { return Math.max(0, Math.min(1, (t - lo) / (hi - lo))); }
+  // The colour of one surface texel: f is broad fbm, r ridged fbm (thin
+  // lines where it peaks), v the vertical position for banded worlds.
+  function shade(type, base, f, r, v) {
+    switch (type) {
+    case "lava":
+      var crust = mix([34, 26, 24], mul(base, 0.7), f * 1.1);
+      var glow = Math.pow(r, 9) * 1.3 + band(f, 0.66, 0.78) * 0.85;
+      return mix(mix(crust, [225, 80, 20], glow), [255, 190, 80], Math.pow(r, 30));
+    case "ice":
+      var snow = mix(base, [225, 238, 246], 0.35 + f * 0.5);
+      return mix(snow, mul(base, 0.75), Math.pow(r, 10) * 0.9);
+    case "gas":
+    case "storm":
+      var warp = type === "storm" ? 2.6 : 1.4;
+      var t = 0.5 + 0.5 * Math.sin((v * 5 + f * warp) * TAU);
+      var c = mix(mul(base, 0.7), mul(base, 1.35), t);
+      if (type === "storm") c = mix(c, [205, 220, 240], Math.pow(r, 12) * 0.8);
+      return c;
+    case "oceanic":
+      var sea = mix(mul(base, 0.6), mul(base, 1.3), f * 1.2 - 0.1);
+      return mix(sea, [150, 140, 95], band(f, 0.7, 0.74));
+    case "temperate":
+      if (f < 0.47) return mix([22, 52, 88], [45, 95, 130], band(f, 0.3, 0.47));
+      var land = mix(mul(base, 1.15), mul(base, 0.75), band(f, 0.47, 0.62));
+      return mix(land, [125, 112, 92], band(f, 0.64, 0.75));
+    case "plasma":
+      var dark = mul(base, 0.45 + f * 0.4);
+      return mix(mix(dark, [215, 120, 235], Math.pow(r, 6)), [255, 225, 255], Math.pow(r, 16));
+    default: // barren and anything unknown
+      var stone = mul(base, 0.55 + f * 0.75);
+      return mix(stone, mul(base, 0.45), Math.pow(r, 9) * 0.6);
+    }
   }
   function parseColor(c) {
     var ctx = document.createElement("canvas").getContext("2d");
@@ -97,6 +144,7 @@
       if (ev.target.closest("[data-copy-template]")) { self.copyTemplate(); return; }
       if (ev.target.closest("[data-replan]")) { self.replan(); return; }
       if (ev.target.closest("[data-colony-reset]")) { self.reset(); return; }
+      if (ev.target.closest("[data-jump-cc]")) { self.jumpCC(); return; }
       var rm = ev.target.closest("[data-remove-pin]");
       if (rm) { self.removePin(self.sel); return; }
     });
@@ -190,22 +238,53 @@
     this.h = h;
   };
 
+  // fitView frames the working structures. The command center counts only
+  // when nothing else is down: it often sits far from the cluster.
   View.prototype.fitView = function () {
-    var pins = this.colony.pins;
-    if (!pins.length) { this.center = { lat: Math.PI / 2, lon: 0 }; this.scale = 4000; return; }
+    var all = this.colony.pins;
+    this.ccSaved = null;
+    this.ccButton();
+    if (!all.length) { this.center = { lat: Math.PI / 2, lon: 0 }; this.sx = 1; this.scale = 4000; return; }
+    var pins = all.filter(function (p) { return p.kind !== "cc"; });
+    if (!pins.length) pins = all;
     var minLa = 9, maxLa = -9, minLo = 9, maxLo = -9;
     pins.forEach(function (p) {
       minLa = Math.min(minLa, p.lat); maxLa = Math.max(maxLa, p.lat);
       minLo = Math.min(minLo, p.lon); maxLo = Math.max(maxLo, p.lon);
     });
     this.center = { lat: (minLa + maxLa) / 2, lon: (minLo + maxLo) / 2 };
-    var s = Math.sin(this.center.lat) || 1;
-    var spanX = Math.max((maxLo - minLo) * s, 0.04), spanY = Math.max(maxLa - minLa, 0.04);
-    this.scale = Math.min((this.w || 600) / (spanX * 1.5), (this.h || 400) / (spanY * 1.5));
+    // One east-west factor per colony, so panning never stretches the map.
+    this.sx = Math.max(0.2, Math.sin(this.center.lat) || 1);
+    var spanX = Math.max((maxLo - minLo) * this.sx, 0.04), spanY = Math.max(maxLa - minLa, 0.04);
+    this.scale = Math.max(800, Math.min(60000, Math.min((this.w || 600) / (spanX * 1.5), (this.h || 400) / (spanY * 1.5))));
+  };
+
+  // jumpCC centres on the command center; pressed again it returns to
+  // the view from before the jump.
+  View.prototype.jumpCC = function () {
+    if (this.ccSaved) {
+      this.center = this.ccSaved.center;
+      this.scale = this.ccSaved.scale;
+      this.ccSaved = null;
+    } else {
+      var cc = null;
+      this.colony.pins.forEach(function (p) { if (p.kind === "cc") cc = p; });
+      if (!cc) { this.say("This colony has no command center yet."); return; }
+      this.ccSaved = { center: { lat: this.center.lat, lon: this.center.lon }, scale: this.scale };
+      this.center = { lat: cc.lat, lon: cc.lon };
+    }
+    this.ccButton();
+  };
+
+  View.prototype.ccButton = function () {
+    var b = this.root.querySelector("[data-jump-cc]");
+    if (!b) return;
+    b.textContent = this.ccSaved ? "Back to the colony" : "Command center";
+    b.setAttribute("aria-pressed", this.ccSaved ? "true" : "false");
   };
 
   View.prototype.toScreen = function (lat, lon) {
-    var s = Math.sin(this.center.lat) || 1;
+    var s = this.sx || 1;
     return {
       x: this.w / 2 + (lon - this.center.lon) * s * this.scale,
       y: this.h / 2 + (lat - this.center.lat) * this.scale
@@ -213,7 +292,7 @@
   };
 
   View.prototype.toPlanet = function (x, y) {
-    var s = Math.sin(this.center.lat) || 1;
+    var s = this.sx || 1;
     return {
       lat: this.center.lat + (y - this.h / 2) / this.scale,
       lon: this.center.lon + (x - this.w / 2) / (s * this.scale)
@@ -245,6 +324,7 @@
   // --- pointer ---------------------------------------------------------
 
   View.prototype.down = function (ev) {
+    if (!this.colony) return;
     this.canvas.setPointerCapture(ev.pointerId);
     var i = this.pinAt(ev.offsetX, ev.offsetY);
     this.drag = { x: ev.offsetX, y: ev.offsetY, pin: i, moved: false, center: { lat: this.center.lat, lon: this.center.lon } };
@@ -252,6 +332,7 @@
   };
 
   View.prototype.move = function (ev) {
+    if (!this.colony) return;
     var d = this.drag;
     if (!d) {
       var h = this.pinAt(ev.offsetX, ev.offsetY);
@@ -271,7 +352,7 @@
       if (p.change === "keep" || p.change === "retool") p.change = p.change; // a moved pin keeps its building
       this.canvas.style.cursor = "grabbing";
     } else {
-      var s = Math.sin(this.center.lat) || 1;
+      var s = this.sx || 1;
       this.center.lat = d.center.lat - dy / this.scale;
       this.center.lon = d.center.lon - dx / (s * this.scale);
     }
@@ -640,32 +721,74 @@
 
   // --- drawing ----------------------------------------------------------
 
+  // The surface is tiling layers fixed to the planet. The planet's
+  // texture is drawn once at a size no zoom level can see repeat, then
+  // again finer, faded in as the view closes on the colony, and a grey
+  // detail layer is blended over the top. All move with the structures.
+  var MACRO_N = 512, WIDE_RAD = 1.6, MACRO_RAD = 0.3, DETAIL_N = 256, DETAIL_RAD = 0.05;
+
   View.prototype.surface = function (type) {
-    var key = type + "|" + this.canvas.width + "x" + this.canvas.height;
+    var key = "m|" + type;
     if (this.textures[key]) return this.textures[key];
-    var w = 256, h = 256;
+    var n = MACRO_N;
     var off = document.createElement("canvas");
-    off.width = w; off.height = h;
+    off.width = n; off.height = n;
     var g = off.getContext("2d");
-    var img = g.createImageData(w, h);
-    var base = parseColor(css(this.panel, "--pi-surface-" + type.toLowerCase(), "#3a3f4a"));
-    var seed = type.length * 97;
-    for (var y = 0; y < h; y++) {
-      for (var x = 0; x < w; x++) {
-        // Tileable: sample a torus.
-        var a = x / w * TAU, b = y / h * TAU;
-        var n = fbm(2 + Math.cos(a) * 1.6, 2 + Math.sin(a) * 1.6 + Math.cos(b) * 1.6 + Math.sin(b) * 1.1, seed);
-        var shade = 0.55 + n * 0.75;
-        var o = (y * w + x) * 4;
-        img.data[o] = Math.min(255, base[0] * shade);
-        img.data[o + 1] = Math.min(255, base[1] * shade);
-        img.data[o + 2] = Math.min(255, base[2] * shade);
+    var img = g.createImageData(n, n);
+    var t = type.toLowerCase();
+    var base = parseColor(css(this.panel, "--pi-surface-" + t, "#3a3f4a"));
+    var seed = type.length * 97 + type.charCodeAt(0);
+    for (var y = 0; y < n; y++) {
+      for (var x = 0; x < n; x++) {
+        var u = x / n, v = y / n;
+        var f = fbm(u, v, seed, 6, false);
+        var rr = fbm(u, v, seed + 7, 5, true);
+        var c = shade(t, base, f, rr, v);
+        var o = (y * n + x) * 4;
+        img.data[o] = Math.min(255, c[0]);
+        img.data[o + 1] = Math.min(255, c[1]);
+        img.data[o + 2] = Math.min(255, c[2]);
         img.data[o + 3] = 255;
       }
     }
     g.putImageData(img, 0, 0);
     this.textures[key] = this.ctx.createPattern(off, "repeat");
     return this.textures[key];
+  };
+
+  View.prototype.detail = function () {
+    if (this.textures.detail) return this.textures.detail;
+    var n = DETAIL_N;
+    var off = document.createElement("canvas");
+    off.width = n; off.height = n;
+    var g = off.getContext("2d");
+    var img = g.createImageData(n, n);
+    for (var y = 0; y < n; y++) {
+      for (var x = 0; x < n; x++) {
+        var k = 60 + fbm(x / n, y / n, 4242, 8, false) * 136;
+        var o = (y * n + x) * 4;
+        img.data[o] = img.data[o + 1] = img.data[o + 2] = k;
+        img.data[o + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    this.textures.detail = this.ctx.createPattern(off, "repeat");
+    return this.textures.detail;
+  };
+
+  // paintTile fills the canvas with pattern pat, one tile spanning rad
+  // radians of the planet, anchored to a planet point near the view.
+  View.prototype.paintTile = function (pat, n, rad) {
+    // Tiles are square in surface distance: rad of longitude spans only
+    // rad * sx of ground.
+    var radLon = rad / (this.sx || 1);
+    var la = Math.floor(this.center.lat / rad) * rad;
+    var lo = Math.floor(this.center.lon / radLon) * radLon;
+    var o = this.toScreen(la, lo);
+    var k = rad * this.scale / n;
+    if (pat.setTransform) pat.setTransform(new DOMMatrix().translate(o.x, o.y).scale(k, k));
+    this.ctx.fillStyle = pat;
+    this.ctx.fillRect(0, 0, this.w, this.h);
   };
 
   View.prototype.draw = function () {
@@ -675,14 +798,23 @@
     var c = this.colony, self = this;
     var t = (performance.now() - this.t0) / 1000;
 
-    // Surface, moving with the view.
-    var pat = this.surface(c.planetType);
+    // Surface, fixed to the planet.
     ctx.save();
-    var origin = this.toScreen(Math.PI / 2, 0);
-    var m = new DOMMatrix().translate(origin.x, origin.y).scale(Math.max(0.6, this.scale / 3000));
-    if (pat.setTransform) pat.setTransform(m);
-    ctx.fillStyle = pat;
-    ctx.fillRect(0, 0, this.w, this.h);
+    ctx.imageSmoothingQuality = "high";
+    var pat = this.surface(c.planetType);
+    this.paintTile(pat, MACRO_N, WIDE_RAD);
+    var mid = Math.max(0, Math.min(1, (this.scale - 1500) / 3000));
+    if (mid > 0) {
+      ctx.globalAlpha = mid;
+      this.paintTile(pat, MACRO_N, MACRO_RAD);
+      ctx.globalAlpha = 1;
+    }
+    var fine = Math.max(0, Math.min(1, (this.scale - 2500) / 6000));
+    if (fine > 0) {
+      ctx.globalCompositeOperation = "overlay";
+      ctx.globalAlpha = fine * 0.55;
+      this.paintTile(this.detail(), DETAIL_N, DETAIL_RAD);
+    }
     ctx.restore();
     // Vignette and grid.
     var vg = ctx.createRadialGradient(this.w / 2, this.h / 2, Math.min(this.w, this.h) * 0.2, this.w / 2, this.h / 2, Math.max(this.w, this.h) * 0.75);
@@ -692,7 +824,9 @@
     ctx.fillRect(0, 0, this.w, this.h);
     ctx.strokeStyle = "rgba(255,255,255,0.05)";
     ctx.lineWidth = 1;
+    // Grid lines at least 40 px apart at any zoom.
     var step = 0.01;
+    while (step * this.scale < 40) step *= 2;
     var tl = this.toPlanet(0, 0), br = this.toPlanet(this.w, this.h);
     ctx.beginPath();
     for (var la = Math.floor(tl.lat / step) * step; la < br.lat; la += step) {

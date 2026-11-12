@@ -133,3 +133,31 @@ func TestFitLeavesOutRemovedStructures(t *testing.T) {
 		t.Errorf("fit counts the removed launchpad: %+v", f)
 	}
 }
+
+// TestRicherPlanetsKeepTargetReachable holds a target the planets can
+// reach to stay reachable when the per-head yield goes up: a higher
+// yield never turns a working plan into "cannot make that much".
+func TestRicherPlanetsKeepTargetReachable(t *testing.T) {
+	var cands []Candidate
+	for _, pt := range PlanetTypes {
+		for i := 0; i < 6; i++ {
+			cands = append(cands, Candidate{PlanetID: int64(len(cands) + 1), Name: pt, Type: pt, RadiusKm: TypicalRadiusKm[pt]})
+		}
+	}
+	var chars []Character
+	for i := 1; i <= 5; i++ {
+		chars = append(chars, Character{ID: int64(i), Name: "Pilot", MaxPlanets: 6, CCLevel: 5})
+	}
+	for _, peak := range []float64{3000, 6000} {
+		sol, err := Optimize(Request{
+			Target: "Integrity Response Drones", PerDay: 10, Peak: peak, TaxRate: 0.1,
+			Characters: chars, Candidates: cands,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sol.PerDay < 10-1e-6 {
+			t.Errorf("peak %.0f: %.2f a day, %q", peak, sol.PerDay, sol.Short)
+		}
+	}
+}

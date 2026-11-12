@@ -1306,6 +1306,18 @@ WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree
   AND (sqlc.arg(name_like)::text = '' OR t.name ILIKE sqlc.arg(name_like)::text)
   AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8
 ORDER BY
+  -- Best match (a name search's default): the exact name, then names
+  -- that start with the words, then a word in the name that starts
+  -- with them, then any name holding them; blueprints after their
+  -- items unless the search asks for one; then what trades the most
+  -- ISK a day.
+  CASE WHEN sqlc.arg(sort)::text = 'match' THEN
+    CASE WHEN lower(t.name) = sqlc.arg(match_name)::text THEN 0
+         WHEN lower(t.name) LIKE sqlc.arg(match_prefix)::text THEN 1
+         WHEN strpos(' ' || regexp_replace(lower(t.name), '[^a-z0-9]+', ' ', 'g'), ' ' || sqlc.arg(match_words)::text) > 0 THEN 2
+         ELSE 3 END END,
+  CASE WHEN sqlc.arg(sort)::text = 'match' AND strpos(sqlc.arg(match_name)::text, 'blueprint') = 0 AND lower(t.name) LIKE '% blueprint' THEN 1 END NULLS FIRST,
+  CASE WHEN sqlc.arg(sort)::text = 'match' THEN NULLIF(COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) * COALESCE(rs.typical_sell, gs.typical_sell, 0), 0) END DESC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'name' THEN t.name END,
   CASE WHEN sqlc.arg(sort)::text = 'price' THEN COALESCE(rs.typical_sell, gs.typical_sell) END DESC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'cheap' THEN NULLIF(COALESCE(rs.typical_sell, gs.typical_sell), 0) END ASC NULLS LAST,

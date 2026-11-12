@@ -1008,6 +1008,9 @@ const sessionFitStash = "fit_stash"
 // on the editor.
 func (app *tool) handleFitImport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	// ParseEFT reads at most 64 KiB; the form around it gets a
+	// little more, and nothing past that is read.
+	r.Body = http.MaxBytesReader(w, r.Body, 128<<10)
 	if err := r.ParseForm(); err != nil {
 		http.Redirect(w, r, "/fittings/#fit-editor", http.StatusSeeOther)
 		return

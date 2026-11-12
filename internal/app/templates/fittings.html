@@ -22,7 +22,7 @@
 {{if .FitEditor.Anonymous}}
 <section class="l-panel fw-anon" aria-label="Signed out">
   <p class="prose">Fitting with All-V skills. <a href="/auth/link">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>
-  <p class="l-cluster"><button type="button" class="btn" id="fit-share-anon">Share this fit by link</button> <span id="fit-share-link"></span></p>
+  <p class="l-cluster"><button type="button" class="btn fit-shiponly" id="fit-share-anon">Share this fit by link</button> <button type="button" class="btn btn-quiet" data-fit-import-open>Import EFT</button> <span id="fit-share-link"></span></p>
   {{if .FitEditor.AnonFits}}<div class="fit-anonfits"><h2>Your shared fits</h2><ul class="fw-anonlist">
   {{range .FitEditor.AnonFits}}<li><span class="fw-anon-name"><a href="{{.ShareURL}}">{{.Name}}</a> <small>{{.ShipName}} · {{.Updated}}</small></span> <form method="post" action="{{.DeleteURL}}" class="inline"><button type="submit" class="btn small">Delete</button></form></li>
   {{end}}</ul><p class="prose">Fits you share while signed out are kept for 180 days after they were last viewed, then deleted.</p></div>{{end}}
@@ -42,6 +42,7 @@
   <span class="fit-saverow fit-shiponly">
   {{if not .FitEditor.Anonymous}}<button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>{{end}}
   {{if .FitEditor.EVECharID}}<button type="button" class="btn fit-head-sec fit-stripsec" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>{{end}}
+  <button type="button" class="btn fit-head-sec fit-stripsec" id="fit-export-btn" title="Copy this fit as EFT text, ready to paste into EVE or any fitting tool">Copy EFT</button>
   <span class="fit-saved" id="fit-saved-at" hidden></span>
   </span>
   <button type="button" class="fit-head-toggle fit-shiponly" data-fit-head-toggle aria-expanded="false" aria-controls="fit-head">Fit details</button>
@@ -74,6 +75,7 @@
       <ul class="suggest" id="fit-yourfits-suggest" role="listbox" hidden></ul>
     </span>
     <label class="fit-check"><input type="checkbox" id="fit-community"> Include community fits</label>
+    <button type="button" class="btn btn-quiet" data-fit-import-open>Import EFT</button>
     <button type="button" class="btn btn-quiet" id="fit-loadouts-btn" data-href="/fittings/saved/">My Loadouts</button>
   </div>{{end}}
 </div>
@@ -126,21 +128,29 @@
   <ul class="fit-browse-tree" id="fit-browse-tree" role="tree" aria-label="Market groups"></ul>
 </div>
 
-<div class="l-switcher fw-eft">
-  <section class="l-panel fit-eft" aria-labelledby="fw-export-h" data-fit-shipblock{{if not .FitEditor.Sim.HasShip}} hidden{{end}}>
-    <h2 id="fw-export-h">Export</h2>
-    <p class="fw-hint">The fit as EFT text, ready to paste into EVE or any fitting tool.</p>
-    <p><button type="button" class="btn" id="fit-export-btn">Show as EFT</button></p>
-    <textarea id="fit-eft-out" rows="8" readonly aria-label="EFT text" placeholder="Press Show as EFT."></textarea>
-  </section>
-  <section class="l-panel fit-eft" aria-labelledby="fw-import-h">
-    <h2 id="fw-import-h">Import</h2>
+{{/* EFT in and out. Import EFT opens the import popup (pasting EFT
+     text anywhere on the page submits the same form); Copy EFT copies
+     straight to the clipboard and opens the copy popup only when the
+     browser refuses, with the text selected to copy by hand. */}}
+<div class="modal-backdrop" id="fit-import-modal" hidden>
+  <div class="modal fit-eftmodal" role="dialog" aria-modal="true" aria-labelledby="fit-import-title">
+    <div class="modal-head"><h2 id="fit-import-title">Import a fit</h2><button type="button" class="modal-close" data-close-modal aria-label="Close">×</button></div>
     <form method="post" action="/fittings/import/">
-      <p class="fw-hint"><label for="fit-eft-in">Paste a fit in EFT text to open it here.</label></p>
-      <textarea id="fit-eft-in" name="eft" rows="8" placeholder="[Rifter, My fit]&#10;Damage Control II&#10;..."></textarea>
-      <p><button type="submit" class="btn">Import</button></p>
+      <p class="fw-hint"><label for="fit-eft-in">Paste a fit in EFT text, the format EVE's own Copy to Clipboard gives.</label></p>
+      <textarea id="fit-eft-in" name="eft" rows="10" placeholder="[Rifter, My fit]&#10;Damage Control II&#10;..." required></textarea>
+      <div class="fit-eftmodal-actions">
+        <button type="button" class="btn btn-quiet" data-close-modal>Cancel</button>
+        <button type="submit" class="btn">Open this fit</button>
+      </div>
     </form>
-  </section>
+  </div>
+</div>
+<div class="modal-backdrop" id="fit-copy-modal" hidden>
+  <div class="modal fit-eftmodal" role="dialog" aria-modal="true" aria-labelledby="fit-copy-title">
+    <div class="modal-head"><h2 id="fit-copy-title">Copy this fit</h2><button type="button" class="modal-close" data-close-modal aria-label="Close">×</button></div>
+    <p class="fw-hint"><label for="fit-eft-out">The browser would not copy it for you. The text is selected: copy it with Ctrl+C, or Cmd+C on a Mac.</label></p>
+    <textarea id="fit-eft-out" rows="10" readonly></textarea>
+  </div>
 </div>
 
 </div>

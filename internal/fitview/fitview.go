@@ -1253,11 +1253,16 @@ type FitStatsView struct {
 	CapInject string // capacitor boosters, empty without one
 	// The damage-at-range chart (FitRange): its data, the inline
 	// sparkline's points and the axis end; empty without damage.
-	RangeJSON     string
-	RangeSpark    string
-	RangeEnd      string
-	CapState      string
-	CapStable     bool
+	RangeJSON  string
+	RangeSpark string
+	RangeEnd   string
+	CapState   string
+	CapStable  bool
+	// CapChip and CapChipLabel are the capacitor in a phone header
+	// chip: "Stable" or the stable level under "Cap stable", or how
+	// long it lasts under "Cap lasts".
+	CapChip       string
+	CapChipLabel  string
 	TurretDPS     string
 	MissileDPS    string
 	DroneDPS      string
@@ -2305,13 +2310,18 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 	}
 	if res.CapacitorStable {
 		st.CapStable = true
+		st.CapChipLabel = "Cap stable"
 		if res.CapacitorStablePercent >= 99.95 {
 			st.CapState = "Stable"
+			st.CapChip = "100%"
 		} else {
 			st.CapState = fmt.Sprintf("Stable at %s%%", FitFmt1(res.CapacitorStablePercent))
+			st.CapChip = FitFmt0(res.CapacitorStablePercent) + "%"
 		}
 	} else {
 		st.CapState = "Runs out in " + FitSeconds(res.CapacitorDepletionSecs)
+		st.CapChipLabel = "Cap lasts"
+		st.CapChip = FitSeconds(res.CapacitorDepletionSecs)
 	}
 
 	st.TurretDPS = FitFmt1(res.TurretDPS)

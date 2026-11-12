@@ -4839,8 +4839,7 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   margin: 0.6rem 0;
 }
 .fit-esi-controls input[type="text"] { flex: 1 1 14rem; }
-.fit-eft { margin-top: 1rem; }
-.fit-eft textarea {
+.fit-eftmodal textarea {
   width: 100%;
   border-radius: var(--r-sm);
   color: var(--text);
@@ -4848,7 +4847,7 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   font-size: var(--fs-xs);
   padding: 0.5rem 0.6rem;
 }
-.fit-eft textarea:focus {
+.fit-eftmodal textarea:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
@@ -5102,7 +5101,6 @@ html[data-theme="light"] .fit-vship img,
 html[data-theme="light"] .fit-vslot .fit-vammo { background: #f1ebdf; }
 html[data-theme="light"] .fit-tip-state { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
 html[data-theme="light"] .fit-tip-state.on { color: #8a4d0e; }
-html[data-theme="light"] .fit-eft textarea { background: #ffffff; border-color: #d8cdb8; color: #2a241d; }
 html[data-theme="light"] .grid.home-grid > .drag-placeholder { background: radial-gradient(ellipse at 50% 40%, rgba(255, 106, 26, 0.16), rgba(255, 106, 26, 0.04) 70%), #f6eedd; }
 /* Tooltips stay dark floating chips in both themes. */
 html[data-theme="light"] .fit-tip { color: #faf3e6; }

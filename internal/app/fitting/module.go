@@ -47,12 +47,16 @@ var Module = module.Module{
 			return func(w http.ResponseWriter, req *http.Request) { f(newTool(deps), w, req) }
 		}
 		// Anonymous-safe surfaces: the simulator (All-V without a
-		// session) and the SDE-only picker. Handlers branch on the session.
+		// session), EFT import and export (text in, text out, against
+		// the SDE only) and the SDE-only picker. Handlers branch on the
+		// session.
 		r.With(deps.AnonPages()).Get("/fittings/", h((*tool).handleFittings))
 		r.With(deps.AnonSim()).Post("/fittings/save-anonymous/", h((*tool).handleFitSaveAnonymous))
 		r.With(deps.AnonSim()).Post("/fittings/share/{token}/delete", h((*tool).handleFitDeleteAnonymous))
 		r.With(deps.AnonSim()).Post("/fittings/simulate/", h((*tool).handleFitSimulate))
 		r.With(deps.AnonSim()).Post("/fittings/solve-implants/", h((*tool).handleFitSolveImplants))
+		r.With(deps.AnonSim()).Post("/fittings/import/", h((*tool).handleFitImport))
+		r.With(deps.AnonSim()).Post("/fittings/export/", h((*tool).handleFitExport))
 		r.With(deps.AnonPages()).Get("/fittings/picker.json", h((*tool).handleFitPickerJSON))
 		r.With(deps.AnonPages()).Get("/fittings/browse.json", h((*tool).handleFitBrowseJSON))
 		auth := r.With(deps.RequireAuth())
@@ -61,8 +65,6 @@ var Module = module.Module{
 		auth.Post("/fittings/save/", h((*tool).handleFitSave))
 		auth.Post("/fittings/save-to-eve/", h((*tool).handleFitSaveToEVE))
 		auth.Post("/fittings/delete/", h((*tool).handleFitDelete))
-		auth.Post("/fittings/import/", h((*tool).handleFitImport))
-		auth.Post("/fittings/export/", h((*tool).handleFitExport))
 		auth.Get("/fittings/mine.json", h((*tool).handleFitMineJSON))
 		auth.Post("/fittings/fork/", h((*tool).handleFitFork))
 		auth.Get("/fittings/shopping/{id}/", h((*tool).handleFitShopping))

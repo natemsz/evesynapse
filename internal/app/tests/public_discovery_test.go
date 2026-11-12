@@ -742,6 +742,13 @@ func TestPublicSimulatorAnon(t *testing.T) {
 	if rec.Code != 400 {
 		t.Errorf("anon foreign-pilot simulate status = %d, want 400", rec.Code)
 	}
+	// Copy EFT works signed out: the fit comes back as EFT text.
+	req = httptest.NewRequest(http.MethodPost, "/fittings/export/", strings.NewReader(`{"name":"x","shipTypeId":587,"items":[{"typeId":1238,"qty":1}],"pilot":0}`))
+	rec = httptest.NewRecorder()
+	rig.Handler().ServeHTTP(rec, req)
+	if rec.Code != 200 || !strings.HasPrefix(rec.Body.String(), "[") {
+		t.Errorf("anon export = %d %q, want EFT text", rec.Code, rec.Body.String())
+	}
 	if transport.Calls.Load() != 0 {
 		t.Errorf("simulator made %d outbound calls", transport.Calls.Load())
 	}

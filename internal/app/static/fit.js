@@ -155,7 +155,7 @@ var FitGauges = (function () {
   var browseHint = document.getElementById("fit-browse-hint");
   var saveBtn = document.getElementById("fit-save");
   var exportBtn = document.getElementById("fit-export-btn");
-  var exportOut = document.getElementById("fit-eft-out");
+  var exportOut = document.getElementById("fit-eft-out"); // the copy popup's text box
 
   function workbench() { return editor.querySelector(".fit-wb"); }
 
@@ -3563,30 +3563,70 @@ var FitGauges = (function () {
       });
     });
   }
-  if (exportBtn) {
-    exportBtn.addEventListener("click", function () {
-      state.name = nameInput ? nameInput.value : state.name;
-      fetch("/fittings/export/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "text/plain" },
-        body: JSON.stringify({
-          name: state.name,
-          shipTypeId: state.shipTypeId,
-          items: state.items,
-          charges: state.charges,
-          pilot: pilotID()
-        })
-      }).then(function (resp) {
-        return resp.ok ? resp.text() : "";
-      }).then(function (text) {
-        if (exportOut) {
-          exportOut.value = text;
-          exportOut.focus();
-          exportOut.select();
-        }
-      }).catch(function () {});
+  // --- EFT out and in --------------------------------------------
+  // Copy EFT: the text comes from the server (/fittings/export/), so
+  // the clipboard gets it as a pending item, inside this click, the
+  // way Safari requires; browsers without ClipboardItem write it once
+  // it arrives. Where the browser refuses both, the copy popup shows
+  // the text selected, to copy by hand. Import EFT opens the import
+  // popup, whose form the page-wide paste also submits.
+  function exportText() {
+    state.name = nameInput ? nameInput.value : state.name;
+    return fetch("/fittings/export/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "text/plain" },
+      body: JSON.stringify({
+        name: state.name,
+        shipTypeId: state.shipTypeId,
+        items: state.items,
+        charges: state.charges,
+        pilot: pilotID()
+      })
+    }).then(function (resp) {
+      if (!resp.ok) throw new Error("export " + resp.status);
+      return resp.text();
     });
   }
+  function exportFlash(label) {
+    var prior = exportBtn.getAttribute("data-fit-label") || exportBtn.textContent;
+    exportBtn.setAttribute("data-fit-label", prior);
+    exportBtn.textContent = label;
+    window.setTimeout(function () { exportBtn.textContent = prior; }, 1500);
+  }
+  function exportByHand(text) {
+    var modal = document.getElementById("fit-copy-modal");
+    if (!modal || !exportOut || !window.EveSynapseModal) return;
+    exportOut.value = text;
+    window.EveSynapseModal.open(modal, { focus: false });
+    exportOut.focus();
+    exportOut.select();
+  }
+  if (exportBtn) {
+    exportBtn.addEventListener("click", function () {
+      if (!state.shipTypeId) return;
+      var pending = exportText();
+      var clip = navigator.clipboard;
+      var copied;
+      if (clip && clip.write && window.ClipboardItem) {
+        copied = clip.write([new window.ClipboardItem({
+          "text/plain": pending.then(function (text) { return new Blob([text], { type: "text/plain" }); })
+        })]);
+      } else if (clip && clip.writeText) {
+        copied = pending.then(function (text) { return clip.writeText(text); });
+      } else {
+        copied = Promise.reject(new Error("no clipboard"));
+      }
+      copied.then(function () { exportFlash("Copied"); }, function () {
+        pending.then(exportByHand, function () { exportFlash("Could not copy"); });
+      });
+    });
+  }
+  var importModal = document.getElementById("fit-import-modal");
+  document.addEventListener("click", function (ev) {
+    var opener = ev.target && ev.target.closest ? ev.target.closest("[data-fit-import-open]") : null;
+    if (!opener || !importModal || !window.EveSynapseModal || !document.body.contains(editor)) return;
+    window.EveSynapseModal.open(importModal);
+  });
   // Last, so the phone view state above is initialized: land on
   // the current view (the Radial, on a fresh page).
   applyFitView();

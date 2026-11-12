@@ -1,5 +1,5 @@
 // Settings page: the tab switch and the Interface tab's theme
-// picker. Loaded on that page only.
+// picker, colour-blind mode included. Loaded on that page only.
 //
 // The theme is an account setting: every pick is posted to the
 // account (POST /settings/theme, ui_theme.go), which renders it
@@ -89,6 +89,7 @@
       body.set('tier', st.scheme ? st.tier : '');
       var bd = null;
       try { bd = window.localStorage.getItem('evesynapse-backdrop'); } catch (e) {}
+      body.set('vision', root.getAttribute('data-vision') || '');
       body.set('backdrop', st.scheme
         ? (bd === 'muted' || bd === 'glow' || bd === 'full' ? bd : '')
         : (st.tier === 'full' ? 'full' : st.tier === 'minimalistic' ? 'glow' : 'muted'));
@@ -156,6 +157,31 @@
       saveAccount();
       markCurrent();
     }
+
+    // The colour-blind mode sits beside the scheme: it retunes the
+    // status colours of whichever scheme is on (bg.css), so a pick
+    // here leaves the scheme, its tier and the backdrop alone.
+    var visionButtons = document.querySelectorAll('[data-vision-row] [data-vision]');
+    function markVision() {
+      var v = root.getAttribute('data-vision') || '';
+      for (var k = 0; k < visionButtons.length; k++) {
+        visionButtons[k].classList.toggle('on', visionButtons[k].getAttribute('data-vision') === v);
+      }
+    }
+    function applyVision(v) {
+      if (v === 'redgreen' || v === 'blueyellow') root.setAttribute('data-vision', v);
+      else { v = ''; root.removeAttribute('data-vision'); }
+      store('evesynapse-vision', v || null);
+      saveAccount();
+      markVision();
+    }
+    for (var k = 0; k < visionButtons.length; k++) {
+      (function (btn) {
+        if (!wire(btn)) return;
+        btn.addEventListener('click', function () { applyVision(btn.getAttribute('data-vision') || ''); });
+      })(visionButtons[k]);
+    }
+    markVision();
 
     for (var i = 0; i < rows.length; i++) {
       (function (row) {

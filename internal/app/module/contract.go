@@ -1068,11 +1068,13 @@ type ShellData struct {
 	// base.html so a signed-in load paints it on any device.
 	// ThemeAccount says the render is a signed-in one; ThemeStored
 	// says the account has a saved theme, carried by ThemeScheme,
-	// ThemeTier and ThemeBackdrop. All unset is the anonymous
+	// ThemeTier, ThemeBackdrop and ThemeVision (the colour-blind
+	// mode). All unset is the anonymous
 	// render, where the browser's local choice rules as before.
 	ThemeScheme   string
 	ThemeTier     string
 	ThemeBackdrop string
+	ThemeVision   string
 	ThemeAccount  bool
 	ThemeStored   bool
 	// Banners is the administrators' global notices this render

@@ -72,7 +72,7 @@
 .wb-on { color: var(--gold); }
 .wb-off { color: var(--muted-2); }
 .wb-dep { color: var(--accent); }
-.wb-hostile { color: #e0301c; }
+.wb-hostile { color: var(--v-bad, #e0301c); }
 .wb-friendly { color: var(--success); }
 .wb-bar { display: flex; height: 0.55rem; border-radius: var(--r-xs); overflow: hidden; background: var(--row-alt); margin: 0.6rem 0 0.2rem; }
 .wb-bar > span { display: block; height: 100%; width: var(--w, 0%); }
@@ -137,13 +137,13 @@
 .wb-alli-corps { font-size: var(--fs-xs); color: var(--muted); }
 .wb-alli-flags { font-size: var(--fs-xs); color: var(--gold); }
 .wb-badge { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; border-radius: var(--r-xs); padding: 0.12rem 0.45rem; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); color: var(--muted-2); }
-.wb-badge-hostile { color: #e0301c; }
+.wb-badge-hostile { color: var(--v-bad, #e0301c); }
 .wb-badge-friendly { color: var(--success); }
 .wb-badge-neutral { color: #7d8ca3; }
 .wb-pilots { list-style: none; margin: 0; padding: 0; }
 .wb-pilot { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.38rem 0.2rem; border-bottom: 1px solid var(--row-alt); }
 .wb-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; flex: none; background: #57493a; }
-.wb-dot-hostile { background: #e0301c; }
+.wb-dot-hostile { background: var(--v-bad, #e0301c); }
 .wb-dot-friendly { background: var(--success); }
 .wb-dot-neutral { background: #7d8ca3; }
 .wb-dot-unknown { background: #57493a; }
@@ -165,7 +165,7 @@
 .wb-delta { padding: 0.4rem 0.2rem; border-bottom: 1px solid var(--row-alt); display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
 .wb-d-sign { font-weight: 700; font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; }
 .wb-d-add { color: var(--success); }
-.wb-d-left { color: #e0301c; }
+.wb-d-left { color: var(--v-bad, #e0301c); }
 .wb-d-text { margin-left: auto; font-family: var(--font-num); font-size: var(--fs-xs); color: var(--muted); }
 .wb-d-bucket { color: var(--muted); font-size: var(--fs-xs); }
 .wb-gates { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1.25rem; }

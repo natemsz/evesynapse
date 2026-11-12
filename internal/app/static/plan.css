@@ -124,8 +124,8 @@ the rail tooltip treatment. */
   line-height: 1rem;
   text-align: center;
 }
-.plan-skillglyph.ok .plan-skillbadge { background: #2e7d32; }
-.plan-skillglyph.bad .plan-skillbadge { background: #d63c14; }
+.plan-skillglyph.ok .plan-skillbadge { background: var(--v-good-deep, #2e7d32); }
+.plan-skillglyph.bad .plan-skillbadge { background: var(--v-bad-deep, #d63c14); }
 /* Glyph tooltips in the plan head: both glyphs carry the same
 .plan-tip panel, a one-line note for settings, the missing
 skills as a list for the skillbook. */

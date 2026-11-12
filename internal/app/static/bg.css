@@ -920,3 +920,86 @@ html[data-scheme="amarr"] .tier-seg button.on, html[data-scheme="edencom"] .tier
       linear-gradient(180deg, #110c09 0%, #0b0806 100%);
   }
 }
+
+/* Colour-blind modes (Settings, Interface tab: data-vision on
+   <html>, ui_theme.go). Each mode retunes the status colours,
+   never the scheme itself: gains and losses, warnings, standings,
+   security status, the status dots, the chart series and the map
+   layers. Red-green (protanopia, deuteranopia) moves good and bad
+   onto the blue and orange axis those readers keep; blue-yellow
+   (tritanopia) moves them onto teal and rose. Every pair below was
+   checked under a simulation of its mode for separation, and every
+   text colour for 4.5:1 contrast on its scheme's panel. Each scheme
+   gets its own good and bad, tuned away from its accent where the
+   mode allows. Base rules read the --v-* tokens with their
+   original colour as the fallback, so with no mode set nothing
+   changes. This block sits last so it outranks the scheme blocks. */
+html[data-vision] {
+  --v-good-ink: color-mix(in oklab, var(--v-good) 62%, #fff);
+  --v-bad-ink: color-mix(in oklab, var(--v-bad) 62%, #fff);
+  --v-good-deep: color-mix(in oklab, var(--v-good) 62%, #000);
+  --v-bad-deep: color-mix(in oklab, var(--v-bad) 62%, #000);
+  --success: var(--v-good-ink);
+  --danger: var(--v-bad);
+  --kept: var(--v-good);
+  --lost: var(--v-bad);
+  --unverified: var(--v-warn);
+}
+html[data-vision="redgreen"] {
+  --v-good: #5aaeff; --v-bad: #ffa040; --v-warn: #fff2a8;
+  --v-sec-10: #2f6fdc; --v-sec-9: #3f8eea; --v-sec-8: #58acf2; --v-sec-7: #7cc6f4; --v-sec-6: #a8dcf0;
+  --v-sec-5: #f6ec7a; --v-sec-4: #f2b640; --v-sec-3: #e8922c; --v-sec-2: #d06c22; --v-sec-1: #b4521e; --v-sec-0: #a8609e;
+  --v-pie-0: #ff6a1a; --v-pie-1: #ffd27a; --v-pie-2: #a8609e; --v-pie-3: #9ed4ff; --v-pie-4: #2f6fe0; --v-pie-5: #7d6a58;
+}
+html[data-vision="redgreen"][data-scheme="amarr"] { --v-good: #6ab4ff; --v-bad: #ff7a3a; }
+html[data-vision="redgreen"][data-scheme="jove"] { --v-good: #7aa8ff; --v-bad: #ff9a3d; }
+html[data-vision="redgreen"][data-scheme="caldari"] { --v-good: #7cc8ff; --v-bad: #ff9a40; }
+html[data-vision="redgreen"][data-scheme="gallente"] { --v-good: #5fb4ff; --v-bad: #ff9a40; }
+html[data-vision="redgreen"][data-scheme="edencom"] { --v-good: #6aaeff; --v-bad: #ff8030; }
+html[data-vision="redgreen"][data-scheme="soe"] { --v-good: #7cc4ff; --v-bad: #ffa83d; }
+html[data-vision="blueyellow"] {
+  --v-good: #33d6b4; --v-bad: #ff4f8f; --v-warn: #e8e0f0;
+  --v-sec-10: #2c74e0; --v-sec-9: #3a9aeb; --v-sec-8: #4ecef8; --v-sec-7: #7fe0d0; --v-sec-6: #b5ecd8;
+  --v-sec-5: #fff0b0; --v-sec-4: #ff8a5c; --v-sec-3: #ff6a4a; --v-sec-2: #e0405a; --v-sec-1: #c03050; --v-sec-0: #a848a8;
+  --v-pie-0: #ff6a1a; --v-pie-1: #ffd27a; --v-pie-2: #d0306a; --v-pie-3: #5eb8ff; --v-pie-4: #c9a2ff; --v-pie-5: #7d6a58;
+}
+html[data-vision="blueyellow"][data-scheme="amarr"],
+html[data-vision="blueyellow"][data-scheme="edencom"] { --v-bad: #ff5c7a; }
+html[data-vision="blueyellow"][data-scheme="jove"] { --v-bad: #ff5c6a; }
+html[data-vision="blueyellow"][data-scheme="caldari"] { --v-good: #3ddcc0; --v-bad: #ff6a6a; }
+html[data-vision="blueyellow"][data-scheme="gallente"] { --v-good: #4ae0b8; --v-bad: #ff6a7e; }
+html[data-vision="blueyellow"][data-scheme="triglavian"] { --v-bad: #ff6fa8; }
+html[data-vision="blueyellow"][data-scheme="soe"] { --v-good: #5ee0d0; --v-bad: #ff4f9a; }
+
+/* Sheets that set their own series on an element: the build
+   plan, the pilot page's losses, the damage-at-range chart and
+   the map's canvas layers (map.js reads these tokens). */
+html[data-vision] #plan { --plan-build: var(--v-good); --plan-risk: var(--v-bad); }
+html[data-vision="redgreen"] #plan { --plan-buy: #d9c7ff; --plan-fee: #fff2a8; }
+html[data-vision="blueyellow"] #plan { --plan-buy: #c9a2ff; }
+html[data-vision] .pi { --pi-loss: var(--v-bad); }
+html[data-vision="redgreen"] .fit-stats,
+html[data-vision="redgreen"] .fit-range { --fr-1: #e0682f; --fr-2: #3f8fe0; --fr-3: #e8a8e0; --fr-4: #f0e05a; }
+html[data-vision="blueyellow"] .fit-stats,
+html[data-vision="blueyellow"] .fit-range { --fr-1: #e0682f; --fr-2: #2bb08f; --fr-3: #a080ff; --fr-4: #e8e0f0; }
+html[data-vision] .map { --map-intel-clear: #e6e6e6; --map-camp: var(--v-bad); }
+html[data-vision="redgreen"] .map {
+  --map-f-amarr: #f5e36a; --map-f-caldari: #3d7bff; --map-f-gallente: #7fd6e6; --map-f-minmatar: #d8602f;
+  --map-threat-lo: #f5e36a; --map-threat-hi: #e0701c;
+  --map-d-pilots: #ffd24a; --map-d-fleet: #3d7bff; --map-d-clones: #c4a1ff; --map-d-market: #fff4b8;
+  --map-d-industry: #e0702a; --map-d-structures: #9ee7ff; --map-d-posted: #9a8f86;
+}
+html[data-vision="blueyellow"] .map {
+  --map-f-caldari: #7a6cff;
+  --map-threat-lo: #ffe08a;
+  --map-d-pilots: #6ff29a; --map-d-fleet: #6aa8ff; --map-d-clones: #f07ad0; --map-d-market: #ffd24a;
+  --map-d-industry: #ff6a3a; --map-d-structures: #c9b8ff; --map-d-posted: #9a8f86;
+}
+
+/* The picker's colour-blind row: its swatch shows the good, warning
+   and bad colours the current scheme and mode paint. */
+.vision-swatch { display: flex; overflow: hidden; background: var(--panel); }
+.vision-swatch span { flex: 1 1 0; margin: 9px 5px; border-radius: 4px; }
+.vision-swatch .vs-good { margin-left: 10px; background: var(--kept); }
+.vision-swatch .vs-warn { background: var(--unverified); }
+.vision-swatch .vs-bad { margin-right: 10px; background: var(--lost); }

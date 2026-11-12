@@ -27,6 +27,11 @@ type themePrefs struct {
 	Scheme   string `json:"scheme,omitempty"`
 	Tier     string `json:"tier,omitempty"`
 	Backdrop string `json:"backdrop,omitempty"`
+	// Vision is the colour-blind mode: "" (off), "redgreen"
+	// (protanopia and deuteranopia) or "blueyellow" (tritanopia).
+	// It retunes the status colours of whichever scheme is on
+	// (bg.css), so it is independent of the scheme and the tier.
+	Vision string `json:"vision,omitempty"`
 }
 
 // themeSchemes are the scheme names the picker can produce; they
@@ -47,6 +52,12 @@ func validThemeTier(s string) bool { return s == "muted" || s == "minimalistic" 
 // muted until its own wallpapers are made.
 func schemeTierFullOK(scheme string) bool {
 	return scheme == "minmatar" || scheme == "minmatar-v3"
+}
+
+// validThemeVision is whether s is a colour-blind mode the picker
+// can produce; "" is off.
+func validThemeVision(s string) bool {
+	return s == "" || s == "redgreen" || s == "blueyellow"
 }
 
 func validThemeBackdrop(s string) bool {
@@ -109,6 +120,9 @@ func parseThemePrefs(blob string) themePrefs {
 	if !validThemeBackdrop(prefs.Backdrop) {
 		prefs.Backdrop = ""
 	}
+	if !validThemeVision(prefs.Vision) {
+		prefs.Vision = ""
+	}
 	return prefs
 }
 
@@ -159,8 +173,15 @@ func (app *Application) handleSettingsThemeSave(w http.ResponseWriter, r *http.R
 		Scheme:   r.FormValue("scheme"),
 		Tier:     r.FormValue("tier"),
 		Backdrop: r.FormValue("backdrop"),
+		Vision:   r.FormValue("vision"),
 	}
-	if !validThemeScheme(prefs.Scheme) || !validThemeBackdrop(prefs.Backdrop) ||
+	// A post without the vision field (a page script cached from
+	// before the colour-blind modes) keeps the stored mode.
+	if _, sent := r.Form["vision"]; !sent {
+		stored, _ := app.themePrefsFor(ctx, userID)
+		prefs.Vision = stored.Vision
+	}
+	if !validThemeScheme(prefs.Scheme) || !validThemeBackdrop(prefs.Backdrop) || !validThemeVision(prefs.Vision) ||
 		(prefs.Scheme != "" && prefs.Tier != "full" && !validThemeTier(prefs.Tier)) ||
 		(prefs.Tier == "full" && !schemeTierFullOK(prefs.Scheme)) {
 		http.Error(w, "unknown theme", http.StatusBadRequest)

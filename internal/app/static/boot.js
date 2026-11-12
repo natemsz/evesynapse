@@ -59,6 +59,12 @@ try {
       document.documentElement.setAttribute("data-tier",
         savedTier === "minimalistic" ? "minimalistic" : savedTier === "full" ? "full" : "muted");
     }
+    // The colour-blind mode retunes the status colours of any
+    // scheme, so it applies on its own, beside the scheme.
+    var savedVision = window.localStorage.getItem("evesynapse-vision");
+    if (savedVision === "redgreen" || savedVision === "blueyellow") {
+      document.documentElement.setAttribute("data-vision", savedVision);
+    }
   }
 } catch (e) {}
 

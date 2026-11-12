@@ -4196,10 +4196,11 @@
 
     var ro = new ResizeObserver(resize);
     ro.observe(stage);
-    // The theme toggle recolors the page; the canvas follows.
-    // Other classes come and go on the root too (full screen, the
-    // nav); only a real change of colors throws the territory away.
-    function colorSig() { return [colors.npc, colors.sovL, colors.label, colors.halo].join("|"); }
+    // The theme, the scheme and the colour-blind mode recolor the
+    // page; the canvas follows. Other classes come and go on the
+    // root too (full screen, the nav); only a real change of colors
+    // throws the territory away.
+    function colorSig() { return JSON.stringify(colors); }
     var lastColors = colorSig();
     var mo = new MutationObserver(function () {
       readColors();
@@ -4210,7 +4211,7 @@
       renderLegend();
       schedule();
     });
-    mo.observe(root.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
+    mo.observe(root.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-scheme", "data-vision", "class"] });
 
     // --- Live layers: loading, the picker, refresh ---
     // The page names the payload it rendered with (hashed, cached for

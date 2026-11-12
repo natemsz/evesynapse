@@ -118,15 +118,15 @@ a.ch-tag:hover { border-color: var(--accent); }
  * attributes out of the markup). */
 .ch-strip { display: flex; height: 0.65rem; border-radius: var(--r-xs); overflow: hidden; background: var(--row-alt); margin-top: 0.35rem; max-width: 34rem; }
 .ch-seg { display: block; min-width: 2px; flex: var(--n, 1) 1 0; }
-.ch-seg.hostile { background: #e0301c; }
-.ch-seg.friendly { background: #ffb84d; }
+.ch-seg.hostile { background: var(--v-bad, #e0301c); }
+.ch-seg.friendly { background: var(--v-good, #ffb84d); }
 .ch-seg.neutral { background: #7d8ca3; }
 .ch-seg.unclassified { background: #57493a; }
 .ch-strip-legend { display: flex; flex-wrap: wrap; gap: 0.15rem 0.8rem; margin-top: 0.25rem; font-size: var(--fs-xs); color: var(--muted); }
 .ch-strip-legend strong { color: var(--text); }
 .ch-dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 2px; margin-right: 0.25rem; }
-.ch-dot.hostile { background: #e0301c; }
-.ch-dot.friendly { background: #ffb84d; }
+.ch-dot.hostile { background: var(--v-bad, #e0301c); }
+.ch-dot.friendly { background: var(--v-good, #ffb84d); }
 .ch-dot.neutral { background: #7d8ca3; }
 .ch-dot.unclassified { background: #57493a; }
 /* A report's doors: where its system leads next. */

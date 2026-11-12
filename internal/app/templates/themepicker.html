@@ -1,4 +1,4 @@
-{{define "theme-picker"}}{{/* The theme picker: the Settings Interface tab and the home Customize menu's Theme modal render the same rows, and settings.js drives either by its data-scheme-row marks. */}}
+{{define "theme-picker"}}{{/* The theme picker: the Settings Interface tab and the home Customize menu's Theme modal render the same rows, and settings.js drives either by its data-scheme-row and data-vision-row marks. */}}
   <div class="theme-default current" data-scheme-row="">
     <div class="scheme-swatch sw-default" aria-hidden="true"></div>
     <div class="scheme-meta"><div class="scheme-name">Dominion v3</div><div class="scheme-sub">Muted ember glass, the standard look</div></div>
@@ -76,4 +76,14 @@
     </div>
   </div>
   <p><small>Full is unavailable for a scheme until its wallpapers are made.</small></p>
+
+  <p class="scheme-group-label">Color vision</p>
+  <div class="scheme-row vision-row" data-vision-row>
+    <div class="scheme-swatch vision-swatch" aria-hidden="true"><span class="vs-good"></span><span class="vs-warn"></span><span class="vs-bad"></span></div>
+    <div class="scheme-meta"><div class="scheme-name">Color-blind mode</div><div class="scheme-sub">Changes gains, losses, warnings, standings and security colors to ones you can tell apart, in any scheme.</div></div>
+    <div class="tier-seg" role="group" aria-label="Color-blind mode">
+      <button type="button" data-vision="">Off</button><button type="button" data-vision="redgreen">Red-green</button><button type="button" data-vision="blueyellow">Blue-yellow</button>
+    </div>
+  </div>
+  <p><small>Red-green suits protanopia and deuteranopia. Blue-yellow suits tritanopia.</small></p>
 {{end}}

@@ -211,15 +211,22 @@ ORDER BY value_ours DESC
 LIMIT 1;
 
 -- Leaderboards over a window, public kills, NPC deaths left out.
+-- TopKillerAlliances starts from the window's kills (the time
+-- index) and looks up each kill's attacking alliances by killmail
+-- id, so a run reads one day of rows, never the whole alliance
+-- index.
 -- name: TopKillerAlliances :many
-SELECT p.alliance_id, COUNT(*)::bigint AS kills, COALESCE(SUM(p.value_ours), 0)::double precision AS isk
-FROM (
-    SELECT DISTINCT a.alliance_id, k.killmail_id, k.value_ours
-    FROM kill_attackers a
-    JOIN kills k ON k.killmail_id = a.killmail_id
-    WHERE k.public AND NOT k.npc AND a.alliance_id > 0 AND k.killmail_time >= sqlc.arg(since)::timestamptz
-) p
-GROUP BY p.alliance_id
+WITH recent AS MATERIALIZED (
+    SELECT k.killmail_id, k.value_ours FROM kills k
+    WHERE k.public AND NOT k.npc AND k.killmail_time >= sqlc.arg(since)::timestamptz
+)
+SELECT a.alliance_id, COUNT(*)::bigint AS kills, COALESCE(SUM(r.value_ours), 0)::double precision AS isk
+FROM recent r
+CROSS JOIN LATERAL (
+    SELECT DISTINCT x.alliance_id FROM kill_attackers x
+    WHERE x.killmail_id = r.killmail_id AND x.alliance_id > 0
+) a
+GROUP BY a.alliance_id
 ORDER BY kills DESC
 LIMIT sqlc.arg(max_rows)::bigint;
 
@@ -594,12 +601,28 @@ SELECT k.* FROM (
 JOIN kills k ON k.killmail_id = p.killmail_id AND k.public
 ORDER BY p.killmail_time DESC, p.killmail_id DESC;
 
--- Public kills with no feed row yet (stored before the feed
--- existed): the maintenance sweep folds these in the background.
--- name: ListKillsMissingFeed :many
-SELECT k.killmail_id FROM kills k
-WHERE NOT EXISTS (SELECT 1 FROM kill_entity_feed f WHERE f.killmail_id = k.killmail_id)
-ORDER BY k.killmail_time ASC
+-- The list backfill's state: where its walk stands, and whether
+-- it has finished.
+-- name: GetKillFeedBackfillState :one
+SELECT cursor_time, cursor_id, done_at FROM kill_feed_backfill_state WHERE id = 1;
+
+-- name: SetKillFeedBackfillCursor :exec
+UPDATE kill_feed_backfill_state SET cursor_time = sqlc.arg(cursor_time)::timestamptz,
+    cursor_id = sqlc.arg(cursor_id)::bigint WHERE id = 1;
+
+-- name: MarkKillFeedBackfillDone :exec
+UPDATE kill_feed_backfill_state SET done_at = sqlc.arg(done_at)::timestamptz WHERE id = 1;
+
+-- The next kills after the backfill's cursor, in (time, id) order
+-- through the time index, each with whether it already has feed
+-- rows: one bounded batch per pass, never a scan of the table.
+-- name: ListKillsAfterFeedCursor :many
+SELECT k.killmail_id, k.killmail_time,
+    EXISTS (SELECT 1 FROM kill_entity_feed f WHERE f.killmail_id = k.killmail_id) AS has_feed
+FROM kills k
+WHERE k.killmail_time >= sqlc.arg(cursor_time)::timestamptz
+  AND (k.killmail_time, k.killmail_id) > (sqlc.arg(cursor_time)::timestamptz, sqlc.arg(cursor_id)::bigint)
+ORDER BY k.killmail_time, k.killmail_id
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- name: UpsertKillboardHeadline :exec

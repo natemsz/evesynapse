@@ -311,7 +311,7 @@ type Application struct {
 	// When the legacy kill-feed backfill last found less than a
 	// batch to do: it is drained, and rechecked only rarely
 	// (killboard_stats.go).
-	killFeedDrainedAt time.Time
+	killFeedBackfillDone bool
 	// Kill-name misses that must not be re-asked every minute,
 	// and when intel retention last pruned (channels.go). The
 	// mutex guards the map now that render-kicked resolution

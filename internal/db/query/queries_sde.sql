@@ -905,3 +905,34 @@ WHERE t.published = 1
         JOIN sde_types m ON m.type_id = mg.type_id AND m.group_id = 1770 AND m.published = 1
         WHERE mg.attribute_id = 604))
 ORDER BY t.name;
+
+-- name: ListPIPlanetsNear :many
+-- The planets within max_jumps gates of a home system, nearest first,
+-- for the PI planner's candidate list. Planet type ids are the eight
+-- planet types; the walk is bounded by the jump count and the LIMIT.
+WITH RECURSIVE reach(system_id, jumps) AS (
+    SELECT sqlc.arg(home_id)::bigint, 0
+    UNION
+    SELECT j.to_system_id, r.jumps + 1
+    FROM reach r JOIN sde_system_jumps j ON j.from_system_id = r.system_id
+    WHERE r.jumps < sqlc.arg(max_jumps)::int
+), nearest AS (
+    SELECT system_id, MIN(jumps) AS jumps FROM reach GROUP BY system_id
+)
+SELECT c.item_id, c.system_id, c.name, c.type_id, c.radius,
+       n.jumps::int AS jumps, s.name AS system_name, s.security
+FROM nearest n
+JOIN sde_celestials c ON c.system_id = n.system_id
+JOIN sde_systems s ON s.system_id = n.system_id
+WHERE c.type_id IN (11, 12, 13, 2014, 2015, 2016, 2017, 2063)
+ORDER BY n.jumps, s.name, c.name
+LIMIT sqlc.arg(row_limit)::int;
+
+-- name: ListPIPlanetsByID :many
+-- Planet shape (type and radius) for known planet ids: owned colonies.
+SELECT c.item_id, c.system_id, c.name, c.type_id, c.radius,
+       COALESCE(s.name, '') AS system_name, COALESCE(s.security, 0)::float8 AS security
+FROM sde_celestials c
+LEFT JOIN sde_systems s ON s.system_id = c.system_id
+WHERE c.item_id = ANY(sqlc.arg(ids)::bigint[]);
+

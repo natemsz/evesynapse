@@ -48,18 +48,6 @@
 .pi-settings .sheet-foot { display: flex; justify-content: flex-end; }
 .as-sheet .pi-settings-h { display: none; }
 
-/* Suggested colonies: one box each, the fit up front. */
-.pi-colonies { display: flex; flex-direction: column; gap: var(--space-2); margin: 0 0 var(--space-3); padding: 0; list-style: none; }
-.pi-colony { padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-left: 3px solid var(--kept); border-radius: var(--r-sm); background: var(--surface-pane); }
-.pi-colony.over { border-left-color: var(--gold); }
-.pi-colony p { margin: 0.15rem 0; }
-.pi-colony-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.5rem; }
-.pi-colony-planet { color: var(--muted); }
-.pi-colony-top .lchip { margin-left: auto; }
-.pi-colony.over .lchip { color: var(--gold); }
-.pi-colony-more summary { color: var(--muted); font-size: var(--fs-md); cursor: pointer; }
-.pi-colony-more ul { margin: 0.3rem 0 0; padding-left: 1.1rem; }
-
 /* The production map: tiers side by side, scrolling inside its own
    box when they don't fit; on a narrow page it swipes two tiers at
    a time and snaps to a tier's edge. */
@@ -99,3 +87,102 @@
 /* In the side column the bar stacks under its figure, so the three
    columns fit the column at every width without scrolling. */
 .pi-chains .pi-margin { flex-direction: column; align-items: flex-end; gap: 0.2rem; }
+
+/* The goal form: what to make, where, by whom. One row of the main
+   fields, folding as the page narrows; the rest below. */
+.pi-goal { display: flex; flex-direction: column; gap: var(--space-3); }
+.pi-goal-main { display: grid; grid-template-columns: minmax(12rem, 2fr) minmax(7rem, 1fr) minmax(12rem, 2fr) minmax(9rem, 1fr) auto; align-items: end; gap: var(--space-2) var(--space-3); }
+.pi-goal-go { min-height: var(--control-h); }
+.pi-goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-sm); }
+.pi-goal-row legend, .pi-goal-more summary { padding: 0 0.3rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.pi-goal-more summary { cursor: pointer; padding: 0; }
+.pi-radio, .pi-check, .pi-pilot { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2rem; }
+.pi-radio small, .pi-pilot small { color: var(--muted); font-size: var(--fs-xs); }
+.pi-check { display: flex; }
+.pi-fields-inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
+.pi-goal .searchwrap { display: block; position: relative; }
+.pi-goal .searchwrap input { width: 100%; box-sizing: border-box; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; }
+@container page (width < 46rem) {
+  .pi-goal-main { grid-template-columns: 1fr; }
+}
+
+/* Planet type colours: the card dot, the canvas surface. */
+.pi { --pi-surface-barren: #6b5d52; --pi-surface-gas: #5c6f8f; --pi-surface-ice: #8fb1c4; --pi-surface-lava: #7a3324; --pi-surface-oceanic: #23506e; --pi-surface-plasma: #6d3f7d; --pi-surface-storm: #46566b; --pi-surface-temperate: #3f6a42;
+  --pi-k-cc: var(--gold); --pi-k-ecu: #6fd3a6; --pi-k-basic: #6fb6e8; --pi-k-advanced: #ffb347; --pi-k-hightech: #c99bff; --pi-k-storage: #a9b4c2; --pi-k-launchpad: #ff8a5c;
+  --pi-link: rgba(200, 220, 255, 0.55); --pi-tier-r0: #9aa5b1; --pi-tier-p1: #6fb6e8; --pi-tier-p2: var(--gold); --pi-tier-p3: var(--accent); --pi-tier-p4: #c99bff; }
+
+/* The plan: figures, then the board of colonies beside the colony
+   view. On a narrow page the view replaces the board, with Back. */
+.pi-board-wrap { display: flex; flex-direction: column; gap: var(--space-3); }
+.pi-short { margin: 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--gold); background: var(--surface-inset); color: var(--gold); }
+.pi-plan-grid { display: grid; grid-template-columns: minmax(18rem, 5fr) minmax(0, 7fr); gap: var(--space-4); align-items: start; }
+.pi-plan-grid:not(.viewing) { grid-template-columns: minmax(0, 1fr); }
+.pi-board, .pi-view, .pi-card, .pi-card-open { min-width: 0; }
+.pi-view { position: sticky; top: calc(var(--sticky-top, 4rem) + var(--space-2)); display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.pi-view-back { display: none; }
+.pi-view { scroll-margin-top: calc(var(--sticky-top, 4rem) + var(--space-2)); }
+@container page (width < 60rem) {
+  .pi-plan-grid, .pi-plan-grid.viewing { grid-template-columns: minmax(0, 1fr); }
+  .pi-card-fit { grid-template-columns: auto minmax(0, 1fr); }
+  .pi-card-fit .pi-meter-fig { grid-column: 2; margin-top: -0.2rem; }
+  .pi-plan-grid.viewing .pi-board { display: none; }
+  .pi-view { position: static; }
+  .pi-view-back { display: inline-flex; }
+}
+.pi-group-h { margin: 0 0 var(--space-2); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.pi-cards { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.pi-card { border: 1px solid var(--hairline); border-left: 3px solid var(--kept); border-radius: var(--r-sm); background: var(--surface-pane); }
+.pi-card.over { border-left-color: var(--danger); }
+.pi-card.on { border-color: var(--gold); background: var(--sel-bg); }
+.pi-card.edited .pi-card-role::after { content: "edited"; margin-left: 0.4rem; color: var(--gold); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; }
+.pi-card-open { display: flex; flex-direction: column; gap: 0.3rem; width: 100%; padding: var(--space-2) var(--space-3); border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.pi-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.5rem; font-size: var(--fs-md); }
+.pi-card-type { color: var(--muted); font-size: var(--fs-sm); }
+.pi-card-role { color: var(--gold); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.pi-card-role .lchip { text-transform: none; }
+.pi-card-sum { font-size: var(--fs-sm); }
+.pi-card-fit { display: grid; grid-template-columns: auto minmax(3rem, 1fr) auto; align-items: center; gap: 0.15rem 0.5rem; }
+.pi-card-fit .l-meter { width: 100%; }
+.pi-card-fit .l-meter.hot rect { fill: var(--gold); }
+.pi-meter-label { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; }
+.pi-meter-fig { color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); white-space: nowrap; }
+.pi-card-rates, .pi-view-rates { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.pi-rate { padding: 0.05rem 0.4rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); font-size: var(--fs-xs); }
+.pi-rate.out { border-color: color-mix(in srgb, var(--kept) 60%, transparent); }
+.pi-rate.in { border-color: color-mix(in srgb, #6fb6e8 60%, transparent); }
+.pi-planet-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--muted); flex: none; }
+.pi-pt-barren .pi-planet-dot { background: var(--pi-surface-barren); }
+.pi-pt-gas .pi-planet-dot { background: var(--pi-surface-gas); }
+.pi-pt-ice .pi-planet-dot { background: var(--pi-surface-ice); }
+.pi-pt-lava .pi-planet-dot { background: var(--pi-surface-lava); }
+.pi-pt-oceanic .pi-planet-dot { background: var(--pi-surface-oceanic); }
+.pi-pt-plasma .pi-planet-dot { background: var(--pi-surface-plasma); }
+.pi-pt-storm .pi-planet-dot { background: var(--pi-surface-storm); }
+.pi-pt-temperate .pi-planet-dot { background: var(--pi-surface-temperate); }
+.pi-flows h3 { margin-top: 0; }
+
+/* The colony view: the canvas fills its panel's width. */
+.pi-view-head { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-2) var(--space-3); }
+.pi-view-title { margin: 0; flex: 1 1 12rem; }
+.pi-view-cc { width: 10rem; }
+.pi-view-fit { display: grid; gap: 0.3rem; }
+.pi-fitbar { display: grid; grid-template-columns: 3.2rem 1fr auto; align-items: center; gap: 0.5rem; }
+.pi-fit-track { display: block; height: 0.45rem; border-radius: 1rem; background: var(--surface-inset); overflow: hidden; }
+.pi-fit-fill { display: block; height: 100%; background: var(--kept); }
+.pi-fitbar.over .pi-fit-fill { background: var(--danger); }
+.pi-warn { margin: 0; color: var(--danger); font-size: var(--fs-sm); }
+.pi-stage { position: relative; border: 1px solid var(--hairline); border-radius: var(--r-md); overflow: hidden; }
+.pi-canvas { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: 70vh; touch-action: none; }
+.pi-canvas:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.pi-stage-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; padding: var(--space-2); border-top: 1px solid var(--hairline); background: var(--surface-inset); }
+.pi-stage-tools::before { content: "Add"; margin-right: 0.3rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; }
+.pi-tip { position: absolute; z-index: 1; padding: 0.2rem 0.5rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); background: rgb(8 13 22 / 0.9); font-size: var(--fs-xs); pointer-events: none; }
+.pi-inspect-h { margin: 0; font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
+.pi-inspect .pi-fields { margin: var(--space-2) 0; }
+.pi-rates-h { flex-basis: 100%; margin: 0.2rem 0 0; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; }
+.pi-view-act { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pi-view-msg { color: var(--kept); font-size: var(--fs-sm); }
+.pi-copy-buffer { position: absolute; inset: auto auto 0 0; opacity: 0; }
+@container page (width < 34rem) {
+  .pi-canvas { aspect-ratio: 1 / 1; }
+}

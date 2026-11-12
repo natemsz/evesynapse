@@ -137,6 +137,10 @@ type piPlannerView struct {
 	PlanetsText    string // the planet types ticked, for the summary strip
 	Profitable     []piProfitRow
 	FacilityNote   string
+	// The colony planner: the goal form and the open plan.
+	Goal    goalView
+	Plan    *planView
+	PlanTab bool
 }
 
 // PageData is the view model passed to piplanner.html.
@@ -158,7 +162,7 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 		data := PageData{ShellData: deps.PublicShell(ctx)} // public: no session needed
 		data.HeadMeta = deps.HeadMeta(module.PageMeta{Title: "PI Planner", Description: "Plan EVE Online planetary industry: chain extractors and factories from raw planet goods up to finished products, step by step.", CanonicalPath: "/industry/pi/"})
 
-		_, active, links, err := deps.PickCharacter(ctx, r, "/industry/pi/")
+		chars, active, links, err := deps.PickCharacter(ctx, r, "/industry/pi/")
 		if err != nil {
 			logging.Errorf("piplanner: list characters: %v", err)
 			data.Error = "Could not load PI planner data; check the server log."
@@ -185,6 +189,17 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 		if target == "" {
 			target = strings.TrimSpace(q.Get("target"))
 		}
+		// An open plan sets the product and the amounts.
+		goal := defaultForm()
+		if token := planFromRequest(r); token != "" {
+			if pv, f, ok := loadPlan(ctx, deps, token); ok {
+				view.Plan, goal = pv, f
+				target = f.Product
+				data.HeadMeta = deps.HeadMeta(module.PageMeta{Title: "PI plan: " + f.Product, Description: "A planetary industry colony plan: which planets, what each builds and what moves between them.", CanonicalPath: "/industry/pi/"})
+			} else {
+				data.Error = "That plan was not found. Plans made without an account are kept for 30 days."
+			}
+		}
 		if target == "" {
 			target = "Broadcast Node"
 		}
@@ -193,10 +208,19 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 			target = "Broadcast Node"
 		}
 		view.Target = target
+		goal.Product = target
+		view.Goal = buildGoal(ctx, deps, chars, goal)
+		view.PlanTab = view.Plan != nil || q.Get("tab") != "materials"
 
 		view.Amount = 10
 		if n, err := strconv.ParseInt(q.Get("amount"), 10, 64); err == nil && n >= 1 && n <= 100000 {
 			view.Amount = n
+		}
+		if view.Plan != nil && q.Get("amount") == "" {
+			// Materials for one day of the plan's output.
+			if n, err := strconv.ParseFloat(strings.ReplaceAll(view.Plan.PerDay, ",", ""), 64); err == nil && n >= 1 {
+				view.Amount = int64(math.Round(n))
+			}
 		}
 		view.AmountStr = strconv.FormatInt(view.Amount, 10)
 		view.CCLevel = 5
@@ -798,12 +822,16 @@ var Module = module.Module{
 	},
 	Routes: func(r chi.Router, deps module.Deps) {
 		r.With(deps.AnonPages()).Get("/industry/pi/", HandlePIPlanner(deps))
+		r.With(deps.AnonSim()).Post("/industry/pi/solve", HandleSolve(deps))
+		r.With(deps.AnonPages()).Get("/industry/pi/plan.json", HandlePlanJSON(deps))
+		r.With(deps.AnonSim()).Post("/industry/pi/colony", HandleColony(deps))
+		r.With(deps.AnonPages()).Get("/industry/pi/systems", HandleSystemSuggest(deps))
 	},
 	Pages: []module.Page{
 		{
 			Template: "piplanner.html",
 			Section:  "industry",
-			Scripts:  []string{"/static/pi.js"},
+			Scripts:  []string{"/static/pi.js", "/static/pi_colony.js"},
 		},
 	},
 }

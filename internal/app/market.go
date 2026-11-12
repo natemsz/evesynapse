@@ -947,13 +947,22 @@ func (app *Application) attachEstimatedValue(ctx context.Context, item *marketIt
 	if item == nil {
 		return
 	}
+	item.EstimatedSell, item.EstimatedSellNote = app.houseValue(ctx, item.TypeID, item.RegionID, liveTypicalSell)
+}
+
+// houseValue is a type's value in the house order with the note that
+// says where it came from: what the market page's Estimated value
+// and the item page show. regionID is the region the page reads
+// (only The Forge's or the global market's live book can stand in
+// for a missing swept row); "" when nothing prices the type.
+func (app *Application) houseValue(ctx context.Context, typeID, regionID int64, liveTypicalSell float64) (string, string) {
 	now := time.Now().UTC()
-	packs, err := app.loadStatPacks(ctx, defaultMarketRegion, []int64{item.TypeID})
+	packs, err := app.loadStatPacks(ctx, defaultMarketRegion, []int64{typeID})
 	if err != nil {
-		logging.Errorf("market: valuation pack for type %d: %v", item.TypeID, err)
-		return
+		logging.Errorf("market: valuation pack for type %d: %v", typeID, err)
+		return "", ""
 	}
-	p := packs[item.TypeID]
+	p := packs[typeID]
 	var own *db.MarketRegionStat
 	var tv *db.TrueValue
 	var fb *db.MarketStatsFallback
@@ -961,39 +970,39 @@ func (app *Application) attachEstimatedValue(ctx context.Context, item *marketIt
 	if p != nil {
 		own, tv, fb, fromGlobal = p.Own, p.Estimate, p.Fallback, p.FromGlobal
 	}
-	if own == nil && liveTypicalSell > 0 && (item.RegionID == defaultMarketRegion || item.RegionID == globalMarketRegion) {
+	if own == nil && liveTypicalSell > 0 && (regionID == defaultMarketRegion || regionID == globalMarketRegion) {
 		own = &db.MarketRegionStat{
-			RegionID:    item.RegionID,
-			TypeID:      item.TypeID,
+			RegionID:    regionID,
+			TypeID:      typeID,
 			TypicalSell: liveTypicalSell,
 			UpdatedAt:   now,
 		}
-		fromGlobal = item.RegionID == globalMarketRegion
+		fromGlobal = regionID == globalMarketRegion
 	}
 	pr := resolveAppraisalPrice(own, tv, fb, now)
 	if !pr.ok {
-		return
+		return "", ""
 	}
-	item.EstimatedSell = esi.FormatISK(pr.unit)
+	value, note := esi.FormatISK(pr.unit), ""
 	switch pr.tier {
 	case module.AppraisalTierTypical:
-		note := "The Forge typical sell"
+		note = "The Forge typical sell"
 		if fromGlobal {
 			note = "Global PLEX market typical sell"
 		}
 		if now.Sub(pr.asOf) >= fallbackOwnFresh {
 			note += " · " + ageText(now, pr.asOf)
 		}
-		item.EstimatedSellNote = note
 	case module.AppraisalTierEstimate:
 		if tv != nil {
-			item.EstimatedSellNote = "Estimated sell · " + trueValueBasis(*tv)
+			note = "Estimated sell · " + trueValueBasis(*tv)
 		} else {
-			item.EstimatedSellNote = "Estimated sell"
+			note = "Estimated sell"
 		}
 	case module.AppraisalTierFallback:
-		item.EstimatedSellNote = fallbackSourceLabel + " · " + ageText(now, pr.asOf)
+		note = fallbackSourceLabel + " · " + ageText(now, pr.asOf)
 	}
+	return value, note
 }
 
 // loadMarketItem builds the item view for (type, region): house

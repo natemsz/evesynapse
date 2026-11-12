@@ -711,6 +711,18 @@ func (q *Queries) GetTypeName(ctx context.Context, typeID int64) (string, error)
 	return name, err
 }
 
+const hasItemVariations = `-- name: HasItemVariations :one
+SELECT EXISTS (SELECT 1 FROM sde_variations WHERE type_id = $1)::bool AS has
+`
+
+// Whether one type is in a variation family of two or more.
+func (q *Queries) HasItemVariations(ctx context.Context, typeID int64) (bool, error) {
+	row := q.db.QueryRow(ctx, hasItemVariations, typeID)
+	var has bool
+	err := row.Scan(&has)
+	return has, err
+}
+
 const listAllSDEShipTypeIDs = `-- name: ListAllSDEShipTypeIDs :many
 SELECT t.type_id FROM sde_types t
 JOIN sde_groups g ON g.group_id = t.group_id
@@ -1382,7 +1394,7 @@ func (q *Queries) ListItemSheetTraits(ctx context.Context, typeID int64) ([]List
 }
 
 const listItemVariationColumns = `-- name: ListItemVariationColumns :many
-SELECT c.ord, c.attribute_id, a.display_name, a.unit_id, a.high_is_good,
+SELECT c.ord, c.attribute_id, a.name, a.display_name, a.unit_id, a.high_is_good,
        COALESCE(u.display_name, '')::text AS unit_name
 FROM sde_variations v
 JOIN sde_variation_columns c ON c.root_type_id = v.root_type_id
@@ -1395,6 +1407,7 @@ ORDER BY c.ord
 type ListItemVariationColumnsRow struct {
 	Ord         int16  `json:"ord"`
 	AttributeID int64  `json:"attribute_id"`
+	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
 	UnitID      int64  `json:"unit_id"`
 	HighIsGood  int64  `json:"high_is_good"`
@@ -1414,6 +1427,7 @@ func (q *Queries) ListItemVariationColumns(ctx context.Context, typeID int64) ([
 		if err := rows.Scan(
 			&i.Ord,
 			&i.AttributeID,
+			&i.Name,
 			&i.DisplayName,
 			&i.UnitID,
 			&i.HighIsGood,
@@ -1431,7 +1445,7 @@ func (q *Queries) ListItemVariationColumns(ctx context.Context, typeID int64) ([
 
 const listItemVariationRows = `-- name: ListItemVariationRows :many
 SELECT m.type_id, t.name, m.meta_group_id, m.meta_level,
-       COALESCE(g.name, '')::text AS meta_group_name, m.vals
+       COALESCE(NULLIF(m.tier, ''), g.name, '')::text AS meta_group_name, m.vals
 FROM sde_variations v
 JOIN sde_variations m ON m.root_type_id = v.root_type_id
 JOIN sde_types t ON t.type_id = m.type_id
@@ -1451,7 +1465,8 @@ type ListItemVariationRowsRow struct {
 }
 
 // The members of the variation family one type is in, in the game's
-// order (meta level), with their column values. Families hold at most
+// order (meta level, or strength for an implant or booster ladder),
+// with their column values and tier labels. Families hold at most
 // a few dozen types.
 func (q *Queries) ListItemVariationRows(ctx context.Context, typeID int64) ([]ListItemVariationRowsRow, error) {
 	rows, err := q.db.Query(ctx, listItemVariationRows, typeID)

@@ -20,7 +20,7 @@
       <div class="kp-victim">
         {{if not .Row.VictimIsStructure}}<img class="kp-portrait" src="https://images.evetech.net/characters/{{.Row.VictimID}}/portrait?size=128" alt="" width="64" height="64">{{end}}
         <div class="kp-victim-names">
-          {{if not .Row.VictimIsStructure}}<a class="kp-name" href="/intel/kills/?character={{.Row.VictimID}}">{{.Row.VictimName}}</a><a class="kp-info" href="/pilot/?character={{.Row.VictimID}}" title="Pilot profile" aria-label="Pilot profile">i</a>{{end}}
+          {{if not .Row.VictimIsStructure}}<a class="kp-name" href="/intel/kills/?character={{.Row.VictimID}}">{{.Row.VictimName}}</a><a class="info-link" href="/pilot/?character={{.Row.VictimID}}" title="Pilot profile" aria-label="Pilot profile">i</a>{{end}}
           {{if .Row.CorpID}}<span class="kp-org"><img src="https://images.evetech.net/corporations/{{.Row.CorpID}}/logo?size=64" alt="" width="22" height="22"><a href="/intel/kills/?corporation={{.Row.CorpID}}">{{.Row.CorpName}}</a></span>{{end}}
           {{if .Row.AllianceID}}<span class="kp-org"><img src="https://images.evetech.net/alliances/{{.Row.AllianceID}}/logo?size=64" alt="" width="22" height="22"><a href="/intel/kills/?alliance={{.Row.AllianceID}}">{{.Row.AllianceName}}</a></span>{{end}}
         </div>
@@ -74,7 +74,7 @@
         {{range .Attackers}}<li class="kp-a{{if .FinalBlow}} fb{{end}}">
           {{if .NPC}}<img class="kp-a-face" src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=64" alt="" width="40" height="40" loading="lazy">{{else}}<img class="kp-a-face" src="https://images.evetech.net/characters/{{.CharacterID}}/portrait?size=64" alt="" width="40" height="40" loading="lazy">{{end}}
           <div class="kp-a-who">
-            {{if .NPC}}<span class="kp-a-name">{{.Name}}</span>{{else}}<a class="kp-a-name" href="/intel/kills/?character={{.CharacterID}}">{{.Name}}</a><a class="kp-info" href="/pilot/?character={{.CharacterID}}" title="Pilot profile" aria-label="Pilot profile">i</a>{{end}}
+            {{if .NPC}}<span class="kp-a-name">{{.Name}}</span>{{else}}<a class="kp-a-name" href="/intel/kills/?character={{.CharacterID}}">{{.Name}}</a><a class="info-link" href="/pilot/?character={{.CharacterID}}" title="Pilot profile" aria-label="Pilot profile">i</a>{{end}}
             {{if .FinalBlow}}<span class="kb-tag">final blow</span>{{end}}
             <span class="kp-a-org">{{if .AllianceID}}<a href="/intel/kills/?alliance={{.AllianceID}}">{{.AllianceName}}</a>{{else if .CorpID}}<a href="/intel/kills/?corporation={{.CorpID}}">{{.CorpName}}</a>{{end}}</span>
           </div>

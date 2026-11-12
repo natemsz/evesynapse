@@ -249,13 +249,45 @@
   backdrop-filter: var(--flyout-frost);
 }
 .fit-info::backdrop { background: rgb(0 0 0 / 0.35); }
-.fit-info-head {
+.fit-info-bar {
   position: sticky; top: 0; z-index: 1;
-  display: flex; align-items: center; gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
   background: color-mix(in srgb, var(--panel) 96%, transparent);
   border-bottom: 1px solid var(--hairline);
 }
+.fit-info-head {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+/* Details / Compare: the drawer's two tabs, in the left column's
+   tab look. */
+.fit-info-tabs { display: flex; padding: 0 var(--space-4); }
+.fit-info-tabs[hidden] { display: none; }
+.fit-info-tabs > button {
+  flex: 1 1 0; padding: 0.45rem 0.6rem; background: none; border: 0;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer;
+  color: var(--muted); font-family: var(--font-display); font-weight: 600;
+  font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em;
+}
+.fit-info-tabs > button:hover { color: var(--text); }
+.fit-info-tabs > button.on { color: var(--text-bright); border-bottom-color: var(--accent); }
+.fit-info-body[hidden] { display: none; }
+.fit-info-wait, .fit-info-msg { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.fit-info-msg { color: var(--danger); }
+/* Compare needs the room of a table: the drawer widens for it. */
+.fit-info.is-wide { width: min(60rem, 100%); }
+.fit-info-cmp .is-vtable tbody th { min-width: 10rem; }
+/* The names stay in view while the figures scroll sideways. */
+.fit-info-cmp .is-vtable th:first-child { position: sticky; left: 0; z-index: 1; background: var(--panel); }
+.fit-info-cmp .is-vtable tr.is-cur th:first-child { background: color-mix(in srgb, var(--panel) 80%, var(--gold)); }
+.fit-info-cmp .is-vtable tbody th a { display: block; }
+.fit-info-swap {
+  margin-top: 0.25rem; padding: 0.15rem 0.5rem;
+  border: 1px solid var(--hairline); border-radius: var(--r-sm);
+  background: transparent; color: var(--muted); cursor: pointer;
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.fit-info-swap:hover, .fit-info-swap:focus-visible { border-color: var(--accent); color: var(--text); }
 .fit-info-names { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .fit-info-names h2 { margin: 0; font-size: var(--fs-lg); overflow-wrap: anywhere; }
 .fit-info-sub { color: var(--muted); font-size: var(--fs-sm); }

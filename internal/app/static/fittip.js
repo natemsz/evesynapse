@@ -14,6 +14,16 @@
 // manual popover in the top layer: a side panel, the whole screen
 // on a phone, with its close control on top. Any element carrying
 // data-fit-info="<type id>" opens it.
+//
+// A type with variations, implant levels or booster strengths (the
+// sheet's compare flag) gets a second tab, Compare: the priced table
+// from /items/compare/{id}.json, each figure marked against the
+// opened type. A page that edits a fit registers a swapper
+// (FitSheet.setSwapper): given the element the drawer was opened
+// from, it answers whether that is a fitted item it can replace, and
+// then each other row offers to fit that one in its place. After a
+// swap the drawer follows the new type, so variants can be tried in
+// turn.
 var FitSheet = (function () {
   var cache = {};
   function get(id) {
@@ -27,7 +37,24 @@ var FitSheet = (function () {
     }
     return cache[id];
   }
-  var drawer = null, title = null, sub = null, link = null, body = null, opener = null, want = "";
+  // The compare table carries prices, so it is fetched on each open
+  // (the browser keeps it a few minutes).
+  function getCompare(id) {
+    return fetch("/items/compare/" + id + ".json", { headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+  var drawer = null, title = null, sub = null, link = null, tabs = null, body = null, cmp = null;
+  var opener = null, want = "", swapper = null, swap = null, tab = "details", cmpFor = "";
+  function tabButton(key, label) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.setAttribute("data-fit-info-tab", key);
+    b.textContent = label;
+    b.addEventListener("click", function () { showTab(key); });
+    return b;
+  }
   function build() {
     drawer = document.createElement("aside");
     drawer.className = "fit-info";
@@ -54,10 +81,27 @@ var FitSheet = (function () {
     head.appendChild(close);
     head.appendChild(names);
     head.appendChild(link);
+    tabs = document.createElement("div");
+    tabs.className = "fit-info-tabs";
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Item details");
+    tabs.appendChild(tabButton("details", "Details"));
+    tabs.appendChild(tabButton("compare", "Compare"));
+    tabs.hidden = true;
+    var bar = document.createElement("div");
+    bar.className = "fit-info-bar";
+    bar.appendChild(head);
+    bar.appendChild(tabs);
     body = document.createElement("div");
     body.className = "fit-info-body";
-    drawer.appendChild(head);
+    body.setAttribute("role", "tabpanel");
+    cmp = document.createElement("div");
+    cmp.className = "fit-info-body fit-info-cmp";
+    cmp.setAttribute("role", "tabpanel");
+    cmp.hidden = true;
+    drawer.appendChild(bar);
     drawer.appendChild(body);
+    drawer.appendChild(cmp);
     document.body.appendChild(drawer);
   }
   function isOpen() { return !!drawer && drawer.matches(":popover-open"); }
@@ -68,17 +112,117 @@ var FitSheet = (function () {
       try { opener.focus({ preventScroll: true }); } catch (e) {}
     }
     opener = null;
+    swap = null;
   }
-  function open(id, from) {
+  function showTab(key) {
+    tab = key === "compare" && !tabs.hidden ? "compare" : "details";
+    var bs = tabs.querySelectorAll("[data-fit-info-tab]");
+    for (var i = 0; i < bs.length; i++) {
+      var on = bs[i].getAttribute("data-fit-info-tab") === tab;
+      bs[i].classList.toggle("on", on);
+      bs[i].setAttribute("aria-selected", on ? "true" : "false");
+    }
+    drawer.classList.toggle("is-wide", tab === "compare");
+    body.hidden = tab !== "details";
+    cmp.hidden = tab !== "compare";
+    drawer.scrollTop = 0;
+    if (tab === "compare" && cmpFor !== want) loadCompare(want);
+  }
+  function note(msg) {
+    var p = cmp.querySelector(".fit-info-msg");
+    if (!p) {
+      p = document.createElement("p");
+      p.className = "fit-info-msg";
+      p.setAttribute("role", "status");
+      cmp.insertBefore(p, cmp.firstChild);
+    }
+    p.textContent = msg;
+  }
+  function loadCompare(id) {
+    cmpFor = id;
+    cmp.textContent = "";
+    var wait = document.createElement("p");
+    wait.className = "fit-info-wait";
+    wait.textContent = "Loading the comparison";
+    cmp.appendChild(wait);
+    getCompare(id).then(function (d) {
+      if (cmpFor !== id || want !== id) return; // a later open won
+      cmp.textContent = "";
+      if (!d) {
+        cmpFor = "";
+        var p = document.createElement("p");
+        p.className = "fit-info-wait";
+        p.textContent = "The comparison couldn't be loaded. Try again in a moment.";
+        cmp.appendChild(p);
+        return;
+      }
+      var panel = document.createElement("section");
+      panel.className = "l-panel is-vars";
+      var h = document.createElement("h3");
+      h.textContent = (swap ? "Swap or compare" : "Compare") + " ";
+      var n = document.createElement("small");
+      n.textContent = String(d.rows);
+      h.appendChild(n);
+      panel.appendChild(h);
+      var wrap = document.createElement("div");
+      // The server's own escaped template output (itemsheet.html).
+      wrap.innerHTML = d.html;
+      while (wrap.firstChild) panel.appendChild(wrap.firstChild);
+      if (swap) addSwaps(panel);
+      cmp.appendChild(panel);
+    });
+  }
+  // addSwaps puts a fit control on every row but the opened type's.
+  function addSwaps(panel) {
+    var rows = panel.querySelectorAll("tr[data-type-id]");
+    for (var i = 0; i < rows.length; i++) {
+      var tr = rows[i];
+      if (tr.classList.contains("is-cur")) continue;
+      var cell = tr.querySelector("th");
+      var a = cell && cell.querySelector("a");
+      if (!a) continue;
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "fit-info-swap";
+      b.textContent = swap.label;
+      b.setAttribute("aria-label", swap.label + " " + a.textContent + " instead");
+      (function (to, name) {
+        b.addEventListener("click", function () {
+          if (!swap) return;
+          var refused = swap.apply(swap.from, to, name);
+          if (refused) { note(refused); return; }
+          swap.from = to;
+          open(to, null, true);
+        });
+      })(tr.getAttribute("data-type-id"), a.textContent);
+      cell.appendChild(b);
+    }
+  }
+  // open shows a type's sheet. keepSwap carries the swap in progress
+  // over to the type just fitted, on the Compare tab.
+  function open(id, from, keepSwap) {
     if (!drawer) build();
     if (!drawer.showPopover) return;
     want = String(id);
-    opener = from || document.activeElement;
+    cmpFor = "";
+    if (!keepSwap) {
+      opener = from || document.activeElement;
+      swap = null;
+      tab = "details";
+      if (swapper && opener) {
+        var s = null;
+        try { s = swapper(opener); } catch (e) { s = null; }
+        if (s && s.apply) swap = { from: want, label: s.label || "Fit", apply: s.apply };
+      }
+    }
     title.textContent = "Loading";
     sub.textContent = "";
     link.removeAttribute("href");
     link.hidden = true;
+    tabs.hidden = true;
     body.textContent = "";
+    cmp.textContent = "";
+    showTab("details");
     if (!isOpen()) drawer.showPopover();
     drawer.scrollTop = 0;
     get(id).then(function (d) {
@@ -94,9 +238,15 @@ var FitSheet = (function () {
       link.hidden = false;
       // The server's own escaped template output (itemsheet.html).
       body.innerHTML = d.html;
-      try { drawer.querySelector(".fit-info-close").focus({ preventScroll: true }); } catch (e) {}
+      tabs.hidden = !d.compare;
+      showTab(keepSwap && d.compare ? "compare" : "details");
+      try { drawer.querySelector(keepSwap && d.compare ? '[data-fit-info-tab="compare"]' : ".fit-info-close").focus({ preventScroll: true }); } catch (e) {}
     });
   }
+  // setSwapper registers the page's swapper: fn(opener) returns null,
+  // or { label, apply(fromID, toID, name) } where apply fits toID in
+  // fromID's place and returns "" or the reason it could not.
+  function setSwapper(fn) { swapper = typeof fn === "function" ? fn : null; }
   document.addEventListener("click", function (ev) {
     var t = ev.target && ev.target.closest ? ev.target.closest("[data-fit-info]") : null;
     if (!t) return;
@@ -106,7 +256,7 @@ var FitSheet = (function () {
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" && isOpen()) hide();
   });
-  return { get: get, open: open, close: hide };
+  return { get: get, open: function (id, from) { open(id, from, false); }, close: hide, setSwapper: setSwapper };
 })();
 
 // --- shared module tooltip ------------------------------------

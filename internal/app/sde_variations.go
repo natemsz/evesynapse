@@ -23,10 +23,12 @@ type sdeVariationRow struct {
 	metaGroupID int64
 	metaLevel   float64
 	vals        []float64
+	tier        string // a ladder step's label (Level 3, Mid-grade); "" reads the meta group
 }
 
 // buildVariations groups the dump's published types into variation
-// families (a base type and the types naming it as their base) and
+// families (a base type and the types naming it as their base, plus
+// the implant and booster ladders of ladderFamilies) and
 // picks each family's compare columns, so the item page reads one
 // family's table by key instead of every member's attributes.
 // Families of one type get no rows.
@@ -72,6 +74,13 @@ func buildVariations(parsed *parsedSDE) ([]sdeVariationColumn, []sdeVariationRow
 			delete(families, root)
 			continue
 		}
+		for _, id := range ms {
+			member[id] = true
+		}
+	}
+	ladders, steps := ladderFamilies(parsed, published, member)
+	for root, ms := range ladders {
+		families[root] = ms
 		for _, id := range ms {
 			member[id] = true
 		}
@@ -125,7 +134,12 @@ func buildVariations(parsed *parsedSDE) ([]sdeVariationColumn, []sdeVariationRow
 			if mg == 0 {
 				mg = 1 // a base type with no tier row is Tech I
 			}
-			rows = append(rows, sdeVariationRow{typeID: id, rootTypeID: root, metaGroupID: mg, metaLevel: values[id][itemsheet.AttrMetaLevel], vals: vals})
+			row := sdeVariationRow{typeID: id, rootTypeID: root, metaGroupID: mg, metaLevel: values[id][itemsheet.AttrMetaLevel], vals: vals}
+			if st, ok := steps[id]; ok {
+				// A ladder reads in strength order under its own labels.
+				row.metaLevel, row.tier = st.rank, st.tier
+			}
+			rows = append(rows, row)
 		}
 	}
 	return cols, rows

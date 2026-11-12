@@ -87,7 +87,6 @@
       {{if .Market.Watchlist}}
       <a class="btn btn-quiet" href="#market-watchlist" data-watchlist-open aria-controls="market-watchlist" aria-expanded="{{if .Market.Watchlist.Query}}true{{else}}false{{end}}">Watchlist{{if .Market.Watchlist.Rows}} <span class="mkt-badge">{{len .Market.Watchlist.Rows}}</span>{{end}}</a>
       {{end}}
-      <a class="btn btn-quiet" href="/items/type/{{$item.TypeID}}/"><svg class="glyph" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15.5 11 10l3 2.6 4.2-5.4"/><path d="M18.2 7.2h-3M18.2 7.2v3"/></g></svg>Item details</a>
       </span>
     </div>
   </div>
@@ -97,7 +96,7 @@
       <img class="mkt-item-icon" src="https://images.evetech.net/types/{{$item.TypeID}}/icon?size=64" alt="" width="48" height="48" loading="lazy">
       <div class="mkt-title-stack">
         <p class="market-crumbs mkt-item-crumbs"><small><a href="/market/">Market</a>{{range $item.Breadcrumbs}} › <a href="/market/?group={{.ID}}&region={{$item.RegionID}}">{{.Name}}</a>{{end}} · Type #{{$item.TypeID}}</small></p>
-        <h2>{{$item.Name}}</h2>
+        <h2>{{$item.Name}}<a class="info-link" href="/items/type/{{$item.TypeID}}/" title="Item details" aria-label="Item details of {{$item.Name}}">i</a></h2>
       </div>
     </div>
     <nav class="region-pills" aria-label="Region">

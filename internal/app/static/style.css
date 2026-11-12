@@ -879,6 +879,11 @@ h3 + .tw > table, h3 + table {
 /* --- info tips: a filled circular "i" beside a panel or chart
    name; its explainer rides in a styled bubble shown on hover or
    keyboard focus, so panels carry no prose of their own. --- */
+/* The info glyph beside a name: a small ringed "i" linking to the
+   thing's own page (a pilot's profile, an item's details). */
+.info-link { display: inline-flex; align-items: center; justify-content: center; width: 1.05rem; height: 1.05rem; margin-left: 0.35rem; border: 1px solid var(--box-edge); border-radius: 50%; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; line-height: 1; text-decoration: none; vertical-align: middle; }
+.info-link:hover, .info-link:focus-visible { color: var(--text-bright); border-color: var(--accent); }
+@media (pointer: coarse) { .info-link { width: 1.5rem; height: 1.5rem; } }
 .info-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 0.4rem; cursor: help; outline: none; }
 .info-tip-dot {
   display: block;

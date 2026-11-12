@@ -159,12 +159,13 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <div class="fit-chips">
         {{range .Implants}}
         {{if $.ReadOnly}}{{if .TypeID}}
-        <span class="fit-chip fit-imp"><span class="fit-imp-slot">{{.Slot}}</span><span class="fit-chip-name">{{.Name}}</span></span>
+        <span class="fit-chip fit-imp"><span class="fit-imp-slot">{{.Slot}}</span><button type="button" class="fit-chip-name" data-fit-info="{{.TypeID}}" title="Details of {{.Name}}">{{.Name}}</button></span>
         {{end}}{{else}}
         <span class="fit-chip fit-imp{{if .Missing}} fit-imp-missing{{end}}{{if not .TypeID}} fit-imp-empty{{end}}">
           <span class="fit-imp-slot" title="Slot {{.Slot}}">{{.Slot}}</span>
           <input type="text" class="fit-imp-input" data-fit-imp-slot="{{.Slot}}" value="{{.Name}}" placeholder="Empty: search slot {{.Slot}} implants" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="Implant slot {{.Slot}}">
           {{if .Missing}}<span class="fit-imp-warn" title="This pilot is missing skills for this implant">Missing skills</span>{{end}}
+          {{if .TypeID}}<button type="button" class="fit-chip-btn fit-imp-info" data-fit-info="{{.TypeID}}" data-fit-imp-info="{{.Slot}}" title="Details of {{.Name}}" aria-label="Details of {{.Name}}">i</button>{{end}}
           {{if .Overridden}}<button type="button" class="fit-chip-btn" data-fit-imp-reset="{{.Slot}}" title="Back to the clone's implant">↺</button>{{end}}
           {{if .TypeID}}<button type="button" class="fit-chip-btn" data-fit-imp-clear="{{.Slot}}" title="Empty this slot">×</button>{{end}}
         </span>

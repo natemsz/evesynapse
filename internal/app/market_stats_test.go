@@ -144,7 +144,7 @@ func TestMarketPageHonestPrices(t *testing.T) {
 	}
 	mustContain(t, "/market/ honest prices", body,
 		`class="region-pills"`,
-		`class="btn btn-quiet" href="/items/type/34/"`,
+		`class="info-link" href="/items/type/34/"`,
 		`class="kpis mkt-kpis"`,
 		`kpi-k">Best sell`,
 		"4.00 <small>ISK</small>",

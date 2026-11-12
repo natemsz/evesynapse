@@ -866,6 +866,62 @@ var FitGauges = (function () {
     pendingFlash = { type: "slot", id: a };
     setItems(items);
   }
+  // swapType fits toID in fromID's place from the info drawer's
+  // Compare tab: one fitted module (keeping its state and rack
+  // position), or a whole drone or fighter line. Returns "" or the
+  // reason it could not.
+  function swapType(fromID, toID, name) {
+    fromID = parseInt(fromID, 10) || 0;
+    toID = parseInt(toID, 10) || 0;
+    if (!fromID || !toID || fromID === toID) return "";
+    var fam = familyOfType(fromID) || "";
+    var req = restrictionFor(toID);
+    if (req) return (name || "That module") + " can only be fitted to " + req + ".";
+    var items = JSON.parse(JSON.stringify(state.items));
+    var at = -1;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].typeId === fromID && !items[i].cargo) { at = i; break; }
+    }
+    if (at < 0) return "That item is no longer fitted.";
+    var line = items[at];
+    var whole = fam === "drone" || fam === "fighter";
+    var n = whole ? (line.qty || 1) : 1;
+    var moved = (line.states || []).slice(-n);
+    while (moved.length < n) moved.push("");
+    line.qty = (line.qty || 1) - n;
+    if (line.states) line.states.length = Math.max(0, line.states.length - n);
+    var gone = line.qty <= 0;
+    if (gone) items.splice(at, 1);
+    var into = -1;
+    for (var j = 0; j < items.length; j++) {
+      if (items[j].typeId === toID && !items[j].cargo) { into = j; break; }
+    }
+    if (into >= 0) {
+      items[into].qty += n;
+      items[into].states = (items[into].states || []).concat(moved);
+    } else {
+      items.splice(gone ? at : at + 1, 0, { typeId: toID, qty: n, states: moved });
+    }
+    pendingFlash = whole ? { type: "group", family: fam } : { type: "slot", id: toID, landed: true };
+    setItems(items);
+    return "";
+  }
+  // The info drawer's Compare tab swaps through these: a fitted
+  // module or bay line, or a plugged implant (its chip's Info).
+  if (window.FitSheet && window.FitSheet.setSwapper) {
+    window.FitSheet.setSwapper(function (op) {
+      if (!op || !op.isConnected || !editor.isConnected || !editor.contains(op)) return null;
+      var imp = op.closest("[data-fit-imp-info]");
+      if (imp) {
+        var slot = imp.getAttribute("data-fit-imp-info");
+        return { label: "Plug in", apply: function (from, to) { setImplant(slot, parseInt(to, 10) || 0); return ""; } };
+      }
+      var mod = op.closest(".fit-vslot.filled, .fit-chip[data-fit-rowtype]");
+      if (!mod || inCargo(mod)) return null;
+      if (!mod.classList.contains("fit-vslot") && !mod.closest(".fit-group")) return null;
+      return { label: "Fit", apply: swapType };
+    });
+  }
   function setShip(typeID, name) {
     pushHistory();
     state.shipTypeId = typeID;

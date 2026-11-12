@@ -903,6 +903,12 @@ var pgDropUnusedKillIndexesSchema string
 //go:embed schema_pg/148_kill_feed_backfill.sql
 var pgKillFeedBackfillSchema string
 
+// Step 149: a variation row's own tier label, for the implant and
+// booster ladders.
+//
+//go:embed schema_pg/149_variation_tiers.sql
+var pgVariationTiersSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1079,6 +1085,7 @@ func schemaSteps() []schemaStep {
 		{146, "kill_stats_rebuild", pgKillStatsRebuildSchema, ""},
 		{147, "drop_unused_kill_indexes", pgDropUnusedKillIndexesSchema, ""},
 		{148, "kill_feed_backfill", pgKillFeedBackfillSchema, ""},
+		{149, "variation_tiers", pgVariationTiersSchema, ""},
 	}
 }
 

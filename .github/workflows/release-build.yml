@@ -394,7 +394,7 @@ jobs:
   # .github/workflows/release.yml, with its built-in token, so
   # no GitHub credential is stored on any other forge.
   forges:
-    if: github.server_url == 'https://github.com' && needs.release.outputs.publish == 'true'
+    if: github.server_url == 'https://github.com' && needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
     needs: release
     continue-on-error: true

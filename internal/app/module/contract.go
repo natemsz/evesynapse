@@ -1333,6 +1333,10 @@ type Deps interface {
 	// DoctrineFitDoc reads one of a corporation’s doctrine fits the
 	// account may use, as a fit document.
 	DoctrineFitDoc(ctx context.Context, userID, fitID int64) (*fitview.FitDoc, bool)
+	// KillFitEFT is a public kill's lost fitting as EFT text, the
+	// text the kill page's Copy fit gives; false for a kill that is
+	// not public or whose full killmail is no longer kept.
+	KillFitEFT(ctx context.Context, killID int64) (string, bool)
 
 	// --- the corporation foundation (core keeps the access model and the feed) ---
 

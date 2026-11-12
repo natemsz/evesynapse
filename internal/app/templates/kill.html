@@ -44,7 +44,8 @@
       <p class="kp-note">Being priced. It shows within a minute.</p>
       {{end}}
       <div class="kp-actions">
-        {{if .Fit}}<button type="button" class="btn small" data-copy data-copy-text="{{.Fit}}">Copy fit</button>{{end}}
+        {{if .Fit}}<a class="btn small" href="/fittings/?kill={{.Row.ID}}#fit-editor">Open in workbench</a>
+        <button type="button" class="btn small" data-copy data-copy-text="{{.Fit}}">Copy fit</button>{{end}}
         <a class="btn small" href="/map/?system={{.Row.SystemID}}">On the map</a>
       </div>
     </div>

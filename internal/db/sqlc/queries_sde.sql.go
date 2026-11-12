@@ -1520,6 +1520,122 @@ func (q *Queries) ListMarketGroupParentIDs(ctx context.Context) ([]int64, error)
 	return items, nil
 }
 
+const listPIPlanetsByID = `-- name: ListPIPlanetsByID :many
+SELECT c.item_id, c.system_id, c.name, c.type_id, c.radius,
+       COALESCE(s.name, '') AS system_name, COALESCE(s.security, 0)::float8 AS security
+FROM sde_celestials c
+LEFT JOIN sde_systems s ON s.system_id = c.system_id
+WHERE c.item_id = ANY($1::bigint[])
+`
+
+type ListPIPlanetsByIDRow struct {
+	ItemID     int64   `json:"item_id"`
+	SystemID   int64   `json:"system_id"`
+	Name       string  `json:"name"`
+	TypeID     int64   `json:"type_id"`
+	Radius     float64 `json:"radius"`
+	SystemName string  `json:"system_name"`
+	Security   float64 `json:"security"`
+}
+
+// Planet shape (type and radius) for known planet ids: owned colonies.
+func (q *Queries) ListPIPlanetsByID(ctx context.Context, ids []int64) ([]ListPIPlanetsByIDRow, error) {
+	rows, err := q.db.Query(ctx, listPIPlanetsByID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPIPlanetsByIDRow
+	for rows.Next() {
+		var i ListPIPlanetsByIDRow
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.SystemID,
+			&i.Name,
+			&i.TypeID,
+			&i.Radius,
+			&i.SystemName,
+			&i.Security,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPIPlanetsNear = `-- name: ListPIPlanetsNear :many
+WITH RECURSIVE reach(system_id, jumps) AS (
+    SELECT $2::bigint, 0
+    UNION
+    SELECT j.to_system_id, r.jumps + 1
+    FROM reach r JOIN sde_system_jumps j ON j.from_system_id = r.system_id
+    WHERE r.jumps < $3::int
+), nearest AS (
+    SELECT system_id, MIN(jumps) AS jumps FROM reach GROUP BY system_id
+)
+SELECT c.item_id, c.system_id, c.name, c.type_id, c.radius,
+       n.jumps::int AS jumps, s.name AS system_name, s.security
+FROM nearest n
+JOIN sde_celestials c ON c.system_id = n.system_id
+JOIN sde_systems s ON s.system_id = n.system_id
+WHERE c.type_id IN (11, 12, 13, 2014, 2015, 2016, 2017, 2063)
+ORDER BY n.jumps, s.name, c.name
+LIMIT $1::int
+`
+
+type ListPIPlanetsNearParams struct {
+	RowLimit int32 `json:"row_limit"`
+	HomeID   int64 `json:"home_id"`
+	MaxJumps int32 `json:"max_jumps"`
+}
+
+type ListPIPlanetsNearRow struct {
+	ItemID     int64   `json:"item_id"`
+	SystemID   int64   `json:"system_id"`
+	Name       string  `json:"name"`
+	TypeID     int64   `json:"type_id"`
+	Radius     float64 `json:"radius"`
+	Jumps      int32   `json:"jumps"`
+	SystemName string  `json:"system_name"`
+	Security   float64 `json:"security"`
+}
+
+// The planets within max_jumps gates of a home system, nearest first,
+// for the PI planner's candidate list. Planet type ids are the eight
+// planet types; the walk is bounded by the jump count and the LIMIT.
+func (q *Queries) ListPIPlanetsNear(ctx context.Context, arg ListPIPlanetsNearParams) ([]ListPIPlanetsNearRow, error) {
+	rows, err := q.db.Query(ctx, listPIPlanetsNear, arg.RowLimit, arg.HomeID, arg.MaxJumps)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPIPlanetsNearRow
+	for rows.Next() {
+		var i ListPIPlanetsNearRow
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.SystemID,
+			&i.Name,
+			&i.TypeID,
+			&i.Radius,
+			&i.Jumps,
+			&i.SystemName,
+			&i.Security,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDEAttributeTypesByIDs = `-- name: ListSDEAttributeTypesByIDs :many
 SELECT attribute_id, name, stackable, high_is_good, unit_id, default_value FROM sde_attribute_types
 WHERE attribute_id = ANY($1::bigint[])

@@ -1553,6 +1553,8 @@ type PlanetPinContent struct {
 type PlanetPin struct {
 	PinID            int64              `json:"pin_id"`
 	TypeID           int64              `json:"type_id"`
+	Latitude         float64            `json:"latitude"`     // radians from the north pole
+	Longitude        float64            `json:"longitude"`    // radians
 	SchematicID      int64              `json:"schematic_id"` // factory pins; mirrors FactoryDetails
 	ExpiryTime       string             `json:"expiry_time"`  // RFC3339, extractor pins
 	InstallTime      string             `json:"install_time"` // RFC3339

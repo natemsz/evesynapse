@@ -31,12 +31,14 @@ import (
 	json "github.com/goccy/go-json"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/piplan"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -215,7 +217,7 @@ func (s *demoSeed) resolve(ctx context.Context) error {
 		"Zainou 'Deadeye' Guided Missile Precision GP-805", "Zainou 'Deadeye' Target Navigation Prediction TN-903",
 		// Planetary commodities and structures.
 		"Oxygen", "Water", "Bacteria", "Proteins", "Reactive Gas", "Precious Metals",
-		"Toxic Metals", "Electrolytes", "Micro Organisms", "Carbon Compounds",
+		"Toxic Metals", "Electrolytes", "Microorganisms", "Carbon Compounds",
 		"Aqueous Liquids", "Ionic Solutions", "Base Metals", "Suspended Plasma",
 		"Noble Gas", "Reactive Metals", "Plasmoids",
 		"Temperate Command Center", "Barren Command Center", "Gas Command Center",
@@ -1603,10 +1605,8 @@ type demoColony struct {
 	Type       string
 	SystemID   int64
 	Upgrade    int64
-	CCName     string // the command center type name for this planet type
 	Extractor  string // the P0 commodity the extractor pulls
 	Product    string // the P1 commodity the factory makes
-	Schematic  int64
 	// Expiry is when the extractor program ends, relative to
 	// the seeding moment; zero keeps the default two days out.
 	// A negative value seeds an already-expired extractor.
@@ -1621,27 +1621,37 @@ func (s *demoSeed) writeColony(ctx context.Context, characterID int64, c demoCol
 	if c.Expiry != 0 {
 		expiry = now.Add(c.Expiry)
 	}
+	// Real structure and schematic ids for the planet type, placed
+	// a little apart on the equator, so the PI pages and the
+	// planner read the demo colonies the way they read the game's.
+	pt := strings.ToUpper(c.Type[:1]) + c.Type[1:]
+	pinID := func(k piplan.PinKind) int64 {
+		id, _ := piplan.PinTypeID(pt, k)
+		return id
+	}
+	schematic := piplan.SchematicIDs[c.Product]
+	const lat, step = 1.5708, 0.0125
 	pins := []esi.PlanetPin{
-		{PinID: 1, TypeID: s.typeID(c.CCName), InstallTime: s.rfc(now.Add(-90 * day))},
-		{PinID: 2, TypeID: s.typeID("Extractor Control Unit"), InstallTime: s.rfc(now.Add(-2 * day)),
+		{PinID: 1, TypeID: pinID(piplan.PinCommandCenter), Latitude: lat - step, Longitude: 0, InstallTime: s.rfc(now.Add(-90 * day))},
+		{PinID: 2, TypeID: pinID(piplan.PinExtractor), Latitude: lat, Longitude: -step, InstallTime: s.rfc(now.Add(-2 * day)),
 			LastCycleStart: s.rfc(now.Add(-30 * time.Minute)), ExpiryTime: s.rfc(expiry),
 			ExtractorDetails: &esi.PlanetExtractor{
 				ProductTypeID: s.typeID(c.Extractor), CycleTime: 1800, QtyPerCycle: 850,
 				Heads: []esi.PlanetExtractorHead{
-					{HeadID: 0, Latitude: 0.42, Longitude: 1.13},
-					{HeadID: 1, Latitude: 0.44, Longitude: 1.16},
-					{HeadID: 2, Latitude: 0.40, Longitude: 1.10},
-					{HeadID: 3, Latitude: 0.43, Longitude: 1.19},
+					{HeadID: 0, Latitude: lat - 0.02, Longitude: -0.035},
+					{HeadID: 1, Latitude: lat + 0.02, Longitude: -0.035},
+					{HeadID: 2, Latitude: lat - 0.03, Longitude: -0.015},
+					{HeadID: 3, Latitude: lat + 0.03, Longitude: -0.015},
 				},
 			}},
-		{PinID: 3, TypeID: s.typeID("Storage Facility"), InstallTime: s.rfc(now.Add(-90 * day)),
+		{PinID: 3, TypeID: pinID(piplan.PinStorage), Latitude: lat, Longitude: 0, InstallTime: s.rfc(now.Add(-90 * day)),
 			Contents: []esi.PlanetPinContent{
 				{TypeID: s.typeID(c.Extractor), Amount: 2400},
 				{TypeID: s.typeID(c.Product), Amount: 620},
 			}},
-		{PinID: 4, TypeID: s.typeID("Basic Industry Facility"), SchematicID: c.Schematic,
+		{PinID: 4, TypeID: pinID(piplan.PinBasic), SchematicID: schematic, Latitude: lat, Longitude: step,
 			InstallTime:    s.rfc(now.Add(-60 * day)),
-			FactoryDetails: &esi.PlanetFactory{SchematicID: c.Schematic},
+			FactoryDetails: &esi.PlanetFactory{SchematicID: schematic},
 			Contents:       []esi.PlanetPinContent{{TypeID: s.typeID(c.Product), Amount: 40}}},
 	}
 	layout := esi.PlanetLayout{
@@ -1688,15 +1698,15 @@ func (s *demoSeed) writePilotOneComms(ctx context.Context) error {
 
 	if err := s.writeColony(ctx, id, demoColony{
 		PlanetID: 40009076, PlanetName: "Jita IV", Type: "temperate", SystemID: s.jitaSystemID,
-		Upgrade: 5, CCName: "Temperate Command Center",
-		Extractor: "Micro Organisms", Product: "Bacteria", Schematic: 116,
+		Upgrade:   5,
+		Extractor: "Microorganisms", Product: "Bacteria",
 	}); err != nil {
 		return err
 	}
 	if err := s.writeColony(ctx, id, demoColony{
 		PlanetID: 40009079, PlanetName: "Jita VII", Type: "barren", SystemID: s.jitaSystemID,
-		Upgrade: 4, CCName: "Barren Command Center",
-		Extractor: "Base Metals", Product: "Reactive Metals", Schematic: 117,
+		Upgrade:   4,
+		Extractor: "Base Metals", Product: "Reactive Metals",
 	}); err != nil {
 		return err
 	}
@@ -1704,8 +1714,8 @@ func (s *demoSeed) writePilotOneComms(ctx context.Context) error {
 	// ago, which is the PI card's expired state.
 	if err := s.writeColony(ctx, id, demoColony{
 		PlanetID: 40009081, PlanetName: "Jita VI", Type: "plasma", SystemID: s.jitaSystemID,
-		Upgrade: 3, CCName: "Plasma Command Center",
-		Extractor: "Suspended Plasma", Product: "Plasmoids", Schematic: 119,
+		Upgrade:   3,
+		Extractor: "Suspended Plasma", Product: "Plasmoids",
 		Expiry: -24 * hour,
 	}); err != nil {
 		return err
@@ -2142,15 +2152,15 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 
 	if err := s.writeColony(ctx, id, demoColony{
 		PlanetID: 40026205, PlanetName: "Amarr V", Type: "gas", SystemID: s.amarrSystemID,
-		Upgrade: 4, CCName: "Gas Command Center",
-		Extractor: "Noble Gas", Product: "Oxygen", Schematic: 118,
+		Upgrade:   4,
+		Extractor: "Noble Gas", Product: "Oxygen",
 	}); err != nil {
 		return err
 	}
 	if err := s.writeColony(ctx, id, demoColony{
 		PlanetID: 40026208, PlanetName: "Amarr VIII", Type: "lava", SystemID: s.amarrSystemID,
-		Upgrade: 3, CCName: "Lava Command Center",
-		Extractor: "Suspended Plasma", Product: "Plasmoids", Schematic: 119,
+		Upgrade:   3,
+		Extractor: "Suspended Plasma", Product: "Plasmoids",
 	}); err != nil {
 		return err
 	}

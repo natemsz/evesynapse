@@ -1796,6 +1796,14 @@ type OrgGroupMember struct {
 	AddedAt     time.Time `json:"added_at"`
 }
 
+type PiPlan struct {
+	Token     string          `json:"token"`
+	UserID    int64           `json:"user_id"`
+	CreatedAt time.Time       `json:"created_at"`
+	Request   json.RawMessage `json:"request"`
+	Solution  json.RawMessage `json:"solution"`
+}
+
 type PilotActivityApplied struct {
 	KillmailID   int64     `json:"killmail_id"`
 	CharacterID  int64     `json:"character_id"`
@@ -2078,9 +2086,11 @@ type SdeCategory struct {
 }
 
 type SdeCelestial struct {
-	ItemID   int64  `json:"item_id"`
-	SystemID int64  `json:"system_id"`
-	Name     string `json:"name"`
+	ItemID   int64   `json:"item_id"`
+	SystemID int64   `json:"system_id"`
+	Name     string  `json:"name"`
+	TypeID   int64   `json:"type_id"`
+	Radius   float64 `json:"radius"`
 }
 
 type SdeConstellation struct {

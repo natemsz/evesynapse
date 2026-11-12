@@ -8,15 +8,83 @@
 <div class="l-page pi">
 <div class="l-head">
   <div class="l-head-pick">{{template "charselector" .PIPlannerChars}}</div>
-  <p class="prose">Plan any planetary chain from raw extraction to P4: factory counts, colony fit and POCO taxes.</p>
+  <p class="prose">Plan colonies for any PI product, from scratch or from your own.</p>
   <div class="l-head-act"><a class="btn btn-quiet" href="/planets/">My Colonies</a></div>
 </div>
 
 {{if .PIPlanner}}
 <div id="pi-wrap" class="l-stack">
 {{with .PIPlanner}}
-{{if .OwnedNote}}<p class="pi-note"><small>{{.OwnedNote}}</small></p>{{end}}
+{{with .Goal}}
+<form method="post" action="/industry/pi/solve" id="pi-goal" class="l-panel pi-goal" aria-label="Plan colonies">
+  <div class="pi-goal-main">
+    <label class="pi-field pi-f-product"><span>Make</span>
+      <select name="product" id="pi-goal-product">
+        {{range $.PIPlanner.Targets}}<option value="{{.}}"{{if eq . $.PIPlanner.Target}} selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pi-field pi-f-num"><span>Per day</span><input type="number" name="perday" value="{{.PerDayStr}}" min="0" step="any" inputmode="decimal" placeholder="As many as possible"></label>
+    <label class="pi-field pi-f-home"><span>Near system</span>
+      <span class="searchwrap">
+        <input type="search" name="home" value="{{.Form.HomeName}}" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="pi-home-suggest" aria-autocomplete="list" data-suggest="/industry/pi/systems" data-suggest-target="pi-home-id" placeholder="Any planets">
+        <ul class="suggest" id="pi-home-suggest" role="listbox" hidden></ul>
+      </span>
+    </label>
+    <input type="hidden" name="home_id" id="pi-home-id" value="{{if .Form.HomeID}}{{.Form.HomeID}}{{end}}">
+    <label class="pi-field pi-f-num"><span>Reach</span>
+      <select name="jumps">{{range .JumpChoice}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+    </label>
+    <button type="submit" class="btn pi-goal-go">Plan colonies</button>
+  </div>
+  {{if .SignedIn}}
+  <fieldset class="pi-goal-row">
+    <legend>Starting point</legend>
+    <label class="pi-radio"><input type="radio" name="mode" value="fresh"{{if not .Form.Adapt}} checked{{end}}> Start fresh</label>
+    <label class="pi-radio"><input type="radio" name="mode" value="adapt"{{if .Form.Adapt}} checked{{end}}> Work from my colonies <small>keeps what serves, says what to change</small></label>
+  </fieldset>
+  <fieldset class="pi-goal-row pi-pilots">
+    <legend>Pilots</legend>
+    <input type="hidden" name="source" value="mine">
+    {{range .Pilots}}<label class="pi-pilot"><input type="checkbox" name="chars" value="{{.ID}}"{{if .Checked}} checked{{end}}> <span>{{.Name}}</span> <small>{{.Detail}}</small></label>{{end}}
+  </fieldset>
+  {{else}}
+  <fieldset class="pi-goal-row pi-fields-inline">
+    <legend>Pilots</legend>
+    <input type="hidden" name="source" value="pilots">
+    <label class="pi-field"><span>Pilots</span><input type="number" name="pilots" value="{{.Form.Pilots}}" min="1" max="20" inputmode="numeric"></label>
+    <label class="pi-field"><span>Planets each</span><input type="number" name="planets_each" value="{{.Form.PlanetsEach}}" min="1" max="6" inputmode="numeric"></label>
+    <label class="pi-field"><span>Command center</span><select name="cc">{{range .CCChoice}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+  </fieldset>
+  {{end}}
+  <details class="pi-goal-more">
+    <summary>Schedule, taxes and yields</summary>
+    <div class="pi-fields">
+      <label class="pi-field"><span>Reset extractors</span><select name="reset">{{range .ResetChoice}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+      <label class="pi-field"><span>Collect and deliver</span><select name="haul">{{range .HaulChoice}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+      <label class="pi-field"><span>Customs tax, %</span><input type="number" name="tax" value="{{.Form.TaxPct}}" min="0" max="100" step="0.5" inputmode="decimal"></label>
+      <label class="pi-field"><span>Yield per head per hour</span><input type="number" name="peak" value="{{.Form.Peak}}" min="50" step="50" inputmode="numeric"></label>
+    </div>
+    <label class="pi-check"><input type="checkbox" name="buy" value="1"{{if .Form.AllowBuy}} checked{{end}}> Buy inputs when cheaper than making them</label>
+    <label class="pi-check"><input type="checkbox" name="surplus" value="1"{{if .Form.SellSurplus}} checked{{end}}> Sell leftovers</label>
+    <p class="pi-help"><small>Shorter extractor programs yield more per hour. Yield per head is an assumption until a survey says otherwise: enter the per-hour figure the game shows when you place heads. Extractors on your own colonies use what they measured.</small></p>
+  </details>
+</form>
+{{end}}
 
+<div class="pi-tabs">
+<div class="l-seg" role="tablist" aria-label="PI Planner views" data-tabs hidden>
+  <button type="button" role="tab" id="pi-colonies-tab" aria-controls="pi-colonies" aria-selected="{{if .PlanTab}}true{{else}}false{{end}}">Colony plan</button>
+  <button type="button" role="tab" id="pi-plan-tab" aria-controls="pi-plan" aria-selected="{{if .PlanTab}}false{{else}}true{{end}}">Chain and costs</button>
+  <button type="button" role="tab" id="pi-map-tab" aria-controls="pi-map" aria-selected="false">Production map</button>
+</div>
+
+<div role="tabpanel" id="pi-colonies" aria-labelledby="pi-colonies-tab">
+<h2 class="l-tab-h">Colony plan</h2>
+{{template "pi-colonies" .}}
+</div>
+
+<div role="tabpanel" id="pi-plan" aria-labelledby="pi-plan-tab">
+<h2 class="l-tab-h">Chain and costs</h2>
 <section class="pi-strip" aria-label="This plan">
   <div class="pi-strip-text">
     <p class="pi-strip-line">Planning <b>{{.AmountStr}} &times; {{.Target}}</b> <span class="pi-tier pi-t-{{.TargetTierKey}}">{{.TargetTier}}</span> per 24-hour window{{if .PlanetsText}}, on {{.PlanetsText}}{{end}}.</p>
@@ -29,15 +97,8 @@
   </div>
 </section>
 {{if .PricesNote}}<p class="pi-note"><small>{{.PricesNote}}</small></p>{{end}}
+{{if .OwnedNote}}<p class="pi-note"><small>{{.OwnedNote}}</small></p>{{end}}
 
-<div class="pi-tabs">
-<div class="l-seg" role="tablist" aria-label="PI Planner views" data-tabs hidden>
-  <button type="button" role="tab" id="pi-plan-tab" aria-controls="pi-plan" aria-selected="true">Plan</button>
-  <button type="button" role="tab" id="pi-map-tab" aria-controls="pi-map" aria-selected="false">Production map</button>
-</div>
-
-<div role="tabpanel" id="pi-plan" aria-labelledby="pi-plan-tab">
-<h2 class="l-tab-h">Plan</h2>
 <div class="l-grid">
 <div class="s8 l-stack">
   {{if .HasPlan}}
@@ -67,8 +128,8 @@
 </div>
 
 <div class="s4 l-stack">
-  <form method="get" action="/industry/pi/" id="pi-form" class="l-panel pi-settings" data-sheet data-sheet-title="Plan settings">
-    <h3 class="pi-settings-h">Plan settings</h3>
+  <form method="get" action="/industry/pi/" id="pi-form" class="l-panel pi-settings" data-sheet data-sheet-title="Chain settings">
+    <h3 class="pi-settings-h">Chain settings</h3>
     <label class="pi-field"><span>Product</span>
       <select name="product" id="pi-product">
         {{range .Targets}}<option value="{{.}}"{{if eq . $.PIPlanner.Target}} selected{{end}}>{{.}}</option>{{end}}
@@ -86,8 +147,6 @@
           <option value="5"{{if eq .CCLevel 5}} selected{{end}}>Level 5 (Elite)</option>
         </select>
       </label>
-      <label class="pi-field"><span>Heads per ECU</span><input type="number" inputmode="numeric" name="heads" value="{{.Heads}}" min="1" max="10"></label>
-      <label class="pi-field"><span>ECU yield, R0 per hour</span><input type="number" inputmode="numeric" name="yield" value="{{.Yield}}" min="100" step="100"></label>
       <label class="pi-field"><span>POCO tax, %</span><input type="number" inputmode="decimal" name="tax" value="{{.TaxStr}}" min="0" max="100" step="0.5"></label>
     </div>
     <fieldset class="pi-planets">
@@ -109,26 +168,10 @@
       <tbody>{{range .Profitable}}<tr{{if .On}} class="yours"{{end}}><td><a href="{{.URL}}">{{.Name}}</a></td><td><span class="pi-margin">{{if .BarPct}}<svg class="l-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.BarPct}}" height="4"/></svg>{{end}}<span class="{{.Class}}">{{.Margin}}</span></span></td><td class="{{.Class}}">{{.Profit}}</td></tr>{{end}}</tbody>
     </table>
     </div>
-    <p><small>Whole-chain margin with every raw bought, before hauling. Pick one to size a colony for it.</small></p>
+    <p><small>Whole-chain margin with every raw bought, before hauling. Pick one to plan it.</small></p>
   </section>
   {{end}}
 
-  {{if .Colonies}}
-  <section class="l-panel pi-cols">
-    <h3>Suggested colonies</h3>
-    <ul class="pi-colonies">
-    {{range .Colonies}}
-      <li class="pi-colony{{if not .Fits}} over{{end}}">
-        <p class="pi-colony-top"><b>{{.Title}}</b> <span class="pi-colony-planet">{{.Planet}}</span> <span class="lchip">{{if .Fits}}Fits{{else}}Over budget{{end}}</span></p>
-        <p class="pi-colony-fit"><small>{{.CPU}}{{if not .Fits}}. Split the colony or upgrade the command center.{{end}}</small></p>
-        <p><small>{{.Detail}}</small></p>
-        {{if .Breakdown}}<details class="pi-colony-more"><summary>Structures</summary><ul>{{range .Breakdown}}<li><small>{{.}}</small></li>{{end}}</ul></details>{{end}}
-      </li>
-    {{end}}
-    </ul>
-    <p class="prose">Extractor planets refine R0 to P1 on the planet (25% of the volume) before export. Factory planets import P1 and run Advanced and High-Tech; only the factory planet needs a Launchpad import route for a P4's P1 input. Link and storage buffers are not counted, so leave headroom on tight fits.</p>
-  </section>
-  {{end}}
 </div>
 </div>
 </div>
@@ -158,4 +201,96 @@
 <p>No character linked yet. Link one, or plan without one.</p>
 {{end}}
 </div>
+{{end}}
+
+{{define "pi-colonies"}}
+{{with .Plan}}
+<div class="pi-board-wrap" id="pi-board" data-plan="{{.Token}}">
+  <div class="l-tiles">
+    <div class="l-stat"><span class="l-stat-label">Makes</span><span class="l-stat-value">{{.PerDay}}</span><span class="l-stat-sub">{{if .TypeID}}{{itemLink .TypeID .Target}}{{else}}{{.Target}}{{end}} a day</span></div>
+    <div class="l-stat {{.ProfitCls}}"><span class="l-stat-label">Profit a day</span><span class="l-stat-value">{{.Profit}}</span><span class="l-stat-sub">sales {{.Revenue}}, taxes {{.Taxes}}</span></div>
+    <div class="l-stat"><span class="l-stat-label">Planets</span><span class="l-stat-value">{{.Slots}}</span><span class="l-stat-sub">{{.ResetText}}</span></div>
+    <div class="l-stat"><span class="l-stat-label">Hauling</span><span class="l-stat-value">{{.Haul}}</span><span class="l-stat-sub">a day, between planets and to market</span></div>
+  </div>
+  {{if .Short}}<p class="pi-short">{{.Short}}</p>{{end}}
+  {{range .Notes}}<p class="pi-note"><small>{{.}}</small></p>{{end}}
+  {{if .AnyAssumed}}<p class="pi-note"><small>Extraction marked "assumed" uses the yield per head from the settings. Survey the planet in game and enter its figure in the colony view to firm it up.</small></p>{{end}}
+
+  <div class="pi-plan-grid">
+    <div class="pi-board l-stack" id="pi-board-list">
+      {{range .Groups}}
+      <section class="pi-group">
+        <h3 class="pi-group-h">{{.Name}}</h3>
+        <ul class="pi-cards">
+        {{range .Colonies}}
+          <li class="pi-card pi-pt-{{.TypeKey}}{{if not .Fits}} over{{end}}" data-colony="{{.Index}}">
+            <button type="button" class="pi-card-open" data-open-colony="{{.Index}}" aria-controls="pi-view">
+              <span class="pi-card-top"><span class="pi-planet-dot" aria-hidden="true"></span><b>{{.Planet}}</b>{{if .Named}} <span class="pi-card-type">{{.Type}}{{if .System}}, {{.System}}{{end}}</span>{{else}} <span class="pi-card-type">any you like</span>{{end}}</span>
+              <span class="pi-card-role">{{.Role}}{{if .Existing}} <span class="lchip">{{.Changes}}</span>{{end}}{{if .Assumed}} <span class="lchip">assumed yield</span>{{end}}</span>
+              <span class="pi-card-sum">{{.Summary}}</span>
+              <span class="pi-card-fit">
+                <span class="pi-meter-label">CPU</span><svg class="l-meter{{if gt .CPUPct 95}} hot{{end}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.CPUPct}}" height="4"/></svg><span class="pi-meter-fig">{{.CPUText}}</span>
+                <span class="pi-meter-label">Power</span><svg class="l-meter{{if gt .PGPct 95}} hot{{end}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.PGPct}}" height="4"/></svg><span class="pi-meter-fig">{{.PGText}}</span>
+              </span>
+              {{if or .Out .In}}<span class="pi-card-rates">{{range .Out}}<span class="pi-rate out">{{.Name}} {{.Rate}}</span>{{end}}{{range .In}}<span class="pi-rate in">{{.Name}} {{.Rate}}</span>{{end}}</span>{{end}}
+            </button>
+            {{if .Template}}<textarea class="pi-template" readonly hidden data-template="{{.Index}}" aria-label="Game template for {{.Planet}}">{{.Template}}</textarea>{{end}}
+          </li>
+        {{end}}
+        </ul>
+      </section>
+      {{end}}
+
+      {{if .Flows}}
+      <section class="l-panel pi-flows">
+        <h3>What moves</h3>
+        <div class="tw">
+        <table>
+          <thead><tr><th>From</th><th>To</th><th>Item</th><th>Per day</th><th>m³ a day</th></tr></thead>
+          <tbody>{{range .Flows}}<tr><td>{{.From}}</td><td>{{.To}}</td><td>{{.Item}}</td><td>{{.PerDay}}</td><td>{{.M3}}</td></tr>{{end}}</tbody>
+        </table>
+        </div>
+      </section>
+      {{end}}
+      <p class="pi-prov"><small>{{.MadeText}}. {{.Prices}}.</small></p>
+    </div>
+
+    <section class="pi-view l-panel" id="pi-view" aria-label="Colony view" hidden>
+      <div class="pi-view-head">
+        <button type="button" class="btn btn-quiet pi-view-back" data-colony-back>Back to the plan</button>
+        <h3 class="pi-view-title" id="pi-view-title">Colony</h3>
+        <label class="pi-field pi-view-cc"><span>Command center</span><select id="pi-view-cc">{{range $.Goal.CCChoice}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></label>
+      </div>
+      <div class="pi-view-fit" id="pi-view-fit" aria-live="polite"></div>
+      <div class="pi-stage">
+        <canvas id="pi-canvas" class="pi-canvas" aria-label="Colony layout. Drag structures to move them; select one to change it."></canvas>
+        <div class="pi-stage-tools" role="toolbar" aria-label="Add a structure">
+          <button type="button" class="btn btn-quiet" data-add="ecu">Extractor</button>
+          <button type="button" class="btn btn-quiet" data-add="basic">Basic</button>
+          <button type="button" class="btn btn-quiet" data-add="advanced">Advanced</button>
+          <button type="button" class="btn btn-quiet" data-add="hightech">High-tech</button>
+          <button type="button" class="btn btn-quiet" data-add="storage">Storage</button>
+          <button type="button" class="btn btn-quiet" data-add="launchpad">Launchpad</button>
+        </div>
+        <div class="pi-tip" id="pi-tip" hidden></div>
+      </div>
+      <div class="pi-inspect" id="pi-inspect"></div>
+      <div class="pi-view-rates" id="pi-view-rates"></div>
+      <div class="pi-view-act">
+        <button type="button" class="btn" data-copy-template>Copy game template</button>
+        <button type="button" class="btn btn-quiet" data-replan>Keep my changes, re-plan the rest</button>
+        <button type="button" class="btn btn-quiet" data-colony-reset>Undo my changes</button>
+        <span class="pi-view-msg" id="pi-view-msg" role="status"></span>
+      </div>
+      <p class="pi-help"><small>In game: open the planet, Templates, Import, Load from clipboard. Leave "Compress Pins" unticked so the layout stays as drawn.</small></p>
+    </section>
+  </div>
+</div>
+{{else}}
+<section class="l-panel pi-empty">
+  <h3>Plan colonies for {{.Target}}</h3>
+  <p class="prose">Set what to make and where you fly, then Plan colonies. The planner picks the planets, what each one extracts or builds and in what numbers, and what moves between them. Each colony opens on its planet, where you can move and change structures and copy the layout into the game as a template.</p>
+  <p class="prose">Signed in, it uses your pilots' skills and can start from the colonies you already run, keeping what still serves.</p>
+</section>
+{{end}}
 {{end}}

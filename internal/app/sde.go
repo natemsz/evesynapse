@@ -346,7 +346,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 
 // sdeImportVersion is the importer's column-set marker (see
 // sdeMaintenance): an import stored under an older one re-imports.
-const sdeImportVersion = "21"
+const sdeImportVersion = "22"
 
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
@@ -937,6 +937,8 @@ type sdeJumpRow struct {
 type sdeCelestialRow struct {
 	itemID   int64
 	systemID int64
+	typeID   int64
+	radius   float64 // metres
 	name     string
 }
 
@@ -1577,8 +1579,13 @@ func parseSDEDenormalize(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) 
 		if err != nil {
 			return err
 		}
+		radius := 0.0
+		if i, ok := idx["radius"]; ok && i < len(rec) {
+			radius, _ = strconv.ParseFloat(strings.TrimSpace(rec[i]), 64)
+		}
 		parsed.celestials = append(parsed.celestials, sdeCelestialRow{
-			itemID: id, systemID: csvIDOrZero(rec, idx, "solarSystemID"), name: name,
+			itemID: id, systemID: csvIDOrZero(rec, idx, "solarSystemID"),
+			typeID: csvIDOrZero(rec, idx, "typeID"), radius: radius, name: name,
 		})
 		return nil
 	})
@@ -2408,9 +2415,9 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		if _, err := tx.Exec(ctx, "DELETE FROM sde_celestials"); err != nil {
 			return 0, fmt.Errorf("clear sde_celestials: %w", err)
 		}
-		if err := insert("INSERT INTO sde_celestials (item_id, system_id, name) VALUES ($1, $2, $3)", len(parsed.celestials), func(i int) []any {
+		if err := insert("INSERT INTO sde_celestials (item_id, system_id, name, type_id, radius) VALUES ($1, $2, $3, $4, $5)", len(parsed.celestials), func(i int) []any {
 			r := parsed.celestials[i]
-			return []any{r.itemID, r.systemID, r.name}
+			return []any{r.itemID, r.systemID, r.name, r.typeID, r.radius}
 		}); err != nil {
 			return 0, err
 		}

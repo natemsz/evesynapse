@@ -87,7 +87,7 @@ func seedDemoSDEFixture(t *testing.T, conn *sql.DB) {
 		"Ocular Filter - Basic", "Memory Augmentation - Basic", "Neural Boost - Basic",
 		"Cybernetic Subprocessor - Basic", "Social Adaptation Chip - Basic",
 		"Oxygen", "Water", "Bacteria", "Proteins", "Reactive Gas", "Precious Metals",
-		"Toxic Metals", "Electrolytes", "Micro Organisms", "Carbon Compounds",
+		"Toxic Metals", "Electrolytes", "Microorganisms", "Carbon Compounds",
 		"Aqueous Liquids", "Ionic Solutions", "Base Metals", "Suspended Plasma",
 		"Noble Gas", "Reactive Metals", "Plasmoids",
 		"Temperate Command Center", "Barren Command Center", "Gas Command Center",

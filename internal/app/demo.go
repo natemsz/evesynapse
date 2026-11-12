@@ -331,6 +331,10 @@ func demoPostAllowed(path string) bool {
 		"/fittings/import/",
 		"/fittings/save-anonymous/",
 		"/market/appraise/",
+		// The PI planner: solving stores a plan under its own link
+		// (anyone may, signed in or not); the colony check computes.
+		"/industry/pi/solve",
+		"/industry/pi/colony",
 	} {
 		if strings.HasPrefix(path, prefix) {
 			return true

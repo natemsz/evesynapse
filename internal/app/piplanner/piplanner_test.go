@@ -31,8 +31,8 @@ func TestMain(m *testing.M) {
 
 // TestPIPlannerRendersChain: the PI Planner page renders the full
 // simulator from local data (no outbound calls), with the chain
-// map, requirements and colony suggestions for a P2 pick, and
-// pre-fills planet types from the character's colonies.
+// map, requirements and the colony planner's goal form for a P2
+// pick, and pre-fills planet types from the character's colonies.
 func TestPIPlannerRendersChain(t *testing.T) {
 	transport := &apptest.CountingTransport{}
 	rig := apptest.Build(t, transport)
@@ -59,9 +59,9 @@ func TestPIPlannerRendersChain(t *testing.T) {
 		"PI Planner",
 		"Production map",
 		"Coolant",
-		"Suggested colonies",
+		"Colony plan",
+		`id="pi-goal"`,
 		"Covered",
-		"Extractor",
 		// The live-coverage hooks pi.js drives: the verdict
 		// element's id and each raw's planet sources.
 		`id="pi-coverage"`,

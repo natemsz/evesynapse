@@ -312,6 +312,9 @@ type Application struct {
 	// batch to do: it is drained, and rechecked only rarely
 	// (killboard_stats.go).
 	killFeedBackfillDone bool
+	// memView is the last measured memory breakdown for the admin
+	// page (admin_memory.go), written by the stats flush.
+	memView atomic.Pointer[memoryView]
 	// Kill-name misses that must not be re-asked every minute,
 	// and when intel retention last pruned (channels.go). The
 	// mutex guards the map now that render-kicked resolution

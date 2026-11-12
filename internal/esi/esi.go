@@ -39,6 +39,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/memsize"
 
 	// json is goccy/go-json under the standard library's name: it
 	// decodes and encodes this package's ESI payloads faster than
@@ -3937,6 +3938,22 @@ func (c *Client) NameCacheCounts() (characters, corporations, alliances int) {
 	alliances = len(c.allianceNames)
 	c.allianceNamesMu.RUnlock()
 	return characters, corporations, alliances
+}
+
+// NameCacheBytes is the estimated memory the three name caches hold
+// (memsize's sampled estimate), for the admin memory breakdown.
+func (c *Client) NameCacheBytes() int64 {
+	var n int64
+	c.charNamesMu.RLock()
+	n += memsize.Of(c.charNames)
+	c.charNamesMu.RUnlock()
+	c.corpNamesMu.RLock()
+	n += memsize.Of(c.corpNames)
+	c.corpNamesMu.RUnlock()
+	c.allianceNamesMu.RLock()
+	n += memsize.Of(c.allianceNames)
+	c.allianceNamesMu.RUnlock()
+	return n
 }
 
 // PrimeName puts a stored name into its cache without telling the

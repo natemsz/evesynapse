@@ -131,3 +131,29 @@
 /* The phone sheet's shared form rule (phone.css) flows labelled
    fields into wrapping rows; this form keeps its own grid. */
 #main-content #notice-form .gn-form { display: grid; }
+
+/* Held in memory: the Go heap split by in-memory surface against
+   its limit, the same bar and legend as the fit's value split. */
+.an-mem { display: grid; gap: 0.35rem; margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px solid var(--hairline); }
+.an-mem-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.5rem; margin: 0; font-size: var(--fs-xs); }
+.an-mem-head > span { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.an-mem-head b { font-family: var(--font-num); font-weight: 500; font-variant-numeric: tabular-nums; color: var(--gold); }
+.an-mem-head small { color: var(--muted); }
+.an-mem-bar { display: block; width: 100%; height: 0.55rem; border-radius: var(--r-xs); overflow: hidden; background: rgb(255 255 255 / 0.05); }
+.an-mem-bar rect { fill: var(--mc); }
+.an-mem-parts { display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; margin: 0; padding: 0; list-style: none; font-size: var(--fs-xs); }
+.an-mem-parts li { display: inline-flex; align-items: baseline; gap: 0.35rem; cursor: default; }
+.an-mem-parts li::before { content: ""; align-self: center; width: 0.55rem; height: 0.55rem; border-radius: 2px; background: var(--mc); }
+.an-mem-parts span { color: var(--muted); }
+.an-mem-parts b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.an-mem-parts small { color: var(--muted); }
+.an-mem-hub { --mc: var(--accent); }
+.an-mem-stats { --mc: var(--gold); }
+.an-mem-names { --mc: var(--k-shield); }
+.an-mem-search { --mc: var(--k-targeting); }
+.an-mem-entities { --mc: var(--k-drones); }
+.an-mem-topology { --mc: var(--k-calibration); }
+.an-mem-fleet { --mc: var(--k-navigation); }
+.an-mem-other { --mc: var(--k-fitting); }
+.an-mem-free { --mc: transparent; }
+.an-mem-parts li.an-mem-free::before { background: none; box-shadow: inset 0 0 0 1px var(--muted); }

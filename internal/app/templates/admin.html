@@ -38,7 +38,13 @@
 </div>
 {{if .HostFacts}}<div class="an-legend">{{range .HostFacts}}<span>{{.}}</span>{{end}}</div>{{end}}
 {{end}}
-{{if .MemoryFacts}}<div class="an-legend an-memory" aria-label="Held in memory">{{range .MemoryFacts}}<span>{{.}}</span>{{end}}</div>{{end}}
+{{with .Memory}}
+<div class="an-mem" aria-label="Held in memory">
+<p class="an-mem-head"><span>Held in memory</span> <b>{{.Heap}}</b> <small>of a {{.Limit}} limit · {{.FromOS}} from the OS · {{.Collection}} collections · measured <time datetime="{{rfc3339 .At}}" data-live-ago>{{.Age}}</time></small></p>
+<svg class="an-mem-bar" viewBox="0 0 100 4" preserveAspectRatio="none" role="img" aria-label="Memory by surface">{{range .Parts}}<rect class="an-mem-{{.Key}}" x="{{printf "%.2f" .X}}" y="0" width="{{printf "%.2f" .Pct}}" height="4"><title>{{.Label}}: {{.Size}}</title></rect>{{end}}</svg>
+<ul class="an-mem-parts">{{range .Parts}}<li class="an-mem-{{.Key}}" title="{{.Detail}}"><span>{{.Label}}</span> <b>{{.Size}}</b> <small>{{.Share}}</small></li>{{end}}</ul>
+</div>
+{{end}}
 </section>
 
 <div class="an-grid2">

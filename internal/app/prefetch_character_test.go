@@ -5,7 +5,7 @@ package app
 // ?character= page ahead of time so the click is instant, but it
 // changes nothing a view would (core_prefetch.go), including
 // the session's character pin. These tests pin that down after
-// the owner watched his active character flip from Burzrujat to
+// I watched my active character flip from Burzrujat to
 // Timorsham Vot on a plain home -> overview navigation: the
 // hover over Timorsham's fleet-table link had silently re-pinned
 // the session underneath him.

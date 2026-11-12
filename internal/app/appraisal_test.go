@@ -137,7 +137,7 @@ func TestAppraisalDealRatioGating(t *testing.T) {
 	if ratio, ok := appraisalDealRatio(db.PubContract{Type: "item_exchange", Price: 0}, withWants); !ok || ratio != 0.5 {
 		t.Errorf("wants can carry the whole cost: got %v/%v, want 0.5/true", ratio, ok)
 	}
-	// The owner's case: 1 ISK plus wants worth two and a half
+	// My case: 1 ISK plus wants worth two and a half
 	// times the contents is no deal at any threshold.
 	barter := module.Appraisal{OfferedValue: 1000, PricedOffered: 1, OfferedLines: 1,
 		WantValue: 2499, PricedWanted: 1, WantedLines: 1}

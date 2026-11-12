@@ -120,7 +120,7 @@ func TestLandingAnonymous(t *testing.T) {
 			t.Errorf("landing still carries the removed slogan %q", tell)
 		}
 	}
-	// The closing copy is the owner's own wording;
+	// The closing copy is my own wording;
 	// the stand-in sentences it replaced never appear.
 	for _, replaced := range []string{"Fitting in the browser", "A full fitting simulator in a browser tab", "full Dogma simulation", "Prices we compute ourselves", "Every price comes from our own swept market data", "Search every public contract in New Eden in one place", "Gate camps are counted from ship kills only.", "Directors can author doctrine fits in the fitting tool itself"} {
 		if strings.Contains(body, replaced) {

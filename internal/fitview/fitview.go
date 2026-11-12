@@ -2928,7 +2928,7 @@ type FitCostView struct {
 	Unpriced int // lines no house price source knows (hull included)
 	// BuildPriced is true when any part of the total was
 	// priced at the build-cost tier (the house order's last
-	// resort, owner ruling 2026-11-12): pages asterisk the
+	// resort, my ruling 2026-11-12): pages asterisk the
 	// total and label it, so the figure never poses as a
 	// market price.
 	BuildPriced bool
@@ -2955,9 +2955,9 @@ type FitCostLine struct {
 // stored true-value estimated sell (trueValues, nil when the
 // worker has stored none), then the stored build cost
 // (buildCosts) when neither market nor estimate could speak
-// (owner ruling, 2026-11-12). A type no source knows is
+// (my ruling, 2026-11-12). A type no source knows is
 // unpriced, CCP's guide average is banned as a price source
-// (owner doctrine, 2026-10-17) and its adjusted price is not
+// (my ruling, 2026-10-17) and its adjusted price is not
 // one either; it survives only as the EIV input to job fees.
 // The estimated sell is what gives a supercapital hull an
 // actual value: it has no swept market to take a typical from,

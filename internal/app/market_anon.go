@@ -14,7 +14,7 @@ import (
 // The anonymous-market switch: anonymous visitors get the Market
 // page's order book from stored sweep data and may queue market
 // history wants (market wants only -- every other anonymous want
-// stays blocked, as it always was). The owner can turn that off
+// stays blocked, as it always was). An admin can turn that off
 // under high load, live, from the Admin page: no restart, because
 // high load is exactly when a restart is least welcome.
 //

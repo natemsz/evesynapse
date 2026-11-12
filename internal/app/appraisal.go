@@ -143,7 +143,7 @@ func typicalForMode(own *db.MarketRegionStat, mode string) (appraisalPrice, bool
 // then the hub row again however old (the floor rule, in the
 // same mode -- a buy price never floors to a sell figure),
 // then the stored build cost when nothing else could speak
-// (owner ruling, 2026-11-12: a build cost is enough when it
+// (my ruling, 2026-11-12: a build cost is enough when it
 // is all we have, asterisked wherever it is shown).
 func resolveAppraisalPriceMode(own *db.MarketRegionStat, tv *db.TrueValue, fb *db.MarketStatsFallback, now time.Time, mode string) appraisalPrice {
 	if p, ok := typicalForMode(own, mode); ok && now.Sub(own.UpdatedAt) < fallbackOwnFresh {

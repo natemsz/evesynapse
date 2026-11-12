@@ -100,7 +100,7 @@ func TestHomeKPIGlyphs(t *testing.T) {
 		`<span class="kpi-icon kpi-icon-assets" aria-hidden="true">`,
 		`<span class="kpi-icon kpi-icon-skills" aria-hidden="true">`,
 		// One distinctive path fragment per glyph, so a swapped
-		// or dropped path fails here, not on the owner's screen.
+		// or dropped path fails here, not on my screen.
 		`M19 7V4a1 1 0 0 0-1-1H5`,                   // wallet body
 		`<circle cx="16" cy="8" r="6"/>`,            // coins top coin
 		`<polyline points="3.29 7 12 12 20.71 7"/>`, // package lid seam

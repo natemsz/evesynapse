@@ -81,7 +81,7 @@ func (app *Application) valuationPrices(ctx context.Context) map[int64]esi.Marke
 // TypicalSells returns the swept typical sell per type,
 // the first tier of the house price order (own swept typicals,
 // then the stored true-value estimated sell, then unpriced; the
-// guide's average is banned as a price source, owner doctrine
+// guide's average is banned as a price source, my ruling
 // 2026-10-17). The Forge's book is the base map; a type The
 // Forge carries no typical for fills from its own global-market
 // row (globalMarketRegion) when the sweep holds one, the

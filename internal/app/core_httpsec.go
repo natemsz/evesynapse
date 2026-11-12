@@ -66,7 +66,7 @@ func warnIfServedInTheClear(cfg Config) {
 // Cloudflare adds to pages on the way out (its analytics beacon,
 // Rocket Loader, its inline bot-check scripts) are blocked by
 // this policy. They were once allowed by name, the inline ones
-// through a per-response nonce; the owner removed those
+// through a per-response nonce; I removed those
 // exceptions, so the policy names no third-party host and carries
 // no nonce.
 func contentSecurityPolicy() string {

@@ -126,11 +126,11 @@ var residueKinds = map[string]bool{
 	"count": true, "direction": true, "action": true, "structure": true,
 }
 
-// goldGate and goldDenyPilots are the owner's hand-verified
+// goldGate and goldDenyPilots are my hand-verified
 // readings from 2026-10-24, where a report's stored final
 // analysis predates the fix it verifies: report 42's analysis
 // reads the Bosena gate's name as a friendly pilot and names no
-// gate, and the owner verified the line was a gate clear naming
+// gate, and I verified the line was a gate clear naming
 // Bosena. The label logic trusts the hand verification over the
 // stale stored reading for this one report.
 var goldGate = map[int64]int64{42: 30002387}
@@ -867,7 +867,7 @@ func (s *summary) render(totalCalls int) string {
   claimed, the target gains the gate's system claim on the
   report's own line, the span the live step adds for a gate
   phrase no residue span carries.
-- Report 42 carries the owner's hand-verified reading (gate
+- Report 42 carries my hand-verified reading (gate
   Bosena, 30002387): its stored analysis predates the gate fix
   and reads the gate's name as a friendly pilot, so that pilot
   is excluded from its entity lists and the gate is labelled

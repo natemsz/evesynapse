@@ -1268,7 +1268,7 @@ func bucketText(singular, pluralForm string, n int, hulls []hullTally) string {
 	return s
 }
 
-// standingText renders the counts in the owner's order -- hostiles,
+// standingText renders the counts in the order I set -- hostiles,
 // friendlies, neutrals -- then the unclassified, the ones no
 // stored source speaks for.
 func standingText(counts [4]int, hulls [4]map[string]int, unknownSingular, unknownPlural string) string {

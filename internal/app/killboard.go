@@ -592,7 +592,7 @@ type killPageView struct {
 	Priced        bool
 	// BuildPriced: at least one retained line price came from
 	// the build-cost tier, so the page asterisks the value and
-	// labels it (owner ruling, 2026-11-12).
+	// labels it (my ruling, 2026-11-12).
 	BuildPriced bool
 	Slots       []killSlotGroup
 	Attackers   []killAttackerRow

@@ -8,7 +8,7 @@ import (
 	"evesynapse/internal/humanize"
 )
 
-// The house money figure (the owner's format, 2026-10-30): a
+// The house money figure (my format, 2026-10-30): a
 // formatted ISK amount renders as its grouped integer at full
 // size with the cents as a superscript, and no unit, the card
 // label or column header on the surface carries the unit. The

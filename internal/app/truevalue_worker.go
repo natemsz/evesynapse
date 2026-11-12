@@ -362,7 +362,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	// a COST input only: what a builder pays to make the leaf
 	// is the honest basis for a parent's build cost, and it
 	// is quoted as nobody's sell price anywhere. The guide's
-	// average is banned as a price source (owner doctrine,
+	// average is banned as a price source (my ruling,
 	// 2026-10-17) and the adjusted price is not one either: a
 	// leaf no house source knows is unpriced, and whatever
 	// builds from it stays unpriced with it, an honest gap,

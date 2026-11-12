@@ -456,24 +456,36 @@ func Optimize(req Request) (*Solution, error) {
 		}
 	}
 
-	slots, ccMin := 0, 5
+	// Fresh colonies are sized for the command center their pilot can
+	// build: pilots are grouped by that skill level, and each group
+	// gets its own planet classes and its own share of the slots.
+	slots := 0
+	slotsAt, nAt, ccOf := map[int]int{}, map[int]int{}, map[int64]int{}
 	for _, ch := range req.Characters {
 		slots += max(ch.MaxPlanets, 1)
-		ccMin = min(ccMin, ch.CCLevel)
+		slotsAt[ch.CCLevel] += max(ch.MaxPlanets, 1)
+		nAt[ch.CCLevel]++
+		if ch.ID != 0 {
+			ccOf[ch.ID] = ch.CCLevel
+		}
 	}
-	nChars := len(req.Characters)
+	var levels []int
+	for l := range nAt {
+		levels = append(levels, l)
+	}
+	sort.Ints(levels)
 
 	// Classes.
 	var classes []*planetClass
 	byType := map[string]*planetClass{}
-	held := 0 // slots that standing colonies occupy
+	held := 0               // slots that standing colonies occupy
+	heldAt := map[int]int{} // the same, by the owner's skill level
 	for i, cand := range req.Candidates {
 		if cand.Existing != nil && (req.Adapt || cand.Fixed) {
 			cc := cand.Existing.CCLevel
-			for _, ch := range req.Characters {
-				if ch.ID == cand.OwnerID && ch.CCLevel > cc {
-					cc = ch.CCLevel
-				}
+			if l, ok := ccOf[cand.OwnerID]; ok {
+				cc = max(cc, l)
+				heldAt[l]++
 			}
 			classes = append(classes, &planetClass{
 				key: fmt.Sprintf("p%d", cand.PlanetID), ptype: cand.Type, radius: cand.RadiusKm, cc: cc,
@@ -482,31 +494,40 @@ func Optimize(req Request) (*Solution, error) {
 			held++
 			continue
 		}
-		if len(cand.Peak) > 0 {
-			classes = append(classes, &planetClass{
-				key: fmt.Sprintf("p%d", cand.PlanetID), ptype: cand.Type, radius: cand.RadiusKm, cc: ccMin,
-				count: nChars, cands: []int{i}, peak: cand.Peak,
-			})
-			continue
-		}
-		cl := byType[cand.Type]
-		if cl == nil {
-			cl = &planetClass{key: "t" + cand.Type, ptype: cand.Type, radius: cand.RadiusKm, cc: ccMin}
-			byType[cand.Type] = cl
-			classes = append(classes, cl)
-		}
-		cl.cands = append(cl.cands, i)
-		cl.count += nChars
-		if cand.RadiusKm > 0 && cand.RadiusKm < cl.radius {
-			cl.radius = cand.RadiusKm
+		for _, l := range levels {
+			if len(cand.Peak) > 0 {
+				classes = append(classes, &planetClass{
+					key: fmt.Sprintf("p%d@%d", cand.PlanetID, l), ptype: cand.Type, radius: cand.RadiusKm, cc: l,
+					count: nAt[l], cands: []int{i}, peak: cand.Peak,
+				})
+				continue
+			}
+			k := fmt.Sprintf("t%s@%d", cand.Type, l)
+			cl := byType[k]
+			if cl == nil {
+				cl = &planetClass{key: k, ptype: cand.Type, radius: cand.RadiusKm, cc: l}
+				byType[k] = cl
+				classes = append(classes, cl)
+			}
+			cl.cands = append(cl.cands, i)
+			cl.count += nAt[l]
+			if cand.RadiusKm > 0 && cand.RadiusKm < cl.radius {
+				cl.radius = cand.RadiusKm
+			}
 		}
 	}
 	free := max(slots-held, 0)
 	if len(classes) == held && free > 0 {
 		// No planets offered beyond the standing colonies: one class
-		// per type at a typical size fills the slots left.
-		for _, pt := range PlanetTypes {
-			classes = append(classes, &planetClass{key: "t" + pt, ptype: pt, radius: TypicalRadiusKm[pt], cc: ccMin, count: free})
+		// per type and skill level at a typical size fills the slots left.
+		for _, l := range levels {
+			n := max(slotsAt[l]-heldAt[l], 0)
+			if n == 0 {
+				continue
+			}
+			for _, pt := range PlanetTypes {
+				classes = append(classes, &planetClass{key: fmt.Sprintf("t%s@%d", pt, l), ptype: pt, radius: TypicalRadiusKm[pt], cc: l, count: n})
+			}
 		}
 	}
 
@@ -676,6 +697,20 @@ func Optimize(req Request) (*Solution, error) {
 		allZ[z.v] = 1
 	}
 	m.row(allZ, senseLE, float64(slots))
+	if len(levels) > 1 {
+		// Each skill level's fresh colonies fit in its pilots' free slots.
+		for _, l := range levels {
+			row := map[int]float64{}
+			for _, z := range zs {
+				if cl := classes[z.class]; cl.existing == nil && cl.cc == l {
+					row[z.v] = 1
+				}
+			}
+			if len(row) > 0 {
+				m.row(row, senseLE, float64(max(slotsAt[l]-heldAt[l], 0)))
+			}
+		}
+	}
 
 	// Factory assignment: a[s] advanced/high-tech factories on schematic s.
 	aVar, runVar := map[string]int{}, map[string]int{}

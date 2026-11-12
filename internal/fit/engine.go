@@ -285,10 +285,26 @@ const (
 	AttrFighterSquadronIsSupport = 2213
 	AttrFighterSquadronIsHeavy   = 2214
 	AttrFighterSquadronMaxSize   = 2215
-	AttrFighterTubes             = 2216
-	AttrFighterLightSlots        = 2217
-	AttrFighterSupportSlots      = 2218
-	AttrFighterHeavySlots        = 2219
+	// Fighter propulsion abilities (no modifier rows: fitview
+	// applies them to the fighter's effective speed and signature).
+	AttrFighterABSpeedBonus      = 2151
+	AttrFighterMWDSpeedBonus     = 2152
+	AttrFighterMWDSigBonus       = 2153
+	AttrFighterMJDDistance       = 2154
+	AttrFighterMWDDuration       = 2157
+	AttrFighterABDuration        = 2158
+	AttrFighterEvasiveDuration   = 2123
+	AttrFighterEvasiveSpeedBonus = 2224
+	AttrFighterEvasiveSigBonus   = 2225
+	// The fighter propulsion ability effects themselves.
+	EffectFighterEvasive    = 6439
+	EffectFighterAB         = 6440
+	EffectFighterMWD        = 6441
+	EffectFighterMJD        = 6442
+	AttrFighterTubes        = 2216
+	AttrFighterLightSlots   = 2217
+	AttrFighterSupportSlots = 2218
+	AttrFighterHeavySlots   = 2219
 
 	AttrFighterAttackMissileMult     = 2226
 	AttrFighterAttackMissileDuration = 2233

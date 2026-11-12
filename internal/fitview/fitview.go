@@ -609,6 +609,8 @@ var fitGlyphKinds = map[string]string{
 	"Armor HP": "armor", "Shield HP": "shield", "Shield recharge": "shield",
 	"Armor repair": "repair", "Shield boosting": "shieldboost",
 	"Boost": "navigation", "Strength": "navigation", "Signature": "navigation",
+	"Speed": "navigation", "Microwarpdrive": "navigation", "Afterburner": "navigation",
+	"Evasive": "navigation", "Jump": "navigation", "Signature on MWD": "navigation", "Signature evading": "navigation",
 	"CPU": "cpu", "PG": "powergrid", "Powergrid": "powergrid", "Calibration": "calibration",
 	"High slots": "fitting", "Mid slots": "fitting", "Low slots": "fitting",
 	"Turrets": "fitting", "Launchers": "fitting",
@@ -786,6 +788,38 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 				}
 			}
 			break
+		}
+	}
+	// A fighter's own speed and signature, and what its propulsion
+	// ability makes of them while it runs: the ability effects carry
+	// no modifier rows, so the bonus is read off the fighter and
+	// applied to its effective figures here.
+	if base[fit.AttrFighterSquadronMaxSize] > 0 {
+		speed, sig := eff[fit.AttrMaxVelocity], eff[fit.AttrSignatureRadius]
+		if speed > 0 {
+			add("Speed", FitFmt0(speed)+" m/s", FitTipClass(speed, base[fit.AttrMaxVelocity], true))
+		}
+		ability := func(label, sigLabel string, effect int64, speedBonus, sigBonus, seconds float64) {
+			if speedBonus == 0 || speed <= 0 || snap == nil || !snap.HasEffect(typeID, effect) {
+				return // a bonus on a fighter without the ability moves nothing
+			}
+			v := FitFmt0(speed*(1+speedBonus/100)) + " m/s"
+			if seconds > 0 {
+				v += " for " + FitFmt0(seconds/1000) + " s"
+			}
+			add(label, v, "")
+			if sigBonus != 0 && sig > 0 {
+				add(sigLabel, FitFmt0(sig*(1+sigBonus/100))+" m", "")
+			}
+		}
+		ability("Microwarpdrive", "Signature on MWD", fit.EffectFighterMWD, eff[fit.AttrFighterMWDSpeedBonus], eff[fit.AttrFighterMWDSigBonus], eff[fit.AttrFighterMWDDuration])
+		ability("Afterburner", "", fit.EffectFighterAB, eff[fit.AttrFighterABSpeedBonus], 0, eff[fit.AttrFighterABDuration])
+		ability("Evasive", "Signature evading", fit.EffectFighterEvasive, eff[fit.AttrFighterEvasiveSpeedBonus], eff[fit.AttrFighterEvasiveSigBonus], eff[fit.AttrFighterEvasiveDuration])
+		if d := eff[fit.AttrFighterMJDDistance]; d > 0 && snap != nil && snap.HasEffect(typeID, fit.EffectFighterMJD) {
+			add("Jump", FitVisualNum(d/1000)+" km", "")
+		}
+		if sig > 0 {
+			add("Signature", FitFmt0(sig)+" m", FitTipClass(sig, base[fit.AttrSignatureRadius], false))
 		}
 	}
 	if sf := eff[fit.AttrSpeedFactor]; sf != 0 {

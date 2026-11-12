@@ -4197,7 +4197,7 @@ html[data-theme="light"] .fit-head select {
 }
 .fit-chip-qty { color: var(--success); }
 .fit-chip-state { margin-left: auto; padding: 0 0.35rem; border: 1px solid #333; border-radius: var(--r-sm); font-size: var(--fs-2xs); line-height: 1.15; min-height: calc(0.68rem * 1.15 + 2px); box-sizing: border-box; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.fit-chip.st-active .fit-chip-state { border-color: rgba(255, 184, 77, 0.45); color: var(--success); }
+.fit-chip.st-active .fit-chip-state { border-color: var(--gold); color: var(--gold); }
 .fit-chip.st-overheated .fit-chip-state { border-color: var(--accent); color: var(--accent); }
 .fit-chip-sub { flex-basis: 100%; min-width: 0; font-size: var(--fs-xs); color: var(--muted); overflow-wrap: anywhere; }
 .fit-qty {
@@ -4341,6 +4341,18 @@ html[data-theme="light"] .fit-head select {
 }
 .fit-vhist:hover:not(:disabled) { border-color: var(--success); color: var(--gold); }
 .fit-vhist:disabled { opacity: 0.3; cursor: default; box-shadow: none; }
+/* The mouse and keyboard card: a light-dismiss popover in the top
+   layer. Touch has its own taps, so phones never show the button. */
+.fit-vkeys-btn { font-family: var(--font-display); font-weight: 600; }
+.fit-vkeys { margin: auto; min-width: min(22rem, 92vw); padding: 0.8rem 1rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--surface-pane); color: var(--text); }
+.fit-vkeys::backdrop { background: rgb(0 0 0 / 0.35); }
+.fit-vkeys h2 { margin: 0 0 0.45rem; font-family: var(--font-display); font-weight: 600; font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-bright); }
+.fit-vkeys dl { margin: 0; }
+.fit-vkeys dl > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.2rem 0; border-top: 1px solid var(--box-edge); font-size: var(--fs-sm); }
+.fit-vkeys dl > div:first-child { border-top: 0; }
+.fit-vkeys dt { color: var(--muted-2); }
+.fit-vkeys dd { margin: 0; text-align: right; }
+@media (max-width: 45rem) { .fit-vkeys-btn { display: none; } }
 .fit-vship {
   position: absolute;
   left: 50%;
@@ -4451,11 +4463,15 @@ look, none of its affordances. */
 .fit-vslot.filled { border-style: solid; border-color: #6b5a43; }
 .fit-vslot.filled:hover { border-color: var(--accent); }
 .fit-vslot.filled img { width: 84%; height: 84%; border-radius: 50%; pointer-events: none; }
-/* Module states: offline is dark and desaturated, inactive dims
-   slightly, overheated glows ember. */
+/* Module states, each readable at a glance: offline is dark and
+   grey, online (fitted, not cycling) is dim with a plain rim,
+   active (cycling) is lit with a gold rim, overheated glows
+   ember. */
 .fit-vslot.st-offline { opacity: 0.55; }
 .fit-vslot.st-offline img { filter: grayscale(1) brightness(0.55); }
-.fit-vslot.st-online img { filter: brightness(0.78); }
+.fit-vslot.st-online { border-color: #4a4034; }
+.fit-vslot.st-online img { filter: saturate(0.6) brightness(0.62); }
+.fit-vslot.st-active { border-color: var(--gold); box-shadow: 0 0 7px color-mix(in srgb, var(--gold) 45%, transparent); }
 .fit-vslot.st-overheated { border-color: #ff6a1a; }
 .fit-vslot.st-overheated img { filter: saturate(1.25) brightness(1.05); }
 .fit-vslot.st-overheated::after {
@@ -4465,8 +4481,10 @@ look, none of its affordances. */
 }
 .fit-chip.st-offline { opacity: 0.55; }
 .fit-chip.st-offline .fit-chip-name { filter: grayscale(1); }
-.fit-chip.st-online { opacity: 0.85; }
-.fit-chip.st-overheated { border-color: #ff6a1a; box-shadow: 0 0 8px rgba(255, 106, 26, 0.45); }
+.fit-chip.st-online { box-shadow: inset 3px 0 0 #4a4034; }
+.fit-chip.st-online .fit-chip-name { color: var(--muted); }
+.fit-chip.st-active { box-shadow: inset 3px 0 0 var(--gold); }
+.fit-chip.st-overheated { border-color: #ff6a1a; box-shadow: inset 3px 0 0 #ff6a1a, 0 0 8px rgba(255, 106, 26, 0.45); }
 /* Loaded-charge badge in the slot's corner; a tap jumps to the
    ammunition select. */
 .fit-vslot .fit-vammo {

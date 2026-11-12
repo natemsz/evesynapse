@@ -854,7 +854,8 @@ func TestFitEngineImplantsNoImplants(t *testing.T) {
 //     attr 1000 to ship attr 2000; CPU 10, PG 10, cap need 5/cycle,
 //     cycle 5 s.
 //   - 2002 "Test Plate": passive (cat 0) effect adding flat 50 to
-//     ship attr 2001; CPU 5, PG 5.
+//     ship attr 2001, plus the onlining effect (16, filed in the
+//     active category like every real module); CPU 5, PG 5.
 //   - 2003 "Test Heater": like 2001, plus an overload (cat 5)
 //     effect raising its own bonus attr 1000 by 20% (op 6).
 //   - 2004 "Test Rig": rig-slot flag, passive bonus.
@@ -868,6 +869,7 @@ func stateFixture() (*fitFixture, int64) {
 	// Passive module.
 	fx.attrs(2002, map[int64]float64{50: 5, 30: 5, 1002: 50})
 	fx.effect(2002, 9002, 0, fitMod("shipID", "ItemModifier", 2001, 1002, 2))
+	fx.effect(2002, EffectOnline, 1)
 	// Heatable active module.
 	fx.attrs(2003, map[int64]float64{50: 10, 30: 10, 6: 5, 73: 5000, 1000: 10, 1001: 20})
 	fx.effect(2003, 9003, 1, fitMod("shipID", "ItemModifier", 2000, 1000, 2))

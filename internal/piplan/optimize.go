@@ -789,7 +789,17 @@ func Optimize(req Request) (*Solution, error) {
 	}
 
 	// Market.
-	makeable := makeableInReach(chain, classes)
+	// Only planets a colony can stand on count: standing colonies, and
+	// fresh planets while a pilot at that skill level has a free slot.
+	// A planet in reach with every slot taken makes nothing, so what
+	// only it could supply is bought.
+	var usable []*planetClass
+	for _, cl := range classes {
+		if cl.existing != nil || (free > 0 && slotsAt[cl.cc]-heldAt[cl.cc] > 0) {
+			usable = append(usable, cl)
+		}
+	}
+	makeable := makeableInReach(chain, usable)
 	sellVar, buyVar := map[string]int{}, map[string]int{}
 	for _, c := range chain {
 		if TierOf(c) == TierRaw {
@@ -1011,9 +1021,22 @@ func Optimize(req Request) (*Solution, error) {
 	sol := &Solution{Target: req.Target, SlotsTotal: slots, Exact: exact, ProgramHours: req.ProgramHours, PricesKnown: true}
 	sol.PerDay = x[sellVar[req.Target]] * 24
 	if sol.PerDay < 0.5 {
-		sol.Short = fmt.Sprintf("%d planets cannot make even one %s a day from raw resources.", slots, req.Target)
-		if !req.AllowBuy && !req.BuyMissing {
-			sol.Short += " Allow buying inputs, or add pilots."
+		soldOther := false
+		for c, v := range sellVar {
+			if c != req.Target && x[v] > 1e-6 {
+				soldOther = true
+			}
+		}
+		switch {
+		case soldOther:
+			sol.Short = fmt.Sprintf("Selling what the planets make pays more than making %s. Turn off selling leftovers to plan %s anyway.", req.Target, req.Target)
+		case req.Adapt && maxMode:
+			sol.Short = fmt.Sprintf("Rebuilding the colonies for %s pays less than the change costs. Ask for a number a day to plan it anyway.", req.Target)
+		default:
+			sol.Short = fmt.Sprintf("%d planets cannot make even one %s a day from raw resources.", slots, req.Target)
+			if !req.AllowBuy && !req.BuyMissing {
+				sol.Short += " Allow buying inputs, or add pilots."
+			}
 		}
 	}
 	for c, v := range sellVar {

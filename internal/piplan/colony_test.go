@@ -161,3 +161,38 @@ func TestRicherPlanetsKeepTargetReachable(t *testing.T) {
 		}
 	}
 }
+
+// TestBuyMissingBuysWhatOnlyFullPlanetsSupply holds "only what my
+// planets cannot make" to the planets a plan can use: with every slot
+// held by standing Barren colonies, a Gas planet in reach cannot host
+// a colony, so Electrolytes are bought and Coolant is still made.
+func TestBuyMissingBuysWhatOnlyFullPlanetsSupply(t *testing.T) {
+	cands := []Candidate{{PlanetID: 9, Name: "G1", Type: "Gas", RadiusKm: 20000}}
+	for id := int64(1); id <= 2; id++ {
+		cands = append(cands, Candidate{
+			PlanetID: id, Name: "B", Type: "Barren", RadiusKm: 4000, OwnerID: 1,
+			Existing: &Colony{PlanetID: id, PlanetType: "Barren", RadiusKm: 4000, CCLevel: 5, Pins: []Pin{{Kind: PinCommandCenter, Keep: ChangeKeep}}},
+		})
+	}
+	sol, err := Optimize(Request{
+		Target: "Coolant", TaxRate: 0.1, BuyMissing: true, Adapt: true,
+		Characters: []Character{{ID: 1, Name: "Pilot", MaxPlanets: 2, CCLevel: 5}},
+		Candidates: cands,
+		Prices:     map[string]float64{"Coolant": 15000, "Water": 1, "Electrolytes": 400, "Aqueous Liquids": 1, "Ionic Solutions": 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sol.PerDay < 1 {
+		t.Fatalf("no Coolant made: %q", sol.Short)
+	}
+	bought := false
+	for _, f := range sol.Flows {
+		if f.From == -1 && f.Item == "Electrolytes" {
+			bought = true
+		}
+	}
+	if !bought {
+		t.Errorf("Electrolytes not bought; flows %+v", sol.Flows)
+	}
+}

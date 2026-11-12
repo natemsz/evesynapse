@@ -895,13 +895,13 @@
     var R = this.pinRadius();
     var pos = pins.map(function (p) { return self.toScreen(p.lat, p.lon); });
 
+    var ecuCol = css(this.panel, "--pi-k-ecu", "#6fd3a6");
+    var linkCase = css(this.panel, "--pi-link-case", "rgba(8,12,20,0.75)");
     // Extractor heads and their reach.
     pins.forEach(function (p, i) {
       if (p.kind !== "ecu" || p.change === "remove") return;
       var heads = p.headPos && p.headPos.length ? p.headPos : null;
       var n = p.heads || 0;
-      ctx.strokeStyle = css(self.panel, "--pi-k-ecu", "#6fd3a6");
-      ctx.globalAlpha = 0.5;
       for (var k = 0; k < n; k++) {
         var hp;
         if (heads && heads[k]) hp = self.toScreen(heads[k].lat, heads[k].lon);
@@ -910,26 +910,37 @@
           var rr = R * 2.6 + (k % 2) * R * 0.9;
           hp = { x: pos[i].x + Math.cos(a) * rr, y: pos[i].y + Math.sin(a) * rr };
         }
+        // Dark casing first, as for links, so heads read on ice.
+        ctx.strokeStyle = linkCase; ctx.lineWidth = 3; ctx.globalAlpha = 0.6;
+        ctx.beginPath(); ctx.moveTo(pos[i].x, pos[i].y); ctx.lineTo(hp.x, hp.y); ctx.stroke();
+        ctx.beginPath(); ctx.arc(hp.x, hp.y, Math.max(3, R * 0.28), 0, TAU); ctx.stroke();
+        ctx.strokeStyle = ecuCol; ctx.lineWidth = 1; ctx.globalAlpha = 0.8;
         ctx.beginPath(); ctx.moveTo(pos[i].x, pos[i].y); ctx.lineTo(hp.x, hp.y); ctx.stroke();
         ctx.beginPath(); ctx.arc(hp.x, hp.y, Math.max(3, R * 0.28), 0, TAU); ctx.stroke();
         var pulse = (Math.sin(t * 2 + k) + 1) / 2;
         ctx.fillStyle = css(self.panel, "--pi-k-ecu", "#6fd3a6");
         ctx.globalAlpha = 0.25 + pulse * 0.35;
         ctx.beginPath(); ctx.arc(hp.x, hp.y, Math.max(2, R * 0.16), 0, TAU); ctx.fill();
-        ctx.globalAlpha = 0.5;
       }
       ctx.globalAlpha = 1;
+      ctx.lineWidth = 1;
     });
 
-    // Links, thicker with level.
-    var linkCol = css(this.panel, "--pi-link", "rgba(200,220,255,0.55)");
-    (c.links || []).forEach(function (l) {
-      var a = pos[l.a], b = pos[l.b];
-      if (!a || !b) return;
-      ctx.strokeStyle = linkCol;
-      ctx.lineWidth = 1.5 + (l.level || 0) * 0.8;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    // Links, thicker with level. A dark casing under each line keeps it
+    // readable on bright surfaces such as ice.
+    var linkCol = css(this.panel, "--pi-link", "rgba(200,220,255,0.85)");
+    ctx.lineCap = "round";
+    [true, false].forEach(function (casing) {
+      (c.links || []).forEach(function (l) {
+        var a = pos[l.a], b = pos[l.b];
+        if (!a || !b) return;
+        var w = 1.5 + (l.level || 0) * 0.8;
+        ctx.strokeStyle = casing ? linkCase : linkCol;
+        ctx.lineWidth = casing ? w + 2.5 : w;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      });
     });
+    ctx.lineCap = "butt";
 
     // Goods moving along routes.
     (c.routes || []).forEach(function (r, ri) {

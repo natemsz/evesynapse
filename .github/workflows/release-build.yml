@@ -326,6 +326,7 @@ jobs:
   # resort. The R2 secrets are not set on GitHub, so this job
   # steps aside for now; the Forgejo mirror job covers it when
   # releases run there again.
+  # Files land under evesynapse/ in the releases bucket.
   mirror:
     if: github.server_url == 'https://github.com' && needs.release.outputs.publish == 'true'
     runs-on: ubuntu-latest
@@ -368,11 +369,11 @@ jobs:
           done
           if [ "$VERSION" = "${VERSION%%-*}" ]; then CH="latest"; else CH="latest-dev"; fi
           for a in arm64 amd64; do
-            aws s3 cp "dist/evesynapse-$a" "s3://$R2_BUCKET/$CH/evesynapse-$a" --endpoint-url "$EP"
+            aws s3 cp "dist/evesynapse-$a" "s3://$R2_BUCKET/evesynapse/$CH/evesynapse-$a" --endpoint-url "$EP"
           done
           for a in arm64 amd64; do
-            aws s3 cp "dist/latest-$a.json" "s3://$R2_BUCKET/$CH-$a.json" --endpoint-url "$EP" --content-type "application/json"
-            aws s3 cp "dist/latest-$a.json.sig" "s3://$R2_BUCKET/$CH-$a.json.sig" --endpoint-url "$EP"
+            aws s3 cp "dist/latest-$a.json" "s3://$R2_BUCKET/evesynapse/$CH-$a.json" --endpoint-url "$EP" --content-type "application/json"
+            aws s3 cp "dist/latest-$a.json.sig" "s3://$R2_BUCKET/evesynapse/$CH-$a.json.sig" --endpoint-url "$EP"
           done
           echo "Mirrored v$VERSION to the $CH channel."
 

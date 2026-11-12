@@ -113,9 +113,14 @@ func (app *Application) attachMarketChanges(ctx context.Context, item *marketIte
 // for a watched item; past it the traded history speaks instead.
 const watchFreshFor = 6 * time.Hour
 
+// watchHistory30Rows is enough recorded days for a 30-day change
+// with its five-day tolerance.
+const watchHistory30Rows = 40
+
 // watchMove is a watched item's price and its 7- and 30-day moves:
 // the stat pack's typical sell where a sweep covers the region, else
-// the recorded traded averages. Watch rows and watch alerts both read
+// the recorded traded averages (which also carry the 30-day move
+// while the sweep's daily rows are younger than that). Watch rows and watch alerts both read
 // it, so the number a player sees is the number that alerts them.
 type watchMove struct {
 	Current          float64
@@ -131,6 +136,10 @@ func (app *Application) watchMove(ctx context.Context, typeID, regionID int64) w
 		m = watchMove{Current: s.TypicalSell, Has: true, Chg7: s.SellChg7d.Float64, Has7: true, FromSweep: true}
 		if s.SellChg30d.Valid {
 			m.Chg30, m.Has30 = s.SellChg30d.Float64, true
+		} else {
+			// The sweep's daily book rows do not reach 30 days back
+			// yet: the recorded traded averages carry the 30-day move.
+			m.Chg30, m.Has30 = markethistory.ChangePct(app.recentHistoryRows(ctx, regionID, typeID, watchHistory30Rows), 30)
 		}
 		return m
 	}

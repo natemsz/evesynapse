@@ -428,6 +428,12 @@ func TestDemoSignInAndPagesRender(t *testing.T) {
 	}
 	mustContain(t, "demo home", home.Body.String(),
 		"Sable Iversen", "Test Pilot Collective", `badge demo`, "Demo")
+	// The shared demo account cannot save a theme, so its pages
+	// render without the account-theme marker and the visitor's own
+	// browser choice applies, as it does signed out.
+	if strings.Contains(home.Body.String(), `name="es-theme-account"`) {
+		t.Error("demo home carries the account-theme marker; the theme must stay in the browser")
+	}
 
 	pages := []struct {
 		path string

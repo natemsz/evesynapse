@@ -82,7 +82,10 @@
     // wire shape is the whole state: the scheme, its tier, and
     // the backdrop strength the default was left at.
     function saveAccount() {
-      if (!window.fetch) return;
+      // Only a signed-in account that can save carries the meta tag
+      // (base.html); signed-out and demo visitors keep the theme in
+      // this browser alone.
+      if (!window.fetch || !document.querySelector('meta[name="es-theme-account"]')) return;
       var st = currentState();
       var body = new URLSearchParams();
       body.set('scheme', st.scheme);

@@ -129,6 +129,33 @@ UPDATE swarm_peers SET excluded = $2, exclude_note = $3 WHERE instance_id = $1;
 -- name: TouchSwarmPeerGossip :exec
 UPDATE swarm_peers SET last_gossip = $2 WHERE instance_id = $1;
 
+-- An instance met under the ID its key certifies retires any row
+-- the same key holds under an older ID (one minted before IDs were
+-- derived from keys): the same key is the same instance. The old
+-- row's standing carries over (approval, exclusion and its note,
+-- the reputation counters, probation, the first sighting) and the
+-- old row goes, so the instance is listed once.
+-- name: MergeLegacySwarmPeer :execrows
+WITH old AS (
+    DELETE FROM swarm_peers o
+    WHERE o.public_key = sqlc.arg(public_key) AND o.instance_id <> sqlc.arg(instance_id)
+    RETURNING o.approved, o.excluded, o.exclude_note, o.good_checks, o.bad_checks,
+        o.probation_checks, o.probation_since, o.first_seen, o.last_pulled, o.last_served
+)
+UPDATE swarm_peers n SET
+    approved = n.approved OR (SELECT bool_or(old.approved) FROM old),
+    excluded = n.excluded OR (SELECT bool_or(old.excluded) FROM old),
+    exclude_note = CASE WHEN n.exclude_note <> '' THEN n.exclude_note
+        ELSE COALESCE((SELECT max(old.exclude_note) FROM old), '') END,
+    good_checks = n.good_checks + (SELECT sum(old.good_checks) FROM old)::bigint,
+    bad_checks = n.bad_checks + (SELECT sum(old.bad_checks) FROM old)::bigint,
+    probation_checks = GREATEST(n.probation_checks, (SELECT max(old.probation_checks) FROM old)),
+    probation_since = COALESCE(n.probation_since, (SELECT max(old.probation_since) FROM old)),
+    first_seen = LEAST(n.first_seen, (SELECT min(old.first_seen) FROM old)),
+    last_pulled = GREATEST(n.last_pulled, (SELECT max(old.last_pulled) FROM old)),
+    last_served = GREATEST(n.last_served, (SELECT max(old.last_served) FROM old))
+WHERE n.instance_id = sqlc.arg(instance_id) AND EXISTS (SELECT 1 FROM old);
+
 -- Removing a peer forgets everything: address, pinned key,
 -- approval, exclusion, the ledger, and any key-conflict mark.
 -- It is the only way a new key is accepted for an instance ID:

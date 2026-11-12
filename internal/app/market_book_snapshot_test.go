@@ -123,14 +123,14 @@ func TestAnonymousMarketStoredBookAndLiveToggle(t *testing.T) {
 	// from the sweep's whole-book figures (median sell of
 	// 5..11 is 8, not the top-five's 7), the top orders in the
 	// tables, the full depth from the stats row, and the sweep
-	// note instead of the signed-in notice.
+	// age in the order book header instead of the signed-in notice.
 	code, body := getSwapPage(t, app, nil, "/market/?type=34")
 	if code != http.StatusOK {
 		t.Fatalf("GET /market/?type=34 (anonymous, stored book): status %d, want 200", code)
 	}
 	mustContain(t, "/market/?type=34 (anonymous, stored book)", body,
 		"Tritanium",
-		"Order book from the latest region sweep",
+		"data-book-swept",
 		"Best sell",
 		"5.00 <small>ISK</small>",
 		"Typical sell <b>8.00</b>",
@@ -186,7 +186,7 @@ func TestAnonymousMarketStoredBookAndLiveToggle(t *testing.T) {
 		t.Fatalf("GET /market/?type=34 (anonymous, switch off): status %d, want 200", code)
 	}
 	mustContain(t, "/market/?type=34 (anonymous, switch off)", body, "The live order book loads for signed-in visitors")
-	if strings.Contains(body, "Order book from the latest region sweep") {
+	if strings.Contains(body, "data-book-swept") {
 		t.Error("switch off still serves the stored book")
 	}
 	if countWants() != 0 {
@@ -215,7 +215,7 @@ func TestAnonymousMarketStoredBookAndLiveToggle(t *testing.T) {
 		t.Fatal("switch on did not land in the live state")
 	}
 	_, body = getSwapPage(t, app, nil, "/market/?type=34")
-	mustContain(t, "/market/?type=34 (anonymous, switch back on)", body, "Order book from the latest region sweep")
+	mustContain(t, "/market/?type=34 (anonymous, switch back on)", body, "data-book-swept")
 	if countWants() == 0 {
 		t.Error("switch back on did not resume market wants")
 	}

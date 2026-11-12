@@ -110,8 +110,8 @@
   <div class="l-pane l-pane--main mkt-main">
   {{if $item.BookPending}}
   <p class="notice"><small>The live order book loads for signed-in visitors. The hub prices below come from the latest region sweep.{{if $.SSOConfigured}} <a href="/auth/eve">Sign in with EVE</a> for the full book, price alerts and your own orders.{{end}}</small></p>
-  {{else if $item.BookStoredAt}}
-  <p class="notice"><small>Order book from the latest region sweep · swept <time datetime="{{rfc3339 $item.BookSweptAt}}" data-live-ago data-book-swept>{{$item.BookStoredAt}}</time>.{{if and $item.Anonymous $.SSOConfigured}} <a href="/auth/eve">Sign in with EVE</a> for the live book, price alerts and your own orders.{{end}}</small></p>
+  {{else if and $item.BookStoredAt $item.Anonymous $.SSOConfigured}}
+  <p class="notice"><small><a href="/auth/eve">Sign in with EVE</a> for the live book, price alerts and your own orders.</small></p>
   {{end}}
 
   <div class="kpis mkt-kpis">

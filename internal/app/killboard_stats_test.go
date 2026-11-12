@@ -89,7 +89,7 @@ func TestRepricedKillMovesCountedISK(t *testing.T) {
 	if err := app.foldKillStats(ctx, 710101); err != nil {
 		t.Fatal(err)
 	}
-	if err := app.storeKillPrices(ctx, 710101, at, []killLine{{typeID: 587, destroyed: 1}}, map[int64]float64{587: 5_000_000}, time.Now().UTC()); err != nil {
+	if err := app.storeKillPrices(ctx, 710101, at, []killLine{{typeID: 587, destroyed: 1}}, map[int64]float64{587: 5_000_000}, nil, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	since := at.Add(-24 * time.Hour)

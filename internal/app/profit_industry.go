@@ -94,7 +94,7 @@ func (app *Application) landDeliveredJobs(ctx context.Context, src ledgerSource,
 	typicals := app.TypicalSells(ctx)
 	estimates := app.storedTrueValues(ctx)
 	priceNow := func(typeID int64) (float64, bool) {
-		return pickValuationPrice(typicals[typeID], estSellOf(estimates, typeID))
+		return pickValuationPrice(typicals[typeID], estSellOf(estimates, typeID), buildCostOf(estimates, typeID))
 	}
 
 	touched := map[int64]bool{}
@@ -525,7 +525,7 @@ func (app *Application) landContractSales(ctx context.Context, src ledgerSource)
 		value, units := 0.0, int64(0)
 		weight := map[int64]float64{}
 		for t, n := range qty {
-			if price, ok := pickValuationPrice(typicals[t], estSellOf(estimates, t)); ok {
+			if price, ok := pickValuationPrice(typicals[t], estSellOf(estimates, t), buildCostOf(estimates, t)); ok {
 				weight[t] = price * float64(n)
 				value += weight[t]
 			}

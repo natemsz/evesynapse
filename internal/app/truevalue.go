@@ -134,6 +134,24 @@ func (app *Application) TrueValues(ctx context.Context) map[int64]float64 {
 	return out
 }
 
+// BuildCosts is the fit foundation's view of the same table
+// (fitview.Env): the stored build cost by type, the house
+// order's last tier (owner ruling, 2026-11-12). Every computed
+// row carries one, whether or not an estimate stands behind it.
+func (app *Application) BuildCosts(ctx context.Context) map[int64]float64 {
+	rows := app.storedTrueValues(ctx)
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make(map[int64]float64, len(rows))
+	for id, tv := range rows {
+		if tv.BuildCost > 0 {
+			out[id] = tv.BuildCost
+		}
+	}
+	return out
+}
+
 // AskEvidence reads the stored live asks behind an unpriced
 // type (schema 137) from the cached true-value rows.
 func (app *Application) AskEvidence(ctx context.Context, typeID int64) (module.AskEvidence, bool) {
@@ -141,7 +159,7 @@ func (app *Application) AskEvidence(ctx context.Context, typeID int64) (module.A
 	if !ok || tv.AskCount <= 0 || !tv.AskLow.Valid || !tv.AskHigh.Valid {
 		return module.AskEvidence{}, false
 	}
-	if _, priced := storedEstimate(tv); priced {
+	if _, priced := storedEstimate(tv); priced || tv.BuildCost > 0 {
 		return module.AskEvidence{}, false
 	}
 	return module.AskEvidence{Low: tv.AskLow.Float64, High: tv.AskHigh.Float64, Count: tv.AskCount}, true
@@ -149,17 +167,21 @@ func (app *Application) AskEvidence(ctx context.Context, typeID int64) (module.A
 
 // pickValuationPrice resolves one unit's price in the house
 // order: The Forge's swept typical sell, then the true-value
-// estimated sell (estSell, 0 when none is stored). ok=false
-// when neither knows the type, CCP's guide average is banned
-// as a price source (owner doctrine, 2026-10-17) and the
-// adjusted price survives only as the EIV input to job fees,
-// never as a price.
-func pickValuationPrice(typicalSell, estSell float64) (float64, bool) {
+// estimated sell (estSell, 0 when none is stored), then the
+// stored build cost (owner ruling, 2026-11-12: enough when it
+// is all we have). ok=false when no tier knows the type,
+// CCP's guide average is banned as a price source (owner
+// doctrine, 2026-10-17) and the adjusted price survives only
+// as the EIV input to job fees, never as a price.
+func pickValuationPrice(typicalSell, estSell, buildCost float64) (float64, bool) {
 	if typicalSell > 0 {
 		return typicalSell, true
 	}
 	if estSell > 0 {
 		return estSell, true
+	}
+	if buildCost > 0 {
+		return buildCost, true
 	}
 	return 0, false
 }
@@ -171,6 +193,16 @@ func estSellOf(rows map[int64]db.TrueValue, typeID int64) float64 {
 		if est, ok := storedEstimate(tv); ok {
 			return est
 		}
+	}
+	return 0
+}
+
+// buildCostOf reads the stored build cost for one type out
+// of a stored-true-values map (nil-safe): 0 when the type has
+// no computed row.
+func buildCostOf(rows map[int64]db.TrueValue, typeID int64) float64 {
+	if tv, ok := rows[typeID]; ok && tv.BuildCost > 0 {
+		return tv.BuildCost
 	}
 	return 0
 }

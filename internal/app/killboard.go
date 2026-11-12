@@ -590,10 +590,14 @@ type killPageView struct {
 	DroppedPct    int
 	Coverage      int // percent of lines our appraisal priced, 100 when full
 	Priced        bool
-	Slots         []killSlotGroup
-	Attackers     []killAttackerRow
-	Detailed      bool   // the full killmail is still held (a year)
-	Fit           string // the lost fitting as EFT text, "" without the full killmail
+	// BuildPriced: at least one retained line price came from
+	// the build-cost tier, so the page asterisks the value and
+	// labels it (owner ruling, 2026-11-12).
+	BuildPriced bool
+	Slots       []killSlotGroup
+	Attackers   []killAttackerRow
+	Detailed    bool   // the full killmail is still held (a year)
+	Fit         string // the lost fitting as EFT text, "" without the full killmail
 }
 
 // killSlot names the slot group an inventory flag belongs to, and
@@ -785,6 +789,9 @@ func (app *Application) fillKillDetail(ctx context.Context, names *killNames, v 
 	if rows, err := app.queries.GetKillLinePrices(ctx, km.KillmailID); err == nil {
 		for _, r := range rows {
 			price[r.TypeID] = r.UnitPrice
+			if r.Tier == module.AppraisalTierBuildCost {
+				v.BuildPriced = true
+			}
 		}
 	}
 	groups := map[string]*killSlotGroup{}
@@ -855,23 +862,28 @@ func (app *Application) fillKillDetail(ctx context.Context, names *killNames, v 
 	}
 }
 
-// killUnitPrices prices a kill's item types through the house order.
-func (app *Application) killUnitPrices(ctx context.Context, types map[int64]bool) (map[int64]float64, error) {
+// killUnitPrices prices a kill's item types through the house
+// order, and reports the tier each price came from: a line
+// priced at the build-cost tier is stored with its tier so the
+// kill page can asterisk the value it feeds.
+func (app *Application) killUnitPrices(ctx context.Context, types map[int64]bool) (map[int64]float64, map[int64]string, error) {
 	out := map[int64]float64{}
+	tiers := map[int64]string{}
 	lines := make([]module.AppraisalLine, 0, len(types))
 	for id := range types {
 		lines = append(lines, module.AppraisalLine{TypeID: id, Quantity: 1, Included: true})
 	}
 	res, err := app.AppraiseLines(ctx, lines)
 	if err != nil {
-		return out, err
+		return out, tiers, err
 	}
 	for _, l := range res.Lines {
 		if l.Priced {
 			out[l.TypeID] = l.UnitPrice
+			tiers[l.TypeID] = l.Tier
 		}
 	}
-	return out, nil
+	return out, tiers, nil
 }
 
 // warmKillNames resolves, in bulk, the names recent public kills

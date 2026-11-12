@@ -1069,7 +1069,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 			assetsSeen = true
 			for _, a := range b.assets {
 				totalItems++
-				price, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID))
+				price, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID), buildCostOf(trueValues, a.TypeID))
 				if !ok {
 					continue
 				}

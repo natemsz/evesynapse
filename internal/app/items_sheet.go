@@ -378,6 +378,8 @@ func variationPriceNote(p module.AppraisedLine, now time.Time) string {
 		return ""
 	case module.AppraisalTierEstimate:
 		return "Estimate"
+	case module.AppraisalTierBuildCost:
+		return "Build cost"
 	case module.AppraisalTierFallback:
 		return "Fuzzwork, " + age
 	}

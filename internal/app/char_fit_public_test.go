@@ -11,6 +11,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fitview"
 )
 
 // TestPublicFitPageMirrorsTool: the public fit page renders the
@@ -269,4 +270,89 @@ func TestPublicFitCostIsHullPlusParts(t *testing.T) {
 		t.Fatalf("simulate: status %d", code)
 	}
 	mustContain(t, "fitting tool stats", tool, `data-fit-cost="1620"`, hullLine)
+}
+
+// TestPublicFitCostBuildTier: a hull no market price and no
+// contract-backed estimate can speak for still carries a
+// value, its stored build cost, in the stored reprice and in
+// the fitting tool's own sum, and every surface that shows
+// the figure asterisks it and labels it as build cost.
+func TestPublicFitCostBuildTier(t *testing.T) {
+	transport := &pricesTransport{body: `[]`}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	seedFitUniverse(t, func(stmt string) error {
+		_, err := conn.ExecContext(ctx, stmt)
+		return err
+	})
+	now := time.Now().UTC()
+	items := `[{"typeId":3001,"qty":2}]`
+	row, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
+		UserID: user.ID, Name: "Build Priced Fixture", ShipTypeID: 1001, IsPublic: true,
+		CreatedAt: now, UpdatedAt: now,
+		ItemsJson: `{"name":"Build Priced Fixture","shipTypeId":1001,"items":` + items + `}`,
+	})
+	if err != nil {
+		t.Fatalf("create fitting: %v", err)
+	}
+	// The hull's stored row carries a build cost and no
+	// estimate (one contract sample is not enough to stand
+	// one up); the item rides The Forge's typical.
+	seedTrueValue(t, q, 1001, 5000, 0, 1)
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 3001, TypicalSell: 250,
+		AvgDailyVolume: 100, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed region stat: %v", err)
+	}
+	if stored, limited := app.refreshGuidePrices(ctx); limited || !stored {
+		t.Fatalf("guide refresh = (stored %v, limited %v), want (true, false)", stored, limited)
+	}
+	if n := app.refreshPublicFitPages(ctx); n != 1 {
+		t.Fatalf("built %d public fit pages, want 1", n)
+	}
+
+	// Hull 5,000 (build cost) + 2 x 250 (typical) = 5,500, the
+	// hull's part of it 91%.
+	const total = 5500.0
+	if got, err := q.GetPublicFitting(ctx, row.ID); err != nil || got.TotalPrice != total {
+		t.Errorf("stored price = %v (err %v), want %v (the reprice's build tier agrees with the live sum)", got.TotalPrice, err, total)
+	}
+	const note = "* Part of this value is priced at build cost, where no market or contract price is known."
+	const hullLine = `<li class="fc-hull"><span>Hull</span> <b>5.0K*</b> <small>91%</small></li>`
+	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
+	if code != http.StatusOK {
+		t.Fatalf("public fit page: status %d", code)
+	}
+	mustContain(t, "public fit page", body,
+		esi.FormatISK(total)+"* ISK",
+		hullLine,
+		`data-fit-cost="5500"`,
+		note,
+	)
+
+	doc := &fitview.FitDoc{
+		ShipTypeID: 1001,
+		Items:      []fitview.FitDocItem{{TypeID: 3001, Qty: 2}},
+	}
+	cost := app.FitBuilder().FitCost(ctx, doc, nil)
+	if cost.HullRaw != 5000 || cost.TotalRaw != total || !cost.BuildPriced {
+		t.Errorf("FitCost hull/total/build = %v / %v / %v, want 5000 / %v / true", cost.HullRaw, cost.TotalRaw, cost.BuildPriced, total)
+	}
+	if len(cost.Lines) == 0 || !cost.Lines[0].Build {
+		t.Errorf("FitCost hull line build flag = %+v, want the hull line flagged", cost.Lines)
+	}
+
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+	code, tool := postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":`+items+`,"charges":{},"pilot":0}`)
+	if code != http.StatusOK {
+		t.Fatalf("simulate: status %d", code)
+	}
+	mustContain(t, "fitting tool stats", tool, `data-fit-cost="5500"`, hullLine, note)
 }

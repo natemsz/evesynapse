@@ -1062,6 +1062,7 @@ type KillLinePrice struct {
 	KillmailID int64   `json:"killmail_id"`
 	TypeID     int64   `json:"type_id"`
 	UnitPrice  float64 `json:"unit_price"`
+	Tier       string  `json:"tier"`
 }
 
 type KillStatsPending struct {

@@ -752,8 +752,9 @@ func TestTrueValueItemPage(t *testing.T) {
 	app.pricesMu.Unlock()
 
 	seedTrueValue(t, q, 11567, 550e9, 590e9, 4)
-	// A healthy type's stored row carries no estimated sell:
-	// it must not surface on the page at all.
+	// A stored row with no estimated sell behind it: the page
+	// shows its build cost as the value, labeled as build cost,
+	// and never presents it as an estimated sell.
 	seedTrueValue(t, q, 34, 4.2, 0, 0)
 
 	code, body := getPage(t, app, cookie, "/items/type/11567/")
@@ -772,8 +773,9 @@ func TestTrueValueItemPage(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("tritanium page: status %d", code)
 	}
-	if strings.Contains(body, "Build cost") || strings.Contains(body, "Estimated sell") {
-		t.Error("healthy type's page gained true-value rows")
+	mustContain(t, "/items/type/34/", body, "ISK, Build cost")
+	if strings.Contains(body, "Estimated sell") {
+		t.Error("build-cost-only type's page presents its build cost as an estimated sell")
 	}
 }
 

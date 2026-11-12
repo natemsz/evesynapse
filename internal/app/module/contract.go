@@ -139,9 +139,12 @@ type PublicFitBody struct {
 	PriceKnown bool
 	PriceRaw   float64
 	PriceTotal string
-	Sections   any
-	Sim        any
-	EFT        string
+	// PriceBuildPriced: part of the total was priced at the
+	// build-cost tier, so the price line is asterisked.
+	PriceBuildPriced bool
+	Sections         any
+	Sim              any
+	EFT              string
 	// Preparing: the stored page for this version of the fit is not
 	// built yet (the worker builds it within a cycle or two).
 	Preparing bool
@@ -444,6 +447,12 @@ const (
 	// AppraisalTierFallback: the labeled Fuzzwork aggregate,
 	// inside its hard expiry, with its as-of stamp.
 	AppraisalTierFallback = "fallback"
+	// AppraisalTierBuildCost: the stored true-value build
+	// cost, the last resort (owner ruling, 2026-11-12): it
+	// speaks only when no market, estimate or fallback price
+	// exists, and every figure it touches is asterisked and
+	// labeled as build cost where it is shown.
+	AppraisalTierBuildCost = "build_cost"
 	// AppraisalTierUnpriced: no tier could price the line.
 	AppraisalTierUnpriced = "unpriced"
 	// The typical tiers of the other pricing modes: the same
@@ -1146,6 +1155,9 @@ type Deps interface {
 	// TrueValues is the stored true-value estimated sell per
 	// type (thin types only), the order's second tier.
 	TrueValues(ctx context.Context) map[int64]float64
+	// BuildCosts is the stored true-value build cost per
+	// type, the order's last tier (owner ruling, 2026-11-12).
+	BuildCosts(ctx context.Context) map[int64]float64
 	// AskEvidence is the live single-item contract asks behind a
 	// type the true-value pass could not price: shown beside the
 	// gap with a warning, never used as a price. ok is false when

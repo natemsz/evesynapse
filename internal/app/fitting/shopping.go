@@ -108,10 +108,12 @@ func (app *tool) handleFitShopping(w http.ResponseWriter, r *http.Request) {
 
 	// Price each line in the house order (fitview.FitUnitPrice):
 	// the swept typical sell (The Forge's book, the global book
-	// for global-market types), then the stored estimated sell.
-	// The guide's average prices nothing.
+	// for global-market types), then the stored estimated sell,
+	// then the stored build cost. The guide's average prices
+	// nothing.
 	typicals := app.deps.TypicalSells(ctx)
 	trueValues := app.deps.TrueValues(ctx)
+	buildCosts := app.deps.BuildCosts(ctx)
 	view := &shoppingView{FitName: fitName, FitID: fitID}
 	var total float64
 	for typeID, qty := range qtyByType {
@@ -121,7 +123,7 @@ func (app *tool) handleFitShopping(w http.ResponseWriter, r *http.Request) {
 			URL:      fmt.Sprintf("/items/type/%d/", typeID),
 			Quantity: qty,
 		}
-		if p, ok := fitview.FitUnitPrice(typicals, trueValues, typeID); ok {
+		if p, ok := fitview.FitUnitPrice(typicals, trueValues, buildCosts, typeID); ok {
 			line.PriceKnown = true
 			line.UnitPrice = isk(p)
 			cost := p * float64(qty)

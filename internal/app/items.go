@@ -820,7 +820,8 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 	}
 
 	// The value of record, as the market page states it: our swept
-	// Forge typical, our stored estimate, the labeled fallback.
+	// Forge typical, our stored estimate, the labeled fallback,
+	// then the build cost when nothing else could speak.
 	detail.Value, detail.ValueNote = app.houseValue(ctx, typeID, 0, 0)
 
 	detail.IsShip = isShip

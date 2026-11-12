@@ -243,7 +243,7 @@ func (app *Application) lpRequiredValue(ctx context.Context, corp, offerID, k in
 	estimates := app.storedTrueValues(ctx)
 	v := 0.0
 	for _, r := range reqs {
-		if price, ok := pickValuationPrice(typicals[r.TypeID], estSellOf(estimates, r.TypeID)); ok {
+		if price, ok := pickValuationPrice(typicals[r.TypeID], estSellOf(estimates, r.TypeID), buildCostOf(estimates, r.TypeID)); ok {
 			v += price * float64(r.Quantity*k)
 		}
 	}

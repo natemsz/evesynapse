@@ -909,6 +909,13 @@ var pgKillFeedBackfillSchema string
 //go:embed schema_pg/149_variation_tiers.sql
 var pgVariationTiersSchema string
 
+// Step 150: the appraisal tier behind each stored kill line
+// price, so a kill page can asterisk a value the build-cost
+// tier fed.
+//
+//go:embed schema_pg/150_kill_line_price_tiers.sql
+var pgKillLinePriceTiersSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1086,6 +1093,7 @@ func schemaSteps() []schemaStep {
 		{147, "drop_unused_kill_indexes", pgDropUnusedKillIndexesSchema, ""},
 		{148, "kill_feed_backfill", pgKillFeedBackfillSchema, ""},
 		{149, "variation_tiers", pgVariationTiersSchema, ""},
+		{150, "kill_line_price_tiers", pgKillLinePriceTiersSchema, ""},
 	}
 }
 

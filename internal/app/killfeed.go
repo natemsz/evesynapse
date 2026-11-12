@@ -536,11 +536,11 @@ func (app *Application) priceKillLines(ctx context.Context, km killmailFull) err
 	for _, l := range lines {
 		types[l.typeID] = true
 	}
-	price, err := app.killUnitPrices(ctx, types)
+	price, tiers, err := app.killUnitPrices(ctx, types)
 	if err != nil {
 		return err
 	}
-	return app.storeKillPrices(ctx, km.KillmailID, km.KillmailTime, lines, price, time.Now().UTC())
+	return app.storeKillPrices(ctx, km.KillmailID, km.KillmailTime, lines, price, tiers, time.Now().UTC())
 }
 
 // storeKillPrices persists one kill's totals from an appraisal's
@@ -548,19 +548,21 @@ func (app *Application) priceKillLines(ctx context.Context, km killmailFull) err
 // within retention. Past two years a kill is metadata for intel
 // only, so its lines are never stored; the total still lands on
 // the kills row, which is what per-player value stats read.
-func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, killTime time.Time, lines []killLine, price map[int64]float64, now time.Time) error {
+func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, killTime time.Time, lines []killLine, price map[int64]float64, tiers map[int64]string, now time.Time) error {
 	if !killTime.Before(now.Add(-killDetailRetention)) {
 		var typeIDs []int64
 		var unitPrices []float64
+		var lineTiers []string
 		for _, l := range lines {
 			if p, ok := price[l.typeID]; ok {
 				typeIDs = append(typeIDs, l.typeID)
 				unitPrices = append(unitPrices, p)
+				lineTiers = append(lineTiers, tiers[l.typeID])
 			}
 		}
 		if len(typeIDs) > 0 {
 			if err := app.queries.InsertKillLinePrices(ctx, db.InsertKillLinePricesParams{
-				KillmailID: killmailID, TypeIds: typeIDs, UnitPrices: unitPrices,
+				KillmailID: killmailID, TypeIds: typeIDs, UnitPrices: unitPrices, Tiers: lineTiers,
 			}); err != nil {
 				return err
 			}
@@ -701,7 +703,7 @@ func (app *Application) KillmailLossValue(ctx context.Context, killmailID int64,
 	for _, l := range lines {
 		types[l.typeID] = true
 	}
-	price, err := app.killUnitPrices(ctx, types)
+	price, _, err := app.killUnitPrices(ctx, types)
 	if err != nil {
 		logging.Errorf("killboard: price loss %d: %v", killmailID, err)
 		return 0
@@ -769,6 +771,7 @@ func (app *Application) priceKills(ctx context.Context) (int, error) {
 		lines = append(lines, module.AppraisalLine{TypeID: id, Quantity: 1, Included: true})
 	}
 	price := map[int64]float64{}
+	tiers := map[int64]string{}
 	if len(lines) > 0 {
 		res, err := app.AppraiseLines(ctx, lines)
 		if err != nil {
@@ -777,13 +780,14 @@ func (app *Application) priceKills(ctx context.Context) (int, error) {
 		for _, l := range res.Lines {
 			if l.Priced {
 				price[l.TypeID] = l.UnitPrice
+				tiers[l.TypeID] = l.Tier
 			}
 		}
 	}
 	now := time.Now().UTC()
 	n := 0
 	for _, w := range work {
-		if err := app.storeKillPrices(ctx, w.id, w.at, w.lines, price, now); err != nil {
+		if err := app.storeKillPrices(ctx, w.id, w.at, w.lines, price, tiers, now); err != nil {
 			return n, err
 		}
 		n++

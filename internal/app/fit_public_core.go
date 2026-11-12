@@ -47,7 +47,7 @@ func (app *Application) PublicFitBody(ctx context.Context, fitID int64, updatedA
 		doc.ShipTypeID = shipTypeID
 	}
 	cost := app.fitBuilder().FitCost(ctx, &doc, nil)
-	body := module.PublicFitBody{PriceKnown: cost.Known, PriceRaw: cost.TotalRaw, PriceTotal: cost.Total}
+	body := module.PublicFitBody{PriceKnown: cost.Known, PriceRaw: cost.TotalRaw, PriceTotal: cost.Total, PriceBuildPriced: cost.BuildPriced}
 	if stored, ok := app.loadPublicFitStored(ctx, fitID, updatedAt); ok {
 		body.Sections, body.EFT = stored.Sections, stored.EFT
 		if stored.Sim != nil {

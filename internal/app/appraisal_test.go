@@ -22,6 +22,9 @@ func TestResolveAppraisalPriceOrder(t *testing.T) {
 	zeroOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 0, UpdatedAt: now.Add(-time.Hour)}
 	tv := &db.TrueValue{TypeID: 1, EstSell: sql.NullFloat64{Float64: 80, Valid: true}, SellSource: tvSampleListing, ComputedAt: now.Add(-2 * time.Hour)}
 	tvNone := &db.TrueValue{TypeID: 1, ComputedAt: now}
+	tvBuild := &db.TrueValue{TypeID: 1, BuildCost: 50, ComputedAt: now.Add(-2 * time.Hour)}
+	tvBuildEst := &db.TrueValue{TypeID: 1, BuildCost: 40, EstSell: sql.NullFloat64{Float64: 80, Valid: true}, SellSource: tvSampleListing, ComputedAt: now.Add(-2 * time.Hour)}
+	tvAnchored := &db.TrueValue{TypeID: 1, BuildCost: 50, EstSell: sql.NullFloat64{Float64: 50, Valid: true}, ComputedAt: now.Add(-2 * time.Hour)}
 	freshFB := &db.MarketStatsFallback{TypeID: 1, MedianSell: 60, SourceAsof: now.Add(-time.Hour)}
 	expiredFB := &db.MarketStatsFallback{TypeID: 1, MedianSell: 60, SourceAsof: now.Add(-72 * time.Hour)}
 
@@ -43,6 +46,11 @@ func TestResolveAppraisalPriceOrder(t *testing.T) {
 		{"expired fallback alone is silence", nil, nil, expiredFB, module.AppraisalTierUnpriced, 0, false},
 		{"nothing stored is unpriced", nil, nil, nil, module.AppraisalTierUnpriced, 0, false},
 		{"a zero typical is no typical", zeroOwn, nil, nil, module.AppraisalTierUnpriced, 0, false},
+		{"build cost speaks when nothing else does", nil, tvBuild, nil, module.AppraisalTierBuildCost, 50, true},
+		{"estimate beats build cost", nil, tvBuildEst, nil, module.AppraisalTierEstimate, 80, true},
+		{"live fallback beats build cost", nil, tvBuild, freshFB, module.AppraisalTierFallback, 60, true},
+		{"floor rule: stale own beats build cost", staleOwn, tvBuild, nil, module.AppraisalTierTypical, 100, true},
+		{"an anchored row reads as build cost, never as an estimate", nil, tvAnchored, nil, module.AppraisalTierBuildCost, 50, true},
 	}
 	for _, tc := range cases {
 		got := resolveAppraisalPrice(tc.own, tc.tv, tc.fb, now)

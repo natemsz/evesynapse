@@ -526,6 +526,8 @@ func tierLabel(tier string) string {
 		return "Our research median"
 	case module.AppraisalTierFallback:
 		return "Fuzzwork aggregate"
+	case module.AppraisalTierBuildCost:
+		return "Build cost"
 	}
 	return "Not priced"
 }
@@ -2820,6 +2822,8 @@ func (app *mod) panelFromDetail(dv *detailView, row db.PubContract, pin pinSearc
 			case l.Tier == module.AppraisalTierResearchMedian:
 				pl.BasisText = "Our research median: " + formatShortISK(l.LineValueNum)
 				pl.BasisNote = l.TierNote
+			case l.Tier == module.AppraisalTierBuildCost:
+				pl.BasisText = "Build cost: " + formatShortISK(l.LineValueNum)
 			case l.Tier == module.AppraisalTierEstimate:
 				pl.BasisText = "Estimated sell: " + formatShortISK(l.LineValueNum)
 			case l.Tier == module.AppraisalTierAbyssal:

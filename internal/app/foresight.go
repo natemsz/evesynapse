@@ -272,7 +272,7 @@ func (app *Application) hangarTypesWorthMost(ctx context.Context, characterID, s
 			continue
 		}
 		value := float64(a.Quantity)
-		if p, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID)); ok {
+		if p, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID), buildCostOf(trueValues, a.TypeID)); ok {
 			value *= p
 		} else if havePrices {
 			continue // nothing we price: nothing to sell

@@ -49,6 +49,9 @@ type lpModel struct {
 	Int   []bool
 	Pri   []int
 	Probe []bool
+	// Up marks whole columns that rounding up moves toward a working
+	// answer (more capacity built), which the rounding search uses.
+	Up []bool
 }
 
 func newLPModel() *lpModel { return &lpModel{} }
@@ -61,6 +64,7 @@ func (m *lpModel) col(obj, lo, hi float64, integer bool) int {
 	m.Int = append(m.Int, integer)
 	m.Pri = append(m.Pri, 0)
 	m.Probe = append(m.Probe, false)
+	m.Up = append(m.Up, false)
 	return len(m.Obj) - 1
 }
 
@@ -439,8 +443,38 @@ func (s *simplex) pivot(r, e int) {
 // dual restores feasibility after bounds moved. It stops early once
 // the objective reaches cut.
 func (s *simplex) dual(cut float64) lpStatus {
+	perturbed := false
+	// done takes a finished verdict; once the costs were perturbed, the
+	// true reduced costs come back and the primal method settles any
+	// whose sign the perturbation hid.
+	done := func(st lpStatus) lpStatus {
+		if perturbed {
+			s.setObjective(s.c)
+		}
+		return st
+	}
+	degenerate := 0
 	for iter := 0; iter < 4000; iter++ {
-		bland := iter > 400
+		if !perturbed && degenerate > 30 {
+			// A run of zero steps is the dual method circling a
+			// degenerate vertex: nudge each nonbasic cost a little
+			// further from zero, differently per column, which breaks
+			// the ties it circles on.
+			perturbed = true
+			for j := 0; j < s.nt; j++ {
+				if s.where[j] >= 0 || s.lo[j] == s.hi[j] {
+					continue
+				}
+				f := math.Mod(float64(j)*0.6180339887, 1)
+				delta := (1e-7 + 1e-7*f) * math.Max(1, math.Abs(s.c[j]))
+				if s.up[j] {
+					s.d[j] -= delta
+				} else {
+					s.d[j] += delta
+				}
+			}
+		}
+		bland := iter > 2000
 		r, worst, below := -1, lpTolP, false
 		for i := 0; i < s.m; i++ {
 			bj := s.basis[i]
@@ -461,7 +495,7 @@ func (s *simplex) dual(cut float64) lpStatus {
 			}
 		}
 		if r < 0 {
-			return lpOptimal
+			return done(lpOptimal)
 		}
 		tr := s.t[r]
 		e, best, bestA := -1, lpInf, 0.0
@@ -489,7 +523,7 @@ func (s *simplex) dual(cut float64) lpStatus {
 			}
 		}
 		if e < 0 {
-			return lpInfeasible
+			return done(lpInfeasible)
 		}
 		bl := s.basis[r]
 		target := s.hi[bl]
@@ -497,6 +531,11 @@ func (s *simplex) dual(cut float64) lpStatus {
 			target = s.lo[bl]
 		}
 		theta := (s.beta[r] - target) / tr[e]
+		if math.Abs(theta*s.d[e]) < 1e-12 {
+			degenerate++
+		} else {
+			degenerate = 0
+		}
 		for i := 0; i < s.m; i++ {
 			if a := s.t[i][e]; a != 0 && i != r {
 				s.beta[i] -= a * theta
@@ -507,11 +546,11 @@ func (s *simplex) dual(cut float64) lpStatus {
 		s.up[bl] = !below
 		s.pivot(r, e)
 		s.beta[r] = xe
-		if !dbgNoEarly && s.dualOK && s.z >= cut {
+		if !dbgNoEarly && !perturbed && s.dualOK && s.z >= cut {
 			return lpCutoff
 		}
 	}
-	return lpStalled
+	return done(lpStalled)
 }
 
 // primal improves the objective in use from a feasible basis.
@@ -665,7 +704,10 @@ func (s *simplex) solve(cut float64) lpStatus {
 				return lpOptimal
 			}
 		}
-		if (st != lpStalled && st != lpOptimal) || attempt >= 2 {
+		// An infeasible verdict rests on one tableau row, and drift in
+		// an incrementally updated tableau can fake it: it stands once
+		// the tableau rebuilt from the rows as given repeats it.
+		if (st != lpStalled && st != lpOptimal && (st != lpInfeasible || attempt > 0)) || attempt >= 2 {
 			if st == lpOptimal {
 				return lpStalled
 			}
@@ -720,6 +762,8 @@ type bbSearch struct {
 	deadline time.Time
 	exact    bool
 	lo, hi   []float64 // scratch
+	up       []int     // columns the rounding search rounds up
+	rs       *simplex  // the rounding search's own tableau
 }
 
 func solveMILP(m *lpModel, opt milpOptions) milpResult {
@@ -746,6 +790,9 @@ func solveMILP(m *lpModel, opt milpOptions) milpResult {
 			if m.Probe[j] {
 				b.probe = append(b.probe, j)
 			}
+			if m.Up[j] {
+				b.up = append(b.up, j)
+			}
 		}
 	}
 	sort.SliceStable(b.ints, func(i, k int) bool { return m.Pri[b.ints[i]] > m.Pri[b.ints[k]] })
@@ -763,6 +810,7 @@ func solveMILP(m *lpModel, opt milpOptions) milpResult {
 	case lpOptimal:
 		res.bound = rootObj
 		root.bound = rootObj
+		b.roundUp(b.s.x())
 	case lpStalled:
 		b.exact = false
 	default:
@@ -823,6 +871,62 @@ func (b *bbSearch) accept(x []float64) bool {
 	return true
 }
 
+// roundUp is the rounding search, a dive from a relaxed answer: it
+// rounds the marked column nearest its next whole value up, fixes it
+// there, solves again so the others can give way, and repeats until
+// every marked column is whole. Building a little more than the
+// relaxation asks for is usually a working plan; if a fixing leaves
+// none, every marked column is rounded up at once instead. A plan in
+// hand lets the search prune from the start. True when it improved
+// on the answer held.
+func (b *bbSearch) roundUp(x []float64) bool {
+	if len(b.up) == 0 || time.Now().After(b.deadline) {
+		return false
+	}
+	if b.rs == nil {
+		b.rs = newSimplex(b.m)
+	}
+	lo := append([]float64(nil), b.rootLo...)
+	hi := append([]float64(nil), b.rootHi...)
+	allUp := func(x []float64) bool {
+		l := append([]float64(nil), b.rootLo...)
+		h := append([]float64(nil), b.rootHi...)
+		for _, j := range b.up {
+			v := math.Min(math.Max(math.Ceil(x[j]-intTol), l[j]), h[j])
+			l[j], h[j] = v, v
+		}
+		b.rs.setBounds(l, h, b.cut)
+		if b.rs.solve(b.cut) != lpOptimal || b.rs.z >= b.cut {
+			return false
+		}
+		return b.accept(b.rs.x())
+	}
+	cur := x
+	for step := 0; step <= len(b.up); step++ {
+		pick, most := -1, -1.0
+		for _, j := range b.up {
+			if lo[j] == hi[j] {
+				continue
+			}
+			f := cur[j] - math.Floor(cur[j])
+			if f > intTol && f < 1-intTol && f > most {
+				pick, most = j, f
+			}
+		}
+		if pick < 0 {
+			return b.accept(cur)
+		}
+		v := math.Min(math.Ceil(cur[pick]), hi[pick])
+		lo[pick], hi[pick] = v, v
+		b.rs.setBounds(lo, hi, b.cut)
+		if b.rs.solve(b.cut) != lpOptimal || b.rs.z >= b.cut || time.Now().After(b.deadline) {
+			return allUp(cur)
+		}
+		cur = b.rs.x()
+	}
+	return allUp(cur)
+}
+
 // relax solves a node's relaxation inside the root ranges.
 func (b *bbSearch) relax(nd *bbNode) (lpStatus, float64) {
 	for j := range b.lo {
@@ -869,12 +973,16 @@ func (b *bbSearch) run() bool {
 			if len(b.open) == 0 {
 				return true
 			}
-			// Best bound first; the newest of equals, which is nearest
-			// the basis in hand.
-			bi := 0
-			for i, nd := range b.open {
-				if nd.bound <= b.open[bi].bound {
-					bi = i
+			// Until an answer is held, the newest node: depth first
+			// reaches a whole answer soonest. Then best bound first; the
+			// newest of equals, which is nearest the basis in hand.
+			bi := len(b.open) - 1
+			if b.best != nil {
+				bi = 0
+				for i, nd := range b.open {
+					if nd.bound <= b.open[bi].bound {
+						bi = i
+					}
 				}
 			}
 			cur = b.open[bi]
@@ -911,6 +1019,18 @@ func (b *bbSearch) run() bool {
 			}
 			cur = nil
 			continue
+		}
+		if b.best == nil || b.nodes%64 == 0 {
+			if b.roundUp(x) {
+				if !b.tighten() {
+					b.open = b.open[:0]
+					return true
+				}
+				if obj >= b.cut {
+					cur = nil
+					continue
+				}
+			}
 		}
 		lo := append([]float64(nil), b.lo...)
 		hi := append([]float64(nil), b.hi...)

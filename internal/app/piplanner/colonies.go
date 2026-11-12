@@ -486,6 +486,7 @@ type colonyAnswer struct {
 	In       map[string]float64 `json:"in"`
 	Template string             `json:"template"`
 	Crowded  []int              `json:"crowded"`
+	Arranged bool               `json:"arranged,omitempty"` // the optimizer moved structures
 	Error    string             `json:"error,omitempty"`
 }
 
@@ -503,12 +504,14 @@ func HandleColony(deps module.Deps) http.HandlerFunc {
 			_ = json.NewEncoder(w).Encode(colonyAnswer{Error: "That colony could not be read."})
 			return
 		}
-		ans := recomputeColony(&c)
+		ans := recomputeColony(&c, r.URL.Query().Get("arrange") == "1")
 		_ = json.NewEncoder(w).Encode(ans)
 	}
 }
 
-func recomputeColony(c *piplan.Colony) colonyAnswer {
+// recomputeColony checks a colony the player shaped; with arrange set
+// it first moves the structures to where their links cost least.
+func recomputeColony(c *piplan.Colony, arrange bool) colonyAnswer {
 	if _, ok := piplan.PlanetTypeIDs[c.PlanetType]; !ok {
 		return colonyAnswer{Error: "Unknown planet type."}
 	}
@@ -532,11 +535,16 @@ func recomputeColony(c *piplan.Colony) colonyAnswer {
 		kept = append(kept, p)
 	}
 	c.Pins = kept
-	piplan.Relink(c)
+	moved := false
+	if arrange {
+		moved = piplan.OptimizeLayout(c)
+	} else {
+		piplan.Relink(c)
+	}
 	f := c.Fit()
 	out, in := piplan.ColonyRates(c)
 	t, err := c.Template()
-	ans := colonyAnswer{Colony: c, Fit: f, Fits: f.Fits(), Out: out, In: in, Template: t, Crowded: c.Crowded()}
+	ans := colonyAnswer{Colony: c, Fit: f, Fits: f.Fits(), Out: out, In: in, Template: t, Crowded: c.Crowded(), Arranged: moved}
 	if err != nil {
 		ans.Error = err.Error()
 	}

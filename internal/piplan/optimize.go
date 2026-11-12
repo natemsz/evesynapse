@@ -686,6 +686,7 @@ func Optimize(req Request) (*Solution, error) {
 			}
 			v := m.col(cost, 0, float64(cl.count), true)
 			m.Pri[v] = 2
+			m.Up[v] = true
 			zs = append(zs, zref{ci, j, v})
 			row[v] = 1
 		}
@@ -744,6 +745,7 @@ func Optimize(req Request) (*Solution, error) {
 		}
 		v := m.col(0.01, 0, most, true)
 		m.Pri[v] = 1
+		m.Up[v] = true
 		m.Probe[v] = true
 		run := m.col(taxIn, 0, -1, false)
 		aVar[c] = v
@@ -937,12 +939,13 @@ func Optimize(req Request) (*Solution, error) {
 		addCount(coef, most*float64(slots)+m.Hi[aVar[c]])
 	}
 
-	const budget = 1200 * time.Millisecond
+	const budget = 3 * time.Second
 	started := time.Now()
 	opt := milpOptions{budget: budget, maxNodes: 200000}
 	var res milpResult
 	exact := true
 	feasible := true
+	timedOut := false // the search stopped at its limit before any plan
 	if !maxMode {
 		// First the fewest colonies, then the best plan with that many.
 		first := *m
@@ -952,13 +955,14 @@ func Optimize(req Request) (*Solution, error) {
 			first.Obj[v] = w
 			limit[v] = w
 		}
-		r1 := solveMILP(&first, milpOptions{budget: budget / 2, maxNodes: opt.maxNodes})
+		r1 := solveMILP(&first, milpOptions{budget: budget * 2 / 3, maxNodes: opt.maxNodes})
 		if r1.ok {
 			exact = r1.exact
 			opt.start = r1.x
 			m.row(limit, senseLE, r1.obj+1e-6)
 		} else {
 			feasible = false
+			timedOut = !r1.exact
 		}
 	}
 	if feasible {
@@ -967,6 +971,9 @@ func Optimize(req Request) (*Solution, error) {
 		exact = exact && res.exact
 	}
 	x, ok := res.x, res.ok
+	if feasible && !ok && !res.exact {
+		timedOut = true
+	}
 	if ok {
 		// A factory built but never run is not built.
 		for c, v := range aVar {
@@ -995,6 +1002,8 @@ func Optimize(req Request) (*Solution, error) {
 		sort.Strings(missing)
 		if len(missing) > 0 && !req.AllowBuy && !req.BuyMissing {
 			short = "No planet in reach yields " + strings.Join(missing, ", ") + "."
+		} else if timedOut {
+			short = "The search ran out of time before it found a plan. Ask for fewer units a day, or let the plan buy inputs."
 		}
 		return &Solution{Target: req.Target, Short: short, SlotsTotal: slots, ProgramHours: req.ProgramHours}, nil
 	}

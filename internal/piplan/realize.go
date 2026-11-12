@@ -271,6 +271,7 @@ func realize(sol *Solution, req Request, classes []*planetClass, zs []zref, keep
 			} else {
 				pc.Colony = BuildColony(cl.ptype, radius, cl.cc, spec)
 			}
+			OptimizeLayout(pc.Colony)
 			// A planet larger than the class's sizing one pays more for
 			// its links: trim heads until it fits.
 			for tries := 0; !pc.Colony.Fit().Fits() && tries < 20; tries++ {

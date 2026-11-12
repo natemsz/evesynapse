@@ -99,8 +99,8 @@
 .pi-radio, .pi-check, .pi-pilot { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2rem; }
 .pi-radio small, .pi-pilot small { color: var(--muted); font-size: var(--fs-xs); }
 .pi-check { display: flex; }
-.pi-field-buy { grid-column: span 2; }
-@container page (width < 34rem) { .pi-field-buy { grid-column: 1 / -1; } }
+.pi-buy .pi-check { display: inline-flex; margin-left: auto; }
+@container page (width < 34rem) { .pi-buy { flex-direction: column; align-items: flex-start; } .pi-buy .pi-check { margin-left: 0; } }
 .pi-fields-inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
 .pi-goal .searchwrap { display: block; position: relative; }
 .pi-goal .searchwrap input { width: 100%; box-sizing: border-box; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; }

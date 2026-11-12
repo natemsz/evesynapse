@@ -144,6 +144,7 @@
       if (ev.target.closest("[data-copy-template]")) { self.copyTemplate(); return; }
       if (ev.target.closest("[data-replan]")) { self.replan(); return; }
       if (ev.target.closest("[data-colony-reset]")) { self.reset(); return; }
+      if (ev.target.closest("[data-arrange]")) { self.arrange(); return; }
       if (ev.target.closest("[data-jump-cc]")) { self.jumpCC(); return; }
       var rm = ev.target.closest("[data-remove-pin]");
       if (rm) { self.removePin(self.sel); return; }
@@ -154,6 +155,7 @@
       self.changed();
     });
     var c = this.canvas;
+    this.pointers = {};
     c.addEventListener("pointerdown", function (ev) { self.down(ev); });
     c.addEventListener("pointermove", function (ev) { self.move(ev); });
     c.addEventListener("pointerup", function (ev) { self.up(ev); });
@@ -326,13 +328,40 @@
   View.prototype.down = function (ev) {
     if (!this.colony) return;
     this.canvas.setPointerCapture(ev.pointerId);
+    this.pointers[ev.pointerId] = { x: ev.offsetX, y: ev.offsetY };
+    if (Object.keys(this.pointers).length >= 2) {
+      // A second finger: pinch to zoom, both fingers pan. A structure
+      // the first finger was dragging stays where it is.
+      if (this.drag && this.drag.pin >= 0 && this.drag.moved) this.changed();
+      else if (this.drag && this.drag.pin >= 0 && this.sel !== this.drag.was) { this.sel = this.drag.was; this.inspect(); }
+      this.drag = null;
+      this.pinch = this.pinchState();
+      return;
+    }
     var i = this.pinAt(ev.offsetX, ev.offsetY);
-    this.drag = { x: ev.offsetX, y: ev.offsetY, pin: i, moved: false, center: { lat: this.center.lat, lon: this.center.lon } };
+    this.drag = { x: ev.offsetX, y: ev.offsetY, pin: i, moved: false, was: this.sel, center: { lat: this.center.lat, lon: this.center.lon } };
     if (i >= 0) { this.sel = i; this.inspect(); }
+  };
+
+  // pinchState is the two first fingers' midpoint and spread.
+  View.prototype.pinchState = function () {
+    var ids = Object.keys(this.pointers).slice(0, 2);
+    var a = this.pointers[ids[0]], b = this.pointers[ids[1]];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) };
   };
 
   View.prototype.move = function (ev) {
     if (!this.colony) return;
+    if (this.pointers[ev.pointerId]) this.pointers[ev.pointerId] = { x: ev.offsetX, y: ev.offsetY };
+    if (this.pinch) {
+      var was = this.pinch, now = this.pinchState();
+      var sx = this.sx || 1;
+      this.center.lat -= (now.y - was.y) / this.scale;
+      this.center.lon -= (now.x - was.x) / (sx * this.scale);
+      this.zoomAt(now.x, now.y, now.dist / was.dist);
+      this.pinch = now;
+      return;
+    }
     var d = this.drag;
     if (!d) {
       var h = this.pinAt(ev.offsetX, ev.offsetY);
@@ -358,7 +387,20 @@
     }
   };
 
-  View.prototype.up = function () {
+  View.prototype.up = function (ev) {
+    if (ev && this.pointers) delete this.pointers[ev.pointerId];
+    if (this.pinch) {
+      // Lifting one finger of a pinch leaves the other panning, not
+      // selecting what it rests on.
+      var left = Object.keys(this.pointers || {});
+      if (left.length >= 2) { this.pinch = this.pinchState(); return; }
+      this.pinch = null;
+      if (left.length === 1) {
+        var q = this.pointers[left[0]];
+        this.drag = { x: q.x, y: q.y, pin: -1, moved: true, center: { lat: this.center.lat, lon: this.center.lon } };
+      }
+      return;
+    }
     var d = this.drag;
     this.drag = null;
     if (!d) return;
@@ -470,7 +512,18 @@
     this.timer = setTimeout(function () { self.recompute(); }, 120);
   };
 
-  View.prototype.recompute = function () {
+  // arrange asks the server to move the structures to where their
+  // links cost the least, then shows the result as an edit.
+  View.prototype.arrange = function () {
+    if (!this.colony) return;
+    clearTimeout(this.timer);
+    this.edited[this.index] = clone(this.colony);
+    var card = this.root.querySelector('.pi-card[data-colony="' + this.index + '"]');
+    if (card) card.classList.add("edited");
+    this.recompute(true);
+  };
+
+  View.prototype.recompute = function (arrange) {
     var self = this;
     var idx = this.index;
     var body = clone(this.colony);
@@ -478,7 +531,7 @@
     body.pins.forEach(function (p) {
       if (p.kind === "ecu" && peaks[p.product]) { p.peak = peaks[p.product]; p.qtyPerCycle = 0; }
     });
-    fetch("/industry/pi/colony", {
+    fetch("/industry/pi/colony" + (arrange ? "?arrange=1" : ""), {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
       body: JSON.stringify(body)
@@ -496,6 +549,7 @@
         if (self.edited[idx]) self.edited[idx] = clone(self.colony);
       }
       self.show(ans);
+      if (arrange) self.say(ans.arranged ? "Layout optimized: structures moved to where their links cost the least." : "This layout already costs the least; nothing moved.");
     }).catch(function () { self.say("The colony could not be checked. Try again."); });
   };
 
@@ -993,6 +1047,14 @@
     var sel = document.getElementById("pi-goal-product");
     if (!sel || sel === goalBooted) return;
     goalBooted = sel;
+    var form = document.getElementById("pi-goal");
+    if (form) {
+      // The search can take a few seconds: say it is working.
+      form.addEventListener("submit", function () {
+        var go = form.querySelector(".pi-goal-go");
+        if (go) { go.textContent = "Planning..."; go.setAttribute("aria-busy", "true"); }
+      });
+    }
     sel.addEventListener("change", function () {
       var chain = document.getElementById("pi-product");
       if (chain && chain.value !== sel.value) {
@@ -1005,4 +1067,11 @@
   function all() { boot(); bootGoal(); }
   all();
   document.addEventListener("evesynapse:content-ready", all);
+  // A page restored from the back-forward cache keeps the busy label.
+  window.addEventListener("pageshow", function () {
+    document.querySelectorAll(".pi-goal-go[aria-busy]").forEach(function (b) {
+      b.textContent = "Plan colonies";
+      b.removeAttribute("aria-busy");
+    });
+  });
 })();

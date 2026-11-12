@@ -353,6 +353,7 @@ jobs:
   # failure, the job reports and steps aside, the release
   # itself is already published by then, and a mirror problem
   # must not fail its pipeline.
+  # Files land under evesynapse/ in the releases bucket.
   mirror:
     runs-on: ubuntu-latest
     needs: release
@@ -395,11 +396,11 @@ jobs:
           done
           if [ "$VERSION" = "${VERSION%%-*}" ]; then CH="latest"; else CH="latest-dev"; fi
           for a in arm64 amd64; do
-            aws s3 cp "dist/evesynapse-$a" "s3://$R2_BUCKET/$CH/evesynapse-$a" --endpoint-url "$EP"
+            aws s3 cp "dist/evesynapse-$a" "s3://$R2_BUCKET/evesynapse/$CH/evesynapse-$a" --endpoint-url "$EP"
           done
           for a in arm64 amd64; do
-            aws s3 cp "dist/latest-$a.json" "s3://$R2_BUCKET/$CH-$a.json" --endpoint-url "$EP" --content-type "application/json"
-            aws s3 cp "dist/latest-$a.json.sig" "s3://$R2_BUCKET/$CH-$a.json.sig" --endpoint-url "$EP"
+            aws s3 cp "dist/latest-$a.json" "s3://$R2_BUCKET/evesynapse/$CH-$a.json" --endpoint-url "$EP" --content-type "application/json"
+            aws s3 cp "dist/latest-$a.json.sig" "s3://$R2_BUCKET/evesynapse/$CH-$a.json.sig" --endpoint-url "$EP"
           done
           echo "Mirrored v$VERSION to the $CH channel."
 

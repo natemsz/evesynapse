@@ -93,7 +93,7 @@ var releaseArches = []string{"amd64", "arm64"}
 // tests can point them at local servers.
 var (
 	forgejoBaseURL       = "https://natems.dev"
-	releaseMirrorBaseURL = "https://cdn.synap6.io"
+	releaseMirrorBaseURL = "https://cdn.synap6.io/evesynapse"
 	// githubAPIBaseURL lists a mirror's releases; githubBaseURL is
 	// where their files are served from.
 	githubAPIBaseURL = "https://api.github.com"

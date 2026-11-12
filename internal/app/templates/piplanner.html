@@ -63,8 +63,12 @@
       <label class="pi-field"><span>Collect and deliver</span><select name="haul">{{range .HaulChoice}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
       <label class="pi-field"><span>Customs tax, %</span><input type="number" name="tax" value="{{.Form.TaxPct}}" min="0" max="100" step="0.5" inputmode="decimal"></label>
       <label class="pi-field"><span>Yield per head per hour</span><input type="number" name="peak" value="{{.Form.Peak}}" min="50" step="50" inputmode="numeric"></label>
+      <label class="pi-field pi-field-buy"><span>Buy inputs</span><select name="buy">
+        <option value="0"{{if not (or .Form.AllowBuy .Form.BuyMissing)}} selected{{end}}>Never</option>
+        <option value="missing"{{if .Form.BuyMissing}} selected{{end}}>Only what I cannot make</option>
+        <option value="1"{{if .Form.AllowBuy}} selected{{end}}>When cheaper than making</option>
+      </select></label>
     </div>
-    <label class="pi-check"><input type="checkbox" name="buy" value="1"{{if .Form.AllowBuy}} checked{{end}}> Buy inputs when cheaper than making them</label>
     <label class="pi-check"><input type="checkbox" name="surplus" value="1"{{if .Form.SellSurplus}} checked{{end}}> Sell leftovers</label>
     <p class="pi-help"><small>Shorter extractor programs yield more per hour. Yield per head is an assumption until a survey says otherwise: enter the per-hour figure the game shows when you place heads. Extractors on your own colonies use what they measured.</small></p>
   </details>

@@ -55,6 +55,7 @@ type planForm struct {
 	TaxPct      float64 `json:"taxPct"`
 	Peak        float64 `json:"peak"`
 	AllowBuy    bool    `json:"allowBuy"`
+	BuyMissing  bool    `json:"buyMissing"`
 	SellSurplus bool    `json:"sellSurplus"`
 	// Pinned colonies: ones the player shaped in the colony view.
 	// A re-plan keeps them exactly and plans the rest around them.
@@ -122,6 +123,7 @@ func parseForm(r *http.Request) planForm {
 	f.TaxPct = clampF(num("tax", 10), 0, 100, 10)
 	f.Peak = clampF(num("peak", piplan.DefaultPeakPerHead), 50, 50000, piplan.DefaultPeakPerHead)
 	f.AllowBuy = r.FormValue("buy") == "1"
+	f.BuyMissing = r.FormValue("buy") == "missing"
 	f.SellSurplus = r.FormValue("surplus") == "1"
 	return f
 }
@@ -187,7 +189,7 @@ func solveAndStore(ctx context.Context, deps module.Deps, r *http.Request, f pla
 	req := piplan.Request{
 		Target: f.Product, PerDay: f.PerDay, Peak: f.Peak,
 		ProgramHours: f.ResetHours, HaulHours: f.HaulHours, TaxRate: f.TaxPct / 100,
-		AllowBuy: f.AllowBuy, SellSurplus: f.SellSurplus, Adapt: f.Adapt,
+		AllowBuy: f.AllowBuy, BuyMissing: f.BuyMissing, SellSurplus: f.SellSurplus, Adapt: f.Adapt,
 	}
 	prices, _, priceLine, _ := piPricesByName(ctx, deps, time.Now())
 	req.Prices = prices

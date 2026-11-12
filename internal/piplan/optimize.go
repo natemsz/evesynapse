@@ -67,8 +67,12 @@ type Request struct {
 	TaxRate      float64 // customs office tax, fraction
 	Prices       map[string]float64
 	AllowBuy     bool // buy intermediates instead of making them, where cheaper
-	SellSurplus  bool // sell leftovers
-	Adapt        bool // keep existing colonies where they serve
+	// BuyMissing buys only what the planets cannot make: items no
+	// planet in reach can supply, and in target mode the shortfall the
+	// slots cannot cover once every colony is in use.
+	BuyMissing  bool
+	SellSurplus bool // sell leftovers
+	Adapt       bool // keep existing colonies where they serve
 }
 
 // PlannedColony is one colony of a solution.
@@ -587,7 +591,7 @@ func Optimize(req Request) (*Solution, error) {
 	// could feed.
 	emb := embodiedP1(chain)
 	maxHT := 24
-	if htProduct != "" && !req.AllowBuy {
+	if htProduct != "" && !req.AllowBuy && !req.BuyMissing {
 		most := 0.0
 		for _, cl := range classes {
 			for _, col := range cl.cols {
@@ -748,6 +752,7 @@ func Optimize(req Request) (*Solution, error) {
 	}
 
 	// Market.
+	makeable := makeableInReach(chain, classes)
 	sellVar, buyVar := map[string]int{}, map[string]int{}
 	for _, c := range chain {
 		if TierOf(c) == TierRaw {
@@ -766,8 +771,19 @@ func Optimize(req Request) (*Solution, error) {
 		} else if req.SellSurplus && known && price > 0 {
 			sellVar[c] = m.col(-(price - tax), 0, -1, false)
 		}
-		if req.AllowBuy && c != req.Target && known && price > 0 {
+		if c == req.Target || !known || price <= 0 {
+			continue
+		}
+		switch {
+		case req.AllowBuy, req.BuyMissing && !makeable[c]:
 			buyVar[c] = m.col(price+tax*0.5, 0, -1, false)
+		case req.BuyMissing && !maxMode:
+			// Bought only for the part of the target the slots cannot
+			// make: each unit an hour weighs as a hundred colonies in the
+			// first objective, so every slot is used before any buying.
+			v := m.col(price+tax*0.5, 0, -1, false)
+			buyVar[c] = v
+			primary[v] = 100
 		}
 	}
 	// Balance: made + bought >= used + sold.
@@ -942,7 +958,7 @@ func Optimize(req Request) (*Solution, error) {
 			}
 		}
 		sort.Strings(missing)
-		if len(missing) > 0 && !req.AllowBuy {
+		if len(missing) > 0 && !req.AllowBuy && !req.BuyMissing {
 			short = "No planet in reach yields " + strings.Join(missing, ", ") + "."
 		}
 		return &Solution{Target: req.Target, Short: short, SlotsTotal: slots, ProgramHours: req.ProgramHours}, nil
@@ -952,7 +968,7 @@ func Optimize(req Request) (*Solution, error) {
 	sol.PerDay = x[sellVar[req.Target]] * 24
 	if sol.PerDay < 0.5 {
 		sol.Short = fmt.Sprintf("%d planets cannot make even one %s a day from raw resources.", slots, req.Target)
-		if !req.AllowBuy {
+		if !req.AllowBuy && !req.BuyMissing {
 			sol.Short += " Allow buying inputs, or add pilots."
 		}
 	}
@@ -1093,6 +1109,50 @@ func pruneColumns(classes []*planetClass, slots int) {
 		}
 		cl.cols = kept
 	}
+}
+
+// makeableInReach marks each chain item the planet classes can supply:
+// a raw some planet type yields, or a product whose factory one of
+// the types can hold and whose inputs are all makeable.
+func makeableInReach(chain []string, classes []*planetClass) map[string]bool {
+	raws, holds := map[string]bool{}, map[PinKind]bool{}
+	for _, cl := range classes {
+		for _, y := range PlanetYields[cl.ptype] {
+			raws[y] = true
+		}
+		for _, k := range []PinKind{PinBasic, PinAdvanced, PinHighTech} {
+			if _, ok := PinTypeID(cl.ptype, k); ok {
+				holds[k] = true
+			}
+		}
+	}
+	memo := map[string]bool{}
+	var can func(c string) bool
+	can = func(c string) bool {
+		if v, ok := memo[c]; ok {
+			return v
+		}
+		memo[c] = false // a cycle is not makeable
+		ok := false
+		if TierOf(c) == TierRaw {
+			ok = raws[c]
+		} else if s, has := Schematics[c]; has && holds[facilityPin(s.Facility)] {
+			ok = true
+			for in := range s.Inputs {
+				if !can(in) {
+					ok = false
+					break
+				}
+			}
+		}
+		memo[c] = ok
+		return ok
+	}
+	out := map[string]bool{}
+	for _, c := range chain {
+		out[c] = can(c)
+	}
+	return out
 }
 
 type keepRun struct {

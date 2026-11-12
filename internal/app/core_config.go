@@ -101,6 +101,7 @@ type Config struct {
 	eveCallbackURL           string         // OAuth2 redirect URI registered with CCP
 	eveRevokeURL             string         // EVE SSO token revocation endpoint (EVE_SSO_REVOKE_URL)
 	devLogin                 bool           // DEV_LOGIN=1: register the /dev-login route
+	ignoreCFConnectingIP     bool           // TRUST_CF_CONNECTING_IP=off: CF-Connecting-IP no longer names a loopback request's visitor (core_throttle.go)
 	lowRAMMode               bool           // LOW_RAM_MODE=1: low-RAM installs serve search from SQL with no in-memory search index (search_index.go); the derived-pack snapshot joins it when built
 	sdeBaseURL               string         // EVE SDE CSV dump base URL (Fuzzwork by default)
 	fuzzworkBaseURL          string         // Fuzzwork market aggregate base URL (fallback prices)
@@ -407,6 +408,7 @@ func LoadConfig() (Config, error) {
 		eveRevokeURL:               getenvDefault("EVE_SSO_REVOKE_URL", defaultEveRevokeURL),
 		devLogin:                   os.Getenv("DEV_LOGIN") == "1",
 		lowRAMMode:                 os.Getenv("LOW_RAM_MODE") == "1",
+		ignoreCFConnectingIP:       strings.EqualFold(strings.TrimSpace(os.Getenv("TRUST_CF_CONNECTING_IP")), "off"),
 		sdeBaseURL:                 getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
 		fuzzworkBaseURL:            getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),
 		killfeedBaseURL:            getenvDefault("KILLFEED_BASE_URL", defaultKillfeedBaseURL),

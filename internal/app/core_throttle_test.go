@@ -75,6 +75,21 @@ func TestClientAddr(t *testing.T) {
 			t.Errorf("clientAddr(%s, XFF %q, CF %q) = %q, want %q", tc.remote, tc.fwd, tc.cf, got, tc.want)
 		}
 	}
+
+	// TRUST_CF_CONNECTING_IP=off: the header names nobody, and a
+	// local proxy's X-Forwarded-For still does.
+	trustCFConnectingIP.Store(false)
+	defer trustCFConnectingIP.Store(true)
+	r := httptest.NewRequest("GET", "/", nil)
+	r.RemoteAddr = "127.0.0.1:50000"
+	r.Header.Set("CF-Connecting-IP", "203.0.113.9")
+	if got := clientAddr(r); got != "127.0.0.1" {
+		t.Errorf("clientAddr with the header distrusted = %q, want the loopback peer", got)
+	}
+	r.Header.Set("X-Forwarded-For", "172.70.1.1")
+	if got := clientAddr(r); got != "172.70.1.1" {
+		t.Errorf("clientAddr with the header distrusted and XFF = %q, want the forwarded address", got)
+	}
 }
 
 // TestAnonThrottleRoutes: an anonymous address that spends its

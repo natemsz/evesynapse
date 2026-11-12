@@ -91,7 +91,7 @@ func (app *Application) characterNetWorth(ctx context.Context, characterID int64
 		var assets []esi.Asset
 		if json.Unmarshal([]byte(snap.Payload), &assets) == nil {
 			for _, a := range assets {
-				price, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID))
+				price, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID), buildCostOf(trueValues, a.TypeID))
 				if !ok {
 					continue
 				}

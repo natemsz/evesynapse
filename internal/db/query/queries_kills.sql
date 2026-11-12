@@ -86,13 +86,14 @@ ORDER BY k.killmail_time DESC
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- name: InsertKillLinePrices :exec
-INSERT INTO kill_line_prices (killmail_id, type_id, unit_price)
+INSERT INTO kill_line_prices (killmail_id, type_id, unit_price, tier)
 SELECT sqlc.arg(killmail_id)::bigint,
-    unnest(sqlc.arg(type_ids)::bigint[]), unnest(sqlc.arg(unit_prices)::float8[])
+    unnest(sqlc.arg(type_ids)::bigint[]), unnest(sqlc.arg(unit_prices)::float8[]),
+    unnest(sqlc.arg(tiers)::text[])
 ON CONFLICT (killmail_id, type_id) DO NOTHING;
 
 -- name: GetKillLinePrices :many
-SELECT type_id, unit_price FROM kill_line_prices
+SELECT type_id, unit_price, tier FROM kill_line_prices
 WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 
 -- name: SetKillValue :exec

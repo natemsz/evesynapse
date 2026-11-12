@@ -516,7 +516,7 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 	}
 	lk := assetLookups{
 		priceOf: func(typeID int64) (float64, bool) {
-			return pickValuationPrice(typicals[typeID], estSellOf(trueValues, typeID))
+			return pickValuationPrice(typicals[typeID], estSellOf(trueValues, typeID), buildCostOf(trueValues, typeID))
 		},
 		shipTypes: make(map[int64]bool),
 	}

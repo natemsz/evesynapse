@@ -133,7 +133,7 @@ func (app *Application) refreshAssetLocationValues(ctx context.Context, ch db.Ch
 	typicals := app.TypicalSells(ctx)
 	trueValues := app.storedTrueValues(ctx)
 	price := func(typeID int64) (float64, bool) {
-		return pickValuationPrice(typicals[typeID], estSellOf(trueValues, typeID))
+		return pickValuationPrice(typicals[typeID], estSellOf(trueValues, typeID), buildCostOf(trueValues, typeID))
 	}
 
 	typeIDs := make([]int64, 0, len(items))

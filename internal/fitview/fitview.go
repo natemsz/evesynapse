@@ -2926,6 +2926,12 @@ type FitCostView struct {
 	HullRaw  float64
 	PartsRaw float64
 	Unpriced int // lines no house price source knows (hull included)
+	// BuildPriced is true when any part of the total was
+	// priced at the build-cost tier (the house order's last
+	// resort, owner ruling 2026-11-12): pages asterisk the
+	// total and label it, so the figure never poses as a
+	// market price.
+	BuildPriced bool
 	// Lines is the total split by part (hull, modules, rigs,
 	// drones, cargo), each with its share of the total; empty
 	// parts are left out.
@@ -2939,6 +2945,7 @@ type FitCostLine struct {
 	Value string  // compact ISK
 	Pct   float64 // share of the total, 0 to 100
 	X     float64 // where its bar segment starts, 0 to 100
+	Build bool    // the part's value includes build-cost-tier money
 }
 
 // FitUnitPrice resolves one unit's price for fit valuation in
@@ -2946,7 +2953,9 @@ type FitCostLine struct {
 // with a global-market type's own global book filling in where
 // The Forge carries no row for it), then the
 // stored true-value estimated sell (trueValues, nil when the
-// worker has stored none). A type neither source knows is
+// worker has stored none), then the stored build cost
+// (buildCosts) when neither market nor estimate could speak
+// (owner ruling, 2026-11-12). A type no source knows is
 // unpriced, CCP's guide average is banned as a price source
 // (owner doctrine, 2026-10-17) and its adjusted price is not
 // one either; it survives only as the EIV input to job fees.
@@ -2955,14 +2964,25 @@ type FitCostLine struct {
 // while its stored estimate tracks real contract trades.
 // RepriceLocalFittings makes the same choices in SQL: change
 // both.
-func FitUnitPrice(typicals, trueValues map[int64]float64, typeID int64) (float64, bool) {
+func FitUnitPrice(typicals, trueValues, buildCosts map[int64]float64, typeID int64) (float64, bool) {
+	p, _, ok := FitUnitPriceTier(typicals, trueValues, buildCosts, typeID)
+	return p, ok
+}
+
+// FitUnitPriceTier is FitUnitPrice with the tier reported:
+// build is true when the build-cost tier spoke, so a total
+// that includes the figure can be asterisked and labeled.
+func FitUnitPriceTier(typicals, trueValues, buildCosts map[int64]float64, typeID int64) (price float64, build bool, ok bool) {
 	if v, ok := typicals[typeID]; ok && v > 0 {
-		return v, true
+		return v, false, true
 	}
 	if est, ok := trueValues[typeID]; ok && est > 0 {
-		return est, true
+		return est, false, true
 	}
-	return 0, false
+	if bc, ok := buildCosts[typeID]; ok && bc > 0 {
+		return bc, true, true
+	}
+	return 0, false, false
 }
 
 // FitCost prices a document from the stored price sources: the
@@ -2973,17 +2993,21 @@ func (app *Builder) FitCost(ctx context.Context, doc *FitDoc, familyOf func(int6
 	c := &FitCostView{}
 	typicals := app.env.TypicalSells(ctx)
 	trueValues := app.env.TrueValues(ctx)
-	if (len(typicals) == 0 && len(trueValues) == 0) || doc == nil || doc.ShipTypeID == 0 {
+	buildCosts := app.env.BuildCosts(ctx)
+	if (len(typicals) == 0 && len(trueValues) == 0 && len(buildCosts) == 0) || doc == nil || doc.ShipTypeID == 0 {
 		return c
 	}
-	if p, ok := FitUnitPrice(typicals, trueValues, doc.ShipTypeID); ok {
+	hullBuild := false
+	if p, b, ok := FitUnitPriceTier(typicals, trueValues, buildCosts, doc.ShipTypeID); ok {
 		c.HullRaw = p
+		hullBuild = b
 	} else {
 		c.Unpriced++
 	}
 	part := map[string]float64{}
+	partBuild := map[string]bool{}
 	for _, it := range doc.Items {
-		p, ok := FitUnitPrice(typicals, trueValues, it.TypeID)
+		p, b, ok := FitUnitPriceTier(typicals, trueValues, buildCosts, it.TypeID)
 		if !ok {
 			c.Unpriced++
 			continue
@@ -2995,28 +3019,32 @@ func (app *Builder) FitCost(ctx context.Context, doc *FitDoc, familyOf func(int6
 			key = fitCostPart(familyOf(it.TypeID), it.Cargo)
 		}
 		part[key] += v
+		if b {
+			partBuild[key] = true
+		}
 	}
 	c.TotalRaw = c.HullRaw + c.PartsRaw
+	c.BuildPriced = hullBuild || len(partBuild) > 0
 	if c.TotalRaw > 0 {
 		c.Known = true
 		c.Hull = esi.FormatISK(c.HullRaw)
 		c.Parts = esi.FormatISK(c.PartsRaw)
 		c.Total = esi.FormatISK(c.TotalRaw)
-		line := func(key, label string, v float64) {
+		line := func(key, label string, v float64, build bool) {
 			if v > 0 {
 				x := 0.0
 				if n := len(c.Lines); n > 0 {
 					x = c.Lines[n-1].X + c.Lines[n-1].Pct
 				}
-				c.Lines = append(c.Lines, FitCostLine{Key: key, Label: label, Value: humanize.ISKCompact(v), Pct: v * 100 / c.TotalRaw, X: x})
+				c.Lines = append(c.Lines, FitCostLine{Key: key, Label: label, Value: humanize.ISKCompact(v), Pct: v * 100 / c.TotalRaw, X: x, Build: build})
 			}
 		}
-		line("hull", "Hull", c.HullRaw)
-		line("module", "Modules", part["module"])
-		line("rig", "Rigs", part["rig"])
-		line("drone", "Drones", part["drone"])
-		line("cargo", "Cargo", part["cargo"])
-		line("module", "Fittings", part["other"])
+		line("hull", "Hull", c.HullRaw, hullBuild)
+		line("module", "Modules", part["module"], partBuild["module"])
+		line("rig", "Rigs", part["rig"], partBuild["rig"])
+		line("drone", "Drones", part["drone"], partBuild["drone"])
+		line("cargo", "Cargo", part["cargo"], partBuild["cargo"])
+		line("module", "Fittings", part["other"], partBuild["other"])
 	}
 	return c
 }
@@ -3088,6 +3116,11 @@ type Env interface {
 	// types the market cannot price (nil when none are
 	// stored): fit valuation's second tier.
 	TrueValues(ctx context.Context) map[int64]float64
+	// BuildCosts is the worker's stored build cost per type
+	// (nil when none are stored): fit valuation's last tier,
+	// spoken only when neither market nor estimate priced
+	// the type, and flagged on the view it feeds.
+	BuildCosts(ctx context.Context) map[int64]float64
 }
 
 // Builder builds fit views from a fit document over the static data

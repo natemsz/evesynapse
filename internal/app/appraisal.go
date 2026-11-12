@@ -141,7 +141,10 @@ func typicalForMode(own *db.MarketRegionStat, mode string) (appraisalPrice, bool
 // pricing mode: the hub row speaks in that mode while fresh,
 // then the basis-independent estimate and fallback tiers,
 // then the hub row again however old (the floor rule, in the
-// same mode -- a buy price never floors to a sell figure).
+// same mode -- a buy price never floors to a sell figure),
+// then the stored build cost when nothing else could speak
+// (owner ruling, 2026-11-12: a build cost is enough when it
+// is all we have, asterisked wherever it is shown).
 func resolveAppraisalPriceMode(own *db.MarketRegionStat, tv *db.TrueValue, fb *db.MarketStatsFallback, now time.Time, mode string) appraisalPrice {
 	if p, ok := typicalForMode(own, mode); ok && now.Sub(own.UpdatedAt) < fallbackOwnFresh {
 		return p
@@ -159,6 +162,9 @@ func resolveAppraisalPriceMode(own *db.MarketRegionStat, tv *db.TrueValue, fb *d
 		// speaks when the fallback cannot -- and its as-of
 		// travels with it, so no reader mistakes it for fresh.
 		return p
+	}
+	if tv != nil && tv.BuildCost > 0 {
+		return appraisalPrice{unit: tv.BuildCost, tier: module.AppraisalTierBuildCost, asOf: tv.ComputedAt, ok: true}
 	}
 	return appraisalPrice{tier: module.AppraisalTierUnpriced}
 }

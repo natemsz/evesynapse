@@ -254,7 +254,7 @@ func (app *Application) buildMine(ctx context.Context, userID int64) minePayload
 	// average prices nothing.
 	typicals, trueValues := app.TypicalSells(ctx), app.storedTrueValues(ctx)
 	priceOf := func(typeID int64) (float64, bool) {
-		return pickValuationPrice(typicals[typeID], estSellOf(trueValues, typeID))
+		return pickValuationPrice(typicals[typeID], estSellOf(trueValues, typeID), buildCostOf(trueValues, typeID))
 	}
 	structSeen := map[int64]bool{}
 	mining := map[int64]*mineHeat{}

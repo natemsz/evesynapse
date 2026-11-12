@@ -257,10 +257,11 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       </dl>
       {{with $.Cost}}{{if .Known}}
       <div class="fit-cost" data-fit-cost="{{.TotalRaw}}">
-        <p class="fit-cost-head"><span>Value</span> <strong class="fit-cost-total">{{.Total}} ISK</strong></p>
+        <p class="fit-cost-head"><span>Value</span> <strong class="fit-cost-total">{{.Total}}{{if .BuildPriced}}*{{end}} ISK</strong></p>
         {{if .Lines}}<svg class="fit-cost-bar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">{{range .Lines}}<rect class="fc-{{.Key}}" x="{{printf "%.2f" .X}}" y="0" width="{{printf "%.2f" .Pct}}" height="4"/>{{end}}</svg>
-        <ul class="fit-cost-parts">{{range .Lines}}<li class="fc-{{.Key}}"><span>{{.Label}}</span> <b>{{.Value}}</b> <small>{{printf "%.0f" .Pct}}%</small></li>{{end}}</ul>{{end}}
+        <ul class="fit-cost-parts">{{range .Lines}}<li class="fc-{{.Key}}"><span>{{.Label}}</span> <b>{{.Value}}{{if .Build}}*{{end}}</b> <small>{{printf "%.0f" .Pct}}%</small></li>{{end}}</ul>{{end}}
         {{if .Unpriced}}<p class="fit-cost-gap">{{.Unpriced}} item{{if ne .Unpriced 1}}s{{end}} without a price, not counted.</p>{{end}}
+        {{if .BuildPriced}}<p class="fit-cost-gap">* Part of this value is priced at build cost, where no market or contract price is known.</p>{{end}}
       </div>
       {{end}}{{end}}
     </section>

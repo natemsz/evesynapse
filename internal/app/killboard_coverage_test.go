@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 )
@@ -665,6 +666,65 @@ func TestKillValueSurvivesPrune(t *testing.T) {
 	if !feedIDs(feed)[800301] {
 		t.Error("pruned kill missing from the attacker's board kills")
 	}
+}
+
+// TestKillPageBuildCostAsterisk: a kill whose only price is a
+// hull's stored build cost is valued at that figure, its line
+// price is stored with the build-cost tier, and the kill page
+// asterisks the value and labels it.
+func TestKillPageBuildCostAsterisk(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+
+	seedTrueValue(t, q, 587, 750000, 0, 1)
+	for _, stmt := range []string{
+		`INSERT INTO sde_systems (system_id, name, security) VALUES (30000142, 'Jita', 0.9)`,
+		`INSERT INTO sde_types (type_id, name) VALUES (587, 'Rifter')`,
+	} {
+		if _, err := app.db.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+
+	at := time.Now().UTC().Add(-2 * time.Hour)
+	esi := fmt.Sprintf(`{"killmail_id":800302,"killmail_time":%q,"solar_system_id":30000142,`+
+		`"victim":{"character_id":9201,"corporation_id":98000101,"ship_type_id":587,"damage_taken":900,"items":[]},`+
+		`"attackers":[{"character_id":9202,"corporation_id":98000201,"ship_type_id":587,"weapon_type_id":2873,"damage_done":900,"final_blow":true}]}`,
+		at.Format("2006-01-02T15:04:05Z"))
+	frame := fmt.Sprintf(`{"killmail_id":800302,"hash":"h800302","esi":%s,`+
+		`"zkb":{"locationID":60003760,"totalValue":0,"points":1,"npc":false,"solo":false,"awox":false},"sequence_id":1}`, esi)
+	if err := app.ingestKillPackage(ctx, []byte(frame)); err != nil {
+		t.Fatalf("ingest kill: %v", err)
+	}
+	stored, err := q.GetKill(ctx, 800302)
+	if err != nil {
+		t.Fatalf("stored kill: %v", err)
+	}
+	if !stored.ValueOurs.Valid || stored.ValueOurs.Float64 != 750000 {
+		t.Fatalf("kill value_ours = %v, want 750000 priced at the build-cost tier", stored.ValueOurs)
+	}
+	lines, err := q.GetKillLinePrices(ctx, 800302)
+	if err != nil || len(lines) != 1 {
+		t.Fatalf("line prices: %v (%d rows)", err, len(lines))
+	}
+	if lines[0].Tier != module.AppraisalTierBuildCost {
+		t.Errorf("stored line tier = %q, want %q", lines[0].Tier, module.AppraisalTierBuildCost)
+	}
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	seedCharacter(t, q, user.ID, 9201, "Build Victim")
+	cookie := sessionCookie(t, app, user.ID, 9201, "Build Victim")
+	code, body := getPage(t, app, cookie, "/intel/kill/800302/")
+	if code != http.StatusOK {
+		t.Fatalf("kill page: status %d", code)
+	}
+	mustContain(t, "kill page", body,
+		"750.0K*",
+		"* Part of this value is priced at build cost, where no market or contract price is known.",
+	)
 }
 
 func TestKillmailPageListsBoardOnlyKill(t *testing.T) {

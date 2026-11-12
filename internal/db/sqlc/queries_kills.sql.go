@@ -318,13 +318,14 @@ func (q *Queries) GetKillFeedBackfillState(ctx context.Context) (GetKillFeedBack
 }
 
 const getKillLinePrices = `-- name: GetKillLinePrices :many
-SELECT type_id, unit_price FROM kill_line_prices
+SELECT type_id, unit_price, tier FROM kill_line_prices
 WHERE killmail_id = $1::bigint
 `
 
 type GetKillLinePricesRow struct {
 	TypeID    int64   `json:"type_id"`
 	UnitPrice float64 `json:"unit_price"`
+	Tier      string  `json:"tier"`
 }
 
 func (q *Queries) GetKillLinePrices(ctx context.Context, killmailID int64) ([]GetKillLinePricesRow, error) {
@@ -336,7 +337,7 @@ func (q *Queries) GetKillLinePrices(ctx context.Context, killmailID int64) ([]Ge
 	var items []GetKillLinePricesRow
 	for rows.Next() {
 		var i GetKillLinePricesRow
-		if err := rows.Scan(&i.TypeID, &i.UnitPrice); err != nil {
+		if err := rows.Scan(&i.TypeID, &i.UnitPrice, &i.Tier); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -624,9 +625,10 @@ func (q *Queries) InsertKillInvolvement(ctx context.Context, arg InsertKillInvol
 }
 
 const insertKillLinePrices = `-- name: InsertKillLinePrices :exec
-INSERT INTO kill_line_prices (killmail_id, type_id, unit_price)
+INSERT INTO kill_line_prices (killmail_id, type_id, unit_price, tier)
 SELECT $1::bigint,
-    unnest($2::bigint[]), unnest($3::float8[])
+    unnest($2::bigint[]), unnest($3::float8[]),
+    unnest($4::text[])
 ON CONFLICT (killmail_id, type_id) DO NOTHING
 `
 
@@ -634,10 +636,16 @@ type InsertKillLinePricesParams struct {
 	KillmailID int64     `json:"killmail_id"`
 	TypeIds    []int64   `json:"type_ids"`
 	UnitPrices []float64 `json:"unit_prices"`
+	Tiers      []string  `json:"tiers"`
 }
 
 func (q *Queries) InsertKillLinePrices(ctx context.Context, arg InsertKillLinePricesParams) error {
-	_, err := q.db.Exec(ctx, insertKillLinePrices, arg.KillmailID, arg.TypeIds, arg.UnitPrices)
+	_, err := q.db.Exec(ctx, insertKillLinePrices,
+		arg.KillmailID,
+		arg.TypeIds,
+		arg.UnitPrices,
+		arg.Tiers,
+	)
 	return err
 }
 

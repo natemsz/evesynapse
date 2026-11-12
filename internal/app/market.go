@@ -1007,6 +1007,8 @@ func (app *Application) houseValue(ctx context.Context, typeID, regionID int64, 
 		}
 	case module.AppraisalTierFallback:
 		note = fallbackSourceLabel + " · " + ageText(now, pr.asOf)
+	case module.AppraisalTierBuildCost:
+		note = "Build cost"
 	}
 	return value, note
 }

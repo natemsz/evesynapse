@@ -545,6 +545,9 @@ func (app *page) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.PriceKnown {
 		card.PriceLine = body.PriceTotal + " ISK"
+		if body.PriceBuildPriced {
+			card.PriceLine = body.PriceTotal + "* ISK"
+		}
 	}
 	if row.RatingCount > 0 {
 		card.Stars = float64(row.RatingSum) / float64(row.RatingCount)
@@ -620,6 +623,9 @@ func (app *page) handleSharedFitPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.PriceKnown {
 		card.PriceLine = body.PriceTotal + " ISK"
+		if body.PriceBuildPriced {
+			card.PriceLine = body.PriceTotal + "* ISK"
+		}
 	}
 	view := &publicFitView{
 		Card: card, Description: doc.Description,

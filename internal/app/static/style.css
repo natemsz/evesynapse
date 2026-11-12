@@ -6239,10 +6239,10 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
     cursor: pointer;
   }
   .phone-bar-icon { width: 1.4rem; height: 1.4rem; }
-  .phone-bar-item.active {
-    color: var(--text-bright);
-    background: rgba(255, 106, 0, 0.16);
-  }
+  /* The current section: its glyph turns solid white whatever the
+     scheme's gradient, with no tinted box. */
+  .phone-bar-item.active { color: #fff; }
+  .phone-bar-item.active .phone-bar-icon { filter: brightness(0) invert(1); }
   .phone-sheet-backdrop:not([hidden]) {
     display: block;
     position: fixed; inset: 0; z-index: 98;

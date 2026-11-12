@@ -18,6 +18,7 @@ func realize(sol *Solution, req Request, classes []*planetClass, zs []zref, keep
 	onPlanet := map[int64]map[int64]bool{}
 	charName := map[int64]string{}
 	var charOrder []int64
+	charCC := map[int64]int{}
 	for i, ch := range req.Characters {
 		id := ch.ID
 		if id == 0 {
@@ -26,6 +27,7 @@ func realize(sol *Solution, req Request, classes []*planetClass, zs []zref, keep
 		slotsLeft[id] = max(ch.MaxPlanets, 1)
 		onPlanet[id] = map[int64]bool{}
 		charName[id] = ch.Name
+		charCC[id] = ch.CCLevel
 		charOrder = append(charOrder, id)
 	}
 
@@ -95,10 +97,23 @@ func realize(sol *Solution, req Request, classes []*planetClass, zs []zref, keep
 			}
 			return ca.RadiusKm < cb.RadiusKm
 		})
+		// A fresh colony goes to a pilot with the skill it was sized for,
+		// then to anyone with a free slot.
+		pilots := make([]int64, 0, len(charOrder))
+		for _, ch := range charOrder {
+			if charCC[ch] == in.class.cc {
+				pilots = append(pilots, ch)
+			}
+		}
+		for _, ch := range charOrder {
+			if charCC[ch] != in.class.cc {
+				pilots = append(pilots, ch)
+			}
+		}
 		placed := false
 		for _, ci := range cands {
 			pid := req.Candidates[ci].PlanetID
-			for _, ch := range charOrder {
+			for _, ch := range pilots {
 				if slotsLeft[ch] > 0 && !onPlanet[ch][pid] {
 					in.cand, in.char = ci, ch
 					slotsLeft[ch]--
@@ -112,7 +127,7 @@ func realize(sol *Solution, req Request, classes []*planetClass, zs []zref, keep
 			}
 		}
 		if !placed {
-			for _, ch := range charOrder {
+			for _, ch := range pilots {
 				if slotsLeft[ch] > 0 {
 					in.char = ch
 					slotsLeft[ch]--
@@ -278,7 +293,7 @@ func realize(sol *Solution, req Request, classes []*planetClass, zs []zref, keep
 			}
 		}
 		if !pc.Fit.Fits() {
-			sol.Notes = append(sol.Notes, fmt.Sprintf("%s does not fit its command center as laid out; drop a factory or a head there.", pc.PlanetName))
+			sol.Notes = append(sol.Notes, fmt.Sprintf("The changes planned for %s need more CPU or power than its command center has; drop a factory or an extractor head there.", pc.PlanetName))
 		}
 		sol.Colonies = append(sol.Colonies, pc)
 	}

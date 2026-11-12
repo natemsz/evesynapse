@@ -48,6 +48,7 @@ jobs:
     outputs:
       version: ${{ steps.decide.outputs.version }}
       publish: ${{ steps.decide.outputs.publish }}
+      released: ${{ steps.decide.outputs.released }}
     env:
       FORGEJO_API: https://natems.dev/api/v1/repos/EveSynapse/evesynapse
       FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
@@ -99,6 +100,7 @@ jobs:
         id: decide
         run: |
           publish=true
+          released=false
           if [ "$VERSION" = "${VERSION%%-*}" ] && [ "$GITHUB_REF_NAME" != "main" ]; then
             echo "Not publishing: $GITHUB_REF_NAME carries the plain version $VERSION, and plain versions are released from main only. Give this branch a suffixed version (for example $VERSION-dev) to publish development builds."
             publish=false
@@ -114,13 +116,16 @@ jobs:
               else
                 echo "Release v$VERSION already exists and is published; leaving it as it is."
                 publish=false
+                released=true
               fi
             elif [ "$code" != "404" ]; then
               echo "The releases API answered $code; not publishing on a guess."
               exit 1
             fi
           fi
+          if [ "$publish" = "true" ]; then released=true; fi
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "released=$released" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       # Only a signed release is published. The step fails, and
       # nothing is published, when the key is missing or is not
@@ -328,7 +333,7 @@ jobs:
   # releases run there again.
   # Files land under evesynapse/ in the releases bucket.
   mirror:
-    if: github.server_url == 'https://github.com' && needs.release.outputs.publish == 'true'
+    if: github.server_url == 'https://github.com' && needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
     needs: release
     continue-on-error: true
@@ -346,14 +351,15 @@ jobs:
           path: dist
       - name: Install the AWS CLI
         run: |
-          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates unzip >/dev/null
+          if command -v aws >/dev/null 2>&1; then aws --version; exit 0; fi
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends curl ca-certificates unzip >/dev/null
           case "$(uname -m)" in
             aarch64) aws_arch=aarch64 ;;
             *) aws_arch=x86_64 ;;
           esac
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-${aws_arch}.zip"
           unzip -q /tmp/awscliv2.zip -d /tmp
-          /tmp/aws/install
+          sudo /tmp/aws/install
           aws --version
       - name: Mirror the release to R2
         run: |
@@ -388,7 +394,7 @@ jobs:
   # .github/workflows/release.yml, with its built-in token, so
   # no GitHub credential is stored on any other forge.
   forges:
-    if: github.server_url == 'https://github.com' && needs.release.outputs.publish == 'true'
+    if: github.server_url == 'https://github.com' && needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
     needs: release
     continue-on-error: true

@@ -591,3 +591,12 @@ button.fit-ftr-ab:hover, button.fit-ftr-ab:focus-visible { color: var(--text); b
 .fit-ftr-ab.on { color: var(--text); border-color: color-mix(in srgb, var(--muted-2) 55%, transparent); background: var(--row-alt); }
 .fit-ftr-ab.dmg.on { color: var(--text-bright); border-color: color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
 span.fit-ftr-ab { cursor: default; }
+
+/* --- unsaved changes popup ---
+   The shared modal, sized for a short question: the message, then
+   the safe choice (focused) and the one that drops the changes. */
+.modal.fit-leave { width: min(28rem, 100%); }
+.fit-leave-msg { margin: 0 0 1rem; color: var(--prose); }
+.fit-leave-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; }
+.fit-leave .btn.fit-leave-go { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.fit-leave .btn.fit-leave-go:hover, .fit-leave .btn.fit-leave-go:focus-visible { color: var(--text-bright); border-color: var(--danger); background: color-mix(in srgb, var(--danger) 18%, transparent); }

@@ -632,6 +632,76 @@ var FitGauges = (function () {
     }
   }
 
+  // --- unsaved changes guard ---------------------------------------
+  // While the fit has unsaved changes, anything on the page that
+  // would drop them asks first in the page's own popup
+  // (#fit-leave-modal): a link (caught here, before swap.js sees
+  // it) and opening another fit (Your fits, the Import form, a
+  // paste). Escape, the backdrop and Stay keep the fit. The
+  // workbench always loads whole, so Back, Forward, reloading,
+  // closing the tab or typing an address leave the document, and
+  // browsers allow only their own prompt there (beforeunload).
+  // Once the reader chooses to go, leaving is set and nothing asks
+  // again.
+  var leaveModal = document.getElementById("fit-leave-modal");
+  var leaving = false;
+  var leaveGo = null;
+  var leaveCopy = {
+    leave: ["Leave without saving?", "This fit has changes you haven't saved. Leaving now loses them.", "Leave without saving"],
+    replace: ["Open another fit?", "This fit has changes you haven't saved. Opening another fit loses them.", "Open it anyway"]
+  };
+  function holdUnsaved() {
+    return dirty && !leaving && !!state.shipTypeId && document.body.contains(editor);
+  }
+  function askLeave(kind, proceed) {
+    if (!holdUnsaved()) { proceed(); return; }
+    var copy = leaveCopy[kind] || leaveCopy.leave;
+    if (!leaveModal || !window.EveSynapseModal) {
+      if (window.confirm(copy[1])) { leaving = true; proceed(); }
+      return;
+    }
+    leaveModal.querySelector("#fit-leave-title").textContent = copy[0];
+    leaveModal.querySelector("#fit-leave-msg").textContent = copy[1];
+    leaveModal.querySelector("[data-fit-leave-go]").textContent = copy[2];
+    leaveGo = proceed;
+    window.EveSynapseModal.open(leaveModal, { onClose: function () { leaveGo = null; } });
+  }
+  if (leaveModal) {
+    leaveModal.querySelector("[data-fit-leave-stay]").addEventListener("click", function () {
+      window.EveSynapseModal.close(leaveModal);
+    });
+    leaveModal.querySelector("[data-fit-leave-go]").addEventListener("click", function () {
+      var go = leaveGo;
+      leaving = true;
+      window.EveSynapseModal.close(leaveModal);
+      if (go) go();
+    });
+  }
+  // Links: caught in the capture phase, ahead of the page swapper.
+  // Going anyway clicks the link again, so it travels exactly as it
+  // would have (swapped or loaded whole). A link to another tab, a
+  // download, a modified click or a jump within this page passes.
+  document.addEventListener("click", function (ev) {
+    if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    if (!holdUnsaved()) return;
+    var a = ev.target && ev.target.closest ? ev.target.closest("a[href]") : null;
+    if (!a || a.hasAttribute("download") || (a.target && a.target !== "_self")) return;
+    var url;
+    try { url = new URL(a.href, window.location.href); } catch (e) { return; }
+    if (url.protocol !== "http:" && url.protocol !== "https:") return;
+    if (url.origin === window.location.origin && url.pathname === window.location.pathname &&
+        url.search === window.location.search) return;
+    ev.preventDefault();
+    askLeave("leave", function () { a.click(); });
+  }, true);
+  if (window.addEventListener) {
+    window.addEventListener("beforeunload", function (ev) {
+      if (!holdUnsaved()) return;
+      ev.preventDefault();
+      ev.returnValue = "";
+    });
+  }
+
   // --- ship-restricted modules -------------------------------------
   // The workbench carries data-fit-restricted for fitted modules:
   // {typeID: "Dreadnoughts"}. Search and Browse rows carry the same
@@ -1912,6 +1982,9 @@ var FitGauges = (function () {
     function yfLoad(it) {
       yfClose();
       yourfitsInput.value = "";
+      askLeave("replace", function () { yfOpen(it); });
+    }
+    function yfOpen(it) {
       if (it.mine) {
         if (it.isESI) {
           // ESI fit: negative ID, load via ?esi= parameter
@@ -3267,13 +3340,24 @@ var FitGauges = (function () {
     var text = ev.clipboardData ? ev.clipboardData.getData("text/plain") : "";
     if (!text || !eftHead.test(text)) return;
     ev.preventDefault();
-    if (dirty && state.shipTypeId && !window.confirm("Replace this fit with the pasted one? Unsaved changes are lost.")) return;
     var importArea = document.getElementById("fit-eft-in");
     var form = importArea && importArea.form;
     if (!form) return;
-    importArea.value = text;
-    if (form.requestSubmit) form.requestSubmit(); else form.submit();
+    askLeave("replace", function () {
+      leaving = true;
+      importArea.value = text;
+      if (form.requestSubmit) form.requestSubmit(); else form.submit();
+    });
   });
+  // The Import form itself opens another fit: it asks the same way.
+  var importForm = document.getElementById("fit-eft-in") && document.getElementById("fit-eft-in").form;
+  if (importForm) {
+    importForm.addEventListener("submit", function (ev) {
+      if (!holdUnsaved()) return;
+      ev.preventDefault();
+      askLeave("replace", function () { importForm.submit(); });
+    });
+  }
 
   // --- sticky summary ----------------------------------------------
   // The stats column's one-line summary shows once its headline
@@ -3384,6 +3468,7 @@ var FitGauges = (function () {
       }).then(function (row) {
         saveEveBtn.disabled = false;
         if (row && row.ok) {
+          clearDirty();
           fitNotice("Saved \u201c" + row.name + "\u201d to EVE. Loading your in-game fitting…", false, false);
           window.setTimeout(function () {
             window.location.href = "/fittings/?character=" + row.characterId + "&esi=" + row.fittingId + "#fit-editor";
@@ -3463,6 +3548,7 @@ var FitGauges = (function () {
       }).then(function (resp) {
         return resp.ok ? resp.json() : null;
       }).then(function (row) {
+        if (row && row.shareUrl) clearDirty(); // the shared copy is this visitor's save
         if (row && row.shareUrl && linkEl) {
           var a = document.createElement("a");
           a.href = row.shareUrl;

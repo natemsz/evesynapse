@@ -7,6 +7,17 @@
 
 {{if .FitEditor}}
 <div class="l-page fw">
+{{/* Unsaved changes: fit.js opens this before a link or another fit would drop them, and fills the heading, message and leave button for the case. Escape, the backdrop and the safe button all stay. */}}
+<div class="modal-backdrop" id="fit-leave-modal" hidden>
+  <div class="modal fit-leave" role="alertdialog" aria-modal="true" aria-labelledby="fit-leave-title" aria-describedby="fit-leave-msg">
+    <div class="modal-head"><h2 id="fit-leave-title">Leave without saving?</h2></div>
+    <p id="fit-leave-msg" class="fit-leave-msg">This fit has changes you haven't saved. Leaving now loses them.</p>
+    <div class="fit-leave-actions">
+      <button type="button" class="btn" data-fit-leave-stay autofocus>Stay on this fit</button>
+      <button type="button" class="btn btn-quiet fit-leave-go" data-fit-leave-go>Leave without saving</button>
+    </div>
+  </div>
+</div>
 <div id="fit-editor" class="l-stack fw-editor{{if not .FitEditor.Sim.HasShip}} fit-noship{{end}}">
 {{if .FitEditor.Anonymous}}
 <section class="l-panel fw-anon" aria-label="Signed out">

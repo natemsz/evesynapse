@@ -63,9 +63,15 @@
     min-width: 0; overflow-wrap: anywhere;
   }
   .fit-mhead-ship { color: var(--accent); font-weight: 600; }
-  .fit-mhead-nums { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+  /* DPS and EHP lead at full size; capacitor, speed, align and lock
+     range follow as a smaller row of four. */
+  .fit-mhead-nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.4rem; margin-top: 0.5rem; }
+  .fit-mhead-nums .fit-mchip:nth-child(-n+2) { grid-column: span 2; }
+  .fit-mhead-nums .fit-mchip:nth-child(n+3) { padding: 0.25rem 0.4rem; }
+  .fit-mhead-nums .fit-mchip:nth-child(n+3) strong { font-size: var(--fs-sm); color: var(--text); white-space: nowrap; }
+  .fit-mhead-nums .fit-mchip.warn strong { color: var(--danger); }
   .fit-mchip {
-    flex: 1 1 0; display: flex; flex-direction: column; align-items: flex-end;
+    min-width: 0; display: flex; flex-direction: column; align-items: flex-end;
     background: var(--row-alt); border: 1px solid var(--box-edge);
     border-radius: var(--r-sm); padding: 0.3rem 0.55rem;
   }

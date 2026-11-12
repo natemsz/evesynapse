@@ -80,10 +80,6 @@
 .fw-anon-name { min-width: 0; overflow-wrap: anywhere; }
 .fw-anonlist form { margin: 0; }
 /* Export and import side by side while each gets 26rem. */
-.fw-eft { --l-min: 52rem; }
-.fw-eft .fit-eft { margin: 0; }
-.fw-eft .fit-eft > p, .fw-eft .fit-eft form > p { margin: 0 0 var(--space-2); }
-.fw-eft textarea { width: 100%; }
 
 /* The workbench grid: the module lists, the ship ring and the stats
    in three columns once the page has room for all of them. The
@@ -600,3 +596,11 @@ span.fit-ftr-ab { cursor: default; }
 .fit-leave-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; }
 .fit-leave .btn.fit-leave-go { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 .fit-leave .btn.fit-leave-go:hover, .fit-leave .btn.fit-leave-go:focus-visible { color: var(--text-bright); border-color: var(--danger); background: color-mix(in srgb, var(--danger) 18%, transparent); }
+
+/* --- EFT import and copy popups ---
+   The shared modal, wide enough for a fit's lines; the import's
+   actions sit under its text box, Cancel before the main action. */
+.modal.fit-eftmodal { width: min(36rem, 100%); }
+.fit-eftmodal .fw-hint { margin: 0 0 var(--space-2); }
+.fit-eftmodal textarea { display: block; min-height: 12rem; resize: vertical; font-family: var(--font-num); }
+.fit-eftmodal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; margin-top: var(--space-3); }

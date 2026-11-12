@@ -47,6 +47,10 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   <div class="fit-mhead-nums">
     <span class="fit-mchip"><strong>{{.TotalDPS}}</strong><span>DPS</span></span>
     <span class="fit-mchip"><strong>{{.EHPOmni}}</strong><span>EHP</span></span>
+    <span class="fit-mchip{{if not .CapStable}} warn{{end}}"><strong>{{.CapChip}}</strong><span>{{.CapChipLabel}}</span></span>
+    <span class="fit-mchip"><strong>{{.Velocity}}</strong><span>Speed</span></span>
+    <span class="fit-mchip"><strong>{{.Align}}</strong><span>Align</span></span>
+    <span class="fit-mchip"><strong>{{.TargetRng}}</strong><span>Lock range</span></span>
   </div>
   <div class="fit-mhead-bars">
     <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">

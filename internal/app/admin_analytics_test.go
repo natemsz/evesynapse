@@ -198,13 +198,15 @@ func TestAdminAnalyticsRenders(t *testing.T) {
 	asAdmin := sessionCookie(t, app, admin.ID, fixtureCharA, "Admin Main")
 
 	// A fresh instance has recorded nothing: the section says so
-	// instead of charting zeros.
+	// instead of charting zeros. The memory bar shows what the
+	// worker last measured.
+	app.refreshMemoryBreakdown(time.Now())
 	code, body := getPage(t, app, asAdmin, "/admin/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /admin/: status %d, want 200", code)
 	}
 	mustContain(t, "/admin/ (empty)", body,
-		"Analytics", "No analytics yet", "Data freshness", "Analytics section:", "Go heap in use")
+		"Analytics", "No analytics yet", "Data freshness", "Analytics section:", "Held in memory", "Hub order books", "an-mem-bar")
 
 	// Seed the stored aggregates the section reads.
 	now := time.Now().UTC()

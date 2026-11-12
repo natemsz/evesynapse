@@ -418,6 +418,7 @@ func (app *Application) flushStats(ctx context.Context, t workerTiming) {
 		}
 	}
 
+	app.refreshMemoryBreakdown(now)
 	if err := app.statsHousekeep(ctx, q, rec, now); err != nil {
 		logging.Errorf("stats: housekeeping: %v", err)
 		return

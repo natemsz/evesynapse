@@ -99,6 +99,7 @@ func RenderPageMeta(m PageMeta) template.HTML {
 		b.WriteString(`<meta property="og:description" content="` + esc(m.Description) + `">` + "\n")
 	}
 	b.WriteString(`<meta property="og:type" content="website">` + "\n")
+	b.WriteString(`<meta property="og:site_name" content="EveSynapse">` + "\n")
 	if canonical != "" {
 		b.WriteString(`<meta property="og:url" content="` + esc(canonical) + `">` + "\n")
 	}
@@ -120,6 +121,27 @@ func RenderPageMeta(m PageMeta) template.HTML {
 				"applicationCategory": "GameApplication",
 				"operatingSystem":     "Web",
 				"offers":              map[string]any{"@type": "Offer", "price": 0},
+			}) + `</script>` + "\n")
+		// The WebSite entity is what search engines read for the site
+		// name; alternateName is the fallback they may show instead.
+		b.WriteString(`<script type="application/ld+json">` +
+			jsonLD(map[string]any{
+				"@context":      "https://schema.org",
+				"@type":         "WebSite",
+				"name":          "EveSynapse",
+				"alternateName": []string{"EveSynapse.app"},
+				"url":           CanonicalHost + "/",
+			}) + `</script>` + "\n")
+		// The logo is the shaded bolt mark (logo.svg) on transparency;
+		// sameAs names the Forgejo repo, the project's home.
+		b.WriteString(`<script type="application/ld+json">` +
+			jsonLD(map[string]any{
+				"@context": "https://schema.org",
+				"@type":    "Organization",
+				"name":     "EveSynapse",
+				"url":      CanonicalHost + "/",
+				"logo":     CanonicalHost + "/static/logo-512.png",
+				"sameAs":   []string{"https://natems.dev/EveSynapse/evesynapse"},
 			}) + `</script>` + "\n")
 	}
 	if len(m.Breadcrumbs) > 0 {

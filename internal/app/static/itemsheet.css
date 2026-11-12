@@ -53,6 +53,8 @@
 .is-vtable .num small { display: block; color: var(--muted); font-size: var(--fs-xs); }
 .is-vtable tr.is-cur { background: var(--row-hover); }
 .is-vtable tr.is-cur th a { color: var(--gold); }
+.is-vtable td.is-better { color: var(--success); }
+.is-vtable td.is-worse { color: var(--danger); }
 
 /* Skill tree: indented by depth; a signed-in pilot's marks. */
 .is-tree { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.2rem; font-size: var(--fs-sm); }

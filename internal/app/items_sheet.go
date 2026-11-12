@@ -92,10 +92,42 @@ type itemVariationRow struct {
 	TypeID    int64
 	Name      string
 	Tier      string
-	Values    []string
+	Values    []itemVariationCell
 	Price     string // "" when no tier can price it
 	PriceNote string // the tier's provenance and age when not a fresh hub price
 	Current   bool
+}
+
+// itemVariationCell is one figure of a member, marked against the
+// type the table is for: "better" or "worse" by the attribute's own
+// direction, "" when equal or either has none.
+type itemVariationCell struct {
+	Text string
+	Cmp  string
+}
+
+// variationCmp marks a member's figure against the current type's.
+// The dump flags most reductions written as negative percentages
+// (CPU need, agility, rate of fire, explosion radius) high-is-good
+// although a larger reduction is the better one, so a negative pair
+// under that flag compares by size. A booster's side-effect penalty
+// is the exception: a larger penalty is the worse one. A booster's
+// chance of a side effect is flagged high-is-good too; a higher
+// chance is the worse one.
+func variationCmp(name string, v, cur float64, highIsGood bool) string {
+	if math.IsNaN(v) || math.IsNaN(cur) || v == cur {
+		return ""
+	}
+	if strings.HasPrefix(name, "boosterEffectChance") {
+		highIsGood = false
+	}
+	if highIsGood && v < 0 && cur < 0 && !(strings.HasPrefix(name, "booster") && strings.Contains(name, "Penalty")) {
+		highIsGood = false
+	}
+	if (v > cur) == highIsGood {
+		return "better"
+	}
+	return "worse"
 }
 
 // Ship attributes the sheet view moves out of the attribute list: the
@@ -125,7 +157,7 @@ var slotEffects = map[int64]string{11: "Low slot", 12: "High slot", 13: "Mid slo
 
 // buildItemSheetView is a type's sheet as the item page shows it: the
 // static sheet, the acting pilot's skill marks, and for a module its
-// variation table with prices.
+// variation table with prices (a ship's hulls are not compared).
 func (app *Application) buildItemSheetView(ctx context.Context, typeID int64) *itemSheetView {
 	_, v := app.itemSheetCore(ctx, typeID)
 	if v == nil {
@@ -300,14 +332,27 @@ func (app *Application) itemVariations(ctx context.Context, typeID int64) *itemV
 		logging.Errorf("items: variation prices %d: %v", typeID, err)
 	}
 	now := time.Now()
+	cur := make([]float64, len(cols))
+	for i := range cur {
+		cur[i] = math.NaN()
+	}
+	for _, r := range rows {
+		if r.TypeID == typeID {
+			copy(cur, r.Vals)
+		}
+	}
 	for _, r := range rows {
 		row := itemVariationRow{TypeID: r.TypeID, Name: r.Name, Tier: r.MetaGroupName, Current: r.TypeID == typeID}
 		for i, c := range cols {
 			if i >= len(r.Vals) || math.IsNaN(r.Vals[i]) {
-				row.Values = append(row.Values, "")
+				row.Values = append(row.Values, itemVariationCell{})
 				continue
 			}
-			row.Values = append(row.Values, itemsheet.FormatValue(c.UnitID, c.UnitName, r.Vals[i]))
+			cell := itemVariationCell{Text: itemsheet.FormatValue(c.UnitID, c.UnitName, r.Vals[i])}
+			if !row.Current {
+				cell.Cmp = variationCmp(c.Name, r.Vals[i], cur[i], c.HighIsGood != 0)
+			}
+			row.Values = append(row.Values, cell)
 		}
 		if p, ok := prices[r.TypeID]; ok && p.Priced {
 			row.Price = esi.FormatISK(p.UnitPrice)
@@ -352,6 +397,9 @@ type itemSheetJSON struct {
 	URL   string            `json:"url"`
 	Top   []itemSheetTopRow `json:"top"`
 	HTML  template.HTML     `json:"html"`
+	// Compare is set when the type has variations, levels or
+	// strengths to compare (/items/compare/{id}.json).
+	Compare bool `json:"compare,omitempty"`
 }
 
 type itemSheetTopRow struct {
@@ -396,8 +444,49 @@ func (app *Application) handleItemSheetJSON(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	out.HTML = html
+	if !v.IsShip {
+		// Hulls are not compared, as on the item page.
+		if has, err := app.queries.HasItemVariations(ctx, typeID); err == nil {
+			out.Compare = has
+		}
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+// itemCompareJSON is a type's compare table for the info drawer's
+// Compare tab: its variations, implant levels or booster strengths
+// with our own prices, rendered by the item page's own partial.
+type itemCompareJSON struct {
+	ID   int64         `json:"id"`
+	Rows int           `json:"rows"`
+	HTML template.HTML `json:"html"`
+}
+
+// handleItemCompareJSON serves GET /items/compare/{typeID}.json.
+// Prices move with every market sweep, so browsers keep it five
+// minutes; a type with nothing to compare is a 404.
+func (app *Application) handleItemCompareJSON(w http.ResponseWriter, r *http.Request) {
+	file := chi.URLParam(r, "file")
+	typeID, err := strconv.ParseInt(strings.TrimSuffix(file, ".json"), 10, 64)
+	if err != nil || typeID <= 0 || !strings.HasSuffix(file, ".json") {
+		http.NotFound(w, r)
+		return
+	}
+	v := app.itemVariations(r.Context(), typeID)
+	if v == nil {
+		http.NotFound(w, r)
+		return
+	}
+	html, err := app.Fragment("itemsheet.html", "item-compare", v)
+	if err != nil {
+		logging.Errorf("items: compare json %d: %v", typeID, err)
+		http.Error(w, "That item's comparison couldn't be read.", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(itemCompareJSON{ID: typeID, Rows: len(v.Rows), HTML: html})
 }
 
 // sheetFigureKinds gives the figures with a glyph of their own

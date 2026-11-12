@@ -149,12 +149,12 @@
   </div>
 </section>
 
-{{if or $d.BuyAt $d.SellAt $d.BuildCost $d.EstimatedSell}}
+{{if or $d.BuyAt $d.SellAt $d.BuildCost $d.Value}}
 <div class="l-tiles">
+  {{if $d.Value}}<div class="l-stat"><span class="l-stat-label">Estimated value</span><span class="l-stat-value">{{$d.Value}}</span><span class="l-stat-sub">ISK, {{$d.ValueNote}}</span></div>{{end}}
   {{with $d.BuyAt}}<div class="l-stat"><span class="l-stat-label">Lowest sell</span><span class="l-stat-value">{{.BestSell}}</span><span class="l-stat-sub">ISK, buy it in {{.Region}}</span></div>{{end}}
   {{with $d.SellAt}}<div class="l-stat"><span class="l-stat-label">Highest buy</span><span class="l-stat-value">{{.BestBuy}}</span><span class="l-stat-sub">ISK, sell it in {{.Region}}</span></div>{{end}}
   {{if $d.BuildCost}}<div class="l-stat"><span class="l-stat-label">Build cost</span><span class="l-stat-value">{{$d.BuildCost}}</span><span class="l-stat-sub">ISK in materials</span></div>{{end}}
-  {{if $d.EstimatedSell}}<div class="l-stat"><span class="l-stat-label">Estimated sell</span><span class="l-stat-value">{{$d.EstimatedSell}}</span><span class="l-stat-sub">ISK, {{$d.EstimatedSellNote}}</span></div>{{end}}
 </div>
 {{end}}
 

@@ -2279,6 +2279,7 @@ type SdeVariation struct {
 	MetaGroupID int64     `json:"meta_group_id"`
 	MetaLevel   float64   `json:"meta_level"`
 	Vals        []float64 `json:"vals"`
+	Tier        string    `json:"tier"`
 }
 
 type SdeVariationColumn struct {

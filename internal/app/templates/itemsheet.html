@@ -45,21 +45,7 @@
 
 {{with .Variations}}<section class="l-panel is-vars">
   <h3>Variations <small>{{len .Rows}}</small></h3>
-  {{$cols := .Columns}}
-  <div class="tw">
-  <table class="is-vtable">
-    <thead><tr><th scope="col">Item</th><th scope="col">Tier</th>{{range $cols}}<th scope="col" class="num">{{.}}</th>{{end}}<th scope="col" class="num">Price</th></tr></thead>
-    <tbody>
-    {{range .Rows}}<tr{{if .Current}} class="is-cur" aria-current="true"{{end}}>
-      <th scope="row"><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></th>
-      <td>{{.Tier}}</td>
-      {{range $v := .Values}}<td class="num">{{if $v}}{{$v}}{{else}}-{{end}}</td>{{end}}
-      <td class="num">{{if .Price}}{{.Price}}{{if .PriceNote}}<small>{{.PriceNote}}</small>{{end}}{{else}}<small>No price</small>{{end}}</td>
-    </tr>{{end}}
-    </tbody>
-  </table>
-  </div>
-  <p class="ib-note">Prices at The Forge from our own swept orders. Any other source is named under the figure.</p>
+  {{template "item-compare" .}}
 </section>{{end}}
 
 {{if .Skills}}<section class="l-panel is-skills">
@@ -68,4 +54,25 @@
     {{range .Skills}}<li class="is-d{{.Depth}}{{if .Mark}} is-{{.Mark}}{{end}}"><a href="/items/type/{{.SkillID}}/">{{.Name}}</a> <span class="is-lvl">Level {{.Level}}</span>{{if eq .Mark "ok"}} <span class="is-mark">Trained</span>{{else if eq .Mark "short"}} <span class="is-mark">{{if .Trained}}At level {{.Trained}}{{else}}Not trained{{end}}</span>{{end}}</li>{{end}}
   </ul>
 </section>{{end}}
+{{end}}{{end}}
+
+{{/* A type's compare table: its variation family, implant levels or
+     booster strengths, each figure marked better or worse than the
+     type's own. Takes an *itemVariationsView. */}}
+{{define "item-compare"}}{{with .}}
+  {{$cols := .Columns}}
+  <div class="tw">
+  <table class="is-vtable">
+    <thead><tr><th scope="col">Item</th><th scope="col">Tier</th>{{range $cols}}<th scope="col" class="num">{{.}}</th>{{end}}<th scope="col" class="num">Price</th></tr></thead>
+    <tbody>
+    {{range .Rows}}<tr data-type-id="{{.TypeID}}"{{if .Current}} class="is-cur" aria-current="true"{{end}}>
+      <th scope="row"><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></th>
+      <td>{{.Tier}}</td>
+      {{range .Values}}<td class="num{{if .Cmp}} is-{{.Cmp}}{{end}}"{{if .Cmp}} title="{{if eq .Cmp "better"}}Better{{else}}Worse{{end}} than the selected item"{{end}}>{{if .Text}}{{.Text}}{{else}}-{{end}}</td>{{end}}
+      <td class="num">{{if .Price}}{{.Price}}{{if .PriceNote}}<small>{{.PriceNote}}</small>{{end}}{{else}}<small>No price</small>{{end}}</td>
+    </tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="ib-note">Highlighted figures beat the selected item; red ones trail it. Prices at The Forge from our own swept orders. Any other source is named under the figure.</p>
 {{end}}{{end}}

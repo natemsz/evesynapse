@@ -346,7 +346,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 
 // sdeImportVersion is the importer's column-set marker (see
 // sdeMaintenance): an import stored under an older one re-imports.
-const sdeImportVersion = "20"
+const sdeImportVersion = "21"
 
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
@@ -2371,9 +2371,9 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		}); err != nil {
 			return 0, err
 		}
-		if err := insert("INSERT INTO sde_variations (type_id, root_type_id, meta_group_id, meta_level, vals) VALUES ($1, $2, $3, $4, $5)", len(varRows), func(i int) []any {
+		if err := insert("INSERT INTO sde_variations (type_id, root_type_id, meta_group_id, meta_level, vals, tier) VALUES ($1, $2, $3, $4, $5, $6)", len(varRows), func(i int) []any {
 			r := varRows[i]
-			return []any{r.typeID, r.rootTypeID, r.metaGroupID, r.metaLevel, r.vals}
+			return []any{r.typeID, r.rootTypeID, r.metaGroupID, r.metaLevel, r.vals, r.tier}
 		}); err != nil {
 			return 0, err
 		}

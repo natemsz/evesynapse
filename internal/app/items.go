@@ -210,9 +210,9 @@ type itemTypeDetail struct {
 	// an estimated sell exists and the guide has no average,
 	// it replaces the adjusted price as the page's price --
 	// CCP's number for such a type is a fossil.
-	BuildCost         string // "" when no true value is stored
-	EstimatedSell     string // "" when no true value is stored
-	EstimatedSellNote string // "from N public contracts" | "anchored to build cost"
+	BuildCost string // "" when no true value is stored
+	Value     string // the house-order value (houseValue); "" when nothing prices it
+	ValueNote string // where Value came from
 
 	HasDescription     bool
 	Description        template.HTML // sanitized like mail bodies
@@ -790,23 +790,26 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 		}
 	}
 
-	// True value: the stored bottom-up price, shown for the
-	// types it exists for (the worker stores an estimated
-	// sell only where the market cannot price the type).
-	// Without a guide average it is the price of record, so
-	// the adjusted row steps aside rather than posing as one.
+	// True value: the stored bottom-up price, stored only where
+	// the market cannot price the type. Its build cost gets a
+	// tile; its estimated sell reaches the page as the value tile
+	// (houseValue). Without a guide average it is the price of
+	// record, so the adjusted row steps aside rather than posing
+	// as one.
 	if tv, ok := app.storedTrueValues(ctx)[typeID]; ok {
-		if est, ok := storedEstimate(tv); ok {
+		if _, ok := storedEstimate(tv); ok {
 			if tv.BuildCost > 0 {
 				detail.BuildCost = esi.FormatISK(tv.BuildCost)
 			}
-			detail.EstimatedSell = esi.FormatISK(est)
-			detail.EstimatedSellNote = trueValueBasis(tv)
 			if detail.AveragePrice == "" {
 				detail.AdjustedPrice = ""
 			}
 		}
 	}
+
+	// The value of record, as the market page states it: our swept
+	// Forge typical, our stored estimate, the labeled fallback.
+	detail.Value, detail.ValueNote = app.houseValue(ctx, typeID, 0, 0)
 
 	detail.IsShip = isShip
 	detail.Sheet = app.buildItemSheetView(ctx, typeID)

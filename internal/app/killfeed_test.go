@@ -253,10 +253,10 @@ func TestKillboardPages(t *testing.T) {
 	if code != http.StatusOK || !strings.Contains(page, "High slots") || !strings.Contains(page, `class="kp-a fb"`) {
 		t.Errorf("kill page: %d, fitting or attackers missing", code)
 	}
-	if !strings.Contains(page, `class="kp-info" href="/pilot/?character=9001"`) {
+	if !strings.Contains(page, `class="info-link" href="/pilot/?character=9001"`) {
 		t.Errorf("the victim's name carries an info link to their profile")
 	}
-	if !strings.Contains(page, `class="kp-info" href="/pilot/?character=9002"`) {
+	if !strings.Contains(page, `class="info-link" href="/pilot/?character=9002"`) {
 		t.Errorf("an attacker's name carries an info link to their profile")
 	}
 	if code, _ := get("/intel/kill/700003/"); code != http.StatusNotFound {

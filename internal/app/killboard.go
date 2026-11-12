@@ -723,17 +723,48 @@ func killFitEFT(names *killNames, ship string, items []killItem) string {
 			b.WriteString("\n")
 		}
 	}
-	for _, f := range []int64{87, 5} {
-		ls := byFlag[f]
-		if len(ls) == 0 {
+	// Drones, then fighters (the bay and the five launch tubes as one
+	// block), then cargo, each type once with its total count.
+	for _, flags := range [][]int64{{87}, {158, 159, 160, 161, 162, 163}, {5}} {
+		var order []int64
+		total := map[int64]int64{}
+		for _, f := range flags {
+			for _, l := range byFlag[f] {
+				if _, ok := total[l.id]; !ok {
+					order = append(order, l.id)
+				}
+				total[l.id] += l.qty
+			}
+		}
+		if len(order) == 0 {
 			continue
 		}
 		b.WriteString("\n")
-		for _, l := range ls {
-			fmt.Fprintf(&b, "%s x%d\n", names.typeName(l.id), l.qty)
+		for _, id := range order {
+			fmt.Fprintf(&b, "%s x%d\n", names.typeName(id), total[id])
 		}
 	}
 	return b.String()
+}
+
+// killFitEFTFor is a public kill's lost fitting as EFT text, for the
+// workbench's ?kill= link; false when the kill is not public or its
+// full killmail is no longer kept.
+func (app *Application) killFitEFTFor(ctx context.Context, killID int64) (string, bool) {
+	k, err := app.queries.GetPublicKill(ctx, killID)
+	if err != nil {
+		return "", false
+	}
+	payload, err := app.queries.GetKillDetail(ctx, k.KillmailID)
+	if err != nil {
+		return "", false
+	}
+	km, ok := decodeKillDetail(payload)
+	if !ok {
+		return "", false
+	}
+	names := app.newKillNames(ctx)
+	return killFitEFT(names, names.typeName(k.ShipTypeID), km.Victim.Items), true
 }
 
 func decodeKillDetail(payload []byte) (killmailFull, bool) {

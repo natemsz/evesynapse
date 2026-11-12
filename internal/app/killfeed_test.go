@@ -262,6 +262,18 @@ func TestKillboardPages(t *testing.T) {
 	if code, _ := get("/intel/kill/700003/"); code != http.StatusNotFound {
 		t.Errorf("a private kill's page must not exist: %d", code)
 	}
+
+	// The lost fitting opens in the workbench from the kill page;
+	// a private kill's fitting is never handed out.
+	if !strings.Contains(page, `href="/fittings/?kill=700001#fit-editor"`) {
+		t.Errorf("the kill page offers no link that opens its fitting in the workbench")
+	}
+	if eft, ok := app.KillFitEFT(ctx, 700001); !ok || !strings.HasPrefix(eft, "[") {
+		t.Errorf("a public kill's fitting = %q, %v; want its EFT text", eft, ok)
+	}
+	if eft, ok := app.KillFitEFT(ctx, 700003); ok || eft != "" {
+		t.Errorf("a private kill's fitting was handed to the workbench: %q", eft)
+	}
 }
 
 // TestKillboardNamesResolveFromView: a name the board shows as

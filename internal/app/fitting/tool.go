@@ -1048,6 +1048,7 @@ func (app *tool) attachFitEditor(ctx context.Context, r *http.Request, data *Pag
 	publicID, _ := strconv.ParseInt(q.Get("public"), 10, 64)
 	doctrineFitID, _ := strconv.ParseInt(q.Get("doctrine"), 10, 64)
 	shipID, _ := strconv.ParseInt(q.Get("ship"), 10, 64)
+	killID, _ := strconv.ParseInt(q.Get("kill"), 10, 64)
 	switch {
 	case localID > 0 && userID > 0:
 		if row, err := app.queries.GetLocalFitting(ctx, db.GetLocalFittingParams{ID: localID, UserID: userID}); err == nil {
@@ -1083,6 +1084,15 @@ func (app *tool) attachFitEditor(ctx context.Context, r *http.Request, data *Pag
 		// A fit of one of the account's corporations' doctrines, likewise.
 		if stored, ok := app.deps.DoctrineFitDoc(ctx, userID, doctrineFitID); ok {
 			doc = stored
+		}
+	case killID > 0:
+		// A lost fitting, from its kill page: the same EFT text the
+		// page's Copy fit gives, read as an import would read it.
+		// It opens unsaved; saving makes the visitor's own copy.
+		if eft, ok := app.deps.KillFitEFT(ctx, killID); ok {
+			if parsed, notes := app.deps.FitBuilder().ParseEFT(ctx, eft); parsed != nil {
+				doc, editor.Notes = parsed, notes
+			}
 		}
 	case shipID > 0:
 		// An empty fit of one hull, from its item page.

@@ -1698,6 +1698,10 @@ func (app *Application) DoctrineFitDoc(ctx context.Context, userID, fitID int64)
 	return app.doctrineFitDoc(ctx, userID, fitID)
 }
 
+func (app *Application) KillFitEFT(ctx context.Context, killID int64) (string, bool) {
+	return app.killFitEFTFor(ctx, killID)
+}
+
 func (app *Application) CorpSection(ctx context.Context, characterID int64, kind string, out any) module.CorpSectionState {
 	return app.corpSection(ctx, characterID, kind, out)
 }

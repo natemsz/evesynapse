@@ -761,6 +761,14 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 			app.SwarmFlagKeyConflict(ctx, m.InstanceID, signer, now)
 			continue
 		}
+		// The same key under an older ID is this instance from
+		// before IDs were derived from keys: one row, its
+		// standing kept.
+		if SwarmIDMatchesKey(m.InstanceID, m.PublicKey) {
+			if _, err := app.Queries.MergeLegacySwarmPeer(ctx, db.MergeLegacySwarmPeerParams{InstanceID: m.InstanceID, PublicKey: m.PublicKey}); err != nil {
+				return err
+			}
+		}
 		if isNew {
 			introduce = append(introduce, m.BaseURL)
 		}

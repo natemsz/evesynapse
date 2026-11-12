@@ -11,7 +11,9 @@ package swarm
 // manifest per architecture (latest-<arch>.json and its .sig): the
 // learner takes the hash from the manifest, and only when the
 // signature verifies under the release keys this build trusts. A
-// storm release carries a SHA256SUMS file. A recorded hash is
+// storm release carries a SHA256SUMS file; storm's releases are
+// published on its GitHub mirror, so the learner reads them there
+// as well, and either home is enough. A recorded hash is
 // remembered for good: it stays known after its release scrolls off
 // the first page, so the library keeps itself current without
 // anyone seeding new hashes by hand.
@@ -60,13 +62,16 @@ type releaseSource struct {
 	product string
 	kind    ReleaseKind
 	signed  bool
+	github  string // the GitHub mirror that also publishes its releases, "" for none
 }
 
 // releaseSources are the learner's projects: the app and the storm
 // node, the two products the swarm carries.
 var releaseSources = []releaseSource{
-	{"EveSynapse/evesynapse", "evesynapse", ReleaseEveSynapse, true},
-	{"EveSynapse/evesynapse-storm", "storm", ReleaseStorm, false},
+	{"EveSynapse/evesynapse", "evesynapse", ReleaseEveSynapse, true, ""},
+	// Storm's tag-triggered release workflow publishes on its
+	// GitHub mirror, so its builds are read there as well.
+	{"EveSynapse/evesynapse-storm", "storm", ReleaseStorm, false, "natemsz/evesynapse-storm"},
 }
 
 const (
@@ -89,6 +94,10 @@ var releaseArches = []string{"amd64", "arm64"}
 var (
 	forgejoBaseURL       = "https://natems.dev"
 	releaseMirrorBaseURL = "https://cdn.synap6.io"
+	// githubAPIBaseURL lists a mirror's releases; githubBaseURL is
+	// where their files are served from.
+	githubAPIBaseURL = "https://api.github.com"
+	githubBaseURL    = "https://github.com"
 )
 
 // releaseTrustedKeys is the set of keys an app manifest has to be
@@ -99,6 +108,11 @@ var releaseTrustedKeys = releasesig.Trusted
 // releaseListURL is one project's recent releases.
 func releaseListURL(src releaseSource) string {
 	return fmt.Sprintf("%s/api/v1/repos/%s/releases?limit=%d", forgejoBaseURL, src.repo, releasePerPage)
+}
+
+// githubReleaseListURL is one GitHub mirror's recent releases.
+func githubReleaseListURL(src releaseSource) string {
+	return fmt.Sprintf("%s/repos/%s/releases?per_page=%d", githubAPIBaseURL, src.github, releasePerPage)
 }
 
 // errReleaseNotFound is a file the server does not have.
@@ -205,7 +219,20 @@ func parseSHA256Sums(src releaseSource, tag string, body []byte) []learnedBuild 
 // a failure to read the release list fails the source, and the
 // caller keeps what it recorded before.
 func learnSource(ctx context.Context, fetch func(context.Context, string) ([]byte, error), src releaseSource, trusted []ed25519.PublicKey) ([]learnedBuild, error) {
-	body, err := fetch(ctx, releaseListURL(src))
+	return learnReleaseList(ctx, fetch, src, releaseListURL(src), forgejoBaseURL+"/", trusted)
+}
+
+// learnGitHub reads an unsigned source's builds off its GitHub
+// mirror's recent releases, the same way: SHA256SUMS files served
+// from github.com only.
+func learnGitHub(ctx context.Context, fetch func(context.Context, string) ([]byte, error), src releaseSource, trusted []ed25519.PublicKey) ([]learnedBuild, error) {
+	return learnReleaseList(ctx, fetch, src, githubReleaseListURL(src), githubBaseURL+"/", trusted)
+}
+
+// learnReleaseList reads one release list (Forgejo and GitHub share
+// the payload's shape), fetching assets only from assetPrefix.
+func learnReleaseList(ctx context.Context, fetch func(context.Context, string) ([]byte, error), src releaseSource, listURL, assetPrefix string, trusted []ed25519.PublicKey) ([]learnedBuild, error) {
+	body, err := fetch(ctx, listURL)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +247,7 @@ func learnSource(ctx context.Context, fetch func(context.Context, string) ([]byt
 		}
 		assets := map[string]string{}
 		for _, a := range rel.Assets {
-			if strings.HasPrefix(a.URL, forgejoBaseURL+"/") {
+			if strings.HasPrefix(a.URL, assetPrefix) {
 				assets[a.Name] = a.URL
 			}
 		}
@@ -323,6 +350,17 @@ func (m *Mod) LearnReleases(ctx context.Context) error {
 		if err != nil && src.signed {
 			logging.Warnf("swarm: release learner: %s on Forgejo: %v; reading the mirror", src.repo, err)
 			pairs, err = learnMirror(fctx, fetch, src, trusted)
+		}
+		if src.github != "" {
+			// Either home counts: the source fails only when
+			// neither could be read.
+			gh, ghErr := learnGitHub(fctx, fetch, src, trusted)
+			switch {
+			case ghErr == nil:
+				pairs, err = append(pairs, gh...), nil
+			case err == nil:
+				logging.Warnf("swarm: release learner: %s on GitHub: %v", src.github, ghErr)
+			}
 		}
 		cancel()
 		for _, p := range pairs {

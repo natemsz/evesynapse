@@ -35,6 +35,17 @@ const stormSumsV010 = `efab584ee7240a2b4844f5dd4c0fd5a15556e24b600dd91c89ba6c1a3
 89cc081c4716ffeeede82202e5401c4a8383821f1c5a94733c68e8da134718ba  storm-linux-amd64.tar.gz
 `
 
+// Storm's GitHub mirror carries a release Forgejo does not.
+const stormGitHubReleasesFixture = `[
+ {"tag_name": "v0.1.4", "draft": false, "assets": [
+  {"name": "SHA256SUMS", "browser_download_url": "https://github.com/natemsz/evesynapse-storm/releases/download/v0.1.4/SHA256SUMS"}]}
+]`
+
+const stormSumsV014 = `a0cd5a88a8136a032e77042acd6f3115e6406511e520f8e15759cac77fd5f3f2  storm-amd64
+5f477e9fa95c4b8f283d070fb1fb9feefbb265d05264ad5015eb35a1fe73857d  storm-arm64
+447a0343e135cc5f706af080e6c1bb158d6c98dee1887ed517f12344153256c4  storm-linux-amd64.tar.gz
+`
+
 // An app release with no signed manifests attached contributes no
 // builds: its binaries are not hashed on trust.
 const appReleasesFixture = `[
@@ -47,6 +58,10 @@ func fixtureReleaseFetch(ctx context.Context, url string) ([]byte, error) {
 	switch {
 	case strings.Contains(url, "/repos/EveSynapse/evesynapse-storm/releases?"):
 		return []byte(stormReleasesFixture), nil
+	case strings.Contains(url, "api.github.com/repos/natemsz/evesynapse-storm/releases?"):
+		return []byte(stormGitHubReleasesFixture), nil
+	case strings.HasSuffix(url, "/v0.1.4/SHA256SUMS"):
+		return []byte(stormSumsV014), nil
 	case strings.Contains(url, "/repos/EveSynapse/evesynapse/releases?"):
 		return []byte(appReleasesFixture), nil
 	case strings.HasSuffix(url, "/v0.1.1/SHA256SUMS"):
@@ -57,9 +72,10 @@ func fixtureReleaseFetch(ctx context.Context, url string) ([]byte, error) {
 	return nil, errors.New("unexpected URL " + url)
 }
 
-// TestLearnReleasesRecordsBuilds: one pass records exactly the four
+// TestLearnReleasesRecordsBuilds: one pass records exactly the six
 // storm binary builds on the fixture payloads (two on each of two
-// releases; the archives listed beside them are not builds), the
+// Forgejo releases and two on a release only the GitHub mirror
+// carries; the archives listed beside them are not builds), the
 // storm v0.1.1 arm64 build then classifies as Mainline through the
 // learned path, and the seeded library still stands beside it.
 func TestLearnReleasesRecordsBuilds(t *testing.T) {
@@ -75,12 +91,15 @@ func TestLearnReleasesRecordsBuilds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list learned builds: %v", err)
 	}
-	if len(rows) != 4 {
-		t.Fatalf("learned %d builds, want 4: %+v", len(rows), rows)
+	if len(rows) != 6 {
+		t.Fatalf("learned %d builds, want 6: %+v", len(rows), rows)
 	}
 	const stormV011Arm64 = "707d8bb6048c2cc8ab3d9ad402c55e0c06324ba81487da19b5a75b72348b0db9"
 	if got := swarm.BuildLabel(stormV011Arm64); got != "Mainline · Storm v0.1.1" {
 		t.Fatalf("storm v0.1.1 label after learn %q, want the learned mainline rendering", got)
+	}
+	if got := swarm.BuildLabel("a0cd5a88a8136a032e77042acd6f3115e6406511e520f8e15759cac77fd5f3f2"); got != "Mainline · Storm v0.1.4" {
+		t.Fatalf("storm v0.1.4 (GitHub only) label after learn %q, want the learned mainline rendering", got)
 	}
 	if got := swarm.BuildLabel(claimKnownA); got != "Mainline · v0.5.2.10" {
 		t.Fatalf("seeded label after learn %q, want the seeded rendering", got)
@@ -95,8 +114,8 @@ func TestLearnReleasesRecordsBuilds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list learned builds after relearn: %v", err)
 	}
-	if len(rows) != 4 {
-		t.Fatalf("after relearn: %d builds, want 4", len(rows))
+	if len(rows) != 6 {
+		t.Fatalf("after relearn: %d builds, want 6", len(rows))
 	}
 
 	// A failed pass keeps everything it had: same rows, same
@@ -111,8 +130,8 @@ func TestLearnReleasesRecordsBuilds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list learned builds after failed pass: %v", err)
 	}
-	if len(rows) != 4 {
-		t.Fatalf("after failed pass: %d builds, want 4", len(rows))
+	if len(rows) != 6 {
+		t.Fatalf("after failed pass: %d builds, want 6", len(rows))
 	}
 	if got := swarm.BuildLabel(stormV011Arm64); got != "Mainline · Storm v0.1.1" {
 		t.Fatalf("storm v0.1.1 label after failed pass %q, want it unchanged", got)

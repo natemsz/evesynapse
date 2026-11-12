@@ -1044,6 +1044,13 @@ type KillEntityFeed struct {
 	Value        float64   `json:"value"`
 }
 
+type KillFeedBackfillState struct {
+	ID         int32        `json:"id"`
+	CursorTime time.Time    `json:"cursor_time"`
+	CursorID   int64        `json:"cursor_id"`
+	DoneAt     sql.NullTime `json:"done_at"`
+}
+
 type KillInvolvement struct {
 	KillmailID    int64 `json:"killmail_id"`
 	CharacterID   int64 `json:"character_id"`

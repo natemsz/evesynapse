@@ -218,14 +218,11 @@ func TestKillDetailRawReadsGzipAndZstd(t *testing.T) {
 	}
 }
 
-// TestKillFeedBackfillDrainsAndBacksOff pins the legacy feed
-// sweep: a kill stored before the feed existed gets its rows
-// from the sweep, and once a pass finds less than a batch the
-// sweep is drained and does not re-scan until the recheck
-// window passes. (Without the killmail_id index, schema 134,
-// the finder query timed out every pass on a full table and
-// the legacy set never drained.)
-func TestKillFeedBackfillDrainsAndBacksOff(t *testing.T) {
+// TestKillFeedBackfillWalksToTheEndOnce pins the legacy feed
+// sweep: a kill stored before the feed existed gets its rows from
+// the cursor walk, the walk records that it reached the end of the
+// table, and from then on it never runs again.
+func TestKillFeedBackfillWalksToTheEndOnce(t *testing.T) {
 	app, conn, _ := buildCorpTestApp(t, nil)
 	ctx := context.Background()
 	if _, err := conn.Exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9)`); err != nil {
@@ -259,23 +256,22 @@ func TestKillFeedBackfillDrainsAndBacksOff(t *testing.T) {
 	if feedRows() == 0 {
 		t.Fatal("backfill restored no feed rows")
 	}
-	if app.killFeedDrainedAt.IsZero() {
-		t.Fatal("short sweep did not mark the backfill drained")
+	var done bool
+	if err := conn.QueryRow(`SELECT done_at IS NOT NULL FROM kill_feed_backfill_state WHERE id = 1`).Scan(&done); err != nil {
+		t.Fatal(err)
 	}
-	// Drained: even with rows missing again, the sweep stays
-	// quiet inside the recheck window.
+	if !done || !app.killFeedBackfillDone {
+		t.Fatal("a walk that reached the end of the table did not record it was done")
+	}
+	// Done: the walk never reads the table again, even after a
+	// restart (the stored flag, not the in-memory one, decides).
 	if _, err := conn.Exec(`DELETE FROM kill_entity_feed WHERE killmail_id = 720001`); err != nil {
 		t.Fatal(err)
 	}
+	app.killFeedBackfillDone = false
 	app.backfillMissingKillFeeds(ctx)
 	if feedRows() != 0 {
-		t.Fatal("drained sweep ran inside its recheck window")
-	}
-	// Past the window it rechecks and repairs.
-	app.killFeedDrainedAt = time.Now().Add(-7 * time.Hour)
-	app.backfillMissingKillFeeds(ctx)
-	if feedRows() == 0 {
-		t.Fatal("recheck after the window restored no feed rows")
+		t.Fatal("a finished walk ran again")
 	}
 }
 

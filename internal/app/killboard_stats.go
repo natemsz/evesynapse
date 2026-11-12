@@ -23,6 +23,10 @@ import (
 
 const killStatsSweepBatch = 200
 
+// killFeedWalkBatch is how many kills one pass of the list backfill
+// walks past its cursor; at most killStatsSweepBatch of them fold.
+const killFeedWalkBatch = 2000
+
 type killEntityRef struct {
 	kind string
 	id   int64
@@ -296,34 +300,64 @@ func (app *Application) backfillKillStats(ctx context.Context) {
 // backfillMissingKillFeeds is the maintenance sweep for kills
 // stored before the entity feed existed: the fold writes their
 // feed rows (the aggregates' markers keep the stats counted
-// once), in the background, never at render. The finder walks
-// oldest first (the missing kills are the legacy ones) over the
-// killmail_id index (schema 134): without that index the
-// anti-join scanned the whole kills table and timed out every
-// pass, so the sweep burned a statement timeout a minute and
-// never drained. Once a pass finds less than a batch the legacy
-// set is drained, kills folded at ingest never miss the feed,
-// and the sweep rechecks only every few hours, in case a fold
-// ever failed quietly.
+// once), in the background, never at render. It walks the kills
+// table oldest first from a stored cursor (schema 148), a bounded
+// batch per pass through the time index, so a pass reads only its
+// batch and a kill that can never have feed rows (no character,
+// corporation or alliance on either side) is passed, not re-read
+// forever. When the walk reaches the end of the table it records
+// that it is done and never runs again: newer kills get their feed
+// rows when they are priced.
 func (app *Application) backfillMissingKillFeeds(ctx context.Context) {
-	if !app.killFeedDrainedAt.IsZero() && time.Since(app.killFeedDrainedAt) < 6*time.Hour {
+	if app.killFeedBackfillDone {
 		return
 	}
-	ids, err := app.queries.ListKillsMissingFeed(ctx, killStatsSweepBatch)
+	st, err := app.queries.GetKillFeedBackfillState(ctx)
 	if err != nil {
-		logging.Errorf("killboard stats: list kills missing feed: %v", err)
+		logging.Errorf("killboard stats: read feed backfill state: %v", err)
 		return
 	}
-	for _, id := range ids {
-		if err := app.foldKillStats(ctx, id); err != nil {
-			logging.Warnf("killboard stats: fold kill %d for feed: %v", id, err)
+	if st.DoneAt.Valid {
+		app.killFeedBackfillDone = true
+		return
+	}
+	rows, err := app.queries.ListKillsAfterFeedCursor(ctx, db.ListKillsAfterFeedCursorParams{
+		CursorTime: st.CursorTime, CursorID: st.CursorID, MaxRows: killFeedWalkBatch,
+	})
+	if err != nil {
+		logging.Errorf("killboard stats: walk kills for feed: %v", err)
+		return
+	}
+	fed, walked := 0, 0
+	for _, r := range rows {
+		if !r.HasFeed {
+			if fed == killStatsSweepBatch {
+				break // the rest waits for the next pass
+			}
+			if err := app.foldKillStats(ctx, r.KillmailID); err != nil {
+				logging.Warnf("killboard stats: fold kill %d for feed: %v", r.KillmailID, err)
+			}
+			fed++
+		}
+		walked++
+		st.CursorTime, st.CursorID = r.KillmailTime, r.KillmailID
+	}
+	if walked > 0 {
+		if err := app.queries.SetKillFeedBackfillCursor(ctx, db.SetKillFeedBackfillCursorParams{CursorTime: st.CursorTime, CursorID: st.CursorID}); err != nil {
+			logging.Errorf("killboard stats: store feed backfill cursor: %v", err)
+			return
 		}
 	}
-	if len(ids) > 0 {
-		logging.Infof("killboard stats: fed %d stored kills", len(ids))
+	if fed > 0 {
+		logging.Infof("killboard stats: fed %d stored kills (walk at kill %d)", fed, st.CursorID)
 	}
-	if len(ids) < killStatsSweepBatch {
-		app.killFeedDrainedAt = time.Now()
+	if len(rows) < killFeedWalkBatch && walked == len(rows) {
+		if err := app.queries.MarkKillFeedBackfillDone(ctx, time.Now()); err != nil {
+			logging.Errorf("killboard stats: mark feed backfill done: %v", err)
+			return
+		}
+		app.killFeedBackfillDone = true
+		logging.Infof("killboard stats: feed backfill finished")
 	}
 }
 

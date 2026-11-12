@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -97,6 +98,10 @@ func (t *anonThrottle) sweep(now time.Time) {
 	}
 }
 
+// trustCFConnectingIP is the TRUST_CF_CONNECTING_IP setting, set
+// once when the application starts (New); on until then.
+var trustCFConnectingIP = func() *atomic.Bool { b := &atomic.Bool{}; b.Store(true); return b }()
+
 // clientAddr is the address a request came from. The app sits behind
 // something on the same machine that connects from loopback: a
 // Cloudflare tunnel (cloudflared), which names the visitor in
@@ -104,7 +109,10 @@ func (t *anonThrottle) sweep(now time.Time) {
 // appends the visitor to X-Forwarded-For. So for a loopback peer
 // CF-Connecting-IP wins, then the last X-Forwarded-For entry. From
 // any other peer both headers are the client's own say-so and are
-// ignored.
+// ignored. CF-Connecting-IP is read only while trustCFConnectingIP
+// holds (TRUST_CF_CONNECTING_IP, on by default): an install with no
+// Cloudflare in front turns it off, so a local process cannot name
+// its own address.
 func clientAddr(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -114,8 +122,10 @@ func clientAddr(r *http.Request) string {
 	if peer == nil || !peer.IsLoopback() {
 		return host
 	}
-	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))); ip != nil {
-		return ip.String()
+	if trustCFConnectingIP.Load() {
+		if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))); ip != nil {
+			return ip.String()
+		}
 	}
 	fwd := r.Header.Values("X-Forwarded-For")
 	if len(fwd) == 0 {

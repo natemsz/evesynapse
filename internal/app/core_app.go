@@ -491,6 +491,7 @@ type Application struct {
 // Call Close to stop the worker and release the database.
 func New(cfg Config) (*Application, error) {
 	applyMemoryLimit()
+	trustCFConnectingIP.Store(!cfg.ignoreCFConnectingIP)
 	tokens, tokenKeyProvider, err := tokenBoxForConfig(cfg)
 	if err != nil {
 		return nil, err

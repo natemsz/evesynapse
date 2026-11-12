@@ -7,6 +7,273 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.8.3.1] - 2026-11-12
+
+Automated build of EveSynapse v0.8.3.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Search: read misspelled item, system and region names by @natemsz in #378
+* Fitting: Compare tab in the item details drawer by @natemsz in #377
+* Fitting: fighter speed and propulsion abilities by @natemsz in #375
+* Market search lists the best match first by @natemsz in #374
+* TRUST_CF_CONNECTING_IP setting for the Cloudflare visitor header by @natemsz in #373
+* Admin: memory breakdown bar by @natemsz in #370
+* Fitting: distinct module states and in-game click actions by @natemsz in #368
+
+### 🐛 Bug Fixes
+* Phone bar: the current section shows a white glyph by @natemsz in #376
+* Swarm: one row per instance key; storm builds learned from GitHub by @natemsz in #371
+* Watch list: 30-day move falls back to traded history by @natemsz in #367
+* Market item page: drop the order book sweep notice by @natemsz in #366
+
+### Other Changes
+* Tests: drop TestFittingPhoneViews by @natemsz in #372
+* Killboard: bounded alliance board and list backfill reads by @natemsz in #369
+
+
+## [v0.8.3.0] - 2026-11-11
+
+Automated build of EveSynapse v0.8.3.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Set a Go memory limit by default and show what memory holds on the admin page by @natemsz in #364
+* Read the stored sold-per-day figure in the hub sweep instead of rescanning history by @natemsz in #363
+* Sweep each market hub once per ESI window (5 minutes) by @natemsz in #353
+* Ship Workbench: command bursts and fleet boosts by @natemsz in #351
+* Fit engine: logistics, mining, bombs, doomsdays and active self modules by @natemsz in #350
+* Ship Workbench: damage at range chart with target presets by @natemsz in #349
+
+### 🐛 Bug Fixes
+* Run the live age tick only while a page shows a live age by @natemsz in #365
+* Move a counted kill's ISK when it is priced again by @natemsz in #361
+* Count kill stats once through a pending queue and rebuild them from complete rows by @natemsz in #360
+* Restore pruned kill attacker rows from ESI, zKillboard as fallback by @natemsz in #359
+* Keep kill data two years and prune only kills counted into the stats by @natemsz in #358
+* Pills and running text in table cells keep the body face's digits by @natemsz in #357
+* Watch list alerts open the watched item's market page by @natemsz in #356
+* Orders: tabs and the beaten filter share one toolbar row by @natemsz in #355
+* Contract search: highlight at most five new contracts at once by @natemsz in #354
+* Market item page: tidy top bar at mid widths, live sweep ages by @natemsz in #352
+* Fit engine: propulsion mass and signature, pre-multiply stacking, target and cap limits by @natemsz in #348
+* Learn release builds from Forgejo, with the mirror as fallback by @natemsz in #347
+* Harden the shared cache: key-certified IDs, signed pulls, bounded membership, probation by @natemsz in #346
+
+### Other Changes
+* Drop the killboard indexes no query reads by @natemsz in #362
+
+
+## [v0.8.2.0] - 2026-11-11
+
+Automated build of EveSynapse v0.8.2.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Serve the contract search roll catalog as a cached file by @natemsz in #343
+* Tidy the fitting workbench: one-line head, compact racks, figure glyphs by @natemsz in #338
+
+### 🐛 Bug Fixes
+* Rewire push settings after page swaps; share the live feeds' seen store by @natemsz in #340
+* Fix workbench drag, tooltip and state bugs; one kind filter for search and Browse by @natemsz in #339
+
+### Other Changes
+* Clarity: plainer punctuation in the README and changelog by @natemsz in #345
+* Build the ship render image address in one place by @natemsz in #344
+* Take test-only code out of the release binaries by @natemsz in #342
+* Drop absence pins and one-off CSS pins from the tests by @natemsz in #341
+
+
+## [v0.8.1.2] - 2026-11-11
+
+Automated build of EveSynapse v0.8.1.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Add a Browse tab to the workbench and real drop rules for drag by @natemsz in #334
+* Show what each fitting edit changes by @natemsz in #332
+* Show item details in fitting tooltips, an info drawer and search rows by @natemsz in #331
+* Build and test with Go 1.27.4 by @miko in #330
+* Fold the public ship page into the item page by @natemsz in #329
+* Show item stats on the item page by @natemsz in #328
+
+### 🐛 Bug Fixes
+* Limit subsystems to one per kind and refuse hull-restricted modules before they land by @natemsz in #333
+
+
+## [v0.8.1.1] - 2026-11-10
+
+Automated build of EveSynapse v0.8.1.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Import attribute display data, units, ship bonuses and variations, and build item sheets by @natemsz in #327
+* Keep slow reads out of the contract search, market item and Home renders by @natemsz in #322
+* Simulate carrier fighters in the fitting workbench by @natemsz in #318
+
+### 🐛 Bug Fixes
+* Make the slot picker's rows add their module by @natemsz in #326
+* Keep the swept contract header when a peer supplies the item list by @natemsz in #325
+* Ask the image server only for pictures it has and remove unused queries and functions by @natemsz in #323
+* Put the kill page's item details link under the ship on phones by @natemsz in #321
+* Hold a pending second factor on every route by @natemsz in #320
+* Skip structure-only modifiers when computing a ship fit by @natemsz in #319
+
+### Other Changes
+* Style and readability audit of copy, comments and docs by @natemsz in #324
+
+
+## [v0.8.1.0] - 2026-11-10
+
+Automated build of EveSynapse v0.8.1.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Log the external referrer on entry pages by @miko in #315
+* Highlight at most five new kills on the killboard by @natemsz in #312
+* Narrow the word space in Eve Sans Neue text by @natemsz in #310
+* Add a 192px favicon that reads clearly in a circular crop by @miko in #309
+
+### 🐛 Bug Fixes
+* Model ancillary repair paste, the Reactive Armor Hardener, disintegrator spool-up and Breacher pods by @natemsz in #317
+* Train every published skill in All V and load all skill dogma for pilots by @natemsz in #316
+* Apply hull and skill bonuses to missiles and drone damage skills by @natemsz in #314
+* Fix chart labels and leftover type inconsistencies by @natemsz in #313
+* Stack the Character and Corporation detail cards on narrow pages by @natemsz in #311
+
+
+## [v0.8.0.9] - 2026-11-10
+
+Automated build of EveSynapse v0.8.0.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Add an uploaded SDE override on the admin Sync page by @natemsz in #308
+* Refresh the killboard's headline and leaders from its live stream by @natemsz in #306
+* Recompute true values from cached contract evidence and write only changed rows by @natemsz in #305
+* Build releases on GitHub runners and publish to Forgejo by @miko in #304
+
+### 🐛 Bug Fixes
+* Fix fitting accuracy for chained modifiers, reactivation delays and group limits by @natemsz in #307
+
+### Other Changes
+* Update Node.js to v26 by @renovate in #281
+* Update Go modules by @renovate in #280
+
+
+## [v0.8.0.8] - 2026-11-10
+
+Automated build of EveSynapse v0.8.0.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Take true-value contract evidence from the stored corpus only by @natemsz in #303
+* Sweep hubs on their own lane, share corporation and route fetches, fetch pages conditionally by @natemsz in #302
+* Show live contract asks beside unpriced items by @natemsz in #299
+
+### 🐛 Bug Fixes
+* Value SRP losses and Foresight hangars at our own prices by @natemsz in #301
+* Keep CCP's published prices out of true-value evidence by @natemsz in #300
+
+
+## [v0.8.0.7] - 2026-11-10
+
+Automated build of EveSynapse v0.8.0.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Keep the built files even when publishing fails by @miko in #295
+* Resume a draft release and retry failed asset uploads by @miko in #293
+* Log slow database queries by @natemsz in #289
+* Add live feeds for kills, market item pages and public contracts by @miko in #287
+* Collapse concurrent identical ESI GETs and cache ETag answers by @miko in #285
+
+### 🐛 Bug Fixes
+* Read sovereignty and corporation fields from their 2026-11-01 shapes by @natemsz in #291
+* Fix pane padding rules browsers dropped and reuse appraisal sample counts by @natemsz in #290
+* Turn off the bot guard on the dev server by @natemsz in #288
+* Hide nav-only inspector bars at wide widths by @natemsz in #286
+* Theme topbar hairline dividers per color scheme by @natemsz in #284
+* Price barter cost and improved originals correctly by @natemsz in #283
+
+### Other Changes
+* Read every freshness surface from one cadence table by @natemsz in #292
+
+
+## [v0.8.0.5] - 2026-11-09
+
+Automated build of EveSynapse v0.8.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Label the killboard columns, widen the asset scope, simplify the top search by @natemsz in #282
+
+
+## [v0.8.0.4] - 2026-11-09
+
+Automated build of EveSynapse v0.8.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Refine layout headers, topbar character switcher, connected page column, and UI bug fixes by @natemsz in #279
+
+
+## [v0.8.0.3] - 2026-11-09
+
+Automated build of EveSynapse v0.8.0.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Use FindCtx for session stores that require a context by @natemsz in #278
+
+
+## [v0.8.0.2] - 2026-11-09
+
+Automated build of EveSynapse v0.8.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Bot guard: HTML-only fingerprints and sequential ID sweep detection by @natemsz in #276
+* Decode and encode app JSON with goccy outside the signing paths by @natemsz in #274
+* Generate sqlc against pgx and run queries on the pool by @natemsz in #273
+* Store kill details with zstd, read gzip rows by magic bytes by @natemsz in #272
+* Serve precompressed brotli for text statics by @natemsz in #271
+* docs(changelog): backfill v0.7.1.0 through v0.8.0.0 by @miko in #270
+* Serve gzip through klauspost gzhttp at the same level by @natemsz in #269
+
+### 🐛 Bug Fixes
+* Fix kill feed backfill timing out every minute by @natemsz in #277
+
+### Other Changes
+* Document the pgx, compression, JSON and PostgreSQL changes by @natemsz in #275
+
+
+## [v0.8.0.1] - 2026-11-09
+
+Automated build of EveSynapse v0.8.0.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Precompute killboard and contract corpus statistics at ingest by @natemsz in #268
+* Redesign character overview cards with ship art, clean location hierarchy, and total SP by @natemsz in #267
+
+### Other Changes
+* selfupdate, pidfile: fall back to systemd and proc process detection when pidfile is absent by @natemsz in #266
+
 ## [v0.8.0.0] - 2026-11-09
 
 Automated build of EveSynapse v0.8.0.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -744,6 +1011,26 @@ Automated build of EveSynapse v0.7.1.0. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Reorganizes the market navigation, fixes the demo profit charts and the LP store table by @miko in #27
 
+## [v0.7.0.10] - 2026-10-30
+
+Automated build of EveSynapse v0.7.0.10. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+### 🚀 Features
+* The updater walks its sources in the order EVESYNAPSE_UPDATE_PROVIDER lists them and says which sources it checked; with nothing set it walks GitHub, GitLab and Forgejo
+### Other Changes
+* The release workflow creates the GitHub and GitLab releases from the same build, so every forge carries the same release
+* The README and the env example document the updater's provider order
+
+## [v0.7.0.9] - 2026-10-30
+
+Automated build of EveSynapse v0.7.0.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+### Other Changes
+* Briefing card text gets the full row on phones
+* The check gates and the release gate run on GitHub runners, and the release tag is signed with the release key before publishing
+
 ## [v0.7.0.8] - 2026-10-30
 
 Automated build of EveSynapse v0.7.0.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -756,6 +1043,38 @@ Automated build of EveSynapse v0.7.0.8. Update with: evesynapse -update -arm64 (
 * Your-orders pages show only the page's item, or a basket's items on basket pages
 * The landing page's section headlines carry the ember gradient again
 * The project's code, CI and releases live on its own Forgejo at natems.dev; signed releases publish there and mirror to the CDN
+
+## [v0.7.0.7] - 2026-10-29
+
+Automated build of EveSynapse v0.7.0.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+### Other Changes
+* The sidebar ESI status button is themed, its dot pings like the ESI pill, the freshness modal drops the Intel row, and the status tooltip is worded by state
+
+## [v0.7.0.6] - 2026-10-29
+
+Automated build of EveSynapse v0.7.0.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+### 🚀 Features
+* Add an ESI status dot to the sidebar with a data freshness modal
+* Give the basket page the real item editor instead of a text box, with an Add button for similar items
+* Show each basket's 1-day and 7-day change on the basket list
+* Add hover sparklines to watchlist averages, with a visualizations switch
+* Seed a foldable trading history for the demo, its profit ledger folded at seed time
+### Other Changes
+* Split the market nav bucket into Browse, Find Trades, Baskets & Restock, and LP & Contracts groups
+* Add API and Security jump links to the sidebar Settings menu
+* Give the LP store filters the boxed panel treatment the contracts search uses
+* Give the wallet balance the same card padding as the sections below it
+* Give every notification kind flyout wording so no badge row renders as a bare count
+* Move chart line, dot, band and legend colors onto the theme tokens
+* Set nav menu items in Rajdhani Medium, capitals only on group labels
+* Set market tree type to 0.8rem and widen the browse sidebar
+* Add the missing market category glyphs
+* Fix basket edit and builder going dead after in-app navigation
+* Intel reader fixes from synthetic reports, and the tagger runtime
 
 ## [v0.7.0.5] - 2026-10-29
 

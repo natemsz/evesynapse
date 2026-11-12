@@ -429,6 +429,7 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 			Title:          "EVE Online Fleet, Market & Fitting Tools",
 			Description:    "Free EVE Online tools for fleet and market play: track pilots and wallets, plan builds and fittings, and read market data refreshed from ESI.",
 			CanonicalPath:  "/",
+			ImagePath:      "/static/og-card.jpg",
 			WebApplication: true,
 		})
 	}

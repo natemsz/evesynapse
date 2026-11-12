@@ -110,6 +110,19 @@ func TestRenderPageMetaStructuredData(t *testing.T) {
 			t.Errorf("the WebApplication block is missing %q", want)
 		}
 	}
+	// The front page names the site: a WebSite entity with the .app
+	// fallback name and an Organization entity with the logo mark and
+	// the Forgejo repo.
+	for _, want := range []string{
+		`"@type":"WebSite"`, `"alternateName":["EveSynapse.app"]`, `"url":"https://evesynapse.app/"`,
+		`"@type":"Organization"`, `"logo":"https://evesynapse.app/static/logo-512.png"`,
+		`"sameAs":["https://natems.dev/EveSynapse/evesynapse"]`,
+		`<meta property="og:site_name" content="EveSynapse">`,
+	} {
+		if !strings.Contains(front, want) {
+			t.Errorf("the front page head is missing %q", want)
+		}
+	}
 	detail := string(RenderPageMeta(PageMeta{Breadcrumbs: []Breadcrumb{
 		{Name: "Item Database", Path: "/items/"},
 		{Name: "Minerals", Path: "/items/group/18/"},
@@ -119,6 +132,16 @@ func TestRenderPageMetaStructuredData(t *testing.T) {
 		`"item":"https://evesynapse.app/items/type/34/"`} {
 		if !strings.Contains(detail, want) {
 			t.Errorf("the BreadcrumbList is missing %q", want)
+		}
+	}
+	// Every page carries the site name; only the front page carries
+	// the WebSite and Organization entities.
+	if !strings.Contains(detail, `<meta property="og:site_name" content="EveSynapse">`) {
+		t.Error("a non-front page is missing og:site_name")
+	}
+	for _, typ := range []string{`"@type":"WebSite"`, `"@type":"Organization"`} {
+		if strings.Contains(detail, typ) {
+			t.Errorf("a non-front page carries %s", typ)
 		}
 	}
 	if strings.Contains(string(RenderPageMeta(PageMeta{})), "ld+json") {

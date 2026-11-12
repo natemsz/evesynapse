@@ -8,8 +8,8 @@ import (
 )
 
 // TestSEOFrontPage: the anonymous front page carries the
-// descriptive title, its description, canonical and the
-// WebApplication block; the signed-in overview keeps "Home" and
+// descriptive title, its description, canonical, the share card
+// image and the WebApplication block; the signed-in overview keeps "Home" and
 // gets no public head metadata.
 func TestSEOFrontPage(t *testing.T) {
 	transport := &countingTransport{}
@@ -25,6 +25,8 @@ func TestSEOFrontPage(t *testing.T) {
 		"<title>EVE Online Fleet, Market & Fitting Tools · EveSynapse</title>",
 		`<meta name="description" content="Free EVE Online tools`,
 		`<link rel="canonical" href="https://evesynapse.app/">`,
+		`<meta property="og:image" content="https://evesynapse.app/static/og-card.jpg">`,
+		`<meta name="twitter:card" content="summary_large_image">`,
 		`"@type":"WebApplication"`, `"name":"EveSynapse"`, `"operatingSystem":"Web"`, `"price":0`)
 
 	user, err := q.CreateUser(ctx)

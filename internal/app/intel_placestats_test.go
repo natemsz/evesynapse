@@ -434,7 +434,7 @@ func TestPlacePagesWithActivity(t *testing.T) {
 		t.Fatalf("GET /system/: status %d", code)
 	}
 	mustContain(t, "/system/", body,
-		`<a class="h-action" href="/map/?system=30000142" title="Open Jita on the universe map"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="1.8" stroke-linecap="round"><path d="M6.2 7.4 11.6 5.6M12.8 6.6l4.6 5.2M16.6 13.4l-5.4 4.4M9.6 17.2 6.6 9"/></g><g fill="url(#nav-glyph-gradient)"><circle cx="5.6" cy="7.8" r="2"/><circle cx="12.2" cy="5.2" r="1.7"/><circle cx="18.2" cy="12.6" r="2.2"/><circle cx="10.2" cy="18.6" r="1.9"/></g></svg>Map</a>`,
+		`<a class="h-action" href="/map/?system=30000142" title="Open Jita on the universe map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg>Map</a>`,
 		`<a href="/map/?region=10000002">Map</a>`,
 		`<tr><th>Sovereignty</th><td><a href="/alliance/?alliance=99000001">Fixture Alliance</a></td></tr>`,
 		`<th>Daily average (last day)</th>`,
@@ -448,7 +448,7 @@ func TestPlacePagesWithActivity(t *testing.T) {
 		t.Fatalf("GET /region/: status %d", code)
 	}
 	mustContain(t, "/region/", body,
-		`<a class="h-action" href="/map/?region=10000002" title="Open The Forge on the universe map">Map</a>`,
+		`<a class="h-action" href="/map/?region=10000002" title="Open The Forge on the universe map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg>Map</a>`,
 		`<th>Daily average</th>`,
 		`<tr><th>Ship kills</th><td>9</td><td>90</td><td>80.5</td></tr>`,
 		`<tr><th>Jumps</th><td>140</td><td>2,400</td><td>2,300.5</td></tr>`,
@@ -481,7 +481,7 @@ func TestPlacePagesWithoutActivity(t *testing.T) {
 		t.Fatalf("GET /system/: status %d", code)
 	}
 	mustContain(t, "/system/ without stats", body,
-		`<a class="h-action" href="/map/?system=30000142" title="Open Jita on the universe map"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="1.8" stroke-linecap="round"><path d="M6.2 7.4 11.6 5.6M12.8 6.6l4.6 5.2M16.6 13.4l-5.4 4.4M9.6 17.2 6.6 9"/></g><g fill="url(#nav-glyph-gradient)"><circle cx="5.6" cy="7.8" r="2"/><circle cx="12.2" cy="5.2" r="1.7"/><circle cx="18.2" cy="12.6" r="2.2"/><circle cx="10.2" cy="18.6" r="1.9"/></g></svg>Map</a>`,
+		`<a class="h-action" href="/map/?system=30000142" title="Open Jita on the universe map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg>Map</a>`,
 		"No activity data collected yet.")
 	if strings.Contains(body, "<th>Sovereignty</th>") {
 		t.Error("system page shows a sovereignty row with none collected")
@@ -492,7 +492,7 @@ func TestPlacePagesWithoutActivity(t *testing.T) {
 		t.Fatalf("GET /region/: status %d", code)
 	}
 	mustContain(t, "/region/ without stats", body,
-		`<a class="h-action" href="/map/?region=10000002" title="Open The Forge on the universe map">Map</a>`,
+		`<a class="h-action" href="/map/?region=10000002" title="Open The Forge on the universe map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg>Map</a>`,
 		"No activity data collected yet.")
 	if strings.Contains(body, "<h2>Sovereignty</h2>") {
 		t.Error("region page shows a sovereignty block with none collected")

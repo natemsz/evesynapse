@@ -232,6 +232,9 @@ func TestKillboardPages(t *testing.T) {
 	if !strings.Contains(body, "Jita") || !strings.Contains(body, `class="sec sec-9"`) {
 		t.Errorf("feed rows name the system with its security")
 	}
+	if !strings.Contains(body, `<a class="map-jump" href="/map/?system=30000142"`) || !strings.Contains(body, `<use href="#ico-map-mini"/>`) {
+		t.Errorf("feed rows carry the map jump beside the system")
+	}
 	row := func(id string) string { return `class="kb-kill-link" href="/intel/kill/` + id + `/"` }
 	if _, solo := get("/intel/kills/?solo=1"); strings.Contains(solo, row("700001")) || !strings.Contains(solo, row("700002")) {
 		t.Errorf("solo narrows to lone-attacker kills")

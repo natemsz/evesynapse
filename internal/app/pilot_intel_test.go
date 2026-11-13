@@ -50,7 +50,7 @@ func TestPilotIntel(t *testing.T) {
 
 	// A visitor sees the public record.
 	_, body := getPage(t, app, &http.Cookie{Name: "nobody", Value: "x"}, "/pilot/?character="+strconv.FormatInt(hostile, 10))
-	for _, want := range []string{"Activity", `<span class="pi-v">1</span><span class="pi-l">kills`, "Sabre", "Amarr", "Flies with"} {
+	for _, want := range []string{"Activity", `<span class="l-stat-label">Kills</span><span class="l-stat-value">1</span>`, "Sabre", "Amarr", "Flies with"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("public pilot intel lacks %q", want)
 		}
@@ -68,10 +68,10 @@ func TestPilotIntel(t *testing.T) {
 	exec(`INSERT INTO pilot_activity_systems (character_id, system_id, events, last_at) VALUES ($1, 30002187, 88, $2)`, hostile, now.Add(-2*time.Hour))
 	exec(`INSERT INTO pilot_activity_hours (character_id, hour, events) VALUES ($1, 21, 5)`, hostile)
 	_, body = getPage(t, app, &http.Cookie{Name: "nobody", Value: "x"}, "/pilot/?character="+strconv.FormatInt(hostile, 10))
-	for _, want := range []string{"every recorded kill and loss", `<span class="pi-v">137</span><span class="pi-l">kills`, `<span class="pi-v">42</span><span class="pi-l">losses`,
-		`<span class="pi-v">10m</span><span class="pi-l">ISK destroyed</span>`,
-		`<span class="pi-v">Sabre</span><span class="pi-l">usual hull</span>`, `<span class="pi-v">3.5</span><span class="pi-l">typical gang size</span>`,
-		`<span class="pi-l">last active</span>`, "41 flown · 27 final blows · 12 lost"} {
+	for _, want := range []string{"Every recorded kill and loss", `<span class="l-stat-label">Kills</span><span class="l-stat-value">137</span>`, `<span class="l-stat-label">Losses</span><span class="l-stat-value">42</span>`,
+		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">10m</span>`,
+		`<span class="l-stat-label">Usual hull</span><span class="l-stat-value text">Sabre</span>`, `<span class="l-stat-label">Typical gang size</span><span class="l-stat-value">3.5</span>`,
+		`<span class="l-stat-label">Last active</span>`, "41 flown · 27 final blows · 12 lost"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("profile-backed pilot intel lacks %q", want)
 		}

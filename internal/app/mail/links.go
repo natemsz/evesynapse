@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"evesynapse/internal/htmlsanitize"
 )
 
 // EVE writes links into mail bodies in its own schemes. These turn
@@ -15,12 +17,6 @@ import (
 // click from its page, and a fitting is one click from the fitting
 // tool.
 
-// Character type IDs: the race-specific character types and the
-// later shared one.
-func isCharacterType(typeID int64) bool {
-	return (typeID >= 1373 && typeID <= 1386) || typeID == 34574
-}
-
 // mailFit is a fitting linked in a mail, ready for the fitting tool.
 type mailFit struct {
 	Ship   string
@@ -28,49 +24,18 @@ type mailFit struct {
 	EFT    string
 }
 
-// gameLinkPath maps one EVE link to an EveSynapse path. fits collects
-// the fittings it meets (fitting:<ship>:<type>;<count>:...).
+// gameLinkPath maps one EVE link to an EveSynapse path
+// (htmlsanitize.EVELinkPath), and a fitting link to its hull's page.
+// fits collects the fittings it meets (fitting:<ship>:<type>;<count>:...).
 func (app *mod) gameLinkPath(ctx context.Context, href string, fits *[]mailFit) (string, bool) {
-	switch {
-	case strings.HasPrefix(href, "showinfo:"):
-		rest := strings.TrimPrefix(href, "showinfo:")
-		typePart, itemPart, hasItem := strings.Cut(rest, "//")
-		typeID, err := strconv.ParseInt(typePart, 10, 64)
-		if err != nil || typeID <= 0 {
-			return "", false
-		}
-		if !hasItem {
-			return fmt.Sprintf("/items/type/%d/", typeID), true
-		}
-		itemID, err := strconv.ParseInt(strings.TrimSpace(itemPart), 10, 64)
-		if err != nil || itemID <= 0 {
-			return "", false
-		}
-		switch {
-		case typeID == 5:
-			return fmt.Sprintf("/system/?system=%d", itemID), true
-		case isCharacterType(typeID):
-			return fmt.Sprintf("/pilot/?character=%d", itemID), true
-		case typeID == 2:
-			return fmt.Sprintf("/corporation/?corporation=%d", itemID), true
-		case typeID == 16159:
-			return fmt.Sprintf("/alliance/?alliance=%d", itemID), true
-		case itemID >= 60000000 && itemID < 64000000:
-			return fmt.Sprintf("/station/?station=%d", itemID), true
-		}
-		return fmt.Sprintf("/items/type/%d/", typeID), true
-	case strings.HasPrefix(href, "killReport:"):
-		idPart, _, _ := strings.Cut(strings.TrimPrefix(href, "killReport:"), ":")
-		if id, err := strconv.ParseInt(idPart, 10, 64); err == nil && id > 0 {
-			return fmt.Sprintf("/intel/kill/%d/", id), true
-		}
-	case strings.HasPrefix(href, "fitting:"):
+	if strings.HasPrefix(href, "fitting:") {
 		if f, ok := app.fitFromDNA(ctx, strings.TrimPrefix(href, "fitting:")); ok {
 			*fits = append(*fits, f)
 			return fmt.Sprintf("/items/type/%d/", f.ShipID), true
 		}
+		return "", false
 	}
-	return "", false
+	return htmlsanitize.EVELinkPath(href)
 }
 
 // fitFromDNA turns EVE's fitting string (ship type, then

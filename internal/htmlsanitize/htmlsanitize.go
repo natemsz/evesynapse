@@ -13,7 +13,7 @@ import (
 )
 
 // MailAllowedTags survive sanitizing (attributes stripped; <a>
-// keeps a validated href only).
+// keeps a validated href only, <font> a validated color only).
 var MailAllowedTags = map[string]bool{
 	"a": true, "b": true, "strong": true, "i": true, "em": true,
 	"u": true, "s": true, "strike": true, "sub": true, "sup": true,
@@ -212,6 +212,14 @@ func SanitizeLinked(raw string, inApp func(href string) (string, bool)) template
 				ok = ok && strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "//") && !strings.ContainsAny(path, "\\\n\r\t")
 			}
 			openTagAs("a", `<a class="mail-in" href="`+html.EscapeString(path)+`">`, ok)
+		case name == "font":
+			// EVE writes colour into bios and mail with <font>; a
+			// colour that parses keeps its colour, nothing else does.
+			if c, ok := FontColor(mailAttrValue(attrs, "color")); ok {
+				openTagAs("font", `<font color="`+c+`">`, true)
+				break
+			}
+			openTagAs("font", "<font>", true)
 		default:
 			openTagAs(name, "<"+name+">", true)
 		}
@@ -323,22 +331,27 @@ func MailHref(attrs string) (string, bool) {
 
 // mailHrefValue is an <a> tag's href value, entities decoded and
 // trimmed, whatever its scheme; "" when the tag has none.
-func mailHrefValue(attrs string) string {
-	for search := 0; search+4 <= len(attrs); {
-		if !hasPrefixASCIICase(attrs[search:], "href") {
+func mailHrefValue(attrs string) string { return mailAttrValue(attrs, "href") }
+
+// mailAttrValue is one attribute's value from a tag's attribute
+// text, entities decoded and trimmed; "" when the tag has none.
+func mailAttrValue(attrs, attr string) string {
+	n := len(attr)
+	for search := 0; search+n <= len(attrs); {
+		if !hasPrefixASCIICase(attrs[search:], attr) {
 			search++
 			continue
 		}
 		pos := search
-		// href must start an attribute (preceded by space).
+		// The name must start an attribute (preceded by space).
 		if pos > 0 && attrs[pos-1] != ' ' && attrs[pos-1] != '\t' {
-			search = pos + 4
+			search = pos + n
 			continue
 		}
-		rest := attrs[pos+4:]
+		rest := attrs[pos+n:]
 		rest = strings.TrimLeft(rest, " \t")
 		if !strings.HasPrefix(rest, "=") {
-			search = pos + 4
+			search = pos + n
 			continue
 		}
 		rest = strings.TrimLeft(rest[1:], " \t")

@@ -179,7 +179,6 @@ func (app *Application) systemLookup(ctx context.Context) intelchat.Lookup {
 // --- Views ---
 
 type channelListView struct {
-	SignedIn bool
 	Channels []channelRow
 	Error    string
 	// Owners are who a new channel can belong to: just the reader,
@@ -306,14 +305,11 @@ func (app *Application) handleChannels(w http.ResponseWriter, r *http.Request) {
 	data := app.publicPage(ctx)
 	v := &channelListView{}
 	id := app.intelIdentity(ctx)
-	if id.userID > 0 {
-		v.SignedIn = true
-		for _, c := range app.accessibleChannels(ctx, id) {
-			v.Channels = append(v.Channels, app.channelRowOf(ctx, c))
-		}
-		v.Owners = app.channelOwnerOptions(ctx, id)
-		app.fillAxon(ctx, v, id.userID)
+	for _, c := range app.accessibleChannels(ctx, id) {
+		v.Channels = append(v.Channels, app.channelRowOf(ctx, c))
 	}
+	v.Owners = app.channelOwnerOptions(ctx, id)
+	app.fillAxon(ctx, v, id.userID)
 	data.Channels = v
 	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "Intel Channels", Description: "Shared intel channels: report hostiles, paste intel chat, and see it all on the map.", CanonicalPath: "/intel/channels/"})
 	app.render(ctx, w, http.StatusOK, "channels.html", data)

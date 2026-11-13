@@ -195,7 +195,7 @@ func (app *Application) handlePairingCodeCreate(w http.ResponseWriter, r *http.R
 		return
 	}
 	data := app.publicPage(ctx)
-	v := &channelListView{SignedIn: true}
+	v := &channelListView{}
 	id := app.intelIdentity(ctx)
 	for _, c := range app.accessibleChannels(ctx, id) {
 		v.Channels = append(v.Channels, app.channelRowOf(ctx, c))

@@ -57,6 +57,8 @@ var Module = module.Module{
 		{Path: "/intel/wars/", ChangeFreq: "weekly", Priority: "0.7"},
 		{Path: "/intel/incursions/", ChangeFreq: "weekly", Priority: "0.7"},
 		{Path: "/intel/fw/", ChangeFreq: "weekly", Priority: "0.7"},
+		{Path: "/intel/kills/", ChangeFreq: "hourly", Priority: "0.7"},
+		{Path: "/intel/scan/", ChangeFreq: "monthly", Priority: "0.7"},
 	},
 	Routes: func(r chi.Router, deps module.Deps) {
 		r.Route("/intel", func(r chi.Router) {

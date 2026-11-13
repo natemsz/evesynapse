@@ -20,6 +20,7 @@ var Module = module.Module{
 	Scopes:        []module.Scope{},
 	EnhanceScopes: []module.Scope{},
 	Activities:    []string{"market"},
+	Sitemap:       []module.SitemapEntry{{Path: "/market/leaderboard/", ChangeFreq: "daily", Priority: "0.6"}},
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{

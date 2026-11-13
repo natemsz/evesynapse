@@ -128,6 +128,11 @@ func (app *Application) buildSitemap(ctx context.Context, origin string) ([]byte
 	urls := []sitemapURL{
 		{Loc: origin + "/", ChangeFreq: "weekly", Priority: "1.0"},
 		{Loc: origin + "/items/", ChangeFreq: "weekly", Priority: "0.8"},
+		{Loc: origin + "/market/", ChangeFreq: "daily", Priority: "0.8"},
+		{Loc: origin + "/market/trends/", ChangeFreq: "daily", Priority: "0.7"},
+		{Loc: origin + "/market/lp/", ChangeFreq: "daily", Priority: "0.6"},
+		{Loc: origin + "/market/baskets/", ChangeFreq: "daily", Priority: "0.6"},
+		{Loc: origin + "/map/", ChangeFreq: "daily", Priority: "0.7"},
 		{Loc: origin + "/about/", ChangeFreq: "monthly", Priority: "0.3"},
 		{Loc: origin + "/license/", ChangeFreq: "yearly", Priority: "0.2"},
 		{Loc: origin + "/report/", ChangeFreq: "monthly", Priority: "0.3"},

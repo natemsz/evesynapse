@@ -45,6 +45,7 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{},
 	Activities:    []string{"market"},
 	Widgets:       []module.WidgetDecl{{ID: "tradeideas", Title: "Trade Ideas", Description: "A model's read on the Forge spread scanner, one tab per trade strategy. Refreshed twice a day; the Trade Ideas page has the full list.", W: 2, H: 1, After: "watchlist"}},
+	Sitemap:       []module.SitemapEntry{{Path: "/market/ideas/", ChangeFreq: "daily", Priority: "0.6"}},
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{

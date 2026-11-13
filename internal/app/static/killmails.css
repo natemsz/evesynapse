@@ -47,7 +47,7 @@
 .km-bar-l { fill: var(--kb-dest); }
 .km-hit { fill: transparent; }
 .km-day:hover .km-hit { fill: color-mix(in srgb, var(--text) 6%, transparent); }
-.km-tick { fill: var(--muted-2); font-family: var(--font-body); font-size: var(--fs-2xs); }
+.km-ticks { display: flex; justify-content: space-between; gap: var(--space-2); margin: var(--space-1) 0 0; color: var(--muted-2); font-family: var(--font-num); font-size: var(--fs-xs); }
 
 .km-plist { margin: 0; padding: 0; list-style: none; }
 .km-plist > li + li { border-top: 1px solid var(--hairline); }

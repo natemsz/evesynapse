@@ -91,8 +91,10 @@
 /* The goal form: what to make, where, by whom. One row of the main
    fields, folding as the page narrows; the rest below. */
 .pi-goal { display: flex; flex-direction: column; gap: var(--space-3); }
-.pi-goal-main { display: grid; grid-template-columns: minmax(12rem, 2fr) minmax(7rem, 1fr) minmax(12rem, 2fr) minmax(9rem, 1fr) auto; align-items: end; gap: var(--space-2) var(--space-3); }
-.pi-goal-go { min-height: var(--control-h); }
+.pi-goal-main { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); }
+.pi-goal-main > .pi-f-product, .pi-goal-main > .pi-f-home { flex: 2 1 12rem; }
+.pi-goal-main > .pi-f-num { flex: 1 1 8rem; }
+.pi-goal-go { flex: 0 0 auto; min-height: var(--control-h); white-space: nowrap; }
 .pi-goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-sm); }
 .pi-goal-row legend, .pi-goal-more summary { padding: 0 0.3rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .pi-goal-more summary { cursor: pointer; padding: 0; }
@@ -102,10 +104,10 @@
 .pi-buy .pi-check { display: inline-flex; margin-left: auto; }
 @container page (width < 34rem) { .pi-buy { flex-direction: column; align-items: flex-start; } .pi-buy .pi-check { margin-left: 0; } }
 .pi-fields-inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
-.pi-goal .searchwrap { display: block; position: relative; }
+.pi-goal .searchwrap { display: block; position: relative; width: 100%; }
 .pi-goal .searchwrap input { width: 100%; box-sizing: border-box; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; }
 @container page (width < 46rem) {
-  .pi-goal-main { grid-template-columns: 1fr; }
+  .pi-goal-main > .pi-field, .pi-goal-go { flex-basis: 100%; }
 }
 
 /* Planet type colours: the card dot, the canvas surface. */

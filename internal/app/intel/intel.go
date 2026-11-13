@@ -36,7 +36,7 @@ var Module = module.Module{
 			// The killboard's pages are core (killboard.go): they
 			// serve in every build, and lead this section's menu
 			// when the section exists.
-			{Href: "/intel/kills/", Label: "Killboard", Pages: []string{"killboard.html", "kill.html"}},
+			{Href: "/intel/kills/", Label: "Killboard", Pages: []string{"killboard.html", "kill.html", "pilot.html", "corporation.html", "alliance.html"}},
 			// Battle reports are core too (battle_pages.go).
 			{Href: "/intel/battles/", Label: "Battle Reports", Pages: []string{"battles.html", "battle.html"}},
 			{Href: "/intel/scan/", Label: "D-Scan Parser", Pages: []string{"scans.html", "scan.html", "scan_compare.html"}},

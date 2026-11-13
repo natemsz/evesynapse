@@ -241,7 +241,7 @@ func buildPilotView(id int64, payload string) (*pilotView, bool) {
 	}
 	if p.Profile.Description != "" {
 		view.HasDescription = true
-		view.Description = htmlsanitize.Sanitize(p.Profile.Description)
+		view.Description = htmlsanitize.SanitizeLinked(htmlsanitize.DecodeEVEEscapes(p.Profile.Description), htmlsanitize.EVELinkPath)
 	}
 	for _, stint := range p.History {
 		row := pilotHistoryView{CorpID: stint.CorpID, CorpName: stint.CorpName, To: "Present"}

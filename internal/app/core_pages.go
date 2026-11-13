@@ -169,7 +169,7 @@ func sectionForPage(page string) string {
 	case "home.html":
 		return "home"
 	case "character.html", "characters.html", "skills.html",
-		"pilot.html", "assets.html",
+		"assets.html",
 		"killmails.html", "notifications.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"
 	case "industry.html", "industry_jobs.html", "industry_mining.html", "planets.html":
@@ -179,11 +179,13 @@ func sectionForPage(page string) string {
 		return "market"
 	case "items.html":
 		return "tools"
-	case "corporations.html", "corporation.html", "alliance.html", "corp_settings.html":
+	case "corporations.html", "corp_settings.html":
 		return "corporation"
 	case "map.html":
 		return "map"
-	case "killboard.html", "kill.html", "intel_sov.html", "battles.html", "battle.html", "scans.html", "scan.html", "scan_compare.html", "channels.html", "channel.html", "feed.html", "intel_workbench.html":
+	// The public pilot, corporation and alliance profiles are the
+	// killboard's entity pages.
+	case "killboard.html", "kill.html", "pilot.html", "corporation.html", "alliance.html", "intel_sov.html", "battles.html", "battle.html", "scans.html", "scan.html", "scan_compare.html", "channels.html", "channel.html", "feed.html", "intel_workbench.html":
 		return "intel"
 	case "sync.html":
 		// The Sync page is a tab of the Admin page now; it

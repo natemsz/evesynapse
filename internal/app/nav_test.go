@@ -404,6 +404,14 @@ func TestNavGroupsMirror(t *testing.T) {
 			{"Tools & Analysis", []string{"/market/trends/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/"}},
 			{"My Finances", []string{"/orders/", "/contracts/", "/profit/"}},
 		}, 1, 2},
+		{"intel", "intel_fw.html", []struct {
+			label string
+			hrefs []string
+		}{
+			{"Killboard", []string{"/intel/kills/", "/intel/battles/"}},
+			{"Live intel", []string{"/intel/feed/", "/intel/channels/", "/intel/workbench/", "/intel/scan/"}},
+			{"Territory", []string{"/intel/fw/", "/intel/wars/", "/intel/incursions/"}},
+		}, 2, 0},
 	} {
 		sgs := navGroupsFor(navLinksFor(tc.section, tc.page, 0))[tc.section]
 		if len(sgs) != len(tc.want) {
@@ -437,7 +445,7 @@ func TestNavGroupsMirror(t *testing.T) {
 
 	// No group map, no grouped menu: the short sections stay
 	// flat.
-	for _, section := range []string{"fitting", "intel", "tools"} {
+	for _, section := range []string{"fitting", "tools"} {
 		if _, ok := navGroupsFor(navLinksFor(section, "", 0))[section]; ok {
 			t.Errorf("the %s menu gained groups; only mapped sections group", section)
 		}

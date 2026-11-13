@@ -228,6 +228,11 @@ var sectionGroups = map[string][]navGroup{
 		{"Tools & Analysis", []string{"/market/trends/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/"}},
 		{"My Finances", []string{"/orders/", "/contracts/", "/profit/"}},
 	},
+	"intel": {
+		{"Killboard", []string{"/intel/kills/", "/intel/battles/"}},
+		{"Live intel", []string{"/intel/feed/", "/intel/channels/", "/intel/workbench/", "/intel/scan/"}},
+		{"Territory", []string{"/intel/sov/", "/intel/fw/", "/intel/wars/", "/intel/incursions/"}},
+	},
 	"corporation": {
 		{"People", []string{"/corporations/", "/corporations/members/", "/corporations/killmails/", "/groups/"}},
 		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/contracts/", "/corporations/assets/", "/corporations/structures/"}},

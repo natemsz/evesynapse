@@ -108,6 +108,7 @@ type Config struct {
 	killfeedBaseURL          string         // zKillboard R2Z2 killmail stream base URL (killfeed.go)
 	killfeedOff              bool           // KILLFEED=off: no public killmail stream
 	zkillAPIBaseURL          string         // zKillboard history API base URL (pilot_activity.go)
+	killArchiveBaseURL       string         // daily killmail archives (killboard_archive.go)
 	pilotBackfillOff         bool           // PILOT_BACKFILL=off: no pilot history backfills
 	residueOff               bool           // RESIDUE_MODEL=off: no residue step (residue_model.go)
 	intelTaggerOff           bool           // INTEL_TAGGER=off: read intel without the classifier (intel_tagger.go)
@@ -331,6 +332,22 @@ func (c Config) KillfeedBaseURL() string {
 // (the tests') never reaches the real stream.
 func (c Config) KillfeedEnabled() bool { return !c.killfeedOff && c.killfeedBaseURL != "" }
 
+// defaultKillArchiveBaseURL is EVE Ref's daily killmail archives:
+// one file a day of CCP's killmails, attackers included, from
+// 2007-12-05 on.
+const defaultKillArchiveBaseURL = "https://data.everef.net/killmails"
+
+// KillArchiveBaseURL returns the archives' base URL without a
+// trailing slash. KILL_ARCHIVE_BASE_URL=off turns the archive
+// restore off, and a Config not built by LoadConfig (the tests')
+// leaves it off.
+func (c Config) KillArchiveBaseURL() string {
+	if c.killArchiveBaseURL == "off" {
+		return ""
+	}
+	return strings.TrimSuffix(c.killArchiveBaseURL, "/")
+}
+
 // defaultZKillAPIBaseURL is zKillboard's history API: filtered
 // killmail queries, a pilot's kills and losses among them.
 const defaultZKillAPIBaseURL = "https://zkillboard.com/api/"
@@ -414,6 +431,7 @@ func LoadConfig() (Config, error) {
 		killfeedBaseURL:            getenvDefault("KILLFEED_BASE_URL", defaultKillfeedBaseURL),
 		killfeedOff:                strings.EqualFold(strings.TrimSpace(os.Getenv("KILLFEED")), "off"),
 		zkillAPIBaseURL:            getenvDefault("ZKILL_API_BASE_URL", defaultZKillAPIBaseURL),
+		killArchiveBaseURL:         getenvDefault("KILL_ARCHIVE_BASE_URL", defaultKillArchiveBaseURL),
 		pilotBackfillOff:           strings.EqualFold(strings.TrimSpace(os.Getenv("PILOT_BACKFILL")), "off"),
 		residueOff:                 strings.EqualFold(strings.TrimSpace(os.Getenv("RESIDUE_MODEL")), "off"),
 		intelTaggerOff:             strings.EqualFold(strings.TrimSpace(os.Getenv("INTEL_TAGGER")), "off"),

@@ -9,17 +9,15 @@ package app
 // ids at a time, into the _rebuild tables (schema 146), then swaps
 // them in for the live ones in one short transaction.
 //
-// It runs twice. Kills, losses, ISK and systems read the permanent
-// involvement record, so the first pass runs at startup without
-// waiting for anything (done_at). Ships flown read the attacker
-// rows, so once the attacker restore (killboard_restore.go) has
-// read every missing row back, a second pass counts everything
-// again from complete rows (complete_at). The retention prune waits
-// for the second pass.
+// It runs once, at startup. Kills, losses, ISK and systems read the
+// permanent involvement record; ships flown read the attacker rows,
+// and kills counted without them get their ships added afterwards
+// as the archive restore writes their rows back
+// (killboard_archive.go).
 //
-// While a pass runs the fold writes feed rows only and leaves kills
+// While it runs the fold writes feed rows only and leaves kills
 // in kill_stats_pending; a chunk skips queued kills, so each kill is
-// counted exactly once, by the pass or by the fold after the swap.
+// counted exactly once, by the rebuild or by the fold after the swap.
 // Progress is stored after every chunk, so a restart resumes where
 // it stopped.
 // ---------------------------------------------------------------------------
@@ -45,18 +43,17 @@ const (
 	killStatsLockKey int64 = 0x6b696c6c73746174 // "killstat"
 )
 
-// killStatsComplete reports whether the rebuild's second pass,
-// the one after the attacker restore drained, has swapped in. The
-// retention prune waits for it.
-func (app *Application) killStatsComplete(ctx context.Context) bool {
+// killStatsRebuilt reports whether the rebuild has swapped in. The
+// archive restore and the retention prune wait for it.
+func (app *Application) killStatsRebuilt(ctx context.Context) bool {
 	st, err := app.queries.GetKillStatsRebuildState(ctx)
-	return err == nil && st.CompleteAt.Valid
+	return err == nil && st.DoneAt.Valid
 }
 
-// runKillStatsFirstPass runs the rebuild's first pass to the swap,
-// retrying a failed pass from its stored cursor. It returns once the
+// runKillStatsRebuild runs the rebuild to the swap, retrying a
+// failed run from its stored cursor. It returns once the
 // pass is done or ctx ends.
-func (app *Application) runKillStatsFirstPass(ctx context.Context) {
+func (app *Application) runKillStatsRebuild(ctx context.Context) {
 	for ctx.Err() == nil {
 		err := app.rebuildKillStats(ctx)
 		if err == nil {
@@ -71,33 +68,8 @@ func (app *Application) runKillStatsFirstPass(ctx context.Context) {
 	}
 }
 
-// completeKillStats runs the rebuild's second pass once the attacker
-// restore has drained: everything counted again, ships flown from
-// complete attacker rows. It returns nil at once when the second
-// pass is done.
-func (app *Application) completeKillStats(ctx context.Context) error {
-	app.killStatsRebuildMu.Lock()
-	st, err := app.queries.GetKillStatsRebuildState(ctx)
-	if err == nil && !st.CompleteAt.Valid && (st.DoneAt.Valid || st.StartedAt.Valid) {
-		// A pass that started before the restore drained counted
-		// ships from incomplete rows: start over from id 0.
-		err = app.queries.ResetKillStatsRebuild(ctx)
-	}
-	app.killStatsRebuildMu.Unlock()
-	if err != nil {
-		return fmt.Errorf("read rebuild state: %w", err)
-	}
-	if st.CompleteAt.Valid {
-		return nil
-	}
-	if err := app.rebuildKillStats(ctx); err != nil {
-		return err
-	}
-	return app.queries.MarkKillStatsRebuildComplete(ctx)
-}
-
-// rebuildKillStats runs one pass to the swap, resuming from its
-// stored cursor. It returns nil at once when the pass is done.
+// rebuildKillStats runs the rebuild to the swap, resuming from its
+// stored cursor. It returns nil at once when it is done.
 func (app *Application) rebuildKillStats(ctx context.Context) error {
 	app.killStatsRebuildMu.Lock()
 	defer app.killStatsRebuildMu.Unlock()

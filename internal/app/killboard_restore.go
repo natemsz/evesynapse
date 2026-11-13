@@ -1,21 +1,20 @@
 package app
 
 // ---------------------------------------------------------------------------
-// Attacker restore: kills whose attacker rows were pruned before the
-// stats fold counted their ships are read back from ESI by id and
-// hash (killmails never change) and their attacker rows stored
-// again. A kill inside the two-year retention also gets its stored
-// killmail back. The stats rebuild then counts every kill from
-// complete rows.
+// Attacker restore, ESI leg: kills inside retention whose attacker
+// rows are gone and that the archive restore (killboard_archive.go)
+// could not serve are read back from ESI by id and hash (killmails
+// never change), their attacker rows and killmail stored again and
+// their ships flown counted (writeBackKillAttackers). It starts once
+// the archive walk is done.
 //
 // One background loop, newest kill first, below a keyset cursor so
 // a kill no source can serve is passed over rather than retried in
-// a loop. ESI is the bulk source: reads go outside the shared GET
-// cache (FetchRawOnce), a few at a time, and back off while ESI's
-// error budget is low. A kill ESI cannot serve is asked of
-// zKillboard by id, one at a time at its requested pace. Once a
-// pass finds nothing left the loop runs the stats rebuild's second
-// pass (killboard_rebuild.go) and then rechecks every few hours.
+// a loop. Reads go outside the shared GET cache (FetchRawOnce), a
+// few at a time, and back off while ESI's error budget is low. A
+// kill ESI cannot serve is asked of zKillboard by id, one at a time
+// at its requested pace. Once a pass finds nothing left the loop
+// rechecks every few hours.
 // ---------------------------------------------------------------------------
 
 import (
@@ -62,7 +61,15 @@ func (app *Application) runKillAttackerRestore(ctx context.Context) {
 			}
 			continue
 		}
-		rows, err := app.queries.ListKillsMissingAttackers(ctx, db.ListKillsMissingAttackersParams{BeforeID: cursor, MaxRows: killRestoreBatch})
+		if !app.killStatsRebuilt(ctx) || !app.killArchiveRestoreDone(ctx) {
+			if !killfeedSleepCtx(ctx, killRestoreBackoff) {
+				return
+			}
+			continue
+		}
+		rows, err := app.queries.ListKillsMissingAttackers(ctx, db.ListKillsMissingAttackersParams{
+			BeforeID: cursor, Since: time.Now().UTC().Add(-killDetailRetention), MaxRows: killRestoreBatch,
+		})
 		if err != nil {
 			if ctx.Err() == nil {
 				logging.Errorf("killboard restore: list kills missing attackers: %v", err)
@@ -76,20 +83,6 @@ func (app *Application) runKillAttackerRestore(ctx context.Context) {
 			if restored+missing > 0 {
 				logging.Infof("killboard restore: done, %d kills restored, %d ESI could not serve, in %s",
 					restored, missing, time.Since(started).Round(time.Minute))
-			}
-			// Every kill has its attacker rows: the rebuild's
-			// second pass can count their ships
-			// (killboard_rebuild.go). A failed pass is retried
-			// after a short pause, from its stored cursor.
-			if err := app.completeKillStats(ctx); err != nil {
-				if ctx.Err() == nil {
-					logging.Errorf("killboard stats rebuild: %v", err)
-				}
-				cursor = math.MaxInt64
-				if !killfeedSleepCtx(ctx, killRestoreBackoff) {
-					return
-				}
-				continue
 			}
 			restored, missing, cursor, started = 0, 0, math.MaxInt64, time.Now()
 			if !killfeedSleepCtx(ctx, killRestoreRecheck) {
@@ -190,23 +183,10 @@ func (app *Application) restoreKillFromZKill(ctx context.Context, client *http.C
 	return errors.New("zKillboard has no such kill")
 }
 
-// storeRestoredKill stores a read-back kill's attacker rows, and
-// its killmail while the kill is inside retention.
+// storeRestoredKill writes one read-back kill (writeBackKillAttackers).
 func (app *Application) storeRestoredKill(ctx context.Context, r db.ListKillsMissingAttackersRow, km killmailFull, body []byte) error {
 	if km.KillmailID != r.KillmailID {
 		return fmt.Errorf("ESI answered killmail %d", km.KillmailID)
 	}
-	if ap := killAttackersParams(km); len(ap.Seqs) > 0 {
-		if err := app.queries.InsertKillAttackers(ctx, ap); err != nil {
-			return fmt.Errorf("store attackers: %w", err)
-		}
-	}
-	if !r.KillmailTime.Before(time.Now().UTC().Add(-killDetailRetention)) {
-		if err := app.queries.InsertKillDetail(ctx, db.InsertKillDetailParams{
-			KillmailID: r.KillmailID, Payload: compressKillDetail(body), StoredAt: time.Now().UTC(),
-		}); err != nil {
-			return fmt.Errorf("store detail: %w", err)
-		}
-	}
-	return nil
+	return app.writeBackKillAttackers(ctx, []restoredKill{{id: r.KillmailID, at: r.KillmailTime, km: km, raw: body}}, nil)
 }

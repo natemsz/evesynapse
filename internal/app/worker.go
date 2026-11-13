@@ -180,7 +180,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(12)
+	children.Add(13)
 
 	// The public killmail stream (killfeed.go) is its own paced
 	// loop: one file every 100 ms while kills arrive, six seconds
@@ -214,12 +214,20 @@ func (app *Application) runWorker(ctx context.Context) {
 		runGuarded("killboard restore", func() { app.runKillAttackerRestore(ctx) })
 	}()
 
-	// The stats rebuild's first pass (killboard_rebuild.go) runs at
-	// once: kills, losses, ISK and systems need only the permanent
-	// involvement record, not the restore.
+	// The stats rebuild (killboard_rebuild.go) runs at once: kills,
+	// losses, ISK and systems need only the permanent involvement
+	// record.
 	go func() {
 		defer children.Done()
-		runGuarded("killboard stats rebuild", func() { app.runKillStatsFirstPass(ctx) })
+		runGuarded("killboard stats rebuild", func() { app.runKillStatsRebuild(ctx) })
+	}()
+
+	// The archive restore (killboard_archive.go) adds the ships flown
+	// of kills counted without attacker rows, from the daily killmail
+	// archives, after the rebuild.
+	go func() {
+		defer children.Done()
+		runGuarded("killboard archive", func() { app.runKillArchiveRestore(ctx) })
 	}()
 
 	// The residue step (residue_model.go) reads what settled

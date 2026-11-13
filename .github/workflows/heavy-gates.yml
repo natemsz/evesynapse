@@ -22,8 +22,14 @@
 
 name: heavy-gates
 
+# The push trigger is scoped to branches: an unfiltered push
+# trigger also fires for tag pushes, so every release ran the
+# whole suite a second time on the tagged commit, a run whose
+# release-gate is excluded by ref and which decided nothing.
 on:
   push:
+    branches:
+      - "**"
   pull_request:
 
 jobs:

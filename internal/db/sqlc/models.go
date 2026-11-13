@@ -1071,10 +1071,11 @@ type KillStatsPending struct {
 }
 
 type KillStatsRebuildState struct {
-	ID        int32        `json:"id"`
-	Cursor    int64        `json:"cursor"`
-	StartedAt sql.NullTime `json:"started_at"`
-	DoneAt    sql.NullTime `json:"done_at"`
+	ID         int32        `json:"id"`
+	Cursor     int64        `json:"cursor"`
+	StartedAt  sql.NullTime `json:"started_at"`
+	DoneAt     sql.NullTime `json:"done_at"`
+	CompleteAt sql.NullTime `json:"complete_at"`
 }
 
 type KillboardHeadline struct {

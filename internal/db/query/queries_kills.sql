@@ -568,7 +568,15 @@ ON CONFLICT (day, kind, entity_id, ship_type_id) DO UPDATE SET
     lost = kill_entity_daily_ships_rebuild.lost + EXCLUDED.lost;
 
 -- name: GetKillStatsRebuildState :one
-SELECT cursor, started_at, done_at FROM kill_stats_rebuild_state WHERE id = 1;
+SELECT cursor, started_at, done_at, complete_at FROM kill_stats_rebuild_state WHERE id = 1;
+
+-- The second pass starts over: the next rebuild counts every kill
+-- again from id 0.
+-- name: ResetKillStatsRebuild :exec
+UPDATE kill_stats_rebuild_state SET cursor = 0, started_at = NULL, done_at = NULL WHERE id = 1;
+
+-- name: MarkKillStatsRebuildComplete :exec
+UPDATE kill_stats_rebuild_state SET complete_at = now() WHERE id = 1;
 
 -- name: StartKillStatsRebuild :exec
 UPDATE kill_stats_rebuild_state SET cursor = 0, started_at = sqlc.arg(started_at)::timestamptz, done_at = NULL WHERE id = 1;

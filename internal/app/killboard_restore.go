@@ -14,8 +14,8 @@ package app
 // cache (FetchRawOnce), a few at a time, and back off while ESI's
 // error budget is low. A kill ESI cannot serve is asked of
 // zKillboard by id, one at a time at its requested pace. Once a
-// pass finds nothing left the loop runs the one time stats rebuild
-// (killboard_rebuild.go) and then rechecks every few hours.
+// pass finds nothing left the loop runs the stats rebuild's second
+// pass (killboard_rebuild.go) and then rechecks every few hours.
 // ---------------------------------------------------------------------------
 
 import (
@@ -77,11 +77,11 @@ func (app *Application) runKillAttackerRestore(ctx context.Context) {
 				logging.Infof("killboard restore: done, %d kills restored, %d ESI could not serve, in %s",
 					restored, missing, time.Since(started).Round(time.Minute))
 			}
-			// Every kill has its attacker rows: the stats rebuild
-			// can count them (killboard_rebuild.go). A failed
-			// rebuild is retried after a short pause, from its
-			// stored cursor.
-			if err := app.rebuildKillStats(ctx); err != nil {
+			// Every kill has its attacker rows: the rebuild's
+			// second pass can count their ships
+			// (killboard_rebuild.go). A failed pass is retried
+			// after a short pause, from its stored cursor.
+			if err := app.completeKillStats(ctx); err != nil {
 				if ctx.Err() == nil {
 					logging.Errorf("killboard stats rebuild: %v", err)
 				}

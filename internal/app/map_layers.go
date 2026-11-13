@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	json "github.com/goccy/go-json"
+	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -72,6 +73,24 @@ type mapLayerSov struct {
 	ID []int64 `json:"id"`
 	A  []int   `json:"a"` // index into alliances, -1 for none
 	F  []int64 `json:"f"` // NPC faction holder, 0 for none
+	// An alliance claim's detail (0 where it does not apply): ADM
+	// to one decimal, the hub's vulnerability window as unix
+	// seconds (the browser decides what is open now), and when the
+	// holder took the system.
+	ADM   []float64 `json:"adm"`
+	VS    []int64   `json:"vs"`
+	VE    []int64   `json:"ve"`
+	Since []int64   `json:"since"`
+	// The live contests (GET /sovereignty/campaigns/).
+	Contests []mapSovContest `json:"contests"`
+}
+
+// mapSovContest is one live sovereignty contest on the map.
+type mapSovContest struct {
+	Sys   int64 `json:"sys"`
+	Def   int   `json:"def"` // defender score, percent
+	Att   int   `json:"att"` // attackers score, percent
+	Start int64 `json:"start"`
 }
 
 type mapLayerFW struct {
@@ -107,6 +126,7 @@ type mapNamed struct {
 var mapLayerSources = []string{
 	esi.GlobalSystemKills, esi.GlobalSystemJumps, esi.GlobalSovMap,
 	esi.GlobalFWSystems, esi.GlobalIncursions, esi.GlobalFactions,
+	esi.GlobalSovCampaigns,
 }
 
 // refreshMapLayers rebuilds the stored layers payload when any of
@@ -225,6 +245,18 @@ func (app *Application) buildMapLayers(ctx context.Context, snaps map[string]db.
 			p.Sov.ID = append(p.Sov.ID, s.SystemID)
 			p.Sov.A = append(p.Sov.A, ai)
 			p.Sov.F = append(p.Sov.F, s.FactionID)
+			p.Sov.ADM = append(p.Sov.ADM, math.Round(s.ADM*10)/10)
+			p.Sov.VS = append(p.Sov.VS, unixOr0(s.VulnStart))
+			p.Sov.VE = append(p.Sov.VE, unixOr0(s.VulnEnd))
+			p.Sov.Since = append(p.Sov.Since, unixOr0(s.ClaimedSince))
+		}
+	}
+	var campaigns esi.SovCampaigns
+	if decode(esi.GlobalSovCampaigns, &campaigns) > 0 {
+		for _, c := range campaigns {
+			p.Sov.Contests = append(p.Sov.Contests, mapSovContest{
+				Sys: c.SystemID, Def: sovPct(c.DefenderScore), Att: sovPct(c.AttackersScore), Start: c.StartTime.Unix(),
+			})
 		}
 	}
 
@@ -280,4 +312,12 @@ func (app *Application) handleMapLayersJSON(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	serveMapJSON(w, r, row.Etag, row.Payload, 60)
+}
+
+// unixOr0 is t as unix seconds, 0 for the zero time.
+func unixOr0(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
 }

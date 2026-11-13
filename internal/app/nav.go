@@ -206,13 +206,13 @@ func orderGroup(links []navLink, hrefs []string) []navLink {
 // the pattern: at thirteen pages its strip was the widest in the
 // app by a third again, and no single row of folder tabs holds
 // it under a very wide window. The other wide sections follow
-// it: pilot, industry and market group the same way, each map
+// it: pilot, industry, market and intel group the same way, each map
 // claiming every one of the section's pages exactly once
 // (TestSectionGroups pins that, so the runtime's flat fallback
 // stays a safety net). The short sections stay flat: fitting
-// and intel carry three pages apiece and tools two, their
-// strips are a single short row and their pages form no
-// clusters worth a heading. No page's route changes.
+// carries three pages and tools two, their strips are a single
+// short row and their pages form no clusters worth a heading.
+// No page's route changes.
 var sectionGroups = map[string][]navGroup{
 	"pilot": {
 		{"Character", []string{"/character/", "/characters/", "/skills/plans", "/killmails/"}},
@@ -255,6 +255,9 @@ var navGroupIcons = map[string]template.HTML{
 	"Browse":           `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></g></svg>`,
 	"Tools & Analysis": `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v15.5h16"/><path d="M7.5 15.5 11 10l3 2.5 4.5-5"/></g></svg>`,
 	"My Finances":      `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6.5" width="17" height="12" rx="2"/><path d="M3.5 10.5h17"/></g><circle cx="16.8" cy="14.5" r="1.4" fill="currentColor"/></svg>`,
+	"Killboard":        `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="6.2"/><path d="M12 2.8v3.4M12 17.8v3.4M2.8 12h3.4M17.8 12h3.4"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/></g></svg>`,
+	"Live intel":       `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><path d="M8.4 15.6a5 5 0 0 1 0-7.2M15.6 8.4a5 5 0 0 1 0 7.2M5.8 18.2a9 9 0 0 1 0-12.4M18.2 5.8a9 9 0 0 1 0 12.4"/></g></svg>`,
+	"Territory":        `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 21.5v-19"/><path d="M5.5 3.8c4-2.2 7 1.6 12-.2v7.8c-5 1.8-8-2-12 .2"/></g></svg>`,
 	"People":           `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="9" cy="9" r="3.4"/><path d="M3.2 19.6c.7-2.9 2.9-4.6 5.8-4.6 1.5 0 2.8.5 3.8 1.3"/><path d="M15.5 6.4a3.4 3.4 0 1 1 .9 4.5"/><path d="M16.8 15.3c2 .4 3.4 1.9 4 4.3"/></g></svg>`,
 	"Programs":         `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 19 6v5.2c0 4.4-2.9 7.5-7 9.3-4.1-1.8-7-4.9-7-9.3V6z"/></g></svg>`,
 	"Comms & Admin":    `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h9"/><path d="M17 7h3"/><path d="M4 12h3"/><path d="M11 12h9"/><path d="M4 17h11"/><path d="M19 17h1"/></g><g fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></g></svg>`,

@@ -145,8 +145,10 @@
         <summary data-tip="Intel"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg nav-icon-intel" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-intel"/></svg></span><span class="nav-label">Intel</span></summary>
         <div class="menu">
           <div class="nav-flyout-head">Intel</div>
-          {{range index .NavLinks "intel"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
-          {{end}}{{if .AxonPaired}}<a href="evesynapse-axon://open">EveSynapse Axon</a>{{end}}
+          {{with index .NavGroups "intel"}}{{range .}}<p class="nav-group-label">{{if .Icon}}{{.Icon}}{{end}}{{.Label}}</p>
+          {{range .Links}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
+          {{end}}{{end}}{{else}}{{range index .NavLinks "intel"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
+          {{end}}{{end}}{{if .AxonPaired}}<a href="evesynapse-axon://open">EveSynapse Axon</a>{{end}}
         </div>
       </details>
       {{end}}

@@ -9,6 +9,7 @@ import (
 	json "github.com/goccy/go-json"
 	"math"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -173,12 +174,7 @@ func contractShows(row contractRow) []string {
 }
 
 func containsShow(keys []string, show string) bool {
-	for _, k := range keys {
-		if k == show {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(keys, show)
 }
 
 // contractFilters builds the chips: All plus every type, then every

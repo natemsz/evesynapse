@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1011,11 +1012,8 @@ func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOpt
 		tag := strings.TrimPrefix(raw, "tag:")
 		var members []db.Character
 		for _, ch := range chars {
-			for _, t := range tags.Split(ch.Tags) {
-				if t == tag {
-					members = append(members, ch)
-					break
-				}
+			if slices.Contains(tags.Split(ch.Tags), tag) {
+				members = append(members, ch)
 			}
 		}
 		if tag != "" && len(members) > 0 {

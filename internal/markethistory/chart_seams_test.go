@@ -124,7 +124,7 @@ func TestBuildPriceChartCarriesDayData(t *testing.T) {
 	// The recent table caps at RecentChartDays.
 	var many []db.MarketHistory
 	base := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		many = append(many, tradeRow(base.AddDate(0, 0, i).Format(DateLayout), float64(100+i), 0, 0, 100))
 	}
 	chart, _ = BuildPriceChart(many)

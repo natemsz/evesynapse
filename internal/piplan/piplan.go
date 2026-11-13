@@ -785,10 +785,7 @@ func suggestColonies(target string, plan *Plan, s Settings, cc CommandCenter) []
 			if !needed || rawPlanet[raw] != pt {
 				continue
 			}
-			n := int(math.Ceil(ln.PerHour / s.ECUYield))
-			if n < 1 {
-				n = 1
-			}
+			n := max(int(math.Ceil(ln.PerHour/s.ECUYield)), 1)
 			ecus += n
 			parts = append(parts, fmt.Sprintf("%s: %d ECU × %d heads (%.0f/hr needed)", raw, n, s.HeadsPerECU, ln.PerHour))
 		}
@@ -863,13 +860,7 @@ func suggestColonies(target string, plan *Plan, s Settings, cc CommandCenter) []
 		if cc.PG > 0 {
 			byPG = int(math.Ceil(float64(fpg) / float64(cc.PG)))
 		}
-		n := byCPU
-		if byPG > n {
-			n = byPG
-		}
-		if n < 2 {
-			n = 2
-		}
+		n := max(max(byPG, byCPU), 2)
 		out = append(out, ColonyPlan{
 			Role: "Factory", Planet: factPlanet,
 			Title:   fmt.Sprintf("Factory ×%d planets", n),

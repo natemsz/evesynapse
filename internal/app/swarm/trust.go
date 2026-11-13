@@ -311,10 +311,7 @@ func (app *Mod) SwarmStreakBump(signer string, good bool) (streak int, weight in
 	}
 	streak = app.SwarmStreak[signer] + 1
 	app.SwarmStreak[signer] = streak
-	shift := streak - 1
-	if shift > SwarmStreakWeightCap {
-		shift = SwarmStreakWeightCap
-	}
+	shift := min(streak-1, SwarmStreakWeightCap)
 	return streak, int64(1) << uint(shift)
 }
 

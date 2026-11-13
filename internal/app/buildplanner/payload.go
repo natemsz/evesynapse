@@ -14,6 +14,7 @@ import (
 	"context"
 	json "github.com/goccy/go-json"
 	"html/template"
+	"maps"
 	"math"
 	"net/url"
 	"sort"
@@ -333,10 +334,7 @@ func planSchedule(jobs []*planSchedNode, slots int, nameOf func(int64) string) (
 				slot = s
 			}
 		}
-		start := ready
-		if free[slot] > start {
-			start = free[slot]
-		}
+		start := max(free[slot], ready)
 		finish := start + sn.dur
 		free[slot] = finish
 		end[sn] = finish
@@ -874,12 +872,8 @@ func (app *planner) planMarket(ctx context.Context, q url.Values, ids []int64, b
 		return base, market, marketName, marketName + " has no sell rows on file yet; Jita market shown."
 	}
 	prices = make(map[int64]esi.MarketPrice, len(base))
-	for id, p := range base {
-		prices[id] = p
-	}
-	for id, p := range rows {
-		prices[id] = p
-	}
+	maps.Copy(prices, base)
+	maps.Copy(prices, rows)
 	return prices, market, marketName, marketName + " sell rows as of " + stamp.UTC().Format("2006-01-02 15:04") + "; Jita market elsewhere."
 }
 

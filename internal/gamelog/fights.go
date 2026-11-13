@@ -11,6 +11,7 @@ package gamelog
 // smartbombs landing on each other while it does.
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -271,7 +272,7 @@ func (b *fightBuilder) fight(listener string, charID int64, session string) Figh
 	for st := range b.slices {
 		steps = append(steps, st)
 	}
-	sort.Slice(steps, func(i, j int) bool { return steps[i] < steps[j] })
+	slices.Sort(steps)
 	for _, st := range steps {
 		sl := Slice{At: int(st) * SliceSeconds}
 		for key, v := range b.slices[st] {

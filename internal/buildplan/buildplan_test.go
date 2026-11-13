@@ -357,15 +357,15 @@ func capitalScaleSource() fixturePlannerSource {
 	src := fixturePlannerSource{}
 	const rootID = 10001
 	rootMats := make([]Material, 0, 40)
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		compID := int64(11000 + i)
 		rootMats = append(rootMats, Material{TypeID: compID, Quantity: 1})
 		subMats := make([]Material, 0, 15)
-		for j := 0; j < 15; j++ {
+		for j := range 15 {
 			subID := int64(12000 + i*15 + j)
 			subMats = append(subMats, Material{TypeID: subID, Quantity: 1})
 			leafMats := make([]Material, 0, 8)
-			for k := 0; k < 8; k++ {
+			for k := range 8 {
 				leafMats = append(leafMats, Material{TypeID: int64(34 + k%4), Quantity: 10})
 			}
 			src[subID] = &Blueprint{BlueprintTypeID: 22000 + int64(i*15+j), ProductTypeID: subID,
@@ -404,7 +404,7 @@ func TestPlanAbsurdScaleStillTripsCap(t *testing.T) {
 	src := capitalScaleSource()
 	root := src[10001]
 	wide := make([]Material, 0, 400)
-	for i := 0; i < 400; i++ {
+	for i := range 400 {
 		id := int64(50000 + i)
 		wide = append(wide, Material{TypeID: id, Quantity: 1})
 		src[id] = &Blueprint{BlueprintTypeID: 60000 + int64(i), ProductTypeID: id,

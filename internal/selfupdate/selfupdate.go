@@ -368,7 +368,7 @@ func selectRelease(releases []gitlabRelease, dev bool) (gitlabRelease, bool) {
 // reads the fallback list (see fetchReleaseManifest).
 func updateProviders() []string {
 	var providers []string
-	for _, name := range strings.Split(os.Getenv("EVESYNAPSE_UPDATE_PROVIDER"), ",") {
+	for name := range strings.SplitSeq(os.Getenv("EVESYNAPSE_UPDATE_PROVIDER"), ",") {
 		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
 			providers = append(providers, name)
 		}
@@ -878,8 +878,7 @@ func walkProviders(ctx context.Context, w io.Writer, providers []string, arch st
 		pcancel()
 		reportProviderCheck(w, provider, m, err)
 		if err != nil {
-			var refused *refusal
-			if errors.As(err, &refused) {
+			if _, ok := errors.AsType[*refusal](err); ok {
 				return best, "", "", "", err
 			}
 			if firstErr == nil {
@@ -955,8 +954,7 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 	m, provider, signer, source, err := fetchReleaseManifest(ctx, stdout, arch, dev)
 	cancel()
 	if err != nil {
-		var refused *refusal
-		if errors.As(err, &refused) {
+		if refused, ok := errors.AsType[*refusal](err); ok {
 			fmt.Fprintf(stderr, "Update refused: %s\nNothing was changed.\n", refused.why)
 			return 1
 		}
@@ -1281,10 +1279,10 @@ func ensureRuntimeDir(w io.Writer) {
 	serviceUser := "evesynapse"
 	if data, err := os.ReadFile(unitFile); err == nil {
 		content := string(data)
-		for _, line := range strings.Split(content, "\n") {
+		for line := range strings.SplitSeq(content, "\n") {
 			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "User=") {
-				if u := strings.TrimSpace(strings.TrimPrefix(line, "User=")); u != "" {
+			if after, ok := strings.CutPrefix(line, "User="); ok {
+				if u := strings.TrimSpace(after); u != "" {
 					serviceUser = u
 				}
 				break

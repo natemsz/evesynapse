@@ -11,7 +11,7 @@ import (
 func TestSwarmDemandAllowanceIsPerPullerPerHour(t *testing.T) {
 	app := &Mod{}
 	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
-	for i := 0; i < SwarmDemandPerHour; i++ {
+	for i := range SwarmDemandPerHour {
 		if !app.swarmDemandAllowed("peer-a", now) {
 			t.Fatalf("demand %d refused inside the allowance", i+1)
 		}

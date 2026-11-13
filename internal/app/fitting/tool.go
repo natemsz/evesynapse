@@ -726,8 +726,7 @@ func fitESIFittingBody(name string, doc *fitview.FitDoc, familyOf map[int64]stri
 // esiSaveToEVEHint turns an ESI failure into a plain sentence for
 // the editor; token values never appear.
 func esiSaveToEVEHint(err error) string {
-	var se *esi.StatusError
-	if errors.As(err, &se) {
+	if se, ok := errors.AsType[*esi.StatusError](err); ok {
 		switch se.Code {
 		case http.StatusBadRequest:
 			return "EVE rejected the fitting as sent, or the character's fitting list is full"

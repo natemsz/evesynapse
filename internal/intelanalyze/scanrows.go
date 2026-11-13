@@ -150,15 +150,15 @@ func distEnd(toks []scanTok, q int) (int, bool) {
 // since a type's own name may end in a parenthesis the prose
 // cleaning trims away ("Stargate (Minmatar System)").
 func rowType(d Dict, toks []scanTok, i, n int) (Ship, bool) {
-	joined := ""
-	for k := 0; k < n; k++ {
+	var joined strings.Builder
+	for k := range n {
 		if k > 0 {
-			joined += " "
+			joined.WriteString(" ")
 		}
-		joined += toks[i+k].s
+		joined.WriteString(toks[i+k].s)
 	}
 	seen := map[string]bool{}
-	for _, cand := range []string{clean(joined), strings.ToLower(joined)} {
+	for _, cand := range []string{clean(joined.String()), strings.ToLower(joined.String())} {
 		for _, c := range []string{cand, strings.TrimSuffix(cand, "s")} {
 			if c == "" || seen[c] {
 				continue

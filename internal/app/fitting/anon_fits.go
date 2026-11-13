@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	json "github.com/goccy/go-json"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -116,7 +117,7 @@ func (app *tool) anonFitTokens(ctx context.Context, r *http.Request) []string {
 		return nil
 	}
 	var out []string
-	for _, tok := range strings.Split(payload, ".") {
+	for tok := range strings.SplitSeq(payload, ".") {
 		if isFitShareTokenShape(tok) {
 			out = append(out, tok)
 		}
@@ -166,12 +167,7 @@ func (app *tool) forgetAnonFit(ctx context.Context, w http.ResponseWriter, r *ht
 // hasAnonFit reports whether the request's verified history
 // holds tok: the cookie-holder is the fit's creator.
 func (app *tool) hasAnonFit(ctx context.Context, r *http.Request, tok string) bool {
-	for _, t := range app.anonFitTokens(ctx, r) {
-		if t == tok {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(app.anonFitTokens(ctx, r), tok)
 }
 
 // anonFitOwnerID returns the shared anonymous owner's user id.

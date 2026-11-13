@@ -393,7 +393,7 @@ func moonScanLines(text string) (string, bool) {
 	var out []string
 	var total float64
 	seen := 0
-	for _, raw := range strings.Split(text, "\n") {
+	for raw := range strings.SplitSeq(text, "\n") {
 		line := strings.TrimSpace(strings.TrimSuffix(raw, "\r"))
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
 			continue
@@ -423,10 +423,7 @@ func moonScanLines(text string) (string, bool) {
 		}
 		seen++
 		total += share
-		qty := int64(share*10000 + 0.5)
-		if qty < 1 {
-			qty = 1
-		}
+		qty := max(int64(share*10000+0.5), 1)
 		out = append(out, fmt.Sprintf("%s x %d", name, qty))
 	}
 	if seen == 0 || total < 0.9 || total > 1.1 {
@@ -440,7 +437,7 @@ func moonScanLines(text string) (string, bool) {
 func parsePaste(text string) pasteResult {
 	var res pasteResult
 	seen := 0
-	for _, raw := range strings.Split(text, "\n") {
+	for raw := range strings.SplitSeq(text, "\n") {
 		line := strings.TrimSpace(strings.TrimSuffix(raw, "\r"))
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
 			continue

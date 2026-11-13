@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"math"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -254,7 +255,7 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 			}
 		} else if _, explicit := q["planets"]; explicit {
 			for _, raw := range q["planets"] {
-				for _, p := range strings.Split(raw, ",") {
+				for p := range strings.SplitSeq(raw, ",") {
 					if p = strings.TrimSpace(p); p != "" {
 						selected[piplan.TitlePlanet(p)] = true
 					}
@@ -611,11 +612,8 @@ func buildPIGraph(target string, selected []string, prices map[string]float64) (
 		if name == target {
 			continue
 		}
-		for _, n := range piplan.ChainNodes(name) {
-			if n == target {
-				downstream[name] = true
-				break
-			}
+		if slices.Contains(piplan.ChainNodes(name), target) {
+			downstream[name] = true
 		}
 	}
 	covAvail := map[string]bool{}

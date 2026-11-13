@@ -140,7 +140,7 @@ func TestFitLeavesOutRemovedStructures(t *testing.T) {
 func TestRicherPlanetsKeepTargetReachable(t *testing.T) {
 	var cands []Candidate
 	for _, pt := range PlanetTypes {
-		for i := 0; i < 6; i++ {
+		for range 6 {
 			cands = append(cands, Candidate{PlanetID: int64(len(cands) + 1), Name: pt, Type: pt, RadiusKm: TypicalRadiusKm[pt]})
 		}
 	}

@@ -124,10 +124,7 @@ const rateReserveShare = 0.10
 
 // reserve is the tokens a bucket keeps back.
 func (b bucketState) reserve() int {
-	r := int(float64(b.limit) * rateReserveShare)
-	if r < rateLowWater {
-		r = rateLowWater
-	}
+	r := max(int(float64(b.limit)*rateReserveShare), rateLowWater)
 	return r
 }
 
@@ -234,10 +231,7 @@ func (c *Client) preflight(ctx context.Context, method, path string, now time.Ti
 	// Held for as long as the window takes to give the reserve back.
 	wait := rateLowWait
 	if b.limit > 0 && b.window > 0 {
-		wait = time.Duration(float64(b.window) * float64(b.reserve()) / float64(b.limit))
-		if wait < 5*time.Second {
-			wait = 5 * time.Second
-		}
+		wait = max(time.Duration(float64(b.window)*float64(b.reserve())/float64(b.limit)), 5*time.Second)
 	}
 	if c.rates.until == nil {
 		c.rates.until = map[int64]time.Time{}

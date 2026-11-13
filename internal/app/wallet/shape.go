@@ -3,6 +3,7 @@ package wallet
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
 	"net/url"
@@ -69,9 +70,7 @@ func (c walletChoice) href(base string, set map[string]string) string {
 	if !c.exact {
 		cur["isk"] = "short"
 	}
-	for k, v := range set {
-		cur[k] = v
-	}
+	maps.Copy(cur, set)
 	v := url.Values{}
 	for k, val := range cur {
 		if val != "" {

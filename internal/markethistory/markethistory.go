@@ -11,6 +11,7 @@ package markethistory
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -484,10 +485,7 @@ func buildChart(rows []db.MarketHistory, display int, opts ChartOptions, legacy 
 		chart.Dots = append(chart.Dots, Dot{X: px, Y: py, Day: day})
 		pts = append(pts, fmt.Sprintf("%d,%d", px, py))
 		if opts.VolumeStrip && maxV > 0 && r.Volume > 0 {
-			h := int(float64(r.Volume) / float64(maxV) * float64(barH))
-			if h < 1 {
-				h = 1
-			}
+			h := max(int(float64(r.Volume)/float64(maxV)*float64(barH)), 1)
 			chart.Bars = append(chart.Bars, Bar{
 				X: px, Y: barBottom - h,
 				W: barWidth(len(disp)), H: h,
@@ -673,8 +671,8 @@ func donchianBand(rows []db.MarketHistory, start int, x func(int) int, y func(fl
 	if len(upper) < 2 {
 		return ""
 	}
-	for i := len(lower) - 1; i >= 0; i-- {
-		upper = append(upper, lower[i])
+	for _, l := range slices.Backward(lower) {
+		upper = append(upper, l)
 	}
 	return strings.Join(upper, " ")
 }

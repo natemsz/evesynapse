@@ -94,7 +94,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 			ids = append(ids, e.Module.ID)
 		}
 	case *modules != "":
-		for _, id := range strings.Split(*modules, ",") {
+		for id := range strings.SplitSeq(*modules, ",") {
 			if id = strings.TrimSpace(id); id != "" {
 				ids = append(ids, id)
 			}

@@ -70,7 +70,7 @@ func ParseSwarmWarm(raw string) map[string]bool {
 		return nil
 	}
 	out := map[string]bool{}
-	for _, part := range strings.Split(raw, ",") {
+	for part := range strings.SplitSeq(raw, ",") {
 		part = strings.TrimSpace(part)
 		switch {
 		case part == "all":

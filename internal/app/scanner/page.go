@@ -10,6 +10,7 @@ package scanner
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
 	"net/url"
@@ -306,9 +307,7 @@ func scannerMeters(view *scannerView, q map[string][]string) {
 			row.ProfitW = int(math.Round(row.profit / bestProfit * 100))
 		}
 		v := url.Values{}
-		for k, vals := range base {
-			v[k] = vals
-		}
+		maps.Copy(v, base)
 		v.Set("pick", strconv.Itoa(row.Rank))
 		row.PickHref = "/market/scanner/?" + v.Encode()
 		if row.Rank == pick {

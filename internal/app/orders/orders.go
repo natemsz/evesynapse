@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"slices"
 	"sort"
 	"time"
 
@@ -160,7 +161,7 @@ func medianDuration(durations []time.Duration) time.Duration {
 	}
 	sorted := make([]time.Duration, len(durations))
 	copy(sorted, durations)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	slices.Sort(sorted)
 	n := len(sorted)
 	if n%2 == 1 {
 		return sorted[n/2]
@@ -219,10 +220,7 @@ func (app *mod) buildOrderLifecycle(ctx context.Context, characterID int64) (*or
 	}
 	out := make([]orderLifecycleRow, 0, len(closed))
 	for _, row := range closed {
-		filledQty := row.VolumeTotal - row.VolumeRemainLast
-		if filledQty < 0 {
-			filledQty = 0
-		}
+		filledQty := max(row.VolumeTotal-row.VolumeRemainLast, 0)
 		verb := "sold"
 		if row.IsBuyOrder == 1 {
 			verb = "bought"

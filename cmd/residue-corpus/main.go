@@ -34,6 +34,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -611,7 +612,7 @@ func matchSystem(name string, set []entity) (entity, bool) {
 }
 
 func mentionsGate(text string) bool {
-	for _, f := range strings.Fields(strings.ToLower(text)) {
+	for f := range strings.FieldsSeq(strings.ToLower(text)) {
 		if strings.Trim(f, ",.;:*!()[]?\"'") == "gate" {
 			return true
 		}
@@ -640,7 +641,7 @@ func buildInput(v reportView, spans []string) exampleInput {
 			nb = append(nb, id)
 		}
 	}
-	sort.Slice(nb, func(i, j int) bool { return nb[i] < nb[j] })
+	slices.Sort(nb)
 	for _, id := range nb {
 		in.Neighbours = append(in.Neighbours, entity{ID: id, Name: systemNames[id]})
 	}
@@ -683,7 +684,7 @@ func augment(ex example, reports map[int64]reportRow) []example {
 			alts = append(alts, id)
 		}
 	}
-	sort.Slice(alts, func(i, j int) bool { return alts[i] < alts[j] })
+	slices.Sort(alts)
 	var out []example
 	for _, alt := range alts {
 		altName := systemNames[alt]

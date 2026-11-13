@@ -319,7 +319,7 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 // firstContentLine is the paste's first non-empty line, the
 // EFT detection point.
 func firstContentLine(input string) (string, bool) {
-	for _, raw := range strings.Split(input, "\n") {
+	for raw := range strings.SplitSeq(input, "\n") {
 		if line := strings.TrimSpace(raw); line != "" {
 			return line, true
 		}
@@ -1040,10 +1040,7 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 			rl.UnitPrice = esi.FormatISK(ln.UnitPrice)
 			rl.LineValue = esi.FormatISK(ln.LineValue)
 			if maxLine > 0 {
-				share := int(math.Round(100 * ln.LineValue / maxLine))
-				if share < 3 {
-					share = 3
-				}
+				share := max(int(math.Round(100*ln.LineValue/maxLine)), 3)
 				rl.SharePct = share
 			}
 			rl.AsOf = ln.AsOf.Format("Jan 2, 3:04 PM")

@@ -313,10 +313,7 @@ func Build(src Source, rootProductTypeID int64, in Input) (*Result, error) {
 	if !ok || rootBP == nil {
 		return nil, ErrNotManufacturable
 	}
-	runs := in.Runs
-	if runs < 1 {
-		runs = 1
-	}
+	runs := max(in.Runs, 1)
 	b := &builder{
 		src:       src,
 		overrides: in.MEOverride,
@@ -537,10 +534,7 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 	node.SurplusQty = node.ProducedQty - node.Shortfall
 	node.TimeSeconds = JobSeconds(bp.TimeSeconds, node.Runs, node.TE)
 	if b.timeFactor != 1 && node.TimeSeconds > 0 {
-		node.TimeSeconds = int64(math.Round(float64(node.TimeSeconds) * b.timeFactor))
-		if node.TimeSeconds < 1 {
-			node.TimeSeconds = 1
-		}
+		node.TimeSeconds = max(int64(math.Round(float64(node.TimeSeconds)*b.timeFactor)), 1)
 	}
 
 	childPath := path

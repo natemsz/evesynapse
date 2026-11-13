@@ -331,7 +331,7 @@ func TestPublicFitsBrowser(t *testing.T) {
 	}
 
 	// Pagination is 24 per page.
-	for i := 0; i < 24; i++ {
+	for i := range 24 {
 		seedPublicFit(t, rig.Queries(), userA, fmt.Sprintf("Bulk %02d", i), 587, `{"typeId":1238,"qty":1}`, `"pvp"`, time.Now().UTC())
 	}
 	code, body = get("/fittings/public/?sort=new")
@@ -623,7 +623,7 @@ func TestPublicFitRatingCountsOnce(t *testing.T) {
 	var wg sync.WaitGroup
 	codes := make([]int, posts)
 	start := make(chan struct{})
-	for i := 0; i < posts; i++ {
+	for i := range posts {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

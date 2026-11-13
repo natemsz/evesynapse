@@ -2,6 +2,7 @@ package piplan
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sort"
 	"strings"
@@ -1071,9 +1072,7 @@ type zref struct{ class, col, v int }
 
 func copyCoef(m map[int]float64) map[int]float64 {
 	out := make(map[int]float64, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
+	maps.Copy(out, m)
 	return out
 }
 

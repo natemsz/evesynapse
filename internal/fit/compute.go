@@ -3,6 +3,7 @@ package fit
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 )
 
@@ -59,7 +60,7 @@ func ComputeFleet(snap *Snapshot, shipTypeID int64, items []ItemInput, levels ma
 	for id := range f.unmodeledBy {
 		f.res.UnmodeledBy = append(f.res.UnmodeledBy, id)
 	}
-	sort.Slice(f.res.UnmodeledBy, func(i, j int) bool { return f.res.UnmodeledBy[i] < f.res.UnmodeledBy[j] })
+	slices.Sort(f.res.UnmodeledBy)
 	return f.res
 }
 
@@ -467,7 +468,7 @@ const (
 )
 
 func missileSkillDamage(name string, attr int64) codeEffect {
-	return codeEffect{Effect: Effect{Name: name}, modifiers: []Modifier{
+	return codeEffect{Name: name, modifiers: []Modifier{
 		{Domain: "charID", Func: "OwnerRequiredSkillModifier", ModifiedAttr: attr, ModifyingAttr: attrDamageMultiplierBonus, Operation: 6, SkillTypeID: skillSelf},
 	}}
 }
@@ -494,7 +495,7 @@ func (f *fitting) bindModifiers() {
 	for id := range f.skills {
 		skillIDs = append(skillIDs, id)
 	}
-	sort.Slice(skillIDs, func(i, j int) bool { return skillIDs[i] < skillIDs[j] })
+	slices.Sort(skillIDs)
 	for _, id := range skillIDs {
 		sources = append(sources, f.skills[id])
 	}
@@ -548,10 +549,7 @@ func (f *fitting) bindModifiers() {
 				// instance so stacking penalties see each copy.
 				n := 1
 				if source.kind == entModule || source.kind == entRig || source.kind == entSubsystem {
-					n = source.instances
-					if n < 1 {
-						n = 1
-					}
+					n = max(source.instances, 1)
 				}
 				for i := 0; i < n; i++ {
 					f.bind(atShip, source, effectID, eff, m)

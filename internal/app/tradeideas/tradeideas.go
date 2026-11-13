@@ -259,10 +259,7 @@ func BuildCSVRows(ctx context.Context, deps module.Deps, limit int) ([]ideas.Row
 		return nil, false
 	}
 	minSpread, rowLimit := deps.SpreadDefaults()
-	rowCap := int64(limit)
-	if rowCap > int64(rowLimit) {
-		rowCap = int64(rowLimit)
-	}
+	rowCap := min(int64(limit), int64(rowLimit))
 	opp, err := q.ListScannerOpportunities(ctx, db.ListScannerOpportunitiesParams{
 		RegionID:  forgeRegionID,
 		MinSpread: minSpread,

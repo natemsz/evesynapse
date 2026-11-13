@@ -19,7 +19,7 @@ import (
 func parityOrdersPage(n int) []byte {
 	var b strings.Builder
 	b.WriteByte('[')
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if i > 0 {
 			b.WriteByte(',')
 		}
@@ -35,7 +35,7 @@ func parityAssetsPage(n int) []byte {
 	flags := []string{"Hangar", "CorpSAG1", "Deliveries", "Impound", "HangarQuery"}
 	var b strings.Builder
 	b.WriteByte('[')
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if i > 0 {
 			b.WriteByte(',')
 		}
@@ -54,7 +54,7 @@ func parityAssetsPage(n int) []byte {
 func parityKillmail() []byte {
 	var b strings.Builder
 	b.WriteString(`{"attackers":[`)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if i > 0 {
 			b.WriteByte(',')
 		}
@@ -62,7 +62,7 @@ func parityKillmail() []byte {
 			int64(9002+i), int64(4500-i*200), i == 0, -2.5+float64(i)*0.3)
 	}
 	b.WriteString(`],"killmail_id":139700392,"killmail_time":"2026-11-05T19:42:11Z","solar_system_id":30000142,"victim":{"alliance_id":99000001,"character_id":9001,"corporation_id":98000001,"damage_taken":98765,"items":[`)
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		if i > 0 {
 			b.WriteByte(',')
 		}

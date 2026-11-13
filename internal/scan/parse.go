@@ -123,7 +123,7 @@ var (
 // carriage returns Windows clipboards add removed.
 func lines(raw string) []string {
 	var out []string
-	for _, l := range strings.Split(strings.ReplaceAll(raw, "\r", ""), "\n") {
+	for l := range strings.SplitSeq(strings.ReplaceAll(raw, "\r", ""), "\n") {
 		l = strings.TrimSpace(l)
 		if l != "" {
 			out = append(out, l)

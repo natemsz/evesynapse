@@ -8,6 +8,7 @@ package standing
 
 import (
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -40,12 +41,7 @@ var EVECorpRoles = []string{
 
 // ValidEVECorpRole reports whether name is a role a rule can ask for.
 func ValidEVECorpRole(name string) bool {
-	for _, role := range EVECorpRoles {
-		if role == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(EVECorpRoles, name)
 }
 
 // HoldsDirector reports whether a character's corporation roles include
@@ -90,12 +86,7 @@ func Address(path, key string) string {
 
 // Includes reports whether o is among owners.
 func Includes(owners []Owner, o Owner) bool {
-	for _, owner := range owners {
-		if owner == o {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(owners, o)
 }
 
 // Rule is one "who" asked against a standing: a kind from the rule

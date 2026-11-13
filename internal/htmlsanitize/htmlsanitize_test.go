@@ -142,7 +142,7 @@ func TestSanitizeMailHTMLAlwaysBalanced(t *testing.T) {
 		seed = seed*1664525 + 1013904223
 		return int(seed>>8) % n
 	}
-	for run := 0; run < 4000; run++ {
+	for range 4000 {
 		var b strings.Builder
 		for k := 0; k < 1+next(14); k++ {
 			b.WriteString(pieces[next(len(pieces))])

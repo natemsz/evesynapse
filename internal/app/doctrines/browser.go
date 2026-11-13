@@ -3,6 +3,7 @@ package doctrines
 import (
 	"context"
 	"evesynapse/internal/app/module"
+	"maps"
 	"net/url"
 	"sort"
 	"strconv"
@@ -123,9 +124,7 @@ type fitBrowserView struct {
 // value takes a choice off.
 func (b *fitBrowser) address(changes map[string]string) string {
 	query := url.Values{}
-	for key, values := range b.Fixed {
-		query[key] = values
-	}
+	maps.Copy(query, b.Fixed)
 	set := func(key, value string) {
 		if changed, ok := changes[key]; ok {
 			value = changed

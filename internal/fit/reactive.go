@@ -81,7 +81,7 @@ func adaptReactiveSplit(ship, rah [4]float64, shift float64) [4]float64 {
 	}
 	history := make([][4]float64, 0, reactiveCycles)
 	cur := rah
-	for n := 0; n < reactiveCycles; n++ {
+	for range reactiveCycles {
 		for p, prev := range history {
 			if sameSplit(prev, cur) {
 				return averageSplits(history[p:])

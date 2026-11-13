@@ -102,10 +102,7 @@ func (app *page) buildRestockView(ctx context.Context, r *http.Request) *restock
 		}
 		listed := listedByType[t.TypeID]
 		row.ListedQty = esi.FormatInt(listed)
-		shortfall := t.TargetQty - listed
-		if shortfall < 0 {
-			shortfall = 0
-		}
+		shortfall := max(t.TargetQty-listed, 0)
 		row.Shortfall = esi.FormatInt(shortfall)
 		row.shortfallRaw = shortfall
 

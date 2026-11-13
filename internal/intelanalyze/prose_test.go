@@ -3,6 +3,7 @@ package intelanalyze_test
 import (
 	"hash/fnv"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -30,10 +31,8 @@ func TestProseReadings(t *testing.T) {
 		Area:   func(l string) (int64, bool) { return 10000060, l == "delve" },
 		Gate: func(s int64, l string) (int64, bool) {
 			id := sys[l]
-			for _, n := range nb[s] {
-				if n == id {
-					return id, true
-				}
+			if slices.Contains(nb[s], id) {
+				return id, true
 			}
 			return 0, false
 		},

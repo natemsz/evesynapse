@@ -11,6 +11,44 @@ import (
 	"time"
 )
 
+const addKillShipsFlown = `-- name: AddKillShipsFlown :exec
+WITH k AS MATERIALIZED (
+    SELECT kl.killmail_id, (kl.killmail_time AT TIME ZONE 'UTC')::date AS day,
+        kl.victim_character_id AS vc, kl.victim_corporation_id AS vco, kl.victim_alliance_id AS val
+    FROM kills kl
+    WHERE kl.killmail_id = ANY($1::bigint[]) AND kl.public AND NOT kl.npc
+), src AS (
+    SELECT k.killmail_id, k.day, k.vc, k.vco, k.val, a.character_id, a.corporation_id, a.alliance_id, a.ship_type_id
+    FROM k JOIN kill_attackers a ON a.killmail_id = k.killmail_id
+    WHERE a.ship_type_id > 0
+), flown AS (
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'character'::text AS kind, x.character_id AS id FROM src x
+    WHERE x.character_id > 0 AND x.character_id <> x.vc
+    UNION
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'corporation'::text AS kind, x.corporation_id AS id FROM src x
+    WHERE x.corporation_id > 0 AND x.corporation_id <> x.vco
+    UNION
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'alliance'::text AS kind, x.alliance_id AS id FROM src x
+    WHERE x.alliance_id > 0 AND x.alliance_id <> x.val
+)
+INSERT INTO kill_entity_daily_ships (day, kind, entity_id, ship_type_id, flown, lost)
+SELECT f.day, f.kind, f.id, f.ship_type_id, COUNT(*)::bigint, 0::bigint
+FROM flown f
+GROUP BY f.day, f.kind, f.id, f.ship_type_id
+ON CONFLICT (day, kind, entity_id, ship_type_id) DO UPDATE SET
+    flown = kill_entity_daily_ships.flown + EXCLUDED.flown
+`
+
+// Ships flown for kills whose attacker rows were just written back,
+// added to the live daily aggregate under the rebuild's rules
+// (RebuildKillEntityDailyShipsChunk): public non-NPC kills, hulls
+// known, the victim's own character, corporation or alliance not
+// credited. Losses were counted from the kill row already.
+func (q *Queries) AddKillShipsFlown(ctx context.Context, killmailIds []int64) error {
+	_, err := q.db.Exec(ctx, addKillShipsFlown, killmailIds)
+	return err
+}
+
 const applyKillEntityDaily = `-- name: ApplyKillEntityDaily :exec
 INSERT INTO kill_entity_daily (day, kind, entity_id, kills, solo, losses, isk_killed, isk_lost, biggest_killmail_id, biggest_value)
 VALUES ($1::date, $2::text, $3::bigint,
@@ -122,6 +160,18 @@ func (q *Queries) ClaimKillStatsPending(ctx context.Context, killmailID int64) (
 	return result.RowsAffected(), nil
 }
 
+const deleteKillAttackersFor = `-- name: DeleteKillAttackersFor :exec
+DELETE FROM kill_attackers WHERE killmail_id = ANY($1::bigint[])
+`
+
+// Attacker rows written back only to count a kill past retention go
+// again in the same transaction: past retention a kill keeps its
+// counted stats, not its detail.
+func (q *Queries) DeleteKillAttackersFor(ctx context.Context, killmailIds []int64) error {
+	_, err := q.db.Exec(ctx, deleteKillAttackersFor, killmailIds)
+	return err
+}
+
 const getBiggestKill = `-- name: GetBiggestKill :one
 SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM kills
 WHERE public AND killmail_time >= $1::timestamptz AND value_ours IS NOT NULL
@@ -226,6 +276,23 @@ func (q *Queries) GetKill(ctx context.Context, killmailID int64) (Kill, error) {
 		&i.Public,
 		&i.IngestedAt,
 	)
+	return i, err
+}
+
+const getKillArchiveRestoreState = `-- name: GetKillArchiveRestoreState :one
+SELECT day, done_at FROM kill_archive_restore_state WHERE id = 1
+`
+
+type GetKillArchiveRestoreStateRow struct {
+	Day    sql.NullTime `json:"day"`
+	DoneAt sql.NullTime `json:"done_at"`
+}
+
+// The archive restore's walk (killboard_archive.go).
+func (q *Queries) GetKillArchiveRestoreState(ctx context.Context) (GetKillArchiveRestoreStateRow, error) {
+	row := q.db.QueryRow(ctx, getKillArchiveRestoreState)
+	var i GetKillArchiveRestoreStateRow
+	err := row.Scan(&i.Day, &i.DoneAt)
 	return i, err
 }
 
@@ -392,25 +459,19 @@ func (q *Queries) GetKillStats(ctx context.Context, arg GetKillStatsParams) (Get
 }
 
 const getKillStatsRebuildState = `-- name: GetKillStatsRebuildState :one
-SELECT cursor, started_at, done_at, complete_at FROM kill_stats_rebuild_state WHERE id = 1
+SELECT cursor, started_at, done_at FROM kill_stats_rebuild_state WHERE id = 1
 `
 
 type GetKillStatsRebuildStateRow struct {
-	Cursor     int64        `json:"cursor"`
-	StartedAt  sql.NullTime `json:"started_at"`
-	DoneAt     sql.NullTime `json:"done_at"`
-	CompleteAt sql.NullTime `json:"complete_at"`
+	Cursor    int64        `json:"cursor"`
+	StartedAt sql.NullTime `json:"started_at"`
+	DoneAt    sql.NullTime `json:"done_at"`
 }
 
 func (q *Queries) GetKillStatsRebuildState(ctx context.Context) (GetKillStatsRebuildStateRow, error) {
 	row := q.db.QueryRow(ctx, getKillStatsRebuildState)
 	var i GetKillStatsRebuildStateRow
-	err := row.Scan(
-		&i.Cursor,
-		&i.StartedAt,
-		&i.DoneAt,
-		&i.CompleteAt,
-	)
+	err := row.Scan(&i.Cursor, &i.StartedAt, &i.DoneAt)
 	return i, err
 }
 
@@ -710,6 +771,47 @@ func (q *Queries) KillStatsRebuildChunkEnd(ctx context.Context, arg KillStatsReb
 	var through_id int64
 	err := row.Scan(&through_id)
 	return through_id, err
+}
+
+const listDayKillsMissingAttackers = `-- name: ListDayKillsMissingAttackers :many
+SELECT k.killmail_id, k.killmail_time FROM kills k
+WHERE k.killmail_time >= $1::timestamptz AND k.killmail_time < $2::timestamptz
+  AND k.attacker_count > 0
+  AND NOT EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id)
+  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id)
+`
+
+type ListDayKillsMissingAttackersParams struct {
+	DayStart time.Time `json:"day_start"`
+	DayEnd   time.Time `json:"day_end"`
+}
+
+type ListDayKillsMissingAttackersRow struct {
+	KillmailID   int64     `json:"killmail_id"`
+	KillmailTime time.Time `json:"killmail_time"`
+}
+
+// One UTC day's counted kills that have no attacker rows: the
+// archive restore reads that day's file for them. Kills still
+// waiting in kill_stats_pending are the live fold's.
+func (q *Queries) ListDayKillsMissingAttackers(ctx context.Context, arg ListDayKillsMissingAttackersParams) ([]ListDayKillsMissingAttackersRow, error) {
+	rows, err := q.db.Query(ctx, listDayKillsMissingAttackers, arg.DayStart, arg.DayEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDayKillsMissingAttackersRow
+	for rows.Next() {
+		var i ListDayKillsMissingAttackersRow
+		if err := rows.Scan(&i.KillmailID, &i.KillmailTime); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listESIKillsToMerge = `-- name: ListESIKillsToMerge :many
@@ -1391,15 +1493,17 @@ func (q *Queries) ListKillsBySystem(ctx context.Context, arg ListKillsBySystemPa
 const listKillsMissingAttackers = `-- name: ListKillsMissingAttackers :many
 SELECT k.killmail_id, k.hash, k.killmail_time FROM kills k
 WHERE k.killmail_id < $1::bigint
+  AND k.killmail_time >= $2::timestamptz
   AND k.attacker_count > 0 AND k.hash <> ''
   AND NOT EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id)
 ORDER BY k.killmail_id DESC
-LIMIT $2::bigint
+LIMIT $3::bigint
 `
 
 type ListKillsMissingAttackersParams struct {
-	BeforeID int64 `json:"before_id"`
-	MaxRows  int64 `json:"max_rows"`
+	BeforeID int64     `json:"before_id"`
+	Since    time.Time `json:"since"`
+	MaxRows  int64     `json:"max_rows"`
 }
 
 type ListKillsMissingAttackersRow struct {
@@ -1408,11 +1512,12 @@ type ListKillsMissingAttackersRow struct {
 	KillmailTime time.Time `json:"killmail_time"`
 }
 
-// Kills whose attacker rows are gone (pruned before the stats fold
-// counted their ships), newest first below a keyset cursor, for the
+// Kills inside retention whose attacker rows are gone (pruned before
+// the stats fold counted their ships) and that the archive restore
+// could not serve, newest first below a keyset cursor, for the
 // restorer to read back from ESI by hash.
 func (q *Queries) ListKillsMissingAttackers(ctx context.Context, arg ListKillsMissingAttackersParams) ([]ListKillsMissingAttackersRow, error) {
-	rows, err := q.db.Query(ctx, listKillsMissingAttackers, arg.BeforeID, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listKillsMissingAttackers, arg.BeforeID, arg.Since, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -1812,21 +1917,21 @@ func (q *Queries) MarkCorpKillCoverage(ctx context.Context, arg MarkCorpKillCove
 	return err
 }
 
+const markKillArchiveRestoreDone = `-- name: MarkKillArchiveRestoreDone :exec
+UPDATE kill_archive_restore_state SET done_at = now() WHERE id = 1
+`
+
+func (q *Queries) MarkKillArchiveRestoreDone(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, markKillArchiveRestoreDone)
+	return err
+}
+
 const markKillFeedBackfillDone = `-- name: MarkKillFeedBackfillDone :exec
 UPDATE kill_feed_backfill_state SET done_at = $1::timestamptz WHERE id = 1
 `
 
 func (q *Queries) MarkKillFeedBackfillDone(ctx context.Context, doneAt time.Time) error {
 	_, err := q.db.Exec(ctx, markKillFeedBackfillDone, doneAt)
-	return err
-}
-
-const markKillStatsRebuildComplete = `-- name: MarkKillStatsRebuildComplete :exec
-UPDATE kill_stats_rebuild_state SET complete_at = now() WHERE id = 1
-`
-
-func (q *Queries) MarkKillStatsRebuildComplete(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, markKillStatsRebuildComplete)
 	return err
 }
 
@@ -2075,14 +2180,12 @@ func (q *Queries) ReplaceKillboardTop(ctx context.Context, arg ReplaceKillboardT
 	return result.RowsAffected(), nil
 }
 
-const resetKillStatsRebuild = `-- name: ResetKillStatsRebuild :exec
-UPDATE kill_stats_rebuild_state SET cursor = 0, started_at = NULL, done_at = NULL WHERE id = 1
+const setKillArchiveRestoreDay = `-- name: SetKillArchiveRestoreDay :exec
+UPDATE kill_archive_restore_state SET day = $1::date WHERE id = 1
 `
 
-// The second pass starts over: the next rebuild counts every kill
-// again from id 0.
-func (q *Queries) ResetKillStatsRebuild(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, resetKillStatsRebuild)
+func (q *Queries) SetKillArchiveRestoreDay(ctx context.Context, day time.Time) error {
+	_, err := q.db.Exec(ctx, setKillArchiveRestoreDay, day)
 	return err
 }
 

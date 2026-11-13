@@ -956,6 +956,12 @@ type Kill struct {
 	IngestedAt          time.Time       `json:"ingested_at"`
 }
 
+type KillArchiveRestoreState struct {
+	ID     int32        `json:"id"`
+	Day    sql.NullTime `json:"day"`
+	DoneAt sql.NullTime `json:"done_at"`
+}
+
 type KillAttacker struct {
 	KillmailID    int64 `json:"killmail_id"`
 	Seq           int32 `json:"seq"`
@@ -1071,11 +1077,10 @@ type KillStatsPending struct {
 }
 
 type KillStatsRebuildState struct {
-	ID         int32        `json:"id"`
-	Cursor     int64        `json:"cursor"`
-	StartedAt  sql.NullTime `json:"started_at"`
-	DoneAt     sql.NullTime `json:"done_at"`
-	CompleteAt sql.NullTime `json:"complete_at"`
+	ID        int32        `json:"id"`
+	Cursor    int64        `json:"cursor"`
+	StartedAt sql.NullTime `json:"started_at"`
+	DoneAt    sql.NullTime `json:"done_at"`
 }
 
 type KillboardHeadline struct {

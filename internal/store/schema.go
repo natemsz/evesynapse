@@ -928,6 +928,11 @@ var pgPIColonyPlannerSchema string
 //go:embed schema_pg/152_kill_stats_complete.sql
 var pgKillStatsCompleteSchema string
 
+// Step 153: the attacker restore reads the daily killmail archives.
+//
+//go:embed schema_pg/153_kill_archive_restore.sql
+var pgKillArchiveRestoreSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1108,6 +1113,7 @@ func schemaSteps() []schemaStep {
 		{150, "kill_line_price_tiers", pgKillLinePriceTiersSchema, ""},
 		{151, "pi_colony_planner", pgPIColonyPlannerSchema, ""},
 		{152, "kill_stats_complete", pgKillStatsCompleteSchema, ""},
+		{153, "kill_archive_restore", pgKillArchiveRestoreSchema, ""},
 	}
 }
 

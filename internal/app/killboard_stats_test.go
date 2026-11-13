@@ -7,6 +7,8 @@ import (
 
 	"fmt"
 	"github.com/klauspost/compress/gzip"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -287,17 +289,20 @@ func countStoredKills(t *testing.T, app *Application, ctx context.Context) {
 	}
 }
 
-// TestKillStatsSecondPass: the rebuild's first pass counts kills
-// and ISK without waiting for the attacker restore; the second pass,
-// run once the restore drains, counts everything again into freshly
-// made tables (ships flown from the restored rows), and only then
-// does the retention prune's gate open.
-func TestKillStatsSecondPass(t *testing.T) {
+// TestKillArchiveRestore: kills the rebuild counted without attacker
+// rows get their ships flown added from the day's archive. A kill
+// past retention keeps only the count, its attacker rows dropped
+// again; a kill inside retention keeps its rows and its killmail.
+// The retention prune waits for the archive walk.
+func TestKillArchiveRestore(t *testing.T) {
 	app, _, _ := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
-	seed := func(id int64, attackers bool) {
+	srv := httptest.NewServer(http.FileServer(http.Dir("testdata/killarchive")))
+	defer srv.Close()
+	app.cfg.killArchiveBaseURL = srv.URL
+
+	seed := func(id int64, at time.Time, attackers bool) {
 		t.Helper()
-		at := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(id%100) * time.Hour)
 		if _, err := app.db.ExecContext(ctx, `
 			INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id,
 				ship_type_id, attacker_count, fb_character_id, source, ingested_at, value_ours)
@@ -316,45 +321,61 @@ func TestKillStatsSecondPass(t *testing.T) {
 			}
 		}
 	}
-	// Two kills, one still missing its attacker rows.
-	seed(950001, true)
-	seed(950002, false)
-	totals := func() (kills int64, isk float64, flown int64) {
+	oldDay := time.Date(2020, 1, 15, 0, 0, 0, 0, time.UTC)
+	newDay := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
+	seed(960001, oldDay.Add(10*time.Hour), false) // past retention, rows pruned
+	seed(960003, oldDay.Add(11*time.Hour), true)  // complete
+	seed(960002, newDay.Add(10*time.Hour), false) // inside retention, rows missing
+	count := func(query string, args ...any) int64 {
 		t.Helper()
-		if err := app.db.QueryRowContext(ctx, `
-			SELECT COALESCE(SUM(kills), 0), COALESCE(SUM(isk_killed), 0) FROM kill_entity_daily
-			WHERE kind = 'character' AND entity_id = 90000001`).Scan(&kills, &isk); err != nil {
+		var n int64
+		if err := app.db.QueryRowContext(ctx, query, args...).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
-		if err := app.db.QueryRowContext(ctx, `
-			SELECT COALESCE(SUM(flown), 0) FROM kill_entity_daily_ships
-			WHERE kind = 'character' AND entity_id = 90000001`).Scan(&flown); err != nil {
-			t.Fatal(err)
-		}
-		return
+		return n
+	}
+	flown := func() int64 {
+		return count(`SELECT COALESCE(SUM(flown), 0) FROM kill_entity_daily_ships WHERE kind = 'character' AND entity_id = 90000001`)
 	}
 
-	app.runKillStatsFirstPass(ctx)
-	if k, isk, flown := totals(); k != 2 || isk != 2000000 || flown != 1 {
-		t.Fatalf("after the first pass: kills %d, ISK %.0f, flown %d; want 2, 2000000, 1", k, isk, flown)
+	app.runKillStatsRebuild(ctx)
+	if k := count(`SELECT COALESCE(SUM(kills), 0) FROM kill_entity_daily WHERE kind = 'character' AND entity_id = 90000001`); k != 3 {
+		t.Fatalf("rebuild counted %d kills, want 3", k)
 	}
-	if app.killStatsComplete(ctx) {
-		t.Fatal("the prune gate opened before the second pass")
+	if f := flown(); f != 1 {
+		t.Fatalf("rebuild counted %d ships flown, want 1", f)
+	}
+	if app.killArchiveRestoreDone(ctx) {
+		t.Fatal("the archive walk read as done before it ran")
 	}
 
-	// The restore reads the missing rows back, then the second pass.
-	if _, err := app.db.ExecContext(ctx, `
-		INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, final_blow)
-		VALUES (950002, 0, 90000001, 98000002, 587, true)`); err != nil {
+	client := &http.Client{Timeout: 10 * time.Second}
+	if n, _, err := app.restoreArchiveDay(ctx, client, app.cfg.KillArchiveBaseURL(), oldDay); err != nil || n != 1 {
+		t.Fatalf("old day: %d kills, %v; want 1", n, err)
+	}
+	if f := flown(); f != 2 {
+		t.Fatalf("after the old day: %d ships flown, want 2", f)
+	}
+	if n := count(`SELECT count(*) FROM kill_attackers WHERE killmail_id = 960001`); n != 0 {
+		t.Fatalf("a kill past retention kept %d attacker rows", n)
+	}
+	if n, _, err := app.restoreArchiveDay(ctx, client, app.cfg.KillArchiveBaseURL(), newDay); err != nil || n != 1 {
+		t.Fatalf("new day: %d kills, %v; want 1", n, err)
+	}
+	if f := flown(); f != 3 {
+		t.Fatalf("after the new day: %d ships flown, want 3", f)
+	}
+	if n := count(`SELECT count(*) FROM kill_attackers WHERE killmail_id = 960002`); n != 1 {
+		t.Fatalf("a kill inside retention has %d attacker rows, want 1", n)
+	}
+	if n := count(`SELECT count(*) FROM kill_details WHERE killmail_id = 960002`); n != 1 {
+		t.Fatalf("a kill inside retention has %d stored killmails, want 1", n)
+	}
+
+	if err := app.queries.MarkKillArchiveRestoreDone(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := app.completeKillStats(ctx); err != nil {
-		t.Fatalf("second pass: %v", err)
-	}
-	if k, isk, flown := totals(); k != 2 || isk != 2000000 || flown != 2 {
-		t.Fatalf("after the second pass: kills %d, ISK %.0f, flown %d; want 2, 2000000, 2", k, isk, flown)
-	}
-	if !app.killStatsComplete(ctx) {
-		t.Fatal("the prune gate stayed shut after the second pass")
+	if !app.killArchiveRestoreDone(ctx) {
+		t.Fatal("the archive walk did not read as done")
 	}
 }

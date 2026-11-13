@@ -644,10 +644,12 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 		logging.Infof("killboard: priced %d kills", n)
 	}
 	app.publishKillboardStats(ctx)
-	// The retention prune waits for the rebuild's second pass: the
-	// attacker rows the restorer reads back (killboard_restore.go)
-	// must stay until that pass has counted their ships.
-	if time.Since(app.killLastPruned) >= 24*time.Hour && app.killStatsComplete(ctx) {
+	// The retention prune waits for the rebuild and the archive
+	// restore's one walk (killboard_archive.go): until the walk has
+	// passed a day, a kill there without attacker rows may be one
+	// whose ships were never counted, and a pruned kill would look
+	// the same.
+	if time.Since(app.killLastPruned) >= 24*time.Hour && app.killStatsRebuilt(ctx) && app.killArchiveRestoreDone(ctx) {
 		app.killLastPruned = time.Now()
 		before := time.Now().UTC().Add(-killDetailRetention)
 		d, err1 := app.queries.PruneKillDetails(ctx, before)

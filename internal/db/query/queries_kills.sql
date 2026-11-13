@@ -103,12 +103,14 @@ UPDATE kills SET value_ours = sqlc.arg(value_ours)::double precision,
     priced_at = sqlc.arg(priced_at)::timestamptz
 WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 
--- Kills whose attacker rows are gone (pruned before the stats fold
--- counted their ships), newest first below a keyset cursor, for the
+-- Kills inside retention whose attacker rows are gone (pruned before
+-- the stats fold counted their ships) and that the archive restore
+-- could not serve, newest first below a keyset cursor, for the
 -- restorer to read back from ESI by hash.
 -- name: ListKillsMissingAttackers :many
 SELECT k.killmail_id, k.hash, k.killmail_time FROM kills k
 WHERE k.killmail_id < sqlc.arg(before_id)::bigint
+  AND k.killmail_time >= sqlc.arg(since)::timestamptz
   AND k.attacker_count > 0 AND k.hash <> ''
   AND NOT EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id)
 ORDER BY k.killmail_id DESC
@@ -568,15 +570,65 @@ ON CONFLICT (day, kind, entity_id, ship_type_id) DO UPDATE SET
     lost = kill_entity_daily_ships_rebuild.lost + EXCLUDED.lost;
 
 -- name: GetKillStatsRebuildState :one
-SELECT cursor, started_at, done_at, complete_at FROM kill_stats_rebuild_state WHERE id = 1;
+SELECT cursor, started_at, done_at FROM kill_stats_rebuild_state WHERE id = 1;
 
--- The second pass starts over: the next rebuild counts every kill
--- again from id 0.
--- name: ResetKillStatsRebuild :exec
-UPDATE kill_stats_rebuild_state SET cursor = 0, started_at = NULL, done_at = NULL WHERE id = 1;
+-- The archive restore's walk (killboard_archive.go).
+-- name: GetKillArchiveRestoreState :one
+SELECT day, done_at FROM kill_archive_restore_state WHERE id = 1;
 
--- name: MarkKillStatsRebuildComplete :exec
-UPDATE kill_stats_rebuild_state SET complete_at = now() WHERE id = 1;
+-- name: SetKillArchiveRestoreDay :exec
+UPDATE kill_archive_restore_state SET day = sqlc.arg(day)::date WHERE id = 1;
+
+-- name: MarkKillArchiveRestoreDone :exec
+UPDATE kill_archive_restore_state SET done_at = now() WHERE id = 1;
+
+-- One UTC day's counted kills that have no attacker rows: the
+-- archive restore reads that day's file for them. Kills still
+-- waiting in kill_stats_pending are the live fold's.
+-- name: ListDayKillsMissingAttackers :many
+SELECT k.killmail_id, k.killmail_time FROM kills k
+WHERE k.killmail_time >= sqlc.arg(day_start)::timestamptz AND k.killmail_time < sqlc.arg(day_end)::timestamptz
+  AND k.attacker_count > 0
+  AND NOT EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id)
+  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id);
+
+-- Ships flown for kills whose attacker rows were just written back,
+-- added to the live daily aggregate under the rebuild's rules
+-- (RebuildKillEntityDailyShipsChunk): public non-NPC kills, hulls
+-- known, the victim's own character, corporation or alliance not
+-- credited. Losses were counted from the kill row already.
+-- name: AddKillShipsFlown :exec
+WITH k AS MATERIALIZED (
+    SELECT kl.killmail_id, (kl.killmail_time AT TIME ZONE 'UTC')::date AS day,
+        kl.victim_character_id AS vc, kl.victim_corporation_id AS vco, kl.victim_alliance_id AS val
+    FROM kills kl
+    WHERE kl.killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]) AND kl.public AND NOT kl.npc
+), src AS (
+    SELECT k.killmail_id, k.day, k.vc, k.vco, k.val, a.character_id, a.corporation_id, a.alliance_id, a.ship_type_id
+    FROM k JOIN kill_attackers a ON a.killmail_id = k.killmail_id
+    WHERE a.ship_type_id > 0
+), flown AS (
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'character'::text AS kind, x.character_id AS id FROM src x
+    WHERE x.character_id > 0 AND x.character_id <> x.vc
+    UNION
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'corporation'::text AS kind, x.corporation_id AS id FROM src x
+    WHERE x.corporation_id > 0 AND x.corporation_id <> x.vco
+    UNION
+    SELECT x.killmail_id, x.day, x.ship_type_id, 'alliance'::text AS kind, x.alliance_id AS id FROM src x
+    WHERE x.alliance_id > 0 AND x.alliance_id <> x.val
+)
+INSERT INTO kill_entity_daily_ships (day, kind, entity_id, ship_type_id, flown, lost)
+SELECT f.day, f.kind, f.id, f.ship_type_id, COUNT(*)::bigint, 0::bigint
+FROM flown f
+GROUP BY f.day, f.kind, f.id, f.ship_type_id
+ON CONFLICT (day, kind, entity_id, ship_type_id) DO UPDATE SET
+    flown = kill_entity_daily_ships.flown + EXCLUDED.flown;
+
+-- Attacker rows written back only to count a kill past retention go
+-- again in the same transaction: past retention a kill keeps its
+-- counted stats, not its detail.
+-- name: DeleteKillAttackersFor :exec
+DELETE FROM kill_attackers WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
 
 -- name: StartKillStatsRebuild :exec
 UPDATE kill_stats_rebuild_state SET cursor = 0, started_at = sqlc.arg(started_at)::timestamptz, done_at = NULL WHERE id = 1;

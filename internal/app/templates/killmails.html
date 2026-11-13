@@ -26,10 +26,11 @@
       <h2 id="km-pulse-h">ISK flow, last 14 days</h2>
       {{with .Pulse}}
       <p class="km-key"><span class="km-key-k">Destroyed {{.Destroyed}}</span> <span class="km-key-l">Lost {{.Lost}}</span>{{if .Peak}} <span class="muted">Busiest day {{.Peak}}</span>{{end}}</p>
-      <svg class="km-chart" viewBox="0 0 {{.Width}} 78" role="img" aria-label="ISK destroyed and lost per day for the last 14 days">
+      <svg class="km-chart" viewBox="0 0 {{.Width}} 64" role="img" aria-label="ISK destroyed and lost per day for the last 14 days">
         <line class="km-axis" x1="0" x2="{{.Width}}" y1="32" y2="32"></line>
-        {{range .Days}}<g class="km-day"><title>{{.Title}}</title><rect class="km-hit" x="{{.X}}" y="0" width="16" height="64"></rect>{{if .KillH}}<rect class="km-bar-k" x="{{.X}}" y="{{.KillY}}" width="12" height="{{.KillH}}" rx="2"></rect>{{end}}{{if .LossH}}<rect class="km-bar-l" x="{{.X}}" y="33" width="12" height="{{.LossH}}" rx="2"></rect>{{end}}{{if .Tick}}<text class="km-tick" x="{{.X}}" y="76">{{.Label}}</text>{{end}}</g>{{end}}
+        {{range .Days}}<g class="km-day"><title>{{.Title}}</title><rect class="km-hit" x="{{.X}}" y="0" width="16" height="64"></rect>{{if .KillH}}<rect class="km-bar-k" x="{{.X}}" y="{{.KillY}}" width="12" height="{{.KillH}}" rx="2"></rect>{{end}}{{if .LossH}}<rect class="km-bar-l" x="{{.X}}" y="33" width="12" height="{{.LossH}}" rx="2"></rect>{{end}}</g>{{end}}
       </svg>
+      <p class="km-ticks" aria-hidden="true">{{range .Days}}{{if .Tick}}<span>{{.Label}}</span>{{end}}{{end}}</p>
       {{else}}
       <p class="muted">No fights in the last 14 days.</p>
       {{end}}

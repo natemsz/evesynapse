@@ -293,7 +293,11 @@ func (app *Application) itemsHeadMeta(view *itemsView) template.HTML {
 			crumbs = append(crumbs, module.Breadcrumb{Name: d.Name, Path: path})
 		}
 	}
-	return app.HeadMeta(module.PageMeta{Title: title, Description: desc, CanonicalPath: path, Breadcrumbs: crumbs})
+	meta := module.PageMeta{Title: title, Description: desc, CanonicalPath: path, Breadcrumbs: crumbs}
+	if view.Mode == "type" && view.TypeDetail != nil {
+		meta.ImagePath = path + "card.png"
+	}
+	return app.HeadMeta(meta)
 }
 
 func (app *Application) itemsPageData(r *http.Request) pageData {

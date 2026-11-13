@@ -453,6 +453,14 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		} else {
 			view.Item = item
 			view.Item.ScopeParam = scope.param()
+			// The item view shares with its card; it names no
+			// canonical, since /market/ alone is not this view.
+			regionName, _ := marketRegionName(view.Region)
+			data.HeadMeta = app.HeadMeta(module.PageMeta{
+				Title:       item.Name + " · Market",
+				Description: item.Name + " in " + regionName + ": swept orders, best prices, spread and price history.",
+				ImagePath:   marketCardPath(typeID, view.Region),
+			})
 		}
 		app.vizSetup(ctx, view.Item, q.Get("range"))
 		if view.Item != nil || !anon {

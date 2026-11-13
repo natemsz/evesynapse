@@ -192,6 +192,7 @@ func (app *Application) handleSovTracker(w http.ResponseWriter, r *http.Request)
 		Title:         "Sovereignty",
 		Description:   "Who holds null-sec in EVE Online: live sovereignty contests, systems that changed hands, vulnerability windows and ADM, refreshed every few minutes.",
 		CanonicalPath: "/intel/sov/",
+		ImagePath:     sovCardPath(max(regionID, 0), max(allianceID, 0)),
 	})
 	app.render(ctx, w, http.StatusOK, "intel_sov.html", data)
 }

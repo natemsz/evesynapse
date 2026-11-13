@@ -927,6 +927,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// even that the admin can switch off live (market_anon.go).
 		// The personal pieces (restock, watches) stay signed-in.
 		r.With(anonPages).Get("/", app.handleMarket)
+		r.With(anonPages).Get("/card.png", app.handleMarketCard)
 		r.With(anonPages).Get("/stream", app.handleMarketStream)
 		r.With(anonPages).Get("/suggest", app.handleMarketSuggest)
 		r.With(anonPages).Get("/history-fragment", app.handleMarketHistoryFragment)
@@ -959,6 +960,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// only (a description not stored yet is not queued).
 		r.With(anonPages).Get("/", app.handleItems)
 		r.With(anonPages).Get("/type/{typeID}/", app.handleItemType)
+		r.With(anonPages).Get("/type/{typeID}/card.png", app.handleItemCard)
 		r.With(anonPages).Get("/sheet/{file}", app.handleItemSheetJSON)
 		r.With(anonPages).Get("/compare/{file}", app.handleItemCompareJSON)
 		r.With(anonPages).Get("/search.json", app.handleItemSearchJSON)
@@ -1005,11 +1007,13 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(anonPages)
 		r.Get("/", app.handleCorporationPage)
 		r.Get("/fragment", app.handleCorporationFragment)
+		r.Get("/card.png", app.handleCorporationCard)
 	})
 	r.Route("/alliance", func(r chi.Router) {
 		r.Use(anonPages)
 		r.Get("/", app.handleAlliancePage)
 		r.Get("/fragment", app.handleAllianceFragment)
+		r.Get("/card.png", app.handleAllianceCard)
 	})
 
 	// Solar system & station pages: an SDE place record, the
@@ -1037,10 +1041,16 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.With(anonPages).Get("/intel/kills/", app.handleKillboard)
 	// The sovereignty tracker (intel_sov_page.go): public.
 	r.With(anonPages).Get("/intel/sov/", app.handleSovTracker)
+	r.With(anonPages).Get("/intel/sov/card.png", app.handleSovCard)
 	r.With(anonPages).Get("/intel/kills/stream", app.handleKillStream)
 	r.With(anonPages).Get("/intel/kills/suggest", app.handleKillboardSuggest)
 	r.With(anonPages).Get("/intel/kill/{id}/", app.handleKillPage)
 	r.With(anonPages).Get("/intel/kill/{id}/card.png", app.handleKillCard)
+	if moduleCompiledIn("publicfits") {
+		// The public fit page's card (cards_more.go), beside the
+		// page the publicfits module routes.
+		r.With(anonPages).Get(publicFitsPath+"fit/{fitID}/card.png", app.handleFitCard)
+	}
 	// Battle reports (battle_pages.go): the account's own, and a
 	// shared one at its unlisted link.
 	r.With(app.requireAuth).Get("/intel/battles/", app.handleBattles)
@@ -1050,6 +1060,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.With(app.requireAuth).Get("/intel/battle/{id}/moment/{seq}/", app.handleBattleMoment)
 	r.With(app.requireAuth).Post("/intel/battle/{id}/share", app.handleBattleShare)
 	r.With(anonPages).Get("/intel/battle/s/{token}/", app.handleBattleShared)
+	r.With(anonPages).Get("/intel/battle/s/{token}/card.png", app.handleBattleCard)
 	r.With(anonPages).Get("/intel/battle/s/{token}/moment/{seq}/", app.handleBattleSharedMoment)
 	// Scans (scans.go): the paste box, and each reading at its
 	// unlisted link. Anyone may paste, throttled like the pages.

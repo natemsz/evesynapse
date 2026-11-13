@@ -119,6 +119,9 @@ const (
 	subCap    = 22.0
 	labelBase = 386.0
 	labelCap  = 13.0
+	// maxUpscale bounds how far a picture is enlarged to fill the
+	// panel.
+	maxUpscale = 2.6
 	// The detail line sits under the figures.
 	detailLabel = 492.0
 	detailBase  = 524.0
@@ -254,7 +257,15 @@ func drawPanel(img *image.RGBA, c Card) {
 	}
 	scaled := image.NewRGBA(image.Rect(0, 0, side, side))
 	xdraw.Draw(scaled, scaled.Bounds(), image.NewUniform(panelC), image.Point{}, xdraw.Src)
-	xdraw.CatmullRom.Scale(scaled, scaled.Bounds(), pic, crop, xdraw.Over, nil)
+	// A small picture (a 64px item icon) is not blown up past
+	// maxUpscale: it sits centred on the panel instead.
+	dst := scaled.Bounds()
+	if s := crop.Dx(); s > 0 && float64(side)/float64(s) > maxUpscale {
+		d := int(float64(s) * maxUpscale)
+		off := (side - d) / 2
+		dst = image.Rect(off, off, off+d, off+d)
+	}
+	xdraw.CatmullRom.Scale(scaled, dst, pic, crop, xdraw.Over, nil)
 	ox, oy := int(ix0), int(iy0)
 	fill(img, inner, func(x, y float64) color.NRGBA {
 		px, py := int(x)-ox, int(y)-oy

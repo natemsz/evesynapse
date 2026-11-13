@@ -435,7 +435,7 @@ func TestPlacePagesWithActivity(t *testing.T) {
 	}
 	mustContain(t, "/system/", body,
 		`<a class="h-action" href="/map/?system=30000142" title="Open Jita on the universe map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg>Map</a>`,
-		`<a href="/map/?region=10000002">Map</a>`,
+		`<a href="/map/?region=10000002"><svg class="map-ic" aria-hidden="true"><use href="#ico-map-mini"/></svg>Map</a>`,
 		`<tr><th>Sovereignty</th><td><a href="/alliance/?alliance=99000001">Fixture Alliance</a></td></tr>`,
 		`<th>Daily average (last day)</th>`,
 		`<tr><th>Ship kills</th><td>3</td><td>30</td><td>25.5</td></tr>`,

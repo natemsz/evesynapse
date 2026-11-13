@@ -1045,11 +1045,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.With(anonPages).Get("/intel/scan/{id}/", app.handleScanPage)
 	r.With(anonPages).Get("/intel/scan/{id}/og.png", app.handleScanOG)
 	r.With(anonPages).Post("/intel/scan/{id}/system", app.handleScanSystem)
-	// Intel channels (channels.go): the list explains itself to a
-	// visitor; everything else is an account's.
-	r.With(anonPages).Get("/intel/channels/", app.handleChannels)
+	// Intel channels (channels.go) are an account's, the list
+	// included: a visitor goes to the landing page.
 	r.Group(func(r chi.Router) {
 		r.Use(app.requireAuth)
+		r.Get("/intel/channels/", app.handleChannels)
 		r.Post("/intel/scan/{id}/post", app.handleScanPost)
 		r.Get("/intel/feed/", app.handleIntelFeed)
 		// The workbench dashboard (intel_dashboard.go) and its rows.

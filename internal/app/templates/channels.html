@@ -10,12 +10,9 @@
 <div class="l-page ch">
   <div class="l-head">
     <p class="prose">An intel channel is where you and your friends share sightings, like “5 hostiles in 1DQ1-A” or “Amamake clear”. Every report shows on the <a href="/map/">map</a> for everyone in the channel for half an hour, and a route through a reported system points it out.</p>
-    {{if .SignedIn}}<div class="l-head-act"><a class="btn" href="/intel/feed/">Open the intel feed</a></div>{{end}}
+    <div class="l-head-act"><a class="btn" href="/intel/feed/">Open the intel feed</a></div>
   </div>
 
-  {{if not .SignedIn}}
-  <div class="l-panel"><p class="ch-p prose"><a class="btn" href="/auth/login">Sign in with EVE Online</a> to make a channel or join one.</p></div>
-  {{else}}
   <div class="l-sidebar l-sidebar--end ch-top">
     <section class="l-panel">
       <h2>Your channels{{if .Channels}} <span class="ch-cnt">{{len .Channels}}</span>{{end}}</h2>
@@ -111,7 +108,6 @@
         <p class="prose">Pair each computer once. If two of your characters are in the same in-game channel, each line is still posted only once.</p></details>
     </div>
   </section>
-  {{end}}
 </div>
 {{end}}
 {{end}}

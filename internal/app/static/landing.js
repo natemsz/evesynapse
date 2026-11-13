@@ -61,23 +61,30 @@
   var CLOSE_GRACE = 280;
   var phone = window.matchMedia("(max-width: 560px)");
 
-  // Places the panel under the Tools button (the sheet pins
-  // it by rule at phone widths instead) and sizes the bridge
-  // over the gap between the button and the panel's top edge.
+  // Places the open panel under the Tools button, moved left as
+  // far as it must to stay inside the viewport, and caps its
+  // height to the room below the bar so a short window scrolls
+  // the panel instead of cutting it off (the sheet pins it by
+  // rule at phone widths). Sizes the bridge over the gap between
+  // the button and the panel's top edge.
   function place() {
     var wr = wrap.getBoundingClientRect();
     var br = btn.getBoundingClientRect();
-    var menuTop;
+    var vw = document.documentElement.clientWidth;
+    var menuTop, menuLeft;
     if (phone.matches) {
       menu.style.top = "";
       menu.style.left = "";
       menuTop = 64;
+      menuLeft = 8;
     } else {
       menuTop = wr.bottom + 14;
+      menuLeft = Math.max(12, Math.min(wr.left - 14, vw - menu.offsetWidth - 12));
       menu.style.top = menuTop + "px";
-      menu.style.left = (wr.left - 14) + "px";
+      menu.style.left = menuLeft + "px";
     }
-    var bLeft = Math.min(br.left, phone.matches ? 8 : wr.left - 14);
+    menu.style.maxHeight = Math.max(160, window.innerHeight - menuTop - 12) + "px";
+    var bLeft = Math.min(br.left, menuLeft);
     bridge.style.top = br.bottom + "px";
     bridge.style.left = bLeft + "px";
     bridge.style.width = (br.right - bLeft + 6) + "px";
@@ -93,14 +100,16 @@
   function setOpen(v) {
     cancelClose();
     if (menu.hidden === !v) return;
-    if (v) place();
     menu.hidden = !v;
     bridge.hidden = !v;
+    if (v) place();
     btn.setAttribute("aria-expanded", v ? "true" : "false");
   }
   function isOpen() { return !menu.hidden; }
+  // A click pins the panel open, a hover-opened one included;
+  // a click on a pinned panel closes it.
   btn.addEventListener("click", function () {
-    pinned = !isOpen();
+    pinned = !(isOpen() && pinned);
     setOpen(pinned);
   });
   if (window.matchMedia("(hover: hover)").matches) {

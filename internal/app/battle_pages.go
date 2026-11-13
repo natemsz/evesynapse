@@ -535,6 +535,11 @@ func (app *Application) renderBattle(w http.ResponseWriter, r *http.Request, dat
 	data.Battle = v
 	desc := fmt.Sprintf("%s, %s long: %d kills and %d losses.", v.Title, v.Length, f.Kills, f.Losses)
 	meta := module.PageMeta{Title: v.Title, Description: desc, CanonicalPath: base}
+	// Only the shared link has a card: the owner's own address is
+	// signed-in only, so no preview fetcher ever reads it.
+	if f.Shared && base == fmt.Sprintf("/intel/battle/s/%s/", f.ShareToken) {
+		meta.ImagePath = base + "card.png"
+	}
 	data.HeadMeta = app.HeadMeta(meta)
 	app.render(ctx, w, http.StatusOK, "battle.html", data)
 }

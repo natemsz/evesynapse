@@ -158,6 +158,62 @@ func TestPlaceSummaryCards(t *testing.T) {
 	}
 }
 
+// TestMarketSummaryCards: the item, market and sovereignty pages
+// point og:image at their cards; the item card names the hubs its
+// prices come from and the market card reads the requested region's
+// swept row; every card route answers with a PNG.
+func TestMarketSummaryCards(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	for _, s := range []string{
+		`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge'), (10000043, 'Domain') ON CONFLICT DO NOTHING`,
+		`INSERT INTO sde_categories (category_id, name) VALUES (4, 'Material') ON CONFLICT DO NOTHING`,
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (18, 'Mineral', 4) ON CONFLICT DO NOTHING`,
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (34, 'Tritanium', 18, 2, 1) ON CONFLICT DO NOTHING`,
+	} {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now().UTC()
+	for _, st := range []db.UpsertMarketRegionStatParams{
+		{RegionID: 10000002, TypeID: 34, BestSell: 4.2, BestBuy: 3.9, UpdatedAt: now},
+		{RegionID: 10000043, TypeID: 34, BestSell: 4.6, BestBuy: 4.1, UpdatedAt: now},
+	} {
+		if err := q.UpsertMarketRegionStat(ctx, st); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var pic bytes.Buffer
+	_ = png.Encode(&pic, image.NewRGBA(image.Rect(0, 0, 8, 8)))
+	app.cardFetch = func(context.Context, string) ([]byte, error) { return pic.Bytes(), nil }
+
+	job, ok := app.itemCardJob(ctx, 34)
+	if !ok || len(job.card.Stats) != 2 || job.card.Detail == nil || job.card.Detail.Text != "Lowest sell in The Forge, highest buy in Domain" {
+		t.Fatalf("item card: ok=%v stats=%+v detail=%+v", ok, job.card.Stats, job.card.Detail)
+	}
+	if job, ok := app.marketCardJob(ctx, 34, 10000043); !ok || len(job.card.Stats) != 3 || job.card.Subtitle != "Domain" {
+		t.Fatalf("market card: ok=%v %+v, want Domain's sell, buy and spread", ok, job.card)
+	}
+
+	visitor := &http.Cookie{Name: "nobody", Value: "x"}
+	for page, want := range map[string]string{
+		"/items/type/34/":                  "https://evesynapse.app/items/type/34/card.png",
+		"/market/?type=34&region=10000043": "https://evesynapse.app/market/card.png?type=34&amp;region=10000043",
+		"/intel/sov/?region=10000002":      "https://evesynapse.app/intel/sov/card.png?region=10000002",
+	} {
+		_, body := getPage(t, app, visitor, page)
+		mustContain(t, page, body, `<meta property="og:image" content="`+want+`">`)
+	}
+	for _, path := range []string{"/items/type/34/card.png", "/market/card.png?type=34&region=10000043", "/intel/sov/card.png?region=10000002"} {
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/png" {
+			t.Errorf("%s: status %d type %q, want a PNG", path, rec.Code, rec.Header().Get("Content-Type"))
+		}
+	}
+}
+
 // TestCardBrandMatchesWordmark: the card package draws the brand from
 // copies of the template's outlines; every one must still be in
 // templates/wordmark.html, so the cards never drift from the site.

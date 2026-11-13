@@ -92,13 +92,16 @@ func (app *Application) cardsState() *cardState {
 }
 
 // cardJob is one card ready to draw: its cache key, its data
-// version, its picture's address and the content.
+// version, its picture's address (and one to try when the image
+// server has no such picture, an item's icon for its render) and
+// the content.
 type cardJob struct {
-	key     string
-	version string
-	picture string
-	card    card.Card
-	maxAge  time.Duration
+	key        string
+	version    string
+	picture    string
+	pictureAlt string
+	card       card.Card
+	maxAge     time.Duration
 }
 
 // cardVersion hashes a card's data version with everything drawn on
@@ -272,6 +275,9 @@ func (app *Application) serveCard(w http.ResponseWriter, r *http.Request, job ca
 		}
 		defer func() { <-st.slots }()
 		pic, complete := app.cardPicture(ctx, job.picture)
+		if pic == nil && job.pictureAlt != "" {
+			pic, complete = app.cardPicture(ctx, job.pictureAlt)
+		}
 		c := job.card
 		c.Picture = pic
 		data, err := card.PNG(c)

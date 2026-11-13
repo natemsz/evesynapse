@@ -147,6 +147,7 @@ func (app *Application) handleCorporationPage(w http.ResponseWriter, r *http.Req
 			Title:         v.Name,
 			Description:   v.Name + ": corporation profile, membership and public record. EveSynapse EVE Online universe data.",
 			CanonicalPath: "/corporation/",
+			ImagePath:     "/corporation/card.png?corporation=" + strconv.FormatInt(id, 10),
 		})
 	}
 	app.render(ctx, w, http.StatusOK, "corporation.html", data)
@@ -175,6 +176,7 @@ func (app *Application) handleAlliancePage(w http.ResponseWriter, r *http.Reques
 			Title:         v.Name,
 			Description:   v.Name + ": alliance profile, member corporations and public record. EveSynapse EVE Online universe data.",
 			CanonicalPath: "/alliance/",
+			ImagePath:     "/alliance/card.png?alliance=" + strconv.FormatInt(id, 10),
 		})
 	}
 	app.render(ctx, w, http.StatusOK, "alliance.html", data)

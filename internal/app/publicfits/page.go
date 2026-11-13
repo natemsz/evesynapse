@@ -582,6 +582,7 @@ func (app *page) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
 		Description:   blurb,
 		CanonicalURL:  view.PageURL,
 		InstallOrigin: true,
+		ImagePath:     card.FitURL + "card.png",
 	})
 	data.PublicFit = view
 	app.deps.Render(ctx, w, http.StatusOK, "fit_public.html", data)

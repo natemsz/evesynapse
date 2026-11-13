@@ -497,11 +497,11 @@ func (app *Application) applyPilotKill(ctx context.Context, characterID int64, k
 // final blow, when they have profiles. The rest of the attackers
 // wait for their own backfill, which reads their whole part in
 // it: folding every attacker on every kill through the stream
-// would multiply the ingest writes by the gang size.
+// would multiply the ingest writes by the gang size. The fold is
+// not backfill: it fetches nothing and only folds a kill the
+// stream already ingested into profiles that already exist, so
+// the backfill switch does not gate it.
 func (app *Application) maintainPilotActivity(ctx context.Context, raw json.RawMessage) {
-	if !app.cfg.PilotBackfillEnabled() {
-		return
-	}
 	var km killmailFull
 	if err := goccyjson.Unmarshal(raw, &km); err != nil {
 		return

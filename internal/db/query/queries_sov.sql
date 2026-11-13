@@ -35,6 +35,13 @@ LIMIT sqlc.arg(max_rows)::bigint;
 
 -- Claims taken since a time, newest first, each with the holder the
 -- change log last saw before it (0 when the log predates the claim).
+-- The previous holder is the claim row's own old holder; when that
+-- row records none (the system sat unclaimed first), it is the old
+-- holder of the most recent logged change for the system that names
+-- a different holder, which is the drop that left it unclaimed.
+-- Rows are not matched by time: a claim row is dated by its
+-- claimed_since, which can precede the moment the drop before it
+-- was seen.
 -- name: ListSovRecentClaims :many
 SELECT s.system_id, ss.name AS system_name, ss.security, ss.region_id,
        COALESCE(r.name, '')::text AS region_name, s.alliance_id, s.claimed_since,
@@ -46,9 +53,21 @@ FROM system_sovereignty s
 JOIN sde_systems ss ON ss.system_id = s.system_id
 LEFT JOIN sde_regions r ON r.region_id = ss.region_id
 LEFT JOIN LATERAL (
-    SELECT c.id, c.old_alliance_id, c.old_faction_id FROM sov_changes c
-    WHERE c.system_id = s.system_id AND c.new_alliance_id = s.alliance_id
-    ORDER BY c.changed_at DESC LIMIT 1
+    SELECT cl.id,
+           COALESCE(NULLIF(cl.old_alliance_id, 0), dr.old_alliance_id, 0) AS old_alliance_id,
+           COALESCE(NULLIF(cl.old_faction_id, 0), dr.old_faction_id, 0) AS old_faction_id
+    FROM (
+        SELECT c.id, c.changed_at, c.old_alliance_id, c.old_faction_id FROM sov_changes c
+        WHERE c.system_id = s.system_id AND c.new_alliance_id = s.alliance_id
+        ORDER BY c.changed_at DESC, c.id DESC LIMIT 1
+    ) cl
+    LEFT JOIN LATERAL (
+        SELECT d.old_alliance_id, d.old_faction_id FROM sov_changes d
+        WHERE d.system_id = s.system_id AND d.id <> cl.id
+          AND (d.old_alliance_id > 0 OR d.old_faction_id > 0)
+          AND d.old_alliance_id <> s.alliance_id
+        ORDER BY d.changed_at DESC, d.id DESC LIMIT 1
+    ) dr ON cl.old_alliance_id = 0 AND cl.old_faction_id = 0
 ) prev ON true
 WHERE s.alliance_id > 0 AND s.claimed_since >= sqlc.arg(since)::timestamptz
   AND (sqlc.arg(region_id)::bigint = 0 OR ss.region_id = sqlc.arg(region_id)::bigint)

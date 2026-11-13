@@ -23,7 +23,7 @@ func TestSovTracker(t *testing.T) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		`INSERT INTO sde_regions (region_id, name) VALUES (10000060, 'Delve')`,
-		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30004759, '1DQ1-A', 10000060, -0.38), (30004760, 'T5ZI-S', 10000060, -0.4)`,
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30004759, '1DQ1-A', 10000060, -0.38), (30004760, 'T5ZI-S', 10000060, -0.4), (30004761, 'NOL-M9', 10000060, -0.35), (30004762, 'F-TE1T', 10000060, -0.3)`,
 	} {
 		if _, err := app.db.ExecContext(ctx, stmt); err != nil {
 			t.Fatalf("seed sde: %v", err)
@@ -46,7 +46,7 @@ func TestSovTracker(t *testing.T) {
 	}
 
 	// First pass: the first stored set logs nothing.
-	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000001, now.Add(-30*24*time.Hour))+`]}`, "a", now.Add(-10*time.Minute))
+	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004761, 99000003, now.Add(-30*24*time.Hour))+`]}`, "a", now.Add(-10*time.Minute))
 	if !app.refreshPlaceSovereignty(ctx) {
 		t.Fatal("first sovereignty pass stored nothing")
 	}
@@ -61,7 +61,7 @@ func TestSovTracker(t *testing.T) {
 	}
 
 	// Second pass: T5ZI-S changes hands.
-	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000002, now.Add(-2*time.Hour))+`]}`, "b", now.Add(-5*time.Minute))
+	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000002, now.Add(-2*time.Hour))+`,`+claim(30004761, 99000003, now.Add(-30*24*time.Hour))+`]}`, "b", now.Add(-5*time.Minute))
 	if !app.refreshPlaceSovereignty(ctx) {
 		t.Fatal("second sovereignty pass stored nothing")
 	}
@@ -74,12 +74,53 @@ func TestSovTracker(t *testing.T) {
 		t.Fatalf("change log: %d rows, system %d, %d to %d; want 1 row, 30004760, 99000001 to 99000002", n, system, oldA, newA)
 	}
 
+	// Third pass: NOL-M9's holder drops it; the system sits unclaimed.
+	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000002, now.Add(-2*time.Hour))+`]}`, "d", now.Add(-4*time.Minute))
+	if !app.refreshPlaceSovereignty(ctx) {
+		t.Fatal("third sovereignty pass stored nothing")
+	}
+
+	// Fourth pass: the second alliance claims NOL-M9. The claim row
+	// records no previous holder; the previous holder is the alliance
+	// from the drop.
+	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000002, now.Add(-2*time.Hour))+`,`+claim(30004761, 99000002, now.Add(-30*time.Minute))+`]}`, "e", now.Add(-3*time.Minute))
+	if !app.refreshPlaceSovereignty(ctx) {
+		t.Fatal("fourth sovereignty pass stored nothing")
+	}
+
+	// A claim the change log predates has no previous holder.
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO system_sovereignty (system_id, alliance_id, corporation_id, faction_id, faction_name, claimed_since, updated_at) VALUES (30004762, 99000002, 98000001, 0, '', $1, $1)`, now.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	claims, err := app.queries.ListSovRecentClaims(ctx, db.ListSovRecentClaimsParams{Since: now.Add(-24 * time.Hour), MaxRows: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := map[int64]int64{}
+	logged := map[int64]bool{}
+	for _, c := range claims {
+		prev[c.SystemID] = c.PrevAllianceID
+		logged[c.SystemID] = c.Logged
+	}
+	if prev[30004760] != 99000001 {
+		t.Errorf("direct flip: T5ZI-S previous holder %d; want 99000001", prev[30004760])
+	}
+	if prev[30004761] != 99000003 {
+		t.Errorf("drop then claim: NOL-M9 previous holder %d; want 99000003 (the drop)", prev[30004761])
+	}
+	if prev[30004762] != 0 || logged[30004762] {
+		t.Errorf("predates the log: F-TE1T previous holder %d, logged %v; want 0, false", prev[30004762], logged[30004762])
+	}
+	if _, err := app.db.ExecContext(ctx, `DELETE FROM system_sovereignty WHERE system_id = 30004762`); err != nil {
+		t.Fatal(err)
+	}
+
 	snapshot(esi.GlobalSovCampaigns, `[{"campaign_id":7,"solar_system_id":30004759,"constellation_id":1,"structure_id":2,"event_type":"ihub_defense","defender_id":99000001,"defender_score":0.3,"attackers_score":0.7,"start_time":"`+now.Add(-20*time.Minute).Format(time.RFC3339)+`"}]`, "c", now)
 	if !app.refreshSovCampaigns(ctx) {
 		t.Fatal("campaigns mirror stored nothing")
 	}
 
-	if _, err := app.db.ExecContext(ctx, `INSERT INTO entity_names (kind, id, name) VALUES ('alliance', 99000001, 'Old Holders'), ('alliance', 99000002, 'New Holders')`); err != nil {
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO entity_names (kind, id, name) VALUES ('alliance', 99000001, 'Old Holders'), ('alliance', 99000002, 'New Holders'), ('alliance', 99000003, 'First Keepers')`); err != nil {
 		t.Fatal(err)
 	}
 	code, body := getPage(t, app, &http.Cookie{Name: "nobody", Value: "x"}, "/intel/sov/")
@@ -88,9 +129,9 @@ func TestSovTracker(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<span class="l-stat-label">Live contests</span><span class="l-stat-value">1</span>`,
-		`<span class="l-stat-label">Changed hands, 24h</span><span class="l-stat-value">1</span>`,
+		`<span class="l-stat-label">Changed hands, 24h</span><span class="l-stat-value">2</span>`,
 		`value="30" aria-label="Defender 30 percent, attackers 70 percent"`,
-		"1DQ1-A", "T5ZI-S", "New Holders", "Old Holders", "Capital",
+		"1DQ1-A", "T5ZI-S", "NOL-M9", "New Holders", "Old Holders", "First Keepers", "Unclaimed", "Capital",
 		`</span><a class="map-jump" href="/map/?system=30004759"`,
 	} {
 		if !strings.Contains(body, want) {

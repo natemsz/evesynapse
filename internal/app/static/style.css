@@ -6630,6 +6630,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .fchips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
 .fchips-label { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
 .fchip { padding: 0.3rem 0.65rem; border: 1px solid var(--box-edge); border-radius: 999px; background: none; color: var(--text); font-size: var(--fs-xs); text-decoration: none; cursor: pointer; }
+.fchip.on { border-color: var(--accent); color: var(--text); background: var(--glass); }
 .fchip.save { border-style: dashed; color: var(--muted); }
 .fchip-wrap { display: inline-flex; align-items: center; gap: 0.1rem; }
 .fchip-del { display: inline-flex; }

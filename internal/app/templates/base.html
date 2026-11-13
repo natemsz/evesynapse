@@ -71,7 +71,7 @@
 {{if eq .NavPage "killmails.html"}}<link rel="stylesheet" href="/static/killmails.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "scans.html") (eq .NavPage "scan.html") (eq .NavPage "scan_compare.html")}}<link rel="stylesheet" href="/static/scans.css?v={{.AssetVersion}}">{{end}}{{if eq .NavPage "intel_workbench.html"}}<link rel="stylesheet" href="/static/workbench.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "pilot.html"}}<link rel="stylesheet" href="/static/pilot.css?v={{.AssetVersion}}">{{end}}
-{{if or (eq .NavPage "intel_wars.html") (eq .NavPage "intel_incursions.html") (eq .NavPage "intel_fw.html")}}<link rel="stylesheet" href="/static/intel.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "intel_wars.html") (eq .NavPage "intel_incursions.html") (eq .NavPage "intel_fw.html")}}<link rel="stylesheet" href="/static/intel.css?v={{.AssetVersion}}">{{end}}{{if eq .NavPage "intel_sov.html"}}<link rel="stylesheet" href="/static/sov.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "channels.html") (eq .NavPage "channel.html") (eq .NavPage "system.html") (eq .NavPage "feed.html") (eq .NavPage "intel_workbench.html")}}<link rel="stylesheet" href="/static/channels.css?v={{.AssetVersion}}">{{end}}
 <link rel="stylesheet" href="/static/phone.css?v={{.AssetVersion}}" media="(max-width: 45rem), (hover: none), (pointer: coarse)">
 </head>

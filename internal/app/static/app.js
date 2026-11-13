@@ -4248,6 +4248,7 @@
     { name: "Wars", url: "/intel/wars/" },
     { name: "Incursions", url: "/intel/incursions/" },
     { name: "Faction Warfare", url: "/intel/fw/" },
+    { name: "Sovereignty", url: "/intel/sov/" },
     { name: "Sync", url: "/admin/sync/" },
     { name: "Admin", url: "/admin/" }
   ];

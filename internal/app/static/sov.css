@@ -1,0 +1,123 @@
+/* sov.css -- the sovereignty tracker (intel_sov.html,
+ * intel_sov_page.go). Framework parts throughout: the page head, the
+ * stat tiles, .l-grid panels. The tables follow the shared table look
+ * and stack into labelled cards when their own panel is narrow; the
+ * contest score is a styled native <progress>. Status colours read
+ * the colour-blind tokens with their literal fallbacks. */
+
+.sov {
+  --sov-good: var(--v-good, #28c76f);
+  --sov-bad: var(--v-bad, #e5533d);
+  --sov-warn: var(--v-warn, #f0b429);
+  --sov-def: var(--accent);
+  --sov-att: var(--sov-bad);
+}
+
+/* --- Page head: summary and filters --- */
+.sov-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; }
+.sov-region { display: inline-flex; align-items: center; gap: var(--space-2); }
+.sov-region-l { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.sov-region select { min-height: var(--control-h); max-inline-size: 14rem; padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.sov-region select:focus-visible { border-color: var(--accent); outline: none; }
+.sov-chip { display: inline-flex; align-items: center; gap: 0.35rem; }
+.sov-chip img { border-radius: 50%; }
+
+/* --- Tiles: a tone marks a figure worth a look --- */
+.sov-tone-hot .l-stat-value { color: var(--sov-bad); }
+.sov-tone-warn .l-stat-value { color: var(--sov-warn); }
+
+/* --- Panels --- */
+.sov-grid { align-items: start; }
+.sov-panel { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; scroll-margin-top: calc(var(--subnav-h, 3rem) + var(--space-4)); }
+.sov-ph { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2) var(--space-3); }
+.sov-ph h2 { margin: 0; display: inline-flex; align-items: baseline; gap: var(--space-2); }
+.sov-count { padding: 0 0.45rem; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); }
+.sov-search { flex: 1 1 12rem; max-inline-size: 18rem; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.sov-search:focus-visible { border-color: var(--accent); outline: none; }
+.sov-h3 { margin: var(--space-2) 0 0; font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.sov-note, .sov-empty { margin: 0; color: var(--muted); font-size: var(--fs-xs); }
+.sov-empty { padding: var(--space-3) 0; font-size: var(--fs-sm); }
+.sov-dim { color: var(--muted); font-size: var(--fs-xs); }
+.sov-up { color: var(--sov-good); font-family: var(--font-num); font-size: var(--fs-xs); }
+.sov-down { color: var(--sov-bad); font-family: var(--font-num); font-size: var(--fs-xs); }
+.sov-live { display: inline-block; padding: 0 0.4rem; border: 1px solid var(--sov-bad); border-radius: 999px; color: var(--sov-bad); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.sov-cap { color: var(--gold, #ffd27a); border-color: currentColor; font-size: var(--fs-2xs); }
+
+/* --- Tables: a scrolling region with sticky column headers --- */
+.sov-tw { container: sovt / inline-size; max-block-size: min(32rem, 70vh); overflow: auto; overscroll-behavior: contain; border-radius: var(--r-sm); }
+.sov-tw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sov-t { inline-size: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--fs-sm); }
+.sov-t thead th { position: sticky; inset-block-start: 0; z-index: 1; background: var(--surface-pane, #15100c); }
+/* Above the shared .tw first-column rule, which paints a band. */
+.sov-tw .sov-t tbody th { position: static; font-weight: 400; text-align: start; background: none; box-shadow: none; }
+.sov-t td, .sov-t tbody th { vertical-align: middle; }
+.sov-row.sov-open { background: color-mix(in srgb, var(--sov-bad) 9%, transparent); }
+.sov-lead-attackers { background: color-mix(in srgb, var(--sov-bad) 7%, transparent); }
+
+.sov-sys { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.4rem; min-width: 0; }
+.sov-region-n { flex-basis: 100%; color: var(--muted); font-size: var(--fs-xs); }
+.sov-org { display: inline-flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.sov-org img { flex: none; border-radius: 50%; }
+.sov-org span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-inline-size: 14rem; }
+
+/* --- Contest score: the defender's share as a native progress bar,
+   the attackers' share as its track --- */
+.sov-score { display: flex; flex-direction: column; gap: 0.25rem; min-inline-size: 7rem; }
+.sov-score-v { font-family: var(--font-num); font-size: var(--fs-xs); white-space: nowrap; }
+.sov-def { color: var(--sov-def); }
+.sov-att { color: var(--sov-att); }
+.sov-bar {
+  appearance: none;
+  border: 0 solid;
+  overflow: clip;
+  inline-size: 100%;
+  block-size: 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sov-att) 70%, transparent);
+}
+.sov-bar::-webkit-progress-bar { background: transparent; }
+.sov-bar::-webkit-progress-value { background: var(--sov-def); border-radius: 999px; transition: inline-size 0.3s; }
+.sov-bar::-moz-progress-bar { background: var(--sov-def); border-radius: 999px; }
+
+/* --- ADM: the figure with a meter of its 1 to 6 range --- */
+.sov-adm { font-family: var(--font-num); font-weight: 700; }
+.sov-adm-m { display: block; inline-size: 4rem; margin-block-start: 0.2rem; }
+.sov-adm-low { color: var(--sov-bad); }
+.sov-adm-mid { color: var(--sov-warn); }
+.sov-adm-high { color: var(--sov-good); }
+.sov-adm-m.sov-adm-low rect { fill: var(--sov-bad); }
+.sov-adm-m.sov-adm-mid rect { fill: var(--sov-warn); }
+.sov-adm-m.sov-adm-high rect { fill: var(--sov-good); }
+
+/* --- Alliance standings --- */
+.sov-standings { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.sov-standings li + li { border-top: 1px solid var(--hairline); }
+.sov-st { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "logo name value" "logo meter meter"; align-items: center; gap: 0.15rem var(--space-2); padding: var(--space-2) var(--space-1); color: var(--text); text-decoration: none; border-radius: var(--r-sm); }
+.sov-st:hover { background: var(--sel-row, rgba(255, 255, 255, 0.04)); }
+.sov-standings li.on .sov-st { background: var(--sel-bg); box-shadow: inset 2px 0 0 var(--sel-edge); }
+.sov-st img { grid-area: logo; border-radius: 50%; }
+.sov-st-n { grid-area: name; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+.sov-st-v { grid-area: value; font-family: var(--font-num); font-size: var(--fs-sm); white-space: nowrap; }
+.sov-st-m { grid-area: meter; inline-size: 100%; }
+
+/* --- Narrow tables stack: each row a card, each cell labelled --- */
+@container sovt (width < 34rem) {
+  .sov-t, .sov-t tbody, .sov-t tr, .sov-t th, .sov-t td { display: block; }
+  .sov-t thead { display: none; }
+  .sov-t tbody tr { padding: var(--space-2) var(--space-3); border-block-end: 1px solid var(--hairline); }
+  .sov-t tbody th { position: static; padding: 0 0 var(--space-1); border: 0; }
+  .sov-t td { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 0.2rem 0; border: 0; text-align: end; }
+  .sov-t td::before { content: attr(data-label); flex: none; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .sov-score { min-inline-size: 9rem; }
+  .sov-adm-m { margin-inline-start: auto; }
+}
+
+/* On a narrow page the lists run at their full height: a scroll box
+   inside the page's own scroll is awkward on a phone. */
+@container page (width < 40rem) {
+  .sov-tw { max-block-size: none; overflow: visible; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sov-bar::-webkit-progress-value { transition: none; }
+}

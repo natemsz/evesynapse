@@ -41,6 +41,10 @@ type Card struct {
 	// Detail is an optional labelled line under the figures, for a
 	// value too long to read as a figure (a pilot's name).
 	Detail *Detail
+	// Spark is an optional labelled value line in the band under
+	// the figures (a market card's price history). It shares the
+	// Detail line's band, so a card carries one or the other.
+	Spark *Spark
 }
 
 // Badge is one large figure centred in the panel with a caption
@@ -64,6 +68,13 @@ type Bar struct {
 type Detail struct {
 	Label string
 	Text  string
+}
+
+// Spark is a labelled line of values, oldest first, drawn scaled
+// to its band (a price history: one value per day).
+type Spark struct {
+	Label  string
+	Values []float64
 }
 
 // Stat is one labelled figure.
@@ -125,6 +136,9 @@ const (
 	// The detail line sits under the figures.
 	detailLabel = 492.0
 	detailBase  = 524.0
+	// The sparkline's band under its caption, in the same space.
+	sparkTop = 504.0
+	sparkBot = 554.0
 	figBase     = 440.0
 	figCap      = 30.5
 	statGap     = 64.0
@@ -175,6 +189,13 @@ func Render(c Card) *image.RGBA {
 		label.draw(img, colX, lb, d.Label, muted2C)
 		line := newText(body, subCap, 0)
 		line.draw(img, colX, tb, line.fit(d.Text, avail), textC)
+	}
+	if s := c.Spark; s != nil && c.Detail == nil && len(s.Values) >= 2 {
+		if s.Label != "" {
+			label := newText(display, labelCap, 3)
+			label.draw(img, colX, detailLabel, s.Label, muted2C)
+		}
+		drawSpark(img, s.Values, colX, right, sparkTop, sparkBot)
 	}
 
 	foot := newText(body, footCap, 0)
@@ -316,6 +337,49 @@ func drawBars(img *image.RGBA, bars []Bar, x0, x1, cy float64) {
 		}
 		y += rowH
 	}
+}
+
+// drawSpark draws a value line across the band x0..x1, y0..y1: a
+// soft fill under the line, the line itself in the figure colour
+// and a dot on the newest value. Values scale to the band with a
+// margin at both ends, so a flat series sits mid-band and a nearly
+// flat one still shows its movement.
+func drawSpark(img *image.RGBA, values []float64, x0, x1, y0, y1 float64) {
+	lo, hi := math.Inf(1), math.Inf(-1)
+	for _, v := range values {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return
+		}
+		lo, hi = math.Min(lo, v), math.Max(hi, v)
+	}
+	pad := (hi - lo) * .12
+	if pad == 0 {
+		pad = math.Max(1, math.Abs(hi)*.02)
+	}
+	lo, hi = lo-pad, hi+pad
+	pts := make([]pt, len(values))
+	for i, v := range values {
+		pts[i] = pt{
+			x0 + (x1-x0)*float64(i)/float64(len(values)-1),
+			y1 - (v-lo)/(hi-lo)*(y1-y0),
+		}
+	}
+	under := append(append([]pt{}, pts...), pt{x1, y1}, pt{x0, y1})
+	fill(img, shape{under}, linear(0, y0, 0, y1, alpha(hiC, .20), alpha(hiC, .02)))
+	const w = 2.6
+	for i := 0; i+1 < len(pts); i++ {
+		a, b := pts[i], pts[i+1]
+		dx, dy := b.x-a.x, b.y-a.y
+		l := math.Hypot(dx, dy)
+		if l == 0 {
+			continue
+		}
+		nx, ny := -dy/l*w/2, dx/l*w/2
+		fill(img, shape{{{a.x + nx, a.y + ny}, {b.x + nx, b.y + ny}, {b.x - nx, b.y - ny}, {a.x - nx, a.y - ny}}}, solid(hiC))
+		fill(img, circle(a.x, a.y, w/2), solid(hiC))
+	}
+	last := pts[len(pts)-1]
+	fill(img, circle(last.x, last.y, 3.4), solid(hiC))
 }
 
 // drawStats draws the figure row left to right from the text

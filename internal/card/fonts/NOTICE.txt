@@ -1,0 +1,9 @@
+The summary card renderer draws with TrueType copies of two of the site's faces, base64-encoded here and decoded when the package loads. Each .ttf is the matching woff2 from ci-assets/fonts unpacked to its sfnt form; the outlines and metrics are unchanged.
+
+rajdhani-600.ttf.b64, rajdhani-600-ext.ttf.b64: Rajdhani SemiBold, the Latin and Latin Extended subsets.
+Copyright (c) 2014, Indian Type Foundry (info@indiantypefoundry.com)
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: https://scripts.sil.org/OFL
+
+evesansneue-regular.ttf.b64: Eve Sans Neue Regular.
+Eve Sans Neue is EVE Online's interface typeface, drawn for CCP Games by Sveinbjörn Pálsson (2014). EVE Online and all associated material are the intellectual property of CCP Games hf and are used with permission.

@@ -660,7 +660,8 @@ func (app *Application) handleKillPage(w http.ResponseWriter, r *http.Request) {
 	if v.ValueFull != "" {
 		desc = fmt.Sprintf("%s lost in %s, %s: %s ISK.", v.Row.ShipName, v.Row.SystemName, v.Row.RegionName, v.ValueFull)
 	}
-	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: title, Description: desc, CanonicalPath: fmt.Sprintf("/intel/kill/%d/", id)})
+	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: title, Description: desc, CanonicalPath: fmt.Sprintf("/intel/kill/%d/", id),
+		ImagePath: fmt.Sprintf("/intel/kill/%d/card.png", id)})
 	app.kickNameResolve()
 	app.render(ctx, w, http.StatusOK, "kill.html", data)
 }

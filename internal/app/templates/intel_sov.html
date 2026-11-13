@@ -173,6 +173,6 @@
 
 {{define "sov-adm"}}<span class="sov-adm sov-adm-{{.ADMTier}}">{{.ADM}}</span><svg class="l-meter sov-adm-m sov-adm-{{.ADMTier}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.ADMPct}}" height="4"/></svg>{{end}}
 
-{{define "sov-system"}}<span class="sov-sys">{{placeLink .Place}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{if .Region}}<span class="sov-region-n">{{.Region}}</span>{{end}}{{if .Place.SystemID}}<a class="map-jump" href="/map/?system={{.Place.SystemID}}" title="Open {{.Place.Name}} on the map" aria-label="Open {{.Place.Name}} on the map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg></a>{{end}}</span>{{end}}
+{{define "sov-system"}}<span class="sov-sys">{{placeLink .Place}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{if .Place.SystemID}}<a class="map-jump" href="/map/?system={{.Place.SystemID}}" title="Open {{.Place.Name}} on the map" aria-label="Open {{.Place.Name}} on the map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg></a>{{end}}{{if .Region}}<span class="sov-region-n">{{.Region}}</span>{{end}}</span>{{end}}
 
 {{define "sov-org"}}{{if .Faction}}<span class="sov-dim">{{.Name}}</span>{{else if .ID}}<a class="sov-org" href="{{.Href}}"><img src="https://images.evetech.net/alliances/{{.ID}}/logo?size=32" alt="" width="20" height="20" loading="lazy"><span>{{.Name}}</span></a>{{else}}<span class="sov-dim">—</span>{{end}}{{end}}

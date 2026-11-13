@@ -272,7 +272,7 @@
     <h3 class="wb-view-h">Solar System &amp; Adjacent Gates</h3>
     {{if .Gates}}<div class="wb-gates">
       {{range .Gates}}<article class="wb-gate">
-        <p class="wb-gate-head"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/system/?system={{.SystemID}}">{{.Name}}</a></p>
+        <p class="wb-gate-head"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/system/?system={{.SystemID}}">{{.Name}}</a><a class="map-jump" href="/map/?system={{.SystemID}}" title="Open {{.Name}} on the map" aria-label="Open {{.Name}} on the map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg></a></p>
         <p class="wb-box-sub">{{.Class}}{{if .Region}} · {{.Region}}{{end}}</p>
         {{if .HasStats}}<p class="wb-gate-stats"><span><strong>{{.Jumps}}</strong> jumps</span> <span><strong>{{.Ship}}</strong> ship kills</span> <span><strong>{{.Pod}}</strong> pod kills</span> <span class="wb-box-sub">last hour</span></p>
         {{else}}<p class="wb-box-sub">No activity stored for the last hour.</p>{{end}}

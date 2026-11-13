@@ -26,7 +26,7 @@
         </div>
       </div>
       <dl class="kp-facts">
-        <div><dt>Where</dt><dd><span class="sec sec-{{.Row.SecTier}}">{{.Row.SecText}}</span> <a href="/intel/kills/?system={{.Row.SystemID}}">{{.Row.SystemName}}</a> · <a href="/intel/kills/?region={{.Row.RegionID}}">{{.Row.RegionName}}</a></dd></div>
+        <div><dt>Where</dt><dd><span class="sec sec-{{.Row.SecTier}}">{{.Row.SecText}}</span> <a href="/intel/kills/?system={{.Row.SystemID}}">{{.Row.SystemName}}</a><a class="map-jump" href="/map/?system={{.Row.SystemID}}" title="Open {{.Row.SystemName}} on the map" aria-label="Open {{.Row.SystemName}} on the map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg></a> · <a href="/intel/kills/?region={{.Row.RegionID}}">{{.Row.RegionName}}</a></dd></div>
         <div><dt>When</dt><dd><time datetime="{{rfc3339 .Row.Time}}">{{.Row.Time.UTC.Format "2006-01-02 15:04"}} EVE</time> <span class="muted">({{.Row.Ago}})</span></dd></div>
         <div><dt>Damage taken</dt><dd>{{.Damage}}</dd></div>
         <div><dt>Attackers</dt><dd>{{.Row.Attackers}}{{if .Row.Solo}} <span class="kb-tag">solo</span>{{end}}{{if .Row.Awox}} <span class="kb-tag warn">awox</span>{{end}}{{if .Row.NPC}} <span class="kb-tag dim">NPC</span>{{end}}{{if .Points}} <span class="muted">· {{.Points}} points</span>{{end}}</dd></div>

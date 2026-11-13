@@ -31,7 +31,8 @@ var blockedScraperSignatures = []string{
 	"perplexitybot",
 	"diffbot",
 	"facebookbot",
-	"facebookexternalhit",
+	// facebookexternalhit is not listed: it is Meta's link-preview
+	// fetcher, and Apple's Messages previews send it in their UA.
 	"imagesiftbot",
 	"omgilibot",
 	"cohere-ai",
@@ -175,6 +176,18 @@ func hasMissingBrowserHeaders(r *http.Request) bool {
 	return r.Header.Get("Sec-Ch-Ua") == "" && r.Header.Get("Sec-Fetch-Site") == ""
 }
 
+// isColdFetch reports whether a request is a single GET with no
+// Referer and no cookies, outside /api/. That is the shape of a
+// link-preview fetch: messaging apps (Google Messages among them)
+// read a shared page and its og:image with a Chrome UA on a plain
+// HTTP client. A Chromium UA without browser headers passes only on
+// a cold fetch, and blockScrapers counts it against the page budget
+// and never issues it the asset cookie.
+func isColdFetch(r *http.Request) bool {
+	return r.Method == http.MethodGet && !strings.HasPrefix(r.URL.Path, "/api/") &&
+		r.Referer() == "" && r.Header.Get("Cookie") == ""
+}
+
 // isBlockedBot reports whether an incoming HTTP request exhibits known
 // botnet fingerprints, crawler signatures, or protocol metadata anomalies.
 func isBlockedBot(r *http.Request) bool {
@@ -191,7 +204,7 @@ func isBlockedBot(r *http.Request) bool {
 	if hasFetchMetadataAnomaly(r) {
 		return true
 	}
-	if hasMissingBrowserHeaders(r) {
+	if hasMissingBrowserHeaders(r) && !isColdFetch(r) {
 		return true
 	}
 	return false
@@ -494,7 +507,15 @@ func (app *Application) blockScrapers(next http.Handler) http.Handler {
 		}
 		prints, floods := app.botWatches()
 		fp := fingerprintOf(r)
+		// A Chromium UA without browser headers got here on a cold
+		// fetch (see isColdFetch). Its asset fetches prove nothing
+		// and every page it takes counts, whatever it sends as Accept.
+		headerless := hasMissingBrowserHeaders(r)
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/static/") {
+			if headerless {
+				next.ServeHTTP(w, r)
+				return
+			}
 			prints.recordAsset(fp)
 			// A client that fetches assets is a browser (or a
 			// browser-driven tool); remember it across visits,
@@ -510,7 +531,7 @@ func (app *Application) blockScrapers(next http.Handler) http.Handler {
 		// Cookie presence alone exempts nobody, both cookies are
 		// verified: the session against its store and signed-in
 		// mark, the asset cookie against its signature.
-		if isHTMLPageRequest(r) && !app.hasVerifiedSession(r) {
+		if (isHTMLPageRequest(r) || headerless) && !app.hasVerifiedSession(r) {
 			if id, ok := enumTargetID(r); ok && floods.observe(id) {
 				tooManyBotRequests(w)
 				return

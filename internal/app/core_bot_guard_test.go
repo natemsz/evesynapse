@@ -31,7 +31,6 @@ func TestBlockScrapers(t *testing.T) {
 		"Mozilla/5.0 (compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)",
 		"PetalBot",
 		"CCBot/2.0 (https://commoncrawl.org/faq/)",
-		"facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
 		"cohere-ai",
 		"python-requests/2.31.0",
 		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36",
@@ -305,6 +304,34 @@ func TestBlockScrapersForgedChrome(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("forged Chrome: status %d, want 403", rec.Code)
+	}
+
+	// A cold fetch (no Referer, no cookies) is a link preview: the
+	// page and its share image pass, the image earns no asset
+	// cookie, and the pages count against the page budget.
+	_, h = botGuardTestApp()
+	img := httptest.NewRequest(http.MethodGet, "/static/og-card.jpg", nil)
+	img.Header.Set("User-Agent", attackChromeUA)
+	imgRec := httptest.NewRecorder()
+	h.ServeHTTP(imgRec, img)
+	if imgRec.Code != http.StatusOK || len(imgRec.Result().Cookies()) != 0 {
+		t.Fatalf("cold image fetch: status %d, cookies %v, want 200 and none", imgRec.Code, imgRec.Result().Cookies())
+	}
+	cold := func() int {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("User-Agent", attackChromeUA)
+		req.Header.Set("Accept", "*/*")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	for i := 1; i < botAssetFreePages; i++ {
+		if code := cold(); code != http.StatusOK {
+			t.Fatalf("cold page %d: status %d, want 200", i, code)
+		}
+	}
+	if code := cold(); code != http.StatusTooManyRequests {
+		t.Fatalf("cold page %d: status %d, want 429", botAssetFreePages, code)
 	}
 }
 

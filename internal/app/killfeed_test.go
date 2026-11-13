@@ -232,7 +232,7 @@ func TestKillboardPages(t *testing.T) {
 	if !strings.Contains(body, "Jita") || !strings.Contains(body, `class="sec sec-9"`) {
 		t.Errorf("feed rows name the system with its security")
 	}
-	if !strings.Contains(body, `<a class="map-jump" href="/map/?system=30000142"`) || !strings.Contains(body, `<use href="#ico-map-mini"/>`) {
+	if !strings.Contains(body, `Jita</a><a class="map-jump" href="/map/?system=30000142"`) || !strings.Contains(body, `<use href="#ico-map-mini"/>`) {
 		t.Errorf("feed rows carry the map jump beside the system")
 	}
 	row := func(id string) string { return `class="kb-kill-link" href="/intel/kill/` + id + `/"` }
@@ -255,6 +255,9 @@ func TestKillboardPages(t *testing.T) {
 	code, page := get("/intel/kill/700001/")
 	if code != http.StatusOK || !strings.Contains(page, "High slots") || !strings.Contains(page, `class="kp-a fb"`) {
 		t.Errorf("kill page: %d, fitting or attackers missing", code)
+	}
+	if !strings.Contains(page, `Jita</a><a class="map-jump" href="/map/?system=30000142"`) {
+		t.Errorf("the kill page where row carries the map jump beside the system")
 	}
 	if !strings.Contains(page, `class="info-link" href="/pilot/?character=9001"`) {
 		t.Errorf("the victim's name carries an info link to their profile")

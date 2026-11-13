@@ -13,7 +13,7 @@
   {{$r := .Result}}
   <header class="sc-head">
     <p class="sc-where">
-      {{if .SysName}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/system/?system={{$r.SystemID}}">{{.SysName}}</a> <span class="muted">{{.RegionName}}</span>
+      {{if .SysName}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/system/?system={{$r.SystemID}}">{{.SysName}}</a><a class="map-jump" href="/map/?system={{$r.SystemID}}" title="Open {{.SysName}} on the map" aria-label="Open {{.SysName}} on the map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg></a> <span class="muted">{{.RegionName}}</span>
       · <a href="/map/?system={{$r.SystemID}}">Map</a> · <a href="/intel/kills/?system={{$r.SystemID}}">Kills</a>
       {{else}}<span class="muted">No system</span>{{end}}
       · <time datetime="{{rfc3339 .At}}" title="{{.At.UTC.Format "2006-01-02 15:04"}} EVE">{{.Ago}}</time>

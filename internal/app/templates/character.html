@@ -116,7 +116,7 @@
         {{if $v.LocationKnown}}
         <div class="tr">
           <span class="k">System</span>
-          <span class="ov-locval">{{if $v.SystemSec}}<span class="sec-pill {{$ov.SysSecClass}}">{{$v.SystemSec}}</span>{{end}} <span class="ov-sys">{{systemLink $v.SystemID $v.SystemName}}</span>{{if $v.RegionName}} <span class="muted">· {{regionLink $v.RegionID $v.RegionName}}</span>{{end}}</span>
+          <span class="ov-locval">{{if $v.SystemSec}}<span class="sec-pill {{$ov.SysSecClass}}">{{$v.SystemSec}}</span>{{end}} <span class="ov-sys">{{systemLink $v.SystemID $v.SystemName}}</span><a class="map-jump" href="/map/?system={{$v.SystemID}}" title="Open {{$v.SystemName}} on the map" aria-label="Open {{$v.SystemName}} on the map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg></a>{{if $v.RegionName}} <span class="muted">· {{regionLink $v.RegionID $v.RegionName}}</span>{{end}}</span>
         </div>
         {{if $v.DockedAt}}
         <div class="tr"><span class="k">Docked</span><span class="ov-stn">{{placeLink $v.DockedRef}}</span></div>

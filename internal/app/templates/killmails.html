@@ -114,7 +114,7 @@
     <dl class="insp-facts">
       <div><dt>Victim</dt><dd>{{if .Row.VictimIsStructure}}{{.Row.CorpName}}{{else}}{{killCharLink $.ViewerChars .Row.VictimID .Row.VictimName}}{{end}}</dd></div>
       {{if and .Row.CorpName (not .Row.VictimIsStructure)}}<div><dt>Corporation</dt><dd>{{.Row.CorpName}}</dd></div>{{end}}
-      <div><dt>Where</dt><dd><span class="sec sec-{{.Row.SecTier}}">{{.Row.SecText}}</span> {{.Row.SystemName}}{{if .Row.RegionName}}, {{.Row.RegionName}}{{end}}</dd></div>
+      <div><dt>Where</dt><dd><span class="sec sec-{{.Row.SecTier}}">{{.Row.SecText}}</span> {{.Row.SystemName}}<a class="map-jump" href="/map/?system={{.Row.SystemID}}" title="Open {{.Row.SystemName}} on the map" aria-label="Open {{.Row.SystemName}} on the map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg></a>{{if .Row.RegionName}}, {{.Row.RegionName}}{{end}}</dd></div>
       <div><dt>Damage taken</dt><dd>{{.Damage}}</dd></div>
       <div><dt>Attackers</dt><dd>{{.Row.Attackers}}{{if .Row.FinalName}}, final blow {{.Row.FinalName}}{{end}}</dd></div>
     </dl>

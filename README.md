@@ -27,7 +27,7 @@ The project's main home is on Forgejo at [natems.dev/EveSynapse/evesynapse](http
 - **Inspired, never copied.** Another tool can inspire a feature. EveSynapse's version ships only if it is better, faster, smarter, or more integrated than the one that inspired it.
 - **Every instance stands on its own.** The swarm is an accelerator where present, never a crutch. An instance budgets its own calls and serves its users by itself.
 - **Intel does not guess.** An invented claim filed as fact can move a fleet; a missed claim is only missing data. Precision comes before recall.
-- **No Overhead** We always take the path that leads to the best results, not the fastest prototype. Experience of the user trumpts the experience of the developer every time.
+- **No Overhead.** We always take the path that leads to the best results, not the fastest prototype. Experience of the user trumpts the experience of the developer every time.
 
 ## AI Use Disclosure and Policy
 - AI is used in this project purely for security auditing, hardening, and performance improvements, writing tests, certain UI elements such as icons and glyphs (I'm no artist), and to assist with simplifying repetitive tasks. AI is a force multiplier, never a primary un-reviewed author. If you wish to contribute code to the project you must:

@@ -47,7 +47,8 @@ func TestCanonicalURL(t *testing.T) {
 // TestRenderPageMetaKeepsTheFitPageTags: the tags the public fit
 // page shipped before the shared mechanism (description, og:title,
 // og:description, og:type, og:url) render byte-for-byte, in order;
-// the mechanism adds the canonical and the twitter card around them.
+// the mechanism adds the canonical, the global share card (the page
+// has no card of its own) and the twitter card around them.
 func TestRenderPageMetaKeepsTheFitPageTags(t *testing.T) {
 	out := string(RenderPageMeta(PageMeta{
 		Title:         "My Fit (Rifter)",
@@ -74,7 +75,8 @@ func TestRenderPageMetaKeepsTheFitPageTags(t *testing.T) {
 	}
 	for _, added := range []string{
 		`<link rel="canonical" href="https://evesynapse.app/fittings/public/fit/7/">`,
-		`<meta name="twitter:card" content="summary">`,
+		`<meta property="og:image" content="https://evesynapse.app/static/og-card.jpg">`,
+		`<meta name="twitter:card" content="summary_large_image">`,
 	} {
 		if !strings.Contains(out, added) {
 			t.Errorf("the shared mechanism did not add %q", added)

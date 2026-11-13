@@ -334,6 +334,13 @@ type Application struct {
 	// about each war, so settled wars cost no per-cycle read.
 	warDetailMemo map[int64]warDetailMemoEntry
 
+	// Summary cards (cards.go): the drawn-card and picture caches,
+	// made on first use. cardFetch, when set, replaces the picture
+	// fetch from images.evetech.net (the test rig sets it).
+	cardOnce  sync.Once
+	cards     *cardState
+	cardFetch func(ctx context.Context, url string) ([]byte, error)
+
 	// Pilot activity profiles (pilot_activity.go): the backfill
 	// queue and who is already on it. The channel is made on first
 	// use; the map keeps a much-reported pilot queued once.
@@ -983,6 +990,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(anonPages)
 		r.Get("/", app.handlePilot)
 		r.Get("/fragment", app.handlePilotFragment)
+		// The pilot's summary card, the page's og:image (cards.go).
+		r.Get("/card.png", app.handlePilotCard)
 		r.With(app.requireAuth).Post("/watch", app.handlePilotWatch)
 	})
 
@@ -1029,6 +1038,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.With(anonPages).Get("/intel/kills/stream", app.handleKillStream)
 	r.With(anonPages).Get("/intel/kills/suggest", app.handleKillboardSuggest)
 	r.With(anonPages).Get("/intel/kill/{id}/", app.handleKillPage)
+	r.With(anonPages).Get("/intel/kill/{id}/card.png", app.handleKillCard)
 	// Battle reports (battle_pages.go): the account's own, and a
 	// shared one at its unlisted link.
 	r.With(app.requireAuth).Get("/intel/battles/", app.handleBattles)

@@ -578,9 +578,10 @@ func (app *page) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
 		blurb += " - " + doc.Description
 	}
 	data.HeadMeta = app.deps.HeadMeta(module.PageMeta{
-		Title:        row.Name + " (" + ship + ")",
-		Description:  blurb,
-		CanonicalURL: view.PageURL,
+		Title:         row.Name + " (" + ship + ")",
+		Description:   blurb,
+		CanonicalURL:  view.PageURL,
+		InstallOrigin: true,
 	})
 	data.PublicFit = view
 	app.deps.Render(ctx, w, http.StatusOK, "fit_public.html", data)

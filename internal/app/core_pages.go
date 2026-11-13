@@ -234,6 +234,11 @@ type shellProvider interface {
 }
 
 func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, page string) {
+	// A page that sets no head metadata still shares as the site:
+	// the global card, the site name and the large twitter card.
+	if shell.HeadMeta == "" {
+		shell.HeadMeta = module.RenderPageMeta(module.PageMeta{})
+	}
 	if shell.Version == "" {
 		shell.Version = appVersion
 	}
@@ -435,7 +440,7 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 			Title:          "EVE Online Fleet, Market & Fitting Tools",
 			Description:    "Free EVE Online tools for fleet and market play: track pilots and wallets, plan builds and fittings, and read market data refreshed from ESI.",
 			CanonicalPath:  "/",
-			ImagePath:      "/static/og-card.jpg",
+			ImagePath:      module.FallbackImagePath,
 			WebApplication: true,
 		})
 	}

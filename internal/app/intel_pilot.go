@@ -148,6 +148,7 @@ func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 			Title:         v.Name,
 			Description:   v.Name + ": corporation, security status and employment history on the public pilot record. EveSynapse EVE Online universe data.",
 			CanonicalPath: "/pilot/",
+			ImagePath:     "/pilot/card.png?character=" + strconv.FormatInt(id, 10),
 		})
 	}
 	app.render(ctx, w, http.StatusOK, "pilot.html", data)

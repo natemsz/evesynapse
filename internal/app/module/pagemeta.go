@@ -4,6 +4,7 @@ import (
 	json "github.com/goccy/go-json"
 	"html"
 	"html/template"
+	"net/url"
 	"strings"
 )
 
@@ -20,6 +21,12 @@ import (
 
 // CanonicalHost is the host every canonical and og:url is built on.
 const CanonicalHost = "https://evesynapse.app"
+
+// FallbackImagePath is the global share card (the front page's
+// wallpaper card): the og:image of every page without a card of
+// its own, and what a card route serves for an entity it cannot
+// resolve.
+const FallbackImagePath = "/static/og-card.jpg"
 
 // PageMeta is one public page's head metadata.
 type PageMeta struct {
@@ -40,11 +47,15 @@ type PageMeta struct {
 	// is omitted entirely where the install has none. Moving it
 	// onto the helper must not change that output.
 	CanonicalURL string
-	// ImagePath, when set, is the page's social preview image
-	// ("/intel/scan/{id}/og.png"): emitted as an absolute
-	// og:image on the canonical host, and the twitter card
-	// upgrades to summary_large_image. Pages without one keep
-	// the plain summary card.
+	// InstallOrigin marks a page whose addresses are the install's
+	// own (the public fit page): its image is served from
+	// CanonicalURL's origin, and with no origin configured it
+	// carries no image, never another site's address.
+	InstallOrigin bool
+	// ImagePath is the page's summary card ("/intel/kill/{id}/card.png"),
+	// emitted as an absolute og:image on the canonical host with
+	// the summary_large_image twitter card. Pages without a card of
+	// their own get FallbackImagePath.
 	ImagePath string
 	// WebApplication asks for the front page's static
 	// WebApplication JSON-LD block.
@@ -103,8 +114,18 @@ func RenderPageMeta(m PageMeta) template.HTML {
 	if canonical != "" {
 		b.WriteString(`<meta property="og:url" content="` + esc(canonical) + `">` + "\n")
 	}
-	if m.ImagePath != "" {
-		img := CanonicalHost + m.ImagePath
+	imagePath := m.ImagePath
+	if imagePath == "" {
+		imagePath = FallbackImagePath
+	}
+	img := CanonicalHost + imagePath
+	if m.InstallOrigin {
+		img = ""
+		if u, err := url.Parse(m.CanonicalURL); err == nil && u.Scheme != "" && u.Host != "" {
+			img = u.Scheme + "://" + u.Host + imagePath
+		}
+	}
+	if img != "" {
 		b.WriteString(`<meta property="og:image" content="` + esc(img) + `">` + "\n")
 		b.WriteString(`<meta name="twitter:image" content="` + esc(img) + `">` + "\n")
 		b.WriteString(`<meta name="twitter:card" content="summary_large_image">` + "\n")

@@ -18,6 +18,16 @@ Contact: admin@evesynapse.app (the team), nate@evesynapse.app (Nate, or in-game 
 
 The project's main home is on Forgejo at [natems.dev/EveSynapse/evesynapse](https://natems.dev/EveSynapse/evesynapse). Development, issues, and pull requests happen there. The project is mirrored at [GitHub](https://github.com/natemsz/evesynapse) and [GitLab](https://gitlab.com/natemsz/evesynapse); the mirrors are read-only copies and may lag the main home.
 
+## Guiding principles
+
+- **Depth and variety both.** We don't sacrifice depth for variety. We spend the extra time to do both.
+- **Accurate data is the altar.** Prices come from EveSynapse's own swept orders and stored estimates, with a clearly labeled outside fallback only where our own data has a gap, and an honest gap where there is no sound figure. We do our own math.
+- **Fresh data, fast pages.** What a user is looking at stays fresh, and the user experience does not degrade to save calls or CPU. Work is precomputed at ingest, never at render, and every page reads a bounded set of rows.
+- **Lightweight without compromise.** Lean, fast, efficient, and scalable, without compromising features, power, or security.
+- **Inspired, never copied.** Another tool can inspire a feature. EveSynapse's version ships only if it is better, faster, smarter, or more integrated than the one that inspired it.
+- **Every instance stands on its own.** The swarm is an accelerator where present, never a crutch. An instance budgets its own calls and serves its users by itself.
+- **Intel does not guess.** An invented claim filed as fact can move a fleet; a missed claim is only missing data. Precision comes before recall.
+
 ## AI Use Disclosure and Policy
 - AI is used in this project purely for security auditing, hardening, and performance improvements, writing tests, certain UI elements such as icons and glyphs (I'm no artist), and to assist with simplifying repetitive tasks. AI is a force multiplier, never a primary un-reviewed author. If you wish to contribute code to the project you must:
 

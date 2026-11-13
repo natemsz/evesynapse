@@ -24,6 +24,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fitview"
+	"evesynapse/internal/markethistory"
 	"evesynapse/internal/tradefees"
 )
 
@@ -189,6 +190,10 @@ func marketCardPath(typeID, regionID int64) string {
 	return "/market/card.png?type=" + strconv.FormatInt(typeID, 10) + "&region=" + strconv.FormatInt(regionID, 10)
 }
 
+// marketSparkMinDays is how many stored history days a market
+// card needs before its price line is worth drawing.
+const marketSparkMinDays = 7
+
 // marketCardJob reads a market item view's card: the item's art and
 // name, the region, and the region's swept best sell, best buy and
 // spread (the same stats row the item page lists per hub).
@@ -218,6 +223,20 @@ func (app *Application) marketCardJob(ctx context.Context, typeID, regionID int6
 				c.Stats = append(c.Stats, card.Stat{Label: "SPREAD", Value: card.Figure(strconv.FormatFloat(spread, 'f', 1, 64) + "%")})
 			}
 			break
+		}
+	}
+	// The price history line: the stored daily averages for this
+	// region, the same rows the item page charts. Too few days
+	// draws no line rather than a stub.
+	if rows := app.recentHistoryRows(ctx, regionID, typeID, markethistory.ChartRows); len(rows) >= marketSparkMinDays {
+		vals := make([]float64, 0, len(rows))
+		for _, row := range rows {
+			if row.Average > 0 {
+				vals = append(vals, row.Average)
+			}
+		}
+		if len(vals) >= marketSparkMinDays {
+			c.Spark = &card.Spark{Label: "PRICE HISTORY", Values: vals}
 		}
 	}
 	var catID int64

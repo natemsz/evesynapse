@@ -118,8 +118,12 @@ func cardVersion(data string, picture string, c card.Card) string {
 	if c.Badge != nil {
 		badge = *c.Badge
 	}
-	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%q\x00%q\x00%q\x00%+v\x00%+v\x00%+v\x00%+v\x00%t",
-		cardStyle, data, picture, c.Kind, c.Title, c.Subtitle, c.Stats, detail, badge, c.Bars, c.Mark)
+	var spark card.Spark
+	if c.Spark != nil {
+		spark = *c.Spark
+	}
+	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%q\x00%q\x00%q\x00%+v\x00%+v\x00%+v\x00%+v\x00%+v\x00%t",
+		cardStyle, data, picture, c.Kind, c.Title, c.Subtitle, c.Stats, detail, badge, c.Bars, spark, c.Mark)
 	return hex.EncodeToString(h.Sum(nil)[:12])
 }
 

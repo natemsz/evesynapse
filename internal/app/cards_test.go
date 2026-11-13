@@ -195,6 +195,27 @@ func TestMarketSummaryCards(t *testing.T) {
 	if job, ok := app.marketCardJob(ctx, 34, 10000043); !ok || len(job.card.Stats) != 3 || job.card.Subtitle != "Domain" {
 		t.Fatalf("market card: ok=%v %+v, want Domain's sell, buy and spread", ok, job.card)
 	}
+	// The market card's price line reads the region's stored daily
+	// averages: ten days in Domain draw the line, oldest first;
+	// three days in The Forge are too few and draw none.
+	for i := 0; i < 10; i++ {
+		day := now.AddDate(0, 0, -i).Format("2006-01-02")
+		avg := 4.0 + 0.1*float64(9-i)
+		if _, err := conn.ExecContext(ctx, `INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count) VALUES (10000043, 34, $1, $2, $2, $2, 1000, 10)`, day, avg); err != nil {
+			t.Fatal(err)
+		}
+		if i < 3 {
+			if _, err := conn.ExecContext(ctx, `INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count) VALUES (10000002, 34, $1, $2, $2, $2, 1000, 10)`, day, avg); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if job, ok := app.marketCardJob(ctx, 34, 10000043); !ok || job.card.Spark == nil || len(job.card.Spark.Values) != 10 || job.card.Spark.Values[0] != 4.0 || job.card.Spark.Values[9] != 4.9 {
+		t.Fatalf("market card spark: ok=%v spark=%+v, want 10 days from 4.0 to 4.9", ok, job.card.Spark)
+	}
+	if job, ok := app.marketCardJob(ctx, 34, 10000002); !ok || job.card.Spark != nil {
+		t.Fatalf("market card spark: ok=%v spark=%+v, want no line for 3 days of history", ok, job.card.Spark)
+	}
 
 	visitor := &http.Cookie{Name: "nobody", Value: "x"}
 	for page, want := range map[string]string{

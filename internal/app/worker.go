@@ -180,7 +180,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(11)
+	children.Add(12)
 
 	// The public killmail stream (killfeed.go) is its own paced
 	// loop: one file every 100 ms while kills arrive, six seconds
@@ -212,6 +212,14 @@ func (app *Application) runWorker(ctx context.Context) {
 	go func() {
 		defer children.Done()
 		runGuarded("killboard restore", func() { app.runKillAttackerRestore(ctx) })
+	}()
+
+	// The stats rebuild's first pass (killboard_rebuild.go) runs at
+	// once: kills, losses, ISK and systems need only the permanent
+	// involvement record, not the restore.
+	go func() {
+		defer children.Done()
+		runGuarded("killboard stats rebuild", func() { app.runKillStatsFirstPass(ctx) })
 	}()
 
 	// The residue step (residue_model.go) reads what settled

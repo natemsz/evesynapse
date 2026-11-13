@@ -392,19 +392,25 @@ func (q *Queries) GetKillStats(ctx context.Context, arg GetKillStatsParams) (Get
 }
 
 const getKillStatsRebuildState = `-- name: GetKillStatsRebuildState :one
-SELECT cursor, started_at, done_at FROM kill_stats_rebuild_state WHERE id = 1
+SELECT cursor, started_at, done_at, complete_at FROM kill_stats_rebuild_state WHERE id = 1
 `
 
 type GetKillStatsRebuildStateRow struct {
-	Cursor    int64        `json:"cursor"`
-	StartedAt sql.NullTime `json:"started_at"`
-	DoneAt    sql.NullTime `json:"done_at"`
+	Cursor     int64        `json:"cursor"`
+	StartedAt  sql.NullTime `json:"started_at"`
+	DoneAt     sql.NullTime `json:"done_at"`
+	CompleteAt sql.NullTime `json:"complete_at"`
 }
 
 func (q *Queries) GetKillStatsRebuildState(ctx context.Context) (GetKillStatsRebuildStateRow, error) {
 	row := q.db.QueryRow(ctx, getKillStatsRebuildState)
 	var i GetKillStatsRebuildStateRow
-	err := row.Scan(&i.Cursor, &i.StartedAt, &i.DoneAt)
+	err := row.Scan(
+		&i.Cursor,
+		&i.StartedAt,
+		&i.DoneAt,
+		&i.CompleteAt,
+	)
 	return i, err
 }
 
@@ -1815,6 +1821,15 @@ func (q *Queries) MarkKillFeedBackfillDone(ctx context.Context, doneAt time.Time
 	return err
 }
 
+const markKillStatsRebuildComplete = `-- name: MarkKillStatsRebuildComplete :exec
+UPDATE kill_stats_rebuild_state SET complete_at = now() WHERE id = 1
+`
+
+func (q *Queries) MarkKillStatsRebuildComplete(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, markKillStatsRebuildComplete)
+	return err
+}
+
 const pruneKillAttackers = `-- name: PruneKillAttackers :execrows
 DELETE FROM kill_attackers a USING kills k
 WHERE k.killmail_id = a.killmail_id AND k.killmail_time < $1::timestamptz
@@ -2058,6 +2073,17 @@ func (q *Queries) ReplaceKillboardTop(ctx context.Context, arg ReplaceKillboardT
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const resetKillStatsRebuild = `-- name: ResetKillStatsRebuild :exec
+UPDATE kill_stats_rebuild_state SET cursor = 0, started_at = NULL, done_at = NULL WHERE id = 1
+`
+
+// The second pass starts over: the next rebuild counts every kill
+// again from id 0.
+func (q *Queries) ResetKillStatsRebuild(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, resetKillStatsRebuild)
+	return err
 }
 
 const setKillFeedBackfillCursor = `-- name: SetKillFeedBackfillCursor :exec

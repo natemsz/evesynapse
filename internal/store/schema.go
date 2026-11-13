@@ -922,6 +922,12 @@ var pgKillLinePriceTiersSchema string
 //go:embed schema_pg/151_pi_colony_planner.sql
 var pgPIColonyPlannerSchema string
 
+// Step 152: the stats rebuild's second pass, after the attacker
+// restore drains.
+//
+//go:embed schema_pg/152_kill_stats_complete.sql
+var pgKillStatsCompleteSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1101,6 +1107,7 @@ func schemaSteps() []schemaStep {
 		{149, "variation_tiers", pgVariationTiersSchema, ""},
 		{150, "kill_line_price_tiers", pgKillLinePriceTiersSchema, ""},
 		{151, "pi_colony_planner", pgPIColonyPlannerSchema, ""},
+		{152, "kill_stats_complete", pgKillStatsCompleteSchema, ""},
 	}
 }
 

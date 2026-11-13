@@ -286,3 +286,75 @@ func countStoredKills(t *testing.T, app *Application, ctx context.Context) {
 		t.Fatalf("rebuild kill stats: %v", err)
 	}
 }
+
+// TestKillStatsSecondPass: the rebuild's first pass counts kills
+// and ISK without waiting for the attacker restore; the second pass,
+// run once the restore drains, counts everything again into freshly
+// made tables (ships flown from the restored rows), and only then
+// does the retention prune's gate open.
+func TestKillStatsSecondPass(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	seed := func(id int64, attackers bool) {
+		t.Helper()
+		at := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(id%100) * time.Hour)
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id,
+				ship_type_id, attacker_count, fb_character_id, source, ingested_at, value_ours)
+			VALUES ($1, $2, 30000142, 93000001, 98000009, 587, 1, 90000001, 'zkill', $2, 1000000)`, id, at); err != nil {
+			t.Fatalf("seed kill %d: %v", id, err)
+		}
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kill_involvement (killmail_id, character_id, corporation_id) VALUES ($1, 90000001, 98000002)`, id); err != nil {
+			t.Fatalf("seed involvement %d: %v", id, err)
+		}
+		if attackers {
+			if _, err := app.db.ExecContext(ctx, `
+				INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, final_blow)
+				VALUES ($1, 0, 90000001, 98000002, 587, true)`, id); err != nil {
+				t.Fatalf("seed attackers %d: %v", id, err)
+			}
+		}
+	}
+	// Two kills, one still missing its attacker rows.
+	seed(950001, true)
+	seed(950002, false)
+	totals := func() (kills int64, isk float64, flown int64) {
+		t.Helper()
+		if err := app.db.QueryRowContext(ctx, `
+			SELECT COALESCE(SUM(kills), 0), COALESCE(SUM(isk_killed), 0) FROM kill_entity_daily
+			WHERE kind = 'character' AND entity_id = 90000001`).Scan(&kills, &isk); err != nil {
+			t.Fatal(err)
+		}
+		if err := app.db.QueryRowContext(ctx, `
+			SELECT COALESCE(SUM(flown), 0) FROM kill_entity_daily_ships
+			WHERE kind = 'character' AND entity_id = 90000001`).Scan(&flown); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+
+	app.runKillStatsFirstPass(ctx)
+	if k, isk, flown := totals(); k != 2 || isk != 2000000 || flown != 1 {
+		t.Fatalf("after the first pass: kills %d, ISK %.0f, flown %d; want 2, 2000000, 1", k, isk, flown)
+	}
+	if app.killStatsComplete(ctx) {
+		t.Fatal("the prune gate opened before the second pass")
+	}
+
+	// The restore reads the missing rows back, then the second pass.
+	if _, err := app.db.ExecContext(ctx, `
+		INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, final_blow)
+		VALUES (950002, 0, 90000001, 98000002, 587, true)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.completeKillStats(ctx); err != nil {
+		t.Fatalf("second pass: %v", err)
+	}
+	if k, isk, flown := totals(); k != 2 || isk != 2000000 || flown != 2 {
+		t.Fatalf("after the second pass: kills %d, ISK %.0f, flown %d; want 2, 2000000, 2", k, isk, flown)
+	}
+	if !app.killStatsComplete(ctx) {
+		t.Fatal("the prune gate stayed shut after the second pass")
+	}
+}

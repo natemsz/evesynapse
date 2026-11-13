@@ -308,6 +308,10 @@ type Application struct {
 	// (killboard_rebuild.go) runs: the fold writes feed rows only
 	// and leaves kills queued until the swap.
 	killStatsRebuilding atomic.Bool
+	// killStatsRebuildMu keeps the rebuild's two callers (the
+	// startup pass and the restore's second pass) from running at
+	// once.
+	killStatsRebuildMu sync.Mutex
 	// When the legacy kill-feed backfill last found less than a
 	// batch to do: it is drained, and rechecked only rarely
 	// (killboard_stats.go).

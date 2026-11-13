@@ -37,6 +37,30 @@ func (q *Queries) ClearSystemSovereignty(ctx context.Context) error {
 	return err
 }
 
+const countRegionSystemsBySecurity = `-- name: CountRegionSystemsBySecurity :one
+SELECT COUNT(*) FILTER (WHERE security >= 0.45)::bigint AS high,
+       COUNT(*) FILTER (WHERE security > 0 AND security < 0.45)::bigint AS low,
+       COUNT(*) FILTER (WHERE security <= 0)::bigint AS null_sec
+FROM sde_systems
+WHERE region_id = $1::bigint
+`
+
+type CountRegionSystemsBySecurityRow struct {
+	High    int64 `json:"high"`
+	Low     int64 `json:"low"`
+	NullSec int64 `json:"null_sec"`
+}
+
+// CountRegionSystemsBySecurity: a region's systems split by the
+// display bands secRound gives (high from 0.45, low above 0, null at
+// or below 0), counted in SQL for the region's summary card.
+func (q *Queries) CountRegionSystemsBySecurity(ctx context.Context, regionID int64) (CountRegionSystemsBySecurityRow, error) {
+	row := q.db.QueryRow(ctx, countRegionSystemsBySecurity, regionID)
+	var i CountRegionSystemsBySecurityRow
+	err := row.Scan(&i.High, &i.Low, &i.NullSec)
+	return i, err
+}
+
 const distillRegionActivityStats = `-- name: DistillRegionActivityStats :exec
 WITH coverage AS (
     SELECT COUNT(DISTINCT hour)::int AS hours

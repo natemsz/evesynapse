@@ -43,6 +43,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 	"github.com/jackc/pgx/v5"
@@ -522,5 +523,12 @@ func (app *Application) handleMapPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.publicPage(ctx)
 	data.Map = app.loadMapPageView(ctx)
+	// The share card names the link's focus and layer (cards_places.go).
+	data.HeadMeta = app.HeadMeta(module.PageMeta{
+		Title:         "Universe map",
+		Description:   "The EVE Online universe map: security, sovereignty, kills, jumps, faction warfare and incursions.",
+		CanonicalPath: "/map/",
+		ImagePath:     mapFocusOf(r.URL.Query()).cardPath(),
+	})
 	app.render(ctx, w, http.StatusOK, "map.html", data)
 }

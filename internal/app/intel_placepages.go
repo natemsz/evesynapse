@@ -173,7 +173,8 @@ func (app *Application) handleSystemPage(w http.ResponseWriter, r *http.Request)
 			desc += " in " + s.Region
 		}
 		desc += ": security, activity, stations and market presence. EveSynapse EVE Online universe data."
-		data.HeadMeta = app.HeadMeta(module.PageMeta{Title: s.Name, Description: desc, CanonicalPath: "/system/"})
+		data.HeadMeta = app.HeadMeta(module.PageMeta{Title: s.Name, Description: desc, CanonicalPath: "/system/",
+			ImagePath: "/system/card.png?system=" + strconv.FormatInt(id, 10)})
 	}
 	app.render(ctx, w, http.StatusOK, "system.html", data)
 }
@@ -245,6 +246,7 @@ func (app *Application) handleRegionPage(w http.ResponseWriter, r *http.Request)
 			Title:         v.Name,
 			Description:   v.Name + ": its systems, security and activity across the region. EveSynapse EVE Online universe data.",
 			CanonicalPath: "/region/",
+			ImagePath:     "/region/card.png?region=" + strconv.FormatInt(id, 10),
 		})
 	}
 	app.render(ctx, w, http.StatusOK, "region.html", data)

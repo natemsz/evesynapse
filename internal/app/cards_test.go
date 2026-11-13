@@ -114,6 +114,50 @@ func TestSummaryCards(t *testing.T) {
 	}
 }
 
+// TestPlaceSummaryCards: the system, region and map pages point
+// og:image at their cards (the map's carrying the link's focus and
+// layer); the region card splits its systems by the display bands;
+// an unknown system gets the fallback card.
+func TestPlaceSummaryCards(t *testing.T) {
+	app, conn, _ := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	for _, s := range []string{
+		`INSERT INTO sde_regions (region_id, name) VALUES (10000042, 'Heimatar') ON CONFLICT DO NOTHING`,
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES
+			(30002537, 'Amamake', 10000042, 0.4), (30002510, 'Rens', 10000042, 0.9),
+			(30002538, 'Vard', 10000042, 0.03), (30002539, 'Null One', 10000042, -0.2) ON CONFLICT DO NOTHING`,
+	} {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	visitor := &http.Cookie{Name: "nobody", Value: "x"}
+	for page, want := range map[string]string{
+		"/system/?system=30002537":                 "https://evesynapse.app/system/card.png?system=30002537",
+		"/region/?region=10000042":                 "https://evesynapse.app/region/card.png?region=10000042",
+		"/map/?region=10000042&layer=sov&view=1,2": "https://evesynapse.app/map/card.png?layer=sov&amp;region=10000042",
+	} {
+		_, body := getPage(t, app, visitor, page)
+		mustContain(t, page, body, `<meta property="og:image" content="`+want+`">`)
+	}
+	c, ok := app.regionCard(ctx, 10000042)
+	if !ok || len(c.Bars) != 3 || c.Bars[0].Count != "1" || c.Bars[1].Count != "2" || c.Bars[2].Count != "1" {
+		t.Fatalf("region card bars: ok=%v %+v, want 1 high, 2 low, 1 null", ok, c.Bars)
+	}
+	for _, path := range []string{"/system/card.png?system=30002537", "/region/card.png?region=10000042", "/map/card.png?layer=sov"} {
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/png" {
+			t.Errorf("%s: status %d type %q, want a PNG", path, rec.Code, rec.Header().Get("Content-Type"))
+		}
+	}
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/card.png?system=1", nil))
+	if !bytes.Equal(rec.Body.Bytes(), fallbackCard()) {
+		t.Errorf("an unknown system did not get the fallback card")
+	}
+}
+
 // TestCardBrandMatchesWordmark: the card package draws the brand from
 // copies of the template's outlines; every one must still be in
 // templates/wordmark.html, so the cards never drift from the site.

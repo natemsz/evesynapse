@@ -264,6 +264,16 @@ LEFT JOIN system_activity_stats st ON st.system_id = s.system_id
 WHERE s.region_id = sqlc.arg(region_id)::bigint
 ORDER BY s.name;
 
+-- CountRegionSystemsBySecurity: a region's systems split by the
+-- display bands secRound gives (high from 0.45, low above 0, null at
+-- or below 0), counted in SQL for the region's summary card.
+-- name: CountRegionSystemsBySecurity :one
+SELECT COUNT(*) FILTER (WHERE security >= 0.45)::bigint AS high,
+       COUNT(*) FILTER (WHERE security > 0 AND security < 0.45)::bigint AS low,
+       COUNT(*) FILTER (WHERE security <= 0)::bigint AS null_sec
+FROM sde_systems
+WHERE region_id = sqlc.arg(region_id)::bigint;
+
 -- ListRegionSovereigntyBreakdown: a region's current holders by
 -- systems held, most first; the caller bounds the list.
 -- name: ListRegionSovereigntyBreakdown :many

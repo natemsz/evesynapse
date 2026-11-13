@@ -26,9 +26,13 @@ const W, H = 1200, 630
 type Card struct {
 	// Kind is the tag at the header's right: "PILOT", "KILL".
 	Kind string
-	// Picture fills the panel at the left (cropped to a square);
-	// nil leaves the panel empty.
+	// Picture fills the panel at the left (cropped to a square).
+	// Without one the panel shows Badge, Bars or the logo mark
+	// (Mark), in that order of preference, or stays empty.
 	Picture image.Image
+	Badge   *Badge
+	Bars    []Bar
+	Mark    bool
 	// Title is the name line; Subtitle the secondary line under it.
 	Title    string
 	Subtitle string
@@ -37,6 +41,23 @@ type Card struct {
 	// Detail is an optional labelled line under the figures, for a
 	// value too long to read as a figure (a pilot's name).
 	Detail *Detail
+}
+
+// Badge is one large figure centred in the panel with a caption
+// under it (a system's security status).
+type Badge struct {
+	Text    string
+	Color   color.NRGBA
+	Caption string
+}
+
+// Bar is one row of a proportion chart in the panel: a label and
+// count over a bar filled to Frac (0 to 1) in its colour.
+type Bar struct {
+	Label string
+	Count string
+	Frac  float64
+	Color color.NRGBA
 }
 
 // Detail is a labelled line of secondary text.
@@ -123,7 +144,7 @@ func Render(c Card) *image.RGBA {
 	}
 	fill(img, rect(margin, ruleY, W-margin, ruleY+2), linear(margin, 0, W-margin, 0, alpha(ruleGold, .6), alpha(ruleEmber, .6)))
 
-	drawPanel(img, c.Picture)
+	drawPanel(img, c)
 
 	right := W - margin
 	avail := right - colX
@@ -142,10 +163,15 @@ func Render(c Card) *image.RGBA {
 	}
 	drawStats(img, c.Stats, right)
 	if d := c.Detail; d != nil && d.Text != "" {
+		// With no figure row the detail line takes its place.
+		lb, tb := detailLabel, detailBase
+		if len(c.Stats) == 0 {
+			lb, tb = labelBase, labelBase+(detailBase-detailLabel)
+		}
 		label := newText(display, labelCap, 3)
-		label.draw(img, colX, detailLabel, d.Label, muted2C)
+		label.draw(img, colX, lb, d.Label, muted2C)
 		line := newText(body, subCap, 0)
-		line.draw(img, colX, detailBase, line.fit(d.Text, avail), textC)
+		line.draw(img, colX, tb, line.fit(d.Text, avail), textC)
 	}
 
 	foot := newText(body, footCap, 0)
@@ -192,17 +218,28 @@ func field(img *image.RGBA) {
 	}
 }
 
-// drawPanel draws the picture panel: a rounded square on panel
-// glass with an accent hairline, the picture cropped to fill it.
-func drawPanel(img *image.RGBA, pic image.Image) {
+// drawPanel draws the panel: a rounded square on panel glass with
+// an accent hairline, holding the picture cropped to fill it, or
+// without one the badge, the bars or the logo mark.
+func drawPanel(img *image.RGBA, c Card) {
 	x0, y0 := margin, panelY
 	x1, y1 := x0+panelSide, y0+panelSide
 	fill(img, roundRect(x0, y0, x1, y1, panelR), solid(alpha(accentC, .45)))
 	const inset = 2.0
 	ix0, iy0, ix1, iy1 := x0+inset, y0+inset, x1-inset, y1-inset
 	inner := roundRect(ix0, iy0, ix1, iy1, panelR-inset)
+	pic := c.Picture
 	if pic == nil {
 		fill(img, inner, solid(panelC))
+		cx, cy := (ix0+ix1)/2, (iy0+iy1)/2
+		switch {
+		case c.Badge != nil:
+			drawBadge(img, *c.Badge, cx, cy)
+		case len(c.Bars) > 0:
+			drawBars(img, c.Bars, ix0+36, ix1-36, cy)
+		case c.Mark:
+			drawMark(img, cx-75, cy-75, 150)
+		}
 		return
 	}
 	side := int(ix1 - ix0)
@@ -227,6 +264,47 @@ func drawPanel(img *image.RGBA, pic image.Image) {
 		i := scaled.PixOffset(px, py)
 		return color.NRGBA{scaled.Pix[i], scaled.Pix[i+1], scaled.Pix[i+2], 0xff}
 	})
+}
+
+// drawBadge sets a large figure centred on (cx, cy) with its caption
+// under it.
+func drawBadge(img *image.RGBA, b Badge, cx, cy float64) {
+	const figPx, gap = 96.0, 34.0
+	fig := newText(display, figPx, 0)
+	text := fig.fit(b.Text, panelSide-48)
+	col := b.Color
+	if col == (color.NRGBA{}) {
+		col = hiC
+	}
+	top := cy - (figPx+gap+labelCap)/2
+	fig.draw(img, cx-fig.width(text)/2, top+figPx, text, col)
+	if b.Caption != "" {
+		caption := newText(display, labelCap, 3)
+		caption.draw(img, cx-caption.width(b.Caption)/2, top+figPx+gap+labelCap, b.Caption, muted2C)
+	}
+}
+
+// drawBars draws a proportion chart between x0 and x1, centred on
+// cy: per row a label with its count at the right, over a track
+// filled to the row's fraction.
+func drawBars(img *image.RGBA, bars []Bar, x0, x1, cy float64) {
+	const rowH, countCap, barGap, barH = 76.0, 22.0, 12.0, 10.0
+	label := newText(display, labelCap, 3)
+	count := newText(display, countCap, 0)
+	block := float64(len(bars))*rowH - (rowH - countCap - barGap - barH)
+	y := cy - block/2
+	for _, b := range bars {
+		base := y + countCap
+		label.draw(img, x0, base, b.Label, muted2C)
+		count.draw(img, x1-count.width(b.Count), base, b.Count, textBright)
+		by := base + barGap
+		fill(img, roundRect(x0, by, x1, by+barH, barH/2), solid(alpha(textC, .08)))
+		if f := math.Max(0, math.Min(1, b.Frac)); f > 0 {
+			w := math.Max(barH, (x1-x0)*f)
+			fill(img, roundRect(x0, by, x0+w, by+barH, barH/2), solid(b.Color))
+		}
+		y += rowH
+	}
 }
 
 // drawStats draws the figure row left to right from the text

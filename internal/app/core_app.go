@@ -1018,10 +1018,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/system", func(r chi.Router) {
 		r.Use(anonPages)
 		r.Get("/", app.handleSystemPage)
+		r.Get("/card.png", app.handleSystemCard)
 	})
 	r.Route("/region", func(r chi.Router) {
 		r.Use(anonPages)
 		r.Get("/", app.handleRegionPage)
+		r.Get("/card.png", app.handleRegionCard)
 	})
 	r.Route("/station", func(r chi.Router) {
 		r.Use(anonPages)
@@ -1108,6 +1110,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/map", func(r chi.Router) {
 		r.Use(anonPages)
 		r.Get("/", app.handleMapPage)
+		r.Get("/card.png", app.handleMapCard)
 		r.Get("/universe.json", app.handleUniverseJSON)
 		r.Get("/layers.json", app.handleMapLayersJSON)
 		r.Get("/scans.json", app.handleMapScans)

@@ -139,11 +139,11 @@ const (
 	// The sparkline's band under its caption, in the same space.
 	sparkTop = 504.0
 	sparkBot = 554.0
-	figBase     = 440.0
-	figCap      = 30.5
-	statGap     = 64.0
-	footBase    = 588.0
-	footCap     = 16.0
+	figBase  = 440.0
+	figCap   = 30.5
+	statGap  = 64.0
+	footBase = 588.0
+	footCap  = 16.0
 )
 
 // Render draws a card.

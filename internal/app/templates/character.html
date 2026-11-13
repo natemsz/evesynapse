@@ -42,6 +42,10 @@
       <p class="ov-sub">{{if $v.SkillsKnown}}{{$v.SkillsCount}} trained skills{{end}}{{if $v.ClonesKnown}} · {{len $v.JumpClones}} jump clones{{end}}{{if $v.PIKnown}} · {{$v.PIColonies}} colonies{{end}}{{if $v.CorpName}} · {{$v.CorpName}}{{if $v.CorpTicker}} [{{$v.CorpTicker}}]{{end}}{{end}}</p>
       <div class="ov-picker">{{template "charselector" .CharChars}}</div>
     </div>
+    <div class="ov-share">
+      <a class="ov-share-img" href="{{$v.ShareCardURL}}" target="_blank" rel="noopener"><img src="{{$v.ShareCardURL}}" alt="Public pilot card for {{$v.CharacterName}}" width="1200" height="630" loading="lazy"></a>
+      <div class="ov-share-bar"><span>Your public pilot card</span><a href="{{$v.ShareProfileHref}}">View public profile</a></div>
+    </div>
     {{if $v.SkillsKnown}}
     <div class="ov-total">
       <div class="ov-total-v">{{$ov.TotalSPCompact}} SP</div>

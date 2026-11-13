@@ -95,6 +95,7 @@ type pilotHistoryView struct {
 type pilotView struct {
 	CharacterID    int64
 	State          string // "loading" | "missing" | "ready"
+	OwnerPreview   bool   // the owner is viewing their own public page (view=public)
 	PortraitURL    string
 	Name           string
 	Title          string
@@ -111,7 +112,8 @@ type pilotView struct {
 }
 
 // handlePilot renders a stranger's public record. One of the
-// viewer's own characters redirects to its full sheet instead.
+// viewer's own characters redirects to its full sheet instead,
+// unless the owner asked for the public view (view=public).
 func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.publicPage(ctx) // public: stored rows only
@@ -122,14 +124,22 @@ func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Own characters belong on their full character sheet.
-	if app.isOwnCharacter(ctx, id) {
+	// Own characters belong on their full character sheet. The
+	// exception is an explicit view=public, which the character
+	// sheet's share block links to: the owner sees the public
+	// page exactly as anyone else does, with a note saying so.
+	own := app.isOwnCharacter(ctx, id)
+	preview := own && r.URL.Query().Get("view") == "public"
+	if own && !preview {
 		http.Redirect(w, r, "/character/?character="+strconv.FormatInt(id, 10), http.StatusSeeOther)
 		return
 	}
 
 	app.markGuessHit(ctx, pageWantPilot, id, 0)
 	data.Pilot = app.loadPilotView(ctx, id)
+	if data.Pilot != nil && preview {
+		data.Pilot.OwnerPreview = true
+	}
 	pname := ""
 	if data.Pilot != nil {
 		pname = data.Pilot.Name

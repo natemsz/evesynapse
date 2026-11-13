@@ -19,6 +19,12 @@
 .ov-total-v { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-4xl); line-height: 1.1; color: var(--accent); }
 .ov-total-l { font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; color: var(--muted-2); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; }
 .ov-total-u { margin-top: 0.15rem; font-size: var(--fs-xs); color: var(--gold); }
+/* The share block sits in the head's open space, against the
+   total: the generated public pilot card image itself, with the
+   public profile link under it. */
+.ov-share { flex: 0 1 19rem; max-width: 19rem; margin-left: auto; }
+.ov-share-img img { display: block; width: 100%; height: auto; border: 1px solid var(--box-edge); border-radius: var(--r-sm); }
+.ov-share-bar { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; margin-top: 0.35rem; font-size: var(--fs-sm); color: var(--muted); }
 
 /* ---- Trained banner ---- */
 .ov-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; margin-bottom: 1rem; padding: 0.6rem 0.8rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: color-mix(in srgb, var(--kept) 14%, transparent); }
@@ -252,4 +258,5 @@ html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #
 @container page (width < 46rem) {
   .ov-head { flex-direction: column; }
   .ov-total { text-align: left; }
+  .ov-share { margin-left: 0; width: 100%; max-width: 22rem; }
 }

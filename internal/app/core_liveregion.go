@@ -125,7 +125,9 @@ func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *htt
 // employment history (the pilot-fragment define), from the
 // pilot_records queue. One of the viewer's own characters
 // gets a settled pointer to the full sheet (the page itself
-// redirects; the fragment cannot).
+// redirects; the fragment cannot), unless the request carries
+// the owner's public view (view=public), which polls for the
+// real record like any stranger's page.
 func (app *Application) handlePilotFragment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id, err := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64)
@@ -133,12 +135,18 @@ func (app *Application) handlePilotFragment(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "bad pilot fragment request", http.StatusBadRequest)
 		return
 	}
-	if app.isOwnCharacter(ctx, id) {
+	own := app.isOwnCharacter(ctx, id)
+	preview := own && r.URL.Query().Get("view") == "public"
+	if own && !preview {
 		view := &pilotView{CharacterID: id, State: "ready", Name: "Your character"}
 		app.renderFragment(w, "pilot.html", "pilot-own-fragment", view)
 		return
 	}
-	app.renderFragment(w, "pilot.html", "pilot-fragment", app.loadPilotView(ctx, id))
+	view := app.loadPilotView(ctx, id)
+	if preview {
+		view.OwnerPreview = true
+	}
+	app.renderFragment(w, "pilot.html", "pilot-fragment", view)
 }
 
 // handleItemDescriptionFragment re-renders just an item's

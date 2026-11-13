@@ -161,6 +161,38 @@ func TestPilotPageStatesAndDrain(t *testing.T) {
 		t.Fatalf("own pilot: code %d location %q, want 303 to the character sheet", req.code, req.location)
 	}
 
+	// The character sheet queues the owner's own public record
+	// while it is not ready, and its head carries the share
+	// block: the card image and the public profile link.
+	seedSnapshot(t, q, fixtureCharA, esi.SnapOnline, esi.Online{})
+	code, body = getPage(t, app, cookie, "/character/?character=90000001")
+	if code != http.StatusOK {
+		t.Fatalf("character sheet: status %d", code)
+	}
+	mustContain(t, "/character/", body,
+		"/pilot/card.png?character=90000001",
+		"/pilot/?character=90000001&amp;view=public")
+	if rec, err := q.GetPilotRecord(ctx, fixtureCharA); err != nil || rec.State != "pending" {
+		t.Fatalf("own pilot want after the sheet: %+v err=%v, want pending", rec, err)
+	}
+
+	// The public view of an own character: no redirect, and the
+	// owner note shows over the public record section.
+	code, body = getPage(t, app, cookie, "/pilot/?character=90000001&view=public")
+	if code != http.StatusOK {
+		t.Fatalf("own pilot public view: status %d", code)
+	}
+	mustContain(t, "/pilot/ (public view)", body,
+		"Your public profile, as other pilots see it",
+		"Loading this pilot's public record")
+
+	// The fragment follows the page: the settled pointer
+	// without view=public, the real record with it.
+	_, body = getPage(t, app, cookie, "/pilot/fragment?character=90000001")
+	mustContain(t, "/pilot/fragment", body, "This is one of your characters")
+	_, body = getPage(t, app, cookie, "/pilot/fragment?character=90000001&view=public")
+	mustContain(t, "/pilot/fragment (public view)", body, "Loading this pilot's public record")
+
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("pilot renders made %d outbound calls, want 0", got)
 	}

@@ -49,16 +49,25 @@ func TestSummaryCards(t *testing.T) {
 	const pilot = int64(93300001)
 	now := time.Now().UTC()
 	if err := app.setPilotRecord(ctx, db.SetPilotRecordParams{CharacterID: pilot, State: pilotStateReady,
-		Payload:   `{"profile":{"name":"Card Pilot","corporation_id":98000001},"corp":{"name":"Card Corp","ticker":"CARD"}}`,
+		Payload:   `{"profile":{"name":"Card Pilot","corporation_id":98000001,"alliance_id":99000001,"birthday":"2009-12-24T00:00:00Z","security_status":0.6},"corp":{"name":"Card Corp","ticker":"CARD"},"alliance":{"name":"Card Alliance","ticker":"ALLY"}}`,
 		FetchedAt: sql.NullTime{Time: now, Valid: true}}); err != nil {
 		t.Fatal(err)
 	}
 	_, body := getPage(t, app, visitor, "/pilot/?character=93300001")
 	mustContain(t, "/pilot/", body, `<meta property="og:image" content="https://evesynapse.app/pilot/card.png?character=93300001">`)
 
-	// No activity record: name and portrait, no stat row.
-	if job, ok := app.pilotCardJob(ctx, pilot); !ok || job.card.Title != "Card Pilot" || len(job.card.Stats) != 0 {
-		t.Fatalf("pilot without activity: ok=%v card=%+v, want a name card with no stats", ok, job.card)
+	// No activity record: the card carries the public record's
+	// facts only, corporation and alliance, security status and
+	// birthday, with no combat figures.
+	job, ok := app.pilotCardJob(ctx, pilot)
+	if !ok || job.card.Title != "Card Pilot" || job.card.Subtitle != "Card Corp · Card Alliance" {
+		t.Fatalf("pilot without activity: ok=%v card=%+v, want the record card", ok, job.card)
+	}
+	if len(job.card.Stats) != 1 || job.card.Stats[0].Label != "SEC STATUS" || job.card.Stats[0].Value[0].Text != "0.60" {
+		t.Fatalf("pilot without activity: stats %+v, want only SEC STATUS 0.60", job.card.Stats)
+	}
+	if job.card.Detail == nil || job.card.Detail.Label != "BORN" || job.card.Detail.Text != "2009-12-24" {
+		t.Fatalf("pilot without activity: detail %+v, want BORN 2009-12-24", job.card.Detail)
 	}
 	rec := fetch("/pilot/card.png?character=93300001")
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/png" {
@@ -75,8 +84,9 @@ func TestSummaryCards(t *testing.T) {
 	// The activity record adds the stat row, and moving its
 	// updated_at redraws the card.
 	exec(`INSERT INTO pilot_activity_profiles (character_id, backfilled_at, updated_at, kills, losses) VALUES ($1, $2, $2, 2431, 318)`, pilot, now)
-	if job, _ := app.pilotCardJob(ctx, pilot); len(job.card.Stats) < 2 || job.card.Stats[0].Value[0].Text != "2,431" {
-		t.Fatalf("pilot with activity: stats %+v, want kills 2,431 first", job.card.Stats)
+	if job, _ := app.pilotCardJob(ctx, pilot); len(job.card.Stats) < 3 || job.card.Stats[0].Value[0].Text != "2,431" ||
+		job.card.Stats[len(job.card.Stats)-1].Label != "SEC STATUS" {
+		t.Fatalf("pilot with activity: stats %+v, want kills 2,431 first and SEC STATUS last", job.card.Stats)
 	}
 	fetch("/pilot/card.png?character=93300001")
 	fetch("/pilot/card.png?character=93300001")

@@ -10,6 +10,8 @@ html[data-theme="light"] .pi { --pi-loss: #b0302a; }
 .pi h3 small { font-weight: 400; font-size: var(--fs-xs); text-transform: none; letter-spacing: 0; }
 .pi h3 { margin: 0 0 var(--space-2); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); display: flex; align-items: baseline; gap: 0.5rem; }
 .pi-more { margin-left: auto; font-family: var(--font-body); font-size: var(--fs-xs); letter-spacing: 0; text-transform: none; }
+/* The owner's public-view note at the top of their own pilot page. */
+.pilot-preview-note { margin: 0 0 var(--space-4); color: var(--muted); font-size: var(--fs-sm); }
 .pi-yours { display: flex; flex-direction: column; gap: var(--space-3); }
 .pi-sub h3 { margin-top: var(--space-1); }
 

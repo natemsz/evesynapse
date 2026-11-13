@@ -454,7 +454,7 @@ func TestDemoSignInAndPagesRender(t *testing.T) {
 		// status, and the seeded activity profile backs the
 		// activity figures.
 		{"/pilot/?character=2900000102", []string{"Ilya Sorin", "Hale Freight Services [HALE]", "1.20",
-			"every recorded kill and loss", "Merlin", "1 final blows"}},
+			"Every recorded kill and loss", "Merlin", "1 final blows"}},
 	}
 	for _, page := range pages {
 		rec := get(app, cookie, page.path)

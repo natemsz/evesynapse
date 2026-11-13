@@ -438,7 +438,7 @@
    * @property {{at:number,id:number[],ship:number[],pod:number[],npc:number[]}} kills
    * @property {{at:number,id:number[],n:number[]}} jumps
    * @property {{at:number,id:number[],a:number[],f:number[]}} sov  a: alliance index (-1 none); f: NPC faction
-   * @property {{id:number,name:string}[]} alliances
+   * @property {{id:number,name:string,cap:number}[]} alliances  cap: the capital system (absent when none)
    * @property {{at:number,id:number[],occ:number[],own:number[],state:string[],pct:number[]}} fw
    * @property {{at:number,list:{cons:number,staging:number,sys:number[],state:string,inf:number,boss:boolean,f:number}[]}} inc
    * @property {{id:number,name:string}[]} factions
@@ -472,6 +472,7 @@
     J.sovAdm = new Float32Array(n); J.sovVS = new Float64Array(n); J.sovVE = new Float64Array(n); J.sovSince = new Float64Array(n);
     J.sovContest = {};
     J.allianceMembers = J.alliances.map(function () { return []; });
+    J.capOf = J.alliances.map(function (a) { var c = a.cap ? G.byID[a.cap] : undefined; return c === undefined ? -1 : c; });
     each(L.sov, "sov", function (i, j, p) {
       J.sovA[i] = p.a[j];
       J.sovF[i] = p.f[j];
@@ -661,6 +662,23 @@
     });
     if (LY) s.hot.sort(function (x, y) { return LY.threat[y] - LY.threat[x]; });
     return s;
+  }
+
+  // --- Ansiblex cost zones: the pure part ---
+  // An Ansiblex jump's capacitor cost grows with how far the jump
+  // lands from the bridge owner's alliance capital, in CCP's five
+  // bands (patch 2026-09-22). Distances count to a tenth of a light
+  // year, as the bands are written. An alliance without a capital
+  // pays the zone 5 rate everywhere, so an unknown distance is zone 5.
+  var BRIDGE_ZONES = [
+    { zone: 1, upTo: 5, mult: 0 }, { zone: 2, upTo: 10, mult: 2 }, { zone: 3, upTo: 15, mult: 6 },
+    { zone: 4, upTo: 20, mult: 9 }, { zone: 5, upTo: Infinity, mult: 15 }
+  ];
+  function bridgeZone(ly) {
+    if (!(ly >= 0)) return BRIDGE_ZONES[4];
+    var d = Math.round(ly * 10) / 10;
+    for (var k = 0; k < 4; k++) if (d <= BRIDGE_ZONES[k].upTo) return BRIDGE_ZONES[k];
+    return BRIDGE_ZONES[4];
   }
 
   // --- Jump drives: the pure part ---
@@ -864,6 +882,9 @@
         sovOpen: tok("--map-sov-open", "#f0b429"),
         sovNew: tok("--map-sov-new", "#e8e0d8"),
         threatRamp: [rgbOf(tok("--map-threat-lo", "#e0a020")), rgbOf(tok("--map-threat-hi", "#e0301c")), rgbOf(tok("--map-threat-core", "#fff0e0"))],
+        // Ansiblex cost zones, 1 (free) to 5 (the full rate).
+        zones: [tok("--map-zone-1", "#5ce0c8"), tok("--map-zone-2", "#b8e05a"), tok("--map-zone-3", "#f0b429"),
+          tok("--map-zone-4", "#ff6a2a"), tok("--map-zone-5", "rgba(214,120,110,0.55)")],
         route: tok("--map-route", "#ffd27a"),
         routeHalo: tok("--map-route-halo", "rgba(255,210,122,0.25)"),
         intel: rgbOf(tok("--map-intel", "#3fd8ff")),
@@ -1389,6 +1410,14 @@
     try { sovNPC = localStorage.getItem("evesynapse-map-sov-npc") !== "0"; } catch (e) { /* private mode */ }
     if (startQuery.get("npc") === "0") sovNPC = false;
     if (startQuery.get("npc") === "1") sovNPC = true;
+    // Zones: the Ansiblex cost zones around one alliance's capital.
+    // The alliance is a link's zones=, else the one last picked, else
+    // (when the layer opens) the holder of the selected system, of a
+    // pilot's system, or the largest holder with a capital. Distances
+    // are true light years from /map/jump.json, worked out once per
+    // capital.
+    var ZONES_KEY = "evesynapse-map-zones", zonesID = +startQuery.get("zones") || 0, zoneCache = null, lyScale = 0;
+    if (!zonesID) { try { zonesID = +localStorage.getItem(ZONES_KEY) || 0; } catch (e) { /* private mode */ } }
     // Improved Projection: the universe in the game's own
     // authored 2D layout, the default view. A remembered
     // preference, on every visit until the reader changes it
@@ -1435,6 +1464,86 @@
         }
       }
       return "hsl(" + allianceHue(al ? al.id : ai) + ",68%," + colors.sovL + ")";
+    }
+
+    function zonesAlliance() {
+      if (!LY || !zonesID) return -1;
+      for (var a = 0; a < LY.alliances.length; a++) if (LY.alliances[a].id === zonesID) return a;
+      return -1;
+    }
+    // zonesEnsure settles the layer's alliance when none is picked
+    // yet (or the picked one holds nothing now).
+    function zonesEnsure() {
+      if (!LY || zonesAlliance() >= 0) return;
+      var a = sel >= 0 ? LY.sovA[sel] : -1;
+      if (a < 0 && MINE && MINE.pilots) {
+        for (var p = 0; p < MINE.pilots.length && a < 0; p++) {
+          var at = G.byID[MINE.pilots[p].sys];
+          if (at !== undefined) a = LY.sovA[at];
+        }
+      }
+      if (a < 0) {
+        var most = 0;
+        for (var b = 0; b < LY.alliances.length; b++) {
+          if (LY.capOf[b] >= 0 && LY.allianceMembers[b].length > most) { most = LY.allianceMembers[b].length; a = b; }
+        }
+      }
+      zonesID = a >= 0 ? LY.alliances[a].id : 0;
+    }
+    // zoneData: the picked alliance, its capital and every system's
+    // light years from it (null until the jump data is in).
+    function zoneData() {
+      var a = zonesAlliance();
+      if (a < 0 || !JUMP) return null;
+      var c = LY.capOf[a];
+      if (c < 0) return { a: a, cap: -1 };
+      if (zoneCache && zoneCache.cap === c && zoneCache.J === JUMP) { zoneCache.a = a; return zoneCache; }
+      var ly = new Float32Array(G.n), zone = new Uint8Array(G.n);
+      for (var i = 0; i < G.n; i++) {
+        ly[i] = isNaN(JUMP.x[i]) ? NaN : lyBetween(JUMP, c, i);
+        zone[i] = bridgeZone(ly[i]).zone;
+      }
+      zoneCache = { a: a, cap: c, J: JUMP, ly: ly, zone: zone };
+      return zoneCache;
+    }
+    // The true frame's units per light year, read off the two payloads
+    // (the frame is the real x and z, scaled), for the zone rings.
+    function frameLY() {
+      if (lyScale || !JUMP) return lyScale;
+      var lo = -1, hi = -1;
+      for (var i = 0; i < G.n; i++) {
+        if (isNaN(JUMP.x[i])) continue;
+        if (lo < 0 || JUMP.x[i] < JUMP.x[lo]) lo = i;
+        if (hi < 0 || JUMP.x[i] > JUMP.x[hi]) hi = i;
+      }
+      if (lo >= 0 && JUMP.x[hi] > JUMP.x[lo]) lyScale = (S.x[hi] - S.x[lo]) / (JUMP.x[hi] - JUMP.x[lo]);
+      return lyScale;
+    }
+    // The zone rings around the capital: each band's reach seen from
+    // above, so only in the true frame (the game's own layout is not
+    // to scale).
+    function drawZoneRings(Z, k, ox, oy) {
+      var u = frameLY();
+      if (!u || projOn) return;
+      var cx = wx(Z.cap) * k + ox, cy = wy(Z.cap) * k + oy;
+      ctx.save();
+      ctx.setLineDash([4, 5]);
+      ctx.lineWidth = 1.2;
+      ctx.font = "600 11px " + fontDisplay;
+      ctx.textAlign = "center";
+      for (var z = 0; z < 4; z++) {
+        var rr = BRIDGE_ZONES[z].upTo * u * k;
+        if (rr < 14) continue;
+        ctx.strokeStyle = colors.zones[z];
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = colors.zones[z];
+        ctx.fillText(BRIDGE_ZONES[z].upTo + " LY", cx, cy - rr - 4);
+      }
+      ctx.restore();
     }
 
     function drawLayer(k, ox, oy, r, list, n, pad) {
@@ -1515,6 +1624,27 @@
             ctx.arc(sx, sy, r + 9, 0, Math.PI * 2);
             ctx.stroke();
           });
+        }
+        return;
+      }
+      if (layer === "zones") {
+        var Z = zoneData();
+        if (!Z || Z.cap < 0) { batch(colors.dim, r * 0.8, function () { return true; }); return; }
+        drawZoneRings(Z, k, ox, oy);
+        // Every system in its zone's color; the alliance's own space
+        // (where its bridges stand) full size, the rest faint.
+        for (var zi = 5; zi >= 1; zi--) {
+          ctx.globalAlpha = 0.5;
+          batch(colors.zones[zi - 1], r * 0.8, function (i) { return Z.zone[i] === zi && LY.sovA[i] !== Z.a; });
+          ctx.globalAlpha = 1;
+          batch(colors.zones[zi - 1], r * 1.15, function (i) { return Z.zone[i] === zi && LY.sovA[i] === Z.a; });
+        }
+        if (on(Z.cap)) {
+          ctx.beginPath();
+          ctx.arc(sx, sy, r * 1.15 + 5, 0, Math.PI * 2);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = colors.route;
+          ctx.stroke();
         }
         return;
       }
@@ -1819,6 +1949,7 @@
       if (name !== "security" && dataHeat()) name = "security";
       if (!el.querySelector('[data-map-layer="' + name + '"]')) name = "security";
       layer = name;
+      if (name === "zones") { zonesEnsure(); loadJump(); }
       showTip(-1);
       el.querySelectorAll("[data-map-layer]").forEach(function (b) {
         var on = b.getAttribute("data-map-layer") === name;
@@ -1844,7 +1975,7 @@
       return ("0" + d.getUTCHours()).slice(-2) + ":" + ("0" + d.getUTCMinutes()).slice(-2) + " EVE";
     }
     var LAYER_TITLES = { kills: "Ship and pod kills, last hour", npc: "NPC kills, last hour", jumps: "Jumps, last hour",
-      sov: "Sovereignty", fw: "Faction Warfare", inc: "Incursions", threat: "Threat now" };
+      sov: "Sovereignty", zones: "Ansiblex zones", fw: "Faction Warfare", inc: "Incursions", threat: "Threat now" };
 
     // The legend for the layer showing: the security swatches for
     // Security, otherwise a scale or key built here.
@@ -1936,6 +2067,58 @@
         trkA.textContent = "Sovereignty tracker";
         trk.appendChild(trkA);
         box.appendChild(trk);
+      } else if (layer === "zones") {
+        // Whose zones: the alliances holding space, those with a
+        // capital first.
+        var pick = root.createElement("label");
+        pick.className = "map-layer-ctl map-zones-pick";
+        pick.appendChild(root.createTextNode("Alliance "));
+        var zs = root.createElement("select");
+        zs.setAttribute("data-map-zones", "");
+        var za = zonesAlliance();
+        LY.alliances.map(function (x, ai) { return ai; }).filter(function (ai) {
+          return LY.capOf[ai] >= 0 || ai === za;
+        }).sort(function (p, q) {
+          return (LY.alliances[p].name || "").localeCompare(LY.alliances[q].name || "");
+        }).forEach(function (ai) {
+          var o = root.createElement("option");
+          o.value = String(LY.alliances[ai].id);
+          o.textContent = (LY.alliances[ai].name || "Alliance " + LY.alliances[ai].id) + (LY.capOf[ai] < 0 ? " (no capital)" : "");
+          o.selected = ai === za;
+          zs.appendChild(o);
+        });
+        pick.appendChild(zs);
+        box.appendChild(pick);
+        var zd = zoneData();
+        var note = function (text) {
+          var p = root.createElement("p");
+          p.className = "map-layer-row muted";
+          p.textContent = text;
+          box.appendChild(p);
+        };
+        if (za < 0) {
+          note("No alliance holds space right now.");
+        } else if (!JUMP) {
+          note("Loading distances…");
+        } else if (zd && zd.cap < 0) {
+          note("No capital set: every bridge jump costs the zone 5 rate.");
+        } else if (zd) {
+          var cp = root.createElement("p");
+          cp.className = "map-layer-row";
+          cp.appendChild(root.createTextNode("Capital "));
+          var cb = root.createElement("button");
+          cb.type = "button";
+          cb.className = "map-zones-cap";
+          cb.setAttribute("data-map-zones-cap", "");
+          cb.textContent = S.n[zd.cap];
+          cp.appendChild(cb);
+          box.appendChild(cp);
+        }
+        BRIDGE_ZONES.forEach(function (bz, zi) {
+          var band = zi === 0 ? "up to 5 LY" : zi === 4 ? "over 20 LY" : BRIDGE_ZONES[zi - 1].upTo + " to " + bz.upTo + " LY";
+          row("", colors.zones[zi], "Zone " + bz.zone + " · " + band + " · " + (bz.mult ? bz.mult + "x cost" : "free"));
+        });
+        note("Cost is set by where the jump lands." + (projOn ? "" : " Rings show each band from above."));
       } else if (layer === "fw") {
         [[500003, "Amarr"], [500001, "Caldari"], [500004, "Gallente"], [500002, "Minmatar"]].forEach(function (f) {
           row("", colors.faction[f[0]], (LY.factions[f[0]] || f[1]).replace(/ (Empire|State|Federation|Republic)$/, ""));
@@ -1970,7 +2153,9 @@
       }
       var at = root.createElement("p");
       at.className = "map-layer-at muted";
-      at.textContent = LY.at[layer] ? "As of " + eveTime(LY.at[layer]) : "No data yet";
+      // Zones stand on the sovereignty data: its capitals.
+      var atOf = LY.at[layer === "zones" ? "sov" : layer];
+      at.textContent = atOf ? "As of " + eveTime(atOf) : "No data yet";
       box.appendChild(at);
     }
 
@@ -1989,7 +2174,7 @@
     // our killfeed (the Threat layer, live).
     function layerRows(i, name, brief) {
       var rows = [];
-      if (!LY || (!LY.at[name] && name !== "sov")) return rows;
+      if (!LY || (!LY.at[name] && name !== "sov" && name !== "zones")) return rows;
       switch (name) {
         case "threat": {
           if (LY.threat[i] > 0 || LY.threatHour[i]) {
@@ -2037,6 +2222,18 @@
             rows.push(["Sovereignty", "Unclaimed"]);
           }
           break;
+        case "zones": {
+          var Z = zoneData();
+          if (!Z) break;
+          var zal = LY.alliances[Z.a], zan = zal.name || "Alliance " + zal.id;
+          if (Z.cap < 0) {
+            if (!brief) rows.push(["Bridge zone", "Zone 5 · " + zan + " has no capital set"]);
+            break;
+          }
+          var bz = bridgeZone(Z.ly[i]);
+          rows.push(["Bridge zone", "Zone " + bz.zone + " · " + (i === Z.cap ? zan + "'s capital" : Z.ly[i].toFixed(1) + " LY from " + S.n[Z.cap]) + " · " + (bz.mult ? bz.mult + "x cost" : "free")]);
+          break;
+        }
         case "fw":
           if (LY.fwState[i]) {
             rows.push(["Faction Warfare", (LY.factions[LY.fwOcc[i]] || "Occupied") + " · " +
@@ -2061,6 +2258,7 @@
       var rows = [];
       rows = dataRows(i).concat(intelRows(i, 3));
       ["threat", "kills", "npc", "jumps", "sov", "fw", "inc"].forEach(function (name) { rows = rows.concat(layerRows(i, name, true)); });
+      if (layer === "zones") rows = rows.concat(layerRows(i, "zones", true));
       return rows;
     }
 
@@ -2287,6 +2485,7 @@
       if (shownLayer && shownLayer !== "security") q.push("layer=" + encodeURIComponent(shownLayer));
       if (shownLayer === "sov" && sovView === "territory") q.push("sov=territory");
       if (shownLayer === "sov" && sovView === "territory" && !sovNPC) q.push("npc=0");
+      if (shownLayer === "zones" && zonesID) q.push("zones=" + zonesID);
       if (projOn) q.push("proj=1");
       if (routeFrom >= 0) q.push("from=" + S.id[routeFrom]);
       if (routeTo >= 0) q.push("to=" + S.id[routeTo]);
@@ -2534,7 +2733,7 @@
     // fatigue -- the shortest total distance (safe) -- and avoid danger
     // at the cyno points (calm). routeLegs holds each jump's light years.
     var travel = startQuery.get("travel") === "jump" ? "jump" : "gates";
-    var JUMP = null, jumpLoading = false, routeLegs = null, bridgeLegs = 0;
+    var JUMP = null, jumpLoading = false, routeLegs = null, bridgeLegs = 0, bridgeZones = [];
     var jumpShipID = +startQuery.get("ship") || 0, jumpPilot = startQuery.get("jdc") ? "jdc:" + startQuery.get("jdc") : "";
     try {
       if (!jumpShipID) jumpShipID = +localStorage.getItem("evesynapse-map-jump-ship") || 0;
@@ -2567,6 +2766,7 @@
         if (!J || !el.isConnected) return;
         JUMP = joinJump(G, J);
         fillJumpControls();
+        if (layer === "zones") renderLegend();
         replan();
       }).catch(function () { jumpLoading = false; });
     }
@@ -2581,11 +2781,24 @@
       });
       return out;
     }
+    // bridgeLegZone: the cost zone of a bridge jump from u to v. Only
+    // the holder of the start system may use its bridge, so the cost
+    // counts from that alliance's capital to where the jump lands.
+    // Null while the holder or the distances are unknown.
+    function bridgeLegZone(u, v) {
+      var owner = LY ? LY.sovA[u] : -1;
+      if (owner < 0) return null;
+      var cap = LY.capOf[owner];
+      if (cap < 0) return BRIDGE_ZONES[4];
+      if (!JUMP) { loadJump(); return null; }
+      return bridgeZone(lyBetween(JUMP, cap, v));
+    }
     function replan() {
       if (signedIn && !MINE) fetchMine();
       var prices = IN && intelOn ? IN.prices : null;
       routeLegs = null;
       bridgeLegs = 0;
+      bridgeZones = [];
       routePath = null;
       if (routeFrom >= 0 && routeTo >= 0) {
         if (travel === "jump") {
@@ -2607,7 +2820,11 @@
           routePath = planRoute(G, routeFrom, routeTo, routeCost(G, LY, routeMode),
             BR ? function (u) { return BR[u] ? G.adj[u].concat(BR[u]) : G.adj[u]; } : null);
           if (routePath && BR) {
-            for (var b = 1; b < routePath.length; b++) if (G.adj[routePath[b - 1]].indexOf(routePath[b]) < 0) bridgeLegs++;
+            for (var b = 1; b < routePath.length; b++) {
+              if (G.adj[routePath[b - 1]].indexOf(routePath[b]) >= 0) continue;
+              bridgeLegs++;
+              bridgeZones.push(bridgeLegZone(routePath[b - 1], routePath[b]));
+            }
           }
         }
       }
@@ -2744,6 +2961,11 @@
           var br = root.createElement("span");
           br.className = "map-route-band";
           br.textContent = plural(bridgeLegs, "jump bridge");
+          if (bridgeZones.length && bridgeZones.every(function (z) { return z; })) {
+            var worst = Math.max.apply(null, bridgeZones.map(function (z) { return z.mult; }));
+            br.textContent += worst ? " · up to " + worst + "x cost" : " · free, zone 1";
+            br.title = bridgeZones.map(function (z) { return "Zone " + z.zone + (z.mult ? " " + z.mult + "x" : " free"); }).join(", ");
+          }
           sum.appendChild(br);
         }
         [[s.high, "high", 10], [s.low, "low", 3], [s.nul, "null", 0]].forEach(function (b) {
@@ -4089,6 +4311,11 @@
         schedule();
         return;
       }
+      if (t.closest("[data-map-zones-cap]")) {
+        var zc = zoneData();
+        if (zc && zc.cap >= 0) focusOn(zc.cap);
+        return;
+      }
       var sv = t.closest("[data-map-sov]");
       if (sv) {
         sovView = sv.getAttribute("data-map-sov");
@@ -4206,6 +4433,15 @@
       schedule();
     });
     el.addEventListener("change", function (e) {
+      if (e.target.hasAttribute && e.target.hasAttribute("data-map-zones")) {
+        zonesID = +e.target.value || 0;
+        try { localStorage.setItem(ZONES_KEY, String(zonesID)); } catch (err) { /* private mode */ }
+        renderLegend();
+        updateCard();
+        syncURL();
+        schedule();
+        return;
+      }
       if (e.target.hasAttribute && e.target.hasAttribute("data-map-gain") && layer === "threat") renderLegend();
     });
     if (zoomPref) {
@@ -4406,7 +4642,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, gateClass: gateClass, gateBatch: gateBatch, prepare: prepare, regionLabelAlpha: regionLabelAlpha, labelTier: labelTier, midTierLabels: midTierLabels, boxesOverlap: boxesOverlap, LABEL_MID_CAP: LABEL_MID_CAP, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
+    module.exports = { bridgeZone: bridgeZone, secRounded: secRounded, secTier: secTier, secText: secText, gateClass: gateClass, gateBatch: gateBatch, prepare: prepare, regionLabelAlpha: regionLabelAlpha, labelTier: labelTier, midTierLabels: midTierLabels, boxesOverlap: boxesOverlap, LABEL_MID_CAP: LABEL_MID_CAP, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
       frameX: frameX, frameY: frameY, sovFieldKey: sovFieldKey, resolveProj: resolveProj, PROJ_PREF_KEY: PROJ_PREF_KEY,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,

@@ -120,6 +120,9 @@ type mapIncursion struct {
 type mapNamed struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
+	// Cap is an alliance's capital system (0 when it has none set):
+	// the centre of its Ansiblex cost zones on the map.
+	Cap int64 `json:"cap,omitempty"`
 }
 
 // mapLayerSources are the global snapshot kinds the layers read.
@@ -241,6 +244,9 @@ func (app *Application) buildMapLayers(ctx context.Context, snaps map[string]db.
 					p.Alliances = append(p.Alliances, mapNamed{ID: s.AllianceID, Name: name})
 				}
 				ai = idx
+				if s.Capital {
+					p.Alliances[idx].Cap = s.SystemID
+				}
 			}
 			p.Sov.ID = append(p.Sov.ID, s.SystemID)
 			p.Sov.A = append(p.Sov.A, ai)

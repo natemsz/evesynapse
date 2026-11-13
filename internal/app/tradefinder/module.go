@@ -19,6 +19,7 @@ var Module = module.Module{
 	Scopes:        []module.Scope{},
 	EnhanceScopes: []module.Scope{},
 	Activities:    []string{"market"},
+	Sitemap:       []module.SitemapEntry{{Path: "/market/tradefinder/", ChangeFreq: "daily", Priority: "0.7"}},
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{

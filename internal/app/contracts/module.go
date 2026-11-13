@@ -31,6 +31,7 @@ var Module = module.Module{
 	Snapshots:      []string{esi.SnapContracts},
 	BriefingTopics: []module.BriefingTopicDecl{{ID: "contracts", Title: "Contract deadlines"}},
 	Activities:     []string{"market"},
+	Sitemap:        []module.SitemapEntry{{Path: "/contracts/search/", ChangeFreq: "daily", Priority: "0.7"}},
 	Nav: []module.NavSection{
 		{
 			Section: "market",

@@ -32,6 +32,7 @@ var Module = module.Module{
 	Scopes:        []module.Scope{},
 	EnhanceScopes: []module.Scope{},
 	Activities:    []string{"market"},
+	Sitemap:       []module.SitemapEntry{{Path: "/market/appraise/", ChangeFreq: "monthly", Priority: "0.7"}},
 	Nav: []module.NavSection{{
 		Section: "tools",
 		Entries: []module.NavEntry{

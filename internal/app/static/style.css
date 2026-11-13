@@ -676,11 +676,11 @@ main {
 .h-action svg { width: 1.05em; height: 1.05em; }
 /* The small map jump: the mini constellation (#ico-map-mini) beside
    a system name in a row, linking to that system on the map. */
-.map-jump { display: inline-flex; align-items: center; margin-left: 0.35rem; color: var(--gold); opacity: 0.7; vertical-align: middle; }
+.map-jump { display: inline-flex; align-items: center; margin-left: 0.35rem; color: var(--gold); opacity: 0.7; vertical-align: middle; transform: translateY(-1.5px); }
 .map-jump:hover { opacity: 1; color: var(--text-bright); }
 .map-jump svg { width: 13px; height: 13px; display: block; }
 /* The mini constellation inside a text link. */
-.map-ic { width: 0.95em; height: 0.95em; vertical-align: -0.14em; }
+.map-ic { width: 0.95em; height: 0.95em; vertical-align: -0.2em; }
 .panel > h1:first-child {
   /* The gradient rides the title text (an inline span every page
      template emits), so it reads the same on a short title as a long

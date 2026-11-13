@@ -58,7 +58,7 @@
             {{if .FinalAllianceID}}<span class="kb-party-orgs"><a class="kb-org" href="/intel/kills/?alliance={{.FinalAllianceID}}"><img src="https://images.evetech.net/alliances/{{.FinalAllianceID}}/logo?size=32" alt="" width="14" height="14" loading="lazy"><span class="kb-org-n">{{.FinalAllianceName}}</span></a></span>{{end}}
           </div>{{end}}
         </div>
-        <div class="kb-kill-where"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/intel/kills/?system={{.SystemID}}">{{.SystemName}}</a> <a class="kb-kill-region" href="/intel/kills/?region={{.RegionID}}">{{.RegionName}}</a></div>
+        <div class="kb-kill-where"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/intel/kills/?system={{.SystemID}}">{{.SystemName}}</a> <a class="kb-kill-region" href="/intel/kills/?region={{.RegionID}}">{{.RegionName}}</a><a class="map-jump" href="/map/?system={{.SystemID}}" title="Open {{.SystemName}} on the map" aria-label="Open {{.SystemName}} on the map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg></a></div>
         <div class="kb-kill-value">{{if .Value}}{{.Value}}{{else}}<span class="muted">pricing…</span>{{end}}</div>
         <div class="kb-kill-meta"><time datetime="{{rfc3339 .Time}}" title="{{.When}} EVE">{{.Ago}}</time><span class="kb-att"> · {{.Attackers}} {{if eq .Attackers 1}}attacker{{else}}attackers{{end}}</span>{{if .Solo}} <span class="kb-tag">solo</span>{{end}}{{if .Awox}} <span class="kb-tag warn">awox</span>{{end}}{{if .NPC}} <span class="kb-tag dim">NPC</span>{{end}}</div>
       </li>

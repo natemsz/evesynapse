@@ -1,5 +1,5 @@
 {{define "title"}}{{if and .Region .Region.Name}}{{.Region.Name}}{{else}}Region{{end}}{{end}}
-{{define "pagetitle"}}{{if .Region}}{{if eq .Region.State "missing"}}<h1><span class="gt">Region</span></h1>{{else}}<h1 class="h-with-action"><span class="gt">{{.Region.Name}}</span><a class="h-action" href="/map/?region={{.Region.RegionID}}" title="Open {{.Region.Name}} on the universe map">Map</a></h1>{{end}}{{end}}{{end}}
+{{define "pagetitle"}}{{if .Region}}{{if eq .Region.State "missing"}}<h1><span class="gt">Region</span></h1>{{else}}<h1 class="h-with-action"><span class="gt">{{.Region.Name}}</span><a class="h-action" href="/map/?region={{.Region.RegionID}}" title="Open {{.Region.Name}} on the universe map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg>Map</a></h1>{{end}}{{end}}{{end}}
 {{define "content"}}
 {{if .Region}}
 {{if eq .Region.State "missing"}}

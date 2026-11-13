@@ -4,10 +4,11 @@
 {{define "content"}}
 {{/* The sovereignty tracker (intel_sov_page.go): who holds null-sec,
      what is under attack and what is open. Tiles over the page; the
-     live contests beside the alliance standings; the vulnerability
-     windows beside the systems that changed hands. Every block reads
-     a capped list the worker stored; the countdowns tick in app.js
-     (data-finish) and the tables sort and filter like every table. */}}
+     contests, vulnerability windows and changes in the main column,
+     the alliance standings beside them. Every list reads a capped
+     list the worker stored and shows its first rows, the rest behind
+     Show all (app.js expanders); countdowns tick on data-finish, and
+     the tables sort, filter and turn into cards like every table. */}}
 <div class="l-page sov">
 {{with .Sov}}
 {{if .Warming}}
@@ -16,120 +17,86 @@
   <div class="l-head">
     <p class="l-head-sum">Who holds null-sec, what is under attack and what is open. Updated {{.Updated}}.</p>
     <form class="l-head-act sov-filters" method="get" action="/intel/sov/">
-      <label class="sov-region"><span class="sov-region-l">Region</span>
+      <label class="sov-pick"><span class="sov-pick-l">Region</span>
         <select name="region" data-autosubmit>
           <option value="0">All regions</option>
           {{range .Regions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
         </select>
       </label>
-      {{if .AllianceID}}<input type="hidden" name="alliance" value="{{.AllianceID}}">
-      <a class="fchip on sov-chip" href="{{.ClearHref}}" title="Show every alliance"><img src="https://images.evetech.net/alliances/{{.AllianceID}}/logo?size=32" alt="" width="16" height="16" loading="lazy"> {{.AllianceName}} <span aria-hidden="true">&times;</span><span class="visually-hidden">, clear the alliance filter</span></a>{{end}}
+      <label class="sov-pick"><span class="sov-pick-l">Alliance</span>
+        <select name="alliance" data-autosubmit>
+          <option value="0">All alliances</option>
+          {{range .AllianceOpts}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
+        </select>
+      </label>
       <noscript><button type="submit" class="btn small">Show</button></noscript>
     </form>
   </div>
 
   {{if .Tiles}}
   <div class="l-tiles sov-tiles l-root">
-    {{range .Tiles}}<a class="l-stat{{if .Tone}} sov-tone-{{.Tone}}{{end}}" href="{{.Href}}"><span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span></a>{{end}}
+    {{range .Tiles}}<a class="l-stat{{if .Tone}} {{.Tone}}{{end}}" href="{{.Href}}"><span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span></a>{{end}}
   </div>
   {{end}}
 
-  <div class="l-grid sov-grid">
-    <section class="l-panel s8 sov-panel" id="sov-contests" aria-labelledby="sov-contests-h">
+  <div class="l-sidebar l-sidebar--end sov-layout">
+  <div class="l-stack sov-main">
+
+    <section class="l-panel sov-panel" id="sov-contests" aria-labelledby="sov-contests-h">
       <div class="sov-ph">
-        <h2 id="sov-contests-h">Live contests{{if .Contests}} <span class="sov-count">{{len .Contests}}</span>{{end}}</h2>
-        {{if .Contests}}<input class="sov-search" type="search" placeholder="Filter by system, region or alliance" aria-label="Filter live contests" data-table-filter="sov-contests-t" data-row-class="sov-row">{{end}}
+        <h2 id="sov-contests-h">Live contests{{if .ContestTotal}} <span class="sov-count">{{.ContestTotal}}</span>{{end}}</h2>
+        {{if gt .ContestTotal 3}}<input class="sov-search" type="search" placeholder="Filter by system, region or alliance" aria-label="Filter live contests" data-table-filter="sov-contests-t" data-row-class="sov-row">{{end}}
       </div>
       {{if .Contests}}
       <div class="tw sov-tw" tabindex="0" role="region" aria-labelledby="sov-contests-h">
       <table id="sov-contests-t" class="sov-t">
-        <thead><tr><th>System</th><th>Defender</th><th>Structure</th><th>Score</th><th>Starts</th></tr></thead>
-        <tbody>
-        {{range .Contests}}
-          <tr class="sov-row sov-lead-{{.Leading}}" data-search="{{.Search}}">
-            <th scope="row" data-label="System">{{template "sov-system" .System}}</th>
-            <td data-label="Defender">{{template "sov-org" .Defender}}</td>
-            <td data-label="Structure">{{.Event}}{{if ne .ADM "—"}} <span class="sov-dim">ADM {{.ADM}}</span>{{end}}</td>
-            <td data-label="Score" data-sort="{{.Def}}"><div class="sov-score"><progress class="sov-bar" max="100" value="{{.Def}}" aria-label="Defender {{.Def}} percent, attackers {{.Att}} percent"></progress><span class="sov-score-v"><b class="sov-def">{{.Def}}%</b> <span class="sov-dim">vs</span> <b class="sov-att">{{.Att}}%</b></span></div></td>
-            <td data-label="Starts" data-sort="{{.Starts.Unix}}">{{if .Started}}<span class="sov-live">Live</span> <span class="sov-dim">{{.StartsIn}}</span>{{else}}<time datetime="{{.Starts.Format "2006-01-02T15:04:05Z07:00"}}" data-finish="{{.Starts.Format "2006-01-02T15:04:05Z07:00"}}">{{.StartsIn}}</time>{{end}}</td>
-          </tr>
-        {{end}}
-        </tbody>
+        <thead><tr><th>System</th><th>Defender</th><th>ADM</th><th class="card-figure">Defender vs attackers</th><th class="card-figure">Timer</th></tr></thead>
+        <tbody>{{range .Contests}}{{template "sov-contest" .}}{{end}}</tbody>
+        {{if .ContestsMore}}<tbody id="sov-contests-more" data-wmore>{{range .ContestsMore}}{{template "sov-contest" .}}{{end}}</tbody>{{end}}
       </table>
       </div>
-      <p class="sov-note">The bar is the defender's share of the contest; the attackers hold the rest. A contest ends when one side reaches 100%.</p>
+      {{if .ContestsMore}}<button type="button" class="btn btn-quiet sov-more" data-expand="sov-contests-more"><span class="sov-more-c">Show all {{.ContestTotal}}</span><span class="sov-more-o">Show fewer</span></button>{{end}}
+      <p class="sov-note">A contest ends when one side reaches 100%.</p>
       {{else}}
       <p class="sov-empty">No sovereignty contests are under way{{if or $.Sov.RegionID $.Sov.AllianceID}} for this filter{{end}}.</p>
       {{end}}
     </section>
 
-    <section class="l-panel s4 sov-panel" id="sov-standings" aria-labelledby="sov-standings-h">
-      <div class="sov-ph"><h2 id="sov-standings-h">Alliances</h2><span class="sov-dim">systems held · 7 days</span></div>
-      {{if .Alliances}}
-      <ol class="sov-standings">
-        {{range .Alliances}}<li{{if .On}} class="on"{{end}}>
-          <a class="sov-st" href="{{.Href}}" title="Show only {{.Org.Name}}">
-            <img src="https://images.evetech.net/alliances/{{.Org.ID}}/logo?size=32" alt="" width="24" height="24" loading="lazy">
-            <span class="sov-st-n">{{.Org.Name}}</span>
-            <span class="sov-st-v"><b>{{.Held}}</b>{{if .Gained}} <span class="sov-up">+{{.Gained}}</span>{{end}}{{if .Lost}} <span class="sov-down">−{{.Lost}}</span>{{end}}</span>
-            <svg class="l-meter sov-st-m" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.Share}}" height="4"/></svg>
-          </a>
-        </li>{{end}}
-      </ol>
-      <p class="sov-note">Pick an alliance to see only its space. <span class="sov-up">+</span> claims taken and <span class="sov-down">−</span> claims lost in the last 7 days.</p>
-      {{else}}
-      <p class="sov-empty">No alliance holds sovereignty here.</p>
-      {{end}}
-    </section>
-
-    <section class="l-panel s6 sov-panel" id="sov-vuln" aria-labelledby="sov-vuln-h">
+    <section class="l-panel sov-panel" id="sov-vuln" aria-labelledby="sov-vuln-h">
       <div class="sov-ph">
-        <h2 id="sov-vuln-h">Vulnerability windows</h2>
-        {{if .Vuln}}<input class="sov-search" type="search" placeholder="Filter" aria-label="Filter vulnerability windows" data-table-filter="sov-vuln-t" data-row-class="sov-row">{{end}}
+        <h2 id="sov-vuln-h">Vulnerability windows{{if .VulnTotal}} <span class="sov-count">{{.VulnTotal}}</span>{{end}}</h2>
+        <div class="fchips sov-chips">{{range .VulnChips}}<a class="fchip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</div>
+        {{if gt .VulnTotal 3}}<input class="sov-search" type="search" placeholder="Filter" aria-label="Filter vulnerability windows" data-table-filter="sov-vuln-t" data-row-class="sov-row">{{end}}
       </div>
       {{if .Vuln}}
       <div class="tw sov-tw" tabindex="0" role="region" aria-labelledby="sov-vuln-h">
       <table id="sov-vuln-t" class="sov-t">
-        <thead><tr><th>System</th><th>Holder</th><th>ADM</th><th>Window</th></tr></thead>
-        <tbody>
-        {{range .Vuln}}
-          <tr class="sov-row{{if .Open}} sov-open{{end}}" data-search="{{.Search}}">
-            <th scope="row" data-label="System">{{template "sov-system" .System}}{{if .Capital}} <span class="badge sov-cap" title="The alliance's capital system">Capital</span>{{end}}</th>
-            <td data-label="Holder">{{template "sov-org" .Holder}}</td>
-            <td data-label="ADM" data-sort="{{.ADM}}" title="{{.Levels}}"><span class="sov-adm sov-adm-{{.ADMTier}}">{{.ADM}}</span><svg class="l-meter sov-adm-m sov-adm-{{.ADMTier}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.ADMPct}}" height="4"/></svg></td>
-            <td data-label="Window" data-sort="{{.Edge.Unix}}">{{if .Open}}<span class="sov-live">Open</span> <span class="sov-dim">closes</span> {{else}}<span class="sov-dim">opens</span> {{end}}<time datetime="{{.Edge.Format "2006-01-02T15:04:05Z07:00"}}" data-finish="{{.Edge.Format "2006-01-02T15:04:05Z07:00"}}">{{.EdgeText}}</time></td>
-          </tr>
-        {{end}}
-        </tbody>
+        <thead><tr><th>System</th><th>Holder</th><th>ADM</th><th class="card-figure">Window</th></tr></thead>
+        <tbody>{{range .Vuln}}{{template "sov-vuln" .}}{{end}}</tbody>
+        {{if .VulnMore}}<tbody id="sov-vuln-more" data-wmore>{{range .VulnMore}}{{template "sov-vuln" .}}{{end}}</tbody>{{end}}
       </table>
       </div>
-      <p class="sov-note">Open windows first, then the next 24 hours. ADM, the activity defense multiplier, runs from 1 to 6: the lower it is, the shorter an attacker's timer.</p>
+      {{if .VulnMore}}<button type="button" class="btn btn-quiet sov-more" data-expand="sov-vuln-more"><span class="sov-more-c">Show all {{.VulnTotal}}</span><span class="sov-more-o">Show fewer</span></button>{{end}}
+      <p class="sov-note">ADM, the activity defense multiplier, runs from 1 to 6: the lower it is, the shorter an attacker's timer.</p>
       {{else}}
-      <p class="sov-empty">No windows open now or in the next 24 hours{{if or $.Sov.RegionID $.Sov.AllianceID}} for this filter{{end}}.</p>
+      <p class="sov-empty">No windows match{{if or $.Sov.RegionID $.Sov.AllianceID}} this filter{{end}} in the next 24 hours.</p>
       {{end}}
     </section>
 
-    <section class="l-panel s6 sov-panel" id="sov-changes" aria-labelledby="sov-changes-h">
+    <section class="l-panel sov-panel" id="sov-changes" aria-labelledby="sov-changes-h">
       <div class="sov-ph">
-        <h2 id="sov-changes-h">Changed hands, 7 days</h2>
-        {{if .Claims}}<input class="sov-search" type="search" placeholder="Filter" aria-label="Filter changed systems" data-table-filter="sov-claims-t" data-row-class="sov-row">{{end}}
+        <h2 id="sov-changes-h">Changed hands, 7 days{{if .ClaimTotal}} <span class="sov-count">{{.ClaimTotal}}</span>{{end}}</h2>
+        {{if gt .ClaimTotal 3}}<input class="sov-search" type="search" placeholder="Filter" aria-label="Filter changed systems" data-table-filter="sov-claims-t" data-row-class="sov-row">{{end}}
       </div>
       {{if .Claims}}
       <div class="tw sov-tw" tabindex="0" role="region" aria-labelledby="sov-changes-h">
       <table id="sov-claims-t" class="sov-t">
-        <thead><tr><th>System</th><th>Now held by</th><th>Taken from</th><th>When</th></tr></thead>
-        <tbody>
-        {{range .Claims}}
-          <tr class="sov-row" data-search="{{.Search}}">
-            <th scope="row" data-label="System">{{template "sov-system" .System}}{{if .Capital}} <span class="badge sov-cap">Capital</span>{{end}}</th>
-            <td data-label="Now held by">{{template "sov-org" .Holder}}</td>
-            <td data-label="Taken from">{{if .Prev.Name}}{{template "sov-org" .Prev}}{{else if .Logged}}<span class="sov-dim">Unclaimed</span>{{else}}<span class="sov-dim" title="Taken before the change log began">—</span>{{end}}</td>
-            <td data-label="When" data-sort="{{.At.Unix}}"><time datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.Ago}}</time></td>
-          </tr>
-        {{end}}
-        </tbody>
+        <thead><tr><th>System</th><th>Now held by</th>{{if .HasPrev}}<th>Taken from</th>{{end}}<th class="card-figure">When</th></tr></thead>
+        <tbody>{{range .Claims}}{{template "sov-claim" .}}{{end}}</tbody>
+        {{if .ClaimsMore}}<tbody id="sov-claims-more" data-wmore>{{range .ClaimsMore}}{{template "sov-claim" .}}{{end}}</tbody>{{end}}
       </table>
       </div>
+      {{if .ClaimsMore}}<button type="button" class="btn btn-quiet sov-more" data-expand="sov-claims-more"><span class="sov-more-c">Show all {{.ClaimTotal}}</span><span class="sov-more-o">Show fewer</span></button>{{end}}
       {{else}}
       <p class="sov-empty">No system changed hands in the last 7 days{{if or $.Sov.RegionID $.Sov.AllianceID}} for this filter{{end}}.</p>
       {{end}}
@@ -137,27 +104,74 @@
       <h3 class="sov-h3">Claims lost</h3>
       <div class="tw sov-tw" tabindex="0" role="region" aria-label="Claims lost in the last 7 days">
       <table class="sov-t">
-        <thead><tr><th>System</th><th>Lost by</th><th>Now</th><th>When</th></tr></thead>
-        <tbody>
-        {{range .Losses}}
-          <tr class="sov-row" data-search="{{.Search}}">
-            <th scope="row" data-label="System">{{template "sov-system" .System}}</th>
-            <td data-label="Lost by">{{template "sov-org" .Lost}}</td>
-            <td data-label="Now">{{if .Now.Faction}}<span class="sov-dim">{{.Now.Name}}</span>{{else}}{{template "sov-org" .Now}}{{end}}</td>
-            <td data-label="When" data-sort="{{.At.Unix}}"><time datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.Ago}}</time></td>
-          </tr>
-        {{end}}
-        </tbody>
+        <thead><tr><th>System</th><th>Lost by</th><th>Now</th><th class="card-figure">When</th></tr></thead>
+        <tbody>{{range .Losses}}{{template "sov-loss" .}}{{end}}</tbody>
+        {{if .LossesMore}}<tbody id="sov-losses-more" data-wmore>{{range .LossesMore}}{{template "sov-loss" .}}{{end}}</tbody>{{end}}
       </table>
       </div>
+      {{if .LossesMore}}<button type="button" class="btn btn-quiet sov-more" data-expand="sov-losses-more"><span class="sov-more-c">Show all {{.LossTotal}}</span><span class="sov-more-o">Show fewer</span></button>{{end}}
       {{end}}
       <p class="sov-note">{{if .LogSince}}Who held a system before is recorded from {{.LogSince}} on.{{else}}Who held a system before is recorded from now on: EVE keeps no history of past holders.{{end}}</p>
+    </section>
+  </div>
+
+    <section class="l-panel sov-panel sov-side" id="sov-standings" aria-labelledby="sov-standings-h">
+      <div class="sov-ph"><h2 id="sov-standings-h">Alliances</h2>{{if gt .AllianceTotal (len .Alliances)}}<span class="sov-dim">Top {{len .Alliances}} of {{.AllianceTotal}}</span>{{end}}</div>
+      {{if .Alliances}}
+      <p class="sov-note">Systems held, with the 7-day change.</p>
+      <ol class="sov-standings">
+        {{range .Alliances}}<li{{if .On}} class="on"{{end}}>
+          <a class="sov-st" href="{{.Href}}" title="Show only {{.Org.Name}}">
+            <span class="sov-st-r">{{.Rank}}</span>
+            <img src="https://images.evetech.net/alliances/{{.Org.ID}}/logo?size=32" alt="" width="24" height="24" loading="lazy">
+            <span class="sov-st-n">{{.Org.Name}}</span>
+            <span class="sov-st-d">{{if .Gained}}<span class="sov-up">+{{.Gained}}</span>{{end}}{{if .Lost}} <span class="sov-down">−{{.Lost}}</span>{{end}}</span>
+            <b class="sov-st-v">{{.Held}}</b>
+            <svg class="l-meter sov-st-m" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.Share}}" height="4"/></svg>
+          </a>
+        </li>{{end}}
+      </ol>
+      {{if $.Sov.AllianceID}}<a class="btn btn-quiet sov-more" href="{{$.Sov.ClearHref}}">Show every alliance</a>{{end}}
+      {{else}}
+      <p class="sov-empty">No alliance holds sovereignty here.</p>
+      {{end}}
     </section>
   </div>
 {{end}}
 {{end}}
 </div>
 {{end}}
+
+{{define "sov-contest"}}<tr class="sov-row{{if eq .Leading "attackers"}} sov-edge{{end}}" data-search="{{.Search}}">
+  <th scope="row">{{template "sov-system" .System}}{{if .Event}} <span class="badge">{{.Event}}</span>{{end}}</th>
+  <td>{{template "sov-org" .Defender}}</td>
+  <td data-sort="{{.ADM}}">{{template "sov-adm" .}}</td>
+  <td data-sort="{{.Def}}"><div class="sov-score"><progress class="sov-bar" max="100" value="{{.Def}}" aria-label="Defender {{.Def}} percent, attackers {{.Att}} percent"></progress><span class="sov-score-v"><span class="sov-def">Defender <b>{{.Def}}%</b></span><span class="sov-att"><b>{{.Att}}%</b> Attackers</span></span></div></td>
+  <td data-sort="{{.Starts.Unix}}" class="sov-nw">{{if .Started}}<span class="sov-live">Live</span> <span class="sov-dim">{{.StartsIn}}</span>{{else}}<time datetime="{{.Starts.Format "2006-01-02T15:04:05Z07:00"}}" data-finish="{{.Starts.Format "2006-01-02T15:04:05Z07:00"}}">{{.StartsIn}}</time>{{end}}</td>
+</tr>{{end}}
+
+{{define "sov-vuln"}}<tr class="sov-row{{if .Open}} sov-edge{{end}}" data-search="{{.Search}}">
+  <th scope="row">{{template "sov-system" .System}}{{if .Capital}} <span class="badge sov-cap" title="The alliance's capital system">Capital</span>{{end}}</th>
+  <td>{{template "sov-org" .Holder}}</td>
+  <td data-sort="{{.ADM}}" title="{{.Levels}}">{{template "sov-adm" .}}</td>
+  <td data-sort="{{.Edge.Unix}}" class="sov-nw">{{if .Open}}<span class="sov-live">Open</span> <span class="sov-dim">closes</span> {{else}}<span class="sov-dim">opens</span> {{end}}<time datetime="{{.Edge.Format "2006-01-02T15:04:05Z07:00"}}" data-finish="{{.Edge.Format "2006-01-02T15:04:05Z07:00"}}">{{.EdgeText}}</time></td>
+</tr>{{end}}
+
+{{define "sov-claim"}}<tr class="sov-row" data-search="{{.Search}}">
+  <th scope="row">{{template "sov-system" .System}}{{if .Capital}} <span class="badge sov-cap">Capital</span>{{end}}</th>
+  <td>{{template "sov-org" .Holder}}</td>
+  {{if .ShowPrev}}<td>{{if .Prev.Name}}{{template "sov-org" .Prev}}{{else if .Logged}}<span class="sov-dim">Unclaimed</span>{{end}}</td>{{end}}
+  <td data-sort="{{.At.Unix}}" class="sov-nw"><time datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.Ago}}</time></td>
+</tr>{{end}}
+
+{{define "sov-loss"}}<tr class="sov-row" data-search="{{.Search}}">
+  <th scope="row">{{template "sov-system" .System}}</th>
+  <td>{{template "sov-org" .Lost}}</td>
+  <td>{{if .Now.Faction}}<span class="sov-dim">{{.Now.Name}}</span>{{else}}{{template "sov-org" .Now}}{{end}}</td>
+  <td data-sort="{{.At.Unix}}" class="sov-nw"><time datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.Ago}}</time></td>
+</tr>{{end}}
+
+{{define "sov-adm"}}<span class="sov-adm sov-adm-{{.ADMTier}}">{{.ADM}}</span><svg class="l-meter sov-adm-m sov-adm-{{.ADMTier}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.ADMPct}}" height="4"/></svg>{{end}}
 
 {{define "sov-system"}}<span class="sov-sys">{{placeLink .Place}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{if .Region}}<span class="sov-region-n">{{.Region}}</span>{{end}}</span>{{end}}
 

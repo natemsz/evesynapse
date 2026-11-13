@@ -77,6 +77,8 @@ type pageData struct {
 	// /alliance/): an organization's public record.
 	Corporation *corporationPageView
 	Alliance    *alliancePageView
+	// AllianceSov is the alliance page's sovereignty block.
+	AllianceSov *allianceSovView
 
 	// Solar system & station pages (/system/, /station/): an SDE
 	// place record.

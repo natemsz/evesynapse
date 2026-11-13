@@ -14,6 +14,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,12 @@ import (
 const (
 	// sovRows caps every list on the page.
 	sovRows = 100
+	// sovShown is how many rows a list shows before its Show all
+	// control; the rest render folded.
+	sovShown = 10
+	// sovAllianceCap bounds the alliance read behind the standings
+	// and the alliance picker (every sov-holding alliance; about 70).
+	sovAllianceCap = 300
 	// sovAllianceRows is how many alliances the standings show.
 	sovAllianceRows = 25
 	// sovWindowAhead is how far ahead the vulnerability list looks.
@@ -45,15 +52,41 @@ type sovPageView struct {
 	Regions      []sovRegionOpt
 	ClearHref    string // the page without the alliance filter
 
-	Tiles     []sovTile
-	Contests  []sovContestRow
-	Vuln      []sovVulnRow
-	Claims    []sovClaimRow
-	Losses    []sovLossRow
-	Alliances []sovAllianceRow
+	Tiles []sovTile
+	// Each list: the rows shown, the rows folded behind Show all,
+	// and the total.
+	Contests, ContestsMore []sovContestRow
+	Vuln, VulnMore         []sovVulnRow
+	Claims, ClaimsMore     []sovClaimRow
+	Losses, LossesMore     []sovLossRow
+	ContestTotal           int
+	VulnTotal              int
+	ClaimTotal             int
+	LossTotal              int
+	// HasPrev: some claim names the holder it was taken from.
+	HasPrev bool
+	// VulnChips switch the windows list between every window, the
+	// open ones and the ones opening in the next 24 hours.
+	VulnChips []sovChip
+	// Alliances: the standings (top sovAllianceRows); AllianceOpts:
+	// every holding alliance, for the picker.
+	Alliances     []sovAllianceRow
+	AllianceOpts  []sovAllianceOpt
+	AllianceTotal int
 	// LogSince is when the change log's first entry was written:
 	// losses are only known from then on.
 	LogSince string
+}
+
+type sovChip struct {
+	Label, Href string
+	On          bool
+}
+
+type sovAllianceOpt struct {
+	ID       int64
+	Name     string
+	Selected bool
 }
 
 type sovRegionOpt struct {
@@ -85,7 +118,9 @@ type sovOrg struct {
 type sovContestRow struct {
 	System   sovSystem
 	Defender sovOrg
-	Event    string
+	Event    string // the structure, named only when it is not a hub
+	ADMTier  string
+	ADMPct   int
 	Def, Att int // scores, percent
 	DefValue string
 	Leading  string // "defender" | "attackers" | "even"
@@ -111,15 +146,16 @@ type sovVulnRow struct {
 }
 
 type sovClaimRow struct {
-	System  sovSystem
-	Holder  sovOrg
-	Prev    sovOrg
-	Logged  bool
-	At      time.Time
-	Ago     string
-	ADM     string
-	Capital bool
-	Search  string
+	ShowPrev bool // the table has a Taken from column
+	System   sovSystem
+	Holder   sovOrg
+	Prev     sovOrg
+	Logged   bool
+	At       time.Time
+	Ago      string
+	ADM      string
+	Capital  bool
+	Search   string
 }
 
 type sovLossRow struct {
@@ -132,6 +168,7 @@ type sovLossRow struct {
 }
 
 type sovAllianceRow struct {
+	Rank     int
 	Org      sovOrg
 	Held     int64
 	Gained   int64
@@ -150,7 +187,7 @@ func (app *Application) handleSovTracker(w http.ResponseWriter, r *http.Request)
 	q := r.URL.Query()
 	regionID, _ := strconv.ParseInt(q.Get("region"), 10, 64)
 	allianceID, _ := strconv.ParseInt(q.Get("alliance"), 10, 64)
-	data.Sov = app.loadSovPage(ctx, max(regionID, 0), max(allianceID, 0), time.Now().UTC())
+	data.Sov = app.loadSovPage(ctx, max(regionID, 0), max(allianceID, 0), q.Get("window"), time.Now().UTC())
 	data.HeadMeta = app.HeadMeta(module.PageMeta{
 		Title:         "Sovereignty",
 		Description:   "Who holds null-sec in EVE Online: live sovereignty contests, systems that changed hands, vulnerability windows and ADM, refreshed every few minutes.",
@@ -160,8 +197,17 @@ func (app *Application) handleSovTracker(w http.ResponseWriter, r *http.Request)
 }
 
 // loadSovPage reads the tracker's blocks for one filter.
-func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID int64, now time.Time) *sovPageView {
+func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID int64, window string, now time.Time) *sovPageView {
 	v := &sovPageView{RegionID: regionID, AllianceID: allianceID}
+	mode := int32(0)
+	switch window {
+	case "open":
+		mode = 1
+	case "soon":
+		mode = 2
+	default:
+		window = ""
+	}
 	meta, err := app.queries.GetPlaceStatsMeta(ctx, placeStatsKindSovereignty)
 	if err != nil {
 		v.Warming = true
@@ -181,7 +227,7 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 		logging.Errorf("sov: contests: %v", err)
 	}
 	vuln, err := app.queries.ListSovVulnerable(ctx, db.ListSovVulnerableParams{
-		Now: now, Until: now.Add(sovWindowAhead), RegionID: regionID, AllianceID: allianceID, MaxRows: sovRows,
+		Now: now, Until: now.Add(sovWindowAhead), Mode: mode, RegionID: regionID, AllianceID: allianceID, MaxRows: sovRows,
 	})
 	if err != nil {
 		logging.Errorf("sov: vulnerable: %v", err)
@@ -194,7 +240,7 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 	if err != nil {
 		logging.Errorf("sov: losses: %v", err)
 	}
-	standings, err := app.queries.ListSovAlliances(ctx, db.ListSovAlliancesParams{Since: weekAgo, RegionID: regionID, MaxRows: sovAllianceRows})
+	standings, err := app.queries.ListSovAlliances(ctx, db.ListSovAlliancesParams{Since: weekAgo, RegionID: regionID, MaxRows: sovAllianceCap})
 	if err != nil {
 		logging.Errorf("sov: alliances: %v", err)
 	}
@@ -258,12 +304,23 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 		if alli > 0 {
 			u.Set("alliance", strconv.FormatInt(alli, 10))
 		}
+		if window != "" {
+			u.Set("window", window)
+		}
 		if len(u) == 0 {
 			return "/intel/sov/"
 		}
 		return "/intel/sov/?" + u.Encode()
 	}
 	v.ClearHref = href(regionID, 0)
+	chip := func(label, w string) sovChip {
+		saved := window
+		window = w
+		h := href(regionID, allianceID) + "#sov-vuln"
+		window = saved
+		return sovChip{Label: label, Href: h, On: window == w}
+	}
+	v.VulnChips = []sovChip{chip("All", ""), chip("Open now", "open"), chip("Opening in 24h", "soon")}
 	for _, r := range regions {
 		v.Regions = append(v.Regions, sovRegionOpt{ID: r.RegionID, Name: r.Name, Selected: r.RegionID == regionID})
 	}
@@ -277,7 +334,7 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 		v.Tiles = []sovTile{
 			{Label: "Systems held", Value: thousands(sum.Held), Sub: heldSub, Href: "#sov-standings"},
 			{Label: "Changed hands, 24h", Value: thousands(sum.ClaimedDay), Sub: thousands(sum.ClaimedWeek) + " in 7 days", Href: "#sov-changes", Tone: toneIf(sum.ClaimedDay > 0, "warn")},
-			{Label: "Live contests", Value: thousands(sum.Contests), Sub: contestSub(contests), Href: "#sov-contests", Tone: toneIf(sum.Contests > 0, "hot")},
+			{Label: "Live contests", Value: thousands(sum.Contests), Sub: contestSub(contests, sum.Contests), Href: "#sov-contests", Tone: toneIf(sum.Contests > 0, "hot")},
 			{Label: "Vulnerable now", Value: thousands(sum.VulnerableNow), Sub: thousands(sum.VulnerableNext) + " more open in 24h", Href: "#sov-vuln"},
 		}
 	}
@@ -286,13 +343,17 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 		row := sovContestRow{
 			System:   sovSystemOf(c.SystemID, c.SystemName, c.Security, c.RegionName),
 			Defender: alliance(c.DefenderID),
-			Event:    sovEventLabel(c.EventType),
+			ADMTier:  admTier(c.Adm),
+			ADMPct:   admPct(c.Adm),
 			Def:      sovPct(c.DefenderScore),
 			Att:      sovPct(c.AttackersScore),
 			DefValue: strconv.FormatFloat(c.DefenderScore, 'f', 2, 64),
 			Starts:   c.StartTime.UTC(),
 			Started:  !c.StartTime.After(now),
 			ADM:      admText(c.Adm),
+		}
+		if c.EventType != "ihub_defense" {
+			row.Event = sovEventLabel(c.EventType)
 		}
 		switch {
 		case row.Def > row.Att:
@@ -303,11 +364,11 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 			row.Leading = "even"
 		}
 		if row.Started {
-			row.StartsIn = "started " + agoText(now.Sub(row.Starts))
+			row.StartsIn = durText(now.Sub(row.Starts))
 		} else {
 			row.StartsIn = "in " + durText(row.Starts.Sub(now))
 		}
-		row.Search = strings.ToLower(row.System.Place.Name + " " + row.System.Region + " " + row.Defender.Name + " " + row.Event)
+		row.Search = strings.ToLower(row.System.Place.Name + " " + row.System.Region + " " + row.Defender.Name + " " + sovEventLabel(c.EventType))
 		v.Contests = append(v.Contests, row)
 	}
 
@@ -352,6 +413,9 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 			row.Prev = sovOrg{Name: "NPC space", Faction: true}
 		}
 		row.Search = strings.ToLower(row.System.Place.Name + " " + row.System.Region + " " + row.Holder.Name + " " + row.Prev.Name)
+		if row.Prev.Name != "" {
+			v.HasPrev = true
+		}
 		v.Claims = append(v.Claims, row)
 	}
 
@@ -375,8 +439,19 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 	for _, a := range standings {
 		top = max(top, a.Held)
 	}
+	v.AllianceTotal = len(standings)
 	for _, a := range standings {
+		v.AllianceOpts = append(v.AllianceOpts, sovAllianceOpt{ID: a.AllianceID, Name: alliance(a.AllianceID).Name, Selected: a.AllianceID == allianceID})
+	}
+	sort.SliceStable(v.AllianceOpts, func(i, j int) bool {
+		return strings.ToLower(v.AllianceOpts[i].Name) < strings.ToLower(v.AllianceOpts[j].Name)
+	})
+	for i, a := range standings {
+		if i >= sovAllianceRows && a.AllianceID != allianceID {
+			continue
+		}
 		row := sovAllianceRow{
+			Rank:     i + 1,
 			Org:      alliance(a.AllianceID),
 			Held:     a.Held,
 			Gained:   a.Gained,
@@ -391,7 +466,26 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 		}
 		v.Alliances = append(v.Alliances, row)
 	}
+
+	// Each list shows its first rows; the rest fold behind Show all.
+	v.ContestTotal, v.VulnTotal, v.ClaimTotal, v.LossTotal = len(v.Contests), len(v.Vuln), len(v.Claims), len(v.Losses)
+	v.Contests, v.ContestsMore = foldRows(v.Contests)
+	v.Vuln, v.VulnMore = foldRows(v.Vuln)
+	for i := range v.Claims {
+		v.Claims[i].ShowPrev = v.HasPrev
+	}
+	v.Claims, v.ClaimsMore = foldRows(v.Claims)
+	v.Losses, v.LossesMore = foldRows(v.Losses)
 	return v
+}
+
+// foldRows splits a list into the rows shown and the rows behind its
+// Show all control.
+func foldRows[T any](rows []T) (shown, more []T) {
+	if len(rows) <= sovShown {
+		return rows, nil
+	}
+	return rows[:sovShown], rows[sovShown:]
 }
 
 func sovSystemOf(id int64, name string, sec float64, region string) sovSystem {
@@ -414,7 +508,10 @@ func sovEventLabel(t string) string {
 	return strings.ReplaceAll(t, "_", " ")
 }
 
-func contestSub(rows []db.ListSovContestsRow) string {
+func contestSub(rows []db.ListSovContestsRow, total int64) string {
+	if total == 0 {
+		return "None under way"
+	}
 	ahead := 0
 	for _, c := range rows {
 		if c.AttackersScore > c.DefenderScore {
@@ -422,9 +519,9 @@ func contestSub(rows []db.ListSovContestsRow) string {
 		}
 	}
 	if ahead == 0 {
-		return "defenders ahead in all"
+		return "Defenders lead in all"
 	}
-	return fmt.Sprintf("attackers ahead in %d", ahead)
+	return fmt.Sprintf("Attackers lead in %d", ahead)
 }
 
 func toneIf(ok bool, tone string) string {
@@ -509,4 +606,58 @@ func thousands(n int64) string {
 		b.WriteRune(c)
 	}
 	return b.String()
+}
+
+// allianceSovView is the alliance page's sovereignty block: the
+// alliance's holdings at a glance, its capital and the systems it
+// holds, best defended first. Nil when it holds none.
+type allianceSovView struct {
+	AllianceID  int64
+	Held        string
+	Gained      int64
+	Lost        int64
+	ADM         string
+	Systems     []sovVulnRow
+	More        int64 // systems held past the list
+	TrackerHref string
+}
+
+// allianceSovShown caps the alliance page's system list.
+const allianceSovShown = 12
+
+// loadAllianceSov reads one alliance's sovereignty: two bounded reads.
+func (app *Application) loadAllianceSov(ctx context.Context, allianceID int64, now time.Time) *allianceSovView {
+	sum, err := app.queries.AllianceSovSummary(ctx, db.AllianceSovSummaryParams{AllianceID: allianceID, Since: now.Add(-7 * 24 * time.Hour)})
+	if err != nil || sum.Held == 0 {
+		return nil
+	}
+	rows, err := app.queries.ListAllianceSovSystems(ctx, db.ListAllianceSovSystemsParams{AllianceID: allianceID, MaxRows: allianceSovShown})
+	if err != nil {
+		return nil
+	}
+	v := &allianceSovView{
+		AllianceID: allianceID, Held: thousands(sum.Held), Gained: sum.Gained, Lost: sum.Lost,
+		ADM: admText(sum.AvgAdm), TrackerHref: fmt.Sprintf("/intel/sov/?alliance=%d", allianceID),
+	}
+	if extra := sum.Held - int64(len(rows)); extra > 0 {
+		v.More = extra
+	}
+	for _, x := range rows {
+		row := sovVulnRow{
+			System: sovSystemOf(x.SystemID, x.SystemName, x.Security, x.RegionName),
+			ADM:    admText(x.Adm), ADMTier: admTier(x.Adm), ADMPct: admPct(x.Adm),
+			Capital: x.IsCapital,
+		}
+		if x.VulnStart.Valid && x.VulnEnd.Valid {
+			row.Open = !x.VulnStart.Time.After(now) && x.VulnEnd.Time.After(now)
+			if row.Open {
+				row.Edge = x.VulnEnd.Time.UTC()
+			} else {
+				row.Edge = x.VulnStart.Time.UTC()
+			}
+			row.EdgeText = "in " + durText(row.Edge.Sub(now))
+		}
+		v.Systems = append(v.Systems, row)
+	}
+	return v
 }

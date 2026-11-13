@@ -410,8 +410,8 @@ func TestNavGroupsMirror(t *testing.T) {
 		}{
 			{"Killboard", []string{"/intel/kills/", "/intel/battles/"}},
 			{"Live intel", []string{"/intel/feed/", "/intel/channels/", "/intel/workbench/", "/intel/scan/"}},
-			{"Territory", []string{"/intel/fw/", "/intel/wars/", "/intel/incursions/"}},
-		}, 2, 0},
+			{"Territory", []string{"/intel/sov/", "/intel/fw/", "/intel/wars/", "/intel/incursions/"}},
+		}, 2, 1},
 	} {
 		sgs := navGroupsFor(navLinksFor(tc.section, tc.page, 0))[tc.section]
 		if len(sgs) != len(tc.want) {

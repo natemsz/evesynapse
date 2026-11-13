@@ -90,7 +90,7 @@ func TestSovTracker(t *testing.T) {
 		`<span class="l-stat-label">Live contests</span><span class="l-stat-value">1</span>`,
 		`<span class="l-stat-label">Changed hands, 24h</span><span class="l-stat-value">1</span>`,
 		`value="30" aria-label="Defender 30 percent, attackers 70 percent"`,
-		"Sovereignty hub", "1DQ1-A", "T5ZI-S", "New Holders", "Old Holders", "Capital",
+		"1DQ1-A", "T5ZI-S", "New Holders", "Old Holders", "Capital",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("tracker page lacks %q", want)

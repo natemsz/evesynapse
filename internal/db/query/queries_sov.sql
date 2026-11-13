@@ -83,6 +83,10 @@ JOIN sde_systems ss ON ss.system_id = s.system_id
 LEFT JOIN sde_regions r ON r.region_id = ss.region_id
 WHERE s.alliance_id > 0 AND s.vuln_end > sqlc.arg(now)::timestamptz
   AND s.vuln_start < sqlc.arg(until)::timestamptz
+  -- mode 1: open now only; mode 2: opening later only; 0: both.
+  AND (sqlc.arg(mode)::int = 0
+       OR (sqlc.arg(mode)::int = 1 AND s.vuln_start <= sqlc.arg(now)::timestamptz)
+       OR (sqlc.arg(mode)::int = 2 AND s.vuln_start > sqlc.arg(now)::timestamptz))
   AND (sqlc.arg(region_id)::bigint = 0 OR ss.region_id = sqlc.arg(region_id)::bigint)
   AND (sqlc.arg(alliance_id)::bigint = 0 OR s.alliance_id = sqlc.arg(alliance_id)::bigint)
 ORDER BY (s.vuln_start <= sqlc.arg(now)::timestamptz) DESC, s.vuln_start, s.adm, s.system_id
@@ -140,3 +144,14 @@ LIMIT sqlc.arg(max_rows)::bigint;
 -- When the change log began: losses are known from then on.
 -- name: SovChangeLogStart :one
 SELECT min(changed_at)::timestamptz AS first FROM sov_changes;
+
+-- One alliance's sovereignty at a glance: systems held, claims
+-- taken and lost since a time, and its capital system.
+-- name: AllianceSovSummary :one
+SELECT
+    (SELECT count(*) FROM system_sovereignty s WHERE s.alliance_id = sqlc.arg(alliance_id)::bigint)::bigint AS held,
+    (SELECT count(*) FROM system_sovereignty s WHERE s.alliance_id = sqlc.arg(alliance_id)::bigint
+        AND s.claimed_since >= sqlc.arg(since)::timestamptz)::bigint AS gained,
+    (SELECT count(*) FROM sov_changes c WHERE c.old_alliance_id = sqlc.arg(alliance_id)::bigint
+        AND c.new_alliance_id <> c.old_alliance_id AND c.changed_at >= sqlc.arg(since)::timestamptz)::bigint AS lost,
+    COALESCE((SELECT avg(s.adm) FROM system_sovereignty s WHERE s.alliance_id = sqlc.arg(alliance_id)::bigint), 0)::double precision AS avg_adm;

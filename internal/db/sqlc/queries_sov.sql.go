@@ -11,6 +11,42 @@ import (
 	"time"
 )
 
+const allianceSovSummary = `-- name: AllianceSovSummary :one
+SELECT
+    (SELECT count(*) FROM system_sovereignty s WHERE s.alliance_id = $1::bigint)::bigint AS held,
+    (SELECT count(*) FROM system_sovereignty s WHERE s.alliance_id = $1::bigint
+        AND s.claimed_since >= $2::timestamptz)::bigint AS gained,
+    (SELECT count(*) FROM sov_changes c WHERE c.old_alliance_id = $1::bigint
+        AND c.new_alliance_id <> c.old_alliance_id AND c.changed_at >= $2::timestamptz)::bigint AS lost,
+    COALESCE((SELECT avg(s.adm) FROM system_sovereignty s WHERE s.alliance_id = $1::bigint), 0)::double precision AS avg_adm
+`
+
+type AllianceSovSummaryParams struct {
+	AllianceID int64     `json:"alliance_id"`
+	Since      time.Time `json:"since"`
+}
+
+type AllianceSovSummaryRow struct {
+	Held   int64   `json:"held"`
+	Gained int64   `json:"gained"`
+	Lost   int64   `json:"lost"`
+	AvgAdm float64 `json:"avg_adm"`
+}
+
+// One alliance's sovereignty at a glance: systems held, claims
+// taken and lost since a time, and its capital system.
+func (q *Queries) AllianceSovSummary(ctx context.Context, arg AllianceSovSummaryParams) (AllianceSovSummaryRow, error) {
+	row := q.db.QueryRow(ctx, allianceSovSummary, arg.AllianceID, arg.Since)
+	var i AllianceSovSummaryRow
+	err := row.Scan(
+		&i.Held,
+		&i.Gained,
+		&i.Lost,
+		&i.AvgAdm,
+	)
+	return i, err
+}
+
 const listAllianceSovSystems = `-- name: ListAllianceSovSystems :many
 SELECT s.system_id, ss.name AS system_name, ss.security, ss.region_id,
        COALESCE(r.name, '')::text AS region_name, s.claimed_since,
@@ -407,15 +443,20 @@ JOIN sde_systems ss ON ss.system_id = s.system_id
 LEFT JOIN sde_regions r ON r.region_id = ss.region_id
 WHERE s.alliance_id > 0 AND s.vuln_end > $1::timestamptz
   AND s.vuln_start < $2::timestamptz
-  AND ($3::bigint = 0 OR ss.region_id = $3::bigint)
-  AND ($4::bigint = 0 OR s.alliance_id = $4::bigint)
+  -- mode 1: open now only; mode 2: opening later only; 0: both.
+  AND ($3::int = 0
+       OR ($3::int = 1 AND s.vuln_start <= $1::timestamptz)
+       OR ($3::int = 2 AND s.vuln_start > $1::timestamptz))
+  AND ($4::bigint = 0 OR ss.region_id = $4::bigint)
+  AND ($5::bigint = 0 OR s.alliance_id = $5::bigint)
 ORDER BY (s.vuln_start <= $1::timestamptz) DESC, s.vuln_start, s.adm, s.system_id
-LIMIT $5::bigint
+LIMIT $6::bigint
 `
 
 type ListSovVulnerableParams struct {
 	Now        time.Time `json:"now"`
 	Until      time.Time `json:"until"`
+	Mode       int32     `json:"mode"`
 	RegionID   int64     `json:"region_id"`
 	AllianceID int64     `json:"alliance_id"`
 	MaxRows    int64     `json:"max_rows"`
@@ -443,6 +484,7 @@ func (q *Queries) ListSovVulnerable(ctx context.Context, arg ListSovVulnerablePa
 	rows, err := q.db.Query(ctx, listSovVulnerable,
 		arg.Now,
 		arg.Until,
+		arg.Mode,
 		arg.RegionID,
 		arg.AllianceID,
 		arg.MaxRows,

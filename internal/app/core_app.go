@@ -1024,6 +1024,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// The killboard (killboard.go): core pages in the Intel section,
 	// beside the Intel module's /intel routes.
 	r.With(anonPages).Get("/intel/kills/", app.handleKillboard)
+	// The sovereignty tracker (intel_sov_page.go): public.
+	r.With(anonPages).Get("/intel/sov/", app.handleSovTracker)
 	r.With(anonPages).Get("/intel/kills/stream", app.handleKillStream)
 	r.With(anonPages).Get("/intel/kills/suggest", app.handleKillboardSuggest)
 	r.With(anonPages).Get("/intel/kill/{id}/", app.handleKillPage)

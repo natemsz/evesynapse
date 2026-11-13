@@ -458,6 +458,11 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	if app.refreshPlaceSovereignty(ctx) {
 		c.refreshed++
 	}
+	// The sovereignty tracker's live contests (intel_sov.go), mirrored
+	// the same way.
+	if app.refreshSovCampaigns(ctx) {
+		c.refreshed++
+	}
 
 	// The character pass, several characters at a time
 	// (worker_lanes.go).

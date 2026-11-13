@@ -261,6 +261,15 @@ func (app *Application) refreshPlaceSovereignty(ctx context.Context) bool {
 	}
 	defer tx.Rollback(ctx)
 	qtx := app.queries.WithTx(tx)
+	// The change log (schema 154): before the set is replaced, every
+	// system whose holder differs from the stored one is logged with
+	// both holders. An empty stored set (the first pass) logs
+	// nothing: there is nothing to compare against.
+	changes, err := app.logSovChanges(ctx, tx, systems, now)
+	if err != nil {
+		logging.Errorf("worker: place sovereignty: log changes: %v", err)
+		return false
+	}
 	if err := qtx.ClearSystemSovereignty(ctx); err != nil {
 		logging.Errorf("worker: place sovereignty: clear: %v", err)
 		return false
@@ -271,6 +280,22 @@ func (app *Application) refreshPlaceSovereignty(ctx context.Context) bool {
 		corpIDs := make([]int64, 0, len(systems))
 		factionIDs := make([]int64, 0, len(systems))
 		factionNameList := make([]string, 0, len(systems))
+		claimed := make([]*time.Time, 0, len(systems))
+		hubIDs := make([]int64, 0, len(systems))
+		vulnStart := make([]*time.Time, 0, len(systems))
+		vulnEnd := make([]*time.Time, 0, len(systems))
+		capitals := make([]bool, 0, len(systems))
+		adms := make([]float64, 0, len(systems))
+		military := make([]int32, 0, len(systems))
+		industrial := make([]int32, 0, len(systems))
+		strategic := make([]int32, 0, len(systems))
+		optTime := func(t time.Time) *time.Time {
+			if t.IsZero() {
+				return nil
+			}
+			u := t.UTC()
+			return &u
+		}
 		seen := make(map[int64]bool, len(systems))
 		for _, s := range systems {
 			if s.SystemID <= 0 || seen[s.SystemID] {
@@ -282,13 +307,26 @@ func (app *Application) refreshPlaceSovereignty(ctx context.Context) bool {
 			corpIDs = append(corpIDs, s.CorporationID)
 			factionIDs = append(factionIDs, s.FactionID)
 			factionNameList = append(factionNameList, factionNames[s.SystemID])
+			claimed = append(claimed, optTime(s.ClaimedSince))
+			hubIDs = append(hubIDs, s.HubID)
+			vulnStart = append(vulnStart, optTime(s.VulnStart))
+			vulnEnd = append(vulnEnd, optTime(s.VulnEnd))
+			capitals = append(capitals, s.Capital)
+			adms = append(adms, s.ADM)
+			military = append(military, s.MilitaryLevel)
+			industrial = append(industrial, s.IndustrialLevel)
+			strategic = append(strategic, s.StrategicLevel)
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO system_sovereignty (system_id, alliance_id, corporation_id, faction_id, faction_name, updated_at)
+			INSERT INTO system_sovereignty (system_id, alliance_id, corporation_id, faction_id, faction_name, updated_at,
+				claimed_since, hub_id, vuln_start, vuln_end, is_capital, adm, military_level, industrial_level, strategic_level)
 			SELECT unnest($1::bigint[]), unnest($2::bigint[]), unnest($3::bigint[]),
-			       unnest($4::bigint[]), unnest($5::text[]), $6::timestamptz
+			       unnest($4::bigint[]), unnest($5::text[]), $6::timestamptz,
+			       unnest($7::timestamptz[]), unnest($8::bigint[]), unnest($9::timestamptz[]), unnest($10::timestamptz[]),
+			       unnest($11::boolean[]), unnest($12::double precision[]), unnest($13::int[]), unnest($14::int[]), unnest($15::int[])
 		`, systemIDs, allianceIDs, corpIDs,
-			factionIDs, factionNameList, now.UTC()); err != nil {
+			factionIDs, factionNameList, now.UTC(),
+			claimed, hubIDs, vulnStart, vulnEnd, capitals, adms, military, industrial, strategic); err != nil {
 			logging.Errorf("worker: place sovereignty: store: %v", err)
 			return false
 		}
@@ -304,6 +342,6 @@ func (app *Application) refreshPlaceSovereignty(ctx context.Context) bool {
 		logging.Errorf("worker: place sovereignty: commit: %v", err)
 		return false
 	}
-	logging.Infof("worker: place sovereignty stored (%d systems)", len(systems))
+	logging.Infof("worker: place sovereignty stored (%d systems, %d holder changes)", len(systems), changes)
 	return true
 }

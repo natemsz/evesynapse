@@ -4248,6 +4248,7 @@
     { name: "Wars", url: "/intel/wars/" },
     { name: "Incursions", url: "/intel/incursions/" },
     { name: "Faction Warfare", url: "/intel/fw/" },
+    { name: "Sovereignty", url: "/intel/sov/" },
     { name: "Sync", url: "/admin/sync/" },
     { name: "Admin", url: "/admin/" }
   ];
@@ -4598,6 +4599,9 @@
   //          data-header-class="bp-cat-header">
   // Rows whose data-search misses hide; category headers with no
   // visible rows hide with them. data-header-class is optional.
+  // While the box holds a query, a table's folded rows (a
+  // data-wmore tbody behind a Show all control) are searched too;
+  // clearing the box folds them back as their control says.
   function initTableFilters(root) {
     var tableFilterBoxes = root.querySelectorAll("input[data-table-filter]");
     for (var filterIndex = 0; filterIndex < tableFilterBoxes.length; filterIndex++) {
@@ -4609,6 +4613,10 @@
       var headerClass = filterInput.getAttribute("data-header-class") || "";
       filterInput.addEventListener("input", function () {
         var q = filterInput.value.toLowerCase();
+        table.querySelectorAll("tbody[data-wmore]").forEach(function (b) {
+          var ctrl = b.id ? document.querySelector('[data-expand="' + b.id + '"]') : null;
+          b.hidden = q ? false : !(ctrl && ctrl.getAttribute("aria-expanded") === "true");
+        });
         table.querySelectorAll("." + rowClass).forEach(function (r) {
           var match = !q || (r.getAttribute("data-search") || "").toLowerCase().indexOf(q) >= 0;
           r.style.display = match ? "" : "none";

@@ -469,11 +469,18 @@
     J.jumps = new Int32Array(n);
     each(L.jumps, "jumps", function (i, j, p) { J.jumps[i] = p.n[j]; });
     J.sovA = new Int16Array(n).fill(-1); J.sovF = new Float64Array(n);
+    J.sovAdm = new Float32Array(n); J.sovVS = new Float64Array(n); J.sovVE = new Float64Array(n); J.sovSince = new Float64Array(n);
+    J.sovContest = {};
     J.allianceMembers = J.alliances.map(function () { return []; });
     each(L.sov, "sov", function (i, j, p) {
       J.sovA[i] = p.a[j];
       J.sovF[i] = p.f[j];
+      if (p.adm) { J.sovAdm[i] = p.adm[j]; J.sovVS[i] = p.vs[j]; J.sovVE[i] = p.ve[j]; J.sovSince[i] = p.since[j]; }
       if (p.a[j] >= 0 && J.allianceMembers[p.a[j]]) J.allianceMembers[p.a[j]].push(i);
+    });
+    ((L.sov && L.sov.contests) || []).forEach(function (c) {
+      var ci = G.byID[c.sys];
+      if (ci !== undefined) J.sovContest[ci] = c;
     });
     J.fwOcc = new Float64Array(n); J.fwOwn = new Float64Array(n); J.fwState = new Uint8Array(n); J.fwPct = new Uint8Array(n);
     each(L.fw, "fw", function (i, j, p) {
@@ -851,6 +858,11 @@
         npc: tok("--map-npc", "#9a8f86"),
         unheld: tok("--map-unheld", "rgba(200,180,160,0.35)"),
         sovL: tok("--map-sov-l", "62%"),
+        // Sovereignty marks: a contest, a window open now, a claim
+        // taken in the last 7 days.
+        sovContest: tok("--map-sov-contest", "#ff3b3b"),
+        sovOpen: tok("--map-sov-open", "#f0b429"),
+        sovNew: tok("--map-sov-new", "#e8e0d8"),
         threatRamp: [rgbOf(tok("--map-threat-lo", "#e0a020")), rgbOf(tok("--map-threat-hi", "#e0301c")), rgbOf(tok("--map-threat-core", "#fff0e0"))],
         route: tok("--map-route", "#ffd27a"),
         routeHalo: tok("--map-route-halo", "rgba(255,210,122,0.25)"),
@@ -1524,6 +1536,31 @@
           ctx.fillStyle = allianceColor(a);
           ctx.fill();
         }
+        // The tracker's marks (/intel/sov/): a contest is a red ring,
+        // a window open now an amber ring, a claim taken in the last
+        // 7 days a light dot at the system's side.
+        var nowS = Date.now() / 1000, weekAgo = nowS - 7 * 86400;
+        var sovRing = function (color, rr, width, test) {
+          ctx.beginPath();
+          for (var q = 0; q < G.n; q++) {
+            if (!test(q) || (mode !== "universe" && S.r[q] !== region) || !on(q)) continue;
+            ctx.moveTo(sx + rr, sy);
+            ctx.arc(sx, sy, rr, 0, Math.PI * 2);
+          }
+          ctx.lineWidth = width;
+          ctx.strokeStyle = color;
+          ctx.stroke();
+        };
+        sovRing(colors.sovOpen, r * 1.15 + 3, 1.5, function (q) { return LY.sovVS[q] && LY.sovVS[q] <= nowS && LY.sovVE[q] > nowS; });
+        sovRing(colors.sovContest, r * 1.15 + 6, 2, function (q) { return !!LY.sovContest[q]; });
+        ctx.beginPath();
+        for (var q2 = 0; q2 < G.n; q2++) {
+          if (!(LY.sovSince[q2] > weekAgo) || (mode !== "universe" && S.r[q2] !== region) || !on(q2)) continue;
+          ctx.moveTo(sx + r * 1.15 + 3.5, sy - r);
+          ctx.arc(sx + r * 1.15 + 2, sy - r, 1.8, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = colors.sovNew;
+        ctx.fill();
         return;
       }
       if (layer === "fw") {
@@ -1883,6 +1920,22 @@
         row("", "hsl(30,68%," + colors.sovL + ")", "Alliances");
         if (sovNPC || sovView !== "territory") row("", colors.npc, "NPC factions");
         if (sovView === "systems") row("", colors.unheld, "Unclaimed");
+        // The tracker's marks, drawn as the map draws them.
+        var ringRow = function (color, text) {
+          row("", "transparent", text);
+          var sw = box.lastChild.firstChild;
+          sw.style.boxShadow = "inset 0 0 0 2px " + color;
+        };
+        ringRow(colors.sovContest, "Contest under way");
+        ringRow(colors.sovOpen, "Vulnerable now");
+        row("", colors.sovNew, "Taken in the last 7 days");
+        var trk = root.createElement("p");
+        trk.className = "map-layer-row";
+        var trkA = root.createElement("a");
+        trkA.href = "/intel/sov/";
+        trkA.textContent = "Sovereignty tracker";
+        trk.appendChild(trkA);
+        box.appendChild(trk);
       } else if (layer === "fw") {
         [[500003, "Amarr"], [500001, "Caldari"], [500004, "Gallente"], [500002, "Minmatar"]].forEach(function (f) {
           row("", colors.faction[f[0]], (LY.factions[f[0]] || f[1]).replace(/ (Empire|State|Federation|Republic)$/, ""));
@@ -1970,6 +2023,14 @@
           if (LY.sovA[i] >= 0) {
             var al = LY.alliances[LY.sovA[i]];
             rows.push(["Sovereignty", al.name || "Alliance " + al.id, "/alliance/?alliance=" + al.id]);
+            var nowT = Date.now() / 1000;
+            var con = LY.sovContest[i];
+            if (con) rows.push(["Contest", "Defender " + con.def + "% vs attackers " + con.att + "%" + (con.start > nowT ? ", starts in " + Math.round((con.start - nowT) / 60) + "m" : ""), "/intel/sov/?alliance=" + al.id]);
+            if (!brief && LY.sovAdm[i]) rows.push(["ADM", LY.sovAdm[i].toFixed(1)]);
+            if (LY.sovVS[i] && LY.sovVE[i] > nowT) {
+              rows.push(["Vulnerable", LY.sovVS[i] <= nowT ? "Open, closes in " + Math.round((LY.sovVE[i] - nowT) / 60) + "m" : "Opens in " + Math.round((LY.sovVS[i] - nowT) / 60) + "m"]);
+            }
+            if (LY.sovSince[i] > nowT - 7 * 86400) rows.push(["Taken", Math.max(1, Math.round((nowT - LY.sovSince[i]) / 3600)) + "h ago"]);
           } else if (LY.sovF[i] > 0) {
             rows.push(["Sovereignty", LY.factions[LY.sovF[i]] || "NPC faction"]);
           } else if (!brief) {

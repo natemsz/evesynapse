@@ -332,9 +332,18 @@ FROM system_sovereignty
 WHERE system_id = $1::bigint
 `
 
-func (q *Queries) GetSystemSovereignty(ctx context.Context, systemID int64) (SystemSovereignty, error) {
+type GetSystemSovereigntyRow struct {
+	SystemID      int64     `json:"system_id"`
+	AllianceID    int64     `json:"alliance_id"`
+	CorporationID int64     `json:"corporation_id"`
+	FactionID     int64     `json:"faction_id"`
+	FactionName   string    `json:"faction_name"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+func (q *Queries) GetSystemSovereignty(ctx context.Context, systemID int64) (GetSystemSovereigntyRow, error) {
 	row := q.db.QueryRow(ctx, getSystemSovereignty, systemID)
-	var i SystemSovereignty
+	var i GetSystemSovereigntyRow
 	err := row.Scan(
 		&i.SystemID,
 		&i.AllianceID,

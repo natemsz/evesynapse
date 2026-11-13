@@ -46,6 +46,8 @@ var Module = module.Module{
 			{Href: "/intel/wars/", Label: "Wars", Pages: []string{"intel_wars.html"}},
 			{Href: "/intel/incursions/", Label: "Incursions", Pages: []string{"intel_incursions.html"}},
 			{Href: "/intel/fw/", Label: "Faction Warfare", Pages: []string{"intel_fw.html"}},
+			// The sovereignty tracker is core (intel_sov_page.go).
+			{Href: "/intel/sov/", Label: "Sovereignty", Pages: []string{"intel_sov.html"}},
 		},
 	}},
 	Pages: []module.Page{
@@ -57,6 +59,7 @@ var Module = module.Module{
 		{Path: "/intel/wars/", ChangeFreq: "weekly", Priority: "0.7"},
 		{Path: "/intel/incursions/", ChangeFreq: "weekly", Priority: "0.7"},
 		{Path: "/intel/fw/", ChangeFreq: "weekly", Priority: "0.7"},
+		{Path: "/intel/sov/", ChangeFreq: "hourly", Priority: "0.7"},
 		{Path: "/intel/kills/", ChangeFreq: "hourly", Priority: "0.7"},
 		{Path: "/intel/scan/", ChangeFreq: "monthly", Priority: "0.7"},
 	},

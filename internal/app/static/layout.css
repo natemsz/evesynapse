@@ -481,6 +481,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 .l-stat-value.text { font-family: var(--font-body); font-size: var(--fs-2xl); white-space: normal; }
 .l-stat-sub { color: var(--muted); font-size: var(--fs-xs); }
 .l-stat.warn .l-stat-value { color: var(--gold); }
+.l-stat.hot .l-stat-value { color: var(--v-bad, #e5533d); }
 .l-stat.ok .l-stat-value { color: var(--kept); }
 
 /* Meter: a used-of-max bar, its fill as SVG geometry (a 100-unit

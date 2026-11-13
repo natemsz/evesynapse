@@ -221,6 +221,8 @@ const (
 	GlobalSystemKills = "system_kills" // GET /universe/system_kills/
 	GlobalSystemJumps = "system_jumps" // GET /universe/system_jumps/
 	GlobalSovMap      = "sov_map"      // GET /sovereignty/systems/
+	// Live sovereignty contests (the sovereignty tracker).
+	GlobalSovCampaigns = "sov_campaigns" // GET /sovereignty/campaigns/
 	// CCP's per-route health (GET /meta/status/), holding only
 	// the routes CCP does not report as OK. The generic fetch
 	// stores payloads whole, so this kind has its own writer
@@ -1437,6 +1439,21 @@ type SovSystem struct {
 	AllianceID    int64 `json:"alliance_id"`
 	CorporationID int64 `json:"corporation_id"`
 	FactionID     int64 `json:"faction_id"`
+	// An alliance claim's detail, read from GET /sovereignty/systems/
+	// only (the old flat /sovereignty/map/ payload had none): when
+	// the holder took the system, its sovereignty hub and that hub's
+	// vulnerability window, whether it is the alliance's capital,
+	// and the system's development, the activity defense multiplier
+	// (ADM) among it.
+	ClaimedSince    time.Time `json:"claimed_since"`
+	HubID           int64     `json:"hub_id"`
+	VulnStart       time.Time `json:"vuln_start"`
+	VulnEnd         time.Time `json:"vuln_end"`
+	Capital         bool      `json:"capital"`
+	ADM             float64   `json:"adm"`
+	MilitaryLevel   int32     `json:"military_level"`
+	IndustrialLevel int32     `json:"industrial_level"`
+	StrategicLevel  int32     `json:"strategic_level"`
 }
 
 // UnmarshalJSON reads GET /sovereignty/systems/, which wraps the
@@ -1457,8 +1474,23 @@ func (m *SovMap) UnmarshalJSON(b []byte) error {
 			SolarSystemID int64 `json:"solar_system_id"`
 			Claim         struct {
 				Alliance *struct {
-					AllianceID    int64 `json:"alliance_id"`
-					CorporationID int64 `json:"corporation_id"`
+					AllianceID     int64     `json:"alliance_id"`
+					CorporationID  int64     `json:"corporation_id"`
+					ClaimedSince   time.Time `json:"claimed_since"`
+					SovereigntyHub *struct {
+						ID                  int64 `json:"id"`
+						VulnerabilityWindow *struct {
+							Start time.Time `json:"start"`
+							End   time.Time `json:"end"`
+						} `json:"vulnerability_window"`
+					} `json:"sovereignty_hub"`
+					IsCapitalSystem bool `json:"is_capital_system"`
+					Development     *struct {
+						ActivityDefenseMultiplier float64 `json:"activity_defense_multiplier"`
+						MilitaryLevel             int32   `json:"military_level"`
+						IndustrialLevel           int32   `json:"industrial_level"`
+						StrategicLevel            int32   `json:"strategic_level"`
+					} `json:"development"`
 				} `json:"alliance"`
 				Faction *struct {
 					FactionID int64 `json:"faction_id"`
@@ -1474,6 +1506,17 @@ func (m *SovMap) UnmarshalJSON(b []byte) error {
 		row := SovSystem{SystemID: s.SolarSystemID}
 		if a := s.Claim.Alliance; a != nil {
 			row.AllianceID, row.CorporationID = a.AllianceID, a.CorporationID
+			row.ClaimedSince, row.Capital = a.ClaimedSince, a.IsCapitalSystem
+			if h := a.SovereigntyHub; h != nil {
+				row.HubID = h.ID
+				if w := h.VulnerabilityWindow; w != nil {
+					row.VulnStart, row.VulnEnd = w.Start, w.End
+				}
+			}
+			if d := a.Development; d != nil {
+				row.ADM = d.ActivityDefenseMultiplier
+				row.MilitaryLevel, row.IndustrialLevel, row.StrategicLevel = d.MilitaryLevel, d.IndustrialLevel, d.StrategicLevel
+			}
 		}
 		if f := s.Claim.Faction; f != nil {
 			row.FactionID = f.FactionID
@@ -1482,6 +1525,24 @@ func (m *SovMap) UnmarshalJSON(b []byte) error {
 	}
 	*m = out
 	return nil
+}
+
+// SovCampaigns is GET /sovereignty/campaigns/: the sovereignty
+// contests under way or about to start, each with the structure
+// fought over and the defender's and attackers' scores (0 to 1).
+type SovCampaigns []SovCampaign
+
+// SovCampaign is one contest in SovCampaigns.
+type SovCampaign struct {
+	CampaignID      int64     `json:"campaign_id"`
+	SystemID        int64     `json:"solar_system_id"`
+	ConstellationID int64     `json:"constellation_id"`
+	StructureID     int64     `json:"structure_id"`
+	EventType       string    `json:"event_type"`
+	DefenderID      int64     `json:"defender_id"`
+	DefenderScore   float64   `json:"defender_score"`
+	AttackersScore  float64   `json:"attackers_score"`
+	StartTime       time.Time `json:"start_time"`
 }
 
 // Constellation is GET /universe/constellations/{id}/ (the slice
@@ -2921,6 +2982,8 @@ func globalSnapshotPath(kind string) string {
 		return "/universe/system_jumps/"
 	case GlobalSovMap:
 		return "/sovereignty/systems/"
+	case GlobalSovCampaigns:
+		return "/sovereignty/campaigns/"
 	}
 	return ""
 }

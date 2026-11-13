@@ -1,0 +1,119 @@
+/* sov.css -- the sovereignty tracker (intel_sov.html,
+ * intel_sov_page.go). Framework parts throughout: the page head, the
+ * stat tiles (.warn, .hot), a main column beside the alliance
+ * standings (.l-sidebar--end). Tables use the shared look and turn
+ * into cards through app.js when their columns do not fit; long lists
+ * fold behind Show all. The contest score is a styled native
+ * <progress>. Status colours read the colour-blind tokens. */
+
+.sov, .prof-sov {
+  --sov-good: var(--v-good, #28c76f);
+  --sov-bad: var(--v-bad, #e5533d);
+  --sov-warn: var(--v-warn, #f0b429);
+  /* Defender neutral, attackers red: the two ends never share a hue
+     with each other or with links. */
+  --sov-def: color-mix(in srgb, var(--text) 82%, transparent);
+  --sov-att: var(--sov-bad);
+}
+
+/* --- Page head: summary and pickers --- */
+.sov-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0; }
+.sov-pick { display: inline-flex; align-items: center; gap: var(--space-2); }
+.sov-pick-l { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.sov-pick select { min-height: var(--control-h); max-inline-size: 14rem; padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.sov-pick select:focus-visible { border-color: var(--accent); outline: none; }
+
+/* --- Layout: the main column and the standings --- */
+.sov-layout { --l-side: 20rem; --l-main-min: 60%; align-items: flex-start; }
+.sov-main { --l-gap: var(--space-4); min-width: 0; }
+.sov-panel { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; scroll-margin-top: calc(var(--subnav-h, 3rem) + var(--space-4)); }
+.sov-ph { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.sov-ph h2 { margin: 0 auto 0 0; display: inline-flex; align-items: baseline; gap: var(--space-2); }
+.sov-count { padding: 0 0.45rem; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); }
+.sov-search { flex: 0 1 16rem; min-width: 8rem; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.sov-search:focus-visible { border-color: var(--accent); outline: none; }
+.sov-h3 { margin: var(--space-2) 0 0; font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.sov-note, .sov-empty { margin: 0; color: var(--muted); font-size: var(--fs-xs); }
+.sov-empty { padding: var(--space-2) 0; font-size: var(--fs-sm); }
+.sov-dim { color: var(--muted); }
+.sov-up { color: var(--sov-good); font-family: var(--font-num); }
+.sov-down { color: var(--sov-bad); font-family: var(--font-num); }
+.sov-live { display: inline-block; padding: 0 0.4rem; border: 1px solid var(--sov-bad); border-radius: 999px; color: var(--sov-bad); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.sov-cap { color: var(--gold, #ffd27a); border-color: currentColor; font-size: var(--fs-2xs); }
+.sov-more { align-self: flex-start; }
+.sov-more .sov-more-o, .sov-more[aria-expanded="true"] .sov-more-c { display: none; }
+.sov-more[aria-expanded="true"] .sov-more-o { display: inline; }
+.sov [data-wmore][hidden] { display: none !important; }
+
+/* --- Tables: one size for the data; dim text stays dim --- */
+.sov-t { inline-size: 100%; font-size: var(--fs-sm); }
+.sov-t .sov-dim, .sov-t .sov-region-n { font-size: inherit; }
+/* Above the shared .tw first-column rule, which paints a band. */
+.sov-tw .sov-t tbody th { position: static; font-weight: 400; text-align: start; background: none; }
+.sov-t td, .sov-t tbody th { vertical-align: middle; }
+.sov-nw, .sov-t time { white-space: nowrap; }
+/* A row worth a look (attackers ahead, a window open) takes the
+   framework's row edge rather than a tint. */
+.sov-edge { --row-edge: var(--sov-bad); --row-edge-w: 3px; }
+.sov-tw .sov-t tbody tr > th:first-child { box-shadow: inset var(--row-edge-w, 0px) 0 0 var(--row-edge, transparent); padding-inline-start: calc(0.5rem + var(--row-edge-w, 0px)); }
+
+.sov-sys { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.4rem; min-width: 0; }
+.sov-region-n { flex-basis: 100%; color: var(--muted); }
+.sov-org { display: inline-flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.sov-org img { flex: none; border-radius: 50%; }
+.sov-org span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-inline-size: 14rem; }
+
+/* --- Contest score: defender share as the fill, attackers as the
+   track, a gap where they meet, each end labelled --- */
+.sov-score { display: flex; flex-direction: column; gap: 0.25rem; min-inline-size: 11rem; }
+.sov-score-v { display: flex; justify-content: space-between; gap: var(--space-2); white-space: nowrap; }
+.sov-def { color: var(--sov-def); }
+.sov-att { color: var(--sov-att); }
+.sov-bar {
+  appearance: none;
+  border: 0 solid;
+  overflow: clip;
+  inline-size: 100%;
+  block-size: 0.45rem;
+  border-radius: 999px;
+  background: var(--sov-att);
+}
+.sov-bar::-webkit-progress-bar { background: transparent; }
+.sov-bar::-webkit-progress-value { background: var(--sov-def); border-radius: 0; border-inline-end: 2px solid var(--surface-pane, #15100c); transition: inline-size 0.3s; }
+.sov-bar::-moz-progress-bar { background: var(--sov-def); border-radius: 0; border-inline-end: 2px solid var(--surface-pane, #15100c); }
+
+/* --- ADM: the figure over a meter of its 1 to 6 range --- */
+.sov-adm { font-family: var(--font-num); font-weight: 700; }
+.sov-adm-m { display: block; inline-size: 3.5rem; margin-block-start: 0.2rem; }
+.sov-adm-low { color: var(--sov-bad); }
+.sov-adm-mid { color: var(--sov-warn); }
+.sov-adm-high { color: var(--sov-good); }
+.sov-adm-m.sov-adm-low rect { fill: var(--sov-bad); }
+.sov-adm-m.sov-adm-mid rect { fill: var(--sov-warn); }
+.sov-adm-m.sov-adm-high rect { fill: var(--sov-good); }
+
+/* --- Alliance standings --- */
+.sov-standings { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.sov-standings li + li { border-top: 1px solid var(--hairline); }
+.sov-st { display: grid; grid-template-columns: 1.5rem auto minmax(0, 1fr) auto 2.75rem; grid-template-areas: "rank logo name delta value" "rank logo meter meter meter"; align-items: center; gap: 0.15rem var(--space-2); padding: var(--space-2) var(--space-1); color: var(--text); text-decoration: none; border-radius: var(--r-sm); font-size: var(--fs-sm); }
+.sov-st:hover { background: var(--sel-row, rgba(255, 255, 255, 0.04)); }
+.sov-standings li.on .sov-st { background: var(--sel-bg); box-shadow: inset 2px 0 0 var(--sel-edge); }
+.sov-st-r { grid-area: rank; color: var(--muted); font-family: var(--font-num); text-align: end; }
+.sov-st img { grid-area: logo; border-radius: 50%; }
+.sov-st-n { grid-area: name; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sov-st-d { grid-area: delta; text-align: end; white-space: nowrap; }
+.sov-st-v { grid-area: value; font-family: var(--font-num); text-align: end; }
+.sov-st-m { grid-area: meter; inline-size: 100%; }
+.sov-st-m rect { fill: color-mix(in srgb, var(--accent) 55%, transparent); }
+.sov-standings li.on .sov-st-m rect { fill: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sov-bar::-webkit-progress-value { transition: none; }
+}
+
+/* --- The alliance page's sovereignty block (alliance.html) --- */
+.prof-sov { display: flex; flex-direction: column; gap: var(--space-3); }
+.prof-sov-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.prof-sov-head h2 { margin: 0; }
+.prof-sov-sum { margin: 0; font-size: var(--fs-sm); }
+.prof-sov-sum b { font-family: var(--font-num); }

@@ -7,8 +7,27 @@
   <div class="l-head-act"><a class="btn" href="/intel/kills/?alliance={{.AllianceID}}">Killboard</a></div>
 </div>
 {{template "alliance-body" .}}{{end}}
+{{with .AllianceSov}}
+<section class="l-panel prof-sov" aria-labelledby="prof-sov-h">
+  <div class="prof-sov-head"><h2 id="prof-sov-h">Sovereignty</h2><a class="btn btn-quiet" href="{{.TrackerHref}}">Open in the tracker</a></div>
+  <p class="prof-sov-sum"><b>{{.Held}}</b> systems held{{if or .Gained .Lost}} · 7 days: {{if .Gained}}<span class="sov-up">+{{.Gained}}</span>{{end}}{{if .Lost}} <span class="sov-down">−{{.Lost}}</span>{{end}}{{end}} · average ADM {{.ADM}}</p>
+  <div class="tw sov-tw" tabindex="0" role="region" aria-labelledby="prof-sov-h">
+  <table class="sov-t">
+    <thead><tr><th>System</th><th>ADM</th><th class="card-figure">Window</th></tr></thead>
+    <tbody>{{range .Systems}}<tr{{if .Open}} class="sov-edge"{{end}}>
+      <th scope="row">{{template "prof-sov-system" .System}}{{if .Capital}} <span class="badge sov-cap">Capital</span>{{end}}</th>
+      <td data-sort="{{.ADM}}"><span class="sov-adm sov-adm-{{.ADMTier}}">{{.ADM}}</span><svg class="l-meter sov-adm-m sov-adm-{{.ADMTier}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.ADMPct}}" height="4"/></svg></td>
+      <td class="sov-nw">{{if .EdgeText}}{{if .Open}}<span class="sov-live">Open</span> <span class="sov-dim">closes</span> {{else}}<span class="sov-dim">opens</span> {{end}}<time datetime="{{.Edge.Format "2006-01-02T15:04:05Z07:00"}}" data-finish="{{.Edge.Format "2006-01-02T15:04:05Z07:00"}}">{{.EdgeText}}</time>{{else}}<span class="sov-dim">—</span>{{end}}</td>
+    </tr>{{end}}</tbody>
+  </table>
+  </div>
+  {{if .More}}<p class="sov-note">{{.More}} more in <a href="{{.TrackerHref}}">the sovereignty tracker</a>.</p>{{end}}
+</section>
+{{end}}
 </div>
 {{end}}
+
+{{define "prof-sov-system"}}<span class="sov-sys">{{placeLink .Place}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{if .Region}}<span class="sov-region-n">{{.Region}}</span>{{end}}</span>{{end}}
 
 {{define "alliance-title"}}
 {{if eq .State "missing"}}

@@ -933,6 +933,12 @@ var pgKillStatsCompleteSchema string
 //go:embed schema_pg/153_kill_archive_restore.sql
 var pgKillArchiveRestoreSchema string
 
+// Step 154: the sovereignty tracker: claim detail on each holder
+// row, the change log and the live contests.
+//
+//go:embed schema_pg/154_sov_tracker.sql
+var pgSovTrackerSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1114,6 +1120,7 @@ func schemaSteps() []schemaStep {
 		{151, "pi_colony_planner", pgPIColonyPlannerSchema, ""},
 		{152, "kill_stats_complete", pgKillStatsCompleteSchema, ""},
 		{153, "kill_archive_restore", pgKillArchiveRestoreSchema, ""},
+		{154, "sov_tracker", pgSovTrackerSchema, ""},
 	}
 }
 

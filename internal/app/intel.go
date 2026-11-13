@@ -29,6 +29,7 @@ var globalKindOrder = []string{
 	esi.GlobalStatus, esi.GlobalWars, esi.GlobalIncursions,
 	esi.GlobalFWSystems, esi.GlobalFWStats, esi.GlobalFactions,
 	esi.GlobalSystemKills, esi.GlobalSystemJumps, esi.GlobalSovMap,
+	esi.GlobalSovCampaigns,
 }
 
 // userCorporationIDs returns every corporation the given user's

@@ -982,7 +982,7 @@ html[data-vision="redgreen"] .fit-stats,
 html[data-vision="redgreen"] .fit-range { --fr-1: #e0682f; --fr-2: #3f8fe0; --fr-3: #e8a8e0; --fr-4: #f0e05a; }
 html[data-vision="blueyellow"] .fit-stats,
 html[data-vision="blueyellow"] .fit-range { --fr-1: #e0682f; --fr-2: #2bb08f; --fr-3: #a080ff; --fr-4: #e8e0f0; }
-html[data-vision] .map { --map-intel-clear: #e6e6e6; --map-camp: var(--v-bad); }
+html[data-vision] .map { --map-intel-clear: #e6e6e6; --map-camp: var(--v-bad); --map-sov-contest: var(--v-bad); --map-sov-open: var(--v-warn, #f0b429); }
 html[data-vision="redgreen"] .map {
   --map-f-amarr: #f5e36a; --map-f-caldari: #3d7bff; --map-f-gallente: #7fd6e6; --map-f-minmatar: #d8602f;
   --map-threat-lo: #f5e36a; --map-threat-hi: #e0701c;

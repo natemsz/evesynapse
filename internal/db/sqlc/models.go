@@ -2340,6 +2340,31 @@ type SnapshotFetchState struct {
 	AttemptedAt time.Time `json:"attempted_at"`
 }
 
+type SovCampaign struct {
+	CampaignID      int64     `json:"campaign_id"`
+	SystemID        int64     `json:"system_id"`
+	ConstellationID int64     `json:"constellation_id"`
+	StructureID     int64     `json:"structure_id"`
+	EventType       string    `json:"event_type"`
+	DefenderID      int64     `json:"defender_id"`
+	DefenderScore   float64   `json:"defender_score"`
+	AttackersScore  float64   `json:"attackers_score"`
+	StartTime       time.Time `json:"start_time"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type SovChange struct {
+	ID               int64     `json:"id"`
+	SystemID         int64     `json:"system_id"`
+	ChangedAt        time.Time `json:"changed_at"`
+	OldAllianceID    int64     `json:"old_alliance_id"`
+	OldCorporationID int64     `json:"old_corporation_id"`
+	OldFactionID     int64     `json:"old_faction_id"`
+	NewAllianceID    int64     `json:"new_alliance_id"`
+	NewCorporationID int64     `json:"new_corporation_id"`
+	NewFactionID     int64     `json:"new_faction_id"`
+}
+
 type SrpRequest struct {
 	ID            int64        `json:"id"`
 	CorporationID int64        `json:"corporation_id"`
@@ -2608,12 +2633,21 @@ type SystemActivityStat struct {
 }
 
 type SystemSovereignty struct {
-	SystemID      int64     `json:"system_id"`
-	AllianceID    int64     `json:"alliance_id"`
-	CorporationID int64     `json:"corporation_id"`
-	FactionID     int64     `json:"faction_id"`
-	FactionName   string    `json:"faction_name"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	SystemID        int64        `json:"system_id"`
+	AllianceID      int64        `json:"alliance_id"`
+	CorporationID   int64        `json:"corporation_id"`
+	FactionID       int64        `json:"faction_id"`
+	FactionName     string       `json:"faction_name"`
+	UpdatedAt       time.Time    `json:"updated_at"`
+	ClaimedSince    sql.NullTime `json:"claimed_since"`
+	HubID           int64        `json:"hub_id"`
+	VulnStart       sql.NullTime `json:"vuln_start"`
+	VulnEnd         sql.NullTime `json:"vuln_end"`
+	IsCapital       bool         `json:"is_capital"`
+	Adm             float64      `json:"adm"`
+	MilitaryLevel   int32        `json:"military_level"`
+	IndustrialLevel int32        `json:"industrial_level"`
+	StrategicLevel  int32        `json:"strategic_level"`
 }
 
 type TradeFoldCheckpoint struct {

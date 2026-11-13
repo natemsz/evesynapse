@@ -33,7 +33,7 @@ func TestMapLayersBuildAndServe(t *testing.T) {
 		{"system_id":30000142,"ship_kills":0,"pod_kills":0,"npc_kills":0},
 		{"system_id":30004759,"ship_kills":1,"pod_kills":0,"npc_kills":350}]`)
 	put(esi.GlobalSystemJumps, `[{"system_id":30000142,"ship_jumps":3100},{"system_id":30002187,"ship_jumps":0}]`)
-	put(esi.GlobalSovMap, `[{"system_id":30004759,"alliance_id":99003581,"corporation_id":1},
+	put(esi.GlobalSovMap, `[{"system_id":30004759,"alliance_id":99003581,"corporation_id":1,"capital":true},
 		{"system_id":30004760,"alliance_id":99003581,"corporation_id":1},
 		{"system_id":30000142,"faction_id":500001},
 		{"system_id":30001000}]`)
@@ -77,6 +77,9 @@ func TestMapLayersBuildAndServe(t *testing.T) {
 	}
 	if len(p.Alliances) != 1 || p.Alliances[0].Name != "Fraternity." || len(p.Sov.ID) != 3 {
 		t.Errorf("sov: one named holder over two systems, one faction system: %+v %+v", p.Alliances, p.Sov)
+	}
+	if len(p.Alliances) == 1 && p.Alliances[0].Cap != 30004759 {
+		t.Errorf("an alliance carries its capital system: %+v", p.Alliances[0])
 	}
 	if len(p.FW.ID) != 1 || p.FW.Pct[0] != 4 || p.FW.State[0] != "contested" {
 		t.Errorf("fw: %+v", p.FW)

@@ -336,6 +336,17 @@ test("jump drives: range, cyno-legal landings, routes and fatigue", () => {
   assert.deepStrictEqual(map.jumpFatigue([10], 0.1, 0), { fatigue: 20, waits: 0 }, "a jump freighter counts a tenth of the distance");
 });
 
+test("bridge cost zones follow CCP's bands from the capital", () => {
+  const z = (ly) => [map.bridgeZone(ly).zone, map.bridgeZone(ly).mult];
+  assert.deepStrictEqual(z(0), [1, 0], "the capital itself is free");
+  assert.deepStrictEqual(z(5.04), [1, 0], "counted to a tenth: 5.0 is still zone 1");
+  assert.deepStrictEqual(z(5.1), [2, 2]);
+  assert.deepStrictEqual(z(12), [3, 6]);
+  assert.deepStrictEqual(z(20), [4, 9]);
+  assert.deepStrictEqual(z(20.1), [5, 15]);
+  assert.deepStrictEqual(z(NaN), [5, 15], "no known distance pays the full rate");
+});
+
 test("zoomed-out picking prefers the system with something on it", () => {
   // A bare system keeps the old 14px reach; a hot one reaches 24px.
   assert.strictEqual(map.pickReach(0), 14);

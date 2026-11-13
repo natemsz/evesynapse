@@ -60,6 +60,13 @@
   --map-camp: #ff3b3b;
   --map-route: #ffd27a;
   --map-route-halo: rgba(255, 210, 122, 0.25);
+  /* Ansiblex cost zones: teal (free) through amber to red, zone 5
+     (the full rate, most of space) faint so the near bands lead. */
+  --map-zone-1: var(--v-good, #5ce0c8);
+  --map-zone-2: #b8e05a;
+  --map-zone-3: var(--v-warn, #f0b429);
+  --map-zone-4: var(--v-bad, #ff6a2a);
+  --map-zone-5: rgba(214, 120, 110, 0.55);
   /* Intel reports: cold cyan against the warm map, green for clear. */
   --map-intel: #3fd8ff;
   --map-intel-clear: #4fbf6a;
@@ -786,6 +793,42 @@ html.map-full-open { overflow: hidden; }
 }
 .map-layer-npc:hover { color: var(--text); }
 .map-layer-npc input { accent-color: var(--accent); margin: 0; }
+/* Zones: whose capital, and a way to it. */
+.map-zones-pick {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0.1rem 0 0.4rem;
+  color: var(--muted-2);
+  font-family: var(--map-font-display);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.map-zones-pick select {
+  max-width: 16rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.map-zones-cap {
+  pointer-events: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--map-route);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
 .map-scale {
   display: grid;
   grid-template-columns: auto minmax(5rem, 1fr) auto;

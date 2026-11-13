@@ -206,7 +206,7 @@ func (app *Application) handlePlanets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 
-	characters, active, links, err := app.pickCharacter(ctx, r, "/planets/")
+	characters, active, links, err := app.pickCharacter(ctx, r)
 	if err != nil {
 		logging.Errorf("planets: list characters: %v", err)
 		data.Error = "Could not load planetary industry data; check the server log."

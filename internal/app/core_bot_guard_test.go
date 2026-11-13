@@ -277,7 +277,7 @@ func botGuardTestApp() (*Application, http.Handler) {
 	}))
 }
 
-func htmlPage(app *Application, h http.Handler, ua, url, remote string, cookies ...*http.Cookie) int {
+func htmlPage(h http.Handler, ua, url, remote string, cookies ...*http.Cookie) int {
 	req := httptest.NewRequest(http.MethodGet, url, nil)
 	req.RemoteAddr = remote
 	req.Header.Set("User-Agent", ua)
@@ -313,18 +313,18 @@ func TestBlockScrapersForgedChrome(t *testing.T) {
 // assets is throttled at the page budget; a fingerprint that
 // fetches assets, and a client carrying the asset cookie, are not.
 func TestBotWatchHTMLOnlyFingerprint(t *testing.T) {
-	app, h := botGuardTestApp()
+	_, h := botGuardTestApp()
 	for i := 1; i < botAssetFreePages; i++ {
-		if code := htmlPage(app, h, attackChromeUA, "/intel/kills/?character=2121821954", "203.0.113.1:1000"); code != http.StatusOK {
+		if code := htmlPage(h, attackChromeUA, "/intel/kills/?character=2121821954", "203.0.113.1:1000"); code != http.StatusOK {
 			t.Fatalf("page %d: status %d, want 200", i, code)
 		}
 	}
-	if code := htmlPage(app, h, attackChromeUA, "/intel/kills/?character=2121821954", "198.51.100.9:1000"); code != http.StatusTooManyRequests {
+	if code := htmlPage(h, attackChromeUA, "/intel/kills/?character=2121821954", "198.51.100.9:1000"); code != http.StatusTooManyRequests {
 		t.Fatalf("page %d from a fresh address: status %d, want 429 (fingerprint, not address)", botAssetFreePages, code)
 	}
 
 	// A browser-shaped fingerprint: assets first, then pages.
-	app2, h2 := botGuardTestApp()
+	_, h2 := botGuardTestApp()
 	assetReq := httptest.NewRequest(http.MethodGet, "/static/site.css", nil)
 	assetReq.Header.Set("User-Agent", attackChromeUA)
 	assetReq.Header.Set("Sec-Ch-Ua", `"Chromium";v="153", "Google Chrome";v="153"`)
@@ -345,7 +345,7 @@ func TestBotWatchHTMLOnlyFingerprint(t *testing.T) {
 		t.Fatal("asset response set no asset cookie")
 	}
 	for i := 0; i < botAssetFreePages+5; i++ {
-		if code := htmlPage(app2, h2, attackChromeUA, "/market/", "203.0.113.1:1000", assetCookie); code != http.StatusOK {
+		if code := htmlPage(h2, attackChromeUA, "/market/", "203.0.113.1:1000", assetCookie); code != http.StatusOK {
 			t.Fatalf("browser page %d: status %d, want 200", i, code)
 		}
 	}
@@ -378,7 +378,7 @@ func TestEnumFloodValve(t *testing.T) {
 	cookie := issuedAssetCookie(t, h)
 	code := 0
 	for i := 0; i < enumMinSamples+10; i++ {
-		code = htmlPage(nil, h, attackChromeUA, "/intel/kill/"+strconv.Itoa(139000000+i)+"/", "203.0.113.1:1000", cookie)
+		code = htmlPage(h, attackChromeUA, "/intel/kill/"+strconv.Itoa(139000000+i)+"/", "203.0.113.1:1000", cookie)
 		if code == http.StatusTooManyRequests {
 			break
 		}
@@ -391,7 +391,7 @@ func TestEnumFloodValve(t *testing.T) {
 	cookie2 := issuedAssetCookie(t, h2)
 	for i := 0; i < enumMinSamples+10; i++ {
 		id := 139000000 + (i*7919)%500000 // deterministic scatter
-		if code := htmlPage(nil, h2, attackChromeUA, "/intel/kill/"+strconv.Itoa(id)+"/", "203.0.113.1:1000", cookie2); code != http.StatusOK {
+		if code := htmlPage(h2, attackChromeUA, "/intel/kill/"+strconv.Itoa(id)+"/", "203.0.113.1:1000", cookie2); code != http.StatusOK {
 			t.Fatalf("random reads %d: status %d, want 200", i, code)
 		}
 	}
@@ -402,7 +402,7 @@ func TestEnumFloodValve(t *testing.T) {
 	cookie3 := issuedAssetCookie(t, h3)
 	code = 0
 	for i := 0; i < enumMinSamples+10; i++ {
-		code = htmlPage(nil, h3, attackChromeUA, "/intel/kills/?character="+strconv.Itoa(2120000000+i), "203.0.113.1:1000", cookie3)
+		code = htmlPage(h3, attackChromeUA, "/intel/kills/?character="+strconv.Itoa(2120000000+i), "203.0.113.1:1000", cookie3)
 		if code == http.StatusTooManyRequests {
 			break
 		}
@@ -437,10 +437,10 @@ func TestBotWatchSpoofedCookies(t *testing.T) {
 		{Name: "evesynapse_session", Value: "forged-token"},
 		{Name: assetCookieName, Value: "1"},
 	}
-	app, h := botGuardTestApp()
+	_, h := botGuardTestApp()
 	code := 0
 	for i := 0; i < botAssetFreePages+5; i++ {
-		code = htmlPage(app, h, attackChromeUA, "/intel/kills/?character=2121821954", "203.0.113.1:1000", fake...)
+		code = htmlPage(h, attackChromeUA, "/intel/kills/?character=2121821954", "203.0.113.1:1000", fake...)
 		if code == http.StatusTooManyRequests {
 			break
 		}
@@ -466,8 +466,7 @@ func TestBotWatchSpoofedCookies(t *testing.T) {
 	}))
 	sessionCookie := &http.Cookie{Name: "evesynapse_session", Value: "real-token"}
 	for i := 0; i < enumMinSamples+10; i++ {
-		if code := htmlPage(authedApp, authed, attackChromeUA,
-			"/intel/kill/"+strconv.Itoa(139000000+i)+"/", "203.0.113.1:1000", sessionCookie); code != http.StatusOK {
+		if code := htmlPage(authed, attackChromeUA, "/intel/kill/"+strconv.Itoa(139000000+i)+"/", "203.0.113.1:1000", sessionCookie); code != http.StatusOK {
 			t.Fatalf("signed-in read %d: status %d, want 200", i, code)
 		}
 	}

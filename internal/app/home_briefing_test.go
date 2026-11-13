@@ -84,7 +84,7 @@ func seedBriefingFixture(t *testing.T, app *Application, q *db.Queries, userID i
 	})
 	app.esi.StoreCharacterName(90000111, "Sender One")
 	// Market signals: undercut verdict + watched move.
-	seedMarketSignals(t, app, q, userID, 1)
+	seedMarketSignals(t, q, userID, 1)
 }
 
 // briefingSection slices the briefing module out of a home body.

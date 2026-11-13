@@ -95,7 +95,7 @@ func TestPhase2Scopes(t *testing.T) {
 
 // seedPIFixtures stores one character's colonies + one layout and
 // returns the fixture character row.
-func seedPIFixtures(t *testing.T, app *Application, q *db.Queries, userID int64, now time.Time) {
+func seedPIFixtures(t *testing.T, app *Application, q *db.Queries, now time.Time) {
 	t.Helper()
 
 	for _, stmt := range []string{
@@ -139,7 +139,7 @@ func TestPlanetsPagesRenderFromSnapshots(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
-	seedPIFixtures(t, app, q, user.ID, now)
+	seedPIFixtures(t, app, q, now)
 
 	seedSnapshot(t, q, fixtureCharA, esi.SnapMailLabels, esi.MailLabels{TotalUnreadCount: 3})
 

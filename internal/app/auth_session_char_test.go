@@ -71,7 +71,7 @@ func TestPickCharacterViewDoesNotPin(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "https://example.com"+target, nil)
 		req.AddCookie(cookie)
 		app.sessions.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, a, _, err := app.pickCharacter(r.Context(), r, "/character/")
+			_, a, _, err := app.pickCharacter(r.Context(), r)
 			if err != nil {
 				t.Fatalf("pickCharacter: %v", err)
 			}

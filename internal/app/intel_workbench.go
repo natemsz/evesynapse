@@ -16,13 +16,14 @@ package app
 import (
 	"context"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"math"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	json "github.com/goccy/go-json"
 
 	"github.com/go-chi/chi/v5"
 
@@ -1157,17 +1158,18 @@ func (app *Application) wbFillLocal(ctx context.Context, v *workbenchView, chann
 			return out
 		}
 		for _, g := range local.Alliances {
-			name := g.Name
+			var name strings.Builder
+			name.WriteString(g.Name)
 			if !g.Corp {
 				// The alliance's ticker, from any member's record.
 				for _, lp := range membersOf(g) {
 					if d := dossiers[lp.ID]; d != nil && d.payload.Alliance.Ticker != "" {
-						name += " [" + d.payload.Alliance.Ticker + "]"
+						name.WriteString(" [" + d.payload.Alliance.Ticker + "]")
 						break
 					}
 				}
 			}
-			mkSection(name, membersOf(g))
+			mkSection(name.String(), membersOf(g))
 		}
 		var rest []localPilot
 		for _, lp := range local.Pilots {
@@ -1178,7 +1180,7 @@ func (app *Application) wbFillLocal(ctx context.Context, v *workbenchView, chann
 		if len(rest) > 0 {
 			mkSection("Unallied / Independent", rest)
 		}
-		app.wbPilotDrawers(ctx, v, local.Pilots, dossiers, buckets, names)
+		app.wbPilotDrawers(v, local.Pilots, dossiers, buckets, names)
 		return
 	}
 
@@ -1222,7 +1224,7 @@ func (app *Application) wbFillLocal(ctx context.Context, v *workbenchView, chann
 			p.Facts = wbFacts(&p)
 			v.AllPilots = append(v.AllPilots, p)
 		}
-		app.wbPilotDrawers(ctx, v, nil, dossiers, buckets, names)
+		app.wbPilotDrawers(v, nil, dossiers, buckets, names)
 		return
 	}
 	v.NoLocal = true
@@ -1231,7 +1233,7 @@ func (app *Application) wbFillLocal(ctx context.Context, v *workbenchView, chann
 // wbPilotDrawers builds the dossier drawer for each pilot whose
 // settled record is on file. sightings, when given, are the
 // roster reading's own per-pilot kill sightings.
-func (app *Application) wbPilotDrawers(ctx context.Context, v *workbenchView, sightings []localPilot, dossiers map[int64]*wbDossier, buckets map[int64]int, names *killNames) {
+func (app *Application) wbPilotDrawers(v *workbenchView, sightings []localPilot, dossiers map[int64]*wbDossier, buckets map[int64]int, names *killNames) {
 	sight := map[int64]localPilot{}
 	for _, lp := range sightings {
 		sight[lp.ID] = lp

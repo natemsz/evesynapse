@@ -437,7 +437,7 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 		// The anonymous front door is the landing page: its own
 		// slim shell. Signed-in members skip it entirely and get
 		// their overview, as before.
-		landing := app.buildLanding(ctx)
+		landing := app.buildLanding()
 		landing.Error = data.Error
 		landing.HeadMeta = data.HeadMeta
 		app.renderLanding(ctx, w, landing)

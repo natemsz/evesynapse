@@ -724,8 +724,8 @@ func (app *Application) fillOverview(ctx context.Context, ch db.Character, view 
 		}
 	}
 
-	selectedGroup := app.ovDirectory(ctx, view, ov, catByID)
-	app.ovTabs(view, ov, selectedGroup)
+	selectedGroup := app.ovDirectory(view, ov, catByID)
+	app.ovTabs(view, ov)
 	app.ovTrainingStrip(view, ov, catByID)
 	app.ovRows(ctx, view, ov, catByID, selectedGroup)
 	app.ovImplantStrip(view, ov)
@@ -737,7 +737,7 @@ func (app *Application) fillOverview(ctx context.Context, ch db.Character, view 
 
 // ovDirectory builds the skill directory (the All entry rides
 // DirAll) and returns the selected group name.
-func (app *Application) ovDirectory(ctx context.Context, view *characterView, ov *overviewView, catByID map[int64]skillCatalogEntry) string {
+func (app *Application) ovDirectory(view *characterView, ov *overviewView, catByID map[int64]skillCatalogEntry) string {
 	st := view.State
 	type agg struct {
 		sp      int64
@@ -868,7 +868,7 @@ func (app *Application) ovDirectory(ctx context.Context, view *characterView, ov
 func (st overviewState) AllGroups() bool { return st.Group == "all" }
 
 // ovTabs builds the surface pills and the level filter chips.
-func (app *Application) ovTabs(view *characterView, ov *overviewView, selectedGroup string) {
+func (app *Application) ovTabs(view *characterView, ov *overviewView) {
 	st := view.State
 	charID := view.CharacterID
 	mk := func(label, count, surface string) ovTab {

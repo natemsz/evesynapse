@@ -124,7 +124,7 @@ type unwrapMapStub struct {
 	calls   map[string]int
 }
 
-func (s *unwrapMapStub) handler(t *testing.T) http.HandlerFunc {
+func (s *unwrapMapStub) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		var body tokenUnwrapRequest
@@ -155,7 +155,7 @@ func TestResolveCredentialsHTTP(t *testing.T) {
 		},
 		fail: map[string]bool{"wrapped-bot": true},
 	}
-	srv := httptest.NewServer(stub.handler(t))
+	srv := httptest.NewServer(stub.handler())
 	defer srv.Close()
 
 	app, _, _ := buildCorpTestApp(t, &countingTransport{})
@@ -216,7 +216,7 @@ type secretsStub struct {
 	paths  []string
 }
 
-func (s *secretsStub) handler(t *testing.T) http.HandlerFunc {
+func (s *secretsStub) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimPrefix(r.URL.Path, "/20190301/secretbundles/")
 		s.mu.Lock()
@@ -248,7 +248,7 @@ func TestResolveCredentialsOCI(t *testing.T) {
 		values: map[string]string{eveID: "fetched-eve-secret", botID: "fetched-bot-token"},
 		fail:   map[string]bool{botID: true},
 	}
-	srv := httptest.NewServer(stub.handler(t))
+	srv := httptest.NewServer(stub.handler())
 	defer srv.Close()
 
 	app, _, _ := buildCorpTestApp(t, &countingTransport{})

@@ -73,7 +73,11 @@ func iskFigure(formatted string, hero bool) template.HTML {
 	}
 	raw := strings.ReplaceAll(whole, ",", "") + "." + cents
 	var b strings.Builder
-	b.WriteString(`<span class="` + cls + `" data-v="` + raw + `"><span class="visually-hidden">`)
+	b.WriteString(`<span class="`)
+	b.WriteString(cls)
+	b.WriteString(`" data-v="`)
+	b.WriteString(raw)
+	b.WriteString(`"><span class="visually-hidden">`)
 	b.WriteString(template.HTMLEscapeString(formatted + " ISK"))
 	b.WriteString(`</span><span aria-hidden="true">`)
 	b.WriteString(template.HTMLEscapeString(whole))

@@ -179,7 +179,7 @@ type corpPageSelection = module.CorpPageSelection
 // from its stored public payload. ok=false means the session has
 // no user or no characters yet.
 func (app *Application) pickCorpPage(ctx context.Context, r *http.Request) (corpPageSelection, bool, error) {
-	_, active, links, err := app.pickCharacter(ctx, r, "/corporations/")
+	_, active, links, err := app.pickCharacter(ctx, r)
 	if err != nil {
 		return corpPageSelection{}, false, err
 	}

@@ -12,7 +12,6 @@ package app
 // ---------------------------------------------------------------------------
 
 import (
-	"context"
 	"evesynapse/internal/balancechart"
 	"fmt"
 	"math"
@@ -100,7 +99,7 @@ type flowSlice struct {
 
 // buildWalletFlow assembles the widget from every character's
 // stored journal window.
-func (app *Application) buildWalletFlow(ctx context.Context, bundles []*charSnaps) *walletFlowWidget {
+func (app *Application) buildWalletFlow(bundles []*charSnaps) *walletFlowWidget {
 	w := &walletFlowWidget{}
 	now := time.Now().UTC()
 	dayStart := func(t time.Time) time.Time {

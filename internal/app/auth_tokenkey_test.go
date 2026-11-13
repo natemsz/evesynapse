@@ -154,7 +154,7 @@ type unwrapStub struct {
 	lastBody tokenUnwrapRequest
 }
 
-func (s *unwrapStub) handler(t *testing.T) http.HandlerFunc {
+func (s *unwrapStub) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.calls.Add(1)
 		s.lastAuth = r.Header.Get("Authorization")
@@ -171,7 +171,7 @@ func (s *unwrapStub) handler(t *testing.T) http.HandlerFunc {
 
 func TestUnwrapTokenSecret(t *testing.T) {
 	stub := &unwrapStub{secret: testTokenKey}
-	srv := httptest.NewServer(stub.handler(t))
+	srv := httptest.NewServer(stub.handler())
 	defer srv.Close()
 	cfg := Config{
 		tokenKeyWrapped:   "the-wrapped-blob",
@@ -283,7 +283,7 @@ func TestTokenKeyUnlockEndToEnd(t *testing.T) {
 
 	// The endpoint appears, holding the right key.
 	stub := &unwrapStub{secret: testTokenKey}
-	up := httptest.NewServer(stub.handler(t))
+	up := httptest.NewServer(stub.handler())
 	defer up.Close()
 	app.cfg.tokenKeyUnwrapURL = up.URL
 	if !app.tryTokenKeyUnlock(ctx) {

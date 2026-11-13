@@ -390,7 +390,9 @@ func (sm *demoLogSmith) render(start time.Time, lines []demoLogLine) demoLogText
 	b.WriteString("------------------------------------------------------------\r\n")
 	b.WriteString("  Gamelog\r\n")
 	b.WriteString("  Listener: " + demoCharName + "\r\n")
-	b.WriteString("  Session Started: " + start.Format("2006.01.02 15:04:05") + "\r\n")
+	b.WriteString("  Session Started: ")
+	b.WriteString(start.Format("2006.01.02 15:04:05"))
+	b.WriteString("\r\n")
 	b.WriteString("------------------------------------------------------------\r\n")
 	for _, ln := range lines {
 		fmt.Fprintf(&b, "[ %s ] %s\r\n", start.Add(ln.at).Format("2006.01.02 15:04:05"), ln.text)

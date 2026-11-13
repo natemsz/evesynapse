@@ -140,7 +140,7 @@ func (app *Application) handleIndustry(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 
-	characters, active, links, err := app.pickCharacter(ctx, r, "/industry/")
+	characters, active, links, err := app.pickCharacter(ctx, r)
 	if err != nil {
 		logging.Errorf("industry: list characters: %v", err)
 		data.Error = "Could not load industry data; check the server log."
@@ -179,7 +179,7 @@ func (app *Application) handleIndustryJobs(w http.ResponseWriter, r *http.Reques
 	ctx := r.Context()
 	data := app.page(ctx)
 
-	characters, _, links, err := app.pickCharacter(ctx, r, "/industry/jobs/")
+	characters, _, links, err := app.pickCharacter(ctx, r)
 	if err != nil {
 		logging.Errorf("industry jobs: list characters: %v", err)
 		data.Error = "Could not load industry data; check the server log."
@@ -203,7 +203,7 @@ func (app *Application) handleIndustryMining(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 	data := app.page(ctx)
 
-	characters, _, links, err := app.pickCharacter(ctx, r, "/industry/mining/")
+	characters, _, links, err := app.pickCharacter(ctx, r)
 	if err != nil {
 		logging.Errorf("industry mining: list characters: %v", err)
 		data.Error = "Could not load industry data; check the server log."

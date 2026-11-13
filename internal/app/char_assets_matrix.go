@@ -602,7 +602,7 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 	}
 
 	if st.query != "" {
-		view.Search = app.buildAssetSearch(ctx, datas, st, view.Directory, lk)
+		view.Search = app.buildAssetSearch(datas, st, view.Directory, lk)
 		return view
 	}
 	view.Matrix = app.buildAssetMatrix(ctx, datas, st, view.Directory, lk)

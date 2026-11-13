@@ -584,6 +584,9 @@ func drainFetchErrors(ctx context.Context, conn *sql.DB, n int) []string {
 		}
 		out = append(out, fmt.Sprintf("%s x%d", kind, count))
 	}
+	if err := rows.Err(); err != nil {
+		return append(out, "fetch-state rows: "+err.Error())
+	}
 	return out
 }
 
@@ -982,9 +985,13 @@ func writeSyncDrainReport(t *testing.T, results []drainStageResult, verdict, def
 		b.WriteString("\n")
 	}
 
-	b.WriteString("## Verdict\n\n" + verdict + "\n\n")
+	b.WriteString("## Verdict\n\n")
+	b.WriteString(verdict)
+	b.WriteString("\n\n")
 	if defect != "" {
-		b.WriteString("## Defect\n\n" + defect + "\n\n")
+		b.WriteString("## Defect\n\n")
+		b.WriteString(defect)
+		b.WriteString("\n\n")
 	}
 
 	reportName := os.Getenv("EVESYNAPSE_SYNCDRAIN_REPORT")

@@ -464,12 +464,12 @@ func momentDetail(x momentInput, bySeq map[int64]db.BattleFightParty, m battleMo
 			battleChartMark{X: round1(float64(m.At-lo) / float64(hi-lo) * momentSparkW)},
 			battleChartMark{X: round1(float64(m.End-lo) / float64(hi-lo) * momentSparkW)})
 	}
-	d.Summary = momentSummary(m, d)
+	d.Summary = momentSummary(d)
 	return d
 }
 
 // momentSummary says what the window holds in one sentence.
-func momentSummary(m battleMoment, d battleMomentDetail) string {
+func momentSummary(d battleMomentDetail) string {
 	var parts []string
 	span := d.To - d.From + 1
 	if d.DamageIn > 0 {

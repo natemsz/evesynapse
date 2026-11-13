@@ -1308,11 +1308,11 @@ func killedHereNotes(names []string) string {
 	if len(names) > 2 {
 		return fmt.Sprintf("; %s, %s +%d more killed here this week", names[0], names[1], len(names)-2)
 	}
-	var out string
+	var out strings.Builder
 	for _, n := range names {
-		out += "; " + n + " killed here this week"
+		out.WriteString("; " + n + " killed here this week")
 	}
-	return out
+	return out.String()
 }
 
 var moonRe = regexp.MustCompile(` - Moon (\d+)`)
@@ -1441,15 +1441,18 @@ func dscanSentence(d *dscanReading, rows []scan.DScanRow, cats map[int64]int64, 
 	}
 	var b strings.Builder
 	if anchor := dscanAnchor(rows, cats, sysName); anchor != "" {
-		b.WriteString(anchor + ": ")
+		b.WriteString(anchor)
+		b.WriteString(": ")
 	} else if sysName != "" {
-		b.WriteString("In " + sysName + ": ")
+		b.WriteString("In ")
+		b.WriteString(sysName)
+		b.WriteString(": ")
 	}
 	if total == 0 {
 		b.WriteString("no ships on scan")
 	} else {
 		b.WriteString(standingText(counts, hulls, "unclassified ship", "unclassified ships"))
-		b.WriteString(fmt.Sprintf(", %d on grid", grid))
+		fmt.Fprintf(&b, ", %d on grid", grid)
 		b.WriteString(pairText(pairs))
 	}
 	b.WriteString(killedHereNotes(flagged))
@@ -1633,9 +1636,11 @@ func fleetSentence(f *fleetReading, sysName string,
 	}
 	var b strings.Builder
 	if sysName != "" {
-		b.WriteString("In " + sysName + ": ")
+		b.WriteString("In ")
+		b.WriteString(sysName)
+		b.WriteString(": ")
 	}
-	b.WriteString(fmt.Sprintf("fleet of %d with ", len(f.Members)))
+	fmt.Fprintf(&b, "fleet of %d with ", len(f.Members))
 	b.WriteString(standingText(counts, hulls, "unclassified pilot", "unclassified pilots"))
 	b.WriteString(pairText(pairs))
 	b.WriteString(killedHereNotes(flagged))

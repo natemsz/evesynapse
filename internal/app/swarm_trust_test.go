@@ -1019,7 +1019,9 @@ func historyDays(dates ...string) string {
 		if i > 0 {
 			b.WriteString(",")
 		}
-		b.WriteString(`{"date":"` + d + `","average":5.5,"highest":6,"lowest":5,"volume":100,"order_count":10}`)
+		b.WriteString(`{"date":"`)
+		b.WriteString(d)
+		b.WriteString(`","average":5.5,"highest":6,"lowest":5,"volume":100,"order_count":10}`)
 	}
 	b.WriteString(`]}`)
 	return b.String()

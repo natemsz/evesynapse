@@ -345,7 +345,7 @@ func TestOrderHealthWorkerAndPrune(t *testing.T) {
 
 // seedMarketSignals plants one of everything the market consumers
 // read: an undercut verdict and a watched type up 8% in a week.
-func seedMarketSignals(t *testing.T, app *Application, q *db.Queries, userID int64, undercutOrders int) {
+func seedMarketSignals(t *testing.T, q *db.Queries, userID int64, undercutOrders int) {
 	t.Helper()
 	ctx := context.Background()
 	if err := q.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: 34, Name: "Tritanium"}); err != nil {
@@ -398,7 +398,7 @@ func TestMarketPageSectionsZeroOutbound(t *testing.T) {
 		{OrderID: 700, TypeID: 34, LocationID: 60003760, RegionID: 10000002, Price: 10,
 			VolumeRemain: 5, VolumeTotal: 5, Issued: rfc(now.Add(-time.Hour)), Duration: 90},
 	})
-	seedMarketSignals(t, app, q, user.ID, 1)
+	seedMarketSignals(t, q, user.ID, 1)
 
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/market/")
@@ -458,7 +458,7 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 	}
 
 	// With rows stored, the chart renders and no new want is left.
-	seedMarketSignals(t, app, q, user.ID, 0)
+	seedMarketSignals(t, q, user.ID, 0)
 	code, body = getPage(t, app, cookie, "/market/?type=34")
 	if code != http.StatusOK {
 		t.Fatalf("item page: status %d", code)

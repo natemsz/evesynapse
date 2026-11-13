@@ -1593,7 +1593,7 @@ func (s *demoSeed) writePilotOneKillmails(ctx context.Context) error {
 // demoKillmailHash is a stable, hash-shaped stand-in for a seeded
 // killmail's hash: the same mail always gets the same one.
 func demoKillmailHash(killmailID int64) string {
-	sum := sha1.Sum([]byte(fmt.Sprintf("evesynapse-demo-killmail-%d", killmailID)))
+	sum := sha1.Sum(fmt.Appendf(nil, "evesynapse-demo-killmail-%d", killmailID))
 	return hex.EncodeToString(sum[:])
 }
 

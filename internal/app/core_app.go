@@ -1337,7 +1337,7 @@ func (app *Application) PublicShell(ctx context.Context) module.ShellData {
 }
 
 func (app *Application) PickCharacter(ctx context.Context, r *http.Request, path string) ([]db.Character, db.Character, []module.CharLink, error) {
-	return app.pickCharacter(ctx, r, path)
+	return app.pickCharacter(ctx, r)
 }
 
 func (app *Application) Render(ctx context.Context, w http.ResponseWriter, status int, page string, data any) {
@@ -1799,7 +1799,8 @@ func (app *Application) AttachWalletGraph(ctx context.Context, userID, character
 func (app *Application) EmptyWalletGraph() any { return &walletGraphView{State: walletGraphEmpty} }
 
 func (app *Application) WalletFlow(ctx context.Context, ch db.Character) any {
-	return app.buildWalletFlow(ctx, app.loadCharSnaps(ctx, ch.UserID, []db.Character{ch}, []string{widgetWalletFlow}))
+	bundles := app.loadCharSnaps(ctx, ch.UserID, []db.Character{ch}, []string{widgetWalletFlow})
+	return app.buildWalletFlow(bundles)
 }
 
 func (app *Application) AllianceDisplayName(ctx context.Context, allianceID int64) string {

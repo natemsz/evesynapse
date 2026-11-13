@@ -29,7 +29,12 @@ func TestFitTipLinesByModuleKind(t *testing.T) {
 	lines := func(typeID int64, state string) string {
 		var b strings.Builder
 		for _, l := range fitview.FitTipLines(res, nil, doc, typeID, state, fitview.FitEffAttrs(res, nil, typeID, state)) {
-			b.WriteString(l.Label + "|" + l.Value + "|" + l.Class + ";")
+			b.WriteString(l.Label)
+			b.WriteString("|")
+			b.WriteString(l.Value)
+			b.WriteString("|")
+			b.WriteString(l.Class)
+			b.WriteString(";")
 		}
 		return b.String()
 	}

@@ -87,7 +87,7 @@ func buildOCIFakes(t *testing.T) *ociFakes {
 
 	b64 := base64.RawURLEncoding.EncodeToString
 	token := b64([]byte(`{"alg":"RS256","typ":"JWT"}`)) + "." +
-		b64([]byte(fmt.Sprintf(`{"exp":%d}`, now.Add(time.Hour).Unix()))) + "." + b64([]byte("sig"))
+		b64(fmt.Appendf(nil, `{"exp":%d}`, now.Add(time.Hour).Unix())) + "." + b64([]byte("sig"))
 	fed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"token": token})

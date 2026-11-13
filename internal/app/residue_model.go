@@ -623,7 +623,10 @@ func residuePrompt(in residueInput) string {
 		for i, e := range list {
 			parts[i] = strconv.FormatInt(e.ID, 10) + " " + e.Name
 		}
-		b.WriteString(label + ": " + strings.Join(parts, "; ") + "\n")
+		b.WriteString(label)
+		b.WriteString(": ")
+		b.WriteString(strings.Join(parts, "; "))
+		b.WriteString("\n")
 	}
 	writeEntities("Pilots", in.Pilots)
 	writeEntities("Ships", in.Ships)
@@ -631,10 +634,14 @@ func residuePrompt(in residueInput) string {
 	writeEntities("Neighbouring systems", in.Neighbours)
 	b.WriteString("\nFragments:\n")
 	for _, s := range in.Spans {
-		b.WriteString("- " + s + "\n")
+		b.WriteString("- ")
+		b.WriteString(s)
+		b.WriteString("\n")
 	}
 	if len(in.Suspect) > 0 {
-		b.WriteString("\nThe reading took these fragments for the pilot of the same name, but each is also an everyday word: " + strings.Join(in.Suspect, "; ") + ". For each, claim it as that pilot only when the report plainly names a pilot there; when it is the word (a count, an action, a direction), claim that instead.\n")
+		b.WriteString("\nThe reading took these fragments for the pilot of the same name, but each is also an everyday word: ")
+		b.WriteString(strings.Join(in.Suspect, "; "))
+		b.WriteString(". For each, claim it as that pilot only when the report plainly names a pilot there; when it is the word (a count, an action, a direction), claim that instead.\n")
 	}
 	b.WriteString(`
 Answer with JSON in exactly this shape and nothing else: {"claims":[{"span":"...","kind":"...","id":0,"name":"...","n":0}]}

@@ -290,7 +290,9 @@ func skillLevel(trained, next int, state string) template.HTML {
 				cls = ` class="on"`
 			}
 		}
-		b.WriteString("<i" + cls + "></i>")
+		b.WriteString("<i")
+		b.WriteString(cls)
+		b.WriteString("></i>")
 	}
 	b.WriteString(`</span>`)
 	return template.HTML(b.String())

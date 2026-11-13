@@ -86,8 +86,8 @@ func indirect(v reflect.Value, depth int) int64 {
 		return own + sum*int64(n)/int64(seen)
 	case reflect.Struct:
 		var sum int64
-		for i := range v.NumField() {
-			sum += indirect(v.Field(i), depth+1)
+		for _, field := range v.Fields() {
+			sum += indirect(field, depth+1)
 		}
 		return sum
 	}
@@ -124,8 +124,8 @@ func hasRefs(t reflect.Type) bool {
 	case reflect.Array:
 		return t.Len() > 0 && hasRefs(t.Elem())
 	case reflect.Struct:
-		for i := range t.NumField() {
-			if hasRefs(t.Field(i).Type) {
+		for field := range t.Fields() {
+			if hasRefs(field.Type) {
 				return true
 			}
 		}

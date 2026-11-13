@@ -642,16 +642,16 @@ func writeLoadReport(t *testing.T, results []loadStageResult, stubCalls int64) {
 	t.Helper()
 	var b strings.Builder
 	b.WriteString("# EveSynapse web-tier load test\n\n")
-	b.WriteString(fmt.Sprintf("Run: %s\n\n", time.Now().UTC().Format("2006-01-02 15:04 UTC")))
+	fmt.Fprintf(&b, "Run: %s\n\n", time.Now().UTC().Format("2006-01-02 15:04 UTC"))
 	b.WriteString("## Environment\n\n")
-	b.WriteString(fmt.Sprintf("- Sandbox host: %d CPUs visible to the test process, %s/%s, %s\n", runtime.NumCPU(), runtime.GOOS, runtime.GOARCH, runtime.Version()))
+	fmt.Fprintf(&b, "- Sandbox host: %d CPUs visible to the test process, %s/%s, %s\n", runtime.NumCPU(), runtime.GOOS, runtime.GOARCH, runtime.Version())
 	b.WriteString("- Database: PostgreSQL 16 (embedded test server on this host) via the app's own store.Open; session store and handlers are production code paths.\n")
 	b.WriteString("- ESI: in-process canned stub, no network. Item-page figures exclude the production live book fetch's network wait; stub book is 400 orders.\n")
 	b.WriteString("- Load generator and server share this process, so generator CPU competes with the server: absolute rates are conservative; the latency-vs-concurrency shape is the transferable result.\n")
 	b.WriteString("- Dataset: 12 characters with wallet/skills/assets (120 stacks each)/orders snapshots; 4,000 types x 2 regions of region stats and station stats; 56,000 history rows (7 days x 4,000 types x 2 regions); 600 order-lifecycle rows.\n")
-	b.WriteString(fmt.Sprintf("- Outbound ESI stub calls during the whole test: %d (prices once per cache expiry, one book fetch per item view).\n\n", stubCalls))
+	fmt.Fprintf(&b, "- Outbound ESI stub calls during the whole test: %d (prices once per cache expiry, one book fetch per item view).\n\n", stubCalls)
 	b.WriteString("## Page mix (weighted)\n\n")
-	b.WriteString(fmt.Sprintf("Mix: %s. Full mix: home 20%%, market item 20%%, spread scanner 25%%, tradefinder 15%%, orders 10%%, character 10%%. Light mix: home, item, orders and character only. Each worker uses its own character's session.\n\n", loadMixName))
+	fmt.Fprintf(&b, "Mix: %s. Full mix: home 20%%, market item 20%%, spread scanner 25%%, tradefinder 15%%, orders 10%%, character 10%%. Light mix: home, item, orders and character only. Each worker uses its own character's session.\n\n", loadMixName)
 	b.WriteString("## Stages (15 s each, after a 3 s warmup)\n\n")
 	b.WriteString("| Concurrency | Requests | Req/s | p50 | p95 | p99 | Slowest page (p95 / p99) | Non-200 | Errors | DB-locked log hits | Peak RSS (MB) | Goroutines |\n")
 	b.WriteString("|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|\n")
@@ -665,7 +665,7 @@ func writeLoadReport(t *testing.T, results []loadStageResult, stubCalls int64) {
 
 	b.WriteString("\n## Per-page latencies by stage\n")
 	for _, r := range results {
-		b.WriteString(fmt.Sprintf("\nConcurrency %d:\n\n", r.Concurrency))
+		fmt.Fprintf(&b, "\nConcurrency %d:\n\n", r.Concurrency)
 		b.WriteString("| Page | Views | p50 | p95 | p99 |\n|---|---:|---:|---:|---:|\n")
 		keys := make([]string, 0, len(r.Pages))
 		for key := range r.Pages {

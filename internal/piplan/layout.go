@@ -148,7 +148,7 @@ func buildColonyAround(planetType string, radiusKm float64, ccLevel int, spec Co
 		placed[i] = -1
 	}
 	if existing != nil {
-		for pass := 0; pass < 2; pass++ {
+		for pass := range 2 {
 			for wi, w := range wants {
 				if placed[wi] >= 0 {
 					continue
@@ -321,10 +321,7 @@ func linkAndRoute(c *Colony) {
 			}
 			cyc := ProgramCycleSec(p.ProgramHours)
 			perHour := ECUOutputPerHour(peakFor(p), p.Heads, p.ProgramHours)
-			qty := int64(math.Round(perHour * float64(cyc) / 3600))
-			if qty < 1 {
-				qty = 1
-			}
+			qty := max(int64(math.Round(perHour*float64(cyc)/3600)), 1)
 			path := reverse(pathTo(i))
 			c.Routes = append(c.Routes, Route{Path: path, Item: p.Product, Qty: qty})
 			addLoad(path, perHour*vol(p.Product))

@@ -438,7 +438,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 	// watched-price moves, from the worker's stored verdicts and
 	// price history (the Needs-attention feed's own sources). ----
 	lines = append(lines, app.briefingMarketLines(ctx, bundles, viewer, names, shared, now, userID, prefs)...)
-	lines = append(lines, app.briefingCampLines(ctx, userID, prefs, bundles, now)...)
+	lines = append(lines, app.briefingCampLines(ctx, prefs, bundles, now)...)
 	lines = aggregateBriefing(lines, briefingGroupThreshold(len(bundles)))
 
 	sort.SliceStable(lines, func(i, j int) bool {
@@ -1050,7 +1050,7 @@ func (bb *briefingBuilder) contractLines(b *charSnaps, prefix string) {
 // but only while one of its characters is online. The line stands
 // while the camp does; the notification's seen key carries the
 // camp's start, so a continuing camp does not notify twice.
-func (app *Application) briefingCampLines(ctx context.Context, userID int64, prefs notifyPrefs, bundles []*charSnaps, now time.Time) []briefingLine {
+func (app *Application) briefingCampLines(ctx context.Context, prefs notifyPrefs, bundles []*charSnaps, now time.Time) []briefingLine {
 	if len(prefs.CampSystems) == 0 {
 		return nil
 	}

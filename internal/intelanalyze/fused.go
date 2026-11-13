@@ -136,7 +136,7 @@ func (ix *NameIndex) Segment(text string) (pilots []Pilot, covered, total int) {
 			cov[j], np[j], from[j], via[j] = c, p, f, v
 		}
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if cov[i] < 0 {
 			continue
 		}

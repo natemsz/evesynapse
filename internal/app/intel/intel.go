@@ -346,13 +346,7 @@ func handleIncursions(deps module.Deps) http.HandlerFunc {
 				row.Constellation = name
 			}
 			row.StagingSecText, row.StagingSecTier, row.StagingSecKnown = deps.SystemSecurity(ctx, inc.StagingSystemID)
-			pct := int(inc.Influence*100 + 0.5)
-			if pct < 0 {
-				pct = 0
-			}
-			if pct > 100 {
-				pct = 100
-			}
+			pct := min(max(int(inc.Influence*100+0.5), 0), 100)
 			row.InfluencePct = pct
 			for _, systemID := range inc.InfestedSystems {
 				row.Systems = append(row.Systems, deps.SystemRef(ctx, systemID))
@@ -557,9 +551,6 @@ func contestedPercent(sys esi.FWSystem) int {
 	if sys.VictoryPointsThreshold <= 0 {
 		return -1
 	}
-	pct := int(sys.VictoryPoints * 100 / sys.VictoryPointsThreshold)
-	if pct > 100 {
-		pct = 100
-	}
+	pct := min(int(sys.VictoryPoints*100/sys.VictoryPointsThreshold), 100)
 	return pct
 }

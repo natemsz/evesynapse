@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -317,8 +318,7 @@ func IsForbidden(err error) bool {
 // definitive answer about the request itself (404/422: this ID is
 // not that kind of entity) from transient failures worth retrying.
 func StatusCode(err error) (int, bool) {
-	var se *StatusError
-	if errors.As(err, &se) {
+	if se, ok := errors.AsType[*StatusError](err); ok {
 		return se.Code, true
 	}
 	return 0, false
@@ -1829,8 +1829,7 @@ func (c *Client) send(ctx context.Context, hc *http.Client, method, accessToken,
 // context) is not. ESI's Retry-After answer, when present, sets the
 // wait (capped); without one the caller's backoff stands.
 func retryWait(err error, header http.Header, backoff time.Duration) (time.Duration, bool) {
-	var se *StatusError
-	if errors.As(err, &se) {
+	if se, ok := errors.AsType[*StatusError](err); ok {
 		switch se.Code {
 		case http.StatusInternalServerError, http.StatusBadGateway,
 			http.StatusServiceUnavailable, http.StatusGatewayTimeout:
@@ -1881,10 +1880,7 @@ func parseRetryAfter(value string) (time.Duration, bool) {
 		return time.Duration(secs) * time.Second, true
 	}
 	if when, err := http.ParseTime(value); err == nil {
-		wait := time.Until(when)
-		if wait < 0 {
-			wait = 0
-		}
+		wait := max(time.Until(when), 0)
 		return wait, true
 	}
 	return 0, false
@@ -1944,10 +1940,8 @@ func (c *Client) sendOnce(ctx context.Context, hc *http.Client, method, accessTo
 		c.noteHardLimit(time.Now())
 		return nil, resp.Header, resp.StatusCode, fmt.Errorf("ESI %s %s: status %d: %w", method, path, resp.StatusCode, ErrErrorLimit)
 	}
-	for _, code := range want {
-		if resp.StatusCode == code {
-			return body, resp.Header, resp.StatusCode, nil
-		}
+	if slices.Contains(want, resp.StatusCode) {
+		return body, resp.Header, resp.StatusCode, nil
 	}
 	return nil, resp.Header, resp.StatusCode, &StatusError{Method: method, Path: path, Code: resp.StatusCode, Detail: esiErrorDetail(body)}
 }
@@ -1999,7 +1993,7 @@ func cacheWindowEnd(header http.Header) time.Time {
 			return t
 		}
 	}
-	for _, part := range strings.Split(header.Get("Cache-Control"), ",") {
+	for part := range strings.SplitSeq(header.Get("Cache-Control"), ",") {
 		part = strings.TrimSpace(part)
 		if v, ok := strings.CutPrefix(part, "max-age="); ok {
 			if secs, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && secs >= 0 {
@@ -2562,10 +2556,8 @@ const pagedETagPrefix = "pages:"
 // encodePagedETags packs per-page ETags for storage; "" when any
 // page came without one (the dataset is then fetched in full).
 func encodePagedETags(etags []string) string {
-	for _, e := range etags {
-		if e == "" {
-			return ""
-		}
+	if slices.Contains(etags, "") {
+		return ""
 	}
 	return pagedETagPrefix + strings.Join(etags, "\n")
 }
@@ -2773,7 +2765,7 @@ func (c *Client) fetchTxnsWindow(ctx context.Context, token, path, etag string) 
 	var firstHeader http.Header
 	firstETag := ""
 	var fromID int64
-	for call := 0; call < maxTxnRequests; call++ {
+	for call := range maxTxnRequests {
 		var (
 			body   []byte
 			header http.Header

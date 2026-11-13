@@ -163,7 +163,7 @@ func Features(toks []Token, lex Lexicon) [][]string {
 	// Lexicon runs: a run of up to four words that is a known
 	// name marks its first word B and the rest I, with its kind.
 	if lex != nil {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			for m := 1; m <= 4 && i+m <= n; m++ {
 				parts := make([]string, m)
 				for k := 0; k < m; k++ {
@@ -246,16 +246,16 @@ func (m *Model) DecodeScores(emit [][]float64) []int {
 		score[t] = make([]float64, L)
 		back[t] = make([]int, L)
 	}
-	for l := 0; l < L; l++ {
+	for l := range L {
 		score[0][l] = math.Inf(-1)
 		if m.allowed(L, l) {
 			score[0][l] = emit[0][l] + float64(m.Trans[L][l])
 		}
 	}
 	for t := 1; t < n; t++ {
-		for l := 0; l < L; l++ {
+		for l := range L {
 			best, arg := math.Inf(-1), 0
-			for p := 0; p < L; p++ {
+			for p := range L {
 				if !m.allowed(p, l) {
 					continue
 				}
@@ -268,7 +268,7 @@ func (m *Model) DecodeScores(emit [][]float64) []int {
 	}
 	path := make([]int, n)
 	best := math.Inf(-1)
-	for l := 0; l < L; l++ {
+	for l := range L {
 		if score[n-1][l] > best {
 			best, path[n-1] = score[n-1][l], l
 		}

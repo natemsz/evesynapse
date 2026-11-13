@@ -171,7 +171,7 @@ func Parse(body string, rows []Row) []Group {
 		}
 	}
 	used := 0
-	for _, raw := range strings.Split(body, "\n") {
+	for raw := range strings.SplitSeq(body, "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" {
 			continue
@@ -289,8 +289,8 @@ func splitRowRef(content string) (n int, valid bool, cleaned string, present boo
 // from its reason at the first dash separator.
 func splitItemReason(s string) (head, reason string) {
 	for _, sep := range []string{" — ", " – ", " - "} {
-		if i := strings.Index(s, sep); i >= 0 {
-			return strings.TrimSpace(s[:i]), strings.TrimSpace(s[i+len(sep):])
+		if before, after, ok := strings.Cut(s, sep); ok {
+			return strings.TrimSpace(before), strings.TrimSpace(after)
 		}
 	}
 	return strings.TrimSpace(s), ""
@@ -349,7 +349,7 @@ func stripMarker(line string) (string, bool) {
 	}
 	if dot := strings.Index(line, ". "); dot > 0 && dot < 5 {
 		numbered := true
-		for i := 0; i < dot; i++ {
+		for i := range dot {
 			if line[i] < '0' || line[i] > '9' {
 				numbered = false
 				break

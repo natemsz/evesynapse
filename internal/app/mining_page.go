@@ -342,7 +342,8 @@ func (app *Application) typeVolumes(ctx context.Context, types map[int64]bool) m
 			b.WriteString(", ")
 		}
 		args = append(args, id)
-		b.WriteString("$" + strconv.Itoa(len(args)))
+		b.WriteString("$")
+		b.WriteString(strconv.Itoa(len(args)))
 	}
 	b.WriteString(")")
 	rows, err := app.pool.Query(ctx, b.String(), args...)

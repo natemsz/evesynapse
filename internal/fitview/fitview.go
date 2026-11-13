@@ -6,6 +6,7 @@ import (
 	json "github.com/goccy/go-json"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -963,10 +964,7 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 		// The visual places at most a rack's worth of instances
 		// per line and a bounded set per family, whatever the
 		// document claims: it renders slots, not quantities.
-		n := it.Qty
-		if n > 8 {
-			n = 8
-		}
+		n := min(it.Qty, 8)
 		for i := 0; i < n && len(fitted[fam]) < 16; i++ {
 			st := ""
 			if i < len(it.States) {
@@ -2118,10 +2116,8 @@ func (app *Builder) FitBuildChargeSets(ctx context.Context, doc *FitDoc, snap *f
 func FitPlainNotes(raw []string, by []int64, nameOf func(int64) string) []string {
 	var notes []string
 	add := func(s string) {
-		for _, n := range notes {
-			if n == s {
-				return
-			}
+		if slices.Contains(notes, s) {
+			return
 		}
 		notes = append(notes, s)
 	}
@@ -2561,7 +2557,7 @@ func ResistOf(res *fit.Result, kind int, shield bool) float64 {
 func ParseFitTags(raw string) []string {
 	var out []string
 	seen := map[string]bool{}
-	for _, t := range strings.Split(raw, ",") {
+	for t := range strings.SplitSeq(raw, ",") {
 		t = strings.TrimSpace(t)
 		if t == "" || seen[strings.ToLower(t)] || len(out) >= 20 {
 			continue
@@ -2579,10 +2575,7 @@ func (app *Builder) FitDocFromESI(ctx context.Context, f esi.Fitting) *FitDoc {
 	doc := &FitDoc{Name: f.Name, ShipTypeID: f.ShipTypeID, Charges: map[int64]int64{}}
 	var cargoIDs []int64
 	for _, it := range f.Items {
-		qty := int(it.Quantity)
-		if qty < 1 {
-			qty = 1
-		}
+		qty := max(int(it.Quantity), 1)
 		inCargo := strings.HasPrefix(it.Flag, "Cargo")
 		doc.Items = append(doc.Items, FitDocItem{TypeID: it.TypeID, Qty: qty, Cargo: inCargo})
 		if inCargo {

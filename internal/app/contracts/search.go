@@ -29,6 +29,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -539,7 +540,7 @@ func tierMixLabel(mix string) string {
 		return ""
 	}
 	var parts []string
-	for _, seg := range strings.Split(mix, ",") {
+	for seg := range strings.SplitSeq(mix, ",") {
 		kv := strings.SplitN(seg, ":", 2)
 		if len(kv) != 2 {
 			continue
@@ -606,10 +607,7 @@ func expiryText(until time.Time, now time.Time) string {
 	case d >= time.Hour:
 		return fmt.Sprintf("Expires in %s", humanize.Plural(int(d/time.Hour), "hour"))
 	default:
-		mins := int(d / time.Minute)
-		if mins < 1 {
-			mins = 1
-		}
+		mins := max(int(d/time.Minute), 1)
 		return fmt.Sprintf("Expires in %s", humanize.Plural(mins, "min"))
 	}
 }
@@ -1192,13 +1190,7 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 				for _, v := range a.variants {
 					var pct int
 					if span != 0 {
-						pct = int(math.Round((v.val - worst) / span * 100))
-						if pct < 0 {
-							pct = 0
-						}
-						if pct > 100 {
-							pct = 100
-						}
+						pct = min(max(int(math.Round((v.val-worst)/span*100)), 0), 100)
 					} else {
 						pct = 50
 					}
@@ -1427,7 +1419,7 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 				}
 			}
 		}
-		sort.Slice(extra, func(i, j int) bool { return extra[i] < extra[j] })
+		slices.Sort(extra)
 		for _, id := range extra {
 			add(id)
 		}
@@ -1493,10 +1485,7 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 	}
 	view.Total = total
 	view.TotalText = esi.FormatInt(total)
-	view.Pages = int((total + searchPageSize - 1) / searchPageSize)
-	if view.Pages < 1 {
-		view.Pages = 1
-	}
+	view.Pages = max(int((total+searchPageSize-1)/searchPageSize), 1)
 	if f.Page > 1 {
 		view.PrevURL = f.pageURL(q, f.Page-1)
 	}
@@ -1721,7 +1710,7 @@ func (app *mod) buildSearchFurniture(view *searchView, f searchFilters, q url.Va
 				ids = append(ids, id)
 			}
 		}
-		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		slices.Sort(ids)
 		for _, id := range ids {
 			name := view.RollAttrNames[id]
 			if name == "" {
@@ -2396,35 +2385,35 @@ func variantShortLabel(name string) string {
 	case strings.Contains(lower, "domination"):
 		return "Domination"
 	case strings.Contains(lower, "a-type"):
-		for _, w := range strings.Fields(name) {
+		for w := range strings.FieldsSeq(name) {
 			if strings.HasSuffix(w, "-Type") || strings.HasSuffix(w, "-type") {
 				return w
 			}
 		}
 		return "A-Type"
 	case strings.Contains(lower, "b-type"):
-		for _, w := range strings.Fields(name) {
+		for w := range strings.FieldsSeq(name) {
 			if strings.HasSuffix(w, "-Type") || strings.HasSuffix(w, "-type") {
 				return w
 			}
 		}
 		return "B-Type"
 	case strings.Contains(lower, "c-type"):
-		for _, w := range strings.Fields(name) {
+		for w := range strings.FieldsSeq(name) {
 			if strings.HasSuffix(w, "-Type") || strings.HasSuffix(w, "-type") {
 				return w
 			}
 		}
 		return "C-Type"
 	case strings.Contains(lower, "x-type"):
-		for _, w := range strings.Fields(name) {
+		for w := range strings.FieldsSeq(name) {
 			if strings.HasSuffix(w, "-Type") || strings.HasSuffix(w, "-type") {
 				return w
 			}
 		}
 		return "X-Type"
 	case strings.Contains(lower, "modified") || strings.Contains(name, "'s"):
-		for _, w := range strings.Fields(name) {
+		for w := range strings.FieldsSeq(name) {
 			if strings.HasSuffix(w, "'s") {
 				return w
 			}

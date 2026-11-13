@@ -8,6 +8,7 @@ import (
 	"html"
 	"html/template"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -98,8 +99,8 @@ func SanitizeLinked(raw string, inApp func(href string) (string, bool)) template
 	// with it anything left open inside it. No such element: the
 	// close tag is a stray and is dropped.
 	closeTag := func(name string) {
-		for depth := len(open) - 1; depth >= 0; depth-- {
-			if open[depth].name == name {
+		for depth, o := range slices.Backward(open) {
+			if o.name == name {
 				closeDownTo(depth)
 				return
 			}

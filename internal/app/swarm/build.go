@@ -36,6 +36,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"maps"
 	"os"
 	"strings"
 	"sync"
@@ -195,9 +196,7 @@ func LearnedBuilds() map[string]ReleaseBuild {
 	learnedBuilds.RLock()
 	defer learnedBuilds.RUnlock()
 	out := make(map[string]ReleaseBuild, len(learnedBuilds.byHash))
-	for hash, rel := range learnedBuilds.byHash {
-		out[hash] = rel
-	}
+	maps.Copy(out, learnedBuilds.byHash)
 	return out
 }
 

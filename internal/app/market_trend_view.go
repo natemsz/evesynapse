@@ -9,12 +9,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	json "github.com/goccy/go-json"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -266,7 +267,7 @@ func buildBookChart(rows []db.ListMarketRegionStatsDailyRecentRow, extended bool
 		First: rows[0].Day, Last: rows[n-1].Day,
 		Extended: extended,
 	}
-	decorateBookChart(chart, rows, x, y, lo, hi, extended, w, h, padBottom, broker, salesTax)
+	decorateBookChart(chart, rows, x, y, lo, hi, extended, w, h, broker, salesTax)
 	if !extended {
 		return chart
 	}
@@ -486,7 +487,7 @@ func (app *Application) attachAllRegionStats(ctx context.Context, item *marketIt
 // decorateBookChart adds the price plot's points, per-day hover
 // columns (the site's chart tip: every figure that day), round value
 // gridlines and first, middle and last date labels.
-func decorateBookChart(c *bookTrendChart, rows []db.ListMarketRegionStatsDailyRecentRow, x func(int) float64, y func(float64) float64, lo, hi float64, extended bool, w, h, padBottom int, broker, salesTax float64) {
+func decorateBookChart(c *bookTrendChart, rows []db.ListMarketRegionStatsDailyRecentRow, x func(int) float64, y func(float64) float64, lo, hi float64, extended bool, w, h int, broker, salesTax float64) {
 	n := len(rows)
 	for i, r := range rows {
 		xi := x(i)

@@ -324,6 +324,9 @@ func TestPulseQuietCycleWritesNothing(t *testing.T) {
 			}
 			out[key] = version
 		}
+		if err := rows.Err(); err != nil {
+			t.Fatalf("read row versions: %v", err)
+		}
 		return out
 	}
 	app.refreshPulseEvents(ctx, chars, &fetchBudget{left: 5})

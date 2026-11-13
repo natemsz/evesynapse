@@ -722,7 +722,8 @@ func killFitEFT(names *killNames, ship string, items []killItem) string {
 			sort.SliceStable(ls, func(a, c int) bool { return ls[a].qty < ls[c].qty })
 			b.WriteString(names.typeName(ls[0].id))
 			if len(ls) > 1 {
-				b.WriteString(", " + names.typeName(ls[1].id))
+				b.WriteString(", ")
+				b.WriteString(names.typeName(ls[1].id))
 			}
 			b.WriteString("\n")
 		}

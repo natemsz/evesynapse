@@ -466,8 +466,8 @@ func enumTargetID(r *http.Request) (int64, bool) {
 		n, err := strconv.ParseInt(s, 10, 64)
 		return n, err == nil && n > 0
 	}
-	if strings.HasPrefix(r.URL.Path, "/intel/kill/") {
-		return parse(strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/intel/kill/"), "/"))
+	if after, ok := strings.CutPrefix(r.URL.Path, "/intel/kill/"); ok {
+		return parse(strings.TrimSuffix(after, "/"))
 	}
 	if strings.HasPrefix(r.URL.Path, "/intel/") || r.URL.Path == "/pilot/" || r.URL.Path == "/killmails/" {
 		q := r.URL.Query()

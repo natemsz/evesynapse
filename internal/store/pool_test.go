@@ -47,16 +47,14 @@ func TestSizePool(t *testing.T) {
 	held := make([]*sql.Conn, 6)
 	var wg sync.WaitGroup
 	for i := range held {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			c, err := conn.Conn(ctx)
 			if err != nil {
 				t.Error(err)
 				return
 			}
 			held[i] = c
-		}()
+		})
 	}
 	wg.Wait()
 	for _, c := range held {

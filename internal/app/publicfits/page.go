@@ -354,10 +354,7 @@ func (app *page) handlePublicFits(w http.ResponseWriter, r *http.Request) {
 			total = firstPage[0].TotalCount
 		}
 	}
-	pages := int((total + publicFitsPerPage - 1) / publicFitsPerPage)
-	if pages < 1 {
-		pages = 1
-	}
+	pages := max(int((total+publicFitsPerPage-1)/publicFitsPerPage), 1)
 	if filters.Page > pages {
 		filters.Page = pages
 		if filters.Page == 1 && firstPage != nil {

@@ -132,7 +132,7 @@ func TestUndercutDigestFrequency(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	seedMarketSignals(t, app, q, user.ID, 1)
+	seedMarketSignals(t, q, user.ID, 1)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	if err := app.storeNotifyPrefs(ctx, user.ID, notifyPrefs{UndercutDigestHours: 24}); err != nil {
@@ -166,7 +166,7 @@ func TestUndercutDigestEveryTime(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	seedMarketSignals(t, app, q, user.ID, 1)
+	seedMarketSignals(t, q, user.ID, 1)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	for i := 0; i < 2; i++ {
@@ -188,7 +188,7 @@ func TestUndercutDigestOpensOrders(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	seedMarketSignals(t, app, q, user.ID, 1)
+	seedMarketSignals(t, q, user.ID, 1)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	section := briefingHome(t, app, cookie)

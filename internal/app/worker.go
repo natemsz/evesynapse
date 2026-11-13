@@ -11,6 +11,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1018,11 +1019,12 @@ func cycleSummary(refreshed, namesResolved, failed int, limited bool, parked, de
 	if limited {
 		parts = append(parts, "ESI error limit, backing off")
 	}
-	out := parts[0]
+	var out strings.Builder
+	out.WriteString(parts[0])
 	for _, p := range parts[1:] {
-		out += ", " + p
+		out.WriteString(", " + p)
 	}
-	return out
+	return out.String()
 }
 
 // coreSnapshotKinds are the per-character snapshot kinds the main

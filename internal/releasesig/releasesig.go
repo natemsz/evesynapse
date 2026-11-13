@@ -100,7 +100,7 @@ func VerifyingKey(trusted []ed25519.PublicKey, message, sigFile []byte) (ed25519
 		return nil, ErrNoTrustedKeys
 	}
 	signatures := 0
-	for _, line := range bytes.Split(sigFile, []byte("\n")) {
+	for line := range bytes.SplitSeq(sigFile, []byte("\n")) {
 		sig, err := base64.StdEncoding.DecodeString(string(bytes.TrimSpace(line)))
 		if err != nil || len(sig) != ed25519.SignatureSize {
 			continue
@@ -255,7 +255,7 @@ func keyBlocks(data []byte) ([]*pem.Block, []string, error) {
 // "" when it has none.
 func labelIn(commentary []byte) string {
 	label := ""
-	for _, line := range strings.Split(string(commentary), "\n") {
+	for line := range strings.SplitSeq(string(commentary), "\n") {
 		if text, ok := strings.CutPrefix(strings.TrimSpace(line), "Label:"); ok {
 			label = strings.TrimSpace(text)
 		}

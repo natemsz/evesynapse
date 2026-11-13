@@ -115,6 +115,7 @@ package fit
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"sort"
@@ -450,12 +451,7 @@ func (snap *Snapshot) requiresSkill(typeID, skillTypeID int64) bool {
 
 // HasEffect reports whether a type carries the given effect.
 func (snap *Snapshot) HasEffect(typeID, effectID int64) bool {
-	for _, id := range snap.TypeEffects[typeID] {
-		if id == effectID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(snap.TypeEffects[typeID], effectID)
 }
 
 // typeEffectCats lists the effect categories a type carries.
@@ -536,10 +532,8 @@ func NormalizeModuleState(snap *Snapshot, typeID int64, state string) string {
 	if len(valid) == 0 {
 		return ""
 	}
-	for _, v := range valid {
-		if v == state {
-			return state
-		}
+	if slices.Contains(valid, state) {
+		return state
 	}
 	return defaultModuleState(snap, typeID)
 }
@@ -592,7 +586,7 @@ func LoadSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*Snapsho
 	// pilot's own base values (two locked targets before skills).
 	pending := dedupeSortedIDs(append(append([]int64(nil), typeIDs...), CharacterTypeID))
 
-	for round := 0; round < 6; round++ {
+	for range 6 {
 		var fresh []int64
 		for _, id := range pending {
 			if !loadedTypes[id] {
@@ -740,7 +734,7 @@ func LoadSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*Snapsho
 	}
 
 	for _, ids := range snap.TypeEffects {
-		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		slices.Sort(ids)
 	}
 	return snap, nil
 }
@@ -756,7 +750,7 @@ func dedupeSortedIDs(ids []int64) []int64 {
 		seen[id] = true
 		out = append(out, id)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 
@@ -1201,13 +1195,7 @@ func foldAttribute(snap *Snapshot, base float64, apps []application, val func(*e
 		for i := range apps {
 			app := &apps[i]
 			op := app.mod.Operation
-			match := false
-			for _, want := range ops {
-				if op == want {
-					match = true
-					break
-				}
-			}
+			match := slices.Contains(ops, op)
 			if !match {
 				continue
 			}
@@ -1276,9 +1264,7 @@ type multEntry struct {
 // cloneAttrMap copies a type's base attribute map (nil-safe).
 func cloneAttrMap(in map[int64]float64) map[int64]float64 {
 	out := make(map[int64]float64, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }
 
@@ -1325,15 +1311,11 @@ func restrictionFor(snap *Snapshot, shipTypeID, shipGroup, moduleTypeID int64) *
 	if len(r.NeedGroup) == 0 && len(r.NeedType) == 0 {
 		return nil
 	}
-	for _, t := range r.NeedType {
-		if t == shipTypeID {
-			return nil
-		}
+	if slices.Contains(r.NeedType, shipTypeID) {
+		return nil
 	}
-	for _, g := range r.NeedGroup {
-		if g == shipGroup {
-			return nil
-		}
+	if slices.Contains(r.NeedGroup, shipGroup) {
+		return nil
 	}
 	return r
 }

@@ -38,7 +38,7 @@ func formatISKShort(v float64) string {
 }
 
 // buildLanding assembles the landing page's data.
-func (app *Application) buildLanding(ctx context.Context) landingData {
+func (app *Application) buildLanding() landingData {
 	return landingData{SSOConfigured: app.cfg.SSOConfigured()}
 }
 

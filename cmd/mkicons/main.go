@@ -448,7 +448,7 @@ func circleLoop(attrs map[string]string) ([][]point, error) {
 	}
 	const pieces = 96
 	loop := make([]point, 0, pieces)
-	for i := 0; i < pieces; i++ {
+	for i := range pieces {
 		a := 2 * math.Pi * float64(i) / pieces
 		loop = append(loop, point{cx + r*math.Cos(a), cy + r*math.Sin(a)})
 	}

@@ -198,7 +198,7 @@ func manifestBuild(src releaseSource, label, arch string, manifest, sig []byte, 
 // anything else listed beside them are not builds.
 func parseSHA256Sums(src releaseSource, tag string, body []byte) []learnedBuild {
 	var out []learnedBuild
-	for _, line := range strings.Split(string(body), "\n") {
+	for line := range strings.SplitSeq(string(body), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 2 || !validSHA256(fields[0]) {
 			continue

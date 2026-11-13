@@ -297,7 +297,7 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 	var cands []assetRowCand
 	var cans []assetCanCard
 	for _, cd := range datas {
-		r, c := collectCharRows(cd, locFilter, st.can, global, titles, st, lk, showOwner)
+		r, c := collectCharRows(cd, locFilter, st.can, st, lk, showOwner)
 		cands = append(cands, r...)
 		cans = append(cans, c...)
 	}
@@ -452,10 +452,10 @@ func sortAssetRows(rows []assetRowCand, by string) {
 // container cards. Inside a ship is not a row: it rides the
 // ship's loadout chips and its inspector. Inside a container is
 // a row under the cans division.
-func collectCharRows(cd *assetCharData, locFilter, canFilter int64, global bool, titles map[int64]string, st assetPageState, lk assetLookups, showOwner bool) ([]assetRowCand, []assetCanCard) {
+func collectCharRows(cd *assetCharData, locFilter, canFilter int64, st assetPageState, lk assetLookups, showOwner bool) ([]assetRowCand, []assetCanCard) {
 	var rows []assetRowCand
 	var cans []assetCanCard
-	base := func(it esi.Asset, locID int64) assetMatrixRow {
+	base := func(it esi.Asset) assetMatrixRow {
 		name, typeName := cd.ix.label(it)
 		row := assetMatrixRow{
 			ItemID: it.ItemID, OwnerID: cd.ch.CharacterID,
@@ -533,16 +533,16 @@ func collectCharRows(cd *assetCharData, locFilter, canFilter int64, global bool,
 			// with anything in it became a card above; an empty
 			// one is a plain stack like any other.
 			if lk.shipTypes[it.TypeID] {
-				rows = append(rows, shipRowCand(cd, it, locID, st, lk, base(it, locID)))
+				rows = append(rows, shipRowCand(cd, it, st, lk, base(it)))
 			} else {
-				rows = append(rows, plainRowCand(it, "items", lk, base(it, locID)))
+				rows = append(rows, plainRowCand(it, "items", lk, base(it)))
 			}
 		default:
 			outer := containers[0]
 			if lk.shipTypes[outer.TypeID] && canFilter == 0 {
 				continue // inside a ship: the ship's row carries it
 			}
-			rows = append(rows, plainRowCand(it, "cans", lk, base(it, locID)))
+			rows = append(rows, plainRowCand(it, "cans", lk, base(it)))
 		}
 	}
 	return rows, cans
@@ -565,7 +565,7 @@ func plainRowCand(it esi.Asset, division string, lk assetLookups, row assetMatri
 // shipRowCand builds an assembled or packaged ship's row: the
 // loadout chips from what sits directly inside it, and the
 // hull-plus-contents value.
-func shipRowCand(cd *assetCharData, it esi.Asset, locID int64, st assetPageState, lk assetLookups, row assetMatrixRow) assetRowCand {
+func shipRowCand(cd *assetCharData, it esi.Asset, st assetPageState, lk assetLookups, row assetMatrixRow) assetRowCand {
 	cand := assetRowCand{row: row, division: "ships"}
 	value, priced, _ := cd.ix.subtreeValue(it, lk.priceOf)
 	if priced > 0 {
@@ -726,7 +726,7 @@ func (app *Application) assetEFT(ctx context.Context, cd *assetCharData, ship es
 // which place it is in, what it is inside, and whose it is. The
 // old page grouped these by character and place; the matrix
 // carries the same facts on the row.
-func (app *Application) buildAssetSearch(ctx context.Context, datas []*assetCharData, st assetPageState, directory []assetDirEntry, lk assetLookups) *assetSearch {
+func (app *Application) buildAssetSearch(datas []*assetCharData, st assetPageState, directory []assetDirEntry, lk assetLookups) *assetSearch {
 	needle := strings.ToLower(st.query)
 	titles := make(map[int64]string)
 	for _, e := range directory {

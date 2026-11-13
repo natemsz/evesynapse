@@ -1,6 +1,6 @@
 package esi
 
-import "sort"
+import "slices"
 
 // Type names nobody here could supply: IDs a reader asked for
 // that were in neither the in-process cache, the SDE tables nor
@@ -44,7 +44,7 @@ func (c *Client) MissingTypeNames(limit int) []int64 {
 		ids = append(ids, id)
 	}
 	c.typeNamesMu.RUnlock()
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 	if limit >= 0 && len(ids) > limit {
 		ids = ids[:limit]
 	}

@@ -29,7 +29,7 @@ func SwarmFanOut(ctx context.Context, n int, fn func(ctx context.Context, i int)
 	defer cancel()
 	slots := make(chan struct{}, SwarmParallelPeers)
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		select {
 		case slots <- struct{}{}:
 		case <-rctx.Done():

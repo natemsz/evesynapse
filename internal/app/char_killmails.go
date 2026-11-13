@@ -117,7 +117,7 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	data := app.page(ctx)
 
-	_, active, links, err := app.pickCharacter(ctx, r, "/killmails/")
+	_, active, links, err := app.pickCharacter(ctx, r)
 	if err != nil {
 		logging.Errorf("killmails: list characters: %v", err)
 		data.Error = "Could not load killmail data; check the server log."

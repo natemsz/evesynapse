@@ -971,7 +971,7 @@ func (app *plans) handleSkillPlanItemsAddBulk(w http.ResponseWriter, r *http.Req
 	}
 	var want []staged
 	seen := map[int64]int{}
-	for _, part := range strings.Split(r.FormValue("items"), ",") {
+	for part := range strings.SplitSeq(r.FormValue("items"), ",") {
 		idText, levelText, ok := strings.Cut(part, ":")
 		if !ok {
 			continue

@@ -177,7 +177,7 @@ func newSimplex(m *lpModel) *simplex {
 	s.hi = make([]float64, s.nt)
 	s.obj = make([]float64, s.nt)
 	cmax := 0.0
-	for j := 0; j < n; j++ {
+	for j := range n {
 		s.lo[j] = m.Lo[j]
 		s.hi[j] = lpInf
 		if m.Hi[j] >= 0 {
@@ -207,7 +207,7 @@ func newSimplex(m *lpModel) *simplex {
 		}
 	}
 	cut := make([]float64, n)
-	for j := 0; j < n; j++ {
+	for j := range n {
 		cut[j] = m.Obj[j] / cmax
 	}
 	s.a[rows-1] = cut
@@ -215,7 +215,7 @@ func newSimplex(m *lpModel) *simplex {
 	s.hi[s.nt-1] = lpInf
 	// The dual method starts with every earning column at its upper
 	// bound, so each needs one.
-	for j := 0; j < n; j++ {
+	for j := range n {
 		if s.obj[j] < 0 && math.IsInf(s.hi[j], 1) {
 			s.hi[j] = s.lo[j] + lpBigM
 		}
@@ -454,7 +454,7 @@ func (s *simplex) dual(cut float64) lpStatus {
 		return st
 	}
 	degenerate := 0
-	for iter := 0; iter < 4000; iter++ {
+	for iter := range 4000 {
 		if !perturbed && degenerate > 30 {
 			// A run of zero steps is the dual method circling a
 			// degenerate vertex: nudge each nonbasic cost a little
@@ -555,7 +555,7 @@ func (s *simplex) dual(cut float64) lpStatus {
 
 // primal improves the objective in use from a feasible basis.
 func (s *simplex) primal() lpStatus {
-	for iter := 0; iter < 4000; iter++ {
+	for iter := range 4000 {
 		bland := iter > 400
 		e, best := -1, s.tolD
 		for j := 0; j < s.nt; j++ {
@@ -784,7 +784,7 @@ func solveMILP(m *lpModel, opt milpOptions) milpResult {
 			b.rootHi[j] = m.Hi[j]
 		}
 	}
-	for j := 0; j < n; j++ {
+	for j := range n {
 		if m.Int[j] {
 			b.ints = append(b.ints, j)
 			if m.Probe[j] {

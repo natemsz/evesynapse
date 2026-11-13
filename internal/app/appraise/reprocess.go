@@ -15,7 +15,7 @@ import (
 	"fmt"
 	json "github.com/goccy/go-json"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -236,7 +236,7 @@ func (app *page) computeReprocess(ctx context.Context, snap *snapshot, s refineS
 	for id := range yieldQty {
 		outIDs = append(outIDs, id)
 	}
-	sort.Slice(outIDs, func(a, b int) bool { return outIDs[a] < outIDs[b] })
+	slices.Sort(outIDs)
 	unitPrice := map[int64]float64{}
 	if len(outIDs) > 0 {
 		lines := make([]module.AppraisalLine, 0, len(outIDs))
@@ -278,7 +278,7 @@ func (app *page) computeReprocess(ctx context.Context, snap *snapshot, s refineS
 		for id := range ly {
 			ids = append(ids, id)
 		}
-		sort.Slice(ids, func(a, b int) bool { return ids[a] < ids[b] })
+		slices.Sort(ids)
 		for _, id := range ids {
 			name := names[id]
 			if name == "" {

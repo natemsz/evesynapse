@@ -2,6 +2,7 @@ package fit
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -245,7 +246,7 @@ func (f *fitting) applyBuffs(fleet []BuffValue) {
 	for id := range byID {
 		ids = append(ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 
 	atShip := make([]*entity, 0, len(f.fitted)+len(f.weaponCharge))
 	atShip = append(atShip, f.fitted...)

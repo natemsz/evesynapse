@@ -233,10 +233,7 @@ func (f *fitting) fighterStats() {
 		if phys, ok := snap.Physics[ent.typeID]; ok {
 			res.FighterHangarUsed += phys.Volume * float64(carried)
 		}
-		size := int(ent.get(snap, AttrFighterSquadronMaxSize))
-		if size < 1 {
-			size = 1
-		}
+		size := max(int(ent.get(snap, AttrFighterSquadronMaxSize)), 1)
 		class, standup := fighterClass(ent.base)
 		line := FighterLine{TypeID: ent.typeID, Class: class, SquadronSize: size, Carried: carried, Abilities: ent.abilities}
 		on := make(map[string]bool, len(ent.abilities))

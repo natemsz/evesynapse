@@ -1,5 +1,7 @@
 package fit
 
+import "maps"
+
 import "sort"
 
 // Implant solving: when a fit runs over its CPU or powergrid
@@ -99,9 +101,7 @@ func SolveImplants(compute func(implants []int64) *Result, base []int64, baseSlo
 func solveInOrder(compute func(implants []int64) *Result, base []int64, baseSlots map[int]int64, candidates []ResourceImplant, order [2]int64) ([]SolvePick, bool) {
 	current := append([]int64(nil), base...)
 	slots := make(map[int]int64, len(baseSlots))
-	for s, id := range baseSlots {
-		slots[s] = id
-	}
+	maps.Copy(slots, baseSlots)
 	chosen := make(map[int]ResourceImplant)
 	for _, resource := range order {
 		res := compute(current)
@@ -187,9 +187,7 @@ func ladderFor(candidates []ResourceImplant, resource int64) []ResourceImplant {
 // earlier pick).
 func withImplant(current []int64, slots map[int]int64, cand ResourceImplant) ([]int64, map[int]int64) {
 	nextSlots := make(map[int]int64, len(slots)+1)
-	for s, id := range slots {
-		nextSlots[s] = id
-	}
+	maps.Copy(nextSlots, slots)
 	evicted := nextSlots[cand.Slot] // 0 when the slot is empty
 	nextSlots[cand.Slot] = cand.TypeID
 	next := make([]int64, 0, len(current)+1)

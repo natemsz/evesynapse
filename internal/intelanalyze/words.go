@@ -24,7 +24,9 @@ package intelanalyze
 // ---------------------------------------------------------------------------
 
 import (
+	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -35,7 +37,7 @@ import (
 // are never part of a pilot's name in prose.
 var commonWords = func() map[string]bool {
 	m := map[string]bool{}
-	for _, w := range strings.Fields(`
+	for w := range strings.FieldsSeq(`
 a about above across after again against ago all almost alone along already also although always am help
 among an and another any anyone anything anyway are around as ask asked at away back bad be became because
 become been before behind being below beside best better between big both but by call called came can
@@ -245,10 +247,8 @@ func gateTo(d Dict, system int64, lower string, id int64) bool {
 
 // appendID adds id to ids once.
 func appendID(ids []int64, id int64) []int64 {
-	for _, v := range ids {
-		if v == id {
-			return ids
-		}
+	if slices.Contains(ids, id) {
+		return ids
 	}
 	return append(ids, id)
 }
@@ -278,7 +278,7 @@ var shipNicks = map[string]string{
 // without a plural "s", and by nickname.
 func shipCands(phrase string) []string {
 	out := []string{phrase}
-	if t := strings.TrimSuffix(phrase, "s"); t != phrase {
+	if t, ok := strings.CutSuffix(phrase, "s"); ok {
 		out = append(out, t)
 	}
 	for _, c := range out {
@@ -294,9 +294,7 @@ func shipCands(phrase string) []string {
 // scouts do.
 func ShipNicknames() map[string]string {
 	out := make(map[string]string, len(shipNicks))
-	for k, v := range shipNicks {
-		out[k] = v
-	}
+	maps.Copy(out, shipNicks)
 	return out
 }
 

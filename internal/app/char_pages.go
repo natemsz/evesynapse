@@ -27,7 +27,7 @@ import (
 // character, then the first linked character), and the switcher
 // links pointing at path. A nil slice with a nil error means the
 // session carries no user or the user has no characters yet.
-func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path string) ([]db.Character, db.Character, []assetCharLink, error) {
+func (app *Application) pickCharacter(ctx context.Context, r *http.Request) ([]db.Character, db.Character, []assetCharLink, error) {
 	userID := app.userID(ctx)
 	if userID == 0 {
 		// Dev-login sessions carry no user; nothing to show.
@@ -300,7 +300,7 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	data := app.page(ctx)
 
-	_, active, links, err := app.pickCharacter(ctx, r, "/character/")
+	_, active, links, err := app.pickCharacter(ctx, r)
 	if err != nil {
 		logging.Errorf("character: list characters: %v", err)
 		data.Error = "Could not load character data; check the server log."

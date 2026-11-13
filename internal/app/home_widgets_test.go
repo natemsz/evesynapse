@@ -282,7 +282,7 @@ func TestWatchlistWidgetHome(t *testing.T) {
 	}
 	mustContain(t, "/", body, "Market Watchlist", "Nothing watched yet")
 
-	seedMarketSignals(t, app, q, user.ID, 0) // history + Tritanium watch at 5%
+	seedMarketSignals(t, q, user.ID, 0) // history + Tritanium watch at 5%
 	if err := q.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: 35, Name: "Pyroxeres"}); err != nil {
 		t.Fatalf("seed type name: %v", err)
 	}

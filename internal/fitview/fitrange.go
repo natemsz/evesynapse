@@ -155,7 +155,7 @@ func fitRangeGroups(weapons []fit.WeaponReach, nameOf func(int64) string) []fitR
 		}
 		index[key] = len(groups)
 		counts[key] = w.Count
-		groups = append(groups, fitRangeGroup{FitRangeGroup: FitRangeGroup{Reach: fitReachNote(w)}, weapons: []fit.WeaponReach{w}})
+		groups = append(groups, fitRangeGroup{Reach: fitReachNote(w), weapons: []fit.WeaponReach{w}})
 	}
 	for key, i := range index {
 		name := nameOf(groups[i].weapons[0].TypeID)
@@ -165,7 +165,7 @@ func fitRangeGroups(weapons []fit.WeaponReach, nameOf func(int64) string) []fitR
 		groups[i].Label = name
 	}
 	if len(groups) > fitRangeSeries {
-		other := fitRangeGroup{FitRangeGroup: FitRangeGroup{Label: "Other weapons", Reach: "Their lines summed"}}
+		other := fitRangeGroup{Label: "Other weapons", Reach: "Their lines summed"}
 		for _, g := range groups[fitRangeSeries-1:] {
 			other.weapons = append(other.weapons, g.weapons...)
 		}

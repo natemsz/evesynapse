@@ -181,12 +181,13 @@ func newNotifyCollector() *notifyCollector {
 
 // source names one readable source and returns its baseline key.
 func (c *notifyCollector) source(kind string, parts ...any) string {
-	key := "base|" + kind
+	var key strings.Builder
+	key.WriteString("base|" + kind)
 	for _, p := range parts {
-		key += fmt.Sprintf("|%v", p)
+		key.WriteString(fmt.Sprintf("|%v", p))
 	}
-	c.sources[key] = true
-	return key
+	c.sources[key.String()] = true
+	return key.String()
 }
 
 func (c *notifyCollector) add(ev notifyEvent) {

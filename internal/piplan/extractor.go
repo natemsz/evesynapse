@@ -51,10 +51,7 @@ func ProgramCycleSec(hours float64) int64 {
 	if hours < 25 {
 		return 900
 	}
-	steps := int(math.Floor(math.Log2(hours/25))) + 1
-	if steps > 4 {
-		steps = 4
-	}
+	steps := min(int(math.Floor(math.Log2(hours/25)))+1, 4)
 	return 900 << steps
 }
 

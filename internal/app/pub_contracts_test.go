@@ -160,7 +160,7 @@ func (f *pubFixture) calls() (list, items, bids, dogma map[int64]int) {
 	return cp(f.listCalls), cp(f.itemsCalls), cp(f.bidsCalls), cp(f.dogmaCalls)
 }
 
-func pubContractJSON(id, region int64, typ string, price float64, expires time.Time) esi.PublicContract {
+func pubContractJSON(id int64, typ string, price float64, expires time.Time) esi.PublicContract {
 	return esi.PublicContract{
 		ContractID: id, IssuerID: 90001, IssuerCorporationID: 98001,
 		Type: typ, Title: "fixture", Price: price,
@@ -229,14 +229,14 @@ func TestPublicContractsSweepDeathAndItems(t *testing.T) {
 	now := time.Now().UTC()
 
 	bpcRuns, bpcME, bpcTE := int64(10), int64(5), int64(8)
-	c1 := pubContractJSON(101, 10000002, "item_exchange", 5000000, now.Add(7*24*time.Hour))
-	c2 := pubContractJSON(102, 10000002, "auction", 0, now.Add(2*24*time.Hour))
+	c1 := pubContractJSON(101, "item_exchange", 5000000, now.Add(7*24*time.Hour))
+	c2 := pubContractJSON(102, "auction", 0, now.Add(2*24*time.Hour))
 	c2.Buyout = 9000000
-	c3 := pubContractJSON(103, 10000002, "courier", 0, now.Add(24*time.Hour))
+	c3 := pubContractJSON(103, "courier", 0, now.Add(24*time.Hour))
 	c3.Reward, c3.Collateral, c3.Volume = 1000000, 50000000, 12000
-	c4 := pubContractJSON(104, 10000002, "auction", 0, now.Add(30*24*time.Hour))
+	c4 := pubContractJSON(104, "auction", 0, now.Add(30*24*time.Hour))
 	c4.Buyout = 20000000
-	c5 := pubContractJSON(105, 10000002, "item_exchange", 1000, now.Add(-time.Hour)) // already expired
+	c5 := pubContractJSON(105, "item_exchange", 1000, now.Add(-time.Hour)) // already expired
 	fx.pages[10000002] = []esi.PublicContract{c1, c2, c3, c4, c5}
 	fx.pages[10000047] = []esi.PublicContract{}
 
@@ -415,7 +415,7 @@ func TestPublicContractsSweepDeathAndItems(t *testing.T) {
 	// The corpus links the two listings by instance: a second
 	// sighting opens for the same item, after the first one's
 	// departure.
-	c6 := pubContractJSON(106, 10000002, "item_exchange", 6500000, now.Add(30*24*time.Hour))
+	c6 := pubContractJSON(106, "item_exchange", 6500000, now.Add(30*24*time.Hour))
 	fx.pages[10000002] = []esi.PublicContract{c2, c3, c6}
 	fx.items[106] = []esi.PublicContractItem{
 		{RecordID: 1006, TypeID: 4242, ItemID: 9001, Quantity: 1, IsIncluded: true},
@@ -466,7 +466,7 @@ func TestPublicContractProbePlainItemOnce(t *testing.T) {
 	seedAbyssalMappings(t, app, [3]int64{2222, 1111, 4242})
 	now := time.Now().UTC()
 
-	c := pubContractJSON(201, 10000002, "item_exchange", 100, now.Add(24*time.Hour))
+	c := pubContractJSON(201, "item_exchange", 100, now.Add(24*time.Hour))
 	fx.pages[10000002] = []esi.PublicContract{c}
 	fx.items[201] = []esi.PublicContractItem{
 		{RecordID: 2001, TypeID: 4242, ItemID: 9100, Quantity: 1, IsIncluded: true}, // a mutable type, but this instance answers 404

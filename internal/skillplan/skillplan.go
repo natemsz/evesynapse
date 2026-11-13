@@ -8,6 +8,7 @@ package skillplan
 
 import (
 	"math"
+	"slices"
 	"sort"
 	"time"
 )
@@ -519,7 +520,7 @@ func FitSkillClosure(g Graph, typeIDs []int64) []Target {
 			ready = append(ready, skillID)
 		}
 	}
-	sort.Slice(ready, func(i, j int) bool { return ready[i] < ready[j] })
+	slices.Sort(ready)
 	var targets []Target
 	for len(ready) > 0 {
 		id := ready[0]
@@ -531,7 +532,7 @@ func FitSkillClosure(g Graph, typeIDs []int64) []Target {
 				ready = append(ready, dep)
 			}
 		}
-		sort.Slice(ready, func(i, j int) bool { return ready[i] < ready[j] })
+		slices.Sort(ready)
 	}
 	if len(targets) < len(required) {
 		placed := make(map[int64]bool, len(targets))
@@ -544,7 +545,7 @@ func FitSkillClosure(g Graph, typeIDs []int64) []Target {
 				rest = append(rest, skillID)
 			}
 		}
-		sort.Slice(rest, func(i, j int) bool { return rest[i] < rest[j] })
+		slices.Sort(rest)
 		for _, id := range rest {
 			targets = append(targets, Target{SkillID: id, Level: required[id], Intent: len(targets)})
 		}

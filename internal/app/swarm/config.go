@@ -118,7 +118,7 @@ func LoadSwarmConfig(getenv func(string) string) SwarmConfig {
 // the shared secret somewhere unsafe.
 func ParseSwarmSeeds(raw string) ([]string, error) {
 	var out []string
-	for _, part := range strings.Split(raw, ",") {
+	for part := range strings.SplitSeq(raw, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue

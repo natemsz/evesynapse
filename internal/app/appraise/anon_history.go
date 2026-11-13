@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -100,7 +101,7 @@ func verifyAnonTokens(secret []byte, value string) []string {
 		return nil
 	}
 	var out []string
-	for _, tok := range strings.Split(payload, ".") {
+	for tok := range strings.SplitSeq(payload, ".") {
 		if isShareTokenShape(tok) {
 			out = append(out, tok)
 		}
@@ -170,12 +171,7 @@ func (app *page) forgetAnonToken(ctx context.Context, w http.ResponseWriter, r *
 // hasAnonToken reports whether the request's verified history
 // holds tok: the cookie-holder is the appraisal's creator.
 func (app *page) hasAnonToken(ctx context.Context, r *http.Request, tok string) bool {
-	for _, t := range app.anonTokens(ctx, r) {
-		if t == tok {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(app.anonTokens(ctx, r), tok)
 }
 
 // anonymousOwnerID returns the shared anonymous owner's user

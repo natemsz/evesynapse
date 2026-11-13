@@ -71,7 +71,7 @@ const maxSystemWords = 3
 func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 	var out Outcome
 	now = now.UTC()
-	for _, line := range strings.Split(strings.ReplaceAll(raw, "\r", ""), "\n") {
+	for line := range strings.SplitSeq(strings.ReplaceAll(raw, "\r", ""), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

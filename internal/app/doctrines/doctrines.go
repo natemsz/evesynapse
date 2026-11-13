@@ -9,6 +9,7 @@ import (
 	json "github.com/goccy/go-json"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -382,9 +383,9 @@ func (app *mod) handleDoctrine(w http.ResponseWriter, r *http.Request) {
 	}
 	data := &PageData{ShellData: app.deps.PageShell(ctx)}
 	view := &doctrineView{
-		doctrineCard: doctrineCard{ID: d.ID, Name: d.Name, Category: d.Category, Description: d.Description, Tags: doctrineTagList(d.Tags)},
-		TagsText:     strings.Join(doctrineTagList(d.Tags), ", "),
-		Corporation:  app.deps.CorpDisplayName(ctx, d.CorporationID), CorpID: d.CorporationID, Keeps: keeps, Roles: app.deps.FleetRoles(),
+		ID: d.ID, Name: d.Name, Category: d.Category, Description: d.Description, Tags: doctrineTagList(d.Tags),
+		TagsText:    strings.Join(doctrineTagList(d.Tags), ", "),
+		Corporation: app.deps.CorpDisplayName(ctx, d.CorporationID), CorpID: d.CorporationID, Keeps: keeps, Roles: app.deps.FleetRoles(),
 	}
 	data.Doctrine = view
 	fits, err := app.queries.ListDoctrineFits(ctx, []int64{d.ID})
@@ -621,12 +622,7 @@ func (app *mod) handleDoctrineFitAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *mod) validFleetRole(role string) bool {
-	for _, known := range app.deps.FleetRoles() {
-		if known == role {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(app.deps.FleetRoles(), role)
 }
 
 func (app *mod) handleDoctrineFitRemove(w http.ResponseWriter, r *http.Request) {

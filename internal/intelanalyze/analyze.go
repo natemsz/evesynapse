@@ -265,7 +265,7 @@ func Analyze(in Input, d Dict) Analysis {
 	// commas or slashes part a list.
 	text = strings.NewReplacer(",", "  ", " / ", "  ", ";", "  ").Replace(text)
 	var segs [][]string
-	for _, s := range strings.Split(text, "  ") {
+	for s := range strings.SplitSeq(text, "  ") {
 		if f := strings.Fields(s); len(f) > 0 {
 			segs = append(segs, f)
 		}
@@ -310,7 +310,7 @@ func Analyze(in Input, d Dict) Analysis {
 		}
 		placey := speaksOfPlace(seg)
 		pending := 0 // a count said before its ship ("2 sabres")
-		for i := 0; i < len(seg); i++ {
+		for i := range seg {
 			if used[i] {
 				continue
 			}
@@ -492,7 +492,7 @@ func Analyze(in Input, d Dict) Analysis {
 				for _, n := range nameOrder(seg, left, names) {
 					words := make([]string, n)
 					shaped := true
-					for k := 0; k < n; k++ {
+					for k := range n {
 						words[k] = seg[left[k]]
 						if !NameLike(words[k]) || (k < n-1 && linkEnd(words[k])) {
 							shaped = false
@@ -516,7 +516,7 @@ func Analyze(in Input, d Dict) Analysis {
 								a.Suspect = append(a.Suspect, asWritten(words))
 							}
 						}
-						for k := 0; k < n; k++ {
+						for k := range n {
 							claimed[left[k]] = true
 						}
 						took = n
@@ -524,7 +524,7 @@ func Analyze(in Input, d Dict) Analysis {
 					}
 					if !known {
 						a.Unknown = append(a.Unknown, name)
-						for k := 0; k < n; k++ {
+						for k := range n {
 							owed[left[k]] = true
 						}
 					}
@@ -803,7 +803,7 @@ func PilotCandidate(name string) bool {
 	// and units ("km 2498", "0 m") has no name in it either. The
 	// words are cleaned first: a phrase carries its punctuation
 	// inside ("(incl." is the word "incl").
-	for _, w := range strings.Fields(name) {
+	for w := range strings.FieldsSeq(name) {
 		w = clean(w)
 		if !isDigits(w) && !isRomanNumeral(w) && !placeNouns[w] && !reportWords[w] && !chatWords[w] && w != "-" && w != "—" && w != "–" {
 			return true

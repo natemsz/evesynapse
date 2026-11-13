@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"evesynapse/internal/fit"
 	"evesynapse/internal/logging"
@@ -176,14 +177,14 @@ func FitFleetBoosts(snap *fit.Snapshot, doc *FitDoc, skillIDs []int64) ([]fit.Bu
 
 // FitBuffWords says what buffs do: "Armor Resistance Bonus -21.6%".
 func FitBuffWords(bursts *fit.BurstData, buffs []fit.BuffValue) string {
-	out := ""
+	var out strings.Builder
 	for i, v := range buffs {
 		if i > 0 {
-			out += ", "
+			out.WriteString(", ")
 		}
-		out += FitBuffWord(bursts, v.ID, v.Value)
+		out.WriteString(FitBuffWord(bursts, v.ID, v.Value))
 	}
-	return out
+	return out.String()
 }
 
 // FitBuffWord is one buff in words, its value shown the way its

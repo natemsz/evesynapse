@@ -6,13 +6,14 @@ import (
 	"evesynapse/internal/balancechart"
 	"evesynapse/internal/ideas"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"io"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	json "github.com/goccy/go-json"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -1672,11 +1673,11 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		case widgetPulse:
 			w.Pulse = app.buildPulse(ctx, userID)
 		case widgetWalletFlow:
-			w.WalletFlow = app.buildWalletFlow(ctx, bundles)
+			w.WalletFlow = app.buildWalletFlow(bundles)
 		case widgetUpkeep:
 			w.Upkeep = app.buildUpkeep(ctx, userID)
 		case widgetGlance:
-			w.Glance = app.buildGlance(ctx, userID, bundles, sharedNetWorth())
+			w.Glance = app.buildGlance(bundles, sharedNetWorth())
 		case widgetProfitPulse:
 			w.ProfitPulse = app.buildProfitPulse(ctx, userID, gw, gh)
 		}
@@ -1907,7 +1908,7 @@ type glanceWidget struct {
 // buildGlance assembles the at-a-glance widget around the
 // render's shared net-worth figures (buildHome computes them
 // once for both widgets).
-func (app *Application) buildGlance(ctx context.Context, userID int64, bundles []*charSnaps, netWorth *netWorthWidget) *glanceWidget {
+func (app *Application) buildGlance(bundles []*charSnaps, netWorth *netWorthWidget) *glanceWidget {
 	g := &glanceWidget{NetWorth: netWorth}
 	now := time.Now()
 	for _, b := range bundles {

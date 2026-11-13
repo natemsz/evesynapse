@@ -150,7 +150,7 @@ func (b *tokenBox) enabled() bool {
 }
 
 func tokenAAD(characterID int64, field string) []byte {
-	return []byte(fmt.Sprintf("character:%d:%s", characterID, field))
+	return fmt.Appendf(nil, "character:%d:%s", characterID, field)
 }
 
 func tokenIsEncrypted(stored string) bool {

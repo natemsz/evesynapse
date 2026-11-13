@@ -163,12 +163,10 @@ func ensureTemplate(t *testing.T) {
 		stopClones = make(chan struct{})
 		clonesDone = make(chan struct{})
 		var producers sync.WaitGroup
-		for i := 0; i < cloneProducers; i++ {
-			producers.Add(1)
-			go func() {
-				defer producers.Done()
+		for range cloneProducers {
+			producers.Go(func() {
 				produceClones()
-			}()
+			})
 		}
 		go func() {
 			producers.Wait()

@@ -117,6 +117,9 @@ func TestProfitRefoldFromCheckpointMatchesFullFold(t *testing.T) {
 			}
 			out = append(out, r)
 		}
+		if err := rows.Err(); err != nil {
+			t.Fatalf("read realized: %v", err)
+		}
 		return out
 	}
 	setup := func(t *testing.T) (*Application, *db.Queries) {

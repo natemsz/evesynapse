@@ -579,7 +579,11 @@ func TestTypingConcurrentKeystrokesDoNotMix(t *testing.T) {
 			}
 			ids = append(ids, id)
 		}
+		err = rows.Err()
 		rows.Close()
+		if err != nil {
+			t.Fatalf("round %d: read ledger: %v", round, err)
+		}
 		if len(ids) != 1 || (ids[0] != a && ids[0] != b) {
 			t.Fatalf("round %d: current guesses are %v, want exactly [%d] or [%d]", round, ids, a, b)
 		}

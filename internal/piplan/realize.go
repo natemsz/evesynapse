@@ -43,7 +43,7 @@ func realize(sol *Solution, req Request, classes []*planetClass, zs []zref, keep
 	for _, z := range zs {
 		n := int(math.Round(x[z.v]))
 		cl := classes[z.class]
-		for k := 0; k < n; k++ {
+		for range n {
 			in := instance{class: cl, col: cl.cols[z.col], zv: z.v, cand: -1}
 			if cl.existing != nil {
 				in.cand = cl.cands[0]

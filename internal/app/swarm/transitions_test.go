@@ -30,8 +30,8 @@ func TestSwarmTrustPrior(t *testing.T) {
 		}
 	}
 	// More good never lowers trust; more bad never raises it.
-	for good := int64(0); good < 50; good++ {
-		for bad := int64(0); bad < 50; bad++ {
+	for good := range int64(50) {
+		for bad := range int64(50) {
 			if SwarmTrust(good+1, bad) < SwarmTrust(good, bad) {
 				t.Fatalf("a good check lowered trust at %d/%d", good, bad)
 			}
@@ -69,7 +69,7 @@ func TestSwarmPullGateEdges(t *testing.T) {
 func sampleRate(good, bad int64) float64 {
 	const steps = 10000
 	hits := 0
-	for i := 0; i < steps; i++ {
+	for i := range steps {
 		if SwarmCheckDraw(SwarmTrust(good, bad), good+bad, float64(i)/steps) {
 			hits++
 		}
@@ -81,7 +81,7 @@ func sampleRate(good, bad int64) float64 {
 // once judged, the rate falls as good checks accumulate, stays inside
 // [SwarmSampleMin, SwarmSampleMax], and a failure raises it again.
 func TestSwarmSampleRateFollowsTrust(t *testing.T) {
-	for total := int64(0); total < SwarmTrustMinChecks; total++ {
+	for total := range int64(SwarmTrustMinChecks) {
 		if r := sampleRate(total, 0); r != 1 {
 			t.Errorf("signer with %d checks sampled at %v, want always", total, r)
 		}

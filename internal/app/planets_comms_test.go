@@ -605,9 +605,9 @@ func TestSanitizeMailHTML(t *testing.T) {
 			want: `5 &lt; 6 &amp; 7 &gt; 2`,
 		},
 		{
-			name: "font loses its attributes",
+			name: "font keeps a readable colour and loses its size",
 			in:   `<font color="#ff0000" size="14">red</font>`,
-			want: `<font>red</font>`,
+			want: `<font color="#ff0000">red</font>`,
 		},
 		{
 			name:    "iframe removed with contents",

@@ -1,7 +1,13 @@
 {{define "title"}}{{if and .Alliance .Alliance.Name}}{{.Alliance.Name}}{{else}}Alliance{{end}}{{end}}
 {{define "pagetitle"}}{{if .Alliance}}{{template "alliance-title" .Alliance}}{{end}}{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-{{if .Alliance}}{{template "alliance-body" .Alliance}}{{end}}
+<div class="l-page prof">
+{{with .Alliance}}<div class="l-head">
+  <div class="l-head-act"><a class="btn" href="/intel/kills/?alliance={{.AllianceID}}">Killboard</a></div>
+</div>
+{{template "alliance-body" .}}{{end}}
+</div>
 {{end}}
 
 {{define "alliance-title"}}
@@ -15,7 +21,7 @@
 {{end}}
 
 {{define "alliance-body"}}
-<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/alliance/fragment?alliance={{.AllianceID}}"{{end}}{{if eq .State "ready"}} data-title-text="{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}"{{end}}>
+<div class="l-panel prof-record" data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/alliance/fragment?alliance={{.AllianceID}}"{{end}}{{if eq .State "ready"}} data-title-text="{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}"{{end}}>
 
 {{if eq .State "missing"}}
 <p><small>EVE has no public record for that alliance.</small></p>
@@ -23,9 +29,10 @@
 <p><img class="portrait" src="{{.LogoURL}}" alt="" width="128" height="128"></p>
 <p><span class="loading-pulse" aria-hidden="true"></span><small>Loading this alliance's public record…</small></p>
 {{else}}
-<p><img class="portrait" src="{{.LogoURL}}" alt="" width="128" height="128"></p>
-{{if .Freshness}}<p><small>{{.Freshness}}</small></p>{{end}}
-
+<div class="prof-id">
+<img class="portrait" src="{{.LogoURL}}" alt="" width="128" height="128">
+<div class="prof-facts">
+<h2 class="prof-name">{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}</h2>
 <div class="tw">
 <table>
   <tbody>
@@ -37,9 +44,9 @@
   </tbody>
 </table>
 </div>
-
-<h2>Killboard</h2>
-<p><a href="/intel/kills/?alliance={{.AllianceID}}">All kills and losses for this alliance</a></p>
+</div>
+</div>
+{{if .Freshness}}<p class="muted">{{.Freshness}}</p>{{end}}
 
 {{if .Members}}
 <h2>Member corporations</h2>

@@ -1,32 +1,44 @@
-/* pilot.css -- the pilot page's intel section (pilot.html,
- * pilot_intel.go). Glass panels on the site's tokens, like the
- * killboard and the scan tool. Bars take their widths from data-w
- * (scans.js); losses are red, as on the killboard. */
+/* pilot.css -- the pilot page (pilot.html, intel_pilot.go,
+ * pilot_intel.go) on the layout framework: the activity figures
+ * are .l-tiles under the page head, the record, the employment
+ * history and each intel block are .l-panel. Bars take their widths
+ * from data-w (scans.js); losses are red, as on the killboard. */
 
-.pi { margin-top: 1.4rem; display: flex; flex-direction: column; gap: 0.8rem; --pi-loss: #d0453a; }
+.pi { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; --pi-loss: #d0453a; }
 html[data-theme="light"] .pi { --pi-loss: #b0302a; }
-.pi h2 { margin: 0; }
-.pi h2 small, .pi h3 small { font-weight: 400; font-size: var(--fs-xs); text-transform: none; letter-spacing: 0; }
-.pi-h2 { margin-top: 0.6rem !important; }
-.pi h3 { margin: 0 0 0.5rem; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); display: flex; align-items: baseline; gap: 0.5rem; }
-.pi-more { margin-left: auto; font-size: var(--fs-xs); letter-spacing: 0; text-transform: none; }
+.pi h2 { margin: 0 0 var(--space-2); }
+.pi h3 small { font-weight: 400; font-size: var(--fs-xs); text-transform: none; letter-spacing: 0; }
+.pi h3 { margin: 0 0 var(--space-2); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); display: flex; align-items: baseline; gap: 0.5rem; }
+.pi-more { margin-left: auto; font-family: var(--font-body); font-size: var(--fs-xs); letter-spacing: 0; text-transform: none; }
+.pi-yours { display: flex; flex-direction: column; gap: var(--space-3); }
+.pi-sub h3 { margin-top: var(--space-1); }
 
-.pi-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.6rem; }
-.pi-stat, .pi-panel {
-  padding: 0.65rem 0.85rem;
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--r-lg);
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+/* The record (pilot, corporation and alliance pages): portrait or
+ * logo beside its facts, wrapping under on a narrow
+ * page. */
+.pilot-main { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.prof-id { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-4); }
+.prof-id .portrait { flex: none; border-radius: var(--r-md); }
+.prof-facts { flex: 1 1 18rem; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.prof-name { margin: 0; overflow-wrap: anywhere; }
+/* Descriptions are the owner's markup: long unbroken runs wrap
+ * inside the panel instead of widening the page. */
+.prof-record .mailbody, .pilot-record .mailbody { overflow-wrap: anywhere; min-width: 0; }
+.prof-record .mailbody *, .pilot-record .mailbody * { max-width: 100%; }
+.pi-title { margin: 0; }
+
+/* The activity figures: two tiles a row in the rail and on a
+ * phone, three on a wide stacked page. A fixed value size, not the
+ * framework's tile-relative one: a rail tile is too narrow for it. */
+.pi-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.pi-stats .l-stat-value { font-size: var(--fs-2xl); white-space: normal; overflow-wrap: anywhere; }
+@container page (min-width: 46rem) {
+  .pilot-layout:not(.pilot-layout-rail) .pi-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-.pi-stat { display: flex; flex-direction: column; gap: 0.1rem; color: inherit; text-decoration: none; }
-a.pi-stat:hover { border-color: var(--accent); }
-.pi-seen { grid-column: span 2; }
-.pi-v { font-size: var(--fs-3xl); font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums; line-height: 1.15; }
-.pi-l { font-size: var(--fs-xs); color: var(--muted-2); }
+.pilot-record h2, .pilot-employment h2 { margin: var(--space-4) 0 var(--space-2); }
+.pilot-employment h2 { margin-top: 0; }
 
-.pi-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; align-items: start; }
+.pi-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
 .pi-bars { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.2rem; }
 .pi-bars li { position: relative; display: flex; align-items: center; gap: 0.5rem; padding: 0.28rem 0.5rem; border-radius: var(--r-xs); overflow: hidden; font-size: var(--fs-sm); }
 .pi-bar { position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); background: color-mix(in srgb, var(--accent) 22%, transparent); pointer-events: none; }
@@ -64,39 +76,28 @@ a.pi-stat:hover { border-color: var(--accent); }
 }
 .pi-watch input[type=text] { width: 18rem; max-width: 100%; }
 
-/* --- Sheet + intel layout (pilot.html) ---
- * With actual intel on the pilot, the page lays out as the record
- * and its employment history in the main column and the intel
- * section in a right rail, the killboard's kb-layout shape. Below
- * the rail breakpoint the grid gives up and the source order
- * stacks: record, intel, employment history. No intel, no rail:
- * the wrapper stays a plain stack, exactly as the page has
- * always rendered. */
-.pilot-layout-rail {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 26rem;
-  grid-template-areas: "record rail" "history rail";
-  /* The history row absorbs whatever height the rail adds, so
-     the history stays directly under the record however tall
-     the intel section runs. */
-  grid-template-rows: auto 1fr;
-  column-gap: 1.5rem;
-  align-items: start;
-}
-.pilot-layout-rail .pilot-record { grid-area: record; min-width: 0; }
-.pilot-layout-rail .pilot-employment { grid-area: history; min-width: 0; }
-.pilot-layout-rail > .pi { grid-area: rail; min-width: 0; margin-top: 0; }
-@media (min-width: 64rem) {
+/* --- Record + intel layout (pilot.html) ---
+ * With actual intel on the pilot, a page of 54rem or more lays out
+ * the record and its employment history in the main column and the
+ * intel section in a right rail. A narrower page stacks them in
+ * source order: record, employment history, intel. No intel, no
+ * rail: the wrapper stays a plain stack. */
+.pilot-layout { display: flex; flex-direction: column; gap: var(--space-4); }
+@container page (min-width: 54rem) {
+  .pilot-layout-rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 26rem;
+    grid-template-areas: "record rail";
+    column-gap: var(--space-4);
+    align-items: start;
+  }
+  .pilot-layout-rail .pilot-main { grid-area: record; }
+  .pilot-layout-rail > .pi { grid-area: rail; }
   /* The rail is too narrow for the section's side-by-side panels. */
   .pilot-layout-rail .pi-cols { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 64rem) {
-  .pilot-layout-rail { display: block; }
-  .pilot-layout-rail > .pi { margin-top: 1.4rem; }
-}
 
-@media (max-width: 45rem) {
+@container page (width < 40rem) {
   .pi-cols { grid-template-columns: minmax(0, 1fr); }
-  .pi-seen { grid-column: 1 / -1; }
   .pi-hours { height: 2.6rem; }
 }

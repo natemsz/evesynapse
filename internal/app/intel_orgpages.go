@@ -307,7 +307,7 @@ func (app *Application) buildCorporationView(ctx context.Context, id int64, payl
 	}
 	if p.Corp.Description != "" {
 		view.HasDescription = true
-		view.Description = htmlsanitize.Sanitize(p.Corp.Description)
+		view.Description = htmlsanitize.SanitizeLinked(htmlsanitize.DecodeEVEEscapes(p.Corp.Description), htmlsanitize.EVELinkPath)
 	}
 	return view, true
 }

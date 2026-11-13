@@ -233,3 +233,30 @@ func TestSanitizeLinkedWritesOnlySameSitePaths(t *testing.T) {
 		}
 	}
 }
+
+// TestDecodeEVEEscapes: a description stored as a Python unicode
+// literal reads as its characters, surrogate pairs included; text
+// without escapes is untouched.
+func TestDecodeEVEEscapes(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{`1007805049<br>混沌(CACX)，`, "1007805049<br>混沌(CACX)，"},
+		{`u'Fly сафе'`, "Fly сафе"},
+		{`🚀 go`, "🚀 go"},
+		{`plain text, a \u and \uZZZZ`, `plain text, a \u and \uZZZZ`},
+	} {
+		if got := DecodeEVEEscapes(c.in); got != c.want {
+			t.Errorf("DecodeEVEEscapes(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestFontColor: EVE's colour codes keep their colour as #rrggbb,
+// alpha first in the eight-digit form; transparent, unreadably dark
+// and malformed values are dropped.
+func TestFontColor(t *testing.T) {
+	got := string(Sanitize(`<font size="12" color="#ffd98d00">gold</font> <font color="#bfffffff">white</font> <font color="#ff000000">black</font> <font color="#00ff0000">clear</font> <font color="red" onclick="x">named</font>`))
+	want := `<font color="#d98d00">gold</font> <font color="#ffffff">white</font> <font>black</font> <font>clear</font> <font>named</font>`
+	if got != want {
+		t.Errorf("Sanitize font colours:\n got %s\nwant %s", got, want)
+	}
+}

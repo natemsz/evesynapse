@@ -1512,8 +1512,9 @@ type ListKillsMissingAttackersRow struct {
 	KillmailTime time.Time `json:"killmail_time"`
 }
 
-// Kills whose attacker rows are gone (pruned before the stats fold
-// counted their ships), newest first below a keyset cursor, for the
+// Kills inside retention whose attacker rows are gone (pruned before
+// the stats fold counted their ships) and that the archive restore
+// could not serve, newest first below a keyset cursor, for the
 // restorer to read back from ESI by hash.
 func (q *Queries) ListKillsMissingAttackers(ctx context.Context, arg ListKillsMissingAttackersParams) ([]ListKillsMissingAttackersRow, error) {
 	rows, err := q.db.Query(ctx, listKillsMissingAttackers, arg.BeforeID, arg.Since, arg.MaxRows)

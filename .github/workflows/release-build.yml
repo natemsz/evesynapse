@@ -146,10 +146,21 @@ jobs:
           go run ./cmd/releasesign sign dist/latest-arm64.json dist/latest-amd64.json
       # The release notes: the pull requests merged since the
       # previous release, grouped by label the way
-      # .github/release.yml groups them.
+      # .github/release.yml groups them. On a run that finds
+      # the release already published, the published notes are
+      # fetched instead, so the kept files carry them on every
+      # run the follow-on jobs read.
       - name: Write the release notes
         run: |
-          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "No notes to write."; exit 0; fi
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then
+            if [ "${{ steps.decide.outputs.released }}" = "true" ]; then
+              curl -fsS --header "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/releases/tags/v$VERSION" | python3 -c 'import json,sys; sys.stdout.write(json.load(sys.stdin).get("body") or "")' > release-notes.md
+              echo "Release v$VERSION is already published; keeping its published notes for the follow-on jobs."
+            else
+              echo "No notes to write."
+            fi
+            exit 0
+          fi
           HOW="evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers)"
           if [ "$VERSION" != "${VERSION%%-*}" ]; then HOW="evesynapse -update -dev"; fi
           printf 'Automated build of EveSynapse v%s. Update with: %s.\n' "$VERSION" "$HOW" > release-notes.md

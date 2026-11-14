@@ -102,7 +102,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   {{range .Visual.Slots}}
   {{if $.ReadOnly}}{{if .Filled}}<span class="fit-vslot filled{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-lines="{{.TipLines}}"{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}</span>{{else}}<span class="fit-vslot" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" aria-hidden="true"></span>{{end}}{{else}}
   <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}" data-tip-lines="{{.TipLines}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
-    {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}}. Click to change ammunition"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
+    {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}}. Click to change it"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
   </button>
   {{end}}
   {{end}}
@@ -133,19 +133,19 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     {{range .BayGroups}}{{if or (eq .Key "drone") (eq .Key "fighter")}}{{template "fit-group" .}}{{end}}{{end}}
     {{if .ChargeSets}}
     <div class="fit-group fit-ammo-group" data-fit-group="ammo">
-      <h4><span>Ammunition</span></h4>
+      <h4><span>Charges</span></h4>
       <div class="fit-chips">
         {{range .ChargeSets}}{{$loaded := .Loaded}}
         {{if $.ReadOnly}}
         <span class="fit-chip fit-imp">
           <img class="fit-imp-icon" src="https://images.evetech.net/types/{{if $loaded.ID}}{{$loaded.ID}}{{else}}{{.WeaponID}}{{end}}/icon?size=32" alt="" draggable="false">
-          <span class="fit-chip-name">{{if $loaded.ID}}{{$loaded.Name}}{{else}}No ammunition{{end}}</span>
+          <span class="fit-chip-name">{{if $loaded.ID}}{{$loaded.Name}}{{else}}Nothing loaded{{end}}</span>
           <span class="fit-chip-sub">{{.WeaponName}}</span>
         </span>
         {{else}}
         <span class="fit-chip fit-imp{{if not $loaded.ID}} fit-imp-empty{{end}}">
           <img class="fit-imp-icon" src="https://images.evetech.net/types/{{if $loaded.ID}}{{$loaded.ID}}{{else}}{{.WeaponID}}{{end}}/icon?size=32" alt="" draggable="false">
-          <input type="text" class="fit-imp-input" data-fit-ammo-for="{{.WeaponID}}" data-fit-ammo-ids="{{.OptionIDs}}" data-fit-ammo-weapon="{{.WeaponName}}" value="{{$loaded.Name}}" placeholder="No ammunition: search" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="{{.WeaponName}} ammunition">
+          <input type="text" class="fit-imp-input" data-fit-ammo-for="{{.WeaponID}}" data-fit-ammo-ids="{{.OptionIDs}}" data-fit-ammo-weapon="{{.WeaponName}}" value="{{$loaded.Name}}" placeholder="Nothing loaded: search" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="{{.WeaponName}} charge">
           {{if $loaded.ID}}<button type="button" class="fit-chip-btn" data-fit-ammo-clear="{{.WeaponID}}" title="Unload">×</button>{{end}}
           <span class="fit-chip-sub">{{.WeaponName}}</span>
         </span>

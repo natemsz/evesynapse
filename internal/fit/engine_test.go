@@ -467,6 +467,43 @@ func TestFitEngineCapacitorEquilibrium(t *testing.T) {
 	}
 }
 
+// TestFitEngineAncillaryShieldBoosterCharge pins a loaded
+// ancillary shield booster: its Cap Booster charge cancels the
+// module's capacitor need and is used up four to a clip with a
+// reload after, but never counts as capacitor injection (only a
+// capacitor booster injects).
+func TestFitEngineAncillaryShieldBoosterCharge(t *testing.T) {
+	const hull, asb, capBooster, charge = 1003, 32772, 3566, 3552
+	fx := newFitFixture()
+	fx.attrs(hull, map[int64]float64{482: 400, 55: 160000})
+	fx.attrs(asb, map[int64]float64{6: 198, 73: 3000, 68: 146, 56: 1, 1795: 60000})
+	fx.phys(asb, Physics{Capacity: 14})
+	fx.effect(asb, 4936, 1) // fueledShieldBoosting: no modifier rows
+	fx.attrs(capBooster, map[int64]float64{73: 10000, 56: 1, 1795: 10000})
+	fx.phys(capBooster, Physics{Capacity: 14})
+	fx.effect(capBooster, EffectPowerBooster, 1)
+	fx.attrs(charge, map[int64]float64{67: 75, 317: -100})
+	fx.phys(charge, Physics{Volume: 3})
+	fx.effect(charge, 804, 0, fitMod("otherID", "ItemModifier", AttrCapacitorNeed, 317, 6))
+
+	res := Compute(fx.snap, hull, []ItemInput{{TypeID: asb, State: StateActive}}, nil, nil, nil)
+	near(t, "unloaded draw", res.CapacitorDraw, 66, 1e-9)
+
+	res = Compute(fx.snap, hull, []ItemInput{{TypeID: asb, State: StateActive}}, nil, map[int64]int64{asb: charge}, nil)
+	near(t, "loaded draw", res.CapacitorDraw, 0, 1e-9)
+	near(t, "loaded injection", res.CapacitorInjection, 0, 1e-9)
+	near(t, "boost", res.ShieldBoostRate, 146.0/3, 1e-9)
+	clip := res.ChargeClips[StateAttrKey(asb, StateActive)]
+	if clip.Cycles != 4 || clip.ActiveSecs != 12 || clip.ReloadSecs != 60 {
+		t.Fatalf("clip = %+v, want 4 cycles over 12 s then a 60 s reload", clip)
+	}
+
+	// The same charge in a capacitor booster injects 4 x 75 GJ
+	// over 4 x 10 s of cycles and a 10 s reload.
+	res = Compute(fx.snap, hull, []ItemInput{{TypeID: capBooster, State: StateActive}}, nil, map[int64]int64{capBooster: charge}, nil)
+	near(t, "injection", res.CapacitorInjection, 300.0/50, 1e-9)
+}
+
 // TestFitEngineLoadSnapshot drives the DB loader end to end on
 // fixture rows in the schema-029 tables.
 func TestFitEngineLoadSnapshot(t *testing.T) {

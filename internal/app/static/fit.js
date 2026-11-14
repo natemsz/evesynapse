@@ -1924,7 +1924,7 @@ var FitGauges = (function () {
             "&q=" + encodeURIComponent(q);
         },
         kinds: ["charge"],
-        labels: { charge: (input.getAttribute("data-fit-ammo-weapon") || "Weapon") + " ammunition" },
+        labels: { charge: (input.getAttribute("data-fit-ammo-weapon") || "Module") + " charges" },
         pick: function (it) { setCharge(weapon, it.id); }
       };
     }
@@ -2505,7 +2505,7 @@ var FitGauges = (function () {
     if (d.kind === "charge") {
       if (t.slot && t.filled) return { act: function () { loadChargeOn(id, t); } };
       if (t.group && t.family === "cargo") return { act: function () { addItem(id, 1, "cargo", true); } };
-      return { why: "Drop ammunition on a weapon" };
+      return { why: "Drop it on a module that loads it" };
     }
     var fam = t.family;
     if (t.group && fam === "cargo") {

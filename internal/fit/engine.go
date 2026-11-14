@@ -235,10 +235,18 @@ const (
 const CharacterTypeID = 1373
 
 // Capacitor boosters: the charge's injection, and the module's
-// reload between clips.
+// reload between clips. EffectPowerBooster is the capacitor
+// booster's injection effect: a Cap Booster charge carries
+// capacitorBonus wherever it is loaded, but only a module with this
+// effect puts it into the capacitor (an ancillary shield booster
+// burns the same charge to run without capacitor).
+// AttrChargeRate is how many charges a module uses per cycle; only
+// modules that set it use up their charges (scripts stay loaded).
 const (
 	AttrCapacitorBonus = 67
 	AttrReloadTime     = 1795
+	AttrChargeRate     = 56
+	EffectPowerBooster = 48
 )
 
 // Slot / fitting effect IDs (dgmEffects names verified live).
@@ -805,6 +813,26 @@ type ItemInput struct {
 	Abilities []string
 }
 
+// ChargeClip is one module's loaded clip: the charge, how many
+// cycles it runs before reloading, the seconds those cycles take,
+// and the reload. Uptime is the share of time spent cycling over
+// a whole clip and its reload, the factor that turns a per-cycle
+// rate into a rate sustained through reloads.
+type ChargeClip struct {
+	ChargeTypeID int64
+	Cycles       int
+	ActiveSecs   float64
+	ReloadSecs   float64
+}
+
+// Uptime is ActiveSecs over ActiveSecs plus ReloadSecs.
+func (c ChargeClip) Uptime() float64 {
+	if c.ActiveSecs <= 0 {
+		return 0
+	}
+	return c.ActiveSecs / (c.ActiveSecs + c.ReloadSecs)
+}
+
 // EHPProfile is effective HP against a damage profile.
 type EHPProfile struct {
 	Omni      float64
@@ -854,7 +882,12 @@ type Result struct {
 	// CapacitorInjection is what fitted capacitor boosters put back,
 	// GJ/s sustained over their reloads. Stability reads the draw
 	// less this.
-	CapacitorInjection     float64
+	CapacitorInjection float64
+	// ChargeClips is each cycling non-weapon module that uses up its
+	// loaded charge (ancillary repairers and boosters, capacitor
+	// boosters, command bursts), keyed by StateAttrKey: how long a
+	// clip lasts and the reload after it.
+	ChargeClips            map[string]ChargeClip
 	CapacitorStable        bool
 	CapacitorStablePercent float64 // equilibrium % when stable
 	CapacitorDepletionSecs float64 // approx seconds to empty; 0 when stable

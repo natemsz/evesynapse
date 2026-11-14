@@ -782,6 +782,7 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 	if neut := eff[fit.AttrEnergyNeutralizerAmount]; neut > 0 {
 		add("Neuts", FitVisualNum(neut)+" GJ", FitTipClass(neut, base[fit.AttrEnergyNeutralizerAmount], true))
 	}
+	repRate := 0.0 // HP/s while cycling, for the clip line below
 	for _, repAttr := range []int64{fit.AttrShieldBonus, fit.AttrArmorDamageAmount} {
 		if amt := eff[repAttr]; amt > 0 {
 			if mult := eff[fit.AttrChargedArmorDamageMult]; repAttr == fit.AttrArmorDamageAmount && mult > 0 && doc.Charges[typeID] > 0 {
@@ -792,6 +793,7 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 				if bc := FitTipCycle(base); bc > 0 {
 					class = FitTipClass(amt/cyc, base[repAttr]/bc, true)
 				}
+				repRate = amt / cyc
 				add("Reps", FitVisualNum(amt/cyc)+" HP/s", class)
 				if n := len(lines); n > 0 && lines[n-1].Label == "Reps" {
 					lines[n-1].Kind = "repair" // a wrench for repairs
@@ -801,6 +803,28 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 				}
 			}
 			break
+		}
+	}
+	// A module that uses up its loaded charge (ancillary repairers
+	// and boosters, capacitor boosters, command bursts): how long a
+	// clip lasts, and what it repairs counting the reloads.
+	if doc.Charges[typeID] > 0 && res != nil {
+		clip, ok := res.ChargeClips[fit.StateAttrKey(typeID, state)]
+		if !ok && state != "" {
+			clip, ok = res.ChargeClips[fit.StateAttrKey(typeID, "")]
+		}
+		if ok {
+			cycles := fmt.Sprintf("%d cycles", clip.Cycles)
+			if clip.Cycles == 1 {
+				cycles = "1 cycle"
+			}
+			if clip.ReloadSecs > 0 {
+				cycles += ", then " + FitFmt0(clip.ReloadSecs) + " s reload"
+			}
+			add("Clip", cycles, "")
+			if repRate > 0 && clip.ReloadSecs > 0 {
+				add("With reloads", FitVisualNum(repRate*clip.Uptime())+" HP/s", "")
+			}
 		}
 	}
 	// A fighter's own speed and signature, and what its propulsion
@@ -1100,7 +1124,7 @@ type FitChargeOption struct {
 	Selected bool
 }
 
-// FitChargeSet is the ammunition picker for one weapon type.
+// FitChargeSet is the charge picker for one module type.
 type FitChargeSet struct {
 	WeaponID   int64
 	WeaponName string
@@ -2072,7 +2096,26 @@ func (app *Builder) FitChargeCandidates(ctx context.Context, weaponTypeID int64)
 	return rows
 }
 
-// FitBuildChargeSets builds the per-weapon ammunition pickers.
+// FitTakesCharges reports whether a module loads charges: weapons,
+// and every other module naming a charge group (ancillary repairers
+// and boosters, capacitor boosters, command bursts, scripted
+// modules). Read off the snapshot, so no query per module.
+func FitTakesCharges(snap *fit.Snapshot, typeID int64) bool {
+	if snap == nil {
+		return false
+	}
+	if snap.HasEffect(typeID, fit.EffectTurretFitted) || snap.HasEffect(typeID, fit.EffectLauncherFitted) {
+		return true
+	}
+	for _, g := range FitChargeGroupAttrs {
+		if snap.Attrs[typeID][g] > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// FitBuildChargeSets builds the per-module charge pickers.
 func (app *Builder) FitBuildChargeSets(ctx context.Context, doc *FitDoc, snap *fit.Snapshot, nameOf func(int64) string) []FitChargeSet {
 	var sets []FitChargeSet
 	seen := map[int64]bool{}
@@ -2081,7 +2124,7 @@ func (app *Builder) FitBuildChargeSets(ctx context.Context, doc *FitDoc, snap *f
 			continue
 		}
 		seen[it.TypeID] = true
-		if !snap.HasEffect(it.TypeID, fit.EffectTurretFitted) && !snap.HasEffect(it.TypeID, fit.EffectLauncherFitted) {
+		if !FitTakesCharges(snap, it.TypeID) {
 			continue
 		}
 		set := FitChargeSet{WeaponID: it.TypeID, WeaponName: nameOf(it.TypeID)}

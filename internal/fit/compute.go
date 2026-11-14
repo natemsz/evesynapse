@@ -859,12 +859,25 @@ func (f *fitting) capacitor() {
 		if need > 0 && cycle > 0 {
 			res.CapacitorDraw += need / cycle * n
 		}
-		if charge := f.weaponCharge[ent.typeID]; charge != nil && cycle > 0 {
-			if bonus := charge.get(snap, AttrCapacitorBonus); bonus > 0 {
-				res.CapacitorInjection += n * capBoosterRate(bonus, cycle,
-					snap.Physics[ent.typeID].Capacity, snap.Physics[charge.typeID].Volume,
-					ent.get(snap, AttrReloadTime)/1000)
+		charge := f.weaponCharge[ent.typeID]
+		if charge == nil || cycle <= 0 {
+			continue
+		}
+		clip, uses := f.chargeClip(ent, charge, cycle)
+		if uses {
+			if res.ChargeClips == nil {
+				res.ChargeClips = make(map[string]ChargeClip)
 			}
+			res.ChargeClips[StateAttrKey(ent.typeID, ent.state)] = clip
+		}
+		// Only a capacitor booster injects: an ancillary shield
+		// booster loads the same Cap Booster charges and burns
+		// them in place of capacitor (the charge's capNeedBonus).
+		if bonus := charge.get(snap, AttrCapacitorBonus); bonus > 0 && snap.HasEffect(ent.typeID, EffectPowerBooster) {
+			if !uses {
+				clip = ChargeClip{Cycles: 1, ActiveSecs: cycle, ReloadSecs: ent.get(snap, AttrReloadTime) / 1000}
+			}
+			res.CapacitorInjection += n * bonus / cycle * clip.Uptime()
 		}
 	}
 	net := res.CapacitorDraw - res.CapacitorInjection
@@ -883,15 +896,32 @@ func (f *fitting) capacitor() {
 	}
 }
 
-// capBoosterRate is a capacitor booster's sustained injection in
-// GJ/s: a clip of charges (as many as the module holds), one per
-// cycle, then the reload before the next clip.
-func capBoosterRate(bonus, cycle, holds, chargeVolume, reload float64) float64 {
-	clip := 1.0
-	if holds > 0 && chargeVolume > 0 {
-		clip = math.Max(1, math.Floor(holds/chargeVolume+1e-9))
+// chargeClip is a module's loaded clip: as many charges as its
+// capacity holds, chargeRate of them per cycle, then the reload.
+// uses is false for modules that never use up their charge
+// (weapons, whose reload the damage figures leave out as the
+// established readouts do, and scripted modules, which set no
+// chargeRate).
+func (f *fitting) chargeClip(ent, charge *entity, cycle float64) (clip ChargeClip, uses bool) {
+	snap := f.snap
+	if snap.HasEffect(ent.typeID, EffectTurretFitted) || snap.HasEffect(ent.typeID, EffectLauncherFitted) {
+		return clip, false
 	}
-	return clip * bonus / (clip*cycle + reload)
+	if _, set := snap.Attrs[ent.typeID][AttrChargeRate]; !set {
+		return clip, false
+	}
+	perCycle := math.Max(1, ent.get(snap, AttrChargeRate))
+	held := 1.0
+	if holds, vol := snap.Physics[ent.typeID].Capacity, snap.Physics[charge.typeID].Volume; holds > 0 && vol > 0 {
+		held = math.Floor(holds/vol + 1e-9)
+	}
+	cycles := math.Max(1, math.Floor(held/perCycle+1e-9))
+	return ChargeClip{
+		ChargeTypeID: charge.typeID,
+		Cycles:       int(cycles),
+		ActiveSecs:   cycles * cycle,
+		ReloadSecs:   ent.get(snap, AttrReloadTime) / 1000,
+	}, true
 }
 
 // offense totals what the cycling modules do to a target: turret

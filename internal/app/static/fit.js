@@ -1975,7 +1975,7 @@ var FitGauges = (function () {
   function runSolve(out) {
     solvePicks = null;
     out.hidden = false;
-    out.textContent = "Checking the implant ladder…";
+    out.textContent = "Checking implants…";
     var payload = {
       name: state.name,
       shipTypeId: state.shipTypeId,
@@ -2010,7 +2010,7 @@ var FitGauges = (function () {
         var nm = document.createElement("strong");
         nm.textContent = p.name;
         line.appendChild(nm);
-        var detail = ", slot " + p.slot + " · +" + p.bonus + "% " + p.resource;
+        var detail = ", slot " + p.slot + " · " + (p.resource ? "+" + p.bonus + "% " + p.resource : "set bonus for the others");
         if (p.priceKnown) detail += " · " + fmtISK(p.price);
         if (p.replacesName) detail += " · replaces your " + p.replacesName + " in this simulation";
         var detailEl = document.createElement("span");
@@ -2022,7 +2022,7 @@ var FitGauges = (function () {
       apply.type = "button";
       apply.className = "fit-solve-apply";
       apply.setAttribute("data-fit-solve-apply", "1");
-      apply.textContent = solvePicks.length > 1 ? "Apply both implants" : "Apply implant";
+      apply.textContent = solvePicks.length > 2 ? "Apply " + solvePicks.length + " implants" : solvePicks.length > 1 ? "Apply both implants" : "Apply implant";
       out.appendChild(apply);
       var note = document.createElement("div");
       note.className = "fit-solve-note";

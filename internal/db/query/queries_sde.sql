@@ -689,6 +689,23 @@ JOIN sde_effect_modifiers mod ON mod.effect_id = te.effect_id AND mod.modified_a
 JOIN sde_type_attributes bonus ON bonus.type_id = t.type_id AND bonus.attribute_id = mod.modifying_attr
 WHERE t.published = 1 AND t.market_group_id > 0
 ORDER BY mod.modified_attr, bonus.value, t.type_id;
+-- ListFitResourceImplantSetPieces: implants that raise the CPU
+-- or powergrid bonus of their own set's members (the Genolution
+-- set bonus), so a set piece with no output bonus of its own can
+-- still complete the solver's answer. The implant solver joins
+-- them to its ladder with no bonus.
+-- name: ListFitResourceImplantSetPieces :many
+SELECT DISTINCT t.type_id, t.name, slot.value::bigint AS slot
+FROM sde_types t
+JOIN sde_type_attributes slot ON slot.type_id = t.type_id AND slot.attribute_id = 331
+JOIN sde_type_effects te ON te.type_id = t.type_id
+JOIN sde_effect_modifiers mod ON mod.effect_id = te.effect_id
+  AND mod.func = 'LocationGroupModifier' AND mod.group_id = t.group_id
+WHERE t.published = 1 AND t.market_group_id > 0
+  AND mod.modified_attr IN (
+    SELECT DISTINCT om.modifying_attr FROM sde_effect_modifiers om
+    WHERE om.modified_attr IN (48, 11) AND om.domain = 'shipID')
+ORDER BY t.type_id;
 -- name: ListFitChargeTypes :many
 SELECT t.type_id, t.name
 FROM sde_types t

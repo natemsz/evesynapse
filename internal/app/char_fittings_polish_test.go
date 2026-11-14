@@ -147,7 +147,7 @@ func TestFitSolveImplantsHonestFailures(t *testing.T) {
 		t.Fatalf("unsolvable solve = %+v, want ok + not solved", out)
 	}
 	if !strings.Contains(out.Note, "CPU is over by 50 tf") ||
-		!strings.Contains(out.Note, "strongest CPU hardwiring adds 5%") {
+		!strings.Contains(out.Note, "strongest CPU implant adds 5%") {
 		t.Errorf("unsolvable note = %q", out.Note)
 	}
 

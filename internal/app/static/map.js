@@ -1877,7 +1877,7 @@
     // over the hour; one that has just arrived rings out. The stream
     // is open only while the layer shows.
     var FEED_KEEP_MS = 3600000, FEED_RING_MS = 2400, FEED_MAX = 300;
-    var KF = { rows: [], byID: {}, src: null, state: "", fetched: false, open: null, frame: 0 };
+    var KF = { rows: [], byID: {}, src: null, state: "", fetched: false, watch: false, open: null, frame: 0 };
     var killCard = el.querySelector(".map-kill-card");
     function feedAdd(k, live) {
       var i = G.byID[k.system];
@@ -1905,6 +1905,12 @@
       if (!("EventSource" in window)) { feedState("down"); return; }
       var src = KF.src = new EventSource("/intel/kills/stream");
       feedState("retry");
+      // A swap that takes the map away closes the stream at once,
+      // not at the next kill it sends.
+      if (!KF.watch && window.EveSynapseContent && window.EveSynapseContent.onReady) {
+        KF.watch = true;
+        window.EveSynapseContent.onReady(function () { if (!el.isConnected) feedStop(); });
+      }
       src.addEventListener("open", function () { feedState("live"); });
       src.addEventListener("error", function () { feedState(src.readyState === EventSource.CLOSED ? "down" : "retry"); });
       function on(name, fn) {
@@ -1927,8 +1933,9 @@
         if (KF.open === b) openKill(b);
         if (layer === "feed") { renderLegend(); schedule(); }
       });
-      // The first picture, fetched once; the stream may already have
-      // sent some of it (each kill is kept once, by id).
+      // The first picture, fetched on each start so a layer turned
+      // back on fills the gap; the stream may already have sent
+      // some of it (each kill is kept once, by id).
       if (KF.fetched) return;
       KF.fetched = true;
       fetch("/map/kills.json", { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
@@ -1941,6 +1948,7 @@
     function feedStop() {
       if (KF.src) { KF.src.close(); KF.src = null; }
       KF.state = "";
+      KF.fetched = false;
     }
     // The blips, with their screen places kept for picking. Kills in
     // one system spread round it, newest in the middle.

@@ -770,6 +770,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/about/", app.handleAbout)
 	r.Get("/license", app.handleLicense)
 	r.Get("/license/", app.handleLicense)
+	// The changelog is public for the same reason: what each
+	// release changed should be readable without an account,
+	// and the footer on every page links here.
+	r.Get("/changelog", app.handleChangelog)
+	r.Get("/changelog/", app.handleChangelog)
 	// The Report a bug page is public for the same reason: the
 	// people who hit a bug may not have an account yet, and the
 	// footer on every page links here.

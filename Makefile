@@ -1,22 +1,23 @@
 # EveSynapse, dev tasks
 
-.PHONY: modules build botguard-link build-arm64 build-amd64 build-dev run tidy gen clean assets test fmt check
+.PHONY: modules build dendrite-link build-arm64 build-amd64 build-dev run tidy gen clean assets test fmt check
 
 build: ## Compile the release server into ./bin/evesynapse
 	go build -o bin/evesynapse ./cmd/evesynapse
 
-# A bot guard engine kept outside this repository (BOTGUARD_DIR, a
-# checkout with a glue/zz_botguard.go) links into a build through a
-# workspace and an overlay, never a file in this tree. This writes
-# both under .botguard-link/; build with the GOWORK and GOFLAGS it
-# prints. The release workflows do this with the engine's checkout.
-botguard-link: ## Link a bot guard engine from BOTGUARD_DIR into builds (writes .botguard-link/)
-	@test -n "$(BOTGUARD_DIR)" && test -f "$(BOTGUARD_DIR)/glue/zz_botguard.go" || { echo "BOTGUARD_DIR must name an engine checkout with glue/zz_botguard.go"; exit 1; }
-	@mkdir -p .botguard-link
-	@printf 'go %s\n\nuse (\n\t%s\n\t%s\n)\n' "$$(awk '/^go /{print $$2}' go.mod)" "$(CURDIR)" "$(abspath $(BOTGUARD_DIR))" > .botguard-link/go.work
-	@printf '{"Replace":{"%s/internal/app/zz_botguard.go":"%s/glue/zz_botguard.go"}}\n' "$(CURDIR)" "$(abspath $(BOTGUARD_DIR))" > .botguard-link/overlay.json
-	@echo 'GOWORK=$(CURDIR)/.botguard-link/go.work'
-	@echo 'GOFLAGS=-tags=botguard -overlay=$(CURDIR)/.botguard-link/overlay.json'
+# Dendrite, the bot guard engine kept outside this repository
+# (DENDRITE_DIR, a checkout with a glue/zz_dendrite.go), links into a
+# build through a workspace and an overlay, never a file in this
+# tree. This writes both under .dendrite-link/; build with the GOWORK
+# and GOFLAGS it prints. The release workflows do this with their
+# Dendrite checkout.
+dendrite-link: ## Link Dendrite from DENDRITE_DIR into builds (writes .dendrite-link/)
+	@test -n "$(DENDRITE_DIR)" && test -f "$(DENDRITE_DIR)/glue/zz_dendrite.go" || { echo "DENDRITE_DIR must name a Dendrite checkout with glue/zz_dendrite.go"; exit 1; }
+	@mkdir -p .dendrite-link
+	@printf 'go %s\n\nuse (\n\t%s\n\t%s\n)\n' "$$(awk '/^go /{print $$2}' go.mod)" "$(CURDIR)" "$(abspath $(DENDRITE_DIR))" > .dendrite-link/go.work
+	@printf '{"Replace":{"%s/internal/app/zz_dendrite.go":"%s/glue/zz_dendrite.go"}}\n' "$(CURDIR)" "$(abspath $(DENDRITE_DIR))" > .dendrite-link/overlay.json
+	@echo 'GOWORK=$(CURDIR)/.dendrite-link/go.work'
+	@echo 'GOFLAGS=-tags=dendrite -overlay=$(CURDIR)/.dendrite-link/overlay.json'
 
 modules: ## List the optional modules; choose some with: go run ./cmd/modbuild -modules a,b -write
 	go run ./cmd/modbuild -list

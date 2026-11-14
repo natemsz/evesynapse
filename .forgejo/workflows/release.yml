@@ -93,24 +93,24 @@ jobs:
             apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null
           fi
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      # The release links the bot guard engine, which lives in a
-      # private repository (EveSynapse/botguard) and never in this
-      # tree: a workspace and an overlay (make botguard-link) add it
-      # to the build. It needs a BOTGUARD_TOKEN secret, a Forgejo
+      # The release links Dendrite, which lives in a
+      # private repository (EveSynapse/dendrite) and never in this
+      # tree: a workspace and an overlay (make dendrite-link) add it
+      # to the build. It needs a DENDRITE_TOKEN secret, a Forgejo
       # token that can read that repository; without it the run
-      # fails, since a release must not ship without the engine.
-      - name: Fetch the bot guard engine
+      # fails, since a release must not ship without it.
+      - name: Fetch Dendrite
         env:
-          BOTGUARD_TOKEN: ${{ secrets.BOTGUARD_TOKEN }}
+          DENDRITE_TOKEN: ${{ secrets.DENDRITE_TOKEN }}
         run: |
-          if [ -z "$BOTGUARD_TOKEN" ]; then
-            echo "::error::BOTGUARD_TOKEN is not set: the release cannot link the bot guard engine."
+          if [ -z "$DENDRITE_TOKEN" ]; then
+            echo "::error::DENDRITE_TOKEN is not set: the release cannot link Dendrite."
             exit 1
           fi
-          git -c http.extraHeader="Authorization: token $BOTGUARD_TOKEN" \
-            clone --quiet --depth 1 https://natems.dev/EveSynapse/botguard.git .botguard
-          echo "Bot guard engine at $(git -C .botguard rev-parse --short HEAD)."
-          make -s botguard-link BOTGUARD_DIR=.botguard >> "$GITHUB_ENV"
+          git -c http.extraHeader="Authorization: token $DENDRITE_TOKEN" \
+            clone --quiet --depth 1 https://natems.dev/EveSynapse/dendrite.git .dendrite
+          echo "Dendrite at $(git -C .dendrite rev-parse --short HEAD)."
+          make -s dendrite-link DENDRITE_DIR=.dendrite >> "$GITHUB_ENV"
       - name: Build the release files
         run: |
           make assets
@@ -120,8 +120,8 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
           for a in arm64 amd64; do
-            go version -m "dist/evesynapse-$a" | grep -q 'natems.dev/EveSynapse/botguard' \
-              || { echo "::error::evesynapse-$a was built without the bot guard engine."; exit 1; }
+            go version -m "dist/evesynapse-$a" | grep -q 'natems.dev/EveSynapse/dendrite' \
+              || { echo "::error::evesynapse-$a was built without Dendrite."; exit 1; }
           done
           cp deploy/setup.sh dist/setup.sh
           cd dist

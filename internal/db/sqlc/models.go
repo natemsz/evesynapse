@@ -1889,6 +1889,9 @@ type PilotActivityProfile struct {
 	GangSamples     int64        `json:"gang_samples"`
 	UsualShipTypeID int64        `json:"usual_ship_type_id"`
 	LastActiveAt    sql.NullTime `json:"last_active_at"`
+	MendCursorTime  sql.NullTime `json:"mend_cursor_time"`
+	MendCursorID    int64        `json:"mend_cursor_id"`
+	MendedAt        sql.NullTime `json:"mended_at"`
 }
 
 type PilotActivityShip struct {

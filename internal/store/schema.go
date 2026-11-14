@@ -949,6 +949,11 @@ var pgKillLeadersSchema string
 //go:embed schema_pg/156_sov_fights.sql
 var pgSovFightsSchema string
 
+// Step 157: the pilot activity mend's cursor.
+//
+//go:embed schema_pg/157_pilot_activity_mend.sql
+var pgPilotActivityMendSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1133,6 +1138,7 @@ func schemaSteps() []schemaStep {
 		{154, "sov_tracker", pgSovTrackerSchema, ""},
 		{155, "kill_leaders", pgKillLeadersSchema, ""},
 		{156, "sov_fights", pgSovFightsSchema, ""},
+		{157, "pilot_activity_mend", pgPilotActivityMendSchema, ""},
 	}
 }
 

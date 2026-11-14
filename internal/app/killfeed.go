@@ -648,6 +648,7 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 	app.refreshKillLeaders(ctx)
 	app.syncSovFights(ctx)
 	app.offerPilotRestorations(ctx)
+	app.mendPilotActivity(ctx)
 	app.warmKillNames(ctx)
 	app.resolveNotedNames(ctx)
 	if n, err := app.priceKills(ctx); err != nil {

@@ -167,14 +167,27 @@ FROM pilot_activity_profiles
 WHERE character_id = $1
 `
 
+type GetPilotActivityProfileRow struct {
+	CharacterID     int64        `json:"character_id"`
+	BackfilledAt    sql.NullTime `json:"backfilled_at"`
+	UpdatedAt       time.Time    `json:"updated_at"`
+	Kills           int64        `json:"kills"`
+	Losses          int64        `json:"losses"`
+	FinalBlows      int64        `json:"final_blows"`
+	GangTotal       int64        `json:"gang_total"`
+	GangSamples     int64        `json:"gang_samples"`
+	UsualShipTypeID int64        `json:"usual_ship_type_id"`
+	LastActiveAt    sql.NullTime `json:"last_active_at"`
+}
+
 // Pilot activity profiles (schema 088, pilot_activity.go): the
 // stored aggregates the pilot page's activity section reads.
 // Written at ingest only: the one-time history backfill of a
 // pilot met in a reading, and the live kill stream for pilots
 // who have one.
-func (q *Queries) GetPilotActivityProfile(ctx context.Context, characterID int64) (PilotActivityProfile, error) {
+func (q *Queries) GetPilotActivityProfile(ctx context.Context, characterID int64) (GetPilotActivityProfileRow, error) {
 	row := q.db.QueryRow(ctx, getPilotActivityProfile, characterID)
-	var i PilotActivityProfile
+	var i GetPilotActivityProfileRow
 	err := row.Scan(
 		&i.CharacterID,
 		&i.BackfilledAt,
@@ -392,6 +405,84 @@ func (q *Queries) ListPilotCompanions(ctx context.Context, arg ListPilotCompanio
 	return items, nil
 }
 
+const listPilotMendKills = `-- name: ListPilotMendKills :many
+SELECT k.killmail_id, k.killmail_time, k.system_id, k.attacker_count, k.ship_type_id AS victim_ship,
+       (k.victim_character_id = $1::bigint)::boolean AS is_victim,
+       (a.killmail_id IS NOT NULL)::boolean AS is_attacker,
+       COALESCE(a.ship_type_id, 0)::bigint AS attacker_ship,
+       COALESCE(a.final_blow, false)::boolean AS final_blow
+FROM kills k
+LEFT JOIN LATERAL (
+    SELECT x.killmail_id, x.ship_type_id, x.final_blow FROM kill_attackers x
+    WHERE x.killmail_id = k.killmail_id AND x.character_id = $1::bigint
+    ORDER BY x.final_blow DESC LIMIT 1
+) a ON true
+WHERE k.killmail_id IN (
+        SELECT x.killmail_id FROM kill_attackers x WHERE x.character_id = $1::bigint
+        UNION
+        SELECT v.killmail_id FROM kills v WHERE v.victim_character_id = $1::bigint)
+  AND (k.killmail_time, k.killmail_id) > ($2::timestamptz, $3::bigint)
+ORDER BY k.killmail_time, k.killmail_id
+LIMIT $4::bigint
+`
+
+type ListPilotMendKillsParams struct {
+	CharacterID int64     `json:"character_id"`
+	AfterTime   time.Time `json:"after_time"`
+	AfterID     int64     `json:"after_id"`
+	MaxRows     int64     `json:"max_rows"`
+}
+
+type ListPilotMendKillsRow struct {
+	KillmailID    int64     `json:"killmail_id"`
+	KillmailTime  time.Time `json:"killmail_time"`
+	SystemID      int64     `json:"system_id"`
+	AttackerCount int32     `json:"attacker_count"`
+	VictimShip    int64     `json:"victim_ship"`
+	IsVictim      bool      `json:"is_victim"`
+	IsAttacker    bool      `json:"is_attacker"`
+	AttackerShip  int64     `json:"attacker_ship"`
+	FinalBlow     bool      `json:"final_blow"`
+}
+
+// One pilot's stored kills after the mend's cursor, oldest first,
+// with the pilot's part in each: victim (and the ship lost), or
+// attacker (the ship flown, a final blow), and the gang size.
+func (q *Queries) ListPilotMendKills(ctx context.Context, arg ListPilotMendKillsParams) ([]ListPilotMendKillsRow, error) {
+	rows, err := q.db.Query(ctx, listPilotMendKills,
+		arg.CharacterID,
+		arg.AfterTime,
+		arg.AfterID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPilotMendKillsRow
+	for rows.Next() {
+		var i ListPilotMendKillsRow
+		if err := rows.Scan(
+			&i.KillmailID,
+			&i.KillmailTime,
+			&i.SystemID,
+			&i.AttackerCount,
+			&i.VictimShip,
+			&i.IsVictim,
+			&i.IsAttacker,
+			&i.AttackerShip,
+			&i.FinalBlow,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPilotRecentKills = `-- name: ListPilotRecentKills :many
 
 WITH pilot_kills AS (
@@ -511,6 +602,73 @@ func (q *Queries) ListPilotsLastSeen(ctx context.Context, arg ListPilotsLastSeen
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPilotsToMend = `-- name: ListPilotsToMend :many
+SELECT character_id, backfilled_at, mend_cursor_time, mend_cursor_id FROM pilot_activity_profiles
+WHERE mended_at IS NULL
+ORDER BY last_active_at DESC NULLS LAST, character_id
+LIMIT $1::bigint
+`
+
+type ListPilotsToMendRow struct {
+	CharacterID    int64        `json:"character_id"`
+	BackfilledAt   sql.NullTime `json:"backfilled_at"`
+	MendCursorTime sql.NullTime `json:"mend_cursor_time"`
+	MendCursorID   int64        `json:"mend_cursor_id"`
+}
+
+// Profiles the mend has not finished, most recently active first.
+func (q *Queries) ListPilotsToMend(ctx context.Context, maxRows int64) ([]ListPilotsToMendRow, error) {
+	rows, err := q.db.Query(ctx, listPilotsToMend, maxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPilotsToMendRow
+	for rows.Next() {
+		var i ListPilotsToMendRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.BackfilledAt,
+			&i.MendCursorTime,
+			&i.MendCursorID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProfiledPilots = `-- name: ListProfiledPilots :many
+SELECT character_id FROM pilot_activity_profiles
+WHERE character_id = ANY($1::bigint[])
+`
+
+// The pilots on one kill who have a profile: the live fold's one
+// lookup per kill, however big the gang.
+func (q *Queries) ListProfiledPilots(ctx context.Context, ids []int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listProfiledPilots, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var character_id int64
+		if err := rows.Scan(&character_id); err != nil {
+			return nil, err
+		}
+		items = append(items, character_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -690,6 +848,21 @@ func (q *Queries) MarkPilotKillApplied(ctx context.Context, arg MarkPilotKillApp
 	return killmail_id, err
 }
 
+const markPilotMended = `-- name: MarkPilotMended :exec
+UPDATE pilot_activity_profiles SET mended_at = $1::timestamptz
+WHERE character_id = $2::bigint
+`
+
+type MarkPilotMendedParams struct {
+	MendedAt    time.Time `json:"mended_at"`
+	CharacterID int64     `json:"character_id"`
+}
+
+func (q *Queries) MarkPilotMended(ctx context.Context, arg MarkPilotMendedParams) error {
+	_, err := q.db.Exec(ctx, markPilotMended, arg.MendedAt, arg.CharacterID)
+	return err
+}
+
 const prunePilotActivityApplied = `-- name: PrunePilotActivityApplied :execrows
 DELETE FROM pilot_activity_applied
 WHERE killmail_time < $1::timestamptz
@@ -732,5 +905,22 @@ type RemoveIntelWatchParams struct {
 
 func (q *Queries) RemoveIntelWatch(ctx context.Context, arg RemoveIntelWatchParams) error {
 	_, err := q.db.Exec(ctx, removeIntelWatch, arg.ChannelID, arg.CharacterID)
+	return err
+}
+
+const setPilotMendCursor = `-- name: SetPilotMendCursor :exec
+UPDATE pilot_activity_profiles SET mend_cursor_time = $1::timestamptz,
+    mend_cursor_id = $2::bigint
+WHERE character_id = $3::bigint
+`
+
+type SetPilotMendCursorParams struct {
+	CursorTime  time.Time `json:"cursor_time"`
+	CursorID    int64     `json:"cursor_id"`
+	CharacterID int64     `json:"character_id"`
+}
+
+func (q *Queries) SetPilotMendCursor(ctx context.Context, arg SetPilotMendCursorParams) error {
+	_, err := q.db.Exec(ctx, setPilotMendCursor, arg.CursorTime, arg.CursorID, arg.CharacterID)
 	return err
 }

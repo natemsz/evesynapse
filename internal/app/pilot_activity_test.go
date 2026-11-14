@@ -17,8 +17,9 @@ import (
 // metadata), into one pilot's activity profile and checks the
 // stored aggregates: a wrong total here would misstate a pilot's
 // record on their page, silently. Folding the same kills again
-// must count nothing twice, and the live stream's fold must pass
-// over pilots who have no profile.
+// must count nothing twice; the live stream's fold must pass over
+// pilots who have no profile and reach every profiled attacker; the
+// mend must fold a stored kill the stream missed, once.
 func TestPilotActivityAggregates(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, nil)
 	ctx := context.Background()
@@ -183,5 +184,44 @@ func TestPilotActivityAggregates(t *testing.T) {
 	}
 	if vp.Losses != 1 || vp.Kills != 0 {
 		t.Fatalf("victim profile: losses %d, kills %d; want 1, 0", vp.Losses, vp.Kills)
+	}
+
+	// The stream folds every profiled pilot on a kill, an attacker
+	// without the final blow too, and still starts no profile.
+	const gangMember = int64(92000008)
+	if err := q.ClaimPilotActivityProfile(ctx, db.ClaimPilotActivityProfileParams{CharacterID: gangMember, UpdatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(entries[2].killmailFull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.maintainPilotActivity(ctx, raw)
+	if gp, err := q.GetPilotActivityProfile(ctx, gangMember); err != nil || gp.Kills != 1 || gp.GangTotal != 5 {
+		t.Fatalf("gang member after the stream fold: %+v, %v; want 1 kill in a gang of 5", gp, err)
+	}
+	if _, err := q.GetPilotActivityProfile(ctx, int64(92000009)); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("stream fold made a profile for an unprofiled attacker: %v", err)
+	}
+
+	// The mend folds a stored kill the stream left out, once.
+	const missed = int64(92000010)
+	if err := q.ClaimPilotActivityProfile(ctx, db.ClaimPilotActivityProfileParams{CharacterID: missed, UpdatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	exec(`INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, ship_type_id, attacker_count, source, public, ingested_at)
+		VALUES (103, '2026-10-22T21:45:00Z', 30000142, 92000006, 587, 5, 'zkill', true, now())`)
+	exec(`INSERT INTO kill_attackers (killmail_id, seq, character_id, ship_type_id, final_blow) VALUES
+		(103, 0, 92000007, 587, true), (103, 1, 91000001, 626, false), (103, 2, 92000008, 587, false),
+		(103, 3, 92000009, 587, false), (103, 4, 92000010, 587, false)`)
+	for range 2 {
+		app.mendPilotActivity(ctx)
+	}
+	mp, err := q.GetPilotActivityProfile(ctx, missed)
+	if err != nil || mp.Kills != 1 || mp.GangTotal != 5 || !mp.LastActiveAt.Valid {
+		t.Fatalf("mended profile: %+v, %v; want 1 kill in a gang of 5", mp, err)
+	}
+	if gp, err := q.GetPilotActivityProfile(ctx, gangMember); err != nil || gp.Kills != 1 {
+		t.Fatalf("gang member after the mend: %+v, %v; want the stream's kill counted once", gp, err)
 	}
 }

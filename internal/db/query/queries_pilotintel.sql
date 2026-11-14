@@ -199,3 +199,48 @@ FROM (
       AND v.public AND v.killmail_time >= sqlc.arg(since)::timestamptz
 ) p
 ORDER BY p.character_id, p.killmail_time DESC;
+
+-- The pilots on one kill who have a profile: the live fold's one
+-- lookup per kill, however big the gang.
+-- name: ListProfiledPilots :many
+SELECT character_id FROM pilot_activity_profiles
+WHERE character_id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- Profiles the mend has not finished, most recently active first.
+-- name: ListPilotsToMend :many
+SELECT character_id, backfilled_at, mend_cursor_time, mend_cursor_id FROM pilot_activity_profiles
+WHERE mended_at IS NULL
+ORDER BY last_active_at DESC NULLS LAST, character_id
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- One pilot's stored kills after the mend's cursor, oldest first,
+-- with the pilot's part in each: victim (and the ship lost), or
+-- attacker (the ship flown, a final blow), and the gang size.
+-- name: ListPilotMendKills :many
+SELECT k.killmail_id, k.killmail_time, k.system_id, k.attacker_count, k.ship_type_id AS victim_ship,
+       (k.victim_character_id = sqlc.arg(character_id)::bigint)::boolean AS is_victim,
+       (a.killmail_id IS NOT NULL)::boolean AS is_attacker,
+       COALESCE(a.ship_type_id, 0)::bigint AS attacker_ship,
+       COALESCE(a.final_blow, false)::boolean AS final_blow
+FROM kills k
+LEFT JOIN LATERAL (
+    SELECT x.killmail_id, x.ship_type_id, x.final_blow FROM kill_attackers x
+    WHERE x.killmail_id = k.killmail_id AND x.character_id = sqlc.arg(character_id)::bigint
+    ORDER BY x.final_blow DESC LIMIT 1
+) a ON true
+WHERE k.killmail_id IN (
+        SELECT x.killmail_id FROM kill_attackers x WHERE x.character_id = sqlc.arg(character_id)::bigint
+        UNION
+        SELECT v.killmail_id FROM kills v WHERE v.victim_character_id = sqlc.arg(character_id)::bigint)
+  AND (k.killmail_time, k.killmail_id) > (sqlc.arg(after_time)::timestamptz, sqlc.arg(after_id)::bigint)
+ORDER BY k.killmail_time, k.killmail_id
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- name: SetPilotMendCursor :exec
+UPDATE pilot_activity_profiles SET mend_cursor_time = sqlc.arg(cursor_time)::timestamptz,
+    mend_cursor_id = sqlc.arg(cursor_id)::bigint
+WHERE character_id = sqlc.arg(character_id)::bigint;
+
+-- name: MarkPilotMended :exec
+UPDATE pilot_activity_profiles SET mended_at = sqlc.arg(mended_at)::timestamptz
+WHERE character_id = sqlc.arg(character_id)::bigint;

@@ -42,21 +42,26 @@
   <div class="l-sidebar l-sidebar--end sov-layout">
   <div class="l-stack sov-main">
 
-    <section class="l-panel sov-panel" id="sov-contests" aria-labelledby="sov-contests-h">
+    {{/* Each contest's Fight cell opens its kills in a row under it
+         (sovfights.js, from /intel/sov/fight/{id}/); new kills stream
+         in from the killboard's stream while the page shows a live
+         contest. */}}
+    <section class="l-panel sov-panel" id="sov-contests" aria-labelledby="sov-contests-h" data-sov-fights{{if .Contests}} data-live{{end}}>
       <div class="sov-ph">
         <h2 id="sov-contests-h">Live contests{{if .ContestTotal}} <span class="sov-count">{{.ContestTotal}}</span>{{end}}</h2>
+        <span class="badge kill sov-live-pill" data-live-pill role="status" hidden>Live</span>
         {{if gt .ContestTotal 3}}<input class="sov-search" type="search" placeholder="Filter by system, region or alliance" aria-label="Filter live contests" data-table-filter="sov-contests-t" data-row-class="sov-row">{{end}}
       </div>
       {{if .Contests}}
       <div class="tw sov-tw" tabindex="0" role="region" aria-labelledby="sov-contests-h">
       <table id="sov-contests-t" class="sov-t">
-        <thead><tr><th>System</th><th>Defender</th><th>ADM</th><th class="card-figure">Defender vs attackers</th><th class="card-figure">Timer</th></tr></thead>
+        <thead><tr><th>System</th><th>Defender</th><th>ADM</th><th class="card-figure">Defender vs attackers</th><th class="card-figure">Fight</th><th class="card-figure">Timer</th></tr></thead>
         <tbody>{{range .Contests}}{{template "sov-contest" .}}{{end}}</tbody>
         {{if .ContestsMore}}<tbody id="sov-contests-more" data-wmore>{{range .ContestsMore}}{{template "sov-contest" .}}{{end}}</tbody>{{end}}
       </table>
       </div>
       {{if .ContestsMore}}<button type="button" class="btn btn-quiet sov-more" data-expand="sov-contests-more"><span class="sov-more-c">Show all {{.ContestTotal}}</span><span class="sov-more-o">Show fewer</span></button>{{end}}
-      <p class="sov-note">A contest ends when one side reaches 100%.</p>
+      <p class="sov-note">A contest ends when one side reaches 100%. Fight counts the kills in the contested constellation from an hour before the timer: open it to see them.</p>
       {{else}}
       <p class="sov-empty">No sovereignty contests are under way{{if or $.Sov.RegionID $.Sov.AllianceID}} for this filter{{end}}.</p>
       {{end}}
@@ -80,6 +85,25 @@
       <p class="sov-note">ADM, the activity defense multiplier, runs from 1 to 6: the lower it is, the shorter an attacker's timer.</p>
       {{else}}
       <p class="sov-empty">No windows match{{if or $.Sov.RegionID $.Sov.AllianceID}} this filter{{end}} in the next 24 hours.</p>
+      {{end}}
+    </section>
+
+    <section class="l-panel sov-panel" id="sov-fights" aria-labelledby="sov-fights-h">
+      <div class="sov-ph">
+        <h2 id="sov-fights-h">Ended contests, 7 days{{if .FightTotal}} <span class="sov-count">{{.FightTotal}}</span>{{end}}</h2>
+        {{if gt .FightTotal 3}}<input class="sov-search" type="search" placeholder="Filter" aria-label="Filter ended contests" data-table-filter="sov-fights-t" data-row-class="sov-row">{{end}}
+      </div>
+      {{if .Fights}}
+      <div class="tw sov-tw" tabindex="0" role="region" aria-labelledby="sov-fights-h">
+      <table id="sov-fights-t" class="sov-t">
+        <thead><tr><th>System</th><th>Defender</th><th>Held by now</th><th class="card-figure">Fight</th><th class="card-figure">Ended</th></tr></thead>
+        <tbody>{{range .Fights}}{{template "sov-ended" .}}{{end}}</tbody>
+        {{if .FightsMore}}<tbody id="sov-fights-more" data-wmore>{{range .FightsMore}}{{template "sov-ended" .}}{{end}}</tbody>{{end}}
+      </table>
+      </div>
+      {{if .FightsMore}}<button type="button" class="btn btn-quiet sov-more" data-expand="sov-fights-more"><span class="sov-more-c">Show all {{.FightTotal}}</span><span class="sov-more-o">Show fewer</span></button>{{end}}
+      {{else}}
+      <p class="sov-empty">No contest ended in the last 7 days{{if or $.Sov.RegionID $.Sov.AllianceID}} for this filter{{end}}.</p>
       {{end}}
     </section>
 
@@ -142,11 +166,12 @@
 </div>
 {{end}}
 
-{{define "sov-contest"}}<tr class="sov-row{{if eq .Leading "attackers"}} sov-edge{{end}}" data-search="{{.Search}}">
+{{define "sov-contest"}}<tr class="sov-row{{if eq .Leading "attackers"}} sov-edge{{end}}" data-search="{{.Search}}" data-campaign="{{.CampaignID}}">
   <th scope="row">{{template "sov-system" .System}}{{if .Event}} <span class="badge">{{.Event}}</span>{{end}}</th>
   <td>{{template "sov-org" .Defender}}</td>
   <td data-sort="{{.ADM}}">{{template "sov-adm" .}}</td>
   <td data-sort="{{.Def}}"><div class="sov-score"><progress class="sov-bar" max="100" value="{{.Def}}" aria-label="Defender {{.Def}} percent, attackers {{.Att}} percent"></progress><span class="sov-score-v"><span class="sov-def">Defender <b>{{.Def}}%</b></span><span class="sov-att"><b>{{.Att}}%</b> Attackers</span></span></div></td>
+  <td data-sort="{{.Fight.Kills}}">{{template "sov-fight-fig" .Fight}}</td>
   <td data-sort="{{.Starts.Unix}}" class="sov-nw">{{if .Started}}<span class="sov-live">Live</span> <span class="sov-dim">{{.StartsIn}}</span>{{else}}<time datetime="{{.Starts.Format "2006-01-02T15:04:05Z07:00"}}" data-finish="{{.Starts.Format "2006-01-02T15:04:05Z07:00"}}">{{.StartsIn}}</time>{{end}}</td>
 </tr>{{end}}
 
@@ -176,3 +201,29 @@
 {{define "sov-system"}}<span class="sov-sys">{{placeLink .Place}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{if .Place.SystemID}}<a class="map-jump" href="/map/?system={{.Place.SystemID}}" title="Open {{.Place.Name}} on the map" aria-label="Open {{.Place.Name}} on the map"><svg aria-hidden="true"><use href="#ico-map-mini"/></svg></a>{{end}}{{if .Region}}<span class="sov-region-n">{{.Region}}</span>{{end}}</span>{{end}}
 
 {{define "sov-org"}}{{if .Faction}}<span class="sov-dim">{{.Name}}</span>{{else if .ID}}<a class="sov-org" href="{{.Href}}"><img src="https://images.evetech.net/alliances/{{.ID}}/logo?size=32" alt="" width="20" height="20" loading="lazy"><span>{{.Name}}</span></a>{{else}}<span class="sov-dim">—</span>{{end}}{{end}}
+
+{{define "sov-fight-fig"}}<a class="sov-fig" href="{{.Href}}" data-fight-open="{{.ID}}" aria-expanded="false" aria-controls="sov-fight-{{.ID}}"><b data-fight-kills>{{.Kills}}</b> <span data-fight-word>{{if eq .Kills 1}}kill{{else}}kills{{end}}</span>{{if .Kills}} <span class="sov-dim">{{.ISK}}</span>{{end}}<svg class="sov-fig-chev" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" focusable="false"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>{{if or .DefLost .DefKilled}}<span class="sov-fig-sub"><span class="sov-down" title="Ships the defender lost, {{.DefLostV}} ISK">−{{.DefLost}}</span> <span class="sov-up" title="Kills the defender was on, {{.DefKillV}} ISK">+{{.DefKilled}}</span> <span class="sov-dim">defender</span></span>{{end}}{{end}}
+
+{{/* A contest's fight panel (handleSovFight): its figures and newest
+     kills, opened under the contest's row. */}}
+{{define "sov-fight-panel"}}<div class="sov-fp">
+  <p class="sov-fp-sum">{{if .Fight.Kills}}{{.Fight.Kills}} {{if eq .Fight.Kills 1}}kill{{else}}kills{{end}} in {{.Name}}'s constellation, {{.Fight.ISK}} ISK. The defender lost {{.Fight.DefLost}} ({{.Fight.DefLostV}} ISK) and was on {{.Fight.DefKilled}} ({{.Fight.DefKillV}} ISK).{{else}}No kills yet in {{.Name}}'s constellation{{if not .Ended}}: new ones show here as they land{{end}}.{{end}}</p>
+  <ol class="sov-fk-list" data-sov-fk-list aria-label="Kills in this fight, newest first">{{range .Kills}}{{template "sov-fight-kill" .}}{{end}}</ol>
+  {{if gt .Fight.Kills (len .Kills)}}<a class="sov-fp-all" href="{{.Fight.Href}}">All {{.Fight.Kills}} kills on the killboard</a>{{else if .Kills}}<a class="sov-fp-all" href="{{.Fight.Href}}">On the killboard</a>{{end}}
+</div>{{end}}
+
+{{define "sov-fight-kill"}}<li class="sov-fk{{if .Kill.Big}} big{{end}}" data-kill-id="{{.Kill.ID}}">
+  <img src="https://images.evetech.net/types/{{.Kill.ShipTypeID}}/icon?size=64" alt="" width="32" height="32" loading="lazy">
+  <span class="sov-fk-main"><a href="/intel/kill/{{.Kill.ID}}/">{{.Kill.ShipName}}</a><span class="sov-dim">{{if .Kill.VictimIsStructure}}{{.Kill.CorpName}}{{else}}{{.Kill.VictimName}}{{end}}{{if .Kill.AllianceName}} · {{.Kill.AllianceName}}{{end}}</span></span>
+  <span class="sov-fk-where"><a href="/intel/kills/?system={{.Kill.SystemID}}">{{.Kill.SystemName}}</a><span class="sov-dim">{{.Kill.Attackers}} {{if eq .Kill.Attackers 1}}attacker{{else}}attackers{{end}}</span></span>
+  <span class="sov-fk-side">{{if eq .Side 1}}<span class="badge loss">Defender lost</span>{{else if eq .Side 2}}<span class="badge kill">Defender scored</span>{{end}}</span>
+  <span class="sov-fk-v"><b data-kill-value>{{if .Kill.Value}}{{.Kill.Value}}{{else}}pricing…{{end}}</b><time class="sov-dim" datetime="{{rfc3339 .Kill.Time}}">{{.Kill.Ago}}</time></span>
+</li>{{end}}
+
+{{define "sov-ended"}}<tr class="sov-row" data-search="{{.Search}}" data-campaign="{{.Fight.ID}}">
+  <th scope="row">{{template "sov-system" .System}}{{if ne .Event "Sovereignty hub"}} <span class="badge">{{.Event}}</span>{{end}}</th>
+  <td>{{template "sov-org" .Defender}}</td>
+  <td>{{template "sov-org" .Holder}}{{if .Held}} <span class="sov-dim">held</span>{{end}}</td>
+  <td data-sort="{{.Fight.Kills}}">{{template "sov-fight-fig" .Fight}}</td>
+  <td data-sort="{{.Ended.Unix}}" class="sov-nw">{{.Ago}}</td>
+</tr>{{end}}

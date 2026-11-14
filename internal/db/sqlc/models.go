@@ -2405,6 +2405,37 @@ type SovChange struct {
 	NewFactionID     int64     `json:"new_faction_id"`
 }
 
+type SovFight struct {
+	CampaignID        int64        `json:"campaign_id"`
+	SystemID          int64        `json:"system_id"`
+	ConstellationID   int64        `json:"constellation_id"`
+	RegionID          int64        `json:"region_id"`
+	StructureID       int64        `json:"structure_id"`
+	EventType         string       `json:"event_type"`
+	DefenderID        int64        `json:"defender_id"`
+	StartTime         time.Time    `json:"start_time"`
+	FirstSeen         time.Time    `json:"first_seen"`
+	LastSeen          time.Time    `json:"last_seen"`
+	EndedAt           sql.NullTime `json:"ended_at"`
+	DefenderScore     float64      `json:"defender_score"`
+	AttackersScore    float64      `json:"attackers_score"`
+	Kills             int64        `json:"kills"`
+	Isk               float64      `json:"isk"`
+	DefenderLost      int64        `json:"defender_lost"`
+	DefenderLostIsk   float64      `json:"defender_lost_isk"`
+	DefenderKilled    int64        `json:"defender_killed"`
+	DefenderKilledIsk float64      `json:"defender_killed_isk"`
+	LastKillAt        sql.NullTime `json:"last_kill_at"`
+}
+
+type SovFightKill struct {
+	CampaignID   int64     `json:"campaign_id"`
+	KillmailID   int64     `json:"killmail_id"`
+	KillmailTime time.Time `json:"killmail_time"`
+	SystemID     int64     `json:"system_id"`
+	Side         int16     `json:"side"`
+}
+
 type SrpRequest struct {
 	ID            int64        `json:"id"`
 	CorporationID int64        `json:"corporation_id"`

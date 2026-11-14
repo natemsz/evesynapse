@@ -245,6 +245,7 @@ type killChip struct {
 var killScopeLabels = map[string]string{
 	"system": "System", "region": "Region", "ship": "Ship",
 	"character": "Pilot", "corporation": "Corporation", "alliance": "Alliance",
+	"fight": "Sov fight",
 }
 
 // killHref builds a feed URL from a scope and the narrowings.
@@ -382,7 +383,9 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	v.LeadersHref = killLeadersScopeHref(v.ScopeKind, v.ScopeID)
+	if v.ScopeKind != "fight" {
 		v.Filter = killFilterViewFor(app.killSDE(ctx), names, v.ScopeKind, v.ScopeID, v.Big, v.Solo, f, time.Now().UTC())
+	}
 	v.Chips = []killChip{
 		{Label: "All kills", Href: killHref(v.BaseQuery, false, false), Active: !v.Big && !v.Solo},
 		{Label: "Big kills", Href: killHref(v.BaseQuery, !v.Big, v.Solo), Active: v.Big},
@@ -437,6 +440,8 @@ func (app *Application) listKills(ctx context.Context, kind string, id int64, bt
 		return q.ListKillsByRegion(ctx, db.ListKillsByRegionParams{RegionID: id, BeforeTime: bt, BeforeID: bid, MinValue: minValue, SoloOnly: solo, MaxRows: killPageSize})
 	case "ship":
 		return q.ListKillsByShip(ctx, db.ListKillsByShipParams{ShipTypeID: id, BeforeTime: bt, BeforeID: bid, MinValue: minValue, SoloOnly: solo, MaxRows: killPageSize})
+	case "fight":
+		return q.ListKillsByFight(ctx, db.ListKillsByFightParams{CampaignID: id, BeforeTime: bt, BeforeID: bid, MinValue: minValue, SoloOnly: solo, MaxRows: killPageSize})
 	case "character", "corporation", "alliance":
 		return q.ListKillsByEntityFeed(ctx, db.ListKillsByEntityFeedParams{Kind: kind, EntityID: id, BeforeTime: bt, BeforeID: bid, MinValue: minValue, SoloOnly: solo, MaxRows: killPageSize})
 	}
@@ -457,6 +462,11 @@ func (n *killNames) scopeName(kind string, id int64) string {
 		return n.corp(id)
 	case "alliance":
 		return n.alliance(id)
+	case "fight":
+		if f, err := n.app.queries.GetSovFight(n.ctx, id); err == nil {
+			return f.SystemName + ", " + strings.ToLower(sovEventLabel(f.EventType))
+		}
+		return "Fight #" + strconv.FormatInt(id, 10)
 	}
 	return ""
 }
@@ -516,8 +526,11 @@ func killStatsEntity(kind string) bool {
 func (app *Application) killboardBoardStats(ctx context.Context, names *killNames, kind string, id int64, scopeName string) (killboardStats, killboardTop) {
 	if !killStatsEntity(kind) {
 		st, top := app.killboardHeadline(ctx, names)
-		if kind != "" {
+		switch kind {
+		case "system", "region", "ship":
 			top = app.killLeaderRail(ctx, names, kind, id)
+		case "fight":
+			top = killboardTop{}
 		}
 		return st, top
 	}

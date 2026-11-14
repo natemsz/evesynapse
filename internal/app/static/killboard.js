@@ -224,7 +224,7 @@
   function streamURLFor() {
     var params = new URLSearchParams(location.search);
     var out = new URLSearchParams();
-    ["system", "region", "ship", "character", "corporation", "alliance"].forEach(function (k) {
+    ["fight", "system", "region", "ship", "character", "corporation", "alliance"].forEach(function (k) {
       var v = params.get(k);
       if (v) out.set(k, v);
     });

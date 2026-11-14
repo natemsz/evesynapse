@@ -133,6 +133,16 @@ type AdminOwner struct {
 	PinnedAt    time.Time `json:"pinned_at"`
 }
 
+type AllianceBridge struct {
+	StructureID   int64     `json:"structure_id"`
+	CorporationID int64     `json:"corporation_id"`
+	AllianceID    int64     `json:"alliance_id"`
+	FromSystem    int64     `json:"from_system"`
+	ToSystem      int64     `json:"to_system"`
+	Name          string    `json:"name"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 type AllianceRecord struct {
 	AllianceID int64        `json:"alliance_id"`
 	Payload    string       `json:"payload"`

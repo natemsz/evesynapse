@@ -102,6 +102,8 @@ func (app *Application) refreshCorpSnapshotsFor(ctx context.Context, ch db.Chara
 				// seed the place cache so assets/orders elsewhere
 				// in the corp can title them.
 				app.seedStructurePlaceNames(ctx, ch)
+				// And its Ansiblexes, for the whole alliance's map.
+				app.storeCorpBridges(ctx, ch, corpID)
 			}
 		case corpFetchLimited:
 			return refreshed

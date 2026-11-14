@@ -138,7 +138,8 @@ type minePayload struct {
 	Mining     []mineHeat      `json:"mining"`
 	Posted     []minePosted    `json:"posted"`
 	// The jump planner's (map_jump.go): each character's jump skills
-	// and fatigue, and the corporation's Ansiblex bridges.
+	// and fatigue, and the Ansiblex bridges of the reader's alliances
+	// and corporations (map_bridges.go).
 	Jumpers []mineJumper `json:"jumpers"`
 	Bridges []mineBridge `json:"bridges"`
 	// Watched is the reader's channels' known hostiles where last
@@ -357,11 +358,6 @@ func (app *Application) buildMine(ctx context.Context, userID int64) minePayload
 					continue
 				}
 				structSeen[s.StructureID] = true
-				if s.TypeID == ansiblexTypeID {
-					if b, ok := app.ansiblexBridge(ctx, s.Name); ok {
-						out.Bridges = append(out.Bridges, b)
-					}
-				}
 				out.Structures = append(out.Structures, mineStructure{Sys: s.SystemID, Name: s.Name, Type: names.typeName(s.TypeID), State: s.State,
 					Fuel: unixOf(s.FuelExpires), Timer: unixOf(s.StateTimerEnd)})
 			}
@@ -487,6 +483,7 @@ func (app *Application) buildMine(ctx context.Context, userID int64) minePayload
 		out.Posted = append(out.Posted, *p)
 	}
 	out.Watched = app.mineWatched(ctx, userID)
+	out.Bridges = app.readerBridges(ctx, chars)
 	if f := app.mineFleets(ctx, chars); f != nil {
 		out.Fleets = f
 	}

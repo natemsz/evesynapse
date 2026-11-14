@@ -990,6 +990,8 @@
         zones: [tok("--map-zone-1", "#5ce0c8"), tok("--map-zone-2", "#b8e05a"), tok("--map-zone-3", "#f0b429"),
           tok("--map-zone-4", "#ff6a2a"), tok("--map-zone-5", "rgba(214,120,110,0.55)")],
         route: tok("--map-route", "#ffd27a"),
+        bridge: tok("--map-bridge", "#9fd8ff"),
+        bridgeHalo: tok("--map-bridge-halo", "rgba(0,0,0,0.8)"),
         routeHalo: tok("--map-route-halo", "rgba(255,210,122,0.25)"),
         intel: rgbOf(tok("--map-intel", "#3fd8ff")),
         intelClear: rgbOf(tok("--map-intel-clear", "#4fbf6a")),
@@ -1674,6 +1676,59 @@
     // The zone rings around the capital: each band's reach seen from
     // above, so only in the true frame (the game's own layout is not
     // to scale).
+    // drawBridges: the reader's Ansiblex bridges (their alliance's and
+    // corporation's, map_bridges.go), each pair once, as a bowed line
+    // so it never reads as a gate. A bridge whose holder's zones are
+    // the ones shown wears the zone of its dearer landing.
+    function drawBridges(Z, k, ox, oy) {
+      if (!MINE || !MINE.bridges || !MINE.bridges.length) return;
+      var seen = {};
+      ctx.save();
+      ctx.setLineDash([]);
+      MINE.bridges.forEach(function (b) {
+        var a = G.byID[b.from], c = G.byID[b.to];
+        if (a === undefined || c === undefined) return;
+        var key = Math.min(a, c) + "-" + Math.max(a, c);
+        if (seen[key]) return;
+        seen[key] = 1;
+        var pa, pc;
+        if (mode === "universe") { pa = [wx(a), wy(a)]; pc = [wx(c), wy(c)]; }
+        else {
+          var ina = S.r[a] === region, inc = S.r[c] === region;
+          if (!ina && !inc) return;
+          pa = ina ? [wx(a), wy(a)] : ghost(c, a);
+          pc = inc ? [wx(c), wy(c)] : ghost(a, c);
+        }
+        var x1 = pa[0] * k + ox, y1 = pa[1] * k + oy, x2 = pc[0] * k + ox, y2 = pc[1] * k + oy;
+        var col = colors.bridge;
+        if (Z && Z.cap >= 0 && LY.sovA[a] === Z.a) col = colors.zones[Math.max(Z.zone[a], Z.zone[c]) - 1];
+        var qx = (x1 + x2) / 2 - (y2 - y1) * 0.18, qy = (y1 + y2) / 2 + (x2 - x1) * 0.18;
+        // A dark halo first, so the line stands off the shaded bands.
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.quadraticCurveTo(qx, qy, x2, y2);
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = colors.bridgeHalo;
+        ctx.lineWidth = 4.5;
+        ctx.stroke();
+        ctx.strokeStyle = ctx.fillStyle = col;
+        ctx.globalAlpha = 0.95;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x1, y1, 2.6, 0, Math.PI * 2);
+        ctx.moveTo(x2 + 2.6, y2);
+        ctx.arc(x2, y2, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+    function bridgePairs() {
+      if (!MINE || !MINE.bridges) return 0;
+      var seen = {};
+      MINE.bridges.forEach(function (b) { seen[Math.min(b.from, b.to) + "-" + Math.max(b.from, b.to)] = 1; });
+      return Object.keys(seen).length;
+    }
     function drawZoneRings(Z, k, ox, oy) {
       var u = frameLY();
       if (!u || projOn) return;
@@ -1773,6 +1828,7 @@
       F3 = null;
       sync3D();
       hint("3D: drag to turn the view, Shift drag to pan.");
+      if (layer === "zones") renderLegend();
       schedule();
     }
     // exit3D goes back to the 2D map, animated unless instant, with
@@ -1805,6 +1861,7 @@
       }
       sync3D();
       syncURL();
+      if (layer === "zones") renderLegend();
       schedule();
     }
     function toggle3D() { if (v3.on) exit3D(); else enter3D(); }
@@ -2429,7 +2486,10 @@
       }
       if (layer === "zones") {
         var Z = zoneData();
-        if (!Z || Z.cap < 0) { batch(colors.dim, r * 0.8, function () { return true; }); return; }
+        if (!Z || Z.cap < 0) { batch(colors.dim, r * 0.8, function () { return true; }); drawBridges(null, k, ox, oy); return; }
+        // The bands as shaded ground in either 2D frame (3D shows
+        // the systems and rings); the true frame adds exact rings.
+        if (!V3) drawTerritory(zoneField(Z), k, ox, oy);
         drawZoneRings(Z, k, ox, oy);
         // Every system in its zone's color; the alliance's own space
         // (where its bridges stand) full size, the rest faint.
@@ -2447,12 +2507,13 @@
           ctx.strokeStyle = colors.route;
           ctx.stroke();
         }
+        drawBridges(Z, k, ox, oy);
         return;
       }
       if (layer === "sov") {
         // Territory is a flat field: 3D shows the systems instead.
         var land = sovView === "territory" && !V3;
-        if (land) drawTerritory(k, ox, oy);
+        if (land) drawTerritory(sovField(), k, ox, oy);
         batch(colors.unheld, r * 0.8, function (i) { return LY.sovA[i] < 0 && (!LY.sovF[i] || (land && G.tier[i] > 0)); });
         batch(colors.npc, r, function (i) { return LY.sovA[i] < 0 && LY.sovF[i] > 0 && !(land && G.tier[i] > 0); });
         for (var a = 0; a < LY.alliances.length; a++) {
@@ -2541,7 +2602,7 @@
     // and strokes those outlines: crisp at any zoom, nothing rebuilt
     // while zooming, and the other NPC setting built while idle so
     // the toggle is instant.
-    var sovGW = 720, sovSettleTimer = 0, sovIdleTimer = 0;
+    var sovGW = 720, sovSettleTimer = 0, sovIdleTimer = 0, zoneSettleTimer = 0;
     try {
       if ((navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2) sovGW = 512;
     } catch (e) { /* no hardware hints */ }
@@ -2567,6 +2628,31 @@
         sovBuild(!sovNPC);
       }, 600);
     }
+    // zoneField: the Zones layer's bands as territory, zones 1 to 4
+    // around the picked alliance's capital (zone 5 is everywhere
+    // else), shaded with their edges drawn in whichever 2D frame is
+    // showing. Built as the Sovereignty layer's is: never mid-move.
+    function zoneField(Z) {
+      var key = "z" + Z.cap + ":" + sovFieldKey(mode, region, false, projOn);
+      if (sovFields[key]) return sovFields[key];
+      if (sovMoving()) { zoneSettle(); return null; }
+      var list = mode === "universe" ? null : G.members[region];
+      var n = list ? list.length : G.n, ownerOf = new Int32Array(G.n).fill(-1);
+      for (var m = 0; m < n; m++) {
+        var i = list ? list[m] : m;
+        if (Z.zone[i] >= 1 && Z.zone[i] <= 4 && !isNaN(Z.ly[i])) ownerOf[i] = Z.zone[i] - 1;
+      }
+      return fieldBuild(key, ownerOf, list, n, function (o) { return colors.zones[o]; });
+    }
+    function zoneSettle() {
+      clearTimeout(zoneSettleTimer);
+      zoneSettleTimer = setTimeout(function () {
+        zoneSettleTimer = 0;
+        if (!el.isConnected || !LY || layer !== "zones") return;
+        if (sovMoving()) { zoneSettle(); return; }
+        schedule();
+      }, 180);
+    }
     function sovField() {
       var f = sovFields[sovKey(sovNPC)];
       if (f) return f;
@@ -2581,7 +2667,7 @@
       if (sovFields[key]) return sovFields[key];
       var list = mode === "universe" ? null : G.members[region];
       var n = list ? list.length : G.n, A = LY.alliances.length;
-      var ownerOf = new Int32Array(G.n).fill(-1), npcIdx = {}, i, m, j;
+      var ownerOf = new Int32Array(G.n).fill(-1), npcIdx = {}, i, m;
       for (m = 0; m < n; m++) {
         i = list ? list[m] : m;
         if (LY.sovA[i] >= 0) ownerOf[i] = LY.sovA[i];
@@ -2590,6 +2676,16 @@
           ownerOf[i] = npcIdx[LY.sovF[i]];
         }
       }
+      return fieldBuild(key, ownerOf, list, n, function (o) { return o < A ? allianceColor(o) : colors.npc; });
+    }
+    // fieldBuild traces a territory field (territoryField) for the
+    // systems' owners and stores it under key in sovFields: ownerOf
+    // names each system's owner (-1 none), list the systems in view
+    // (null: all of New Eden) and n how many, colorOf an owner's color.
+    // The Sovereignty layer's holders and the Zones layer's bands both
+    // paint through it.
+    function fieldBuild(key, ownerOf, list, n, colorOf) {
+      var i, m, j;
       var b = viewBounds(), bw = b[2] - b[0], bh = b[3] - b[1];
       var sigma = 0.85 * Math.sqrt(bw * bh / Math.max(n, 1));
       var src = { o: [], x: [], y: [], s: [] };
@@ -2636,7 +2732,7 @@
           }
           path.closePath();
         });
-        var c = rgbOf(o < A ? allianceColor(o) : colors.npc);
+        var c = rgbOf(colorOf(o));
         shapes.push({ path: path, fill: "rgba(" + c[0] + "," + c[1] + "," + c[2] + ",0.17)", line: "rgba(" + c[0] + "," + c[1] + "," + c[2] + ",0.9)" });
       });
       sovFields[key] = { shapes: shapes, bounds: [bx0, by0, bx1, by1], fitK: fitK() };
@@ -2672,8 +2768,7 @@
       });
       return c;
     }
-    function drawTerritory(k, ox, oy) {
-      var f = sovField();
+    function drawTerritory(f, k, ox, oy) {
       if (!f) return;
       var b = f.bounds;
       if (!(b[2] > b[0])) return;
@@ -2751,7 +2846,7 @@
       if (name !== "security" && dataHeat()) name = "security";
       if (!el.querySelector('[data-map-layer="' + name + '"]')) name = "security";
       layer = name;
-      if (name === "zones") { zonesEnsure(); loadJump(); }
+      if (name === "zones") { zonesEnsure(); loadJump(); if (signedIn && !MINE) fetchMine(); }
       if (name === "feed") feedStart(); else { feedStop(); closeKill(); tourStop(); }
       showTip(-1);
       el.querySelectorAll("[data-map-layer]").forEach(function (b) {
@@ -2927,7 +3022,13 @@
           var band = zi === 0 ? "up to 5 LY" : zi === 4 ? "over 20 LY" : BRIDGE_ZONES[zi - 1].upTo + " to " + bz.upTo + " LY";
           row("", colors.zones[zi], "Zone " + bz.zone + " · " + band + " · " + (bz.mult ? bz.mult + "x cost" : "free"));
         });
-        note("Cost is set by where the jump lands." + (V3 ? " Rings show each band's reach." : projOn ? "" : " Rings show each band from above."));
+        note("Cost is set by where the jump lands." + (v3.on ? " Rings show each band's reach." : projOn ? " Shading shows each band." : " Shading shows each band; rings mark its exact reach."));
+        // The reader's bridges, drawn over the zones.
+        var nb = bridgePairs();
+        if (nb) row("", colors.bridge, plural(nb, "Ansiblex bridge") + " of your alliance");
+        else note(!signedIn ? "Sign in to see your alliance's Ansiblex bridges."
+          : !MINE ? "Loading your alliance's bridges…"
+          : "No bridges known for your alliance yet. They show once a director in your alliance signs in here.");
       } else if (layer === "fw") {
         [[500003, "Amarr"], [500001, "Caldari"], [500004, "Gallente"], [500002, "Minmatar"]].forEach(function (f) {
           row("", colors.faction[f[0]], (LY.factions[f[0]] || f[1]).replace(/ (Empire|State|Federation|Republic)$/, ""));
@@ -4363,9 +4464,10 @@
       return M;
     }
     function fetchMine(fresh) {
-      // Wanted by the data layers on, or by an open route (its jump
-      // bridges, its pilots' jump skills).
-      if (!signedIn || (!dataAny() && routeFrom < 0 && routeTo < 0) || mineLoading) return;
+      // Wanted by the data layers on, by an open route (its jump
+      // bridges, its pilots' jump skills), or by the Zones layer (the
+      // alliance's bridges over the bands).
+      if (!signedIn || (!dataAny() && routeFrom < 0 && routeTo < 0 && layer !== "zones") || mineLoading) return;
       mineLoading = true;
       fetch("/map/mine.json" + (fresh ? "?fresh=1" : ""), { credentials: "same-origin" }).then(function (r) {
         return r.ok ? r.json() : null;

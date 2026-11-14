@@ -15,8 +15,8 @@ package app
 // The reader's side rides on /map/mine.json (map_mine.go): each
 // character's Jump Drive Calibration and Jump Fuel Conservation levels
 // and current jump fatigue, and the Ansiblex jump bridges of their
-// corporation (named "From » To - Name", read from a director's
-// structures snapshot).
+// alliance and corporation (named "From » To - Name", read from any
+// director's synced structures list; map_bridges.go).
 // ---------------------------------------------------------------------------
 
 import (

@@ -412,6 +412,36 @@
   function frameX(G, S, i, projOn) { return projOn ? G.px[i] : S.x[i]; }
   function frameY(G, S, i, projOn) { return projOn ? G.py[i] : S.y[i]; }
 
+  // --- 3D: the pure part ---
+  // orbit3 turns an offset from the pivot in the true frame (dx
+  // east, dy south, dh up, all in frame units) into the 3D view:
+  // turned about the vertical by yaw, then tilted back by pitch (0
+  // looks straight down, as the 2D map does). out gets the offset
+  // on the screen plane and the depth toward the viewer. A sphere
+  // stays a circle of the same radius (no perspective), so jump
+  // ranges and zone bands draw as true circles.
+  function orbit3(dx, dy, dh, yaw, pitch, out) {
+    var cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    var rx = dx * cy - dy * sy, ry = dx * sy + dy * cy;
+    out[0] = rx;
+    out[1] = ry * cp - dh * sp;
+    out[2] = ry * sp + dh * cp;
+    return out;
+  }
+  // swapStops: for each stop between a jump route's ends, the
+  // systems a jump could go through instead: in range of both the
+  // stop before and the stop after (near(u) lists where u reaches).
+  function swapStops(path, near) {
+    var out = [];
+    for (var s = 1; s < path.length - 1; s++) {
+      var a = near(path[s - 1]), b = near(path[s + 1]), inA = {}, c = [], m;
+      for (m = 0; m < a.length; m++) inA[a[m]] = 1;
+      for (m = 0; m < b.length; m++) if (inA[b[m]] && b[m] !== path[s]) c.push(b[m]);
+      out.push(c);
+    }
+    return out;
+  }
+
   // The Improved Projection's preference key. The "2" is load-
   // bearing: the first key ("evesynapse-map-projection") predates
   // the projection becoming the default, so an off stored under
@@ -826,6 +856,16 @@
     var cw = 0, ch = 0, dpr = 1;
     var mode = "universe", region = -1;
     var cam = { x: 0, y: 0, k: 1 };
+    // 3D: the true positions, orbited (project3). t runs from 0 (the
+    // 2D map) to 1 (3D), and a switch animates it; from the game's
+    // layout the first half moves each system to its true place and
+    // the second tilts. p is the pivot system; hold, while the view
+    // moves, is the screen point the pivot is kept at. V3 holds the
+    // frame's positions (null in 2D); F3 the jump route's
+    // neighbourhood (focus3).
+    var V3 = null, F3 = null;
+    var v3 = { on: false, t: 0, anim: null, yaw: 0, pitch: 0.95, p: -1, hold: null,
+      fromProj: false, wasProj: false, k0: 1, k1: 1, pending: false };
     var sel = -1, hover = -1;
     var raf = 0, hintTimer = 0, fitted = false;
     var colors = null, font = "sans-serif", fontDisplay = "\"Rajdhani\", \"Segoe UI\", sans-serif";
@@ -928,8 +968,11 @@
     // systems, gates, labels and territory all follow the
     // projection setting. Everything that draws, picks or
     // measures goes through them.
-    function wx(i) { return frameX(G, S, i, projOn); }
-    function wy(i) { return frameY(G, S, i, projOn); }
+    function wx(i) { return V3 ? V3.x[i] : frameX(G, S, i, projOn); }
+    function wy(i) { return V3 ? V3.y[i] : frameY(G, S, i, projOn); }
+    // A region's label point: its systems' middle in 3D.
+    function regLX(i) { var rg = P.regions[i]; return V3 ? V3.rx[i] : projOn && rg.px !== undefined ? rg.px : rg.x; }
+    function regLY(i) { var rg = P.regions[i]; return V3 ? V3.ry[i] : projOn && rg.py !== undefined ? rg.py : rg.y; }
     // A region's bounds in the universe frame in use.
     function uBounds(r) { return projOn ? G.pbounds[r] : G.bounds[r]; }
 
@@ -1040,8 +1083,9 @@
     }
 
     function paths() {
-      var key = mode === "universe" ? (projOn ? "up" : "u") : "r" + region + (projOn ? "p" : "t");
-      if (pathCache[key]) return pathCache[key];
+      // In 3D the web moves every frame: built fresh, never kept.
+      var key = V3 ? "" : mode === "universe" ? (projOn ? "up" : "u") : "r" + region + (projOn ? "p" : "t");
+      if (key && pathCache[key]) return pathCache[key];
       var intra = new Path2D(), inter = new Path2D(), stubs = new Path2D();
       var web = null;
       var i, a, b;
@@ -1077,8 +1121,9 @@
           }
         }
       }
-      pathCache[key] = { intra: intra, inter: inter, stubs: stubs, web: web };
-      return pathCache[key];
+      var built = { intra: intra, inter: inter, stubs: stubs, web: web };
+      if (key) pathCache[key] = built;
+      return built;
     }
 
     function visible() { return mode === "universe" ? null : G.members[region]; }
@@ -1103,8 +1148,18 @@
       raf = 0;
       if (!cw || !ch) return;
       if (stepMotion(now || performance.now())) schedule();
+      if (v3.on || v3.anim) {
+        if (step3(now || performance.now())) schedule();
+        if (v3.on || v3.anim) {
+          project3();
+          if (v3.hold && v3.p >= 0) {
+            cam.x = V3.x[v3.p] - (v3.hold[0] - cw / 2) / cam.k;
+            cam.y = V3.y[v3.p] - (v3.hold[1] - ch / 2) / cam.k;
+          }
+        }
+      }
       var k = cam.k, ox = cw / 2 - cam.x * k, oy = ch / 2 - cam.y * k;
-      var i, t;
+      var i, t, F = focus3();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cw, ch);
 
@@ -1117,6 +1172,8 @@
       // texture behind the region names, not the picture: drawn
       // at reduced alpha until the reader zooms into it.
       if (mode === "universe" && projOn && labelTier(cam.k / fitK()) === 0) ctx.globalAlpha = 0.45;
+      // Around a jump route in 3D the web is the backdrop.
+      if (F) ctx.globalAlpha = 0.15;
       if (pp.web) {
         // Solid batches first, then the border crossings in the
         // same class colors, dashed at a constant screen size.
@@ -1166,24 +1223,42 @@
       // Systems: by security, or by the live layer showing.
       var r = radius(), list = visible(), n = list ? list.length : G.n;
       var pad = 40;
-      if (dataHeat()) {
-        drawDataHeat(k, ox, oy, r, list, n, pad);
-      } else if (layer === "security" || !LY) {
-        for (t = 0; t <= 10; t++) {
-          ctx.beginPath();
-          for (var m = 0; m < n; m++) {
-            i = list ? list[m] : m;
-            if (G.tier[i] !== t) continue;
-            var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
-            if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) continue;
-            ctx.moveTo(sx + r, sy);
-            ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      var systems = function (list, n) {
+        if (dataHeat()) {
+          drawDataHeat(k, ox, oy, r, list, n, pad);
+        } else if (layer === "security" || !LY) {
+          for (t = 0; t <= 10; t++) {
+            ctx.beginPath();
+            for (var m = 0; m < n; m++) {
+              i = list ? list[m] : m;
+              if (G.tier[i] !== t) continue;
+              var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
+              if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) continue;
+              ctx.moveTo(sx + r, sy);
+              ctx.arc(sx, sy, r, 0, Math.PI * 2);
+            }
+            ctx.fillStyle = colors.sec[t];
+            ctx.fill();
           }
-          ctx.fillStyle = colors.sec[t];
-          ctx.fill();
+        } else {
+          drawLayer(k, ox, oy, r, list, n, pad);
         }
+      };
+      if (F) {
+        // A jump route in 3D, in three strengths: space barely there
+        // (the layer still shows through), everywhere a stop reaches
+        // dimmed, and at full strength the route's stops and the
+        // systems inside the range bubble showing.
+        var B = bubble3();
+        drawBubbleFill3(k, ox, oy);
+        ctx.globalAlpha = 0.08;
+        systems(null, G.n);
+        ctx.globalAlpha = 0.35;
+        systems(F.list, F.list.length);
+        ctx.globalAlpha = 1;
+        systems(B.list, B.list.length);
       } else {
-        drawLayer(k, ox, oy, r, list, n, pad);
+        systems(list, n);
       }
 
       // Ghost ends of the region's exits.
@@ -1311,14 +1386,21 @@
         // region names stay visible behind them -- smaller,
         // thinner, still there to click. Everywhere else region
         // names claim first, as before.
-        var terrSov = layer === "sov" && sovView === "territory" && LY;
+        var terrSov = layer === "sov" && sovView === "territory" && LY && !V3;
         if (terrSov) layerLabels(k, ox, oy, label, inPlaceFirst);
-        ctx.globalAlpha = regionLabelAlpha(f) * (terrSov ? 0.5 : 1);
+        var F3l = focus3();
+        // A jump route in 3D names its stops before anything else.
+        if (F3l) {
+          routePath.forEach(function (s) {
+            label(S.n[s], wx(s) * k + ox, wy(s) * k + oy + r + 4, 12, colors.route, "700", true, "j" + s);
+          });
+        }
+        ctx.globalAlpha = regionLabelAlpha(f) * (terrSov || F3l ? 0.5 : 1);
         var size = Math.min(12 + f * 0.8, 18) - (terrSov ? 3 : 0), regs = [];
         for (i = 0; i < P.regions.length; i++) if (G.members[i].length) regs.push(i);
         inPlaceFirst(regs, function (i) { return "R" + i; }, function (i) {
           var rg = P.regions[i];
-          label(rg.name.toUpperCase(), (projOn && rg.px !== undefined ? rg.px : rg.x) * k + ox, (projOn && rg.py !== undefined ? rg.py : rg.y) * k + oy - size / 2, size, colors.region, "600", false, "R" + i, fontDisplay,
+          label(rg.name.toUpperCase(), regLX(i) * k + ox, regLY(i) * k + oy - size / 2, size, colors.region, "600", false, "R" + i, fontDisplay,
             function (box) { labelBoxes.push({ r: i, b: box }); });
         });
         ctx.globalAlpha = 1;
@@ -1335,6 +1417,9 @@
           var vis = [];
           for (var o = 0; o < G.n; o++) {
             i = G.prio[o];
+            // Around a jump route in 3D only the stops, the systems that
+            // could stand in for them and those inside a bubble are named.
+            if (F3l && F3l.tier[i] < 2 && !(B3 && B3.inside[i])) continue;
             var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
             if (sx >= 0 && sy >= 0 && sx <= cw && sy <= ch) vis.push(i);
           }
@@ -1546,6 +1631,241 @@
       ctx.restore();
     }
 
+    // --- 3D ---
+    function smooth3(t) { return t * t * (3 - 2 * t); }
+    function morph3() { return v3.fromProj ? Math.min(1, v3.t * 2) : 1; }
+    function tilt3() { return v3.fromProj ? Math.max(0, Math.min(1, v3.t * 2 - 1)) : v3.t; }
+    // project3 fills V3 for this frame: each system's place in the
+    // frame (moving from the game's layout to the true one while t
+    // is in its first half, when the switch began there) with its
+    // true height, turned about the pivot.
+    function project3() {
+      var n = G.n, R = P.regions.length, u = frameLY(), m = smooth3(morph3()), q = smooth3(tilt3());
+      if (!V3) V3 = { x: new Float64Array(n), y: new Float64Array(n), d: new Float64Array(n), rx: new Float64Array(R), ry: new Float64Array(R), pitch: 0 };
+      var yaw = v3.yaw * q, pitch = v3.pitch * q, o = [0, 0, 0], fp = v3.fromProj, i;
+      var bx = function (j) { return fp ? G.px[j] + (S.x[j] - G.px[j]) * m : S.x[j]; };
+      var by = function (j) { return fp ? G.py[j] + (S.y[j] - G.py[j]) * m : S.y[j]; };
+      var bh = function (j) { return isNaN(JUMP.x[j]) ? 0 : JUMP.y[j] * u * m; };
+      var p = v3.p >= 0 ? v3.p : 0, px = bx(p), py = by(p), ph = bh(p);
+      var cnt = new Int32Array(R);
+      V3.rx.fill(0); V3.ry.fill(0);
+      for (i = 0; i < n; i++) {
+        orbit3(bx(i) - px, by(i) - py, bh(i) - ph, yaw, pitch, o);
+        V3.x[i] = px + o[0];
+        V3.y[i] = py + o[1];
+        V3.d[i] = o[2];
+        V3.rx[S.r[i]] += V3.x[i]; V3.ry[S.r[i]] += V3.y[i]; cnt[S.r[i]]++;
+      }
+      for (i = 0; i < R; i++) if (cnt[i]) { V3.rx[i] /= cnt[i]; V3.ry[i] /= cnt[i]; }
+      V3.pitch = pitch;
+    }
+    // step3 moves a switch along; true while more remains.
+    function step3(now) {
+      var a = v3.anim;
+      if (!a) return false;
+      var e = Math.min(1, (now - a.t0) / a.dur);
+      v3.t = a.from + (a.to - a.from) * e;
+      if (v3.fromProj) cam.k = Math.exp(Math.log(v3.k0) + (Math.log(v3.k1) - Math.log(v3.k0)) * smooth3(morph3()));
+      if (e < 1) return true;
+      v3.anim = null;
+      if (v3.on) {
+        v3.hold = null;
+        syncURL();
+        // Opened with a jump route: the view closes in on it.
+        if (focus3()) fitRoute();
+      } else finish2D();
+      return false;
+    }
+    // The frame scale either way, for keeping the view's size across
+    // a switch from or to the game's layout.
+    function projScale() {
+      var was = projOn, kp, kt;
+      projOn = true; kp = fitK();
+      projOn = false; kt = fitK();
+      projOn = was;
+      return kp / kt;
+    }
+    function enter3D() {
+      if (compact || v3.on) return;
+      if (!JUMP) { v3.pending = true; loadJump(); hint("Loading star positions…"); return; }
+      if (!frameLY()) return;
+      if (mode !== "universe") leaveRegion();
+      stopMotion();
+      var p = travel === "jump" && routePath && routePath.length ? routePath[routePath.length >> 1] : sel >= 0 ? sel : nearestUniverse(cam.x, cam.y);
+      if (p < 0) return;
+      v3.p = p;
+      v3.hold = [(wx(p) - cam.x) * cam.k + cw / 2, (wy(p) - cam.y) * cam.k + ch / 2];
+      v3.wasProj = v3.fromProj = projOn;
+      if (projOn) {
+        v3.k0 = cam.k;
+        v3.k1 = cam.k / projScale();
+        projOn = false;
+      }
+      v3.on = true;
+      v3.anim = { t0: performance.now(), dur: still ? 1 : v3.fromProj ? 750 : 500, from: v3.t, to: 1 };
+      F3 = null;
+      sync3D();
+      hint("3D: drag to turn the view, Shift drag to pan.");
+      schedule();
+    }
+    // exit3D goes back to the 2D map, animated unless instant, with
+    // the system nearest the middle held in place.
+    function exit3D(instant) {
+      if (!v3.on) return;
+      v3.on = false;
+      v3.pending = false;
+      if (V3) {
+        var p = nearestUniverse(cam.x, cam.y);
+        if (p >= 0) { v3.p = p; v3.hold = [(V3.x[p] - cam.x) * cam.k + cw / 2, (V3.y[p] - cam.y) * cam.k + ch / 2]; }
+      }
+      if (v3.fromProj) { v3.k1 = cam.k; v3.k0 = cam.k * projScale(); }
+      if (instant || still || !V3) { v3.anim = null; v3.t = 0; finish2D(); return; }
+      v3.anim = { t0: performance.now(), dur: v3.fromProj ? 750 : 500, from: v3.t, to: 0 };
+      sync3D();
+      schedule();
+    }
+    function finish2D() {
+      var p = v3.p, hold = v3.hold;
+      V3 = null;
+      F3 = null;
+      v3.t = 0;
+      v3.hold = null;
+      projOn = v3.wasProj;
+      if (v3.fromProj) cam.k = v3.k0;
+      if (hold && p >= 0) {
+        cam.x = wx(p) - (hold[0] - cw / 2) / cam.k;
+        cam.y = wy(p) - (hold[1] - ch / 2) / cam.k;
+      }
+      sync3D();
+      syncURL();
+      schedule();
+    }
+    function toggle3D() { if (v3.on) exit3D(); else enter3D(); }
+    // repivot3 turns the view about the system nearest the middle
+    // from here on, held where it is on screen.
+    function repivot3() {
+      var p = nearestUniverse(cam.x, cam.y);
+      if (p < 0 || !V3) return;
+      v3.p = p;
+      v3.hold = [(V3.x[p] - cam.x) * cam.k + cw / 2, (V3.y[p] - cam.y) * cam.k + ch / 2];
+    }
+    function sync3D() {
+      el.classList.toggle("map-3d", v3.on);
+      el.querySelectorAll("[data-map-3d]").forEach(function (b) {
+        b.setAttribute("aria-pressed", v3.on ? "true" : "false");
+        if (b.classList.contains("map-route-3d")) b.textContent = v3.on ? "Back to 2D" : "See it in 3D";
+      });
+      if (projPref) projPref.disabled = v3.on || !!v3.anim;
+      if (layer === "sov" || layer === "zones") renderLegend();
+    }
+    // focus3: a jump route's neighbourhood in 3D. tier 3 the stops,
+    // 2 the systems that could stand in for a stop, 1 everywhere a
+    // stop reaches; null without a planned jump route.
+    function focus3() {
+      if (!V3 || travel !== "jump" || !JUMP || !routePath || routePath.length < 2) return null;
+      var R = jumpRangeNow();
+      if (!(R > 0)) return null;
+      var key = routePath.join(",") + "|" + R;
+      if (F3 && F3.key === key) return F3;
+      var tier = new Uint8Array(G.n), near = function (u) { return jumpNeighbours(JUMP, u, R); };
+      routePath.forEach(function (s) { near(s).forEach(function (j) { tier[j] = 1; }); });
+      var swaps = swapStops(routePath, near);
+      swaps.forEach(function (c) { c.forEach(function (j) { tier[j] = 2; }); });
+      routePath.forEach(function (s) { tier[s] = 3; });
+      var list = [];
+      for (var i = 0; i < G.n; i++) if (tier[i]) list.push(i);
+      F3 = { key: key, tier: tier, list: list, swaps: swaps };
+      return F3;
+    }
+    // bubble3: the range bubbles showing (around the start, and
+    // around the stop under the pointer or selected) and the systems
+    // inside them, with the route's stops; null without a jump route.
+    var B3 = null;
+    function bubble3() {
+      var F = focus3();
+      if (!F) return null;
+      var R = jumpRangeNow(), stopAt = routePath.indexOf(hover >= 0 ? hover : sel);
+      var centres = [routeFrom];
+      if (stopAt > 0 && routePath[stopAt] !== routeFrom) centres.push(routePath[stopAt]);
+      var key = F.key + "|" + centres.join(",");
+      if (B3 && B3.key === key) return B3;
+      var inside = new Uint8Array(G.n), list = [];
+      centres.forEach(function (c) { jumpNeighbours(JUMP, c, R).forEach(function (j) { inside[j] = 1; }); });
+      routePath.forEach(function (s) { inside[s] = inside[s] || 2; });
+      for (var i = 0; i < G.n; i++) if (inside[i]) list.push(i);
+      B3 = { key: key, centres: centres, stopAt: stopAt, inside: inside, list: list };
+      return B3;
+    }
+    // The bubbles' glass, drawn under the systems.
+    function drawBubbleFill3(k, ox, oy) {
+      var B = bubble3();
+      if (!B) return;
+      var rr = jumpRangeNow() * frameLY() * k, c = rgbOf(colors.route);
+      B.centres.forEach(function (s) {
+        var cx = wx(s) * k + ox, cy = wy(s) * k + oy;
+        var g = ctx.createRadialGradient(cx, cy, rr * 0.2, cx, cy, rr);
+        g.addColorStop(0, "rgba(" + c[0] + "," + c[1] + "," + c[2] + ",0.05)");
+        g.addColorStop(0.85, "rgba(" + c[0] + "," + c[1] + "," + c[2] + ",0.12)");
+        g.addColorStop(1, "rgba(" + c[0] + "," + c[1] + "," + c[2] + ",0.2)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    // draw3DRange: the jump range as a sphere (its outline and, dashed,
+    // its equator) around the start and around the stop under the
+    // pointer or selected, and that stop's stand-ins ringed.
+    function draw3DRange(k, ox, oy, r, R) {
+      var u = frameLY(), rr = R * u * k, F = focus3(), B = bubble3();
+      var stopAt = B ? B.stopAt : -1;
+      var centres = B ? B.centres : [routeFrom];
+      ctx.save();
+      ctx.strokeStyle = colors.route;
+      // Every system a bubble reaches, ringed.
+      if (B) {
+        ctx.globalAlpha = 0.75;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        B.list.forEach(function (i) {
+          if (B.inside[i] !== 1) return;
+          var x = wx(i) * k + ox, y = wy(i) * k + oy;
+          ctx.moveTo(x + r + 2.5, y);
+          ctx.arc(x, y, r + 2.5, 0, Math.PI * 2);
+        });
+        ctx.stroke();
+      }
+      centres.forEach(function (c) {
+        var cx = wx(c) * k + ox, cy = wy(c) * k + oy;
+        ctx.globalAlpha = 0.9;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rr, Math.max(1, rr * Math.cos(V3.pitch)), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+      if (F && stopAt > 0 && stopAt < routePath.length - 1) {
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.9;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        F.swaps[stopAt - 1].forEach(function (i) {
+          var x = wx(i) * k + ox, y = wy(i) * k + oy;
+          ctx.moveTo(x + r + 3, y);
+          ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+        });
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     function drawLayer(k, ox, oy, r, list, n, pad) {
       var i, m, sx, sy;
       function on(i) {
@@ -1633,10 +1953,11 @@
         drawZoneRings(Z, k, ox, oy);
         // Every system in its zone's color; the alliance's own space
         // (where its bridges stand) full size, the rest faint.
+        var za0 = ctx.globalAlpha;
         for (var zi = 5; zi >= 1; zi--) {
-          ctx.globalAlpha = 0.5;
+          ctx.globalAlpha = za0 * 0.5;
           batch(colors.zones[zi - 1], r * 0.8, function (i) { return Z.zone[i] === zi && LY.sovA[i] !== Z.a; });
-          ctx.globalAlpha = 1;
+          ctx.globalAlpha = za0;
           batch(colors.zones[zi - 1], r * 1.15, function (i) { return Z.zone[i] === zi && LY.sovA[i] === Z.a; });
         }
         if (on(Z.cap)) {
@@ -1649,7 +1970,8 @@
         return;
       }
       if (layer === "sov") {
-        var land = sovView === "territory";
+        // Territory is a flat field: 3D shows the systems instead.
+        var land = sovView === "territory" && !V3;
         if (land) drawTerritory(k, ox, oy);
         batch(colors.unheld, r * 0.8, function (i) { return LY.sovA[i] < 0 && (!LY.sovF[i] || (land && G.tier[i] > 0)); });
         batch(colors.npc, r, function (i) { return LY.sovA[i] < 0 && LY.sovF[i] > 0 && !(land && G.tier[i] > 0); });
@@ -2048,6 +2370,12 @@
           npcRow.appendChild(root.createTextNode(" NPC faction borders"));
           box.appendChild(npcRow);
         }
+        if (V3 && sovView === "territory") {
+          var tn = root.createElement("p");
+          tn.className = "map-layer-row muted";
+          tn.textContent = "3D shows territory as systems.";
+          box.appendChild(tn);
+        }
         row("", "hsl(30,68%," + colors.sovL + ")", "Alliances");
         if (sovNPC || sovView !== "territory") row("", colors.npc, "NPC factions");
         if (sovView === "systems") row("", colors.unheld, "Unclaimed");
@@ -2118,7 +2446,7 @@
           var band = zi === 0 ? "up to 5 LY" : zi === 4 ? "over 20 LY" : BRIDGE_ZONES[zi - 1].upTo + " to " + bz.upTo + " LY";
           row("", colors.zones[zi], "Zone " + bz.zone + " · " + band + " · " + (bz.mult ? bz.mult + "x cost" : "free"));
         });
-        note("Cost is set by where the jump lands." + (projOn ? "" : " Rings show each band from above."));
+        note("Cost is set by where the jump lands." + (V3 ? " Rings show each band's reach." : projOn ? "" : " Rings show each band from above."));
       } else if (layer === "fw") {
         [[500003, "Amarr"], [500001, "Caldari"], [500004, "Gallente"], [500002, "Minmatar"]].forEach(function (f) {
           row("", colors.faction[f[0]], (LY.factions[f[0]] || f[1]).replace(/ (Empire|State|Federation|Republic)$/, ""));
@@ -2353,7 +2681,8 @@
     // pointer still wins.
     function pick(px, py) {
       var k = cam.k, ox = cw / 2 - cam.x * k, oy = ch / 2 - cam.y * k;
-      var best = -1, bs = Infinity, list = visible(), n = list ? list.length : G.n;
+      // Around a jump route in 3D the faint backdrop is not a target.
+      var F = focus3(), best = -1, bs = Infinity, list = F ? F.list : visible(), n = list ? list.length : G.n;
       var dot = radius() + 1;
       for (var m = 0; m < n; m++) {
         var i = list ? list[m] : m;
@@ -2394,6 +2723,7 @@
     // fires only its own way, so zooming in while a region's fly-in
     // still sits below the exit scale never throws you back out.
     function afterZoom(dir) {
+      if (v3.on) return;
       if (mode !== "universe") {
         if (dir < 0 && cam.k < fitK() * 0.7) leaveRegion();
         return;
@@ -2418,6 +2748,8 @@
     // so the glide carries on) to its fit, or to the focus system.
     function enterRegion(ri, focus, byZoom) {
       if (ri < 0) return;
+      // A region's tactical view is its own 2D layout.
+      exit3D(true);
       stopMotion();
       mode = "region";
       region = ri;
@@ -2486,7 +2818,8 @@
       if (shownLayer === "sov" && sovView === "territory") q.push("sov=territory");
       if (shownLayer === "sov" && sovView === "territory" && !sovNPC) q.push("npc=0");
       if (shownLayer === "zones" && zonesID) q.push("zones=" + zonesID);
-      if (projOn) q.push("proj=1");
+      if (projOn || (v3.on && v3.wasProj)) q.push("proj=1");
+      if (v3.on) q.push("3d=1");
       if (routeFrom >= 0) q.push("from=" + S.id[routeFrom]);
       if (routeTo >= 0) q.push("to=" + S.id[routeTo]);
       if ((routeFrom >= 0 || routeTo >= 0) && routeMode !== "short") q.push("route=" + routeMode);
@@ -2690,6 +3023,12 @@
         x0 = Math.min(x0, wx(i)); x1 = Math.max(x1, wx(i));
         y0 = Math.min(y0, wy(i)); y1 = Math.max(y1, wy(i));
       });
+      // In 3D the start's range bubble is part of the picture.
+      var rb = V3 && travel === "jump" && routeFrom >= 0 ? jumpRangeNow() * frameLY() : 0;
+      if (rb > 0) {
+        x0 = Math.min(x0, wx(routeFrom) - rb); x1 = Math.max(x1, wx(routeFrom) + rb);
+        y0 = Math.min(y0, wy(routeFrom) - rb); y1 = Math.max(y1, wy(routeFrom) + rb);
+      }
       // The free part of the canvas: left of the side column, or
       // above it where it is a sheet rising from the bottom (phones).
       var fx0 = 0, fy0 = 0, fx1 = cw, fy1 = ch, side = el.querySelector(".map-side");
@@ -2767,6 +3106,7 @@
         JUMP = joinJump(G, J);
         fillJumpControls();
         if (layer === "zones") renderLegend();
+        if (v3.pending) { v3.pending = false; enter3D(); }
         replan();
       }).catch(function () { jumpLoading = false; });
     }
@@ -3444,6 +3784,7 @@
       if (travel !== "jump" || !JUMP || routeFrom < 0) return;
       var R = jumpRangeNow();
       if (!(R > 0)) return;
+      if (V3) { draw3DRange(k, ox, oy, r, R); return; }
       ctx.beginPath();
       jumpNeighbours(JUMP, routeFrom, R).forEach(function (i) {
         if (mode !== "universe" && S.r[i] !== region) return;
@@ -3897,6 +4238,8 @@
       renderHits();
       findInput.value = "";
       if (h.r !== undefined) { sel = -1; enterRegion(h.r, -1); return; }
+      // In 3D a found system is brought to the middle, still in 3D.
+      if (v3.on && V3) { select(h.s); flyTo(V3.x[h.s], V3.y[h.s], cam.k, 320); return; }
       sel = h.s;
       enterRegion(S.r[h.s], h.s);
     }
@@ -3912,7 +4255,8 @@
       var p = pt(e);
       pointers[e.pointerId] = p;
       var ids = Object.keys(pointers);
-      if (ids.length === 1) gesture = { start: p, last: p, t: Date.now(), moved: false };
+      // In 3D a drag turns the view; Shift or the right button pans.
+      if (ids.length === 1) gesture = { start: p, last: p, t: Date.now(), moved: false, pan: e.shiftKey || e.button === 2 };
       else if (ids.length === 2) {
         var a = pointers[ids[0]], b = pointers[ids[1]];
         gesture = { pinch: true, d: Math.hypot(a[0] - b[0], a[1] - b[1]), mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], moved: true };
@@ -3946,7 +4290,13 @@
       if (!gesture) return;
       var dx = p[0] - gesture.last[0], dy = p[1] - gesture.last[1];
       if (!gesture.moved && Math.hypot(p[0] - gesture.start[0], p[1] - gesture.start[1]) > 6) gesture.moved = true;
-      if (gesture.moved) {
+      if (gesture.moved && v3.on && !v3.anim && !gesture.pan) {
+        if (!gesture.orbit) { gesture.orbit = true; repivot3(); }
+        v3.yaw += dx * 0.005;
+        v3.pitch = Math.max(0, Math.min(1.5, v3.pitch - dy * 0.005));
+        canvas.classList.add("dragging");
+        schedule();
+      } else if (gesture.moved) {
         cam.x -= dx / cam.k;
         cam.y -= dy / cam.k;
         canvas.classList.add("dragging");
@@ -3961,6 +4311,7 @@
       canvas.classList.remove("dragging");
       if (Object.keys(pointers).length) return;
       gesture = null;
+      if (g && g.orbit) { v3.hold = null; syncURL(); }
       if (!g || g.moved || g.pinch) return;
       // A tap: double-tap zooms, a single tap picks.
       var now = Date.now();
@@ -3974,7 +4325,7 @@
     }
     function onPointerCancel(e) {
       delete pointers[e.pointerId];
-      if (!Object.keys(pointers).length) gesture = null;
+      if (!Object.keys(pointers).length) { if (gesture && gesture.orbit) v3.hold = null; gesture = null; }
       canvas.classList.remove("dragging");
     }
     function tap(px, py) {
@@ -4036,6 +4387,7 @@
         case "-": case "_": case "q": glideZoom(cw / 2, ch / 2, 1 / 1.5); break;
         case "0": case "f": flyFit(); break;
         case "F": toggleFull(); break;
+        case "3": if (compact) return; toggle3D(); break;
         case "/": findInput.focus(); break;
         case "?": toggleKeys(); break;
         case "l": case "L": {
@@ -4326,6 +4678,7 @@
         return;
       }
       if (t.closest("[data-map-full]")) { toggleFull(); return; }
+      if (t.closest("[data-map-3d]")) { toggle3D(); return; }
       if (t.closest("[data-map-data]")) { toggleDataMenu(); return; }
       if (t.closest("[data-map-view]")) { toggleViewMenu(); return; }
       if (t.closest(".map-data-menu")) return;
@@ -4382,6 +4735,7 @@
         fitted = true;
         restore();
         if (pendingFocus >= 0) { focusOn(pendingFocus); pendingFocus = -1; }
+        if (!compact && startQuery.get("3d") === "1") enter3D();
       }
       else if (hadK) cam.k = fitK() * hadK;
       draw();
@@ -4417,7 +4771,7 @@
     readColors();
     statusEl.hidden = true;
     findInput.disabled = false;
-    el.querySelectorAll("[data-map-zoom], [data-map-keys], [data-map-full], [data-map-shot], [data-map-share]").forEach(function (b) { b.disabled = false; });
+    el.querySelectorAll("[data-map-zoom], [data-map-keys], [data-map-full], [data-map-shot], [data-map-share], [data-map-3d]").forEach(function (b) { b.disabled = false; });
     root.addEventListener("fullscreenchange", onFullChange);
     root.addEventListener("webkitfullscreenchange", onFullChange);
     // The layer scale: the map follows the slider as it moves; the
@@ -4481,6 +4835,8 @@
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("pointercancel", onPointerCancel);
+    // The right button pans in 3D, so its menu stays shut there.
+    canvas.addEventListener("contextmenu", function (e) { if (v3.on) e.preventDefault(); });
     canvas.addEventListener("pointerleave", function () { showTip(-1); if (hover >= 0) { hover = -1; schedule(); } });
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("gesturestart", onGestureStart);
@@ -4642,7 +4998,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { bridgeZone: bridgeZone, secRounded: secRounded, secTier: secTier, secText: secText, gateClass: gateClass, gateBatch: gateBatch, prepare: prepare, regionLabelAlpha: regionLabelAlpha, labelTier: labelTier, midTierLabels: midTierLabels, boxesOverlap: boxesOverlap, LABEL_MID_CAP: LABEL_MID_CAP, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
+    module.exports = { bridgeZone: bridgeZone, orbit3: orbit3, swapStops: swapStops, secRounded: secRounded, secTier: secTier, secText: secText, gateClass: gateClass, gateBatch: gateBatch, prepare: prepare, regionLabelAlpha: regionLabelAlpha, labelTier: labelTier, midTierLabels: midTierLabels, boxesOverlap: boxesOverlap, LABEL_MID_CAP: LABEL_MID_CAP, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
       frameX: frameX, frameY: frameY, sovFieldKey: sovFieldKey, resolveProj: resolveProj, PROJ_PREF_KEY: PROJ_PREF_KEY,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,

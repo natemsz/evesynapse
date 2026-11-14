@@ -482,7 +482,7 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 		// finishes by calling noteRecentKillPrice, which can only
 		// fill the price into an entry that already exists.
 		if public {
-			app.noteRecentKill(ctx, db.Kill{
+			nk := db.Kill{
 				KillmailID:          km.KillmailID,
 				Hash:                hash,
 				KillmailTime:        km.KillmailTime.UTC(),
@@ -507,7 +507,17 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 				Source:              source,
 				Public:              public,
 				IngestedAt:          p.IngestedAt,
-			})
+			}
+			app.noteRecentKill(ctx, nk)
+			// A kill in a contested constellation joins its sov
+			// fight and streams to the sov tracker.
+			if !p.Npc {
+				alliances := make([]int64, 0, len(km.Attackers))
+				for _, a := range km.Attackers {
+					alliances = append(alliances, a.AllianceID)
+				}
+				app.fileSovFightKill(ctx, nk, alliances)
+			}
 		}
 		// Priced once, here at ingest: the kill's lines are
 		// appraised and stored, and renders read the stored
@@ -636,6 +646,7 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 	app.backfillMissingKillFeeds(ctx)
 	app.refreshKillboardHeadline(ctx)
 	app.refreshKillLeaders(ctx)
+	app.syncSovFights(ctx)
 	app.offerPilotRestorations(ctx)
 	app.warmKillNames(ctx)
 	app.resolveNotedNames(ctx)

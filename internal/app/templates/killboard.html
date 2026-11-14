@@ -26,7 +26,7 @@
     </nav>
     <span class="badge kill kb-live-pill" data-live-pill role="status" hidden>Live</span>
   </div>
-  {{with .Filter}}
+  {{with .Filter}}{{if .Bands}}
   {{/* The filters (killboard_filter.go): each picker reloads the
        page on change; the scope and any hull or system it is
        narrowed by ride along as hidden fields. */}}
@@ -60,7 +60,7 @@
     {{if .Active}}<a class="kb-f-clear" href="{{.ClearHref}}">Clear filters</a>{{end}}
   </form>
   </details>
-  {{end}}
+  {{end}}{{end}}
   {{if .SearchQ}}<p class="kb-search-note" role="status">No pilot, corporation, alliance, system, region or ship matches “{{.SearchQ}}”.</p>{{end}}
 
   <div class="kb-layout">

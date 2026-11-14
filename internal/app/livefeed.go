@@ -214,6 +214,15 @@ func (h *killLiveHub) publishKillPriced(row killRow, k db.Kill, value string, bi
 		}
 	}
 	for _, sub := range subs {
+		// Sov fight streams take every price: a row they never
+		// showed ignores it.
+		if sub.kind == "fights" || sub.kind == "fight" {
+			select {
+			case sub.ch <- priceFrame:
+			default:
+			}
+			continue
+		}
 		if sub.big || sub.minValue > 0 {
 			if killFrame != nil && (!sub.big || big) && k.ValueOurs.Float64 >= sub.minValue &&
 				killMatchesScope(k, sub.kind, sub.id, sub.big, sub.solo) && sub.filter.matches(k) {
@@ -229,6 +238,57 @@ func (h *killLiveHub) publishKillPriced(row killRow, k db.Kill, value string, bi
 		}
 		select {
 		case sub.ch <- priceFrame:
+		default:
+		}
+	}
+}
+
+// killFightLiveEvent is the payload of a fight-kill event: a kill
+// that landed in one or more sov fights, with the defender's side in
+// each.
+type killFightLiveEvent struct {
+	Kill   killRow           `json:"kill"`
+	Fights []sovFightKillRef `json:"fights"`
+}
+
+// publishFightKill streams a kill filed into sov fights: the sov
+// tracker's streams ("fights") get it with its fights, and a
+// killboard scoped to one of those fights ("fight") gets the plain
+// kill event its list adds.
+func (h *killLiveHub) publishFightKill(row killRow, refs []sovFightKillRef) {
+	fightPayload, err := json.Marshal(killFightLiveEvent{Kill: row, Fights: refs})
+	if err != nil {
+		logging.Errorf("live feed: marshal fight kill %d: %v", row.ID, err)
+		return
+	}
+	killPayload, err := json.Marshal(row)
+	if err != nil {
+		return
+	}
+	h.mu.Lock()
+	subs := make([]*killLiveSub, 0, len(h.subs))
+	for sub := range h.subs {
+		if sub.kind == "fights" || sub.kind == "fight" {
+			subs = append(subs, sub)
+		}
+	}
+	h.mu.Unlock()
+	fightFrame, killFrame := sseFrame("fight-kill", fightPayload), sseFrame("kill", killPayload)
+	for _, sub := range subs {
+		frame := fightFrame
+		if sub.kind == "fight" {
+			frame = nil
+			for _, r := range refs {
+				if r.Campaign == sub.id {
+					frame = killFrame
+				}
+			}
+			if frame == nil {
+				continue
+			}
+		}
+		select {
+		case sub.ch <- frame:
 		default:
 		}
 	}
@@ -579,6 +639,10 @@ func (app *Application) handleKillStream(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	kind, id, big, solo, f := killStreamScope(r)
+	// The sov tracker's stream: every kill filed into a sov fight.
+	if r.URL.Query().Get("fights") == "1" {
+		kind, id, big, solo, f = "fights", 0, false, false, killFilter{}
+	}
 	var filter *killStreamFilter
 	if f.filtering() {
 		filter = &killStreamFilter{f: f, kind: kind, id: id, sde: app.killSDE(r.Context())}

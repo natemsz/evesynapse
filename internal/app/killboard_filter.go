@@ -28,7 +28,7 @@ const killScanCap = 1000
 // the first one present is the page's scope and rides its index; a
 // hull or place after it narrows that scope. A pilot, corporation or
 // alliance scope narrows by hull and place, a hull by place.
-var killScopeOrder = []string{"character", "corporation", "alliance", "ship", "system", "region"}
+var killScopeOrder = []string{"fight", "character", "corporation", "alliance", "ship", "system", "region"}
 
 // killOpt is one choice in a filter picker.
 type killOpt struct {
@@ -148,6 +148,11 @@ func parseKillQuery(qs url.Values) (kind string, id int64, big, solo bool, f kil
 	}
 	big = qs.Get("big") == "1"
 	solo = qs.Get("solo") == "1"
+	// A sov fight's kills are few: the chips narrow them, the
+	// filters do not.
+	if kind == "fight" {
+		return kind, id, big, solo, f
+	}
 	for _, b := range killBands {
 		if qs.Get("sec") == b.Value {
 			f.Band = b.Value

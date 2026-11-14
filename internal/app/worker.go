@@ -462,6 +462,8 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// the same way.
 	if app.refreshSovCampaigns(ctx) {
 		c.refreshed++
+		// The contests moved: fights open and end (sov_fights.go).
+		app.syncSovFights(ctx)
 	}
 
 	// The character pass, several characters at a time

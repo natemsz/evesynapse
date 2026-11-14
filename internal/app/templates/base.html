@@ -335,6 +335,7 @@
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<script src="/static/contracts.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "market.html"}}<script src="/static/market.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "killboard.html"}}<script src="/static/killboard.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .NavPage "intel_sov.html"}}<script src="/static/sovfights.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "market_lp.html"}}<script src="/static/fittip.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "market_baskets.html") (eq .NavPage "market_basket.html")}}<script src="/static/baskets.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{range .Scripts}}<script src="{{.}}?v={{$.AssetVersion}}" defer></script>{{end}}

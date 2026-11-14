@@ -1222,6 +1222,7 @@
       if (stepMotion(now || performance.now())) schedule();
       if (v3.on || v3.anim) {
         if (step3(now || performance.now())) schedule();
+        if (spinStep(now || performance.now())) schedule();
         if (v3.on || v3.anim) {
           project3();
           if (v3.hold && v3.p >= 0) {
@@ -1942,7 +1943,8 @@
       v3.anim = { t0: performance.now(), dur: still ? 1 : v3.fromProj ? 750 : 500, from: v3.t, to: 1 };
       F3 = null;
       sync3D();
-      hint("3D: drag to turn the view, Shift drag to pan.");
+      hint(still ? "3D: drag to turn the view, Shift drag to pan." : "3D: drag to turn the view, Shift drag to pan. Left alone, it turns slowly.");
+      spinWake();
       if (layer === "zones") renderLegend();
       schedule();
     }
@@ -1951,6 +1953,7 @@
     function exit3D(instant) {
       if (!v3.on) return;
       v3.on = false;
+      spinWake();
       v3.pending = false;
       if (V3) {
         var p = nearestUniverse(cam.x, cam.y);
@@ -1982,6 +1985,37 @@
     function toggle3D() { if (v3.on) exit3D(); else enter3D(); }
     // repivot3 turns the view about the system nearest the middle
     // from here on, held where it is on screen.
+    // The idle spin: in 3D, after a quiet spell the view turns slowly
+    // about the system nearest the middle, a full turn in two
+    // minutes, because motion is the strongest depth cue a flat
+    // screen has. Any touch, wheel, key or pointer move stops it and
+    // starts the wait again. Never under reduced motion, and never
+    // on a hidden tab.
+    var SPIN_IDLE_MS = 6000, SPIN_TURN_MS = 120000;
+    var spin = { on: false, last: 0, timer: 0 };
+    function spinWake() {
+      spin.on = false;
+      clearTimeout(spin.timer);
+      spin.timer = 0;
+      if (v3.on && !still) spin.timer = setTimeout(spinStart, SPIN_IDLE_MS);
+    }
+    function spinStart() {
+      spin.timer = 0;
+      if (!el.isConnected || !v3.on || still) return;
+      if (v3.anim || gesture || document.hidden) { spinWake(); return; }
+      repivot3();
+      spin.on = true;
+      spin.last = performance.now();
+      schedule();
+    }
+    function spinStep(now) {
+      if (!spin.on) return false;
+      if (!v3.on || v3.anim || document.hidden) { spin.on = false; return false; }
+      var dt = Math.min(100, Math.max(0, now - spin.last));
+      spin.last = now;
+      v3.yaw += dt / SPIN_TURN_MS * Math.PI * 2;
+      return true;
+    }
     function repivot3() {
       var p = nearestUniverse(cam.x, cam.y);
       if (p < 0 || !V3) return;
@@ -5811,6 +5845,9 @@
     var index = root.querySelector(".map-index");
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
+    // Any hand on the map stops the idle spin and restarts its wait.
+    ["pointerdown", "pointermove", "wheel"].forEach(function (ev) { canvas.addEventListener(ev, spinWake, { passive: true }); });
+    el.addEventListener("keydown", spinWake);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("pointercancel", onPointerCancel);
     // The right button pans in 3D, so its menu stays shut there.
@@ -5902,6 +5939,7 @@
     }
 
     function teardown() {
+      clearTimeout(spin.timer);
       ro.disconnect();
       mo.disconnect();
       clearInterval(layersTimer);

@@ -1,15 +1,16 @@
 package fit
 
-import "maps"
-
-import "sort"
+import (
+	"maps"
+	"sort"
+)
 
 // Implant solving: when a fit runs over its CPU or powergrid
-// budget, the cheapest fix in the game is usually a hardwiring,
-// a 'Gnome' CPU Tuning or 'Squire' Power Grid implant that raises
-// the ship's output by a few percent. SolveImplants searches the
-// ladder for the smallest sufficient implant per over-budget
-// resource and reports the picks; the caller applies them as a
+// budget, the cheapest fix in the game is usually an implant that
+// raises the ship's output by a few percent: a 'Gypsy' CPU or
+// 'Squire' Power Grid hardwiring, or the Genolution Core
+// Augmentation set. SolveImplants searches the combinations for
+// the smallest sufficient set and reports the picks; the caller applies them as a
 // simulation overlay (the fit document's implant overrides), so
 // the pilot's real clone is never touched.
 
@@ -21,7 +22,8 @@ const (
 )
 
 // ResourceImplant is one ladder candidate: an implant type whose
-// effects raise one fitting output. Bonus is the ladder percent
+// effects raise one fitting output, or (Resource 0) a set piece
+// that raises other candidates' bonuses. Bonus is the ladder percent
 // the implant advertises (its modifying attribute's value); Price
 // is the guide price, 0 when unknown.
 type ResourceImplant struct {
@@ -58,21 +60,32 @@ func resourceOver(res *Result, resource int64) bool {
 	return false
 }
 
+// solveMaxTrials bounds the engine runs one solve may spend. The
+// real ladders are small (the hardwiring slot's dozen rungs and
+// the Genolution set's four slots), so a full search fits well
+// under it; the bound only guards against a future SDE growing
+// the candidate list.
+const solveMaxTrials = 2000
+
 // SolveImplants finds the implants that make an over-budget fit
 // legal. compute runs the engine for a complete implant set;
 // base is the fit's current effective set (clone plus overrides)
 // and baseSlots maps each base implant's slot to its type. A pick
 // replaces whatever occupies its slot, exactly like a document
-// override, and a trial counts only when the resource it targets
-// fits and the other resource is no worse than before the trial.
+// override.
 //
-// The search solves CPU first, then powergrid (the owner's
-// order), and retries in the opposite order when the first pass
-// fails, the two ladders can share a slot, and one order can
-// succeed where the other cannot. Success returns the picks
-// (CPU's first) and no unsolved resources; failure returns the
-// picks that were not enough, none, the search is
-// all-or-nothing, plus the resources still over budget.
+// The search tries combinations across slots, fewest implants
+// first: one implant rarely fixes both resources (the CPU and
+// powergrid hardwirings share slot 6), while pieces in other
+// slots can (Genolution's CA-1 and CA-2, whose set bonus also
+// raises each other's). Among the legal sets of the smallest
+// size the cheapest wins (an unknown price sorts last), then the
+// smallest advertised bonus, then the lowest type IDs. Candidates
+// with Resource 0 carry no output bonus of their own but raise
+// other implants' bonuses (a set piece); they join a set only
+// when it needs them. Success returns the picks (CPU's first,
+// then powergrid's, then set pieces) and no unsolved resources;
+// failure returns no picks and the resources over budget.
 func SolveImplants(compute func(implants []int64) *Result, base []int64, baseSlots map[int]int64, candidates []ResourceImplant) (picks []SolvePick, unsolved []int64) {
 	baseRes := compute(base)
 	var over []int64
@@ -84,84 +97,91 @@ func SolveImplants(compute func(implants []int64) *Result, base []int64, baseSlo
 	if len(over) == 0 {
 		return nil, nil
 	}
-	orders := [][2]int64{
-		{ResourceCPU, ResourcePG},
-		{ResourcePG, ResourceCPU},
-	}
-	for _, order := range orders {
-		if got, ok := solveInOrder(compute, base, baseSlots, candidates, order); ok {
-			return got, nil
-		}
-	}
-	return nil, over
-}
-
-// solveInOrder tries to clear the two resources in the given
-// order, one smallest-sufficient implant each.
-func solveInOrder(compute func(implants []int64) *Result, base []int64, baseSlots map[int]int64, candidates []ResourceImplant, order [2]int64) ([]SolvePick, bool) {
-	current := append([]int64(nil), base...)
-	slots := make(map[int]int64, len(baseSlots))
-	maps.Copy(slots, baseSlots)
-	chosen := make(map[int]ResourceImplant)
-	for _, resource := range order {
-		res := compute(current)
-		if !resourceOver(res, resource) {
+	// Each slot's options: every candidate that is not already
+	// what the slot holds, in ladder order.
+	bySlot := make(map[int][]ResourceImplant)
+	for _, c := range sortedCandidates(candidates) {
+		if baseSlots[c.Slot] == c.TypeID {
 			continue
 		}
-		other := order[0]
-		if other == resource {
-			other = order[1]
+		bySlot[c.Slot] = append(bySlot[c.Slot], c)
+	}
+	slots := make([]int, 0, len(bySlot))
+	for s := range bySlot {
+		slots = append(slots, s)
+	}
+	sort.Ints(slots)
+
+	trials := 0
+	var best []ResourceImplant
+	var bestPrice, bestBonus float64
+	var walk func(from, need int, set []ResourceImplant)
+	walk = func(from, need int, set []ResourceImplant) {
+		if trials >= solveMaxTrials {
+			return
 		}
-		otherWasOver := resourceOver(res, other)
-		found := false
-		for _, cand := range ladderFor(candidates, resource) {
-			trial, trialSlots := withImplant(current, slots, cand)
-			trialRes := compute(trial)
-			if resourceOver(trialRes, resource) {
-				continue
+		if need == 0 {
+			current := append([]int64(nil), base...)
+			slotMap := make(map[int]int64, len(baseSlots)+len(set))
+			maps.Copy(slotMap, baseSlots)
+			for _, c := range set {
+				current, slotMap = withImplant(current, slotMap, c)
 			}
-			// Replacing a same-slot implant can withdraw the
-			// other resource's bonus: never let a pick push a
-			// resource that currently fits over budget.
-			if !otherWasOver && resourceOver(trialRes, other) {
-				continue
+			trials++
+			res := compute(current)
+			if resourceOver(res, ResourceCPU) || resourceOver(res, ResourcePG) {
+				return
 			}
-			current, slots = trial, trialSlots
-			chosen[cand.Slot] = cand
-			found = true
-			break
+			price, bonus := setCost(set)
+			if best == nil || price < bestPrice || (price == bestPrice && bonus < bestBonus) {
+				best = append([]ResourceImplant(nil), set...)
+				bestPrice, bestBonus = price, bonus
+			}
+			return
 		}
-		if !found {
-			return nil, false
+		for i := from; i <= len(slots)-need; i++ {
+			for _, c := range bySlot[slots[i]] {
+				walk(i+1, need-1, append(set, c))
+			}
 		}
 	}
-	final := compute(current)
-	if resourceOver(final, ResourceCPU) || resourceOver(final, ResourcePG) {
-		return nil, false
+	for size := 1; size <= len(slots) && best == nil && trials < solveMaxTrials; size++ {
+		walk(0, size, nil)
 	}
-	out := make([]SolvePick, 0, len(chosen))
-	for _, resource := range []int64{ResourceCPU, ResourcePG} {
-		for _, cand := range chosen {
-			if cand.Resource == resource {
-				out = append(out, SolvePick{TypeID: cand.TypeID, Slot: cand.Slot, Resource: cand.Resource, Bonus: cand.Bonus})
+	if best == nil {
+		return nil, over
+	}
+	out := make([]SolvePick, 0, len(best))
+	for _, resource := range []int64{ResourceCPU, ResourcePG, 0} {
+		for _, c := range best {
+			if c.Resource == resource {
+				out = append(out, SolvePick{TypeID: c.TypeID, Slot: c.Slot, Resource: c.Resource, Bonus: c.Bonus})
 			}
 		}
 	}
-	return out, true
+	return out, nil
 }
 
-// ladderFor is one resource's candidates in pick order: the
-// smallest bonus first (the least implant that can do the job),
-// the cheapest first among equals, the ladder grades share
-// percents, and the low-grade is the cheap one. An unknown price
-// sorts after every known one at the same bonus.
-func ladderFor(candidates []ResourceImplant, resource int64) []ResourceImplant {
-	var out []ResourceImplant
-	for _, c := range candidates {
-		if c.Resource == resource && c.Bonus > 0 {
-			out = append(out, c)
+// setCost is a candidate set's total price (an unknown price
+// counts as dearer than any known one) and advertised bonus.
+func setCost(set []ResourceImplant) (price, bonus float64) {
+	for _, c := range set {
+		p := c.Price
+		if p <= 0 {
+			p = 1e15
 		}
+		price += p
+		bonus += c.Bonus
 	}
+	return price, bonus
+}
+
+// sortedCandidates is the candidates in ladder order: the
+// smallest bonus first (the least implant that can do the job),
+// the cheapest first among equals, an unknown price after every
+// known one, then by type ID.
+func sortedCandidates(candidates []ResourceImplant) []ResourceImplant {
+	out := append([]ResourceImplant(nil), candidates...)
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
 		if a.Bonus != b.Bonus {

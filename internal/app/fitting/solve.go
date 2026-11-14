@@ -12,7 +12,8 @@ import (
 
 // handleFitSolveImplants serves POST /fittings/solve-implants/:
 // the posted fit is over its CPU or powergrid budget, so search
-// the hardwiring ladder for the smallest implants that make it
+// the output implants (hardwirings and the Genolution set) for the
+// smallest set that make it
 // legal and answer with the picks. Nothing is applied here, the
 // editor applies a pick by writing it into the document's
 // implant overrides (the ordinary simulate path), which is a
@@ -41,6 +42,12 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 		writeFitJSON(w, map[string]any{"ok": false, "error": "Couldn't read the implant data."})
 		return
 	}
+	pieces, err := app.queries.ListFitResourceImplantSetPieces(ctx)
+	if err != nil {
+		logging.Errorf("fittings solve: implant set pieces: %v", err)
+		writeFitJSON(w, map[string]any{"ok": false, "error": "Couldn't read the implant data."})
+		return
+	}
 	implantIDs, _, _, _ := app.fv.FitPilotImplants(ctx, req.Pilot, req.Clone)
 	typeIDs := fitview.FitDocTypeIDs(doc)
 	typeIDs = append(typeIDs, implantIDs...)
@@ -53,6 +60,12 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 	for _, row := range rows {
 		typeIDs = append(typeIDs, row.TypeID)
 		candNames[row.TypeID] = row.Name
+	}
+	for _, row := range pieces {
+		typeIDs = append(typeIDs, row.TypeID)
+		if _, ok := candNames[row.TypeID]; !ok {
+			candNames[row.TypeID] = row.Name
+		}
 	}
 	snap, err := fit.LoadSnapshot(ctx, app.queries, typeIDs)
 	if err != nil {
@@ -96,13 +109,15 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 	typicals := app.deps.TypicalSells(ctx)
 	trueValues := app.deps.TrueValues(ctx)
 	buildCosts := app.deps.BuildCosts(ctx)
-	candidates := make([]fit.ResourceImplant, 0, len(rows))
+	candidates := make([]fit.ResourceImplant, 0, len(rows)+len(pieces))
+	direct := make(map[int64]bool, len(rows))
 	strongest := make(map[int64]float64, 2)
 	ladderSlots := make(map[int64]map[int]bool, 2)
 	for _, row := range rows {
 		if row.Bonus <= 0 {
 			continue
 		}
+		direct[row.TypeID] = true
 		price, _ := fitview.FitUnitPrice(typicals, trueValues, buildCosts, row.TypeID)
 		candidates = append(candidates, fit.ResourceImplant{
 			TypeID: row.TypeID, Slot: int(row.Slot), Resource: row.ResourceAttr,
@@ -115,6 +130,17 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 			ladderSlots[row.ResourceAttr] = make(map[int]bool)
 		}
 		ladderSlots[row.ResourceAttr][int(row.Slot)] = true
+	}
+	// Set pieces with no output bonus of their own (Genolution
+	// CA-3 and CA-4) raise the others' bonuses through the set.
+	seenPiece := make(map[int64]bool, len(pieces))
+	for _, row := range pieces {
+		if direct[row.TypeID] || seenPiece[row.TypeID] {
+			continue
+		}
+		seenPiece[row.TypeID] = true
+		price, _ := fitview.FitUnitPrice(typicals, trueValues, buildCosts, row.TypeID)
+		candidates = append(candidates, fit.ResourceImplant{TypeID: row.TypeID, Slot: int(row.Slot), Price: price})
 	}
 
 	picks, unsolved := fit.SolveImplants(compute, base, baseSlots, candidates)
@@ -155,12 +181,16 @@ func solveEngineItems(snap *fit.Snapshot, doc *fitview.FitDoc) []fit.ItemInput {
 	return engineItems
 }
 
-// solveResourceName is the plain-language resource label.
+// solveResourceName is the plain-language resource label; a set
+// piece has none.
 func solveResourceName(resource int64) string {
-	if resource == fit.ResourceCPU {
+	switch resource {
+	case fit.ResourceCPU:
 		return "CPU"
+	case fit.ResourcePG:
+		return "Powergrid"
 	}
-	return "Powergrid"
+	return ""
 }
 
 // solveFailureNote explains, per unsolved resource, how far over
@@ -172,7 +202,7 @@ func solveFailureNote(baseRes *fit.Result, unsolved []int64, strongest map[int64
 		if len(cpuSlots) == 1 && len(pgSlots) == 1 {
 			for s := range cpuSlots {
 				if pgSlots[s] {
-					return fmt.Sprintf("No implant makes this fit legal: CPU and powergrid hardwirings both plug into slot %d, and one slot can't hold both fixes.", s)
+					return fmt.Sprintf("No implant makes this fit legal: CPU and powergrid implants both plug into slot %d, and one slot can't hold both fixes.", s)
 				}
 			}
 		}
@@ -183,13 +213,13 @@ func solveFailureNote(baseRes *fit.Result, unsolved []int64, strongest map[int64
 		case fit.ResourceCPU:
 			part := fmt.Sprintf("CPU is over by %s tf", fitview.FitFmt1(baseRes.CPUUsed-baseRes.CPUMax))
 			if best := strongest[resource]; best > 0 {
-				part += fmt.Sprintf(" and the strongest CPU hardwiring adds %s%%", fitview.FitFmt1(best))
+				part += fmt.Sprintf(" and the strongest CPU implant adds %s%%", fitview.FitFmt1(best))
 			}
 			parts = append(parts, part)
 		case fit.ResourcePG:
 			part := fmt.Sprintf("powergrid is over by %s MW", fitview.FitFmt1(baseRes.PowergridUsed-baseRes.PowergridMax))
 			if best := strongest[resource]; best > 0 {
-				part += fmt.Sprintf(" and the strongest powergrid hardwiring adds %s%%", fitview.FitFmt1(best))
+				part += fmt.Sprintf(" and the strongest powergrid implant adds %s%%", fitview.FitFmt1(best))
 			}
 			parts = append(parts, part)
 		}

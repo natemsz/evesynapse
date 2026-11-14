@@ -194,3 +194,29 @@ func TestSolveImplantsAlreadyLegal(t *testing.T) {
 		t.Fatalf("picks = %v unsolved = %v, want both empty", pickIDs(picks), unsolved)
 	}
 }
+
+// The CPU and powergrid ladders sharing slot 6, as the real
+// hardwirings do, with a powergrid implant in another slot (the
+// Genolution CA-1 shape): the solver combines slots, CPU from
+// slot 6 and powergrid from slot 1, instead of reporting no fix.
+func TestSolveImplantsCombinesSlots(t *testing.T) {
+	fx := solverFixture()
+	const pgOther = int64(7008)
+	fx.attrs(pgOther, map[int64]float64{331: 1, 9602: 5})
+	fx.effect(pgOther, 9702, 0, fitMod("shipID", "ItemModifier", AttrPowerOutput, 9602, 6))
+	cands := solverCandidates()
+	for i := range cands {
+		if cands[i].Resource == ResourcePG {
+			cands[i].Slot = 6
+		}
+	}
+	cands = append(cands, ResourceImplant{TypeID: pgOther, Slot: 1, Resource: ResourcePG, Bonus: 5, Price: 3000000})
+	items := []ItemInput{{TypeID: solveCPUHog, Quantity: 1}, {TypeID: solvePGHog, Quantity: 1}}
+	picks, unsolved := solveWith(fx, items, nil, nil, cands)
+	if len(unsolved) != 0 {
+		t.Fatalf("unsolved = %v, want none", unsolved)
+	}
+	if len(picks) != 2 || picks[0].TypeID != solveCPU2Alt || picks[1].TypeID != pgOther {
+		t.Fatalf("picks = %v, want [%d %d]", pickIDs(picks), solveCPU2Alt, pgOther)
+	}
+}

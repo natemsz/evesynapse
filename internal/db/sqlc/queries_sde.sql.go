@@ -1156,6 +1156,51 @@ func (q *Queries) ListFitImplantTypes(ctx context.Context, arg ListFitImplantTyp
 	return items, nil
 }
 
+const listFitResourceImplantSetPieces = `-- name: ListFitResourceImplantSetPieces :many
+SELECT DISTINCT t.type_id, t.name, slot.value::bigint AS slot
+FROM sde_types t
+JOIN sde_type_attributes slot ON slot.type_id = t.type_id AND slot.attribute_id = 331
+JOIN sde_type_effects te ON te.type_id = t.type_id
+JOIN sde_effect_modifiers mod ON mod.effect_id = te.effect_id
+  AND mod.func = 'LocationGroupModifier' AND mod.group_id = t.group_id
+WHERE t.published = 1 AND t.market_group_id > 0
+  AND mod.modified_attr IN (
+    SELECT DISTINCT om.modifying_attr FROM sde_effect_modifiers om
+    WHERE om.modified_attr IN (48, 11) AND om.domain = 'shipID')
+ORDER BY t.type_id
+`
+
+type ListFitResourceImplantSetPiecesRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+	Slot   int64  `json:"slot"`
+}
+
+// ListFitResourceImplantSetPieces: implants that raise the CPU
+// or powergrid bonus of their own set's members (the Genolution
+// set bonus), so a set piece with no output bonus of its own can
+// still complete the solver's answer. The implant solver joins
+// them to its ladder with no bonus.
+func (q *Queries) ListFitResourceImplantSetPieces(ctx context.Context) ([]ListFitResourceImplantSetPiecesRow, error) {
+	rows, err := q.db.Query(ctx, listFitResourceImplantSetPieces)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFitResourceImplantSetPiecesRow
+	for rows.Next() {
+		var i ListFitResourceImplantSetPiecesRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.Slot); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFitResourceImplants = `-- name: ListFitResourceImplants :many
 SELECT DISTINCT t.type_id, t.name, slot.value::bigint AS slot, mod.modified_attr AS resource_attr, bonus.value AS bonus
 FROM sde_types t

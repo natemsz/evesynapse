@@ -347,6 +347,18 @@ test("bridge cost zones follow CCP's bands from the capital", () => {
   assert.deepStrictEqual(z(NaN), [5, 15], "no known distance pays the full rate");
 });
 
+test("3D: straight down is the 2D map, tilting raises height on screen", () => {
+  const o = [0, 0, 0];
+  assert.deepStrictEqual(map.orbit3(3, 4, 7, 0, 0, o).slice(0, 2), [3, 4], "no tilt: height does not move a system");
+  map.orbit3(0, 0, 10, 0, Math.PI / 2, o);
+  assert.ok(Math.abs(o[1] + 10) < 1e-9, "edge on: 10 up is 10 up the screen");
+  map.orbit3(5, 0, 0, Math.PI / 2, 0, o);
+  assert.ok(Math.abs(o[0]) < 1e-9 && Math.abs(o[1] - 5) < 1e-9, "a quarter turn swings east to south");
+  // A line A B C D: B can be swapped for anything both A and C reach.
+  const near = { 0: [1, 4], 1: [0, 2, 4], 2: [1, 3, 4], 3: [2], 4: [0, 1, 2] };
+  assert.deepStrictEqual(map.swapStops([0, 1, 2, 3], (u) => near[u]), [[4], []], "D reaches only C: C has no stand-in");
+});
+
 test("zoomed-out picking prefers the system with something on it", () => {
   // A bare system keeps the old 14px reach; a hot one reaches 24px.
   assert.strictEqual(map.pickReach(0), 14);

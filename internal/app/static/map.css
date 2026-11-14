@@ -976,6 +976,8 @@ html.map-full-open { overflow: hidden; }
   font: inherit;
   font-size: var(--fs-xs);
 }
+.map-route-3d { grid-column: 1 / -1; justify-self: start; }
+.map-3d-btn[aria-pressed="true"], .map-route-3d[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 .map-route-range { grid-column: 1 / -1; margin: 0; font-size: var(--fs-xs); color: var(--map-route); }
 .map-route-leg { color: var(--muted-2); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .map-route-warn li.map-route-fatigue { border-left-color: var(--map-route); color: var(--text); }

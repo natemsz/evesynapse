@@ -17,6 +17,7 @@
       <button type="button" class="btn small" data-map-zoom="in" aria-label="Zoom in" disabled>+</button>
       <button type="button" class="btn small" data-map-zoom="out" aria-label="Zoom out" disabled>−</button>
       <button type="button" class="btn small" data-map-zoom="fit" aria-label="Fit to view" disabled>Fit</button>
+      <button type="button" class="btn small map-3d-btn" data-map-3d aria-pressed="false" aria-label="3D view" title="3D view: true positions (3)" disabled>3D</button>
       <button type="button" class="btn small map-full-btn" data-map-full aria-label="Full screen" aria-pressed="false" title="Full screen (Shift F)" disabled><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button type="button" class="btn small map-keys-btn" data-map-keys aria-label="Map controls" aria-expanded="false" aria-controls="map-keys" disabled>?</button>
     </div>
@@ -111,6 +112,8 @@
         <div><dt>Zoom out · Esc</dt><dd>Back to New Eden</dd></div>
         <div><dt>Enter</dt><dd>Tactical view of the selected system</dd></div>
         <div><dt>0 · F</dt><dd>Fit</dd></div>
+        <div><dt>3</dt><dd>3D view, true positions</dd></div>
+        <div><dt>Drag · Shift drag (3D)</dt><dd>Turn · pan</dd></div>
         <div><dt>Shift F</dt><dd>Full screen</dd></div>
         <div><dt>/</dt><dd>Find</dd></div>
         <div><dt>L · Shift L</dt><dd>Next · previous layer</dd></div>
@@ -150,6 +153,7 @@
         <label><span>Ship</span><select data-route-ship></select></label>
         <label><span>Pilot</span><select data-route-pilot><option value="jdc:5">Jump Drive Calibration V</option><option value="jdc:4">Jump Drive Calibration IV</option><option value="jdc:3">Jump Drive Calibration III</option><option value="jdc:0">No calibration skill</option></select></label>
         <p class="map-route-range"><span data-route-range></span></p>
+        <button type="button" class="btn small map-route-3d" data-map-3d aria-pressed="false">See it in 3D</button>
       </div>
       <div class="map-route-modes" role="radiogroup" aria-label="Route preference">
         <button type="button" role="radio" aria-checked="true" data-route-mode="short" title="The fewest jumps">Shortest</button>

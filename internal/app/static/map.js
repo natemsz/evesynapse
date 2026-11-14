@@ -909,6 +909,9 @@
         halo: tok("--map-halo", "rgba(10,7,4,0.85)"),
         // The live layers.
         dim: tok("--map-dim", "rgba(200,180,160,0.28)"),
+        feed: tok("--map-feed", "#ff4d3a"),
+        feedBig: tok("--map-feed-big", "#ffd27a"),
+        feedNPC: tok("--map-feed-npc", "#b08a74"),
         heatLo: rgbOf(tok("--map-heat-lo", "#7a2a0c")),
         heatHi: rgbOf(tok("--map-heat-hi", "#ff6a1a")),
         heatCore: rgbOf(tok("--map-heat-core", "#ffe2a8")),
@@ -1287,6 +1290,7 @@
         ctx.stroke();
       });
       drawJumpRange(k, ox, oy, r);
+      drawFeed(k, ox, oy, r);
       drawIntel(k, ox, oy, r);
       drawMarks(k, ox, oy, r);
       drawPings(k, ox, oy, r);
@@ -1866,6 +1870,253 @@
       ctx.restore();
     }
 
+    // --- Live kills ---
+    // The layer's kills, newest first: the recent kills the server
+    // holds (/map/kills.json), then each one the killboard's stream
+    // (/intel/kills/stream) sends while the layer is on. A blip fades
+    // over the hour; one that has just arrived rings out. The stream
+    // is open only while the layer shows.
+    var FEED_KEEP_MS = 3600000, FEED_RING_MS = 2400, FEED_MAX = 300;
+    var KF = { rows: [], byID: {}, src: null, state: "", fetched: false, watch: false, open: null, frame: 0 };
+    var killCard = el.querySelector(".map-kill-card");
+    function feedAdd(k, live) {
+      var i = G.byID[k.system];
+      if (i === undefined || !k.id) return null;
+      var b = KF.byID[k.id];
+      if (b) { b.k = k; return b; }
+      b = { k: k, s: i, t: Date.parse(k.time) || Date.now(), born: live && !still ? performance.now() : 0, f: -1, x: 0, y: 0, rad: 0 };
+      KF.byID[k.id] = b;
+      KF.rows.push(b);
+      KF.rows.sort(function (a, c) { return c.t - a.t; });
+      var cut = Date.now() - FEED_KEEP_MS;
+      while (KF.rows.length && (KF.rows.length > FEED_MAX || KF.rows[KF.rows.length - 1].t < cut)) {
+        var gone = KF.rows.pop();
+        delete KF.byID[gone.k.id];
+        if (KF.open === gone) closeKill();
+      }
+      return b;
+    }
+    function feedState(s) {
+      KF.state = s;
+      if (layer === "feed") renderLegend();
+    }
+    function feedStart() {
+      if (KF.src || compact) return;
+      if (!("EventSource" in window)) { feedState("down"); return; }
+      var src = KF.src = new EventSource("/intel/kills/stream");
+      feedState("retry");
+      // A swap that takes the map away closes the stream at once,
+      // not at the next kill it sends.
+      if (!KF.watch && window.EveSynapseContent && window.EveSynapseContent.onReady) {
+        KF.watch = true;
+        window.EveSynapseContent.onReady(function () { if (!el.isConnected) feedStop(); });
+      }
+      src.addEventListener("open", function () { feedState("live"); });
+      src.addEventListener("error", function () { feedState(src.readyState === EventSource.CLOSED ? "down" : "retry"); });
+      function on(name, fn) {
+        src.addEventListener(name, function (e) {
+          if (!el.isConnected) { feedStop(); return; }
+          var d;
+          try { d = JSON.parse(e.data); } catch (err) { return; }
+          fn(d);
+        });
+      }
+      on("kill", function (k) {
+        if (!feedAdd(k, true)) return;
+        if (layer === "feed") { renderLegend(); schedule(); }
+      });
+      on("kill-price", function (p) {
+        var b = KF.byID[p.id];
+        if (!b) return;
+        b.k.value = p.value;
+        b.k.big = p.big;
+        if (KF.open === b) openKill(b);
+        if (layer === "feed") { renderLegend(); schedule(); }
+      });
+      // The first picture, fetched on each start so a layer turned
+      // back on fills the gap; the stream may already have sent
+      // some of it (each kill is kept once, by id).
+      if (KF.fetched) return;
+      KF.fetched = true;
+      fetch("/map/kills.json", { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+        if (!d || !el.isConnected) return;
+        (d.kills || []).forEach(function (k) { feedAdd(k, false); });
+        if (!d.live) { feedStop(); feedState("off"); }
+        if (layer === "feed") { renderLegend(); schedule(); }
+      }).catch(function () { KF.fetched = false; });
+    }
+    function feedStop() {
+      if (KF.src) { KF.src.close(); KF.src = null; }
+      KF.state = "";
+      KF.fetched = false;
+    }
+    // The blips, with their screen places kept for picking. Kills in
+    // one system spread round it, newest in the middle.
+    function drawFeed(k, ox, oy, r) {
+      if (layer !== "feed" || !KF.rows.length) return;
+      var now = Date.now(), pnow = performance.now(), per = {}, ringing = false, m, b, i;
+      KF.frame++;
+      for (m = 0; m < KF.rows.length; m++) {
+        b = KF.rows[m]; i = b.s;
+        if (now - b.t > FEED_KEEP_MS) continue;
+        if (mode !== "universe" && S.r[i] !== region) continue;
+        var nth = per[i] = (per[i] || 0) + 1;
+        var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
+        if (nth > 1) {
+          var a = nth * 2.4, d = r * 1.4 + 2.2 * Math.sqrt(nth);
+          sx += Math.cos(a) * d; sy += Math.sin(a) * d;
+        }
+        if (sx < -30 || sy < -30 || sx > cw + 30 || sy > ch + 30) continue;
+        b.x = sx; b.y = sy; b.f = KF.frame;
+        b.rad = Math.max(b.k.big ? 5 : isPod(b.k.shipType) ? 2.5 : 3.5, r * (b.k.big ? 1.9 : isPod(b.k.shipType) ? 0.9 : 1.3));
+      }
+      ctx.save();
+      // Oldest first, so the newest sit on top.
+      for (m = KF.rows.length - 1; m >= 0; m--) {
+        b = KF.rows[m];
+        if (b.f !== KF.frame) continue;
+        var fade = 1 - 0.7 * Math.min(1, (now - b.t) / FEED_KEEP_MS);
+        var col = b.k.big ? colors.feedBig : b.k.npc ? colors.feedNPC : colors.feed;
+        ctx.globalAlpha = fade;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.rad, 0, Math.PI * 2);
+        ctx.fillStyle = col;
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = colors.halo;
+        ctx.stroke();
+        if (b.born) {
+          var e = (pnow - b.born) / FEED_RING_MS;
+          if (e < 1) {
+            ringing = true;
+            ctx.globalAlpha = 1 - e;
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = col;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.rad + 4 + e * 26, 0, Math.PI * 2);
+            ctx.stroke();
+          } else b.born = 0;
+        }
+        if (KF.open === b) {
+          ctx.globalAlpha = 1;
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = colors.label;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.rad + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+      if (KF.open) placeKill();
+      if (ringing) schedule();
+    }
+    function isPod(t) { return t === 670 || t === 33328; }
+    // pickKill: the blip under a point, nearest first; null if none.
+    function pickKill(px, py) {
+      if (layer !== "feed") return null;
+      var best = null, bd = Infinity;
+      KF.rows.forEach(function (b) {
+        if (b.f !== KF.frame) return;
+        var d = Math.hypot(b.x - px, b.y - py);
+        if (d <= Math.max(b.rad + 4, 9) && d < bd) { bd = d; best = b; }
+      });
+      return best;
+    }
+    // The kill card: a summary of one kill beside its blip, with the
+    // way on to the full killmail.
+    function kcEl(tag, cls, text, parent) {
+      var e = root.createElement(tag);
+      if (cls) e.className = cls;
+      if (text) e.textContent = text;
+      if (parent) parent.appendChild(e);
+      return e;
+    }
+    function kcLink(href, text, parent, cls) {
+      var a = kcEl("a", cls || "", text, parent);
+      a.href = href;
+      return a;
+    }
+    function kcRow(label, parent) {
+      var p = kcEl("p", "map-kill-row", "", parent);
+      kcEl("span", "map-kill-k", label, p);
+      return kcEl("span", "map-kill-v", "", p);
+    }
+    function openKill(b) {
+      if (!killCard) return;
+      var k = b.k;
+      KF.open = b;
+      killCard.textContent = "";
+      var x = kcEl("button", "map-kill-close", "×", killCard);
+      x.type = "button";
+      x.setAttribute("data-map-kill-close", "");
+      x.setAttribute("aria-label", "Close");
+      var head = kcEl("div", "map-kill-head", "", killCard);
+      var img = kcEl("img", "map-kill-ship", "", head);
+      img.src = "https://images.evetech.net/types/" + k.shipType + "/icon?size=64";
+      img.alt = "";
+      img.width = 40; img.height = 40;
+      var ht = kcEl("div", "", "", head);
+      kcLink("/intel/kill/" + k.id + "/", k.ship || "Unknown ship", ht, "map-kill-title");
+      var val = kcEl("p", "map-kill-value" + (k.big ? " big" : ""), k.value || "Pricing…", ht);
+      if (!k.value) val.classList.add("muted");
+      var v = kcRow(k.structure ? "Owner" : "Victim", killCard);
+      if (k.structure) { if (k.corp) kcLink("/intel/kills/?corporation=" + k.corp, k.corpName, v); }
+      else if (k.victim) kcLink("/intel/kills/?character=" + k.victim, k.victimName, v);
+      var org = k.allianceName || (!k.structure && k.corpName);
+      if (org) {
+        var o = kcRow(k.allianceName ? "Alliance" : "Corp", killCard);
+        if (k.allianceName) kcLink("/intel/kills/?alliance=" + k.alliance, k.allianceName, o);
+        else kcLink("/intel/kills/?corporation=" + k.corp, k.corpName, o);
+      }
+      var f = kcRow("Final blow", killCard);
+      if (k.final) kcLink("/intel/kills/?character=" + k.final, k.finalName, f);
+      else if (k.finalCorp) kcLink("/intel/kills/?corporation=" + k.finalCorp, k.finalCorpName, f);
+      else f.textContent = "NPC";
+      f.appendChild(root.createTextNode(" · " + k.attackers + (k.attackers === 1 ? " attacker" : " attackers")));
+      var w = kcRow("Where", killCard);
+      kcEl("span", "sec sec-" + k.secTier, k.sec, w);
+      w.appendChild(root.createTextNode(" "));
+      kcLink("/intel/kills/?system=" + k.system, k.systemName, w);
+      kcEl("span", "map-tip-region", " " + k.regionName, w);
+      var t = kcRow("When", killCard);
+      t.textContent = agoShort(Date.parse(k.time) / 1000) + " · " + k.when + " EVE";
+      var tags = [k.solo && "solo", k.awox && "awox", k.npc && "NPC"].filter(Boolean);
+      if (tags.length) {
+        var tg = kcEl("p", "map-kill-tags", "", killCard);
+        tags.forEach(function (s) { kcEl("span", s === "awox" ? "warn" : s === "NPC" ? "dim" : "", s, tg); });
+      }
+      kcLink("/intel/kill/" + k.id + "/", "Full killmail", killCard, "btn small map-kill-more");
+      killCard.hidden = false;
+      showTip(-1);
+      placeKill();
+      schedule();
+    }
+    function closeKill() {
+      if (!KF.open) return;
+      KF.open = null;
+      el.classList.remove("map-kill-open");
+      if (killCard) killCard.hidden = true;
+      schedule();
+    }
+    // Beside the blip, flipped to stay on the stage; on a narrow
+    // stage it sits along the bottom edge.
+    function placeKill() {
+      var b = KF.open;
+      if (!b || !killCard || killCard.hidden) return;
+      var w = killCard.offsetWidth, h = killCard.offsetHeight, gap = 14, x, y;
+      // Narrow: the card takes the legend's corner while it is open.
+      el.classList.toggle("map-kill-open", cw < 560);
+      if (cw < 560) { x = (cw - w) / 2; y = ch - h - 8; }
+      else {
+        if (b.f !== KF.frame) { killCard.style.visibility = "hidden"; return; }
+        x = b.x + gap; y = b.y - h / 2;
+        if (x + w > cw - 6) x = b.x - gap - w;
+        y = Math.min(Math.max(6, y), ch - h - 6);
+      }
+      killCard.style.visibility = "";
+      killCard.style.transform = "translate(" + Math.max(6, x) + "px," + Math.max(6, y) + "px)";
+    }
+
     function drawLayer(k, ox, oy, r, list, n, pad) {
       var i, m, sx, sy;
       function on(i) {
@@ -1882,6 +2133,11 @@
         }
         ctx.fillStyle = color;
         ctx.fill();
+      }
+      // Live kills: the systems stay quiet under the blips.
+      if (layer === "feed") {
+        batch(colors.dim, r * 0.8, function () { return true; });
+        return;
       }
       if (HEAT[layer]) {
         var vals = LY[layer], max = heatMax(layer);
@@ -2272,6 +2528,7 @@
       if (!el.querySelector('[data-map-layer="' + name + '"]')) name = "security";
       layer = name;
       if (name === "zones") { zonesEnsure(); loadJump(); }
+      if (name === "feed") feedStart(); else { feedStop(); closeKill(); }
       showTip(-1);
       el.querySelectorAll("[data-map-layer]").forEach(function (b) {
         var on = b.getAttribute("data-map-layer") === name;
@@ -2297,7 +2554,7 @@
       return ("0" + d.getUTCHours()).slice(-2) + ":" + ("0" + d.getUTCMinutes()).slice(-2) + " EVE";
     }
     var LAYER_TITLES = { kills: "Ship and pod kills, last hour", npc: "NPC kills, last hour", jumps: "Jumps, last hour",
-      sov: "Sovereignty", zones: "Ansiblex zones", fw: "Faction Warfare", inc: "Incursions", threat: "Threat now" };
+      sov: "Sovereignty", zones: "Ansiblex zones", feed: "Live kills", fw: "Faction Warfare", inc: "Incursions", threat: "Threat now" };
 
     // The legend for the layer showing: the security swatches for
     // Security, otherwise a scale or key built here.
@@ -2459,6 +2716,37 @@
         row("", colors.inc, "Infested");
         row("", colors.incStage, "Staging");
         if (!LY.incs.length) row("", colors.dim, "No incursions right now");
+      } else if (layer === "feed") {
+        row("", colors.feed, "Ship or pod kill");
+        row("", colors.feedBig, "Worth 1B ISK or more");
+        row("", colors.feedNPC, "Killed by NPCs");
+        var hint1 = root.createElement("p");
+        hint1.className = "map-layer-row muted";
+        hint1.textContent = "Newest brightest. Select a kill for its details.";
+        box.appendChild(hint1);
+        // The latest few, each a way to its blip.
+        var latest = KF.rows.slice(0, 5);
+        if (latest.length) {
+          var ol = root.createElement("ol");
+          ol.className = "map-feed-latest";
+          ol.setAttribute("aria-label", "Latest kills");
+          latest.forEach(function (b) {
+            var li = root.createElement("li");
+            var btn = root.createElement("button");
+            btn.type = "button";
+            btn.setAttribute("data-map-kill", String(b.k.id));
+            var nm = root.createElement("span");
+            nm.textContent = b.k.ship + " · " + b.k.systemName;
+            var vv = root.createElement("span");
+            vv.className = "map-feed-value";
+            vv.textContent = b.k.value || "";
+            btn.appendChild(nm);
+            btn.appendChild(vv);
+            li.appendChild(btn);
+            ol.appendChild(li);
+          });
+          box.appendChild(ol);
+        }
       }
       if (HEAT[layer]) {
         // The scale: a slider, ends labelled by what they do.
@@ -2484,6 +2772,10 @@
       // Zones stand on the sovereignty data: its capitals.
       var atOf = LY.at[layer === "zones" ? "sov" : layer];
       at.textContent = atOf ? "As of " + eveTime(atOf) : "No data yet";
+      if (layer === "feed") {
+        at.textContent = { live: "Live", retry: "Connecting…", down: "Offline: showing the kills already in", off: "Live kills are off on this server" }[KF.state] || "";
+        at.setAttribute("data-state", KF.state);
+      }
       box.appendChild(at);
     }
 
@@ -4329,6 +4621,9 @@
       canvas.classList.remove("dragging");
     }
     function tap(px, py) {
+      var kb = pickKill(px, py);
+      if (kb) { openKill(kb); return; }
+      closeKill();
       var s = pick(px, py);
       if (s >= 0) { select(s); return; }
       var g = pickGhost(px, py);
@@ -4410,6 +4705,7 @@
           break;
         case "Escape":
           if (!keysPanel.hidden) toggleKeys(false);
+          else if (KF.open) closeKill();
           else if (routeFrom >= 0 || routeTo >= 0) clearRoute();
           else if (sel >= 0) select(-1);
           else if (mode !== "universe" || !el.classList.contains("map-full")) leaveRegion();
@@ -4679,6 +4975,17 @@
       }
       if (t.closest("[data-map-full]")) { toggleFull(); return; }
       if (t.closest("[data-map-3d]")) { toggle3D(); return; }
+      if (t.closest("[data-map-kill-close]")) { closeKill(); return; }
+      var kl = t.closest("[data-map-kill]");
+      if (kl) {
+        var kb = KF.byID[kl.getAttribute("data-map-kill")];
+        if (kb) {
+          if (mode !== "universe" && S.r[kb.s] !== region) leaveRegion();
+          flyTo(wx(kb.s), wy(kb.s), Math.max(cam.k, fitK() * 4), 380);
+          openKill(kb);
+        }
+        return;
+      }
       if (t.closest("[data-map-data]")) { toggleDataMenu(); return; }
       if (t.closest("[data-map-view]")) { toggleViewMenu(); return; }
       if (t.closest(".map-data-menu")) return;

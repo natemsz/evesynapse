@@ -1129,6 +1129,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/intel.json", app.handleMapIntel)
 		r.Get("/mine.json", app.handleMapMine)
 		r.Get("/jump.json", app.handleMapJump)
+		// The live kills layer's first picture (map_kills.go).
+		r.Get("/kills.json", app.handleMapKills)
 		// A planned route to the game's autopilot (map_route.go);
 		// it answers JSON, signed-in or not.
 		r.Post("/route", app.handleMapRoute)

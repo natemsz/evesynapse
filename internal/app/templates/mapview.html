@@ -76,6 +76,7 @@
       <button type="button" role="radio" aria-checked="true" data-map-layer="security">Security</button>
       <button type="button" role="radio" aria-checked="false" data-map-layer="threat" disabled>Threat</button>
       <button type="button" role="radio" aria-checked="false" data-map-layer="kills" disabled>Kills</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="feed" disabled>Live kills</button>
       <button type="button" role="radio" aria-checked="false" data-map-layer="npc" disabled>NPC kills</button>
       <button type="button" role="radio" aria-checked="false" data-map-layer="jumps" disabled>Jumps</button>
       <button type="button" role="radio" aria-checked="false" data-map-layer="sov" disabled>Sovereignty</button>
@@ -101,6 +102,9 @@
     {{/* The hover popover (mouse only): the system under the cursor
          and the figures of the layer showing. Filled by map.js. */}}
     <div class="map-tip" role="tooltip" aria-hidden="true" hidden></div>
+    {{/* The live kills layer's card: one kill's summary beside its
+         blip. Filled by map.js. */}}
+    <div class="map-kill-card" role="dialog" aria-label="Kill details" hidden></div>
     <section class="map-keys" id="map-keys" aria-label="Map controls" hidden>
       <h2>Map controls</h2>
       <dl>

@@ -1908,8 +1908,11 @@
       if (v3.on) {
         v3.hold = null;
         syncURL();
-        // Opened with a jump route: the view closes in on it.
+        // Opened with a jump route: the view closes in on it. Opened
+        // on the whole of New Eden: the turned galaxy, which has its
+        // own shape, is framed and centred.
         if (focus3()) fitRoute();
+        else if (v3.wide) flyFit();
       } else finish2D();
       return false;
     }
@@ -1932,6 +1935,9 @@
       if (p < 0) return;
       v3.p = p;
       v3.hold = [(wx(p) - cam.x) * cam.k + cw / 2, (wy(p) - cam.y) * cam.k + ch / 2];
+      // Opened on the whole of New Eden with nothing picked: it is
+      // framed again once the switch ends (step3).
+      v3.wide = sel < 0 && cam.k <= fitK() * 1.5;
       v3.wasProj = v3.fromProj = projOn;
       if (projOn) {
         v3.k0 = cam.k;

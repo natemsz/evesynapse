@@ -383,29 +383,58 @@ func zkillHistoryPage(ctx context.Context, client *http.Client, base string, kin
 
 // applyPilotKill folds one killmail into one pilot's activity
 // profile: their part in it (a loss, a kill, a final blow, the
-// gang they flew with on it) and where and when it happened. It
-// reports whether the kill was newly folded in. The (kill,
-// pilot) marker is written in the same transaction, so neither
-// writer can count a kill twice. requireProfile limits the fold
-// to pilots who already have a profile: the live stream's rule,
-// since it maintains profiles rather than starting them.
+// gang they flew with on it) and where and when it happened
+// (applyPilotPart). It reports whether the kill was newly folded
+// in. requireProfile limits the fold to a pilot who already has a
+// profile.
 func (app *Application) applyPilotKill(ctx context.Context, characterID int64, km killmailFull, requireProfile bool) (bool, error) {
-	if characterID <= 0 || km.KillmailID <= 0 || km.KillmailTime.IsZero() {
+	part, ok := pilotPartOf(characterID, km)
+	if !ok {
 		return false, nil
 	}
-	var isVictim, isAttacker, finalBlow bool
-	var victimShip, attackerShip int64
+	return app.applyPilotPart(ctx, characterID, part, requireProfile)
+}
+
+// pilotKillPart is one pilot's part in one kill: what the profile
+// fold counts.
+type pilotKillPart struct {
+	KillmailID   int64
+	Time         time.Time
+	SystemID     int64
+	Victim       bool
+	VictimShip   int64
+	Attacker     bool
+	AttackerShip int64
+	FinalBlow    bool
+	Gang         int // everyone on the attacker list
+}
+
+// pilotPartOf reads a pilot's part from a killmail; false when the
+// pilot is not on it.
+func pilotPartOf(characterID int64, km killmailFull) (pilotKillPart, bool) {
+	if characterID <= 0 || km.KillmailID <= 0 || km.KillmailTime.IsZero() {
+		return pilotKillPart{}, false
+	}
+	p := pilotKillPart{KillmailID: km.KillmailID, Time: km.KillmailTime.UTC(), SystemID: km.SolarSystemID, Gang: len(km.Attackers)}
 	if km.Victim.CharacterID == characterID {
-		isVictim, victimShip = true, km.Victim.ShipTypeID
+		p.Victim, p.VictimShip = true, km.Victim.ShipTypeID
 	}
 	for _, a := range km.Attackers {
 		if a.CharacterID == characterID {
-			isAttacker, attackerShip = true, a.ShipTypeID
-			finalBlow = a.FinalBlow
+			p.Attacker, p.AttackerShip, p.FinalBlow = true, a.ShipTypeID, a.FinalBlow
 			break
 		}
 	}
-	if !isVictim && !isAttacker {
+	return p, p.Victim || p.Attacker
+}
+
+// applyPilotPart folds one pilot's part in one kill into the
+// pilot's profile. It reports whether the kill was newly folded in.
+// The (kill, pilot) marker is written in the same transaction, so no
+// writer counts a kill twice. requireProfile limits the fold to a
+// pilot who already has a profile.
+func (app *Application) applyPilotPart(ctx context.Context, characterID int64, p pilotKillPart, requireProfile bool) (bool, error) {
+	if characterID <= 0 || p.KillmailID <= 0 || p.Time.IsZero() || (!p.Victim && !p.Attacker) {
 		return false, nil
 	}
 	if requireProfile {
@@ -426,7 +455,7 @@ func (app *Application) applyPilotKill(ctx context.Context, characterID int64, k
 	defer tx.Rollback(ctx)
 	q := db.New(tx)
 	if _, err := q.MarkPilotKillApplied(ctx, db.MarkPilotKillAppliedParams{
-		KillmailID: km.KillmailID, CharacterID: characterID, KillmailTime: km.KillmailTime.UTC(),
+		KillmailID: p.KillmailID, CharacterID: characterID, KillmailTime: p.Time,
 	}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil // already folded in
@@ -435,53 +464,53 @@ func (app *Application) applyPilotKill(ctx context.Context, characterID int64, k
 	}
 	pp := db.ApplyPilotActivityKillParams{
 		CharacterID: characterID, AppliedAt: time.Now().UTC(),
-		KillmailTime: sql.NullTime{Time: km.KillmailTime.UTC(), Valid: true},
+		KillmailTime: sql.NullTime{Time: p.Time, Valid: true},
 	}
-	if isAttacker {
+	if p.Attacker {
 		pp.Kills = 1
-		pp.GangTotal = int64(len(km.Attackers))
+		pp.GangTotal = int64(p.Gang)
 		pp.GangSamples = 1
 	}
-	if isVictim {
+	if p.Victim {
 		pp.Losses = 1
 	}
-	if finalBlow {
+	if p.FinalBlow {
 		pp.FinalBlows = 1
 	}
 	if err := q.ApplyPilotActivityKill(ctx, pp); err != nil {
 		return false, err
 	}
-	if isVictim && victimShip > 0 {
+	if p.Victim && p.VictimShip > 0 {
 		if err := q.ApplyPilotActivityShip(ctx, db.ApplyPilotActivityShipParams{
-			CharacterID: characterID, ShipTypeID: victimShip, Lost: 1,
+			CharacterID: characterID, ShipTypeID: p.VictimShip, Lost: 1,
 		}); err != nil {
 			return false, err
 		}
 	}
-	if isAttacker && attackerShip > 0 {
-		sp := db.ApplyPilotActivityShipParams{CharacterID: characterID, ShipTypeID: attackerShip, Flown: 1}
-		if finalBlow {
+	if p.Attacker && p.AttackerShip > 0 {
+		sp := db.ApplyPilotActivityShipParams{CharacterID: characterID, ShipTypeID: p.AttackerShip, Flown: 1}
+		if p.FinalBlow {
 			sp.FinalBlows = 1
 		}
 		if err := q.ApplyPilotActivityShip(ctx, sp); err != nil {
 			return false, err
 		}
 	}
-	if km.SolarSystemID > 0 {
+	if p.SystemID > 0 {
 		if err := q.ApplyPilotActivitySystem(ctx, db.ApplyPilotActivitySystemParams{
-			CharacterID: characterID, SystemID: km.SolarSystemID, KillmailTime: km.KillmailTime.UTC(),
+			CharacterID: characterID, SystemID: p.SystemID, KillmailTime: p.Time,
 		}); err != nil {
 			return false, err
 		}
 	}
 	if err := q.ApplyPilotActivityHour(ctx, db.ApplyPilotActivityHourParams{
-		CharacterID: characterID, Hour: int16(km.KillmailTime.UTC().Hour()),
+		CharacterID: characterID, Hour: int16(p.Time.Hour()),
 	}); err != nil {
 		return false, err
 	}
 	// The usual ship is derived from the ship rows: only
 	// re-sort it when this kill actually moved one.
-	if (isVictim && victimShip > 0) || (isAttacker && attackerShip > 0) {
+	if (p.Victim && p.VictimShip > 0) || (p.Attacker && p.AttackerShip > 0) {
 		if err := q.RefreshPilotUsualShip(ctx, characterID); err != nil {
 			return false, err
 		}
@@ -492,32 +521,41 @@ func (app *Application) applyPilotKill(ctx context.Context, characterID int64, k
 	return true, nil
 }
 
-// maintainPilotActivity folds a kill from the live stream into
-// the profiles of the two pilots it headlines, the victim and the
-// final blow, when they have profiles. The rest of the attackers
-// wait for their own backfill, which reads their whole part in
-// it: folding every attacker on every kill through the stream
-// would multiply the ingest writes by the gang size. The fold is
-// not backfill: it fetches nothing and only folds a kill the
-// stream already ingested into profiles that already exist, so
-// the backfill switch does not gate it.
+// maintainPilotActivity folds a kill from the live stream into the
+// profile of every pilot on it who has one: the victim and every
+// attacker, final blow or not. One lookup per kill finds them, so a
+// big gang costs writes only for the profiled pilots in it. The fold
+// is not backfill: it fetches nothing and only folds a kill the
+// stream already ingested into profiles that already exist, so the
+// backfill switch does not gate it. Kills the stream once left out
+// are folded by the mend (pilot_activity_mend.go).
 func (app *Application) maintainPilotActivity(ctx context.Context, raw json.RawMessage) {
 	var km killmailFull
 	if err := goccyjson.Unmarshal(raw, &km); err != nil {
 		return
 	}
-	pilots := map[int64]bool{}
-	if km.Victim.CharacterID > 0 {
-		pilots[km.Victim.CharacterID] = true
-	}
-	for _, a := range km.Attackers {
-		if a.FinalBlow && a.CharacterID > 0 {
-			pilots[a.CharacterID] = true
-			break
+	ids := make([]int64, 0, len(km.Attackers)+1)
+	seen := map[int64]bool{}
+	add := func(id int64) {
+		if id > 0 && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
 		}
 	}
-	for id := range pilots {
-		if _, err := app.applyPilotKill(ctx, id, km, true); err != nil {
+	add(km.Victim.CharacterID)
+	for _, a := range km.Attackers {
+		add(a.CharacterID)
+	}
+	if len(ids) == 0 {
+		return
+	}
+	profiled, err := app.queries.ListProfiledPilots(ctx, ids)
+	if err != nil {
+		logging.Warnf("pilot activity: profiled pilots on kill %d: %v", km.KillmailID, err)
+		return
+	}
+	for _, id := range profiled {
+		if _, err := app.applyPilotKill(ctx, id, km, false); err != nil {
 			logging.Warnf("pilot activity: fold stream kill %d for pilot %d: %v", km.KillmailID, id, err)
 		}
 	}

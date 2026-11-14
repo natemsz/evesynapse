@@ -938,6 +938,10 @@
     try { zoomTactical = window.localStorage.getItem(ZOOM_TACTICAL_KEY) === "1"; } catch (e) { /* private mode */ }
 
     var cw = 0, ch = 0, dpr = 1;
+    // Name pictures for 3D (labelSprite), by font, colour and text;
+    // made again once a web font arrives, or a scheme changes colours.
+    var spriteCache = {}, spriteCount = 0;
+    if (root.fonts && root.fonts.addEventListener) root.fonts.addEventListener("loadingdone", function () { spriteCache = {}; spriteCount = 0; });
     var mode = "universe", region = -1;
     var cam = { x: 0, y: 0, k: 1 };
     // 3D: the true positions, orbited (project3). t runs from 0 (the
@@ -959,6 +963,8 @@
 
     // --- Colors from the page ---
     function readColors() {
+      spriteCache = {};
+      spriteCount = 0;
       var cs = getComputedStyle(el);
       function tok(name, fallback) {
         var v = cs.getPropertyValue(name).trim();
@@ -1441,8 +1447,16 @@
     // that is showing (and lose it back the next frame): names stop
     // blinking in and out as the scale changes.
     var shownLabels = {};
+    // While the 3D view turns (its angle changed since the last frame),
+    // names already showing hold their places and no new ones come in:
+    // systems slide past each other as it turns, and in crowded space
+    // names would otherwise win and lose their room frame to frame.
+    var LABEL_HOLD_PAD = -8, labelTurn = { yaw: NaN, pitch: NaN };
     function drawLabels(k, ox, oy, r) {
       var nextShown = {}, queue = [];
+      var turning = !!V3 && (v3.yaw !== labelTurn.yaw || v3.pitch !== labelTurn.pitch);
+      labelTurn.yaw = V3 ? v3.yaw : NaN;
+      labelTurn.pitch = V3 ? v3.pitch : NaN;
       // Items in priority order; the passes do the rest.
       function inPlaceFirst(items, key, fn) {
         for (var i = 0; i < items.length; i++) fn(items[i]);
@@ -1481,16 +1495,46 @@
         // Geometric hysteresis: a name already showing claims a box
         // a little inside its text, a newcomer one a little outside,
         // so two names at the edge of touching don't trade places.
-        var pad = q.pass === 1 ? -2 : 4;
+        if (turning && q.pass === 2) return;
+        var pad = q.pass === 1 ? (turning ? Math.max(LABEL_HOLD_PAD, 1 - Math.min(w, q.size) / 2) : -2) : 4;
         if (!claim(lx - pad, ly - pad, w + 2 * pad, q.size + 2 * pad) && !q.force) return;
         if (q.key) nextShown[q.key] = 1;
         ctx.globalAlpha = q.alpha;
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = colors.halo;
-        ctx.strokeText(q.text, lx, ly + q.size * 0.8);
-        ctx.fillStyle = q.color;
-        ctx.fillText(q.text, lx, ly + q.size * 0.8);
+        if (V3) labelSprite(q, w, lx, ly);
+        else {
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = colors.halo;
+          ctx.strokeText(q.text, lx, ly + q.size * 0.8);
+          ctx.fillStyle = q.color;
+          ctx.fillText(q.text, lx, ly + q.size * 0.8);
+        }
         if (q.placed) q.placed([lx, ly, w, q.size]);
+      }
+      // In 3D a name is drawn as a picture of itself, made once and
+      // placed at its exact spot: canvas text snaps to whole pixels,
+      // so while the view turns, names drawn as text stepped a pixel
+      // at a time against their smoothly moving systems.
+      function labelSprite(q, w, lx, ly) {
+        var key = ctx.font + "|" + q.color + "|" + dpr + "|" + q.text, sp = spriteCache[key];
+        if (!sp) {
+          if (spriteCount > 1500) { spriteCache = {}; spriteCount = 0; }
+          var cv = root.createElement("canvas"), m = 3, sw = Math.ceil(w + 2 * m), sh = Math.ceil(q.size * 1.25 + 2 * m);
+          cv.width = Math.ceil(sw * dpr);
+          cv.height = Math.ceil(sh * dpr);
+          var g = cv.getContext("2d");
+          g.scale(dpr, dpr);
+          g.font = ctx.font;
+          g.lineJoin = "round";
+          g.textBaseline = "alphabetic";
+          g.lineWidth = 3;
+          g.strokeStyle = colors.halo;
+          g.strokeText(q.text, m, m + q.size * 0.8);
+          g.fillStyle = q.color;
+          g.fillText(q.text, m, m + q.size * 0.8);
+          sp = spriteCache[key] = { cv: cv, w: sw, h: sh, m: m };
+          spriteCount++;
+        }
+        ctx.drawImage(sp.cv, lx - sp.m, ly - sp.m, sp.w, sp.h);
       }
       function placeAll() {
         for (var pass = 0; pass < 3; pass++) {
@@ -1530,6 +1574,7 @@
         ctx.globalAlpha = regionLabelAlpha(f) * (terrSov || F3l ? 0.5 : 1);
         var size = Math.min(12 + f * 0.8, 18) - (terrSov ? 3 : 0), regs = [];
         for (i = 0; i < P.regions.length; i++) {
+          if (turning && shownLabels["R" + i]) { regs.push(i); continue; }
           if (!G.members[i].length) continue;
           // In 3D with depth showing, the farthest regions go unnamed.
           if (V3 && D3 && !F3l && !(S3 && sel >= 0) && depthBand3(V3.rd[i]) >= 3) continue;
@@ -1554,6 +1599,12 @@
           var vis = [];
           for (var o = 0; o < G.n; o++) {
             i = G.prio[o];
+            // While the view turns, a name showing stays (labelTurn).
+            if (turning && shownLabels["s" + i]) {
+              var hx = wx(i) * k + ox, hy = wy(i) * k + oy;
+              if (hx >= 0 && hy >= 0 && hx <= cw && hy <= ch) vis.push(i);
+              continue;
+            }
             // Around a jump route in 3D only the stops, the systems that
             // could stand in for them and those inside a bubble are named.
             if (F3l && F3l.tier[i] < 2 && !(B3 && B3.inside[i])) continue;

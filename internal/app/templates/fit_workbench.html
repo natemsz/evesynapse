@@ -44,14 +44,6 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     <span class="fit-mhead-ship">{{.ShipName}}</span>
   </div>
   {{with .Stats}}
-  <div class="fit-mhead-nums">
-    <span class="fit-mchip"><strong>{{.TotalDPS}}</strong><span>DPS</span></span>
-    <span class="fit-mchip"><strong>{{.EHPOmni}}</strong><span>EHP</span></span>
-    <span class="fit-mchip{{if not .CapStable}} warn{{end}}"><strong>{{.CapChip}}</strong><span>{{.CapChipLabel}}</span></span>
-    <span class="fit-mchip"><strong>{{.Velocity}}</strong><span>Speed</span></span>
-    <span class="fit-mchip"><strong>{{.Align}}</strong><span>Align</span></span>
-    <span class="fit-mchip"><strong>{{.TargetRng}}</strong><span>Lock range</span></span>
-  </div>
   <div class="fit-mhead-bars">
     <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
       <span class="fit-bar-label">CPU</span>
@@ -70,14 +62,10 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
 {{if .HasShip}}
 {{if .Visual}}
 <div class="fit-center">
-<div class="fit-visual"{{if not .ReadOnly}} id="fit-visual"{{end}} role="group" aria-label="Visual fitting">
-  <div class="fit-vring-outer" aria-hidden="true"></div>
-  <div class="fit-vring" aria-hidden="true"></div>
-  {{if .Visual.Segs}}<svg class="fit-vsegs" viewBox="0 0 100 100" aria-hidden="true">{{range .Visual.Segs}}<path d="{{.D}}" class="fit-vseg"/>{{end}}</svg>{{end}}
-  <div class="fit-vship"><button type="button" class="fit-vship-info" data-fit-info="{{.Visual.ShipID}}" title="Ship details"><img src="{{typeRender .Visual.ShipID 512}}" alt="{{.Visual.ShipName}} details" draggable="false"></button></div>
   {{if not .ReadOnly}}<div class="fit-vhistory" role="group" aria-label="Undo and redo">
     <button type="button" class="fit-vhist" data-fit-undo title="Undo" aria-label="Undo" disabled>↩</button>
     <button type="button" class="fit-vhist" data-fit-redo title="Redo" aria-label="Redo" disabled>↪</button>
+    <button type="button" class="fit-vhist fit-vfull-btn" data-fit-full aria-pressed="false" aria-label="Full screen" title="Full screen (Shift F)"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button type="button" class="fit-vhist fit-vkeys-btn" popovertarget="fit-vkeys" title="Mouse and keyboard" aria-label="Mouse and keyboard">?</button>
   </div>
   <section class="fit-vkeys" id="fit-vkeys" popover aria-label="Mouse and keyboard">
@@ -91,8 +79,14 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <div><dt>Drag</dt><dd>Move or swap; drag off the ring to remove</dd></div>
       <div><dt>Ctrl drag</dt><dd>Fit a copy</dd></div>
       <div><dt>Delete</dt><dd>Remove one</dd></div>
+      <div><dt>Shift F</dt><dd>Full screen on or off</dd></div>
     </dl>
   </section>{{end}}
+<div class="fit-visual"{{if not .ReadOnly}} id="fit-visual"{{end}} role="group" aria-label="Visual fitting">
+  <div class="fit-vring-outer" aria-hidden="true"></div>
+  <div class="fit-vring" aria-hidden="true"></div>
+  {{if .Visual.Segs}}<svg class="fit-vsegs" viewBox="0 0 100 100" aria-hidden="true">{{range .Visual.Segs}}<path d="{{.D}}" class="fit-vseg"/>{{end}}</svg>{{end}}
+  <div class="fit-vship"><button type="button" class="fit-vship-info" data-fit-info="{{.Visual.ShipID}}" title="Ship details"><img src="{{typeRender .Visual.ShipID 512}}" alt="{{.Visual.ShipName}} details" draggable="false"></button></div>
   {{range .Visual.Labels}}
   <div class="fit-vlabel" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" aria-hidden="true">{{.Text}}</div>
   {{end}}
@@ -201,26 +195,23 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     {{end}}
   </div>
   {{with .Stats}}
-  <div class="fit-stats" data-fit-figures="{{.Figures}}"{{if .RangeJSON}} data-fit-range="{{.RangeJSON}}"{{end}}>
-    {{if not $.ReadOnly}}<div class="fit-sum" aria-hidden="true"><div class="fit-sum-in">
-      <span class="k-weapon">{{template "fit-g" "weapon"}}<b>{{.TotalDPS}}</b> DPS</span>
-      <span class="k-armor">{{template "fit-g" "armor"}}<b>{{.EHPOmni}}</b> EHP</span>
-      <span class="k-capacitor{{if not .CapStable}} fit-over{{end}}">{{template "fit-g" "capacitor"}}<b>{{.CapState}}</b></span>
-      <span class="k-cpu{{if .CPU.Over}} fit-over{{end}}">{{template "fit-g" "cpu"}}<b>{{.CPU.Left}}</b> left</span>
-      <span class="k-powergrid{{if .Powergrid.Over}} fit-over{{end}}">{{template "fit-g" "powergrid"}}<b>{{.Powergrid.Left}}</b> left</span>
-    </div></div>{{end}}
+  <div class="fit-stats" data-fit-figures="{{.Figures}}"{{if .RangeJSON}} data-fit-range="{{.RangeJSON}}"{{end}}{{if .RampJSON}} data-fit-ramp="{{.RampJSON}}"{{end}}>
     <h4>{{$.ShipName}} <small>with {{$.PilotLabel}}'s skills</small></h4>
     <div class="fit-glance">
-      <div class="fit-gl k-weapon"><span class="fit-gl-k">{{template "fit-g" "weapon"}}<abbr title="Damage per second">DPS</abbr></span><b data-fit-fig="dps">{{.TotalDPS}}</b><small data-fit-fig="volley">{{.TotalVolley}} volley</small></div>
+      {{if .SpooledDPS}}<button type="button" class="fit-gl k-weapon fit-gl-btn"{{if .RampJSON}} data-fit-ramp-open aria-haspopup="dialog"{{end}} title="Damage over time"><span class="fit-gl-k">{{template "fit-g" "weapon"}}<abbr title="Damage per second">DPS</abbr></span><b data-fit-fig="dps">{{.TotalDPS}}</b><small class="fit-gl-to">to <strong>{{.SpooledDPS}}</strong> spooled</small><small data-fit-fig="volley">{{.TotalVolley}} to {{.SpoolVolley}} volley</small></button>{{else}}<div class="fit-gl k-weapon"><span class="fit-gl-k">{{template "fit-g" "weapon"}}<abbr title="Damage per second">DPS</abbr></span><b data-fit-fig="dps">{{.TotalDPS}}</b><small data-fit-fig="volley">{{.TotalVolley}} volley</small></div>{{end}}
       <div class="fit-gl k-armor"><span class="fit-gl-k">{{template "fit-g" "armor"}}<abbr title="Effective hit points">EHP</abbr></span><b data-fit-fig="ehp">{{.EHPOmni}}</b><small>{{.TankLine}}</small></div>
       <div class="fit-gl k-capacitor{{if not .CapStable}} fit-over{{end}}"><span class="fit-gl-k">{{template "fit-g" "capacitor"}}{{.CapChipLabel}}</span><b>{{.CapChip}}</b><small>{{.CapDraw}} use</small></div>
       <div class="fit-gl k-navigation"><span class="fit-gl-k">{{template "fit-g" "navigation"}}Speed</span><b data-fit-fig="speed">{{.Velocity}}</b><small data-fit-fig="align">align {{.Align}}</small></div>
       <div class="fit-gl k-targeting"><span class="fit-gl-k">{{template "fit-g" "targeting"}}Lock range</span><b data-fit-fig="range">{{.TargetRng}}</b><small>{{.LockedTgts}} targets, {{.ScanRes}}</small></div>
       <div class="fit-gl k-navigation"><span class="fit-gl-k">{{template "fit-g" "navigation"}}Signature</span><b data-fit-fig="sig">{{.Signature}}</b><small>sensor strength {{.Sensor}}</small></div>
     </div>
-    {{if or .DamageFrom .SpooledDPS .RangeSpark}}<div class="fit-gl-dmg">
+    {{if or .DamageFrom .SpooledDPS .RangeSpark .RampSpark}}<div class="fit-gl-dmg">
       {{if .DamageFrom}}<p>{{.DamageFrom}}</p>{{end}}
-      {{if .SpooledDPS}}<p>{{.SpooledDPS}} DPS at full spool, after {{.SpoolTime}} of firing</p>{{end}}
+      {{if .SpooledDPS}}<p>Full spool after {{.SpoolTime}} of firing{{if .SpoolAvg}}, {{.SpoolAvg}} DPS on average until then{{end}}</p>{{end}}
+      {{if .RampSpark}}<button type="button" class="fit-range-spark" data-fit-ramp-open aria-haspopup="dialog">
+        <svg viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{.RampSpark}}"/></svg>
+        <span>{{if .SpooledDPS}}Damage{{else}}Output{{end}} over time, from the first cycle</span>
+      </button>{{end}}
       {{if .RangeSpark}}<button type="button" class="fit-range-spark" data-fit-range-open aria-haspopup="dialog">
         <svg viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{.RangeSpark}}"/></svg>
         <span>Damage at range, out to {{.RangeEnd}}</span>
@@ -296,6 +287,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         {{if .LogiShield}}<div><dt>Shield repair</dt><dd>{{.LogiShield}}</dd></div>{{end}}
         {{if .LogiArmor}}<div><dt>Armor repair</dt><dd>{{.LogiArmor}}</dd></div>{{end}}
         {{if .LogiArmorSpool}}<div><dt>Armor, ramped up</dt><dd>{{.LogiArmorSpool}}</dd></div>{{end}}
+        {{if .LogiArmorAvg}}<div><dt>Armor, while ramping</dt><dd>{{.LogiArmorAvg}} on average</dd></div>{{end}}
         {{if .LogiHull}}<div><dt>Hull repair</dt><dd>{{.LogiHull}}</dd></div>{{end}}
         {{if .LogiCap}}<div><dt>Capacitor transfer</dt><dd>{{.LogiCap}}</dd></div>{{end}}
       </dl>

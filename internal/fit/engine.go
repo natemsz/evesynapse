@@ -842,6 +842,71 @@ type EHPProfile struct {
 	Explosive float64
 }
 
+// RampKind says what a ramping module puts out.
+type RampKind string
+
+const (
+	RampDamage RampKind = "damage" // spool-up weapon: damage per second
+	RampArmor  RampKind = "armor"  // mutadaptive remote repairer: armor per second
+)
+
+// Ramp is one group of identical ramping modules: Count of them,
+// each putting out Amount per cycle of Cycle seconds before any
+// bonus, the bonus growing by Step after every cycle up to Max
+// (fractions: 0.05 is +5%).
+type Ramp struct {
+	TypeID int64
+	Kind   RampKind
+	Count  int
+	Amount float64
+	Cycle  float64
+	Step   float64
+	Max    float64
+}
+
+// Bonus is the ramp's bonus t seconds into continuous firing: one
+// Step for every cycle already finished, capped at Max.
+func (r Ramp) Bonus(t float64) float64 {
+	if r.Cycle <= 0 || t <= 0 {
+		return 0
+	}
+	return math.Min(math.Floor(t/r.Cycle+1e-9)*r.Step, r.Max)
+}
+
+// RateAt is the group's output a second, t seconds into firing.
+func (r Ramp) RateAt(t float64) float64 {
+	if r.Cycle <= 0 {
+		return 0
+	}
+	return float64(r.Count) * r.Amount * (1 + r.Bonus(t)) / r.Cycle
+}
+
+// FullAfter is how long the group fires before its bonus is full.
+func (r Ramp) FullAfter() float64 {
+	if r.Step <= 0 {
+		return 0
+	}
+	return math.Ceil(r.Max/r.Step-1e-9) * r.Cycle
+}
+
+// OutputBy is what the group puts out in its first t seconds of
+// firing, spreading each cycle's output evenly over the cycle.
+func (r Ramp) OutputBy(t float64) float64 {
+	if r.Cycle <= 0 || t <= 0 {
+		return 0
+	}
+	done := math.Floor(t/r.Cycle + 1e-9)
+	full := r.FullAfter() / r.Cycle // cycles before the bonus caps
+	per := float64(r.Count) * r.Amount
+	var sum float64
+	if done <= full {
+		sum = per * (done + r.Step*done*(done-1)/2)
+	} else {
+		sum = per*(full+r.Step*full*(full-1)/2) + per*(1+r.Max)*(done-full)
+	}
+	return sum + (t-done*r.Cycle)*r.RateAt(t)
+}
+
 // Result is the computed fit. Floats are raw dogma units
 // (times in seconds, capacitor in GJ); counts are integers.
 type Result struct {
@@ -903,6 +968,13 @@ type Result struct {
 	// SpoolSeconds of continuous fire; both 0 without one.
 	SpooledDPS   float64
 	SpoolSeconds float64
+	// SpooledVolley is Volley with every spool-up weapon at its
+	// full bonus; 0 without one.
+	SpooledVolley float64
+	// Ramps lists every module whose output ramps up cycle by cycle
+	// (spool-up weapons, mutadaptive remote armor repairers), for
+	// the figures over time; empty without one.
+	Ramps []Ramp
 	// Breacher pods: up to BreacherMaxPerSec HP a second, or
 	// BreacherHPPercent of the target's hit points a second when
 	// that is lower, for BreacherSeconds per pod. Not in DPS.

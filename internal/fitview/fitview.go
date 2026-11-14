@@ -468,6 +468,11 @@ var FitVisualArcs = map[string][3]float64{
 	FitFamilySubsystem: {180, 225, 44},
 }
 
+// FitVisualLabelR is the captions' radius: just inside the slot band
+// (radius 44, 4.5 deep), clear of the ship render, which takes the
+// middle 56% of the ring (style.css .fit-vship).
+const FitVisualLabelR = 35.5
+
 var FitVisualGroupLabels = map[string]string{
 	FitFamilyHigh:      "High slot",
 	FitFamilyMedium:    "Mid slot",
@@ -483,7 +488,7 @@ var FitVisualGroupCaptions = map[string]string{
 	FitFamilyMedium:    "MID",
 	FitFamilyLow:       "LOW",
 	FitFamilyRig:       "RIG",
-	FitFamilySubsystem: "SUBSYSTEM",
+	FitFamilySubsystem: "SUBS",
 }
 
 // FitVisualGroupOrder is the circular order of slot groups around
@@ -1084,7 +1089,7 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 			v.Slots = append(v.Slots, s)
 		}
 	}
-	// Ember dividers between rendered groups, on the ring at their
+	// Dividers between rendered groups, on the ring at their
 	// shared boundary angle, plus an in-ring caption per group so
 	// the rings read as distinct in-game-like sections.
 	for i, fam := range FitVisualGroupOrder {
@@ -1093,8 +1098,8 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 		if rendered[fam] {
 			mid := (arc[0] + arc[1]) / 2 * math.Pi / 180
 			v.Labels = append(v.Labels, FitVisualLabel{
-				X:    50 + 30*math.Cos(mid),
-				Y:    50 + 30*math.Sin(mid),
+				X:    50 + FitVisualLabelR*math.Cos(mid),
+				Y:    50 + FitVisualLabelR*math.Sin(mid),
 				Text: FitVisualGroupCaptions[fam],
 			})
 		}
@@ -1280,18 +1285,24 @@ type FitStatsView struct {
 	RangeEnd   string
 	CapState   string
 	CapStable  bool
-	// CapChip and CapChipLabel are the capacitor in a phone header
-	// chip: "Stable" or the stable level under "Cap stable", or how
+	// CapChip and CapChipLabel are the capacitor in its glance tile:
+	// "Stable" or the stable level under "Cap stable", or how
 	// long it lasts under "Cap lasts".
-	CapChip       string
-	CapChipLabel  string
-	TurretDPS     string
-	MissileDPS    string
-	DroneDPS      string
-	SmartbombDPS  string // "" when no smartbomb is fitted
-	TotalDPS      string
-	SpooledDPS    string // "" without a spool-up weapon
-	SpoolTime     string
+	CapChip      string
+	CapChipLabel string
+	TurretDPS    string
+	MissileDPS   string
+	DroneDPS     string
+	SmartbombDPS string // "" when no smartbomb is fitted
+	TotalDPS     string
+	SpooledDPS   string // "" without a spool-up weapon
+	SpoolTime    string
+	SpoolVolley  string // volley at full spool
+	SpoolAvg     string // average DPS from the first shot to full spool
+	// The figures-over-time chart (FitRamp): its data and the inline
+	// sparkline's points; empty without anything that ramps.
+	RampJSON      string
+	RampSpark     string
 	Breacher      string // "" without a breacher pod loaded
 	TurretVolley  string
 	MissileVolley string
@@ -1306,6 +1317,7 @@ type FitStatsView struct {
 	LogiShield     string
 	LogiArmor      string
 	LogiArmorSpool string
+	LogiArmorAvg   string // average from the first cycle to full ramp
 	LogiHull       string
 	LogiCap        string
 	MineOre        string
@@ -2384,6 +2396,18 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 	if res.SpooledDPS > 0 {
 		st.SpooledDPS = FitFmt1(res.SpooledDPS)
 		st.SpoolTime = FitSeconds(res.SpoolSeconds)
+		st.SpoolVolley = FitFmt1(res.SpooledVolley)
+	}
+	for _, o := range fitRampOutputs(res) {
+		switch o.kind {
+		case fit.RampDamage:
+			st.SpoolAvg = FitFmt1(fitRampAverage(o))
+		case fit.RampArmor:
+			st.LogiArmorAvg = FitFmt1(fitRampAverage(o)) + " HP/s"
+		}
+	}
+	if _, js, spark := FitRamp(res); js != "" {
+		st.RampJSON, st.RampSpark = js, spark
 	}
 
 	st.TurretVolley = FitFmt1(res.TurretVolley)

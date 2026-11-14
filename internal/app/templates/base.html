@@ -326,7 +326,7 @@
 {{end}}
 <script src="/static/app.js?v={{.AssetVersion}}" defer></script>
 <script src="/static/swap.js?v={{.AssetVersion}}" defer></script>
-{{if eq .Section "fitting"}}<script src="/static/fittip.js?v={{.AssetVersion}}" defer></script><script src="/static/fitrange.js?v={{.AssetVersion}}" defer></script><script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .Section "fitting"}}<script src="/static/fittip.js?v={{.AssetVersion}}" defer></script><script src="/static/fitrange.js?v={{.AssetVersion}}" defer></script><script src="/static/fitramp.js?v={{.AssetVersion}}" defer></script><script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "planner.html"}}<script src="/static/plan.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "character.html"}}<script src="/static/overview.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "map.html") (eq .NavPage "intel_workbench.html")}}<script src="/static/map.js?v={{.AssetVersion}}" defer></script>{{end}}{{if or (eq .NavPage "battles.html") (eq .NavPage "battle.html")}}<script src="/static/battle.js?v={{.AssetVersion}}" defer></script>{{end}}{{if eq .NavPage "intel_workbench.html"}}<script src="/static/dashboard.js?v={{.AssetVersion}}" defer></script>{{end}}

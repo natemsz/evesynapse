@@ -98,8 +98,10 @@ type fitting struct {
 	unmodeled   map[string]bool
 	unmodeledBy map[int64]bool
 
-	// spoolExtra is the DPS spool-up weapons add at full spool.
-	spoolExtra float64
+	// spoolExtra and spoolVolley are the DPS and volley spool-up
+	// weapons add at full spool.
+	spoolExtra  float64
+	spoolVolley float64
 
 	// droneFlying is each drone type with how many of it launch
 	// (droneStats), for what drones do besides damage.
@@ -976,7 +978,10 @@ func (f *fitting) offense() {
 			res.TurretDPS += n * volley / cycle
 			if maxBonus, step := ent.get(snap, AttrSpoolBonusMax), ent.get(snap, AttrSpoolBonusPerCycle); maxBonus > 0 && step > 0 {
 				f.spoolExtra += n * volley * maxBonus / cycle
+				f.spoolVolley += n * volley * maxBonus
 				res.SpoolSeconds = math.Max(res.SpoolSeconds, math.Ceil(maxBonus/step-1e-9)*cycle)
+				res.Ramps = append(res.Ramps, Ramp{TypeID: ent.typeID, Kind: RampDamage, Count: int(n),
+					Amount: volley, Cycle: cycle, Step: step, Max: maxBonus})
 			}
 			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
 			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
@@ -1098,6 +1103,9 @@ func (f *fitting) droneStats() {
 		res.SpooledDPS = res.DPS + f.spoolExtra
 	}
 	res.Volley = res.TurretVolley + res.MissileVolley + res.DroneVolley + res.SmartbombVolley + res.FighterVolley
+	if f.spoolVolley > 0 {
+		res.SpooledVolley = res.Volley + f.spoolVolley
+	}
 }
 
 // tank works out hit points and effective hit points per layer,

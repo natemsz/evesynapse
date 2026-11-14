@@ -277,6 +277,7 @@ var FitGauges = (function () {
       }
       reanchorTip();
       if (window.FitRange) window.FitRange.refresh();
+      if (window.FitRamp) window.FitRamp.refresh();
       syncFold();
       syncImpFold();
       syncSummary();

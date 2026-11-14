@@ -149,6 +149,8 @@ func (f *fitting) remoteRepair(ent *entity, n, cycle float64) {
 		if maxBonus, step := ent.get(snap, attrRemoteSpoolMax), ent.get(snap, attrRemoteSpoolPerCycle); maxBonus > 0 && step > 0 {
 			res.RemoteArmorSpooled += n * amt * maxBonus / cycle
 			res.RemoteArmorSpoolSeconds = math.Max(res.RemoteArmorSpoolSeconds, math.Ceil(maxBonus/step-1e-9)*cycle)
+			res.Ramps = append(res.Ramps, Ramp{TypeID: ent.typeID, Kind: RampArmor, Count: int(n),
+				Amount: amt, Cycle: cycle, Step: step, Max: maxBonus})
 		}
 	case "hull":
 		res.RemoteHullRate += n * ent.get(snap, AttrStructureDamageAmt) / cycle

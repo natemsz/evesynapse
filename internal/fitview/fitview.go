@@ -1283,15 +1283,21 @@ type FitStatsView struct {
 	// CapChip and CapChipLabel are the capacitor in a phone header
 	// chip: "Stable" or the stable level under "Cap stable", or how
 	// long it lasts under "Cap lasts".
-	CapChip       string
-	CapChipLabel  string
-	TurretDPS     string
-	MissileDPS    string
-	DroneDPS      string
-	SmartbombDPS  string // "" when no smartbomb is fitted
-	TotalDPS      string
-	SpooledDPS    string // "" without a spool-up weapon
-	SpoolTime     string
+	CapChip      string
+	CapChipLabel string
+	TurretDPS    string
+	MissileDPS   string
+	DroneDPS     string
+	SmartbombDPS string // "" when no smartbomb is fitted
+	TotalDPS     string
+	SpooledDPS   string // "" without a spool-up weapon
+	SpoolTime    string
+	SpoolVolley  string // volley at full spool
+	SpoolAvg     string // average DPS from the first shot to full spool
+	// The figures-over-time chart (FitRamp): its data and the inline
+	// sparkline's points; empty without anything that ramps.
+	RampJSON      string
+	RampSpark     string
 	Breacher      string // "" without a breacher pod loaded
 	TurretVolley  string
 	MissileVolley string
@@ -1306,6 +1312,7 @@ type FitStatsView struct {
 	LogiShield     string
 	LogiArmor      string
 	LogiArmorSpool string
+	LogiArmorAvg   string // average from the first cycle to full ramp
 	LogiHull       string
 	LogiCap        string
 	MineOre        string
@@ -2384,6 +2391,18 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 	if res.SpooledDPS > 0 {
 		st.SpooledDPS = FitFmt1(res.SpooledDPS)
 		st.SpoolTime = FitSeconds(res.SpoolSeconds)
+		st.SpoolVolley = FitFmt1(res.SpooledVolley)
+	}
+	for _, o := range fitRampOutputs(res) {
+		switch o.kind {
+		case fit.RampDamage:
+			st.SpoolAvg = FitFmt1(fitRampAverage(o))
+		case fit.RampArmor:
+			st.LogiArmorAvg = FitFmt1(fitRampAverage(o)) + " HP/s"
+		}
+	}
+	if _, js, spark := FitRamp(res); js != "" {
+		st.RampJSON, st.RampSpark = js, spark
 	}
 
 	st.TurretVolley = FitFmt1(res.TurretVolley)

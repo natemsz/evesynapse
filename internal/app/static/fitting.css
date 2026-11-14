@@ -652,6 +652,19 @@ span.fit-ftr-ab { cursor: default; }
 @container fitstats (max-width: 17rem) {
   .fit-glance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* A DPS tile with a spool-up weapon reads start to full and opens
+   the damage-over-time chart. */
+.fit-gl-btn { font: inherit; text-align: left; color: inherit; cursor: pointer; }
+.fit-gl-btn:hover, .fit-gl-btn:focus-visible { border-color: var(--k, var(--accent)); }
+.fit-gl-to strong { font-family: var(--font-num); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.fit-ramp-chart { display: grid; gap: var(--space-2); }
+.fit-ramp-chart + .fit-ramp-chart { padding-top: var(--space-3); border-top: 1px solid var(--hairline); }
+.fit-ramp-title {
+  margin: 0; font-family: var(--font-display); font-weight: 600; font-size: var(--fs-xs);
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-bright);
+}
+.fit-ramp-sum { margin: 0; font-size: var(--fs-sm); color: var(--muted-2); }
+.fit-ramp-full { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .fit-gl-dmg { display: grid; gap: 0.3rem; margin: 0 0 0.6rem; }
 .fit-gl-dmg p { margin: 0; font-size: var(--fs-xs); color: var(--muted-2); }
 .fit-gl-dmg .fit-range-spark { margin-top: 0; }

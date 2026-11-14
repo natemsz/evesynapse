@@ -31,8 +31,8 @@ WHERE corporation_id = ANY(sqlc.arg(corporation_ids)::bigint[])
 ORDER BY corporation_id, lower(category), lower(name);
 
 -- name: AddDoctrineFit :one
-INSERT INTO doctrine_fits (doctrine_id, name, ship_type_id, items_json, fleet_role, note, added_by, added_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO doctrine_fits (doctrine_id, name, ship_type_id, items_json, fleet_role, note, added_by, added_at, boosts_json)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING id;
 
 -- name: GetDoctrineFit :one
@@ -54,3 +54,14 @@ ORDER BY doctrine_id, id;
 
 -- name: DoctrineHasShip :one
 SELECT EXISTS (SELECT 1 FROM doctrine_fits WHERE doctrine_id = $1 AND ship_type_id = $2);
+
+-- The fleet boosts of several doctrines' fits, for the fitting tool's
+-- doctrine boosts; boosts_json NULL marks a fit not yet worked out.
+-- name: ListDoctrineFitBoosts :many
+SELECT id, doctrine_id, items_json, boosts_json FROM doctrine_fits
+WHERE doctrine_id = ANY(sqlc.arg(doctrine_ids)::bigint[])
+ORDER BY doctrine_id, id
+LIMIT 400;
+
+-- name: SetDoctrineFitBoosts :exec
+UPDATE doctrine_fits SET boosts_json = $2 WHERE id = $1;

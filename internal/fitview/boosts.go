@@ -228,3 +228,25 @@ func (app *Builder) fitAllSkillIDs(ctx context.Context, snap *fit.Snapshot) []in
 	}
 	return ids
 }
+
+// FitDocBoosts is the fleet boosts a fit gives when it flies as a
+// booster: every burst charge it loads, once, from its hull with its
+// slot 10 implant as the mindlink, at skills V. FitFleetBoosts drops a
+// hull or mindlink that does not raise the charge's family.
+func FitDocBoosts(doc *FitDoc, bursts *fit.BurstData) []FitBoost {
+	if doc == nil || bursts == nil {
+		return nil
+	}
+	isBurst := map[int64]bool{}
+	for _, c := range bursts.Charges {
+		isBurst[c.TypeID] = true
+	}
+	var out []FitBoost
+	for _, c := range doc.LoadedCharges() {
+		if !isBurst[c] || len(out) >= FitMaxBoosts {
+			continue
+		}
+		out = append(out, FitBoost{Charge: c, Hull: doc.ShipTypeID, Level: 5, Mindlink: doc.Implants[FitImplantSlots]})
+	}
+	return out
+}

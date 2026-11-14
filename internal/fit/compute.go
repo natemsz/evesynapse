@@ -26,6 +26,15 @@ func Compute(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int
 // buffs other ships' bursts give (BoosterBuffs), alongside the fit's
 // own bursts.
 func ComputeFleet(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int64]int, charges map[int64]int64, implants []int64, fleet []BuffValue) *Result {
+	return ComputeEnv(snap, shipTypeID, items, levels, charges, implants, fleet, 0)
+}
+
+// ComputeEnv is ComputeFleet with the fit inside a system-wide
+// environment (0: none). An environment carrying warfare buffs
+// (abyssal weather) acts through them like a booster would, marked
+// as the system's; any other (a wormhole or incursion effect beacon)
+// acts through its own system effects.
+func ComputeEnv(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int64]int, charges map[int64]int64, implants []int64, fleet []BuffValue, env int64) *Result {
 	f := newFitting(snap, shipTypeID, levels)
 
 	// What is being computed: the hull, the pilot, and everything
@@ -34,6 +43,11 @@ func ComputeFleet(snap *Snapshot, shipTypeID int64, items []ItemInput, levels ma
 	f.addCharges(charges)
 	f.addSkills()
 	f.addImplants(implants)
+	if weather := EnvBuffs(snap, env); len(weather) > 0 {
+		fleet = append(append([]BuffValue{}, fleet...), weather...)
+	} else {
+		f.addBeacon(env)
+	}
 
 	f.checkShipRestrictions()
 
@@ -91,6 +105,7 @@ type fitting struct {
 	charges  []*entity
 	skills   map[int64]*entity
 	implants []*entity
+	beacon   *entity // the system effect beacon, nil when none
 
 	// apps is every modifier bound to a target (bindModifiers).
 	apps []application
@@ -422,6 +437,45 @@ func (f *fitting) addImplants(implants []int64) {
 	}
 }
 
+// envBuffAttrs are the warfareBuffNID / warfareBuffNValue pairs an
+// environment type (abyssal weather) carries.
+var envBuffAttrs = [][2]int64{{2468, 2469}, {2470, 2471}, {2472, 2473}, {2536, 2537}}
+
+// EnvBuffs is the warfare buffs an environment type gives, marked as
+// the system's; none for a type carrying no warfare buffs.
+func EnvBuffs(snap *Snapshot, env int64) []BuffValue {
+	if snap == nil || env <= 0 {
+		return nil
+	}
+	attrs := snap.Attrs[env]
+	var out []BuffValue
+	for _, p := range envBuffAttrs {
+		if id := int64(attrs[p[0]]); id > 0 && attrs[p[1]] != 0 {
+			out = append(out, BuffValue{ID: id, Value: attrs[p[1]], System: true})
+		}
+	}
+	return out
+}
+
+// addBeacon adds a system effect beacon as an always-on source: its
+// system effects bind like any source's, on the ship, its modules
+// and charges, and the pilot.
+func (f *fitting) addBeacon(typeID int64) {
+	if typeID <= 0 || len(f.snap.TypeEffects[typeID]) == 0 {
+		return
+	}
+	ent := &entity{
+		key:       fmt.Sprintf("beacon:%d", typeID),
+		kind:      entBeacon,
+		typeID:    typeID,
+		instances: 1,
+		base:      cloneAttrMap(f.snap.Attrs[typeID]),
+		calc:      map[int64]float64{},
+	}
+	f.beacon = ent
+	f.entities = append(f.entities, ent)
+}
+
 // checkShipRestrictions flags the fit errors: modules carrying
 // canFitShipGroup*/canFitShipType*/fitsToShipType may only fly on the
 // named hulls, a group may not be fitted past its maxGroupFitted, and
@@ -569,6 +623,9 @@ func (f *fitting) bindModifiers() {
 		sources = append(sources, f.skills[id])
 	}
 	sources = append(sources, f.implants...)
+	if f.beacon != nil {
+		sources = append(sources, f.beacon)
+	}
 	sources = append(sources, f.fitted...)
 	sources = append(sources, f.charges...)
 

@@ -193,7 +193,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       </div>
     </div>
     {{end}}
-    {{if or (not .ReadOnly) .Boosts .BuffsActing}}
+    {{if or (not .ReadOnly) .Boosts .BuffsActing .EnvName}}
     <div class="fit-group fit-boost-group" data-fit-group="boosts">
       <h4><span>Fleet boosts</span></h4>
       {{range .Boosts}}
@@ -210,8 +210,23 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       </div>
       {{end}}
       {{end}}
-      {{if and (not .ReadOnly) .BoostDefault}}<button type="button" class="fit-slot-empty fit-boost-add" data-fit-boost-add="{{.BoostDefault}}">+ Add a fleet boost</button>{{end}}
+      {{if and (not .ReadOnly) .BoostDefault}}<div class="fit-boost-adds">
+        <button type="button" class="fit-slot-empty fit-boost-add" data-fit-boost-add="{{.BoostDefault}}">+ Add a fleet boost</button>
+        {{if moduleOn "doctrines"}}<button type="button" class="fit-slot-empty fit-boost-add" data-fit-doctrine-boosts aria-expanded="false" aria-controls="fit-doctrine-boosts">+ Use a doctrine's boosts</button>{{end}}
+      </div>
+      {{if moduleOn "doctrines"}}<div class="fit-doctrine-boosts" id="fit-doctrine-boosts" data-fit-doctrine-list hidden></div>{{end}}{{end}}
       {{if .BuffsActing}}<div class="fit-boost-acting"><h5>Acting on this fit</h5><ul>{{range .BuffsActing}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+      {{if $.ReadOnly}}{{if .EnvName}}<p class="fit-boost-ro"><b>System effect</b> {{.EnvName}}</p>{{end}}{{else}}
+      <div class="fit-env">
+        <h5>System effect</h5>
+        <label class="fit-env-pick"><span>The system this fit flies in</span><select data-fit-env>
+          <option value="0">None: normal space</option>
+          {{range .EnvGroups}}<optgroup label="{{.Name}}">{{range .Options}}<option value="{{.TypeID}}"{{if eq .TypeID $.Env}} selected{{end}}>{{.Name}}</option>{{end}}</optgroup>{{end}}
+        </select></label>
+      </div>{{end}}
+      {{if .EnvEffects}}<dl class="fit-kv fit-env-effects">
+        {{range .EnvEffects}}<div><dt>{{.Label}}</dt><dd><span class="{{if .Good}}fit-good{{else}}fit-over{{end}}">{{.Delta}}</span> <small>{{.From}} → {{.To}}</small></dd></div>{{end}}
+      </dl>{{end}}
     </div>
     {{end}}
   </div>

@@ -2,6 +2,7 @@ package doctrines
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/humanize"
@@ -19,6 +20,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fit"
 	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
 	"github.com/jackc/pgx/v5"
@@ -607,6 +609,7 @@ func (app *mod) handleDoctrineFitAdd(w http.ResponseWriter, r *http.Request) {
 			DoctrineID: d.ID, Name: name, ShipTypeID: doc.ShipTypeID, ItemsJson: string(raw), FleetRole: role,
 			Note:    humanize.Clip(strings.TrimSpace(r.Form.Get("note")), doctrineNoteMax),
 			AddedBy: app.deps.CorpActorFor(ctx, userID, d.CorporationID).CharacterID, AddedAt: time.Now().UTC(),
+			BoostsJson: app.fitBoostsJSON(ctx, doc),
 		})
 	}
 	if err != nil {
@@ -619,6 +622,114 @@ func (app *mod) handleDoctrineFitAdd(w http.ResponseWriter, r *http.Request) {
 		message += " " + humanize.Plural(skipped, "line") + " of the pasted text could not be read and " + map[bool]string{true: "was", false: "were"}[skipped == 1] + " left out."
 	}
 	back(message)
+}
+
+// fitBoostsJSON is the fleet boosts a doctrine fit gives, as stored
+// with it; NULL when the burst data cannot be read, so the first read
+// works them out.
+func (app *mod) fitBoostsJSON(ctx context.Context, doc *fitview.FitDoc) sql.NullString {
+	bursts, err := fit.Bursts(ctx, app.queries)
+	if err != nil {
+		logging.Errorf("doctrines: burst data: %v", err)
+		return sql.NullString{}
+	}
+	boosts := fitview.FitDocBoosts(doc, bursts)
+	if boosts == nil {
+		boosts = []fitview.FitBoost{}
+	}
+	raw, err := json.Marshal(boosts)
+	if err != nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: string(raw), Valid: true}
+}
+
+// doctrineBoosts is one doctrine whose fits give fleet boosts, for
+// the fitting tool: its boosts, each burst charge once.
+type doctrineBoosts struct {
+	ID     int64              `json:"id"`
+	Name   string             `json:"name"`
+	Corp   string             `json:"corp"`
+	Boosts []fitview.FitBoost `json:"boosts"`
+}
+
+// doctrineBoostsMost bounds the doctrines the list reads.
+const doctrineBoostsMost = 100
+
+// handleDoctrineBoosts lists the doctrines of the account's
+// corporations whose fits give fleet boosts (GET
+// /doctrines/boosts.json), so the fitting tool can fly a fit inside
+// one. The boosts are stored with each fit when it is added; a fit
+// from before that is worked out once here and stored.
+func (app *mod) handleDoctrineBoosts(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	out := []doctrineBoosts{}
+	write := func() {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(map[string]any{"doctrines": out})
+	}
+	st, err := app.deps.StandingFor(ctx, app.deps.UserID(ctx))
+	if err != nil {
+		write()
+		return
+	}
+	var corps []int64
+	for id, ok := range st.Corps {
+		if ok {
+			corps = append(corps, id)
+		}
+	}
+	slices.Sort(corps)
+	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, corps)
+	if err != nil || len(doctrines) == 0 {
+		write()
+		return
+	}
+	if len(doctrines) > doctrineBoostsMost {
+		doctrines = doctrines[:doctrineBoostsMost]
+	}
+	ids := make([]int64, 0, len(doctrines))
+	for _, d := range doctrines {
+		ids = append(ids, d.ID)
+	}
+	fits, err := app.queries.ListDoctrineFitBoosts(ctx, ids)
+	if err != nil {
+		logging.Errorf("doctrines: fit boosts: %v", err)
+		write()
+		return
+	}
+	byDoctrine := map[int64][]fitview.FitBoost{}
+	for _, f := range fits {
+		stored := f.BoostsJson
+		if !stored.Valid {
+			var doc fitview.FitDoc
+			if json.Unmarshal([]byte(f.ItemsJson), &doc) != nil {
+				continue
+			}
+			if stored = app.fitBoostsJSON(ctx, &doc); stored.Valid {
+				if err := app.queries.SetDoctrineFitBoosts(ctx, db.SetDoctrineFitBoostsParams{ID: f.ID, BoostsJson: stored}); err != nil {
+					logging.Errorf("doctrines: store boosts of fit %d: %v", f.ID, err)
+				}
+			}
+		}
+		var boosts []fitview.FitBoost
+		if json.Unmarshal([]byte(stored.String), &boosts) != nil {
+			continue
+		}
+		for _, b := range boosts {
+			if !slices.ContainsFunc(byDoctrine[f.DoctrineID], func(o fitview.FitBoost) bool { return o.Charge == b.Charge }) &&
+				len(byDoctrine[f.DoctrineID]) < fitview.FitMaxBoosts {
+				byDoctrine[f.DoctrineID] = append(byDoctrine[f.DoctrineID], b)
+			}
+		}
+	}
+	for _, d := range doctrines {
+		if b := byDoctrine[d.ID]; len(b) > 0 {
+			out = append(out, doctrineBoosts{ID: d.ID, Name: d.Name, Corp: app.deps.CorpDisplayName(ctx, d.CorporationID), Boosts: b})
+		}
+	}
+	write()
 }
 
 func (app *mod) validFleetRole(role string) bool {

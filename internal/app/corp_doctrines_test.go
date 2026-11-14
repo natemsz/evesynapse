@@ -11,6 +11,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fit"
 )
 
 // savedFit stores a fit for an account, as the fitting tool would.
@@ -158,6 +159,35 @@ func TestDoctrines(t *testing.T) {
 	}
 	mustContain(t, "corporate fits for a keeper", browse(director, doctrineFitsPath+chosen), page+"/fits/add", `name="copy"`)
 	mustContain(t, "public fits for a keeper", browse(director, publicFitsPath+chosen), page+"/fits/add", `name="public"`)
+
+	// Doctrine boosts for the fitting tool: a fit loading a burst
+	// charge gives that boost, to the corporation's members only.
+	for _, stmt := range []string{
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (42526, 'Fixture Shield Command Burst II', 1770, 1, 1)`,
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES (42526, 604, 1774)`,
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (42832, 'Fixture Shield Harmonizing Charge', 1774, 1, 1)`,
+	} {
+		if _, err := f.app.db.ExecContext(f.ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fit.ResetBurstData()
+	booster := f.savedFit(f.userID, "Fleet Claymore", 22468, false, ``)
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE local_fittings SET items_json = '{"name":"Fleet Claymore","shipTypeId":22468,"items":[{"typeId":42526,"qty":1}],"charges":{"42526":42832}}' WHERE id = $1`, booster); err != nil {
+		t.Fatal(err)
+	}
+	f.post(director, add, url.Values{"fit": {strconv.FormatInt(booster, 10)}, "fleet_role": {"Booster"}})
+	_, body = getPage(t, f.app, member, "/doctrines/boosts.json")
+	mustContain(t, "doctrine boosts for a member", body, `"name":"Shield Lokis"`, `"charge":42832`, `"hull":22468`)
+	if _, body = getPage(t, f.app, stranger, "/doctrines/boosts.json"); strings.Contains(body, "Shield Lokis") {
+		t.Fatal("somebody outside the corporation got its doctrine's boosts")
+	}
+	withBooster, _ := f.q.ListDoctrineFits(f.ctx, []int64{d.ID})
+	for _, df := range withBooster {
+		if df.Name == "Fleet Claymore" {
+			f.post(director, page+"/fits/"+strconv.FormatInt(df.ID, 10)+"/remove", url.Values{})
+		}
+	}
 
 	// An op names the doctrine; one of another corporation is refused.
 	start := time.Now().UTC().Add(48 * time.Hour).Format(opDateTimeLayout)

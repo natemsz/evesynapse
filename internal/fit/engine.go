@@ -337,6 +337,7 @@ const (
 	catTarget   = 2
 	catArea     = 3
 	catOverload = 5
+	catSystem   = 7 // system-wide effects (effect beacons)
 )
 
 // Module states: the values ItemInput.State carries, and a saved
@@ -551,6 +552,9 @@ func NormalizeModuleState(snap *Snapshot, typeID int64, state string) string {
 // modules bind nothing; online skips active and overload;
 // active adds the active category; overheated adds overload.
 func sourceCategories(e *entity) map[int64]bool {
+	if e.kind == entBeacon {
+		return map[int64]bool{0: true, catSystem: true}
+	}
 	if e.kind != entModule {
 		return map[int64]bool{0: true, 1: true, 4: true}
 	}
@@ -1177,6 +1181,7 @@ const (
 	entCharge
 	entImplant
 	entFighter
+	entBeacon // a system-wide effect beacon (wormhole, incursion)
 )
 
 // entity is one thing whose attributes get computed: the ship,

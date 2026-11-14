@@ -47,16 +47,20 @@ type BuffMod struct {
 type BuffValue struct {
 	ID    int64
 	Value float64
+	// System marks a buff from the system the fit is in (abyssal
+	// weather) rather than a fleet booster.
+	System bool
 }
 
 // AppliedBuff is a buff acting on the fit: its name, the value that
 // holds, and whether a fleet booster (not the fit's own burst)
 // supplies it.
 type AppliedBuff struct {
-	ID    int64
-	Name  string
-	Value float64
-	Fleet bool
+	ID     int64
+	Name   string
+	Value  float64
+	Fleet  bool
+	System bool // from the system's environment (abyssal weather)
 }
 
 // BurstData is what bursts need from the SDE, cached per process:
@@ -220,8 +224,9 @@ func (f *fitting) applyBuffs(fleet []BuffValue) {
 		return
 	}
 	type source struct {
-		value float64
-		fleet bool
+		value  float64
+		fleet  bool
+		system bool
 	}
 	byID := map[int64][]source{}
 	for _, ent := range f.fitted {
@@ -237,7 +242,7 @@ func (f *fitting) applyBuffs(fleet []BuffValue) {
 		}
 	}
 	for _, b := range fleet {
-		byID[b.ID] = append(byID[b.ID], source{value: b.Value, fleet: true})
+		byID[b.ID] = append(byID[b.ID], source{value: b.Value, fleet: !b.System, system: b.System})
 	}
 	if len(byID) == 0 {
 		return
@@ -282,7 +287,7 @@ func (f *fitting) applyBuffs(fleet []BuffValue) {
 			f.bind(atShip, src, 0, eff, mod)
 			bound = true
 		}
-		f.res.Buffs = append(f.res.Buffs, AppliedBuff{ID: id, Name: buff.Name, Value: best.value, Fleet: best.fleet})
+		f.res.Buffs = append(f.res.Buffs, AppliedBuff{ID: id, Name: buff.Name, Value: best.value, Fleet: best.fleet, System: best.system})
 	}
 	if bound {
 		f.resetCalc()

@@ -226,6 +226,7 @@ var FitGauges = (function () {
       charges: state.charges,
       implants: state.implants || {},
       boosts: state.boosts || [],
+      env: state.env || 0,
       pilot: pilotID(),
       clone: cloneID()
     };
@@ -567,7 +568,8 @@ var FitGauges = (function () {
       items: JSON.parse(JSON.stringify(state.items || [])),
       charges: JSON.parse(JSON.stringify(state.charges || {})),
       implants: JSON.parse(JSON.stringify(state.implants || {})),
-      boosts: JSON.parse(JSON.stringify(state.boosts || []))
+      boosts: JSON.parse(JSON.stringify(state.boosts || [])),
+      env: state.env || 0
     };
   }
   function applySnap(s) {
@@ -576,6 +578,7 @@ var FitGauges = (function () {
     state.charges = JSON.parse(JSON.stringify(s.charges || {}));
     state.implants = JSON.parse(JSON.stringify(s.implants || {}));
     state.boosts = JSON.parse(JSON.stringify(s.boosts || []));
+    state.env = s.env || 0;
     if (shipInput) shipInput.value = s.shipName || "";
     markDirty();
     simulate();
@@ -1047,6 +1050,8 @@ var FitGauges = (function () {
       var boostRemove = t.closest("[data-fit-boost-remove]");
       if (boostRemove) { removeBoost(parseInt(boostRemove.getAttribute("data-fit-boost-remove"), 10)); return; }
       if (t.closest("[data-fit-redo]")) { redo(); return; }
+      var doctrineBtn = t.closest("[data-fit-doctrine-boosts]");
+      if (doctrineBtn) { toggleDoctrineBoosts(doctrineBtn); return; }
       var searchBtn = t.closest("[data-fit-search-btn]");
       if (searchBtn) { setSearchOpen(!searchOpen); return; }
       var viewBtn = t.closest("[data-fit-view]");
@@ -1144,6 +1149,7 @@ var FitGauges = (function () {
     if (qtyFor) {
       setItemQty(parseInt(qtyFor, 10) || 0, parseInt(t.value, 10) || 0);
     }
+    if (t.hasAttribute("data-fit-env")) { setEnv(parseInt(t.value, 10) || 0); return; }
     var boostField = t.getAttribute("data-fit-boost-field");
     var boostRow = boostField && t.closest("[data-fit-boost]");
     if (boostRow) {
@@ -1696,6 +1702,79 @@ var FitGauges = (function () {
     markDirty();
     simulate();
   }
+  // The system the fit flies in: a wormhole, incursion or abyssal
+  // weather type, 0 for normal space.
+  function setEnv(id) {
+    if ((state.env || 0) === id) return;
+    pushHistory();
+    state.env = id;
+    pendingFlash = { type: "group", family: "boosts" };
+    markDirty();
+    simulate();
+  }
+  // A doctrine's boosts: the boosts its fits give, added as fleet
+  // boost rows the pilot can still adjust. The list comes from the
+  // doctrines module, for the account's corporations.
+  function toggleDoctrineBoosts(btn) {
+    var box = editor.querySelector("[data-fit-doctrine-list]");
+    if (!box) return;
+    if (!box.hidden) { box.hidden = true; btn.setAttribute("aria-expanded", "false"); return; }
+    box.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    box.textContent = "Loading…";
+    fetch("/doctrines/boosts.json", { headers: { "Accept": "application/json" }, credentials: "same-origin" })
+      .then(function (resp) {
+        var json = resp.ok && (resp.headers.get("Content-Type") || "").indexOf("application/json") === 0;
+        return json ? resp.json() : null;
+      })
+      .then(function (data) { fillDoctrineBoosts(box, data); })
+      .catch(function () { fillDoctrineBoosts(box, null); });
+  }
+  function fillDoctrineBoosts(box, data) {
+    box.textContent = "";
+    if (!data) {
+      box.appendChild(doctrineNote("Sign in with a character in a corporation to use its doctrines' boosts."));
+      return;
+    }
+    var list = data.doctrines || [];
+    if (!list.length) {
+      box.appendChild(doctrineNote("None of your corporations' doctrines has a fit that loads command bursts."));
+      return;
+    }
+    list.forEach(function (d) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "fit-doctrine-opt";
+      var name = document.createElement("b");
+      name.textContent = d.name;
+      var sub = document.createElement("small");
+      sub.textContent = d.corp + ", " + d.boosts.length + " burst" + (d.boosts.length === 1 ? "" : "s");
+      b.appendChild(name);
+      b.appendChild(sub);
+      b.addEventListener("click", function () { useDoctrineBoosts(d.boosts); });
+      box.appendChild(b);
+    });
+  }
+  function doctrineNote(text) {
+    var p = document.createElement("p");
+    p.className = "fit-note";
+    p.textContent = text;
+    return p;
+  }
+  // useDoctrineBoosts replaces the fit's fleet boosts with the
+  // doctrine's: flying inside a doctrine means its boosters.
+  function useDoctrineBoosts(boosts) {
+    pushHistory();
+    state.boosts = (boosts || []).map(function (b) {
+      var o = { charge: b.charge, level: b.level || 5 };
+      if (b.hull) o.hull = b.hull;
+      if (b.mindlink) o.mindlink = b.mindlink;
+      return o;
+    });
+    pendingFlash = { type: "group", family: "boosts" };
+    markDirty();
+    simulate();
+  }
   function removeBoost(index) {
     var list = (state.boosts || []).slice();
     if (!list[index]) return;
@@ -1904,6 +1983,7 @@ var FitGauges = (function () {
       charges: state.charges,
       implants: state.implants || {},
       boosts: state.boosts || [],
+      env: state.env || 0,
       pilot: pilotID(),
       clone: cloneID()
     };
@@ -3650,7 +3730,8 @@ var FitGauges = (function () {
           items: state.items,
           charges: state.charges,
           implants: state.implants || {},
-          boosts: state.boosts || []
+          boosts: state.boosts || [],
+          env: state.env || 0
         }
       };
       fetch("/fittings/save/", {
@@ -3690,7 +3771,8 @@ var FitGauges = (function () {
             items: state.items,
             charges: state.charges,
             implants: state.implants || {},
-            boosts: state.boosts || []
+            boosts: state.boosts || [],
+          env: state.env || 0
           }
         })
       }).then(function (resp) {

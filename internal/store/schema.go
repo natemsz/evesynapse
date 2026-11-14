@@ -954,6 +954,11 @@ var pgSovFightsSchema string
 //go:embed schema_pg/157_pilot_activity_mend.sql
 var pgPilotActivityMendSchema string
 
+// Step 158: the fleet boosts a doctrine fit gives.
+//
+//go:embed schema_pg/158_doctrine_fit_boosts.sql
+var pgDoctrineFitBoostsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1139,6 +1144,7 @@ func schemaSteps() []schemaStep {
 		{155, "kill_leaders", pgKillLeadersSchema, ""},
 		{156, "sov_fights", pgSovFightsSchema, ""},
 		{157, "pilot_activity_mend", pgPilotActivityMendSchema, ""},
+		{158, "doctrine_fit_boosts", pgDoctrineFitBoostsSchema, ""},
 	}
 }
 

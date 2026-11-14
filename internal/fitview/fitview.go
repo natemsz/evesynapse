@@ -121,6 +121,10 @@ type FitDoc struct {
 	Implants map[int]int64 `json:"implants,omitempty"`
 	// Boosts are fleet boosts acting on the fit (FitFleetBoosts).
 	Boosts []FitBoost `json:"boosts,omitempty"`
+	// Env is the system the fit is simulated in: a wormhole or
+	// incursion effect beacon, or an abyssal weather (FitEnvGroups);
+	// 0 for none.
+	Env int64 `json:"env,omitempty"`
 }
 
 // FitImplantSlots is how many implant slots a clone has.
@@ -155,6 +159,9 @@ func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 		return
 	}
 	sanitizeBoosts(doc)
+	if FitEnvName(doc.Env) == "" {
+		doc.Env = 0
+	}
 	merged := make([]FitDocItem, 0, len(doc.Items))
 	index := make(map[fitDocLineKey]int, len(doc.Items))
 	for _, it := range doc.Items {
@@ -1666,6 +1673,13 @@ type FitSimView struct {
 	BuffsActing []string
 	// BoostDefault is the charge a new fleet boost starts with.
 	BoostDefault int64
+	// EnvGroups feeds the system effect picker; Env is the chosen
+	// environment, EnvName its label, and EnvEffects what it changes
+	// on this fit (empty when nothing).
+	EnvGroups  []FitEnvGroup
+	Env        int64
+	EnvName    string
+	EnvEffects []FitImplantEffect
 	// CloneID is the selected clone (0 = active clone); Clones
 	// feeds the Clone dropdown; Implants is the ten slots (clone
 	// plus the fit's overrides); ImplantNote covers warming /
@@ -1703,6 +1717,9 @@ func FitDocTypeIDs(doc *FitDoc) []int64 {
 		ids = append(ids, it.TypeID)
 	}
 	ids = append(ids, doc.LoadedCharges()...)
+	if doc.Env > 0 {
+		ids = append(ids, doc.Env)
+	}
 	return ids
 }
 
@@ -1901,17 +1918,26 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 		state, _ := json.Marshal(doc) // checked boosts
 		view.StateJSON = string(state)
 	}
-	res := fit.ComputeFleet(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs, fleet)
+	res := fit.ComputeEnv(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs, fleet, doc.Env)
 	for _, b := range res.Buffs {
 		w := FitBuffWord(bursts, b.ID, b.Value)
-		if !b.Fleet {
+		switch {
+		case b.System:
+			w += " (the system's weather)"
+		case !b.Fleet:
 			w += " (this fit's burst)"
 		}
 		view.BuffsActing = append(view.BuffsActing, w)
 	}
 	if len(implantIDs) > 0 {
-		base := fit.ComputeFleet(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, nil, fleet)
+		base := fit.ComputeEnv(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, nil, fleet, doc.Env)
 		view.ImplantEffects = FitImplantEffects(base, res)
+	}
+	view.EnvGroups, view.Env = FitEnvGroups(), doc.Env
+	if doc.Env > 0 {
+		view.EnvName = FitEnvName(doc.Env)
+		outside := fit.ComputeFleet(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs, fleet)
+		view.EnvEffects = FitImplantEffects(outside, res)
 	}
 
 	// Names for everything the fragment prints.

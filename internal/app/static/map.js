@@ -1010,11 +1010,13 @@
     var anim = null, wheelZ = null;
     var still = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     function ease(t) { return 1 - Math.pow(1 - t, 3); }
-    function flyTo(x, y, k, dur) {
+    // hop (log zoom) pulls the camera back midway, so a long flight
+    // shows where it is going.
+    function flyTo(x, y, k, dur, hop) {
       wheelZ = null;
       k = clampK(k);
       if (still || !cw) { anim = null; cam.x = x; cam.y = y; cam.k = k; schedule(); return; }
-      anim = { kind: "fly", t0: performance.now(), dur: dur || 320,
+      anim = { kind: "fly", t0: performance.now(), dur: dur || 320, hop: hop || 0,
         x0: cam.x, y0: cam.y, l0: Math.log(cam.k), x1: x, y1: y, l1: Math.log(k) };
       schedule();
     }
@@ -1043,7 +1045,7 @@
         if (anim.kind === "fly") {
           cam.x = anim.x0 + (anim.x1 - anim.x0) * e;
           cam.y = anim.y0 + (anim.y1 - anim.y0) * e;
-          cam.k = Math.exp(anim.l0 + (anim.l1 - anim.l0) * e);
+          cam.k = clampK(Math.exp(anim.l0 + (anim.l1 - anim.l0) * e - anim.hop * Math.sin(Math.PI * e)));
           if (t >= 1) anim = null; else more = true;
         } else {
           var a = anim;
@@ -1876,8 +1878,18 @@
     // (/intel/kills/stream) sends while the layer is on. A blip fades
     // over the hour; one that has just arrived rings out. The stream
     // is open only while the layer shows.
-    var FEED_KEEP_MS = 3600000, FEED_RING_MS = 2400, FEED_MAX = 300;
+    var FEED_KEEP_MS = 3600000, FEED_RING_MS = 3200, FEED_MAX = 300;
     var KF = { rows: [], byID: {}, src: null, state: "", fetched: false, watch: false, open: null, frame: 0 };
+    // Following new kills: the camera flies to each new kill and
+    // shows its card for a few seconds. Kills in one system are one
+    // stop (the card shows the newest), a system just shown waits
+    // before it is a stop again, and a flood drops the oldest stops
+    // and shortens the rest, so a fleet fight cannot hold the tour.
+    // Moving the map or pointing at the card holds it a while.
+    var TOUR_KEY = "evesynapse-map-follow-kills";
+    var TOUR_SHOW_MS = 5000, TOUR_RUSH_MS = 2500, TOUR_FLY_MS = 900, TOUR_AGAIN_MS = 45000, TOUR_HOLD_MS = 20000, TOUR_STOPS = 6;
+    var TOUR = { on: false, q: [], cur: null, timer: 0, redo: 0, seen: {}, hold: 0, over: false };
+    try { TOUR.on = localStorage.getItem(TOUR_KEY) === "1"; } catch (err) { /* private mode */ }
     var killCard = el.querySelector(".map-kill-card");
     function feedAdd(k, live) {
       var i = G.byID[k.system];
@@ -1893,6 +1905,7 @@
         var gone = KF.rows.pop();
         delete KF.byID[gone.k.id];
         if (KF.open === gone) closeKill();
+        if (TOUR.cur === gone) TOUR.cur = null;
       }
       return b;
     }
@@ -1922,14 +1935,17 @@
         });
       }
       on("kill", function (k) {
-        if (!feedAdd(k, true)) return;
+        var fresh = !KF.byID[k.id], b = feedAdd(k, true);
+        if (!b) return;
         if (layer === "feed") { renderLegend(); schedule(); }
+        if (fresh) tourAdd(b);
       });
       on("kill-price", function (p) {
         var b = KF.byID[p.id];
         if (!b) return;
         b.k.value = p.value;
         b.k.big = p.big;
+        if (tipFor === "k" + b.k.id) tipFor = -2;
         if (KF.open === b) openKill(b);
         if (layer === "feed") { renderLegend(); schedule(); }
       });
@@ -1943,6 +1959,7 @@
         (d.kills || []).forEach(function (k) { feedAdd(k, false); });
         if (!d.live) { feedStop(); feedState("off"); }
         if (layer === "feed") { renderLegend(); schedule(); }
+        if (!TOUR.cur && KF.rows.length) tourAdd(KF.rows[0]);
       }).catch(function () { KF.fetched = false; });
     }
     function feedStop() {
@@ -1985,16 +2002,29 @@
         ctx.lineWidth = 1;
         ctx.strokeStyle = colors.halo;
         ctx.stroke();
+        // A new kill flashes, then two rings run out from it, the
+        // second a beat behind the first.
         if (b.born) {
           var e = (pnow - b.born) / FEED_RING_MS;
           if (e < 1) {
             ringing = true;
-            ctx.globalAlpha = 1 - e;
-            ctx.lineWidth = 2;
             ctx.strokeStyle = col;
-            ctx.beginPath();
-            ctx.arc(b.x, b.y, b.rad + 4 + e * 26, 0, Math.PI * 2);
-            ctx.stroke();
+            if (e < 0.3) {
+              ctx.globalAlpha = 0.45 * (1 - e / 0.3);
+              ctx.fillStyle = col;
+              ctx.beginPath();
+              ctx.arc(b.x, b.y, b.rad + 5 + e * 20, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            [0, 0.28].forEach(function (lag) {
+              var q = (e - lag) / (1 - lag);
+              if (q <= 0) return;
+              ctx.globalAlpha = 0.95 * (1 - q);
+              ctx.lineWidth = 3 - q * 1.5;
+              ctx.beginPath();
+              ctx.arc(b.x, b.y, b.rad + 4 + q * 38, 0, Math.PI * 2);
+              ctx.stroke();
+            });
           } else b.born = 0;
         }
         if (KF.open === b) {
@@ -2080,12 +2110,17 @@
       kcEl("span", "map-tip-region", " " + k.regionName, w);
       var t = kcRow("When", killCard);
       t.textContent = agoShort(Date.parse(k.time) / 1000) + " · " + k.when + " EVE";
+      var near = killsNear(b);
+      if (near) kcRow("Here", killCard).textContent = near;
       var tags = [k.solo && "solo", k.awox && "awox", k.npc && "NPC"].filter(Boolean);
       if (tags.length) {
         var tg = kcEl("p", "map-kill-tags", "", killCard);
         tags.forEach(function (s) { kcEl("span", s === "awox" ? "warn" : s === "NPC" ? "dim" : "", s, tg); });
       }
-      kcLink("/intel/kill/" + k.id + "/", "Full killmail", killCard, "btn small map-kill-more");
+      var more = kcEl("p", "map-kill-links", "", killCard);
+      kcLink("/intel/kill/" + k.id + "/", "Full killmail", more, "btn small");
+      // A busy system offers its whole killboard too.
+      if (near) kcLink("/intel/kills/?system=" + k.system, "System killboard", more, "btn small");
       killCard.hidden = false;
       showTip(-1);
       placeKill();
@@ -2097,6 +2132,121 @@
       el.classList.remove("map-kill-open");
       if (killCard) killCard.hidden = true;
       schedule();
+    }
+    // killsNear: the layer's other kills in b's system in the last
+    // 15 minutes, as a phrase; "" when there are none.
+    function killsNear(b) {
+      var cut = Date.now() - 900000, n = 0;
+      for (var m = 0; m < KF.rows.length && KF.rows[m].t >= cut; m++) if (KF.rows[m].s === b.s && KF.rows[m] !== b) n++;
+      return n ? n + (n === 1 ? " more kill" : " more kills") + " in 15 min" : "";
+    }
+
+    // The hover summary of one kill, in the system popover's place.
+    function showKillTip(b, px, py) {
+      if (!tipEl) return;
+      if (KF.open === b) { showTip(-1); return; }
+      var k = b.k;
+      if (tipFor !== "k" + k.id) {
+        tipFor = "k" + k.id;
+        tipEl.textContent = "";
+        var head = kcEl("p", "map-tip-head", "", tipEl);
+        kcEl("strong", "", k.ship || "Unknown ship", head);
+        if (k.value) kcEl("span", "map-tip-value" + (k.big ? " big" : ""), " " + k.value, head);
+        var who = k.structure ? k.corpName : k.victimName;
+        var org = k.allianceName || (!k.structure && k.corpName);
+        var rows = [];
+        if (who) rows.push([k.structure ? "Owner" : "Victim", who]);
+        if (org) rows.push([k.allianceName ? "Alliance" : "Corp", org]);
+        rows.push(["Final blow", (k.finalName || k.finalCorpName || "NPC") + " · " + k.attackers + (k.attackers === 1 ? " attacker" : " attackers")]);
+        rows.push(["Where", k.sec + " " + k.systemName]);
+        rows.push(["When", agoShort(Date.parse(k.time) / 1000)]);
+        var near = killsNear(b);
+        if (near) rows.push(["Here", near]);
+        rows.forEach(function (r) {
+          var p = kcEl("p", "map-tip-row", "", tipEl);
+          kcEl("span", "", r[0], p);
+          kcEl("span", "", r[1], p);
+        });
+        tipEl.hidden = false;
+      }
+      placeTip(px, py);
+    }
+
+    function tourHold() {
+      if (!TOUR.on || layer !== "feed") return;
+      var was = TOUR.hold > Date.now();
+      TOUR.hold = Date.now() + TOUR_HOLD_MS;
+      if (!was) renderLegend();
+    }
+    function tourStop() {
+      clearTimeout(TOUR.timer); clearTimeout(TOUR.redo);
+      TOUR.timer = TOUR.redo = 0;
+      TOUR.q = []; TOUR.cur = null; TOUR.seen = {}; TOUR.hold = 0;
+    }
+    function tourSet(on) {
+      TOUR.on = on;
+      try { localStorage.setItem(TOUR_KEY, on ? "1" : "0"); } catch (err) { /* private mode */ }
+      tourStop();
+      if (on && KF.rows.length) tourAdd(KF.rows[0]);
+      renderLegend();
+    }
+    // tourAdd: a new kill for the tour.
+    function tourAdd(b) {
+      if (!TOUR.on || layer !== "feed" || isNaN(wx(b.s))) return;
+      // A kill where the tour is now refreshes the card, at most
+      // once a second or so however fast they come.
+      if (TOUR.cur && TOUR.cur.s === b.s) {
+        TOUR.cur = b;
+        if (!TOUR.redo) TOUR.redo = setTimeout(function () {
+          TOUR.redo = 0;
+          if (TOUR.cur && KF.open && KF.open.s === TOUR.cur.s && KF.open !== TOUR.cur) openKill(TOUR.cur);
+        }, 1200);
+        return;
+      }
+      if (TOUR.seen[b.s] > Date.now()) return;
+      for (var j = 0; j < TOUR.q.length; j++) if (TOUR.q[j].s === b.s) { TOUR.q[j] = b; return; }
+      TOUR.q.push(b);
+      // Over the cap, the oldest stop goes, sparing kills worth 1B.
+      while (TOUR.q.length > TOUR_STOPS) {
+        var drop = 0;
+        for (j = 0; j < TOUR.q.length; j++) if (!TOUR.q[j].k.big) { drop = j; break; }
+        TOUR.q.splice(drop, 1);
+      }
+      if (!TOUR.timer) tourNext();
+    }
+    function tourNext() {
+      clearTimeout(TOUR.timer);
+      TOUR.timer = 0;
+      if (!TOUR.on || layer !== "feed") return;
+      if (!el.isConnected) { tourStop(); return; }
+      var wait = Math.max(TOUR.hold - Date.now(), 0);
+      if (wait || TOUR.over || root.hidden) {
+        TOUR.timer = setTimeout(tourNext, Math.max(wait, 1000));
+        return;
+      }
+      var b = null;
+      while (TOUR.q.length && !b) {
+        b = TOUR.q.shift();
+        if (KF.byID[b.k.id] !== b) b = null;
+      }
+      // Nothing waiting: the tour stays where it is until a kill.
+      if (!b) { if (TOUR.hold) { TOUR.hold = 0; renderLegend(); } return; }
+      TOUR.hold = 0;
+      TOUR.cur = b;
+      TOUR.seen[b.s] = Date.now() + TOUR_AGAIN_MS;
+      if (mode !== "universe") leaveRegion();
+      var x = wx(b.s), y = wy(b.s), fk = fitK();
+      var k = Math.min(Math.max(cam.k, fk * 5), fk * 12);
+      // Pull back on a flight longer than the stage is wide.
+      var far = Math.hypot(x - cam.x, y - cam.y) * k / Math.max(cw, 1);
+      flyTo(x, y, k, TOUR_FLY_MS, far > 1 ? Math.min(2.4, Math.log(far) + 0.7) : 0);
+      openKill(b);
+      renderLegend();
+      TOUR.timer = setTimeout(tourNext, TOUR_FLY_MS + (TOUR.q.length > 2 ? TOUR_RUSH_MS : TOUR_SHOW_MS));
+    }
+    if (killCard) {
+      killCard.addEventListener("pointerenter", function () { TOUR.over = true; });
+      killCard.addEventListener("pointerleave", function () { TOUR.over = false; });
     }
     // Beside the blip, flipped to stay on the stage; on a narrow
     // stage it sits along the bottom edge.
@@ -2528,7 +2678,7 @@
       if (!el.querySelector('[data-map-layer="' + name + '"]')) name = "security";
       layer = name;
       if (name === "zones") { zonesEnsure(); loadJump(); }
-      if (name === "feed") feedStart(); else { feedStop(); closeKill(); }
+      if (name === "feed") feedStart(); else { feedStop(); closeKill(); tourStop(); }
       showTip(-1);
       el.querySelectorAll("[data-map-layer]").forEach(function (b) {
         var on = b.getAttribute("data-map-layer") === name;
@@ -2722,10 +2872,31 @@
         row("", colors.feedNPC, "Killed by NPCs");
         var hint1 = root.createElement("p");
         hint1.className = "map-layer-row muted";
-        hint1.textContent = "Newest brightest. Select a kill for its details.";
+        hint1.textContent = "Newest brightest. Point at a kill for a summary, select it for details.";
         box.appendChild(hint1);
-        // The latest few, each a way to its blip.
-        var latest = KF.rows.slice(0, 5);
+        var tourRow = root.createElement("label");
+        tourRow.className = "map-layer-ctl map-layer-check";
+        var tourCb = root.createElement("input");
+        tourCb.type = "checkbox";
+        tourCb.checked = TOUR.on;
+        tourCb.setAttribute("data-map-follow-kills", "");
+        tourRow.appendChild(tourCb);
+        tourRow.appendChild(root.createTextNode(" Follow new kills"));
+        box.appendChild(tourRow);
+        if (TOUR.on) {
+          var tourNote = root.createElement("p");
+          tourNote.className = "map-layer-row muted";
+          tourNote.textContent = TOUR.hold > Date.now() ? "Paused while you move the map." : "Flies to each new kill. Kills in one system count as one stop.";
+          box.appendChild(tourNote);
+        }
+        // The latest few, each a way to its blip; a busy system is
+        // one row, its newest kill, with how many it has had.
+        var latest = [], per = {}, cut15 = Date.now() - 900000;
+        KF.rows.forEach(function (b) {
+          if (per[b.s]) { if (b.t >= cut15) per[b.s].n++; return; }
+          if (latest.length < 5) latest.push(per[b.s] = { b: b, n: 1 });
+        });
+        latest = latest.map(function (e) { e.b.many = e.n; return e.b; });
         if (latest.length) {
           var ol = root.createElement("ol");
           ol.className = "map-feed-latest";
@@ -2736,10 +2907,10 @@
             btn.type = "button";
             btn.setAttribute("data-map-kill", String(b.k.id));
             var nm = root.createElement("span");
-            nm.textContent = b.k.ship + " · " + b.k.systemName;
+            nm.textContent = b.many > 1 ? b.k.systemName + " · " + b.many + " kills in 15 min" : b.k.ship + " · " + b.k.systemName;
             var vv = root.createElement("span");
             vv.className = "map-feed-value";
-            vv.textContent = b.k.value || "";
+            vv.textContent = b.many > 1 ? "" : b.k.value || "";
             btn.appendChild(nm);
             btn.appendChild(vv);
             li.appendChild(btn);
@@ -2919,7 +3090,10 @@
         });
         tipEl.hidden = false;
       }
-      // Beside the cursor, flipped to stay inside the stage.
+      placeTip(px, py);
+    }
+    // Beside the cursor, flipped to stay inside the stage.
+    function placeTip(px, py) {
       var w = tipEl.offsetWidth, h = tipEl.offsetHeight, gap = 14;
       var x = px + gap, y = py + gap;
       if (x + w > cw - 6) x = px - gap - w;
@@ -4543,6 +4717,7 @@
     function onPointerDown(e) {
       showTip(-1);
       stopMotion();
+      tourHold();
       canvas.setPointerCapture(e.pointerId);
       var p = pt(e);
       pointers[e.pointerId] = p;
@@ -4558,6 +4733,13 @@
       var p = pt(e);
       if (!pointers[e.pointerId]) {
         if (e.pointerType === "mouse") {
+          var kb = pickKill(p[0], p[1]);
+          if (kb) {
+            if (hover >= 0) { hover = -1; schedule(); }
+            showKillTip(kb, p[0], p[1]);
+            canvas.style.cursor = "pointer";
+            return;
+          }
           var h = pick(p[0], p[1]);
           if (h !== hover) { hover = h; schedule(); }
           showTip(h, p[0], p[1]);
@@ -4644,6 +4826,7 @@
     // around instead of zooming, so there is no guess any more.
     function onWheel(e) {
       e.preventDefault();
+      tourHold();
       var p = pt(e);
       var dy = e.deltaY;
       if (e.deltaMode === 1) { dy *= 16; } else if (e.deltaMode === 2) { dy *= ch; }
@@ -4664,6 +4847,7 @@
       flyTo((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, fitK(), 360);
     }
     function pan(dx, dy) {
+      tourHold();
       var base = anim && anim.kind === "fly" ? anim : null;
       flyTo((base ? base.x1 : cam.x) + dx / cam.k, (base ? base.y1 : cam.y) + dy / cam.k,
         base ? Math.exp(base.l1) : cam.k, 180);
@@ -4975,7 +5159,7 @@
       }
       if (t.closest("[data-map-full]")) { toggleFull(); return; }
       if (t.closest("[data-map-3d]")) { toggle3D(); return; }
-      if (t.closest("[data-map-kill-close]")) { closeKill(); return; }
+      if (t.closest("[data-map-kill-close]")) { closeKill(); tourHold(); return; }
       var kl = t.closest("[data-map-kill]");
       if (kl) {
         var kb = KF.byID[kl.getAttribute("data-map-kill")];
@@ -5094,6 +5278,7 @@
       schedule();
     });
     el.addEventListener("change", function (e) {
+      if (e.target.hasAttribute && e.target.hasAttribute("data-map-follow-kills")) { tourSet(e.target.checked); return; }
       if (e.target.hasAttribute && e.target.hasAttribute("data-map-zones")) {
         zonesID = +e.target.value || 0;
         try { localStorage.setItem(ZONES_KEY, String(zonesID)); } catch (err) { /* private mode */ }

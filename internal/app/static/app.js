@@ -6018,9 +6018,14 @@
 // modal. The preview image loads only on first open, so a page
 // view never draws a card nobody asked for. Copy image and the
 // device's own share sheet show only where the browser has them.
+// The card's bytes are fetched as soon as the preview shows, so
+// Copy image and Share hand over a ready image inside the tap:
+// phone browsers drop a clipboard write or share that waits on
+// the network.
 (function () {
   "use strict";
   var blobs = {};
+  var ready = {};
   function flash(btn, text) {
     var prior = btn.getAttribute("data-label") || btn.textContent;
     btn.setAttribute("data-label", prior);
@@ -6030,16 +6035,29 @@
   function absolute(href) {
     try { return new URL(href, location.href).href; } catch (e) { return href; }
   }
+  function srcOf(img) { return img.currentSrc || img.src; }
+  // imageBlob fetches the card once per source. Anything but a PNG
+  // (an error page, a challenge) is refused, so it never reaches
+  // the clipboard or the share sheet dressed as an image.
   function imageBlob(img) {
-    var src = img.currentSrc || img.src;
+    var src = srcOf(img);
     if (!blobs[src]) {
       blobs[src] = fetch(src, { credentials: "same-origin" }).then(function (r) {
         if (!r.ok) throw new Error("status " + r.status);
         return r.blob();
+      }).then(function (b) {
+        if (b.type && b.type !== "image/png") throw new Error("not a png: " + b.type);
+        b = b.type ? b : new Blob([b], { type: "image/png" });
+        ready[src] = b;
+        return b;
       });
       blobs[src].catch(function () { delete blobs[src]; });
     }
     return blobs[src];
+  }
+  function canCopyImage() {
+    if (!(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write)) return false;
+    return typeof ClipboardItem.supports !== "function" || ClipboardItem.supports("image/png");
   }
   // An opener may name its own card: data-share-image, -link,
   // -download and -name replace the dialog's, so one dialog serves
@@ -6068,18 +6086,50 @@
       img.addEventListener("load", function () {
         modal.classList.remove("share-loading");
         if (wait) wait.textContent = "";
+        imageBlob(img).catch(function () { /* fetched again on tap */ });
       }, { once: true });
       img.addEventListener("error", function () {
         modal.classList.remove("share-loading");
         if (wait) wait.textContent = "The card could not be drawn just now.";
       }, { once: true });
       img.src = img.getAttribute("data-share-src");
+    } else if (img && img.complete && img.naturalWidth) {
+      imageBlob(img).catch(function () { /* fetched again on tap */ });
     }
     var copyImg = modal.querySelector("[data-share-copy-image]");
-    if (copyImg) copyImg.hidden = !(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write);
+    if (copyImg) copyImg.hidden = !canCopyImage();
     var native = modal.querySelector("[data-share-native]");
     if (native) native.hidden = !(navigator.share && navigator.canShare);
     if (window.EveSynapseModal) EveSynapseModal.open(modal);
+  }
+  function copyImage(btn, img) {
+    var blob = ready[srcOf(img)];
+    try {
+      // A ready blob goes in as is. Otherwise Safari wants the
+      // ClipboardItem built inside the tap, holding the promise.
+      var item = new ClipboardItem({ "image/png": blob || imageBlob(img) });
+      navigator.clipboard.write([item]).then(
+        function () { flash(btn, "Image copied"); },
+        function () { flash(btn, "Copy failed"); });
+    } catch (e) { flash(btn, "Copy failed"); }
+  }
+  // shareCard hands the share sheet the image alone: a file mixed
+  // with a title and link makes phone sheets show two previews and
+  // lets apps send the link without the picture. Copy link covers
+  // the link. Without file sharing the sheet gets the link.
+  function shareCard(box, btn, img) {
+    var link = absolute((box.querySelector("[data-share-copy-link]") || btn).getAttribute("data-share-copy-link") || location.href);
+    var title = (box.querySelector(".modal-head h2") || {}).textContent || document.title;
+    function send(blob) {
+      var dl = box.querySelector("a[download]");
+      var file = new File([blob], (dl && dl.getAttribute("download")) || "card.png", { type: "image/png" });
+      var data = { files: [file] };
+      if (!navigator.canShare(data)) data = { title: title, url: link };
+      return navigator.share(data);
+    }
+    var blob = ready[srcOf(img)];
+    var done = blob ? send(blob) : imageBlob(img).then(send);
+    done.catch(function () { /* dismissed or unsupported */ });
   }
   document.addEventListener("click", function (ev) {
     var t = ev.target && ev.target.closest ? ev.target : null;
@@ -6102,28 +6152,9 @@
       return;
     }
     var imgBtn = t.closest("[data-share-copy-image]");
-    if (imgBtn && img) {
-      // Safari wants the ClipboardItem built inside the click,
-      // holding a promise of the blob rather than the blob.
-      try {
-        navigator.clipboard.write([new ClipboardItem({ "image/png": imageBlob(img) })]).then(
-          function () { flash(imgBtn, "Image copied"); },
-          function () { flash(imgBtn, "Copy failed"); });
-      } catch (e) { flash(imgBtn, "Copy failed"); }
-      return;
-    }
+    if (imgBtn && img) { copyImage(imgBtn, img); return; }
     var nativeBtn = t.closest("[data-share-native]");
-    if (nativeBtn && img) {
-      var link = absolute((box.querySelector("[data-share-copy-link]") || nativeBtn).getAttribute("data-share-copy-link") || location.href);
-      var title = (box.querySelector(".modal-head h2") || {}).textContent || document.title;
-      imageBlob(img).then(function (blob) {
-        var dl = box.querySelector("a[download]");
-        var file = new File([blob], (dl && dl.getAttribute("download")) || "card.png", { type: "image/png" });
-        var data = { title: title, url: link, files: [file] };
-        if (!navigator.canShare(data)) data = { title: title, url: link };
-        return navigator.share(data);
-      }).catch(function () { /* dismissed or unsupported */ });
-    }
+    if (nativeBtn && img) shareCard(box, nativeBtn, img);
   });
 })();
 

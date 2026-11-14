@@ -639,6 +639,29 @@
   function heatT(v, max) {
     return v <= 0 || max <= 0 ? 0 : Math.log(1 + v) / Math.log(1 + max);
   }
+  // heatRanks: where each active system ranks among the active ones,
+  // 0 the quietest to 1 the busiest, ties sharing their middle rank.
+  // A share of the single busiest made everything glow (one system
+  // with 30,000 jumps puts one with 100 near half); a rank spreads
+  // the colours over what is actually there. order lists the active
+  // systems quietest first.
+  function heatRanks(vals, order) {
+    var pct = new Float32Array(vals.length), n = order.length;
+    for (var a = 0; a < n;) {
+      var b = a;
+      while (b + 1 < n && vals[order[b + 1]] === vals[order[a]]) b++;
+      var p = n > 1 ? (a + b) / 2 / (n - 1) : 1;
+      for (var m = a; m <= b; m++) pct[order[m]] = p;
+      a = b + 1;
+    }
+    return pct;
+  }
+  // heatCurve turns a rank into heat by the legend's scale (gain,
+  // -3 to 5): toward "Hottest" only the top few percent glow, toward
+  // "All activity" most do; the middle lights the busiest third.
+  function heatCurve(p, gain) {
+    return Math.pow(p, 2 * Math.pow(2, -(gain || 0) / 2));
+  }
 
   // allianceHue gives every alliance its own stable hue: neighbours
   // with near IDs still land far apart on the wheel.
@@ -974,6 +997,9 @@
         feedBig: tok("--map-feed-big", "#ffd27a"),
         feedNPC: tok("--map-feed-npc", "#b08a74"),
         heatLo: rgbOf(tok("--map-heat-lo", "#7a2a0c")),
+        // The heat ramp, quiet to white-hot, in six steps.
+        heatRamp: [rgbOf(tok("--map-heat-0", "#3b0f70")), rgbOf(tok("--map-heat-1", "#8c2981")), rgbOf(tok("--map-heat-2", "#de4968")),
+          rgbOf(tok("--map-heat-3", "#fe9f6d")), rgbOf(tok("--map-heat-4", "#fcfdbf")), rgbOf(tok("--map-heat-5", "#ffffff"))],
         heatHi: rgbOf(tok("--map-heat-hi", "#ff6a1a")),
         heatCore: rgbOf(tok("--map-heat-core", "#ffe2a8")),
         heatBlend: tok("--map-heat-blend", "lighter"),
@@ -1588,10 +1614,96 @@
       var top = DATA_HEAT[name] ? (MINE ? MINE.max[name] : 1) : LY.max[name];
       return Math.max(top * Math.pow(2, -g), name === "threat" ? 0.25 : 1);
     }
-    // heatTop is the value the legend's scale ends at, as said.
+    // heatTop is the value the legend's scale ends at, as said:
+    // threat's by the gain, the ranked layers' their busiest.
     function heatTop(name) {
-      var m = heatMax(name), full = DATA_HEAT[name] ? (MINE ? MINE.max[name] : 1) : LY.max[name];
-      return (DATA_HEAT[name] && DATA_HEAT[name].isk ? iskShort(m) : Math.round(m).toLocaleString()) + (m < full ? "+" : "");
+      var full = DATA_HEAT[name] ? (MINE ? MINE.max[name] : 1) : LY.max[name];
+      var m = name === "threat" ? heatMax(name) : full;
+      return heatValue(name, m) + (m < full ? "+" : "");
+    }
+    function heatValue(name, v) {
+      return DATA_HEAT[name] && DATA_HEAT[name].isk ? iskShort(v) : Math.round(v).toLocaleString();
+    }
+    // heatRanked: a ranked heat layer's systems quietest first, each
+    // one's rank, and the values in order, built once per payload.
+    function heatRanked(name, vals, ids) {
+      var c = heatOrder[name];
+      if (c && c.vals === vals) return c;
+      var order = [];
+      if (ids) order = ids.slice();
+      else for (var i = 0; i < vals.length; i++) if (vals[i] > 0) order.push(i);
+      order = order.filter(function (i) { return vals[i] > 0; });
+      order.sort(function (a, b) { return vals[a] - vals[b]; });
+      c = heatOrder[name] = { vals: vals, order: order, pct: heatRanks(vals, order) };
+      return c;
+    }
+    // heatBar: the legend's colour scale, every step of the ramp.
+    function heatBar(g) {
+      var stops = [];
+      for (var s = 0; s <= 6; s++) stops.push(heatColor(s / 6, 1));
+      g.style.background = "linear-gradient(to right," + stops.join(",") + ")";
+    }
+    // heatNote: what the brightest colours stand for, in the layer's
+    // own numbers, at the scale set now.
+    function heatNote(box, name, c) {
+      if (!c || c.order.length < 10) return;
+      var gain = +heatGain[name] || 0, p = Math.pow(0.75, 1 / (2 * Math.pow(2, -gain / 2)));
+      var note = root.createElement("p");
+      note.className = "map-layer-row muted map-heat-note";
+      note.textContent = "Brightest from " + heatValue(name, heatAt(c, p)) + " (top " + Math.max(1, Math.round((1 - p) * 100)) + "%)";
+      box.appendChild(note);
+    }
+    // heatAt: the value at rank p (0 to 1) of a ranked layer.
+    function heatAt(c, p) {
+      return c.order.length ? c.vals[c.order[Math.min(c.order.length - 1, Math.floor(p * c.order.length))]] : 0;
+    }
+    // drawHeat: the heat for the systems in order (quietest first)
+    // that are in list (null: all of them), each at tOf(i), 0 to 1.
+    // Glows and dots are batched in HEAT_STEPS colour steps, one path
+    // a step, so a frame fills a few dozen paths, not thousands, and
+    // overlapping glows of one step do not stack. Only from
+    // HEAT_GLOW_FROM up does a system glow, and a glow's colour stops
+    // short of white (HEAT_GLOW_TOP) so neighbouring glows on the
+    // additive blend do not merge into white blobs; every active
+    // system keeps its coloured dot, white only at the very top.
+    var HEAT_STEPS = 24, HEAT_GLOW_FROM = 0.3, HEAT_GLOW_TOP = 0.62;
+    function drawHeat(k, ox, oy, r, list, order, tOf, ramp, pad) {
+      var keep = null, glow = [], dots = [], i, m, s;
+      if (list) {
+        keep = new Uint8Array(G.n);
+        for (m = 0; m < list.length; m++) keep[list[m]] = 1;
+      }
+      var grow = mode === "universe" ? Math.min(1 + (cam.k / fitK() - 1) * 0.15, 3) : 0.9;
+      for (m = 0; m < order.length; m++) {
+        i = order[m];
+        if (keep && !keep[i]) continue;
+        if (mode !== "universe" && S.r[i] !== region) continue;
+        var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
+        if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) continue;
+        var t = tOf(i);
+        s = Math.round(t * HEAT_STEPS);
+        if (t >= HEAT_GLOW_FROM) {
+          var rr = r + (1 + 8 * t) * grow;
+          if (!glow[s]) glow[s] = new Path2D();
+          glow[s].moveTo(sx + rr, sy);
+          glow[s].arc(sx, sy, rr, 0, Math.PI * 2);
+        }
+        if (!dots[s]) dots[s] = new Path2D();
+        dots[s].moveTo(sx + r + 0.6, sy);
+        dots[s].arc(sx, sy, r + 0.6, 0, Math.PI * 2);
+      }
+      ctx.globalCompositeOperation = colors.heatBlend;
+      for (s = 0; s <= HEAT_STEPS; s++) {
+        if (!glow[s]) continue;
+        ctx.fillStyle = heatColor(Math.min(s / HEAT_STEPS, HEAT_GLOW_TOP), 0.08 + 0.22 * s / HEAT_STEPS, ramp);
+        ctx.fill(glow[s]);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      for (s = 0; s <= HEAT_STEPS; s++) {
+        if (!dots[s]) continue;
+        ctx.fillStyle = heatColor(s / HEAT_STEPS, 1, ramp);
+        ctx.fill(dots[s]);
+      }
     }
     // Sovereignty can show as dots (each system its holder's color)
     // or as territory: the old influence-map look, each holder's
@@ -1631,8 +1743,13 @@
     // heatColor walks a three-stop ramp (the heat ramp unless one is
     // given: threat has its own, amber through red to white-hot).
     function heatColor(t, a, ramp) {
-      ramp = ramp || [colors.heatLo, colors.heatHi, colors.heatCore];
+      ramp = ramp || colors.heatRamp;
       t = Math.min(Math.max(t, 0), 1);
+      if (ramp.length > 3) {
+        // An even ramp of any length.
+        var f = t * (ramp.length - 1), j = Math.min(ramp.length - 2, Math.floor(f)), x = f - j, p = ramp[j], q = ramp[j + 1];
+        return "rgba(" + Math.round(p[0] + (q[0] - p[0]) * x) + "," + Math.round(p[1] + (q[1] - p[1]) * x) + "," + Math.round(p[2] + (q[2] - p[2]) * x) + "," + a + ")";
+      }
       var lo = ramp[0], hi = ramp[1], core = ramp[2], c;
       if (t < 0.75) {
         var u = t / 0.75;
@@ -2619,38 +2736,16 @@
           }
           ctx.setLineDash([]);
         }
-        // Quietest first, so the hottest glow on top.
-        var order = heatOrder[layer];
-        if (!order) {
-          order = [];
-          for (i = 0; i < G.n; i++) if (vals[i] > 0) order.push(i);
-          order.sort(function (a, b) { return vals[a] - vals[b]; });
-          heatOrder[layer] = order;
+        // Threat by its fixed danger levels; the others by rank, so
+        // the colours spread over what is actually there.
+        var tOf;
+        if (layer === "threat") tOf = function (i) { return heatT(vals[i], max); };
+        else {
+          var rk = heatRanked(layer, vals), gain = +heatGain[layer] || 0;
+          tOf = function (i) { return heatCurve(rk.pct[i], gain); };
         }
-        // In a region's tactical view systems sit far apart and are
-        // named; a modest glow keeps neighbours and their names clear.
-        var grow = mode === "universe" ? Math.min(1 + (cam.k / fitK() - 1) * 0.15, 3) : 0.9;
-        ctx.globalCompositeOperation = colors.heatBlend;
-        for (m = 0; m < order.length; m++) {
-          i = order[m];
-          if (mode !== "universe" && S.r[i] !== region) continue;
-          if (!on(i)) continue;
-          var t = heatT(vals[i], max), rr = r + (2 + 13 * t) * grow;
-          ctx.beginPath();
-          ctx.arc(sx, sy, rr, 0, Math.PI * 2);
-          ctx.fillStyle = heatColor(t, 0.18 + 0.3 * t, ramp);
-          ctx.fill();
-        }
-        ctx.globalCompositeOperation = "source-over";
-        for (m = 0; m < order.length; m++) {
-          i = order[m];
-          if (mode !== "universe" && S.r[i] !== region) continue;
-          if (!on(i)) continue;
-          ctx.beginPath();
-          ctx.arc(sx, sy, r + 0.6, 0, Math.PI * 2);
-          ctx.fillStyle = heatColor(heatT(vals[i], max), 1, ramp);
-          ctx.fill();
-        }
+        var hc = layer === "threat" ? heatRanked("threat:order", vals) : heatRanked(layer, vals);
+        drawHeat(k, ox, oy, r, list, hc.order, tOf, ramp, pad);
         // Camps: a ring around each.
         if (layer === "threat") {
           ctx.lineWidth = 2;
@@ -3092,7 +3187,7 @@
         bar.className = "map-heat";
         var g = root.createElement("span");
         g.className = "map-heat-bar";
-        g.style.background = "linear-gradient(to right," + heatColor(0.05, 1) + "," + heatColor(0.75, 1) + "," + heatColor(1, 1) + ")";
+        heatBar(g);
         bar.appendChild(root.createTextNode("1 "));
         bar.appendChild(g);
         var top = root.createElement("span");
@@ -3100,6 +3195,7 @@
         top.textContent = " " + heatTop(layer);
         bar.appendChild(top);
         box.appendChild(bar);
+        heatNote(box, layer, heatRanked(layer, LY[layer]));
       } else if (layer === "sov") {
         var view = root.createElement("div");
         view.className = "map-layer-ctl map-layer-seg";
@@ -4655,7 +4751,6 @@
         mineLoading = false;
         if (!D || !el.isConnected) return;
         MINE = joinMine(D);
-        dataHeatOrder = null;
         syncDataMenu();
         renderLegend();
         // Bridges and pilots may change the route.
@@ -4829,7 +4924,6 @@
         });
       }
     }
-    var dataHeatOrder = null;
     function drawDataHeat(k, ox, oy, r, list, n, pad) {
       var dk = dataHeat(), H = MINE && MINE.heat[dk];
       ctx.beginPath();
@@ -4844,31 +4938,9 @@
       ctx.fillStyle = colors.dim;
       ctx.fill();
       if (!H) return;
-      if (!dataHeatOrder || dataHeatOrder.k !== dk) {
-        var order = Object.keys(H.rows).map(Number).sort(function (a, b) { return H.vals[a] - H.vals[b]; });
-        dataHeatOrder = { k: dk, order: order };
-      }
-      var max = heatMax(dk), grow = mode === "universe" ? Math.min(1 + (cam.k / fitK() - 1) * 0.15, 3) : 0.9;
-      ctx.globalCompositeOperation = colors.heatBlend;
-      dataHeatOrder.order.forEach(function (i) {
-        if (mode !== "universe" && S.r[i] !== region) return;
-        var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
-        if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) return;
-        var t = heatT(H.vals[i], max);
-        ctx.beginPath();
-        ctx.arc(sx, sy, r + (2 + 13 * t) * grow, 0, Math.PI * 2);
-        ctx.fillStyle = heatColor(t, 0.18 + 0.3 * t);
-        ctx.fill();
-      });
-      ctx.globalCompositeOperation = "source-over";
-      dataHeatOrder.order.forEach(function (i) {
-        if (mode !== "universe" && S.r[i] !== region) return;
-        var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
-        ctx.beginPath();
-        ctx.arc(sx, sy, r + 0.6, 0, Math.PI * 2);
-        ctx.fillStyle = heatColor(heatT(H.vals[i], max), 1);
-        ctx.fill();
-      });
+      // Ranked like the live heat layers, on the same scale.
+      var rk = heatRanked("data:" + dk, H.vals, Object.keys(H.rows).map(Number)), gain = +heatGain[dk] || 0;
+      drawHeat(k, ox, oy, r, list, rk.order, function (i) { return heatCurve(rk.pct[i], gain); }, null, pad);
     }
     function renderDataLegend(box, dk) {
       box.textContent = "";
@@ -4880,7 +4952,7 @@
       bar.className = "map-heat";
       var g = root.createElement("span");
       g.className = "map-heat-bar";
-      g.style.background = "linear-gradient(to right," + heatColor(0.05, 1) + "," + heatColor(0.75, 1) + "," + heatColor(1, 1) + ")";
+      heatBar(g);
       bar.appendChild(root.createTextNode(DATA_HEAT[dk].isk ? "0 " : "1 "));
       bar.appendChild(g);
       var top = root.createElement("span");
@@ -4888,6 +4960,8 @@
       top.textContent = " " + (MINE ? heatTop(dk) : "…");
       bar.appendChild(top);
       box.appendChild(bar);
+      var dh = MINE && MINE.heat[dk];
+      if (dh) heatNote(box, dk, heatRanked("data:" + dk, dh.vals, Object.keys(dh.rows).map(Number)));
       var sc = root.createElement("label");
       sc.className = "map-layer-ctl map-scale";
       var lo = root.createElement("span");
@@ -5006,7 +5080,6 @@
         if (back !== layer) setLayer(back, true);
       }
       try { localStorage.setItem(DATA_KEY, Object.keys(dataOn).join(",")); } catch (e) { /* private mode */ }
-      dataHeatOrder = null;
       syncDataMenu();
       renderLegend();
       syncURL();
@@ -5774,7 +5847,9 @@
         schedule();
         return;
       }
-      if (e.target.hasAttribute && e.target.hasAttribute("data-map-gain") && layer === "threat") renderLegend();
+      // The legend redraws once the scale is let go: threat's level
+      // swatches, the others' "brightest from" line.
+      if (e.target.hasAttribute && e.target.hasAttribute("data-map-gain")) renderLegend();
     });
     if (zoomPref) {
       zoomPref.disabled = false;

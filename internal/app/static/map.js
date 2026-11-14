@@ -915,6 +915,10 @@
     try { zoomTactical = window.localStorage.getItem(ZOOM_TACTICAL_KEY) === "1"; } catch (e) { /* private mode */ }
 
     var cw = 0, ch = 0, dpr = 1;
+    // Name pictures for 3D (labelSprite), by font, colour and text;
+    // made again once a web font arrives, or a scheme changes colours.
+    var spriteCache = {}, spriteCount = 0;
+    if (root.fonts && root.fonts.addEventListener) root.fonts.addEventListener("loadingdone", function () { spriteCache = {}; spriteCount = 0; });
     var mode = "universe", region = -1;
     var cam = { x: 0, y: 0, k: 1 };
     // 3D: the true positions, orbited (project3). t runs from 0 (the
@@ -936,6 +940,8 @@
 
     // --- Colors from the page ---
     function readColors() {
+      spriteCache = {};
+      spriteCount = 0;
       var cs = getComputedStyle(el);
       function tok(name, fallback) {
         var v = cs.getPropertyValue(name).trim();
@@ -1455,12 +1461,41 @@
         if (!claim(lx - pad, ly - pad, w + 2 * pad, q.size + 2 * pad) && !q.force) return;
         if (q.key) nextShown[q.key] = 1;
         ctx.globalAlpha = q.alpha;
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = colors.halo;
-        ctx.strokeText(q.text, lx, ly + q.size * 0.8);
-        ctx.fillStyle = q.color;
-        ctx.fillText(q.text, lx, ly + q.size * 0.8);
+        if (V3) labelSprite(q, w, lx, ly);
+        else {
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = colors.halo;
+          ctx.strokeText(q.text, lx, ly + q.size * 0.8);
+          ctx.fillStyle = q.color;
+          ctx.fillText(q.text, lx, ly + q.size * 0.8);
+        }
         if (q.placed) q.placed([lx, ly, w, q.size]);
+      }
+      // In 3D a name is drawn as a picture of itself, made once and
+      // placed at its exact spot: canvas text snaps to whole pixels,
+      // so while the view turns, names drawn as text stepped a pixel
+      // at a time against their smoothly moving systems.
+      function labelSprite(q, w, lx, ly) {
+        var key = ctx.font + "|" + q.color + "|" + dpr + "|" + q.text, sp = spriteCache[key];
+        if (!sp) {
+          if (spriteCount > 1500) { spriteCache = {}; spriteCount = 0; }
+          var cv = root.createElement("canvas"), m = 3, sw = Math.ceil(w + 2 * m), sh = Math.ceil(q.size * 1.25 + 2 * m);
+          cv.width = Math.ceil(sw * dpr);
+          cv.height = Math.ceil(sh * dpr);
+          var g = cv.getContext("2d");
+          g.scale(dpr, dpr);
+          g.font = ctx.font;
+          g.lineJoin = "round";
+          g.textBaseline = "alphabetic";
+          g.lineWidth = 3;
+          g.strokeStyle = colors.halo;
+          g.strokeText(q.text, m, m + q.size * 0.8);
+          g.fillStyle = q.color;
+          g.fillText(q.text, m, m + q.size * 0.8);
+          sp = spriteCache[key] = { cv: cv, w: sw, h: sh, m: m };
+          spriteCount++;
+        }
+        ctx.drawImage(sp.cv, lx - sp.m, ly - sp.m, sp.w, sp.h);
       }
       function placeAll() {
         for (var pass = 0; pass < 3; pass++) {

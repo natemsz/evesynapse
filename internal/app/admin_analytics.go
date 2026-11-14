@@ -932,7 +932,13 @@ func (b *analyticsBuild) topPages(v *analyticsView) {
 		if m, ok := statsPercentileMs(acc[g.RouteGroup], 50); ok {
 			val += " · " + msText(m)
 		}
-		v.TopBars = append(v.TopBars, analyticsBar{Name: g.RouteGroup, Mono: true, Pct: barPct(g.Requests, max), Value: val})
+		name := g.RouteGroup
+		if name == "unmatched" {
+			// Requests that matched no route: probes and scans
+			// asking for pages the app does not have.
+			name = "Bot traffic"
+		}
+		v.TopBars = append(v.TopBars, analyticsBar{Name: name, Mono: true, Pct: barPct(g.Requests, max), Value: val})
 	}
 	v.TopNote = "Route template, requests, median response."
 }

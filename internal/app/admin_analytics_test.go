@@ -221,6 +221,16 @@ func TestAdminAnalyticsRenders(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed durations: %v", err)
 	}
+	if err := q.UpsertStatsRequest(ctx, db.UpsertStatsRequestParams{
+		Minute: minute, RouteGroup: "unmatched", StatusClass: 4, Requests: 300,
+	}); err != nil {
+		t.Fatalf("seed unmatched traffic: %v", err)
+	}
+	if err := q.UpsertStatsDuration(ctx, db.UpsertStatsDurationParams{
+		Minute: minute, RouteGroup: "unmatched", Bucket: 4, Hits: 300,
+	}); err != nil {
+		t.Fatalf("seed unmatched durations: %v", err)
+	}
 	if err := q.InsertStatsCycle(ctx, db.InsertStatsCycleParams{
 		At: minute, TookMs: 45000, Fetches: 8, Budget: 100, Characters: 2,
 	}); err != nil {
@@ -252,7 +262,10 @@ func TestAdminAnalyticsRenders(t *testing.T) {
 	mustContain(t, "/admin/ (seeded)", body,
 		"Traffic", "Worker cycles", "Host", "Growth",
 		"Top pages · 24h", "Activity · 24h", "Data freshness", "Swarm",
-		"Data inventory", "market_orders", "Requests · 24h", "120")
+		"Data inventory", "market_orders", "Requests · 24h", "120", "Bot traffic")
+	if strings.Contains(body, "unmatched") {
+		t.Errorf("/admin/ (seeded): the unmatched route group shows under its stored name; want the Bot traffic label")
+	}
 	if strings.Contains(body, "ESI calls ·") {
 		t.Errorf("/admin/ (seeded): the per-family ESI section is still on Analytics; it belongs to the ESI Details tab")
 	}

@@ -515,8 +515,8 @@ func (app *page) resolveEFT(ctx context.Context, input string) ([]resolvedLine, 
 		add(it.TypeID, int64(it.Qty))
 	}
 	chargeQty := map[int64]int64{}
-	for _, chargeID := range doc.Charges {
-		chargeQty[chargeID]++
+	for _, p := range doc.LoadedChargePairs() {
+		chargeQty[p.Charge]++
 	}
 	for chargeID, n := range chargeQty {
 		add(chargeID, n)

@@ -678,12 +678,17 @@ func fitESIFittingBody(name string, doc *fitview.FitDoc, familyOf map[int64]stri
 		Name:        name,
 		ShipTypeID:  doc.ShipTypeID,
 	}
-	byFamily := map[string][]int64{}
+	type placed struct{ id, ownCharge int64 }
+	byFamily := map[string][]placed{}
 	for _, it := range doc.Items {
 		switch it.FamilyIn(familyOf) {
 		case fitview.FitFamilyHigh, fitview.FitFamilyMedium, fitview.FitFamilyLow, fitview.FitFamilyRig, fitview.FitFamilySubsystem:
 			for i := 0; i < it.Qty; i++ {
-				byFamily[it.FamilyIn(familyOf)] = append(byFamily[it.FamilyIn(familyOf)], it.TypeID)
+				p := placed{id: it.TypeID}
+				if i < len(it.Charges) {
+					p.ownCharge = it.Charges[i]
+				}
+				byFamily[it.FamilyIn(familyOf)] = append(byFamily[it.FamilyIn(familyOf)], p)
 			}
 		}
 	}
@@ -695,11 +700,16 @@ func fitESIFittingBody(name string, doc *fitview.FitDoc, familyOf map[int64]stri
 			return body, fmt.Errorf("%d %s modules don't fit in %d %s slots; remove %d first",
 				len(ids), ff.label, ff.slots, ff.label, len(ids)-ff.slots)
 		}
-		for i, id := range ids {
+		for i, p := range ids {
 			flag := fmt.Sprintf("%s%d", ff.prefix, i)
-			body.Items = append(body.Items, esiFittingItem{Flag: flag, Quantity: 1, TypeID: id})
-			if _, ok := weaponFlag[id]; !ok {
-				weaponFlag[id] = flag
+			body.Items = append(body.Items, esiFittingItem{Flag: flag, Quantity: 1, TypeID: p.id})
+			if p.ownCharge > 0 {
+				// A module with its own charge carries it in its slot.
+				body.Items = append(body.Items, esiFittingItem{Flag: flag, Quantity: 1, TypeID: p.ownCharge})
+				continue
+			}
+			if _, ok := weaponFlag[p.id]; !ok {
+				weaponFlag[p.id] = flag
 			}
 		}
 	}

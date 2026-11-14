@@ -705,7 +705,7 @@ func (app *mod) corpFitBrowser(ctx context.Context, corp int64, chosen *module.N
 					modNames = append(modNames, name)
 				}
 			}
-			for _, chargeID := range doc.Charges {
+			for _, chargeID := range doc.LoadedCharges() {
 				if name := namesByID[chargeID]; name != "" {
 					modNames = append(modNames, name)
 				}

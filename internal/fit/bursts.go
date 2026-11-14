@@ -225,7 +225,7 @@ func (f *fitting) applyBuffs(fleet []BuffValue) {
 	}
 	byID := map[int64][]source{}
 	for _, ent := range f.fitted {
-		if ent.kind != entModule || !ent.cycling() || snap.Groups[ent.typeID] != groupCommandBurst || f.weaponCharge[ent.typeID] == nil {
+		if ent.kind != entModule || !ent.cycling() || snap.Groups[ent.typeID] != groupCommandBurst || ent.charge == nil {
 			continue
 		}
 		for _, pair := range burstBuffAttrs {
@@ -248,11 +248,9 @@ func (f *fitting) applyBuffs(fleet []BuffValue) {
 	}
 	slices.Sort(ids)
 
-	atShip := make([]*entity, 0, len(f.fitted)+len(f.weaponCharge))
+	atShip := make([]*entity, 0, len(f.fitted)+len(f.charges))
 	atShip = append(atShip, f.fitted...)
-	for _, ent := range f.weaponCharge {
-		atShip = append(atShip, ent)
-	}
+	atShip = append(atShip, f.charges...)
 	bound := false
 	for _, id := range ids {
 		buff := snap.Bursts.Buffs[id]

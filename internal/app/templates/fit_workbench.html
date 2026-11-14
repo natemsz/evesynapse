@@ -95,8 +95,8 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   {{end}}
   {{range .Visual.Slots}}
   {{if $.ReadOnly}}{{if .Filled}}<span class="fit-vslot filled{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-lines="{{.TipLines}}"{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}</span>{{else}}<span class="fit-vslot" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" aria-hidden="true"></span>{{end}}{{else}}
-  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}" data-tip-lines="{{.TipLines}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
-    {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}}. Click to change it"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
+  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-ordinal="{{.Ordinal}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-type="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}" data-tip-lines="{{.TipLines}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
+    {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" data-fit-ammo-index="{{.Ordinal}}" title="Loaded: {{.ChargeName}}. Click to change it"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
   </button>
   {{end}}
   {{end}}
@@ -131,18 +131,39 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <div class="fit-chips">
         {{range .ChargeSets}}{{$loaded := .Loaded}}
         {{if $.ReadOnly}}
+        {{if .Mixed}}{{$w := .}}{{range .Each}}
+        <span class="fit-chip fit-imp">
+          <img class="fit-imp-icon" src="https://images.evetech.net/types/{{if .ID}}{{.ID}}{{else}}{{$w.WeaponID}}{{end}}/icon?size=32" alt="" draggable="false">
+          <span class="fit-chip-name">{{if .ID}}{{.Name}}{{else}}Nothing loaded{{end}}</span>
+          <span class="fit-chip-sub">{{$w.WeaponName}} {{.Num}}</span>
+        </span>
+        {{end}}{{else}}
         <span class="fit-chip fit-imp">
           <img class="fit-imp-icon" src="https://images.evetech.net/types/{{if $loaded.ID}}{{$loaded.ID}}{{else}}{{.WeaponID}}{{end}}/icon?size=32" alt="" draggable="false">
           <span class="fit-chip-name">{{if $loaded.ID}}{{$loaded.Name}}{{else}}Nothing loaded{{end}}</span>
           <span class="fit-chip-sub">{{.WeaponName}}</span>
         </span>
+        {{end}}
         {{else}}
         <span class="fit-chip fit-imp{{if not $loaded.ID}} fit-imp-empty{{end}}">
           <img class="fit-imp-icon" src="https://images.evetech.net/types/{{if $loaded.ID}}{{$loaded.ID}}{{else}}{{.WeaponID}}{{end}}/icon?size=32" alt="" draggable="false">
-          <input type="text" class="fit-imp-input" data-fit-ammo-for="{{.WeaponID}}" data-fit-ammo-ids="{{.OptionIDs}}" data-fit-ammo-weapon="{{.WeaponName}}" value="{{$loaded.Name}}" placeholder="Nothing loaded: search" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="{{.WeaponName}} charge">
-          {{if $loaded.ID}}<button type="button" class="fit-chip-btn" data-fit-ammo-clear="{{.WeaponID}}" title="Unload">×</button>{{end}}
-          <span class="fit-chip-sub">{{.WeaponName}}</span>
+          <input type="text" class="fit-imp-input" data-fit-ammo-for="{{.WeaponID}}" data-fit-ammo-ids="{{.OptionIDs}}" data-fit-ammo-weapon="{{.WeaponName}}" value="{{if not .Mixed}}{{$loaded.Name}}{{end}}" placeholder="{{if .Mixed}}Each loads its own: search to load all{{else}}Nothing loaded: search{{end}}" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="{{.WeaponName}} charge, all of them">
+          {{if or $loaded.ID .Split}}<button type="button" class="fit-chip-btn" data-fit-ammo-clear="{{.WeaponID}}" title="Unload all">×</button>{{end}}
+          <span class="fit-chip-sub">{{.WeaponName}}{{if .Each}}, all {{len .Each}}{{end}}</span>
         </span>
+        {{if .Each}}{{$w := .}}
+        <button type="button" class="fit-ammo-split" data-fit-ammo-split="{{.WeaponID}}" aria-expanded="{{if .Split}}true{{else}}false{{end}}" aria-controls="fit-ammo-each-{{.WeaponID}}">Load each separately</button>
+        <div class="fit-ammo-each" id="fit-ammo-each-{{.WeaponID}}" data-fit-ammo-each="{{.WeaponID}}" data-fit-ammo-split-on="{{if .Split}}1{{end}}"{{if not .Split}} hidden{{end}}>
+          {{range .Each}}
+          <span class="fit-chip fit-imp{{if not .ID}} fit-imp-empty{{end}}">
+            <img class="fit-imp-icon" src="https://images.evetech.net/types/{{if .ID}}{{.ID}}{{else}}{{$w.WeaponID}}{{end}}/icon?size=32" alt="" draggable="false">
+            <input type="text" class="fit-imp-input" data-fit-ammo-one="{{$w.WeaponID}}" data-fit-ammo-index="{{.Index}}" data-fit-ammo-weapon="{{$w.WeaponName}}" value="{{.Name}}" placeholder="Nothing loaded: search" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="{{$w.WeaponName}} {{.Num}} charge">
+            {{if .Own}}<button type="button" class="fit-chip-btn" data-fit-ammo-reset="{{$w.WeaponID}}" data-fit-ammo-index="{{.Index}}" title="Load the same as the others">↺</button>{{end}}
+            <span class="fit-chip-sub">{{$w.WeaponName}} {{.Num}}</span>
+          </span>
+          {{end}}
+        </div>
+        {{end}}
         {{end}}
         {{end}}
       </div>

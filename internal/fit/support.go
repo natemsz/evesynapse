@@ -142,7 +142,7 @@ func (f *fitting) remoteRepair(ent *entity, n, cycle float64) {
 		res.RemoteShieldRate += n * ent.get(snap, AttrShieldBonus) / cycle
 	case "armor":
 		amt := ent.get(snap, AttrArmorDamageAmount)
-		if mult := ent.get(snap, AttrChargedArmorDamageMult); mult > 0 && f.weaponCharge[ent.typeID] != nil {
+		if mult := ent.get(snap, AttrChargedArmorDamageMult); mult > 0 && ent.charge != nil {
 			amt *= mult // paste loaded
 		}
 		res.RemoteArmorRate += n * amt / cycle
@@ -189,7 +189,7 @@ func (f *fitting) mine(ent *entity, n, cycle float64) {
 // strike: area or one-off damage on long cycles, so not in DPS.
 func (f *fitting) bombsAndDoomsdays(ent *entity, cycle float64) {
 	snap, res := f.snap, f.res
-	if charge := f.weaponCharge[ent.typeID]; charge != nil && snap.HasEffect(charge.typeID, effectBombLaunching) {
+	if charge := ent.charge; charge != nil && snap.HasEffect(charge.typeID, effectBombLaunching) {
 		dmg := 0.0
 		for _, a := range damageAttrs {
 			dmg += charge.get(snap, a)

@@ -1,6 +1,7 @@
 package fitview
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	json "github.com/goccy/go-json"
@@ -73,6 +74,11 @@ type FitDocItem struct {
 	TypeID int64    `json:"typeId"`
 	Qty    int      `json:"qty"`
 	States []string `json:"states,omitempty"`
+	// Charges is each fitted instance's own loaded charge, in the
+	// order States uses; 0 (or a missing entry) loads the type's
+	// charge from FitDoc.Charges. Empty while every instance loads
+	// the type's charge.
+	Charges []int64 `json:"charges,omitempty"`
 	// Cargo carries a module, rig, drone or the like in the cargo
 	// hold instead of on the hull (a refit set). Items that only
 	// ever sit in cargo leave it false.
@@ -170,6 +176,14 @@ func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 		}
 		key := fitDocLineKey{it.TypeID, it.Cargo}
 		if j, ok := index[key]; ok {
+			// A second line's own charges follow the first line's
+			// instances.
+			if len(it.Charges) > 0 {
+				for len(merged[j].Charges) < merged[j].Qty && len(merged[j].Charges) < maxFitStateEntries {
+					merged[j].Charges = append(merged[j].Charges, 0)
+				}
+				merged[j].Charges = append(merged[j].Charges, it.Charges...)
+			}
 			merged[j].Qty += it.Qty
 			if merged[j].Qty > 10000 {
 				merged[j].Qty = 10000
@@ -258,9 +272,154 @@ func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 			delete(doc.Charges, weapon)
 		}
 	}
+	// Per-instance charges: one entry per instance at most, an entry
+	// naming the type's charge folded to 0, and the list dropped when
+	// nothing in it differs from the type's charge. A line whose every
+	// instance loads one charge makes that the type's charge.
+	for i := range doc.Items {
+		it := &doc.Items[i]
+		if it.Cargo || len(it.Charges) == 0 {
+			it.Charges = nil
+			continue
+		}
+		if len(it.Charges) > it.Qty {
+			it.Charges = it.Charges[:it.Qty]
+		}
+		// Every instance loading its own with no type charge: the
+		// most common one (the first, on a tie) becomes the type's,
+		// so "the same as the others" names a charge.
+		if doc.Charges[it.TypeID] == 0 && len(it.Charges) == it.Qty && !slices.Contains(it.Charges, 0) {
+			best, bestN := int64(0), 0
+			for _, c := range it.Charges {
+				if n := countOf(it.Charges, c); c > 0 && n > bestN {
+					best, bestN = c, n
+				}
+			}
+			if best > 0 {
+				doc.Charges[it.TypeID] = best
+			}
+		}
+		def := doc.Charges[it.TypeID]
+		own := false
+		for j, c := range it.Charges {
+			if c < 0 || c == def {
+				it.Charges[j] = 0
+			} else if c > 0 {
+				own = true
+			}
+		}
+		if !own {
+			it.Charges = nil
+			continue
+		}
+	}
 	if len(doc.Name) > 120 {
 		doc.Name = doc.Name[:120]
 	}
+}
+
+func countOf(list []int64, v int64) int {
+	n := 0
+	for _, x := range list {
+		if x == v {
+			n++
+		}
+	}
+	return n
+}
+
+// ChargeAt is the charge instance i of a line loads: its own, else
+// the type's.
+func (doc *FitDoc) ChargeAt(it *FitDocItem, i int) int64 {
+	if i >= 0 && i < len(it.Charges) && it.Charges[i] > 0 {
+		return it.Charges[i]
+	}
+	return doc.Charges[it.TypeID]
+}
+
+// ChargePair is one weapon type loading one charge type.
+type ChargePair struct{ Weapon, Charge int64 }
+
+// LoadedChargePairs is every weapon type and charge type pair the fit
+// loads, each once, in weapon then charge order.
+func (doc *FitDoc) LoadedChargePairs() []ChargePair {
+	var out []ChargePair
+	add := func(p ChargePair) {
+		if p.Charge > 0 && !slices.Contains(out, p) {
+			out = append(out, p)
+		}
+	}
+	for w, c := range doc.Charges {
+		add(ChargePair{w, c})
+	}
+	for _, it := range doc.Items {
+		if it.Cargo {
+			continue
+		}
+		for _, c := range it.Charges {
+			add(ChargePair{it.TypeID, c})
+		}
+	}
+	slices.SortFunc(out, func(a, b ChargePair) int {
+		if a.Weapon != b.Weapon {
+			return cmp.Compare(a.Weapon, b.Weapon)
+		}
+		return cmp.Compare(a.Charge, b.Charge)
+	})
+	return out
+}
+
+// LoadedCharges is every charge type the fit loads, the types' and
+// the instances' own, each once, in type ID order.
+func (doc *FitDoc) LoadedCharges() []int64 {
+	var out []int64
+	for _, c := range doc.Charges {
+		if c > 0 && !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	for _, it := range doc.Items {
+		if it.Cargo {
+			continue
+		}
+		for _, c := range it.Charges {
+			if c > 0 && !slices.Contains(out, c) {
+				out = append(out, c)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// FitLineEngineItems turns one fitted document line into engine lines:
+// one per state and own charge its instances share.
+func FitLineEngineItems(snap *fit.Snapshot, it FitDocItem) []fit.ItemInput {
+	type key struct {
+		state  string
+		charge int64
+	}
+	count := make(map[key]int, 2)
+	var order []key
+	for i := 0; i < it.Qty; i++ {
+		k := key{}
+		if i < len(it.States) {
+			k.state = it.States[i]
+		}
+		if i < len(it.Charges) {
+			k.charge = it.Charges[i]
+		}
+		if _, ok := count[k]; !ok {
+			order = append(order, k)
+		}
+		count[k]++
+	}
+	out := make([]fit.ItemInput, 0, len(order))
+	abilities := FitFighterAbilitiesOf(snap, it)
+	for _, k := range order {
+		out = append(out, fit.ItemInput{TypeID: it.TypeID, Quantity: count[k], State: k.state, Charge: k.charge, Abilities: abilities})
+	}
+	return out
 }
 
 // FitSlotFamilyOf classifies one type into an editor family using
@@ -403,6 +562,7 @@ type FitVisualSlot struct {
 	GroupLabel string
 	Filled     bool
 	Index      int     // position within the family's slot row
+	Ordinal    int     // which module of its type this is (0 first)
 	X, Y       float64 // center position, percent of the visual box
 	CPU        string  // per-module quick-look for the tooltip ("15 tf")
 	PG         string  // ("10 MW")
@@ -661,9 +821,17 @@ func FitTipClass(eff, base float64, higherBetter bool) string {
 // is in a non-default state, else its resting fold, else the
 // raw SDE row when the engine has nothing (snap may be nil).
 func FitEffAttrs(res *fit.Result, snap *fit.Snapshot, typeID int64, state string) map[int64]float64 {
+	return FitEffAttrsCharge(res, snap, typeID, state, 0)
+}
+
+// FitEffAttrsCharge is FitEffAttrs for the modules of a type and
+// state loading one charge (0: whichever the type's state key holds).
+func FitEffAttrsCharge(res *fit.Result, snap *fit.Snapshot, typeID int64, state string, charge int64) map[int64]float64 {
 	eff := res.ItemAttrs[typeID]
 	if state != "" {
-		if sa := res.StateAttrs[fit.StateAttrKey(typeID, state)]; sa != nil {
+		if sa := res.StateAttrs[fit.ChargeAttrKey(typeID, state, charge)]; sa != nil {
+			eff = sa
+		} else if sa := res.StateAttrs[fit.StateAttrKey(typeID, state)]; sa != nil {
 			eff = sa
 		}
 	}
@@ -708,6 +876,12 @@ func FitTipDamage(attrs map[int64]float64) float64 {
 // are ordered the way a pilot reads them, output, reach,
 // cost, and capped so the tooltip stays a quick look.
 func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64, state string, eff map[int64]float64) []FitTipLine {
+	return FitTipLinesCharge(res, snap, typeID, state, doc.Charges[typeID], eff)
+}
+
+// FitTipLinesCharge is FitTipLines for modules loading chargeID
+// (0: no charge loaded).
+func FitTipLinesCharge(res *fit.Result, snap *fit.Snapshot, typeID int64, state string, chargeID int64, eff map[int64]float64) []FitTipLine {
 	if eff == nil {
 		return nil
 	}
@@ -747,10 +921,18 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 		}
 	}
 	weapon := snap != nil && (snap.HasEffect(typeID, fit.EffectTurretFitted) || snap.HasEffect(typeID, fit.EffectLauncherFitted))
-	chargeID := doc.Charges[typeID]
 	if chargeID > 0 {
-		key := fit.StateAttrKey(typeID, state)
+		key := fit.ChargeAttrKey(typeID, state, chargeID)
 		dps, volley := res.WeaponDPS[key], res.WeaponVolley[key]
+		if dps == 0 {
+			key = fit.StateAttrKey(typeID, state)
+			dps, volley = res.WeaponDPS[key], res.WeaponVolley[key]
+		}
+		if dps == 0 && state != "" {
+			if k := fit.ChargeAttrKey(typeID, "", chargeID); res.WeaponDPS[k] > 0 {
+				dps, volley = res.WeaponDPS[k], res.WeaponVolley[k]
+			}
+		}
 		if dps == 0 && state != "" {
 			// The engine records an unspecified state under
 			// the default key; the slot's normalized state
@@ -790,7 +972,7 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 	repRate := 0.0 // HP/s while cycling, for the clip line below
 	for _, repAttr := range []int64{fit.AttrShieldBonus, fit.AttrArmorDamageAmount} {
 		if amt := eff[repAttr]; amt > 0 {
-			if mult := eff[fit.AttrChargedArmorDamageMult]; repAttr == fit.AttrArmorDamageAmount && mult > 0 && doc.Charges[typeID] > 0 {
+			if mult := eff[fit.AttrChargedArmorDamageMult]; repAttr == fit.AttrArmorDamageAmount && mult > 0 && chargeID > 0 {
 				amt *= mult // paste loaded
 			}
 			if cyc := FitTipCycle(eff); cyc > 0 {
@@ -813,8 +995,11 @@ func FitTipLines(res *fit.Result, snap *fit.Snapshot, doc *FitDoc, typeID int64,
 	// A module that uses up its loaded charge (ancillary repairers
 	// and boosters, capacitor boosters, command bursts): how long a
 	// clip lasts, and what it repairs counting the reloads.
-	if doc.Charges[typeID] > 0 && res != nil {
-		clip, ok := res.ChargeClips[fit.StateAttrKey(typeID, state)]
+	if chargeID > 0 && res != nil {
+		clip, ok := res.ChargeClips[fit.ChargeAttrKey(typeID, state, chargeID)]
+		if !ok {
+			clip, ok = res.ChargeClips[fit.StateAttrKey(typeID, state)]
+		}
 		if !ok && state != "" {
 			clip, ok = res.ChargeClips[fit.StateAttrKey(typeID, "")]
 		}
@@ -982,6 +1167,7 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 		TypeID  int64
 		State   string
 		Ordinal int
+		Charge  int64 // what this instance loads, 0 for none
 	}
 	fitted := map[string][]fitPlacedModule{}
 	ordinals := map[int64]int{}
@@ -1002,7 +1188,7 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 			if snap != nil {
 				st = fit.NormalizeModuleState(snap, it.TypeID, st)
 			}
-			fitted[fam] = append(fitted[fam], fitPlacedModule{TypeID: it.TypeID, State: st, Ordinal: ordinals[it.TypeID]})
+			fitted[fam] = append(fitted[fam], fitPlacedModule{TypeID: it.TypeID, State: st, Ordinal: ordinals[it.TypeID], Charge: doc.ChargeAt(&it, i)})
 			ordinals[it.TypeID]++
 		}
 	}
@@ -1047,6 +1233,7 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 				s.Name = nameOf(pm.TypeID)
 				s.State = pm.State
 				s.TipKey = fmt.Sprintf("%d:%d", pm.TypeID, pm.Ordinal)
+				s.Ordinal = pm.Ordinal
 				if snap != nil {
 					if vs := fit.ModuleValidStates(snap, pm.TypeID); len(vs) > 0 {
 						s.ValidStates = vs
@@ -1058,7 +1245,7 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 				// bonuses applied), not raw SDE rows. A module in
 				// a non-default state reads its own state's
 				// numbers (an overheated module shows heated).
-				eff := FitEffAttrs(res, snap, pm.TypeID, pm.State)
+				eff := FitEffAttrsCharge(res, snap, pm.TypeID, pm.State, pm.Charge)
 				if eff != nil {
 					if cpu := eff[fit.AttrCPU]; cpu > 0 {
 						s.CPU = FitVisualNum(cpu) + " tf"
@@ -1080,11 +1267,11 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 				}
 				// Loaded charge rides the slot as a badge; the
 				// tooltip names it too.
-				if chID := doc.Charges[pm.TypeID]; chID > 0 {
+				if chID := pm.Charge; chID > 0 {
 					s.ChargeID = chID
 					s.ChargeName = nameOf(chID)
 				}
-				s.TipLines = FitTipLinesString(FitTipLines(res, snap, doc, pm.TypeID, pm.State, eff))
+				s.TipLines = FitTipLinesString(FitTipLinesCharge(res, snap, pm.TypeID, pm.State, pm.Charge, eff))
 			}
 			v.Slots = append(v.Slots, s)
 		}
@@ -1134,6 +1321,22 @@ type FitChargeSet struct {
 	WeaponID   int64
 	WeaponName string
 	Options    []FitChargeOption
+	// Each is every fitted module of the type with what it loads,
+	// when there is more than one; Split says at least one loads a
+	// charge of its own, Mixed that they do not all load the same.
+	Each  []FitChargeInstance
+	Split bool
+	Mixed bool
+}
+
+// FitChargeInstance is one fitted module of a charge-taking type:
+// which of its type it is and the charge it loads.
+type FitChargeInstance struct {
+	Index int
+	Num   int // Index counted from 1, for the label
+	ID    int64
+	Name  string
+	Own   bool // loads a charge of its own rather than the type's
 }
 
 // Loaded is the selected charge, if any.
@@ -1499,9 +1702,7 @@ func FitDocTypeIDs(doc *FitDoc) []int64 {
 	for _, it := range doc.Items {
 		ids = append(ids, it.TypeID)
 	}
-	for _, charge := range doc.Charges {
-		ids = append(ids, charge)
-	}
+	ids = append(ids, doc.LoadedCharges()...)
 	return ids
 }
 
@@ -1688,22 +1889,7 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 		if !FitFamilyFitted(it.FamilyIn(familyOf)) {
 			continue
 		}
-		byState := make(map[string]int, 2)
-		var order []string
-		for i := 0; i < it.Qty; i++ {
-			st := ""
-			if i < len(it.States) {
-				st = it.States[i]
-			}
-			if _, ok := byState[st]; !ok {
-				order = append(order, st)
-			}
-			byState[st]++
-		}
-		for _, st := range order {
-			engineItems = append(engineItems, fit.ItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st,
-				Abilities: FitFighterAbilitiesOf(snap, it)})
-		}
+		engineItems = append(engineItems, FitLineEngineItems(snap, it)...)
 	}
 	snap.Bursts = bursts
 	fleet, boostRows := FitFleetBoosts(snap, doc, app.fitAllSkillIDs(ctx, snap))
@@ -1844,7 +2030,7 @@ func (app *Builder) FitRestrictedJSON(ctx context.Context, rs []fit.Restriction,
 // requirement gathering (ammo skills count too).
 func EngineItemsAll(engineItems []fit.ItemInput, doc *FitDoc) []fit.ItemInput {
 	out := append([]fit.ItemInput{}, engineItems...)
-	for _, charge := range doc.Charges {
+	for _, charge := range doc.LoadedCharges() {
 		out = append(out, fit.ItemInput{TypeID: charge, Quantity: 1})
 	}
 	return out
@@ -2004,7 +2190,8 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 		if !uniform || FitBayGroup(fam) {
 			st = "" // bay items (drones, fighters, cargo) carry no module state
 		}
-		lines := FitTipLines(res, snap, doc, it.TypeID, st, FitEffAttrs(res, snap, it.TypeID, st))
+		lineCharge := doc.ChargeAt(&it, 0)
+		lines := FitTipLinesCharge(res, snap, it.TypeID, st, lineCharge, FitEffAttrsCharge(res, snap, it.TypeID, st, lineCharge))
 		chip := FitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: qty, State: st,
 			Sub: FitChipSub(lines), TipLines: FitTipLinesString(lines)}
 		// The states a fitted line may take, for the phone racks'
@@ -2148,6 +2335,19 @@ func (app *Builder) FitBuildChargeSets(ctx context.Context, doc *FitDoc, snap *f
 		}
 		set := FitChargeSet{WeaponID: it.TypeID, WeaponName: nameOf(it.TypeID)}
 		selected := doc.Charges[it.TypeID]
+		if n := min(it.Qty, maxFittedPerLine); n > 1 {
+			for i := 0; i < n; i++ {
+				id := doc.ChargeAt(&it, i)
+				own := i < len(it.Charges) && it.Charges[i] > 0
+				inst := FitChargeInstance{Index: i, Num: i + 1, ID: id, Own: own}
+				if id > 0 {
+					inst.Name = nameOf(id)
+				}
+				set.Each = append(set.Each, inst)
+				set.Split = set.Split || own
+				set.Mixed = set.Mixed || id != set.Each[0].ID
+			}
+		}
 		for _, row := range app.FitChargeCandidates(ctx, it.TypeID) {
 			set.Options = append(set.Options, FitChargeOption{
 				ID: row.TypeID, Name: row.Name, Selected: row.TypeID == selected,
@@ -2688,19 +2888,77 @@ func ParseFitTags(raw string) []string {
 	return out
 }
 
+// fitESISlotCharges pairs each module in a saved EVE fitting with
+// the charge sharing its slot flag: item index -> the charge it
+// loads, and -1 for the charge itself. Slots holding one item, and
+// slots whose items cannot be told apart, are left out.
+func (app *Builder) fitESISlotCharges(ctx context.Context, f esi.Fitting) map[int]int64 {
+	byFlag := map[string][]int{}
+	for i, it := range f.Items {
+		if strings.Contains(it.Flag, "Slot") {
+			byFlag[it.Flag] = append(byFlag[it.Flag], i)
+		}
+	}
+	var ids []int64
+	for _, idx := range byFlag {
+		if len(idx) == 2 {
+			for _, i := range idx {
+				ids = append(ids, f.Items[i].TypeID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	snap, err := fit.LoadSnapshot(ctx, app.queries, ids)
+	if err != nil {
+		return nil
+	}
+	out := map[int]int64{}
+	for _, idx := range byFlag {
+		if len(idx) != 2 {
+			continue
+		}
+		a, b := idx[0], idx[1]
+		fa := FitSlotFamilyOf(snap, f.Items[a].TypeID) != FitFamilyCargo
+		fb := FitSlotFamilyOf(snap, f.Items[b].TypeID) != FitFamilyCargo
+		if fa == fb {
+			continue
+		}
+		if fb {
+			a, b = b, a
+		}
+		out[a], out[b] = f.Items[b].TypeID, -1
+	}
+	return out
+}
+
 // FitDocFromESI turns one saved EVE fitting into an editor
 // document. Cargo ammunition that fits exactly one fitted
 // weapon group is loaded into that group; the rest stays cargo.
 func (app *Builder) FitDocFromESI(ctx context.Context, f esi.Fitting) *FitDoc {
 	doc := &FitDoc{Name: f.Name, ShipTypeID: f.ShipTypeID, Charges: map[int64]int64{}}
+	// A slot holding two items holds a module and the charge it loads
+	// (Save to EVE writes a module's own charge into its slot).
+	slotCharge := app.fitESISlotCharges(ctx, f)
 	var cargoIDs []int64
-	for _, it := range f.Items {
+	for i, it := range f.Items {
 		qty := max(int(it.Quantity), 1)
 		inCargo := strings.HasPrefix(it.Flag, "Cargo")
+		if c, ok := slotCharge[i]; ok {
+			if c < 0 {
+				continue // the charge half of a slot: loaded below
+			}
+			doc.Items = append(doc.Items, FitDocItem{TypeID: it.TypeID, Qty: 1, Charges: []int64{c}})
+			continue
+		}
 		doc.Items = append(doc.Items, FitDocItem{TypeID: it.TypeID, Qty: qty, Cargo: inCargo})
 		if inCargo {
 			cargoIDs = append(cargoIDs, it.TypeID)
 		}
+	}
+	if len(slotCharge) > 0 {
+		SanitizeFitDoc(doc) // fold the slots' charges per type
 	}
 	if len(cargoIDs) == 0 || len(doc.Items) == 0 {
 		return doc
@@ -2830,12 +3088,17 @@ func (app *Builder) ParseEFT(ctx context.Context, text string) (*FitDoc, []strin
 			doc.Items = append(doc.Items, FitDocItem{TypeID: id, Qty: qty})
 			continue
 		}
-		// A "Module, Charge" line.
+		// A "Module, Charge" line: the charge is that module's own;
+		// SanitizeFitDoc folds a charge every module of the type
+		// shares into the type's.
 		if cut := strings.LastIndex(body, ", "); cut > 0 {
 			if modID, ok := lookup(strings.TrimSpace(body[:cut])); ok {
 				if chargeID, ok := lookup(strings.TrimSpace(body[cut+2:])); ok {
-					doc.Items = append(doc.Items, FitDocItem{TypeID: modID, Qty: qty})
-					doc.Charges[modID] = chargeID
+					item := FitDocItem{TypeID: modID, Qty: qty}
+					if body == line { // a counted line is cargo: it loads nothing
+						item.Charges = []int64{chargeID}
+					}
+					doc.Items = append(doc.Items, item)
 					continue
 				}
 			}
@@ -2897,8 +3160,8 @@ func (app *Builder) FormatEFT(ctx context.Context, doc *FitDoc) string {
 			familyOf[it.TypeID] = FitSlotFamilyOf(snap, it.TypeID)
 		}
 	}
-	weaponCharge := func(typeID int64) string {
-		if charge, ok := doc.Charges[typeID]; ok && charge > 0 {
+	weaponCharge := func(it *FitDocItem, i int) string {
+		if charge := doc.ChargeAt(it, i); charge > 0 {
 			return ", " + nameOf(charge)
 		}
 		return ""
@@ -2912,7 +3175,7 @@ func (app *Builder) FormatEFT(ctx context.Context, doc *FitDoc) string {
 				continue
 			}
 			for i := 0; i < it.Qty; i++ {
-				lines = append(lines, nameOf(it.TypeID)+weaponCharge(it.TypeID))
+				lines = append(lines, nameOf(it.TypeID)+weaponCharge(&it, i))
 			}
 		}
 		if len(lines) > 0 {

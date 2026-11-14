@@ -4262,6 +4262,19 @@ html[data-theme="light"] .fit-head select {
 .fit-imp-warn { flex: none; font-size: var(--fs-2xs); color: var(--danger); }
 .fit-imp-missing .fit-imp-input { color: var(--danger); }
 .fit-imp-icon { flex: none; width: 20px; height: 20px; }
+/* A weapon type's charge row per module, under its all-of-them row:
+   opened by "Load each separately", indented so the rows read as
+   that type's. */
+.fit-ammo-split {
+  flex-basis: 100%; justify-self: start; margin: -0.1rem 0 0.1rem; padding: 0.1rem 0.4rem;
+  border: 0; background: none; color: var(--muted); cursor: pointer; text-align: left;
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.fit-ammo-split:hover, .fit-ammo-split:focus-visible { color: var(--text); }
+.fit-ammo-split[aria-expanded="true"] { color: var(--accent); }
+.fit-ammo-each { flex-basis: 100%; display: flex; flex-direction: column; gap: 0.3rem; padding-left: 0.8rem; border-left: 1px solid var(--hairline); }
+.fit-ammo-each[hidden] { display: none; }
 .fit-kv-effects dd small { color: var(--muted); }
 /* Cargo past five items: the rest fold behind a chevron line. */
 .fit-fold:not(.open) .fit-chips > .fit-chip:nth-child(n+6) { display: none; }

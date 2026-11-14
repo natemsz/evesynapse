@@ -100,10 +100,8 @@ func (app *tool) handleFitShopping(w http.ResponseWriter, r *http.Request) {
 			qtyByType[it.TypeID] += int64(it.Qty)
 		}
 	}
-	for _, chargeTypeID := range doc.Charges {
-		if chargeTypeID > 0 {
-			qtyByType[chargeTypeID] += 1000
-		}
+	for _, p := range doc.LoadedChargePairs() {
+		qtyByType[p.Charge] += 1000
 	}
 
 	// Price each line in the house order (fitview.FitUnitPrice):

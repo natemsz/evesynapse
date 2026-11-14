@@ -11,10 +11,10 @@ require (
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/goccy/go-json v0.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/klauspost/compress v1.20.4
 	github.com/tdewolff/minify/v2 v2.24.25
-	golang.org/x/crypto v0.58.0
+	golang.org/x/crypto v0.59.0
 	golang.org/x/image v0.48.0
 	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sync v0.25.0

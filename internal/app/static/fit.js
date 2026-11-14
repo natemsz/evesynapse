@@ -279,7 +279,6 @@ var FitGauges = (function () {
       if (window.FitRange) window.FitRange.refresh();
       syncFold();
       syncImpFold();
-      syncSummary();
       syncDroneGauges();
       syncChargeButtons();
       syncFilterUI();
@@ -3360,25 +3359,6 @@ var FitGauges = (function () {
     });
   }
 
-  // --- sticky summary ----------------------------------------------
-  // The stats column's one-line summary shows once its headline
-  // figures scroll out of view, parked on the sticky line under
-  // the top bar (fitting.css).
-  var sumObserver = null;
-  function syncSummary() {
-    if (sumObserver) { sumObserver.disconnect(); sumObserver = null; }
-    var sum = editor.querySelector(".fit-sum");
-    var head = editor.querySelector(".fit-stats .fit-glance");
-    if (!sum || !head || !window.IntersectionObserver) return;
-    var stack = Math.round(parseFloat(getComputedStyle(sum).top) || 0);
-    sumObserver = new IntersectionObserver(function (entries) {
-      var e = entries[entries.length - 1];
-      sum.classList.toggle("on", !e.isIntersecting && e.boundingClientRect.top < stack);
-    }, { rootMargin: "-" + stack + "px 0px 0px 0px" });
-    sumObserver.observe(head);
-  }
-  syncSummary();
-  if (window.addEventListener) window.addEventListener("resize", function () { syncSummary(); });
 
   syncShipGate();
   editor.addEventListener("keydown", function (ev) {

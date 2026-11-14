@@ -204,13 +204,6 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   </div>
   {{with .Stats}}
   <div class="fit-stats" data-fit-figures="{{.Figures}}"{{if .RangeJSON}} data-fit-range="{{.RangeJSON}}"{{end}}>
-    {{if not $.ReadOnly}}<div class="fit-sum" aria-hidden="true"><div class="fit-sum-in">
-      <span class="k-weapon">{{template "fit-g" "weapon"}}<b>{{.TotalDPS}}</b> DPS</span>
-      <span class="k-armor">{{template "fit-g" "armor"}}<b>{{.EHPOmni}}</b> EHP</span>
-      <span class="k-capacitor{{if not .CapStable}} fit-over{{end}}">{{template "fit-g" "capacitor"}}<b>{{.CapState}}</b></span>
-      <span class="k-cpu{{if .CPU.Over}} fit-over{{end}}">{{template "fit-g" "cpu"}}<b>{{.CPU.Left}}</b> left</span>
-      <span class="k-powergrid{{if .Powergrid.Over}} fit-over{{end}}">{{template "fit-g" "powergrid"}}<b>{{.Powergrid.Left}}</b> left</span>
-    </div></div>{{end}}
     <h4>{{$.ShipName}} <small>with {{$.PilotLabel}}'s skills</small></h4>
     <div class="fit-glance">
       <div class="fit-gl k-weapon"><span class="fit-gl-k">{{template "fit-g" "weapon"}}<abbr title="Damage per second">DPS</abbr></span><b data-fit-fig="dps">{{.TotalDPS}}</b><small data-fit-fig="volley">{{.TotalVolley}} volley</small></div>

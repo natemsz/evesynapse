@@ -1064,6 +1064,46 @@ type KillInvolvement struct {
 	AllianceID    int64 `json:"alliance_id"`
 }
 
+type KillLeader struct {
+	Period    string  `json:"period"`
+	ScopeKind string  `json:"scope_kind"`
+	ScopeID   int64   `json:"scope_id"`
+	Board     string  `json:"board"`
+	EntityID  int64   `json:"entity_id"`
+	Kills     int64   `json:"kills"`
+	Solo      int64   `json:"solo"`
+	Isk       float64 `json:"isk"`
+	RankKills int32   `json:"rank_kills"`
+	RankIsk   int32   `json:"rank_isk"`
+}
+
+type KillLeadersAtt struct {
+	KillmailID    int64 `json:"killmail_id"`
+	CharacterID   int64 `json:"character_id"`
+	CorporationID int64 `json:"corporation_id"`
+	AllianceID    int64 `json:"alliance_id"`
+	ShipTypeID    int64 `json:"ship_type_id"`
+}
+
+type KillLeadersState struct {
+	Period     string    `json:"period"`
+	Since      time.Time `json:"since"`
+	ComputedAt time.Time `json:"computed_at"`
+	Kills      int64     `json:"kills"`
+}
+
+type KillLeadersWin struct {
+	KillmailID   int64   `json:"killmail_id"`
+	SystemID     int64   `json:"system_id"`
+	RegionID     int64   `json:"region_id"`
+	ShipTypeID   int64   `json:"ship_type_id"`
+	Value        float64 `json:"value"`
+	Solo         bool    `json:"solo"`
+	VCharacter   int64   `json:"v_character"`
+	VCorporation int64   `json:"v_corporation"`
+	VAlliance    int64   `json:"v_alliance"`
+}
+
 type KillLinePrice struct {
 	KillmailID int64   `json:"killmail_id"`
 	TypeID     int64   `json:"type_id"`

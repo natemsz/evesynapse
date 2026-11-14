@@ -69,6 +69,28 @@
 .kb-chips a:hover { color: var(--text); border-color: var(--glass-edge); }
 .kb-chips a.active { color: var(--text-bright); border-color: var(--sel-edge); background: var(--sel-bg); }
 
+/* --- Filters --- */
+/* A disclosure: closed until a filter is on, hidden again at will. */
+.kb-fbox { display: flex; flex-direction: column; gap: var(--space-2); }
+.kb-fsum { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--space-2); padding: 0.3rem 0.75rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-inset); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.kb-fsum:hover, .kb-fbox[open] > .kb-fsum { color: var(--text-bright); border-color: var(--glass-edge); }
+.kb-fcount { color: var(--accent); }
+/* One wrapping row of labelled pickers; on a phone each picker takes
+   half the row so the labels stay readable. */
+.kb-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0; }
+.kb-f { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.kb-f-l { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.kb-f select, .kb-f input { min-height: var(--control-h); min-width: 0; max-inline-size: 12rem; padding: 0.2rem 0.5rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.kb-f select:focus-visible, .kb-f input:focus-visible { border-color: var(--accent); outline: none; }
+.kb-pill { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; border: 1px solid var(--sel-edge); border-radius: var(--r-xs); background: var(--sel-bg); color: var(--text-bright); font-size: var(--fs-xs); text-decoration: none; }
+.kb-pill:hover { border-color: var(--accent); }
+.kb-f-clear { font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.kb-scan-note { margin: 0; color: var(--muted-2); font-size: var(--fs-sm); text-align: center; }
+@container page (max-width: 36rem) {
+  .kb-f { flex: 1 1 calc(50% - var(--space-3)); flex-direction: column; align-items: stretch; gap: 0.2rem; }
+  .kb-f select, .kb-f input { max-inline-size: none; width: 100%; }
+}
+
 /* --- The feed --- */
 /* The list and its leaderboards: side by side on a wide page, the
    boards under the list (in a row of their own) on a narrower one. */
@@ -272,3 +294,36 @@
   .kb-head > span { display: none; }
   .kb-head > .kb-h-detail { display: inline; }
 }
+
+/* --- Leaderboards page (killboard_top.html) --- */
+.kbt { display: flex; flex-direction: column; gap: var(--space-4); }
+.kbt-bar { align-items: center; gap: var(--space-2) var(--space-3); }
+.kbt-back { font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.kbt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); gap: var(--space-3); align-items: start; }
+.kbt-grid.kbt-one { grid-template-columns: minmax(0, 52rem); }
+.kbt-board { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.kbt-bh { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.kbt-bh h2 { margin: 0; }
+.kbt-all { font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.kbt-note, .kbt-empty { margin: 0; color: var(--muted-2); font-size: var(--fs-xs); }
+.kbt-rows { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.kbt-row { display: grid; grid-template-columns: 1.6rem 1.75rem minmax(0, 1fr) auto 1.25rem; align-items: center; gap: var(--space-2); padding: 0.4rem 0.25rem; border-top: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.kbt-row:first-child { border-top: 0; }
+.kbt-row:hover { background: var(--row-hover); }
+.kbt-rank { color: var(--muted-2); font-family: var(--font-num); text-align: right; }
+.kbt-img { width: 1.75rem; height: 1.75rem; border-radius: var(--r-xs); }
+.kbt-sec { display: grid; place-items: center; width: auto; height: auto; font-size: var(--fs-xs); }
+.kbt-name { display: flex; flex-direction: column; min-width: 0; }
+.kbt-name a, .kbt-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kbt-name a { color: var(--text-bright); }
+.kbt-sub { color: var(--muted-2); font-size: var(--fs-xs); }
+.kbt-fig { display: flex; flex-direction: column; align-items: flex-end; font-family: var(--font-num); white-space: nowrap; }
+.kbt-count { color: var(--text-bright); }
+.kbt-isk { color: var(--muted); font-size: var(--fs-xs); }
+.kbt-unit { color: var(--muted-2); font-family: var(--font-body); font-size: var(--fs-xs); }
+.kbt-top { display: grid; place-items: center; color: var(--muted-2); }
+.kbt-top:hover { color: var(--accent); }
+
+/* The rail's window line and its way to the full leaderboards. */
+.kb-top-window { margin: 0; color: var(--muted-2); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.kb-top-more { justify-self: start; font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }

@@ -26,6 +26,41 @@
     </nav>
     <span class="badge kill kb-live-pill" data-live-pill role="status" hidden>Live</span>
   </div>
+  {{with .Filter}}
+  {{/* The filters (killboard_filter.go): each picker reloads the
+       page on change; the scope and any hull or system it is
+       narrowed by ride along as hidden fields. */}}
+  <details class="kb-fbox"{{if .Open}} open{{end}}>
+  <summary class="kb-fsum">Filters{{if .Count}} <span class="kb-fcount">{{.Count}} on</span>{{end}}</summary>
+  <form method="get" action="/intel/kills/" class="kb-filters" aria-label="Filter kills">
+    {{range .Hidden}}<input type="hidden" name="{{.Value}}" value="{{.Label}}">{{end}}
+    {{if .ShowRegion}}<label class="kb-f"><span class="kb-f-l">Region</span>
+      <select name="region" data-autosubmit><option value="">Anywhere</option>{{range .Regions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+    </label>{{end}}
+    <label class="kb-f"><span class="kb-f-l">Security</span>
+      <select name="sec" data-autosubmit><option value="">Any</option>{{range .Bands}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+    </label>
+    <label class="kb-f"><span class="kb-f-l">Ship class</span>
+      <select name="class" data-autosubmit><option value="">Any</option>{{range .Classes}}<optgroup label="{{.Label}}">{{range .Opts}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</optgroup>{{end}}</select>
+    </label>
+    <label class="kb-f"><span class="kb-f-l">Fleet size</span>
+      <select name="fleet" data-autosubmit><option value="">Any</option>{{range .Fleets}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+    </label>
+    <label class="kb-f"><span class="kb-f-l">Value</span>
+      <select name="value" data-autosubmit><option value="">Any</option>{{range .Values}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+    </label>
+    {{if .ShowSide}}<label class="kb-f"><span class="kb-f-l">Show</span>
+      <select name="side" data-autosubmit><option value="">Kills and losses</option>{{range .Sides}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+    </label>{{end}}
+    <label class="kb-f"><span class="kb-f-l">Up to</span>
+      <input type="date" name="date" value="{{.Date}}" min="2003-05-06" max="{{.Today}}" data-autosubmit>
+    </label>
+    <noscript><button class="btn small" type="submit">Apply</button></noscript>
+    {{range .Pills}}<a class="kb-pill" href="{{.Href}}" aria-label="Remove {{.Label}}">{{.Label}} <span aria-hidden="true">×</span></a>{{end}}
+    {{if .Active}}<a class="kb-f-clear" href="{{.ClearHref}}">Clear filters</a>{{end}}
+  </form>
+  </details>
+  {{end}}
   {{if .SearchQ}}<p class="kb-search-note" role="status">No pilot, corporation, alliance, system, region or ship matches “{{.SearchQ}}”.</p>{{end}}
 
   <div class="kb-layout">
@@ -63,12 +98,13 @@
         <div class="kb-kill-meta"><time datetime="{{rfc3339 .Time}}" title="{{.When}} EVE">{{.Ago}}</time><span class="kb-att"> · {{.Attackers}} {{if eq .Attackers 1}}attacker{{else}}attackers{{end}}</span>{{if .Solo}} <span class="kb-tag">solo</span>{{end}}{{if .Awox}} <span class="kb-tag warn">awox</span>{{end}}{{if .NPC}} <span class="kb-tag dim">NPC</span>{{end}}</div>
       </li>
       {{else}}
-      <li class="prose">{{if .ScopeKind}}No public kills here yet.{{else}}No kills yet. The killboard fills from zKillboard's live stream within a minute of starting.{{end}}</li>
+      <li class="prose">{{if .ScanNote}}{{else if .Filtered}}No kills match these filters.{{else if .ScopeKind}}No public kills here yet.{{else}}No kills yet. The killboard fills from zKillboard's live stream within a minute of starting.{{end}}</li>
       {{end}}
     </ol>
 
     {{template "kb-side" .}}
   </div>
+  {{if .ScanNote}}<p class="kb-scan-note" role="status">{{.ScanNote}}</p>{{end}}
   {{if .Older}}<p class="kb-more"><a class="btn" href="{{.Older}}">Older kills</a></p>{{end}}
 </div>
 {{end}}
@@ -97,7 +133,7 @@
 {{end}}
 
 {{define "kb-side"}}
-<aside class="kb-side" aria-label="{{if .Stats.Scoped}}{{.ScopeName}}: leaders, last 90 days{{else}}The last day's leaders{{end}}">
+<aside class="kb-side" aria-label="{{if .Stats.Scoped}}{{.ScopeName}}: leaders, last 90 days{{else if .Top.Window}}{{.ScopeName}}: leaders, {{.Top.Window}}{{else}}The last day's leaders{{end}}">
   {{if .Stats.Scoped}}
   {{if .Top.TopShips}}<section class="kb-top">
     <h2>Top ships</h2>
@@ -112,6 +148,7 @@
     <ol>{{range .Top.Systems}}<li><a href="/intel/kills/?system={{.ID}}"><span class="kb-top-sec sec sec-{{.Tier}}">{{.Note}}</span><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
   </section>{{end}}
   {{else}}
+  {{if .Top.Window}}<p class="kb-top-window">{{.Top.Window}}</p>{{end}}
   {{if .Top.Alliances}}<section class="kb-top">
     <h2>Top killers</h2>
     <ol>{{range .Top.Alliances}}<li><a href="/intel/kills/?alliance={{.ID}}"><img src="https://images.evetech.net/alliances/{{.ID}}/logo?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
@@ -120,10 +157,15 @@
     <h2>Most lost</h2>
     <ol>{{range .Top.Ships}}<li><a href="/intel/kills/?ship={{.ID}}"><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
   </section>{{end}}
+  {{if .Top.Pilots}}<section class="kb-top">
+    <h2>Top pilots</h2>
+    <ol>{{range .Top.Pilots}}<li><a href="/intel/kills/?character={{.ID}}"><img src="https://images.evetech.net/characters/{{.ID}}/portrait?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+  </section>{{end}}
   {{if .Top.Systems}}<section class="kb-top">
     <h2>Hottest systems</h2>
     <ol>{{range .Top.Systems}}<li><a href="/intel/kills/?system={{.ID}}"><span class="kb-top-sec sec sec-{{.Tier}}">{{.Note}}</span><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
   </section>{{end}}
   {{end}}
+  <a class="kb-top-more" href="{{if .Top.LeadersHref}}{{.Top.LeadersHref}}{{else}}{{.LeadersHref}}{{end}}">Full leaderboards</a>
 </aside>
 {{end}}

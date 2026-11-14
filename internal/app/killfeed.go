@@ -635,6 +635,7 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 	app.backfillKillStats(ctx)
 	app.backfillMissingKillFeeds(ctx)
 	app.refreshKillboardHeadline(ctx)
+	app.refreshKillLeaders(ctx)
 	app.offerPilotRestorations(ctx)
 	app.warmKillNames(ctx)
 	app.resolveNotedNames(ctx)

@@ -38,6 +38,8 @@ var Module = module.Module{
 			// when the section exists.
 			{Href: "/intel/kills/", Label: "Killboard", Pages: []string{"killboard.html", "kill.html", "pilot.html", "corporation.html", "alliance.html"}},
 			// Battle reports are core too (battle_pages.go).
+			// The leaderboards are core too (killboard_leaders.go).
+			{Href: "/intel/kills/top/", Label: "Leaderboards", Pages: []string{"killboard_top.html"}},
 			{Href: "/intel/battles/", Label: "Battle Reports", Pages: []string{"battles.html", "battle.html"}},
 			{Href: "/intel/scan/", Label: "D-Scan Parser", Pages: []string{"scans.html", "scan.html", "scan_compare.html"}},
 			{Href: "/intel/channels/", Label: "Intel Channels", Pages: []string{"channels.html", "channel.html"}},
@@ -61,6 +63,7 @@ var Module = module.Module{
 		{Path: "/intel/fw/", ChangeFreq: "weekly", Priority: "0.7"},
 		{Path: "/intel/sov/", ChangeFreq: "hourly", Priority: "0.7"},
 		{Path: "/intel/kills/", ChangeFreq: "hourly", Priority: "0.7"},
+		{Path: "/intel/kills/top/", ChangeFreq: "hourly", Priority: "0.6"},
 		{Path: "/intel/scan/", ChangeFreq: "monthly", Priority: "0.7"},
 	},
 	Routes: func(r chi.Router, deps module.Deps) {

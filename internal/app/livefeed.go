@@ -52,6 +52,11 @@ type killLiveSub struct {
 	id   int64
 	big  bool
 	solo bool
+	// filter is the page's filters beyond its scope (nil for none);
+	// minValue a value step above zero, which waits for the price
+	// like big does.
+	filter   *killStreamFilter
+	minValue float64
 }
 
 // killLiveHub is the kill feed's fan-out: one publish per new kill,
@@ -73,7 +78,7 @@ func (h *killLiveHub) count() int {
 	return len(h.subs)
 }
 
-func (h *killLiveHub) subscribe(kind string, id int64, big, solo bool) (*killLiveSub, bool) {
+func (h *killLiveHub) subscribe(kind string, id int64, big, solo bool, filter *killStreamFilter) (*killLiveSub, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if len(h.subs) >= maxLiveFeedSubscribers {
@@ -82,7 +87,10 @@ func (h *killLiveHub) subscribe(kind string, id int64, big, solo bool) (*killLiv
 	if h.subs == nil {
 		h.subs = make(map[*killLiveSub]struct{})
 	}
-	sub := &killLiveSub{ch: make(chan []byte, liveFeedChanCap), kind: kind, id: id, big: big, solo: solo}
+	sub := &killLiveSub{ch: make(chan []byte, liveFeedChanCap), kind: kind, id: id, big: big, solo: solo, filter: filter}
+	if filter != nil {
+		sub.minValue = filter.f.minValue()
+	}
 	h.subs[sub] = struct{}{}
 	return sub, true
 }
@@ -164,10 +172,10 @@ func (h *killLiveHub) publishKill(row killRow, k db.Kill) {
 	h.mu.Unlock()
 	frame := sseFrame("kill", payload)
 	for _, sub := range subs {
-		if sub.big {
+		if sub.big || sub.minValue > 0 {
 			continue
 		}
-		if !killMatchesScope(k, sub.kind, sub.id, false, sub.solo) {
+		if !killMatchesScope(k, sub.kind, sub.id, false, sub.solo) || !sub.filter.matches(k) {
 			continue
 		}
 		select {
@@ -196,7 +204,8 @@ func (h *killLiveHub) publishKillPriced(row killRow, k db.Kill, value string, bi
 	h.mu.Unlock()
 	priceFrame := sseFrame("kill-price", pricePayload)
 	var killFrame []byte
-	if big {
+	valued := k.ValueOurs.Valid && k.ValueOurs.Float64 > 0
+	if big || valued {
 		killPayload, err := json.Marshal(row)
 		if err != nil {
 			logging.Errorf("live feed: marshal priced kill %d: %v", row.ID, err)
@@ -205,8 +214,9 @@ func (h *killLiveHub) publishKillPriced(row killRow, k db.Kill, value string, bi
 		}
 	}
 	for _, sub := range subs {
-		if sub.big {
-			if big && killFrame != nil && killMatchesScope(k, sub.kind, sub.id, true, sub.solo) {
+		if sub.big || sub.minValue > 0 {
+			if killFrame != nil && (!sub.big || big) && k.ValueOurs.Float64 >= sub.minValue &&
+				killMatchesScope(k, sub.kind, sub.id, sub.big, sub.solo) && sub.filter.matches(k) {
 				select {
 				case sub.ch <- killFrame:
 				default:
@@ -214,7 +224,7 @@ func (h *killLiveHub) publishKillPriced(row killRow, k db.Kill, value string, bi
 			}
 			continue
 		}
-		if !killMatchesScope(k, sub.kind, sub.id, false, sub.solo) {
+		if !killMatchesScope(k, sub.kind, sub.id, false, sub.solo) || !sub.filter.matches(k) {
 			continue
 		}
 		select {
@@ -264,10 +274,11 @@ func (h *killLiveHub) statsTargets() (global bool, entities []killEntityRef) {
 }
 
 // publishStats sends one stats frame to the streams showing that
-// headline: an entity board's own streams, or for the zero ref
-// every stream on New Eden's. A global frame equal to the last one
-// sent is skipped.
-func (h *killLiveHub) publishStats(e killEntityRef, frame []byte) {
+// headline: an entity board's own streams, or for the zero ref the
+// streams on New Eden (the whole frame) and on a system, region or
+// hull (bandOnly: the band, without New Eden's rail). A global
+// frame equal to the last one sent is skipped.
+func (h *killLiveHub) publishStats(e killEntityRef, frame, bandOnly []byte) {
 	h.mu.Lock()
 	if e.kind == "" {
 		if bytes.Equal(frame, h.lastStats) {
@@ -276,16 +287,27 @@ func (h *killLiveHub) publishStats(e killEntityRef, frame []byte) {
 		}
 		h.lastStats = frame
 	}
-	subs := make([]*killLiveSub, 0, len(h.subs))
+	type send struct {
+		sub   *killLiveSub
+		frame []byte
+	}
+	var sends []send
 	for sub := range h.subs {
-		if e.kind == "" && !killStatsEntity(sub.kind) || e.kind != "" && sub.kind == e.kind && sub.id == e.id {
-			subs = append(subs, sub)
+		switch {
+		case e.kind == "" && sub.kind == "":
+			sends = append(sends, send{sub, frame})
+		case e.kind == "" && !killStatsEntity(sub.kind):
+			if bandOnly != nil {
+				sends = append(sends, send{sub, bandOnly})
+			}
+		case e.kind != "" && sub.kind == e.kind && sub.id == e.id:
+			sends = append(sends, send{sub, frame})
 		}
 	}
 	h.mu.Unlock()
-	for _, sub := range subs {
+	for _, s := range sends {
 		select {
-		case sub.ch <- frame:
+		case s.sub.ch <- s.frame:
 		default:
 		}
 	}
@@ -312,7 +334,7 @@ func (app *Application) publishKillboardStats(ctx context.Context) {
 	}
 	names := app.newKillNames(ctx)
 	send := func(e killEntityRef) {
-		v := &killboardView{ScopeKind: e.kind, ScopeID: e.id}
+		v := &killboardView{ScopeKind: e.kind, ScopeID: e.id, LeadersHref: killLeadersScopeHref(e.kind, e.id)}
 		if e.kind != "" {
 			v.ScopeName = names.scopeName(e.kind, e.id)
 		}
@@ -331,7 +353,15 @@ func (app *Application) publishKillboardStats(ctx context.Context) {
 		if err != nil {
 			return
 		}
-		app.killLive.publishStats(e, sseFrame("stats", payload))
+		// A system, region or hull board shows New Eden's band
+		// beside a rail of its own: it takes the band alone.
+		var bandOnly []byte
+		if e.kind == "" {
+			if p, err := json.Marshal(killStatsLiveEvent{Stats: stats.String()}); err == nil {
+				bandOnly = sseFrame("stats", p)
+			}
+		}
+		app.killLive.publishStats(e, sseFrame("stats", payload), bandOnly)
 	}
 	if global {
 		send(killEntityRef{})
@@ -533,15 +563,9 @@ func serveSSE(w http.ResponseWriter, r *http.Request, ch <-chan []byte) {
 // killStreamScope reads the killboard's scope and narrowings from a
 // stream request's query, the same way handleKillboard reads them
 // from the page's.
-func killStreamScope(r *http.Request) (kind string, id int64, big, solo bool) {
-	qs := r.URL.Query()
-	for _, s := range killScopes {
-		if n, err := strconv.ParseInt(qs.Get(s), 10, 64); err == nil && n > 0 {
-			kind, id = s, n
-			break
-		}
-	}
-	return kind, id, qs.Get("big") == "1", qs.Get("solo") == "1"
+func killStreamScope(r *http.Request) (kind string, id int64, big, solo bool, f killFilter) {
+	kind, id, big, solo, f = parseKillQuery(r.URL.Query())
+	return kind, id, big, solo, f
 }
 
 // handleKillStream is GET /intel/kills/stream: the killboard's live
@@ -554,8 +578,12 @@ func (app *Application) handleKillStream(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Live kills are off while the server runs in low-memory mode.", http.StatusServiceUnavailable)
 		return
 	}
-	kind, id, big, solo := killStreamScope(r)
-	sub, ok := app.killLive.subscribe(kind, id, big, solo)
+	kind, id, big, solo, f := killStreamScope(r)
+	var filter *killStreamFilter
+	if f.filtering() {
+		filter = &killStreamFilter{f: f, kind: kind, id: id, sde: app.killSDE(r.Context())}
+	}
+	sub, ok := app.killLive.subscribe(kind, id, big, solo, filter)
 	if !ok {
 		http.Error(w, "Too many live feeds are open right now. Try again shortly.", http.StatusServiceUnavailable)
 		return

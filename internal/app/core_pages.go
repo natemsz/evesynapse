@@ -92,6 +92,8 @@ type pageData struct {
 
 	// The killboard (/intel/kills/, /intel/kill/{id}/).
 	Killboard *killboardView
+	// The killboard's leaderboards (/intel/kills/top/).
+	KillLeaders *killLeadersView
 	// Sov is the sovereignty tracker (intel_sov_page.go).
 	Sov      *sovPageView
 	KillPage *killPageView
@@ -187,7 +189,7 @@ func sectionForPage(page string) string {
 		return "map"
 	// The public pilot, corporation and alliance profiles are the
 	// killboard's entity pages.
-	case "killboard.html", "kill.html", "pilot.html", "corporation.html", "alliance.html", "intel_sov.html", "battles.html", "battle.html", "scans.html", "scan.html", "scan_compare.html", "channels.html", "channel.html", "feed.html", "intel_workbench.html":
+	case "killboard.html", "killboard_top.html", "kill.html", "pilot.html", "corporation.html", "alliance.html", "intel_sov.html", "battles.html", "battle.html", "scans.html", "scan.html", "scan_compare.html", "channels.html", "channel.html", "feed.html", "intel_workbench.html":
 		return "intel"
 	case "sync.html":
 		// The Sync page is a tab of the Admin page now; it

@@ -224,6 +224,16 @@ type killboardView struct {
 	// SearchQ is a search-box query that resolved to nothing; the
 	// page names it so a miss does not read as an empty board.
 	SearchQ string
+	// Filter is the filter form; ScanNote explains a filtered page
+	// that came up short (killboard_filter.go).
+	Filter   killFilterView
+	ScanNote string
+	// LeadersHref opens the leaderboards for this scope: New Eden,
+	// a place, a hull, or an alliance's or corporation's members.
+	LeadersHref string
+	// Filtered: the list is narrowed beyond its scope, so the live
+	// stream carries the same filters.
+	Filtered bool
 }
 
 type killChip struct {
@@ -275,10 +285,15 @@ type killboardStats struct {
 }
 
 type killboardTop struct {
-	Alliances []killTopRow
-	TopShips  []killTopRow // a scoped entity's ships flown, on its kills
-	Ships     []killTopRow
-	Systems   []killTopRow
+	// Window names a rail read from the stored leaderboards (a place
+	// or hull scope); LeadersHref opens its full leaderboard.
+	Window      string
+	LeadersHref string
+	Pilots      []killTopRow // a hull's rail: the pilots flying it
+	Alliances   []killTopRow
+	TopShips    []killTopRow // a scoped entity's ships flown, on its kills
+	Ships       []killTopRow
+	Systems     []killTopRow
 }
 
 type killTopRow struct {
@@ -289,19 +304,20 @@ type killTopRow struct {
 	Tier  int // a system's security color step
 }
 
-var killScopes = []string{"system", "region", "ship", "character", "corporation", "alliance"}
-
 // handleKillboard renders the feed.
 func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.publicPage(ctx)
 	v := &killboardView{}
 	qs := r.URL.Query()
-	for _, s := range killScopes {
-		if id, err := strconv.ParseInt(qs.Get(s), 10, 64); err == nil && id > 0 {
-			v.ScopeKind, v.ScopeID = s, id
-			break
-		}
+	var f killFilter
+	v.ScopeKind, v.ScopeID, v.Big, v.Solo, f = parseKillQuery(qs)
+	// The filter form sends every picker, empty ones too, and the
+	// chips' steps under the pickers' names: answer with the page's
+	// own short URL.
+	if r.Method == http.MethodGet && qs.Get("q") == "" && killQueryUntidy(qs) {
+		http.Redirect(w, r, killTidyHref(v.ScopeKind, v.ScopeID, v.Big, v.Solo, f, qs.Get("before")), http.StatusFound)
+		return
 	}
 	// The search form's path (no script): a name in q resolves
 	// through the same merged lookup the suggestions use, and a
@@ -316,23 +332,34 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 			v.SearchQ = q
 		}
 	}
-	v.Big = qs.Get("big") == "1"
-	v.Solo = qs.Get("solo") == "1"
 	beforeTime, beforeID := time.Now().Add(time.Hour).UTC(), int64(1<<62)
+	paged := false
 	if b := qs.Get("before"); b != "" {
 		if dot := strings.IndexByte(b, '.'); dot > 0 {
 			if sec, err := strconv.ParseInt(b[:dot], 10, 64); err == nil {
 				if id, err := strconv.ParseInt(b[dot+1:], 10, 64); err == nil {
 					beforeTime, beforeID = time.Unix(sec, 0).UTC(), id
+					paged = true
 				}
 			}
 		}
+	}
+	if !paged && !f.Date.IsZero() {
+		beforeTime, beforeID = killDateCursor(f.Date)
 	}
 	minValue := 0.0
 	if v.Big {
 		minValue = killBigValue
 	}
-	kills, err := app.listKills(ctx, v.ScopeKind, v.ScopeID, beforeTime, beforeID, minValue, v.Solo)
+	v.Filtered = f.filtering()
+	var kills []db.Kill
+	var edge db.KillScanEdgeRecentRow
+	var err error
+	if v.Filtered {
+		kills, edge, err = app.listKillsFiltered(ctx, v.ScopeKind, v.ScopeID, f, beforeTime, beforeID, minValue, v.Solo)
+	} else {
+		kills, err = app.listKills(ctx, v.ScopeKind, v.ScopeID, beforeTime, beforeID, minValue, v.Solo)
+	}
 	if err != nil {
 		logging.Errorf("killboard: list: %v", err)
 	}
@@ -340,22 +367,28 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 	for _, k := range kills {
 		v.Kills = append(v.Kills, names.row(k))
 	}
+	// BaseQuery is the scope with its filters: the chips, the older
+	// page and the clear links all keep it.
+	v.BaseQuery = killFilterQuery(v.ScopeKind, v.ScopeID, f)
 	if v.ScopeKind != "" {
 		v.ScopeName = names.scopeName(v.ScopeKind, v.ScopeID)
 		v.ScopeLabel = killScopeLabels[v.ScopeKind]
-		v.BaseQuery = v.ScopeKind + "=" + strconv.FormatInt(v.ScopeID, 10)
-		v.ClearHref = killHref("", v.Big, v.Solo)
+		// Clearing the scope keeps the filters that stand without it.
+		rest := f
+		rest.Side = ""
+		v.ClearHref = killHref(killFilterQuery("", 0, rest), v.Big, v.Solo)
 		if v.ScopeKind == "character" {
 			v.ScopeProfileHref = "/pilot/?character=" + strconv.FormatInt(v.ScopeID, 10)
 		}
 	}
+	v.LeadersHref = killLeadersScopeHref(v.ScopeKind, v.ScopeID)
+	v.Filter = killFilterViewFor(app.killSDE(ctx), names, v.ScopeKind, v.ScopeID, v.Big, v.Solo, f, time.Now().UTC())
 	v.Chips = []killChip{
 		{Label: "All kills", Href: killHref(v.BaseQuery, false, false), Active: !v.Big && !v.Solo},
 		{Label: "Big kills", Href: killHref(v.BaseQuery, !v.Big, v.Solo), Active: v.Big},
 		{Label: "Solo", Href: killHref(v.BaseQuery, v.Big, !v.Solo), Active: v.Solo},
 	}
-	if len(kills) == killPageSize {
-		last := kills[len(kills)-1]
+	older := func(t time.Time, id int64) string {
 		q := []string{}
 		if v.BaseQuery != "" {
 			q = append(q, v.BaseQuery)
@@ -366,8 +399,18 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		if v.Solo {
 			q = append(q, "solo=1")
 		}
-		q = append(q, fmt.Sprintf("before=%d.%d", last.KillmailTime.Unix(), last.KillmailID))
-		v.Older = "/intel/kills/?" + strings.Join(q, "&")
+		q = append(q, fmt.Sprintf("before=%d.%d", t.Unix(), id))
+		return "/intel/kills/?" + strings.Join(q, "&")
+	}
+	switch {
+	case len(kills) == killPageSize:
+		last := kills[len(kills)-1]
+		v.Older = older(last.KillmailTime, last.KillmailID)
+	case v.Filtered && edge.KillmailID > 0:
+		// A short filtered page: the window ended before a page
+		// filled, and older kills remain behind it.
+		v.Older = older(edge.KillmailTime, edge.KillmailID)
+		v.ScanNote = killScanNote(len(kills))
 	}
 	v.Stats, v.Top = app.killboardBoardStats(ctx, names, v.ScopeKind, v.ScopeID, v.ScopeName)
 	data.Killboard = v
@@ -472,7 +515,11 @@ func killStatsEntity(kind string) bool {
 // rows only.
 func (app *Application) killboardBoardStats(ctx context.Context, names *killNames, kind string, id int64, scopeName string) (killboardStats, killboardTop) {
 	if !killStatsEntity(kind) {
-		return app.killboardHeadline(ctx, names)
+		st, top := app.killboardHeadline(ctx, names)
+		if kind != "" {
+			top = app.killLeaderRail(ctx, names, kind, id)
+		}
+		return st, top
 	}
 	st, top := app.killboardScopedHeadline(ctx, names, kind, id)
 	st.AriaLabel = scopeName + ": " + st.ScopeNote

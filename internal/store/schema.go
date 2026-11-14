@@ -939,6 +939,11 @@ var pgKillArchiveRestoreSchema string
 //go:embed schema_pg/154_sov_tracker.sql
 var pgSovTrackerSchema string
 
+// Step 155: the killboard's stored leaderboards.
+//
+//go:embed schema_pg/155_kill_leaders.sql
+var pgKillLeadersSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1121,6 +1126,7 @@ func schemaSteps() []schemaStep {
 		{152, "kill_stats_complete", pgKillStatsCompleteSchema, ""},
 		{153, "kill_archive_restore", pgKillArchiveRestoreSchema, ""},
 		{154, "sov_tracker", pgSovTrackerSchema, ""},
+		{155, "kill_leaders", pgKillLeadersSchema, ""},
 	}
 }
 

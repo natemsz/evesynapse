@@ -2121,6 +2121,12 @@
       kcLink("/intel/kill/" + k.id + "/", "Full killmail", more, "btn small");
       // A busy system offers its whole killboard too.
       if (near) kcLink("/intel/kills/?system=" + k.system, "System killboard", more, "btn small");
+      // Share copies the kill's link (app.js's copy buttons).
+      var share = kcEl("button", "btn small", "Share", more);
+      share.type = "button";
+      share.title = "Copy a link to this kill";
+      share.setAttribute("data-copy", "");
+      share.setAttribute("data-copy-url", "/intel/kill/" + k.id + "/");
       killCard.hidden = false;
       showTip(-1);
       placeKill();

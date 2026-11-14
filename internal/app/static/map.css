@@ -489,6 +489,20 @@ html[data-theme="light"] .map {
 .map-route[hidden] { display: none; }
 .map-route-head { display: flex; align-items: center; justify-content: space-between; margin: -0.15rem -0.45rem 0.35rem 0; }
 .map-route-head .map-card-close { position: static; width: 1.9rem; height: 1.9rem; }
+.map-route-tools { display: flex; align-items: center; gap: 0.1rem; }
+.map-route-copy {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.map-route-copy:hover:not(:disabled) { color: var(--accent); }
+.map-route-copy:disabled { opacity: 0.4; cursor: default; }
 .map-route-title {
   margin: 0;
   font-size: var(--fs-xs);
@@ -592,6 +606,21 @@ html[data-theme="light"] .map {
 .map-route-list li::marker { color: var(--muted-2); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .map-route-list li.hot .map-route-sys { color: var(--map-threat-lo); }
 .map-route-list li.camp .map-route-sys { color: var(--map-camp); font-weight: 600; }
+/* A jump route lists each stop's stand-ins under it, one column. */
+.map-route-list.map-route-list-alts { columns: 1; }
+.map-route-alts { display: block; color: var(--muted-2); }
+.map-route-alt {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+}
+.map-route-alt:hover { color: var(--accent); }
+.map-route-warn li.map-route-chosen { border-left-color: var(--map-route); color: var(--text); }
 .map-route-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.65rem; }
 .map-route-actions[hidden] { display: none; }
 .map-route-actions .btn { justify-content: center; text-align: center; }

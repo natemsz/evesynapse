@@ -45,6 +45,14 @@
   --map-heat-lo: #7a2a0c;
   --map-heat-hi: #ff6a1a;
   --map-heat-core: #ffe7b0;
+  /* The heat ramp, quiet to white-hot: deep violet, magenta, rose,
+     amber, pale gold, white. */
+  --map-heat-0: #3b0f70;
+  --map-heat-1: #8c2981;
+  --map-heat-2: #de4968;
+  --map-heat-3: #fe9f6d;
+  --map-heat-4: #fcfdbf;
+  --map-heat-5: #ffffff;
   --map-heat-blend: lighter;
   --map-sov-l: 62%;
   --map-npc: #8d8279;
@@ -994,7 +1002,7 @@ html.map-full-open { overflow: hidden; }
 .map-data-sw.structures { background: var(--map-d-structures); border-radius: 1px; }
 .map-data-sw.posted { border: 2px dashed var(--map-d-posted); box-sizing: border-box; }
 .map-data-sw.watched { border: 2px solid var(--map-camp); box-sizing: border-box; }
-.map-data-sw.heat { background: linear-gradient(90deg, var(--map-heat-lo), var(--map-heat-hi), var(--map-heat-core)); border-radius: 2px; width: 0.9rem; }
+.map-data-sw.heat { background: linear-gradient(90deg, var(--map-heat-1), var(--map-heat-2), var(--map-heat-3), var(--map-heat-4)); border-radius: 2px; width: 0.9rem; }
 /* A layer chip a data heat layer stands in for. */
 .map-layers button.off { opacity: 0.35; }
 

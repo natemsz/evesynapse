@@ -150,22 +150,7 @@ func solveEngineItems(snap *fit.Snapshot, doc *fitview.FitDoc) []fit.ItemInput {
 		if it.Cargo || !fitview.FitFamilyFitted(fitview.FitSlotFamilyOf(snap, it.TypeID)) {
 			continue
 		}
-		byState := make(map[string]int, 2)
-		var order []string
-		for i := 0; i < it.Qty; i++ {
-			st := ""
-			if i < len(it.States) {
-				st = it.States[i]
-			}
-			if _, ok := byState[st]; !ok {
-				order = append(order, st)
-			}
-			byState[st]++
-		}
-		for _, st := range order {
-			engineItems = append(engineItems, fit.ItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st,
-				Abilities: fitview.FitFighterAbilitiesOf(snap, it)})
-		}
+		engineItems = append(engineItems, fitview.FitLineEngineItems(snap, it)...)
 	}
 	return engineItems
 }

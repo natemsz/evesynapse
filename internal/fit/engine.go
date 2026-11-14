@@ -571,6 +571,17 @@ func StateAttrKey(typeID int64, state string) string {
 	return strconv.FormatInt(typeID, 10) + "\x00" + state
 }
 
+// ChargeAttrKey is StateAttrKey for the modules of a type and state
+// that load one charge, so modules of one type loading different
+// charges keep apart. Result maps carry each loaded module under
+// both keys: the StateAttrKey entry is one of the charges.
+func ChargeAttrKey(typeID int64, state string, charge int64) string {
+	if charge <= 0 {
+		return StateAttrKey(typeID, state)
+	}
+	return StateAttrKey(typeID, state) + "\x00" + strconv.FormatInt(charge, 10)
+}
+
 // LoadSnapshot loads the dogma rows for the given types and
 // closes over the skills they touch: requirements (recursive)
 // and skill selectors in any carried effect's modifiers. The
@@ -807,6 +818,10 @@ type ItemInput struct {
 	TypeID   int64
 	Quantity int
 	State    string
+	// Charge is the line's own loaded charge; 0 takes the charge
+	// Compute was given for the type. Lines of one type with
+	// different charges stay apart, like lines in different states.
+	Charge int64
 	// Abilities is a fighter line's switched-on abilities, the
 	// whole set (FighterAbilitiesOn resolves one); nil is the
 	// fighter type's defaults. Ignored for anything else.
@@ -1176,8 +1191,12 @@ type entity struct {
 	instances int
 	state     string   // module state, "" for other kinds
 	abilities []string // a fighter's switched-on abilities
-	base      map[int64]float64
-	calc      map[int64]float64 // attributes touched by modifiers, post-pass
+	// chargeType is a module line's own charge (ItemInput.Charge);
+	// charge is the charge entity it loads, nil when none.
+	chargeType int64
+	charge     *entity
+	base       map[int64]float64
+	calc       map[int64]float64 // attributes touched by modifiers, post-pass
 }
 
 // cycling reports whether the entity's active effects are

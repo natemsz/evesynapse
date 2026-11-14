@@ -85,10 +85,12 @@ type fitting struct {
 	fittedByType map[int64][]*entity
 	drones       []*entity // the drones among fitted
 	fighters     []*entity // the fighters among fitted
-	// weaponCharge is each weapon type's loaded charge or missile.
-	weaponCharge map[int64]*entity
-	skills       map[int64]*entity
-	implants     []*entity
+	// charges is every loaded charge or missile entity, one per
+	// weapon type and charge type; each module entity points at its
+	// own (entity.charge).
+	charges  []*entity
+	skills   map[int64]*entity
+	implants []*entity
 
 	// apps is every modifier bound to a target (bindModifiers).
 	apps []application
@@ -143,7 +145,6 @@ func newFitting(snap *Snapshot, shipTypeID int64, levels map[int64]int) *fitting
 		char:         char,
 		entities:     []*entity{ship, char},
 		fittedByType: make(map[int64][]*entity),
-		weaponCharge: make(map[int64]*entity),
 		skills:       make(map[int64]*entity),
 		unmodeled:    make(map[string]bool),
 		unmodeledBy:  make(map[int64]bool),
@@ -232,9 +233,13 @@ func (f *fitting) addItems(items []ItemInput) {
 			}
 		}
 		abilityKey := fighterAbilityKey(abilities)
+		chargeType := int64(0)
+		if kind == entModule {
+			chargeType = it.Charge
+		}
 		var ent *entity
 		for _, e := range f.fittedByType[it.TypeID] {
-			if e.state == state && fighterAbilityKey(e.abilities) == abilityKey {
+			if e.state == state && fighterAbilityKey(e.abilities) == abilityKey && e.chargeType == chargeType {
 				ent = e
 				break
 			}
@@ -247,14 +252,15 @@ func (f *fitting) addItems(items []ItemInput) {
 			continue
 		}
 		ent = &entity{
-			key:       fmt.Sprintf("fit:%d:%s:%s", it.TypeID, state, abilityKey),
-			kind:      kind,
-			typeID:    it.TypeID,
-			instances: qty,
-			state:     state,
-			abilities: abilities,
-			base:      cloneAttrMap(snap.Attrs[it.TypeID]),
-			calc:      map[int64]float64{},
+			key:        fmt.Sprintf("fit:%d:%s:%s:%d", it.TypeID, state, abilityKey, chargeType),
+			kind:       kind,
+			typeID:     it.TypeID,
+			instances:  qty,
+			state:      state,
+			abilities:  abilities,
+			chargeType: chargeType,
+			base:       cloneAttrMap(snap.Attrs[it.TypeID]),
+			calc:       map[int64]float64{},
 		}
 		f.fittedByType[it.TypeID] = append(f.fittedByType[it.TypeID], ent)
 		f.fitted = append(f.fitted, ent)
@@ -269,16 +275,36 @@ func (f *fitting) addItems(items []ItemInput) {
 }
 
 // addCharges builds the charge entities (missile entities for
-// launchers), paired with the weapon type that carries them. A
-// charge is only modeled when at least one weapon of its type is
-// cycling, a loaded charge in an offline or inactive weapon
-// does nothing (the doc still remembers it).
+// launchers): one per weapon type and charge type, shared by every
+// module of the type loading it. A module loads its line's own
+// charge, else the type's from charges. A charge is only modeled
+// when at least one module loading it is cycling: a loaded charge
+// in an offline or inactive weapon does nothing (the doc still
+// remembers it). A charge the module cannot load is refused with a
+// note.
 func (f *fitting) addCharges(charges map[int64]int64) {
-	for weaponType, chargeType := range charges {
-		ents := f.fittedByType[weaponType]
-		if len(ents) == 0 || chargeType == 0 {
+	type pair struct{ weapon, charge int64 }
+	hosts := map[pair][]*entity{}
+	var order []pair
+	for _, e := range f.fitted {
+		if e.kind != entModule {
 			continue
 		}
+		ct := e.chargeType
+		if ct == 0 {
+			ct = charges[e.typeID]
+		}
+		if ct == 0 {
+			continue
+		}
+		k := pair{e.typeID, ct}
+		if _, ok := hosts[k]; !ok {
+			order = append(order, k)
+		}
+		hosts[k] = append(hosts[k], e)
+	}
+	for _, k := range order {
+		ents := hosts[k]
 		cycling := false
 		for _, e := range ents {
 			if e.cycling() {
@@ -289,23 +315,26 @@ func (f *fitting) addCharges(charges map[int64]int64) {
 		if !cycling {
 			continue
 		}
-		if !ChargeFits(f.snap, weaponType, chargeType) {
-			f.note(fmt.Sprintf("charge type %d does not fit weapon type %d", chargeType, weaponType))
+		if !ChargeFits(f.snap, k.weapon, k.charge) {
+			f.note(fmt.Sprintf("charge type %d does not fit weapon type %d", k.charge, k.weapon))
 			continue
 		}
 		kind := entCharge
-		if f.snap.HasEffect(weaponType, EffectLauncherFitted) {
+		if f.snap.HasEffect(k.weapon, EffectLauncherFitted) {
 			kind = entMissile
 		}
 		ent := &entity{
-			key:       fmt.Sprintf("charge:%d", chargeType),
+			key:       fmt.Sprintf("charge:%d:%d", k.weapon, k.charge),
 			kind:      kind,
-			typeID:    chargeType,
+			typeID:    k.charge,
 			instances: 1,
-			base:      cloneAttrMap(f.snap.Attrs[chargeType]),
+			base:      cloneAttrMap(f.snap.Attrs[k.charge]),
 			calc:      map[int64]float64{},
 		}
-		f.weaponCharge[weaponType] = ent
+		for _, e := range ents {
+			e.charge = ent
+		}
+		f.charges = append(f.charges, ent)
 		f.entities = append(f.entities, ent)
 	}
 }
@@ -523,11 +552,9 @@ func (f *fitting) bindModifiers() {
 	// atShip are the entities sitting at the ship's location for
 	// Location* selectors: fitted equipment plus launched-craft
 	// types (drones, missiles).
-	atShip := make([]*entity, 0, len(f.fitted)+len(f.weaponCharge))
+	atShip := make([]*entity, 0, len(f.fitted)+len(f.charges))
 	atShip = append(atShip, f.fitted...)
-	for _, ent := range f.weaponCharge {
-		atShip = append(atShip, ent)
-	}
+	atShip = append(atShip, f.charges...)
 
 	// Sources in a fixed order (ship, char, skills by type,
 	// fitted items, charges) so PreAssign outcomes are stable.
@@ -543,9 +570,7 @@ func (f *fitting) bindModifiers() {
 	}
 	sources = append(sources, f.implants...)
 	sources = append(sources, f.fitted...)
-	for _, ent := range f.weaponCharge {
-		sources = append(sources, ent)
-	}
+	sources = append(sources, f.charges...)
 
 	for _, source := range sources {
 		// Effect categories bind per module state: an
@@ -632,9 +657,9 @@ func (f *fitting) bind(atShip []*entity, source *entity, effectID int64, eff *Ef
 		case "otherID":
 			// A charge modifier reaching its host weapon.
 			if source.kind == entCharge || source.kind == entMissile {
-				for weaponType, ent := range f.weaponCharge {
-					if ent == source {
-						targets(f.fittedByType[weaponType]...)
+				for _, host := range f.fitted {
+					if host.charge == source {
+						targets(host)
 					}
 				}
 			} else {
@@ -795,6 +820,9 @@ func (f *fitting) recordAttrs() {
 		}
 		if ent.kind == entModule && ent.state != "" {
 			res.StateAttrs[StateAttrKey(ent.typeID, ent.state)] = fa
+			if ent.charge != nil {
+				res.StateAttrs[ChargeAttrKey(ent.typeID, ent.state, ent.charge.typeID)] = fa
+			}
 		}
 	}
 }
@@ -901,7 +929,7 @@ func (f *fitting) capacitor() {
 		if need > 0 && cycle > 0 {
 			res.CapacitorDraw += need / cycle * n
 		}
-		charge := f.weaponCharge[ent.typeID]
+		charge := ent.charge
 		if charge == nil || cycle <= 0 {
 			continue
 		}
@@ -911,6 +939,7 @@ func (f *fitting) capacitor() {
 				res.ChargeClips = make(map[string]ChargeClip)
 			}
 			res.ChargeClips[StateAttrKey(ent.typeID, ent.state)] = clip
+			res.ChargeClips[ChargeAttrKey(ent.typeID, ent.state, charge.typeID)] = clip
 		}
 		// Only a capacitor booster injects: an ancillary shield
 		// booster loads the same Cap Booster charges and burns
@@ -999,7 +1028,7 @@ func (f *fitting) offense() {
 		if cycle <= 0 {
 			continue
 		}
-		charge := f.weaponCharge[ent.typeID]
+		charge := ent.charge
 		switch {
 		case snap.HasEffect(ent.typeID, EffectTurretFitted):
 			if charge == nil {
@@ -1023,8 +1052,7 @@ func (f *fitting) offense() {
 				res.Ramps = append(res.Ramps, Ramp{TypeID: ent.typeID, Kind: RampDamage, Count: int(n),
 					Amount: volley, Cycle: cycle, Step: step, Max: maxBonus})
 			}
-			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
-			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
+			f.weaponFigures(ent, volley, cycle)
 			reach := WeaponReach{TypeID: ent.typeID, Kind: ReachTurret, Count: int(n), DPS: n * volley / cycle,
 				Optimal: ent.get(snap, AttrMaxRange), Falloff: ent.get(snap, AttrFalloff),
 				Tracking: ent.get(snap, AttrTrackingSpeed), SigResolution: ent.get(snap, attrOptimalSigRadius)}
@@ -1057,8 +1085,7 @@ func (f *fitting) offense() {
 			volley *= f.char.get(snap, AttrMissileDamageMult)
 			res.MissileVolley += n * volley
 			res.MissileDPS += n * volley / cycle
-			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
-			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
+			f.weaponFigures(ent, volley, cycle)
 			res.Weapons = append(res.Weapons, WeaponReach{TypeID: ent.typeID, Kind: ReachMissile, Count: int(n), DPS: n * volley / cycle,
 				Range:             charge.get(snap, AttrMaxVelocity) * charge.get(snap, attrExplosionDelay) / 1000,
 				ExplosionRadius:   charge.get(snap, attrAoeCloudSize),
@@ -1078,9 +1105,21 @@ func (f *fitting) offense() {
 			res.SmartbombDPS += n * volley / cycle
 			res.Weapons = append(res.Weapons, WeaponReach{TypeID: ent.typeID, Kind: ReachSmartbomb, Count: int(n),
 				DPS: n * volley / cycle, Range: ent.get(snap, attrEmpFieldRange)})
-			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
-			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
+			f.weaponFigures(ent, volley, cycle)
 		}
+	}
+}
+
+// weaponFigures records one weapon entity's per-module volley and
+// DPS under its state key and, when it loads a charge, its charge key.
+func (f *fitting) weaponFigures(ent *entity, volley, cycle float64) {
+	keys := []string{StateAttrKey(ent.typeID, ent.state)}
+	if ent.charge != nil {
+		keys = append(keys, ChargeAttrKey(ent.typeID, ent.state, ent.charge.typeID))
+	}
+	for _, k := range keys {
+		f.res.WeaponVolley[k] = volley
+		f.res.WeaponDPS[k] = volley / cycle
 	}
 }
 
@@ -1191,7 +1230,7 @@ func (f *fitting) tank() {
 			res.ShieldBoostRate += n * amt / cycle
 		}
 		if amt := ent.get(snap, AttrArmorDamageAmount); amt > 0 {
-			if mult := ent.get(snap, AttrChargedArmorDamageMult); mult > 0 && f.weaponCharge[ent.typeID] != nil {
+			if mult := ent.get(snap, AttrChargedArmorDamageMult); mult > 0 && ent.charge != nil {
 				amt *= mult // paste loaded
 			}
 			res.ArmorRepairRate += n * amt / cycle

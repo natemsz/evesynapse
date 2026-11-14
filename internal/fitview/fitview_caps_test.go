@@ -117,3 +117,28 @@ func TestSanitizeFitDocBoundsStateGrowth(t *testing.T) {
 		t.Fatalf("first state = %q, want the line's real state kept", it.States[0])
 	}
 }
+
+// Per-module charges survive normalizing: lines of one type merge
+// with their charges in order, the most common charge becomes the
+// type's, and only the modules loading something else keep their own.
+func TestSanitizeKeepsPerModuleCharges(t *testing.T) {
+	const gun, emp, lead = 9100, 501, 502
+	doc := &FitDoc{ShipTypeID: 1, Items: []FitDocItem{
+		{TypeID: gun, Qty: 1, Charges: []int64{emp}},
+		{TypeID: gun, Qty: 1, Charges: []int64{lead}},
+		{TypeID: gun, Qty: 1, Charges: []int64{emp}},
+	}}
+	SanitizeFitDoc(doc, capsSnapshot())
+	if len(doc.Items) != 1 || doc.Items[0].Qty != 3 {
+		t.Fatalf("items = %+v, want one line of 3", doc.Items)
+	}
+	if doc.Charges[gun] != emp {
+		t.Errorf("type charge = %d, want %d", doc.Charges[gun], emp)
+	}
+	it := &doc.Items[0]
+	for i, want := range []int64{emp, lead, emp} {
+		if got := doc.ChargeAt(it, i); got != want {
+			t.Errorf("module %d loads %d, want %d", i, got, want)
+		}
+	}
+}

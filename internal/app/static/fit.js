@@ -171,6 +171,9 @@ var FitGauges = (function () {
   state.shipTypeId = state.shipTypeId || 0;
   state.items = state.items || [];
   state.charges = state.charges || {};
+  // splitOpen remembers which weapon types show a charge row per
+  // module, across re-renders (syncSplitRows).
+  var splitOpen = {};
 
   // Per-instance module states ride alongside qty: states[i] is
   // the i-th instance's state ("" = the type default). Kept the
@@ -282,6 +285,7 @@ var FitGauges = (function () {
       syncImpFold();
       syncDroneGauges();
       syncChargeButtons();
+      syncSplitRows();
       syncFilterUI();
       syncSubsystemUI();
       syncUndoButtons();
@@ -1052,6 +1056,22 @@ var FitGauges = (function () {
       // click on the slot (only the border used to respond).
       var ammoClear = t.closest("[data-fit-ammo-clear]");
       if (ammoClear) { setCharge(ammoClear.getAttribute("data-fit-ammo-clear"), 0); return; }
+      var ammoReset = t.closest("[data-fit-ammo-reset]");
+      if (ammoReset) {
+        setChargeAt(ammoReset.getAttribute("data-fit-ammo-reset"), parseInt(ammoReset.getAttribute("data-fit-ammo-index"), 10), 0);
+        return;
+      }
+      var ammoSplit = t.closest("[data-fit-ammo-split]");
+      if (ammoSplit) {
+        var sw = ammoSplit.getAttribute("data-fit-ammo-split");
+        var box = editor.querySelector('[data-fit-ammo-each="' + sw + '"]');
+        // A type whose modules load their own stays split until
+        // the all-of-them row loads one charge for every module.
+        if (box && box.getAttribute("data-fit-ammo-split-on") === "1") return;
+        splitOpen[sw] = !splitOpen[sw];
+        syncSplitRows();
+        return;
+      }
       var chargeBtn = t.closest("[data-fit-charge-for]");
       if (chargeBtn) { toggleChargeDrawer(chargeBtn); return; }
       var chargePick = t.closest("[data-fit-charge-pick]");
@@ -1202,6 +1222,7 @@ var FitGauges = (function () {
   syncSubsystemUI();
   syncDroneGauges();
   syncChargeButtons();
+  syncSplitRows();
   // Populate the clone dropdown for the initially-selected pilot
   // (Issue 19); pilot changes refresh it via the change handler.
   refreshCloneOptions();
@@ -1684,14 +1705,54 @@ var FitGauges = (function () {
     markDirty();
     simulate();
   }
-  // Weapon ammunition: id 0 unloads.
+  // Weapon ammunition for every module of the type: id 0 unloads.
+  // It replaces the charges single modules loaded of their own.
   function setCharge(weapon, id) {
     pushHistory();
     if (id > 0) state.charges[weapon] = id;
     else delete state.charges[weapon];
+    weaponLines(weapon).forEach(function (it) { delete it.charges; });
     pendingFlash = { type: "charge", id: weapon };
     markDirty();
     simulate();
+  }
+  // weaponLines are the fitted document lines of a weapon type.
+  function weaponLines(weapon) {
+    return (state.items || []).filter(function (it) {
+      return String(it.typeId) === String(weapon) && !it.cargo;
+    });
+  }
+  // One module's own charge: index counts the type's fitted modules
+  // from 0; id 0 has it load the same as the others. The server
+  // folds a charge every module shares into the type's.
+  function setChargeAt(weapon, index, id) {
+    var line = weaponLines(weapon)[0];
+    if (!line || !(index >= 0) || index >= (line.qty || 1)) return;
+    pushHistory();
+    var list = (line.charges || []).slice();
+    while (list.length < (line.qty || 1)) list.push(0);
+    list[index] = id > 0 ? id : 0;
+    line.charges = list;
+    splitOpen[weapon] = true;
+    pendingFlash = { type: "charge", id: weapon };
+    markDirty();
+    simulate();
+  }
+  // syncSplitRows shows a type's charge row per module when splitOpen
+  // (declared with the editor state) or the server says to: a type
+  // whose modules load their own always shows them.
+  function syncSplitRows() {
+    editor.querySelectorAll("[data-fit-ammo-each]").forEach(function (box) {
+      var weapon = box.getAttribute("data-fit-ammo-each");
+      var on = box.getAttribute("data-fit-ammo-split-on") === "1" || !!splitOpen[weapon];
+      box.hidden = !on;
+      var btn = editor.querySelector('[data-fit-ammo-split="' + weapon + '"]');
+      if (btn) btn.setAttribute("aria-expanded", on ? "true" : "false");
+    });
+  }
+  function splitShown(weapon) {
+    var box = editor.querySelector('[data-fit-ammo-each="' + weapon + '"]');
+    return !!box && !box.hidden;
   }
   // --- drone gauges: the shared FitGauges pass, on this editor's
   // workbench.
@@ -1915,6 +1976,19 @@ var FitGauges = (function () {
         kinds: ["implant"],
         labels: { implant: "Slot " + slot + " implants" },
         pick: function (it) { setImplant(slot, it.id); }
+      };
+    }
+    var one = input.getAttribute("data-fit-ammo-one");
+    if (one) {
+      var oneIndex = parseInt(input.getAttribute("data-fit-ammo-index"), 10);
+      return {
+        url: function (q) {
+          return "/fittings/picker.json?family=charge&weapon=" + encodeURIComponent(one) +
+            "&q=" + encodeURIComponent(q);
+        },
+        kinds: ["charge"],
+        labels: { charge: (input.getAttribute("data-fit-ammo-weapon") || "Module") + " charges" },
+        pick: function (it) { setChargeAt(one, oneIndex, it.id); }
       };
     }
     var weapon = input.getAttribute("data-fit-ammo-for");
@@ -2584,6 +2658,10 @@ var FitGauges = (function () {
       return resp.ok ? resp.json() : [];
     }).then(function (charges) {
       var ok = (charges || []).some(function (ch) { return ch.id === chargeID; });
+      // Onto a ring slot of a type showing a row per module, the
+      // charge loads that one module; otherwise every module.
+      var ord = t.el && t.el.getAttribute ? parseInt(t.el.getAttribute("data-v-ordinal"), 10) : NaN;
+      if (ok && ord >= 0 && splitShown(String(weaponID))) { setChargeAt(String(weaponID), ord, chargeID); return; }
       if (ok) { setCharge(String(weaponID), chargeID); return; }
       var el = editor.querySelector('.fit-vslot[data-fit-vslot="' + weaponID + '"]') || t.el;
       if (!el) return;
@@ -2748,7 +2826,7 @@ var FitGauges = (function () {
   // its item. Rack rows and search rows keep their own click.
   function tapDragSource(ev, d) {
     var ammo = ev.target && ev.target.closest ? ev.target.closest("[data-fit-ammo]") : null;
-    if (ammo) { jumpToCharge(ammo.getAttribute("data-fit-ammo")); return; }
+    if (ammo) { jumpToCharge(ammo.getAttribute("data-fit-ammo"), parseInt(ammo.getAttribute("data-fit-ammo-index"), 10)); return; }
     if (d.el.hasAttribute("data-fit-vslot")) {
       if (ev.pointerType !== "touch" && d.el.hasAttribute("data-tip-states")) {
         closeTip();
@@ -2996,8 +3074,11 @@ var FitGauges = (function () {
   }
   // Jumps to a weapon's ammunition search (from its slot badge),
   // which opens on everything the weapon takes.
-  function jumpToCharge(weaponID) {
+  function jumpToCharge(weaponID, index) {
     var input = editor.querySelector('[data-fit-ammo-for="' + weaponID + '"]');
+    if (index >= 0 && splitShown(String(weaponID))) {
+      input = editor.querySelector('[data-fit-ammo-one="' + weaponID + '"][data-fit-ammo-index="' + index + '"]') || input;
+    }
     if (!input) return;
     closeTip();
     if (input.scrollIntoView) input.scrollIntoView({ block: "center" });

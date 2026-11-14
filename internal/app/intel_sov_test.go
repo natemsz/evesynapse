@@ -23,7 +23,7 @@ func TestSovTracker(t *testing.T) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		`INSERT INTO sde_regions (region_id, name) VALUES (10000060, 'Delve')`,
-		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30004759, '1DQ1-A', 10000060, -0.38), (30004760, 'T5ZI-S', 10000060, -0.4), (30004761, 'NOL-M9', 10000060, -0.35), (30004762, 'F-TE1T', 10000060, -0.3)`,
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30004759, '1DQ1-A', 10000060, -0.38), (30004760, 'T5ZI-S', 10000060, -0.4), (30004761, 'NOL-M9', 10000060, -0.35), (30004762, 'F-TE1T', 10000060, -0.3), (30004763, 'Y-2ANO', 10000060, -0.3)`,
 	} {
 		if _, err := app.db.ExecContext(ctx, stmt); err != nil {
 			t.Fatalf("seed sde: %v", err)
@@ -46,7 +46,7 @@ func TestSovTracker(t *testing.T) {
 	}
 
 	// First pass: the first stored set logs nothing.
-	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004761, 99000003, now.Add(-30*24*time.Hour))+`]}`, "a", now.Add(-10*time.Minute))
+	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004761, 99000003, now.Add(-30*24*time.Hour))+`,`+claim(30004763, 99000003, now.Add(-30*24*time.Hour))+`]}`, "a", now.Add(-10*time.Minute))
 	if !app.refreshPlaceSovereignty(ctx) {
 		t.Fatal("first sovereignty pass stored nothing")
 	}
@@ -61,7 +61,7 @@ func TestSovTracker(t *testing.T) {
 	}
 
 	// Second pass: T5ZI-S changes hands.
-	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000002, now.Add(-2*time.Hour))+`,`+claim(30004761, 99000003, now.Add(-30*24*time.Hour))+`]}`, "b", now.Add(-5*time.Minute))
+	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000002, now.Add(-2*time.Hour))+`,`+claim(30004761, 99000003, now.Add(-30*24*time.Hour))+`,`+claim(30004763, 99000003, now.Add(-30*24*time.Hour))+`]}`, "b", now.Add(-5*time.Minute))
 	if !app.refreshPlaceSovereignty(ctx) {
 		t.Fatal("second sovereignty pass stored nothing")
 	}
@@ -75,17 +75,25 @@ func TestSovTracker(t *testing.T) {
 	}
 
 	// Third pass: NOL-M9's holder drops it; the system sits unclaimed.
-	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000002, now.Add(-2*time.Hour))+`]}`, "d", now.Add(-4*time.Minute))
+	// Y-2ANO changes hands.
+	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000002, now.Add(-2*time.Hour))+`,`+claim(30004763, 99000002, now.Add(-3*time.Hour))+`]}`, "d", now.Add(-4*time.Minute))
 	if !app.refreshPlaceSovereignty(ctx) {
 		t.Fatal("third sovereignty pass stored nothing")
 	}
 
 	// Fourth pass: the second alliance claims NOL-M9. The claim row
 	// records no previous holder; the previous holder is the alliance
-	// from the drop.
+	// from the drop. Y-2ANO's new holder drops it.
 	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000002, now.Add(-2*time.Hour))+`,`+claim(30004761, 99000002, now.Add(-30*time.Minute))+`]}`, "e", now.Add(-3*time.Minute))
 	if !app.refreshPlaceSovereignty(ctx) {
 		t.Fatal("fourth sovereignty pass stored nothing")
+	}
+
+	// Fifth pass: Y-2ANO's holder, which dropped it in the fourth
+	// pass, claims it back. A reclaim has no previous holder.
+	snapshot(esi.GlobalSovMap, `{"solar_systems":[`+claim(30004759, 99000001, now.Add(-30*24*time.Hour))+`,`+claim(30004760, 99000002, now.Add(-2*time.Hour))+`,`+claim(30004761, 99000002, now.Add(-30*time.Minute))+`,`+claim(30004763, 99000002, now.Add(-20*time.Minute))+`]}`, "f", now.Add(-2*time.Minute))
+	if !app.refreshPlaceSovereignty(ctx) {
+		t.Fatal("fifth sovereignty pass stored nothing")
 	}
 
 	// A claim the change log predates has no previous holder.
@@ -108,6 +116,9 @@ func TestSovTracker(t *testing.T) {
 	if prev[30004761] != 99000003 {
 		t.Errorf("drop then claim: NOL-M9 previous holder %d; want 99000003 (the drop)", prev[30004761])
 	}
+	if prev[30004763] != 0 {
+		t.Errorf("reclaim after its own drop: Y-2ANO previous holder %d; want 0", prev[30004763])
+	}
 	if prev[30004762] != 0 || logged[30004762] {
 		t.Errorf("predates the log: F-TE1T previous holder %d, logged %v; want 0, false", prev[30004762], logged[30004762])
 	}
@@ -129,7 +140,7 @@ func TestSovTracker(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<span class="l-stat-label">Live contests</span><span class="l-stat-value">1</span>`,
-		`<span class="l-stat-label">Changed hands, 24h</span><span class="l-stat-value">2</span>`,
+		`<span class="l-stat-label">Changed hands, 24h</span><span class="l-stat-value">3</span>`,
 		`value="30" aria-label="Defender 30 percent, attackers 70 percent"`,
 		"1DQ1-A", "T5ZI-S", "NOL-M9", "New Holders", "Old Holders", "First Keepers", "Unclaimed", "Capital",
 		`</span><a class="map-jump" href="/map/?system=30004759"`,

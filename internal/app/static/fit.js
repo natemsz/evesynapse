@@ -280,12 +280,12 @@ var FitGauges = (function () {
       if (window.FitRamp) window.FitRamp.refresh();
       syncFold();
       syncImpFold();
-      syncSummary();
       syncDroneGauges();
       syncChargeButtons();
       syncFilterUI();
       syncSubsystemUI();
       syncUndoButtons();
+      syncFullButton();
       if (beforeShip !== shipOf(fresh)) {
         // Rows answer for the hull they were fetched for.
         browseCache = {};
@@ -3360,25 +3360,6 @@ var FitGauges = (function () {
     });
   }
 
-  // --- sticky summary ----------------------------------------------
-  // The stats column's one-line summary shows once its headline
-  // figures scroll out of view, parked on the sticky line under
-  // the top bar (fitting.css).
-  var sumObserver = null;
-  function syncSummary() {
-    if (sumObserver) { sumObserver.disconnect(); sumObserver = null; }
-    var sum = editor.querySelector(".fit-sum");
-    var head = editor.querySelector(".fit-stats .fit-glance");
-    if (!sum || !head || !window.IntersectionObserver) return;
-    var stack = Math.round(parseFloat(getComputedStyle(sum).top) || 0);
-    sumObserver = new IntersectionObserver(function (entries) {
-      var e = entries[entries.length - 1];
-      sum.classList.toggle("on", !e.isIntersecting && e.boundingClientRect.top < stack);
-    }, { rootMargin: "-" + stack + "px 0px 0px 0px" });
-    sumObserver.observe(head);
-  }
-  syncSummary();
-  if (window.addEventListener) window.addEventListener("resize", function () { syncSummary(); });
 
   syncShipGate();
   editor.addEventListener("keydown", function (ev) {
@@ -3400,6 +3381,91 @@ var FitGauges = (function () {
   });
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape") closeTip();
+  });
+
+  // --- full screen -----------------------------------------------
+  // The whole editor (fit bar, module search, workbench) takes the
+  // screen: through the Fullscreen API where the browser has it for
+  // an element, and where it does not (iPhone Safari) as a manual
+  // popover in the top layer. Either way the editor wears fit-full;
+  // modals, the details drawer and the keys card are top-layer
+  // popovers of their own, so they still open over it. The button
+  // lives in the re-rendered workbench, so its pressed state is
+  // synced after every render.
+  var fullViaAPI = false;
+  function fullscreenElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function isFull() { return editor.classList.contains("fit-full"); }
+  function syncFullButton() {
+    var on = isFull();
+    editor.querySelectorAll("[data-fit-full]").forEach(function (b) {
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.setAttribute("aria-label", on ? "Leave full screen" : "Full screen");
+      b.title = on ? "Leave full screen (Shift F)" : "Full screen (Shift F)";
+    });
+  }
+  function fullTopLayer(on) {
+    if (!editor.showPopover) return;
+    if (on) {
+      if (!isFull()) return;
+      editor.setAttribute("popover", "manual");
+      try { editor.showPopover(); } catch (e) { /* already showing */ }
+    } else if (editor.hasAttribute("popover")) {
+      try { editor.hidePopover(); } catch (e) { /* already hidden */ }
+      editor.removeAttribute("popover");
+    }
+  }
+  function toggleFull(force) {
+    var on = force === undefined ? !isFull() : force;
+    editor.classList.toggle("fit-full", on);
+    document.documentElement.classList.toggle("fit-full-open", on);
+    syncFullButton();
+    closeTip();
+    if (on) {
+      var req = editor.requestFullscreen || editor.webkitRequestFullscreen;
+      if (!req) { fullTopLayer(true); return; }
+      try {
+        var pr = req.call(editor);
+        if (pr && pr.catch) pr.catch(function () { fullTopLayer(true); });
+      } catch (e) { fullTopLayer(true); }
+    } else {
+      fullTopLayer(false);
+      if (fullscreenElement() === editor) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
+  }
+  function onFullChange() {
+    if (fullscreenElement() === editor) { fullViaAPI = true; return; }
+    if (fullViaAPI) { fullViaAPI = false; if (isFull()) toggleFull(false); }
+  }
+  document.addEventListener("fullscreenchange", onFullChange);
+  document.addEventListener("webkitfullscreenchange", onFullChange);
+  editor.addEventListener("click", function (ev) {
+    var b = ev.target && ev.target.closest ? ev.target.closest("[data-fit-full]") : null;
+    if (b) toggleFull();
+  });
+  // Shift F toggles it; Escape leaves the popover fallback (the
+  // browser's own full screen handles Escape itself). Typing in a
+  // field never toggles.
+  document.addEventListener("keydown", function (ev) {
+    if (!document.body.contains(editor)) return;
+    var t = ev.target;
+    var typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""));
+    if (ev.key === "F" && ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !typing) {
+      if (!workbench()) return;
+      ev.preventDefault();
+      toggleFull();
+      return;
+    }
+    if (ev.key === "Escape" && isFull() && !fullscreenElement() && !ev.defaultPrevented) {
+      try { if (document.querySelector(":popover-open:not(#fit-editor)")) return; } catch (e) { /* no popovers here */ }
+      toggleFull(false);
+    }
+  });
+  // A page swap that takes the editor away leaves full screen.
+  document.addEventListener("evesynapse:content-ready", function () {
+    if (!document.body.contains(editor) && document.documentElement.classList.contains("fit-full-open")) {
+      document.documentElement.classList.remove("fit-full-open");
+      if (fullscreenElement() === editor) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
   });
 
   // --- subsystem UI gating ----------------------------------------

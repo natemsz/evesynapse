@@ -640,6 +640,30 @@ html[data-scheme] {
   --prose: color-mix(in srgb, var(--text) 55%, var(--muted));
   --glass: color-mix(in srgb, var(--panel) 90%, transparent);
 }
+/* The fitting ring's colours. The default look is ember; under a
+   scheme the ring takes the scheme's second colour (the highlight)
+   with the core colour as its dark end, so it stands apart from the
+   accent the rest of the page wears. The Minmatar schemes keep the
+   ember ring. The slot rims are grey warmed by the highlight. */
+:root {
+  --ring: #ff6a1a;
+  --ring-hi: #ffd27a;
+  --ring-lo: #d63c14;
+}
+html[data-scheme] {
+  --ring: var(--sch-hi);
+  --ring-hi: color-mix(in srgb, var(--sch-hi) 55%, white);
+  --ring-lo: var(--sch-core);
+}
+html[data-scheme="minmatar"], html[data-scheme="minmatar-v3"] {
+  --ring: var(--sch-core);
+  --ring-hi: var(--sch-hi);
+  --ring-lo: var(--sch-end);
+}
+:root {
+  --ring-rim: color-mix(in srgb, var(--ring-hi) 30%, #3a3a3a);
+  --ring-rim-dim: color-mix(in srgb, var(--ring-hi) 14%, #333);
+}
 /* The muted tier art is baked dark (brightness 0.42, saturate
    0.30), so at the scheme glass strength of 90% almost nothing
    behind a panel is left to read through it: the tint paints

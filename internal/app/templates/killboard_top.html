@@ -1,0 +1,61 @@
+{{define "title"}}{{with .KillLeaders}}{{if .ScopeName}}{{.ScopeName}} · {{end}}{{end}}Killboard leaderboards{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Leaderboards</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .KillLeaders}}
+{{/* The killboard's leaderboards (killboard_leaders.go): the stored
+     ranks of one period, New Eden or one scope. The overview shows
+     each board's top five; a board's own page shows it in full.
+     A row's name opens its kills on the killboard; the arrow beside
+     it opens that row's own leaderboard. */}}
+<div class="l-page kbt">
+  <div class="l-head">
+    <p class="l-head-sum">{{if .Warming}}The leaderboards are being ranked. They show here within a few minutes.{{else}}Ranked from the public kills of the last {{.PeriodText}}, updated {{.Updated}}. Padding is left out: losses under 1M ISK, ships their own pilot helped kill, and kills inside one corporation.{{end}}</p>
+  </div>
+
+  <div class="l-cluster kbt-bar">
+    <nav class="kb-chips" aria-label="Period">{{range .Periods}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+    <nav class="kb-chips" aria-label="Rank by">{{range .Ranks}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+    {{if .ShowRegion}}<form method="get" action="/intel/kills/top/" class="kb-filters">
+      {{range .Hidden}}<input type="hidden" name="{{.Value}}" value="{{.Label}}">{{end}}
+      <label class="kb-f"><span class="kb-f-l">Region</span>
+        <select name="region" data-autosubmit><option value="">All of New Eden</option>{{range .Regions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+      </label>
+      <noscript><button class="btn small" type="submit">Show</button></noscript>
+    </form>{{end}}
+    {{if and .ScopeKind (ne .ScopeKind "region")}}<p class="kb-scope"><span class="kb-scope-k">{{.ScopeLabel}}</span> <a href="{{.ScopeHref}}"><strong>{{.ScopeName}}</strong></a> <a class="kb-scope-x" href="{{.ClearHref}}" aria-label="Show New Eden">×</a></p>{{end}}
+    {{if .OverHref}}<a class="kbt-back" href="{{.OverHref}}">All boards</a>{{end}}
+  </div>
+
+  {{if not .Warming}}
+  <div class="kbt-grid{{if .Board}} kbt-one{{end}}">
+    {{range .Boards}}
+    <section class="l-panel kbt-board" aria-labelledby="kbt-{{.Key}}">
+      <div class="kbt-bh">
+        <h2 id="kbt-{{.Key}}">{{.Title}}</h2>
+        {{if .Href}}<a class="kbt-all" href="{{.Href}}">Full board</a>{{end}}
+      </div>
+      {{if .Note}}<p class="kbt-note">{{.Note}}</p>{{end}}
+      {{if .Rows}}
+      <ol class="kbt-rows">
+        {{$b := .}}
+        {{range .Rows}}
+        <li class="kbt-row">
+          <span class="kbt-rank">{{.Rank}}</span>
+          {{if .Img}}<img class="kbt-img" src="{{.Img}}" alt="" width="28" height="28" loading="lazy">{{else if .HasSec}}<span class="kbt-img kbt-sec sec sec-{{.SecTier}}">{{.SecText}}</span>{{else}}<span class="kbt-img" aria-hidden="true"></span>{{end}}
+          <span class="kbt-name"><a href="{{.Href}}">{{.Name}}</a>{{if .Sub}}<span class="kbt-sub">{{.Sub}}</span>{{end}}</span>
+          <span class="kbt-fig">{{if $b.Count}}<span class="kbt-count">{{.Count}} <span class="kbt-unit">{{$b.Count}}</span></span>{{end}}<span class="kbt-isk">{{.ISK}} <span class="kbt-unit">ISK</span></span></span>
+          {{if .TopHref}}<a class="kbt-top" href="{{.TopHref}}" title="Leaderboard for {{.TopName}}" aria-label="Leaderboard for {{.TopName}}"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M3 13V8M8 13V3M13 13V6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></a>{{else}}<span class="kbt-top" aria-hidden="true"></span>{{end}}
+        </li>
+        {{end}}
+      </ol>
+      {{else}}
+      <p class="kbt-empty">No kills to rank here in the last {{$.KillLeaders.PeriodText}}.</p>
+      {{end}}
+    </section>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+{{end}}

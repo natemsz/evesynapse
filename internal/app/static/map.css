@@ -976,6 +976,77 @@ html.map-full-open { overflow: hidden; }
   font: inherit;
   font-size: var(--fs-xs);
 }
+.map-route-3d { grid-column: 1 / -1; justify-self: start; }
+.map-3d-btn[aria-pressed="true"], .map-route-3d[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 .map-route-range { grid-column: 1 / -1; margin: 0; font-size: var(--fs-xs); color: var(--map-route); }
 .map-route-leg { color: var(--muted-2); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .map-route-warn li.map-route-fatigue { border-left-color: var(--map-route); color: var(--text); }
+/* Live kills: one kill's card beside its blip, and the legend's
+   latest kills. */
+.map-kill-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  width: 17rem;
+  max-width: calc(100% - 12px);
+  padding: 0.55rem 0.7rem 0.6rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+  font-size: var(--fs-xs);
+  will-change: transform;
+}
+.map-kill-card[hidden] { display: none; }
+.map-kill-card p { margin: 0; }
+.map-kill-close {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.3rem;
+  padding: 0.1rem 0.35rem;
+  border: 0;
+  background: none;
+  color: var(--muted-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.map-kill-close:hover { color: var(--text-bright); }
+.map-kill-head { display: flex; gap: 0.55rem; align-items: center; margin: 0 1.2rem 0.4rem 0; }
+.map-kill-ship { border-radius: var(--r-sm); flex: none; }
+.map-kill-title { display: block; color: var(--text-bright); font-size: var(--fs-sm); font-weight: 600; }
+.map-kill-value { font-variant-numeric: tabular-nums; color: var(--text); }
+.map-kill-value.big { color: var(--success); }
+.map-kill-row { display: flex; justify-content: space-between; gap: 0.9rem; margin-top: 0.2rem !important; }
+.map-kill-k { color: var(--muted-2); white-space: nowrap; font-family: var(--font-display); font-weight: 600; text-transform: uppercase; font-size: var(--fs-2xs); letter-spacing: 0.04em; }
+.map-kill-v { color: var(--text); text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.map-kill-tags { display: flex; gap: 0.3rem; margin-top: 0.35rem !important; }
+.map-kill-tags span { padding: 0 0.35rem; border: 1px solid currentColor; border-radius: var(--r-xs); font-size: var(--fs-2xs); line-height: 1.35; color: var(--accent); }
+.map-kill-tags .warn { color: var(--danger); }
+.map-kill-tags .dim { color: var(--muted); }
+.map-kill-more { display: inline-block; margin-top: 0.5rem; }
+.map-feed-latest { list-style: none; margin: 0.35rem 0 0; padding: 0; pointer-events: auto; }
+.map-feed-latest button {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.15rem 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  cursor: pointer;
+}
+.map-feed-latest button:hover span:first-child { color: var(--accent); }
+.map-feed-value { color: var(--muted-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.map-layer-at[data-state="live"] { color: var(--accent); }
+.map-kill-open .map-layer-legend { visibility: hidden; }

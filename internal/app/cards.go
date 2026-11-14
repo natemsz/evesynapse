@@ -159,25 +159,28 @@ func (app *Application) handleKillCard(w http.ResponseWriter, r *http.Request) {
 
 // pilotCardJob reads a pilot's card from their stored record and
 // activity profile: the activity panel's lead figures, from the
-// same rows. A pilot without a ready record does not resolve; one
-// without an activity record gets a name and portrait card.
+// same rows, over the public record's own facts (corporation and
+// alliance, security status, birthday). Everything on the card
+// is public record data. A pilot without a ready record does not
+// resolve; one without an activity record gets the record facts
+// without the combat figures.
 func (app *Application) pilotCardJob(ctx context.Context, id int64) (cardJob, bool) {
 	rec, err := app.queries.GetPilotRecord(ctx, id)
 	if err != nil || rec.State != pilotStateReady || rec.Payload == "" {
 		return cardJob{}, false
 	}
-	var p struct {
-		Profile struct {
-			Name string `json:"name"`
-		} `json:"profile"`
-		Corp struct {
-			Name string `json:"name"`
-		} `json:"corp"`
-	}
+	var p pilotPayload
 	if json.Unmarshal([]byte(rec.Payload), &p) != nil || p.Profile.Name == "" {
 		return cardJob{}, false
 	}
 	c := card.Card{Kind: "PILOT", Title: p.Profile.Name, Subtitle: p.Corp.Name}
+	if p.Alliance.Name != "" {
+		if c.Subtitle != "" {
+			c.Subtitle += " · " + p.Alliance.Name
+		} else {
+			c.Subtitle = p.Alliance.Name
+		}
+	}
 	data := "record:" + rec.FetchedAt.Time.UTC().Format(time.RFC3339Nano)
 	prof, err := app.queries.GetPilotActivityProfile(ctx, id)
 	switch {
@@ -194,6 +197,10 @@ func (app *Application) pilotCardJob(ctx context.Context, id int64) (cardJob, bo
 		}
 	case !errors.Is(err, pgx.ErrNoRows):
 		logging.Warnf("pilot card %d: profile: %v", id, err)
+	}
+	c.Stats = append(c.Stats, card.Stat{Label: "SEC STATUS", Value: card.Figure(fmt.Sprintf("%.2f", p.Profile.SecurityStatus))})
+	if born, err := time.Parse(time.RFC3339, p.Profile.Birthday); err == nil {
+		c.Detail = &card.Detail{Label: "BORN", Text: born.UTC().Format("2006-01-02")}
 	}
 	pic := portraitURL(id, 512)
 	return cardJob{key: "pilot:" + strconv.FormatInt(id, 10), version: cardVersion(data, pic, c),

@@ -229,7 +229,7 @@ var sectionGroups = map[string][]navGroup{
 		{"My Finances", []string{"/orders/", "/contracts/", "/profit/"}},
 	},
 	"intel": {
-		{"Killboard", []string{"/intel/kills/", "/intel/battles/"}},
+		{"Killboard", []string{"/intel/kills/", "/intel/kills/top/", "/intel/battles/"}},
 		{"Live intel", []string{"/intel/feed/", "/intel/channels/", "/intel/workbench/", "/intel/scan/"}},
 		{"Territory", []string{"/intel/sov/", "/intel/fw/", "/intel/wars/", "/intel/incursions/"}},
 	},

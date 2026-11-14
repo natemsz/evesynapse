@@ -1,10 +1,11 @@
 // Killboard live feed: opens an EventSource to /intel/kills/stream
-// (carrying the page's scope, if any) and slots each kill that
+// (carrying the page's scope and filters, if any) and slots each kill that
 // arrives after load into the list by kill time, in the same markup
 // the server renders. The list never grows past the page size: rows
 // past 40 drop off the bottom. A kill that lands unpriced shows
 // "pricing…" until its price event fills the value in. Only the
-// first page is live; an older page (?before=) stays as it is.
+// first page is live; an older page (?before=) or a date jump stays
+// as it is.
 //
 // New kills stay highlighted until they are seen: a row fades back
 // to normal a few seconds after it is on screen in a visible tab.
@@ -223,12 +224,18 @@
   function streamURLFor() {
     var params = new URLSearchParams(location.search);
     var out = new URLSearchParams();
-    ["system", "region", "ship", "character", "corporation", "alliance"].forEach(function (k) {
+    ["fight", "system", "region", "ship", "character", "corporation", "alliance"].forEach(function (k) {
       var v = params.get(k);
       if (v) out.set(k, v);
     });
     ["big", "solo"].forEach(function (k) {
       if (params.get(k) === "1") out.set(k, "1");
+    });
+    // The filters (killboard_filter.go) narrow the stream the same
+    // way they narrow the page.
+    ["sec", "class", "fleet", "value", "side"].forEach(function (k) {
+      var v = params.get(k);
+      if (v) out.set(k, v);
     });
     var q = out.toString();
     return "/intel/kills/stream" + (q ? "?" + q : "");
@@ -244,7 +251,7 @@
 
   function openStream() {
     var list = document.querySelector(".kb-list");
-    if (!list || /[?&]before=/.test(location.search)) {
+    if (!list || /[?&](before|date)=/.test(location.search)) {
       closeStream();
       return;
     }

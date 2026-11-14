@@ -939,6 +939,16 @@ var pgKillArchiveRestoreSchema string
 //go:embed schema_pg/154_sov_tracker.sql
 var pgSovTrackerSchema string
 
+// Step 155: the killboard's stored leaderboards.
+//
+//go:embed schema_pg/155_kill_leaders.sql
+var pgKillLeadersSchema string
+
+// Step 156: sov fights and the kills fought in them.
+//
+//go:embed schema_pg/156_sov_fights.sql
+var pgSovFightsSchema string
+
 // Step 157: the pilot activity mend's cursor.
 //
 //go:embed schema_pg/157_pilot_activity_mend.sql
@@ -1126,6 +1136,8 @@ func schemaSteps() []schemaStep {
 		{152, "kill_stats_complete", pgKillStatsCompleteSchema, ""},
 		{153, "kill_archive_restore", pgKillArchiveRestoreSchema, ""},
 		{154, "sov_tracker", pgSovTrackerSchema, ""},
+		{155, "kill_leaders", pgKillLeadersSchema, ""},
+		{156, "sov_fights", pgSovFightsSchema, ""},
 		{157, "pilot_activity_mend", pgPilotActivityMendSchema, ""},
 	}
 }

@@ -27,11 +27,11 @@ func TestLiveFeedHubPinsNonBlockingPublishAndScope(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	all, ok := app.killLive.subscribe("", 0, false, false)
+	all, ok := app.killLive.subscribe("", 0, false, false, nil)
 	if !ok {
 		t.Fatal("unscoped subscribe refused")
 	}
-	other, ok := app.killLive.subscribe("system", 30000144, false, false)
+	other, ok := app.killLive.subscribe("system", 30000144, false, false, nil)
 	if !ok {
 		t.Fatal("scoped subscribe refused")
 	}
@@ -63,7 +63,7 @@ func TestLiveFeedHubPinsNonBlockingPublishAndScope(t *testing.T) {
 	// fill its channel, then ingest again and require the ingest
 	// to finish. The kill is dropped for that subscriber, not
 	// queued behind it.
-	slow, ok := app.killLive.subscribe("", 0, false, false)
+	slow, ok := app.killLive.subscribe("", 0, false, false, nil)
 	if !ok {
 		t.Fatal("slow subscribe refused")
 	}
@@ -91,7 +91,7 @@ func TestLiveFeedHubPinsNonBlockingPublishAndScope(t *testing.T) {
 	// at insert time: the value is unknown until the appraisal
 	// lands, so the insert publishes nothing to it and the pricing
 	// publishes the whole kill.
-	bigSub, ok := app.killLive.subscribe("", 0, true, false)
+	bigSub, ok := app.killLive.subscribe("", 0, true, false, nil)
 	if !ok {
 		t.Fatal("big subscribe refused")
 	}

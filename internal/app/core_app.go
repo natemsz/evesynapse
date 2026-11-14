@@ -304,6 +304,12 @@ type Application struct {
 	killRegionsMu  sync.Mutex
 	killRegions    map[int64]int64
 	killLastPruned time.Time
+	// killSDEIndex is the SDE in memory for the killboard's stream
+	// filters and the sov fight correlation (killboard_filter.go).
+	killSDEIndex killSDEIndex
+	// sovFights indexes the open sov fights for the kill ingest
+	// (sov_fights.go).
+	sovFights sovFightState
 	// killStatsRebuilding is set while the one time stats rebuild
 	// (killboard_rebuild.go) runs: the fold writes feed rows only
 	// and leaves kills queued until the swap.
@@ -1042,7 +1048,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// The sovereignty tracker (intel_sov_page.go): public.
 	r.With(anonPages).Get("/intel/sov/", app.handleSovTracker)
 	r.With(anonPages).Get("/intel/sov/card.png", app.handleSovCard)
+	r.With(anonPages).Get("/intel/sov/fight/{id}/", app.handleSovFight)
 	r.With(anonPages).Get("/intel/kills/stream", app.handleKillStream)
+	r.With(anonPages).Get("/intel/kills/top/", app.handleKillLeaders)
 	r.With(anonPages).Get("/intel/kills/suggest", app.handleKillboardSuggest)
 	r.With(anonPages).Get("/intel/kill/{id}/", app.handleKillPage)
 	r.With(anonPages).Get("/intel/kill/{id}/card.png", app.handleKillCard)
@@ -1129,6 +1137,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/intel.json", app.handleMapIntel)
 		r.Get("/mine.json", app.handleMapMine)
 		r.Get("/jump.json", app.handleMapJump)
+		// The live kills layer's first picture (map_kills.go).
+		r.Get("/kills.json", app.handleMapKills)
 		// A planned route to the game's autopilot (map_route.go);
 		// it answers JSON, signed-in or not.
 		r.Post("/route", app.handleMapRoute)

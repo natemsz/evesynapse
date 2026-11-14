@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -76,6 +78,53 @@ type sovPageView struct {
 	// LogSince is when the change log's first entry was written:
 	// losses are only known from then on.
 	LogSince string
+	// Fights are the contests that ended in the last 7 days, with
+	// what they cost (sov_fights.go).
+	Fights, FightsMore []sovEndedFight
+	FightTotal         int
+}
+
+// sovFightFig is a fight's figures: the kills, what they were worth,
+// and the defender's share on each side.
+type sovFightFig struct {
+	ID        int64 // the contest, which the fight panel opens under
+	Kills     int64
+	ISK       string
+	DefLost   int64
+	DefLostV  string
+	DefKilled int64
+	DefKillV  string
+	Href      string // the fight's kills on the killboard
+}
+
+// sovFightKillRow is one kill in a contest's fight panel.
+type sovFightKillRow struct {
+	Kill killRow
+	Side int16 // 1 the defender lost it, 2 the defender scored it
+}
+
+// sovEndedFight is a contest that ended, with its fight's figures and
+// the system's holder now.
+type sovEndedFight struct {
+	System   sovSystem
+	Event    string
+	Defender sovOrg
+	Holder   sovOrg
+	Held     bool // the defender still holds the system
+	Ended    time.Time
+	Ago      string
+	Fight    sovFightFig
+	Search   string
+}
+
+// sovFightFigOf dresses a fight's stored figures.
+func sovFightFigOf(id, kills int64, isk float64, dl int64, dli float64, dk int64, dki float64) sovFightFig {
+	return sovFightFig{
+		ID: id, Kills: kills, ISK: formatISKShort(isk),
+		DefLost: dl, DefLostV: formatISKShort(dli),
+		DefKilled: dk, DefKillV: formatISKShort(dki),
+		Href: "/intel/kills/?fight=" + strconv.FormatInt(id, 10),
+	}
 }
 
 type sovChip struct {
@@ -116,6 +165,10 @@ type sovOrg struct {
 }
 
 type sovContestRow struct {
+	CampaignID int64
+	// Fight is the contest's sov fight: its kills so far
+	// (sov_fights.go). The live script bumps the count.
+	Fight    sovFightFig
 	System   sovSystem
 	Defender sovOrg
 	Event    string // the structure, named only when it is not a hub
@@ -249,6 +302,24 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 	if err != nil {
 		logging.Errorf("sov: regions: %v", err)
 	}
+	fightStats := map[int64]db.ListSovFightStatsRow{}
+	if len(contests) > 0 {
+		cids := make([]int64, len(contests))
+		for i, c := range contests {
+			cids[i] = c.CampaignID
+		}
+		if rows, err := app.queries.ListSovFightStats(ctx, cids); err == nil {
+			for _, r := range rows {
+				fightStats[r.CampaignID] = r
+			}
+		} else {
+			logging.Errorf("sov: fight figures: %v", err)
+		}
+	}
+	ended, err := app.queries.ListSovFightsEnded(ctx, db.ListSovFightsEndedParams{Since: weekAgo, RegionID: regionID, DefenderID: allianceID, MaxRows: sovRows})
+	if err != nil {
+		logging.Errorf("sov: ended fights: %v", err)
+	}
 	if first, err := app.queries.SovChangeLogStart(ctx); err == nil && !first.IsZero() {
 		v.LogSince = first.UTC().Format("2006-01-02")
 	}
@@ -277,6 +348,10 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 	}
 	for _, a := range standings {
 		add(a.AllianceID)
+	}
+	for _, f := range ended {
+		add(f.DefenderID)
+		add(f.HolderID)
 	}
 	list := make([]int64, 0, len(ids))
 	for id := range ids {
@@ -356,6 +431,9 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 		if c.EventType != "ihub_defense" {
 			row.Event = sovEventLabel(c.EventType)
 		}
+		row.CampaignID = c.CampaignID
+		fs := fightStats[c.CampaignID]
+		row.Fight = sovFightFigOf(c.CampaignID, fs.Kills, fs.Isk, fs.DefenderLost, fs.DefenderLostIsk, fs.DefenderKilled, fs.DefenderKilledIsk)
 		switch {
 		case row.Def > row.Att:
 			row.Leading = "defender"
@@ -468,6 +546,26 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 		v.Alliances = append(v.Alliances, row)
 	}
 
+	for _, f := range ended {
+		row := sovEndedFight{
+			System:   sovSystemOf(f.SystemID, f.SystemName, f.Security, f.RegionName),
+			Event:    sovEventLabel(f.EventType),
+			Defender: alliance(f.DefenderID),
+			Holder:   alliance(f.HolderID),
+			Held:     f.HolderID > 0 && f.HolderID == f.DefenderID,
+			Fight:    sovFightFigOf(f.CampaignID, f.Kills, f.Isk, f.DefenderLost, f.DefenderLostIsk, f.DefenderKilled, f.DefenderKilledIsk),
+		}
+		if f.HolderID == 0 {
+			row.Holder = sovOrg{Name: "Unclaimed", Faction: true}
+		}
+		if f.EndedAt.Valid {
+			row.Ended = f.EndedAt.Time.UTC()
+			row.Ago = agoText(now.Sub(row.Ended))
+		}
+		row.Search = strings.ToLower(row.System.Place.Name + " " + row.System.Region + " " + row.Defender.Name + " " + row.Holder.Name)
+		v.Fights = append(v.Fights, row)
+	}
+
 	// Each list shows its first rows; the rest fold behind Show all.
 	v.ContestTotal, v.VulnTotal, v.ClaimTotal, v.LossTotal = len(v.Contests), len(v.Vuln), len(v.Claims), len(v.Losses)
 	v.Contests, v.ContestsMore = foldRows(v.Contests)
@@ -477,6 +575,8 @@ func (app *Application) loadSovPage(ctx context.Context, regionID, allianceID in
 	}
 	v.Claims, v.ClaimsMore = foldRows(v.Claims)
 	v.Losses, v.LossesMore = foldRows(v.Losses)
+	v.FightTotal = len(v.Fights)
+	v.Fights, v.FightsMore = foldRows(v.Fights)
 	return v
 }
 
@@ -661,4 +761,55 @@ func (app *Application) loadAllianceSov(ctx context.Context, allianceID int64, n
 		v.Systems = append(v.Systems, row)
 	}
 	return v
+}
+
+// sovFightKillsShown is how many kills a contest's fight panel lists;
+// the killboard holds the rest.
+const sovFightKillsShown = 20
+
+// sovFightPanel is a contest's fight panel: its figures and newest
+// kills.
+type sovFightPanel struct {
+	Fight sovFightFig
+	Name  string
+	Ended bool
+	Kills []sovFightKillRow
+}
+
+// handleSovFight is GET /intel/sov/fight/{id}/: the panel that opens
+// under a contest on the tracker, as a fragment. It reads the fight's
+// stored figures and its newest kills.
+func (app *Application) handleSovFight(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	f, err := app.queries.GetSovFightFigures(ctx, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	p := sovFightPanel{
+		Fight: sovFightFigOf(id, f.Kills, f.Isk, f.DefenderLost, f.DefenderLostIsk, f.DefenderKilled, f.DefenderKilledIsk),
+		Name:  f.SystemName, Ended: f.EndedAt.Valid,
+	}
+	rows, err := app.queries.ListSovFightKillsOf(ctx, db.ListSovFightKillsOfParams{CampaignID: id, MaxRows: sovFightKillsShown})
+	if err != nil {
+		logging.Errorf("sov: fight %d kills: %v", id, err)
+	}
+	names := app.newKillNames(ctx)
+	for _, k := range rows {
+		p.Kills = append(p.Kills, sovFightKillRow{Kill: names.row(k.Kill), Side: k.Side})
+	}
+	buf, err := executeFragment("intel_sov.html", "sov-fight-panel", p)
+	if err != nil {
+		logging.Errorf("sov: fight %d panel: %v", id, err)
+		http.Error(w, "The fight could not be shown.", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(buf.Bytes())
 }

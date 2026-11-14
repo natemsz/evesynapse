@@ -408,7 +408,7 @@ func TestNavGroupsMirror(t *testing.T) {
 			label string
 			hrefs []string
 		}{
-			{"Killboard", []string{"/intel/kills/", "/intel/battles/"}},
+			{"Killboard", []string{"/intel/kills/", "/intel/kills/top/", "/intel/battles/"}},
 			{"Live intel", []string{"/intel/feed/", "/intel/channels/", "/intel/workbench/", "/intel/scan/"}},
 			{"Territory", []string{"/intel/sov/", "/intel/fw/", "/intel/wars/", "/intel/incursions/"}},
 		}, 2, 1},

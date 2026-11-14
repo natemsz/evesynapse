@@ -1609,8 +1609,11 @@
     // brings quiet systems out; down picks out only the hottest.
     var GAIN_KEY = "evesynapse-map-gain", heatGain = {};
     try { heatGain = JSON.parse(localStorage.getItem(GAIN_KEY) || "{}") || {}; } catch (e) { heatGain = {}; }
+    // Threat's scale sits one step toward "Hottest" (THREAT_GAIN_SHIFT),
+    // so at the slider's middle only Medium and up glow strongly.
+    var THREAT_GAIN_SHIFT = -1;
     function heatMax(name) {
-      var g = +heatGain[name] || 0;
+      var g = (+heatGain[name] || 0) + (name === "threat" ? THREAT_GAIN_SHIFT : 0);
       var top = DATA_HEAT[name] ? (MINE ? MINE.max[name] : 1) : LY.max[name];
       return Math.max(top * Math.pow(2, -g), name === "threat" ? 0.25 : 1);
     }
@@ -1679,7 +1682,9 @@
         keep = new Uint8Array(G.n);
         for (m = 0; m < list.length; m++) keep[list[m]] = 1;
       }
-      var grow = mode === "universe" ? Math.min(1 + (cam.k / fitK() - 1) * 0.15, 3) : 0.9;
+      // Glows widen as the flat map zooms in; in 3D they keep their
+      // size on screen, since there the galaxy fills the view.
+      var grow = V3 ? 1 : mode === "universe" ? Math.min(1 + (cam.k / fitK() - 1) * 0.15, 3) : 0.9;
       for (m = 0; m < order.length; m++) {
         i = order[m];
         if (keep && !keep[i]) continue;

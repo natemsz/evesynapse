@@ -1086,7 +1086,7 @@
     function glideZoom(px, py, factor, dur) {
       wheelZ = null;
       var k = clampK((anim && anim.kind === "zoom" ? Math.exp(anim.l1) : cam.k) * factor);
-      if (still) { setZoomAt(px, py, k); afterZoom(factor > 1 ? 1 : -1); schedule(); return; }
+      if (still) { setZoomAt(px, py, k); recentre(factor > 1 ? 1 : -1); afterZoom(factor > 1 ? 1 : -1); schedule(); return; }
       anim = { kind: "zoom", t0: performance.now(), dur: dur || 260, px: px, py: py,
         l0: Math.log(cam.k), l1: Math.log(k) };
       schedule();
@@ -1114,6 +1114,7 @@
           var a = anim;
           setZoomAt(a.px, a.py, Math.exp(a.l0 + (a.l1 - a.l0) * e));
           if (t >= 1) anim = null; else more = true;
+          recentre(a.l1 > a.l0 ? 1 : -1);
           afterZoom(a.l1 > a.l0 ? 1 : -1);
         }
       }
@@ -1121,6 +1122,7 @@
         var lk = Math.log(cam.k), lt = Math.log(wheelZ.k);
         var done = Math.abs(lt - lk) < 0.004;
         setZoomAt(wheelZ.px, wheelZ.py, Math.exp(done ? lt : lk + (lt - lk) * 0.3));
+        recentre(lt > lk ? 1 : -1);
         var w = wheelZ;
         if (done) wheelZ = null; else more = true;
         afterZoom(lt > lk ? 1 : -1);
@@ -1136,7 +1138,7 @@
       anim = null;
       var base = wheelZ ? wheelZ.k : cam.k;
       var k = clampK(base * factor);
-      if (still) { setZoomAt(px, py, k); afterZoom(factor > 1 ? 1 : -1); schedule(); return; }
+      if (still) { setZoomAt(px, py, k); recentre(factor > 1 ? 1 : -1); afterZoom(factor > 1 ? 1 : -1); schedule(); return; }
       wheelZ = { k: k, px: px, py: py };
       schedule();
     }
@@ -5192,7 +5194,7 @@
         // Fingers track exactly: no easing under a pinch.
         cam.x -= (mid[0] - gesture.mid[0]) / cam.k;
         cam.y -= (mid[1] - gesture.mid[1]) / cam.k;
-        if (gesture.d > 0) { setZoomAt(mid[0], mid[1], cam.k * d / gesture.d); afterZoom(d > gesture.d ? 1 : -1); }
+        if (gesture.d > 0) { setZoomAt(mid[0], mid[1], cam.k * d / gesture.d); recentre(d > gesture.d ? 1 : -1); afterZoom(d > gesture.d ? 1 : -1); }
         gesture.d = d;
         gesture.mid = mid;
         schedule();
@@ -5279,22 +5281,36 @@
       gestureScale = e.scale;
     }
 
-    function flyFit() {
-      // In 3D the systems stand where the turn puts them: frame those.
+    // whole: the centre and zoom that show all of what is on the map:
+    // in 3D the systems where the turn puts them, else the frame's
+    // bounds.
+    function whole() {
       if (v3.on && V3) {
         var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
         for (var i = 0; i < G.n; i++) {
           if (V3.x[i] < x0) x0 = V3.x[i]; if (V3.x[i] > x1) x1 = V3.x[i];
           if (V3.y[i] < y0) y0 = V3.y[i]; if (V3.y[i] > y1) y1 = V3.y[i];
         }
-        if (x1 > x0) {
-          v3.hold = null;
-          flyTo((x0 + x1) / 2, (y0 + y1) / 2, clampK(Math.min(cw / (x1 - x0), ch / Math.max(y1 - y0, 1)) * 0.92), 360);
-          return;
-        }
+        if (x1 > x0) return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, k: clampK(Math.min(cw / (x1 - x0), ch / Math.max(y1 - y0, 1)) * 0.92) };
       }
       var b = viewBounds();
-      flyTo((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, fitK(), 360);
+      return { x: (b[0] + b[2]) / 2, y: (b[1] + b[3]) / 2, k: fitK() };
+    }
+    function flyFit() {
+      var w = whole();
+      v3.hold = null;
+      flyTo(w.x, w.y, w.k, 360);
+    }
+    // Zooming out past the zoom that shows everything eases the view
+    // back to the middle of New Eden, so however far it was panned,
+    // zooming out ends with all of it in view.
+    function recentre(dir) {
+      if (dir >= 0 || mode !== "universe" || v3.hold) return;
+      var w = whole();
+      if (cam.k >= w.k) return;
+      var s = Math.min(1, (w.k / cam.k - 1) * 2.5);
+      cam.x += (w.x - cam.x) * s;
+      cam.y += (w.y - cam.y) * s;
     }
     function pan(dx, dy) {
       tourHold();

@@ -1845,15 +1845,22 @@
       return F3;
     }
     // bubble3: the range bubbles showing (around the start, and
-    // around the stop under the pointer or selected) and the systems
+    // around the midway stop under the pointer or selected; the
+    // destination gets none, though "Route to here" leaves it
+    // selected with its card open) and the systems
     // inside them, with the route's stops; null without a jump route.
     var B3 = null;
     function bubble3() {
       var F = focus3();
       if (!F) return null;
-      var R = jumpRangeNow(), stopAt = routePath.indexOf(hover >= 0 ? hover : sel);
+      var R = jumpRangeNow(), stopAt = -1;
+      [hover, sel].some(function (s) {
+        var at = s >= 0 ? routePath.indexOf(s) : -1;
+        if (at > 0 && at < routePath.length - 1) { stopAt = at; return true; }
+        return false;
+      });
       var centres = [routeFrom];
-      if (stopAt > 0 && routePath[stopAt] !== routeFrom) centres.push(routePath[stopAt]);
+      if (stopAt > 0) centres.push(routePath[stopAt]);
       var key = F.key + "|" + centres.join(",");
       if (B3 && B3.key === key) return B3;
       var inside = new Uint8Array(G.n), list = [];

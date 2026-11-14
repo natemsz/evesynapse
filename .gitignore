@@ -1,8 +1,8 @@
 bin/
 
-# A Dendrite checkout and its link files (make dendrite-link).
-/.dendrite/
-/.dendrite-link/
+# A Ranvia checkout and its link files (make ranvia-link).
+/.ranvia/
+/.ranvia-link/
 *.db
 *.db-wal
 *.db-shm

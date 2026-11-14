@@ -1,23 +1,23 @@
 # EveSynapse, dev tasks
 
-.PHONY: modules build dendrite-link build-arm64 build-amd64 build-dev run tidy gen clean assets test fmt check
+.PHONY: modules build ranvia-link build-arm64 build-amd64 build-dev run tidy gen clean assets test fmt check
 
 build: ## Compile the release server into ./bin/evesynapse
 	go build -o bin/evesynapse ./cmd/evesynapse
 
-# Dendrite, the bot guard engine kept outside this repository
-# (DENDRITE_DIR, a checkout with a glue/zz_dendrite.go), links into a
+# Ranvia, the bot guard engine kept outside this repository
+# (RANVIA_DIR, a checkout with a glue/zz_ranvia.go), links into a
 # build through a workspace and an overlay, never a file in this
-# tree. This writes both under .dendrite-link/; build with the GOWORK
+# tree. This writes both under .ranvia-link/; build with the GOWORK
 # and GOFLAGS it prints. The release workflows do this with their
-# Dendrite checkout.
-dendrite-link: ## Link Dendrite from DENDRITE_DIR into builds (writes .dendrite-link/)
-	@test -n "$(DENDRITE_DIR)" && test -f "$(DENDRITE_DIR)/glue/zz_dendrite.go" || { echo "DENDRITE_DIR must name a Dendrite checkout with glue/zz_dendrite.go"; exit 1; }
-	@mkdir -p .dendrite-link
-	@printf 'go %s\n\nuse (\n\t%s\n\t%s\n)\n' "$$(awk '/^go /{print $$2}' go.mod)" "$(CURDIR)" "$(abspath $(DENDRITE_DIR))" > .dendrite-link/go.work
-	@printf '{"Replace":{"%s/internal/app/zz_dendrite.go":"%s/glue/zz_dendrite.go"}}\n' "$(CURDIR)" "$(abspath $(DENDRITE_DIR))" > .dendrite-link/overlay.json
-	@echo 'GOWORK=$(CURDIR)/.dendrite-link/go.work'
-	@echo 'GOFLAGS=-tags=dendrite -overlay=$(CURDIR)/.dendrite-link/overlay.json'
+# Ranvia checkout.
+ranvia-link: ## Link Ranvia from RANVIA_DIR into builds (writes .ranvia-link/)
+	@test -n "$(RANVIA_DIR)" && test -f "$(RANVIA_DIR)/glue/zz_ranvia.go" || { echo "RANVIA_DIR must name a Ranvia checkout with glue/zz_ranvia.go"; exit 1; }
+	@mkdir -p .ranvia-link
+	@printf 'go %s\n\nuse (\n\t%s\n\t%s\n)\n' "$$(awk '/^go /{print $$2}' go.mod)" "$(CURDIR)" "$(abspath $(RANVIA_DIR))" > .ranvia-link/go.work
+	@printf '{"Replace":{"%s/internal/app/zz_ranvia.go":"%s/glue/zz_ranvia.go"}}\n' "$(CURDIR)" "$(abspath $(RANVIA_DIR))" > .ranvia-link/overlay.json
+	@echo 'GOWORK=$(CURDIR)/.ranvia-link/go.work'
+	@echo 'GOFLAGS=-tags=ranvia -overlay=$(CURDIR)/.ranvia-link/overlay.json'
 
 modules: ## List the optional modules; choose some with: go run ./cmd/modbuild -modules a,b -write
 	go run ./cmd/modbuild -list

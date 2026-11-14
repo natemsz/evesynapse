@@ -171,6 +171,9 @@ var FitGauges = (function () {
   state.shipTypeId = state.shipTypeId || 0;
   state.items = state.items || [];
   state.charges = state.charges || {};
+  // splitOpen remembers which weapon types show a charge row per
+  // module, across re-renders (syncSplitRows).
+  var splitOpen = {};
 
   // Per-instance module states ride alongside qty: states[i] is
   // the i-th instance's state ("" = the type default). Kept the
@@ -1735,10 +1738,9 @@ var FitGauges = (function () {
     markDirty();
     simulate();
   }
-  // splitOpen remembers which types show a charge row per module,
-  // across re-renders; a type whose modules load their own always
-  // shows them.
-  var splitOpen = {};
+  // syncSplitRows shows a type's charge row per module when splitOpen
+  // (declared with the editor state) or the server says to: a type
+  // whose modules load their own always shows them.
   function syncSplitRows() {
     editor.querySelectorAll("[data-fit-ammo-each]").forEach(function (box) {
       var weapon = box.getAttribute("data-fit-ammo-each");

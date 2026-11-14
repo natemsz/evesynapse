@@ -3367,7 +3367,7 @@ var FitGauges = (function () {
   function syncSummary() {
     if (sumObserver) { sumObserver.disconnect(); sumObserver = null; }
     var sum = editor.querySelector(".fit-sum");
-    var head = editor.querySelector(".fit-stats .fit-headline");
+    var head = editor.querySelector(".fit-stats .fit-glance");
     if (!sum || !head || !window.IntersectionObserver) return;
     var stack = Math.round(parseFloat(getComputedStyle(sum).top) || 0);
     sumObserver = new IntersectionObserver(function (entries) {

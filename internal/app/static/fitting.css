@@ -604,3 +604,76 @@ span.fit-ftr-ab { cursor: default; }
 .fit-eftmodal .fw-hint { margin: 0 0 var(--space-2); }
 .fit-eftmodal textarea { display: block; min-height: 12rem; resize: vertical; font-family: var(--font-num); }
 .fit-eftmodal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; margin-top: var(--space-3); }
+
+/* --- stats column: glance tiles and section headers ---
+   The six figures a fitter checks first (damage, tank, capacitor,
+   speed, lock range, signature) sit in equal tiles at the top of
+   the column, each edged in its kind's colour. Every section opens
+   on a header band, an accent wash fading into the panel, so the
+   sections can be found at a glance. On the editor's phone layout
+   the ship header carries the same figures (fit.css). */
+.fit-stats { container: fitstats / inline-size; }
+.fit-glance {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem;
+  margin: 0.5rem 0 0.6rem;
+}
+.fit-gl {
+  min-width: 0; display: flex; flex-direction: column; gap: 0.1rem;
+  padding: 0.4rem 0.45rem 0.45rem 0.5rem;
+  border: 1px solid var(--hairline); border-left: 2px solid var(--k, var(--accent));
+  border-radius: var(--r-sm);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--k, var(--accent)) 13%, transparent), transparent 70%),
+    var(--row-alt);
+}
+.fit-gl-k {
+  display: flex; align-items: center; gap: 0.3rem; min-width: 0;
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fit-gl-k abbr { text-decoration: none; }
+.fit-gl-k .fit-g { flex: none; }
+.fit-gl > b {
+  font-size: var(--fs-xl); font-weight: 600; line-height: 1.15;
+  color: var(--text-bright); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fit-gl > small { font-size: var(--fs-xs); color: var(--muted-2); overflow-wrap: anywhere; }
+.fit-gl.fit-over > b { color: var(--danger); }
+/* A narrow column steps the figures down a size, then to two
+   tiles a row. */
+@container fitstats (max-width: 24rem) {
+  .fit-gl > b { font-size: var(--fs-lg); }
+}
+@container fitstats (max-width: 21rem) {
+  .fit-gl > b { font-size: var(--fs-md); }
+}
+@container fitstats (max-width: 17rem) {
+  .fit-glance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.fit-gl-dmg { display: grid; gap: 0.3rem; margin: 0 0 0.6rem; }
+.fit-gl-dmg p { margin: 0; font-size: var(--fs-xs); color: var(--muted-2); }
+.fit-gl-dmg .fit-range-spark { margin-top: 0; }
+
+/* Section header bands: the panel's heading bleeds to its edges on
+   a wash of the accent that fades out to the right. */
+.fit-panel { padding-top: 0; }
+.fit-panel > h5 {
+  margin: 0 -0.75rem 0.5rem; padding: 0.4rem 0.75rem;
+  border-radius: calc(var(--r-md) - 1px) calc(var(--r-md) - 1px) 0 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent) 55%,
+    transparent);
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-xs);
+  letter-spacing: 0.1em; color: var(--sch-hi, var(--gold));
+}
+.fit-panel > h5 .fit-panel-side { font-family: var(--font-body); color: var(--text); }
+.fit-panel > h5 .fit-ehp { font-size: var(--fs-md); }
+/* Two-up rows (repairs, implant effects) pair up in the column's
+   width, label over figure, instead of falling to one long list. */
+.fit-stats .fit-kv-2 { grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr)); gap: 0.35rem 1rem; }
+.fit-stats .fit-kv-2 > div { flex-direction: column; justify-content: flex-start; gap: 0; border-bottom: 0; }
+.fit-stats .fit-kv-2 dd { text-align: left; }

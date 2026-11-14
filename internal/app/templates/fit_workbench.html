@@ -210,23 +210,22 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <span class="k-powergrid{{if .Powergrid.Over}} fit-over{{end}}">{{template "fit-g" "powergrid"}}<b>{{.Powergrid.Left}}</b> left</span>
     </div></div>{{end}}
     <h4>{{$.ShipName}} <small>with {{$.PilotLabel}}'s skills</small></h4>
-    <div class="fit-headline">
-      <div class="fit-headline-dps">
-        <span class="fit-headline-num" data-fit-fig="dps">{{.TotalDPS}}</span>
-        <span class="fit-headline-label"><abbr title="Damage per second">DPS</abbr></span>
-        <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}{{if .FighterDPS}} · fighters {{.FighterDPS}}{{end}}{{if .SmartbombDPS}} · smartbombs {{.SmartbombDPS}}{{end}}</span>
-        {{if .SpooledDPS}}<span class="fit-headline-sub">{{.SpooledDPS}} at full spool, after {{.SpoolTime}} of firing</span>{{end}}
-        {{if .RangeSpark}}<button type="button" class="fit-range-spark" data-fit-range-open aria-haspopup="dialog">
-          <svg viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{.RangeSpark}}"/></svg>
-          <span>Damage at range, out to {{.RangeEnd}}</span>
-        </button>{{end}}
-      </div>
-      <div class="fit-headline-volley">
-        <span class="fit-headline-num" data-fit-fig="volley">{{.TotalVolley}}</span>
-        <span class="fit-headline-label"><abbr title="Volley damage">volley</abbr></span>
-        <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}{{if .FighterVolley}} · fighters {{.FighterVolley}}{{end}}</span>
-      </div>
+    <div class="fit-glance">
+      <div class="fit-gl k-weapon"><span class="fit-gl-k">{{template "fit-g" "weapon"}}<abbr title="Damage per second">DPS</abbr></span><b data-fit-fig="dps">{{.TotalDPS}}</b><small data-fit-fig="volley">{{.TotalVolley}} volley</small></div>
+      <div class="fit-gl k-armor"><span class="fit-gl-k">{{template "fit-g" "armor"}}<abbr title="Effective hit points">EHP</abbr></span><b data-fit-fig="ehp">{{.EHPOmni}}</b><small>{{.TankLine}}</small></div>
+      <div class="fit-gl k-capacitor{{if not .CapStable}} fit-over{{end}}"><span class="fit-gl-k">{{template "fit-g" "capacitor"}}{{.CapChipLabel}}</span><b>{{.CapChip}}</b><small>{{.CapDraw}} use</small></div>
+      <div class="fit-gl k-navigation"><span class="fit-gl-k">{{template "fit-g" "navigation"}}Speed</span><b data-fit-fig="speed">{{.Velocity}}</b><small data-fit-fig="align">align {{.Align}}</small></div>
+      <div class="fit-gl k-targeting"><span class="fit-gl-k">{{template "fit-g" "targeting"}}Lock range</span><b data-fit-fig="range">{{.TargetRng}}</b><small>{{.LockedTgts}} targets, {{.ScanRes}}</small></div>
+      <div class="fit-gl k-navigation"><span class="fit-gl-k">{{template "fit-g" "navigation"}}Signature</span><b data-fit-fig="sig">{{.Signature}}</b><small>sensor strength {{.Sensor}}</small></div>
     </div>
+    {{if or .DamageFrom .SpooledDPS .RangeSpark}}<div class="fit-gl-dmg">
+      {{if .DamageFrom}}<p>{{.DamageFrom}}</p>{{end}}
+      {{if .SpooledDPS}}<p>{{.SpooledDPS}} DPS at full spool, after {{.SpoolTime}} of firing</p>{{end}}
+      {{if .RangeSpark}}<button type="button" class="fit-range-spark" data-fit-range-open aria-haspopup="dialog">
+        <svg viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{.RangeSpark}}"/></svg>
+        <span>Damage at range, out to {{.RangeEnd}}</span>
+      </button>{{end}}
+    </div>{{end}}
     {{if or .NeutDrain .NosDrain .Breacher .Bomb .Doomsday}}<dl class="fit-kv fit-kv-drain">
       {{if .Breacher}}<div><dt>Breacher pod</dt><dd>{{.Breacher}}</dd></div>{{end}}
       {{if .Bomb}}<div><dt>Bomb</dt><dd>{{.Bomb}}</dd></div>{{end}}
@@ -255,15 +254,25 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <dl class="fit-kv">
         <div><dt>Slots</dt><dd class="prose-figs {{if .SlotsOver}}fit-over{{else}}fit-good{{end}}">{{.SlotLine}}</dd></div>
       </dl>
-      {{with $.Cost}}{{if .Known}}
-      <div class="fit-cost" data-fit-cost="{{.TotalRaw}}">
-        <p class="fit-cost-head"><span>Value</span> <strong class="fit-cost-total">{{.Total}}{{if .BuildPriced}}*{{end}} ISK</strong></p>
-        {{if .Lines}}<svg class="fit-cost-bar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">{{range .Lines}}<rect class="fc-{{.Key}}" x="{{printf "%.2f" .X}}" y="0" width="{{printf "%.2f" .Pct}}" height="4"/>{{end}}</svg>
-        <ul class="fit-cost-parts">{{range .Lines}}<li class="fc-{{.Key}}"><span>{{.Label}}</span> <b>{{.Value}}{{if .Build}}*{{end}}</b> <small>{{printf "%.0f" .Pct}}%</small></li>{{end}}</ul>{{end}}
-        {{if .Unpriced}}<p class="fit-cost-gap">{{.Unpriced}} item{{if ne .Unpriced 1}}s{{end}} without a price, not counted.</p>{{end}}
-        {{if .BuildPriced}}<p class="fit-cost-gap">* Part of this value is priced at build cost, where no market or contract price is known.</p>{{end}}
+    </section>
+
+    <section class="fit-panel" aria-label="Defense">
+      <h5>Defense <span class="fit-panel-side"><span class="fit-ehp">{{.EHPOmni}}</span> <abbr title="Effective hit points">EHP</abbr></span></h5>
+      <div class="fit-resists">
+        <div class="fit-res-head" aria-hidden="true"><span></span><span class="res-em">EM</span><span class="res-th">TH</span><span class="res-kin">KIN</span><span class="res-exp">EXP</span></div>
+        {{range .Tank}}
+        <div class="fit-res-row">
+          <div class="fit-res-layer" data-fit-fig="{{.Fig}}"><strong>{{.Layer}}</strong> <small>{{.HP}} HP · {{.EHP}} EHP</small></div>
+          {{range .Resists}}<span class="fit-res res-{{.Kind}}" title="{{.Text}}"><span data-w="{{printf "%.1f" .Pct}}"></span><b>{{.Text}}</b></span>{{end}}
+        </div>
+        {{end}}
       </div>
-      {{end}}{{end}}
+      <dl class="fit-kv fit-kv-2">
+        <div><dt class="k-shield">{{template "fit-g" "shield"}}Shield recharge</dt><dd data-fit-fig="shieldreg">{{.ShieldReg}} at peak</dd></div>
+        <div><dt class="k-shieldboost">{{template "fit-g" "shieldboost"}}Shield boosting</dt><dd data-fit-fig="shieldboost">{{.ShieldBoost}}</dd></div>
+        <div><dt class="k-repair">{{template "fit-g" "repair"}}Armor repair</dt><dd data-fit-fig="armorrep">{{.ArmorRep}}</dd></div>
+        <div><dt class="k-repair">{{template "fit-g" "repair"}}Hull repair</dt><dd data-fit-fig="hullrep">{{.HullRep}}</dd></div>
+      </dl>
     </section>
 
     <section class="fit-panel" aria-label="Capacitor">
@@ -302,32 +311,13 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       </dl>
     </section>{{end}}
 
-    <section class="fit-panel" aria-label="Defense">
-      <h5>Defense <span class="fit-panel-side"><span class="fit-ehp" data-fit-fig="ehp">{{.EHPOmni}}</span> <abbr title="Effective hit points">EHP</abbr></span></h5>
-      <div class="fit-resists">
-        <div class="fit-res-head" aria-hidden="true"><span></span><span class="res-em">EM</span><span class="res-th">TH</span><span class="res-kin">KIN</span><span class="res-exp">EXP</span></div>
-        {{range .Tank}}
-        <div class="fit-res-row">
-          <div class="fit-res-layer" data-fit-fig="{{.Fig}}"><strong>{{.Layer}}</strong> <small>{{.HP}} HP · {{.EHP}} EHP</small></div>
-          {{range .Resists}}<span class="fit-res res-{{.Kind}}" title="{{.Text}}"><span data-w="{{printf "%.1f" .Pct}}"></span><b>{{.Text}}</b></span>{{end}}
-        </div>
-        {{end}}
-      </div>
-      <dl class="fit-kv fit-kv-2">
-        <div><dt class="k-shield">{{template "fit-g" "shield"}}Shield recharge</dt><dd data-fit-fig="shieldreg">{{.ShieldReg}} at peak</dd></div>
-        <div><dt class="k-shieldboost">{{template "fit-g" "shieldboost"}}Shield boosting</dt><dd data-fit-fig="shieldboost">{{.ShieldBoost}}</dd></div>
-        <div><dt class="k-repair">{{template "fit-g" "repair"}}Armor repair</dt><dd data-fit-fig="armorrep">{{.ArmorRep}}</dd></div>
-        <div><dt class="k-repair">{{template "fit-g" "repair"}}Hull repair</dt><dd data-fit-fig="hullrep">{{.HullRep}}</dd></div>
-      </dl>
-    </section>
-
     <section class="fit-panel" aria-label="Navigation and targeting">
       <h5>Navigation &amp; targeting</h5>
-      <dl class="fit-kv fit-kv-2">
-        <div><dt>Speed</dt><dd data-fit-fig="speed">{{.Velocity}}</dd></div>
-        <div><dt>Align time</dt><dd data-fit-fig="align">{{.Align}}</dd></div>
-        <div><dt>Signature radius</dt><dd data-fit-fig="sig">{{.Signature}}</dd></div>
-        <div><dt>Targeting range</dt><dd data-fit-fig="range">{{.TargetRng}}</dd></div>
+      <dl class="fit-kv fit-kv-3">
+        <div><dt>Speed</dt><dd>{{.Velocity}}</dd></div>
+        <div><dt>Align time</dt><dd>{{.Align}}</dd></div>
+        <div><dt>Signature radius</dt><dd>{{.Signature}}</dd></div>
+        <div><dt>Targeting range</dt><dd>{{.TargetRng}}</dd></div>
         <div><dt>Scan resolution</dt><dd data-fit-fig="scanres">{{.ScanRes}}</dd></div>
         <div><dt>Sensor strength</dt><dd data-fit-fig="sensor">{{.Sensor}}</dd></div>
         <div><dt>Locked targets</dt><dd data-fit-fig="locks">up to {{.LockedTgts}}</dd></div>
@@ -336,7 +326,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
 
     <section class="fit-panel" aria-label="Drones and cargo">
       <h5>Drones &amp; cargo</h5>
-      <dl class="fit-kv fit-kv-2">
+      <dl class="fit-kv fit-kv-3">
         <div><dt>Drone bandwidth</dt><dd>{{.DroneBW}}</dd></div>
         <div><dt>Drone bay</dt><dd>{{.DroneBay}}</dd></div>
         <div><dt>Drones</dt><dd>{{.DronesUp}}</dd></div>
@@ -346,6 +336,17 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <div><dt>Cargo hold</dt><dd data-fit-fig="cargo">{{.Cargo}}</dd></div>
       </dl>
     </section>
+    {{with $.Cost}}{{if .Known}}
+    <section class="fit-panel" aria-label="Value">
+      <h5>Value <span class="fit-panel-side"><strong class="fit-cost-total">{{.Total}}{{if .BuildPriced}}*{{end}} ISK</strong></span></h5>
+      <div class="fit-cost" data-fit-cost="{{.TotalRaw}}">
+        {{if .Lines}}<svg class="fit-cost-bar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">{{range .Lines}}<rect class="fc-{{.Key}}" x="{{printf "%.2f" .X}}" y="0" width="{{printf "%.2f" .Pct}}" height="4"/>{{end}}</svg>
+        <ul class="fit-cost-parts">{{range .Lines}}<li class="fc-{{.Key}}"><span>{{.Label}}</span> <b>{{.Value}}{{if .Build}}*{{end}}</b> <small>{{printf "%.0f" .Pct}}%</small></li>{{end}}</ul>{{end}}
+        {{if .Unpriced}}<p class="fit-cost-gap">{{.Unpriced}} item{{if ne .Unpriced 1}}s{{end}} without a price, not counted.</p>{{end}}
+        {{if .BuildPriced}}<p class="fit-cost-gap">* Part of this value is priced at build cost, where no market or contract price is known.</p>{{end}}
+      </div>
+    </section>
+    {{end}}{{end}}
     {{if $.ImplantsUsed}}
     <section class="fit-panel" aria-label="Effects from implants">
       <h5>Effects from implants <span class="fit-panel-side">{{$.ImplantsUsed}} implant{{if ne $.ImplantsUsed 1}}s{{end}}</span></h5>

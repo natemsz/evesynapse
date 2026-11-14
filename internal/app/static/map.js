@@ -1161,10 +1161,14 @@
         // The web, batched by line class (gateBatch): solid
         // in-region jumps, then the dashed border crossings,
         // each in its lower end's security color.
-        web = [new Path2D(), new Path2D(), new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+        // In 3D with depth showing, one set per depth slice, a gate
+        // in the slice of its nearer end.
+        var DBw = V3 && D3 && !focus3() && !sel3() ? D3.band : null;
+        web = [];
+        for (i = 0; i < (DBw ? 24 : 6); i++) web.push(new Path2D());
         for (i = 0; i < P.gates.length; i += 2) {
           a = P.gates[i]; b = P.gates[i + 1];
-          var p = web[gateBatch(S.s[a], S.s[b], S.r[a], S.r[b])];
+          var p = web[(DBw ? Math.min(DBw[a], DBw[b]) * 6 : 0) + gateBatch(S.s[a], S.s[b], S.r[a], S.r[b])];
           p.moveTo(wx(a), wy(a));
           p.lineTo(wx(b), wy(b));
         }
@@ -1227,7 +1231,11 @@
         }
       }
       var k = cam.k, ox = cw / 2 - cam.x * k, oy = ch / 2 - cam.y * k;
-      var i, t, F = focus3();
+      var i, t, F = focus3(), SF = sel3();
+      // In 3D with no focus, depth decides how strongly each part
+      // shows (depthBands3); a route or a selection decides instead.
+      depthBands3(k);
+      var DB = F || SF ? null : D3;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cw, ch);
 
@@ -1240,21 +1248,26 @@
       // texture behind the region names, not the picture: drawn
       // at reduced alpha until the reader zooms into it.
       if (mode === "universe" && projOn && labelTier(cam.k / fitK()) === 0) ctx.globalAlpha = 0.45;
-      // Around a jump route in 3D the web is the backdrop.
-      if (F) ctx.globalAlpha = 0.15;
+      // Around a jump route or a selection in 3D the web is the backdrop.
+      if (F || SF) ctx.globalAlpha = 0.15;
       if (pp.web) {
         // Solid batches first, then the border crossings in the
-        // same class colors, dashed at a constant screen size.
-        for (i = 0; i < 3; i++) {
-          ctx.strokeStyle = colors.gateLine[i];
-          ctx.stroke(pp.web[i]);
+        // same class colors, dashed at a constant screen size. In 3D
+        // the web comes in depth slices, the far ones first and faint.
+        var slices = pp.web.length / 6, webA = ctx.globalAlpha;
+        for (var sl = slices - 1; sl >= 0; sl--) {
+          ctx.globalAlpha = webA * (slices > 1 ? DEPTH_GATE_ALPHA[sl] : 1);
+          for (i = 0; i < 3; i++) {
+            ctx.strokeStyle = colors.gateLine[i];
+            ctx.stroke(pp.web[sl * 6 + i]);
+          }
+          ctx.setLineDash([5 / k, 4 / k]);
+          for (i = 0; i < 3; i++) {
+            ctx.strokeStyle = colors.gateLineX[i];
+            ctx.stroke(pp.web[sl * 6 + i + 3]);
+          }
+          ctx.setLineDash([]);
         }
-        ctx.setLineDash([5 / k, 4 / k]);
-        for (i = 0; i < 3; i++) {
-          ctx.strokeStyle = colors.gateLineX[i];
-          ctx.stroke(pp.web[i + 3]);
-        }
-        ctx.setLineDash([]);
       } else {
         ctx.strokeStyle = colors.gate;
         ctx.stroke(pp.intra);
@@ -1291,7 +1304,8 @@
       // Systems: by security, or by the live layer showing.
       var r = radius(), list = visible(), n = list ? list.length : G.n;
       var pad = 40;
-      var systems = function (list, n) {
+      var systems = function (list, n, rs) {
+        var r = rs || radius();
         if (dataHeat()) {
           drawDataHeat(k, ox, oy, r, list, n, pad);
         } else if (layer === "security" || !LY) {
@@ -1325,6 +1339,25 @@
         systems(F.list, F.list.length);
         ctx.globalAlpha = 1;
         systems(B.list, B.list.length);
+      } else if (SF) {
+        // A selection in 3D, in four strengths (sel3).
+        for (var st = 0; st < 4; st++) {
+          ctx.globalAlpha = SEL3_ALPHA[st];
+          systems(SF.lists[st], SF.lists[st].length);
+        }
+        ctx.globalAlpha = 1;
+      } else if (DB) {
+        // 3D: the far slices first, smaller and fainter.
+        for (var db = 3; db >= 0; db--) {
+          var dl = [];
+          for (var dm = 0; dm < n; dm++) {
+            var di = list ? list[dm] : dm;
+            if (DB.band[di] === db) dl.push(di);
+          }
+          ctx.globalAlpha = DEPTH_ALPHA[db];
+          systems(dl, dl.length, r * DEPTH_SIZE[db]);
+        }
+        ctx.globalAlpha = 1;
       } else {
         systems(list, n);
       }
@@ -1466,7 +1499,12 @@
         }
         ctx.globalAlpha = regionLabelAlpha(f) * (terrSov || F3l ? 0.5 : 1);
         var size = Math.min(12 + f * 0.8, 18) - (terrSov ? 3 : 0), regs = [];
-        for (i = 0; i < P.regions.length; i++) if (G.members[i].length) regs.push(i);
+        for (i = 0; i < P.regions.length; i++) {
+          if (!G.members[i].length) continue;
+          // In 3D with depth showing, the far regions go unnamed.
+          if (V3 && D3 && !F3l && !(S3 && sel >= 0) && Math.abs(V3.rd[i] - D3.dp) / D3.span > DEPTH_EDGE[1]) continue;
+          regs.push(i);
+        }
         inPlaceFirst(regs, function (i) { return "R" + i; }, function (i) {
           var rg = P.regions[i];
           label(rg.name.toUpperCase(), regLX(i) * k + ox, regLY(i) * k + oy - size / 2, size, colors.region, "600", false, "R" + i, fontDisplay,
@@ -1489,6 +1527,9 @@
             // Around a jump route in 3D only the stops, the systems that
             // could stand in for them and those inside a bubble are named.
             if (F3l && F3l.tier[i] < 2 && !(B3 && B3.inside[i])) continue;
+            // Around a selection in 3D its jump reach is named; with
+            // neither, only the nearer depth slices.
+            if (!F3l && V3 && (S3 && sel >= 0 ? S3.tier[i] < 2 : D3 && D3.band[i] >= 2)) continue;
             var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
             if (sx >= 0 && sy >= 0 && sx <= cw && sy <= ch) vis.push(i);
           }
@@ -1837,22 +1878,22 @@
     // true height, turned about the pivot.
     function project3() {
       var n = G.n, R = P.regions.length, u = frameLY(), m = smooth3(morph3()), q = smooth3(tilt3());
-      if (!V3) V3 = { x: new Float64Array(n), y: new Float64Array(n), d: new Float64Array(n), rx: new Float64Array(R), ry: new Float64Array(R), pitch: 0 };
+      if (!V3) V3 = { x: new Float64Array(n), y: new Float64Array(n), d: new Float64Array(n), rx: new Float64Array(R), ry: new Float64Array(R), rd: new Float64Array(R), pitch: 0 };
       var yaw = v3.yaw * q, pitch = v3.pitch * q, o = [0, 0, 0], fp = v3.fromProj, i;
       var bx = function (j) { return fp ? G.px[j] + (S.x[j] - G.px[j]) * m : S.x[j]; };
       var by = function (j) { return fp ? G.py[j] + (S.y[j] - G.py[j]) * m : S.y[j]; };
       var bh = function (j) { return isNaN(JUMP.x[j]) ? 0 : JUMP.y[j] * u * m; };
       var p = v3.p >= 0 ? v3.p : 0, px = bx(p), py = by(p), ph = bh(p);
       var cnt = new Int32Array(R);
-      V3.rx.fill(0); V3.ry.fill(0);
+      V3.rx.fill(0); V3.ry.fill(0); V3.rd.fill(0);
       for (i = 0; i < n; i++) {
         orbit3(bx(i) - px, by(i) - py, bh(i) - ph, yaw, pitch, o);
         V3.x[i] = px + o[0];
         V3.y[i] = py + o[1];
         V3.d[i] = o[2];
-        V3.rx[S.r[i]] += V3.x[i]; V3.ry[S.r[i]] += V3.y[i]; cnt[S.r[i]]++;
+        V3.rx[S.r[i]] += V3.x[i]; V3.ry[S.r[i]] += V3.y[i]; V3.rd[S.r[i]] += V3.d[i]; cnt[S.r[i]]++;
       }
-      for (i = 0; i < R; i++) if (cnt[i]) { V3.rx[i] /= cnt[i]; V3.ry[i] /= cnt[i]; }
+      for (i = 0; i < R; i++) if (cnt[i]) { V3.rx[i] /= cnt[i]; V3.ry[i] /= cnt[i]; V3.rd[i] /= cnt[i]; }
       V3.pitch = pitch;
     }
     // step3 moves a switch along; true while more remains.
@@ -1956,6 +1997,71 @@
       if (projPref) projPref.disabled = v3.on || !!v3.anim;
       if (layer === "sov" || layer === "zones") renderLegend();
     }
+    // --- 3D legibility ---
+    // depthBands3 sorts the systems into four slices by how far they
+    // sit in front of or behind the system the view turns round (the
+    // pivot), against how far the systems on screen spread (their
+    // 90th percentile), so the slices divide what is in view at any
+    // zoom: 0 the pivot's plane, 3 the far reaches either side. The slices draw far ones first,
+    // smaller and fainter, and the far ones go unnamed, so depth reads
+    // as it does through a lens. The effect grows in with the switch.
+    var DEPTH_ALPHA = [1, 0.7, 0.42, 0.22], DEPTH_GATE_ALPHA = [1, 0.6, 0.3, 0.12], DEPTH_SIZE = [1.15, 1, 0.82, 0.68];
+    var DEPTH_EDGE = [0.25, 0.5, 0.78];
+    var D3 = null;
+    function depthBands3(k) {
+      if (!V3) { D3 = null; return null; }
+      var n = G.n;
+      if (!D3 || D3.band.length !== n) D3 = { band: new Uint8Array(n) };
+      var p = v3.p >= 0 ? v3.p : 0, dp = V3.d[p], q = smooth3(tilt3()), i;
+      var ox = cw / 2 - cam.x * k, oy = ch / 2 - cam.y * k, step = Math.max(1, Math.floor(n / 2000)), seen = [];
+      for (i = 0; i < n; i += step) {
+        var sx = V3.x[i] * k + ox, sy = V3.y[i] * k + oy;
+        if (sx >= 0 && sy >= 0 && sx <= cw && sy <= ch) seen.push(Math.abs(V3.d[i] - dp));
+      }
+      seen.sort(function (a, b) { return a - b; });
+      var span = seen.length > 8 ? seen[Math.floor(seen.length * 0.9)] : Math.max(cw, ch) / k * 0.5;
+      if (!(span > 0)) span = 1;
+      D3.dp = dp;
+      D3.span = q > 0 ? span / q : Infinity;
+      for (i = 0; i < n; i++) {
+        var s = Math.abs(V3.d[i] - dp) / span * q, b = 0;
+        while (b < 3 && s > DEPTH_EDGE[b]) b++;
+        D3.band[i] = b;
+      }
+      return D3;
+    }
+    // sel3: with no jump route, a selected system is the focus in 3D:
+    // it and its gate neighbours at full strength; next what is near
+    // by the way the route panel travels (within three gate jumps, or
+    // where a jump from it lands with the planner's ship and pilot);
+    // its region after that; and the rest of space barely there.
+    var S3 = null;
+    function sel3() {
+      if (!V3 || sel < 0 || focus3()) return null;
+      var R = travel === "jump" && JUMP ? jumpRangeNow() : 0, key = sel + "|" + travel + "|" + R;
+      if (S3 && S3.key === key) return S3;
+      var tier = new Uint8Array(G.n), lists = [[], [], [], []], i;
+      G.members[S.r[sel]].forEach(function (j) { tier[j] = 1; });
+      if (R > 0) jumpNeighbours(JUMP, sel, R).forEach(function (j) { tier[j] = 2; });
+      else if (travel !== "jump") {
+        var ring = [sel], seen = {};
+        seen[sel] = 1;
+        for (var hop = 0; hop < SEL3_GATE_HOPS; hop++) {
+          var next = [];
+          ring.forEach(function (u) {
+            G.adj[u].forEach(function (v) { if (!seen[v]) { seen[v] = 1; tier[v] = 2; next.push(v); } });
+          });
+          ring = next;
+        }
+      }
+      tier[sel] = 3;
+      G.adj[sel].forEach(function (j) { tier[j] = 3; });
+      for (i = 0; i < G.n; i++) lists[tier[i]].push(i);
+      S3 = { key: key, tier: tier, lists: lists };
+      return S3;
+    }
+    var SEL3_ALPHA = [0.1, 0.35, 0.65, 1], SEL3_GATE_HOPS = 3;
+
     // focus3: a jump route's neighbourhood in 3D. tier 3 the stops,
     // 2 the systems that could stand in for a stop, 1 everywhere a
     // stop reaches; null without a planned jump route.

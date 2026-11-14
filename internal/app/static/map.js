@@ -1668,10 +1668,84 @@
       MINE.bridges.forEach(function (b) { seen[Math.min(b.from, b.to) + "-" + Math.max(b.from, b.to)] = 1; });
       return Object.keys(seen).length;
     }
+    // drawZoneSpheres: in 3D, each band's reach as a sphere round the
+    // capital (scale: screen px per light year). Outermost first, so
+    // the nearer bands sit on top. A faint glass fill, the outline,
+    // and the equator: its far half dashed and dim, its near half
+    // solid, so the tilt reads at a glance. Each sphere is named at
+    // its rim over a dark halo: at the top, or the first place round
+    // the rim that is on screen and clear of the other labels.
+    var SPHERE_LABEL_AT = [-90, -60, -120, -30, -150, 0, 180, 30, 150, 60, 120, 90];
+    function drawZoneSpheres(cx, cy, scale) {
+      var tilt = Math.max(0.08, Math.abs(Math.cos(V3.pitch))), placed = [];
+      // The panels over the map (route, card, legend) count as taken,
+      // so no label hides under one.
+      var at = canvas.getBoundingClientRect();
+      el.querySelectorAll(".map-route, .map-card, .map-layer-legend, .map-legend").forEach(function (o) {
+        if (o.hidden || !o.offsetParent) return;
+        var b = o.getBoundingClientRect();
+        if (b.width && b.height) placed.push([b.left - at.left, b.top - at.top, b.width, b.height]);
+      });
+      ctx.save();
+      ctx.font = "600 12px " + fontDisplay;
+      ctx.textAlign = "center";
+      ctx.lineJoin = "round";
+      for (var z = 3; z >= 0; z--) {
+        var bz = BRIDGE_ZONES[z], rr = bz.upTo * scale;
+        if (rr < 14) continue;
+        var col = colors.zones[z], c = rgbOf(col);
+        var g = ctx.createRadialGradient(cx, cy - rr * 0.3, rr * 0.1, cx, cy, rr);
+        g.addColorStop(0, "rgba(" + c[0] + "," + c[1] + "," + c[2] + ",0.02)");
+        // The near bands carry the stronger glass, so the outer shells
+        // never tint the whole view.
+        g.addColorStop(1, "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + [0.1, 0.07, 0.045, 0.03][z] + ")");
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = col;
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.85;
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+        ctx.lineWidth = 1.3;
+        ctx.globalAlpha = 0.3;
+        ctx.setLineDash([5, 6]);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rr, rr * tilt, 0, Math.PI, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.7;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rr, rr * tilt, 0, 0, Math.PI);
+        ctx.stroke();
+        var text = "Zone " + bz.zone + " · " + bz.upTo + " LY · " + (bz.mult ? bz.mult + "x" : "free");
+        var tw = ctx.measureText(text).width, spot = null;
+        for (var a = 0; a < SPHERE_LABEL_AT.length && !spot; a++) {
+          var t = SPHERE_LABEL_AT[a] * Math.PI / 180, d = rr + 10;
+          var lx = cx + Math.cos(t) * (d + tw / 2 * Math.abs(Math.cos(t))), ly = cy + Math.sin(t) * d + 4;
+          var box = [lx - tw / 2 - 3, ly - 12, tw + 6, 16];
+          if (box[0] < 6 || box[1] < 6 || box[0] + box[2] > cw - 6 || box[1] + box[3] > ch - 6) continue;
+          if (placed.some(function (p) { return boxesOverlap(box[0], box[1], box[2], box[3], p); })) continue;
+          spot = [lx, ly];
+          placed.push(box);
+        }
+        if (!spot) continue;
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = colors.halo;
+        ctx.strokeText(text, spot[0], spot[1]);
+        ctx.fillStyle = col;
+        ctx.fillText(text, spot[0], spot[1]);
+      }
+      ctx.restore();
+    }
     function drawZoneRings(Z, k, ox, oy) {
       var u = frameLY();
       if (!u || projOn) return;
       var cx = wx(Z.cap) * k + ox, cy = wy(Z.cap) * k + oy;
+      if (v3.on && V3) { drawZoneSpheres(cx, cy, u * k); return; }
       ctx.save();
       ctx.setLineDash([4, 5]);
       ctx.lineWidth = 1.2;

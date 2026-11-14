@@ -1222,6 +1222,8 @@
       if (stepMotion(now || performance.now())) schedule();
       if (v3.on || v3.anim) {
         if (step3(now || performance.now())) schedule();
+        if (spinStep(now || performance.now())) schedule();
+        if (glideStep(now || performance.now())) schedule();
         if (v3.on || v3.anim) {
           project3();
           if (v3.hold && v3.p >= 0) {
@@ -1942,7 +1944,8 @@
       v3.anim = { t0: performance.now(), dur: still ? 1 : v3.fromProj ? 750 : 500, from: v3.t, to: 1 };
       F3 = null;
       sync3D();
-      hint("3D: drag to turn the view, Shift drag to pan.");
+      hint(still ? "3D: drag to turn the view, Shift drag to pan." : "3D: drag to turn the view, Shift drag to pan. Left alone, it turns slowly.");
+      spinWake();
       if (layer === "zones") renderLegend();
       schedule();
     }
@@ -1951,6 +1954,7 @@
     function exit3D(instant) {
       if (!v3.on) return;
       v3.on = false;
+      spinWake();
       v3.pending = false;
       if (V3) {
         var p = nearestUniverse(cam.x, cam.y);
@@ -1982,6 +1986,86 @@
     function toggle3D() { if (v3.on) exit3D(); else enter3D(); }
     // repivot3 turns the view about the system nearest the middle
     // from here on, held where it is on screen.
+    // glide3 brings system p to the middle of the view in 3D: it
+    // becomes the pivot, held where it stands, and the hold eases to
+    // the centre. The hold is let go when the glide ends, unless the
+    // spin is turning about it.
+    var GLIDE3_MS = 800;
+    function glide3(p) {
+      if (!V3 || p < 0) return;
+      v3.p = p;
+      var from = [V3.x[p] * cam.k + cw / 2 - cam.x * cam.k, V3.y[p] * cam.k + ch / 2 - cam.y * cam.k];
+      v3.hold = from.slice();
+      v3.glide = { from: from, t0: performance.now(), dur: still ? 1 : GLIDE3_MS };
+      schedule();
+    }
+    function glideStep(now) {
+      var g = v3.glide;
+      if (!g || !v3.hold) { v3.glide = null; return false; }
+      var e = Math.min(1, (now - g.t0) / g.dur), s = smooth3(e);
+      v3.hold[0] = g.from[0] + (cw / 2 - g.from[0]) * s;
+      v3.hold[1] = g.from[1] + (ch / 2 - g.from[1]) * s;
+      if (e < 1) return true;
+      v3.glide = null;
+      // Let go after this frame has placed the view on it.
+      if (!spin.on) setTimeout(function () { if (!v3.glide && !spin.on) { v3.hold = null; syncURL(); } }, 0);
+      return false;
+    }
+    // middle3: the system nearest New Eden's middle, in true space.
+    var mid3 = -1;
+    function middle3() {
+      if (mid3 >= 0 || !JUMP) return mid3;
+      var sx = 0, sy = 0, sh = 0, c = 0, i;
+      for (i = 0; i < G.n; i++) if (!isNaN(JUMP.x[i])) { sx += S.x[i]; sy += S.y[i]; sh += JUMP.y[i]; c++; }
+      if (!c) return -1;
+      sx /= c; sy /= c; sh /= c;
+      var u = frameLY(), best = Infinity;
+      for (i = 0; i < G.n; i++) {
+        if (isNaN(JUMP.x[i])) continue;
+        var d = Math.pow(S.x[i] - sx, 2) + Math.pow(S.y[i] - sy, 2) + Math.pow((JUMP.y[i] - sh) * u, 2);
+        if (d < best) { best = d; mid3 = i; }
+      }
+      return mid3;
+    }
+
+    // The idle spin: in 3D, after a quiet spell the view turns slowly,
+    // a full turn in two minutes, because motion is the strongest
+    // depth cue a flat screen has. It turns about what the view is on,
+    // brought to the middle first: the selected system, a jump route's
+    // middle stop, New Eden's middle when the whole of it shows, or
+    // else the system nearest the middle of the view. Any touch,
+    // wheel, key or pointer move stops it, lets go of the view, and
+    // starts the wait again. Never under reduced motion, and never on
+    // a hidden tab.
+    var SPIN_IDLE_MS = 6000, SPIN_TURN_MS = 120000;
+    var spin = { on: false, last: 0, timer: 0 };
+    function spinWake() {
+      if (spin.on) { spin.on = false; v3.hold = null; v3.glide = null; syncURL(); }
+      clearTimeout(spin.timer);
+      spin.timer = 0;
+      if (v3.on && !still) spin.timer = setTimeout(spinStart, SPIN_IDLE_MS);
+    }
+    function spinStart() {
+      spin.timer = 0;
+      if (!el.isConnected || !v3.on || still || !V3) return;
+      if (v3.anim || gesture || document.hidden) { spinWake(); return; }
+      var p = sel >= 0 ? sel
+        : focus3() ? routePath[routePath.length >> 1]
+        : cam.k <= fitK() * 1.5 ? middle3()
+        : nearestUniverse(cam.x, cam.y);
+      if (p < 0) return;
+      spin.on = true;
+      spin.last = performance.now();
+      glide3(p);
+    }
+    function spinStep(now) {
+      if (!spin.on) return false;
+      if (!v3.on || v3.anim || document.hidden) { spin.on = false; return false; }
+      var dt = Math.min(100, Math.max(0, now - spin.last));
+      spin.last = now;
+      v3.yaw += dt / SPIN_TURN_MS * Math.PI * 2;
+      return true;
+    }
     function repivot3() {
       var p = nearestUniverse(cam.x, cam.y);
       if (p < 0 || !V3) return;
@@ -3663,6 +3747,9 @@
       if (i >= 0 && follow && mode !== "universe" && S.r[i] !== region) {
         enterRegion(S.r[i], i);
       }
+      // In 3D a selected system comes to the middle, so the view turns
+      // about it and it can always be found again.
+      if (i >= 0 && v3.on && !v3.anim) glide3(i);
       updateCard();
       syncURL();
       schedule();
@@ -5131,7 +5218,7 @@
       findInput.value = "";
       if (h.r !== undefined) { sel = -1; enterRegion(h.r, -1); return; }
       // In 3D a found system is brought to the middle, still in 3D.
-      if (v3.on && V3) { select(h.s); flyTo(V3.x[h.s], V3.y[h.s], cam.k, 320); return; }
+      if (v3.on && V3) { select(h.s); return; }
       sel = h.s;
       enterRegion(S.r[h.s], h.s);
     }
@@ -5811,6 +5898,14 @@
     var index = root.querySelector(".map-index");
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
+    // Any hand on the map stops the idle spin and restarts its wait;
+    // a press, wheel or key also stops a glide to the middle and lets
+    // go of the view, so it is the reader's again.
+    function handsOn() { if (v3.glide) { v3.glide = null; v3.hold = null; } }
+    ["pointerdown", "wheel"].forEach(function (ev) { canvas.addEventListener(ev, handsOn, { passive: true }); });
+    el.addEventListener("keydown", handsOn);
+    ["pointerdown", "pointermove", "wheel"].forEach(function (ev) { canvas.addEventListener(ev, spinWake, { passive: true }); });
+    el.addEventListener("keydown", spinWake);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("pointercancel", onPointerCancel);
     // The right button pans in 3D, so its menu stays shut there.
@@ -5902,6 +5997,7 @@
     }
 
     function teardown() {
+      clearTimeout(spin.timer);
       ro.disconnect();
       mo.disconnect();
       clearInterval(layersTimer);

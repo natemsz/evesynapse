@@ -1501,8 +1501,8 @@
         var size = Math.min(12 + f * 0.8, 18) - (terrSov ? 3 : 0), regs = [];
         for (i = 0; i < P.regions.length; i++) {
           if (!G.members[i].length) continue;
-          // In 3D with depth showing, the far regions go unnamed.
-          if (V3 && D3 && !F3l && !(S3 && sel >= 0) && Math.abs(V3.rd[i] - D3.dp) / D3.span > DEPTH_EDGE[1]) continue;
+          // In 3D with depth showing, the farthest regions go unnamed.
+          if (V3 && D3 && !F3l && !(S3 && sel >= 0) && depthBand3(V3.rd[i]) >= 3) continue;
           regs.push(i);
         }
         inPlaceFirst(regs, function (i) { return "R" + i; }, function (i) {
@@ -1528,8 +1528,8 @@
             // could stand in for them and those inside a bubble are named.
             if (F3l && F3l.tier[i] < 2 && !(B3 && B3.inside[i])) continue;
             // Around a selection in 3D its jump reach is named; with
-            // neither, only the nearer depth slices.
-            if (!F3l && V3 && (S3 && sel >= 0 ? S3.tier[i] < 2 : D3 && D3.band[i] >= 2)) continue;
+            // neither, all but the farthest depth slice.
+            if (!F3l && V3 && (S3 && sel >= 0 ? S3.tier[i] < 2 : D3 && D3.band[i] >= 3)) continue;
             var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
             if (sx >= 0 && sy >= 0 && sx <= cw && sy <= ch) vis.push(i);
           }
@@ -1998,37 +1998,42 @@
       if (layer === "sov" || layer === "zones") renderLegend();
     }
     // --- 3D legibility ---
-    // depthBands3 sorts the systems into four slices by how far they
-    // sit in front of or behind the system the view turns round (the
-    // pivot), against how far the systems on screen spread (their
-    // 90th percentile), so the slices divide what is in view at any
-    // zoom: 0 the pivot's plane, 3 the far reaches either side. The slices draw far ones first,
-    // smaller and fainter, and the far ones go unnamed, so depth reads
-    // as it does through a lens. The effect grows in with the switch.
-    var DEPTH_ALPHA = [1, 0.7, 0.42, 0.22], DEPTH_GATE_ALPHA = [1, 0.6, 0.3, 0.12], DEPTH_SIZE = [1.15, 1, 0.82, 0.68];
-    var DEPTH_EDGE = [0.25, 0.5, 0.78];
+    // depthBands3 sorts the systems into four slices by how near they
+    // sit to the eye, read against the depths of the systems on
+    // screen (their 10th to 90th percentile), so the slices divide
+    // what is in view at any zoom: 0 the nearest, 3 the farthest. A
+    // larger depth (orbit3's third value) is nearer: on a tilted view
+    // the disc's near edge sits low on screen and raised systems rise.
+    // The far slices draw first, a little smaller and fainter, and
+    // the farthest goes unnamed. The effect grows in with the switch.
+    var DEPTH_ALPHA = [1, 0.88, 0.72, 0.56], DEPTH_GATE_ALPHA = [1, 0.8, 0.6, 0.42], DEPTH_SIZE = [1.08, 1, 0.94, 0.88];
+    var DEPTH_NEAR = [0.5, 0.3, 0.12];
     var D3 = null;
     function depthBands3(k) {
       if (!V3) { D3 = null; return null; }
       var n = G.n;
       if (!D3 || D3.band.length !== n) D3 = { band: new Uint8Array(n) };
-      var p = v3.p >= 0 ? v3.p : 0, dp = V3.d[p], q = smooth3(tilt3()), i;
+      var q = smooth3(tilt3()), i;
       var ox = cw / 2 - cam.x * k, oy = ch / 2 - cam.y * k, step = Math.max(1, Math.floor(n / 2000)), seen = [];
       for (i = 0; i < n; i += step) {
         var sx = V3.x[i] * k + ox, sy = V3.y[i] * k + oy;
-        if (sx >= 0 && sy >= 0 && sx <= cw && sy <= ch) seen.push(Math.abs(V3.d[i] - dp));
+        if (sx >= 0 && sy >= 0 && sx <= cw && sy <= ch) seen.push(V3.d[i]);
       }
       seen.sort(function (a, b) { return a - b; });
-      var span = seen.length > 8 ? seen[Math.floor(seen.length * 0.9)] : Math.max(cw, ch) / k * 0.5;
-      if (!(span > 0)) span = 1;
-      D3.dp = dp;
-      D3.span = q > 0 ? span / q : Infinity;
-      for (i = 0; i < n; i++) {
-        var s = Math.abs(V3.d[i] - dp) / span * q, b = 0;
-        while (b < 3 && s > DEPTH_EDGE[b]) b++;
-        D3.band[i] = b;
-      }
+      var lo = seen.length > 8 ? seen[Math.floor(seen.length * 0.1)] : 0;
+      var hi = seen.length > 8 ? seen[Math.floor(seen.length * 0.9)] : 0;
+      D3.lo = lo;
+      D3.hi = hi;
+      D3.q = q;
+      for (i = 0; i < n; i++) D3.band[i] = depthBand3(V3.d[i]);
       return D3;
+    }
+    // depthBand3: the slice for a depth, by D3's on-screen range.
+    function depthBand3(d) {
+      if (!(D3.hi > D3.lo)) return 0;
+      var t = 1 - (1 - Math.max(0, Math.min(1, (d - D3.lo) / (D3.hi - D3.lo)))) * D3.q, b = 0;
+      while (b < 3 && t < DEPTH_NEAR[b]) b++;
+      return b;
     }
     // sel3: with no jump route, a selected system is the focus in 3D:
     // it and its gate neighbours at full strength; next what is near
@@ -5269,6 +5274,19 @@
     }
 
     function flyFit() {
+      // In 3D the systems stand where the turn puts them: frame those.
+      if (v3.on && V3) {
+        var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (var i = 0; i < G.n; i++) {
+          if (V3.x[i] < x0) x0 = V3.x[i]; if (V3.x[i] > x1) x1 = V3.x[i];
+          if (V3.y[i] < y0) y0 = V3.y[i]; if (V3.y[i] > y1) y1 = V3.y[i];
+        }
+        if (x1 > x0) {
+          v3.hold = null;
+          flyTo((x0 + x1) / 2, (y0 + y1) / 2, clampK(Math.min(cw / (x1 - x0), ch / Math.max(y1 - y0, 1)) * 0.92), 360);
+          return;
+        }
+      }
       var b = viewBounds();
       flyTo((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, fitK(), 360);
     }

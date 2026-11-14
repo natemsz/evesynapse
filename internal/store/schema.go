@@ -959,6 +959,11 @@ var pgPilotActivityMendSchema string
 //go:embed schema_pg/158_doctrine_fit_boosts.sql
 var pgDoctrineFitBoostsSchema string
 
+// Step 159: Ansiblex bridges by alliance, from synced structure lists.
+//
+//go:embed schema_pg/159_alliance_bridges.sql
+var pgAllianceBridgesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1145,6 +1150,7 @@ func schemaSteps() []schemaStep {
 		{156, "sov_fights", pgSovFightsSchema, ""},
 		{157, "pilot_activity_mend", pgPilotActivityMendSchema, ""},
 		{158, "doctrine_fit_boosts", pgDoctrineFitBoostsSchema, ""},
+		{159, "alliance_bridges", pgAllianceBridgesSchema, ""},
 	}
 }
 

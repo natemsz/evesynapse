@@ -19,7 +19,9 @@ import (
 // light years and each jump-capable ship's range from the SDE (its
 // fatigue multiplier falling back on the ship's group); the reader's
 // side carries their pilots' Jump Drive Calibration and fatigue, and
-// the Ansiblex bridges named in their corporation's structures.
+// the Ansiblex bridges named in their corporation's structures, stored
+// when the list syncs and shown only to that corporation (or its
+// alliance), never to an outsider.
 func TestMapJump(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, nil)
 	ctx := context.Background()
@@ -72,7 +74,7 @@ func TestMapJump(t *testing.T) {
 
 	// The reader's side.
 	u, _ := q.CreateUser(ctx)
-	seedCharacter(t, q, u.ID, 90000401, "Jump Pilot")
+	pilot := seedCharacter(t, q, u.ID, 90000401, "Jump Pilot")
 	cookie := sessionCookie(t, app, u.ID, 90000401, "Jump Pilot")
 	seedSnapshot(t, q, 90000401, esi.SnapSkills, esi.Skills{Skills: []esi.Skill{{SkillID: skillJDC, ActiveSkillLevel: 4, TrainedSkillLevel: 4}}})
 	seedSnapshot(t, q, 90000401, esi.SnapFatigue, esi.Fatigue{JumpFatigueExpireDate: "2099-01-01T00:00:00Z"})
@@ -80,6 +82,14 @@ func TestMapJump(t *testing.T) {
 		{StructureID: 1, TypeID: ansiblexTypeID, SystemID: 30004759, Name: "1DQ1-A » Y-OMTZ - Home Bridge", State: "shield_vulnerable"},
 		{StructureID: 2, TypeID: 35832, SystemID: 30004759, Name: "1DQ1-A - Keepstar"},
 	})
+	inCorp := func(char, corp int64) {
+		t.Helper()
+		if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{CharacterID: char, CorporationID: corp, UpdatedAt: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	inCorp(90000401, 98000401)
+	app.storeCorpBridges(ctx, pilot, 98000401)
 	_, body := getPage(t, app, cookie, "/map/mine.json?fresh=1")
 	var d minePayload
 	if err := json.Unmarshal([]byte(body), &d); err != nil {
@@ -90,5 +100,18 @@ func TestMapJump(t *testing.T) {
 	}
 	if len(d.Bridges) != 1 || d.Bridges[0].From != 30004759 || d.Bridges[0].To != 30004758 {
 		t.Errorf("the Ansiblex, read off its name: %+v", d.Bridges)
+	}
+
+	// A pilot of another corporation, in no shared alliance, sees none.
+	u2, _ := q.CreateUser(ctx)
+	seedCharacter(t, q, u2.ID, 90000402, "Outsider")
+	inCorp(90000402, 98000402)
+	_, body = getPage(t, app, sessionCookie(t, app, u2.ID, 90000402, "Outsider"), "/map/mine.json?fresh=1")
+	var d2 minePayload
+	if err := json.Unmarshal([]byte(body), &d2); err != nil {
+		t.Fatal(err)
+	}
+	if len(d2.Bridges) != 0 {
+		t.Errorf("an outsider sees another corporation's bridges: %+v", d2.Bridges)
 	}
 }

@@ -67,6 +67,9 @@
   --map-zone-3: var(--v-warn, #f0b429);
   --map-zone-4: var(--v-bad, #ff6a2a);
   --map-zone-5: rgba(214, 120, 110, 0.55);
+  /* Ansiblex bridges over the zones, and the dark edge under them. */
+  --map-bridge: #9fd8ff;
+  --map-bridge-halo: rgba(0, 0, 0, 0.8);
   /* Intel reports: cold cyan against the warm map, green for clear. */
   --map-intel: #3fd8ff;
   --map-intel-clear: #4fbf6a;

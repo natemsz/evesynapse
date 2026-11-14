@@ -1417,8 +1417,16 @@
     // that is showing (and lose it back the next frame): names stop
     // blinking in and out as the scale changes.
     var shownLabels = {};
+    // While the 3D view turns (its angle changed since the last frame),
+    // names already showing hold their places and no new ones come in:
+    // systems slide past each other as it turns, and in crowded space
+    // names would otherwise win and lose their room frame to frame.
+    var LABEL_HOLD_PAD = -8, labelTurn = { yaw: NaN, pitch: NaN };
     function drawLabels(k, ox, oy, r) {
       var nextShown = {}, queue = [];
+      var turning = !!V3 && (v3.yaw !== labelTurn.yaw || v3.pitch !== labelTurn.pitch);
+      labelTurn.yaw = V3 ? v3.yaw : NaN;
+      labelTurn.pitch = V3 ? v3.pitch : NaN;
       // Items in priority order; the passes do the rest.
       function inPlaceFirst(items, key, fn) {
         for (var i = 0; i < items.length; i++) fn(items[i]);
@@ -1457,7 +1465,8 @@
         // Geometric hysteresis: a name already showing claims a box
         // a little inside its text, a newcomer one a little outside,
         // so two names at the edge of touching don't trade places.
-        var pad = q.pass === 1 ? -2 : 4;
+        if (turning && q.pass === 2) return;
+        var pad = q.pass === 1 ? (turning ? Math.max(LABEL_HOLD_PAD, 1 - Math.min(w, q.size) / 2) : -2) : 4;
         if (!claim(lx - pad, ly - pad, w + 2 * pad, q.size + 2 * pad) && !q.force) return;
         if (q.key) nextShown[q.key] = 1;
         ctx.globalAlpha = q.alpha;
@@ -1535,6 +1544,7 @@
         ctx.globalAlpha = regionLabelAlpha(f) * (terrSov || F3l ? 0.5 : 1);
         var size = Math.min(12 + f * 0.8, 18) - (terrSov ? 3 : 0), regs = [];
         for (i = 0; i < P.regions.length; i++) {
+          if (turning && shownLabels["R" + i]) { regs.push(i); continue; }
           if (!G.members[i].length) continue;
           // In 3D with depth showing, the far regions go unnamed.
           if (V3 && D3 && !F3l && !(S3 && sel >= 0) && Math.abs(V3.rd[i] - D3.dp) / D3.span > DEPTH_EDGE[1]) continue;
@@ -1559,6 +1569,12 @@
           var vis = [];
           for (var o = 0; o < G.n; o++) {
             i = G.prio[o];
+            // While the view turns, a name showing stays (labelTurn).
+            if (turning && shownLabels["s" + i]) {
+              var hx = wx(i) * k + ox, hy = wy(i) * k + oy;
+              if (hx >= 0 && hy >= 0 && hx <= cw && hy <= ch) vis.push(i);
+              continue;
+            }
             // Around a jump route in 3D only the stops, the systems that
             // could stand in for them and those inside a bubble are named.
             if (F3l && F3l.tier[i] < 2 && !(B3 && B3.inside[i])) continue;

@@ -163,14 +163,16 @@ func TestPilotPageStatesAndDrain(t *testing.T) {
 
 	// The character sheet queues the owner's own public record
 	// while it is not ready, and its head carries the share
-	// block: the card image and the public profile link.
+	// controls: the Share pilot card dialog on the large sheet
+	// and the public profile link.
 	seedSnapshot(t, q, fixtureCharA, esi.SnapOnline, esi.Online{})
 	code, body = getPage(t, app, cookie, "/character/?character=90000001")
 	if code != http.StatusOK {
 		t.Fatalf("character sheet: status %d", code)
 	}
 	mustContain(t, "/character/", body,
-		"/pilot/card.png?character=90000001",
+		`data-share-card="pilot-share"`,
+		"/pilot/share.png?character=90000001",
 		"/pilot/?character=90000001&amp;view=public")
 	if rec, err := q.GetPilotRecord(ctx, fixtureCharA); err != nil || rec.State != "pending" {
 		t.Fatalf("own pilot want after the sheet: %+v err=%v, want pending", rec, err)

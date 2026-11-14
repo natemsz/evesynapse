@@ -1000,6 +1000,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/fragment", app.handlePilotFragment)
 		// The pilot's summary card, the page's og:image (cards.go).
 		r.Get("/card.png", app.handlePilotCard)
+		// The large share sheet the character sheet's Share
+		// button previews (cards_pilotshare.go).
+		r.Get("/share.png", app.handlePilotShareCard)
 		r.With(app.requireAuth).Post("/watch", app.handlePilotWatch)
 	})
 
@@ -1058,6 +1061,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// The public fit page's card (cards_more.go), beside the
 		// page the publicfits module routes.
 		r.With(anonPages).Get(publicFitsPath+"fit/{fitID}/card.png", app.handleFitCard)
+		r.With(anonPages).Get("/fittings/share/{token}/card.png", app.handleSharedFitCard)
 	}
 	// Battle reports (battle_pages.go): the account's own, and a
 	// shared one at its unlisted link.

@@ -45,7 +45,34 @@ type Card struct {
 	// the figures (a market card's price history). It shares the
 	// Detail line's band, so a card carries one or the other.
 	Spark *Spark
+	// Glance replaces the figure row with a grid of tiles, three
+	// to a row, the way the fitting tool's stats column opens. The
+	// Detail line then moves to the footer's right.
+	Glance []Tile
 }
+
+// Tile is one glance tile: a label in its kind's colour over a
+// figure and a short second line.
+type Tile struct {
+	Label string
+	Value string
+	Sub   string
+	// Color is the tile's kind colour (its edge and wash).
+	Color color.NRGBA
+	// Warn draws the figure in the warning colour (a capacitor
+	// that runs out).
+	Warn bool
+}
+
+// Kind colours for glance tiles: the fitting tool's --k-* tokens.
+var (
+	KindWeapon     = hex(0xff8a5c)
+	KindArmor      = hex(0xe0a060)
+	KindShield     = hex(0x5fc9e8)
+	KindCapacitor  = hex(0xf2d04a)
+	KindNavigation = hex(0x7dc96f)
+	KindTargeting  = hex(0xc79bff)
+)
 
 // Badge is one large figure centred in the panel with a caption
 // under it (a system's security status).
@@ -178,6 +205,19 @@ func Render(c Card) *image.RGBA {
 		sub := newText(body, subCap, 0)
 		sub.draw(img, colX, subBase, sub.fit(c.Subtitle, avail), mutedC)
 	}
+	if len(c.Glance) > 0 {
+		drawGlance(img, c.Glance, colX, right)
+		foot := newText(body, footCap, 0)
+		foot.draw(img, margin, footBase, "evesynapse.app", muted2C)
+		if d := c.Detail; d != nil && d.Text != "" {
+			label := newText(display, labelCap, 3)
+			line := newText(display, 22, 0)
+			tw := line.width(d.Text)
+			line.draw(img, right-tw, footBase, d.Text, textBright)
+			label.draw(img, right-tw-14-label.width(d.Label), footBase, d.Label, muted2C)
+		}
+		return img
+	}
 	drawStats(img, c.Stats, right)
 	if d := c.Detail; d != nil && d.Text != "" {
 		// With no figure row the detail line takes its place.
@@ -221,8 +261,9 @@ func PNG(c Card) ([]byte, error) {
 func field(img *image.RGBA) {
 	const cx, rx, ry = 1020.0, 560.0, 240.0
 	clear := color.NRGBA{glow2.R, glow2.G, glow2.B, 0}
-	for y := range H {
-		for x := range W {
+	b := img.Bounds()
+	for y := range b.Dy() {
+		for x := range b.Dx() {
 			g := mix(groundTop, groundBot, float64(x)/900+float64(y)/480)
 			i := img.PixOffset(x, y)
 			img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = g.R, g.G, g.B, 0xff
@@ -412,6 +453,40 @@ func drawStats(img *image.RGBA, stats []Stat, right float64) {
 			fx += fig.width(s.Text)
 		}
 		x += math.Max(lw, fw) + statGap
+	}
+}
+
+// drawGlance draws the tile grid from the text column to the right
+// edge: three tiles a row, two rows, under the name and subtitle.
+func drawGlance(img *image.RGBA, tiles []Tile, x0, right float64) {
+	const top, tileH, gap = 336.0, 106.0, 14.0
+	w := (right - x0 - 2*gap) / 3
+	label := newText(display, 12.5, 2.6)
+	fig := newText(display, 30, 0)
+	sub := newText(body, 15, 0)
+	for i, t := range tiles {
+		if i >= 6 {
+			break
+		}
+		tx := x0 + float64(i%3)*(w+gap)
+		ty := top + float64(i/3)*(tileH+gap)
+		k := t.Color
+		if k == (color.NRGBA{}) {
+			k = accentC
+		}
+		fill(img, roundRect(tx, ty, tx+w, ty+tileH, 8), solid(alpha(textC, .10)))
+		fill(img, roundRect(tx+1, ty+1, tx+w-1, ty+tileH-1, 7), solid(alpha(panelC, .94)))
+		fill(img, roundRect(tx+1, ty+1, tx+w-1, ty+tileH-1, 7), linear(tx, ty, tx+w*.7, ty+tileH, alpha(k, .15), alpha(k, 0)))
+		fill(img, roundRect(tx, ty, tx+3, ty+tileH, 1.5), solid(k))
+		label.draw(img, tx+18, ty+28, label.fit(t.Label, w-30), k)
+		col := textBright
+		if t.Warn {
+			col = hex(0xe5484d)
+		}
+		fig.draw(img, tx+18, ty+68, fig.fit(t.Value, w-30), col)
+		if t.Sub != "" {
+			sub.draw(img, tx+18, ty+93, sub.fit(t.Sub, w-30), mutedC)
+		}
 	}
 }
 

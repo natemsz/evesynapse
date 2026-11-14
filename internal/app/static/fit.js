@@ -1222,6 +1222,8 @@ var FitGauges = (function () {
         isPublic: pubChkInit.checked, promote: false,
         fit: { name: nm, shipTypeId: state.shipTypeId, items: state.items, charges: state.charges, implants: state.implants || {} }
       })
+    }).then(function (resp) {
+      if (resp && resp.ok) pointShare(pubChkInit.checked ? "/fittings/public/fit/" + localID + "/" : "");
     }).catch(function () {});
   });
   syncFilterUI();
@@ -3752,6 +3754,18 @@ var FitGauges = (function () {
       }).catch(function () {});
     });
   }
+  // The Share button opens the shared share dialog on the fit's
+  // card. It shows once the fit has a page of its own: saved and
+  // public, or shared by link; pointShare aims it at that page.
+  function pointShare(pagePath) {
+    var btn = document.getElementById("fit-share-btn");
+    if (!btn) return;
+    if (!pagePath) { btn.hidden = true; return; }
+    btn.setAttribute("data-share-image", pagePath + "card.png");
+    btn.setAttribute("data-share-download", pagePath + "card.png?download=1");
+    btn.setAttribute("data-share-link", pagePath);
+    btn.hidden = false;
+  }
   var shareAnonBtn = document.getElementById("fit-share-anon");
   if (shareAnonBtn) {
     shareAnonBtn.addEventListener("click", function () {
@@ -3779,6 +3793,7 @@ var FitGauges = (function () {
         return resp.ok ? resp.json() : null;
       }).then(function (row) {
         if (row && row.shareUrl) clearDirty(); // the shared copy is this visitor's save
+        if (row && row.shareUrl) pointShare(row.shareUrl);
         if (row && row.shareUrl && linkEl) {
           var a = document.createElement("a");
           a.href = row.shareUrl;

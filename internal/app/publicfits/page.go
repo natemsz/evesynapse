@@ -491,6 +491,8 @@ type publicFitView struct {
 	Preparing    bool
 	ShareDiscord string // a ready-to-paste Discord message: the fit, its ship and the link (Discord has no share URL)
 	ShareReddit  string
+	// ShareCard is the Share card dialog: the fit's summary card.
+	ShareCard *module.ShareCard
 }
 
 // handlePublicFitPage renders one stable public fit page:
@@ -560,6 +562,8 @@ func (app *page) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
 	view.Sections, view.Sim, view.EFT, view.Preparing = body.Sections, body.Sim, body.EFT, body.Preparing
 	// Links out need an absolute address to point back at.
 	if view.PageURL != "" {
+		view.ShareCard = module.FitShareCard(card.FitURL, row.Name, ship)
+		view.ShareCard.Link = view.PageURL
 		view.ShareDiscord = row.Name + " (" + ship + "): " + view.PageURL
 		view.ShareReddit = "https://www.reddit.com/submit?url=" + url.QueryEscape(view.PageURL) + "&title=" + url.QueryEscape(row.Name+" ("+ship+")")
 	}
@@ -633,6 +637,8 @@ func (app *page) handleSharedFitPage(w http.ResponseWriter, r *http.Request) {
 	}
 	view.Sections, view.Sim, view.EFT, view.Preparing = body.Sections, body.Sim, body.EFT, body.Preparing
 	if view.PageURL != "" {
+		view.ShareCard = module.FitShareCard(card.FitURL, row.Name, ship)
+		view.ShareCard.Link = view.PageURL
 		view.ShareDiscord = row.Name + " (" + ship + "): " + view.PageURL
 		view.ShareReddit = "https://www.reddit.com/submit?url=" + url.QueryEscape(view.PageURL) + "&title=" + url.QueryEscape(row.Name+" ("+ship+")")
 	}
@@ -652,6 +658,7 @@ func (app *page) handleSharedFitPage(w http.ResponseWriter, r *http.Request) {
 	data.HeadMeta = app.deps.HeadMeta(module.PageMeta{
 		Title:       row.Name + " (" + ship + ")",
 		Description: ship + " fitting shared by link.",
+		ImagePath:   sharePath + "card.png",
 	})
 	data.PublicFit = view
 	app.deps.Render(ctx, w, http.StatusOK, "fit_public.html", data)

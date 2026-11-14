@@ -43,6 +43,10 @@ type fitEditorView struct {
 	// AnonFits is the anonymous creator's shared fits, from
 	// their history cookie.
 	AnonFits []anonFitEntry
+	// ShareCard is the editor's Share dialog. It points at the
+	// open fit's public page when the fit is saved and public;
+	// otherwise it waits for a share link (fit.js retargets it).
+	ShareCard *module.ShareCard
 }
 
 // fitSimRequest is the simulate/save/export request body: the fit
@@ -1149,6 +1153,13 @@ func (app *tool) attachFitEditor(ctx context.Context, r *http.Request, data *Pag
 	}
 	cloneID, _ := strconv.ParseInt(q.Get("clone"), 10, 64)
 	editor.Sim = app.deps.FitBuilder().BuildFitSimView(ctx, doc, pilotID, pilotLabel, cloneID)
+	sharePath := ""
+	if editor.LocalID > 0 && editor.IsPublic {
+		sharePath = module.PublicFitsPath + "fit/" + strconv.FormatInt(editor.LocalID, 10) + "/"
+	}
+	if editor.Sim != nil {
+		editor.ShareCard = module.FitShareCard(sharePath, editor.Sim.FitName, editor.Sim.ShipName)
+	}
 	editor.CloneID = editor.Sim.CloneID
 	editor.Clones = editor.Sim.Clones
 

@@ -65,7 +65,7 @@ const (
 	cardPictureMax = 4 << 20
 	// cardStyle versions the drawing itself: bump it when the
 	// template changes so clients holding an ETag fetch anew.
-	cardStyle = "1"
+	cardStyle = "2"
 )
 
 // cardState is the generator's caches and limits, made on first use
@@ -122,8 +122,8 @@ func cardVersion(data string, picture string, c card.Card) string {
 	if c.Spark != nil {
 		spark = *c.Spark
 	}
-	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%q\x00%q\x00%q\x00%+v\x00%+v\x00%+v\x00%+v\x00%+v\x00%t",
-		cardStyle, data, picture, c.Kind, c.Title, c.Subtitle, c.Stats, detail, badge, c.Bars, spark, c.Mark)
+	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%q\x00%q\x00%q\x00%+v\x00%+v\x00%+v\x00%+v\x00%+v\x00%t\x00%+v",
+		cardStyle, data, picture, c.Kind, c.Title, c.Subtitle, c.Stats, detail, badge, c.Bars, spark, c.Mark, c.Glance)
 	return hex.EncodeToString(h.Sum(nil)[:12])
 }
 
@@ -262,19 +262,42 @@ func joinNonEmpty(sep string, parts ...string) string {
 // and draws otherwise; concurrent requests for the same version
 // share one draw.
 func (app *Application) serveCard(w http.ResponseWriter, r *http.Request, job cardJob) {
-	etag := `"` + job.version + `"`
+	app.serveDrawn(w, r, job.key, job.version, job.maxAge, func(ctx context.Context) ([]byte, bool, error) {
+		pic, complete := app.cardPicture(ctx, job.picture)
+		if pic == nil && job.pictureAlt != "" {
+			pic, complete = app.cardPicture(ctx, job.pictureAlt)
+		}
+		c := job.card
+		c.Picture = pic
+		data, err := card.PNG(c)
+		return data, complete, err
+	})
+}
+
+// serveDrawn is the shared serving path for any drawn image: the
+// ETag answer, the byte cache keyed by version, one draw slot per
+// draw and one draw per version however many ask at once. draw
+// returns the PNG and whether every picture it needed arrived; an
+// incomplete PNG is served but not kept.
+func (app *Application) serveDrawn(w http.ResponseWriter, r *http.Request, key, version string, maxAge time.Duration, draw func(ctx context.Context) ([]byte, bool, error)) {
+	if r.URL.Query().Get("download") == "1" {
+		// The share dialog's Download: the link's own download
+		// attribute names the file.
+		w.Header().Set("Content-Disposition", "attachment")
+	}
+	etag := `"` + version + `"`
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "public, max-age="+strconv.Itoa(int(job.maxAge.Seconds())))
+	w.Header().Set("Cache-Control", "public, max-age="+strconv.Itoa(int(maxAge.Seconds())))
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 	st := app.cardsState()
-	if e, ok := st.cards.get(job.key); ok && e.ver == job.version {
+	if e, ok := st.cards.get(key); ok && e.ver == version {
 		writeCardPNG(w, e.data)
 		return
 	}
-	v, err, _ := st.group.Do(job.key+"@"+job.version, func() (any, error) {
+	v, err, _ := st.group.Do(key+"@"+version, func() (any, error) {
 		// The draw outlives any one request: the first caller's
 		// cancellation must not fail the others waiting on it.
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -285,24 +308,18 @@ func (app *Application) serveCard(w http.ResponseWriter, r *http.Request, job ca
 			return nil, ctx.Err()
 		}
 		defer func() { <-st.slots }()
-		pic, complete := app.cardPicture(ctx, job.picture)
-		if pic == nil && job.pictureAlt != "" {
-			pic, complete = app.cardPicture(ctx, job.pictureAlt)
-		}
-		c := job.card
-		c.Picture = pic
-		data, err := card.PNG(c)
+		data, complete, err := draw(ctx)
 		if err != nil {
 			return nil, err
 		}
 		st.draws.Add(1)
 		if complete {
-			st.cards.put(lruEntry{key: job.key, ver: job.version, data: data})
+			st.cards.put(lruEntry{key: key, ver: version, data: data})
 		}
 		return data, nil
 	})
 	if err != nil {
-		logging.Warnf("card %s: %v", job.key, err)
+		logging.Warnf("card %s: %v", key, err)
 		app.serveFallbackCard(w)
 		return
 	}

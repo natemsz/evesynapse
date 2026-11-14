@@ -255,6 +255,8 @@ html[data-theme="light"] .map {
 .map-tip-head { white-space: nowrap; }
 .map-tip-head strong { color: var(--text-bright); }
 .map-tip-region { color: var(--muted-2); }
+.map-tip-value { color: var(--text); font-variant-numeric: tabular-nums; }
+.map-tip-value.big { color: var(--success); }
 .map-tip-row { display: flex; justify-content: space-between; gap: 0.9rem; margin-top: 0.15rem !important; }
 .map-tip-row span:first-child { color: var(--muted-2); white-space: nowrap; }
 .map-tip-row span:last-child { color: var(--text); text-align: right; }
@@ -783,7 +785,8 @@ html.map-full-open { overflow: hidden; }
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
-.map-layer-npc {
+.map-layer-npc,
+.map-layer-check {
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -791,8 +794,11 @@ html.map-full-open { overflow: hidden; }
   color: var(--muted-2);
   cursor: pointer;
 }
-.map-layer-npc:hover { color: var(--text); }
-.map-layer-npc input { accent-color: var(--accent); margin: 0; }
+.map-layer-npc:hover,
+.map-layer-check:hover { color: var(--text); }
+.map-layer-npc input,
+.map-layer-check input { accent-color: var(--accent); margin: 0; }
+.map-layer-check { margin-top: 0.35rem; }
 /* Zones: whose capital, and a way to it. */
 .map-zones-pick {
   display: grid;
@@ -1027,7 +1033,7 @@ html.map-full-open { overflow: hidden; }
 .map-kill-tags span { padding: 0 0.35rem; border: 1px solid currentColor; border-radius: var(--r-xs); font-size: var(--fs-2xs); line-height: 1.35; color: var(--accent); }
 .map-kill-tags .warn { color: var(--danger); }
 .map-kill-tags .dim { color: var(--muted); }
-.map-kill-more { display: inline-block; margin-top: 0.5rem; }
+.map-kill-links { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem !important; }
 .map-feed-latest { list-style: none; margin: 0.35rem 0 0; padding: 0; pointer-events: auto; }
 .map-feed-latest button {
   display: flex;

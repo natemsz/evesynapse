@@ -2247,7 +2247,9 @@
       spin.timer = 0;
       if (!el.isConnected || !v3.on || still || !V3) return;
       if (v3.anim || gesture || document.hidden) { spinWake(); return; }
-      var p = sel >= 0 ? sel
+      // Following kills, the spin turns about the kill showing.
+      var p = TOUR.on && layer === "feed" && TOUR.cur ? TOUR.cur.s
+        : sel >= 0 ? sel
         : focus3() ? routePath[routePath.length >> 1]
         : cam.k <= fitK() * 1.5 ? middle3()
         : nearestUniverse(cam.x, cam.y);
@@ -2729,6 +2731,8 @@
       KF.open = null;
       el.classList.remove("map-kill-open");
       if (killCard) killCard.hidden = true;
+      // A card hidden under the pointer never hears it leave.
+      TOUR.over = false;
       schedule();
     }
     // killsNear: the layer's other kills in b's system in the last
@@ -2779,7 +2783,7 @@
     function tourStop() {
       clearTimeout(TOUR.timer); clearTimeout(TOUR.redo);
       TOUR.timer = TOUR.redo = 0;
-      TOUR.q = []; TOUR.cur = null; TOUR.seen = {}; TOUR.hold = 0;
+      TOUR.q = []; TOUR.cur = null; TOUR.seen = {}; TOUR.hold = 0; TOUR.over = false;
     }
     function tourSet(on) {
       TOUR.on = on;
@@ -2835,6 +2839,17 @@
       if (mode !== "universe") leaveRegion();
       var x = wx(b.s), y = wy(b.s), fk = fitK();
       var k = Math.min(Math.max(cam.k, fk * 5), fk * 12);
+      // In 3D the kill's place moves as the view turns: it becomes
+      // the pivot and glides to the middle, held there while the view
+      // spins, and the zoom eases in alongside.
+      if (v3.on && V3) {
+        glide3(b.s);
+        glideZoom(cw / 2, ch / 2, k / cam.k, TOUR_FLY_MS);
+        openKill(b);
+        renderLegend();
+        TOUR.timer = setTimeout(tourNext, TOUR_FLY_MS + (TOUR.q.length > 2 ? TOUR_RUSH_MS : TOUR_SHOW_MS));
+        return;
+      }
       // Pull back on a flight longer than the stage is wide.
       var far = Math.hypot(x - cam.x, y - cam.y) * k / Math.max(cw, 1);
       flyTo(x, y, k, TOUR_FLY_MS, far > 1 ? Math.min(2.4, Math.log(far) + 0.7) : 0);

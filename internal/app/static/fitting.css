@@ -90,7 +90,8 @@ html.fit-full-open { overflow: hidden; }
   padding: max(var(--space-3), env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right)) max(var(--space-3), env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-left));
 }
 #fit-editor.fit-full::backdrop { background: var(--panel); }
-#fit-editor.fit-full .fit-visual { width: min(46rem, 100%, calc(100dvh - 3rem)); }
+#fit-editor.fit-full .fit-visual { width: min(46rem, 100%, calc(100dvh - 5.5rem)); }
+#fit-editor.fit-full .fit-vhistory { width: min(46rem, 100%, calc(100dvh - 5.5rem)); }
 #fit-editor.fit-full .fit-vlabel { font-size: clamp(var(--fs-2xs), 2cqi, var(--fs-sm)); }
 #fit-editor.fit-full .fit-vslot { width: 8.5cqi; height: 8.5cqi; }
 .fit-vfull-btn { display: inline-flex; align-items: center; justify-content: center; }

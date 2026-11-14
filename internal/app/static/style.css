@@ -4329,13 +4329,14 @@ html[data-theme="light"] .fit-head select {
   stroke: color-mix(in srgb, var(--ring) 55%, transparent);
   stroke-width: 0.7;
 }
+/* Undo, redo, full screen and the keys card: a row of their own
+   above the ring, right-aligned to it, so they never cover a slot. */
 .fit-vhistory {
-  position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
   display: flex;
+  justify-content: flex-end;
   gap: 0.3rem;
-  z-index: 6;
+  width: min(34rem, 100%);
+  margin: 0 auto 0.3rem;
 }
 .fit-vhist {
   width: 1.9rem;

@@ -1285,8 +1285,8 @@ type FitStatsView struct {
 	RangeEnd   string
 	CapState   string
 	CapStable  bool
-	// CapChip and CapChipLabel are the capacitor in a phone header
-	// chip: "Stable" or the stable level under "Cap stable", or how
+	// CapChip and CapChipLabel are the capacitor in its glance tile:
+	// "Stable" or the stable level under "Cap stable", or how
 	// long it lasts under "Cap lasts".
 	CapChip       string
 	CapChipLabel  string

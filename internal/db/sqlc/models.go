@@ -510,15 +510,16 @@ type Doctrine struct {
 }
 
 type DoctrineFit struct {
-	ID         int64     `json:"id"`
-	DoctrineID int64     `json:"doctrine_id"`
-	Name       string    `json:"name"`
-	ShipTypeID int64     `json:"ship_type_id"`
-	ItemsJson  string    `json:"items_json"`
-	FleetRole  string    `json:"fleet_role"`
-	Note       string    `json:"note"`
-	AddedBy    int64     `json:"added_by"`
-	AddedAt    time.Time `json:"added_at"`
+	ID         int64          `json:"id"`
+	DoctrineID int64          `json:"doctrine_id"`
+	Name       string         `json:"name"`
+	ShipTypeID int64          `json:"ship_type_id"`
+	ItemsJson  string         `json:"items_json"`
+	FleetRole  string         `json:"fleet_role"`
+	Note       string         `json:"note"`
+	AddedBy    int64          `json:"added_by"`
+	AddedAt    time.Time      `json:"added_at"`
+	BoostsJson sql.NullString `json:"boosts_json"`
 }
 
 type EntityName struct {

@@ -43,6 +43,7 @@ var Module = module.Module{
 		auth.Get("/doctrines/fits/", h((*mod).handleCorpFits))
 		auth.Post("/doctrines/create", h((*mod).handleDoctrineCreate))
 		auth.Get("/doctrines/suggest", h((*mod).handleDoctrineSuggest))
+		auth.Get("/doctrines/boosts.json", h((*mod).handleDoctrineBoosts))
 		auth.Get("/doctrines/{doctrineID}", h((*mod).handleDoctrine))
 		auth.Post("/doctrines/{doctrineID}/save", h((*mod).handleDoctrineSave))
 		auth.Post("/doctrines/{doctrineID}/delete", h((*mod).handleDoctrineDelete))

@@ -564,6 +564,34 @@ html.fit-dragging, html.fit-dragging * { -webkit-user-select: none; user-select:
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
 }
 .fit-boost-acting ul { margin: 0; padding-left: 1.1rem; }
+.fit-boost-adds { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.fit-boost-adds .fit-boost-add { flex: 1 1 12rem; }
+/* A doctrine's boosts: the doctrines whose fits load bursts, one
+   button each, under the add buttons. */
+.fit-doctrine-boosts { display: grid; gap: 0.3rem; margin-top: 0.4rem; }
+.fit-doctrine-boosts[hidden] { display: none; }
+.fit-doctrine-boosts .fit-note { margin: 0; font-size: var(--fs-sm); }
+.fit-doctrine-opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem;
+  padding: 0.35rem 0.5rem; text-align: left; font: inherit; cursor: pointer;
+  color: var(--text); background: var(--row-alt); border: 1px solid var(--hairline); border-radius: var(--r-sm);
+}
+.fit-doctrine-opt:hover, .fit-doctrine-opt:focus-visible { border-color: var(--accent); }
+.fit-doctrine-opt b { font-weight: 600; font-size: var(--fs-sm); }
+.fit-doctrine-opt small { font-size: var(--fs-xs); color: var(--muted-2); }
+/* The system the fit flies in, and what it changes on the fit. */
+.fit-env { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--hairline); }
+.fit-env h5 {
+  margin: 0 0 0.3rem; font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.fit-env-pick { display: grid; gap: 0.15rem; }
+.fit-env-pick > span { font-size: var(--fs-xs); color: var(--muted-2); }
+.fit-env-pick select {
+  width: 100%; min-width: 0; padding: 0.3rem 0.4rem; font: inherit; font-size: var(--fs-sm);
+  color: var(--text); background: var(--input-bg); border: 1px solid var(--glass-edge); border-radius: var(--r-sm);
+}
+.fit-env-effects { margin-top: 0.4rem; }
 
 /* --- fighters ---
    The Fighters bay states its limits under the heading (launch

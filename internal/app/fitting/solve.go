@@ -82,7 +82,7 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 	levels, _ := app.fv.FitPilotLevels(ctx, req.Pilot, snap, doc)
 	engineItems := solveEngineItems(snap, doc)
 	compute := func(implants []int64) *fit.Result {
-		return fit.Compute(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implants)
+		return fit.ComputeEnv(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implants, nil, doc.Env)
 	}
 	baseRes := compute(base)
 	overCPU := baseRes.CPUUsed > baseRes.CPUMax+1e-6

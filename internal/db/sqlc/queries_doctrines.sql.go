@@ -7,24 +7,26 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
 const addDoctrineFit = `-- name: AddDoctrineFit :one
-INSERT INTO doctrine_fits (doctrine_id, name, ship_type_id, items_json, fleet_role, note, added_by, added_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO doctrine_fits (doctrine_id, name, ship_type_id, items_json, fleet_role, note, added_by, added_at, boosts_json)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING id
 `
 
 type AddDoctrineFitParams struct {
-	DoctrineID int64     `json:"doctrine_id"`
-	Name       string    `json:"name"`
-	ShipTypeID int64     `json:"ship_type_id"`
-	ItemsJson  string    `json:"items_json"`
-	FleetRole  string    `json:"fleet_role"`
-	Note       string    `json:"note"`
-	AddedBy    int64     `json:"added_by"`
-	AddedAt    time.Time `json:"added_at"`
+	DoctrineID int64          `json:"doctrine_id"`
+	Name       string         `json:"name"`
+	ShipTypeID int64          `json:"ship_type_id"`
+	ItemsJson  string         `json:"items_json"`
+	FleetRole  string         `json:"fleet_role"`
+	Note       string         `json:"note"`
+	AddedBy    int64          `json:"added_by"`
+	AddedAt    time.Time      `json:"added_at"`
+	BoostsJson sql.NullString `json:"boosts_json"`
 }
 
 func (q *Queries) AddDoctrineFit(ctx context.Context, arg AddDoctrineFitParams) (int64, error) {
@@ -37,6 +39,7 @@ func (q *Queries) AddDoctrineFit(ctx context.Context, arg AddDoctrineFitParams) 
 		arg.Note,
 		arg.AddedBy,
 		arg.AddedAt,
+		arg.BoostsJson,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -151,23 +154,24 @@ func (q *Queries) GetDoctrine(ctx context.Context, id int64) (Doctrine, error) {
 }
 
 const getDoctrineFit = `-- name: GetDoctrineFit :one
-SELECT f.id, f.doctrine_id, f.name, f.ship_type_id, f.items_json, f.fleet_role, f.note, f.added_by, f.added_at, d.corporation_id, d.name AS doctrine_name
+SELECT f.id, f.doctrine_id, f.name, f.ship_type_id, f.items_json, f.fleet_role, f.note, f.added_by, f.added_at, f.boosts_json, d.corporation_id, d.name AS doctrine_name
 FROM doctrine_fits f JOIN doctrines d ON d.id = f.doctrine_id
 WHERE f.id = $1
 `
 
 type GetDoctrineFitRow struct {
-	ID            int64     `json:"id"`
-	DoctrineID    int64     `json:"doctrine_id"`
-	Name          string    `json:"name"`
-	ShipTypeID    int64     `json:"ship_type_id"`
-	ItemsJson     string    `json:"items_json"`
-	FleetRole     string    `json:"fleet_role"`
-	Note          string    `json:"note"`
-	AddedBy       int64     `json:"added_by"`
-	AddedAt       time.Time `json:"added_at"`
-	CorporationID int64     `json:"corporation_id"`
-	DoctrineName  string    `json:"doctrine_name"`
+	ID            int64          `json:"id"`
+	DoctrineID    int64          `json:"doctrine_id"`
+	Name          string         `json:"name"`
+	ShipTypeID    int64          `json:"ship_type_id"`
+	ItemsJson     string         `json:"items_json"`
+	FleetRole     string         `json:"fleet_role"`
+	Note          string         `json:"note"`
+	AddedBy       int64          `json:"added_by"`
+	AddedAt       time.Time      `json:"added_at"`
+	BoostsJson    sql.NullString `json:"boosts_json"`
+	CorporationID int64          `json:"corporation_id"`
+	DoctrineName  string         `json:"doctrine_name"`
 }
 
 func (q *Queries) GetDoctrineFit(ctx context.Context, id int64) (GetDoctrineFitRow, error) {
@@ -183,14 +187,56 @@ func (q *Queries) GetDoctrineFit(ctx context.Context, id int64) (GetDoctrineFitR
 		&i.Note,
 		&i.AddedBy,
 		&i.AddedAt,
+		&i.BoostsJson,
 		&i.CorporationID,
 		&i.DoctrineName,
 	)
 	return i, err
 }
 
+const listDoctrineFitBoosts = `-- name: ListDoctrineFitBoosts :many
+SELECT id, doctrine_id, items_json, boosts_json FROM doctrine_fits
+WHERE doctrine_id = ANY($1::bigint[])
+ORDER BY doctrine_id, id
+LIMIT 400
+`
+
+type ListDoctrineFitBoostsRow struct {
+	ID         int64          `json:"id"`
+	DoctrineID int64          `json:"doctrine_id"`
+	ItemsJson  string         `json:"items_json"`
+	BoostsJson sql.NullString `json:"boosts_json"`
+}
+
+// The fleet boosts of several doctrines' fits, for the fitting tool's
+// doctrine boosts; boosts_json NULL marks a fit not yet worked out.
+func (q *Queries) ListDoctrineFitBoosts(ctx context.Context, doctrineIds []int64) ([]ListDoctrineFitBoostsRow, error) {
+	rows, err := q.db.Query(ctx, listDoctrineFitBoosts, doctrineIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDoctrineFitBoostsRow
+	for rows.Next() {
+		var i ListDoctrineFitBoostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.DoctrineID,
+			&i.ItemsJson,
+			&i.BoostsJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDoctrineFits = `-- name: ListDoctrineFits :many
-SELECT id, doctrine_id, name, ship_type_id, items_json, fleet_role, note, added_by, added_at FROM doctrine_fits
+SELECT id, doctrine_id, name, ship_type_id, items_json, fleet_role, note, added_by, added_at, boosts_json FROM doctrine_fits
 WHERE doctrine_id = ANY($1::bigint[])
 ORDER BY doctrine_id, id
 `
@@ -215,6 +261,7 @@ func (q *Queries) ListDoctrineFits(ctx context.Context, doctrineIds []int64) ([]
 			&i.Note,
 			&i.AddedBy,
 			&i.AddedAt,
+			&i.BoostsJson,
 		); err != nil {
 			return nil, err
 		}
@@ -260,6 +307,20 @@ func (q *Queries) ListDoctrinesForCorporations(ctx context.Context, corporationI
 		return nil, err
 	}
 	return items, nil
+}
+
+const setDoctrineFitBoosts = `-- name: SetDoctrineFitBoosts :exec
+UPDATE doctrine_fits SET boosts_json = $2 WHERE id = $1
+`
+
+type SetDoctrineFitBoostsParams struct {
+	ID         int64          `json:"id"`
+	BoostsJson sql.NullString `json:"boosts_json"`
+}
+
+func (q *Queries) SetDoctrineFitBoosts(ctx context.Context, arg SetDoctrineFitBoostsParams) error {
+	_, err := q.db.Exec(ctx, setDoctrineFitBoosts, arg.ID, arg.BoostsJson)
+	return err
 }
 
 const updateDoctrine = `-- name: UpdateDoctrine :execrows

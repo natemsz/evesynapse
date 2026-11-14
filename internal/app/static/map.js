@@ -1686,7 +1686,9 @@
         if (mode !== "universe" && S.r[i] !== region) continue;
         var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
         if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) continue;
-        var t = tOf(i);
+        // Clamped: threat's scale at "All activity" puts busy systems
+        // past 1, and a step past the last would never be drawn.
+        var t = Math.min(1, Math.max(0, tOf(i)));
         s = Math.round(t * HEAT_STEPS);
         if (t > 0 && t >= style.from) {
           var rr = r + (style.base + style.size * t) * grow;

@@ -5974,8 +5974,10 @@
   });
 })();
 
-// Copy buttons: [data-copy] copies its data-copy-text, or the
-// text of [data-copy-from]; the label flips to Copied briefly.
+// Copy buttons: [data-copy] copies its data-copy-text, the text of
+// [data-copy-from], or the full address of its data-copy-url (a
+// path on this site, for share buttons); the label flips to Copied
+// briefly.
 // Server-rendered share blocks use it so no page needs its own
 // clipboard code.
 (function () {
@@ -5989,6 +5991,8 @@
     var btn = ev.target && ev.target.closest ? ev.target.closest("[data-copy]") : null;
     if (!btn) return;
     var text = btn.getAttribute("data-copy-text") || "";
+    var link = btn.getAttribute("data-copy-url");
+    if (link) text = new URL(link, location.href).href;
     var from = btn.getAttribute("data-copy-from");
     if (from) {
       var el = document.getElementById(from);

@@ -137,7 +137,10 @@
     <section class="map-route" aria-label="Route" hidden>
       <div class="map-route-head">
         <h2 class="map-route-title">Route</h2>
-        <button type="button" class="map-card-close" data-route-close aria-label="Clear the route">×</button>
+        <span class="map-route-tools">
+          <button type="button" class="map-route-copy" data-route-copy aria-label="Copy the route as text for chat" title="Copy route as text" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+          <button type="button" class="map-card-close" data-route-close aria-label="Clear the route">×</button>
+        </span>
       </div>
       <div class="map-route-ends">
         <span class="map-route-lbl">From</span><span class="map-route-end" data-route-end="from"></span>

@@ -441,6 +441,67 @@
     }
     return out;
   }
+  // bestSwaps: of each stop's stand-ins (swapStops), the few that
+  // come closest to the stop the planner chose, judged by the route's
+  // preference. Fewest jumps ties every stand-in, so the quietest cyno
+  // points come first; least fatigue weighs the light years of the
+  // two legs; avoid danger weighs the threat where the cyno is lit. A
+  // stand-in clearly worse than the chosen stop is not offered.
+  // legs(p, c, n) is the light years from p through c to n; danger(c)
+  // the price of lighting a cyno in c (routeCost "calm").
+  var SWAP_SHOW = 2, SWAP_LY_SLACK = 1.1, SWAP_LY_PLUS = 0.5, SWAP_DANGER_SLACK = 2;
+  function bestSwaps(path, swaps, mode, legs, danger) {
+    return swaps.map(function (cands, k) {
+      var p = path[k], s = path[k + 1], n = path[k + 2];
+      var ly0 = legs(p, s, n), d0 = danger(s);
+      var keep = cands.filter(function (c) {
+        return mode === "safe" ? legs(p, c, n) <= ly0 * SWAP_LY_SLACK + SWAP_LY_PLUS : danger(c) <= d0 + SWAP_DANGER_SLACK;
+      });
+      keep.sort(function (a, b) {
+        var dd = danger(a) - danger(b), dl = legs(p, a, n) - legs(p, b, n);
+        return mode === "safe" ? dl || dd : dd || dl;
+      });
+      return keep.slice(0, SWAP_SHOW);
+    });
+  }
+  // routeText: a route as plain text for a chat message. The stops sit
+  // in a code block, which keeps their columns in Discord and is
+  // harmless elsewhere; the map link follows outside it, so chat makes
+  // it clickable. r: { head, sub, stops: [{ name, sec, region, leg,
+  // mark, alts }], notes, url }. A route too long for one message
+  // keeps its ends, its marked stops and its region changes, and
+  // counts the systems between.
+  var ROUTE_TEXT_MAX = 1800;
+  function routeText(r) {
+    var stops = r.stops, n = stops.length;
+    function pad(t, w) { return t + " ".repeat(Math.max(0, w - t.length)); }
+    function render(keep) {
+      var w = 0, lw = 0, rw = 0, nw = String(n - 1).length, out = [], gap = 0;
+      stops.forEach(function (s, k) {
+        if (!keep(k)) return;
+        w = Math.max(w, s.name.length);
+        lw = Math.max(lw, (s.leg || "").length);
+        if (k === 0 || s.region !== stops[k - 1].region) rw = Math.max(rw, s.region.length);
+      });
+      stops.forEach(function (s, k) {
+        if (!keep(k)) { gap++; return; }
+        if (gap) { out.push(" ".repeat(nw + 2) + "(" + gap + (gap === 1 ? " system)" : " systems)")); gap = 0; }
+        var tail = [pad(k === 0 || s.region !== stops[k - 1].region ? s.region : "", rw)];
+        if (s.mark) tail.push(s.mark);
+        if (s.alts && s.alts.length) tail.push("or " + s.alts.join(", "));
+        var line = " ".repeat(nw - String(k).length) + k + ". " + pad(s.name, w) + " " + " ".repeat(Math.max(0, 4 - s.sec.length)) + s.sec +
+          (lw ? "  " + " ".repeat(lw - (s.leg || "").length) + (s.leg || "") : "") + "  " + tail.join("  ");
+        out.push(line.replace(/\s+$/, ""));
+      });
+      var text = "```\n" + r.head + "\n" + r.sub + "\n\n" + out.join("\n") + (r.notes.length ? "\n\n" + r.notes.join("\n") : "") + "\n```";
+      return r.url ? text + "\n" + r.url : text;
+    }
+    var text = render(function () { return true; });
+    if (text.length <= ROUTE_TEXT_MAX) return text;
+    text = render(function (k) { return k === 0 || k === n - 1 || stops[k].mark || stops[k].region !== stops[k - 1].region; });
+    if (text.length <= ROUTE_TEXT_MAX) return text;
+    return render(function (k) { return k === 0 || k === n - 1 || !!stops[k].mark; });
+  }
 
   // The Improved Projection's preference key. The "2" is load-
   // bearing: the first key ("evesynapse-map-projection") predates
@@ -1784,15 +1845,22 @@
       return F3;
     }
     // bubble3: the range bubbles showing (around the start, and
-    // around the stop under the pointer or selected) and the systems
+    // around the midway stop under the pointer or selected; the
+    // destination gets none, though "Route to here" leaves it
+    // selected with its card open) and the systems
     // inside them, with the route's stops; null without a jump route.
     var B3 = null;
     function bubble3() {
       var F = focus3();
       if (!F) return null;
-      var R = jumpRangeNow(), stopAt = routePath.indexOf(hover >= 0 ? hover : sel);
+      var R = jumpRangeNow(), stopAt = -1;
+      [hover, sel].some(function (s) {
+        var at = s >= 0 ? routePath.indexOf(s) : -1;
+        if (at > 0 && at < routePath.length - 1) { stopAt = at; return true; }
+        return false;
+      });
       var centres = [routeFrom];
-      if (stopAt > 0 && routePath[stopAt] !== routeFrom) centres.push(routePath[stopAt]);
+      if (stopAt > 0) centres.push(routePath[stopAt]);
       var key = F.key + "|" + centres.join(",");
       if (B3 && B3.key === key) return B3;
       var inside = new Uint8Array(G.n), list = [];
@@ -3289,6 +3357,7 @@
       if (routeFrom >= 0) q.push("from=" + S.id[routeFrom]);
       if (routeTo >= 0) q.push("to=" + S.id[routeTo]);
       if ((routeFrom >= 0 || routeTo >= 0) && routeMode !== "short") q.push("route=" + routeMode);
+      if (routeLock && travel === "jump") q.push("via=" + routeLock.slice(1, -1).map(function (i) { return S.id[i]; }).join(","));
       var dk = Object.keys(dataOn).filter(function (k) { return dataOn[k]; });
       if (dk.length) q.push("data=" + dk.join(","));
       if ((routeFrom >= 0 || routeTo >= 0) && travel === "jump") {
@@ -3511,6 +3580,7 @@
     function setRouteEnd(which, i) {
       if (i < 0) return;
       fitNext = true;
+      routeLock = null;
       if (which === "to") {
         routeTo = i;
         if (routeFrom < 0 && here >= 0) routeFrom = here;
@@ -3525,7 +3595,7 @@
     function clearRoute() {
       fitNext = false;
       routeFrom = routeTo = -1;
-      routePath = routeSum = null;
+      routePath = routeSum = routeLock = routeSwaps = null;
       routeNote("");
       renderRoute();
       updateCard();
@@ -3539,6 +3609,17 @@
     // at the cyno points (calm). routeLegs holds each jump's light years.
     var travel = startQuery.get("travel") === "jump" ? "jump" : "gates";
     var JUMP = null, jumpLoading = false, routeLegs = null, bridgeLegs = 0, bridgeZones = [];
+    // A jump route the pilot made their own by taking a stand-in for
+    // a stop (routeLock, the whole path), and the stand-ins on offer
+    // for each stop of the route showing (routeSwaps, bestSwaps).
+    var routeLock = null, routeSwaps = null, stepsTouched = false;
+    (function () {
+      var via = (startQuery.get("via") || "").split(",").map(function (v) { return G.byID[+v]; });
+      var rf = G.byID[+startQuery.get("from")], rt = G.byID[+startQuery.get("to")];
+      if (travel === "jump" && rf !== undefined && rt !== undefined && via.length && via.every(function (v) { return v !== undefined; })) {
+        routeLock = [rf].concat(via, [rt]);
+      }
+    })();
     var jumpShipID = +startQuery.get("ship") || 0, jumpPilot = startQuery.get("jdc") ? "jdc:" + startQuery.get("jdc") : "";
     try {
       if (!jumpShipID) jumpShipID = +localStorage.getItem("evesynapse-map-jump-ship") || 0;
@@ -3599,6 +3680,15 @@
       if (!JUMP) { loadJump(); return null; }
       return bridgeZone(lyBetween(JUMP, cap, v));
     }
+    // lockFits: whether a chosen path still runs between the route's
+    // ends with every leg in range R and every stop able to take a cyno.
+    function lockFits(path, R) {
+      if (path[0] !== routeFrom || path[path.length - 1] !== routeTo) return false;
+      for (var k = 1; k < path.length; k++) {
+        if (!JUMP.dest[path[k]] || !(lyBetween(JUMP, path[k - 1], path[k]) <= R)) return false;
+      }
+      return true;
+    }
     function replan() {
       if (signedIn && !MINE) fetchMine();
       var prices = IN && intelOn ? IN.prices : null;
@@ -3606,6 +3696,7 @@
       bridgeLegs = 0;
       bridgeZones = [];
       routePath = null;
+      routeSwaps = null;
       if (routeFrom >= 0 && routeTo >= 0) {
         if (travel === "jump") {
           if (!JUMP) loadJump();
@@ -3615,10 +3706,17 @@
             var cost = routeMode === "safe" ? function (v, u) { return lyBetween(JUMP, u, v) + 0.01; }
               : routeMode === "calm" ? function (v) { return danger(v); }
               : function () { return 1; };
-            routePath = planRoute(G, routeFrom, routeTo, cost, function (u) { return jumpNeighbours(JUMP, u, R); });
+            var near = function (u) { return jumpNeighbours(JUMP, u, R); };
+            if (routeLock && !lockFits(routeLock, R)) {
+              routeLock = null;
+              routeNote("Your chosen stops are out of this ship's range: this is the planned route.");
+            }
+            routePath = routeLock ? routeLock.slice() : planRoute(G, routeFrom, routeTo, cost, near);
             if (routePath) {
               routeLegs = [];
               for (var m = 1; m < routePath.length; m++) routeLegs.push(lyBetween(JUMP, routePath[m - 1], routePath[m]));
+              routeSwaps = bestSwaps(routePath, swapStops(routePath, near), routeMode,
+                function (p, c, n) { return lyBetween(JUMP, p, c) + lyBetween(JUMP, c, n); }, danger);
             }
           }
         } else {
@@ -3692,6 +3790,10 @@
       b.appendChild(root.createTextNode(" " + S.n[i]));
       return b;
     }
+    function modeLabel(mk) {
+      return (travel === "jump" ? { short: "Fewest jumps", safe: "Least fatigue", calm: "Avoid danger" }
+        : { short: "Shortest", safe: "Safer", calm: "Avoid danger" })[mk];
+    }
     function renderRoute() {
       routeEl.hidden = routeFrom < 0 && routeTo < 0;
       el.classList.toggle("map-routing", !routeEl.hidden);
@@ -3709,10 +3811,10 @@
       });
       routeEl.querySelectorAll("[data-route-mode]").forEach(function (b) {
         var mk = b.getAttribute("data-route-mode");
-        b.setAttribute("aria-checked", mk === routeMode ? "true" : "false");
-        b.textContent = (travel === "jump" ? { short: "Fewest jumps", safe: "Least fatigue", calm: "Avoid danger" }
-          : { short: "Shortest", safe: "Safer", calm: "Avoid danger" })[mk];
+        b.setAttribute("aria-checked", mk === routeMode && !routeLock ? "true" : "false");
+        b.textContent = modeLabel(mk);
       });
+      routeEl.querySelector("[data-route-copy]").disabled = !routePath || !routeSum || routeSum.jumps < 1;
       routeEl.querySelectorAll("[data-route-travel]").forEach(function (b) {
         b.setAttribute("aria-checked", b.getAttribute("data-route-travel") === travel ? "true" : "false");
       });
@@ -3791,6 +3893,18 @@
           seg.title = S.n[i] + " " + secText(S.s[i]);
           strip.appendChild(seg);
         });
+        if (routeLock) {
+          var own = root.createElement("li");
+          own.className = "map-route-chosen";
+          own.appendChild(root.createTextNode("You picked the stops on this route. "));
+          var back = root.createElement("button");
+          back.type = "button";
+          back.className = "map-route-alt";
+          back.setAttribute("data-route-unlock", "");
+          back.textContent = "Use the planned route";
+          own.appendChild(back);
+          warn.appendChild(own);
+        }
         s.camps.forEach(function (i) {
           var c = LY.camps[LY.campOf[i]], li = root.createElement("li");
           li.className = "map-route-camp";
@@ -3830,8 +3944,32 @@
           }
           if (LY && LY.campOf[i] >= 0) li.className = "camp";
           else if (LY && threatLevel(LY.threat[i]) >= 2) li.className = "hot";
+          // The cyno systems that could stand in for this stop.
+          var alts = routeSwaps && at > 0 && at < routePath.length - 1 ? routeSwaps[at - 1] : null;
+          if (alts && alts.length) {
+            var box = root.createElement("span");
+            box.className = "map-route-alts";
+            box.appendChild(root.createTextNode("or "));
+            alts.forEach(function (c, n) {
+              if (n) box.appendChild(root.createTextNode(", "));
+              var ab = root.createElement("button");
+              ab.type = "button";
+              ab.className = "map-route-alt";
+              ab.setAttribute("data-route-alt", String(c));
+              ab.setAttribute("data-route-at", String(at));
+              ab.title = "Jump through " + S.n[c] + " instead";
+              ab.appendChild(secBadge(c));
+              ab.appendChild(root.createTextNode(" " + S.n[c]));
+              box.appendChild(ab);
+            });
+            li.appendChild(box);
+          }
           list.appendChild(li);
         });
+        list.classList.toggle("map-route-list-alts", !!routeSwaps);
+        // A jump route's stops, and what could stand in for them, show
+        // unless the pilot has folded them away.
+        if (routeSwaps && !stepsTouched) routeEl.querySelector(".map-route-steps").open = true;
       }
       var acts = routeEl.querySelector(".map-route-actions");
       acts.hidden = !signedIn;
@@ -5064,11 +5202,15 @@
     // own view of it while anyone else sees the public map.
     function shareMap() {
       syncURL();
-      var url = location.href;
-      function done() { hint("Map link copied."); }
+      copyText(location.href, "Map link copied.", "Copy this map link:");
+    }
+    // copyText puts text on the clipboard and says so in the hint;
+    // where the clipboard is shut it offers the text to copy by hand.
+    function copyText(text, said, ask) {
+      function done() { hint(said); }
       function fallback() {
         var ta = root.createElement("textarea");
-        ta.value = url;
+        ta.value = text;
         ta.setAttribute("readonly", "");
         ta.style.position = "absolute";
         ta.style.opacity = "0";
@@ -5077,10 +5219,46 @@
         var ok = false;
         try { ok = root.execCommand && root.execCommand("copy"); } catch (e) { /* no clipboard */ }
         ta.remove();
-        if (ok) done(); else window.prompt("Copy this map link:", url);
+        if (ok) done(); else window.prompt(ask, text);
       }
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, fallback);
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
       else fallback();
+    }
+    // The route's copy button: the route as text for chat (routeText),
+    // with the stand-ins for each jump stop and the link to this map.
+    // Channel intel stays out: the text is for pasting anywhere.
+    function copyRoute() {
+      if (!routePath || !routeSum || routeSum.jumps < 1) return;
+      var s = routeSum, sub = [routeLock ? "Stops picked by hand" : modeLabel(routeMode), plural(s.jumps, "jump")];
+      if (routeLegs) {
+        var ship = jumpShip(), pi = jumpPilotInfo();
+        sub.push(routeLegs.reduce(function (a, b) { return a + b; }, 0).toFixed(1) + " LY");
+        if (ship) sub.push(ship.n + ", JDC " + pi.jdc);
+        var est = jumpFatigue(routeLegs, ship ? ship.f : 1, 0);
+        sub.push("fatigue after ≈ " + minutesShort(est.fatigue) + " (estimate)");
+      } else {
+        sub.push([[s.high, "high"], [s.low, "low"], [s.nul, "null"]].filter(function (b) { return b[0]; })
+          .map(function (b) { return b[0] + " " + b[1]; }).join(", "));
+        if (bridgeLegs) sub.push(plural(bridgeLegs, "jump bridge"));
+      }
+      var stops = routePath.map(function (i, at) {
+        var leg = "";
+        if (routeLegs && at > 0) leg = routeLegs[at - 1].toFixed(2) + " LY";
+        else if (at > 0 && G.adj[routePath[at - 1]].indexOf(i) < 0) leg = "bridge";
+        var mark = LY && LY.campOf[i] >= 0 ? "gate camp" : LY && threatLevel(LY.threat[i]) >= 2 ? THREAT_LEVELS[threatLevel(LY.threat[i])].name.toLowerCase() + " threat" : "";
+        var alts = routeSwaps && at > 0 && at < routePath.length - 1 ? routeSwaps[at - 1] : [];
+        return { name: S.n[i], sec: secText(S.s[i]), region: P.regions[S.r[i]].name, leg: leg, mark: mark,
+          alts: alts.map(function (c) { return S.n[c] + " " + secText(S.s[c]); }) };
+      });
+      var notes = s.camps.map(function (i) {
+        var c = LY.camps[LY.campOf[i]];
+        return "Gate camp in " + S.n[i] + ": " + plural(c.n, "kill") + (c.group ? " by " + c.group : "");
+      });
+      var url = "";
+      if (!compact) { syncURL(); url = location.href; }
+      var text = routeText({ head: (routeLegs ? "Jump route: " : "Route: ") + S.n[routeFrom] + " to " + S.n[routeTo],
+        sub: sub.join(" · "), stops: stops, notes: notes, url: url });
+      copyText(text, "Route copied. Paste it in chat.", "Copy this route:");
     }
 
     function onClick(e) {
@@ -5097,11 +5275,13 @@
         return;
       }
       if (t.closest("[data-map-keys]")) { toggleKeys(); return; }
+      if (t.closest(".map-route-steps > summary")) stepsTouched = true;
       var rs = t.closest("[data-route-set]");
       if (rs) { if (sel >= 0) setRouteEnd(rs.getAttribute("data-route-set"), sel); return; }
       if (t.closest("[data-route-close]")) { clearRoute(); return; }
       if (t.closest("[data-route-swap]")) {
         var tmp = routeFrom; routeFrom = routeTo; routeTo = tmp;
+        routeLock = null;
         routeNote("");
         fitNext = true;
         replan();
@@ -5110,6 +5290,7 @@
       var tv = t.closest("[data-route-travel]");
       if (tv) {
         travel = tv.getAttribute("data-route-travel") === "jump" ? "jump" : "gates";
+        routeLock = null;
         if (travel === "jump") loadJump();
         routeNote("");
         fitNext = true;
@@ -5120,18 +5301,35 @@
       // button would seem to do nothing.
       var rm = t.closest("[data-route-mode]");
       if (rm && ROUTE_MODES[rm.getAttribute("data-route-mode")]) {
-        var was = routeKey(), wasMode = routeMode;
+        var was = routeKey(), wasMode = routeMode, wasLocked = !!routeLock;
         routeMode = rm.getAttribute("data-route-mode");
+        routeLock = null;
         routeNote("");
         fitNext = true;
         replan();
-        if (routeMode !== wasMode && was && routeKey() === was) {
+        if (routeMode !== wasMode && was && routeKey() === was && !wasLocked) {
           routeNote("Same route: this is already the best way for that choice.");
         }
         return;
       }
       var rd = t.closest("[data-route-send]");
       if (rd && !rd.disabled) { sendRoute(rd.getAttribute("data-route-send")); return; }
+      // Taking a stand-in for a stop makes the route the pilot's own:
+      // it holds through ship and pilot changes while it stays in
+      // range, until a new plan is asked for.
+      var ra = t.closest("[data-route-alt]");
+      if (ra && routePath) {
+        var at = +ra.getAttribute("data-route-at"), alt = +ra.getAttribute("data-route-alt");
+        if (at > 0 && at < routePath.length - 1) {
+          routeLock = routePath.slice();
+          routeLock[at] = alt;
+          routeNote("");
+          replan();
+        }
+        return;
+      }
+      if (t.closest("[data-route-unlock]")) { routeLock = null; routeNote(""); replan(); return; }
+      if (t.closest("[data-route-copy]")) { copyRoute(); return; }
       var npcT = t.closest("[data-map-sov-npc]");
       if (npcT) {
         sovNPC = npcT.checked;

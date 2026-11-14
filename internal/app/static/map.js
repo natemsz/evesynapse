@@ -1906,6 +1906,15 @@
       if (e < 1) return true;
       v3.anim = null;
       if (v3.on) {
+        // Hold the pivot where it was once more, at the final layout,
+        // before letting go: a switch that ends in its first frame
+        // (reduced motion) has not laid the systems out yet, and the
+        // view would stay on the old frame's ground.
+        if (v3.hold && v3.p >= 0) {
+          project3();
+          cam.x = V3.x[v3.p] - (v3.hold[0] - cw / 2) / cam.k;
+          cam.y = V3.y[v3.p] - (v3.hold[1] - ch / 2) / cam.k;
+        }
         v3.hold = null;
         syncURL();
         // Opened with a jump route: the view closes in on it.

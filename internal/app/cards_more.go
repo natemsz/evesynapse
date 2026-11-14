@@ -1,8 +1,9 @@
 package app
 
 // Summary cards for the rest of the shareable pages (cards.go has the
-// generator): a public fit, an item, an item's market, a corporation,
-// an alliance, a shared battle report and the sovereignty tracker.
+// generator): a public fit or one shared by link, an item, an item's
+// market, a corporation, an alliance, a shared battle report and the
+// sovereignty tracker.
 // Each card shows figures its page shows, read from the same stored
 // rows. Intel channels and their reports never get a card: what a
 // preview fetcher could draw from them is intel.
@@ -40,48 +41,117 @@ func cardID(s string) (int64, bool) {
 
 // --- public fit ------------------------------------------------------------
 
-// fitCardJob reads a public fit's card: the hull render, the fit's
-// name, hull and author, the stored simulation's damage and
-// effective hit points, the price the page shows, and its rating.
+// fitCardJob reads a public fit's card.
 func (app *Application) fitCardJob(ctx context.Context, id int64) (cardJob, bool) {
 	row, err := app.queries.GetPublicFitting(ctx, id)
 	if err != nil {
 		return cardJob{}, false
 	}
-	ship := app.TypeNameOrID(ctx, row.ShipTypeID)
-	c := card.Card{Kind: "FIT", Title: row.Name, Subtitle: ship}
-	if row.AuthorName != "" {
-		c.Subtitle += " · by " + row.AuthorName
+	return app.fitCard(ctx, fitCardSource{
+		key: "fit:" + strconv.FormatInt(id, 10), id: row.ID, name: row.Name, author: row.AuthorName,
+		shipTypeID: row.ShipTypeID, itemsJSON: row.ItemsJson, updatedAt: row.UpdatedAt,
+		ratingCount: row.RatingCount, ratingSum: row.RatingSum,
+	}), true
+}
+
+// sharedFitCardJob reads the card of a fit shared by link, keyed by
+// its unguessable token, so the card leaks nothing a link holder
+// cannot already open.
+func (app *Application) sharedFitCardJob(ctx context.Context, token string) (cardJob, bool) {
+	if token == "" {
+		return cardJob{}, false
 	}
-	if stored, ok := app.loadPublicFitStored(ctx, id, row.UpdatedAt); ok && stored.Sim != nil && stored.Sim.Stats != nil {
-		// A fit with no weapons has no damage worth a figure.
-		if s := stored.Sim.Stats.TotalDPS; s != "" && strings.Trim(s, "0.") != "" {
-			c.Stats = append(c.Stats, card.Stat{Label: "DPS", Value: card.Figure(s)})
-		}
-		if s := stored.Sim.Stats.EHPOmni; s != "" {
-			c.Stats = append(c.Stats, card.Stat{Label: "EHP", Value: card.Figure(s)})
-		}
+	row, err := app.queries.GetFittingByShareToken(ctx, token)
+	if err != nil {
+		return cardJob{}, false
 	}
+	return app.fitCard(ctx, fitCardSource{
+		key: "fitshare:" + token, id: row.ID, name: row.Name,
+		shipTypeID: row.ShipTypeID, itemsJSON: row.ItemsJson, updatedAt: row.UpdatedAt,
+	}), true
+}
+
+// fitCardSource is what a fit card is drawn from, public or shared.
+type fitCardSource struct {
+	key, name, author      string
+	id, shipTypeID         int64
+	itemsJSON              string
+	updatedAt              time.Time
+	ratingCount, ratingSum int64
+}
+
+// fitCard draws a fit the way the fitting tool's stats column opens:
+// the hull render, the fit's name, hull and author, then the six
+// glance tiles (damage, tank, capacitor, speed, lock range,
+// signature) from the stored simulation, never a fresh one, and
+// the price the page shows at the foot. A fit whose page is still
+// being prepared draws without tiles.
+func (app *Application) fitCard(ctx context.Context, src fitCardSource) cardJob {
+	ship := app.TypeNameOrID(ctx, src.shipTypeID)
+	c := card.Card{Kind: "FIT", Title: src.name, Subtitle: ship}
+	if src.author != "" {
+		c.Subtitle += " · by " + src.author
+	}
+	if stored, ok := app.loadPublicFitStored(ctx, src.id, src.updatedAt); ok && stored.Sim != nil && stored.Sim.Stats != nil {
+		c.Glance = fitGlanceTiles(stored.Sim.Stats)
+	}
+	var price string
 	var doc fitview.FitDoc
-	if json.Unmarshal([]byte(row.ItemsJson), &doc) == nil {
+	if json.Unmarshal([]byte(src.itemsJSON), &doc) == nil {
 		if doc.ShipTypeID == 0 {
-			doc.ShipTypeID = row.ShipTypeID
+			doc.ShipTypeID = src.shipTypeID
 		}
 		if cost := app.fitBuilder().FitCost(ctx, &doc, nil); cost.Known {
-			price := formatISKShort(cost.TotalRaw)
+			price = formatISKShort(cost.TotalRaw) + " ISK"
 			if cost.BuildPriced {
-				price += "*"
+				price = formatISKShort(cost.TotalRaw) + "* ISK"
 			}
-			c.Stats = append(c.Stats, card.Stat{Label: "PRICE", Value: card.Figure(price)})
 		}
 	}
-	if row.RatingCount > 0 {
-		c.Detail = &card.Detail{Label: "RATING", Text: fmt.Sprintf("%.1f of 5 from %s", float64(row.RatingSum)/float64(row.RatingCount),
-			pluralCount(row.RatingCount, "rating", "ratings"))}
+	switch {
+	case price != "" && src.ratingCount > 0:
+		c.Detail = &card.Detail{Label: "PRICE", Text: fmt.Sprintf("%s · %.1f ★", price, float64(src.ratingSum)/float64(src.ratingCount))}
+	case price != "":
+		c.Detail = &card.Detail{Label: "PRICE", Text: price}
+	case src.ratingCount > 0:
+		c.Detail = &card.Detail{Label: "RATING", Text: fmt.Sprintf("%.1f of 5 from %s", float64(src.ratingSum)/float64(src.ratingCount),
+			pluralCount(src.ratingCount, "rating", "ratings"))}
 	}
-	pic := fmt.Sprintf("https://images.evetech.net/types/%d/render?size=512", row.ShipTypeID)
-	return cardJob{key: "fit:" + strconv.FormatInt(id, 10), version: cardVersion(row.UpdatedAt.UTC().Format(time.RFC3339Nano), pic, c),
-		picture: pic, card: c, maxAge: time.Hour}, true
+	if len(c.Glance) == 0 && c.Detail != nil {
+		// Without tiles the price reads as the figure row.
+		c.Stats = []card.Stat{{Label: c.Detail.Label, Value: card.Figure(c.Detail.Text)}}
+		c.Detail = nil
+	}
+	pic := fmt.Sprintf("https://images.evetech.net/types/%d/render?size=512", src.shipTypeID)
+	return cardJob{key: src.key, version: cardVersion(src.updatedAt.UTC().Format(time.RFC3339Nano), pic, c),
+		picture: pic, card: c, maxAge: time.Hour}
+}
+
+// fitGlanceTiles are the stats column's six glance tiles, read from
+// the stored figures as the workbench prints them.
+func fitGlanceTiles(st *fitview.FitStatsView) []card.Tile {
+	dps := card.Tile{Label: "DPS", Value: st.TotalDPS, Sub: st.TotalVolley + " volley", Color: card.KindWeapon}
+	if st.SpooledDPS != "" {
+		dps.Sub = "to " + st.SpooledDPS + " spooled"
+	}
+	return []card.Tile{
+		dps,
+		{Label: "EHP", Value: st.EHPOmni, Sub: st.TankLine, Color: card.KindArmor},
+		{Label: strings.ToUpper(st.CapChipLabel), Value: st.CapChip, Sub: st.CapDraw + " use", Color: card.KindCapacitor, Warn: !st.CapStable},
+		{Label: "SPEED", Value: st.Velocity, Sub: "align " + st.Align, Color: card.KindNavigation},
+		{Label: "LOCK RANGE", Value: st.TargetRng, Sub: st.LockedTgts + " targets, " + st.ScanRes, Color: card.KindTargeting},
+		{Label: "SIGNATURE", Value: st.Signature, Sub: "sensor strength " + st.Sensor, Color: card.KindNavigation},
+	}
+}
+
+// handleSharedFitCard serves /fittings/share/{token}/card.png.
+func (app *Application) handleSharedFitCard(w http.ResponseWriter, r *http.Request) {
+	job, ok := app.sharedFitCardJob(r.Context(), chi.URLParam(r, "token"))
+	if !ok {
+		app.serveFallbackCard(w)
+		return
+	}
+	app.serveCard(w, r, job)
 }
 
 func (app *Application) handleFitCard(w http.ResponseWriter, r *http.Request) {

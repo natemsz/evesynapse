@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/humanize"
@@ -162,9 +163,10 @@ type characterView struct {
 	Loaded        bool
 	Warming       bool
 
-	// The head's share block: the character's public pilot card
-	// image, and the owner's link to their public profile.
-	ShareCardURL     string
+	// The head's share controls: the Share pilot card dialog (the
+	// large public sheet, cards_pilotshare.go) and the owner's
+	// link to their public profile.
+	Share            *module.ShareCard
 	ShareProfileHref string
 
 	// Skills that finished training, as the notification store
@@ -321,11 +323,11 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 	app.foresightOpened(ctx, app.userID(ctx), foresightSkillsView(active.CharacterID))
 	view := &characterView{CharacterID: active.CharacterID, CharacterName: active.Name}
 	view.PortraitURL = portraitURL(active.CharacterID, 128)
-	view.ShareCardURL = "/pilot/card.png?character=" + strconv.FormatInt(active.CharacterID, 10)
+	view.Share = pilotShareView(active.CharacterID, active.Name)
 	view.ShareProfileHref = "/pilot/?character=" + strconv.FormatInt(active.CharacterID, 10) + "&view=public"
 
-	// The share block shows the public pilot card; queue the
-	// public record while it is not ready so the card resolves
+	// The share dialog shows the public pilot sheet; queue the
+	// public record while it is not ready so the sheet resolves
 	// instead of serving the fallback image.
 	if rec, err := app.queries.GetPilotRecord(ctx, active.CharacterID); err != nil || rec.State != pilotStateReady {
 		if werr := app.wantPilot(ctx, active.CharacterID, viewedPriority(ctx)); werr != nil {

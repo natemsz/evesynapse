@@ -6013,6 +6013,120 @@
   });
 })();
 
+// Share card dialogs (templates/sharecard.html): an opener with
+// data-share-card="{id}" opens that dialog through the shared
+// modal. The preview image loads only on first open, so a page
+// view never draws a card nobody asked for. Copy image and the
+// device's own share sheet show only where the browser has them.
+(function () {
+  "use strict";
+  var blobs = {};
+  function flash(btn, text) {
+    var prior = btn.getAttribute("data-label") || btn.textContent;
+    btn.setAttribute("data-label", prior);
+    btn.textContent = text;
+    setTimeout(function () { btn.textContent = prior; }, 1600);
+  }
+  function absolute(href) {
+    try { return new URL(href, location.href).href; } catch (e) { return href; }
+  }
+  function imageBlob(img) {
+    var src = img.currentSrc || img.src;
+    if (!blobs[src]) {
+      blobs[src] = fetch(src, { credentials: "same-origin" }).then(function (r) {
+        if (!r.ok) throw new Error("status " + r.status);
+        return r.blob();
+      });
+      blobs[src].catch(function () { delete blobs[src]; });
+    }
+    return blobs[src];
+  }
+  // An opener may name its own card: data-share-image, -link,
+  // -download and -name replace the dialog's, so one dialog serves
+  // whichever fit the page has open.
+  function retarget(modal, opener) {
+    var img = modal.querySelector("img[data-share-src]");
+    var image = opener.getAttribute("data-share-image");
+    if (img && image && img.getAttribute("data-share-src") !== image) {
+      img.setAttribute("data-share-src", image);
+      img.removeAttribute("src");
+      var wait = modal.querySelector(".share-wait");
+      if (wait) wait.textContent = "Drawing the card…";
+    }
+    var link = opener.getAttribute("data-share-link");
+    var linkBtn = modal.querySelector("[data-share-copy-link]");
+    if (link && linkBtn) linkBtn.setAttribute("data-share-copy-link", link);
+    var dl = modal.querySelector("a[download]");
+    if (dl && opener.getAttribute("data-share-download")) dl.setAttribute("href", opener.getAttribute("data-share-download"));
+    if (dl && opener.getAttribute("data-share-name")) dl.setAttribute("download", opener.getAttribute("data-share-name"));
+  }
+  function open(modal) {
+    var img = modal.querySelector("img[data-share-src]");
+    var wait = modal.querySelector(".share-wait");
+    if (img && !img.getAttribute("src") && img.getAttribute("data-share-src")) {
+      modal.classList.add("share-loading");
+      img.addEventListener("load", function () {
+        modal.classList.remove("share-loading");
+        if (wait) wait.textContent = "";
+      }, { once: true });
+      img.addEventListener("error", function () {
+        modal.classList.remove("share-loading");
+        if (wait) wait.textContent = "The card could not be drawn just now.";
+      }, { once: true });
+      img.src = img.getAttribute("data-share-src");
+    }
+    var copyImg = modal.querySelector("[data-share-copy-image]");
+    if (copyImg) copyImg.hidden = !(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write);
+    var native = modal.querySelector("[data-share-native]");
+    if (native) native.hidden = !(navigator.share && navigator.canShare);
+    if (window.EveSynapseModal) EveSynapseModal.open(modal);
+  }
+  document.addEventListener("click", function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target : null;
+    if (!t) return;
+    var opener = t.closest("[data-share-card]");
+    if (opener) {
+      var modal = document.getElementById(opener.getAttribute("data-share-card"));
+      if (modal) { ev.preventDefault(); retarget(modal, opener); open(modal); }
+      return;
+    }
+    var box = t.closest(".share-modal");
+    if (!box) return;
+    var img = box.querySelector("img[data-share-src]");
+    var linkBtn = t.closest("[data-share-copy-link]");
+    if (linkBtn) {
+      var url = absolute(linkBtn.getAttribute("data-share-copy-link"));
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () { flash(linkBtn, "Link copied"); }, function () { flash(linkBtn, "Copy failed"); });
+      }
+      return;
+    }
+    var imgBtn = t.closest("[data-share-copy-image]");
+    if (imgBtn && img) {
+      // Safari wants the ClipboardItem built inside the click,
+      // holding a promise of the blob rather than the blob.
+      try {
+        navigator.clipboard.write([new ClipboardItem({ "image/png": imageBlob(img) })]).then(
+          function () { flash(imgBtn, "Image copied"); },
+          function () { flash(imgBtn, "Copy failed"); });
+      } catch (e) { flash(imgBtn, "Copy failed"); }
+      return;
+    }
+    var nativeBtn = t.closest("[data-share-native]");
+    if (nativeBtn && img) {
+      var link = absolute((box.querySelector("[data-share-copy-link]") || nativeBtn).getAttribute("data-share-copy-link") || location.href);
+      var title = (box.querySelector(".modal-head h2") || {}).textContent || document.title;
+      imageBlob(img).then(function (blob) {
+        var dl = box.querySelector("a[download]");
+        var file = new File([blob], (dl && dl.getAttribute("download")) || "card.png", { type: "image/png" });
+        var data = { title: title, url: link, files: [file] };
+        if (!navigator.canShare(data)) data = { title: title, url: link };
+        return navigator.share(data);
+      }).catch(function () { /* dismissed or unsupported */ });
+    }
+  });
+})();
+
 // The appraisal form's Clear button: empties the pastes and
 // puts the basis back to the remembered defaults the page
 // loaded with, then focuses the paste box.

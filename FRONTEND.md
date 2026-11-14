@@ -122,6 +122,20 @@ wrapping a `.modal`, rendered hidden. Drive it through
   closes the topmost. Dialogs inside swapped-out content close
   with the swap.
 
+### Share dialog
+
+One dialog for passing a card image on: `templates/sharecard.html`
+(`{{template "sharecard" .}}` with a `module.ShareCard`). It shows
+the card's preview, loaded only when the dialog first opens, with
+Copy link, Copy image, Download and the device's own share sheet
+(the last two copy and share buttons show only where the browser
+supports them). Any element with `data-share-card="{id}"` opens
+it through `EveSynapseModal`; an opener may carry
+`data-share-image`, `data-share-link`, `data-share-download` and
+`data-share-name` to point the dialog at another card (the
+fitting tool does, once a fit has a page). Card routes answer
+`?download=1` with an attachment disposition.
+
 ### Tabs
 
 A strategy/tabbed block is a `[data-tabs]` container whose

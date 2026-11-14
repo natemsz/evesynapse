@@ -43,8 +43,8 @@
       <div class="ov-picker">{{template "charselector" .CharChars}}</div>
     </div>
     <div class="ov-share">
-      <a class="ov-share-img" href="{{$v.ShareCardURL}}" target="_blank" rel="noopener"><img src="{{$v.ShareCardURL}}" alt="Public pilot card for {{$v.CharacterName}}" width="1200" height="630" loading="lazy"></a>
-      <div class="ov-share-bar"><span>Your public pilot card</span><a href="{{$v.ShareProfileHref}}">View public profile</a></div>
+      <button type="button" class="btn ov-share-btn" data-share-card="{{$v.Share.ID}}" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg> Share pilot card</button>
+      <a class="ov-share-link" href="{{$v.ShareProfileHref}}">View public profile</a>
     </div>
     {{if $v.SkillsKnown}}
     <div class="ov-total">
@@ -54,6 +54,8 @@
     </div>
     {{end}}
   </div>
+
+  {{template "sharecard" $v.Share}}
 
   {{if $v.TrainedEntries}}
   <div class="ov-banner l-root" role="status">

@@ -1,0 +1,31 @@
+{{/* The share card dialog: a preview of a shareable image with the
+     ways to pass it on. Any page hands it a value with these fields:
+     ID (the dialog's id), Title, Lead (one line under the title),
+     Image (the image's path; loaded only when the dialog opens),
+     Width and Height (its pixel size), Alt, Download (the image with
+     a download disposition), Link (the page the image stands for),
+     FileName and Note (one line under the actions). An opener is
+     any element with data-share-card="{ID}"; app.js wires the
+     actions. */}}
+{{define "sharecard"}}
+<div class="modal-backdrop share-modal" id="{{.ID}}" hidden>
+  <div class="modal share-card" role="dialog" aria-modal="true" aria-labelledby="{{.ID}}-title">
+    <div class="modal-head">
+      <h2 id="{{.ID}}-title">{{.Title}}</h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
+    </div>
+    {{if .Lead}}<p class="share-lead">{{.Lead}}</p>{{end}}
+    <figure class="share-preview">
+      <img data-share-src="{{.Image}}" alt="{{.Alt}}" width="{{.Width}}" height="{{.Height}}" decoding="async">
+      <figcaption class="share-wait" aria-live="polite">Drawing the card…</figcaption>
+    </figure>
+    <div class="share-actions">
+      <button type="button" class="btn" data-share-copy-link="{{.Link}}">Copy link</button>
+      <button type="button" class="btn" data-share-copy-image hidden>Copy image</button>
+      <a class="btn" href="{{.Download}}" download="{{.FileName}}">Download</a>
+      <button type="button" class="btn" data-share-native hidden>Share…</button>
+    </div>
+    {{if .Note}}<p class="share-note">{{.Note}}</p>{{end}}
+  </div>
+</div>
+{{end}}

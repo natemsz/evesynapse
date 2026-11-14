@@ -67,12 +67,14 @@
 <section class="l-panel fp-share" aria-labelledby="fp-share-h">
 <h2 id="fp-share-h">Share</h2>
 <p class="share-row">
+  {{if .ShareCard}}<button type="button" class="btn" data-share-card="{{.ShareCard.ID}}" aria-haspopup="dialog">Share card</button>{{end}}
   {{if .PageURL}}<button type="button" data-copy data-copy-text="{{.PageURL}}">Copy link</button>{{end}}
   {{if .EFT}}<button type="button" data-copy data-copy-from="fit-eft">Copy EFT</button>{{end}}
   {{if .ShareDiscord}}<button type="button" class="btn btn-discord" data-copy data-copy-text="{{.ShareDiscord}}" title="Copies a message to paste into Discord; the link unfurls into a preview">Share to Discord</button>
   <a class="btn" href="{{.ShareReddit}}" target="_blank" rel="noopener noreferrer">Share to Reddit</a>{{end}}
 </p>
 {{if .EFT}}<pre id="fit-eft">{{.EFT}}</pre>{{end}}
+{{with .ShareCard}}{{template "sharecard" .}}{{end}}
 
 </section>
 

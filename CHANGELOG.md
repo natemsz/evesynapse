@@ -23,7 +23,7 @@ Automated build of EveSynapse v0.8.6.7. Update with: evesynapse -update -arm64 (
 * Fitter: load a charge only where it fits by @natemsz in #443
 
 
-## [v0.8.6.6] - 2026-11-14
+## [v0.8.6.6]
 
 Automated build of EveSynapse v0.8.6.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -37,7 +37,7 @@ Automated build of EveSynapse v0.8.6.6. Update with: evesynapse -update -arm64 (
 * Fitter: model charges in ancillary repairers, boosters and every charge-taking module by @natemsz in #437
 
 
-## [v0.8.6.5] - 2026-11-14
+## [v0.8.6.5]
 
 Automated build of EveSynapse v0.8.6.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -58,7 +58,7 @@ Automated build of EveSynapse v0.8.6.5. Update with: evesynapse -update -arm64 (
 * Pilot activity: fold every profiled pilot on a kill, and mend the kills profiles missed by @natemsz in #435
 
 
-## [v0.8.6.4] - 2026-11-13
+## [v0.8.6.4]
 
 Automated build of EveSynapse v0.8.6.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -69,7 +69,7 @@ Automated build of EveSynapse v0.8.6.4. Update with: evesynapse -update -arm64 (
 * Map Zones layer: Ansiblex cost zones around an alliance capital by @natemsz in #423
 
 
-## [v0.8.6.3] - 2026-11-13
+## [v0.8.6.3]
 
 Automated build of EveSynapse v0.8.6.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -80,7 +80,7 @@ Automated build of EveSynapse v0.8.6.3. Update with: evesynapse -update -arm64 (
 * Summary cards for system, region and map pages by @natemsz in #421
 
 
-## [v0.8.6.2] - 2026-11-13
+## [v0.8.6.2]
 
 Automated build of EveSynapse v0.8.6.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -95,7 +95,7 @@ Automated build of EveSynapse v0.8.6.2. Update with: evesynapse -update -arm64 (
 * CI: run the heavy gates on branch pushes only, not on release tags by @miko in #413
 
 
-## [v0.8.6.1] - 2026-11-13
+## [v0.8.6.1]
 
 Automated build of EveSynapse v0.8.6.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -105,7 +105,7 @@ Automated build of EveSynapse v0.8.6.1. Update with: evesynapse -update -arm64 (
 * Sidebar: render the Intel section groups with group glyphs by @miko in #412
 
 
-## [v0.8.6.0] - 2026-11-13
+## [v0.8.6.0]
 
 Automated build of EveSynapse v0.8.6.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -119,7 +119,7 @@ Automated build of EveSynapse v0.8.6.0. Update with: evesynapse -update -arm64 (
 * Put the pilot, corporation and alliance pages on the layout framework and read EVE bio markup by @natemsz in #409
 
 
-## [v0.8.5.0] - 2026-11-13
+## [v0.8.5.0]
 
 Automated build of EveSynapse v0.8.5.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -132,7 +132,7 @@ Automated build of EveSynapse v0.8.5.0. Update with: evesynapse -update -arm64 (
 * Keep the landing Tools menu in the viewport, list every public tool on the landing page and in the sitemap, and gate the intel channel list by @natemsz in #408
 
 
-## [v0.8.4.9] - 2026-11-13
+## [v0.8.4.9]
 
 Automated build of EveSynapse v0.8.4.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -142,7 +142,7 @@ Automated build of EveSynapse v0.8.4.9. Update with: evesynapse -update -arm64 (
 * Restore missing attacker counts from the daily killmail archives by @natemsz in #406
 
 
-## [v0.8.4.8] - 2026-11-13
+## [v0.8.4.8]
 
 Automated build of EveSynapse v0.8.4.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -156,7 +156,7 @@ Automated build of EveSynapse v0.8.4.8. Update with: evesynapse -update -arm64 (
 * Run the kill stats rebuild now instead of after the attacker restore by @natemsz in #404
 
 
-## [v0.8.4.7] - 2026-11-13
+## [v0.8.4.7]
 
 Automated build of EveSynapse v0.8.4.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -169,7 +169,7 @@ Automated build of EveSynapse v0.8.4.7. Update with: evesynapse -update -arm64 (
 * Clear gopls hints and apply go fix modernizers by @natemsz in #402
 
 
-## [v0.8.4.6] - 2026-11-13
+## [v0.8.4.6]
 
 Automated build of EveSynapse v0.8.4.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -182,7 +182,7 @@ Automated build of EveSynapse v0.8.4.6. Update with: evesynapse -update -arm64 (
 * PI planner: buy what only full planets supply; readable ice links; reachable colony tools by @natemsz in #400
 
 
-## [v0.8.4.5] - 2026-11-12
+## [v0.8.4.5]
 
 Automated build of EveSynapse v0.8.4.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -195,7 +195,7 @@ Automated build of EveSynapse v0.8.4.5. Update with: evesynapse -update -arm64 (
 * Comments: eliminate schizophrenic comments for clarity. by @natemsz in #397
 
 
-## [v0.8.4.4] - 2026-11-12
+## [v0.8.4.4]
 
 Automated build of EveSynapse v0.8.4.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -206,7 +206,7 @@ Automated build of EveSynapse v0.8.4.4. Update with: evesynapse -update -arm64 (
 * PI planner: reliable solver, layout optimizer, pinch zoom, visible buy options by @natemsz in #395
 
 
-## [v0.8.4.3] - 2026-11-12
+## [v0.8.4.3]
 
 Automated build of EveSynapse v0.8.4.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -216,7 +216,7 @@ Automated build of EveSynapse v0.8.4.3. Update with: evesynapse -update -arm64 (
 * Release mirror: run when the release exists, install the AWS CLI with sudo by @miko in #394
 
 
-## [v0.8.4.2] - 2026-11-12
+## [v0.8.4.2]
 
 Automated build of EveSynapse v0.8.4.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -226,7 +226,7 @@ Automated build of EveSynapse v0.8.4.2. Update with: evesynapse -update -arm64 (
 * Landing gallery: new fitting workbench video, add the PI planner video by @miko in #393
 
 
-## [v0.8.4.1] - 2026-11-12
+## [v0.8.4.1]
 
 Automated build of EveSynapse v0.8.4.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -240,7 +240,7 @@ Automated build of EveSynapse v0.8.4.1. Update with: evesynapse -update -arm64 (
 * PI planner: changed colonies fit without their removed structures; new colonies sized per pilot skill by @natemsz in #391
 
 
-## [v0.8.4.0] - 2026-11-12
+## [v0.8.4.0]
 
 Automated build of EveSynapse v0.8.4.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -251,7 +251,7 @@ Automated build of EveSynapse v0.8.4.0. Update with: evesynapse -update -arm64 (
 * Price at build cost when nothing else can, asterisked by @miko in #388
 
 
-## [v0.8.3.2] - 2026-11-12
+## [v0.8.3.2]
 
 Automated build of EveSynapse v0.8.3.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -271,7 +271,7 @@ Automated build of EveSynapse v0.8.3.2. Update with: evesynapse -update -arm64 (
 * Demo: keep the theme in the browser by @natemsz in #380
 
 
-## [v0.8.3.1] - 2026-11-12
+## [v0.8.3.1]
 
 Automated build of EveSynapse v0.8.3.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -297,7 +297,7 @@ Automated build of EveSynapse v0.8.3.1. Update with: evesynapse -update -arm64 (
 * Killboard: bounded alliance board and list backfill reads by @natemsz in #369
 
 
-## [v0.8.3.0] - 2026-11-11
+## [v0.8.3.0]
 
 Automated build of EveSynapse v0.8.3.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -330,7 +330,7 @@ Automated build of EveSynapse v0.8.3.0. Update with: evesynapse -update -arm64 (
 * Drop the killboard indexes no query reads by @natemsz in #362
 
 
-## [v0.8.2.0] - 2026-11-11
+## [v0.8.2.0]
 
 Automated build of EveSynapse v0.8.2.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -351,7 +351,7 @@ Automated build of EveSynapse v0.8.2.0. Update with: evesynapse -update -arm64 (
 * Drop absence pins and one-off CSS pins from the tests by @natemsz in #341
 
 
-## [v0.8.1.2] - 2026-11-11
+## [v0.8.1.2]
 
 Automated build of EveSynapse v0.8.1.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -369,7 +369,7 @@ Automated build of EveSynapse v0.8.1.2. Update with: evesynapse -update -arm64 (
 * Limit subsystems to one per kind and refuse hull-restricted modules before they land by @natemsz in #333
 
 
-## [v0.8.1.1] - 2026-11-10
+## [v0.8.1.1]
 
 Automated build of EveSynapse v0.8.1.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -392,7 +392,7 @@ Automated build of EveSynapse v0.8.1.1. Update with: evesynapse -update -arm64 (
 * Style and readability audit of copy, comments and docs by @natemsz in #324
 
 
-## [v0.8.1.0] - 2026-11-10
+## [v0.8.1.0]
 
 Automated build of EveSynapse v0.8.1.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -412,7 +412,7 @@ Automated build of EveSynapse v0.8.1.0. Update with: evesynapse -update -arm64 (
 * Stack the Character and Corporation detail cards on narrow pages by @natemsz in #311
 
 
-## [v0.8.0.9] - 2026-11-10
+## [v0.8.0.9]
 
 Automated build of EveSynapse v0.8.0.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -432,7 +432,7 @@ Automated build of EveSynapse v0.8.0.9. Update with: evesynapse -update -arm64 (
 * Update Go modules by @renovate in #280
 
 
-## [v0.8.0.8] - 2026-11-10
+## [v0.8.0.8]
 
 Automated build of EveSynapse v0.8.0.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -448,7 +448,7 @@ Automated build of EveSynapse v0.8.0.8. Update with: evesynapse -update -arm64 (
 * Keep CCP's published prices out of true-value evidence by @natemsz in #300
 
 
-## [v0.8.0.7] - 2026-11-10
+## [v0.8.0.7]
 
 Automated build of EveSynapse v0.8.0.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -473,7 +473,7 @@ Automated build of EveSynapse v0.8.0.7. Update with: evesynapse -update -arm64 (
 * Read every freshness surface from one cadence table by @natemsz in #292
 
 
-## [v0.8.0.5] - 2026-11-09
+## [v0.8.0.5]
 
 Automated build of EveSynapse v0.8.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -483,7 +483,7 @@ Automated build of EveSynapse v0.8.0.5. Update with: evesynapse -update -arm64 (
 * Label the killboard columns, widen the asset scope, simplify the top search by @natemsz in #282
 
 
-## [v0.8.0.4] - 2026-11-09
+## [v0.8.0.4]
 
 Automated build of EveSynapse v0.8.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -493,7 +493,7 @@ Automated build of EveSynapse v0.8.0.4. Update with: evesynapse -update -arm64 (
 * Refine layout headers, topbar character switcher, connected page column, and UI bug fixes by @natemsz in #279
 
 
-## [v0.8.0.3] - 2026-11-09
+## [v0.8.0.3]
 
 Automated build of EveSynapse v0.8.0.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -503,7 +503,7 @@ Automated build of EveSynapse v0.8.0.3. Update with: evesynapse -update -arm64 (
 * Use FindCtx for session stores that require a context by @natemsz in #278
 
 
-## [v0.8.0.2] - 2026-11-09
+## [v0.8.0.2]
 
 Automated build of EveSynapse v0.8.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -525,7 +525,7 @@ Automated build of EveSynapse v0.8.0.2. Update with: evesynapse -update -arm64 (
 * Document the pgx, compression, JSON and PostgreSQL changes by @natemsz in #275
 
 
-## [v0.8.0.1] - 2026-11-09
+## [v0.8.0.1]
 
 Automated build of EveSynapse v0.8.0.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -538,7 +538,7 @@ Automated build of EveSynapse v0.8.0.1. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * selfupdate, pidfile: fall back to systemd and proc process detection when pidfile is absent by @natemsz in #266
 
-## [v0.8.0.0] - 2026-11-09
+## [v0.8.0.0]
 
 Automated build of EveSynapse v0.8.0.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -547,7 +547,7 @@ Automated build of EveSynapse v0.8.0.0. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Block botnet traffic using protocol and client hint behavioral fingerprinting by @natemsz in #265
 
-## [v0.7.9.8] - 2026-11-08
+## [v0.7.9.8]
 
 Automated build of EveSynapse v0.7.9.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -556,7 +556,7 @@ Automated build of EveSynapse v0.7.9.8. Update with: evesynapse -update -arm64 (
 ### 🚀 Features
 * Materialize entity kill involvement lookups to prevent incremental sort planner trap by @natemsz in #264
 
-## [v0.7.9.7] - 2026-11-08
+## [v0.7.9.7]
 
 Automated build of EveSynapse v0.7.9.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -568,7 +568,7 @@ Automated build of EveSynapse v0.7.9.7. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * feat/dominion-v3-default-theme by @natemsz in #262
 
-## [v0.7.9.6] - 2026-11-08
+## [v0.7.9.6]
 
 Automated build of EveSynapse v0.7.9.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -577,7 +577,7 @@ Automated build of EveSynapse v0.7.9.6. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Optimize ListBlueprintCopyMedianCandidates query plan by @natemsz in #261
 
-## [v0.7.9.5] - 2026-11-08
+## [v0.7.9.5]
 
 Automated build of EveSynapse v0.7.9.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -586,7 +586,7 @@ Automated build of EveSynapse v0.7.9.5. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Refine Minmatar v3 borders and panel tones by @natemsz in #260
 
-## [v0.7.9.4] - 2026-11-08
+## [v0.7.9.4]
 
 Automated build of EveSynapse v0.7.9.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -603,7 +603,7 @@ Automated build of EveSynapse v0.7.9.4. Update with: evesynapse -update -arm64 (
 * Pin market scanner tests and harden sqlc freshness gate by @natemsz in #259
 * Block automated AI scrapers and update robots.txt by @natemsz in #257
 
-## [v0.7.9.3] - 2026-11-07
+## [v0.7.9.3]
 
 Automated build of EveSynapse v0.7.9.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -613,7 +613,7 @@ Automated build of EveSynapse v0.7.9.3. Update with: evesynapse -update -arm64 (
 * Fix recent kills showing pricing and link kill items to the market by @miko in #252
 * Read table data at --fs-sm, keeping pills and loadout chips at their size by @miko in #236
 
-## [v0.7.9.2] - 2026-11-07
+## [v0.7.9.2]
 
 Automated build of EveSynapse v0.7.9.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -626,7 +626,7 @@ Automated build of EveSynapse v0.7.9.2. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Document LOW_RAM_MODE in README and .env.example by @natemsz in #251
 
-## [v0.7.9.1] - 2026-11-07
+## [v0.7.9.1]
 
 Automated build of EveSynapse v0.7.9.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -640,7 +640,7 @@ Automated build of EveSynapse v0.7.9.1. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Use the partial entity indexes on kill reads and index kill ingest time by @natemsz in #247
 
-## [v0.7.9.0] - 2026-11-07
+## [v0.7.9.0]
 
 Automated build of EveSynapse v0.7.9.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -654,7 +654,7 @@ Automated build of EveSynapse v0.7.9.0. Update with: evesynapse -update -arm64 (
 * Replace adjusted price card on market item page with house appraisal value by @natemsz in #243
 * Use native .l-seg security tabs and right-hand watchlist inspector on market item page by @natemsz in #242
 
-## [v0.7.8.9] - 2026-11-07
+## [v0.7.8.9]
 
 Automated build of EveSynapse v0.7.8.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -667,7 +667,7 @@ Automated build of EveSynapse v0.7.8.9. Update with: evesynapse -update -arm64 (
 * Tune scheme text neutrals, secondary highlights, and panel surface contrast by @natemsz in #239
 * Lay out the market item details page in a responsive 3-tier grid with order book filtering by @natemsz in #238
 
-## [v0.7.8.8] - 2026-11-07
+## [v0.7.8.8]
 
 Automated build of EveSynapse v0.7.8.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -681,7 +681,7 @@ Automated build of EveSynapse v0.7.8.8. Update with: evesynapse -update -arm64 (
 * Show the entity's record in the killmail page tiles, with an all-time and 30-day scope swap by @miko in #231
 * Add a prepared runner image with the release tools preinstalled by @miko in #230
 
-## [v0.7.8.7] - 2026-11-06
+## [v0.7.8.7]
 
 Automated build of EveSynapse v0.7.8.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -691,7 +691,7 @@ Automated build of EveSynapse v0.7.8.7. Update with: evesynapse -update -arm64 (
 * Walk pre-permanence pilot profiles once more to restore their pruned involvement by @miko in #229
 * Show profile-backed pilots their all-time solo kills and ISK destroyed by @miko in #228
 
-## [v0.7.8.6] - 2026-11-06
+## [v0.7.8.6]
 
 Automated build of EveSynapse v0.7.8.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -701,7 +701,7 @@ Automated build of EveSynapse v0.7.8.6. Update with: evesynapse -update -arm64 (
 * Keep priced kill values credited permanently through a slim involvement record by @miko in #227
 * Park the fitting module search below the sub-nav when it sticks by @miko in #226
 
-## [v0.7.8.5] - 2026-11-06
+## [v0.7.8.5]
 
 Automated build of EveSynapse v0.7.8.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -712,7 +712,7 @@ Automated build of EveSynapse v0.7.8.5. Update with: evesynapse -update -arm64 (
 * Store kills past the retention cutoff in post-prune shape at ingest by @miko in #224
 * Lay out icon suggestion rows with a gap and text centered on the icon by @miko in #223
 
-## [v0.7.8.4] - 2026-11-06
+## [v0.7.8.4]
 
 Automated build of EveSynapse v0.7.8.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -724,7 +724,7 @@ Automated build of EveSynapse v0.7.8.4. Update with: evesynapse -update -arm64 (
 * Set the chip and chip on font size to the 2xs step by @miko in #220
 * Remove two stray closing braces from style.css by @miko in #219
 
-## [v0.7.8.2] - 2026-11-06
+## [v0.7.8.2]
 
 Automated build of EveSynapse v0.7.8.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -737,7 +737,7 @@ Automated build of EveSynapse v0.7.8.2. Update with: evesynapse -update -arm64 (
 * Replace the industry glyph with a mallet and anvil by @miko in #215
 * Draw the rail nav icons from the shared glyph sprite by @miko in #214
 
-## [v0.7.8.1] - 2026-11-06
+## [v0.7.8.1]
 
 Automated build of EveSynapse v0.7.8.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -752,7 +752,7 @@ Automated build of EveSynapse v0.7.8.1. Update with: evesynapse -update -arm64 (
 * Sets pill tabs to the 2xs type size by @miko in #207
 * Marks the admin pages intro and explainer lines as prose by @miko in #206
 
-## [v0.7.7.7] - 2026-11-06
+## [v0.7.7.7]
 
 Automated build of EveSynapse v0.7.7.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -764,7 +764,7 @@ Automated build of EveSynapse v0.7.7.7. Update with: evesynapse -update -arm64 (
 * Loads admin.css on the ESI Details tab, grids its per-family section, and moves the Admin tabs to the shared sub-nav bar by @miko in #203
 * Give prose a readable treatment and mark it on the Appraisal, Intel Channels and Swarm Cache pages by @miko in #202
 
-## [v0.7.7.6] - 2026-11-05
+## [v0.7.7.6]
 
 Automated build of EveSynapse v0.7.7.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -773,7 +773,7 @@ Automated build of EveSynapse v0.7.7.6. Update with: evesynapse -update -arm64 (
 ### 🚀 Features
 * Batches the swarm history apply onto the existing unnest upsert by @miko in #201
 
-## [v0.7.7.5] - 2026-11-05
+## [v0.7.7.5]
 
 Automated build of EveSynapse v0.7.7.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -787,7 +787,7 @@ Automated build of EveSynapse v0.7.7.5. Update with: evesynapse -update -arm64 (
 * Reads CCP's per-route health from /meta/status into the ESI status verdicts by @miko in #196
 * Pins the ESI compatibility date on every client request by @miko in #195
 
-## [v0.7.7.4] - 2026-11-05
+## [v0.7.7.4]
 
 Automated build of EveSynapse v0.7.7.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -798,7 +798,7 @@ Automated build of EveSynapse v0.7.7.4. Update with: evesynapse -update -arm64 (
 * Add battle reports to the demo account seed by @miko in #193
 * Adds EVE Online status and service health links to the data freshness modal by @miko in #192
 
-## [v0.7.7.3] - 2026-11-05
+## [v0.7.7.3]
 
 Automated build of EveSynapse v0.7.7.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -807,7 +807,7 @@ Automated build of EveSynapse v0.7.7.3. Update with: evesynapse -update -arm64 (
 ### 🚀 Features
 * Fills the demo account with realistic data across pages by @natemsz in #191
 
-## [v0.7.7.2] - 2026-11-05
+## [v0.7.7.2]
 
 Automated build of EveSynapse v0.7.7.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -816,7 +816,7 @@ Automated build of EveSynapse v0.7.7.2. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Moves card, form, KPI and picker layout fixes into the shared layer by @natemsz in #190
 
-## [v0.7.7.1] - 2026-11-05
+## [v0.7.7.1]
 
 Automated build of EveSynapse v0.7.7.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -829,7 +829,7 @@ Automated build of EveSynapse v0.7.7.1. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Fixes My Loadouts source filters and layout on phones and narrow widths by @natemsz in #189
 
-## [v0.7.7.0] - 2026-11-05
+## [v0.7.7.0]
 
 Automated build of EveSynapse v0.7.7.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -847,7 +847,7 @@ Automated build of EveSynapse v0.7.7.0. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Maps the app's layers, modules and their dependencies in the README by @natemsz in #186
 
-## [v0.7.6.3] - 2026-11-05
+## [v0.7.6.3]
 
 Automated build of EveSynapse v0.7.6.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -856,7 +856,7 @@ Automated build of EveSynapse v0.7.6.3. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Completes region sweeps at the end of a shrinking book by @natemsz in #180
 
-## [v0.7.6.2] - 2026-11-05
+## [v0.7.6.2]
 
 Automated build of EveSynapse v0.7.6.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -865,7 +865,7 @@ Automated build of EveSynapse v0.7.6.2. Update with: evesynapse -update -arm64 (
 ### 🚀 Features
 * Adds battle reports from Axon's game log fights by @natemsz in #179
 
-## [v0.7.6.1] - 2026-11-04
+## [v0.7.6.1]
 
 Automated build of EveSynapse v0.7.6.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -877,7 +877,7 @@ Automated build of EveSynapse v0.7.6.1. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Reads bulk ESI pages over parallel connections, backs off failed region sweeps and shrinks the page window after a failure by @natemsz in #176
 
-## [v0.7.6.0] - 2026-11-04
+## [v0.7.6.0]
 
 Automated build of EveSynapse v0.7.6.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -891,7 +891,7 @@ Automated build of EveSynapse v0.7.6.0. Update with: evesynapse -update -arm64 (
 * Moves the Map onto the layout framework and removes the overflow clip by @natemsz in #170
 * Moves the Tools category onto the layout framework by @natemsz in #167
 
-## [v0.7.5.1] - 2026-11-04
+## [v0.7.5.1]
 
 Automated build of EveSynapse v0.7.5.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -901,7 +901,7 @@ Automated build of EveSynapse v0.7.5.1. Update with: evesynapse -update -arm64 (
 * Re-stamps the swept font sizes onto the current type scale by @natemsz in #169
 * Adds a Repository section naming the main home and the mirrors by @miko in #168
 
-## [v0.7.5.0] - 2026-11-04
+## [v0.7.5.0]
 
 Automated build of EveSynapse v0.7.5.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -919,7 +919,7 @@ Automated build of EveSynapse v0.7.5.0. Update with: evesynapse -update -arm64 (
 * Brightens the Specialized specs tabs on Contracts by @natemsz in #158
 * Raises the small end of the type scale by @natemsz in #157
 
-## [v0.7.4.0] - 2026-11-04
+## [v0.7.4.0]
 
 Automated build of EveSynapse v0.7.4.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -934,7 +934,7 @@ Automated build of EveSynapse v0.7.4.0. Update with: evesynapse -update -arm64 (
 * Builds Wallet from its mockup by @natemsz in #151
 * Builds Killmails from its mockup and moves the kill page onto the framework by @natemsz in #150
 
-## [v0.7.3.22] - 2026-11-04
+## [v0.7.3.22]
 
 Automated build of EveSynapse v0.7.3.22. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -954,7 +954,7 @@ Automated build of EveSynapse v0.7.3.22. Update with: evesynapse -update -arm64 
 * Replaces the Saira Semi Condensed UI face with Eve Sans Neue by @miko in #143
 * Moves the sub-nav bar into the page shell, spans it the full width beside the sidebar, and holds it in place during swaps by @miko in #140
 
-## [v0.7.3.21] - 2026-11-04
+## [v0.7.3.21]
 
 Automated build of EveSynapse v0.7.3.21. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -977,7 +977,7 @@ Automated build of EveSynapse v0.7.3.21. Update with: evesynapse -update -arm64 
 * Reads Killmails values from the killboard stored prices by @miko in #135
 * Prices kills only with EveSynapse's own appraisal by @miko in #133
 
-## [v0.7.3.19] - 2026-11-03
+## [v0.7.3.19]
 
 Automated build of EveSynapse v0.7.3.19. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -986,7 +986,7 @@ Automated build of EveSynapse v0.7.3.19. Update with: evesynapse -update -arm64 
 ### Other Changes
 * Provisions the database a dev .env names and unexpires the postgres account by @miko in #128
 
-## [v0.7.3.18] - 2026-11-03
+## [v0.7.3.18]
 
 Automated build of EveSynapse v0.7.3.18. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -998,7 +998,7 @@ Automated build of EveSynapse v0.7.3.18. Update with: evesynapse -update -arm64 
 * Adds the contribution rules to the AI use disclosure by @miko in #124
 * Refreshes the README for the current app by @miko in #119
 
-## [v0.7.3.17] - 2026-11-03
+## [v0.7.3.17]
 
 Automated build of EveSynapse v0.7.3.17. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1008,7 +1008,7 @@ Automated build of EveSynapse v0.7.3.17. Update with: evesynapse -update -arm64 
 * Lets long skill names truncate in their cell so the name, the mastered tag and the level pips stop overlapping by @miko in #123
 * Paints the pinned first column of scrollable tables so columns scrolling under it stop showing through by @miko in #122
 
-## [v0.7.3.16] - 2026-11-03
+## [v0.7.3.16]
 
 Automated build of EveSynapse v0.7.3.16. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1017,7 +1017,7 @@ Automated build of EveSynapse v0.7.3.16. Update with: evesynapse -update -arm64 
 ### Other Changes
 * Keeps the console panes usable in the tablet band and keeps the assets view in place when a ship or stack opens by @miko in #121
 
-## [v0.7.3.15] - 2026-11-03
+## [v0.7.3.15]
 
 Automated build of EveSynapse v0.7.3.15. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1027,7 +1027,7 @@ Automated build of EveSynapse v0.7.3.15. Update with: evesynapse -update -arm64 
 * Lands character surface switches at the top of the sheet window by @miko in #120
 * Keeps Assets selections in place and routes matrix row clicks through the name link by @miko in #118
 
-## [v0.7.3.14] - 2026-11-03
+## [v0.7.3.14]
 
 Automated build of EveSynapse v0.7.3.14. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1041,7 +1041,7 @@ Automated build of EveSynapse v0.7.3.14. Update with: evesynapse -update -arm64 
 * Unifies the skill level squares, lands Assets place switches at the top, caps the station directory by @miko in #115
 * Puts the briefing first in the default home layout by @miko in #114
 
-## [v0.7.3.13] - 2026-11-03
+## [v0.7.3.13]
 
 Automated build of EveSynapse v0.7.3.13. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1050,7 +1050,7 @@ Automated build of EveSynapse v0.7.3.13. Update with: evesynapse -update -arm64 
 ### 🚀 Features
 * Serves per-playstyle default home layouts by @natemsz in #113
 
-## [v0.7.3.12] - 2026-11-03
+## [v0.7.3.12]
 
 Automated build of EveSynapse v0.7.3.12. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1059,7 +1059,7 @@ Automated build of EveSynapse v0.7.3.12. Update with: evesynapse -update -arm64 
 ### Other Changes
 * On phones, Assets and the character sheet show their directory first and the picked place or skill group alone by @miko in #112
 
-## [v0.7.3.11] - 2026-11-02
+## [v0.7.3.11]
 
 Automated build of EveSynapse v0.7.3.11. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1068,7 +1068,7 @@ Automated build of EveSynapse v0.7.3.11. Update with: evesynapse -update -arm64 
 ### Other Changes
 * Home resize: the grip frame starts over the module it resizes by @miko in #111
 
-## [v0.7.3.10] - 2026-11-02
+## [v0.7.3.10]
 
 Automated build of EveSynapse v0.7.3.10. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1077,7 +1077,7 @@ Automated build of EveSynapse v0.7.3.10. Update with: evesynapse -update -arm64 
 ### Other Changes
 * Gives three column pages a shared console class by @miko in #110
 
-## [v0.7.3.9] - 2026-11-02
+## [v0.7.3.9]
 
 Automated build of EveSynapse v0.7.3.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1086,7 +1086,7 @@ Automated build of EveSynapse v0.7.3.9. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Pads the character console inside its border by @miko in #109
 
-## [v0.7.3.8] - 2026-11-02
+## [v0.7.3.8]
 
 Automated build of EveSynapse v0.7.3.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1095,7 +1095,7 @@ Automated build of EveSynapse v0.7.3.8. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Gives the character sheet console the frosted glass pane the Assets console uses by @miko in #108
 
-## [v0.7.3.7] - 2026-11-02
+## [v0.7.3.7]
 
 Automated build of EveSynapse v0.7.3.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1104,7 +1104,7 @@ Automated build of EveSynapse v0.7.3.7. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Moves the gate camp watched systems behind a button and modal, trims the undercut digest row to its frequency dropdown, and stacks the notification rows cleanly on phones by @miko in #107
 
-## [v0.7.3.6] - 2026-11-02
+## [v0.7.3.6]
 
 Automated build of EveSynapse v0.7.3.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1113,7 +1113,7 @@ Automated build of EveSynapse v0.7.3.6. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Pins the mid-view inspector sheets to the screen, gives the Assets matrix readable columns, and makes the character scope selector apply live by @miko in #106
 
-## [v0.7.3.5] - 2026-11-02
+## [v0.7.3.5]
 
 Automated build of EveSynapse v0.7.3.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1122,7 +1122,7 @@ Automated build of EveSynapse v0.7.3.5. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Polishes the character sheet and Assets headers, spacing, and controls by @miko in #105
 
-## [v0.7.3.4] - 2026-11-02
+## [v0.7.3.4]
 
 Automated build of EveSynapse v0.7.3.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1132,7 +1132,7 @@ Automated build of EveSynapse v0.7.3.4. Update with: evesynapse -update -arm64 (
 * Keeps the table fill on the header row only by @miko in #104
 * Removes the hard offset text shadows by @miko in #103
 
-## [v0.7.3.3] - 2026-11-02
+## [v0.7.3.3]
 
 Automated build of EveSynapse v0.7.3.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1141,7 +1141,7 @@ Automated build of EveSynapse v0.7.3.3. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Paints the remaining surfaces with the shared theme fills, drops the redundant page wrappers and lets muted scheme glass read through by @miko in #101
 
-## [v0.7.3.2] - 2026-11-02
+## [v0.7.3.2]
 
 Automated build of EveSynapse v0.7.3.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1150,7 +1150,7 @@ Automated build of EveSynapse v0.7.3.2. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Size home modules inside their floor and ceiling, and backfill the grid by @natemsz in #100
 
-## [v0.7.3.1] - 2026-11-02
+## [v0.7.3.1]
 
 Automated build of EveSynapse v0.7.3.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1176,7 +1176,7 @@ Automated build of EveSynapse v0.7.3.1. Update with: evesynapse -update -arm64 (
 * Links take the theme's secondary tone, one shade lighter on highlight and on the card titles by @miko in #74
 * Update https://code.forgejo.org/forgejo/upload-artifact action to v5 by @renovate in #69
 
-## [v0.7.3.0] - 2026-11-02
+## [v0.7.3.0]
 
 Automated build of EveSynapse v0.7.3.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1194,7 +1194,7 @@ Automated build of EveSynapse v0.7.3.0. Update with: evesynapse -update -arm64 (
 * Opens the rail Settings menu upward and gives the phone sheet the settings sections by @miko in #56
 * Filters long tables live as you type by @miko in #55
 
-## [v0.7.2.2] - 2026-11-01
+## [v0.7.2.2]
 
 Automated build of EveSynapse v0.7.2.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1208,7 +1208,7 @@ Automated build of EveSynapse v0.7.2.2. Update with: evesynapse -update -arm64 (
 * Update Gradle to v9 by @renovate in #67
 * Update Go modules by @renovate in #62
 
-## [v0.7.2.1] - 2026-11-01
+## [v0.7.2.1]
 
 Automated build of EveSynapse v0.7.2.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1226,7 +1226,7 @@ Automated build of EveSynapse v0.7.2.1. Update with: evesynapse -update -arm64 (
 * Pins a chart tooltip on a plain tap so tapping off the chart dismisses it by @miko in #46
 * Replaces the swap crossfade with a live height glide and staggered draw-in by @miko in #45
 
-## [v0.7.2.0] - 2026-10-31
+## [v0.7.2.0]
 
 Automated build of EveSynapse v0.7.2.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1235,7 +1235,7 @@ Automated build of EveSynapse v0.7.2.0. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Rebuilds the Profit page around realized profit, capital flow and coverage by @miko in #44
 
-## [v0.7.1.2] - 2026-10-31
+## [v0.7.1.2]
 
 Automated build of EveSynapse v0.7.1.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1248,7 +1248,7 @@ Automated build of EveSynapse v0.7.1.2. Update with: evesynapse -update -arm64 (
 * Adds the category header to rail flyouts and keeps group rules from collapsing by @miko in #40
 * Pools the theme accent as a glow at the base of the KPI and briefing cards by @miko in #39
 
-## [v0.7.1.1] - 2026-10-31
+## [v0.7.1.1]
 
 Automated build of EveSynapse v0.7.1.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1266,7 +1266,7 @@ Automated build of EveSynapse v0.7.1.1. Update with: evesynapse -update -arm64 (
 * Renders ISK figures in the house money format on the home KPIs and fleet table by @miko in #29
 * Publishes the GitHub release from GitHub Actions instead of the Forgejo pipeline by @miko in #28
 
-## [v0.7.1.0] - 2026-10-31
+## [v0.7.1.0]
 
 Automated build of EveSynapse v0.7.1.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1275,7 +1275,7 @@ Automated build of EveSynapse v0.7.1.0. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Reorganizes the market navigation, fixes the demo profit charts and the LP store table by @miko in #27
 
-## [v0.7.0.10] - 2026-10-30
+## [v0.7.0.10]
 
 Automated build of EveSynapse v0.7.0.10. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1286,7 +1286,7 @@ Automated build of EveSynapse v0.7.0.10. Update with: evesynapse -update -arm64 
 * The release workflow creates the GitHub and GitLab releases from the same build, so every forge carries the same release
 * The README and the env example document the updater's provider order
 
-## [v0.7.0.9] - 2026-10-30
+## [v0.7.0.9]
 
 Automated build of EveSynapse v0.7.0.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1295,7 +1295,7 @@ Automated build of EveSynapse v0.7.0.9. Update with: evesynapse -update -arm64 (
 * Briefing card text gets the full row on phones
 * The check gates and the release gate run on GitHub runners, and the release tag is signed with the release key before publishing
 
-## [v0.7.0.8] - 2026-10-30
+## [v0.7.0.8]
 
 Automated build of EveSynapse v0.7.0.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1308,7 +1308,7 @@ Automated build of EveSynapse v0.7.0.8. Update with: evesynapse -update -arm64 (
 * The landing page's section headlines carry the ember gradient again
 * The project's code, CI and releases live on its own Forgejo at natems.dev; signed releases publish there and mirror to the CDN
 
-## [v0.7.0.7] - 2026-10-29
+## [v0.7.0.7]
 
 Automated build of EveSynapse v0.7.0.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1316,7 +1316,7 @@ Automated build of EveSynapse v0.7.0.7. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * The sidebar ESI status button is themed, its dot pings like the ESI pill, the freshness modal drops the Intel row, and the status tooltip is worded by state
 
-## [v0.7.0.6] - 2026-10-29
+## [v0.7.0.6]
 
 Automated build of EveSynapse v0.7.0.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1340,7 +1340,7 @@ Automated build of EveSynapse v0.7.0.6. Update with: evesynapse -update -arm64 (
 * Fix basket edit and builder going dead after in-app navigation
 * Intel reader fixes from synthetic reports, and the tagger runtime
 
-## [v0.7.0.5] - 2026-10-29
+## [v0.7.0.5]
 
 Automated build of EveSynapse v0.7.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1358,7 +1358,7 @@ Automated build of EveSynapse v0.7.0.5. Update with: evesynapse -update -arm64 (
 * Set dropdown menu items in Rajdhani Regular at 0.03em letter spacing
 * Check for SDE updates daily instead of weekly
 
-## [v0.7.0.4] - 2026-10-29
+## [v0.7.0.4]
 
 Automated build of EveSynapse v0.7.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1373,7 +1373,7 @@ Automated build of EveSynapse v0.7.0.4. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.7.0.3...v0.7.0.4
 
-## [v0.7.0.3] - 2026-10-29
+## [v0.7.0.3]
 
 Automated build of EveSynapse v0.7.0.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1391,7 +1391,7 @@ Automated build of EveSynapse v0.7.0.3. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.7.0.2...v0.7.0.3
 
-## [v0.7.0.2] - 2026-10-29
+## [v0.7.0.2]
 
 Automated build of EveSynapse v0.7.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1419,13 +1419,13 @@ Automated build of EveSynapse v0.7.0.2. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.7.0.1...v0.7.0.2
 
-## [v0.7.0.1] - 2026-10-29
+## [v0.7.0.1]
 
 Automated build of EveSynapse v0.7.0.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-## [v0.6.1.9] - 2026-10-28
+## [v0.6.1.9]
 
 Automated build of EveSynapse v0.6.1.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-## [v0.6.1.8] - 2026-10-28
+## [v0.6.1.8]
 
 Automated build of EveSynapse v0.6.1.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1436,7 +1436,7 @@ Automated build of EveSynapse v0.6.1.8. Update with: evesynapse -update -arm64 (
 
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.6...v0.6.1.8
-## [v0.6.1.7] - 2026-10-28
+## [v0.6.1.7]
 
 Automated build of EveSynapse v0.6.1.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1478,7 +1478,7 @@ Automated build of EveSynapse v0.6.1.7. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.5...v0.6.1.7
 
-## [v0.6.1.5] - 2026-10-28
+## [v0.6.1.5]
 
 Automated build of EveSynapse v0.6.1.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1497,7 +1497,7 @@ Automated build of EveSynapse v0.6.1.5. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.4...v0.6.1.5
 
-## [v0.6.1.4] - 2026-10-28
+## [v0.6.1.4]
 
 Automated build of EveSynapse v0.6.1.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1511,10 +1511,10 @@ Automated build of EveSynapse v0.6.1.4. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.3...v0.6.1.4
 
-## [v0.6.1.3] - 2026-10-28
+## [v0.6.1.3]
 
 Automated build of EveSynapse v0.6.1.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-## [v0.6.1.2] - 2026-10-28
+## [v0.6.1.2]
 
 Automated build of EveSynapse v0.6.1.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1541,7 +1541,7 @@ Automated build of EveSynapse v0.6.1.2. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.0...v0.6.1.1
 
-## [v0.6.1.0] - 2026-10-28
+## [v0.6.1.0]
 
 Automated build of EveSynapse v0.6.1.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1554,7 +1554,7 @@ Automated build of EveSynapse v0.6.1.0. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.9...v0.6.1.0
 
-## [v0.6.0.9] - 2026-10-27
+## [v0.6.0.9]
 
 Automated build of EveSynapse v0.6.0.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1569,7 +1569,7 @@ Automated build of EveSynapse v0.6.0.9. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.8...v0.6.0.9
 
-## [v0.6.0.8] - 2026-10-27
+## [v0.6.0.8]
 
 Automated build of EveSynapse v0.6.0.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1583,7 +1583,7 @@ Automated build of EveSynapse v0.6.0.8. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.7...v0.6.0.8
 
-## [v0.6.0.7] - 2026-10-27
+## [v0.6.0.7]
 
 Automated build of EveSynapse v0.6.0.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1595,7 +1595,7 @@ Automated build of EveSynapse v0.6.0.7. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.6...v0.6.0.7
 
-## [v0.6.0.6] - 2026-10-27
+## [v0.6.0.6]
 
 Automated build of EveSynapse v0.6.0.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1611,7 +1611,7 @@ Automated build of EveSynapse v0.6.0.6. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.5...v0.6.0.6
 
-## [v0.6.0.5] - 2026-10-27
+## [v0.6.0.5]
 
 Automated build of EveSynapse v0.6.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1630,7 +1630,7 @@ Automated build of EveSynapse v0.6.0.5. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.4...v0.6.0.5
 
-## [v0.6.0.4] - 2026-10-27
+## [v0.6.0.4]
 
 Automated build of EveSynapse v0.6.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1651,7 +1651,7 @@ Automated build of EveSynapse v0.6.0.4. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.2...v0.6.0.4
 
-## [v0.6.0.2] - 2026-10-27
+## [v0.6.0.2]
 
 Automated build of EveSynapse v0.6.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1665,7 +1665,7 @@ Automated build of EveSynapse v0.6.0.2. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.1...v0.6.0.2
 
-## [v0.6.0.1] - 2026-10-27
+## [v0.6.0.1]
 
 Automated build of EveSynapse v0.6.0.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1681,7 +1681,7 @@ Automated build of EveSynapse v0.6.0.1. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.0...v0.6.0.1
 
-## [v0.6.0.0] - 2026-10-27
+## [v0.6.0.0]
 
 Automated build of EveSynapse v0.6.0.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1711,7 +1711,7 @@ Automated build of EveSynapse v0.6.0.0. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.11...v0.6.0.0
 
-## [v0.5.9.11] - 2026-10-27
+## [v0.5.9.11]
 
 Automated build of EveSynapse v0.5.9.11. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1727,7 +1727,7 @@ Automated build of EveSynapse v0.5.9.11. Update with: evesynapse -update -arm64 
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.10...v0.5.9.11
 
-## [v0.5.9.10] - 2026-10-27
+## [v0.5.9.10]
 
 Automated build of EveSynapse v0.5.9.10. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1750,7 +1750,7 @@ Automated build of EveSynapse v0.5.9.10. Update with: evesynapse -update -arm64 
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.9...v0.5.9.10
 
-## [v0.5.9.9] - 2026-10-26
+## [v0.5.9.9]
 
 Automated build of EveSynapse v0.5.9.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1764,7 +1764,7 @@ Automated build of EveSynapse v0.5.9.9. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.8...v0.5.9.9
 
-## [v0.5.9.8] - 2026-10-26
+## [v0.5.9.8]
 
 Automated build of EveSynapse v0.5.9.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1778,7 +1778,7 @@ Automated build of EveSynapse v0.5.9.8. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.7...v0.5.9.8
 
-## [v0.5.9.7] - 2026-10-26
+## [v0.5.9.7]
 
 Automated build of EveSynapse v0.5.9.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1795,7 +1795,7 @@ Automated build of EveSynapse v0.5.9.7. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.6...v0.5.9.7
 
-## [v0.5.9.6] - 2026-10-26
+## [v0.5.9.6]
 
 Automated build of EveSynapse v0.5.9.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1806,7 +1806,7 @@ Automated build of EveSynapse v0.5.9.6. Update with: evesynapse -update -arm64 (
 
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.5...v0.5.9.6
-## [v0.5.9.5] - 2026-10-26
+## [v0.5.9.5]
 
 Automated build of EveSynapse v0.5.9.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1822,7 +1822,7 @@ Automated build of EveSynapse v0.5.9.5. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.4...v0.5.9.5
 
-## [v0.5.9.4] - 2026-10-25
+## [v0.5.9.4]
 
 Automated build of EveSynapse v0.5.9.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1837,7 +1837,7 @@ Automated build of EveSynapse v0.5.9.4. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.3...v0.5.9.4
 
-## [v0.5.9.3] - 2026-10-25
+## [v0.5.9.3]
 
 Automated build of EveSynapse v0.5.9.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1854,7 +1854,7 @@ Automated build of EveSynapse v0.5.9.3. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.2...v0.5.9.3
 
-## [v0.5.9.2] - 2026-10-25
+## [v0.5.9.2]
 
 Automated build of EveSynapse v0.5.9.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1867,7 +1867,7 @@ Automated build of EveSynapse v0.5.9.2. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.1...v0.5.9.2
 
-## [v0.5.9.1] - 2026-10-25
+## [v0.5.9.1]
 
 Automated build of EveSynapse v0.5.9.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1880,7 +1880,7 @@ Automated build of EveSynapse v0.5.9.1. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.0...v0.5.9.1
 
-## [v0.5.9.0] - 2026-10-24
+## [v0.5.9.0]
 
 Automated build of EveSynapse v0.5.9.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1895,7 +1895,7 @@ Automated build of EveSynapse v0.5.9.0. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.3...v0.5.9.0
 
-## [v0.5.8.3] - 2026-10-24
+## [v0.5.8.3]
 
 Automated build of EveSynapse v0.5.8.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1913,7 +1913,7 @@ Automated build of EveSynapse v0.5.8.3. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.2...v0.5.8.3
 
-## [v0.5.8.2] - 2026-10-24
+## [v0.5.8.2]
 
 Automated build of EveSynapse v0.5.8.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1930,7 +1930,7 @@ Automated build of EveSynapse v0.5.8.2. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.1...v0.5.8.2
 
-## [v0.5.8.1] - 2026-10-24
+## [v0.5.8.1]
 
 Automated build of EveSynapse v0.5.8.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1943,7 +1943,7 @@ Automated build of EveSynapse v0.5.8.1. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.0...v0.5.8.1
 
-## [v0.5.8.0] - 2026-10-24
+## [v0.5.8.0]
 
 Automated build of EveSynapse v0.5.8.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1960,7 +1960,7 @@ Automated build of EveSynapse v0.5.8.0. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.9...v0.5.8.0
 
-## [v0.5.7.9] - 2026-10-24
+## [v0.5.7.9]
 
 Automated build of EveSynapse v0.5.7.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1974,7 +1974,7 @@ Automated build of EveSynapse v0.5.7.9. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.8...v0.5.7.9
 
-## [v0.5.7.8] - 2026-10-24
+## [v0.5.7.8]
 
 Automated build of EveSynapse v0.5.7.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -1992,7 +1992,7 @@ Automated build of EveSynapse v0.5.7.8. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.7...v0.5.7.8
 
-## [v0.5.7.7] - 2026-10-24
+## [v0.5.7.7]
 
 Automated build of EveSynapse v0.5.7.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2008,7 +2008,7 @@ Automated build of EveSynapse v0.5.7.7. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.6...v0.5.7.7
 
-## [v0.5.7.6] - 2026-10-23
+## [v0.5.7.6]
 
 Automated build of EveSynapse v0.5.7.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2025,7 +2025,7 @@ Automated build of EveSynapse v0.5.7.6. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.5...v0.5.7.6
 
-## [v0.5.7.5] - 2026-10-23
+## [v0.5.7.5]
 
 Automated build of EveSynapse v0.5.7.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2048,7 +2048,7 @@ Automated build of EveSynapse v0.5.7.5. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.4...v0.5.7.5
 
-## [v0.5.7.4] - 2026-10-23
+## [v0.5.7.4]
 
 Automated build of EveSynapse v0.5.7.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2065,7 +2065,7 @@ Automated build of EveSynapse v0.5.7.4. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.3...v0.5.7.4
 
-## [v0.5.7.3] - 2026-10-22
+## [v0.5.7.3]
 
 Automated build of EveSynapse v0.5.7.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2082,7 +2082,7 @@ Automated build of EveSynapse v0.5.7.3. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.2...v0.5.7.3
 
-## [v0.5.7.2] - 2026-10-22
+## [v0.5.7.2]
 
 Automated build of EveSynapse v0.5.7.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2096,7 +2096,7 @@ Automated build of EveSynapse v0.5.7.2. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.1...v0.5.7.2
 
-## [v0.5.7.1] - 2026-10-22
+## [v0.5.7.1]
 
 Automated build of EveSynapse v0.5.7.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2110,7 +2110,7 @@ Automated build of EveSynapse v0.5.7.1. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.0...v0.5.7.1
 
-## [v0.5.7.0] - 2026-10-22
+## [v0.5.7.0]
 
 Automated build of EveSynapse v0.5.7.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2124,7 +2124,7 @@ Automated build of EveSynapse v0.5.7.0. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.9...v0.5.7.0
 
-## [v0.5.6.9] - 2026-10-22
+## [v0.5.6.9]
 
 Automated build of EveSynapse v0.5.6.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2138,7 +2138,7 @@ Automated build of EveSynapse v0.5.6.9. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.8...v0.5.6.9
 
-## [v0.5.6.8] - 2026-10-22
+## [v0.5.6.8]
 
 Automated build of EveSynapse v0.5.6.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2168,7 +2168,7 @@ Automated build of EveSynapse v0.5.6.8. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.7...v0.5.6.8
 
-## [v0.5.6.7] - 2026-10-22
+## [v0.5.6.7]
 
 Automated build of EveSynapse v0.5.6.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2183,7 +2183,7 @@ Automated build of EveSynapse v0.5.6.7. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.6...v0.5.6.7
 
-## [v0.5.6.6] - 2026-10-22
+## [v0.5.6.6]
 
 Automated build of EveSynapse v0.5.6.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2199,7 +2199,7 @@ Automated build of EveSynapse v0.5.6.6. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.5...v0.5.6.6
 
-## [v0.5.6.5] - 2026-10-21
+## [v0.5.6.5]
 
 Automated build of EveSynapse v0.5.6.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2212,7 +2212,7 @@ Automated build of EveSynapse v0.5.6.5. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.4...v0.5.6.5
 
-## [v0.5.6.4] - 2026-10-21
+## [v0.5.6.4]
 
 Automated build of EveSynapse v0.5.6.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2228,7 +2228,7 @@ Automated build of EveSynapse v0.5.6.4. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.2...v0.5.6.4
 
-## [v0.5.6.3] - 2026-10-21
+## [v0.5.6.3]
 
 Automated build of EveSynapse v0.5.6.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2244,7 +2244,7 @@ Automated build of EveSynapse v0.5.6.3. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.1...v0.5.6.3
 
-## [v0.5.6.1] - 2026-10-21
+## [v0.5.6.1]
 
 Automated build of EveSynapse v0.5.6.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2262,7 +2262,7 @@ Automated build of EveSynapse v0.5.6.1. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.0...v0.5.6.1
 
-## [v0.5.6.0] - 2026-10-21
+## [v0.5.6.0]
 
 Automated build of EveSynapse v0.5.6.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2281,7 +2281,7 @@ Automated build of EveSynapse v0.5.6.0. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.4...v0.5.6.0
 
-## [v0.5.5.4] - 2026-10-21
+## [v0.5.5.4]
 
 Automated build of EveSynapse v0.5.5.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2298,7 +2298,7 @@ Automated build of EveSynapse v0.5.5.4. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.3...v0.5.5.4
 
-## [v0.5.5.3] - 2026-10-21
+## [v0.5.5.3]
 
 Automated build of EveSynapse v0.5.5.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2315,7 +2315,7 @@ Automated build of EveSynapse v0.5.5.3. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.2...v0.5.5.3
 
-## [v0.5.5.2] - 2026-10-21
+## [v0.5.5.2]
 
 Automated build of EveSynapse v0.5.5.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2333,7 +2333,7 @@ Automated build of EveSynapse v0.5.5.2. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.1...v0.5.5.2
 
-## [v0.5.5.1] - 2026-10-21
+## [v0.5.5.1]
 
 Automated build of EveSynapse v0.5.5.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2350,7 +2350,7 @@ Automated build of EveSynapse v0.5.5.1. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.0...v0.5.5.1
 
-## [v0.5.5.0] - 2026-10-21
+## [v0.5.5.0]
 
 Automated build of EveSynapse v0.5.5.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2365,7 +2365,7 @@ Automated build of EveSynapse v0.5.5.0. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.8...v0.5.5.0
 
-## [v0.5.4.8] - 2026-10-21
+## [v0.5.4.8]
 
 Automated build of EveSynapse v0.5.4.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2379,7 +2379,7 @@ Automated build of EveSynapse v0.5.4.8. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.7...v0.5.4.8
 
-## [v0.5.4.7] - 2026-10-21
+## [v0.5.4.7]
 
 Automated build of EveSynapse v0.5.4.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2391,7 +2391,7 @@ Automated build of EveSynapse v0.5.4.7. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.6...v0.5.4.7
 
-## [v0.5.4.6] - 2026-10-21
+## [v0.5.4.6]
 
 Automated build of EveSynapse v0.5.4.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2406,7 +2406,7 @@ Automated build of EveSynapse v0.5.4.6. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.5...v0.5.4.6
 
-## [v0.5.4.5] - 2026-10-20
+## [v0.5.4.5]
 
 Automated build of EveSynapse v0.5.4.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2421,7 +2421,7 @@ Automated build of EveSynapse v0.5.4.5. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.4...v0.5.4.5
 
-## [v0.5.4.4] - 2026-10-20
+## [v0.5.4.4]
 
 Automated build of EveSynapse v0.5.4.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2433,7 +2433,7 @@ Automated build of EveSynapse v0.5.4.4. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.3...v0.5.4.4
 
-## [v0.5.4.3] - 2026-10-20
+## [v0.5.4.3]
 
 Automated build of EveSynapse v0.5.4.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2445,7 +2445,7 @@ Automated build of EveSynapse v0.5.4.3. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.2...v0.5.4.3
 
-## [v0.5.4.2] - 2026-10-20
+## [v0.5.4.2]
 
 Automated build of EveSynapse v0.5.4.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2458,7 +2458,7 @@ Automated build of EveSynapse v0.5.4.2. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.1...v0.5.4.2
 
-## [v0.5.4.1] - 2026-10-20
+## [v0.5.4.1]
 
 Automated build of EveSynapse v0.5.4.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2479,7 +2479,7 @@ Automated build of EveSynapse v0.5.4.1. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.0...v0.5.4.1
 
-## [v0.5.4.0] - 2026-10-20
+## [v0.5.4.0]
 
 Automated build of EveSynapse v0.5.4.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2493,7 +2493,7 @@ Automated build of EveSynapse v0.5.4.0. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.9...v0.5.4.0
 
-## [v0.5.3.9] - 2026-10-20
+## [v0.5.3.9]
 
 Automated build of EveSynapse v0.5.3.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2515,7 +2515,7 @@ Automated build of EveSynapse v0.5.3.9. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.8...v0.5.3.9
 
-## [v0.5.3.8] - 2026-10-19
+## [v0.5.3.8]
 
 Automated build of EveSynapse v0.5.3.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2527,7 +2527,7 @@ Automated build of EveSynapse v0.5.3.8. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.7...v0.5.3.8
 
-## [v0.5.3.7] - 2026-10-19
+## [v0.5.3.7]
 
 Automated build of EveSynapse v0.5.3.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2539,7 +2539,7 @@ Automated build of EveSynapse v0.5.3.7. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.6...v0.5.3.7
 
-## [v0.5.3.6] - 2026-10-19
+## [v0.5.3.6]
 
 Automated build of EveSynapse v0.5.3.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2555,7 +2555,7 @@ Automated build of EveSynapse v0.5.3.6. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.5...v0.5.3.6
 
-## [v0.5.3.5] - 2026-10-19
+## [v0.5.3.5]
 
 Automated build of EveSynapse v0.5.3.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2569,7 +2569,7 @@ Automated build of EveSynapse v0.5.3.5. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.4...v0.5.3.5
 
-## [v0.5.3.4] - 2026-10-19
+## [v0.5.3.4]
 
 Automated build of EveSynapse v0.5.3.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2588,7 +2588,7 @@ Automated build of EveSynapse v0.5.3.4. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.3...v0.5.3.4
 
-## [v0.5.3.3] - 2026-10-19
+## [v0.5.3.3]
 
 Automated build of EveSynapse v0.5.3.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2600,7 +2600,7 @@ Automated build of EveSynapse v0.5.3.3. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.2...v0.5.3.3
 
-## [v0.5.3.2] - 2026-10-19
+## [v0.5.3.2]
 
 Automated build of EveSynapse v0.5.3.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2616,7 +2616,7 @@ Automated build of EveSynapse v0.5.3.2. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.1...v0.5.3.2
 
-## [v0.5.3.1] - 2026-10-19
+## [v0.5.3.1]
 
 Automated build of EveSynapse v0.5.3.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2639,7 +2639,7 @@ Automated build of EveSynapse v0.5.3.1. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.0...v0.5.3.1
 
-## [v0.5.3.0] - 2026-10-19
+## [v0.5.3.0]
 
 Automated build of EveSynapse v0.5.3.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2655,7 +2655,7 @@ Automated build of EveSynapse v0.5.3.0. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.2.14...v0.5.3.0
 
-## [v0.5.2.14] - 2026-10-19
+## [v0.5.2.14]
 
 Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
@@ -2672,7 +2672,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.2.13...v0.5.2.14
 
-## [v0.5.2.13] - 2026-10-18
+## [v0.5.2.13]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.13. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2683,7 +2683,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 ### Fixed
 - No changes recorded for this release window.
 
-## [v0.5.2.12] - 2026-10-18
+## [v0.5.2.12]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.12. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2692,7 +2692,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 - PR #448: Swarm: signed pull auth (dual-accept) + public contracts as a swarm kind.
 - PR #449: Admin: peer Build column, a release-library lookup of a peer's binary SHA claim.
 
-## [v0.5.2.11] - 2026-10-18
+## [v0.5.2.11]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.11. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2701,12 +2701,12 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 - PR #446: Nav: rename corporation Orders to My Orders.
 - PR #447: Add release-notes category config (.github/release.yml).
 
-## [v0.5.2.10] - 2026-10-18
+## [v0.5.2.10]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.10. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-## [v0.5.2.7] - 2026-10-18
+## [v0.5.2.7]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2719,7 +2719,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 - Appraisal logic now prices the wanted side of item exchanges and gates deal ratio on full wanted coverage.
 - Contract search UI fixes for drawers, row expansion, item icons, and spread phrasing.
 
-## [v0.5.2.6] - 2026-10-18
+## [v0.5.2.6]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2733,7 +2733,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 - Contract search structure and navigation updates.
 - Home page header alignment, glance card spacing, and dropdown treatment.
 
-## [v0.5.2.5] - 2026-10-18
+## [v0.5.2.5]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2746,7 +2746,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 - Contract surface styling and attribute label readability.
 - Rebuilt background asset tiers for the calm interior theme.
 
-## [v0.5.2.4] - 2026-10-18
+## [v0.5.2.4]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2757,7 +2757,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 ### Fixed
 - Contract search redesign and new inline expansion behavior.
 
-## [v0.5.2.3] - 2026-10-18
+## [v0.5.2.3]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2768,7 +2768,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 ### Fixed
 - Briefing filter placement and fleet search separator styling.
 
-## [v0.5.2.2] - 2026-10-18
+## [v0.5.2.2]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2779,7 +2779,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 ### Fixed
 - Home page visual treatment, glass styling, background, and fleet header improvements.
 
-## [v0.5.2.1] - 2026-10-18
+## [v0.5.2.1]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2792,7 +2792,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 ### Fixed
 - Search, home fetch, mail box behavior, and stylesheet loading fixes.
 
-## [v0.5.2.0] - 2026-10-18
+## [v0.5.2.0]
 
 ### Added
 - Automated build of EveSynapse v0.5.2.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2816,7 +2816,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 ### Fixed
 - Multiple UI, schema, appraisal, and performance fixes across the app.
 
-## [v0.5.1.24] - 2026-10-17
+## [v0.5.1.24]
 
 ### Added
 - Automated build of EveSynapse v0.5.1.24. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -2827,7 +2827,7 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 ### Fixed
 - No changes recorded for this release window.
 
-## [v0.5.1.23] - 2026-10-17
+## [v0.5.1.23]
 
 ### Added
 - Automated build of EveSynapse v0.5.1.23. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

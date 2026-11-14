@@ -289,6 +289,10 @@ func (f *fitting) addCharges(charges map[int64]int64) {
 		if !cycling {
 			continue
 		}
+		if !ChargeFits(f.snap, weaponType, chargeType) {
+			f.note(fmt.Sprintf("charge type %d does not fit weapon type %d", chargeType, weaponType))
+			continue
+		}
 		kind := entCharge
 		if f.snap.HasEffect(weaponType, EffectLauncherFitted) {
 			kind = entMissile
@@ -304,6 +308,42 @@ func (f *fitting) addCharges(charges map[int64]int64) {
 		f.weaponCharge[weaponType] = ent
 		f.entities = append(f.entities, ent)
 	}
+}
+
+// chargeGroupAttrs are the attributes a module names the charge
+// groups it loads with.
+var chargeGroupAttrs = []int64{604, 605, 606, 609, 610}
+
+// attrChargeSize is a launcher's or turret's charge size, and a
+// charge's own: 1 small, 2 medium, 3 large, 4 extra large.
+const attrChargeSize = 128
+
+// ChargeFits reports whether a module can load a charge, as the game
+// rules it: the charge's group is one the module names, and where
+// both carry a charge size, the sizes match (a large disintegrator
+// takes L crystals, never the capital XL ones). A module naming no
+// charge group, or a type the snapshot lacks, is not refused here.
+func ChargeFits(snap *Snapshot, moduleType, chargeType int64) bool {
+	if snap == nil {
+		return true
+	}
+	mod, ch := snap.Attrs[moduleType], snap.Attrs[chargeType]
+	if mod == nil || ch == nil {
+		return true
+	}
+	var groups []int64
+	for _, a := range chargeGroupAttrs {
+		if g := int64(mod[a]); g > 0 {
+			groups = append(groups, g)
+		}
+	}
+	if len(groups) > 0 && !slices.Contains(groups, snap.Groups[chargeType]) {
+		return false
+	}
+	if ms, cs := mod[attrChargeSize], ch[attrChargeSize]; ms > 0 && cs > 0 && ms != cs {
+		return false
+	}
+	return true
 }
 
 // addSkills makes each trained skill a pseudo-item, its skillLevel

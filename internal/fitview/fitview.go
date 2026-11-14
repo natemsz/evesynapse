@@ -2213,10 +2213,18 @@ func FitPlainNotes(raw []string, by []int64, nameOf func(int64) string) []string
 	}
 	// The engine's no-charge notes carry the weapon's type ID.
 	var turrets, launchers []int64
+	var misfits []string
+	var refused []int64 // weapons whose charge was refused: the misfit line covers them
 	generic := false
 	for _, s := range raw {
 		var id int64
 		switch {
+		case strings.Contains(s, "does not fit weapon type"):
+			var ch, w int64
+			if _, err := fmt.Sscanf(s, "charge type %d does not fit weapon type %d", &ch, &w); err == nil {
+				misfits = append(misfits, nameOf(ch)+" doesn't fit "+nameOf(w)+", so it isn't loaded.")
+				refused = append(refused, w)
+			}
 		case strings.Contains(s, "has no charge selected"):
 			if _, err := fmt.Sscanf(s, "turret type %d", &id); err == nil {
 				turrets = append(turrets, id)
@@ -2228,6 +2236,12 @@ func FitPlainNotes(raw []string, by []int64, nameOf func(int64) string) []string
 		default:
 			generic = true
 		}
+	}
+	turrets = slices.DeleteFunc(turrets, func(id int64) bool { return slices.Contains(refused, id) })
+	launchers = slices.DeleteFunc(launchers, func(id int64) bool { return slices.Contains(refused, id) })
+	sort.Strings(misfits)
+	for _, m := range misfits {
+		add(m)
 	}
 	if who, n := names(turrets); n > 0 {
 		add("No ammunition picked for " + who + ", so " + its(n) + " damage isn't counted yet.")

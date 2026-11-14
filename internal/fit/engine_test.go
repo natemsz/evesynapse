@@ -1237,3 +1237,28 @@ func TestFitEngineFighterSquadrons(t *testing.T) {
 	res = Compute(f.snap, carrier, []ItemInput{{TypeID: fighter, Quantity: 6, Abilities: []string{FighterAbilityAttack}}}, nil, nil, nil)
 	near(t, "attack only", res.FighterDPS, 120, 1e-9)
 }
+
+// A module loads only charges of a group it names and, where both
+// carry a size, of its own size; an unsized charge in a named group
+// (cap booster charges) loads.
+func TestChargeFitsGroupAndSize(t *testing.T) {
+	const largeGun, crystalL, crystalXL, capCharge, otherGroup = 1, 2, 3, 4, 5
+	snap := &Snapshot{
+		Attrs: map[int64]map[int64]float64{
+			largeGun:   {604: 100, 128: 3},
+			crystalL:   {128: 3},
+			crystalXL:  {128: 4},
+			capCharge:  {},
+			otherGroup: {128: 3},
+		},
+		Groups: map[int64]int64{crystalL: 100, crystalXL: 100, capCharge: 100, otherGroup: 200},
+	}
+	for _, c := range []struct {
+		charge int64
+		want   bool
+	}{{crystalL, true}, {crystalXL, false}, {capCharge, true}, {otherGroup, false}} {
+		if got := ChargeFits(snap, largeGun, c.charge); got != c.want {
+			t.Errorf("ChargeFits(large gun, %d) = %v, want %v", c.charge, got, c.want)
+		}
+	}
+}

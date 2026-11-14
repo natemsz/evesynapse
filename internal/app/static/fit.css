@@ -38,6 +38,8 @@
   /* The stats view is a page of its own here, and the ship
      header carries the headline figures: no summary bar. */
   .fit-sum { display: none; }
+  /* The ship header carries the glance figures here too. */
+  .fit-glance { display: none; }
   /* fit.js hides the sections outside the current view with
      this class; it only ever applies at phone widths. */
   .fit-wb .fv-off { display: none !important; }

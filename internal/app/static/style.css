@@ -1982,7 +1982,7 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
 /* KPI titles read as UI labels, like table headers: Rajdhani
    SemiBold in small spaced capitals, bright enough to read on glass. */
 .kpi-k { font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600; font-synthesis-weight: none; font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
-td, dd, .kpi-v, .fit-headline-num, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b, .sec {
+td, dd, .kpi-v, .fit-gl > b, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b, .sec {
   /* Standalone figures: monospaced digits, Eve Sans Neue for any letters. */
   font-family: "Synapse Numerals", "Eve Sans Neue", "Inter", "Segoe UI", sans-serif;
 }
@@ -4130,7 +4130,6 @@ html[data-theme="light"] .fit-head select {
 .fit-top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.4rem 1.2rem; }
 .fit-top > .fit-note { margin: 0; }
 .fit-top > .fit-problems { flex: 1 1 100%; }
-.fit-headline-label abbr { text-decoration: none; }
 .fit-problems { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; margin: 0 0 0.8rem; padding: 0.55rem 0.8rem; border: 1px solid rgba(198, 47, 16, 0.55); border-radius: var(--r-sm); background: rgba(198, 47, 16, 0.1); }
 .fit-problems strong { color: #ff7a5c; letter-spacing: 0.06em; text-transform: uppercase; font-size: var(--fs-xs); }
 .fit-problems ul { display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin: 0; padding: 0; }
@@ -4860,31 +4859,6 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
 }
 
-/* DPS/volley headline: the two numbers fitters look at first. */
-.fit-headline {
-  display: flex;
-  gap: 2rem;
-  align-items: baseline;
-  margin: 0.6rem 0 0.8rem;
-  padding: 0.7rem 1rem;
-  border: 1px solid #2c2c2c;
-  border-radius: 6px;
-  background: rgba(255, 184, 77, 0.04);
-}
-.fit-headline-dps, .fit-headline-volley { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
-.fit-headline-num {
-  font-size: var(--fs-5xl);
-  font-weight: 700;
-  color: var(--success);
-  line-height: 1;
-}
-.fit-headline-label {
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-.fit-headline-sub { font-size: var(--fs-xs); color: var(--muted); flex-basis: 100%; }
 
 /* Fit metadata + your-fits search in the editor header. */
 .fit-meta {
@@ -5100,7 +5074,6 @@ html[data-theme="light"] .fit-problems strong { color: #a8280d; }
 html[data-theme="light"] .fit-bar { background: #e9e0cf; border-color: #d3c7ae; }
 html[data-theme="light"] .fit-famchips button { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
 html[data-theme="light"] .fit-famchips button.on { background: #e8d5b5; color: #20180e; }
-html[data-theme="light"] .fit-headline { border-color: #d3c7ae; background: rgba(255, 184, 77, 0.1); }
 html[data-theme="light"] .fit-slot-empty { border-color: #c9b992; }
 html[data-theme="light"] .fit-vhist { background: rgba(255, 253, 249, 0.92); }
 html[data-theme="light"] .fit-qty { background: #fdfbf6; border-color: #d3c7ae; }

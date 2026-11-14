@@ -164,7 +164,8 @@ func TestFitSimulateStatsFragment(t *testing.T) {
 		"Fixture Frigate", "Fixture Blaster", "Fixture Charge S",
 		"Damage per second", "Powergrid", "Capacitor")
 	// Two blasters at 20 DPS each: the total must read 40.
-	mustContain(t, "/fittings/simulate/", body, `<span class="fit-headline-num" data-fit-fig="dps">40</span>`, "turrets 40 · missiles 0 · drones 0")
+	// Only the sources that deal damage are listed under the tiles.
+	mustContain(t, "/fittings/simulate/", body, `<b data-fit-fig="dps">40</b>`, "turrets 40 DPS")
 	// Within budget: no over-budget marker anywhere in the bars.
 	if strings.Contains(body, "fit-bar-row over") {
 		t.Errorf("in-budget fit is flagged over budget:\n%s", body)

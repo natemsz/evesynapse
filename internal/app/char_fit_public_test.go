@@ -64,7 +64,7 @@ func TestPublicFitPageMirrorsTool(t *testing.T) {
 		`types/1001/render?size=512`,
 		"High slots",
 		"Fixture Blaster",
-		`class="fit-headline-num"`,
+		`class="fit-glance"`,
 		`>DPS</abbr>`,
 		`class="fit-resists"`,
 		"Effective hit points",

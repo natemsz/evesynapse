@@ -1341,6 +1341,13 @@ type FitStatsView struct {
 	// Figures is the headline stats as numbers (JSON), so the
 	// editor can show what an edit moved and preview a candidate.
 	Figures string
+	// DamageFrom is where the damage comes from, only the sources
+	// that deal any ("missiles 33.1 DPS, 205 volley"); "" without
+	// damage. TankLine is the EHP tile's second line: the strongest
+	// active repair ("repairs 49.1 HP/s"), or the shield's passive
+	// recharge without one.
+	DamageFrom string
+	TankLine   string
 }
 
 // FitFigure is one stat the editor compares between two
@@ -2383,6 +2390,27 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 	st.MissileVolley = FitFmt1(res.MissileVolley)
 	st.DroneVolley = FitFmt1(res.DroneVolley)
 	st.TotalVolley = FitFmt1(res.Volley)
+	var from []string
+	for _, src := range []struct {
+		name        string
+		dps, volley float64
+	}{
+		{"turrets", res.TurretDPS, res.TurretVolley},
+		{"missiles", res.MissileDPS, res.MissileVolley},
+		{"drones", res.DroneDPS, res.DroneVolley},
+		{"fighters", res.FighterDPS, res.FighterVolley},
+		{"smartbombs", res.SmartbombDPS, 0},
+	} {
+		if src.dps <= 0 {
+			continue
+		}
+		line := src.name + " " + FitFmt1(src.dps) + " DPS"
+		if src.volley > 0 {
+			line += ", " + FitFmt0(src.volley) + " volley"
+		}
+		from = append(from, line)
+	}
+	st.DamageFrom = strings.Join(from, " · ")
 
 	if res.NeutDrainPerSec > 0 {
 		st.NeutDrain = fmt.Sprintf("%s GJ/s (%s GJ per cycle)",
@@ -2467,6 +2495,17 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 	st.ShieldBoost = FitFmt1(res.ShieldBoostRate) + " HP/s"
 	st.ArmorRep = FitFmt1(res.ArmorRepairRate) + " HP/s"
 	st.HullRep = FitFmt1(res.HullRepairRate) + " HP/s"
+	st.TankLine = "recharge " + FitFmt1(res.ShieldRegenPeak) + " HP/s"
+	best := 0.0
+	for _, r := range []struct {
+		v    float64
+		what string
+	}{{res.ShieldBoostRate, "boosts "}, {res.ArmorRepairRate, "repairs "}, {res.HullRepairRate, "hull repairs "}} {
+		if r.v > best {
+			best = r.v
+			st.TankLine = r.what + FitFmt1(r.v) + " HP/s"
+		}
+	}
 
 	st.Velocity = FitFmt0(res.Velocity) + " m/s"
 	st.Align = FitFmt1(res.AlignSeconds) + " s"

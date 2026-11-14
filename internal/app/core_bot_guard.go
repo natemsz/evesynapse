@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"hash/fnv"
@@ -272,8 +271,9 @@ type botFingerprintWatch struct {
 	now       func() time.Time
 	// key signs the asset cookie. A cookie is client-asserted,
 	// so presence alone must exempt nobody: the value is an
-	// HMAC of the fingerprint under a per-process random key,
-	// issued only by an actual /static/ response.
+	// HMAC of the fingerprint under the install's guard secret
+	// (botGuardSecret), issued only by an actual /static/
+	// response.
 	key []byte
 }
 
@@ -434,12 +434,12 @@ func (w *enumFloodWatch) observe(id int64) bool {
 }
 
 // botWatches makes the behavioral watches on first use (the test
-// rig builds an Application without New).
+// rig builds an Application without New). The asset cookie's key
+// is the install's stored guard secret, so a cookie outlives a
+// restart.
 func (app *Application) botWatches() (*botFingerprintWatch, *enumFloodWatch) {
 	app.botWatchOnce.Do(func() {
-		key := make([]byte, 32)
-		_, _ = rand.Read(key)
-		app.botWatch = &botFingerprintWatch{prints: make(map[string]*botPrint), now: time.Now, key: key}
+		app.botWatch = &botFingerprintWatch{prints: make(map[string]*botPrint), now: time.Now, key: app.botGuardSecret()}
 		app.enumWatch = &enumFloodWatch{now: time.Now}
 	})
 	return app.botWatch, app.enumWatch
@@ -503,6 +503,11 @@ func (app *Application) blockScrapers(next http.Handler) http.Handler {
 		}
 		if isBlockedBot(r) {
 			http.Error(w, "Automated scraping is not permitted.", http.StatusForbidden)
+			return
+		}
+		// A verified search crawler is never counted.
+		if app.crawlerVerifier().verified(r) {
+			next.ServeHTTP(w, r)
 			return
 		}
 		prints, floods := app.botWatches()

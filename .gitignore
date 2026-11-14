@@ -1,4 +1,8 @@
 bin/
+
+# A bot guard engine checkout and its link files (make botguard-link).
+/.botguard/
+/.botguard-link/
 *.db
 *.db-wal
 *.db-shm

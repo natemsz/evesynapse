@@ -1667,7 +1667,13 @@
     // additive blend do not merge into white blobs; every active
     // system keeps its coloured dot, white only at the very top.
     var HEAT_STEPS = 24, HEAT_GLOW_FROM = 0.3, HEAT_GLOW_TOP = 0.62;
-    function drawHeat(k, ox, oy, r, list, order, tOf, ramp, pad) {
+    // Threat glows as it always has: every danger level glows, full
+    // size, up to white-hot at Extreme, since there the white is the
+    // message rather than noise.
+    var HEAT_RANKED = { from: HEAT_GLOW_FROM, top: HEAT_GLOW_TOP, base: 1, size: 8, a0: 0.08, a1: 0.22 };
+    var HEAT_LEVELS = { from: 0, top: 1, base: 2, size: 13, a0: 0.18, a1: 0.3 };
+    function drawHeat(k, ox, oy, r, list, order, tOf, ramp, pad, style) {
+      style = style || HEAT_RANKED;
       var keep = null, glow = [], dots = [], i, m, s;
       if (list) {
         keep = new Uint8Array(G.n);
@@ -1682,8 +1688,8 @@
         if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) continue;
         var t = tOf(i);
         s = Math.round(t * HEAT_STEPS);
-        if (t >= HEAT_GLOW_FROM) {
-          var rr = r + (1 + 8 * t) * grow;
+        if (t > 0 && t >= style.from) {
+          var rr = r + (style.base + style.size * t) * grow;
           if (!glow[s]) glow[s] = new Path2D();
           glow[s].moveTo(sx + rr, sy);
           glow[s].arc(sx, sy, rr, 0, Math.PI * 2);
@@ -1695,7 +1701,7 @@
       ctx.globalCompositeOperation = colors.heatBlend;
       for (s = 0; s <= HEAT_STEPS; s++) {
         if (!glow[s]) continue;
-        ctx.fillStyle = heatColor(Math.min(s / HEAT_STEPS, HEAT_GLOW_TOP), 0.08 + 0.22 * s / HEAT_STEPS, ramp);
+        ctx.fillStyle = heatColor(Math.min(s / HEAT_STEPS, style.top), style.a0 + style.a1 * s / HEAT_STEPS, ramp);
         ctx.fill(glow[s]);
       }
       ctx.globalCompositeOperation = "source-over";
@@ -2745,7 +2751,7 @@
           tOf = function (i) { return heatCurve(rk.pct[i], gain); };
         }
         var hc = layer === "threat" ? heatRanked("threat:order", vals) : heatRanked(layer, vals);
-        drawHeat(k, ox, oy, r, list, hc.order, tOf, ramp, pad);
+        drawHeat(k, ox, oy, r, list, hc.order, tOf, ramp, pad, layer === "threat" ? HEAT_LEVELS : HEAT_RANKED);
         // Camps: a ring around each.
         if (layer === "threat") {
           ctx.lineWidth = 2;

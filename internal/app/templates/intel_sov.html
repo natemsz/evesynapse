@@ -61,7 +61,7 @@
       </table>
       </div>
       {{if .ContestsMore}}<button type="button" class="btn btn-quiet sov-more" data-expand="sov-contests-more"><span class="sov-more-c">Show all {{.ContestTotal}}</span><span class="sov-more-o">Show fewer</span></button>{{end}}
-      <p class="sov-note">A contest ends when one side reaches 100%. Fight counts the kills in the contested constellation from an hour before the timer: open it to see them.</p>
+      <p class="sov-note">A contest ends when one side reaches 100%. Fight counts the kills the defending alliance took part in, in the contested constellation, from an hour before the timer: open it to see them.</p>
       {{else}}
       <p class="sov-empty">No sovereignty contests are under way{{if or $.Sov.RegionID $.Sov.AllianceID}} for this filter{{end}}.</p>
       {{end}}
@@ -207,7 +207,7 @@
 {{/* A contest's fight panel (handleSovFight): its figures and newest
      kills, opened under the contest's row. */}}
 {{define "sov-fight-panel"}}<div class="sov-fp">
-  <p class="sov-fp-sum">{{if .Fight.Kills}}{{.Fight.Kills}} {{if eq .Fight.Kills 1}}kill{{else}}kills{{end}} in {{.Name}}'s constellation, {{.Fight.ISK}} ISK. The defender lost {{.Fight.DefLost}} ({{.Fight.DefLostV}} ISK) and was on {{.Fight.DefKilled}} ({{.Fight.DefKillV}} ISK).{{else}}No kills yet in {{.Name}}'s constellation{{if not .Ended}}: new ones show here as they land{{end}}.{{end}}</p>
+  <p class="sov-fp-sum">{{if .Fight.Kills}}The defender lost {{.Fight.DefLost}} {{if eq .Fight.DefLost 1}}ship{{else}}ships{{end}} ({{.Fight.DefLostV}} ISK) and killed {{.Fight.DefKilled}} ({{.Fight.DefKillV}} ISK) in {{.Name}}'s constellation.{{else}}The defender has no kills or losses yet in {{.Name}}'s constellation{{if not .Ended}}: new ones show here as they land{{end}}.{{end}}</p>
   <ol class="sov-fk-list" data-sov-fk-list aria-label="Kills in this fight, newest first">{{range .Kills}}{{template "sov-fight-kill" .}}{{end}}</ol>
   {{if gt .Fight.Kills (len .Kills)}}<a class="sov-fp-all" href="{{.Fight.Href}}">All {{.Fight.Kills}} kills on the killboard</a>{{else if .Kills}}<a class="sov-fp-all" href="{{.Fight.Href}}">On the killboard</a>{{end}}
 </div>{{end}}

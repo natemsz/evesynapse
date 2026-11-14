@@ -14,17 +14,17 @@ import (
 const correlateSovFightKills = `-- name: CorrelateSovFightKills :execrows
 INSERT INTO sov_fight_kills (campaign_id, killmail_id, killmail_time, system_id, side)
 SELECT f.campaign_id, k.killmail_id, k.killmail_time, k.system_id,
-       (CASE WHEN f.defender_id > 0 AND k.victim_alliance_id = f.defender_id THEN 1
-             WHEN f.defender_id > 0 AND EXISTS (SELECT 1 FROM kill_involvement i
-                  WHERE i.killmail_id = k.killmail_id AND i.alliance_id = f.defender_id) THEN 2
-             ELSE 0 END)::smallint
+       (CASE WHEN k.victim_alliance_id = f.defender_id THEN 1 ELSE 2 END)::smallint
 FROM sov_fights f
 JOIN sde_systems s ON s.constellation_id = f.constellation_id
 JOIN kills k ON k.system_id = s.system_id
     AND k.killmail_time >= f.start_time - make_interval(secs => $1::double precision)
     AND k.killmail_time < COALESCE(f.ended_at, 'infinity'::timestamptz)
-WHERE f.constellation_id > 0 AND (f.ended_at IS NULL OR f.ended_at >= $2::timestamptz)
+WHERE f.constellation_id > 0 AND f.defender_id > 0
+  AND (f.ended_at IS NULL OR f.ended_at >= $2::timestamptz)
   AND k.public AND NOT k.npc
+  AND (k.victim_alliance_id = f.defender_id
+       OR EXISTS (SELECT 1 FROM kill_involvement i WHERE i.killmail_id = k.killmail_id AND i.alliance_id = f.defender_id))
 ON CONFLICT DO NOTHING
 `
 
@@ -33,9 +33,10 @@ type CorrelateSovFightKillsParams struct {
 	Since    time.Time `json:"since"`
 }
 
-// The catch-up: every stored kill in an open or just-ended fight's
-// constellation and window, through each system's kill index. It
-// files kills stored before the fight was seen and any the ingest
+// The catch-up: every stored kill the defending alliance took part
+// in (its ship lost, or on the attacker list) in an open or just-ended
+// fight's constellation and window, through each system's kill index.
+// It files kills stored before the fight was seen and any the ingest
 // missed.
 func (q *Queries) CorrelateSovFightKills(ctx context.Context, arg CorrelateSovFightKillsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, correlateSovFightKills, arg.LeadSecs, arg.Since)

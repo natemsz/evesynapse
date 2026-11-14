@@ -10,9 +10,10 @@ import (
 )
 
 // TestSovFightKills: a contest becomes a fight whose kills are the
-// public player kills in its constellation from an hour before the
-// timer, each marked with the defender's side; a kill outside the
-// constellation or before the window stays out; a kill landing at
+// public player kills the defender took part in, in its constellation
+// from an hour before the timer, each marked with the defender's side;
+// a kill outside the constellation or before the window, or between
+// third parties, stays out; a kill landing at
 // ingest joins the open fight; the tracker shows the fight's figures
 // and its panel lists the fight's kills only.
 func TestSovFightKills(t *testing.T) {
@@ -41,6 +42,7 @@ func TestSovFightKills(t *testing.T) {
 	exec(`INSERT INTO kill_involvement (killmail_id, character_id, corporation_id, alliance_id) VALUES (2, 5001, 98000001, $1)`, defender)
 	kill(3, 30004759, now.Add(-2*time.Hour), defender, 1e8)    // before the window
 	kill(4, 30004770, now.Add(-10*time.Minute), defender, 1e8) // another constellation
+	kill(6, 30004760, now.Add(-15*time.Minute), 99000009, 1e8) // third parties, the defender on neither side
 
 	app.syncSovFights(ctx)
 	sides := map[int64]int16{}
@@ -58,7 +60,7 @@ func TestSovFightKills(t *testing.T) {
 	}
 	rows.Close()
 	if len(sides) != 2 || sides[1] != 1 || sides[2] != 2 {
-		t.Fatalf("fight kills %v; want kill 1 as a defender loss and kill 2 as a defender kill, nothing else", sides)
+		t.Fatalf("fight kills %v; want kill 1 as a defender loss and kill 2 as a defender kill, nothing else (not the third-party kill 6)", sides)
 	}
 
 	// A kill at ingest joins the open fight.
@@ -97,7 +99,7 @@ func TestSovFightKills(t *testing.T) {
 			t.Errorf("fight panel lacks %q", want)
 		}
 	}
-	if strings.Contains(body, `data-kill-id="3"`) || strings.Contains(body, `data-kill-id="4"`) {
+	if strings.Contains(body, `data-kill-id="3"`) || strings.Contains(body, `data-kill-id="4"`) || strings.Contains(body, `data-kill-id="6"`) {
 		t.Error("fight panel shows a kill outside the fight")
 	}
 }

@@ -1085,11 +1085,27 @@ type KillLeadersAtt struct {
 	ShipTypeID    int64 `json:"ship_type_id"`
 }
 
+type KillLeadersDay struct {
+	Day        time.Time `json:"day"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
 type KillLeadersState struct {
 	Period     string    `json:"period"`
 	Since      time.Time `json:"since"`
 	ComputedAt time.Time `json:"computed_at"`
 	Kills      int64     `json:"kills"`
+}
+
+type KillLeadersTotal struct {
+	Day      time.Time `json:"day"`
+	Board    int16     `json:"board"`
+	Scope    int16     `json:"scope"`
+	ScopeID  int64     `json:"scope_id"`
+	EntityID int64     `json:"entity_id"`
+	Kills    int32     `json:"kills"`
+	Solo     int32     `json:"solo"`
+	Isk      float64   `json:"isk"`
 }
 
 type KillLeadersWin struct {

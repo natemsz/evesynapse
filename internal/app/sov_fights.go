@@ -2,9 +2,11 @@ package app
 
 // Sov fights: the kills fought in each sovereignty contest. A contest
 // the campaigns mirror lists is a fight (schema 156, kept after ESI
-// drops the contest); a kill belongs to it when it lands in the
-// contested constellation from sovFightLead before the timer until the
-// contest ends. Kills are filed twice over: at ingest, against an
+// drops the contest); a kill belongs to it when the defending alliance
+// took part in it (lost the ship or was on the attacker list), in the
+// contested constellation, from sovFightLead before the timer until
+// the contest ends. ESI names only the defender, so a kill between
+// third parties nearby stays out. Kills are filed twice over: at ingest, against an
 // in-memory index of the open fights, so the sov tracker streams them
 // as they land; and by a catch-up sweep on every killboard pass, for
 // kills stored before a contest was seen and any the ingest missed.
@@ -101,7 +103,8 @@ func (app *Application) sweepSovFights(ctx context.Context) {
 }
 
 // sovFightSide is how a fight's defender took part in a kill: 1 it
-// lost the ship, 2 it was on the attacker list, 0 neither.
+// lost the ship, 2 it was on the attacker list, 0 neither (the kill is
+// not the fight's).
 func sovFightSide(defender, victimAlliance int64, attackerAlliances []int64) int16 {
 	if defender <= 0 {
 		return 0
@@ -124,7 +127,8 @@ type sovFightKillRef struct {
 }
 
 // fileSovFightKill files one new public kill into the open fights of
-// its constellation and streams it to the sov tracker. A kill outside
+// its constellation that its defender took part in, and streams it to
+// the sov tracker. A kill outside
 // every fight costs two map reads.
 func (app *Application) fileSovFightKill(ctx context.Context, k db.Kill, attackerAlliances []int64) {
 	if k.Npc || !k.Public {
@@ -144,6 +148,9 @@ func (app *Application) fileSovFightKill(ctx context.Context, k db.Kill, attacke
 			continue
 		}
 		side := sovFightSide(f.DefenderID, k.VictimAllianceID, attackerAlliances)
+		if side == 0 {
+			continue
+		}
 		if err := app.queries.InsertSovFightKill(ctx, db.InsertSovFightKillParams{
 			CampaignID: f.CampaignID, KillmailID: k.KillmailID, KillmailTime: k.KillmailTime, SystemID: k.SystemID, Side: side,
 		}); err != nil {

@@ -1,9 +1,9 @@
 -- Sov fights (sov_fights.go): every sovereignty contest the campaigns
 -- mirror has seen, kept after ESI drops it, and the kills fought in
--- it. A kill belongs to a fight when it lands in the contested
--- constellation from an hour before the timer until the contest ends.
--- side says how the defending alliance took part: 1 it lost the ship,
--- 2 it was on the attacker list, 0 neither.
+-- it. A kill belongs to a fight when the defending alliance took part
+-- in it, in the contested constellation, from an hour before the timer
+-- until the contest ends. side says how: 1 the defender lost the ship,
+-- 2 the defender was on the attacker list.
 CREATE TABLE IF NOT EXISTS sov_fights (
     campaign_id         BIGINT PRIMARY KEY,
     system_id           BIGINT NOT NULL,

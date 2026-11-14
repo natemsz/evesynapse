@@ -53,6 +53,9 @@ type pageData struct {
 	// Legal is the /license/ page (license_page.go).
 	Legal *legalView
 
+	// Changelog is the /changelog/ page (changelog_page.go).
+	Changelog *changelogView
+
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
 

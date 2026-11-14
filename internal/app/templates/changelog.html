@@ -1,0 +1,11 @@
+{{define "title"}}Changelog - EveSynapse{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Changelog</span></h1>{{end}}
+{{define "content"}}
+
+<div class="legal-stack">
+<section class="card" data-fold="never">
+  <h2>Release history</h2>
+  {{.Changelog.Body}}
+</section>
+</div>
+{{end}}

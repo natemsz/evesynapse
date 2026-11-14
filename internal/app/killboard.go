@@ -382,7 +382,7 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	v.LeadersHref = killLeadersScopeHref(v.ScopeKind, v.ScopeID)
-		v.Filter = killFilterViewFor(app.killSDE(ctx), names, v.ScopeKind, v.ScopeID, v.Big, v.Solo, f, time.Now().UTC())
+	v.Filter = killFilterViewFor(app.killSDE(ctx), names, v.ScopeKind, v.ScopeID, v.Big, v.Solo, f, time.Now().UTC())
 	v.Chips = []killChip{
 		{Label: "All kills", Href: killHref(v.BaseQuery, false, false), Active: !v.Big && !v.Solo},
 		{Label: "Big kills", Href: killHref(v.BaseQuery, !v.Big, v.Solo), Active: v.Big},

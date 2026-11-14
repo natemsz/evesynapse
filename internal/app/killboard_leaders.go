@@ -24,17 +24,19 @@ import (
 )
 
 // killLeaderPeriod is one ranked window and how often it is ranked.
+// Days is how many EVE days of totals it adds up, today included; 0
+// ranks the rolling last 24 hours.
 type killLeaderPeriod struct {
 	Key   string
 	Label string
-	Span  time.Duration
+	Days  int
 	Every time.Duration
 }
 
 var killLeaderPeriods = []killLeaderPeriod{
-	{"day", "24 hours", 24 * time.Hour, 10 * time.Minute},
-	{"week", "7 days", 7 * 24 * time.Hour, time.Hour},
-	{"month", "30 days", 30 * 24 * time.Hour, 6 * time.Hour},
+	{"day", "24 hours", 0, 10 * time.Minute},
+	{"week", "7 days", 7, time.Hour},
+	{"month", "30 days", 30, 6 * time.Hour},
 }
 
 // killPaddingValue is the loss under which a kill is padding for the
@@ -42,12 +44,36 @@ var killLeaderPeriods = []killLeaderPeriod{
 // nothing fitted or plugged in.
 const killPaddingValue = 1e6
 
+const (
+	// killLeadersLate is how long after a day ends it is totalled
+	// once more, for the killmails that arrive late.
+	killLeadersLate = 6 * time.Hour
+	// killLeadersTodayFresh is how old today's totals may be when a
+	// 7 or 30 day rank adds them up.
+	killLeadersTodayFresh = 10 * time.Minute
+)
+
 // killLeadersMu keeps one ranking run at a time: the working set is
 // one pair of tables.
 var killLeadersMu sync.Mutex
 
-// refreshKillLeaders ranks the period most overdue, at most one per
-// call, so a killboard pass never carries more than one run.
+// killLeadersRolling is where the rolling last 24 hours' totals sit:
+// a day no kill is from.
+var killLeadersRolling = time.Unix(0, 0).UTC()
+
+// killLeadersBoardCodes are the boards' codes in kill_leaders_totals.
+var killLeadersBoardCodes = map[string]int16{
+	"character": 1, "corporation": 2, "alliance": 3, "ship_lost": 4, "ship_used": 5, "system": 6, "region": 7, "kill": 8,
+}
+
+func killLeadersDayKey(day time.Time) string { return day.Format("2006-01-02") }
+
+// refreshKillLeaders does one unit of the ranking per killboard pass,
+// the most urgent first: the 24 hours when due, then the 7 days and
+// the 30 days when due, then a finished day that has no totals
+// (newest first) or is due its late totalling. A 7 or 30 day rank
+// waits until every day it adds up has totals, so it never ranks a
+// partial window.
 func (app *Application) refreshKillLeaders(ctx context.Context) {
 	if !killLeadersMu.TryLock() {
 		return
@@ -58,31 +84,106 @@ func (app *Application) refreshKillLeaders(ctx context.Context) {
 		logging.Errorf("killboard leaders: state: %v", err)
 		return
 	}
-	done := map[string]time.Time{}
+	ranked := map[string]time.Time{}
 	for _, s := range states {
-		done[s.Period] = s.ComputedAt
+		ranked[s.Period] = s.ComputedAt
+	}
+	rows, err := app.queries.ListKillLeadersDays(ctx)
+	if err != nil {
+		logging.Errorf("killboard leaders: days: %v", err)
+		return
+	}
+	totalled := map[string]time.Time{}
+	for _, d := range rows {
+		totalled[killLeadersDayKey(d.Day)] = d.ComputedAt
 	}
 	now := time.Now().UTC()
-	for _, p := range killLeaderPeriods {
-		if last, ok := done[p.Key]; ok && now.Sub(last) < p.Every {
-			continue
-		}
+	today := now.Truncate(24 * time.Hour)
+	due := func(p killLeaderPeriod) bool {
+		last, ok := ranked[p.Key]
+		return !ok || now.Sub(last) >= p.Every
+	}
+	logRun := func(what string, start time.Time, n int64) {
+		logging.Infof("killboard leaders: %s (%d kills) in %s", what, n, time.Since(start).Round(time.Millisecond))
+	}
+
+	// The 24 hours: totalled straight from the kills, then ranked.
+	if p := killLeaderPeriods[0]; due(p) {
 		start := time.Now()
-		n, err := app.rankKillLeaders(ctx, p, now)
+		n, err := app.totalKillLeaders(ctx, killLeadersRolling, now.Add(-24*time.Hour), now)
+		if err == nil {
+			err = app.rankKillLeaders(ctx, p, []time.Time{killLeadersRolling}, now.Add(-24*time.Hour), now, n)
+		}
 		if err != nil {
 			logging.Errorf("killboard leaders: rank %s: %v", p.Key, err)
 			return
 		}
-		logging.Infof("killboard leaders: ranked the last %s (%d kills) in %s", p.Label, n, time.Since(start).Round(time.Millisecond))
+		logRun("ranked the last "+p.Label, start, n)
+		return
+	}
+
+	longest := killLeaderPeriods[len(killLeaderPeriods)-1].Days
+
+	// The 7 and 30 days: today's totals refreshed, then the days
+	// added up.
+	for _, p := range killLeaderPeriods[1:] {
+		if !due(p) {
+			continue
+		}
+		days := make([]time.Time, 0, p.Days)
+		complete := true
+		for d := 0; d < p.Days; d++ {
+			day := today.AddDate(0, 0, -d)
+			if _, ok := totalled[killLeadersDayKey(day)]; !ok && d > 0 {
+				complete = false
+			}
+			days = append(days, day)
+		}
+		if !complete {
+			continue
+		}
+		start := time.Now()
+		if last, ok := totalled[killLeadersDayKey(today)]; !ok || now.Sub(last) >= killLeadersTodayFresh {
+			if _, err := app.totalKillLeaders(ctx, today, today, now); err != nil {
+				logging.Errorf("killboard leaders: total %s: %v", killLeadersDayKey(today), err)
+				return
+			}
+		}
+		if err := app.rankKillLeaders(ctx, p, days, today.AddDate(0, 0, 1-p.Days), now, 0); err != nil {
+			logging.Errorf("killboard leaders: rank %s: %v", p.Key, err)
+			return
+		}
+		logRun("ranked the last "+p.Label, start, 0)
+		if err := app.queries.PruneKillLeadersDays(ctx, today.AddDate(0, 0, 1-longest)); err != nil {
+			logging.Warnf("killboard leaders: prune: %v", err)
+		}
+		return
+	}
+
+	// A finished day without totals, or due its late totalling.
+	for d := 1; d < longest; d++ {
+		day := today.AddDate(0, 0, -d)
+		end := day.Add(24 * time.Hour)
+		b := killLeadersDayKey(day)
+		last, ok := totalled[b]
+		if ok && (!last.Before(end.Add(killLeadersLate)) || now.Before(end.Add(killLeadersLate))) {
+			continue
+		}
+		start := time.Now()
+		n, err := app.totalKillLeaders(ctx, day, day, end)
+		if err != nil {
+			logging.Errorf("killboard leaders: total %s: %v", b, err)
+			return
+		}
+		logRun("totalled "+b, start, n)
 		return
 	}
 }
 
-// rankKillLeaders fills the working set with one period's kills and
-// their attackers and replaces the period's ranks, in one
-// transaction: a page reads the old ranks until the new ones land.
-func (app *Application) rankKillLeaders(ctx context.Context, p killLeaderPeriod, now time.Time) (int64, error) {
-	since := now.Add(-p.Span)
+// totalKillLeaders fills the working set with the kills of [since,
+// until) and replaces one day's totals with theirs, in one
+// transaction.
+func (app *Application) totalKillLeaders(ctx context.Context, day, since, until time.Time) (int64, error) {
 	tx, err := app.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -95,7 +196,7 @@ func (app *Application) rankKillLeaders(ctx context.Context, p killLeaderPeriod,
 	if err := q.ClearKillLeadersStage(ctx); err != nil {
 		return 0, err
 	}
-	n, err := q.FillKillLeadersWin(ctx, db.FillKillLeadersWinParams{Since: since, PaddingValue: killPaddingValue})
+	n, err := q.FillKillLeadersWin(ctx, db.FillKillLeadersWinParams{Since: since, Until: until, PaddingValue: killPaddingValue})
 	if err != nil {
 		return 0, err
 	}
@@ -105,29 +206,56 @@ func (app *Application) rankKillLeaders(ctx context.Context, p killLeaderPeriod,
 	if _, err := tx.Exec(ctx, "ANALYZE kill_leaders_win, kill_leaders_att"); err != nil {
 		return 0, err
 	}
-	if err := q.DeleteKillLeadersPeriod(ctx, p.Key); err != nil {
+	if err := q.DeleteKillLeadersDay(ctx, day); err != nil {
 		return 0, err
 	}
 	for _, board := range []string{"character", "corporation", "alliance"} {
-		if err := q.InsertKillLeadersEntity(ctx, db.InsertKillLeadersEntityParams{Period: p.Key, Board: board}); err != nil {
+		if err := q.InsertKillLeadersTotalsEntity(ctx, db.InsertKillLeadersTotalsEntityParams{Day: day, Board: killLeadersBoardCodes[board]}); err != nil {
 			return 0, fmt.Errorf("%s: %w", board, err)
 		}
 	}
-	for _, board := range []string{"ship_lost", "system", "region", "kill"} {
-		if err := q.InsertKillLeadersPlace(ctx, db.InsertKillLeadersPlaceParams{Period: p.Key, Board: board}); err != nil {
+	for _, board := range []string{"ship_lost", "system", "region"} {
+		if err := q.InsertKillLeadersTotalsPlace(ctx, db.InsertKillLeadersTotalsPlaceParams{Day: day, Board: killLeadersBoardCodes[board]}); err != nil {
 			return 0, fmt.Errorf("%s: %w", board, err)
 		}
 	}
-	if err := q.InsertKillLeadersShipsUsed(ctx, p.Key); err != nil {
+	if err := q.InsertKillLeadersTotalsKills(ctx, day); err != nil {
+		return 0, fmt.Errorf("kill: %w", err)
+	}
+	if err := q.InsertKillLeadersTotalsShipsUsed(ctx, day); err != nil {
 		return 0, fmt.Errorf("ship_used: %w", err)
 	}
 	if err := q.ClearKillLeadersStage(ctx); err != nil {
 		return 0, err
 	}
-	if err := q.UpsertKillLeadersState(ctx, db.UpsertKillLeadersStateParams{Period: p.Key, Since: since, ComputedAt: now, Kills: n}); err != nil {
+	if err := q.UpsertKillLeadersDay(ctx, db.UpsertKillLeadersDayParams{Day: day, ComputedAt: time.Now().UTC()}); err != nil {
 		return 0, err
 	}
 	return n, tx.Commit(ctx)
+}
+
+// rankKillLeaders replaces a period's ranks with its days added up, in one transaction: a page reads the old ranks until the new
+// ones land.
+func (app *Application) rankKillLeaders(ctx context.Context, p killLeaderPeriod, days []time.Time, since, now time.Time, kills int64) error {
+	tx, err := app.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, "SET LOCAL work_mem = '128MB'"); err != nil {
+		return err
+	}
+	q := db.New(tx)
+	if err := q.DeleteKillLeadersPeriod(ctx, p.Key); err != nil {
+		return err
+	}
+	if err := q.RankKillLeaders(ctx, db.RankKillLeadersParams{Period: p.Key, Days: days}); err != nil {
+		return err
+	}
+	if err := q.UpsertKillLeadersState(ctx, db.UpsertKillLeadersStateParams{Period: p.Key, Since: since, ComputedAt: now, Kills: kills}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // killLeaderBoardDef is one board: what it ranks and how it reads.

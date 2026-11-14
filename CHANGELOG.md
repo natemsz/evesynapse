@@ -7,6 +7,270 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.8.6.7] - 2026-11-14
+
+Automated build of EveSynapse v0.8.6.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Fitter: fly a fit inside a doctrine's boosts and a system's effects by @natemsz in #445
+* Fitter: modules of one type can load different charges by @natemsz in #444
+* Fitting: spool-up DPS and remote repair over time by @natemsz in #442
+* Landing gallery: add live kills, live kills in 3D and 3D jump planner videos by @miko in #440
+
+### 🐛 Bug Fixes
+* Fitter: load a charge only where it fits by @natemsz in #443
+
+
+## [v0.8.6.6] - 2026-11-14
+
+Automated build of EveSynapse v0.8.6.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Workbench stats: glance tiles and section header bands by @natemsz in #439
+* Map live kills: hover summaries, stronger arrival rings, and a follow mode by @natemsz in #438
+
+### 🐛 Bug Fixes
+* Fitter: model charges in ancillary repairers, boosters and every charge-taking module by @natemsz in #437
+
+
+## [v0.8.6.5] - 2026-11-14
+
+Automated build of EveSynapse v0.8.6.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Bump pgx to v5.13.0 and golang.org/x/crypto to v0.59.0 by @miko in #436
+* Sov tracker: the kills fought in each contest by @natemsz in #434
+* Killboard: search filters and leaderboards by @natemsz in #433
+* Map: Live kills layer with a summary card per kill by @natemsz in #432
+* Map: 3D view on true star positions with the jump route's range sphere by @natemsz in #431
+* Pilot share block, public profile preview, more detailed pilot card by @miko in #430
+* Admin analytics: label the unmatched route group as Bot traffic by @miko in #428
+* Sov tracker: name the previous holder of a claim taken after a drop by @miko in #427
+* Market card: price history sparkline by @miko in #426
+
+### 🐛 Bug Fixes
+* Pilot activity: fold every profiled pilot on a kill, and mend the kills profiles missed by @natemsz in #435
+
+
+## [v0.8.6.4] - 2026-11-13
+
+Automated build of EveSynapse v0.8.6.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Map mini icon: sit right of the security chip and cover kill, workbench, scan and character system links by @miko in #424
+* Map Zones layer: Ansiblex cost zones around an alliance capital by @natemsz in #423
+
+
+## [v0.8.6.3] - 2026-11-13
+
+Automated build of EveSynapse v0.8.6.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Summary cards for fits, items, market, organizations, battle reports and sovereignty by @natemsz in #422
+* Summary cards for system, region and map pages by @natemsz in #421
+
+
+## [v0.8.6.2] - 2026-11-13
+
+Automated build of EveSynapse v0.8.6.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Summary cards for pilot and kill pages by @natemsz in #420
+* README: list the guiding principles by @miko in #417
+* Map mini icon: small-size constellation beside system names, linking to the map by @miko in #416
+* Pilot activity: fold live stream kills into profiles regardless of the backfill switch by @miko in #415
+* Landing gallery: sovereignty tracker video by @miko in #414
+* CI: run the heavy gates on branch pushes only, not on release tags by @miko in #413
+
+
+## [v0.8.6.1] - 2026-11-13
+
+Automated build of EveSynapse v0.8.6.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Sidebar: render the Intel section groups with group glyphs by @miko in #412
+
+
+## [v0.8.6.0] - 2026-11-13
+
+Automated build of EveSynapse v0.8.6.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Add the sovereignty tracker to Intel and its marks to the map by @natemsz in #411
+* Group the Intel section's pages into Killboard, Live intel and Territory by @natemsz in #410
+
+### 🐛 Bug Fixes
+* Put the pilot, corporation and alliance pages on the layout framework and read EVE bio markup by @natemsz in #409
+
+
+## [v0.8.5.0] - 2026-11-13
+
+Automated build of EveSynapse v0.8.5.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Landing gallery: Market Trends and Market page videos replace their stills by @miko in #407
+
+### 🐛 Bug Fixes
+* Keep the landing Tools menu in the viewport, list every public tool on the landing page and in the sitemap, and gate the intel channel list by @natemsz in #408
+
+
+## [v0.8.4.9] - 2026-11-13
+
+Automated build of EveSynapse v0.8.4.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Restore missing attacker counts from the daily killmail archives by @natemsz in #406
+
+
+## [v0.8.4.8] - 2026-11-13
+
+Automated build of EveSynapse v0.8.4.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Put the logo and wordmark on the share card by @natemsz in #403
+
+### 🐛 Bug Fixes
+* Keep the killmail chart labels in their panel and stop the PI planner row overlapping by @natemsz in #405
+* Run the kill stats rebuild now instead of after the attacker restore by @natemsz in #404
+
+
+## [v0.8.4.7] - 2026-11-13
+
+Automated build of EveSynapse v0.8.4.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Let link-preview fetchers read shared pages and share images by @natemsz in #401
+
+### Other Changes
+* Clear gopls hints and apply go fix modernizers by @natemsz in #402
+
+
+## [v0.8.4.6] - 2026-11-13
+
+Automated build of EveSynapse v0.8.4.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Release mirror: pin the R2 region, keep built files on re-runs by @miko in #399
+
+### 🐛 Bug Fixes
+* PI planner: buy what only full planets supply; readable ice links; reachable colony tools by @natemsz in #400
+
+
+## [v0.8.4.5] - 2026-11-12
+
+Automated build of EveSynapse v0.8.4.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Front page site name structured data and share card by @natemsz in #398
+
+### Other Changes
+* Comments: eliminate schizophrenic comments for clarity. by @natemsz in #397
+
+
+## [v0.8.4.4] - 2026-11-12
+
+Automated build of EveSynapse v0.8.4.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* PI planner: whole-number cuts and confirmed range narrowing in the solver by @natemsz in #396
+* PI planner: reliable solver, layout optimizer, pinch zoom, visible buy options by @natemsz in #395
+
+
+## [v0.8.4.3] - 2026-11-12
+
+Automated build of EveSynapse v0.8.4.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Release mirror: run when the release exists, install the AWS CLI with sudo by @miko in #394
+
+
+## [v0.8.4.2] - 2026-11-12
+
+Automated build of EveSynapse v0.8.4.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Landing gallery: new fitting workbench video, add the PI planner video by @miko in #393
+
+
+## [v0.8.4.1] - 2026-11-12
+
+Automated build of EveSynapse v0.8.4.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* PI planner: buy only what the planets cannot make by @natemsz in #392
+* PI colony view: surface fixed to the planet, per-type textures, command center jump by @natemsz in #390
+
+### 🐛 Bug Fixes
+* PI planner: changed colonies fit without their removed structures; new colonies sized per pilot skill by @natemsz in #391
+
+
+## [v0.8.4.0] - 2026-11-12
+
+Automated build of EveSynapse v0.8.4.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* PI planner: colony optimizer, colony view and game templates by @natemsz in #389
+* Price at build cost when nothing else can, asterisked by @miko in #388
+
+
+## [v0.8.3.2] - 2026-11-12
+
+Automated build of EveSynapse v0.8.3.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Workbench: EFT copy and import as buttons, more phone summary by @natemsz in #387
+* Workbench: ask before leaving a fit with unsaved changes by @natemsz in #385
+* Killboard: open a lost fitting in the workbench by @natemsz in #384
+* Point the release mirror at the releases bucket layout by @miko in #383
+* Fitting: fighter abilities, launch report and full fighter damage by @natemsz in #382
+* Fill in the missing changelog sections for v0.7.0.6 through v0.8.3.1 by @miko in #381
+* Settings: color-blind modes for every scheme by @natemsz in #379
+
+### 🐛 Bug Fixes
+* Fitting: targeted modules can be active and overheated by @natemsz in #386
+* Demo: keep the theme in the browser by @natemsz in #380
+
+
 ## [v0.8.3.1] - 2026-11-12
 
 Automated build of EveSynapse v0.8.3.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

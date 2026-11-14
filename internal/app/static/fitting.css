@@ -69,6 +69,33 @@
 #fit-editor.fit-noship .fit-shiponly { display: none !important; }
 .fit-shipblock { display: flex; flex-direction: column; gap: var(--l-gap, var(--space-3)); }
 .fit-shipblock[hidden] { display: none; }
+/* Full screen: the editor over everything (the browser's full
+   screen or, without it, a popover in the top layer: fit.js), on
+   the page's solid ground, scrolling inside itself. The ring may
+   grow past its usual 34rem, and its slots and captions grow with
+   it instead of stopping at their usual caps. */
+html.fit-full-open { overflow: hidden; }
+#fit-editor.fit-full {
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: var(--text);
+  background: var(--panel);
+  padding: max(var(--space-3), env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right)) max(var(--space-3), env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-left));
+}
+#fit-editor.fit-full::backdrop { background: var(--panel); }
+#fit-editor.fit-full .fit-visual { width: min(46rem, 100%, calc(100dvh - 3rem)); }
+#fit-editor.fit-full .fit-vlabel { font-size: clamp(var(--fs-2xs), 2cqi, var(--fs-sm)); }
+#fit-editor.fit-full .fit-vslot { width: 8.5cqi; height: 8.5cqi; }
+.fit-vfull-btn { display: inline-flex; align-items: center; justify-content: center; }
+.fit-vfull-btn svg { width: 45%; height: 45%; }
+.fit-vfull-btn[aria-pressed="true"] { border-color: var(--success); color: var(--gold); }
 .fit-emptystate p { margin: 0; padding: var(--space-3); text-align: center; color: var(--muted); }
 .fw-anon { display: flex; flex-direction: column; gap: var(--space-2); }
 .fw-anon > p { margin: 0; }

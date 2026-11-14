@@ -78,6 +78,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   {{if not .ReadOnly}}<div class="fit-vhistory" role="group" aria-label="Undo and redo">
     <button type="button" class="fit-vhist" data-fit-undo title="Undo" aria-label="Undo" disabled>↩</button>
     <button type="button" class="fit-vhist" data-fit-redo title="Redo" aria-label="Redo" disabled>↪</button>
+    <button type="button" class="fit-vhist fit-vfull-btn" data-fit-full aria-pressed="false" aria-label="Full screen" title="Full screen (Shift F)"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button type="button" class="fit-vhist fit-vkeys-btn" popovertarget="fit-vkeys" title="Mouse and keyboard" aria-label="Mouse and keyboard">?</button>
   </div>
   <section class="fit-vkeys" id="fit-vkeys" popover aria-label="Mouse and keyboard">
@@ -91,6 +92,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <div><dt>Drag</dt><dd>Move or swap; drag off the ring to remove</dd></div>
       <div><dt>Ctrl drag</dt><dd>Fit a copy</dd></div>
       <div><dt>Delete</dt><dd>Remove one</dd></div>
+      <div><dt>Shift F</dt><dd>Full screen on or off</dd></div>
     </dl>
   </section>{{end}}
   {{range .Visual.Labels}}

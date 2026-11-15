@@ -1,4 +1,8 @@
 bin/
+
+# A Ranvia checkout and its link files (make ranvia-link).
+/.ranvia/
+/.ranvia-link/
 *.db
 *.db-wal
 *.db-shm

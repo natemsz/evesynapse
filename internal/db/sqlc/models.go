@@ -364,6 +364,12 @@ type BlueprintResearchMedian struct {
 	ComputedAt  time.Time `json:"computed_at"`
 }
 
+type BotGuardSecret struct {
+	ID        int64     `json:"id"`
+	Secret    string    `json:"secret"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type BriefingDismissal struct {
 	UserID      int64     `json:"user_id"`
 	LineKey     string    `json:"line_key"`

@@ -437,6 +437,14 @@ type Application struct {
 	// botGuardOff is set only by the dev entrypoint
 	// (DisableBotGuard) during route setup.
 	botGuardOff bool
+	// botGuardKey is the install's stored guard secret, loaded by
+	// New (core_bot_guard_engine.go); botGuardSecret fills in a
+	// random one where there is none.
+	botGuardKey     []byte
+	botGuardKeyOnce sync.Once
+	// crawlers verifies search engine crawlers (core_bot_crawlers.go).
+	crawlers     *crawlerVerifier
+	crawlersOnce sync.Once
 
 	// The public service summary's cache and throttle
 	// (core_status.go).
@@ -563,6 +571,7 @@ func New(cfg Config) (*Application, error) {
 	// Every stored name is in memory before the first request, and
 	// every name learned from here on is kept (entity_names.go).
 	app.loadAnonMarketSetting(context.Background())
+	app.loadBotGuardSecret(context.Background())
 	app.loadEntityNames(context.Background())
 	app.names = newNameWriter(app.db)
 	app.esi.SetNameSink(app.names.enqueue)
@@ -704,7 +713,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(requestLogger)
 	r.Use(app.countRequests)
 	r.Use(middleware.Recoverer)
-	r.Use(app.blockScrapers)
+	// The bot guard: a linked engine, else the built-in one
+	// (core_bot_guard_engine.go).
+	r.Use(app.botGuardMiddleware())
 	r.Use(app.securityHeaders)
 	// The market API's own host answers /api/ only (market_api.go).
 	r.Use(app.marketAPIHostGate)

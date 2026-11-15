@@ -6122,7 +6122,14 @@
     var title = (box.querySelector(".modal-head h2") || {}).textContent || document.title;
     function send(blob) {
       var dl = box.querySelector("a[download]");
-      var file = new File([blob], (dl && dl.getAttribute("download")) || "card.png", { type: "image/png" });
+      // The shared file gets a plain name, letters, digits, dots
+      // and dashes only: the card's download name ("Burzrujat -
+      // EveSynapse.png") carries spaces, and a spaced name breaks
+      // the share handoff on Android, where the sheet shows a
+      // black preview and the app picked receives nothing. The
+      // download itself keeps the readable name.
+      var name = ((dl && dl.getAttribute("download")) || "card.png").replace(/[^A-Za-z0-9._]+/g, "-");
+      var file = new File([blob], name, { type: "image/png" });
       var data = { files: [file] };
       if (!navigator.canShare(data)) data = { title: title, url: link };
       return navigator.share(data);

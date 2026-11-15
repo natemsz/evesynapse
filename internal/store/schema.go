@@ -964,6 +964,11 @@ var pgDoctrineFitBoostsSchema string
 //go:embed schema_pg/159_alliance_bridges.sql
 var pgAllianceBridgesSchema string
 
+// Step 160: the bot guard's signing secret, kept across restarts.
+//
+//go:embed schema_pg/160_bot_guard_secret.sql
+var pgBotGuardSecretSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1151,6 +1156,7 @@ func schemaSteps() []schemaStep {
 		{157, "pilot_activity_mend", pgPilotActivityMendSchema, ""},
 		{158, "doctrine_fit_boosts", pgDoctrineFitBoostsSchema, ""},
 		{159, "alliance_bridges", pgAllianceBridgesSchema, ""},
+		{160, "bot_guard_secret", pgBotGuardSecretSchema, ""},
 	}
 }
 

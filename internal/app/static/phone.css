@@ -81,6 +81,10 @@
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
   }
+  /* Keep top-layer share dialogs free of shadow/filter recomposition on mobile GPUs. */
+  html dialog.share-modal.share-card { box-shadow: none; }
+  .share-modal .btn { transition: none; }
+  .share-modal .btn:active { transform: none; filter: none; }
 }
 @media ((hover: none), (pointer: coarse)) and (min-width: 861px) {
   body { padding-top: calc(3.75rem + 1px + env(safe-area-inset-top, 0px)); }

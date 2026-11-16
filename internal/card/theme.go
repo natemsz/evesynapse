@@ -76,7 +76,7 @@ var namedPalettes = map[string]Palette{
 		Rule1:      hex(0x3730a3),
 		EveWord:    hex(0xffffff),
 		SynWords: [7]color.NRGBA{
-			hex(0xf472b6), hex(0xd16bcb), hex(0xae63e1), hex(0x8b5cf6), hex(0x6f4dda), hex(0x533fbf), hex(0x3730a3),
+			hex(0xf472b6), hex(0xd26bca), hex(0xb164df), hex(0x8d5df5), hex(0x8161f0), hex(0x7569eb), hex(0x686ee5),
 		},
 		MarkUp0:   hex(0xf472b6),
 		MarkUp1:   hex(0x8b5cf6),
@@ -102,7 +102,7 @@ var namedPalettes = map[string]Palette{
 		Rule1:      hex(0x263242),
 		EveWord:    hex(0xffffff),
 		SynWords: [7]color.NRGBA{
-			hex(0x7dd3fc), hex(0x73c4fb), hex(0x6ab4fb), hex(0x60a5fa), hex(0x4d7fbd), hex(0x39587f), hex(0x263242),
+			hex(0x7dd3fc), hex(0x69b3fb), hex(0x5896e2), hex(0x4e7eba), hex(0x597eac), hex(0x657e9f), hex(0x6f7d8f),
 		},
 		MarkUp0:   hex(0x7dd3fc),
 		MarkUp1:   hex(0x60a5fa),
@@ -128,7 +128,7 @@ var namedPalettes = map[string]Palette{
 		Rule1:      hex(0x155e75),
 		EveWord:    hex(0xffffff),
 		SynWords: [7]color.NRGBA{
-			hex(0x4ade80), hex(0x40db95), hex(0x37d7aa), hex(0x2dd4bf), hex(0x25ada6), hex(0x1d858e), hex(0x155e75),
+			hex(0x4ade80), hex(0x34d6b1), hex(0x29c2b3), hex(0x24a8a3), hex(0x1f8e94), hex(0x328897), hex(0x43869e),
 		},
 		MarkUp0:   hex(0x4ade80),
 		MarkUp1:   hex(0x2dd4bf),
@@ -154,7 +154,7 @@ var namedPalettes = map[string]Palette{
 		Rule1:      hex(0x9a3412),
 		EveWord:    hex(0xffffff),
 		SynWords: [7]color.NRGBA{
-			hex(0xfacc15), hex(0xf7c623), hex(0xf3bf31), hex(0xf0b93f), hex(0xd38d30), hex(0xb76021), hex(0x9a3412),
+			hex(0xfacc15), hex(0xedb43d), hex(0xdc9b35), hex(0xcc822c), hex(0xbc6824), hex(0xc06130), hex(0xc65c3d),
 		},
 		MarkUp0:   hex(0xfacc15),
 		MarkUp1:   hex(0xf0b93f),
@@ -180,7 +180,7 @@ var namedPalettes = map[string]Palette{
 		Rule1:      hex(0x570a04),
 		EveWord:    hex(0xffffff),
 		SynWords: [7]color.NRGBA{
-			hex(0xd41236), hex(0xd41236), hex(0xd41236), hex(0xd41236), hex(0xd41236), hex(0xd41236), hex(0xd41236),
+			hex(0xff6b81), hex(0xec4b60), hex(0xe53248), hex(0xdd413c), hex(0xcf4e3e), hex(0xc35a4b), hex(0xb56255),
 		},
 		MarkUp0:   hex(0xd41236),
 		MarkUp1:   hex(0xac160a),
@@ -206,7 +206,7 @@ var namedPalettes = map[string]Palette{
 		Rule1:      hex(0x334155),
 		EveWord:    hex(0xffffff),
 		SynWords: [7]color.NRGBA{
-			hex(0xeab308), hex(0xeabc35), hex(0xe9c662), hex(0xe9cf8f), hex(0xaca07c), hex(0x707068), hex(0x334155),
+			hex(0xeab308), hex(0xe9cf8d), hex(0xc2b183), hex(0x9d9477), hex(0x7e7d71), hex(0x777e83), hex(0x6e7d94),
 		},
 		MarkUp0:   hex(0xeab308),
 		MarkUp1:   hex(0xe9cf8f),
@@ -232,7 +232,7 @@ var namedPalettes = map[string]Palette{
 		Rule1:      hex(0x922020),
 		EveWord:    hex(0xffffff),
 		SynWords: [7]color.NRGBA{
-			hex(0x57d7e7), hex(0x7ab6c2), hex(0x9e959d), hex(0xc17377), hex(0xe55252), hex(0xbc3939), hex(0x922020),
+			hex(0x57d7e7), hex(0x7db4c0), hex(0xa1939a), hex(0xc37175), hex(0xdf4e4e), hex(0xd2504c), hex(0xca564f),
 		},
 		MarkUp0:   hex(0xa1dde0),
 		MarkUp1:   hex(0xe55252),
@@ -284,7 +284,7 @@ var namedPalettes = map[string]Palette{
 		Rule1:      hex(0xb0490a),
 		EveWord:    hex(0x20180e),
 		SynWords: [7]color.NRGBA{
-			hex(0xd97706), hex(0xc86408), hex(0xba5509), hex(0xb0490a), hex(0x9c3f08), hex(0x893607), hex(0x7a2f04),
+			hex(0x90590e), hex(0x9d5203), hex(0xa64904), hex(0xb04108), hex(0xb93404), hex(0xbd2e17), hex(0xb91c1c),
 		},
 		MarkUp0:   hex(0xf59e0b),
 		MarkUp1:   hex(0xd9640f),

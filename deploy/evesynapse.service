@@ -41,9 +41,13 @@ RestartSec=2
 # stop. Its pidfile lives here.
 RuntimeDirectory=evesynapse
 RuntimeDirectoryMode=0755
+# /var/cache/evesynapse: Ranvia keeps its encrypted engine here
+# between starts.
+CacheDirectory=evesynapse
 
-# Sandbox. The server reads its program and its .env, talks to
-# PostgreSQL and to CCP over the network, and needs nothing else:
+# Sandbox. The server reads its program and its .env, writes its
+# cache, talks to PostgreSQL, CCP and ranvia.io over the network, and
+# needs nothing else:
 # no way to gain privileges, a read-only view of the system, no
 # home directories or devices, a /tmp of its own. A systemd too old
 # to know one of these logs a warning and ignores it.
@@ -63,7 +67,9 @@ RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
-MemoryDenyWriteExecute=yes
+# No MemoryDenyWriteExecute: Ranvia compiles its engine to machine
+# code at start, which needs executable memory. Denied, it runs the
+# engine interpreted, about 40 times slower.
 CapabilityBoundingSet=
 AmbientCapabilities=
 SystemCallArchitectures=native

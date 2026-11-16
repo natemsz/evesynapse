@@ -73,24 +73,6 @@ jobs:
       - name: Install the toolbox
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      # The release links Ranvia, which lives in a
-      # private repository (Ranvia/ranvia) and never in this
-      # tree: a workspace and an overlay (make ranvia-link) add it
-      # to the build. It needs a RANVIA_TOKEN secret, a Forgejo
-      # token that can read that repository; without it the run
-      # fails, since a release must not ship without it.
-      - name: Fetch Ranvia
-        env:
-          RANVIA_TOKEN: ${{ secrets.RANVIA_TOKEN }}
-        run: |
-          if [ -z "$RANVIA_TOKEN" ]; then
-            echo "::error::RANVIA_TOKEN is not set: the release cannot link Ranvia."
-            exit 1
-          fi
-          git -c http.extraHeader="Authorization: token $RANVIA_TOKEN" \
-            clone --quiet --depth 1 https://natems.dev/Ranvia/ranvia.git .ranvia
-          echo "Ranvia at $(git -C .ranvia rev-parse --short HEAD)."
-          make -s ranvia-link RANVIA_DIR=.ranvia >> "$GITHUB_ENV"
       - name: Build the release files
         run: |
           make assets
@@ -99,10 +81,6 @@ jobs:
           mkdir -p dist
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
-          for a in arm64 amd64; do
-            go version -m "dist/evesynapse-$a" | grep -q 'natems.dev/Ranvia/ranvia' \
-              || { echo "::error::evesynapse-$a was built without Ranvia."; exit 1; }
-          done
           cp deploy/setup.sh dist/setup.sh
           cd dist
           for a in arm64 amd64; do

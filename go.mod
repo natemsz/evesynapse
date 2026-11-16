@@ -18,6 +18,7 @@ require (
 	golang.org/x/image v0.48.0
 	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sync v0.25.0
+	ranvia.io/go v0.2.2
 )
 
 require (
@@ -32,6 +33,7 @@ require (
 	github.com/lib/pq v1.12.3 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/tdewolff/parse/v2 v2.8.20 // indirect
+	github.com/tetratelabs/wazero v1.11.0 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect

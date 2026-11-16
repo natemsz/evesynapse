@@ -8,65 +8,44 @@ import (
 	"net/http"
 	"strings"
 
+	"ranvia.io/go"
+
 	"evesynapse/internal/logging"
 )
 
-// A bot guard engine can replace the guard in core_bot_guard.go. An
-// engine is linked into a build from outside this package and
-// registers itself from an init function; a build without one runs
-// the built-in guard. Either way the guard sits at the same place in
-// the middleware chain and sees the same requests.
+// The bot guard. With RANVIA_KEY set, Ranvia (ranvia.io) guards the
+// site through its public Go loader, ranvia.io/go: the loader
+// fetches the engine for the site key and decides every request on
+// this server. Without a key, and while Ranvia has no engine yet (a
+// first start with ranvia.io out of reach), the built-in guard in
+// core_bot_guard.go runs. Either way the guard sits at the same
+// place in the middleware chain and sees the same requests.
 
-// BotGuardHost is what the application tells an engine.
-type BotGuardHost struct {
-	// SignedIn reports whether the request carries a verified,
-	// signed-in session (checked against the session store; a
-	// demo session does not count).
-	SignedIn func(*http.Request) bool
-	// Network names the visitor's network as the edge reports it,
-	// "" when nothing trustworthy names one (see networkOf).
-	Network func(*http.Request) string
-	// VerifiedCrawler reports a search engine crawler whose address
-	// checks out (core_bot_crawlers.go).
-	VerifiedCrawler func(*http.Request) bool
-	// Secret is the install's stable 32-byte signing secret for
-	// the guard, stored in the database, so what the guard signs
-	// survives a restart.
-	Secret []byte
-	// SettingsPath is BOT_GUARD_SETTINGS: a file of the engine's
-	// own settings, kept on the server.
-	SettingsPath string
-	// Logf logs one line.
-	Logf func(format string, args ...any)
-}
-
-// BotGuardEngine builds an engine's middleware for a host.
-type BotGuardEngine func(BotGuardHost) (func(http.Handler) http.Handler, error)
-
-var botGuardEngine BotGuardEngine
-
-// RegisterBotGuardEngine installs an engine. A linked engine calls
-// it from an init function, before the application starts.
-func RegisterBotGuardEngine(e BotGuardEngine) {
-	botGuardEngine = e
-}
-
-// botGuardMiddleware is the guard for this build: the registered
-// engine when there is one and it starts, else blockScrapers. An
-// engine that fails to start is logged and replaced by the
-// built-in guard: the site keeps serving, guarded.
+// botGuardMiddleware is the guard for this run.
 func (app *Application) botGuardMiddleware() func(http.Handler) http.Handler {
-	if botGuardEngine == nil {
+	if app.cfg.ranviaKey == "" {
 		return app.blockScrapers
 	}
-	mw, err := botGuardEngine(app.botGuardHost())
+	g, err := ranvia.New(ranvia.Config{
+		Key:             app.cfg.ranviaKey,
+		ServiceURL:      app.cfg.ranviaURL,
+		CacheDir:        app.cfg.ranviaCacheDir,
+		Network:         app.networkOf,
+		SignedIn:        app.hasVerifiedSession,
+		VerifiedCrawler: app.crawlerVerifier().verified,
+		ClientIP:        clientAddr,
+		RulesFile:       app.cfg.botGuardSettingsPath,
+		LogRefusals:     app.cfg.ranviaLogRefusals,
+		Logf:            logging.Infof,
+		Fallback:        app.blockScrapers,
+	})
 	if err != nil {
-		logging.Errorf("evesynapse: bot guard engine did not start (%v); using the built-in guard", err)
+		logging.Errorf("evesynapse: Ranvia did not start (%v); using the built-in guard", err)
 		return app.blockScrapers
 	}
-	logging.Infof("evesynapse: bot guard: linked engine")
+	logging.Infof("evesynapse: bot guard: Ranvia")
 	return func(next http.Handler) http.Handler {
-		guarded := mw(next)
+		guarded := g.Middleware(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// The dev entrypoint turns the guard off during route
 			// setup (DisableBotGuard), after this was built.
@@ -76,17 +55,6 @@ func (app *Application) botGuardMiddleware() func(http.Handler) http.Handler {
 			}
 			guarded.ServeHTTP(w, r)
 		})
-	}
-}
-
-func (app *Application) botGuardHost() BotGuardHost {
-	return BotGuardHost{
-		SignedIn:        app.hasVerifiedSession,
-		Network:         app.networkOf,
-		VerifiedCrawler: app.crawlerVerifier().verified,
-		Secret:          app.botGuardSecret(),
-		SettingsPath:    app.cfg.botGuardSettingsPath,
-		Logf:            logging.Infof,
 	}
 }
 

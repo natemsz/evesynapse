@@ -6082,23 +6082,39 @@
     if (mime.indexOf("image/") !== 0) {
       return Promise.reject(new Error("not an image: " + b.type));
     }
-    if (typeof URL === "undefined" || typeof URL.createObjectURL !== "function" || typeof Image !== "function") {
+    if (typeof Image !== "function" || (typeof FileReader !== "function" && (typeof URL === "undefined" || typeof URL.createObjectURL !== "function"))) {
       return Promise.reject(new Error("cannot convert image: " + mime));
     }
     return new Promise(function (resolve, reject) {
-      var url = URL.createObjectURL(b);
       var tmp = new Image();
+      var objectUrl = "";
+      function cleanup() {
+        if (objectUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+          URL.revokeObjectURL(objectUrl);
+          objectUrl = "";
+        }
+      }
       tmp.onload = function () {
         imgElementToPng(tmp).then(
-          function (png) { URL.revokeObjectURL(url); resolve(png); },
-          function (err) { URL.revokeObjectURL(url); reject(err); }
+          function (png) { cleanup(); resolve(png); },
+          function (err) { cleanup(); reject(err); }
         );
       };
       tmp.onerror = function () {
-        URL.revokeObjectURL(url);
+        cleanup();
         reject(new Error("decode failed"));
       };
-      tmp.src = url;
+      // Prefer data: URLs via FileReader so fallback image conversion satisfies
+      // the site's img-src 'self' data: CSP without requiring blob:.
+      if (typeof FileReader === "function") {
+        var reader = new FileReader();
+        reader.onload = function () { tmp.src = reader.result; };
+        reader.onerror = function () { reject(new Error("read failed")); };
+        reader.readAsDataURL(b);
+      } else {
+        objectUrl = URL.createObjectURL(b);
+        tmp.src = objectUrl;
+      }
     });
   }
   // imageBlob fetches the card once per source and converts any non-PNG
@@ -6127,13 +6143,33 @@
     }
     return blobs[src];
   }
+  function isSamsungBrowser() {
+    return typeof navigator !== "undefined" && typeof navigator.userAgent === "string" && /SamsungBrowser\//i.test(navigator.userAgent);
+  }
   function canCopyImage() {
     if (typeof window !== "undefined" && window.isSecureContext === false) return false;
+    if (isSamsungBrowser()) return false;
     if (!(typeof ClipboardItem !== "undefined" && navigator.clipboard && navigator.clipboard.write)) return false;
     return typeof ClipboardItem.supports !== "function" || ClipboardItem.supports("image/png");
   }
+  function canShareFiles(files) {
+    if (typeof navigator === "undefined" || typeof navigator.canShare !== "function") return false;
+    try { return navigator.canShare({ files: files }); } catch (e) { return false; }
+  }
+  function canShareLink(data) {
+    if (typeof navigator === "undefined") return false;
+    if (typeof navigator.canShare !== "function") return true;
+    try { return navigator.canShare(data); } catch (e) { return false; }
+  }
   function canNativeShare() {
-    return typeof navigator !== "undefined" && typeof navigator.share === "function";
+    if (typeof navigator === "undefined" || typeof navigator.share !== "function") return false;
+    if (typeof navigator.canShare !== "function") return true;
+    var url = typeof location !== "undefined" ? location.href : "https://evesynapse.app/";
+    if (canShareLink({ title: "EveSynapse", url: url })) return true;
+    if (typeof File === "function") {
+      return canShareFiles([new File([new Uint8Array(1)], "card.png", { type: "image/png" })]);
+    }
+    return false;
   }
   function activeCardTheme() {
     var root = typeof document !== "undefined" ? document.documentElement : null;
@@ -6198,6 +6234,10 @@
   }
   function open(modal) {
     if (modal.open) return;
+    if (typeof document !== "undefined" && document.body && modal.parentNode !== document.body && typeof document.body.appendChild === "function") {
+      modal.setAttribute("data-hoisted", "1");
+      document.body.appendChild(modal);
+    }
     var img = modal.querySelector("img[data-share-src]");
     var wait = modal.querySelector(".share-wait");
     var shareSrc = img ? themedShareURL(img.getAttribute("data-share-src")) : "";
@@ -6306,9 +6346,10 @@
     }
     flash(btn, execCopyInDialog(box, url) ? "Link copied" : "Copy failed");
   }
-  // shareCard hands the share sheet the image alone when file sharing works;
-  // if PNG file sharing is unsupported or fails on desktop/mobile, it falls
-  // back to sharing the title and link, and reports non-cancel failures.
+  // shareCard hands the share sheet the image when called from mobile with
+  // a ready PNG blob; on desktop fine-pointer devices or before the blob is
+  // ready, it shares title and URL directly inside the click so transient user
+  // activation is never spent on an async fetch or a failed file share.
   function shareCard(box, btn, img) {
     if (typeof navigator.share !== "function") {
       flash(btn, "Share failed");
@@ -6329,7 +6370,7 @@
     function sendBlob(blob) {
       var file = new File([blob], fileName, { type: "image/png" });
       var fileData = { files: [file] };
-      if (typeof navigator.canShare === "function" && navigator.canShare(fileData)) {
+      if (canShareFiles([file])) {
         return navigator.share(fileData).catch(function (err) {
           if (err && err.name === "AbortError") throw err;
           return sendLink();
@@ -6338,17 +6379,19 @@
       return sendLink();
     }
 
+    var isMobileShare = (typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "")) ||
+      (typeof window !== "undefined" && typeof window.matchMedia === "function" &&
+        window.matchMedia("(hover: none) and (pointer: coarse)").matches);
     var blob = ready[srcKey(img)];
-    var canFiles = true;
-    if (!blob && typeof navigator.canShare === "function" && typeof File === "function") {
-      try {
-        canFiles = navigator.canShare({ files: [new File([new Uint8Array(0)], fileName, { type: "image/png" })] });
-      } catch (e) {
-        canFiles = false;
-      }
+    var linkOk = canShareLink(fallbackData);
+    var done;
+    try {
+      done = (!blob || (!isMobileShare && linkOk)) ? sendLink() : sendBlob(blob);
+    } catch (err) {
+      if (!err || err.name !== "AbortError") flash(btn, "Share failed");
+      return;
     }
-    var done = blob ? sendBlob(blob) : (canFiles ? imageBlob(img).then(sendBlob, sendLink) : sendLink());
-    done.catch(function (err) {
+    Promise.resolve(done).catch(function (err) {
       if (err && err.name === "AbortError") return;
       flash(btn, "Share failed");
     });

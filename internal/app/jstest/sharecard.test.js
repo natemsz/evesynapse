@@ -423,8 +423,9 @@ test("copyImage reports Copy failed cleanly on error and never disables button",
   assert.equal(imgBtn.disabled, undefined);
 });
 
-test("shareCard falls back to title+url when desktop rejects file sharing and flashes Share failed on error", async () => {
+test("shareCard falls back to title+url when file sharing rejects and flashes Share failed on error", async () => {
   const env = makeStubEnv();
+  navigator.userAgent = "Mozilla/5.0 (Linux; Android 14) Chrome/126.0.0.0 Mobile Safari/537.36";
   const { dlg, img, nativeBtn } = env.makeDialog({
     image: "/pilot/share.png?character=12",
     link: "/pilot/?character=12",
@@ -536,6 +537,7 @@ test("flash cancels prior per-button timer so rapid double taps keep their label
 
 test("shareCard gives shared File a plain name without spaces for Android", async () => {
   const env = makeStubEnv();
+  navigator.userAgent = "Mozilla/5.0 (Linux; Android 14) Chrome/126.0.0.0 Mobile Safari/537.36";
   const { dlg, img, nativeBtn, dlLink } = env.makeDialog({ fileName: "Kestrel Pilot - EveSynapse.png" });
   const shared = [];
   navigator.share = async (data) => { shared.push(data); };
@@ -575,4 +577,55 @@ test("open syncs html theme and vision onto /pilot/share.png URLs and redraws wh
   env.api.open(dlg);
   assert.equal(img.src, "/pilot/share.png?character=42&theme=light");
   assert.equal(dlLink.getAttribute("href"), "/pilot/share.png?character=42&download=1&theme=light");
+});
+
+test("canCopyImage hides Copy image on SamsungBrowser where PNG clipboard is unsupported", () => {
+  const env = makeStubEnv();
+  navigator.userAgent = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36";
+  assert.equal(env.api.canCopyImage(), false);
+
+  navigator.userAgent = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36";
+  assert.equal(env.api.canCopyImage(), true);
+});
+
+test("canNativeShare respects navigator.canShare and desktop fine-pointer shares link synchronously", async () => {
+  const env = makeStubEnv();
+  const { dlg, img, nativeBtn } = env.makeDialog({ image: "/pilot/share.png?character=7", link: "/pilot/?character=7" });
+
+  // Hidden if browser reports canShare=false for both URL and PNG file.
+  navigator.canShare = () => false;
+  assert.equal(env.api.canNativeShare(), false);
+
+  // Shown when link sharing is supported; desktop fine-pointer skips file-share activation trap.
+  navigator.canShare = (d) => !!(d && (d.url || (d.files && d.files.length)));
+  assert.equal(env.api.canNativeShare(), true);
+
+  env.api.ready["https://evesynapse.app/pilot/share.png?character=7"] = new Blob([new Uint8Array([1, 2])], { type: "image/png" });
+  img.src = "/pilot/share.png?character=7";
+
+  const shared = [];
+  navigator.share = async (data) => { shared.push(data); };
+  window.matchMedia = (q) => ({ matches: q === "(hover: hover) and (pointer: fine)", addEventListener() {} });
+
+  env.api.shareCard(dlg, nativeBtn, img);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(shared.length, 1);
+  assert.deepEqual(shared[0], { title: "Share pilot card", url: "https://evesynapse.app/pilot/?character=7" });
+});
+
+test("shareCard shares link synchronously when blob is not ready yet instead of awaiting fetch", async () => {
+  const env = makeStubEnv();
+  const { dlg, img, nativeBtn } = env.makeDialog({ image: "/pilot/share.png?character=8", link: "/pilot/?character=8" });
+  img.src = "/pilot/share.png?character=8";
+
+  const shared = [];
+  let fetched = false;
+  env.setFetch(async () => { fetched = true; return { ok: true, blob: async () => new Blob([new Uint8Array([1])], { type: "image/png" }) }; });
+  navigator.canShare = () => true;
+  navigator.share = async (data) => { shared.push(data); };
+
+  env.api.shareCard(dlg, nativeBtn, img);
+  assert.equal(shared.length, 1);
+  assert.deepEqual(shared[0], { title: "Share pilot card", url: "https://evesynapse.app/pilot/?character=8" });
+  assert.equal(fetched, false);
 });

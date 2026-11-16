@@ -3094,22 +3094,30 @@ html[data-theme="light"] .cardbtn { background: #fffdf9; border-color: #d9a77a; 
    (a fit card) by the dialog's width. */
 dialog.share-modal:not([open]) { display: none; }
 dialog.share-modal {
+  position: fixed;
+  inset: 0;
   margin: auto;
   padding: 0;
   color: var(--text);
+  overflow: hidden;
   overscroll-behavior: contain;
+  isolation: isolate;
+  transform: translateZ(0);
 }
-dialog.share-modal::backdrop { background: rgba(12, 8, 5, 0.76); }
-.modal.share-card { width: fit-content; max-width: min(46rem, calc(100vw - 2rem)); max-height: 92vh; max-height: 92dvh; }
-.share-card-body { padding: 1rem 1.1rem 1.1rem; }
+dialog.share-modal::backdrop { background: rgba(12, 8, 5, 0.84); }
+body:has(dialog.share-modal[open]) .page-body { -webkit-backdrop-filter: none; backdrop-filter: none; }
+body:has(dialog.share-modal[open]) :is(.ov-pips i.train, [data-live-pill]::before, .esi-dot::after, .status-dot::after) { animation-play-state: paused; }
+.modal.share-card { width: min(44rem, calc(100vw - 2rem)); max-width: calc(100vw - 2rem); max-height: 90vh; }
+.share-card-body { padding: 1rem 1.1rem 1.1rem; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; }
 .share-lead { margin: 0 0 0.75rem; font-size: var(--fs-sm); color: var(--muted-2); max-width: 40rem; }
 .share-preview { position: relative; margin: 0; display: grid; place-items: center; }
 .share-modal.share-loading .share-preview { min-height: 12rem; min-width: min(20rem, 100%); }
 .share-preview img {
-  display: block; width: auto; height: auto; max-width: 100%; max-height: min(62vh, 44rem); max-height: min(62dvh, 44rem);
+  display: block; width: auto; height: auto; max-width: 100%; max-height: min(58vh, 42rem);
   border: 1px solid var(--box-edge); border-radius: var(--r-md);
   background: var(--surface-inset, #151312);
 }
+.share-modal .btn { -webkit-backdrop-filter: none; backdrop-filter: none; }
 .share-wait { position: absolute; inset: auto 0 1rem; text-align: center; font-size: var(--fs-sm); color: var(--muted-2); }
 .share-wait:empty { display: none; }
 .share-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; }

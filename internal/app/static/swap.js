@@ -252,8 +252,8 @@
   // hoisted on first load and after every swap (the incoming
   // page's backdrops arrive inside the swapped markup), and the
   // outgoing page's hoisted backdrops are dropped as it leaves.
-  function hoistModals(root) {
-    var found = root.querySelectorAll(".modal-backdrop");
+  function hoistSelector(root, sel) {
+    var found = root.querySelectorAll(sel);
     for (var i = 0; i < found.length; i++) {
       var el = found[i];
       if (el.parentNode !== document.body) {
@@ -262,11 +262,20 @@
       }
     }
   }
-  function dropHoistedModals() {
-    var stale = document.querySelectorAll("body > .modal-backdrop[data-hoisted]");
+  function hoistModals(root) {
+    hoistSelector(root, ".modal-backdrop");
+    hoistSelector(root, "dialog.share-modal");
+  }
+  function dropSelector(sel) {
+    var stale = document.querySelectorAll(sel);
     for (var i = 0; i < stale.length; i++) {
+      if (stale[i].open && typeof stale[i].close === "function") stale[i].close();
       stale[i].parentNode.removeChild(stale[i]);
     }
+  }
+  function dropHoistedModals() {
+    dropSelector("body > .modal-backdrop[data-hoisted]");
+    dropSelector("body > dialog.share-modal[data-hoisted]");
   }
 
   // Image fallbacks: EVE's image server answers a render only

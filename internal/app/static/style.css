@@ -483,11 +483,11 @@ header .topbar {
   padding-bottom: 0.275rem;
   gap: 1rem;
 }
-/* The wordmark letterforms are inline SVG in the templates, outlined
-   from the Pixelify face, so the brand paints with no font load and
-   no blocking period. The svg is sized in ems off the anchor's
-   font-size: 1.2em is the face's line box (920 units up, 280 down on
-   its 1000-unit em), and the phone size below sets 1rem. */
+/* The wordmark letterforms are bespoke drawings, inline SVG in the
+   templates, so the brand paints with no font load and no blocking
+   period. The svg is sized in ems off the anchor's font-size: 1.2em
+   is the drawing's line box (920 units up, 280 down, caps from -636
+   to the baseline at 11), and the phone size below sets 1rem. */
 .wordmark {
   display: inline-block;
   font-size: var(--fs-4xl);

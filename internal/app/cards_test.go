@@ -9,12 +9,14 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"evesynapse/internal/card"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 )
 
 // TestSummaryCards: the pilot and kill pages point og:image at their
@@ -258,4 +260,96 @@ func TestCardBrandMatchesWordmark(t *testing.T) {
 			t.Errorf("card outline not in wordmark.html: %s", d)
 		}
 	}
+}
+
+// TestPilotShareCardThemes: the pilot share card mirrors the chosen
+// theme and colour-blind palette, caches per theme, ignores unknown
+// theme names, and receives the account's saved theme on /character/.
+func TestPilotShareCardThemes(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture A")
+	seedSnapshot(t, q, fixtureCharA, esi.SnapOnline, esi.Online{})
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture A")
+
+	var pic bytes.Buffer
+	src := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	for y := 0; y < 64; y++ {
+		for x := 0; x < 64; x++ {
+			src.SetRGBA(x, y, color.RGBA{R: 40, G: 90, B: 140, A: 255})
+		}
+	}
+	_ = png.Encode(&pic, src)
+	app.cardFetch = func(context.Context, string) ([]byte, error) { return pic.Bytes(), nil }
+
+	const payload = `{"profile":{"name":"Fixture A","birthday":"2015-05-01T00:00:00Z","security_status":3.5},"corp":{"name":"Test Corp","ticker":"TST"}}`
+	if _, err := conn.ExecContext(ctx,
+		`INSERT INTO pilot_records (character_id, payload, state, fetched_at) VALUES ($1, $2, 'ready', $3)`,
+		fixtureCharA, payload, time.Now().UTC().Format(time.RFC3339),
+	); err != nil {
+		t.Fatalf("seed pilot record: %v", err)
+	}
+
+	getCard := func(query string) []byte {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/pilot/share.png?character=90000001"+query, nil))
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/png" {
+			t.Fatalf("/pilot/share.png%s: status %d type %q", query, rec.Code, rec.Header().Get("Content-Type"))
+		}
+		img, err := png.Decode(bytes.NewReader(rec.Body.Bytes()))
+		if err != nil {
+			t.Fatalf("decode PNG (%s): %v", query, err)
+		}
+		if img.Bounds().Dx() != card.ProfileW || img.Bounds().Dy() != card.ProfileH {
+			t.Fatalf("size (%s) = %dx%d, want %dx%d", query, img.Bounds().Dx(), img.Bounds().Dy(), card.ProfileW, card.ProfileH)
+		}
+		return rec.Body.Bytes()
+	}
+
+	def := getCard("")
+	cal := getCard("&theme=caldari")
+	lgt := getCard("&theme=light")
+	rg := getCard("&theme=caldari&vision=redgreen")
+	bogus := getCard("&theme=not-a-theme&vision=not-a-vision")
+
+	if bytes.Equal(def, cal) {
+		t.Error("caldari card bytes matched default card")
+	}
+	if bytes.Equal(def, lgt) || bytes.Equal(cal, lgt) {
+		t.Error("light card bytes matched a dark scheme")
+	}
+	if bytes.Equal(cal, rg) {
+		t.Error("redgreen colour-blind card bytes matched standard caldari card")
+	}
+	if !bytes.Equal(def, bogus) {
+		t.Error("unknown theme/vision should fall back to default card bytes")
+	}
+
+	form := url.Values{
+		"scheme":   {"caldari"},
+		"tier":     {"muted"},
+		"backdrop": {""},
+		"vision":   {"redgreen"},
+	}
+	saveReq := httptest.NewRequest(http.MethodPost, "/settings/theme", strings.NewReader(form.Encode()))
+	saveReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	saveReq.Header.Set("X-Requested-With", "XMLHttpRequest")
+	saveReq.AddCookie(cookie)
+	saveRec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(saveRec, saveReq)
+	if saveRec.Code != http.StatusOK {
+		t.Fatalf("save theme status = %d", saveRec.Code)
+	}
+
+	code, body := getPage(t, app, cookie, "/character/")
+	if code != http.StatusOK {
+		t.Fatalf("/character/ status = %d", code)
+	}
+	mustContain(t, "themed share image", body, `/pilot/share.png?character=90000001&amp;theme=caldari&amp;vision=redgreen`)
+	mustContain(t, "themed share download", body, `/pilot/share.png?character=90000001&amp;download=1&amp;theme=caldari&amp;vision=redgreen`)
 }

@@ -26,13 +26,6 @@ var WordmarkPaths = []string{
 	"M6648 11V-75H6559V-548H6648V-636H6944V-548H7034V-424H6915V-511H6677V-374H6856V-251H6677V-113H6915V-200H7034V-75H6944V11Z",
 }
 
-// wordmarkColors: EVE solid white, SYNAPSE one solid colour per
-// letter stepping gold to ember.
-var wordmarkColors = []color.NRGBA{
-	hex(0xffffff), hex(0xffffff), hex(0xffffff),
-	hex(0xffc36c), hex(0xffa551), hex(0xff8835), hex(0xff6a1a), hex(0xf35d18), hex(0xe85017), hex(0xdc4315),
-}
-
 // The wordmark's ink box in its own units: x 61 to 7034, cap top
 // -636 to baseline 11.
 const (
@@ -41,14 +34,18 @@ const (
 )
 
 // drawWordmark sets the wordmark with its ink box's left edge at x
-// and its cap height h, vertically centred on cy. It returns the
-// drawn width.
-func drawWordmark(dst *image.RGBA, x, cy, h float64) float64 {
+// and its cap height h, vertically centred on cy, painted in pal.
+// It returns the drawn width.
+func drawWordmark(dst *image.RGBA, x, cy, h float64, pal Palette) float64 {
 	scale := h / (wordmarkBot - wordmarkTop)
 	ox := x - wordmarkX0*scale
 	oy := cy - h/2 - wordmarkTop*scale
 	for i, d := range WordmarkPaths {
-		fill(dst, svgPath(d, scale, ox, oy), solid(wordmarkColors[i]))
+		col := pal.EveWord
+		if i >= 3 && i-3 < len(pal.SynWords) {
+			col = pal.SynWords[i-3]
+		}
+		fill(dst, svgPath(d, scale, ox, oy), solid(col))
 	}
 	return (wordmarkX1 - wordmarkX0) * scale
 }
@@ -63,26 +60,26 @@ var MarkPaths = []string{
 }
 
 // drawMark draws the logo mark in a size x size box at (x, y), with
-// the template's gradients: each blade's linear gradient runs
-// (0.8, 0) to (0.2, 1) of its own bounding box, and the core is a
-// radial glow under a solid spark.
-func drawMark(dst *image.RGBA, x, y, size float64) {
+// pal's gradients: each blade's linear gradient runs (0.8, 0) to
+// (0.2, 1) of its own bounding box, and the core is a radial glow
+// under a solid spark.
+func drawMark(dst *image.RGBA, x, y, size float64, pal Palette) {
 	s := size / 64
 	blade := func(d string, c0, c1 color.NRGBA) {
 		sh := svgPath(d, s, x, y)
 		fill(dst, sh, bboxLinear(sh, c0, c1))
 	}
-	blade(MarkPaths[0], hex(0xffe2a0), hex(0xff7a26))
-	fill(dst, svgPath(MarkPaths[1], s, x, y), solid(alpha(hex(0xfff3d6), .55)))
-	blade(MarkPaths[2], hex(0xff6a1a), hex(0xc8360f))
+	blade(MarkPaths[0], pal.MarkUp0, pal.MarkUp1)
+	fill(dst, svgPath(MarkPaths[1], s, x, y), solid(alpha(pal.MarkSheen, .55)))
+	blade(MarkPaths[2], pal.MarkDn0, pal.MarkDn1)
 	fill(dst, svgPath(MarkPaths[3], s, x, y), solid(alpha(hex(0x000000), .22)))
 	cx, cy := x+32*s, y+32*s
-	glow, glowEdge := alpha(hex(0xffd27a), .85), alpha(hex(0xffd27a), 0)
+	glow, glowEdge := alpha(pal.MarkGlow, .85), alpha(pal.MarkGlow, 0)
 	r := 4.5 * s
 	fill(dst, circle(cx, cy, r), func(px, py float64) color.NRGBA {
 		return mix(glow, glowEdge, math.Hypot(px-cx, py-cy)/r)
 	})
-	fill(dst, circle(cx, cy, 1.8*s), solid(hex(0xfff6e6)))
+	fill(dst, circle(cx, cy, 1.8*s), solid(pal.MarkSpark))
 }
 
 // bboxLinear is SVG's objectBoundingBox gradient from (0.8, 0) to

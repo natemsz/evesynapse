@@ -50,6 +50,8 @@ type Profile struct {
 	// the bottom right.
 	Foot string
 	Note string
+	// Theme names the scheme or light/dark palette for the sheet.
+	Theme string
 }
 
 // ProfileRow is one row of a profile panel: an icon, a name, a
@@ -81,20 +83,21 @@ const (
 
 // RenderProfile draws a share sheet.
 func RenderProfile(p Profile) *image.RGBA {
+	pal := PaletteFor(p.Theme)
 	img := image.NewRGBA(image.Rect(0, 0, ProfileW, ProfileH))
-	field(img)
+	field(img, pal)
 	const right = ProfileW - pMargin
 
-	drawMark(img, pMargin, pHeadMid-30, 60)
-	drawWordmark(img, pMargin+80, pHeadMid, 22)
+	drawMark(img, pMargin, pHeadMid-30, 60, pal)
+	drawWordmark(img, pMargin+80, pHeadMid, 22, pal)
 	if p.Kind != "" {
 		tag := newText(display, 17, 5)
-		tag.draw(img, right-tag.width(p.Kind), pHeadMid+17.0/2, p.Kind, hiC)
+		tag.draw(img, right-tag.width(p.Kind), pHeadMid+17.0/2, p.Kind, pal.Hi)
 	}
-	fill(img, rect(pMargin, pRuleY, right, pRuleY+2), linear(pMargin, 0, right, 0, alpha(ruleGold, .6), alpha(ruleEmber, .6)))
+	fill(img, rect(pMargin, pRuleY, right, pRuleY+2), linear(pMargin, 0, right, 0, alpha(pal.Rule0, .6), alpha(pal.Rule1, .6)))
 
 	// Hero: the portrait panel and the identity column.
-	drawFramedPicture(img, p.Picture, pMargin, pHeroY, pHeroSide, 16)
+	drawFramedPicture(img, p.Picture, pMargin, pHeroY, pHeroSide, 16, pal)
 	avail := right - pColX
 	y := pHeroY + 78
 	if p.Title != "" {
@@ -104,41 +107,41 @@ func RenderProfile(p Profile) *image.RGBA {
 			capPx -= 2
 			name = newText(display, capPx, 0)
 		}
-		name.draw(img, pColX, y, name.fit(p.Title, avail), textBright)
+		name.draw(img, pColX, y, name.fit(p.Title, avail), pal.TextBright)
 	}
 	y += 58
 	line := newText(body, 26, 0)
 	for i, l := range p.Lines {
-		col := mutedC
+		col := pal.Muted
 		if i == 0 {
-			col = textC
+			col = pal.Text
 		}
 		line.draw(img, pColX, y, line.fit(l, avail), col)
 		y += 44
 	}
 	if len(p.Chips) > 0 {
-		drawChips(img, p.Chips, pColX, y-4, right, pHeroY+pHeroSide)
+		drawChips(img, p.Chips, pColX, y-4, right, pHeroY+pHeroSide, pal)
 	}
 
-	drawTiles(img, p.Figures, pTileY, pTileH, 46, right)
-	drawTiles(img, p.Minor, pMinorY, pMinorH, 32, right)
+	drawTiles(img, p.Figures, pTileY, pTileH, 46, right, pal)
+	drawTiles(img, p.Minor, pMinorY, pMinorH, 32, right, pal)
 
 	// Lower panels: ships at the left, hours and facts at the right.
 	mid := pMargin + (right-pMargin)*0.52
 	if len(p.Ships) > 0 {
-		drawShipPanel(img, p.ShipsLabel, p.Ships, pMargin, pPanelY, mid-24, pPanelBot)
+		drawShipPanel(img, p.ShipsLabel, p.Ships, pMargin, pPanelY, mid-24, pPanelBot, pal)
 	}
 	hx0 := mid + 24
 	if len(p.Ships) == 0 {
 		hx0 = pMargin
 	}
-	drawHoursPanel(img, p, hx0, pPanelY, right, pPanelBot)
+	drawHoursPanel(img, p, hx0, pPanelY, right, pPanelBot, pal)
 
 	foot := newText(body, 19, 0)
-	foot.draw(img, pMargin, pFootBase, p.Foot, muted2C)
+	foot.draw(img, pMargin, pFootBase, p.Foot, pal.Muted2)
 	if p.Note != "" {
 		note := newText(body, 17, 0)
-		note.draw(img, right-note.width(p.Note), pFootBase, p.Note, muted2C)
+		note.draw(img, right-note.width(p.Note), pFootBase, p.Note, pal.Muted2)
 	}
 	return img
 }
@@ -155,23 +158,23 @@ func ProfilePNG(p Profile) ([]byte, error) {
 
 // drawFramedPicture draws a picture cropped square into a rounded
 // frame with the accent hairline; without one, the logo mark.
-func drawFramedPicture(img *image.RGBA, pic image.Image, x0, y0, side, r float64) {
+func drawFramedPicture(img *image.RGBA, pic image.Image, x0, y0, side, r float64, pal Palette) {
 	x1, y1 := x0+side, y0+side
-	fill(img, roundRect(x0, y0, x1, y1, r), solid(alpha(accentC, .45)))
+	fill(img, roundRect(x0, y0, x1, y1, r), solid(alpha(pal.Accent, .45)))
 	const inset = 2.0
-	drawPicture(img, pic, x0+inset, y0+inset, side-2*inset, r-inset)
+	drawPicture(img, pic, x0+inset, y0+inset, side-2*inset, r-inset, pal)
 	if pic == nil {
 		cx, cy := x0+side/2, y0+side/2
-		drawMark(img, cx-side*0.22, cy-side*0.22, side*0.44)
+		drawMark(img, cx-side*0.22, cy-side*0.22, side*0.44, pal)
 	}
 }
 
 // drawPicture fills a rounded square with a picture cropped to fill
 // it (panel colour where there is none).
-func drawPicture(img *image.RGBA, pic image.Image, x0, y0, side, r float64) {
+func drawPicture(img *image.RGBA, pic image.Image, x0, y0, side, r float64, pal Palette) {
 	inner := roundRect(x0, y0, x0+side, y0+side, r)
 	if pic == nil {
-		fill(img, inner, solid(panelC))
+		fill(img, inner, solid(pal.Panel))
 		return
 	}
 	n := int(math.Round(side))
@@ -185,13 +188,13 @@ func drawPicture(img *image.RGBA, pic image.Image, x0, y0, side, r float64) {
 		crop = image.Rect(sb.Min.X, sb.Min.Y+off, sb.Max.X, sb.Min.Y+off+sb.Dx())
 	}
 	scaled := image.NewRGBA(image.Rect(0, 0, n, n))
-	xdraw.Draw(scaled, scaled.Bounds(), image.NewUniform(panelC), image.Point{}, xdraw.Src)
+	xdraw.Draw(scaled, scaled.Bounds(), image.NewUniform(pal.Panel), image.Point{}, xdraw.Src)
 	xdraw.CatmullRom.Scale(scaled, scaled.Bounds(), pic, crop, xdraw.Over, nil)
 	ox, oy := int(x0), int(y0)
 	fill(img, inner, func(x, y float64) color.NRGBA {
 		px, py := int(x)-ox, int(y)-oy
 		if px < 0 || py < 0 || px >= n || py >= n {
-			return panelC
+			return pal.Panel
 		}
 		i := scaled.PixOffset(px, py)
 		return color.NRGBA{scaled.Pix[i], scaled.Pix[i+1], scaled.Pix[i+2], 0xff}
@@ -201,7 +204,7 @@ func drawPicture(img *image.RGBA, pic image.Image, x0, y0, side, r float64) {
 // drawChips sets labelled facts in rows of framed pills, wrapping
 // to a new row at the right edge; a pill with no row left above
 // bottom is not drawn.
-func drawChips(img *image.RGBA, chips []Stat, x, y, right, bottom float64) {
+func drawChips(img *image.RGBA, chips []Stat, x, y, right, bottom float64, pal Palette) {
 	label := newText(display, 13, 3)
 	val := newText(display, 22, 0)
 	const padX, h = 16.0, 48.0
@@ -219,14 +222,14 @@ func drawChips(img *image.RGBA, chips []Stat, x, y, right, bottom float64) {
 		if y+h > bottom || x+w > right {
 			return
 		}
-		fill(img, roundRect(x, y, x+w, y+h, 10), solid(alpha(textC, .14)))
-		fill(img, roundRect(x+1, y+1, x+w-1, y+h-1, 9), solid(alpha(panelC, .92)))
-		label.draw(img, x+padX, y+h/2+13.0/2, c.Label, muted2C)
+		fill(img, roundRect(x, y, x+w, y+h, 10), solid(alpha(pal.Text, .14)))
+		fill(img, roundRect(x+1, y+1, x+w-1, y+h-1, 9), solid(alpha(pal.Panel, .92)))
+		label.draw(img, x+padX, y+h/2+13.0/2, c.Label, pal.Muted2)
 		vx := x + padX + lw + 12
 		for _, s := range c.Value {
 			col := s.Color
 			if col == (color.NRGBA{}) {
-				col = textBright
+				col = pal.TextBright
 			}
 			val.draw(img, vx, y+h/2+22.0/2, s.Text, col)
 			vx += val.width(s.Text)
@@ -238,7 +241,7 @@ func drawChips(img *image.RGBA, chips []Stat, x, y, right, bottom float64) {
 // drawTiles draws up to four tiles on a four-column grid, each a
 // label over a figure, edged at the left in the accent, the way
 // the fitting tool's glance tiles read.
-func drawTiles(img *image.RGBA, stats []Stat, y0, h, figCap, right float64) {
+func drawTiles(img *image.RGBA, stats []Stat, y0, h, figCap, right float64, pal Palette) {
 	n := min(len(stats), 4)
 	if n == 0 {
 		return
@@ -252,14 +255,14 @@ func drawTiles(img *image.RGBA, stats []Stat, y0, h, figCap, right float64) {
 	for i := range n {
 		st := stats[i]
 		x0 := pMargin + float64(i)*(w+pTileGap)
-		drawTile(img, x0, y0, x0+w, y0+h, accentC)
-		label.draw(img, x0+26, y0+22+14, st.Label, muted2C)
+		drawTile(img, x0, y0, x0+w, y0+h, pal.Accent, pal)
+		label.draw(img, x0+26, y0+22+14, st.Label, pal.Muted2)
 		segs := fitSegs(fig, st.Value, w-48)
 		fx := x0 + 26
 		for _, s := range segs {
 			c := s.Color
 			if c == (color.NRGBA{}) {
-				c = hiC
+				c = pal.Hi
 			}
 			fig.draw(img, fx, y0+h-26, s.Text, c)
 			fx += fig.width(s.Text)
@@ -269,19 +272,19 @@ func drawTiles(img *image.RGBA, stats []Stat, y0, h, figCap, right float64) {
 
 // drawTile is one tile: a hairline frame on a faint fill, with a
 // wash of its colour from the top left and a solid left edge.
-func drawTile(img *image.RGBA, x0, y0, x1, y1 float64, k color.NRGBA) {
+func drawTile(img *image.RGBA, x0, y0, x1, y1 float64, k color.NRGBA, pal Palette) {
 	const r = 10.0
-	fill(img, roundRect(x0, y0, x1, y1, r), solid(alpha(textC, .10)))
-	fill(img, roundRect(x0+1, y0+1, x1-1, y1-1, r-1), solid(alpha(panelC, .94)))
+	fill(img, roundRect(x0, y0, x1, y1, r), solid(alpha(pal.Text, .10)))
+	fill(img, roundRect(x0+1, y0+1, x1-1, y1-1, r-1), solid(alpha(pal.Panel, .94)))
 	fill(img, roundRect(x0+1, y0+1, x1-1, y1-1, r-1), linear(x0, y0, x0+(x1-x0)*.7, y1, alpha(k, .16), alpha(k, 0)))
 	fill(img, roundRect(x0, y0, x0+4, y1, 2), solid(k))
 }
 
 // drawShipPanel lists rows with icons, names, counts and bars.
-func drawShipPanel(img *image.RGBA, title string, rows []ProfileRow, x0, y0, x1, y1 float64) {
-	drawPanelFrame(img, x0, y0, x1, y1)
+func drawShipPanel(img *image.RGBA, title string, rows []ProfileRow, x0, y0, x1, y1 float64, pal Palette) {
+	drawPanelFrame(img, x0, y0, x1, y1, pal)
 	label := newText(display, 15, 3.5)
-	label.draw(img, x0+28, y0+44, title, muted2C)
+	label.draw(img, x0+28, y0+44, title, pal.Muted2)
 	name := newText(body, 22, 0)
 	count := newText(display, 22, 0)
 	const icon, rowH = 48.0, 74.0
@@ -290,15 +293,15 @@ func drawShipPanel(img *image.RGBA, title string, rows []ProfileRow, x0, y0, x1,
 		if y+icon > y1-20 {
 			break
 		}
-		drawPicture(img, r.Icon, x0+28, y, icon, 8)
+		drawPicture(img, r.Icon, x0+28, y, icon, 8, pal)
 		tx := x0 + 28 + icon + 18
 		cw := count.width(r.Count)
-		name.draw(img, tx, y+22, name.fit(r.Name, x1-28-cw-16-tx), textC)
-		count.draw(img, x1-28-cw, y+22, r.Count, textBright)
+		name.draw(img, tx, y+22, name.fit(r.Name, x1-28-cw-16-tx), pal.Text)
+		count.draw(img, x1-28-cw, y+22, r.Count, pal.TextBright)
 		by := y + 35
-		fill(img, roundRect(tx, by, x1-28, by+8, 4), solid(alpha(textC, .08)))
+		fill(img, roundRect(tx, by, x1-28, by+8, 4), solid(alpha(pal.Text, .08)))
 		if f := math.Max(0, math.Min(1, r.Frac)); f > 0 {
-			fill(img, roundRect(tx, by, tx+math.Max(8, (x1-28-tx)*f), by+8, 4), solid(hiC))
+			fill(img, roundRect(tx, by, tx+math.Max(8, (x1-28-tx)*f), by+8, 4), solid(pal.Hi))
 		}
 		y += rowH
 	}
@@ -306,12 +309,12 @@ func drawShipPanel(img *image.RGBA, title string, rows []ProfileRow, x0, y0, x1,
 
 // drawHoursPanel draws the 24-hour histogram, its axis and note,
 // then the labelled facts under it.
-func drawHoursPanel(img *image.RGBA, p Profile, x0, y0, x1, y1 float64) {
-	drawPanelFrame(img, x0, y0, x1, y1)
+func drawHoursPanel(img *image.RGBA, p Profile, x0, y0, x1, y1 float64, pal Palette) {
+	drawPanelFrame(img, x0, y0, x1, y1, pal)
 	label := newText(display, 15, 3.5)
 	y := y0 + 44
 	if len(p.Hours) == 24 {
-		label.draw(img, x0+28, y, p.HoursLabel, muted2C)
+		label.draw(img, x0+28, y, p.HoursLabel, pal.Muted2)
 		const barTop, barH = 76.0, 150.0
 		bx0, bx1 := x0+28, x1-28
 		gap := 4.0
@@ -319,22 +322,22 @@ func drawHoursPanel(img *image.RGBA, p Profile, x0, y0, x1, y1 float64) {
 		base := y0 + barTop + barH
 		for h, f := range p.Hours {
 			x := bx0 + float64(h)*(bw+gap)
-			fill(img, roundRect(x, y0+barTop, x+bw, base, 3), solid(alpha(textC, .05)))
+			fill(img, roundRect(x, y0+barTop, x+bw, base, 3), solid(alpha(pal.Text, .05)))
 			if f > 0 {
 				top := base - math.Max(4, barH*math.Min(1, f))
-				fill(img, roundRect(x, top, x+bw, base, 3), linear(0, top, 0, base, hiC, alpha(accentC, .55)))
+				fill(img, roundRect(x, top, x+bw, base, 3), linear(0, top, 0, base, pal.Hi, alpha(pal.Accent, .55)))
 			}
 		}
 		axis := newText(display, 13, 1)
 		for _, h := range []int{0, 6, 12, 18} {
 			t := []string{"00", "06", "12", "18"}[h/6]
-			axis.draw(img, bx0+float64(h)*(bw+gap), base+28, t, muted2C)
+			axis.draw(img, bx0+float64(h)*(bw+gap), base+28, t, pal.Muted2)
 		}
-		axis.draw(img, bx1-axis.width("24"), base+28, "24", muted2C)
+		axis.draw(img, bx1-axis.width("24"), base+28, "24", pal.Muted2)
 		y = base + 70
 		if p.HoursNote != "" {
 			note := newText(body, 21, 0)
-			note.draw(img, x0+28, y, note.fit(p.HoursNote, x1-x0-56), textC)
+			note.draw(img, x0+28, y, note.fit(p.HoursNote, x1-x0-56), pal.Text)
 			y += 56
 		}
 	}
@@ -344,15 +347,15 @@ func drawHoursPanel(img *image.RGBA, p Profile, x0, y0, x1, y1 float64) {
 		colW := (x1 - x0 - 56) / float64(n)
 		for i, f := range p.Facts {
 			fx := x0 + 28 + float64(i)*colW
-			label.draw(img, fx, y, f.Label, muted2C)
-			lineT.draw(img, fx, y+38, lineT.fit(f.Text, colW-16), textBright)
+			label.draw(img, fx, y, f.Label, pal.Muted2)
+			lineT.draw(img, fx, y+38, lineT.fit(f.Text, colW-16), pal.TextBright)
 		}
 	}
 }
 
 // drawPanelFrame is a panel's hairline frame on a faint fill.
-func drawPanelFrame(img *image.RGBA, x0, y0, x1, y1 float64) {
+func drawPanelFrame(img *image.RGBA, x0, y0, x1, y1 float64, pal Palette) {
 	const r = 14.0
-	fill(img, roundRect(x0, y0, x1, y1, r), solid(alpha(textC, .10)))
-	fill(img, roundRect(x0+1, y0+1, x1-1, y1-1, r-1), solid(alpha(panelC, .9)))
+	fill(img, roundRect(x0, y0, x1, y1, r), solid(alpha(pal.Text, .10)))
+	fill(img, roundRect(x0+1, y0+1, x1-1, y1-1, r-1), solid(alpha(pal.Panel, .9)))
 }

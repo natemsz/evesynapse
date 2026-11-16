@@ -6014,50 +6014,146 @@
 })();
 
 // Share card dialogs (templates/sharecard.html): an opener with
-// data-share-card="{id}" opens that dialog through the shared
-// modal. The preview image loads only on first open, so a page
-// view never draws a card nobody asked for. Copy image and the
-// device's own share sheet show only where the browser has them.
-// The card's bytes are fetched as soon as the preview shows, so
-// Copy image and Share hand over a ready image inside the tap:
-// phone browsers drop a clipboard write or share that waits on
-// the network.
+// data-share-card="{id}" opens that native <dialog> through showModal().
+// The preview image loads only on first open, so a page view never draws
+// a card nobody asked for. Copy image and the device's own share sheet
+// show only where the browser has them. The card's bytes are fetched as
+// soon as the dialog opens (and normalized to PNG if a fallback image
+// was served), so Copy image and Share hand over a ready Blob inside the
+// tap without dropping user activation or hitting Promise-in-ClipboardItem
+// incompatibilities on Android browsers.
 (function () {
   "use strict";
   var blobs = {};
   var ready = {};
+  var flashTimers = typeof WeakMap === "function" ? new WeakMap() : null;
+  var pointerDownTarget = null;
+
   function flash(btn, text) {
     var prior = btn.getAttribute("data-label") || btn.textContent;
     btn.setAttribute("data-label", prior);
+    if (flashTimers && flashTimers.has(btn)) clearTimeout(flashTimers.get(btn));
     btn.textContent = text;
-    setTimeout(function () { btn.textContent = prior; }, 1600);
+    var id = setTimeout(function () {
+      btn.textContent = prior;
+      if (flashTimers) flashTimers.delete(btn);
+    }, 1600);
+    if (flashTimers) flashTimers.set(btn, id);
   }
   function absolute(href) {
     try { return new URL(href, location.href).href; } catch (e) { return href; }
   }
-  function srcOf(img) { return img.currentSrc || img.src; }
-  // imageBlob fetches the card once per source. Anything but a PNG
-  // (an error page, a challenge) is refused, so it never reaches
-  // the clipboard or the share sheet dressed as an image.
+  function srcOf(img) {
+    return (img && (img.currentSrc || img.src || img.getAttribute("data-share-src"))) || "";
+  }
+  function srcKey(img) {
+    var raw = srcOf(img);
+    return raw ? absolute(raw) : "";
+  }
+  function imgElementToPng(img) {
+    return new Promise(function (resolve, reject) {
+      if (!(img && img.complete && img.naturalWidth > 0 && typeof document.createElement === "function")) {
+        reject(new Error("image not ready"));
+        return;
+      }
+      var canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      var ctx = canvas.getContext && canvas.getContext("2d");
+      if (!ctx || typeof canvas.toBlob !== "function") {
+        reject(new Error("no canvas"));
+        return;
+      }
+      try {
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(function (png) {
+          if (png) resolve(png); else reject(new Error("toBlob failed"));
+        }, "image/png");
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+  function blobToPng(b) {
+    var mime = (b && b.type ? b.type : "").split(";")[0].trim().toLowerCase();
+    if (!mime || mime === "image/png") {
+      return Promise.resolve(mime === "image/png" ? b : new Blob([b], { type: "image/png" }));
+    }
+    if (mime.indexOf("image/") !== 0) {
+      return Promise.reject(new Error("not an image: " + b.type));
+    }
+    if (typeof URL === "undefined" || typeof URL.createObjectURL !== "function" || typeof Image !== "function") {
+      return Promise.reject(new Error("cannot convert image: " + mime));
+    }
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(b);
+      var tmp = new Image();
+      tmp.onload = function () {
+        imgElementToPng(tmp).then(
+          function (png) { URL.revokeObjectURL(url); resolve(png); },
+          function (err) { URL.revokeObjectURL(url); reject(err); }
+        );
+      };
+      tmp.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error("decode failed"));
+      };
+      tmp.src = url;
+    });
+  }
+  // imageBlob fetches the card once per source and converts any non-PNG
+  // image fallback (such as the JPEG placeholder) to PNG. Non-image
+  // responses (error pages or challenges) are refused.
   function imageBlob(img) {
-    var src = srcOf(img);
+    var src = srcKey(img);
+    if (!src) return Promise.reject(new Error("no source"));
     if (!blobs[src]) {
       blobs[src] = fetch(src, { credentials: "same-origin" }).then(function (r) {
         if (!r.ok) throw new Error("status " + r.status);
         return r.blob();
-      }).then(function (b) {
-        if (b.type && b.type !== "image/png") throw new Error("not a png: " + b.type);
-        b = b.type ? b : new Blob([b], { type: "image/png" });
-        ready[src] = b;
-        return b;
+      }).then(blobToPng).then(function (png) {
+        ready[src] = png;
+        return png;
+      }).catch(function (err) {
+        if (img && img.complete && img.naturalWidth > 0) {
+          return imgElementToPng(img).then(function (png) {
+            ready[src] = png;
+            return png;
+          });
+        }
+        delete blobs[src];
+        throw err;
       });
-      blobs[src].catch(function () { delete blobs[src]; });
     }
     return blobs[src];
   }
   function canCopyImage() {
-    if (!(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write)) return false;
+    if (typeof window !== "undefined" && window.isSecureContext === false) return false;
+    if (!(typeof ClipboardItem !== "undefined" && navigator.clipboard && navigator.clipboard.write)) return false;
     return typeof ClipboardItem.supports !== "function" || ClipboardItem.supports("image/png");
+  }
+  function canNativeShare() {
+    return typeof navigator !== "undefined" && typeof navigator.share === "function";
+  }
+  function activeCardTheme() {
+    var root = typeof document !== "undefined" ? document.documentElement : null;
+    if (!root || typeof root.getAttribute !== "function") return { theme: "", vision: "" };
+    var scheme = root.getAttribute("data-theme") === "light" ? "light" : (root.getAttribute("data-scheme") || "");
+    if (scheme === "minmatar-v3") scheme = "";
+    var vision = root.getAttribute("data-vision") || "";
+    if (vision !== "redgreen" && vision !== "blueyellow") vision = "";
+    return { theme: scheme, vision: vision };
+  }
+  function themedShareURL(href) {
+    if (!href || href.indexOf("/pilot/share.png") !== 0) return href;
+    var state = activeCardTheme();
+    var u = new URL(href, "https://evesynapse.invalid");
+    if (u.pathname !== "/pilot/share.png") return href;
+    if (state.theme) u.searchParams.set("theme", state.theme);
+    else u.searchParams.delete("theme");
+    if (state.vision) u.searchParams.set("vision", state.vision);
+    else u.searchParams.delete("vision");
+    return u.pathname + u.search;
   }
   // An opener may name its own card: data-share-image, -link,
   // -download and -name replace the dialog's, so one dialog serves
@@ -6078,91 +6174,245 @@
     if (dl && opener.getAttribute("data-share-download")) dl.setAttribute("href", opener.getAttribute("data-share-download"));
     if (dl && opener.getAttribute("data-share-name")) dl.setAttribute("download", opener.getAttribute("data-share-name"));
   }
+  function showDialog(modal) {
+    if (typeof modal.showModal === "function") {
+      if (!modal.open) modal.showModal();
+    } else if (modal.hasAttribute && modal.classList && modal.classList.contains("modal-backdrop")) {
+      if (window.EveSynapseModal) window.EveSynapseModal.open(modal);
+      return;
+    } else {
+      modal.setAttribute("open", "");
+    }
+    var first = modal.querySelector("[data-share-copy-link], button:not([data-close-modal])");
+    if (first && first.focus) first.focus({ preventScroll: true });
+  }
+  function closeDialog(modal) {
+    if (!modal) return;
+    if (typeof modal.close === "function") {
+      if (modal.open) modal.close();
+    } else if (modal.classList && modal.classList.contains("modal-backdrop")) {
+      if (window.EveSynapseModal) window.EveSynapseModal.close(modal);
+    } else {
+      modal.removeAttribute("open");
+    }
+  }
   function open(modal) {
+    if (modal.open) return;
     var img = modal.querySelector("img[data-share-src]");
     var wait = modal.querySelector(".share-wait");
-    if (img && !img.getAttribute("src") && img.getAttribute("data-share-src")) {
+    var shareSrc = img ? themedShareURL(img.getAttribute("data-share-src")) : "";
+    if (img && shareSrc && shareSrc !== img.getAttribute("data-share-src")) {
+      img.setAttribute("data-share-src", shareSrc);
+    }
+    var dl = modal.querySelector("a[download]");
+    if (dl) {
+      var dlHref = dl.getAttribute("href");
+      var themedDl = themedShareURL(dlHref);
+      if (themedDl && themedDl !== dlHref) dl.setAttribute("href", themedDl);
+    }
+    var curSrc = img ? img.getAttribute("src") : "";
+    if (img && shareSrc && (!curSrc || curSrc !== shareSrc || (img.complete && img.naturalWidth === 0))) {
+      var seq = (modal._shareLoadSeq || 0) + 1;
+      modal._shareLoadSeq = seq;
       modal.classList.add("share-loading");
-      img.addEventListener("load", function () {
+      if (wait) wait.textContent = "Drawing the card…";
+      img.onload = function () {
+        if (modal._shareLoadSeq !== seq) return;
         modal.classList.remove("share-loading");
         if (wait) wait.textContent = "";
-        imageBlob(img).catch(function () { /* fetched again on tap */ });
-      }, { once: true });
-      img.addEventListener("error", function () {
+        imageBlob(img).catch(function () { /* retried on tap */ });
+      };
+      img.onerror = function () {
+        if (modal._shareLoadSeq !== seq) return;
         modal.classList.remove("share-loading");
+        img.removeAttribute("src");
         if (wait) wait.textContent = "The card could not be drawn just now.";
-      }, { once: true });
-      img.src = img.getAttribute("data-share-src");
+      };
+      img.src = shareSrc;
+      imageBlob(img).catch(function () { /* retried on load or tap */ });
     } else if (img && img.complete && img.naturalWidth) {
-      imageBlob(img).catch(function () { /* fetched again on tap */ });
+      modal.classList.remove("share-loading");
+      if (wait) wait.textContent = "";
+      imageBlob(img).catch(function () { /* retried on tap */ });
     }
     var copyImg = modal.querySelector("[data-share-copy-image]");
     if (copyImg) copyImg.hidden = !canCopyImage();
     var native = modal.querySelector("[data-share-native]");
-    if (native) native.hidden = !(navigator.share && navigator.canShare);
-    if (window.EveSynapseModal) EveSynapseModal.open(modal);
+    if (native) native.hidden = !canNativeShare();
+    showDialog(modal);
+  }
+  function writeBlobToClipboard(blob) {
+    return navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
   }
   function copyImage(btn, img) {
-    var blob = ready[srcOf(img)];
-    try {
-      // A ready blob goes in as is. Otherwise Safari wants the
-      // ClipboardItem built inside the tap, holding the promise.
-      var item = new ClipboardItem({ "image/png": blob || imageBlob(img) });
-      navigator.clipboard.write([item]).then(
-        function () { flash(btn, "Image copied"); },
-        function () { flash(btn, "Copy failed"); });
-    } catch (e) { flash(btn, "Copy failed"); }
-  }
-  // shareCard hands the share sheet the image alone: a file mixed
-  // with a title and link makes phone sheets show two previews and
-  // lets apps send the link without the picture. Copy link covers
-  // the link. Without file sharing the sheet gets the link.
-  function shareCard(box, btn, img) {
-    var link = absolute((box.querySelector("[data-share-copy-link]") || btn).getAttribute("data-share-copy-link") || location.href);
-    var title = (box.querySelector(".modal-head h2") || {}).textContent || document.title;
-    function send(blob) {
-      var dl = box.querySelector("a[download]");
-      // The shared file gets a plain name, letters, digits, dots
-      // and dashes only: the card's download name ("Burzrujat -
-      // EveSynapse.png") carries spaces, and a spaced name breaks
-      // the share handoff on Android, where the sheet shows a
-      // black preview and the app picked receives nothing. The
-      // download itself keeps the readable name.
-      var name = ((dl && dl.getAttribute("download")) || "card.png").replace(/[^A-Za-z0-9._]+/g, "-");
-      var file = new File([blob], name, { type: "image/png" });
-      var data = { files: [file] };
-      if (!navigator.canShare(data)) data = { title: title, url: link };
-      return navigator.share(data);
-    }
-    var blob = ready[srcOf(img)];
-    var done = blob ? send(blob) : imageBlob(img).then(send);
-    done.catch(function () { /* dismissed or unsupported */ });
-  }
-  document.addEventListener("click", function (ev) {
-    var t = ev.target && ev.target.closest ? ev.target : null;
-    if (!t) return;
-    var opener = t.closest("[data-share-card]");
-    if (opener) {
-      var modal = document.getElementById(opener.getAttribute("data-share-card"));
-      if (modal) { ev.preventDefault(); retarget(modal, opener); open(modal); }
+    if (!(typeof ClipboardItem !== "undefined" && navigator.clipboard && navigator.clipboard.write)) {
+      flash(btn, "Copy failed");
       return;
     }
-    var box = t.closest(".share-modal");
-    if (!box) return;
-    var img = box.querySelector("img[data-share-src]");
-    var linkBtn = t.closest("[data-share-copy-link]");
-    if (linkBtn) {
-      var url = absolute(linkBtn.getAttribute("data-share-copy-link"));
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).then(function () { flash(linkBtn, "Link copied"); }, function () { flash(linkBtn, "Copy failed"); });
+    var blob = ready[srcKey(img)];
+    if (blob) {
+      try {
+        writeBlobToClipboard(blob).then(
+          function () { flash(btn, "Image copied"); },
+          function () { flash(btn, "Copy failed"); }
+        );
+      } catch (e) {
+        flash(btn, "Copy failed");
       }
       return;
     }
-    var imgBtn = t.closest("[data-share-copy-image]");
-    if (imgBtn && img) { copyImage(imgBtn, img); return; }
-    var nativeBtn = t.closest("[data-share-native]");
-    if (nativeBtn && img) shareCard(box, nativeBtn, img);
-  });
+    // Not ready yet: try Safari's synchronous Promise-in-ClipboardItem path,
+    // and fall back to writing the resolved Blob for Android/Blink browsers
+    // that reject Promise-valued ClipboardItems.
+    var pending = imageBlob(img);
+    try {
+      navigator.clipboard.write([new ClipboardItem({ "image/png": pending })]).then(
+        function () { flash(btn, "Image copied"); },
+        function () {
+          pending.then(writeBlobToClipboard).then(
+            function () { flash(btn, "Image copied"); },
+            function () { flash(btn, "Copy failed"); }
+          );
+        }
+      );
+    } catch (e) {
+      pending.then(writeBlobToClipboard).then(
+        function () { flash(btn, "Image copied"); },
+        function () { flash(btn, "Copy failed"); }
+      );
+    }
+  }
+  function execCopyInDialog(box, text) {
+    if (!document.execCommand) return false;
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    box.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = !!document.execCommand("copy"); } catch (e) { ok = false; }
+    box.removeChild(ta);
+    return ok;
+  }
+  function copyLink(btn, box, url) {
+    if (navigator.clipboard && navigator.clipboard.writeText && (typeof window === "undefined" || window.isSecureContext !== false)) {
+      navigator.clipboard.writeText(url).then(
+        function () { flash(btn, "Link copied"); },
+        function () { flash(btn, execCopyInDialog(box, url) ? "Link copied" : "Copy failed"); }
+      );
+      return;
+    }
+    flash(btn, execCopyInDialog(box, url) ? "Link copied" : "Copy failed");
+  }
+  // shareCard hands the share sheet the image alone when file sharing works;
+  // if PNG file sharing is unsupported or fails on desktop/mobile, it falls
+  // back to sharing the title and link, and reports non-cancel failures.
+  function shareCard(box, btn, img) {
+    if (typeof navigator.share !== "function") {
+      flash(btn, "Share failed");
+      return;
+    }
+    var link = absolute((box.querySelector("[data-share-copy-link]") || btn).getAttribute("data-share-copy-link") || location.href);
+    var title = (box.querySelector(".modal-head h2") || {}).textContent || document.title;
+    var dl = box.querySelector("a[download]");
+    // The shared file gets a plain name (letters, digits, dots and dashes
+    // only): a spaced download name breaks Android's share handoff. The
+    // download link itself keeps the readable name.
+    var fileName = ((dl && dl.getAttribute("download")) || "card.png").replace(/[^A-Za-z0-9._]+/g, "-");
+    var fallbackData = { title: title, url: link };
+
+    function sendLink() {
+      return navigator.share(fallbackData);
+    }
+    function sendBlob(blob) {
+      var file = new File([blob], fileName, { type: "image/png" });
+      var fileData = { files: [file] };
+      if (typeof navigator.canShare === "function" && navigator.canShare(fileData)) {
+        return navigator.share(fileData).catch(function (err) {
+          if (err && err.name === "AbortError") throw err;
+          return sendLink();
+        });
+      }
+      return sendLink();
+    }
+
+    var blob = ready[srcKey(img)];
+    var canFiles = true;
+    if (!blob && typeof navigator.canShare === "function" && typeof File === "function") {
+      try {
+        canFiles = navigator.canShare({ files: [new File([new Uint8Array(0)], fileName, { type: "image/png" })] });
+      } catch (e) {
+        canFiles = false;
+      }
+    }
+    var done = blob ? sendBlob(blob) : (canFiles ? imageBlob(img).then(sendBlob, sendLink) : sendLink());
+    done.catch(function (err) {
+      if (err && err.name === "AbortError") return;
+      flash(btn, "Share failed");
+    });
+  }
+  function isBackdropClick(modal, ev) {
+    if (ev.target !== modal || pointerDownTarget !== modal) return false;
+    if (ev.clientX === 0 && ev.clientY === 0) return false;
+    if (typeof modal.getBoundingClientRect !== "function") return true;
+    var r = modal.getBoundingClientRect();
+    return ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom;
+  }
+  if (typeof document !== "undefined") {
+    document.addEventListener("pointerdown", function (ev) {
+      pointerDownTarget = ev.target;
+    });
+    document.addEventListener("click", function (ev) {
+      var raw = ev.target;
+      var t = raw && raw.nodeType === 3 ? raw.parentElement : raw;
+      if (!t || !t.closest) return;
+      var opener = t.closest("[data-share-card]");
+      if (opener) {
+        var modal = document.getElementById(opener.getAttribute("data-share-card"));
+        if (modal) { ev.preventDefault(); retarget(modal, opener); open(modal); }
+        return;
+      }
+      var box = t.closest(".share-modal");
+      if (!box) return;
+      if (t.closest("[data-close-modal]") || isBackdropClick(box, ev)) {
+        closeDialog(box);
+        return;
+      }
+      var img = box.querySelector("img[data-share-src]");
+      var linkBtn = t.closest("[data-share-copy-link]");
+      if (linkBtn) {
+        copyLink(linkBtn, box, absolute(linkBtn.getAttribute("data-share-copy-link")));
+        return;
+      }
+      var imgBtn = t.closest("[data-share-copy-image]");
+      if (imgBtn && img) { copyImage(imgBtn, img); return; }
+      var nativeBtn = t.closest("[data-share-native]");
+      if (nativeBtn && img) shareCard(box, nativeBtn, img);
+    });
+    document.addEventListener("evesynapse:content-will-swap", function () {
+      var openModals = document.querySelectorAll("dialog.share-modal[open]");
+      for (var i = 0; i < openModals.length; i++) closeDialog(openModals[i]);
+    });
+  }
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.shareCardTestAPI = {
+      canCopyImage: canCopyImage,
+      canNativeShare: canNativeShare,
+      open: open,
+      closeDialog: closeDialog,
+      copyImage: copyImage,
+      shareCard: shareCard,
+      retarget: retarget,
+      blobToPng: blobToPng,
+      flash: flash,
+      themedShareURL: themedShareURL,
+      ready: ready,
+      blobs: blobs,
+      srcKey: srcKey
+    };
+  }
 })();
 
 // The appraisal form's Clear button: empties the pastes and

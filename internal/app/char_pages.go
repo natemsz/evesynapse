@@ -321,9 +321,10 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 	data.CharChars = links
 
 	app.foresightOpened(ctx, app.userID(ctx), foresightSkillsView(active.CharacterID))
+	app.applyAccountTheme(ctx, &data.ShellData)
 	view := &characterView{CharacterID: active.CharacterID, CharacterName: active.Name}
 	view.PortraitURL = portraitURL(active.CharacterID, 128)
-	view.Share = pilotShareView(active.CharacterID, active.Name)
+	view.Share = pilotShareView(active.CharacterID, active.Name, data.ThemeScheme, data.ThemeVision)
 	view.ShareProfileHref = "/pilot/?character=" + strconv.FormatInt(active.CharacterID, 10) + "&view=public"
 
 	// The share dialog shows the public pilot sheet; queue the

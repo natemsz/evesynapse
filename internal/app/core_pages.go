@@ -265,21 +265,7 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	if shell.NavState == "" {
 		shell.NavState = navStateFrom(ctx)
 	}
-	// The demo account is shared by every visitor and cannot save,
-	// so it renders like a signed-out load: the theme stays in this
-	// browser (boot.js), where a visitor can still try every scheme.
-	if !shell.ThemeAccount && !app.sessionIsDemo(ctx) {
-		if userID := app.userID(ctx); userID != 0 {
-			shell.ThemeAccount = true
-			if prefs, stored := app.themePrefsFor(ctx, userID); stored {
-				shell.ThemeStored = true
-				shell.ThemeScheme = prefs.Scheme
-				shell.ThemeTier = prefs.Tier
-				shell.ThemeBackdrop = prefs.Backdrop
-				shell.ThemeVision = prefs.Vision
-			}
-		}
-	}
+	app.applyAccountTheme(ctx, shell)
 	if shell.Notice == "" {
 		shell.Notice = app.sessions.PopString(ctx, sessionFlash)
 	}
@@ -343,6 +329,24 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 		shell.ViewerChars = make(map[int64]bool, len(shell.Switcher))
 		for _, entry := range shell.Switcher {
 			shell.ViewerChars[entry.ID] = true
+		}
+	}
+}
+
+func (app *Application) applyAccountTheme(ctx context.Context, shell *module.ShellData) {
+	// The demo account is shared by every visitor and cannot save,
+	// so it renders like a signed-out load: the theme stays in this
+	// browser (boot.js), where a visitor can still try every scheme.
+	if !shell.ThemeAccount && !app.sessionIsDemo(ctx) {
+		if userID := app.userID(ctx); userID != 0 {
+			shell.ThemeAccount = true
+			if prefs, stored := app.themePrefsFor(ctx, userID); stored {
+				shell.ThemeStored = true
+				shell.ThemeScheme = prefs.Scheme
+				shell.ThemeTier = prefs.Tier
+				shell.ThemeBackdrop = prefs.Backdrop
+				shell.ThemeVision = prefs.Vision
+			}
 		}
 	}
 }

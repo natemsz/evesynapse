@@ -52,7 +52,9 @@ func (app *Application) handlePilotShareCard(w http.ResponseWriter, r *http.Requ
 		app.serveFallbackCard(w)
 		return
 	}
-	job, ok := app.pilotSheetJob(r.Context(), id, time.Now())
+	theme := validCardTheme(r.URL.Query().Get("theme"))
+	vision := validCardVision(r.URL.Query().Get("vision"))
+	job, ok := app.pilotSheetJob(r.Context(), id, theme, vision, time.Now())
 	if !ok {
 		app.serveFallbackCard(w)
 		return
@@ -72,11 +74,28 @@ func (app *Application) handlePilotShareCard(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func validCardTheme(s string) string {
+	if s == "" || s == "minmatar-v3" {
+		return ""
+	}
+	if card.KnownTheme(s) {
+		return s
+	}
+	return ""
+}
+
+func validCardVision(s string) string {
+	if validThemeVision(s) {
+		return s
+	}
+	return ""
+}
+
 // pilotSheetJob reads a pilot's sheet from the stored public record
 // and activity aggregates: bounded single-row reads plus the top
 // hulls (LIMIT) and the 24 hour rows. A pilot without a ready
 // record does not resolve; one without kills gets the record alone.
-func (app *Application) pilotSheetJob(ctx context.Context, id int64, now time.Time) (pilotSheetJob, bool) {
+func (app *Application) pilotSheetJob(ctx context.Context, id int64, theme, vision string, now time.Time) (pilotSheetJob, bool) {
 	rec, err := app.queries.GetPilotRecord(ctx, id)
 	if err != nil || rec.State != pilotStateReady || rec.Payload == "" {
 		return pilotSheetJob{}, false
@@ -85,9 +104,12 @@ func (app *Application) pilotSheetJob(ctx context.Context, id int64, now time.Ti
 	if json.Unmarshal([]byte(rec.Payload), &p) != nil || p.Profile.Name == "" {
 		return pilotSheetJob{}, false
 	}
+	theme = validCardTheme(theme)
+	vision = validCardVision(vision)
 	s := card.Profile{
 		Kind:       "PILOT",
 		Title:      p.Profile.Name,
+		Theme:      theme,
 		ShipsLabel: "FLIES MOST",
 		HoursLabel: "ACTIVE HOURS · EVE TIME",
 		Foot:       "evesynapse.app",
@@ -104,7 +126,7 @@ func (app *Application) pilotSheetJob(ctx context.Context, id int64, now time.Ti
 		s.Lines = append(s.Lines, p.Alliance.Name)
 	}
 	sec := p.Profile.SecurityStatus
-	s.Chips = append(s.Chips, card.Stat{Label: "SECURITY", Value: []card.Seg{{Text: fmt.Sprintf("%.2f", sec), Color: pilotSecColor(sec)}}})
+	s.Chips = append(s.Chips, card.Stat{Label: "SECURITY", Value: []card.Seg{{Text: fmt.Sprintf("%.2f", sec), Color: pilotSecColor(sec, theme, vision)}}})
 	if born, err := time.Parse(time.RFC3339, p.Profile.Birthday); err == nil {
 		s.Chips = append(s.Chips, card.Stat{Label: "BORN", Value: card.Figure(born.UTC().Format("2006-01-02"))})
 		if years := int(now.Sub(born).Hours() / (24 * 365.25)); years >= 1 {
@@ -199,8 +221,12 @@ func (app *Application) pilotSheetJob(ctx context.Context, id int64, now time.Ti
 	portrait := portraitURL(id, 512)
 	// The version covers the stored data and everything drawn; the
 	// age chip moves on a birthday, so the date is part of it.
-	ver := pilotSheetVersion(data+"|"+now.UTC().Format("2006-01-02"), portrait, shipIcons, s)
-	return pilotSheetJob{key: "pilotsheet:" + strconv.FormatInt(id, 10), version: ver,
+	ver := pilotSheetVersion(data+"|"+now.UTC().Format("2006-01-02")+"|"+theme+"|"+vision, portrait, shipIcons, s)
+	key := "pilotsheet:" + strconv.FormatInt(id, 10)
+	if theme != "" || vision != "" {
+		key += ":" + theme + ":" + vision
+	}
+	return pilotSheetJob{key: key, version: ver,
 		sheet: s, portrait: portrait, shipIcons: shipIcons}, true
 }
 
@@ -224,34 +250,41 @@ func pilotSheetVersion(data, portrait string, icons []string, s card.Profile) st
 	rows = append(rows, card.Stat{Label: strings.Join(hours, ",") + "|" + s.HoursNote})
 	stats := append(append(append([]card.Stat{}, s.Chips...), s.Figures...), s.Minor...)
 	stats = append(stats, rows...)
-	return cardVersion("sheet|"+data+"|"+strings.Join(icons, ","), portrait, card.Card{Kind: s.Kind, Title: s.Title, Stats: stats})
+	return cardVersion("sheet|"+data+"|"+strings.Join(icons, ","), portrait, card.Card{Kind: s.Kind, Title: s.Title, Theme: s.Theme, Stats: stats})
 }
 
 // pilotSecColor colours a pilot's security status the way the game
-// reads it: deep negative is an outlaw's red, mildly negative a
-// warning orange, positive the high-sec blue.
-func pilotSecColor(sec float64) (c color.NRGBA) {
+// reads it (deep negative red, mild negative orange, high-sec blue),
+// adjusted for light mode and the active colour-blind palette.
+func pilotSecColor(sec float64, theme, vision string) (c color.NRGBA) {
 	switch {
 	case sec <= -5:
-		return card.SecColor(1)
+		return card.SecColorFor(1, theme, vision)
 	case sec < 0:
-		return card.SecColor(4)
+		return card.SecColorFor(4, theme, vision)
 	case sec >= 0.5:
-		return card.SecColor(9)
+		return card.SecColorFor(9, theme, vision)
 	}
 	return c
 }
 
 // pilotShareView is the character sheet's Share pilot card dialog:
 // the large sheet, its download, and the public profile as the link.
-func pilotShareView(id int64, name string) *module.ShareCard {
+func pilotShareView(id int64, name, theme, vision string) *module.ShareCard {
 	q := strconv.FormatInt(id, 10)
+	suffix := ""
+	if t := validCardTheme(theme); t != "" {
+		suffix += "&theme=" + t
+	}
+	if v := validCardVision(vision); v != "" {
+		suffix += "&vision=" + v
+	}
 	return &module.ShareCard{
 		ID:       "pilot-share",
 		Title:    "Share pilot card",
 		Lead:     "Your public record and killboard figures. Nothing private: no wallet, location, skills or assets.",
-		Image:    "/pilot/share.png?character=" + q,
-		Download: "/pilot/share.png?character=" + q + "&download=1",
+		Image:    "/pilot/share.png?character=" + q + suffix,
+		Download: "/pilot/share.png?character=" + q + "&download=1" + suffix,
 		Width:    card.ProfileW, Height: card.ProfileH,
 		Alt:      "Pilot card for " + name,
 		Link:     "/pilot/?character=" + q,

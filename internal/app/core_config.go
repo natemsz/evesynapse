@@ -103,7 +103,11 @@ type Config struct {
 	devLogin                 bool           // DEV_LOGIN=1: register the /dev-login route
 	ignoreCFConnectingIP     bool           // TRUST_CF_CONNECTING_IP=off: CF-Connecting-IP no longer names a loopback request's visitor (core_throttle.go)
 	botGuardASNHeader        string         // BOT_GUARD_ASN_HEADER: request header the edge fills with the visitor's ASN; the visitor's network for the bot guard (core_bot_guard_engine.go)
-	botGuardSettingsPath     string         // BOT_GUARD_SETTINGS: a linked bot guard engine's settings file, kept on the server (core_bot_guard_engine.go)
+	botGuardSettingsPath     string         // BOT_GUARD_SETTINGS: Ranvia's rule overrides file, kept on the server (core_bot_guard_engine.go)
+	ranviaKey                string         // RANVIA_KEY: the site key from the Ranvia dashboard; unset runs the built-in guard
+	ranviaURL                string         // RANVIA_URL: the Ranvia service; unset is https://ranvia.io
+	ranviaCacheDir           string         // RANVIA_CACHE_DIR, else systemd's CACHE_DIRECTORY: where Ranvia keeps its encrypted engine between starts
+	ranviaLogRefusals        bool           // RANVIA_LOG_REFUSALS=1: log each request Ranvia refuses, checks or slows
 	lowRAMMode               bool           // LOW_RAM_MODE=1: low-RAM installs serve search from SQL with no in-memory search index (search_index.go); the derived-pack snapshot joins it when built
 	sdeBaseURL               string         // EVE SDE CSV dump base URL (Fuzzwork by default)
 	fuzzworkBaseURL          string         // Fuzzwork market aggregate base URL (fallback prices)
@@ -430,6 +434,10 @@ func LoadConfig() (Config, error) {
 		ignoreCFConnectingIP:       strings.EqualFold(strings.TrimSpace(os.Getenv("TRUST_CF_CONNECTING_IP")), "off"),
 		botGuardASNHeader:          strings.TrimSpace(os.Getenv("BOT_GUARD_ASN_HEADER")),
 		botGuardSettingsPath:       strings.TrimSpace(os.Getenv("BOT_GUARD_SETTINGS")),
+		ranviaKey:                  strings.TrimSpace(os.Getenv("RANVIA_KEY")),
+		ranviaURL:                  strings.TrimSpace(os.Getenv("RANVIA_URL")),
+		ranviaCacheDir:             ranviaCacheDir(),
+		ranviaLogRefusals:          os.Getenv("RANVIA_LOG_REFUSALS") == "1",
 		sdeBaseURL:                 getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
 		fuzzworkBaseURL:            getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),
 		killfeedBaseURL:            getenvDefault("KILLFEED_BASE_URL", defaultKillfeedBaseURL),
@@ -707,4 +715,17 @@ func intSetting(name, raw string, lo, hi, unset int) int {
 		return unset
 	}
 	return min(max(n, lo), hi)
+}
+
+// ranviaCacheDir is RANVIA_CACHE_DIR, else the cache directory
+// systemd gives the service (CacheDirectory=), else "" for the
+// loader's default.
+func ranviaCacheDir() string {
+	if dir := strings.TrimSpace(os.Getenv("RANVIA_CACHE_DIR")); dir != "" {
+		return dir
+	}
+	if dir := strings.TrimSpace(os.Getenv("CACHE_DIRECTORY")); dir != "" {
+		return filepath.Join(strings.SplitN(dir, ":", 2)[0], "ranvia")
+	}
+	return ""
 }

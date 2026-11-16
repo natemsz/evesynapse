@@ -3092,15 +3092,24 @@ html[data-theme="light"] .cardbtn { background: #fffdf9; border-color: #d9a77a; 
    width and height attributes, then the ways to pass it on. A
    tall card (the pilot sheet) is bounded by height, a wide one
    (a fit card) by the dialog's width. */
-.modal.share-card { width: auto; max-width: min(46rem, 100%); max-height: 94vh; }
+dialog.share-modal:not([open]) { display: none; }
+dialog.share-modal {
+  margin: auto;
+  padding: 0;
+  color: var(--text);
+  overscroll-behavior: contain;
+}
+dialog.share-modal::backdrop { background: rgba(12, 8, 5, 0.76); }
+.modal.share-card { width: fit-content; max-width: min(46rem, calc(100vw - 2rem)); max-height: 92vh; max-height: 92dvh; }
+.share-card-body { padding: 1rem 1.1rem 1.1rem; }
 .share-lead { margin: 0 0 0.75rem; font-size: var(--fs-sm); color: var(--muted-2); max-width: 40rem; }
 .share-preview { position: relative; margin: 0; display: grid; place-items: center; }
+.share-modal.share-loading .share-preview { min-height: 12rem; min-width: min(20rem, 100%); }
 .share-preview img {
-  display: block; width: auto; height: auto; max-width: 100%; max-height: min(62vh, 44rem);
+  display: block; width: auto; height: auto; max-width: 100%; max-height: min(62vh, 44rem); max-height: min(62dvh, 44rem);
   border: 1px solid var(--box-edge); border-radius: var(--r-md);
   background: var(--surface-inset, #151312);
 }
-.share-modal.share-loading .share-preview img { min-height: 12rem; min-width: min(20rem, 100%); }
 .share-wait { position: absolute; inset: auto 0 1rem; text-align: center; font-size: var(--fs-sm); color: var(--muted-2); }
 .share-wait:empty { display: none; }
 .share-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; }

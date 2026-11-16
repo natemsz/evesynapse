@@ -8,15 +8,15 @@
      any element with data-share-card="{ID}"; app.js wires the
      actions. */}}
 {{define "sharecard"}}
-<div class="modal-backdrop share-modal" id="{{.ID}}" hidden>
-  <div class="modal share-card" role="dialog" aria-modal="true" aria-labelledby="{{.ID}}-title">
+<dialog class="modal share-card share-modal" id="{{.ID}}" aria-labelledby="{{.ID}}-title">
+  <div class="share-card-body">
     <div class="modal-head">
       <h2 id="{{.ID}}-title">{{.Title}}</h2>
       <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
     </div>
     {{if .Lead}}<p class="share-lead">{{.Lead}}</p>{{end}}
     <figure class="share-preview">
-      <img data-share-src="{{.Image}}" alt="{{.Alt}}" width="{{.Width}}" height="{{.Height}}" decoding="async">
+      <img data-share-src="{{.Image}}" alt="{{.Alt}}" width="{{.Width}}" height="{{.Height}}">
       <figcaption class="share-wait" aria-live="polite">Drawing the card…</figcaption>
     </figure>
     <div class="share-actions">
@@ -27,5 +27,5 @@
     </div>
     {{if .Note}}<p class="share-note">{{.Note}}</p>{{end}}
   </div>
-</div>
+</dialog>
 {{end}}

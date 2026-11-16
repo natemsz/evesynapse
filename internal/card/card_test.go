@@ -64,3 +64,44 @@ func TestRenderSparkDrawsTheLine(t *testing.T) {
 		t.Fatal("a one-point sparkline changed the card")
 	}
 }
+
+func TestRenderProfileThemes(t *testing.T) {
+	base := Profile{
+		Kind:       "PILOT",
+		Title:      "Test Pilot",
+		Lines:      []string{"Test Corp [TST]"},
+		Chips:      []Stat{{Label: "SECURITY", Value: []Seg{{Text: "0.85", Color: SecColorFor(9, "", "")}}}},
+		Figures:    []Stat{{Label: "KILLS", Value: Figure("12")}},
+		ShipsLabel: "FLIES MOST",
+		HoursLabel: "ACTIVE HOURS",
+		Foot:       "evesynapse.app",
+	}
+	defBytes, err := PNG(sparkCard(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = defBytes
+	defProfile := RenderProfile(base)
+	for _, theme := range []string{"jove", "caldari", "gallente", "amarr", "triglavian", "edencom", "soe", "minmatar", "light"} {
+		if !KnownTheme(theme) {
+			t.Fatalf("KnownTheme(%q) = false", theme)
+		}
+		p := base
+		p.Theme = theme
+		themed := RenderProfile(p)
+		if bytes.Equal(defProfile.Pix, themed.Pix) {
+			t.Errorf("theme %q rendered identical pixels to default", theme)
+		}
+		pal := PaletteFor(theme)
+		got := themed.RGBAAt(1190, 1490)
+		if got.R != pal.GroundBot.R && got == defProfile.RGBAAt(1190, 1490) {
+			t.Errorf("theme %q did not change corner ground pixel", theme)
+		}
+	}
+	// Unknown theme falls back cleanly to default palette.
+	u := base
+	u.Theme = "not-a-theme"
+	if !bytes.Equal(defProfile.Pix, RenderProfile(u).Pix) {
+		t.Fatal("unknown theme did not fall back to default palette")
+	}
+}

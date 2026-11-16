@@ -49,6 +49,8 @@ type Card struct {
 	// to a row, the way the fitting tool's stats column opens. The
 	// Detail line then moves to the footer's right.
 	Glance []Tile
+	// Theme names the scheme or light/dark palette for the card.
+	Theme string
 }
 
 // Tile is one glance tile: a label in its kind's colour over a
@@ -175,20 +177,21 @@ const (
 
 // Render draws a card.
 func Render(c Card) *image.RGBA {
+	pal := PaletteFor(c.Theme)
 	img := image.NewRGBA(image.Rect(0, 0, W, H))
-	field(img)
+	field(img, pal)
 
 	// Header: the mark, the wordmark, the kind tag; under it the
-	// accent rule stepping gold to ember.
-	drawMark(img, margin, headMidY-markSize/2, markSize)
-	drawWordmark(img, wordX, headMidY, wordCap)
+	// accent rule stepping rule0 to rule1.
+	drawMark(img, margin, headMidY-markSize/2, markSize, pal)
+	drawWordmark(img, wordX, headMidY, wordCap, pal)
 	if c.Kind != "" {
 		tag := newText(display, tagCap, 4.5)
-		tag.draw(img, W-margin-tag.width(c.Kind), headMidY+tagCap/2, c.Kind, hiC)
+		tag.draw(img, W-margin-tag.width(c.Kind), headMidY+tagCap/2, c.Kind, pal.Hi)
 	}
-	fill(img, rect(margin, ruleY, W-margin, ruleY+2), linear(margin, 0, W-margin, 0, alpha(ruleGold, .6), alpha(ruleEmber, .6)))
+	fill(img, rect(margin, ruleY, W-margin, ruleY+2), linear(margin, 0, W-margin, 0, alpha(pal.Rule0, .6), alpha(pal.Rule1, .6)))
 
-	drawPanel(img, c)
+	drawPanel(img, c, pal)
 
 	right := W - margin
 	avail := right - colX
@@ -199,26 +202,26 @@ func Render(c Card) *image.RGBA {
 			capPx -= 2
 			name = newText(display, capPx, 0)
 		}
-		name.draw(img, colX, nameBase, name.fit(c.Title, avail), textBright)
+		name.draw(img, colX, nameBase, name.fit(c.Title, avail), pal.TextBright)
 	}
 	if c.Subtitle != "" {
 		sub := newText(body, subCap, 0)
-		sub.draw(img, colX, subBase, sub.fit(c.Subtitle, avail), mutedC)
+		sub.draw(img, colX, subBase, sub.fit(c.Subtitle, avail), pal.Muted)
 	}
 	if len(c.Glance) > 0 {
-		drawGlance(img, c.Glance, colX, right)
+		drawGlance(img, c.Glance, colX, right, pal)
 		foot := newText(body, footCap, 0)
-		foot.draw(img, margin, footBase, "evesynapse.app", muted2C)
+		foot.draw(img, margin, footBase, "evesynapse.app", pal.Muted2)
 		if d := c.Detail; d != nil && d.Text != "" {
 			label := newText(display, labelCap, 3)
 			line := newText(display, 22, 0)
 			tw := line.width(d.Text)
-			line.draw(img, right-tw, footBase, d.Text, textBright)
-			label.draw(img, right-tw-14-label.width(d.Label), footBase, d.Label, muted2C)
+			line.draw(img, right-tw, footBase, d.Text, pal.TextBright)
+			label.draw(img, right-tw-14-label.width(d.Label), footBase, d.Label, pal.Muted2)
 		}
 		return img
 	}
-	drawStats(img, c.Stats, right)
+	drawStats(img, c.Stats, right, pal)
 	if d := c.Detail; d != nil && d.Text != "" {
 		// With no figure row the detail line takes its place.
 		lb, tb := detailLabel, detailBase
@@ -226,20 +229,20 @@ func Render(c Card) *image.RGBA {
 			lb, tb = labelBase, labelBase+(detailBase-detailLabel)
 		}
 		label := newText(display, labelCap, 3)
-		label.draw(img, colX, lb, d.Label, muted2C)
+		label.draw(img, colX, lb, d.Label, pal.Muted2)
 		line := newText(body, subCap, 0)
-		line.draw(img, colX, tb, line.fit(d.Text, avail), textC)
+		line.draw(img, colX, tb, line.fit(d.Text, avail), pal.Text)
 	}
 	if s := c.Spark; s != nil && c.Detail == nil && len(s.Values) >= 2 {
 		if s.Label != "" {
 			label := newText(display, labelCap, 3)
-			label.draw(img, colX, detailLabel, s.Label, muted2C)
+			label.draw(img, colX, detailLabel, s.Label, pal.Muted2)
 		}
-		drawSpark(img, s.Values, colX, right, sparkTop, sparkBot)
+		drawSpark(img, s.Values, colX, right, sparkTop, sparkBot, pal)
 	}
 
 	foot := newText(body, footCap, 0)
-	foot.draw(img, margin, footBase, "evesynapse.app", muted2C)
+	foot.draw(img, margin, footBase, "evesynapse.app", pal.Muted2)
 	return img
 }
 
@@ -253,18 +256,18 @@ func PNG(c Card) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// field paints the ground and the scheme's glow as the approved
-// card draws them: the ground falls diagonally from ground-2 at
-// the top left to ground by mid-card, and the glow is an ellipse
-// hanging from the top edge toward the right, glow-1 at its heart
-// through glow-2 to nothing.
-func field(img *image.RGBA) {
+// field paints the ground and pal's glow as the card draws them:
+// the ground falls diagonally from GroundTop at the top left to
+// GroundBot by mid-card, and the glow is an ellipse hanging from the
+// top edge toward the right, Glow1 at its heart through Glow2 to
+// nothing.
+func field(img *image.RGBA, pal Palette) {
 	const cx, rx, ry = 1020.0, 560.0, 240.0
-	clear := color.NRGBA{glow2.R, glow2.G, glow2.B, 0}
+	clear := color.NRGBA{pal.Glow2.R, pal.Glow2.G, pal.Glow2.B, 0}
 	b := img.Bounds()
 	for y := range b.Dy() {
 		for x := range b.Dx() {
-			g := mix(groundTop, groundBot, float64(x)/900+float64(y)/480)
+			g := mix(pal.GroundTop, pal.GroundBot, float64(x)/900+float64(y)/480)
 			i := img.PixOffset(x, y)
 			img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = g.R, g.G, g.B, 0xff
 			dx, dy := (float64(x)+.5-cx)/rx, (float64(y)+.5+10)/ry
@@ -274,9 +277,9 @@ func field(img *image.RGBA) {
 			}
 			var c color.NRGBA
 			if d < .52 {
-				c = mix(glow1, glow2, d/.52)
+				c = mix(pal.Glow1, pal.Glow2, d/.52)
 			} else {
-				c = mix(glow2, clear, (d-.52)/.48)
+				c = mix(pal.Glow2, clear, (d-.52)/.48)
 			}
 			blend(img, x, y, c, 1)
 		}
@@ -286,24 +289,24 @@ func field(img *image.RGBA) {
 // drawPanel draws the panel: a rounded square on panel glass with
 // an accent hairline, holding the picture cropped to fill it, or
 // without one the badge, the bars or the logo mark.
-func drawPanel(img *image.RGBA, c Card) {
+func drawPanel(img *image.RGBA, c Card, pal Palette) {
 	x0, y0 := margin, panelY
 	x1, y1 := x0+panelSide, y0+panelSide
-	fill(img, roundRect(x0, y0, x1, y1, panelR), solid(alpha(accentC, .45)))
+	fill(img, roundRect(x0, y0, x1, y1, panelR), solid(alpha(pal.Accent, .45)))
 	const inset = 2.0
 	ix0, iy0, ix1, iy1 := x0+inset, y0+inset, x1-inset, y1-inset
 	inner := roundRect(ix0, iy0, ix1, iy1, panelR-inset)
 	pic := c.Picture
 	if pic == nil {
-		fill(img, inner, solid(panelC))
+		fill(img, inner, solid(pal.Panel))
 		cx, cy := (ix0+ix1)/2, (iy0+iy1)/2
 		switch {
 		case c.Badge != nil:
-			drawBadge(img, *c.Badge, cx, cy)
+			drawBadge(img, *c.Badge, cx, cy, pal)
 		case len(c.Bars) > 0:
-			drawBars(img, c.Bars, ix0+36, ix1-36, cy)
+			drawBars(img, c.Bars, ix0+36, ix1-36, cy, pal)
 		case c.Mark:
-			drawMark(img, cx-75, cy-75, 150)
+			drawMark(img, cx-75, cy-75, 150, pal)
 		}
 		return
 	}
@@ -318,7 +321,7 @@ func drawPanel(img *image.RGBA, c Card) {
 		crop = image.Rect(sb.Min.X, sb.Min.Y+off, sb.Max.X, sb.Min.Y+off+sb.Dx())
 	}
 	scaled := image.NewRGBA(image.Rect(0, 0, side, side))
-	xdraw.Draw(scaled, scaled.Bounds(), image.NewUniform(panelC), image.Point{}, xdraw.Src)
+	xdraw.Draw(scaled, scaled.Bounds(), image.NewUniform(pal.Panel), image.Point{}, xdraw.Src)
 	// A small picture (a 64px item icon) is not blown up past
 	// maxUpscale: it sits centred on the panel instead.
 	dst := scaled.Bounds()
@@ -332,7 +335,7 @@ func drawPanel(img *image.RGBA, c Card) {
 	fill(img, inner, func(x, y float64) color.NRGBA {
 		px, py := int(x)-ox, int(y)-oy
 		if px < 0 || py < 0 || px >= side || py >= side {
-			return panelC
+			return pal.Panel
 		}
 		i := scaled.PixOffset(px, py)
 		return color.NRGBA{scaled.Pix[i], scaled.Pix[i+1], scaled.Pix[i+2], 0xff}
@@ -341,26 +344,26 @@ func drawPanel(img *image.RGBA, c Card) {
 
 // drawBadge sets a large figure centred on (cx, cy) with its caption
 // under it.
-func drawBadge(img *image.RGBA, b Badge, cx, cy float64) {
+func drawBadge(img *image.RGBA, b Badge, cx, cy float64, pal Palette) {
 	const figPx, gap = 96.0, 34.0
 	fig := newText(display, figPx, 0)
 	text := fig.fit(b.Text, panelSide-48)
 	col := b.Color
 	if col == (color.NRGBA{}) {
-		col = hiC
+		col = pal.Hi
 	}
 	top := cy - (figPx+gap+labelCap)/2
 	fig.draw(img, cx-fig.width(text)/2, top+figPx, text, col)
 	if b.Caption != "" {
 		caption := newText(display, labelCap, 3)
-		caption.draw(img, cx-caption.width(b.Caption)/2, top+figPx+gap+labelCap, b.Caption, muted2C)
+		caption.draw(img, cx-caption.width(b.Caption)/2, top+figPx+gap+labelCap, b.Caption, pal.Muted2)
 	}
 }
 
 // drawBars draws a proportion chart between x0 and x1, centred on
 // cy: per row a label with its count at the right, over a track
 // filled to the row's fraction.
-func drawBars(img *image.RGBA, bars []Bar, x0, x1, cy float64) {
+func drawBars(img *image.RGBA, bars []Bar, x0, x1, cy float64, pal Palette) {
 	const rowH, countCap, barGap, barH = 76.0, 22.0, 12.0, 10.0
 	label := newText(display, labelCap, 3)
 	count := newText(display, countCap, 0)
@@ -368,10 +371,10 @@ func drawBars(img *image.RGBA, bars []Bar, x0, x1, cy float64) {
 	y := cy - block/2
 	for _, b := range bars {
 		base := y + countCap
-		label.draw(img, x0, base, b.Label, muted2C)
-		count.draw(img, x1-count.width(b.Count), base, b.Count, textBright)
+		label.draw(img, x0, base, b.Label, pal.Muted2)
+		count.draw(img, x1-count.width(b.Count), base, b.Count, pal.TextBright)
 		by := base + barGap
-		fill(img, roundRect(x0, by, x1, by+barH, barH/2), solid(alpha(textC, .08)))
+		fill(img, roundRect(x0, by, x1, by+barH, barH/2), solid(alpha(pal.Text, .08)))
 		if f := math.Max(0, math.Min(1, b.Frac)); f > 0 {
 			w := math.Max(barH, (x1-x0)*f)
 			fill(img, roundRect(x0, by, x0+w, by+barH, barH/2), solid(b.Color))
@@ -385,7 +388,7 @@ func drawBars(img *image.RGBA, bars []Bar, x0, x1, cy float64) {
 // and a dot on the newest value. Values scale to the band with a
 // margin at both ends, so a flat series sits mid-band and a nearly
 // flat one still shows its movement.
-func drawSpark(img *image.RGBA, values []float64, x0, x1, y0, y1 float64) {
+func drawSpark(img *image.RGBA, values []float64, x0, x1, y0, y1 float64, pal Palette) {
 	lo, hi := math.Inf(1), math.Inf(-1)
 	for _, v := range values {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -406,7 +409,7 @@ func drawSpark(img *image.RGBA, values []float64, x0, x1, y0, y1 float64) {
 		}
 	}
 	under := append(append([]pt{}, pts...), pt{x1, y1}, pt{x0, y1})
-	fill(img, shape{under}, linear(0, y0, 0, y1, alpha(hiC, .20), alpha(hiC, .02)))
+	fill(img, shape{under}, linear(0, y0, 0, y1, alpha(pal.Hi, .20), alpha(pal.Hi, .02)))
 	const w = 2.6
 	for i := 0; i+1 < len(pts); i++ {
 		a, b := pts[i], pts[i+1]
@@ -416,18 +419,18 @@ func drawSpark(img *image.RGBA, values []float64, x0, x1, y0, y1 float64) {
 			continue
 		}
 		nx, ny := -dy/l*w/2, dx/l*w/2
-		fill(img, shape{{{a.x + nx, a.y + ny}, {b.x + nx, b.y + ny}, {b.x - nx, b.y - ny}, {a.x - nx, a.y - ny}}}, solid(hiC))
-		fill(img, circle(a.x, a.y, w/2), solid(hiC))
+		fill(img, shape{{{a.x + nx, a.y + ny}, {b.x + nx, b.y + ny}, {b.x - nx, b.y - ny}, {a.x - nx, a.y - ny}}}, solid(pal.Hi))
+		fill(img, circle(a.x, a.y, w/2), solid(pal.Hi))
 	}
 	last := pts[len(pts)-1]
-	fill(img, circle(last.x, last.y, 3.4), solid(hiC))
+	fill(img, circle(last.x, last.y, 3.4), solid(pal.Hi))
 }
 
 // drawStats draws the figure row left to right from the text
 // column, each column as wide as its label or figure; a figure
 // that runs past the right edge is shortened, and a column with no
 // room left is not drawn.
-func drawStats(img *image.RGBA, stats []Stat, right float64) {
+func drawStats(img *image.RGBA, stats []Stat, right float64, pal Palette) {
 	label := newText(display, labelCap, 3)
 	fig := newText(display, figCap, 0)
 	x := colX
@@ -442,12 +445,12 @@ func drawStats(img *image.RGBA, stats []Stat, right float64) {
 		for _, s := range segs {
 			fw += fig.width(s.Text)
 		}
-		label.draw(img, x, labelBase, st.Label, muted2C)
+		label.draw(img, x, labelBase, st.Label, pal.Muted2)
 		fx := x
 		for _, s := range segs {
 			c := s.Color
 			if c == (color.NRGBA{}) {
-				c = hiC
+				c = pal.Hi
 			}
 			fig.draw(img, fx, figBase, s.Text, c)
 			fx += fig.width(s.Text)
@@ -458,7 +461,7 @@ func drawStats(img *image.RGBA, stats []Stat, right float64) {
 
 // drawGlance draws the tile grid from the text column to the right
 // edge: three tiles a row, two rows, under the name and subtitle.
-func drawGlance(img *image.RGBA, tiles []Tile, x0, right float64) {
+func drawGlance(img *image.RGBA, tiles []Tile, x0, right float64, pal Palette) {
 	const top, tileH, gap = 336.0, 106.0, 14.0
 	w := (right - x0 - 2*gap) / 3
 	label := newText(display, 12.5, 2.6)
@@ -472,20 +475,20 @@ func drawGlance(img *image.RGBA, tiles []Tile, x0, right float64) {
 		ty := top + float64(i/3)*(tileH+gap)
 		k := t.Color
 		if k == (color.NRGBA{}) {
-			k = accentC
+			k = pal.Accent
 		}
-		fill(img, roundRect(tx, ty, tx+w, ty+tileH, 8), solid(alpha(textC, .10)))
-		fill(img, roundRect(tx+1, ty+1, tx+w-1, ty+tileH-1, 7), solid(alpha(panelC, .94)))
+		fill(img, roundRect(tx, ty, tx+w, ty+tileH, 8), solid(alpha(pal.Text, .10)))
+		fill(img, roundRect(tx+1, ty+1, tx+w-1, ty+tileH-1, 7), solid(alpha(pal.Panel, .94)))
 		fill(img, roundRect(tx+1, ty+1, tx+w-1, ty+tileH-1, 7), linear(tx, ty, tx+w*.7, ty+tileH, alpha(k, .15), alpha(k, 0)))
 		fill(img, roundRect(tx, ty, tx+3, ty+tileH, 1.5), solid(k))
 		label.draw(img, tx+18, ty+28, label.fit(t.Label, w-30), k)
-		col := textBright
+		col := pal.TextBright
 		if t.Warn {
 			col = hex(0xe5484d)
 		}
 		fig.draw(img, tx+18, ty+68, fig.fit(t.Value, w-30), col)
 		if t.Sub != "" {
-			sub.draw(img, tx+18, ty+93, sub.fit(t.Sub, w-30), mutedC)
+			sub.draw(img, tx+18, ty+93, sub.fit(t.Sub, w-30), pal.Muted)
 		}
 	}
 }

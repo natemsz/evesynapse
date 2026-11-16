@@ -18,7 +18,7 @@ require (
 	golang.org/x/image v0.48.0
 	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sync v0.25.0
-	ranvia.io/go v0.3.0
+	ranvia.io/go v0.3.1
 )
 
 require (

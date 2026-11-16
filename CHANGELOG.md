@@ -7,7 +7,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v0.8.6.7] - 2026-11-14
+## [v0.8.7.6] - 2026-11-16
+
+Automated build of EveSynapse v0.8.7.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Bot guard: Ranvia loader 0.3.1 by @natemsz in #474
+* Brand: bespoke synapse wordmark by @natemsz in #473
+
+
+## [v0.8.7.5]
+
+Automated build of EveSynapse v0.8.7.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Landing gallery: add the map layers video by @miko in #470
+
+
+## [v0.8.7.4]
+
+Automated build of EveSynapse v0.8.7.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🧰 Maintenance & Dependencies
+* Bot guard: Ranvia loader 0.3.0 by @natemsz in #469
+
+
+## [v0.8.7.3]
+
+Automated build of EveSynapse v0.8.7.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* Share dialog: stabilize top-layer rendering, desktop share, and Samsung controls by @natemsz in #468
+
+
+## [v0.8.7.2]
+
+Automated build of EveSynapse v0.8.7.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Bot guard: Ranvia through its public Go loader by @natemsz in #467
+
+### Other Changes
+* Share dialog: stabilize modal controls and theme pilot cards by @natemsz in #466
+
+
+## [v0.8.7.1]
+
+Automated build of EveSynapse v0.8.7.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Bot guard: engine hook, verified search crawlers, stable secret by @natemsz in #465
+* Share dialog: give the shared card file a plain name with no spaces by @miko in #464
+* Changelog: truncate list so its not one large list by @miko in #463
+
+
+## [v0.8.7.0]
+
+Automated build of EveSynapse v0.8.7.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Share dialog: hand phones a ready image for Copy image and Share by @natemsz in #462
+
+
+## [v0.8.6.9]
+
+Automated build of EveSynapse v0.8.6.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Changelog page: render CHANGELOG.md at /changelog/ by @miko in #460
+
+### 🐛 Bug Fixes
+* Map 3D: follow new kills keeps the kill centred by @natemsz in #461
+
+
+## [v0.8.6.8]
+
+Automated build of EveSynapse v0.8.6.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Map 3D: turn slowly when left alone by @natemsz in #455
+* Map 3D: depth cues, a selection focus, fewer names by @natemsz in #454
+* Map 3D: Ansiblex zones as labelled spheres by @natemsz in #453
+* Share cards: a large pilot sheet, fit cards in glance tiles, one share dialog by @natemsz in #451
+* Changelog: fill in the missing sections for v0.8.3.2 through v0.8.6.7 by @miko in #450
+* Kills: Share button copies the kill's link by @natemsz in #449
+* Map: copy a route as text for chat; jump stops offer stand-ins by @natemsz in #447
+* Release build: keep the published notes on already-published runs by @miko in #446
+
+### 🐛 Bug Fixes
+* Map 3D: names move smoothly and hold their places while the view turns by @natemsz in #459
+* Map heat layers: ranked scale, a wider ramp, batched drawing by @natemsz in #458
+* Map 3D: fade by nearness, gently; keep New Eden in view by @natemsz in #457
+* Map 3D: land on the view under reduced motion by @natemsz in #456
+* Map: Ansiblex zones shaded in both 2D frames; alliance bridges drawn by @natemsz in #452
+* Fitter: the implant solver combines implants across slots by @natemsz in #448
+
+
+## [v0.8.6.7]
 
 Automated build of EveSynapse v0.8.6.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 

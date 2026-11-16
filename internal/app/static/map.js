@@ -5729,7 +5729,7 @@
         o.font = "600 " + Math.round(h * 0.7) + "px Rajdhani, sans-serif";
         o.textBaseline = "alphabetic";
         var tld = ".APP", tw = o.measureText(tld).width;
-        var ww = word ? h * (word.naturalWidth / word.naturalHeight || 5.9) : 0;
+        var ww = word ? h * (word.naturalWidth / word.naturalHeight || 4.9) : 0;
         var x = out.width - pad - tw, base = out.height - pad - h * 0.18;
         o.fillStyle = colors.label;
         o.fillText(tld, x, base);

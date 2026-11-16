@@ -4990,6 +4990,16 @@ html[data-theme="light"] footer {
   border-top-color: #d9cfba;
   text-shadow: none;
 }
+/* The wordmark on the cream bar: EVE in the theme's ink, SYNAPSE
+   amber to red, every letter at 4.5:1 or better on the bar. */
+html[data-theme="light"] .wordmark-svg .p-eve { fill: #20180e; }
+html[data-theme="light"] .wordmark-svg .p-s1 { fill: #90590e; }
+html[data-theme="light"] .wordmark-svg .p-s2 { fill: #9d5203; }
+html[data-theme="light"] .wordmark-svg .p-s3 { fill: #a64904; }
+html[data-theme="light"] .wordmark-svg .p-s4 { fill: #b04108; }
+html[data-theme="light"] .wordmark-svg .p-s5 { fill: #b93404; }
+html[data-theme="light"] .wordmark-svg .p-s6 { fill: #bd2e17; }
+html[data-theme="light"] .wordmark-svg .p-s7 { fill: #b91c1c; }
 html[data-theme="light"] header a.navlink,
 html[data-theme="light"] .branch > summary,
 html[data-theme="light"] header .who,

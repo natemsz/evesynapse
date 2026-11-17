@@ -66,7 +66,7 @@ var FitSheet = (function () {
     close.type = "button";
     close.className = "fit-info-close";
     close.textContent = "Back";
-    close.addEventListener("click", hide);
+    close.addEventListener("click", function () { hide(true); });
     var names = document.createElement("div");
     names.className = "fit-info-names";
     title = document.createElement("h2");
@@ -105,14 +105,26 @@ var FitSheet = (function () {
     document.body.appendChild(drawer);
   }
   function isOpen() { return !!drawer && drawer.matches(":popover-open"); }
-  function hide() {
+  function hide(refocus) {
     if (!isOpen()) return;
     drawer.hidePopover();
-    if (opener && opener.isConnected && opener.focus) {
+    if (refocus !== false && opener && opener.isConnected && opener.focus) {
       try { opener.focus({ preventScroll: true }); } catch (e) {}
     }
     opener = null;
     swap = null;
+  }
+  function outside(el, ev) {
+    var t = ev.target;
+    if (!t || !el) return false;
+    if (t === el) {
+      if (typeof ev.clientX !== "number" || typeof ev.clientY !== "number" || !el.getBoundingClientRect) return false;
+      var r = el.getBoundingClientRect();
+      if (!r.width && !r.height) return false;
+      return ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom;
+    }
+    if (el.contains) return !el.contains(t);
+    return !(t.closest && t.closest(".fit-info"));
   }
   function showTab(key) {
     tab = key === "compare" && !tabs.hidden ? "compare" : "details";
@@ -248,13 +260,18 @@ var FitSheet = (function () {
   // fromID's place and returns "" or the reason it could not.
   function setSwapper(fn) { swapper = typeof fn === "function" ? fn : null; }
   document.addEventListener("click", function (ev) {
+    if (!isOpen()) return;
+    if (ev.target && ev.target.closest && ev.target.closest("[data-fit-info], .fit-tip-info")) return;
+    if (outside(drawer, ev)) hide(false);
+  }, true);
+  document.addEventListener("click", function (ev) {
     var t = ev.target && ev.target.closest ? ev.target.closest("[data-fit-info]") : null;
     if (!t) return;
     ev.preventDefault();
     open(t.getAttribute("data-fit-info"), t);
   });
   document.addEventListener("keydown", function (ev) {
-    if (ev.key === "Escape" && isOpen()) hide();
+    if (ev.key === "Escape" && isOpen()) hide(true);
   });
   return { get: get, open: function (id, from) { open(id, from, false); }, close: hide, setSwapper: setSwapper };
 })();

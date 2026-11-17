@@ -70,29 +70,32 @@ func (app *Application) crawlerVerifier() *crawlerVerifier {
 	return app.crawlers
 }
 
-// claimedCrawler returns the domains of the search crawler a
-// User-Agent names, nil when it names none.
-func claimedCrawler(ua string) []string {
+// claimedCrawler returns the token and domains of the search
+// crawler a User-Agent names, empty when it names none.
+func claimedCrawler(ua string) (string, []string) {
 	ua = strings.ToLower(ua)
 	for _, c := range searchCrawlers {
 		if strings.Contains(ua, c.token) {
-			return c.suffixes
+			return c.token, c.suffixes
 		}
 	}
-	return nil
+	return "", nil
 }
 
 // verified reports whether the request comes from the search
 // crawler its User-Agent names.
 func (v *crawlerVerifier) verified(r *http.Request) bool {
-	suffixes := claimedCrawler(r.UserAgent())
+	token, suffixes := claimedCrawler(r.UserAgent())
 	if suffixes == nil {
 		return false
 	}
 	addr := clientAddr(r)
+	// The verdict is cached per claimed crawler as well as address:
+	// one verified crawler's address must not vouch for every name.
+	cacheKey := addr + "|" + token
 	now := v.now()
 	v.mu.Lock()
-	if got, ok := v.seen[addr]; ok {
+	if got, ok := v.seen[cacheKey]; ok {
 		ttl := crawlerFailFor
 		if got.ok {
 			ttl = crawlerOKFor
@@ -121,7 +124,7 @@ func (v *crawlerVerifier) verified(r *http.Request) bool {
 			break
 		}
 	}
-	v.seen[addr] = crawlerVerdict{ok: ok, at: now}
+	v.seen[cacheKey] = crawlerVerdict{ok: ok, at: now}
 	v.mu.Unlock()
 	return ok
 }

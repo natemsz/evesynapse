@@ -329,7 +329,7 @@ jobs:
         run: cp release-notes.md dist/release-notes.md
       - name: Keep the built files for the follow-on jobs
         if: always() && steps.decide.outputs.released == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/

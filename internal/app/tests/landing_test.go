@@ -63,7 +63,6 @@ func TestLandingAnonymous(t *testing.T) {
 		"Know what your ISK is doing.",
 		"Build with the margin already proven.",
 		"A hundred pilots, one morning briefing.",
-		"If you find it useful, my only ask is that you share it with your friends.",
 		"Your keys, your call.",
 		"You pick the scopes",
 		"the sign-in asks for the scopes behind those features, and no more",
@@ -94,7 +93,7 @@ func TestLandingAnonymous(t *testing.T) {
 	toolsAt := strings.Index(body, "Every tool you need, in one place.")
 	trustAt := strings.Index(body, "Your keys, your call.")
 	playstylesAt := strings.Index(body, "Three alts, or a hundred multiboxed characters.")
-	closingAt := strings.Index(body, "If you find it useful, my only ask is that you share it with your friends.")
+	closingAt := strings.Index(body, "No donation pop-ups: for neither ISK nor dollars.")
 	if !(toolsAt >= 0 && toolsAt < trustAt && trustAt < playstylesAt && playstylesAt < closingAt) {
 		t.Error("landing sections out of order: want tools, trust, playstyles, then the closing trust paragraph")
 	}

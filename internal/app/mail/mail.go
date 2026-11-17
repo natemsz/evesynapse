@@ -85,6 +85,7 @@ type mailView struct {
 	AllChars      bool  // ?all=1: every character's mail in one list
 	MultiChar     bool  // the account has several characters (the switch shows)
 	BoxesView     bool  // ?boxes=1: the reader asked for the mailbox list itself (a phone's top level)
+	View          bool  // ?view=1: viewing without moving the acting character
 }
 
 func (app *mod) handleMail(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +105,11 @@ func (app *mod) handleMail(w http.ResponseWriter, r *http.Request) {
 	}
 	data.MailChars = links
 
-	view := &mailView{CharacterID: active.CharacterID, CharacterName: active.Name}
+	view := &mailView{
+		CharacterID:   active.CharacterID,
+		CharacterName: active.Name,
+		View:          r.URL.Query().Get("view") == "1",
+	}
 	data.Mail = view
 
 	mailID, _ := strconv.ParseInt(r.URL.Query().Get("mail"), 10, 64)
@@ -297,7 +302,11 @@ func (app *mod) handleMailMarkRead(w http.ResponseWriter, r *http.Request) {
 	// mail keeps showing as unread until the worker's next refresh.
 	app.deps.MarkMailReadLocally(ctx, charID, mailID)
 	// Success: back to the mail view, in the inbox box.
-	http.Redirect(w, r, fmt.Sprintf("/mail/?character=%d&box=inbox&mail=%d", charID, mailID), http.StatusSeeOther)
+	back := fmt.Sprintf("/mail/?character=%d&box=inbox&mail=%d", charID, mailID)
+	if r.FormValue("view") == "1" {
+		back += "&view=1"
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
 }
 
 // mailComposeView is the compose form's view model.

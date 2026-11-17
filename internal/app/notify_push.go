@@ -301,7 +301,7 @@ func pushMessagesFor(events []notifyEvent) []pushMessage {
 	}
 	out := make([]pushMessage, 0, len(events))
 	for _, ev := range events {
-		out = append(out, pushMessage{Title: "EveSynapse", Body: ev.Title, URL: notifyTarget(ev.URL), Tag: ev.Key})
+		out = append(out, pushMessage{Title: "EveSynapse", Body: ev.Title, URL: notifyViewTarget(ev.URL), Tag: ev.Key})
 	}
 	return out
 }

@@ -77,6 +77,7 @@ type calendarView struct {
 	Response  string           // the response filter in force
 	Awaiting  int              // upcoming events with no answer yet
 	Next      *calendarRow     // the next event
+	View      bool             // ?view=1: viewing without moving the acting character
 }
 
 func (app *mod) handleCalendar(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +97,11 @@ func (app *mod) handleCalendar(w http.ResponseWriter, r *http.Request) {
 	}
 	data.CalendarChars = links
 
-	view := &calendarView{CharacterID: active.CharacterID, CharacterName: active.Name}
+	view := &calendarView{
+		CharacterID:   active.CharacterID,
+		CharacterName: active.Name,
+		View:          r.URL.Query().Get("view") == "1",
+	}
 	data.Calendar = view
 
 	var events esi.CalendarEventSummaries
@@ -128,6 +133,9 @@ func (app *mod) handleCalendar(w http.ResponseWriter, r *http.Request) {
 			view.Next = &next
 		}
 		base := "/calendar/?character=" + strconv.FormatInt(active.CharacterID, 10)
+		if view.View {
+			base += "&view=1"
+		}
 		view.Filters = append(view.Filters, calendarFilter{Label: "All events", Count: len(view.Rows), Href: base, On: want == ""})
 		for _, f := range []struct{ key, label string }{{"not_responded", "No answer yet"}, {"accepted", "Accepted"}, {"tentative", "Tentative"}, {"declined", "Declined"}} {
 			if counts[f.key] == 0 && want != f.key {

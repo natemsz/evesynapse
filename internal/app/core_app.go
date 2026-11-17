@@ -1520,7 +1520,7 @@ func (app *Application) FlashBack(w http.ResponseWriter, r *http.Request, path s
 }
 
 func (app *Application) SiteURL(path string) string {
-	return app.cfg.publicOrigin() + notifyTarget(path)
+	return app.cfg.publicOrigin() + notifyViewTarget(path)
 }
 
 func (app *Application) PageShell(ctx context.Context) module.ShellData {

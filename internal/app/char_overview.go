@@ -43,6 +43,7 @@ type overviewState struct {
 	Level   string // level filter: "all" | "v" | "mid" | "none"
 	PlanID  int64  // target plan for the staged plan's save
 	Stage   []stageItem
+	View    bool // ?view=1: viewing without moving the acting character
 	// Insp marks a deliberate inspector pick: at middle widths
 	// the inspector opens as an overlay sheet only for a pick,
 	// never for the default selection it otherwise follows.
@@ -72,6 +73,7 @@ func parseOverviewState(r *http.Request) overviewState {
 		st.Insp = true
 	}
 	st.Insp = st.Insp || q.Get("insp") != ""
+	st.View = viewPick(r)
 	st.Query = strings.TrimSpace(q.Get("q"))
 	switch q.Get("lvl") {
 	case "v", "mid", "none":
@@ -164,6 +166,9 @@ func (st overviewState) href(characterID int64) string {
 	if st.Insp {
 		v.Set("insp", "1")
 	}
+	if st.View {
+		v.Set("view", "1")
+	}
 	return "/character/?" + v.Encode()
 }
 
@@ -196,6 +201,9 @@ func (st overviewState) hiddenFields(characterID int64) []ovHiddenField {
 			parts = append(parts, fmt.Sprintf("%d:%d", it.SkillID, it.Level))
 		}
 		add("stage", strings.Join(parts, ","))
+	}
+	if st.View {
+		add("view", "1")
 	}
 	return fields
 }

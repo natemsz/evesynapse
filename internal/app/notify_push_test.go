@@ -331,7 +331,7 @@ func TestPushMessagesFor(t *testing.T) {
 		{Kind: notifySkill, Key: "skill|1|2|5", Title: "A finished training X V", URL: "https://evil.example/"},
 	}
 	got := pushMessagesFor(events)
-	if len(got) != 2 || got[0].Body != "A has new mail" || got[0].URL != "/mail/?character=1" || got[0].Tag != "mail|1|1" {
+	if len(got) != 2 || got[0].Body != "A has new mail" || got[0].URL != "/mail/?character=1&view=1" || got[0].Tag != "mail|1|1" {
 		t.Fatalf("messages %+v", got)
 	}
 	// A message never points off the site.

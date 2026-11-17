@@ -300,6 +300,12 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 			shell.IsAdmin = app.adminAmong(characters)
 		}
 	}
+	for _, entry := range shell.Switcher {
+		if entry.Active {
+			shell.CharacterName = entry.Name
+			break
+		}
+	}
 	if shell.LoggedIn && shell.SheetSwitcher == nil {
 		shell.SheetSwitcher, shell.SheetMoreCount = sheetSwitcherCap(shell.Switcher)
 	}

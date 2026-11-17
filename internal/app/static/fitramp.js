@@ -36,7 +36,7 @@ var FitRamp = (function () {
     var head = el("div", "fit-info-head");
     var close = el("button", "fit-info-close", "Close");
     close.type = "button";
-    close.addEventListener("click", hide);
+    close.addEventListener("click", function () { hide(true); });
     var names = el("div", "fit-info-names");
     var h = el("h2", null, "Output over time");
     h.id = "fit-ramp-title";
@@ -52,13 +52,25 @@ var FitRamp = (function () {
   }
 
   function isOpen() { return !!dlg && dlg.matches(":popover-open"); }
-  function hide() {
+  function hide(refocus) {
     if (!isOpen()) return;
     dlg.hidePopover();
-    if (opener && opener.isConnected && opener.focus) {
+    if (refocus !== false && opener && opener.isConnected && opener.focus) {
       try { opener.focus({ preventScroll: true }); } catch (e) {}
     }
     opener = null;
+  }
+  function outside(el, ev) {
+    var t = ev.target;
+    if (!t || !el) return false;
+    if (t === el) {
+      if (typeof ev.clientX !== "number" || typeof ev.clientY !== "number" || !el.getBoundingClientRect) return false;
+      var r = el.getBoundingClientRect();
+      if (!r.width && !r.height) return false;
+      return ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom;
+    }
+    if (el.contains) return !el.contains(t);
+    return !(t.closest && t.closest(".fit-ramp"));
   }
   function read() {
     var stats = document.querySelector(".fit-stats[data-fit-ramp]");
@@ -208,13 +220,18 @@ var FitRamp = (function () {
   }
 
   document.addEventListener("click", function (ev) {
+    if (!isOpen()) return;
+    if (ev.target && ev.target.closest && ev.target.closest("[data-fit-ramp-open]")) return;
+    if (outside(dlg, ev)) hide(false);
+  }, true);
+  document.addEventListener("click", function (ev) {
     var t = ev.target && ev.target.closest ? ev.target.closest("[data-fit-ramp-open]") : null;
     if (!t) return;
     ev.preventDefault();
     open(t);
   });
   document.addEventListener("keydown", function (ev) {
-    if (ev.key === "Escape" && isOpen()) hide();
+    if (ev.key === "Escape" && isOpen()) hide(true);
   });
   return { open: open, refresh: refresh, close: hide };
 })();

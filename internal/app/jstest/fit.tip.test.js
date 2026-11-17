@@ -213,12 +213,13 @@ test("read-only tooltip dismisses on leave, toggles on tap, closes on Escape", a
 // round trip the test releases by hand.
 
 function parseCompound(s) {
-  const c = { tag: "", cls: [], id: "", attrs: [], hover: false };
-  const re = /^[a-zA-Z*]+|\.[\w-]+|#[\w-]+|\[([\w-]+)(?:="([^"]*)")?\]|:hover/g;
+  const c = { tag: "", cls: [], id: "", attrs: [], hover: false, popoverOpen: false };
+  const re = /^[a-zA-Z*]+|\.[\w-]+|#[\w-]+|\[([\w-]+)(?:="([^"]*)")?\]|:hover|:popover-open/g;
   let m;
   while ((m = re.exec(s))) {
     const t = m[0];
     if (t === ":hover") c.hover = true;
+    else if (t === ":popover-open") c.popoverOpen = true;
     else if (t[0] === ".") c.cls.push(t.slice(1));
     else if (t[0] === "#") c.id = t.slice(1);
     else if (t[0] === "[") c.attrs.push({ k: m[1], v: m[2] });
@@ -237,6 +238,7 @@ function matchCompound(el, c) {
     if (v === null || (a.v !== undefined && v !== a.v)) return false;
   }
   if (c.hover && !el.hovered) return false;
+  if (c.popoverOpen && !el._popoverOpen) return false;
   return true;
 }
 
@@ -352,6 +354,8 @@ class EEl {
   }
   focus() {}
   setPointerCapture() {}
+  showPopover() { this._popoverOpen = true; }
+  hidePopover() { this._popoverOpen = false; }
 }
 
 // A ring of slots like the workbench renders: a 544px visual,
@@ -969,4 +973,23 @@ test("fitting polish: the implant solver previews and applies its pick", async f
   const body = JSON.parse(sim.body);
   assert.equal(String(body.implants["6"]), "7104",
     "Apply wrote the pick as a document implant override (the simulation overlay)");
+});
+
+test("info drawer: clicking inside keeps it open, clicking off closes it", async function () {
+  const { env } = await chipEnv();
+  const infoBtn = new EEl("button", env);
+  infoBtn.setAttribute("data-fit-info", "100");
+  env.wb().appendChild(infoBtn);
+
+  env.dispatch(infoBtn, "click");
+  const drawer = document.querySelector(".fit-info");
+  assert.ok(drawer, "the info drawer was created");
+  assert.ok(drawer.matches(":popover-open"), "clicking data-fit-info opens the drawer");
+
+  const body = drawer.querySelector(".fit-info-body");
+  env.dispatch(body, "click");
+  assert.ok(drawer.matches(":popover-open"), "clicking inside the drawer keeps it open");
+
+  env.dispatch(env.wb(), "click");
+  assert.ok(!drawer.matches(":popover-open"), "clicking off the drawer closes it");
 });

@@ -324,6 +324,12 @@ func TestBotGuardVerifiedCrawler(t *testing.T) {
 			t.Fatalf("unverified Googlebot from %s: status %d, want 429", remote, code)
 		}
 	}
+	req := httptest.NewRequest(http.MethodGet, "/intel/kill/139000000/", nil)
+	req.RemoteAddr = "66.249.66.1:4000"
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")
+	if app.crawlers.verified(req) {
+		t.Fatal("verified Googlebot address must not vouch for a Bingbot claim")
+	}
 }
 
 func htmlPage(h http.Handler, ua, url, remote string, cookies ...*http.Cookie) int {

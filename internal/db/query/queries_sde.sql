@@ -953,3 +953,8 @@ FROM sde_celestials c
 LEFT JOIN sde_systems s ON s.system_id = c.system_id
 WHERE c.item_id = ANY(sqlc.arg(ids)::bigint[]);
 
+-- name: GetSDECharacterTitle :one
+-- Cosmetic character title name by UUID (chrTitles.csv).
+SELECT name FROM sde_character_titles
+WHERE title_id = $1;
+

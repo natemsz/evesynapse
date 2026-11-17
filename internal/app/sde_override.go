@@ -50,6 +50,7 @@ func sdeKnownFiles() map[string]bool {
 	for _, name := range sdeSheetFileNames {
 		known[name] = true
 	}
+	known[sdeTitlesFileName] = true
 	return known
 }
 

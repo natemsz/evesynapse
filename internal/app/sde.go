@@ -118,6 +118,10 @@ const (
 // sdeSheetFileNames lists the item sheet's optional files.
 var sdeSheetFileNames = []string{sdeUnitsFileName, sdeTraitsFileName, sdeMetaTypesFileName, sdeMetaGroupsFileName}
 
+// Cosmetic character title names (schema 161): UUID to display name.
+// Best-effort like the sheet files above.
+const sdeTitlesFileName = "chrTitles.csv"
+
 // The buff tables (schema 145): what a command burst's buff ids do.
 // Best-effort like the sheet files: a dump lacking them keeps the
 // previous rows, and bursts change nothing.
@@ -512,6 +516,11 @@ func (app *Application) importSDEFrom(ctx context.Context, ov *sdeArchive) error
 			parsed.markers[name] = marker
 		}
 	}
+	if marker, err := app.parseSDESource(ctx, ov, base, sdeTitlesFileName, parsed); err != nil {
+		logging.Warnf("sde: optional %s unavailable, keeping previous character titles: %v", sdeTitlesFileName, err)
+	} else {
+		parsed.markers[sdeTitlesFileName] = marker
+	}
 	// The buff tables go in together or not at all: modifiers
 	// without their collections (or the reverse) would leave bursts
 	// half described.
@@ -688,6 +697,15 @@ type parsedSDE struct {
 	// The buff tables (schema 145): empty when the dump lacks them.
 	dbuffs    []sdeDbuffRow
 	dbuffMods []sdeDbuffModRow
+
+	// Cosmetic character titles (schema 161): empty when the dump lacks chrTitles.csv.
+	titles []sdeCharacterTitleRow
+}
+
+// sdeCharacterTitleRow maps a cosmetic title UUID to its display name.
+type sdeCharacterTitleRow struct {
+	titleID string
+	name    string
 }
 
 // sdeDbuffRow is one buff collection: its name, how several values
@@ -1068,6 +1086,8 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		err = parseSDEMetaTypes(cr, idx, parsed)
 	case sdeMetaGroupsFileName:
 		err = parseSDEMetaGroups(cr, idx, parsed)
+	case sdeTitlesFileName:
+		err = parseSDETitles(cr, idx, parsed)
 	case "dgmTypeAttributes.csv":
 		err = parseSDEDogmaAttributes(cr, idx, parsed)
 	case "dgmAttributeTypes.csv":
@@ -1407,6 +1427,28 @@ func parseSDEConstellations(cr *csv.Reader, idx map[string]int, parsed *parsedSD
 		parsed.constellations = append(parsed.constellations, sdeConstellationRow{
 			constellationID: id, name: name, regionID: csvIDOrZero(rec, idx, "regionID"),
 		})
+		return nil
+	})
+	return err
+}
+
+// parseSDETitles reads chrTitles.csv: cosmetic title UUIDs and names.
+func parseSDETitles(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvField(rec, idx, "titleID")
+		if err != nil {
+			return errSkipRow
+		}
+		name, err := csvField(rec, idx, "titleName")
+		if err != nil {
+			return errSkipRow
+		}
+		id = strings.ToLower(strings.TrimSpace(id))
+		name = strings.TrimSpace(name)
+		if id == "" || name == "" {
+			return errSkipRow
+		}
+		parsed.titles = append(parsed.titles, sdeCharacterTitleRow{titleID: id, name: name})
 		return nil
 	})
 	return err
@@ -2330,6 +2372,10 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 			r := parsed.metaGroups[i]
 			return []any{r.metaGroupID, r.name}
 		}},
+		{"sde_character_titles", len(parsed.titles), "INSERT INTO sde_character_titles (title_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING", func(i int) []any {
+			r := parsed.titles[i]
+			return []any{r.titleID, r.name}
+		}},
 	}
 	for _, st := range sheetTables {
 		if st.n == 0 {
@@ -2552,7 +2598,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		len(parsed.modifiers) + len(parsed.typeEffects) + len(parsed.dynRanges) +
 		len(parsed.dynMappings) +
 		len(parsed.units) + len(parsed.traits) + len(parsed.metaTypes) + len(parsed.metaGroups) +
-		len(parsed.dbuffs) + len(parsed.dbuffMods))
+		len(parsed.dbuffs) + len(parsed.dbuffMods) + len(parsed.titles))
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	tq := db.New(tx)

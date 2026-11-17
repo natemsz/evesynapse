@@ -969,6 +969,11 @@ var pgAllianceBridgesSchema string
 //go:embed schema_pg/160_bot_guard_secret.sql
 var pgBotGuardSecretSchema string
 
+// Step 161: cosmetic character titles from chrTitles.csv (UUID -> title name).
+//
+//go:embed schema_pg/161_sde_character_titles.sql
+var pgSDECharacterTitlesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1157,6 +1162,7 @@ func schemaSteps() []schemaStep {
 		{158, "doctrine_fit_boosts", pgDoctrineFitBoostsSchema, ""},
 		{159, "alliance_bridges", pgAllianceBridgesSchema, ""},
 		{160, "bot_guard_secret", pgBotGuardSecretSchema, ""},
+		{161, "sde_character_titles", pgSDECharacterTitlesSchema, ""},
 	}
 }
 

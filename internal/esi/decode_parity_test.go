@@ -78,7 +78,7 @@ func parityKillmail() []byte {
 }
 
 func parityCharacter() []byte {
-	return []byte(`{"alliance_id":99000001,"birthday":"2009-12-24T11:03:00Z","bloodline_id":8,"corporation_id":98000001,"description":"Solo empire builder. <font size=\"12\">Occasionally explodes.</font>","faction_id":0,"gender":"male","name":"Burzrujat","race_id":4,"security_status":-1.27,"title":"CEO"}`)
+	return []byte(`{"achievement_score":1234,"alliance_id":99000001,"birthday":"2009-12-24T11:03:00Z","bloodline_id":8,"character_title_id":"08dfebb0-b4ff-593d-b78e-b42a963f7847","corporation_id":98000001,"description":"Solo empire builder. <font size=\"12\">Occasionally explodes.</font>","faction_id":0,"gender":"male","name":"Burzrujat","race_id":4,"security_status":-1.27,"title":"CEO"}`)
 }
 
 // The skillqueue entries exercise the pointer field: a value, an

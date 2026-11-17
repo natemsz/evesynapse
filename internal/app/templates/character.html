@@ -80,12 +80,15 @@
         <span class="ov-portrait"><img src="{{$v.PortraitURL}}" alt="" width="56" height="56">{{if $v.SecurityStatus}}<span class="ov-secchip">{{$v.SecurityStatus}}</span>{{end}}</span>
         <div class="ov-entity-main">
           <div class="ov-nm">{{$v.CharacterName}}</div>
+          {{if $v.CharacterTitle}}<div class="ov-title">{{$v.CharacterTitle}}</div>{{end}}
           {{if $v.CorpName}}<div class="ov-corp">{{corpLink $v.CorpID $v.CorpName}}{{if $v.CorpTicker}} [{{$v.CorpTicker}}]{{end}}</div>{{end}}
           {{if $v.AllianceName}}<div class="ov-alliance">{{allianceLink $v.AllianceID $v.AllianceName}}</div>{{end}}
         </div>
       </div>
       <div class="ov-trows">
         <div class="tr"><span class="k">Status</span><span>{{if $v.Birthday}}Born {{$v.Birthday}} · {{end}}Security status {{$v.SecurityStatus}}</span></div>
+        {{if $v.CorpTitle}}<div class="tr"><span class="k">Corp title</span><span>{{$v.CorpTitle}}</span></div>{{end}}
+        {{if $v.AchievementScoreKnown}}<div class="tr"><span class="k">Achievement score</span><span class="ov-ach-val">{{$v.AchievementScore}}</span></div>{{end}}
         {{if $v.OnlineKnown}}
         <div class="tr"><span class="k">Logins</span><span>{{if not $v.Online}}{{if $v.LastLogin}}Last login {{$v.LastLogin}} · {{end}}{{end}}{{$v.Logins}} logins</span></div>
         {{end}}

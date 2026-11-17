@@ -220,15 +220,19 @@ type characterView struct {
 	// Identity: name, birthday, security and corporation, from the
 	// worker-warmed profile snapshot, so this page, like every other
 	//, renders cache-only.
-	IdentityKnown  bool
-	PortraitURL    string
-	CorpID         int64
-	CorpName       string
-	CorpTicker     string
-	AllianceID     int64
-	AllianceName   string
-	Birthday       string
-	SecurityStatus string
+	IdentityKnown         bool
+	PortraitURL           string
+	CorpID                int64
+	CorpName              string
+	CorpTicker            string
+	AllianceID            int64
+	AllianceName          string
+	Birthday              string
+	SecurityStatus        string
+	CharacterTitle        string
+	CorpTitle             string
+	AchievementScoreKnown bool
+	AchievementScore      string
 
 	// Wallet snapshot.
 	WalletKnown bool
@@ -538,6 +542,16 @@ func (app *Application) fillCharacterIdentity(ctx context.Context, ch db.Charact
 			view.Birthday = profile.Birthday[:10]
 		}
 		view.SecurityStatus = fmt.Sprintf("%.2f", profile.SecurityStatus)
+		view.CorpTitle = strings.TrimSpace(profile.Title)
+		if titleID := strings.ToLower(strings.TrimSpace(profile.CharacterTitleID)); titleID != "" {
+			if name, err := app.queries.GetSDECharacterTitle(ctx, titleID); err == nil {
+				view.CharacterTitle = strings.TrimSpace(name)
+			}
+		}
+		if profile.AchievementScore != nil {
+			view.AchievementScoreKnown = true
+			view.AchievementScore = esi.FormatInt(*profile.AchievementScore)
+		}
 		corpID := profile.CorporationID
 		if corpID == 0 {
 			if mapping, err := app.queries.GetCharacterCorporation(ctx, ch.CharacterID); err == nil {

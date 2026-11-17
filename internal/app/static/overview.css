@@ -56,6 +56,7 @@
 .ov-secchip { position: absolute; left: 50%; bottom: -0.35rem; transform: translateX(-50%); padding: 0.02rem 0.35rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--box-edge); color: var(--text); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.1; z-index: 1; }
 .ov-entity-main { min-width: 0; flex: 1 1 auto; }
 .ov-nm { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-xl); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-title { font-size: var(--fs-xs); font-weight: 600; color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-corp { font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-alliance { color: var(--muted); font-size: var(--fs-2xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-ship-title { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -74,7 +75,7 @@
 .ov-sp-val { font-family: var(--font-num); font-weight: 600; color: var(--accent); }
 .ov-skills-cnt { font-family: var(--font-body); font-size: var(--fs-2xs); color: var(--muted); }
 .ov-unalloc { color: var(--gold); font-size: var(--fs-2xs); font-weight: 600; }
-.ov-wallet-val { font-family: var(--font-num); font-weight: 600; color: var(--text); }
+.ov-wallet-val, .ov-ach-val { font-family: var(--font-num); font-weight: 600; color: var(--text); }
 .ov-date { font-family: var(--font-num); font-size: var(--fs-2xs); color: var(--text); }
 
 /* Status pills for card rows */

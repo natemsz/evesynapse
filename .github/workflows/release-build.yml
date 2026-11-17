@@ -58,7 +58,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Cache Go builds and modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             .cache/go-build

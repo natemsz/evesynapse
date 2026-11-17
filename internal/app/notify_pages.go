@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -166,7 +167,7 @@ func (app *Application) handleNotifications(w http.ResponseWriter, r *http.Reque
 		view.Rows = append(view.Rows, notificationRow{
 			Kind:   name,
 			Title:  row.Title,
-			URL:    notifyTarget(row.Url),
+			URL:    notifyViewTarget(row.Url),
 			When:   row.CreatedAt.UTC().Format("Jan 2, 15:04") + " UTC",
 			Unread: !row.ReadAt.Valid,
 		})
@@ -223,7 +224,7 @@ func (app *Application) handleNotificationsOpen(w http.ResponseWriter, r *http.R
 			if rows, err := app.queries.ListUnreadNotificationSummary(ctx, userID); err == nil {
 				for _, row := range rows {
 					if row.Kind == kind.ID {
-						target = notifyTarget(row.Url)
+						target = notifyViewTarget(row.Url)
 					}
 				}
 			}
@@ -281,6 +282,24 @@ func notifyTarget(url string) string {
 		return url
 	}
 	return "/notifications/"
+}
+
+// notifyViewTarget resolves a notification link safely and ensures
+// character-scoped targets carry view=1, so opening an older or
+// untagged notification never switches the acting character.
+func notifyViewTarget(raw string) string {
+	target := notifyTarget(raw)
+	u, err := url.Parse(target)
+	if err != nil {
+		return target
+	}
+	q := u.Query()
+	if q.Get("character") == "" || q.Get("view") != "" {
+		return target
+	}
+	q.Set("view", "1")
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // ---------------------------------------------------------------------------

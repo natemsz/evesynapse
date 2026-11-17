@@ -118,8 +118,8 @@ func TestNotifyIconFollowsWhatIsUnread(t *testing.T) {
 
 	// Following the mail row marks mail read and goes to the mail.
 	code, where := f.post(cookie, "/notifications/open", url.Values{"kind": {notifyMail}})
-	if code != http.StatusSeeOther || where != "/mail/?character=90000001" {
-		t.Fatalf("open mail: %d to %q, want 303 to the mail page", code, where)
+	if code != http.StatusSeeOther || where != "/mail/?character=90000001&view=1" {
+		t.Fatalf("open mail: %d to %q, want 303 to the mail page with view=1", code, where)
 	}
 	if got := f.unread(f.userID); got[notifyMail] != 0 || got[notifyPI] != 1 {
 		t.Fatalf("after opening mail, unread = %v; want mail cleared and the planet left", got)
@@ -155,7 +155,7 @@ func TestNotificationsPageAndMarkRead(t *testing.T) {
 
 	_, body = getPage(t, f.app, cookie, "/notifications/")
 	mustContain(t, "/notifications/", body,
-		`<a href="/character/?character=90000001">Fixture Ceo finished training Mechanics V</a> <small>new</small>`,
+		`<a href="/character/?character=90000001&amp;view=1">Fixture Ceo finished training Mechanics V</a> <small>new</small>`,
 		`<td>Skill complete</td>`, `<td>New killmail</td>`, `Oct 8, 12:00 UTC`,
 		`<small>2 unread</small>`, `<button type="submit">Mark all read</button>`)
 	if strings.Contains(body, "Somebody else") {

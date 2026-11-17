@@ -257,6 +257,9 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 
 	view := &contractsView{CharacterName: active.Name, Depth: 1}
 	base := "/contracts/?character=" + strconv.FormatInt(active.CharacterID, 10)
+	if r.URL.Query().Get("view") == "1" {
+		base += "&view=1"
+	}
 	show := r.URL.Query().Get("show")
 	if !validContractShow(show) {
 		show = ""

@@ -17,9 +17,9 @@
 <section class="l-panel cal-month l-root">
 {{with .Calendar.Month}}
 <div class="cal-head">
-  <a class="btn" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{.Prev}}" aria-label="Previous month">‹</a>
+  <a class="btn" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{.Prev}}{{if $.Calendar.View}}&amp;view=1{{end}}" aria-label="Previous month">‹</a>
   <strong class="cal-title">{{.Title}}</strong>
-  <a class="btn" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{.Next}}" aria-label="Next month">›</a>
+  <a class="btn" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{.Next}}{{if $.Calendar.View}}&amp;view=1{{end}}" aria-label="Next month">›</a>
 </div>
 <div class="cal-wrap">
 <table class="cal" data-cards="off">
@@ -54,7 +54,7 @@
   <thead><tr><th>Date</th><th class="card-title">Event</th><th>Starts in</th><th>Your response</th><th></th></tr></thead>
   <tbody>
   {{range .Calendar.Rows}}
-    <tr{{if $.Calendar.Detail}}{{if eq .ID $.Calendar.Detail.EventID}} class="yours"{{end}}{{end}}><td>{{.Date}} <span class="l-local" data-local-time="{{.DateRaw}}"></span></td><td><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;event={{.ID}}" data-l-step="in">{{.Title}}</a></td><td><span class="countdown" data-finish="{{.DateRaw}}"></span></td><td><span class="cal-resp cal-resp-{{.RespKey}}">{{.Response}}</span></td><td>{{if .Important}}<strong>Important</strong>{{end}}</td></tr>
+    <tr{{if $.Calendar.Detail}}{{if eq .ID $.Calendar.Detail.EventID}} class="yours"{{end}}{{end}}><td>{{.Date}} <span class="l-local" data-local-time="{{.DateRaw}}"></span></td><td><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;event={{.ID}}{{if $.Calendar.View}}&amp;view=1{{end}}" data-l-step="in">{{.Title}}</a></td><td><span class="countdown" data-finish="{{.DateRaw}}"></span></td><td><span class="cal-resp cal-resp-{{.RespKey}}">{{.Response}}</span></td><td>{{if .Important}}<strong>Important</strong>{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -66,7 +66,7 @@
 </section>
 {{if .Calendar.Detail}}
 <article class="l-pane l-pane--insp cal-detail" aria-label="Event">
-<div class="l-pane-bar"><a class="l-back" data-l-step="out" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}">Back to upcoming events</a><a class="l-close" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}" aria-label="Close the event">&#10005;</a></div>
+<div class="l-pane-bar"><a class="l-back" data-l-step="out" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}{{if $.Calendar.View}}&amp;view=1{{end}}">Back to upcoming events</a><a class="l-close" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}{{if $.Calendar.View}}&amp;view=1{{end}}" aria-label="Close the event">&#10005;</a></div>
 {{if .Calendar.Detail.Warming}}
 <h3>{{if .Calendar.Detail.Title}}{{.Calendar.Detail.Title}}{{else}}Event{{end}}</h3>
 <p><small>Event details are still loading. Check back shortly.</small></p>
@@ -110,9 +110,9 @@
 <p><a class="btn" href="{{.RelinkURL}}">Sign in again to answer events</a> <small>{{$.Calendar.CharacterName}} was linked before EveSynapse asked for permission to answer calendar events.</small></p>
 {{end}}
 {{end}}
-<p><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}">Back to upcoming events</a></p>
+<p><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}{{if $.Calendar.View}}&amp;view=1{{end}}">Back to upcoming events</a></p>
 </article>
-<a class="l-scrim" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}" aria-label="Close the event" tabindex="-1"></a>
+<a class="l-scrim" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}{{if $.Calendar.View}}&amp;view=1{{end}}" aria-label="Close the event" tabindex="-1"></a>
 {{end}}
 </div>
 </div>

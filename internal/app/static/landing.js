@@ -242,7 +242,10 @@
 // the arrow keys step the reel behind the same clip. Only the
 // clip in focus ever plays: stepping the reel, opening the
 // modal, scrolling the gallery off screen or hiding the tab
-// pauses everything else. Without the script the reel is a
+// pauses everything else. Behind the focused slide, and behind
+// the modal's media, an ambient layer runs a blurred copy of the
+// same media, so its colours wash the panel around it. Without
+// the script the reel is a
 // plain sideways-scrolling row of posters; the script adds
 // ld-gal-on and drives the track's transform instead.
 (function () {
@@ -257,12 +260,67 @@
   var modalVid = modal ? modal.querySelector("[data-gal-modal-vid]") : null;
   var modalImg = modal ? modal.querySelector("[data-gal-modal-img]") : null;
   var modalCap = modal ? modal.querySelector("[data-gal-modal-cap]") : null;
+  var amb = gal.querySelector("[data-gal-ambient]");
+  var ambVid = amb ? amb.querySelector("[data-gal-amb-vid]") : null;
+  var ambImg = amb ? amb.querySelector("[data-gal-amb-img]") : null;
+  var mAmb = modal ? modal.querySelector("[data-gal-modal-ambient]") : null;
+  var mAmbVid = mAmb ? mAmb.querySelector("[data-gal-mamb-vid]") : null;
+  var mAmbImg = mAmb ? mAmb.querySelector("[data-gal-mamb-img]") : null;
+  var ambSlide = -1;
   var cur = 0;
   var galVisible = true;
   var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   gal.classList.add("ld-gal-on");
   function vidOf(s) { return s.querySelector("[data-gal-vid]"); }
   function mediaOf(s) { return s.querySelector("[data-gal-vid], [data-gal-img]"); }
+  // The ambient layer behind a slide (and behind the modal's media)
+  // is a blurred copy of the slide's own media, so the media throws
+  // its colours onto the panel around it. fillAmbient points a
+  // layer's video or image at the slide's media and shapes the
+  // layer to the media's aspect; driveAmbient keeps a layer's clip
+  // playing in step with the clip it mirrors.
+  function fillAmbient(box, vid, img, s) {
+    if (!box || !vid || !img) return;
+    var m = mediaOf(s);
+    if (!m) return;
+    if (m.getAttribute("width") && m.getAttribute("height")) {
+      box.style.aspectRatio = m.getAttribute("width") + " / " + m.getAttribute("height");
+    }
+    var v = vidOf(s);
+    if (v) {
+      if (vid.getAttribute("src") !== v.getAttribute("src")) {
+        vid.src = v.getAttribute("src");
+        vid.poster = v.getAttribute("poster") || "";
+      }
+      vid.hidden = false;
+      img.hidden = true;
+    } else {
+      var im = s.querySelector("[data-gal-img]");
+      if (!im) return;
+      if (img.getAttribute("src") !== im.getAttribute("src")) img.src = im.getAttribute("src");
+      img.hidden = false;
+      vid.hidden = true;
+      if (!vid.paused) vid.pause();
+    }
+  }
+  function driveAmbient(vid, srcVid, on) {
+    if (!vid || vid.hidden) return;
+    if (on && srcVid) {
+      if (Math.abs(vid.currentTime - srcVid.currentTime) > 1.5) {
+        try { vid.currentTime = srcVid.currentTime; } catch (e) {}
+      }
+      tryPlay(vid);
+    } else if (!vid.paused) vid.pause();
+  }
+  // Two decoders drift apart within seconds, and a clip whose
+  // colours change (the schemes reel) would throw the wrong light;
+  // the source clip's timeupdate pulls its ambient copy back in.
+  function pullAmbient(vid, srcVid) {
+    if (!vid || vid.hidden || vid.paused || !srcVid || srcVid.paused) return;
+    if (Math.abs(vid.currentTime - srcVid.currentTime) > 0.35) {
+      try { vid.currentTime = srcVid.currentTime; } catch (e) {}
+    }
+  }
   function tryPlay(v) {
     if (!v || !v.paused) return;
     var p = v.play();
@@ -280,6 +338,8 @@
       if (!reduced && !document.hidden && modalOpen && !modalVid.hidden) tryPlay(modalVid);
       else if (!modalVid.paused) modalVid.pause();
     }
+    driveAmbient(ambVid, vidOf(slides[cur]), !reduced && galVisible && !document.hidden && !modalOpen);
+    driveAmbient(mAmbVid, modalVid, !reduced && !document.hidden && modalOpen && modalVid && !modalVid.hidden);
   }
   function captionOf(i) {
     var c = slides[i].querySelector("figcaption");
@@ -304,6 +364,8 @@
       if (!modalVid.paused) modalVid.pause();
     }
     modalCap.textContent = captionOf(cur);
+    fillAmbient(mAmb, mAmbVid, mAmbImg, slides[cur]);
+    if (mAmb) mAmb.classList.add("is-on");
   }
   function centerX() {
     var s = slides[cur];
@@ -314,6 +376,11 @@
     slides.forEach(function (s, j) { s.classList.toggle("is-active", j === cur); });
     track.style.transform = "translateX(" + centerX() + "px)";
     if (cap) cap.textContent = captionOf(cur);
+    if (ambSlide !== cur) {
+      ambSlide = cur;
+      fillAmbient(amb, ambVid, ambImg, slides[cur]);
+      if (amb) { amb.classList.remove("is-on"); void amb.offsetWidth; amb.classList.add("is-on"); }
+    }
     if (modal && !modal.hidden) fillModal();
     syncPlay();
   }
@@ -339,6 +406,14 @@
       if (j === cur) openModal(); else focus(j);
     });
   });
+  slides.forEach(function (s) {
+    var v = vidOf(s);
+    if (!v) return;
+    v.addEventListener("timeupdate", function () {
+      if (slides[cur] === s) pullAmbient(ambVid, v);
+    });
+  });
+  if (modalVid) modalVid.addEventListener("timeupdate", function () { pullAmbient(mAmbVid, modalVid); });
   // Swipe: a horizontal drag steps the reel through the same
   // focus() the arrows use. On the stage the track follows the
   // pointer and the release either steps one slide or settles

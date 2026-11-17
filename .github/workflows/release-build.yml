@@ -358,7 +358,7 @@ jobs:
       AWS_REGION: auto
     steps:
       - name: Fetch the built files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist
@@ -416,7 +416,7 @@ jobs:
       GITLAB_TOKEN: ${{ secrets.GL_TOKEN }}
     steps:
       - name: Fetch the built files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist

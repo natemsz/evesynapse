@@ -401,6 +401,19 @@ func (q *Queries) GetSDECategory(ctx context.Context, categoryID int64) (SdeCate
 	return i, err
 }
 
+const getSDECharacterTitle = `-- name: GetSDECharacterTitle :one
+SELECT name FROM sde_character_titles
+WHERE title_id = $1
+`
+
+// Cosmetic character title name by UUID (chrTitles.csv).
+func (q *Queries) GetSDECharacterTitle(ctx context.Context, titleID string) (string, error) {
+	row := q.db.QueryRow(ctx, getSDECharacterTitle, titleID)
+	var name string
+	err := row.Scan(&name)
+	return name, err
+}
+
 const getSDEGroup = `-- name: GetSDEGroup :one
 SELECT group_id, name, category_id FROM sde_groups
 WHERE group_id = $1

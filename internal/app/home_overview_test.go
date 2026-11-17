@@ -947,10 +947,25 @@ func TestCharacterSheetFromSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
+	var titleParsed parsedSDE
+	chrTitlesCSV := "\ufeff\"titleID\",\"titleName\"\n\"08DFebb0-b4ff-593d-b78e-b42a963f7847\",\"Arch-Luminary\"\n"
+	if err := parseSDEFile(sdeTitlesFileName, strings.NewReader(chrTitlesCSV), &titleParsed); err != nil {
+		t.Fatalf("parse %s: %v", sdeTitlesFileName, err)
+	}
+	if len(titleParsed.titles) != 1 || titleParsed.titles[0].titleID != "08dfebb0-b4ff-593d-b78e-b42a963f7847" || titleParsed.titles[0].name != "Arch-Luminary" {
+		t.Fatalf("parsed titles = %+v, want normalized Arch-Luminary", titleParsed.titles)
+	}
+	if _, err := app.db.Exec(`INSERT INTO sde_character_titles (title_id, name) VALUES ($1, $2)`,
+		titleParsed.titles[0].titleID, titleParsed.titles[0].name); err != nil {
+		t.Fatalf("seed character title: %v", err)
+	}
+	score := int64(1234)
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	seedSnapshot(t, q, fixtureCharA, esi.SnapProfile, esi.Character{
 		Name: "Fixture Alpha", CorporationID: fixtureCorpA,
 		Birthday: "2009-12-24T13:44:00Z", SecurityStatus: 0.55,
+		Title: "Fleet Lead", CharacterTitleID: "08DFebb0-b4ff-593d-b78e-b42a963f7847",
+		AchievementScore: &score,
 	})
 	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpInfo, esi.Corporation{Name: "Fixture Corp", Ticker: "FC"})
 	seedSnapshot(t, q, fixtureCharA, esi.SnapWallet, 4242.25)
@@ -980,9 +995,12 @@ func TestCharacterSheetFromSnapshots(t *testing.T) {
 	mustContain(t, "/character/", body,
 		`<h1><span class="gt">Character</span></h1>`,
 		"Fixture Corp", "2009-12-24", "0.55",
-		"4,242.25",   // wallet from snapshot
-		"105.53M SP", // total SP, compact in the sheet head
-		"finishes",   // queue line's server-rendered finish
+		"Arch-Luminary", // active cosmetic title from chrTitles
+		"Fleet Lead",    // corporation_title
+		"1,234",         // achievement_score
+		"4,242.25",      // wallet from snapshot
+		"105.53M SP",    // total SP, compact in the sheet head
+		"finishes",      // queue line's server-rendered finish
 		"Now training",
 	)
 	if !strings.Contains(strings.ToLower(body), "training") {

@@ -143,6 +143,9 @@ func TestSDEDogmaStoreRoundTrip(t *testing.T) {
 	parsed.typeEffects = []sdeTypeEffectRow{
 		{typeID: 377, effectID: 21, isDefault: 1},
 	}
+	parsed.titles = []sdeCharacterTitleRow{
+		{titleID: "08dfebb0-b4ff-593d-b78e-b42a963f7847", name: "Arch-Luminary"},
+	}
 
 	if _, err := app.storeSDE(ctx, "fixture", parsed); err != nil {
 		t.Fatalf("store SDE: %v", err)
@@ -167,6 +170,9 @@ func TestSDEDogmaStoreRoundTrip(t *testing.T) {
 	attrs, err := q.ListSDETypeAttributes(ctx, 597)
 	if err != nil || len(attrs) != 2 || attrs[0].AttributeID != 263 || attrs[0].Value != 350 {
 		t.Fatalf("ListSDETypeAttributes(597) = %+v, %v", attrs, err)
+	}
+	if title, err := q.GetSDECharacterTitle(ctx, "08dfebb0-b4ff-593d-b78e-b42a963f7847"); err != nil || title != "Arch-Luminary" {
+		t.Fatalf("GetSDECharacterTitle = %q, %v; want Arch-Luminary", title, err)
 	}
 	meta, err := q.GetSDEAttributeType(ctx, 267)
 	if err != nil || meta.Stackable != 0 || meta.DefaultValue != 1 {

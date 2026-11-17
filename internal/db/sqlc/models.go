@@ -2175,6 +2175,11 @@ type SdeCelestial struct {
 	Radius   float64 `json:"radius"`
 }
 
+type SdeCharacterTitle struct {
+	TitleID string `json:"title_id"`
+	Name    string `json:"name"`
+}
+
 type SdeConstellation struct {
 	ConstellationID int64  `json:"constellation_id"`
 	Name            string `json:"name"`

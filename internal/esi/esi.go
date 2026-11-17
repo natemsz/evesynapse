@@ -514,14 +514,16 @@ func New(httpClient *http.Client, queries *db.Queries, tokens TokenFunc) *Client
 // rendered sanitized (see sanitizeMailHTML); Title is the
 // character's in-corp title, "" for most pilots.
 type Character struct {
-	Name           string  `json:"name"`
-	CorporationID  int64   `json:"corporation_id"`
-	AllianceID     int64   `json:"alliance_id"`
-	FactionID      int64   `json:"faction_id"`
-	Birthday       string  `json:"birthday"` // RFC3339
-	SecurityStatus float64 `json:"security_status"`
-	Description    string  `json:"description"`
-	Title          string  `json:"corporation_title"`
+	Name             string  `json:"name"`
+	CorporationID    int64   `json:"corporation_id"`
+	AllianceID       int64   `json:"alliance_id"`
+	FactionID        int64   `json:"faction_id"`
+	Birthday         string  `json:"birthday"` // RFC3339
+	SecurityStatus   float64 `json:"security_status"`
+	Description      string  `json:"description"`
+	Title            string  `json:"corporation_title"`
+	CharacterTitleID string  `json:"character_title_id"`
+	AchievementScore *int64  `json:"achievement_score"`
 }
 
 // UnmarshalJSON reads the corporation title from corporation_title,

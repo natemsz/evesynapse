@@ -30,7 +30,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"The demo uses a sample fleet and needs no sign-in.",
 		"Linking asks only for the scopes behind the features you pick",
 		"EveSynapse is free to use forever.",
-		"No donation pop-ups.",
+		"No donation pop-ups: for neither ISK nor dollars.",
 		"Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.",
 		"href=\"/auth/login\"",        // existing members sign in plainly
 		"href=\"/auth/link\"",         // new members link characters

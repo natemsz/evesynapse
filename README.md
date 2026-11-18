@@ -58,6 +58,11 @@ This is a human-built project built for other humans, and a labor of love.
 - **github.com/golang-jwt/jwt/v5**: SSO access-token verification
   against CCP's JWKS (issuer `login.eveonline.com`)
 - **html/template** + `embed.FS`: server-rendered pages
+- **Ferron** (live deployment): reverse proxy in front of the
+  app, behind Cloudflare (proxied DNS, Full Strict TLS,
+  Authenticated Origin Pulls). Ferron terminates TLS with a
+  Cloudflare Origin CA certificate and proxies to the app on
+  127.0.0.1:8080.
 
 
 ## Documentation

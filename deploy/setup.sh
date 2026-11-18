@@ -33,6 +33,35 @@
 # install from a fork, run the fork's copy of this script.
 set -euo pipefail
 
+# --- Banner ---
+# The EveSynapse bolt, drawn in Braille dots, printed on every run.
+# Plain text, no dependencies: it renders in any UTF-8 terminal.
+print_banner() {
+  cat <<'EOF'
+                ⡀
+              ⢀⡴⠁
+             ⣠⣾⠃
+           ⢀⣴⣿⠇
+          ⣠⣾⣿⡟
+        ⢀⣴⣿⣿⡿
+       ⣠⣾⣿⣿⣿⠁
+     ⢀⣴⣿⣿⣿⣿⠇ ⣰⣶⣶⣶⣶⡶⠂
+    ⠠⠾⠿⠿⠿⠿⠏ ⢰⣿⣿⣿⣿⠟⠁
+           ⢀⣿⣿⣿⡿⠋
+           ⣾⣿⣿⠟⠁
+          ⣼⣿⡿⠋
+         ⢰⣿⠟⠁
+        ⢠⡿⠋
+       ⢀⠞⠁
+       ⠈
+
+  EVESYNAPSE
+  Lightweight, fast, and comprehensive EVE Online companion.
+EOF
+}
+
+print_banner
+
 # The GitLab project releases are fetched from. An install
 # made before EVESYNAPSE_UPDATE_PROJECT existed carries
 # EVESYNAPSE_UPDATE_REPO from the GitHub years; the project

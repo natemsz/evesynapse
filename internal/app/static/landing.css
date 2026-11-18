@@ -328,7 +328,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
    script off the reel is a plain row the reader can scroll
    sideways; landing.js adds ld-gal-on and drives the track's
    transform instead. */
-.ld-gallery { margin-top: 26px; }
+.ld-gallery { position: relative; margin-top: 26px; }
 .ld-gal-stage { position: relative; overflow: hidden; padding: 18px 0; }
 .ld-gal-track { position: relative; z-index: 1; display: flex; align-items: center; gap: 20px; overflow-x: auto; scrollbar-width: none; }
 .ld-gal-track::-webkit-scrollbar { display: none; }

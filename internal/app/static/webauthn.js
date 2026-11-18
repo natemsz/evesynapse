@@ -268,7 +268,7 @@
       var start = async function () {
         if (starting || active) return;
         starting = true;
-        stop(); reset(); panel.hidden = true;
+        stop(); reset(); panel.hidden = false;
         if (button) button.disabled = true;
         say(status, 'Starting a secure passkey handoff…');
         var fields = { for: box.getAttribute('data-qr-for') || 'factor' };
@@ -298,18 +298,17 @@
       if (button && wire(button)) button.addEventListener('click', start);
     });
 
-    // The factor page has one action: try this browser's key and,
-    // where hybrid transport is unavailable, open the phone QR too.
+    // The factor page's primary action also opens the phone QR when
+    // the browser cannot use the native hybrid transport.
     var factorGo = document.getElementById('factor-go');
-    if (factorGo && !factorGo.__esQRHandoffWired) {
-      factorGo.__esQRHandoffWired = true;
-      factorGo.addEventListener('click', function () {
+    if (factorGo) {
+      factorGo.__esStartQRIfNeeded = function () {
         nativeHybridPromise.then(function (nativeHybrid) {
           if (nativeHybrid) return;
           var box = document.querySelector('[data-webauthn-qr][data-qr-for="factor"]');
           if (box && box.__esStartQR) box.__esStartQR();
         });
-      }, true);
+      };
     }
 
     var device = document.querySelector('[data-webauthn-qr-device]');
@@ -380,6 +379,7 @@
     var factorGo = document.getElementById('factor-go');
     if (wire(factorGo)) {
       factorGo.addEventListener('click', function () {
+        if (factorGo.__esStartQRIfNeeded) factorGo.__esStartQRIfNeeded();
         var root = document.getElementById('factor-assert');
         var status = document.getElementById('factor-status');
         hideError(status);

@@ -61,6 +61,51 @@ var killLeadersMu sync.Mutex
 // a day no kill is from.
 var killLeadersRolling = time.Unix(0, 0).UTC()
 
+// killLeadersRetry is a failed rank's next retry and its delay, by
+// period key. refreshKillLeaders holds killLeadersMu while it reads
+// and writes this map, so no separate lock is needed. A failing
+// period backs off instead of retrying on every pass, so it cannot
+// block the day totals behind it.
+type killLeadersRetryState struct {
+	next  time.Time
+	delay time.Duration
+}
+
+var killLeadersRetry = map[string]killLeadersRetryState{}
+
+// killLeadersBlocked reports whether a period's rank is in backoff.
+func killLeadersBlocked(key string, now time.Time) bool {
+	if s, ok := killLeadersRetry[key]; ok {
+		return now.Before(s.next)
+	}
+	return false
+}
+
+// killLeadersFail records a rank failure: the next retry is the
+// current delay from now, and the delay doubles, capped at the
+// period's own interval or six hours.
+func killLeadersFail(key string, every time.Duration, now time.Time) {
+	s := killLeadersRetry[key]
+	if s.delay == 0 {
+		s.delay = 5 * time.Minute
+	}
+	s.next = now.Add(s.delay)
+	cap := every
+	if cap > 6*time.Hour {
+		cap = 6 * time.Hour
+	}
+	s.delay *= 2
+	if s.delay > cap {
+		s.delay = cap
+	}
+	killLeadersRetry[key] = s
+}
+
+// killLeadersOK clears a period's backoff after a good rank.
+func killLeadersOK(key string) {
+	delete(killLeadersRetry, key)
+}
+
 // killLeadersBoardCodes are the boards' codes in kill_leaders_totals.
 var killLeadersBoardCodes = map[string]int16{
 	"character": 1, "corporation": 2, "alliance": 3, "ship_lost": 4, "ship_used": 5, "system": 6, "region": 7, "kill": 8,
@@ -108,16 +153,18 @@ func (app *Application) refreshKillLeaders(ctx context.Context) {
 	}
 
 	// The 24 hours: totalled straight from the kills, then ranked.
-	if p := killLeaderPeriods[0]; due(p) {
+	if p := killLeaderPeriods[0]; due(p) && !killLeadersBlocked(p.Key, now) {
 		start := time.Now()
 		n, err := app.totalKillLeaders(ctx, killLeadersRolling, now.Add(-24*time.Hour), now)
 		if err == nil {
 			err = app.rankKillLeaders(ctx, p, []time.Time{killLeadersRolling}, now.Add(-24*time.Hour), now, n)
 		}
 		if err != nil {
+			killLeadersFail(p.Key, p.Every, now)
 			logging.Errorf("killboard leaders: rank %s: %v", p.Key, err)
 			return
 		}
+		killLeadersOK(p.Key)
 		logRun("ranked the last "+p.Label, start, n)
 		return
 	}
@@ -127,7 +174,7 @@ func (app *Application) refreshKillLeaders(ctx context.Context) {
 	// The 7 and 30 days: today's totals refreshed, then the days
 	// added up.
 	for _, p := range killLeaderPeriods[1:] {
-		if !due(p) {
+		if !due(p) || killLeadersBlocked(p.Key, now) {
 			continue
 		}
 		days := make([]time.Time, 0, p.Days)
@@ -145,14 +192,17 @@ func (app *Application) refreshKillLeaders(ctx context.Context) {
 		start := time.Now()
 		if last, ok := totalled[killLeadersDayKey(today)]; !ok || now.Sub(last) >= killLeadersTodayFresh {
 			if _, err := app.totalKillLeaders(ctx, today, today, now); err != nil {
+				killLeadersFail(p.Key, p.Every, now)
 				logging.Errorf("killboard leaders: total %s: %v", killLeadersDayKey(today), err)
 				return
 			}
 		}
 		if err := app.rankKillLeaders(ctx, p, days, today.AddDate(0, 0, 1-p.Days), now, 0); err != nil {
+			killLeadersFail(p.Key, p.Every, now)
 			logging.Errorf("killboard leaders: rank %s: %v", p.Key, err)
 			return
 		}
+		killLeadersOK(p.Key)
 		logRun("ranked the last "+p.Label, start, 0)
 		if err := app.queries.PruneKillLeadersDays(ctx, today.AddDate(0, 0, 1-longest)); err != nil {
 			logging.Warnf("killboard leaders: prune: %v", err)
@@ -234,6 +284,21 @@ func (app *Application) totalKillLeaders(ctx context.Context, day, since, until 
 	return n, tx.Commit(ctx)
 }
 
+// killLeaderRankPairs are the (board, scope) pairs that have totals,
+// as the totals queries write them: every board in New Eden, then
+// the scopes each board reaches. A rank writes one pair per
+// statement so its sums and sorts stay small enough for memory.
+var killLeaderRankPairs = [][2]int16{
+	{1, 0}, {1, 1}, {1, 2}, {1, 3}, {1, 4}, {1, 5},
+	{2, 0}, {2, 1}, {2, 2}, {2, 3}, {2, 4},
+	{3, 0}, {3, 1}, {3, 2}, {3, 3},
+	{4, 0}, {4, 1}, {4, 2},
+	{5, 0}, {5, 1},
+	{6, 0}, {6, 1},
+	{7, 0},
+	{8, 0}, {8, 1}, {8, 2},
+}
+
 // rankKillLeaders replaces a period's ranks with its days added up, in one transaction: a page reads the old ranks until the new
 // ones land.
 func (app *Application) rankKillLeaders(ctx context.Context, p killLeaderPeriod, days []time.Time, since, now time.Time, kills int64) error {
@@ -245,12 +310,17 @@ func (app *Application) rankKillLeaders(ctx context.Context, p killLeaderPeriod,
 	if _, err := tx.Exec(ctx, "SET LOCAL work_mem = '128MB'"); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = '120s'"); err != nil {
+		return err
+	}
 	q := db.New(tx)
 	if err := q.DeleteKillLeadersPeriod(ctx, p.Key); err != nil {
 		return err
 	}
-	if err := q.RankKillLeaders(ctx, db.RankKillLeadersParams{Period: p.Key, Days: days}); err != nil {
-		return err
+	for _, pair := range killLeaderRankPairs {
+		if err := q.RankKillLeaders(ctx, db.RankKillLeadersParams{Period: p.Key, Days: days, Board: pair[0], Scope: pair[1]}); err != nil {
+			return err
+		}
 	}
 	if err := q.UpsertKillLeadersState(ctx, db.UpsertKillLeadersStateParams{Period: p.Key, Since: since, ComputedAt: now, Kills: kills}); err != nil {
 		return err

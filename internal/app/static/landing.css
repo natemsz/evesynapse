@@ -349,6 +349,9 @@ div.ld-gal-ambient > video, div.ld-gal-ambient > img { display: block; width: 10
 .ld-gal-arrow:hover { border-color: rgba(255, 106, 0, 0.45); }
 .ld-gal-prev { left: 12px; }
 .ld-gal-next { right: 12px; }
+.ld-modal .ld-gal-arrow { display: flex; }
+.ld-gal-mprev { left: 14px; }
+.ld-gal-mnext { right: 14px; }
 .ld-gal-card { position: relative; width: min(1280px, 100%); padding: 18px; }
 .ld-gal-card img, .ld-gal-card video { position: relative; z-index: 1; display: block; width: 100%; height: auto; border-radius: 12px; }
 .ld-gal-card [hidden] { display: none; }

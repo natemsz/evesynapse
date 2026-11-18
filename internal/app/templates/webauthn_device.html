@@ -1,0 +1,18 @@
+{{define "title"}}Use your passkey{{end}}
+{{define "pagetitle"}}<h1>Use your passkey</h1>{{end}}
+{{define "content"}}
+<section class="card page-card" data-webauthn-qr-device data-token="{{if .WebAuthnQR}}{{.WebAuthnQR.Token}}{{end}}" data-mode="{{if .WebAuthnQR}}{{.WebAuthnQR.Mode}}{{end}}">
+  {{if .WebAuthnQR.Expired}}
+    <h2>This passkey request expired</h2>
+    <p class="prose">Return to the browser that showed the QR code and request a new one.</p>
+  {{else}}
+    <h2>Confirm on this phone</h2>
+    <p class="prose">Only continue if you scanned this code yourself on your computer just now. The passkey will be used for that request only.</p>
+    <p class="prose">Never enter a pairing code someone sent you. Anyone asking for it may be trying to access your account.</p>
+    <p><label for="webauthn-qr-code">Six-digit code shown on your computer</label>
+      <input class="input" id="webauthn-qr-code" inputmode="numeric" autocomplete="off" maxlength="7" placeholder="000 000"></p>
+    <p><button type="button" class="btn" data-webauthn-qr-device-start>Continue with this phone's passkey</button></p>
+    <p class="prose" id="webauthn-qr-device-status" role="status" aria-live="polite"></p>
+  {{end}}
+</section>
+{{end}}

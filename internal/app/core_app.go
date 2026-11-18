@@ -88,6 +88,10 @@ type Application struct {
 	// the subscribers watching /market/stream for stat-pack updates.
 	marketLive marketLiveHub
 
+	// webauthnQR holds short-lived cross-device passkey handoffs
+	// for browsers without the WebAuthn hybrid transport.
+	webauthnQR webauthnQRHandoffs
+
 	// liveFeeds holds the named broadcast feeds modules open
 	// through Deps.LiveFeed (livefeed.go), by name.
 	liveFeeds sync.Map
@@ -809,6 +813,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/auth/factor", app.handleFactor)
 	r.Post("/auth/factor/begin", app.handleFactorBegin)
 	r.Post("/auth/factor/finish", app.handleFactorFinish)
+	r.Post("/auth/factor/qr", app.handleWebAuthnQRCreate)
+	r.Get("/auth/factor/qr/status", app.handleWebAuthnQRStatus)
+	r.Post("/auth/factor/qr/cancel", app.handleWebAuthnQRCancel)
+	r.Get("/auth/factor/qr/device", app.handleWebAuthnQRDevicePage)
+	r.Post("/auth/factor/qr/device/options", app.handleWebAuthnQRDeviceOptions)
+	r.Post("/auth/factor/qr/device/verify", app.handleWebAuthnQRDeviceVerify)
 	r.Post("/auth/factor/recover", app.handleFactorRecover)
 	r.Get("/auth/enroll", app.handleEnroll)
 	r.Post("/auth/enroll/begin", app.handleEnrollBegin)

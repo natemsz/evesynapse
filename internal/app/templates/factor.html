@@ -11,6 +11,19 @@
   {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
   <p class="err" id="factor-status" role="alert" hidden></p>
   <p><button type="button" class="btn factor-wide" id="factor-go">Continue with key</button></p>
+  <div class="factor-alt" data-webauthn-qr data-qr-for="factor" hidden>
+    <p class="prose">This browser cannot ask your phone to sign in directly. Use your phone's passkey instead.</p>
+    <p><button type="button" class="btn" data-webauthn-qr-start>Use a passkey on my phone</button></p>
+    <div class="webauthn-qr-panel" data-qr-panel hidden>
+      <p class="prose">Scan with your phone's camera, then enter the code below on the phone.</p>
+      <img alt="Passkey handoff QR code" width="240" height="240" data-qr-img hidden>
+      <p class="prose">Pairing code</p>
+      <p class="webauthn-qr-code" data-qr-code></p>
+      <p class="prose">Only enter this code on the phone you are using now. Never share it with anyone.</p>
+      <p class="prose" role="status" aria-live="polite" data-qr-status></p>
+      <button type="button" class="btn" data-qr-cancel>Cancel</button>
+    </div>
+  </div>
 {{if .HasCodes}}
   <details class="factor-alt">
     <summary>Sign in with recovery code</summary>

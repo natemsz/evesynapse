@@ -770,13 +770,28 @@ func (app *Application) handleFactorRecover(w http.ResponseWriter, r *http.Reque
 // required and no attestation. The account's own keys are
 // excluded, so a key cannot be enrolled twice.
 func (app *Application) beginRegistration(ctx context.Context, r *http.Request, userID int64, name string) (*protocol.CredentialCreation, error) {
-	user, err := app.webauthnUserFor(ctx, userID, app.factorDisplayName(ctx, userID))
+	creation, session, err := app.beginRegistrationFor(ctx, r, userID)
 	if err != nil {
 		return nil, err
 	}
+	if err := app.putCeremony(ctx, session2FARegChallenge, session); err != nil {
+		return nil, err
+	}
+	app.sessions.Put(ctx, session2FARegName, name)
+	return creation, nil
+}
+
+// beginRegistrationFor creates a registration challenge without
+// binding it to the current browser session. The QR handoff uses it
+// for a phone that has no EveSynapse session of its own.
+func (app *Application) beginRegistrationFor(ctx context.Context, r *http.Request, userID int64) (*protocol.CredentialCreation, *webauthn.SessionData, error) {
+	user, err := app.webauthnUserFor(ctx, userID, app.factorDisplayName(ctx, userID))
+	if err != nil {
+		return nil, nil, err
+	}
 	rp, err := webauthnFor(r)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	creation, session, err := rp.BeginRegistration(user,
 		webauthn.WithConveyancePreference(protocol.PreferNoAttestation),
@@ -786,13 +801,9 @@ func (app *Application) beginRegistration(ctx context.Context, r *http.Request, 
 		webauthn.WithExclusions(webauthn.Credentials(user.credentials).CredentialDescriptors()),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if err := app.putCeremony(ctx, session2FARegChallenge, session); err != nil {
-		return nil, err
-	}
-	app.sessions.Put(ctx, session2FARegName, name)
-	return creation, nil
+	return creation, session, nil
 }
 
 // finishRegistration closes a registration ceremony and stores
@@ -804,6 +815,16 @@ func (app *Application) finishRegistration(ctx context.Context, r *http.Request,
 		return false, errFactorStale
 	}
 	name := app.sessions.PopString(ctx, session2FARegName)
+	return app.finishRegistrationFor(ctx, r, userID, name, &session)
+}
+
+// finishRegistrationFor verifies and stores a registration ceremony
+// whose challenge may live in a cross-device QR handoff rather than a
+// browser session.
+func (app *Application) finishRegistrationFor(ctx context.Context, r *http.Request, userID int64, name string, session *webauthn.SessionData) (first bool, err error) {
+	if session == nil {
+		return false, errFactorStale
+	}
 	user, err := app.webauthnUserFor(ctx, userID, app.factorDisplayName(ctx, userID))
 	if err != nil {
 		return false, err
@@ -812,7 +833,7 @@ func (app *Application) finishRegistration(ctx context.Context, r *http.Request,
 	if err != nil {
 		return false, err
 	}
-	cred, err := rp.FinishRegistration(user, session, r)
+	cred, err := rp.FinishRegistration(user, *session, r)
 	if err != nil {
 		return false, err
 	}

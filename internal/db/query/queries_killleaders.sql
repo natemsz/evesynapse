@@ -147,8 +147,10 @@ DELETE FROM kill_leaders_totals t USING gone WHERE t.day = gone.day;
 -- name: DeleteKillLeadersPeriod :exec
 DELETE FROM kill_leaders WHERE period = sqlc.arg(period)::text;
 
--- A period's ranks: its days added up per board, scope and entity,
--- each scope cut by its depth, written with the names the pages read.
+-- One board and scope of a period's ranks: its days added up per
+-- scope id and entity, cut by the scope's depth, written with the
+-- names the pages read. A run ranks one board and scope at a time so
+-- each statement's sums and sorts stay small enough for memory.
 -- name: RankKillLeaders :exec
 INSERT INTO kill_leaders (period, scope_kind, scope_id, board, entity_id, kills, solo, isk, rank_kills, rank_isk)
 SELECT sqlc.arg(period)::text,
@@ -158,13 +160,14 @@ SELECT sqlc.arg(period)::text,
        r.entity_id, r.kills, r.solo, r.isk, r.rk, r.ri
 FROM (
     SELECT g.board, g.scope, g.scope_id, g.entity_id, g.kills, g.solo, g.isk,
-           row_number() OVER (PARTITION BY g.board, g.scope, g.scope_id ORDER BY g.kills DESC, g.isk DESC, g.entity_id)::integer AS rk,
-           row_number() OVER (PARTITION BY g.board, g.scope, g.scope_id ORDER BY g.isk DESC, g.kills DESC, g.entity_id)::integer AS ri
+           row_number() OVER (PARTITION BY g.scope_id ORDER BY g.kills DESC, g.isk DESC, g.entity_id)::integer AS rk,
+           row_number() OVER (PARTITION BY g.scope_id ORDER BY g.isk DESC, g.kills DESC, g.entity_id)::integer AS ri
     FROM (
         SELECT t.board, t.scope, t.scope_id, t.entity_id, sum(t.kills)::bigint AS kills,
                sum(t.solo)::bigint AS solo, sum(t.isk)::double precision AS isk
         FROM kill_leaders_totals t
         WHERE t.day = ANY(sqlc.arg(days)::date[])
+          AND t.board = sqlc.arg(board)::smallint AND t.scope = sqlc.arg(scope)::smallint
         GROUP BY t.board, t.scope, t.scope_id, t.entity_id
     ) g
 ) r

@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -295,7 +296,7 @@ func (app *Application) handleWebAuthnQRCreate(w http.ResponseWriter, r *http.Re
 		qrJSONError(w, http.StatusBadRequest, "bad request")
 		return
 	}
-	ctx := r.Context()
+	var ctx context.Context
 	userID := int64(0)
 	h := &webauthnQRHandoff{mode: in.For, name: strings.TrimSpace(in.Name), expires: time.Now().Add(webauthnQRLifetime)}
 	switch in.For {

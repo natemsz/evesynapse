@@ -489,6 +489,8 @@
     modal.querySelectorAll("[data-gal-close]").forEach(function (el) {
       el.addEventListener("click", closeModal);
     });
+    modal.querySelector("[data-gal-mprev]").addEventListener("click", function () { focus(cur - 1); });
+    modal.querySelector("[data-gal-mnext]").addEventListener("click", function () { focus(cur + 1); });
     document.addEventListener("keydown", function (e) {
       if (modal.hidden) return;
       if (e.key === "Escape") closeModal();

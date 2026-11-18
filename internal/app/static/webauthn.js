@@ -101,6 +101,25 @@
     return out;
   }
 
+  function requestOptions(options) {
+    var pk = options.publicKey || options;
+    pk.challenge = toBuffer(pk.challenge);
+    (pk.allowCredentials || []).forEach(function (c) {
+      c.id = toBuffer(c.id);
+    });
+    return pk;
+  }
+
+  function creationOptions(options) {
+    var pk = options.publicKey || options;
+    pk.challenge = toBuffer(pk.challenge);
+    pk.user.id = toBuffer(pk.user.id);
+    (pk.excludeCredentials || []).forEach(function (c) {
+      c.id = toBuffer(c.id);
+    });
+    return pk;
+  }
+
   // runAssertion plays one key challenge: options from begin,
   // the browser prompt, the answer to finish. It resolves to
   // the redirect the server answers with.
@@ -152,6 +171,179 @@
   function keysAvailable() {
     return !!(window.navigator && window.navigator.credentials &&
       window.fetch && window.atob);
+  }
+
+  async function hasNativeHybrid() {
+    if (!window.PublicKeyCredential || !window.navigator.credentials) return false;
+    if (typeof PublicKeyCredential.getClientCapabilities === 'function') {
+      try {
+        var caps = await PublicKeyCredential.getClientCapabilities();
+        if (typeof caps.hybridTransport === 'boolean') return caps.hybridTransport;
+      } catch (err) { /* use the conservative browser fallback below */ }
+    }
+    // Older Firefox builds expose WebAuthn without hybrid transport.
+    // Other browsers keep their existing native prompt unless they
+    // explicitly report that hybrid is unavailable.
+    return !/firefox|fxios/i.test(navigator.userAgent);
+  }
+
+  function initWebAuthnQR() {
+    var boxes = document.querySelectorAll('[data-webauthn-qr]');
+    if (boxes.length) {
+      hasNativeHybrid().then(function (nativeHybrid) {
+        if (!nativeHybrid) {
+          Array.prototype.forEach.call(boxes, function (box) { box.hidden = false; });
+        }
+      });
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-webauthn-qr]'), function (box) {
+      var button = box.querySelector('[data-webauthn-qr-start]');
+      var panel = box.querySelector('[data-qr-panel]');
+      var img = box.querySelector('[data-qr-img]');
+      var code = box.querySelector('[data-qr-code]');
+      var status = box.querySelector('[data-qr-status]');
+      var cancel = box.querySelector('[data-qr-cancel]');
+      if (!button || !panel || !img || !code || !status || !cancel || !wire(button)) return;
+
+      var timer = null;
+      var active = false;
+      var reset = function () {
+        img.hidden = true;
+        img.removeAttribute('src');
+        code.textContent = '';
+      };
+      var stop = function () {
+        active = false;
+        if (timer) window.clearTimeout(timer);
+        timer = null;
+      };
+      var poll = async function () {
+        if (!active) return;
+        try {
+          var response = await fetch('/auth/factor/qr/status', {
+            credentials: 'same-origin', headers: { Accept: 'application/json' }
+          });
+          var body = await response.json();
+          if (!active) return;
+          if (body.status === 'done') {
+            stop();
+            if (Array.isArray(body.codes)) {
+              var mode = box.getAttribute('data-qr-for');
+              var form = document.getElementById(mode === 'enroll' ? 'enroll-form' : 'security-form');
+              var codesRoot = document.getElementById(mode === 'enroll' ? 'enroll-codes' : 'security-codes');
+              var codesList = document.getElementById(mode === 'enroll' ? 'enroll-code-list' : 'security-code-list');
+              if (form) form.hidden = true;
+              if (codesList) showCodes(codesList, body.codes);
+              if (codesRoot) codesRoot.hidden = false;
+              panel.hidden = true;
+              return;
+            }
+            location.assign(body.redirect || '/settings#security');
+            return;
+          }
+          if (body.status === 'expired' || body.status === 'error') {
+            stop(); reset();
+            say(status, body.error || 'This QR code expired. Request a new one.');
+            return;
+          }
+        } catch (err) { /* keep polling through a short network interruption */ }
+        if (active) timer = window.setTimeout(poll, 1800);
+      };
+
+      cancel.addEventListener('click', function () {
+        stop(); panel.hidden = true; reset(); say(status, '');
+        fetch('/auth/factor/qr/cancel', { method: 'POST', credentials: 'same-origin' }).catch(function () {});
+        button.focus();
+      });
+
+      button.addEventListener('click', async function () {
+        stop(); button.disabled = true; say(status, 'Starting a secure passkey handoff…');
+        var fields = { for: box.getAttribute('data-qr-for') || 'factor' };
+        var nameField = box.getAttribute('data-qr-name-from');
+        if (nameField) {
+          var input = document.getElementById(nameField);
+          if (input && input.value.trim()) fields.name = input.value.trim();
+        }
+        try {
+          var started = await postJSON('/auth/factor/qr', fields);
+          if (!started.qr) throw new Error(started.error || 'begin');
+          panel.hidden = false;
+          img.src = started.qr; img.hidden = false;
+          code.textContent = started.code || '';
+          say(status, 'Waiting for your phone…');
+          active = true; cancel.focus();
+          timer = window.setTimeout(poll, 1200);
+        } catch (err) {
+          panel.hidden = false;
+          say(status, messageFor(err.message));
+        } finally {
+          button.disabled = false;
+        }
+      });
+    });
+
+    var device = document.querySelector('[data-webauthn-qr-device]');
+    var deviceButton = device && device.querySelector('[data-webauthn-qr-device-start]');
+    if (deviceButton && wire(deviceButton)) {
+      var token = device.getAttribute('data-token') || '';
+      var codeInput = document.getElementById('webauthn-qr-code');
+      var deviceStatus = document.getElementById('webauthn-qr-device-status');
+      deviceButton.addEventListener('click', async function () {
+        var pairingCode = (codeInput.value || '').replace(/[\s-]+/g, '');
+        if (!/^\d{6}$/.test(pairingCode)) {
+          say(deviceStatus, 'Enter the six-digit code shown on your computer.');
+          codeInput.focus();
+          return;
+        }
+        deviceButton.disabled = true;
+        say(deviceStatus, 'Follow the passkey prompt on this phone…');
+        try {
+          var operation;
+          do {
+            var optsResponse = await fetch('/auth/factor/qr/device/options', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-Evesynapse-QR-Token': token },
+              body: JSON.stringify({ code: pairingCode })
+            });
+            var opts = {};
+            try { opts = await optsResponse.json(); } catch (err) { /* handled below */ }
+            if (!optsResponse.ok) throw new Error(opts.error || 'expired');
+            operation = opts.operation;
+            var publicKey = operation === 'register'
+              ? creationOptions(opts.publicKey)
+              : requestOptions(opts.publicKey);
+            var credential = operation === 'register'
+              ? await navigator.credentials.create({ publicKey: publicKey })
+              : await navigator.credentials.get({ publicKey: publicKey });
+            if (!credential) throw new Error('verify');
+            var verified = await fetch('/auth/factor/qr/device/verify', {
+              method: 'POST', credentials: 'same-origin',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Evesynapse-QR-Token': token,
+                'X-Evesynapse-QR-Code': pairingCode
+              },
+            body: JSON.stringify(serialiseCredential(credential))
+            });
+            var result = {};
+            try { result = await verified.json(); } catch (err) { /* handled below */ }
+            if (!verified.ok) throw new Error(result.error || 'verify');
+            if (result.next === 'register') {
+              say(deviceStatus, 'Passkey confirmed. Now save a passkey on this phone…');
+              continue;
+            }
+            say(deviceStatus, result.message || 'Done. Return to your computer to finish.');
+            codeInput.disabled = true;
+            return;
+          } while (true);
+        } catch (err) {
+          say(deviceStatus, messageFor(err.name === 'NotAllowedError' ? err.name : err.message));
+          if (err.name === 'NotAllowedError') deviceButton.disabled = false;
+          else deviceButton.disabled = false;
+        }
+      });
+    }
   }
 
   function init() {
@@ -286,6 +478,7 @@
         });
       })(freshForms[i]);
     }
+    initWebAuthnQR();
   }
 
   init();

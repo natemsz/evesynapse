@@ -129,6 +129,19 @@
     <div id="security-form">
       <p><label>Key name <input type="text" id="security-name" value="Security key" maxlength="64" autocomplete="off"></label>
       <button type="button" class="btn" id="security-add">{{if .Enabled}}Add another key{{else}}Add a key{{end}}</button></p>
+      <div data-webauthn-qr data-qr-for="settings" data-qr-name-from="security-name" hidden>
+        <p class="prose">This browser cannot invite your phone directly. Scan this code to add a passkey on your phone.</p>
+        <p><button type="button" class="btn" data-webauthn-qr-start>Add with my phone</button></p>
+        <div class="webauthn-qr-panel" data-qr-panel hidden>
+          <p class="prose">Scan with your phone's camera, then enter the code below on the phone.</p>
+          <img alt="Passkey enrollment QR code" width="240" height="240" data-qr-img hidden>
+          <p class="prose">Pairing code</p>
+          <p class="webauthn-qr-code" data-qr-code></p>
+          <p class="prose">Only enter this code on the phone you are using now. Never share it with anyone.</p>
+          <p class="prose" role="status" aria-live="polite" data-qr-status></p>
+          <button type="button" class="btn" data-qr-cancel>Cancel</button>
+        </div>
+      </div>
     </div>
     <div id="security-codes" hidden>
       <h2>Recovery codes</h2>

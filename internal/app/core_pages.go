@@ -14,6 +14,7 @@ import (
 // pageData is the view model shared by the templates.
 type pageData struct {
 	module.ShellData
+	WebAuthnQR      *webauthnQRDeviceView
 	Home            *homeView
 	CharChars       []assetCharLink
 	CharacterPage   *characterView

@@ -104,9 +104,9 @@ var trustCFConnectingIP = func() *atomic.Bool { b := &atomic.Bool{}; b.Store(tru
 
 // clientAddr is the address a request came from. The app sits behind
 // something on the same machine that connects from loopback: a
-// Cloudflare tunnel (cloudflared), which names the visitor in
-// CF-Connecting-IP, or a reverse proxy such as Caddy (README), which
-// appends the visitor to X-Forwarded-For. So for a loopback peer
+// reverse proxy such as Ferron or Caddy (README), which passes the
+// visitor through in CF-Connecting-IP (Cloudflare) or appends them
+// to X-Forwarded-For. So for a loopback peer
 // CF-Connecting-IP wins, then the last X-Forwarded-For entry. From
 // any other peer both headers are the client's own say-so and are
 // ignored. CF-Connecting-IP is read only while trustCFConnectingIP

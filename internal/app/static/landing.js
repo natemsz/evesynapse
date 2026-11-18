@@ -303,10 +303,15 @@
       if (!vid.paused) vid.pause();
     }
   }
+  // Seeking a clip that has not buffered yet can kill the play()
+  // the same call just asked for (Blink drops the promise when a
+  // seek interrupts a load), so a seek waits for enough data;
+  // the clip then starts at 0 and pullAmbient pulls it in step
+  // once it is playing.
   function driveAmbient(vid, srcVid, on) {
     if (!vid || vid.hidden) return;
     if (on && srcVid) {
-      if (Math.abs(vid.currentTime - srcVid.currentTime) > 1.5) {
+      if (vid.readyState >= 2 && Math.abs(vid.currentTime - srcVid.currentTime) > 1.5) {
         try { vid.currentTime = srcVid.currentTime; } catch (e) {}
       }
       tryPlay(vid);
@@ -315,9 +320,19 @@
   // Two decoders drift apart within seconds, and a clip whose
   // colours change (the schemes reel) would throw the wrong light;
   // the source clip's timeupdate pulls its ambient copy back in.
+  // If the ambient copy stalled (a refused play, a seek that
+  // starved the load), the same heartbeat restarts it: while its
+  // source is playing, the ambient copy has to be playing too.
   function pullAmbient(vid, srcVid) {
-    if (!vid || vid.hidden || vid.paused || !srcVid || srcVid.paused) return;
-    if (Math.abs(vid.currentTime - srcVid.currentTime) > 0.35) {
+    if (!vid || vid.hidden || !srcVid || srcVid.paused) return;
+    if (vid.paused) {
+      if (vid.readyState >= 2 && Math.abs(vid.currentTime - srcVid.currentTime) > 0.35) {
+        try { vid.currentTime = srcVid.currentTime; } catch (e) {}
+      }
+      tryPlay(vid);
+      return;
+    }
+    if (vid.readyState >= 2 && Math.abs(vid.currentTime - srcVid.currentTime) > 0.35) {
       try { vid.currentTime = srcVid.currentTime; } catch (e) {}
     }
   }
@@ -414,6 +429,15 @@
     });
   });
   if (modalVid) modalVid.addEventListener("timeupdate", function () { pullAmbient(mAmbVid, modalVid); });
+  // A play() asked for while a clip is still fetching its source
+  // can be refused (Blink), and the refusal is silent, so when a
+  // clip has enough data to play, retry the whole sync: the
+  // ambient copies and the modal clip cannot stay paused after a
+  // single refused attempt.
+  [ambVid, mAmbVid, modalVid].forEach(function (v) {
+    if (!v) return;
+    v.addEventListener("canplay", syncPlay);
+  });
   // Swipe: a horizontal drag steps the reel through the same
   // focus() the arrows use. On the stage the track follows the
   // pointer and the release either steps one slide or settles

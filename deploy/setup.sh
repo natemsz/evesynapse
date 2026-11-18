@@ -34,30 +34,59 @@
 set -euo pipefail
 
 # --- Banner ---
-# The EveSynapse bolt, drawn in Braille dots, printed on every run.
-# Plain text, no dependencies: it renders in any UTF-8 terminal.
+# The EveSynapse bolt, rotating in 3D (Braille dots), printed on every run.
+# Pure bash: printf, sleep, tput only. After two full rotations the final
+# frame (the bolt facing forward) stays on screen, with the title and
+# description below it, and the script continues. When stdout is not a
+# terminal, the static bolt prints once and the animation is skipped.
 print_banner() {
-  cat <<'EOF'
-                ⡀
-              ⢀⡴⠁
-             ⣠⣾⠃
-           ⢀⣴⣿⠇
-          ⣠⣾⣿⡟
-        ⢀⣴⣿⣿⡿
-       ⣠⣾⣿⣿⣿⠁
-     ⢀⣴⣿⣿⣿⣿⠇ ⣰⣶⣶⣶⣶⡶⠂
-    ⠠⠾⠿⠿⠿⠿⠏ ⢰⣿⣿⣿⣿⠟⠁
-           ⢀⣿⣿⣿⡿⠋
-           ⣾⣿⣿⠟⠁
-          ⣼⣿⡿⠋
-         ⢰⣿⠟⠁
-        ⢠⡿⠋
-       ⢀⠞⠁
-       ⠈
-
-  EVESYNAPSE
-  Lightweight, fast, and comprehensive EVE Online companion.
-EOF
+  local frames=(
+    $'              ⢀⣼⠃   \n            ⢀⣴⣿⠃    \n          ⢀⣴⣿⣿⠃     \n         ⣴⣿⣿⣿⠃      \n       ⣠⣾⣿⣿⣿⠃       \n     ⣠⣾⣿⣿⣿⣿⠃        \n   ⣠⣾⣿⣿⣿⣿⣿⠇         \n ⢀⣾⣿⣿⣿⣿⣿⣿⠏ ⣰⣿⣿⣿⣿⣿⣿⣿⠟\n⣴⣿⣿⣿⣿⣿⣿⣿⠏ ⣰⣿⣿⣿⣿⣿⣿⡿⠁ \n         ⢰⣿⣿⣿⣿⣿⡿⠋   \n        ⢠⣿⣿⣿⣿⡿⠋     \n       ⢠⣿⣿⣿⡿⠋       \n      ⢠⣿⣿⣿⠟         \n     ⢠⣿⣿⠟⠁          \n    ⢠⣿⠟⠁            \n   ⢠⡟⠁              '
+    $'              ⣠⡾⠁   \n            ⢀⣼⡿⠁    \n          ⢀⣴⣿⡿⠁     \n         ⣴⣿⣿⣿⠃      \n       ⣠⣾⣿⣿⣿⠃       \n     ⣠⣾⣿⣿⣿⣿⠃        \n   ⢀⣼⣿⣿⣿⣿⣿⠃         \n ⢀⣴⣿⣿⣿⣿⣿⣿⠏ ⣰⣿⣿⣿⣿⣿⣿⣿⠟\n⣴⣿⣿⣿⣿⣿⣿⣿⠏ ⣰⣿⣿⣿⣿⣿⣿⠟⠁ \n         ⢠⣿⣿⣿⣿⣿⡟⠁   \n        ⢠⣿⣿⣿⣿⡿⠋     \n       ⢠⣿⣿⣿⡿⠋       \n      ⢠⣿⣿⣿⠟         \n     ⢀⣾⣿⠟⠁          \n    ⢀⣾⡟⠁            \n   ⢀⡾⠋              '
+    $'             ⢀⣴⠃    \n            ⣠⣾⠏     \n          ⢀⣼⣿⡟      \n         ⣰⣿⣿⡟       \n       ⢠⣾⣿⣿⡿⠁       \n     ⢀⣴⣿⣿⣿⣿⠃        \n    ⣠⣾⣿⣿⣿⣿⠃         \n  ⢀⣾⣿⣿⣿⣿⣿⠏ ⣼⣿⣿⣿⣿⣿⣿⠟ \n ⣴⣿⣿⣿⣿⣿⣿⡟ ⣰⣿⣿⣿⣿⣿⡿⠁  \n         ⢠⣿⣿⣿⣿⡿⠋    \n        ⢠⣿⣿⣿⣿⠟⠁     \n       ⢀⣾⣿⣿⡿⠃       \n       ⣼⣿⣿⠏         \n      ⣼⣿⡟⠁          \n     ⣰⡿⠋            \n    ⢠⠟⠁             '
+    $'             ⣰⠇     \n           ⢀⣼⡟      \n          ⢠⣾⣿⠁      \n         ⣰⣿⣿⠇       \n       ⢀⣼⣿⣿⡟        \n      ⢀⣾⣿⣿⣿⠁        \n     ⣠⣿⣿⣿⣿⠃         \n    ⣴⣿⣿⣿⣿⡏ ⣾⣿⣿⣿⣿⡿   \n   ⣾⣿⣿⣿⣿⡿ ⣸⣿⣿⣿⣿⠟    \n         ⢠⣿⣿⣿⣿⠋     \n        ⢀⣿⣿⣿⡿⠁      \n        ⣼⣿⣿⡟⠁       \n       ⢰⣿⣿⠏         \n      ⢀⣿⡿⠃          \n      ⣼⡟⠁           \n     ⢰⠏             '
+    $'            ⣰⠁      \n           ⣰⡟       \n          ⣰⣿⠃       \n         ⢰⣿⡟        \n        ⢠⣿⣿⠃        \n       ⢠⣿⣿⡟         \n      ⢠⣿⣿⣿⠃         \n     ⢀⣿⣿⣿⡿⢰⣿⣿⣿⡿     \n     ⣾⣿⣿⣿⠇⣾⣿⣿⣿⠁     \n         ⢠⣿⣿⣿⠃      \n         ⣼⣿⣿⠃       \n        ⢠⣿⣿⠃        \n        ⣼⣿⠇         \n       ⢠⣿⠏          \n       ⣼⠏           \n      ⢀⠏            '
+    $'           ⡞        \n          ⢰⡇        \n          ⣾⠃        \n         ⢠⣿         \n         ⣼⡟         \n        ⢠⣿⡇         \n        ⣼⣿⠃         \n       ⢠⣿⣿⣼⣿⡗       \n       ⢼⣿⡟⣿⣿⠃       \n         ⢠⣿⡟        \n         ⢸⣿⠃        \n         ⣼⡟         \n         ⣿⠃         \n        ⢠⡿          \n        ⢸⠇          \n        ⡼           '
+    $'         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          '
+    $'        ⢳           \n        ⢸⡆          \n        ⠘⣷          \n         ⣿⡄         \n         ⢻⣧         \n         ⢸⣿⡄        \n         ⠘⣿⣧        \n       ⢺⣿⣧⣿⣿⡄       \n       ⠘⣿⣿⢻⣿⡧       \n        ⢻⣿⡄         \n        ⠘⣿⡇         \n         ⢻⣧         \n         ⠘⣿         \n          ⢿⡄        \n          ⠸⡇        \n           ⢧        '
+    $'      ⠈⣆            \n       ⢻⣆           \n       ⠘⣿⣆          \n        ⢻⣿⡆         \n        ⠘⣿⣿⡄        \n         ⢻⣿⣿⡄       \n         ⠘⣿⣿⣿⡄      \n     ⢿⣿⣿⣿⡆⢿⣿⣿⣿⡀     \n     ⠈⣿⣿⣿⣷⠸⣿⣿⣿⣷     \n      ⠘⣿⣿⣿⡄         \n       ⠘⣿⣿⣧         \n        ⠘⣿⣿⡄        \n         ⠸⣿⣧        \n          ⠹⣿⡄       \n           ⠹⣧       \n            ⠹⡀      '
+    $'     ⠸⣆             \n      ⢻⣧⡀           \n      ⠈⣿⣷⡄          \n       ⠸⣿⣿⣆         \n        ⢻⣿⣿⣧⡀       \n        ⠈⣿⣿⣿⣷⡀      \n         ⠘⣿⣿⣿⣿⣄     \n   ⢿⣿⣿⣿⣿⣷ ⢹⣿⣿⣿⣿⣦    \n    ⠻⣿⣿⣿⣿⣇ ⢿⣿⣿⣿⣿⣷   \n     ⠙⣿⣿⣿⣿⡄         \n      ⠈⢿⣿⣿⣿⡀        \n       ⠈⢻⣿⣿⣧        \n         ⠹⣿⣿⡆       \n          ⠘⢿⣿⡀      \n           ⠈⢻⣧      \n             ⠹⡆     '
+    $'    ⠘⣦⡀             \n     ⠹⣷⣄            \n      ⢻⣿⣧⡀          \n       ⢻⣿⣿⣆         \n       ⠈⢿⣿⣿⣷⡄       \n        ⠘⣿⣿⣿⣿⣦⡀     \n         ⠘⣿⣿⣿⣿⣷⣄    \n ⠻⣿⣿⣿⣿⣿⣿⣧ ⠹⣿⣿⣿⣿⣿⣷⡀  \n  ⠈⢿⣿⣿⣿⣿⣿⣆ ⢻⣿⣿⣿⣿⣿⣿⣦ \n    ⠙⢿⣿⣿⣿⣿⡄         \n     ⠈⠻⣿⣿⣿⣿⡄        \n       ⠘⢿⣿⣿⣷⡀       \n         ⠹⣿⣿⣧       \n          ⠈⢻⣿⣧      \n            ⠙⢿⣆     \n             ⠈⠻⡄    '
+    $'   ⠈⢷⣄              \n    ⠈⢿⣧⡀            \n     ⠈⢿⣿⣦⡀          \n      ⠘⣿⣿⣿⣦         \n       ⠘⣿⣿⣿⣷⣄       \n        ⠘⣿⣿⣿⣿⣷⣄     \n         ⠘⣿⣿⣿⣿⣿⣧⡀   \n⠻⣿⣿⣿⣿⣿⣿⣿⣆ ⠹⣿⣿⣿⣿⣿⣿⣦⡀ \n ⠈⠻⣿⣿⣿⣿⣿⣿⣆ ⠹⣿⣿⣿⣿⣿⣿⣿⣦\n   ⠈⢻⣿⣿⣿⣿⣿⡄         \n     ⠙⢿⣿⣿⣿⣿⡄        \n       ⠙⢿⣿⣿⣿⡄       \n         ⠻⣿⣿⣿⡄      \n          ⠈⠻⣿⣷⡀     \n            ⠈⢻⣷⡀    \n              ⠙⢷⡀   '
+    $'   ⠘⣧⡀              \n    ⠘⣿⣦⡀            \n     ⠘⣿⣿⣦⡀          \n      ⠘⣿⣿⣿⣦         \n       ⠘⣿⣿⣿⣷⣄       \n        ⠘⣿⣿⣿⣿⣷⣄     \n         ⠸⣿⣿⣿⣿⣿⣷⣄   \n⠻⣿⣿⣿⣿⣿⣿⣿⣆ ⠹⣿⣿⣿⣿⣿⣿⣷⡀ \n ⠈⢿⣿⣿⣿⣿⣿⣿⣆ ⠹⣿⣿⣿⣿⣿⣿⣿⣦\n   ⠙⢿⣿⣿⣿⣿⣿⡆         \n     ⠙⢿⣿⣿⣿⣿⡄        \n       ⠙⢿⣿⣿⣿⡄       \n         ⠻⣿⣿⣿⡄      \n          ⠈⠻⣿⣿⡄     \n            ⠈⠻⣿⡄    \n              ⠈⢻⡄   '
+    $'   ⠈⢷⣄              \n    ⠈⢿⣧⡀            \n     ⠈⢿⣿⣦⡀          \n      ⠘⣿⣿⣿⣦         \n       ⠘⣿⣿⣿⣷⣄       \n        ⠘⣿⣿⣿⣿⣷⣄     \n         ⠘⣿⣿⣿⣿⣿⣧⡀   \n⠻⣿⣿⣿⣿⣿⣿⣿⣆ ⠹⣿⣿⣿⣿⣿⣿⣦⡀ \n ⠈⠻⣿⣿⣿⣿⣿⣿⣆ ⠹⣿⣿⣿⣿⣿⣿⣿⣦\n   ⠈⢻⣿⣿⣿⣿⣿⡄         \n     ⠙⢿⣿⣿⣿⣿⡄        \n       ⠙⢿⣿⣿⣿⡄       \n         ⠻⣿⣿⣿⡄      \n          ⠈⠻⣿⣷⡀     \n            ⠈⢻⣷⡀    \n              ⠙⢷⡀   '
+    $'    ⠘⣦⡀             \n     ⠹⣷⣄            \n      ⢻⣿⣧⡀          \n       ⢻⣿⣿⣆         \n       ⠈⢿⣿⣿⣷⡄       \n        ⠘⣿⣿⣿⣿⣦⡀     \n         ⠘⣿⣿⣿⣿⣷⣄    \n ⠻⣿⣿⣿⣿⣿⣿⣧ ⠹⣿⣿⣿⣿⣿⣷⡀  \n  ⠈⢿⣿⣿⣿⣿⣿⣆ ⢻⣿⣿⣿⣿⣿⣿⣦ \n    ⠙⢿⣿⣿⣿⣿⡄         \n     ⠈⠻⣿⣿⣿⣿⡄        \n       ⠘⢿⣿⣿⣷⡀       \n         ⠹⣿⣿⣧       \n          ⠈⢻⣿⣧      \n            ⠙⢿⣆     \n             ⠈⠻⡄    '
+    $'     ⠸⣆             \n      ⢻⣧⡀           \n      ⠈⣿⣷⡄          \n       ⠸⣿⣿⣆         \n        ⢻⣿⣿⣧⡀       \n        ⠈⣿⣿⣿⣷⡀      \n         ⠘⣿⣿⣿⣿⣄     \n   ⢿⣿⣿⣿⣿⣷ ⢹⣿⣿⣿⣿⣦    \n    ⠻⣿⣿⣿⣿⣇ ⢿⣿⣿⣿⣿⣷   \n     ⠙⣿⣿⣿⣿⡄         \n      ⠈⢿⣿⣿⣿⡀        \n       ⠈⢻⣿⣿⣧        \n         ⠹⣿⣿⡆       \n          ⠘⢿⣿⡀      \n           ⠈⢻⣧      \n             ⠹⡆     '
+    $'      ⠈⣆            \n       ⢻⣆           \n       ⠘⣿⣆          \n        ⢻⣿⡆         \n        ⠘⣿⣿⡄        \n         ⢻⣿⣿⡄       \n         ⠘⣿⣿⣿⡄      \n     ⢿⣿⣿⣿⡆⢿⣿⣿⣿⡀     \n     ⠈⣿⣿⣿⣷⠸⣿⣿⣿⣷     \n      ⠘⣿⣿⣿⡄         \n       ⠘⣿⣿⣧         \n        ⠘⣿⣿⡄        \n         ⠸⣿⣧        \n          ⠹⣿⡄       \n           ⠹⣧       \n            ⠹⡀      '
+    $'        ⢳           \n        ⢸⡆          \n        ⠘⣷          \n         ⣿⡄         \n         ⢻⣧         \n         ⢸⣿⡄        \n         ⠘⣿⣧        \n       ⢺⣿⣧⣿⣿⡄       \n       ⠘⣿⣿⢻⣿⡧       \n        ⢻⣿⡄         \n        ⠘⣿⡇         \n         ⢻⣧         \n         ⠘⣿         \n          ⢿⡄        \n          ⠸⡇        \n           ⢧        '
+    $'         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          \n         ⢸          '
+    $'           ⡞        \n          ⢰⡇        \n          ⣾⠃        \n         ⢠⣿         \n         ⣼⡟         \n        ⢠⣿⡇         \n        ⣼⣿⠃         \n       ⢠⣿⣿⣼⣿⡗       \n       ⢼⣿⡟⣿⣿⠃       \n         ⢠⣿⡟        \n         ⢸⣿⠃        \n         ⣼⡟         \n         ⣿⠃         \n        ⢠⡿          \n        ⢸⠇          \n        ⡼           '
+    $'            ⣰⠁      \n           ⣰⡟       \n          ⣰⣿⠃       \n         ⢰⣿⡟        \n        ⢠⣿⣿⠃        \n       ⢠⣿⣿⡟         \n      ⢠⣿⣿⣿⠃         \n     ⢀⣿⣿⣿⡿⢰⣿⣿⣿⡿     \n     ⣾⣿⣿⣿⠇⣾⣿⣿⣿⠁     \n         ⢠⣿⣿⣿⠃      \n         ⣼⣿⣿⠃       \n        ⢠⣿⣿⠃        \n        ⣼⣿⠇         \n       ⢠⣿⠏          \n       ⣼⠏           \n      ⢀⠏            '
+    $'             ⣰⠇     \n           ⢀⣼⡟      \n          ⢠⣾⣿⠁      \n         ⣰⣿⣿⠇       \n       ⢀⣼⣿⣿⡟        \n      ⢀⣾⣿⣿⣿⠁        \n     ⣠⣿⣿⣿⣿⠃         \n    ⣴⣿⣿⣿⣿⡏ ⣾⣿⣿⣿⣿⡿   \n   ⣾⣿⣿⣿⣿⡿ ⣸⣿⣿⣿⣿⠟    \n         ⢠⣿⣿⣿⣿⠋     \n        ⢀⣿⣿⣿⡿⠁      \n        ⣼⣿⣿⡟⠁       \n       ⢰⣿⣿⠏         \n      ⢀⣿⡿⠃          \n      ⣼⡟⠁           \n     ⢰⠏             '
+    $'             ⢀⣴⠃    \n            ⣠⣾⠏     \n          ⢀⣼⣿⡟      \n         ⣰⣿⣿⡟       \n       ⢠⣾⣿⣿⡿⠁       \n     ⢀⣴⣿⣿⣿⣿⠃        \n    ⣠⣾⣿⣿⣿⣿⠃         \n  ⢀⣾⣿⣿⣿⣿⣿⠏ ⣼⣿⣿⣿⣿⣿⣿⠟ \n ⣴⣿⣿⣿⣿⣿⣿⡟ ⣰⣿⣿⣿⣿⣿⡿⠁  \n         ⢠⣿⣿⣿⣿⡿⠋    \n        ⢠⣿⣿⣿⣿⠟⠁     \n       ⢀⣾⣿⣿⡿⠃       \n       ⣼⣿⣿⠏         \n      ⣼⣿⡟⠁          \n     ⣰⡿⠋            \n    ⢠⠟⠁             '
+    $'              ⣠⡾⠁   \n            ⢀⣼⡿⠁    \n          ⢀⣴⣿⡿⠁     \n         ⣴⣿⣿⣿⠃      \n       ⣠⣾⣿⣿⣿⠃       \n     ⣠⣾⣿⣿⣿⣿⠃        \n   ⢀⣼⣿⣿⣿⣿⣿⠃         \n ⢀⣴⣿⣿⣿⣿⣿⣿⠏ ⣰⣿⣿⣿⣿⣿⣿⣿⠟\n⣴⣿⣿⣿⣿⣿⣿⣿⠏ ⣰⣿⣿⣿⣿⣿⣿⠟⠁ \n         ⢠⣿⣿⣿⣿⣿⡟⠁   \n        ⢠⣿⣿⣿⣿⡿⠋     \n       ⢠⣿⣿⣿⡿⠋       \n      ⢠⣿⣿⣿⠟         \n     ⢀⣾⣿⠟⠁          \n    ⢀⣾⡟⠁            \n   ⢀⡾⠋              '
+  )
+  local total=${#frames[@]}
+  local i f
+  # Static fallback when there is no terminal to animate in.
+  if [ ! -t 1 ]; then
+    printf '%s\n' "${frames[0]}"
+    printf '\n  EVESYNAPSE\n  Lightweight, fast, and comprehensive EVE Online companion.\n'
+    return 0
+  fi
+  # First frame with the title and description below it, then 48 more
+  # (two full rotations), ending on frame 0. The title block stays on
+  # screen while the bolt spins above it: the block is 19 lines (16 bolt
+  # + blank + title + tagline), so the cursor moves up 19 each redraw.
+  printf '%s\n' "${frames[0]}"
+  printf '\n  EVESYNAPSE\n  Lightweight, fast, and comprehensive EVE Online companion.\n'
+  for ((i = 1; i <= total * 2; i++)); do
+    sleep 0.08
+    tput cuu 19 2>/dev/null || printf '\033[19A'
+    f=$((i % total))
+    printf '%s\n' "${frames[f]}"
+    printf '\n  EVESYNAPSE\n  Lightweight, fast, and comprehensive EVE Online companion.\n'
+  done
 }
 
 print_banner

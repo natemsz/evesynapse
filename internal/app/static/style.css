@@ -1105,6 +1105,12 @@ thead th {
   font-size: var(--fs-2xs);
   white-space: nowrap;
 }
+/* Row labels (th in tbody) are body text, not headers: the
+   browser's default th bold (700) made them read heavier than
+   the values beside them. */
+tbody th {
+  font-weight: 400;
+}
 td, .isk, dd, .kpi-v, .kpi-sub, .fleet-foot, .flow-figs { font-variant-numeric: tabular-nums; }
 /* Sortable headers (app.js): a pointer, and the direction once sorted. */
 #main-content table:not([data-nosort]) > thead th:not(:empty) { cursor: pointer; user-select: none; }

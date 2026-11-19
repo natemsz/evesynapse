@@ -1,18 +1,25 @@
 // Package pgtest gives EveSynapse's test binaries one shared
-// embedded Postgres 16 per test process (the same major version
-// the live box runs), started lazily on the first FreshDSN call,
-// so `go test ./...` self-provisions with no external database
-// and CI needs no service. Each test gets its own empty database
-// on that server; the app's store.Open applies the schema on first
+// Postgres 16 per test process (the same major version the live
+// box runs), started lazily on the first FreshDSN call, so `go
+// test ./...` self-provisions with no external database and CI
+// needs no service. Each test gets its own empty database on
+// that server; the app's store.Open applies the schema on first
 // open, exactly like a fresh install.
+//
+// When PGTEST_DSN names a running server, the tests use it
+// instead of starting an embedded one. CI sets it to the
+// runner's preinstalled PostgreSQL, so no binary is downloaded
+// from Maven Central at all.
 package pgtest
 
 import (
 	"context"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -29,6 +36,9 @@ var (
 	port      int
 	startErr  error
 	dbSeq     atomic.Int64
+	// dsnBase is the server every per-test DSN is built from: the
+	// embedded server's URL, or the PGTEST_DSN URL when one is set.
+	dsnBase *url.URL
 	// runtimeDir is where the embedded server unpacks its binaries
 	// and keeps its data for this test process.
 	runtimeDir string
@@ -138,7 +148,15 @@ func FreshDSN(t *testing.T) string {
 		}
 	}
 	t.Cleanup(func() { dropDatabase(name) })
-	return fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/%s?sslmode=disable", port, name)
+	return dsnForDB(name)
+}
+
+// dsnForDB builds the connection URL for a database on the shared
+// server, carrying the server's own credentials and host.
+func dsnForDB(name string) string {
+	u := *dsnBase
+	u.Path = "/" + name
+	return u.String()
 }
 
 // ensureTemplate builds the template database once, created empty,
@@ -199,7 +217,7 @@ func produceClones() {
 func DSNFor(t *testing.T, name string) string {
 	t.Helper()
 	startServer(t)
-	return fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/%s?sslmode=disable", port, name)
+	return dsnForDB(name)
 }
 
 func startServer(t *testing.T) string {
@@ -208,6 +226,30 @@ func startServer(t *testing.T) string {
 		t.Fatalf("pgtest: this package has no TestMain calling pgtest.TestMain, so the embedded Postgres it starts would be left running. Add one: see internal/app/main_test.go.")
 	}
 	startOnce.Do(func() {
+		// PGTEST_DSN names a running server to test against
+		// instead of starting an embedded one. CI sets it to
+		// the runner's preinstalled PostgreSQL, so the suite
+		// never downloads a binary from Maven Central.
+		if dsn := os.Getenv("PGTEST_DSN"); dsn != "" {
+			u, err := url.Parse(dsn)
+			if err != nil {
+				startErr = fmt.Errorf("PGTEST_DSN: %w", err)
+				return
+			}
+			if p, err := strconv.Atoi(u.Port()); err == nil {
+				port = p
+			}
+			adminDSN = dsn
+			dsnBase = u
+			pool, err := pgxpool.New(context.Background(), adminDSN)
+			if err != nil {
+				startErr = fmt.Errorf("admin pool: %w", err)
+				return
+			}
+			adminPool = pool
+			return
+		}
+
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			startErr = err
@@ -256,6 +298,7 @@ func startServer(t *testing.T) string {
 			return
 		}
 		adminDSN = fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/postgres?sslmode=disable", port)
+		dsnBase, _ = url.Parse(adminDSN)
 		pool, err := pgxpool.New(context.Background(), adminDSN)
 		if err != nil {
 			startErr = fmt.Errorf("admin pool: %w", err)

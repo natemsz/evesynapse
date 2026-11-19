@@ -35,7 +35,7 @@ on:
 jobs:
   test:
     if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the source
         uses: actions/checkout@v4
@@ -89,6 +89,15 @@ jobs:
           fi
       - name: Vet
         run: go vet ./...
+      # The tests use the runner's preinstalled PostgreSQL 16
+      # instead of downloading a binary from Maven Central: the
+      # shared egress addresses get throttled there and the
+      # download fails the whole suite.
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          echo "PGTEST_DSN=postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable" >> "$GITHUB_ENV"
       - name: Run the test suite
         run: go test -timeout 20m ./...
       # File list is explicit, not a glob: node --test only
@@ -130,7 +139,7 @@ jobs:
 
   race:
     if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the source
         uses: actions/checkout@v4
@@ -145,6 +154,11 @@ jobs:
         run: make assets
       # Under the race detector internal/app takes 5-10
       # minutes: past go test's default 10m limit.
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          echo "PGTEST_DSN=postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable" >> "$GITHUB_ENV"
       - name: Run the test suite under the race detector
         run: go test -race -timeout 30m ./...
       - name: Report the result to Forgejo
@@ -166,7 +180,7 @@ jobs:
 
   core-only:
     if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the source
         uses: actions/checkout@v4
@@ -183,6 +197,11 @@ jobs:
         run: |
           go build -tags core_only ./...
           go vet -tags core_only ./...
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          echo "PGTEST_DSN=postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable" >> "$GITHUB_ENV"
       - name: Run the core-only tests
         run: go test -tags core_only -timeout 20m -run 'TestCoreOnly' ./internal/app/
       # The module build tool: every module must compile and
@@ -218,7 +237,7 @@ jobs:
   # run without blocking a release.
   analysis:
     if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
       - name: Check out the source
@@ -269,7 +288,7 @@ jobs:
   # reads as green.
   release-gate:
     if: github.server_url == 'https://github.com' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/evesynapse-dev')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [test, race, core-only]
     permissions:
       actions: write

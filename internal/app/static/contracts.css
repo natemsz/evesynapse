@@ -22,7 +22,7 @@
 .cs-intro { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.6rem 1.5rem; margin-bottom: 1rem; }
 .cs-intro > p { margin: 0; max-width: 32rem; }
 .cs-hunts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; flex: 0 1 auto; min-width: 0; padding-top: 0.1rem; }
-.cs-hunts-label { color: var(--gold); font-weight: 600; }
+.cs-hunts-label { color: var(--gold); }
 .cs-hunt {
   display: inline-flex; align-items: center; gap: 0.4rem;
   border: 1px solid var(--box-edge); border-radius: 999px;
@@ -133,8 +133,6 @@
 .cs-field {
   display: flex; flex-direction: column; justify-content: flex-end;
   gap: 0.25rem; min-width: 0;
-  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--muted);
   white-space: nowrap;
 }
 .cs-field input, .cs-field select { width: 100%; margin-top: auto; text-transform: none; letter-spacing: normal; }
@@ -255,7 +253,7 @@
 .cs-drawer-bar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem;
 }
-.cs-drawer-label { font-size: var(--fs-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); font-weight: 700; }
+
 .cs-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .cs-tab {
   border: 1px solid var(--box-edge); background: transparent;
@@ -482,16 +480,6 @@
   display: block;
 }
 
-/* The filter labels speak in the results table's type
-   voice: the box titles, the region quick links, the
-   field labels and the specs band label take .cs-type's
-   face, weight, size, spacing and uppercase treatment.
-   Their colors stay their own. */
-.cs-fbox .box-title, .cs-region-quick, .cs-field, .cs-drawer-label {
-  font-family: var(--font-body);
-  font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
 
 /* ---- results: the count bar over one continuous table ---- */
 /* The count bar sits above the results panel: the match
@@ -569,8 +557,6 @@
    the type text runs. */
 .cs-type {
   display: inline-block; width: 6.6rem; vertical-align: middle;
-  font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .cs-type.t-exchange { color: var(--accent); }
 .cs-type.t-auction { color: #fbbf24; }
@@ -621,7 +607,7 @@
    or the courier's volume and rate. */
 .cs-pill {
   display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;
-  padding: 0.1rem 0.5rem; border-radius: 0.25rem; font-size: var(--fs-2xs);
+  padding: 0.1rem 0.5rem; border-radius: 0.25rem;
 }
 .cs-pill.ab { background: rgba(8, 47, 73, 0.5); border: 1px solid rgba(34, 211, 238, 0.3); color: #a5f3fc; }
 .cs-pill.bp { background: rgba(69, 26, 3, 0.5); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; }
@@ -681,9 +667,7 @@
   margin-bottom: 0.5rem; padding-bottom: 0.4rem;
   border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
 }
-.cs-dhead-t {
-  font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em;
-  text-transform: uppercase; color: #ff882e;
+.cs-dhead-t { color: #ff882e;
 }
 .cs-dhead-t.cy { color: #22d3ee; }
 .cs-dhead-t.dim { color: var(--muted); }

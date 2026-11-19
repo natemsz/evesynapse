@@ -7,7 +7,7 @@
 
 .bk-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-1) var(--space-3); margin: 0 0 var(--space-3); }
 .bk-head > small { color: var(--muted); }
-.bk-title { margin: 0; color: var(--gold); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.bk-title { margin: 0; color: var(--gold); }
 .bk-title small { color: var(--muted); font-weight: var(--fw-display); letter-spacing: 0; }
 .bk-sub { margin: 0 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .bk-note { margin: var(--space-3) 0 0; color: var(--muted); }
@@ -15,7 +15,7 @@
 .l-page > * + * { margin-top: var(--space-4); }
 
 /* Kind badges: the reader's own baskets in the accent, presets cool. */
-.bk-badge { display: inline-block; padding: 0.05rem 0.45rem; border: 1px solid currentColor; border-radius: var(--r-xs); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; vertical-align: middle; }
+.bk-badge { display: inline-block; padding: 0.05rem 0.45rem; border: 1px solid currentColor; border-radius: var(--r-xs); vertical-align: middle; }
 .bk-badge.yours { color: var(--gold); }
 .bk-badge.preset { color: var(--muted); }
 

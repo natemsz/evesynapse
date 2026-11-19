@@ -14,8 +14,6 @@
 }
 :is(.is-bonuses, .is-fits, .is-attrs, .is-skills) h4 {
   margin: var(--space-3) 0 var(--space-1);
-  font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-xs);
-  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
 }
 :is(.is-bonuses, .is-fits, .is-attrs, .is-skills) h3 + :is(h4, div > h4:first-child), .is-sec > h4:first-child { margin-top: 0; }
 
@@ -49,7 +47,7 @@
 .is-vtable { width: 100%; font-size: var(--fs-sm); }
 .is-vtable th[scope="col"] { white-space: normal; vertical-align: bottom; font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; }
 .is-vtable tbody th { text-align: left; font-weight: 500; }
-.is-vtable .num { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.is-vtable .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .is-vtable .num small { display: block; color: var(--muted); font-size: var(--fs-xs); }
 .is-vtable tr.is-cur { background: var(--row-hover); }
 .is-vtable tr.is-cur th a { color: var(--gold); }

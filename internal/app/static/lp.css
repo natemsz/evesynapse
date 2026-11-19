@@ -25,12 +25,11 @@
 .lp-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-2); }
 .lp-field { display: flex; flex-direction: column; gap: 0.3rem; flex: 1 1 8.5rem; min-width: 0; }
 .lp-field--wide, .lp-pair, .lp-form > .btn { flex: 1 1 100%; }
-.lp-field > span { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-sm); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .lp-field :is(input, select) { width: 100%; min-width: 0; min-height: var(--tap); }
 .lp-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); align-items: end; }
 .lp-form > .btn { width: 100%; min-height: var(--tap); }
 
-.lp-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
+.lp-h { margin: var(--space-4) 0 var(--space-2); }
 .lp-bal .l-meter { margin-top: 0.4rem; }
 
 /* The offers. */

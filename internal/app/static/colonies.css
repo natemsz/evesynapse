@@ -21,7 +21,6 @@
 .pc-ex-l, .pc-ex-r { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .pc-ex-r { text-align: right; flex: none; }
 .pc-lab { color: var(--muted); font-size: var(--fs-xs); }
-.pc-ex-v { font-weight: 600; }
 .pc-ex-v .countdown { font-family: var(--font-num); }
 .pc-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .pc-chips .lchip { white-space: normal; }

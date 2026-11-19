@@ -61,16 +61,16 @@
 .co-struct-head { display: flex; align-items: flex-start; gap: var(--space-3); }
 .co-struct-head img { flex: none; border-radius: var(--r-sm); }
 .co-struct-id { flex: 1 1 auto; min-width: 0; }
-.co-struct-id h3 { margin: 0; font-size: var(--fs-xl); overflow-wrap: anywhere; }
-.co-struct-id p { margin: 0.15rem 0 0; font-size: var(--fs-md); }
-.co-state { flex: none; padding: 0.1rem 0.5rem; border: 1px solid var(--hairline); border-radius: 999px; color: var(--kept); font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.co-struct-id h3 { margin: 0; overflow-wrap: anywhere; }
+.co-struct-id p { margin: 0.15rem 0 0; font-size: var(--fs-xs); }
+.co-state { flex: none; padding: 0.1rem 0.5rem; border: 1px solid var(--hairline); border-radius: 999px; color: var(--kept); }
 .co-state.co-warn { color: var(--gold); border-color: currentColor; }
 .co-state.co-bad { color: var(--danger); border-color: currentColor; }
 .co-fuel { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem var(--space-2); align-items: baseline; }
 .co-fuel .sharebar, .co-fuel small { grid-column: 1 / -1; }
 .co-fuel .sharebar { margin-top: 0.2rem; height: 0.35rem; }
-.co-fuel-l { color: var(--muted); font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
-.co-fuel-v { justify-self: end; font-family: var(--font-num); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.co-fuel-v { justify-self: end; font-family: var(--font-num); font-weight: var(--fw-num); font-variant-numeric: tabular-nums; }
 .co-fuel .fill { background: var(--kept); }
 .co-fuel.co-warn .fill { background: var(--gold); }
 .co-fuel.co-warn .co-fuel-v { color: var(--gold); }
@@ -78,7 +78,7 @@
 .co-fuel.co-bad .co-fuel-v { color: var(--danger); }
 .co-facts { display: grid; gap: 0.3rem; margin: 0; }
 .co-facts:empty { display: none; }
-.co-facts > div { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--fs-md); }
+.co-facts > div { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--fs-sm); }
 .co-facts dt { color: var(--muted); }
 .co-facts dd { margin: 0; text-align: right; }
 .co-svcs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0; padding: 0; list-style: none; }
@@ -90,12 +90,12 @@
 .co-ceo { display: flex; align-items: center; gap: var(--space-3); }
 .co-ceo img { border-radius: var(--r-sm); }
 .co-chars { margin: var(--space-2) 0 0; font-size: var(--fs-md); line-height: 1.6; }
-.co-about h2 { margin: 0 0 var(--space-2); font-size: var(--fs-xl); }
+.co-about h2 { margin: 0 0 var(--space-2); }
 .co-about .corp-desc { margin: 0; white-space: pre-line; }
 
 /* The admin pages: a section heading over a card grid, and the cards. */
 .co-sec { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin: var(--space-5) 0 var(--space-3); }
-.co-sec h2, .co-h2 { margin: 0; font-size: var(--fs-xl); }
+.co-sec h2, .co-h2 { margin: 0; }
 .co-h2 { margin-bottom: var(--space-3); }
 .co-card { display: flex; flex-direction: column; gap: var(--space-2); }
 /* A card form stays one column on phones: phone.css wraps forms
@@ -103,7 +103,7 @@
 form.co-card { flex-wrap: nowrap !important; align-items: stretch !important; }
 form.co-card > label { flex: none !important; }
 .co-card > * { margin: 0; }
-.co-card h3 { margin: 0; color: var(--gold); font-size: var(--fs-lg); letter-spacing: 0.05em; text-transform: uppercase; }
+.co-card h3 { margin: 0; color: var(--gold); }
 .co-card h3 a { color: inherit; }
 .co-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
 .co-card-foot { margin-top: auto; padding-top: var(--space-2); border-top: 1px solid var(--hairline); }

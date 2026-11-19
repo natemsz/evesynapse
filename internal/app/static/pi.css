@@ -53,7 +53,7 @@
    a time and snaps to a tier's edge. */
 .pi-graph { display: flex; gap: 0.6rem; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 0.5rem; }
 .pi-col { flex: 1 0 10rem; min-width: 10rem; }
-.pi-col h4 { margin: 0 0 0.4rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-sm); letter-spacing: 0.06em; text-transform: uppercase; }
+.pi-col h4 { margin: 0 0 0.4rem; }
 .pi-node { display: block; width: 100%; min-height: 2.25rem; margin-bottom: 0.3rem; padding: 0.35rem 0.5rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-pane); color: var(--text); text-align: left; font: inherit; cursor: pointer; }
 .pi-node small { display: block; color: var(--muted); font-family: var(--font-num); }
 .pi-node .pi-on { color: var(--gold); font-family: var(--font-body); font-size: var(--fs-xs); }

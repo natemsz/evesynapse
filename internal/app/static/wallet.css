@@ -15,12 +15,6 @@
   justify-content: space-between;
   gap: var(--space-2);
   margin: var(--space-4) 0 var(--space-2);
-  color: var(--muted);
-  font-family: var(--font-display);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-display);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 .wl-h span { font-family: var(--font-num); letter-spacing: 0; }
 .wl-in { color: var(--success); }

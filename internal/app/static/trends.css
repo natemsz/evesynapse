@@ -14,10 +14,9 @@
 .tr-modes { --l-gap: var(--space-2); }
 .tr-modes .pilltabs { margin: 0; }
 
-.tr-chip { cursor: default; font-size: var(--fs-xs); color: var(--muted); }
+.tr-chip { cursor: default; color: var(--muted); }
 .tr-item { display: inline-flex; align-items: center; gap: 0.55rem; min-width: 0; }
 .tr-item img { flex: none; border-radius: var(--r-xs); }
-.tr-item a { font-weight: 600; }
 .tr-rank { flex: none; min-width: 1.6rem; color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; text-align: right; }
 .tr-table td:first-child { white-space: normal; min-width: 11rem; }
 
@@ -25,7 +24,7 @@
 .tr-table[data-rank="swing"] .tr-swing,
 .tr-table[data-rank="chg1"] .tr-chg1,
 .tr-table[data-rank="chg7"] .tr-chg7,
-.tr-table[data-rank="chg30"] .tr-chg30 { background: var(--sel-row); font-weight: 700; }
+.tr-table[data-rank="chg30"] .tr-chg30 { background: var(--sel-row); }
 .tr-table[data-rank="swing"] td.tr-swing { color: var(--gold); }
 
 /* With an item open beside the list, the columns its inspector

@@ -438,7 +438,7 @@ a:active { color: color-mix(in srgb, var(--gold) 80%, #ffffff); }
    Rajdhani SemiBold in spaced capitals. Synthetic bold is off. Menu
    items (below) are Rajdhani SemiBold in their labels' own case; only
    the menus' group labels are capitals. */
-h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
+h1, h2, h3, h4, .wordmark, .btn, thead th,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])),
 .branch > summary,
 .sidenav a.navlink,
@@ -491,9 +491,10 @@ h2, h3 {
   text-shadow: none;
   display: inline-block;
 }
+/* Panel title (h2) and card or pane title (h3); h4 is a kicker
+   (Type roles, below). */
 h2 { font-size: var(--fs-xl); }
 h3 { font-size: var(--fs-md); margin: 1.4rem 0 0.15rem; }
-h4 { font-size: var(--fs-sm); }
 /* Heading text is solid (the old gradient's light end). The
    forced-colors rule below keeps headings readable where the
    platform overrides page colors. */
@@ -511,7 +512,9 @@ h4 { font-size: var(--fs-sm); }
 small { color: var(--muted); font-size: var(--fs-rel-small); }
 /* A button takes the family of the text around it. Left alone it
    takes the system's, which showed on icon-only buttons. */
-button { font-family: inherit; }
+/* A classed button takes the family of the text around it; a
+   classless one keeps the display face of the button rule. */
+:where(button[class]) { font-family: inherit; }
 footer small { font-size: var(--fs-rel-small); }
 
 /* --- top bar --- */
@@ -800,8 +803,7 @@ main {
 }
 /* The small-caps label a box or field group carries. */
 .box-title {
-  margin: 0; font-size: var(--fs-xs); font-weight: 700;
-  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+  margin: 0;
 }
 /* A segmented control: joined options inside one small box.
    Items are labels, buttons or links; the current one takes
@@ -1028,6 +1030,7 @@ h3 + .tw > table, h3 + table {
   box-sizing: border-box;
   min-height: var(--control-h);
   padding: 0.2rem 0.85rem;
+  font-size: var(--fs-xs);
   line-height: 1.2;
   color: var(--text-bright);
   background: linear-gradient(180deg,
@@ -1447,8 +1450,6 @@ input[type="search"]:not(.topsearch input),
 .dot.on { background: var(--v-good, #ffb84d); }
 .dot.off { background: var(--v-bad, #a8230c); }
 .badge {
-  font-size: var(--fs-2xs);
-  letter-spacing: 0.08em;
   padding: 0.1em 0.5em;
   border-radius: var(--r-sm);
   border: 1px solid;
@@ -1456,7 +1457,7 @@ input[type="search"]:not(.topsearch input),
 .badge.kill { color: var(--gold); border-color: var(--success); background: rgba(255, 184, 77, 0.14); }
 .badge.loss { color: var(--v-bad-ink, #ffab8f); border-color: var(--danger); background: rgba(120, 26, 6, 0.38); }
 .badge.wait { color: var(--muted); border-color: currentColor; }
-.badge.demo { color: var(--accent); border-color: var(--accent); background: rgba(255, 106, 26, 0.12); text-transform: uppercase; }
+.badge.demo { color: var(--accent); border-color: var(--accent); background: rgba(255, 106, 26, 0.12); }
 .countdown { font-variant-numeric: tabular-nums; color: var(--accent); }
 /* The live pill: a badge with a pulsing dot that says a page's feed
    is streaming. Hidden until its script connects; data-state="retry"
@@ -1610,7 +1611,7 @@ footer .hash-pop {
    and wrap. Customize mode clears the band for the widget's own
    controls (the move buttons sit at the title's right). */
 .fleet-tags { position: absolute; top: 0; right: 1rem; height: 2.94rem; display: flex; align-items: center; gap: 0.4rem; margin: 0; }
-.fleet-tags-label { font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 0.15rem; }
+.fleet-tags-label { margin-right: 0.15rem; }
 @media (max-width: 70rem) {
   .fleet-tags { position: static; height: auto; padding-top: 0.1rem; flex-wrap: wrap; }
 }
@@ -1667,16 +1668,99 @@ html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[d
   letter-spacing: normal;
   font-size: var(--fs-xs);
 }
-/* Filter chips read as controls too: the same Rajdhani capitals
-   as the buttons. */
-.chip {
+/* Type roles (FRONTEND.md, "Type roles"): one rule per role, and a
+   class joins a role by joining its selector list here, never by
+   restating the type in its own rule.
+   Chip: a filter control. Its own rule gives the shape, the color
+   and the on state. */
+.chip, .pilltab, .fchip, .ct-chip, .ap-preset,
+.cs-region-quick > button, .cs-cap-chips > button, .kb-chips a {
   font-family: var(--font-display);
+  font-size: var(--fs-2xs);
   font-weight: 600;
+  font-synthesis-weight: none;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; font-family: var(--font-display); font-weight: var(--fw-display); text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-2xs); }
-.chip.on { border-color: var(--accent); color: var(--accent); font-size: var(--fs-2xs); }
+/* Badge: a word that states a status or a kind (kill or loss,
+   outstanding, mastered, solo, preset). Its tone comes from its own
+   rule. */
+.badge, .fo-pill, .kb-tag, .bk-badge, .bt-result, .bt-chip, .ib-tag,
+.prodline-chip, .lo-src, .asmbadge, .ov-tag, .ov-tag-ok,
+.iw-state, .co-state, .cs-type, .fit-chip-state, .ov-tag-warn,
+.jb-state, .ct-flag, .ov-live {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-display);
+  font-synthesis-weight: none;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+/* Data chip: a small box that holds data, not a status (a colony
+   and its timer, a container's item count, a contract's volume):
+   the body face, in the case it was written. */
+.lchip, .ov-pipill, span.cs-pill {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+/* Label: names a field, a filter group, a legend or a chart. Column
+   headers (thead th) are labels too, in their own brighter ink on
+   the header band. */
+.field-label, .cs-field, .cs-drawer-label,
+label > small:first-child, .lp-field > span, .mb-minvol > span, .fchips-label,
+.cs-hunts-label,
+.fleet-tags-label, .facet-title, .pie-head, .co-fuel-l {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-display);
+  font-synthesis-weight: none;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-2);
+}
+/* Card title: an h3, a label that titles its panel's one field
+   (the scan paste box), and the calendar's month. */
+.sc-label, .cal-title, .ov-chead {
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-display);
+  font-synthesis-weight: none;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sch-hi, #ffd27a);
+}
+/* A row header in a table body names its row the way a first
+   cell does: data, at the regular weight. */
+tbody th { font-weight: 400; }
+/* Kicker: a sub-section inside a panel, under the panel's title.
+   Every h4 is one; a smaller heading of another level joins here. */
+h4, h5, .box-title, .km-h, .bt-h, .cs-dhead-t, .jb-h, .sov-h3, .wl-h, .lp-h, .ib-sub, .bt-sub,
+.kp-fit h3, .pi h3, .fit-vkeys h2, .slotsec h4, .pi-col h4,
+.wb-rail-head h3, .wb-box h3, .kb-top h2, .fit-group > h4,
+:is(.is-bonuses, .is-fits, .is-attrs, .is-skills) h4 {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-display);
+  font-synthesis-weight: none;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+/* Stat label: names the figure in a tile or KPI. */
+.l-stat-label, .kpi-k, .ov-total-l, .ov-ranktile .rl, .assets-net-l {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-display);
+  font-synthesis-weight: none;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-2);
+}
+.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; }
+.chip.on { border-color: var(--accent); color: var(--accent); }
 .relink { color: var(--danger); }
 .attention { list-style: none; margin: 0; padding: 0; }
 .attention li { background: var(--row); padding: 0.35rem 0.5rem; border-bottom: 1px solid color-mix(in srgb, var(--accent) 7%, transparent); }
@@ -2045,9 +2129,7 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
   border: 1px solid rgba(255, 110, 0, 0.16);
   border-radius: var(--r-md);
 }
-/* KPI titles read as UI labels, like table headers: Rajdhani
-   SemiBold in small spaced capitals, bright enough to read on glass. */
-.kpi-k { font-family: var(--font-display); font-weight: var(--fw-display); font-synthesis-weight: none; font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
+
 /* Table figures read as body text: Eve Sans Neue at the regular
    weight, the same as everywhere else. The monospaced numeral face
    is too heavy for table figures at this size, so it is kept only
@@ -2069,6 +2151,7 @@ td.neg, .neg { color: var(--v-bad, #ff4d4d); }
 td.pos, .pos { color: var(--v-good, #28c76f); }
 .watch-matches td:last-child, .watch-matches th:last-child { width: 1%; white-space: nowrap; text-align: right; }
 .flow-figs td { text-align: right; white-space: nowrap; }
+.flow-figs tbody th { white-space: nowrap; }
 .flow-figs thead th { text-align: right; }
 .flow-figs thead small { color: var(--accent); font-size: inherit; }
 .kpi-v {
@@ -2470,8 +2553,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .card[data-widget="prodline"] .prodline-art { width: 40px; height: 40px; border-radius: var(--r-sm); border: 1px solid var(--box-edge); background: rgba(0, 0, 0, 0.35); flex: none; }
 .card[data-widget="prodline"] .prodline-main { flex: 1; min-width: 0; }
 .card[data-widget="prodline"] .prodline-top { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.card[data-widget="prodline"] .prodline-prod { font-weight: 600; }
-.card[data-widget="prodline"] .prodline-chip { font-size: var(--fs-2xs); letter-spacing: 0.08em; padding: 0.1em 0.5em; border-radius: var(--r-sm); border: 1px solid; white-space: nowrap; }
+.card[data-widget="prodline"] .prodline-chip { padding: 0.1em 0.5em; border-radius: var(--r-sm); border: 1px solid; white-space: nowrap; }
 .card[data-widget="prodline"] .prodline-due { color: var(--accent); border-color: var(--accent); background: rgba(255, 106, 26, 0.12); }
 .card[data-widget="prodline"] .prodline-restart { color: #ffab8f; border-color: var(--danger); background: rgba(120, 26, 6, 0.38); }
 .card[data-widget="prodline"] .prodline-healthy { color: var(--kept); border-color: var(--kept); background: color-mix(in srgb, var(--kept) 12%, transparent); }
@@ -2514,7 +2596,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .flow-pie path { stroke: var(--panel); stroke-width: 0.8; }
 .flow-pie .pie-c { font-size: var(--fs-2xs); fill: var(--muted); text-anchor: middle; letter-spacing: 0.08em; text-transform: uppercase; }
 .flow-pie figcaption { min-width: 0; font-size: var(--fs-xs); }
-.pie-head { display: block; margin-bottom: 0.25rem; font-family: var(--font-display); font-synthesis-weight: none; font-weight: var(--fw-display); font-size: var(--fs-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.pie-head { display: block; margin-bottom: 0.25rem; }
 .pie-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
 .pie-legend li { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
 .pie-legend .pie-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4249,7 +4331,7 @@ html[data-theme="light"] .fit-head select {
 .fit-tile.over { border-color: rgba(198, 47, 16, 0.6); }
 .fit-tile.over strong { color: #ff7a5c; }
 .fit-group { margin-bottom: 0.7rem; padding: 0.5rem 0.6rem 0.6rem; border: 1px solid #242424; border-radius: var(--r-md); background: rgba(0, 0, 0, 0.18); }
-.fit-group > h4 { display: flex; align-items: baseline; gap: 0.5rem; margin: 0 0 0.45rem; font-size: var(--fs-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.fit-group > h4 { display: flex; align-items: baseline; gap: 0.5rem; margin: 0 0 0.45rem; }
 .fit-group > h4 .fit-count { margin-left: auto; letter-spacing: 0; color: var(--muted); }
 .fit-group > h4 .fit-count.fit-over { color: var(--danger); }
 .fit-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
@@ -4314,7 +4396,7 @@ html[data-theme="light"] .fit-head select {
   padding: 0.1rem 0.35rem;
 }
 .fit-chip-qty { color: var(--success); }
-.fit-chip-state { margin-left: auto; padding: 0 0.35rem; border: 1px solid #333; border-radius: var(--r-sm); font-size: var(--fs-2xs); line-height: 1.15; min-height: calc(0.68rem * 1.15 + 2px); box-sizing: border-box; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.fit-chip-state { margin-left: auto; padding: 0 0.35rem; border: 1px solid #333; border-radius: var(--r-sm); line-height: 1.15; min-height: calc(0.68rem * 1.15 + 2px); box-sizing: border-box; color: var(--muted); }
 .fit-chip.st-active .fit-chip-state { border-color: var(--gold); color: var(--gold); }
 .fit-chip.st-overheated .fit-chip-state { border-color: var(--accent); color: var(--accent); }
 .fit-chip-sub { flex-basis: 100%; min-width: 0; font-size: var(--fs-xs); color: var(--muted); overflow-wrap: anywhere; }
@@ -4478,7 +4560,7 @@ html[data-theme="light"] .fit-head select {
 .fit-vkeys-btn { font-family: var(--font-display); font-weight: var(--fw-display); }
 .fit-vkeys { margin: auto; min-width: min(22rem, 92vw); padding: 0.8rem 1rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--surface-pane); color: var(--text); }
 .fit-vkeys::backdrop { background: rgb(0 0 0 / 0.35); }
-.fit-vkeys h2 { margin: 0 0 0.45rem; font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-bright); }
+.fit-vkeys h2 { margin: 0 0 0.45rem; }
 .fit-vkeys dl { margin: 0; }
 .fit-vkeys dl > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.2rem 0; border-top: 1px solid var(--box-edge); font-size: var(--fs-sm); }
 .fit-vkeys dl > div:first-child { border-top: 0; }
@@ -5633,7 +5715,7 @@ html[data-theme="light"] .notify-all { border-top-color: #e4dac6; }
 /* --- calendar: the month grid, and the op pages --- Ops carry the
    ember edge; in-game events a quieter one. */
 .cal-head { display: flex; align-items: center; gap: 0.5rem; margin: 0.75rem 0 0.5rem; }
-.cal-title { min-width: 9rem; text-align: center; font-size: var(--fs-lg); }
+.cal-title { min-width: 9rem; text-align: center; }
 .cal-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table.cal { table-layout: fixed; min-width: 44rem; margin-bottom: 0.5rem; }
 table.cal th { text-align: center; }
@@ -5955,13 +6037,6 @@ table.notify-settings.cards-on td:has(> .checkselector) { grid-column: 1 / -1; }
 .field.wide { grid-column: 1 / -1; }
 .field-label {
   display: block;
-  font-family: var(--font-display);
-  font-synthesis-weight: none;
-  font-weight: var(--fw-display);
-  font-size: var(--fs-2xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted-2);
 }
 .field-hint { font-size: var(--fs-xs); color: var(--muted); }
 .field-static { display: flex; align-items: center; min-height: var(--control-h); color: var(--text-bright); }
@@ -6041,7 +6116,7 @@ a.badge { text-decoration: none; }
 .field .searchwrap { display: block; width: 100%; }
 .facets { display: grid; gap: 0.45rem; margin: 0 0 1rem; padding: 0.75rem 0.9rem; border: 1px solid #222; border-radius: 6px; background: rgba(255, 255, 255, 0.02); }
 .facet { display: flex; align-items: baseline; gap: 0.75rem; min-width: 0; }
-.facet-title { flex: 0 0 6.5rem; font-size: var(--fs-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.facet-title { flex: 0 0 6.5rem; }
 .facet-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; min-width: 0; }
 a.chip { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text); text-decoration: none; white-space: nowrap; }
 a.chip.on { color: var(--accent); background: rgba(255, 106, 26, 0.12); }
@@ -6681,7 +6756,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
    panel stays open; Done commits the set, and each row's
    Only link scopes the page to that character in one pick. */
 .asset-scope { margin: 0; max-width: none; flex: 1 1 auto; }
-.asset-scope-btn { display: flex; align-items: center; gap: 0.5rem; width: 100%; white-space: nowrap; justify-content: space-between; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
+.asset-scope-btn { display: flex; align-items: center; gap: 0.5rem; width: 100%; white-space: nowrap; justify-content: space-between; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; cursor: pointer; }
 .asset-scope-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset-scope-caret { flex: none; color: var(--muted); font-size: var(--fs-xs); }
 /* The panel is wider than its button and hangs from the button's
@@ -6718,9 +6793,9 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .diritem.on { background: var(--glass); border-color: var(--gold); }
 .dir-top { display: flex; align-items: center; gap: 0.5rem; }
 .dir-sec { flex: none; }
-.dir-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.dir-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dir-name a { color: inherit; text-decoration: none; }
-.dir-val { flex: none; color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+.dir-val { flex: none; color: var(--gold); font-variant-numeric: tabular-nums; }
 .dir-sub { display: block; margin-top: 0.15rem; color: var(--muted); font-size: var(--fs-xs); }
 .dir-note { display: block; margin-top: 0.2rem; color: var(--unverified); font-size: var(--fs-xs); }
 .sharebar { display: block; height: 3px; margin-top: 0.4rem; border-radius: 2px; background: var(--box-edge); overflow: hidden; }
@@ -6728,7 +6803,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 
 /* Pill tabs: a row of divisions with counts. */
 .pilltabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: var(--fw-display); text-transform: uppercase; letter-spacing: 0.06em; text-decoration: none; }
+.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); text-decoration: none; }
 .pilltab:hover { color: var(--text); }
 .pilltab.on { background: var(--glass); border-color: var(--accent); color: var(--text-bright); }
 .pilltab .cnt { font-weight: var(--fw-display); opacity: 0.75; }
@@ -6736,8 +6811,8 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 /* Saved-filter chips: the user's own named views, each with its
    delete, plus the save form that names the current view. */
 .fchips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
-.fchips-label { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.05em; text-transform: uppercase; }
-.fchip { padding: 0.3rem 0.65rem; border: 1px solid var(--box-edge); border-radius: 999px; background: none; color: var(--text); font-size: var(--fs-xs); text-decoration: none; cursor: pointer; }
+
+.fchip { padding: 0.3rem 0.65rem; border: 1px solid var(--box-edge); border-radius: 999px; background: none; color: var(--text); text-decoration: none; cursor: pointer; }
 .fchip.on { border-color: var(--accent); color: var(--text); background: var(--glass); }
 .fchip.save { border-style: dashed; color: var(--muted); }
 .fchip-wrap { display: inline-flex; align-items: center; gap: 0.1rem; }
@@ -6750,7 +6825,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
    row (stacks inside, fitted counts by family, cargo). The row
    stays on one line: the badges never wrap. */
 .lchips { display: flex; flex-wrap: nowrap; gap: 0.3rem; }
-.lchip { padding: 0.1rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: var(--r-xs); background: var(--glass); color: var(--muted-2); font-size: var(--fs-xs); font-weight: 700; white-space: nowrap; }
+.lchip { padding: 0.1rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: var(--r-xs); background: var(--glass); color: var(--muted-2); white-space: nowrap; }
 .lchip.cargo { color: var(--gold); }
 
 /* The inspector pane: a detail column for one selected thing,
@@ -6763,7 +6838,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .insp-x { margin-left: auto; color: var(--muted); text-decoration: none; }
 .insp-copy { width: 100%; margin: 0.8rem 0 0.2rem; }
 .slotsec { margin-top: 0.9rem; }
-.slotsec h4 { margin: 0 0 0.3rem; color: var(--muted); font-size: var(--fs-xs); letter-spacing: 0.05em; text-transform: uppercase; }
+.slotsec h4 { margin: 0 0 0.3rem; }
 .slotsec h4 small { letter-spacing: 0; text-transform: none; }
 .modrow { display: flex; justify-content: space-between; gap: 1rem; padding: 0.28rem 0; border-bottom: 1px solid var(--box-edge); font-size: var(--fs-sm); }
 .modrow:last-child { border-bottom: 0; }
@@ -6798,7 +6873,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .estbar form { margin: 0; }
 .estbar-l { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
 .estbar-lab { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.08em; text-transform: uppercase; }
-.estbar-v { color: var(--gold); font-size: var(--fs-lg); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.estbar-v { color: var(--gold); font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Loadout chip accents: the slot letter reads in the accent,
    and the subsystem pill reads violet. */

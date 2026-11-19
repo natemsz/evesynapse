@@ -145,8 +145,7 @@
     margin-bottom: 0.4rem;
   }
   .fit-slots .fit-chip-name, .fit-bays .fit-chip-name { font-size: var(--fs-md); }
-  .fit-slots .fit-chip-state, .fit-bays .fit-chip-state {
-    font-size: var(--fs-xs); padding: 0.1rem 0.45rem;
+  .fit-slots .fit-chip-state, .fit-bays .fit-chip-state { padding: 0.1rem 0.45rem;
   }
   .fit-slots .fit-chip-sub, .fit-bays .fit-chip-sub { font-size: var(--fs-xs); }
   .fit-slots .fit-chip-btn, .fit-bays .fit-chip-btn {

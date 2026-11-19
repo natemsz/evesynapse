@@ -736,8 +736,10 @@ html[data-scheme] tbody tr:hover th { background: color-mix(in srgb, var(--accen
    lighter than the secondary tone every link now uses;
    the rule itself lives with the card styles in style.css. */
 /* Heading text is solid in every scheme: the gradient's light
-   end, the scheme highlight. */
-html[data-scheme] h2, html[data-scheme] h3,
+   end, the scheme highlight. The h2 and h3 rule carries a bare
+   element's weight, so a kicker (style.css, Type roles) keeps its
+   muted ink in every scheme. */
+:where(html[data-scheme]) :is(h2, h3),
 html[data-scheme] .panel > h1:first-child > .gt {
   color: var(--sch-hi);
 }

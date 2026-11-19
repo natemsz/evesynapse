@@ -59,10 +59,9 @@
   flex: none;
   padding: 0.3rem 0.75rem;
   border: 1px solid var(--hairline);
-  border-radius: var(--r-xs);
+  border-radius: 999px;
   background: var(--surface-inset);
   color: var(--muted-2);
-  font-size: var(--fs-xs);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -198,7 +197,6 @@
   padding: 0 0.35rem;
   border: 1px solid currentColor;
   border-radius: var(--r-xs);
-  font-size: var(--fs-2xs);
   line-height: 1.35;
   color: var(--accent);
   vertical-align: 0.06em;
@@ -225,10 +223,9 @@
   display: block;
   background: none;
   -webkit-text-fill-color: currentColor;
-  color: var(--muted-2);
   text-shadow: none;
 }
-.kb-top h2 { margin: 0 0 0.4rem; font-family: var(--font-display); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.07em; }
+.kb-top h2 { margin: 0 0 0.4rem; }
 .kb-top ol { margin: 0; padding: 0; list-style: none; counter-reset: kbtop; }
 .kb-top li a {
   display: flex;

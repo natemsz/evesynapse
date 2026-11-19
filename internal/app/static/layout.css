@@ -473,7 +473,7 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-stat { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); color: var(--text); text-decoration: none; container-type: inline-size; }
 a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); text-decoration: none; }
 .l-stat.on { border-color: var(--sel-edge); background: var(--sel-bg); }
-.l-stat-label { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
+
 /* Amounts size relative to their tile (cqw against the .l-stat
    container above), capped at the display step: a bigger figure
    shrinks to stay on one line instead of wrapping. */

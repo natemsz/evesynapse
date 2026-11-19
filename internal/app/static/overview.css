@@ -17,7 +17,7 @@
 .ov-picker .charselector { margin: 0; max-width: none; }
 .ov-total { text-align: right; }
 .ov-total-v { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-4xl); line-height: 1.1; color: var(--accent); }
-.ov-total-l { font-family: var(--font-display); font-synthesis-weight: none; font-weight: var(--fw-display); color: var(--muted-2); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; }
+
 .ov-total-u { margin-top: 0.15rem; font-size: var(--fs-xs); color: var(--gold); }
 /* The share controls sit in the head's open space, against the
    total: the Share pilot card button (it opens the preview
@@ -45,8 +45,8 @@
 /* ---- Header cards ---- */
 .ov-cards { gap: 0.9rem; align-items: stretch; }
 .ov-card { display: flex; flex-direction: column; padding: 0.85rem 0.95rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--row-alt); }
-.ov-chead { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; margin-bottom: 0.65rem; color: var(--muted-2); font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: var(--fw-display); text-transform: uppercase; letter-spacing: 0.07em; }
-.ov-live { color: var(--success); text-transform: none; letter-spacing: 0; font-size: var(--fs-xs); font-weight: 600; }
+.ov-chead { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; margin-bottom: 0.65rem; }
+.ov-live { color: var(--success); }
 .ov-live.dim { color: var(--muted); }
 
 /* Entity row: portrait or ship art paired with name and badges */
@@ -70,17 +70,12 @@
 .ov-trows .k { color: var(--muted); flex: 0 0 auto; }
 .ov-trows span:not(.k) { text-align: right; overflow-wrap: anywhere; }
 .ov-locval { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; justify-content: flex-end; }
-.ov-sys { font-weight: 600; }
-.ov-stn { color: var(--text); font-weight: 500; text-align: right; }
-.ov-sp-val { font-family: var(--font-num); font-weight: 600; color: var(--accent); }
+.ov-stn { color: var(--text); text-align: right; }
 .ov-skills-cnt { font-family: var(--font-body); font-size: var(--fs-2xs); color: var(--muted); }
-.ov-unalloc { color: var(--gold); font-size: var(--fs-2xs); font-weight: 600; }
-.ov-wallet-val, .ov-ach-val { font-family: var(--font-num); font-weight: 600; color: var(--text); }
-.ov-date { font-family: var(--font-num); font-size: var(--fs-2xs); color: var(--text); }
 
 /* Status pills for card rows */
-.ov-tag-ok { display: inline-flex; align-items: center; padding: 0.08rem 0.45rem; border-radius: var(--r-sm); background: color-mix(in srgb, var(--kept) 14%, transparent); border: 1px solid var(--kept); color: var(--kept); font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.2; }
-.ov-tag-warn { display: inline-flex; align-items: center; padding: 0.08rem 0.45rem; border-radius: var(--r-sm); background: color-mix(in srgb, var(--gold) 14%, transparent); border: 1px solid var(--gold); color: var(--gold); font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.2; }
+.ov-tag-ok { display: inline-flex; align-items: center; padding: 0.08rem 0.45rem; border-radius: var(--r-sm); background: color-mix(in srgb, var(--kept) 14%, transparent); border: 1px solid var(--kept); color: var(--kept); line-height: 1.2; }
+.ov-tag-warn { display: inline-flex; align-items: center; gap: 0.3em; padding: 0.08rem 0.45rem; border-radius: var(--r-sm); background: color-mix(in srgb, var(--gold) 14%, transparent); border: 1px solid var(--gold); color: var(--gold); line-height: 1.2; }
 /* Reset generic .ok and .warn inside .ov-card */
 .ov-card .ok { background: none; border: 0; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--success); }
 .ov-card .warn { background: none; border: 0; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--gold); }
@@ -89,7 +84,7 @@
 .ov-pisub { color: var(--muted); font-size: var(--fs-xs); line-height: 1.45; }
 .ov-pisub .bad, .ov-table .bad { color: var(--danger); }
 .ov-pipills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
-.ov-pipill { padding: 0.12rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; font-size: var(--fs-2xs); }
+.ov-pipill { padding: 0.12rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; }
 .ov-pipill.expired { border-color: var(--danger); color: var(--danger); }
 .ov-pipill.soon { border-color: var(--gold); color: var(--gold); }
 
@@ -123,7 +118,6 @@
 .ov-clone-main:hover { text-decoration: none; }
 .ov-clone-r1 { display: flex; align-items: center; gap: 0.45rem; }
 .ov-activedot { flex: 0 0 auto; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--kept); }
-.ov-clone-nm { font-weight: 600; }
 .ov-clone-r1 .ov-sec { margin-left: auto; }
 .ov-clone-r2 { display: block; margin-top: 0.25rem; color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }
 .ov-slotbadges { display: flex; gap: 0.22rem; margin-top: 0.45rem; }
@@ -172,7 +166,7 @@
 .ov-can:hover { text-decoration: none; border-color: var(--accent); }
 .ov-can-box { flex: 0 0 auto; padding: 0.3rem 0.45rem; border: 1px solid var(--gold); border-radius: var(--r-sm); color: var(--gold); font-weight: 700; font-size: var(--fs-xs); }
 .ov-can-main { min-width: 0; }
-.ov-can-nm { display: block; font-weight: 600; }
+.ov-can-nm { display: block; }
 .ov-can-mt { display: block; color: var(--muted); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-can-go { margin-left: auto; color: var(--muted); font-size: var(--fs-xl); }
 
@@ -202,7 +196,7 @@
 .ov-table .ov-nmline { display: flex; align-items: center; min-width: 0; }
 .ov-table .ov-nm { font-size: var(--fs-sm); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-table .ov-tag { flex: none; }
-.ov-table .ov-tag { font-size: var(--fs-2xs); padding: 0.02rem 0.32rem; }
+.ov-table .ov-tag { padding: 0.02rem 0.32rem; }
 .ov-table th.r, .ov-table td.r { text-align: right; }
 .ov-table th:first-child, .ov-table th:last-child { text-align: center; }
 .ov-table tr.sel td { background: var(--glass); }
@@ -211,7 +205,7 @@
 .ov-lvl { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; border-radius: var(--r-sm); background: var(--glass); border: 1px solid var(--box-edge); font-family: var(--font-display); font-weight: 700; }
 .ov-lvl.zero { color: var(--muted); }
 .ov-table .ov-nm { font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 400; }
-.ov-tag { margin-left: 0.45rem; padding: 0.05rem 0.4rem; border-radius: 999px; font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: var(--fw-display); text-transform: uppercase; letter-spacing: 0.05em; }
+.ov-tag { margin-left: 0.45rem; padding: 0.05rem 0.4rem; border-radius: 999px; }
 .ov-tag.mastered { background: color-mix(in srgb, var(--kept) 14%, transparent); color: var(--kept); border: 1px solid var(--kept); }
 .ov-tag.untrained { color: var(--muted); border: 1px solid var(--box-edge); }
 .ov-pips { display: inline-flex; gap: 0.18rem; }
@@ -230,7 +224,7 @@ html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #
 
 /* ---- Inspector ---- */
 .ov-ranktile { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 3.2rem; height: 3.2rem; border: 1px solid var(--gold); border-radius: var(--r-sm); }
-.ov-ranktile .rl { font-family: var(--font-display); font-synthesis-weight: none; font-weight: var(--fw-display); color: var(--muted-2); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; }
+
 .ov-ranktile .rv { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-xl); color: var(--gold); }
 .ov-itype { margin: 0.2rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
 .ov-eft { padding: 0.35rem 0.6rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); font-weight: 600; white-space: nowrap; }

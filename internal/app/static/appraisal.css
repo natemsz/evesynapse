@@ -109,15 +109,13 @@
   gap: 0.5rem; flex-wrap: wrap;
 }
 .ap-presets { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
-.ap-preset {
-  font-family: var(--font-display); font-synthesis-weight: none; font-weight: var(--fw-display);
-  text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--fs-2xs); color: var(--muted); cursor: pointer;
+.ap-preset { color: var(--muted); cursor: pointer;
   background: var(--row-alt); border: 1px solid var(--box-edge);
   border-radius: var(--r-xs); padding: 0.14rem 0.45rem;
 }
 .ap-preset.on {
   background: var(--accent); border-color: var(--accent);
-  color: #16100b; font-weight: 700;
+  color: #16100b;
 }
 .ap-actions { display: flex; gap: 0.7rem; margin: 1rem 0 0; }
 .ap-actions .ap-appraise { flex: 1; }

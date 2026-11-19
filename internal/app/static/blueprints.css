@@ -7,7 +7,7 @@
 .bp-filter { flex: 1 1 12rem; min-width: 0; }
 .bp-kinds { margin: 0 0 var(--space-3); }
 .bp-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
-.bp-mats td.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; }
+.bp-mats td.num { font-variant-numeric: tabular-nums; text-align: right; }
 
 /* Can build (schema 122, stored at sync): a check, and a green edge
    on the row, when the skills and one run's materials are there; a

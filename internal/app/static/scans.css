@@ -21,11 +21,11 @@
   border-radius: var(--r-md);
   background: var(--surface-inset);
 }
-.sc h2 { margin: 0 0 0.6rem; font-family: var(--font-display); font-size: var(--fs-md); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); }
+.sc h2 { margin: 0 0 0.6rem; color: var(--muted-2); }
 
 /* --- The paste box --- */
 .sc-paste { display: flex; flex-direction: column; gap: 0.6rem; }
-.sc-label { font-family: var(--font-display); font-size: var(--fs-md); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); }
+
 .sc-paste textarea {
   width: 100%;
   min-height: 12rem;

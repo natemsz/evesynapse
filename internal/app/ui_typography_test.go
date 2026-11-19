@@ -42,15 +42,15 @@ func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 // on the Rajdhani capitals treatment (section tabs, the section
 // sub-tabs, the strategy tabs, the contract spec tabs, the
 // fitting view tabs) reads at 12px, at the display weight
-// (--fw-display), regular letter spacing. Filter chips keep their own heavier control
-// treatment.
+// (--fw-display), regular letter spacing. Filter chips are not
+// tabs: they share one heavier chip rule.
 func TestTabNavTypeSpec(t *testing.T) {
 	style := readStatic(t, "style.css")
 	for _, want := range []string{
 		// Section tabs, sub-tabs and strategy tabs share the tab
 		// rule; the chip is not a tab and keeps its own rule.
 		".section-tabs a, .section-tabs .tabs-more-btn, .section-subtabs a, .section-subtabs .tabs-more-btn, .ti-tabs button {\n  font-family: var(--font-display);\n  font-weight: var(--fw-display);\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: var(--fs-xs);\n}",
-		".chip {\n  font-family: var(--font-display);\n  font-weight: 600;\n  text-transform: uppercase;\n  letter-spacing: 0.06em;\n}",
+		".chip, .pilltab, .fchip, .ct-chip, .ap-preset,\n.cs-region-quick > button, .cs-cap-chips > button, .kb-chips a {\n  font-family: var(--font-display);\n  font-size: var(--fs-2xs);\n  font-weight: 600;",
 		// The strategy tabs' pill paint block states the same spec.
 		".ti-tabs button {\n  font-family: var(--font-display);\n  font-weight: var(--fw-display);\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: var(--fs-xs);",
 	} {

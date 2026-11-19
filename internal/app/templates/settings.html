@@ -127,7 +127,7 @@
   <div id="security-register" data-begin="/settings/security/keys/begin" data-finish="/settings/security/keys/finish" data-fresh="{{.Fresh}}" data-enabled="{{.Enabled}}">
     <p class="err" id="security-status" role="alert" hidden></p>
     <div id="security-form">
-      <p><label>Key name <input type="text" id="security-name" value="Security key" maxlength="64" autocomplete="off"></label>
+      <p><label><small>Key name</small> <input type="text" id="security-name" value="Security key" maxlength="64" autocomplete="off"></label>
       <button type="button" class="btn" id="security-add">{{if .Enabled}}Add another key{{else}}Add a key{{end}}</button></p>
       <div data-webauthn-qr data-qr-for="settings" data-qr-name-from="security-name" hidden>
         <p class="prose">This browser cannot invite your phone directly. Scan this code to add a passkey on your phone.</p>
@@ -200,7 +200,7 @@
   <p><small>You have the most keys one account can hold. Revoke one to make another.</small></p>
   {{else}}
   <form method="post" action="/settings/api-keys#api">
-    <p><label>Key name <input type="text" name="name" maxlength="40" required autocomplete="off" placeholder="My spreadsheet"></label>
+    <p><label><small>Key name</small> <input type="text" name="name" maxlength="40" required autocomplete="off" placeholder="My spreadsheet"></label>
     <button class="btn" type="submit">Make a key</button></p>
   </form>
   {{end}}

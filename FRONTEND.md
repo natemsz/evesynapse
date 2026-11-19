@@ -463,6 +463,59 @@ holds it for every page on the framework.
   their own colour. Never a fixed colour for "selected".
 - `--tap`: the smallest touch target (2.75rem).
 
+### Type roles
+
+Type is information. Each attribute says one thing everywhere, so a
+reader learns it once and reads every page by it:
+
+- **Face** says what kind of text it is. Rajdhani capitals
+  (`--font-display`) are the interface talking: titles, labels,
+  column headers, buttons, tabs, chips, badges. Eve Sans Neue
+  (`--font-body`) is the data and the sentences: names, places,
+  values, descriptions. The figure face (`--font-num`) is a figure
+  that stands on its own: a KPI value, a total, a count in a chip.
+  Prose (`.prose`) explains.
+- **Size** says rank. One step per level, never a one-off.
+- **Weight** says emphasis or state, never decoration. Regular is
+  the norm; bold marks a group or category row, a total, unread or
+  new, or the one figure a panel exists to show. A list entry's
+  name is never bold: its color already marks it.
+- **Color** says what the text does. Gold (`--gold`) opens
+  something. `--text` is plain data, `--text-bright` the name of a
+  row that does not link. `--muted` is secondary (sub-lines, units,
+  timestamps). Status colors (`--v-*`, `--kept`, `--danger`) carry
+  a state and nothing else. Section titles take the heading gold.
+
+| Role | Face | Size | Weight | Color |
+| --- | --- | --- | --- | --- |
+| Page title (h1) | display caps | `--fs-4xl` | 700 | `--text` |
+| Panel title (h2) | display caps | `--fs-xl` | `--fw-display` | heading gold |
+| Card or pane title (h3, `.l-pane-title`) | display caps | `--fs-md` | `--fw-display` | heading gold |
+| Kicker (a sub-section inside a panel) | display caps | `--fs-xs` | `--fw-display` | `--muted` |
+| Label (field label, filter group, legend) | display caps | `--fs-2xs` | `--fw-display` | `--muted-2` |
+| Column header (`thead th`) | display caps | `--fs-2xs` | `--fw-display` | `--text-bright` |
+| Stat label (over a tile figure) | display caps | `--fs-xs` | `--fw-display` | `--muted-2` |
+| Button, tab | display caps | `--fs-xs` | `--fw-display` | as its rule |
+| Chip (a filter control) | display caps | `--fs-2xs` | 600 | `--muted`, on: `--text-bright` |
+| Badge (a status word) | display caps | `--fs-2xs` | `--fw-display` | its tone |
+| Security status | figure face in a pill | `--fs-2xs` | `--fw-num` | `.sec-N` |
+| Data (cells, list rows, row headers) | body | `--fs-sm` | 400 | gold if it links, else `--text` |
+| Sub-line (under a name) | body | `--fs-xs` | 400 | `--muted` |
+| Figure (tile value, total) | figure face | by its tile | `--fw-num` | `--text` |
+| Hint (under a control) | body | `--fs-xs` | 400 | `--muted` |
+
+Weights come from tokens because platforms draw the same weight
+differently: boot.js marks Windows and Linux on `<html>`
+(`data-os`), Windows takes `--fw-display`, `--fw-display-strong`
+and `--fw-num` one step lighter, and Linux draws glyphs unhinted.
+Never write 500 or 600 for the display or figure face; name the
+token.
+
+In style.css each role is one rule under "Type roles", and a class
+takes a role by joining that rule's selector list. A page sheet
+gives a member its shape, spacing and tone, never its face, size,
+weight, case or letter spacing.
+
 ### Arrangement patterns
 
 Each arranges its children from the space it has, with custom

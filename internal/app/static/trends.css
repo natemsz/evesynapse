@@ -14,10 +14,9 @@
 .tr-modes { --l-gap: var(--space-2); }
 .tr-modes .pilltabs { margin: 0; }
 
-.tr-chip { cursor: default; font-size: var(--fs-xs); color: var(--muted); }
+.tr-chip { cursor: default; color: var(--muted); }
 .tr-item { display: inline-flex; align-items: center; gap: 0.55rem; min-width: 0; }
 .tr-item img { flex: none; border-radius: var(--r-xs); }
-.tr-item a { font-weight: 600; }
 .tr-rank { flex: none; min-width: 1.6rem; color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; text-align: right; }
 .tr-table td:first-child { white-space: normal; min-width: 11rem; }
 
@@ -25,7 +24,7 @@
 .tr-table[data-rank="swing"] .tr-swing,
 .tr-table[data-rank="chg1"] .tr-chg1,
 .tr-table[data-rank="chg7"] .tr-chg7,
-.tr-table[data-rank="chg30"] .tr-chg30 { background: var(--sel-row); font-weight: 700; }
+.tr-table[data-rank="chg30"] .tr-chg30 { background: var(--sel-row); }
 .tr-table[data-rank="swing"] td.tr-swing { color: var(--gold); }
 
 /* With an item open beside the list, the columns its inspector
@@ -42,7 +41,7 @@
 .tr-kpis .l-stat-sub { overflow-wrap: anywhere; }
 .tr-open { margin: var(--space-3) 0 0; }
 .tr-open .btn { width: 100%; justify-content: center; }
-.tr-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.tr-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .tr-meter { margin: var(--space-2) 0 0; }
 
 /* The trend column: each item's stored 30-day typical sell line,

@@ -21,14 +21,14 @@
   {{if .Fittings.Fittings}}
   <div class="l-panel lo-filter fit-esi-controls">
     <span class="searchwrap"><input type="search" id="fit-esi-q" placeholder="Search by fit or ship name…" autocomplete="off" aria-label="Search fittings"></span>
-    <label>Sort <select id="fit-esi-sort" aria-label="Sort fittings">
+    <label><small>Sort</small> <select id="fit-esi-sort" aria-label="Sort fittings">
       <option value="name-asc">Name A–Z</option>
       <option value="name-desc">Name Z–A</option>
       <option value="ship-asc">Ship A–Z</option>
       <option value="ship-desc">Ship Z–A</option>
     </select></label>
-    <label>With module <input type="search" id="fit-esi-include" placeholder="Module name" autocomplete="off"></label>
-    <label>Without module <input type="search" id="fit-esi-exclude" placeholder="Module name" autocomplete="off"></label>
+    <label><small>With module</small> <input type="search" id="fit-esi-include" placeholder="Module name" autocomplete="off"></label>
+    <label><small>Without module</small> <input type="search" id="fit-esi-exclude" placeholder="Module name" autocomplete="off"></label>
   </div>
   <div id="fit-esi-list" class="fit-cards lo-cards">
   {{range .Fittings.Fittings}}

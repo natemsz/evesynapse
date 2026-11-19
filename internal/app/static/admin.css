@@ -16,7 +16,7 @@
 .an-families .an-bar-svg { width: 100%; margin-top: .5rem; }
 .an-kpi { border: 1px solid var(--glass-edge); border-radius: .6rem; padding: .7rem .8rem; background: var(--glass); }
 .an-kpi .k-l { font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.an-kpi .k-v { font-family: 'Synapse Numerals', 'JetBrains Mono', monospace; font-size: var(--fs-4xl); color: var(--text-bright); margin: .15rem 0 .05rem; }
+.an-kpi .k-v { font-family: var(--font-num); font-size: var(--fs-4xl); color: var(--text-bright); margin: .15rem 0 .05rem; }
 .an-kpi .k-s { font-size: var(--fs-xs); color: var(--muted); }
 .an-kpi .up { color: var(--success); }
 .an-kpi .warn { color: var(--gold); }
@@ -136,8 +136,8 @@
    its limit, the same bar and legend as the fit's value split. */
 .an-mem { display: grid; gap: 0.35rem; margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px solid var(--hairline); }
 .an-mem-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.5rem; margin: 0; font-size: var(--fs-xs); }
-.an-mem-head > span { font-family: var(--font-display); font-weight: 500; font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.an-mem-head b { font-family: var(--font-num); font-weight: 500; font-variant-numeric: tabular-nums; color: var(--gold); }
+.an-mem-head > span { font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.an-mem-head b { font-family: var(--font-num); font-weight: var(--fw-num); font-variant-numeric: tabular-nums; color: var(--gold); }
 .an-mem-head small { color: var(--muted); }
 .an-mem-bar { display: block; width: 100%; height: 0.55rem; border-radius: var(--r-xs); overflow: hidden; background: rgb(255 255 255 / 0.05); }
 .an-mem-bar rect { fill: var(--mc); }

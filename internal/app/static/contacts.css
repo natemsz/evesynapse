@@ -21,7 +21,7 @@ rect.ct-terrible, .ct-dot.ct-terrible { fill: var(--ct-terrible); background: va
 .ct-standing.ct-neutral { color: var(--ct-neutral); }
 .ct-standing.ct-bad { color: var(--ct-bad); }
 .ct-standing.ct-terrible { color: var(--ct-terrible); }
-.ct-flag { display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--fs-xs); font-weight: 600; }
+.ct-flag { display: inline-flex; align-items: center; gap: 0.3rem; }
 .ct-flag svg { width: 1rem; height: 1rem; }
 .ct-watched { color: var(--gold); }
 .ct-blocked { color: var(--danger); }

@@ -150,9 +150,9 @@
         {{if .CanEnterBasis}}<details class="pf-basis"><summary><small class="sem-unverified-tx">Enter what these cost you</small></summary>
           <form method="post" action="/profit/basis" class="pf-basis-form">
             <input type="hidden" name="pool" value="{{$.Profit.BasisPool}}"><input type="hidden" name="type_id" value="{{.TypeID}}">
-            <label>Units <input name="quantity" inputmode="numeric" required></label>
-            <label>Cost per unit, ISK <input name="unit_cost" inputmode="decimal" required></label>
-            <label>Note <input name="note" maxlength="200"></label>
+            <label><small>Units</small> <input name="quantity" inputmode="numeric" required></label>
+            <label><small>Cost per unit, ISK</small> <input name="unit_cost" inputmode="decimal" required></label>
+            <label><small>Note</small> <input name="note" maxlength="200"></label>
             <button class="btn" type="submit">Save</button>
           </form></details>{{end}}
       </td>
@@ -269,7 +269,7 @@
 {{if .Candidates}}
 <form method="post" action="/profit/lp-pick" class="pf-basis-form">
   <input type="hidden" name="id" value="{{.ID}}">
-  <label>What you bought <select name="choice">{{range .Candidates}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></label>
+  <label><small>What you bought</small> <select name="choice">{{range .Candidates}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></label>
   <button class="btn" type="submit">Save</button>
 </form>
 {{end}}
@@ -277,7 +277,7 @@
 </details>
 {{end}}
 <form method="post" action="/profit/lp-value" class="pf-basis-form">
-  <label>Your own value for LP, ISK each <input id="lp-value" name="lp_value" inputmode="decimal" value="{{.LPValue}}" placeholder="unset"></label>
+  <label><small>Your own value for LP, ISK each</small> <input id="lp-value" name="lp_value" inputmode="decimal" value="{{.LPValue}}" placeholder="unset"></label>
   <button class="btn" type="submit">Save</button>
   {{if .LPMedian}}<small class="mt-reqs">Your usual realized rate is {{.LPMedian}} ISK per LP.</small>{{end}}
 </form>

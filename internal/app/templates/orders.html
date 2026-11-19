@@ -115,7 +115,7 @@
       <td class="fo-trend opt">{{.Line}}</td>
       <td class="mt-num">{{.Volume}}</td>
       <td>{{placeLink .Loc}}</td>
-      <td><span class="fo-pill {{.StateTone}}">{{.State}}</span></td>
+      <td><span class="fo-pill fo-state {{.StateTone}}">{{.State}}</span></td>
       <td>{{.IssuedOn}}</td>
     </tr>
   {{end}}
@@ -142,7 +142,7 @@
       <td class="mt-num">{{.Price}}</td>
       <td><span class="fo-vol">{{.Filled}}</span><svg class="l-meter fo-meter{{if .FilledOK}} full{{end}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.FilledPct}}" height="4"/></svg></td>
       <td>{{.OpenDuration}}</td>
-      <td><span class="fo-pill{{if .FilledOK}} good{{end}}">{{.Outcome}}</span></td>
+      <td><span class="fo-pill fo-state{{if .FilledOK}} good{{end}}">{{.Outcome}}</span></td>
     </tr>
   {{end}}
   </tbody>

@@ -9,7 +9,7 @@
 <div class="ov-clone{{if .Selected}} sel{{end}}">
   <a class="ov-clone-main" href="{{.Href}}">
     <span class="ov-clone-r1">{{if .Active}}<span class="ov-activedot" aria-hidden="true"></span>{{end}}<span class="ov-clone-nm">{{.Name}}</span>{{if .SystemSec}}<span class="sec-pill {{.SecClass}}">{{.SystemSec}}</span>{{end}}</span>
-    <span class="ov-clone-r2">{{if .SystemName}}<b>{{.SystemName}}</b> · {{end}}{{.Location}}<br>{{.ImplantCount}} implant{{if ne .ImplantCount 1}}s{{end}} installed</span>
+    <span class="ov-clone-r2">{{if .SystemName}}{{.SystemName}} · {{end}}{{.Location}}<br>{{.ImplantCount}} implant{{if ne .ImplantCount 1}}s{{end}} installed</span>
     {{if .SlotBadges}}<span class="ov-slotbadges">{{range .SlotBadges}}<i{{if not .Filled}} class="off"{{end}}>{{.Num}}</i>{{end}}</span>{{end}}
   </a>
   {{if .CloneID}}
@@ -61,7 +61,7 @@
   <div class="ov-banner l-root" role="status">
     <span class="ov-bchip">Trained since your last visit</span>
     {{range $v.TrainedEntries}}
-    <span class="ov-bitem"><b>{{.Skill}}</b> <span class="lv">Level {{.Level}}</span> <span class="when">({{.When}})</span>{{if .StageHref}} <a class="ov-badd" href="{{.StageHref}}">+ Plan L{{.NextLevel}}</a>{{end}}</span>
+    <span class="ov-bitem">{{.Skill}} <span class="lv">Level {{.Level}}</span> <span class="when">({{.When}})</span>{{if .StageHref}} <a class="ov-badd" href="{{.StageHref}}">+ Plan L{{.NextLevel}}</a>{{end}}</span>
     {{end}}
     <form class="ov-bx" method="post" action="/notifications/read">
       <input type="hidden" name="kind" value="skill">
@@ -324,7 +324,7 @@
         <div class="insp-head">
           <div>
             <h3>{{.Title}}</h3>
-            <p class="ov-itype">{{if .SystemName}}<b>{{.SystemName}}</b> · {{end}}{{.Location}}</p>
+            <p class="ov-itype">{{if .SystemName}}{{.SystemName}} · {{end}}{{.Location}}</p>
           </div>
         </div>
         <div class="slotsec">
@@ -392,7 +392,7 @@
       <tbody>
       {{range $ov.Colonies}}
       <tr>
-        <td><b>{{.Planet}}</b><br><span class="ov-sub">{{.System}} · {{.Type}} · upgrade {{.Upgrade}} · {{.Pins}} pins</span></td>
+        <td>{{.Planet}}<br><span class="ov-sub">{{.System}} · {{.Type}} · upgrade {{.Upgrade}} · {{.Pins}} pins</span></td>
         <td>{{if .Outputs}}{{.Outputs}}{{else}}-{{end}}</td>
         <td>{{.Extractors}}</td>
         <td>{{.Factories}}</td>

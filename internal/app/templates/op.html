@@ -41,15 +41,15 @@
 <p><small>Sign-ups are closed: the op is over. Lost a ship on it? <a href="/srp/">Ask for a replacement</a>.</small></p>
 {{else}}
 <form method="post" action="/ops/{{.ID}}/signup" class="op-signup">
-  <p><label>Character <select name="character">{{range .Characters}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label></p>
+  <p><label><small>Character</small> <select name="character">{{range .Characters}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label></p>
   <p class="op-answers">
     <label><input type="radio" name="response" value="yes"{{if or (eq .Mine "yes") (not .Mine)}} checked{{end}}> Coming</label>
     <label><input type="radio" name="response" value="maybe"{{if eq .Mine "maybe"}} checked{{end}}> Maybe</label>
     <label><input type="radio" name="response" value="no"{{if eq .Mine "no"}} checked{{end}}> Not coming</label>
   </p>
-  <p><label>Ship <input type="text" name="ship" value="{{.MyShip}}" maxlength="120" placeholder="e.g. Loki"{{if .DoctrineFit}} list="op-doctrine-ships"{{end}}>{{if .DoctrineFit}}<datalist id="op-doctrine-ships">{{range .DoctrineFit}}<option value="{{.Ship}}">{{end}}</datalist>{{end}}</label>
-     <label>Role <select name="fleet_role"><option value="">—</option>{{range .Roles}}<option value="{{.}}"{{if eq . $.Op.MyRole}} selected{{end}}>{{.}}</option>{{end}}</select></label></p>
-  <p><label>Note <input type="text" name="note" value="{{.MyNote}}" maxlength="120" placeholder="e.g. 20 minutes late"></label></p>
+  <p><label><small>Ship</small> <input type="text" name="ship" value="{{.MyShip}}" maxlength="120" placeholder="e.g. Loki"{{if .DoctrineFit}} list="op-doctrine-ships"{{end}}>{{if .DoctrineFit}}<datalist id="op-doctrine-ships">{{range .DoctrineFit}}<option value="{{.Ship}}">{{end}}</datalist>{{end}}</label>
+     <label><small>Role</small> <select name="fleet_role"><option value="">—</option>{{range .Roles}}<option value="{{.}}"{{if eq . $.Op.MyRole}} selected{{end}}>{{.}}</option>{{end}}</select></label></p>
+  <p><label><small>Note</small> <input type="text" name="note" value="{{.MyNote}}" maxlength="120" placeholder="e.g. 20 minutes late"></label></p>
   <p><button type="submit">{{if .Mine}}Update sign-up{{else}}Sign up{{end}}</button>{{if .Mine}} <small>This character has answered: {{.Mine}}.</small>{{end}}</p>
 </form>
 {{end}}

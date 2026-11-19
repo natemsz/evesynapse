@@ -35,7 +35,7 @@
    member, above the views every member shares. */
 .wb-rail { background: var(--surface-inset); border: 1px solid var(--hairline); border-radius: var(--r-md); padding: 0.8rem 1.05rem; margin: 1.5rem 0; }
 .wb-rail-head { display: flex; align-items: baseline; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.45rem; }
-.wb-rail-head h3 { margin: 0; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); }
+.wb-rail-head h3 { margin: 0; }
 .wb-rail-kinds { font-size: var(--fs-xs); color: var(--accent); font-weight: 600; }
 .wb-rail-note { font-size: var(--fs-xs); color: var(--muted); }
 .wb-rail-list { list-style: none; margin: 0; padding: 0; }
@@ -63,7 +63,7 @@
    cards: the framework's solid panel (--surface-inset, --hairline),
    no blur of their own. */
 .wb-box { background: var(--surface-inset); border: 1px solid var(--hairline); border-radius: var(--r-md); padding: 0.95rem 1.05rem; }
-.wb-box h3 { margin: 0 0 0.6rem; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+.wb-box h3 { margin: 0 0 0.6rem; display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
 .wb-split-nums { display: flex; gap: 1.6rem; flex-wrap: wrap; }
 .wb-split-nums > div { display: flex; flex-direction: column; }
 .wb-num { font-family: var(--font-num); font-size: var(--fs-4xl); line-height: 1.1; color: var(--text-bright); }
@@ -103,7 +103,7 @@
 /* Panels */
 .wb-panel { background: var(--surface-inset); border: 1px solid var(--hairline); border-radius: var(--r-md); padding: 0.9rem 1rem; }
 .wb-panel-head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
-.wb-panel-head h3 { margin: 0; font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-bright); }
+.wb-panel-head h3 { margin: 0; color: var(--text-bright); }
 .wb-pill { font-family: var(--font-num); font-size: var(--fs-xs); color: var(--accent); border: 1px solid var(--glass-edge); border-radius: 2rem; padding: 0.1rem 0.55rem; }
 .wb-modes { display: flex; gap: 0.25rem; flex-wrap: wrap; }
 .wb-mode { background: none; border: 1px solid var(--hairline); border-radius: var(--r-xs); color: var(--muted); font: inherit; font-size: var(--fs-xs); font-weight: 600; padding: 0.24rem 0.55rem; cursor: pointer; }

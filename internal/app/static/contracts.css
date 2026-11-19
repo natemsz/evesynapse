@@ -22,13 +22,13 @@
 .cs-intro { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.6rem 1.5rem; margin-bottom: 1rem; }
 .cs-intro > p { margin: 0; max-width: 32rem; }
 .cs-hunts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; flex: 0 1 auto; min-width: 0; padding-top: 0.1rem; }
-.cs-hunts-label { color: var(--gold); font-weight: 600; }
+.cs-hunts-label { color: var(--gold); }
 .cs-hunt {
   display: inline-flex; align-items: center; gap: 0.4rem;
   border: 1px solid var(--box-edge); border-radius: 999px;
   padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
   background: var(--row-alt);
-  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 500;
+  font-family: var(--font-display); font-weight: var(--fw-display);
   text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs);
 }
 .cs-hunt:hover { border-color: var(--accent); color: var(--text-bright); }
@@ -90,8 +90,8 @@
    fills green. */
 .cs-deals {
   position: relative; display: inline-flex; align-items: center; gap: 0.5rem;
-  cursor: pointer; font-weight: 500;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  cursor: pointer; font-weight: var(--fw-display);
+  font-family: var(--font-display);
   text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--fs-xs);
   border-color: color-mix(in srgb, var(--deal) 55%, transparent);
   color: var(--deal);
@@ -133,8 +133,6 @@
 .cs-field {
   display: flex; flex-direction: column; justify-content: flex-end;
   gap: 0.25rem; min-width: 0;
-  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--muted);
   white-space: nowrap;
 }
 .cs-field input, .cs-field select { width: 100%; margin-top: auto; text-transform: none; letter-spacing: normal; }
@@ -199,7 +197,7 @@
   border: 1px solid var(--box-edge); border-radius: 999px;
   padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
   background: var(--row-alt);
-  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 500;
+  font-family: var(--font-display); font-weight: var(--fw-display);
   text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs);
   cursor: pointer;
 }
@@ -239,7 +237,7 @@
 .cs-cap-chips button {
   border: 1px solid var(--box-edge); background: var(--row-alt);
   color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer;
-  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 500;
+  font-family: var(--font-display); font-weight: var(--fw-display);
   text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs);
 }
 .cs-cap-chips button:hover { border-color: var(--accent); color: var(--text-bright); }
@@ -255,12 +253,12 @@
 .cs-drawer-bar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem;
 }
-.cs-drawer-label { font-size: var(--fs-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); font-weight: 700; }
+
 .cs-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .cs-tab {
   border: 1px solid var(--box-edge); background: transparent;
   color: var(--muted-2); border-radius: var(--r-xs); padding: 0.3rem 0.7rem;
-  cursor: pointer; font-family: "Rajdhani", "Segoe UI", sans-serif;
+  cursor: pointer; font-family: var(--font-display);
   font-weight: 600; text-transform: uppercase; letter-spacing: normal; font-size: var(--fs-xs);
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
@@ -474,7 +472,7 @@
   border: 1px solid var(--box-edge); border-radius: 4px;
   padding: 0.15rem 0.45rem; font-size: var(--fs-2xs); white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); pointer-events: none; z-index: 10;
-  font-family: "Eve Sans Neue", "Inter", sans-serif; text-transform: none;
+  font-family: var(--font-body); text-transform: none;
   letter-spacing: normal;
 }
 .cs-roll-mark:hover .cs-roll-mark-tip,
@@ -482,16 +480,6 @@
   display: block;
 }
 
-/* The filter labels speak in the results table's type
-   voice: the box titles, the region quick links, the
-   field labels and the specs band label take .cs-type's
-   face, weight, size, spacing and uppercase treatment.
-   Their colors stay their own. */
-.cs-fbox .box-title, .cs-region-quick, .cs-field, .cs-drawer-label {
-  font-family: "Eve Sans Neue", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
 
 /* ---- results: the count bar over one continuous table ---- */
 /* The count bar sits above the results panel: the match
@@ -512,7 +500,7 @@
    for, on the squared 8px radius; the spec tabs' count
    badges keep the shared .cs-count pill above. */
 .cs-countbar .cs-count { padding: 0.25rem 0.52rem; font-weight: 500; border-radius: 8px; }
-.cs-counthint { margin: 0; font-size: var(--fs-2xs); color: var(--muted); }
+.cs-counthint { margin: 0; font-size: var(--fs-xs); color: var(--muted); }
 /* The live pill sits beside the count; the hint keeps the far end. */
 .cs-live-pill { margin-right: auto; margin-left: -0.5rem; }
 .cs-results { padding: 0 0 0.4rem; }
@@ -535,7 +523,7 @@
 .cs-table col.cs-c5 { width: 14%; }
 .cs-table thead tr { background: color-mix(in srgb, var(--panel) 55%, transparent); }
 .cs-table th {
-  padding: 0.75rem; color: var(--muted); font-weight: 500; text-shadow: none;
+  padding: 0.75rem; color: var(--muted); font-weight: var(--fw-display); text-shadow: none;
   border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
 }
 .cs-table th:first-child { padding-left: 1rem; }
@@ -569,8 +557,6 @@
    the type text runs. */
 .cs-type {
   display: inline-block; width: 6.6rem; vertical-align: middle;
-  font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .cs-type.t-exchange { color: var(--accent); }
 .cs-type.t-auction { color: #fbbf24; }
@@ -578,7 +564,7 @@
 .cs-deal {
   display: inline-flex; align-items: center; gap: 0.2rem; vertical-align: middle;
   padding: 0.1rem 0.4rem; font-size: var(--fs-2xs); font-weight: 700;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   text-transform: uppercase; letter-spacing: 0.04em;
   color: #6ee7a8; background: rgba(6, 40, 24, 0.55);
   border: 1px solid rgba(52, 211, 153, 0.5); border-radius: 0.25rem;
@@ -589,9 +575,10 @@
   text-overflow: ellipsis; max-width: 16.25rem;
 }
 .cs-row-meta {
-  display: flex; gap: 0.4rem; align-items: center; margin-top: 0.25rem;
-  font-size: var(--fs-2xs); color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 0 0.4rem; align-items: center; margin-top: 0.25rem;
+  font-size: var(--fs-xs); color: var(--muted);
 }
+.cs-row-meta > span { white-space: nowrap; }
 /* The issuer line renders only in the phone card form
    (see the 45rem block below); the desktop row's head
    cell has no room for it and stays as it was. */
@@ -621,27 +608,27 @@
    or the courier's volume and rate. */
 .cs-pill {
   display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;
-  padding: 0.1rem 0.5rem; border-radius: 0.25rem; font-size: var(--fs-2xs);
+  padding: 0.1rem 0.5rem; border-radius: 0.25rem;
 }
 .cs-pill.ab { background: rgba(8, 47, 73, 0.5); border: 1px solid rgba(34, 211, 238, 0.3); color: #a5f3fc; }
 .cs-pill.bp { background: rgba(69, 26, 3, 0.5); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; }
 .cs-pill.co { background: rgba(6, 40, 24, 0.5); border: 1px solid rgba(52, 211, 153, 0.3); color: #a7f3d0; }
-.cs-cell-label { font-size: var(--fs-2xs); color: var(--muted); }
+
 .cs-cell-value {
   font-weight: 700; font-size: var(--fs-sm); color: var(--text-bright);
   white-space: nowrap; margin-top: 0.15rem;
 }
-.cs-psub { font-size: var(--fs-2xs); margin-top: 0.15rem; }
+.cs-psub { font-size: var(--fs-xs); margin-top: 0.15rem; }
 .cs-psub.amber { color: #fbbf24; }
 .cs-psub.gray { color: var(--muted); }
-.cs-priced { font-size: var(--fs-2xs); color: var(--muted); margin-top: 0.15rem; }
-.cs-spread { font-size: var(--fs-2xs); color: var(--v-good, #34d399); margin-top: 0.15rem; }
+.cs-priced { font-size: var(--fs-xs); color: var(--muted); margin-top: 0.15rem; }
+.cs-spread { font-size: var(--fs-xs); color: var(--v-good, #34d399); margin-top: 0.15rem; }
 .cs-spread.neg { color: var(--neg); }
-.cs-c5 .sec-pill { margin-left: 0; border-radius: var(--r-xs); }
+.cs-c5 .sec-pill { margin-left: 0; }
 .cs-place {
   display: inline-block; max-width: calc(100% - 62px); vertical-align: bottom;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-weight: 500; font-size: var(--fs-2xs);
+  font-weight: 500; font-size: var(--fs-xs);
 }
 .cs-expires { font-size: var(--fs-xs); color: var(--muted); margin-top: 0.25rem; }
 .cs-copy {
@@ -681,13 +668,11 @@
   margin-bottom: 0.5rem; padding-bottom: 0.4rem;
   border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
 }
-.cs-dhead-t {
-  font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em;
-  text-transform: uppercase; color: #ff882e;
+.cs-dhead-t { color: #ff882e;
 }
 .cs-dhead-t.cy { color: #22d3ee; }
 .cs-dhead-t.dim { color: var(--muted); }
-.cs-dhead-id { font-size: var(--fs-2xs); color: var(--muted-2); }
+.cs-dhead-id { font-size: var(--fs-xs); color: var(--muted-2); }
 .cs-dnote { margin: 0 0 0.4rem; color: var(--muted); font-size: var(--fs-xs); }
 .cs-aline {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
@@ -795,7 +780,6 @@
 .cd-kv > div { min-width: 0; }
 .cd-kv dt { color: var(--muted); font-size: var(--fs-xs); }
 .cd-kv dd { margin: 0.1rem 0 0; overflow-wrap: anywhere; }
-.cd-kv .sec-pill { border-radius: var(--r-xs); }
 /* The Full mutaplasmid card's words under its rolls. */
 .cd-abnotes {
   margin-top: 0.7rem; padding-top: 0.6rem;

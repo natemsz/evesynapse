@@ -21,14 +21,6 @@
 .km-panels h2,
 .km-h {
   margin: 0;
-  color: var(--muted);
-  font-family: var(--font-display);
-  font-size: var(--fs-xs);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  background: none;
-  -webkit-text-fill-color: currentColor;
 }
 .km-ph { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-2); }
 .km-pulse h2 { margin-bottom: var(--space-2); }
@@ -79,7 +71,7 @@
 .km-scope .fchip { margin-left: var(--space-2); }
 
 /* The list: losses carry a red edge, the open kill the selection. */
-.km-table td.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; }
+.km-table td.num { font-variant-numeric: tabular-nums; text-align: right; }
 .km-row.km-loss { --row-edge: var(--kb-dest); --row-edge-w: 2px; }
 .km-row.km-kill { --row-edge: color-mix(in srgb, var(--kb-drop) 60%, transparent); --row-edge-w: 2px; }
 .km-row.on > td { background: var(--sel-row); }
@@ -91,7 +83,7 @@
 /* One kill in the inspector. */
 .km-value { margin: var(--space-3) 0 0; padding: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); }
 .km-value p { margin: 0; }
-.km-value-v { margin-bottom: var(--space-2) !important; color: var(--gold); font-family: var(--font-num); font-size: var(--fs-3xl); font-weight: 500; font-variant-numeric: tabular-nums; }
+.km-value-v { margin-bottom: var(--space-2) !important; color: var(--gold); font-family: var(--font-num); font-size: var(--fs-3xl); font-weight: var(--fw-num); font-variant-numeric: tabular-nums; }
 .km-value-v small { color: var(--muted-2); font-size: var(--fs-xs); font-weight: 400; }
 .km-acts { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0; }
 .km-h { margin: var(--space-4) 0 var(--space-2); }

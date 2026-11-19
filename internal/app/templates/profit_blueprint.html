@@ -24,19 +24,19 @@
         {{if .HasUnsold}}<details class="pf-basis"><summary><small>{{.Unsold}} units not sold: say what happened</small></summary>
           <form method="post" action="/profit/job-event" class="pf-basis-form">
             <input type="hidden" name="pool" value="{{$.ProfitBlueprint.Pool}}"><input type="hidden" name="bp" value="{{$.ProfitBlueprint.BP}}"><input type="hidden" name="job_id" value="{{.JobID}}"><input type="hidden" name="kind" value="sale">
-            <label>Units sold elsewhere <input name="units" inputmode="numeric" required></label>
-            <label>At, ISK each <input name="unit_price" inputmode="decimal" required></label>
+            <label><small>Units sold elsewhere</small> <input name="units" inputmode="numeric" required></label>
+            <label><small>At, ISK each</small> <input name="unit_price" inputmode="decimal" required></label>
             <button class="btn" type="submit">Save sale</button>
           </form>
           <form method="post" action="/profit/job-event" class="pf-basis-form">
             <input type="hidden" name="pool" value="{{$.ProfitBlueprint.Pool}}"><input type="hidden" name="bp" value="{{$.ProfitBlueprint.BP}}"><input type="hidden" name="job_id" value="{{.JobID}}"><input type="hidden" name="kind" value="lost">
-            <label>Units lost or used <input name="units" inputmode="numeric" required></label>
+            <label><small>Units lost or used</small> <input name="units" inputmode="numeric" required></label>
             <button class="btn" type="submit">Mark lost</button>
           </form>
           {{if $.ProfitBlueprint.Orders}}
           <form method="post" action="/profit/job-event" class="pf-basis-form">
             <input type="hidden" name="pool" value="{{$.ProfitBlueprint.Pool}}"><input type="hidden" name="bp" value="{{$.ProfitBlueprint.BP}}"><input type="hidden" name="job_id" value="{{.JobID}}"><input type="hidden" name="kind" value="watch">
-            <label>This open order is selling it <select name="order_id">{{range $.ProfitBlueprint.Orders}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</select></label>
+            <label><small>This open order is selling it</small> <select name="order_id">{{range $.ProfitBlueprint.Orders}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</select></label>
             <button class="btn" type="submit">Watch</button>
           </form>
           {{end}}

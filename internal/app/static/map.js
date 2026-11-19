@@ -956,7 +956,7 @@
       fromProj: false, wasProj: false, k0: 1, k1: 1, pending: false };
     var sel = -1, hover = -1;
     var raf = 0, hintTimer = 0, fitted = false;
-    var colors = null, font = "sans-serif", fontDisplay = "\"Rajdhani\", \"Segoe UI\", sans-serif";
+    var colors = null, font = "sans-serif", fontDisplay = "\"Eve Sans Neue\", \"Segoe UI\", sans-serif";
     var labelBoxes = []; // region labels hit-tested in the universe view
     var pathCache = {};
     var widthCache = {};
@@ -5720,13 +5720,13 @@
       o.fillStyle = getComputedStyle(stage).backgroundColor || "#070504";
       o.fillRect(0, 0, out.width, out.height);
       o.drawImage(canvas, 0, 0);
-      var fonts = root.fonts && root.fonts.load ? root.fonts.load("600 12px Rajdhani").catch(function () {}) : Promise.resolve();
+      var fonts = root.fonts && root.fonts.load ? root.fonts.load("600 12px \"Eve Sans Neue\"").catch(function () {}) : Promise.resolve();
       Promise.all([glyphImage().catch(function () { return null; }), wordmarkImage().catch(function () { return null; }), fonts]).then(function (got) {
         var logo = got[0], word = got[1], pad = 14 * s, h = 18 * s;
         // The brand: glyph, wordmark, ".APP", right-aligned.
         o.save();
         o.globalAlpha = 0.6;
-        o.font = "600 " + Math.round(h * 0.7) + "px Rajdhani, sans-serif";
+        o.font = "600 " + Math.round(h * 0.7) + "px \"Eve Sans Neue\", sans-serif";
         o.textBaseline = "alphabetic";
         var tld = ".APP", tw = o.measureText(tld).width;
         var ww = word ? h * (word.naturalWidth / word.naturalHeight || 4.9) : 0;

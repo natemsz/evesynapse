@@ -21,11 +21,11 @@
 }
 
 .map {
-  /* Type: the body face for names, the display face for region and
+  /* Type: the body face (Eve Sans Neue) for names, region and
      holder names, panel titles, and the picker chips, the numerals
      face for figures. The canvas reads --map-font-display back for
-     its display labels. */
-  --map-font-display: var(--font-display);
+     its labels. */
+  --map-font-display: var(--font-body);
   container: map / inline-size;
   font-family: var(--font-body);
   --map-gate: rgba(255, 178, 120, 0.2);
@@ -347,6 +347,9 @@ html[data-theme="light"] .map {
 .map-layers::-webkit-scrollbar { display: none; }
 .map-layers button {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
   padding: 0.25rem 0.65rem;
   border: 1px solid var(--box-edge);
   border-radius: var(--r-xs);
@@ -724,7 +727,7 @@ html.map-full-open { overflow: hidden; }
 
 /* The brand watermark: only on the full-screen map, faint, out of the
    way in the bottom-right corner, never taking the pointer. ".APP"
-   sits after the wordmark in Rajdhani capitals at 0.7 of its size. */
+   sits after the wordmark in Eve Sans Neue capitals at 0.7 of its size. */
 .map-mark {
   position: absolute;
   right: 3.4rem;
@@ -742,7 +745,7 @@ html.map-full-open { overflow: hidden; }
 .map-mark-word .wordmark-svg { display: block; height: 1.2em; width: auto; }
 .map-mark-tld {
   margin-left: 0.15em;
-  font-family: var(--font-display);
+  font-family: var(--map-font-display);
   font-size: var(--fs-2xs);
   font-weight: 600;
   letter-spacing: 0.06em;

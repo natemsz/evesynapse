@@ -407,7 +407,7 @@ h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 }
 header a.navlink {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-synthesis-weight: none;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -417,7 +417,7 @@ header a.navlink {
    them. The group labels carry the capitals; the items do not. */
 .branch .menu a, .switcher .menu a, .switcher-menu a {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-synthesis-weight: none;
   text-transform: none;
   letter-spacing: 0.03em;
@@ -1611,7 +1611,7 @@ html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[d
    as the buttons. */
 .chip {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -3000,7 +3000,7 @@ html[data-theme="light"] .esi-ours-down .esi-label { color: #6d28d9; }
   text-align: left;
   padding: 0.45rem 0.6rem;
   font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
   font-size: var(--fs-sm);
   color: var(--text);

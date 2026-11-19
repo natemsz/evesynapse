@@ -27,7 +27,7 @@
   min-height: 2.5rem; padding: 0.45rem 0.6rem;
   background: none; border: 1px solid var(--box-edge); border-radius: var(--r-sm);
   color: var(--muted); cursor: pointer;
-  font-family: var(--font-display); font-weight: 600;
+  font-family: var(--font-display); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-xs);
 }
 @media (min-width: 45.01rem) {
@@ -111,7 +111,7 @@
   #fit-modsearch.open .fit-modsearch-bar {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 0.45rem;
-    font-family: var(--font-display); font-weight: 600;
+    font-family: var(--font-display); font-weight: 500;
     text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-xs);
     color: var(--muted);
   }

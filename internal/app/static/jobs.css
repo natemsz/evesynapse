@@ -7,7 +7,7 @@
 .jb .l-panes { --l-dir: 19rem; --l-insp: 22rem; }
 
 /* Slots by pilot: three queues each, used against the maximum. */
-.jb-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.jb-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
 .jb-pilots { display: flex; flex-direction: column; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
 .jb-pilots > li { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.25rem 0.6rem; }
 .jb-pilot { grid-column: 1 / -1; font-weight: 600; }

@@ -55,7 +55,7 @@ it, inactive tabs recessed and muted. */
   font: inherit;
   font-family: var(--font-display);
   font-synthesis-weight: none;
-  font-weight: 600;
+  font-weight: 500;
   font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;

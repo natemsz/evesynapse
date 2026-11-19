@@ -28,7 +28,7 @@
   border: 1px solid var(--box-edge); border-radius: 999px;
   padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
   background: var(--row-alt);
-  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs);
 }
 .cs-hunt:hover { border-color: var(--accent); color: var(--text-bright); }
@@ -90,7 +90,7 @@
    fills green. */
 .cs-deals {
   position: relative; display: inline-flex; align-items: center; gap: 0.5rem;
-  cursor: pointer; font-weight: 600;
+  cursor: pointer; font-weight: 500;
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--fs-xs);
   border-color: color-mix(in srgb, var(--deal) 55%, transparent);
@@ -199,7 +199,7 @@
   border: 1px solid var(--box-edge); border-radius: 999px;
   padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
   background: var(--row-alt);
-  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs);
   cursor: pointer;
 }
@@ -239,7 +239,7 @@
 .cs-cap-chips button {
   border: 1px solid var(--box-edge); background: var(--row-alt);
   color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer;
-  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs);
 }
 .cs-cap-chips button:hover { border-color: var(--accent); color: var(--text-bright); }
@@ -261,7 +261,7 @@
   border: 1px solid var(--box-edge); background: transparent;
   color: var(--muted-2); border-radius: var(--r-xs); padding: 0.3rem 0.7rem;
   cursor: pointer; font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 600; text-transform: uppercase; letter-spacing: normal; font-size: var(--fs-xs);
+  font-weight: 500; text-transform: uppercase; letter-spacing: normal; font-size: var(--fs-xs);
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
 .cs-tab svg { width: 0.95rem; height: 0.95rem; flex: none; }

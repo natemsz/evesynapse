@@ -19,8 +19,7 @@
 /* --- Page head: summary and pickers --- */
 .sov-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0; }
 .sov-pick { display: inline-flex; align-items: center; gap: var(--space-2); }
-.sov-pick-l { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
-.sov-pick select { min-height: var(--control-h); max-inline-size: 14rem; padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.sov-pick select { min-height: var(--control-h); max-inline-size: 14rem; padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font-size: var(--fs-sm); }
 .sov-pick select:focus-visible { border-color: var(--accent); outline: none; }
 
 /* --- Layout: the main column and the standings --- */
@@ -30,7 +29,7 @@
 .sov-ph { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .sov-ph h2 { margin: 0 auto 0 0; display: inline-flex; align-items: baseline; gap: var(--space-2); }
 .sov-count { padding: 0 0.45rem; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); }
-.sov-search { flex: 0 1 16rem; min-width: 8rem; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.sov-search { flex: 0 1 16rem; min-width: 8rem; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font-size: var(--fs-sm); }
 .sov-search:focus-visible { border-color: var(--accent); outline: none; }
 .sov-h3 { margin: var(--space-2) 0 0; }
 .sov-note, .sov-empty { margin: 0; color: var(--muted); font-size: var(--fs-xs); }

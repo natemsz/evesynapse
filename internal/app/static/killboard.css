@@ -78,7 +78,7 @@
    half the row so the labels stay readable. */
 .kb-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0; }
 .kb-f { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.kb-f-l { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.kb-f-l { white-space: nowrap; }
 .kb-f select, .kb-f input { min-height: var(--control-h); min-width: 0; max-inline-size: 12rem; padding: 0.2rem 0.5rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--fs-sm); }
 .kb-f select:focus-visible, .kb-f input:focus-visible { border-color: var(--accent); outline: none; }
 .kb-pill { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; border: 1px solid var(--sel-edge); border-radius: var(--r-xs); background: var(--sel-bg); color: var(--text-bright); font-size: var(--fs-xs); text-decoration: none; }

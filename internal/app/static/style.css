@@ -1289,8 +1289,10 @@ img.portrait {
    textareas all wear the same surface, the --input-bg paint and the
    accent-tinted --glass-edge border every panel and card uses, so a
    field reads as a tint of the page glass, not a neutral slab pasted
-   onto it. */
-input[type="text"], input[type="search"], input[type="number"], select, textarea {
+   onto it. What a field holds is data: it reads in the body face at
+   the regular weight, whatever face its label wears. An input with
+   no type attribute is a text field. */
+input:not([type]), input[type="text"], input[type="search"], input[type="number"], select, textarea {
   background: var(--input-bg);
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-sm);
@@ -1299,6 +1301,10 @@ input[type="text"], input[type="search"], input[type="number"], select, textarea
   min-height: var(--control-h);
   padding: 0.2rem 0.6rem;
   font: inherit;
+  font-family: var(--font-body);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
 }
 /* The open list of a native select is painted by the browser from
    the <option> elements' own colours, and a browser that falls
@@ -1311,10 +1317,10 @@ select option, select optgroup {
   background-color: var(--panel);
   color: var(--text);
 }
-html[data-theme="light"] input[type="text"], html[data-theme="light"] input[type="search"], html[data-theme="light"] input[type="number"], html[data-theme="light"] select, html[data-theme="light"] textarea {
+html[data-theme="light"] input:not([type]), html[data-theme="light"] input[type="text"], html[data-theme="light"] input[type="search"], html[data-theme="light"] input[type="number"], html[data-theme="light"] select, html[data-theme="light"] textarea {
   border-color: #d8cdb8;
 }
-input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus, select:focus, textarea:focus {
+input:not([type]):focus, input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus, select:focus, textarea:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
@@ -1742,7 +1748,9 @@ html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[d
    the header band. */
 .field-label, .cs-field, .cs-drawer-label, .cs-cell-label,
 label > small:first-child, .lp-field > span, .mb-minvol > span, .fchips-label,
-.cs-hunts-label,
+.cs-hunts-label, .ap-label, .sov-pick-l, .kb-f-l, .pi-field > span, .co-pick > span,
+.sc-sys > span, .pi-watch label > span, .fit-boost-fields label > span,
+.map-route-jump label > span,
 .fleet-tags-label, .facet-title, .pie-head, .co-fuel-l {
   font-family: var(--font-display);
   font-size: var(--fs-2xs);
@@ -1790,7 +1798,9 @@ h4, h5, .box-title, .km-h, .bt-h, .cs-dhead-t, .jb-h, .sov-h3, .wl-h, .lp-h, .ib
   font-synthesis-weight: none;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--muted);
+  /* A section title: the scheme's highlight when a scheme is on,
+     the muted ink without one. */
+  color: var(--sch-hi, var(--muted));
 }
 /* Stat label: names the figure in a tile or KPI. */
 .l-stat-label, .kpi-k, .ov-total-l, .ov-ranktile .rl, .assets-net-l {
@@ -4304,7 +4314,6 @@ the page sideways. */
   border-radius: var(--r-sm);
   color: var(--text);
   padding: 0.42rem 0.6rem;
-  font: inherit;
 }
 html[data-theme="light"] .fit-head select {
   border-color: #d8cdb8;
@@ -4374,7 +4383,9 @@ html[data-theme="light"] .fit-head select {
 .fit-tile.over { border-color: rgba(198, 47, 16, 0.6); }
 .fit-tile.over strong { color: #ff7a5c; }
 .fit-group { margin-bottom: 0.7rem; padding: 0.5rem 0.6rem 0.6rem; border: 1px solid #242424; border-radius: var(--r-md); background: rgba(0, 0, 0, 0.18); }
-.fit-group > h4 { display: flex; align-items: baseline; gap: 0.5rem; margin: 0 0 0.45rem; }
+/* Slot group titles take the stat cards' title ink, so both sides
+   of the workbench open their sections in one color. */
+.fit-group > h4 { display: flex; align-items: baseline; gap: 0.5rem; margin: 0 0 0.45rem; color: var(--sch-hi, var(--gold)); }
 .fit-group > h4 .fit-count { margin-left: auto; letter-spacing: 0; color: var(--muted); }
 .fit-group > h4 .fit-count.fit-over { color: var(--danger); }
 .fit-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
@@ -5034,7 +5045,7 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   cursor: pointer;
 }
 .fit-check.disabled { opacity: 0.45; cursor: default; }
-.fit-check select { font: inherit; font-size: var(--fs-xs); }
+.fit-check select { font-size: var(--fs-xs); }
 /* Suggestion dropdown: kind groups, icons, keyboard nav. */
 .suggest li.sug-kind {
   font-size: var(--fs-xs);

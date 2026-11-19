@@ -1016,7 +1016,7 @@ html.map-full-open { overflow: hidden; }
 .map-route-opt { display: flex; align-items: center; gap: 0.4rem; margin: -0.2rem 0 0.55rem; font-size: var(--fs-xs); cursor: pointer; }
 .map-route-opt[hidden], .map-route-jump[hidden] { display: none; }
 .map-route-jump { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0.4rem 0.5rem; margin-bottom: 0.55rem; }
-.map-route-jump label > span { display: block; margin-bottom: 0.15rem; font-size: var(--fs-2xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-2); }
+.map-route-jump label > span { display: block; margin-bottom: 0.15rem; }
 .map-route-jump select {
   width: 100%;
   padding: 0.3rem 0.4rem;

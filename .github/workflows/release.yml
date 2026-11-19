@@ -3,11 +3,11 @@
 # GitHub credential is stored on any other forge. The files
 # published are the identical signed files the Forgejo
 # release made (Forgejo stays the one builder and signer):
-# this job waits for that release, downloads its thirteen files,
-# checks both binaries' SHA256 against the signed manifests,
-# and only then creates the GitHub release under the same
-# tag, title and notes, so the updater finds the same signed
-# release whichever forge it asks.
+# this job waits for that release, downloads its nineteen
+# files, checks each binary's SHA256 against its signed
+# manifest, and only then creates the GitHub release under the
+# same tag, title and notes, so the updater finds the same
+# signed release whichever forge it asks.
 #
 # Forgejo also reads .github/workflows, so the job carries
 # the same guard as heavy-gates: it only runs on GitHub
@@ -47,8 +47,8 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           for i in $(seq 1 45); do
             if curl -sf "$FORGEJO_API/releases/tags/$TAG" -o release.json \
-              && [ "$(jq '.assets | length' release.json)" = "13" ]; then
-              echo "Forgejo release $TAG is published with all thirteen files."
+              && [ "$(jq '.assets | length' release.json)" = "19" ]; then
+              echo "Forgejo release $TAG is published with all nineteen files."
               exit 0
             fi
             echo "Waiting for the Forgejo release $TAG (try $i of 45)."
@@ -72,6 +72,17 @@ jobs:
               exit 1
             fi
             echo "evesynapse-$a matches its signed manifest."
+          done
+          for p in windows-amd64 windows-arm64 darwin-amd64 darwin-arm64; do
+            bin="evesynapse-$p"
+            case "$p" in windows-*) bin="$bin.exe" ;; esac
+            want=$(jq -r .sha256 "dist/latest-$p.json")
+            got=$(sha256sum "dist/$bin" | cut -d' ' -f1)
+            if [ "$want" != "$got" ]; then
+              echo "$bin does not match its signed manifest ($got != $want); refusing to publish."
+              exit 1
+            fi
+            echo "$bin matches its signed manifest."
           done
       - name: Create the GitHub release
         run: |

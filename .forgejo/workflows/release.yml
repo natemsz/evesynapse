@@ -13,7 +13,7 @@
 # publishes from the dev branch and is reached with
 # `evesynapse -update -dev`; nothing publishes unsigned.
 # The release object is the commit point the
-# updater reads: it is created as a draft, the thirteen assets are
+# updater reads: it is created as a draft, the nineteen assets are
 # uploaded to it, and only then is it published, so no reader
 # ever sees a release whose files are not all there.
 #
@@ -101,20 +101,24 @@ jobs:
           mkdir -p dist
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/evesynapse-windows-amd64.exe ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o dist/evesynapse-windows-arm64.exe ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o dist/evesynapse-darwin-amd64 ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o dist/evesynapse-darwin-arm64 ./cmd/evesynapse
           cp deploy/setup.sh dist/setup.sh
           cd dist
           for a in arm64 amd64; do
             sha=$(sha256sum "evesynapse-$a" | cut -d' ' -f1)
             printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "$VERSION" "$a" "$sha" > "latest-$a.json"
           done
-          # The installer is its own Go module (deploy/installer),
-          # so it builds from its own directory. One binary per
-          # platform the release serves: Linux, macOS and Windows,
-          # each for amd64 and arm64.
-          for osarch in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
-            os="${osarch%/*}"; arch="${osarch#*/}"
-            ext=""; [ "$os" = "windows" ] && ext=".exe"
-            (cd ../deploy/installer && CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -o "../../dist/evesynapse-installer-$os-$arch$ext" .)
+          # Windows and macOS carry the operating system in
+          # their manifest names, the way the Linux ones carry
+          # only the CPU kind.
+          for p in windows-amd64 windows-arm64 darwin-amd64 darwin-arm64; do
+            bin="evesynapse-$p"
+            case "$p" in windows-*) bin="$bin.exe" ;; esac
+            sha=$(sha256sum "$bin" | cut -d' ' -f1)
+            printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "$VERSION" "$p" "$sha" > "latest-$p.json"
           done
           ls -la
       # A version carrying a suffix (0.4.1.4-dev) is a
@@ -169,7 +173,7 @@ jobs:
             RELEASE_SIGNING_KEY="$(cat "$RELEASE_SIGNING_KEY")"
             export RELEASE_SIGNING_KEY
           fi
-          go run ./cmd/releasesign sign dist/latest-arm64.json dist/latest-amd64.json
+          go run ./cmd/releasesign sign dist/latest-arm64.json dist/latest-amd64.json dist/latest-windows-amd64.json dist/latest-windows-arm64.json dist/latest-darwin-amd64.json dist/latest-darwin-arm64.json
       # The release notes: the pull requests merged since the
       # previous release, grouped by label the way
       # .github/release.yml groups them.
@@ -232,7 +236,7 @@ jobs:
               with open("release-notes.md", "a") as fh:
                   fh.write("\n## What's Changed\n\n" + "\n".join(notes))
           PYEOF
-      # The release is created as a draft, the thirteen files are
+      # The release is created as a draft, the nineteen files are
       # uploaded to it, and then it is published: the publish
       # is the commit point, and the updater skips drafts, so
       # no reader can see a half-uploaded release. When a draft
@@ -323,7 +327,7 @@ jobs:
                   fh.write(a["name"] + "\n")
           PYEOF
           REL_ID="$(cat release-id.txt)"
-          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh evesynapse-installer-linux-amd64 evesynapse-installer-linux-arm64 evesynapse-installer-darwin-amd64 evesynapse-installer-darwin-arm64 evesynapse-installer-windows-amd64.exe evesynapse-installer-windows-arm64.exe; do
+          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh evesynapse-windows-amd64.exe evesynapse-windows-arm64.exe evesynapse-darwin-amd64 evesynapse-darwin-arm64 latest-windows-amd64.json latest-windows-arm64.json latest-darwin-amd64.json latest-darwin-arm64.json latest-windows-amd64.json.sig latest-windows-arm64.json.sig latest-darwin-amd64.json.sig latest-darwin-arm64.json.sig; do
             if grep -qx "$f" release-assets.txt; then
               echo "$f: already on the draft; skipping."
               continue
@@ -401,7 +405,7 @@ jobs:
           fi
           export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
           EP="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
-          FILES="evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh evesynapse-installer-linux-amd64 evesynapse-installer-linux-arm64 evesynapse-installer-darwin-amd64 evesynapse-installer-darwin-arm64 evesynapse-installer-windows-amd64.exe evesynapse-installer-windows-arm64.exe"
+          FILES="evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh evesynapse-windows-amd64.exe evesynapse-windows-arm64.exe evesynapse-darwin-amd64 evesynapse-darwin-arm64 latest-windows-amd64.json latest-windows-arm64.json latest-darwin-amd64.json latest-darwin-arm64.json latest-windows-amd64.json.sig latest-windows-arm64.json.sig latest-darwin-amd64.json.sig latest-darwin-arm64.json.sig"
           for f in $FILES; do
             aws s3 cp "dist/$f" "s3://$R2_BUCKET/evesynapse/v$VERSION/$f" --endpoint-url "$EP"
           done
@@ -412,6 +416,13 @@ jobs:
           for a in arm64 amd64; do
             aws s3 cp "dist/latest-$a.json" "s3://$R2_BUCKET/evesynapse/$CH-$a.json" --endpoint-url "$EP" --content-type "application/json"
             aws s3 cp "dist/latest-$a.json.sig" "s3://$R2_BUCKET/evesynapse/$CH-$a.json.sig" --endpoint-url "$EP"
+          done
+          for p in windows-amd64 windows-arm64 darwin-amd64 darwin-arm64; do
+            bin="evesynapse-$p"
+            case "$p" in windows-*) bin="$bin.exe" ;; esac
+            aws s3 cp "dist/$bin" "s3://$R2_BUCKET/evesynapse/$CH/$bin" --endpoint-url "$EP"
+            aws s3 cp "dist/latest-$p.json" "s3://$R2_BUCKET/evesynapse/$CH-$p.json" --endpoint-url "$EP" --content-type "application/json"
+            aws s3 cp "dist/latest-$p.json.sig" "s3://$R2_BUCKET/evesynapse/$CH-$p.json.sig" --endpoint-url "$EP"
           done
           echo "Mirrored v$VERSION to the $CH channel."
 
@@ -485,7 +496,7 @@ jobs:
               [ -n "$fname" ] && have["$fname"]="$fsha"
             done < <(printf '%s' "$files_json" | python3 -c 'import json,sys; [print(f["file_name"]+"="+f["file_sha256"]) for f in json.load(sys.stdin)]')
           fi
-          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh evesynapse-installer-linux-amd64 evesynapse-installer-linux-arm64 evesynapse-installer-darwin-amd64 evesynapse-installer-darwin-arm64 evesynapse-installer-windows-amd64.exe evesynapse-installer-windows-arm64.exe; do
+          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh evesynapse-windows-amd64.exe evesynapse-windows-arm64.exe evesynapse-darwin-amd64 evesynapse-darwin-arm64 latest-windows-amd64.json latest-windows-arm64.json latest-darwin-amd64.json latest-darwin-arm64.json latest-windows-amd64.json.sig latest-windows-arm64.json.sig latest-darwin-amd64.json.sig latest-darwin-arm64.json.sig; do
             sha="$(sha256sum "dist/$f" | cut -d' ' -f1)"
             if [ "${have[$f]:-}" = "$sha" ]; then
               echo "$f: already in the GitLab registry under the same hash; skipping."
@@ -506,9 +517,12 @@ jobs:
                    "latest-arm64.json", "latest-amd64.json",
                    "latest-arm64.json.sig", "latest-amd64.json.sig",
                    "setup.sh",
-                   "evesynapse-installer-linux-amd64", "evesynapse-installer-linux-arm64",
-                   "evesynapse-installer-darwin-amd64", "evesynapse-installer-darwin-arm64",
-                   "evesynapse-installer-windows-amd64.exe", "evesynapse-installer-windows-arm64.exe"]
+                   "evesynapse-windows-amd64.exe", "evesynapse-windows-arm64.exe",
+                   "evesynapse-darwin-amd64", "evesynapse-darwin-arm64",
+                   "latest-windows-amd64.json", "latest-windows-arm64.json",
+                   "latest-darwin-amd64.json", "latest-darwin-arm64.json",
+                   "latest-windows-amd64.json.sig", "latest-windows-arm64.json.sig",
+                   "latest-darwin-amd64.json.sig", "latest-darwin-arm64.json.sig"]
           api = os.environ["GL_API"]
           project = os.environ["GL_PROJECT"]
           body = {

@@ -6,7 +6,9 @@
 //	    computer's kind, and when there is one whose signature
 //	    checks out download it, verify it against the checksum the
 //	    signed manifest names, swap it into place, and restart onto
-//	    it. With no flag the binary's own kind is used.
+//	    it. With no flag the binary's own kind is used: the
+//	    -arm64 and -x86 flags pick the CPU kind on this computer's
+//	    operating system, Linux, Windows or macOS.
 //
 //	evesynapse -update -dev [-arm64|-x86]
 //	    The same, from the newest development release.
@@ -14,16 +16,20 @@
 //	evesynapse -update <url> <sha256>  /  -update <file> [sha256]
 //	    Install a build from an explicit address or file: verify it
 //	    really is an EveSynapse program for this kind of computer
-//	    (ELF, and matching the checksum, which a network address
+//	    (an ELF program on Linux, a PE on Windows, a Mach-O on
+//	    macOS, and matching the checksum, which a network address
 //	    must come with), swap it into place, and ask the running
 //	    server to restart onto it. The running process keeps its
 //	    old inode during the swap, so an update can never corrupt
 //	    a copy that is serving pages right now.
 //
 // The restart hand-off runs through the server's pidfile (package
-// pidfile): the updater signals that PID, after checking the process
-// really is this program, and the service manager (Restart=always)
-// brings the new build up. No systemctl call is attempted.
+// pidfile): on Linux the updater signals that PID, after checking
+// the process really is this program, and the service manager
+// (Restart=always) brings the new build up. No systemctl call is
+// attempted. Windows and macOS have no service manager the updater
+// can rely on, so there the update is installed and the operator
+// is told plainly to restart EveSynapse to start it.
 //
 // What "verify" means for the release channel: the release's
 // manifest has to carry a signature made with a release key this
@@ -82,8 +88,7 @@ const (
 	// updateRestartWait bounds the wait for the old server to
 	// stop after SIGTERM.
 	updateRestartWait = 20 * time.Second
-	// elfMachineAArch64 is ELF e_machine for 64-bit ARM, the
-	// only computer the deployed binary ever runs on.
+	// elfMachineAArch64 is ELF e_machine for 64-bit ARM.
 	elfMachineAArch64 = 183
 )
 
@@ -94,9 +99,9 @@ var providerCheckTimeout = 10 * time.Second
 
 // ---------------------------------------------------------------------------
 // The release channel: CI publishes every build as a release
-// whose assets are the package files, a tiny manifest per CPU
-// kind (the version it names and the checksum of the binary
-// beside it) and that manifest's signature. Where the updater
+// whose assets are the package files, a tiny manifest per
+// platform kind (the version it names and the checksum of the
+// binary beside it) and that manifest's signature. Where the updater
 // reads them from is a provider. Which providers an install
 // reads, and in what order, is the install's own
 // configuration: EVESYNAPSE_UPDATE_PROVIDER names one or
@@ -129,9 +134,16 @@ var providerCheckTimeout = 10 * time.Second
 // ---------------------------------------------------------------------------
 
 const (
-	// elfMachineAMD64 is ELF e_machine for x86-64, the desktop
-	// build's counterpart to elfMachineAArch64.
+	// elfMachineAMD64 is ELF e_machine for x86-64.
 	elfMachineAMD64 = 62
+	// peMachineAMD64 is the PE COFF machine for x86-64.
+	peMachineAMD64 = 0x8664
+	// peMachineARM64 is the PE COFF machine for 64-bit ARM.
+	peMachineARM64 = 0xaa64
+	// machOCPUAMD64 is the Mach-O cputype for x86-64.
+	machOCPUAMD64 = 0x01000007
+	// machOCPUARM64 is the Mach-O cputype for 64-bit ARM.
+	machOCPUARM64 = 0x0100000c
 )
 
 // releaseAPIBaseURL is the GitLab API root the updater lists
@@ -199,18 +211,90 @@ func parseArchArg(arg string) string {
 	return ""
 }
 
-// ownReleaseArch is the CPU kind this very binary was built for.
-func ownReleaseArch() string { return runtime.GOARCH }
-
-// elfMachineForArch maps a release arch to its ELF e_machine.
-func elfMachineForArch(arch string) (uint16, bool) {
-	switch arch {
-	case "arm64":
-		return elfMachineAArch64, true
-	case "amd64":
-		return elfMachineAMD64, true
+// ownReleasePlatform is the platform key of the binary doing
+// the updating. Linux keeps its bare arch names (arm64, amd64),
+// the names the releases have always carried, so installs
+// already out there keep updating against the manifests they
+// already read. Windows and macOS carry the operating system
+// in the key (windows-amd64, darwin-arm64), because the same
+// CPU kind ships a different program there. A var so tests can
+// run the Windows and macOS paths on the Linux test host.
+var ownReleasePlatform = func() string {
+	if runtime.GOOS == "linux" {
+		return runtime.GOARCH
 	}
-	return 0, false
+	return runtime.GOOS + "-" + runtime.GOARCH
+}
+
+// platformOS is the operating system a platform key names:
+// linux for the bare arch keys, the part before the dash
+// otherwise.
+func platformOS(platform string) string {
+	if os, _, ok := strings.Cut(platform, "-"); ok {
+		return os
+	}
+	return "linux"
+}
+
+// platformArch is the CPU kind a platform key names: the key
+// itself on Linux, the part after the operating system
+// otherwise.
+func platformArch(platform string) string {
+	if _, arch, ok := strings.Cut(platform, "-"); ok {
+		return arch
+	}
+	return platform
+}
+
+// platformForArch is the platform key for a CPU kind on this
+// computer's operating system: what the -arm64 and -x86 flags
+// select. On Linux it is the arch itself, the name the
+// releases have always carried.
+func platformForArch(arch string) string {
+	if runtime.GOOS == "linux" {
+		return arch
+	}
+	return runtime.GOOS + "-" + arch
+}
+
+// platformBinaryName is the release file name of the app binary
+// for a platform key: evesynapse-<key>, with .exe on Windows.
+func platformBinaryName(platform string) string {
+	if platformOS(platform) == "windows" {
+		return "evesynapse-" + platform + ".exe"
+	}
+	return "evesynapse-" + platform
+}
+
+// platformManifestName is the release file name of the signed
+// manifest for a platform key: latest-<key>.json.
+func platformManifestName(platform string) string {
+	return "latest-" + platform + ".json"
+}
+
+// executableKindForPlatform maps a platform key to the program
+// a build for it has to be: its container format (elf, pe or
+// macho) and the machine code inside it. A key naming no
+// published platform is refused.
+func executableKindForPlatform(platform string) (format string, machine uint32, ok bool) {
+	var elf, pe, macho uint32
+	switch platformArch(platform) {
+	case "arm64":
+		elf, pe, macho = elfMachineAArch64, peMachineARM64, machOCPUARM64
+	case "amd64":
+		elf, pe, macho = elfMachineAMD64, peMachineAMD64, machOCPUAMD64
+	default:
+		return "", 0, false
+	}
+	switch platformOS(platform) {
+	case "linux":
+		return "elf", elf, true
+	case "windows":
+		return "pe", pe, true
+	case "darwin":
+		return "macho", macho, true
+	}
+	return "", 0, false
 }
 
 // compareVersions orders dotted numeric versions: -1 when a is
@@ -409,9 +493,9 @@ func gitlabReleaseAssets(ctx context.Context, arch string, dev bool) (manifestUR
 		}
 		return "", "", "", errors.New("no releases found")
 	}
-	wantManifest := "latest-" + arch + ".json"
+	wantManifest := platformManifestName(arch)
 	wantSig := wantManifest + releasesig.SigSuffix
-	wantBinary := "evesynapse-" + arch
+	wantBinary := platformBinaryName(arch)
 	for _, a := range rel.Assets.Links {
 		switch a.Name {
 		case wantManifest:
@@ -482,9 +566,9 @@ type githubRelease struct {
 // files. The dev channel lists the releases and picks the
 // newest -dev one, as the gitlab provider picks from its list.
 func githubReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
-	wantManifest := "latest-" + arch + ".json"
+	wantManifest := platformManifestName(arch)
 	wantSig := wantManifest + releasesig.SigSuffix
-	wantBinary := "evesynapse-" + arch
+	wantBinary := platformBinaryName(arch)
 	if !dev {
 		base := releaseGitHubBaseURL + "/" + updateGitHubRepo() + "/releases/latest/download"
 		return base + "/" + wantManifest, base + "/" + wantSig, base + "/" + wantBinary, nil
@@ -594,9 +678,9 @@ type forgejoRelease struct {
 // release is latest by date and can name a dev build, so the
 // stable channel does not take it on trust.)
 func forgejoReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
-	wantManifest := "latest-" + arch + ".json"
+	wantManifest := platformManifestName(arch)
 	wantSig := wantManifest + releasesig.SigSuffix
-	wantBinary := "evesynapse-" + arch
+	wantBinary := platformBinaryName(arch)
 	apiURL := fmt.Sprintf("%s/repos/%s/releases?limit=100", forgejoAPIBase(), updateForgejoRepo())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -691,7 +775,7 @@ func mirrorReleaseAssets(arch string, dev bool) (manifestURL, sigURL, binaryURL 
 		channel = "latest-dev"
 	}
 	manifestURL = base + "/" + channel + "-" + arch + ".json"
-	return manifestURL, manifestURL + releasesig.SigSuffix, base + "/" + channel + "/evesynapse-" + arch, nil
+	return manifestURL, manifestURL + releasesig.SigSuffix, base + "/" + channel + "/" + platformBinaryName(arch), nil
 }
 
 // trustedReleaseKeys is the set of keys a release has to be signed
@@ -940,8 +1024,7 @@ func fetchProviderManifest(ctx context.Context, provider string, arch string, de
 // it. With dev=true it pulls the latest -dev tagged release
 // instead of the main channel.
 func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, dev bool) int {
-	machine, ok := elfMachineForArch(arch)
-	if !ok {
+	if _, _, ok := executableKindForPlatform(arch); !ok {
 		fmt.Fprintf(stderr, "EveSynapse doesn't publish builds for %q computers. Nothing was changed.\n", arch)
 		return 2
 	}
@@ -976,13 +1059,13 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 	}
 	fmt.Fprintf(stdout, "A new version is available: %s.\n", latest)
 	fmt.Fprintf(stdout, "Signature verified: %s\n", signer)
-	display := &downloadDisplay{w: stdout, name: "evesynapse-" + arch, from: provider}
+	display := &downloadDisplay{w: stdout, name: platformBinaryName(arch), from: provider}
 	sizeCtx, sizeCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	if size, serr := downloadSize(sizeCtx, source); serr == nil {
 		display.total = size
 	}
 	sizeCancel()
-	if code := installUpdate(target, source, m.SHA256, machine, stdout, stderr, display); code != 0 {
+	if code := installUpdate(target, source, m.SHA256, arch, stdout, stderr, display); code != 0 {
 		return code
 	}
 	if got, ok := installedVersion(target); ok {
@@ -1039,15 +1122,16 @@ func runUpdate(current, target string, args []string, stdout, stderr io.Writer) 
 	}
 	args = filtered
 	if len(args) == 0 {
-		return runReleaseUpdate(current, target, ownReleaseArch(), stdout, stderr, dev)
+		return runReleaseUpdate(current, target, ownReleasePlatform(), stdout, stderr, dev)
 	}
 	if len(args) == 1 {
 		if arch := parseArchArg(args[0]); arch != "" {
-			return runReleaseUpdate(current, target, arch, stdout, stderr, dev)
+			return runReleaseUpdate(current, target, platformForArch(arch), stdout, stderr, dev)
 		}
 	}
 	if len(args) > 2 {
 		fmt.Fprintln(stderr, "Usage: evesynapse -update [-dev] [-arm64|-x86] or evesynapse -update <download address> <checksum> or evesynapse -update <file> [checksum]")
+		fmt.Fprintln(stderr, "The -arm64 and -x86 flags pick the CPU kind for this operating system.")
 		return 2
 	}
 	source := args[0]
@@ -1071,13 +1155,13 @@ func runUpdate(current, target string, args []string, stdout, stderr io.Writer) 
 	}
 	// The build has to be one this computer can run: the same kind
 	// as the program doing the updating.
-	machine, ok := elfMachineForArch(ownReleaseArch())
-	if !ok {
-		fmt.Fprintf(stderr, "EveSynapse doesn't publish builds for %q computers. Nothing was changed.\n", ownReleaseArch())
+	platform := ownReleasePlatform()
+	if _, _, ok := executableKindForPlatform(platform); !ok {
+		fmt.Fprintf(stderr, "EveSynapse doesn't publish builds for %q computers. Nothing was changed.\n", platform)
 		return 2
 	}
 
-	return installUpdate(target, source, wantHash, machine, stdout, stderr, nil)
+	return installUpdate(target, source, wantHash, platform, stdout, stderr, nil)
 }
 
 // updateSourceIsRemote reports whether an explicit update source
@@ -1181,12 +1265,12 @@ func (p *progressReader) print(now time.Time) {
 	fmt.Fprintf(d.w, "     [%s %s] %.1f MB/s\n", d.name, formatBytes(p.done), speed)
 }
 
-// installUpdate downloads source, verifies it (size, ELF
-// machine kind, checksum when wantHash is set), swaps it into
-// place at target, and asks the running server to restart onto
-// it. Shared by the explicit-address and release-channel forms;
+// installUpdate downloads source, verifies it (size, program
+// kind, checksum when wantHash is set), swaps it into place at
+// target, and asks the running server to restart onto it.
+// Shared by the explicit-address and release-channel forms;
 // the release channel passes its download read-out as display.
-func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, stderr io.Writer, display *downloadDisplay) int {
+func installUpdate(target, source, wantHash string, platform string, stdout, stderr io.Writer, display *downloadDisplay) int {
 	dir := filepath.Dir(target)
 	tmpPath := filepath.Join(dir, fmt.Sprintf(".evesynapse.update-%d", os.Getpid()))
 	defer os.Remove(tmpPath) // no-op once the temp file has been renamed into place
@@ -1212,7 +1296,7 @@ func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, 
 		fmt.Fprintln(stderr, "The download is too small to be the EveSynapse program. It may not have downloaded properly. Nothing was changed.")
 		return 1
 	}
-	if err := verifyExecutableMachine(tmpPath, wantMachine); err != nil {
+	if err := verifyExecutable(tmpPath, platform); err != nil {
 		fmt.Fprintf(stderr, "%v\nNothing was changed.\n", err)
 		return 1
 	}
@@ -1233,26 +1317,74 @@ func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, 
 		fmt.Fprintf(stderr, "Couldn't prepare the new version: %v\nNothing was changed.\n", err)
 		return 1
 	}
-	if err := os.Rename(tmpPath, target); err != nil {
+	if err := swapExecutable(tmpPath, target, platform); err != nil {
 		fmt.Fprintf(stderr, "Couldn't install the new version: %v\nThe current version is still in place.\n", err)
 		return 1
 	}
 	syncDir(dir)
-	relabelExecutable(target)
-	ensureRuntimeDir(stdout)
+	if platformOS(platform) == "linux" {
+		relabelExecutable(target)
+		ensureRuntimeDir(stdout)
+	}
+
+	restartAfterSwap(stdout, dir, target, platform)
+	return 0
+}
+
+// swapExecutable moves the downloaded build into place at
+// target. On Linux and macOS a rename does it. On Windows the
+// running program cannot be replaced in place: the old copy is
+// renamed aside first, then the new one moves in, and the old
+// copy is removed when nothing still holds it. A failure
+// moving the new one in puts the old copy back, so a failed
+// swap still leaves a working program.
+func swapExecutable(tmpPath, target, platform string) error {
+	if platformOS(platform) != "windows" {
+		return os.Rename(tmpPath, target)
+	}
+	oldPath := target + ".old"
+	_ = os.Remove(oldPath) // a leftover from an earlier update
+	if err := os.Rename(target, oldPath); err != nil {
+		if os.IsNotExist(err) {
+			return os.Rename(tmpPath, target)
+		}
+		return err
+	}
+	if err := os.Rename(tmpPath, target); err != nil {
+		_ = os.Rename(oldPath, target)
+		return err
+	}
+	_ = os.Remove(oldPath) // still held while the old server runs; best effort
+	return nil
+}
+
+// restartAfterSwap asks the running server to restart onto the
+// new build, in the way the platform supports, and reads out
+// what happened. On Linux the pidfile names the server, the
+// updater signals it, and the service manager brings the new
+// build up. Windows and macOS have no service manager the
+// updater can rely on, so there the update is installed and
+// the operator is told plainly to restart EveSynapse: taking
+// down a running server the updater cannot bring back would
+// leave it down, not updated.
+func restartAfterSwap(stdout io.Writer, dir, target, platform string) {
+	if platformOS(platform) != "linux" {
+		fmt.Fprintln(stdout, "Update installed. Restart EveSynapse to start the new version: nothing on this system restarts it on its own.")
+		return
+	}
 
 	if pid, pidPath, ok := pidfile.FindLive(pidfile.Candidates(dir)); ok {
 		fmt.Fprintln(stdout, "Update installed.")
 		if !pidfile.ProcessCheck(pid, target) {
 			fmt.Fprintf(stdout, "The pidfile %s names process %d, which isn't EveSynapse, so nothing was signalled. Restart EveSynapse yourself to start the new version (sudo systemctl restart evesynapse).\n", pidPath, pid)
-			return 0
+			return
 		}
 		if pidfile.SignalRestart(pid, pidPath, updateRestartWait) {
 			fmt.Fprintln(stdout, "EveSynapse is restarting on the new version.")
 		} else {
 			fmt.Fprintln(stdout, "EveSynapse is still finishing up. It will pick up the new version when it next restarts.")
 		}
-		return 0
+		return
 	}
 
 	if pid, ok := pidfile.FindProcess(target); ok {
@@ -1262,11 +1394,10 @@ func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, 
 		} else {
 			fmt.Fprintln(stdout, "EveSynapse is still finishing up. It will pick up the new version when it next restarts.")
 		}
-		return 0
+		return
 	}
 
 	fmt.Fprintln(stdout, "Update installed. EveSynapse isn't running right now. The new version will be in place next time it starts.")
-	return 0
 }
 
 func ensureRuntimeDir(w io.Writer) {
@@ -1369,16 +1500,35 @@ func fetchUpdate(ctx context.Context, source, dstPath string, display *downloadD
 	return out.Sync()
 }
 
-// verifyExecutableMachine checks that path is an ELF program
-// built for the given machine kind, the one check that keeps a
-// wrong download (error page, build for another kind of
-// computer) from ever replacing the working copy.
-func verifyExecutableMachine(path string, wantMachine uint16) error {
+// verifyExecutable checks that path is a program for the
+// platform key: an ELF program on Linux, a PE on Windows, a
+// Mach-O on macOS, built for the key's CPU kind. It is the one
+// check that keeps a wrong download (error page, build for
+// another kind of computer) from ever replacing the working
+// copy.
+func verifyExecutable(path, platform string) error {
+	format, machine, ok := executableKindForPlatform(platform)
+	if !ok {
+		return fmt.Errorf("EveSynapse doesn't publish builds for %q computers", platform)
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+	switch format {
+	case "pe":
+		return verifyPE(f, uint16(machine))
+	case "macho":
+		return verifyMachO(f, machine)
+	default:
+		return verifyELF(f, uint16(machine))
+	}
+}
+
+// verifyELF checks that f is an ELF program built for the
+// given machine kind.
+func verifyELF(f *os.File, wantMachine uint16) error {
 	var hdr [20]byte
 	if _, err := f.ReadAt(hdr[:], 0); err != nil {
 		return errors.New("the download isn't a complete program file")
@@ -1387,6 +1537,55 @@ func verifyExecutableMachine(path string, wantMachine uint16) error {
 		return errors.New("the download isn't an EveSynapse program; it may be an error page instead of the update")
 	}
 	if machine := binary.LittleEndian.Uint16(hdr[18:20]); machine != wantMachine {
+		return errors.New("the download was built for a different kind of computer, so it wouldn't run here")
+	}
+	return nil
+}
+
+// verifyPE checks that f is a PE program (a Windows .exe)
+// built for the given COFF machine kind: the MZ header, the
+// PE signature at the offset the DOS header names, and the
+// machine in the COFF header after it.
+func verifyPE(f *os.File, wantMachine uint16) error {
+	var dos [64]byte
+	if _, err := f.ReadAt(dos[:], 0); err != nil {
+		return errors.New("the download isn't a complete program file")
+	}
+	if dos[0] != 'M' || dos[1] != 'Z' {
+		return errors.New("the download isn't an EveSynapse program; it may be an error page instead of the update")
+	}
+	peOff := binary.LittleEndian.Uint32(dos[60:64])
+	if peOff < 64 || peOff > 1<<20 {
+		return errors.New("the download isn't a Windows program file")
+	}
+	var coff [6]byte
+	if _, err := f.ReadAt(coff[:], int64(peOff)); err != nil {
+		return errors.New("the download isn't a complete program file")
+	}
+	if coff[0] != 'P' || coff[1] != 'E' || coff[2] != 0 || coff[3] != 0 {
+		return errors.New("the download isn't a Windows program file")
+	}
+	if machine := binary.LittleEndian.Uint16(coff[4:6]); machine != wantMachine {
+		return errors.New("the download was built for a different kind of computer, so it wouldn't run here")
+	}
+	return nil
+}
+
+// verifyMachO checks that f is a Mach-O program built for the
+// given CPU type: the 64-bit (or 32-bit) magic and the cputype
+// after it. A fat binary, which carries several architectures
+// at once, is refused: the release ships one thin build per
+// platform.
+func verifyMachO(f *os.File, wantCPU uint32) error {
+	var hdr [8]byte
+	if _, err := f.ReadAt(hdr[:], 0); err != nil {
+		return errors.New("the download isn't a complete program file")
+	}
+	magic := binary.LittleEndian.Uint32(hdr[0:4])
+	if magic != 0xfeedfacf && magic != 0xfeedface {
+		return errors.New("the download isn't an EveSynapse program; it may be an error page instead of the update")
+	}
+	if cpu := binary.LittleEndian.Uint32(hdr[4:8]); cpu != wantCPU {
 		return errors.New("the download was built for a different kind of computer, so it wouldn't run here")
 	}
 	return nil

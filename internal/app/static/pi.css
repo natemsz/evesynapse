@@ -36,7 +36,7 @@
 
 /* Settings: labelled fields on a two-up grid that folds to one. */
 .pi-field { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
-.pi-field :is(select, input) { width: 100%; min-width: 0; box-sizing: border-box; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; }
+.pi-field :is(select, input) { width: 100%; min-width: 0; box-sizing: border-box; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); }
 .pi-field :is(select, input):focus { border-color: var(--accent); }
 .pi-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--space-2) var(--space-3); margin: var(--space-3) 0; }
 .pi-planets { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.5rem), 1fr)); gap: 0.15rem 0.5rem; margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-sm); }
@@ -104,7 +104,7 @@
 @container page (width < 34rem) { .pi-buy { flex-direction: column; align-items: flex-start; } .pi-buy .pi-check { margin-left: 0; } }
 .pi-fields-inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
 .pi-goal .searchwrap { display: block; position: relative; width: 100%; }
-.pi-goal .searchwrap input { width: 100%; box-sizing: border-box; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; }
+.pi-goal .searchwrap input { width: 100%; box-sizing: border-box; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); }
 @container page (width < 46rem) {
   .pi-goal-main > .pi-field, .pi-goal-go { flex-basis: 100%; }
 }

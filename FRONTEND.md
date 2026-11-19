@@ -491,7 +491,7 @@ reader learns it once and reads every page by it:
 | Page title (h1) | display caps | `--fs-4xl` | 700 | `--text` |
 | Panel title (h2) | display caps | `--fs-xl` | `--fw-display` | heading gold |
 | Card or pane title (h3, `.l-pane-title`) | display caps | `--fs-md` | `--fw-display` | heading gold |
-| Kicker (a sub-section inside a panel) | display caps | `--fs-xs` | `--fw-display` | `--muted` |
+| Kicker (a sub-section inside a panel) | display caps | `--fs-xs` | `--fw-display` | `--sch-hi`, `--muted` without a scheme |
 | Label (field label, filter group, legend) | display caps | `--fs-2xs` | `--fw-display` | `--muted-2` |
 | Column header (`thead th`) | display caps | `--fs-2xs` | `--fw-display` | `--text-bright` |
 | Stat label (over a tile figure) | display caps | `--fs-xs` | `--fw-display` | `--muted-2` |

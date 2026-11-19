@@ -96,7 +96,7 @@
 .pi-goal-main > .pi-f-num { flex: 1 1 8rem; }
 .pi-goal-go { flex: 0 0 auto; min-height: var(--control-h); white-space: nowrap; }
 .pi-goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-sm); }
-.pi-goal-row legend, .pi-goal-more summary { padding: 0 0.3rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.pi-goal-row legend, .pi-goal-more summary { padding: 0 0.3rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .pi-goal-more summary { cursor: pointer; padding: 0; }
 .pi-radio, .pi-check, .pi-pilot { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2rem; }
 .pi-radio small, .pi-pilot small { color: var(--muted); font-size: var(--fs-xs); }
@@ -138,22 +138,22 @@
   .pi-view { position: static; max-height: none; overflow: visible; }
   .pi-view-back { display: inline-flex; }
 }
-.pi-group-h { margin: 0 0 var(--space-2); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.pi-group-h { margin: 0 0 var(--space-2); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .pi-cards { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .pi-card { border: 1px solid var(--hairline); border-left: 3px solid var(--kept); border-radius: var(--r-sm); background: var(--surface-pane); }
 .pi-card.over { border-left-color: var(--danger); }
 .pi-card.on { border-color: var(--gold); background: var(--sel-bg); }
-.pi-card.edited .pi-card-role::after { content: "edited"; margin-left: 0.4rem; color: var(--gold); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; text-transform: uppercase; }
+.pi-card.edited .pi-card-role::after { content: "edited"; margin-left: 0.4rem; color: var(--gold); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); text-transform: uppercase; }
 .pi-card-open { display: flex; flex-direction: column; gap: 0.3rem; width: 100%; padding: var(--space-2) var(--space-3); border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .pi-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.5rem; font-size: var(--fs-md); }
 .pi-card-type { color: var(--muted); font-size: var(--fs-sm); }
-.pi-card-role { color: var(--gold); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+.pi-card-role { color: var(--gold); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.04em; text-transform: uppercase; }
 .pi-card-role .lchip { text-transform: none; }
 .pi-card-sum { font-size: var(--fs-sm); }
 .pi-card-fit { display: grid; grid-template-columns: auto minmax(3rem, 1fr) auto; align-items: center; gap: 0.15rem 0.5rem; }
 .pi-card-fit .l-meter { width: 100%; }
 .pi-card-fit .l-meter.hot rect { fill: var(--gold); }
-.pi-meter-label { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; text-transform: uppercase; }
+.pi-meter-label { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); text-transform: uppercase; }
 .pi-meter-fig { color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); white-space: nowrap; }
 .pi-card-rates, .pi-view-rates { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .pi-rate { padding: 0.05rem 0.4rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); font-size: var(--fs-xs); }
@@ -185,11 +185,11 @@
 .pi-jump-cc { position: absolute; top: var(--space-2); right: var(--space-2); z-index: 1; padding: 0.15rem 0.5rem; font-size: var(--fs-2xs); background: rgb(8 13 22 / 0.75); }
 .pi-canvas:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 .pi-stage-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; padding: var(--space-2); border-top: 1px solid var(--hairline); background: var(--surface-inset); }
-.pi-stage-tools::before { content: "Add"; margin-right: 0.3rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; text-transform: uppercase; }
+.pi-stage-tools::before { content: "Add"; margin-right: 0.3rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); text-transform: uppercase; }
 .pi-tip { position: absolute; z-index: 1; padding: 0.2rem 0.5rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); background: rgb(8 13 22 / 0.9); font-size: var(--fs-xs); pointer-events: none; }
-.pi-inspect-h { margin: 0; font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
+.pi-inspect-h { margin: 0; font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
 .pi-inspect .pi-fields { margin: var(--space-2) 0; }
-.pi-rates-h { flex-basis: 100%; margin: 0.2rem 0 0; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; text-transform: uppercase; }
+.pi-rates-h { flex-basis: 100%; margin: 0.2rem 0 0; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); text-transform: uppercase; }
 .pi-view-act { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .pi-view-msg { color: var(--kept); font-size: var(--fs-sm); }
 .pi-copy-buffer { position: absolute; inset: auto auto 0 0; opacity: 0; }

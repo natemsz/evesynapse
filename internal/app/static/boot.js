@@ -4,6 +4,17 @@
 // dependency-free and tiny: every byte here delays first paint.
 try {
   document.documentElement.classList.add("js");
+  // Text renders differently per desktop system, and style.css
+  // evens it out from this mark: Windows draws the same weight
+  // heavier, so the display and figure faces go one weight lighter
+  // there (--fw-display, --fw-num); Linux snaps glyphs to the pixel
+  // grid, so it renders them unhinted.
+  var platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+  if (/^win/i.test(platform)) {
+    document.documentElement.setAttribute("data-os", "windows");
+  } else if (/linux/i.test(platform) && !/android/i.test(navigator.userAgent)) {
+    document.documentElement.setAttribute("data-os", "linux");
+  }
   var savedNav = window.localStorage.getItem("evesynapse-nav");
   if (savedNav === "rail" || savedNav === "hidden" || savedNav === "expanded") {
     document.documentElement.setAttribute("data-nav", savedNav);

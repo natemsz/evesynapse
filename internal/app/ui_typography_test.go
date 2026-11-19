@@ -18,12 +18,12 @@ func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 		// The display-face rows state their capitals in the menu rule.
 		".sidenav a.navlink,\n.sidebar-account-footer .navlink,\n.branch > summary {\n  text-transform: uppercase;\n}",
 		// Header links keep the SemiBold face.
-		"header a.navlink {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  font-synthesis-weight: none;\n  text-transform: uppercase;",
+		"header a.navlink {\n  font-family: var(--font-display);\n  font-weight: 600;\n  font-synthesis-weight: none;\n  text-transform: uppercase;",
 		// Dropdown items: SemiBold, in their labels' own case,
 		// tighter letter spacing.
-		".branch .menu a, .switcher .menu a, .switcher-menu a {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  font-synthesis-weight: none;\n  text-transform: none;\n  letter-spacing: 0.03em;",
+		".branch .menu a, .switcher .menu a, .switcher-menu a {\n  font-family: var(--font-display);\n  font-weight: 600;\n  font-synthesis-weight: none;\n  text-transform: none;\n  letter-spacing: 0.03em;",
 		// Pop-menu items too.
-		".menu-pop-body a, .menu-pop-body button {\n  display: block;\n  width: 100%;\n  text-align: left;\n  padding: 0.45rem 0.6rem;\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  text-transform: uppercase;",
+		".menu-pop-body a, .menu-pop-body button {\n  display: block;\n  width: 100%;\n  text-align: left;\n  padding: 0.45rem 0.6rem;\n  font-family: var(--font-display);\n  font-weight: 600;\n  text-transform: uppercase;",
 		// The sidenav layout rule carries no casing of its own: the
 		// menu rule above is the only casing menu rows get.
 		".sidenav a.navlink,\n.sidebar .branch > summary {\n  display: flex;\n  align-items: center;\n  gap: 0.6rem;\n  min-height: 2.35rem;\n  padding: 0.42rem 0.55rem;\n  border-radius: var(--r-sm);\n  color: var(--text);\n  font-size: var(--fs-md);\n  letter-spacing: 0.04em;\n  cursor: pointer;\n}",
@@ -41,18 +41,18 @@ func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 // TestTabNavTypeSpec pins the tab-navigation face: every tab bar
 // on the Rajdhani capitals treatment (section tabs, the section
 // sub-tabs, the strategy tabs, the contract spec tabs, the
-// fitting view tabs) reads at 12px, weight 500, regular letter
-// spacing. Filter chips keep their own heavier control
+// fitting view tabs) reads at 12px, at the display weight
+// (--fw-display), regular letter spacing. Filter chips keep their own heavier control
 // treatment.
 func TestTabNavTypeSpec(t *testing.T) {
 	style := readStatic(t, "style.css")
 	for _, want := range []string{
 		// Section tabs, sub-tabs and strategy tabs share the tab
 		// rule; the chip is not a tab and keeps its own rule.
-		".section-tabs a, .section-tabs .tabs-more-btn, .section-subtabs a, .section-subtabs .tabs-more-btn, .ti-tabs button {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: var(--fs-xs);\n}",
-		".chip {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  text-transform: uppercase;\n  letter-spacing: 0.06em;\n}",
+		".section-tabs a, .section-tabs .tabs-more-btn, .section-subtabs a, .section-subtabs .tabs-more-btn, .ti-tabs button {\n  font-family: var(--font-display);\n  font-weight: var(--fw-display);\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: var(--fs-xs);\n}",
+		".chip {\n  font-family: var(--font-display);\n  font-weight: 600;\n  text-transform: uppercase;\n  letter-spacing: 0.06em;\n}",
 		// The strategy tabs' pill paint block states the same spec.
-		".ti-tabs button {\n  font-family: Rajdhani, sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: var(--fs-xs);",
+		".ti-tabs button {\n  font-family: var(--font-display);\n  font-weight: var(--fw-display);\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: var(--fs-xs);",
 	} {
 		if !strings.Contains(style, want) {
 			t.Errorf("style.css missing tab rule %q", want)
@@ -63,15 +63,16 @@ func TestTabNavTypeSpec(t *testing.T) {
 		t.Errorf("contracts.css .cs-tab missing tab spec %q", want)
 	}
 	fit := readStatic(t, "fit.css")
-	if want := "font-weight: 500; text-transform: uppercase; letter-spacing: normal;\n    font-size: var(--fs-xs);"; !strings.Contains(fit, want) {
+	if want := "font-weight: var(--fw-display); text-transform: uppercase; letter-spacing: normal;\n    font-size: var(--fs-xs);"; !strings.Contains(fit, want) {
 		t.Errorf("fit.css .fit-mtabs button missing tab spec %q", want)
 	}
 }
 
 // TestOpenProseTreatment pins the prose role: a block whose job
-// is to explain reads in Rajdhani Medium at --fs-sm with a 1.55
-// line height, in the prose ink each theme mixes from its own
-// text and muted values; emphasis inside prose reads at 600.
+// is to explain reads in Rajdhani at the display weight, --fs-sm,
+// with a 1.55 line height, in the prose ink each theme mixes from
+// its own text and muted values; emphasis inside prose reads one
+// weight step heavier.
 // Pages across the site mark their explanatory blocks with it.
 // The admin pages mark none: their prose is marked with the
 // admin rework. The landing and home pages mark none either:
@@ -80,9 +81,9 @@ func TestOpenProseTreatment(t *testing.T) {
 	style := readStatic(t, "style.css")
 	for _, want := range []string{
 		"--prose: color-mix(in srgb, var(--text) 55%, var(--muted));",
-		".prose {\n  font-family: \"Rajdhani\", \"Eve Sans Neue\", \"Inter\", \"Segoe UI\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n  font-weight: 500;\n  font-size: var(--fs-sm);\n  line-height: 1.55;\n  color: var(--prose);\n}",
-		// Emphasis inside prose reads in Rajdhani SemiBold.
-		".prose strong { font-weight: 600; }",
+		".prose {\n  font-family: var(--font-display);\n  font-weight: var(--fw-display);\n  font-size: var(--fs-sm);\n  line-height: 1.55;\n  color: var(--prose);\n}",
+		// Emphasis inside prose reads one weight step heavier.
+		".prose strong { font-weight: var(--fw-display-strong); }",
 		// Definition answers inside a prose block stay prose.
 		".prose dd { font-family: inherit; }",
 	} {

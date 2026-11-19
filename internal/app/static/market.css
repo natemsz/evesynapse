@@ -490,7 +490,7 @@
   color: var(--muted);
   text-decoration: none;
   font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: var(--fw-display);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-size: var(--fs-xs);
@@ -575,7 +575,7 @@ td.mt-reqs { max-width: 12rem; }
 .mb-searchform .searchwrap > input { width: 100%; }
 .mb-filters { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 .mb-minvol { display: inline-flex; align-items: center; gap: 0.45rem; }
-.mb-minvol > span { color: var(--muted); font-family: var(--font-display); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.mb-minvol > span { color: var(--muted); font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
 .mb-minvol input { width: 6rem; }
 /* On a phone the trades filter is one row: the labelled field, then
    Apply beside it rather than under it. */

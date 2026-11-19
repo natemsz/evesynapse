@@ -71,7 +71,7 @@
 .kp-value { padding: 0.75rem 0.85rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--row-alt); }
 .kp-value p { margin: 0; }
 .kp-value-l { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted-2); }
-.kp-value-v { font-family: var(--font-num); font-size: var(--fs-4xl); font-weight: 500; color: var(--gold); font-variant-numeric: tabular-nums; margin: 0.1rem 0 0.5rem !important; }
+.kp-value-v { font-family: var(--font-num); font-size: var(--fs-4xl); font-weight: var(--fw-num); color: var(--gold); font-variant-numeric: tabular-nums; margin: 0.1rem 0 0.5rem !important; }
 .kp-value-v small { font-size: var(--fs-xs); color: var(--muted-2); font-weight: 400; }
 .kp-split {
   display: block;

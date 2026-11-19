@@ -93,7 +93,7 @@
 .ib-hubs { width: 100%; }
 .ib-hubs .num { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ib-uses { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr)); gap: 0 var(--space-3); }
-.l-panel h3 small { color: var(--muted); font-size: var(--fs-sm); font-weight: 500; letter-spacing: 0; text-transform: none; }
+.l-panel h3 small { color: var(--muted); font-size: var(--fs-sm); font-weight: var(--fw-display); letter-spacing: 0; text-transform: none; }
 
 /* A hull's public fits: the shared fit cards, without a picture
    (every card is this hull). */

@@ -298,6 +298,14 @@
   --fs-rel-pill: 0.85em;
   --fs-rel-glyph: 0.75em;
   --fs-rel-dec: 0.56em;
+  /* The working weights of the display face (Rajdhani: headings,
+     labels, buttons, badges, prose) and the figure face (Synapse
+     Numerals: KPI and standalone values). Windows draws text
+     heavier than macOS and Linux, so boot.js marks it and it
+     takes one step lighter (below). */
+  --fw-display: 600;
+  --fw-display-strong: 700;
+  --fw-num: 600;
   color-scheme: dark;
   /* The extra text-tone variables below exist so the light theme can
      re-tone them. */
@@ -348,6 +356,11 @@
      scroll away; the notch inset pads it) moves them all. */
   --sticky-top: calc(3.75rem + env(safe-area-inset-top, 0px));
 }
+:root[data-os="windows"] {
+  --fw-display: 500;
+  --fw-display-strong: 600;
+  --fw-num: 500;
+}
 
 * { box-sizing: border-box; }
 
@@ -363,7 +376,7 @@ body {
      composites one background surface. */
   background: #0d0503;
   color: var(--text);
-  font-family: "Eve Sans Neue", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   font-weight: 400;
   font-size: var(--fs-xs);
   line-height: 1.4;
@@ -376,6 +389,10 @@ body {
      Windows, so it only widens the gap between the two. */
   -webkit-font-smoothing: auto;
 }
+/* On Linux, Chromium hints glyphs to the pixel grid, which reads as
+   thin and jagged at these sizes; geometric precision draws them
+   from their true outlines, as macOS does. */
+:root[data-os="linux"] body { text-rendering: geometricPrecision; }
 body::before {
   content: "";
   position: fixed;
@@ -426,8 +443,8 @@ h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 .branch > summary,
 .sidenav a.navlink,
 .sidebar-account-footer .navlink {
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
   font-synthesis-weight: none;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -440,7 +457,7 @@ h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
   text-transform: uppercase;
 }
 header a.navlink {
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-synthesis-weight: none;
   text-transform: uppercase;
@@ -450,7 +467,7 @@ header a.navlink {
    under the capitals of the category and group titles above
    them. The group labels carry the capitals; the items do not. */
 .branch .menu a, .switcher .menu a, .switcher-menu a {
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-synthesis-weight: none;
   text-transform: none;
@@ -460,8 +477,8 @@ header a.navlink {
 
 /* Headings: Rajdhani SemiBold in spaced capitals, the HUD face. */
 h1, h2, h3, h4 {
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
   font-synthesis-weight: none;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -634,8 +651,8 @@ header a.navlink.utility { font-size: var(--fs-xs); color: var(--muted); }
   gap: 0.55rem;
   margin: 0.85rem 0 0.25rem;
   padding: 0.35rem 0.6rem 0;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
   font-size: var(--fs-xs);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -705,7 +722,7 @@ main {
   flex: none;
   font-family: inherit;
   font-size: var(--fs-xs);
-  font-weight: 500;
+  font-weight: var(--fw-display);
   letter-spacing: normal;
   color: var(--success);
   text-decoration: none;
@@ -797,8 +814,8 @@ main {
 }
 .seg > * {
   display: inline-flex; align-items: center; padding: 0.2rem 0.7rem;
-  color: var(--muted); font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); font-family: var(--font-display);
+  font-weight: var(--fw-display); text-transform: uppercase; letter-spacing: 0.06em;
   font-size: var(--fs-xs); white-space: nowrap;
 }
 .seg > * + * { border-left: 1px solid var(--box-edge); }
@@ -816,7 +833,7 @@ main {
      app.js sets under a compacted headline figure. */
   .kpi-exact {
     display: block;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-family: var(--font-mono);
     font-size: var(--fs-xs); color: var(--muted);
   }
 }
@@ -928,7 +945,7 @@ h3 + .tw > table, h3 + table {
    keyboard focus, so panels carry no prose of their own. --- */
 /* The info glyph beside a name: a small ringed "i" linking to the
    thing's own page (a pilot's profile, an item's details). */
-.info-link { display: inline-flex; align-items: center; justify-content: center; width: 1.05rem; height: 1.05rem; margin-left: 0.35rem; border: 1px solid var(--box-edge); border-radius: 50%; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; line-height: 1; text-decoration: none; vertical-align: middle; }
+.info-link { display: inline-flex; align-items: center; justify-content: center; width: 1.05rem; height: 1.05rem; margin-left: 0.35rem; border: 1px solid var(--box-edge); border-radius: 50%; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); line-height: 1; text-decoration: none; vertical-align: middle; }
 .info-link:hover, .info-link:focus-visible { color: var(--text-bright); border-color: var(--accent); }
 @media (pointer: coarse) { .info-link { width: 1.5rem; height: 1.5rem; } }
 .info-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 0.4rem; cursor: help; outline: none; }
@@ -948,7 +965,7 @@ h3 + .tw > table, h3 + table {
   backdrop-filter: blur(var(--glass-blur)) saturate(0.95);
   border: 1px solid var(--glass-edge); border-radius: var(--r-sm);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
-  color: var(--text); font-family: var(--font-body, inherit); font-size: var(--fs-xs); font-weight: 400;
+  color: var(--text); font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 400;
   letter-spacing: normal; text-transform: none; line-height: 1.45; text-align: left;
   opacity: 0; transform: translateX(-50%) translateY(3px); pointer-events: none;
   transition: opacity 120ms ease, transform 120ms ease;
@@ -1229,7 +1246,7 @@ img.portrait {
 }
 
 .isk {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-weight: 400;
   letter-spacing: 0.01em;
   color: var(--text-bright);
@@ -1346,8 +1363,35 @@ body:has(main .suggest:not([hidden])) main { position: relative; z-index: 70; }
   text-overflow: ellipsis;
 }
 
-/* Security status in EVE's own colors, 1.0 down to null. */
-.sec { font-variant-numeric: tabular-nums; font-weight: 500; }
+/* Security status in EVE's own colors, 1.0 down to null: one
+   boxed pill everywhere it appears (tables, cards, kill lists, the
+   map, search), the figure in the figure face at one fixed size so
+   it reads the same beside a heading or inside a table cell. The
+   box and figure take their color from the .sec-N class. .sec-pill
+   is the same pill, spaced off the name it follows. */
+.sec, .sec-pill {
+  display: inline-block;
+  padding: 0.1em 0.4em;
+  border: 1px solid currentColor;
+  border-radius: var(--r-xs);
+  /* The whole figure, minus sign included, in the numeral face's own
+     font, so one set of metrics both draws it and centers it. */
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-num);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+/* Trimmed to the figures' cap height and baseline, the padding is
+   the whole gap on each side, so the figure sits dead center in its
+   box. Browsers without text-box keep the line-height box above. */
+@supports (text-box: trim-both cap alphabetic) {
+  .sec, .sec-pill { padding: 0.3em 0.4em; line-height: 1; text-box: trim-both cap alphabetic; }
+}
+.sec-pill { margin-left: 0.35em; }
 .sec-10 { color: var(--v-sec-10, #2c74e0); }
 .sec-9 { color: var(--v-sec-9, #3a9aeb); }
 .sec-8 { color: var(--v-sec-8, #4ecef8); }
@@ -1360,24 +1404,6 @@ body:has(main .suggest:not([hidden])) main { position: relative; z-index: 70; }
 .sec-1 { color: var(--v-sec-1, #b33a3a); }
 .sec-0 { color: var(--v-sec-0, #c0508a); }
 .sug-label .sec, .qj-label .sec { margin-right: 0.4em; }
-/* The fleet table's security pill: the same severity colors and
-   one-decimal value, boxed small beside the system name. Its text
-   color comes from the .sec-N class it carries, like everywhere. */
-.sec-pill {
-  display: inline-block;
-  margin-left: 0.35em;
-  padding: 0 0.35em;
-  border: 1px solid currentColor;
-  border-radius: var(--r-sm);
-  font-size: var(--fs-rel-pill);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  vertical-align: 0.12em;
-  white-space: nowrap;
-}
-/* Pills inside tables stay the size they were: --fs-rel-pill is
-   relative, so the bigger table text would otherwise grow them. */
-td .sec-pill { font-size: var(--fs-2xs); }
 
 /* --- top bar search --- */
 .topsearch { margin: 0; }
@@ -1479,7 +1505,7 @@ footer {
   backdrop-filter: blur(18px);
   border-top: 1px solid #262626;
   color: var(--muted);
-  font-family: "Eve Sans Neue", "Inter", "Segoe UI", sans-serif;
+  font-family: var(--font-body);
   text-align: center;
   font-size: var(--fs-xs);
   padding: 1.4rem 1rem 1.6rem;
@@ -1584,7 +1610,7 @@ footer .hash-pop {
    and wrap. Customize mode clears the band for the widget's own
    controls (the move buttons sit at the title's right). */
 .fleet-tags { position: absolute; top: 0; right: 1rem; height: 2.94rem; display: flex; align-items: center; gap: 0.4rem; margin: 0; }
-.fleet-tags-label { font-family: "Rajdhani", "Segoe UI", sans-serif; font-synthesis-weight: none; font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 0.15rem; }
+.fleet-tags-label { font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 0.15rem; }
 @media (max-width: 70rem) {
   .fleet-tags { position: static; height: auto; padding-top: 0.1rem; flex-wrap: wrap; }
 }
@@ -1635,8 +1661,8 @@ html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[d
    Rajdhani capitals at 12px, medium weight, regular letter
    spacing. */
 .section-tabs a, .section-tabs .tabs-more-btn, .section-subtabs a, .section-subtabs .tabs-more-btn, .ti-tabs button {
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
   text-transform: uppercase;
   letter-spacing: normal;
   font-size: var(--fs-xs);
@@ -1644,12 +1670,12 @@ html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[d
 /* Filter chips read as controls too: the same Rajdhani capitals
    as the buttons. */
 .chip {
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; font-family: Rajdhani, sans-serif; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-2xs); }
+.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; font-family: var(--font-display); font-weight: var(--fw-display); text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-2xs); }
 .chip.on { border-color: var(--accent); color: var(--accent); font-size: var(--fs-2xs); }
 .relink { color: var(--danger); }
 .attention { list-style: none; margin: 0; padding: 0; }
@@ -2021,23 +2047,23 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
 }
 /* KPI titles read as UI labels, like table headers: Rajdhani
    SemiBold in small spaced capitals, bright enough to read on glass. */
-.kpi-k { font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 500; font-synthesis-weight: none; font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
+.kpi-k { font-family: var(--font-display); font-weight: var(--fw-display); font-synthesis-weight: none; font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
 /* Table figures read as body text: Eve Sans Neue at the regular
    weight, the same as everywhere else. The monospaced numeral face
    is too heavy for table figures at this size, so it is kept only
    for the larger standalone figures below. */
 td { font-family: var(--font-body); }
-dd, .kpi-v, .fit-gl > b, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b, .sec {
+dd, .kpi-v, .fit-gl > b, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b {
   /* Standalone figures: monospaced digits, Eve Sans Neue for any letters. */
-  font-family: "Synapse Numerals", "Eve Sans Neue", "Inter", "Segoe UI", sans-serif;
+  font-family: var(--font-num);
 }
-.prose-figs { font-family: "Eve Sans Neue", "Inter", "Segoe UI", sans-serif; }
+.prose-figs { font-family: var(--font-body); }
 /* A pill, tag or badge in a cell is a label with a figure in it
    ("BPC · ME 9% / TE 18%", "Deal -87%"): its digits read with its
    words, in the body face. A pill that holds a bare figure (security
    status, a count) keeps the numeral face, and a pill that names its
    own face keeps it (no specificity here, so any class rule wins). */
-:where(td, dd) :where([class*="pill"], [class*="badge"], [class*="tag"], .cs-rolltag):where(:not(.sec-pill, .mkt-badge, [class*="stag"])) { font-family: var(--font-body); }
+:where(td, dd) :where([class*="pill"], [class*="badge"], [class*="tag"], .cs-rolltag):where(:not(.sec, .sec-pill, .mkt-badge, [class*="stag"])) { font-family: var(--font-body); }
 /* Money in and out: losses soft red, gains muted green. */
 td.neg, .neg { color: var(--v-bad, #ff4d4d); }
 td.pos, .pos { color: var(--v-good, #28c76f); }
@@ -2047,7 +2073,7 @@ td.pos, .pos { color: var(--v-good, #28c76f); }
 .flow-figs thead small { color: var(--accent); font-size: inherit; }
 .kpi-v {
   font-size: var(--fs-3xl);
-  font-weight: 500;
+  font-weight: var(--fw-num);
   color: var(--text-bright);
   font-variant-numeric: tabular-nums;
   /* A figure wraps at its spaces only (value, unit, trend are
@@ -2215,10 +2241,10 @@ ul.brief-cards::-webkit-scrollbar { display: none; }
    then the line itself. */
 .brief-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
 .brief-meta { margin-left: auto; display: inline-flex; align-items: center; gap: 0.5rem; }
-.brief-count { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--fs-2xs); letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
+.brief-count { font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
 .brief-icon { flex: none; width: 15px; height: 15px; background-size: contain; background-repeat: no-repeat; opacity: 0.85; pointer-events: none; }
 .brief-title {
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   font-size: var(--fs-4xl);
   font-weight: 700;
   line-height: 1.05;
@@ -2286,7 +2312,7 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
 .brief-deck.brief-off { display: none; }
 .brief-deck.has-flip .brief-flip-card { padding-bottom: 2.15rem; }
 .brief-deck.noanim .brief-flip-card { transition: none; }
-.brief-more-btn { position: absolute; right: 0.6rem; bottom: 0.55rem; z-index: 1; display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.22rem 0.6rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.16); background: color-mix(in srgb, var(--brief-tint, var(--panel)) 30%, rgba(10, 14, 20, 0.35)); color: var(--text); font-family: "Rajdhani", "Segoe UI", sans-serif; font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.brief-more-btn { position: absolute; right: 0.6rem; bottom: 0.55rem; z-index: 1; display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.22rem 0.6rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.16); background: color-mix(in srgb, var(--brief-tint, var(--panel)) 30%, rgba(10, 14, 20, 0.35)); color: var(--text); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
 .brief-more-btn:hover, .brief-more-btn:focus-visible { border-color: var(--accent); color: var(--text-bright); }
 .brief-more-btn .brief-arrow { transition: transform 160ms ease; }
 .brief-more-btn:hover .brief-arrow { transform: translateX(2px); }
@@ -2296,7 +2322,7 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
 .brief-cards .brief-row a, .brief-cards .brief-row button, .brief-cards .brief-row form, .brief-cards .brief-head button { position: relative; z-index: 1; }
 .brief-card-link { display: inline-flex; align-items: center; gap: 0.5rem; }
 .brief-deck .brief-head { margin-bottom: 0.15rem; }
-.brief-stack-title { font-family: "Rajdhani", "Segoe UI", sans-serif; font-size: var(--fs-3xl); font-weight: 700; line-height: 1.05; letter-spacing: 0.01em; }
+.brief-stack-title { font-family: var(--font-display); font-size: var(--fs-3xl); font-weight: 700; line-height: 1.05; letter-spacing: 0.01em; }
 .brief-deck .brief-count { border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px; padding: 0.08rem 0.45rem; }
 .brief-row { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.55rem 0; border-top: 1px solid color-mix(in srgb, var(--brief-tint, transparent) 30%, rgba(255, 255, 255, 0.05)); }
 .brief-cards .brief-row:first-of-type { border-top: none; }
@@ -2345,7 +2371,7 @@ html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card
   font-family: var(--font-display);
   font-synthesis-weight: none;
   font-size: var(--fs-2xs);
-  font-weight: 500;
+  font-weight: var(--fw-display);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
@@ -2462,7 +2488,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 /* The pin toggle on the Blueprints page: a quiet button that
    fills in gold when its blueprint is pinned. */
 .bp-pin { margin: 0; }
-.bp-pin-btn { background: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-sm); color: var(--muted); cursor: pointer; font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 500; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; padding: 0.22rem 0.5rem; }
+.bp-pin-btn { background: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-sm); color: var(--muted); cursor: pointer; font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: var(--fw-display); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; padding: 0.22rem 0.5rem; }
 .bp-pin-btn:hover, .bp-pin-btn:focus-visible { color: var(--text); border-color: var(--accent); }
 .bp-pin-btn.on { color: var(--gold); border-color: var(--gold); }
 /* A fleet table taller than its module scrolls inside it, and the
@@ -2488,7 +2514,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .flow-pie path { stroke: var(--panel); stroke-width: 0.8; }
 .flow-pie .pie-c { font-size: var(--fs-2xs); fill: var(--muted); text-anchor: middle; letter-spacing: 0.08em; text-transform: uppercase; }
 .flow-pie figcaption { min-width: 0; font-size: var(--fs-xs); }
-.pie-head { display: block; margin-bottom: 0.25rem; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 500; font-size: var(--fs-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.pie-head { display: block; margin-bottom: 0.25rem; font-family: var(--font-display); font-synthesis-weight: none; font-weight: var(--fw-display); font-size: var(--fs-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .pie-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
 .pie-legend li { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
 .pie-legend .pie-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2514,8 +2540,8 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   gap: 0.35rem 0.9rem;
   margin: 0.15rem 0 0.35rem;
   color: var(--note);
-  font-family: "Rajdhani", sans-serif;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
   font-size: var(--fs-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2775,7 +2801,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .card[data-widget="profitpulse"] .pf-y-99 { top: 99%; }
 .card[data-widget="profitpulse"] .pf-y-100 { top: 100%; }
 .pchart text {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: var(--fs-2xs);
 }
 .chart-gridline { stroke: #241708; stroke-width: 1; }
@@ -3033,7 +3059,7 @@ html[data-theme="light"] .esi-ours-down .esi-label { color: #6d28d9; }
   width: 100%;
   text-align: left;
   padding: 0.45rem 0.6rem;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   text-transform: uppercase;
   font-size: var(--fs-sm);
@@ -3594,8 +3620,8 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 @media (min-width: 861px) {
   html[data-nav="rail"] .sidebar .branch .menu .nav-flyout-head {
     display: block;
-    font-family: "Rajdhani", "Segoe UI", sans-serif;
-    font-weight: 500;
+    font-family: var(--font-display);
+    font-weight: var(--fw-display);
     font-size: var(--fs-xs);
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -3746,8 +3772,8 @@ html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   cursor: pointer;
-  font-family: "Rajdhani", sans-serif;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
   font-size: var(--fs-md);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -4092,8 +4118,8 @@ tbody tr.order-beaten td { background: color-mix(in srgb, var(--danger) 10%, tra
 .quickjump-results li.qj-group {
   padding: 0.55rem 0.6rem 0.2rem;
   cursor: default;
-  font-family: "Rajdhani", sans-serif;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
   font-size: var(--fs-xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -4349,7 +4375,7 @@ html[data-theme="light"] .fit-head select {
 .fit-ammo-split {
   flex-basis: 100%; justify-self: start; margin: -0.1rem 0 0.1rem; padding: 0.1rem 0.4rem;
   border: 0; background: none; color: var(--muted); cursor: pointer; text-align: left;
-  font-family: var(--font-display); font-weight: 500; font-size: var(--fs-2xs);
+  font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-2xs);
   letter-spacing: 0.06em; text-transform: uppercase;
 }
 .fit-ammo-split:hover, .fit-ammo-split:focus-visible { color: var(--text); }
@@ -4449,10 +4475,10 @@ html[data-theme="light"] .fit-head select {
 .fit-vhist:disabled { opacity: 0.3; cursor: default; box-shadow: none; }
 /* The mouse and keyboard card: a light-dismiss popover in the top
    layer. Touch has its own taps, so phones never show the button. */
-.fit-vkeys-btn { font-family: var(--font-display); font-weight: 500; }
+.fit-vkeys-btn { font-family: var(--font-display); font-weight: var(--fw-display); }
 .fit-vkeys { margin: auto; min-width: min(22rem, 92vw); padding: 0.8rem 1rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--surface-pane); color: var(--text); }
 .fit-vkeys::backdrop { background: rgb(0 0 0 / 0.35); }
-.fit-vkeys h2 { margin: 0 0 0.45rem; font-family: var(--font-display); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-bright); }
+.fit-vkeys h2 { margin: 0 0 0.45rem; font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-bright); }
 .fit-vkeys dl { margin: 0; }
 .fit-vkeys dl > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.2rem 0; border-top: 1px solid var(--box-edge); font-size: var(--fs-sm); }
 .fit-vkeys dl > div:first-child { border-top: 0; }
@@ -4654,7 +4680,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-racknote-undo {
   font-family: var(--font-display);
   font-size: var(--fs-2xs);
-  font-weight: 500;
+  font-weight: var(--fw-display);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 0.1rem 0.5rem;
@@ -4860,7 +4886,7 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   font: inherit;
   font-family: var(--font-display);
   font-synthesis-weight: none;
-  font-weight: 500;
+  font-weight: var(--fw-display);
   font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -5899,15 +5925,15 @@ table.notify-settings.cards-on td:has(> .checkselector) { grid-column: 1 / -1; }
    for captions and labels, not for reading. Mark each prose
    block: class="prose". */
 .prose {
-  font-family: "Rajdhani", "Eve Sans Neue", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
   font-size: var(--fs-sm);
   line-height: 1.55;
   color: var(--prose);
 }
 /* Emphasis inside prose reads in Rajdhani SemiBold, the family's
    heading weight, not the browser's bolder step up to Bold. */
-.prose strong { font-weight: 600; }
+.prose strong { font-weight: var(--fw-display-strong); }
 /* A prose block's definition answers are prose, not standalone
    figures: they keep the prose face against the figures rule. */
 .prose dd { font-family: inherit; }
@@ -5931,7 +5957,7 @@ table.notify-settings.cards-on td:has(> .checkselector) { grid-column: 1 / -1; }
   display: block;
   font-family: var(--font-display);
   font-synthesis-weight: none;
-  font-weight: 500;
+  font-weight: var(--fw-display);
   font-size: var(--fs-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -6065,7 +6091,7 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
    of flow, so the card and the page keep their height. Groups
    lay out side by side and wrap, using the horizontal space. */
 .loadout-preview { position: relative; grid-column: 1 / -1; }
-.loadout-preview-btn { background: none; border: 0; padding: 0; font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 500; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); cursor: pointer; }
+.loadout-preview-btn { background: none; border: 0; padding: 0; font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: var(--fw-display); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); cursor: pointer; }
 .loadout-preview-btn::before { content: "▸"; display: inline-block; margin-right: 0.35rem; transition: transform 0.12s ease; }
 .loadout-preview-btn[aria-expanded="true"]::before { transform: rotate(90deg); }
 .loadout-preview-btn:hover { color: var(--text); }
@@ -6087,8 +6113,8 @@ thead th {
    (#17110d family) made translucent, the glass edge for a border,
    and its active pill (orange at 20% fill, 40% border). */
 .ti-tabs button {
-  font-family: Rajdhani, sans-serif;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
   text-transform: uppercase;
   letter-spacing: normal;
   font-size: var(--fs-xs);
@@ -6318,7 +6344,7 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
     color: var(--muted);
     background: transparent;
     border: 0; border-radius: var(--r-sm);
-    font-family: "Rajdhani", sans-serif; font-weight: 500;
+    font-family: var(--font-display); font-weight: var(--fw-display);
     font-size: var(--fs-xs); letter-spacing: 0.05em; text-transform: uppercase;
     text-decoration: none;
     cursor: pointer;
@@ -6385,7 +6411,7 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
     padding: 0 0.6rem 0 0.1rem;
     color: var(--gold);
     background: transparent; border: 0;
-    font-family: var(--font-display); font-weight: 500;
+    font-family: var(--font-display); font-weight: var(--fw-display);
     font-size: var(--fs-sm); letter-spacing: 0.06em; text-transform: uppercase;
     cursor: pointer;
   }
@@ -6440,7 +6466,7 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
     color: var(--text-bright);
     background: transparent;
     border: 0;
-    font-family: var(--font-display); font-weight: 500;
+    font-family: var(--font-display); font-weight: var(--fw-display);
     font-size: var(--fs-md); letter-spacing: 0.03em;
     text-align: left; text-decoration: none;
     cursor: pointer;
@@ -6502,7 +6528,7 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
   .phone-sheet-group {
     display: flex; align-items: center; gap: 0.45rem;
     margin: var(--space-2) 0 0.4rem 0.85rem;
-    font-family: var(--font-display); font-weight: 500;
+    font-family: var(--font-display); font-weight: var(--fw-display);
     font-size: var(--fs-xs); letter-spacing: 0.1em; text-transform: uppercase;
     color: color-mix(in srgb, var(--gold) 70%, var(--text));
   }
@@ -6553,7 +6579,7 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
 .gn-critical { --gn-c: var(--danger); }
 .gn-tag {
   flex: none;
-  font-family: 'Rajdhani', sans-serif;
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: var(--fs-xs);
   letter-spacing: 0.08em;
@@ -6604,9 +6630,9 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .gn-post { font-family: 'Inter', sans-serif; line-height: 1.55; overflow-wrap: anywhere; }
 .gn-post > :first-child { margin-top: 0; }
 .gn-post > :last-child { margin-bottom: 0; }
-.gn-post h3, .gn-post h4, .gn-post h5 { margin: 1rem 0 0.4rem; font-family: 'Eve Sans Neue', sans-serif; }
+.gn-post h3, .gn-post h4, .gn-post h5 { margin: 1rem 0 0.4rem; font-family: var(--font-body); }
 .gn-post blockquote { margin: 0.6rem 0; padding: 0.1rem 0 0.1rem 0.8rem; border-left: 2px solid var(--box-edge); color: var(--muted); }
-.gn-post pre { white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; font-size: var(--fs-xs); padding: 0.6rem 0.75rem; background: var(--input-bg); border: 1px solid var(--box-edge); border-radius: var(--r-sm); }
+.gn-post pre { white-space: pre-wrap; font-family: var(--font-mono); font-size: var(--fs-xs); padding: 0.6rem 0.75rem; background: var(--input-bg); border: 1px solid var(--box-edge); border-radius: var(--r-sm); }
 .gn-post a { color: var(--accent); }
 .gn-post hr { border: 0; border-top: 1px solid var(--box-edge); }
 .gn-muted { color: var(--muted); }
@@ -6691,7 +6717,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .diritem:hover { background: var(--glass); }
 .diritem.on { background: var(--glass); border-color: var(--gold); }
 .dir-top { display: flex; align-items: center; gap: 0.5rem; }
-.dir-sec { flex: none; font-size: var(--fs-xs); padding: 0.05rem 0.3rem; border: 1px solid currentColor; border-radius: var(--r-xs); }
+.dir-sec { flex: none; }
 .dir-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .dir-name a { color: inherit; text-decoration: none; }
 .dir-val { flex: none; color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -6702,15 +6728,15 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 
 /* Pill tabs: a row of divisions with counts. */
 .pilltabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; text-decoration: none; }
+.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: var(--fw-display); text-transform: uppercase; letter-spacing: 0.06em; text-decoration: none; }
 .pilltab:hover { color: var(--text); }
 .pilltab.on { background: var(--glass); border-color: var(--accent); color: var(--text-bright); }
-.pilltab .cnt { font-weight: 500; opacity: 0.75; }
+.pilltab .cnt { font-weight: var(--fw-display); opacity: 0.75; }
 
 /* Saved-filter chips: the user's own named views, each with its
    delete, plus the save form that names the current view. */
 .fchips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
-.fchips-label { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
+.fchips-label { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.05em; text-transform: uppercase; }
 .fchip { padding: 0.3rem 0.65rem; border: 1px solid var(--box-edge); border-radius: 999px; background: none; color: var(--text); font-size: var(--fs-xs); text-decoration: none; cursor: pointer; }
 .fchip.on { border-color: var(--accent); color: var(--text); background: var(--glass); }
 .fchip.save { border-style: dashed; color: var(--muted); }
@@ -6771,7 +6797,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .estbar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0.8rem 0 0.2rem; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .estbar form { margin: 0; }
 .estbar-l { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
-.estbar-lab { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+.estbar-lab { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.08em; text-transform: uppercase; }
 .estbar-v { color: var(--gold); font-size: var(--fs-lg); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Loadout chip accents: the slot letter reads in the accent,

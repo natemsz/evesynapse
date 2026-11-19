@@ -17,7 +17,7 @@
 .co-note small { font-size: inherit; }
 .co-dim { color: var(--muted); }
 .co-hint { color: var(--muted); font-size: var(--fs-md); }
-.co-cnt { margin-left: 0.25rem; color: var(--muted); font-weight: 500; }
+.co-cnt { margin-left: 0.25rem; color: var(--muted); font-weight: var(--fw-display); }
 
 /* The bar over a table: its filter box, and the controls that act on
    the table (tabs, the add-to-group picker). It wraps on a narrow page,

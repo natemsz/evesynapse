@@ -42,13 +42,13 @@
   color: var(--muted);
   font-family: var(--font-display);
   font-size: var(--fs-xs);
-  font-weight: 500;
+  font-weight: var(--fw-display);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   background: none;
   -webkit-text-fill-color: currentColor;
 }
-.bt-sub { margin: 0 0 var(--space-2); color: var(--text); font-family: var(--font-display); font-size: var(--fs-sm); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+.bt-sub { margin: 0 0 var(--space-2); color: var(--text); font-family: var(--font-display); font-size: var(--fs-sm); font-weight: var(--fw-display); letter-spacing: 0.04em; text-transform: uppercase; }
 .bt-sub .bt-dim { margin-left: 0.4rem; font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 400; letter-spacing: 0; text-transform: none; }
 .bt-dim { color: var(--muted); }
 .bt-note { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--fs-xs); }
@@ -76,7 +76,7 @@
   border-radius: 999px;
   font-family: var(--font-display);
   font-size: var(--fs-xs);
-  font-weight: 500;
+  font-weight: var(--fw-display);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   text-decoration: none;
@@ -99,7 +99,7 @@
 .bt-add > .bt-add-sum {
   cursor: pointer;
   font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: var(--fw-display);
   font-size: var(--fs-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -126,7 +126,7 @@
 .bt-drop.has-file { border-style: solid; }
 .bt-drop-title {
   font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: var(--fw-display);
   font-size: var(--fs-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -139,7 +139,7 @@
 .bt-field { display: flex; flex-direction: column; gap: 0.25rem; }
 .bt-field > span {
   font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: var(--fw-display);
   font-size: var(--fs-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -209,7 +209,7 @@
 
 .bt-lanes { display: grid; gap: 0.3rem; margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--hairline); }
 .bt-lane { display: grid; grid-template-columns: var(--bt-gut) minmax(0, 1fr); align-items: center; min-height: 1.75rem; }
-.bt-lane-label { padding-right: var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.06em; text-align: right; text-transform: uppercase; }
+.bt-lane-label { padding-right: var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-align: right; text-transform: uppercase; }
 .bt-lane-track { position: relative; height: 1.75rem; border-radius: var(--r-xs); background: var(--row-alt); }
 
 /* An event: a pill over its window, never thinner than a tap can
@@ -259,7 +259,7 @@
   background: color-mix(in srgb, var(--bt-c, var(--muted-2)) 12%, transparent);
   font-family: var(--font-display);
   font-size: var(--fs-xs);
-  font-weight: 500;
+  font-weight: var(--fw-display);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -283,7 +283,7 @@
 .bt-mspark { flex: 1 1 10rem; height: 3rem; min-width: 8rem; }
 .bt-mspan { fill: var(--sel-bg); }
 .bt-mnums { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0; }
-.bt-mnum dt { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.bt-mnum dt { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .bt-mnum dd { margin: 0; font-family: var(--font-num); font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
 .bt-tone-out dd { color: var(--bt-out); }
 .bt-tone-in dd { color: var(--bt-in); }
@@ -305,7 +305,7 @@
 .bt-findings li + li { margin-top: 0.15rem; }
 .bt-findings li.first:not(:first-child) { margin-top: var(--space-3); }
 .bt-findings p { margin: 0.15rem 0 0; color: var(--text); font-size: var(--fs-sm); }
-.bt-find-k { color: var(--bt-c, var(--muted)); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.bt-find-k { color: var(--bt-c, var(--muted)); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .bt-find-focus,
 .bt-find-tank { --bt-c: var(--bt-in); }
 .bt-find-application,
@@ -380,7 +380,7 @@
 .bt-tlist { display: grid; gap: 0.3rem; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
 .bt-tlist li { padding: 0.2rem 0 0.2rem var(--space-2); border-left: 2px solid var(--hairline); }
 .bt-tlist li.mine { border-left-color: var(--bt-tackle); }
-.bt-tk { color: var(--muted-2); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.bt-tk { color: var(--muted-2); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .bt-tlist + .bt-note { margin-top: var(--space-3); }
 .bt-tlist + .bt-tlist { margin-top: 0.3rem; }
 
@@ -446,7 +446,7 @@
 .bt-card .btc-sw.q-pen { background: var(--q-pen); }
 .bt-card .btc-sw.q-smash { background: var(--q-smash); }
 .bt-card .btc-sw.q-wreck { background: var(--q-wreck); }
-.bt-card .btc-sub { margin: var(--space-2) 0 0.2rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.bt-card .btc-sub { margin: var(--space-2) 0 0.2rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .bt-card .btc-w { display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: 0.1rem 0; }
 .bt-card .btc-w img,
 .bt-card .btc-noicon { flex: none; width: 22px; height: 22px; border-radius: var(--r-xs); }

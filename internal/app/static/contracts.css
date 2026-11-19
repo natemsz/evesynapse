@@ -28,7 +28,7 @@
   border: 1px solid var(--box-edge); border-radius: 999px;
   padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
   background: var(--row-alt);
-  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 500;
+  font-family: var(--font-display); font-weight: var(--fw-display);
   text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs);
 }
 .cs-hunt:hover { border-color: var(--accent); color: var(--text-bright); }
@@ -90,8 +90,8 @@
    fills green. */
 .cs-deals {
   position: relative; display: inline-flex; align-items: center; gap: 0.5rem;
-  cursor: pointer; font-weight: 500;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  cursor: pointer; font-weight: var(--fw-display);
+  font-family: var(--font-display);
   text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--fs-xs);
   border-color: color-mix(in srgb, var(--deal) 55%, transparent);
   color: var(--deal);
@@ -199,7 +199,7 @@
   border: 1px solid var(--box-edge); border-radius: 999px;
   padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
   background: var(--row-alt);
-  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 500;
+  font-family: var(--font-display); font-weight: var(--fw-display);
   text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs);
   cursor: pointer;
 }
@@ -239,7 +239,7 @@
 .cs-cap-chips button {
   border: 1px solid var(--box-edge); background: var(--row-alt);
   color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer;
-  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 500;
+  font-family: var(--font-display); font-weight: var(--fw-display);
   text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs);
 }
 .cs-cap-chips button:hover { border-color: var(--accent); color: var(--text-bright); }
@@ -260,7 +260,7 @@
 .cs-tab {
   border: 1px solid var(--box-edge); background: transparent;
   color: var(--muted-2); border-radius: var(--r-xs); padding: 0.3rem 0.7rem;
-  cursor: pointer; font-family: "Rajdhani", "Segoe UI", sans-serif;
+  cursor: pointer; font-family: var(--font-display);
   font-weight: 600; text-transform: uppercase; letter-spacing: normal; font-size: var(--fs-xs);
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
@@ -474,7 +474,7 @@
   border: 1px solid var(--box-edge); border-radius: 4px;
   padding: 0.15rem 0.45rem; font-size: var(--fs-2xs); white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); pointer-events: none; z-index: 10;
-  font-family: "Eve Sans Neue", "Inter", sans-serif; text-transform: none;
+  font-family: var(--font-body); text-transform: none;
   letter-spacing: normal;
 }
 .cs-roll-mark:hover .cs-roll-mark-tip,
@@ -488,7 +488,7 @@
    face, weight, size, spacing and uppercase treatment.
    Their colors stay their own. */
 .cs-fbox .box-title, .cs-region-quick, .cs-field, .cs-drawer-label {
-  font-family: "Eve Sans Neue", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -535,7 +535,7 @@
 .cs-table col.cs-c5 { width: 14%; }
 .cs-table thead tr { background: color-mix(in srgb, var(--panel) 55%, transparent); }
 .cs-table th {
-  padding: 0.75rem; color: var(--muted); font-weight: 500; text-shadow: none;
+  padding: 0.75rem; color: var(--muted); font-weight: var(--fw-display); text-shadow: none;
   border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
 }
 .cs-table th:first-child { padding-left: 1rem; }
@@ -578,7 +578,7 @@
 .cs-deal {
   display: inline-flex; align-items: center; gap: 0.2rem; vertical-align: middle;
   padding: 0.1rem 0.4rem; font-size: var(--fs-2xs); font-weight: 700;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   text-transform: uppercase; letter-spacing: 0.04em;
   color: #6ee7a8; background: rgba(6, 40, 24, 0.55);
   border: 1px solid rgba(52, 211, 153, 0.5); border-radius: 0.25rem;
@@ -637,7 +637,7 @@
 .cs-priced { font-size: var(--fs-2xs); color: var(--muted); margin-top: 0.15rem; }
 .cs-spread { font-size: var(--fs-2xs); color: var(--v-good, #34d399); margin-top: 0.15rem; }
 .cs-spread.neg { color: var(--neg); }
-.cs-c5 .sec-pill { margin-left: 0; border-radius: var(--r-xs); }
+.cs-c5 .sec-pill { margin-left: 0; }
 .cs-place {
   display: inline-block; max-width: calc(100% - 62px); vertical-align: bottom;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -795,7 +795,6 @@
 .cd-kv > div { min-width: 0; }
 .cd-kv dt { color: var(--muted); font-size: var(--fs-xs); }
 .cd-kv dd { margin: 0.1rem 0 0; overflow-wrap: anywhere; }
-.cd-kv .sec-pill { border-radius: var(--r-xs); }
 /* The Full mutaplasmid card's words under its rolls. */
 .cd-abnotes {
   margin-top: 0.7rem; padding-top: 0.6rem;

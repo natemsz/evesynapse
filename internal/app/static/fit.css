@@ -27,7 +27,7 @@
   min-height: 2.5rem; padding: 0.45rem 0.6rem;
   background: none; border: 1px solid var(--box-edge); border-radius: var(--r-sm);
   color: var(--muted); cursor: pointer;
-  font-family: var(--font-display); font-weight: 500;
+  font-family: var(--font-display); font-weight: var(--fw-display);
   text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-xs);
 }
 @media (min-width: 45.01rem) {
@@ -78,7 +78,7 @@
     padding: 0.55rem 0.3rem; min-height: 2.5rem;
     background: none; border: 0; cursor: pointer;
     color: var(--muted); font-family: var(--font-display);
-    font-weight: 500; text-transform: uppercase; letter-spacing: normal;
+    font-weight: var(--fw-display); text-transform: uppercase; letter-spacing: normal;
     font-size: var(--fs-xs); min-width: 0; text-align: center; line-height: 1.15;
   }
   .fit-mtabs > button + button { border-left: 1px solid var(--box-edge); }
@@ -111,7 +111,7 @@
   #fit-modsearch.open .fit-modsearch-bar {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 0.45rem;
-    font-family: var(--font-display); font-weight: 500;
+    font-family: var(--font-display); font-weight: var(--fw-display);
     text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-xs);
     color: var(--muted);
   }

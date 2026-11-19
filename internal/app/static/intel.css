@@ -9,7 +9,7 @@
 
 .iw-note { margin: 0; color: var(--muted); font-size: var(--fs-md); }
 .iw-dim { color: var(--muted); font-size: var(--fs-md); }
-.iw-role { display: block; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.iw-role { display: block; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
 
 /* State chips: active and established read as live (accent),
    pending and mobilizing as rising (gold), ended and withdrawing as

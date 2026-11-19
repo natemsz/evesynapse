@@ -144,7 +144,7 @@ html[data-backdrop="glow"] body::before {
 }
 .legal-text {
   white-space: pre-wrap;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: var(--fs-xs);
   line-height: 1.55;
   margin: 0;
@@ -349,7 +349,7 @@ html[data-theme="light"] .btn.btn-quiet {
    header's own vocabulary on top of them. */
 .region-pills { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.9rem 0 1.1rem; }
 .region-pills a {
-  font-family: "Rajdhani", "Inter", sans-serif; font-weight: 500; font-size: var(--fs-xs);
+  font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-xs);
   letter-spacing: 0.09em; text-transform: uppercase; text-decoration: none; white-space: nowrap;
   color: var(--muted); padding: 0.34rem 0.85rem; border-radius: 999px;
   background: rgba(23, 17, 13, 0.55); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
@@ -889,7 +889,7 @@ html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 
 /* The Settings page's theme picker: one row per look, a swatch,
    a name, and the strength it can be worn at. */
-.scheme-group-label { font-family: Rajdhani, sans-serif; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; font-size: var(--fs-xs); opacity: .75; margin: 1.4rem 0 .5rem; }
+.scheme-group-label { font-family: var(--font-display); font-weight: var(--fw-display); letter-spacing: .14em; text-transform: uppercase; font-size: var(--fs-xs); opacity: .75; margin: 1.4rem 0 .5rem; }
 /* The home Theme modal gives the picker room: at the standard
    modal width the rows squeeze their text into a ribbon. */
 .modal.theme-modal { width: min(46rem, 100%); }
@@ -908,9 +908,9 @@ html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 .sw-minmatar { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,150,60,.95) 0%, rgba(234,88,12,.55) 42%, rgba(90,30,5,.9) 78%), linear-gradient(180deg,#17100b,#0b0806); }
 .sw-minmatar-v3 { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,152,61,.95) 0%, rgba(242,102,25,.50) 42%, rgba(21,19,18,.95) 80%), linear-gradient(180deg,#191513,#0f0d0c); }
 .scheme-meta { flex: 1 1 auto; min-width: 0; }
-.scheme-name { font-family: Rajdhani, sans-serif; font-weight: 500; font-size: var(--fs-lg); letter-spacing: .05em; text-transform: uppercase; }
+.scheme-name { font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-lg); letter-spacing: .05em; text-transform: uppercase; }
 .scheme-sub { font-size: var(--fs-xs); opacity: .72; }
-.current-badge { font-family: Rajdhani, sans-serif; font-weight: 500; font-size: var(--fs-xs); letter-spacing: .12em; text-transform: uppercase; padding: .18rem .5rem; border-radius: 999px; border: 1px solid var(--sch-accent, #ff6a1a); color: var(--sch-hi, #ffd27a); visibility: hidden; }
+.current-badge { font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-xs); letter-spacing: .12em; text-transform: uppercase; padding: .18rem .5rem; border-radius: 999px; border: 1px solid var(--sch-accent, #ff6a1a); color: var(--sch-hi, #ffd27a); visibility: hidden; }
 .current .current-badge { visibility: visible; }
 .tier-seg { display: inline-flex; border: 1px solid rgba(255,255,255,.16); border-radius: 8px; overflow: hidden; flex: 0 0 auto; }
 .tier-seg button { appearance: none; border: 0; background: rgba(255,255,255,.04); color: inherit; font: inherit; font-size: var(--fs-xs); padding: .42rem .8rem; cursor: pointer; min-height: 0; text-transform: uppercase; letter-spacing: .06em; }

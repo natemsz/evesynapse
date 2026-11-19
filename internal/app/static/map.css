@@ -406,6 +406,8 @@ html[data-theme="light"] .map {
   display: block;
   width: 0.7rem;
   height: 0.7rem;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
   background: currentColor;
 }

@@ -28,7 +28,7 @@
     <summary>Sign in with recovery code</summary>
     <p class="prose">A recovery code signs you in once. It burns on use.</p>
     <form method="post" action="/auth/factor/recover">
-      <p><label>Recovery code <input type="text" name="code" autocomplete="one-time-code" maxlength="11" required></label></p>
+      <p><label><small>Recovery code</small> <input type="text" name="code" autocomplete="one-time-code" maxlength="11" required></label></p>
       <p><button class="btn" type="submit">Sign in with code</button></p>
     </form>
   </details>

@@ -71,8 +71,8 @@ func TestTabNavTypeSpec(t *testing.T) {
 // TestOpenProseTreatment pins the prose role: a block whose job
 // is to explain reads in Rajdhani at the display weight, --fs-sm,
 // with a 1.55 line height, in the prose ink each theme mixes from
-// its own text and muted values; emphasis inside prose reads one
-// weight step heavier.
+// its own text and muted values, wrapped so no paragraph ends on
+// one word; emphasis inside prose reads one weight step heavier.
 // Pages across the site mark their explanatory blocks with it.
 // The admin pages mark none: their prose is marked with the
 // admin rework. The landing and home pages mark none either:
@@ -81,7 +81,7 @@ func TestOpenProseTreatment(t *testing.T) {
 	style := readStatic(t, "style.css")
 	for _, want := range []string{
 		"--prose: color-mix(in srgb, var(--text) 55%, var(--muted));",
-		".prose {\n  font-family: var(--font-display);\n  font-weight: var(--fw-display);\n  font-size: var(--fs-sm);\n  line-height: 1.55;\n  color: var(--prose);\n}",
+		".prose {\n  font-family: var(--font-display);\n  font-weight: var(--fw-display);\n  font-size: var(--fs-sm);\n  line-height: 1.55;\n  color: var(--prose);\n  /* No one-word last line in a paragraph of explanation. */\n  text-wrap: pretty;\n}",
 		// Emphasis inside prose reads one weight step heavier.
 		".prose strong { font-weight: var(--fw-display-strong); }",
 		// Definition answers inside a prose block stay prose.

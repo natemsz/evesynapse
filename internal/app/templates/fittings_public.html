@@ -21,32 +21,32 @@
   </span>
   <button type="button" class="btn btn-quiet" data-sheet-open="fit-filters" hidden>Filters</button>
   <div class="lookup-more pb-fields" id="fit-filters" data-sheet data-sheet-title="Filters">
-  <label>Role <select name="role">
+  <label><small>Role</small> <select name="role">
     <option value="">Any role</option>
     {{range .Roles}}<option value="{{.}}"{{if eq $.PublicFits.Filters.Role .}} selected{{end}}>{{.}}</option>{{end}}
   </select></label>
-  <label>Ship class <select name="hull">
+  <label><small>Ship class</small> <select name="hull">
     <option value="">Any class</option>
     {{range .Hulls}}<option value="{{.Label}}"{{if .On}} selected{{end}}>{{.Label}} ({{.Count}})</option>{{end}}
   </select></label>
-  <label>Hull <input type="search" name="hullq" value="{{.Filters.HullQ}}" placeholder="Ship name" size="14"></label>
-  <label>Stars <select name="stars">
+  <label><small>Hull</small> <input type="search" name="hullq" value="{{.Filters.HullQ}}" placeholder="Ship name" size="14"></label>
+  <label><small>Stars</small> <select name="stars">
     <option value="">Any rating</option>
     <option value="4.5"{{if eq $.PublicFits.Filters.MinStars 4.5}} selected{{end}}>4.5+</option>
     <option value="4"{{if eq $.PublicFits.Filters.MinStars 4.0}} selected{{end}}>4+</option>
     <option value="3"{{if eq $.PublicFits.Filters.MinStars 3.0}} selected{{end}}>3+</option>
   </select></label>
-  <label>Updated <select name="updated">
+  <label><small>Updated</small> <select name="updated">
     <option value="">Any time</option>
     {{range .Ages}}<option value="{{.}}"{{if eq $.PublicFits.Filters.SinceDays .}} selected{{end}}>Last {{.}} days</option>{{end}}
   </select></label>
-  <label>With module <input type="search" name="include" value="{{.Filters.IncludeName}}" placeholder="Exact module name" size="18"></label>
-  <label>Without module <input type="search" name="exclude" value="{{.Filters.ExcludeName}}" placeholder="Exact module name" size="18"></label>
-  <label>Faction <select name="faction">
+  <label><small>With module</small> <input type="search" name="include" value="{{.Filters.IncludeName}}" placeholder="Exact module name" size="18"></label>
+  <label><small>Without module</small> <input type="search" name="exclude" value="{{.Filters.ExcludeName}}" placeholder="Exact module name" size="18"></label>
+  <label><small>Faction</small> <select name="faction">
     <option value="any"{{if eq $.PublicFits.Filters.Faction "any"}} selected{{end}}>Any</option>
     <option value="none"{{if eq $.PublicFits.Filters.Faction "none"}} selected{{end}}>No faction modules</option>
   </select></label>
-  <label>Max price <input type="text" name="maxprice" value="{{if gt $.PublicFits.Filters.MaxPrice 0.0}}{{$.PublicFits.Filters.MaxPrice}}{{end}}" placeholder="ISK" size="10" inputmode="decimal"></label>
+  <label><small>Max price</small> <input type="text" name="maxprice" value="{{if gt $.PublicFits.Filters.MaxPrice 0.0}}{{$.PublicFits.Filters.MaxPrice}}{{end}}" placeholder="ISK" size="10" inputmode="decimal"></label>
   <label class="pb-check"><input type="checkbox" name="alpha" value="1"{{if .Filters.Alpha}} checked{{end}}> Alpha-friendly</label>
   <div class="sheet-foot sheet-only"><a href="{{.FirstURL}}">Clear all</a><button class="btn" type="submit">Show fits</button></div>
   </div>
@@ -65,7 +65,7 @@
 
 <div class="browse-head">
   <span><strong>{{len .Cards}}</strong> of {{.Total}} fit{{if ne .Total 1}}s{{end}} · page {{.Page}} of {{.Pages}}</span>
-  <span class="browse-sorts">Sort by {{range .Sorts}}<a class="chip{{if .On}} on{{end}}" href="{{.URL}}">{{.Label}}</a>{{end}}</span>
+  <span class="browse-sorts"><span class="fchips-label">Sort by</span> {{range .Sorts}}<a class="chip{{if .On}} on{{end}}" href="{{.URL}}">{{.Label}}</a>{{end}}</span>
 </div>
 
 {{if .Cards}}

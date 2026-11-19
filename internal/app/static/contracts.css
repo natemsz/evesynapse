@@ -500,7 +500,7 @@
    for, on the squared 8px radius; the spec tabs' count
    badges keep the shared .cs-count pill above. */
 .cs-countbar .cs-count { padding: 0.25rem 0.52rem; font-weight: 500; border-radius: 8px; }
-.cs-counthint { margin: 0; font-size: var(--fs-2xs); color: var(--muted); }
+.cs-counthint { margin: 0; font-size: var(--fs-xs); color: var(--muted); }
 /* The live pill sits beside the count; the hint keeps the far end. */
 .cs-live-pill { margin-right: auto; margin-left: -0.5rem; }
 .cs-results { padding: 0 0 0.4rem; }
@@ -575,9 +575,10 @@
   text-overflow: ellipsis; max-width: 16.25rem;
 }
 .cs-row-meta {
-  display: flex; gap: 0.4rem; align-items: center; margin-top: 0.25rem;
-  font-size: var(--fs-2xs); color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 0 0.4rem; align-items: center; margin-top: 0.25rem;
+  font-size: var(--fs-xs); color: var(--muted);
 }
+.cs-row-meta > span { white-space: nowrap; }
 /* The issuer line renders only in the phone card form
    (see the 45rem block below); the desktop row's head
    cell has no room for it and stays as it was. */
@@ -612,22 +613,22 @@
 .cs-pill.ab { background: rgba(8, 47, 73, 0.5); border: 1px solid rgba(34, 211, 238, 0.3); color: #a5f3fc; }
 .cs-pill.bp { background: rgba(69, 26, 3, 0.5); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; }
 .cs-pill.co { background: rgba(6, 40, 24, 0.5); border: 1px solid rgba(52, 211, 153, 0.3); color: #a7f3d0; }
-.cs-cell-label { font-size: var(--fs-2xs); color: var(--muted); }
+
 .cs-cell-value {
   font-weight: 700; font-size: var(--fs-sm); color: var(--text-bright);
   white-space: nowrap; margin-top: 0.15rem;
 }
-.cs-psub { font-size: var(--fs-2xs); margin-top: 0.15rem; }
+.cs-psub { font-size: var(--fs-xs); margin-top: 0.15rem; }
 .cs-psub.amber { color: #fbbf24; }
 .cs-psub.gray { color: var(--muted); }
-.cs-priced { font-size: var(--fs-2xs); color: var(--muted); margin-top: 0.15rem; }
-.cs-spread { font-size: var(--fs-2xs); color: var(--v-good, #34d399); margin-top: 0.15rem; }
+.cs-priced { font-size: var(--fs-xs); color: var(--muted); margin-top: 0.15rem; }
+.cs-spread { font-size: var(--fs-xs); color: var(--v-good, #34d399); margin-top: 0.15rem; }
 .cs-spread.neg { color: var(--neg); }
 .cs-c5 .sec-pill { margin-left: 0; }
 .cs-place {
   display: inline-block; max-width: calc(100% - 62px); vertical-align: bottom;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-weight: 500; font-size: var(--fs-2xs);
+  font-weight: 500; font-size: var(--fs-xs);
 }
 .cs-expires { font-size: var(--fs-xs); color: var(--muted); margin-top: 0.25rem; }
 .cs-copy {
@@ -671,7 +672,7 @@
 }
 .cs-dhead-t.cy { color: #22d3ee; }
 .cs-dhead-t.dim { color: var(--muted); }
-.cs-dhead-id { font-size: var(--fs-2xs); color: var(--muted-2); }
+.cs-dhead-id { font-size: var(--fs-xs); color: var(--muted-2); }
 .cs-dnote { margin: 0 0 0.4rem; color: var(--muted); font-size: var(--fs-xs); }
 .cs-aline {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;

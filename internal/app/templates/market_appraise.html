@@ -163,7 +163,7 @@ Pyerite 250000</pre>
   <form method="get" action="{{$rp.BackURL}}reprocess">
     <input type="hidden" name="refine" value="1">
     <p><small>
-      <label>Refine rate <input type="number" name="rate" min="1" max="100" step="0.1" value="{{$rp.RateText}}"> %</label>
+      <label><small>Refine rate</small> <input type="number" name="rate" min="1" max="100" step="0.1" value="{{$rp.RateText}}"> %</label>
       {{range $rp.Presets}}<button class="btn small" type="submit" name="preset" value="{{.Key}}">{{.Label}}</button>{{end}}
       <label><input type="checkbox" name="prune" value="1"{{if $rp.Prune}} checked{{end}}> Prune leftover ores below one refine batch</label>
       <button class="btn small" type="submit">Apply</button>

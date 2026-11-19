@@ -27,7 +27,7 @@
     {{if .CanDelete}}<form method="post" action="{{.DeleteURL}}"><button type="submit" class="btn">Delete this fit</button></form>{{end}}
     {{else if $.LoggedIn}}
     <form method="post" action="{{.Card.FitURL}}rate" class="fit-rateform">
-      <label>Rate this fit <select name="stars" aria-label="Stars">
+      <label><small>Rate this fit</small> <select name="stars" aria-label="Stars">
         <option value="5">5 ★</option>
         <option value="4">4 ★</option>
         <option value="3">3 ★</option>

@@ -588,8 +588,8 @@
     <form method="post" action="/home/layout">
       <input type="hidden" name="action" value="size">
       <input type="hidden" name="widget" value="{{.ID}}">
-      <label>Width <select name="w"><option value="1"{{if eq .W 1}} selected{{end}}>1</option><option value="2"{{if eq .W 2}} selected{{end}}>2</option><option value="3"{{if eq .W 3}} selected{{end}}>3</option></select></label>
-      <label>Height <select name="h"><option value="1"{{if eq .H 1}} selected{{end}}>1</option><option value="2"{{if eq .H 2}} selected{{end}}>2</option><option value="3"{{if eq .H 3}} selected{{end}}>3</option></select></label>
+      <label><small>Width</small> <select name="w"><option value="1"{{if eq .W 1}} selected{{end}}>1</option><option value="2"{{if eq .W 2}} selected{{end}}>2</option><option value="3"{{if eq .W 3}} selected{{end}}>3</option></select></label>
+      <label><small>Height</small> <select name="h"><option value="1"{{if eq .H 1}} selected{{end}}>1</option><option value="2"{{if eq .H 2}} selected{{end}}>2</option><option value="3"{{if eq .H 3}} selected{{end}}>3</option></select></label>
       <button type="submit">Resize</button>
     </form>
     {{end}}

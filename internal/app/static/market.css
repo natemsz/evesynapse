@@ -505,7 +505,7 @@
 td.mt-reqs { max-width: 12rem; }
 .req-icon { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; margin: 0 0.35rem 0.2rem 0; vertical-align: top; text-decoration: none; }
 .req-icon img { display: block; border-radius: var(--r-xs); }
-.req-qty { font-size: var(--fs-2xs); line-height: 1.1; color: var(--muted); font-variant-numeric: tabular-nums; }
+.req-qty { font-size: var(--fs-xs); line-height: 1.1; color: var(--muted); font-variant-numeric: tabular-nums; }
 .req-icon:hover .req-qty { color: var(--text-bright); }
 
 .mt-movers { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem 1.25rem; margin: 0.5rem 0 1rem; }
@@ -773,7 +773,7 @@ td.mt-reqs { max-width: 12rem; }
 .pf-act-grid { display: grid; grid-template-columns: minmax(0, 1fr) 18.75rem; gap: 1rem 1.5rem; align-items: start; }
 @container page (width < 52rem) { .pf-act-grid { grid-template-columns: minmax(0, 1fr); } }
 .pf-card { background: var(--panel); border: 1px solid var(--box-edge); border-radius: var(--r-md); padding: 0.8rem 0.9rem; }
-.pf-card h4 { margin: 0 0 0.5rem; font-size: var(--fs-sm); }
+.pf-card h4 { margin: 0 0 0.5rem; }
 @container page (width < 40rem) {
   .pf-chart .pchart svg { height: 150px; }
   .pf-chart .pchart svg.pf-short { height: 75px; }

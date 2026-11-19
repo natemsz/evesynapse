@@ -14,7 +14,7 @@
 .ch-p { margin: 0 0 var(--space-3); }
 .ch-hint { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--fs-md); }
 .ch-dim { display: block; color: var(--muted); font-size: var(--fs-sm); }
-.ch-cnt { margin-left: 0.3rem; color: var(--muted); font-weight: var(--fw-display); }
+.ch-cnt { margin-left: 0.3rem; }
 .ch code { padding: 0 0.3rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-page); font-family: var(--font-body); font-size: var(--fs-rel-small); }
 
 /* The page's top: the main block beside its side panel. */

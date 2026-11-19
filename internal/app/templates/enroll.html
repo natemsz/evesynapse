@@ -11,7 +11,7 @@
   <p class="prose">Keys are per hostname: a key enrolled here ({{.Host}}) does not work on any other EveSynapse address.</p>
   <p class="err" id="enroll-status" role="alert" hidden></p>
   <div id="enroll-form">
-    <p><label>Key name <input type="text" id="enroll-name" value="Security key" maxlength="64" autocomplete="off"></label></p>
+    <p><label><small>Key name</small> <input type="text" id="enroll-name" value="Security key" maxlength="64" autocomplete="off"></label></p>
     <p><button type="button" class="btn" id="enroll-go">Enroll this key</button></p>
     <div data-webauthn-qr data-qr-for="enroll" data-qr-name-from="enroll-name" hidden>
       <p class="prose">This browser cannot invite your phone directly. Scan this code to enroll a passkey on your phone.</p>

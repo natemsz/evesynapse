@@ -492,7 +492,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 
 /* Local time: the reader's own time beside an EVE time, written in
    by app.js; empty (and out of the way) without JS. */
-.l-local { color: var(--muted); font-size: var(--fs-2xs); }
+.l-local { color: var(--muted); font-size: var(--fs-xs); }
 .l-local:not(.on) { display: none; }
 
 /* Panel: the standard solid block on the page. */
@@ -587,7 +587,7 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
 }
 .l-pane-bar > .searchwrap, .l-pane-bar > form, .l-pane-bar > input[type="search"] { flex: 1 1 14rem; min-width: 0; }
 .l-pane-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--fs-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.l-pane-title small { color: var(--muted); font-size: var(--fs-xs); font-weight: var(--fw-display); }
+
 
 /* Back: shown only when the pane it returns to is off screen. */
 .l-back {

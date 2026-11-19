@@ -96,7 +96,10 @@ func TestMain(m *testing.M) int {
 }
 
 // templateName is the database FreshDSN clones once prepared.
-const templateName = "evetest_template"
+// It carries the process id: several test processes share one
+// server when PGTEST_DSN points at a system Postgres, and a
+// fixed name would have them all creating the same database.
+var templateName = fmt.Sprintf("evetest_template_%d", os.Getpid())
 
 // TestMainWithTemplate is TestMain for packages whose tests all open
 // the full schema: prepare runs once, on the first FreshDSN, against a
@@ -113,6 +116,11 @@ func TestMainWithTemplate(m *testing.M, prep func(dsn string) error) int {
 		<-clonesDone
 	}
 	if adminPool != nil {
+		// The template is per-process (named by pid), so drop
+		// it: on a shared server it would otherwise linger.
+		if prepare != nil {
+			_, _ = adminPool.Exec(context.Background(), "DROP DATABASE IF EXISTS "+templateName+" WITH (FORCE)")
+		}
 		adminPool.Close()
 	}
 	if server != nil {
@@ -142,7 +150,10 @@ func FreshDSN(t *testing.T) string {
 		}
 		name = c.name
 	} else {
-		name = fmt.Sprintf("evetest_%d", dbSeq.Add(1))
+		// The name carries the process id, like the template:
+		// several test processes share one server under
+		// PGTEST_DSN.
+		name = fmt.Sprintf("evetest_%d_%d", os.Getpid(), dbSeq.Add(1))
 		if _, err := adminPool.Exec(context.Background(), "CREATE DATABASE "+name); err != nil {
 			t.Fatalf("pgtest: create database %s: %v", name, err)
 		}
@@ -170,7 +181,7 @@ func ensureTemplate(t *testing.T) {
 			templateErr = fmt.Errorf("create template: %w", err)
 			return
 		}
-		dsn := fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/%s?sslmode=disable", port, templateName)
+		dsn := dsnForDB(templateName)
 		if err := prepare(dsn); err != nil {
 			templateErr = fmt.Errorf("prepare template: %w", err)
 			return
@@ -198,9 +209,11 @@ func ensureTemplate(t *testing.T) {
 
 // produceClones copies the template ahead of demand until stopped.
 // Copies left over at the end go with the server's runtime directory.
+// The clone names carry the process id, like the template: several
+// test processes share one server under PGTEST_DSN.
 func produceClones() {
 	for {
-		name := fmt.Sprintf("evetest_%d", dbSeq.Add(1))
+		name := fmt.Sprintf("evetest_%d_%d", os.Getpid(), dbSeq.Add(1))
 		_, err := adminPool.Exec(context.Background(), "CREATE DATABASE "+name+" TEMPLATE "+templateName)
 		select {
 		case clones <- clone{name: name, err: err}:

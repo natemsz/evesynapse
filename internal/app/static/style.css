@@ -1982,7 +1982,12 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
 /* KPI titles read as UI labels, like table headers: Rajdhani
    SemiBold in small spaced capitals, bright enough to read on glass. */
 .kpi-k { font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600; font-synthesis-weight: none; font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
-td, dd, .kpi-v, .fit-gl > b, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b, .sec {
+/* Table figures read as body text: Eve Sans Neue at the regular
+   weight, the same as everywhere else. The monospaced numeral face
+   is too heavy for table figures at this size, so it is kept only
+   for the larger standalone figures below. */
+td { font-family: var(--font-body); }
+dd, .kpi-v, .fit-gl > b, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b, .sec {
   /* Standalone figures: monospaced digits, Eve Sans Neue for any letters. */
   font-family: "Synapse Numerals", "Eve Sans Neue", "Inter", "Segoe UI", sans-serif;
 }

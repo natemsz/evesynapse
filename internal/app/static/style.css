@@ -1742,7 +1742,9 @@ html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[d
    the header band. */
 .field-label, .cs-field, .cs-drawer-label, .cs-cell-label,
 label > small:first-child, .lp-field > span, .mb-minvol > span, .fchips-label,
-.cs-hunts-label,
+.cs-hunts-label, .ap-label, .sov-pick-l, .kb-f-l, .pi-field > span, .co-pick > span,
+.sc-sys > span, .pi-watch label > span, .fit-boost-fields label > span,
+.map-route-jump label > span,
 .fleet-tags-label, .facet-title, .pie-head, .co-fuel-l {
   font-family: var(--font-display);
   font-size: var(--fs-2xs);

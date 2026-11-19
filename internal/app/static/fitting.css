@@ -572,10 +572,6 @@ html.fit-dragging, html.fit-dragging * { -webkit-user-select: none; user-select:
 }
 .fit-boost-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr)); gap: 0.35rem 0.5rem; }
 .fit-boost-fields label { display: grid; gap: 0.15rem; min-width: 0; }
-.fit-boost-fields label > span {
-  font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-2xs);
-  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
-}
 .fit-boost-fields select {
   width: 100%; min-width: 0; padding: 0.3rem 0.4rem; font: inherit; font-size: var(--fs-sm);
   color: var(--text); background: var(--input-bg); border: 1px solid var(--glass-edge); border-radius: var(--r-sm);

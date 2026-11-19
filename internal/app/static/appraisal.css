@@ -32,11 +32,6 @@
 /* The paste form measures itself: in the bench's narrow left
    column its pricing fields stack one per row. */
 .ap-form { container: apform / inline-size; }
-.ap-label {
-  font-family: var(--font-display); font-synthesis-weight: none; font-weight: var(--fw-display);
-  font-size: var(--fs-2xs); letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--muted);
-}
 .ap-chips {
   display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
   padding-bottom: 0.7rem; border-bottom: 1px solid var(--box-edge);

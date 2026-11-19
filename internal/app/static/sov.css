@@ -19,7 +19,6 @@
 /* --- Page head: summary and pickers --- */
 .sov-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0; }
 .sov-pick { display: inline-flex; align-items: center; gap: var(--space-2); }
-.sov-pick-l { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .sov-pick select { min-height: var(--control-h); max-inline-size: 14rem; padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--fs-sm); }
 .sov-pick select:focus-visible { border-color: var(--accent); outline: none; }
 

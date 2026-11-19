@@ -25,13 +25,13 @@
 <form method="post" action="/mail/send/" class="l-stack mc-form">
   <input type="hidden" name="character" value="{{$c.CharacterID}}">
   {{if $c.Back}}<input type="hidden" name="back" value="{{$c.Back}}">{{end}}
-  <label class="mc-field">To (character, corporation, or alliance name)
+  <label class="mc-field"><small>To (character, corporation, or alliance name)</small>
     <input type="text" name="to" value="{{$c.To}}" required autocomplete="off">
   </label>
-  <label class="mc-field">Subject
+  <label class="mc-field"><small>Subject</small>
     <input type="text" name="subject" value="{{$c.Subject}}" maxlength="100" required>
   </label>
-  <label class="mc-field">Message
+  <label class="mc-field"><small>Message</small>
     <textarea name="body" rows="14" required>{{$c.Body}}</textarea>
   </label>
   <div class="l-cluster mc-actions"><button class="btn" type="submit">Send mail</button>

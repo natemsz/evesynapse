@@ -66,7 +66,7 @@ html[data-theme="light"] .pi { --pi-loss: #b0302a; }
 .pi-unwatch { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .pi-unwatch form { margin: 0; }
 .pi-watch { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 0.7rem; }
-.pi-watch label > span { display: block; margin-bottom: 0.2rem; font-size: var(--fs-xs); color: var(--muted-2); }
+.pi-watch label > span { display: block; margin-bottom: 0.2rem; }
 .pi-watch select, .pi-watch input[type=text] {
   padding: 0.38rem 0.5rem;
   border: 1px solid var(--box-edge);

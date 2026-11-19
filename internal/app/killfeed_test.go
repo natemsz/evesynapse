@@ -229,7 +229,7 @@ func TestKillboardPages(t *testing.T) {
 	if strings.Contains(body, "/intel/kill/700003/") {
 		t.Errorf("a private kill must never be listed")
 	}
-	if !strings.Contains(body, "Jita") || !strings.Contains(body, `class="sec sec-9"`) {
+	if !strings.Contains(body, "Jita") || !strings.Contains(body, `class="sec-pill sec-9"`) {
 		t.Errorf("feed rows name the system with its security")
 	}
 	if !strings.Contains(body, `Jita</a><a class="map-jump" href="/map/?system=30000142"`) || !strings.Contains(body, `<use href="#ico-map-mini"/>`) {

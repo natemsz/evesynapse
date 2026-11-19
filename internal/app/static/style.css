@@ -334,7 +334,13 @@ body {
   font-size: var(--fs-xs);
   line-height: 1.4;
   text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
+  /* Never fake a weight or an italic: a weight the site asks for
+     always has a real file loaded, and a faked weight is what makes
+     text look bloated on Windows. */
+  font-synthesis: none;
+  /* Do not thin text on macOS: antialiased smoothing is ignored on
+     Windows, so it only widens the gap between the two. */
+  -webkit-font-smoothing: auto;
 }
 body::before {
   content: "";

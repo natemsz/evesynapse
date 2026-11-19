@@ -172,7 +172,7 @@ func TestOverviewPreservesViewPickAcrossLinksAndBannerDismiss(t *testing.T) {
 		t.Fatalf("POST /notifications/open = %d to %q, want 303 to /character/?character=90000002&view=1", code, where)
 	}
 	_, charsBody := prefetchGet(t, app, &cookie, "/characters/", false)
-	if !strings.Contains(charsBody, ">Fixture Alpha</a></strong> <small>· active</small>") {
+	if !strings.Contains(charsBody, ">Fixture Alpha</a> <small>· active</small>") {
 		t.Errorf("acting character moved away from Fixture Alpha after opening notification")
 	}
 
@@ -208,7 +208,7 @@ func TestOverviewPreservesViewPickAcrossLinksAndBannerDismiss(t *testing.T) {
 		t.Errorf("topbar name moved off Fixture Alpha after banner dismiss")
 	}
 	_, charsBody = prefetchGet(t, app, &cookie, "/characters/", false)
-	if !strings.Contains(charsBody, ">Fixture Alpha</a></strong> <small>· active</small>") {
+	if !strings.Contains(charsBody, ">Fixture Alpha</a> <small>· active</small>") {
 		t.Errorf("acting character moved away from Fixture Alpha after banner dismiss")
 	}
 }

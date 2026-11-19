@@ -54,7 +54,7 @@ func actingCharacterName(t *testing.T, app *Application, cookie **http.Cookie) s
 		t.Fatalf("GET /characters/: status %d", code)
 	}
 	for _, name := range []string{"Burzrujat", "Khastira", "Timorsham Vot"} {
-		if strings.Contains(body, ">"+name+"</a></strong> <small>· active</small>") {
+		if strings.Contains(body, ">"+name+"</a> <small>· active</small>") {
 			return name
 		}
 	}

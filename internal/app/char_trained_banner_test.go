@@ -106,7 +106,7 @@ func (f *trainedBannerFixture) wantBanner(body, want string) {
 	at := 0
 	for _, entry := range strings.Split(want, " · ") {
 		j := strings.LastIndexByte(entry, ' ')
-		frag := `<b>` + entry[:j] + `</b> <span class="lv">Level ` + entry[j+1:] + `</span>`
+		frag := `<span class="ov-bitem">` + entry[:j] + ` <span class="lv">Level ` + entry[j+1:] + `</span>`
 		i := strings.Index(body[at:], frag)
 		if i < 0 {
 			f.t.Fatalf("GET /character/: banner item %q missing or out of order", frag)

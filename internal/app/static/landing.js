@@ -366,13 +366,13 @@
     if (vid) {
       if (modalVid.getAttribute("src") !== vid.getAttribute("src")) {
         modalVid.src = vid.getAttribute("src");
-        modalVid.poster = vid.getAttribute("poster") || "";
+        modalVid.poster = vid.getAttribute("data-full-poster") || vid.getAttribute("poster") || "";
       }
       modalVid.setAttribute("aria-label", vid.getAttribute("aria-label") || "");
       modalVid.hidden = false;
       if (modalImg) modalImg.hidden = true;
     } else if (img && modalImg) {
-      modalImg.src = img.getAttribute("src");
+      modalImg.src = img.getAttribute("data-full") || img.getAttribute("src");
       modalImg.alt = img.getAttribute("alt") || "";
       modalImg.hidden = false;
       modalVid.hidden = true;

@@ -18,7 +18,8 @@ require (
 	golang.org/x/image v0.48.0
 	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sync v0.25.0
-	ranvia.io/go v0.3.4
+	ranvia.io/go v0.4.0
+	rsc.io/qr v0.2.0
 )
 
 require (
@@ -39,5 +40,4 @@ require (
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
-	rsc.io/qr v0.2.0
 )

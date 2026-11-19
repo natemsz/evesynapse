@@ -347,6 +347,9 @@ html[data-theme="light"] .map {
 .map-layers::-webkit-scrollbar { display: none; }
 .map-layers button {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
   padding: 0.25rem 0.65rem;
   border: 1px solid var(--box-edge);
   border-radius: var(--r-xs);

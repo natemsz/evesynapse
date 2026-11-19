@@ -50,16 +50,38 @@ func fakeELF(machine uint16, size int) []byte {
 	return b
 }
 
+// fakePE builds a minimal PE-looking payload: the MZ header,
+// the PE signature at the offset the DOS header names, and the
+// given COFF machine, zero padding out to size.
+func fakePE(machine uint16, size int) []byte {
+	b := make([]byte, size)
+	copy(b, []byte{'M', 'Z'})
+	binary.LittleEndian.PutUint32(b[60:64], 64) // e_lfanew
+	copy(b[64:], []byte{'P', 'E', 0, 0})
+	binary.LittleEndian.PutUint16(b[68:70], machine)
+	return b
+}
+
+// fakeMachO builds a minimal Mach-O-looking payload: the
+// 64-bit magic and the given CPU type, zero padding out to size.
+func fakeMachO(cpu uint32, size int) []byte {
+	b := make([]byte, size)
+	binary.LittleEndian.PutUint32(b[0:4], 0xfeedfacf)
+	binary.LittleEndian.PutUint32(b[4:8], cpu)
+	return b
+}
+
 // ownAndOtherELFMachine returns the ELF machine kind of the
 // computer running the tests, what the explicit-source update
 // form expects of a build, since it installs one this computer can
 // run, and a kind it is not.
 func ownAndOtherELFMachine(t *testing.T) (own, other uint16) {
 	t.Helper()
-	own, ok := elfMachineForArch(ownReleaseArch())
-	if !ok {
-		t.Skipf("EveSynapse publishes no build for %s", ownReleaseArch())
+	format, machine, ok := executableKindForPlatform(ownReleasePlatform())
+	if !ok || format != "elf" {
+		t.Skipf("EveSynapse publishes no Linux build for %s", ownReleasePlatform())
 	}
+	own = uint16(machine)
 	other = elfMachineAArch64
 	if own == elfMachineAArch64 {
 		other = elfMachineAMD64
@@ -259,16 +281,99 @@ func TestParseArchArg(t *testing.T) {
 	}
 }
 
+// withPlatform has the updater under test believe it is a
+// build for the given platform key, for the duration of one
+// test, so the Windows and macOS paths run on the Linux test
+// host.
+func withPlatform(t *testing.T, platform string) {
+	t.Helper()
+	old := ownReleasePlatform
+	ownReleasePlatform = func() string { return platform }
+	t.Cleanup(func() { ownReleasePlatform = old })
+}
+
+func TestPlatformNames(t *testing.T) {
+	// Linux keeps the bare arch names the releases have
+	// always carried; Windows and macOS carry the operating
+	// system in the key, and the Windows binary carries .exe.
+	for _, tc := range []struct {
+		platform, os, arch, binary, manifest string
+	}{
+		{"arm64", "linux", "arm64", "evesynapse-arm64", "latest-arm64.json"},
+		{"amd64", "linux", "amd64", "evesynapse-amd64", "latest-amd64.json"},
+		{"windows-amd64", "windows", "amd64", "evesynapse-windows-amd64.exe", "latest-windows-amd64.json"},
+		{"windows-arm64", "windows", "arm64", "evesynapse-windows-arm64.exe", "latest-windows-arm64.json"},
+		{"darwin-amd64", "darwin", "amd64", "evesynapse-darwin-amd64", "latest-darwin-amd64.json"},
+		{"darwin-arm64", "darwin", "arm64", "evesynapse-darwin-arm64", "latest-darwin-arm64.json"},
+	} {
+		if got := platformOS(tc.platform); got != tc.os {
+			t.Errorf("platformOS(%q) = %q, want %q", tc.platform, got, tc.os)
+		}
+		if got := platformArch(tc.platform); got != tc.arch {
+			t.Errorf("platformArch(%q) = %q, want %q", tc.platform, got, tc.arch)
+		}
+		if got := platformBinaryName(tc.platform); got != tc.binary {
+			t.Errorf("platformBinaryName(%q) = %q, want %q", tc.platform, got, tc.binary)
+		}
+		if got := platformManifestName(tc.platform); got != tc.manifest {
+			t.Errorf("platformManifestName(%q) = %q, want %q", tc.platform, got, tc.manifest)
+		}
+	}
+	if _, _, ok := executableKindForPlatform("plan9-amd64"); ok {
+		t.Error("executableKindForPlatform accepted a platform EveSynapse does not publish")
+	}
+}
+
+func TestVerifyExecutable(t *testing.T) {
+	cases := []struct {
+		name     string
+		build    []byte
+		platform string
+		wantPass bool
+	}{
+		{"ELF arm64 for arm64", fakeELF(elfMachineAArch64, 1<<20), "arm64", true},
+		{"ELF amd64 for amd64", fakeELF(elfMachineAMD64, 1<<20), "amd64", true},
+		{"ELF amd64 for arm64", fakeELF(elfMachineAMD64, 1<<20), "arm64", false},
+		{"PE amd64 for windows-amd64", fakePE(peMachineAMD64, 1<<20), "windows-amd64", true},
+		{"PE arm64 for windows-arm64", fakePE(peMachineARM64, 1<<20), "windows-arm64", true},
+		{"PE amd64 for windows-arm64", fakePE(peMachineAMD64, 1<<20), "windows-arm64", false},
+		{"ELF for windows-amd64", fakeELF(elfMachineAMD64, 1<<20), "windows-amd64", false},
+		{"Mach-O arm64 for darwin-arm64", fakeMachO(machOCPUARM64, 1<<20), "darwin-arm64", true},
+		{"Mach-O amd64 for darwin-amd64", fakeMachO(machOCPUAMD64, 1<<20), "darwin-amd64", true},
+		{"Mach-O amd64 for darwin-arm64", fakeMachO(machOCPUAMD64, 1<<20), "darwin-arm64", false},
+		{"PE for darwin-amd64", fakePE(peMachineAMD64, 1<<20), "darwin-amd64", false},
+		{"an error page for amd64", []byte("<!DOCTYPE html><html><body>Not Found</body></html>"), "amd64", false},
+		{"an error page for windows-amd64", []byte("<!DOCTYPE html><html><body>Not Found</body></html>"), "windows-amd64", false},
+		{"truncated for amd64", []byte("tiny"), "amd64", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "download")
+			writeTestFile(t, path, tc.build, 0o644)
+			err := verifyExecutable(path, tc.platform)
+			if tc.wantPass && err != nil {
+				t.Fatalf("verifyExecutable: %v, want acceptance", err)
+			}
+			if !tc.wantPass && err == nil {
+				t.Fatal("verifyExecutable accepted a build it should refuse")
+			}
+		})
+	}
+}
+
 // channelRelease describes one release on the test channel:
 // its tag, and the paths on the test server its files are
 // served from. A field left empty is a file the release does
-// not carry among its assets.
+// not carry among its assets. binaryName overrides the
+// binary's asset name (the Windows binary carries .exe).
 type channelRelease struct {
-	tag      string
-	arch     string // defaults to arm64
-	manifest string
-	sig      string
-	binary   string
+	tag        string
+	arch       string // defaults to arm64
+	manifest   string
+	sig        string
+	binary     string
+	binaryName string
 }
 
 // serveChannel registers the GitLab releases listing for the
@@ -300,7 +405,11 @@ func serveChannel(mux *http.ServeMux, rels ...channelRelease) {
 				link("latest-"+arch+".json"+releasesig.SigSuffix, rel.sig)
 			}
 			if rel.binary != "" {
-				link("evesynapse-"+arch, rel.binary)
+				name := rel.binaryName
+				if name == "" {
+					name = "evesynapse-" + arch
+				}
+				link(name, rel.binary)
 			}
 			fmt.Fprintf(&sb, `{"tag_name":%q,"upcoming_release":false,"assets":{"links":[%s]}}`,
 				rel.tag, strings.Join(links, ","))
@@ -927,6 +1036,176 @@ func TestReleaseUpdateRefusesAnotherKindsManifest(t *testing.T) {
 	if got := downloads.Load(); got != 0 {
 		t.Fatalf("the build was downloaded %d time(s), want 0", got)
 	}
+}
+
+// TestReleaseUpdatePlatforms: the release channel is keyed by
+// platform, not just CPU kind. A Windows manifest and binary
+// install on a Windows updater and are refused on a Linux one,
+// and the other way round; a manifest naming another platform
+// is refused even when its signature checks out, and an
+// unsigned Windows manifest is refused before anything is
+// downloaded. The Windows and macOS paths run here on the
+// Linux test host, under a stood-in platform key.
+func TestReleaseUpdatePlatforms(t *testing.T) {
+	// makePlatformRelease is a newer release for a platform
+	// key: a build in that platform's format, and the manifest
+	// that names it.
+	makePlatformRelease := func(t *testing.T, platform string) (build []byte, sum, manifest string) {
+		t.Helper()
+		_, machine, ok := executableKindForPlatform(platform)
+		if !ok {
+			t.Fatalf("no published platform %q", platform)
+		}
+		switch platformOS(platform) {
+		case "windows":
+			build = fakePE(uint16(machine), updateMinBytes+100)
+		case "darwin":
+			build = fakeMachO(machine, updateMinBytes+100)
+		default:
+			build = fakeELF(uint16(machine), updateMinBytes+100)
+		}
+		var err error
+		if sum, err = sha256FileHexBytes(build); err != nil {
+			t.Fatal(err)
+		}
+		return build, sum, manifestJSON("9.9.9.9", platform, sum)
+	}
+
+	// servePlatformRelease publishes one release for a platform
+	// key on the test channel: its manifest, signature and
+	// binary, under the asset names the release carries.
+	servePlatformRelease := func(t *testing.T, mux *http.ServeMux, key ed25519.PrivateKey, platform string, signed bool) (build []byte, downloads *atomic.Int64) {
+		t.Helper()
+		build, _, manifest := makePlatformRelease(t, platform)
+		manifestPath := "/" + platformManifestName(platform)
+		if signed {
+			publish(mux, manifestPath, manifest, key)
+		} else {
+			serve(mux, manifestPath, []byte(manifest))
+		}
+		sigPath := ""
+		if signed {
+			sigPath = manifestPath + releasesig.SigSuffix
+		}
+		binaryPath := "/" + platformBinaryName(platform)
+		serveChannel(mux, channelRelease{tag: "v9.9.9.9", arch: platform, manifest: manifestPath, sig: sigPath, binary: binaryPath, binaryName: platformBinaryName(platform)})
+		return build, countedBuild(mux, binaryPath, build)
+	}
+
+	t.Run("a windows release installs on a windows updater", func(t *testing.T) {
+		key := trustTestKey(t)
+		withPlatform(t, "windows-amd64")
+		mux := http.NewServeMux()
+		build, _ := servePlatformRelease(t, mux, key, "windows-amd64", true)
+		srv := httptest.NewServer(mux)
+		defer srv.Close()
+		withReleaseAPI(t, srv.URL)
+
+		dir := t.TempDir()
+		target := filepath.Join(dir, "evesynapse.exe")
+		writeTestFile(t, target, []byte("old build"), 0o755)
+
+		var out, errOut bytes.Buffer
+		if code := runUpdate(testVersion, target, nil, &out, &errOut); code != 0 {
+			t.Fatalf("code %d, stderr %q", code, errOut.String())
+		}
+		if !strings.Contains(out.String(), "A new version is available: v9.9.9.9") {
+			t.Fatalf("output %q missing the new-version note", out.String())
+		}
+		if !strings.Contains(out.String(), "Get: evesynapse-windows-amd64.exe from gitlab") {
+			t.Fatalf("output %q missing the windows download line", out.String())
+		}
+		if !strings.Contains(out.String(), "Restart EveSynapse to start the new version") {
+			t.Fatalf("output %q missing the plain restart note", out.String())
+		}
+		got, err := os.ReadFile(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, build) {
+			t.Fatal("target not replaced by the windows release download")
+		}
+		if _, err := os.Stat(target + ".old"); !os.IsNotExist(err) {
+			t.Fatalf("the renamed-aside old copy is still there: %v", err)
+		}
+	})
+
+	t.Run("a windows release is refused on a linux updater", func(t *testing.T) {
+		key := trustTestKey(t)
+		withPlatform(t, "amd64")
+		mux := http.NewServeMux()
+		_, downloads := servePlatformRelease(t, mux, key, "windows-amd64", true)
+
+		code, _, stderr := attemptUpdate(t, mux)
+		if code != 1 {
+			t.Fatalf("code %d, want 1", code)
+		}
+		if !strings.Contains(stderr, "has no latest-amd64.json asset") {
+			t.Fatalf("stderr %q does not say the linux manifest is missing", stderr)
+		}
+		if got := downloads.Load(); got != 0 {
+			t.Fatalf("the windows build was downloaded %d time(s), want 0", got)
+		}
+	})
+
+	t.Run("a linux release is refused on a windows updater", func(t *testing.T) {
+		key := trustTestKey(t)
+		withPlatform(t, "windows-amd64")
+		mux := http.NewServeMux()
+		_, downloads := servePlatformRelease(t, mux, key, "amd64", true)
+
+		code, _, stderr := attemptUpdate(t, mux)
+		if code != 1 {
+			t.Fatalf("code %d, want 1", code)
+		}
+		if !strings.Contains(stderr, "has no latest-windows-amd64.json asset") {
+			t.Fatalf("stderr %q does not say the windows manifest is missing", stderr)
+		}
+		if got := downloads.Load(); got != 0 {
+			t.Fatalf("the linux build was downloaded %d time(s), want 0", got)
+		}
+	})
+
+	t.Run("a windows manifest is refused on a linux updater", func(t *testing.T) {
+		key := trustTestKey(t)
+		withPlatform(t, "amd64")
+		mux := http.NewServeMux()
+		build, _, manifest := makePlatformRelease(t, "windows-amd64")
+		publish(mux, "/latest-amd64.json", manifest, key)
+		serveChannel(mux, channelRelease{tag: "v9.9.9.9", arch: "amd64", manifest: "/latest-amd64.json", sig: "/latest-amd64.json" + releasesig.SigSuffix, binary: "/evesynapse-amd64"})
+		downloads := countedBuild(mux, "/evesynapse-amd64", build)
+
+		code, _, stderr := attemptUpdate(t, mux)
+		if code != 1 {
+			t.Fatalf("code %d, want 1", code)
+		}
+		if !strings.Contains(stderr, `for "windows-amd64" computers, not "amd64"`) {
+			t.Fatalf("stderr %q does not say the manifest is for another platform", stderr)
+		}
+		if got := downloads.Load(); got != 0 {
+			t.Fatalf("the build was downloaded %d time(s), want 0", got)
+		}
+	})
+
+	t.Run("an unsigned windows manifest is refused", func(t *testing.T) {
+		withPlatform(t, "windows-amd64")
+		mux := http.NewServeMux()
+		// The key is trusted but never signs: the manifest is
+		// served without a signature among the release's files.
+		key := trustTestKey(t)
+		_, downloads := servePlatformRelease(t, mux, key, "windows-amd64", false)
+
+		code, _, stderr := attemptUpdate(t, mux)
+		if code != 1 {
+			t.Fatalf("code %d, want 1", code)
+		}
+		if !strings.Contains(stderr, "Update refused") || !strings.Contains(stderr, "isn't signed") {
+			t.Fatalf("stderr %q, want a refusal for an unsigned release", stderr)
+		}
+		if got := downloads.Load(); got != 0 {
+			t.Fatalf("the build was downloaded %d time(s), want 0", got)
+		}
+	})
 }
 
 // TestReleaseUpdateDuringAKeyReplacement: while a key is being

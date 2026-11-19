@@ -82,6 +82,12 @@
     if (el) el.hidden = true;
   }
 
+  function say(el, message) {
+    if (!el) return;
+    el.textContent = message || '';
+    el.hidden = !message;
+  }
+
   function serialiseCredential(cred) {
     var out = {
       id: cred.id,

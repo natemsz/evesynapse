@@ -490,7 +490,7 @@
   color: var(--muted);
   text-decoration: none;
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-size: var(--fs-xs);
@@ -547,7 +547,7 @@ td.mt-reqs { max-width: 12rem; }
    SemiBold capitals, the display treatment), subcategories as
    capitals at the regular weight, and the groups under them stay
    small body text. Depth alone decides a row's rung. */
-.mb-node.mb-cat > .mb-row > a { font-family: var(--font-display); font-weight: 600; font-synthesis-weight: none; text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-sm); }
+.mb-node.mb-cat > .mb-row > a { font-family: var(--font-display); font-weight: 500; font-synthesis-weight: none; text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-sm); }
 .mb-node.mb-subcat > .mb-row > a { font-family: var(--font-display); font-weight: 400; font-synthesis-weight: none; text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--fs-sm); }
 .mb-node .market-group-icon svg { width: 1.1rem; height: 1.1rem; }
 .mb-toggle { flex: none; width: 1.05rem; height: 1.05rem; padding: 0; background: none; border: 0; cursor: pointer; position: relative; color: var(--muted); }
@@ -575,7 +575,7 @@ td.mt-reqs { max-width: 12rem; }
 .mb-searchform .searchwrap > input { width: 100%; }
 .mb-filters { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 .mb-minvol { display: inline-flex; align-items: center; gap: 0.45rem; }
-.mb-minvol > span { color: var(--muted); font-family: var(--font-display); font-weight: 600; font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.mb-minvol > span { color: var(--muted); font-family: var(--font-display); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
 .mb-minvol input { width: 6rem; }
 /* On a phone the trades filter is one row: the labelled field, then
    Apply beside it rather than under it. */

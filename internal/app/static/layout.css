@@ -173,7 +173,7 @@ html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
   color: var(--muted);
   font-family: var(--font-display);
   font-size: var(--fs-xs);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-decoration: none;
@@ -460,7 +460,7 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
    that follow it read the same. */
 .l-seg { display: inline-flex; flex-wrap: wrap; gap: 0.2rem; margin: 0 0 var(--space-3); padding: 0.2rem; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); }
 .l-seg[hidden] { display: none; }
-.l-seg > [role="tab"] { min-height: 2.25rem; padding: 0 0.9rem; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; cursor: pointer; }
+.l-seg > [role="tab"] { min-height: 2.25rem; padding: 0 0.9rem; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 500; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; cursor: pointer; }
 .l-seg > [role="tab"]:hover { color: var(--text); background: var(--row-hover); }
 .l-seg > [role="tab"][aria-selected="true"] { background: var(--sel-bg); color: var(--text-bright); box-shadow: inset 0 0 0 1px var(--sel-edge); }
 .l-seg > [role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -473,7 +473,7 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-stat { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); color: var(--text); text-decoration: none; container-type: inline-size; }
 a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); text-decoration: none; }
 .l-stat.on { border-color: var(--sel-edge); background: var(--sel-bg); }
-.l-stat-label { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.l-stat-label { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
 /* Amounts size relative to their tile (cqw against the .l-stat
    container above), capped at the display step: a bigger figure
    shrinks to stay on one line instead of wrapping. */

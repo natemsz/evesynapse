@@ -1307,7 +1307,7 @@ body:has(main .suggest:not([hidden])) main { position: relative; z-index: 70; }
 }
 
 /* Security status in EVE's own colors, 1.0 down to null. */
-.sec { font-variant-numeric: tabular-nums; font-weight: 600; }
+.sec { font-variant-numeric: tabular-nums; font-weight: 500; }
 .sec-10 { color: var(--v-sec-10, #2c74e0); }
 .sec-9 { color: var(--v-sec-9, #3a9aeb); }
 .sec-8 { color: var(--v-sec-8, #4ecef8); }
@@ -2002,7 +2002,7 @@ td.pos, .pos { color: var(--v-good, #28c76f); }
 .flow-figs thead small { color: var(--accent); font-size: inherit; }
 .kpi-v {
   font-size: var(--fs-3xl);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-bright);
   font-variant-numeric: tabular-nums;
   /* A figure wraps at its spaces only (value, unit, trend are
@@ -2497,7 +2497,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .card[data-widget="profitpulse"] .profitpulse-sub { color: var(--muted); }
 .card[data-widget="profitpulse"] .profitpulse-figs { display: flex; flex-wrap: wrap; gap: 0.5rem 2.5rem; margin: 0.25rem 0 0.5rem; }
 .card[data-widget="profitpulse"] .profitpulse-figs dt { font-size: var(--fs-xs); color: var(--muted); }
-.card[data-widget="profitpulse"] .profitpulse-figs dd { margin: 0; font-size: var(--fs-2xl); font-weight: 600; }
+.card[data-widget="profitpulse"] .profitpulse-figs dd { margin: 0; font-size: var(--fs-2xl); font-weight: 500; }
 .card[data-widget="profitpulse"] .profitpulse-top { margin: 0.25rem 0; }
 .card[data-widget="profitpulse"] .profitpulse-mini-cap { margin: 0.5rem 0 0.15rem; }
 .card[data-widget="profitpulse"] .profitpulse-mini { display: block; }
@@ -6739,7 +6739,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .insp-facts { margin: 0.9rem 0 0; }
 .insp-facts > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--box-edge); font-size: var(--fs-sm); }
 .insp-facts dt { color: var(--muted); }
-.insp-facts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.insp-facts dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
 .insp-foot { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding-top: 0.7rem; border-top: 1px solid var(--box-edge); color: var(--muted); font-size: var(--fs-xs); }
 .slotsec .modrow .mq { color: var(--accent); font-weight: 700; }
 .insp-note { margin-top: 0.6rem; color: var(--muted); font-size: var(--fs-xs); }

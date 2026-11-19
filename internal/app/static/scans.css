@@ -123,7 +123,7 @@
 }
 .sc-stat.hot { border-color: color-mix(in srgb, var(--sc-hot) 55%, transparent); }
 .sc-stat.hot .sc-stat-v { color: var(--sc-hot); }
-.sc-stat-v { font-family: var(--font-num); font-size: var(--fs-3xl); font-weight: 600; color: var(--text-bright); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.sc-stat-v { font-family: var(--font-num); font-size: var(--fs-3xl); font-weight: 500; color: var(--text-bright); font-variant-numeric: tabular-nums; line-height: 1.15; }
 .sc-stat-l { font-size: var(--fs-xs); color: var(--muted-2); }
 
 .sc-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.9rem; align-items: start; }

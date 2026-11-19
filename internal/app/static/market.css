@@ -284,7 +284,7 @@
 }
 .mkt-price-sell,
 .mkt-price-buy {
-  font-weight: 600;
+  font-weight: 500;
 }
 .mkt-price-sell {
   color: var(--accent);
@@ -1079,7 +1079,7 @@ a:hover .pf-hero-gap, a:focus .pf-hero-gap { fill: color-mix(in srgb, var(--unve
 
 /* Item and blueprint tables: the uncovered group and its rows,
    the built-versus-sold proportion, position shares. */
-.pf-group-row td { background: var(--row-alt); color: var(--unverified); font-weight: 600; }
+.pf-group-row td { background: var(--row-alt); color: var(--unverified); font-weight: 500; }
 .pf-unc-row td:first-child { border-left: 3px solid var(--unverified); }
 .pf-prop { display: block; margin-top: 0.2rem; }
 .pf-prop-track { fill: var(--recycled); opacity: 0.45; }

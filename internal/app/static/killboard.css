@@ -191,7 +191,7 @@
 .kb-kill-org { color: var(--muted-2) !important; }
 .kb-kill-where { grid-area: where; align-self: end; font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-kill-region { color: var(--muted-2) !important; margin-left: 0.2rem; }
-.kb-kill-value { grid-area: value; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-bright); }
+.kb-kill-value { grid-area: value; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-bright); }
 .kb-kill-meta { grid-area: meta; align-self: start; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-tag {
   display: inline-block;

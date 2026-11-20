@@ -23,6 +23,15 @@ func (q *Queries) ClearGuidePriceWant(ctx context.Context) error {
 	return err
 }
 
+const clearStructureProbes = `-- name: ClearStructureProbes :exec
+DELETE FROM structure_probes WHERE structure_id = $1::bigint
+`
+
+func (q *Queries) ClearStructureProbes(ctx context.Context, structureID int64) error {
+	_, err := q.db.Exec(ctx, clearStructureProbes, structureID)
+	return err
+}
+
 const closeOrderLifecycle = `-- name: CloseOrderLifecycle :exec
 UPDATE order_lifecycle
 SET closed_at = $1::timestamptz, close_kind = $2, beaten_now = 0
@@ -3655,6 +3664,39 @@ func (q *Queries) ListStatPackStationStats(ctx context.Context) ([]MarketStation
 	return items, nil
 }
 
+const listStructureProbes = `-- name: ListStructureProbes :many
+SELECT character_id
+FROM structure_probes
+WHERE structure_id = $1::bigint
+  AND asked_at >= $2::timestamptz
+`
+
+type ListStructureProbesParams struct {
+	StructureID int64     `json:"structure_id"`
+	Since       time.Time `json:"since"`
+}
+
+// Characters already refused for one structure within the window.
+func (q *Queries) ListStructureProbes(ctx context.Context, arg ListStructureProbesParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listStructureProbes, arg.StructureID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var character_id int64
+		if err := rows.Scan(&character_id); err != nil {
+			return nil, err
+		}
+		items = append(items, character_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStructureResolutions = `-- name: ListStructureResolutions :many
 SELECT structure_id
 FROM structure_names
@@ -3950,6 +3992,32 @@ type PruneOldOrderLifecycleParams struct {
 
 func (q *Queries) PruneOldOrderLifecycle(ctx context.Context, arg PruneOldOrderLifecycleParams) error {
 	_, err := q.db.Exec(ctx, pruneOldOrderLifecycle, arg.ClosedBefore, arg.RowLimit)
+	return err
+}
+
+const pruneStructureProbes = `-- name: PruneStructureProbes :exec
+DELETE FROM structure_probes WHERE asked_at < $1::timestamptz
+`
+
+func (q *Queries) PruneStructureProbes(ctx context.Context, before time.Time) error {
+	_, err := q.db.Exec(ctx, pruneStructureProbes, before)
+	return err
+}
+
+const recordStructureProbe = `-- name: RecordStructureProbe :exec
+INSERT INTO structure_probes (structure_id, character_id, asked_at)
+VALUES ($1::bigint, $2::bigint, $3::timestamptz)
+ON CONFLICT (structure_id, character_id) DO UPDATE SET asked_at = EXCLUDED.asked_at
+`
+
+type RecordStructureProbeParams struct {
+	StructureID int64     `json:"structure_id"`
+	CharacterID int64     `json:"character_id"`
+	AskedAt     time.Time `json:"asked_at"`
+}
+
+func (q *Queries) RecordStructureProbe(ctx context.Context, arg RecordStructureProbeParams) error {
+	_, err := q.db.Exec(ctx, recordStructureProbe, arg.StructureID, arg.CharacterID, arg.AskedAt)
 	return err
 }
 

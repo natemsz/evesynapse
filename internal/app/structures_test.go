@@ -184,6 +184,56 @@ func TestStructureAllFailNegativeCachedAfterExhaustion(t *testing.T) {
 	}
 }
 
+// TestStructureRefusalsSpreadAcrossCycles: every 403 spends ESI error
+// budget, so one cycle asks at most maxStructureRefusalsPerID
+// characters for a structure; the next cycle asks the ones not yet
+// asked, never the same character twice, and the structure settles
+// as missing once every candidate has refused.
+func TestStructureRefusalsSpreadAcrossCycles(t *testing.T) {
+	const n = maxStructureRefusalsPerID + 2
+	deny := map[int64]bool{}
+	for i := range n {
+		deny[int64(9100000001+i)] = true
+	}
+	transport := &structureAttemptTransport{deny: deny, name: "Never Seen"}
+	app, q := buildStructureTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	var chars []db.Character
+	for i := range n {
+		chars = append(chars, scopedCharacter(t, q, user.ID, int64(9100000001+i), fmt.Sprintf("Fixture %d", i), "2026-06-01T00:00:00Z"))
+	}
+	const structureID = int64(1044752365998)
+	app.noteStructureIDs(ctx, structureID)
+
+	app.resolveStructureNames(ctx, chars, &fetchBudget{left: 120})
+	if got := len(transport.attemptOrder()); got != maxStructureRefusalsPerID {
+		t.Fatalf("first cycle asked %d characters, want %d", got, maxStructureRefusalsPerID)
+	}
+	if row, err := q.GetStructureName(ctx, structureID); err != nil || row.State == esi.StructureMissing {
+		t.Fatalf("settled as missing before every candidate was asked: %+v err=%v", row, err)
+	}
+
+	app.resolveStructureNames(ctx, chars, &fetchBudget{left: 120})
+	got := transport.attemptOrder()
+	if len(got) != n {
+		t.Fatalf("after two cycles asked %d times, want each of %d characters once: %v", len(got), n, got)
+	}
+	seen := map[int64]bool{}
+	for _, id := range got {
+		if seen[id] {
+			t.Fatalf("character %d asked twice: %v", id, got)
+		}
+		seen[id] = true
+	}
+	if row, err := q.GetStructureName(ctx, structureID); err != nil || row.State != esi.StructureMissing {
+		t.Fatalf("row after every candidate refused: %+v err=%v, want missing", row, err)
+	}
+}
+
 func TestStructureTransientErrorBlocksNegativeCache(t *testing.T) {
 	transport := &structureAttemptTransport{
 		deny: map[int64]bool{fixtureCharA: true},

@@ -2,6 +2,10 @@ package app
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -111,5 +115,45 @@ func TestWarmContractItemsSkipsStoredDetails(t *testing.T) {
 	}
 	if _, err := q.GetContractDetail(ctx, 103); err == nil {
 		t.Fatal("contract 103 was stored despite the failed fetch")
+	}
+}
+
+// conStopSpammingTransport answers every call the way the EVE server
+// does when one character asks for contract items too fast.
+type conStopSpammingTransport struct{ calls atomic.Int64 }
+
+func (s *conStopSpammingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	s.calls.Add(1)
+	return &http.Response{
+		StatusCode: 520,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(`{"error":"ConStopSpamming, details: {\"remainingTime\": 14385554}"}`)),
+	}, nil
+}
+
+// TestWarmContractItemsStopsOnServerError: a 5xx such as 520
+// ConStopSpamming ends the character's item pass for the cycle. Each
+// failed call spends ESI error budget, and the next contract would
+// get the same answer.
+func TestWarmContractItemsStopsOnServerError(t *testing.T) {
+	transport := &conStopSpammingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	chA := seedCharacter(t, q, user.ID, fixtureCharA, "Contract Tester A")
+	seedSnapshot(t, q, fixtureCharA, esi.SnapContracts, esi.Contracts{
+		{ContractID: 201, Status: "outstanding"},
+		{ContractID: 202, Status: "outstanding"},
+		{ContractID: 203, Status: "outstanding"},
+	})
+	if fetched, limited := app.warmContractItems(ctx, chA); fetched != 0 || limited {
+		t.Fatalf("warm against 520s: fetched=%d limited=%v", fetched, limited)
+	}
+	if n := transport.calls.Load(); n != 1 {
+		t.Fatalf("asked %d times after a 520, want 1", n)
 	}
 }

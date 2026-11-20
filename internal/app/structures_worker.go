@@ -132,7 +132,23 @@ func (app *Application) resolveStructureNames(ctx context.Context, characters []
 	if len(ids) == 0 {
 		return 0, false
 	}
+	// Refusals older than the missing window are stale: the
+	// character may have gained access since.
+	if err := app.queries.PruneStructureProbes(ctx, now.Add(-structureMissingWindow)); err != nil {
+		logging.Errorf("worker: structures: prune probes: %v", err)
+	}
 	corpIdx := app.corpStructureIndex(ctx)
+	refusals, unreachable := 0, 0
+	defer func() {
+		if refusals > 0 || unreachable > 0 {
+			logging.Infof("worker: structures: %d lookup(s) refused this cycle, %d structure(s) no character can see", refusals, unreachable)
+		}
+	}()
+	settleMissing := func(id int64) {
+		app.storeStructureName(ctx, id, "", esi.StructureMissing, esi.StructureSourceESI, now)
+		app.clearStructureProbes(ctx, id)
+		unreachable++
+	}
 idsLoop:
 	for _, id := range ids {
 		if ctx.Err() != nil {
@@ -143,6 +159,7 @@ idsLoop:
 		if name, ok := corpIdx.names[id]; ok {
 			if app.storeStructureName(ctx, id, name, esi.StructureResolved, esi.StructureSourceCorp, now) {
 				app.esi.StoreStructureName(id, name)
+				app.clearStructureProbes(ctx, id)
 				resolved++
 			}
 			continue
@@ -152,11 +169,33 @@ idsLoop:
 		if app.deferFetch(ctx, module.FetchKindStructure, strconv.FormatInt(id, 10), now) {
 			continue
 		}
-		// Tier 1: ask every eligible character, best bet first,
-		// until one can name it.
+		// Tier 1: ask the eligible characters, best bet first,
+		// until one can name it. A character that was refused
+		// for this structure is not asked again within the
+		// missing window, so each cycle moves on to the next
+		// ones; every refusal costs ESI error budget.
 		candidates := app.structureResolverCandidates(ctx, characters, corpIdx.owner[id])
-		negatives := 0
+		if len(candidates) == 0 {
+			continue
+		}
+		asked := map[int64]bool{}
+		if prior, err := app.queries.ListStructureProbes(ctx, db.ListStructureProbesParams{StructureID: id, Since: now.Add(-structureMissingWindow)}); err == nil {
+			for _, cid := range prior {
+				asked[cid] = true
+			}
+		}
+		refusedHere := 0
+		settled := false
 		for _, ch := range candidates {
+			if asked[ch.CharacterID] {
+				continue
+			}
+			if refusedHere >= maxStructureRefusalsPerID {
+				continue idsLoop // the rest of its candidates wait for a later cycle
+			}
+			if refusals >= maxStructureRefusalsPerCycle || app.esiErrorBudgetBelow(structureErrorBudgetReserve) {
+				break idsLoop // structure names wait; core sync keeps the budget
+			}
 			if ctx.Err() != nil || !allowance.take() {
 				break idsLoop
 			}
@@ -171,21 +210,25 @@ idsLoop:
 					// 403 naming the scope): settle it for this
 					// character and let another candidate try.
 					app.recordFetchRefusal(ctx, ch.CharacterID, structureNamesKind, err)
-					negatives++
+					refusals++
+					refusedHere++
 					continue
 				}
 				if code, has := esi.StatusCode(err); has && (code == 403 || code == 404) {
 					// This character can't name it; another
-					// still might. Only an exhausted set earns
-					// the negative cache entry.
-					negatives++
+					// still might.
+					app.recordStructureProbe(ctx, id, ch.CharacterID, now)
+					asked[ch.CharacterID] = true
+					refusals++
+					refusedHere++
 					continue
 				}
 				logging.Errorf("worker: structures: resolve structure %d via character %d: %v", id, ch.CharacterID, err)
 				continue
 			}
 			if info.Name == "" {
-				negatives++
+				app.recordStructureProbe(ctx, id, ch.CharacterID, now)
+				asked[ch.CharacterID] = true
 				continue
 			}
 			if app.storeStructureName(ctx, id, info.Name, esi.StructureResolved, esi.StructureSourceESI, now) {
@@ -193,17 +236,55 @@ idsLoop:
 				app.storeStructureLookupContext(ctx, id, info, now)
 				resolved++
 			}
-			negatives = -1 // settled: not an all-negative outcome
+			app.clearStructureProbes(ctx, id)
+			settled = true
 			break
 		}
-		// Every candidate answered 403/404: remember the answer
-		// so this id isn't re-asked for a day. A pass interrupted
-		// by transient errors leaves the row pending instead.
-		if len(candidates) > 0 && negatives == len(candidates) {
-			app.storeStructureName(ctx, id, "", esi.StructureMissing, esi.StructureSourceESI, now)
+		// Every candidate has now answered 403/404, this cycle or
+		// an earlier one: remember the answer so this id isn't
+		// re-asked for a day. Candidates not yet asked (a transient
+		// error, or a cap reached) leave the row pending.
+		if !settled && allAsked(candidates, asked) {
+			settleMissing(id)
 		}
 	}
 	return resolved, false
+}
+
+// allAsked reports whether every candidate has a refusal on record.
+func allAsked(candidates []db.Character, asked map[int64]bool) bool {
+	for _, ch := range candidates {
+		if !asked[ch.CharacterID] {
+			return false
+		}
+	}
+	return true
+}
+
+// recordStructureProbe remembers that a character could not name a
+// structure, so later cycles ask the next candidate instead.
+func (app *Application) recordStructureProbe(ctx context.Context, structureID, characterID int64, now time.Time) {
+	if err := app.queries.RecordStructureProbe(ctx, db.RecordStructureProbeParams{StructureID: structureID, CharacterID: characterID, AskedAt: now}); err != nil {
+		logging.Errorf("worker: structures: record probe %d/%d: %v", structureID, characterID, err)
+	}
+}
+
+// clearStructureProbes drops a settled structure's refusals.
+func (app *Application) clearStructureProbes(ctx context.Context, structureID int64) {
+	if err := app.queries.ClearStructureProbes(ctx, structureID); err != nil {
+		logging.Errorf("worker: structures: clear probes %d: %v", structureID, err)
+	}
+}
+
+// esiErrorBudgetBelow reports whether ESI's error budget, as its last
+// answer reported it, is under reserve for the current window. Low
+// priority passes stop there so core sync never runs out.
+func (app *Application) esiErrorBudgetBelow(reserve int) bool {
+	if app.esi == nil {
+		return false
+	}
+	remain, reset := app.esi.ErrorBudgetStatus()
+	return reset != 0 && time.Now().Unix() < reset && remain < reserve
 }
 
 // storeStructureLookupContext persists the owner/system/type

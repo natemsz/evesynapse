@@ -72,26 +72,31 @@ func SanitizeLinked(raw string, inApp func(href string) (string, bool)) template
 	// An entry that was not written (an <a> whose href was unusable,
 	// or anything nested past MailMaxDepth) still takes its place,
 	// so that its close tag is swallowed with it.
+	// An entry's name is the tag as the source writes it; element
+	// is the tag written in its place (EVE's <color> is written as
+	// <font>), so the source's own close tag still finds it.
 	type openTag struct {
 		name    string
+		element string
 		written bool
 	}
 	var open []openTag
-	openTagAs := func(name, markup string, write bool) {
+	openElementAs := func(name, element, markup string, write bool) {
 		if len(open) >= MailMaxDepth {
 			write = false
 		}
 		if write {
 			out.WriteString(markup)
 		}
-		open = append(open, openTag{name: name, written: write})
+		open = append(open, openTag{name: name, element: element, written: write})
 	}
+	openTagAs := func(name, markup string, write bool) { openElementAs(name, name, markup, write) }
 	closeDownTo := func(depth int) {
 		for len(open) > depth {
 			top := open[len(open)-1]
 			open = open[:len(open)-1]
 			if top.written {
-				out.WriteString("</" + top.name + ">")
+				out.WriteString("</" + top.element + ">")
 			}
 		}
 	}
@@ -173,8 +178,19 @@ func SanitizeLinked(raw string, inApp func(href string) (string, bool)) template
 		i = end + 1
 
 		if closing {
-			if MailAllowedTags[name] && !MailVoidTags[name] {
+			if (MailAllowedTags[name] && !MailVoidTags[name]) || name == "color" {
 				closeTag(name)
+			}
+			continue
+		}
+		if name == "color" {
+			// EVE's own colour tag, as the game writes it into
+			// titles and bios: <color=0xAARRGGBB>. It is written
+			// as <font> with the colour checked like any other.
+			if c, ok := FontColor(eveColorValue(attrs)); ok {
+				openElementAs("color", "font", `<font color="`+c+`">`, true)
+			} else {
+				openElementAs("color", "font", "", false)
 			}
 			continue
 		}
@@ -225,6 +241,29 @@ func SanitizeLinked(raw string, inApp func(href string) (string, bool)) template
 		}
 	}
 	return finish()
+}
+
+// eveColorValue reads the value of EVE's <color=...> tag: the text
+// after '=', unquoted, with a 0x prefix taken as hex like '#'.
+func eveColorValue(attrs string) string {
+	v := strings.TrimSpace(attrs)
+	v = strings.TrimSpace(strings.TrimSuffix(v, "/"))
+	v, ok := strings.CutPrefix(v, "=")
+	if !ok {
+		return ""
+	}
+	v = strings.Trim(strings.TrimSpace(v), `"'`)
+	if len(v) > 2 && (v[:2] == "0x" || v[:2] == "0X") {
+		v = v[2:]
+	}
+	return v
+}
+
+// Title reads a corporation title or character title as ESI returns
+// it: EVE escapes decoded, then sanitized like a bio, with EVE's
+// colour tags kept and game links pointed at their in-app pages.
+func Title(raw string) template.HTML {
+	return SanitizeLinked(DecodeEVEEscapes(strings.TrimSpace(raw)), EVELinkPath)
 }
 
 // WriteMailText appends a text run: entities decoded, then

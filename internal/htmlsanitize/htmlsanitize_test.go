@@ -260,3 +260,15 @@ func TestFontColor(t *testing.T) {
 		t.Errorf("Sanitize font colours:\n got %s\nwant %s", got, want)
 	}
 }
+
+// TestEVEColorTag: EVE's <color=0xAARRGGBB> tag, as titles carry
+// it, is written as a checked <font> colour and closed by its own
+// </color>; an unreadable colour leaves the text bare, and a stray
+// </color> never closes anything else.
+func TestEVEColorTag(t *testing.T) {
+	got := string(Title(`<color=0xFFA620AA>CEO</color> <color='0xff000000'>dark</color> <b>x</color>y</b>`))
+	want := `<font color="#a620aa">CEO</font> dark <b>xy</b>`
+	if got != want {
+		t.Errorf("Title colour tags:\n got %s\nwant %s", got, want)
+	}
+}

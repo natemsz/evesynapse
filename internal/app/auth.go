@@ -584,29 +584,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		TokenExpiry:  sql.NullTime{Time: token.Expiry.UTC(), Valid: !token.Expiry.IsZero()},
 	}
 
-	// Land on the account this sign-in belongs to (auth_confirm.go):
-	// the signed-in account for a character new to it or already on
-	// it, the character's own account for a signed-out sign-in. A
-	// character on another account of the same player, and a
-	// signed-out character on no account, wait for the player to say
-	// where they go.
-	plan, err := app.planSignIn(ctx, app.userID(ctx), characterID, ownerHash)
-	if err != nil {
-		logging.Errorf("sso callback: plan account for character %d: %v", characterID, err)
-		fail("save")
-		return
-	}
-	if plan.Step != "link" {
-		if err := app.stashPendingLink(ctx, in); err != nil {
-			logging.Errorf("sso callback: hold sign-in for character %d: %v", characterID, err)
-			fail("save")
-			return
-		}
-		http.Redirect(w, r, "/auth/confirm", http.StatusSeeOther)
-		return
-	}
-	notice, returnTo := app.linkNotice(ctx, plan, in)
-	app.finishLink(w, r, plan.UserID, in, notice, returnTo)
+	app.routeVerifiedSignIn(w, r, in)
 }
 
 // handleSignOut destroys the session server-side and expires the cookie.

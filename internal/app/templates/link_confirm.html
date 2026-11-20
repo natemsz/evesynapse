@@ -1,5 +1,5 @@
 {{define "title"}}{{with .Confirm}}{{if eq .Kind "new"}}New account{{else if eq .Kind "move"}}Move character{{else}}Add character{{end}}{{end}}{{end}}
-{{define "pagetitle"}}<h1><span class="gt">{{with .Confirm}}{{if eq .Kind "new"}}One more step{{else if eq .Kind "move"}}Already on another account{{else}}Add a character{{end}}{{end}}</span></h1>{{end}}
+{{define "pagetitle"}}<h1><span class="gt">{{with .Confirm}}{{if eq .Kind "add"}}Add a character{{else}}Which account?{{end}}{{end}}</span></h1>{{end}}
 {{define "content"}}
 {{with .Confirm}}
 <section class="card lk-confirm" data-fold="never">

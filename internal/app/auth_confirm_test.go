@@ -51,3 +51,26 @@ func TestSignInPlanAsksBeforeMovingOrCreating(t *testing.T) {
 		}
 	}
 }
+
+// TestSignInWhilePendingFactorAddsToNoAccount: a session that has not
+// passed its second factor holds no account a new sign-in could add a
+// character to; the half-finished sign-in is dropped instead.
+func TestSignInWhilePendingFactorAddsToNoAccount(t *testing.T) {
+	app := linkApp(t)
+	ctx, err := app.sessions.Load(context.Background(), "")
+	if err != nil {
+		t.Fatalf("load session: %v", err)
+	}
+	app.sessions.Put(ctx, sessionAuthenticated, true)
+	app.sessions.Put(ctx, sessionUserID, 7)
+	if got := app.signInSessionUser(ctx); got != 7 {
+		t.Fatalf("full session: account %d, want 7", got)
+	}
+	app.sessions.Put(ctx, session2FAPending, true)
+	if got := app.signInSessionUser(ctx); got != 0 {
+		t.Fatalf("pending session: account %d, want 0", got)
+	}
+	if app.userID(ctx) != 0 || app.sessions.GetBool(ctx, sessionAuthenticated) || app.sessions.GetBool(ctx, session2FAPending) {
+		t.Fatal("the pending sign-in was not dropped from the session")
+	}
+}

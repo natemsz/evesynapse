@@ -407,3 +407,47 @@ func (app *Application) confirmExit(ctx context.Context) string {
 	}
 	return "/"
 }
+
+// routeVerifiedSignIn sends a verified (non-identity) sign-in where
+// it belongs: the signed-in account for a character new to it or
+// already on it, the character's own account for a signed-out
+// sign-in. A character on another account of the same player, and a
+// signed-out character on no account, wait on /auth/confirm for the
+// player to say where they go.
+func (app *Application) routeVerifiedSignIn(w http.ResponseWriter, r *http.Request, in linkCharacterInput) {
+	ctx := r.Context()
+	plan, err := app.planSignIn(ctx, app.signInSessionUser(ctx), in.CharacterID, in.OwnerHash)
+	if err != nil {
+		logging.Errorf("sso callback: plan account for character %d: %v", in.CharacterID, err)
+		http.Redirect(w, r, "/?error=save", http.StatusSeeOther)
+		return
+	}
+	if plan.Step != "link" {
+		if err := app.stashPendingLink(ctx, in); err != nil {
+			logging.Errorf("sso callback: hold sign-in for character %d: %v", in.CharacterID, err)
+			http.Redirect(w, r, "/?error=save", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/auth/confirm", http.StatusSeeOther)
+		return
+	}
+	notice, returnTo := app.linkNotice(ctx, plan, in)
+	app.finishLink(w, r, plan.UserID, in, notice, returnTo)
+}
+
+// signInSessionUser is the account a new sign-in may add to: the
+// session's, unless the session still owes its second factor. A
+// sign-in that has not passed the factor holds no account, so it is
+// dropped and the new sign-in starts from signed out (and is asked
+// for the factor of whatever account it lands on).
+func (app *Application) signInSessionUser(ctx context.Context) int64 {
+	if !app.sessions.GetBool(ctx, session2FAPending) {
+		return app.userID(ctx)
+	}
+	app.sessions.Remove(ctx, sessionUserID)
+	app.sessions.Remove(ctx, sessionAuthenticated)
+	app.sessions.Remove(ctx, sessionLinkIntent)
+	app.sessions.Put(ctx, session2FAPending, false)
+	app.sessions.Put(ctx, session2FAMustEnroll, false)
+	return 0
+}

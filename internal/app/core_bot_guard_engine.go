@@ -32,7 +32,7 @@ func (app *Application) botGuardMiddleware() func(http.Handler) http.Handler {
 		CacheDir:        app.cfg.ranviaCacheDir,
 		Network:         app.networkOf,
 		SignedIn:        app.hasVerifiedSession,
-		VerifiedCrawler: app.crawlerVerifier().verified,
+		VerifiedCrawler: app.verifiedCrawler,
 		ClientIP:        clientAddr,
 		RulesFile:       app.cfg.botGuardSettingsPath,
 		LogRefusals:     app.cfg.ranviaLogRefusals,
@@ -56,6 +56,20 @@ func (app *Application) botGuardMiddleware() func(http.Handler) http.Handler {
 			guarded.ServeHTTP(w, r)
 		})
 	}
+}
+
+// verifiedCrawler reports a request from the search crawler its
+// User-Agent names. Both guards share the one check: the Ranvia
+// loader's reverse-and-forward DNS test, made on first use, so its
+// cached verdicts carry over when Ranvia takes over from the built-in
+// guard.
+func (app *Application) verifiedCrawler(r *http.Request) bool {
+	app.crawlerCheckOnce.Do(func() {
+		if app.crawlerCheck == nil {
+			app.crawlerCheck = ranvia.CrawlerCheck(clientAddr)
+		}
+	})
+	return app.crawlerCheck(r)
 }
 
 // botGuardSecret is the secret New loaded from the database, or a

@@ -506,7 +506,7 @@ func (app *Application) blockScrapers(next http.Handler) http.Handler {
 			return
 		}
 		// A verified search crawler is never counted.
-		if app.crawlerVerifier().verified(r) {
+		if app.verifiedCrawler(r) {
 			next.ServeHTTP(w, r)
 			return
 		}

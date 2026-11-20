@@ -13,7 +13,7 @@ import (
 // and synthetic botnet fingerprints receive an immediate 403 Forbidden without
 // reaching inner handlers, while standard browsers and legitimate search engines pass through.
 func TestBlockScrapers(t *testing.T) {
-	app := &Application{crawlers: fakeCrawlerDNS(nil, nil)}
+	app := &Application{crawlerCheck: func(*http.Request) bool { return false }}
 	called := false
 	handler := app.blockScrapers(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -270,35 +270,18 @@ func TestBlockScrapers(t *testing.T) {
 const attackChromeUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
 
 func botGuardTestApp() (*Application, http.Handler) {
-	app := &Application{crawlers: fakeCrawlerDNS(nil, nil)}
+	app := &Application{crawlerCheck: func(*http.Request) bool { return false }}
 	return app, app.blockScrapers(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 }
 
-// fakeCrawlerDNS is a crawler verifier answering from maps
-// (address -> reverse names, name -> addresses) instead of DNS.
-func fakeCrawlerDNS(reverse, forward map[string][]string) *crawlerVerifier {
-	v := newCrawlerVerifier()
-	v.lookupAddr = func(_ context.Context, addr string) ([]string, error) { return reverse[addr], nil }
-	v.lookupHost = func(_ context.Context, host string) ([]string, error) { return forward[host], nil }
-	return v
-}
-
-// TestBotGuardVerifiedCrawler: a search crawler whose address
-// resolves under its engine's domain and back is never counted;
-// the same User-Agent from an address that does not check out is
-// counted like any other client.
+// TestBotGuardVerifiedCrawler: a request the search crawler check
+// verifies is never counted; the same User-Agent from an address the
+// check does not verify is counted like any other client.
 func TestBotGuardVerifiedCrawler(t *testing.T) {
 	const googlebotUA = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
-	app := &Application{crawlers: fakeCrawlerDNS(
-		map[string][]string{
-			"66.249.66.1": {"crawl-66-249-66-1.googlebot.com."},
-			"203.0.113.7": {"crawl-66-249-66-1.googlebot.com."}, // claims a Google name it does not own
-			"203.0.113.8": {"bot.example.com."},
-		},
-		map[string][]string{"crawl-66-249-66-1.googlebot.com": {"66.249.66.1"}},
-	)}
+	app := &Application{crawlerCheck: func(r *http.Request) bool { return r.RemoteAddr == "66.249.66.1:4000" }}
 	h := app.blockScrapers(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -315,20 +298,12 @@ func TestBotGuardVerifiedCrawler(t *testing.T) {
 			t.Fatalf("verified Googlebot page %d: status %d, want 200", i, code)
 		}
 	}
-	for _, remote := range []string{"203.0.113.7:4000", "203.0.113.8:4000"} {
-		code := 0
-		for i := 0; i < botAssetFreePages+1; i++ {
-			code = crawl(remote)
-		}
-		if code != http.StatusTooManyRequests {
-			t.Fatalf("unverified Googlebot from %s: status %d, want 429", remote, code)
-		}
+	code := 0
+	for i := 0; i < botAssetFreePages+1; i++ {
+		code = crawl("203.0.113.7:4000")
 	}
-	req := httptest.NewRequest(http.MethodGet, "/intel/kill/139000000/", nil)
-	req.RemoteAddr = "66.249.66.1:4000"
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)")
-	if app.crawlers.verified(req) {
-		t.Fatal("verified Googlebot address must not vouch for a Bingbot claim")
+	if code != http.StatusTooManyRequests {
+		t.Fatalf("unverified Googlebot: status %d, want 429", code)
 	}
 }
 

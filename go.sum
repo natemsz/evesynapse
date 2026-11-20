@@ -144,7 +144,7 @@ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EV
 gopkg.in/errgo.v2 v2.1.0/go.mod h1:hNsd1EY+bozCKY1Ytp96fpM3vjJbqLJn88ws8XvfDNI=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-ranvia.io/go v0.4.0 h1:qAtFRxibCNREZkg6BDMW8LK3UsPJmTOWUC1aJ4YodKo=
-ranvia.io/go v0.4.0/go.mod h1:/bRHzGTuaLClzQjMAoZLu151yVZwZiCY630wncaLBEs=
+ranvia.io/go v0.4.1 h1:DOOpT8ZDXbcO6yYYuwQzT2UhiYUH8YPDLmj9kkNe2SE=
+ranvia.io/go v0.4.1/go.mod h1:/bRHzGTuaLClzQjMAoZLu151yVZwZiCY630wncaLBEs=
 rsc.io/qr v0.2.0 h1:6vBLea5/NRMVTz8V66gipeLycZMl/+UlFmk8DvqQ6WY=
 rsc.io/qr v0.2.0/go.mod h1:IF+uZjkb9fqyeF/4tlBoynqmQxUoPfWEKh921coOuXs=

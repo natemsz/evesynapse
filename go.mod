@@ -18,7 +18,7 @@ require (
 	golang.org/x/image v0.48.0
 	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sync v0.25.0
-	ranvia.io/go v0.4.0
+	ranvia.io/go v0.4.1
 	rsc.io/qr v0.2.0
 )
 
@@ -41,5 +41,3 @@ require (
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
 )
-
-replace ranvia.io/go => /home/natemsz/workspace/ranvia/loaders/go

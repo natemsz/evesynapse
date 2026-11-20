@@ -644,7 +644,8 @@ header a.navlink.utility { font-size: var(--fs-xs); color: var(--muted); }
   backdrop-filter: blur(20px) saturate(1.25);
 }
 .branch .menu a, .switcher-menu a {
-  color: #d8c3a5;
+  /* Near the scheme's text, a step under the category label. */
+  color: color-mix(in srgb, var(--text) 80%, var(--muted));
   padding: 0.35rem 0.6rem;
   border-radius: var(--r-sm);
   white-space: nowrap;

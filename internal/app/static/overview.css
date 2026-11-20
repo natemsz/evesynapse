@@ -202,7 +202,14 @@
 .ov-table tr.sel td { background: var(--glass); }
 .ov-cell { display: flex; align-items: center; gap: 0.6rem; color: var(--text); }
 .ov-cell:hover { text-decoration: none; }
-.ov-lvl { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; border-radius: var(--r-sm); background: var(--glass); border: 1px solid var(--box-edge); font-family: var(--font-display); font-weight: 700; }
+.ov-lvl { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; border-radius: var(--r-sm); background: var(--glass); border: 1px solid var(--box-edge); font-family: var(--font-display); font-weight: var(--fw-display-strong); line-height: 1; }
+/* The numeral's box hugs its capitals (text-box trim), so the
+   tile's flex centring centres the glyphs themselves rather than
+   a line box with the face's taller ascent above them. */
+.ov-lvl > span { display: block; }
+@supports (text-box: trim-both cap alphabetic) {
+  .ov-lvl > span { text-box: trim-both cap alphabetic; }
+}
 .ov-lvl.zero { color: var(--muted); }
 .ov-table .ov-nm { font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 400; }
 .ov-tag { margin-left: 0.45rem; padding: 0.05rem 0.4rem; border-radius: 999px; }

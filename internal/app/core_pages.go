@@ -64,6 +64,8 @@ type pageData struct {
 	Link *linkView
 	// Confirm asks where a waiting sign-in goes (/auth/confirm).
 	Confirm *confirmView
+	// Merge finishes moving one account into another (/auth/merge).
+	Merge *mergeView
 
 	// CorpSettings is the /corporations/settings/ page (corp_select.go).
 	CorpSettings *corpSettingsView

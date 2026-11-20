@@ -374,6 +374,8 @@ func (app *Application) handleLinkConfirmPost(w http.ResponseWriter, r *http.Req
 	case kind == "move" && action == "move":
 		app.sessions.Remove(ctx, sessionPendingLink)
 		app.finishLink(w, r, plan.UserID, in, in.Name+" was moved to this account.", "/characters/")
+	case kind == "move" && action == "merge":
+		app.startMerge(w, r, plan, in)
 	case kind == "move" && action == "switch":
 		app.sessions.Remove(ctx, sessionPendingLink)
 		app.finishLink(w, r, plan.OnAccount, in, "You are now signed in to the account "+in.Name+" is on.", "/characters/")

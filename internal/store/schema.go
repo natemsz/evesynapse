@@ -974,6 +974,11 @@ var pgBotGuardSecretSchema string
 //go:embed schema_pg/161_sde_character_titles.sql
 var pgSDECharacterTitlesSchema string
 
+// Step 162: when an account emptied by a merge is removed.
+//
+//go:embed schema_pg/162_user_delete_after.sql
+var pgUserDeleteAfterSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1163,6 +1168,7 @@ func schemaSteps() []schemaStep {
 		{159, "alliance_bridges", pgAllianceBridgesSchema, ""},
 		{160, "bot_guard_secret", pgBotGuardSecretSchema, ""},
 		{161, "sde_character_titles", pgSDECharacterTitlesSchema, ""},
+		{162, "user_delete_after", pgUserDeleteAfterSchema, ""},
 	}
 }
 

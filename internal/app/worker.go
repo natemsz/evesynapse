@@ -1016,6 +1016,7 @@ func (c *cycleState) warmNames(ctx context.Context, characters []db.Character) {
 	runGuarded("scans", func() { app.pruneScans(ctx) })
 	runGuarded("channels", func() { app.pruneIntelReports(ctx) })
 	runGuarded("2fa events", func() { app.pruneWebAuthnEvents(ctx) })
+	runGuarded("emptied accounts", func() { app.deleteDueAccounts(ctx) })
 }
 
 // cycleSummary builds the one-line status/log summary of a cycle.

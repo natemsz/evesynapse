@@ -19,9 +19,10 @@ func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 		".sidenav a.navlink,\n.sidebar-account-footer .navlink,\n.branch > summary {\n  text-transform: uppercase;\n}",
 		// Header links keep the SemiBold face.
 		"header a.navlink {\n  font-family: var(--font-display);\n  font-weight: 600;\n  font-synthesis-weight: none;\n  text-transform: uppercase;",
-		// Dropdown items: SemiBold, in their labels' own case,
-		// tighter letter spacing.
-		".branch .menu a, .switcher .menu a, .switcher-menu a {\n  font-family: var(--font-display);\n  font-weight: 600;\n  font-synthesis-weight: none;\n  text-transform: none;\n  letter-spacing: 0.03em;",
+		// Dropdown items: the display weight token (one step
+		// lighter on Windows), in their labels' own case, tighter
+		// letter spacing.
+		".branch .menu a, .switcher .menu a, .switcher-menu a {\n  font-family: var(--font-display);\n  font-weight: var(--fw-display);\n  font-synthesis-weight: none;\n  text-transform: none;\n  letter-spacing: 0.03em;",
 		// Pop-menu items too.
 		".menu-pop-body a, .menu-pop-body button {\n  display: block;\n  width: 100%;\n  text-align: left;\n  padding: 0.45rem 0.6rem;\n  font-family: var(--font-display);\n  font-weight: 600;\n  text-transform: uppercase;",
 		// The sidenav layout rule carries no casing of its own: the

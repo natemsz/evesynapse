@@ -55,11 +55,11 @@
 .ov-portrait img, .ov-ship-art img { display: block; width: 56px; height: 56px; border-radius: var(--r-sm); background: var(--input-bg); border: 1px solid var(--box-edge); object-fit: cover; }
 .ov-secchip { position: absolute; left: 50%; bottom: -0.35rem; transform: translateX(-50%); padding: 0.02rem 0.35rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--box-edge); color: var(--text); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.1; z-index: 1; }
 .ov-entity-main { min-width: 0; flex: 1 1 auto; }
-/* Each card leads with one line of data at one size: the pilot's
-   name, the ship, the soonest extractor expiry. Names are data, so
-   they take the body face; the ship type is gold because it links.
-   The lines under it are plain sub-lines. */
-.ov-nm, .ov-ship-title, .ov-pibig { font-family: var(--font-body); font-weight: 600; font-size: var(--fs-md); line-height: 1.25; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The pilot's name leads its card. The ship line and the soonest
+   extractor expiry are plain data at the size of the card rows; the
+   ship type is gold because it links. */
+.ov-nm { font-family: var(--font-body); font-weight: 600; font-size: var(--fs-md); line-height: 1.25; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-ship-title, .ov-pibig { font-family: var(--font-body); font-weight: 400; font-size: var(--fs-xs); line-height: 1.35; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-title, .ov-corp, .ov-alliance, .ov-ship-group { font-size: var(--fs-xs); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-title { color: var(--text); }
 .ov-alliance, .ov-ship-group, .ov-nm.muted { color: var(--muted); }

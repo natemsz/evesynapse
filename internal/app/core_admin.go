@@ -96,6 +96,8 @@ type adminAccountRow struct {
 	Created    string
 	LastSeen   string
 	Characters int64
+	// DeleteAfter is when an account emptied by a merge is removed.
+	DeleteAfter string
 }
 
 // adminAccountView is the one account the page is showing.
@@ -156,7 +158,11 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 			rows, view.EmptyMore = rows[:adminEmptyListed], true
 		}
 		for _, row := range rows {
-			view.Empty = append(view.Empty, adminAccountRow{ID: row.ID, Created: rfc3339(row.CreatedAt), LastSeen: rfc3339(row.LastSeenAt)})
+			acct := adminAccountRow{ID: row.ID, Created: rfc3339(row.CreatedAt), LastSeen: rfc3339(row.LastSeenAt)}
+			if row.DeleteAfter.Valid {
+				acct.DeleteAfter = rfc3339(row.DeleteAfter.Time)
+			}
+			view.Empty = append(view.Empty, acct)
 		}
 	}
 

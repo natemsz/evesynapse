@@ -30,9 +30,14 @@
   {{with .Account}}{{template "lk-account" .}}{{end}}
   <div class="lk-choices">
     <form method="post" action="/auth/confirm" class="lk-choice">
-      <h3>Move it here</h3>
-      <p>{{.Name}} leaves the other account and joins this one, with its data.</p>
+      <h3>Move just {{.Name}}</h3>
+      <p>{{.Name}} leaves the other account and joins this one, with its data. Everything else stays where it is.</p>
       <button class="btn" type="submit" name="action" value="move">Move {{.Name}} here</button>
+    </form>
+    <form method="post" action="/auth/confirm" class="lk-choice">
+      <h3>Move everything here</h3>
+      <p>All {{.OtherCount}} character{{if ne .OtherCount 1}}s{{end}} on that account, plus its saved fits, skill plans, watchlist and settings, move to this one. Where both accounts have a setting, this one's is kept. The emptied account is deleted after 30 days.</p>
+      <button class="btn btn-quiet" type="submit" name="action" value="merge">Move everything here</button>
     </form>
     <form method="post" action="/auth/confirm" class="lk-choice">
       <h3>Use the other account</h3>

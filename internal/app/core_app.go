@@ -446,9 +446,10 @@ type Application struct {
 	// random one where there is none.
 	botGuardKey     []byte
 	botGuardKeyOnce sync.Once
-	// crawlers verifies search engine crawlers (core_bot_crawlers.go).
-	crawlers     *crawlerVerifier
-	crawlersOnce sync.Once
+	// crawlerCheck verifies search engine crawlers for both guards
+	// (verifiedCrawler, core_bot_guard_engine.go).
+	crawlerCheck     func(*http.Request) bool
+	crawlerCheckOnce sync.Once
 
 	// The public service summary's cache and throttle
 	// (core_status.go).

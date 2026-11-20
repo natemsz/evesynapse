@@ -4,7 +4,15 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-<p><small>Already have an EveSynapse account? <a href="/auth/login">Log in</a></small></p>
+{{with .Link}}{{with .Account}}<section class="card lk-adding" data-fold="never">
+  <h2>Adding to your account</h2>
+  <ul class="lk-account">
+    {{range .Chars}}<li><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}</li>{{end}}
+    {{if .More}}<li class="lk-more">and {{.More}} more</li>{{end}}
+  </ul>
+  <p><small>The character you pick on EVE's login page joins this account. If EVE shows the characters of a different EVE account, switch EVE accounts there first. Not your account? <button class="linkbtn" type="submit" form="lk-signout">Sign out</button></small></p>
+  <form id="lk-signout" method="post" action="/auth/logout" hidden></form>
+</section>{{else}}<p><small>Already have an EveSynapse account? <a href="/auth/login">Log in</a> first, then link more characters from inside it.</small></p>{{end}}{{end}}
 
 {{with .Link}}
 {{if eq .Step "cards"}}
@@ -76,7 +84,8 @@
 <section class="card" data-fold="never">
   <h2>This is what will be turned on</h2>
   <p class="lk-top"><a href="#lk-actions">Jump to bottom <span aria-hidden="true">&darr;</span></a></p>
-  {{if .Remembered}}<p><small>These are the choices you made last time. Change anything, or continue as they are.</small></p>{{end}}
+  {{if .Remembered}}<p><small>These are the choices you made last time. Change anything, or continue as they are.</small></p>
+  {{if not .Signup}}<p class="lk-actions"><a class="btn" href="{{.Continue}}">Link with these permissions</a></p>{{end}}{{end}}
   <p class="lk-count">EVE will ask for <strong data-lk-count>{{.Count}}</strong> permission{{if ne .Count 1}}s{{end}}{{if .Count}}, <span data-lk-required>{{.Required}}</span> of them needed by the features below{{else}}: you only sign in, and nothing about your characters is read{{end}}.</p>
   <form method="get" action="{{if .Signup}}/auth/link{{else}}/auth/eve{{end}}" data-lk-form>
     <input type="hidden" name="submitted" value="1">
@@ -112,7 +121,7 @@
     {{end}}
 
     <p class="lk-actions" id="lk-actions">
-      <button class="btn" type="submit">{{if .Signup}}Continue{{else}}Complete sign up{{end}}</button>
+      <button class="btn" type="submit">{{if .Signup}}Continue{{else}}Link character{{end}}</button>
       <a href="{{.Back}}">Go back</a>
       <a href="{{.Full}}#lk-actions" data-tick-all>Tick every permission</a>
     </p>

@@ -62,6 +62,8 @@ type pageData struct {
 
 	// Link is the sign-up and character-link chooser (/auth/link).
 	Link *linkView
+	// Confirm asks where a waiting sign-in goes (/auth/confirm).
+	Confirm *confirmView
 
 	// CorpSettings is the /corporations/settings/ page (corp_select.go).
 	CorpSettings *corpSettingsView

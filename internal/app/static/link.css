@@ -95,3 +95,27 @@
    the intel channels file reports by is part of the choice. */
 .lk-axon { margin-top: 1rem; border-top: 1px solid rgba(255,255,255,.08); padding-top: 0.8rem; }
 .lk-axon-dl { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* Which account a link lands on (/auth/link signed in, /auth/confirm):
+   the account shown by its characters, and the confirm page's choices. */
+.lk-account { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; margin: 0.4rem 0 0.6rem; padding: 0; list-style: none; }
+.lk-account li { display: flex; align-items: center; gap: 0.4rem; font-size: var(--fs-sm); }
+.lk-account .portrait { border-radius: 3px; }
+.lk-account .lk-more { color: var(--muted); }
+.lk-who { display: flex; align-items: center; gap: 0.7rem; margin: 0 0 0.4rem; font-size: var(--fs-lg); }
+.lk-who .portrait { border-radius: 4px; }
+.lk-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 0.6rem; margin: 0.8rem 0; }
+.lk-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.7rem 0.9rem 0.8rem;
+  border: 1px solid #262626;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--row) 85%, transparent);
+}
+.lk-choice h3 { margin: 0; }
+.lk-choice p { margin: 0 0 0.3rem; color: var(--muted); }
+.lk-choice .btn { margin-top: auto; }
+.lk-cancel { margin: 0.6rem 0 0; }

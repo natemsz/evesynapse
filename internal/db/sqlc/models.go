@@ -2655,6 +2655,12 @@ type StructureName struct {
 	Source      string       `json:"source"`
 }
 
+type StructureProbe struct {
+	StructureID int64     `json:"structure_id"`
+	CharacterID int64     `json:"character_id"`
+	AskedAt     time.Time `json:"asked_at"`
+}
+
 type SwarmApplied struct {
 	Kind      string       `json:"kind"`
 	Key       string       `json:"key"`

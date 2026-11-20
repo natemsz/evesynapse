@@ -974,6 +974,12 @@ var pgBotGuardSecretSchema string
 //go:embed schema_pg/161_sde_character_titles.sql
 var pgSDECharacterTitlesSchema string
 
+// Step 162: characters refused for a structure lookup, so each
+// one is asked once per structure across cycles.
+//
+//go:embed schema_pg/162_structure_probes.sql
+var pgStructureProbesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1163,6 +1169,7 @@ func schemaSteps() []schemaStep {
 		{159, "alliance_bridges", pgAllianceBridgesSchema, ""},
 		{160, "bot_guard_secret", pgBotGuardSecretSchema, ""},
 		{161, "sde_character_titles", pgSDECharacterTitlesSchema, ""},
+		{162, "structure_probes", pgStructureProbesSchema, ""},
 	}
 }
 

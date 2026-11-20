@@ -51,6 +51,16 @@ const (
 	// per worker cycle; a cold backlog converges over a few
 	// cycles instead of bursting.
 	maxStructureResolutionsPerCycle = 100
+	// Each 403/404 from a structure lookup counts against ESI's
+	// error limit (100 per window). maxStructureRefusalsPerCycle
+	// caps the refusals one cycle may spend on structure names;
+	// maxStructureRefusalsPerID caps any one structure's share so
+	// the rest still get a turn. structureErrorBudgetReserve is
+	// the remaining budget under which structure lookups stop for
+	// the cycle, leaving it to core sync.
+	maxStructureRefusalsPerCycle = 20
+	maxStructureRefusalsPerID    = 5
+	structureErrorBudgetReserve  = 40
 	// structureRenameWindow is how long a resolved name is
 	// trusted before the worker re-asks.
 	structureRenameWindow = module.StructureRenameWindow

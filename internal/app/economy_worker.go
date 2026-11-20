@@ -113,6 +113,11 @@ func (app *Application) fetchCharKind(ctx context.Context, ch db.Character, kind
 // per worker cycle.
 const maxContractItemsPerCycle = 100
 
+// contractItemsErrorBudgetReserve is the remaining ESI error budget
+// under which contract item warming stops for the cycle: the item
+// lists are a warm-up and wait, core sync keeps the budget.
+const contractItemsErrorBudgetReserve = 40
+
 // warmContractItems fetches item lists for the contracts in the
 // character's contracts snapshot that are not stored yet, at most
 // maxContractItemsPerCycle of them. It reports how many were
@@ -178,8 +183,11 @@ func (app *Application) warmContractItemsOf(ctx context.Context, ch db.Character
 		}
 	}
 
+	// attempts counts every request, failed ones included: each
+	// failure spends ESI error budget, so the cap bounds those too.
+	attempts := 0
 	for _, c := range contracts {
-		if fetched >= maxContractItemsPerCycle {
+		if attempts >= maxContractItemsPerCycle {
 			break
 		}
 		if c.ContractID <= 0 || c.Status == "deleted" {
@@ -188,7 +196,11 @@ func (app *Application) warmContractItemsOf(ctx context.Context, ch db.Character
 		if stored[c.ContractID] {
 			continue // already stored (by any character's list)
 		}
+		if app.esiErrorBudgetBelow(contractItemsErrorBudgetReserve) {
+			return fetched, false // item lists wait; core sync keeps the budget
+		}
 
+		attempts++
 		body, err := fetch(c.ContractID)
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
@@ -199,6 +211,13 @@ func (app *Application) warmContractItemsOf(ctx context.Context, ch db.Character
 			}
 			if ctx.Err() == nil {
 				logging.Errorf("worker: contract items %d for character %d: %v", c.ContractID, ch.CharacterID, err)
+			}
+			if code, has := esi.StatusCode(err); has && code >= 500 {
+				// A server-side answer (520 ConStopSpamming when
+				// one character asks too fast, or ESI trouble):
+				// the next contract would get the same one, and
+				// each costs error budget. Try again next cycle.
+				return fetched, false
 			}
 			continue
 		}

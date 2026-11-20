@@ -228,6 +228,24 @@ WHERE state = 'pending'
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, structure_id
 LIMIT sqlc.arg(resolution_limit)::bigint;
 
+-- name: ListStructureProbes :many
+-- Characters already refused for one structure within the window.
+SELECT character_id
+FROM structure_probes
+WHERE structure_id = sqlc.arg(structure_id)::bigint
+  AND asked_at >= sqlc.arg(since)::timestamptz;
+
+-- name: RecordStructureProbe :exec
+INSERT INTO structure_probes (structure_id, character_id, asked_at)
+VALUES (sqlc.arg(structure_id)::bigint, sqlc.arg(character_id)::bigint, sqlc.arg(asked_at)::timestamptz)
+ON CONFLICT (structure_id, character_id) DO UPDATE SET asked_at = EXCLUDED.asked_at;
+
+-- name: ClearStructureProbes :exec
+DELETE FROM structure_probes WHERE structure_id = sqlc.arg(structure_id)::bigint;
+
+-- name: PruneStructureProbes :exec
+DELETE FROM structure_probes WHERE asked_at < sqlc.arg(before)::timestamptz;
+
 -- name: ListResolvedStructureNames :many
 SELECT structure_id, name
 FROM structure_names

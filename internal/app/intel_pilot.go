@@ -98,7 +98,7 @@ type pilotView struct {
 	OwnerPreview   bool   // the owner is viewing their own public page (view=public)
 	PortraitURL    string
 	Name           string
-	Title          string
+	Title          template.HTML
 	CorpID         int64
 	CorpLine       string // name [ticker], "" when unknown
 	AllianceID     int64
@@ -229,7 +229,7 @@ func buildPilotView(id int64, payload string) (*pilotView, bool) {
 		State:       "ready",
 		PortraitURL: portraitURL(id, 128),
 		Name:        p.Profile.Name,
-		Title:       p.Profile.Title,
+		Title:       htmlsanitize.Title(p.Profile.Title),
 		FactionName: p.FactionName,
 	}
 	if p.Corp.Name != "" {

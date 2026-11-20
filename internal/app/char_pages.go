@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/htmlsanitize"
 	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 )
@@ -230,7 +232,7 @@ type characterView struct {
 	Birthday              string
 	SecurityStatus        string
 	CharacterTitle        string
-	CorpTitle             string
+	CorpTitle             template.HTML
 	AchievementScoreKnown bool
 	AchievementScore      string
 
@@ -542,7 +544,7 @@ func (app *Application) fillCharacterIdentity(ctx context.Context, ch db.Charact
 			view.Birthday = profile.Birthday[:10]
 		}
 		view.SecurityStatus = fmt.Sprintf("%.2f", profile.SecurityStatus)
-		view.CorpTitle = strings.TrimSpace(profile.Title)
+		view.CorpTitle = htmlsanitize.Title(profile.Title)
 		if titleID := strings.ToLower(strings.TrimSpace(profile.CharacterTitleID)); titleID != "" {
 			if name, err := app.queries.GetSDECharacterTitle(ctx, titleID); err == nil {
 				view.CharacterTitle = strings.TrimSpace(name)

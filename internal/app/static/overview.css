@@ -55,14 +55,14 @@
 .ov-portrait img, .ov-ship-art img { display: block; width: 56px; height: 56px; border-radius: var(--r-sm); background: var(--input-bg); border: 1px solid var(--box-edge); object-fit: cover; }
 .ov-secchip { position: absolute; left: 50%; bottom: -0.35rem; transform: translateX(-50%); padding: 0.02rem 0.35rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--box-edge); color: var(--text); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.1; z-index: 1; }
 .ov-entity-main { min-width: 0; flex: 1 1 auto; }
-.ov-nm { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-xl); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ov-title { font-size: var(--fs-xs); font-weight: 600; color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ov-corp { font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ov-alliance { color: var(--muted); font-size: var(--fs-2xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ov-ship-title { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ov-sn { color: var(--text); font-weight: 600; }
-.ov-st { font-weight: 700; }
-.ov-ship-group { font-size: var(--fs-xs); color: var(--muted); }
+/* The pilot's name leads its card. The ship line and the soonest
+   extractor expiry are plain data at the size of the card rows; the
+   ship type is gold because it links. */
+.ov-nm { font-family: var(--font-body); font-weight: 600; font-size: var(--fs-md); line-height: 1.25; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-ship-title, .ov-pibig { font-family: var(--font-body); font-weight: 400; font-size: var(--fs-xs); line-height: 1.35; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-title, .ov-corp, .ov-alliance, .ov-ship-group { font-size: var(--fs-xs); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-title { color: var(--text); }
+.ov-alliance, .ov-ship-group, .ov-nm.muted { color: var(--muted); }
 
 /* Card key-value table rows */
 .ov-trows { display: grid; gap: 0.32rem; font-size: var(--fs-xs); }
@@ -80,7 +80,7 @@
 .ov-card .ok { background: none; border: 0; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--success); }
 .ov-card .warn { background: none; border: 0; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--gold); }
 
-.ov-pibig { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-xl); color: var(--gold); margin-bottom: 0.25rem; line-height: 1.2; }
+.ov-pibig { margin-bottom: 0.25rem; }
 .ov-pisub { color: var(--muted); font-size: var(--fs-xs); line-height: 1.45; }
 .ov-pisub .bad, .ov-table .bad { color: var(--danger); }
 .ov-pipills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
@@ -202,7 +202,14 @@
 .ov-table tr.sel td { background: var(--glass); }
 .ov-cell { display: flex; align-items: center; gap: 0.6rem; color: var(--text); }
 .ov-cell:hover { text-decoration: none; }
-.ov-lvl { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; border-radius: var(--r-sm); background: var(--glass); border: 1px solid var(--box-edge); font-family: var(--font-display); font-weight: 700; }
+.ov-lvl { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; border-radius: var(--r-sm); background: var(--glass); border: 1px solid var(--box-edge); font-family: var(--font-display); font-weight: var(--fw-display-strong); line-height: 1; }
+/* The numeral's box hugs its capitals (text-box trim), so the
+   tile's flex centring centres the glyphs themselves rather than
+   a line box with the face's taller ascent above them. */
+.ov-lvl > span { display: block; }
+@supports (text-box: trim-both cap alphabetic) {
+  .ov-lvl > span { text-box: trim-both cap alphabetic; }
+}
 .ov-lvl.zero { color: var(--muted); }
 .ov-table .ov-nm { font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 400; }
 .ov-tag { margin-left: 0.45rem; padding: 0.05rem 0.4rem; border-radius: 999px; }

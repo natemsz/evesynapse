@@ -474,7 +474,7 @@ header a.navlink {
    them. The group labels carry the capitals; the items do not. */
 .branch .menu a, .switcher .menu a, .switcher-menu a {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--fw-display);
   font-synthesis-weight: none;
   text-transform: none;
   letter-spacing: 0.03em;

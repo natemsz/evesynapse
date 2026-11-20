@@ -718,6 +718,14 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(requestLogger)
 	r.Use(app.countRequests)
 	r.Use(middleware.Recoverer)
+	// The response compressor surrounds the bot guard so it can add
+	// proof and robots tags before compressing the body.
+	if compress, err := gzhttp.NewWrapper(gzhttp.CompressionLevel(5)); err == nil {
+		r.Use(func(next http.Handler) http.Handler { return compress(next) })
+	} else {
+		logging.Errorf("gzip middleware: %v", err)
+		r.Use(middleware.Compress(5))
+	}
 	// The bot guard: a linked engine, else the built-in one
 	// (core_bot_guard_engine.go).
 	r.Use(app.botGuardMiddleware())
@@ -725,16 +733,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// The market API's own host answers /api/ only (market_api.go).
 	r.Use(app.marketAPIHostGate)
 	r.Use(navStateMiddleware)
-	// Pages, the stylesheet and the scripts are text and compress to
-	// a fraction of their size; fonts and images are left alone.
-	// gzhttp (klauspost) replaces chi's std gzip at the same level:
-	// identical output size for less CPU per response.
-	if compress, err := gzhttp.NewWrapper(gzhttp.CompressionLevel(5)); err == nil {
-		r.Use(func(next http.Handler) http.Handler { return compress(next) })
-	} else {
-		logging.Errorf("gzip middleware: %v", err)
-		r.Use(middleware.Compress(5))
-	}
 	r.Use(app.crossOriginGuard())
 	r.Use(markPrefetch)
 	r.Use(app.sessions.LoadAndSave)

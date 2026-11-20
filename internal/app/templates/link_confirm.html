@@ -1,0 +1,62 @@
+{{define "title"}}{{with .Confirm}}{{if eq .Kind "new"}}New account{{else if eq .Kind "move"}}Move character{{else}}Add character{{end}}{{end}}{{end}}
+{{define "pagetitle"}}<h1><span class="gt">{{with .Confirm}}{{if eq .Kind "new"}}One more step{{else if eq .Kind "move"}}Already on another account{{else}}Add a character{{end}}{{end}}</span></h1>{{end}}
+{{define "content"}}
+{{with .Confirm}}
+<section class="card lk-confirm" data-fold="never">
+  <p class="lk-who"><img class="portrait" src="{{.PortraitURL}}" alt="" width="64" height="64"> <strong>{{.Name}}</strong></p>
+
+  {{if eq .Kind "new"}}
+  <h2>{{.Name}} is not on an EveSynapse account yet</h2>
+  <p class="prose">Each EveSynapse account holds all of one player's characters. If you already have an account, add {{.Name}} to it so your characters stay together.</p>
+  <div class="lk-choices">
+    {{if .CanCreate}}
+    <form method="post" action="/auth/confirm" class="lk-choice">
+      <h3>I am new here</h3>
+      <p>Create an account with {{.Name}}. You can link your other characters right after.</p>
+      <button class="btn" type="submit" name="action" value="create">Create an account</button>
+    </form>
+    {{end}}
+    <div class="lk-choice">
+      <h3>I already have an account</h3>
+      <p>Sign in with a character that is already on your account, then confirm adding {{.Name}}.</p>
+      <a class="btn{{if .CanCreate}} btn-quiet{{end}}" href="/auth/login">Sign in to my account</a>
+    </div>
+  </div>
+  {{if not .CanCreate}}<p><small>This server creates new accounts only for the characters, corporations and alliances its admins list. A character outside them can still join an account that already exists.</small></p>{{end}}
+
+  {{else if eq .Kind "move"}}
+  <h2>{{.Name}} is linked to a different EveSynapse account</h2>
+  <p class="prose">That account has {{.OtherCount}} character{{if ne .OtherCount 1}}s{{end}}. You are signed in to another one.{{with .Account}} It has {{.Total}} character{{if ne .Total 1}}s{{end}}:{{end}}</p>
+  {{with .Account}}{{template "lk-account" .}}{{end}}
+  <div class="lk-choices">
+    <form method="post" action="/auth/confirm" class="lk-choice">
+      <h3>Move it here</h3>
+      <p>{{.Name}} leaves the other account and joins this one, with its data.</p>
+      <button class="btn" type="submit" name="action" value="move">Move {{.Name}} here</button>
+    </form>
+    <form method="post" action="/auth/confirm" class="lk-choice">
+      <h3>Use the other account</h3>
+      <p>Leave {{.Name}} where it is and switch to the account it is on.</p>
+      <button class="btn btn-quiet" type="submit" name="action" value="switch">Switch accounts</button>
+    </form>
+  </div>
+
+  {{else}}
+  <h2>Add {{.Name}} to this account?</h2>
+  {{with .Account}}<p class="prose">This account has {{.Total}} character{{if ne .Total 1}}s{{end}}:</p>{{template "lk-account" .}}{{end}}
+  <form method="post" action="/auth/confirm" class="lk-actions">
+    <button class="btn" type="submit" name="action" value="add">Add {{.Name}}</button>
+  </form>
+  {{end}}
+
+  <form method="post" action="/auth/confirm" class="lk-cancel">
+    <button class="linkbtn" type="submit" name="action" value="cancel">Cancel, link nothing</button>
+  </form>
+</section>
+{{end}}
+{{end}}
+
+{{define "lk-account"}}<ul class="lk-account">
+  {{range .Chars}}<li><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}</li>{{end}}
+  {{if .More}}<li class="lk-more">and {{.More}} more</li>{{end}}
+</ul>{{end}}

@@ -55,12 +55,15 @@ type linkView struct {
 	Required   int
 	Remembered bool
 	Character  int64
-	Continue   string // the link to EVE
-	Full       string // the same with every extra permission ticked
-	Back       string // the question again
-	AllPicked  bool   // every card picked (pick=all)
-	Error      string
-	Hidden     []linkHidden // choices to carry across a form
+	// Account is the signed-in account a new character joins (nil
+	// signed out, and on a re-link of one named character).
+	Account   *linkAccountView
+	Continue  string // the link to EVE
+	Full      string // the same with every extra permission ticked
+	Back      string // the question again
+	AllPicked bool   // every card picked (pick=all)
+	Error     string
+	Hidden    []linkHidden // choices to carry across a form
 
 	// Sign-up only (a signed-out visitor): the theme step on the
 	// reveal, and the Axon offer when the choice turns on the
@@ -194,6 +197,8 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 
 	if cid, err := strconv.ParseInt(q.Get("character"), 10, 64); err == nil && cid > 0 && app.ownsCharacter(r, cid) {
 		view.Character = cid
+	} else {
+		view.Account = app.linkAccount(ctx)
 	}
 	submitted := q.Get("submitted") == "1"
 	choice := linkChoice{Activities: q["activity"], Features: q["feature"], Enhance: q["enhance"]}

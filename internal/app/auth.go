@@ -342,6 +342,14 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 		}
 		cfg.Scopes = scopes
 	}
+	// A signed-in player linking with no character named is adding
+	// one: if EVE hands back a character already on the account, the
+	// player is told how to pick another (auth_confirm.go).
+	if app.userID(r.Context()) != 0 && r.URL.Query().Get("character") == "" && r.URL.Query().Get("module") == "" {
+		app.sessions.Put(r.Context(), sessionLinkIntent, "add")
+	} else {
+		app.sessions.Remove(r.Context(), sessionLinkIntent)
+	}
 	app.sessions.PopString(r.Context(), sessionIdentityLogin)
 	app.authorizeRedirect(w, r, cfg)
 }
@@ -375,9 +383,24 @@ func (app *Application) handleEVELoginIdentity(w http.ResponseWriter, r *http.Re
 func (app *Application) finishIdentityLogin(w http.ResponseWriter, r *http.Request, characterID int64, characterName, ownerHash string) {
 	ctx := r.Context()
 	userID, target := app.identityLogin(ctx, characterID, ownerHash)
-	if target != "" {
+	// A sign-in waiting on /auth/confirm (the player chose to add it
+	// to an existing account) goes back there once signed in.
+	waiting := app.pendingLinkWaiting(ctx, characterID)
+	switch {
+	case target == "/auth/link" && waiting:
+		app.flash(ctx, characterName+" is not on an EveSynapse account either. Sign in with a character that is, or create a new account.")
+		http.Redirect(w, r, "/auth/confirm", http.StatusSeeOther)
+		return
+	case target == "/auth/link":
+		app.flash(ctx, characterName+" is not on an EveSynapse account yet. If your account uses a different character, sign in with that one. Otherwise pick what you want to use EveSynapse for below to create one.")
 		http.Redirect(w, r, target, http.StatusSeeOther)
 		return
+	case target != "":
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return
+	}
+	if waiting {
+		app.sessions.Put(ctx, sessionReturnTo, "/auth/confirm")
 	}
 	logging.Infof("sso: identity login for character %d (%s) on user %d", characterID, characterName, userID)
 	app.markCharacterPriority(characterID)
@@ -551,54 +574,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Land on the account this sign-in belongs to: the session's
-	// account when it holds one ("link another character"), else
-	// the account the character is already linked to, else a fresh
-	// account, for a first-ever sign-in, and for a character that
-	// changed EVE accounts since it was linked (its new owner must
-	// never inherit the previous owner's account).
-	userID, err := app.resolveSignInUser(ctx, app.userID(ctx), characterID, ownerHash)
-	if err != nil {
-		switch {
-		case errors.Is(err, errSignUpNotAllowed):
-			logging.Infof("sso callback: character %d (%s) is not on this instance's sign-up lists; no account created", characterID, characterName)
-			fail("notallowed")
-		case errors.Is(err, errSignUpUnverified):
-			logging.Warnf("sso callback: sign-up check for character %d: %v", characterID, err)
-			fail("allowcheck")
-		default:
-			logging.Errorf("sso callback: resolve account for character %d: %v", characterID, err)
-			fail("save")
-		}
-		return
-	}
-
-	// What the player chose at sign-up is remembered for the account's
-	// next character link (the choice waited in the session until there
-	// was an account).
-	if blob := app.sessions.GetString(ctx, sessionLinkChoice); blob != "" {
-		app.sessions.Remove(ctx, sessionLinkChoice)
-		var c linkChoice
-		if json.Unmarshal([]byte(blob), &c) == nil {
-			app.rememberLink(ctx, userID, c)
-		}
-	}
-
-	// The theme the player picked at sign-up, saved to the account
-	// it just created (or returned to), so the first page inside
-	// already wears it.
-	if blob := app.sessions.GetString(ctx, sessionThemeChoice); blob != "" {
-		app.sessions.Remove(ctx, sessionThemeChoice)
-		var prefs themePrefs
-		if json.Unmarshal([]byte(blob), &prefs) == nil {
-			if err := app.storeThemePrefs(ctx, userID, prefs); err != nil {
-				logging.Errorf("sso callback: store sign-up theme for user %d: %v", userID, err)
-			}
-		}
-	}
-
-	result, err := app.linkVerifiedCharacter(ctx, linkCharacterInput{
-		UserID:       userID,
+	in := linkCharacterInput{
 		CharacterID:  characterID,
 		Name:         characterName,
 		Scopes:       grantedScopes,
@@ -606,39 +582,31 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
 		TokenExpiry:  sql.NullTime{Time: token.Expiry.UTC(), Valid: !token.Expiry.IsZero()},
-	})
+	}
+
+	// Land on the account this sign-in belongs to (auth_confirm.go):
+	// the signed-in account for a character new to it or already on
+	// it, the character's own account for a signed-out sign-in. A
+	// character on another account of the same player, and a
+	// signed-out character on no account, wait for the player to say
+	// where they go.
+	plan, err := app.planSignIn(ctx, app.userID(ctx), characterID, ownerHash)
 	if err != nil {
-		logging.Errorf("sso callback: store character %d: %v", characterID, err)
+		logging.Errorf("sso callback: plan account for character %d: %v", characterID, err)
 		fail("save")
 		return
 	}
-	switch {
-	case result.OwnerChanged && result.Moved:
-		logging.Warnf("sso: character %d changed EVE accounts since it was linked; moved off its previous account to user %d", characterID, userID)
-	case result.OwnerChanged:
-		logging.Warnf("sso: character %d owner hash changed since the link was verified; flagged for re-verification", characterID)
-	case result.Moved:
-		logging.Infof("sso: character %d moved to user %d (already linked elsewhere; fresh sign-in wins)", characterID, userID)
+	if plan.Step != "link" {
+		if err := app.stashPendingLink(ctx, in); err != nil {
+			logging.Errorf("sso callback: hold sign-in for character %d: %v", characterID, err)
+			fail("save")
+			return
+		}
+		http.Redirect(w, r, "/auth/confirm", http.StatusSeeOther)
+		return
 	}
-
-	logging.Infof("sso: signed in character %d (%s) on user %d", characterID, characterName, userID)
-
-	// Warm this character first on the next worker cycle so its
-	// pages are ready moments after login, not minutes later.
-	app.markCharacterPriority(characterID)
-
-	// Rotate the session token on privilege change, then sign in.
-	if err := app.sessions.RenewToken(ctx); err != nil {
-		logging.Errorf("sso callback: renew session token: %v", err)
-	}
-	app.sessions.Put(ctx, sessionAuthenticated, true)
-	app.sessions.Put(ctx, sessionUserID, int(userID))
-	putSessionCharID(app.sessions, ctx, characterID)
-	app.sessions.Put(ctx, sessionCharacterName, characterName)
-	app.recorder().tick(statsEventSignIn)
-	app.armSecondFactor(ctx, userID)
-
-	http.Redirect(w, r, app.signInTarget(ctx), http.StatusSeeOther)
+	notice, returnTo := app.linkNotice(ctx, plan, in)
+	app.finishLink(w, r, plan.UserID, in, notice, returnTo)
 }
 
 // handleSignOut destroys the session server-side and expires the cookie.

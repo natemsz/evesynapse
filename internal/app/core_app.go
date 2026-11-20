@@ -801,6 +801,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// demo account, no EVE SSO (demo.go).
 	r.With(anonPages).Get("/auth/demo", app.handleDemoSignIn)
 	r.Get("/auth/callback", app.handleEVECallback)
+	r.Get("/auth/confirm", app.handleLinkConfirm)
+	r.Post("/auth/confirm", app.handleLinkConfirmPost)
 	// Signing out changes state, so it is a POST: a link or an image
 	// tag on another page cannot sign the visitor out.
 	r.Post("/auth/logout", app.handleSignOut)

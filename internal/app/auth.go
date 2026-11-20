@@ -25,6 +25,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"evesynapse/internal/logging"
+	"evesynapse/internal/netguard"
 )
 
 // Session keys. Values stored via scs are gob-encoded; keep them typed
@@ -244,8 +245,10 @@ var eveScopes = []string{
 }
 
 // loginHTTPClient serves the SSO/JWKS calls (auth.go) only. ESI has
-// its own tuned client (esi.NewHTTPClient); the two never share.
-var loginHTTPClient = &http.Client{Timeout: 10 * time.Second}
+// its own tuned client (esi.NewHTTPClient); the two never share. Its
+// transport closes a connection whose path went dead (netguard), so
+// token refreshes never queue behind one.
+var loginHTTPClient = &http.Client{Timeout: 10 * time.Second, Transport: netguard.DefaultTransport()}
 
 // eveOAuthConfig builds the EVE SSO OAuth2 config. The redirect URL must
 // match the callback registered for the app at developers.eveonline.com

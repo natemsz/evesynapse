@@ -5,13 +5,17 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"evesynapse/internal/netguard"
 )
 
 // esiDialer is the connection dialer under every production ESI
-// request: a short dial timeout so a dead route fails fast, and a
-// 30s keep-alive so pooled connections stay warm between cycles.
+// request: a short dial timeout so a dead route fails fast, a 30s
+// keep-alive so pooled connections stay warm between cycles, and the
+// kernel's unacknowledged-data limit (netguard) so a connection whose
+// path died is closed in seconds, not left to retransmit for minutes.
 func esiDialer() *net.Dialer {
-	return &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
+	return netguard.Dialer(5 * time.Second)
 }
 
 // newESITransport builds the tuned transport under every production
@@ -19,8 +23,14 @@ func esiDialer() *net.Dialer {
 // handshake and header waits. The overall request deadline is the
 // client's, not the transport's, so the shared client and the bulk
 // client ride the same transport tuning at different deadlines.
+//
+// HTTP/2 multiplexes every small call onto one connection, so a dead
+// one fails them all until it closes. The health checks (netguard)
+// ping a connection that has gone quiet and close it when the ping
+// goes unanswered, so the next call dials a fresh one.
 func newESITransport() *http.Transport {
 	return &http.Transport{
+		HTTP2:                 netguard.HTTP2(),
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           esiDialer().DialContext,
 		ForceAttemptHTTP2:     true,

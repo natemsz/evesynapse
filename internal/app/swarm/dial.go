@@ -31,6 +31,8 @@ import (
 	"net/netip"
 	"syscall"
 	"time"
+
+	"evesynapse/internal/netguard"
 )
 
 // MaxSwarmRedirects bounds same-host redirects (a trailing slash,
@@ -112,8 +114,12 @@ func (t SwarmTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // NewSwarmClient builds the peer client: bearer secret, the
 // guarded dialer, the same-host redirect rule, no proxy.
 func NewSwarmClient(secret string) *SwarmClient {
-	dialer := &net.Dialer{Timeout: 10 * time.Second, ControlContext: SwarmDialControl}
+	// The dial check runs first; netguard's limit on unacknowledged
+	// data then rides every peer socket, and the transport's HTTP/2
+	// health checks close a peer connection whose path went dead.
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second, ControlContext: netguard.ControlContext(SwarmDialControl)}
 	transport := &http.Transport{
+		HTTP2:                 netguard.HTTP2(),
 		Proxy:                 nil,
 		DialContext:           dialer.DialContext,
 		ForceAttemptHTTP2:     true,

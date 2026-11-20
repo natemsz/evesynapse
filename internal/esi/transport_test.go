@@ -47,6 +47,11 @@ func TestFetchRawLongCarriesTheBulkDeadline(t *testing.T) {
 	if got := NewHTTPClient().Timeout; got != 10*time.Second {
 		t.Errorf("shared client timeout = %v, want 10s", got)
 	}
+	// Every small call shares one HTTP/2 connection: without health
+	// checks a connection whose path died fails them all for minutes.
+	if tr, ok := NewHTTPClient().Transport.(*http.Transport); !ok || tr.HTTP2 == nil || tr.HTTP2.SendPingTimeout <= 0 || tr.HTTP2.PingTimeout <= 0 {
+		t.Error("shared client must ping quiet HTTP/2 connections and close one that misses the ping")
+	}
 
 	shared, bulk := &deadlineTransport{}, &deadlineTransport{}
 	client := New(&http.Client{Timeout: 10 * time.Second, Transport: shared}, nil, nil)

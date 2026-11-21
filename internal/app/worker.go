@@ -150,6 +150,10 @@ func (app *Application) workerStatusText() string {
 func (app *Application) runWorker(ctx context.Context) {
 	logging.Infof("worker: started")
 
+	// Hub books saved by the last clean shutdown come back before
+	// the market lane's first sweep compares against them.
+	app.restoreHubBooks(ctx)
+
 	// The search index builds once here, at startup, so the
 	// first search after a restart reads memory instead of
 	// waiting for a user to trigger the build. The build runs

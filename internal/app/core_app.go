@@ -245,6 +245,9 @@ type Application struct {
 	// each region one fresh attempt, which is harmless.
 	sweepPaceMu sync.Mutex
 	sweepPace   map[int64]*sweepRegionPace
+	// sweepPartials is each region's interrupted read, kept so it can
+	// resume inside the same cache window. Guarded by sweepPaceMu.
+	sweepPartials map[int64]*sweepPartial
 
 	// hubBooksMu guards hubBooks, each swept region's whole order
 	// book from its last sweep (market_hub_book.go), and
@@ -690,6 +693,7 @@ func (app *Application) Close() {
 	if app.names != nil {
 		app.names.close()
 	}
+	app.saveHubBooks(context.Background())
 	if app.db != nil {
 		// Views counted since the worker last wrote them.
 		app.flushFitViews(context.Background())

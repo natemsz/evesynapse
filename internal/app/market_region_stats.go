@@ -173,6 +173,14 @@ func (app *Application) noteSweepPageFailure(regionID int64, now time.Time) time
 	return delay
 }
 
+// holdSweep keeps the region from starting a read before until,
+// without counting a failure or narrowing its page window.
+func (app *Application) holdSweep(regionID int64, until time.Time) {
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	app.sweepPaceOf(regionID).nextAttempt = until
+}
+
 // noteSweepPageSuccess records a landed page for the region: any
 // failure backoff resets, so a route that recovers sweeps at full
 // pace again.

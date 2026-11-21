@@ -311,6 +311,24 @@ func (c *Client) RateLimitedUntil(characterID int64, now time.Time) time.Time {
 	return until
 }
 
+// RouteHeadroom is how many tokens an unauthenticated route's bucket
+// can spend now before reaching its reserve; it is negative when the
+// bucket is already under it. known is false until a response has
+// stated the route's group and limit.
+func (c *Client) RouteHeadroom(method, path string, now time.Time) (tokens int, known bool) {
+	c.rates.mu.Lock()
+	defer c.rates.mu.Unlock()
+	group, ok := c.rates.routeGroup[routeOf(method, path)]
+	if !ok {
+		return 0, false
+	}
+	b, ok := c.rates.buckets[bucketKey{group, 0}]
+	if !ok || b.limit <= 0 {
+		return 0, false
+	}
+	return b.estimate(now) - b.reserve(), true
+}
+
 // trackRateHeaders reads the rate-limit headers ESI sends with a
 // response (X-Ratelimit-Group, -Limit, -Remaining) and keeps the
 // tightest budget seen. Headers that are missing or not as expected

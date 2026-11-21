@@ -32,6 +32,7 @@ type pagedBookTransport struct {
 	failPages   map[[2]int64]int    // (region, page) -> status answered instead of the book
 	modified    map[[2]int64]string // (region, page) -> Last-Modified answered, when set
 	delay       time.Duration       // artificial latency per request
+	remaining   int                 // market-order tokens stated as left, when set
 	requests    [][2]int64
 	inFlight    atomic.Int64
 	maxInFlight atomic.Int64
@@ -76,6 +77,11 @@ func (s *pagedBookTransport) RoundTrip(req *http.Request) (*http.Response, error
 		}, nil
 	}
 	header.Set("X-Pages", fmt.Sprintf("%d", len(pages)))
+	if s.remaining > 0 {
+		header.Set("X-Ratelimit-Group", "market-order")
+		header.Set("X-Ratelimit-Limit", "12000/15m")
+		header.Set("X-Ratelimit-Remaining", fmt.Sprintf("%d", s.remaining))
+	}
 	if modified != "" {
 		header.Set("Last-Modified", modified)
 	}
@@ -152,6 +158,88 @@ func TestSweepConcurrentRegionsBothComplete(t *testing.T) {
 		if err != nil || len(rows) != 1 || rows[0].TypeID != wantType {
 			t.Fatalf("region %d stats after concurrent sweep: %+v err=%v, want one row for type %d", regionID, rows, err, wantType)
 		}
+	}
+}
+
+func TestSweepWaitsWhenBudgetCannotCoverTheBook(t *testing.T) {
+	transport := &pagedBookTransport{books: map[int64][][]esi.MarketOrder{}, remaining: 1100}
+	app, _, q := buildCorpTestApp(t, transport)
+	for _, region := range sweptRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	transport.books[10000002] = [][]esi.MarketOrder{
+		{{OrderID: 1, TypeID: 34, Price: 5.0, VolumeRemain: 1}},
+		{{OrderID: 2, TypeID: 34, Price: 6.0, VolumeRemain: 1}},
+		{{OrderID: 3, TypeID: 34, Price: 7.0, VolumeRemain: 1}},
+	}
+
+	app.sweepRegionStats(context.Background(), &fetchBudget{left: 1000})
+	if got := transport.pagesFor(10000002); !slices.Equal(got, []int64{1}) {
+		t.Fatalf("pages read with too little budget: %v, want only page 1", got)
+	}
+	if !app.sweepBackedOff(10000002, time.Now()) {
+		t.Fatal("a region short of budget must wait before asking again")
+	}
+}
+
+func TestSweepResumesHeldPagesFromTheSameWindow(t *testing.T) {
+	const stamp = "Tue, 10 Nov 2026 01:25:13 GMT"
+	transport := &pagedBookTransport{books: map[int64][][]esi.MarketOrder{}, modified: map[[2]int64]string{}}
+	app, _, q := buildCorpTestApp(t, transport)
+	for _, region := range sweptRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	held := []esi.MarketOrder{{OrderID: 2, TypeID: 35, Price: 6.0, VolumeRemain: 1}}
+	transport.books[10000002] = [][]esi.MarketOrder{
+		{{OrderID: 1, TypeID: 34, Price: 5.0, VolumeRemain: 1}},
+		held,
+		{{OrderID: 3, TypeID: 36, Price: 7.0, VolumeRemain: 1}},
+	}
+	for page := int64(1); page <= 3; page++ {
+		transport.modified[[2]int64{10000002, page}] = stamp
+	}
+	modified, _ := http.ParseTime(stamp)
+	win := esiWindow{lastModified: modified, expires: modified.Add(5 * time.Minute)}
+	app.keepSweepPartial(10000002, win, 3, [][]esi.MarketOrder{nil, held, nil})
+
+	app.sweepRegionStats(context.Background(), &fetchBudget{left: 1000})
+	if got := transport.pagesFor(10000002); !slices.Equal(got, []int64{1, 3}) {
+		t.Fatalf("pages read on resume: %v, want 1 and 3", got)
+	}
+	if rows, err := q.ListMarketRegionStatsByRegion(context.Background(), 10000002); err != nil || len(rows) != 3 {
+		t.Fatalf("resumed read stored %d items (err %v), want 3", len(rows), err)
+	}
+}
+
+func TestHubBooksRestoreOnlyWhileStoredRowsMatch(t *testing.T) {
+	transport := &pagedBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	app.cfg.hubBookDir = t.TempDir()
+	const regionID = 10000002
+	markRegionFresh(t, q, regionID)
+	book := newHubBook([][]esi.MarketOrder{{{OrderID: 1, TypeID: 34, Price: 5.0, VolumeRemain: 1}}})
+	book.day = time.Now().UTC().Format("2006-01-02")
+
+	app.holdHubBook(regionID, book)
+	app.saveHubBooks(ctx)
+	app.hubBooks = nil
+	app.restoreHubBooks(ctx)
+	got := app.heldHubBook(regionID)
+	if got == nil || !sameTypeBook(got.types[34], book.types[34]) {
+		t.Fatalf("restored book = %+v, want the saved book", got)
+	}
+
+	app.saveHubBooks(ctx)
+	app.hubBooks = nil
+	app.recordMarketFetchAt(ctx, regionSweepKind(regionID), fetchStateOK, "", time.Now().UTC().Add(time.Minute))
+	app.restoreHubBooks(ctx)
+	if app.heldHubBook(regionID) != nil {
+		t.Fatal("a book older than the stored rows was restored")
 	}
 }
 

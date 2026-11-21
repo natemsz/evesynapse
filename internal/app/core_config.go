@@ -108,6 +108,7 @@ type Config struct {
 	ranviaURL                string         // RANVIA_URL: the Ranvia service; unset is https://ranvia.io
 	ranviaCacheDir           string         // RANVIA_CACHE_DIR, else systemd's CACHE_DIRECTORY: where Ranvia keeps its encrypted engine between starts
 	ranviaLogRefusals        bool           // RANVIA_LOG_REFUSALS=1: log each request Ranvia refuses, checks or slows
+	hubBookDir               string         // systemd's CACHE_DIRECTORY: where hub order books wait across a restart; "" keeps them in memory only
 	lowRAMMode               bool           // LOW_RAM_MODE=1: low-RAM installs serve search from SQL with no in-memory search index (search_index.go); the derived-pack snapshot joins it when built
 	sdeBaseURL               string         // EVE SDE CSV dump base URL (Fuzzwork by default)
 	fuzzworkBaseURL          string         // Fuzzwork market aggregate base URL (fallback prices)
@@ -437,6 +438,7 @@ func LoadConfig() (Config, error) {
 		ranviaKey:                  strings.TrimSpace(os.Getenv("RANVIA_KEY")),
 		ranviaURL:                  strings.TrimSpace(os.Getenv("RANVIA_URL")),
 		ranviaCacheDir:             ranviaCacheDir(),
+		hubBookDir:                 hubBookDir(),
 		ranviaLogRefusals:          os.Getenv("RANVIA_LOG_REFUSALS") == "1",
 		sdeBaseURL:                 getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
 		fuzzworkBaseURL:            getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),
@@ -715,6 +717,15 @@ func intSetting(name, raw string, lo, hi, unset int) int {
 		return unset
 	}
 	return min(max(n, lo), hi)
+}
+
+// hubBookDir is the market folder in the cache directory systemd
+// gives the service (CacheDirectory=), or "" without one.
+func hubBookDir() string {
+	if dir := strings.TrimSpace(os.Getenv("CACHE_DIRECTORY")); dir != "" {
+		return filepath.Join(strings.SplitN(dir, ":", 2)[0], "market")
+	}
+	return ""
 }
 
 // ranviaCacheDir is RANVIA_CACHE_DIR, else the cache directory

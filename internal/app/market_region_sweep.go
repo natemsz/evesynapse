@@ -57,6 +57,11 @@ const (
 	// defaultBookWindow is the market order route's cache window,
 	// used when ESI's headers do not give one.
 	defaultBookWindow = 5 * time.Minute
+	// sweepPageTokens is what ESI charges for one successful page.
+	sweepPageTokens = 2
+	// sweepBudgetWait is how long a region whose read the rate budget
+	// cannot cover waits before asking for page 1 again.
+	sweepBudgetWait = 30 * time.Second
 )
 
 // regionSweepDue reports whether a region may start a sweep now: its
@@ -127,18 +132,22 @@ func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBu
 	defer app.sweepMu.Unlock()
 
 	var limitHit atomic.Bool
+	var claims sweepTokenClaims
 	outcomes := make([]regionSweepOutcome, len(sweptRegions))
 	var wg sync.WaitGroup
 	now := time.Now()
 	for i, region := range sweptRegions {
-		if !app.regionSweepDue(ctx, region.ID, now) || app.sweepBackedOff(region.ID, now) {
+		if app.sweepBackedOff(region.ID, now) {
+			continue
+		}
+		if !app.sweepResumable(region.ID, now) && !app.regionSweepDue(ctx, region.ID, now) {
 			continue
 		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			defer recoverWorkerPanic("region sweep")
-			outcomes[i] = app.sweepRegion(ctx, region.ID, allowance, &limitHit)
+			outcomes[i] = app.sweepRegion(ctx, region.ID, allowance, &limitHit, &claims)
 		}()
 	}
 	wg.Wait()
@@ -151,10 +160,84 @@ func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBu
 	return stored, limited
 }
 
+// sweepTokenClaims is the rate-limit tokens the regions of one pass
+// have set aside, so regions starting together cannot each count the
+// same headroom.
+type sweepTokenClaims struct {
+	mu      sync.Mutex
+	claimed int
+}
+
+// claim sets aside need tokens if headroom still covers them.
+func (c *sweepTokenClaims) claim(headroom, need int) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if headroom-c.claimed < need {
+		return false
+	}
+	c.claimed += need
+	return true
+}
+
+// sweepPartial is a read that stopped early: the pages it holds all
+// came from win, so a later read of the same window needs only the
+// rest.
+type sweepPartial struct {
+	win   esiWindow
+	total int
+	pages [][]esi.MarketOrder
+}
+
+// keepSweepPartial holds an interrupted read. A read with no stated
+// window cannot be matched later, and low-RAM mode holds no books.
+func (app *Application) keepSweepPartial(regionID int64, win esiWindow, total int, pages [][]esi.MarketOrder) {
+	if app.cfg.lowRAMMode || win.lastModified.IsZero() || win.expires.IsZero() {
+		return
+	}
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	if app.sweepPartials == nil {
+		app.sweepPartials = make(map[int64]*sweepPartial)
+	}
+	app.sweepPartials[regionID] = &sweepPartial{win: win, total: total, pages: pages}
+}
+
+// sweepPartialPages is the region's held pages for this window and
+// page count, or nil; a held read from anything else is dropped.
+func (app *Application) sweepPartialPages(regionID int64, win esiWindow, total int) [][]esi.MarketOrder {
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	p := app.sweepPartials[regionID]
+	if p == nil {
+		return nil
+	}
+	if p.total != total || !p.win.lastModified.Equal(win.lastModified) {
+		delete(app.sweepPartials, regionID)
+		return nil
+	}
+	return p.pages
+}
+
+func (app *Application) dropSweepPartial(regionID int64) {
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	delete(app.sweepPartials, regionID)
+}
+
+// sweepResumable reports a held read whose window is still current.
+func (app *Application) sweepResumable(regionID int64, now time.Time) bool {
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	p := app.sweepPartials[regionID]
+	return p != nil && now.Before(p.win.expires)
+}
+
 // sweepRegion reads one region's whole book and stores it. A read cut
 // short (the allowance, the error limit, a failed page, a mixed
-// window) stores nothing; the region is read again from page 1.
-func (app *Application) sweepRegion(ctx context.Context, regionID int64, allowance *fetchBudget, limitHit *atomic.Bool) regionSweepOutcome {
+// window) stores nothing; its good pages wait for a resume inside the
+// same window. A read goes past page 1 only when the rate budget
+// covers every page it still needs.
+func (app *Application) sweepRegion(ctx context.Context, regionID int64, allowance *fetchBudget, limitHit *atomic.Bool, claims *sweepTokenClaims) regionSweepOutcome {
 	var out regionSweepOutcome
 	label := marketRegionLabel(regionID)
 	if !allowance.take() {
@@ -186,15 +269,37 @@ func (app *Application) sweepRegion(ctx context.Context, regionID int64, allowan
 	if total > maxRegionSweepPagesTotal {
 		total = maxRegionSweepPagesTotal
 	}
-
 	pages := make([][]esi.MarketOrder, total)
+	if held := app.sweepPartialPages(regionID, win, total); held != nil {
+		copy(pages, held)
+	}
 	pages[0] = first
+	missing := 0
+	for _, p := range pages {
+		if p == nil {
+			missing++
+		}
+	}
+	if missing > 0 {
+		need := missing * sweepPageTokens
+		path := fmt.Sprintf("/markets/%d/orders/", regionID)
+		if headroom, known := app.esi.RouteHeadroom(http.MethodGet, path, time.Now()); known && !claims.claim(headroom, need) {
+			app.holdSweep(regionID, time.Now().Add(sweepBudgetWait))
+			out.limited = true
+			logging.Infof("worker: region sweep: %s waits for rate budget: %d pages need %d tokens, %d free", label, missing, need, headroom)
+			return out
+		}
+	}
+
 	errs := make([]error, total)
 	var read atomic.Int64
 	window := app.sweepWindow(regionID)
 	sem := make(chan struct{}, window)
 	var wg sync.WaitGroup
 	for page := 2; page <= total; page++ {
+		if pages[page-1] != nil {
+			continue
+		}
 		if ctx.Err() != nil || limitHit.Load() {
 			errs[page-1] = ctx.Err()
 			if errs[page-1] == nil {
@@ -206,6 +311,7 @@ func (app *Application) sweepRegion(ctx context.Context, regionID int64, allowan
 			logging.Warnf("worker: region sweep: %s stopped at page %d of %d: the pass allowance ran out", label, page, total)
 			wg.Wait()
 			out.pages += int(read.Load())
+			app.keepSweepPartial(regionID, win, total, pages)
 			return out
 		}
 		sem <- struct{}{}
@@ -228,9 +334,11 @@ func (app *Application) sweepRegion(ctx context.Context, regionID int64, allowan
 	out.pages += int(read.Load())
 	for i, err := range errs {
 		if err != nil {
+			app.keepSweepPartial(regionID, win, total, pages)
 			return app.sweepFailed(ctx, regionID, i+1, err, limitHit, out)
 		}
 	}
+	app.dropSweepPartial(regionID)
 	app.noteSweepPageSuccess(regionID)
 	app.noteSweepWindowClean(regionID)
 

@@ -150,3 +150,47 @@ func TestSignupThemePrefs(t *testing.T) {
 		}
 	}
 }
+
+// TestVisionSchemeAndSemanticTokens pins that colour-blind modes
+// retune colliding scheme accents, wire security/standing/fitting/ESI
+// status elements to --v-* tokens, and prevent light-mode rules from
+// overwriting data-vision map and pilot tokens.
+func TestVisionSchemeAndSemanticTokens(t *testing.T) {
+	bg := readStatic(t, "bg.css")
+	for _, want := range []string{
+		`html[data-vision="redgreen"][data-scheme="caldari"] { --v-good: #38bdf8; --v-bad: #ff9a40; --sch-hi: #b8dcff; --sch-core: #5b92f6; --sch-accent: #5b92f6; }`,
+		`html[data-vision="redgreen"][data-scheme="triglavian"] { --sch-hi: #ff6b7a; --sch-core: #d9483b; --sch-accent: #d9483b; --sch-nav-head: #facc15; }`,
+		`html[data-vision="redgreen"][data-scheme="minmatar-v3"] { --sch-hi: #ffd27a; }`,
+		`html[data-vision="blueyellow"][data-scheme="gallente"] { --v-good: #33d6b4; --v-bad: #ff6a7e; --sch-hi: #88f5b2; --sch-core: #1ba89e; --sch-accent: #1ba89e; }`,
+		`html[data-vision="blueyellow"][data-scheme="soe"] { --v-good: #3dd6c8; --v-bad: #ff5ca8; --sch-hi: #a8e6ec; --sch-core: #d63838; --sch-accent: #d63838; --sch-nav-head: #7ce4f0; }`,
+		`--v-res-em: #5aaeff;`,
+		`--v-res-em: #4ad9c8;`,
+	} {
+		if !strings.Contains(bg, want) {
+			t.Errorf("bg.css missing vision token rule %q", want)
+		}
+	}
+	for _, tc := range []struct {
+		file, want string
+	}{
+		{"contracts.css", "var(--v-sec-0, #c0508a)"},
+		{"contacts.css", `html[data-vision="blueyellow"] .ct-list`},
+		{"workbench.css", `.wb-role-dictor { color: var(--v-bad, #e0301c); }`},
+		{"scans.css", `var(--v-good, #4fbf6a)`},
+		{"pilot.css", `html[data-theme="light"]:not([data-vision]) .pi`},
+		{"map.css", `html[data-theme="light"]:not([data-vision]) .map`},
+		{"style.css", `.res-em { color: var(--v-res-em, #6fb6ff); }`},
+		{"style.css", `html[data-theme="light"]:not([data-vision]) .esi-ok .esi-label`},
+		{"style.css", `html[data-vision="redgreen"] .pip-ds`},
+		{"style.css", `.fit-vslot.st-overheated { border-color: var(--v-bad, #ff6a1a); }`},
+		{"market.css", `var(--v-ma7, #f472b6)`},
+		{"tradeideas.css", `html[data-vision="redgreen"] .ti-a1`},
+		{"assets.css", `var(--v-good-ink, #7fe0a3)`},
+		{"pi.css", `html[data-vision="blueyellow"] .pi`},
+		{"colonies.css", `.pc-temperate { color: var(--v-good, #79d18f); }`},
+	} {
+		if !strings.Contains(readStatic(t, tc.file), tc.want) {
+			t.Errorf("%s missing vision rule %q", tc.file, tc.want)
+		}
+	}
+}

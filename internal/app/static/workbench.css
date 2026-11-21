@@ -76,7 +76,7 @@
 .wb-friendly { color: var(--success); }
 .wb-bar { display: flex; height: 0.55rem; border-radius: var(--r-xs); overflow: hidden; background: var(--row-alt); margin: 0.6rem 0 0.2rem; }
 .wb-bar > span { display: block; height: 100%; width: var(--w, 0%); }
-.wb-bar-on { background: #ff9a3c; }
+.wb-bar-on { background: var(--v-warn, #ff9a3c); }
 .wb-bar-off { background: #57493a; }
 .wb-bar-dep { background: var(--accent); }
 .wb-box-foot { margin: 0.55rem 0 0; font-size: var(--fs-sm); color: var(--muted); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -121,12 +121,12 @@
 .wb-clickable { cursor: pointer; }
 .wb-clickable:hover { background: var(--row-hover); }
 .wb-role-chip { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.04em; border: 1px solid color-mix(in srgb, currentColor 40%, transparent); border-radius: var(--r-xs); padding: 0.1rem 0.45rem; white-space: nowrap; color: var(--muted-2); }
-.wb-role-dictor { color: #e0301c; }
-.wb-role-recon { color: #d8a022; }
+.wb-role-dictor { color: var(--v-bad, #e0301c); }
+.wb-role-recon { color: var(--v-warn, #d8a022); }
 .wb-role-logi { color: var(--success); }
 .wb-role-command { color: var(--gold); }
 .wb-role-capital { color: var(--accent); }
-.wb-role-probes { color: #ff9a3c; }
+.wb-role-probes { color: var(--v-warn, #ff9a3c); }
 
 /* Local panel: dots and badges carry the channel strips'
    standing palette, so a pilot reads the same in both places. */
@@ -154,7 +154,7 @@
 .wb-flag { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.05em; border-radius: var(--r-xs); padding: 0.1rem 0.4rem; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); }
 .wb-flag-young { color: var(--gold); }
 .wb-flag-recent { color: #7d8ca3; }
-.wb-flag-kill { color: #e0301c; }
+.wb-flag-kill { color: var(--v-bad, #e0301c); }
 .wb-pilot-facts { margin-left: auto; font-size: var(--fs-xs); color: var(--muted); text-align: right; }
 .wb-unknown { color: var(--muted); font-size: var(--fs-xs); }
 

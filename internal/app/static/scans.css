@@ -237,7 +237,7 @@ details > .sc-pilots { margin-left: 2.2rem; }
   vertical-align: middle;
 }
 .sc-signal::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); background: var(--sc-bar); }
-.sc-sigs tr:not(.partial) .sc-signal::before { background: color-mix(in srgb, #4fbf6a 40%, transparent); }
+.sc-sigs tr:not(.partial) .sc-signal::before { background: color-mix(in srgb, var(--v-good, #4fbf6a) 40%, transparent); }
 .sc-signal span { position: relative; display: block; padding: 0 0.35rem; font-size: var(--fs-xs); line-height: 1.1rem; font-variant-numeric: tabular-nums; }
 
 /* --- Phones: one column; the share row folds --- */

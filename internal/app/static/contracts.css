@@ -152,9 +152,9 @@
   -webkit-appearance: none; appearance: none;
   height: 0.45rem; border-radius: 999px;
   background: linear-gradient(to right,
-    #c0508a 0%, #c0508a 50%, #b33a3a 55%, #d0262c 60%,
-    #ce440f 65%, #dc6d07 70%, #f3fd82 75%, #71e554 80%,
-    #60dba3 85%, #4ecef8 90%, #3a9aeb 95%, #2c74e0 100%);
+    var(--v-sec-0, #c0508a) 0%, var(--v-sec-0, #c0508a) 50%, var(--v-sec-1, #b33a3a) 55%, var(--v-sec-2, #d0262c) 60%,
+    var(--v-sec-3, #ce440f) 65%, var(--v-sec-4, #dc6d07) 70%, var(--v-sec-5, #f3fd82) 75%, var(--v-sec-6, #71e554) 80%,
+    var(--v-sec-7, #60dba3) 85%, var(--v-sec-8, #4ecef8) 90%, var(--v-sec-9, #3a9aeb) 95%, var(--v-sec-10, #2c74e0) 100%);
 }
 .cs-secslider::-webkit-slider-thumb,
 .cs-rollslider::-webkit-slider-thumb {
@@ -559,15 +559,15 @@
   display: inline-block; width: 6.6rem; vertical-align: middle;
 }
 .cs-type.t-exchange { color: var(--accent); }
-.cs-type.t-auction { color: #fbbf24; }
-.cs-type.t-courier { color: #34d399; }
+.cs-type.t-auction { color: var(--v-warn, #fbbf24); }
+.cs-type.t-courier { color: var(--v-good, #34d399); }
 .cs-deal {
   display: inline-flex; align-items: center; gap: 0.2rem; vertical-align: middle;
   padding: 0.1rem 0.4rem; font-size: var(--fs-2xs); font-weight: 700;
   font-family: var(--font-display);
   text-transform: uppercase; letter-spacing: 0.04em;
-  color: #6ee7a8; background: rgba(6, 40, 24, 0.55);
-  border: 1px solid rgba(52, 211, 153, 0.5); border-radius: 0.25rem;
+  color: var(--v-good-ink, #6ee7a8); background: var(--v-good-bg, rgba(6, 40, 24, 0.55));
+  border: 1px solid color-mix(in srgb, var(--v-good, #34d399) 50%, transparent); border-radius: 0.25rem;
 }
 .cs-row-title {
   color: var(--text-bright); font-weight: 500; font-size: var(--fs-xs);
@@ -610,16 +610,16 @@
   display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;
   padding: 0.1rem 0.5rem; border-radius: 0.25rem;
 }
-.cs-pill.ab { background: rgba(8, 47, 73, 0.5); border: 1px solid rgba(34, 211, 238, 0.3); color: #a5f3fc; }
-.cs-pill.bp { background: rgba(69, 26, 3, 0.5); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; }
-.cs-pill.co { background: rgba(6, 40, 24, 0.5); border: 1px solid rgba(52, 211, 153, 0.3); color: #a7f3d0; }
+.cs-pill.ab { background: color-mix(in srgb, var(--v-info, #22d3ee) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--v-info, #22d3ee) 35%, transparent); color: var(--v-info-ink, #a5f3fc); }
+.cs-pill.bp { background: color-mix(in srgb, var(--v-warn, #f59e0b) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--v-warn, #f59e0b) 35%, transparent); color: var(--v-warn, #fcd34d); }
+.cs-pill.co { background: var(--v-good-bg, rgba(6, 40, 24, 0.5)); border: 1px solid color-mix(in srgb, var(--v-good, #34d399) 35%, transparent); color: var(--v-good-ink, #a7f3d0); }
 
 .cs-cell-value {
   font-weight: 700; font-size: var(--fs-sm); color: var(--text-bright);
   white-space: nowrap; margin-top: 0.15rem;
 }
 .cs-psub { font-size: var(--fs-xs); margin-top: 0.15rem; }
-.cs-psub.amber { color: #fbbf24; }
+.cs-psub.amber { color: var(--v-warn, #fbbf24); }
 .cs-psub.gray { color: var(--muted); }
 .cs-priced { font-size: var(--fs-xs); color: var(--muted); margin-top: 0.15rem; }
 .cs-spread { font-size: var(--fs-xs); color: var(--v-good, #34d399); margin-top: 0.15rem; }
@@ -695,7 +695,7 @@
 }
 .cs-aq { color: #ff882e; }
 .cs-tp { font-size: var(--fs-2xs); color: var(--v-good, #34d399); text-align: right; flex: none; }
-.cs-tp.un { color: #fbbf24; }
+.cs-tp.un { color: var(--v-warn, #fbbf24); }
 .cs-tnote { display: block; color: var(--muted); font-size: var(--fs-2xs); }
 .cs-tp.un .cs-tnote { color: inherit; font-size: var(--fs-xs); }
 .cs-srow {
@@ -732,7 +732,7 @@
 }
 .cs-telbar > span {
   display: block; height: 100%;
-  background: linear-gradient(90deg, #06b6d4, #34d399);
+  background: linear-gradient(90deg, var(--v-info, #06b6d4), var(--v-good, #34d399));
 }
 /* Roll rows, shared with the contract detail page's
    inline mutaplasmid panel. */

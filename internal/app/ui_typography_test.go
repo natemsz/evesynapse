@@ -165,3 +165,36 @@ func TestFontSizesNameTheScale(t *testing.T) {
 		}
 	}
 }
+
+// TestNavHeaderAndRailTooltipColors pins that sidebar category
+// headers, subcategory group labels, and rail icon hover tooltips
+// all read the scheme's --nav-head token rather than --text or
+// hardcoded ember yellow.
+func TestNavHeaderAndRailTooltipColors(t *testing.T) {
+	style := readStatic(t, "style.css")
+	for _, want := range []string{
+		"--nav-head: var(--gold);",
+		".branch .menu .nav-group-label, .switcher-menu .nav-group-label {",
+		"color: var(--nav-head);",
+		"background: color-mix(in srgb, var(--nav-head) 32%, transparent);",
+		"background: color-mix(in srgb, var(--panel) 95%, transparent);\n    border: 1px solid color-mix(in srgb, var(--nav-head) 35%, transparent);\n    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);\n    color: var(--nav-head);",
+		"html[data-nav=\"rail\"] .sidebar .branch .menu .nav-flyout-head {\n    display: block;\n    font-family: var(--font-display);\n    font-weight: var(--fw-display);\n    font-size: var(--fs-xs);\n    letter-spacing: 0.14em;\n    text-transform: uppercase;\n    line-height: 1;\n    color: var(--nav-head);",
+		"background: color-mix(in srgb, var(--accent) 14%, transparent);",
+	} {
+		if !strings.Contains(style, want) {
+			t.Errorf("style.css missing nav header/tooltip rule %q", want)
+		}
+	}
+	bg := readStatic(t, "bg.css")
+	for _, want := range []string{
+		"--nav-head: var(--sch-nav-head, var(--sch-hi));",
+		`html[data-scheme="triglavian"]`,
+		"--sch-nav-head: #f59e0b;",
+		`html[data-scheme="soe"]`,
+		"--sch-nav-head: #57d7e7;",
+	} {
+		if !strings.Contains(bg, want) {
+			t.Errorf("bg.css missing scheme nav header rule %q", want)
+		}
+	}
+}

@@ -652,18 +652,18 @@ td.mt-reqs { max-width: 12rem; }
 .viz-gear { display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem; flex: none; border-radius: 999px; border: 1px solid var(--box-edge); background: transparent; color: var(--muted); cursor: pointer; }
 .viz-gear:hover, .viz-gear:focus-visible { color: var(--accent); border-color: var(--accent); }
 .legend-ma20 { height: 2px; background: #8a93a6; }
-.legend-channel { background: rgba(255, 184, 77, 0.25); }
+.legend-channel { background: color-mix(in srgb, var(--success) 25%, transparent); }
 .pchart .chart-wick { stroke: rgba(230, 236, 245, 0.28); stroke-width: 1; }
 .pchart .chart-channel { fill: var(--success); fill-opacity: 0.07; stroke: color-mix(in srgb, var(--success) 35%, transparent); stroke-width: 1; }
 .pchart .chart-ma20 { fill: none; stroke: #8a93a6; stroke-width: 1.3; stroke-dasharray: 5 4; }
 .pchart .chart-area { fill: url(#chart-area-grad); }
 .chart-area-stop-top { stop-color: var(--success); stop-opacity: 0.28; }
 .chart-area-stop-bottom { stop-color: var(--success); stop-opacity: 0; }
-.pchart .chart-ma7 { fill: none; stroke: #f472b6; stroke-width: 1.6; }
-.legend-ma7 { height: 2px; background: #f472b6; }
-.pchart .chart-orders { fill: none; stroke: #7ac7ff; stroke-width: 1.2; }
-.pchart .orders-axis { fill: #7ac7ff; }
-.legend-orders { height: 2px; background: #7ac7ff; }
+.pchart .chart-ma7 { fill: none; stroke: var(--v-ma7, #f472b6); stroke-width: 1.6; }
+.legend-ma7 { height: 2px; background: var(--v-ma7, #f472b6); }
+.pchart .chart-orders { fill: none; stroke: var(--v-orders, #7ac7ff); stroke-width: 1.2; }
+.pchart .orders-axis { fill: var(--v-orders, #7ac7ff); }
+.legend-orders { height: 2px; background: var(--v-orders, #7ac7ff); }
 .legend-wick { background: linear-gradient(rgba(230, 236, 245, 0.8), rgba(230, 236, 245, 0.8)) center / 1.5px 100% no-repeat, linear-gradient(rgba(230, 236, 245, 0.8), rgba(230, 236, 245, 0.8)) center / 55% 1.5px no-repeat; }
 .viz-strip-key { margin-top: 0.35rem; }
 .viz-modal { max-width: 30rem; }
@@ -675,8 +675,8 @@ td.mt-reqs { max-width: 12rem; }
 .vt-switch input { opacity: 0; width: 100%; height: 100%; position: absolute; margin: 0; cursor: pointer; }
 .vt-track { position: absolute; inset: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.14); transition: background 0.15s; pointer-events: none; }
 .vt-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #cfd6e4; transition: left 0.15s, background 0.15s; }
-.vt-switch input:checked + .vt-track { background: rgba(255, 106, 26, 0.55); }
-.vt-switch input:checked + .vt-track::after { left: 20px; background: #ffb84d; }
+.vt-switch input:checked + .vt-track { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.vt-switch input:checked + .vt-track::after { left: 20px; background: var(--gold); }
 .vt-switch input:focus-visible + .vt-track { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Profit charts (profit v2, part 4). Colours only from theme tokens,

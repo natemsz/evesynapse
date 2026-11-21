@@ -71,10 +71,10 @@
   /* Ansiblex cost zones: teal (free) through amber to red, zone 5
      (the full rate, most of space) faint so the near bands lead. */
   --map-zone-1: var(--v-good, #5ce0c8);
-  --map-zone-2: #b8e05a;
+  --map-zone-2: var(--v-zone-2, #b8e05a);
   --map-zone-3: var(--v-warn, #f0b429);
   --map-zone-4: var(--v-bad, #ff6a2a);
-  --map-zone-5: rgba(214, 120, 110, 0.55);
+  --map-zone-5: var(--v-zone-5, rgba(214, 120, 110, 0.55));
   /* Ansiblex bridges over the zones, and the dark edge under them. */
   --map-bridge: #9fd8ff;
   --map-bridge-halo: rgba(0, 0, 0, 0.8);
@@ -89,8 +89,8 @@
   --map-d-industry: #ffa45c;
   --map-d-structures: #5ce0d8;
   --map-d-posted: #e6dccb;
-  --map-inc: #c64bd6;
-  --map-inc-staging: #ff5ce0;
+  --map-inc: var(--v-inc, #c64bd6);
+  --map-inc-staging: var(--v-inc-staging, #ff5ce0);
   --map-space: radial-gradient(120% 90% at 30% 20%, var(--map-glow-1), transparent 55%),
     radial-gradient(90% 80% at 80% 85%, var(--map-glow-2), transparent 60%),
     #070504;
@@ -118,13 +118,18 @@ html[data-theme="light"] .map {
   --map-sov-l: 45%;
   --map-npc: #8a7d72;
   --map-unheld: rgba(110, 84, 64, 0.28);
+  --map-route: #a86a10;
+  --map-route-halo: rgba(168, 106, 16, 0.22);
+  --map-intel: #0a7fa8;
+  --map-inc: #a12fb3;
+  --map-inc-staging: #d01ba8;
+  --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.07), transparent 55%), #fbf6ee;
+}
+html[data-theme="light"]:not([data-vision]) .map {
   --map-threat-lo: #f0c060;
   --map-threat-hi: #c8281a;
   --map-threat-core: #5a0a04;
   --map-camp: #c41818;
-  --map-route: #a86a10;
-  --map-route-halo: rgba(168, 106, 16, 0.22);
-  --map-intel: #0a7fa8;
   --map-intel-clear: #2f8f46;
   --map-d-pilots: #1f9d55;
   --map-d-fleet: #2563c9;
@@ -133,9 +138,6 @@ html[data-theme="light"] .map {
   --map-d-industry: #b4560f;
   --map-d-structures: #0f8a8a;
   --map-d-posted: #6b5a48;
-  --map-inc: #a12fb3;
-  --map-inc-staging: #d01ba8;
-  --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.07), transparent 55%), #fbf6ee;
 }
 
 /* --- The bar --- */

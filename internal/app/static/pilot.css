@@ -5,7 +5,7 @@
  * from data-w (scans.js); losses are red, as on the killboard. */
 
 .pi { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; --pi-loss: #d0453a; }
-html[data-theme="light"] .pi { --pi-loss: #b0302a; }
+html[data-theme="light"]:not([data-vision]) .pi { --pi-loss: #b0302a; }
 .pi h2 { margin: 0 0 var(--space-2); }
 
 .pi h3 { margin: 0 0 var(--space-2); display: flex; align-items: baseline; gap: 0.5rem; }

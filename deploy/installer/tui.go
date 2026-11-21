@@ -18,7 +18,6 @@ import (
 
 var (
 	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4500"))
-	boltStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4500"))
 	mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("247"))
 	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
 	okStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))

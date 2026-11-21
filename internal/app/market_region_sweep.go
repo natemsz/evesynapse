@@ -57,6 +57,11 @@ const (
 	// defaultBookWindow is the market order route's cache window,
 	// used when ESI's headers do not give one.
 	defaultBookWindow = 5 * time.Minute
+	// sweepPageTokens is what ESI charges for one successful page.
+	sweepPageTokens = 2
+	// sweepBudgetWait is how long a region whose read the rate budget
+	// cannot cover waits before asking for page 1 again.
+	sweepBudgetWait = 30 * time.Second
 )
 
 // regionSweepDue reports whether a region may start a sweep now: its
@@ -127,6 +132,7 @@ func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBu
 	defer app.sweepMu.Unlock()
 
 	var limitHit atomic.Bool
+	var claims sweepTokenClaims
 	outcomes := make([]regionSweepOutcome, len(sweptRegions))
 	var wg sync.WaitGroup
 	now := time.Now()
@@ -138,7 +144,7 @@ func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBu
 		go func() {
 			defer wg.Done()
 			defer recoverWorkerPanic("region sweep")
-			outcomes[i] = app.sweepRegion(ctx, region.ID, allowance, &limitHit)
+			outcomes[i] = app.sweepRegion(ctx, region.ID, allowance, &limitHit, &claims)
 		}()
 	}
 	wg.Wait()
@@ -151,10 +157,30 @@ func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBu
 	return stored, limited
 }
 
+// sweepTokenClaims is the rate-limit tokens the regions of one pass
+// have set aside, so regions starting together cannot each count the
+// same headroom.
+type sweepTokenClaims struct {
+	mu      sync.Mutex
+	claimed int
+}
+
+// claim sets aside need tokens if headroom still covers them.
+func (c *sweepTokenClaims) claim(headroom, need int) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if headroom-c.claimed < need {
+		return false
+	}
+	c.claimed += need
+	return true
+}
+
 // sweepRegion reads one region's whole book and stores it. A read cut
 // short (the allowance, the error limit, a failed page, a mixed
-// window) stores nothing; the region is read again from page 1.
-func (app *Application) sweepRegion(ctx context.Context, regionID int64, allowance *fetchBudget, limitHit *atomic.Bool) regionSweepOutcome {
+// window) stores nothing; the region is read again from page 1, so a
+// read starts past page 1 only when the rate budget covers all of it.
+func (app *Application) sweepRegion(ctx context.Context, regionID int64, allowance *fetchBudget, limitHit *atomic.Bool, claims *sweepTokenClaims) regionSweepOutcome {
 	var out regionSweepOutcome
 	label := marketRegionLabel(regionID)
 	if !allowance.take() {
@@ -185,6 +211,15 @@ func (app *Application) sweepRegion(ctx context.Context, regionID int64, allowan
 	app.hubBooksMu.Unlock()
 	if total > maxRegionSweepPagesTotal {
 		total = maxRegionSweepPagesTotal
+	}
+	if total > 1 {
+		path := fmt.Sprintf("/markets/%d/orders/", regionID)
+		if headroom, known := app.esi.RouteHeadroom(http.MethodGet, path, time.Now()); known && !claims.claim(headroom, (total-1)*sweepPageTokens) {
+			app.holdSweep(regionID, time.Now().Add(sweepBudgetWait))
+			out.limited = true
+			logging.Infof("worker: region sweep: %s waits for rate budget: %d pages need %d tokens, %d free", label, total-1, (total-1)*sweepPageTokens, headroom)
+			return out
+		}
 	}
 
 	pages := make([][]esi.MarketOrder, total)

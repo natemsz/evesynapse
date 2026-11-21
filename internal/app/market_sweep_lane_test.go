@@ -32,6 +32,7 @@ type pagedBookTransport struct {
 	failPages   map[[2]int64]int    // (region, page) -> status answered instead of the book
 	modified    map[[2]int64]string // (region, page) -> Last-Modified answered, when set
 	delay       time.Duration       // artificial latency per request
+	remaining   int                 // market-order tokens stated as left, when set
 	requests    [][2]int64
 	inFlight    atomic.Int64
 	maxInFlight atomic.Int64
@@ -76,6 +77,11 @@ func (s *pagedBookTransport) RoundTrip(req *http.Request) (*http.Response, error
 		}, nil
 	}
 	header.Set("X-Pages", fmt.Sprintf("%d", len(pages)))
+	if s.remaining > 0 {
+		header.Set("X-Ratelimit-Group", "market-order")
+		header.Set("X-Ratelimit-Limit", "12000/15m")
+		header.Set("X-Ratelimit-Remaining", fmt.Sprintf("%d", s.remaining))
+	}
 	if modified != "" {
 		header.Set("Last-Modified", modified)
 	}
@@ -152,6 +158,29 @@ func TestSweepConcurrentRegionsBothComplete(t *testing.T) {
 		if err != nil || len(rows) != 1 || rows[0].TypeID != wantType {
 			t.Fatalf("region %d stats after concurrent sweep: %+v err=%v, want one row for type %d", regionID, rows, err, wantType)
 		}
+	}
+}
+
+func TestSweepWaitsWhenBudgetCannotCoverTheBook(t *testing.T) {
+	transport := &pagedBookTransport{books: map[int64][][]esi.MarketOrder{}, remaining: 1100}
+	app, _, q := buildCorpTestApp(t, transport)
+	for _, region := range sweptRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	transport.books[10000002] = [][]esi.MarketOrder{
+		{{OrderID: 1, TypeID: 34, Price: 5.0, VolumeRemain: 1}},
+		{{OrderID: 2, TypeID: 34, Price: 6.0, VolumeRemain: 1}},
+		{{OrderID: 3, TypeID: 34, Price: 7.0, VolumeRemain: 1}},
+	}
+
+	app.sweepRegionStats(context.Background(), &fetchBudget{left: 1000})
+	if got := transport.pagesFor(10000002); !slices.Equal(got, []int64{1}) {
+		t.Fatalf("pages read with too little budget: %v, want only page 1", got)
+	}
+	if !app.sweepBackedOff(10000002, time.Now()) {
+		t.Fatal("a region short of budget must wait before asking again")
 	}
 }
 

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -20,9 +19,10 @@ import (
 var (
 	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4500"))
 	boltStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4500"))
-	mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("247"))
 	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
 	okStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	warnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
 )
 
 type stage int
@@ -35,12 +35,17 @@ const (
 	stageDBURL
 	stageClientID
 	stageClientSecret
+	stageCallback
 	stageContact
 	stageReview
+	stageEdit
 	stageInstall
 	stageDone
 	stageFailed
 )
+
+// frameEvery paces the bolt: one turn takes about 2.4 seconds.
+const frameEvery = 66 * time.Millisecond
 
 type tickMsg time.Time
 type stepMsg int // install advanced to this many steps done
@@ -60,27 +65,35 @@ type downloadDoneMsg struct {
 
 // model is the installer interface.
 type model struct {
-	a       *answers
-	dryRun  bool
-	stage   stage
-	frame   int
-	input   textinput.Model
-	choice  int // selected option on choice stages
-	errMsg  string
-	review  table.Model
-	bar     progress.Model
+	a             *answers
+	dryRun        bool
+	stage         stage
+	frame         int
+	input         textinput.Model
+	choice        int // selected option on choice stages
+	errMsg        string
+	width, height int
+	// review state
+	cursor    int  // index into reviewItems
+	scroll    int  // first visible list line
+	showAll   bool // list every setting, not only the important ones
+	filtering bool // the filter box has focus
+	filter    textinput.Model
+	editKey   string // the setting open on stageEdit
+	notice    string // one-line result of the last review action
+	bar       progress.Model
 	// download state
 	dlAttempts []providerAttempt
 	dlPct      float64
 	dlErr      error
 	dlCh       chan tea.Msg
 	// install state
-	step      int
+	step       int
 	totalSteps int
-	failedAt  string
-	failOut   string
-	installCh chan tea.Msg
-	quitting  bool
+	failedAt   string
+	failOut    string
+	installCh  chan tea.Msg
+	quitting   bool
 	// returnToReview is set when a prompt was entered from the
 	// review screen: finishing it goes back to the review.
 	returnToReview bool
@@ -89,12 +102,15 @@ type model struct {
 func newModel(a *answers, dryRun bool) model {
 	bar := progress.New(progress.WithSolidFill("#FF4500"))
 	bar.Width = 60
-	return model{a: a, dryRun: dryRun, bar: bar, choice: 0}
+	filter := textinput.New()
+	filter.Prompt = "/ "
+	filter.Placeholder = "filter settings"
+	return model{a: a, dryRun: dryRun, bar: bar, choice: 0, filter: filter}
 }
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(
-		tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) }),
+		tea.Tick(frameEvery, func(t time.Time) tea.Msg { return tickMsg(t) }),
 		func() tea.Msg { return startMsg{} },
 	)
 }
@@ -106,19 +122,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case startMsg:
 		return m, m.advanceFrom(stageSource - 1) // start at the first stage
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		m.keepCursorVisible()
+		return m, nil
 	case tea.KeyMsg:
-		// Keys the stage itself consumes go to handleKey; the
-		// rest go to the input or the table on this screen.
 		if m.stage == stageReview {
-			switch msg.String() {
-			case "enter", "q", "ctrl+c":
-				return m.handleKey(msg)
-			default:
-				var cmd tea.Cmd
-				m.review, cmd = m.review.Update(msg)
-				return m, cmd
-			}
+			return m.handleReviewKey(msg)
 		}
+		if m.stage == stageEdit {
+			return m.handleEditKey(msg)
+		}
+		// Keys the stage itself consumes go to handleKey; the
+		// rest go to the input on this screen.
 		if m.isPromptStage() && msg.String() != "enter" && msg.String() != "esc" && msg.String() != "ctrl+c" {
 			var cmd tea.Cmd
 			m.input, cmd = m.input.Update(msg)
@@ -126,8 +142,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.handleKey(msg)
 	case tickMsg:
-		m.frame = (m.frame + 1) % len(boltFrames)
-		return m, tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
+		m.frame = (m.frame + 1) % boltFrameCount
+		return m, tea.Tick(frameEvery, func(t time.Time) tea.Msg { return tickMsg(t) })
 	case downloadAttemptMsg:
 		m.dlAttempts = append(m.dlAttempts, msg.att)
 		return m, m.waitDownload
@@ -178,10 +194,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd
 	}
-	// The review table gets the other messages on the review stage.
-	if m.stage == stageReview {
+	if m.stage == stageEdit {
 		var cmd tea.Cmd
-		m.review, cmd = m.review.Update(msg)
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+	}
+	if m.stage == stageReview && m.filtering {
+		var cmd tea.Cmd
+		m.filter, cmd = m.filter.Update(msg)
 		return m, cmd
 	}
 	return m, nil
@@ -190,7 +210,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // isPromptStage reports whether the current stage takes text input.
 func (m *model) isPromptStage() bool {
 	switch m.stage {
-	case stageSourceDir, stageDBURL, stageClientID, stageClientSecret, stageContact:
+	case stageSourceDir, stageDBURL, stageClientID, stageClientSecret, stageCallback, stageContact:
 		return true
 	}
 	return false
@@ -214,7 +234,7 @@ func (m *model) needsStage(s stage) bool {
 		if !isLinux() {
 			return false // elsewhere the URL is asked directly
 		}
-		return !a.given["databaseURL"]
+		return !a.given["databaseURL"] && a.databaseURL != "present"
 	case stageDBURL:
 		if a.dbLocal {
 			return false
@@ -224,11 +244,13 @@ func (m *model) needsStage(s stage) bool {
 		}
 		return !a.given["databaseURL"]
 	case stageClientID:
-		return !a.given["clientID"]
+		return !a.given["clientID"] && a.existingEnv["EVE_CLIENT_ID"] == ""
 	case stageClientSecret:
-		return !a.given["clientSecret"]
+		return !a.given["clientSecret"] && a.existingEnv["EVE_CLIENT_SECRET"] == ""
+	case stageCallback:
+		return !a.given["callback"] && a.existingEnv["EVE_CALLBACK_URL"] == ""
 	case stageContact:
-		return !a.given["contact"]
+		return !a.given["contact"] && a.existingEnv["ESI_CONTACT"] == ""
 	}
 	return true
 }
@@ -237,7 +259,7 @@ func (m *model) needsStage(s stage) bool {
 // is where the prompts end, reached by advanceFrom's fallthrough.
 var stageOrder = []stage{
 	stageSource, stageSourceDir, stageDownload, stageDB, stageDBURL,
-	stageClientID, stageClientSecret, stageContact,
+	stageClientID, stageClientSecret, stageCallback, stageContact,
 }
 
 // advanceFrom moves to the next stage after s that has anything
@@ -311,71 +333,27 @@ func (m *model) enterStage(s stage) tea.Cmd {
 		m.startPrompt(s, "EVE client ID", a.clientID, false)
 	case stageClientSecret:
 		m.startPrompt(s, "EVE client secret", a.clientSecret, true)
+	case stageCallback:
+		v := a.callback
+		if v == "" {
+			cb, _ := settingFor("EVE_CALLBACK_URL")
+			v = cb.Default
+		}
+		m.startPrompt(s, "https://your-host/auth/callback", v, false)
 	case stageContact:
 		m.startPrompt(s, "Contact email", a.contact, false)
 	}
 	return nil
 }
 
-// enterReview builds the review table and shows it.
+// enterReview shows the settings review.
 func (m *model) enterReview() tea.Cmd {
 	m.stage = stageReview
-	rows := m.a.reviewRows()
-	cols := []table.Column{
-		{Title: "Setting", Width: 22},
-		{Title: "Value", Width: 52},
-		{Title: "Source", Width: 14},
-	}
-	var trows []table.Row
-	for _, r := range rows {
-		trows = append(trows, table.Row{r.setting, r.value, r.source.String()})
-	}
-	trows = append(trows, table.Row{"Install EveSynapse", "", ""})
-	t := table.New(
-		table.WithColumns(cols),
-		table.WithRows(trows),
-		table.WithFocused(true),
-		table.WithHeight(len(trows)+1),
-	)
-	styles := table.DefaultStyles()
-	styles.Header = styles.Header.Bold(true)
-	styles.Selected = styles.Selected.Foreground(lipgloss.Color("#FF4500")).Bold(true)
-	t.SetStyles(styles)
-	m.review = t
-	return nil
-}
-
-// editRow jumps from the review to the stage that edits a row.
-func (m *model) editRow(row int) tea.Cmd {
-	rows := m.a.reviewRows()
-	if row < 0 || row >= len(rows) {
-		return nil
-	}
-	edit := rows[row].edit
-	if edit == "" {
-		return nil
-	}
-	m.returnToReview = true
-	switch edit {
-	case "source":
-		m.a.given["source"] = false
-		return m.enterStage(stageSource)
-	case "db":
-		m.a.given["databaseURL"] = false
-		if isLinux() {
-			return m.enterStage(stageDB)
-		}
-		return m.enterStage(stageDBURL)
-	case "clientid":
-		m.a.given["clientID"] = false
-		return m.enterStage(stageClientID)
-	case "clientsecret":
-		m.a.given["clientSecret"] = false
-		return m.enterStage(stageClientSecret)
-	case "contact":
-		m.a.given["contact"] = false
-		return m.enterStage(stageContact)
-	}
+	m.errMsg = ""
+	m.filtering = false
+	m.filter.Blur()
+	m.clampCursor()
+	m.keepCursorVisible()
 	return nil
 }
 
@@ -455,7 +433,7 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case stageDBURL, stageClientID, stageClientSecret, stageContact:
+	case stageDBURL, stageClientID, stageClientSecret, stageCallback, stageContact:
 		if msg.String() == "enter" {
 			v := strings.TrimSpace(m.input.Value())
 			switch m.stage {
@@ -493,6 +471,15 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.a.orgClientSecret = orgNew
 				}
 				return m, m.advanceFrom(stageClientSecret)
+			case stageCallback:
+				cb, _ := settingFor("EVE_CALLBACK_URL")
+				if err := cb.validate(v); err != nil {
+					m.errMsg = err.Error()
+					return m, nil
+				}
+				m.a.callback = v
+				m.a.orgCallback = orgNew
+				return m, m.advanceFrom(stageCallback)
 			case stageContact:
 				m.a.contact = v
 				if v == "" {
@@ -506,32 +493,6 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if msg.String() == "esc" {
 			return m, m.advanceFrom(stageSource - 1)
-		}
-		return m, nil
-
-	case stageReview:
-		switch msg.String() {
-		case "enter":
-			row := m.review.Cursor()
-			rows := len(m.a.reviewRows())
-			if row == rows {
-				// Confirm: install, or stop here on a dry run.
-				if m.dryRun {
-					m.quitting = true
-					return m, tea.Quit
-				}
-				m.stage = stageInstall
-				m.step = 0
-				if m.a.source == sourceDownload {
-					m.step = 1
-				}
-				m.totalSteps = len(installStepsFor(m.a))
-				return m.runInstall()
-			}
-			return m, m.editRow(row)
-		case "q":
-			m.quitting = true
-			return m, tea.Quit
 		}
 		return m, nil
 
@@ -550,7 +511,7 @@ func (m *model) startPrompt(s stage, placeholder, value string, masked bool) {
 	m.stage = s
 	ti := textinput.New()
 	ti.Focus()
-	ti.Width = 60
+	ti.Width = min(60, max(20, m.bodyWidth()-6))
 	ti.Placeholder = placeholder
 	ti.SetValue(value)
 	if masked {
@@ -649,25 +610,48 @@ func (m model) waitInstall() tea.Msg {
 // Rendering
 // ---------------------------------------------------------------------------
 
-// boltHeader renders the spinning bolt, the title, the tagline,
-// and the credits.
-func (m model) boltHeader() string {
-	var b strings.Builder
-	for _, ln := range boltFrames[m.frame] {
-		b.WriteString(boltStyle.Render(ln) + "\n")
+// size is the terminal size, with a default until it is known.
+func (m model) size() (int, int) {
+	if m.width <= 0 || m.height <= 0 {
+		return defaultWidth, defaultHeight
 	}
-	b.WriteString("\n" + titleStyle.Render("  EVESYNAPSE") + "\n")
-	b.WriteString("  " + mutedStyle.Render(tagline) + "\n")
-	b.WriteString("  " + mutedStyle.Render(creditsLine) + "\n")
-	return b.String()
+	return m.width, m.height
 }
 
-// errLine renders the inline validation error, when there is one.
-func (m model) errLine() string {
-	if m.errMsg == "" {
-		return ""
+// bodyWidth is the width of the content column.
+func (m model) bodyWidth() int {
+	w, _ := m.size()
+	return max(20, min(maxBodyWidth, w-4))
+}
+
+// promptBody lays out a question: centered title and help, the
+// control as a centered block, and the key hints.
+func (m model) promptBody(title string, help []string, control, hint string) string {
+	w := m.bodyWidth()
+	wrap := lipgloss.NewStyle().Width(w).Align(lipgloss.Center)
+	parts := []string{wrap.Render(titleStyle.Render(title))}
+	for _, h := range help {
+		parts = append(parts, wrap.Render(h))
 	}
-	return "\n" + errStyle.Render(m.errMsg) + "\n"
+	parts = append(parts, "", center(w, control))
+	if m.errMsg != "" {
+		parts = append(parts, "", wrap.Render(errStyle.Render(m.errMsg)))
+	}
+	parts = append(parts, "", wrap.Render(mutedStyle.Render(hint)))
+	return strings.Join(parts, "\n")
+}
+
+// choiceBlock renders options with the selection marked.
+func (m model) choiceBlock(opts []string) string {
+	var lines []string
+	for i, o := range opts {
+		mark := "  "
+		if i == m.choice {
+			mark = titleStyle.Render("> ")
+		}
+		lines = append(lines, mark+truncateCells(o, m.bodyWidth()-2))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
 // View renders the current screen.
@@ -675,36 +659,35 @@ func (m model) View() string {
 	if m.quitting {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString(m.boltHeader())
-	b.WriteString("\n")
+	w, h := m.size()
+	if m.stage == stageReview {
+		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, m.reviewView())
+	}
+	body := center(w, lipgloss.NewStyle().Width(m.bodyWidth()).Render(m.stageBody(h)))
+	return compose(w, h, m.frame, body)
+}
 
+const (
+	promptHint = "Enter to continue, Esc to go back."
+	choiceHint = "Up and down to choose, Enter to continue, Ctrl+C to quit."
+)
+
+// stageBody renders everything below the header.
+func (m model) stageBody(h int) string {
+	var b strings.Builder
 	switch m.stage {
 	case stageSource:
-		b.WriteString(titleStyle.Render("How should EveSynapse be installed?") + "\n\n")
-		opts := []string{
-			"Build from source, from a checkout on this machine",
-			"Download the latest release (GitHub, then GitLab, then natems.dev)",
-		}
-		for i, o := range opts {
-			mark := "  "
-			if i == m.choice {
-				mark = titleStyle.Render("> ")
-			}
-			b.WriteString(mark + o + "\n")
-		}
-		b.WriteString("\n" + mutedStyle.Render("Up and down to choose, Enter to continue, Ctrl+C to quit.") + "\n")
+		return m.promptBody("How should EveSynapse be installed?", nil, m.choiceBlock([]string{
+			"Build from a checkout on this machine",
+			"Download the latest release",
+		}), choiceHint)
 
 	case stageSourceDir:
-		b.WriteString(titleStyle.Render("Where is the EveSynapse checkout?") + "\n")
-		if detectSourceDir() != "" {
-			b.WriteString("Found one at " + detectSourceDir() + "; change it below if that is not the right one.\n\n")
-		} else {
-			b.WriteString("The checkout holds the source the install builds from.\n\n")
+		help := "The checkout holds the source the install builds from."
+		if d := detectSourceDir(); d != "" {
+			help = "Found one at " + d + ". Change it below if that is not the right one."
 		}
-		b.WriteString(m.input.View() + "\n")
-		b.WriteString(m.errLine())
-		b.WriteString("\n" + mutedStyle.Render("Enter to continue, Esc to go back.") + "\n")
+		return m.promptBody("Where is the EveSynapse checkout?", []string{help}, m.input.View(), promptHint)
 
 	case stageDownload:
 		if m.dlErr != nil {
@@ -714,8 +697,8 @@ func (m model) View() string {
 			for _, p := range providerDownloadPages {
 				b.WriteString("  " + p + "\n")
 			}
-			b.WriteString("\n" + mutedStyle.Render("Enter to choose a different source, Q to quit.") + "\n")
-			break
+			b.WriteString("\n" + mutedStyle.Render("Enter to choose a different source, Q to quit."))
+			return b.String()
 		}
 		b.WriteString(titleStyle.Render("Downloading the latest release...") + "\n\n")
 		for _, att := range m.dlAttempts {
@@ -729,15 +712,15 @@ func (m model) View() string {
 			if len(m.dlAttempts) == 0 {
 				b.WriteString("  Trying GitHub...\n")
 			} else {
-				b.WriteString("  " + m.bar.View() + "\n")
+				b.WriteString("  " + m.barView() + "\n")
 			}
 		} else {
 			b.WriteString("\n" + okStyle.Render("Release v"+m.a.release.Version+" from "+providerDisplayName(m.a.release.Provider)+".") + "\n")
 		}
-		b.WriteString("\n" + mutedStyle.Render("One provider failing just tries the next.") + "\n")
+		b.WriteString("\n" + mutedStyle.Render("One provider failing just tries the next."))
+		return b.String()
 
 	case stageDB:
-		b.WriteString(titleStyle.Render("Where should EveSynapse keep its data?") + "\n\n")
 		opts := []string{
 			"Set up PostgreSQL on this machine (recommended)",
 			"Use a PostgreSQL database I already have",
@@ -745,97 +728,91 @@ func (m model) View() string {
 		if m.a.hasLocalPG {
 			opts[0] += " (already installed)"
 		}
-		for i, o := range opts {
-			mark := "  "
-			if i == m.choice {
-				mark = titleStyle.Render("> ")
-			}
-			b.WriteString(mark + o + "\n")
-		}
-		b.WriteString("\n" + mutedStyle.Render("Up and down to choose, Enter to continue, Ctrl+C to quit.") + "\n")
+		return m.promptBody("Where should EveSynapse keep its data?", nil, m.choiceBlock(opts), choiceHint)
 
 	case stageDBURL:
+		help := []string{"It looks like postgres://user:password@host:5432/evesynapse"}
 		if !isLinux() {
-			b.WriteString(titleStyle.Render("What is the connection string for your database?") + "\n")
-			b.WriteString("Local provisioning needs a Linux machine, so give the\n")
-			b.WriteString("DATABASE_URL of a PostgreSQL you already have, or leave\n")
-			b.WriteString("it blank to add it later (the app will not start without one).\n\n")
-		} else {
-			b.WriteString(titleStyle.Render("What is the connection string for your database?") + "\n")
-			b.WriteString("It looks like postgres://user:password@host:5432/evesynapse\n\n")
+			help = []string{"Local setup needs a Linux machine. Give the DATABASE_URL of a PostgreSQL you already have, or leave it blank to add it later. The app will not start without one."}
 		}
-		b.WriteString(m.input.View() + "\n")
-		b.WriteString(m.errLine())
-		b.WriteString("\n" + mutedStyle.Render("Enter to continue, Esc to go back.") + "\n")
+		return m.promptBody("What is the connection string for your database?", help, m.input.View(), promptHint)
 
 	case stageClientID:
-		b.WriteString(titleStyle.Render("What is your EVE Online application client ID?") + "\n")
-		b.WriteString("Find it at developers.eveonline.com, on your application page.\n")
-		b.WriteString("Leave it blank to add it later; sign-in stays off until then.\n\n")
-		b.WriteString(m.input.View() + "\n")
-		b.WriteString(m.errLine())
-		b.WriteString("\n" + mutedStyle.Render("Enter to continue, Esc to go back.") + "\n")
+		return m.promptBody("What is your EVE Online application client ID?", []string{
+			"Find it at developers.eveonline.com, on your application page.",
+			"Leave it blank to add it later. Sign-in stays off until then.",
+		}, m.input.View(), promptHint)
 
 	case stageClientSecret:
-		b.WriteString(titleStyle.Render("What is your EVE Online application client secret?") + "\n")
-		b.WriteString("It is on the same application page as the client ID.\n")
-		b.WriteString("Leave it blank to add it later; sign-in stays off until then.\n\n")
-		b.WriteString(m.input.View() + "\n")
-		b.WriteString(m.errLine())
-		b.WriteString("\n" + mutedStyle.Render("Enter to continue, Esc to go back.") + "\n")
+		return m.promptBody("What is your EVE Online application client secret?", []string{
+			"It is on the same application page as the client ID.",
+			"Leave it blank to add it later. Sign-in stays off until then.",
+		}, m.input.View(), promptHint)
+
+	case stageCallback:
+		return m.promptBody("What is your EVE callback URL?", []string{
+			"CCP sends the browser here after login.",
+			"It must match your EVE application exactly.",
+		}, m.input.View(), promptHint)
 
 	case stageContact:
-		b.WriteString(titleStyle.Render("What email should CCP see as the contact for your EVE application?") + "\n")
-		b.WriteString("CCP uses it to reach you about your application. Leave it blank\n")
-		b.WriteString("to skip it.\n\n")
-		b.WriteString(m.input.View() + "\n")
-		b.WriteString(m.errLine())
-		b.WriteString("\n" + mutedStyle.Render("Enter to continue, Esc to go back.") + "\n")
+		return m.promptBody("What email should CCP see as your contact?", []string{
+			"CCP uses it to reach you about your application. Leave it blank to skip it.",
+		}, m.input.View(), promptHint)
 
-	case stageReview:
-		b.WriteString(titleStyle.Render("Here is what the install will use.") + "\n")
-		b.WriteString("Move to a line and press Enter to change it, or choose Install to go ahead.\n\n")
-		b.WriteString(mutedStyle.Render("Detected on this machine:") + "\n")
-		for _, d := range m.a.detectedLines() {
-			b.WriteString("  " + d[0] + ": " + d[1] + "\n")
+	case stageEdit:
+		s, _ := settingFor(m.editKey)
+		help := []string{s.Help}
+		hint := "Enter to save, Esc to cancel."
+		if s.Kind == kindSecret {
+			hint = "Enter to save, Esc to cancel. Leave blank to keep the current value."
 		}
-		b.WriteString("\n")
-		b.WriteString(m.review.View() + "\n")
-		b.WriteString("\n" + mutedStyle.Render("Up and down to move, Enter to change or install, Q to quit.") + "\n")
-		if m.dryRun {
-			b.WriteString(mutedStyle.Render("(Dry run: nothing will be installed.)") + "\n")
+		if len(s.Choices) > 0 {
+			help = append(help, "Choices: "+strings.Join(s.Choices, ", "))
+			hint = "Tab to cycle the choices, Enter to save, Esc to cancel."
 		}
+		if s.Default != "" {
+			help = append(help, "Default: "+s.Default)
+		}
+		return m.promptBody(s.Key, help, m.input.View(), hint)
 
 	case stageInstall:
 		b.WriteString(titleStyle.Render("Installing EveSynapse...") + "\n\n")
-		steps := installStepsFor(m.a)
-		for i, s := range steps {
+		for i, st := range installStepsFor(m.a) {
 			switch {
 			case i < m.step:
-				b.WriteString("  " + okStyle.Render("[x]") + " " + s.name + "\n")
+				b.WriteString("  " + okStyle.Render("[x]") + " " + st.name + "\n")
 			case i == m.step:
-				b.WriteString("  " + titleStyle.Render("[*]") + " " + s.name + "...\n")
+				b.WriteString("  " + titleStyle.Render("[*]") + " " + st.name + "...\n")
 			default:
-				b.WriteString("  [ ] " + s.name + "\n")
+				b.WriteString("  [ ] " + st.name + "\n")
 			}
 		}
-		b.WriteString("\n" + m.bar.View() + "\n")
-		b.WriteString("\n" + mutedStyle.Render("Please wait, this takes a few minutes.") + "\n")
+		b.WriteString("\n" + m.barView() + "\n")
+		b.WriteString("\n" + mutedStyle.Render("Please wait, this takes a few minutes."))
+		return b.String()
 
 	case stageDone:
-		b.WriteString(titleStyle.Render("Done. EveSynapse is listening on " + m.a.siteURL() + ".") + "\n\n")
+		b.WriteString(titleStyle.Render("Done. EveSynapse is at "+m.a.siteURL()+".") + "\n\n")
 		b.WriteString(m.doneNotes())
-		b.WriteString("\n" + mutedStyle.Render(creditsLine) + "\n")
-		b.WriteString("\n" + mutedStyle.Render("Press Enter to finish.") + "\n")
+		b.WriteString("\n" + mutedStyle.Render("Press Enter to finish."))
+		return b.String()
 
 	case stageFailed:
 		b.WriteString(errStyle.Render("The install stopped at: "+m.failedAt) + "\n\n")
-		b.WriteString("What the installer said:\n---\n")
-		b.WriteString(lastLines(m.failOut, 30))
-		b.WriteString("---\n")
-		b.WriteString("\n" + mutedStyle.Render("Press Enter to finish.") + "\n")
+		b.WriteString("What the installer said:\n")
+		b.WriteString(lastLines(m.failOut, max(4, min(30, h-10))))
+		b.WriteString("\n" + mutedStyle.Render("Press Enter to finish."))
+		return b.String()
 	}
 	return b.String()
+}
+
+// barView renders the progress bar at the column's width.
+func (m model) barView() string {
+	bar := m.bar
+	bar.Width = min(60, m.bodyWidth()-2)
+	return bar.View()
 }
 
 // doneNotes lists what to do next, and what was skipped.
@@ -852,7 +829,7 @@ func (m *model) doneNotes() string {
 		b.WriteString("  " + linuxNote("The service and local database setup") + "\n")
 	}
 	b.WriteString("  Your reverse proxy is yours to arrange: point Ferron, Caddy,\n")
-	b.WriteString("  nginx, or a Cloudflare Tunnel at 127.0.0.1:8080 to reach it\n")
+	b.WriteString("  nginx, or a Cloudflare Tunnel at " + strings.TrimPrefix(a.siteURL(), "http://") + " to reach it\n")
 	b.WriteString("  from the internet.\n")
 	if a.clientID == "" || a.clientSecret == "" {
 		b.WriteString("  Sign-in stays off until you add your EVE client ID and secret\n")
@@ -878,9 +855,23 @@ func lastLines(s string, n int) string {
 }
 
 func runTUI(a *answers, dryRun bool) {
-	p := tea.NewProgram(newModel(a, dryRun))
-	if _, err := p.Run(); err != nil {
+	p := tea.NewProgram(newModel(a, dryRun), tea.WithAltScreen())
+	final, err := p.Run()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "installer:", err)
 		os.Exit(1)
+	}
+	// The full-screen view is gone once the program exits, so the
+	// outcome is printed where it stays in the scrollback.
+	if m, ok := final.(model); ok {
+		switch m.stage {
+		case stageDone:
+			fmt.Println("Done. EveSynapse is at " + a.siteURL() + ".")
+			plainDoneNotes(a)
+		case stageFailed:
+			fmt.Fprintln(os.Stderr, "The install stopped at: "+m.failedAt)
+			fmt.Fprint(os.Stderr, lastLines(m.failOut, 30))
+			os.Exit(1)
+		}
 	}
 }

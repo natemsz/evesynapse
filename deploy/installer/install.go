@@ -7,14 +7,15 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // installStep is one progress step: its plain-language name and
@@ -127,6 +128,18 @@ func runInstallLinux(ctx context.Context, a *answers, steps []installStep, step 
 	done = 5
 	step(done)
 
+	// Every answer and review edit goes into .env here, before the
+	// app first reads it.
+	envPath := filepath.Join(a.installDir, ".env")
+	if err := updateEnvFile(envPath, a.finalEdits()); err != nil {
+		return fmt.Errorf("could not write your settings to %s: %v", envPath, err)
+	}
+	if data, err := os.ReadFile(envPath); err == nil {
+		if a.dbLocal && parseEnv(string(data))["DATABASE_URL"] == templateDatabaseURL {
+			return fmt.Errorf("the local database was not set up, so %s still has the template's DATABASE_URL", envPath)
+		}
+	}
+
 	// Start the app, so the site answers when the installer
 	// says it is ready. A service that will not start is a
 	// warning on the done screen, not a failed install: the
@@ -134,9 +147,14 @@ func runInstallLinux(ctx context.Context, a *answers, steps []installStep, step 
 	// journal. Without systemd there is nothing to start: the
 	// operator starts the service by hand.
 	if hasSystemd() {
-		if out, err := runCmd("systemctl", "start", "evesynapse"); err != nil {
+		// A restart also applies a new build and new settings to a
+		// service that was already running.
+		if out, err := runCmd("systemctl", "restart", "evesynapse"); err != nil {
 			log("Warning: EveSynapse did not start (" + strings.TrimSpace(out) + "). See: journalctl -u evesynapse")
 			a.startWarning = "EveSynapse did not start; see: journalctl -u evesynapse"
+		} else if err := waitHealthy(ctx, a.siteURL()+"/healthz", healthWait); err != nil {
+			log("Warning: " + err.Error())
+			a.startWarning = err.Error() + " See: journalctl -u evesynapse"
 		}
 	} else {
 		log("No systemd on this machine; start EveSynapse by hand: evesynapse")
@@ -145,6 +163,38 @@ func runInstallLinux(ctx context.Context, a *answers, steps []installStep, step 
 	done = 6
 	step(done)
 	return nil
+}
+
+// healthWait is how long a first start may take to answer.
+const healthWait = 2 * time.Minute
+
+// waitHealthy polls the app's health check until it answers ok.
+// systemctl returns as soon as the process is launched, so this is
+// what proves the app actually came up.
+func waitHealthy(ctx context.Context, url string, limit time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	client := &http.Client{Timeout: 5 * time.Second}
+	last := "it did not answer"
+	for {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return err
+		}
+		if resp, err := client.Do(req); err == nil {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+			last = strings.TrimSpace(strings.ReplaceAll(string(body), "\n", " "))
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("EveSynapse started but is not healthy yet (%s)", last)
+		case <-time.After(2 * time.Second):
+		}
+	}
 }
 
 // prepareSetupRun gets the embedded setup.sh ready to run and
@@ -298,45 +348,25 @@ func runLocalBuild(ctx context.Context, a *answers, line func(string)) error {
 	return nil
 }
 
-// writeLocalEnv writes the collected settings into a .env
-// beside the binary, appending only keys that are not already
-// there, the same rule setup.sh follows.
+// writeLocalEnv writes the collected settings into a .env beside
+// the binary, generating a token key for a new file.
 func writeLocalEnv(a *answers, binPath string) error {
 	dir := filepath.Dir(binPath)
 	envPath := filepath.Join(dir, ".env")
-	existing := map[string]bool{}
-	if data, err := os.ReadFile(envPath); err == nil {
-		for _, l := range strings.Split(string(data), "\n") {
-			if k, _, ok := strings.Cut(l, "="); ok {
-				existing[strings.TrimSpace(k)] = true
-			}
-		}
-	}
-	f, err := os.OpenFile(envPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o640)
-	if err != nil {
+	edits := a.finalEdits()
+	data, err := os.ReadFile(envPath)
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	defer f.Close()
-	write := func(key, value, comment string) {
-		if value == "" || existing[key] {
-			return
+	current := parseEnv(string(data))
+	if _, set := edits["TOKEN_ENCRYPTION_KEY"]; !set && current["TOKEN_ENCRYPTION_KEY"] == "" && current["TOKEN_KEY_PROVIDER"] == "" {
+		key, err := generateValue(32)
+		if err != nil {
+			return err
 		}
-		fmt.Fprintf(f, "\n# %s\n%s=%s\n", comment, key, value)
-		existing[key] = true
+		edits["TOKEN_ENCRYPTION_KEY"] = key
 	}
-	if !a.dbLocal {
-		write("DATABASE_URL", a.databaseURL, "Postgres connection (given to the installer).")
-	}
-	write("EVE_CLIENT_ID", a.clientID, "EVE Online application client ID (given to the installer).")
-	write("EVE_CLIENT_SECRET", a.clientSecret, "EVE Online application client secret (given to the installer).")
-	write("ESI_CONTACT", a.contact, "Contact email CCP sees for the EVE application (given to the installer).")
-	if !existing["TOKEN_ENCRYPTION_KEY"] {
-		key := make([]byte, 32)
-		if _, err := rand.Read(key); err == nil {
-			fmt.Fprintf(f, "\n# Encrypts the EVE login tokens stored in the database (generated by the installer).\nTOKEN_ENCRYPTION_KEY=%s\n", hex.EncodeToString(key))
-		}
-	}
-	return nil
+	return updateEnvFile(envPath, edits)
 }
 
 // copyFile copies src to dst with the given mode.

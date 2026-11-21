@@ -162,6 +162,25 @@ unexpire_postgres_account() {
   chage -E -1 postgres >/dev/null 2>&1 || true
 }
 
+# ensure_password_auth: the app connects over TCP to localhost
+# with a password. Some distributions ship PostgreSQL with
+# ident authentication for those connections (RHEL family),
+# which needs an ident server that is not running here, so the
+# app can never sign in. Change just the localhost host lines
+# from ident to scram-sha-256 (password), and reload, so the
+# password the installer generated is the one that is checked.
+# A pg_hba.conf that already uses password auth is untouched.
+ensure_password_auth() {
+  local hba
+  hba="$(su postgres -c "psql -tAc 'SHOW hba_file'" 2>/dev/null)" || return 0
+  [ -n "$hba" ] && [ -f "$hba" ] || return 0
+  if grep -qE '^host[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+(127\.0\.0\.1/32|::1/128)[[:space:]]+ident' "$hba"; then
+    sed -i -E '/^host[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+(127\.0\.0\.1\/32|::1\/128)[[:space:]]+ident/s/ident/scram-sha-256/' "$hba"
+    su postgres -c "psql -tAc 'SELECT pg_reload_conf()'" >/dev/null 2>&1 || true
+    echo "PostgreSQL now checks a password for localhost connections (was ident)."
+  fi
+}
+
 # parse_db_url URL: take a postgres:// or postgresql:// URL
 # apart into DB_URL_USER, DB_URL_PASSWORD, DB_URL_HOST and
 # DB_URL_DB. The password comes back percent-decoded, the way
@@ -210,6 +229,7 @@ dev_postgres() {
   if command -v systemctl >/dev/null; then
     systemctl enable --now postgresql >/dev/null 2>&1 || die "could not enable+start postgresql"
   fi
+  ensure_password_auth
   su postgres -c "psql -v ON_ERROR_STOP=1 -q" >/dev/null <<SQL || die "could not create the $role database role"
 DO \$\$
 BEGIN
@@ -491,18 +511,56 @@ echo "Installed the program to $INSTALL_DIR/evesynapse (run it as plain \`evesyn
 PG_PASSWORD=""
 # An existing database given to the interactive installer needs no
 # local provisioning: its DATABASE_URL is written in step 3 below.
-if [ -z "${EVESYNAPSE_DATABASE_URL:-}" ] && ! grep -qs '^DATABASE_URL=' "$INSTALL_DIR/.env" 2>/dev/null; then
-  if command -v dnf >/dev/null && ! command -v psql >/dev/null; then
-    echo "Installing PostgreSQL..."
+#
+# EVESYNAPSE_PROVISION_DB=1 is the interactive installer asking for
+# a database on this machine even though .env names another one (or
+# only the template's placeholder): the connection is then replaced.
+PROVISION_DB="${EVESYNAPSE_PROVISION_DB:-0}"
+
+# pg_server_missing: psql alone can be just the client package.
+pg_server_missing() {
+  command -v psql >/dev/null || return 0
+  if command -v systemctl >/dev/null; then
+    systemctl cat postgresql.service >/dev/null 2>&1 || return 0
+  fi
+  return 1
+}
+
+install_postgres() {
+  echo "Installing PostgreSQL..."
+  if command -v apt-get >/dev/null; then
+    apt-get update -qq >/dev/null || die "could not refresh the package lists"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql >/dev/null || die "could not install postgresql"
+  elif command -v dnf >/dev/null; then
     dnf install -y postgresql-server >/dev/null || die "could not install postgresql-server"
+  elif command -v pacman >/dev/null; then
+    pacman -S --noconfirm --needed postgresql >/dev/null || die "could not install postgresql; update the system with pacman -Syu and run this again"
+  fi
+}
+
+if [ -z "${EVESYNAPSE_DATABASE_URL:-}" ] && { [ "$PROVISION_DB" = "1" ] || ! grep -qs '^DATABASE_URL=' "$INSTALL_DIR/.env" 2>/dev/null; }; then
+  if pg_server_missing; then
+    install_postgres
   fi
   if command -v psql >/dev/null; then
     if command -v postgresql-setup >/dev/null && [ ! -f /var/lib/pgsql/data/PG_VERSION ]; then
       postgresql-setup --initdb >/dev/null || die "postgresql-setup --initdb failed"
     fi
+    # Arch packages the server without creating its data directory.
+    if command -v pacman >/dev/null && [ ! -f /var/lib/postgres/data/PG_VERSION ]; then
+      su postgres -c "initdb -D /var/lib/postgres/data --encoding=UTF8 --locale=C.UTF-8 --auth-local=peer --auth-host=scram-sha-256" >/dev/null \
+        || die "could not initialize the PostgreSQL data directory"
+    fi
     if command -v systemctl >/dev/null; then
       systemctl enable --now postgresql >/dev/null 2>&1 || die "could not enable+start postgresql"
     fi
+    PG_VERSION_NUM="$(su postgres -c "psql -tAc 'SHOW server_version_num'" 2>/dev/null | tr -d '[:space:]')"
+    case "$PG_VERSION_NUM" in
+      ''|*[!0-9]*) die "could not reach the PostgreSQL server on this machine" ;;
+    esac
+    [ "$PG_VERSION_NUM" -ge 160000 ] \
+      || die "EveSynapse needs PostgreSQL 16 or newer, and this machine has $PG_VERSION_NUM. Install a newer PostgreSQL, or give the installer a database you already have."
+    ensure_password_auth
     PG_PASSWORD="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
     unexpire_postgres_account
     # Create the role when missing; when it already exists (a
@@ -589,15 +647,34 @@ fi
 # Fresh installs get their database connection written in; an
 # install whose .env predates Postgres (a SQLite-era box) gets
 # DATABASE_URL appended, pointing at the role/database above.
-if [ -n "$PG_PASSWORD" ] && ! grep -q '^DATABASE_URL=' "$INSTALL_DIR/.env"; then
-  printf '\n# Postgres connection (generated by setup; the password is only stored here).\nDATABASE_URL=postgres://evesynapse:%s@localhost:5432/evesynapse?sslmode=disable\n' "$PG_PASSWORD" >> "$INSTALL_DIR/.env"
-  echo "Wrote DATABASE_URL to $INSTALL_DIR/.env."
+# The template .env carries a password-less DATABASE_URL as a
+# placeholder; that is not a setting the operator chose, so a
+# locally provisioned password replaces it. A DATABASE_URL that
+# already carries a password is the operator's, and is left
+# alone. Without this, the app reads the placeholder, connects
+# with no password, and never starts.
+if [ -n "$PG_PASSWORD" ]; then
+  if grep -q '^DATABASE_URL=' "$INSTALL_DIR/.env"; then
+    if [ "$PROVISION_DB" = "1" ] || grep -q '^DATABASE_URL=postgres://[^:]*@' "$INSTALL_DIR/.env"; then
+      sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgres://evesynapse:${PG_PASSWORD}@localhost:5432/evesynapse?sslmode=disable|" "$INSTALL_DIR/.env"
+      echo "Wrote DATABASE_URL to $INSTALL_DIR/.env."
+    fi
+  else
+    printf '\n# Postgres connection (generated by setup; the password is only stored here).\nDATABASE_URL=postgres://evesynapse:%s@localhost:5432/evesynapse?sslmode=disable\n' "$PG_PASSWORD" >> "$INSTALL_DIR/.env"
+    echo "Wrote DATABASE_URL to $INSTALL_DIR/.env."
+  fi
 fi
 # --- Interactive installer inputs ---
 # The interactive installer (deploy/installer) passes the operator's
 # answers through EVESYNAPSE_* variables. Each one is only written
 # when set and when the key is not already in .env, so a re-run never
-# overwrites a value the operator set by hand.
+# overwrites a value the operator set by hand. The one exception is
+# a database connection given for this run: it is an explicit choice
+# and replaces the old line, so the steps below act on the right
+# database.
+if [ -n "${EVESYNAPSE_DATABASE_URL:-}" ]; then
+  sed -i '/^DATABASE_URL=/d' "$INSTALL_DIR/.env"
+fi
 if [ -n "${EVESYNAPSE_DATABASE_URL:-}" ] && ! grep -q '^DATABASE_URL=' "$INSTALL_DIR/.env"; then
   printf '\n# Postgres connection (given to the interactive installer).\nDATABASE_URL=%s\n' "$EVESYNAPSE_DATABASE_URL" >> "$INSTALL_DIR/.env"
   echo "Wrote DATABASE_URL to $INSTALL_DIR/.env."

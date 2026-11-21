@@ -93,10 +93,22 @@ func plainRun(a *answers, dryRun bool) {
 
 	// Review.
 	fmt.Println("\nHere is what the install will use:")
-	for _, row := range a.reviewRows() {
-		fmt.Printf("  %-22s %s (%s)\n", row.setting, row.value, row.source.String())
+	for _, row := range a.reviewRows(false) {
+		fmt.Printf("  %-30s %s (%s)\n", row.setting, row.value, row.source.String())
+	}
+	blockers, warnings := a.reviewProblems()
+	for _, w := range warnings {
+		fmt.Println("  Note: " + w)
 	}
 	fmt.Println()
+	if len(blockers) > 0 {
+		for _, p := range blockers {
+			fmt.Fprintln(os.Stderr, "installer: "+p)
+		}
+		if !dryRun {
+			os.Exit(1)
+		}
+	}
 	if dryRun {
 		fmt.Println("Dry run: nothing will be installed.")
 		return
@@ -130,7 +142,7 @@ func plainRun(a *answers, dryRun bool) {
 		os.Exit(1)
 	}
 	fmt.Println()
-	fmt.Println("Done. EveSynapse is listening on " + a.siteURL() + ".")
+	fmt.Println("Done. EveSynapse is at " + a.siteURL() + ".")
 	plainDoneNotes(a)
 }
 
@@ -154,7 +166,7 @@ func plainDoneNotes(a *answers) {
 		fmt.Println("  " + linuxNote("The service and local database setup"))
 	}
 	fmt.Println("  Your reverse proxy is yours to arrange: point Ferron, Caddy,")
-	fmt.Println("  nginx, or a Cloudflare Tunnel at 127.0.0.1:8080 to reach it")
+	fmt.Println("  nginx, or a Cloudflare Tunnel at " + strings.TrimPrefix(a.siteURL(), "http://") + " to reach it")
 	fmt.Println("  from the internet.")
 	if a.clientID == "" || a.clientSecret == "" {
 		fmt.Println("  Sign-in stays off until you add your EVE client ID and secret")
@@ -182,8 +194,8 @@ func plainPrompts(a *answers, r *bufio.Reader, dryRun bool) error {
 		}
 		choice, err := askChoice(r, "How should EveSynapse be installed?",
 			[]string{
-				"Build from source, from a checkout on this machine",
-				"Download the latest release (GitHub, then GitLab, then natems.dev)",
+				"Build from a checkout on this machine",
+				"Download the latest release",
 			}, def)
 		if err != nil {
 			return err
@@ -274,7 +286,7 @@ func plainPrompts(a *answers, r *bufio.Reader, dryRun bool) error {
 
 	// Database.
 	if isLinux() {
-		if !a.given["databaseURL"] {
+		if !a.given["databaseURL"] && a.databaseURL != "present" {
 			def := 0
 			if !a.dbLocal {
 				def = 1
@@ -321,7 +333,7 @@ func plainPrompts(a *answers, r *bufio.Reader, dryRun bool) error {
 	}
 
 	// EVE client ID and secret.
-	if !a.given["clientID"] {
+	if !a.given["clientID"] && a.existingEnv["EVE_CLIENT_ID"] == "" {
 		fmt.Println("Your EVE Online application client ID (from developers.eveonline.com).")
 		fmt.Println("Leave it blank to add it later; sign-in stays off until then.")
 		line, err := ask(r, "EVE client ID:")
@@ -335,7 +347,7 @@ func plainPrompts(a *answers, r *bufio.Reader, dryRun bool) error {
 			a.orgClientID = orgNew
 		}
 	}
-	if !a.given["clientSecret"] {
+	if !a.given["clientSecret"] && a.existingEnv["EVE_CLIENT_SECRET"] == "" {
 		fmt.Println("Your EVE Online application client secret (same application page).")
 		fmt.Println("Leave it blank to add it later; sign-in stays off until then.")
 		line, err := ask(r, "EVE client secret:")
@@ -350,8 +362,31 @@ func plainPrompts(a *answers, r *bufio.Reader, dryRun bool) error {
 		}
 	}
 
+	// Callback address.
+	if !a.given["callback"] && a.existingEnv["EVE_CALLBACK_URL"] == "" {
+		s, _ := settingFor("EVE_CALLBACK_URL")
+		fmt.Println("The address CCP sends the browser back to after login.")
+		fmt.Println("It must match your EVE application exactly.")
+		for {
+			line, err := ask(r, "Callback URL ["+s.Default+"]:")
+			if err != nil {
+				return err
+			}
+			if line == "" {
+				line = s.Default
+			}
+			if err := s.validate(line); err != nil {
+				fmt.Println(err.Error())
+				continue
+			}
+			a.callback = line
+			a.orgCallback = orgNew
+			break
+		}
+	}
+
 	// ESI contact.
-	if !a.given["contact"] {
+	if !a.given["contact"] && a.existingEnv["ESI_CONTACT"] == "" {
 		fmt.Println("What email should CCP see as the contact for your EVE application?")
 		fmt.Println("Leave it blank to skip it.")
 		line, err := ask(r, "Contact email:")

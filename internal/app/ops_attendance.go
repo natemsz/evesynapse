@@ -344,13 +344,24 @@ func (app *Application) captureNotes(ctx context.Context, op db.Op) []string {
 	return notes
 }
 
-// opAttendanceFor builds the attendance section for one op.
-func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups []db.OpSignup, canManage bool, now time.Time) *opAttendance {
+// opAttendanceFor builds the attendance section for one op. Who flew is
+// for those running the fleet and the pilots who were in it, and a pilot
+// sees only their own ship. While the fleet runs, the pilots read from it
+// are who is in it now, so they show only to a viewer who sees the whole
+// fleet in game.
+func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups []db.OpSignup, canManage bool, viewer []int64, sight fleetSight, now time.Time) *opAttendance {
 	rows, err := app.queries.ListOpAttendance(ctx, op.ID)
 	if err != nil {
 		logging.Errorf("ops: attendance for op %d: %v", op.ID, err)
 	}
-	capture, notes := app.captureSummary(ctx, op, now, len(rows))
+	capture, notes := app.fleetCaptureStatus(ctx, op, now, len(rows), sight)
+	flew := slices.ContainsFunc(rows, func(row db.OpAttendance) bool { return slices.Contains(viewer, row.CharacterID) })
+	if !canManage && !flew {
+		rows = nil
+	}
+	if fleetLiveOpen(op, now) && !sight.All {
+		rows = slices.DeleteFunc(rows, func(row db.OpAttendance) bool { return row.Source == attendanceFleet })
+	}
 	att := &opAttendance{
 		Capture: capture, CaptureNotes: notes,
 		Capturing: op.CaptureStatus == captureRunning,
@@ -358,13 +369,13 @@ func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups [
 	present := map[int64]db.OpAttendance{}
 	for _, row := range rows {
 		present[row.CharacterID] = row
-		ship := ""
-		if row.ShipTypeID != 0 {
-			ship = app.typeNameOrID(ctx, row.ShipTypeID)
+		ship, shipID := "", int64(0)
+		if row.ShipTypeID != 0 && (canManage || sight.All || slices.Contains(viewer, row.CharacterID)) {
+			ship, shipID = app.typeNameOrID(ctx, row.ShipTypeID), row.ShipTypeID
 		}
 		att.Rows = append(att.Rows, opAttendanceRow{
 			CharacterID: row.CharacterID, Name: app.displayCharacter(ctx, row.CharacterID),
-			Ship: ship, ShipTypeID: row.ShipTypeID, ByHand: row.Source == attendanceManual,
+			Ship: ship, ShipTypeID: shipID, ByHand: row.Source == attendanceManual,
 		})
 	}
 	sort.Slice(att.Rows, func(i, j int) bool { return att.Rows[i].Name < att.Rows[j].Name })

@@ -938,6 +938,7 @@ WHERE o.owner_kind = $2
   AND o.owner_id = $3
   AND o.cancelled_at IS NULL
   AND o.starts_at >= $4
+  AND o.starts_at + (o.duration_minutes * interval '1 minute') < $5
 GROUP BY a.character_id
 ORDER BY total DESC, a.character_id
 LIMIT 100
@@ -948,6 +949,7 @@ type ListOwnerPAPsParams struct {
 	OwnerKind   string    `json:"owner_kind"`
 	OwnerID     int64     `json:"owner_id"`
 	Since       time.Time `json:"since"`
+	EndedBefore time.Time `json:"ended_before"`
 }
 
 type ListOwnerPAPsRow struct {
@@ -958,13 +960,15 @@ type ListOwnerPAPsRow struct {
 }
 
 // Attendance counts for an owner's fleets since a date, per character:
-// the most active first.
+// the most active first. A fleet counts once it is over, so the totals
+// do not show who is in a running fleet.
 func (q *Queries) ListOwnerPAPs(ctx context.Context, arg ListOwnerPAPsParams) ([]ListOwnerPAPsRow, error) {
 	rows, err := q.db.Query(ctx, listOwnerPAPs,
 		arg.RecentSince,
 		arg.OwnerKind,
 		arg.OwnerID,
 		arg.Since,
+		arg.EndedBefore,
 	)
 	if err != nil {
 		return nil, err

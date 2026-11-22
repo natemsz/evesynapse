@@ -335,6 +335,7 @@ func (app *Application) fillFleetHistory(ctx context.Context, v fleetViewer, vie
 	}
 	rows, err := app.queries.ListOwnerPAPs(ctx, db.ListOwnerPAPsParams{
 		OwnerKind: owner.Kind, OwnerID: owner.ID, Since: now.Add(-papWindow), RecentSince: now.Add(-papRecent),
+		EndedBefore: now.Add(-opCaptureTail),
 	})
 	if err != nil {
 		logging.Errorf("fleets: attendance of %s: %v", owner.Key(), err)

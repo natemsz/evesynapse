@@ -57,6 +57,11 @@
       headers: { "X-Requested-With": "XMLHttpRequest" }
     }).then(function (resp) {
       if (resp.status === 204) return null;
+      // The viewer left the fleet: reload so the page stops showing it.
+      if (resp.status === 403 || resp.status === 404) {
+        window.location.reload();
+        throw new Error("stop");
+      }
       if (!resp.ok) throw new Error("stop");
       return resp.text();
     }).then(function (html) {
@@ -72,7 +77,8 @@
       }
       schedule();
     }).catch(function (err) {
-      // The fleet is no longer open to this viewer: stop asking.
+      // The fleet is no longer open to this viewer, or the request was
+      // refused: stop asking.
       if (err && err.message === "stop") return;
       schedule();
     });

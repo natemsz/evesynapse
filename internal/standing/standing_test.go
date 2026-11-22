@@ -64,6 +64,28 @@ func TestMeets(t *testing.T) {
 	}
 }
 
+// A community whose ID equals an alliance's ID gets nothing from that
+// alliance's members, and the corporation and alliance parser refuses it.
+func TestCommunityNeverMatchesAnAllianceWithItsID(t *testing.T) {
+	st := sample()
+	st.EVERoles[100] = map[string]bool{"director": true}
+	community, ok := ParseAnyOwner("community:9000")
+	if !ok || community.Kind != OwnerCommunity || community.ID != 9000 {
+		t.Fatalf("ParseAnyOwner: %+v %v", community, ok)
+	}
+	if _, ok := ParseOwner("community:9000"); ok {
+		t.Error("ParseOwner accepted a community")
+	}
+	if st.Within(community, 100) || st.Belongs(community) {
+		t.Error("a corporation of alliance 9000 counts as inside community 9000")
+	}
+	for _, rule := range []Rule{{Kind: RuleMember}, {Kind: RuleCEO}, {Kind: RuleCorp, Ref: "100"}, {Kind: RuleEVERole, Ref: "Director"}} {
+		if st.Meets(community, rule) {
+			t.Errorf("rule %+v met for a community through the alliance with its ID", rule)
+		}
+	}
+}
+
 func TestDirectsBelongsInCorporation(t *testing.T) {
 	st := sample()
 	if !st.Directs(100) || st.Directs(200) {

@@ -27,7 +27,7 @@ func (app *Application) doctrineChosenFor(ctx context.Context, userID int64, raw
 		return nil
 	}
 	st, err := app.standingFor(ctx, userID)
-	if err != nil || !app.corpPermits(ctx, st, d.CorporationID, permDoctrines) {
+	if err != nil || !app.ownerPermits(ctx, st, orgOwner{Kind: ownerCorporation, ID: d.CorporationID}, permDoctrines) {
 		return nil
 	}
 	return &opChoice{ID: d.ID, Name: d.Name}

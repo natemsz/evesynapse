@@ -111,7 +111,7 @@ func corpAddress(path string, corp int64) string {
 // Corporation settings: what a corporation's directors decide about
 // how it runs here, on one page. Who handles ship replacement and what
 // the pilots are told about it, and who keeps the doctrines
-// (corp_permissions.go). Groups and the Discord server have pages of
+// (owner_permissions.go). Groups and the Discord server have pages of
 // their own, linked from here.
 // ---------------------------------------------------------------------------
 
@@ -152,9 +152,10 @@ func (app *Application) handleCorpSettings(w http.ResponseWriter, r *http.Reques
 	corp, options := app.pickCorporation(ctx, r, app.directedCorps(ctx, app.userID(ctx)))
 	if corp != 0 {
 		view.CorpOptions, view.ID, view.Name = options, corp, app.corpDisplayName(ctx, corp)
-		view.SRPWho = app.permissionChoices(ctx, corp, permSRP)
-		view.DoctrinesWho = app.permissionChoices(ctx, corp, permDoctrines)
-		view.IntelWho = app.permissionChoices(ctx, corp, permIntel)
+		owner := orgOwner{Kind: ownerCorporation, ID: corp}
+		view.SRPWho = app.permissionChoices(ctx, owner, permSRP)
+		view.DoctrinesWho = app.permissionChoices(ctx, owner, permDoctrines)
+		view.IntelWho = app.permissionChoices(ctx, owner, permIntel)
 		if settings, err := app.queries.GetSRPSettings(ctx, corp); err == nil {
 			view.SRPPolicy = settings.Policy
 		}
@@ -184,9 +185,9 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 		}
 	}
 	by := app.CorpActorFor(ctx, userID, corp).CharacterID
-	saved := app.setCorpPermission(ctx, corp, permSRP, r.Form.Get("srp_who"), by) &&
-		app.setCorpPermission(ctx, corp, permDoctrines, r.Form.Get("doctrines_who"), by) &&
-		app.setCorpPermission(ctx, corp, permIntel, r.Form.Get("intel_who"), by)
+	saved := app.setOwnerPermission(ctx, owner, permSRP, r.Form.Get("srp_who"), by) &&
+		app.setOwnerPermission(ctx, owner, permDoctrines, r.Form.Get("doctrines_who"), by) &&
+		app.setOwnerPermission(ctx, owner, permIntel, r.Form.Get("intel_who"), by)
 	if saved {
 		err = app.queries.SetSRPSettings(ctx, db.SetSRPSettingsParams{
 			CorporationID: corp, Policy: clip(strings.TrimSpace(r.Form.Get("srp_policy")), srpPolicyMax), UpdatedAt: time.Now().UTC(),

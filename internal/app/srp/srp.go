@@ -19,6 +19,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/standing"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -34,7 +35,7 @@ import (
 // fresh each time, because attendance can be ticked by hand later.
 //
 // Requests are handled by the corporation's directors and CEO, and by
-// whoever they hand it to (corp_permissions.go). Handling is marking a
+// whoever they hand it to (owner_permissions.go). Handling is marking a
 // request paid, with the amount, or denying it with a reason. EVE has
 // no call that moves ISK, so the paying is done in game; the pay list
 // mail (corp_srp_handle.go) puts what is owed in the handler's inbox
@@ -286,7 +287,7 @@ func (app *mod) handleSRP(w http.ResponseWriter, r *http.Request) {
 		data.Error = "Could not load ship replacement; check the server log."
 	}
 	cv := &srpCorpView{ID: corp, Name: app.deps.CorpDisplayName(ctx, corp), Directs: st.Directs(corp)}
-	cv.Handles = app.deps.CorpPermits(ctx, st, corp, permSRP)
+	cv.Handles = app.deps.OwnerPermits(ctx, st, standing.CorporationOwner(corp), permSRP)
 	view.CorpOptions, view.Corp = options, cv
 	if settings, err := app.queries.GetSRPSettings(ctx, corp); err == nil {
 		cv.Policy = settings.Policy

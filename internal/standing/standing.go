@@ -13,10 +13,13 @@ import (
 	"strings"
 )
 
-// The kinds of owner.
+// The kinds of owner. A community is a group of players outside the
+// game's corporations: it has no in-game roles, CEO or member
+// corporations, so a rule resting on those is never met for one.
 const (
 	OwnerCorporation = "corporation"
 	OwnerAlliance    = "alliance"
+	OwnerCommunity   = "community"
 )
 
 // The kinds of rule (discord_role_rules.kind, which also stores the
@@ -55,24 +58,42 @@ func HoldsDirector(roles []string) bool {
 	return false
 }
 
-// Owner is a corporation or alliance that things (servers, groups)
-// belong to.
+// Owner is a corporation, alliance or community that things (servers,
+// groups, programmes) belong to.
 type Owner struct {
 	Kind string
 	ID   int64
 }
 
+// CorporationOwner is a corporation as an owner.
+func CorporationOwner(id int64) Owner { return Owner{Kind: OwnerCorporation, ID: id} }
+
 // Key is the owner as one string ("corporation:98000001").
 func (o Owner) Key() string { return o.Kind + ":" + strconv.FormatInt(o.ID, 10) }
 
-// ParseOwner reads a Key back.
+// ParseOwner reads the Key of a corporation or alliance, the only
+// owners of Discord servers, intel channels and the groups page.
 func ParseOwner(raw string) (Owner, bool) {
-	kind, id, found := strings.Cut(raw, ":")
-	n, err := strconv.ParseInt(id, 10, 64)
-	if !found || err != nil || n <= 0 || (kind != OwnerCorporation && kind != OwnerAlliance) {
+	o, ok := ParseAnyOwner(raw)
+	if !ok || (o.Kind != OwnerCorporation && o.Kind != OwnerAlliance) {
 		return Owner{}, false
 	}
-	return Owner{Kind: kind, ID: n}, true
+	return o, true
+}
+
+// ParseAnyOwner reads the Key of any kind of owner, communities
+// included.
+func ParseAnyOwner(raw string) (Owner, bool) {
+	kind, id, found := strings.Cut(raw, ":")
+	n, err := strconv.ParseInt(id, 10, 64)
+	if !found || err != nil || n <= 0 {
+		return Owner{}, false
+	}
+	switch kind {
+	case OwnerCorporation, OwnerAlliance, OwnerCommunity:
+		return Owner{Kind: kind, ID: n}, true
+	}
+	return Owner{}, false
 }
 
 // Address is a page's address for one owner, named by its key; the
@@ -129,12 +150,16 @@ func (st Standing) InCorporation(corp int64) bool {
 }
 
 // Within reports whether a corporation the account has a character in
-// is the owner, or is in the owner alliance.
+// is the owner, or is in the owner alliance. No corporation is within
+// any other kind of owner, whatever its ID.
 func (st Standing) Within(owner Owner, corp int64) bool {
-	if owner.Kind == OwnerCorporation {
+	switch owner.Kind {
+	case OwnerCorporation:
 		return corp == owner.ID
+	case OwnerAlliance:
+		return st.Alliance[corp] == owner.ID
 	}
-	return st.Alliance[corp] == owner.ID
+	return false
 }
 
 // Meets reports whether the account satisfies one rule of something

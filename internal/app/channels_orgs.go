@@ -6,7 +6,7 @@ package app
 //
 // A personal channel is managed by the account that made it, as
 // before. A corporation's channel is managed like its other programmes
-// (corp_permissions.go): its directors and CEO, and whoever they hand
+// (owner_permissions.go): its directors and CEO, and whoever they hand
 // "intel channels" to in the corporation's settings. An alliance's
 // channel is managed by the directors of its executor corporation, as
 // its Discord server is.
@@ -30,7 +30,7 @@ import (
 	"evesynapse/internal/standing"
 )
 
-// permIntel is the programme "intel channels" (corp_permissions).
+// permIntel is the programme "intel channels" (owner_permissions).
 // Stored: never rename.
 const permIntel = "intel_channels"
 
@@ -63,11 +63,11 @@ func (app *Application) intelManagedOrgs(ctx context.Context, st orgStanding) []
 	sort.Slice(corps, func(i, j int) bool { return corps[i] < corps[j] })
 	var out []orgOwner
 	for _, corp := range corps {
-		if app.corpPermits(ctx, st, corp, permIntel) {
-			out = append(out, orgOwner{Kind: ownerCorporation, ID: corp})
+		if own := (orgOwner{Kind: ownerCorporation, ID: corp}); app.ownerPermits(ctx, st, own, permIntel) {
+			out = append(out, own)
 		}
-		if alliance, executor := app.corpAlliance(ctx, corp); alliance != 0 && executor == corp && st.Directs(corp) {
-			if a := (orgOwner{Kind: ownerAlliance, ID: alliance}); !ownersInclude(out, a) {
+		if alliance, executor := app.corpAlliance(ctx, corp); alliance != 0 && executor == corp {
+			if a := (orgOwner{Kind: ownerAlliance, ID: alliance}); !ownersInclude(out, a) && app.ownerPermits(ctx, st, a, permIntel) {
 				out = append(out, a)
 			}
 		}

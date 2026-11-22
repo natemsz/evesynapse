@@ -69,18 +69,18 @@ func TestCorporationPagesShowOneCorporation(t *testing.T) {
 	}
 	save := url.Values{"corporation": {"98000001"}, "srp_who": {"eve_role:Accountant"}, "doctrines_who": {"member"}, "srp_policy": {"Doctrine ships only."}}
 	f.post(director, "/corporations/settings/save", save)
-	if _, err := f.q.GetCorpPermission(f.ctx, db.GetCorpPermissionParams{CorporationID: discordCorp, Permission: permSRP}); err == nil {
+	if _, err := f.q.GetOwnerPermission(f.ctx, db.GetOwnerPermissionParams{OwnerKind: ownerCorporation, OwnerID: discordCorp, Permission: permSRP}); err == nil {
 		t.Fatal("settings were half saved though one choice could not be made")
 	}
 	save.Set("doctrines_who", "eve_role:Fitting_Manager")
 	f.post(stranger, "/corporations/settings/save", save)
 	f.post(director, "/corporations/settings/save", url.Values{"corporation": {"98000002"}, "srp_who": {"eve_role:Accountant"}})
-	if _, err := f.q.GetCorpPermission(f.ctx, db.GetCorpPermissionParams{CorporationID: discordOtherCorp, Permission: permSRP}); err == nil {
+	if _, err := f.q.GetOwnerPermission(f.ctx, db.GetOwnerPermissionParams{OwnerKind: ownerCorporation, OwnerID: discordOtherCorp, Permission: permSRP}); err == nil {
 		t.Fatal("somebody who is not a director changed a corporation's settings")
 	}
 	f.post(director, "/corporations/settings/save", save)
-	srp, _ := f.q.GetCorpPermission(f.ctx, db.GetCorpPermissionParams{CorporationID: discordCorp, Permission: permSRP})
-	keeps, _ := f.q.GetCorpPermission(f.ctx, db.GetCorpPermissionParams{CorporationID: discordCorp, Permission: permDoctrines})
+	srp, _ := f.q.GetOwnerPermission(f.ctx, db.GetOwnerPermissionParams{OwnerKind: ownerCorporation, OwnerID: discordCorp, Permission: permSRP})
+	keeps, _ := f.q.GetOwnerPermission(f.ctx, db.GetOwnerPermissionParams{OwnerKind: ownerCorporation, OwnerID: discordCorp, Permission: permDoctrines})
 	policy, _ := f.q.GetSRPSettings(f.ctx, discordCorp)
 	if srp.Ref != "Accountant" || keeps.Ref != "Fitting_Manager" || policy.Policy != "Doctrine ships only." {
 		t.Fatalf("saved settings: srp %+v, doctrines %+v, policy %q", srp, keeps, policy.Policy)

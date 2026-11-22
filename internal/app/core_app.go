@@ -1815,8 +1815,8 @@ func (app *Application) CorpDisplayName(ctx context.Context, corpID int64) strin
 	return app.corpDisplayName(ctx, corpID)
 }
 
-func (app *Application) CorpPermits(ctx context.Context, st standing.Standing, corp int64, permission string) bool {
-	return app.corpPermits(ctx, st, corp, permission)
+func (app *Application) OwnerPermits(ctx context.Context, st standing.Standing, owner standing.Owner, permission string) bool {
+	return app.ownerPermits(ctx, st, owner, permission)
 }
 
 func (app *Application) PlayerCorps(ctx context.Context, userID int64) []int64 {

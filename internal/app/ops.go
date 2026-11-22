@@ -82,7 +82,8 @@ func (app *Application) opMembers(ctx context.Context, userID int64) []opMember 
 		m := opMember{CharacterID: row.CharacterID, Name: row.Name, CorporationID: row.CorporationID}
 		var roles esi.CharacterRoles
 		if app.loadCorpSnapshot(ctx, row.CharacterID, esi.SnapCorpRoles, &roles) {
-			m.Manager = app.cfg.holdsOpsManagerRole(roles.Roles)
+			owner := orgOwner{Kind: ownerCorporation, ID: row.CorporationID}
+			m.Manager = app.holdsProgramme(ctx, characterStanding(row.CorporationID, roles.Roles), owner, permFleets)
 		}
 		out = append(out, m)
 	}

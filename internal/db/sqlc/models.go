@@ -1875,6 +1875,16 @@ type OrgGroupMember struct {
 	AddedAt     time.Time `json:"added_at"`
 }
 
+type OwnerPermission struct {
+	OwnerKind  string    `json:"owner_kind"`
+	OwnerID    int64     `json:"owner_id"`
+	Permission string    `json:"permission"`
+	Kind       string    `json:"kind"`
+	Ref        string    `json:"ref"`
+	UpdatedBy  int64     `json:"updated_by"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 type PiPlan struct {
 	Token     string          `json:"token"`
 	UserID    int64           `json:"user_id"`

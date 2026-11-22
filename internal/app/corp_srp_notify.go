@@ -108,7 +108,7 @@ func (app *Application) notifySRPEvents(ctx context.Context, c *notifyCollector,
 		}
 		may, known := handles[req.CorporationID]
 		if !known {
-			may = app.corpPermits(ctx, st, req.CorporationID, permSRP)
+			may = app.ownerPermits(ctx, st, orgOwner{Kind: ownerCorporation, ID: req.CorporationID}, permSRP)
 			handles[req.CorporationID] = may
 		}
 		if !may {

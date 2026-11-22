@@ -732,6 +732,29 @@ func (q *Queries) InsertKillStatsPending(ctx context.Context, arg InsertKillStat
 	return err
 }
 
+const killRestoreWindowFloor = `-- name: KillRestoreWindowFloor :one
+SELECT COALESCE((
+    SELECT k.killmail_id FROM kills k
+    WHERE k.killmail_id < $1::bigint
+    ORDER BY k.killmail_id DESC
+    OFFSET $2::bigint - 1 LIMIT 1
+), 0)::bigint AS floor_id
+`
+
+type KillRestoreWindowFloorParams struct {
+	BeforeID   int64 `json:"before_id"`
+	WindowSize int64 `json:"window_size"`
+}
+
+// The lowest kill id in the next window of the restore's walk, the
+// window_size kills below before_id. 0 when fewer than that remain.
+func (q *Queries) KillRestoreWindowFloor(ctx context.Context, arg KillRestoreWindowFloorParams) (int64, error) {
+	row := q.db.QueryRow(ctx, killRestoreWindowFloor, arg.BeforeID, arg.WindowSize)
+	var floor_id int64
+	err := row.Scan(&floor_id)
+	return floor_id, err
+}
+
 const killStatsQueued = `-- name: KillStatsQueued :one
 SELECT EXISTS (SELECT 1 FROM kill_stats_pending WHERE killmail_id = $1::bigint) AS queued
 `
@@ -1493,15 +1516,17 @@ func (q *Queries) ListKillsBySystem(ctx context.Context, arg ListKillsBySystemPa
 const listKillsMissingAttackers = `-- name: ListKillsMissingAttackers :many
 SELECT k.killmail_id, k.hash, k.killmail_time FROM kills k
 WHERE k.killmail_id < $1::bigint
-  AND k.killmail_time >= $2::timestamptz
+  AND k.killmail_id >= $2::bigint
+  AND k.killmail_time >= $3::timestamptz
   AND k.attacker_count > 0 AND k.hash <> ''
   AND NOT EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id)
 ORDER BY k.killmail_id DESC
-LIMIT $3::bigint
+LIMIT $4::bigint
 `
 
 type ListKillsMissingAttackersParams struct {
 	BeforeID int64     `json:"before_id"`
+	FloorID  int64     `json:"floor_id"`
 	Since    time.Time `json:"since"`
 	MaxRows  int64     `json:"max_rows"`
 }
@@ -1514,10 +1539,16 @@ type ListKillsMissingAttackersRow struct {
 
 // Kills inside retention whose attacker rows are gone (pruned before
 // the stats fold counted their ships) and that the archive restore
-// could not serve, newest first below a keyset cursor, for the
-// restorer to read back from ESI by hash.
+// could not serve, newest first within one window of ids, for the
+// restorer to read back from ESI by hash. The window keeps each read
+// short when almost every kill still has its attackers.
 func (q *Queries) ListKillsMissingAttackers(ctx context.Context, arg ListKillsMissingAttackersParams) ([]ListKillsMissingAttackersRow, error) {
-	rows, err := q.db.Query(ctx, listKillsMissingAttackers, arg.BeforeID, arg.Since, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listKillsMissingAttackers,
+		arg.BeforeID,
+		arg.FloorID,
+		arg.Since,
+		arg.MaxRows,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -379,3 +379,50 @@ func TestKillArchiveRestore(t *testing.T) {
 		t.Fatal("the archive walk did not read as done")
 	}
 }
+
+func TestKillRestoreWalkReadsOneWindowAtATime(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	at := time.Now().UTC().Add(-time.Hour)
+	for _, id := range []int64{970001, 970002, 970003} {
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kills (killmail_id, hash, killmail_time, system_id, victim_character_id, victim_corporation_id,
+				ship_type_id, attacker_count, fb_character_id, source, ingested_at, value_ours)
+			VALUES ($1, 'h', $2, 30000142, 93000001, 98000009, 587, 1, 90000001, 'zkill', $2, 1000000)`, id, at); err != nil {
+			t.Fatalf("seed kill %d: %v", id, err)
+		}
+	}
+	for _, id := range []int64{970002, 970003} {
+		if _, err := app.db.ExecContext(ctx, `
+			INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, final_blow)
+			VALUES ($1, 0, 90000001, 98000002, 587, true)`, id); err != nil {
+			t.Fatalf("seed attackers %d: %v", id, err)
+		}
+	}
+	read := func(before int64) (int64, []int64) {
+		t.Helper()
+		floor, err := app.queries.KillRestoreWindowFloor(ctx, db.KillRestoreWindowFloorParams{BeforeID: before, WindowSize: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := app.queries.ListKillsMissingAttackers(ctx, db.ListKillsMissingAttackersParams{
+			BeforeID: before, FloorID: floor, Since: at.Add(-time.Hour), MaxRows: 10,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids := make([]int64, 0, len(rows))
+		for _, r := range rows {
+			ids = append(ids, r.KillmailID)
+		}
+		return floor, ids
+	}
+	floor, ids := read(970004)
+	if floor != 970002 || len(ids) != 0 {
+		t.Fatalf("first window: floor %d, missing %v", floor, ids)
+	}
+	floor, ids = read(floor)
+	if floor != 0 || len(ids) != 1 || ids[0] != 970001 {
+		t.Fatalf("last window: floor %d, missing %v", floor, ids)
+	}
+}

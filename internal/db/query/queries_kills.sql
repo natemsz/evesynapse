@@ -103,13 +103,25 @@ UPDATE kills SET value_ours = sqlc.arg(value_ours)::double precision,
     priced_at = sqlc.arg(priced_at)::timestamptz
 WHERE killmail_id = sqlc.arg(killmail_id)::bigint;
 
+-- The lowest kill id in the next window of the restore's walk, the
+-- window_size kills below before_id. 0 when fewer than that remain.
+-- name: KillRestoreWindowFloor :one
+SELECT COALESCE((
+    SELECT k.killmail_id FROM kills k
+    WHERE k.killmail_id < sqlc.arg(before_id)::bigint
+    ORDER BY k.killmail_id DESC
+    OFFSET sqlc.arg(window_size)::bigint - 1 LIMIT 1
+), 0)::bigint AS floor_id;
+
 -- Kills inside retention whose attacker rows are gone (pruned before
 -- the stats fold counted their ships) and that the archive restore
--- could not serve, newest first below a keyset cursor, for the
--- restorer to read back from ESI by hash.
+-- could not serve, newest first within one window of ids, for the
+-- restorer to read back from ESI by hash. The window keeps each read
+-- short when almost every kill still has its attackers.
 -- name: ListKillsMissingAttackers :many
 SELECT k.killmail_id, k.hash, k.killmail_time FROM kills k
 WHERE k.killmail_id < sqlc.arg(before_id)::bigint
+  AND k.killmail_id >= sqlc.arg(floor_id)::bigint
   AND k.killmail_time >= sqlc.arg(since)::timestamptz
   AND k.attacker_count > 0 AND k.hash <> ''
   AND NOT EXISTS (SELECT 1 FROM kill_attackers a WHERE a.killmail_id = k.killmail_id)

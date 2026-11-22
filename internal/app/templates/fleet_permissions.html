@@ -3,7 +3,8 @@
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{with .FleetPermissions}}
-<div class="l-page l-named fl-page">
+<div class="l-page fl-page">
+<div class="l-head"><h2 class="l-head-title">Fleet permissions</h2></div>
 {{if not .OwnerKey}}
 <div class="l-panel">
   <p>The leader and admins of a community, and the directors of an alliance's executor corporation, choose here who else plans fleets and keeps doctrines.</p>

@@ -2,9 +2,10 @@
 {{define "pagetitle"}}{{with .Doctrine}}<h1><span class="gt">{{.Name}}</span></h1>{{end}}{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" $}}{{end}}
 {{define "content"}}
-<div class="l-page l-named">
+<div class="l-page">
 {{with .Doctrine}}
 <div class="l-head">
+  <h2 class="l-head-title">{{.Name}}</h2>
   <p class="l-head-sum">{{if .Member}}<a href="/doctrines/?owner={{.OwnerKey}}">Doctrines</a> · {{end}}{{.Owner}}{{if .Category}} · {{if .Member}}<a href="/doctrines/?owner={{.OwnerKey}}&amp;category={{.Category}}">{{.Category}}</a>{{else}}{{.Category}}{{end}}{{end}} · {{len .Fits}} {{if eq (len .Fits) 1}}fit{{else}}fits{{end}}{{if .Public}} <span class="badge">Anyone with the link</span>{{end}}</p>
 </div>
 {{if .Tags}}<p class="tag-row">{{range .Tags}}{{if $.Doctrine.Member}}<a href="/doctrines/?owner={{$.Doctrine.OwnerKey}}&amp;tag={{.}}">#{{.}}</a>{{else}}#{{.}}{{end}} {{end}}</p>{{end}}

@@ -127,9 +127,6 @@ html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
   display: none;
 }
 .page-shell:has(> .subnav nav) #main-content > h1 { margin-top: 0; }
-/* A page about one named thing keeps its title: the active tab only
-   names the list it came from. */
-.page-shell:has(> .subnav nav):has(.l-named) #main-content > h1 { display: block; }
 .subnav > .section-tabs,
 .subnav > .section-subtabs {
   display: flex;
@@ -353,6 +350,9 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 /* Page head: the summary line, the scope control and the page's
    primary action. The title itself is the shell's h1 above. */
 .l-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+/* A page about one named thing says its name here, inside the page
+   body: the active tab only names the list it came from. */
+.l-head-title { flex: 1 0 100%; min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .l-head-sum { flex: 1 1 20rem; min-width: 0; margin: 0; color: var(--muted); }
 .l-head-sum b { color: var(--text); font-weight: 600; }
 /* The page's character or scope picker, leading the head. */

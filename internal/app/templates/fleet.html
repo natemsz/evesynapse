@@ -4,8 +4,9 @@
 {{define "content"}}
 {{with .Op}}
 {{$op := .}}
-<div class="l-page l-named fl-page">
+<div class="l-page fl-page">
 <div class="l-head">
+  <h2 class="l-head-title">{{.Title}}</h2>
   <p class="l-head-sum">{{.Kind}} by <b>{{.Owner}}</b>. <span class="badge">{{.Visibility}}</span></p>
   {{if .CanManage}}
   <div class="l-head-act">
@@ -107,7 +108,7 @@
 {{with .Attendance}}
 <section class="l-panel" aria-labelledby="fl-attendance-title">
   <h2 id="fl-attendance-title">Attendance <small>{{len .Rows}}</small></h2>
-  {{if $op.CanManage}}<p class="fl-hint">{{.Capture}}</p>{{end}}
+  {{if $op.CanManage}}<p class="fl-hint">{{.Capture}}</p>{{if .CaptureNotes}}<ul class="fl-notes">{{range .CaptureNotes}}<li>{{.}}</li>{{end}}</ul>{{end}}{{end}}
   {{if .Rows}}
   <div class="tw">
   <table>

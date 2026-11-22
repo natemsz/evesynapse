@@ -26,8 +26,6 @@ package app
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	json "github.com/goccy/go-json"
 	"net/http"
 	"sort"
@@ -561,31 +559,18 @@ func (app *Application) characterFleet(ctx context.Context, ch db.Character) *mi
 	if err != nil {
 		return keep(nil)
 	}
-	var membership struct {
-		FleetID int64  `json:"fleet_id"`
-		Role    string `json:"role"`
-		BossID  int64  `json:"fleet_boss_id"`
+	read, err := app.readCharacterFleet(ctx, token, ch.CharacterID)
+	if err != nil {
+		logging.Debugf("map: fleet of %d: %v", ch.CharacterID, err)
 	}
-	if err := app.esi.Get(ctx, token, fmt.Sprintf("/characters/%d/fleet/", ch.CharacterID), &membership); err != nil {
-		var se *esi.StatusError
-		if !errors.As(err, &se) || se.Code != http.StatusNotFound {
-			logging.Debugf("map: fleet of %d: %v", ch.CharacterID, err)
-		}
+	if read.FleetID == 0 {
 		return keep(nil)
 	}
-	f := &mineFleet{ID: membership.FleetID}
-	if membership.BossID != ch.CharacterID {
+	f := &mineFleet{ID: read.FleetID}
+	if read.State != fleetReadBoss {
 		return keep(f)
 	}
-	var members []struct {
-		CharacterID   int64 `json:"character_id"`
-		ShipTypeID    int64 `json:"ship_type_id"`
-		SolarSystemID int64 `json:"solar_system_id"`
-	}
-	if err := app.esi.Get(ctx, token, fmt.Sprintf("/fleets/%d/members/", membership.FleetID), &members); err != nil {
-		logging.Debugf("map: fleet %d members: %v", membership.FleetID, err)
-		return keep(f)
-	}
+	members := read.Members
 	f.Boss = true
 	names := app.newKillNames(ctx)
 	var unknown []int64

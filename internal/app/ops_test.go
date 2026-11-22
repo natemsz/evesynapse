@@ -407,7 +407,9 @@ type fleetESI struct {
 	fleet         string
 	membersStatus int
 	members       string
-	asked         []string
+	// coFleet is what the second commander (opsCharC) is in, if anything.
+	coFleet string
+	asked   []string
 }
 
 func (s *fleetESI) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -419,6 +421,8 @@ func (s *fleetESI) RoundTrip(req *http.Request) (*http.Response, error) {
 	switch {
 	case strings.HasSuffix(req.URL.Path, "/characters/90000001/fleet/"):
 		return respond(s.fleetStatus, s.fleet)
+	case strings.HasSuffix(req.URL.Path, "/characters/90000003/fleet/") && s.coFleet != "":
+		return respond(http.StatusOK, s.coFleet)
 	case strings.HasSuffix(req.URL.Path, "/fleets/777/members/"):
 		return respond(s.membersStatus, s.members)
 	}
@@ -617,5 +621,78 @@ func TestOpAttendanceFallsBackToMarkingByHand(t *testing.T) {
 	f.post(f.director, opURL(later)+"attendance", url.Values{"present": {fmt.Sprint(opsCharC)}})
 	if len(f.attendance(later)) != 0 {
 		t.Fatal("attendance was marked on an op that has not started")
+	}
+}
+
+// TestLiveFleetFollowsTheBossAndLimitsWhoSeesPilots: the fleet is read
+// through whichever commander is boss while they are in the owner.
+// Commanders see the pilots, people who can sign up see only totals,
+// and nobody else sees the live fleet.
+func TestLiveFleetFollowsTheBossAndLimitsWhoSeesPilots(t *testing.T) {
+	const boss = `{"fleet_id":777,"fleet_boss_id":90000003}`
+	fleet := &fleetESI{
+		fleetStatus: http.StatusOK, fleet: boss, coFleet: boss,
+		membersStatus: http.StatusOK, members: fleetOfThree,
+	}
+	f := newFleetFixture(t, fleet)
+	now := time.Now().UTC()
+	id := f.create(now.Add(-10*time.Minute).Truncate(time.Minute), "Running")
+	f.grantFleet(opsCharC, true)
+	if err := f.q.AddOpCommander(f.ctx, db.AddOpCommanderParams{OpID: id, CharacterID: opsCharC, AddedBy: fixtureCharA, AddedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	if stored, limited := f.app.captureOpAttendance(f.ctx, now); stored != 3 || limited {
+		t.Fatalf("recorded %d, limited=%v; want the 3 pilots read through the co-FC", stored, limited)
+	}
+	op, err := f.q.GetOp(f.ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if op.CaptureStatus != captureRunning || op.CaptureBossID != opsCharC {
+		t.Fatalf("status %q through %d, want %q through the co-FC", op.CaptureStatus, op.CaptureBossID, captureRunning)
+	}
+
+	path := fleetCompositionPath(id)
+	const pilot = "Pilot #95000001"
+	if _, _, body := f.get(f.member, path); !strings.Contains(body, pilot) {
+		t.Fatal("a commander does not see the fleet's pilots")
+	}
+	user, err := f.q.CreateUser(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.join(user.ID, 90000077, "Fixture Joiner", opsCorp)
+	joiner := sessionCookie(t, f.app, user.ID, 90000077, "Fixture Joiner")
+	for _, p := range []string{path, path + "/live"} {
+		_, _, body := f.get(joiner, p)
+		if !strings.Contains(body, "Hulls") || strings.Contains(body, pilot) || strings.Contains(body, "fl-pilots") {
+			t.Fatalf("%s for someone who can sign up: want totals and no pilots", p)
+		}
+	}
+	if code, _ := f.post(joiner, opURL(id)+"pilot", url.Values{"character": {"95000001"}, "role": {"Logistics"}}); code != http.StatusSeeOther {
+		t.Fatalf("pilot save by a non-commander answered %d", code)
+	}
+	if tags, err := f.q.ListOpMemberTags(f.ctx, id); err != nil || len(tags) != 0 {
+		t.Fatalf("a non-commander assigned a role: %v, %v", tags, err)
+	}
+	for name, cookie := range map[string]*http.Cookie{"outsider": f.other, "anonymous": {Name: "none", Value: "none"}} {
+		if _, _, body := f.get(cookie, path); strings.Contains(body, pilot) || !strings.Contains(body, "Fleet not available") {
+			t.Fatalf("the live fleet is open to an %s", name)
+		}
+	}
+
+	// A commander who leaves the owner is no longer read.
+	if err := f.q.UpsertCharacterCorporation(f.ctx, db.UpsertCharacterCorporationParams{
+		CharacterID: opsCharC, CorporationID: opsOtherCorp, UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fleet.asked = nil
+	f.app.captureOpAttendance(f.ctx, now.Add(time.Minute))
+	for _, asked := range fleet.asked {
+		if strings.Contains(asked, "/characters/90000003/") || strings.Contains(asked, "/members/") {
+			t.Fatalf("read %s through a commander who left the owner", asked)
+		}
 	}
 }

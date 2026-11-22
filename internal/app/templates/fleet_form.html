@@ -4,7 +4,8 @@
 {{define "content"}}
 {{with .OpForm}}
 {{$f := .}}
-<div class="l-page l-named fl-page">
+<div class="l-page fl-page">
+<div class="l-head"><h2 class="l-head-title">{{if .ID}}Change fleet{{else}}Plan a fleet{{end}}</h2></div>
 {{if .Errors}}<div role="alert">{{range .Errors}}<p class="err">{{.}}</p>{{end}}</div>{{end}}
 
 {{if and (not .ID) (gt (len .Owners) 1)}}

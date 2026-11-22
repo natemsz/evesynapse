@@ -1017,6 +1017,8 @@ type FleetMember struct {
 	CharacterID   int64  `json:"character_id"`
 	ShipTypeID    int64  `json:"ship_type_id"`
 	SolarSystemID int64  `json:"solar_system_id"`
+	WingID        int64  `json:"wing_id"`
+	SquadID       int64  `json:"squad_id"`
 	Role          string `json:"role"`
 	JoinTime      string `json:"join_time"`
 }

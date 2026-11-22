@@ -1,9 +1,10 @@
 {{define "title"}}Fleet not available{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Fleet not available</span></h1>{{end}}
-{{define "pagetabs"}}{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{with .FleetHidden}}
 <div class="l-page fl-page">
+<div class="l-head"><h2 class="l-head-title">Fleet not available</h2></div>
 <section class="l-panel fl-next">
   {{if eq .Level "account"}}
   <p>None of your characters can see this fleet. It may be private, or the link may have changed.</p>

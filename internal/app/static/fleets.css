@@ -93,3 +93,53 @@
 .fl-fly:not(:has(input[value="suggested"]:checked, input[value="required"]:checked)) .fl-fly-pick { display: none; }
 .fl-see:not(:has(input[value="restricted"]:checked)) .fl-rule,
 .fl-join:not(:has(input[value="rule"]:checked)) .fl-rule { display: none; }
+
+/* The live fleet */
+.fl-live { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.fl-asof { margin: 0; color: var(--muted); font-size: var(--fs-xs); }
+.fl-asof.is-stale { color: var(--gold); }
+.fl-notes { margin: 0; padding-inline-start: 1.1rem; color: var(--muted); font-size: var(--fs-xs); }
+.fl-r-dps { --fl-r: #3987e5; }
+.fl-r-logi { --fl-r: #d95926; }
+.fl-r-tackle { --fl-r: #199e70; }
+.fl-r-scout { --fl-r: #c98500; }
+.fl-r-ewar { --fl-r: #d55181; }
+.fl-r-command { --fl-r: #0ca30c; }
+.fl-r-other { --fl-r: #8b8f98; }
+.fl-rolebar { display: block; width: 100%; height: 1.05rem; border-radius: var(--r-xs); background: var(--row-alt); }
+.fl-rolebar rect { fill: var(--fl-r); stroke: var(--surface-page, #1a1a19); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.fl-legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: var(--space-2) 0 0; padding: 0; list-style: none; font-size: var(--fs-sm); color: var(--muted); }
+.fl-legend b { color: var(--text); font-weight: 600; }
+.fl-swatch { display: inline-block; width: 0.65rem; height: 0.65rem; margin-inline-end: var(--space-1); border-radius: 2px; background: var(--fl-r); }
+.fl-gap { margin: 0 0 var(--space-2); overflow-wrap: anywhere; }
+.fl-gap .field-label { display: block; }
+.fl-tally { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.fl-tally li { display: flex; justify-content: space-between; gap: var(--space-3); min-width: 0; overflow-wrap: anywhere; }
+.fl-tally small { color: var(--muted); font-size: var(--fs-xs); }
+.fl-invite { max-height: 14rem; margin: 0; padding: var(--space-2); overflow: auto; background: var(--surface-inset); border-radius: var(--r-xs); font-family: var(--font-body); font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.fl-invite:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.fl-pager { justify-content: center; margin-top: var(--space-3); }
+.fl-pilots { container: fl-pilots / inline-size; }
+.fl-pilots select, .fl-pilots input[type="text"] { width: 100%; min-width: 7rem; }
+.fl-pilots td small { color: var(--muted); font-size: var(--fs-xs); }
+/* On a narrow page each pilot is three short lines: who, what and
+   where, then their role and tags, so a full fleet stays scannable. */
+@container fl-pilots (max-width: 52rem) {
+  .fl-pilots table, .fl-pilots tbody { display: block; width: 100%; }
+  .fl-pilots thead { display: none; }
+  .fl-pilots tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas: "pilot pilot place" "ship ship system" "role tags save";
+    align-items: center; gap: var(--space-1) var(--space-2);
+    padding: var(--space-2) 0; border-top: 1px solid var(--hairline);
+  }
+  .fl-pilots td { display: block; min-width: 0; padding: 0; border: 0; overflow-wrap: anywhere; }
+  .fl-pilots td[data-label="Pilot"] { grid-area: pilot; }
+  .fl-pilots td[data-label="Position"] { grid-area: place; color: var(--muted); font-size: var(--fs-xs); text-align: end; }
+  .fl-pilots td[data-label="Ship"] { grid-area: ship; }
+  .fl-pilots td[data-label="System"] { grid-area: system; color: var(--muted); text-align: end; }
+  .fl-pilots td[data-label="Role"] { grid-area: role; }
+  .fl-pilots td[data-label="Tags"] { grid-area: tags; }
+  .fl-pilots td:last-child { grid-area: save; }
+  .fl-pilots select, .fl-pilots input[type="text"] { min-width: 0; }
+}

@@ -123,7 +123,7 @@ var sectionNav = map[string][]navEntry{
 		{"/map/", "Map", []string{"map.html"}},
 	},
 	"fleets": {
-		{"/fleets/", "Fleets", []string{"fleets.html", "fleet.html", "fleet_form.html", "fleet_hidden.html", "fleet_permissions.html"}},
+		{"/fleets/", "Fleets", []string{"fleets.html", "fleet.html", "fleet_composition.html", "fleet_form.html", "fleet_hidden.html", "fleet_permissions.html"}},
 		{"/fleets/history/", "History", []string{"fleet_history.html"}},
 	},
 }

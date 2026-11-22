@@ -184,7 +184,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(13)
+	children.Add(14)
 
 	// The public killmail stream (killfeed.go) is its own paced
 	// loop: one file every 100 ms while kills arrive, six seconds
@@ -287,6 +287,12 @@ func (app *Application) runWorker(ctx context.Context) {
 	go func() {
 		defer children.Done()
 		app.runContractLane(ctx)
+	}()
+	// Running fleets (fleet_read.go), read every minute whatever the
+	// character pass is doing.
+	go func() {
+		defer children.Done()
+		app.runFleetLane(ctx)
 	}()
 	defer func() {
 		children.Wait()
@@ -478,13 +484,6 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		return
 	}
 	clock.mark("characters", time.Now())
-
-	// Ops in progress: record who is in each one's fleet
-	// (ops_attendance.go). No call is made unless an op is running.
-	c.pass("recording op attendance", func() (int, bool) {
-		return app.captureOpAttendance(ctx, time.Now())
-	})
-	clock.mark("op attendance", time.Now())
 
 	// Fleets that have started keep the doctrine they flew, whatever
 	// happens to it later (corp_doctrine_access.go).

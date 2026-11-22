@@ -5,10 +5,11 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-<div class="l-page l-named cm-page">
+<div class="l-page cm-page">
 {{with .Community}}
 {{$c := .}}
 <div class="l-head">
+  <h2 class="l-head-title">{{.Name}}</h2>
   <p class="l-head-sum"><b>{{.Members}}</b> {{.MemberWord}}. {{.Policy}}.{{if .Closed}} <span class="badge wait">Closed</span>{{else if not .Listed}} Not listed.{{end}}</p>
   <div class="l-head-act"><a class="btn btn-quiet" href="/fleets/communities/">All communities</a></div>
 </div>

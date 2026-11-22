@@ -1,0 +1,157 @@
+{{define "title"}}{{with .Community}}{{.Name}}{{end}}{{end}}
+{{define "pagetitle"}}<h1><span class="gt">{{with .Community}}{{.Name}}{{end}}</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+<div class="l-page cm-page">
+{{with .Community}}
+{{$c := .}}
+<div class="l-head">
+  <p class="l-head-sum"><b>{{.Members}}</b> {{.MemberWord}}. {{.Policy}}.{{if .Closed}} <span class="badge wait">Closed</span>{{else if not .Listed}} Not listed.{{end}}</p>
+  <div class="l-head-act"><a class="btn btn-quiet" href="/fleets/communities/">All communities</a></div>
+</div>
+{{with .Description}}<p class="prose cm-about">{{.}}</p>{{end}}
+
+<div class="l-sidebar cm-split">
+  <div class="cm-side">
+  <aside class="l-panel cm-next" aria-labelledby="cm-you-title">
+    <h2 id="cm-you-title">{{if .Yours}}Your place{{else}}Join{{end}}</h2>
+
+    {{range .Yours}}
+    <div class="cm-place">
+      <span>{{.Name}}<small>{{.Label}}</small></span>
+      {{if .CanLeave}}<form method="post" action="{{$c.Path}}leave" data-confirm="{{.LeaveAsk}}"><input type="hidden" name="character" value="{{.CharacterID}}"><button type="submit" class="btn btn-quiet">Leave</button></form>{{end}}
+    </div>
+    {{end}}
+
+    {{if .Closed}}
+      <p>This community is closed and takes no new members.</p>
+    {{else if .NeedsInvite}}
+      {{if not .SeesPeople}}<p>This community takes new members through its invite link. Ask someone in it for the link.</p>{{end}}
+    {{else if eq .Level "anonymous"}}
+      <p>Sign in with EVE to {{if eq .PolicyValue "approval"}}ask to join{{else}}join{{end}}. EveSynapse asks for no permissions and keeps no token.</p>
+      <a class="btn" href="{{.SignIn}}">Sign in with EVE</a>
+    {{else if .Joinable}}
+      <form method="post" action="{{.Path}}join" class="cm-form">
+        {{with .Invite}}<input type="hidden" name="invite" value="{{.}}">{{end}}
+        {{if eq (len .Joinable) 1}}
+          {{range .Joinable}}<input type="hidden" name="character" value="{{.ID}}"><p>Join as {{.Name}}.</p>{{end}}
+        {{else}}
+          <label class="field"><span class="field-label">Join as</span>
+            <select name="character" required>{{range .Joinable}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+        {{end}}
+        <button type="submit">{{.JoinLabel}}</button>
+      </form>
+    {{end}}
+
+    {{if eq .Level "pilot"}}
+    <div class="cm-pilot">
+      <p>Signed in as {{.PilotName}}, with no account. An account also lets you start a community and use more than one character.</p>
+      <div class="cm-stack">
+        <a class="btn btn-quiet" href="{{.Account}}">Create an account</a>
+        <form method="post" action="/auth/logout"><button type="submit" class="btn btn-quiet">Sign out</button></form>
+        <form method="post" action="/auth/pilot/forget" data-confirm="Remove your pilot record and leave every community?"><button type="submit" class="btn btn-quiet">Remove my pilot record</button></form>
+      </div>
+    </div>
+    {{end}}
+  </aside>
+    {{if .Manages}}
+    <details class="l-panel cm-settings">
+  <summary><h2 id="cm-settings-title">Settings</h2></summary>
+  {{if .Closed}}
+    {{if .CanReopen}}
+    {{if not .Leads}}<p>This community has no leader. Reopening it makes you the leader.</p>{{end}}
+    <form method="post" action="{{.Path}}reopen"><button type="submit">Reopen community</button></form>
+    {{else}}
+    <p>Only the leader can reopen this community.</p>
+    {{end}}
+  {{else}}
+  <form method="post" action="{{.Path}}settings" class="cm-form" aria-labelledby="cm-settings-title">
+    <label class="field"><span class="field-label">Name</span>
+      <input type="text" name="name" value="{{.Name}}" maxlength="60" required autocomplete="off"></label>
+    <label class="field"><span class="field-label">What it is for (optional)</span>
+      <textarea name="description" maxlength="500" rows="3">{{.Description}}</textarea></label>
+    <fieldset class="cm-choices">
+      <legend class="field-label">New members</legend>
+      {{range .Policies}}
+      <label><input type="radio" name="join_policy" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}<small>{{.Hint}}</small></span></label>
+      {{end}}
+    </fieldset>
+    <label class="cm-check"><input type="checkbox" name="listed" value="1"{{if .Listed}} checked{{end}}><span>List it in the communities directory</span></label>
+    <button type="submit">Save settings</button>
+  </form>
+  {{with .InviteURL}}
+  <div class="cm-invite">
+    <label class="field"><span class="field-label">Private link</span>
+      <input type="text" value="{{.}}" readonly aria-describedby="cm-link-hint"><span class="field-hint" id="cm-link-hint">{{$c.InviteHint}}</span></label>
+    <form method="post" action="{{$c.Path}}invite" data-confirm="Make a new link? The current link stops working."><button type="submit" class="btn btn-quiet">Make a new link</button></form>
+  </div>
+  {{end}}
+  <div class="cm-stack cm-row">
+    {{with .GroupsHref}}<a class="btn btn-quiet" href="{{.}}">Manage groups</a>{{end}}
+    {{if .Leads}}<form method="post" action="{{.Path}}close" data-confirm="Close {{.Name}}? It leaves the directory and takes no new members. You can reopen it."><button type="submit" class="btn btn-danger">Close community</button></form>{{end}}
+  </div>
+  {{end}}
+    </details>
+    {{end}}
+  </div>
+
+  <section class="l-panel" aria-labelledby="cm-people-title">
+    <h2 id="cm-people-title">People</h2>
+    {{if not .SeesPeople}}
+    <p class="cm-empty">Member names are shown to members only.</p>
+    {{else}}
+      {{with .Managers}}
+      <ul class="cm-managers" aria-label="Who runs this community">
+        {{range .}}<li>{{.Link}} <span class="badge">{{.Role}}</span></li>{{end}}
+      </ul>
+      {{end}}
+      <div class="cm-tools">
+        {{with .Tabs}}<nav class="l-cluster" aria-label="Which people to show">{{range .}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Label}}{{with .Count}} {{.}}{{end}}</a>{{end}}</nav>{{end}}
+        <search>
+          <form method="get" action="{{.Path}}" class="cm-search">
+            {{with .Show}}<input type="hidden" name="show" value="{{.}}">{{end}}
+            <label class="field-label" for="cm-find-member">Jump to a name</label>
+            <input type="search" id="cm-find-member" name="find" value="{{.Find}}" maxlength="60" autocomplete="off" enterkeyhint="search">
+            <button type="submit" class="btn btn-quiet">Go</button>
+          </form>
+        </search>
+      </div>
+      {{if .Rows}}
+      <div class="cm-table-box"><table class="cm-table">
+        <thead><tr><th>Pilot</th>{{if not .RowsInline}}<th>Place</th>{{end}}<th>{{if eq .Show "requests"}}Asked{{else}}Joined{{end}}</th>{{if .Manages}}<th>Manage</th>{{end}}</tr></thead>
+        <tbody>
+          {{range .Rows}}
+          <tr>
+            <td>{{.Name}}</td>
+            {{if not $c.RowsInline}}<td>{{.Role}}</td>{{end}}
+            <td class="cm-date">{{.Joined}}</td>
+            {{if $c.Manages}}<td>
+              {{if .Actions}}
+              {{if $c.RowsInline}}
+              <div class="cm-actions">{{range .Actions}}{{template "community_action" .}}{{end}}</div>
+              {{else}}
+              <details class="cm-manage"><summary>Manage</summary>
+                <div class="cm-actions">{{range .Actions}}{{template "community_action" .}}{{end}}</div>
+              </details>
+              {{end}}
+              {{end}}
+            </td>{{end}}
+          </tr>
+          {{end}}
+        </tbody>
+      </table></div>
+      {{with .NextHref}}<p><a class="btn btn-quiet" href="{{.}}">Next page</a></p>{{end}}
+      {{else}}
+      <p class="cm-empty">{{if eq .Show "requests"}}No one is waiting for an answer.{{else if eq .Show "banned"}}No one is banned.{{else if .Find}}No member from that name onward.{{else}}No members yet.{{end}}</p>
+      {{end}}
+    {{end}}
+  </section>
+</div>
+{{end}}
+</div>
+{{end}}
+
+{{define "community_action"}}<form method="post" action="{{.Href}}"{{with .Confirm}} data-confirm="{{.}}"{{end}}>{{with .Show}}<input type="hidden" name="show" value="{{.}}">{{end}}<input type="hidden" name="do" value="{{.Do}}"><button type="submit" class="btn {{if .Danger}}btn-danger{{else}}btn-quiet{{end}}">{{.Label}}</button></form>{{end}}

@@ -400,6 +400,7 @@ var bottomSheetSections = []struct{ section, label string }{
 	{"industry", "Industry"},
 	{"market", "Market"},
 	{"corporation", "Corporation"},
+	{"fleets", "Fleets"},
 	{"intel", "Intel"},
 	{"tools", "Tools"},
 }

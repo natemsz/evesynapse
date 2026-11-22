@@ -71,6 +71,12 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 		return result, err
 	}
 
+	// A character that changed EVE accounts leaves its communities
+	// before the new owner is linked: its places were the old owner's.
+	if err := app.releaseSoldCharacter(ctx, in.CharacterID, in.OwnerHash); err != nil {
+		return result, err
+	}
+
 	// Never store an empty owner hash over a known one: a token
 	// without the claim (shouldn't happen) must not erase the
 	// transfer detection baseline.

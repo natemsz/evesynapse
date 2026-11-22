@@ -21,8 +21,13 @@ import (
 // core_bot_guard.go runs. Either way the guard sits at the same
 // place in the middleware chain and sees the same requests.
 
-// botGuardMiddleware is the guard for this run.
+// botGuardMiddleware is the guard for this run. On the dev server
+// there is none: Ranvia never starts, so a local run neither uses the
+// site key nor contacts ranvia.io.
 func (app *Application) botGuardMiddleware() func(http.Handler) http.Handler {
+	if app.botGuardOff {
+		return func(next http.Handler) http.Handler { return next }
+	}
 	if app.cfg.ranviaKey == "" {
 		return app.blockScrapers
 	}
@@ -44,18 +49,7 @@ func (app *Application) botGuardMiddleware() func(http.Handler) http.Handler {
 		return app.blockScrapers
 	}
 	logging.Infof("evesynapse: bot guard: Ranvia")
-	return func(next http.Handler) http.Handler {
-		guarded := g.Middleware(next)
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// The dev entrypoint turns the guard off during route
-			// setup (DisableBotGuard), after this was built.
-			if app.botGuardOff {
-				next.ServeHTTP(w, r)
-				return
-			}
-			guarded.ServeHTTP(w, r)
-		})
-	}
+	return g.Middleware
 }
 
 // verifiedCrawler reports a request from the search crawler its

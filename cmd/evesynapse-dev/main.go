@@ -106,6 +106,7 @@ func serve() int {
 	pidPath := pidfile.Start()
 	defer pidfile.Remove(pidPath)
 
+	devtools.Prepare(application)
 	srv := app.NewHTTPServer(cfg.Addr(), application.Handler(devtools.Register))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

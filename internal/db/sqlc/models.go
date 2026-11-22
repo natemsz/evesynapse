@@ -416,6 +416,31 @@ type CloneName struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type Community struct {
+	ID                 int64          `json:"id"`
+	Slug               string         `json:"slug"`
+	Name               string         `json:"name"`
+	Description        string         `json:"description"`
+	JoinPolicy         string         `json:"join_policy"`
+	Listed             bool           `json:"listed"`
+	InviteToken        sql.NullString `json:"invite_token"`
+	MemberCount        int32          `json:"member_count"`
+	PendingCount       int32          `json:"pending_count"`
+	CreatedByCharacter int64          `json:"created_by_character"`
+	CreatedAt          time.Time      `json:"created_at"`
+	ArchivedAt         sql.NullTime   `json:"archived_at"`
+}
+
+type CommunityMember struct {
+	CommunityID int64     `json:"community_id"`
+	CharacterID int64     `json:"character_id"`
+	Name        string    `json:"name"`
+	Role        string    `json:"role"`
+	State       string    `json:"state"`
+	JoinedAt    time.Time `json:"joined_at"`
+	AddedBy     int64     `json:"added_by"`
+}
+
 type ContractDetail struct {
 	ContractID  int64     `json:"contract_id"`
 	CharacterID int64     `json:"character_id"`
@@ -1866,6 +1891,7 @@ type OrgGroup struct {
 	Description string    `json:"description"`
 	CreatedBy   int64     `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
+	MemberCount int32     `json:"member_count"`
 }
 
 type OrgGroupMember struct {
@@ -2979,6 +3005,17 @@ type UserProfitPref struct {
 	IndustryRegion int64     `json:"industry_region"`
 	IndustrySide   string    `json:"industry_side"`
 	LpIskValue     float64   `json:"lp_isk_value"`
+}
+
+type VerifiedPilot struct {
+	CharacterID   int64        `json:"character_id"`
+	Name          string       `json:"name"`
+	OwnerHash     string       `json:"owner_hash"`
+	CorporationID int64        `json:"corporation_id"`
+	AllianceID    int64        `json:"alliance_id"`
+	AffiliationAt sql.NullTime `json:"affiliation_at"`
+	VerifiedAt    time.Time    `json:"verified_at"`
+	LastSeenAt    time.Time    `json:"last_seen_at"`
 }
 
 type WalletHistory struct {

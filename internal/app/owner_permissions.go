@@ -71,6 +71,8 @@ func (app *Application) holdsProgramme(ctx context.Context, st orgStanding, owne
 				return true
 			}
 		}
+	case ownerCommunity:
+		return st.ManagesCommunity(owner.ID)
 	}
 	return false
 }
@@ -108,18 +110,30 @@ func (app *Application) permissionChoices(ctx context.Context, owner orgOwner, p
 	}
 	out := []permissionChoice{{Value: "", Label: "Nobody else", Selected: current == ""}}
 	for _, who := range app.whoChoices(ctx, owner) {
-		if permissionRule(who.Value) {
+		if permissionRule(owner, who.Value) {
 			out = append(out, permissionChoice{Value: who.Value, Label: who.Label, Selected: who.Value == current})
 		}
 	}
 	return out
 }
 
-// permissionRule reports whether a "kind:ref" is one a programme can
-// be handed to: an in-game role other than Director, or a group.
-func permissionRule(value string) bool {
+// permissionRule reports whether a "kind:ref" is one an owner's
+// programme can be handed to. Every owner can name one of its groups.
+// A corporation can also name an in-game role other than Director, and
+// an alliance one of its corporations. An in-game role never hands over
+// an alliance's programme, since any member corporation could grant it.
+func permissionRule(owner orgOwner, value string) bool {
 	kind, ref, _ := strings.Cut(value, ":")
-	return kind == ruleGroup || (kind == ruleEVERole && ref != "Director")
+	if kind == ruleGroup {
+		return true
+	}
+	switch owner.Kind {
+	case ownerCorporation:
+		return kind == ruleEVERole && ref != "Director"
+	case ownerAlliance:
+		return kind == ruleCorp
+	}
+	return false
 }
 
 // setOwnerPermission stores an owner's choice for a programme; the
@@ -129,7 +143,7 @@ func (app *Application) setOwnerPermission(ctx context.Context, owner orgOwner, 
 	if raw != "" {
 		var ok bool
 		kind, ref, ok = app.parseRuleWho(ctx, owner, raw)
-		if !ok || !permissionRule(kind+":"+ref) {
+		if !ok || !permissionRule(owner, kind+":"+ref) {
 			return false
 		}
 	}

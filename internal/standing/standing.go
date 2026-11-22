@@ -22,6 +22,28 @@ const (
 	OwnerCommunity   = "community"
 )
 
+// The places a character can hold in a community
+// (community_members.role). Stored: never rename.
+const (
+	CommunityLeader = "leader"
+	CommunityAdmin  = "admin"
+	CommunityMember = "member"
+)
+
+// CommunityRank orders the places in a community, highest first by
+// value; 0 is no place at all.
+func CommunityRank(role string) int {
+	switch role {
+	case CommunityLeader:
+		return 3
+	case CommunityAdmin:
+		return 2
+	case CommunityMember:
+		return 1
+	}
+	return 0
+}
+
 // The kinds of rule (discord_role_rules.kind, which also stores the
 // corporation permissions). Stored: never rename.
 const (
@@ -72,7 +94,7 @@ func CorporationOwner(id int64) Owner { return Owner{Kind: OwnerCorporation, ID:
 func (o Owner) Key() string { return o.Kind + ":" + strconv.FormatInt(o.ID, 10) }
 
 // ParseOwner reads the Key of a corporation or alliance, the only
-// owners of Discord servers, intel channels and the groups page.
+// owners of Discord servers and intel channels.
 func ParseOwner(raw string) (Owner, bool) {
 	o, ok := ParseAnyOwner(raw)
 	if !ok || (o.Kind != OwnerCorporation && o.Kind != OwnerAlliance) {
@@ -99,7 +121,7 @@ func ParseAnyOwner(raw string) (Owner, bool) {
 // Address is a page's address for one owner, named by its key; the
 // plain page where the key is not one.
 func Address(path, key string) string {
-	if _, ok := ParseOwner(key); !ok {
+	if _, ok := ParseAnyOwner(key); !ok {
 		return path
 	}
 	return path + "?owner=" + url.QueryEscape(key)
@@ -128,6 +150,9 @@ type Standing struct {
 	EVERoles  map[int64]map[string]bool // corporation -> in-game roles held there (lower case)
 	Groups    map[int64]bool            // groups a character is in, and still belongs to the owner of
 	Alliances map[int64]bool
+	// Communities is the highest place a working character holds in
+	// each open community it is an active member of.
+	Communities map[int64]string
 }
 
 // New is an empty Standing with its maps made.
@@ -135,7 +160,22 @@ func New() Standing {
 	return Standing{
 		Corps: map[int64]bool{}, Alliance: map[int64]int64{}, Alliances: map[int64]bool{},
 		CEOOf: map[int64]bool{}, EVERoles: map[int64]map[string]bool{}, Groups: map[int64]bool{},
+		Communities: map[int64]string{},
 	}
+}
+
+// NoteCommunity records a place held in a community, keeping the
+// highest.
+func (st Standing) NoteCommunity(community int64, role string) {
+	if CommunityRank(role) > CommunityRank(st.Communities[community]) {
+		st.Communities[community] = role
+	}
+}
+
+// ManagesCommunity reports whether a working character leads or is an
+// admin of a community.
+func (st Standing) ManagesCommunity(community int64) bool {
+	return st.Working && CommunityRank(st.Communities[community]) >= CommunityRank(CommunityAdmin)
 }
 
 // Directs reports whether the account has a director, or the CEO, of
@@ -172,11 +212,7 @@ func (st Standing) Meets(owner Owner, rule Rule) bool {
 	case RuleLinked:
 		return true
 	case RuleMember:
-		for corp := range st.Corps {
-			if st.Within(owner, corp) {
-				return true
-			}
-		}
+		return st.Belongs(owner)
 	case RuleCorp:
 		corp, _ := strconv.ParseInt(rule.Ref, 10, 64)
 		return corp != 0 && st.Corps[corp] && st.Within(owner, corp)
@@ -201,10 +237,14 @@ func (st Standing) Meets(owner Owner, rule Rule) bool {
 }
 
 // Belongs reports whether one of the account's working characters is in
-// the owner corporation, or in a corporation of the owner alliance.
+// the owner corporation, in a corporation of the owner alliance, or an
+// active member of the owner community.
 func (st Standing) Belongs(owner Owner) bool {
 	if !st.Working {
 		return false
+	}
+	if owner.Kind == OwnerCommunity {
+		return st.Communities[owner.ID] != ""
 	}
 	for corp := range st.Corps {
 		if st.Within(owner, corp) {

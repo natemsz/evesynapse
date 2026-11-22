@@ -63,7 +63,7 @@ func TestCoreOnlyOmitsModules(t *testing.T) {
 // TestCoreOnlyHasNoModuleScopes: with no module compiled in, the scope
 // surfaces know only the core manifest.
 func TestCoreOnlyHasNoModuleScopes(t *testing.T) {
-	for _, id := range []string{"buildplanner", "fitting", "publicfits", "corpdata", "doctrines", "srp", "groups", "skillplans", "scanner", "tradefinder", "leaderboard", "restock", "piplanner", "intel", "tradeideas", "discord"} {
+	for _, id := range []string{"buildplanner", "fitting", "publicfits", "corpdata", "doctrines", "srp", "groups", "communities", "skillplans", "scanner", "tradefinder", "leaderboard", "restock", "piplanner", "intel", "tradeideas", "discord"} {
 		if _, ok := moduleByID(id); ok {
 			t.Errorf("the core-only build still knows %s's declaration", id)
 		}

@@ -1,0 +1,66 @@
+/* Communities: the directory and one community's page. Layout comes
+   from the framework; this sheet styles the content inside it. */
+
+.cm-page { --l-side: 19rem; display: flex; flex-direction: column; gap: var(--space-4); }
+.cm-page .l-panel { margin: 0; }
+.cm-page .l-panel > h2 { margin: 0 0 var(--space-3); }
+.cm-split { align-items: flex-start; }
+.cm-split > * { box-sizing: border-box; }
+.cm-about { margin: 0; max-width: 70ch; white-space: pre-line; overflow-wrap: anywhere; }
+
+.cm-empty { margin: 0; color: var(--muted); }
+.cm-sub { display: block; color: var(--muted); font-size: var(--fs-xs); }
+.cm-clip { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; max-width: 52ch; }
+.cm-num { text-align: right; white-space: nowrap; }
+.cm-table-box { min-width: 0; overflow-x: auto; }
+.cm-table { width: 100%; }
+.cm-date { white-space: nowrap; }
+.cm-table td { vertical-align: top; }
+
+.cm-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-1) var(--space-2); }
+.cm-search .field-label { grid-column: 1 / -1; }
+.cm-search input[type="search"] { width: 100%; min-width: 0; box-sizing: border-box; }
+search.l-head-act { display: block; flex: 0 1 22rem; min-width: 0; }
+
+.cm-mine { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: var(--space-2); }
+.cm-mine li { padding: var(--space-2) var(--space-3); background: var(--surface-inset); border: 1px solid var(--hairline); border-radius: 6px; min-width: 0; overflow-wrap: anywhere; }
+.cm-mine .badge { margin-top: var(--space-1); }
+
+.cm-side { display: flex; flex-direction: column; gap: var(--space-4); }
+.cm-settings > summary { cursor: pointer; }
+.cm-settings > summary h2 { display: inline; margin: 0; }
+.cm-settings[open] > summary { margin-bottom: var(--space-3); }
+.cm-next { display: flex; flex-direction: column; gap: var(--space-3); }
+.cm-next > h2 { margin-bottom: 0; }
+.cm-next p { margin: 0; }
+.cm-next .btn { text-align: center; }
+.cm-stack { display: flex; flex-direction: column; gap: var(--space-2); }
+.cm-stack form, .cm-stack .btn, .cm-stack button { width: 100%; box-sizing: border-box; }
+.cm-stack.cm-row { flex-direction: row; flex-wrap: wrap; margin-top: var(--space-3); }
+.cm-stack.cm-row > * { width: auto; }
+.cm-pilot { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--hairline); }
+
+.cm-place { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
+.cm-place small { display: block; color: var(--muted); font-size: var(--fs-xs); }
+
+.cm-form { display: flex; flex-direction: column; gap: var(--space-3); max-width: 38rem; }
+.cm-form textarea { resize: vertical; }
+.cm-form > button { align-self: flex-start; }
+.cm-choices { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.cm-choices label, .cm-check { display: flex; align-items: flex-start; gap: var(--space-2); cursor: pointer; }
+.cm-choices input, .cm-check input { flex: none; margin-top: 0.2em; accent-color: var(--accent); }
+.cm-choices small { display: block; color: var(--muted); font-size: var(--fs-xs); }
+
+.cm-managers { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.cm-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }
+.cm-tools search { flex: 0 1 24rem; min-width: 0; }
+
+.cm-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.cm-actions form { margin: 0; }
+.cm-table td > .cm-actions { flex-wrap: nowrap; }
+.cm-table.cards-on td > .cm-actions { flex-wrap: wrap; }
+.cm-manage > summary { cursor: pointer; color: var(--gold); }
+.cm-manage[open] > summary { margin-bottom: var(--space-2); }
+
+.cm-invite { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); margin-top: var(--space-3); max-width: 38rem; }
+.cm-invite .field { flex: 1 1 18rem; }

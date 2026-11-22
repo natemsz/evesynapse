@@ -6,6 +6,7 @@ import (
 	"evesynapse/internal/app/appraise"
 	"evesynapse/internal/app/buildplanner"
 	"evesynapse/internal/app/calendar"
+	"evesynapse/internal/app/communities"
 	"evesynapse/internal/app/contacts"
 	"evesynapse/internal/app/contracts"
 	"evesynapse/internal/app/corpdata"
@@ -62,6 +63,7 @@ func init() {
 		doctrines.Module,
 		srp.Module,
 		groups.Module,
+		communities.Module,
 		discord.Module,
 		swarm.Module,
 		intel.Module,

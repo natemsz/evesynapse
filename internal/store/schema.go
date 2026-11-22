@@ -985,6 +985,11 @@ var pgStructureProbesSchema string
 //go:embed schema_pg/163_owner_permissions.sql
 var pgOwnerPermissionsSchema string
 
+// Step 164: communities and verified pilots.
+//
+//go:embed schema_pg/164_communities.sql
+var pgCommunitiesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1176,6 +1181,7 @@ func schemaSteps() []schemaStep {
 		{161, "sde_character_titles", pgSDECharacterTitlesSchema, ""},
 		{162, "structure_probes", pgStructureProbesSchema, ""},
 		{163, "owner_permissions", pgOwnerPermissionsSchema, ""},
+		{164, "communities", pgCommunitiesSchema, ""},
 	}
 }
 

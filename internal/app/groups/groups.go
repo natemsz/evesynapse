@@ -4,6 +4,7 @@ import (
 	"context"
 	"evesynapse/internal/humanize"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -18,20 +19,19 @@ import (
 
 // ---------------------------------------------------------------------------
 // Groups (/groups): sets of characters that the directors of a
-// corporation or alliance keep by hand. A special interest group, the
-// fleet commanders, a logistics wing. A group is a list and nothing
-// more; what it is used for is elsewhere, and at present that is
-// Discord roles (discord_roles.go): "whoever is in this group gets
-// that role".
+// corporation or alliance, or the leader and admins of a community,
+// keep by hand. A special interest group, the fleet commanders, a
+// logistics wing. A group is a list and nothing more; what it is used
+// for is elsewhere: Discord roles (discord_roles.go) for a corporation
+// or alliance, and who runs a programme for any owner.
 //
-// Who may: the same people who may manage the owner's Discord servers
-// (discord_servers.go). A director of a corporation for its groups; a
-// director of the executor corporation for an alliance's.
+// Who may: a director of a corporation for its groups; a director of
+// the executor corporation for an alliance's; the leader or an admin
+// of a community for its groups.
 //
 // Who can be put in a group: a character that is linked to EveSynapse
-// and is in the corporation (or in a corporation of the alliance).
-// Somebody who has never signed in cannot be given a Discord role in
-// any case, since nothing connects them to a Discord account.
+// and is in the corporation (or in a corporation of the alliance), or
+// an active member of the community, with or without an account.
 // ---------------------------------------------------------------------------
 
 const (
@@ -40,6 +40,12 @@ const (
 	groupDescMax     = 200
 	groupsPerOwner   = 50
 	groupMembersMost = 500
+	// communityPickerMost is how many members a community group's
+	// picker lists. Past it, a member is added by name.
+	communityPickerMost = 50
+	// communityGroupPage is how many of an open community group's
+	// members one page shows.
+	communityGroupPage = 50
 )
 
 // groupsView is the /groups page.
@@ -56,15 +62,25 @@ type groupOwnerView struct {
 	// Candidates are the characters that can be added to this owner's
 	// groups.
 	Candidates []groupCandidate
+	// Community: the owner is a community. Its groups open one at a
+	// time, so a page reads one group's members however many it keeps.
+	Community bool
 }
 
 type groupView struct {
 	ID          int64
 	Name        string
 	Description string
+	Count       int
 	Members     []groupMemberView
 	// Addable are the candidates not in the group yet.
 	Addable []groupCandidate
+	// Folded: a community group that is not the open one.
+	Folded bool
+	// ByName: more candidates than the picker lists, so members are
+	// also added by typing a name. NextHref is the next page of members.
+	ByName   bool
+	NextHref string
 }
 
 type groupMemberView struct {
@@ -86,11 +102,12 @@ func (app *mod) handleGroups(w http.ResponseWriter, r *http.Request) {
 	userID := app.deps.UserID(ctx)
 	view := &groupsView{}
 	var shown []standing.Owner
-	if owner, options, ok := app.deps.PickOwner(ctx, r, app.deps.ManageableOwners(ctx, userID)); ok {
+	if owner, options, ok := app.deps.PickOwner(ctx, r, app.deps.GroupOwners(ctx, userID)); ok {
 		shown, view.OwnerOptions = []standing.Owner{owner}, options
 	}
+	openGroup, _ := strconv.ParseInt(r.URL.Query().Get("group"), 10, 64)
 	for _, owner := range shown {
-		ov := groupOwnerView{Key: owner.Key(), Kind: owner.Kind, Name: app.deps.OwnerName(ctx, owner)}
+		ov := groupOwnerView{Key: owner.Key(), Kind: owner.Kind, Name: app.deps.OwnerName(ctx, owner), Community: owner.Kind == standing.OwnerCommunity}
 		corps := app.deps.OwnerCorporations(ctx, owner)
 		inside := map[int64]bool{}
 		if len(corps) > 0 {
@@ -109,7 +126,15 @@ func (app *mod) handleGroups(w http.ResponseWriter, r *http.Request) {
 			data.Error = "Could not load the groups; check the server log."
 		}
 		for _, group := range groups {
-			gv := groupView{ID: group.ID, Name: group.Name, Description: group.Description}
+			gv := groupView{ID: group.ID, Name: group.Name, Description: group.Description, Count: int(group.MemberCount)}
+			if ov.Community {
+				gv.Folded = group.ID != openGroup
+				if !gv.Folded {
+					app.fillCommunityGroup(ctx, &gv, owner, r.URL.Query())
+				}
+				ov.Groups = append(ov.Groups, gv)
+				continue
+			}
 			members, err := app.queries.ListOrgGroupMembers(ctx, group.ID)
 			if err != nil {
 				logging.Errorf("groups: members of group %d: %v", group.ID, err)
@@ -136,6 +161,41 @@ func (app *mod) handleGroups(w http.ResponseWriter, r *http.Request) {
 	app.deps.Render(ctx, w, http.StatusOK, "groups.html", data)
 }
 
+// fillCommunityGroup reads the open community group: one page of its
+// members and the members who could be added.
+func (app *mod) fillCommunityGroup(ctx context.Context, gv *groupView, owner standing.Owner, q url.Values) {
+	afterID, _ := strconv.ParseInt(q.Get("id"), 10, 64)
+	rows, err := app.queries.ListCommunityGroupMembers(ctx, db.ListCommunityGroupMembersParams{
+		CommunityID: owner.ID, GroupID: gv.ID, AfterName: q.Get("after"), AfterID: afterID, MaxRows: communityGroupPage + 1,
+	})
+	if err != nil {
+		logging.Errorf("groups: members of group %d: %v", gv.ID, err)
+	}
+	if len(rows) > communityGroupPage {
+		rows = rows[:communityGroupPage]
+		last := rows[len(rows)-1]
+		gv.NextHref = groupsPath + "?" + url.Values{
+			"owner": {owner.Key()}, "group": {strconv.FormatInt(gv.ID, 10)},
+			"after": {last.SortName}, "id": {strconv.FormatInt(last.CharacterID, 10)},
+		}.Encode()
+	}
+	for _, m := range rows {
+		gv.Members = append(gv.Members, groupMemberView{CharacterID: m.CharacterID, Name: m.Name})
+	}
+	candidates, err := app.queries.ListCommunityGroupCandidates(ctx, db.ListCommunityGroupCandidatesParams{
+		CommunityID: owner.ID, GroupID: gv.ID, MaxRows: communityPickerMost + 1,
+	})
+	if err != nil {
+		logging.Errorf("groups: candidates of group %d: %v", gv.ID, err)
+	}
+	if len(candidates) > communityPickerMost {
+		candidates, gv.ByName = candidates[:communityPickerMost], true
+	}
+	for _, c := range candidates {
+		gv.Addable = append(gv.Addable, groupCandidate{CharacterID: c.CharacterID, Name: c.Name})
+	}
+}
+
 // groupFor loads the group named in the address, for an account that
 // may manage its owner.
 func (app *mod) groupFor(r *http.Request, userID int64) (db.OrgGroup, bool) {
@@ -147,7 +207,7 @@ func (app *mod) groupFor(r *http.Request, userID int64) (db.OrgGroup, bool) {
 	if err != nil {
 		return db.OrgGroup{}, false
 	}
-	if !standing.Includes(app.deps.ManageableOwners(r.Context(), userID), standing.Owner{Kind: group.OwnerKind, ID: group.OwnerID}) {
+	if !standing.Includes(app.deps.GroupOwners(r.Context(), userID), standing.Owner{Kind: group.OwnerKind, ID: group.OwnerID}) {
 		return db.OrgGroup{}, false
 	}
 	return group, true
@@ -156,16 +216,20 @@ func (app *mod) groupFor(r *http.Request, userID int64) (db.OrgGroup, bool) {
 func (app *mod) groupsBack(w http.ResponseWriter, r *http.Request, message string) {
 	app.deps.Flash(r.Context(), message)
 	_ = r.ParseForm()
-	http.Redirect(w, r, standing.Address(groupsPath, r.Form.Get("owner")), http.StatusSeeOther)
+	path := standing.Address(groupsPath, r.Form.Get("owner"))
+	if id, err := strconv.ParseInt(r.Form.Get("group"), 10, 64); err == nil && id > 0 && strings.Contains(path, "?") {
+		path += "&group=" + strconv.FormatInt(id, 10)
+	}
+	http.Redirect(w, r, path, http.StatusSeeOther)
 }
 
 func (app *mod) handleGroupCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.deps.UserID(ctx)
 	_ = r.ParseForm()
-	owner, ok := standing.ParseOwner(r.Form.Get("owner"))
-	if !ok || !standing.Includes(app.deps.ManageableOwners(ctx, userID), owner) {
-		app.groupsBack(w, r, "Only a director can make groups for that corporation or alliance.")
+	owner, ok := standing.ParseAnyOwner(r.Form.Get("owner"))
+	if !ok || !standing.Includes(app.deps.GroupOwners(ctx, userID), owner) {
+		app.groupsBack(w, r, "Only a director, or a community's leader or admin, can make its groups.")
 		return
 	}
 	name := strings.Join(strings.Fields(r.Form.Get("name")), " ")
@@ -175,7 +239,7 @@ func (app *mod) handleGroupCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	existing, err := app.queries.ListOrgGroupsForOwner(ctx, db.ListOrgGroupsForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 	if err == nil && len(existing) >= groupsPerOwner {
-		app.groupsBack(w, r, "That is as many groups as one corporation or alliance can have.")
+		app.groupsBack(w, r, "That is as many groups as one "+owner.Kind+" can have.")
 		return
 	}
 	for _, g := range existing {
@@ -239,16 +303,40 @@ func (app *mod) handleGroupMemberAdd(w http.ResponseWriter, r *http.Request) {
 		app.groupsBack(w, r, "That group is not yours to change.")
 		return
 	}
-	app.groupsBack(w, r, app.addToGroup(ctx, userID, group, r.Form["character"]))
+	characters := r.Form["character"]
+	if name := strings.TrimSpace(r.Form.Get("name")); name != "" && group.OwnerKind == standing.OwnerCommunity {
+		member, err := app.queries.GetActiveCommunityMemberByName(ctx, db.GetActiveCommunityMemberByNameParams{CommunityID: group.OwnerID, Name: name})
+		if err != nil {
+			app.groupsBack(w, r, "No active member of this community is called "+name+".")
+			return
+		}
+		characters = append(characters, strconv.FormatInt(member.CharacterID, 10))
+	}
+	app.groupsBack(w, r, app.addToGroup(ctx, userID, group, characters))
 }
 
 // addToGroup puts the characters named in a group and says what
 // happened. Each has to be a linked character in the corporation, or in
-// a corporation of the alliance, the group belongs to.
+// a corporation of the alliance, the group belongs to, or an active
+// member of its community.
 func (app *mod) addToGroup(ctx context.Context, userID int64, group db.OrgGroup, characters []string) string {
 	owner := standing.Owner{Kind: group.OwnerKind, ID: group.OwnerID}
 	allowed := map[int64]bool{}
-	if corps := app.deps.OwnerCorporations(ctx, owner); len(corps) > 0 {
+	if owner.Kind == standing.OwnerCommunity {
+		ids := make([]int64, 0, len(characters))
+		for _, raw := range characters {
+			if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
+				ids = append(ids, id)
+			}
+		}
+		active, err := app.queries.ListActiveCommunityMembersIn(ctx, db.ListActiveCommunityMembersInParams{CommunityID: owner.ID, CharacterIds: ids})
+		if err != nil {
+			logging.Errorf("groups: members of %s: %v", owner.Key(), err)
+		}
+		for _, id := range active {
+			allowed[id] = true
+		}
+	} else if corps := app.deps.OwnerCorporations(ctx, owner); len(corps) > 0 {
 		rows, err := app.queries.ListCharactersInCorporations(ctx, corps)
 		if err != nil {
 			logging.Errorf("groups: characters of %s: %v", owner.Key(), err)
@@ -257,8 +345,7 @@ func (app *mod) addToGroup(ctx context.Context, userID int64, group db.OrgGroup,
 			allowed[row.CharacterID] = true
 		}
 	}
-	members, _ := app.queries.ListOrgGroupMembers(ctx, group.ID)
-	room := groupMembersMost - len(members)
+	room := groupMembersMost - int(group.MemberCount)
 	added := 0
 	for _, raw := range characters {
 		id, err := strconv.ParseInt(raw, 10, 64)
@@ -274,6 +361,9 @@ func (app *mod) addToGroup(ctx context.Context, userID int64, group db.OrgGroup,
 		added++
 	}
 	if added == 0 {
+		if owner.Kind == standing.OwnerCommunity {
+			return "Nobody was added. Only active members of the community can be."
+		}
 		return "Nobody was added. Only characters linked to EveSynapse that are in the " + owner.Kind + " can be."
 	}
 	logging.Infof("groups: user %d added %d member(s) to group %d (%s)", userID, added, group.ID, group.Name)

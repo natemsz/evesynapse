@@ -137,20 +137,22 @@ LIMIT sqlc.arg(max_rows)::bigint;
 -- into the daily statistics (it is not waiting in
 -- kill_stats_pending): the fold reads the attacker rows for ships
 -- flown, so pruning first would lose them from the stats for good.
+-- name: ListPrunableKillIDs :many
+SELECT k.killmail_id FROM kills k
+WHERE k.killmail_id > sqlc.arg(after_id)::bigint
+  AND k.killmail_time < sqlc.arg(before)::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id)
+ORDER BY k.killmail_id
+LIMIT sqlc.arg(max_rows)::bigint;
+
 -- name: PruneKillDetails :execrows
-DELETE FROM kill_details d USING kills k
-WHERE k.killmail_id = d.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz
-  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id);
+DELETE FROM kill_details WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
 
 -- name: PruneKillAttackers :execrows
-DELETE FROM kill_attackers a USING kills k
-WHERE k.killmail_id = a.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz
-  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id);
+DELETE FROM kill_attackers WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
 
 -- name: PruneKillLinePrices :execrows
-DELETE FROM kill_line_prices l USING kills k
-WHERE k.killmail_id = l.killmail_id AND k.killmail_time < sqlc.arg(before)::timestamptz
-  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id);
+DELETE FROM kill_line_prices WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
 
 -- name: ListSystemRegions :many
 SELECT system_id, region_id FROM sde_systems;

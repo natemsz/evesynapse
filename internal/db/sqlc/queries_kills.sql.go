@@ -1648,6 +1648,50 @@ func (q *Queries) ListKillsRecent(ctx context.Context, arg ListKillsRecentParams
 	return items, nil
 }
 
+const listPrunableKillIDs = `-- name: ListPrunableKillIDs :many
+SELECT k.killmail_id FROM kills k
+WHERE k.killmail_id > $1::bigint
+  AND k.killmail_time < $2::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id)
+ORDER BY k.killmail_id
+LIMIT $3::bigint
+`
+
+type ListPrunableKillIDsParams struct {
+	AfterID int64     `json:"after_id"`
+	Before  time.Time `json:"before"`
+	MaxRows int64     `json:"max_rows"`
+}
+
+// Retention: attacker detail, full killmails and per-item priced
+// lines older than the cutoff go; the summary row and the
+// involvement record stay. Values and who they credit are
+// permanent; only detail ages out. Past two years a kill is metadata
+// for intel only (who, when, ship, total value), not a record.
+// Raw kill rows past retention go only once the kill is counted
+// into the daily statistics (it is not waiting in
+// kill_stats_pending): the fold reads the attacker rows for ships
+// flown, so pruning first would lose them from the stats for good.
+func (q *Queries) ListPrunableKillIDs(ctx context.Context, arg ListPrunableKillIDsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listPrunableKillIDs, arg.AfterID, arg.Before, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var killmail_id int64
+		if err := rows.Scan(&killmail_id); err != nil {
+			return nil, err
+		}
+		items = append(items, killmail_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecentKillEntities = `-- name: ListRecentKillEntities :many
 SELECT DISTINCT unnest(ARRAY[k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id,
     a.character_id, a.corporation_id, a.alliance_id])::bigint AS id
@@ -1967,13 +2011,11 @@ func (q *Queries) MarkKillFeedBackfillDone(ctx context.Context, doneAt time.Time
 }
 
 const pruneKillAttackers = `-- name: PruneKillAttackers :execrows
-DELETE FROM kill_attackers a USING kills k
-WHERE k.killmail_id = a.killmail_id AND k.killmail_time < $1::timestamptz
-  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id)
+DELETE FROM kill_attackers WHERE killmail_id = ANY($1::bigint[])
 `
 
-func (q *Queries) PruneKillAttackers(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.Exec(ctx, pruneKillAttackers, before)
+func (q *Queries) PruneKillAttackers(ctx context.Context, killmailIds []int64) (int64, error) {
+	result, err := q.db.Exec(ctx, pruneKillAttackers, killmailIds)
 	if err != nil {
 		return 0, err
 	}
@@ -1981,22 +2023,11 @@ func (q *Queries) PruneKillAttackers(ctx context.Context, before time.Time) (int
 }
 
 const pruneKillDetails = `-- name: PruneKillDetails :execrows
-DELETE FROM kill_details d USING kills k
-WHERE k.killmail_id = d.killmail_id AND k.killmail_time < $1::timestamptz
-  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id)
+DELETE FROM kill_details WHERE killmail_id = ANY($1::bigint[])
 `
 
-// Retention: attacker detail, full killmails and per-item priced
-// lines older than the cutoff go; the summary row and the
-// involvement record stay. Values and who they credit are
-// permanent; only detail ages out. Past two years a kill is metadata
-// for intel only (who, when, ship, total value), not a record.
-// Raw kill rows past retention go only once the kill is counted
-// into the daily statistics (it is not waiting in
-// kill_stats_pending): the fold reads the attacker rows for ships
-// flown, so pruning first would lose them from the stats for good.
-func (q *Queries) PruneKillDetails(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.Exec(ctx, pruneKillDetails, before)
+func (q *Queries) PruneKillDetails(ctx context.Context, killmailIds []int64) (int64, error) {
+	result, err := q.db.Exec(ctx, pruneKillDetails, killmailIds)
 	if err != nil {
 		return 0, err
 	}
@@ -2004,13 +2035,11 @@ func (q *Queries) PruneKillDetails(ctx context.Context, before time.Time) (int64
 }
 
 const pruneKillLinePrices = `-- name: PruneKillLinePrices :execrows
-DELETE FROM kill_line_prices l USING kills k
-WHERE k.killmail_id = l.killmail_id AND k.killmail_time < $1::timestamptz
-  AND NOT EXISTS (SELECT 1 FROM kill_stats_pending p WHERE p.killmail_id = k.killmail_id)
+DELETE FROM kill_line_prices WHERE killmail_id = ANY($1::bigint[])
 `
 
-func (q *Queries) PruneKillLinePrices(ctx context.Context, before time.Time) (int64, error) {
-	result, err := q.db.Exec(ctx, pruneKillLinePrices, before)
+func (q *Queries) PruneKillLinePrices(ctx context.Context, killmailIds []int64) (int64, error) {
+	result, err := q.db.Exec(ctx, pruneKillLinePrices, killmailIds)
 	if err != nil {
 		return 0, err
 	}

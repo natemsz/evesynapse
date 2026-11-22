@@ -3,15 +3,19 @@ package app
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fit"
+	"evesynapse/internal/standing"
 )
 
 // savedFit stores a fit for an account, as the fitting tool would.
@@ -30,7 +34,7 @@ func (f *notifyFixture) savedFit(userID int64, name string, ship int64, public b
 
 func (f *notifyFixture) doctrines(corp int64) []db.Doctrine {
 	f.t.Helper()
-	rows, err := f.q.ListDoctrinesForCorporations(f.ctx, []int64{corp})
+	rows, err := f.q.ListDoctrinesForOwner(f.ctx, db.ListDoctrinesForOwnerParams{OwnerKind: ownerCorporation, OwnerID: corp})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -232,6 +236,104 @@ func TestDoctrines(t *testing.T) {
 	}
 }
 
+// TestCommunityDoctrineAccessAndFleetCopy: only who runs a community
+// keeps its doctrines, a private one answers like a missing one, a
+// public one opens with no sign-in, a pilot's public corporation never
+// reads a corporation's doctrine, and a fleet that has started keeps
+// the doctrine it flew through a later edit.
+func TestCommunityDoctrineAccessAndFleetCopy(t *testing.T) {
+	f := newNotifyFixture(t)
+	leader := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	otherUser, _ := f.q.CreateUser(f.ctx)
+	seedCharacter(t, f.q, otherUser.ID, fixtureCharB, "Fixture Outsider")
+	outsider := sessionCookie(t, f.app, otherUser.ID, fixtureCharB, "Fixture Outsider")
+	now := time.Now().UTC()
+	community, err := f.q.CreateCommunity(f.ctx, db.CreateCommunityParams{
+		Slug: "doctrine-pilots", Name: "Doctrine Pilots", JoinPolicy: "open", CreatedByCharacter: f.ch.CharacterID, CreatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.q.UpsertVerifiedPilot(f.ctx, db.UpsertVerifiedPilotParams{CharacterID: f.ch.CharacterID, Name: f.ch.Name, SeenAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.q.AddCommunityMember(f.ctx, db.AddCommunityMemberParams{
+		CommunityID: community.ID, CharacterID: f.ch.CharacterID, Name: f.ch.Name,
+		Role: standing.CommunityLeader, State: "active", JoinedAt: now, AddedBy: f.ch.CharacterID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	owner := orgOwner{Kind: ownerCommunity, ID: community.ID}
+	list := func() []db.Doctrine {
+		rows, err := f.q.ListDoctrinesForOwner(f.ctx, db.ListDoctrinesForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rows
+	}
+	create := url.Values{"owner": {owner.Key()}, "name": {"Community Caracals"}}
+	f.post(outsider, "/doctrines/create", create)
+	if len(list()) != 0 {
+		t.Fatal("somebody outside the community made it a doctrine")
+	}
+	f.post(leader, "/doctrines/create", create)
+	made := list()
+	if len(made) != 1 || made[0].CorporationID >= 0 {
+		t.Fatalf("doctrines %+v, want one that names no real corporation", made)
+	}
+	d := made[0]
+	page := doctrineURL(d.ID)
+	fitID, err := f.q.AddDoctrineFit(f.ctx, db.AddDoctrineFitParams{
+		DoctrineID: d.ID, Name: "Fleet Caracal", ShipTypeID: 621, ItemsJson: `{"shipTypeId":621,"items":[]}`, FleetRole: "DPS", AddedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	anonymous := func() (int, string) {
+		rec := httptest.NewRecorder()
+		f.app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, page, nil))
+		return rec.Code, rec.Body.String()
+	}
+	if code, body := anonymous(); code != http.StatusNotFound || strings.Contains(body, "Fleet Caracal") {
+		t.Fatalf("a private doctrine, signed out: %d", code)
+	}
+	if _, body := getPage(t, f.app, outsider, page); strings.Contains(body, "Fleet Caracal") {
+		t.Fatal("somebody outside the community read its private doctrine")
+	}
+	pilot := fleetViewer{Pilot: &fleetPilot{CorporationID: discordCorp, Communities: map[int64]bool{community.ID: true}}}
+	if !pilot.readsDoctrine(owner, module.DoctrineMembers) {
+		t.Fatal("a verified pilot in the community cannot read its doctrine")
+	}
+	if pilot.readsDoctrine(orgOwner{Kind: ownerCorporation, ID: discordCorp}, module.DoctrineMembers) {
+		t.Fatal("a verified pilot's public corporation read that corporation's doctrine")
+	}
+	f.post(leader, page+"/save", url.Values{"name": {d.Name}, "visibility": {module.DoctrinePublic}})
+	if code, body := anonymous(); code != http.StatusOK || !strings.Contains(body, "Fleet Caracal") {
+		t.Fatalf("a public doctrine, signed out: %d", code)
+	}
+
+	id, err := f.q.CreateFleet(f.ctx, db.CreateFleetParams{
+		OwnerKind: owner.Kind, OwnerID: owner.ID, FleetType: fleetTypeCommunity, Visibility: fleetRestricted, JoinGate: joinByRule,
+		Title: "Caracal roam", StartsAt: now.Add(-10 * time.Minute), DurationMinutes: 60, Doctrine: d.Name, DoctrineID: d.ID,
+		DoctrineMode: doctrineRequired, CreatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.post(leader, page+"/fits/"+strconv.FormatInt(fitID, 10)+"/remove", url.Values{})
+	if left, _ := f.q.ListDoctrineFits(f.ctx, []int64{d.ID}); len(left) != 0 {
+		t.Fatalf("%d fit(s) left in the doctrine, want none", len(left))
+	}
+	op, err := f.q.GetOp(f.ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !op.DoctrineSnapshotAt.Valid || !slices.Contains(op.DoctrineSnapshotShips, 621) || !strings.Contains(op.DoctrineSnapshot.String, "Fleet Caracal") {
+		t.Fatalf("the started fleet lost the doctrine it flew: %+v", op)
+	}
+}
+
 // TestFitToolOpensLibraryFits: a pasted fit goes into a doctrine with
 // what could not be read left out, and the fitting tool opens a
 // doctrine's fit and a public fit, but not a doctrine fit of a
@@ -248,7 +350,7 @@ func TestFitToolOpensLibraryFits(t *testing.T) {
 	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpRoles, esi.CharacterRoles{Roles: []string{"Director"}})
 
 	postForm(t, app, cookie, "/doctrines/create", url.Values{"corporation": {"98000001"}, "name": {"Blaster boats"}})
-	made, _ := q.ListDoctrinesForCorporations(ctx, []int64{discordCorp})
+	made, _ := q.ListDoctrinesForOwner(ctx, db.ListDoctrinesForOwnerParams{OwnerKind: ownerCorporation, OwnerID: discordCorp})
 	if len(made) != 1 {
 		t.Fatalf("%d doctrine(s), want one", len(made))
 	}

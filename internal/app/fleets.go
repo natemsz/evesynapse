@@ -6,8 +6,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -99,6 +101,19 @@ var fleetJoinOptions = []fleetOption{
 	{Value: joinByRule, Label: "Only who you choose", Hint: "Only the people you pick below can sign up."},
 }
 
+// What a fleet flies (ops.doctrine_mode). Stored: never rename.
+const (
+	doctrineNone      = "none"
+	doctrineSuggested = "suggested"
+	doctrineRequired  = "required"
+)
+
+var fleetDoctrineModes = []fleetOption{
+	{Value: doctrineNone, Label: "Bring what you like", Hint: "No doctrine for this fleet."},
+	{Value: doctrineSuggested, Label: "Suggested", Hint: "Pilots see the doctrine and can bring something else."},
+	{Value: doctrineRequired, Label: "Required", Hint: "Pilots are told to bring one of its fits."},
+}
+
 func fleetOptions(list []fleetOption, selected string) []fleetOption {
 	out := make([]fleetOption, len(list))
 	copy(out, list)
@@ -174,16 +189,22 @@ type opFormView struct {
 	Date        string // the start's day, kept when switching owner
 	Duration    int64
 	Doctrine    string
-	DoctrineID  int64 // one of the corporation's doctrines, or 0
+	DoctrineID  int64 // one of the owner's doctrines, or 0
 	Doctrines   []opDoctrineGroup
-	FormUp      string
-	Owners      []fleetOwnerChoice
-	OwnerKey    string
-	OwnerName   string
-	FCID        int64
-	FCName      string
-	FCs         []opChoice
-	Errors      []string
+	// DoctrineMode is none, suggested or required. DoctrineLocked: the
+	// fleet is over, so what it flew no longer changes.
+	DoctrineMode   string
+	DoctrineModes  []fleetOption
+	DoctrineLocked bool
+	DoctrinesHref  string
+	FormUp         string
+	Owners         []fleetOwnerChoice
+	OwnerKey       string
+	OwnerName      string
+	FCID           int64
+	FCName         string
+	FCs            []opChoice
+	Errors         []string
 
 	// CanSetAccess: the viewer may change who can see and join the
 	// fleet. A commander without that sees the details form only.
@@ -200,11 +221,10 @@ type opFormView struct {
 	RuleChoices  []whoChoice
 }
 
-// opDoctrineGroup is one corporation's doctrines, as the form offers
-// them.
+// opDoctrineGroup is one owner's doctrines, as the form offers them.
 type opDoctrineGroup struct {
-	Corporation string
-	Choices     []opChoice
+	Owner   string
+	Choices []opChoice
 }
 
 // opFormFor fills the form's choices for one owner.
@@ -233,19 +253,21 @@ func (app *Application) opFormFor(ctx context.Context, v fleetViewer, form *opFo
 	if fcID != 0 {
 		form.FCName = app.displayCharacter(ctx, fcID)
 	}
-	if owner.Kind == ownerCorporation {
-		doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, []int64{owner.ID})
-		if err != nil {
-			logging.Errorf("fleets: doctrines of corporation %d: %v", owner.ID, err)
-		}
-		group := opDoctrineGroup{Corporation: form.OwnerName}
-		for _, d := range doctrines {
-			group.Choices = append(group.Choices, opChoice{ID: d.ID, Name: d.Name, Selected: d.ID == form.DoctrineID})
-		}
-		if len(group.Choices) > 0 {
-			form.Doctrines = []opDoctrineGroup{group}
-		}
+	doctrines, err := app.queries.ListDoctrinesForOwner(ctx, db.ListDoctrinesForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
+	if err != nil {
+		logging.Errorf("fleets: doctrines of %s: %v", owner.Key(), err)
 	}
+	group := opDoctrineGroup{Owner: form.OwnerName}
+	for _, d := range doctrines {
+		group.Choices = append(group.Choices, opChoice{ID: d.ID, Name: d.Name, Selected: d.ID == form.DoctrineID})
+	}
+	if len(group.Choices) > 0 {
+		form.Doctrines = []opDoctrineGroup{group}
+	}
+	if moduleCompiledIn("doctrines") {
+		form.DoctrinesHref = standing.Address("/doctrines/", owner.Key())
+	}
+	form.DoctrineModes = fleetOptions(fleetDoctrineModes, form.DoctrineMode)
 	form.Types = fleetOptions(fleetTypeOptions, form.Type)
 	form.Visibilities = fleetOptions(fleetVisibilityOptions, form.Visibility)
 	form.Gates = fleetOptions(fleetJoinOptions, form.JoinGate)
@@ -292,7 +314,7 @@ func (app *Application) handleOpNew(w http.ResponseWriter, r *http.Request) {
 	form := &opFormView{
 		StartsAt: start.Format(opDateTimeLayout), Duration: 60, CanSetAccess: true,
 		Type: defaultFleetType(owner), Visibility: fleetRestricted, JoinGate: joinByRule,
-		ViewRule: ruleMember, JoinRule: ruleMember,
+		ViewRule: ruleMember, JoinRule: ruleMember, DoctrineMode: doctrineNone,
 	}
 	app.opFormFor(ctx, v, form, owner, sessionCharID(app.sessions, ctx))
 	app.renderOpForm(w, r, form)
@@ -311,7 +333,8 @@ func (app *Application) handleOpEdit(w http.ResponseWriter, r *http.Request) {
 	form := &opFormView{
 		ID: op.ID, Title: op.Title, Description: op.Description,
 		StartsAt: op.StartsAt.UTC().Format(opDateTimeLayout), Duration: op.DurationMinutes,
-		Doctrine: op.Doctrine, DoctrineID: op.DoctrineID, FormUp: op.FormUp,
+		Doctrine: op.Doctrine, DoctrineID: op.DoctrineID, DoctrineMode: op.DoctrineMode,
+		DoctrineLocked: opEnd(op).Before(time.Now()), FormUp: op.FormUp,
 		CanSetAccess: a.Plan, Type: op.FleetType, Visibility: op.Visibility, JoinGate: op.JoinGate,
 		RosterPublic: op.RosterPublic, ViewRule: ruleMember, JoinRule: ruleMember,
 	}
@@ -366,6 +389,7 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 		CanSetAccess: true,
 	}
 	form.DoctrineID, _ = strconv.ParseInt(r.FormValue("doctrine_id"), 10, 64)
+	form.DoctrineMode = r.FormValue("doctrine_mode")
 
 	var owner orgOwner
 	var existing db.Op
@@ -408,16 +432,11 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 	if !fcOK {
 		form.Errors = append(form.Errors, "Choose the character that will run the fleet: one of yours in "+app.ownerName(ctx, owner)+".")
 	}
-	// A doctrine picked from the list gives the fleet its name; it has
-	// to be one of the fleet's own corporation.
-	if form.DoctrineID != 0 {
-		d, err := app.queries.GetDoctrine(ctx, form.DoctrineID)
-		if err == nil && owner.Kind == ownerCorporation && d.CorporationID == owner.ID {
-			form.Doctrine = d.Name
-		} else {
-			form.DoctrineID = 0
-			form.Errors = append(form.Errors, "Choose one of that corporation's doctrines, or write the doctrine in.")
-		}
+	if id != 0 && opEnd(existing).Before(time.Now()) {
+		// What a finished fleet flew stays as it was.
+		form.Doctrine, form.DoctrineID, form.DoctrineMode, form.DoctrineLocked = existing.Doctrine, existing.DoctrineID, existing.DoctrineMode, true
+	} else {
+		app.checkFleetDoctrine(ctx, form, owner)
 	}
 	if form.Title == "" || len(form.Title) > opTitleMax {
 		form.Errors = append(form.Errors, fmt.Sprintf("Give the fleet a title of up to %d characters.", opTitleMax))
@@ -505,6 +524,43 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, opURL(saved), http.StatusSeeOther)
 }
 
+// checkFleetDoctrine settles what the form says the fleet flies. A
+// doctrine picked from the list has to be the fleet owner's and gives
+// the fleet its name. Only a doctrine from the list can be required,
+// since only that has fits to bring.
+func (app *Application) checkFleetDoctrine(ctx context.Context, form *opFormView, owner orgOwner) {
+	if form.DoctrineMode == "" {
+		form.DoctrineMode = doctrineNone
+		if form.DoctrineID != 0 || form.Doctrine != "" {
+			form.DoctrineMode = doctrineSuggested
+		}
+	}
+	if !validFleetOption(fleetDoctrineModes, form.DoctrineMode) {
+		form.DoctrineMode = doctrineNone
+		form.Errors = append(form.Errors, "Choose what the fleet flies.")
+	}
+	if form.DoctrineMode == doctrineNone {
+		form.Doctrine, form.DoctrineID = "", 0
+		return
+	}
+	if form.DoctrineID != 0 {
+		d, err := app.queries.GetDoctrine(ctx, form.DoctrineID)
+		if err == nil && doctrineOwner(d) == owner {
+			form.Doctrine = d.Name
+			return
+		}
+		form.DoctrineID = 0
+		form.Errors = append(form.Errors, "Choose one of "+app.ownerName(ctx, owner)+"'s doctrines, or write the doctrine in.")
+		return
+	}
+	switch {
+	case form.DoctrineMode == doctrineRequired:
+		form.Errors = append(form.Errors, "A required doctrine has to be one from the list.")
+	case form.Doctrine == "":
+		form.Errors = append(form.Errors, "Name the doctrine, or choose to let pilots bring what they like.")
+	}
+}
+
 // saveFleet writes a fleet and its access rules together.
 func (app *Application) saveFleet(ctx context.Context, form *opFormView, owner orgOwner, start time.Time, fcID int64, rules []db.InsertOpAccessRuleParams, now time.Time) (int64, error) {
 	tx, err := app.pool.Begin(ctx)
@@ -527,7 +583,7 @@ func (app *Application) saveFleet(ctx context.Context, form *opFormView, owner o
 			CorporationID: corp, OwnerKind: owner.Kind, OwnerID: owner.ID, FleetType: form.Type,
 			Visibility: form.Visibility, JoinGate: form.JoinGate, RosterPublic: form.RosterPublic,
 			ShareToken: sql.NullString{String: token, Valid: true}, Title: form.Title, Description: form.Description,
-			StartsAt: start, DurationMinutes: form.Duration, Doctrine: form.Doctrine, DoctrineID: form.DoctrineID,
+			StartsAt: start, DurationMinutes: form.Duration, Doctrine: form.Doctrine, DoctrineID: form.DoctrineID, DoctrineMode: form.DoctrineMode,
 			FormUp: form.FormUp, FcCharacterID: fcID, CreatedByCharacter: sessionCharID(app.sessions, ctx), CreatedAt: now,
 		})
 		if err != nil {
@@ -536,7 +592,7 @@ func (app *Application) saveFleet(ctx context.Context, form *opFormView, owner o
 	} else {
 		if err := q.UpdateOp(ctx, db.UpdateOpParams{
 			ID: id, Title: form.Title, Description: form.Description, StartsAt: start, DurationMinutes: form.Duration,
-			Doctrine: form.Doctrine, DoctrineID: form.DoctrineID, FormUp: form.FormUp, FcCharacterID: fcID,
+			Doctrine: form.Doctrine, DoctrineID: form.DoctrineID, DoctrineMode: form.DoctrineMode, FormUp: form.FormUp, FcCharacterID: fcID,
 		}); err != nil {
 			return 0, err
 		}
@@ -646,20 +702,22 @@ type opView struct {
 	WhenRaw     string // RFC3339, drives the live countdown
 	Length      string
 	Doctrine    string
-	DoctrineURL string            // the doctrine's page, for those in its corporation
-	DoctrineFit []doctrineFitView // its fits: what to bring
-	FormUp      string
-	FCID        int64
-	FC          string
-	Cancelled   bool
-	Over        bool
-	Live        bool
-	CanManage   bool
-	CanPlan     bool
-	SeeNames    bool
-	SeeFormUp   bool
-	CanJoin     bool
-	HasSRP      bool
+	DoctrineURL string     // the doctrine's page, for those who can read it
+	DoctrineFit []fleetFit // its fits: what to bring
+	// DoctrineRequired: pilots are told to bring one of its fits.
+	DoctrineRequired bool
+	FormUp           string
+	FCID             int64
+	FC               string
+	Cancelled        bool
+	Over             bool
+	Live             bool
+	CanManage        bool
+	CanPlan          bool
+	SeeNames         bool
+	SeeFormUp        bool
+	CanJoin          bool
+	HasSRP           bool
 
 	// Level is "anonymous", "pilot" or "account"; the sign-up panel
 	// offers that viewer's next step.
@@ -772,13 +830,27 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	if a.SeeNames && op.FcCharacterID != 0 {
 		view.FCID, view.FC = op.FcCharacterID, app.displayCharacter(ctx, op.FcCharacterID)
 	}
-	if owner.Kind == ownerCorporation && op.DoctrineID != 0 && (a.Join || a.Manage) {
-		if d, err := app.queries.GetDoctrine(ctx, op.DoctrineID); err == nil && d.CorporationID == owner.ID {
-			view.DoctrineFit = app.doctrineFitViews(ctx, []int64{d.ID})[d.ID]
-			if v.belongs(owner) {
-				view.DoctrineURL = doctrineURL(d.ID)
+	view.DoctrineRequired = op.DoctrineMode == doctrineRequired
+	fits, doctrine := app.fleetFits(ctx, op)
+	readable := doctrine != nil && v.readsDoctrine(owner, doctrine.Visibility)
+	if readable {
+		view.DoctrineURL = doctrineURL(doctrine.ID)
+	}
+	if a.Join || a.Manage || (doctrine != nil && doctrine.Visibility == module.DoctrinePublic) {
+		if readable {
+			// A fit taken out of the doctrine since the start has
+			// nothing left to open.
+			open := map[int64]bool{}
+			for _, fit := range app.doctrineFitViews(ctx, []int64{doctrine.ID})[doctrine.ID] {
+				open[fit.ID] = true
+			}
+			for i := range fits {
+				if open[fits[i].id] {
+					fits[i].Href = "/fittings/?doctrine=" + strconv.FormatInt(fits[i].id, 10) + "#fit-editor"
+				}
 			}
 		}
+		view.DoctrineFit = fits
 	}
 
 	var signups []db.OpSignup
@@ -818,6 +890,67 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 		})
 	}
 	app.render(ctx, w, http.StatusOK, "fleet.html", data)
+}
+
+// fleetFit is one fit a fleet's pilots are asked to bring. Href is empty
+// for a viewer who cannot open it.
+type fleetFit struct {
+	id               int64
+	Name, Ship, Role string
+	Href             string
+}
+
+// fleetFits is what a fleet flies: the copy kept from its start, else
+// its doctrine as it stands. The doctrine is nil once it is gone, or if
+// it is not the fleet owner's.
+func (app *Application) fleetFits(ctx context.Context, op db.Op) ([]fleetFit, *db.Doctrine) {
+	if op.DoctrineID == 0 {
+		return nil, nil
+	}
+	var live *db.Doctrine
+	if d, err := app.queries.GetDoctrine(ctx, op.DoctrineID); err == nil && doctrineOwner(d) == opOwner(op) {
+		live = &d
+	}
+	if op.DoctrineSnapshotAt.Valid && op.DoctrineSnapshot.Valid {
+		var snapshot doctrineSnapshot
+		if err := json.Unmarshal([]byte(op.DoctrineSnapshot.String), &snapshot); err != nil {
+			logging.Errorf("fleets: doctrine snapshot of %d: %v", op.ID, err)
+			return nil, live
+		}
+		out := make([]fleetFit, 0, len(snapshot.Fits))
+		for _, fit := range snapshot.Fits {
+			out = append(out, fleetFit{id: fit.ID, Name: fit.Name, Ship: app.typeNameOrID(ctx, fit.ShipTypeID), Role: fit.Role})
+		}
+		return out, live
+	}
+	if live == nil {
+		return nil, nil
+	}
+	current := app.doctrineFitViews(ctx, []int64{live.ID})[live.ID]
+	out := make([]fleetFit, 0, len(current))
+	for _, fit := range current {
+		out = append(out, fleetFit{id: fit.ID, Name: fit.Name, Ship: fit.Ship, Role: fit.Role})
+	}
+	return out, live
+}
+
+// doctrineRoleFor is the part a ship plays in a fleet's doctrine, when
+// every fit of that ship agrees on one the sign-up form offers.
+func doctrineRoleFor(fits []fleetFit, ship string) string {
+	role, found := "", false
+	for _, fit := range fits {
+		if !strings.EqualFold(fit.Ship, ship) {
+			continue
+		}
+		if found && fit.Role != role {
+			return ""
+		}
+		role, found = fit.Role, true
+	}
+	if !slices.Contains(opFleetRoles, role) {
+		return ""
+	}
+	return role
 }
 
 // fillFleetSignup sets the sign-up form: the viewer's characters that
@@ -966,6 +1099,10 @@ func (app *Application) handleOpSignup(w http.ResponseWriter, r *http.Request) {
 		note := clip(strings.TrimSpace(r.FormValue("note")), opShortMax)
 		if response == opNo {
 			ship, role = "", "" // not coming: nothing to bring
+		}
+		if role == "" && ship != "" {
+			fits, _ := app.fleetFits(ctx, op)
+			role = doctrineRoleFor(fits, ship)
 		}
 		if err := app.queries.UpsertOpSignup(ctx, db.UpsertOpSignupParams{
 			OpID: op.ID, CharacterID: characterID, UserID: sql.NullInt64{Int64: v.UserID, Valid: v.UserID != 0},

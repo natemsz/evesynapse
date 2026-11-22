@@ -995,6 +995,11 @@ var pgCommunitiesSchema string
 //go:embed schema_pg/165_fleets.sql
 var pgFleetsSchema string
 
+// Step 166: doctrines with owners, and the doctrine a fleet flew.
+//
+//go:embed schema_pg/166_doctrine_owners.sql
+var pgDoctrineOwnersSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1188,6 +1193,7 @@ func schemaSteps() []schemaStep {
 		{163, "owner_permissions", pgOwnerPermissionsSchema, ""},
 		{164, "communities", pgCommunitiesSchema, ""},
 		{165, "fleets", pgFleetsSchema, ""},
+		{166, "doctrine owners", pgDoctrineOwnersSchema, ""},
 	}
 }
 

@@ -945,6 +945,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	fleets.Get(planPath, app.handleOpNew)
 	fleets.Post("/fleets/save", app.handleOpSave)
 	fleets.Get("/fleets/history/", app.handleFleetHistory)
+	fleets.Get(fleetPermissionsPath, app.handleFleetPermissions)
+	fleets.Post(fleetPermissionsPath, app.handleFleetPermissionsSave)
 	fleets.Get("/fleets/{opID:[0-9]+}/", app.handleOp)
 	fleets.Get("/fleets/{opID:[0-9]+}/edit", app.handleOpEdit)
 	fleets.Post("/fleets/{opID:[0-9]+}/signup", app.handleOpSignup)

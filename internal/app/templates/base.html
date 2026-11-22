@@ -75,7 +75,7 @@
 {{if or (eq .NavPage "intel_wars.html") (eq .NavPage "intel_incursions.html") (eq .NavPage "intel_fw.html")}}<link rel="stylesheet" href="/static/intel.css?v={{.AssetVersion}}">{{end}}{{if or (eq .NavPage "intel_sov.html") (eq .NavPage "alliance.html")}}<link rel="stylesheet" href="/static/sov.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "channels.html") (eq .NavPage "channel.html") (eq .NavPage "system.html") (eq .NavPage "feed.html") (eq .NavPage "intel_workbench.html")}}<link rel="stylesheet" href="/static/channels.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "communities.html") (eq .NavPage "community.html")}}<link rel="stylesheet" href="/static/communities.css?v={{.AssetVersion}}">{{end}}
-{{if or (eq .NavPage "fleets.html") (eq .NavPage "fleet.html") (eq .NavPage "fleet_form.html") (eq .NavPage "fleet_history.html") (eq .NavPage "fleet_hidden.html")}}<link rel="stylesheet" href="/static/fleets.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "fleets.html") (eq .NavPage "fleet.html") (eq .NavPage "fleet_form.html") (eq .NavPage "fleet_history.html") (eq .NavPage "fleet_hidden.html") (eq .NavPage "fleet_permissions.html")}}<link rel="stylesheet" href="/static/fleets.css?v={{.AssetVersion}}">{{end}}
 <link rel="stylesheet" href="/static/phone.css?v={{.AssetVersion}}" media="(max-width: 45rem), (hover: none), (pointer: coarse)">
 </head>
 <body{{if .AutoRefresh}} data-autorefresh="5"{{end}}>

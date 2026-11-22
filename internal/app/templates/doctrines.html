@@ -7,12 +7,12 @@
 
 <div class="l-page">
 {{with .Doctrines}}
-{{if not .Corp}}
-<div class="l-panel co-gate"><p>None of your characters is in a player corporation EveSynapse knows of yet, so there are no doctrines to show.</p></div>
+{{if not .Owner}}
+<div class="l-panel co-gate"><p>None of your characters is in a player corporation, alliance or community EveSynapse knows of yet, so there are no doctrines to show. <a href="/fleets/communities/">Find a community</a>.</p></div>
 {{else}}
-{{$corp := .Corp}}
+{{$corp := .Owner}}
 <div class="l-head">
-  <div class="l-head-pick">{{template "corpselector" .CorpOptions}}</div>
+  <div class="l-head-pick">{{template "ownerselector" .OwnerOptions}}</div>
   <p class="l-head-sum"><b>{{$corp.Name}}</b>{{if $corp.Total}} · {{$corp.Total}} {{if eq $corp.Total 1}}doctrine{{else}}doctrines{{end}}{{end}}</p>
 </div>
 
@@ -20,15 +20,15 @@
 
 {{if $corp.Total}}
 <form method="get" action="/doctrines/" class="l-panel co-search">
-  <input type="hidden" name="corporation" value="{{$corp.ID}}">
+  <input type="hidden" name="owner" value="{{$corp.Key}}">
   <span class="searchwrap">
-    <input type="search" name="q" id="doctrine-q" value="{{.Q}}" placeholder="Search doctrines, fits and ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="doctrine-suggest" aria-autocomplete="list" aria-label="Search doctrines" data-suggest="/doctrines/suggest?corporation={{$corp.ID}}">
+    <input type="search" name="q" id="doctrine-q" value="{{.Q}}" placeholder="Search doctrines, fits and ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="doctrine-suggest" aria-autocomplete="list" aria-label="Search doctrines" data-suggest="/doctrines/suggest?owner={{$corp.Key}}">
     <ul class="suggest" id="doctrine-suggest" role="listbox" hidden></ul>
   </span>
   {{if .Categories}}<select name="category" aria-label="Category"><option value="">Any category</option>{{range .Categories}}<option value="{{.}}"{{if eq . $.Doctrines.Category}} selected{{end}}>{{.}}</option>{{end}}</select>{{end}}
   {{if .Tags}}<select name="tag" aria-label="Tag"><option value="">Any tag</option>{{range .Tags}}<option value="{{.}}"{{if eq . $.Doctrines.Tag}} selected{{end}}>{{.}}</option>{{end}}</select>{{end}}
   <button type="submit">Search</button>
-  {{if .Filtered}}<a href="/doctrines/?corporation={{$corp.ID}}">Clear</a>{{end}}
+  {{if .Filtered}}<a href="/doctrines/?owner={{$corp.Key}}">Clear</a>{{end}}
 </form>
 {{end}}
 
@@ -36,7 +36,7 @@
 <div class="co-cards">
 {{range $corp.Doctrines}}
 <section class="l-panel co-card">
-  <div class="co-card-head"><h3><a href="/doctrines/{{.ID}}">{{.Name}}</a></h3>{{if .Category}}<a class="badge wait" href="/doctrines/?corporation={{$corp.ID}}&amp;category={{.Category}}">{{.Category}}</a>{{end}}</div>
+  <div class="co-card-head"><h3><a href="/doctrines/{{.ID}}">{{.Name}}</a></h3>{{if .Category}}<a class="badge wait" href="/doctrines/?owner={{$corp.Key}}&amp;category={{.Category}}">{{.Category}}</a>{{end}}</div>
   {{if .Description}}<p class="co-dim doctrine-clip">{{.Description}}</p>{{end}}
   {{if .Fits}}
   <ul class="row-list doctrine-fits">
@@ -46,26 +46,26 @@
   {{else}}
   <p class="co-dim">No fits yet.</p>
   {{end}}
-  {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/doctrines/?corporation={{$corp.ID}}&amp;tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
+  {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/doctrines/?owner={{$corp.Key}}&amp;tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
 </section>
 {{end}}
 </div>
 {{else if $corp.Total}}
-<p class="co-note">No doctrine matches. <a href="/doctrines/?corporation={{$corp.ID}}">Clear the search</a>.</p>
+<p class="co-note">No doctrine matches. <a href="/doctrines/?owner={{$corp.Key}}">Clear the search</a>.</p>
 {{else}}
-<p class="prose">No doctrines yet.{{if not $corp.Manages}} They are kept by the corporation's directors, and whoever they hand it to.{{end}}</p>
+<p class="prose">No doctrines yet.{{if not $corp.Manages}} They are kept by the people who run {{$corp.Name}}, and whoever they hand it to.{{end}}</p>
 {{end}}
 
 {{if $corp.Manages}}
 <form method="post" action="/doctrines/create" class="l-panel co-card op-form form-card">
-  <input type="hidden" name="corporation" value="{{$corp.ID}}">
+  <input type="hidden" name="owner" value="{{$corp.Key}}">
   <h3>New doctrine</h3>
   <div class="form-grid">
     <label class="field"><span class="field-label">Name</span>
       <input type="text" name="name" maxlength="80" required placeholder="e.g. Shield Lokis"></label>
     <div class="field"><label class="field-label" for="doctrine-category">Category</label>
       <span class="searchwrap">
-        <input type="search" name="category" id="doctrine-category" maxlength="40" placeholder="e.g. Stratop, Roam, Home defence" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="doctrine-category-suggest" aria-autocomplete="list" data-suggest="/doctrines/suggest?scope=categories&amp;corporation={{$corp.ID}}">
+        <input type="search" name="category" id="doctrine-category" maxlength="40" placeholder="e.g. Stratop, Roam, Home defence" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="doctrine-category-suggest" aria-autocomplete="list" data-suggest="/doctrines/suggest?scope=categories&amp;owner={{$corp.Key}}">
         <ul class="suggest" id="doctrine-category-suggest" role="listbox" hidden></ul>
       </span></div>
     <label class="field wide"><span class="field-label">Tags</span>
@@ -73,10 +73,12 @@
       <span class="field-hint">What members search by</span></label>
     <label class="field wide"><span class="field-label">What it is for</span>
       <textarea name="description" rows="3" maxlength="2000" placeholder="How it is flown, what it counters, what to train first."></textarea></label>
+    <div class="field wide">{{template "doctrineread" false}}</div>
   </div>
   <div class="form-actions"><button type="submit">Create doctrine</button><span class="field-hint">Fits are added on the doctrine's own page.</span></div>
 </form>
 {{end}}
+{{with $corp.HandOver}}<p class="co-note"><a href="{{.}}">Choose who else keeps these doctrines</a></p>{{end}}
 {{end}}
 {{end}}
 </div>

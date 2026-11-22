@@ -35,6 +35,15 @@
         <span class="field-hint">They make, change and delete doctrines and their fits. Every member can read them.</span></label>
     </section>
 
+    {{if .FleetsWho}}
+    <section class="l-panel co-card">
+      <h3>Fleets</h3>
+      <label class="field"><span class="field-label">Who plans fleets, besides holders of {{.FleetsRoles}}</span>
+        <select name="fleets_who">{{range .FleetsWho}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+        <span class="field-hint">They plan the corporation's <a href="/fleets/">fleets</a> and choose who can see and join them.</span></label>
+    </section>
+    {{end}}
+
     <section class="l-panel co-card">
       <h3>Intel channels</h3>
       <label class="field"><span class="field-label">Who runs the corporation's intel channels, besides directors and the CEO</span>

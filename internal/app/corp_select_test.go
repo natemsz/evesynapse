@@ -31,7 +31,7 @@ func TestCorporationPagesShowOneCorporation(t *testing.T) {
 	f.post(director, "/doctrines/create", url.Values{"corporation": {"98000001"}, "name": {"Shield Lokis"}, "category": {"Stratop"}, "tags": {"shield"}})
 	mine := f.doctrines(discordCorp)[0]
 	now := time.Now().UTC()
-	if _, err := f.q.CreateDoctrine(f.ctx, db.CreateDoctrineParams{CorporationID: discordOtherCorp, Name: "Armor Abaddons", CreatedAt: now}); err != nil {
+	if _, err := f.q.CreateDoctrine(f.ctx, db.CreateDoctrineParams{CorporationID: discordOtherCorp, OwnerKind: ownerCorporation, OwnerID: discordOtherCorp, Visibility: "members", Name: "Armor Abaddons", CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	add := doctrineURL(mine.ID) + "/fits/add"
@@ -51,8 +51,8 @@ func TestCorporationPagesShowOneCorporation(t *testing.T) {
 	}
 	// One corporation at a time; the selector offers the player corporations only.
 	home := get(doctrinesPath)
-	mustContain(t, "doctrines, the character's corporation", home, "Shield Lokis", `href="?corporation=98000001"`, `href="?corporation=98000002"`)
-	if strings.Contains(home, "Armor Abaddons") || strings.Contains(home, "corporation=1000125") {
+	mustContain(t, "doctrines, the character's corporation", home, "Shield Lokis", `href="?owner=corporation%3a98000001"`, `href="?owner=corporation%3a98000002"`)
+	if strings.Contains(home, "Armor Abaddons") || strings.Contains(home, "corporation%3a1000125") {
 		t.Fatal("the doctrines page shows a second corporation's doctrines, or offers an NPC corporation")
 	}
 	away := get(doctrinesPath + "?corporation=98000002")

@@ -184,8 +184,16 @@ func (app *Application) writeOwnerPermission(ctx context.Context, owner orgOwner
 		return err
 	}
 	defer tx.Rollback(ctx)
-	q := app.queries.WithTx(tx)
+	if err := storeOwnerPermission(ctx, app.queries.WithTx(tx), owner, permission, kind, ref, by); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// storeOwnerPermission writes one choice inside a caller's transaction.
+func storeOwnerPermission(ctx context.Context, q *db.Queries, owner orgOwner, permission, kind, ref string, by int64) error {
 	now := time.Now().UTC()
+	var err error
 	if kind == "" {
 		err = q.DeleteOwnerPermission(ctx, db.DeleteOwnerPermissionParams(ownerPermissionKey(owner, permission)))
 	} else {
@@ -193,20 +201,13 @@ func (app *Application) writeOwnerPermission(ctx context.Context, owner orgOwner
 			OwnerKind: owner.Kind, OwnerID: owner.ID, Permission: permission, Kind: kind, Ref: ref, UpdatedBy: by, UpdatedAt: now,
 		})
 	}
-	if err != nil {
+	if err != nil || owner.Kind != ownerCorporation {
 		return err
 	}
-	if owner.Kind == ownerCorporation {
-		if kind == "" {
-			err = q.DeleteCorpPermission(ctx, db.DeleteCorpPermissionParams{CorporationID: owner.ID, Permission: permission})
-		} else {
-			err = q.SetCorpPermission(ctx, db.SetCorpPermissionParams{
-				CorporationID: owner.ID, Permission: permission, Kind: kind, Ref: ref, UpdatedBy: by, UpdatedAt: now,
-			})
-		}
-		if err != nil {
-			return err
-		}
+	if kind == "" {
+		return q.DeleteCorpPermission(ctx, db.DeleteCorpPermissionParams{CorporationID: owner.ID, Permission: permission})
 	}
-	return tx.Commit(ctx)
+	return q.SetCorpPermission(ctx, db.SetCorpPermissionParams{
+		CorporationID: owner.ID, Permission: permission, Kind: kind, Ref: ref, UpdatedBy: by, UpdatedAt: now,
+	})
 }

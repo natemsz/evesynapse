@@ -2,12 +2,12 @@
 {{define "pagetitle"}}{{with .Doctrine}}<h1><span class="gt">{{.Name}}</span></h1>{{end}}{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" $}}{{end}}
 {{define "content"}}
-<div class="l-page">
+<div class="l-page l-named">
 {{with .Doctrine}}
 <div class="l-head">
-  <p class="l-head-sum"><a href="/doctrines/?corporation={{.CorpID}}">Doctrines</a> · {{.Corporation}}{{if .Category}} · <a href="/doctrines/?corporation={{.CorpID}}&amp;category={{.Category}}">{{.Category}}</a>{{end}} · {{len .Fits}} {{if eq (len .Fits) 1}}fit{{else}}fits{{end}}</p>
+  <p class="l-head-sum">{{if .Member}}<a href="/doctrines/?owner={{.OwnerKey}}">Doctrines</a> · {{end}}{{.Owner}}{{if .Category}} · {{if .Member}}<a href="/doctrines/?owner={{.OwnerKey}}&amp;category={{.Category}}">{{.Category}}</a>{{else}}{{.Category}}{{end}}{{end}} · {{len .Fits}} {{if eq (len .Fits) 1}}fit{{else}}fits{{end}}{{if .Public}} <span class="badge">Anyone with the link</span>{{end}}</p>
 </div>
-{{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/doctrines/?corporation={{$.Doctrine.CorpID}}&amp;tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
+{{if .Tags}}<p class="tag-row">{{range .Tags}}{{if $.Doctrine.Member}}<a href="/doctrines/?owner={{$.Doctrine.OwnerKey}}&amp;tag={{.}}">#{{.}}</a>{{else}}#{{.}}{{end}} {{end}}</p>{{end}}
 {{if .Description}}<p class="co-lede op-description">{{.Description}}</p>{{end}}
 
 <div class="co-sec"><h2>Fits</h2></div>
@@ -79,8 +79,8 @@
 
 <section class="l-panel co-card">
   <h3>Add a fit that is already here</h3>
-  <p class="hint">Copy a fit from another of the corporation's doctrines, or one that somebody has made public.</p>
-  <div class="form-actions"><a class="btn" href="/doctrines/fits/?corporation={{.CorpID}}&amp;for={{.ID}}">From corporate fits</a><a class="btn" href="/fittings/public/?for={{.ID}}">From public fits</a></div>
+  <p class="hint">Copy a fit from another of {{.Owner}}'s doctrines, or one that somebody has made public.</p>
+  <div class="form-actions"><a class="btn" href="/doctrines/fits/?owner={{.OwnerKey}}&amp;for={{.ID}}">From {{.Owner}}'s fits</a><a class="btn" href="/fittings/public/?for={{.ID}}">From public fits</a></div>
 </section>
 </div>
 {{end}}
@@ -96,6 +96,9 @@
       <input type="text" name="tags" value="{{.TagsText}}" placeholder="Comma-separated"></label>
     <label class="field wide"><span class="field-label">What it is for</span>
       <textarea name="description" rows="4" maxlength="2000">{{.Description}}</textarea></label>
+    <div class="field wide">{{template "doctrineread" .Public}}</div>
+    {{with .ShareURL}}<div class="field wide"><label class="field-label" for="doctrine-link">Link to share</label>
+      <input id="doctrine-link" type="text" value="{{.}}" readonly></div>{{end}}
   </div>
   <div class="form-actions"><button type="submit">Save details</button></div>
 </form>

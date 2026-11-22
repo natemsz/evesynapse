@@ -336,6 +336,12 @@ type DoctrineFitView struct {
 // DoctrineURL is a doctrine's page.
 func DoctrineURL(id int64) string { return "/doctrines/" + strconv.FormatInt(id, 10) }
 
+// Who can read a doctrine (doctrines.visibility). Stored: never rename.
+const (
+	DoctrineMembers = "members"
+	DoctrinePublic  = "public"
+)
+
 // EconSectionState is the empty-state triage the economy sections render
 // from: data loaded, still warming, or why it is absent.
 type EconSectionState struct {
@@ -1585,6 +1591,23 @@ type Deps interface {
 	// PickOwner chooses which of the offered owners a page is about
 	// (from the address), with the chooser's options.
 	PickOwner(ctx context.Context, r *http.Request, offered []standing.Owner) (standing.Owner, []OwnerOption, bool)
+	// DoctrineOwners lists the player corporations, alliances and
+	// communities an account belongs to, whose doctrines it can read.
+	DoctrineOwners(ctx context.Context, userID int64) []standing.Owner
+	// ReadsDoctrine reports whether the session can read a doctrine: a
+	// public one, one of an owner the account belongs to, or a
+	// community's when a verified pilot is an active member. A pilot's
+	// public corporation and alliance never count here.
+	ReadsDoctrine(ctx context.Context, userID int64, owner standing.Owner, visibility string) bool
+	// HoldsProgramme reports whether a standing runs an owner's programme
+	// by position, the people who can hand it to someone else.
+	HoldsProgramme(ctx context.Context, st standing.Standing, owner standing.Owner, permission string) bool
+	// OwnerActorFor is the account's character that acts for an owner,
+	// 0 when it has none there.
+	OwnerActorFor(ctx context.Context, userID int64, owner standing.Owner) int64
+	// SnapshotFleetsOfDoctrine stores the doctrine on every fleet flying
+	// it that has started, so an edit made now cannot change them.
+	SnapshotFleetsOfDoctrine(ctx context.Context, doctrineID int64) error
 	// ResolvedCorpName and DisplayCharacter are cache-only names.
 	ResolvedCorpName(ctx context.Context, corpID int64) (string, bool)
 	DisplayCharacter(ctx context.Context, characterID int64) string

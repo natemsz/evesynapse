@@ -31,8 +31,8 @@
     <div><dt class="field-label">Length</dt><dd>{{.Length}}</dd></div>
     {{if .FC}}<div><dt class="field-label">Fleet commander</dt><dd>{{charLink $.ViewerChars .FCID .FC}}</dd></div>{{end}}
     {{range .Commanders}}<div><dt class="field-label">Co-FC</dt><dd>{{charLink $.ViewerChars .CharacterID .Name}}{{if $op.CanPlan}} <form method="post" action="/fleets/{{$op.ID}}/commanders" class="fl-inline"><input type="hidden" name="character" value="{{.CharacterID}}"><input type="hidden" name="do" value="remove"><button type="submit" class="btn btn-quiet">Remove</button></form>{{end}}</dd></div>{{end}}
-    {{if .Doctrine}}<div><dt class="field-label">Doctrine</dt><dd>{{if .DoctrineURL}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{else}}{{.Doctrine}}{{end}}</dd></div>{{end}}
-    {{if .DoctrineFit}}<div><dt class="field-label">Bring</dt><dd>{{range $i, $fit := .DoctrineFit}}{{if $i}}, {{end}}<a href="/fittings/?doctrine={{$fit.ID}}#fit-editor">{{$fit.Name}}</a>{{if $fit.Role}} <small>({{$fit.Role}})</small>{{end}}{{end}}</dd></div>{{end}}
+    <div><dt class="field-label">Doctrine</dt><dd>{{if .Doctrine}}{{if .DoctrineURL}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{else}}{{.Doctrine}}{{end}} <small>{{if .DoctrineRequired}}required{{else}}suggested{{end}}</small>{{else}}None, bring what you like{{end}}</dd></div>
+    {{if .DoctrineFit}}<div><dt class="field-label">Bring</dt><dd>{{range $i, $fit := .DoctrineFit}}{{if $i}}, {{end}}{{if $fit.Href}}<a href="{{$fit.Href}}">{{$fit.Name}}</a>{{else}}{{$fit.Name}}{{end}}{{if $fit.Role}} <small>({{$fit.Role}})</small>{{end}}{{end}}</dd></div>{{end}}
     <div><dt class="field-label">Sign-ups</dt><dd>{{.JoinGate}}</dd></div>
   </dl>
   {{if .Description}}<p class="fl-about">{{.Description}}</p>{{end}}
@@ -62,7 +62,7 @@
       <div class="field"><label class="field-label" for="fl-ship">Ship</label>
         <input id="fl-ship" type="text" name="ship" value="{{.MyShip}}" maxlength="120" placeholder="e.g. Loki"{{if .DoctrineFit}} list="fl-doctrine-ships"{{end}}>{{if .DoctrineFit}}<datalist id="fl-doctrine-ships">{{range .DoctrineFit}}<option value="{{.Ship}}">{{end}}</datalist>{{end}}</div>
       <div class="field"><label class="field-label" for="fl-role">Role</label>
-        <select id="fl-role" name="fleet_role"><option value="">Any</option>{{range .Roles}}<option value="{{.}}"{{if eq . $op.MyRole}} selected{{end}}>{{.}}</option>{{end}}</select></div>
+        <select id="fl-role" name="fleet_role"{{if .DoctrineFit}} aria-describedby="fl-role-hint"{{end}}><option value="">Any</option>{{range .Roles}}<option value="{{.}}"{{if eq . $op.MyRole}} selected{{end}}>{{.}}</option>{{end}}</select>{{if .DoctrineFit}}<span class="field-hint" id="fl-role-hint">On Any, a doctrine ship takes its part in the doctrine.</span>{{end}}</div>
       <div class="field"><label class="field-label" for="fl-note">Note</label>
         <input id="fl-note" type="text" name="note" value="{{.MyNote}}" maxlength="120" placeholder="e.g. 20 minutes late"></div>
     </div>

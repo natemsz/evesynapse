@@ -37,12 +37,12 @@ func (q *Queries) AddOpCommander(ctx context.Context, arg AddOpCommanderParams) 
 const createFleet = `-- name: CreateFleet :one
 
 INSERT INTO ops (corporation_id, owner_kind, owner_id, fleet_type, visibility, join_gate, roster_public, share_token,
-                 title, description, starts_at, duration_minutes, doctrine, doctrine_id, form_up, fc_character_id,
+                 title, description, starts_at, duration_minutes, doctrine, doctrine_id, doctrine_mode, form_up, fc_character_id,
                  created_by_character, created_at)
 VALUES ($1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15,
-        $16, $17, $18)
+        $11, $12, $13, $14, $15, $16,
+        $17, $18, $19)
 RETURNING id
 `
 
@@ -61,6 +61,7 @@ type CreateFleetParams struct {
 	DurationMinutes    int64          `json:"duration_minutes"`
 	Doctrine           string         `json:"doctrine"`
 	DoctrineID         int64          `json:"doctrine_id"`
+	DoctrineMode       string         `json:"doctrine_mode"`
 	FormUp             string         `json:"form_up"`
 	FcCharacterID      int64          `json:"fc_character_id"`
 	CreatedByCharacter int64          `json:"created_by_character"`
@@ -86,6 +87,7 @@ func (q *Queries) CreateFleet(ctx context.Context, arg CreateFleetParams) (int64
 		arg.DurationMinutes,
 		arg.Doctrine,
 		arg.DoctrineID,
+		arg.DoctrineMode,
 		arg.FormUp,
 		arg.FcCharacterID,
 		arg.CreatedByCharacter,
@@ -161,7 +163,7 @@ func (q *Queries) DeleteOpAccessRules(ctx context.Context, opID int64) error {
 }
 
 const getOp = `-- name: GetOp :one
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops WHERE id = $1
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at FROM ops WHERE id = $1
 `
 
 func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
@@ -193,12 +195,16 @@ func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
 		&i.RosterPublic,
 		&i.ComingCount,
 		&i.MaybeCount,
+		&i.DoctrineMode,
+		&i.DoctrineSnapshot,
+		&i.DoctrineSnapshotShips,
+		&i.DoctrineSnapshotAt,
 	)
 	return i, err
 }
 
 const getOpByShareToken = `-- name: GetOpByShareToken :one
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops WHERE share_token = $1
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at FROM ops WHERE share_token = $1
 `
 
 func (q *Queries) GetOpByShareToken(ctx context.Context, shareToken sql.NullString) (Op, error) {
@@ -230,6 +236,10 @@ func (q *Queries) GetOpByShareToken(ctx context.Context, shareToken sql.NullStri
 		&i.RosterPublic,
 		&i.ComingCount,
 		&i.MaybeCount,
+		&i.DoctrineMode,
+		&i.DoctrineSnapshot,
+		&i.DoctrineSnapshotShips,
+		&i.DoctrineSnapshotAt,
 	)
 	return i, err
 }
@@ -341,7 +351,7 @@ func (q *Queries) ListCharacterCorporationsByUser(ctx context.Context, userID in
 }
 
 const listFleetsForCharacters = `-- name: ListFleetsForCharacters :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at FROM ops
 WHERE (id IN (SELECT s.op_id FROM op_signups s WHERE s.character_id = ANY($1::bigint[]) AND s.response <> 'no')
     OR fc_character_id = ANY($1::bigint[])
     OR id IN (SELECT c.op_id FROM op_commanders c WHERE c.character_id = ANY($1::bigint[])))
@@ -399,6 +409,10 @@ func (q *Queries) ListFleetsForCharacters(ctx context.Context, arg ListFleetsFor
 			&i.RosterPublic,
 			&i.ComingCount,
 			&i.MaybeCount,
+			&i.DoctrineMode,
+			&i.DoctrineSnapshot,
+			&i.DoctrineSnapshotShips,
+			&i.DoctrineSnapshotAt,
 		); err != nil {
 			return nil, err
 		}
@@ -411,7 +425,7 @@ func (q *Queries) ListFleetsForCharacters(ctx context.Context, arg ListFleetsFor
 }
 
 const listFleetsForOwners = `-- name: ListFleetsForOwners :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at FROM ops
 WHERE (owner_kind, owner_id) IN (SELECT unnest($1::text[]), unnest($2::bigint[]))
   AND starts_at < $3
   AND starts_at + (duration_minutes * interval '1 minute') >= $4
@@ -470,6 +484,10 @@ func (q *Queries) ListFleetsForOwners(ctx context.Context, arg ListFleetsForOwne
 			&i.RosterPublic,
 			&i.ComingCount,
 			&i.MaybeCount,
+			&i.DoctrineMode,
+			&i.DoctrineSnapshot,
+			&i.DoctrineSnapshotShips,
+			&i.DoctrineSnapshotAt,
 		); err != nil {
 			return nil, err
 		}
@@ -664,7 +682,7 @@ func (q *Queries) ListOpSignups(ctx context.Context, opID int64) ([]OpSignup, er
 }
 
 const listOpsForCorporationsBetween = `-- name: ListOpsForCorporationsBetween :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at FROM ops
 WHERE corporation_id = ANY($1::bigint[])
   AND starts_at >= $2 AND starts_at < $3
 ORDER BY starts_at, id
@@ -711,6 +729,10 @@ func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOps
 			&i.RosterPublic,
 			&i.ComingCount,
 			&i.MaybeCount,
+			&i.DoctrineMode,
+			&i.DoctrineSnapshot,
+			&i.DoctrineSnapshotShips,
+			&i.DoctrineSnapshotAt,
 		); err != nil {
 			return nil, err
 		}
@@ -724,7 +746,7 @@ func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOps
 
 const listOpsToCapture = `-- name: ListOpsToCapture :many
 
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at FROM ops
 WHERE cancelled_at IS NULL
   AND fc_character_id <> 0
   AND starts_at <= $1
@@ -777,6 +799,10 @@ func (q *Queries) ListOpsToCapture(ctx context.Context, arg ListOpsToCapturePara
 			&i.RosterPublic,
 			&i.ComingCount,
 			&i.MaybeCount,
+			&i.DoctrineMode,
+			&i.DoctrineSnapshot,
+			&i.DoctrineSnapshotShips,
+			&i.DoctrineSnapshotAt,
 		); err != nil {
 			return nil, err
 		}
@@ -896,7 +922,7 @@ func (q *Queries) ListOwnerPermissionsForOwners(ctx context.Context, arg ListOwn
 }
 
 const listPastFleetsForOwners = `-- name: ListPastFleetsForOwners :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at FROM ops
 WHERE (owner_kind, owner_id) IN (SELECT unnest($1::text[]), unnest($2::bigint[]))
   AND starts_at < $3
   AND starts_at + (duration_minutes * interval '1 minute') < $3
@@ -952,6 +978,10 @@ func (q *Queries) ListPastFleetsForOwners(ctx context.Context, arg ListPastFleet
 			&i.RosterPublic,
 			&i.ComingCount,
 			&i.MaybeCount,
+			&i.DoctrineMode,
+			&i.DoctrineSnapshot,
+			&i.DoctrineSnapshotShips,
+			&i.DoctrineSnapshotAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1019,7 +1049,7 @@ func (q *Queries) ListPilotCommunityGroups(ctx context.Context, characterID int6
 }
 
 const listPublicFleets = `-- name: ListPublicFleets :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at FROM ops
 WHERE visibility = 'public' AND cancelled_at IS NULL
   AND starts_at < $1
   AND starts_at + (duration_minutes * interval '1 minute') >= $2
@@ -1068,6 +1098,10 @@ func (q *Queries) ListPublicFleets(ctx context.Context, arg ListPublicFleetsPara
 			&i.RosterPublic,
 			&i.ComingCount,
 			&i.MaybeCount,
+			&i.DoctrineMode,
+			&i.DoctrineSnapshot,
+			&i.DoctrineSnapshotShips,
+			&i.DoctrineSnapshotAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1238,9 +1272,10 @@ UPDATE ops SET
     duration_minutes = $4,
     doctrine         = $5,
     doctrine_id      = $6,
-    form_up          = $7,
-    fc_character_id  = $8
-WHERE id = $9
+    doctrine_mode    = $7,
+    form_up          = $8,
+    fc_character_id  = $9
+WHERE id = $10
 `
 
 type UpdateOpParams struct {
@@ -1250,6 +1285,7 @@ type UpdateOpParams struct {
 	DurationMinutes int64     `json:"duration_minutes"`
 	Doctrine        string    `json:"doctrine"`
 	DoctrineID      int64     `json:"doctrine_id"`
+	DoctrineMode    string    `json:"doctrine_mode"`
 	FormUp          string    `json:"form_up"`
 	FcCharacterID   int64     `json:"fc_character_id"`
 	ID              int64     `json:"id"`
@@ -1263,6 +1299,7 @@ func (q *Queries) UpdateOp(ctx context.Context, arg UpdateOpParams) error {
 		arg.DurationMinutes,
 		arg.Doctrine,
 		arg.DoctrineID,
+		arg.DoctrineMode,
 		arg.FormUp,
 		arg.FcCharacterID,
 		arg.ID,

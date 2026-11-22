@@ -19,7 +19,7 @@ require (
 	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sync v0.25.0
 	golang.org/x/sys v0.50.0
-	ranvia.io/go v0.4.2
+	ranvia.io/go v0.4.3
 	rsc.io/qr v0.2.0
 )
 

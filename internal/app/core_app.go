@@ -442,7 +442,7 @@ type Application struct {
 	botWatch     *botFingerprintWatch
 	enumWatch    *enumFloodWatch
 	// botGuardOff is set only by the dev entrypoint
-	// (DisableBotGuard) during route setup.
+	// (DisableBotGuard), before Handler builds the routes.
 	botGuardOff bool
 	// botGuardKey is the install's stored guard secret, loaded by
 	// New (core_bot_guard_engine.go); botGuardSecret fills in a

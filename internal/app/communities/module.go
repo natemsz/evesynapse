@@ -21,6 +21,7 @@ var Module = module.Module{
 	Requires:      []string{},
 	Scopes:        []module.Scope{},
 	EnhanceScopes: []module.Scope{},
+	Activities:    []string{"corporation"},
 	Nav: []module.NavSection{{
 		Section: "fleets",
 		Entries: []module.NavEntry{

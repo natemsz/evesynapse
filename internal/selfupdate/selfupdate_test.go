@@ -2073,3 +2073,31 @@ func TestProgressReaderReadout(t *testing.T) {
 		t.Fatalf("read-out %q does not end on the completed download", out.String())
 	}
 }
+
+func TestMirrorPrefersTheCombinedManifest(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	sum := strings.Repeat("ab", 32)
+	bundle, err := releasesig.NewBundle([]ed25519.PrivateKey{priv}, releasesig.BundleManifest{Version: "9.1.2.3", SHA256: map[string]string{"arm64": sum}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/latest.json" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(bundle)
+	}))
+	defer srv.Close()
+	oldBase, oldKeys := releaseMirrorBaseURL, trustedReleaseKeys
+	releaseMirrorBaseURL, trustedReleaseKeys = srv.URL, func() ([]ed25519.PublicKey, error) { return []ed25519.PublicKey{pub}, nil }
+	defer func() { releaseMirrorBaseURL, trustedReleaseKeys = oldBase, oldKeys }()
+
+	m, _, binary, err := fetchProviderManifest(context.Background(), "mirror", "arm64", false)
+	if err != nil || m.Version != "9.1.2.3" || m.Arch != "arm64" || m.SHA256 != sum || binary != srv.URL+"/latest/evesynapse-arm64" {
+		t.Fatalf("manifest %+v binary %q err %v", m, binary, err)
+	}
+	if _, _, _, err := fetchProviderManifest(context.Background(), "mirror", "amd64", false); err == nil {
+		t.Error("a bundle with no amd64 entry served an amd64 update")
+	}
+}

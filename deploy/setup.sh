@@ -394,7 +394,7 @@ verify_release_signature() {
 # EveSynapse's channels, so the choice is made here, the
 # same way `evesynapse -update` makes it.
 pick_release_assets() {
-  local json="$1" tsv tag up mu su bu best="" bestver=""
+  local json="$1" tsv tag up mu su bu lj best="" bestver=""
   tsv="$TMP/releases.tsv"
   awk -v arch="$ARCH" '
     BEGIN { RS = "\"tag_name\":" }
@@ -403,7 +403,7 @@ pick_release_assets() {
       if (!match(rec, /"[^"]*"/)) next
       tag = substr(rec, RSTART + 1, RLENGTH - 2)
       upcoming = (rec ~ /"upcoming_release": *true/) ? 1 : 0
-      mu = ""; su = ""; bu = ""
+      mu = "-"; su = "-"; bu = "-"; lj = "-"
       n = split(rec, parts, "\"name\":\"")
       for (i = 2; i <= n; i++) {
         name = parts[i]; sub(/".*/, "", name)
@@ -412,18 +412,20 @@ pick_release_assets() {
         if (name == "latest-" arch ".json") mu = url
         else if (name == "latest-" arch ".json.sig") su = url
         else if (name == "evesynapse-" arch) bu = url
+        else if (name == "latest.json") lj = url
       }
-      printf "%s\t%d\t%s\t%s\t%s\n", tag, upcoming, mu, su, bu
+      printf "%s\t%d\t%s\t%s\t%s\t%s\n", tag, upcoming, mu, su, bu, lj
     }' "$json" > "$tsv"
-  while IFS=$'\t' read -r tag up mu su bu; do
+  while IFS=$'\t' read -r tag up mu su bu lj; do
     [ "$up" = "0" ] || continue
+    [ "$mu" != "-" ] || mu=""; [ "$su" != "-" ] || su=""; [ "$bu" != "-" ] || bu=""; [ "$lj" != "-" ] || lj=""
     case "$tag" in
       *-*) continue ;; # a suffixed tag is a development build
     esac
-    [ -n "$mu" ] && [ -n "$bu" ] || continue
+    { [ -n "$mu" ] || [ -n "$lj" ]; } && [ -n "$bu" ] || continue
     if [ -z "$best" ] || [ "$(printf '%s\n%s\n' "$bestver" "${tag#v}" | sort -V | tail -1)" = "${tag#v}" ]; then
       best="$tag"; bestver="${tag#v}"
-      MANIFEST_URL="$mu"; SIG_URL="$su"; BINARY_URL="$bu"
+      MANIFEST_URL="$mu"; SIG_URL="$su"; BINARY_URL="$bu"; BUNDLE_URL="$lj"
     fi
   done < "$tsv"
   [ -n "$best" ] || return 1
@@ -442,7 +444,15 @@ else
   pick_release_assets "$TMP/releases.json" \
     || die "no published release of $PROJECT carries a build for this machine; not installing"
   echo "The latest release is $RELEASE_TAG."
-  curl -fsSL "$MANIFEST_URL" -o "$TMP/manifest.json" || die "could not reach the manifest of $RELEASE_TAG"
+  if [ -n "${BUNDLE_URL:-}" ]; then
+    # One signed latest.json covers every platform.
+    curl -fsSL "$BUNDLE_URL" -o "$TMP/bundle.json" || die "could not reach the release information of $RELEASE_TAG"
+    sed -n 's/.*"manifest":"\([A-Za-z0-9+\/=]*\)".*/\1/p' "$TMP/bundle.json" | base64 -d > "$TMP/manifest.json" \
+      || die "the release information of $RELEASE_TAG could not be read"
+    sed -n 's/.*"signatures":\[\([^]]*\)\].*/\1/p' "$TMP/bundle.json" | tr ',' '\n' | tr -d '"' > "$TMP/manifest.json.sig"
+  else
+    curl -fsSL "$MANIFEST_URL" -o "$TMP/manifest.json" || die "could not reach the manifest of $RELEASE_TAG"
+  fi
   # The signature is checked before anything in the manifest is read
   # and before the build is downloaded.
   if can_check_signatures; then
@@ -455,10 +465,12 @@ else
     fi
     grep -q '^-----BEGIN PUBLIC KEY-----' "$KEYS" \
       || die "$KEYS holds no release key, so the release cannot be checked; not installing"
-    [ -n "$SIG_URL" ] \
-      || die "the latest release of $PROJECT is not signed; not installing"
-    curl -fsSL "$SIG_URL" -o "$TMP/manifest.json.sig" \
-      || die "the signature of $RELEASE_TAG could not be fetched; not installing"
+    if [ -z "${BUNDLE_URL:-}" ]; then
+      [ -n "$SIG_URL" ] \
+        || die "the latest release of $PROJECT is not signed; not installing"
+      curl -fsSL "$SIG_URL" -o "$TMP/manifest.json.sig" \
+        || die "the signature of $RELEASE_TAG could not be fetched; not installing"
+    fi
     verify_release_signature "$TMP/manifest.json" "$TMP/manifest.json.sig" "$KEYS" \
       || die "the latest release of $PROJECT is not signed with the release key in $KEYS; not installing. (To install from a fork, run the fork's own copy of this script.)"
     echo "The release's signature checks out."
@@ -467,7 +479,11 @@ else
     echo "      so the release's signature is NOT checked here, only the build's checksum."
   fi
   VERSION="$(sed -n 's/.*"version":"\([^"]*\)".*/\1/p' "$TMP/manifest.json")"
-  SHA="$(sed -n 's/.*"sha256":"\([0-9a-f]*\)".*/\1/p' "$TMP/manifest.json")"
+  if [ -n "${BUNDLE_URL:-}" ]; then
+    SHA="$(sed -n "s/.*\"$ARCH\":\"\([0-9a-f]*\)\".*/\1/p" "$TMP/manifest.json")"
+  else
+    SHA="$(sed -n 's/.*"sha256":"\([0-9a-f]*\)".*/\1/p' "$TMP/manifest.json")"
+  fi
   [ -n "$SHA" ] || die "the latest release of $PROJECT has no readable checksum; not installing"
   curl -fsSL "$BINARY_URL" -o "$TMP/evesynapse"
   echo "$SHA  $TMP/evesynapse" | sha256sum -c - >/dev/null || die "the download did not match its published checksum; not installing"

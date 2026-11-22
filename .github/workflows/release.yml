@@ -71,6 +71,8 @@ jobs:
               echo "evesynapse-$a does not match its signed manifest ($got != $want); refusing to publish."
               exit 1
             fi
+            bundled=$(jq -r --arg k "$a" '.manifest | @base64d | fromjson | .sha256[$k]' dist/latest.json)
+            [ "$bundled" = "$got" ] || { echo "evesynapse-$a does not match latest.json; refusing to publish."; exit 1; }
             echo "evesynapse-$a matches its signed manifest."
           done
           for p in windows-amd64 windows-arm64 darwin-amd64 darwin-arm64; do
@@ -82,6 +84,8 @@ jobs:
               echo "$bin does not match its signed manifest ($got != $want); refusing to publish."
               exit 1
             fi
+            bundled=$(jq -r --arg k "$p" '.manifest | @base64d | fromjson | .sha256[$k]' dist/latest.json)
+            [ "$bundled" = "$got" ] || { echo "$bin does not match latest.json; refusing to publish."; exit 1; }
             echo "$bin matches its signed manifest."
           done
       - name: Create the GitHub release

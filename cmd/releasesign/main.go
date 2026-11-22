@@ -31,6 +31,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -66,6 +67,10 @@ const usage = `releasesign makes the release key and signs releases with it.
       Sign each update manifest with the key in ` + signingKeyEnv + `,
       writing <manifest>.sig beside it.
 
+  releasesign bundle -out <latest.json> <manifest>...
+      Combine the update manifests into one file signed with the key in
+      ` + signingKeyEnv + `.
+
   releasesign openssh -out <file>
       Write the key in ` + signingKeyEnv + ` in OpenSSH form, with its
       public half beside it at <file>.pub, so git can sign the
@@ -99,6 +104,8 @@ func (t tool) run(args []string) int {
 		return t.keygen(args[1:])
 	case "sign":
 		return t.sign(args[1:])
+	case "bundle":
+		return t.bundle(args[1:])
 	case "openssh":
 		return t.openssh(args[1:])
 	case "verify":
@@ -391,6 +398,68 @@ func (t tool) sign(paths []string) int {
 		}
 		fmt.Fprintf(t.stdout, "signed %s -> %s\n", path, path+releasesig.SigSuffix)
 	}
+	return 0
+}
+
+// bundle combines signed-for manifests into the one file a release
+// carries for every platform, and checks it before writing it.
+func (t tool) bundle(args []string) int {
+	if len(args) < 3 || args[0] != "-out" {
+		fmt.Fprint(t.stderr, "releasesign bundle: name -out <file> and the manifests.\n\n"+usage)
+		return 2
+	}
+	out, paths := args[1], args[2:]
+	keys, err := releasesig.ParsePrivateKeys([]byte(t.getenv(signingKeyEnv)))
+	if err != nil || len(keys) == 0 {
+		fmt.Fprintf(t.stderr, "releasesign bundle: %s does not hold a signing key.\n", signingKeyEnv)
+		return 1
+	}
+	trusted, err := t.trusted()
+	if err != nil {
+		fmt.Fprintf(t.stderr, "releasesign bundle: the trusted keys in this build can't be read: %v\n", err)
+		return 1
+	}
+	m := releasesig.BundleManifest{SHA256: map[string]string{}}
+	for _, path := range paths {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			fmt.Fprintf(t.stderr, "releasesign bundle: %v\n", err)
+			return 1
+		}
+		var one struct {
+			Version string `json:"version"`
+			Arch    string `json:"arch"`
+			SHA256  string `json:"sha256"`
+		}
+		if err := json.Unmarshal(raw, &one); err != nil || one.Version == "" || one.Arch == "" || len(one.SHA256) != 64 {
+			fmt.Fprintf(t.stderr, "releasesign bundle: %s is not an update manifest.\n", path)
+			return 1
+		}
+		if m.Version != "" && m.Version != one.Version {
+			fmt.Fprintf(t.stderr, "releasesign bundle: %s is version %s, the others are %s.\n", path, one.Version, m.Version)
+			return 1
+		}
+		if _, dup := m.SHA256[one.Arch]; dup {
+			fmt.Fprintf(t.stderr, "releasesign bundle: two manifests are for %s.\n", one.Arch)
+			return 1
+		}
+		m.Version, m.SHA256[one.Arch] = one.Version, one.SHA256
+	}
+	body, err := releasesig.NewBundle(keys, m)
+	if err == nil && len(body) > releasesig.MaxManifestBytes {
+		err = fmt.Errorf("it is %d bytes, over the %d an updater accepts", len(body), releasesig.MaxManifestBytes)
+	}
+	if err == nil {
+		_, _, err = releasesig.OpenBundle(trusted, body)
+	}
+	if err == nil {
+		err = os.WriteFile(out, body, 0o644)
+	}
+	if err != nil {
+		fmt.Fprintf(t.stderr, "releasesign bundle: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(t.stdout, "bundled %d platforms -> %s\n", len(m.SHA256), out)
 	return 0
 }
 

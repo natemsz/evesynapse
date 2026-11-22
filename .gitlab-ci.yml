@@ -311,6 +311,7 @@ release:
         export RELEASE_SIGNING_KEY
       fi
       go run ./cmd/releasesign sign dist/latest-arm64.json dist/latest-amd64.json
+      go run ./cmd/releasesign bundle -out dist/latest.json dist/latest-arm64.json dist/latest-amd64.json
     # The release notes: the merge requests merged since the
     # previous release, grouped by label the way
     # .github/release.yml groups them.
@@ -383,7 +384,7 @@ release:
           [ -n "$fname" ] && have["$fname"]="$fsha"
         done < <(printf '%s' "$files" | python3 -c 'import json,sys; [print(f["file_name"]+"="+f["file_sha256"]) for f in json.load(sys.stdin)]')
       fi
-      for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh; do
+      for f in evesynapse-arm64 evesynapse-amd64 latest.json latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh; do
         sha="$(sha256sum "dist/$f" | cut -d' ' -f1)"
         if [ "${have[$f]:-}" = "$sha" ]; then
           echo "$f: already in the registry under the same hash; skipping."
@@ -403,7 +404,7 @@ release:
 
       version = os.environ["VERSION"]
       files = ["evesynapse-arm64", "evesynapse-amd64",
-               "latest-arm64.json", "latest-amd64.json",
+               "latest.json", "latest-arm64.json", "latest-amd64.json",
                "latest-arm64.json.sig", "latest-amd64.json.sig",
                "setup.sh"]
       body = {
@@ -469,7 +470,7 @@ mirror:
       fi
       export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
       EP="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
-      FILES="evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh"
+      FILES="evesynapse-arm64 evesynapse-amd64 latest.json latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh"
       for f in $FILES; do
         aws s3 cp "dist/$f" "s3://$R2_BUCKET/evesynapse/v$VERSION/$f" --endpoint-url "$EP"
       done

@@ -474,7 +474,7 @@ func providerAssets(ctx context.Context, provider string, arch string, dev bool)
 	case "github":
 		return githubReleaseAssets(ctx, arch, dev)
 	case "mirror":
-		return mirrorReleaseAssets(arch, dev)
+		return mirrorReleaseAssets(ctx, arch, dev)
 	}
 	return "", "", "", fmt.Errorf("unknown update provider %q (EVESYNAPSE_UPDATE_PROVIDER names forgejo, gitlab, github or mirror)", provider)
 }
@@ -496,6 +496,7 @@ func gitlabReleaseAssets(ctx context.Context, arch string, dev bool) (manifestUR
 	wantManifest := platformManifestName(arch)
 	wantSig := wantManifest + releasesig.SigSuffix
 	wantBinary := platformBinaryName(arch)
+	var bundleURL string
 	for _, a := range rel.Assets.Links {
 		switch a.Name {
 		case wantManifest:
@@ -504,7 +505,12 @@ func gitlabReleaseAssets(ctx context.Context, arch string, dev bool) (manifestUR
 			sigURL = a.URL
 		case wantBinary:
 			binaryURL = a.URL
+		case releasesig.BundleName:
+			bundleURL = a.URL
 		}
+	}
+	if bundleURL != "" && binaryURL != "" {
+		return bundleURL, "", binaryURL, nil
 	}
 	if manifestURL == "" {
 		return "", "", "", fmt.Errorf("release %s has no %s asset", rel.TagName, wantManifest)
@@ -571,6 +577,9 @@ func githubReleaseAssets(ctx context.Context, arch string, dev bool) (manifestUR
 	wantBinary := platformBinaryName(arch)
 	if !dev {
 		base := releaseGitHubBaseURL + "/" + updateGitHubRepo() + "/releases/latest/download"
+		if releaseFileExists(ctx, base+"/"+releasesig.BundleName) {
+			return base + "/" + releasesig.BundleName, "", base + "/" + wantBinary, nil
+		}
 		return base + "/" + wantManifest, base + "/" + wantSig, base + "/" + wantBinary, nil
 	}
 	apiURL := fmt.Sprintf("%s/repos/%s/releases?per_page=100", githubAPIBase(), updateGitHubRepo())
@@ -606,6 +615,7 @@ func githubReleaseAssets(ctx context.Context, arch string, dev bool) (manifestUR
 	if best == nil {
 		return "", "", "", errors.New("no dev releases found")
 	}
+	var bundleURL string
 	for _, a := range best.Assets {
 		switch a.Name {
 		case wantManifest:
@@ -614,7 +624,12 @@ func githubReleaseAssets(ctx context.Context, arch string, dev bool) (manifestUR
 			sigURL = a.URL
 		case wantBinary:
 			binaryURL = a.URL
+		case releasesig.BundleName:
+			bundleURL = a.URL
 		}
+	}
+	if bundleURL != "" && binaryURL != "" {
+		return bundleURL, "", binaryURL, nil
 	}
 	if manifestURL == "" {
 		return "", "", "", fmt.Errorf("release %s has no %s asset", best.TagName, wantManifest)
@@ -723,6 +738,7 @@ func forgejoReleaseAssets(ctx context.Context, arch string, dev bool) (manifestU
 		}
 		return "", "", "", errors.New("no releases found")
 	}
+	var bundleURL string
 	for _, a := range rel.Assets {
 		switch a.Name {
 		case wantManifest:
@@ -731,7 +747,12 @@ func forgejoReleaseAssets(ctx context.Context, arch string, dev bool) (manifestU
 			sigURL = a.URL
 		case wantBinary:
 			binaryURL = a.URL
+		case releasesig.BundleName:
+			bundleURL = a.URL
 		}
+	}
+	if bundleURL != "" && binaryURL != "" {
+		return bundleURL, "", binaryURL, nil
 	}
 	if manifestURL == "" {
 		return "", "", "", fmt.Errorf("release %s has no %s asset", rel.TagName, wantManifest)
@@ -768,11 +789,15 @@ func updateMirrorBase() string {
 // manifest's signature and checksum are checked exactly as
 // with any provider, so a mirror that serves stale or mixed
 // files fails the checksum and installs nothing.
-func mirrorReleaseAssets(arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
+func mirrorReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
 	base := updateMirrorBase()
 	channel := "latest"
 	if dev {
 		channel = "latest-dev"
+	}
+	binary := base + "/" + channel + "/" + platformBinaryName(arch)
+	if bundle := base + "/" + channel + ".json"; releaseFileExists(ctx, bundle) {
+		return bundle, "", binary, nil
 	}
 	manifestURL = base + "/" + channel + "-" + arch + ".json"
 	return manifestURL, manifestURL + releasesig.SigSuffix, base + "/" + channel + "/" + platformBinaryName(arch), nil
@@ -852,6 +877,41 @@ func verifyReleaseSignature(ctx context.Context, manifest []byte, sigURL string)
 		return "", &refusal{"the newest release's signature doesn't check out: it was not signed with a release key this copy of EveSynapse trusts, or it was changed after it was signed."}
 	}
 	return signerReadout(key), nil
+}
+
+// openReleaseBundle checks a combined latest.json and returns the
+// entry for this kind of computer, in the form a single manifest has.
+func openReleaseBundle(raw []byte, arch string) (releaseManifest, string, error) {
+	keys, err := trustedReleaseKeys()
+	if err != nil || len(keys) == 0 {
+		return releaseManifest{}, "", &refusal{"this copy of EveSynapse was built without a usable release key, so it can't tell a genuine release from a forgery."}
+	}
+	bundle, key, err := releasesig.OpenBundle(keys, raw)
+	if err != nil {
+		return releaseManifest{}, "", &refusal{"the newest release's signature doesn't check out: it was not signed with a release key this copy trusts."}
+	}
+	sum, ok := bundle.SHA256[arch]
+	if !ok {
+		return releaseManifest{}, "", fmt.Errorf("the newest release has no build for %q computers", arch)
+	}
+	return releaseManifest{Version: bundle.Version, Arch: arch, SHA256: sum}, signerReadout(key), nil
+}
+
+// releaseFileExists reports whether a provider serves a file. Any
+// failure counts as no, so the caller uses the per-platform files.
+func releaseFileExists(ctx context.Context, fileURL string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, fileURL, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("User-Agent", "EveSynapse-Updater")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 // signerName names a release key for the read-out: the label
@@ -992,15 +1052,23 @@ func fetchProviderManifest(ctx context.Context, provider string, arch string, de
 	if err != nil {
 		return m, "", "", err
 	}
-	signer, err := verifyReleaseSignature(ctx, raw, sigURL)
-	if err != nil {
-		return m, "", "", err
-	}
-	// Only now is the manifest read. Nothing in it is acted on, or
-	// even parsed, before its signature has been checked, and what is
-	// parsed is the very bytes that were signed.
-	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&m); err != nil {
-		return m, "", "", errors.New("the update information couldn't be read")
+	var signer string
+	if sigURL == "" {
+		// A combined latest.json carries its own signature.
+		if m, signer, err = openReleaseBundle(raw, arch); err != nil {
+			return m, "", "", err
+		}
+	} else {
+		signer, err = verifyReleaseSignature(ctx, raw, sigURL)
+		if err != nil {
+			return m, "", "", err
+		}
+		// Only now is the manifest read. Nothing in it is acted on, or
+		// even parsed, before its signature has been checked, and what is
+		// parsed is the very bytes that were signed.
+		if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&m); err != nil {
+			return m, "", "", errors.New("the update information couldn't be read")
+		}
 	}
 	m.SHA256 = strings.ToLower(strings.TrimSpace(m.SHA256))
 	if _, err := hex.DecodeString(m.SHA256); err != nil || len(m.SHA256) != sha256.Size*2 {

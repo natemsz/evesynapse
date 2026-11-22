@@ -3,9 +3,9 @@
 # GitHub credential is stored on any other forge. The files
 # published are the identical signed files the Forgejo
 # release made (Forgejo stays the one builder and signer):
-# this job waits for that release, downloads its nineteen
-# files, checks each binary's SHA256 against its signed
-# manifest, and only then creates the GitHub release under the
+# this job waits for that release, downloads its eight
+# files, checks each binary's SHA256 against the signed
+# latest.json, and only then creates the GitHub release under the
 # same tag, title and notes, so the updater finds the same
 # signed release whichever forge it asks.
 #
@@ -47,8 +47,8 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           for i in $(seq 1 45); do
             if curl -sf "$FORGEJO_API/releases/tags/$TAG" -o release.json \
-              && [ "$(jq '.assets | length' release.json)" = "20" ]; then
-              echo "Forgejo release $TAG is published with all twenty files."
+              && [ "$(jq '.assets | length' release.json)" = "8" ]; then
+              echo "Forgejo release $TAG is published with all eight files."
               exit 0
             fi
             echo "Waiting for the Forgejo release $TAG (try $i of 45)."
@@ -62,31 +62,18 @@ jobs:
           jq -r '.assets[].browser_download_url' release.json |
             while read -r url; do curl -sfL "$url" -o "dist/$(basename "$url")"; done
           ls -la dist
-      - name: Check the binaries against the signed manifests
+      - name: Check the binaries against the signed latest.json
         run: |
-          for a in amd64 arm64; do
-            want=$(jq -r .sha256 "dist/latest-$a.json")
-            got=$(sha256sum "dist/evesynapse-$a" | cut -d' ' -f1)
-            if [ "$want" != "$got" ]; then
-              echo "evesynapse-$a does not match its signed manifest ($got != $want); refusing to publish."
-              exit 1
-            fi
-            bundled=$(jq -r --arg k "$a" '.manifest | @base64d | fromjson | .sha256[$k]' dist/latest.json)
-            [ "$bundled" = "$got" ] || { echo "evesynapse-$a does not match latest.json; refusing to publish."; exit 1; }
-            echo "evesynapse-$a matches its signed manifest."
-          done
-          for p in windows-amd64 windows-arm64 darwin-amd64 darwin-arm64; do
+          for p in amd64 arm64 windows-amd64 windows-arm64 darwin-amd64 darwin-arm64; do
             bin="evesynapse-$p"
             case "$p" in windows-*) bin="$bin.exe" ;; esac
-            want=$(jq -r .sha256 "dist/latest-$p.json")
+            want=$(jq -r --arg k "$p" '.manifest | @base64d | fromjson | .sha256[$k]' dist/latest.json)
             got=$(sha256sum "dist/$bin" | cut -d' ' -f1)
             if [ "$want" != "$got" ]; then
-              echo "$bin does not match its signed manifest ($got != $want); refusing to publish."
+              echo "$bin does not match latest.json ($got != $want); refusing to publish."
               exit 1
             fi
-            bundled=$(jq -r --arg k "$p" '.manifest | @base64d | fromjson | .sha256[$k]' dist/latest.json)
-            [ "$bundled" = "$got" ] || { echo "$bin does not match latest.json; refusing to publish."; exit 1; }
-            echo "$bin matches its signed manifest."
+            echo "$bin matches latest.json."
           done
       - name: Create the GitHub release
         run: |

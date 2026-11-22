@@ -8,9 +8,10 @@ package swarm
 // my two Forgejo projects and records every binary build's
 // SHA-256 in the release_builds table, under the release's tag and
 // the project's product kind. An app release carries a signed
-// manifest per architecture (latest-<arch>.json and its .sig): the
-// learner takes the hash from the manifest, and only when the
-// signature verifies under the release keys this build trusts. A
+// latest.json, or on older releases a manifest per architecture
+// (latest-<arch>.json and its .sig): the learner takes the hash from
+// it, and only when the signature verifies under the release keys
+// this build trusts. A
 // storm release carries a SHA256SUMS file; storm's releases are
 // published on its GitHub mirror, so the learner reads them there
 // as well, and either home is enough. A recorded hash is
@@ -193,6 +194,23 @@ func manifestBuild(src releaseSource, label, arch string, manifest, sig []byte, 
 	return learnedBuild{hash: strings.ToLower(m.SHA256), entry: ReleaseBuild{Kind: src.kind, Label: label}}, true
 }
 
+// bundleBuilds reads a signed latest.json: the build for each
+// architecture the library tracks, nothing when the signature does
+// not verify under trusted.
+func bundleBuilds(src releaseSource, label string, raw []byte, trusted []ed25519.PublicKey) []learnedBuild {
+	bundle, _, err := releasesig.OpenBundle(trusted, raw)
+	if err != nil {
+		return nil
+	}
+	var out []learnedBuild
+	for _, arch := range releaseArches {
+		if sum := bundle.SHA256[arch]; validSHA256(sum) {
+			out = append(out, learnedBuild{hash: strings.ToLower(sum), entry: ReleaseBuild{Kind: src.kind, Label: label}})
+		}
+	}
+	return out
+}
+
 // parseSHA256Sums reads a SHA256SUMS file: the builds of the
 // product's own binaries ("<hash>  storm-amd64"); archives and
 // anything else listed beside them are not builds.
@@ -252,6 +270,14 @@ func learnReleaseList(ctx context.Context, fetch func(context.Context, string) (
 			}
 		}
 		if src.signed {
+			if url := assets[releasesig.BundleName]; url != "" {
+				raw, err := fetch(ctx, url)
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, bundleBuilds(src, rel.TagName, raw, trusted)...)
+				continue
+			}
 			for _, arch := range releaseArches {
 				name := "latest-" + arch + ".json"
 				if assets[name] == "" || assets[name+releasesig.SigSuffix] == "" {

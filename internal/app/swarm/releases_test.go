@@ -174,3 +174,29 @@ func TestClassifyLearnedBuild(t *testing.T) {
 		t.Fatalf("unknown hash classified %v, want Fork", got)
 	}
 }
+
+func TestLearnSourceReadsSignedBundle(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	_, otherPriv, _ := ed25519.GenerateKey(rand.Reader)
+	amd, arm := strings.Repeat("aa", 32), strings.Repeat("bb", 32)
+	good, _ := releasesig.NewBundle([]ed25519.PrivateKey{priv}, releasesig.BundleManifest{Version: "1.2.3.4", SHA256: map[string]string{"amd64": amd, "arm64": arm}})
+	forged, _ := releasesig.NewBundle([]ed25519.PrivateKey{otherPriv}, releasesig.BundleManifest{Version: "1.2.3.3", SHA256: map[string]string{"amd64": strings.Repeat("cc", 32)}})
+	dl := forgejoBaseURL + "/dl/"
+	files := map[string][]byte{
+		releaseListURL(releaseSources[0]): []byte(`[
+  {"tag_name":"v1.2.3.4","assets":[{"name":"latest.json","browser_download_url":"` + dl + `good"}]},
+  {"tag_name":"v1.2.3.3","assets":[{"name":"latest.json","browser_download_url":"` + dl + `forged"}]}]`),
+		dl + "good":   good,
+		dl + "forged": forged,
+	}
+	fetch := func(_ context.Context, url string) ([]byte, error) {
+		if b, ok := files[url]; ok {
+			return b, nil
+		}
+		return nil, errReleaseNotFound
+	}
+	got, err := learnSource(context.Background(), fetch, releaseSources[0], []ed25519.PublicKey{pub})
+	if err != nil || len(got) != 2 || got[0].hash != amd || got[1].hash != arm || got[0].entry.Label != "v1.2.3.4" {
+		t.Fatalf("learned %+v, err %v", got, err)
+	}
+}

@@ -14,6 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
 	db "evesynapse/internal/db/sqlc"
@@ -31,10 +32,10 @@ import (
 // Doctrine matching is by hull. ESI does not show another pilot's fit,
 // so nothing here claims a fit is right.
 //
-// Who sees what: commanders see everything. People who can sign up see
-// the totals (hulls, roles, doctrine gaps) but not who is where. Nobody
-// else sees the live fleet, on a public fleet included, because live
-// numbers and positions are worth something to the other side.
+// Who sees what follows the game. Only a pilot in the fleet sees the live
+// fleet, on a public fleet included, because live numbers and positions
+// are worth something to the other side. See fleetSight for what each
+// rank sees. Commanders outside the fleet get its setup status only.
 // ---------------------------------------------------------------------------
 
 const (
@@ -87,6 +88,9 @@ type fleetMemberRow struct {
 	Assigned   string   `json:"assigned,omitempty"`
 	OnDoctrine bool     `json:"on_doctrine,omitempty"`
 	Tags       []string `json:"tags,omitempty"`
+	// Hidden: this viewer's rank does not show this pilot's ship and
+	// system. Set on the copy made for a page, never stored.
+	Hidden bool `json:"-"`
 }
 
 // Role is the commander's assignment, or else what the hull suggests.
@@ -478,8 +482,11 @@ type fleetLiveView struct {
 	ID          int64
 	Title       string
 	Revision    int64
-	Has         bool
-	Full        bool // a commander: pilots, systems, wings and the forms
+	Has         bool // the viewer is in the fleet as last read
+	Full        bool // fleet commander or boss: every ship and system, and the totals
+	CanManage   bool // runs this fleet on EveSynapse: sees how the read is going
+	CanEdit     bool // runs this fleet and is in it: sets roles and tags
+	Reading     bool // a read of the fleet exists, whether or not the viewer is in it
 	Stale       bool
 	Polling     bool
 	AsOf        string
@@ -517,9 +524,176 @@ func fleetTabs(id int64, composition bool, active string) []navLink {
 	}
 }
 
-// seesFleetLive: the live fleet is for those running it or able to sign
-// up to it. A share link alone never opens it.
-func seesFleetLive(a fleetAccess) bool { return a.Manage || a.Join }
+// fleetSight is what a viewer's characters can see of a fleet in game.
+// Every member sees who is in the fleet and where they sit in the command
+// chain. Ships and systems follow EVE's Fleet Composition window: a squad
+// commander sees their squad, a wing commander their wing, and the fleet
+// commander and boss the whole fleet. A pilot always sees their own.
+type fleetSight struct {
+	In     bool
+	All    bool
+	own    map[int64]bool
+	wings  map[int64]bool
+	squads map[int64]bool
+}
+
+// sightFor reads the viewer's places from the stored fleet. An account
+// with several characters in the fleet sees what each of them sees.
+func (c *fleetComposition) sightFor(ids []int64) fleetSight {
+	s := fleetSight{own: map[int64]bool{}, wings: map[int64]bool{}, squads: map[int64]bool{}}
+	mine := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		mine[id] = true
+	}
+	if c.BossID != 0 && mine[c.BossID] {
+		s.In, s.All = true, true
+		s.own[c.BossID] = true
+	}
+	for _, m := range c.Members {
+		if !mine[m.ID] {
+			continue
+		}
+		s.In = true
+		s.own[m.ID] = true
+		switch m.Position {
+		case "fleet_commander":
+			s.All = true
+		case "wing_commander":
+			if m.WingID > 0 {
+				s.wings[m.WingID] = true
+			}
+		case "squad_commander":
+			if m.SquadID > 0 {
+				s.squads[m.SquadID] = true
+			}
+		}
+	}
+	return s
+}
+
+func (s fleetSight) seesShip(m fleetMemberRow) bool {
+	return s.All || s.own[m.ID] || (m.WingID > 0 && s.wings[m.WingID]) || (m.SquadID > 0 && s.squads[m.SquadID])
+}
+
+// row is a copy of one pilot holding only what this viewer may see.
+// Roles and tags are commanders' notes, so they stay with those who
+// can edit them. The suggested role goes with the ship it comes from.
+func (s fleetSight) row(m fleetMemberRow, edit bool) fleetMemberRow {
+	if !s.seesShip(m) {
+		m.ShipTypeID, m.Ship, m.SystemID, m.System, m.Suggested, m.OnDoctrine = 0, "", 0, "", "", false
+		m.Hidden = true
+	}
+	if !edit {
+		m.Assigned, m.Tags = "", nil
+	}
+	return m
+}
+
+// fleetLiveOpen: the fleet is inside the window it is read in.
+func fleetLiveOpen(op db.Op, now time.Time) bool {
+	return !op.CancelledAt.Valid && now.Before(opEnd(op).Add(opCaptureTail)) && !now.Before(op.StartsAt.Add(-opCaptureLead))
+}
+
+// seesFleetLive: the Composition tab is for pilots in the fleet, and for
+// those running it until it closes, who see its setup status and not
+// its pilots. A share link alone never opens it.
+func seesFleetLive(op db.Op, a fleetAccess, sight fleetSight, now time.Time) bool {
+	return sight.In || (a.Manage && !op.CancelledAt.Valid && now.Before(opEnd(op).Add(opCaptureTail)))
+}
+
+// fleetLiveRead is the stored read of a running fleet and what one viewer
+// can see of it. It is empty outside the window the fleet is read in, and
+// for a read left from before the fleet was moved to a later time.
+type fleetLiveRead struct {
+	row   *db.OpComposition
+	comp  fleetComposition
+	sight fleetSight
+}
+
+func (app *Application) fleetLiveReadFor(ctx context.Context, op db.Op, v fleetViewer, now time.Time) (fleetLiveRead, error) {
+	ids := v.characterIDs()
+	if len(ids) == 0 || !fleetLiveOpen(op, now) {
+		return fleetLiveRead{}, nil
+	}
+	row, err := app.storedComposition(ctx, op.ID)
+	if err != nil || row == nil || row.ComputedAt.Before(op.StartsAt.Add(-opCaptureLead)) {
+		return fleetLiveRead{}, err
+	}
+	live := fleetLiveRead{row: row}
+	if err := json.Unmarshal([]byte(row.Payload), &live.comp); err != nil {
+		return fleetLiveRead{}, err
+	}
+	live.sight = live.comp.sightFor(ids)
+	return live, nil
+}
+
+// fleetCaptureStatus is captureSummary for one viewer. While the fleet
+// runs, the count and the boss's name are for those who see the whole
+// fleet.
+func (app *Application) fleetCaptureStatus(ctx context.Context, op db.Op, now time.Time, recorded int, sight fleetSight) (string, []string) {
+	if !sight.All && op.CaptureStatus == captureRunning && fleetLiveOpen(op, now) {
+		return "Attendance is being recorded from this fleet.", nil
+	}
+	return app.captureSummary(ctx, op, now, recorded)
+}
+
+// liveFleetFromURL loads a fleet for its live pages. Being in the fleet
+// in game opens them even for a pilot who could not otherwise see the
+// fleet. Anyone else is answered here: a polled fragment that may no
+// longer show gets a 403, so the page can reload.
+func (app *Application) liveFleetFromURL(w http.ResponseWriter, r *http.Request, fragment bool) (db.Op, fleetViewer, fleetAccess, fleetLiveRead, bool) {
+	ctx := r.Context()
+	v := app.fleetViewerFor(ctx)
+	id, _ := strconv.ParseInt(chi.URLParam(r, "opID"), 10, 64)
+	op, err := app.queries.GetOp(ctx, id)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			logging.Errorf("fleets: load fleet %d: %v", id, err)
+		}
+		app.renderFleetHidden(w, r, v)
+		return db.Op{}, v, fleetAccess{}, fleetLiveRead{}, false
+	}
+	a := v.access(op, app.fleetFactsFor(ctx, v, []db.Op{op})[op.ID])
+	now := time.Now()
+	live, err := app.fleetLiveReadFor(ctx, op, v, now)
+	if err != nil {
+		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
+		if fragment {
+			http.Error(w, "Unavailable", http.StatusServiceUnavailable)
+			return db.Op{}, v, fleetAccess{}, fleetLiveRead{}, false
+		}
+	}
+	if !seesFleetLive(op, a, live.sight, now) {
+		switch {
+		case !a.View:
+			app.renderFleetHidden(w, r, v)
+		case fragment:
+			http.Error(w, "Forbidden", http.StatusForbidden)
+		default:
+			http.Redirect(w, r, opURL(op.ID), http.StatusSeeOther)
+		}
+		return db.Op{}, v, fleetAccess{}, fleetLiveRead{}, false
+	}
+	return op, v, a, live, true
+}
+
+// redirectIntoLiveFleet sends a pilot who is in the fleet but cannot see
+// its page to the part they can see.
+func (app *Application) redirectIntoLiveFleet(w http.ResponseWriter, r *http.Request, op db.Op, v fleetViewer) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	live, err := app.fleetLiveReadFor(r.Context(), op, v, time.Now())
+	if err != nil {
+		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
+		return false
+	}
+	if !live.sight.In {
+		return false
+	}
+	http.Redirect(w, r, fleetCompositionPath(op.ID), http.StatusSeeOther)
+	return true
+}
 
 func fleetRoleClass(role string) string {
 	switch role {
@@ -553,14 +727,13 @@ func fleetRoleBar(roles []fleetRoleCount, pilots int) []fleetRoleSegment {
 	return out
 }
 
-// fleetLiveFor builds the view from the stored row. A viewer who is not
-// a commander gets a copy with the pilots, systems and wings left out,
-// so the template cannot show them by mistake.
-func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewer, a fleetAccess, row *db.OpComposition, page int, now time.Time) *fleetLiveView {
-	end := opEnd(op).Add(opCaptureTail)
+// fleetLiveFor builds the view from the stored read. It copies only what
+// the viewer's rank shows, so the template cannot show more by mistake.
+func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewer, a fleetAccess, live fleetLiveRead, page int, now time.Time) *fleetLiveView {
 	view := &fleetLiveView{
-		ID: op.ID, Title: op.Title, Full: a.Manage, Roles: opFleetRoles,
-		Polling: !op.CancelledAt.Valid && now.Before(end) && !now.Before(op.StartsAt.Add(-opCaptureLead)),
+		ID: op.ID, Title: op.Title, Full: live.sight.All, CanManage: a.Manage,
+		CanEdit: a.Manage && live.sight.In, Reading: live.row != nil, Roles: opFleetRoles,
+		Polling: fleetLiveOpen(op, now),
 		LiveURL: fleetCompositionPath(op.ID) + "/live", PollSeconds: fleetPollSeconds,
 		Page: 1, Pages: 1,
 		ViewerChars: make(map[int64]bool, len(v.Characters)),
@@ -571,50 +744,49 @@ func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewe
 	if page > 1 {
 		view.LiveURL += "?page=" + strconv.Itoa(page)
 	}
-	var comp fleetComposition
-	if row != nil {
-		if err := json.Unmarshal([]byte(row.Payload), &comp); err != nil {
-			logging.Errorf("fleets: composition of %d: %v", op.ID, err)
-			row = nil
+	if live.row != nil {
+		view.Revision = live.row.Revision
+	}
+	if a.Manage {
+		view.Status, view.Notes = app.fleetCaptureStatus(ctx, op, now, live.comp.Pilots, live.sight)
+		// The list leaves out who is in the fleet, so it would name them
+		// to a commander who is not.
+		if live.row == nil || live.sight.In {
+			app.fillFleetInvite(ctx, view, op, live.comp.Members)
 		}
 	}
-	if row != nil {
-		view.Has, view.Revision = true, row.Revision
-		view.AsOf = row.ComputedAt.UTC().Format("15:04") + " EVE"
-		view.AsOfRaw = row.ComputedAt.UTC().Format(time.RFC3339)
-		view.Stale = now.Sub(row.ComputedAt) > fleetLiveStaleAfter
+	if !live.sight.In {
+		return view
+	}
+	comp := live.comp
+	view.Has = true
+	view.AsOf = live.row.ComputedAt.UTC().Format("15:04") + " EVE"
+	view.AsOfRaw = live.row.ComputedAt.UTC().Format(time.RFC3339)
+	view.Stale = now.Sub(live.row.ComputedAt) > fleetLiveStaleAfter
+	if live.sight.All {
+		view.Comp = &comp
 		view.RoleBar = fleetRoleBar(comp.Roles, comp.Pilots)
 		parts := make([]string, 0, len(comp.Roles))
 		for _, role := range comp.Roles {
 			parts = append(parts, strconv.Itoa(role.Count)+" "+role.Role)
 		}
 		view.RoleSummary = "Pilots by role: " + strings.Join(parts, ", ")
+	} else {
+		view.Comp = &fleetComposition{Pilots: comp.Pilots, Wings: comp.Wings}
 	}
-	if a.Manage {
-		view.Status, view.Notes = app.captureSummary(ctx, op, now, comp.Pilots)
-		app.fillFleetInvite(ctx, view, op, comp.Members)
-		if view.Has {
-			view.Comp = &comp
-			view.Pages = max(1, (len(comp.Members)+fleetPilotsPerPage-1)/fleetPilotsPerPage)
-			view.Page = min(max(page, 1), view.Pages)
-			from := (view.Page - 1) * fleetPilotsPerPage
-			view.Members = comp.Members[from:min(from+fleetPilotsPerPage, len(comp.Members))]
-			if view.Page > 1 {
-				view.PrevURL = fleetCompositionPath(op.ID) + "?page=" + strconv.Itoa(view.Page-1)
-			}
-			if view.Page < view.Pages {
-				view.NextURL = fleetCompositionPath(op.ID) + "?page=" + strconv.Itoa(view.Page+1)
-			}
-		}
-		return view
+	view.Pages = max(1, (len(comp.Members)+fleetPilotsPerPage-1)/fleetPilotsPerPage)
+	view.Page = min(max(page, 1), view.Pages)
+	from := (view.Page - 1) * fleetPilotsPerPage
+	shown := comp.Members[from:min(from+fleetPilotsPerPage, len(comp.Members))]
+	view.Members = make([]fleetMemberRow, 0, len(shown))
+	for _, m := range shown {
+		view.Members = append(view.Members, live.sight.row(m, view.CanEdit))
 	}
-	if view.Has {
-		view.Comp = &fleetComposition{
-			Pilots: comp.Pilots, HasDoctrine: comp.HasDoctrine,
-			OnDoctrine: comp.OnDoctrine, OffDoctrine: comp.OffDoctrine,
-			MissingHulls: comp.MissingHulls, MissingRoles: comp.MissingRoles,
-			Hulls: comp.Hulls, Roles: comp.Roles,
-		}
+	if view.Page > 1 {
+		view.PrevURL = fleetCompositionPath(op.ID) + "?page=" + strconv.Itoa(view.Page-1)
+	}
+	if view.Page < view.Pages {
+		view.NextURL = fleetCompositionPath(op.ID) + "?page=" + strconv.Itoa(view.Page+1)
 	}
 	return view
 }
@@ -664,22 +836,15 @@ func (app *Application) storedComposition(ctx context.Context, opID int64) (*db.
 // handleFleetComposition is the Composition tab.
 func (app *Application) handleFleetComposition(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	op, v, _, a, ok := app.fleetFromURL(w, r)
+	op, v, a, live, ok := app.liveFleetFromURL(w, r, false)
 	if !ok {
 		return
 	}
-	if !seesFleetLive(a) {
-		http.Redirect(w, r, opURL(op.ID), http.StatusSeeOther)
-		return
-	}
-	row, err := app.storedComposition(ctx, op.ID)
-	if err != nil {
-		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
-	}
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	w.Header().Set("X-Robots-Tag", "noindex")
-	data := pageData{ShellData: app.PublicShell(ctx), FleetLive: app.fleetLiveFor(ctx, op, v, a, row, page, time.Now())}
-	data.SectionSubTabs = fleetTabs(op.ID, true, "composition")
+	data := pageData{ShellData: app.PublicShell(ctx), FleetLive: app.fleetLiveFor(ctx, op, v, a, live, page, time.Now())}
+	// A pilot let in only by being in the fleet has no Overview to go to.
+	data.SectionSubTabs = fleetTabs(op.ID, a.View, "composition")
 	data.Scripts = []string{"/static/fleets.js"}
 	app.render(ctx, w, http.StatusOK, "fleet_composition.html", data)
 }
@@ -688,24 +853,14 @@ func (app *Application) handleFleetComposition(w http.ResponseWriter, r *http.Re
 // empty answer when nothing changed since the revision the page holds.
 func (app *Application) handleFleetLive(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	op, v, _, a, ok := app.fleetFromURL(w, r)
+	op, v, a, live, ok := app.liveFleetFromURL(w, r, true)
 	if !ok {
-		return
-	}
-	if !seesFleetLive(a) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	row, err := app.storedComposition(ctx, op.ID)
-	if err != nil {
-		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
-		http.Error(w, "Unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	held, _ := strconv.ParseInt(r.URL.Query().Get("rev"), 10, 64)
 	var current int64
-	if row != nil {
-		current = row.Revision
+	if live.row != nil {
+		current = live.row.Revision
 	}
 	if current == held {
 		w.Header().Set("Cache-Control", "no-store")
@@ -713,7 +868,7 @@ func (app *Application) handleFleetLive(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	app.renderFragment(w, "fleet_composition.html", "fleet-live", app.fleetLiveFor(ctx, op, v, a, row, page, time.Now()))
+	app.renderFragment(w, "fleet_composition.html", "fleet-live", app.fleetLiveFor(ctx, op, v, a, live, page, time.Now()))
 }
 
 // parseFleetTags reads the tag box: comma separated, short, no repeats.
@@ -744,7 +899,7 @@ func parseFleetTags(raw string) []string {
 // the fleet, and updates the stored totals so the page shows it at once.
 func (app *Application) handleFleetPilot(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	op, v, _, a, ok := app.fleetFromURL(w, r)
+	op, v, a, live, ok := app.liveFleetFromURL(w, r, false)
 	if !ok {
 		return
 	}
@@ -753,7 +908,7 @@ func (app *Application) handleFleetPilot(w http.ResponseWriter, r *http.Request)
 		back += "?page=" + strconv.Itoa(p)
 	}
 	defer func() { http.Redirect(w, r, back, http.StatusSeeOther) }()
-	if !a.Manage {
+	if !a.Manage || !live.sight.In {
 		return
 	}
 	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)
@@ -761,16 +916,7 @@ func (app *Application) handleFleetPilot(w http.ResponseWriter, r *http.Request)
 	if role != "" && !slices.Contains(opFleetRoles, role) {
 		return
 	}
-	row, err := app.storedComposition(ctx, op.ID)
-	if err != nil || row == nil {
-		app.flash(ctx, "That pilot is not in the fleet as last read.")
-		return
-	}
-	var comp fleetComposition
-	if err := json.Unmarshal([]byte(row.Payload), &comp); err != nil {
-		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
-		return
-	}
+	row, comp := live.row, live.comp
 	at := slices.IndexFunc(comp.Members, func(m fleetMemberRow) bool { return m.ID == characterID })
 	if at < 0 {
 		app.flash(ctx, "That pilot is not in the fleet as last read.")

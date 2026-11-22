@@ -522,7 +522,14 @@ func TestOpAttendanceIsCapturedFromTheFleet(t *testing.T) {
 		t.Fatalf("after a pilot left the fleet, attendance is %v; they were there and should stay", got)
 	}
 
-	// The totals page counts it, for members of the corporation only.
+	// The totals page counts it once the fleet is over, for members of
+	// the corporation only.
+	if _, _, body = f.get(f.member, "/fleets/history/"); strings.Contains(body, "Fixture Member</a></td>") {
+		t.Fatal("the totals show who is in a running fleet")
+	}
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE ops SET starts_at = $1 WHERE id = $2`, now.Add(-48*time.Hour), id); err != nil {
+		t.Fatal(err)
+	}
 	_, _, body = f.get(f.member, "/fleets/history/")
 	mustContain(t, "/fleets/history/", body, "Fixture Member</a></td><td>1</td><td>1</td>")
 	if _, _, body = f.get(f.other, "/fleets/history/"); strings.Contains(body, "Fixture Member") {
@@ -624,26 +631,39 @@ func TestOpAttendanceFallsBackToMarkingByHand(t *testing.T) {
 	}
 }
 
-// TestLiveFleetFollowsTheBossAndLimitsWhoSeesPilots: the fleet is read
-// through whichever commander is boss while they are in the owner.
-// Commanders see the pilots, people who can sign up see only totals,
-// and nobody else sees the live fleet.
-func TestLiveFleetFollowsTheBossAndLimitsWhoSeesPilots(t *testing.T) {
+// TestLiveFleetShowsEachPilotWhatTheirRankShowsInGame: the fleet is read
+// through whichever commander is boss while they are in the owner. Only
+// pilots in the fleet see it: every member sees who is there, commanders
+// see ships for the pilots under them, and the fleet commander and boss
+// see everything. Running the fleet on EveSynapse adds no sight of it.
+func TestLiveFleetShowsEachPilotWhatTheirRankShowsInGame(t *testing.T) {
 	const boss = `{"fleet_id":777,"fleet_boss_id":90000003}`
+	const joinerChar, bystanderChar, plannerChar = 90000077, 90000078, 90000079
 	fleet := &fleetESI{
 		fleetStatus: http.StatusOK, fleet: boss, coFleet: boss,
-		membersStatus: http.StatusOK, members: fleetOfThree,
+		membersStatus: http.StatusOK,
+		members: fmt.Sprintf(`[
+			{"character_id":%d,"ship_type_id":11987,"wing_id":-1,"squad_id":-1,"role":"fleet_commander"},
+			{"character_id":%d,"ship_type_id":29990,"wing_id":10,"squad_id":100,"role":"squad_commander"},
+			{"character_id":95000001,"ship_type_id":587,"wing_id":10,"squad_id":100,"role":"squad_member"},
+			{"character_id":%d,"ship_type_id":638,"wing_id":10,"squad_id":200,"role":"squad_member"},
+			{"character_id":%d,"ship_type_id":641,"wing_id":10,"squad_id":200,"role":"squad_member"}
+		]`, opsCharC, fixtureCharA, joinerChar, opsCharD),
 	}
 	f := newFleetFixture(t, fleet)
+	if _, err := f.app.db.ExecContext(f.ctx, `INSERT INTO sde_types (type_id, name) VALUES
+		(11987, 'Guardian'), (29990, 'Loki'), (587, 'Rifter'), (638, 'Raven'), (641, 'Megathron')
+		ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
 	now := time.Now().UTC()
 	id := f.create(now.Add(-10*time.Minute).Truncate(time.Minute), "Running")
 	f.grantFleet(opsCharC, true)
 	if err := f.q.AddOpCommander(f.ctx, db.AddOpCommanderParams{OpID: id, CharacterID: opsCharC, AddedBy: fixtureCharA, AddedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-
-	if stored, limited := f.app.captureOpAttendance(f.ctx, now); stored != 3 || limited {
-		t.Fatalf("recorded %d, limited=%v; want the 3 pilots read through the co-FC", stored, limited)
+	if stored, limited := f.app.captureOpAttendance(f.ctx, now); stored != 5 || limited {
+		t.Fatalf("recorded %d, limited=%v; want the 5 pilots read through the co-FC", stored, limited)
 	}
 	op, err := f.q.GetOp(f.ctx, id)
 	if err != nil {
@@ -652,33 +672,80 @@ func TestLiveFleetFollowsTheBossAndLimitsWhoSeesPilots(t *testing.T) {
 	if op.CaptureStatus != captureRunning || op.CaptureBossID != opsCharC {
 		t.Fatalf("status %q through %d, want %q through the co-FC", op.CaptureStatus, op.CaptureBossID, captureRunning)
 	}
+	account := func(charID int64, name string, roles ...string) *http.Cookie {
+		t.Helper()
+		user, err := f.q.CreateUser(f.ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.join(user.ID, charID, name, opsCorp, roles...)
+		return sessionCookie(t, f.app, user.ID, charID, name)
+	}
+	joiner := account(joinerChar, "Fixture Joiner")
+	bystander := account(bystanderChar, "Fixture Bystander")
+	planner := account(plannerChar, "Fixture Planner", "Director")
 
 	path := fleetCompositionPath(id)
 	const pilot = "Pilot #95000001"
-	if _, _, body := f.get(f.member, path); !strings.Contains(body, pilot) {
-		t.Fatal("a commander does not see the fleet's pilots")
-	}
-	user, err := f.q.CreateUser(f.ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.join(user.ID, 90000077, "Fixture Joiner", opsCorp)
-	joiner := sessionCookie(t, f.app, user.ID, 90000077, "Fixture Joiner")
-	for _, p := range []string{path, path + "/live"} {
-		_, _, body := f.get(joiner, p)
-		if !strings.Contains(body, "Hulls") || strings.Contains(body, pilot) || strings.Contains(body, "fl-pilots") {
-			t.Fatalf("%s for someone who can sign up: want totals and no pilots", p)
+	const pilotLink = "character=95000001"
+	ship := func(typeID int) string { return fmt.Sprintf("/items/type/%d/", typeID) }
+	sees := func(who string, cookie *http.Cookie, want, hidden []string) {
+		t.Helper()
+		code, _, body := f.get(cookie, path)
+		if code != http.StatusOK {
+			t.Fatalf("%s: composition answered %d", who, code)
+		}
+		for _, s := range want {
+			if !strings.Contains(body, s) {
+				t.Errorf("%s does not see %q", who, s)
+			}
+		}
+		for _, s := range hidden {
+			if strings.Contains(body, s) {
+				t.Errorf("%s sees %q", who, s)
+			}
 		}
 	}
-	if code, _ := f.post(joiner, opURL(id)+"pilot", url.Values{"character": {"95000001"}, "role": {"Logistics"}}); code != http.StatusSeeOther {
-		t.Fatalf("pilot save by a non-commander answered %d", code)
+	sees("the boss", f.member,
+		[]string{pilot, ship(11987), ship(29990), ship(587), ship(638), ship(641), "fl-hulls-title"}, nil)
+	sees("a squad commander", f.director,
+		[]string{pilot, ship(29990), ship(587), `id="fl-p-95000001"`},
+		[]string{ship(11987), ship(638), ship(641), "fl-hulls-title", "fl-systems-title"})
+	sees("a squad member", joiner,
+		[]string{pilot, ship(638)},
+		[]string{ship(11987), ship(29990), ship(587), ship(641), "fl-hulls-title", "fl-p-"})
+	sees("a pilot in the fleet from outside the owner", f.other,
+		[]string{pilot, ship(641)},
+		[]string{ship(638), ship(587), "fl-hulls-title", "fl-p-"})
+	if code, where, _ := f.get(f.other, opURL(id)); code != http.StatusSeeOther || where != path {
+		t.Fatalf("overview for a pilot in the fleet who cannot see it: %d to %q", code, where)
 	}
-	if tags, err := f.q.ListOpMemberTags(f.ctx, id); err != nil || len(tags) != 0 {
-		t.Fatalf("a non-commander assigned a role: %v, %v", tags, err)
+	sees("a planner outside the fleet", planner,
+		[]string{"You are not in this fleet", "Attendance is being recorded from this fleet."},
+		[]string{pilot, "/items/type/", "so far", "fl-p-", "Fixture Member"})
+	if _, _, body := f.get(planner, opURL(id)); strings.Contains(body, "from the fleet") || strings.Contains(body, pilotLink) {
+		t.Fatal("the attendance panel shows a running fleet to a planner outside it")
 	}
-	for name, cookie := range map[string]*http.Cookie{"outsider": f.other, "anonymous": {Name: "none", Value: "none"}} {
-		if _, _, body := f.get(cookie, path); strings.Contains(body, pilot) || !strings.Contains(body, "Fleet not available") {
-			t.Fatalf("the live fleet is open to an %s", name)
+
+	// Someone who could sign up but is not in the fleet.
+	if code, where, _ := f.get(bystander, path); code != http.StatusSeeOther || where != opURL(id) {
+		t.Fatalf("composition for a bystander: %d to %q", code, where)
+	}
+	if code, _, _ := f.get(bystander, path+"/live"); code != http.StatusForbidden {
+		t.Fatalf("live fragment for a bystander answered %d", code)
+	}
+	if _, _, body := f.get(bystander, opURL(id)); strings.Contains(body, path) || strings.Contains(body, pilotLink) {
+		t.Fatal("the overview offers a running fleet to a bystander")
+	}
+	if code, _, body := f.get(&http.Cookie{Name: "none", Value: "none"}, path); code != http.StatusNotFound || strings.Contains(body, pilot) {
+		t.Fatalf("composition for an anonymous viewer answered %d", code)
+	}
+
+	// Only a commander in the fleet sets roles and tags.
+	for name, cookie := range map[string]*http.Cookie{"member": joiner, "planner outside the fleet": planner} {
+		f.post(cookie, opURL(id)+"pilot", url.Values{"character": {"95000001"}, "role": {"Logistics"}})
+		if tags, err := f.q.ListOpMemberTags(f.ctx, id); err != nil || len(tags) != 0 {
+			t.Fatalf("a %s assigned a role: %v, %v", name, tags, err)
 		}
 	}
 
@@ -694,5 +761,23 @@ func TestLiveFleetFollowsTheBossAndLimitsWhoSeesPilots(t *testing.T) {
 		if strings.Contains(asked, "/characters/90000003/") || strings.Contains(asked, "/members/") {
 			t.Fatalf("read %s through a commander who left the owner", asked)
 		}
+	}
+
+	// Once the fleet is over, its last read shows to nobody. Who flew
+	// stays with those running it and the pilots who were in it.
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE ops SET starts_at = $1 WHERE id = $2`, now.Add(-48*time.Hour), id); err != nil {
+		t.Fatal(err)
+	}
+	if code, where, _ := f.get(joiner, path); code != http.StatusSeeOther || where != opURL(id) {
+		t.Fatalf("composition after the fleet ended: %d to %q", code, where)
+	}
+	if _, _, body := f.get(joiner, opURL(id)); !strings.Contains(body, pilotLink) || !strings.Contains(body, ship(638)) || strings.Contains(body, ship(587)) {
+		t.Fatal("a pilot who flew should see who was there and only their own ship")
+	}
+	if _, _, body := f.get(planner, opURL(id)); !strings.Contains(body, pilotLink) || !strings.Contains(body, ship(587)) {
+		t.Fatal("a planner should keep the full attendance record")
+	}
+	if _, _, body := f.get(bystander, opURL(id)); strings.Contains(body, pilotLink) || strings.Contains(body, ship(587)) {
+		t.Fatal("attendance of a past fleet is shown to someone who was not in it")
 	}
 }

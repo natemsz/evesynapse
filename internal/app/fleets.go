@@ -640,7 +640,9 @@ func (app *Application) fleetFromURL(w http.ResponseWriter, r *http.Request) (db
 	facts := app.fleetFactsFor(ctx, v, []db.Op{op})[op.ID]
 	a := v.access(op, facts)
 	if !a.View {
-		app.renderFleetHidden(w, r, v)
+		if !app.redirectIntoLiveFleet(w, r, op, v) {
+			app.renderFleetHidden(w, r, v)
+		}
 		return db.Op{}, v, fleetFacts{}, fleetAccess{}, false
 	}
 	return op, v, facts, a, true
@@ -782,7 +784,9 @@ func (app *Application) handleFleetShare(w http.ResponseWriter, r *http.Request)
 	facts.ViaToken = true
 	a := v.access(op, facts)
 	if !a.View {
-		app.renderFleetHidden(w, r, v)
+		if !app.redirectIntoLiveFleet(w, r, op, v) {
+			app.renderFleetHidden(w, r, v)
+		}
 		return
 	}
 	app.renderFleet(w, r, op, v, facts, a)
@@ -874,10 +878,14 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 			view.ShareNote = "This fleet is private: the link only works for people who can already see it."
 		}
 	}
-	if a.SeeNames {
-		// How the capture is going is for those running the fleet;
-		// anyone else sees attendance once there is some.
-		if att := app.opAttendanceFor(ctx, op, signups, a.Manage, now); a.Manage || len(att.Rows) > 0 {
+	live, err := app.fleetLiveReadFor(ctx, op, v, now)
+	if err != nil {
+		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
+	}
+	if ids := v.characterIDs(); len(ids) > 0 {
+		// How the capture is going is for those running the fleet; a
+		// pilot who flew in it sees attendance once there is some.
+		if att := app.opAttendanceFor(ctx, op, signups, a.Manage, ids, live.sight, now); a.Manage || len(att.Rows) > 0 {
 			view.Attendance = att
 		}
 	}
@@ -887,7 +895,7 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	// count, so it is offered only to those it would let in.
 	direct := facts
 	direct.ViaToken = false
-	data.SectionSubTabs = fleetTabs(op.ID, seesFleetLive(v.access(op, direct)), "overview")
+	data.SectionSubTabs = fleetTabs(op.ID, seesFleetLive(op, v.access(op, direct), live.sight, now), "overview")
 	if op.Visibility == fleetPublic || facts.ViaToken {
 		data.HeadMeta = module.RenderPageMeta(module.PageMeta{
 			Title:       op.Title,

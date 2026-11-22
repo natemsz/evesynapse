@@ -283,7 +283,8 @@ WHERE op_id = sqlc.arg(op_id) AND source = 'manual'
 SELECT * FROM op_attendance WHERE op_id = $1 ORDER BY character_id;
 
 -- Attendance counts for an owner's fleets since a date, per character:
--- the most active first.
+-- the most active first. A fleet counts once it is over, so the totals
+-- do not show who is in a running fleet.
 -- name: ListOwnerPAPs :many
 SELECT a.character_id,
        COUNT(*)::bigint AS total,
@@ -295,6 +296,7 @@ WHERE o.owner_kind = sqlc.arg(owner_kind)
   AND o.owner_id = sqlc.arg(owner_id)
   AND o.cancelled_at IS NULL
   AND o.starts_at >= sqlc.arg(since)
+  AND o.starts_at + (o.duration_minutes * interval '1 minute') < sqlc.arg(ended_before)
 GROUP BY a.character_id
 ORDER BY total DESC, a.character_id
 LIMIT 100;

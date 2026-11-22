@@ -135,6 +135,15 @@ func fitFight(f *gamelog.Fight, now time.Time) string {
 			}
 			f.Slices[i].Rows = rows
 		}
+		for i := range f.Aligned {
+			rows := f.Aligned[i].Rows[:0]
+			for _, r := range f.Aligned[i].Rows {
+				if r[0] < battleMaxParties {
+					rows = append(rows, r)
+				}
+			}
+			f.Aligned[i].Rows = rows
+		}
 	}
 	if len(f.Tackles) > battleMaxTackles {
 		f.Tackles = f.Tackles[:battleMaxTackles]
@@ -497,6 +506,10 @@ func (app *Application) storeFight(ctx context.Context, userID, charID int64, f 
 	if err != nil {
 		return 0, false, err
 	}
+	aligned, err := json.Marshal(f.Aligned)
+	if err != nil {
+		return 0, false, err
+	}
 	token, err := newShareToken()
 	if err != nil {
 		return 0, false, err
@@ -508,6 +521,17 @@ func (app *Application) storeFight(ctx context.Context, userID, charID int64, f 
 	}
 	defer tx.Rollback(ctx)
 	q := app.queries.WithTx(tx)
+	if err := q.LockBattleFightReads(ctx, charID); err != nil {
+		return 0, false, err
+	}
+	firstStep := time.Unix(gamelog.ClockStep(f.Start.Unix()), 0).UTC()
+	lastStepEnd := time.Unix(gamelog.ClockStep(f.End.Unix())+gamelog.SliceSeconds-1, 0).UTC()
+	if err := q.MarkBattleFightReadsDirty(ctx, db.MarkBattleFightReadsDirtyParams{
+		CharacterID: charID, StartedAt: f.Start.UTC(), FirstStep: firstStep, LastStepEnd: lastStepEnd,
+		EarliestStart: firstStep.Add(-gamelog.MaxFightLength),
+	}); err != nil {
+		return 0, false, err
+	}
 	row, err := q.UpsertBattleFight(ctx, db.UpsertBattleFightParams{
 		UserID: userID, CharacterID: charID, Listener: f.Listener, SessionFile: truncate(f.Session, 64),
 		StartedAt: f.Start.UTC(), EndedAt: f.End.UTC(),
@@ -518,7 +542,7 @@ func (app *Application) storeFight(ctx context.Context, userID, charID int64, f 
 	if err != nil {
 		return 0, false, err
 	}
-	if err := q.UpsertBattleFightSeries(ctx, db.UpsertBattleFightSeriesParams{FightID: row.ID, Series: string(series), Slices: string(slices)}); err != nil {
+	if err := q.UpsertBattleFightSeries(ctx, db.UpsertBattleFightSeriesParams{FightID: row.ID, Series: string(series), Slices: string(slices), Aligned: string(aligned), AlignedAt: timeSet(now)}); err != nil {
 		return 0, false, err
 	}
 	if err := q.DeleteBattleFightWeapons(ctx, row.ID); err != nil {

@@ -66,7 +66,7 @@ func (q *Queries) DeleteBattleFightWeapons(ctx context.Context, fightID int64) e
 }
 
 const getBattleFight = `-- name: GetBattleFight :one
-SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, system_id, system_from, hull_type_id, hull_from, damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at, pilots, kills, losses, isk_destroyed, isk_lost, outcome, spark_out, spark_in, lines, unparsed, share_token, shared, received_at, correlated_at FROM battle_fights WHERE id = $1
+SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, system_id, system_from, hull_type_id, hull_from, damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at, pilots, kills, losses, isk_destroyed, isk_lost, outcome, spark_out, spark_in, lines, unparsed, share_token, shared, received_at, correlated_at, merge_digest, merge_dirty_seq FROM battle_fights WHERE id = $1
 `
 
 func (q *Queries) GetBattleFight(ctx context.Context, id int64) (BattleFight, error) {
@@ -105,12 +105,14 @@ func (q *Queries) GetBattleFight(ctx context.Context, id int64) (BattleFight, er
 		&i.Shared,
 		&i.ReceivedAt,
 		&i.CorrelatedAt,
+		&i.MergeDigest,
+		&i.MergeDirtySeq,
 	)
 	return i, err
 }
 
 const getBattleFightByToken = `-- name: GetBattleFightByToken :one
-SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, system_id, system_from, hull_type_id, hull_from, damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at, pilots, kills, losses, isk_destroyed, isk_lost, outcome, spark_out, spark_in, lines, unparsed, share_token, shared, received_at, correlated_at FROM battle_fights WHERE share_token = $1 AND shared
+SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, system_id, system_from, hull_type_id, hull_from, damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at, pilots, kills, losses, isk_destroyed, isk_lost, outcome, spark_out, spark_in, lines, unparsed, share_token, shared, received_at, correlated_at, merge_digest, merge_dirty_seq FROM battle_fights WHERE share_token = $1 AND shared
 `
 
 func (q *Queries) GetBattleFightByToken(ctx context.Context, shareToken string) (BattleFight, error) {
@@ -149,6 +151,8 @@ func (q *Queries) GetBattleFightByToken(ctx context.Context, shareToken string) 
 		&i.Shared,
 		&i.ReceivedAt,
 		&i.CorrelatedAt,
+		&i.MergeDigest,
+		&i.MergeDirtySeq,
 	)
 	return i, err
 }
@@ -182,9 +186,17 @@ const getBattleFightSeries = `-- name: GetBattleFightSeries :one
 SELECT fight_id, series, slices, chart FROM battle_fight_series WHERE fight_id = $1
 `
 
-func (q *Queries) GetBattleFightSeries(ctx context.Context, fightID int64) (BattleFightSeries, error) {
+type GetBattleFightSeriesRow struct {
+	FightID int64  `json:"fight_id"`
+	Series  string `json:"series"`
+	Slices  string `json:"slices"`
+	Chart   string `json:"chart"`
+}
+
+// Leaves out the aligned steps, which only a fleet report build reads.
+func (q *Queries) GetBattleFightSeries(ctx context.Context, fightID int64) (GetBattleFightSeriesRow, error) {
 	row := q.db.QueryRow(ctx, getBattleFightSeries, fightID)
-	var i BattleFightSeries
+	var i GetBattleFightSeriesRow
 	err := row.Scan(
 		&i.FightID,
 		&i.Series,
@@ -622,6 +634,53 @@ func (q *Queries) ListBattleFightParties(ctx context.Context, fightID int64) ([]
 	return items, nil
 }
 
+const listBattleFightPartiesToMatch = `-- name: ListBattleFightPartiesToMatch :many
+SELECT fight_id, seq, name, ticker, hull, hull_type_id, pilot, character_id, damage_out, damage_in, reps_out, reps_in, cap_out, cap_in, first_at, last_at, died FROM battle_fight_parties
+WHERE fight_id = $1
+ORDER BY (damage_out + damage_in + reps_out + reps_in) DESC, seq
+LIMIT 500
+`
+
+// Every stored party, for correlation to match to characters. The
+// first 200 are the ones ListBattleFightParties shows.
+func (q *Queries) ListBattleFightPartiesToMatch(ctx context.Context, fightID int64) ([]BattleFightParty, error) {
+	rows, err := q.db.Query(ctx, listBattleFightPartiesToMatch, fightID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BattleFightParty
+	for rows.Next() {
+		var i BattleFightParty
+		if err := rows.Scan(
+			&i.FightID,
+			&i.Seq,
+			&i.Name,
+			&i.Ticker,
+			&i.Hull,
+			&i.HullTypeID,
+			&i.Pilot,
+			&i.CharacterID,
+			&i.DamageOut,
+			&i.DamageIn,
+			&i.RepsOut,
+			&i.RepsIn,
+			&i.CapOut,
+			&i.CapIn,
+			&i.FirstAt,
+			&i.LastAt,
+			&i.Died,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBattleFightTackles = `-- name: ListBattleFightTackles :many
 SELECT fight_id, seq, from_name, to_name, kind, first_at, attempts FROM battle_fight_tackles
 WHERE fight_id = $1
@@ -700,7 +759,7 @@ func (q *Queries) ListBattleFightWeapons(ctx context.Context, fightID int64) ([]
 }
 
 const listBattleFightsByUser = `-- name: ListBattleFightsByUser :many
-SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, system_id, system_from, hull_type_id, hull_from, damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at, pilots, kills, losses, isk_destroyed, isk_lost, outcome, spark_out, spark_in, lines, unparsed, share_token, shared, received_at, correlated_at FROM battle_fights
+SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, system_id, system_from, hull_type_id, hull_from, damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at, pilots, kills, losses, isk_destroyed, isk_lost, outcome, spark_out, spark_in, lines, unparsed, share_token, shared, received_at, correlated_at, merge_digest, merge_dirty_seq FROM battle_fights
 WHERE user_id = $1
 ORDER BY started_at DESC
 LIMIT 100
@@ -748,6 +807,8 @@ func (q *Queries) ListBattleFightsByUser(ctx context.Context, userID int64) ([]B
 			&i.Shared,
 			&i.ReceivedAt,
 			&i.CorrelatedAt,
+			&i.MergeDigest,
+			&i.MergeDirtySeq,
 		); err != nil {
 			return nil, err
 		}
@@ -760,7 +821,7 @@ func (q *Queries) ListBattleFightsByUser(ctx context.Context, userID int64) ([]B
 }
 
 const listBattleFightsToCorrelate = `-- name: ListBattleFightsToCorrelate :many
-SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, system_id, system_from, hull_type_id, hull_from, damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at, pilots, kills, losses, isk_destroyed, isk_lost, outcome, spark_out, spark_in, lines, unparsed, share_token, shared, received_at, correlated_at FROM battle_fights
+SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, system_id, system_from, hull_type_id, hull_from, damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at, pilots, kills, losses, isk_destroyed, isk_lost, outcome, spark_out, spark_in, lines, unparsed, share_token, shared, received_at, correlated_at, merge_digest, merge_dirty_seq FROM battle_fights
 WHERE ended_at > $1
 ORDER BY correlated_at NULLS FIRST, id
 LIMIT $2
@@ -815,6 +876,8 @@ func (q *Queries) ListBattleFightsToCorrelate(ctx context.Context, arg ListBattl
 			&i.Shared,
 			&i.ReceivedAt,
 			&i.CorrelatedAt,
+			&i.MergeDigest,
+			&i.MergeDirtySeq,
 		); err != nil {
 			return nil, err
 		}
@@ -963,6 +1026,67 @@ func (q *Queries) ListKillsForFight(ctx context.Context, arg ListKillsForFightPa
 	return items, nil
 }
 
+const lockBattleFightForCorrelation = `-- name: LockBattleFightForCorrelation :one
+SELECT received_at FROM battle_fights WHERE id = $1 FOR UPDATE
+`
+
+// Taken first in a correlation write, the same order a store locks
+// in. The read's received_at says whether it was replaced meanwhile.
+func (q *Queries) LockBattleFightForCorrelation(ctx context.Context, id int64) (time.Time, error) {
+	row := q.db.QueryRow(ctx, lockBattleFightForCorrelation, id)
+	var received_at time.Time
+	err := row.Scan(&received_at)
+	return received_at, err
+}
+
+const lockBattleFightReads = `-- name: LockBattleFightReads :exec
+SELECT pg_advisory_xact_lock(hashtextextended('battle-fight-reads:' || $1::bigint::text, 0))
+`
+
+// Stores of one character's fights run one at a time, so two reads
+// marking each other cannot deadlock.
+func (q *Queries) LockBattleFightReads(ctx context.Context, characterID int64) error {
+	_, err := q.db.Exec(ctx, lockBattleFightReads, characterID)
+	return err
+}
+
+const markBattleFightReadsDirty = `-- name: MarkBattleFightReadsDirty :exec
+WITH prior AS (
+    SELECT ended_at FROM battle_fights
+    WHERE character_id = $1 AND started_at = $5::timestamptz
+)
+UPDATE battle_fights o SET merge_dirty_seq = nextval('battle_fights_merge_seq')
+WHERE o.character_id = $1
+  AND o.started_at >= $2::timestamptz
+  AND o.started_at <= GREATEST($3::timestamptz,
+                               COALESCE((SELECT ended_at + interval '10 seconds' FROM prior),
+                                        $3::timestamptz))
+  AND o.ended_at >= $4::timestamptz
+`
+
+type MarkBattleFightReadsDirtyParams struct {
+	CharacterID   int64     `json:"character_id"`
+	EarliestStart time.Time `json:"earliest_start"`
+	LastStepEnd   time.Time `json:"last_step_end"`
+	FirstStep     time.Time `json:"first_step"`
+	StartedAt     time.Time `json:"started_at"`
+}
+
+// Marks every stored read of this character that shares a clock step
+// with a fight about to be stored, including what the row at the same
+// start covered before, since which read counts for a step can change.
+// earliest_start bounds the index range by the longest possible fight.
+func (q *Queries) MarkBattleFightReadsDirty(ctx context.Context, arg MarkBattleFightReadsDirtyParams) error {
+	_, err := q.db.Exec(ctx, markBattleFightReadsDirty,
+		arg.CharacterID,
+		arg.EarliestStart,
+		arg.LastStepEnd,
+		arg.FirstStep,
+		arg.StartedAt,
+	)
+	return err
+}
+
 const setBattleFightChart = `-- name: SetBattleFightChart :exec
 UPDATE battle_fight_series SET chart = $2 WHERE fight_id = $1
 `
@@ -990,8 +1114,11 @@ UPDATE battle_fights SET
     outcome = $9,
     spark_out = $10,
     spark_in = $11,
-    correlated_at = $12
-WHERE id = $13
+    merge_dirty_seq = CASE WHEN merge_digest = $12::text
+                           THEN merge_dirty_seq ELSE nextval('battle_fights_merge_seq') END,
+    merge_digest = $12::text,
+    correlated_at = $13
+WHERE id = $14
 `
 
 type SetBattleFightCorrelationParams struct {
@@ -1006,6 +1133,7 @@ type SetBattleFightCorrelationParams struct {
 	Outcome      string       `json:"outcome"`
 	SparkOut     string       `json:"spark_out"`
 	SparkIn      string       `json:"spark_in"`
+	MergeDigest  string       `json:"merge_digest"`
 	CorrelatedAt sql.NullTime `json:"correlated_at"`
 	ID           int64        `json:"id"`
 }
@@ -1023,6 +1151,7 @@ func (q *Queries) SetBattleFightCorrelation(ctx context.Context, arg SetBattleFi
 		arg.Outcome,
 		arg.SparkOut,
 		arg.SparkIn,
+		arg.MergeDigest,
 		arg.CorrelatedAt,
 		arg.ID,
 	)
@@ -1076,13 +1205,14 @@ const upsertBattleFight = `-- name: UpsertBattleFight :one
 INSERT INTO battle_fights (
     user_id, character_id, listener, session_file, started_at, ended_at,
     damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at,
-    pilots, lines, unparsed, share_token, received_at
+    pilots, lines, unparsed, share_token, received_at, merge_dirty_seq
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6,
     $7, $8, $9, $10,
     $11, $12, $13,
-    $14, $15, $16, $17, $18
+    $14, $15, $16, $17, $18,
+    nextval('battle_fights_merge_seq')
 )
 ON CONFLICT (character_id, started_at) DO UPDATE SET
     user_id      = excluded.user_id,
@@ -1100,6 +1230,7 @@ ON CONFLICT (character_id, started_at) DO UPDATE SET
     lines        = excluded.lines,
     unparsed     = excluded.unparsed,
     received_at  = excluded.received_at,
+    merge_dirty_seq = excluded.merge_dirty_seq,
     correlated_at = NULL
 RETURNING id, (xmax = 0)::boolean AS inserted
 `
@@ -1161,18 +1292,28 @@ func (q *Queries) UpsertBattleFight(ctx context.Context, arg UpsertBattleFightPa
 }
 
 const upsertBattleFightSeries = `-- name: UpsertBattleFightSeries :exec
-INSERT INTO battle_fight_series (fight_id, series, slices, chart)
-VALUES ($1, $2, $3, '')
-ON CONFLICT (fight_id) DO UPDATE SET series = excluded.series, slices = excluded.slices, chart = ''
+INSERT INTO battle_fight_series (fight_id, series, slices, aligned, aligned_at, chart)
+VALUES ($1, $2, $3, $4, $5, '')
+ON CONFLICT (fight_id) DO UPDATE SET
+    series = excluded.series, slices = excluded.slices,
+    aligned = excluded.aligned, aligned_at = excluded.aligned_at, chart = ''
 `
 
 type UpsertBattleFightSeriesParams struct {
-	FightID int64  `json:"fight_id"`
-	Series  string `json:"series"`
-	Slices  string `json:"slices"`
+	FightID   int64        `json:"fight_id"`
+	Series    string       `json:"series"`
+	Slices    string       `json:"slices"`
+	Aligned   string       `json:"aligned"`
+	AlignedAt sql.NullTime `json:"aligned_at"`
 }
 
 func (q *Queries) UpsertBattleFightSeries(ctx context.Context, arg UpsertBattleFightSeriesParams) error {
-	_, err := q.db.Exec(ctx, upsertBattleFightSeries, arg.FightID, arg.Series, arg.Slices)
+	_, err := q.db.Exec(ctx, upsertBattleFightSeries,
+		arg.FightID,
+		arg.Series,
+		arg.Slices,
+		arg.Aligned,
+		arg.AlignedAt,
+	)
 	return err
 }

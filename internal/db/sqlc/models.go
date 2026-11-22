@@ -197,38 +197,40 @@ type AssetLocationValue struct {
 }
 
 type BattleFight struct {
-	ID           int64        `json:"id"`
-	UserID       int64        `json:"user_id"`
-	CharacterID  int64        `json:"character_id"`
-	Listener     string       `json:"listener"`
-	SessionFile  string       `json:"session_file"`
-	StartedAt    time.Time    `json:"started_at"`
-	EndedAt      time.Time    `json:"ended_at"`
-	SystemID     int64        `json:"system_id"`
-	SystemFrom   string       `json:"system_from"`
-	HullTypeID   int64        `json:"hull_type_id"`
-	HullFrom     string       `json:"hull_from"`
-	DamageOut    int64        `json:"damage_out"`
-	DamageIn     int64        `json:"damage_in"`
-	RepsOut      int64        `json:"reps_out"`
-	RepsIn       int64        `json:"reps_in"`
-	CapIn        int64        `json:"cap_in"`
-	PeakInDps    int64        `json:"peak_in_dps"`
-	PeakInAt     int32        `json:"peak_in_at"`
-	Pilots       int32        `json:"pilots"`
-	Kills        int32        `json:"kills"`
-	Losses       int32        `json:"losses"`
-	IskDestroyed float64      `json:"isk_destroyed"`
-	IskLost      float64      `json:"isk_lost"`
-	Outcome      string       `json:"outcome"`
-	SparkOut     string       `json:"spark_out"`
-	SparkIn      string       `json:"spark_in"`
-	Lines        int32        `json:"lines"`
-	Unparsed     int32        `json:"unparsed"`
-	ShareToken   string       `json:"share_token"`
-	Shared       bool         `json:"shared"`
-	ReceivedAt   time.Time    `json:"received_at"`
-	CorrelatedAt sql.NullTime `json:"correlated_at"`
+	ID            int64         `json:"id"`
+	UserID        int64         `json:"user_id"`
+	CharacterID   int64         `json:"character_id"`
+	Listener      string        `json:"listener"`
+	SessionFile   string        `json:"session_file"`
+	StartedAt     time.Time     `json:"started_at"`
+	EndedAt       time.Time     `json:"ended_at"`
+	SystemID      int64         `json:"system_id"`
+	SystemFrom    string        `json:"system_from"`
+	HullTypeID    int64         `json:"hull_type_id"`
+	HullFrom      string        `json:"hull_from"`
+	DamageOut     int64         `json:"damage_out"`
+	DamageIn      int64         `json:"damage_in"`
+	RepsOut       int64         `json:"reps_out"`
+	RepsIn        int64         `json:"reps_in"`
+	CapIn         int64         `json:"cap_in"`
+	PeakInDps     int64         `json:"peak_in_dps"`
+	PeakInAt      int32         `json:"peak_in_at"`
+	Pilots        int32         `json:"pilots"`
+	Kills         int32         `json:"kills"`
+	Losses        int32         `json:"losses"`
+	IskDestroyed  float64       `json:"isk_destroyed"`
+	IskLost       float64       `json:"isk_lost"`
+	Outcome       string        `json:"outcome"`
+	SparkOut      string        `json:"spark_out"`
+	SparkIn       string        `json:"spark_in"`
+	Lines         int32         `json:"lines"`
+	Unparsed      int32         `json:"unparsed"`
+	ShareToken    string        `json:"share_token"`
+	Shared        bool          `json:"shared"`
+	ReceivedAt    time.Time     `json:"received_at"`
+	CorrelatedAt  sql.NullTime  `json:"correlated_at"`
+	MergeDigest   string        `json:"merge_digest"`
+	MergeDirtySeq sql.NullInt64 `json:"merge_dirty_seq"`
 }
 
 type BattleFightFinding struct {
@@ -285,10 +287,12 @@ type BattleFightParty struct {
 }
 
 type BattleFightSeries struct {
-	FightID int64  `json:"fight_id"`
-	Series  string `json:"series"`
-	Slices  string `json:"slices"`
-	Chart   string `json:"chart"`
+	FightID   int64        `json:"fight_id"`
+	Series    string       `json:"series"`
+	Slices    string       `json:"slices"`
+	Chart     string       `json:"chart"`
+	Aligned   string       `json:"aligned"`
+	AlignedAt sql.NullTime `json:"aligned_at"`
 }
 
 type BattleFightTackle struct {

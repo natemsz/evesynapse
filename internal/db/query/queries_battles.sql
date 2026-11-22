@@ -7,13 +7,14 @@
 INSERT INTO battle_fights (
     user_id, character_id, listener, session_file, started_at, ended_at,
     damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at,
-    pilots, lines, unparsed, share_token, received_at
+    pilots, lines, unparsed, share_token, received_at, merge_dirty_seq
 ) VALUES (
     sqlc.arg(user_id), sqlc.arg(character_id), sqlc.arg(listener), sqlc.arg(session_file),
     sqlc.arg(started_at), sqlc.arg(ended_at),
     sqlc.arg(damage_out), sqlc.arg(damage_in), sqlc.arg(reps_out), sqlc.arg(reps_in),
     sqlc.arg(cap_in), sqlc.arg(peak_in_dps), sqlc.arg(peak_in_at),
-    sqlc.arg(pilots), sqlc.arg(lines), sqlc.arg(unparsed), sqlc.arg(share_token), sqlc.arg(received_at)
+    sqlc.arg(pilots), sqlc.arg(lines), sqlc.arg(unparsed), sqlc.arg(share_token), sqlc.arg(received_at),
+    nextval('battle_fights_merge_seq')
 )
 ON CONFLICT (character_id, started_at) DO UPDATE SET
     user_id      = excluded.user_id,
@@ -31,13 +32,43 @@ ON CONFLICT (character_id, started_at) DO UPDATE SET
     lines        = excluded.lines,
     unparsed     = excluded.unparsed,
     received_at  = excluded.received_at,
+    merge_dirty_seq = excluded.merge_dirty_seq,
     correlated_at = NULL
 RETURNING id, (xmax = 0)::boolean AS inserted;
 
 -- name: UpsertBattleFightSeries :exec
-INSERT INTO battle_fight_series (fight_id, series, slices, chart)
-VALUES ($1, $2, $3, '')
-ON CONFLICT (fight_id) DO UPDATE SET series = excluded.series, slices = excluded.slices, chart = '';
+INSERT INTO battle_fight_series (fight_id, series, slices, aligned, aligned_at, chart)
+VALUES ($1, $2, $3, $4, $5, '')
+ON CONFLICT (fight_id) DO UPDATE SET
+    series = excluded.series, slices = excluded.slices,
+    aligned = excluded.aligned, aligned_at = excluded.aligned_at, chart = '';
+
+-- name: LockBattleFightReads :exec
+-- Stores of one character's fights run one at a time, so two reads
+-- marking each other cannot deadlock.
+SELECT pg_advisory_xact_lock(hashtextextended('battle-fight-reads:' || sqlc.arg(character_id)::bigint::text, 0));
+
+-- name: MarkBattleFightReadsDirty :exec
+-- Marks every stored read of this character that shares a clock step
+-- with a fight about to be stored, including what the row at the same
+-- start covered before, since which read counts for a step can change.
+-- earliest_start bounds the index range by the longest possible fight.
+WITH prior AS (
+    SELECT ended_at FROM battle_fights
+    WHERE character_id = sqlc.arg(character_id) AND started_at = sqlc.arg(started_at)::timestamptz
+)
+UPDATE battle_fights o SET merge_dirty_seq = nextval('battle_fights_merge_seq')
+WHERE o.character_id = sqlc.arg(character_id)
+  AND o.started_at >= sqlc.arg(earliest_start)::timestamptz
+  AND o.started_at <= GREATEST(sqlc.arg(last_step_end)::timestamptz,
+                               COALESCE((SELECT ended_at + interval '10 seconds' FROM prior),
+                                        sqlc.arg(last_step_end)::timestamptz))
+  AND o.ended_at >= sqlc.arg(first_step)::timestamptz;
+
+-- name: LockBattleFightForCorrelation :one
+-- Taken first in a correlation write, the same order a store locks
+-- in. The read's received_at says whether it was replaced meanwhile.
+SELECT received_at FROM battle_fights WHERE id = $1 FOR UPDATE;
 
 -- name: DeleteBattleFightMoments :exec
 DELETE FROM battle_fight_moments WHERE fight_id = $1;
@@ -129,13 +160,22 @@ ORDER BY started_at DESC
 LIMIT 100;
 
 -- name: GetBattleFightSeries :one
-SELECT * FROM battle_fight_series WHERE fight_id = $1;
+-- Leaves out the aligned steps, which only a fleet report build reads.
+SELECT fight_id, series, slices, chart FROM battle_fight_series WHERE fight_id = $1;
 
 -- name: ListBattleFightParties :many
 SELECT * FROM battle_fight_parties
 WHERE fight_id = $1
 ORDER BY (damage_out + damage_in + reps_out + reps_in) DESC, seq
 LIMIT 200;
+
+-- name: ListBattleFightPartiesToMatch :many
+-- Every stored party, for correlation to match to characters. The
+-- first 200 are the ones ListBattleFightParties shows.
+SELECT * FROM battle_fight_parties
+WHERE fight_id = $1
+ORDER BY (damage_out + damage_in + reps_out + reps_in) DESC, seq
+LIMIT 500;
 
 -- name: ListBattleFightWeapons :many
 SELECT * FROM battle_fight_weapons
@@ -221,6 +261,9 @@ UPDATE battle_fights SET
     outcome = sqlc.arg(outcome),
     spark_out = sqlc.arg(spark_out),
     spark_in = sqlc.arg(spark_in),
+    merge_dirty_seq = CASE WHEN merge_digest = sqlc.arg(merge_digest)::text
+                           THEN merge_dirty_seq ELSE nextval('battle_fights_merge_seq') END,
+    merge_digest = sqlc.arg(merge_digest)::text,
     correlated_at = sqlc.arg(correlated_at)
 WHERE id = sqlc.arg(id);
 

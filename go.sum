@@ -148,5 +148,7 @@ ranvia.io/go v0.4.1 h1:DOOpT8ZDXbcO6yYYuwQzT2UhiYUH8YPDLmj9kkNe2SE=
 ranvia.io/go v0.4.1/go.mod h1:/bRHzGTuaLClzQjMAoZLu151yVZwZiCY630wncaLBEs=
 ranvia.io/go v0.4.2 h1:jn235CB+pBMcmB3LeUnUyhL/rBiI7j1JZSstKYlY1lY=
 ranvia.io/go v0.4.2/go.mod h1:/bRHzGTuaLClzQjMAoZLu151yVZwZiCY630wncaLBEs=
+ranvia.io/go v0.4.3 h1:jjrreerWpNB8ZLDIqcegU01qUd3YlsmKUyj5gXa65LE=
+ranvia.io/go v0.4.3/go.mod h1:/bRHzGTuaLClzQjMAoZLu151yVZwZiCY630wncaLBEs=
 rsc.io/qr v0.2.0 h1:6vBLea5/NRMVTz8V66gipeLycZMl/+UlFmk8DvqQ6WY=
 rsc.io/qr v0.2.0/go.mod h1:IF+uZjkb9fqyeF/4tlBoynqmQxUoPfWEKh921coOuXs=

@@ -253,13 +253,30 @@ func fetchProviderRelease(ctx context.Context, provider, arch string) (*releaseI
 	if err != nil {
 		return nil, err
 	}
+	bundled := sigURL == ""
+	var bundleSigs []byte
+	if bundled {
+		// A combined latest.json carries the signed bytes and their
+		// signatures, and this computer's entry is read from it.
+		var file struct {
+			Manifest   []byte   `json:"manifest"`
+			Signatures []string `json:"signatures"`
+		}
+		if err := json.Unmarshal(raw, &file); err != nil || len(file.Manifest) == 0 {
+			return nil, errors.New("the release information couldn't be read")
+		}
+		raw, bundleSigs = file.Manifest, []byte(strings.Join(file.Signatures, "\n"))
+	}
 	trusted, err := readTrustedKeys()
 	if err != nil {
 		return nil, err
 	}
-	sig, err := httpGet(ctx, sigURL, maxSigBytes)
-	if err != nil {
-		return nil, fmt.Errorf("the release's signature could not be fetched: %v", err)
+	sig := bundleSigs
+	if !bundled {
+		sig, err = httpGet(ctx, sigURL, maxSigBytes)
+		if err != nil {
+			return nil, fmt.Errorf("the release's signature could not be fetched: %v", err)
+		}
 	}
 	if err := verifyManifestSignature(trusted, raw, sig); err != nil {
 		// A release whose signature does not check out is not a
@@ -268,7 +285,16 @@ func fetchProviderRelease(ctx context.Context, provider, arch string) (*releaseI
 		return nil, &refusalError{why: "the release " + providerDisplayName(provider) + " served is not signed with a trusted release key: " + err.Error()}
 	}
 	var m releaseManifest
-	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&m); err != nil {
+	if bundled {
+		var body struct {
+			Version string            `json:"version"`
+			SHA256  map[string]string `json:"sha256"`
+		}
+		if err := json.Unmarshal(raw, &body); err != nil {
+			return nil, errors.New("the release information couldn't be read")
+		}
+		m = releaseManifest{Version: body.Version, Arch: arch, SHA256: body.SHA256[arch]}
+	} else if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&m); err != nil {
 		return nil, errors.New("the release information couldn't be read")
 	}
 	m.SHA256 = strings.ToLower(strings.TrimSpace(m.SHA256))
@@ -307,6 +333,9 @@ func providerAssets(ctx context.Context, provider, arch string) (manifestURL, si
 		// repository's "latest" download address always serves
 		// the newest plain release's files.
 		base := githubBaseURL + "/" + updateProject + "/releases/latest/download"
+		if _, err := httpGet(ctx, base+"/latest.json", maxManifestBytes); err == nil {
+			return base + "/latest.json", "", base + "/" + wantBinary, nil
+		}
 		return base + "/" + wantManifest, base + "/" + wantSig, base + "/" + wantBinary, nil
 	case "gitlab":
 		return gitlabReleaseAssets(ctx, arch)
@@ -419,9 +448,11 @@ func wantAssetNames(arch string) [3]string {
 // pickAssets matches the wanted asset names against a release's
 // links, returning the manifest, signature and binary URLs.
 func pickAssets(tag string, want [3]string, links []namedURL) (string, string, string, error) {
-	var m, s, b string
+	var m, s, b, bundle string
 	for _, a := range links {
 		switch a.Name {
+		case "latest.json":
+			bundle = a.URL
 		case want[0]:
 			m = a.URL
 		case want[1]:
@@ -429,6 +460,9 @@ func pickAssets(tag string, want [3]string, links []namedURL) (string, string, s
 		case want[2]:
 			b = a.URL
 		}
+	}
+	if bundle != "" && b != "" {
+		return bundle, "", b, nil
 	}
 	if m == "" {
 		return "", "", "", fmt.Errorf("release %s has no %s asset", tag, want[0])

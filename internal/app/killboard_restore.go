@@ -37,6 +37,8 @@ import (
 const (
 	// killRestoreBatch is how many kills one pass lists.
 	killRestoreBatch = 400
+	// killRestoreWindow is how many kills one read of the walk covers.
+	killRestoreWindow = 5000
 	// killRestoreReaders is how many ESI reads run at once.
 	killRestoreReaders = 8
 	// killRestoreRecheck is how long the loop waits once nothing is
@@ -67,9 +69,15 @@ func (app *Application) runKillAttackerRestore(ctx context.Context) {
 			}
 			continue
 		}
-		rows, err := app.queries.ListKillsMissingAttackers(ctx, db.ListKillsMissingAttackersParams{
-			BeforeID: cursor, Since: time.Now().UTC().Add(-killDetailRetention), MaxRows: killRestoreBatch,
+		floor, err := app.queries.KillRestoreWindowFloor(ctx, db.KillRestoreWindowFloorParams{
+			BeforeID: cursor, WindowSize: killRestoreWindow,
 		})
+		var rows []db.ListKillsMissingAttackersRow
+		if err == nil {
+			rows, err = app.queries.ListKillsMissingAttackers(ctx, db.ListKillsMissingAttackersParams{
+				BeforeID: cursor, FloorID: floor, Since: time.Now().UTC().Add(-killDetailRetention), MaxRows: killRestoreBatch,
+			})
+		}
 		if err != nil {
 			if ctx.Err() == nil {
 				logging.Errorf("killboard restore: list kills missing attackers: %v", err)
@@ -77,6 +85,10 @@ func (app *Application) runKillAttackerRestore(ctx context.Context) {
 			if !killfeedSleepCtx(ctx, killRestoreBackoff) {
 				return
 			}
+			continue
+		}
+		if len(rows) == 0 && floor > 0 {
+			cursor = floor
 			continue
 		}
 		if len(rows) == 0 {
@@ -103,6 +115,9 @@ func (app *Application) runKillAttackerRestore(ctx context.Context) {
 			}
 		}
 		cursor = rows[len(rows)-1].KillmailID
+		if len(rows) < killRestoreBatch {
+			cursor = floor
+		}
 		logging.Infof("killboard restore: %d kills restored so far (%d unservable), now at kill %d", restored, missing, cursor)
 		if limited && !killfeedSleepCtx(ctx, killRestoreBackoff) {
 			return

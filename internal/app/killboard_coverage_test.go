@@ -626,14 +626,8 @@ func TestKillValueSurvivesPrune(t *testing.T) {
 
 	// The retention prune, run as the daily pass runs it once
 	// the kill is past the cutoff.
-	if _, err := q.PruneKillDetails(ctx, time.Now().UTC()); err != nil {
-		t.Fatalf("prune details: %v", err)
-	}
-	if _, err := q.PruneKillAttackers(ctx, time.Now().UTC()); err != nil {
-		t.Fatalf("prune attackers: %v", err)
-	}
-	if _, err := q.PruneKillLinePrices(ctx, time.Now().UTC()); err != nil {
-		t.Fatalf("prune line prices: %v", err)
+	if _, _, _, err := app.pruneKillDetail(ctx, time.Now().UTC()); err != nil {
+		t.Fatalf("prune detail: %v", err)
 	}
 	var attackers int
 	if err := app.db.QueryRowContext(ctx,

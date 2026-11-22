@@ -72,8 +72,10 @@ const (
 	killfeedJumpGap = 20000
 
 	killDetailRetention = 2 * 365 * 24 * time.Hour
-	killPriceBatch      = 300
-	killMergeBatch      = 500
+	// killPruneBatch is how many kills one retention delete covers.
+	killPruneBatch = 5000
+	killPriceBatch = 300
+	killMergeBatch = 500
 )
 
 const killfeedUserAgent = "EveSynapse killboard (contact: the site operator; self-hosted EVE Online companion)"
@@ -665,15 +667,45 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 	if time.Since(app.killLastPruned) >= 24*time.Hour && app.killStatsRebuilt(ctx) && app.killArchiveRestoreDone(ctx) {
 		app.killLastPruned = time.Now()
 		before := time.Now().UTC().Add(-killDetailRetention)
-		d, err1 := app.queries.PruneKillDetails(ctx, before)
-		a, err2 := app.queries.PruneKillAttackers(ctx, before)
-		l, err4 := app.queries.PruneKillLinePrices(ctx, before)
-		_, err3 := app.queries.PrunePilotActivityApplied(ctx, before)
-		if err := errors.Join(err1, err2, err3, err4); err != nil {
+		d, a, l, err1 := app.pruneKillDetail(ctx, before)
+		_, err2 := app.queries.PrunePilotActivityApplied(ctx, before)
+		if err := errors.Join(err1, err2); err != nil {
 			logging.Errorf("killboard: prune: %v", err)
 		} else if d+a+l > 0 {
 			logging.Infof("killboard: pruned %d killmails, %d attacker rows and %d priced lines past two years", d, a, l)
 		}
+	}
+}
+
+// pruneKillDetail removes the detail of kills older than before, a
+// short batch at a time so no statement scans the whole kill tables.
+// It returns how many killmails, attacker rows and priced lines went.
+func (app *Application) pruneKillDetail(ctx context.Context, before time.Time) (details, attackers, lines int64, err error) {
+	var after int64
+	for {
+		ids, err := app.queries.ListPrunableKillIDs(ctx, db.ListPrunableKillIDsParams{
+			AfterID: after, Before: before, MaxRows: killPruneBatch,
+		})
+		if err != nil || len(ids) == 0 {
+			return details, attackers, lines, err
+		}
+		d, err := app.queries.PruneKillDetails(ctx, ids)
+		if err != nil {
+			return details, attackers, lines, err
+		}
+		a, err := app.queries.PruneKillAttackers(ctx, ids)
+		if err != nil {
+			return details + d, attackers, lines, err
+		}
+		l, err := app.queries.PruneKillLinePrices(ctx, ids)
+		if err != nil {
+			return details + d, attackers + a, lines, err
+		}
+		details, attackers, lines = details+d, attackers+a, lines+l
+		if len(ids) < killPruneBatch {
+			return details, attackers, lines, nil
+		}
+		after = ids[len(ids)-1]
 	}
 }
 

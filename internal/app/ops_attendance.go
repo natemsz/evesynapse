@@ -265,6 +265,9 @@ type opAttendance struct {
 	// CanMark: the viewer may mark attendance by hand now (a manager,
 	// once the op has started).
 	CanMark bool
+	// MarkLater: marking waits for the fleet to end, because the list
+	// would show who is in it to a viewer who cannot see that.
+	MarkLater bool
 	// Ticks is the hand-marking list, for a manager once the op has
 	// started: everyone who signed up, plus anyone already recorded.
 	Ticks []opTick
@@ -359,7 +362,8 @@ func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups [
 	if !canManage && !flew {
 		rows = nil
 	}
-	if fleetLiveOpen(op, now) && !sight.All {
+	hidesFleet := fleetLiveOpen(op, now) && !sight.All && slices.ContainsFunc(rows, func(row db.OpAttendance) bool { return row.Source == attendanceFleet })
+	if hidesFleet {
 		rows = slices.DeleteFunc(rows, func(row db.OpAttendance) bool { return row.Source == attendanceFleet })
 	}
 	att := &opAttendance{
@@ -380,7 +384,8 @@ func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups [
 	}
 	sort.Slice(att.Rows, func(i, j int) bool { return att.Rows[i].Name < att.Rows[j].Name })
 
-	if canManage && !op.CancelledAt.Valid && !now.Before(op.StartsAt) {
+	att.MarkLater = canManage && hidesFleet
+	if canManage && !hidesFleet && !op.CancelledAt.Valid && !now.Before(op.StartsAt) {
 		att.CanMark = true
 		listed := map[int64]bool{}
 		add := func(id int64) {
@@ -405,13 +410,36 @@ func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups [
 	return att
 }
 
+// attendanceKeptFrom: the fleet is running and has been read, and this
+// viewer does not see all of it. Saving a hand list would show them who
+// is in it, because a pilot the fleet reported stays as reported.
+func (app *Application) attendanceKeptFrom(ctx context.Context, op db.Op, v fleetViewer, now time.Time) bool {
+	if !fleetLiveOpen(op, now) {
+		return false
+	}
+	live, err := app.fleetLiveReadFor(ctx, op, v, now)
+	if err != nil {
+		logging.Errorf("ops: composition of %d: %v", op.ID, err)
+		return true
+	}
+	if live.sight.All {
+		return false
+	}
+	rows, err := app.queries.ListOpAttendance(ctx, op.ID)
+	if err != nil {
+		logging.Errorf("ops: attendance for op %d: %v", op.ID, err)
+		return true
+	}
+	return slices.ContainsFunc(rows, func(row db.OpAttendance) bool { return row.Source == attendanceFleet })
+}
+
 // handleOpAttendance saves a manager's hand-marking: the characters
 // ticked are present, the others it could have ticked are not. Only
 // characters on the op's sign-up list can be marked, and nothing the
 // fleet reported is changed.
 func (app *Application) handleOpAttendance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	op, _, _, a, ok := app.fleetFromURL(w, r)
+	op, v, _, a, ok := app.fleetFromURL(w, r)
 	if !ok {
 		return
 	}
@@ -424,6 +452,8 @@ func (app *Application) handleOpAttendance(w http.ResponseWriter, r *http.Reques
 		app.flash(ctx, "This fleet was cancelled.")
 	case now.Before(op.StartsAt):
 		app.flash(ctx, "Attendance can be marked once the fleet has started.")
+	case app.attendanceKeptFrom(ctx, op, v, now):
+		app.flash(ctx, "Attendance can be marked by hand once the fleet is over.")
 	default:
 		signups, err := app.queries.ListOpSignups(ctx, op.ID)
 		if err != nil {

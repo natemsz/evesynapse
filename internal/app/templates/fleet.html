@@ -46,7 +46,7 @@
   {{if .Cancelled}}
   <p class="fl-empty">Sign-ups are closed: the fleet was cancelled.</p>
   {{else if .Over}}
-  <p class="fl-empty">Sign-ups are closed: the fleet is over.{{if .HasSRP}} Lost a ship on it? <a href="/srp/">Ask for a replacement</a>.{{end}}</p>
+  <p class="fl-empty">Sign-ups are closed: the fleet is over.{{if .HasSRP}} Lost a ship on it? <a href="/fleets/{{.ID}}/srp">Ask for a replacement</a>.{{end}}</p>
   {{else if .CanJoin}}
   <form method="post" action="/fleets/{{.ID}}/signup" class="fl-signup-form">
     {{with .Share}}<input type="hidden" name="share" value="{{.}}">{{end}}
@@ -121,6 +121,7 @@
   </table>
   </div>
   {{end}}
+  {{if .MarkLater}}<p class="fl-hint">You can mark attendance by hand once the fleet is over.</p>{{end}}
   {{if .CanMark}}
   <section class="foldable"{{if .Capturing}} data-fold="closed"{{end}}>
   <h3>Mark attendance by hand</h3>

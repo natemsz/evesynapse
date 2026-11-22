@@ -11,33 +11,151 @@ import (
 	"time"
 )
 
+const anyOnOpAttendance = `-- name: AnyOnOpAttendance :one
+SELECT EXISTS (
+    SELECT 1 FROM op_attendance
+    WHERE op_id = $1 AND character_id = ANY($2::bigint[])
+)::boolean
+`
+
+type AnyOnOpAttendanceParams struct {
+	OpID         int64   `json:"op_id"`
+	CharacterIds []int64 `json:"character_ids"`
+}
+
+// Whether any of some characters is on a fleet's attendance.
+func (q *Queries) AnyOnOpAttendance(ctx context.Context, arg AnyOnOpAttendanceParams) (bool, error) {
+	row := q.db.QueryRow(ctx, anyOnOpAttendance, arg.OpID, arg.CharacterIds)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const clearDefaultSRPPolicy = `-- name: ClearDefaultSRPPolicy :exec
+UPDATE srp_policies SET is_default = FALSE
+WHERE owner_kind = $1 AND owner_id = $2 AND is_default
+`
+
+type ClearDefaultSRPPolicyParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+func (q *Queries) ClearDefaultSRPPolicy(ctx context.Context, arg ClearDefaultSRPPolicyParams) error {
+	_, err := q.db.Exec(ctx, clearDefaultSRPPolicy, arg.OwnerKind, arg.OwnerID)
+	return err
+}
+
+const countOpenSRPRequests = `-- name: CountOpenSRPRequests :one
+SELECT COUNT(*)::bigint AS requests, COALESCE(SUM(suggested_payout), 0)::double precision AS owed
+FROM srp_requests
+WHERE owner_kind = $1 AND owner_id = $2 AND status = 'open'
+`
+
+type CountOpenSRPRequestsParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+type CountOpenSRPRequestsRow struct {
+	Requests int64   `json:"requests"`
+	Owed     float64 `json:"owed"`
+}
+
+func (q *Queries) CountOpenSRPRequests(ctx context.Context, arg CountOpenSRPRequestsParams) (CountOpenSRPRequestsRow, error) {
+	row := q.db.QueryRow(ctx, countOpenSRPRequests, arg.OwnerKind, arg.OwnerID)
+	var i CountOpenSRPRequestsRow
+	err := row.Scan(&i.Requests, &i.Owed)
+	return i, err
+}
+
+const createSRPPolicy = `-- name: CreateSRPPolicy :one
+INSERT INTO srp_policies (owner_kind, owner_id, name, mode, percent, max_payout, requires_doctrine,
+                          requires_attendance, claim_window_hours, ledger_visibility, policy_text,
+                          is_default, updated_by, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+RETURNING id
+`
+
+type CreateSRPPolicyParams struct {
+	OwnerKind          string    `json:"owner_kind"`
+	OwnerID            int64     `json:"owner_id"`
+	Name               string    `json:"name"`
+	Mode               string    `json:"mode"`
+	Percent            int32     `json:"percent"`
+	MaxPayout          float64   `json:"max_payout"`
+	RequiresDoctrine   bool      `json:"requires_doctrine"`
+	RequiresAttendance bool      `json:"requires_attendance"`
+	ClaimWindowHours   int32     `json:"claim_window_hours"`
+	LedgerVisibility   string    `json:"ledger_visibility"`
+	PolicyText         string    `json:"policy_text"`
+	IsDefault          bool      `json:"is_default"`
+	UpdatedBy          int64     `json:"updated_by"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+func (q *Queries) CreateSRPPolicy(ctx context.Context, arg CreateSRPPolicyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createSRPPolicy,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.Name,
+		arg.Mode,
+		arg.Percent,
+		arg.MaxPayout,
+		arg.RequiresDoctrine,
+		arg.RequiresAttendance,
+		arg.ClaimWindowHours,
+		arg.LedgerVisibility,
+		arg.PolicyText,
+		arg.IsDefault,
+		arg.UpdatedBy,
+		arg.UpdatedAt,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createSRPRequest = `-- name: CreateSRPRequest :one
-INSERT INTO srp_requests (corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id,
-                          ship_type_id, solar_system_id, lost_at, loss_value, note, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+INSERT INTO srp_requests (corporation_id, owner_kind, owner_id, policy_id, op_id, killmail_id, killmail_hash,
+                          character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value,
+                          suggested_payout, fit_evidence, note, created_at)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7, $8, NULLIF($9::bigint, 0),
+        $10, $11, $12, $13,
+        $14, $15, $16, $17)
 ON CONFLICT (killmail_id) DO NOTHING
 RETURNING id
 `
 
 type CreateSRPRequestParams struct {
-	CorporationID int64     `json:"corporation_id"`
-	OpID          int64     `json:"op_id"`
-	KillmailID    int64     `json:"killmail_id"`
-	KillmailHash  string    `json:"killmail_hash"`
-	CharacterID   int64     `json:"character_id"`
-	UserID        int64     `json:"user_id"`
-	ShipTypeID    int64     `json:"ship_type_id"`
-	SolarSystemID int64     `json:"solar_system_id"`
-	LostAt        time.Time `json:"lost_at"`
-	LossValue     float64   `json:"loss_value"`
-	Note          string    `json:"note"`
-	CreatedAt     time.Time `json:"created_at"`
+	CorporationID   int64         `json:"corporation_id"`
+	OwnerKind       string        `json:"owner_kind"`
+	OwnerID         int64         `json:"owner_id"`
+	PolicyID        sql.NullInt64 `json:"policy_id"`
+	OpID            int64         `json:"op_id"`
+	KillmailID      int64         `json:"killmail_id"`
+	KillmailHash    string        `json:"killmail_hash"`
+	CharacterID     int64         `json:"character_id"`
+	UserID          int64         `json:"user_id"`
+	ShipTypeID      int64         `json:"ship_type_id"`
+	SolarSystemID   int64         `json:"solar_system_id"`
+	LostAt          time.Time     `json:"lost_at"`
+	LossValue       float64       `json:"loss_value"`
+	SuggestedPayout float64       `json:"suggested_payout"`
+	FitEvidence     string        `json:"fit_evidence"`
+	Note            string        `json:"note"`
+	CreatedAt       time.Time     `json:"created_at"`
 }
 
-// A killmail is claimed once: a second request for it creates nothing.
+// A killmail is claimed once, across every owner: a second request for
+// it creates nothing. user_id 0 is a pilot with no account.
 func (q *Queries) CreateSRPRequest(ctx context.Context, arg CreateSRPRequestParams) (int64, error) {
 	row := q.db.QueryRow(ctx, createSRPRequest,
 		arg.CorporationID,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.PolicyID,
 		arg.OpID,
 		arg.KillmailID,
 		arg.KillmailHash,
@@ -47,6 +165,8 @@ func (q *Queries) CreateSRPRequest(ctx context.Context, arg CreateSRPRequestPara
 		arg.SolarSystemID,
 		arg.LostAt,
 		arg.LossValue,
+		arg.SuggestedPayout,
+		arg.FitEvidence,
 		arg.Note,
 		arg.CreatedAt,
 	)
@@ -119,6 +239,65 @@ func (q *Queries) DeleteOwnerPermission(ctx context.Context, arg DeleteOwnerPerm
 	return err
 }
 
+const deleteSRPPolicy = `-- name: DeleteSRPPolicy :execrows
+DELETE FROM srp_policies WHERE id = $1 AND owner_kind = $2 AND owner_id = $3
+`
+
+type DeleteSRPPolicyParams struct {
+	ID        int64  `json:"id"`
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+func (q *Queries) DeleteSRPPolicy(ctx context.Context, arg DeleteSRPPolicyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSRPPolicy, arg.ID, arg.OwnerKind, arg.OwnerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteSRPPolicyHulls = `-- name: DeleteSRPPolicyHulls :exec
+DELETE FROM srp_policy_hulls WHERE policy_id = $1
+`
+
+func (q *Queries) DeleteSRPPolicyHulls(ctx context.Context, policyID int64) error {
+	_, err := q.db.Exec(ctx, deleteSRPPolicyHulls, policyID)
+	return err
+}
+
+const getDefaultSRPPolicy = `-- name: GetDefaultSRPPolicy :one
+SELECT id, owner_kind, owner_id, name, mode, percent, max_payout, requires_doctrine, requires_attendance, claim_window_hours, ledger_visibility, policy_text, is_default, updated_by, updated_at FROM srp_policies WHERE owner_kind = $1 AND owner_id = $2 AND is_default
+`
+
+type GetDefaultSRPPolicyParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+func (q *Queries) GetDefaultSRPPolicy(ctx context.Context, arg GetDefaultSRPPolicyParams) (SrpPolicy, error) {
+	row := q.db.QueryRow(ctx, getDefaultSRPPolicy, arg.OwnerKind, arg.OwnerID)
+	var i SrpPolicy
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerKind,
+		&i.OwnerID,
+		&i.Name,
+		&i.Mode,
+		&i.Percent,
+		&i.MaxPayout,
+		&i.RequiresDoctrine,
+		&i.RequiresAttendance,
+		&i.ClaimWindowHours,
+		&i.LedgerVisibility,
+		&i.PolicyText,
+		&i.IsDefault,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getOpAttendance = `-- name: GetOpAttendance :one
 SELECT op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at, wing_id, squad_id, fleet_position, solar_system_id, suggested_role FROM op_attendance WHERE op_id = $1 AND character_id = $2
 `
@@ -177,8 +356,51 @@ func (q *Queries) GetOwnerPermission(ctx context.Context, arg GetOwnerPermission
 	return i, err
 }
 
+const getSRPPolicy = `-- name: GetSRPPolicy :one
+SELECT id, owner_kind, owner_id, name, mode, percent, max_payout, requires_doctrine, requires_attendance, claim_window_hours, ledger_visibility, policy_text, is_default, updated_by, updated_at FROM srp_policies WHERE id = $1
+`
+
+func (q *Queries) GetSRPPolicy(ctx context.Context, id int64) (SrpPolicy, error) {
+	row := q.db.QueryRow(ctx, getSRPPolicy, id)
+	var i SrpPolicy
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerKind,
+		&i.OwnerID,
+		&i.Name,
+		&i.Mode,
+		&i.Percent,
+		&i.MaxPayout,
+		&i.RequiresDoctrine,
+		&i.RequiresAttendance,
+		&i.ClaimWindowHours,
+		&i.LedgerVisibility,
+		&i.PolicyText,
+		&i.IsDefault,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getSRPPolicyHull = `-- name: GetSRPPolicyHull :one
+SELECT payout FROM srp_policy_hulls WHERE policy_id = $1 AND ship_type_id = $2
+`
+
+type GetSRPPolicyHullParams struct {
+	PolicyID   int64 `json:"policy_id"`
+	ShipTypeID int64 `json:"ship_type_id"`
+}
+
+func (q *Queries) GetSRPPolicyHull(ctx context.Context, arg GetSRPPolicyHullParams) (float64, error) {
+	row := q.db.QueryRow(ctx, getSRPPolicyHull, arg.PolicyID, arg.ShipTypeID)
+	var payout float64
+	err := row.Scan(&payout)
+	return payout, err
+}
+
 const getSRPRequest = `-- name: GetSRPRequest :one
-SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at FROM srp_requests WHERE id = $1
+SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at, owner_kind, owner_id, policy_id, suggested_payout, fit_evidence, answered_at, previous_payout FROM srp_requests WHERE id = $1
 `
 
 func (q *Queries) GetSRPRequest(ctx context.Context, id int64) (SrpRequest, error) {
@@ -203,6 +425,13 @@ func (q *Queries) GetSRPRequest(ctx context.Context, id int64) (SrpRequest, erro
 		&i.HandlerNote,
 		&i.HandledAt,
 		&i.CreatedAt,
+		&i.OwnerKind,
+		&i.OwnerID,
+		&i.PolicyID,
+		&i.SuggestedPayout,
+		&i.FitEvidence,
+		&i.AnsweredAt,
+		&i.PreviousPayout,
 	)
 	return i, err
 }
@@ -218,20 +447,169 @@ func (q *Queries) GetSRPSettings(ctx context.Context, corporationID int64) (SrpS
 	return i, err
 }
 
+const insertSRPPolicyHull = `-- name: InsertSRPPolicyHull :exec
+INSERT INTO srp_policy_hulls (policy_id, ship_type_id, payout) VALUES ($1, $2, $3)
+ON CONFLICT (policy_id, ship_type_id) DO UPDATE SET payout = excluded.payout
+`
+
+type InsertSRPPolicyHullParams struct {
+	PolicyID   int64   `json:"policy_id"`
+	ShipTypeID int64   `json:"ship_type_id"`
+	Payout     float64 `json:"payout"`
+}
+
+func (q *Queries) InsertSRPPolicyHull(ctx context.Context, arg InsertSRPPolicyHullParams) error {
+	_, err := q.db.Exec(ctx, insertSRPPolicyHull, arg.PolicyID, arg.ShipTypeID, arg.Payout)
+	return err
+}
+
+const listCommunitiesOfCharacters = `-- name: ListCommunitiesOfCharacters :many
+SELECT DISTINCT community_id
+FROM community_members
+WHERE character_id = ANY($1::bigint[]) AND state = 'active'
+`
+
+// The communities some characters are active in.
+func (q *Queries) ListCommunitiesOfCharacters(ctx context.Context, characterIds []int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listCommunitiesOfCharacters, characterIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var community_id int64
+		if err := rows.Scan(&community_id); err != nil {
+			return nil, err
+		}
+		items = append(items, community_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFittableTypeIDs = `-- name: ListFittableTypeIDs :many
+SELECT t.type_id
+FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.type_id = ANY($1::bigint[]) AND g.category_id IN (7, 32)
+`
+
+// The modules, rigs and subsystems among some types.
+func (q *Queries) ListFittableTypeIDs(ctx context.Context, typeIds []int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listFittableTypeIDs, typeIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var type_id int64
+		if err := rows.Scan(&type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, type_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFleetsForOwnerNewest = `-- name: ListFleetsForOwnerNewest :many
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at, capture_boss_id, capture_detail, srp_policy_id FROM ops
+WHERE owner_kind = $1 AND owner_id = $2
+  AND starts_at < $3
+  AND starts_at + (duration_minutes * interval '1 minute') >= $4
+ORDER BY starts_at DESC, id DESC
+LIMIT $5
+`
+
+type ListFleetsForOwnerNewestParams struct {
+	OwnerKind    string    `json:"owner_kind"`
+	OwnerID      int64     `json:"owner_id"`
+	StartsBefore time.Time `json:"starts_before"`
+	EndsAfter    time.Time `json:"ends_after"`
+	RowLimit     int32     `json:"row_limit"`
+}
+
+// An owner's fleets overlapping a stretch of time, newest first.
+func (q *Queries) ListFleetsForOwnerNewest(ctx context.Context, arg ListFleetsForOwnerNewestParams) ([]Op, error) {
+	rows, err := q.db.Query(ctx, listFleetsForOwnerNewest,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.StartsBefore,
+		arg.EndsAfter,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Op
+	for rows.Next() {
+		var i Op
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.Title,
+			&i.Description,
+			&i.StartsAt,
+			&i.DurationMinutes,
+			&i.Doctrine,
+			&i.FormUp,
+			&i.FcCharacterID,
+			&i.CreatedByCharacter,
+			&i.CreatedAt,
+			&i.CancelledAt,
+			&i.CaptureStatus,
+			&i.CaptureCheckedAt,
+			&i.DiscordAnnouncedAt,
+			&i.DoctrineID,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.FleetType,
+			&i.Visibility,
+			&i.JoinGate,
+			&i.ShareToken,
+			&i.RosterPublic,
+			&i.ComingCount,
+			&i.MaybeCount,
+			&i.DoctrineMode,
+			&i.DoctrineSnapshot,
+			&i.DoctrineSnapshotShips,
+			&i.DoctrineSnapshotAt,
+			&i.CaptureBossID,
+			&i.CaptureDetail,
+			&i.SrpPolicyID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listHandledSRPRequests = `-- name: ListHandledSRPRequests :many
-SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at FROM srp_requests
-WHERE corporation_id = $1 AND status <> 'open'
+SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at, owner_kind, owner_id, policy_id, suggested_payout, fit_evidence, answered_at, previous_payout FROM srp_requests
+WHERE owner_kind = $1 AND owner_id = $2 AND status <> 'open'
 ORDER BY handled_at DESC NULLS LAST, id DESC
-LIMIT $2::bigint
+LIMIT $3::bigint
 `
 
 type ListHandledSRPRequestsParams struct {
-	CorporationID int64 `json:"corporation_id"`
-	RowLimit      int64 `json:"row_limit"`
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+	RowLimit  int64  `json:"row_limit"`
 }
 
 func (q *Queries) ListHandledSRPRequests(ctx context.Context, arg ListHandledSRPRequestsParams) ([]SrpRequest, error) {
-	rows, err := q.db.Query(ctx, listHandledSRPRequests, arg.CorporationID, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listHandledSRPRequests, arg.OwnerKind, arg.OwnerID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +636,13 @@ func (q *Queries) ListHandledSRPRequests(ctx context.Context, arg ListHandledSRP
 			&i.HandlerNote,
 			&i.HandledAt,
 			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.PolicyID,
+			&i.SuggestedPayout,
+			&i.FitEvidence,
+			&i.AnsweredAt,
+			&i.PreviousPayout,
 		); err != nil {
 			return nil, err
 		}
@@ -309,14 +694,30 @@ func (q *Queries) ListLossDetails(ctx context.Context, arg ListLossDetailsParams
 	return items, nil
 }
 
-const listOpenSRPRequests = `-- name: ListOpenSRPRequests :many
-SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at FROM srp_requests
-WHERE corporation_id = ANY($1::bigint[]) AND status = 'open'
-ORDER BY created_at, id
+const listNewestOpenSRPRequests = `-- name: ListNewestOpenSRPRequests :many
+SELECT r.id, r.corporation_id, r.op_id, r.killmail_id, r.killmail_hash, r.character_id, r.user_id, r.ship_type_id, r.solar_system_id, r.lost_at, r.loss_value, r.note, r.status, r.payout, r.handled_by, r.handler_note, r.handled_at, r.created_at, r.owner_kind, r.owner_id, r.policy_id, r.suggested_payout, r.fit_evidence, r.answered_at, r.previous_payout FROM srp_requests r
+WHERE r.id IN (
+    SELECT n.id
+    FROM (SELECT unnest($1::text[]) AS kind, unnest($2::bigint[]) AS id) AS o
+    CROSS JOIN LATERAL (
+        SELECT s.id FROM srp_requests s
+        WHERE s.owner_kind = o.kind AND s.owner_id = o.id AND s.status = 'open'
+        ORDER BY s.created_at DESC, s.id DESC
+        LIMIT 100
+    ) n
+)
+ORDER BY r.created_at, r.id
 `
 
-func (q *Queries) ListOpenSRPRequests(ctx context.Context, corporationIds []int64) ([]SrpRequest, error) {
-	rows, err := q.db.Query(ctx, listOpenSRPRequests, corporationIds)
+type ListNewestOpenSRPRequestsParams struct {
+	OwnerKinds []string `json:"owner_kinds"`
+	OwnerIds   []int64  `json:"owner_ids"`
+}
+
+// The newest open requests of each owner, for telling handlers. One
+// owner's backlog cannot crowd out a new request or another owner's.
+func (q *Queries) ListNewestOpenSRPRequests(ctx context.Context, arg ListNewestOpenSRPRequestsParams) ([]SrpRequest, error) {
+	rows, err := q.db.Query(ctx, listNewestOpenSRPRequests, arg.OwnerKinds, arg.OwnerIds)
 	if err != nil {
 		return nil, err
 	}
@@ -343,6 +744,176 @@ func (q *Queries) ListOpenSRPRequests(ctx context.Context, corporationIds []int6
 			&i.HandlerNote,
 			&i.HandledAt,
 			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.PolicyID,
+			&i.SuggestedPayout,
+			&i.FitEvidence,
+			&i.AnsweredAt,
+			&i.PreviousPayout,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpAttendanceForPilots = `-- name: ListOpAttendanceForPilots :many
+SELECT op_id, character_id, source, first_seen_at, last_seen_at
+FROM op_attendance
+WHERE op_id = ANY($1::bigint[]) AND character_id = ANY($2::bigint[])
+`
+
+type ListOpAttendanceForPilotsParams struct {
+	OpIds        []int64 `json:"op_ids"`
+	CharacterIds []int64 `json:"character_ids"`
+}
+
+type ListOpAttendanceForPilotsRow struct {
+	OpID        int64     `json:"op_id"`
+	CharacterID int64     `json:"character_id"`
+	Source      string    `json:"source"`
+	FirstSeenAt time.Time `json:"first_seen_at"`
+	LastSeenAt  time.Time `json:"last_seen_at"`
+}
+
+// Which of some characters are on the attendance of some fleets.
+func (q *Queries) ListOpAttendanceForPilots(ctx context.Context, arg ListOpAttendanceForPilotsParams) ([]ListOpAttendanceForPilotsRow, error) {
+	rows, err := q.db.Query(ctx, listOpAttendanceForPilots, arg.OpIds, arg.CharacterIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpAttendanceForPilotsRow
+	for rows.Next() {
+		var i ListOpAttendanceForPilotsRow
+		if err := rows.Scan(
+			&i.OpID,
+			&i.CharacterID,
+			&i.Source,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenSRPRequests = `-- name: ListOpenSRPRequests :many
+SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at, owner_kind, owner_id, policy_id, suggested_payout, fit_evidence, answered_at, previous_payout FROM srp_requests
+WHERE owner_kind = $1 AND owner_id = $2 AND status = 'open'
+ORDER BY created_at, id
+LIMIT $3::bigint
+`
+
+type ListOpenSRPRequestsParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+	RowLimit  int64  `json:"row_limit"`
+}
+
+// The oldest open requests of one owner: the handler's queue.
+func (q *Queries) ListOpenSRPRequests(ctx context.Context, arg ListOpenSRPRequestsParams) ([]SrpRequest, error) {
+	rows, err := q.db.Query(ctx, listOpenSRPRequests, arg.OwnerKind, arg.OwnerID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SrpRequest
+	for rows.Next() {
+		var i SrpRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.OpID,
+			&i.KillmailID,
+			&i.KillmailHash,
+			&i.CharacterID,
+			&i.UserID,
+			&i.ShipTypeID,
+			&i.SolarSystemID,
+			&i.LostAt,
+			&i.LossValue,
+			&i.Note,
+			&i.Status,
+			&i.Payout,
+			&i.HandledBy,
+			&i.HandlerNote,
+			&i.HandledAt,
+			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.PolicyID,
+			&i.SuggestedPayout,
+			&i.FitEvidence,
+			&i.AnsweredAt,
+			&i.PreviousPayout,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpsByIDs = `-- name: ListOpsByIDs :many
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at, capture_boss_id, capture_detail, srp_policy_id FROM ops WHERE id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListOpsByIDs(ctx context.Context, ids []int64) ([]Op, error) {
+	rows, err := q.db.Query(ctx, listOpsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Op
+	for rows.Next() {
+		var i Op
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.Title,
+			&i.Description,
+			&i.StartsAt,
+			&i.DurationMinutes,
+			&i.Doctrine,
+			&i.FormUp,
+			&i.FcCharacterID,
+			&i.CreatedByCharacter,
+			&i.CreatedAt,
+			&i.CancelledAt,
+			&i.CaptureStatus,
+			&i.CaptureCheckedAt,
+			&i.DiscordAnnouncedAt,
+			&i.DoctrineID,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.FleetType,
+			&i.Visibility,
+			&i.JoinGate,
+			&i.ShareToken,
+			&i.RosterPublic,
+			&i.ComingCount,
+			&i.MaybeCount,
+			&i.DoctrineMode,
+			&i.DoctrineSnapshot,
+			&i.DoctrineSnapshotShips,
+			&i.DoctrineSnapshotAt,
+			&i.CaptureBossID,
+			&i.CaptureDetail,
+			&i.SrpPolicyID,
 		); err != nil {
 			return nil, err
 		}
@@ -378,8 +949,215 @@ func (q *Queries) ListSRPClaimedKillmails(ctx context.Context, killmailIds []int
 	return items, nil
 }
 
+const listSRPMemberLedger = `-- name: ListSRPMemberLedger :many
+SELECT r.id, r.corporation_id, r.op_id, r.killmail_id, r.killmail_hash, r.character_id, r.user_id, r.ship_type_id, r.solar_system_id, r.lost_at, r.loss_value, r.note, r.status, r.payout, r.handled_by, r.handler_note, r.handled_at, r.created_at, r.owner_kind, r.owner_id, r.policy_id, r.suggested_payout, r.fit_evidence, r.answered_at, r.previous_payout
+FROM srp_requests r
+JOIN srp_policies p ON p.id = r.policy_id
+WHERE r.owner_kind = $1 AND r.owner_id = $2 AND r.status <> 'open' AND p.ledger_visibility = 'members'
+ORDER BY r.handled_at DESC NULLS LAST, r.id DESC
+LIMIT 100
+`
+
+type ListSRPMemberLedgerParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+// Answered requests under a policy whose ledger its members can read.
+func (q *Queries) ListSRPMemberLedger(ctx context.Context, arg ListSRPMemberLedgerParams) ([]SrpRequest, error) {
+	rows, err := q.db.Query(ctx, listSRPMemberLedger, arg.OwnerKind, arg.OwnerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SrpRequest
+	for rows.Next() {
+		var i SrpRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.OpID,
+			&i.KillmailID,
+			&i.KillmailHash,
+			&i.CharacterID,
+			&i.UserID,
+			&i.ShipTypeID,
+			&i.SolarSystemID,
+			&i.LostAt,
+			&i.LossValue,
+			&i.Note,
+			&i.Status,
+			&i.Payout,
+			&i.HandledBy,
+			&i.HandlerNote,
+			&i.HandledAt,
+			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.PolicyID,
+			&i.SuggestedPayout,
+			&i.FitEvidence,
+			&i.AnsweredAt,
+			&i.PreviousPayout,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSRPMemberLedgerOnOp = `-- name: ListSRPMemberLedgerOnOp :many
+SELECT r.id, r.corporation_id, r.op_id, r.killmail_id, r.killmail_hash, r.character_id, r.user_id, r.ship_type_id, r.solar_system_id, r.lost_at, r.loss_value, r.note, r.status, r.payout, r.handled_by, r.handler_note, r.handled_at, r.created_at, r.owner_kind, r.owner_id, r.policy_id, r.suggested_payout, r.fit_evidence, r.answered_at, r.previous_payout
+FROM srp_requests r
+JOIN srp_policies p ON p.id = r.policy_id
+WHERE r.op_id = $1 AND r.status <> 'open' AND p.ledger_visibility = 'members'
+ORDER BY r.handled_at DESC NULLS LAST, r.id DESC
+LIMIT 100
+`
+
+// The same for one fleet.
+func (q *Queries) ListSRPMemberLedgerOnOp(ctx context.Context, opID int64) ([]SrpRequest, error) {
+	rows, err := q.db.Query(ctx, listSRPMemberLedgerOnOp, opID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SrpRequest
+	for rows.Next() {
+		var i SrpRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.OpID,
+			&i.KillmailID,
+			&i.KillmailHash,
+			&i.CharacterID,
+			&i.UserID,
+			&i.ShipTypeID,
+			&i.SolarSystemID,
+			&i.LostAt,
+			&i.LossValue,
+			&i.Note,
+			&i.Status,
+			&i.Payout,
+			&i.HandledBy,
+			&i.HandlerNote,
+			&i.HandledAt,
+			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.PolicyID,
+			&i.SuggestedPayout,
+			&i.FitEvidence,
+			&i.AnsweredAt,
+			&i.PreviousPayout,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSRPPolicies = `-- name: ListSRPPolicies :many
+
+SELECT id, owner_kind, owner_id, name, mode, percent, max_payout, requires_doctrine, requires_attendance, claim_window_hours, ledger_visibility, policy_text, is_default, updated_by, updated_at FROM srp_policies
+WHERE owner_kind = $1 AND owner_id = $2
+ORDER BY is_default DESC, lower(name), id
+LIMIT 25
+`
+
+type ListSRPPoliciesParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+// ---------------------------------------------------------------------
+// Replacement policies (schema 168).
+// ---------------------------------------------------------------------
+func (q *Queries) ListSRPPolicies(ctx context.Context, arg ListSRPPoliciesParams) ([]SrpPolicy, error) {
+	rows, err := q.db.Query(ctx, listSRPPolicies, arg.OwnerKind, arg.OwnerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SrpPolicy
+	for rows.Next() {
+		var i SrpPolicy
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.Name,
+			&i.Mode,
+			&i.Percent,
+			&i.MaxPayout,
+			&i.RequiresDoctrine,
+			&i.RequiresAttendance,
+			&i.ClaimWindowHours,
+			&i.LedgerVisibility,
+			&i.PolicyText,
+			&i.IsDefault,
+			&i.UpdatedBy,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSRPPolicyHulls = `-- name: ListSRPPolicyHulls :many
+SELECT h.ship_type_id, h.payout, COALESCE(t.name, '')::text AS name
+FROM srp_policy_hulls h
+LEFT JOIN sde_types t ON t.type_id = h.ship_type_id
+WHERE h.policy_id = $1
+ORDER BY name, h.ship_type_id
+LIMIT 100
+`
+
+type ListSRPPolicyHullsRow struct {
+	ShipTypeID int64   `json:"ship_type_id"`
+	Payout     float64 `json:"payout"`
+	Name       string  `json:"name"`
+}
+
+func (q *Queries) ListSRPPolicyHulls(ctx context.Context, policyID int64) ([]ListSRPPolicyHullsRow, error) {
+	rows, err := q.db.Query(ctx, listSRPPolicyHulls, policyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSRPPolicyHullsRow
+	for rows.Next() {
+		var i ListSRPPolicyHullsRow
+		if err := rows.Scan(&i.ShipTypeID, &i.Payout, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSRPRequestsByUser = `-- name: ListSRPRequestsByUser :many
-SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at FROM srp_requests WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2::bigint
+SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at, owner_kind, owner_id, policy_id, suggested_payout, fit_evidence, answered_at, previous_payout FROM srp_requests
+WHERE user_id = $1::bigint
+ORDER BY created_at DESC, id DESC
+LIMIT $2::bigint
 `
 
 type ListSRPRequestsByUserParams struct {
@@ -415,6 +1193,78 @@ func (q *Queries) ListSRPRequestsByUser(ctx context.Context, arg ListSRPRequests
 			&i.HandlerNote,
 			&i.HandledAt,
 			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.PolicyID,
+			&i.SuggestedPayout,
+			&i.FitEvidence,
+			&i.AnsweredAt,
+			&i.PreviousPayout,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSRPRequestsByUserForOwner = `-- name: ListSRPRequestsByUserForOwner :many
+SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at, owner_kind, owner_id, policy_id, suggested_payout, fit_evidence, answered_at, previous_payout FROM srp_requests
+WHERE user_id = $1::bigint AND owner_kind = $2 AND owner_id = $3
+ORDER BY created_at DESC, id DESC
+LIMIT $4::bigint
+`
+
+type ListSRPRequestsByUserForOwnerParams struct {
+	UserID    int64  `json:"user_id"`
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+	RowLimit  int64  `json:"row_limit"`
+}
+
+func (q *Queries) ListSRPRequestsByUserForOwner(ctx context.Context, arg ListSRPRequestsByUserForOwnerParams) ([]SrpRequest, error) {
+	rows, err := q.db.Query(ctx, listSRPRequestsByUserForOwner,
+		arg.UserID,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SrpRequest
+	for rows.Next() {
+		var i SrpRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.OpID,
+			&i.KillmailID,
+			&i.KillmailHash,
+			&i.CharacterID,
+			&i.UserID,
+			&i.ShipTypeID,
+			&i.SolarSystemID,
+			&i.LostAt,
+			&i.LossValue,
+			&i.Note,
+			&i.Status,
+			&i.Payout,
+			&i.HandledBy,
+			&i.HandlerNote,
+			&i.HandledAt,
+			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.PolicyID,
+			&i.SuggestedPayout,
+			&i.FitEvidence,
+			&i.AnsweredAt,
+			&i.PreviousPayout,
 		); err != nil {
 			return nil, err
 		}
@@ -427,8 +1277,13 @@ func (q *Queries) ListSRPRequestsByUser(ctx context.Context, arg ListSRPRequests
 }
 
 const listSRPRequestsDecidedForUser = `-- name: ListSRPRequestsDecidedForUser :many
-SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at FROM srp_requests
-WHERE user_id = $1 AND status <> 'open' AND handled_at >= $2
+SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at, owner_kind, owner_id, policy_id, suggested_payout, fit_evidence, answered_at, previous_payout FROM srp_requests
+WHERE id IN (
+    SELECT d.id FROM srp_requests d
+    WHERE d.user_id = $1::bigint AND d.status <> 'open' AND d.handled_at >= $2
+    ORDER BY d.handled_at DESC, d.id DESC
+    LIMIT 200
+)
 ORDER BY handled_at, id
 `
 
@@ -467,6 +1322,218 @@ func (q *Queries) ListSRPRequestsDecidedForUser(ctx context.Context, arg ListSRP
 			&i.HandlerNote,
 			&i.HandledAt,
 			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.PolicyID,
+			&i.SuggestedPayout,
+			&i.FitEvidence,
+			&i.AnsweredAt,
+			&i.PreviousPayout,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSRPRequestsOnOp = `-- name: ListSRPRequestsOnOp :many
+SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at, owner_kind, owner_id, policy_id, suggested_payout, fit_evidence, answered_at, previous_payout FROM srp_requests
+WHERE op_id = $1
+ORDER BY created_at DESC, id DESC
+LIMIT 100
+`
+
+// One fleet's ledger.
+func (q *Queries) ListSRPRequestsOnOp(ctx context.Context, opID int64) ([]SrpRequest, error) {
+	rows, err := q.db.Query(ctx, listSRPRequestsOnOp, opID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SrpRequest
+	for rows.Next() {
+		var i SrpRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.OpID,
+			&i.KillmailID,
+			&i.KillmailHash,
+			&i.CharacterID,
+			&i.UserID,
+			&i.ShipTypeID,
+			&i.SolarSystemID,
+			&i.LostAt,
+			&i.LossValue,
+			&i.Note,
+			&i.Status,
+			&i.Payout,
+			&i.HandledBy,
+			&i.HandlerNote,
+			&i.HandledAt,
+			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.PolicyID,
+			&i.SuggestedPayout,
+			&i.FitEvidence,
+			&i.AnsweredAt,
+			&i.PreviousPayout,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSRPRequestsOnOpByCharacters = `-- name: ListSRPRequestsOnOpByCharacters :many
+SELECT id, corporation_id, op_id, killmail_id, killmail_hash, character_id, user_id, ship_type_id, solar_system_id, lost_at, loss_value, note, status, payout, handled_by, handler_note, handled_at, created_at, owner_kind, owner_id, policy_id, suggested_payout, fit_evidence, answered_at, previous_payout FROM srp_requests
+WHERE op_id = $1 AND character_id = ANY($2::bigint[])
+ORDER BY created_at DESC, id DESC
+LIMIT 50
+`
+
+type ListSRPRequestsOnOpByCharactersParams struct {
+	OpID         int64   `json:"op_id"`
+	CharacterIds []int64 `json:"character_ids"`
+}
+
+// What some characters have asked for on one fleet.
+func (q *Queries) ListSRPRequestsOnOpByCharacters(ctx context.Context, arg ListSRPRequestsOnOpByCharactersParams) ([]SrpRequest, error) {
+	rows, err := q.db.Query(ctx, listSRPRequestsOnOpByCharacters, arg.OpID, arg.CharacterIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SrpRequest
+	for rows.Next() {
+		var i SrpRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.OpID,
+			&i.KillmailID,
+			&i.KillmailHash,
+			&i.CharacterID,
+			&i.UserID,
+			&i.ShipTypeID,
+			&i.SolarSystemID,
+			&i.LostAt,
+			&i.LossValue,
+			&i.Note,
+			&i.Status,
+			&i.Payout,
+			&i.HandledBy,
+			&i.HandlerNote,
+			&i.HandledAt,
+			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.PolicyID,
+			&i.SuggestedPayout,
+			&i.FitEvidence,
+			&i.AnsweredAt,
+			&i.PreviousPayout,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShipTypesByLowerNames = `-- name: ListShipTypesByLowerNames :many
+SELECT t.type_id, t.name
+FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.category_id = 6 AND t.published = 1
+  AND lower(t.name) = ANY($1::text[])
+LIMIT 100
+`
+
+type ListShipTypesByLowerNamesRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+// Ships named in a policy's hull list, whatever their capitals.
+func (q *Queries) ListShipTypesByLowerNames(ctx context.Context, names []string) ([]ListShipTypesByLowerNamesRow, error) {
+	rows, err := q.db.Query(ctx, listShipTypesByLowerNames, names)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListShipTypesByLowerNamesRow
+	for rows.Next() {
+		var i ListShipTypesByLowerNamesRow
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVictimLossesBetween = `-- name: ListVictimLossesBetween :many
+SELECT killmail_id, hash, killmail_time, system_id, victim_character_id, victim_corporation_id, ship_type_id, value_ours
+FROM kills
+WHERE victim_character_id = ANY($1::bigint[])
+  AND killmail_time >= $2 AND killmail_time <= $3
+ORDER BY killmail_time DESC, killmail_id DESC
+LIMIT 50
+`
+
+type ListVictimLossesBetweenParams struct {
+	CharacterIds []int64   `json:"character_ids"`
+	FromTime     time.Time `json:"from_time"`
+	ToTime       time.Time `json:"to_time"`
+}
+
+type ListVictimLossesBetweenRow struct {
+	KillmailID          int64           `json:"killmail_id"`
+	Hash                string          `json:"hash"`
+	KillmailTime        time.Time       `json:"killmail_time"`
+	SystemID            int64           `json:"system_id"`
+	VictimCharacterID   int64           `json:"victim_character_id"`
+	VictimCorporationID int64           `json:"victim_corporation_id"`
+	ShipTypeID          int64           `json:"ship_type_id"`
+	ValueOurs           sql.NullFloat64 `json:"value_ours"`
+}
+
+// A pilot's losses in the public killboard store, for a pilot who has
+// not granted killmail access.
+func (q *Queries) ListVictimLossesBetween(ctx context.Context, arg ListVictimLossesBetweenParams) ([]ListVictimLossesBetweenRow, error) {
+	rows, err := q.db.Query(ctx, listVictimLossesBetween, arg.CharacterIds, arg.FromTime, arg.ToTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListVictimLossesBetweenRow
+	for rows.Next() {
+		var i ListVictimLossesBetweenRow
+		if err := rows.Scan(
+			&i.KillmailID,
+			&i.Hash,
+			&i.KillmailTime,
+			&i.SystemID,
+			&i.VictimCharacterID,
+			&i.VictimCorporationID,
+			&i.ShipTypeID,
+			&i.ValueOurs,
 		); err != nil {
 			return nil, err
 		}
@@ -519,6 +1586,59 @@ func (q *Queries) SetCorpPermission(ctx context.Context, arg SetCorpPermissionPa
 		arg.UpdatedBy,
 		arg.UpdatedAt,
 	)
+	return err
+}
+
+const setDefaultSRPPolicyText = `-- name: SetDefaultSRPPolicyText :exec
+WITH updated AS (
+    UPDATE srp_policies p SET
+        policy_text = $4,
+        updated_by  = $5,
+        updated_at  = $6
+    WHERE p.owner_kind = $1 AND p.owner_id = $2 AND p.is_default
+    RETURNING p.id
+)
+INSERT INTO srp_policies (owner_kind, owner_id, name, policy_text, is_default, updated_by, updated_at)
+SELECT $1, $2, $3, $4, TRUE, $5, $6
+WHERE NOT EXISTS (SELECT 1 FROM updated) AND btrim($4::text) <> ''
+ON CONFLICT DO NOTHING
+`
+
+type SetDefaultSRPPolicyTextParams struct {
+	OwnerKind  string    `json:"owner_kind"`
+	OwnerID    int64     `json:"owner_id"`
+	NewName    string    `json:"new_name"`
+	PolicyText string    `json:"policy_text"`
+	UpdatedBy  int64     `json:"updated_by"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// The text a corporation writes in its settings is its default policy's.
+// With no default yet it makes one under new_name, which the caller has
+// checked is free, so no other policy is taken over.
+func (q *Queries) SetDefaultSRPPolicyText(ctx context.Context, arg SetDefaultSRPPolicyTextParams) error {
+	_, err := q.db.Exec(ctx, setDefaultSRPPolicyText,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.NewName,
+		arg.PolicyText,
+		arg.UpdatedBy,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const setOpSRPPolicy = `-- name: SetOpSRPPolicy :exec
+UPDATE ops SET srp_policy_id = $1 WHERE id = $2
+`
+
+type SetOpSRPPolicyParams struct {
+	SrpPolicyID sql.NullInt64 `json:"srp_policy_id"`
+	ID          int64         `json:"id"`
+}
+
+func (q *Queries) SetOpSRPPolicy(ctx context.Context, arg SetOpSRPPolicyParams) error {
+	_, err := q.db.Exec(ctx, setOpSRPPolicy, arg.SrpPolicyID, arg.ID)
 	return err
 }
 
@@ -577,12 +1697,14 @@ func (q *Queries) SetSRPSettings(ctx context.Context, arg SetSRPSettingsParams) 
 const sumSRPPaid = `-- name: SumSRPPaid :one
 SELECT COUNT(*)::bigint AS requests, COALESCE(SUM(payout), 0)::double precision AS paid
 FROM srp_requests
-WHERE corporation_id = $1 AND status = 'paid' AND handled_at >= $2
+WHERE owner_kind = $1 AND owner_id = $2
+  AND status = 'paid' AND handled_at >= $3
 `
 
 type SumSRPPaidParams struct {
-	CorporationID int64        `json:"corporation_id"`
-	Since         sql.NullTime `json:"since"`
+	OwnerKind string       `json:"owner_kind"`
+	OwnerID   int64        `json:"owner_id"`
+	Since     sql.NullTime `json:"since"`
 }
 
 type SumSRPPaidRow struct {
@@ -591,14 +1713,95 @@ type SumSRPPaidRow struct {
 }
 
 func (q *Queries) SumSRPPaid(ctx context.Context, arg SumSRPPaidParams) (SumSRPPaidRow, error) {
-	row := q.db.QueryRow(ctx, sumSRPPaid, arg.CorporationID, arg.Since)
+	row := q.db.QueryRow(ctx, sumSRPPaid, arg.OwnerKind, arg.OwnerID, arg.Since)
 	var i SumSRPPaidRow
 	err := row.Scan(&i.Requests, &i.Paid)
 	return i, err
 }
 
+const updateSRPPolicy = `-- name: UpdateSRPPolicy :execrows
+UPDATE srp_policies SET
+    name                = $1,
+    mode                = $2,
+    percent             = $3,
+    max_payout          = $4,
+    requires_doctrine   = $5,
+    requires_attendance = $6,
+    claim_window_hours  = $7,
+    ledger_visibility   = $8,
+    policy_text         = $9,
+    is_default          = $10,
+    updated_by          = $11,
+    updated_at          = $12
+WHERE id = $13 AND owner_kind = $14 AND owner_id = $15
+`
+
+type UpdateSRPPolicyParams struct {
+	Name               string    `json:"name"`
+	Mode               string    `json:"mode"`
+	Percent            int32     `json:"percent"`
+	MaxPayout          float64   `json:"max_payout"`
+	RequiresDoctrine   bool      `json:"requires_doctrine"`
+	RequiresAttendance bool      `json:"requires_attendance"`
+	ClaimWindowHours   int32     `json:"claim_window_hours"`
+	LedgerVisibility   string    `json:"ledger_visibility"`
+	PolicyText         string    `json:"policy_text"`
+	IsDefault          bool      `json:"is_default"`
+	UpdatedBy          int64     `json:"updated_by"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	ID                 int64     `json:"id"`
+	OwnerKind          string    `json:"owner_kind"`
+	OwnerID            int64     `json:"owner_id"`
+}
+
+func (q *Queries) UpdateSRPPolicy(ctx context.Context, arg UpdateSRPPolicyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateSRPPolicy,
+		arg.Name,
+		arg.Mode,
+		arg.Percent,
+		arg.MaxPayout,
+		arg.RequiresDoctrine,
+		arg.RequiresAttendance,
+		arg.ClaimWindowHours,
+		arg.LedgerVisibility,
+		arg.PolicyText,
+		arg.IsDefault,
+		arg.UpdatedBy,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.OwnerKind,
+		arg.OwnerID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const withdrawFleetSRPRequest = `-- name: WithdrawFleetSRPRequest :execrows
+DELETE FROM srp_requests
+WHERE id = $1 AND op_id = $2 AND character_id = ANY($3::bigint[])
+  AND status = 'open' AND answered_at IS NULL
+`
+
+type WithdrawFleetSRPRequestParams struct {
+	ID           int64   `json:"id"`
+	OpID         int64   `json:"op_id"`
+	CharacterIds []int64 `json:"character_ids"`
+}
+
+// The same from a fleet's tab, by the characters the session has proved.
+func (q *Queries) WithdrawFleetSRPRequest(ctx context.Context, arg WithdrawFleetSRPRequestParams) (int64, error) {
+	result, err := q.db.Exec(ctx, withdrawFleetSRPRequest, arg.ID, arg.OpID, arg.CharacterIds)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const withdrawSRPRequest = `-- name: WithdrawSRPRequest :execrows
-DELETE FROM srp_requests WHERE id = $1 AND user_id = $2 AND status = 'open'
+DELETE FROM srp_requests
+WHERE id = $1 AND user_id = $2::bigint AND status = 'open' AND answered_at IS NULL
 `
 
 type WithdrawSRPRequestParams struct {
@@ -606,7 +1809,9 @@ type WithdrawSRPRequestParams struct {
 	UserID int64 `json:"user_id"`
 }
 
-// A pilot takes back a request nobody has answered.
+// A pilot takes back a request nobody has ever answered. One that was
+// answered and opened again stays, so its killmail cannot be claimed
+// anew after a payment.
 func (q *Queries) WithdrawSRPRequest(ctx context.Context, arg WithdrawSRPRequestParams) (int64, error) {
 	result, err := q.db.Exec(ctx, withdrawSRPRequest, arg.ID, arg.UserID)
 	if err != nil {

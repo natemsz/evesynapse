@@ -9,8 +9,9 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Who else plans an alliance's or community's fleets and keeps its
-// doctrines. Only the people who run the owner by position can choose.
+// Who else plans an alliance's or community's fleets, keeps its
+// doctrines and handles its ship replacement. Only the people who run
+// the owner by position can choose.
 // A corporation makes the same choices in its settings.
 // ---------------------------------------------------------------------------
 
@@ -24,6 +25,7 @@ type fleetPermissionsView struct {
 	Community    bool
 	Doctrines    []permissionChoice
 	Fleets       []permissionChoice
+	SRP          []permissionChoice // empty when the module is not built in
 	GroupsHref   string
 	// Corporations: the viewer directs a corporation, whose choices are
 	// in its settings.
@@ -82,6 +84,9 @@ func (app *Application) handleFleetPermissions(w http.ResponseWriter, r *http.Re
 		view.Community = owner.Kind == ownerCommunity
 		view.Doctrines = app.handOverChoices(r, v, owner, permDoctrines)
 		view.Fleets = app.handOverChoices(r, v, owner, permFleets)
+		if moduleCompiledIn("srp") {
+			view.SRP = app.handOverChoices(r, v, owner, permSRP)
+		}
 		if moduleCompiledIn("groups") {
 			view.GroupsHref = standing.Address("/groups/", owner.Key())
 		}
@@ -89,7 +94,7 @@ func (app *Application) handleFleetPermissions(w http.ResponseWriter, r *http.Re
 	app.render(ctx, w, http.StatusOK, "fleet_permissions.html", pageData{ShellData: app.PublicShell(ctx), FleetPermissions: view})
 }
 
-// handleFleetPermissionsSave stores both choices or neither.
+// handleFleetPermissionsSave stores every choice or none.
 func (app *Application) handleFleetPermissionsSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	v := app.fleetViewerFor(ctx)
@@ -103,15 +108,20 @@ func (app *Application) handleFleetPermissionsSave(w http.ResponseWriter, r *htt
 		return
 	}
 	back := app.flashBack(w, r, standing.Address(fleetPermissionsPath, owner.Key()))
-	doctrines, fleets := r.PostForm.Get("doctrines_who"), r.PostForm.Get("fleets_who")
-	if !hasPermissionChoice(app.handOverChoices(r, v, owner, permDoctrines), doctrines) ||
-		!hasPermissionChoice(app.handOverChoices(r, v, owner, permFleets), fleets) {
-		back("That cannot be handed to the choice made; nothing was saved.")
-		return
+	type handOver struct{ permission, value string }
+	choices := []handOver{{permDoctrines, r.PostForm.Get("doctrines_who")}, {permFleets, r.PostForm.Get("fleets_who")}}
+	if moduleCompiledIn("srp") && r.PostForm.Has("srp_who") {
+		choices = append(choices, handOver{permSRP, r.PostForm.Get("srp_who")})
+	}
+	for _, choice := range choices {
+		if !hasPermissionChoice(app.handOverChoices(r, v, owner, choice.permission), choice.value) {
+			back("That cannot be handed to the choice made; nothing was saved.")
+			return
+		}
 	}
 	by := app.OwnerActorFor(ctx, v.UserID, owner)
 	err := app.inOwnerPermissionTx(r, func(q *db.Queries) error {
-		for _, choice := range []struct{ permission, value string }{{permDoctrines, doctrines}, {permFleets, fleets}} {
+		for _, choice := range choices {
 			kind, ref := splitRuleValue(choice.value)
 			if err := storeOwnerPermission(ctx, q, owner, choice.permission, kind, ref, by); err != nil {
 				return err
@@ -124,7 +134,7 @@ func (app *Application) handleFleetPermissionsSave(w http.ResponseWriter, r *htt
 		back("The choices could not be saved. Try again in a moment.")
 		return
 	}
-	logging.Infof("fleets: user %d changed who runs the fleets and doctrines of %s", v.UserID, owner.Key())
+	logging.Infof("fleets: user %d changed who runs the fleet programmes of %s", v.UserID, owner.Key())
 	back("Saved.")
 }
 

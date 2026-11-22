@@ -3,11 +3,11 @@ package srp
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/humanize"
 	"fmt"
 	json "github.com/goccy/go-json"
+	"math"
 	"net/http"
 	"slices"
 	"sort"
@@ -21,26 +21,28 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/standing"
-	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
 // Ship replacement (SRP).
 //
-// A pilot who lost a ship on one of the corporation's ops asks for it
-// to be replaced. A request rests on two things EveSynapse already
-// holds: the killmail (the pilot's own loss, read from EVE) and the
-// op it happened on (ops.go). The loss has to fall inside the op's
-// time; whether the fleet recorded the pilot on that op
-// (ops_attendance.go) is shown to whoever handles the request, read
-// fresh each time, because attendance can be ticked by hand later.
+// A pilot who lost a ship on a fleet asks for it to be replaced. A
+// request rests on two things EveSynapse already holds: the killmail
+// and the fleet it happened on. The loss has to fall inside the fleet's
+// time, and the fleet's policy (policy.go) can ask for more. Whether the
+// fleet recorded the pilot (ops_attendance.go) is shown to whoever
+// handles the request, read fresh each time, because attendance can be
+// ticked by hand later.
 //
-// Requests are handled by the corporation's directors and CEO, and by
-// whoever they hand it to (owner_permissions.go). Handling is marking a
-// request paid, with the amount, or denying it with a reason. EVE has
-// no call that moves ISK, so the paying is done in game; the pay list
-// mail (corp_srp_handle.go) puts what is owed in the handler's inbox
-// there.
+// Requests belong to the fleet's owner: a corporation, alliance or
+// community. They are handled by the people who run it and whoever they
+// hand it to (owner_permissions.go). Handling is marking a request paid,
+// with the amount, or denying it with a reason. EVE has no call that
+// moves ISK, so the paying is done in game; the pay list mail
+// (srp_handle.go) puts what is owed in the handler's inbox there.
+//
+// Pilots' names on the ledger are never public. Who can read it is the
+// policy's choice between the handlers and the owner's members.
 // ---------------------------------------------------------------------------
 
 const srpPath = "/srp/"
@@ -63,6 +65,13 @@ const (
 	srpMineShown     = 50
 	srpHandledShown  = 25
 	srpPaidStatDays  = 30
+	// srpFleetsRead bounds the fleets a page checks losses against.
+	srpFleetsRead = 100
+	// srpOpenShown bounds the handler's queue on one page.
+	srpOpenShown = 100
+	// srpLossReach is how old a loss can be and still be inside a claim
+	// window, which runs from the close of a fleet of the longest length.
+	srpLossReach = srpClaimWindow + module.OpMaxDuration*time.Minute + module.OpCaptureTail
 )
 
 // srpLoss is one of an account's recent losses.
@@ -104,7 +113,7 @@ func (app *mod) srpLosses(ctx context.Context, characters []db.Character, now ti
 			continue
 		}
 		at, err := time.Parse(time.RFC3339, km.KillmailTime)
-		if err != nil || now.Sub(at) > srpClaimWindow {
+		if err != nil || now.Sub(at) > srpLossReach {
 			continue
 		}
 		out = append(out, srpLoss{km: km, hash: row.Hash, at: at})
@@ -142,7 +151,7 @@ func parseISK(raw string) (float64, bool) {
 		scale, s = 1e9, strings.TrimSuffix(s, "b")
 	}
 	v, err := strconv.ParseFloat(s, 64)
-	if err != nil || v < 0 || v*scale > 1e13 {
+	if err != nil || math.IsNaN(v) || v < 0 || v*scale > 1e13 {
 		return 0, false
 	}
 	return v * scale, true
@@ -192,31 +201,45 @@ type srpRow struct {
 	// corporation's; DoctrineShip, that the lost hull is in it.
 	Doctrine     string
 	DoctrineShip bool
+	// FitNote says what the loss mail showed against the doctrine.
+	FitNote string
+	// CanWithdraw: open, and never answered.
+	CanWithdraw bool
+	// Earlier: it was paid and then opened again.
+	Earlier string
 }
 
-// srpCorpView is the corporation a ship replacement page is about.
+// srpCorpView is the owner a ship replacement page is about.
 type srpCorpView struct {
 	ID      int64
+	Key     string
 	Name    string
 	Policy  string
 	Handles bool // may answer its requests
-	Directs bool // may change its settings
+	Directs bool // a corporation whose settings the viewer can change
+	Keeps   bool // may change its policies
 
-	Open      []srpRow
-	Handled   []srpRow
-	OpenValue string
-	PaidCount int64
-	PaidValue string
-	Mailers   []module.NamedChoice // the account's characters that can send the EVE mail
+	Open       []srpRow
+	Handled    []srpRow
+	Ledger     []srpRow // answered requests its members can read
+	OpenCount  int64
+	OpenValue  string
+	PaidCount  int64
+	PaidValue  string
+	Mailers    []module.NamedChoice // the account's characters that can send the EVE mail
+	Policies   []srpPolicyRow
+	PolicyForm *srpPolicyRow
+	HandOver   string
 }
 
-// srpView is the /srp/ page: one corporation's ship replacement.
+// srpView is the /srp/ page: one owner's ship replacement.
 type srpView struct {
 	CorpOptions []module.OwnerOption
-	Corp        *srpCorpView // nil when the account is in no player corporation
+	Corp        *srpCorpView // nil when the account belongs to no owner
 	Losses      []srpLossChoice
-	Outside     int // recent losses in the corporation that were not during an op
+	Outside     int // recent losses that were not during one of its fleets
 	Claimed     int // recent losses already asked for
+	Refused     int // losses during a fleet that its policy does not cover
 	Mine        []srpRow
 }
 
@@ -240,14 +263,19 @@ func (app *mod) srpRows(ctx context.Context, requests []db.SrpRequest, ops map[i
 			Open: req.Status == srpOpen, Paid: req.Status == srpPaid,
 			Payout: srpISK(req.Payout), HandlerNote: req.HandlerNote,
 		}
-		if req.LossValue > 0 {
-			row.Suggested = esi.FormatInt(int64(req.LossValue + 0.5))
+		if req.SuggestedPayout > 0 {
+			row.Suggested = esi.FormatInt(int64(req.SuggestedPayout + 0.5))
+		}
+		row.CanWithdraw = row.Open && !req.AnsweredAt.Valid
+		if req.PreviousPayout > 0 {
+			row.Earlier = "Already paid " + srpISK(req.PreviousPayout) + " before it was opened again."
 		}
 		if req.HandledAt.Valid {
 			row.HandledAt = req.HandledAt.Time.UTC().Format("2006-01-02 15:04")
 			row.HandledBy = app.srpPilot(ctx, req.HandledBy)
 		}
 		if row.Open {
+			row.FitNote = srpFitSentence(req.FitEvidence)
 			if op.DoctrineID != 0 {
 				// A fleet that has started is judged by the doctrine it
 				// flew, not by later edits.
@@ -257,7 +285,10 @@ func (app *mod) srpRows(ctx context.Context, requests []db.SrpRequest, ops map[i
 					row.Doctrine, row.DoctrineShip = op.Doctrine, in
 				}
 			}
-			if seen, err := app.queries.GetOpAttendance(ctx, db.GetOpAttendanceParams{OpID: req.OpID, CharacterID: req.CharacterID}); err == nil {
+			seen, err := app.queries.GetOpAttendance(ctx, db.GetOpAttendanceParams{OpID: req.OpID, CharacterID: req.CharacterID})
+			if err == nil && !srpAttendedAt(seen.Source, seen.FirstSeenAt, seen.LastSeenAt, req.LostAt) {
+				row.Attendance = "Seen in the fleet, but not when this ship was lost."
+			} else if err == nil {
 				row.Attended = true
 				row.Attendance = "Ticked present by hand."
 				if seen.Source == module.AttendanceFleet {
@@ -281,8 +312,8 @@ func (app *mod) handleSRP(w http.ResponseWriter, r *http.Request) {
 	view := &srpView{}
 	data.SRP = view
 
-	corp, options := app.deps.PickCorporation(ctx, r, app.deps.PlayerCorps(ctx, userID))
-	if corp == 0 {
+	owner, options, found := app.deps.PickOwner(ctx, r, app.deps.DoctrineOwners(ctx, userID))
+	if !found {
 		app.deps.Render(ctx, w, http.StatusOK, "srp.html", data)
 		return
 	}
@@ -291,42 +322,54 @@ func (app *mod) handleSRP(w http.ResponseWriter, r *http.Request) {
 		logging.Errorf("srp: standing of user %d: %v", userID, err)
 		data.Error = "Could not load ship replacement; check the server log."
 	}
-	cv := &srpCorpView{ID: corp, Name: app.deps.CorpDisplayName(ctx, corp), Directs: st.Directs(corp)}
-	cv.Handles = app.deps.OwnerPermits(ctx, st, standing.CorporationOwner(corp), permSRP)
+	cv := &srpCorpView{ID: owner.ID, Key: owner.Key(), Name: app.deps.OwnerName(ctx, owner)}
+	cv.Directs = owner.Kind == standing.OwnerCorporation && st.Directs(owner.ID)
+	cv.Handles = app.deps.OwnerPermits(ctx, st, owner, permSRP)
+	cv.Keeps = app.deps.HoldsProgramme(ctx, st, owner, permSRP)
+	if cv.Keeps && owner.Kind != standing.OwnerCorporation {
+		cv.HandOver = standing.Address("/fleets/permissions/", owner.Key())
+	}
 	view.CorpOptions, view.Corp = options, cv
-	if settings, err := app.queries.GetSRPSettings(ctx, corp); err == nil {
-		cv.Policy = settings.Policy
+	policies, err := app.queries.ListSRPPolicies(ctx, db.ListSRPPoliciesParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
+	if err != nil {
+		logging.Errorf("srp: policies of %s: %v", owner.Key(), err)
+	}
+	for _, p := range policies {
+		if p.IsDefault {
+			cv.Policy = p.PolicyText
+		}
+	}
+	if cv.Keeps {
+		cv.Policies = srpPolicyRows(owner, policies)
+		cv.PolicyForm = app.srpPolicyForm(ctx, r, policies)
 	}
 	ops := map[int64]db.Op{}
 
 	characters, _ := app.queries.ListCharactersByUser(ctx, userID)
-	app.srpOffer(ctx, view, characters, corp, now)
+	app.srpOffer(ctx, view, characters, owner, policies, now)
 
-	mine, err := app.queries.ListSRPRequestsByUser(ctx, db.ListSRPRequestsByUserParams{UserID: userID, RowLimit: srpMineShown})
+	mine, err := app.queries.ListSRPRequestsByUserForOwner(ctx, db.ListSRPRequestsByUserForOwnerParams{
+		UserID: userID, OwnerKind: owner.Kind, OwnerID: owner.ID, RowLimit: srpMineShown,
+	})
 	if err != nil {
 		logging.Errorf("srp: requests of user %d: %v", userID, err)
 	}
-	here := mine[:0]
-	for _, req := range mine {
-		if req.CorporationID == corp {
-			here = append(here, req)
-		}
-	}
-	view.Mine = app.srpRows(ctx, here, ops)
+	view.Mine = app.srpRows(ctx, mine, ops)
 
 	if cv.Handles {
-		open, err := app.queries.ListOpenSRPRequests(ctx, []int64{corp})
+		open, err := app.queries.ListOpenSRPRequests(ctx, db.ListOpenSRPRequestsParams{OwnerKind: owner.Kind, OwnerID: owner.ID, RowLimit: srpOpenShown})
 		if err != nil {
-			logging.Errorf("srp: open requests of corporation %d: %v", corp, err)
+			logging.Errorf("srp: open requests of %s: %v", owner.Key(), err)
 		}
-		var owed float64
-		for _, req := range open {
-			owed += req.LossValue
+		cv.Open = app.srpRows(ctx, open, ops)
+		if totals, err := app.queries.CountOpenSRPRequests(ctx, db.CountOpenSRPRequestsParams{OwnerKind: owner.Kind, OwnerID: owner.ID}); err == nil {
+			cv.OpenCount, cv.OpenValue = totals.Requests, srpISK(totals.Owed)
+		} else {
+			logging.Errorf("srp: open total of %s: %v", owner.Key(), err)
 		}
-		cv.Open, cv.OpenValue = app.srpRows(ctx, open, ops), srpISK(owed)
-		handled, _ := app.queries.ListHandledSRPRequests(ctx, db.ListHandledSRPRequestsParams{CorporationID: corp, RowLimit: srpHandledShown})
+		handled, _ := app.queries.ListHandledSRPRequests(ctx, db.ListHandledSRPRequestsParams{OwnerKind: owner.Kind, OwnerID: owner.ID, RowLimit: srpHandledShown})
 		cv.Handled = app.srpRows(ctx, handled, ops)
-		if paid, err := app.queries.SumSRPPaid(ctx, db.SumSRPPaidParams{CorporationID: corp, Since: timeSet(now.AddDate(0, 0, -srpPaidStatDays))}); err == nil {
+		if paid, err := app.queries.SumSRPPaid(ctx, db.SumSRPPaidParams{OwnerKind: owner.Kind, OwnerID: owner.ID, Since: timeSet(now.AddDate(0, 0, -srpPaidStatDays))}); err == nil {
 			cv.PaidCount, cv.PaidValue = paid.Requests, srpISK(paid.Paid)
 		}
 		for _, ch := range characters {
@@ -334,77 +377,147 @@ func (app *mod) handleSRP(w http.ResponseWriter, r *http.Request) {
 				cv.Mailers = append(cv.Mailers, module.NamedChoice{ID: ch.CharacterID, Name: ch.Name})
 			}
 		}
+	} else if slices.ContainsFunc(policies, func(p db.SrpPolicy) bool { return p.LedgerVisibility == srpLedgerMembers }) {
+		cv.Ledger = app.srpMemberLedger(ctx, owner, ops)
 	}
 	app.deps.Render(ctx, w, http.StatusOK, "srp.html", data)
 }
 
-// srpBack answers an SRP form by sending the account back to the
-// corporation's page it was sent from, with a word.
-func (app *mod) srpBack(w http.ResponseWriter, r *http.Request) func(string) {
-	_ = r.ParseForm()
-	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
-	return app.deps.FlashBack(w, r, module.CorpAddress(srpPath, corp))
+// srpMemberLedger is the answered requests a member can read: filed
+// under a policy that opens its ledger to members, on a fleet they can
+// see.
+func (app *mod) srpMemberLedger(ctx context.Context, owner standing.Owner, ops map[int64]db.Op) []srpRow {
+	rows, err := app.queries.ListSRPMemberLedger(ctx, db.ListSRPMemberLedgerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
+	if err != nil {
+		logging.Errorf("srp: ledger of %s: %v", owner.Key(), err)
+		return nil
+	}
+	ids := make([]int64, 0, len(rows))
+	for _, req := range rows {
+		if !slices.Contains(ids, req.OpID) {
+			ids = append(ids, req.OpID)
+		}
+	}
+	fleets, err := app.queries.ListOpsByIDs(ctx, ids)
+	if err != nil {
+		logging.Errorf("srp: ledger fleets of %s: %v", owner.Key(), err)
+		return nil
+	}
+	for _, op := range fleets {
+		ops[op.ID] = op
+	}
+	visible := app.deps.FleetsVisible(ctx, fleets)
+	shown := make([]db.SrpRequest, 0, srpHandledShown)
+	for _, req := range rows {
+		if visible[req.OpID] && len(shown) < srpHandledShown {
+			shown = append(shown, req)
+		}
+	}
+	return app.srpRows(ctx, shown, ops)
 }
 
-// srpOffer fills in the losses an account can ask a corporation
-// about: those of a pilot who was in it, that fell inside one of its
-// ops, and that nobody has asked about yet.
-func (app *mod) srpOffer(ctx context.Context, view *srpView, characters []db.Character, corp int64, now time.Time) {
-	all := app.srpLosses(ctx, characters, now)
-	losses := all[:0]
-	for _, loss := range all {
-		if loss.km.Victim.CorporationID == corp {
-			losses = append(losses, loss)
-		}
+// srpFormOwner is the owner a form names. A form from before the page
+// had owners names a corporation.
+func srpFormOwner(r *http.Request) (standing.Owner, bool) {
+	if owner, ok := standing.ParseAnyOwner(r.Form.Get("owner")); ok {
+		return owner, true
+	}
+	if id, err := strconv.ParseInt(r.Form.Get("corporation"), 10, 64); err == nil && id > 0 {
+		return standing.CorporationOwner(id), true
+	}
+	return standing.Owner{}, false
+}
+
+// srpBack answers an SRP form by sending the account back to the
+// owner's page it was sent from, with a word.
+func (app *mod) srpBack(w http.ResponseWriter, r *http.Request) func(string) {
+	_ = r.ParseForm()
+	path := srpPath
+	if owner, ok := srpFormOwner(r); ok {
+		path = standing.Address(srpPath, owner.Key())
+	}
+	return app.deps.FlashBack(w, r, path)
+}
+
+// srpOffer fills in the losses an account can ask an owner about: those
+// that fell inside one of its fleets, that its policy covers, and that
+// nobody has asked about yet.
+func (app *mod) srpOffer(ctx context.Context, view *srpView, characters []db.Character, owner standing.Owner, policies []db.SrpPolicy, now time.Time) {
+	ids := make([]int64, 0, len(characters))
+	for _, ch := range characters {
+		ids = append(ids, ch.CharacterID)
+	}
+	losses := app.srpCandidates(ctx, characters, ids, now.Add(-srpLossReach), now, now)
+	if owner.Kind == standing.OwnerCorporation {
+		losses = slices.DeleteFunc(losses, func(l srpLoss) bool { return l.km.Victim.CorporationID != owner.ID })
 	}
 	if len(losses) == 0 {
 		return
 	}
-	ids := make([]int64, 0, len(losses))
-	seenCorp := map[int64]bool{}
-	var corps []int64
+	killIDs := make([]int64, 0, len(losses))
 	for _, loss := range losses {
-		ids = append(ids, loss.km.KillmailID)
-		if corp := loss.km.Victim.CorporationID; corp != 0 && !seenCorp[corp] {
-			seenCorp[corp] = true
-			corps = append(corps, corp)
-		}
+		killIDs = append(killIDs, loss.km.KillmailID)
 	}
 	claimed := map[int64]bool{}
-	if rows, err := app.queries.ListSRPClaimedKillmails(ctx, ids); err == nil {
+	if rows, err := app.queries.ListSRPClaimedKillmails(ctx, killIDs); err == nil {
 		for _, id := range rows {
 			claimed[id] = true
 		}
 	}
-	ops, err := app.queries.ListOpsForCorporationsBetween(ctx, db.ListOpsForCorporationsBetweenParams{
-		CorporationIds: corps,
-		FromTime:       now.Add(-srpClaimWindow - module.OpMaxDuration*time.Minute - module.OpCaptureTail),
-		ToTime:         now.Add(module.OpCaptureLead),
+	// Losses are newest first, so this is the stretch they cover.
+	ops, err := app.queries.ListFleetsForOwnerNewest(ctx, db.ListFleetsForOwnerNewestParams{
+		OwnerKind: owner.Kind, OwnerID: owner.ID,
+		StartsBefore: losses[0].at.Add(module.OpCaptureLead + time.Second),
+		EndsAfter:    losses[len(losses)-1].at.Add(-module.OpCaptureTail),
+		RowLimit:     srpFleetsRead,
 	})
 	if err != nil {
-		logging.Errorf("srp: ops for losses: %v", err)
+		logging.Errorf("srp: fleets for losses: %v", err)
 		return
 	}
+	opIDs := make([]int64, 0, len(ops))
+	for _, op := range ops {
+		opIDs = append(opIDs, op.ID)
+	}
+	seen, err := app.queries.ListOpAttendanceForPilots(ctx, db.ListOpAttendanceForPilotsParams{OpIds: opIDs, CharacterIds: ids})
+	if err != nil {
+		logging.Errorf("srp: attendance for losses: %v", err)
+		return
+	}
+	sightings := make(map[[2]int64]db.ListOpAttendanceForPilotsRow, len(seen))
+	for _, row := range seen {
+		sightings[[2]int64{row.OpID, row.CharacterID}] = row
+	}
+	visible := app.deps.FleetsVisible(ctx, ops)
 	for _, loss := range losses {
 		if claimed[loss.km.KillmailID] {
 			view.Claimed++
 			continue
 		}
-		during := false
+		during, offered := false, false
 		for _, op := range ops {
-			if op.CorporationID != loss.km.Victim.CorporationID || !srpDuring(op, loss.at) {
+			if !srpDuring(op, loss.at) {
 				continue
 			}
+			row, on := sightings[[2]int64{op.ID, loss.km.Victim.CharacterID}]
+			attended := on && srpAttendedAt(row.Source, row.FirstSeenAt, row.LastSeenAt, loss.at)
+			if !visible[op.ID] && !attended {
+				continue // a fleet kept from this pilot is not mentioned
+			}
 			during = true
+			if srpRefusal(op, srpPolicyFor(op, policies), loss, visible[op.ID], attended, app.srpInDoctrine(ctx, op, loss.km.Victim.ShipTypeID), now) != "" {
+				continue
+			}
+			offered = true
 			view.Losses = append(view.Losses, srpLossChoice{
 				Value: fmt.Sprintf("%d:%d", loss.km.KillmailID, op.ID),
-				Label: fmt.Sprintf("%s · %s · %s · %s · fleet: %s",
-					loss.at.UTC().Format("Jan 2 15:04"), app.deps.TypeNameOrID(ctx, loss.km.Victim.ShipTypeID),
-					app.deps.LocationTitle(ctx, loss.km.SolarSystemID, "solar_system"),
-					app.srpPilot(ctx, loss.km.Victim.CharacterID), op.Title),
+				Label: app.srpLossLabel(ctx, loss) + " · fleet: " + op.Title,
 			})
 		}
-		if !during {
+		switch {
+		case during && !offered:
+			view.Refused++
+		case !during && owner.Kind == standing.OwnerCorporation:
 			view.Outside++
 		}
 	}
@@ -412,55 +525,27 @@ func (app *mod) srpOffer(ctx context.Context, view *srpView, characters []db.Cha
 
 // handleSRPRequest files a request (POST /srp/request). Everything it
 // stores about the loss is read from the stored killmail, not from the
-// form: the form only says which killmail and which op.
+// form: the form only says which killmail and which fleet.
 func (app *mod) handleSRPRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.deps.UserID(ctx)
 	back := app.srpBack(w, r)
 	_ = r.ParseForm()
-	now := time.Now().UTC()
 	rawKill, rawOp, _ := strings.Cut(r.Form.Get("loss"), ":")
 	killID, _ := strconv.ParseInt(rawKill, 10, 64)
 	opID, _ := strconv.ParseInt(rawOp, 10, 64)
-
-	stored, err := app.queries.GetKillmailDetail(ctx, killID)
-	var km esi.Killmail
-	if err != nil || json.Unmarshal([]byte(stored.Payload), &km) != nil {
-		back("Pick the loss to claim.")
-		return
-	}
-	pilot, err := app.queries.GetCharacter(ctx, km.Victim.CharacterID)
-	if err != nil || pilot.UserID != userID {
-		back("That loss is not one of your characters'.")
-		return
-	}
-	at, err := time.Parse(time.RFC3339, km.KillmailTime)
-	if err != nil || now.Sub(at) > srpClaimWindow {
-		back("That loss is too old to claim.")
-		return
-	}
 	op, err := app.queries.GetOp(ctx, opID)
-	if err != nil || op.CorporationID != km.Victim.CorporationID || !srpDuring(op, at) {
+	if err != nil {
 		back("That loss was not during that fleet.")
 		return
 	}
-	id, err := app.queries.CreateSRPRequest(ctx, db.CreateSRPRequestParams{
-		CorporationID: op.CorporationID, OpID: op.ID, KillmailID: km.KillmailID, KillmailHash: stored.Hash,
-		CharacterID: pilot.CharacterID, UserID: userID, ShipTypeID: km.Victim.ShipTypeID, SolarSystemID: km.SolarSystemID,
-		LostAt: at, LossValue: app.deps.KillmailLossValue(ctx, km.KillmailID, stored.Payload),
-		Note: humanize.Clip(strings.TrimSpace(r.Form.Get("note")), srpNoteMax), CreatedAt: now,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		back("That loss has already been claimed.")
-		return
+	mine := func(id int64) bool {
+		ch, err := app.queries.GetCharacter(ctx, id)
+		return err == nil && ch.UserID == userID
 	}
-	if err != nil {
-		logging.Errorf("srp: save request for killmail %d: %v", km.KillmailID, err)
-		back("The request could not be saved; check the server log.")
-		return
-	}
-	logging.Infof("srp: user %d asked for killmail %d on op %d (request %d)", userID, km.KillmailID, op.ID, id)
-	back("Request sent. You will be told here when it is answered.")
+	note := humanize.Clip(strings.TrimSpace(r.Form.Get("note")), srpNoteMax)
+	message, _ := app.fileClaim(ctx, op, killID, userID, mine, note, time.Now().UTC())
+	back(message)
 }
 
 // handleSRPWithdraw takes back a request nobody has answered

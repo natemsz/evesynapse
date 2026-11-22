@@ -1006,6 +1006,11 @@ var pgDoctrineOwnersSchema string
 //go:embed schema_pg/167_live_fleet.sql
 var pgLiveFleetSchema string
 
+// Step 168: ship replacement for any owner, and replacement policies.
+//
+//go:embed schema_pg/168_srp_owners.sql
+var pgSRPOwnersSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1201,6 +1206,7 @@ func schemaSteps() []schemaStep {
 		{165, "fleets", pgFleetsSchema, ""},
 		{166, "doctrine owners", pgDoctrineOwnersSchema, ""},
 		{167, "live fleet", pgLiveFleetSchema, ""},
+		{168, "srp owners", pgSRPOwnersSchema, ""},
 	}
 }
 

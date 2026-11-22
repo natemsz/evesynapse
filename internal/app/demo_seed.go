@@ -2643,7 +2643,8 @@ func (s *demoSeed) writeOrgRows(ctx context.Context) error {
 			continue
 		}
 		reqID, err := q.CreateSRPRequest(ctx, db.CreateSRPRequestParams{
-			CorporationID: demoCorpID, OpID: opIDs[c.op], KillmailID: c.killmail, KillmailHash: c.hash,
+			CorporationID: demoCorpID, OwnerKind: ownerCorporation, OwnerID: demoCorpID,
+			OpID: opIDs[c.op], KillmailID: c.killmail, KillmailHash: c.hash, SuggestedPayout: c.value,
 			CharacterID: demoCharacterID, UserID: s.userID, ShipTypeID: t(c.ship), SolarSystemID: c.system,
 			LostAt: now.Add(-c.lostAgo), LossValue: c.value, Note: c.note, CreatedAt: now.Add(-c.lostAgo + 3*hour),
 		})

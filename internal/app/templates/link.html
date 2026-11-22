@@ -47,7 +47,7 @@
     <div class="su-tiers">
       {{range .Theme.Types}}
       <label class="su-tier">
-        <input type="radio" name="ttype" value="{{.ID}}"{{if .Selected}} checked{{end}}>
+        <input type="radio" name="ttype" value="{{.ID}}"{{if .Selected}} checked{{end}}{{if .Disabled}} disabled{{end}}>
         <span class="su-tier-name">{{.Title}}</span>
         <span class="su-tier-blurb">{{.Blurb}}</span>
       </label>
@@ -59,11 +59,9 @@
         <input type="radio" name="tscheme" value="{{.ID}}"{{if .Selected}} checked{{end}}>
         <span class="scheme-swatch sw-{{if .ID}}{{.ID}}{{else}}default{{end}}" aria-hidden="true"></span>
         <span class="scheme-meta"><span class="scheme-name">{{.Name}}</span><span class="scheme-sub">{{.Sub}}</span></span>
-        {{if not .FullOK}}<small class="su-soon" data-su-soon{{if not .Pending}} hidden{{end}}>Wallpaper coming soon</small>{{end}}
       </label>
       {{end}}
     </div>
-    <p class="su-fullnote" data-su-fullnote{{if not .Theme.Full}} hidden{{end}}><small>Scheme wallpapers are still on the way: a scheme picked at Full applies at Muted until its wallpaper lands.</small></p>
     <p class="lk-actions"><button class="btn" type="submit">Continue</button> <a href="{{.StepBack}}">Go back</a></p>
   </form>
 </section>

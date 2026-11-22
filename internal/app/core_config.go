@@ -409,6 +409,11 @@ func LoadConfig() (Config, error) {
 	if !ok {
 		logging.Warnf("evesynapse: NOTIFY_POLL_SECONDS=%q is not a whole number of seconds; using %d", os.Getenv("NOTIFY_POLL_SECONDS"), notifyPoll)
 	}
+	assets := parseAssetsPath(os.Getenv("ASSETS_PATH"))
+	if assets == "" && strings.TrimSpace(os.Getenv("ASSETS_PATH")) != "" {
+		logging.Warnf("evesynapse: ASSETS_PATH=%q is not an https address; using the built-in assets", os.Getenv("ASSETS_PATH"))
+	}
+	setAssetsBase(assets)
 	return Config{
 		notifyPoll:                 notifyPoll,
 		workerTiersOff:             strings.EqualFold(strings.TrimSpace(os.Getenv("WORKER_TIERS")), "off"),

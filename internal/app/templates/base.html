@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-{{if .ThemeAccount}}<meta name="es-theme-account" content="{{if .ThemeStored}}stored{{else}}none{{end}}">{{end}}<script src="/static/boot.js?v={{.AssetVersion}}" data-cfasync="false"></script>
+{{with assetsBase}}<meta name="es-assets" content="{{.}}">{{end}}{{if .ThemeAccount}}<meta name="es-theme-account" content="{{if .ThemeStored}}stored{{else}}none{{end}}">{{end}}<script src="/static/boot.js?v={{.AssetVersion}}" data-cfasync="false"></script>
 <title>{{template "title" .}} · EveSynapse</title>
 {{if .HeadMeta}}{{.HeadMeta}}{{end}}
 {{if .AutoRefresh}}<noscript><meta http-equiv="refresh" content="5"></noscript>{{end}}
@@ -20,11 +20,11 @@
 <meta name="apple-mobile-web-app-title" content="EveSynapse">
 {{/* The backdrop preload names the art the page will paint: the full art for the Full backdrop and the Minmatar full tier, the muted twins otherwise, none for the glow backdrop (bg.css). */}}
 {{if or (and (not .ThemeScheme) (eq .ThemeBackdrop "full")) (and (or (eq .ThemeScheme "minmatar") (eq .ThemeScheme "minmatar-v3")) (eq .ThemeTier "full"))}}
-<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-uhd.jxl?v=afdbe38df4d5f595" media="(min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx)">
-<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-4k.jxl?v=e6653b67c49cd641" media="((min-width: 1501px) and (max-width: 3200px) and (max-resolution: 1.99dppx)), ((min-width: 751px) and (max-width: 1600px) and (min-resolution: 2dppx))">
+<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-uhd.jxl?v=afdbe38df4d5f595" media="(min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx)">
+<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-4k.jxl?v=e6653b67c49cd641" media="((min-width: 1501px) and (max-width: 3200px) and (max-resolution: 1.99dppx)), ((min-width: 751px) and (max-width: 1600px) and (min-resolution: 2dppx))">
 {{else if not (and (not .ThemeScheme) (eq .ThemeBackdrop "glow"))}}
-<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-muted-uhd.jxl?v=b7e4118004978f2e" media="(min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx)">
-<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-muted-4k.jxl?v=73ff76cacb449b10" media="((min-width: 1501px) and (max-width: 3200px) and (max-resolution: 1.99dppx)), ((min-width: 751px) and (max-width: 1600px) and (min-resolution: 2dppx))">
+<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-muted-uhd.jxl?v=b7e4118004978f2e" media="(min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx)">
+<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-muted-4k.jxl?v=73ff76cacb449b10" media="((min-width: 1501px) and (max-width: 3200px) and (max-resolution: 1.99dppx)), ((min-width: 751px) and (max-width: 1600px) and (min-resolution: 2dppx))">
 {{end}}
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/evesansneue-regular.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/evesansneue-space-regular.woff2" crossorigin>
@@ -32,6 +32,7 @@
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/rajdhani-600.woff2" crossorigin>
 <link rel="stylesheet" href="/static/style.css?v={{.AssetVersion}}">
 <link rel="stylesheet" href="/static/bg.css?v={{.AssetVersion}}">
+{{if assetsBase}}<link rel="stylesheet" href="/static/wallpapers-cdn.css?v={{.AssetVersion}}"><script src="/static/assets-probe.js?v={{.AssetVersion}}"></script>{{end}}
 <link rel="stylesheet" href="/static/layout.css?v={{.AssetVersion}}">
 {{if or (eq .NavPage "planner.html") (eq .NavPage "industry.html")}}<link rel="stylesheet" href="/static/plan.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "character.html"}}<link rel="stylesheet" href="/static/overview.css?v={{.AssetVersion}}">{{end}}

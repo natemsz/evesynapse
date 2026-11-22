@@ -79,19 +79,17 @@ type linkView struct {
 type signupThemeView struct {
 	Types   []signupThemeType
 	Schemes []signupThemeScheme
-	Full    bool // the full type is picked: scheme rows show their wallpaper note
 }
 
 type signupThemeType struct {
 	ID, Title, Blurb string
 	Selected         bool
+	Disabled         bool
 }
 
 type signupThemeScheme struct {
 	ID, Name, Sub string
 	Selected      bool
-	Pending       bool // a scheme at the full type: its wallpaper has not landed yet
-	FullOK        bool
 }
 
 var signupThemeTypes = []signupThemeType{
@@ -123,22 +121,23 @@ func signupThemeViewFor(q url.Values) *signupThemeView {
 			valid = true
 		}
 	}
-	if !valid {
+	if !valid || (tierType == "full" && !fullWallpapers()) {
 		tierType = "muted"
 	}
 	scheme := q.Get("tscheme")
 	if !validThemeScheme(scheme) {
 		scheme = ""
 	}
-	view := &signupThemeView{Full: tierType == "full"}
+	view := &signupThemeView{}
 	for _, t := range signupThemeTypes {
 		t.Selected = t.ID == tierType
+		if t.ID == "full" && !fullWallpapers() {
+			t.Disabled, t.Blurb = true, "Not available on this server."
+		}
 		view.Types = append(view.Types, t)
 	}
 	for _, s := range signupThemeSchemes {
 		s.Selected = s.ID == scheme
-		s.FullOK = s.ID == "" || schemeTierFullOK(s.ID)
-		s.Pending = view.Full && !s.FullOK
 		view.Schemes = append(view.Schemes, s)
 	}
 	return view

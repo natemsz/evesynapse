@@ -146,6 +146,10 @@ func staticHandler() (http.Handler, error) {
 	}
 	fileServer := http.FileServer(http.FS(sub))
 	return http.StripPrefix("/static", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if body, ok := cdnStylesheet(req.URL.Path); ok {
+			serveCDNStylesheet(w, req, body)
+			return
+		}
 		idx := loadStaticIndex()
 		versioned := req.URL.Query().Get("v") == idx.version
 		if !versioned {

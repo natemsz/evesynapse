@@ -44,14 +44,12 @@ var themeSchemes = map[string]bool{
 
 func validThemeScheme(s string) bool { return s == "" || themeSchemes[s] }
 
-func validThemeTier(s string) bool { return s == "muted" || s == "minimalistic" }
+func validThemeTier(s string) bool { return s == "full" || s == "muted" || s == "minimalistic" }
 
-// schemeTierFullOK is whether a scheme honours the full tier: Minmatar
-// and v3 Minmatar, which reuse the default calm wallpapers, so their full
-// backdrop is the calm art. Every other scheme degrades full to
-// muted until its own wallpapers are made.
+// schemeTierFullOK is whether a scheme can use the full tier: every
+// scheme can when the asset CDN is set, and none can without it.
 func schemeTierFullOK(scheme string) bool {
-	return scheme == "minmatar" || scheme == "minmatar-v3"
+	return fullWallpapers() && validThemeScheme(scheme)
 }
 
 // validThemeVision is whether s is a colour-blind mode the picker
@@ -67,10 +65,9 @@ func validThemeBackdrop(s string) bool {
 // signupThemePrefs turns the sign-up theme step's two answers (a
 // scheme, "" for the default look, and a type: full, muted or
 // minimalistic) into the stored account theme. The default look's
-// types are its backdrop strengths, the Settings mapping. A scheme
-// at full applies at muted until its wallpaper lands, except Minmatar
-// and v3 Minmatar, which reuse the calm wallpapers; the same degrade
-// parseThemePrefs applies to a tier it cannot honour.
+// types are its backdrop strengths, the Settings mapping. Without the
+// asset CDN, full applies at muted, the same degrade parseThemePrefs
+// applies to a tier it cannot honour.
 // ok is false when either answer is one the step cannot produce.
 func signupThemePrefs(scheme, tierType string) (themePrefs, bool) {
 	if !validThemeScheme(scheme) {
@@ -81,6 +78,9 @@ func signupThemePrefs(scheme, tierType string) (themePrefs, bool) {
 	default:
 		return themePrefs{}, false
 	}
+	if tierType == "full" && !fullWallpapers() {
+		tierType = "muted"
+	}
 	if scheme == "" {
 		switch tierType {
 		case "full":
@@ -90,9 +90,6 @@ func signupThemePrefs(scheme, tierType string) (themePrefs, bool) {
 		default:
 			return themePrefs{Backdrop: "muted"}, true
 		}
-	}
-	if tierType == "full" && !schemeTierFullOK(scheme) {
-		tierType = "muted"
 	}
 	return themePrefs{Scheme: scheme, Tier: tierType}, true
 }
@@ -119,6 +116,9 @@ func parseThemePrefs(blob string) themePrefs {
 	}
 	if !validThemeBackdrop(prefs.Backdrop) {
 		prefs.Backdrop = ""
+	}
+	if prefs.Backdrop == "full" && !fullWallpapers() {
+		prefs.Backdrop = "muted"
 	}
 	if !validThemeVision(prefs.Vision) {
 		prefs.Vision = ""
@@ -181,9 +181,16 @@ func (app *Application) handleSettingsThemeSave(w http.ResponseWriter, r *http.R
 		stored, _ := app.themePrefsFor(ctx, userID)
 		prefs.Vision = stored.Vision
 	}
+	if !fullWallpapers() {
+		if prefs.Backdrop == "full" {
+			prefs.Backdrop = "muted"
+		}
+		if prefs.Tier == "full" {
+			prefs.Tier = "muted"
+		}
+	}
 	if !validThemeScheme(prefs.Scheme) || !validThemeBackdrop(prefs.Backdrop) || !validThemeVision(prefs.Vision) ||
-		(prefs.Scheme != "" && prefs.Tier != "full" && !validThemeTier(prefs.Tier)) ||
-		(prefs.Tier == "full" && !schemeTierFullOK(prefs.Scheme)) {
+		(prefs.Scheme != "" && !validThemeTier(prefs.Tier)) {
 		http.Error(w, "unknown theme", http.StatusBadRequest)
 		return
 	}

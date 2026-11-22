@@ -70,10 +70,15 @@ func warnIfServedInTheClear(cfg Config) {
 // exceptions, so the policy names no third-party host and carries
 // no nonce.
 func contentSecurityPolicy() string {
+	imgs, media := "", ""
+	if origin := assetsOrigin(); origin != "" {
+		imgs, media = " "+origin, "media-src 'self' "+origin+"; "
+	}
 	return "default-src 'self'; " +
 		"script-src 'self'; " +
 		"style-src 'self'; " +
-		"img-src 'self' data: https://images.evetech.net; " +
+		"img-src 'self' data: https://images.evetech.net" + imgs + "; " +
+		media +
 		"font-src 'self'; " +
 		"connect-src 'self'; " +
 		"object-src 'none'; " +

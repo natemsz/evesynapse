@@ -9,6 +9,7 @@ import (
 	"fmt"
 	json "github.com/goccy/go-json"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -248,7 +249,11 @@ func (app *mod) srpRows(ctx context.Context, requests []db.SrpRequest, ops map[i
 		}
 		if row.Open {
 			if op.DoctrineID != 0 {
-				if in, err := app.queries.DoctrineHasShip(ctx, db.DoctrineHasShipParams{DoctrineID: op.DoctrineID, ShipTypeID: req.ShipTypeID}); err == nil {
+				// A fleet that has started is judged by the doctrine it
+				// flew, not by later edits.
+				if op.DoctrineSnapshotAt.Valid {
+					row.Doctrine, row.DoctrineShip = op.Doctrine, slices.Contains(op.DoctrineSnapshotShips, req.ShipTypeID)
+				} else if in, err := app.queries.DoctrineHasShip(ctx, db.DoctrineHasShipParams{DoctrineID: op.DoctrineID, ShipTypeID: req.ShipTypeID}); err == nil {
 					row.Doctrine, row.DoctrineShip = op.Doctrine, in
 				}
 			}

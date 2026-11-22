@@ -36,20 +36,35 @@
         <input id="fl-start" type="datetime-local" name="starts_at" value="{{.StartsAt}}" required></div>
       <div class="field"><label class="field-label" for="fl-length">Length in minutes</label>
         <input id="fl-length" type="number" name="duration" value="{{.Duration}}" min="15" max="1440" step="5" required></div>
-      {{if .Doctrines}}
-      <div class="field"><label class="field-label" for="fl-doctrine-id">Doctrine</label>
-        <select id="fl-doctrine-id" name="doctrine_id"><option value="0">Not one of the corporation's</option>{{range .Doctrines}}<optgroup label="{{.Corporation}}">{{range .Choices}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</optgroup>{{end}}</select></div>
-      <div class="field"><label class="field-label" for="fl-doctrine">Or write it in</label>
-        <input id="fl-doctrine" type="text" name="doctrine" value="{{if not .DoctrineID}}{{.Doctrine}}{{end}}" maxlength="120" placeholder="e.g. Shield Lokis"></div>
-      {{else}}
-      <div class="field"><label class="field-label" for="fl-doctrine">Doctrine</label>
-        <input id="fl-doctrine" type="text" name="doctrine" value="{{.Doctrine}}" maxlength="120" placeholder="e.g. Shield Lokis"></div>
-      {{end}}
       <div class="field"><label class="field-label" for="fl-formup">Form up</label>
         <input id="fl-formup" type="text" name="form_up" value="{{.FormUp}}" maxlength="120" placeholder="e.g. Jita 4-4"></div>
       <div class="field wide"><label class="field-label" for="fl-details">Details</label>
         <textarea id="fl-details" name="description" rows="4" maxlength="2000">{{.Description}}</textarea></div>
     </div>
+  </fieldset>
+
+  <fieldset class="l-panel fl-choices fl-fly">
+    <legend><h2>What to fly</h2></legend>
+    {{if .DoctrineLocked}}
+    <p class="fl-hint">This fleet is over, so what it flew stays on record: {{if .Doctrine}}<b>{{.Doctrine}}</b>{{else}}no doctrine{{end}}.</p>
+    {{else}}
+    <div class="fl-options fl-options--row">
+    {{range .DoctrineModes}}<label><input type="radio" name="doctrine_mode" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}<small>{{.Hint}}</small></span></label>{{end}}
+    </div>
+    <div class="form-grid fl-fly-pick">
+      {{if .Doctrines}}
+      <div class="field"><label class="field-label" for="fl-doctrine-id">Doctrine</label>
+        <select id="fl-doctrine-id" name="doctrine_id"><option value="0">Not from the list</option>{{range .Doctrines}}<optgroup label="{{.Owner}}">{{range .Choices}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</optgroup>{{end}}</select></div>
+      <div class="field"><label class="field-label" for="fl-doctrine">Or write it in</label>
+        <input id="fl-doctrine" type="text" name="doctrine" value="{{if not .DoctrineID}}{{.Doctrine}}{{end}}" maxlength="120" placeholder="e.g. Shield Lokis" aria-describedby="fl-doctrine-hint">
+        <span class="field-hint" id="fl-doctrine-hint">A doctrine you write in can be suggested but not required.</span></div>
+      {{else}}
+      <div class="field wide"><label class="field-label" for="fl-doctrine">Doctrine</label>
+        <input id="fl-doctrine" type="text" name="doctrine" value="{{.Doctrine}}" maxlength="120" placeholder="e.g. Shield Lokis" aria-describedby="fl-doctrine-hint">
+        <span class="field-hint" id="fl-doctrine-hint">{{.OwnerName}} has no doctrines yet.{{with .DoctrinesHref}} <a href="{{.}}">Make one</a> to require it and show pilots its fits.{{end}}</span></div>
+      {{end}}
+    </div>
+    {{end}}
   </fieldset>
 
   {{if .CanSetAccess}}

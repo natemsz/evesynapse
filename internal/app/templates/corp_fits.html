@@ -1,5 +1,5 @@
-{{define "title"}}Corporate Loadouts{{end}}
-{{define "pagetitle"}}<h1><span class="gt">Corporate Loadouts</span></h1>{{end}}
+{{define "title"}}{{.CorpFits.Title}}{{end}}
+{{define "pagetitle"}}<h1><span class="gt">{{.CorpFits.Title}}</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 
@@ -7,12 +7,12 @@
 
 <div class="l-page">
 {{with .CorpFits}}
-{{if not .CorpID}}
-<div class="l-panel co-gate"><p>None of your characters is in a player corporation EveSynapse knows of yet, so there are no corporate fits to show.</p></div>
+{{if not .OwnerKey}}
+<div class="l-panel co-gate"><p>None of your characters is in a player corporation, alliance or community EveSynapse knows of yet, so there are no fits to show.</p></div>
 {{else}}
 <div class="l-head">
-  <div class="l-head-pick">{{template "corpselector" .CorpOptions}}</div>
-  <p class="l-head-sum"><b>{{.CorpName}}</b></p>
+  <div class="l-head-pick">{{template "ownerselector" .OwnerOptions}}</div>
+  <p class="l-head-sum"><b>{{.OwnerName}}</b></p>
 </div>
 
 {{template "fitbrowser" .Browser}}

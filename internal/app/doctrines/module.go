@@ -1,5 +1,6 @@
-// Package doctrines is the Doctrines module: a corporation's doctrines,
-// the fits that make them up, and the corporate loadouts browser. Which
+// Package doctrines is the Doctrines module: the doctrines of a
+// corporation, alliance or community, the fits that make them up, and
+// the loadouts browser. Which
 // doctrine a keeper is choosing fits for, and reading a doctrine fit as a
 // fit document, are access questions core answers (corp_doctrine_access.go)
 // for the public fits browser and the fitting tool.
@@ -19,19 +20,27 @@ var Module = module.Module{
 	ID:       "doctrines",
 	Title:    "Doctrines",
 	Requires: []string{"fitting"},
-	// Anyone in a corporation can read its doctrines; who keeps them is the
-	// corporation's own permission rule.
+	// An owner's members can read its doctrines, and a doctrine can be
+	// opened to anyone with its link; who keeps them is the owner's own
+	// permission rule.
 	Scopes: []module.Scope{},
 	EnhanceScopes: []module.Scope{
 		{Scope: "esi-characters.read_corporation_roles.v1", Unlocks: "Directors and role holders can keep their corporation's doctrines."},
 		{Scope: "esi-fittings.read_fittings.v1", Unlocks: "A keeper can add a fit from their in-game fittings to a doctrine."},
 	},
 	Activities: []string{"corporation", "fitting"},
+	// The pages live under Fleets; the corporation menu keeps its way in.
 	Nav: []module.NavSection{{
 		Section: "corporation",
 		Entries: []module.NavEntry{
 			{Href: "/doctrines/", Label: "Doctrines", Pages: []string{"doctrines.html", "doctrine.html"}, After: "/corporations/killmails/"},
 			{Href: "/doctrines/fits/", Label: "Corporate Loadouts", Pages: []string{"corp_fits.html"}, After: "/doctrines/"},
+		},
+	}, {
+		Section: "fleets",
+		Entries: []module.NavEntry{
+			{Href: "/doctrines/", Label: "Doctrines", Pages: []string{"doctrines.html", "doctrine.html"}, After: "/fleets/history/"},
+			{Href: "/doctrines/fits/", Label: "Loadouts", Pages: []string{"corp_fits.html"}, After: "/doctrines/"},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {
@@ -44,16 +53,18 @@ var Module = module.Module{
 		auth.Post("/doctrines/create", h((*mod).handleDoctrineCreate))
 		auth.Get("/doctrines/suggest", h((*mod).handleDoctrineSuggest))
 		auth.Get("/doctrines/boosts.json", h((*mod).handleDoctrineBoosts))
-		auth.Get("/doctrines/{doctrineID}", h((*mod).handleDoctrine))
+		// A doctrine's page decides for itself: a public one needs no
+		// sign-in, and a community's opens to a verified pilot in it.
+		r.With(deps.AnonPages()).Get("/doctrines/{doctrineID}", h((*mod).handleDoctrine))
 		auth.Post("/doctrines/{doctrineID}/save", h((*mod).handleDoctrineSave))
 		auth.Post("/doctrines/{doctrineID}/delete", h((*mod).handleDoctrineDelete))
 		auth.Post("/doctrines/{doctrineID}/fits/add", h((*mod).handleDoctrineFitAdd))
 		auth.Post("/doctrines/{doctrineID}/fits/{fitID}/remove", h((*mod).handleDoctrineFitRemove))
 	},
 	Pages: []module.Page{
-		{Template: "doctrines.html", Section: "corporation"},
-		{Template: "doctrine.html", Section: "corporation"},
-		{Template: "corp_fits.html", Section: "corporation"},
+		{Template: "doctrines.html", Section: "fleets"},
+		{Template: "doctrine.html", Section: "fleets"},
+		{Template: "corp_fits.html", Section: "fleets"},
 	},
 }
 

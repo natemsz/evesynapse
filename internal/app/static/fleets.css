@@ -89,5 +89,7 @@
 .fl-options input, .fl-check input { flex: none; margin-top: 0.2em; }
 .fl-options small, .fl-check small { display: block; color: var(--muted); font-size: var(--fs-xs); }
 .fl-rule { margin-top: var(--space-3); }
+.fl-fly-pick { margin-top: var(--space-3); }
+.fl-fly:not(:has(input[value="suggested"]:checked, input[value="required"]:checked)) .fl-fly-pick { display: none; }
 .fl-see:not(:has(input[value="restricted"]:checked)) .fl-rule,
 .fl-join:not(:has(input[value="rule"]:checked)) .fl-rule { display: none; }

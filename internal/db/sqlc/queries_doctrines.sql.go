@@ -59,14 +59,18 @@ func (q *Queries) CountDoctrineFits(ctx context.Context, doctrineID int64) (int6
 
 const createDoctrine = `-- name: CreateDoctrine :one
 
-INSERT INTO doctrines (corporation_id, name, category, description, tags, created_by, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
-ON CONFLICT (corporation_id, lower(name)) DO NOTHING
+INSERT INTO doctrines (corporation_id, owner_kind, owner_id, visibility, name, category, description, tags, created_by, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $10)
+ON CONFLICT (owner_kind, owner_id, lower(name)) DO NOTHING
 RETURNING id
 `
 
 type CreateDoctrineParams struct {
 	CorporationID int64     `json:"corporation_id"`
+	OwnerKind     string    `json:"owner_kind"`
+	OwnerID       int64     `json:"owner_id"`
+	Visibility    string    `json:"visibility"`
 	Name          string    `json:"name"`
 	Category      string    `json:"category"`
 	Description   string    `json:"description"`
@@ -81,6 +85,9 @@ type CreateDoctrineParams struct {
 func (q *Queries) CreateDoctrine(ctx context.Context, arg CreateDoctrineParams) (int64, error) {
 	row := q.db.QueryRow(ctx, createDoctrine,
 		arg.CorporationID,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.Visibility,
 		arg.Name,
 		arg.Category,
 		arg.Description,
@@ -133,7 +140,7 @@ func (q *Queries) DoctrineHasShip(ctx context.Context, arg DoctrineHasShipParams
 }
 
 const getDoctrine = `-- name: GetDoctrine :one
-SELECT id, corporation_id, name, category, description, tags, created_by, created_at, updated_at FROM doctrines WHERE id = $1
+SELECT id, corporation_id, name, category, description, tags, created_by, created_at, updated_at, owner_kind, owner_id, visibility FROM doctrines WHERE id = $1
 `
 
 func (q *Queries) GetDoctrine(ctx context.Context, id int64) (Doctrine, error) {
@@ -149,29 +156,34 @@ func (q *Queries) GetDoctrine(ctx context.Context, id int64) (Doctrine, error) {
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OwnerKind,
+		&i.OwnerID,
+		&i.Visibility,
 	)
 	return i, err
 }
 
 const getDoctrineFit = `-- name: GetDoctrineFit :one
-SELECT f.id, f.doctrine_id, f.name, f.ship_type_id, f.items_json, f.fleet_role, f.note, f.added_by, f.added_at, f.boosts_json, d.corporation_id, d.name AS doctrine_name
+SELECT f.id, f.doctrine_id, f.name, f.ship_type_id, f.items_json, f.fleet_role, f.note, f.added_by, f.added_at, f.boosts_json, d.owner_kind, d.owner_id, d.visibility, d.name AS doctrine_name
 FROM doctrine_fits f JOIN doctrines d ON d.id = f.doctrine_id
 WHERE f.id = $1
 `
 
 type GetDoctrineFitRow struct {
-	ID            int64          `json:"id"`
-	DoctrineID    int64          `json:"doctrine_id"`
-	Name          string         `json:"name"`
-	ShipTypeID    int64          `json:"ship_type_id"`
-	ItemsJson     string         `json:"items_json"`
-	FleetRole     string         `json:"fleet_role"`
-	Note          string         `json:"note"`
-	AddedBy       int64          `json:"added_by"`
-	AddedAt       time.Time      `json:"added_at"`
-	BoostsJson    sql.NullString `json:"boosts_json"`
-	CorporationID int64          `json:"corporation_id"`
-	DoctrineName  string         `json:"doctrine_name"`
+	ID           int64          `json:"id"`
+	DoctrineID   int64          `json:"doctrine_id"`
+	Name         string         `json:"name"`
+	ShipTypeID   int64          `json:"ship_type_id"`
+	ItemsJson    string         `json:"items_json"`
+	FleetRole    string         `json:"fleet_role"`
+	Note         string         `json:"note"`
+	AddedBy      int64          `json:"added_by"`
+	AddedAt      time.Time      `json:"added_at"`
+	BoostsJson   sql.NullString `json:"boosts_json"`
+	OwnerKind    string         `json:"owner_kind"`
+	OwnerID      int64          `json:"owner_id"`
+	Visibility   string         `json:"visibility"`
+	DoctrineName string         `json:"doctrine_name"`
 }
 
 func (q *Queries) GetDoctrineFit(ctx context.Context, id int64) (GetDoctrineFitRow, error) {
@@ -188,10 +200,59 @@ func (q *Queries) GetDoctrineFit(ctx context.Context, id int64) (GetDoctrineFitR
 		&i.AddedBy,
 		&i.AddedAt,
 		&i.BoostsJson,
-		&i.CorporationID,
+		&i.OwnerKind,
+		&i.OwnerID,
+		&i.Visibility,
 		&i.DoctrineName,
 	)
 	return i, err
+}
+
+const listCommunityDoctrines = `-- name: ListCommunityDoctrines :many
+SELECT id, name, category, visibility FROM doctrines
+WHERE owner_kind = 'community' AND owner_id = $1
+  AND (visibility = 'public' OR $2::boolean)
+ORDER BY lower(category), lower(name)
+LIMIT 24
+`
+
+type ListCommunityDoctrinesParams struct {
+	CommunityID    int64 `json:"community_id"`
+	IncludeMembers bool  `json:"include_members"`
+}
+
+type ListCommunityDoctrinesRow struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Category   string `json:"category"`
+	Visibility string `json:"visibility"`
+}
+
+// What a community's page lists: its public doctrines, and the rest
+// for its members.
+func (q *Queries) ListCommunityDoctrines(ctx context.Context, arg ListCommunityDoctrinesParams) ([]ListCommunityDoctrinesRow, error) {
+	rows, err := q.db.Query(ctx, listCommunityDoctrines, arg.CommunityID, arg.IncludeMembers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCommunityDoctrinesRow
+	for rows.Next() {
+		var i ListCommunityDoctrinesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Category,
+			&i.Visibility,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listDoctrineFitBoosts = `-- name: ListDoctrineFitBoosts :many
@@ -273,14 +334,21 @@ func (q *Queries) ListDoctrineFits(ctx context.Context, doctrineIds []int64) ([]
 	return items, nil
 }
 
-const listDoctrinesForCorporations = `-- name: ListDoctrinesForCorporations :many
-SELECT id, corporation_id, name, category, description, tags, created_by, created_at, updated_at FROM doctrines
-WHERE corporation_id = ANY($1::bigint[])
-ORDER BY corporation_id, lower(category), lower(name)
+const listDoctrinesForOwner = `-- name: ListDoctrinesForOwner :many
+SELECT id, corporation_id, name, category, description, tags, created_by, created_at, updated_at, owner_kind, owner_id, visibility FROM doctrines
+WHERE owner_kind = $1 AND owner_id = $2
+ORDER BY lower(category), lower(name)
+LIMIT 200
 `
 
-func (q *Queries) ListDoctrinesForCorporations(ctx context.Context, corporationIds []int64) ([]Doctrine, error) {
-	rows, err := q.db.Query(ctx, listDoctrinesForCorporations, corporationIds)
+type ListDoctrinesForOwnerParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+// One owner's doctrines, up to the most a page lists.
+func (q *Queries) ListDoctrinesForOwner(ctx context.Context, arg ListDoctrinesForOwnerParams) ([]Doctrine, error) {
+	rows, err := q.db.Query(ctx, listDoctrinesForOwner, arg.OwnerKind, arg.OwnerID)
 	if err != nil {
 		return nil, err
 	}
@@ -298,6 +366,55 @@ func (q *Queries) ListDoctrinesForCorporations(ctx context.Context, corporationI
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.Visibility,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDoctrinesForOwners = `-- name: ListDoctrinesForOwners :many
+SELECT id, corporation_id, name, category, description, tags, created_by, created_at, updated_at, owner_kind, owner_id, visibility FROM doctrines
+WHERE (owner_kind, owner_id) IN (SELECT unnest($1::text[]), unnest($2::bigint[]))
+ORDER BY owner_kind, owner_id, lower(category), lower(name)
+LIMIT 100
+`
+
+type ListDoctrinesForOwnersParams struct {
+	OwnerKinds []string `json:"owner_kinds"`
+	OwnerIds   []int64  `json:"owner_ids"`
+}
+
+// The doctrines of several owners, for the fitting tool's boosts.
+func (q *Queries) ListDoctrinesForOwners(ctx context.Context, arg ListDoctrinesForOwnersParams) ([]Doctrine, error) {
+	rows, err := q.db.Query(ctx, listDoctrinesForOwners, arg.OwnerKinds, arg.OwnerIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Doctrine
+	for rows.Next() {
+		var i Doctrine
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.Name,
+			&i.Category,
+			&i.Description,
+			&i.Tags,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.Visibility,
 		); err != nil {
 			return nil, err
 		}
@@ -323,16 +440,70 @@ func (q *Queries) SetDoctrineFitBoosts(ctx context.Context, arg SetDoctrineFitBo
 	return err
 }
 
+const snapshotStartedFleetDoctrines = `-- name: SnapshotStartedFleetDoctrines :execrows
+WITH due AS (
+    SELECT o.id, o.doctrine_id
+    FROM ops o
+    JOIN doctrines d ON d.id = o.doctrine_id AND d.owner_kind = o.owner_kind AND d.owner_id = o.owner_id
+    WHERE o.doctrine_id <> 0
+      AND o.doctrine_snapshot_at IS NULL
+      AND o.starts_at <= $1::timestamptz
+      AND ($2::bigint = 0 OR o.doctrine_id = $2::bigint)
+    ORDER BY o.starts_at, o.id
+    LIMIT 100
+    FOR UPDATE OF o
+), copied AS (
+    SELECT due.id,
+           json_build_object(
+               'id', d.id, 'name', d.name, 'category', d.category,
+               'fits', COALESCE(fits.list, '[]'::json))::text AS payload,
+           COALESCE(fits.ships, '{}'::bigint[]) AS ships
+    FROM due
+    JOIN doctrines d ON d.id = due.doctrine_id
+    LEFT JOIN LATERAL (
+        SELECT json_agg(json_build_object(
+                   'id', f.id, 'name', f.name, 'ship_type_id', f.ship_type_id,
+                   'role', f.fleet_role, 'note', f.note, 'items_json', f.items_json) ORDER BY f.id) AS list,
+               array_agg(DISTINCT f.ship_type_id) AS ships
+        FROM doctrine_fits f WHERE f.doctrine_id = d.id
+    ) fits ON TRUE
+)
+UPDATE ops o SET
+    doctrine_snapshot       = copied.payload,
+    doctrine_snapshot_ships = copied.ships,
+    doctrine_snapshot_at    = $1::timestamptz
+FROM copied
+WHERE o.id = copied.id
+`
+
+type SnapshotStartedFleetDoctrinesParams struct {
+	TakenAt      time.Time `json:"taken_at"`
+	OnlyDoctrine int64     `json:"only_doctrine"`
+}
+
+// Stores the doctrine of fleets that have started and have no snapshot
+// yet, a batch at a time; doctrine_id 0 means any doctrine. A doctrine
+// that is gone, or is not the fleet's owner's, is never copied.
+func (q *Queries) SnapshotStartedFleetDoctrines(ctx context.Context, arg SnapshotStartedFleetDoctrinesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, snapshotStartedFleetDoctrines, arg.TakenAt, arg.OnlyDoctrine)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateDoctrine = `-- name: UpdateDoctrine :execrows
 UPDATE doctrines d SET
     name        = $1,
     category    = $2,
     description = $3,
     tags        = $4,
-    updated_at  = $5
-WHERE d.id = $6
+    visibility  = $5,
+    updated_at  = $6
+WHERE d.id = $7
   AND NOT EXISTS (SELECT 1 FROM doctrines o
-                  WHERE o.corporation_id = d.corporation_id AND lower(o.name) = lower($1) AND o.id <> d.id)
+                  WHERE o.owner_kind = d.owner_kind AND o.owner_id = d.owner_id
+                    AND lower(o.name) = lower($1) AND o.id <> d.id)
 `
 
 type UpdateDoctrineParams struct {
@@ -340,6 +511,7 @@ type UpdateDoctrineParams struct {
 	Category    string    `json:"category"`
 	Description string    `json:"description"`
 	Tags        string    `json:"tags"`
+	Visibility  string    `json:"visibility"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	ID          int64     `json:"id"`
 }
@@ -350,6 +522,7 @@ func (q *Queries) UpdateDoctrine(ctx context.Context, arg UpdateDoctrineParams) 
 		arg.Category,
 		arg.Description,
 		arg.Tags,
+		arg.Visibility,
 		arg.UpdatedAt,
 		arg.ID,
 	)

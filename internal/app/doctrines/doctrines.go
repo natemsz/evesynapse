@@ -30,19 +30,21 @@ import (
 // ---------------------------------------------------------------------------
 // Doctrines.
 //
-// A doctrine is a corporation's named set of fits for a kind of fleet.
-// Every member with a character in the corporation can read its
-// doctrines; its directors and CEO keep them, with whoever they hand
-// that to (owner_permissions.go).
+// A doctrine is a named set of fits for a kind of fleet, owned by a
+// corporation, alliance or community. The owner's members can read it,
+// and a keeper can open it to anyone with its link. Whoever runs the
+// owner keeps its doctrines, with whoever they hand that to
+// (owner_permissions.go).
 //
 // A fit in a doctrine is a copy of a fit document from the fitting
 // tool: one of the keeper's saved fits, a public fit, a fit from
 // another doctrine, or pasted EFT text. Being a copy, it opens in the
-// fitting tool for anyone in the corporation, whether or not the fit
-// it came from is public or still exists.
+// fitting tool for anyone who can read the doctrine, whether or not
+// the fit it came from is public or still exists.
 //
-// An op can name a doctrine (ops.go), and ship replacement shows
-// whether a lost ship was one of the doctrine's (corp_srp.go).
+// A fleet can fly a doctrine (fleets.go) and keeps a copy of it from
+// its start, and ship replacement shows whether a lost ship was in
+// that copy.
 // ---------------------------------------------------------------------------
 
 const doctrinesPath = "/doctrines/"
@@ -94,26 +96,29 @@ type doctrineCard struct {
 	Fits        []module.DoctrineFitView
 }
 
-// doctrineCorpView is the corporation a doctrines page is about.
-type doctrineCorpView struct {
-	ID        int64
-	Name      string
-	Manages   bool
-	Directs   bool
+// doctrineOwnerView is the owner a doctrines page is about.
+type doctrineOwnerView struct {
+	Key     string
+	Kind    string
+	Name    string
+	Manages bool
+	// HandOver is where the people who run the owner choose who else
+	// keeps its doctrines; empty for anyone else.
+	HandOver  string
 	Total     int // doctrines before the page's filters
 	Doctrines []doctrineCard
 }
 
-// doctrinesView is the /doctrines/ page: one corporation's doctrines.
+// doctrinesView is the /doctrines/ page: one owner's doctrines.
 type doctrinesView struct {
-	CorpOptions []module.OwnerOption
-	Corp        *doctrineCorpView // nil when the account is in no player corporation
-	Q           string
-	Category    string
-	Tag         string
-	Filtered    bool
-	Categories  []string
-	Tags        []string
+	OwnerOptions []module.OwnerOption
+	Owner        *doctrineOwnerView // nil when the account belongs to no owner
+	Q            string
+	Category     string
+	Tag          string
+	Filtered     bool
+	Categories   []string
+	Tags         []string
 }
 
 // doctrineFitViews turns stored fits into rows, by doctrine.
@@ -148,8 +153,8 @@ func (app *mod) handleDoctrines(w http.ResponseWriter, r *http.Request) {
 	view.Filtered = view.Q != "" || view.Category != "" || view.Tag != ""
 	data.Doctrines = view
 
-	corp, options := app.deps.PickCorporation(ctx, r, app.deps.PlayerCorps(ctx, userID))
-	if corp == 0 {
+	owner, options, found := app.deps.PickOwner(ctx, r, app.deps.DoctrineOwners(ctx, userID))
+	if !found {
 		app.deps.Render(ctx, w, http.StatusOK, "doctrines.html", data)
 		return
 	}
@@ -158,13 +163,19 @@ func (app *mod) handleDoctrines(w http.ResponseWriter, r *http.Request) {
 		logging.Errorf("doctrines: standing of user %d: %v", userID, err)
 		data.Error = "Could not load the doctrines; check the server log."
 	}
-	cv := &doctrineCorpView{ID: corp, Name: app.deps.CorpDisplayName(ctx, corp), Directs: st.Directs(corp)}
-	cv.Manages = app.deps.OwnerPermits(ctx, st, standing.CorporationOwner(corp), permDoctrines)
-	view.CorpOptions, view.Corp = options, cv
+	cv := &doctrineOwnerView{Key: owner.Key(), Kind: owner.Kind, Name: app.deps.OwnerName(ctx, owner)}
+	cv.Manages = app.deps.OwnerPermits(ctx, st, owner, permDoctrines)
+	if app.deps.HoldsProgramme(ctx, st, owner, permDoctrines) {
+		cv.HandOver = standing.Address("/fleets/permissions/", owner.Key())
+		if owner.Kind == standing.OwnerCorporation {
+			cv.HandOver = module.CorpAddress("/corporations/settings/", owner.ID)
+		}
+	}
+	view.OwnerOptions, view.Owner = options, cv
 
-	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, []int64{corp})
+	doctrines, err := app.queries.ListDoctrinesForOwner(ctx, db.ListDoctrinesForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 	if err != nil {
-		logging.Errorf("doctrines: list for corporation %d: %v", corp, err)
+		logging.Errorf("doctrines: list for %s: %v", owner.Key(), err)
 	}
 	ids := make([]int64, 0, len(doctrines))
 	for _, d := range doctrines {
@@ -190,10 +201,10 @@ func (app *mod) handleDoctrines(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDoctrineSuggest feeds the search boxes of the doctrine pages
-// (GET /doctrines/suggest?scope=&corporation=&q=). What it offers
-// depends on the box: doctrines and what they are filed under, a
-// corporation's fits, its categories, or the account's own saved fits.
-// A corporation's names go only to an account with a character in it.
+// (GET /doctrines/suggest?scope=&owner=&q=). What it offers depends on
+// the box: doctrines and what they are filed under, an owner's fits,
+// its categories, or the account's own saved fits. An owner's names go
+// only to an account that belongs to it.
 func (app *mod) handleDoctrineSuggest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.deps.UserID(ctx)
@@ -228,24 +239,20 @@ func (app *mod) handleDoctrineSuggest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	corp, _ := strconv.ParseInt(query.Get("corporation"), 10, 64)
-	inside := false
-	for _, mine := range app.deps.PlayerCorps(ctx, userID) {
-		inside = inside || mine == corp
-	}
-	if !inside {
+	owner, named := submittedOwner(query.Get("owner"), query.Get("corporation"))
+	if !named || !standing.Includes(app.deps.DoctrineOwners(ctx, userID), owner) {
 		app.deps.WriteSuggest(w, out)
 		return
 	}
 	if query.Get("scope") == "fits" {
-		browser, cards := app.corpFitBrowser(ctx, corp, app.deps.DoctrineChosenFor(ctx, userID, query.Get("for")), url.Values{})
+		browser, cards := app.corpFitBrowser(ctx, owner, app.deps.DoctrineChosenFor(ctx, userID, query.Get("for")), url.Values{})
 		app.deps.WriteSuggest(w, browser.suggestFits(cards, q))
 		return
 	}
 
-	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, []int64{corp})
+	doctrines, err := app.queries.ListDoctrinesForOwner(ctx, db.ListDoctrinesForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 	if err != nil {
-		logging.Errorf("doctrines: suggest for corporation %d: %v", corp, err)
+		logging.Errorf("doctrines: suggest for %s: %v", owner.Key(), err)
 	}
 	seen := map[string]bool{}
 	add := func(name, label, address string) {
@@ -255,7 +262,7 @@ func (app *mod) handleDoctrineSuggest(w http.ResponseWriter, r *http.Request) {
 			out = append(out, module.SuggestItem{Name: name, Label: label, URL: address})
 		}
 	}
-	list := module.CorpAddress(doctrinesPath, corp)
+	list := standing.Address(doctrinesPath, owner.Key())
 	if query.Get("scope") == "categories" {
 		for _, d := range doctrines {
 			add(d.Category, "Category", "")
@@ -288,6 +295,27 @@ func (app *mod) handleDoctrineSuggest(w http.ResponseWriter, r *http.Request) {
 	app.deps.WriteSuggest(w, out)
 }
 
+// submittedOwner reads the owner a form or address names: its key, or
+// a corporation id from an older link.
+func submittedOwner(key, corporation string) (standing.Owner, bool) {
+	if owner, ok := standing.ParseAnyOwner(key); ok {
+		return owner, true
+	}
+	if id, err := strconv.ParseInt(corporation, 10, 64); err == nil && id > 0 {
+		return standing.CorporationOwner(id), true
+	}
+	return standing.Owner{}, false
+}
+
+// doctrineVisibility reads who a form says can read a doctrine; anything
+// but an explicit choice to open it stays with the members.
+func doctrineVisibility(raw string) string {
+	if raw == module.DoctrinePublic {
+		return module.DoctrinePublic
+	}
+	return module.DoctrineMembers
+}
+
 func sortedKeys(set map[string]bool) []string {
 	out := make([]string, 0, len(set))
 	for key := range set {
@@ -312,17 +340,21 @@ func doctrineFields(r *http.Request) (name, category, description, tags, problem
 	return
 }
 
-// handleDoctrineCreate makes a doctrine for a corporation
+// handleDoctrineCreate makes a doctrine for an owner
 // (POST /doctrines/create).
 func (app *mod) handleDoctrineCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.deps.UserID(ctx)
 	_ = r.ParseForm()
-	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
-	back := app.deps.FlashBack(w, r, module.CorpAddress(doctrinesPath, corp))
+	owner, named := submittedOwner(r.Form.Get("owner"), r.Form.Get("corporation"))
+	path := doctrinesPath
+	if named {
+		path = standing.Address(doctrinesPath, owner.Key())
+	}
+	back := app.deps.FlashBack(w, r, path)
 	st, err := app.deps.StandingFor(ctx, userID)
-	if err != nil || corp == 0 || !app.deps.OwnerPermits(ctx, st, standing.CorporationOwner(corp), permDoctrines) {
-		back("That corporation's doctrines are not yours to keep.")
+	if err != nil || !named || !app.deps.OwnerPermits(ctx, st, owner, permDoctrines) {
+		back("Those doctrines are not yours to keep.")
 		return
 	}
 	name, category, description, tags, problem := doctrineFields(r)
@@ -330,27 +362,37 @@ func (app *mod) handleDoctrineCreate(w http.ResponseWriter, r *http.Request) {
 		back(problem)
 		return
 	}
+	corp := int64(0)
+	if owner.Kind == standing.OwnerCorporation {
+		corp = owner.ID
+	}
 	id, err := app.queries.CreateDoctrine(ctx, db.CreateDoctrineParams{
-		CorporationID: corp, Name: name, Category: category, Description: description, Tags: tags,
-		CreatedBy: app.deps.CorpActorFor(ctx, userID, corp).CharacterID, CreatedAt: time.Now().UTC(),
+		CorporationID: corp, OwnerKind: owner.Kind, OwnerID: owner.ID, Visibility: doctrineVisibility(r.Form.Get("visibility")),
+		Name: name, Category: category, Description: description, Tags: tags,
+		CreatedBy: app.deps.OwnerActorFor(ctx, userID, owner), CreatedAt: time.Now().UTC(),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		back("There is already a doctrine called " + name + ".")
 		return
 	}
 	if err != nil {
-		logging.Errorf("doctrines: create for corporation %d: %v", corp, err)
+		logging.Errorf("doctrines: create for %s: %v", owner.Key(), err)
 		back("The doctrine could not be saved; check the server log.")
 		return
 	}
-	logging.Infof("doctrines: user %d made doctrine %d (%s) for corporation %d", userID, id, name, corp)
+	logging.Infof("doctrines: user %d made doctrine %d (%s) for %s", userID, id, name, owner.Key())
 	app.deps.Flash(ctx, "Doctrine made. Add its fits below.")
 	http.Redirect(w, r, module.DoctrineURL(id), http.StatusSeeOther)
 }
 
-// doctrineAccess loads the doctrine named in the address and says
-// what the account may do with it: read it (a character in the
-// corporation) and keep it.
+// doctrineOwnerOf is who a doctrine belongs to.
+func doctrineOwnerOf(d db.Doctrine) standing.Owner {
+	return standing.Owner{Kind: d.OwnerKind, ID: d.OwnerID}
+}
+
+// doctrineAccess loads the doctrine named in the address and says what
+// the session may do with it: read it and keep it. Keeping takes an
+// account.
 func (app *mod) doctrineAccess(r *http.Request) (d db.Doctrine, reads, keeps bool) {
 	ctx := r.Context()
 	id, _ := strconv.ParseInt(chi.URLParam(r, "doctrineID"), 10, 64)
@@ -358,37 +400,64 @@ func (app *mod) doctrineAccess(r *http.Request) (d db.Doctrine, reads, keeps boo
 	if err != nil {
 		return d, false, false
 	}
-	st, err := app.deps.StandingFor(ctx, app.deps.UserID(ctx))
-	if err != nil {
-		return d, false, false
+	userID := app.deps.UserID(ctx)
+	owner := doctrineOwnerOf(d)
+	reads = app.deps.ReadsDoctrine(ctx, userID, owner, d.Visibility)
+	if userID == 0 {
+		return d, reads, false
 	}
-	return d, st.Corps[d.CorporationID], app.deps.OwnerPermits(ctx, st, standing.CorporationOwner(d.CorporationID), permDoctrines)
+	st, err := app.deps.StandingFor(ctx, userID)
+	if err != nil {
+		return d, reads, false
+	}
+	return d, reads, app.deps.OwnerPermits(ctx, st, owner, permDoctrines)
 }
 
 // doctrineView is one doctrine's own page.
 type doctrineView struct {
 	doctrineCard
-	TagsText    string
-	Corporation string
-	CorpID      int64
-	Keeps       bool
-	Full        bool // no room for another fit
-	Roles       []string
+	TagsText string
+	Owner    string
+	OwnerKey string
+	// Member: the viewer belongs to the owner, so its list is theirs.
+	Member bool
+	Public bool
+	// ShareURL is the address to pass on, for a keeper of a public doctrine.
+	ShareURL string
+	Keeps    bool
+	Full     bool // no room for another fit
+	Roles    []string
 }
 
 func (app *mod) handleDoctrine(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	w.Header().Set("X-Robots-Tag", "noindex")
 	d, reads, keeps := app.doctrineAccess(r)
+	userID := app.deps.UserID(ctx)
 	if !reads {
-		app.deps.Flash(ctx, "That doctrine is not one of your corporation's.")
+		// The same answer whether it is private or does not exist.
+		if userID == 0 {
+			http.NotFound(w, r)
+			return
+		}
+		app.deps.Flash(ctx, "That doctrine is private, or does not exist.")
 		http.Redirect(w, r, doctrinesPath, http.StatusSeeOther)
 		return
 	}
-	data := &PageData{ShellData: app.deps.PageShell(ctx)}
+	owner := doctrineOwnerOf(d)
+	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 	view := &doctrineView{
 		ID: d.ID, Name: d.Name, Category: d.Category, Description: d.Description, Tags: doctrineTagList(d.Tags),
-		TagsText:    strings.Join(doctrineTagList(d.Tags), ", "),
-		Corporation: app.deps.CorpDisplayName(ctx, d.CorporationID), CorpID: d.CorporationID, Keeps: keeps, Roles: app.deps.FleetRoles(),
+		TagsText: strings.Join(doctrineTagList(d.Tags), ", "),
+		Owner:    app.deps.OwnerName(ctx, owner), OwnerKey: owner.Key(), Keeps: keeps, Roles: app.deps.FleetRoles(),
+		Member: userID != 0 && standing.Includes(app.deps.DoctrineOwners(ctx, userID), owner),
+		Public: d.Visibility == module.DoctrinePublic,
+	}
+	if view.Public && keeps {
+		view.ShareURL = app.deps.PublicPageURL(module.DoctrineURL(d.ID))
+		if view.ShareURL == "" {
+			view.ShareURL = module.DoctrineURL(d.ID)
+		}
 	}
 	data.Doctrine = view
 	fits, err := app.queries.ListDoctrineFits(ctx, []int64{d.ID})
@@ -417,8 +486,15 @@ func (app *mod) keptDoctrine(w http.ResponseWriter, r *http.Request) (db.Doctrin
 	d, _, keeps := app.doctrineAccess(r)
 	if !keeps {
 		app.deps.FlashBack(w, r, doctrinesPath)("That doctrine is not yours to change.")
+		return d, false
 	}
-	return d, keeps
+	// Fleets already flying it keep it as it stands now.
+	if err := app.deps.SnapshotFleetsOfDoctrine(r.Context(), d.ID); err != nil {
+		logging.Errorf("doctrines: keep fleets' copy of %d: %v", d.ID, err)
+		app.deps.FlashBack(w, r, module.DoctrineURL(d.ID))("The doctrine could not be changed. Try again in a moment.")
+		return d, false
+	}
+	return d, true
 }
 
 func (app *mod) handleDoctrineSave(w http.ResponseWriter, r *http.Request) {
@@ -435,7 +511,8 @@ func (app *mod) handleDoctrineSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n, err := app.queries.UpdateDoctrine(ctx, db.UpdateDoctrineParams{
-		ID: d.ID, Name: name, Category: category, Description: description, Tags: tags, UpdatedAt: time.Now().UTC(),
+		ID: d.ID, Name: name, Category: category, Description: description, Tags: tags,
+		Visibility: doctrineVisibility(r.Form.Get("visibility")), UpdatedAt: time.Now().UTC(),
 	})
 	if err != nil {
 		logging.Errorf("doctrines: save %d: %v", d.ID, err)
@@ -459,7 +536,7 @@ func (app *mod) handleDoctrineDelete(w http.ResponseWriter, r *http.Request) {
 		logging.Errorf("doctrines: delete %d: %v", d.ID, err)
 	}
 	logging.Infof("doctrines: user %d deleted doctrine %d (%s)", app.deps.UserID(ctx), d.ID, d.Name)
-	app.deps.FlashBack(w, r, module.CorpAddress(doctrinesPath, d.CorporationID))("Deleted " + d.Name + ". Fleets that named it keep its name.")
+	app.deps.FlashBack(w, r, standing.Address(doctrinesPath, doctrineOwnerOf(d).Key()))("Deleted " + d.Name + ". Fleets that named it keep its name.")
 }
 
 // doctrineFitSource finds the fit document a keeper is adding: one of
@@ -529,7 +606,7 @@ func (app *mod) doctrineFitSource(r *http.Request) (doc *fitview.FitDoc, problem
 		if doc, ok := app.deps.DoctrineFitDoc(ctx, userID, id); ok {
 			return doc, "", 0
 		}
-		return nil, "That fit is not in one of your corporation's doctrines.", 0
+		return nil, "That fit is not in a doctrine you can read.", 0
 	}
 	if text := strings.TrimSpace(r.Form.Get("eft")); text != "" {
 		if len(text) > doctrineEFTMax {
@@ -609,7 +686,7 @@ func (app *mod) handleDoctrineFitAdd(w http.ResponseWriter, r *http.Request) {
 		_, err = app.queries.AddDoctrineFit(ctx, db.AddDoctrineFitParams{
 			DoctrineID: d.ID, Name: name, ShipTypeID: doc.ShipTypeID, ItemsJson: string(raw), FleetRole: role,
 			Note:    humanize.Clip(strings.TrimSpace(r.Form.Get("note")), doctrineNoteMax),
-			AddedBy: app.deps.CorpActorFor(ctx, userID, d.CorporationID).CharacterID, AddedAt: time.Now().UTC(),
+			AddedBy: app.deps.OwnerActorFor(ctx, userID, doctrineOwnerOf(d)), AddedAt: time.Now().UTC(),
 			BoostsJson: app.fitBoostsJSON(ctx, doc),
 		})
 	}
@@ -654,11 +731,8 @@ type doctrineBoosts struct {
 	Boosts []fitview.FitBoost `json:"boosts"`
 }
 
-// doctrineBoostsMost bounds the doctrines the list reads.
-const doctrineBoostsMost = 100
-
-// handleDoctrineBoosts lists the doctrines of the account's
-// corporations whose fits give fleet boosts (GET
+// handleDoctrineBoosts lists the doctrines of the owners the account
+// belongs to whose fits give fleet boosts (GET
 // /doctrines/boosts.json), so the fitting tool can fly a fit inside
 // one. The boosts are stored with each fit when it is added; a fit
 // from before that is worked out once here and stored.
@@ -670,25 +744,19 @@ func (app *mod) handleDoctrineBoosts(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		_ = json.NewEncoder(w).Encode(map[string]any{"doctrines": out})
 	}
-	st, err := app.deps.StandingFor(ctx, app.deps.UserID(ctx))
-	if err != nil {
+	owners := app.deps.DoctrineOwners(ctx, app.deps.UserID(ctx))
+	if len(owners) == 0 {
 		write()
 		return
 	}
-	var corps []int64
-	for id, ok := range st.Corps {
-		if ok {
-			corps = append(corps, id)
-		}
+	params := db.ListDoctrinesForOwnersParams{OwnerKinds: make([]string, len(owners)), OwnerIds: make([]int64, len(owners))}
+	for i, owner := range owners {
+		params.OwnerKinds[i], params.OwnerIds[i] = owner.Kind, owner.ID
 	}
-	slices.Sort(corps)
-	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, corps)
+	doctrines, err := app.queries.ListDoctrinesForOwners(ctx, params)
 	if err != nil || len(doctrines) == 0 {
 		write()
 		return
-	}
-	if len(doctrines) > doctrineBoostsMost {
-		doctrines = doctrines[:doctrineBoostsMost]
 	}
 	ids := make([]int64, 0, len(doctrines))
 	for _, d := range doctrines {
@@ -727,7 +795,7 @@ func (app *mod) handleDoctrineBoosts(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, d := range doctrines {
 		if b := byDoctrine[d.ID]; len(b) > 0 {
-			out = append(out, doctrineBoosts{ID: d.ID, Name: d.Name, Corp: app.deps.CorpDisplayName(ctx, d.CorporationID), Boosts: b})
+			out = append(out, doctrineBoosts{ID: d.ID, Name: d.Name, Corp: app.deps.OwnerName(ctx, doctrineOwnerOf(d)), Boosts: b})
 		}
 	}
 	write()
@@ -751,7 +819,7 @@ func (app *mod) handleDoctrineFitRemove(w http.ResponseWriter, r *http.Request) 
 }
 
 // ---------------------------------------------------------------------------
-// Corporate fits: every fit in one corporation's doctrines, in the fit
+// Loadouts: every fit in one owner's doctrines, in the fit
 // browser (fit_browser.go). Public fits have their own page in the
 // fitting tool (char_fit_public.go).
 // ---------------------------------------------------------------------------
@@ -759,19 +827,19 @@ func (app *mod) handleDoctrineFitRemove(w http.ResponseWriter, r *http.Request) 
 const doctrineFitsPath = "/doctrines/fits/"
 
 type corpFitsView struct {
-	CorpOptions []module.OwnerOption
-	CorpID      int64 // 0 when the account is in no player corporation
-	CorpName    string
-	Directs     bool
-	Browser     *fitBrowserView
+	Title        string
+	OwnerOptions []module.OwnerOption
+	OwnerKey     string // empty when the account belongs to no owner
+	OwnerName    string
+	Browser      *fitBrowserView
 }
 
-// corpFitBrowser sets up the browser for one corporation's fits, as
-// an address filters it, and loads the fits.
-func (app *mod) corpFitBrowser(ctx context.Context, corp int64, chosen *module.NamedChoice, query url.Values) (*fitBrowser, []fitCard) {
-	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, []int64{corp})
+// corpFitBrowser sets up the browser for one owner's fits, as an
+// address filters it, and loads the fits.
+func (app *mod) corpFitBrowser(ctx context.Context, owner standing.Owner, chosen *module.NamedChoice, query url.Values) (*fitBrowser, []fitCard) {
+	doctrines, err := app.queries.ListDoctrinesForOwner(ctx, db.ListDoctrinesForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 	if err != nil {
-		logging.Errorf("corporate fits: doctrines of corporation %d: %v", corp, err)
+		logging.Errorf("loadouts: doctrines of %s: %v", owner.Key(), err)
 	}
 	byID := map[int64]db.Doctrine{}
 	names := map[string]string{}
@@ -785,7 +853,7 @@ func (app *mod) corpFitBrowser(ctx context.Context, corp int64, chosen *module.N
 	if len(ids) > 0 {
 		fits, err := app.queries.ListDoctrineFits(ctx, ids)
 		if err != nil {
-			logging.Errorf("corporate fits: fits of corporation %d: %v", corp, err)
+			logging.Errorf("loadouts: fits of %s: %v", owner.Key(), err)
 		}
 		// The module and charge names behind every card's
 		// search text resolve in one batched lookup, not one
@@ -832,7 +900,7 @@ func (app *mod) corpFitBrowser(ctx context.Context, corp int64, chosen *module.N
 		app.hullClasses(ctx, cards)
 	}
 
-	fixed := url.Values{"corporation": {idString(corp)}}
+	fixed := url.Values{"owner": {owner.Key()}}
 	if chosen != nil {
 		fixed.Set("for", idString(chosen.ID))
 	}
@@ -859,27 +927,27 @@ func (app *mod) handleCorpFits(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PageShell(ctx)}
 	userID := app.deps.UserID(ctx)
-	view := &corpFitsView{}
+	view := &corpFitsView{Title: "Corporate Loadouts"}
 	data.CorpFits = view
-	corp, options := app.deps.PickCorporation(ctx, r, app.deps.PlayerCorps(ctx, userID))
-	if corp == 0 {
+	owner, options, found := app.deps.PickOwner(ctx, r, app.deps.DoctrineOwners(ctx, userID))
+	if !found {
 		app.deps.Render(ctx, w, http.StatusOK, "corp_fits.html", data)
 		return
 	}
-	view.CorpOptions, view.CorpID, view.CorpName = options, corp, app.deps.CorpDisplayName(ctx, corp)
-	if st, err := app.deps.StandingFor(ctx, userID); err == nil {
-		view.Directs = st.Directs(corp)
+	if owner.Kind != standing.OwnerCorporation {
+		view.Title = "Loadouts"
 	}
+	view.OwnerOptions, view.OwnerKey, view.OwnerName = options, owner.Key(), app.deps.OwnerName(ctx, owner)
 	chosen := app.deps.DoctrineChosenFor(ctx, userID, r.URL.Query().Get("for"))
-	browser, cards := app.corpFitBrowser(ctx, corp, chosen, r.URL.Query())
+	browser, cards := app.corpFitBrowser(ctx, owner, chosen, r.URL.Query())
 	view.Browser = browser.run(cards)
 	view.Browser.For = chosen
 	view.Browser.Placeholder = "Search fits, ships and doctrines…"
 	view.Browser.SuggestURL = "/doctrines/suggest?scope=fits&" + browser.Fixed.Encode()
-	view.Browser.Empty = "No corporate fits yet. A fit shows here once it is in one of the corporation's doctrines."
+	view.Browser.Empty = "No fits yet. A fit shows here once it is in one of " + view.OwnerName + "'s doctrines."
 	app.deps.Render(ctx, w, http.StatusOK, "corp_fits.html", data)
 }
 
-// permDoctrines is the corporation permission that lets an account keep
+// permDoctrines is the owner permission that lets an account keep
 // doctrines (core's access model names it "doctrines").
 const permDoctrines = "doctrines"

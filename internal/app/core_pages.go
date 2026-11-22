@@ -75,6 +75,8 @@ type pageData struct {
 	OpForm      *opFormView
 	PAPs        *papsView
 	FleetHidden *fleetHiddenView
+	// FleetPermissions: who else runs an owner's fleets and doctrines.
+	FleetPermissions *fleetPermissionsView
 
 	// Public pilot page (/pilot/): a stranger's public record.
 	Pilot *pilotView
@@ -184,7 +186,7 @@ func sectionForPage(page string) string {
 		"assets.html",
 		"killmails.html", "notifications.html":
 		return "pilot"
-	case "fleets.html", "fleet.html", "fleet_form.html", "fleet_history.html", "fleet_hidden.html":
+	case "fleets.html", "fleet.html", "fleet_form.html", "fleet_history.html", "fleet_hidden.html", "fleet_permissions.html":
 		return "fleets"
 	case "industry.html", "industry_jobs.html", "industry_mining.html", "planets.html":
 		return "industry"

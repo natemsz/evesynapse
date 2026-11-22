@@ -310,7 +310,7 @@ func (q *Queries) ListDiscordRoleGrantsForGuild(ctx context.Context, guildID str
 }
 
 const listOpsToAnnounceOnDiscord = `-- name: ListOpsToAnnounceOnDiscord :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at FROM ops
 WHERE discord_announced_at IS NULL
   AND cancelled_at IS NULL
   AND owner_kind IN ('corporation', 'alliance')
@@ -363,6 +363,10 @@ func (q *Queries) ListOpsToAnnounceOnDiscord(ctx context.Context, arg ListOpsToA
 			&i.RosterPublic,
 			&i.ComingCount,
 			&i.MaybeCount,
+			&i.DoctrineMode,
+			&i.DoctrineSnapshot,
+			&i.DoctrineSnapshotShips,
+			&i.DoctrineSnapshotAt,
 		); err != nil {
 			return nil, err
 		}

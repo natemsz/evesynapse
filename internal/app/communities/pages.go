@@ -212,6 +212,15 @@ type communityView struct {
 	InviteURL, GroupsHref        string
 	InviteHint                   string
 	CanReopen                    bool
+	// Doctrines: the public ones, and the rest for members.
+	Doctrines       []communityDoctrine
+	DoctrinesHref   string
+	PermissionsHref string
+}
+
+// communityDoctrine is one doctrine on a community's page.
+type communityDoctrine struct {
+	Name, Category, Href string
 }
 
 func (app *mod) communityFrom(r *http.Request) (db.Community, bool) {
@@ -330,6 +339,19 @@ func (app *mod) handleCommunity(w http.ResponseWriter, r *http.Request) {
 	if view.SeesPeople {
 		app.fillPeople(ctx, view, c, role, q)
 	}
+	if app.deps.ModuleEnabled("doctrines") {
+		owner := standing.Owner{Kind: standing.OwnerCommunity, ID: c.ID}
+		doctrines, err := app.queries.ListCommunityDoctrines(ctx, db.ListCommunityDoctrinesParams{CommunityID: c.ID, IncludeMembers: view.SeesPeople})
+		if err != nil {
+			logging.Errorf("communities: doctrines of %d: %v", c.ID, err)
+		}
+		for _, d := range doctrines {
+			view.Doctrines = append(view.Doctrines, communityDoctrine{Name: d.Name, Category: d.Category, Href: module.DoctrineURL(d.ID)})
+		}
+		if view.SeesPeople && v.userID != 0 {
+			view.DoctrinesHref = standing.Address("/doctrines/", owner.Key())
+		}
+	}
 	if view.Manages {
 		view.Policies = policyOptions(c.JoinPolicy)
 		if view.Closed {
@@ -350,6 +372,7 @@ func (app *mod) handleCommunity(w http.ResponseWriter, r *http.Request) {
 		if app.deps.ModuleEnabled("groups") {
 			view.GroupsHref = standing.Address("/groups/", standing.Owner{Kind: standing.OwnerCommunity, ID: c.ID}.Key())
 		}
+		view.PermissionsHref = standing.Address("/fleets/permissions/", standing.Owner{Kind: standing.OwnerCommunity, ID: c.ID}.Key())
 	}
 	data.Community = view
 	app.deps.Render(ctx, w, http.StatusOK, "community.html", data)

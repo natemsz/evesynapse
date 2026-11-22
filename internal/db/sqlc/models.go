@@ -548,6 +548,9 @@ type Doctrine struct {
 	CreatedBy     int64     `json:"created_by"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+	OwnerKind     string    `json:"owner_kind"`
+	OwnerID       int64     `json:"owner_id"`
+	Visibility    string    `json:"visibility"`
 }
 
 type DoctrineFit struct {
@@ -1805,31 +1808,35 @@ type NotificationSeen struct {
 }
 
 type Op struct {
-	ID                 int64          `json:"id"`
-	CorporationID      int64          `json:"corporation_id"`
-	Title              string         `json:"title"`
-	Description        string         `json:"description"`
-	StartsAt           time.Time      `json:"starts_at"`
-	DurationMinutes    int64          `json:"duration_minutes"`
-	Doctrine           string         `json:"doctrine"`
-	FormUp             string         `json:"form_up"`
-	FcCharacterID      int64          `json:"fc_character_id"`
-	CreatedByCharacter int64          `json:"created_by_character"`
-	CreatedAt          time.Time      `json:"created_at"`
-	CancelledAt        sql.NullTime   `json:"cancelled_at"`
-	CaptureStatus      string         `json:"capture_status"`
-	CaptureCheckedAt   sql.NullTime   `json:"capture_checked_at"`
-	DiscordAnnouncedAt sql.NullTime   `json:"discord_announced_at"`
-	DoctrineID         int64          `json:"doctrine_id"`
-	OwnerKind          string         `json:"owner_kind"`
-	OwnerID            int64          `json:"owner_id"`
-	FleetType          string         `json:"fleet_type"`
-	Visibility         string         `json:"visibility"`
-	JoinGate           string         `json:"join_gate"`
-	ShareToken         sql.NullString `json:"share_token"`
-	RosterPublic       bool           `json:"roster_public"`
-	ComingCount        int32          `json:"coming_count"`
-	MaybeCount         int32          `json:"maybe_count"`
+	ID                    int64          `json:"id"`
+	CorporationID         int64          `json:"corporation_id"`
+	Title                 string         `json:"title"`
+	Description           string         `json:"description"`
+	StartsAt              time.Time      `json:"starts_at"`
+	DurationMinutes       int64          `json:"duration_minutes"`
+	Doctrine              string         `json:"doctrine"`
+	FormUp                string         `json:"form_up"`
+	FcCharacterID         int64          `json:"fc_character_id"`
+	CreatedByCharacter    int64          `json:"created_by_character"`
+	CreatedAt             time.Time      `json:"created_at"`
+	CancelledAt           sql.NullTime   `json:"cancelled_at"`
+	CaptureStatus         string         `json:"capture_status"`
+	CaptureCheckedAt      sql.NullTime   `json:"capture_checked_at"`
+	DiscordAnnouncedAt    sql.NullTime   `json:"discord_announced_at"`
+	DoctrineID            int64          `json:"doctrine_id"`
+	OwnerKind             string         `json:"owner_kind"`
+	OwnerID               int64          `json:"owner_id"`
+	FleetType             string         `json:"fleet_type"`
+	Visibility            string         `json:"visibility"`
+	JoinGate              string         `json:"join_gate"`
+	ShareToken            sql.NullString `json:"share_token"`
+	RosterPublic          bool           `json:"roster_public"`
+	ComingCount           int32          `json:"coming_count"`
+	MaybeCount            int32          `json:"maybe_count"`
+	DoctrineMode          string         `json:"doctrine_mode"`
+	DoctrineSnapshot      sql.NullString `json:"doctrine_snapshot"`
+	DoctrineSnapshotShips []int64        `json:"doctrine_snapshot_ships"`
+	DoctrineSnapshotAt    sql.NullTime   `json:"doctrine_snapshot_at"`
 }
 
 type OpAccessRule struct {

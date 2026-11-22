@@ -27,6 +27,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"evesynapse/internal/app/module"
 	"fmt"
 	json "github.com/goccy/go-json"
 	"math"
@@ -2568,8 +2569,8 @@ func (s *demoSeed) writeOrgRows(ctx context.Context) error {
 	doctrineIDs := map[string]int64{}
 	for _, d := range doctrines {
 		docID, err := q.CreateDoctrine(ctx, db.CreateDoctrineParams{
-			CorporationID: demoCorpID, Name: d.name, Category: d.category, Description: d.description,
-			Tags: d.tags, CreatedBy: demoCharacterID, CreatedAt: now.Add(-d.created),
+			CorporationID: demoCorpID, OwnerKind: ownerCorporation, OwnerID: demoCorpID, Visibility: module.DoctrineMembers,
+			Name: d.name, Category: d.category, Description: d.description, Tags: d.tags, CreatedBy: demoCharacterID, CreatedAt: now.Add(-d.created),
 		})
 		if err != nil {
 			return fmt.Errorf("demo seed: doctrine %q: %w", d.name, err)

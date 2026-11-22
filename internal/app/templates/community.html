@@ -91,10 +91,22 @@
   {{end}}
   <div class="cm-stack cm-row">
     {{with .GroupsHref}}<a class="btn btn-quiet" href="{{.}}">Manage groups</a>{{end}}
+    {{with .PermissionsHref}}<a class="btn btn-quiet" href="{{.}}">Who plans fleets and keeps doctrines</a>{{end}}
     {{if .Leads}}<form method="post" action="{{.Path}}close" data-confirm="Close {{.Name}}? It leaves the directory and takes no new members. You can reopen it."><button type="submit" class="btn btn-danger">Close community</button></form>{{end}}
   </div>
   {{end}}
     </details>
+    {{end}}
+    {{if or .Doctrines .DoctrinesHref}}
+    <section class="l-panel cm-next" aria-labelledby="cm-doctrines-title">
+      <h2 id="cm-doctrines-title">Doctrines</h2>
+      {{if .Doctrines}}
+      <ul class="cm-doctrines">{{range .Doctrines}}<li><a href="{{.Href}}">{{.Name}}</a>{{with .Category}} <small>{{.}}</small>{{end}}</li>{{end}}</ul>
+      {{else}}
+      <p>No doctrines yet.</p>
+      {{end}}
+      {{with .DoctrinesHref}}<a class="btn btn-quiet" href="{{.}}">Open doctrines</a>{{end}}
+    </section>
     {{end}}
   </div>
 

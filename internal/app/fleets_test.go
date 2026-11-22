@@ -3,12 +3,35 @@ package app
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 )
+
+// TestOnlyAManagerRoleHandsOnFleetPlanning: a director outside
+// OPS_MANAGER_ROLES cannot use the corporation's settings to give
+// fleet planning to a role, and a holder of the manager role can.
+func TestOnlyAManagerRoleHandsOnFleetPlanning(t *testing.T) {
+	f := newOpsFixture(t)
+	key := db.GetOwnerPermissionParams{OwnerKind: ownerCorporation, OwnerID: opsCorp, Permission: permFleets}
+	save := url.Values{"corporation": {strconv.FormatInt(opsCorp, 10)}, "fleets_who": {"eve_role:Accountant"}}
+
+	f.app.cfg.opsManagerRoles = parseRoleList("Personnel_Manager")
+	postForm(t, f.app, f.director, "/corporations/settings/save", save)
+	if rule, err := f.q.GetOwnerPermission(f.ctx, key); err == nil {
+		t.Fatalf("a director outside the manager roles handed on fleets: %+v", rule)
+	}
+
+	f.app.cfg.opsManagerRoles = parseRoleList("Director")
+	postForm(t, f.app, f.director, "/corporations/settings/save", save)
+	if rule, err := f.q.GetOwnerPermission(f.ctx, key); err != nil || rule.Ref != "Accountant" {
+		t.Fatalf("a holder of the manager role could not hand on fleets: %+v (%v)", rule, err)
+	}
+}
 
 // TestAnonymousViewerGetsNoDetailsOfARestrictedFleet: without standing,
 // a private fleet answers the same as one that does not exist, by its

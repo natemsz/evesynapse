@@ -13,6 +13,29 @@
 {{end}}
 {{end}}
 
+{{define "ownerselector"}}
+{{if gt (len .) 1}}
+<div class="charselector" data-charselector>
+  <input type="text" class="charselector-input" placeholder="Select owner..." autocomplete="off" aria-label="Select corporation, alliance or community">
+  <div class="charselector-dropdown" hidden>
+    {{range .}}
+    <a href="?{{.Param}}={{.Value}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}">
+      <span class="charselector-name">{{.Name}}</span>
+    </a>
+    {{end}}
+  </div>
+</div>
+{{end}}
+{{end}}
+
+{{define "doctrineread"}}
+<fieldset class="doctrine-read">
+  <legend class="field-label">Who can read it</legend>
+  <label><input type="radio" name="visibility" value="members"{{if not .}} checked{{end}}><span>Members<small>Only people in this corporation, alliance or community.</small></span></label>
+  <label><input type="radio" name="visibility" value="public"{{if .}} checked{{end}}><span>Anyone with the link<small>They can see its fits without an account.</small></span></label>
+</fieldset>
+{{end}}
+
 {{define "fitbrowser"}}
 {{if .For}}<p class="browse-for"><strong>Choosing fits for <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each one added is copied into the doctrine.</p>{{end}}
 

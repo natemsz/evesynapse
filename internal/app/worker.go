@@ -486,6 +486,16 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	})
 	clock.mark("op attendance", time.Now())
 
+	// Fleets that have started keep the doctrine they flew, whatever
+	// happens to it later (corp_doctrine_access.go).
+	c.pass("storing fleet doctrines", func() (int, bool) {
+		stored, err := app.snapshotFleetDoctrines(ctx, 0, time.Now().UTC())
+		if err != nil {
+			logging.Errorf("worker: fleet doctrines: %v", err)
+		}
+		return stored, false
+	})
+
 	// Module passes that run ahead of the public-data passes (the
 	// swarm's fetch phase: gossip when due, then demand-driven pulls;
 	// peer traffic spends no ESI budget, and pulling first means the

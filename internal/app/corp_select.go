@@ -85,6 +85,12 @@ func (app *Application) pickOwner(ctx context.Context, r *http.Request, offered 
 			active = mine
 		}
 	}
+	if id, err := strconv.ParseInt(r.URL.Query().Get("corporation"), 10, 64); err == nil {
+		// An address from before the page had owners.
+		if named := (orgOwner{Kind: ownerCorporation, ID: id}); ownersInclude(offered, named) {
+			active = named
+		}
+	}
 	if named, ok := parseAnyOwner(r.URL.Query().Get("owner")); ok && ownersInclude(offered, named) {
 		active = named
 	}
@@ -128,6 +134,10 @@ type corpSettingsView struct {
 	SRPPolicy    string
 	DoctrinesWho []permissionChoice
 	IntelWho     []permissionChoice
+	// FleetsWho is offered only to holders of the ops manager roles, so
+	// a setting cannot be used to get around OPS_MANAGER_ROLES.
+	FleetsWho   []permissionChoice
+	FleetsRoles string
 }
 
 // directedCorps lists the corporations an account has a director, or
@@ -159,6 +169,10 @@ func (app *Application) handleCorpSettings(w http.ResponseWriter, r *http.Reques
 		view.SRPWho = app.permissionChoices(ctx, owner, permSRP)
 		view.DoctrinesWho = app.permissionChoices(ctx, owner, permDoctrines)
 		view.IntelWho = app.permissionChoices(ctx, owner, permIntel)
+		if st, err := app.standingFor(ctx, app.userID(ctx)); err == nil && app.holdsProgramme(ctx, st, owner, permFleets) {
+			view.FleetsWho = app.permissionChoices(ctx, owner, permFleets)
+			view.FleetsRoles = app.cfg.opsManagerRolesText()
+		}
 		if settings, err := app.queries.GetSRPSettings(ctx, corp); err == nil {
 			view.SRPPolicy = settings.Policy
 		}
@@ -181,7 +195,14 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 		return
 	}
 	owner := orgOwner{Kind: ownerCorporation, ID: corp}
-	for _, raw := range []string{r.Form.Get("srp_who"), r.Form.Get("doctrines_who"), r.Form.Get("intel_who")} {
+	// Only a holder of the ops manager roles hands fleets on, and a form
+	// without the field leaves the choice alone.
+	setsFleets := r.Form.Has("fleets_who") && app.holdsProgramme(ctx, st, owner, permFleets)
+	choices := []string{r.Form.Get("srp_who"), r.Form.Get("doctrines_who"), r.Form.Get("intel_who")}
+	if setsFleets {
+		choices = append(choices, r.Form.Get("fleets_who"))
+	}
+	for _, raw := range choices {
 		if kind, ref, ok := app.parseRuleWho(ctx, owner, raw); raw != "" && (!ok || !permissionRule(owner, kind+":"+ref)) {
 			back("That cannot be handed to the choice made; nothing was saved.")
 			return
@@ -190,7 +211,8 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 	by := app.CorpActorFor(ctx, userID, corp).CharacterID
 	saved := app.setOwnerPermission(ctx, owner, permSRP, r.Form.Get("srp_who"), by) &&
 		app.setOwnerPermission(ctx, owner, permDoctrines, r.Form.Get("doctrines_who"), by) &&
-		app.setOwnerPermission(ctx, owner, permIntel, r.Form.Get("intel_who"), by)
+		app.setOwnerPermission(ctx, owner, permIntel, r.Form.Get("intel_who"), by) &&
+		(!setsFleets || app.setOwnerPermission(ctx, owner, permFleets, r.Form.Get("fleets_who"), by))
 	if saved {
 		err = app.queries.SetSRPSettings(ctx, db.SetSRPSettingsParams{
 			CorporationID: corp, Policy: clip(strings.TrimSpace(r.Form.Get("srp_policy")), srpPolicyMax), UpdatedAt: time.Now().UTC(),

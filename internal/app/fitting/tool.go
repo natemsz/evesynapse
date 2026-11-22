@@ -1096,8 +1096,8 @@ func (app *tool) attachFitEditor(ctx context.Context, r *http.Request, data *Pag
 				}
 			}
 		}
-	case doctrineFitID > 0 && userID > 0:
-		// A fit of one of the account's corporations' doctrines, likewise.
+	case doctrineFitID > 0:
+		// A fit of a doctrine this session can read, likewise.
 		if stored, ok := app.deps.DoctrineFitDoc(ctx, userID, doctrineFitID); ok {
 			doc = stored
 		}

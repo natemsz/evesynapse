@@ -24,6 +24,7 @@ UPDATE ops SET
     duration_minutes = sqlc.arg(duration_minutes),
     doctrine         = sqlc.arg(doctrine),
     doctrine_id      = sqlc.arg(doctrine_id),
+    doctrine_mode    = sqlc.arg(doctrine_mode),
     form_up          = sqlc.arg(form_up),
     fc_character_id  = sqlc.arg(fc_character_id)
 WHERE id = sqlc.arg(id);
@@ -70,11 +71,11 @@ WHERE op_id = ANY(sqlc.arg(op_ids)::bigint[])
 
 -- name: CreateFleet :one
 INSERT INTO ops (corporation_id, owner_kind, owner_id, fleet_type, visibility, join_gate, roster_public, share_token,
-                 title, description, starts_at, duration_minutes, doctrine, doctrine_id, form_up, fc_character_id,
+                 title, description, starts_at, duration_minutes, doctrine, doctrine_id, doctrine_mode, form_up, fc_character_id,
                  created_by_character, created_at)
 VALUES (sqlc.arg(corporation_id), sqlc.arg(owner_kind), sqlc.arg(owner_id), sqlc.arg(fleet_type), sqlc.arg(visibility),
         sqlc.arg(join_gate), sqlc.arg(roster_public), sqlc.narg(share_token), sqlc.arg(title), sqlc.arg(description),
-        sqlc.arg(starts_at), sqlc.arg(duration_minutes), sqlc.arg(doctrine), sqlc.arg(doctrine_id), sqlc.arg(form_up),
+        sqlc.arg(starts_at), sqlc.arg(duration_minutes), sqlc.arg(doctrine), sqlc.arg(doctrine_id), sqlc.arg(doctrine_mode), sqlc.arg(form_up),
         sqlc.arg(fc_character_id), sqlc.arg(created_by_character), sqlc.arg(created_at))
 RETURNING id;
 

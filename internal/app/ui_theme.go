@@ -44,14 +44,14 @@ var themeSchemes = map[string]bool{
 
 func validThemeScheme(s string) bool { return s == "" || themeSchemes[s] }
 
-func validThemeTier(s string) bool { return s == "muted" || s == "minimalistic" }
+func validThemeTier(s string) bool { return s == "full" || s == "muted" || s == "minimalistic" }
 
-// schemeTierFullOK is whether a scheme honours the full tier: Minmatar
-// and v3 Minmatar, which reuse the default calm wallpapers, so their full
-// backdrop is the calm art. Every other scheme degrades full to
-// muted until its own wallpapers are made.
+// schemeTierFullOK is whether a scheme honours the full tier: every
+// scheme does now, each with its own wallpaper, and Minmatar and v3
+// Minmatar reuse the default calm wallpapers, so their full backdrop
+// is the calm art.
 func schemeTierFullOK(scheme string) bool {
-	return scheme == "minmatar" || scheme == "minmatar-v3"
+	return validThemeScheme(scheme)
 }
 
 // validThemeVision is whether s is a colour-blind mode the picker
@@ -68,9 +68,7 @@ func validThemeBackdrop(s string) bool {
 // scheme, "" for the default look, and a type: full, muted or
 // minimalistic) into the stored account theme. The default look's
 // types are its backdrop strengths, the Settings mapping. A scheme
-// at full applies at muted until its wallpaper lands, except Minmatar
-// and v3 Minmatar, which reuse the calm wallpapers; the same degrade
-// parseThemePrefs applies to a tier it cannot honour.
+// at full applies at full, now that every scheme has a wallpaper.
 // ok is false when either answer is one the step cannot produce.
 func signupThemePrefs(scheme, tierType string) (themePrefs, bool) {
 	if !validThemeScheme(scheme) {

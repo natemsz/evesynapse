@@ -104,32 +104,19 @@ func (q *Queries) DeleteCorpPermission(ctx context.Context, arg DeleteCorpPermis
 	return err
 }
 
-const getCorpPermission = `-- name: GetCorpPermission :one
-
-SELECT corporation_id, permission, kind, ref, updated_by, updated_at FROM corp_permissions WHERE corporation_id = $1 AND permission = $2
+const deleteOwnerPermission = `-- name: DeleteOwnerPermission :exec
+DELETE FROM owner_permissions WHERE owner_kind = $1 AND owner_id = $2 AND permission = $3
 `
 
-type GetCorpPermissionParams struct {
-	CorporationID int64  `json:"corporation_id"`
-	Permission    string `json:"permission"`
+type DeleteOwnerPermissionParams struct {
+	OwnerKind  string `json:"owner_kind"`
+	OwnerID    int64  `json:"owner_id"`
+	Permission string `json:"permission"`
 }
 
-// ---------------------------------------------------------------------
-// Ship replacement (schema 025), and who runs a corporation's
-// programmes.
-// ---------------------------------------------------------------------
-func (q *Queries) GetCorpPermission(ctx context.Context, arg GetCorpPermissionParams) (CorpPermission, error) {
-	row := q.db.QueryRow(ctx, getCorpPermission, arg.CorporationID, arg.Permission)
-	var i CorpPermission
-	err := row.Scan(
-		&i.CorporationID,
-		&i.Permission,
-		&i.Kind,
-		&i.Ref,
-		&i.UpdatedBy,
-		&i.UpdatedAt,
-	)
-	return i, err
+func (q *Queries) DeleteOwnerPermission(ctx context.Context, arg DeleteOwnerPermissionParams) error {
+	_, err := q.db.Exec(ctx, deleteOwnerPermission, arg.OwnerKind, arg.OwnerID, arg.Permission)
+	return err
 }
 
 const getOpAttendance = `-- name: GetOpAttendance :one
@@ -151,6 +138,36 @@ func (q *Queries) GetOpAttendance(ctx context.Context, arg GetOpAttendanceParams
 		&i.Source,
 		&i.FirstSeenAt,
 		&i.LastSeenAt,
+	)
+	return i, err
+}
+
+const getOwnerPermission = `-- name: GetOwnerPermission :one
+
+SELECT owner_kind, owner_id, permission, kind, ref, updated_by, updated_at FROM owner_permissions WHERE owner_kind = $1 AND owner_id = $2 AND permission = $3
+`
+
+type GetOwnerPermissionParams struct {
+	OwnerKind  string `json:"owner_kind"`
+	OwnerID    int64  `json:"owner_id"`
+	Permission string `json:"permission"`
+}
+
+// ---------------------------------------------------------------------
+// Ship replacement (schema 025), and who runs a corporation's
+// programmes.
+// ---------------------------------------------------------------------
+func (q *Queries) GetOwnerPermission(ctx context.Context, arg GetOwnerPermissionParams) (OwnerPermission, error) {
+	row := q.db.QueryRow(ctx, getOwnerPermission, arg.OwnerKind, arg.OwnerID, arg.Permission)
+	var i OwnerPermission
+	err := row.Scan(
+		&i.OwnerKind,
+		&i.OwnerID,
+		&i.Permission,
+		&i.Kind,
+		&i.Ref,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -491,6 +508,39 @@ type SetCorpPermissionParams struct {
 func (q *Queries) SetCorpPermission(ctx context.Context, arg SetCorpPermissionParams) error {
 	_, err := q.db.Exec(ctx, setCorpPermission,
 		arg.CorporationID,
+		arg.Permission,
+		arg.Kind,
+		arg.Ref,
+		arg.UpdatedBy,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const setOwnerPermission = `-- name: SetOwnerPermission :exec
+INSERT INTO owner_permissions (owner_kind, owner_id, permission, kind, ref, updated_by, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (owner_kind, owner_id, permission) DO UPDATE SET
+    kind       = excluded.kind,
+    ref        = excluded.ref,
+    updated_by = excluded.updated_by,
+    updated_at = excluded.updated_at
+`
+
+type SetOwnerPermissionParams struct {
+	OwnerKind  string    `json:"owner_kind"`
+	OwnerID    int64     `json:"owner_id"`
+	Permission string    `json:"permission"`
+	Kind       string    `json:"kind"`
+	Ref        string    `json:"ref"`
+	UpdatedBy  int64     `json:"updated_by"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+func (q *Queries) SetOwnerPermission(ctx context.Context, arg SetOwnerPermissionParams) error {
+	_, err := q.db.Exec(ctx, setOwnerPermission,
+		arg.OwnerKind,
+		arg.OwnerID,
 		arg.Permission,
 		arg.Kind,
 		arg.Ref,

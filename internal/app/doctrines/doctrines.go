@@ -23,6 +23,7 @@ import (
 	"evesynapse/internal/fit"
 	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/standing"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -32,7 +33,7 @@ import (
 // A doctrine is a corporation's named set of fits for a kind of fleet.
 // Every member with a character in the corporation can read its
 // doctrines; its directors and CEO keep them, with whoever they hand
-// that to (corp_permissions.go).
+// that to (owner_permissions.go).
 //
 // A fit in a doctrine is a copy of a fit document from the fitting
 // tool: one of the keeper's saved fits, a public fit, a fit from
@@ -158,7 +159,7 @@ func (app *mod) handleDoctrines(w http.ResponseWriter, r *http.Request) {
 		data.Error = "Could not load the doctrines; check the server log."
 	}
 	cv := &doctrineCorpView{ID: corp, Name: app.deps.CorpDisplayName(ctx, corp), Directs: st.Directs(corp)}
-	cv.Manages = app.deps.CorpPermits(ctx, st, corp, permDoctrines)
+	cv.Manages = app.deps.OwnerPermits(ctx, st, standing.CorporationOwner(corp), permDoctrines)
 	view.CorpOptions, view.Corp = options, cv
 
 	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, []int64{corp})
@@ -320,7 +321,7 @@ func (app *mod) handleDoctrineCreate(w http.ResponseWriter, r *http.Request) {
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
 	back := app.deps.FlashBack(w, r, module.CorpAddress(doctrinesPath, corp))
 	st, err := app.deps.StandingFor(ctx, userID)
-	if err != nil || corp == 0 || !app.deps.CorpPermits(ctx, st, corp, permDoctrines) {
+	if err != nil || corp == 0 || !app.deps.OwnerPermits(ctx, st, standing.CorporationOwner(corp), permDoctrines) {
 		back("That corporation's doctrines are not yours to keep.")
 		return
 	}
@@ -361,7 +362,7 @@ func (app *mod) doctrineAccess(r *http.Request) (d db.Doctrine, reads, keeps boo
 	if err != nil {
 		return d, false, false
 	}
-	return d, st.Corps[d.CorporationID], app.deps.CorpPermits(ctx, st, d.CorporationID, permDoctrines)
+	return d, st.Corps[d.CorporationID], app.deps.OwnerPermits(ctx, st, standing.CorporationOwner(d.CorporationID), permDoctrines)
 }
 
 // doctrineView is one doctrine's own page.

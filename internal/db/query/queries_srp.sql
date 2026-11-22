@@ -3,8 +3,20 @@
 -- programmes.
 -- ---------------------------------------------------------------------
 
--- name: GetCorpPermission :one
-SELECT * FROM corp_permissions WHERE corporation_id = $1 AND permission = $2;
+-- name: GetOwnerPermission :one
+SELECT * FROM owner_permissions WHERE owner_kind = $1 AND owner_id = $2 AND permission = $3;
+
+-- name: SetOwnerPermission :exec
+INSERT INTO owner_permissions (owner_kind, owner_id, permission, kind, ref, updated_by, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (owner_kind, owner_id, permission) DO UPDATE SET
+    kind       = excluded.kind,
+    ref        = excluded.ref,
+    updated_by = excluded.updated_by,
+    updated_at = excluded.updated_at;
+
+-- name: DeleteOwnerPermission :exec
+DELETE FROM owner_permissions WHERE owner_kind = $1 AND owner_id = $2 AND permission = $3;
 
 -- name: SetCorpPermission :exec
 INSERT INTO corp_permissions (corporation_id, permission, kind, ref, updated_by, updated_at)

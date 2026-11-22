@@ -52,7 +52,7 @@ const (
 func (app *mod) srpHandler(r *http.Request, corp int64) (standing.Standing, bool) {
 	ctx := r.Context()
 	st, err := app.deps.StandingFor(ctx, app.deps.UserID(ctx))
-	return st, err == nil && corp != 0 && app.deps.CorpPermits(ctx, st, corp, permSRP)
+	return st, err == nil && corp != 0 && app.deps.OwnerPermits(ctx, st, standing.CorporationOwner(corp), permSRP)
 }
 
 // handleSRPDecide answers a request (POST /srp/{id}/decide): paid with

@@ -1376,10 +1376,10 @@ type Deps interface {
 	AssetLocations(ctx context.Context, items []esi.Asset, extraTitles, nameOverrides map[int64]string) any
 	// OrderHealthText says how an order’s price stands against the market.
 	OrderHealthText(myPrice float64, status string, stationBest, regionBest float64) (string, bool)
-	// CorpDisplayName, PlayerCorps, PickCorporation and CorpPermits are
+	// CorpDisplayName, PlayerCorps, PickCorporation and OwnerPermits are
 	// the access model the corporation modules ask.
 	CorpDisplayName(ctx context.Context, corpID int64) string
-	CorpPermits(ctx context.Context, st standing.Standing, corp int64, permission string) bool
+	OwnerPermits(ctx context.Context, st standing.Standing, owner standing.Owner, permission string) bool
 	PlayerCorps(ctx context.Context, userID int64) []int64
 	PickCorporation(ctx context.Context, r *http.Request, offered []int64) (int64, []OwnerOption)
 	// OwnerCorporations lists the corporations an owner covers.

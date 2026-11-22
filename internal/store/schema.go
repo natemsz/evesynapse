@@ -980,6 +980,11 @@ var pgSDECharacterTitlesSchema string
 //go:embed schema_pg/162_structure_probes.sql
 var pgStructureProbesSchema string
 
+// Step 163: who runs an owner's programmes, for every kind of owner.
+//
+//go:embed schema_pg/163_owner_permissions.sql
+var pgOwnerPermissionsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1170,6 +1175,7 @@ func schemaSteps() []schemaStep {
 		{160, "bot_guard_secret", pgBotGuardSecretSchema, ""},
 		{161, "sde_character_titles", pgSDECharacterTitlesSchema, ""},
 		{162, "structure_probes", pgStructureProbesSchema, ""},
+		{163, "owner_permissions", pgOwnerPermissionsSchema, ""},
 	}
 }
 

@@ -39,25 +39,18 @@ func holdsDirector(roles []string) bool                { return standing.HoldsDi
 func parseOrgOwner(raw string) (orgOwner, bool)        { return standing.ParseOwner(raw) }
 func ownersInclude(owners []orgOwner, o orgOwner) bool { return standing.Includes(owners, o) }
 
-// meetsRule asks a standing whether it meets one stored rule.
-func meetsRule(st orgStanding, owner orgOwner, rule db.DiscordRoleRule) bool {
-	return st.Meets(owner, standing.Rule{Kind: rule.Kind, Ref: rule.Ref})
-}
-
 // ---------------------------------------------------------------------------
-// Standing: who directs, belongs to or holds a role in a corporation or
-// alliance. An "owner" is a corporation or alliance; an account's
+// Standing: who directs, belongs to or holds a role in an owner. An
+// "owner" is a corporation, alliance or community; an account's
 // "standing" is what its working characters amount to (corporations,
 // alliances, CEO-ships, in-game roles, groups). Rules ("who") are asked
-// against a standing, and the same model decides who may manage the
-// corporation's pages (corp_permissions.go) and which Discord roles an
-// account is owed (the Discord module).
+// against a standing, and the same model decides who may run an owner's
+// programmes (owner_permissions.go) and which Discord roles an account
+// is owed (the Discord module).
 //
 // This is foundation, not part of any module: the corporation pages
 // depend on it, and so does Discord. Rule kinds are stored in
-// discord_role_rules.kind (never renamed); the table also keeps the
-// corporation permissions, which is why the Discord-named storage
-// remains.
+// discord_role_rules.kind and owner_permissions.kind (never renamed).
 // ---------------------------------------------------------------------------
 
 // corpAlliance reports the alliance a corporation is in and that
@@ -129,10 +122,14 @@ type whoChoice struct {
 
 // ownerCorporations lists the corporations that belong to an owner: the
 // corporation itself, or the corporations of the alliance that
-// EveSynapse has linked characters in.
+// EveSynapse has linked characters in. No other kind of owner has any.
 func (app *Application) ownerCorporations(ctx context.Context, owner orgOwner) []int64 {
-	if owner.Kind == ownerCorporation {
+	switch owner.Kind {
+	case ownerCorporation:
 		return []int64{owner.ID}
+	case ownerAlliance:
+	default:
+		return nil
 	}
 	known, err := app.queries.ListKnownCorporations(ctx)
 	if err != nil {

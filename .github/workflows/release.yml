@@ -47,8 +47,8 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           for i in $(seq 1 45); do
             if curl -sf "$FORGEJO_API/releases/tags/$TAG" -o release.json \
-              && [ "$(jq '.assets | length' release.json)" = "19" ]; then
-              echo "Forgejo release $TAG is published with all nineteen files."
+              && [ "$(jq '.assets | length' release.json)" = "20" ]; then
+              echo "Forgejo release $TAG is published with all twenty files."
               exit 0
             fi
             echo "Waiting for the Forgejo release $TAG (try $i of 45)."

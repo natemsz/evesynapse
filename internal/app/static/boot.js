@@ -53,7 +53,9 @@ try {
   var staleMirror = acctTheme === "none" &&
     window.localStorage.getItem("evesynapse-theme-src") === "account";
   if (acctTheme !== "stored" && !staleMirror) {
+    var fullOK = !!document.querySelector('meta[name="es-assets"]');
     var savedBackdrop = window.localStorage.getItem("evesynapse-backdrop");
+    if (savedBackdrop === "full" && !fullOK) savedBackdrop = "muted";
     if (savedBackdrop === "muted" || savedBackdrop === "glow" || savedBackdrop === "full") {
       document.documentElement.setAttribute("data-backdrop", savedBackdrop);
     }
@@ -68,7 +70,7 @@ try {
       document.documentElement.removeAttribute("data-backdrop");
       var savedTier = window.localStorage.getItem("evesynapse-tier");
       document.documentElement.setAttribute("data-tier",
-        savedTier === "minimalistic" ? "minimalistic" : savedTier === "full" ? "full" : "muted");
+        savedTier === "minimalistic" ? "minimalistic" : savedTier === "full" && fullOK ? "full" : "muted");
     }
     // The colour-blind mode retunes the status colours of any
     // scheme, so it applies on its own, beside the scheme.

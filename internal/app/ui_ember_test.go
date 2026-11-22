@@ -268,10 +268,10 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 		t.Fatalf("read base.html: %v", err)
 	}
 	for _, want := range []string{
-		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-uhd.jxl?v=afdbe38df4d5f595"`,
-		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-4k.jxl?v=e6653b67c49cd641"`,
-		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-muted-uhd.jxl?v=b7e4118004978f2e"`,
-		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-muted-4k.jxl?v=73ff76cacb449b10"`,
+		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-uhd.jxl?v=afdbe38df4d5f595"`,
+		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-4k.jxl?v=e6653b67c49cd641"`,
+		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-muted-uhd.jxl?v=b7e4118004978f2e"`,
+		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-muted-4k.jxl?v=73ff76cacb449b10"`,
 	} {
 		if !strings.Contains(string(base), want) {
 			t.Errorf("base.html is missing the wallpaper preload %q", want)

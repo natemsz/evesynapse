@@ -305,6 +305,8 @@ func linkFuncMap() template.FuncMap {
 		// moduleOn: whether an optional module is compiled into this
 		// build, for the core links that lead to its pages.
 		"moduleOn":          moduleCompiledIn,
+		"assetsBase":        assetsBase,
+		"fullWallpapers":    fullWallpapers,
 		"itemLink":          itemLink,
 		"publicItemLink":    publicItemLink,
 		"itemSublink":       itemSublink,

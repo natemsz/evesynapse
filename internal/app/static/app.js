@@ -6780,21 +6780,6 @@
     if (form) { recount(form); }
   });
 
-  // The sign-up theme step: the type decides which scheme rows
-  // carry the wallpaper note, swapped in place, no reload.
-  var themeBox = document.querySelector("[data-su-theme]");
-  if (themeBox) {
-    var syncTheme = function () {
-      var picked = themeBox.querySelector('input[name="ttype"]:checked');
-      var full = !!picked && picked.value === "full";
-      var notes = themeBox.querySelectorAll("[data-su-soon]");
-      for (var i = 0; i < notes.length; i++) notes[i].hidden = !full;
-      var note = themeBox.querySelector("[data-su-fullnote]");
-      if (note) note.hidden = !full;
-    };
-    themeBox.addEventListener("change", syncTheme);
-    syncTheme();
-  }
 })();
 
 // Hover sparklines: a figure wrapped in .spark-hover carries a

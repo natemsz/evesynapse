@@ -195,22 +195,78 @@ SELECT * FROM ops
 WHERE cancelled_at IS NULL
   AND fc_character_id <> 0
   AND starts_at <= sqlc.arg(starts_before)
+  AND starts_at >= sqlc.arg(ends_after)::timestamptz - interval '24 hours'
   AND starts_at + (duration_minutes * interval '1 minute') >= sqlc.arg(ends_after)
-ORDER BY starts_at, id;
+ORDER BY capture_checked_at NULLS FIRST, starts_at, id
+LIMIT 40;
 
 -- name: SetOpCaptureStatus :exec
-UPDATE ops SET capture_status = sqlc.arg(capture_status), capture_checked_at = sqlc.arg(checked_at)
+UPDATE ops SET capture_status = sqlc.arg(capture_status), capture_checked_at = sqlc.arg(checked_at),
+    capture_boss_id = sqlc.arg(boss_id), capture_detail = sqlc.arg(detail)
 WHERE id = sqlc.arg(id);
 
--- Seen in the fleet. A character already marked by hand becomes a
--- fleet sighting: the fleet is the better witness.
--- name: UpsertFleetAttendance :exec
-INSERT INTO op_attendance (op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at)
-VALUES (sqlc.arg(op_id), sqlc.arg(character_id), sqlc.arg(ship_type_id), 'fleet', sqlc.arg(seen_at), sqlc.arg(seen_at))
+-- Seen in the fleet, everyone in one write. A character already marked
+-- by hand becomes a fleet sighting: the fleet is the better witness.
+-- name: UpsertFleetAttendance :execrows
+INSERT INTO op_attendance (op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at,
+    wing_id, squad_id, fleet_position, solar_system_id, suggested_role)
+SELECT sqlc.arg(op_id)::bigint, m.character_id, m.ship_type_id, 'fleet',
+       sqlc.arg(seen_at)::timestamptz, sqlc.arg(seen_at)::timestamptz,
+       m.wing_id, m.squad_id, m.fleet_position, m.solar_system_id, m.suggested_role
+FROM (
+    SELECT unnest(sqlc.arg(character_ids)::bigint[]) AS character_id,
+           unnest(sqlc.arg(ship_type_ids)::bigint[]) AS ship_type_id,
+           unnest(sqlc.arg(wing_ids)::bigint[]) AS wing_id,
+           unnest(sqlc.arg(squad_ids)::bigint[]) AS squad_id,
+           unnest(sqlc.arg(positions)::text[]) AS fleet_position,
+           unnest(sqlc.arg(system_ids)::bigint[]) AS solar_system_id,
+           unnest(sqlc.arg(suggested_roles)::text[]) AS suggested_role
+) AS m
 ON CONFLICT (op_id, character_id) DO UPDATE SET
-    ship_type_id = excluded.ship_type_id,
-    source       = 'fleet',
-    last_seen_at = excluded.last_seen_at;
+    ship_type_id    = excluded.ship_type_id,
+    source          = 'fleet',
+    last_seen_at    = excluded.last_seen_at,
+    wing_id         = excluded.wing_id,
+    squad_id        = excluded.squad_id,
+    fleet_position  = excluded.fleet_position,
+    solar_system_id = excluded.solar_system_id,
+    suggested_role  = excluded.suggested_role;
+
+-- ---------------------------------------------------------------------
+-- The live fleet (schema 167).
+-- ---------------------------------------------------------------------
+
+-- name: GetOpComposition :one
+SELECT op_id, payload, revision, computed_at FROM op_composition WHERE op_id = $1;
+
+-- name: UpsertOpComposition :exec
+INSERT INTO op_composition (op_id, payload, revision, computed_at)
+VALUES (sqlc.arg(op_id), sqlc.arg(payload), 1, sqlc.arg(computed_at))
+ON CONFLICT (op_id) DO UPDATE SET
+    payload     = excluded.payload,
+    revision    = op_composition.revision + 1,
+    computed_at = excluded.computed_at;
+
+-- Stores a commander's change on the composition it was made against.
+-- No row changes if the worker wrote a newer one meanwhile; its next
+-- read picks the change up from op_member_tags.
+-- name: UpdateOpCompositionAt :execrows
+UPDATE op_composition SET payload = sqlc.arg(payload), revision = revision + 1
+WHERE op_id = sqlc.arg(op_id) AND revision = sqlc.arg(revision);
+
+-- name: ListOpMemberTags :many
+SELECT character_id, kind, tag FROM op_member_tags
+WHERE op_id = $1
+ORDER BY character_id, kind, tag
+LIMIT 1500;
+
+-- name: ClearOpMemberTags :exec
+DELETE FROM op_member_tags WHERE op_id = sqlc.arg(op_id) AND character_id = sqlc.arg(character_id);
+
+-- name: InsertOpMemberTag :exec
+INSERT INTO op_member_tags (op_id, character_id, kind, tag, set_by, set_at)
+VALUES (sqlc.arg(op_id), sqlc.arg(character_id), sqlc.arg(kind), sqlc.arg(tag), sqlc.arg(set_by), sqlc.arg(set_at))
+ON CONFLICT DO NOTHING;
 
 -- Marked by hand. Never touches a row the fleet reported.
 -- name: InsertManualAttendance :exec

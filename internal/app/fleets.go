@@ -883,6 +883,11 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	}
 
 	data := pageData{ShellData: app.PublicShell(ctx), Op: view}
+	// The tab opens by the fleet's address, where a share link does not
+	// count, so it is offered only to those it would let in.
+	direct := facts
+	direct.ViaToken = false
+	data.SectionSubTabs = fleetTabs(op.ID, seesFleetLive(v.access(op, direct)), "overview")
 	if op.Visibility == fleetPublic || facts.ViaToken {
 		data.HeadMeta = module.RenderPageMeta(module.PageMeta{
 			Title:       op.Title,

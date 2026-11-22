@@ -1000,6 +1000,12 @@ var pgFleetsSchema string
 //go:embed schema_pg/166_doctrine_owners.sql
 var pgDoctrineOwnersSchema string
 
+// Step 167: the live fleet: where pilots are, commanders' roles and
+// tags, and the stored composition pages read.
+//
+//go:embed schema_pg/167_live_fleet.sql
+var pgLiveFleetSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1194,6 +1200,7 @@ func schemaSteps() []schemaStep {
 		{164, "communities", pgCommunitiesSchema, ""},
 		{165, "fleets", pgFleetsSchema, ""},
 		{166, "doctrine owners", pgDoctrineOwnersSchema, ""},
+		{167, "live fleet", pgLiveFleetSchema, ""},
 	}
 }
 

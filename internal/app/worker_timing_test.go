@@ -131,7 +131,7 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 		names = append(names, p.Name)
 	}
 	// The cycle's own phases, with the ones modules add where they run.
-	want := []string{"ordering", "guide and indices", "true values", "characters", "op attendance"}
+	want := []string{"ordering", "guide and indices", "true values", "characters"}
 	if moduleCompiledIn("swarm") {
 		want = append(want, "swarm fetch")
 	}

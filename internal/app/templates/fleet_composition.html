@@ -1,0 +1,127 @@
+{{define "title"}}{{with .FleetLive}}{{.Title}}: composition{{end}}{{end}}
+{{define "pagetitle"}}{{with .FleetLive}}<h1><span class="gt">{{.Title}}</span></h1>{{end}}{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .FleetLive}}
+<div class="l-page fl-page">
+<div class="l-head">
+  <h2 class="l-head-title">{{.Title}}</h2>
+  <p class="l-head-sum">Who is in the fleet right now, read from EVE about once a minute.</p>
+</div>
+<p class="visually-hidden" role="status" id="fl-live-said"></p>
+{{template "fleet-live" .}}
+</div>
+{{end}}
+{{end}}
+
+{{define "fleet-live"}}
+<div class="fl-live" id="fl-live"{{if .Polling}} data-fleet-live="{{.LiveURL}}" data-revision="{{.Revision}}" data-every="{{.PollSeconds}}"{{end}}>
+{{$v := .}}
+{{if .Has}}
+<p class="fl-asof{{if .Stale}} is-stale{{end}}">{{if .Stale}}Out of date: last read at {{.AsOf}}.{{else}}Last read at {{.AsOf}}.{{end}}{{if .Full}} {{.Status}}{{end}}</p>
+{{if .Notes}}<ul class="fl-notes">{{range .Notes}}<li>{{.}}</li>{{end}}</ul>{{end}}
+{{with .Comp}}
+<div class="l-tiles">
+  <div class="l-stat"><span class="l-stat-label">Pilots</span><span class="l-stat-value">{{.Pilots}}</span></div>
+  {{if .HasDoctrine}}<div class="l-stat"><span class="l-stat-label">In a doctrine hull</span><span class="l-stat-value">{{.OnDoctrine}}</span><span class="l-stat-sub">of {{.Pilots}}</span></div>
+  <div class="l-stat"><span class="l-stat-label">In another hull</span><span class="l-stat-value">{{.OffDoctrine}}</span></div>{{end}}
+  {{if $v.Full}}<div class="l-stat"><span class="l-stat-label">Systems</span><span class="l-stat-value">{{len .Systems}}</span></div>{{end}}
+</div>
+
+<section class="l-panel" aria-labelledby="fl-roles-title">
+  <h2 id="fl-roles-title">Roles</h2>
+  <svg class="fl-rolebar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="{{$v.RoleSummary}}">{{range $v.RoleBar}}<rect class="{{.Class}}" x="{{printf "%.3f" .X}}" y="0" width="{{printf "%.3f" .W}}" height="10"><title>{{.Role}}: {{.Count}}</title></rect>{{end}}</svg>
+  <ul class="fl-legend">{{range $v.RoleBar}}<li><span class="fl-swatch {{.Class}}" aria-hidden="true"></span>{{.Role}} <b>{{.Count}}</b></li>{{end}}</ul>
+</section>
+
+<div class="l-sidebar l-sidebar--end fl-split">
+<div class="fl-main">
+<section class="l-panel" aria-labelledby="fl-hulls-title">
+  <h2 id="fl-hulls-title">Hulls <small>{{len .Hulls}}</small></h2>
+  <div class="tw" tabindex="0" role="region" aria-labelledby="fl-hulls-title">
+  <table>
+    <thead><tr><th>Hull</th><th>Class</th><th class="num">Pilots</th>{{if .HasDoctrine}}<th>Doctrine</th>{{end}}</tr></thead>
+    <tbody>
+    {{$doctrine := .HasDoctrine}}
+    {{range .Hulls}}<tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Class}}</td><td class="num">{{.Count}}</td>{{if $doctrine}}<td>{{if .Doctrine}}In doctrine{{else}}Not in doctrine{{end}}</td>{{end}}</tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+</div>
+
+{{if .HasDoctrine}}
+<aside class="fl-side" aria-label="Doctrine gaps">
+  <section class="l-panel" aria-labelledby="fl-gaps-title">
+    <h2 id="fl-gaps-title">Doctrine gaps</h2>
+    {{if or .MissingHulls .MissingRoles}}
+    {{if .MissingRoles}}<p class="fl-gap"><span class="field-label">No pilot in</span> {{range $i, $r := .MissingRoles}}{{if $i}}, {{end}}{{$r}}{{end}}</p>{{end}}
+    {{if .MissingHulls}}<p class="fl-gap"><span class="field-label">Nobody flying</span> {{range $i, $h := .MissingHulls}}{{if $i}}, {{end}}{{$h}}{{end}}</p>{{end}}
+    {{else}}<p class="fl-empty">Every doctrine hull and role is covered.</p>{{end}}
+    <p class="fl-hint">Checked by hull. EVE does not show other pilots' fits.</p>
+  </section>
+</aside>
+{{end}}
+</div>
+
+{{if $v.Full}}
+<div class="l-tiles l-tiles--cards">
+  <section class="l-panel" aria-labelledby="fl-wings-title">
+    <h2 id="fl-wings-title">Wings</h2>
+    <ul class="fl-tally">{{range .Wings}}<li><span>{{.Name}}{{if .Squads}} <small>{{.Squads}} {{if eq .Squads 1}}squad{{else}}squads{{end}}</small>{{end}}</span><b>{{.Pilots}}</b></li>{{end}}</ul>
+  </section>
+  <section class="l-panel" aria-labelledby="fl-systems-title">
+    <h2 id="fl-systems-title">Systems</h2>
+    <ul class="fl-tally">{{range .Systems}}<li><span>{{if .Name}}{{.Name}}{{else}}Unknown system{{end}}</span><b>{{.Count}}</b></li>{{end}}</ul>
+  </section>
+  {{template "fleet-invite" $v}}
+</div>
+{{end}}
+
+{{if $v.Full}}
+<section class="l-panel fl-pilots" aria-labelledby="fl-pilots-title">
+  <h2 id="fl-pilots-title">Pilots <small>{{.Pilots}}</small></h2>
+  <p class="fl-hint">Set a role to replace the one suggested by the pilot's hull. Tags are separated by commas, up to 5.</p>
+  <div class="tw" tabindex="0" role="region" aria-labelledby="fl-pilots-title">
+  <table>
+    <thead><tr><th>Pilot</th><th>Ship</th><th>System</th><th>Position</th><th>Role</th><th>Tags</th><th><span class="visually-hidden">Save</span></th></tr></thead>
+    <tbody>
+    {{range $v.Members}}
+    {{$m := .}}
+    <tr>
+      <td data-label="Pilot">{{charLink $v.ViewerChars .ID .Name}}</td>
+      <td data-label="Ship">{{if .ShipTypeID}}{{itemLink .ShipTypeID .Ship}}{{end}}{{if and $v.Comp.HasDoctrine (not .OnDoctrine)}} <small>not in doctrine</small>{{end}}</td>
+      <td data-label="System">{{.System}}</td>
+      <td data-label="Position">{{.PositionText}}</td>
+      <td data-label="Role"><select form="fl-p-{{.ID}}" name="role" aria-label="Role for {{.Name}}"><option value="">{{.Suggested}} (suggested)</option>{{range $v.Roles}}<option value="{{.}}"{{if eq . $m.Assigned}} selected{{end}}>{{.}}</option>{{end}}</select></td>
+      <td data-label="Tags"><input form="fl-p-{{.ID}}" type="text" name="tags" value="{{.TagText}}" maxlength="130" placeholder="Tags" aria-label="Tags for {{.Name}}"></td>
+      <td><form id="fl-p-{{.ID}}" method="post" action="/fleets/{{$v.ID}}/pilot" class="fl-inline"><input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="page" value="{{$v.Page}}"><button type="submit" class="btn btn-quiet" aria-label="Save {{.Name}}">Save</button></form></td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if gt $v.Pages 1}}<nav class="l-cluster fl-pager" aria-label="Pilot pages">{{with $v.PrevURL}}<a class="btn btn-quiet" href="{{.}}">Previous</a>{{end}}<span>Page {{$v.Page}} of {{$v.Pages}}</span>{{with $v.NextURL}}<a class="btn btn-quiet" href="{{.}}">Next</a>{{end}}</nav>{{end}}
+</section>
+{{end}}
+{{end}}
+{{else}}
+<section class="l-panel">
+  <h2>No fleet read yet</h2>
+  {{if .Full}}<p>{{.Status}}</p>{{if .Notes}}<ul class="fl-notes">{{range .Notes}}<li>{{.}}</li>{{end}}</ul>{{end}}{{else}}<p class="fl-empty">This fills in once the fleet is up and its boss is a commander with fleet access.</p>{{end}}
+</section>
+{{if .Full}}{{template "fleet-invite" .}}{{end}}
+{{end}}
+</div>
+{{end}}
+
+{{define "fleet-invite"}}
+{{if .InviteCount}}
+<section class="l-panel fl-next" aria-labelledby="fl-invite-title">
+  <h2 id="fl-invite-title">To invite <small>{{.InviteCount}}</small></h2>
+  <p class="fl-hint">Signed up as coming and not in the fleet.{{if .InviteCut}} Showing the first {{.InviteShown}}.{{end}}</p>
+  <pre class="fl-invite" id="fl-invite" tabindex="0">{{.Invite}}</pre>
+  <button type="button" class="btn btn-quiet" data-copy data-copy-from="fl-invite">Copy names</button>
+</section>
+{{end}}
+{{end}}

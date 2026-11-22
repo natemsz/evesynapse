@@ -1837,6 +1837,8 @@ type Op struct {
 	DoctrineSnapshot      sql.NullString `json:"doctrine_snapshot"`
 	DoctrineSnapshotShips []int64        `json:"doctrine_snapshot_ships"`
 	DoctrineSnapshotAt    sql.NullTime   `json:"doctrine_snapshot_at"`
+	CaptureBossID         int64          `json:"capture_boss_id"`
+	CaptureDetail         string         `json:"capture_detail"`
 }
 
 type OpAccessRule struct {
@@ -1847,12 +1849,17 @@ type OpAccessRule struct {
 }
 
 type OpAttendance struct {
-	OpID        int64     `json:"op_id"`
-	CharacterID int64     `json:"character_id"`
-	ShipTypeID  int64     `json:"ship_type_id"`
-	Source      string    `json:"source"`
-	FirstSeenAt time.Time `json:"first_seen_at"`
-	LastSeenAt  time.Time `json:"last_seen_at"`
+	OpID          int64     `json:"op_id"`
+	CharacterID   int64     `json:"character_id"`
+	ShipTypeID    int64     `json:"ship_type_id"`
+	Source        string    `json:"source"`
+	FirstSeenAt   time.Time `json:"first_seen_at"`
+	LastSeenAt    time.Time `json:"last_seen_at"`
+	WingID        int64     `json:"wing_id"`
+	SquadID       int64     `json:"squad_id"`
+	FleetPosition string    `json:"fleet_position"`
+	SolarSystemID int64     `json:"solar_system_id"`
+	SuggestedRole string    `json:"suggested_role"`
 }
 
 type OpCommander struct {
@@ -1861,6 +1868,22 @@ type OpCommander struct {
 	Role        string    `json:"role"`
 	AddedBy     int64     `json:"added_by"`
 	AddedAt     time.Time `json:"added_at"`
+}
+
+type OpComposition struct {
+	OpID       int64     `json:"op_id"`
+	Payload    string    `json:"payload"`
+	Revision   int64     `json:"revision"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
+type OpMemberTag struct {
+	OpID        int64     `json:"op_id"`
+	CharacterID int64     `json:"character_id"`
+	Kind        string    `json:"kind"`
+	Tag         string    `json:"tag"`
+	SetBy       int64     `json:"set_by"`
+	SetAt       time.Time `json:"set_at"`
 }
 
 type OpSignup struct {

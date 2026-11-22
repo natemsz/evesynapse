@@ -72,6 +72,7 @@ type pageData struct {
 	// history, and the answer for a fleet the viewer cannot see.
 	Fleets      *fleetsView
 	Op          *opView
+	FleetLive   *fleetLiveView
 	OpForm      *opFormView
 	PAPs        *papsView
 	FleetHidden *fleetHiddenView
@@ -186,7 +187,7 @@ func sectionForPage(page string) string {
 		"assets.html",
 		"killmails.html", "notifications.html":
 		return "pilot"
-	case "fleets.html", "fleet.html", "fleet_form.html", "fleet_history.html", "fleet_hidden.html", "fleet_permissions.html":
+	case "fleets.html", "fleet.html", "fleet_composition.html", "fleet_form.html", "fleet_history.html", "fleet_hidden.html", "fleet_permissions.html":
 		return "fleets"
 	case "industry.html", "industry_jobs.html", "industry_mining.html", "planets.html":
 		return "industry"
@@ -290,7 +291,12 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	// whose strip is the Admin tabs) keeps it; every other
 	// page's strip comes from its nav section.
 	if len(shell.SectionTabs) == 0 {
-		shell.SectionTabs, shell.SectionSubTabs = sectionTabsGrouped(shell.NavLinks, shell.Section)
+		tabs, sub := sectionTabsGrouped(shell.NavLinks, shell.Section)
+		shell.SectionTabs = tabs
+		// A detail page may bring its own second row (one fleet's tabs).
+		if len(shell.SectionSubTabs) == 0 {
+			shell.SectionSubTabs = sub
+		}
 	}
 	shell.BottomNav, shell.BottomSections = bottomNavFor(shell.NavLinks, shell.NavGroups, shell.Section)
 	if len(shell.Scripts) == 0 {

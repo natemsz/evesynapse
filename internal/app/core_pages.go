@@ -78,9 +78,14 @@ type pageData struct {
 	FleetHidden *fleetHiddenView
 	// FleetPermissions: who else runs an owner's fleets and doctrines.
 	FleetPermissions *fleetPermissionsView
+	// FleetReport is a fleet's Report tab; FleetLeaders the leaderboards.
+	FleetReport  *fleetReportView
+	FleetLeaders *fleetLeadersView
 
-	// Public pilot page (/pilot/): a stranger's public record.
-	Pilot *pilotView
+	// Public pilot page (/pilot/): a stranger's public record, and
+	// their place on the fleet leaderboard.
+	PilotFleet *fleetRecordView
+	Pilot      *pilotView
 	// PilotIntel is the pilot page's intel section (pilot_intel.go).
 	PilotIntel *pilotIntelView
 
@@ -187,7 +192,7 @@ func sectionForPage(page string) string {
 		"assets.html",
 		"killmails.html", "notifications.html":
 		return "pilot"
-	case "fleets.html", "fleet.html", "fleet_composition.html", "fleet_form.html", "fleet_history.html", "fleet_hidden.html", "fleet_permissions.html", "fleet_srp.html", "srp.html":
+	case "fleets.html", "fleet.html", "fleet_composition.html", "fleet_form.html", "fleet_history.html", "fleet_hidden.html", "fleet_permissions.html", "fleet_report.html", "fleet_leaders.html", "fleet_srp.html", "srp.html":
 		return "fleets"
 	case "industry.html", "industry_jobs.html", "industry_mining.html", "planets.html":
 		return "industry"

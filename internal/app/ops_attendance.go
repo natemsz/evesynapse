@@ -478,6 +478,9 @@ func (app *Application) handleOpAttendance(w http.ResponseWriter, r *http.Reques
 		if err := app.queries.DeleteManualAttendanceExcept(ctx, db.DeleteManualAttendanceExceptParams{OpID: op.ID, KeepIds: keep}); err != nil {
 			logging.Errorf("ops: clear attendance on op %d: %v", op.ID, err)
 		}
+		if err := markFleetReportChanged(ctx, app.queries, op.ID); err != nil {
+			logging.Errorf("ops: mark report of op %d: %v", op.ID, err)
+		}
 		app.flash(ctx, "Attendance saved.")
 	}
 	http.Redirect(w, r, opURL(op.ID), http.StatusSeeOther)

@@ -4241,6 +4241,7 @@
     { name: "Corporation Settings", url: "/corporations/settings/" },
     { name: "Fleets", url: "/fleets/" },
     { name: "Fleet History", url: "/fleets/history/" },
+    { name: "Fleet Leaderboards", url: "/fleets/leaderboard/" },
     { name: "Communities", url: "/fleets/communities/" },
     { name: "Killboard", url: "/intel/kills/" },
     { name: "Leaderboards", url: "/intel/kills/top/" },

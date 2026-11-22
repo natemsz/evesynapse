@@ -105,6 +105,18 @@
   {{end}}
 </section>
 
+{{with .Totals}}
+<section class="l-panel" aria-labelledby="fl-totals-title">
+  <h2 id="fl-totals-title">Fleet totals</h2>
+  <ul class="fl-tally">
+    <li><span>Kills</span><span>{{.Kills}}</span></li>
+    <li><span>Losses</span><span>{{.Losses}}</span></li>
+    <li><span>ISK destroyed</span><span>{{.Destroyed}}</span></li>
+    <li><span>ISK lost</span><span>{{.Lost}}</span></li>
+  </ul>
+</section>
+{{end}}
+
 {{with .Attendance}}
 <section class="l-panel" aria-labelledby="fl-attendance-title">
   <h2 id="fl-attendance-title">Attendance <small>{{len .Rows}}</small></h2>

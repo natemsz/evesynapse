@@ -231,6 +231,9 @@ type killboardView struct {
 	// LeadersHref opens the leaderboards for this scope: New Eden,
 	// a place, a hull, or an alliance's or corporation's members.
 	LeadersHref string
+	// FleetRecord is the scope's place on the fleet leaderboard, for a
+	// pilot, corporation or alliance that has one.
+	FleetRecord *fleetRecordView
 	// Filtered: the list is narrowed beyond its scope, so the live
 	// stream carries the same filters.
 	Filtered bool
@@ -416,6 +419,7 @@ func (app *Application) handleKillboard(w http.ResponseWriter, r *http.Request) 
 		v.ScanNote = killScanNote(len(kills))
 	}
 	v.Stats, v.Top = app.killboardBoardStats(ctx, names, v.ScopeKind, v.ScopeID, v.ScopeName)
+	v.FleetRecord = app.fleetRecord(ctx, v.ScopeKind, v.ScopeID)
 	data.Killboard = v
 	title := "Killboard"
 	if v.ScopeName != "" {

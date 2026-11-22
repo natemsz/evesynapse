@@ -28,19 +28,9 @@ func (app *Application) seesFleetSRP(ctx context.Context, op db.Op, v fleetViewe
 	if !moduleCompiledIn("srp") {
 		return false, false, false, false
 	}
-	owner := opOwner(op)
-	facts := app.fleetFactsFor(ctx, v, []db.Op{op})[op.ID]
-	facts.ViaToken = false
-	member = v.access(op, facts).View && v.readsDoctrine(owner, module.DoctrineMembers)
+	member, attended = app.fleetStake(ctx, op, v)
 	if v.UserID != 0 {
-		handles = app.ownerPermits(ctx, v.Standing, owner, permSRP)
-	}
-	if ids := v.characterIDs(); len(ids) > 0 {
-		var err error
-		attended, err = app.queries.AnyOnOpAttendance(ctx, db.AnyOnOpAttendanceParams{OpID: op.ID, CharacterIds: ids})
-		if err != nil {
-			logging.Errorf("fleets: attendance of viewer on %d: %v", op.ID, err)
-		}
+		handles = app.ownerPermits(ctx, v.Standing, opOwner(op), permSRP)
 	}
 	return member, attended, handles, member || attended || handles
 }
@@ -76,9 +66,8 @@ func (app *Application) FleetSRPFor(ctx context.Context, opID int64) (module.Fle
 		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
 	}
 	// A pilot with no other view of the fleet has no Overview to go to.
-	if access := v.access(op, app.fleetFactsFor(ctx, v, []db.Op{op})[op.ID]); access.View {
-		out.Tabs = fleetTabs(op.ID, seesFleetLive(op, access, live.sight, now), true, "srp")
-	}
+	access := v.access(op, app.fleetFactsFor(ctx, v, []db.Op{op})[op.ID])
+	out.Tabs = fleetTabs(op.ID, access.View, seesFleetLive(op, access, live.sight, now), true, app.fleetReportTab(ctx, op, v, now), "srp")
 	return out, true
 }
 

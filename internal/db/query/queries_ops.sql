@@ -208,10 +208,10 @@ WHERE id = sqlc.arg(id);
 -- Seen in the fleet, everyone in one write. A character already marked
 -- by hand becomes a fleet sighting: the fleet is the better witness.
 -- name: UpsertFleetAttendance :execrows
-INSERT INTO op_attendance (op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at,
+INSERT INTO op_attendance (op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at, first_fleet_at,
     wing_id, squad_id, fleet_position, solar_system_id, suggested_role)
 SELECT sqlc.arg(op_id)::bigint, m.character_id, m.ship_type_id, 'fleet',
-       sqlc.arg(seen_at)::timestamptz, sqlc.arg(seen_at)::timestamptz,
+       sqlc.arg(seen_at)::timestamptz, sqlc.arg(seen_at)::timestamptz, sqlc.arg(seen_at)::timestamptz,
        m.wing_id, m.squad_id, m.fleet_position, m.solar_system_id, m.suggested_role
 FROM (
     SELECT unnest(sqlc.arg(character_ids)::bigint[]) AS character_id,
@@ -226,6 +226,9 @@ ON CONFLICT (op_id, character_id) DO UPDATE SET
     ship_type_id    = excluded.ship_type_id,
     source          = 'fleet',
     last_seen_at    = excluded.last_seen_at,
+    first_fleet_at  = COALESCE(op_attendance.first_fleet_at,
+                               CASE WHEN op_attendance.source = 'fleet' THEN op_attendance.first_seen_at
+                                    ELSE excluded.first_fleet_at END),
     wing_id         = excluded.wing_id,
     squad_id        = excluded.squad_id,
     fleet_position  = excluded.fleet_position,

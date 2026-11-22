@@ -1017,6 +1017,11 @@ var pgSRPOwnersSchema string
 //go:embed schema_pg/169_battle_merge.sql
 var pgBattleMergeSchema string
 
+// Step 170: fleet battle reports, points and leaderboards.
+//
+//go:embed schema_pg/170_fleet_reports.sql
+var pgFleetReportsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1214,6 +1219,7 @@ func schemaSteps() []schemaStep {
 		{167, "live fleet", pgLiveFleetSchema, ""},
 		{168, "srp owners", pgSRPOwnersSchema, ""},
 		{169, "battle merge", pgBattleMergeSchema, ""},
+		{170, "fleet reports", pgFleetReportsSchema, ""},
 	}
 }
 

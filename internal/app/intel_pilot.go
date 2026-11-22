@@ -145,6 +145,7 @@ func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 		pname = data.Pilot.Name
 	}
 	data.PilotIntel = app.loadPilotIntel(ctx, id, pname)
+	data.PilotFleet = app.fleetRecord(ctx, "character", id)
 	// Viewing the profile offers the pilot to the history
 	// backfill, like meeting them in a reading does: the pass
 	// completes their activity aggregates and brings their

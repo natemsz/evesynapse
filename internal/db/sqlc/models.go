@@ -617,6 +617,103 @@ type FittingCookieSecret struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type FleetBattle struct {
+	ID             int64     `json:"id"`
+	OpID           int64     `json:"op_id"`
+	Seq            int32     `json:"seq"`
+	SystemID       int64     `json:"system_id"`
+	StartedAt      time.Time `json:"started_at"`
+	EndedAt        time.Time `json:"ended_at"`
+	PilotsTotal    int32     `json:"pilots_total"`
+	PilotsWithLogs int32     `json:"pilots_with_logs"`
+	LogsLeftOut    int32     `json:"logs_left_out"`
+	Kills          int32     `json:"kills"`
+	Losses         int32     `json:"losses"`
+	IskDestroyed   float64   `json:"isk_destroyed"`
+	IskLost        float64   `json:"isk_lost"`
+	UnpricedMails  int32     `json:"unpriced_mails"`
+	DamageOut      int64     `json:"damage_out"`
+	DamageIn       int64     `json:"damage_in"`
+	RepsOut        int64     `json:"reps_out"`
+	CapOut         int64     `json:"cap_out"`
+	FriendlyFire   int64     `json:"friendly_fire"`
+	ComputedAt     time.Time `json:"computed_at"`
+}
+
+type FleetBattleFight struct {
+	FleetBattleID int64 `json:"fleet_battle_id"`
+	FightID       int64 `json:"fight_id"`
+}
+
+type FleetBattleKill struct {
+	FleetBattleID     int64           `json:"fleet_battle_id"`
+	KillmailID        int64           `json:"killmail_id"`
+	KillmailTime      time.Time       `json:"killmail_time"`
+	Loss              bool            `json:"loss"`
+	VictimCharacterID int64           `json:"victim_character_id"`
+	ShipTypeID        int64           `json:"ship_type_id"`
+	ValueIsk          sql.NullFloat64 `json:"value_isk"`
+}
+
+type FleetBattlePilot struct {
+	FleetBattleID int64 `json:"fleet_battle_id"`
+	CharacterID   int64 `json:"character_id"`
+	ShipTypeID    int64 `json:"ship_type_id"`
+	DamageOut     int64 `json:"damage_out"`
+	DamageIn      int64 `json:"damage_in"`
+	RepsOut       int64 `json:"reps_out"`
+	KillsOn       int32 `json:"kills_on"`
+	Died          bool  `json:"died"`
+	HasLog        bool  `json:"has_log"`
+}
+
+type FleetBattleSeries struct {
+	FleetBattleID int64  `json:"fleet_battle_id"`
+	Payload       string `json:"payload"`
+}
+
+type FleetLeader struct {
+	Period     string  `json:"period"`
+	Audience   string  `json:"audience"`
+	ScopeKind  string  `json:"scope_kind"`
+	ScopeID    int64   `json:"scope_id"`
+	Board      string  `json:"board"`
+	EntityKind string  `json:"entity_kind"`
+	EntityID   int64   `json:"entity_id"`
+	Place      int32   `json:"place"`
+	Fleets     int64   `json:"fleets"`
+	Kills      int64   `json:"kills"`
+	Deaths     int64   `json:"deaths"`
+	Isk        float64 `json:"isk"`
+	Points     int64   `json:"points"`
+}
+
+type FleetReportState struct {
+	OpID       int64         `json:"op_id"`
+	DirtySeq   sql.NullInt64 `json:"dirty_seq"`
+	ComputedAt sql.NullTime  `json:"computed_at"`
+}
+
+type FleetScoreMail struct {
+	OpID        int64     `json:"op_id"`
+	CharacterID int64     `json:"character_id"`
+	KillmailID  int64     `json:"killmail_id"`
+	At          time.Time `json:"at"`
+	Loss        bool      `json:"loss"`
+	Counts      bool      `json:"counts"`
+	ValueIsk    float64   `json:"value_isk"`
+	ValuePoints float64   `json:"value_points"`
+}
+
+type FleetScorePilot struct {
+	OpID         int64     `json:"op_id"`
+	CharacterID  int64     `json:"character_id"`
+	FlownAt      time.Time `json:"flown_at"`
+	SeenInFleet  bool      `json:"seen_in_fleet"`
+	MemberCredit bool      `json:"member_credit"`
+	PublicCredit bool      `json:"public_credit"`
+}
+
 type ForesightTarget struct {
 	ID          int64        `json:"id"`
 	UserID      int64        `json:"user_id"`
@@ -1854,17 +1951,25 @@ type OpAccessRule struct {
 }
 
 type OpAttendance struct {
-	OpID          int64     `json:"op_id"`
-	CharacterID   int64     `json:"character_id"`
-	ShipTypeID    int64     `json:"ship_type_id"`
-	Source        string    `json:"source"`
-	FirstSeenAt   time.Time `json:"first_seen_at"`
-	LastSeenAt    time.Time `json:"last_seen_at"`
-	WingID        int64     `json:"wing_id"`
-	SquadID       int64     `json:"squad_id"`
-	FleetPosition string    `json:"fleet_position"`
-	SolarSystemID int64     `json:"solar_system_id"`
-	SuggestedRole string    `json:"suggested_role"`
+	OpID          int64        `json:"op_id"`
+	CharacterID   int64        `json:"character_id"`
+	ShipTypeID    int64        `json:"ship_type_id"`
+	Source        string       `json:"source"`
+	FirstSeenAt   time.Time    `json:"first_seen_at"`
+	LastSeenAt    time.Time    `json:"last_seen_at"`
+	WingID        int64        `json:"wing_id"`
+	SquadID       int64        `json:"squad_id"`
+	FleetPosition string       `json:"fleet_position"`
+	SolarSystemID int64        `json:"solar_system_id"`
+	SuggestedRole string       `json:"suggested_role"`
+	FirstFleetAt  sql.NullTime `json:"first_fleet_at"`
+}
+
+type OpBattleConsent struct {
+	OpID        int64     `json:"op_id"`
+	CharacterID int64     `json:"character_id"`
+	UserID      int64     `json:"user_id"`
+	ConsentedAt time.Time `json:"consented_at"`
 }
 
 type OpCommander struct {

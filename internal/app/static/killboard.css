@@ -53,6 +53,7 @@
   font-size: var(--fs-xl);
 }
 .kb-scope-x:hover { color: var(--text-bright); background: var(--row-hover); }
+.kb-fleet { margin: 0; font-size: var(--fs-sm); }
 .kb-chips { display: flex; gap: 0.35rem; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .kb-chips::-webkit-scrollbar { display: none; }
 .kb-chips a {

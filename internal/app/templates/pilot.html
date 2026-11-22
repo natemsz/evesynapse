@@ -21,6 +21,7 @@
 <div class="pilot-main">
 {{template "pilot-body" .Pilot}}
 {{template "pilot-employment" .Pilot}}
+{{with .PilotFleet}}<p class="l-panel pilot-fleet"><a href="{{.Href}}">{{.Text}}</a></p>{{end}}
 </div>
 {{with .PilotIntel}}{{template "pilot-intel" .}}{{end}}
 </div>

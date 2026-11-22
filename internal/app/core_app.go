@@ -495,6 +495,10 @@ type Application struct {
 	// (unix seconds).
 	typingPrunedAt atomic.Int64
 
+	// fleetLeadersAt is when the fleet leaderboards were last ranked
+	// (unix seconds).
+	fleetLeadersAt atomic.Int64
+
 	// Trade ideas (tradeideas.go): the model client and the Meta API
 	// base, set in tests; production builds a timeout client per
 	// refresh and calls api.meta.ai.
@@ -945,6 +949,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	fleets.Get(planPath, app.handleOpNew)
 	fleets.Post("/fleets/save", app.handleOpSave)
 	fleets.Get("/fleets/history/", app.handleFleetHistory)
+	fleets.Get(module.FleetLeadersPath, app.handleFleetLeaders)
 	fleets.Get(fleetPermissionsPath, app.handleFleetPermissions)
 	fleets.Post(fleetPermissionsPath, app.handleFleetPermissionsSave)
 	fleets.Get("/fleets/{opID:[0-9]+}/", app.handleOp)
@@ -957,6 +962,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	fleets.Get("/fleets/{opID:[0-9]+}/composition", app.handleFleetComposition)
 	fleets.Get("/fleets/{opID:[0-9]+}/composition/live", app.handleFleetLive)
 	fleets.Post("/fleets/{opID:[0-9]+}/pilot", app.handleFleetPilot)
+	fleets.Get("/fleets/{opID:[0-9]+}/report", app.handleFleetReport)
+	fleets.Post("/fleets/{opID:[0-9]+}/report/logs", app.handleFleetReportLogs)
 	fleets.Get("/fleets/{opID:[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, opURL(mustFleetID(r)), http.StatusMovedPermanently)
 	})

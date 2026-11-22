@@ -527,6 +527,11 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	app.correlateRecentFights(ctx)
 	clock.mark("battle reports", time.Now())
 
+	// Fleet reports (fleet_reports.go): closed fleets' battles, points
+	// and leaderboards, from stored logs and mails. No ESI call.
+	app.refreshFleetReports(ctx)
+	clock.mark("fleet reports", time.Now())
+
 	// Corp pulse change log (home_pulse.go): diff the stored
 	// corp snapshots into pulse_events. The diff is local, so it
 	// runs whether or not ESI was reachable; it spends from the

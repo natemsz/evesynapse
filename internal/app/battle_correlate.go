@@ -19,8 +19,12 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	json "github.com/goccy/go-json"
+	"github.com/jackc/pgx/v5"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,6 +39,7 @@ const (
 	battleMailMargin     = 120 * time.Second
 	battleLateMails      = 72 * time.Hour
 	battleCorrelateBatch = 100
+	battleReportParties  = 200 // parties a report is built from
 	battleLocationFresh  = 15 * time.Minute
 )
 
@@ -63,7 +68,7 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	parties, err := app.queries.ListBattleFightParties(ctx, id)
+	matched, err := app.queries.ListBattleFightPartiesToMatch(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -106,6 +111,11 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 			}
 		}
 	}
+	if systemID == 0 && f.SystemFrom == "location" {
+		// A later pass has no location read near the fight; the one
+		// taken when it was stored still stands.
+		systemID, systemFrom = f.SystemID, f.SystemFrom
+	}
 	kept := mails[:0]
 	for _, m := range mails {
 		if systemID == 0 || m.SystemID == systemID {
@@ -123,13 +133,16 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 		charID, shipID int64
 	}
 	byName := map[string]onMail{}
+	unsettled := false // a name lookup that may still resolve
 	if len(ids) > 0 {
 		atk, err := app.queries.ListKillAttackerCharacters(ctx, ids)
 		if err != nil {
 			return err
 		}
 		for _, a := range atk {
-			if name, ok := app.resolvedCharacterName(ctx, a.CharacterID); ok && name != "" {
+			name, ok := app.resolvedCharacterName(ctx, a.CharacterID)
+			unsettled = unsettled || !ok
+			if ok && name != "" {
 				byName[strings.ToLower(name)] = onMail{a.CharacterID, a.ShipTypeID}
 			}
 		}
@@ -139,7 +152,9 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 		if m.VictimCharacterID == 0 {
 			continue
 		}
-		if name, ok := app.resolvedCharacterName(ctx, m.VictimCharacterID); ok && name != "" {
+		name, ok := app.resolvedCharacterName(ctx, m.VictimCharacterID)
+		unsettled = unsettled || !ok
+		if ok && name != "" {
 			victimName[m.KillmailID] = name
 			byName[strings.ToLower(name)] = onMail{m.VictimCharacterID, m.ShipTypeID}
 		}
@@ -150,18 +165,25 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 			died[m.VictimCharacterID] = true
 		}
 	}
-	for i := range parties {
-		p := &parties[i]
+	var rematched []db.BattleFightParty
+	for i := range matched {
+		p := &matched[i]
+		wasChar, wasDied, wasHull := p.CharacterID, p.Died, p.HullTypeID
 		if hit, ok := byName[strings.ToLower(p.Name)]; ok {
 			p.CharacterID = hit.charID
 			p.Died = died[hit.charID]
 			if p.HullTypeID == 0 {
 				p.HullTypeID = hit.shipID
 			}
-		} else {
+		} else if !unsettled {
+			// With a lookup still open, the stored match stands.
 			p.CharacterID, p.Died = 0, false
 		}
+		if p.CharacterID != wasChar || p.Died != wasDied || p.HullTypeID != wasHull {
+			rematched = append(rematched, *p)
+		}
 	}
+	parties := matched[:min(len(matched), battleReportParties)]
 
 	// The kills, placed in the fight's timeline.
 	firstIn := -1
@@ -252,6 +274,9 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 			}
 		}
 	}
+	if hullID == 0 && f.HullFrom == "ship" {
+		hullID, hullFrom = f.HullTypeID, f.HullFrom
+	}
 	ships := map[int64]string{}
 	for _, k := range kills {
 		if _, ok := ships[k.ShipTypeID]; !ok && k.ShipTypeID > 0 {
@@ -289,6 +314,16 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 	}
 	defer tx.Rollback(ctx)
 	q := app.queries.WithTx(tx)
+	received, err := q.LockBattleFightForCorrelation(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !received.Equal(f.ReceivedAt) {
+		return nil // stored again since this pass read it; that store correlates it
+	}
 	if err := q.DeleteBattleFightKills(ctx, id); err != nil {
 		return err
 	}
@@ -297,7 +332,7 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 			return err
 		}
 	}
-	for _, p := range parties {
+	for _, p := range rematched {
 		if err := q.SetBattleFightPartyMatch(ctx, db.SetBattleFightPartyMatchParams{
 			CharacterID: p.CharacterID, Died: p.Died, HullTypeID: p.HullTypeID, FightID: id, Seq: p.Seq,
 		}); err != nil {
@@ -337,11 +372,30 @@ func (app *Application) correlateFight(ctx context.Context, id int64) error {
 	if err := q.SetBattleFightCorrelation(ctx, db.SetBattleFightCorrelationParams{
 		SystemID: systemID, SystemFrom: systemFrom, HullTypeID: hullID, HullFrom: hullFrom, Kills: nKills, Losses: nLosses,
 		IskDestroyed: iskDestroyed, IskLost: iskLost, Outcome: outcome, SparkOut: sparkOut, SparkIn: sparkIn,
+		MergeDigest:  fightMergeDigest(systemID, hullID, systemFrom, hullFrom, kills, matched),
 		CorrelatedAt: timeSet(time.Now().UTC()), ID: id,
 	}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// fightMergeDigest fingerprints what a fleet report takes from a
+// correlated fight: its system and hull with their sources, its mails
+// with their values, and who each party turned out to be. Victim names
+// are left out: a fleet report resolves them from the character ID. A
+// pass that leaves the digest unchanged gives a report nothing to
+// rebuild.
+func fightMergeDigest(systemID, hullID int64, systemFrom, hullFrom string, kills []db.BattleFightKill, parties []db.BattleFightParty) string {
+	h := sha256.New()
+	fmt.Fprintf(h, "%d|%d|%s|%s\n", systemID, hullID, systemFrom, hullFrom)
+	for _, k := range kills {
+		fmt.Fprintf(h, "k|%d|%t|%d|%d|%d|%t|%g\n", k.KillmailID, k.Loss, k.VictimCharacterID, k.ShipTypeID, k.MyDamage, k.ValueIsk.Valid, k.ValueIsk.Float64)
+	}
+	for _, p := range parties {
+		fmt.Fprintf(h, "p|%d|%d|%t|%d\n", p.Seq, p.CharacterID, p.Died, p.HullTypeID)
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // correlateRecentFights is the worker's pass: every fight a late

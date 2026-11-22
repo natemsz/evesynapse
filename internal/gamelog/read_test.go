@@ -1,6 +1,7 @@
 package gamelog
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -88,5 +89,55 @@ func TestCombatLogToFight(t *testing.T) {
 	}
 	if lasers == nil || lasers.Shots != 2 || lasers.Quality[QPenetrate] != 1 || lasers.Quality[QMiss] != 1 {
 		t.Errorf("lasers: %+v", lasers)
+	}
+}
+
+// Aligned steps sit on fixed clock boundaries whatever second the
+// fight started on, and carry the pilot's own capacitor warfare.
+func TestAlignedSlicesFollowTheClock(t *testing.T) {
+	log := strings.Join([]string{
+		"[ 2026.11.04 12:03:07 ] (combat) <color=0xff00ffff><b>100</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Bad Guy</b>[EVIL](Vexor)<font size=10><color=0x77ffffff> - Heavy Pulse Laser II - Hits",
+		"[ 2026.11.04 12:03:09 ] (combat) <color=0xff7fffff><b>50 GJ</b><color=0x77ffffff><font size=10> energy neutralized </font><b><color=0xffffffff><font size=12><color=0xFFFFB900> <u><b>Vexor</b></u></color></font> </b><color=0x77ffffff><font size=10> - Medium Energy Neutralizer II</font>",
+		"[ 2026.11.04 12:03:11 ] (combat) <color=0xffcc0000><b>200</b> <color=0x77ffffff><font size=10>from</font> <b><color=0xffffffff>Bad Guy</b>[EVIL](Vexor)<font size=10><color=0x77ffffff> - Hammerhead II - Smashes",
+		"",
+	}, "\n")
+	l, err := Read(strings.NewReader(log), "")
+	if err != nil || len(l.Fights) != 1 {
+		t.Fatalf("fights %d, err %v", len(l.Fights), err)
+	}
+	got := l.Fights[0].Aligned
+	first := time.Date(2026, 11, 4, 12, 3, 0, 0, time.UTC).Unix()
+	if len(got) != 2 || got[0].At != first || got[1].At != first+SliceSeconds {
+		t.Fatalf("steps: %+v", got)
+	}
+	if len(got[0].Rows) != 2 || got[0].Rows[0] != [7]int64{0, 100, 0, 0, 0, 0, 0} || got[0].Rows[1] != [7]int64{1, 0, 0, 0, 0, 50, 0} {
+		t.Errorf("first step: %+v", got[0].Rows)
+	}
+	if len(got[1].Rows) != 1 || got[1].Rows[0] != [7]int64{0, 0, 200, 0, 0, 0, 0} {
+		t.Errorf("second step: %+v", got[1].Rows)
+	}
+}
+
+// Each clock step of a pilot's log counts from one read: the one
+// covering the most of it, the newest on a tie. A short newer read
+// leaves the rest of an older read counted.
+func TestCountedStepsTakeEachStepOnce(t *testing.T) {
+	base := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
+	read := func(id int64, from, to, received int) FightRead {
+		return FightRead{
+			ID: id, Start: base.Add(time.Duration(from) * time.Second), End: base.Add(time.Duration(to) * time.Second),
+			Received: base.Add(time.Duration(received) * time.Hour),
+		}
+	}
+	got := CountedSteps([]FightRead{
+		read(1, 0, 59, 1),    // the whole log
+		read(2, 20, 29, 2),   // a newer read of one full step
+		read(3, 33, 36, 3),   // a newer sliver of a step the log covers fully
+		read(4, 100, 105, 0), // alone at its time
+	})
+	b := base.Unix()
+	want := []StepRange{{1, b, b + 20}, {2, b + 20, b + 30}, {1, b + 30, b + 60}, {4, b + 100, b + 110}}
+	if !slices.Equal(got, want) {
+		t.Errorf("counted %v, want %v", got, want)
 	}
 }

@@ -40,9 +40,12 @@ type Fight struct {
 	// Slices are the fight in SliceSeconds steps, per party: who
 	// did what to whom when, at a resolution a report can tell the
 	// fight's moments apart by.
-	Slices   []Slice `json:"slices,omitempty"`
-	Lines    int     `json:"lines"`
-	Unparsed int     `json:"unparsed"`
+	Slices []Slice `json:"slices,omitempty"`
+	// Aligned holds the same per-party figures cut on the clock, so
+	// steps from different pilots' logs of one battle line up.
+	Aligned  []AlignedSlice `json:"aligned,omitempty"`
+	Lines    int            `json:"lines"`
+	Unparsed int            `json:"unparsed"`
 }
 
 // Series holds one value per second from Start: index i is the
@@ -81,6 +84,16 @@ type Slice struct {
 	Rows [][6]int64 `json:"rows"`
 }
 
+// AlignedSlice is one SliceSeconds step on the clock: At is the
+// step's first second as Unix time, always a multiple of
+// SliceSeconds. Each row is a party (its index in Parties) with the
+// damage out and in, repairs out and in, and capacitor warfare out
+// and in between it and the pilot during the step.
+type AlignedSlice struct {
+	At   int64      `json:"at"`
+	Rows [][7]int64 `json:"rows"`
+}
+
 // Tackle is a warp scramble or disruption seen on grid: who tried to
 // hold whom, as the log names them ("you" for the pilot, else by
 // hull), when first, and how many attempts.
@@ -111,6 +124,7 @@ type fightBuilder struct {
 	weapons     map[string]*WeaponTally
 	tackles     map[string]*Tackle
 	slices      map[int64]map[string]*[5]int64
+	aligned     map[int64]map[string]*[6]int64
 	torder      []string
 	order       []string
 	lines       int
@@ -118,7 +132,35 @@ type fightBuilder struct {
 }
 
 func newFightBuilder(at time.Time) *fightBuilder {
-	return &fightBuilder{start: at, last: at, secs: map[int64]*[5]int64{}, parties: map[string]*Tally{}, weapons: map[string]*WeaponTally{}, tackles: map[string]*Tackle{}, slices: map[int64]map[string]*[5]int64{}}
+	return &fightBuilder{start: at, last: at, secs: map[int64]*[5]int64{}, parties: map[string]*Tally{}, weapons: map[string]*WeaponTally{}, tackles: map[string]*Tackle{}, slices: map[int64]map[string]*[5]int64{}, aligned: map[int64]map[string]*[6]int64{}}
+}
+
+// ClockStep is the first second, as Unix time, of the SliceSeconds
+// clock step holding unix.
+func ClockStep(unix int64) int64 {
+	return unix - ((unix%SliceSeconds)+SliceSeconds)%SliceSeconds
+}
+
+// addAligned adds one event's figures to its party's step on the
+// clock.
+func (b *fightBuilder) addAligned(at time.Time, key string, d [5]int64, capOut int64) {
+	step := ClockStep(at.Unix())
+	m := b.aligned[step]
+	if m == nil {
+		m = map[string]*[6]int64{}
+		b.aligned[step] = m
+	}
+	v := m[key]
+	if v == nil {
+		v = &[6]int64{}
+		m[key] = v
+	}
+	v[0] += d[0]
+	v[1] += d[1]
+	v[2] += d[2]
+	v[3] += d[3]
+	v[4] += capOut
+	v[5] += d[4]
 }
 
 func (b *fightBuilder) add(ev CombatEvent) {
@@ -166,6 +208,15 @@ func (b *fightBuilder) add(ev CombatEvent) {
 		for i := range d {
 			d[i] = slot[i] - before[i]
 			moved = moved || d[i] != 0
+		}
+		var capOut int64
+		if ev.Kind == EvCap && ev.Dir == DirOut {
+			capOut = ev.Amount
+		}
+		// A line older than the fight's start is outside its window,
+		// where the per-second series leaves it out too.
+		if (moved || capOut != 0) && !ev.At.Before(b.start) {
+			b.addAligned(ev.At, key, d, capOut)
 		}
 		if !moved {
 			return
@@ -280,6 +331,20 @@ func (b *fightBuilder) fight(listener string, charID int64, session string) Figh
 		}
 		sort.Slice(sl.Rows, func(i, j int) bool { return sl.Rows[i][0] < sl.Rows[j][0] })
 		f.Slices = append(f.Slices, sl)
+	}
+	clock := make([]int64, 0, len(b.aligned))
+	for st := range b.aligned {
+		clock = append(clock, st)
+	}
+	slices.Sort(clock)
+	f.Aligned = make([]AlignedSlice, 0, len(clock))
+	for _, st := range clock {
+		sl := AlignedSlice{At: st}
+		for key, v := range b.aligned[st] {
+			sl.Rows = append(sl.Rows, [7]int64{index[key], v[0], v[1], v[2], v[3], v[4], v[5]})
+		}
+		sort.Slice(sl.Rows, func(i, j int) bool { return sl.Rows[i][0] < sl.Rows[j][0] })
+		f.Aligned = append(f.Aligned, sl)
 	}
 	return f
 }

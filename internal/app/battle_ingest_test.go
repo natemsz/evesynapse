@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"evesynapse/internal/gamelog"
 )
 
 // TestBattleFightOwnCharactersOnly pins who a game log's fights can
@@ -79,5 +81,67 @@ func TestBattleFightOwnCharactersOnly(t *testing.T) {
 	}
 	if code, _ := getPage(t, app, otherCookie, path); code != http.StatusNotFound {
 		t.Errorf("another account opening the report: %d, want 404", code)
+	}
+}
+
+// TestFightStoreMarksOverlappingReads pins what fleet reports rebuild
+// from: storing a read marks every read of that pilot sharing a clock
+// step with it and no other, a correlation pass that changes nothing adds no
+// mark, and a new read carries clock-aligned steps.
+func TestFightStoreMarksOverlappingReads(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	u, _ := q.CreateUser(ctx)
+	seedCharacter(t, q, u.ID, 90000201, "Watcher Pilot")
+	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	store := func(from, to time.Duration) int64 {
+		t.Helper()
+		line := func(d time.Duration) string {
+			return "[ " + at.Add(d).Format("2006.01.02 15:04:05") + " ] (combat) <color=0xff00ffff><b>100</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Bad Guy</b>[EVIL](Vexor)<font size=10><color=0x77ffffff> - Heavy Pulse Laser II - Hits"
+		}
+		l, err := gamelog.Read(strings.NewReader(line(from)+"\n"+line(to)+"\n"), "")
+		if err != nil || len(l.Fights) != 1 {
+			t.Fatalf("read: %d fights, %v", len(l.Fights), err)
+		}
+		l.Fights[0].Listener = "Watcher Pilot"
+		id, _, err := app.storeFight(ctx, u.ID, 90000201, &l.Fights[0], time.Now().UTC())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	marked := func(id int64) bool {
+		t.Helper()
+		var dirty bool
+		if err := app.pool.QueryRow(ctx, `SELECT merge_dirty_seq IS NOT NULL FROM battle_fights WHERE id = $1`, id).Scan(&dirty); err != nil {
+			t.Fatal(err)
+		}
+		return dirty
+	}
+
+	first := store(0, 20*time.Second)
+	apart := store(10*time.Minute, 10*time.Minute+20*time.Second)
+	if err := app.correlateFight(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.pool.Exec(ctx, `UPDATE battle_fights SET merge_dirty_seq = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.correlateFight(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	if marked(first) {
+		t.Error("a correlation pass that changed nothing marked the fight")
+	}
+	second := store(10*time.Second, 30*time.Second)
+	if !marked(first) || !marked(second) {
+		t.Errorf("overlapping reads marked: first %t, second %t", marked(first), marked(second))
+	}
+	if marked(apart) {
+		t.Error("a read at another time was marked")
+	}
+	var hasAligned bool
+	if err := app.pool.QueryRow(ctx, `SELECT s.aligned <> '' AND s.aligned_at = f.received_at FROM battle_fight_series s JOIN battle_fights f ON f.id = s.fight_id WHERE s.fight_id = $1`, second).Scan(&hasAligned); err != nil || !hasAligned {
+		t.Errorf("aligned steps stored: %t, %v", hasAligned, err)
 	}
 }

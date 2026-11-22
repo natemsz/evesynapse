@@ -1011,6 +1011,12 @@ var pgLiveFleetSchema string
 //go:embed schema_pg/168_srp_owners.sql
 var pgSRPOwnersSchema string
 
+// Step 169: clock-aligned fight steps and change marks for merging
+// pilots' logs into fleet reports.
+//
+//go:embed schema_pg/169_battle_merge.sql
+var pgBattleMergeSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1207,6 +1213,7 @@ func schemaSteps() []schemaStep {
 		{166, "doctrine owners", pgDoctrineOwnersSchema, ""},
 		{167, "live fleet", pgLiveFleetSchema, ""},
 		{168, "srp owners", pgSRPOwnersSchema, ""},
+		{169, "battle merge", pgBattleMergeSchema, ""},
 	}
 }
 

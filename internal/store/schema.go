@@ -990,6 +990,11 @@ var pgOwnerPermissionsSchema string
 //go:embed schema_pg/164_communities.sql
 var pgCommunitiesSchema string
 
+// Step 165: fleets with an owner, access rules and share links.
+//
+//go:embed schema_pg/165_fleets.sql
+var pgFleetsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1182,6 +1187,7 @@ func schemaSteps() []schemaStep {
 		{162, "structure_probes", pgStructureProbesSchema, ""},
 		{163, "owner_permissions", pgOwnerPermissionsSchema, ""},
 		{164, "communities", pgCommunitiesSchema, ""},
+		{165, "fleets", pgFleetsSchema, ""},
 	}
 }
 

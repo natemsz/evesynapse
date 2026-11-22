@@ -116,7 +116,7 @@ func discordRoleChoices(roles []dc.Role, current string) []discordChoice {
 }
 
 func discordChannelChoices(channels []dc.Channel, current string) []discordChoice {
-	out := []discordChoice{{ID: "", Name: "Do not post ops", Selected: current == ""}}
+	out := []discordChoice{{ID: "", Name: "Do not post fleets", Selected: current == ""}}
 	for _, ch := range channels {
 		out = append(out, discordChoice{ID: ch.ID, Name: "#" + ch.Name, Selected: ch.ID == current})
 	}
@@ -438,23 +438,25 @@ func (app *mod) handleDiscordOpsShare(w http.ResponseWriter, r *http.Request) {
 	back("Saved.")
 }
 
-// discordOpsChannels lists where a corporation's new op is posted: its
-// own servers' channels, and its alliance's when the corporation has
-// agreed to that.
-func (app *mod) discordOpsChannels(ctx context.Context, guilds []db.DiscordGuild, corpID int64) []db.DiscordGuild {
-	alliance, _ := app.corpAlliance(ctx, corpID)
-	shared := false
-	if alliance != 0 {
-		_, err := app.queries.GetDiscordOpsShare(ctx, corpID)
-		shared = err == nil
+// discordOpsChannels lists where an owner's new fleet is posted: its
+// own servers' channels, and for a corporation its alliance's when the
+// corporation has agreed to that.
+func (app *mod) discordOpsChannels(ctx context.Context, guilds []db.DiscordGuild, owner orgOwner) []db.DiscordGuild {
+	alliance, shared := int64(0), false
+	if owner.Kind == ownerCorporation {
+		alliance, _ = app.corpAlliance(ctx, owner.ID)
+		if alliance != 0 {
+			_, err := app.queries.GetDiscordOpsShare(ctx, owner.ID)
+			shared = err == nil
+		}
 	}
 	var out []db.DiscordGuild
 	for _, guild := range guilds {
 		if guild.OpsChannel == "" {
 			continue
 		}
-		if (guild.OwnerKind == ownerCorporation && guild.OwnerID == corpID) ||
-			(guild.OwnerKind == ownerAlliance && shared && guild.OwnerID == alliance) {
+		if (guild.OwnerKind == owner.Kind && guild.OwnerID == owner.ID) ||
+			(shared && guild.OwnerKind == ownerAlliance && guild.OwnerID == alliance) {
 			out = append(out, guild)
 		}
 	}

@@ -1,0 +1,93 @@
+/* Fleets: the board, one fleet's page, the planner and history. Layout
+   comes from the framework; this sheet styles the content inside it.
+   A fleet is read by its start, so the EVE-time clock leads every row. */
+
+.fl-page { --l-side: 22rem; display: flex; flex-direction: column; gap: var(--space-4); }
+.fl-page .l-panel { margin: 0; }
+.fl-page .l-panel > h2 { margin: 0 0 var(--space-3); }
+.fl-page .l-panel > h3 { margin: var(--space-4) 0 var(--space-2); }
+.fl-page .l-panel > h2 small { display: inline; margin-inline-start: 0.35em; }
+.fl-split { align-items: flex-start; }
+.fl-split > * { box-sizing: border-box; }
+.fl-main, .fl-side { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.fl-empty { margin: 0; color: var(--muted); }
+.fl-hint { margin: 0 0 var(--space-2); color: var(--muted); font-size: var(--fs-xs); }
+.fl-back { margin: 0; }
+.fl-inline { display: inline; margin: 0; }
+.fl-next { display: flex; flex-direction: column; gap: var(--space-3); }
+.fl-next > h2 { margin-bottom: 0 !important; }
+.fl-next p { margin: 0; }
+.fl-next .btn { text-align: center; }
+
+/* The board */
+.fl-board { container: fl-board / inline-size; list-style: none; margin: 0; padding: 0; }
+.fl-row + .fl-row { border-top: 1px solid var(--hairline); }
+.fl-row > a {
+  display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; align-items: center;
+  gap: var(--space-1) var(--space-3); padding: var(--space-2); color: inherit; text-decoration: none;
+}
+.fl-row > a:hover { background: var(--surface-inset); }
+.fl-row > a:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.fl-row.is-live > a { box-shadow: inset 3px 0 0 var(--accent); }
+.fl-row.is-off .fl-title, .fl-row.is-off .fl-clock { color: var(--muted); text-decoration: line-through; }
+.fl-when { display: flex; flex-direction: column; min-width: 0; }
+.fl-clock { color: var(--text-bright); font-size: var(--fs-xl); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.fl-day { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
+.fl-what { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.fl-title { color: var(--gold); }
+.fl-sub { color: var(--muted); font-size: var(--fs-xs); }
+.fl-state { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-1) var(--space-2); }
+.fl-count { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
+@container fl-board (max-width: 32rem) {
+  .fl-row > a { grid-template-columns: 4.75rem minmax(0, 1fr); }
+  .fl-state { grid-column: 2; justify-content: flex-start; }
+}
+
+/* One fleet: when and where first */
+.fl-muster { display: grid; grid-template-columns: minmax(10rem, auto) minmax(0, 1fr); gap: var(--space-3) var(--space-5); align-items: start; }
+.fl-muster.is-live { box-shadow: inset 3px 0 0 var(--accent); }
+.fl-muster .fl-when { gap: var(--space-1); align-items: flex-start; }
+.fl-muster .fl-clock { font-size: var(--fs-4xl); }
+.fl-muster.is-off .fl-clock { color: var(--muted); text-decoration: line-through; }
+.fl-muster .fl-day { font-size: var(--fs-sm); color: var(--text); }
+.fl-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: var(--space-3); margin: 0; min-width: 0; }
+.fl-facts > div { min-width: 0; overflow-wrap: anywhere; }
+.fl-facts dd { margin: 0; font-family: var(--font-body); }
+.fl-about { grid-column: 1 / -1; margin: 0; max-width: 70ch; white-space: pre-line; overflow-wrap: anywhere; }
+@container page (max-width: 36rem) {
+  .fl-muster { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Sign-up */
+.fl-signup-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.fl-signup-form > button { align-self: flex-start; }
+.fl-as { margin: 0; }
+.fl-answers { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); min-width: 0; }
+.fl-answers legend { padding: 0; margin-bottom: var(--space-1); }
+.fl-answers label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--tap); cursor: pointer; }
+.fl-answers input, .fl-options input, .fl-check input, .fl-ticks input { accent-color: var(--accent); }
+.fl-signup-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: var(--space-3); }
+.fl-ticks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr)); gap: var(--space-1) var(--space-3); }
+.fl-ticks > p { grid-column: 1 / -1; margin: var(--space-2) 0 0; }
+.fl-ticks label { display: flex; align-items: center; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
+
+/* The planner */
+.fl-owner { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); }
+.fl-owner .field { flex: 1 1 16rem; min-width: 0; }
+.fl-form { display: flex; flex-direction: column; gap: var(--space-4); }
+.fl-form fieldset { min-width: 0; }
+.fl-form fieldset.l-panel { border: 1px solid var(--hairline); }
+.fl-form fieldset.l-panel > legend { float: inline-start; width: 100%; padding: 0; margin: 0 0 var(--space-3); }
+.fl-form fieldset.l-panel > legend h2 { margin: 0; }
+.fl-form fieldset.l-panel > legend + * { clear: both; }
+.fl-form textarea { resize: vertical; }
+.fl-access { --l-min: 40rem; --l-gap: var(--space-4); }
+.fl-choices { display: flow-root; }
+.fl-options { display: flex; flex-direction: column; gap: var(--space-2); }
+.fl-options--row { flex-direction: row; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.fl-options label, .fl-check { display: flex; align-items: flex-start; gap: var(--space-2); cursor: pointer; }
+.fl-options input, .fl-check input { flex: none; margin-top: 0.2em; }
+.fl-options small, .fl-check small { display: block; color: var(--muted); font-size: var(--fs-xs); }
+.fl-rule { margin-top: var(--space-3); }
+.fl-see:not(:has(input[value="restricted"]:checked)) .fl-rule,
+.fl-join:not(:has(input[value="rule"]:checked)) .fl-rule { display: none; }

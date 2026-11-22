@@ -1,0 +1,60 @@
+{{define "title"}}Fleets{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Fleets</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .Fleets}}
+<div class="l-page fl-page">
+<div class="l-head">
+  <p class="l-head-sum">{{if .Live}}<b>{{len .Live}}</b> live now. {{end}}{{if .Total}}All times are EVE time.{{else}}No fleets coming up.{{end}}</p>
+  <div class="l-head-act">{{if .CanPlan}}<a class="btn" href="/fleets/plan">Plan a fleet</a>{{end}}</div>
+</div>
+
+{{if .Live}}
+<section class="l-panel fl-live" aria-labelledby="fl-live-title">
+  <h2 id="fl-live-title">Live now</h2>
+  {{template "fleet_board" .Live}}
+</section>
+{{end}}
+
+<div class="l-sidebar l-sidebar--end fl-split">
+  <div class="fl-main">
+    {{if .Yours}}
+    <section class="l-panel" aria-labelledby="fl-yours-title">
+      <h2 id="fl-yours-title">Your fleets</h2>
+      {{template "fleet_board" .Yours}}
+    </section>
+    {{end}}
+    {{if or .Upcoming (not .Yours)}}
+    <section class="l-panel" aria-labelledby="fl-next-title">
+      <h2 id="fl-next-title">Coming up</h2>
+      {{if .Upcoming}}{{template "fleet_board" .Upcoming}}
+      {{else if eq .Level "anonymous"}}<p class="fl-empty">Fleets from your corporation, alliance and communities show here once you sign in.</p>
+      {{else if .CanPlan}}<p class="fl-empty">Nothing is planned. <a href="/fleets/plan">Plan a fleet</a> and it shows here for the people you choose.</p>
+      {{else}}<p class="fl-empty">Nothing is planned by your corporation, alliance or communities.</p>{{end}}
+    </section>
+    {{end}}
+  </div>
+  <div class="fl-side">
+    <section class="l-panel" aria-labelledby="fl-public-title">
+      <h2 id="fl-public-title">Public fleets</h2>
+      {{if .Public}}{{template "fleet_board" .Public}}{{else}}<p class="fl-empty">No public fleets are coming up.</p>{{end}}
+    </section>
+    {{if eq .Level "anonymous"}}
+    <aside class="l-panel fl-next" aria-labelledby="fl-join-title">
+      <h2 id="fl-join-title">Join a fleet</h2>
+      <p>Sign in with EVE to go on a fleet's roster. EveSynapse asks for no permissions and keeps no token.</p>
+      <a class="btn" href="{{.SignIn}}">Sign in with EVE</a>
+    </aside>
+    {{else if eq .Level "pilot"}}
+    <aside class="l-panel fl-next" aria-labelledby="fl-join-title">
+      <h2 id="fl-join-title">Signed in as {{.PilotName}}</h2>
+      <p>You can sign up to fleets with no account. An account adds reminders, a calendar and more than one character.</p>
+      <a class="btn btn-quiet" href="{{.Account}}">Create an account</a>
+    </aside>
+    {{end}}
+  </div>
+</div>
+</div>
+{{end}}
+{{end}}
+

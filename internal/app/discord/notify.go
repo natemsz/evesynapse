@@ -5,6 +5,7 @@ import (
 	"evesynapse/internal/app/module"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -129,10 +130,15 @@ func (app *mod) discordAnnounceOps(ctx context.Context, now time.Time) (posted i
 			return posted
 		}
 		retry := false
-		targets := app.discordOpsChannels(ctx, guilds, op.CorporationID)
+		owner := orgOwner{Kind: op.OwnerKind, ID: op.OwnerID}
+		targets := app.discordOpsChannels(ctx, guilds, owner)
 		if len(targets) > 0 {
-			lead := "New op"
-			if name, settled := app.resolvedCorpName(ctx, op.CorporationID); settled && name != "" {
+			lead := "New fleet"
+			if owner.Kind == ownerCorporation {
+				if name, settled := app.resolvedCorpName(ctx, owner.ID); settled && name != "" {
+					lead += " for " + name
+				}
+			} else if name := app.ownerName(ctx, owner); !strings.HasPrefix(name, "Alliance #") {
 				lead += " for " + name
 			}
 			text := fmt.Sprintf("**%s: %s**\n%s EVE time", lead, op.Title, op.StartsAt.UTC().Format("Monday, Jan 2 15:04"))

@@ -114,6 +114,8 @@ LIMIT sqlc.arg(max_rows);
 SELECT * FROM ops
 WHERE discord_announced_at IS NULL
   AND cancelled_at IS NULL
+  AND owner_kind IN ('corporation', 'alliance')
+  AND NOT EXISTS (SELECT 1 FROM op_access_rules r WHERE r.op_id = ops.id AND r.action = 'view')
   AND starts_at > sqlc.arg(now)
   AND created_at >= sqlc.arg(created_after)
 ORDER BY id;

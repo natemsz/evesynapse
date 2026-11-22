@@ -98,7 +98,7 @@ func (f *opsFixture) get(cookie *http.Cookie, path string) (int, string, string)
 // opForm is a valid op form, starting at the given time.
 func opForm(start time.Time, title string) url.Values {
 	return url.Values{
-		"title": {title}, "corporation": {fmt.Sprint(opsCorp)}, "fc": {fmt.Sprint(fixtureCharA)},
+		"title": {title}, "owner": {fmt.Sprintf("corporation:%d", opsCorp)}, "fc": {fmt.Sprint(fixtureCharA)},
 		"starts_at": {start.UTC().Format(opDateTimeLayout)}, "duration": {"90"},
 		"doctrine": {"Shield Lokis"}, "form_up": {"Jita 4-4"}, "description": {"Bring probes."},
 	}
@@ -107,9 +107,9 @@ func opForm(start time.Time, title string) url.Values {
 // create makes an op as the director and returns its id.
 func (f *opsFixture) create(start time.Time, title string) int64 {
 	f.t.Helper()
-	code, where := f.post(f.director, "/ops/save", opForm(start, title))
+	code, where := f.post(f.director, "/fleets/save", opForm(start, title))
 	var id int64
-	if _, err := fmt.Sscanf(where, "/ops/%d", &id); code != http.StatusSeeOther || err != nil {
+	if _, err := fmt.Sscanf(where, "/fleets/%d/", &id); code != http.StatusSeeOther || err != nil {
 		f.t.Fatalf("create op: %d to %q", code, where)
 	}
 	return id
@@ -130,35 +130,35 @@ func TestOnlyAManagerRoleCreatesOps(t *testing.T) {
 
 	// A member without the role is not offered the form, and a form
 	// posted anyway creates nothing.
-	if code, where, _ := f.get(f.member, "/ops/new"); code != http.StatusSeeOther || where != "/calendar/" {
-		t.Fatalf("member GET /ops/new: %d to %q, want a redirect to the calendar", code, where)
+	if code, where, _ := f.get(f.member, "/fleets/plan"); code != http.StatusSeeOther || where != "/fleets/" {
+		t.Fatalf("member GET /fleets/plan: %d to %q, want a redirect to the fleets page", code, where)
 	}
 	form := opForm(start, "Sneaky op")
 	form.Set("fc", fmt.Sprint(opsCharC))
-	if code, _ := f.post(f.member, "/ops/save", form); code == http.StatusSeeOther || f.ops() != 0 {
-		t.Fatalf("a member without the role created an op (%d, %d stored)", code, f.ops())
+	if f.post(f.member, "/fleets/save", form); f.ops() != 0 {
+		t.Fatalf("a member without the role created a fleet (%d stored)", f.ops())
 	}
 	_, _, body := f.get(f.member, "/calendar/")
-	if strings.Contains(body, `href="/ops/new`) {
-		t.Fatal("a member without the role is offered New op on the calendar")
+	if strings.Contains(body, `href="/fleets/plan`) {
+		t.Fatal("a member without the role is offered planning a fleet on the calendar")
 	}
 
 	// A director of another corporation cannot create one for this one.
-	if code, _ := f.post(f.other, "/ops/save", opForm(start, "Hostile takeover")); code == http.StatusSeeOther || f.ops() != 0 {
+	if code, _ := f.post(f.other, "/fleets/save", opForm(start, "Hostile takeover")); code == http.StatusSeeOther || f.ops() != 0 {
 		t.Fatalf("an outsider created an op for this corporation (%d, %d stored)", code, f.ops())
 	}
 
 	// The director can, and the form is offered.
-	code, _, body := f.get(f.director, "/ops/new?date=2026-11-07")
+	code, _, body := f.get(f.director, "/fleets/plan?date=2026-11-07")
 	if code != http.StatusOK {
-		t.Fatalf("director GET /ops/new = %d", code)
+		t.Fatalf("director GET /fleets/plan = %d", code)
 	}
-	mustContain(t, "/ops/new", body, `name="starts_at" value="2026-11-07T19:00"`,
+	mustContain(t, "/fleets/plan", body, `name="starts_at" value="2026-11-07T19:00"`,
 		`<option value="90000001" selected>Fixture Ceo</option>`, `<option value="90000002">Fixture Alt</option>`)
 	id := f.create(start, "Roam")
 	_, _, body = f.get(f.director, opURL(id))
-	mustContain(t, "op page", body, ">Roam<", start.Format("Mon Jan 2, 15:04")+" EVE", "1h 30m", "Shield Lokis", "Jita 4-4", "Bring probes.", "Fixture Ceo",
-		`href="/ops/`+fmt.Sprint(id)+`/edit"`, "Cancel op")
+	mustContain(t, "op page", body, ">Roam<", start.Format("15:04"), start.Format("Mon Jan 2"), "1h 30m", "Shield Lokis", "Jita 4-4", "Bring probes.", "Fixture Ceo",
+		`href="/fleets/`+fmt.Sprint(id)+`/edit"`, "Cancel fleet")
 
 	// What the form sends is checked, whatever the page offered.
 	for name, change := range map[string]func(url.Values){
@@ -168,12 +168,12 @@ func TestOnlyAManagerRoleCreatesOps(t *testing.T) {
 		"a start years away":             func(v url.Values) { v.Set("starts_at", "2099-01-01T19:00") },
 		"a length of no time":            func(v url.Values) { v.Set("duration", "0") },
 		"an FC from another account":     func(v url.Values) { v.Set("fc", fmt.Sprint(opsCharC)) },
-		"a corporation it cannot manage": func(v url.Values) { v.Set("corporation", fmt.Sprint(opsOtherCorp)) },
+		"a corporation it cannot manage": func(v url.Values) { v.Set("owner", fmt.Sprintf("corporation:%d", opsOtherCorp)) },
 	} {
 		before := f.ops()
 		v := opForm(start, "Checked")
 		change(v)
-		if code, _ := f.post(f.director, "/ops/save", v); code == http.StatusSeeOther || f.ops() != before {
+		if code, _ := f.post(f.director, "/fleets/save", v); code == http.StatusSeeOther || f.ops() != before {
 			t.Errorf("%s: accepted (%d)", name, code)
 		}
 	}
@@ -182,14 +182,14 @@ func TestOnlyAManagerRoleCreatesOps(t *testing.T) {
 	// stays with its corporation whatever the form says.
 	edit := opForm(start.Add(time.Hour), "Roam, later")
 	edit.Set("id", fmt.Sprint(id))
-	edit.Set("corporation", fmt.Sprint(opsOtherCorp))
-	if code, _ := f.post(f.member, "/ops/save", edit); code == http.StatusSeeOther {
+	edit.Set("owner", fmt.Sprintf("corporation:%d", opsOtherCorp))
+	if code, _ := f.post(f.member, "/fleets/save", edit); code == http.StatusSeeOther {
 		_, _, body = f.get(f.director, opURL(id))
 		if strings.Contains(body, "Roam, later") {
 			t.Fatal("a member without the role changed an op")
 		}
 	}
-	if code, where := f.post(f.director, "/ops/save", edit); code != http.StatusSeeOther || where != opURL(id) {
+	if code, where := f.post(f.director, "/fleets/save", edit); code != http.StatusSeeOther || where != opURL(id) {
 		t.Fatalf("director edit: %d to %q", code, where)
 	}
 	op, err := f.q.GetOp(f.ctx, id)
@@ -215,19 +215,19 @@ func TestOpsAreSeenOnlyByTheirCorporation(t *testing.T) {
 
 	// Someone in another corporation gets the same answer as for an
 	// op that does not exist, and never sees it on their calendar.
-	for _, path := range []string{opURL(id), opURL(id) + "/edit", opURL(999999)} {
-		if code, where, body := f.get(f.other, path); code != http.StatusSeeOther || where != "/calendar/" || strings.Contains(body, "Members only") {
-			t.Fatalf("outsider GET %s: %d to %q", path, code, where)
+	for _, path := range []string{opURL(id), opURL(id) + "edit", opURL(999999)} {
+		if code, _, body := f.get(f.other, path); code != http.StatusNotFound || strings.Contains(body, "Members only") {
+			t.Fatalf("outsider GET %s: %d", path, code)
 		}
 	}
 	_, _, body = f.get(f.other, "/calendar/?month="+month)
 	if strings.Contains(body, "Members only") {
 		t.Fatal("an outsider's calendar shows another corporation's op")
 	}
-	if code, _ := f.post(f.other, opURL(id)+"/signup", url.Values{"character": {fmt.Sprint(opsCharD)}, "response": {"yes"}}); code != http.StatusSeeOther {
+	if code, _ := f.post(f.other, opURL(id)+"signup", url.Values{"character": {fmt.Sprint(opsCharD)}, "response": {"yes"}}); code != http.StatusNotFound {
 		t.Fatalf("outsider sign-up = %d", code)
 	}
-	if code, _ := f.post(f.other, opURL(id)+"/cancel", url.Values{}); code != http.StatusSeeOther {
+	if code, _ := f.post(f.other, opURL(id)+"cancel", url.Values{}); code != http.StatusNotFound {
 		t.Fatalf("outsider cancel = %d", code)
 	}
 	signups, _ := f.q.ListOpSignups(f.ctx, id)
@@ -243,7 +243,7 @@ func TestOpSignUpCancelAndReopen(t *testing.T) {
 	id := f.create(start, "Structure bash")
 	signup := func(cookie *http.Cookie, v url.Values) {
 		t.Helper()
-		if code, _ := f.post(cookie, opURL(id)+"/signup", v); code != http.StatusSeeOther {
+		if code, _ := f.post(cookie, opURL(id)+"signup", v); code != http.StatusSeeOther {
 			t.Fatalf("sign-up = %d", code)
 		}
 	}
@@ -254,13 +254,13 @@ func TestOpSignUpCancelAndReopen(t *testing.T) {
 
 	_, _, body := f.get(f.member, opURL(id))
 	mustContain(t, "op page", body,
-		"<h2>Coming <small>· 2</small></h2>", "1 Logistics · 1 Command",
+		`Coming <small>2</small>`, "1 Logistics, 1 Command",
 		"<td>Guardian</td><td>Logistics</td><td>20 minutes late</td>",
-		"<h2>Maybe <small>· 1</small></h2>", "<td>Sabre</td><td>Tackle</td>",
+		"<h3>Maybe</h3>", "<td>Sabre</td><td>Tackle</td>",
 		// The form shows the member's own answer back.
-		`value="Guardian"`, `<option value="Logistics" selected>`, "This character has answered: yes.")
-	if strings.Contains(body, "Cancel op") {
-		t.Fatal("a member without the role is offered Cancel op")
+		`value="Guardian"`, `<option value="Logistics" selected>`, "Update sign-up")
+	if strings.Contains(body, "Cancel fleet") {
+		t.Fatal("a member without the role is offered Cancel fleet")
 	}
 	// On the calendar, the member's own answer sits on the entry.
 	_, _, body = f.get(f.member, "/calendar/?month="+start.Format(calendar.MonthLayout))
@@ -296,12 +296,12 @@ func TestOpSignUpCancelAndReopen(t *testing.T) {
 
 	// Cancelling is the manager's. A cancelled op closes its sign-ups
 	// and stays on the calendar, struck through.
-	if f.post(f.member, opURL(id)+"/cancel", url.Values{}); func() bool { op, _ := f.q.GetOp(f.ctx, id); return op.CancelledAt.Valid }() {
+	if f.post(f.member, opURL(id)+"cancel", url.Values{}); func() bool { op, _ := f.q.GetOp(f.ctx, id); return op.CancelledAt.Valid }() {
 		t.Fatal("a member without the role cancelled the op")
 	}
-	f.post(f.director, opURL(id)+"/cancel", url.Values{})
+	f.post(f.director, opURL(id)+"cancel", url.Values{})
 	_, _, body = f.get(f.member, opURL(id))
-	mustContain(t, "cancelled op", body, "This op was cancelled.", "Sign-ups are closed: the op was cancelled.")
+	mustContain(t, "cancelled op", body, "This fleet was cancelled.", "Sign-ups are closed: the fleet was cancelled.")
 	before, _ := f.q.ListOpSignups(f.ctx, id)
 	signup(f.member, url.Values{"character": {fmt.Sprint(opsCharC)}, "response": {"no"}})
 	after, _ := f.q.ListOpSignups(f.ctx, id)
@@ -313,14 +313,14 @@ func TestOpSignUpCancelAndReopen(t *testing.T) {
 	_, _, body = f.get(f.member, "/calendar/?month="+start.Format(calendar.MonthLayout))
 	mustContain(t, "calendar", body, `class="cal-entry cal-op cal-cancelled"`)
 	// And the manager can bring it back.
-	f.post(f.director, opURL(id)+"/cancel", url.Values{})
+	f.post(f.director, opURL(id)+"cancel", url.Values{})
 	if op, _ := f.q.GetOp(f.ctx, id); op.CancelledAt.Valid {
 		t.Fatal("the op was not brought back")
 	}
 
 	// An op that is over takes no more sign-ups.
 	past := f.create(time.Now().UTC().Add(-5*time.Hour).Truncate(time.Minute), "Yesterday's news")
-	f.post(f.member, opURL(past)+"/signup", url.Values{"character": {fmt.Sprint(opsCharC)}, "response": {"yes"}})
+	f.post(f.member, opURL(past)+"signup", url.Values{"character": {fmt.Sprint(opsCharC)}, "response": {"yes"}})
 	if rows, _ := f.q.ListOpSignups(f.ctx, past); len(rows) != 0 {
 		t.Fatal("a sign-up to an op that is over was recorded")
 	}
@@ -351,8 +351,8 @@ func TestCalendarShowsOpsAndInGameEventsTogether(t *testing.T) {
 	mustContain(t, "/calendar/", body,
 		`<strong class="cal-title">`+month.Format("January 2006")+`</strong>`,
 		"month="+month.AddDate(0, -1, 0).Format(calendar.MonthLayout), "month="+month.AddDate(0, 1, 0).Format(calendar.MonthLayout),
-		`<a class="btn cal-new" href="/ops/new">New op</a>`,
-		`href="/ops/new?date=`+opAt.Format("2006-01-02")+`"`,
+		`<a class="btn cal-new" href="/fleets/plan">Plan a fleet</a>`,
+		`href="/fleets/plan?date=`+opAt.Format("2006-01-02")+`"`,
 		`<a class="cal-entry cal-op" href="`+opURL(id)+`"><span class="cal-time">19:00</span> Fleet night</a>`,
 		`event=501"><span class="cal-time">21:00</span> Corp meeting <small>accepted</small></a>`,
 		// An event not answered yet carries no label.
@@ -362,7 +362,7 @@ func TestCalendarShowsOpsAndInGameEventsTogether(t *testing.T) {
 		t.Fatal("an event from another month is on this month's grid")
 	}
 	// The op and the meeting share a day, the op first (19:00, 21:00).
-	day := body[strings.Index(body, `href="/ops/new?date=`+opAt.Format("2006-01-02")+`"`):]
+	day := body[strings.Index(body, `href="/fleets/plan?date=`+opAt.Format("2006-01-02")+`"`):]
 	day = day[:strings.Index(day, "</td>")]
 	if op, ev := strings.Index(day, "Fleet night"), strings.Index(day, "Corp meeting"); op < 0 || ev < 0 || op > ev {
 		t.Fatalf("the 10th should hold the op then the meeting: %q", day)
@@ -487,7 +487,7 @@ func TestOpAttendanceIsCapturedFromTheFleet(t *testing.T) {
 		t.Fatalf("with no op running: %d recorded, ESI asked %v", stored, fleet.asked)
 	}
 	_, _, body := f.get(f.director, opURL(tomorrow))
-	mustContain(t, "op not started", body, "Attendance will be recorded from Fixture Ceo&#39;s fleet while the op runs.")
+	mustContain(t, "op not started", body, "Attendance will be recorded from Fixture Ceo&#39;s fleet while it runs.")
 	if strings.Contains(body, "Mark attendance by hand") {
 		t.Fatal("hand-marking is offered before the op has started")
 	}
@@ -507,7 +507,7 @@ func TestOpAttendanceIsCapturedFromTheFleet(t *testing.T) {
 	}
 	_, _, body = f.get(f.director, opURL(id))
 	mustContain(t, "running op", body,
-		"<h2>Attendance <small>· 3</small></h2>",
+		`Attendance <small>3</small>`,
 		"Attendance is being recorded from Fixture Ceo&#39;s fleet: 3 so far.",
 		"<td>from the fleet</td>")
 
@@ -519,9 +519,9 @@ func TestOpAttendanceIsCapturedFromTheFleet(t *testing.T) {
 	}
 
 	// The totals page counts it, for members of the corporation only.
-	_, _, body = f.get(f.member, "/ops/paps")
-	mustContain(t, "/ops/paps", body, "Fixture Member</a></td><td>1</td><td>1</td>")
-	if _, _, body = f.get(f.other, "/ops/paps"); strings.Contains(body, "Fixture Member") {
+	_, _, body = f.get(f.member, "/fleets/history/")
+	mustContain(t, "/fleets/history/", body, "Fixture Member</a></td><td>1</td><td>1</td>")
+	if _, _, body = f.get(f.other, "/fleets/history/"); strings.Contains(body, "Fixture Member") {
 		t.Fatal("another corporation's attendance is shown to an outsider")
 	}
 }
@@ -579,15 +579,15 @@ func TestOpAttendanceFallsBackToMarkingByHand(t *testing.T) {
 
 	// Marking by hand. Only the manager, and only pilots on the
 	// sign-up list. (An op in progress still takes sign-ups.)
-	f.post(f.member, opURL(id)+"/signup", url.Values{"character": {fmt.Sprint(opsCharC)}, "response": {"yes"}, "ship": {"Guardian"}})
+	f.post(f.member, opURL(id)+"signup", url.Values{"character": {fmt.Sprint(opsCharC)}, "response": {"yes"}, "ship": {"Guardian"}})
 	if rows, _ := f.q.ListOpSignups(f.ctx, id); len(rows) != 1 {
 		t.Fatalf("%d sign-up(s) on the running op, want 1", len(rows))
 	}
-	f.post(f.member, opURL(id)+"/attendance", url.Values{"present": {fmt.Sprint(opsCharC)}})
+	f.post(f.member, opURL(id)+"attendance", url.Values{"present": {fmt.Sprint(opsCharC)}})
 	if len(f.attendance(id)) != 0 {
 		t.Fatal("a member without the role marked attendance")
 	}
-	f.post(f.director, opURL(id)+"/attendance", url.Values{"present": {fmt.Sprint(opsCharC), "95000001", "junk"}})
+	f.post(f.director, opURL(id)+"attendance", url.Values{"present": {fmt.Sprint(opsCharC), "95000001", "junk"}})
 	if got := f.attendance(id); len(got) != 1 || got[opsCharC] != attendanceManual {
 		t.Fatalf("after marking: %v, want only the signed-up pilot, by hand", got)
 	}
@@ -604,7 +604,7 @@ func TestOpAttendanceFallsBackToMarkingByHand(t *testing.T) {
 	if got := f.attendance(id); got[opsCharC] != attendanceFleet {
 		t.Fatalf("after the fleet reported the pilot: %v", got)
 	}
-	f.post(f.director, opURL(id)+"/attendance", url.Values{})
+	f.post(f.director, opURL(id)+"attendance", url.Values{})
 	if got := f.attendance(id); got[opsCharC] != attendanceFleet {
 		t.Fatalf("an empty hand list removed what the fleet reported: %v", got)
 	}
@@ -613,8 +613,8 @@ func TestOpAttendanceFallsBackToMarkingByHand(t *testing.T) {
 
 	// Before an op starts there is nothing to mark.
 	later := f.create(now.Add(3*time.Hour).Truncate(time.Minute), "Later")
-	f.post(f.member, opURL(later)+"/signup", url.Values{"character": {fmt.Sprint(opsCharC)}, "response": {"yes"}})
-	f.post(f.director, opURL(later)+"/attendance", url.Values{"present": {fmt.Sprint(opsCharC)}})
+	f.post(f.member, opURL(later)+"signup", url.Values{"character": {fmt.Sprint(opsCharC)}, "response": {"yes"}})
+	f.post(f.director, opURL(later)+"attendance", url.Values{"present": {fmt.Sprint(opsCharC)}})
 	if len(f.attendance(later)) != 0 {
 		t.Fatal("attendance was marked on an op that has not started")
 	}

@@ -201,7 +201,7 @@ func captureExplanation(op db.Op, fc string, now time.Time, recorded int) string
 		return "The fleet could not be read from EVE when last tried."
 	}
 	if !started {
-		return fmt.Sprintf("Attendance will be recorded from %s's fleet while the op runs. %s has to be the fleet's boss.", fc, fc)
+		return fmt.Sprintf("Attendance will be recorded from %s's fleet while it runs. %s has to be the fleet's boss.", fc, fc)
 	}
 	return "Attendance has not been recorded from a fleet."
 }
@@ -262,21 +262,19 @@ func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups [
 // fleet reported is changed.
 func (app *Application) handleOpAttendance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
-	members := app.opMembers(ctx, userID)
-	op, ok := app.opFromURL(w, r, members)
+	op, _, _, a, ok := app.fleetFromURL(w, r)
 	if !ok {
 		return
 	}
 	now := time.Now().UTC()
 	switch {
-	case !opManages(members, op.CorporationID):
+	case !a.Manage:
 		// Not theirs to mark; nothing is said, nothing changes.
 	case r.ParseForm() != nil:
 	case op.CancelledAt.Valid:
-		app.flash(ctx, "This op was cancelled.")
+		app.flash(ctx, "This fleet was cancelled.")
 	case now.Before(op.StartsAt):
-		app.flash(ctx, "Attendance can be marked once the op has started.")
+		app.flash(ctx, "Attendance can be marked once the fleet has started.")
 	default:
 		signups, err := app.queries.ListOpSignups(ctx, op.ID)
 		if err != nil {
@@ -304,61 +302,4 @@ func (app *Application) handleOpAttendance(w http.ResponseWriter, r *http.Reques
 		app.flash(ctx, "Attendance saved.")
 	}
 	http.Redirect(w, r, opURL(op.ID), http.StatusSeeOther)
-}
-
-// ---------------------------------------------------------------------------
-// The PAP table: how often each character has attended.
-// ---------------------------------------------------------------------------
-
-const (
-	papWindow = 90 * 24 * time.Hour
-	papRecent = 30 * 24 * time.Hour
-)
-
-type papRow struct {
-	CharacterID int64
-	Name        string
-	Recent      int64 // ops attended in the last 30 days
-	Total       int64 // in the last 90
-	LastOp      string
-}
-
-type papCorp struct {
-	Name string
-	Rows []papRow
-}
-
-// papsView is the /ops/paps page.
-type papsView struct {
-	Corps []papCorp
-}
-
-func (app *Application) handleOpPAPs(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	userID := app.userID(ctx)
-	now := time.Now().UTC()
-	view := &papsView{}
-	for _, corpID := range opCorps(app.opMembers(ctx, userID), false) {
-		rows, err := app.queries.ListCorporationPAPs(ctx, db.ListCorporationPAPsParams{
-			CorporationID: corpID, Since: now.Add(-papWindow), RecentSince: now.Add(-papRecent),
-		})
-		if err != nil {
-			logging.Errorf("ops: PAPs for corporation %d: %v", corpID, err)
-			continue
-		}
-		corp := papCorp{Name: app.corpDisplayName(ctx, corpID)}
-		for _, row := range rows {
-			corp.Rows = append(corp.Rows, papRow{
-				CharacterID: row.CharacterID, Name: app.displayCharacter(ctx, row.CharacterID),
-				Recent: row.Recent, Total: row.Total, LastOp: row.LastOp.UTC().Format("Jan 2"),
-			})
-		}
-		view.Corps = append(view.Corps, corp)
-	}
-	app.render(ctx, w, http.StatusOK, "op_paps.html", pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-		PAPs:          view,
-	})
 }

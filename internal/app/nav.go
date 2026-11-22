@@ -122,6 +122,10 @@ var sectionNav = map[string][]navEntry{
 	"map": {
 		{"/map/", "Map", []string{"map.html"}},
 	},
+	"fleets": {
+		{"/fleets/", "Fleets", []string{"fleets.html", "fleet.html", "fleet_form.html", "fleet_hidden.html"}},
+		{"/fleets/history/", "History", []string{"fleet_history.html"}},
+	},
 }
 
 // navLink is one rendered nav link: the sidebar menu item and the

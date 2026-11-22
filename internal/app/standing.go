@@ -264,75 +264,126 @@ func (app *Application) corpCEO(ctx context.Context, corpID int64) int64 {
 	return payload.Corp.CEOID
 }
 
-// standingFor works out an account's standing from stored data.
-// A corporation whose alliance is not known yet counts for itself
-// only.
+// standingFor works out an account's standing from stored data: what
+// its working characters hold between them. A corporation whose
+// alliance is not known yet counts for itself only.
 func (app *Application) standingFor(ctx context.Context, userID int64) (orgStanding, error) {
+	st, _, err := app.standingWithCharacters(ctx, userID)
+	return st, err
+}
+
+// standingWithCharacters is an account's standing and the characters it
+// is made of, from one read of them.
+func (app *Application) standingWithCharacters(ctx context.Context, userID int64) (orgStanding, []accountCharacter, error) {
 	st := standing.New()
 	n, err := app.queries.CountLinkedCharactersByUser(ctx, userID)
 	if err != nil || n == 0 {
-		return st, err
+		return st, nil, err
 	}
 	st.Working = true
+	characters, err := app.accountCharacters(ctx, userID)
+	if err != nil {
+		return st, nil, err
+	}
+	for _, c := range characters {
+		st.Merge(c.Standing)
+	}
+	return st, characters, nil
+}
+
+// accountCharacter is one of an account's working characters with the
+// standing it has alone, for what a character does in its own name.
+type accountCharacter struct {
+	CharacterID   int64
+	CorporationID int64
+	Name          string
+	Standing      orgStanding
+}
+
+// accountCharacters lists an account's working characters, each with
+// its own standing, from stored data.
+func (app *Application) accountCharacters(ctx context.Context, userID int64) ([]accountCharacter, error) {
 	rows, err := app.queries.ListWorkingCharacterCorporationsByUser(ctx, userID)
 	if err != nil {
-		return st, err
+		return nil, err
 	}
-	corpOf := map[int64]int64{} // character -> corporation
+	out := make([]accountCharacter, 0, len(rows))
+	at := make(map[int64]int, len(rows))
+	alliances := map[int64]int64{}
+	ceos := map[int64]int64{}
 	for _, row := range rows {
-		corp := row.CorporationID
-		if corp == 0 {
-			continue
-		}
-		corpOf[row.CharacterID] = corp
-		if !st.Corps[corp] {
+		st := standing.New()
+		st.Working = true
+		if corp := row.CorporationID; corp != 0 {
 			st.Corps[corp] = true
-			if alliance, _ := app.corpAlliance(ctx, corp); alliance != 0 {
+			alliance, known := alliances[corp]
+			if !known {
+				alliance, _ = app.corpAlliance(ctx, corp)
+				alliances[corp] = alliance
+				ceos[corp] = app.corpCEO(ctx, corp)
+			}
+			if alliance != 0 {
 				st.Alliance[corp] = alliance
 				st.Alliances[alliance] = true
 			}
-		}
-		if app.corpCEO(ctx, corp) == row.CharacterID {
-			st.CEOOf[corp] = true
-		}
-		var roles esi.CharacterRoles
-		if app.loadCorpSnapshot(ctx, row.CharacterID, esi.SnapCorpRoles, &roles) {
-			for _, role := range roles.Roles {
-				if st.EVERoles[corp] == nil {
-					st.EVERoles[corp] = map[string]bool{}
+			if ceos[corp] == row.CharacterID {
+				st.CEOOf[corp] = true
+			}
+			var roles esi.CharacterRoles
+			if app.loadCorpSnapshot(ctx, row.CharacterID, esi.SnapCorpRoles, &roles) {
+				for _, role := range roles.Roles {
+					if st.EVERoles[corp] == nil {
+						st.EVERoles[corp] = map[string]bool{}
+					}
+					st.EVERoles[corp][strings.ToLower(role)] = true
 				}
-				st.EVERoles[corp][strings.ToLower(role)] = true
 			}
 		}
+		at[row.CharacterID] = len(out)
+		out = append(out, accountCharacter{CharacterID: row.CharacterID, CorporationID: row.CorporationID, Name: row.Name, Standing: st})
 	}
 	places, err := app.queries.ListCommunityMembershipsByUser(ctx, userID)
 	if err != nil {
-		return st, err
+		return nil, err
 	}
 	inCommunity := make(map[[2]int64]bool, len(places)) // {character, community}
 	for _, place := range places {
-		st.NoteCommunity(place.CommunityID, place.Role)
+		i, known := at[place.CharacterID]
+		if !known {
+			// A character can hold a community place before its
+			// corporation is stored.
+			st := standing.New()
+			st.Working = true
+			i = len(out)
+			at[place.CharacterID] = i
+			out = append(out, accountCharacter{CharacterID: place.CharacterID, Name: app.displayCharacter(ctx, place.CharacterID), Standing: st})
+		}
+		out[i].Standing.NoteCommunity(place.CommunityID, place.Role)
 		inCommunity[[2]int64{place.CharacterID, place.CommunityID}] = true
 	}
 	memberships, err := app.queries.ListOrgGroupsByUser(ctx, userID)
 	if err != nil {
-		return st, err
+		return nil, err
 	}
 	for _, m := range memberships {
+		i, known := at[m.CharacterID]
+		if !known {
+			continue
+		}
+		c := &out[i]
 		// A character counts for a community's group only while it is
-		// an active member of that community.
+		// an active member of that community, and for any other group
+		// only while it is in the corporation or alliance the group
+		// belongs to.
 		if m.OwnerKind == ownerCommunity {
 			if inCommunity[[2]int64{m.CharacterID, m.OwnerID}] {
-				st.Groups[m.GroupID] = true
+				c.Standing.Groups[m.GroupID] = true
 			}
 			continue
 		}
-		// A character counts for a group only while it is in the
-		// corporation or alliance the group belongs to.
-		corp := corpOf[m.CharacterID]
-		if corp != 0 && st.Within(orgOwner{Kind: m.OwnerKind, ID: m.OwnerID}, corp) {
-			st.Groups[m.GroupID] = true
+		if c.CorporationID != 0 && c.Standing.Within(orgOwner{Kind: m.OwnerKind, ID: m.OwnerID}, c.CorporationID) {
+			c.Standing.Groups[m.GroupID] = true
 		}
 	}
-	return st, nil
+	return out, nil
 }

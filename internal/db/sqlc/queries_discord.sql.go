@@ -310,9 +310,11 @@ func (q *Queries) ListDiscordRoleGrantsForGuild(ctx context.Context, guildID str
 }
 
 const listOpsToAnnounceOnDiscord = `-- name: ListOpsToAnnounceOnDiscord :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
 WHERE discord_announced_at IS NULL
   AND cancelled_at IS NULL
+  AND owner_kind IN ('corporation', 'alliance')
+  AND NOT EXISTS (SELECT 1 FROM op_access_rules r WHERE r.op_id = ops.id AND r.action = 'view')
   AND starts_at > $1
   AND created_at >= $2
 ORDER BY id
@@ -352,6 +354,15 @@ func (q *Queries) ListOpsToAnnounceOnDiscord(ctx context.Context, arg ListOpsToA
 			&i.CaptureCheckedAt,
 			&i.DiscordAnnouncedAt,
 			&i.DoctrineID,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.FleetType,
+			&i.Visibility,
+			&i.JoinGate,
+			&i.ShareToken,
+			&i.RosterPublic,
+			&i.ComingCount,
+			&i.MaybeCount,
 		); err != nil {
 			return nil, err
 		}

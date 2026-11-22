@@ -1,0 +1,94 @@
+{{define "title"}}{{if .OpForm.ID}}Change fleet{{else}}Plan a fleet{{end}}{{end}}
+{{define "pagetitle"}}{{with .OpForm}}<h1><span class="gt">{{if .ID}}Change fleet{{else}}Plan a fleet{{end}}</span></h1>{{end}}{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .OpForm}}
+{{$f := .}}
+<div class="l-page l-named fl-page">
+{{if .Errors}}<div role="alert">{{range .Errors}}<p class="err">{{.}}</p>{{end}}</div>{{end}}
+
+{{if and (not .ID) (gt (len .Owners) 1)}}
+<form method="get" action="/fleets/plan" class="l-panel fl-owner">
+  {{with .Date}}<input type="hidden" name="date" value="{{.}}">{{end}}
+  <div class="field"><label class="field-label" for="fl-owner">Planning for</label>
+    <select id="fl-owner" name="owner">{{range .Owners}}<option value="{{.Key}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
+  <button type="submit" class="btn btn-quiet">Switch</button>
+</form>
+{{end}}
+
+<form method="post" action="/fleets/save" class="fl-form">
+  {{if .ID}}<input type="hidden" name="id" value="{{.ID}}">{{else}}<input type="hidden" name="owner" value="{{.OwnerKey}}">{{end}}
+
+  <fieldset class="l-panel">
+    <legend><h2>The fleet</h2></legend>
+    <p class="fl-hint">For {{.OwnerName}}. Times are EVE time (UTC).</p>
+    <div class="form-grid">
+      <div class="field wide"><label class="field-label" for="fl-title">Title</label>
+        <input id="fl-title" type="text" name="title" value="{{.Title}}" maxlength="120" required></div>
+      {{if .CanSetAccess}}
+      <div class="field"><label class="field-label" for="fl-fc">Fleet commander</label>
+        <select id="fl-fc" name="fc" aria-describedby="fl-fc-hint">{{range .FCs}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+        <span class="field-hint" id="fl-fc-hint">The character that will run the fleet</span></div>
+      {{else}}
+      <div class="field"><span class="field-label">Fleet commander</span><span class="field-static">{{.FCName}}</span></div>
+      {{end}}
+      <div class="field"><label class="field-label" for="fl-start">Starts</label>
+        <input id="fl-start" type="datetime-local" name="starts_at" value="{{.StartsAt}}" required></div>
+      <div class="field"><label class="field-label" for="fl-length">Length in minutes</label>
+        <input id="fl-length" type="number" name="duration" value="{{.Duration}}" min="15" max="1440" step="5" required></div>
+      {{if .Doctrines}}
+      <div class="field"><label class="field-label" for="fl-doctrine-id">Doctrine</label>
+        <select id="fl-doctrine-id" name="doctrine_id"><option value="0">Not one of the corporation's</option>{{range .Doctrines}}<optgroup label="{{.Corporation}}">{{range .Choices}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</optgroup>{{end}}</select></div>
+      <div class="field"><label class="field-label" for="fl-doctrine">Or write it in</label>
+        <input id="fl-doctrine" type="text" name="doctrine" value="{{if not .DoctrineID}}{{.Doctrine}}{{end}}" maxlength="120" placeholder="e.g. Shield Lokis"></div>
+      {{else}}
+      <div class="field"><label class="field-label" for="fl-doctrine">Doctrine</label>
+        <input id="fl-doctrine" type="text" name="doctrine" value="{{.Doctrine}}" maxlength="120" placeholder="e.g. Shield Lokis"></div>
+      {{end}}
+      <div class="field"><label class="field-label" for="fl-formup">Form up</label>
+        <input id="fl-formup" type="text" name="form_up" value="{{.FormUp}}" maxlength="120" placeholder="e.g. Jita 4-4"></div>
+      <div class="field wide"><label class="field-label" for="fl-details">Details</label>
+        <textarea id="fl-details" name="description" rows="4" maxlength="2000">{{.Description}}</textarea></div>
+    </div>
+  </fieldset>
+
+  {{if .CanSetAccess}}
+  <fieldset class="l-panel fl-choices">
+    <legend><h2>Kind of fleet</h2></legend>
+    <div class="fl-options fl-options--row">
+    {{range .Types}}<label><input type="radio" name="fleet_type" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}</span></label>{{end}}
+    </div>
+  </fieldset>
+
+  <div class="l-switcher fl-access">
+    <fieldset class="l-panel fl-choices fl-see">
+      <legend><h2>Who can see it</h2></legend>
+      <div class="fl-options">
+      {{range .Visibilities}}<label><input type="radio" name="visibility" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}<small>{{.Hint}}</small></span></label>{{end}}
+      </div>
+      <div class="field fl-rule"><label class="field-label" for="fl-view-rule">Who, when private</label>
+        <select id="fl-view-rule" name="view_rule">{{range .RuleChoices}}<option value="{{.Value}}"{{if eq .Value $f.ViewRule}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>
+    </fieldset>
+    <fieldset class="l-panel fl-choices fl-join">
+      <legend><h2>Who can sign up</h2></legend>
+      <div class="fl-options">
+      {{range .Gates}}<label><input type="radio" name="join_gate" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}<small>{{.Hint}}</small></span></label>{{end}}
+      </div>
+      <div class="field fl-rule"><label class="field-label" for="fl-join-rule">Who, when you choose</label>
+        <select id="fl-join-rule" name="join_rule">{{range .RuleChoices}}<option value="{{.Value}}"{{if eq .Value $f.JoinRule}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>
+    </fieldset>
+  </div>
+
+  <div class="l-panel">
+    <label class="fl-check"><input type="checkbox" name="roster_public" value="1"{{if .RosterPublic}} checked{{end}}><span>Show pilot names to everyone who can open the fleet<small>Off: people who cannot sign up see only how many are coming.</small></span></label>
+  </div>
+  {{end}}
+
+  <div class="form-actions">
+    <button type="submit">{{if .ID}}Save changes{{else}}Create fleet{{end}}</button>
+    <a href="{{if .ID}}/fleets/{{.ID}}/{{else}}/fleets/{{end}}">Cancel</a>
+  </div>
+</form>
+</div>
+{{end}}
+{{end}}

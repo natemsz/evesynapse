@@ -9,13 +9,12 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
 // The calendar's month view: one grid holding both kinds of entry,
-// the character's in-game events and the ops of the corporations the
-// account has a character in. EVE time throughout, weeks from Monday.
+// the character's in-game events and the fleets the account can see.
+// EVE time throughout, weeks from Monday.
 // ---------------------------------------------------------------------------
 
 // Entry kinds, used as CSS classes.
@@ -107,44 +106,17 @@ func buildCalMonth(month, now time.Time, entries []calEntry) *calMonth {
 	return m
 }
 
-// calendarEntries gathers what the grid shows between from and to:
-// the corporations' ops, with the account's own answer on each, and
-// the character's in-game events.
+// calendarEntries gathers what the grid shows between from and to: the
+// fleets the account can see, with its own answer on each, and the
+// character's in-game events.
 func (app *mod) calendarEntries(ctx context.Context, userID int64, active db.Character, events esi.CalendarEventSummaries, from, to time.Time, month string) []calEntry {
 	var entries []calEntry
 
-	if corps := app.deps.OpCorps(ctx, userID, false); len(corps) > 0 {
-		ops, err := app.queries.ListOpsForCorporationsBetween(ctx, db.ListOpsForCorporationsBetweenParams{
-			CorporationIds: corps, FromTime: from, ToTime: to,
+	for _, fleet := range app.deps.CalendarFleets(ctx, userID, from, to) {
+		entries = append(entries, calEntry{
+			Time: fleet.StartsAt.UTC().Format("15:04"), Title: fleet.Title, URL: module.OpURL(fleet.ID),
+			Kind: calKindOp, Cancelled: fleet.Cancelled, Mine: fleet.Answer, at: fleet.StartsAt,
 		})
-		if err != nil {
-			logging.Errorf("calendar: ops for user %d: %v", userID, err)
-		}
-		ids := make([]int64, 0, len(ops))
-		for _, op := range ops {
-			ids = append(ids, op.ID)
-		}
-		mine := map[int64]string{}
-		if len(ids) > 0 {
-			rows, err := app.queries.ListOpSignupsForOps(ctx, ids)
-			if err != nil {
-				logging.Errorf("calendar: sign-ups for user %d: %v", userID, err)
-			}
-			// With several characters signed up, "yes" outranks
-			// "maybe", which outranks "no".
-			rank := map[string]int{module.OpNo: 1, module.OpMaybe: 2, module.OpYes: 3}
-			for _, row := range rows {
-				if row.UserID == userID && rank[row.Response] > rank[mine[row.OpID]] {
-					mine[row.OpID] = row.Response
-				}
-			}
-		}
-		for _, op := range ops {
-			entries = append(entries, calEntry{
-				Time: op.StartsAt.UTC().Format("15:04"), Title: op.Title, URL: module.OpURL(op.ID),
-				Kind: calKindOp, Cancelled: op.CancelledAt.Valid, Mine: mine[op.ID], at: op.StartsAt,
-			})
-		}
 	}
 
 	for _, ev := range events {

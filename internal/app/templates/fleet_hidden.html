@@ -1,0 +1,18 @@
+{{define "title"}}Fleet not available{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Fleet not available</span></h1>{{end}}
+{{define "pagetabs"}}{{end}}
+{{define "content"}}
+{{with .FleetHidden}}
+<div class="l-page fl-page">
+<section class="l-panel fl-next">
+  {{if eq .Level "account"}}
+  <p>None of your characters can see this fleet. It may be private, or the link may have changed.</p>
+  {{else}}
+  <p>This fleet may be private, or the link may have changed. If your character should be able to see it, sign in with EVE. EveSynapse asks for no permissions and keeps no token.</p>
+  <a class="btn" href="{{.SignIn}}">Sign in with EVE</a>
+  {{end}}
+  <a class="btn btn-quiet" href="/fleets/">All fleets</a>
+</section>
+</div>
+{{end}}
+{{end}}

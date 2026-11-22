@@ -1,0 +1,39 @@
+{{define "title"}}Fleet history{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Fleet history</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .PAPs}}
+<div class="l-page fl-page">
+{{if .Owners}}
+{{if gt (len .Owners) 1}}<nav class="l-cluster" aria-label="Whose fleets to show">{{range .Owners}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}</nav>{{end}}
+<div class="l-sidebar l-sidebar--end fl-split">
+  <section class="l-panel" aria-labelledby="fl-past-title">
+    <h2 id="fl-past-title">Past fleets of {{.Owner}}</h2>
+    {{if .Past}}{{template "fleet_board" .Past}}{{else}}<p class="fl-empty">No past fleets yet.</p>{{end}}
+  </section>
+  <section class="l-panel" aria-labelledby="fl-pap-title">
+    <h2 id="fl-pap-title">Attendance</h2>
+    <p class="prose">Counted from the fleets themselves where EveSynapse could read them, and from a manager's marking where it could not.</p>
+    {{if .Rows}}
+    <div class="tw">
+    <table>
+      <thead><tr><th>Pilot</th><th>Last 30 days</th><th>Last 90 days</th><th>Last fleet</th></tr></thead>
+      <tbody>
+      {{range .Rows}}
+        <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{.Recent}}</td><td>{{.Total}}</td><td>{{.LastOp}}</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{else}}
+    <p class="fl-empty">No attendance recorded in the last 90 days.</p>
+    {{end}}
+  </section>
+</div>
+{{else}}
+<p class="fl-empty">None of your characters is in a corporation, alliance or community EveSynapse knows yet.</p>
+{{end}}
+</div>
+{{end}}
+{{end}}
+

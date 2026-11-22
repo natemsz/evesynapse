@@ -77,18 +77,40 @@ func (app *Application) holdsProgramme(ctx context.Context, st orgStanding, owne
 	return false
 }
 
-// characterStanding is the standing of one character alone, for the
-// checks made character by character.
-func characterStanding(corp int64, roles []string) orgStanding {
-	st := standing.New()
-	st.Working = true
-	st.Corps[corp] = true
-	held := make(map[string]bool, len(roles))
-	for _, role := range roles {
-		held[strings.ToLower(role)] = true
+// ownersPermitted answers ownerPermits for several owners with one read
+// of their stored choices.
+func (app *Application) ownersPermitted(ctx context.Context, st orgStanding, owners []orgOwner, permission string) map[string]bool {
+	out := make(map[string]bool, len(owners))
+	if len(owners) == 0 {
+		return out
 	}
-	st.EVERoles[corp] = held
-	return st
+	kinds, ids := ownerArrays(owners)
+	rows, err := app.queries.ListOwnerPermissionsForOwners(ctx, db.ListOwnerPermissionsForOwnersParams{
+		Permission: permission, OwnerKinds: kinds, OwnerIds: ids,
+	})
+	if err != nil {
+		logging.Errorf("permissions: read %s choices: %v", permission, err)
+	}
+	stored := make(map[string]standing.Rule, len(rows))
+	for _, row := range rows {
+		stored[orgOwner{Kind: row.OwnerKind, ID: row.OwnerID}.Key()] = standing.Rule{Kind: row.Kind, Ref: row.Ref}
+	}
+	for _, owner := range owners {
+		rule, chosen := stored[owner.Key()]
+		out[owner.Key()] = app.holdsProgramme(ctx, st, owner, permission) ||
+			(chosen && st.Belongs(owner) && st.Meets(owner, rule))
+	}
+	return out
+}
+
+// ownerArrays splits owners into the parallel lists a query takes.
+func ownerArrays(owners []orgOwner) (kinds []string, ids []int64) {
+	kinds = make([]string, len(owners))
+	ids = make([]int64, len(owners))
+	for i, owner := range owners {
+		kinds[i], ids[i] = owner.Kind, owner.ID
+	}
+	return kinds, ids
 }
 
 func ownerPermissionKey(owner orgOwner, permission string) db.GetOwnerPermissionParams {

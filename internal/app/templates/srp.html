@@ -25,7 +25,7 @@
 </div>
 {{end}}
 
-<p class="prose">Lost a ship on one of {{$corp.Name}}'s ops? Ask for it to be replaced here. A request names the killmail and the op it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
+<p class="prose">Lost a ship on one of {{$corp.Name}}'s fleets? Ask for it to be replaced here. A request names the killmail and the op it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
 
 <div class="co-cards">
 {{if $corp.Policy}}
@@ -42,13 +42,13 @@
   <div class="form-grid">
     <label class="field wide"><span class="field-label">Loss</span>
       <select name="loss" required>{{range .Losses}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select>
-      <span class="field-hint">Your characters' losses of the last 30 days that happened during one of the corporation's ops</span></label>
+      <span class="field-hint">Your characters' losses of the last 30 days that happened during one of the corporation's fleets</span></label>
     <label class="field wide"><span class="field-label">Note</span>
       <input type="text" name="note" maxlength="500" placeholder="Optional: anything the handler should know"></label>
   </div>
   <div class="form-actions"><button type="submit">Send request</button></div>
   {{else}}
-  <p class="hint">Nothing to claim: none of your characters has an unclaimed loss during one of this corporation's ops in the last 30 days. A loss shows up here once EveSynapse has read its killmail, which needs killmail access on the character that lost the ship.</p>
+  <p class="hint">Nothing to claim: none of your characters has an unclaimed loss during one of this corporation's fleets in the last 30 days. A loss shows up here once EveSynapse has read its killmail, which needs killmail access on the character that lost the ship.</p>
   {{end}}
   {{if .Outside}}<p class="hint">{{.Outside}} other recent loss{{if ne .Outside 1}}es were{{else}} was{{end}} not during an op and cannot be claimed here.</p>{{end}}
 </form>
@@ -59,7 +59,7 @@
 <h2 class="co-h2">Your requests</h2>
 <div class="tw">
 <table>
-  <thead><tr><th>Lost</th><th>Pilot</th><th>Ship</th><th>Op</th><th>Estimate</th><th>Answer</th><th></th></tr></thead>
+  <thead><tr><th>Lost</th><th>Pilot</th><th>Ship</th><th>Fleet</th><th>Estimate</th><th>Answer</th><th></th></tr></thead>
   <tbody>
   {{range .Mine}}
     <tr><td>{{.LostAt}}</td><td>{{.Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td><td>{{.Value}}</td>
@@ -124,7 +124,7 @@
 <h2 class="co-h2">Answered</h2>
 <div class="tw">
 <table>
-  <thead><tr><th>Answered</th><th>Pilot</th><th>Ship</th><th>Op</th><th>Answer</th><th>By</th><th></th></tr></thead>
+  <thead><tr><th>Answered</th><th>Pilot</th><th>Ship</th><th>Fleet</th><th>Answer</th><th>By</th><th></th></tr></thead>
   <tbody>
   {{range $corp.Handled}}
     <tr><td>{{.HandledAt}}</td><td>{{.Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td>

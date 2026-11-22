@@ -801,6 +801,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/auth/link", app.handleLinkChoose)
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/login", app.handleEVELoginIdentity)
+	// A Fleets sign-in with no account and no permissions
+	// (verified_pilots.go).
+	r.With(anonPages).Get("/auth/pilot", app.handlePilotSignIn)
+	r.Post("/auth/pilot/forget", app.handlePilotForget)
 	// The landing page's Try it now: a session on the shared
 	// demo account, no EVE SSO (demo.go).
 	r.With(anonPages).Get("/auth/demo", app.handleDemoSignIn)

@@ -143,7 +143,7 @@ func (q *Queries) DeleteOrgGroup(ctx context.Context, id int64) error {
 }
 
 const getOrgGroup = `-- name: GetOrgGroup :one
-SELECT id, owner_kind, owner_id, name, description, created_by, created_at FROM org_groups WHERE id = $1
+SELECT id, owner_kind, owner_id, name, description, created_by, created_at, member_count FROM org_groups WHERE id = $1
 `
 
 func (q *Queries) GetOrgGroup(ctx context.Context, id int64) (OrgGroup, error) {
@@ -157,6 +157,7 @@ func (q *Queries) GetOrgGroup(ctx context.Context, id int64) (OrgGroup, error) {
 		&i.Description,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.MemberCount,
 	)
 	return i, err
 }
@@ -463,7 +464,7 @@ func (q *Queries) ListOrgGroupsByUser(ctx context.Context, userID int64) ([]List
 
 const listOrgGroupsForOwner = `-- name: ListOrgGroupsForOwner :many
 
-SELECT id, owner_kind, owner_id, name, description, created_by, created_at FROM org_groups
+SELECT id, owner_kind, owner_id, name, description, created_by, created_at, member_count FROM org_groups
 WHERE owner_kind = $1 AND owner_id = $2
 ORDER BY lower(name), id
 `
@@ -491,6 +492,7 @@ func (q *Queries) ListOrgGroupsForOwner(ctx context.Context, arg ListOrgGroupsFo
 			&i.Description,
 			&i.CreatedBy,
 			&i.CreatedAt,
+			&i.MemberCount,
 		); err != nil {
 			return nil, err
 		}

@@ -354,6 +354,7 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 		app.sessions.Remove(r.Context(), sessionLinkIntent)
 	}
 	app.sessions.PopString(r.Context(), sessionIdentityLogin)
+	app.sessions.Remove(r.Context(), sessionPilotEntry)
 	app.authorizeRedirect(w, r, cfg)
 }
 
@@ -373,6 +374,7 @@ func (app *Application) handleEVELoginIdentity(w http.ResponseWriter, r *http.Re
 	}
 	cfg := eveOAuthConfig(app.cfg)
 	cfg.Scopes = nil
+	app.sessions.Remove(r.Context(), sessionPilotEntry)
 	app.sessions.Put(r.Context(), sessionIdentityLogin, "1")
 	app.authorizeRedirect(w, r, cfg)
 }
@@ -573,6 +575,10 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	// (scopeless) token, and never creates an account.
 	if app.sessions.GetString(ctx, sessionIdentityLogin) != "" {
 		app.sessions.Remove(ctx, sessionIdentityLogin)
+		if app.sessions.PopString(ctx, sessionPilotEntry) != "" {
+			app.finishPilotSignIn(w, r, characterID, characterName, ownerHash)
+			return
+		}
 		app.finishIdentityLogin(w, r, characterID, characterName, ownerHash)
 		return
 	}

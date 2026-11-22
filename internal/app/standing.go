@@ -23,6 +23,7 @@ type (
 const (
 	ownerCorporation = standing.OwnerCorporation
 	ownerAlliance    = standing.OwnerAlliance
+	ownerCommunity   = standing.OwnerCommunity
 
 	ruleLinked  = standing.RuleLinked
 	ruleMember  = standing.RuleMember
@@ -37,6 +38,7 @@ var eveCorpRoles = standing.EVECorpRoles
 func validEVECorpRole(name string) bool                { return standing.ValidEVECorpRole(name) }
 func holdsDirector(roles []string) bool                { return standing.HoldsDirector(roles) }
 func parseOrgOwner(raw string) (orgOwner, bool)        { return standing.ParseOwner(raw) }
+func parseAnyOwner(raw string) (orgOwner, bool)        { return standing.ParseAnyOwner(raw) }
 func ownersInclude(owners []orgOwner, o orgOwner) bool { return standing.Includes(owners, o) }
 
 // ---------------------------------------------------------------------------
@@ -105,11 +107,17 @@ func (app *Application) manageableOwners(ctx context.Context, userID int64) []or
 
 // ownerName is how an owner is shown.
 func (app *Application) ownerName(ctx context.Context, o orgOwner) string {
-	if o.Kind == ownerAlliance {
+	switch o.Kind {
+	case ownerAlliance:
 		if name, ok := app.resolvedAllianceName(ctx, o.ID); ok && name != "" {
 			return name
 		}
 		return fmt.Sprintf("Alliance #%d", o.ID)
+	case ownerCommunity:
+		if community, err := app.queries.GetCommunity(ctx, o.ID); err == nil {
+			return community.Name
+		}
+		return fmt.Sprintf("Community #%d", o.ID)
 	}
 	return app.corpDisplayName(ctx, o.ID)
 }
@@ -147,19 +155,26 @@ func (app *Application) ownerCorporations(ctx context.Context, owner orgOwner) [
 
 // whoChoices lists what a rule in an owner's server can be about.
 func (app *Application) whoChoices(ctx context.Context, owner orgOwner) []whoChoice {
-	out := []whoChoice{
-		{ruleLinked, "Everyone who has connected EveSynapse"},
-		{ruleMember, "Members of the " + owner.Kind},
-		{ruleCEO, "CEO"},
-	}
-	if owner.Kind == ownerAlliance {
-		out[2].Label = "CEOs of its corporations"
-		for _, corp := range app.ownerCorporations(ctx, owner) {
-			out = append(out, whoChoice{ruleCorp + ":" + strconv.FormatInt(corp, 10), "Members of " + app.corpDisplayName(ctx, corp)})
+	var out []whoChoice
+	switch owner.Kind {
+	case ownerCommunity:
+		// A community has no in-game roles, CEO or corporations.
+		out = []whoChoice{{ruleMember, "Members of the community"}}
+	default:
+		out = []whoChoice{
+			{ruleLinked, "Everyone who has connected EveSynapse"},
+			{ruleMember, "Members of the " + owner.Kind},
+			{ruleCEO, "CEO"},
 		}
-	}
-	for _, role := range eveCorpRoles {
-		out = append(out, whoChoice{ruleEVERole + ":" + role, "In-game role: " + strings.ReplaceAll(role, "_", " ")})
+		if owner.Kind == ownerAlliance {
+			out[2].Label = "CEOs of its corporations"
+			for _, corp := range app.ownerCorporations(ctx, owner) {
+				out = append(out, whoChoice{ruleCorp + ":" + strconv.FormatInt(corp, 10), "Members of " + app.corpDisplayName(ctx, corp)})
+			}
+		}
+		for _, role := range eveCorpRoles {
+			out = append(out, whoChoice{ruleEVERole + ":" + role, "In-game role: " + strings.ReplaceAll(role, "_", " ")})
+		}
 	}
 	groups, err := app.queries.ListOrgGroupsForOwner(ctx, db.ListOrgGroupsForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 	if err != nil {
@@ -204,6 +219,9 @@ func (app *Application) ruleWho(ctx context.Context, owner orgOwner, rule db.Dis
 // owner's own, an in-game role has to be one that exists.
 func (app *Application) parseRuleWho(ctx context.Context, owner orgOwner, raw string) (kind, ref string, ok bool) {
 	kind, ref, _ = strings.Cut(raw, ":")
+	if owner.Kind == ownerCommunity && kind != ruleMember && kind != ruleGroup {
+		return "", "", false
+	}
 	switch kind {
 	case ruleLinked, ruleMember, ruleCEO:
 		return kind, "", ref == ""
@@ -287,11 +305,28 @@ func (app *Application) standingFor(ctx context.Context, userID int64) (orgStand
 			}
 		}
 	}
+	places, err := app.queries.ListCommunityMembershipsByUser(ctx, userID)
+	if err != nil {
+		return st, err
+	}
+	inCommunity := make(map[[2]int64]bool, len(places)) // {character, community}
+	for _, place := range places {
+		st.NoteCommunity(place.CommunityID, place.Role)
+		inCommunity[[2]int64{place.CharacterID, place.CommunityID}] = true
+	}
 	memberships, err := app.queries.ListOrgGroupsByUser(ctx, userID)
 	if err != nil {
 		return st, err
 	}
 	for _, m := range memberships {
+		// A character counts for a community's group only while it is
+		// an active member of that community.
+		if m.OwnerKind == ownerCommunity {
+			if inCommunity[[2]int64{m.CharacterID, m.OwnerID}] {
+				st.Groups[m.GroupID] = true
+			}
+			continue
+		}
 		// A character counts for a group only while it is in the
 		// corporation or alliance the group belongs to.
 		corp := corpOf[m.CharacterID]

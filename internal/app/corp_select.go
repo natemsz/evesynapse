@@ -85,14 +85,17 @@ func (app *Application) pickOwner(ctx context.Context, r *http.Request, offered 
 			active = mine
 		}
 	}
-	if named, ok := parseOrgOwner(r.URL.Query().Get("owner")); ok && ownersInclude(offered, named) {
+	if named, ok := parseAnyOwner(r.URL.Query().Get("owner")); ok && ownersInclude(offered, named) {
 		active = named
 	}
 	options := make([]corpOption, 0, len(offered))
 	for _, owner := range offered {
 		name := app.ownerName(ctx, owner)
-		if owner.Kind == ownerAlliance {
+		switch owner.Kind {
+		case ownerAlliance:
 			name += " (alliance)"
+		case ownerCommunity:
+			name += " (community)"
 		}
 		options = append(options, corpOption{ID: owner.ID, Name: name, Active: owner == active, Param: "owner", Value: owner.Key()})
 	}
@@ -179,7 +182,7 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 	}
 	owner := orgOwner{Kind: ownerCorporation, ID: corp}
 	for _, raw := range []string{r.Form.Get("srp_who"), r.Form.Get("doctrines_who"), r.Form.Get("intel_who")} {
-		if kind, ref, ok := app.parseRuleWho(ctx, owner, raw); raw != "" && (!ok || !permissionRule(kind+":"+ref)) {
+		if kind, ref, ok := app.parseRuleWho(ctx, owner, raw); raw != "" && (!ok || !permissionRule(owner, kind+":"+ref)) {
 			back("That cannot be handed to the choice made; nothing was saved.")
 			return
 		}

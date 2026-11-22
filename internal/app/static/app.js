@@ -4239,6 +4239,7 @@
     { name: "Discord Server", url: "/discord/servers" },
     { name: "Groups", url: "/groups/" },
     { name: "Corporation Settings", url: "/corporations/settings/" },
+    { name: "Communities", url: "/fleets/communities/" },
     { name: "Killboard", url: "/intel/kills/" },
     { name: "Leaderboards", url: "/intel/kills/top/" },
     { name: "Battle Reports", url: "/intel/battles/" },

@@ -1,7 +1,7 @@
 // Package groups is the Groups module (/groups): sets of characters the
-// directors of a corporation or alliance keep by hand. A group is a list
-// and nothing more; what it is used for is elsewhere (at present Discord
-// roles). The group tables are core's; this module owns every surface
+// directors of a corporation or alliance, or the leader and admins of a
+// community, keep by hand. A group is a list and nothing more; what it
+// is used for is elsewhere. The group tables are core's; this module owns every surface
 // that edits them, including adding ticked members from the corporation
 // members list.
 package groups

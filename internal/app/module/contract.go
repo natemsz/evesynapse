@@ -787,6 +787,13 @@ type Page struct {
 	Scripts  []string
 }
 
+// VerifiedPilot is a character proved through EVE sign-in by someone
+// with no account here.
+type VerifiedPilot struct {
+	CharacterID int64
+	Name        string
+}
+
 // PlaceRef is a place's title with the ids it can link by (see the
 // core link policy: station, then structure, then system, otherwise
 // plain text).
@@ -1544,6 +1551,13 @@ type Deps interface {
 	// ManageableOwners lists the corporations and alliances an account
 	// may manage things for (it directs them).
 	ManageableOwners(ctx context.Context, userID int64) []standing.Owner
+	// GroupOwners lists the owners whose groups an account may keep:
+	// its ManageableOwners and the communities it leads or is an admin of.
+	GroupOwners(ctx context.Context, userID int64) []standing.Owner
+	// VerifiedPilot is the session's verified pilot: someone who proved
+	// a character through EVE sign-in and has no account. Nothing it
+	// reports grants the right to manage anything.
+	VerifiedPilot(ctx context.Context) (VerifiedPilot, bool)
 	// OwnerName is how an owner is shown.
 	OwnerName(ctx context.Context, o standing.Owner) string
 	// CorpAlliance is a corporation's alliance and that alliance's

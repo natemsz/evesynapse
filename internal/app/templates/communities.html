@@ -1,0 +1,103 @@
+{{define "title"}}Communities{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Communities</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+<div class="l-page cm-page">
+{{with .Directory}}
+<div class="l-head">
+  <p class="l-head-sum">Groups of players who fly together, whatever corporation they are in.</p>
+  <search class="l-head-act">
+    <form method="get" action="/fleets/communities/" class="cm-search">
+      <label class="field-label" for="cm-find">Find a community</label>
+      <input type="search" id="cm-find" name="q" value="{{.Find}}" maxlength="60" autocomplete="off" enterkeyhint="search">
+      <button type="submit" class="btn btn-quiet">Search</button>
+    </form>
+  </search>
+</div>
+
+{{if .Mine}}
+<section class="l-panel" aria-labelledby="cm-mine-title">
+  <h2 id="cm-mine-title">Your communities</h2>
+  <ul class="cm-mine">
+    {{range .Mine}}
+    <li><a href="{{.Path}}">{{.Name}}</a>
+      <span class="cm-sub">{{.Place}}, {{.Members}}{{if .Closed}}, closed{{end}}</span>
+      {{with .Pending}}<span class="badge wait">{{.}} waiting</span>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</section>
+{{end}}
+
+<div class="l-sidebar l-sidebar--end cm-split">
+  <section class="l-panel" aria-labelledby="cm-list-title">
+    <h2 id="cm-list-title">{{if .Find}}Communities matching “{{.Find}}”{{else}}Listed communities{{end}}</h2>
+    {{if .Listed}}
+    <div class="cm-table-box"><table class="cm-table">
+      <thead><tr><th>Community</th><th class="cm-num">Members</th><th>Joining</th></tr></thead>
+      <tbody>
+        {{range .Listed}}
+        <tr>
+          <td><a href="{{.Path}}">{{.Name}}</a>{{with .Description}}<span class="cm-sub cm-clip">{{.}}</span>{{end}}</td>
+          <td class="cm-num">{{.Members}}</td>
+          <td>{{.Policy}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table></div>
+    {{else if .Find}}
+    <p class="cm-empty">No listed community matches that name. A community that is not listed can only be reached by its link.</p>
+    {{else}}
+    <p class="cm-empty">No community is listed yet. Communities stay off this list unless their leader adds them.</p>
+    {{end}}
+  </section>
+
+  <aside class="l-panel cm-next">
+    {{if eq .Level "account"}}
+      <h2 id="cm-start-title">Start a community</h2>
+      {{if .AtLimit}}
+      <p>You lead {{.LedMost}} communities, the most one account can. Close one or hand it to someone else to start another.</p>
+      {{else if .Characters}}
+      <form method="post" action="/fleets/communities/create" class="cm-form" aria-labelledby="cm-start-title">
+        <label class="field"><span class="field-label">Name</span>
+          <input type="text" name="name" maxlength="60" required autocomplete="off"></label>
+        <label class="field"><span class="field-label">What it is for (optional)</span>
+          <textarea name="description" maxlength="500" rows="3"></textarea></label>
+        <label class="field"><span class="field-label">Led by</span>
+          <select name="character" required>{{range .Characters}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+        <fieldset class="cm-choices">
+          <legend class="field-label">New members</legend>
+          {{range .Policies}}
+          <label><input type="radio" name="join_policy" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}<small>{{.Hint}}</small></span></label>
+          {{end}}
+        </fieldset>
+        <label class="cm-check"><input type="checkbox" name="listed" value="1"><span>List it here so people can find it</span></label>
+        <button type="submit">Start community</button>
+      </form>
+      {{else}}
+      <p>Link a working character to start a community.</p>
+      {{end}}
+    {{else if eq .Level "pilot"}}
+      <h2>Signed in as {{.PilotName}}</h2>
+      <p>You can join communities without an account. An account also lets you start one and use more than one character.</p>
+      <div class="cm-stack">
+        <a class="btn" href="{{.Account}}">Create an account</a>
+        <form method="post" action="/auth/logout"><button type="submit" class="btn btn-quiet">Sign out</button></form>
+        <form method="post" action="/auth/pilot/forget" data-confirm="Remove your pilot record and leave every community?"><button type="submit" class="btn btn-quiet">Remove my pilot record</button></form>
+      </div>
+    {{else}}
+      <h2>Join without an account</h2>
+      <p>Sign in with EVE to join a community. EveSynapse asks for no permissions and keeps no token.</p>
+      <div class="cm-stack">
+        <a class="btn" href="{{.SignIn}}">Sign in with EVE</a>
+        <a class="btn btn-quiet" href="{{.Account}}">Create an account to start one</a>
+      </div>
+    {{end}}
+  </aside>
+</div>
+{{end}}
+</div>
+{{end}}

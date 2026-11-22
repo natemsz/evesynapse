@@ -9,6 +9,7 @@ import (
 	"evesynapse/internal/app/appraise"
 	"evesynapse/internal/app/buildplanner"
 	"evesynapse/internal/app/calendar"
+	"evesynapse/internal/app/communities"
 	"evesynapse/internal/app/contacts"
 	"evesynapse/internal/app/contracts"
 	"evesynapse/internal/app/corpdata"
@@ -63,6 +64,7 @@ var All = []Entry{
 	{"doctrines", doctrines.Module},
 	{"srp", srp.Module},
 	{"groups", groups.Module},
+	{"communities", communities.Module},
 	{"discord", discord.Module},
 	{"swarm", swarm.Module},
 	{"intel", intel.Module},

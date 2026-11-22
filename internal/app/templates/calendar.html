@@ -9,7 +9,7 @@
 <div class="l-head">
   <div class="l-head-pick">{{template "charselector" .CalendarChars}}</div>
   {{if .Calendar}}<p class="l-head-sum"><b>{{.Calendar.CharacterName}}</b>{{with .Calendar.Next}} · next: <b>{{.Title}}</b> <span class="countdown" data-finish="{{.DateRaw}}"></span>{{end}}{{if .Calendar.Awaiting}} · <span class="warn">{{.Calendar.Awaiting}} waiting for your answer</span>{{end}}</p>
-  <div class="l-head-act">{{if .Calendar.CanCreate}}<a class="btn cal-new" href="/ops/new">New op</a>{{end}}<a class="cal-paps" href="/ops/paps">Attendance</a></div>{{end}}
+  <div class="l-head-act">{{if .Calendar.CanCreate}}<a class="btn cal-new" href="/fleets/plan">Plan a fleet</a>{{end}}<a class="cal-paps" href="/fleets/history/">Fleet history</a></div>{{end}}
 </div>
 
 {{if .Calendar}}
@@ -27,7 +27,7 @@
   <tbody>
   {{$wd := .Weekdays}}{{range .Weeks}}<tr>
     {{range $i, $d := .}}{{with $d}}<td class="cal-day{{if not .InMonth}} cal-out{{end}}{{if .Today}} cal-today{{end}}">
-      <span class="cal-num" data-wd="{{index $wd $i}}">{{.Day}}</span>{{if $.Calendar.CanCreate}}<a class="cal-add" href="/ops/new?date={{.Date}}" aria-label="New op on {{.Date}}" title="New op on {{.Date}}">+</a>{{end}}
+      <span class="cal-num" data-wd="{{index $wd $i}}">{{.Day}}</span>{{if $.Calendar.CanCreate}}<a class="cal-add" href="/fleets/plan?date={{.Date}}" aria-label="Plan a fleet on {{.Date}}" title="Plan a fleet on {{.Date}}">+</a>{{end}}
       {{range .Entries}}<a class="cal-entry cal-{{.Kind}}{{if .Cancelled}} cal-cancelled{{end}}" href="{{.URL}}"><span class="cal-time">{{.Time}}</span> {{.Title}}{{if .Mine}} <small>{{.Mine}}</small>{{end}}</a>
       {{end}}
     </td>{{end}}{{end}}
@@ -35,7 +35,7 @@
   </tbody>
 </table>
 </div>
-<p class="prose">Times are EVE time. <span class="cal-key cal-op">Ops</span> are your corporation's, planned here and open to sign up to. <span class="cal-key cal-event">Events</span> come from the in-game calendar.</p>
+<p class="prose">Times are EVE time. <span class="cal-key cal-op">Fleets</span> are the ones you can see here, including public fleets. <span class="cal-key cal-event">Events</span> come from the in-game calendar.</p>
 {{end}}
 </section>
 

@@ -191,11 +191,11 @@ func TestDoctrines(t *testing.T) {
 
 	// An op names the doctrine; one of another corporation is refused.
 	start := time.Now().UTC().Add(48 * time.Hour).Format(opDateTimeLayout)
-	op := url.Values{"title": {"Stratop"}, "corporation": {"98000001"}, "fc": {"90000001"}, "starts_at": {start}, "duration": {"60"}}
+	op := url.Values{"title": {"Stratop"}, "owner": {"corporation:98000001"}, "fc": {"90000001"}, "starts_at": {start}, "duration": {"60"}}
 	op.Set("doctrine_id", "999999")
-	f.post(director, "/ops/save", op)
+	f.post(director, "/fleets/save", op)
 	op.Set("doctrine_id", strconv.FormatInt(d.ID, 10))
-	f.post(director, "/ops/save", op)
+	f.post(director, "/fleets/save", op)
 	ops, _ := f.q.ListOpsForCorporationsBetween(f.ctx, db.ListOpsForCorporationsBetweenParams{
 		CorporationIds: []int64{discordCorp}, FromTime: time.Now(), ToTime: time.Now().Add(72 * time.Hour),
 	})

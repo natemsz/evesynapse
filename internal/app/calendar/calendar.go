@@ -162,7 +162,7 @@ func (app *mod) handleCalendar(w http.ResponseWriter, r *http.Request) {
 		month := parseCalMonth(r.URL.Query().Get("month"), now)
 		from, to := calGridRange(month)
 		view.Month = buildCalMonth(month, now, app.calendarEntries(ctx, userID, active, events, from, to, month.Format(calMonthLayout)))
-		view.CanCreate = len(app.deps.OpCorps(ctx, userID, true)) > 0
+		view.CanCreate = app.deps.CanPlanFleets(ctx, userID)
 	}
 
 	// An open event renders its detail under the list.

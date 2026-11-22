@@ -17,7 +17,7 @@
   </form>
   {{end}}{{end}}
 </div>
-<p class="prose">The EveSynapse bot can be added to the Discord server of a corporation or an alliance. There it gives roles to members who have connected their Discord account, and posts new ops in a channel. A corporation's servers are set up by its directors, an alliance's by the directors of its executor corporation.</p>
+<p class="prose">The EveSynapse bot can be added to the Discord server of a corporation or an alliance. There it gives roles to members who have connected their Discord account, and posts new fleets in a channel. A corporation's servers are set up by its directors, an alliance's by the directors of its executor corporation.</p>
 
 {{if not .Owner}}
 <div class="l-panel co-gate"><p class="prose">None of your characters is a director, so there is nothing for you to set up here. To get your own roles, connect your Discord account under <a href="/settings#notifications">notification settings</a>.</p></div>
@@ -65,11 +65,11 @@
 </section>
 
 <section class="l-panel co-card">
-  <h3>Members and ops</h3>
+  <h3>Members and fleets</h3>
   <form method="post" action="/discord/servers/{{.GuildID}}/save" class="op-form">
     <label class="check-row"><input type="checkbox" name="auto_join" value="1"{{if .AutoJoin}} checked{{end}}> <span>Add members of the {{.MemberWord}} to this server automatically, once they have connected Discord</span></label>
     <p class="hint">Only someone with a character in the {{.MemberWord}} is ever added; they agree to it on Discord when they connect.</p>
-    <label class="field"><span class="field-label">Post new ops in</span>
+    <label class="field"><span class="field-label">Post new fleets in</span>
       <select name="ops_channel">{{range .Channels}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
     <div class="form-actions"><button type="submit">Save</button></div>
   </form>
@@ -133,13 +133,13 @@
 {{end}}
 
 {{if .Shares}}
-<div class="co-sec"><h2>Ops in an alliance's server</h2></div>
+<div class="co-sec"><h2>Fleets in an alliance's server</h2></div>
 <section class="l-panel">
-  <p class="prose">A corporation's ops are posted in its own servers. They are posted in its alliance's server only if you say so here.</p>
+  <p class="prose">A corporation's fleets are posted in its own servers. They are posted in its alliance's server only if you say so here.</p>
   {{range .Shares}}
   <form method="post" action="/discord/servers/share" class="add-row">
     <input type="hidden" name="corporation" value="{{.CorporationID}}">
-    <label class="check-row"><input type="checkbox" name="share" value="1"{{if .On}} checked{{end}}> <span>Also post {{.Name}}'s new ops in the {{.Alliance}} server</span></label>
+    <label class="check-row"><input type="checkbox" name="share" value="1"{{if .On}} checked{{end}}> <span>Also post {{.Name}}'s new fleets in the {{.Alliance}} server</span></label>
     <button type="submit">Save</button>
   </form>
   {{end}}

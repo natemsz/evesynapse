@@ -459,7 +459,7 @@ func (app *mod) handleDoctrineDelete(w http.ResponseWriter, r *http.Request) {
 		logging.Errorf("doctrines: delete %d: %v", d.ID, err)
 	}
 	logging.Infof("doctrines: user %d deleted doctrine %d (%s)", app.deps.UserID(ctx), d.ID, d.Name)
-	app.deps.FlashBack(w, r, module.CorpAddress(doctrinesPath, d.CorporationID))("Deleted " + d.Name + ". Ops that named it keep its name.")
+	app.deps.FlashBack(w, r, module.CorpAddress(doctrinesPath, d.CorporationID))("Deleted " + d.Name + ". Fleets that named it keep its name.")
 }
 
 // doctrineFitSource finds the fit document a keeper is adding: one of

@@ -2199,7 +2199,7 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
    is too heavy for table figures at this size, so it is kept only
    for the larger standalone figures below. */
 td { font-family: var(--font-body); }
-dd, .kpi-v, .fit-gl > b, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b {
+dd, .kpi-v, .fit-gl > b, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b, .fl-clock {
   /* Standalone figures: monospaced digits, Eve Sans Neue for any letters. */
   font-family: var(--font-num);
 }

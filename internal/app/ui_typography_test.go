@@ -116,7 +116,7 @@ func TestOpenProseTreatment(t *testing.T) {
 		"market_leaderboard.html", "market_restock.html",
 		"market_scanner.html", "market_tradefinder.html",
 		"market_tradeideas.html", "market_trends.html",
-		"notifications.html", "op_paps.html", "orders.html",
+		"notifications.html", "fleet_history.html", "orders.html",
 		"piplanner.html", "planets.html", "planner.html", "profit.html",
 		"profit_blueprint.html", "report.html", "scans.html",
 		"search.html", "security_codes.html", "settings.html",

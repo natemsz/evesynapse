@@ -1,0 +1,13 @@
+{{define "fleet_board"}}<ol class="fl-board">
+{{range .}}<li class="fl-row{{if .Live}} is-live{{end}}{{if .Cancelled}} is-off{{end}}">
+  <a href="{{.Href}}">
+    <time class="fl-when" datetime="{{.WhenRaw}}"><span class="fl-clock">{{.Clock}}</span><span class="fl-day">{{.Day}}</span></time>
+    <span class="fl-what"><span class="fl-title">{{.Title}}</span>{{with .Sub}}<span class="fl-sub">{{.}}</span>{{end}}</span>
+    <span class="fl-state">
+      {{if .Cancelled}}<span class="badge wait">Cancelled</span>{{else if .Live}}<span class="badge kill">Live</span>{{else if .Ahead}}<span class="countdown" data-finish="{{.WhenRaw}}"></span>{{end}}
+      <span class="fl-count">{{.Count}}</span>
+      {{with .Answer}}<span class="badge">{{.}}</span>{{end}}
+    </span>
+  </a>
+</li>
+{{end}}</ol>{{end}}

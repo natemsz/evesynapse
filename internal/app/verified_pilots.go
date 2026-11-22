@@ -34,17 +34,13 @@ const (
 	sessionPilotID    = "verified_pilot_id"
 	sessionPilotOwner = "verified_pilot_owner"
 
-	pilotHomePath        = "/fleets/communities/"
+	pilotHomePath        = fleetsPath
 	pilotAffiliationWait = 5 * time.Second
 )
 
 // handlePilotSignIn starts a sign-in with no permissions for someone
 // on a Fleets page (GET /auth/pilot?next=).
 func (app *Application) handlePilotSignIn(w http.ResponseWriter, r *http.Request) {
-	if !moduleCompiledIn("communities") {
-		http.NotFound(w, r)
-		return
-	}
 	if !app.cfg.SSOConfigured() {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -53,7 +49,7 @@ func (app *Application) handlePilotSignIn(w http.ResponseWriter, r *http.Request
 	}
 	ctx := r.Context()
 	target := pilotHomePath
-	if next := r.URL.Query().Get("next"); safeReturnPath(next) && strings.HasPrefix(next, "/fleets/") && !strings.Contains(next, "..") {
+	if next := r.URL.Query().Get("next"); safeReturnPath(next) && (strings.HasPrefix(next, fleetsPath) || strings.HasPrefix(next, "/f/")) && !strings.Contains(next, "..") {
 		target = next
 	}
 	if app.userID(ctx) != 0 {
@@ -99,7 +95,7 @@ func (app *Application) finishPilotSignIn(w http.ResponseWriter, r *http.Request
 	}
 	app.sessions.Put(ctx, sessionPilotID, characterID)
 	app.sessions.Put(ctx, sessionPilotOwner, ownerHash)
-	app.flash(ctx, "Signed in as "+name+". You can join communities without an account.")
+	app.flash(ctx, "Signed in as "+name+". You can join fleets and communities without an account.")
 	next := app.takeReturnTo(ctx)
 	if next == "/" {
 		next = pilotHomePath
@@ -204,7 +200,7 @@ func (app *Application) handlePilotForget(w http.ResponseWriter, r *http.Request
 	if err := app.sessions.RenewToken(ctx); err != nil {
 		logging.Errorf("verified pilot: renew session token: %v", err)
 	}
-	app.flash(ctx, "Your pilot record and community memberships are removed.")
+	app.flash(ctx, "Your pilot record, fleet sign-ups and community memberships are removed.")
 	http.Redirect(w, r, pilotHomePath, http.StatusSeeOther)
 }
 

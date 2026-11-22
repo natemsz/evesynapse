@@ -1,0 +1,162 @@
+{{define "title"}}{{.Op.Title}}{{end}}
+{{define "pagetitle"}}{{with .Op}}<h1><span class="gt">{{.Title}}</span></h1>{{end}}{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .Op}}
+{{$op := .}}
+<div class="l-page l-named fl-page">
+<div class="l-head">
+  <p class="l-head-sum">{{.Kind}} by <b>{{.Owner}}</b>. <span class="badge">{{.Visibility}}</span></p>
+  {{if .CanManage}}
+  <div class="l-head-act">
+    <a class="btn btn-quiet" href="/fleets/{{.ID}}/edit">Change</a>
+    <form method="post" action="/fleets/{{.ID}}/cancel"{{if not .Cancelled}} data-confirm="Cancel this fleet? People who signed up will see it was cancelled."{{end}}>
+      {{if .Cancelled}}<button type="submit" class="btn btn-quiet">Bring it back</button>{{else}}<button type="submit" class="btn btn-danger">Cancel fleet</button>{{end}}
+    </form>
+  </div>
+  {{end}}
+</div>
+
+{{if .Cancelled}}<p class="err">This fleet was cancelled.</p>{{end}}
+
+<section class="l-panel fl-muster{{if .Live}} is-live{{end}}{{if .Cancelled}} is-off{{end}}" aria-label="When and where">
+  <time class="fl-when" datetime="{{.WhenRaw}}">
+    <span class="fl-clock">{{.Clock}}</span>
+    <span class="fl-day">{{.Day}}, EVE time</span>
+    <span class="l-local" data-local-time="{{.WhenRaw}}"></span>
+    {{if .Live}}<span class="badge kill">Live now</span>{{else if and (not .Over) (not .Cancelled)}}<span class="countdown" data-finish="{{.WhenRaw}}"></span>{{else if .Over}}<span class="badge wait">Over</span>{{end}}
+  </time>
+  <dl class="fl-facts">
+    <div><dt class="field-label">Form up</dt><dd>{{if .FormUp}}{{.FormUp}}{{else if .SeeFormUp}}Not set{{else}}Shown once you can sign up{{end}}</dd></div>
+    <div><dt class="field-label">Length</dt><dd>{{.Length}}</dd></div>
+    {{if .FC}}<div><dt class="field-label">Fleet commander</dt><dd>{{charLink $.ViewerChars .FCID .FC}}</dd></div>{{end}}
+    {{range .Commanders}}<div><dt class="field-label">Co-FC</dt><dd>{{charLink $.ViewerChars .CharacterID .Name}}{{if $op.CanPlan}} <form method="post" action="/fleets/{{$op.ID}}/commanders" class="fl-inline"><input type="hidden" name="character" value="{{.CharacterID}}"><input type="hidden" name="do" value="remove"><button type="submit" class="btn btn-quiet">Remove</button></form>{{end}}</dd></div>{{end}}
+    {{if .Doctrine}}<div><dt class="field-label">Doctrine</dt><dd>{{if .DoctrineURL}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{else}}{{.Doctrine}}{{end}}</dd></div>{{end}}
+    {{if .DoctrineFit}}<div><dt class="field-label">Bring</dt><dd>{{range $i, $fit := .DoctrineFit}}{{if $i}}, {{end}}<a href="/fittings/?doctrine={{$fit.ID}}#fit-editor">{{$fit.Name}}</a>{{if $fit.Role}} <small>({{$fit.Role}})</small>{{end}}{{end}}</dd></div>{{end}}
+    <div><dt class="field-label">Sign-ups</dt><dd>{{.JoinGate}}</dd></div>
+  </dl>
+  {{if .Description}}<p class="fl-about">{{.Description}}</p>{{end}}
+</section>
+
+<div class="l-sidebar l-sidebar--end fl-split">
+<div class="fl-main">
+<section class="l-panel fl-signup" aria-labelledby="fl-signup-title">
+  <h2 id="fl-signup-title">Your sign-up</h2>
+  {{if .Cancelled}}
+  <p class="fl-empty">Sign-ups are closed: the fleet was cancelled.</p>
+  {{else if .Over}}
+  <p class="fl-empty">Sign-ups are closed: the fleet is over.{{if .HasSRP}} Lost a ship on it? <a href="/srp/">Ask for a replacement</a>.{{end}}</p>
+  {{else if .CanJoin}}
+  <form method="post" action="/fleets/{{.ID}}/signup" class="fl-signup-form">
+    {{with .Share}}<input type="hidden" name="share" value="{{.}}">{{end}}
+    {{if eq (len .Characters) 1}}{{range .Characters}}<input type="hidden" name="character" value="{{.ID}}"><p class="fl-as">Signing up as <b>{{.Name}}</b></p>{{end}}
+    {{else}}<div class="field"><label class="field-label" for="fl-character">Character</label>
+      <select id="fl-character" name="character">{{range .Characters}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>{{end}}
+    <fieldset class="fl-answers">
+      <legend class="field-label">Are you coming?</legend>
+      <label><input type="radio" name="response" value="yes"{{if or (eq .Mine "yes") (not .Mine)}} checked{{end}}> Coming</label>
+      <label><input type="radio" name="response" value="maybe"{{if eq .Mine "maybe"}} checked{{end}}> Maybe</label>
+      <label><input type="radio" name="response" value="no"{{if eq .Mine "no"}} checked{{end}}> Not coming</label>
+    </fieldset>
+    <div class="fl-signup-fields">
+      <div class="field"><label class="field-label" for="fl-ship">Ship</label>
+        <input id="fl-ship" type="text" name="ship" value="{{.MyShip}}" maxlength="120" placeholder="e.g. Loki"{{if .DoctrineFit}} list="fl-doctrine-ships"{{end}}>{{if .DoctrineFit}}<datalist id="fl-doctrine-ships">{{range .DoctrineFit}}<option value="{{.Ship}}">{{end}}</datalist>{{end}}</div>
+      <div class="field"><label class="field-label" for="fl-role">Role</label>
+        <select id="fl-role" name="fleet_role"><option value="">Any</option>{{range .Roles}}<option value="{{.}}"{{if eq . $op.MyRole}} selected{{end}}>{{.}}</option>{{end}}</select></div>
+      <div class="field"><label class="field-label" for="fl-note">Note</label>
+        <input id="fl-note" type="text" name="note" value="{{.MyNote}}" maxlength="120" placeholder="e.g. 20 minutes late"></div>
+    </div>
+    <button type="submit">{{if .Mine}}Update sign-up{{else}}Sign up{{end}}</button>
+  </form>
+  {{if eq .Level "pilot"}}<p class="fl-hint">Signed in as {{.PilotName}}, with no account. <a href="{{.Account}}">An account</a> adds reminders and a calendar.</p>{{end}}
+  {{else if eq .Level "anonymous"}}
+  <p>Sign in with EVE to sign up. EveSynapse asks for no permissions and keeps no token.</p>
+  <a class="btn" href="{{.SignIn}}">Sign in with EVE</a>
+  {{else if eq .Level "pilot"}}
+  <p class="fl-empty">{{.PilotName}} cannot sign up to this fleet. It may need an EveSynapse account, or be for certain pilots only.</p>
+  <a class="btn btn-quiet" href="{{.Account}}">Create an account</a>
+  {{else}}
+  <p class="fl-empty">None of your characters can sign up to this fleet.</p>
+  {{end}}
+</section>
+
+<section class="l-panel" aria-labelledby="fl-roster-title">
+  <h2 id="fl-roster-title">Coming <small>{{.ComingCount}}</small>{{if .MaybeCount}} <small>and {{.MaybeCount}} maybe</small>{{end}}</h2>
+  {{if not .SeeNames}}
+  <p class="fl-empty">Pilot names are shown to people who can sign up.</p>
+  {{else}}
+  {{if .RoleCounts}}<p class="fl-hint">{{range $i, $c := .RoleCounts}}{{if $i}}, {{end}}{{$c.Count}} {{$c.Role}}{{end}}</p>{{end}}
+  {{if .RosterCut}}<p class="fl-hint">Showing the first 300 sign-ups.</p>{{end}}
+  {{if not .Yes}}<p class="fl-empty">Nobody yet.</p>{{end}}
+  {{range .Roster}}
+  {{with .Title}}<h3>{{.}}</h3>{{end}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Pilot</th><th>Ship</th><th>Role</th><th>Note</th>{{if $op.CanPlan}}<th class="opt">Co-FC</th>{{end}}</tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{.Ship}}</td><td>{{.Role}}</td><td>{{.Note}}</td>{{if $op.CanPlan}}<td>{{if .CanCommand}}<form method="post" action="/fleets/{{$op.ID}}/commanders" class="fl-inline"><input type="hidden" name="character" value="{{.CharacterID}}"><input type="hidden" name="do" value="add"><button type="submit" class="btn btn-quiet">Make co-FC</button></form>{{end}}</td>{{end}}</tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{end}}
+</section>
+
+{{with .Attendance}}
+<section class="l-panel" aria-labelledby="fl-attendance-title">
+  <h2 id="fl-attendance-title">Attendance <small>{{len .Rows}}</small></h2>
+  {{if $op.CanManage}}<p class="fl-hint">{{.Capture}}</p>{{end}}
+  {{if .Rows}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Pilot</th><th>Ship</th><th>Recorded</th></tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{if .ShipTypeID}}{{itemLink .ShipTypeID .Ship}}{{end}}</td><td>{{if .ByHand}}by hand{{else}}from the fleet{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{if .CanMark}}
+  <section class="foldable"{{if .Capturing}} data-fold="closed"{{end}}>
+  <h3>Mark attendance by hand</h3>
+  <p class="fl-hint">{{if .Capturing}}Not needed while the fleet is being read; here in case someone was missed.{{else}}Tick who was there. Pilots recorded from the fleet stay as they are.{{end}}</p>
+  {{if .Ticks}}
+  <form method="post" action="/fleets/{{$.Op.ID}}/attendance" class="fl-ticks">
+    {{range .Ticks}}
+    <label><input type="checkbox" name="present" value="{{.CharacterID}}"{{if .Present}} checked{{end}}{{if .FromFleet}} disabled{{end}}> {{.Name}}{{if .FromFleet}} <small>from the fleet</small>{{end}}</label>
+    {{end}}
+    <p><button type="submit">Save attendance</button></p>
+  </form>
+  {{else}}
+  <p class="fl-empty">Nobody signed up to this fleet, so there is nobody to tick yet. Pilots can still sign up while it runs.</p>
+  {{end}}
+  </section>
+  {{end}}
+</section>
+{{end}}
+</div>
+
+<aside class="fl-side" aria-label="Share this fleet">
+  {{if or .ShareURL .CalendarURL}}
+  <section class="l-panel fl-next" aria-labelledby="fl-share-title">
+    <h2 id="fl-share-title">Share</h2>
+    {{with .ShareURL}}
+    <div class="field"><label class="field-label" for="fl-share-link">Share link</label>
+      <input id="fl-share-link" type="text" value="{{.}}" readonly aria-describedby="fl-share-hint"></div>
+    <p class="fl-hint" id="fl-share-hint">{{$op.ShareNote}}</p>
+    <form method="post" action="/fleets/{{$op.ID}}/share" data-confirm="Make a new link? The current link stops working."><button type="submit" class="btn btn-quiet">Make a new link</button></form>
+    {{end}}
+    {{with .CalendarURL}}<a class="btn btn-quiet" href="{{.}}">Add to calendar</a>{{end}}
+  </section>
+  {{end}}
+  <p class="fl-back"><a href="/fleets/">All fleets</a></p>
+</aside>
+</div>
+</div>
+{{end}}
+{{end}}
+

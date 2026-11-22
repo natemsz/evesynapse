@@ -51,12 +51,137 @@ ON CONFLICT (op_id, character_id) DO UPDATE SET
     note       = excluded.note,
     updated_at = excluded.updated_at;
 
+-- The first sign-ups to a fleet, up to the most its page shows.
 -- name: ListOpSignups :many
-SELECT * FROM op_signups WHERE op_id = $1 ORDER BY character_id;
+SELECT * FROM op_signups WHERE op_id = $1 ORDER BY updated_at, character_id LIMIT 300;
 
--- name: ListOpSignupsForOps :many
-SELECT op_id, character_id, user_id, response FROM op_signups
-WHERE op_id = ANY(sqlc.arg(op_ids)::bigint[]);
+-- name: GetOpSignup :one
+SELECT * FROM op_signups WHERE op_id = $1 AND character_id = $2;
+
+-- The answers some characters gave to some fleets.
+-- name: ListSignupsOfCharacters :many
+SELECT op_id, character_id, response FROM op_signups
+WHERE op_id = ANY(sqlc.arg(op_ids)::bigint[])
+  AND character_id = ANY(sqlc.arg(character_ids)::bigint[]);
+
+-- ---------------------------------------------------------------------
+-- Fleets (schema 165): owners, access rules, commanders, share links.
+-- ---------------------------------------------------------------------
+
+-- name: CreateFleet :one
+INSERT INTO ops (corporation_id, owner_kind, owner_id, fleet_type, visibility, join_gate, roster_public, share_token,
+                 title, description, starts_at, duration_minutes, doctrine, doctrine_id, form_up, fc_character_id,
+                 created_by_character, created_at)
+VALUES (sqlc.arg(corporation_id), sqlc.arg(owner_kind), sqlc.arg(owner_id), sqlc.arg(fleet_type), sqlc.arg(visibility),
+        sqlc.arg(join_gate), sqlc.arg(roster_public), sqlc.narg(share_token), sqlc.arg(title), sqlc.arg(description),
+        sqlc.arg(starts_at), sqlc.arg(duration_minutes), sqlc.arg(doctrine), sqlc.arg(doctrine_id), sqlc.arg(form_up),
+        sqlc.arg(fc_character_id), sqlc.arg(created_by_character), sqlc.arg(created_at))
+RETURNING id;
+
+-- name: UpdateFleetAccess :exec
+UPDATE ops SET
+    fleet_type    = sqlc.arg(fleet_type),
+    visibility    = sqlc.arg(visibility),
+    join_gate     = sqlc.arg(join_gate),
+    roster_public = sqlc.arg(roster_public)
+WHERE id = sqlc.arg(id);
+
+-- name: GetOpByShareToken :one
+SELECT * FROM ops WHERE share_token = $1;
+
+-- name: SetOpShareToken :exec
+UPDATE ops SET share_token = sqlc.arg(share_token) WHERE id = sqlc.arg(id);
+
+-- Fleets of some owners that have not ended by ends_after and start
+-- before starts_before, soonest first.
+-- name: ListFleetsForOwners :many
+SELECT * FROM ops
+WHERE (owner_kind, owner_id) IN (SELECT unnest(sqlc.arg(owner_kinds)::text[]), unnest(sqlc.arg(owner_ids)::bigint[]))
+  AND starts_at < sqlc.arg(starts_before)
+  AND starts_at + (duration_minutes * interval '1 minute') >= sqlc.arg(ends_after)
+ORDER BY starts_at, id
+LIMIT sqlc.arg(row_limit);
+
+-- Fleets some characters have said they will come to, or command.
+-- name: ListFleetsForCharacters :many
+SELECT * FROM ops
+WHERE (id IN (SELECT s.op_id FROM op_signups s WHERE s.character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND s.response <> 'no')
+    OR fc_character_id = ANY(sqlc.arg(character_ids)::bigint[])
+    OR id IN (SELECT c.op_id FROM op_commanders c WHERE c.character_id = ANY(sqlc.arg(character_ids)::bigint[])))
+  AND starts_at < sqlc.arg(starts_before)
+  AND starts_at + (duration_minutes * interval '1 minute') >= sqlc.arg(ends_after)
+ORDER BY starts_at, id
+LIMIT sqlc.arg(row_limit);
+
+-- name: ListPublicFleets :many
+SELECT * FROM ops
+WHERE visibility = 'public' AND cancelled_at IS NULL
+  AND starts_at < sqlc.arg(starts_before)
+  AND starts_at + (duration_minutes * interval '1 minute') >= sqlc.arg(ends_after)
+ORDER BY starts_at, id
+LIMIT sqlc.arg(row_limit);
+
+-- Fleets of some owners that have ended, latest first.
+-- name: ListPastFleetsForOwners :many
+SELECT * FROM ops
+WHERE (owner_kind, owner_id) IN (SELECT unnest(sqlc.arg(owner_kinds)::text[]), unnest(sqlc.arg(owner_ids)::bigint[]))
+  AND starts_at < sqlc.arg(ended_before)
+  AND starts_at + (duration_minutes * interval '1 minute') < sqlc.arg(ended_before)
+ORDER BY starts_at DESC, id DESC
+LIMIT sqlc.arg(row_limit);
+
+-- name: ListOpAccessRules :many
+SELECT * FROM op_access_rules WHERE op_id = $1 ORDER BY action, rule_kind, rule_ref;
+
+-- name: ListOpAccessRulesForOps :many
+SELECT * FROM op_access_rules WHERE op_id = ANY(sqlc.arg(op_ids)::bigint[]);
+
+-- name: DeleteOpAccessRules :exec
+DELETE FROM op_access_rules WHERE op_id = $1;
+
+-- name: InsertOpAccessRule :exec
+INSERT INTO op_access_rules (op_id, action, rule_kind, rule_ref)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT DO NOTHING;
+
+-- name: ListOpCommanders :many
+SELECT * FROM op_commanders WHERE op_id = $1 ORDER BY added_at, character_id;
+
+-- name: ListOpCommandersForOps :many
+SELECT op_id, character_id FROM op_commanders WHERE op_id = ANY(sqlc.arg(op_ids)::bigint[]);
+
+-- name: AddOpCommander :exec
+INSERT INTO op_commanders (op_id, character_id, added_by, added_at)
+VALUES (sqlc.arg(op_id), sqlc.arg(character_id), sqlc.arg(added_by), sqlc.arg(added_at))
+ON CONFLICT (op_id, character_id) DO NOTHING;
+
+-- name: RemoveOpCommander :exec
+DELETE FROM op_commanders WHERE op_id = sqlc.arg(op_id) AND character_id = sqlc.arg(character_id);
+
+-- Which of some characters are linked to a working account: only those
+-- can command a fleet.
+-- name: ListWorkingCharacterIDs :many
+SELECT character_id FROM characters
+WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND link_state = 'ok';
+
+-- The stored hand-offs of one programme for some owners.
+-- name: ListOwnerPermissionsForOwners :many
+SELECT owner_kind, owner_id, kind, ref FROM owner_permissions
+WHERE permission = sqlc.arg(permission)
+  AND (owner_kind, owner_id) IN (SELECT unnest(sqlc.arg(owner_kinds)::text[]), unnest(sqlc.arg(owner_ids)::bigint[]));
+
+-- The open communities a verified pilot is an active member of.
+-- name: ListPilotCommunities :many
+SELECT m.community_id FROM community_members m
+JOIN communities o ON o.id = m.community_id AND o.archived_at IS NULL
+WHERE m.character_id = $1 AND m.state = 'active';
+
+-- The community groups a verified pilot is in, while an active member.
+-- name: ListPilotCommunityGroups :many
+SELECT g.id FROM org_group_members gm
+JOIN org_groups g ON g.id = gm.group_id AND g.owner_kind = 'community'
+JOIN community_members m ON m.community_id = g.owner_id AND m.character_id = gm.character_id AND m.state = 'active'
+WHERE gm.character_id = $1;
 
 -- ---------------------------------------------------------------------
 -- Attendance (schema 015).
@@ -100,17 +225,19 @@ WHERE op_id = sqlc.arg(op_id) AND source = 'manual'
 -- name: ListOpAttendance :many
 SELECT * FROM op_attendance WHERE op_id = $1 ORDER BY character_id;
 
--- Attendance counts for a corporation's ops since a date, per
--- character: the PAP table.
--- name: ListCorporationPAPs :many
+-- Attendance counts for an owner's fleets since a date, per character:
+-- the most active first.
+-- name: ListOwnerPAPs :many
 SELECT a.character_id,
        COUNT(*)::bigint AS total,
        COUNT(*) FILTER (WHERE o.starts_at >= sqlc.arg(recent_since))::bigint AS recent,
        MAX(o.starts_at)::timestamptz AS last_op
 FROM op_attendance a
 JOIN ops o ON o.id = a.op_id
-WHERE o.corporation_id = sqlc.arg(corporation_id)
+WHERE o.owner_kind = sqlc.arg(owner_kind)
+  AND o.owner_id = sqlc.arg(owner_id)
   AND o.cancelled_at IS NULL
   AND o.starts_at >= sqlc.arg(since)
 GROUP BY a.character_id
-ORDER BY total DESC, a.character_id;
+ORDER BY total DESC, a.character_id
+LIMIT 100;

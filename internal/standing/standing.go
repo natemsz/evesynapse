@@ -7,6 +7,7 @@
 package standing
 
 import (
+	"maps"
 	"net/url"
 	"slices"
 	"strconv"
@@ -161,6 +162,26 @@ func New() Standing {
 		Corps: map[int64]bool{}, Alliance: map[int64]int64{}, Alliances: map[int64]bool{},
 		CEOOf: map[int64]bool{}, EVERoles: map[int64]map[string]bool{}, Groups: map[int64]bool{},
 		Communities: map[int64]string{},
+	}
+}
+
+// Merge adds what another standing holds to this one: an account's
+// standing is what its characters hold between them.
+func (st *Standing) Merge(other Standing) {
+	st.Working = st.Working || other.Working
+	maps.Copy(st.Corps, other.Corps)
+	maps.Copy(st.Alliance, other.Alliance)
+	maps.Copy(st.Alliances, other.Alliances)
+	maps.Copy(st.CEOOf, other.CEOOf)
+	maps.Copy(st.Groups, other.Groups)
+	for corp, roles := range other.EVERoles {
+		if st.EVERoles[corp] == nil {
+			st.EVERoles[corp] = map[string]bool{}
+		}
+		maps.Copy(st.EVERoles[corp], roles)
+	}
+	for community, role := range other.Communities {
+		st.NoteCommunity(community, role)
 	}
 }
 

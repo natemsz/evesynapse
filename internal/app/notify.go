@@ -98,10 +98,9 @@ var coreNotifyKinds = []notifyKind{
 	{ID: notifyWatch, Title: "Watch list alerts", Module: "market_public", Standing: true, Account: true},
 	{ID: notifyMarket, Title: "Market changes on watched items and baskets", Module: "market_public", Account: true},
 	{ID: notifySkill, Title: "Skill complete", Module: "skills"},
-	// Ops are EveSynapse's own (ops.go): any character sees its
-	// corporation's, with no access to grant.
-	{ID: notifyOp, Title: "New op on the calendar"},
-	{ID: notifyOpReminder, Title: "Op starting soon"},
+	// Fleets are EveSynapse's own (fleets.go): no access to grant.
+	{ID: notifyOp, Title: "New fleet planned"},
+	{ID: notifyOpReminder, Title: "Fleet starting soon"},
 	// Ship replacement (corp_srp.go) is EveSynapse's own too.
 	{ID: notifyKillmail, Title: "New killmail", Module: "killmails"},
 	{ID: notifyPI, Title: "Stopped planetary extractors", Module: "planets"},
@@ -1063,134 +1062,261 @@ func (p notifyPrefs) reminderLead() time.Duration {
 	return defaultReminderMinutes * time.Minute
 }
 
-// opRecipients picks, per corporation, the character of the account
-// that is told about its ops under kind: the first that has not
-// switched the kind off, else the first.
-func opRecipients(rows []db.ListWorkingCharacterCorporationsByUserRow, prefs notifyPrefs, kind string) map[int64]int64 {
-	recipient := map[int64]int64{}
+// fleetOwnersOfUser lists the owners an account's working characters
+// belong to, which characters belong to each, and the characters
+// themselves, from stored data.
+func (app *Application) fleetOwnersOfUser(ctx context.Context, userID int64) ([]orgOwner, map[string][]int64, map[int64]bool, error) {
+	rows, err := app.queries.ListWorkingCharacterCorporationsByUser(ctx, userID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var owners []orgOwner
+	members := map[string][]int64{}
+	mine := make(map[int64]bool, len(rows))
+	note := func(owner orgOwner, character int64) {
+		key := owner.Key()
+		if _, known := members[key]; !known {
+			owners = append(owners, owner)
+		}
+		members[key] = append(members[key], character)
+	}
+	alliances := map[int64]int64{}
 	for _, row := range rows {
+		mine[row.CharacterID] = true
 		if row.CorporationID == 0 {
 			continue
 		}
-		current, known := recipient[row.CorporationID]
-		if !known || (prefs.offFor(kind, current) && !prefs.offFor(kind, row.CharacterID)) {
-			recipient[row.CorporationID] = row.CharacterID
+		note(orgOwner{Kind: ownerCorporation, ID: row.CorporationID}, row.CharacterID)
+		alliance, known := alliances[row.CorporationID]
+		if !known {
+			alliance, _ = app.corpAlliance(ctx, row.CorporationID)
+			alliances[row.CorporationID] = alliance
+		}
+		if alliance != 0 {
+			note(orgOwner{Kind: ownerAlliance, ID: alliance}, row.CharacterID)
 		}
 	}
-	return recipient
+	places, err := app.queries.ListCommunityMembershipsByUser(ctx, userID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, place := range places {
+		mine[place.CharacterID] = true
+		note(orgOwner{Kind: ownerCommunity, ID: place.CommunityID}, place.CharacterID)
+	}
+	return owners, members, mine, nil
 }
 
-// notifyOpEvents: ops ahead, planned for a corporation the account
-// has a character in (ops.go). Two things are said about one:
+// fleetSourceParts names an owner in a notification baseline. A
+// corporation keeps the bare id its baselines were stored under.
+func fleetSourceParts(owner orgOwner) []any {
+	if owner.Kind == ownerCorporation {
+		return []any{owner.ID}
+	}
+	return []any{owner.Kind, owner.ID}
+}
+
+// fleetsMemberMaySee drops the fleets narrowed to people this account
+// is not among. A member sees the others, so most passes read no
+// standing at all.
+func (app *Application) fleetsMemberMaySee(ctx context.Context, userID int64, ops []db.Op) []db.Op {
+	if len(ops) == 0 {
+		return ops
+	}
+	ids := make([]int64, len(ops))
+	for i, op := range ops {
+		ids[i] = op.ID
+	}
+	rules, err := app.queries.ListOpAccessRulesForOps(ctx, ids)
+	if err != nil {
+		logging.Errorf("notify: fleet access rules for user %d: %v", userID, err)
+		return nil
+	}
+	narrowed := map[int64]bool{}
+	for _, rule := range rules {
+		if rule.Action == accessView {
+			narrowed[rule.OpID] = true
+		}
+	}
+	if len(narrowed) == 0 {
+		return ops
+	}
+	v := app.accountFleetViewer(ctx, userID)
+	facts := app.fleetFactsFor(ctx, v, ops)
+	out := make([]db.Op, 0, len(ops))
+	for _, op := range ops {
+		if !narrowed[op.ID] || (op.Visibility != fleetRestricted) || v.access(op, facts[op.ID]).View {
+			out = append(out, op)
+		}
+	}
+	return out
+}
+
+// settledOwnerName is an owner's name where it is already known, or ""
+// so a stored title never carries a placeholder.
+func (app *Application) settledOwnerName(ctx context.Context, owner orgOwner) string {
+	switch owner.Kind {
+	case ownerCorporation:
+		if name, settled := app.resolvedCorpName(ctx, owner.ID); settled {
+			return name
+		}
+	case ownerAlliance:
+		if name, ok := app.resolvedAllianceName(ctx, owner.ID); ok {
+			return name
+		}
+	case ownerCommunity:
+		if community, err := app.queries.GetCommunity(ctx, owner.ID); err == nil {
+			return community.Name
+		}
+	}
+	return ""
+}
+
+// notifyOpEvents: fleets ahead. Two things are said about one:
 //
-// That it was planned (notifyOp). The ops already there when a
-// corporation's calendar first becomes readable are its baseline. An
-// op the account made itself is not news to it, and neither is one
-// that was cancelled before it was seen.
+// That it was planned (notifyOp), to an account that belongs to the
+// fleet's owner and may see it. The fleets already there when an owner
+// is first looked at are its baseline. A fleet the account made itself
+// is not news to it, and neither is one cancelled before it was seen.
 //
 // That it is about to start (notifyOpReminder): once the start is
-// within the account's chosen lead and has not passed. The worker
-// looks about once a minute, so the reminder comes within a minute or
-// so of the chosen time. It goes only to an account that signed up to
-// the op as coming or maybe, in the name of the character it signed up
-// with; everyone else in the corporation was already told when the op
-// was planned. Signing up inside the lead brings the reminder at the
-// worker's next look. A start that is moved is reminded of again.
+// within the account's chosen lead and has not passed. It goes to an
+// account that signed up as coming or maybe, whoever owns the fleet, in
+// the name of the character it signed up with, for as long as the
+// account can still see the fleet. A start that is moved is reminded of
+// again.
 //
-// Each is said once to the account. The planning is said in the name
-// of one of its characters in that corporation: the first that has
-// not switched that kind off. With every character concerned switched
-// off, an event is still recorded as seen, so switching back on starts
-// from then.
+// Each is said once to the account. The planning is said in the name of
+// one of its characters in that owner: the first that has not switched
+// that kind off. With every character concerned switched off, an event
+// is still recorded as seen, so switching back on starts from then.
 func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, userID int64, prefs notifyPrefs, now time.Time) {
-	rows, err := app.queries.ListWorkingCharacterCorporationsByUser(ctx, userID)
+	owners, members, mine, err := app.fleetOwnersOfUser(ctx, userID)
 	if err != nil {
-		logging.Errorf("notify: corporations of user %d: %v", userID, err)
+		logging.Errorf("notify: owners of user %d: %v", userID, err)
 		return
 	}
-	mine := map[int64]bool{}
-	seenCorp := map[int64]bool{}
-	var corps []int64
-	for _, row := range rows {
-		mine[row.CharacterID] = true
-		if row.CorporationID != 0 && !seenCorp[row.CorporationID] {
-			seenCorp[row.CorporationID] = true
-			corps = append(corps, row.CorporationID)
-		}
-	}
-	if len(corps) == 0 {
+	if len(mine) == 0 {
 		return
 	}
-	ops, err := app.queries.ListOpsForCorporationsBetween(ctx, db.ListOpsForCorporationsBetweenParams{
-		CorporationIds: corps, FromTime: now, ToTime: now.Add(notifyOpWindow),
-	})
-	if err != nil {
-		logging.Errorf("notify: ops for user %d: %v", userID, err)
-		return
+	plannedSource, remindedSource := map[string]string{}, map[string]string{}
+	for _, owner := range owners {
+		plannedSource[owner.Key()] = c.source(notifyOp, fleetSourceParts(owner)...)
+		remindedSource[owner.Key()] = c.source(notifyOpReminder, fleetSourceParts(owner)...)
 	}
-	planned := opRecipients(rows, prefs, notifyOp)
-	plannedSource, remindedSource := map[int64]string{}, map[int64]string{}
-	for _, corp := range corps {
-		plannedSource[corp] = c.source(notifyOp, corp)
-		remindedSource[corp] = c.source(notifyOpReminder, corp)
-	}
+	// A fleet joined from outside its owner has its own baseline, kept
+	// from the first look so its first reminder is not swallowed.
+	signedSource := c.source(notifyOpReminder, "signed")
 
-	// The ops about to start, and which of the account's characters
-	// signed up to each as coming or maybe: the one reminded. Where
-	// several did, one that has not switched reminders off.
-	lead := prefs.reminderLead()
-	var soon []int64
-	for _, op := range ops {
-		if !op.CancelledAt.Valid && !op.StartsAt.After(now.Add(lead)) {
-			soon = append(soon, op.ID)
-		}
-	}
-	signedUp := map[int64]int64{} // op -> character
-	if len(soon) > 0 {
-		signups, err := app.queries.ListOpSignupsForOps(ctx, soon)
+	var ahead []db.Op
+	if len(owners) > 0 {
+		kinds, ids := ownerArrays(owners)
+		ahead, err = app.queries.ListFleetsForOwners(ctx, db.ListFleetsForOwnersParams{
+			OwnerKinds: kinds, OwnerIds: ids, StartsBefore: now.Add(notifyOpWindow), EndsAfter: now, RowLimit: fleetsFromOwners,
+		})
 		if err != nil {
-			logging.Errorf("notify: sign-ups for user %d: %v", userID, err)
+			logging.Errorf("notify: fleets for user %d: %v", userID, err)
 			return
 		}
-		for _, s := range signups {
-			if s.UserID != userID || s.Response == opNo {
-				continue
-			}
-			current, known := signedUp[s.OpID]
-			if !known || (prefs.offFor(notifyOpReminder, current) && !prefs.offFor(notifyOpReminder, s.CharacterID)) {
-				signedUp[s.OpID] = s.CharacterID
-			}
-		}
 	}
-
-	for _, op := range ops {
-		if op.CancelledAt.Valid {
+	names := map[string]string{}
+	forOwner := func(owner orgOwner) string {
+		name, known := names[owner.Key()]
+		if !known {
+			name = app.settledOwnerName(ctx, owner)
+			names[owner.Key()] = name
+		}
+		if name == "" {
+			return ""
+		}
+		return " for " + name
+	}
+	for _, op := range app.fleetsMemberMaySee(ctx, userID, ahead) {
+		if op.CancelledAt.Valid || op.StartsAt.Before(now) || mine[op.CreatedByCharacter] {
 			continue
 		}
-		// The corporation is named where its name is already known;
-		// a title is stored, so it never carries a placeholder.
-		corp := ""
-		if name, settled := app.resolvedCorpName(ctx, op.CorporationID); settled && name != "" {
-			corp = " for " + name
+		owner := opOwner(op)
+		recipient := members[owner.Key()][0]
+		for _, id := range members[owner.Key()] {
+			if !prefs.offFor(notifyOp, id) {
+				recipient = id
+				break
+			}
 		}
-		if !mine[op.CreatedByCharacter] {
-			c.add(notifyEvent{
-				Kind: notifyOp, CharacterID: planned[op.CorporationID], Source: plannedSource[op.CorporationID],
-				Key:   fmt.Sprintf("op|%d", op.ID),
-				Title: fmt.Sprintf("New op%s: %s, %s", corp, op.Title, op.StartsAt.UTC().Format("Jan 2 15:04")),
-				URL:   opURL(op.ID),
-			})
+		c.add(notifyEvent{
+			Kind: notifyOp, CharacterID: recipient, Source: plannedSource[owner.Key()],
+			Key:   fmt.Sprintf("op|%d", op.ID),
+			Title: fmt.Sprintf("New fleet%s: %s, %s", forOwner(owner), op.Title, op.StartsAt.UTC().Format("Jan 2 15:04")),
+			URL:   opURL(op.ID),
+		})
+	}
+
+	// The fleets about to start, and which of the account's characters
+	// signed up to each as coming or maybe: the one reminded. Where
+	// several did, one that has not switched reminders off.
+	characters := make([]int64, 0, len(mine))
+	for id := range mine {
+		characters = append(characters, id)
+	}
+	lead := prefs.reminderLead()
+	near, err := app.queries.ListFleetsForCharacters(ctx, db.ListFleetsForCharactersParams{
+		CharacterIds: characters, StartsBefore: now.Add(lead + time.Microsecond), EndsAfter: now, RowLimit: fleetsOfCharacter,
+	})
+	if err != nil {
+		logging.Errorf("notify: fleets near for user %d: %v", userID, err)
+		return
+	}
+	soon := near[:0]
+	for _, op := range near {
+		if !op.CancelledAt.Valid && !op.StartsAt.Before(now) {
+			soon = append(soon, op)
 		}
-		if character, coming := signedUp[op.ID]; coming {
-			c.add(notifyEvent{
-				Kind: notifyOpReminder, CharacterID: character, Source: remindedSource[op.CorporationID],
-				// The start is part of the key: an op that is moved is
-				// reminded of again at its new time.
-				Key:   fmt.Sprintf("opremind|%d|%d", op.ID, op.StartsAt.Unix()),
-				Title: fmt.Sprintf("Op%s starts at %s EVE time: %s", corp, op.StartsAt.UTC().Format("15:04"), op.Title),
-				URL:   opURL(op.ID),
-			})
+	}
+	if len(soon) == 0 {
+		return
+	}
+	ids := make([]int64, len(soon))
+	for i, op := range soon {
+		ids[i] = op.ID
+	}
+	signups, err := app.queries.ListSignupsOfCharacters(ctx, db.ListSignupsOfCharactersParams{OpIds: ids, CharacterIds: characters})
+	if err != nil {
+		logging.Errorf("notify: sign-ups for user %d: %v", userID, err)
+		return
+	}
+	signedUp := map[int64]int64{} // fleet -> character
+	for _, s := range signups {
+		if s.Response == opNo {
+			continue
 		}
+		current, known := signedUp[s.OpID]
+		if !known || (prefs.offFor(notifyOpReminder, current) && !prefs.offFor(notifyOpReminder, s.CharacterID)) {
+			signedUp[s.OpID] = s.CharacterID
+		}
+	}
+	if len(signedUp) == 0 {
+		return
+	}
+	v := app.accountFleetViewer(ctx, userID)
+	facts := app.fleetFactsFor(ctx, v, soon)
+	for _, op := range soon {
+		character, coming := signedUp[op.ID]
+		if !coming || !v.access(op, facts[op.ID]).View {
+			continue
+		}
+		owner := opOwner(op)
+		source, member := remindedSource[owner.Key()]
+		if !member {
+			source = signedSource
+		}
+		c.add(notifyEvent{
+			Kind: notifyOpReminder, CharacterID: character, Source: source,
+			// The start is part of the key: a fleet that is moved is
+			// reminded of again at its new time.
+			Key:   fmt.Sprintf("opremind|%d|%d", op.ID, op.StartsAt.Unix()),
+			Title: fmt.Sprintf("Fleet%s starts at %s EVE time: %s", forOwner(owner), op.StartsAt.UTC().Format("15:04"), op.Title),
+			URL:   opURL(op.ID),
+		})
 	}
 }
 

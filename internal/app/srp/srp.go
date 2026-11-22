@@ -393,7 +393,7 @@ func (app *mod) srpOffer(ctx context.Context, view *srpView, characters []db.Cha
 			during = true
 			view.Losses = append(view.Losses, srpLossChoice{
 				Value: fmt.Sprintf("%d:%d", loss.km.KillmailID, op.ID),
-				Label: fmt.Sprintf("%s · %s · %s · %s · op: %s",
+				Label: fmt.Sprintf("%s · %s · %s · %s · fleet: %s",
 					loss.at.UTC().Format("Jan 2 15:04"), app.deps.TypeNameOrID(ctx, loss.km.Victim.ShipTypeID),
 					app.deps.LocationTitle(ctx, loss.km.SolarSystemID, "solar_system"),
 					app.srpPilot(ctx, loss.km.Victim.CharacterID), op.Title),
@@ -436,7 +436,7 @@ func (app *mod) handleSRPRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	op, err := app.queries.GetOp(ctx, opID)
 	if err != nil || op.CorporationID != km.Victim.CorporationID || !srpDuring(op, at) {
-		back("That loss was not during that op.")
+		back("That loss was not during that fleet.")
 		return
 	}
 	id, err := app.queries.CreateSRPRequest(ctx, db.CreateSRPRequestParams{

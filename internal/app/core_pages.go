@@ -68,11 +68,13 @@ type pageData struct {
 	// CorpSettings is the /corporations/settings/ page (corp_select.go).
 	CorpSettings *corpSettingsView
 
-	// Ops (ops.go): one op's page, and the form that creates or
-	// changes one.
-	Op     *opView
-	OpForm *opFormView
-	PAPs   *papsView // the attendance table (/ops/paps)
+	// Fleets (fleets.go): the board, one fleet's page, the planner,
+	// history, and the answer for a fleet the viewer cannot see.
+	Fleets      *fleetsView
+	Op          *opView
+	OpForm      *opFormView
+	PAPs        *papsView
+	FleetHidden *fleetHiddenView
 
 	// Public pilot page (/pilot/): a stranger's public record.
 	Pilot *pilotView
@@ -180,8 +182,10 @@ func sectionForPage(page string) string {
 		return "home"
 	case "character.html", "characters.html", "skills.html",
 		"assets.html",
-		"killmails.html", "notifications.html", "op.html", "op_form.html", "op_paps.html":
+		"killmails.html", "notifications.html":
 		return "pilot"
+	case "fleets.html", "fleet.html", "fleet_form.html", "fleet_history.html", "fleet_hidden.html":
+		return "fleets"
 	case "industry.html", "industry_jobs.html", "industry_mining.html", "planets.html":
 		return "industry"
 	case "market.html", "market_trends.html", "market_lp.html", "market_baskets.html", "market_basket.html",
@@ -219,7 +223,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/contractlist.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html", "templates/noticebanners.html", "templates/yourorders.html", "templates/reqicons.html", "templates/itemsheet.html", "templates/sharecard.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/contractlist.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html", "templates/noticebanners.html", "templates/yourorders.html", "templates/reqicons.html", "templates/itemsheet.html", "templates/sharecard.html", "templates/fleetboard.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.

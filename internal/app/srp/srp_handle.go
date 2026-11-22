@@ -148,7 +148,7 @@ func (app *mod) srpMailPaid(ctx context.Context, actor module.CorpActor, req db.
 		"Lost: " + req.LostAt.UTC().Format("2006-01-02 15:04") + " EVE time in " + html.EscapeString(app.deps.LocationTitle(ctx, req.SolarSystemID, "solar_system")),
 	}
 	if op, err := app.queries.GetOp(ctx, req.OpID); err == nil {
-		lines = append(lines, "Op: "+html.EscapeString(op.Title))
+		lines = append(lines, "Fleet: "+html.EscapeString(op.Title))
 	}
 	lines = append(lines, "Paid: "+srpISK(req.Payout))
 	if req.HandlerNote != "" {

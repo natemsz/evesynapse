@@ -934,19 +934,35 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/push/test", app.handlePushTest)
 	})
 
-	// Ops (ops.go): EveSynapse's own calendar entries and the
-	// sign-ups to them.
-	r.Route("/ops", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/new", app.handleOpNew)
-		r.Post("/save", app.handleOpSave)
-		r.Get("/paps", app.handleOpPAPs)
-		r.Get("/{opID}", app.handleOp)
-		r.Get("/{opID}/edit", app.handleOpEdit)
-		r.Post("/{opID}/signup", app.handleOpSignup)
-		r.Post("/{opID}/cancel", app.handleOpCancel)
-		r.Post("/{opID}/attendance", app.handleOpAttendance)
+	// Fleets (fleets.go): open to anyone at the level each page allows;
+	// the handlers decide, so a Fleets entry point never falls through
+	// to the full sign-in.
+	fleets := r.With(anonPages)
+	fleets.Get("/fleets", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, fleetsPath, http.StatusMovedPermanently)
 	})
+	fleets.Get(fleetsPath, app.handleFleets)
+	fleets.Get(planPath, app.handleOpNew)
+	fleets.Post("/fleets/save", app.handleOpSave)
+	fleets.Get("/fleets/history/", app.handleFleetHistory)
+	fleets.Get("/fleets/{opID:[0-9]+}/", app.handleOp)
+	fleets.Get("/fleets/{opID:[0-9]+}/edit", app.handleOpEdit)
+	fleets.Post("/fleets/{opID:[0-9]+}/signup", app.handleOpSignup)
+	fleets.Post("/fleets/{opID:[0-9]+}/cancel", app.handleOpCancel)
+	fleets.Post("/fleets/{opID:[0-9]+}/attendance", app.handleOpAttendance)
+	fleets.Post("/fleets/{opID:[0-9]+}/commanders", app.handleFleetCommander)
+	fleets.Post("/fleets/{opID:[0-9]+}/share", app.handleFleetShareReset)
+	fleets.Get("/fleets/{opID:[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, opURL(mustFleetID(r)), http.StatusMovedPermanently)
+	})
+	fleets.Get("/f/{token}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, fleetSharePath(chi.URLParam(r, "token")), http.StatusMovedPermanently)
+	})
+	fleets.Get("/f/{token}/", app.handleFleetShare)
+	fleets.Get("/f/{token}/fleet.ics", app.handleFleetICS)
+	// Addresses from before Fleets, kept in stored notifications and
+	// posted Discord messages.
+	r.Handle("/ops/*", http.HandlerFunc(handleOldOpPath))
 
 	// Generic entity-label live regions (worker_pagewants.go): a pending
 	// character/structure label anywhere polls its own fragment.
@@ -1847,10 +1863,6 @@ func (app *Application) ESIRefusalDetail(err error) string { return esiRefusalDe
 
 func (app *Application) EconSection(ctx context.Context, characterID int64, kind string, out any) module.EconSectionState {
 	return app.econSection(ctx, characterID, kind, out)
-}
-
-func (app *Application) OpCorps(ctx context.Context, userID int64, managedOnly bool) []int64 {
-	return opCorps(app.opMembers(ctx, userID), managedOnly)
 }
 
 func (app *Application) RelinkURL(moduleID string, characterID int64) string {

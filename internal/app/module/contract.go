@@ -305,7 +305,7 @@ func OpEnd(op db.Op) time.Time {
 }
 
 // OpURL is an op’s page.
-func OpURL(id int64) string { return fmt.Sprintf("/ops/%d", id) }
+func OpURL(id int64) string { return fmt.Sprintf("/fleets/%d/", id) }
 
 // CorpAddress is a corporation page’s address for one corporation.
 func CorpAddress(path string, corp int64) string {
@@ -785,6 +785,16 @@ type Page struct {
 	Template string
 	Section  string
 	Scripts  []string
+}
+
+// CalendarFleet is one fleet as the calendar shows it.
+type CalendarFleet struct {
+	ID        int64
+	Title     string
+	StartsAt  time.Time
+	Cancelled bool
+	// Answer is the account's own sign-up answer, if it has given one.
+	Answer string
 }
 
 // VerifiedPilot is a character proved through EVE sign-in by someone
@@ -1403,9 +1413,12 @@ type Deps interface {
 	// decoded snapshot wins; otherwise the recorded fetch state decides
 	// between the warming note and the failure note.
 	EconSection(ctx context.Context, characterID int64, kind string, out any) EconSectionState
-	// OpCorps lists the corporations an account has a character in
-	// (managedOnly: those where it may manage ops).
-	OpCorps(ctx context.Context, userID int64, managedOnly bool) []int64
+	// CalendarFleets lists the fleets an account can see in a span, with
+	// its own answer on each.
+	CalendarFleets(ctx context.Context, userID int64, from, to time.Time) []CalendarFleet
+	// CanPlanFleets reports whether an account can plan a fleet for any
+	// owner.
+	CanPlanFleets(ctx context.Context, userID int64) bool
 	// RelinkURL is the address that re-links a character for one module’s
 	// scopes.
 	RelinkURL(moduleID string, characterID int64) string

@@ -11,6 +11,91 @@ import (
 	"time"
 )
 
+const addOpCommander = `-- name: AddOpCommander :exec
+INSERT INTO op_commanders (op_id, character_id, added_by, added_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (op_id, character_id) DO NOTHING
+`
+
+type AddOpCommanderParams struct {
+	OpID        int64     `json:"op_id"`
+	CharacterID int64     `json:"character_id"`
+	AddedBy     int64     `json:"added_by"`
+	AddedAt     time.Time `json:"added_at"`
+}
+
+func (q *Queries) AddOpCommander(ctx context.Context, arg AddOpCommanderParams) error {
+	_, err := q.db.Exec(ctx, addOpCommander,
+		arg.OpID,
+		arg.CharacterID,
+		arg.AddedBy,
+		arg.AddedAt,
+	)
+	return err
+}
+
+const createFleet = `-- name: CreateFleet :one
+
+INSERT INTO ops (corporation_id, owner_kind, owner_id, fleet_type, visibility, join_gate, roster_public, share_token,
+                 title, description, starts_at, duration_minutes, doctrine, doctrine_id, form_up, fc_character_id,
+                 created_by_character, created_at)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15,
+        $16, $17, $18)
+RETURNING id
+`
+
+type CreateFleetParams struct {
+	CorporationID      int64          `json:"corporation_id"`
+	OwnerKind          string         `json:"owner_kind"`
+	OwnerID            int64          `json:"owner_id"`
+	FleetType          string         `json:"fleet_type"`
+	Visibility         string         `json:"visibility"`
+	JoinGate           string         `json:"join_gate"`
+	RosterPublic       bool           `json:"roster_public"`
+	ShareToken         sql.NullString `json:"share_token"`
+	Title              string         `json:"title"`
+	Description        string         `json:"description"`
+	StartsAt           time.Time      `json:"starts_at"`
+	DurationMinutes    int64          `json:"duration_minutes"`
+	Doctrine           string         `json:"doctrine"`
+	DoctrineID         int64          `json:"doctrine_id"`
+	FormUp             string         `json:"form_up"`
+	FcCharacterID      int64          `json:"fc_character_id"`
+	CreatedByCharacter int64          `json:"created_by_character"`
+	CreatedAt          time.Time      `json:"created_at"`
+}
+
+// ---------------------------------------------------------------------
+// Fleets (schema 165): owners, access rules, commanders, share links.
+// ---------------------------------------------------------------------
+func (q *Queries) CreateFleet(ctx context.Context, arg CreateFleetParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createFleet,
+		arg.CorporationID,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.FleetType,
+		arg.Visibility,
+		arg.JoinGate,
+		arg.RosterPublic,
+		arg.ShareToken,
+		arg.Title,
+		arg.Description,
+		arg.StartsAt,
+		arg.DurationMinutes,
+		arg.Doctrine,
+		arg.DoctrineID,
+		arg.FormUp,
+		arg.FcCharacterID,
+		arg.CreatedByCharacter,
+		arg.CreatedAt,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createOp = `-- name: CreateOp :one
 INSERT INTO ops (corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, doctrine_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -66,8 +151,17 @@ func (q *Queries) DeleteManualAttendanceExcept(ctx context.Context, arg DeleteMa
 	return err
 }
 
+const deleteOpAccessRules = `-- name: DeleteOpAccessRules :exec
+DELETE FROM op_access_rules WHERE op_id = $1
+`
+
+func (q *Queries) DeleteOpAccessRules(ctx context.Context, opID int64) error {
+	_, err := q.db.Exec(ctx, deleteOpAccessRules, opID)
+	return err
+}
+
 const getOp = `-- name: GetOp :one
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id FROM ops WHERE id = $1
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops WHERE id = $1
 `
 
 func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
@@ -90,6 +184,77 @@ func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
 		&i.CaptureCheckedAt,
 		&i.DiscordAnnouncedAt,
 		&i.DoctrineID,
+		&i.OwnerKind,
+		&i.OwnerID,
+		&i.FleetType,
+		&i.Visibility,
+		&i.JoinGate,
+		&i.ShareToken,
+		&i.RosterPublic,
+		&i.ComingCount,
+		&i.MaybeCount,
+	)
+	return i, err
+}
+
+const getOpByShareToken = `-- name: GetOpByShareToken :one
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops WHERE share_token = $1
+`
+
+func (q *Queries) GetOpByShareToken(ctx context.Context, shareToken sql.NullString) (Op, error) {
+	row := q.db.QueryRow(ctx, getOpByShareToken, shareToken)
+	var i Op
+	err := row.Scan(
+		&i.ID,
+		&i.CorporationID,
+		&i.Title,
+		&i.Description,
+		&i.StartsAt,
+		&i.DurationMinutes,
+		&i.Doctrine,
+		&i.FormUp,
+		&i.FcCharacterID,
+		&i.CreatedByCharacter,
+		&i.CreatedAt,
+		&i.CancelledAt,
+		&i.CaptureStatus,
+		&i.CaptureCheckedAt,
+		&i.DiscordAnnouncedAt,
+		&i.DoctrineID,
+		&i.OwnerKind,
+		&i.OwnerID,
+		&i.FleetType,
+		&i.Visibility,
+		&i.JoinGate,
+		&i.ShareToken,
+		&i.RosterPublic,
+		&i.ComingCount,
+		&i.MaybeCount,
+	)
+	return i, err
+}
+
+const getOpSignup = `-- name: GetOpSignup :one
+SELECT op_id, character_id, user_id, response, ship, fleet_role, note, updated_at FROM op_signups WHERE op_id = $1 AND character_id = $2
+`
+
+type GetOpSignupParams struct {
+	OpID        int64 `json:"op_id"`
+	CharacterID int64 `json:"character_id"`
+}
+
+func (q *Queries) GetOpSignup(ctx context.Context, arg GetOpSignupParams) (OpSignup, error) {
+	row := q.db.QueryRow(ctx, getOpSignup, arg.OpID, arg.CharacterID)
+	var i OpSignup
+	err := row.Scan(
+		&i.OpID,
+		&i.CharacterID,
+		&i.UserID,
+		&i.Response,
+		&i.Ship,
+		&i.FleetRole,
+		&i.Note,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -109,6 +274,29 @@ type InsertManualAttendanceParams struct {
 // Marked by hand. Never touches a row the fleet reported.
 func (q *Queries) InsertManualAttendance(ctx context.Context, arg InsertManualAttendanceParams) error {
 	_, err := q.db.Exec(ctx, insertManualAttendance, arg.OpID, arg.CharacterID, arg.SeenAt)
+	return err
+}
+
+const insertOpAccessRule = `-- name: InsertOpAccessRule :exec
+INSERT INTO op_access_rules (op_id, action, rule_kind, rule_ref)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT DO NOTHING
+`
+
+type InsertOpAccessRuleParams struct {
+	OpID     int64  `json:"op_id"`
+	Action   string `json:"action"`
+	RuleKind string `json:"rule_kind"`
+	RuleRef  string `json:"rule_ref"`
+}
+
+func (q *Queries) InsertOpAccessRule(ctx context.Context, arg InsertOpAccessRuleParams) error {
+	_, err := q.db.Exec(ctx, insertOpAccessRule,
+		arg.OpID,
+		arg.Action,
+		arg.RuleKind,
+		arg.RuleRef,
+	)
 	return err
 }
 
@@ -152,49 +340,194 @@ func (q *Queries) ListCharacterCorporationsByUser(ctx context.Context, userID in
 	return items, nil
 }
 
-const listCorporationPAPs = `-- name: ListCorporationPAPs :many
-SELECT a.character_id,
-       COUNT(*)::bigint AS total,
-       COUNT(*) FILTER (WHERE o.starts_at >= $1)::bigint AS recent,
-       MAX(o.starts_at)::timestamptz AS last_op
-FROM op_attendance a
-JOIN ops o ON o.id = a.op_id
-WHERE o.corporation_id = $2
-  AND o.cancelled_at IS NULL
-  AND o.starts_at >= $3
-GROUP BY a.character_id
-ORDER BY total DESC, a.character_id
+const listFleetsForCharacters = `-- name: ListFleetsForCharacters :many
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+WHERE (id IN (SELECT s.op_id FROM op_signups s WHERE s.character_id = ANY($1::bigint[]) AND s.response <> 'no')
+    OR fc_character_id = ANY($1::bigint[])
+    OR id IN (SELECT c.op_id FROM op_commanders c WHERE c.character_id = ANY($1::bigint[])))
+  AND starts_at < $2
+  AND starts_at + (duration_minutes * interval '1 minute') >= $3
+ORDER BY starts_at, id
+LIMIT $4
 `
 
-type ListCorporationPAPsParams struct {
-	RecentSince   time.Time `json:"recent_since"`
-	CorporationID int64     `json:"corporation_id"`
-	Since         time.Time `json:"since"`
+type ListFleetsForCharactersParams struct {
+	CharacterIds []int64   `json:"character_ids"`
+	StartsBefore time.Time `json:"starts_before"`
+	EndsAfter    time.Time `json:"ends_after"`
+	RowLimit     int32     `json:"row_limit"`
 }
 
-type ListCorporationPAPsRow struct {
-	CharacterID int64     `json:"character_id"`
-	Total       int64     `json:"total"`
-	Recent      int64     `json:"recent"`
-	LastOp      time.Time `json:"last_op"`
-}
-
-// Attendance counts for a corporation's ops since a date, per
-// character: the PAP table.
-func (q *Queries) ListCorporationPAPs(ctx context.Context, arg ListCorporationPAPsParams) ([]ListCorporationPAPsRow, error) {
-	rows, err := q.db.Query(ctx, listCorporationPAPs, arg.RecentSince, arg.CorporationID, arg.Since)
+// Fleets some characters have said they will come to, or command.
+func (q *Queries) ListFleetsForCharacters(ctx context.Context, arg ListFleetsForCharactersParams) ([]Op, error) {
+	rows, err := q.db.Query(ctx, listFleetsForCharacters,
+		arg.CharacterIds,
+		arg.StartsBefore,
+		arg.EndsAfter,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListCorporationPAPsRow
+	var items []Op
 	for rows.Next() {
-		var i ListCorporationPAPsRow
+		var i Op
 		if err := rows.Scan(
-			&i.CharacterID,
-			&i.Total,
-			&i.Recent,
-			&i.LastOp,
+			&i.ID,
+			&i.CorporationID,
+			&i.Title,
+			&i.Description,
+			&i.StartsAt,
+			&i.DurationMinutes,
+			&i.Doctrine,
+			&i.FormUp,
+			&i.FcCharacterID,
+			&i.CreatedByCharacter,
+			&i.CreatedAt,
+			&i.CancelledAt,
+			&i.CaptureStatus,
+			&i.CaptureCheckedAt,
+			&i.DiscordAnnouncedAt,
+			&i.DoctrineID,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.FleetType,
+			&i.Visibility,
+			&i.JoinGate,
+			&i.ShareToken,
+			&i.RosterPublic,
+			&i.ComingCount,
+			&i.MaybeCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFleetsForOwners = `-- name: ListFleetsForOwners :many
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+WHERE (owner_kind, owner_id) IN (SELECT unnest($1::text[]), unnest($2::bigint[]))
+  AND starts_at < $3
+  AND starts_at + (duration_minutes * interval '1 minute') >= $4
+ORDER BY starts_at, id
+LIMIT $5
+`
+
+type ListFleetsForOwnersParams struct {
+	OwnerKinds   []string  `json:"owner_kinds"`
+	OwnerIds     []int64   `json:"owner_ids"`
+	StartsBefore time.Time `json:"starts_before"`
+	EndsAfter    time.Time `json:"ends_after"`
+	RowLimit     int32     `json:"row_limit"`
+}
+
+// Fleets of some owners that have not ended by ends_after and start
+// before starts_before, soonest first.
+func (q *Queries) ListFleetsForOwners(ctx context.Context, arg ListFleetsForOwnersParams) ([]Op, error) {
+	rows, err := q.db.Query(ctx, listFleetsForOwners,
+		arg.OwnerKinds,
+		arg.OwnerIds,
+		arg.StartsBefore,
+		arg.EndsAfter,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Op
+	for rows.Next() {
+		var i Op
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.Title,
+			&i.Description,
+			&i.StartsAt,
+			&i.DurationMinutes,
+			&i.Doctrine,
+			&i.FormUp,
+			&i.FcCharacterID,
+			&i.CreatedByCharacter,
+			&i.CreatedAt,
+			&i.CancelledAt,
+			&i.CaptureStatus,
+			&i.CaptureCheckedAt,
+			&i.DiscordAnnouncedAt,
+			&i.DoctrineID,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.FleetType,
+			&i.Visibility,
+			&i.JoinGate,
+			&i.ShareToken,
+			&i.RosterPublic,
+			&i.ComingCount,
+			&i.MaybeCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpAccessRules = `-- name: ListOpAccessRules :many
+SELECT op_id, action, rule_kind, rule_ref FROM op_access_rules WHERE op_id = $1 ORDER BY action, rule_kind, rule_ref
+`
+
+func (q *Queries) ListOpAccessRules(ctx context.Context, opID int64) ([]OpAccessRule, error) {
+	rows, err := q.db.Query(ctx, listOpAccessRules, opID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OpAccessRule
+	for rows.Next() {
+		var i OpAccessRule
+		if err := rows.Scan(
+			&i.OpID,
+			&i.Action,
+			&i.RuleKind,
+			&i.RuleRef,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpAccessRulesForOps = `-- name: ListOpAccessRulesForOps :many
+SELECT op_id, action, rule_kind, rule_ref FROM op_access_rules WHERE op_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListOpAccessRulesForOps(ctx context.Context, opIds []int64) ([]OpAccessRule, error) {
+	rows, err := q.db.Query(ctx, listOpAccessRulesForOps, opIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OpAccessRule
+	for rows.Next() {
+		var i OpAccessRule
+		if err := rows.Scan(
+			&i.OpID,
+			&i.Action,
+			&i.RuleKind,
+			&i.RuleRef,
 		); err != nil {
 			return nil, err
 		}
@@ -237,10 +570,70 @@ func (q *Queries) ListOpAttendance(ctx context.Context, opID int64) ([]OpAttenda
 	return items, nil
 }
 
-const listOpSignups = `-- name: ListOpSignups :many
-SELECT op_id, character_id, user_id, response, ship, fleet_role, note, updated_at FROM op_signups WHERE op_id = $1 ORDER BY character_id
+const listOpCommanders = `-- name: ListOpCommanders :many
+SELECT op_id, character_id, role, added_by, added_at FROM op_commanders WHERE op_id = $1 ORDER BY added_at, character_id
 `
 
+func (q *Queries) ListOpCommanders(ctx context.Context, opID int64) ([]OpCommander, error) {
+	rows, err := q.db.Query(ctx, listOpCommanders, opID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OpCommander
+	for rows.Next() {
+		var i OpCommander
+		if err := rows.Scan(
+			&i.OpID,
+			&i.CharacterID,
+			&i.Role,
+			&i.AddedBy,
+			&i.AddedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpCommandersForOps = `-- name: ListOpCommandersForOps :many
+SELECT op_id, character_id FROM op_commanders WHERE op_id = ANY($1::bigint[])
+`
+
+type ListOpCommandersForOpsRow struct {
+	OpID        int64 `json:"op_id"`
+	CharacterID int64 `json:"character_id"`
+}
+
+func (q *Queries) ListOpCommandersForOps(ctx context.Context, opIds []int64) ([]ListOpCommandersForOpsRow, error) {
+	rows, err := q.db.Query(ctx, listOpCommandersForOps, opIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpCommandersForOpsRow
+	for rows.Next() {
+		var i ListOpCommandersForOpsRow
+		if err := rows.Scan(&i.OpID, &i.CharacterID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpSignups = `-- name: ListOpSignups :many
+SELECT op_id, character_id, user_id, response, ship, fleet_role, note, updated_at FROM op_signups WHERE op_id = $1 ORDER BY updated_at, character_id LIMIT 300
+`
+
+// The first sign-ups to a fleet, up to the most its page shows.
 func (q *Queries) ListOpSignups(ctx context.Context, opID int64) ([]OpSignup, error) {
 	rows, err := q.db.Query(ctx, listOpSignups, opID)
 	if err != nil {
@@ -270,45 +663,8 @@ func (q *Queries) ListOpSignups(ctx context.Context, opID int64) ([]OpSignup, er
 	return items, nil
 }
 
-const listOpSignupsForOps = `-- name: ListOpSignupsForOps :many
-SELECT op_id, character_id, user_id, response FROM op_signups
-WHERE op_id = ANY($1::bigint[])
-`
-
-type ListOpSignupsForOpsRow struct {
-	OpID        int64  `json:"op_id"`
-	CharacterID int64  `json:"character_id"`
-	UserID      int64  `json:"user_id"`
-	Response    string `json:"response"`
-}
-
-func (q *Queries) ListOpSignupsForOps(ctx context.Context, opIds []int64) ([]ListOpSignupsForOpsRow, error) {
-	rows, err := q.db.Query(ctx, listOpSignupsForOps, opIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListOpSignupsForOpsRow
-	for rows.Next() {
-		var i ListOpSignupsForOpsRow
-		if err := rows.Scan(
-			&i.OpID,
-			&i.CharacterID,
-			&i.UserID,
-			&i.Response,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listOpsForCorporationsBetween = `-- name: ListOpsForCorporationsBetween :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
 WHERE corporation_id = ANY($1::bigint[])
   AND starts_at >= $2 AND starts_at < $3
 ORDER BY starts_at, id
@@ -346,6 +702,15 @@ func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOps
 			&i.CaptureCheckedAt,
 			&i.DiscordAnnouncedAt,
 			&i.DoctrineID,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.FleetType,
+			&i.Visibility,
+			&i.JoinGate,
+			&i.ShareToken,
+			&i.RosterPublic,
+			&i.ComingCount,
+			&i.MaybeCount,
 		); err != nil {
 			return nil, err
 		}
@@ -359,7 +724,7 @@ func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOps
 
 const listOpsToCapture = `-- name: ListOpsToCapture :many
 
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
 WHERE cancelled_at IS NULL
   AND fc_character_id <> 0
   AND starts_at <= $1
@@ -403,6 +768,15 @@ func (q *Queries) ListOpsToCapture(ctx context.Context, arg ListOpsToCapturePara
 			&i.CaptureCheckedAt,
 			&i.DiscordAnnouncedAt,
 			&i.DoctrineID,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.FleetType,
+			&i.Visibility,
+			&i.JoinGate,
+			&i.ShareToken,
+			&i.RosterPublic,
+			&i.ComingCount,
+			&i.MaybeCount,
 		); err != nil {
 			return nil, err
 		}
@@ -412,6 +786,376 @@ func (q *Queries) ListOpsToCapture(ctx context.Context, arg ListOpsToCapturePara
 		return nil, err
 	}
 	return items, nil
+}
+
+const listOwnerPAPs = `-- name: ListOwnerPAPs :many
+SELECT a.character_id,
+       COUNT(*)::bigint AS total,
+       COUNT(*) FILTER (WHERE o.starts_at >= $1)::bigint AS recent,
+       MAX(o.starts_at)::timestamptz AS last_op
+FROM op_attendance a
+JOIN ops o ON o.id = a.op_id
+WHERE o.owner_kind = $2
+  AND o.owner_id = $3
+  AND o.cancelled_at IS NULL
+  AND o.starts_at >= $4
+GROUP BY a.character_id
+ORDER BY total DESC, a.character_id
+LIMIT 100
+`
+
+type ListOwnerPAPsParams struct {
+	RecentSince time.Time `json:"recent_since"`
+	OwnerKind   string    `json:"owner_kind"`
+	OwnerID     int64     `json:"owner_id"`
+	Since       time.Time `json:"since"`
+}
+
+type ListOwnerPAPsRow struct {
+	CharacterID int64     `json:"character_id"`
+	Total       int64     `json:"total"`
+	Recent      int64     `json:"recent"`
+	LastOp      time.Time `json:"last_op"`
+}
+
+// Attendance counts for an owner's fleets since a date, per character:
+// the most active first.
+func (q *Queries) ListOwnerPAPs(ctx context.Context, arg ListOwnerPAPsParams) ([]ListOwnerPAPsRow, error) {
+	rows, err := q.db.Query(ctx, listOwnerPAPs,
+		arg.RecentSince,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.Since,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOwnerPAPsRow
+	for rows.Next() {
+		var i ListOwnerPAPsRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Total,
+			&i.Recent,
+			&i.LastOp,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOwnerPermissionsForOwners = `-- name: ListOwnerPermissionsForOwners :many
+SELECT owner_kind, owner_id, kind, ref FROM owner_permissions
+WHERE permission = $1
+  AND (owner_kind, owner_id) IN (SELECT unnest($2::text[]), unnest($3::bigint[]))
+`
+
+type ListOwnerPermissionsForOwnersParams struct {
+	Permission string   `json:"permission"`
+	OwnerKinds []string `json:"owner_kinds"`
+	OwnerIds   []int64  `json:"owner_ids"`
+}
+
+type ListOwnerPermissionsForOwnersRow struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+	Kind      string `json:"kind"`
+	Ref       string `json:"ref"`
+}
+
+// The stored hand-offs of one programme for some owners.
+func (q *Queries) ListOwnerPermissionsForOwners(ctx context.Context, arg ListOwnerPermissionsForOwnersParams) ([]ListOwnerPermissionsForOwnersRow, error) {
+	rows, err := q.db.Query(ctx, listOwnerPermissionsForOwners, arg.Permission, arg.OwnerKinds, arg.OwnerIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOwnerPermissionsForOwnersRow
+	for rows.Next() {
+		var i ListOwnerPermissionsForOwnersRow
+		if err := rows.Scan(
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.Kind,
+			&i.Ref,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPastFleetsForOwners = `-- name: ListPastFleetsForOwners :many
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+WHERE (owner_kind, owner_id) IN (SELECT unnest($1::text[]), unnest($2::bigint[]))
+  AND starts_at < $3
+  AND starts_at + (duration_minutes * interval '1 minute') < $3
+ORDER BY starts_at DESC, id DESC
+LIMIT $4
+`
+
+type ListPastFleetsForOwnersParams struct {
+	OwnerKinds  []string  `json:"owner_kinds"`
+	OwnerIds    []int64   `json:"owner_ids"`
+	EndedBefore time.Time `json:"ended_before"`
+	RowLimit    int32     `json:"row_limit"`
+}
+
+// Fleets of some owners that have ended, latest first.
+func (q *Queries) ListPastFleetsForOwners(ctx context.Context, arg ListPastFleetsForOwnersParams) ([]Op, error) {
+	rows, err := q.db.Query(ctx, listPastFleetsForOwners,
+		arg.OwnerKinds,
+		arg.OwnerIds,
+		arg.EndedBefore,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Op
+	for rows.Next() {
+		var i Op
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.Title,
+			&i.Description,
+			&i.StartsAt,
+			&i.DurationMinutes,
+			&i.Doctrine,
+			&i.FormUp,
+			&i.FcCharacterID,
+			&i.CreatedByCharacter,
+			&i.CreatedAt,
+			&i.CancelledAt,
+			&i.CaptureStatus,
+			&i.CaptureCheckedAt,
+			&i.DiscordAnnouncedAt,
+			&i.DoctrineID,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.FleetType,
+			&i.Visibility,
+			&i.JoinGate,
+			&i.ShareToken,
+			&i.RosterPublic,
+			&i.ComingCount,
+			&i.MaybeCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPilotCommunities = `-- name: ListPilotCommunities :many
+SELECT m.community_id FROM community_members m
+JOIN communities o ON o.id = m.community_id AND o.archived_at IS NULL
+WHERE m.character_id = $1 AND m.state = 'active'
+`
+
+// The open communities a verified pilot is an active member of.
+func (q *Queries) ListPilotCommunities(ctx context.Context, characterID int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listPilotCommunities, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var community_id int64
+		if err := rows.Scan(&community_id); err != nil {
+			return nil, err
+		}
+		items = append(items, community_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPilotCommunityGroups = `-- name: ListPilotCommunityGroups :many
+SELECT g.id FROM org_group_members gm
+JOIN org_groups g ON g.id = gm.group_id AND g.owner_kind = 'community'
+JOIN community_members m ON m.community_id = g.owner_id AND m.character_id = gm.character_id AND m.state = 'active'
+WHERE gm.character_id = $1
+`
+
+// The community groups a verified pilot is in, while an active member.
+func (q *Queries) ListPilotCommunityGroups(ctx context.Context, characterID int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listPilotCommunityGroups, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicFleets = `-- name: ListPublicFleets :many
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count FROM ops
+WHERE visibility = 'public' AND cancelled_at IS NULL
+  AND starts_at < $1
+  AND starts_at + (duration_minutes * interval '1 minute') >= $2
+ORDER BY starts_at, id
+LIMIT $3
+`
+
+type ListPublicFleetsParams struct {
+	StartsBefore time.Time `json:"starts_before"`
+	EndsAfter    time.Time `json:"ends_after"`
+	RowLimit     int32     `json:"row_limit"`
+}
+
+func (q *Queries) ListPublicFleets(ctx context.Context, arg ListPublicFleetsParams) ([]Op, error) {
+	rows, err := q.db.Query(ctx, listPublicFleets, arg.StartsBefore, arg.EndsAfter, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Op
+	for rows.Next() {
+		var i Op
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.Title,
+			&i.Description,
+			&i.StartsAt,
+			&i.DurationMinutes,
+			&i.Doctrine,
+			&i.FormUp,
+			&i.FcCharacterID,
+			&i.CreatedByCharacter,
+			&i.CreatedAt,
+			&i.CancelledAt,
+			&i.CaptureStatus,
+			&i.CaptureCheckedAt,
+			&i.DiscordAnnouncedAt,
+			&i.DoctrineID,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.FleetType,
+			&i.Visibility,
+			&i.JoinGate,
+			&i.ShareToken,
+			&i.RosterPublic,
+			&i.ComingCount,
+			&i.MaybeCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSignupsOfCharacters = `-- name: ListSignupsOfCharacters :many
+SELECT op_id, character_id, response FROM op_signups
+WHERE op_id = ANY($1::bigint[])
+  AND character_id = ANY($2::bigint[])
+`
+
+type ListSignupsOfCharactersParams struct {
+	OpIds        []int64 `json:"op_ids"`
+	CharacterIds []int64 `json:"character_ids"`
+}
+
+type ListSignupsOfCharactersRow struct {
+	OpID        int64  `json:"op_id"`
+	CharacterID int64  `json:"character_id"`
+	Response    string `json:"response"`
+}
+
+// The answers some characters gave to some fleets.
+func (q *Queries) ListSignupsOfCharacters(ctx context.Context, arg ListSignupsOfCharactersParams) ([]ListSignupsOfCharactersRow, error) {
+	rows, err := q.db.Query(ctx, listSignupsOfCharacters, arg.OpIds, arg.CharacterIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSignupsOfCharactersRow
+	for rows.Next() {
+		var i ListSignupsOfCharactersRow
+		if err := rows.Scan(&i.OpID, &i.CharacterID, &i.Response); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkingCharacterIDs = `-- name: ListWorkingCharacterIDs :many
+SELECT character_id FROM characters
+WHERE character_id = ANY($1::bigint[]) AND link_state = 'ok'
+`
+
+// Which of some characters are linked to a working account: only those
+// can command a fleet.
+func (q *Queries) ListWorkingCharacterIDs(ctx context.Context, characterIds []int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listWorkingCharacterIDs, characterIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var character_id int64
+		if err := rows.Scan(&character_id); err != nil {
+			return nil, err
+		}
+		items = append(items, character_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const removeOpCommander = `-- name: RemoveOpCommander :exec
+DELETE FROM op_commanders WHERE op_id = $1 AND character_id = $2
+`
+
+type RemoveOpCommanderParams struct {
+	OpID        int64 `json:"op_id"`
+	CharacterID int64 `json:"character_id"`
+}
+
+func (q *Queries) RemoveOpCommander(ctx context.Context, arg RemoveOpCommanderParams) error {
+	_, err := q.db.Exec(ctx, removeOpCommander, arg.OpID, arg.CharacterID)
+	return err
 }
 
 const setOpCancelled = `-- name: SetOpCancelled :exec
@@ -441,6 +1185,48 @@ type SetOpCaptureStatusParams struct {
 
 func (q *Queries) SetOpCaptureStatus(ctx context.Context, arg SetOpCaptureStatusParams) error {
 	_, err := q.db.Exec(ctx, setOpCaptureStatus, arg.CaptureStatus, arg.CheckedAt, arg.ID)
+	return err
+}
+
+const setOpShareToken = `-- name: SetOpShareToken :exec
+UPDATE ops SET share_token = $1 WHERE id = $2
+`
+
+type SetOpShareTokenParams struct {
+	ShareToken sql.NullString `json:"share_token"`
+	ID         int64          `json:"id"`
+}
+
+func (q *Queries) SetOpShareToken(ctx context.Context, arg SetOpShareTokenParams) error {
+	_, err := q.db.Exec(ctx, setOpShareToken, arg.ShareToken, arg.ID)
+	return err
+}
+
+const updateFleetAccess = `-- name: UpdateFleetAccess :exec
+UPDATE ops SET
+    fleet_type    = $1,
+    visibility    = $2,
+    join_gate     = $3,
+    roster_public = $4
+WHERE id = $5
+`
+
+type UpdateFleetAccessParams struct {
+	FleetType    string `json:"fleet_type"`
+	Visibility   string `json:"visibility"`
+	JoinGate     string `json:"join_gate"`
+	RosterPublic bool   `json:"roster_public"`
+	ID           int64  `json:"id"`
+}
+
+func (q *Queries) UpdateFleetAccess(ctx context.Context, arg UpdateFleetAccessParams) error {
+	_, err := q.db.Exec(ctx, updateFleetAccess,
+		arg.FleetType,
+		arg.Visibility,
+		arg.JoinGate,
+		arg.RosterPublic,
+		arg.ID,
+	)
 	return err
 }
 
@@ -525,14 +1311,14 @@ ON CONFLICT (op_id, character_id) DO UPDATE SET
 `
 
 type UpsertOpSignupParams struct {
-	OpID        int64     `json:"op_id"`
-	CharacterID int64     `json:"character_id"`
-	UserID      int64     `json:"user_id"`
-	Response    string    `json:"response"`
-	Ship        string    `json:"ship"`
-	FleetRole   string    `json:"fleet_role"`
-	Note        string    `json:"note"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	OpID        int64         `json:"op_id"`
+	CharacterID int64         `json:"character_id"`
+	UserID      sql.NullInt64 `json:"user_id"`
+	Response    string        `json:"response"`
+	Ship        string        `json:"ship"`
+	FleetRole   string        `json:"fleet_role"`
+	Note        string        `json:"note"`
+	UpdatedAt   time.Time     `json:"updated_at"`
 }
 
 func (q *Queries) UpsertOpSignup(ctx context.Context, arg UpsertOpSignupParams) error {

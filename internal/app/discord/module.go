@@ -15,7 +15,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -253,8 +252,8 @@ func (app *mod) displayCharacter(ctx context.Context, characterID int64) string 
 	return app.deps.DisplayCharacter(ctx, characterID)
 }
 
-// opPath is an op's page.
-func opPath(id int64) string { return fmt.Sprintf("/ops/%d", id) }
+// opPath is a fleet's page.
+func opPath(id int64) string { return module.OpURL(id) }
 
 // newOAuthState returns 32 random bytes hex-encoded (64 chars): the
 // single-use state of a sign-in.

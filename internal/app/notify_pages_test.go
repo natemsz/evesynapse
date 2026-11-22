@@ -603,8 +603,8 @@ func TestNotifyNewOps(t *testing.T) {
 
 	// The settings page lists it and the bell words it.
 	_, body := getPage(t, f.app, cookie, "/settings")
-	mustContain(t, "settings", body, `value="op" checked> New op on the calendar`, `value="calendar" checked> New in-game calendar event`)
-	mustContain(t, "bell", f.badge(cookie, "").Body.String(), "2 new ops")
+	mustContain(t, "settings", body, `value="op" checked> New fleet planned`, `value="calendar" checked> New in-game calendar event`)
+	mustContain(t, "bell", f.badge(cookie, "").Body.String(), "2 new fleets")
 }
 
 // TestNotifyOpReminder: an account that signed up to an op, as coming
@@ -635,7 +635,7 @@ func TestNotifyOpReminder(t *testing.T) {
 	}
 	answer := func(op int64, response string) {
 		t.Helper()
-		if code, _ := f.post(cookie, opURL(op)+"/signup", url.Values{"character": {"90000001"}, "response": {response}}); code != http.StatusSeeOther {
+		if code, _ := f.post(cookie, opURL(op)+"signup", url.Values{"character": {"90000001"}, "response": {response}}); code != http.StatusSeeOther {
 			t.Fatalf("sign-up %q: %d", response, code)
 		}
 	}
@@ -697,7 +697,7 @@ func TestNotifyOpReminder(t *testing.T) {
 	// A longer lead, chosen on the settings page.
 	_, body := getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings", body,
-		`value="op_reminder" checked> Op starting soon</label>`,
+		`value="op_reminder" checked> Fleet starting soon</label>`,
 		`<select name="op_reminder_minutes"`, `<option value="30" selected>30 minutes</option>`, `<option value="120">2 hours</option>`)
 	form := url.Values{"kinds_shown": {"1"}, "op_reminder_minutes": {"120"}}
 	for _, kind := range notifyKindList() {

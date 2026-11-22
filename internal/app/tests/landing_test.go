@@ -44,7 +44,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"Contract Search",
 		"Fleet Overview",
 		"Every tool you need, in one place.",
-		"Twenty-three modules and the core pages all work from the same shared data.",
+		"Twenty-five modules and the core pages all work from the same shared data.",
 		"Developed in Seattle, WA by",
 		"BSD-3-Clause-Clear",
 		"© 2026 Synap6.io LLC, dba Synap6",

@@ -15,7 +15,7 @@
   <div class="l-head-pick">{{template "ownerselector" .OwnerOptions}}</div>
   <p class="l-head-sum"><b>{{.OwnerName}}</b></p>
 </div>
-<p class="prose">{{if .Community}}The leader and admins{{else}}Directors of the executor corporation{{end}} can always do both. Choose who else can.</p>
+<p class="prose">{{if .Community}}The leader and admins{{else}}Directors of the executor corporation{{end}} can always do these. Choose who else can.</p>
 
 <form method="post" action="/fleets/permissions/" class="l-panel fl-perms" aria-label="Who else can run {{.OwnerName}}">
   <input type="hidden" name="owner" value="{{.OwnerKey}}">
@@ -26,6 +26,9 @@
     <div class="field"><label class="field-label" for="fl-perm-doctrines">Who else keeps doctrines</label>
       <select id="fl-perm-doctrines" name="doctrines_who" aria-describedby="fl-perm-doctrines-hint">{{range .Doctrines}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
       <span class="field-hint" id="fl-perm-doctrines-hint">They make, change and delete doctrines and their fits.</span></div>
+    {{if .SRP}}<div class="field"><label class="field-label" for="fl-perm-srp">Who else handles ship replacement</label>
+      <select id="fl-perm-srp" name="srp_who" aria-describedby="fl-perm-srp-hint">{{range .SRP}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+      <span class="field-hint" id="fl-perm-srp-hint">They pay or deny claims. Policies stay with the people above.</span></div>{{end}}
   </div>
   {{with .GroupsHref}}<p class="fl-hint">{{if $.FleetPermissions.Community}}These go to one of the community's groups.{{else}}These go to a group or one of the alliance's corporations.{{end}} <a href="{{.}}">Manage groups</a></p>{{end}}
   <div class="form-actions"><button type="submit">Save changes</button></div>

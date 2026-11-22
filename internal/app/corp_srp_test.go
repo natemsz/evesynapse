@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -124,7 +125,7 @@ func TestSRPRequest(t *testing.T) {
 	f.post(f.acct, "/srp/request", url.Values{"loss": {f.claim(srpLossOnOp)}})
 	f.post(f.pilot, "/srp/request", url.Values{"loss": {f.claim(srpLossLater)}})
 	f.post(f.pilot, "/srp/request", url.Values{"loss": {f.claim(srpKill)}})
-	if rows, _ := f.q.ListOpenSRPRequests(f.ctx, []int64{discordCorp}); len(rows) != 0 {
+	if rows, _ := f.q.ListOpenSRPRequests(f.ctx, db.ListOpenSRPRequestsParams{OwnerKind: ownerCorporation, OwnerID: discordCorp, RowLimit: 100}); len(rows) != 0 {
 		t.Fatalf("%d request(s) made from somebody else's loss, a loss outside the op, or a kill", len(rows))
 	}
 
@@ -149,7 +150,7 @@ func TestSRPRequest(t *testing.T) {
 	f.post(f.acct, "/srp/"+strconv.FormatInt(req.ID, 10)+"/withdraw", url.Values{})
 	f.request()
 	f.post(f.pilot, "/srp/"+strconv.FormatInt(req.ID, 10)+"/withdraw", url.Values{})
-	if rows, _ := f.q.ListOpenSRPRequests(f.ctx, []int64{discordCorp}); len(rows) != 0 {
+	if rows, _ := f.q.ListOpenSRPRequests(f.ctx, db.ListOpenSRPRequestsParams{OwnerKind: ownerCorporation, OwnerID: discordCorp, RowLimit: 100}); len(rows) != 0 {
 		t.Fatal("the pilot could not withdraw their own request")
 	}
 }
@@ -236,5 +237,144 @@ func TestSRPHandling(t *testing.T) {
 	f.pass(now.Add(3 * time.Minute))
 	if told := f.told(f.pilotUser); !strings.Contains(told, "srp_done: SRP paid") || !strings.Contains(told, "12,500,000 ISK") {
 		t.Fatalf("the pilot was told %q", told)
+	}
+}
+
+// TestSRPClaimNeedsTheFleetAndPaysALossOnce: on a community's fleet only
+// a pilot on its attendance can claim, with or without an account, and
+// only their own loss. One loss is claimed once across every owner, and
+// only the fleet owner's handlers can answer it.
+func TestSRPClaimNeedsTheFleetAndPaysALossOnce(t *testing.T) {
+	f := newSRPFixture(t)
+	const walkOn, walkOnLoss, community = int64(93300500), int64(5101), int64(7)
+	start := time.Now().UTC().Add(-3 * time.Hour).Truncate(time.Second)
+	id, err := f.q.CreateFleet(f.ctx, db.CreateFleetParams{
+		OwnerKind: ownerCommunity, OwnerID: community, FleetType: fleetTypeCommunity, Visibility: fleetPublic, JoinGate: joinAnyone,
+		Title: "Open roam", StartsAt: start, DurationMinutes: 60, DoctrineMode: doctrineNone,
+		FcCharacterID: fixtureCharA, CreatedByCharacter: fixtureCharA, CreatedAt: start,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.app.db.ExecContext(f.ctx, `INSERT INTO kills (killmail_id, hash, killmail_time, system_id, victim_character_id, ship_type_id, source, public, ingested_at, value_ours)
+		VALUES ($1, 'walkon', $2, 30000142, $3, 587, 'stream', true, now(), 50000000)`, walkOnLoss, start.Add(20*time.Minute), walkOn); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.recordVerifiedPilot(f.ctx, walkOn, "Walk On", "owner-walk-on"); err != nil {
+		t.Fatal(err)
+	}
+	session, err := f.app.sessions.Load(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.app.sessions.Put(session, sessionPilotID, walkOn)
+	f.app.sessions.Put(session, sessionPilotOwner, "owner-walk-on")
+	token, _, err := f.app.sessions.Commit(session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pilot := &http.Cookie{Name: "evesynapse_session", Value: token, Path: "/"}
+	path := opURL(id) + "srp"
+	requests := func() []db.SrpRequest {
+		t.Helper()
+		rows, err := f.q.ListSRPRequestsOnOp(f.ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rows
+	}
+
+	// Not on the fleet: the tab is closed and a claim stores nothing.
+	if code, _ := getPage(t, f.app, pilot, path); code != http.StatusNotFound {
+		t.Fatalf("tab for a pilot not on the fleet answered %d", code)
+	}
+	f.post(pilot, path+"/claim", url.Values{"killmail": {strconv.FormatInt(walkOnLoss, 10)}})
+	if rows := requests(); len(rows) != 0 {
+		t.Fatalf("a pilot not on the fleet claimed: %+v", rows)
+	}
+	if code, _ := getPage(t, f.app, &http.Cookie{Name: "none", Value: "none"}, path); code != http.StatusNotFound {
+		t.Fatalf("tab for an anonymous viewer answered %d", code)
+	}
+
+	// A corporation fleet kept from a member is neither offered nor
+	// claimable, though the loss is theirs and in its time.
+	if err := f.q.InsertOpAccessRule(f.ctx, db.InsertOpAccessRuleParams{OpID: f.op, Action: accessView, RuleKind: "group", RuleRef: "99"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE ops SET visibility = 'restricted' WHERE id = $1`, f.op); err != nil {
+		t.Fatal(err)
+	}
+	if _, body := getPage(t, f.app, f.pilot, srpPath); strings.Contains(body, f.claim(srpLossOnOp)) || strings.Contains(body, "fleet: Stratop") {
+		t.Fatal("a fleet kept from a member is offered for a claim")
+	}
+	f.post(f.pilot, "/srp/request", url.Values{"loss": {f.claim(srpLossOnOp)}})
+	if rows, _ := f.q.ListSRPRequestsByUser(f.ctx, db.ListSRPRequestsByUserParams{UserID: f.pilotUser, RowLimit: 10}); len(rows) != 0 {
+		t.Fatalf("a member claimed on a fleet kept from them: %+v", rows)
+	}
+	if err := f.q.DeleteOpAccessRules(f.ctx, f.op); err != nil {
+		t.Fatal(err)
+	}
+
+	// On the attendance, a pilot with no account claims their own loss
+	// from the public killboard, and nobody else's.
+	for _, character := range []int64{walkOn, fixtureCharB} {
+		if err := f.q.InsertManualAttendance(f.ctx, db.InsertManualAttendanceParams{OpID: id, CharacterID: character, SeenAt: start}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Seen in the fleet, but not when the ship died: no claim.
+	sighted := func(from, to time.Time) {
+		t.Helper()
+		if _, err := f.app.db.ExecContext(f.ctx, `UPDATE op_attendance SET source = 'fleet', first_seen_at = $1, last_seen_at = $2 WHERE op_id = $3 AND character_id = $4`, from, to, id, walkOn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sighted(start.Add(45*time.Minute), start.Add(46*time.Minute))
+	f.post(pilot, path+"/claim", url.Values{"killmail": {strconv.FormatInt(walkOnLoss, 10)}})
+	if rows := requests(); len(rows) != 0 {
+		t.Fatalf("a pilot claimed a loss from outside their time in the fleet: %+v", rows)
+	}
+	sighted(start.Add(10*time.Minute), start.Add(25*time.Minute))
+	if code, body := getPage(t, f.app, pilot, path); code != http.StatusOK || !strings.Contains(body, `value="5101"`) {
+		t.Fatalf("tab for a pilot on the fleet: %d, loss offered=%v", code, strings.Contains(body, `value="5101"`))
+	}
+	f.post(pilot, path+"/claim", url.Values{"killmail": {strconv.FormatInt(srpLossOnOp, 10)}})
+	if rows := requests(); len(rows) != 0 {
+		t.Fatalf("a pilot claimed someone else's loss: %+v", rows)
+	}
+	f.post(pilot, path+"/claim", url.Values{"killmail": {strconv.FormatInt(walkOnLoss, 10)}})
+	rows := requests()
+	if len(rows) != 1 || rows[0].CharacterID != walkOn || rows[0].UserID.Valid || rows[0].OwnerKind != ownerCommunity ||
+		rows[0].OwnerID != community || rows[0].CorporationID != 0 || rows[0].LossValue != 50000000 {
+		t.Fatalf("request %+v", rows)
+	}
+
+	// A handler of another owner cannot answer it.
+	f.post(f.director, "/srp/"+strconv.FormatInt(rows[0].ID, 10)+"/decide", url.Values{"action": {"paid"}, "payout": {"5m"}})
+	if req, err := f.q.GetSRPRequest(f.ctx, rows[0].ID); err != nil || req.Status != srpOpen {
+		t.Fatalf("another owner's handler answered it: %+v, %v", req, err)
+	}
+
+	// Paid and opened again: the pilot cannot withdraw it to free the
+	// loss for a second claim, and the payment stays on record.
+	if n, err := f.q.DecideSRPRequest(f.ctx, db.DecideSRPRequestParams{
+		ID: rows[0].ID, Status: srpPaid, Payout: 7000000, HandledBy: fixtureCharA, HandledAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
+	}); err != nil || n != 1 {
+		t.Fatalf("pay: %d, %v", n, err)
+	}
+	if n, err := f.q.ReopenSRPRequest(f.ctx, rows[0].ID); err != nil || n != 1 {
+		t.Fatalf("reopen: %d, %v", n, err)
+	}
+	f.post(pilot, path+"/"+strconv.FormatInt(rows[0].ID, 10)+"/withdraw", url.Values{})
+	if req, err := f.q.GetSRPRequest(f.ctx, rows[0].ID); err != nil || req.PreviousPayout != 7000000 || !req.AnsweredAt.Valid {
+		t.Fatalf("after paying, reopening and withdrawing: %+v, %v", req, err)
+	}
+
+	// The same loss claimed on a second fleet creates nothing.
+	f.post(f.pilot, path+"/claim", url.Values{"killmail": {strconv.FormatInt(srpLossOnOp, 10)}})
+	f.post(f.pilot, "/srp/request", url.Values{"loss": {f.claim(srpLossOnOp)}})
+	mine, err := f.q.ListSRPRequestsByUser(f.ctx, db.ListSRPRequestsByUserParams{UserID: f.pilotUser, RowLimit: 10})
+	if err != nil || len(mine) != 1 || mine[0].OpID != id {
+		t.Fatalf("one loss on two fleets: %+v, %v", mine, err)
 	}
 }

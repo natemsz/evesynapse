@@ -1,0 +1,82 @@
+{{define "title"}}{{with .FleetSRP}}{{.Title}}: ship replacement{{end}}{{end}}
+{{define "pagetitle"}}{{with .FleetSRP}}<h1><span class="gt">{{.Title}}</span></h1>{{end}}{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+{{with .FleetSRP}}
+{{$v := .}}
+<div class="l-page fl-page">
+<div class="l-head">
+  <h2 class="l-head-title">{{.Title}}</h2>
+  <p class="l-head-sum">Ship replacement from {{.OwnerName}}. EVE has no way for a site to give ISK, so claims are paid in game.</p>
+</div>
+
+<section class="l-panel" aria-labelledby="fl-srp-policy-title">
+  <h2 id="fl-srp-policy-title">Policy</h2>
+  {{with .Policy}}
+  <p><b>{{.Name}}.</b> {{.Summary}}</p>
+  {{if .Text}}<p class="srp-policy">{{.Text}}</p>{{end}}
+  {{else}}<p class="fl-empty">No policy, so a handler decides each claim.</p>{{end}}
+</section>
+
+{{if .CanClaim}}
+<section class="l-panel" aria-labelledby="fl-srp-claim-title">
+  <h2 id="fl-srp-claim-title">Claim a loss</h2>
+  {{if .Losses}}
+  <form method="post" action="{{.Path}}/claim" class="op-form">
+    <div class="form-grid">
+      <label class="field wide"><span class="field-label">Loss</span>
+        <select name="killmail" required>{{range .Losses}}<option value="{{.KillmailID}}">{{.Label}}</option>{{end}}</select></label>
+      <label class="field wide"><span class="field-label">Note</span>
+        <input type="text" name="note" maxlength="500" placeholder="Optional: anything the handler should know"></label>
+    </div>
+    <div class="form-actions"><button type="submit">Send request</button></div>
+  </form>
+  {{else}}<p class="fl-empty">You have no unclaimed loss during this fleet. A loss appears here once its killmail reaches the killboard.</p>{{end}}
+  {{if .Refused}}
+  <h3>Cannot be claimed</h3>
+  <ul class="fl-notes">{{range .Refused}}<li>{{.Label}}: {{.Refusal}}</li>{{end}}</ul>
+  {{end}}
+</section>
+{{end}}
+
+{{if .Mine}}
+<section class="l-panel" aria-labelledby="fl-srp-mine-title">
+  <h2 id="fl-srp-mine-title">Your requests</h2>
+  <div class="tw" tabindex="0" role="region" aria-labelledby="fl-srp-mine-title">
+  <table>
+    <thead><tr><th>Lost</th><th>Pilot</th><th>Ship</th><th>Estimate</th><th>Answer</th><th><span class="visually-hidden">Withdraw</span></th></tr></thead>
+    <tbody>
+    {{range .Mine}}
+    <tr><td>{{.LostAt}}</td><td>{{charLink $v.Viewer .PilotID .Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{.Value}}</td>
+      <td>{{if .Open}}<span class="badge wait">OPEN</span>{{else if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}{{if .HandlerNote}} <small>{{.HandlerNote}}</small>{{end}}</td>
+      <td>{{if .CanWithdraw}}<form method="post" action="{{$v.Path}}/{{.ID}}/withdraw" class="inline-form"><button type="submit" class="btn btn-quiet">Withdraw</button></form>{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+{{end}}
+
+{{if .SeesLedger}}
+<section class="l-panel" aria-labelledby="fl-srp-ledger-title">
+  <h2 id="fl-srp-ledger-title">Fleet ledger</h2>
+  {{if .Ledger}}
+  <div class="tw" tabindex="0" role="region" aria-labelledby="fl-srp-ledger-title">
+  <table>
+    <thead><tr><th>Lost</th><th>Pilot</th><th>Ship</th><th>Answer</th></tr></thead>
+    <tbody>
+    {{range .Ledger}}
+    <tr><td>{{.LostAt}}</td><td>{{charLink $v.Viewer .PilotID .Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td>
+      <td>{{if .Open}}<span class="badge wait">OPEN</span>{{else if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}<p class="fl-empty">No claims on this fleet yet.</p>{{end}}
+  {{with .HandleHref}}<p class="fl-hint"><a href="{{.}}">Answer requests</a></p>{{end}}
+</section>
+{{end}}
+</div>
+{{end}}
+{{end}}

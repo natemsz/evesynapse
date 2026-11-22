@@ -8,6 +8,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/standing"
 )
 
 // The ship replacement notification source. The notifier asks every
@@ -41,8 +42,9 @@ func (app *Application) srpPilotName(ctx context.Context, characterID int64) str
 
 // notifySRPEvents: what ship replacement tells an account.
 //
-// A handler is told of each open request in a corporation whose
-// requests it may answer (notifySRPNew), other than its own. A pilot
+// A handler is told of each open request of a corporation, alliance or
+// community whose requests it may answer (notifySRPNew), other than its
+// own. A pilot
 // is told when a request of theirs is paid or denied (notifySRPDone),
 // in the name of the character that lost the ship; an answer that is
 // taken back and given again is told again.
@@ -57,16 +59,46 @@ func (app *Application) notifySRPEvents(ctx context.Context, c *notifyCollector,
 		return
 	}
 	mine := map[int64]bool{}
-	asked := map[int64]string{}
-	var corps []int64
+	characterIDs := make([]int64, 0, len(rows))
+	var owners []orgOwner
+	asked := map[orgOwner]string{}
+	// Every owner has its source from the start, so its first request is
+	// news and not part of a baseline.
+	addOwner := func(o orgOwner) {
+		if o.ID == 0 {
+			return
+		}
+		if _, seen := asked[o]; seen {
+			return
+		}
+		if o.Kind == ownerCorporation {
+			asked[o] = c.source(notifySRPNew, o.ID)
+		} else {
+			asked[o] = c.source(notifySRPNew, o.Key())
+		}
+		owners = append(owners, o)
+	}
 	for _, row := range rows {
 		mine[row.CharacterID] = true
-		if row.CorporationID != 0 && asked[row.CorporationID] == "" {
-			asked[row.CorporationID] = c.source(notifySRPNew, row.CorporationID)
-			corps = append(corps, row.CorporationID)
+		characterIDs = append(characterIDs, row.CharacterID)
+		if row.CorporationID == 0 {
+			continue
+		}
+		addOwner(orgOwner{Kind: ownerCorporation, ID: row.CorporationID})
+		if alliance, _ := app.corpAlliance(ctx, row.CorporationID); alliance != 0 {
+			addOwner(orgOwner{Kind: ownerAlliance, ID: alliance})
 		}
 	}
-	if len(corps) == 0 {
+	if len(characterIDs) > 0 {
+		communities, err := app.queries.ListCommunitiesOfCharacters(ctx, characterIDs)
+		if err != nil {
+			logging.Errorf("notify: communities of user %d: %v", userID, err)
+		}
+		for _, id := range communities {
+			addOwner(orgOwner{Kind: ownerCommunity, ID: id})
+		}
+	}
+	if len(owners) == 0 {
 		return
 	}
 
@@ -89,11 +121,16 @@ func (app *Application) notifySRPEvents(ctx context.Context, c *notifyCollector,
 		c.add(notifyEvent{
 			Kind: notifySRPDone, CharacterID: req.CharacterID, Source: answered,
 			Key:   fmt.Sprintf("srpdone|%d|%s|%d", req.ID, req.Status, req.HandledAt.Time.Unix()),
-			Title: title, URL: corpAddress(srpPath, req.CorporationID),
+			Title: title, URL: standing.Address(srpPath, orgOwner{Kind: req.OwnerKind, ID: req.OwnerID}.Key()),
 		})
 	}
 
-	open, err := app.queries.ListOpenSRPRequests(ctx, corps)
+	kinds := make([]string, 0, len(owners))
+	ids := make([]int64, 0, len(owners))
+	for _, o := range owners {
+		kinds, ids = append(kinds, o.Kind), append(ids, o.ID)
+	}
+	open, err := app.queries.ListNewestOpenSRPRequests(ctx, db.ListNewestOpenSRPRequestsParams{OwnerKinds: kinds, OwnerIds: ids})
 	if err != nil || len(open) == 0 {
 		return
 	}
@@ -101,24 +138,25 @@ func (app *Application) notifySRPEvents(ctx context.Context, c *notifyCollector,
 	if err != nil {
 		return
 	}
-	handles := map[int64]bool{}
+	handles := map[orgOwner]bool{}
 	for _, req := range open {
-		if req.UserID == userID {
+		if req.UserID.Valid && req.UserID.Int64 == userID {
 			continue
 		}
-		may, known := handles[req.CorporationID]
+		owner := orgOwner{Kind: req.OwnerKind, ID: req.OwnerID}
+		may, known := handles[owner]
 		if !known {
-			may = app.ownerPermits(ctx, st, orgOwner{Kind: ownerCorporation, ID: req.CorporationID}, permSRP)
-			handles[req.CorporationID] = may
+			may = app.ownerPermits(ctx, st, owner, permSRP)
+			handles[owner] = may
 		}
 		if !may {
 			continue
 		}
 		c.add(notifyEvent{
-			Kind: notifySRPNew, Source: asked[req.CorporationID],
+			Kind: notifySRPNew, Source: asked[owner],
 			Key:   fmt.Sprintf("srp|%d", req.ID),
 			Title: fmt.Sprintf("SRP request: %s lost a %s", app.srpPilotName(ctx, req.CharacterID), app.typeNameOrID(ctx, req.ShipTypeID)),
-			URL:   corpAddress(srpPath, req.CorporationID),
+			URL:   standing.Address(srpPath, owner.Key()),
 		})
 	}
 }

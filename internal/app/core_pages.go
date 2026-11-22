@@ -187,7 +187,7 @@ func sectionForPage(page string) string {
 		"assets.html",
 		"killmails.html", "notifications.html":
 		return "pilot"
-	case "fleets.html", "fleet.html", "fleet_composition.html", "fleet_form.html", "fleet_history.html", "fleet_hidden.html", "fleet_permissions.html":
+	case "fleets.html", "fleet.html", "fleet_composition.html", "fleet_form.html", "fleet_history.html", "fleet_hidden.html", "fleet_permissions.html", "fleet_srp.html", "srp.html":
 		return "fleets"
 	case "industry.html", "industry_jobs.html", "industry_mining.html", "planets.html":
 		return "industry"

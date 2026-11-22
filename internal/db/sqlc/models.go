@@ -1839,6 +1839,7 @@ type Op struct {
 	DoctrineSnapshotAt    sql.NullTime   `json:"doctrine_snapshot_at"`
 	CaptureBossID         int64          `json:"capture_boss_id"`
 	CaptureDetail         string         `json:"capture_detail"`
+	SrpPolicyID           sql.NullInt64  `json:"srp_policy_id"`
 }
 
 type OpAccessRule struct {
@@ -2567,25 +2568,56 @@ type SovFightKill struct {
 	Side         int16     `json:"side"`
 }
 
+type SrpPolicy struct {
+	ID                 int64     `json:"id"`
+	OwnerKind          string    `json:"owner_kind"`
+	OwnerID            int64     `json:"owner_id"`
+	Name               string    `json:"name"`
+	Mode               string    `json:"mode"`
+	Percent            int32     `json:"percent"`
+	MaxPayout          float64   `json:"max_payout"`
+	RequiresDoctrine   bool      `json:"requires_doctrine"`
+	RequiresAttendance bool      `json:"requires_attendance"`
+	ClaimWindowHours   int32     `json:"claim_window_hours"`
+	LedgerVisibility   string    `json:"ledger_visibility"`
+	PolicyText         string    `json:"policy_text"`
+	IsDefault          bool      `json:"is_default"`
+	UpdatedBy          int64     `json:"updated_by"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type SrpPolicyHull struct {
+	PolicyID   int64   `json:"policy_id"`
+	ShipTypeID int64   `json:"ship_type_id"`
+	Payout     float64 `json:"payout"`
+}
+
 type SrpRequest struct {
-	ID            int64        `json:"id"`
-	CorporationID int64        `json:"corporation_id"`
-	OpID          int64        `json:"op_id"`
-	KillmailID    int64        `json:"killmail_id"`
-	KillmailHash  string       `json:"killmail_hash"`
-	CharacterID   int64        `json:"character_id"`
-	UserID        int64        `json:"user_id"`
-	ShipTypeID    int64        `json:"ship_type_id"`
-	SolarSystemID int64        `json:"solar_system_id"`
-	LostAt        time.Time    `json:"lost_at"`
-	LossValue     float64      `json:"loss_value"`
-	Note          string       `json:"note"`
-	Status        string       `json:"status"`
-	Payout        float64      `json:"payout"`
-	HandledBy     int64        `json:"handled_by"`
-	HandlerNote   string       `json:"handler_note"`
-	HandledAt     sql.NullTime `json:"handled_at"`
-	CreatedAt     time.Time    `json:"created_at"`
+	ID              int64         `json:"id"`
+	CorporationID   int64         `json:"corporation_id"`
+	OpID            int64         `json:"op_id"`
+	KillmailID      int64         `json:"killmail_id"`
+	KillmailHash    string        `json:"killmail_hash"`
+	CharacterID     int64         `json:"character_id"`
+	UserID          sql.NullInt64 `json:"user_id"`
+	ShipTypeID      int64         `json:"ship_type_id"`
+	SolarSystemID   int64         `json:"solar_system_id"`
+	LostAt          time.Time     `json:"lost_at"`
+	LossValue       float64       `json:"loss_value"`
+	Note            string        `json:"note"`
+	Status          string        `json:"status"`
+	Payout          float64       `json:"payout"`
+	HandledBy       int64         `json:"handled_by"`
+	HandlerNote     string        `json:"handler_note"`
+	HandledAt       sql.NullTime  `json:"handled_at"`
+	CreatedAt       time.Time     `json:"created_at"`
+	OwnerKind       string        `json:"owner_kind"`
+	OwnerID         int64         `json:"owner_id"`
+	PolicyID        sql.NullInt64 `json:"policy_id"`
+	SuggestedPayout float64       `json:"suggested_payout"`
+	FitEvidence     string        `json:"fit_evidence"`
+	AnsweredAt      sql.NullTime  `json:"answered_at"`
+	PreviousPayout  float64       `json:"previous_payout"`
 }
 
 type SrpSetting struct {

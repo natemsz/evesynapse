@@ -181,7 +181,7 @@ func (app *Application) knownCorporationIDs(ctx context.Context) ([]int64, error
 		UNION SELECT corporation_id FROM character_corporations
 		UNION SELECT owner_corporation_id FROM structure_context
 		UNION SELECT corporation_id FROM ops WHERE corporation_id <> 0
-		UNION SELECT corporation_id FROM srp_requests
+		UNION SELECT corporation_id FROM srp_requests WHERE corporation_id <> 0
 		UNION SELECT corporation_id FROM doctrines WHERE owner_kind = 'corporation'`)
 	if err != nil {
 		return nil, err

@@ -925,6 +925,21 @@ type WhoChoice struct {
 	Value, Label string
 }
 
+// FleetSRP is one fleet as its Ship Replacement tab sees it, for the
+// person looking. Pilots are the characters they can claim for: an
+// account's, or a verified pilot's one. Member reads members-only
+// records, and a pilot's public corporation never counts for it.
+type FleetSRP struct {
+	Op        db.Op
+	Owner     standing.Owner
+	OwnerName string
+	UserID    int64
+	Pilots    []NamedChoice
+	Member    bool
+	Handles   bool
+	Tabs      []NavLink
+}
+
 // OwnerOption is one corporation or alliance in an owner chooser.
 type OwnerOption struct {
 	ID     int64
@@ -1605,6 +1620,18 @@ type Deps interface {
 	// OwnerActorFor is the account's character that acts for an owner,
 	// 0 when it has none there.
 	OwnerActorFor(ctx context.Context, userID int64, owner standing.Owner) int64
+	// FleetSRPFor is one fleet for its Ship Replacement tab; false when
+	// the session is not someone the tab opens for. RenderFleetHidden
+	// answers that case with the page a hidden fleet gets.
+	FleetSRPFor(ctx context.Context, opID int64) (FleetSRP, bool)
+	RenderFleetHidden(w http.ResponseWriter, r *http.Request)
+	// FleetsVisible says which of some fleets the session can see by
+	// their ordinary access rules. A share link does not count.
+	FleetsVisible(ctx context.Context, ops []db.Op) map[int64]bool
+	// KillmailPayload is a stored killmail as ESI JSON, from a pilot's
+	// own killmails or the killboard, with its hash. A killboard row
+	// whose detail is gone has no item list.
+	KillmailPayload(ctx context.Context, killmailID int64) (payload, hash string, ok bool)
 	// SnapshotFleetsOfDoctrine stores the doctrine on every fleet flying
 	// it that has started, so an edit made now cannot change them.
 	SnapshotFleetsOfDoctrine(ctx context.Context, doctrineID int64) error

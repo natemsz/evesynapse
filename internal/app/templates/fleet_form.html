@@ -95,6 +95,14 @@
     </fieldset>
   </div>
 
+  {{if .SRPHref}}
+  <div class="l-panel">
+    <div class="field"><label class="field-label" for="fl-srp">Ship replacement policy</label>
+      <select id="fl-srp" name="srp_policy" aria-describedby="fl-srp-hint"><option value="0">The default policy</option>{{range .SRPPolicies}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+      <span class="field-hint" id="fl-srp-hint">{{if .SRPPolicies}}What this fleet's losses pay.{{else}}No policies yet, so a handler decides each claim.{{end}} <a href="{{.SRPHref}}">Manage policies</a></span></div>
+  </div>
+  {{end}}
+
   <div class="l-panel">
     <label class="fl-check"><input type="checkbox" name="roster_public" value="1"{{if .RosterPublic}} checked{{end}}><span>Show pilot names to everyone who can open the fleet<small>Off: people who cannot sign up see only how many are coming.</small></span></label>
   </div>

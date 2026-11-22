@@ -219,6 +219,13 @@ type opFormView struct {
 	Visibilities []fleetOption
 	Gates        []fleetOption
 	RuleChoices  []whoChoice
+
+	// SRPPolicyID is the replacement policy the fleet names; 0 is the
+	// owner's default. SRPPolicySet: the form sent a choice.
+	SRPPolicyID  int64
+	SRPPolicySet bool
+	SRPPolicies  []opChoice
+	SRPHref      string
 }
 
 // opDoctrineGroup is one owner's doctrines, as the form offers them.
@@ -273,6 +280,17 @@ func (app *Application) opFormFor(ctx context.Context, v fleetViewer, form *opFo
 	form.Gates = fleetOptions(fleetJoinOptions, form.JoinGate)
 	if form.CanSetAccess {
 		form.RuleChoices = app.fleetRuleChoices(ctx, v, owner, form.ViewRule, form.JoinRule)
+	}
+	form.SRPPolicies, form.SRPHref = nil, ""
+	if form.CanSetAccess && moduleCompiledIn("srp") {
+		form.SRPHref = standing.Address("/srp/", owner.Key()) + "#srp-policy"
+		policies, err := app.queries.ListSRPPolicies(ctx, db.ListSRPPoliciesParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
+		if err != nil {
+			logging.Errorf("fleets: replacement policies of %s: %v", owner.Key(), err)
+		}
+		for _, p := range policies {
+			form.SRPPolicies = append(form.SRPPolicies, opChoice{ID: p.ID, Name: p.Name, Selected: p.ID == form.SRPPolicyID})
+		}
 	}
 }
 
@@ -337,6 +355,7 @@ func (app *Application) handleOpEdit(w http.ResponseWriter, r *http.Request) {
 		DoctrineLocked: opEnd(op).Before(time.Now()), FormUp: op.FormUp,
 		CanSetAccess: a.Plan, Type: op.FleetType, Visibility: op.Visibility, JoinGate: op.JoinGate,
 		RosterPublic: op.RosterPublic, ViewRule: ruleMember, JoinRule: ruleMember,
+		SRPPolicyID: op.SrpPolicyID.Int64,
 	}
 	rules, err := app.queries.ListOpAccessRules(ctx, op.ID)
 	if err != nil {
@@ -390,6 +409,8 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 	}
 	form.DoctrineID, _ = strconv.ParseInt(r.FormValue("doctrine_id"), 10, 64)
 	form.DoctrineMode = r.FormValue("doctrine_mode")
+	form.SRPPolicySet = r.PostForm.Has("srp_policy")
+	form.SRPPolicyID, _ = strconv.ParseInt(r.PostForm.Get("srp_policy"), 10, 64)
 
 	var owner orgOwner
 	var existing db.Op
@@ -410,6 +431,7 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 			// A commander changes the details only.
 			fcID = op.FcCharacterID
 			form.Type, form.Visibility, form.JoinGate, form.RosterPublic = op.FleetType, op.Visibility, op.JoinGate, op.RosterPublic
+			form.SRPPolicyID, form.SRPPolicySet = op.SrpPolicyID.Int64, false
 		}
 	} else {
 		owners := v.planOwners()
@@ -506,6 +528,13 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 		}
 		if form.JoinGate == joinByRule {
 			addRule(accessJoin, form.JoinRule)
+		}
+		if form.SRPPolicySet && form.SRPPolicyID != 0 {
+			p, err := app.queries.GetSRPPolicy(ctx, form.SRPPolicyID)
+			if err != nil || p.OwnerKind != owner.Kind || p.OwnerID != owner.ID {
+				form.SRPPolicyID = 0
+				form.Errors = append(form.Errors, "Choose one of "+app.ownerName(ctx, owner)+"'s replacement policies.")
+			}
 		}
 	}
 	if len(form.Errors) > 0 {
@@ -611,6 +640,13 @@ func (app *Application) saveFleet(ctx context.Context, form *opFormView, owner o
 		for _, rule := range rules {
 			rule.OpID = id
 			if err := q.InsertOpAccessRule(ctx, rule); err != nil {
+				return 0, err
+			}
+		}
+		if form.SRPPolicySet {
+			if err := q.SetOpSRPPolicy(ctx, db.SetOpSRPPolicyParams{
+				ID: id, SrpPolicyID: sql.NullInt64{Int64: form.SRPPolicyID, Valid: form.SRPPolicyID != 0},
+			}); err != nil {
 				return 0, err
 			}
 		}
@@ -818,8 +854,7 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 		Over:      opEnd(op).Before(now),
 		Live:      !op.CancelledAt.Valid && !op.StartsAt.After(now) && !opEnd(op).Before(now),
 		CanManage: a.Manage, CanPlan: a.Plan, SeeNames: a.SeeNames, SeeFormUp: a.SeeFormUp, CanJoin: a.Join,
-		HasSRP: moduleCompiledIn("srp") && op.CorporationID != 0 && v.belongs(owner),
-		Level:  v.level(), SignIn: "/auth/pilot?next=" + url.QueryEscape(path), Account: "/auth/link?from=cards",
+		Level: v.level(), SignIn: "/auth/pilot?next=" + url.QueryEscape(path), Account: "/auth/link?from=cards",
 		ComingCount: op.ComingCount, MaybeCount: op.MaybeCount, Roles: opFleetRoles,
 	}
 	if v.Pilot != nil {
@@ -834,6 +869,7 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	if a.SeeNames && op.FcCharacterID != 0 {
 		view.FCID, view.FC = op.FcCharacterID, app.displayCharacter(ctx, op.FcCharacterID)
 	}
+	_, _, _, view.HasSRP = app.seesFleetSRP(ctx, op, v)
 	view.DoctrineRequired = op.DoctrineMode == doctrineRequired
 	fits, doctrine := app.fleetFits(ctx, op)
 	readable := doctrine != nil && v.readsDoctrine(owner, doctrine.Visibility)
@@ -895,7 +931,7 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	// count, so it is offered only to those it would let in.
 	direct := facts
 	direct.ViaToken = false
-	data.SectionSubTabs = fleetTabs(op.ID, seesFleetLive(op, v.access(op, direct), live.sight, now), "overview")
+	data.SectionSubTabs = fleetTabs(op.ID, seesFleetLive(op, v.access(op, direct), live.sight, now), view.HasSRP, "overview")
 	if op.Visibility == fleetPublic || facts.ViaToken {
 		data.HeadMeta = module.RenderPageMeta(module.PageMeta{
 			Title:       op.Title,

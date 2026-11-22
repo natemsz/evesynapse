@@ -47,12 +47,37 @@ const (
 	eveCharacterType = 1377
 )
 
-// srpHandler reports whether the account making a request may answer a
-// corporation's requests.
-func (app *mod) srpHandler(r *http.Request, corp int64) (standing.Standing, bool) {
+// srpHandler reports whether the account making a request may answer
+// an owner's requests.
+func (app *mod) srpHandler(r *http.Request, owner standing.Owner) (standing.Standing, bool) {
 	ctx := r.Context()
 	st, err := app.deps.StandingFor(ctx, app.deps.UserID(ctx))
-	return st, err == nil && corp != 0 && app.deps.OwnerPermits(ctx, st, standing.CorporationOwner(corp), permSRP)
+	return st, err == nil && owner.ID != 0 && app.deps.OwnerPermits(ctx, st, owner, permSRP)
+}
+
+// srpActor is the character a handler answers as, and the one that can
+// send the EVE mail. Outside a corporation any of the account's
+// characters with mail access can send it.
+func (app *mod) srpActor(ctx context.Context, userID int64, owner standing.Owner) module.CorpActor {
+	if owner.Kind == standing.OwnerCorporation {
+		return app.deps.CorpActorFor(ctx, userID, owner.ID)
+	}
+	actor := module.CorpActor{CharacterID: app.deps.OwnerActorFor(ctx, userID, owner)}
+	characters, err := app.queries.ListCharactersByUser(ctx, userID)
+	if err != nil {
+		logging.Errorf("srp: characters of user %d: %v", userID, err)
+		return actor
+	}
+	for i := range characters {
+		ch := &characters[i]
+		if ch.LinkState != module.LinkStateOK || !module.CharacterHasScope(*ch, module.MailSendScope) {
+			continue
+		}
+		if actor.Mailer == nil || ch.CharacterID == actor.CharacterID {
+			actor.Mailer = ch
+		}
+	}
+	return actor
 }
 
 // handleSRPDecide answers a request (POST /srp/{id}/decide): paid with
@@ -68,11 +93,12 @@ func (app *mod) handleSRPDecide(w http.ResponseWriter, r *http.Request) {
 		back("That request is not yours to handle.")
 		return
 	}
-	if _, ok := app.srpHandler(r, req.CorporationID); !ok {
+	owner := standing.Owner{Kind: req.OwnerKind, ID: req.OwnerID}
+	if _, ok := app.srpHandler(r, owner); !ok {
 		back("That request is not yours to handle.")
 		return
 	}
-	actor := app.deps.CorpActorFor(ctx, userID, req.CorporationID)
+	actor := app.srpActor(ctx, userID, owner)
 	note := humanize.Clip(strings.TrimSpace(r.Form.Get("note")), srpNoteMax)
 	decide := func(status string, payout float64) bool {
 		n, err := app.queries.DecideSRPRequest(ctx, db.DecideSRPRequestParams{
@@ -115,7 +141,7 @@ func (app *mod) handleSRPDecide(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		message := "Marked paid: " + srpISK(payout) + " to " + app.srpPilot(ctx, req.CharacterID) + "."
-		if r.Form.Get("mail") == "1" && req.UserID != userID {
+		if r.Form.Get("mail") == "1" && (!req.UserID.Valid || req.UserID.Int64 != userID) {
 			req.Payout, req.HandlerNote = payout, note
 			message += " " + app.srpMailPaid(ctx, actor, req)
 		}
@@ -138,7 +164,7 @@ func srpKillLink(req db.SrpRequest, text string) string {
 // says in a sentence how that went.
 func (app *mod) srpMailPaid(ctx context.Context, actor module.CorpActor, req db.SrpRequest) string {
 	if actor.Mailer == nil {
-		return "No EVE mail was sent: none of your characters in the corporation has granted mail access."
+		return "No EVE mail was sent: none of your characters has granted mail access."
 	}
 	ship := app.deps.TypeNameOrID(ctx, req.ShipTypeID)
 	lines := []string{
@@ -163,15 +189,15 @@ func (app *mod) srpMailPaid(ctx context.Context, actor module.CorpActor, req db.
 	return "The pilot was told by EVE mail."
 }
 
-// handleSRPPayList mails a corporation's open requests to one of the
+// handleSRPPayList mails an owner's open requests to one of the
 // handler's own characters in game (POST /srp/paylist).
 func (app *mod) handleSRPPayList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.deps.UserID(ctx)
 	back := app.srpBack(w, r)
 	_ = r.ParseForm()
-	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
-	if _, ok := app.srpHandler(r, corp); !ok {
+	owner, named := srpFormOwner(r)
+	if _, ok := app.srpHandler(r, owner); !named || !ok {
 		back("Those requests are not yours to handle.")
 		return
 	}
@@ -181,16 +207,16 @@ func (app *mod) handleSRPPayList(w http.ResponseWriter, r *http.Request) {
 		back("Pick one of your characters that has granted mail access.")
 		return
 	}
-	open, err := app.queries.ListOpenSRPRequests(ctx, []int64{corp})
+	open, err := app.queries.ListOpenSRPRequests(ctx, db.ListOpenSRPRequestsParams{OwnerKind: owner.Kind, OwnerID: owner.ID, RowLimit: srpPayListMost})
 	if err != nil || len(open) == 0 {
 		back("There is nothing open to pay.")
 		return
 	}
 	left := 0
-	if len(open) > srpPayListMost {
-		left, open = len(open)-srpPayListMost, open[:srpPayListMost]
+	if totals, err := app.queries.CountOpenSRPRequests(ctx, db.CountOpenSRPRequestsParams{OwnerKind: owner.Kind, OwnerID: owner.ID}); err == nil {
+		left = max(int(totals.Requests)-len(open), 0)
 	}
-	name := app.deps.CorpDisplayName(ctx, corp)
+	name := app.deps.OwnerName(ctx, owner)
 	lines := []string{
 		"Open ship replacement requests for " + html.EscapeString(name) + ".",
 		"Open a pilot's name to give ISK, then mark each request paid at " + app.deps.SiteURL(srpPath),
@@ -203,9 +229,12 @@ func (app *mod) handleSRPPayList(w http.ResponseWriter, r *http.Request) {
 			op, _ = app.queries.GetOp(ctx, req.OpID)
 			ops[req.OpID] = op
 		}
-		amount := srpISK(req.LossValue)
+		amount := srpISK(req.SuggestedPayout)
 		if amount == "" {
 			amount = "no estimate"
+		}
+		if req.PreviousPayout > 0 {
+			amount += " (already paid " + srpISK(req.PreviousPayout) + ")"
 		}
 		lines = append(lines, fmt.Sprintf(`<a href="showinfo:%d//%d">%s</a>: %s, %s, op %s on %s`,
 			eveCharacterType, req.CharacterID, html.EscapeString(app.srpPilot(ctx, req.CharacterID)), amount,
@@ -217,10 +246,10 @@ func (app *mod) handleSRPPayList(w http.ResponseWriter, r *http.Request) {
 	}
 	subject := "SRP pay list: " + name + " (" + humanize.Plural(len(open), "request") + ")"
 	if err := app.deps.SendEVEMail(ctx, mailer, mailer.CharacterID, "character", subject, strings.Join(lines, "<br>"), 0); err != nil {
-		logging.Errorf("srp: pay list mail for corporation %d: %v", corp, err)
+		logging.Errorf("srp: pay list mail for %s: %v", owner.Key(), err)
 		back("The pay list was not sent" + app.deps.ESIRefusalDetail(err) + ".")
 		return
 	}
-	logging.Infof("srp: user %d mailed the pay list of corporation %d to character %d", userID, corp, mailer.CharacterID)
+	logging.Infof("srp: user %d mailed the pay list of %s to character %d", userID, owner.Key(), mailer.CharacterID)
 	back("The pay list is in " + mailer.Name + "'s EVE mail: " + humanize.Plural(len(open), "request") + ".")
 }

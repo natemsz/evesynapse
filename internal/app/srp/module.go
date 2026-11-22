@@ -1,8 +1,9 @@
-// Package srp is the Ship Replacement module (/srp/): pilots file a loss
-// for their corporation's replacement programme and its handlers pay or
-// deny it, with the pay list mailed in game. The request tables and the
-// permission model are core's; the notification source for new and
-// answered requests lives with core's notifier (corp_srp_notify.go).
+// Package srp is the Ship Replacement module (/srp/ and each fleet's
+// tab): pilots file a loss with the corporation, alliance or community
+// that ran the fleet, and its handlers pay or deny it, with the pay list
+// mailed in game. The request tables and the permission model are core's;
+// the notification source for new and answered requests lives with
+// core's notifier (corp_srp_notify.go).
 package srp
 
 import (
@@ -37,6 +38,11 @@ var Module = module.Module{
 		Entries: []module.NavEntry{
 			{Href: "/srp/", Label: "Ship Replacement", Pages: []string{"srp.html"}, After: "/doctrines/fits/"},
 		},
+	}, {
+		Section: "fleets",
+		Entries: []module.NavEntry{
+			{Href: "/srp/", Label: "Ship Replacement", Pages: []string{"srp.html"}, After: "/doctrines/fits/"},
+		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {
 		h := func(f func(*mod, http.ResponseWriter, *http.Request)) http.HandlerFunc {
@@ -48,16 +54,26 @@ var Module = module.Module{
 		auth.Post("/srp/paylist", h((*mod).handleSRPPayList))
 		auth.Post("/srp/{id}/decide", h((*mod).handleSRPDecide))
 		auth.Post("/srp/{id}/withdraw", h((*mod).handleSRPWithdraw))
+		auth.Post("/srp/policies", h((*mod).handleSRPPolicySave))
+		auth.Post("/srp/policies/{id}/delete", h((*mod).handleSRPPolicyDelete))
+
+		// A pilot with no account claims from the fleet's own tab.
+		anon := r.With(deps.AnonPages())
+		anon.Get("/fleets/{opID:[0-9]+}/srp", h((*mod).handleFleetSRP))
+		anon.Post("/fleets/{opID:[0-9]+}/srp/claim", h((*mod).handleFleetSRPClaim))
+		anon.Post("/fleets/{opID:[0-9]+}/srp/{requestID:[0-9]+}/withdraw", h((*mod).handleFleetSRPWithdraw))
 	},
 	Pages: []module.Page{
-		{Template: "srp.html", Section: "corporation"},
+		{Template: "srp.html", Section: "fleets"},
+		{Template: "fleet_srp.html", Section: "fleets"},
 	},
 }
 
 // PageData is the view model passed to srp.html.
 type PageData struct {
 	module.ShellData
-	SRP *srpView
+	SRP      *srpView
+	FleetSRP *fleetSRPView
 }
 
 // Shell returns the embedded ShellData pointer for render.

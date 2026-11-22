@@ -4,6 +4,7 @@ import (
 	"context"
 	"evesynapse/internal/app/module"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -116,6 +117,15 @@ func corpAddress(path string, corp int64) string {
 	return path + "?corporation=" + strconv.FormatInt(corp, 10)
 }
 
+// freeSRPPolicyName is a name no policy of the owner has.
+func freeSRPPolicyName(policies []db.SrpPolicy) string {
+	name := "Standard"
+	for i := 2; slices.ContainsFunc(policies, func(p db.SrpPolicy) bool { return strings.EqualFold(p.Name, name) }); i++ {
+		name = "Standard " + strconv.Itoa(i)
+	}
+	return name
+}
+
 // ---------------------------------------------------------------------------
 // Corporation settings: what a corporation's directors decide about
 // how it runs here, on one page. Who handles ship replacement and what
@@ -173,8 +183,8 @@ func (app *Application) handleCorpSettings(w http.ResponseWriter, r *http.Reques
 			view.FleetsWho = app.permissionChoices(ctx, owner, permFleets)
 			view.FleetsRoles = app.cfg.opsManagerRolesText()
 		}
-		if settings, err := app.queries.GetSRPSettings(ctx, corp); err == nil {
-			view.SRPPolicy = settings.Policy
+		if policy, err := app.queries.GetDefaultSRPPolicy(ctx, db.GetDefaultSRPPolicyParams{OwnerKind: owner.Kind, OwnerID: owner.ID}); err == nil {
+			view.SRPPolicy = policy.PolicyText
 		}
 	}
 	app.render(ctx, w, http.StatusOK, "corp_settings.html", data)
@@ -214,9 +224,17 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 		app.setOwnerPermission(ctx, owner, permIntel, r.Form.Get("intel_who"), by) &&
 		(!setsFleets || app.setOwnerPermission(ctx, owner, permFleets, r.Form.Get("fleets_who"), by))
 	if saved {
-		err = app.queries.SetSRPSettings(ctx, db.SetSRPSettingsParams{
-			CorporationID: corp, Policy: clip(strings.TrimSpace(r.Form.Get("srp_policy")), srpPolicyMax), UpdatedAt: time.Now().UTC(),
-		})
+		text, now := clip(strings.TrimSpace(r.Form.Get("srp_policy")), srpPolicyMax), time.Now().UTC()
+		err = app.queries.SetSRPSettings(ctx, db.SetSRPSettingsParams{CorporationID: corp, Policy: text, UpdatedAt: now})
+		if err == nil {
+			var policies []db.SrpPolicy
+			policies, err = app.queries.ListSRPPolicies(ctx, db.ListSRPPoliciesParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
+			if err == nil {
+				err = app.queries.SetDefaultSRPPolicyText(ctx, db.SetDefaultSRPPolicyTextParams{
+					OwnerKind: owner.Kind, OwnerID: owner.ID, NewName: freeSRPPolicyName(policies), PolicyText: text, UpdatedBy: by, UpdatedAt: now,
+				})
+			}
+		}
 	}
 	if !saved || err != nil {
 		logging.Errorf("corporation settings: save for corporation %d: %v", corp, err)

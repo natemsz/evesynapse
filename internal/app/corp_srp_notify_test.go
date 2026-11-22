@@ -32,7 +32,7 @@ func seedPaidSRPRequest(t *testing.T, f *notifyFixture, decidedAt time.Time) {
 		t.Fatalf("create op: %v", err)
 	}
 	id, err := f.q.CreateSRPRequest(f.ctx, db.CreateSRPRequestParams{
-		CorporationID: fixtureCorpA, OpID: opID, KillmailID: 777001, KillmailHash: "fixturehash",
+		CorporationID: fixtureCorpA, OwnerKind: ownerCorporation, OwnerID: fixtureCorpA, OpID: opID, KillmailID: 777001, KillmailHash: "fixturehash",
 		CharacterID: f.ch.CharacterID, UserID: f.userID, ShipTypeID: 34,
 		SolarSystemID: 30000142, LostAt: decidedAt.Add(-time.Hour), LossValue: 12000000,
 		CreatedAt: decidedAt.Add(-time.Hour),

@@ -299,7 +299,7 @@ func (q *Queries) GetDefaultSRPPolicy(ctx context.Context, arg GetDefaultSRPPoli
 }
 
 const getOpAttendance = `-- name: GetOpAttendance :one
-SELECT op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at, wing_id, squad_id, fleet_position, solar_system_id, suggested_role FROM op_attendance WHERE op_id = $1 AND character_id = $2
+SELECT op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at, wing_id, squad_id, fleet_position, solar_system_id, suggested_role, first_fleet_at FROM op_attendance WHERE op_id = $1 AND character_id = $2
 `
 
 type GetOpAttendanceParams struct {
@@ -322,6 +322,7 @@ func (q *Queries) GetOpAttendance(ctx context.Context, arg GetOpAttendanceParams
 		&i.FleetPosition,
 		&i.SolarSystemID,
 		&i.SuggestedRole,
+		&i.FirstFleetAt,
 	)
 	return i, err
 }

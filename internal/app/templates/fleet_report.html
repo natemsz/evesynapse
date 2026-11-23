@@ -1,0 +1,107 @@
+{{define "title"}}{{with .FleetReport}}{{.Title}}: report{{end}}{{end}}
+{{define "pagetitle"}}{{with .FleetReport}}<h1><span class="gt">{{.Title}}</span></h1>{{end}}{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+{{with .FleetReport}}
+{{$v := .}}
+<div class="l-page fl-page fl-report">
+<div class="l-head">
+  <h2 class="l-head-title">{{.Title}}</h2>
+  <p class="l-head-sum">Battle report for {{.Owner}}. Kills and losses come from killmails. Damage and repairs come from the logs pilots add.</p>
+</div>
+
+{{if .Chips}}<nav class="l-cluster" aria-label="Battles of this fleet">{{range .Chips}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+
+{{with .Battle}}
+<section class="l-panel fl-cover" aria-labelledby="fl-cover-title">
+  <h2 id="fl-cover-title">{{systemLink .SystemID .System}} <small>{{.When}}, {{.Length}}</small></h2>
+  <p class="fl-cover-line">{{.Coverage}}</p>
+  <svg class="fl-coverbar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.CoverWidth}}" height="4"/></svg>
+  {{if or .LeftOut .Unpriced}}<ul class="fl-notes">{{with .LeftOut}}<li>{{.}}</li>{{end}}{{with .Unpriced}}<li>{{.}}</li>{{end}}</ul>{{end}}
+</section>
+
+<div class="l-tiles">
+  <div class="l-stat"><span class="l-stat-label">Kills</span><span class="l-stat-value">{{.Kills}}</span><span class="l-stat-sub">{{.Destroyed}} ISK destroyed</span></div>
+  <div class="l-stat"><span class="l-stat-label">Losses</span><span class="l-stat-value">{{.Losses}}</span><span class="l-stat-sub">{{.Lost}} ISK lost</span></div>
+  <div class="l-stat"><span class="l-stat-label">Damage dealt</span><span class="l-stat-value">{{.Out}}</span><span class="l-stat-sub">to enemies</span></div>
+  <div class="l-stat"><span class="l-stat-label">Damage taken</span><span class="l-stat-value">{{.In}}</span><span class="l-stat-sub">from enemies</span></div>
+</div>
+
+<section class="l-panel" aria-labelledby="fl-curve-title">
+  <div class="fl-curve-head">
+    <h2 id="fl-curve-title">Damage and repairs per second</h2>
+    {{if .Curve}}<ul class="fl-curve-key"><li class="is-out">Damage out</li><li class="is-in">Damage in</li><li class="is-rep">Repairs</li></ul>{{end}}
+  </div>
+  {{if .Curve}}
+  <div class="fl-plot">
+    <div class="fl-plot-y" aria-hidden="true"><span>{{.TopDPS}}</span><span>0</span></div>
+    <svg class="fl-curve" viewBox="0 0 600 160" preserveAspectRatio="none" role="img" aria-label="Damage out, damage in and repairs per second across the battle. The pilots table below has each pilot's figures.">
+      <line class="fl-grid" x1="0" y1="80" x2="600" y2="80" vector-effect="non-scaling-stroke"/>
+      <line class="fl-grid" x1="0" y1="159.5" x2="600" y2="159.5" vector-effect="non-scaling-stroke"/>
+      <polyline class="fl-ln fl-ln-rep" points="{{.Curve.Reps}}" vector-effect="non-scaling-stroke"/>
+      <polyline class="fl-ln fl-ln-in" points="{{.Curve.In}}" vector-effect="non-scaling-stroke"/>
+      <polyline class="fl-ln fl-ln-out" points="{{.Curve.Out}}" vector-effect="non-scaling-stroke"/>
+      {{range .Curve.Bars}}<rect class="fl-hit" x="{{.X}}" y="0" width="{{.W}}" height="160"><title>{{.Label}}</title></rect>{{end}}
+    </svg>
+  </div>
+  {{else}}<p class="fl-empty">No logs for this battle yet, so there is no curve.</p>{{end}}
+  <ul class="fl-tally fl-extra">
+    <li><span>Repairs given</span><span>{{.Reps}}</span></li>
+    <li><span>Capacitor drained</span><span>{{.Cap}}</span></li>
+    <li><span>Friendly fire</span><span>{{.FriendlyFire}}</span></li>
+  </ul>
+</section>
+
+<section class="l-panel" aria-labelledby="fl-rp-title">
+  <h2 id="fl-rp-title">Pilots</h2>
+  {{if $v.PilotsCut}}<p class="fl-hint">Showing the top {{len $v.Pilots}} by damage.</p>{{end}}
+  <div class="tw" tabindex="0" role="region" aria-labelledby="fl-rp-title">
+  <table>
+    <thead><tr><th>Pilot</th><th>Ship</th><th>Kills</th><th>Damage out</th><th>Damage in</th><th>Repairs</th><th>Log</th></tr></thead>
+    <tbody>
+    {{range $v.Pilots}}
+    <tr><td>{{charLink $v.ViewerChars .CharacterID .Name}}{{if .Died}} <span class="badge loss">LOST SHIP</span>{{end}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{.Kills}}</td>
+      <td>{{if .HasLog}}{{.Out}}{{else}}-{{end}}</td><td>{{if .HasLog}}{{.In}}{{else}}-{{end}}</td><td>{{if .HasLog}}{{.Reps}}{{else}}-{{end}}</td><td>{{if .HasLog}}Added{{else}}None{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+{{if $v.Mails}}
+<section class="l-panel" aria-labelledby="fl-rm-title">
+  <h2 id="fl-rm-title">Killmails</h2>
+  {{if $v.MailsCut}}<p class="fl-hint">Showing the first {{len $v.Mails}}.</p>{{end}}
+  <div class="tw" tabindex="0" role="region" aria-labelledby="fl-rm-title">
+  <table>
+    <thead><tr><th>Time</th><th>Result</th><th>Ship</th><th>Pilot</th><th>Value</th></tr></thead>
+    <tbody>
+    {{range $v.Mails}}
+    <tr><td><a href="/intel/kill/{{.KillmailID}}/">{{.When}}</a></td><td>{{if .Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{charLink $v.ViewerChars .VictimID .Victim}}</td><td>{{.Value}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+{{end}}
+{{else}}
+<section class="l-panel" aria-labelledby="fl-none-title">
+  <h2 id="fl-none-title">No report yet</h2>
+  <p class="fl-empty">{{if .Building}}This report is still being built. Check back in a few minutes.{{else if .Closed}}No kills, losses or added logs were found for this fleet.{{else}}The report is built a few minutes after the fleet closes.{{end}}</p>
+</section>
+{{end}}
+
+{{if .Consent}}
+<section class="l-panel" aria-labelledby="fl-logs-title">
+  <h2 id="fl-logs-title">Add your battle logs</h2>
+  <p class="prose">Your damage and repairs join this report, where others with access to it can see them. Send logs with Axon or <a href="{{.UploadHref}}">upload them</a>. Untick a pilot to take their logs back out.</p>
+  <form method="post" action="{{.Path}}/logs" class="fl-ticks" aria-labelledby="fl-logs-title">
+    {{range .Consent}}<label><input type="checkbox" name="logs" value="{{.CharacterID}}"{{if .On}} checked{{end}}> {{.Name}}</label>{{end}}
+    <p><button type="submit">Save log choices</button></p>
+  </form>
+</section>
+{{end}}
+</div>
+{{end}}
+{{end}}

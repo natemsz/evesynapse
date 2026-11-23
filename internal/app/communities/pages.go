@@ -190,6 +190,9 @@ type peopleTab struct {
 }
 
 type communityView struct {
+	// FleetRecord is a listed community's place on the public fleet
+	// leaderboard, and FleetHref its board.
+	FleetRecord, FleetHref       string
 	ID                           int64
 	Path, Name, Description      string
 	Policy, PolicyValue, Members string
@@ -338,6 +341,16 @@ func (app *mod) handleCommunity(w http.ResponseWriter, r *http.Request) {
 	}
 	if view.SeesPeople {
 		app.fillPeople(ctx, view, c, role, q)
+	}
+	if c.Listed && !c.ArchivedAt.Valid {
+		owner := standing.Owner{Kind: standing.OwnerCommunity, ID: c.ID}
+		row, err := app.queries.GetFleetLeaderPlace(ctx, db.GetFleetLeaderPlaceParams{Period: "all", Board: "group", EntityKind: owner.Kind, EntityID: owner.ID})
+		if err == nil {
+			view.FleetRecord = module.FleetRecordText(row.Place, row.Fleets, row.Kills, row.Deaths, row.Points)
+			view.FleetHref = module.FleetLeadersFor(owner.Key())
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			logging.Errorf("communities: fleet record of %d: %v", c.ID, err)
+		}
 	}
 	if app.deps.ModuleEnabled("doctrines") {
 		owner := standing.Owner{Kind: standing.OwnerCommunity, ID: c.ID}

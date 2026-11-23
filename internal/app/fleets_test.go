@@ -33,6 +33,87 @@ func TestOnlyAManagerRoleHandsOnFleetPlanning(t *testing.T) {
 	}
 }
 
+// TestPrivateFleetStaysOffPublicBoards: a private fleet's pilots rank
+// only on the board its own members see. A public fleet counts toward
+// its group, names its pilots only if its planner turned names on, shows
+// its totals, and keeps its pilot-by-pilot report closed to strangers.
+func TestPrivateFleetStaysOffPublicBoards(t *testing.T) {
+	f := newOpsFixture(t)
+	id := f.create(time.Now().UTC().Add(48*time.Hour).Truncate(time.Minute), "Closed strat op")
+	start := time.Now().UTC().Add(-4 * time.Hour).Truncate(time.Minute)
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := f.app.db.ExecContext(f.ctx, query, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`UPDATE ops SET starts_at = $1 WHERE id = $2`, start, id)
+	for _, pilot := range []int64{fixtureCharA, fixtureCharB, opsCharC, 90000011, 90000012} {
+		exec(`INSERT INTO op_attendance (op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at)
+		      VALUES ($1, $2, 587, 'fleet', $3, $4)`, id, pilot, start, start.Add(40*time.Minute))
+	}
+	exec(`INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id, ship_type_id, damage_taken, source, public, ingested_at, value_ours)
+	      VALUES (7001, $1, 30000142, 95000001, 98009999, 587, 1000, 'test', TRUE, $1, 200000000)`, start.Add(10*time.Minute))
+	exec(`INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, damage_done, final_blow)
+	      VALUES (7001, 0, $1, $2, 587, 1000, TRUE)`, opsCharC, opsCorp)
+	f.app.refreshFleetReports(f.ctx)
+
+	anonymous := func(path string) (int, string) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		f.app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec.Code, rec.Body.String()
+	}
+	pilot := strconv.FormatInt(opsCharC, 10)
+	ownBoard := "/fleets/leaderboard/?owner=corporation:" + strconv.FormatInt(opsCorp, 10)
+	if _, body := anonymous("/fleets/leaderboard/"); strings.Contains(body, pilot) {
+		t.Error("the public board ranks a pilot from a private fleet")
+	}
+	if code, body := anonymous(ownBoard); code != http.StatusNotFound || strings.Contains(body, pilot) {
+		t.Errorf("a corporation with only private fleets has a public board: %d", code)
+	}
+	if _, _, body := f.get(f.other, ownBoard); strings.Contains(body, pilot) {
+		t.Error("an outsider sees the private fleet on the corporation's board")
+	}
+	if _, _, body := f.get(f.member, ownBoard); !strings.Contains(body, pilot) {
+		t.Error("a member does not see their own group's private fleet counted")
+	}
+
+	op, err := f.q.GetOp(f.ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publish := func(names bool) {
+		t.Helper()
+		if err := f.q.UpdateFleetAccess(f.ctx, db.UpdateFleetAccessParams{ID: id, FleetType: op.FleetType, Visibility: fleetPublic, JoinGate: op.JoinGate, RosterPublic: names}); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.app.refreshFleetLeaders(f.ctx, time.Now().UTC()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	publish(false)
+	if _, body := anonymous("/fleets/leaderboard/"); strings.Contains(body, pilot) {
+		t.Error("the public board names a pilot of a fleet with names turned off")
+	}
+	if code, body := anonymous(ownBoard); code != http.StatusOK || strings.Contains(body, pilot) {
+		t.Errorf("a group's board with names turned off: %d", code)
+	}
+	if _, body := anonymous("/fleets/leaderboard/?board=groups"); !strings.Contains(body, strconv.FormatInt(opsCorp, 10)) {
+		t.Error("the group board leaves out a public fleet with names turned off")
+	}
+	publish(true)
+	if _, body := anonymous("/fleets/leaderboard/"); !strings.Contains(body, pilot) {
+		t.Error("the public board leaves out a public fleet's pilot")
+	}
+	if code, body := anonymous(opURL(id)); code != http.StatusOK || !strings.Contains(body, "Fleet totals") {
+		t.Errorf("a public fleet's totals: %d", code)
+	}
+	if code, body := anonymous(fleetReportPath(id)); code != http.StatusNotFound || strings.Contains(body, pilot) {
+		t.Errorf("a stranger opened the pilot-by-pilot report: %d", code)
+	}
+}
+
 // TestAnonymousViewerGetsNoDetailsOfARestrictedFleet: without standing,
 // a private fleet answers the same as one that does not exist, by its
 // address, its share link and its calendar file. A link-only fleet

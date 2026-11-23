@@ -514,16 +514,25 @@ func fleetCompositionPath(id int64) string { return opURL(id) + "composition" }
 
 // fleetTabs is the second tab row on one fleet's pages. Each tab is
 // offered only to those who can open it.
-func fleetTabs(id int64, composition, srp bool, active string) []navLink {
-	if !composition && !srp {
+func fleetTabs(id int64, overview, composition, srp, report bool, active string) []navLink {
+	if !composition && !srp && !report {
 		return nil
 	}
-	tabs := []navLink{{Href: opURL(id), Label: "Overview", Active: active == "overview"}}
+	var tabs []navLink
+	if overview {
+		tabs = append(tabs, navLink{Href: opURL(id), Label: "Overview", Active: active == "overview"})
+	}
 	if composition {
 		tabs = append(tabs, navLink{Href: fleetCompositionPath(id), Label: "Composition", Active: active == "composition"})
 	}
 	if srp {
 		tabs = append(tabs, navLink{Href: opURL(id) + "srp", Label: "Ship Replacement", Active: active == "srp"})
+	}
+	if report {
+		tabs = append(tabs, navLink{Href: fleetReportPath(id), Label: "Report", Active: active == "report"})
+	}
+	if len(tabs) < 2 {
+		return nil
 	}
 	return tabs
 }
@@ -848,10 +857,8 @@ func (app *Application) handleFleetComposition(w http.ResponseWriter, r *http.Re
 	w.Header().Set("X-Robots-Tag", "noindex")
 	data := pageData{ShellData: app.PublicShell(ctx), FleetLive: app.fleetLiveFor(ctx, op, v, a, live, page, time.Now())}
 	// A pilot let in only by being in the fleet has no Overview to go to.
-	if a.View {
-		_, _, _, srp := app.seesFleetSRP(ctx, op, v)
-		data.SectionSubTabs = fleetTabs(op.ID, true, srp, "composition")
-	}
+	_, _, _, srp := app.seesFleetSRP(ctx, op, v)
+	data.SectionSubTabs = fleetTabs(op.ID, a.View, true, srp, app.fleetReportTab(ctx, op, v, time.Now()), "composition")
 	data.Scripts = []string{"/static/fleets.js"}
 	app.render(ctx, w, http.StatusOK, "fleet_composition.html", data)
 }

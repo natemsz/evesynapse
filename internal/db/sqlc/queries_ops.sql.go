@@ -631,7 +631,7 @@ func (q *Queries) ListOpAccessRulesForOps(ctx context.Context, opIds []int64) ([
 }
 
 const listOpAttendance = `-- name: ListOpAttendance :many
-SELECT op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at, wing_id, squad_id, fleet_position, solar_system_id, suggested_role FROM op_attendance WHERE op_id = $1 ORDER BY character_id
+SELECT op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at, wing_id, squad_id, fleet_position, solar_system_id, suggested_role, first_fleet_at FROM op_attendance WHERE op_id = $1 ORDER BY character_id
 `
 
 func (q *Queries) ListOpAttendance(ctx context.Context, opID int64) ([]OpAttendance, error) {
@@ -655,6 +655,7 @@ func (q *Queries) ListOpAttendance(ctx context.Context, opID int64) ([]OpAttenda
 			&i.FleetPosition,
 			&i.SolarSystemID,
 			&i.SuggestedRole,
+			&i.FirstFleetAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1468,10 +1469,10 @@ func (q *Queries) UpdateOpCompositionAt(ctx context.Context, arg UpdateOpComposi
 }
 
 const upsertFleetAttendance = `-- name: UpsertFleetAttendance :execrows
-INSERT INTO op_attendance (op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at,
+INSERT INTO op_attendance (op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at, first_fleet_at,
     wing_id, squad_id, fleet_position, solar_system_id, suggested_role)
 SELECT $1::bigint, m.character_id, m.ship_type_id, 'fleet',
-       $2::timestamptz, $2::timestamptz,
+       $2::timestamptz, $2::timestamptz, $2::timestamptz,
        m.wing_id, m.squad_id, m.fleet_position, m.solar_system_id, m.suggested_role
 FROM (
     SELECT unnest($3::bigint[]) AS character_id,
@@ -1486,6 +1487,9 @@ ON CONFLICT (op_id, character_id) DO UPDATE SET
     ship_type_id    = excluded.ship_type_id,
     source          = 'fleet',
     last_seen_at    = excluded.last_seen_at,
+    first_fleet_at  = COALESCE(op_attendance.first_fleet_at,
+                               CASE WHEN op_attendance.source = 'fleet' THEN op_attendance.first_seen_at
+                                    ELSE excluded.first_fleet_at END),
     wing_id         = excluded.wing_id,
     squad_id        = excluded.squad_id,
     fleet_position  = excluded.fleet_position,

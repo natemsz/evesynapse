@@ -143,3 +143,32 @@
   .fl-pilots td:last-child { grid-area: save; }
   .fl-pilots select, .fl-pilots input[type="text"] { min-width: 0; }
 }
+
+/* The fleet report */
+.fl-report { --fl-out: var(--gold); --fl-in: var(--danger); --fl-rep: var(--kept); }
+.fl-cover h2 small { color: var(--muted); }
+.fl-cover-line { margin: 0 0 var(--space-2); color: var(--text-bright); }
+.fl-coverbar { display: block; width: 100%; height: 0.4rem; border-radius: var(--r-xs); background: var(--row-alt); }
+.fl-coverbar rect { fill: var(--kept); }
+.fl-cover .fl-notes { margin-top: var(--space-2); }
+.fl-curve-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2) var(--space-4); margin-bottom: var(--space-3); }
+.fl-page .fl-curve-head h2 { margin: 0; }
+.fl-curve-key { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--fs-xs); }
+.fl-curve-key li::before { content: ""; display: inline-block; width: 1rem; margin-inline-end: var(--space-1); vertical-align: middle; border-top: 2px solid var(--fl-key); }
+.fl-curve-key .is-out { --fl-key: var(--fl-out); }
+.fl-curve-key .is-in { --fl-key: var(--fl-in); }
+.fl-curve-key .is-rep { --fl-key: var(--fl-rep); }
+.fl-curve-key .is-rep::before { border-top-style: dashed; }
+.fl-plot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2); }
+.fl-plot-y { display: flex; flex-direction: column; justify-content: space-between; color: var(--muted); font-size: var(--fs-xs); text-align: end; }
+.fl-curve { display: block; width: 100%; height: 11rem; }
+.fl-grid { stroke: var(--hairline); stroke-width: 1px; }
+.fl-ln { fill: none; stroke-width: 2px; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+.fl-ln-out { stroke: var(--fl-out); }
+.fl-ln-in { stroke: var(--fl-in); }
+.fl-ln-rep { stroke: var(--fl-rep); stroke-dasharray: 5 3; }
+.fl-hit { fill: transparent; }
+.fl-hit:hover { fill: color-mix(in srgb, var(--text) 12%, transparent); }
+.fl-extra { margin-top: var(--space-3); }
+.fl-scoring { margin: var(--space-3) 0 0; max-width: 70ch; }
+.fl-place { display: inline-block; min-width: 2.5ch; margin-inline-end: var(--space-2); color: var(--muted); font-variant-numeric: tabular-nums; }

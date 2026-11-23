@@ -11,6 +11,7 @@
      leaderboards drop below the list. */}}
 <div class="l-page kb">
   {{template "kb-stats" .}}
+  {{with .FleetRecord}}<p class="kb-fleet"><a href="{{.Href}}">{{.Text}}</a></p>{{end}}
 
   <div class="l-cluster kb-bar">
     <form method="get" action="/intel/kills/" class="kb-search" role="search">

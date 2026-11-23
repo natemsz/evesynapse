@@ -632,6 +632,10 @@ func (app *Application) saveFleet(ctx context.Context, form *opFormView, owner o
 				return 0, err
 			}
 		}
+		// A new time moves the window its logs and mails are read from.
+		if err := markFleetReportChanged(ctx, q, id); err != nil {
+			return 0, err
+		}
 	}
 	if form.CanSetAccess {
 		if err := q.DeleteOpAccessRules(ctx, id); err != nil {
@@ -790,6 +794,8 @@ type opView struct {
 
 	// Attendance: who was there, and how that is known.
 	Attendance *opAttendance
+	// Totals: the fleet's stored kills, losses and ISK, nil until built.
+	Totals *fleetTotalsView
 }
 
 func (app *Application) handleOp(w http.ResponseWriter, r *http.Request) {
@@ -926,12 +932,13 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 		}
 	}
 
+	view.Totals = app.fleetTotalsFor(ctx, op.ID)
 	data := pageData{ShellData: app.PublicShell(ctx), Op: view}
 	// The tab opens by the fleet's address, where a share link does not
 	// count, so it is offered only to those it would let in.
 	direct := facts
 	direct.ViaToken = false
-	data.SectionSubTabs = fleetTabs(op.ID, seesFleetLive(op, v.access(op, direct), live.sight, now), view.HasSRP, "overview")
+	data.SectionSubTabs = fleetTabs(op.ID, true, seesFleetLive(op, v.access(op, direct), live.sight, now), view.HasSRP, app.fleetReportTab(ctx, op, v, now), "overview")
 	if op.Visibility == fleetPublic || facts.ViaToken {
 		data.HeadMeta = module.RenderPageMeta(module.PageMeta{
 			Title:       op.Title,
@@ -1180,6 +1187,8 @@ func (app *Application) handleOpCancel(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := app.queries.SetOpCancelled(ctx, db.SetOpCancelledParams{CancelledAt: cancelled, ID: op.ID}); err != nil {
 			logging.Errorf("fleets: cancel fleet %d: %v", op.ID, err)
+		} else if err := markFleetReportChanged(ctx, app.queries, op.ID); err != nil {
+			logging.Errorf("fleets: mark report of %d: %v", op.ID, err)
 		}
 	}
 	http.Redirect(w, r, opURL(op.ID), http.StatusSeeOther)

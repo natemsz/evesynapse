@@ -98,6 +98,13 @@
   {{end}}
     </details>
     {{end}}
+    {{if .FleetRecord}}
+    <section class="l-panel cm-next" aria-labelledby="cm-fleet-title">
+      <h2 id="cm-fleet-title">Fleet record</h2>
+      <p>{{.FleetRecord}}</p>
+      <a class="btn btn-quiet" href="{{.FleetHref}}">Open leaderboard</a>
+    </section>
+    {{end}}
     {{if or .Doctrines .DoctrinesHref}}
     <section class="l-panel cm-next" aria-labelledby="cm-doctrines-title">
       <h2 id="cm-doctrines-title">Doctrines</h2>

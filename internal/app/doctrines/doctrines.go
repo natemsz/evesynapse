@@ -57,6 +57,7 @@ const (
 	doctrineTagsMost    = 12
 	doctrineFitsMost    = 40
 	doctrineEFTMax      = 16 << 10
+	doctrineListMost    = 100 // doctrines one list page shows
 )
 
 // doctrineTags reads a tags field into the stored form: the tags as
@@ -117,29 +118,9 @@ type doctrinesView struct {
 	Category     string
 	Tag          string
 	Filtered     bool
+	Cut          bool // more doctrines match than the page shows
 	Categories   []string
 	Tags         []string
-}
-
-// doctrineFitViews turns stored fits into rows, by doctrine.
-// matches reports whether a doctrine passes the page's filters: the
-// words in its name, category, description, tags, or the name or ship
-// of one of its fits.
-func (c doctrineCard) matches(q, category, tag string) bool {
-	if category != "" && !strings.EqualFold(c.Category, category) {
-		return false
-	}
-	if tag != "" && !hasTag(c.Tags, tag) {
-		return false
-	}
-	if q == "" {
-		return true
-	}
-	hay := []string{c.Name, c.Category, c.Description, strings.Join(c.Tags, " ")}
-	for _, fit := range c.Fits {
-		hay = append(hay, fit.Name, fit.Ship)
-	}
-	return strings.Contains(strings.ToLower(strings.Join(hay, "\n")), strings.ToLower(q))
 }
 
 func (app *mod) handleDoctrines(w http.ResponseWriter, r *http.Request) {
@@ -173,30 +154,36 @@ func (app *mod) handleDoctrines(w http.ResponseWriter, r *http.Request) {
 	}
 	view.OwnerOptions, view.Owner = options, cv
 
-	doctrines, err := app.queries.ListDoctrinesForOwner(ctx, db.ListDoctrinesForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
+	facets, err := app.queries.GetDoctrineFacets(ctx, db.GetDoctrineFacetsParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
+	if err != nil {
+		logging.Errorf("doctrines: filters for %s: %v", owner.Key(), err)
+	}
+	cv.Total = int(facets.Total)
+	categories, tags := make(map[string]bool, len(facets.Categories)), make(map[string]bool, len(facets.Tags))
+	for _, category := range facets.Categories {
+		categories[category] = true
+	}
+	for _, tag := range facets.Tags {
+		tags[tag] = true
+	}
+	view.Categories, view.Tags = sortedKeys(categories), sortedKeys(tags)
+	doctrines, err := app.queries.ListDoctrinesFiltered(ctx, db.ListDoctrinesFilteredParams{
+		OwnerKind: owner.Kind, OwnerID: owner.ID, Category: view.Category, Tag: view.Tag, Needle: view.Q, RowLimit: doctrineListMost + 1,
+	})
 	if err != nil {
 		logging.Errorf("doctrines: list for %s: %v", owner.Key(), err)
+	}
+	if len(doctrines) > doctrineListMost {
+		doctrines, view.Cut = doctrines[:doctrineListMost], true
 	}
 	ids := make([]int64, 0, len(doctrines))
 	for _, d := range doctrines {
 		ids = append(ids, d.ID)
 	}
 	fits := app.deps.DoctrineFitViews(ctx, ids)
-	categories, tags := map[string]bool{}, map[string]bool{}
 	for _, d := range doctrines {
-		cv.Total++
-		card := doctrineCard{ID: d.ID, Name: d.Name, Category: d.Category, Description: d.Description, Tags: doctrineTagList(d.Tags), Fits: fits[d.ID]}
-		if d.Category != "" {
-			categories[d.Category] = true
-		}
-		for _, tag := range card.Tags {
-			tags[tag] = true
-		}
-		if card.matches(view.Q, view.Category, view.Tag) {
-			cv.Doctrines = append(cv.Doctrines, card)
-		}
+		cv.Doctrines = append(cv.Doctrines, doctrineCard{ID: d.ID, Name: d.Name, Category: d.Category, Description: d.Description, Tags: doctrineTagList(d.Tags), Fits: fits[d.ID]})
 	}
-	view.Categories, view.Tags = sortedKeys(categories), sortedKeys(tags)
 	app.deps.Render(ctx, w, http.StatusOK, "doctrines.html", data)
 }
 

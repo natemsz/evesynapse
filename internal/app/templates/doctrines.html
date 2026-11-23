@@ -50,6 +50,7 @@
 </section>
 {{end}}
 </div>
+{{if .Cut}}<p class="co-note">Showing the first {{len $corp.Doctrines}}. Search or filter to find the rest.</p>{{end}}
 {{else if $corp.Total}}
 <p class="co-note">No doctrine matches. <a href="/doctrines/?owner={{$corp.Key}}">Clear the search</a>.</p>
 {{else}}

@@ -24,8 +24,8 @@ import (
 // stored in owner_permissions in the terms of a Discord role rule and
 // judged the same way, from stored data only.
 //
-// A corporation's choice is also written to corp_permissions, so the
-// previous release reads the same choices if it is restored.
+// corp_permissions is no longer written. It stays, with the trigger that
+// carries its writes here, so a restored earlier release still saves.
 // ---------------------------------------------------------------------------
 
 // Programmes (owner_permissions.permission). Stored: never rename.
@@ -158,56 +158,13 @@ func permissionRule(owner orgOwner, value string) bool {
 	return false
 }
 
-// setOwnerPermission stores an owner's choice for a programme; the
-// empty choice hands it to nobody else.
-func (app *Application) setOwnerPermission(ctx context.Context, owner orgOwner, permission, raw string, by int64) bool {
-	kind, ref := "", ""
-	if raw != "" {
-		var ok bool
-		kind, ref, ok = app.parseRuleWho(ctx, owner, raw)
-		if !ok || !permissionRule(owner, kind+":"+ref) {
-			return false
-		}
-	}
-	if err := app.writeOwnerPermission(ctx, owner, permission, kind, ref, by); err != nil {
-		logging.Errorf("permissions: set %s of %s: %v", permission, owner.Key(), err)
-		return false
-	}
-	return true
-}
-
-// writeOwnerPermission stores one choice, an empty kind clearing it,
-// and a corporation's copy in corp_permissions with it.
-func (app *Application) writeOwnerPermission(ctx context.Context, owner orgOwner, permission, kind, ref string, by int64) error {
-	tx, err := app.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if err := storeOwnerPermission(ctx, app.queries.WithTx(tx), owner, permission, kind, ref, by); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
-}
-
-// storeOwnerPermission writes one choice inside a caller's transaction.
+// storeOwnerPermission writes one choice inside a caller's transaction,
+// an empty kind clearing it.
 func storeOwnerPermission(ctx context.Context, q *db.Queries, owner orgOwner, permission, kind, ref string, by int64) error {
-	now := time.Now().UTC()
-	var err error
 	if kind == "" {
-		err = q.DeleteOwnerPermission(ctx, db.DeleteOwnerPermissionParams(ownerPermissionKey(owner, permission)))
-	} else {
-		err = q.SetOwnerPermission(ctx, db.SetOwnerPermissionParams{
-			OwnerKind: owner.Kind, OwnerID: owner.ID, Permission: permission, Kind: kind, Ref: ref, UpdatedBy: by, UpdatedAt: now,
-		})
+		return q.DeleteOwnerPermission(ctx, db.DeleteOwnerPermissionParams(ownerPermissionKey(owner, permission)))
 	}
-	if err != nil || owner.Kind != ownerCorporation {
-		return err
-	}
-	if kind == "" {
-		return q.DeleteCorpPermission(ctx, db.DeleteCorpPermissionParams{CorporationID: owner.ID, Permission: permission})
-	}
-	return q.SetCorpPermission(ctx, db.SetCorpPermissionParams{
-		CorporationID: owner.ID, Permission: permission, Kind: kind, Ref: ref, UpdatedBy: by, UpdatedAt: now,
+	return q.SetOwnerPermission(ctx, db.SetOwnerPermissionParams{
+		OwnerKind: owner.Kind, OwnerID: owner.ID, Permission: permission, Kind: kind, Ref: ref, UpdatedBy: by, UpdatedAt: time.Now().UTC(),
 	})
 }

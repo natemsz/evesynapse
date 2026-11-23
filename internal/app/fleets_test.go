@@ -114,6 +114,37 @@ func TestPrivateFleetStaysOffPublicBoards(t *testing.T) {
 	}
 }
 
+// TestOutsiderCannotReadWhoIsOnARunningFleet: a public sign-up list stops
+// naming pilots to outsiders while the fleet runs, stays open to the
+// owner's members, and names them again once the fleet has closed.
+func TestOutsiderCannotReadWhoIsOnARunningFleet(t *testing.T) {
+	f := newOpsFixture(t)
+	id := f.create(time.Now().UTC().Add(48*time.Hour).Truncate(time.Minute), "Open roam")
+	setStart := func(start time.Time) {
+		t.Helper()
+		if _, err := f.app.db.ExecContext(f.ctx, `UPDATE ops SET starts_at = $1, visibility = 'public', roster_public = TRUE WHERE id = $2`, start, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setStart(time.Now().UTC().Add(-10 * time.Minute))
+	if err := f.q.UpsertOpSignup(f.ctx, db.UpsertOpSignupParams{
+		OpID: id, CharacterID: opsCharC, Response: opYes, Ship: "Tengu", UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	const pilot = "Fixture Member"
+	if _, _, body := f.get(f.other, opURL(id)); strings.Contains(body, pilot) {
+		t.Error("an outsider read the sign-up list of a running fleet")
+	}
+	if _, _, body := f.get(f.member, opURL(id)); !strings.Contains(body, pilot) {
+		t.Error("the owner's member cannot read the sign-up list of a running fleet")
+	}
+	setStart(time.Now().UTC().Add(-6 * time.Hour))
+	if _, _, body := f.get(f.other, opURL(id)); !strings.Contains(body, pilot) {
+		t.Error("a closed fleet's public sign-up list stayed hidden")
+	}
+}
+
 // TestAnonymousViewerGetsNoDetailsOfARestrictedFleet: without standing,
 // a private fleet answers the same as one that does not exist, by its
 // address, its share link and its calendar file. A link-only fleet

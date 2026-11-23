@@ -831,6 +831,13 @@ func (app *Application) fillFleetInvite(ctx context.Context, view *fleetLiveView
 	for _, m := range members {
 		inFleet[m.ID] = true
 	}
+	waiting := make([]int64, 0, len(signups))
+	for _, s := range signups {
+		if s.Response == opYes && !inFleet[s.CharacterID] {
+			waiting = append(waiting, s.CharacterID)
+		}
+	}
+	app.primeVerifiedNames(ctx, waiting)
 	var names []string
 	for _, s := range signups {
 		if s.Response != opYes || inFleet[s.CharacterID] {

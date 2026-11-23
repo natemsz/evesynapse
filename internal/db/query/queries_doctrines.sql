@@ -124,3 +124,31 @@ UPDATE ops o SET
     doctrine_snapshot_at    = sqlc.arg(taken_at)::timestamptz
 FROM copied
 WHERE o.id = copied.id;
+
+-- An owner's doctrines as its list page filters them: by category, tag,
+-- and words in the doctrine or the name or ship of one of its fits.
+-- name: ListDoctrinesFiltered :many
+SELECT d.* FROM doctrines d
+WHERE d.owner_kind = sqlc.arg(owner_kind) AND d.owner_id = sqlc.arg(owner_id)
+  AND (sqlc.arg(category)::text = '' OR lower(d.category) = lower(sqlc.arg(category)::text))
+  AND (sqlc.arg(tag)::text = '' OR lower(sqlc.arg(tag)::text) = ANY(string_to_array(lower(d.tags), ',')))
+  AND (sqlc.arg(needle)::text = ''
+       OR position(lower(sqlc.arg(needle)::text) IN lower(concat_ws(E'\n', d.name, d.category, d.description, replace(d.tags, ',', ' ')))) > 0
+       OR EXISTS (
+           SELECT 1 FROM doctrine_fits f
+           LEFT JOIN sde_types t ON t.type_id = f.ship_type_id
+           WHERE f.doctrine_id = d.id
+             AND (position(lower(sqlc.arg(needle)::text) IN lower(f.name)) > 0
+                  OR position(lower(sqlc.arg(needle)::text) IN lower(COALESCE(t.name, ''))) > 0)))
+ORDER BY lower(d.category), lower(d.name)
+LIMIT sqlc.arg(row_limit);
+
+-- What an owner's doctrine list can be filtered by, in one row.
+-- name: GetDoctrineFacets :one
+SELECT COUNT(*)::bigint AS total,
+       COALESCE(array_agg(DISTINCT d.category) FILTER (WHERE d.category <> ''), '{}')::text[] AS categories,
+       COALESCE((SELECT array_agg(DISTINCT tag)
+                 FROM doctrines t, unnest(string_to_array(t.tags, ',')) AS tag
+                 WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = sqlc.arg(owner_id) AND tag <> ''), '{}')::text[] AS tags
+FROM doctrines d
+WHERE d.owner_kind = sqlc.arg(owner_kind) AND d.owner_id = sqlc.arg(owner_id);

@@ -79,6 +79,8 @@ const (
 	demoRivalXan
 	demoRivalYara
 	demoRivalZeke
+	demoRivalAdda
+	demoRivalBoro
 )
 
 // demoFleetCast is everyone the group's fleets name beyond the seed's
@@ -116,6 +118,8 @@ var demoFleetCast = []struct {
 	{demoRivalXan, "Xan Mirov", demoCorpTideID, "2018-08-27T19:20:00Z"},
 	{demoRivalYara, "Yara Flint", demoCorpTideID, "2022-11-30T01:10:00Z"},
 	{demoRivalZeke, "Zeke Harlan", demoCorpTideID, "2020-01-22T15:55:00Z"},
+	{demoRivalAdda, "Adda Korvin", demoCorpTideID, "2021-04-09T12:35:00Z"},
+	{demoRivalBoro, "Boro Easling", demoCorpTideID, "2019-09-18T05:50:00Z"},
 }
 
 // demoFleetSeat is one pilot's place in the fleet. Wing and squad are
@@ -190,7 +194,7 @@ var demoLiveUnits = fleetUnitNames{
 // invented pilots or rivals. They have no public record, so their
 // names are never links.
 func demoInventedPilot(id int64) bool {
-	return id >= demoPilotAiko && id <= demoRivalZeke
+	return id >= demoPilotAiko && id <= demoRivalBoro
 }
 
 // demoFleetValues is what each hull is worth on a report, fitted.
@@ -638,7 +642,7 @@ func demoLogWork(ship string) (out, in, reps float64) {
 	case "Loki":
 		return 610, 290, 0
 	case "Scimitar", "Basilisk":
-		return 25, 150, 1120
+		return 25, 150, 780
 	case "Sabre":
 		return 210, 320, 0
 	case "Huginn":
@@ -705,7 +709,7 @@ func (s *demoSeed) demoBattleEnemies(b demoFleetBattle, at time.Time) []demoEnem
 		extras = append(extras, demoEnemy{Ship: "Bhaalgorn", Neut: true})
 	}
 	for _, e := range extras {
-		for _, id := range []int64{demoRivalUlric, demoRivalVera, demoRivalWes, demoRivalXan, demoRivalYara, demoRivalZeke} {
+		for _, id := range []int64{demoRivalUlric, demoRivalVera, demoRivalWes, demoRivalXan, demoRivalYara, demoRivalZeke, demoRivalAdda, demoRivalBoro} {
 			if !used[id] {
 				used[id] = true
 				e.ID, e.Weapon, e.DPS = id, demoWeapons[e.Ship], demoEnemyDPS(e.Ship)
@@ -786,10 +790,15 @@ func (s *demoSeed) demoLogRead(id int64, seat demoFleetSeat, mate int64, from ti
 		}
 		// Incoming: from every rival with guns, heavier on a pilot about
 		// to be lost.
+		// Each rival keeps its own share of the fleet's attention for
+		// the whole battle (grip), and wavers a little step to step.
 		var weight float64
-		for _, e := range enemies {
+		pull := make([]float64, len(enemies))
+		for j, e := range enemies {
 			if alive(e, now) {
-				weight += e.DPS
+				grip := 0.7 + float64((e.ID*7919)%61)/100
+				pull[j] = e.DPS * grip * (0.85 + rng.Float64()*0.3)
+				weight += pull[j]
 			}
 		}
 		pressure := in * (1.5 - t)
@@ -799,7 +808,7 @@ func (s *demoSeed) demoLogRead(id int64, seat demoFleetSeat, mate int64, from ti
 		if inc := work(pressure); inc > 0 && weight > 0 {
 			for j, e := range enemies {
 				if alive(e, now) && e.DPS > 0 {
-					part := int64(float64(inc) * e.DPS / weight)
+					part := int64(float64(inc) * pull[j] / weight)
 					row(j)[2] += part
 					taken[int64(j)] += part
 				}
@@ -963,7 +972,7 @@ func (s *demoSeed) writeDemoPastFleet(ctx context.Context, f demoPastFleet, inde
 				// The rivals on the mail: everyone with guns still on grid.
 				for _, e := range enemies {
 					if e.DPS > 0 && (e.Dies.IsZero() || at.Add(m.At).Before(e.Dies)) {
-						damage := int64(e.DPS) * (6 + rng.Int63n(10))
+						damage := int64(e.DPS * (0.55 + rng.Float64()*0.9) * float64(6+rng.Intn(10)))
 						mail.Attackers = append(mail.Attackers, fleetMailAttacker{Character: e.ID, Ship: s.typeID(e.Ship), Damage: damage})
 					}
 				}

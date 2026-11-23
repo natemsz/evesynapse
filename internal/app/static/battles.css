@@ -381,6 +381,9 @@
 /* Card-mode tables give their bodies a display of their own; a
    closed Show all body stays closed. */
 .bt [data-wmore][hidden] { display: none !important; }
+/* The hidden attribute hides HTML on its own, but not an SVG part:
+   the chart's cursor, its band and a zoom's dragged window. */
+.bt svg [hidden] { display: none; }
 
 /* --- Hover cards: the shared layer (#spark-layer) in this page's
    dress. Wider than a price card, never wider than the screen; long

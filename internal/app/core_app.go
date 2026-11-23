@@ -965,6 +965,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	fleets.Post("/fleets/{opID:[0-9]+}/composition/try", app.handleFleetTry)
 	fleets.Post("/fleets/{opID:[0-9]+}/pilot", app.handleFleetPilot)
 	fleets.Get("/fleets/{opID:[0-9]+}/report", app.handleFleetReport)
+	fleets.Get("/fleets/{opID:[0-9]+}/report/battle/{seq:[0-9]+}/moment/{m:[0-9]+}/", app.handleFleetReportMoment)
 	fleets.Post("/fleets/{opID:[0-9]+}/report/logs", app.handleFleetReportLogs)
 	fleets.Get("/fleets/{opID:[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, opURL(mustFleetID(r)), http.StatusMovedPermanently)

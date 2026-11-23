@@ -1032,6 +1032,11 @@ var pgDeadGroupRulesSchema string
 //go:embed schema_pg/172_fleet_battle_detail.sql
 var pgFleetBattleDetailSchema string
 
+// Step 173: queue reports built before the explorer for a rebuild.
+//
+//go:embed schema_pg/173_fleet_explorer_backfill.sql
+var pgFleetExplorerBackfillSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1232,6 +1237,7 @@ func schemaSteps() []schemaStep {
 		{170, "fleet reports", pgFleetReportsSchema, ""},
 		{171, "dead group rules", pgDeadGroupRulesSchema, ""},
 		{172, "fleet battle detail", pgFleetBattleDetailSchema, ""},
+		{173, "fleet explorer backfill", pgFleetExplorerBackfillSchema, ""},
 	}
 }
 

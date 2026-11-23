@@ -496,3 +496,14 @@ INSERT INTO fleet_battle_detail (fleet_battle_id, payload) VALUES ($1, $2);
 
 -- name: GetFleetBattleDetail :one
 SELECT payload FROM fleet_battle_detail WHERE fleet_battle_id = $1;
+
+-- Battles of one owner's fleets that have no explorer stored; the demo
+-- reads it for its own small group to tell an outdated seed.
+-- name: CountFleetBattlesWithoutDetail :one
+SELECT COUNT(*)::bigint
+FROM fleet_battles b
+JOIN ops o ON o.id = b.op_id
+LEFT JOIN fleet_battle_detail d ON d.fleet_battle_id = b.id
+WHERE o.owner_kind = sqlc.arg(owner_kind)::text
+  AND o.owner_id = sqlc.arg(owner_id)::bigint
+  AND d.fleet_battle_id IS NULL;

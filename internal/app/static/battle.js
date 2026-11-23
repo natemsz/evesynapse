@@ -187,7 +187,9 @@
   // drained; ti, to, tr who hit the pilot hardest, whom the pilot hit
   // hardest and who repaired the pilot most in that 10-second slice,
   // each {n name, h hull, s ship type, a amount}; m the mails that
-  // landed there, each {s ship type, l a loss, t text}). Anywhere
+  // landed there, each {s ship type, l a loss, t text}; on a fleet
+  // battle drawn from killmails, ik and il the ISK destroyed and lost
+  // so far). Anywhere
   // over the chart, the column under the pointer shows in the shared
   // hover layer, the same card the site's hover sparklines use; a
   // finger scrubs sideways while the page still scrolls up and down.
@@ -234,26 +236,55 @@
     row.appendChild(node("b", "", fmt(p.a) + (unit || "")));
     card.appendChild(row);
   }
-  function fill(l, pt) {
+  // A battle ISK figure, short: 1.2B, 350M, 40k.
+  function isk(v) {
+    var units = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "k"]];
+    for (var i = 0; i < units.length; i++) {
+      if (v >= units[i][0]) return (v / units[i][0]).toFixed(v >= units[i][0] * 100 ? 0 : 1).replace(/\.0$/, "") + units[i][1];
+    }
+    return String(Math.round(v || 0));
+  }
+  // The card's words. A pilot's report speaks of the pilot; a fleet
+  // battle's chart (data-side="fleet" on its data) speaks of the fleet,
+  // on EVE time, and one drawn from killmails (data-isk) shows the ISK
+  // destroyed and lost so far. Each row: label, point key, tone, unit;
+  // the first two always show, the rest only when not zero.
+  var WORDS = {
+    pilot: {
+      clock: "", sub: "a second, 10-second average",
+      rows: [["Damage out", "o", "btc-out", ""], ["Damage in", "i", "btc-in", ""], ["Repairs in", "r", "btc-rep", ""], ["Repairs out", "g", "btc-rep", ""], ["Energy drained", "c", "btc-cap", " GJ"]],
+      ti: "Hitting you hardest", to: "Your main target", tr: "Repairing you most"
+    },
+    fleet: {
+      clock: " EVE", sub: "a second, 10-second average",
+      rows: [["The fleet dealt", "o", "btc-out", ""], ["The fleet took", "i", "btc-in", ""], ["Repaired", "r", "btc-rep", ""], ["Drained from the fleet", "c", "btc-cap", " GJ"]],
+      ti: "Hitting the fleet hardest", to: "The fleet's main target", tr: "Repairing the most"
+    },
+    isk: {
+      clock: " EVE", sub: "so far",
+      rows: [["ISK destroyed", "ik", "btc-kill", " ISK"], ["ISK lost", "il", "btc-loss", " ISK"]]
+    }
+  };
+  function fill(l, pt, words) {
     l.className = "bt-card bt-card-chart";
     l.textContent = "";
     var top = node("span", "btc-top");
-    top.appendChild(node("span", "btc-time", pt.t));
-    top.appendChild(node("span", "btc-s", "a second, 10-second average"));
+    top.appendChild(node("span", "btc-time", pt.t + words.clock));
+    top.appendChild(node("span", "btc-s", words.sub));
     l.appendChild(top);
     var rows = node("span", "btc-rows");
-    var lines = [["Damage out", pt.o, "btc-out", ""], ["Damage in", pt.i, "btc-in", ""], ["Repairs in", pt.r, "btc-rep", ""], ["Repairs out", pt.g, "btc-rep", ""], ["Energy drained", pt.c, "btc-cap", " GJ"]];
-    for (var i = 0; i < lines.length; i++) {
-      if (i > 1 && !lines[i][1]) continue;
-      var row = node("span", "btc-row " + lines[i][2]);
-      row.appendChild(node("span", "", lines[i][0]));
-      row.appendChild(node("b", "", fmt(lines[i][1]) + lines[i][3]));
+    for (var i = 0; i < words.rows.length; i++) {
+      var w = words.rows[i], v = pt[w[1]] || 0;
+      if (i > 1 && !v) continue;
+      var row = node("span", "btc-row " + w[2]);
+      row.appendChild(node("span", "", w[0]));
+      row.appendChild(node("b", "", (w[3] === " ISK" ? isk(v) : fmt(v)) + w[3]));
       rows.appendChild(row);
     }
     l.appendChild(rows);
-    who(l, "Hitting you hardest", pt.ti);
-    who(l, "Your main target", pt.to);
-    who(l, "Repairing you most", pt.tr);
+    if (words.ti) who(l, words.ti, pt.ti);
+    if (words.to) who(l, words.to, pt.to);
+    if (words.tr) who(l, words.tr, pt.tr);
     if (pt.m && pt.m.length) {
       l.appendChild(node("span", "btc-sub", "Killmails"));
       for (var m = 0; m < pt.m.length; m++) {
@@ -272,6 +303,7 @@
     var pts = [];
     try { pts = JSON.parse(data.textContent) || []; } catch (e) { pts = []; }
     if (!pts.length) return;
+    var words = data.hasAttribute("data-isk") ? WORDS.isk : WORDS[data.getAttribute("data-side")] || WORDS.pilot;
     var last = -1;
     function at(ev) {
       var r = svg.getBoundingClientRect();
@@ -289,7 +321,7 @@
       cursor.removeAttribute("hidden");
       var l = layerEl();
       if (idx !== last || l.hidden) {
-        fill(l, pts[idx]);
+        fill(l, pts[idx], words);
         last = idx;
       }
       l.hidden = false;
@@ -365,14 +397,6 @@
       var p = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1))));
       var m = v / p;
       return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
-    }
-    // A battle drawn from killmails charts ISK: 1.2B, 350M, 40k.
-    function isk(v) {
-      var units = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "k"]];
-      for (var i = 0; i < units.length; i++) {
-        if (v >= units[i][0]) return (v / units[i][0]).toFixed(v >= units[i][0] * 100 ? 0 : 1).replace(/\.0$/, "") + units[i][1];
-      }
-      return String(Math.round(v));
     }
     function clock(sec) {
       var t = new Date((d.start + Math.round(sec)) * 1000);

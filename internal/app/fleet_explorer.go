@@ -70,7 +70,10 @@ func (p fleetLogParty) key() string {
 // fleetDetailVersion is the explorer's build: a stored explorer from an
 // older build lacks what a newer one adds (the demo seeds again for it).
 // 2: killmail hands, the killmail-only battle, our own private kills.
-const fleetDetailVersion = 2
+// 3: each pilot's and enemy's heaviest weapons for their cards, a chart
+// of each moment's window, and the chart's card on EVE time and for a
+// battle drawn from its killmails.
+const fleetDetailVersion = 3
 
 // fleetDetail is the stored explorer of one fleet battle.
 type fleetDetail struct {
@@ -127,6 +130,8 @@ type fleetDetailPilot struct {
 	FromMails bool    `json:"from_mails,omitempty"`
 	LaneOut   []int64 `json:"lane_out,omitempty"`
 	LaneIn    []int64 `json:"lane_in,omitempty"`
+	// Weapons: its heaviest weapons, for its card.
+	Weapons []fleetCardWeapon `json:"weapons,omitempty"`
 }
 
 // fleetDetailParty is one enemy (or a third party that repaired the
@@ -155,6 +160,16 @@ type fleetDetailParty struct {
 	// ToUs the damage it did on the fleet's losses, FromUs the fleet's
 	// damage on its own killmail.
 	FromMails bool `json:"from_mails,omitempty"`
+	// Weapons: the heaviest it fired at the fleet, for its card.
+	Weapons []fleetCardWeapon `json:"weapons,omitempty"`
+}
+
+// fleetCardWeapon is one of a pilot's or an enemy's heaviest weapons,
+// with the damage it did over the battle.
+type fleetCardWeapon struct {
+	Name   string `json:"n"`
+	TypeID int64  `json:"t,omitempty"`
+	Damage int64  `json:"d"`
 }
 
 // fleetDetailWeapon is one weapon across the fleet (or across the
@@ -228,7 +243,18 @@ type fleetMomentDetail struct {
 	FromMails bool  `json:"from_mails,omitempty"`
 	MailOut   int64 `json:"mail_out,omitempty"`
 	MailIn    int64 `json:"mail_in,omitempty"`
-	OnMail    int   `json:"on_mail,omitempty"` // a kill: the fleet's pilots on its mail
+	OnMail    int   `json:"on_mail,omitempty"`   // a kill: the fleet's pilots on its mail
+	HandsAll  int   `json:"hands_all,omitempty"` // a kill or loss: everyone on its mail
+	// The window on a small chart with some lead either side, in
+	// momentSparkW by momentSparkH: the fleet's damage dealt, taken and
+	// repaired, or with no log the ISK destroyed and lost so far, and
+	// where the window starts on it and how wide it is.
+	SparkOut  string  `json:"spark_out,omitempty"`
+	SparkIn   string  `json:"spark_in,omitempty"`
+	SparkReps string  `json:"spark_reps,omitempty"`
+	SparkISK  bool    `json:"spark_isk,omitempty"`
+	MarkA     float64 `json:"mark_a,omitempty"`
+	MarkB     float64 `json:"mark_b,omitempty"`
 }
 
 // fleetMailHand is one character on a killmail, from the mail itself.
@@ -686,11 +712,14 @@ func buildFleetDetail(x fleetDetailInput) fleetDetail {
 	d.WeaponsOut, d.WeaponsIn, d.Tackles, d.WeaponLogs = fleetWholeTables(x, first)
 	if d.Logged > 0 {
 		d.Hover = fleetHover(d, tops, enemies, x, first)
+	} else if len(d.IskKill) == n {
+		d.Hover = fleetIskHover(d, x, first)
 	}
 	if d.WeaponLogs == 0 {
 		d.WeaponsOut, d.WeaponsIn = fleetMailWeapons(x)
 		d.WeaponsFromMails = len(d.WeaponsOut)+len(d.WeaponsIn) > 0
 	}
+	fleetCardWeapons(x, enemies, &d)
 	d.Moments = fleetMoments(x, d, enemies, first)
 	d.Findings = fleetFindings(x, d)
 	return d
@@ -916,7 +945,7 @@ func fleetHover(d fleetDetail, tops []fleetStepTop, enemies map[string]*fleetEne
 	out := make([]battleHoverPt, 0, n)
 	for i := 0; i < n; i++ {
 		pt := battleHoverPt{
-			T: clockOffset(i * int(step)), Out: d.Out[i] / step, In: d.In[i] / step, RepIn: d.Reps[i] / step, Cap: d.CapIn[i] / step,
+			T: fleetClock(first + int64(i)*step), Out: d.Out[i] / step, In: d.In[i] / step, RepIn: d.Reps[i] / step, Cap: d.CapIn[i] / step,
 		}
 		pt.TopIn, pt.TopOt = party(tops[i].in), party(tops[i].out)
 		best, who := int64(0), int64(0)
@@ -1185,6 +1214,7 @@ func fleetMoments(x fleetDetailInput, d fleetDetail, enemies map[string]*fleetEn
 		// Everyone on the mail, either side, the most damage first; the
 		// share is of all the damage the mail lists.
 		hands := fleetMailHands(m)
+		mo.Detail.HandsAll = len(hands)
 		total := m.Damage
 		if total <= 0 {
 			for _, a := range hands {
@@ -1262,7 +1292,7 @@ func fleetMoments(x fleetDetailInput, d fleetDetail, enemies map[string]*fleetEn
 	for i := range ms {
 		ms[i].Seq = i + 1
 		w := fleetWindow(x, d, enemies, ms[i].Detail.From, ms[i].Detail.To)
-		w.Attackers, w.OnMail = ms[i].Detail.Attackers, ms[i].Detail.OnMail
+		w.Attackers, w.OnMail, w.HandsAll = ms[i].Detail.Attackers, ms[i].Detail.OnMail, ms[i].Detail.HandsAll
 		ms[i].Detail = w
 		ms[i].Brief = fleetMomentBrief{Out: w.Out, In: w.In, Reps: w.Reps, Cap: w.CapIn}
 		if len(w.Attack) > 0 {
@@ -1274,8 +1304,178 @@ func fleetMoments(x fleetDetailInput, d fleetDetail, enemies map[string]*fleetEn
 			ms[i].Brief.TopOut = &top
 		}
 		ms[i].Detail.Summary = fleetMomentSummary(x, ms[i], w)
+		fleetMomentSpark(d, &ms[i].Detail)
 	}
 	return ms
+}
+
+// fleetClock is a Unix second as the EVE clock reads it.
+func fleetClock(at int64) string { return time.Unix(at, 0).UTC().Format("15:04:05") }
+
+// fleetIskHover is the chart's card per column for a battle drawn from
+// its killmails: the ISK destroyed and lost so far, and the mails that
+// landed in the column.
+func fleetIskHover(d fleetDetail, x fleetDetailInput, first int64) []battleHoverPt {
+	step := int64(gamelog.SliceSeconds)
+	out := make([]battleHoverPt, 0, len(d.IskKill))
+	for i := range d.IskKill {
+		pt := battleHoverPt{T: fleetClock(first + int64(i)*step), IskK: d.IskKill[i], IskL: d.IskLoss[i]}
+		lo, hi := first+int64(i)*step, first+int64(i+1)*step
+		for _, m := range x.Cluster.Mails {
+			if at := m.At.Unix(); at >= lo && at < hi {
+				pt.Mails = append(pt.Mails, hoverMail{Ship: m.Ship, Loss: m.Loss, Text: fleetMailLine(x, m)})
+			}
+		}
+		out = append(out, pt)
+	}
+	return out
+}
+
+// fleetCardWeaponsShown is how many weapons a pilot's or an enemy's card
+// lists.
+const fleetCardWeaponsShown = 3
+
+// fleetCardWeapons gives every pilot and enemy its heaviest weapons, for
+// its card. A log read in full names the weapons its pilot fired and the
+// ones each enemy fired at that pilot; for anyone no such log saw, the
+// killmails name the weapon each attacker is listed with and the damage
+// it did there.
+func fleetCardWeapons(x fleetDetailInput, enemies map[string]*fleetEnemyAcc, d *fleetDetail) {
+	type wkey struct {
+		name string
+		id   int64
+	}
+	type tally map[wkey]int64
+	logOurs, logTheirs := map[int64]tally{}, map[string]tally{}
+	mailOurs, mailTheirs := map[int64]tally{}, map[string]tally{}
+	addTo := func(m map[int64]tally, id int64, k wkey, v int64) {
+		if m[id] == nil {
+			m[id] = tally{}
+		}
+		m[id][k] += v
+	}
+	addKey := func(m map[string]tally, key string, k wkey, v int64) {
+		if m[key] == nil {
+			m[key] = tally{}
+		}
+		m[key][k] += v
+	}
+	for _, r := range x.Cluster.Reads {
+		if _, present := x.On[r.Character]; !present || !r.Usable || !fleetReadWhole(r, x.Counted[r.ID]) {
+			continue
+		}
+		for _, w := range r.Weapons {
+			if w.Damage <= 0 || r.Fleetmates[int64(w.PartySeq)] != 0 {
+				continue // nothing landed, or a fleetmate: friendly fire
+			}
+			k := wkey{w.Weapon, w.WeaponTypeID}
+			if w.Dir != "in" {
+				addTo(logOurs, r.Character, k, w.Damage)
+				continue
+			}
+			party := r.Parties[int64(w.PartySeq)]
+			if party.Name == "" && party.Hull == "" {
+				party.Name = "An unnamed ship"
+			}
+			addKey(logTheirs, party.key(), k, w.Damage)
+		}
+	}
+	for _, m := range x.Cluster.Mails {
+		for _, a := range fleetMailHands(m) {
+			if a.Weapon == 0 || a.Damage <= 0 {
+				continue
+			}
+			mine := fleetMailOurs(x, m, a.Character)
+			switch {
+			case !m.Loss && mine:
+				addTo(mailOurs, a.Character, wkey{id: a.Weapon}, a.Damage)
+			case m.Loss && !mine:
+				if key, found := fleetEnemyKey(x, enemies, a.Character, a.Ship); found {
+					addKey(mailTheirs, key, wkey{id: a.Weapon}, a.Damage)
+				}
+			}
+		}
+	}
+	heaviest := func(t tally) []fleetCardWeapon {
+		var list []fleetCardWeapon
+		for k, v := range t {
+			name := k.name
+			if name == "" && k.id != 0 && x.Type != nil {
+				name = x.Type(k.id)
+			}
+			if name == "" {
+				name = "Drones and missiles"
+			}
+			list = append(list, fleetCardWeapon{Name: name, TypeID: k.id, Damage: v})
+		}
+		sort.Slice(list, func(i, j int) bool {
+			if list[i].Damage != list[j].Damage {
+				return list[i].Damage > list[j].Damage
+			}
+			return list[i].Name < list[j].Name
+		})
+		return list[:min(len(list), fleetCardWeaponsShown)]
+	}
+	for i := range d.Pilots {
+		t := logOurs[d.Pilots[i].ID]
+		if len(t) == 0 {
+			t = mailOurs[d.Pilots[i].ID]
+		}
+		d.Pilots[i].Weapons = heaviest(t)
+	}
+	for i := range d.Enemies {
+		t := logTheirs[d.Enemies[i].Key]
+		if len(t) == 0 {
+			t = mailTheirs[d.Enemies[i].Key]
+		}
+		d.Enemies[i].Weapons = heaviest(t)
+	}
+}
+
+// fleetMomentSpark draws a moment's window on its small chart, with
+// three steps of lead either side: the fleet's damage dealt, taken and
+// repaired, or with no log the ISK destroyed and lost so far. A window
+// with nothing to draw has no chart.
+func fleetMomentSpark(d fleetDetail, w *fleetMomentDetail) {
+	step := int(gamelog.SliceSeconds)
+	n := len(d.Out)
+	a, b, c := d.Out, d.In, d.Reps
+	isk := d.Logged == 0 && len(d.IskKill) == n
+	if isk {
+		a, b, c = d.IskKill, d.IskLoss, nil
+	}
+	lo := max(w.From/step-3, 0)
+	hi := min((w.To+step-1)/step+3, n-1)
+	if hi <= lo || len(a) < n || len(b) < n {
+		return
+	}
+	var top int64
+	for i := lo; i <= hi; i++ {
+		top = max(top, a[i], b[i])
+		if c != nil {
+			top = max(top, c[i])
+		}
+	}
+	if top <= 0 {
+		return
+	}
+	span := float64(hi - lo)
+	line := func(v []int64) string {
+		var sb strings.Builder
+		for i := lo; i <= hi; i++ {
+			if i > lo {
+				sb.WriteByte(' ')
+			}
+			fmt.Fprintf(&sb, "%.1f,%.1f", float64(i-lo)/span*momentSparkW, momentSparkH-float64(v[i])/float64(top)*momentSparkH)
+		}
+		return sb.String()
+	}
+	w.SparkOut, w.SparkIn, w.SparkISK = line(a), line(b), isk
+	if c != nil {
+		w.SparkReps = line(c)
+	}
+	w.MarkA = round1(max(float64(w.From)/float64(step)-float64(lo), 0) / span * momentSparkW)
+	w.MarkB = round1(max(float64(w.To-w.From)/float64(step)/span*momentSparkW, 1))
 }
 
 // fleetMomentSummary says in one sentence what a moment's window held.

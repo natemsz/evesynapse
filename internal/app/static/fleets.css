@@ -237,8 +237,11 @@
   .fl-edit-form { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Adding a battle log from the fleet's report */
+/* Adding a battle log from the fleet's report: folded under its heading
+   once a log counts in the battle shown. */
 .fl-logs { display: flex; flex-direction: column; gap: var(--space-3); }
+.fl-logs > summary { cursor: pointer; }
+.fl-logs > summary > h2 { display: inline; margin: 0; }
 .fl-logs > .prose { margin: 0; max-width: 70ch; }
 .fl-paste > summary { color: var(--gold); cursor: pointer; }
 .fl-paste[open] > summary { margin-bottom: var(--space-2); }
@@ -317,8 +320,10 @@
    lane per pilot and the hands on a killmail. The strip's rows share
    one gutter, wide enough for a pilot's name. */
 .fl-x { --bt-gut: 10rem; }
+/* The page (.fl-x) is the container the queries measure, so a narrower
+   gutter goes on its parts. */
 @container page (max-width: 40rem) {
-  .fl-x { --bt-gut: 6rem; }
+  .fl-x > * { --bt-gut: 6rem; }
 }
 .fl-x-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .fl-x-where { color: var(--text-bright); }
@@ -340,9 +345,11 @@
 .fl-x-pbar { overflow: hidden; }
 .fl-x-zoomhint { margin: var(--space-2) 0 0; }
 
-/* The kill rail: each death's ship over the moment it died. */
+/* The kill rail: each death's ship over the moment it died. A pin sits
+   centred on its second, so one at either end of the battle shows whole
+   past the track's edge; the zoom hides the ones outside its window. */
 .fl-x-rail { display: grid; grid-template-columns: var(--bt-gut) minmax(0, 1fr); align-items: center; margin-bottom: var(--space-2); }
-.fl-x-rail-track { position: relative; height: 2rem; overflow: hidden; }
+.fl-x-rail-track { position: relative; height: 2rem; }
 .fl-x-pin { position: absolute; top: 0.25rem; translate: -50% 0; display: block; width: 1.5rem; height: 1.5rem; border-radius: var(--r-xs); outline: 2px solid var(--bt-kill); background: var(--row-alt); }
 .fl-x-pin.is-loss { outline-color: var(--bt-loss); }
 .fl-x-pin img { display: block; width: 100%; height: 100%; border-radius: inherit; }
@@ -371,6 +378,15 @@
 .fl-i4 { fill: color-mix(in srgb, var(--bt-in) 78%, transparent); }
 .fl-i5 { fill: var(--bt-in); }
 .fl-x-death { stroke: var(--bt-loss); stroke-width: 3; }
+/* A phone keeps the pilot report's narrow gutter, so the chart has the
+   room; each pilot's name takes its own line over their lane, which
+   still starts where the chart does. */
+@container page (width < 34rem) {
+  .fl-x > * { --bt-gut: 4.25rem; }
+  .fl-x-plane { row-gap: 0.1rem; }
+  .fl-x-pname { grid-column: 1 / -1; padding-inline-end: 0; }
+  .fl-x-pbar { grid-column: 2; }
+}
 
 /* People: a portrait for a character, the ship beside its name. */
 .fl-x-portrait { border-radius: 50%; }
@@ -416,6 +432,15 @@
 /* The fleet's pilots and the enemy side by side only while both stay
    tables. */
 .fl-x .bt-whole { --l-min: 66rem; }
+
+/* What the numbers say, each rule in the colour of what it is about. */
+.fl-x .bt-find-outcome { --bt-c: var(--bt-kill); }
+.fl-x .bt-find-focus,
+.fl-x .bt-find-damage { --bt-c: var(--bt-out); }
+.fl-x .bt-find-logistics { --bt-c: var(--bt-rep); }
+.fl-x .bt-find-pressure,
+.fl-x .bt-find-primary { --bt-c: var(--bt-in); }
+.fl-x .bt-find-energy { --bt-c: var(--bt-cap); }
 
 /* A battle no log covers yet, drawn from its killmails. */
 .fl-x-source { margin: 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--gold); border-radius: var(--r-xs); background: var(--surface-inset); color: var(--text); font-size: var(--fs-sm); }

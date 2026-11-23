@@ -836,7 +836,7 @@ func weaponRow(wp db.BattleFightWeapon, party string) battleWeaponRow {
 			continue
 		}
 		wd := float64(c) / float64(judged) * 100
-		r.Segs = append(r.Segs, battleQualitySeg{Class: qualityLabels[i].class, X: round1(x), W: round1(wd), Label: fmt.Sprintf("%d %s", c, qualityLabels[i].label)})
+		r.Segs = append(r.Segs, battleQualitySeg{Class: qualityLabels[i].class, X: round1(x), W: round1(wd), Label: esi.FormatInt(c) + " " + qualityLabels[i].label})
 		x += wd
 	}
 	r.Good = fmt.Sprintf("%d%%", pct(judged-wp.QMiss-wp.QGraze, judged))

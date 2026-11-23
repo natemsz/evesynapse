@@ -454,6 +454,10 @@ type battleHoverPt struct {
 	TopOt *hoverParty `json:"to,omitempty"`
 	TopRp *hoverParty `json:"tr,omitempty"`
 	Mails []hoverMail `json:"m,omitempty"`
+	// A fleet battle drawn from its killmails: the ISK destroyed and
+	// lost so far.
+	IskK int64 `json:"ik,omitempty"`
+	IskL int64 `json:"il,omitempty"`
 }
 
 type hoverParty struct {

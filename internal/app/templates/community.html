@@ -141,7 +141,8 @@
         </search>
       </div>
       {{if .Rows}}
-      <div class="cm-table-box"><table class="cm-table">
+      <div class="cm-table-box"><table class="cm-table cm-members">
+        <colgroup><col>{{if not .RowsInline}}<col class="cm-col-place">{{end}}<col class="cm-col-date">{{if .Manages}}<col class="cm-col-manage">{{end}}</colgroup>
         <thead><tr><th>Pilot</th>{{if not .RowsInline}}<th>Place</th>{{end}}<th>{{if eq .Show "requests"}}Asked{{else}}Joined{{end}}</th>{{if .Manages}}<th>Manage</th>{{end}}</tr></thead>
         <tbody>
           {{range .Rows}}

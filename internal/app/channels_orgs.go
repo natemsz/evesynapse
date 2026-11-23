@@ -62,12 +62,16 @@ func (app *Application) intelManagedOrgs(ctx context.Context, st orgStanding) []
 	}
 	sort.Slice(corps, func(i, j int) bool { return corps[i] < corps[j] })
 	var out []orgOwner
+	checked := make(map[int64]bool, len(corps))
 	for _, corp := range corps {
 		if own := (orgOwner{Kind: ownerCorporation, ID: corp}); app.ownerPermits(ctx, st, own, permIntel) {
 			out = append(out, own)
 		}
-		if alliance, executor := app.corpAlliance(ctx, corp); alliance != 0 && executor == corp {
-			if a := (orgOwner{Kind: ownerAlliance, ID: alliance}); !ownersInclude(out, a) && app.ownerPermits(ctx, st, a, permIntel) {
+		// Any member corporation's pilot can hold an alliance's hand-off,
+		// so every alliance is asked once, not only the executor's.
+		if alliance, _ := app.corpAlliance(ctx, corp); alliance != 0 && !checked[alliance] {
+			checked[alliance] = true
+			if a := (orgOwner{Kind: ownerAlliance, ID: alliance}); app.ownerPermits(ctx, st, a, permIntel) {
 				out = append(out, a)
 			}
 		}

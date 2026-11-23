@@ -174,7 +174,8 @@ type PublicFitCard struct {
 	// ?local=, others via ?public=): the doctrine keepers' flow.
 	OpenToolURL string
 	// AddField names this card’s hidden input on the keeper’s
-	// add-to-doctrine form: local for own fits, public otherwise.
+	// add-to-doctrine form: fit (a saved fit) for own fits, public
+	// otherwise.
 	AddField string
 }
 
@@ -190,8 +191,10 @@ func PublicFitCardOf(row db.ListPublicFitsRow, userID int64) PublicFitCard {
 		FitURL: PublicFitsPath + "fit/" + id + "/",
 	}
 	if card.Mine {
+		// A public fit is a saved fit made public: the author's own
+		// adds to a doctrine as one of their saved fits.
 		card.OpenToolURL = "/fittings/?local=" + id + "#fit-editor"
-		card.AddField = "local"
+		card.AddField = "fit"
 	} else {
 		card.OpenToolURL = "/fittings/?public=" + id + "#fit-editor"
 		card.AddField = "public"
@@ -1080,9 +1083,14 @@ type ShellData struct {
 	Error         string
 	Section       string
 	NavPage       string
-	Scripts       []string
-	HeadMeta      template.HTML
-	Switcher      []SwitcherEntry
+	// NavAs is the page whose place in the menus this one takes, when
+	// it serves another section's work: the public fits browser picking
+	// fits for a doctrine sits under Doctrines. NavPage still names the
+	// page itself, since its sheets and scripts load by that name.
+	NavAs    string
+	Scripts  []string
+	HeadMeta template.HTML
+	Switcher []SwitcherEntry
 	// SheetSwitcher is the phone sheet's character grid: the
 	// switcher capped to the grid's cells (nav.go's
 	// sheetSwitcherCap), with the pilots past the cap counted in

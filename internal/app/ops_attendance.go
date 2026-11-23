@@ -13,6 +13,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 )
 
@@ -86,6 +87,8 @@ func (app *Application) captureOpAttendance(ctx context.Context, now time.Time) 
 		logging.Errorf("worker: ops to capture: %v", err)
 		return 0, false
 	}
+	// The demo's fleet is invented: there is nothing in EVE to read.
+	ops = slices.DeleteFunc(ops, isDemoFleet)
 	if len(ops) == 0 {
 		return 0, false
 	}
@@ -280,9 +283,9 @@ func captureExplanation(op db.Op, fc string, now time.Time, recorded int) string
 	switch op.CaptureStatus {
 	case captureRunning:
 		if over {
-			return fmt.Sprintf("Attendance was recorded from %s's fleet.", fc)
+			return fmt.Sprintf("Attendance was read from %s's fleet in EVE.", fc)
 		}
-		return fmt.Sprintf("Attendance is being recorded from %s's fleet: %d so far.", fc, recorded)
+		return fmt.Sprintf("Reading %s's fleet in EVE every minute: %s seen so far.", fc, humanize.Plural(recorded, "pilot"))
 	case captureNoFC:
 		return fmt.Sprintf("%s is not linked to EveSynapse, or its sign-in has stopped working, so its fleet could not be read.", fc)
 	case captureNoScope:
@@ -297,9 +300,12 @@ func captureExplanation(op db.Op, fc string, now time.Time, recorded int) string
 		return "The fleet could not be read from EVE when last tried."
 	}
 	if !started {
-		return fmt.Sprintf("Attendance will be recorded from %s's fleet while it runs. %s has to be the fleet's boss.", fc, fc)
+		return fmt.Sprintf("Once the fleet starts, attendance is read from %s's fleet in EVE. %s has to be the fleet boss.", fc, fc)
 	}
-	return "Attendance has not been recorded from a fleet."
+	if recorded > 0 {
+		return fmt.Sprintf("Attendance was read from %s's fleet in EVE.", fc)
+	}
+	return "No attendance was read from a fleet in EVE."
 }
 
 // captureSummary is the sentence on how the fleet's capture is going,
@@ -357,7 +363,13 @@ func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups [
 	if err != nil {
 		logging.Errorf("ops: attendance for op %d: %v", op.ID, err)
 	}
-	capture, notes := app.fleetCaptureStatus(ctx, op, now, len(rows), sight)
+	seen := 0
+	for _, row := range rows {
+		if row.Source != attendanceManual {
+			seen++
+		}
+	}
+	capture, notes := app.fleetCaptureStatus(ctx, op, now, seen, sight)
 	flew := slices.ContainsFunc(rows, func(row db.OpAttendance) bool { return slices.Contains(viewer, row.CharacterID) })
 	if !canManage && !flew {
 		rows = nil
@@ -370,6 +382,16 @@ func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups [
 		Capture: capture, CaptureNotes: notes,
 		Capturing: op.CaptureStatus == captureRunning,
 	}
+	named := make([]int64, 0, len(rows)+len(signups))
+	for _, row := range rows {
+		named = append(named, row.CharacterID)
+	}
+	if canManage {
+		for _, s := range signups {
+			named = append(named, s.CharacterID)
+		}
+	}
+	app.primeVerifiedNames(ctx, named)
 	present := map[int64]db.OpAttendance{}
 	for _, row := range rows {
 		present[row.CharacterID] = row

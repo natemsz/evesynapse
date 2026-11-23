@@ -174,6 +174,10 @@ func (app *Application) handleBattleUpload(w http.ResponseWriter, r *http.Reques
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.flashBack(w, r, "/intel/battles/")
+	fleet := app.uploadFleetFor(ctx, r)
+	if fleet != nil {
+		back = app.flashBack(w, r, fleetReportPath(fleet.op.ID))
+	}
 	q := app.battleQueue()
 	if why, wait := q.admit(userID, false, r.ContentLength, time.Now()); why != "" {
 		back("Not read: " + why + ". Try again " + battleWaitText(wait) + ".")
@@ -212,7 +216,74 @@ func (app *Application) handleBattleUpload(w http.ResponseWriter, r *http.Reques
 	if ahead == 0 {
 		msg = strings.Join(names, " and ") + " is being read; its fights show here in a moment."
 	}
+	if fleet != nil {
+		msg = app.countUploadInFleet(ctx, fleet, jobs, strings.Join(names, " and "))
+	}
 	back(msg)
+}
+
+// uploadFleet is the fleet a log was sent from: the upload form on a
+// fleet's Report tab adds ?fleet=. pilots are the uploader's characters
+// recorded on it, the ones whose logs may count in its report.
+type uploadFleet struct {
+	op     db.Op
+	userID int64
+	pilots map[int64]bool
+}
+
+// uploadFleetFor is the fleet named by ?fleet=, when the uploader can
+// open its report; nil otherwise, and the upload goes on as a plain one.
+func (app *Application) uploadFleetFor(ctx context.Context, r *http.Request) *uploadFleet {
+	id, _ := strconv.ParseInt(r.URL.Query().Get("fleet"), 10, 64)
+	if id <= 0 {
+		return nil
+	}
+	op, err := app.queries.GetOp(ctx, id)
+	if err != nil {
+		return nil
+	}
+	v := app.fleetViewerFor(ctx)
+	if v.UserID == 0 || !app.fleetReportTab(ctx, op, v, time.Now()) {
+		return nil
+	}
+	f := &uploadFleet{op: op, userID: v.UserID, pilots: map[int64]bool{}}
+	for _, c := range app.fleetConsentChoices(ctx, op.ID, v) {
+		f.pilots[c.CharacterID] = true
+	}
+	return f
+}
+
+// countUploadInFleet opts each uploaded log's pilot into the fleet's
+// report, as ticking them on the Report tab does, and says what
+// happens next. A pilot not recorded on the fleet cannot count in it.
+func (app *Application) countUploadInFleet(ctx context.Context, f *uploadFleet, jobs []*battleJob, what string) string {
+	now := time.Now().UTC()
+	counted := false
+	var outside []string
+	for _, j := range jobs {
+		if !f.pilots[j.charID] {
+			outside = append(outside, j.listener)
+			continue
+		}
+		if err := app.queries.SetFleetBattleConsent(ctx, db.SetFleetBattleConsentParams{OpID: f.op.ID, CharacterID: j.charID, UserID: f.userID, ConsentedAt: now}); err != nil {
+			logging.Errorf("fleets: log choice of %d on %d: %v", j.charID, f.op.ID, err)
+			continue
+		}
+		counted = true
+	}
+	if counted {
+		if err := app.queries.MarkFleetReportDirty(ctx, f.op.ID); err != nil {
+			logging.Errorf("fleets: mark report of %d: %v", f.op.ID, err)
+		}
+	}
+	msg := what + " is being read."
+	if counted {
+		msg += " Its damage and repairs count in this report, which updates a few minutes after the log is read."
+	}
+	if len(outside) > 0 {
+		msg += " " + strings.Join(outside, " and ") + " is not recorded on this fleet, so that log shows under Battle Reports and not here."
+	}
+	return msg
 }
 
 // uploadJobs reads the form's parts into jobs, each checked for

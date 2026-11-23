@@ -59,11 +59,7 @@ type groupOwnerView struct {
 	Kind   string
 	Name   string
 	Groups []groupView
-	// Candidates are the characters that can be added to this owner's
-	// groups.
-	Candidates []groupCandidate
-	// Community: the owner is a community. Its groups open one at a
-	// time, so a page reads one group's members however many it keeps.
+	// Community: the owner is a community.
 	Community bool
 }
 
@@ -104,53 +100,37 @@ func (app *mod) handleGroups(w http.ResponseWriter, r *http.Request) {
 	var shown []standing.Owner
 	if owner, options, ok := app.deps.PickOwner(ctx, r, app.deps.GroupOwners(ctx, userID)); ok {
 		shown, view.OwnerOptions = []standing.Owner{owner}, options
+		// A community's or an alliance's groups are kept from Fleets,
+		// so the page stays in that menu; a corporation's stay under
+		// Corporation.
+		switch owner.Kind {
+		case standing.OwnerCommunity:
+			data.NavAs = "communities.html"
+		case standing.OwnerAlliance:
+			data.NavAs = "fleet_permissions.html"
+		}
 	}
 	openGroup, _ := strconv.ParseInt(r.URL.Query().Get("group"), 10, 64)
 	for _, owner := range shown {
 		ov := groupOwnerView{Key: owner.Key(), Kind: owner.Kind, Name: app.deps.OwnerName(ctx, owner), Community: owner.Kind == standing.OwnerCommunity}
-		corps := app.deps.OwnerCorporations(ctx, owner)
-		inside := map[int64]bool{}
-		if len(corps) > 0 {
-			rows, err := app.queries.ListCharactersInCorporations(ctx, corps)
-			if err != nil {
-				logging.Errorf("groups: characters of %s: %v", owner.Key(), err)
-			}
-			for _, row := range rows {
-				inside[row.CharacterID] = true
-				ov.Candidates = append(ov.Candidates, groupCandidate{CharacterID: row.CharacterID, Name: row.Name})
-			}
-		}
 		groups, err := app.queries.ListOrgGroupsForOwner(ctx, db.ListOrgGroupsForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 		if err != nil {
 			logging.Errorf("groups: groups of %s: %v", owner.Key(), err)
 			data.Error = "Could not load the groups; check the server log."
 		}
+		// One group is open at a time, so a render reads one page of
+		// members however many groups there are. A lone group opens itself.
+		open := openGroup
+		if open == 0 && len(groups) == 1 {
+			open = groups[0].ID
+		}
 		for _, group := range groups {
-			gv := groupView{ID: group.ID, Name: group.Name, Description: group.Description, Count: int(group.MemberCount)}
-			if ov.Community {
-				gv.Folded = group.ID != openGroup
-				if !gv.Folded {
+			gv := groupView{ID: group.ID, Name: group.Name, Description: group.Description, Count: int(group.MemberCount), Folded: group.ID != open}
+			if !gv.Folded {
+				if ov.Community {
 					app.fillCommunityGroup(ctx, &gv, owner, r.URL.Query())
-				}
-				ov.Groups = append(ov.Groups, gv)
-				continue
-			}
-			members, err := app.queries.ListOrgGroupMembers(ctx, group.ID)
-			if err != nil {
-				logging.Errorf("groups: members of group %d: %v", group.ID, err)
-			}
-			in := map[int64]bool{}
-			for _, m := range members {
-				in[m.CharacterID] = true
-				name := m.Name
-				if name == "" {
-					name = app.deps.DisplayCharacter(ctx, m.CharacterID)
-				}
-				gv.Members = append(gv.Members, groupMemberView{CharacterID: m.CharacterID, Name: name, Outside: !inside[m.CharacterID]})
-			}
-			for _, c := range ov.Candidates {
-				if !in[c.CharacterID] {
-					gv.Addable = append(gv.Addable, c)
+				} else {
+					app.fillOrgGroup(ctx, &gv, owner, r.URL.Query())
 				}
 			}
 			ov.Groups = append(ov.Groups, gv)
@@ -159,6 +139,53 @@ func (app *mod) handleGroups(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Groups = view
 	app.deps.Render(ctx, w, http.StatusOK, "groups.html", data)
+}
+
+// fillOrgGroup reads a corporation's or alliance's open group: one page
+// of its members and the linked characters who could be added.
+func (app *mod) fillOrgGroup(ctx context.Context, gv *groupView, owner standing.Owner, q url.Values) {
+	corps := app.deps.OwnerCorporations(ctx, owner)
+	inOwner := make(map[int64]bool, len(corps))
+	for _, corp := range corps {
+		inOwner[corp] = true
+	}
+	afterID, _ := strconv.ParseInt(q.Get("id"), 10, 64)
+	rows, err := app.queries.ListOrgGroupMembersPage(ctx, db.ListOrgGroupMembersPageParams{
+		GroupID: gv.ID, AfterName: q.Get("after"), AfterID: afterID, MaxRows: communityGroupPage + 1,
+	})
+	if err != nil {
+		logging.Errorf("groups: members of group %d: %v", gv.ID, err)
+	}
+	if len(rows) > communityGroupPage {
+		rows = rows[:communityGroupPage]
+		last := rows[len(rows)-1]
+		gv.NextHref = groupsPath + "?" + url.Values{
+			"owner": {owner.Key()}, "group": {strconv.FormatInt(gv.ID, 10)},
+			"after": {last.SortName}, "id": {strconv.FormatInt(last.CharacterID, 10)},
+		}.Encode()
+	}
+	for _, m := range rows {
+		name := m.Name
+		if name == "" {
+			name = app.deps.DisplayCharacter(ctx, m.CharacterID)
+		}
+		gv.Members = append(gv.Members, groupMemberView{CharacterID: m.CharacterID, Name: name, Outside: m.Name == "" || !inOwner[m.CorporationID]})
+	}
+	if len(corps) == 0 {
+		return
+	}
+	candidates, err := app.queries.ListOrgGroupCandidates(ctx, db.ListOrgGroupCandidatesParams{
+		CorporationIds: corps, GroupID: gv.ID, MaxRows: communityPickerMost + 1,
+	})
+	if err != nil {
+		logging.Errorf("groups: candidates of group %d: %v", gv.ID, err)
+	}
+	if len(candidates) > communityPickerMost {
+		candidates, gv.ByName = candidates[:communityPickerMost], true
+	}
+	for _, c := range candidates {
+		gv.Addable = append(gv.Addable, groupCandidate{CharacterID: c.CharacterID, Name: c.Name})
+	}
 }
 
 // fillCommunityGroup reads the open community group: one page of its
@@ -276,7 +303,11 @@ func (app *mod) handleGroupDelete(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		defer tx.Rollback(ctx)
 		q := app.queries.WithTx(tx)
-		if err = q.DeleteDiscordRoleRulesForGroup(ctx, strconv.FormatInt(group.ID, 10)); err == nil {
+		ref := strconv.FormatInt(group.ID, 10)
+		if err = q.DeleteDiscordRoleRulesForGroup(ctx, ref); err == nil {
+			err = q.DeleteOwnerPermissionsForGroup(ctx, db.DeleteOwnerPermissionsForGroupParams{OwnerKind: group.OwnerKind, OwnerID: group.OwnerID, Ref: ref})
+		}
+		if err == nil {
 			err = q.DeleteOrgGroup(ctx, group.ID)
 		}
 		if err == nil {
@@ -289,7 +320,7 @@ func (app *mod) handleGroupDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logging.Infof("groups: user %d removed group %d (%s)", userID, group.ID, group.Name)
-	app.groupsBack(w, r, "Group "+group.Name+" removed, with any Discord role rules that used it.")
+	app.groupsBack(w, r, "Group "+group.Name+" removed, with any Discord role rules and permissions that used it.")
 }
 
 // handleGroupMemberAdd puts characters in a group. Each has to be a
@@ -304,13 +335,25 @@ func (app *mod) handleGroupMemberAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	characters := r.Form["character"]
-	if name := strings.TrimSpace(r.Form.Get("name")); name != "" && group.OwnerKind == standing.OwnerCommunity {
-		member, err := app.queries.GetActiveCommunityMemberByName(ctx, db.GetActiveCommunityMemberByNameParams{CommunityID: group.OwnerID, Name: name})
-		if err != nil {
-			app.groupsBack(w, r, "No active member of this community is called "+name+".")
-			return
+	if name := strings.TrimSpace(r.Form.Get("name")); name != "" {
+		if group.OwnerKind == standing.OwnerCommunity {
+			member, err := app.queries.GetActiveCommunityMemberByName(ctx, db.GetActiveCommunityMemberByNameParams{CommunityID: group.OwnerID, Name: name})
+			if err != nil {
+				app.groupsBack(w, r, "No active member of this community is called "+name+".")
+				return
+			}
+			characters = append(characters, strconv.FormatInt(member.CharacterID, 10))
+		} else {
+			owner := standing.Owner{Kind: group.OwnerKind, ID: group.OwnerID}
+			id, err := app.queries.GetCharacterInCorporationsByName(ctx, db.GetCharacterInCorporationsByNameParams{
+				CorporationIds: app.deps.OwnerCorporations(ctx, owner), Name: name,
+			})
+			if err != nil {
+				app.groupsBack(w, r, "No linked character in this "+owner.Kind+" is called "+name+".")
+				return
+			}
+			characters = append(characters, strconv.FormatInt(id, 10))
 		}
-		characters = append(characters, strconv.FormatInt(member.CharacterID, 10))
 	}
 	app.groupsBack(w, r, app.addToGroup(ctx, userID, group, characters))
 }
@@ -322,13 +365,13 @@ func (app *mod) handleGroupMemberAdd(w http.ResponseWriter, r *http.Request) {
 func (app *mod) addToGroup(ctx context.Context, userID int64, group db.OrgGroup, characters []string) string {
 	owner := standing.Owner{Kind: group.OwnerKind, ID: group.OwnerID}
 	allowed := map[int64]bool{}
-	if owner.Kind == standing.OwnerCommunity {
-		ids := make([]int64, 0, len(characters))
-		for _, raw := range characters {
-			if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
-				ids = append(ids, id)
-			}
+	ids := make([]int64, 0, len(characters))
+	for _, raw := range characters {
+		if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
+			ids = append(ids, id)
 		}
+	}
+	if owner.Kind == standing.OwnerCommunity {
 		active, err := app.queries.ListActiveCommunityMembersIn(ctx, db.ListActiveCommunityMembersInParams{CommunityID: owner.ID, CharacterIds: ids})
 		if err != nil {
 			logging.Errorf("groups: members of %s: %v", owner.Key(), err)
@@ -337,12 +380,12 @@ func (app *mod) addToGroup(ctx context.Context, userID int64, group db.OrgGroup,
 			allowed[id] = true
 		}
 	} else if corps := app.deps.OwnerCorporations(ctx, owner); len(corps) > 0 {
-		rows, err := app.queries.ListCharactersInCorporations(ctx, corps)
+		rows, err := app.queries.ListCharactersAmongCorporations(ctx, db.ListCharactersAmongCorporationsParams{CorporationIds: corps, CharacterIds: ids})
 		if err != nil {
 			logging.Errorf("groups: characters of %s: %v", owner.Key(), err)
 		}
-		for _, row := range rows {
-			allowed[row.CharacterID] = true
+		for _, id := range rows {
+			allowed[id] = true
 		}
 	}
 	room := groupMembersMost - int(group.MemberCount)

@@ -8,8 +8,9 @@
 <div class="l-head">
   <h2 class="l-head-title">{{.Title}}</h2>
   <p class="l-head-sum">{{.Summary}}</p>
-  {{with .AllHref}}<div class="l-head-act"><a class="btn btn-quiet" href="{{.}}">All pilots</a></div>{{end}}
 </div>
+{{if gt (len .Scopes) 1}}<nav class="l-cluster" aria-label="Whose board">{{range .Scopes}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+{{else}}{{with .AllHref}}<p class="fl-back"><a href="{{.}}">Public board</a></p>{{end}}{{end}}
 <div class="l-cluster">
   {{if .Boards}}<nav class="l-cluster" aria-label="Which board">{{range .Boards}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
   <nav class="l-cluster l-push" aria-label="Time span">{{range .Periods}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
@@ -28,7 +29,7 @@
   </table>
   </div>
   {{else if .GroupBoard}}<p class="fl-empty">No fleets count here yet. A public fleet appears once it closes.</p>
-  {{else}}<p class="fl-empty">No pilots to show. A pilot appears here once a public fleet they flew has closed, if its planner chose to show pilot names.</p>{{end}}
+  {{else}}<p class="fl-empty">No pilots to show. A pilot appears here once a public fleet they flew has closed, if its planner chose to show pilot names.{{if and (not $v.Scoped) (gt (len $v.Scopes) 1)}} Your groups' own boards, private fleets included, are in the choices above.{{end}}</p>{{end}}
   <p class="fl-hint fl-scoring">{{.Scoring}}</p>
 </section>
 </div>

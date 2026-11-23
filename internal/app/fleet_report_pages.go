@@ -14,6 +14,7 @@ import (
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/gamelog"
 	"evesynapse/internal/logging"
 )
 
@@ -75,6 +76,9 @@ type fleetReportMail struct {
 	KillmailID, VictimID, ShipTypeID int64
 	When, Victim, Ship, Value        string
 	Loss                             bool
+	// Linked: the mail has a page on the killboard. The demo's
+	// invented mails stay off it.
+	Linked bool
 }
 
 type fleetConsentChoice struct {
@@ -97,21 +101,26 @@ type fleetBattleView struct {
 }
 
 type fleetReportView struct {
-	ID          int64
-	Title       string
-	Owner       string
-	Path        string
-	Closed      bool
-	Building    bool // closed, with its first build still to come
-	Chips       []fleetReportChip
-	Battle      *fleetBattleView
-	Pilots      []fleetReportPilot
-	PilotsCut   bool
-	Mails       []fleetReportMail
-	MailsCut    bool
-	Consent     []fleetConsentChoice
-	UploadHref  string
-	ViewerChars map[int64]bool
+	ID         int64
+	Title      string
+	Owner      string
+	Path       string
+	Closed     bool
+	Building   bool // closed, with its first build still to come
+	Demo       bool // the demo's invented fleet
+	Chips      []fleetReportChip
+	Battle     *fleetBattleView
+	Pilots     []fleetReportPilot
+	PilotsCut  bool
+	Mails      []fleetReportMail
+	MailsCut   bool
+	Consent    []fleetConsentChoice
+	UploadHref string
+	// UploadAction is the upload form's target, which counts the log in
+	// this fleet's report; LogMB is the largest log it takes.
+	UploadAction string
+	LogMB        int
+	ViewerChars  map[int64]bool
 }
 
 func (app *Application) handleFleetReport(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +143,8 @@ func (app *Application) handleFleetReport(w http.ResponseWriter, r *http.Request
 	w.Header().Set("X-Robots-Tag", "noindex")
 	view := &fleetReportView{
 		ID: op.ID, Title: op.Title, Owner: app.ownerName(ctx, opOwner(op)), Path: fleetReportPath(op.ID),
-		Closed: opEnd(op).Add(opCaptureTail).Before(now), UploadHref: "/intel/battles/",
+		Closed: opEnd(op).Add(opCaptureTail).Before(now), UploadHref: "/intel/battles/", Demo: isDemoFleet(op),
+		UploadAction: "/intel/battles/upload?fleet=" + strconv.FormatInt(op.ID, 10), LogMB: gamelog.MaxText >> 20,
 		ViewerChars: make(map[int64]bool, len(v.Characters)),
 	}
 	for _, c := range v.Characters {
@@ -238,9 +248,10 @@ func (app *Application) fillFleetBattle(ctx context.Context, view *fleetReportVi
 	if len(battles) > 1 {
 		for _, b := range battles {
 			view.Chips = append(view.Chips, fleetReportChip{
-				Label: systemName(b.SystemID) + " " + b.StartedAt.UTC().Format("15:04"),
-				Href:  view.Path + "?battle=" + strconv.Itoa(int(b.Seq)),
-				On:    b.ID == shown.ID,
+				Label: fmt.Sprintf("%s %s: %d %s, %d %s", systemName(b.SystemID), b.StartedAt.UTC().Format("15:04"),
+					b.Kills, map[bool]string{true: "kill", false: "kills"}[b.Kills == 1], b.Losses, map[bool]string{true: "loss", false: "losses"}[b.Losses == 1]),
+				Href: view.Path + "?battle=" + strconv.Itoa(int(b.Seq)),
+				On:   b.ID == shown.ID,
 			})
 		}
 	}
@@ -297,7 +308,7 @@ func (app *Application) fillFleetBattle(ctx context.Context, view *fleetReportVi
 		row := fleetReportMail{
 			KillmailID: k.KillmailID, VictimID: k.VictimCharacterID, ShipTypeID: k.ShipTypeID,
 			When: k.KillmailTime.UTC().Format("15:04:05"), Victim: names.character(k.VictimCharacterID),
-			Ship: names.typeName(k.ShipTypeID), Value: "No price yet", Loss: k.Loss,
+			Ship: names.typeName(k.ShipTypeID), Value: "No price yet", Loss: k.Loss, Linked: !view.Demo,
 		}
 		if k.ValueIsk.Valid {
 			row.Value = formatISKShort(k.ValueIsk.Float64)
@@ -353,7 +364,7 @@ func (app *Application) handleFleetReportLogs(w http.ResponseWriter, r *http.Req
 	if failed {
 		app.flash(ctx, "Your log choices could not all be saved. Try again.")
 	} else {
-		app.flash(ctx, "Log choices saved. The report updates after the fleet closes, within a few minutes.")
+		app.flash(ctx, "Saved. The report updates within a few minutes of the fleet ending.")
 	}
 	http.Redirect(w, r, fleetReportPath(op.ID), http.StatusSeeOther)
 }
@@ -375,4 +386,42 @@ func (app *Application) fleetTotalsFor(ctx context.Context, opID int64) *fleetTo
 		return nil
 	}
 	return &fleetTotalsView{Battles: t.Battles, Kills: t.Kills, Losses: t.Losses, Destroyed: formatISKShort(t.IskDestroyed), Lost: formatISKShort(t.IskLost)}
+}
+
+// fleetBattleLink is one fight of a fleet's report, as a row on the
+// fleet's Overview that opens it.
+type fleetBattleLink struct {
+	Href, System, When string
+	Kills, Losses      int32
+	Destroyed, Lost    string
+}
+
+// fleetBattleLinks lists a fleet's stored fights, at most a handful.
+func (app *Application) fleetBattleLinks(ctx context.Context, opID int64) []fleetBattleLink {
+	battles, err := app.queries.ListFleetBattles(ctx, opID)
+	if err != nil {
+		logging.Errorf("fleets: battles of %d: %v", opID, err)
+		return nil
+	}
+	names := app.newKillNames(ctx)
+	out := make([]fleetBattleLink, 0, len(battles))
+	for _, b := range battles {
+		system := names.system(b.SystemID).Name
+		if system == "" {
+			system = "Unknown system"
+		}
+		out = append(out, fleetBattleLink{
+			Href:   fleetReportPath(opID) + "?battle=" + strconv.Itoa(int(b.Seq)),
+			System: system, When: b.StartedAt.UTC().Format("15:04") + " EVE",
+			Kills: b.Kills, Losses: b.Losses,
+			Destroyed: formatISKShort(b.IskDestroyed) + " destroyed", Lost: formatISKShort(b.IskLost) + " lost",
+		})
+		if b.IskDestroyed == 0 {
+			out[len(out)-1].Destroyed = "nothing destroyed"
+		}
+		if b.IskLost == 0 {
+			out[len(out)-1].Lost = "nothing lost"
+		}
+	}
+	return out
 }

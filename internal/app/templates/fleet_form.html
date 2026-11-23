@@ -34,7 +34,8 @@
       <div class="field"><span class="field-label">Fleet commander</span><span class="field-static">{{.FCName}}</span></div>
       {{end}}
       <div class="field"><label class="field-label" for="fl-start">Starts</label>
-        <input id="fl-start" type="datetime-local" name="starts_at" value="{{.StartsAt}}" required></div>
+        <input id="fl-start" type="datetime-local" name="starts_at" value="{{.StartsAt}}" required aria-describedby="fl-start-local">
+        <span class="field-hint" id="fl-start-local" aria-live="polite">In EVE time, which is UTC.</span></div>
       <div class="field"><label class="field-label" for="fl-length">Length in minutes</label>
         <input id="fl-length" type="number" name="duration" value="{{.Duration}}" min="15" max="1440" step="5" required></div>
       <div class="field"><label class="field-label" for="fl-formup">Form up</label>
@@ -82,7 +83,7 @@
       <div class="fl-options">
       {{range .Visibilities}}<label><input type="radio" name="visibility" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}<small>{{.Hint}}</small></span></label>{{end}}
       </div>
-      <div class="field fl-rule"><label class="field-label" for="fl-view-rule">Who, when private</label>
+      <div class="field fl-rule"><label class="field-label" for="fl-view-rule">Private to</label>
         <select id="fl-view-rule" name="view_rule">{{range .RuleChoices}}<option value="{{.Value}}"{{if eq .Value $f.ViewRule}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>
     </fieldset>
     <fieldset class="l-panel fl-choices fl-join">
@@ -90,7 +91,7 @@
       <div class="fl-options">
       {{range .Gates}}<label><input type="radio" name="join_gate" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}<small>{{.Hint}}</small></span></label>{{end}}
       </div>
-      <div class="field fl-rule"><label class="field-label" for="fl-join-rule">Who, when you choose</label>
+      <div class="field fl-rule"><label class="field-label" for="fl-join-rule">Pilots who can sign up</label>
         <select id="fl-join-rule" name="join_rule">{{range .RuleChoices}}<option value="{{.Value}}"{{if eq .Value $f.JoinRule}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>
     </fieldset>
   </div>

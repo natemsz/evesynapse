@@ -8,8 +8,9 @@
 <div class="l-page fl-page fl-report">
 <div class="l-head">
   <h2 class="l-head-title">{{.Title}}</h2>
-  <p class="l-head-sum">Battle report for {{.Owner}}. Kills and losses come from killmails. Damage and repairs come from the logs pilots add.</p>
+  <p class="l-head-sum">Battle report for {{.Owner}}. Kills and losses come from killmails; damage and repairs come from the game logs pilots add.</p>
 </div>
+{{if not .Battle}}{{template "fleet-logs" .}}{{end}}
 
 {{if .Chips}}<nav class="l-cluster" aria-label="Battles of this fleet">{{range .Chips}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
 
@@ -22,10 +23,10 @@
 </section>
 
 <div class="l-tiles">
-  <div class="l-stat"><span class="l-stat-label">Kills</span><span class="l-stat-value">{{.Kills}}</span><span class="l-stat-sub">{{.Destroyed}} ISK destroyed</span></div>
-  <div class="l-stat"><span class="l-stat-label">Losses</span><span class="l-stat-value">{{.Losses}}</span><span class="l-stat-sub">{{.Lost}} ISK lost</span></div>
-  <div class="l-stat"><span class="l-stat-label">Damage dealt</span><span class="l-stat-value">{{.Out}}</span><span class="l-stat-sub">to enemies</span></div>
-  <div class="l-stat"><span class="l-stat-label">Damage taken</span><span class="l-stat-value">{{.In}}</span><span class="l-stat-sub">from enemies</span></div>
+  <div class="l-stat fl-tone-kill"><span class="l-stat-label">Kills</span><span class="l-stat-value">{{.Kills}}</span><span class="l-stat-sub">{{.Destroyed}} ISK destroyed</span></div>
+  <div class="l-stat fl-tone-loss"><span class="l-stat-label">Losses</span><span class="l-stat-value">{{.Losses}}</span><span class="l-stat-sub">{{.Lost}} ISK lost</span></div>
+  <div class="l-stat fl-tone-out"><span class="l-stat-label">Damage dealt</span><span class="l-stat-value">{{.Out}}</span><span class="l-stat-sub">to enemies</span></div>
+  <div class="l-stat fl-tone-in"><span class="l-stat-label">Damage taken</span><span class="l-stat-value">{{.In}}</span><span class="l-stat-sub">from enemies</span></div>
 </div>
 
 <section class="l-panel" aria-labelledby="fl-curve-title">
@@ -48,7 +49,7 @@
   {{else}}<p class="fl-empty">No logs for this battle yet, so there is no curve.</p>{{end}}
   <ul class="fl-tally fl-extra">
     <li><span>Repairs given</span><span>{{.Reps}}</span></li>
-    <li><span>Capacitor drained</span><span>{{.Cap}}</span></li>
+    {{if ne .Cap "0"}}<li><span>Capacitor drained</span><span>{{.Cap}}</span></li>{{end}}
     <li><span>Friendly fire</span><span>{{.FriendlyFire}}</span></li>
   </ul>
 </section>
@@ -58,11 +59,11 @@
   {{if $v.PilotsCut}}<p class="fl-hint">Showing the top {{len $v.Pilots}} by damage.</p>{{end}}
   <div class="tw" tabindex="0" role="region" aria-labelledby="fl-rp-title">
   <table>
-    <thead><tr><th>Pilot</th><th>Ship</th><th>Kills</th><th>Damage out</th><th>Damage in</th><th>Repairs</th><th>Log</th></tr></thead>
+    <thead><tr><th>Pilot</th><th>Ship</th><th class="num">Kills</th><th class="num">Damage out</th><th class="num">Damage in</th><th class="num">Repairs</th><th>Log</th></tr></thead>
     <tbody>
     {{range $v.Pilots}}
-    <tr><td>{{charLink $v.ViewerChars .CharacterID .Name}}{{if .Died}} <span class="badge loss">LOST SHIP</span>{{end}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{.Kills}}</td>
-      <td>{{if .HasLog}}{{.Out}}{{else}}-{{end}}</td><td>{{if .HasLog}}{{.In}}{{else}}-{{end}}</td><td>{{if .HasLog}}{{.Reps}}{{else}}-{{end}}</td><td>{{if .HasLog}}Added{{else}}None{{end}}</td></tr>
+    <tr><td>{{charLink $v.ViewerChars .CharacterID .Name}}{{if .Died}} <span class="badge loss">Lost ship</span>{{end}}</td><td>{{template "fleet-shipcell" .}}</td><td class="num{{if not .Kills}} fl-zero{{end}}">{{.Kills}}</td>
+      <td class="num{{if or (not .HasLog) (eq .Out "0")}} fl-zero{{end}}">{{if .HasLog}}{{.Out}}{{else}}-{{end}}</td><td class="num{{if or (not .HasLog) (eq .In "0")}} fl-zero{{end}}">{{if .HasLog}}{{.In}}{{else}}-{{end}}</td><td class="num{{if or (not .HasLog) (eq .Reps "0")}} fl-zero{{end}}">{{if .HasLog}}{{.Reps}}{{else}}-{{end}}</td><td{{if not .HasLog}} class="fl-zero"{{end}}>{{if .HasLog}}Added{{else}}Not added{{end}}</td></tr>
     {{end}}
     </tbody>
   </table>
@@ -71,14 +72,15 @@
 
 {{if $v.Mails}}
 <section class="l-panel" aria-labelledby="fl-rm-title">
-  <h2 id="fl-rm-title">Killmails</h2>
+  <h2 id="fl-rm-title">Kills and losses</h2>
   {{if $v.MailsCut}}<p class="fl-hint">Showing the first {{len $v.Mails}}.</p>{{end}}
+  {{if $v.Demo}}<p class="fl-hint">These sample killmails are invented, so they have no killboard pages.</p>{{end}}
   <div class="tw" tabindex="0" role="region" aria-labelledby="fl-rm-title">
   <table>
-    <thead><tr><th>Time</th><th>Result</th><th>Ship</th><th>Pilot</th><th>Value</th></tr></thead>
+    <thead><tr><th>Time</th><th>Result</th><th>Ship lost</th><th>Pilot lost</th><th class="num">Value</th>{{if not $v.Demo}}<th><span class="visually-hidden">Killboard</span></th>{{end}}</tr></thead>
     <tbody>
     {{range $v.Mails}}
-    <tr><td><a href="/intel/kill/{{.KillmailID}}/">{{.When}}</a></td><td>{{if .Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{charLink $v.ViewerChars .VictimID .Victim}}</td><td>{{.Value}}</td></tr>
+    <tr class="{{if .Loss}}fl-mail-loss{{else}}fl-mail-kill{{end}}"><td>{{.When}}</td><td>{{if .Loss}}<span class="badge loss">Loss</span>{{else}}<span class="badge kill">Kill</span>{{end}}</td><td>{{template "fleet-shipcell" .}}</td><td>{{charLink $v.ViewerChars .VictimID .Victim}}</td><td class="num">{{.Value}}</td>{{if not $v.Demo}}<td>{{if .Linked}}<a href="/intel/kill/{{.KillmailID}}/">View on killboard</a>{{end}}</td>{{end}}</tr>
     {{end}}
     </tbody>
   </table>
@@ -88,20 +90,49 @@
 {{else}}
 <section class="l-panel" aria-labelledby="fl-none-title">
   <h2 id="fl-none-title">No report yet</h2>
-  <p class="fl-empty">{{if .Building}}This report is still being built. Check back in a few minutes.{{else if .Closed}}No kills, losses or added logs were found for this fleet.{{else}}The report is built a few minutes after the fleet closes.{{end}}</p>
+  <p class="fl-empty">{{if .Building}}This report is still being built. Check back in a few minutes.{{else if .Closed}}No kills, losses or game logs were found for this fleet.{{else}}The report is built a few minutes after the fleet ends, from its killmails and the game logs pilots add.{{end}}</p>
 </section>
 {{end}}
 
+{{if .Battle}}{{template "fleet-logs" .}}{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{/* Adding a battle log from the fleet: upload a game log file or paste
+     part of one (battle.js gzips a chosen file), or tick whose logs
+     already on EveSynapse count here. Shown to pilots recorded on the
+     fleet. */}}
+{{define "fleet-logs"}}
 {{if .Consent}}
-<section class="l-panel" aria-labelledby="fl-logs-title">
-  <h2 id="fl-logs-title">Add your battle logs</h2>
-  <p class="prose">Your damage and repairs join this report, where others with access to it can see them. Send logs with Axon or <a href="{{.UploadHref}}">upload them</a>. Untick a pilot to take their logs back out.</p>
-  <form method="post" action="{{.Path}}/logs" class="fl-ticks" aria-labelledby="fl-logs-title">
+<section class="l-panel fl-logs" aria-labelledby="fl-logs-title">
+  <h2 id="fl-logs-title">Add your battle log</h2>
+  <p class="prose">Your game log adds your damage and repairs to this report, for everyone who can open it to see. With Axon running, your logs are sent by themselves. Without it, upload the log file from this fleet here.</p>
+  <form class="bt-add-form fl-upload" method="post" action="{{.UploadAction}}" enctype="multipart/form-data" data-bt-upload>
+    <div class="bt-pick">
+      <label class="bt-drop" for="fl-log">
+        <span class="bt-drop-title">Choose a game log</span>
+        <span class="bt-drop-hint" data-bt-file>A .txt file from Documents\EVE\logs\Gamelogs, up to {{.LogMB}} MB. The newest file covers your latest session.</span>
+        <input id="fl-log" type="file" name="log" accept=".txt,.gz,text/plain">
+      </label>
+    </div>
+    <details class="fl-paste">
+      <summary>Or paste part of a log</summary>
+      <label class="bt-field" for="fl-paste-text"><span>Log text</span></label>
+      <textarea id="fl-paste-text" name="paste" rows="5" spellcheck="false" autocomplete="off" placeholder="[ 2026.11.04 12:00:05 ] (combat) 523 to Pilot[TICK](Vexor) - Heavy Pulse Laser II - Hits"></textarea>
+      {{if gt (len .Consent) 1}}<label class="bt-field"><span>Whose log it is</span>
+        <select name="character">{{range .Consent}}<option value="{{.CharacterID}}">{{.Name}}</option>{{end}}</select>
+      </label>{{else}}{{range .Consent}}<input type="hidden" name="character" value="{{.CharacterID}}">{{end}}{{end}}
+    </details>
+    <div class="bt-add-row"><button type="submit" class="btn">Upload log</button></div>
+    <p class="fl-hint">Only the fights are kept, not the log.</p>
+  </form>
+  <form method="post" action="{{.Path}}/logs" class="fl-ticks fl-logs-count" aria-label="Whose logs count in this report">
+    <p class="field-label">Logs that count in this report</p>
     {{range .Consent}}<label><input type="checkbox" name="logs" value="{{.CharacterID}}"{{if .On}} checked{{end}}> {{.Name}}</label>{{end}}
-    <p><button type="submit">Save log choices</button></p>
+    <p class="fl-hint">A log already uploaded under <a href="{{.UploadHref}}">Battle Reports</a> counts once its pilot is ticked. Untick a pilot to take their logs back out.</p>
+    <p><button type="submit" class="btn btn-quiet">Save</button></p>
   </form>
 </section>
-{{end}}
-</div>
 {{end}}
 {{end}}

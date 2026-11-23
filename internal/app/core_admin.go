@@ -287,6 +287,6 @@ func (app *Application) handleAdminAccountRemove(w http.ResponseWriter, r *http.
 		back("There is no account with that number.")
 	default:
 		logging.Warnf("admin: account %d removed account %d and its %s", by, id, plural(len(characters), "character"))
-		back("Account " + strconv.FormatInt(id, 10) + " was removed, with its " + plural(len(characters), "character") + " and everything stored for it.")
+		back("Account " + strconv.FormatInt(id, 10) + " was removed, with its " + plural(len(characters), "character") + " and their stored data.")
 	}
 }

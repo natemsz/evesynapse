@@ -75,6 +75,10 @@ type publicFitFilters struct {
 	Sort      string
 	Page      int
 	Note      string
+	// For is the doctrine a keeper is choosing fits for (?for=), kept
+	// in every address the browser builds so a search, a filter or an
+	// added fit leaves its Add buttons in place.
+	For string
 }
 
 // parsePublicFitFilters reads the browser address; unknown sorts
@@ -88,6 +92,9 @@ func (app *page) parsePublicFitFilters(ctx context.Context, query url.Values) pu
 		Faction: strings.TrimSpace(query.Get("faction")),
 		Tag:     strings.TrimSpace(query.Get("tag")),
 		Sort:    strings.TrimSpace(query.Get("sort")),
+	}
+	if id, err := strconv.ParseInt(strings.TrimSpace(query.Get("for")), 10, 64); err == nil && id > 0 {
+		f.For = strconv.FormatInt(id, 10)
 	}
 	if f.Sort == "" {
 		f.Sort = publicFitDefaultSort
@@ -239,7 +246,7 @@ func (f publicFitFilters) browser(keepPage bool) *browserAddr {
 			filter("role", f.Role), filter("hull", f.Hull), filter("hullq", f.HullQ),
 			filter("faction", faction), filter("tag", f.Tag), filter("updated", updated),
 			filter("stars", num(f.MinStars)), filter("maxprice", num(f.MaxPrice)),
-			filter("alpha", alpha), filter("page", page),
+			filter("alpha", alpha), filter("page", page), filter("for", f.For),
 		},
 	}
 }
@@ -376,7 +383,11 @@ func (app *page) handlePublicFits(w http.ResponseWriter, r *http.Request) {
 	}
 	// doctrineChosenFor returns nil unless the account keeps the
 	// doctrine, so a non-nil For is the keeper flag itself.
-	chosen := app.deps.DoctrineChosenFor(ctx, userID, r.URL.Query().Get("for"))
+	chosen := app.deps.DoctrineChosenFor(ctx, userID, filters.For)
+	if chosen != nil {
+		// Choosing fits is doctrine work: the page sits under Doctrines.
+		data.NavAs = "doctrine.html"
+	}
 	view := &publicFitsView{
 		Filters: filters, Cards: cards, Total: total, Page: page, Pages: pages,
 		Roles: app.deps.FleetRoles(),

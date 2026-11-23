@@ -916,6 +916,49 @@ func (q *Queries) ListFleetMails(ctx context.Context, arg ListFleetMailsParams) 
 	return items, nil
 }
 
+const listFleetOutcomes = `-- name: ListFleetOutcomes :many
+SELECT o.id AS op_id,
+       (SELECT COUNT(*) FROM op_attendance a WHERE a.op_id = o.id)::int AS flew,
+       COALESCE((SELECT SUM(b.kills) FROM fleet_battles b WHERE b.op_id = o.id), 0)::int AS kills,
+       COALESCE((SELECT SUM(b.losses) FROM fleet_battles b WHERE b.op_id = o.id), 0)::int AS losses
+FROM ops o
+WHERE o.id = ANY($1::bigint[])
+`
+
+type ListFleetOutcomesRow struct {
+	OpID   int64 `json:"op_id"`
+	Flew   int32 `json:"flew"`
+	Kills  int32 `json:"kills"`
+	Losses int32 `json:"losses"`
+}
+
+// How each of a page of past fleets went, for its history row: how many
+// pilots are on its attendance and its report's kills and losses.
+func (q *Queries) ListFleetOutcomes(ctx context.Context, opIds []int64) ([]ListFleetOutcomesRow, error) {
+	rows, err := q.db.Query(ctx, listFleetOutcomes, opIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFleetOutcomesRow
+	for rows.Next() {
+		var i ListFleetOutcomesRow
+		if err := rows.Scan(
+			&i.OpID,
+			&i.Flew,
+			&i.Kills,
+			&i.Losses,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFleetReportsToBuild = `-- name: ListFleetReportsToBuild :many
 SELECT s.op_id, s.dirty_seq::bigint AS dirty_seq
 FROM fleet_report_state s
@@ -1021,6 +1064,37 @@ func (q *Queries) ListPilotsOnEarlierOverlappingFleet(ctx context.Context, opID 
 	for rows.Next() {
 		var i ListPilotsOnEarlierOverlappingFleetRow
 		if err := rows.Scan(&i.CharacterID, &i.SameOwner, &i.EarlierPublic); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVerifiedPilotNames = `-- name: ListVerifiedPilotNames :many
+SELECT character_id, name FROM verified_pilots
+WHERE character_id = ANY($1::bigint[]) AND name <> ''
+`
+
+type ListVerifiedPilotNamesRow struct {
+	CharacterID int64  `json:"character_id"`
+	Name        string `json:"name"`
+}
+
+// The names some pilots signed in with.
+func (q *Queries) ListVerifiedPilotNames(ctx context.Context, characterIds []int64) ([]ListVerifiedPilotNamesRow, error) {
+	rows, err := q.db.Query(ctx, listVerifiedPilotNames, characterIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListVerifiedPilotNamesRow
+	for rows.Next() {
+		var i ListVerifiedPilotNamesRow
+		if err := rows.Scan(&i.CharacterID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

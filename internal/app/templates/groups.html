@@ -32,7 +32,7 @@
   <ul class="row-list">
     {{range .Members}}
     <li><span>{{.Name}}{{if .Outside}} <small>no longer in the {{$owner.Kind}}, or not linked: counts for nothing until it is back</small>{{end}}</span>
-      <form method="post" action="/groups/{{$group}}/members/remove" class="inline-form"><input type="hidden" name="owner" value="{{$owner.Key}}">{{if $owner.Community}}<input type="hidden" name="group" value="{{$group}}">{{end}}<input type="hidden" name="character" value="{{.CharacterID}}"><button type="submit" class="btn btn-quiet">Remove</button></form></li>
+      <form method="post" action="/groups/{{$group}}/members/remove" class="inline-form"><input type="hidden" name="owner" value="{{$owner.Key}}"><input type="hidden" name="group" value="{{$group}}"><input type="hidden" name="character" value="{{.CharacterID}}"><button type="submit" class="btn btn-quiet">Remove</button></form></li>
     {{end}}
   </ul>
   {{with .NextHref}}<p><a class="btn btn-quiet" href="{{.}}">Next page</a></p>{{end}}
@@ -42,7 +42,7 @@
   {{if or .Addable .ByName}}
   <form method="post" action="/groups/{{.ID}}/members/add" class="add-row">
     <input type="hidden" name="owner" value="{{$owner.Key}}">
-    {{if $owner.Community}}<input type="hidden" name="group" value="{{.ID}}">{{end}}
+    <input type="hidden" name="group" value="{{.ID}}">
     {{if .Addable}}<div class="charselector checkselector" data-checkselector data-summary="add" data-title="Add to {{.Name}}">
       <input type="text" class="charselector-input" placeholder="Add characters…" autocomplete="off" aria-label="Characters to add to {{.Name}}. Type to search.">
       <div class="charselector-dropdown" hidden>
@@ -76,7 +76,7 @@
     <button type="submit">Create group</button>
   </div>
   {{if .Community}}<p class="co-dim"><small>Only active members of the community can be added.</small></p>
-  {{else}}<p class="co-dim"><small>Only characters linked to EveSynapse and in the {{.Kind}} can be added{{if not .Candidates}}; none are yet{{end}}.</small></p>{{end}}
+  {{else}}<p class="co-dim"><small>Only characters linked to EveSynapse and in the {{.Kind}} can be added.</small></p>{{end}}
 </form>
 </div>
 {{end}}

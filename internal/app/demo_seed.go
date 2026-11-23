@@ -370,6 +370,13 @@ func (s *demoSeed) wipe(ctx context.Context) error {
 		func() error { return q.DeleteDemoBattleKillInvolvement(ctx, demoBattleMailIDs) },
 		func() error { return q.DeleteDemoBattleKillDetails(ctx, demoBattleMailIDs) },
 		func() error { return q.DeleteDemoBattleKillPrices(ctx, demoBattleMailIDs) },
+		// The demo's fleet group (demo_fleets.go). Its fleets take
+		// their reports, attendance and claims with them.
+		func() error { return q.DeleteDemoCommunityOps(ctx, demoCommunityID) },
+		func() error { return q.DeleteDemoCommunityDoctrines(ctx, demoCommunityID) },
+		func() error { return q.DeleteDemoCommunityPolicies(ctx, demoCommunityID) },
+		func() error { return q.DeleteDemoCommunityGroups(ctx, demoCommunityID) },
+		func() error { return q.DeleteDemoCommunity(ctx, demoCommunityID) },
 	}
 	for _, step := range userSteps {
 		if err := step(); err != nil {
@@ -390,8 +397,14 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 		{Kind: esi.NameCorporation, ID: demoCorpID, Name: demoCorpName},
 		{Kind: esi.NameCorporation, ID: demoCorpHaleID, Name: "Hale Freight Services"},
 		{Kind: esi.NameCorporation, ID: demoCorpWatchID, Name: "Kedama Watch"},
+		{Kind: esi.NameCorporation, ID: demoCorpStaticID, Name: "Quiet Static"},
+		{Kind: esi.NameCorporation, ID: demoCorpSurveyID, Name: "Far Survey Group"},
+		{Kind: esi.NameCorporation, ID: demoCorpTideID, Name: "Hollow Tide"},
 	}
 	for _, c := range demoFictionalChars {
+		names = append(names, entityName{Kind: esi.NameCharacter, ID: c.ID, Name: c.Name})
+	}
+	for _, c := range demoFleetCast {
 		names = append(names, entityName{Kind: esi.NameCharacter, ID: c.ID, Name: c.Name})
 	}
 	if err := upsertEntityNames(ctx, s.app.db, names); err != nil {
@@ -412,6 +425,10 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 		demoCorpID:      {Name: demoCorpName, Ticker: "TPC"},
 		demoCorpHaleID:  {Name: "Hale Freight Services", Ticker: "HALE"},
 		demoCorpWatchID: {Name: "Kedama Watch", Ticker: "KWTCH"},
+
+		demoCorpStaticID: {Name: "Quiet Static", Ticker: "QSTAT"},
+		demoCorpSurveyID: {Name: "Far Survey Group", Ticker: "FSRVY"},
+		demoCorpTideID:   {Name: "Hollow Tide", Ticker: "HTIDE"},
 	}
 	stint := func(corpID int64, start, end string) pilotHistoryRow {
 		return pilotHistoryRow{CorpID: corpID, CorpName: corps[corpID].Name, Start: start, End: end}
@@ -458,6 +475,12 @@ func (s *demoSeed) writeNames(ctx context.Context) error {
 			sec = 1.2
 		}
 		if err := record(c.ID, c.Corp, c.Name, birthdays[i%len(birthdays)], sec, "", "",
+			[]pilotHistoryRow{stint(c.Corp, c.Joined, "")}); err != nil {
+			return fmt.Errorf("demo seed: pilot record %d: %w", c.ID, err)
+		}
+	}
+	for i, c := range demoFleetCast {
+		if err := record(c.ID, c.Corp, c.Name, birthdays[i%len(birthdays)], 0.4, "", "",
 			[]pilotHistoryRow{stint(c.Corp, c.Joined, "")}); err != nil {
 			return fmt.Errorf("demo seed: pilot record %d: %w", c.ID, err)
 		}
@@ -514,6 +537,15 @@ func (app *Application) seedDemoData(ctx context.Context, now time.Time) error {
 	if err := s.wipe(ctx); err != nil {
 		return err
 	}
+	// The wipe clears each pilot's corporation, and a session already
+	// open never signs in again to get it back.
+	for _, pilot := range demoPilots {
+		if err := app.queries.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
+			CharacterID: pilot.ID, CorporationID: demoCorpID, UpdatedAt: s.now,
+		}); err != nil {
+			return fmt.Errorf("demo seed: pilot corporation: %w", err)
+		}
+	}
 	if err := s.writeNames(ctx); err != nil {
 		return err
 	}
@@ -542,6 +574,9 @@ func (app *Application) seedDemoData(ctx context.Context, now time.Time) error {
 		return err
 	}
 	if err := s.writeOrgRows(ctx); err != nil {
+		return err
+	}
+	if err := s.writeDemoFleets(ctx); err != nil {
 		return err
 	}
 	// The worker folds a real pilot's snapshots into the profit

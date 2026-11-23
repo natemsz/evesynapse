@@ -20,6 +20,7 @@ import (
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/standing"
 )
@@ -375,7 +376,9 @@ func (app *Application) handleOpEdit(w http.ResponseWriter, r *http.Request) {
 
 func (app *Application) renderOpForm(w http.ResponseWriter, r *http.Request, form *opFormView) {
 	ctx := r.Context()
-	app.render(ctx, w, http.StatusOK, "fleet_form.html", pageData{ShellData: app.PublicShell(ctx), OpForm: form})
+	data := pageData{ShellData: app.PublicShell(ctx), OpForm: form}
+	data.Scripts = []string{"/static/fleets.js"}
+	app.render(ctx, w, http.StatusOK, "fleet_form.html", data)
 }
 
 // handleOpSave creates a fleet, or changes one when the form names it.
@@ -796,6 +799,23 @@ type opView struct {
 	Attendance *opAttendance
 	// Totals: the fleet's stored kills, losses and ISK, nil until built.
 	Totals *fleetTotalsView
+
+	// Running: how long a live fleet has been going.
+	Running string
+	// LiveView is the fleet as last read, for a viewer in it: the live
+	// panel and the structure lead the page while it runs.
+	LiveView *fleetLiveView
+	// InFleet says where the viewer's own characters sit in the fleet.
+	InFleet []string
+	// ReportURL is the Report tab, for those it opens to. Battles are
+	// the report's fights, each a link into it, and LogPilots the
+	// viewer's characters on the fleet who can add a battle log.
+	ReportURL string
+	Battles   []fleetBattleLink
+	LogPilots []fleetConsentChoice
+	// ViewerChars are the viewer's characters, whose names link to their
+	// own sheets.
+	ViewerChars map[int64]bool
 }
 
 func (app *Application) handleOp(w http.ResponseWriter, r *http.Request) {
@@ -845,6 +865,16 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	if op.Visibility != fleetPublic {
 		w.Header().Set("X-Robots-Tag", "noindex")
 	}
+	live, err := app.fleetLiveReadFor(ctx, op, v, now)
+	if err != nil {
+		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
+	}
+	// While a fleet runs, who is on it stays with those running it, its
+	// owner's members and the pilots in it, whatever its sign-up list
+	// shows the rest of the time.
+	if fleetLiveOpen(op, now) && !a.Manage && !v.belongs(owner) && !live.sight.In {
+		a.SeeNames = false
+	}
 	start := op.StartsAt.UTC()
 	view := &opView{
 		ID: op.ID, Title: op.Title, Description: op.Description, Owner: app.ownerName(ctx, owner),
@@ -865,6 +895,10 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	}
 	if v.Pilot != nil {
 		view.PilotName = v.Pilot.Name
+	}
+	view.ViewerChars = make(map[int64]bool, len(v.Characters))
+	for _, c := range v.Characters {
+		view.ViewerChars[c.CharacterID] = true
 	}
 	if facts.ViaToken {
 		view.Share = op.ShareToken.String
@@ -920,10 +954,6 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 			view.ShareNote = "This fleet is private: the link only works for people who can already see it."
 		}
 	}
-	live, err := app.fleetLiveReadFor(ctx, op, v, now)
-	if err != nil {
-		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
-	}
 	if ids := v.characterIDs(); len(ids) > 0 {
 		// How the capture is going is for those running the fleet; a
 		// pilot who flew in it sees attendance once there is some.
@@ -933,12 +963,35 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	}
 
 	view.Totals = app.fleetTotalsFor(ctx, op.ID)
+	if view.Live {
+		view.Running = fleetRunningText(now.Sub(op.StartsAt))
+	}
+	if live.sight.In {
+		view.LiveView = app.fleetLiveFor(ctx, op, v, a, live, 1, now)
+		for _, m := range live.comp.Members {
+			if live.sight.own[m.ID] {
+				seat := m.Name + ", " + strings.ToLower(m.PositionText())
+				if m.Ship != "" {
+					seat += ", in a " + m.Ship
+				}
+				view.InFleet = append(view.InFleet, seat)
+			}
+		}
+	}
+	reportTab := app.fleetReportTab(ctx, op, v, now)
+	if reportTab {
+		view.ReportURL = fleetReportPath(op.ID)
+		if view.Totals != nil {
+			view.Battles = app.fleetBattleLinks(ctx, op.ID)
+		}
+		view.LogPilots = app.fleetConsentChoices(ctx, op.ID, v)
+	}
 	data := pageData{ShellData: app.PublicShell(ctx), Op: view}
 	// The tab opens by the fleet's address, where a share link does not
 	// count, so it is offered only to those it would let in.
 	direct := facts
 	direct.ViaToken = false
-	data.SectionSubTabs = fleetTabs(op.ID, true, seesFleetLive(op, v.access(op, direct), live.sight, now), view.HasSRP, app.fleetReportTab(ctx, op, v, now), "overview")
+	data.SectionSubTabs = fleetTabs(op.ID, true, seesFleetLive(op, v.access(op, direct), live.sight, now), view.HasSRP, reportTab, "overview")
 	if op.Visibility == fleetPublic || facts.ViaToken {
 		data.HeadMeta = module.RenderPageMeta(module.PageMeta{
 			Title:       op.Title,
@@ -1041,6 +1094,29 @@ func (app *Application) fillFleetSignup(ctx context.Context, r *http.Request, vi
 	view.Mine, view.MyShip, view.MyRole, view.MyNote = row.Response, row.Ship, row.FleetRole, row.Note
 }
 
+// primeVerifiedNames puts the names pilots signed in with into the name
+// cache, in one read, so a pilot with no account shows by name at once
+// and not as a number until a public lookup lands.
+func (app *Application) primeVerifiedNames(ctx context.Context, ids []int64) {
+	unknown := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if name, ok := app.esi.CachedCharacterName(id); !ok || name == "" {
+			unknown = append(unknown, id)
+		}
+	}
+	if len(unknown) == 0 {
+		return
+	}
+	rows, err := app.queries.ListVerifiedPilotNames(ctx, unknown)
+	if err != nil {
+		logging.Errorf("fleets: verified pilot names: %v", err)
+		return
+	}
+	for _, row := range rows {
+		app.esi.PrimeName(esi.NameCharacter, row.CharacterID, row.Name)
+	}
+}
+
 // fillFleetRoster sets who is coming, for a viewer who may see names.
 func (app *Application) fillFleetRoster(ctx context.Context, view *opView, op db.Op, signups []db.OpSignup, a fleetAccess) {
 	if !a.SeeNames {
@@ -1050,6 +1126,14 @@ func (app *Application) fillFleetRoster(ctx context.Context, view *opView, op db
 	if err != nil {
 		logging.Errorf("fleets: commanders of %d: %v", op.ID, err)
 	}
+	named := make([]int64, 0, len(signups)+len(commanders))
+	for _, s := range signups {
+		named = append(named, s.CharacterID)
+	}
+	for _, c := range commanders {
+		named = append(named, c.CharacterID)
+	}
+	app.primeVerifiedNames(ctx, named)
 	isCommander := make(map[int64]bool, len(commanders))
 	for _, c := range commanders {
 		isCommander[c.CharacterID] = true

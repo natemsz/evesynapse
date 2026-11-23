@@ -117,7 +117,7 @@ func (f *srpFixture) told(userID int64) string {
 func TestSRPRequest(t *testing.T) {
 	f := newSRPFixture(t)
 	_, body := getPage(t, f.app, f.pilot, srpPath)
-	mustContain(t, "srp page for the pilot", body, `value="`+f.claim(srpLossOnOp)+`"`, "fleet: Stratop", "1 other recent loss was not during an op")
+	mustContain(t, "srp page for the pilot", body, `value="`+f.claim(srpLossOnOp)+`"`, "fleet: Stratop", "1 other recent loss was not during one of these fleets")
 	if strings.Contains(body, f.claim(srpKill)) || strings.Contains(body, "Mark paid") {
 		t.Fatal("a kill is offered as a loss, or a pilot is offered the handler's controls")
 	}

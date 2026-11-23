@@ -25,7 +25,7 @@
 </div>
 {{end}}
 
-<p class="prose">Lost a ship on one of {{$corp.Name}}'s fleets? Ask for it to be replaced here. A request names the killmail and the op it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
+<p class="prose">Lost a ship on one of {{$corp.Name}}'s fleets? Ask for it to be replaced here. A request names the killmail and the fleet it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
 
 <div class="co-cards">
 {{if $corp.Policy}}
@@ -50,7 +50,7 @@
   {{else}}
   <p class="hint">Nothing to claim: none of your characters has an unclaimed loss during one of these fleets in the last 30 days. A loss shows up here once its killmail reaches the killboard or EveSynapse reads it with the pilot's killmail access.</p>
   {{end}}
-  {{if .Outside}}<p class="hint">{{.Outside}} other recent loss{{if ne .Outside 1}}es were{{else}} was{{end}} not during an op and cannot be claimed here.</p>{{end}}
+  {{if .Outside}}<p class="hint">{{.Outside}} other recent loss{{if ne .Outside 1}}es were{{else}} was{{end}} not during one of these fleets and cannot be claimed here.</p>{{end}}
   {{if .Refused}}<p class="hint">{{.Refused}} loss{{if ne .Refused 1}}es{{end}} during a fleet cannot be claimed right now. The fleet's Ship Replacement tab says why.</p>{{end}}
 </form>
 </div>
@@ -98,7 +98,8 @@
 <section class="l-panel co-card">
   <div class="co-card-head"><h3>{{.Pilot}} · {{.Ship}}</h3>{{if .Value}}<span class="field-hint">est. {{.Value}}</span>{{end}}</div>
   <p class="hint">Lost {{.LostAt}} in {{.System}} on <a href="{{.OpURL}}">{{.Op}}</a>. {{killPageLink .KillmailID}}</p>
-  <p class="srp-facts co-badges"><span class="badge kill">KILLMAIL</span><span class="badge kill">DURING THE OP</span>{{if .Attended}}<span class="badge kill">ATTENDED</span> {{.Attendance}}{{else if .Attendance}}<span class="badge loss">NOT IN FLEET THEN</span> {{.Attendance}}{{else}}<span class="badge loss">NOT ON ATTENDANCE</span> The op's attendance does not have this pilot. It can be ticked by hand on the op's page.{{end}}{{if .Doctrine}} {{if .DoctrineShip}}<span class="badge kill">DOCTRINE SHIP</span>{{else}}<span class="badge loss">NOT A DOCTRINE SHIP</span>{{end}} The op flew {{.Doctrine}}.{{end}}</p>
+  <p class="srp-facts co-badges"><span class="badge kill">KILLMAIL</span><span class="badge kill">DURING THE FLEET</span>{{if .Attended}}<span class="badge kill">ATTENDED</span>{{else if .Attendance}}<span class="badge loss">NOT IN FLEET THEN</span>{{else}}<span class="badge loss">NOT ON ATTENDANCE</span>{{end}}{{if .Doctrine}}{{if .DoctrineShip}}<span class="badge kill">DOCTRINE SHIP</span>{{else}}<span class="badge loss">NOT A DOCTRINE SHIP</span>{{end}}{{end}}</p>
+  <ul class="srp-why">{{if .Attendance}}<li>{{.Attendance}}</li>{{else if not .Attended}}<li>This pilot is not on the fleet's attendance. They can be ticked by hand on the fleet's page.</li>{{end}}{{if .Doctrine}}<li>The fleet flew {{.Doctrine}}.</li>{{end}}</ul>
   {{if .FitNote}}<p class="hint">{{.FitNote}} EVE shows fits only on the loss mail.</p>{{end}}
   {{if .Earlier}}<p class="hint warn-note">{{.Earlier}}</p>{{end}}
   {{if .Note}}<p class="hint">Pilot's note: {{.Note}}</p>{{end}}

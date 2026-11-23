@@ -18,17 +18,17 @@ ON CONFLICT (owner_kind, owner_id, permission) DO UPDATE SET
 -- name: DeleteOwnerPermission :exec
 DELETE FROM owner_permissions WHERE owner_kind = $1 AND owner_id = $2 AND permission = $3;
 
--- name: SetCorpPermission :exec
-INSERT INTO corp_permissions (corporation_id, permission, kind, ref, updated_by, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (corporation_id, permission) DO UPDATE SET
-    kind       = excluded.kind,
-    ref        = excluded.ref,
-    updated_by = excluded.updated_by,
-    updated_at = excluded.updated_at;
-
--- name: DeleteCorpPermission :exec
-DELETE FROM corp_permissions WHERE corporation_id = $1 AND permission = $2;
+-- Clears what an owner handed to a group being deleted. A rule naming
+-- a group that is gone grants nobody, but reads as "Nobody else".
+-- name: DeleteOwnerPermissionsForGroup :exec
+WITH old AS (
+    DELETE FROM corp_permissions
+    WHERE sqlc.arg(owner_kind)::text = 'corporation' AND corporation_id = sqlc.arg(owner_id)::bigint
+      AND kind = 'group' AND ref = sqlc.arg(ref)::text
+)
+DELETE FROM owner_permissions
+WHERE owner_kind = sqlc.arg(owner_kind)::text AND owner_id = sqlc.arg(owner_id)::bigint
+  AND kind = 'group' AND ref = sqlc.arg(ref)::text;
 
 -- name: GetSRPSettings :one
 SELECT * FROM srp_settings WHERE corporation_id = $1;

@@ -1,0 +1,53 @@
+{{/* A live fleet laid out as EVE's fleet window does: fleet command,
+     then each wing and its squads, commander first. Shared by a
+     fleet's Overview and its Composition tab (fleet_live.go builds
+     .Structure with ships and systems as the viewer's rank allows). */}}
+{{define "fleet-structure"}}
+<div class="fl-tree">
+{{range .Structure}}
+<section class="fl-wing{{if .Command}} is-command{{end}}" aria-label="{{.Name}}">
+  <div class="fl-unit-head">
+    <h3 class="fl-unit-name">{{.Name}}</h3>
+    <span class="fl-unit-meta">{{.Pilots}} {{if eq .Pilots 1}}pilot{{else}}pilots{{end}}{{with .System}} in {{.}}{{end}}</span>
+  </div>
+  {{if or .Commander (and .Members (not .Squads))}}
+  <ul class="fl-seats" role="list">
+    {{with .Commander}}{{template "fleet-seat" .}}{{end}}
+    {{if not .Squads}}{{range .Members}}{{template "fleet-seat" .}}{{end}}{{end}}
+  </ul>
+  {{end}}
+  {{range .Squads}}
+  <div class="fl-squad">
+    <div class="fl-unit-head">
+      <h4 class="fl-unit-name">{{.Name}}</h4>
+      <span class="fl-unit-meta">{{.Pilots}} {{if eq .Pilots 1}}pilot{{else}}pilots{{end}}{{with .System}} in {{.}}{{end}}</span>
+      {{template "fleet-hulls" .}}
+    </div>
+    <ul class="fl-seats" role="list">
+      {{with .Commander}}{{template "fleet-seat" .}}{{end}}
+      {{range .Members}}{{template "fleet-seat" .}}{{end}}
+    </ul>
+  </div>
+  {{end}}
+</section>
+{{end}}
+</div>
+{{end}}
+
+{{define "fleet-hulls"}}{{if or .Hulls .Unseen}}<span class="fl-hullmix">{{range .Hulls}}<span class="fl-hullmix-item"><img src="{{typeRender .TypeID 64}}" width="20" height="20" alt="" loading="lazy">{{itemLink .TypeID .Name}} <b>{{.Count}}</b></span>{{end}}{{with .Unseen}}<span class="fl-hullmix-item is-unseen">{{.}} not shown</span>{{end}}</span>{{end}}{{end}}
+
+{{define "fleet-seat"}}
+<li class="fl-seat{{if .Commands}} is-lead{{end}}{{if .Hidden}} is-unseen{{end}}">
+  {{if .ShipTypeID}}<img class="fl-seat-ship" src="{{typeRender .ShipTypeID 64}}" width="32" height="32" alt="" loading="lazy">{{else}}<span class="fl-seat-ship" aria-hidden="true"></span>{{end}}
+  <span class="fl-seat-who">
+    <span class="fl-seat-name">{{if .Mine}}<a href="/character/?character={{.ID}}">{{.Name}}</a>{{else}}{{charLink nil .ID .Name}}{{end}}{{if .Commands}} <span class="badge fl-rank">{{.PositionText}}</span>{{end}}</span>
+    <span class="fl-seat-ship-name">{{if .Hidden}}Ship not shown{{else}}{{if .ShipTypeID}}{{itemLink .ShipTypeID .Ship}}{{end}}{{if .ShowSystem}}, {{.System}}{{end}}{{if .OffDoctrine}} <span class="fl-off">not in doctrine</span>{{end}}{{end}}</span>
+  </span>
+  {{if not .Hidden}}{{with .Role}}<span class="fl-seat-role"><span class="fl-swatch {{$.RoleClass}}" aria-hidden="true"></span>{{.}}</span>{{end}}{{end}}
+  {{if .Tags}}<span class="fl-seat-tags">{{range .Tags}}<span class="fl-tag">{{.}}</span>{{end}}</span>{{end}}
+</li>
+{{end}}
+
+{{/* A ship in a table cell: its picture, then its name linking to the
+     item's page. Takes any row with ShipTypeID and Ship. */}}
+{{define "fleet-shipcell"}}<span class="fl-shipcell">{{if .ShipTypeID}}<img src="{{typeRender .ShipTypeID 64}}" width="20" height="20" alt="" loading="lazy">{{itemLink .ShipTypeID .Ship}}{{else}}{{.Ship}}{{end}}</span>{{end}}

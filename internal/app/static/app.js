@@ -3827,6 +3827,38 @@
   startPageSync();
 })();
 
+// The menu section the reader is in, kept for the server
+// (ui_navstate.go): a page listed under two sections, such as
+// Doctrines under Corporation and Fleets, opens in the one the
+// reader came from. The sidebar carries the section the server
+// rendered, and swap.js updates it with each page it paints.
+(function () {
+  "use strict";
+  function rememberSection() {
+    var side = document.querySelector(".sidenav");
+    var section = side ? side.getAttribute("data-section") || "" : "";
+    if (!/^[a-z]{1,32}$/.test(section)) return;
+    document.cookie = "evesynapse-section=" + section + "; path=/; max-age=86400; samesite=lax" +
+      (window.location.protocol === "https:" ? "; secure" : "");
+  }
+  rememberSection();
+  document.addEventListener("evesynapse:content-ready", rememberSection);
+  // A link chosen in a section's own menu (the sidebar, or a section
+  // screen of the phone menu) opens its page in that section, even
+  // when the same page is listed under the section the reader was in.
+  // Capture phase, so the cookie is set before swap.js fetches.
+  document.addEventListener("click", function (ev) {
+    var a = ev.target && ev.target.closest ? ev.target.closest("a[href]") : null;
+    if (!a) return;
+    var home = a.closest('.sidenav details.branch[data-nav-category], .phone-sheet-pane[data-pane]');
+    if (!home) return;
+    var section = home.getAttribute("data-nav-category") || home.getAttribute("data-pane") || "";
+    if (!/^[a-z]{1,32}$/.test(section) || section === "root" || section === "pilots" || section === "settings") return;
+    document.cookie = "evesynapse-section=" + section + "; path=/; max-age=86400; samesite=lax" +
+      (window.location.protocol === "https:" ? "; secure" : "");
+  }, true);
+})();
+
 // Navigation state: the wide sidebar can be expanded, collapsed
 // to an icon rail, or hidden entirely; the choice persists in
 // local storage. On small screens the same sidebar is an

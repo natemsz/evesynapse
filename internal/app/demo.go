@@ -276,11 +276,16 @@ func (app *Application) refreshDemoPilotName(ctx context.Context) error {
 
 // demoSeedPresent reports whether the seed data is in place; the
 // skills snapshot is the canary, seeded first and never removed
-// by anything but the reset's own wipe-and-reseed.
+// by anything but the reset's own wipe-and-reseed. The fleet group
+// is checked too, so an install seeded before it existed gets it
+// on the worker's next pass instead of at the daily restore.
 func (app *Application) demoSeedPresent(ctx context.Context) bool {
-	_, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{
+	if _, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{
 		CharacterID: demoCharacterID, Kind: esi.SnapSkills,
-	})
+	}); err != nil {
+		return false
+	}
+	_, err := app.queries.GetCommunity(ctx, demoCommunityID)
 	return err == nil
 }
 
@@ -339,6 +344,11 @@ func demoPostAllowed(path string) bool {
 		if strings.HasPrefix(path, prefix) {
 			return true
 		}
+	}
+	// The live demo fleet's commander tools: computed from what the
+	// page sends and never stored (handleFleetTry).
+	if strings.HasPrefix(path, "/fleets/") && strings.HasSuffix(path, "/composition/try") {
+		return true
 	}
 	return strings.HasPrefix(path, "/fittings/share/") && strings.HasSuffix(path, "/delete")
 }

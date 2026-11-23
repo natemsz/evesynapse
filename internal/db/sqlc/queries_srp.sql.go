@@ -210,20 +210,6 @@ func (q *Queries) DecideSRPRequest(ctx context.Context, arg DecideSRPRequestPara
 	return result.RowsAffected(), nil
 }
 
-const deleteCorpPermission = `-- name: DeleteCorpPermission :exec
-DELETE FROM corp_permissions WHERE corporation_id = $1 AND permission = $2
-`
-
-type DeleteCorpPermissionParams struct {
-	CorporationID int64  `json:"corporation_id"`
-	Permission    string `json:"permission"`
-}
-
-func (q *Queries) DeleteCorpPermission(ctx context.Context, arg DeleteCorpPermissionParams) error {
-	_, err := q.db.Exec(ctx, deleteCorpPermission, arg.CorporationID, arg.Permission)
-	return err
-}
-
 const deleteOwnerPermission = `-- name: DeleteOwnerPermission :exec
 DELETE FROM owner_permissions WHERE owner_kind = $1 AND owner_id = $2 AND permission = $3
 `
@@ -236,6 +222,30 @@ type DeleteOwnerPermissionParams struct {
 
 func (q *Queries) DeleteOwnerPermission(ctx context.Context, arg DeleteOwnerPermissionParams) error {
 	_, err := q.db.Exec(ctx, deleteOwnerPermission, arg.OwnerKind, arg.OwnerID, arg.Permission)
+	return err
+}
+
+const deleteOwnerPermissionsForGroup = `-- name: DeleteOwnerPermissionsForGroup :exec
+WITH old AS (
+    DELETE FROM corp_permissions
+    WHERE $1::text = 'corporation' AND corporation_id = $2::bigint
+      AND kind = 'group' AND ref = $3::text
+)
+DELETE FROM owner_permissions
+WHERE owner_kind = $1::text AND owner_id = $2::bigint
+  AND kind = 'group' AND ref = $3::text
+`
+
+type DeleteOwnerPermissionsForGroupParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+	Ref       string `json:"ref"`
+}
+
+// Clears what an owner handed to a group being deleted. A rule naming
+// a group that is gone grants nobody, but reads as "Nobody else".
+func (q *Queries) DeleteOwnerPermissionsForGroup(ctx context.Context, arg DeleteOwnerPermissionsForGroupParams) error {
+	_, err := q.db.Exec(ctx, deleteOwnerPermissionsForGroup, arg.OwnerKind, arg.OwnerID, arg.Ref)
 	return err
 }
 
@@ -1557,37 +1567,6 @@ func (q *Queries) ReopenSRPRequest(ctx context.Context, id int64) (int64, error)
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const setCorpPermission = `-- name: SetCorpPermission :exec
-INSERT INTO corp_permissions (corporation_id, permission, kind, ref, updated_by, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (corporation_id, permission) DO UPDATE SET
-    kind       = excluded.kind,
-    ref        = excluded.ref,
-    updated_by = excluded.updated_by,
-    updated_at = excluded.updated_at
-`
-
-type SetCorpPermissionParams struct {
-	CorporationID int64     `json:"corporation_id"`
-	Permission    string    `json:"permission"`
-	Kind          string    `json:"kind"`
-	Ref           string    `json:"ref"`
-	UpdatedBy     int64     `json:"updated_by"`
-	UpdatedAt     time.Time `json:"updated_at"`
-}
-
-func (q *Queries) SetCorpPermission(ctx context.Context, arg SetCorpPermissionParams) error {
-	_, err := q.db.Exec(ctx, setCorpPermission,
-		arg.CorporationID,
-		arg.Permission,
-		arg.Kind,
-		arg.Ref,
-		arg.UpdatedBy,
-		arg.UpdatedAt,
-	)
-	return err
 }
 
 const setDefaultSRPPolicyText = `-- name: SetDefaultSRPPolicyText :exec

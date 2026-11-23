@@ -30,7 +30,7 @@
       <select id="fl-perm-srp" name="srp_who" aria-describedby="fl-perm-srp-hint">{{range .SRP}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
       <span class="field-hint" id="fl-perm-srp-hint">They pay or deny claims. Policies stay with the people above.</span></div>{{end}}
   </div>
-  {{with .GroupsHref}}<p class="fl-hint">{{if $.FleetPermissions.Community}}These go to one of the community's groups.{{else}}These go to a group or one of the alliance's corporations.{{end}} <a href="{{.}}">Manage groups</a></p>{{end}}
+  {{with .GroupsHref}}<p class="fl-hint fl-perm-note">{{if $.FleetPermissions.Community}}These go to one of the community's groups.{{else}}These go to a group or one of the alliance's corporations.{{end}} <a href="{{.}}">Manage groups</a></p>{{end}}
   <div class="form-actions"><button type="submit">Save changes</button></div>
 </form>
 {{end}}

@@ -6,14 +6,14 @@
 <div class="l-page fl-page">
 {{if .Owners}}
 {{if gt (len .Owners) 1}}<nav class="l-cluster" aria-label="Whose fleets to show">{{range .Owners}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}</nav>{{end}}
-<div class="l-sidebar l-sidebar--end fl-split">
+<div class="l-switcher fl-history">
   <section class="l-panel" aria-labelledby="fl-past-title">
     <h2 id="fl-past-title">Past fleets of {{.Owner}}</h2>
     {{if .Past}}{{template "fleet_board" .Past}}{{else}}<p class="fl-empty">No past fleets yet.</p>{{end}}
   </section>
   <section class="l-panel" aria-labelledby="fl-pap-title">
     <h2 id="fl-pap-title">Attendance</h2>
-    <p class="prose">Counted from the fleets themselves where EveSynapse could read them, and from a manager's marking where it could not.</p>
+    <p class="prose">Counted from fleets read in EVE, and from attendance a commander marked by hand.</p>
     {{if .Rows}}
     <div class="tw">
     <table>

@@ -112,6 +112,57 @@ func (q *Queries) DeleteDemoCharacterCorporation(ctx context.Context, characterI
 	return err
 }
 
+const deleteDemoCommunity = `-- name: DeleteDemoCommunity :exec
+DELETE FROM communities WHERE id = $1
+`
+
+func (q *Queries) DeleteDemoCommunity(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteDemoCommunity, id)
+	return err
+}
+
+const deleteDemoCommunityDoctrines = `-- name: DeleteDemoCommunityDoctrines :exec
+DELETE FROM doctrines WHERE owner_kind = 'community' AND owner_id = $1
+`
+
+func (q *Queries) DeleteDemoCommunityDoctrines(ctx context.Context, ownerID int64) error {
+	_, err := q.db.Exec(ctx, deleteDemoCommunityDoctrines, ownerID)
+	return err
+}
+
+const deleteDemoCommunityGroups = `-- name: DeleteDemoCommunityGroups :exec
+DELETE FROM org_groups WHERE owner_kind = 'community' AND owner_id = $1
+`
+
+func (q *Queries) DeleteDemoCommunityGroups(ctx context.Context, ownerID int64) error {
+	_, err := q.db.Exec(ctx, deleteDemoCommunityGroups, ownerID)
+	return err
+}
+
+const deleteDemoCommunityOps = `-- name: DeleteDemoCommunityOps :exec
+
+DELETE FROM ops WHERE owner_kind = 'community' AND owner_id = $1
+`
+
+// ---------------------------------------------------------------------
+// The demo's fleet group (demo_fleets.go).
+// ---------------------------------------------------------------------
+// The group's fleets; their attendance, reports, scores and claims
+// cascade.
+func (q *Queries) DeleteDemoCommunityOps(ctx context.Context, ownerID int64) error {
+	_, err := q.db.Exec(ctx, deleteDemoCommunityOps, ownerID)
+	return err
+}
+
+const deleteDemoCommunityPolicies = `-- name: DeleteDemoCommunityPolicies :exec
+DELETE FROM srp_policies WHERE owner_kind = 'community' AND owner_id = $1
+`
+
+func (q *Queries) DeleteDemoCommunityPolicies(ctx context.Context, ownerID int64) error {
+	_, err := q.db.Exec(ctx, deleteDemoCommunityPolicies, ownerID)
+	return err
+}
+
 const deleteDemoContractDetails = `-- name: DeleteDemoContractDetails :exec
 DELETE FROM contract_details WHERE character_id = $1
 `
@@ -364,6 +415,64 @@ func (q *Queries) GetDemoUser(ctx context.Context) (User, error) {
 		&i.VizPrefs,
 	)
 	return i, err
+}
+
+const insertDemoCommunity = `-- name: InsertDemoCommunity :exec
+INSERT INTO communities (id, slug, name, description, join_policy, listed, invite_token, created_by_character, created_at)
+VALUES ($1, $2, $3, $4, 'invite', FALSE,
+        $5, $6, $7)
+`
+
+type InsertDemoCommunityParams struct {
+	ID                 int64          `json:"id"`
+	Slug               string         `json:"slug"`
+	Name               string         `json:"name"`
+	Description        string         `json:"description"`
+	InviteToken        sql.NullString `json:"invite_token"`
+	CreatedByCharacter int64          `json:"created_by_character"`
+	CreatedAt          time.Time      `json:"created_at"`
+}
+
+// Unlisted, and joined only by invite.
+func (q *Queries) InsertDemoCommunity(ctx context.Context, arg InsertDemoCommunityParams) error {
+	_, err := q.db.Exec(ctx, insertDemoCommunity,
+		arg.ID,
+		arg.Slug,
+		arg.Name,
+		arg.Description,
+		arg.InviteToken,
+		arg.CreatedByCharacter,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const keepDemoFleetLive = `-- name: KeepDemoFleetLive :exec
+WITH live AS (
+    UPDATE ops SET starts_at = $2::timestamptz, capture_checked_at = $1::timestamptz
+    WHERE owner_kind = 'community' AND owner_id = $3::bigint
+      AND capture_status = 'capturing' AND cancelled_at IS NULL
+    RETURNING id
+), seen AS (
+    UPDATE op_attendance a SET last_seen_at = $1::timestamptz
+    FROM live WHERE a.op_id = live.id
+)
+UPDATE op_composition c SET computed_at = $1::timestamptz
+FROM live WHERE c.op_id = live.id
+`
+
+type KeepDemoFleetLiveParams struct {
+	SeenAt   time.Time `json:"seen_at"`
+	StartsAt time.Time `json:"starts_at"`
+	OwnerID  int64     `json:"owner_id"`
+}
+
+// Moves the group's running fleet along, so it always reads as live.
+// The composition's revision stays, so a page holding a visitor's
+// changes is never refreshed over them.
+func (q *Queries) KeepDemoFleetLive(ctx context.Context, arg KeepDemoFleetLiveParams) error {
+	_, err := q.db.Exec(ctx, keepDemoFleetLive, arg.SeenAt, arg.StartsAt, arg.OwnerID)
+	return err
 }
 
 const markUserDemo = `-- name: MarkUserDemo :exec

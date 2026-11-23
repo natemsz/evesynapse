@@ -155,6 +155,9 @@ func (app *Application) handleFleets(w http.ResponseWriter, r *http.Request) {
 		}
 		switch {
 		case row.Live:
+			// Who is on a running fleet stays with the pilots in it, so
+			// the board says how long it has run instead of a count.
+			row.Count = "Running for " + fleetRunningText(now.Sub(op.StartsAt))
 			view.Live = append(view.Live, row)
 		case mine[op.ID]:
 			view.Yours = append(view.Yours, row)
@@ -221,6 +224,32 @@ func fleetCountText(op db.Op) string {
 		return fmt.Sprintf("%d coming, %d maybe", op.ComingCount, op.MaybeCount)
 	}
 	return fmt.Sprintf("%d coming", op.ComingCount)
+}
+
+// pastFleetCount says how a past fleet went, for its history row: who
+// flew and what its report counted, else its sign-ups.
+func pastFleetCount(op db.Op, out db.ListFleetOutcomesRow) string {
+	var parts []string
+	if out.Flew > 0 {
+		parts = append(parts, fmt.Sprintf("%d flew", out.Flew))
+	} else if n := op.ComingCount + op.MaybeCount; n > 0 {
+		parts = append(parts, fmt.Sprintf("%d signed up", n))
+	}
+	if out.Kills > 0 || out.Losses > 0 {
+		losses := "losses"
+		if out.Losses == 1 {
+			losses = "loss"
+		}
+		kills := "kills"
+		if out.Kills == 1 {
+			kills = "kill"
+		}
+		parts = append(parts, fmt.Sprintf("%d %s, %d %s", out.Kills, kills, out.Losses, losses))
+	}
+	if len(parts) == 0 {
+		return "No sign-ups"
+	}
+	return strings.Join(parts, ", ")
 }
 
 func answerLabel(response string) string {
@@ -322,6 +351,20 @@ func (app *Application) fillFleetHistory(ctx context.Context, v fleetViewer, vie
 		logging.Errorf("fleets: past fleets of %s: %v", owner.Key(), err)
 	}
 	facts := app.fleetFactsFor(ctx, v, past)
+	ids := make([]int64, 0, len(past))
+	for _, op := range past {
+		ids = append(ids, op.ID)
+	}
+	outcomes := map[int64]db.ListFleetOutcomesRow{}
+	if len(ids) > 0 {
+		rows, err := app.queries.ListFleetOutcomes(ctx, ids)
+		if err != nil {
+			logging.Errorf("fleets: outcomes of %s: %v", owner.Key(), err)
+		}
+		for _, row := range rows {
+			outcomes[row.OpID] = row
+		}
+	}
 	for _, op := range past {
 		if !v.access(op, facts[op.ID]).View {
 			continue
@@ -330,7 +373,7 @@ func (app *Application) fillFleetHistory(ctx context.Context, v fleetViewer, vie
 		view.Past = append(view.Past, fleetBoardRow{
 			Href: opURL(op.ID), Title: op.Title, Sub: fleetRowSub(op, ""),
 			Day: start.Format("Mon Jan 2"), Clock: start.Format("15:04"), WhenRaw: start.Format(time.RFC3339),
-			Count: fmt.Sprintf("%d signed up", op.ComingCount+op.MaybeCount), Cancelled: op.CancelledAt.Valid,
+			Count: pastFleetCount(op, outcomes[op.ID]), Cancelled: op.CancelledAt.Valid,
 		})
 	}
 	rows, err := app.queries.ListOwnerPAPs(ctx, db.ListOwnerPAPsParams{

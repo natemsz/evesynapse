@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -93,6 +94,7 @@ func seedDemoSDEFixture(t *testing.T, conn *sql.DB) {
 		"Temperate Command Center", "Barren Command Center", "Gas Command Center",
 		"Lava Command Center", "Extractor Control Unit", "Storage Facility",
 		"Launchpad", "Basic Industry Facility", "Advanced Industry Facility",
+		"Tengu", "Loki", "Scimitar", "Basilisk", "Sabre", "Huginn", "Buzzard", "Claymore", "Falcon", "Gila",
 	}
 	itemIDs := map[string]int64{}
 	for i, name := range items {
@@ -822,6 +824,68 @@ func TestDemoProfitCoherence(t *testing.T) {
 // holds three reports whose matched kills are the killmails
 // the seed planted, and reseeding neither drops nor
 // duplicates them.
+// TestDemoFleetToolsStoreNothing: the demo account is shared, so a
+// commander's change to the live sample fleet shows on the page that
+// made it, reaches no stored row and no other page, and the route opens
+// for no other account.
+func TestDemoFleetToolsStoreNothing(t *testing.T) {
+	app, conn, queries := demoTestApp(t)
+	ctx := context.Background()
+	var opID int64
+	if err := conn.QueryRowContext(ctx, `SELECT id FROM ops WHERE owner_kind = 'community' AND owner_id = $1 AND capture_status = 'capturing'`, demoCommunityID).Scan(&opID); err != nil {
+		t.Fatalf("the live sample fleet: %v", err)
+	}
+	cookie := sessionCookie(t, app, app.demoUserID(ctx), demoCharacterID, demoCharName)
+	const gap = `Roles nobody is flying</span> EWAR`
+	if _, body := getPage(t, app, cookie, fleetCompositionPath(opID)); !strings.Contains(body, gap) || !strings.Contains(body, "data-fleet-try") {
+		t.Fatal("the sample fleet does not offer the commander tools with its EWAR gap")
+	}
+	before, err := queries.GetOpComposition(ctx, opID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tagsBefore, err := queries.ListOpMemberTags(ctx, opID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	try := func(c *http.Cookie) *httptest.ResponseRecorder {
+		t.Helper()
+		form := url.Values{"edits": {fmt.Sprintf(`{"%d":{"role":"EWAR","tags":"jam logi"}}`, demoPilotQuinn)}}
+		req := httptest.NewRequest(http.MethodPost, fleetCompositionPath(opID)+"/try", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(c)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	rec := try(cookie)
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), gap) || !strings.Contains(rec.Body.String(), `value="jam logi"`) {
+		t.Fatalf("a commander's change on the sample fleet: %d", rec.Code)
+	}
+	after, err := queries.GetOpComposition(ctx, opID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tagsAfter, err := queries.ListOpMemberTags(ctx, opID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Revision != before.Revision || after.Payload != before.Payload || len(tagsAfter) != len(tagsBefore) {
+		t.Error("trying a change stored it")
+	}
+	if _, body := getPage(t, app, cookie, fleetCompositionPath(opID)); !strings.Contains(body, gap) || strings.Contains(body, "jam logi") {
+		t.Error("a fresh page shows another visitor's change")
+	}
+	user, err := queries.CreateUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedCharacter(t, queries, user.ID, 90000077, "Ordinary Pilot")
+	if rec := try(sessionCookie(t, app, user.ID, 90000077, "Ordinary Pilot")); rec.Code != http.StatusNotFound {
+		t.Errorf("another account on the demo's commander tools: %d", rec.Code)
+	}
+}
+
 func TestDemoSeedBattleReports(t *testing.T) {
 	app, _, queries := demoTestApp(t)
 	ctx := context.Background()

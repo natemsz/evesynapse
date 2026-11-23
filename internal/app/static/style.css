@@ -1747,7 +1747,7 @@ html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[d
 /* Data chip: a small box that holds data, not a status (a colony
    and its timer, a container's item count, a contract's volume):
    the body face, in the case it was written. */
-.lchip, .ov-pipill, span.cs-pill, .fo-pill:not(.fo-state) {
+.lchip, .ov-pipill, span.cs-pill, .fo-pill:not(.fo-state), .fl-tag {
   font-family: var(--font-body);
   font-size: var(--fs-xs);
   font-weight: 400;
@@ -6170,6 +6170,8 @@ html[data-theme="light"] .setting-foot, html[data-theme="light"] .row-list li { 
 html[data-theme="light"] .setting h4 { color: var(--accent); }
 .srp-facts { margin: 0 0 0.6rem; }
 .srp-facts .badge { margin-right: 0.35rem; }
+.srp-why { margin: 0 0 0.6rem; padding-inline-start: 1.1rem; color: var(--muted); font-size: var(--fs-xs); }
+.srp-why:empty { display: none; }
 .srp-policy { white-space: pre-wrap; max-width: 62rem; margin: 0; }
 .srp-sum { display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; margin: 0 0 0.75rem; color: var(--muted); }
 .srp-sum strong { color: var(--text-bright); }

@@ -367,6 +367,22 @@
     return bar ? bar.innerHTML : null;
   }
 
+  // Which menu the server lit for a document: its section and the
+  // link marked in the sidebar (the phone bar reads its mark back off
+  // the sidebar on content-ready). A page listed under
+  // two sections (Doctrines sits under Corporation and Fleets) is lit
+  // where the server put it, which the address alone cannot tell.
+  function navMarks(doc) {
+    if (!doc || !doc.querySelector) return null;
+    var side = doc.querySelector(".sidenav");
+    if (!side) return null;
+    var link = side.querySelector(".menu a.active, a.navlink.active");
+    return {
+      section: side.getAttribute("data-section") || "",
+      href: link ? link.getAttribute("href") : ""
+    };
+  }
+
   // A document's stylesheet links as { href, path, media }, in
   // document order, the page assets a <main>-only swap would
   // otherwise throw away with the fetched <head>.
@@ -571,6 +587,7 @@
         return {
           main: next.innerHTML,
           subnav: subnavHTML(doc),
+          nav: navMarks(doc),
           title: titleEl ? titleEl.textContent : "",
           styles: pageStyles(doc),
           scripts: pageScripts(doc)
@@ -579,29 +596,51 @@
     });
   }
 
-  function syncActiveNav(path) {
+  function lightBranch(branch) {
+    if (!branch) return;
+    branch.classList.add("active");
+    if (document.documentElement.getAttribute("data-nav") !== "rail") {
+      branch.open = true;
+    }
+  }
+
+  // Marks the sidebar for the page just painted:
+  // as the server lit them when the entry carries its marks, else by
+  // the address (an entry cached before marks existed).
+  function syncActiveNav(path, marks) {
     var sidebar = document.getElementById("site-nav");
     if (!sidebar) return;
+    var side = sidebar.querySelector(".sidenav");
     var links = sidebar.querySelectorAll(".sidenav a[href]");
     var hrefs = [];
     for (var i = 0; i < links.length; i++) hrefs.push(links[i].getAttribute("href") || "");
-    var match = bestNavHref(hrefs, path);
     for (var j = 0; j < links.length; j++) {
       links[j].classList.remove("active");
     }
     var branches = sidebar.querySelectorAll(".sidenav details.branch");
     for (var k = 0; k < branches.length; k++) branches[k].classList.remove("active");
+    if (marks && marks.section) {
+      if (side) side.setAttribute("data-section", marks.section);
+      var home = null;
+      for (var b = 0; b < branches.length; b++) {
+        if (branches[b].getAttribute("data-nav-category") === marks.section) home = branches[b];
+      }
+      lightBranch(home);
+      var scope = home ? home.querySelectorAll("a[href]") : sidebar.querySelectorAll(".sidenav a.navlink[href]");
+      for (var n = 0; n < scope.length; n++) {
+        if (marks.href && scope[n].getAttribute("href") === marks.href) {
+          scope[n].classList.add("active");
+          break;
+        }
+      }
+      return;
+    }
+    var match = bestNavHref(hrefs, path);
     if (!match) return;
     for (var m = 0; m < links.length; m++) {
       if (links[m].getAttribute("href") === match) {
         links[m].classList.add("active");
-        var branch = links[m].closest ? links[m].closest("details.branch") : null;
-        if (branch) {
-          branch.classList.add("active");
-          if (document.documentElement.getAttribute("data-nav") !== "rail") {
-            branch.open = true;
-          }
-        }
+        lightBranch(links[m].closest ? links[m].closest("details.branch") : null);
         break;
       }
     }
@@ -739,7 +778,7 @@
       if (bar && entry.subnav != null) bar.innerHTML = entry.subnav;
       hoistModals(main);
       if (entry.title) document.title = entry.title;
-      syncActiveNav(new URL(url, window.location.href).pathname);
+      syncActiveNav(new URL(url, window.location.href).pathname, entry.nav);
       if (push === "top") {
         window.scrollTo(0, 0);
       } else if (push === "region") {
@@ -1053,6 +1092,7 @@
   cachePut(window.location.href, {
     main: main.innerHTML,
     subnav: subnavHTML(document),
+    nav: navMarks(document),
     title: document.title,
     styles: pageStyles(document),
     scripts: pageScripts(document)

@@ -207,6 +207,18 @@ type fleetMail struct {
 	Counts    bool
 	Loss      bool
 	Attackers []fleetMailAttacker
+	// What the explorer reads where no log covers it: the victim's
+	// group, and everyone on the mail, either side, the most damage
+	// first. Public: the mail has a page on the killboard.
+	VictimCorp, VictimAlliance int64
+	Public                     bool
+	Hands                      []fleetMailHandRow
+}
+
+// fleetMailHandRow is one attacker on a killmail, ours or the enemy's.
+type fleetMailHandRow struct {
+	Character, Corp, Alliance, Ship, Weapon, Damage int64
+	FinalBlow                                       bool
 }
 
 // fleetScoreMail is what one mail is worth to one pilot.

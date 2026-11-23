@@ -165,10 +165,18 @@
   {{range .Tiles}}<div class="l-stat{{with .Tone}} bt-stat-{{.}}{{end}}"><span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span></div>{{end}}
 </div>
 
+{{if .MailsOnly}}
+<p class="fl-x-source" role="note">No one has added a game log for this battle yet, so it is drawn from its killmails: who died, when, and who was on each mail. Every log added fills in damage, repairs, tackle and energy warfare second by second. <a href="#fl-logs-title">Add your log</a></p>
+{{end}}
 <section class="l-panel bt-strip fl-x-strip" aria-labelledby="fl-x-strip-h" data-fleet-zoom>
   <div class="bt-strip-head">
+    {{if .Chart.ISK}}
+    <h2 class="bt-h" id="fl-x-strip-h">The battle, kill by kill</h2>
+    <ul class="bt-key"><li class="fl-key-kill">ISK destroyed so far</li><li class="fl-key-loss">ISK lost so far</li></ul>
+    {{else}}
     <h2 class="bt-h" id="fl-x-strip-h">The battle, second by second</h2>
     <ul class="bt-key"><li class="bt-key-out">Damage dealt</li><li class="bt-key-in">Damage taken</li><li class="bt-key-repin">Repairs</li></ul>
+    {{end}}
     <div class="fl-x-zoom" data-zoom-controls hidden>
       <span class="fl-x-zoom-win" data-zoom-window aria-live="polite">Whole battle</span>
       <button type="button" class="btn btn-quiet" data-zoom="in" aria-label="Zoom in">+</button>
@@ -187,12 +195,12 @@
   {{end}}
   <div class="bt-plot">
     <div class="bt-y" aria-hidden="true"><span data-zoom-ytop>{{.Chart.YTop}}</span><span>0</span></div>
-    <svg class="bt-chart" viewBox="0 0 600 160" preserveAspectRatio="none" role="img" aria-label="Damage the fleet dealt and took, and its repairs, a second, with every kill and loss marked" data-zoom-svg>
+    <svg class="bt-chart{{if .Chart.ISK}} fl-chart-isk{{end}}" viewBox="0 0 600 160" preserveAspectRatio="none" role="img" aria-label="{{if .Chart.ISK}}ISK the fleet destroyed and lost as the battle went on, with every kill and loss marked{{else}}Damage the fleet dealt and took, and its repairs, a second, with every kill and loss marked{{end}}" data-zoom-svg>
       <line class="bt-grid" x1="0" y1="0.5" x2="600" y2="0.5" vector-effect="non-scaling-stroke"/>
       <line class="bt-grid" x1="0" y1="80" x2="600" y2="80" vector-effect="non-scaling-stroke"/>
       <line class="bt-grid bt-grid-base" x1="0" y1="159.5" x2="600" y2="159.5" vector-effect="non-scaling-stroke"/>
       <rect class="bt-band" id="bt-band" x="{{.Band.X}}" y="0" width="{{.Band.W}}" height="160"{{if not .Band.On}} hidden{{end}}/>
-      <polyline class="bt-ln-repin" points="{{.Chart.Reps}}" vector-effect="non-scaling-stroke"/>
+      {{if not .Chart.ISK}}<polyline class="bt-ln-repin" points="{{.Chart.Reps}}" vector-effect="non-scaling-stroke"/>{{end}}
       <polyline class="bt-ln-in" points="{{.Chart.In}}" vector-effect="non-scaling-stroke"/>
       <polyline class="bt-ln-out" points="{{.Chart.Out}}" vector-effect="non-scaling-stroke"/>
       {{range .Chart.Marks}}<line class="bt-mk{{if .Loss}} bt-mk-loss{{end}}" x1="{{.X}}" y1="0" x2="{{.X}}" y2="160" vector-effect="non-scaling-stroke"><title>{{.Label}}</title></line>{{end}}
@@ -216,7 +224,7 @@
   {{end}}
   {{if .PilotLanes}}
   <details class="fl-x-pilotlanes"{{if le (len .PilotLanes) 30}} open{{end}}>
-    <summary>Each pilot through the battle <span class="bt-dim">{{len .PilotLanes}} pilots: gold when dealing damage, red when taking it</span></summary>
+    <summary>Each pilot through the battle <span class="bt-dim">{{len .PilotLanes}} pilots: {{if .MailsOnly}}gold on a kill, red on their loss, from killmails{{else}}gold when dealing damage, red when taking it{{end}}</span></summary>
     <div class="fl-x-plist" role="list">
       {{range .PilotLanes}}
       <div class="fl-x-plane" role="listitem">
@@ -268,6 +276,15 @@
   </table>
   </div>
   {{else}}<p class="prose">No killmail matched this battle.</p>{{end}}
+  <details class="fl-x-addmail">
+    <summary>A killmail is missing?</summary>
+    <form method="post" action="{{.AddMails}}" class="l-stack">
+      <label class="field-label" for="fl-x-mails-in">Killmail links, one per line</label>
+      <textarea id="fl-x-mails-in" name="links" rows="3" maxlength="2000" required placeholder="https://esi.evetech.net/latest/killmails/123456789/0a1b2c.../"></textarea>
+      <p class="fl-hint">In game, open the killmail and choose Copy External Kill Link. A zKillboard link works too while zKillboard still has the kill. Up to 10 at a time. The report picks them up when it next updates, a few minutes after.</p>
+      <div><button type="submit" class="btn">Add killmails</button></div>
+    </form>
+  </details>
 </section>
 
 {{if or .Ours.Hulls .Theirs.Hulls}}
@@ -279,9 +296,10 @@
       <ul class="bt-hulls">{{range .Hulls}}<li><img src="{{typeRender .TypeID 64}}" alt="" width="28" height="28" loading="lazy"><span class="bt-hull-n">{{itemLink .TypeID .Name}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>
     </div>{{end}}{{end}}
     {{with .Theirs}}{{if .Hulls}}<div class="bt-side bt-side-hostile">
-      <h3 class="bt-sub">Against it <span class="bt-dim">{{.Pilots}} seen in logs</span></h3>
+      <h3 class="bt-sub">Against it <span class="bt-dim">{{.Pilots}} seen{{if $x.MailsOnly}} on the killmails{{end}}</span></h3>
       <ul class="bt-hulls">{{range .Hulls}}<li><img src="{{typeRender .TypeID 64}}" alt="" width="28" height="28" loading="lazy"><span class="bt-hull-n">{{itemLink .TypeID .Name}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>
       {{if .Tickers}}<p class="bt-tickers">{{range .Tickers}}<span>[{{.Name}}] {{.Count}}</span>{{end}}</p>{{end}}
+      {{with $x.Groups}}<ul class="fl-x-groups">{{range .}}<li>{{if .Logo}}<img src="{{.Logo}}" alt="" width="24" height="24" loading="lazy">{{else}}<span class="bt-who-dot" aria-hidden="true"></span>{{end}}<span class="fl-x-gn">{{.Link}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>{{end}}
     </div>{{end}}{{end}}
   </div>
 </section>
@@ -290,11 +308,11 @@
 <div class="l-switcher bt-whole">
   {{if .Pilots.Total}}<section class="l-panel" aria-labelledby="fl-x-pilots-h">
     <h2 class="bt-h" id="fl-x-pilots-h">The fleet's pilots</h2>
-    {{template "fl-table" (fleetTableHead .Pilots "Dealt" "Taken" "Repaired")}}
+    {{if .MailsOnly}}<p class="fl-hint">From killmails: the damage each pilot is credited with on the fleet's kills, and the damage on their own loss.</p>{{template "fl-table" (fleetTableHead .Pilots "On kills" "On their loss" "Kills")}}{{else}}{{template "fl-table" (fleetTableHead .Pilots "Dealt" "Taken" "Repaired")}}{{end}}
   </section>{{end}}
   {{if .Enemies.Total}}<section class="l-panel" aria-labelledby="fl-x-enemies-h">
     <h2 class="bt-h" id="fl-x-enemies-h">The enemy</h2>
-    {{template "fl-table" (fleetTableHead .Enemies "Dealt to us" "Taken from us" "On grid")}}
+    {{if .MailsOnly}}<p class="fl-hint">From killmails: the damage each did on the fleet's losses, and the fleet's damage on their own killmail.</p>{{template "fl-table" (fleetTableHead .Enemies "On our losses" "Ours on them" "Seen")}}{{else}}{{template "fl-table" (fleetTableHead .Enemies "Dealt to us" "Taken from us" "On grid")}}{{end}}
   </section>{{end}}
 </div>
 
@@ -302,15 +320,21 @@
 <section class="l-panel bt-app" aria-labelledby="fl-x-app-h">
   <div class="bt-strip-head">
     <h2 class="bt-h" id="fl-x-app-h">Weapons and how they landed</h2>
-    <ul class="bt-qkey" aria-label="Hit quality, worst to best"><li class="q-miss">Miss</li><li class="q-graze">Graze</li><li class="q-glance">Glance</li><li class="q-hit">Hit</li><li class="q-pen">Penetrate</li><li class="q-smash">Smash</li><li class="q-wreck">Wreck</li></ul>
+    {{if not .WeaponsFromMails}}<ul class="bt-qkey" aria-label="Hit quality, worst to best"><li class="q-miss">Miss</li><li class="q-graze">Graze</li><li class="q-glance">Glance</li><li class="q-hit">Hit</li><li class="q-pen">Penetrate</li><li class="q-smash">Smash</li><li class="q-wreck">Wreck</li></ul>{{end}}
   </div>
   <div class="l-seg" role="tablist" aria-label="Whose weapons" data-tabs hidden>
     {{if .WeaponsOut.Total}}<button type="button" role="tab" id="fl-x-wout-tab" aria-controls="fl-x-wout" aria-selected="true">The fleet's</button>{{end}}
     {{if .WeaponsIn.Total}}<button type="button" role="tab" id="fl-x-win-tab" aria-controls="fl-x-win" aria-selected="{{if .WeaponsOut.Total}}false{{else}}true{{end}}">The enemy's</button>{{end}}
   </div>
+  {{if .WeaponsFromMails}}
+  {{if .WeaponsOut.Total}}<section role="tabpanel" id="fl-x-wout" aria-labelledby="fl-x-wout-tab"><h3 class="l-tab-h">The fleet's weapons</h3>{{template "fl-mweapons" .WeaponsOut}}</section>{{end}}
+  {{if .WeaponsIn.Total}}<section role="tabpanel" id="fl-x-win" aria-labelledby="fl-x-win-tab"><h3 class="l-tab-h">The enemy's weapons</h3>{{template "fl-mweapons" .WeaponsIn}}</section>{{end}}
+  <p class="fl-hint">From killmails: the weapon each attacker is listed with, and the damage the mail credits it. A game log read in full adds shots and how well they landed.</p>
+  {{else}}
   {{if .WeaponsOut.Total}}<section role="tabpanel" id="fl-x-wout" aria-labelledby="fl-x-wout-tab"><h3 class="l-tab-h">The fleet's weapons</h3>{{template "fl-weapons" .WeaponsOut}}</section>{{end}}
   {{if .WeaponsIn.Total}}<section role="tabpanel" id="fl-x-win" aria-labelledby="fl-x-win-tab"><h3 class="l-tab-h">The enemy's weapons</h3>{{template "fl-weapons" .WeaponsIn}}</section>{{end}}
   <p class="fl-hint">From the {{.WeaponLogs}} {{if eq .WeaponLogs 1}}log{{else}}logs{{end}} read in full for this battle.</p>
+  {{end}}
 </section>
 {{end}}
 
@@ -336,6 +360,7 @@
 </div>
 <h2 class="bt-mtitle" id="bt-moment-h" data-moment-seq="{{.Seq}}">{{.Title}}</h2>
 <p class="bt-msum">{{.Summary}}</p>
+{{if .FromMails}}<p class="fl-hint">No log covers these seconds, so the lists below come from the killmails in them.</p>{{end}}
 <dl class="bt-mnums">{{range .Figures}}<div class="bt-mnum bt-tone-{{.Tone}}"><dt>{{.Label}}</dt><dd>{{.Value}}</dd></div>{{end}}</dl>
 {{if .Kills}}
 <ul class="bt-mkills">
@@ -345,7 +370,7 @@
 {{if .Hands}}
 <h3 class="bt-h">On the killmail</h3>
 <ul class="fl-x-hands">
-  {{range .Hands}}<li{{if .Ours}} class="ours"{{end}}>{{template "fl-who-icon" .Who}}<span class="fl-x-hn">{{.Who.Link}}{{with .Who.Hull}} <span class="bt-dim">{{.}}</span>{{end}}</span><span class="bt-bar"><span class="bt-bar-fill" data-w="{{.BarW}}"></span></span><span class="fl-x-hd">{{.Damage}} <span class="bt-dim">{{.Pct}}%</span></span></li>{{end}}
+  {{range .Hands}}<li{{if .Ours}} class="ours"{{end}}>{{template "fl-who-icon" .Who}}<span class="fl-x-hn">{{.Who.Link}}{{with .Who.Hull}} <span class="bt-dim">{{.}}</span>{{end}}{{if .Who.FinalBlow}} <span class="kb-tag">final blow</span>{{end}}{{if .Who.Group}}<span class="fl-x-hg">{{if .Who.GroupLogo}}<img src="{{.Who.GroupLogo}}" alt="" width="16" height="16" loading="lazy">{{end}}{{.Who.Group}}</span>{{end}}</span>{{if .Who.Weapon}}<img class="fl-x-hw" src="{{typeIcon .Who.Weapon 32}}" alt="" width="20" height="20" loading="lazy" title="{{.Who.WeaponName}}">{{else}}<span class="fl-x-hw"></span>{{end}}<span class="bt-bar"><span class="bt-bar-fill" data-w="{{.BarW}}"></span></span><span class="fl-x-hd">{{.Damage}} <span class="bt-dim">{{.Pct}}%</span></span></li>{{end}}
 </ul>
 {{end}}
 <div class="l-switcher bt-mtables">
@@ -366,7 +391,7 @@
 
 {{define "fl-who-icon"}}{{if .Portrait}}<img class="fl-x-portrait" src="{{.Portrait}}" alt="" width="24" height="24" loading="lazy">{{else if .ShipTypeID}}<img src="{{typeRender .ShipTypeID 64}}" alt="" width="24" height="24" loading="lazy">{{else}}<span class="bt-who-dot" aria-hidden="true"></span>{{end}}{{end}}
 
-{{define "fl-who"}}<span class="bt-who">{{template "fl-who-icon" .}}<span class="bt-who-t"><span class="bt-who-n">{{.Link}}{{if .Died}} <span class="kb-tag warn">died</span>{{end}}</span>{{if or .Hull .Ticker}}<span class="bt-who-s">{{if .ShipTypeID}}{{if .Portrait}}<img src="{{typeRender .ShipTypeID 64}}" alt="" width="16" height="16" loading="lazy"> {{end}}{{end}}{{if .Ticker}}[{{.Ticker}}] {{end}}{{.Hull}}</span>{{end}}</span></span>{{end}}
+{{define "fl-who"}}<span class="bt-who">{{template "fl-who-icon" .}}<span class="bt-who-t"><span class="bt-who-n">{{.Link}}{{if .Died}} <span class="kb-tag warn">died</span>{{end}}</span>{{if .Group}}<span class="bt-who-s fl-x-grp">{{if .GroupLogo}}<img src="{{.GroupLogo}}" alt="" width="16" height="16" loading="lazy"> {{end}}{{.Group}}</span>{{end}}{{if or .Hull .Ticker}}<span class="bt-who-s">{{if .ShipTypeID}}{{if .Portrait}}<img src="{{typeRender .ShipTypeID 64}}" alt="" width="16" height="16" loading="lazy"> {{end}}{{end}}{{if .Ticker}}[{{.Ticker}}] {{end}}{{.Hull}}</span>{{end}}</span></span>{{end}}
 
 {{define "fl-mtable"}}
 <div class="tw">
@@ -386,7 +411,7 @@
 </div>
 {{if $t.More}}<button type="button" class="btn btn-quiet bt-more" data-expand="{{$t.ID}}"><span class="bt-more-c">Show all {{$t.Total}}</span><span class="bt-more-o">Show fewer</span></button>{{end}}
 {{end}}
-{{define "fl-table-row"}}<tr>
+{{define "fl-table-row"}}<tr{{if .Muted}} class="fl-x-muted"{{end}}>
   <td>{{template "fl-who" .Who}}{{with .Note}}<span class="bt-who-s fl-x-note">{{.}}</span>{{end}}{{if .Who.Died}}{{with .Who.MailHref}} <a class="fl-x-km" href="{{.}}">Killmail</a>{{end}}{{end}}</td>
   <td class="num fl-x-fig">{{.A}}{{if .AW}}<span class="bt-bar fl-x-bar-out"><span class="bt-bar-fill" data-w="{{.AW}}"></span></span>{{end}}</td>
   <td class="num fl-x-fig">{{.B}}{{if .BW}}<span class="bt-bar fl-x-bar-in"><span class="bt-bar-fill" data-w="{{.BW}}"></span></span>{{end}}</td>
@@ -428,3 +453,20 @@
   {{with .Brief.TopOut}}<span class="btc-sub">The fleet's main target</span><span class="btc-w">{{if .HullTypeID}}<img src="{{typeRender .HullTypeID 64}}" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Name}}{{if and .Hull (ne .Name .Hull)}} <span class="btc-s">{{.Hull}}</span>{{end}}</span><b>{{battleNum .Amount}}</b></span>{{end}}
   <span class="btc-foot">Select to open this moment</span>
 </span>{{end}}
+
+{{/* A weapons table from killmails: no shots, no hit quality. */}}
+{{define "fl-mweapons"}}
+<div class="tw">
+<table class="bt-wtable">
+  <thead><tr><th class="card-title">Weapon</th><th>Used by</th><th class="num">Damage on killmails</th></tr></thead>
+  <tbody>{{range .Top}}{{template "fl-mweapon-row" .}}{{end}}</tbody>
+  {{if .More}}<tbody id="{{.ID}}" data-wmore>{{range .More}}{{template "fl-mweapon-row" .}}{{end}}</tbody>{{end}}
+</table>
+</div>
+{{if .More}}<button type="button" class="btn btn-quiet bt-more" data-expand="{{.ID}}"><span class="bt-more-c">Show all {{.Total}}</span><span class="bt-more-o">Show fewer</span></button>{{end}}
+{{end}}
+{{define "fl-mweapon-row"}}<tr>
+  <td><span class="bt-who">{{if .WeaponTypeID}}<img src="{{typeIcon .WeaponTypeID 32}}" alt="" width="22" height="22" loading="lazy">{{itemLink .WeaponTypeID .Weapon}}{{else}}<span class="bt-who-dot" aria-hidden="true"></span>{{.Weapon}}{{end}}</span></td>
+  <td>{{.Party}}</td>
+  <td class="num">{{.Damage}}</td>
+</tr>{{end}}

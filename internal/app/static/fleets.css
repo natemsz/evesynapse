@@ -387,7 +387,7 @@
 
 /* Who was on a killmail, ours marked. */
 .fl-x-hands { display: grid; gap: 0.25rem; margin: 0 0 var(--space-3); padding: 0; list-style: none; font-size: var(--fs-sm); }
-.fl-x-hands li { display: grid; grid-template-columns: 24px minmax(0, 1fr) 7rem auto; align-items: center; gap: var(--space-2); padding: 0.15rem var(--space-1); border-radius: var(--r-xs); --bt-c: var(--bt-in); }
+.fl-x-hands li { display: grid; grid-template-columns: 24px minmax(0, 1fr) 20px 7rem auto; align-items: center; gap: var(--space-2); padding: 0.15rem var(--space-1); border-radius: var(--r-xs); --bt-c: var(--bt-in); }
 .fl-x-hands li.ours { background: var(--surface-inset); --bt-c: var(--bt-out); }
 .fl-x-hands img { border-radius: var(--r-xs); }
 .fl-x-hands .fl-x-portrait { border-radius: 50%; }
@@ -409,8 +409,31 @@
 .fl-x .bt-lane-label { display: flex; align-items: center; justify-content: flex-end; gap: 0.35rem; white-space: nowrap; }
 @container page (max-width: 40rem) {
   .fl-x-lane-icon { display: none; }
+  /* Five times to the second do not fit a phone: keep every other. */
+  .fl-x [data-zoom-ticks] span:nth-child(2n) { display: none; }
   .fl-x-pin { top: 0.4rem; width: 1.15rem; height: 1.15rem; outline-width: 1.5px; }
 }
 /* The fleet's pilots and the enemy side by side only while both stay
    tables. */
 .fl-x .bt-whole { --l-min: 66rem; }
+
+/* A battle no log covers yet, drawn from its killmails. */
+.fl-x-source { margin: 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--gold); border-radius: var(--r-xs); background: var(--surface-inset); color: var(--text); font-size: var(--fs-sm); }
+.fl-chart-isk .bt-ln-out { stroke: var(--bt-kill); }
+.fl-chart-isk .bt-ln-in { stroke: var(--bt-loss); }
+.fl-key-kill::before { color: var(--bt-kill); }
+.fl-key-loss::before { color: var(--bt-loss); }
+.fl-x-muted td { color: var(--muted-2); }
+.fl-x-muted .bt-bar-fill { opacity: 0.55; }
+.fl-x-grp img { vertical-align: -0.25em; border-radius: 2px; }
+.fl-x-hg { display: flex; align-items: center; gap: 0.3rem; color: var(--muted); font-size: var(--fs-xs); }
+.fl-x-hg img { border-radius: 2px; }
+.fl-x-hw { border-radius: 2px; }
+.fl-x-groups { display: grid; gap: 0.3rem; margin: var(--space-3) 0 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.fl-x-groups li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
+.fl-x-groups img { border-radius: var(--r-xs); }
+.fl-x-gn { min-width: 0; overflow-wrap: anywhere; }
+.fl-x-addmail { margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--hairline); }
+.fl-x-addmail > summary { cursor: pointer; color: var(--gold); font-size: var(--fs-sm); }
+.fl-x-addmail form { margin-top: var(--space-2); max-width: 46rem; }
+.fl-x-addmail textarea { width: 100%; font-family: var(--font-num); font-size: var(--fs-xs); }

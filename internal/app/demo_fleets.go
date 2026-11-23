@@ -24,6 +24,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"sort"
 	"time"
 
 	"evesynapse/internal/app/module"
@@ -197,6 +198,38 @@ func demoInventedPilot(id int64) bool {
 	return id >= demoPilotAiko && id <= demoRivalBoro
 }
 
+// demoInventedGroup: a corporation the demo made up, with no page or
+// logo in EVE.
+func demoInventedGroup(id int64) bool {
+	return id >= demoCorpID && id <= demoCorpTideID
+}
+
+// demoCastCorp is the corporation of one of the demo's pilots.
+func demoCastCorp(id int64) int64 {
+	for _, c := range demoFleetCast {
+		if c.ID == id {
+			return c.Corp
+		}
+	}
+	return demoCorpID
+}
+
+// demoMailHands is everyone on a made-up mail as a real one lists them:
+// ship, weapon, corporation, the most damage first, one final blow.
+func (s *demoSeed) demoMailHands(m *fleetMail, ships map[int64]string, rng *rand.Rand) {
+	for _, a := range m.Attackers {
+		h := fleetMailHandRow{Character: a.Character, Corp: demoCastCorp(a.Character), Ship: a.Ship, Damage: a.Damage}
+		if w := demoWeapons[ships[a.Character]]; w != "" {
+			h.Weapon = s.typeID(w)
+		}
+		m.Hands = append(m.Hands, h)
+	}
+	sort.SliceStable(m.Hands, func(i, j int) bool { return m.Hands[i].Damage > m.Hands[j].Damage })
+	if len(m.Hands) > 0 {
+		m.Hands[rng.Intn(len(m.Hands))].FinalBlow = true
+	}
+}
+
 // demoFleetValues is what each hull is worth on a report, fitted.
 var demoFleetValues = map[string]float64{
 	"Tengu": 512e6, "Loki": 548e6, "Legion": 462e6, "Proteus": 603e6, "Scimitar": 268e6, "Basilisk": 274e6,
@@ -296,7 +329,7 @@ func demoPastFleets() []demoPastFleet {
 		},
 		{
 			Title: "Weekend roam", Description: "Low stakes roam out the static. New pilots welcome, ask for a fit.",
-			Ago: 20*day + 6*time.Hour, Minutes: 100, FC: demoCharDario, Pilots: 14, Logs: 7,
+			Ago: 20*day + 6*time.Hour, Minutes: 100, FC: demoCharDario, Pilots: 14, Logs: 0,
 			Battles: []demoFleetBattle{{System: 1, Offset: 52 * minute, Length: 5 * minute, Mails: []demoFleetMail{
 				demoKill("Cerberus", demoRivalZeke, 80*second), demoLoss(12, 190*second), demoKill("Huginn", demoRivalYara, 250*second),
 			}}},
@@ -967,26 +1000,33 @@ func (s *demoSeed) writeDemoPastFleet(ctx context.Context, f demoPastFleet, inde
 			if m.Loss {
 				seat := seats[m.Seat]
 				mail.Loss, mail.Victim, mail.Ship = true, seat.ID, s.typeID(seat.Ship)
-				mail.Damage = 28000 + rng.Int63n(30000)
 				mail.Value = sql.NullFloat64{Float64: demoFleetValues[seat.Ship], Valid: true}
 				// The rivals on the mail: everyone with guns still on grid.
+				handShips := map[int64]string{}
 				for _, e := range enemies {
 					if e.DPS > 0 && (e.Dies.IsZero() || at.Add(m.At).Before(e.Dies)) {
 						damage := int64(e.DPS * (0.55 + rng.Float64()*0.9) * float64(6+rng.Intn(10)))
 						mail.Attackers = append(mail.Attackers, fleetMailAttacker{Character: e.ID, Ship: s.typeID(e.Ship), Damage: damage})
+						mail.Damage += damage // a mail's damage is its hands' sum
+						handShips[e.ID] = e.Ship
 					}
 				}
+				s.demoMailHands(mail, handShips, rng)
 			} else {
 				mail.Victim, mail.Ship = m.Victim, s.typeID(m.Ship)
+				mail.VictimCorp = demoCorpTideID
 				mail.Value = sql.NullFloat64{Float64: demoFleetValues[m.Ship], Valid: true}
 				count := 4 + rng.Intn(max(len(seats)-4, 1))
+				handShips := map[int64]string{}
 				for _, pick := range rng.Perm(len(seats))[:min(count, len(seats))] {
 					if out, _, _ := demoLogWork(seats[pick].Ship); out > 100 {
 						damage := int64(out) * (4 + rng.Int63n(9))
 						mail.Attackers = append(mail.Attackers, fleetMailAttacker{Character: seats[pick].ID, Ship: s.typeID(seats[pick].Ship), Damage: damage})
 						mail.Damage += damage
+						handShips[seats[pick].ID] = seats[pick].Ship
 					}
 				}
+				s.demoMailHands(mail, handShips, rng)
 			}
 			mails = append(mails, mail)
 		}

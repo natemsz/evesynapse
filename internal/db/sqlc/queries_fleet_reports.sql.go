@@ -585,21 +585,36 @@ func (q *Queries) ListFleetBattleConsentFor(ctx context.Context, arg ListFleetBa
 }
 
 const listFleetBattleKills = `-- name: ListFleetBattleKills :many
-SELECT fleet_battle_id, killmail_id, killmail_time, loss, victim_character_id, ship_type_id, value_isk FROM fleet_battle_kills
-WHERE fleet_battle_id = $1
-ORDER BY killmail_time, killmail_id
+SELECT b.fleet_battle_id, b.killmail_id, b.killmail_time, b.loss, b.victim_character_id, b.ship_type_id, b.value_isk, COALESCE(k.public, false)::boolean AS public
+FROM fleet_battle_kills b
+LEFT JOIN kills k ON k.killmail_id = b.killmail_id
+WHERE b.fleet_battle_id = $1
+ORDER BY b.killmail_time, b.killmail_id
 LIMIT 100
 `
 
-func (q *Queries) ListFleetBattleKills(ctx context.Context, fleetBattleID int64) ([]FleetBattleKill, error) {
+type ListFleetBattleKillsRow struct {
+	FleetBattleID     int64           `json:"fleet_battle_id"`
+	KillmailID        int64           `json:"killmail_id"`
+	KillmailTime      time.Time       `json:"killmail_time"`
+	Loss              bool            `json:"loss"`
+	VictimCharacterID int64           `json:"victim_character_id"`
+	ShipTypeID        int64           `json:"ship_type_id"`
+	ValueIsk          sql.NullFloat64 `json:"value_isk"`
+	Public            bool            `json:"public"`
+}
+
+// public: the kill has a page on the killboard. A kill only our own
+// members' ESI brought in stays private until zKillboard posts it.
+func (q *Queries) ListFleetBattleKills(ctx context.Context, fleetBattleID int64) ([]ListFleetBattleKillsRow, error) {
 	rows, err := q.db.Query(ctx, listFleetBattleKills, fleetBattleID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []FleetBattleKill
+	var items []ListFleetBattleKillsRow
 	for rows.Next() {
-		var i FleetBattleKill
+		var i ListFleetBattleKillsRow
 		if err := rows.Scan(
 			&i.FleetBattleID,
 			&i.KillmailID,
@@ -608,6 +623,7 @@ func (q *Queries) ListFleetBattleKills(ctx context.Context, fleetBattleID int64)
 			&i.VictimCharacterID,
 			&i.ShipTypeID,
 			&i.ValueIsk,
+			&i.Public,
 		); err != nil {
 			return nil, err
 		}
@@ -888,9 +904,65 @@ func (q *Queries) ListFleetMailAttackers(ctx context.Context, arg ListFleetMailA
 	return items, nil
 }
 
+const listFleetMailHands = `-- name: ListFleetMailHands :many
+SELECT killmail_id, character_id, corporation_id, alliance_id, ship_type_id, weapon_type_id, damage_done, final_blow
+FROM (
+    SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, a.ship_type_id, a.weapon_type_id,
+           a.damage_done, a.final_blow,
+           row_number() OVER (PARTITION BY a.killmail_id ORDER BY a.damage_done DESC, a.seq) AS rn
+    FROM kill_attackers a
+    WHERE a.killmail_id = ANY($1::bigint[])
+) s
+WHERE rn <= 60
+ORDER BY killmail_id, damage_done DESC
+`
+
+type ListFleetMailHandsRow struct {
+	KillmailID    int64 `json:"killmail_id"`
+	CharacterID   int64 `json:"character_id"`
+	CorporationID int64 `json:"corporation_id"`
+	AllianceID    int64 `json:"alliance_id"`
+	ShipTypeID    int64 `json:"ship_type_id"`
+	WeaponTypeID  int64 `json:"weapon_type_id"`
+	DamageDone    int64 `json:"damage_done"`
+	FinalBlow     bool  `json:"final_blow"`
+}
+
+// Everyone on a fleet's killmails, either side, the most damage first:
+// the explorer's enemies, weapons and killmail hands when no log covers
+// them. A blob's mail keeps its 60 biggest hands.
+func (q *Queries) ListFleetMailHands(ctx context.Context, killmailIds []int64) ([]ListFleetMailHandsRow, error) {
+	rows, err := q.db.Query(ctx, listFleetMailHands, killmailIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFleetMailHandsRow
+	for rows.Next() {
+		var i ListFleetMailHandsRow
+		if err := rows.Scan(
+			&i.KillmailID,
+			&i.CharacterID,
+			&i.CorporationID,
+			&i.AllianceID,
+			&i.ShipTypeID,
+			&i.WeaponTypeID,
+			&i.DamageDone,
+			&i.FinalBlow,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFleetMails = `-- name: ListFleetMails :many
 SELECT k.killmail_id, k.killmail_time, k.system_id, k.victim_character_id, k.ship_type_id,
-       k.damage_taken, k.value_ours,
+       k.damage_taken, k.value_ours, k.victim_corporation_id, k.victim_alliance_id, k.public,
        (NOT k.npc
         AND COALESCE(k.value_ours, 0) >= $1::double precision
         AND NOT (k.victim_character_id > 0 AND f.own_pilot)
@@ -903,8 +975,7 @@ CROSS JOIN LATERAL (
            COALESCE(bool_or(a.character_id = ANY($2::bigint[])), false) AS roster_attacker
     FROM kill_attackers a WHERE a.killmail_id = k.killmail_id
 ) f
-WHERE k.public
-  AND k.killmail_time >= $3::timestamptz
+WHERE k.killmail_time >= $3::timestamptz
   AND k.killmail_time <= $4::timestamptz
   AND (k.victim_character_id = ANY($2::bigint[]) OR f.roster_attacker)
 ORDER BY k.killmail_time, k.killmail_id
@@ -919,14 +990,17 @@ type ListFleetMailsParams struct {
 }
 
 type ListFleetMailsRow struct {
-	KillmailID        int64           `json:"killmail_id"`
-	KillmailTime      time.Time       `json:"killmail_time"`
-	SystemID          int64           `json:"system_id"`
-	VictimCharacterID int64           `json:"victim_character_id"`
-	ShipTypeID        int64           `json:"ship_type_id"`
-	DamageTaken       int64           `json:"damage_taken"`
-	ValueOurs         sql.NullFloat64 `json:"value_ours"`
-	Counts            bool            `json:"counts"`
+	KillmailID          int64           `json:"killmail_id"`
+	KillmailTime        time.Time       `json:"killmail_time"`
+	SystemID            int64           `json:"system_id"`
+	VictimCharacterID   int64           `json:"victim_character_id"`
+	ShipTypeID          int64           `json:"ship_type_id"`
+	DamageTaken         int64           `json:"damage_taken"`
+	ValueOurs           sql.NullFloat64 `json:"value_ours"`
+	VictimCorporationID int64           `json:"victim_corporation_id"`
+	VictimAllianceID    int64           `json:"victim_alliance_id"`
+	Public              bool            `json:"public"`
+	Counts              bool            `json:"counts"`
 }
 
 // Public mails in a window with a roster pilot on them. counts is false
@@ -953,6 +1027,9 @@ func (q *Queries) ListFleetMails(ctx context.Context, arg ListFleetMailsParams) 
 			&i.ShipTypeID,
 			&i.DamageTaken,
 			&i.ValueOurs,
+			&i.VictimCorporationID,
+			&i.VictimAllianceID,
+			&i.Public,
 			&i.Counts,
 		); err != nil {
 			return nil, err
@@ -1073,6 +1150,50 @@ func (q *Queries) ListOpAttendanceOf(ctx context.Context, arg ListOpAttendanceOf
 			return nil, err
 		}
 		items = append(items, character_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOwnerFleetDetailVersions = `-- name: ListOwnerFleetDetailVersions :many
+SELECT b.id, COALESCE((d.payload::jsonb ->> 'v')::int, 0)::int AS version
+FROM fleet_battles b
+JOIN ops o ON o.id = b.op_id
+LEFT JOIN fleet_battle_detail d ON d.fleet_battle_id = b.id
+WHERE o.owner_kind = $1::text
+  AND o.owner_id = $2::bigint
+ORDER BY b.id
+LIMIT 100
+`
+
+type ListOwnerFleetDetailVersionsParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+type ListOwnerFleetDetailVersionsRow struct {
+	ID      int64 `json:"id"`
+	Version int32 `json:"version"`
+}
+
+// The explorer version of each of one owner's fleet battles, 0 for none
+// or one stored before versions: the demo reads it for its own small
+// group to tell a seed an older build made.
+func (q *Queries) ListOwnerFleetDetailVersions(ctx context.Context, arg ListOwnerFleetDetailVersionsParams) ([]ListOwnerFleetDetailVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listOwnerFleetDetailVersions, arg.OwnerKind, arg.OwnerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOwnerFleetDetailVersionsRow
+	for rows.Next() {
+		var i ListOwnerFleetDetailVersionsRow
+		if err := rows.Scan(&i.ID, &i.Version); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

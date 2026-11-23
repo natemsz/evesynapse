@@ -366,6 +366,14 @@
       var m = v / p;
       return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
     }
+    // A battle drawn from killmails charts ISK: 1.2B, 350M, 40k.
+    function isk(v) {
+      var units = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "k"]];
+      for (var i = 0; i < units.length; i++) {
+        if (v >= units[i][0]) return (v / units[i][0]).toFixed(v >= units[i][0] * 100 ? 0 : 1).replace(/\.0$/, "") + units[i][1];
+      }
+      return String(Math.round(v));
+    }
     function clock(sec) {
       var t = new Date((d.start + Math.round(sec)) * 1000);
       var p2 = function (x) { return (x < 10 ? "0" : "") + x; };
@@ -393,7 +401,7 @@
         sv.setAttribute("data-zoom-a", fa);
         sv.setAttribute("data-zoom-b", fb);
       }
-      if (ytop) ytop.textContent = Math.round(h / 160 * ceilFull).toLocaleString("en-US");
+      if (ytop) ytop.textContent = d.isk ? isk(h / 160 * ceilFull) : Math.round(h / 160 * ceilFull).toLocaleString("en-US");
       // The marks: placed again inside the window, hidden outside it.
       var marks = strip.querySelectorAll("[data-zoom-track] [data-at]");
       var w = (fb - fa) * 100;

@@ -189,7 +189,8 @@
       if (out) out.textContent = d ? "In EVE time (UTC). That is " + local + " your time." : "In EVE time, which is UTC.";
       if (d) {
         set("clock", pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()));
-        set("day", d.toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }));
+        set("day", ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()] + " " +
+          ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()] + " " + d.getUTCDate());
         set("local", local);
       }
       var title = document.getElementById("fl-title");

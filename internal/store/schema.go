@@ -1032,6 +1032,12 @@ var pgDeadGroupRulesSchema string
 //go:embed schema_pg/172_fleet_battle_detail.sql
 var pgFleetBattleDetailSchema string
 
+// Step 174: rebuild every fleet's report once, for the killmail data its
+// explorer now carries.
+//
+//go:embed schema_pg/174_fleet_explorer_killmails.sql
+var pgFleetExplorerKillmailsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1232,6 +1238,7 @@ func schemaSteps() []schemaStep {
 		{170, "fleet reports", pgFleetReportsSchema, ""},
 		{171, "dead group rules", pgDeadGroupRulesSchema, ""},
 		{172, "fleet battle detail", pgFleetBattleDetailSchema, ""},
+		{174, "fleet explorer killmails", pgFleetExplorerKillmailsSchema, ""},
 	}
 }
 

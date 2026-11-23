@@ -133,7 +133,7 @@ WHERE fight_id = $1 AND (pilot OR character_id > 0);
 -- for padding, by the same rule as FillKillLeadersWin.
 -- name: ListFleetMails :many
 SELECT k.killmail_id, k.killmail_time, k.system_id, k.victim_character_id, k.ship_type_id,
-       k.damage_taken, k.value_ours,
+       k.damage_taken, k.value_ours, k.victim_corporation_id, k.victim_alliance_id, k.public,
        (NOT k.npc
         AND COALESCE(k.value_ours, 0) >= sqlc.arg(padding_value)::double precision
         AND NOT (k.victim_character_id > 0 AND f.own_pilot)
@@ -146,8 +146,7 @@ CROSS JOIN LATERAL (
            COALESCE(bool_or(a.character_id = ANY(sqlc.arg(roster)::bigint[])), false) AS roster_attacker
     FROM kill_attackers a WHERE a.killmail_id = k.killmail_id
 ) f
-WHERE k.public
-  AND k.killmail_time >= sqlc.arg(from_at)::timestamptz
+WHERE k.killmail_time >= sqlc.arg(from_at)::timestamptz
   AND k.killmail_time <= sqlc.arg(to_at)::timestamptz
   AND (k.victim_character_id = ANY(sqlc.arg(roster)::bigint[]) OR f.roster_attacker)
 ORDER BY k.killmail_time, k.killmail_id
@@ -157,6 +156,21 @@ LIMIT 5000;
 SELECT killmail_id, character_id, ship_type_id, damage_done FROM kill_attackers
 WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[])
   AND character_id = ANY(sqlc.arg(roster)::bigint[]);
+
+-- Everyone on a fleet's killmails, either side, the most damage first:
+-- the explorer's enemies, weapons and killmail hands when no log covers
+-- them. A blob's mail keeps its 60 biggest hands.
+-- name: ListFleetMailHands :many
+SELECT killmail_id, character_id, corporation_id, alliance_id, ship_type_id, weapon_type_id, damage_done, final_blow
+FROM (
+    SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, a.ship_type_id, a.weapon_type_id,
+           a.damage_done, a.final_blow,
+           row_number() OVER (PARTITION BY a.killmail_id ORDER BY a.damage_done DESC, a.seq) AS rn
+    FROM kill_attackers a
+    WHERE a.killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[])
+) s
+WHERE rn <= 60
+ORDER BY killmail_id, damage_done DESC;
 
 -- Pilots the fleet read saw on an earlier fleet at the same time, so one
 -- stretch of flying earns attendance once: once on an owner's own board,
@@ -255,6 +269,19 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 -- name: ListFleetBattles :many
 SELECT * FROM fleet_battles WHERE op_id = $1 ORDER BY seq LIMIT 20;
 
+-- The explorer version of each of one owner's fleet battles, 0 for none
+-- or one stored before versions: the demo reads it for its own small
+-- group to tell a seed an older build made.
+-- name: ListOwnerFleetDetailVersions :many
+SELECT b.id, COALESCE((d.payload::jsonb ->> 'v')::int, 0)::int AS version
+FROM fleet_battles b
+JOIN ops o ON o.id = b.op_id
+LEFT JOIN fleet_battle_detail d ON d.fleet_battle_id = b.id
+WHERE o.owner_kind = sqlc.arg(owner_kind)::text
+  AND o.owner_id = sqlc.arg(owner_id)::bigint
+ORDER BY b.id
+LIMIT 100;
+
 -- name: GetFleetBattleTotals :one
 SELECT COUNT(*)::bigint AS battles,
        COALESCE(SUM(kills), 0)::bigint AS kills,
@@ -279,10 +306,14 @@ WHERE fleet_battle_id = $1
 ORDER BY damage_out DESC, reps_out DESC, character_id
 LIMIT 100;
 
+-- public: the kill has a page on the killboard. A kill only our own
+-- members' ESI brought in stays private until zKillboard posts it.
 -- name: ListFleetBattleKills :many
-SELECT * FROM fleet_battle_kills
-WHERE fleet_battle_id = $1
-ORDER BY killmail_time, killmail_id
+SELECT b.*, COALESCE(k.public, false)::boolean AS public
+FROM fleet_battle_kills b
+LEFT JOIN kills k ON k.killmail_id = b.killmail_id
+WHERE b.fleet_battle_id = $1
+ORDER BY b.killmail_time, b.killmail_id
 LIMIT 100;
 
 -- name: GetFleetBattleSeries :one

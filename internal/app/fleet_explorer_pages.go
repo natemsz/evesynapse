@@ -86,11 +86,26 @@ type fleetExplorerView struct {
 	Hover       template.JS // the chart's card per column (#bt-hover-data)
 	Demo        bool
 	ID          int64
+	// MailsOnly: no log counts in this battle, so it is drawn from its
+	// killmails: the chart shows the ISK destroyed and lost so far.
+	MailsOnly        bool
+	Groups           []fleetGroupView // the enemy, by alliance or corporation
+	WeaponsFromMails bool
+	AddMails         string // where a missing killmail is added
+}
+
+// fleetGroupView is one alliance or corporation on the other side.
+type fleetGroupView struct {
+	Logo  string
+	Link  template.HTML
+	Count int
+	Lost  int
 }
 
 type fleetChartView struct {
 	Out, In, Reps string // polyline points
 	YTop          string
+	ISK           bool // the lines are ISK destroyed and lost so far
 	Ticks         []string
 	Marks         []battleChartMark
 }
@@ -123,6 +138,11 @@ type fleetLaneCell struct {
 // fleetWho is a pilot or a ship as a row names it: a portrait for a
 // character, the hull's picture, a link where there is a page.
 type fleetWho struct {
+	Group      template.HTML // alliance, else corporation, from a killmail
+	GroupLogo  string
+	FinalBlow  bool
+	Weapon     int64
+	WeaponName string
 	Name       string
 	Link       template.HTML
 	Portrait   string
@@ -139,6 +159,7 @@ type fleetPartyRow struct {
 	A, B, C    string // the row's figures, by table
 	AW, BW, CW float64
 	Note       string
+	Muted      bool // figures from killmails beside figures from logs
 }
 
 // fleetTableWithHead is a party table and its three figure headings.
@@ -210,6 +231,7 @@ type fleetMomentView struct {
 	NextFrag  string
 	Demo      bool
 	NeutIcon  int64
+	FromMails bool
 }
 
 type fleetHandView struct {
@@ -286,10 +308,11 @@ func fleetMomentTable(id string, names *killNames, viewer map[int64]bool, list [
 	return fleetTable(id, rows)
 }
 
-// fleetKillHref is a killmail's killboard page; the demo's made-up
-// mails have none.
-func fleetKillHref(demo bool, id int64) string {
-	if demo || id <= 0 {
+// fleetKillHref is a killmail's killboard page, empty when it has none:
+// a demo mail, or a kill only our members' own ESI brought in, which
+// stays private until zKillboard posts it.
+func fleetKillHref(linked bool, id int64) string {
+	if !linked || id <= 0 {
 		return ""
 	}
 	return "/intel/kill/" + strconv.FormatInt(id, 10) + "/"
@@ -298,8 +321,10 @@ func fleetKillHref(demo bool, id int64) string {
 // fleetExplorerFor builds the explorer of the shown battle.
 func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportView, shown db.FleetBattle, d fleetDetail, pick string) *fleetExplorerView {
 	names := app.newKillNames(ctx)
-	x := &fleetExplorerView{BattleSeq: shown.Seq, Demo: view.Demo, ID: view.ID, Findings: d.Findings, WeaponLogs: d.WeaponLogs}
+	x := &fleetExplorerView{BattleSeq: shown.Seq, Demo: view.Demo, ID: view.ID, Findings: d.Findings, WeaponLogs: d.WeaponLogs,
+		MailsOnly: d.Logged == 0, WeaponsFromMails: d.WeaponsFromMails, AddMails: view.Path + "/killmails"}
 	viewer := view.ViewerChars
+	href := func(id int64) string { return fleetKillHref(view.Linked[id], id) }
 	n := len(d.Out)
 	length := max(n*10, 10)
 	base := view.Path + "?battle=" + strconv.Itoa(int(shown.Seq))
@@ -334,16 +359,34 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 	x.Tiles = []battleTile{
 		{Label: "Kills", Value: strconv.Itoa(int(shown.Kills)), Sub: formatISKShort(destroyed) + " ISK destroyed", Tone: "pos"},
 		{Label: "Losses", Value: strconv.Itoa(int(shown.Losses)), Sub: formatISKShort(lost) + " ISK lost", Tone: "neg"},
-		{Label: "Damage dealt", Value: battleNum(shown.DamageOut), Sub: "to enemies", Tone: "out"},
-		{Label: "Damage taken", Value: battleNum(shown.DamageIn), Sub: fmt.Sprintf("peak %s a second", battleNum(d.PeakIn)), Tone: "in"},
-		{Label: "Repairs", Value: battleNum(reps), Sub: repsCoverage(reps, shown.DamageIn), Tone: "rep"},
-		{Label: "Enemies", Value: strconv.Itoa(d.EnemyCount), Sub: fmt.Sprintf("%d of our pilots", len(d.Pilots)), Tone: ""},
 	}
+	if x.MailsOnly {
+		var onKills, onLosses int64
+		for _, p := range d.Pilots {
+			onKills += p.Out
+			onLosses += p.In
+		}
+		x.Tiles = append(x.Tiles,
+			battleTile{Label: "Damage on kills", Value: battleNum(onKills), Sub: "what the killmails credit the fleet", Tone: "out"},
+			battleTile{Label: "Damage on losses", Value: battleNum(onLosses), Sub: "to the ships the fleet lost", Tone: "in"})
+	} else {
+		x.Tiles = append(x.Tiles,
+			battleTile{Label: "Damage dealt", Value: battleNum(shown.DamageOut), Sub: "to enemies", Tone: "out"},
+			battleTile{Label: "Damage taken", Value: battleNum(shown.DamageIn), Sub: fmt.Sprintf("peak %s a second", battleNum(d.PeakIn)), Tone: "in"},
+			battleTile{Label: "Repairs", Value: battleNum(reps), Sub: repsCoverage(reps, shown.DamageIn), Tone: "rep"})
+	}
+	x.Tiles = append(x.Tiles, battleTile{Label: "Enemies", Value: strconv.Itoa(d.EnemyCount), Sub: fmt.Sprintf("%d of our pilots", len(d.Pilots)), Tone: ""})
 
-	// The chart: rates a second, on one axis.
+	// The chart: rates a second, on one axis; with no log, the ISK
+	// destroyed and lost so far.
+	series := [3][]int64{d.Out, d.In, d.Reps}
+	per := int64(10)
+	if x.MailsOnly && len(d.IskKill) == n {
+		series, per = [3][]int64{d.IskKill, d.IskLoss, make([]int64, n)}, 1
+	}
 	var top int64
 	for i := 0; i < n; i++ {
-		top = max(top, d.Out[i]/10, d.In[i]/10, d.Reps[i]/10)
+		top = max(top, series[0][i]/per, series[1][i]/per, series[2][i]/per)
 	}
 	ceil := niceCeil(float64(max(top, 1)))
 	line := func(v []int64) string {
@@ -353,7 +396,7 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 			if n > 1 {
 				xp = float64(i) * fleetChartW / float64(n-1)
 			}
-			yp := fleetChartH - float64(v[i])/10/ceil*fleetChartH
+			yp := fleetChartH - float64(v[i])/float64(per)/ceil*fleetChartH
 			if i > 0 {
 				b.WriteByte(' ')
 			}
@@ -361,7 +404,10 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 		}
 		return b.String()
 	}
-	x.Chart = fleetChartView{Out: line(d.Out), In: line(d.In), Reps: line(d.Reps), YTop: battleNum(int64(ceil))}
+	x.Chart = fleetChartView{Out: line(series[0]), In: line(series[1]), Reps: line(series[2]), YTop: battleNum(int64(ceil))}
+	if per == 1 {
+		x.Chart.ISK, x.Chart.YTop = true, formatISKShort(ceil)
+	}
 	clock := func(sec int) string { return time.Unix(d.Start+int64(sec), 0).UTC().Format("15:04:05") }
 	for i := 0; i <= 4; i++ {
 		x.Chart.Ticks = append(x.Chart.Ticks, clock(length * i / 4)[:5])
@@ -461,6 +507,9 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 			}
 		}
 		lane.Summary = fmt.Sprintf("%s dealt %s and took %s", lane.Who.Name, battleNum(p.Out), battleNum(p.In))
+		if p.FromMails {
+			lane.Summary = fmt.Sprintf("%s: %s damage on kills and %s on their loss, from killmails", lane.Who.Name, battleNum(p.Out), battleNum(p.In))
+		}
 		x.PilotLanes = append(x.PilotLanes, lane)
 	}
 
@@ -471,10 +520,11 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 		Out    []int64 `json:"out"`
 		In     []int64 `json:"in"`
 		Reps   []int64 `json:"reps"`
+		ISK    bool    `json:"isk,omitempty"`
 	}
-	z := zoomData{Start: d.Start, Length: length, Out: make([]int64, n), In: make([]int64, n), Reps: make([]int64, n)}
+	z := zoomData{Start: d.Start, Length: length, Out: make([]int64, n), In: make([]int64, n), Reps: make([]int64, n), ISK: x.Chart.ISK}
 	for i := 0; i < n; i++ {
-		z.Out[i], z.In[i], z.Reps[i] = d.Out[i]/10, d.In[i]/10, d.Reps[i]/10
+		z.Out[i], z.In[i], z.Reps[i] = series[0][i]/per, series[1][i]/per, series[2][i]/per
 	}
 	if raw, err := json.Marshal(z); err == nil {
 		x.Zoom = template.JS(raw)
@@ -490,7 +540,7 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 		}
 		k := fleetKillView{
 			At: clock(m.At), Loss: m.Kind == momentLoss, ShipTypeID: m.Ship, Ship: names.typeName(m.Ship),
-			Href: fleetKillHref(view.Demo, m.Mail), Moment: base + "&m=" + strconv.Itoa(m.Seq) + "#bt-moment", Fragment: fragBase + strconv.Itoa(m.Seq) + "/",
+			Href: href(m.Mail), Moment: base + "&m=" + strconv.Itoa(m.Seq) + "#bt-moment", Fragment: fragBase + strconv.Itoa(m.Seq) + "/",
 			Hands: len(m.Detail.Attackers),
 		}
 		for _, row := range view.Mails {
@@ -541,6 +591,42 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 			tickers[e.Ticker]++
 		}
 	}
+	groups := map[int64]*fleetGroupView{}
+	for _, e := range d.Enemies {
+		id := e.AllianceID
+		if id == 0 {
+			id = e.CorpID
+		}
+		if id == 0 {
+			continue
+		}
+		g := groups[id]
+		if g == nil {
+			g = &fleetGroupView{}
+			if e.AllianceID != 0 {
+				g.Link, g.Logo = fleetGroupOf(names, 0, id)
+			} else {
+				g.Link, g.Logo = fleetGroupOf(names, id, 0)
+			}
+			groups[id] = g
+		}
+		g.Count++
+		if e.Died {
+			g.Lost++
+		}
+	}
+	for _, g := range groups {
+		x.Groups = append(x.Groups, *g)
+	}
+	sort.Slice(x.Groups, func(i, j int) bool {
+		if x.Groups[i].Count != x.Groups[j].Count {
+			return x.Groups[i].Count > x.Groups[j].Count
+		}
+		return string(x.Groups[i].Link) < string(x.Groups[j].Link)
+	})
+	if len(x.Groups) > 8 {
+		x.Groups = x.Groups[:8]
+	}
 	x.Ours = fleetSideView{Pilots: len(d.Pilots), Hulls: sortedHulls(ours)}
 	x.Theirs = fleetSideView{Pilots: d.EnemyCount, Hulls: sortedHulls(theirs)}
 	for t, c := range tickers {
@@ -556,14 +642,21 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 	var pilotRows []fleetPartyRow
 	for _, p := range d.Pilots {
 		who := fleetWhoOf(names, viewer, p.ID, p.Ship)
-		who.Died, who.Mail, who.MailHref = p.Died, p.LossMail, fleetKillHref(view.Demo, p.LossMail)
+		who.Died, who.Mail, who.MailHref = p.Died, p.LossMail, href(p.LossMail)
 		row := fleetPartyRow{Who: who, AW: fleetPct(p.Out, maxOut), BW: fleetPct(p.In, maxIn), CW: fleetPct(p.Reps, maxRep)}
-		if p.HasLog {
+		switch {
+		case p.HasLog:
 			row.A, row.B, row.C = battleNum(p.Out), battleNum(p.In), battleNum(p.Reps)
-		} else {
+		case x.MailsOnly:
+			row.A, row.B, row.C = battleNum(p.Out), battleNum(p.In), strconv.Itoa(p.OnMails)
+			row.CW = 0
+		case p.FromMails:
+			row.A, row.B, row.C, row.Note = battleNum(p.Out), battleNum(p.In), "-", "No log: damage from killmails"
+			row.Muted = true
+		default:
 			row.A, row.B, row.C, row.Note = "-", "-", "-", "No log added"
 		}
-		if p.OnMails > 0 {
+		if p.OnMails > 0 && !x.MailsOnly {
 			row.Note = strings.TrimPrefix(row.Note+fmt.Sprintf(", on %d %s", p.OnMails, map[bool]string{true: "kill", false: "kills"}[p.OnMails == 1]), ", ")
 		}
 		pilotRows = append(pilotRows, row)
@@ -582,12 +675,19 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 	var enemyRows []fleetPartyRow
 	for _, e := range d.Enemies {
 		who := fleetWhoParty(names, viewer, momentParty{Name: e.Name, Hull: e.Hull, HullTypeID: e.HullTypeID, CharacterID: e.CharacterID, Ticker: e.Ticker, Pilot: e.Pilot, Died: e.Died})
-		who.Mail, who.MailHref = e.KillMail, fleetKillHref(view.Demo, e.KillMail)
+		who.Mail, who.MailHref = e.KillMail, href(e.KillMail)
+		who.Group, who.GroupLogo = fleetGroupOf(names, e.CorpID, e.AllianceID)
 		row := fleetPartyRow{Who: who, A: battleNum(e.ToUs), B: battleNum(e.FromUs), AW: fleetPct(e.ToUs, eTo), BW: fleetPct(e.FromUs, eFrom)}
+		if e.FromMails && !x.MailsOnly {
+			row.Muted = true
+		}
 		row.C = clock(e.First)[:5] + " to " + clock(e.Last)[:5]
 		// Who fired on it, only when that was not everyone who fired:
 		// a fleet shooting its primaries together is the rule, not news.
-		if e.Shooters > 0 && e.Shooters < firing {
+		switch {
+		case e.FromMails && !x.MailsOnly:
+			row.Note = "Seen only on killmails"
+		case e.Shooters > 0 && e.Shooters < firing:
 			row.Note = fmt.Sprintf("Shot by %d of the %d pilots who fired", e.Shooters, firing)
 		}
 		enemyRows = append(enemyRows, row)
@@ -605,11 +705,24 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 		return splitWeapons(id, rows)
 	}
 	x.WeaponsOut = toRows(d.WeaponsOut, "fl-x-wout-more", "of our pilots")
-	x.WeaponsIn = toRows(d.WeaponsIn, "fl-x-win-more", "enemy ships")
+	x.WeaponsIn = toRows(d.WeaponsIn, "fl-x-win-more", "enemy pilots")
 	for _, t := range d.Tackles {
 		x.Tackles = append(x.Tackles, fleetTackleFor(t, icons, clock))
 	}
 	return x
+}
+
+// fleetGroupOf names an alliance, else a corporation, with its logo.
+func fleetGroupOf(names *killNames, corp, alliance int64) (template.HTML, string) {
+	switch {
+	case alliance == 0 && demoInventedGroup(corp):
+		return template.HTML(template.HTMLEscapeString(names.corp(corp))), ""
+	case alliance > 0:
+		return allianceLink(alliance, names.alliance(alliance)), fmt.Sprintf("https://images.evetech.net/alliances/%d/logo?size=32", alliance)
+	case corp > 0:
+		return corpLink(corp, names.corp(corp)), fmt.Sprintf("https://images.evetech.net/corporations/%d/logo?size=32", corp)
+	}
+	return "", ""
 }
 
 func repsCoverage(reps, in int64) string {
@@ -699,18 +812,25 @@ func (app *Application) fleetMomentViewFor(names *killNames, viewer map[int64]bo
 		Seq: m.Seq, Kind: m.Kind, KindLabel: kind.label, Title: m.Title, Summary: w.Summary,
 		Window: clock(w.From) + " to " + clock(w.To) + " EVE", From: w.From, To: w.To,
 		Position: fmt.Sprintf("%d of %d", pos+1, len(d.Moments)), Demo: view.Demo,
-		Mail: fleetKillHref(view.Demo, m.Mail), NeutIcon: icons["energy"],
+		Mail: fleetKillHref(view.Linked[m.Mail], m.Mail), NeutIcon: icons["energy"], FromMails: w.FromMails,
 	}
-	v.Figures = []battleTile{
-		{Label: "Dealt", Value: battleNum(w.Out), Tone: "out"},
-		{Label: "Taken", Value: battleNum(w.In), Tone: "in"},
-		{Label: "Repaired", Value: battleNum(w.Reps), Tone: "rep"},
+	if w.FromMails {
+		v.Figures = []battleTile{
+			{Label: "Damage on kills", Value: battleNum(w.MailOut), Tone: "out"},
+			{Label: "Damage on losses", Value: battleNum(w.MailIn), Tone: "in"},
+		}
+	} else {
+		v.Figures = []battleTile{
+			{Label: "Dealt", Value: battleNum(w.Out), Tone: "out"},
+			{Label: "Taken", Value: battleNum(w.In), Tone: "in"},
+			{Label: "Repaired", Value: battleNum(w.Reps), Tone: "rep"},
+		}
 	}
 	if w.CapIn > 0 {
 		v.Figures = append(v.Figures, battleTile{Label: "Drained", Value: battleNum(w.CapIn) + " GJ", Tone: "cap"})
 	}
 	for _, k := range w.Kills {
-		kv := fleetKillView{At: clock(k.At), Loss: k.Loss, ShipTypeID: k.ShipTypeID, Ship: names.typeName(k.ShipTypeID), Href: fleetKillHref(view.Demo, k.KillmailID)}
+		kv := fleetKillView{At: clock(k.At), Loss: k.Loss, ShipTypeID: k.ShipTypeID, Ship: names.typeName(k.ShipTypeID), Href: fleetKillHref(view.Linked[k.KillmailID], k.KillmailID)}
 		kv.Victim = fleetWhoOf(names, viewer, k.VictimID, 0)
 		v.Kills = append(v.Kills, kv)
 	}
@@ -723,6 +843,17 @@ func (app *Application) fleetMomentViewFor(names *killNames, viewer map[int64]bo
 	v.Neuts = fleetMomentTable("fl-m-ne-"+id, names, viewer, w.Neuts)
 	for _, h := range w.Attackers {
 		who := fleetWhoOf(names, viewer, h.Character, h.Ship)
+		if h.Character == 0 && h.Ship != 0 {
+			who.Name = names.typeName(h.Ship)
+			who.Link = template.HTML(template.HTMLEscapeString(who.Name))
+		}
+		if !h.Ours {
+			who.Group, who.GroupLogo = fleetGroupOf(names, h.Corp, h.Alliance)
+		}
+		who.Weapon, who.FinalBlow = h.Weapon, h.FinalBlow
+		if h.Weapon != 0 {
+			who.WeaponName = names.typeName(h.Weapon)
+		}
 		v.Hands = append(v.Hands, fleetHandView{Who: who, Damage: battleNum(h.Damage), Pct: h.Pct, BarW: float64(h.Pct), Ours: h.Ours})
 	}
 	for _, t := range w.Tackles {
@@ -783,7 +914,12 @@ func (app *Application) handleFleetReportMoment(w http.ResponseWriter, r *http.R
 		if !ok {
 			break
 		}
-		view := &fleetReportView{ID: op.ID, Path: fleetReportPath(op.ID), Demo: isDemoFleet(op), ViewerChars: map[int64]bool{}}
+		view := &fleetReportView{ID: op.ID, Path: fleetReportPath(op.ID), Demo: isDemoFleet(op), ViewerChars: map[int64]bool{}, Linked: map[int64]bool{}}
+		if kills, err := app.queries.ListFleetBattleKills(ctx, b.ID); err == nil {
+			for _, k := range kills {
+				view.Linked[k.KillmailID] = k.Public && !view.Demo
+			}
+		}
 		for _, c := range v.Characters {
 			view.ViewerChars[c.CharacterID] = true
 		}

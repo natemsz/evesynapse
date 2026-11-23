@@ -67,8 +67,14 @@ func (p fleetLogParty) key() string {
 	return "h:" + strings.ToLower(p.Name) + "|" + strings.ToLower(p.Hull)
 }
 
+// fleetDetailVersion is the explorer's build: a stored explorer from an
+// older build lacks what a newer one adds (the demo seeds again for it).
+// 2: killmail hands, the killmail-only battle, our own private kills.
+const fleetDetailVersion = 2
+
 // fleetDetail is the stored explorer of one fleet battle.
 type fleetDetail struct {
+	Version int     `json:"v"`
 	Start   int64   `json:"start"` // the first step, a Unix second on a 10-second boundary
 	Out     []int64 `json:"out"`   // per step: damage the fleet dealt
 	In      []int64 `json:"in"`    // damage the fleet took
@@ -92,23 +98,35 @@ type fleetDetail struct {
 	Findings    []fleetFinding      `json:"findings,omitempty"`
 	Hover       []battleHoverPt     `json:"hover,omitempty"`
 	LaneColumns int                 `json:"lane_columns"`
+	// Logged is how many of the fleet's pilots have a log counted here.
+	// With none, the battle is drawn from its killmails alone: IskKill
+	// and IskLoss carry the ISK destroyed and lost so far, per step.
+	Logged  int     `json:"logged"`
+	IskKill []int64 `json:"isk_kill,omitempty"`
+	IskLoss []int64 `json:"isk_loss,omitempty"`
+	// WeaponsFromMails: no log was read in full, so the weapons are the
+	// ones the killmails list, with no shots or hit quality.
+	WeaponsFromMails bool `json:"weapons_from_mails,omitempty"`
 }
 
 // fleetDetailPilot is one of the fleet's pilots in the battle.
 type fleetDetailPilot struct {
-	ID       int64   `json:"id"`
-	Ship     int64   `json:"ship"`
-	Out      int64   `json:"out"`
-	In       int64   `json:"in"`
-	Reps     int64   `json:"reps"`
-	CapIn    int64   `json:"cap_in"`
-	HasLog   bool    `json:"has_log"`
-	Died     bool    `json:"died,omitempty"`
-	LossMail int64   `json:"loss_mail,omitempty"`
-	DiedAt   int     `json:"died_at,omitempty"`
-	OnMails  int     `json:"on_mails,omitempty"` // kills it is on
-	LaneOut  []int64 `json:"lane_out,omitempty"`
-	LaneIn   []int64 `json:"lane_in,omitempty"`
+	ID       int64 `json:"id"`
+	Ship     int64 `json:"ship"`
+	Out      int64 `json:"out"`
+	In       int64 `json:"in"`
+	Reps     int64 `json:"reps"`
+	CapIn    int64 `json:"cap_in"`
+	HasLog   bool  `json:"has_log"`
+	Died     bool  `json:"died,omitempty"`
+	LossMail int64 `json:"loss_mail,omitempty"`
+	DiedAt   int   `json:"died_at,omitempty"`
+	OnMails  int   `json:"on_mails,omitempty"` // kills it is on
+	// FromMails: no log of this pilot counts, so Out and In are the
+	// damage the killmails credit: dealt on kills, taken on its loss.
+	FromMails bool    `json:"from_mails,omitempty"`
+	LaneOut   []int64 `json:"lane_out,omitempty"`
+	LaneIn    []int64 `json:"lane_in,omitempty"`
 }
 
 // fleetDetailParty is one enemy (or a third party that repaired the
@@ -131,6 +149,12 @@ type fleetDetailParty struct {
 	Last        int    `json:"last"`
 	Shooters    int    `json:"shooters,omitempty"` // our pilots who hit it
 	Hit         int    `json:"hit,omitempty"`      // our pilots it hit
+	CorpID      int64  `json:"corp_id,omitempty"`  // from a killmail
+	AllianceID  int64  `json:"alliance_id,omitempty"`
+	// FromMails: no log saw it, so its figures are the killmails' own:
+	// ToUs the damage it did on the fleet's losses, FromUs the fleet's
+	// damage on its own killmail.
+	FromMails bool `json:"from_mails,omitempty"`
 }
 
 // fleetDetailWeapon is one weapon across the fleet (or across the
@@ -198,15 +222,26 @@ type fleetMomentDetail struct {
 	Kills     []momentKillRow     `json:"kills,omitempty"`
 	Tackles   []fleetDetailTackle `json:"tackles,omitempty"`
 	Attackers []fleetMailHand     `json:"attackers,omitempty"` // a kill or loss: who was on the mail
+	// FromMails: no log covers this window, so its lists come from the
+	// killmails in it. MailOut is the fleet's damage on those kills,
+	// MailIn the damage on its losses.
+	FromMails bool  `json:"from_mails,omitempty"`
+	MailOut   int64 `json:"mail_out,omitempty"`
+	MailIn    int64 `json:"mail_in,omitempty"`
+	OnMail    int   `json:"on_mail,omitempty"` // a kill: the fleet's pilots on its mail
 }
 
 // fleetMailHand is one character on a killmail, from the mail itself.
 type fleetMailHand struct {
 	Character int64 `json:"character"`
 	Ship      int64 `json:"ship,omitempty"`
+	Weapon    int64 `json:"weapon,omitempty"`
+	Corp      int64 `json:"corp,omitempty"`
+	Alliance  int64 `json:"alliance,omitempty"`
 	Damage    int64 `json:"damage"`
 	Pct       int64 `json:"pct"`
 	Ours      bool  `json:"ours,omitempty"`
+	FinalBlow bool  `json:"fb,omitempty"`
 }
 
 // fleetFinding is one plain sentence the numbers support.
@@ -220,6 +255,57 @@ type fleetEnemyAcc struct {
 	fleetDetailParty
 	shooters, hit map[int64]bool
 	seen          bool
+	// From the killmails, for an enemy no log saw.
+	mailed                bool
+	mailTo, mailFrom      int64
+	mailFirst, mailLast   int
+	mailShooter, mailHits map[int64]bool
+}
+
+// fleetEnemyKey finds the enemy a killmail names among those the logs
+// merged: by character, else by the character's name (a log that knew
+// only the name), else a ship with no pilot by its type. New is the key
+// to file it under when nothing matched.
+func fleetEnemyKey(x fleetDetailInput, enemies map[string]*fleetEnemyAcc, char, ship int64) (key string, found bool) {
+	if char > 0 {
+		key = fmt.Sprintf("c:%d", char)
+		if enemies[key] != nil {
+			return key, true
+		}
+		if x.Name != nil {
+			if n := x.Name(char); n != "" && enemies["n:"+strings.ToLower(n)] != nil {
+				return "n:" + strings.ToLower(n), true
+			}
+		}
+		return key, false
+	}
+	name := "An unnamed ship"
+	if x.Type != nil && ship != 0 {
+		name = x.Type(ship)
+	}
+	key = "h:" + name + "|" + name
+	return key, enemies[key] != nil
+}
+
+// fleetMailHands is everyone on a mail, the most damage first. A mail
+// read without its hands (an older read, the demo's) has our own only.
+func fleetMailHands(m *fleetMail) []fleetMailHandRow {
+	if len(m.Hands) > 0 {
+		return m.Hands
+	}
+	out := make([]fleetMailHandRow, 0, len(m.Attackers))
+	for _, a := range m.Attackers {
+		out = append(out, fleetMailHandRow{Character: a.Character, Ship: a.Ship, Damage: a.Damage})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Damage > out[j].Damage })
+	return out
+}
+
+// fleetMailOurs says a hand on a mail is one of the fleet's pilots,
+// flying with it when the ship died.
+func fleetMailOurs(x fleetDetailInput, m *fleetMail, char int64) bool {
+	p, ok := x.On[char]
+	return ok && char > 0 && p.holds(m.At)
 }
 
 // fleetStepTop is who did the most each way in one step.
@@ -251,7 +337,7 @@ func buildFleetDetail(x fleetDetailInput) fleetDetail {
 	step := int64(gamelog.SliceSeconds)
 	n := int((last-first)/step) + 1
 	d := fleetDetail{
-		Start: first, Out: make([]int64, n), In: make([]int64, n), Reps: make([]int64, n),
+		Version: fleetDetailVersion, Start: first, Out: make([]int64, n), In: make([]int64, n), Reps: make([]int64, n),
 		CapIn: make([]int64, n), CapOut: make([]int64, n),
 	}
 	idx := func(at int64) int { return int((at - first) / step) }
@@ -371,36 +457,163 @@ func buildFleetDetail(x fleetDetailInput) fleetDetail {
 		}
 	}
 
-	// The mails: who died, who was on what.
-	kills := map[int64]bool{}
+	// The mails: who died, who was on what. Logs come first: a pilot or
+	// an enemy a log saw keeps the log's figures, and the mails fill in
+	// only what no log covers, and who died.
+	enemyOf := func(char, ship int64) *fleetEnemyAcc {
+		key, found := fleetEnemyKey(x, enemies, char, ship)
+		if found {
+			e := enemies[key]
+			if char > 0 && e.CharacterID == 0 {
+				e.CharacterID = char
+			}
+			return e
+		}
+		e := &fleetEnemyAcc{fleetDetailParty: fleetDetailParty{Key: key, CharacterID: char, Pilot: char > 0, First: -1},
+			shooters: map[int64]bool{}, hit: map[int64]bool{}}
+		switch {
+		case char > 0 && x.Name != nil:
+			e.Name = x.Name(char)
+		case x.Type != nil && ship != 0:
+			e.Name = x.Type(ship)
+		default:
+			e.Name = "An unnamed ship"
+		}
+		enemies[key] = e
+		return e
+	}
+	mailSaw := func(e *fleetEnemyAcc, at int, ship, corp, alliance int64) {
+		if !e.mailed {
+			e.mailed, e.mailFirst, e.mailLast = true, at, at
+			e.mailShooter, e.mailHits = map[int64]bool{}, map[int64]bool{}
+		}
+		e.mailFirst, e.mailLast = min(e.mailFirst, at), max(e.mailLast, at)
+		if e.HullTypeID == 0 && ship != 0 {
+			e.HullTypeID = ship
+			if x.Type != nil {
+				e.Hull = x.Type(ship)
+			}
+		}
+		if e.CorpID == 0 {
+			e.CorpID, e.AllianceID = corp, alliance
+		}
+	}
+	mailOut, mailIn := map[int64][]int64{}, map[int64][]int64{}
+	lane := func(m map[int64][]int64, id int64, i int, v int64) {
+		if i < 0 || i >= n || v <= 0 {
+			return
+		}
+		if m[id] == nil {
+			m[id] = make([]int64, n)
+		}
+		m[id][i] += v
+	}
 	for _, m := range c.Mails {
+		at, i := sec(m.At), idx(gamelog.ClockStep(m.At.Unix()))
+		hands := fleetMailHands(m)
 		if m.Loss {
 			p := touch(m.Victim)
-			p.Died, p.LossMail, p.DiedAt = true, m.ID, sec(m.At)
+			p.Died, p.LossMail, p.DiedAt = true, m.ID, at
 			if m.Ship != 0 {
 				p.Ship = m.Ship
 			}
+			lane(mailIn, m.Victim, i, m.Damage)
+			for _, a := range hands {
+				if fleetMailOurs(x, m, a.Character) {
+					continue // a fleetmate on its own loss: in no total
+				}
+				e := enemyOf(a.Character, a.Ship)
+				mailSaw(e, at, a.Ship, a.Corp, a.Alliance)
+				e.mailTo += a.Damage
+				e.mailHits[m.Victim] = true
+			}
 			continue
 		}
-		kills[m.ID] = true
-		for _, a := range m.Attackers {
-			if _, ours := x.On[a.Character]; ours {
-				p := touch(a.Character)
-				p.OnMails++
-				if p.Ship == 0 {
-					p.Ship = a.Ship
-				}
+		var ours int64
+		var shooters []int64
+		for _, a := range hands {
+			if !fleetMailOurs(x, m, a.Character) {
+				continue
+			}
+			p := touch(a.Character)
+			p.OnMails++
+			if p.Ship == 0 {
+				p.Ship = a.Ship
+			}
+			lane(mailOut, a.Character, i, a.Damage)
+			ours += a.Damage
+			shooters = append(shooters, a.Character)
+		}
+		if m.Victim == 0 && m.Ship == 0 {
+			continue
+		}
+		e := enemyOf(m.Victim, m.Ship)
+		e.Died, e.KillMail = true, m.ID
+		if m.Ship != 0 && (e.HullTypeID == 0 || !e.seen) {
+			e.HullTypeID = m.Ship
+			if x.Type != nil {
+				e.Hull = x.Type(m.Ship)
 			}
 		}
-		if e := enemies[fmt.Sprintf("c:%d", m.Victim)]; e != nil && m.Victim != 0 {
-			e.Died, e.KillMail = true, m.ID
-			if m.Ship != 0 && e.HullTypeID == 0 {
-				e.HullTypeID = m.Ship
+		mailSaw(e, at, m.Ship, m.VictimCorp, m.VictimAlliance)
+		e.mailFrom += ours
+		for _, id := range shooters {
+			e.mailShooter[id] = true
+		}
+	}
+	for id, p := range pilots {
+		if p.HasLog {
+			d.Logged++
+			continue
+		}
+		for _, v := range mailOut[id] {
+			p.Out += v
+		}
+		for _, v := range mailIn[id] {
+			p.In += v
+		}
+		p.FromMails = p.Out+p.In > 0
+		if mailOut[id] != nil || mailIn[id] != nil {
+			p.out, p.in = mailOut[id], mailIn[id]
+			if p.out == nil {
+				p.out = make([]int64, n)
 			}
-		} else if m.Victim != 0 && x.Name != nil {
-			if e := enemies["n:"+strings.ToLower(x.Name(m.Victim))]; e != nil {
-				e.Died, e.KillMail, e.CharacterID = true, m.ID, m.Victim
+			if p.in == nil {
+				p.in = make([]int64, n)
 			}
+		}
+	}
+	for _, e := range enemies {
+		if !e.mailed {
+			continue
+		}
+		if !e.seen {
+			e.ToUs, e.FromUs, e.FromMails = e.mailTo, e.mailFrom, true
+			e.First, e.Last = e.mailFirst, e.mailLast
+			for id := range e.mailShooter {
+				e.shooters[id] = true
+			}
+			for id := range e.mailHits {
+				e.hit[id] = true
+			}
+		}
+	}
+	if d.Logged == 0 && len(c.Mails) > 0 {
+		d.IskKill, d.IskLoss = make([]int64, n), make([]int64, n)
+		for _, m := range c.Mails {
+			i := idx(gamelog.ClockStep(m.At.Unix()))
+			if i < 0 || i >= n || !m.Value.Valid {
+				continue
+			}
+			if m.Loss {
+				d.IskLoss[i] += int64(m.Value.Float64)
+			} else {
+				d.IskKill[i] += int64(m.Value.Float64)
+			}
+		}
+		for i := 1; i < n; i++ {
+			d.IskKill[i] += d.IskKill[i-1]
+			d.IskLoss[i] += d.IskLoss[i-1]
 		}
 	}
 
@@ -447,7 +660,7 @@ func buildFleetDetail(x fleetDetailInput) fleetDetail {
 	// repaired the fleet are allies.
 	var hostile []fleetDetailParty
 	for _, e := range enemies {
-		if !e.seen && !e.Died {
+		if !e.seen && !e.Died && !e.mailed {
 			continue
 		}
 		e.Shooters, e.Hit = len(e.shooters), len(e.hit)
@@ -471,10 +684,73 @@ func buildFleetDetail(x fleetDetailInput) fleetDetail {
 	d.Enemies = hostile[:min(len(hostile), fleetDetailEnemies)]
 
 	d.WeaponsOut, d.WeaponsIn, d.Tackles, d.WeaponLogs = fleetWholeTables(x, first)
-	d.Hover = fleetHover(d, tops, enemies, x, first)
+	if d.Logged > 0 {
+		d.Hover = fleetHover(d, tops, enemies, x, first)
+	}
+	if d.WeaponLogs == 0 {
+		d.WeaponsOut, d.WeaponsIn = fleetMailWeapons(x)
+		d.WeaponsFromMails = len(d.WeaponsOut)+len(d.WeaponsIn) > 0
+	}
 	d.Moments = fleetMoments(x, d, enemies, first)
 	d.Findings = fleetFindings(x, d)
 	return d
+}
+
+// fleetMailWeapons is the weapons table when no log was read in full:
+// each weapon the killmails list, with the damage they credit it, the
+// fleet's on its kills and the enemy's on its losses.
+func fleetMailWeapons(x fleetDetailInput) (out, in []fleetDetailWeapon) {
+	type acc struct {
+		damage int64
+		users  map[int64]bool
+	}
+	ours, theirs := map[int64]*acc{}, map[int64]*acc{}
+	for _, m := range x.Cluster.Mails {
+		for _, a := range fleetMailHands(m) {
+			if a.Weapon == 0 {
+				continue
+			}
+			mine := fleetMailOurs(x, m, a.Character)
+			var into map[int64]*acc
+			switch {
+			case m.Loss && !mine:
+				into = theirs
+			case !m.Loss && mine:
+				into = ours
+			default:
+				continue
+			}
+			w := into[a.Weapon]
+			if w == nil {
+				w = &acc{users: map[int64]bool{}}
+				into[a.Weapon] = w
+			}
+			w.damage += a.Damage
+			who := a.Character
+			if who == 0 {
+				who = -a.Ship // a ship with no pilot counts once per type
+			}
+			w.users[who] = true
+		}
+	}
+	list := func(m map[int64]*acc) []fleetDetailWeapon {
+		var rows []fleetDetailWeapon
+		for id, w := range m {
+			name := ""
+			if x.Type != nil {
+				name = x.Type(id)
+			}
+			rows = append(rows, fleetDetailWeapon{Weapon: name, TypeID: id, Users: len(w.users), Damage: w.damage})
+		}
+		sort.Slice(rows, func(i, j int) bool {
+			if rows[i].Damage != rows[j].Damage {
+				return rows[i].Damage > rows[j].Damage
+			}
+			return rows[i].TypeID < rows[j].TypeID
+		})
+		return rows[:min(len(rows), fleetDetailWeapons)]
+	}
+	return list(ours), list(theirs)
 }
 
 // fleetReadWhole says a read counts in full: every step it holds is the
@@ -720,6 +996,40 @@ func fleetWindow(x fleetDetailInput, d fleetDetail, enemies map[string]*fleetEne
 			}
 		}
 	}
+	// No log covers the window: its lists come from the killmails in it.
+	if w.Out+w.In+w.Reps == 0 {
+		for _, m := range x.Cluster.Mails {
+			if at := int(m.At.Unix() - first); at < from || at > to {
+				continue
+			}
+			w.FromMails = true
+			hands := fleetMailHands(m)
+			if m.Loss {
+				hurt[m.Victim] += m.Damage
+				w.MailIn += m.Damage
+				for _, a := range hands {
+					if fleetMailOurs(x, m, a.Character) {
+						continue
+					}
+					if key, ok := fleetEnemyKey(x, enemies, a.Character, a.Ship); ok {
+						attack[key] += a.Damage
+					}
+				}
+				continue
+			}
+			var dealt int64
+			for _, a := range hands {
+				if fleetMailOurs(x, m, a.Character) {
+					shooters[a.Character] += a.Damage
+					dealt += a.Damage
+				}
+			}
+			w.MailOut += dealt
+			if key, ok := fleetEnemyKey(x, enemies, m.Victim, m.Ship); ok {
+				targets[key] += dealt
+			}
+		}
+	}
 	ours := func(m map[int64]int64) []momentParty {
 		var total int64
 		for _, v := range m {
@@ -872,17 +1182,28 @@ func fleetMoments(x fleetDetailInput, d fleetDetail, enemies map[string]*fleetEn
 		}
 		mo := add(kind, at, at-momentKillLead, at+step, title)
 		mo.Ship, mo.Mail = m.Ship, m.ID
-		var total int64
-		for _, a := range m.Attackers {
-			total += a.Damage
+		// Everyone on the mail, either side, the most damage first; the
+		// share is of all the damage the mail lists.
+		hands := fleetMailHands(m)
+		total := m.Damage
+		if total <= 0 {
+			for _, a := range hands {
+				total += a.Damage
+			}
 		}
-		for _, a := range m.Attackers {
-			_, ours := x.On[a.Character]
-			mo.Detail.Attackers = append(mo.Detail.Attackers, fleetMailHand{Character: a.Character, Ship: a.Ship, Damage: a.Damage, Pct: a.Damage * 100 / max(total, 1), Ours: ours})
+		for _, a := range hands {
+			if !m.Loss && fleetMailOurs(x, m, a.Character) {
+				mo.Detail.OnMail++
+			}
 		}
-		sort.Slice(mo.Detail.Attackers, func(i, j int) bool { return mo.Detail.Attackers[i].Damage > mo.Detail.Attackers[j].Damage })
-		if len(mo.Detail.Attackers) > 12 {
-			mo.Detail.Attackers = mo.Detail.Attackers[:12]
+		for _, a := range hands {
+			mo.Detail.Attackers = append(mo.Detail.Attackers, fleetMailHand{
+				Character: a.Character, Ship: a.Ship, Weapon: a.Weapon, Corp: a.Corp, Alliance: a.Alliance,
+				Damage: a.Damage, Pct: a.Damage * 100 / max(total, 1), Ours: fleetMailOurs(x, m, a.Character), FinalBlow: a.FinalBlow,
+			})
+			if len(mo.Detail.Attackers) == 12 {
+				break
+			}
 		}
 	}
 	for _, i := range fleetPeaks(d.In) {
@@ -941,7 +1262,7 @@ func fleetMoments(x fleetDetailInput, d fleetDetail, enemies map[string]*fleetEn
 	for i := range ms {
 		ms[i].Seq = i + 1
 		w := fleetWindow(x, d, enemies, ms[i].Detail.From, ms[i].Detail.To)
-		w.Attackers = ms[i].Detail.Attackers
+		w.Attackers, w.OnMail = ms[i].Detail.Attackers, ms[i].Detail.OnMail
 		ms[i].Detail = w
 		ms[i].Brief = fleetMomentBrief{Out: w.Out, In: w.In, Reps: w.Reps, Cap: w.CapIn}
 		if len(w.Attack) > 0 {
@@ -952,13 +1273,13 @@ func fleetMoments(x fleetDetailInput, d fleetDetail, enemies map[string]*fleetEn
 			top := w.Targets[0]
 			ms[i].Brief.TopOut = &top
 		}
-		ms[i].Detail.Summary = fleetMomentSummary(ms[i], w)
+		ms[i].Detail.Summary = fleetMomentSummary(x, ms[i], w)
 	}
 	return ms
 }
 
 // fleetMomentSummary says in one sentence what a moment's window held.
-func fleetMomentSummary(m fleetDetailMoment, w fleetMomentDetail) string {
+func fleetMomentSummary(x fleetDetailInput, m fleetDetailMoment, w fleetMomentDetail) string {
 	secs := max(w.To-w.From, 1)
 	var parts []string
 	if w.Out > 0 {
@@ -971,6 +1292,9 @@ func fleetMomentSummary(m fleetDetailMoment, w fleetMomentDetail) string {
 		parts = append(parts, fmt.Sprintf("repaired %s", battleNum(w.Reps)))
 	}
 	if len(parts) == 0 {
+		if w.FromMails {
+			return fleetMailSummary(x, m, w)
+		}
 		return "No logged damage or repairs in this window."
 	}
 	s := fmt.Sprintf("In these %d seconds %s.", secs, strings.Join(parts, ", "))
@@ -981,6 +1305,71 @@ func fleetMomentSummary(m fleetDetailMoment, w fleetMomentDetail) string {
 		s += fmt.Sprintf(" %d%% of the fleet's damage went into %s.", w.Targets[0].Pct, fleetPartyShort(w.Targets[0]))
 	}
 	return s
+}
+
+// fleetMailSummary says what a window's killmails show, for a window no
+// log covers.
+func fleetMailSummary(x fleetDetailInput, m fleetDetailMoment, w fleetMomentDetail) string {
+	name := func(h fleetMailHand) string {
+		who := ""
+		if x.Name != nil && h.Character > 0 {
+			who = x.Name(h.Character)
+		}
+		ship := ""
+		if x.Type != nil && h.Ship != 0 {
+			ship = x.Type(h.Ship)
+		}
+		switch {
+		case who != "" && ship != "":
+			return who + " (" + ship + ")"
+		case who != "":
+			return who
+		case ship != "":
+			return "a " + ship
+		}
+		return "an unnamed ship"
+	}
+	var ours, theirs []fleetMailHand
+	var fb *fleetMailHand
+	for i, h := range w.Attackers {
+		if h.Ours {
+			ours = append(ours, h)
+		} else {
+			theirs = append(theirs, h)
+		}
+		if h.FinalBlow {
+			fb = &w.Attackers[i]
+		}
+	}
+	switch m.Kind {
+	case momentLoss:
+		if len(theirs) == 0 {
+			break
+		}
+		s := fmt.Sprintf("From the killmail: %s did the most damage, %d%%.", name(theirs[0]), theirs[0].Pct)
+		if fb != nil && fb.Character != theirs[0].Character {
+			s += " The final blow was " + name(*fb) + "'s."
+		}
+		return s
+	case momentKill:
+		if len(ours) == 0 {
+			break
+		}
+		pilots := "pilot is"
+		if w.OnMail != 1 {
+			pilots = "pilots are"
+		}
+		return fmt.Sprintf("From the killmail: %d of the fleet's %s on it, and %s did the most damage, %d%%.", w.OnMail, pilots, name(ours[0]), ours[0].Pct)
+	}
+	var kills, losses int
+	for _, k := range w.Kills {
+		if k.Loss {
+			losses++
+		} else {
+			kills++
+		}
+	}
+	return fmt.Sprintf("From the killmails in this window: %s and %s.", humanize.Plural(kills, "kill"), fleetLossWord(losses))
 }
 
 func fleetPartyShort(p momentParty) string {
@@ -1020,6 +1409,9 @@ func fleetFindings(x fleetDetailInput, d fleetDetail) []fleetFinding {
 	// Focus: how much of the fleet's damage went into what it killed.
 	var onKilled, total int64
 	for _, e := range d.Enemies {
+		if e.FromMails {
+			continue // a killmail credits only damage on the kill
+		}
 		total += e.FromUs
 		if e.Died {
 			onKilled += e.FromUs
@@ -1042,7 +1434,7 @@ func fleetFindings(x fleetDetailInput, d fleetDetail) []fleetFinding {
 	// Whom the enemy went for.
 	var topHurt fleetDetailPilot
 	for _, p := range d.Pilots {
-		if p.In > topHurt.In {
+		if p.HasLog && p.In > topHurt.In {
 			topHurt = p
 		}
 	}
@@ -1053,16 +1445,44 @@ func fleetFindings(x fleetDetailInput, d fleetDetail) []fleetFinding {
 		}
 		say("primary", fmt.Sprintf("The enemy's fire fell hardest on %s: %d%% of everything the fleet took%s", x.Name(topHurt.ID), topHurt.In*100/in, end))
 	}
+	// Who did the most: from the logs when there are any, else from what
+	// the killmails credit.
 	var topOut fleetDetailPilot
 	var out64 int64
 	for _, p := range d.Pilots {
+		if p.HasLog != (d.Logged > 0) {
+			continue
+		}
 		out64 += p.Out
 		if p.Out > topOut.Out {
 			topOut = p
 		}
 	}
-	if out64 > 0 && topOut.Out > 0 && x.Name != nil {
+	switch {
+	case out64 <= 0 || topOut.Out <= 0 || x.Name == nil:
+	case d.Logged > 0:
 		say("damage", fmt.Sprintf("%s dealt the most damage, %s, %d%% of the fleet's.", x.Name(topOut.ID), battleNum(topOut.Out), topOut.Out*100/out64))
+	default:
+		say("damage", fmt.Sprintf("%s did the most damage on the fleet's kills, %d%% of what their killmails credit, and is on %d of %d.",
+			x.Name(topOut.ID), topOut.Out*100/out64, topOut.OnMails, kills))
+	}
+	// Who killed the fleet: the enemy with the most damage on its losses.
+	if d.Logged == 0 && losses > 0 {
+		var top fleetDetailParty
+		var onLosses int64
+		for _, e := range d.Enemies {
+			onLosses += e.ToUs
+			if e.ToUs > top.ToUs {
+				top = e
+			}
+		}
+		if top.ToUs > 0 {
+			who := top.Name
+			if top.Pilot && top.Hull != "" && top.Hull != top.Name {
+				who += " (" + top.Hull + ")"
+			}
+			say("primary", fmt.Sprintf("%s did %d%% of the damage on the fleet's losses.", who, top.ToUs*100/max(onLosses, 1)))
+		}
 	}
 	if d.CapOnUs > 0 {
 		say("energy", fmt.Sprintf("Enemy energy warfare drained %s GJ from the fleet.", battleNum(d.CapOnUs)))

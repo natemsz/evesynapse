@@ -132,6 +132,8 @@ type fleetReportView struct {
 	UploadAction string
 	LogMB        int
 	ViewerChars  map[int64]bool
+	// Linked: the shown battle's mails that have a killboard page.
+	Linked map[int64]bool
 	// X is the shown battle's explorer, nil for a battle built before
 	// explorers were (the page then shows its plain report).
 	X *fleetExplorerView
@@ -319,11 +321,13 @@ func (app *Application) fillFleetBattle(ctx context.Context, view *fleetReportVi
 		logging.Errorf("fleets: mails of battle %d: %v", shown.ID, err)
 	}
 	view.MailsCut = int32(len(kills)) < shown.Kills+shown.Losses
+	view.Linked = make(map[int64]bool, len(kills))
 	for _, k := range kills {
+		view.Linked[k.KillmailID] = !view.Demo && k.Public
 		row := fleetReportMail{
 			KillmailID: k.KillmailID, VictimID: k.VictimCharacterID, ShipTypeID: k.ShipTypeID,
 			When: k.KillmailTime.UTC().Format("15:04:05"), Victim: names.character(k.VictimCharacterID),
-			Ship: names.typeName(k.ShipTypeID), Value: "No price yet", Loss: k.Loss, Linked: !view.Demo,
+			Ship: names.typeName(k.ShipTypeID), Value: "No price yet", Loss: k.Loss, Linked: !view.Demo && k.Public,
 		}
 		if k.ValueIsk.Valid {
 			row.Value = formatISKShort(k.ValueIsk.Float64)

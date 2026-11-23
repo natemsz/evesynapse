@@ -387,6 +387,17 @@ func (app *Application) readFleetMails(ctx context.Context, roster []int64, on m
 		}
 		m[a.CharacterID] = &fleetMailAttacker{Character: a.CharacterID, Ship: a.ShipTypeID, Damage: a.DamageDone}
 	}
+	hands, err := app.queries.ListFleetMailHands(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	handsOf := make(map[int64][]fleetMailHandRow, len(rows))
+	for _, h := range hands {
+		handsOf[h.KillmailID] = append(handsOf[h.KillmailID], fleetMailHandRow{
+			Character: h.CharacterID, Corp: h.CorporationID, Alliance: h.AllianceID, Ship: h.ShipTypeID,
+			Weapon: h.WeaponTypeID, Damage: h.DamageDone, FinalBlow: h.FinalBlow,
+		})
+	}
 	out := make([]*fleetMail, 0, len(rows))
 	for _, k := range rows {
 		at := k.KillmailTime.UTC()
@@ -394,6 +405,8 @@ func (app *Application) readFleetMails(ctx context.Context, roster []int64, on m
 		m := &fleetMail{
 			ID: k.KillmailID, At: at, System: k.SystemID, Victim: k.VictimCharacterID, Ship: k.ShipTypeID,
 			Damage: k.DamageTaken, Value: k.ValueOurs, Counts: k.Counts, Loss: listed && victim.holds(at),
+			VictimCorp: k.VictimCorporationID, VictimAlliance: k.VictimAllianceID, Public: k.Public,
+			Hands: handsOf[k.KillmailID],
 		}
 		for id, a := range byMail[k.KillmailID] {
 			if p, ok := on[id]; ok && p.holds(at) {

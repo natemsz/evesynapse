@@ -183,7 +183,7 @@ func (app *Application) ensureDemoAccount(ctx context.Context) error {
 	if err := app.refreshDemoPilotName(ctx); err != nil {
 		return err
 	}
-	if !app.demoSeedPresent(ctx) {
+	if !app.demoSeedPresent(ctx) || app.demoExplorersStale(ctx) {
 		if err := app.seedDemoData(ctx, time.Now()); err != nil {
 			return err
 		}
@@ -192,6 +192,22 @@ func (app *Application) ensureDemoAccount(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// demoExplorersStale: one of the demo's fleet battles was stored by an
+// older explorer build, so the demo seeds again to show the current one.
+// The worker never rebuilds the demo's reports itself.
+func (app *Application) demoExplorersStale(ctx context.Context) bool {
+	rows, err := app.queries.ListOwnerFleetDetailVersions(ctx, db.ListOwnerFleetDetailVersionsParams{OwnerKind: ownerCommunity, OwnerID: demoCommunityID})
+	if err != nil {
+		return false
+	}
+	for _, r := range rows {
+		if r.Version < fleetDetailVersion {
+			return true
+		}
+	}
+	return false
 }
 
 // refreshDemoPilotName brings the stored copies of the lead

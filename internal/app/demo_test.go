@@ -1017,13 +1017,58 @@ func TestDemoFleetReportOpensAsAnExplorer(t *testing.T) {
 	}
 }
 
-// TestFleetKillLinksReachTheKillboard: a real killmail on a fleet report
-// links to its killboard page; an invented demo mail links nowhere.
+// TestFleetKillLinksReachTheKillboard: a killmail with a page on the
+// killboard links to it; one without (an invented demo mail, or a kill
+// still private to the board) links nowhere.
 func TestFleetKillLinksReachTheKillboard(t *testing.T) {
-	if got := fleetKillHref(false, 7001); got != "/intel/kill/7001/" {
-		t.Errorf("a real mail's link = %q", got)
+	if got := fleetKillHref(true, 7001); got != "/intel/kill/7001/" {
+		t.Errorf("a public mail's link = %q", got)
 	}
-	if got := fleetKillHref(true, 7001); got != "" {
-		t.Errorf("a demo mail's link = %q, want none", got)
+	if got := fleetKillHref(false, 7001); got != "" {
+		t.Errorf("a mail with no killboard page links to %q, want none", got)
+	}
+}
+
+// TestDemoShowsAKillmailOnlyBattleAndKeepsItsExplorersCurrent: one demo
+// fleet has no logs, so its report is drawn from its killmails; and a
+// demo whose explorers an older build stored seeds again on its next
+// pass, so the demo always shows the current explorer.
+func TestDemoShowsAKillmailOnlyBattleAndKeepsItsExplorersCurrent(t *testing.T) {
+	app, conn, _ := demoTestApp(t)
+	ctx := context.Background()
+	if app.demoExplorersStale(ctx) {
+		t.Fatal("a fresh demo seed counts as built by an older explorer")
+	}
+	var opID int64
+	if err := conn.QueryRow(`SELECT b.op_id FROM fleet_battles b
+		JOIN fleet_battle_detail d ON d.fleet_battle_id = b.id
+		WHERE (d.payload::jsonb ->> 'logged')::int = 0 LIMIT 1`).Scan(&opID); err != nil {
+		t.Fatalf("no demo battle is drawn from killmails alone: %v", err)
+	}
+	signIn := get(app, nil, "/auth/demo")
+	var cookie *http.Cookie
+	for _, c := range signIn.Result().Cookies() {
+		if c.Name == "evesynapse_session" {
+			cookie = c
+		}
+	}
+	rec := get(app, cookie, fleetReportPath(opID))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET the killmail-only report = %d", rec.Code)
+	}
+	mustContain(t, "killmail-only report", rec.Body.String(), `class="fl-x-source"`, "The battle, kill by kill", "Damage on kills", "A killmail is missing?")
+
+	if _, err := conn.Exec(`UPDATE fleet_battle_detail SET payload = jsonb_set(payload::jsonb, '{v}', '1')::text
+		WHERE fleet_battle_id = (SELECT MIN(fleet_battle_id) FROM fleet_battle_detail)`); err != nil {
+		t.Fatal(err)
+	}
+	if !app.demoExplorersStale(ctx) {
+		t.Fatal("an explorer from an older build does not count as stale")
+	}
+	if err := app.ensureDemoAccount(ctx); err != nil {
+		t.Fatalf("ensureDemoAccount: %v", err)
+	}
+	if app.demoExplorersStale(ctx) {
+		t.Error("seeding again left an explorer from an older build")
 	}
 }

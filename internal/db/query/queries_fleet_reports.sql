@@ -490,3 +490,9 @@ WHERE period = sqlc.arg(period)::text AND audience = 'public' AND scope_kind = '
 -- name: ListVerifiedPilotNames :many
 SELECT character_id, name FROM verified_pilots
 WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND name <> '';
+
+-- name: InsertFleetBattleDetail :exec
+INSERT INTO fleet_battle_detail (fleet_battle_id, payload) VALUES ($1, $2);
+
+-- name: GetFleetBattleDetail :one
+SELECT payload FROM fleet_battle_detail WHERE fleet_battle_id = $1;

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/gamelog"
 )
 
@@ -80,6 +81,11 @@ type fleetLogRead struct {
 	Usable     bool
 	Steps      []gamelog.AlignedSlice
 	Fleetmates map[int64]int64
+	// The read's own tables, for the battle's explorer (fleet_explorer.go):
+	// its parties by seq, its weapons and its tackle.
+	Parties map[int64]fleetLogParty
+	Weapons []db.BattleFightWeapon
+	Tackles []db.BattleFightTackle
 }
 
 type fleetPilotDamage struct {

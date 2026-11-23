@@ -13,26 +13,31 @@ import (
 // and a shared enemy, and one of them holds two reads of the same
 // seconds. Damage against the enemy is each pilot's own, a hit between
 // them counts once as friendly fire, repairs count from the giver, and
-// a kill both are on is one kill.
+// a kill both are on is one kill. The battle's explorer merges the
+// enemy both logs name into one, with the same totals.
 func TestFleetMergeCountsEveryShotOnce(t *testing.T) {
 	const pilotA, pilotB = int64(1), int64(2)
 	start := time.Unix(1_800_000_000, 0).UTC()
 	step := gamelog.ClockStep(start.Unix())
 	end := start.Add(9 * time.Second)
+	enemy := fleetLogParty{Name: "Bad Guy", Hull: "Rifter", HullTypeID: 587, CharacterID: 999, Pilot: true}
 	reads := []*fleetLogRead{
 		{ // A's log: party 0 is the enemy, party 1 is B.
 			ID: 10, Character: pilotA, Start: start, End: end, Received: start.Add(time.Hour), Usable: true,
 			Fleetmates: map[int64]int64{1: pilotB},
+			Parties:    map[int64]fleetLogParty{0: enemy, 1: {Name: "Pilot B", Pilot: true}},
 			Steps:      []gamelog.AlignedSlice{{At: step, Rows: [][7]int64{{0, 100, 40, 0, 0, 0, 0}, {1, 30, 20, 0, 0, 0, 0}}}},
 		},
 		{ // An older read of the same seconds of A's log.
 			ID: 11, Character: pilotA, Start: start, End: end, Received: start.Add(time.Minute), Usable: true,
 			Fleetmates: map[int64]int64{1: pilotB},
+			Parties:    map[int64]fleetLogParty{0: enemy, 1: {Name: "Pilot B", Pilot: true}},
 			Steps:      []gamelog.AlignedSlice{{At: step, Rows: [][7]int64{{0, 100, 40, 0, 0, 0, 0}, {1, 30, 20, 0, 0, 0, 0}}}},
 		},
 		{ // B's log: party 0 is A, party 1 is the enemy.
 			ID: 20, Character: pilotB, Start: start, End: end, Received: start.Add(time.Hour), Usable: true,
 			Fleetmates: map[int64]int64{0: pilotA},
+			Parties:    map[int64]fleetLogParty{0: {Name: "Pilot A", Pilot: true}, 1: enemy},
 			Steps:      []gamelog.AlignedSlice{{At: step, Rows: [][7]int64{{0, 20, 30, 15, 0, 0, 0}, {1, 50, 0, 0, 0, 0, 0}}}},
 		},
 	}
@@ -58,6 +63,22 @@ func TestFleetMergeCountsEveryShotOnce(t *testing.T) {
 	if !ok || battle.Battle.Kills != 1 || battle.Battle.IskDestroyed != 100_000_000 {
 		t.Fatalf("a kill two pilots are on: %+v", battle.Battle)
 	}
+	withLogs := clusterFleetBattles([]*fleetMail{mail}, reads, on)
+	detail := buildFleetDetail(fleetDetailInput{
+		Cluster: withLogs[0], Counted: countedByRead(reads), On: on, Ships: map[int64]int64{},
+		Merge: mergeFleetLogs(withLogs[0].Reads, countedByRead(reads), on),
+	})
+	if len(detail.Enemies) != 1 || detail.Enemies[0].FromUs != 150 || detail.Enemies[0].ToUs != 40 || !detail.Enemies[0].Died {
+		t.Fatalf("explorer enemies %+v, want the one enemy dealt 150, dealing 40, killed", detail.Enemies)
+	}
+	var out, in, reps int64
+	for _, p := range detail.Pilots {
+		out, in, reps = out+p.Out, in+p.In, reps+p.Reps
+	}
+	if out != 150 || in != 40 || reps != 15 {
+		t.Fatalf("explorer pilots out %d in %d reps %d, want 150, 40, 15", out, in, reps)
+	}
+
 	scores := fleetMailScores(mail)
 	total := 0.0
 	for _, s := range scores {

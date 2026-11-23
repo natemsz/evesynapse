@@ -48,7 +48,7 @@
     <thead><tr><th>Lost</th><th>Pilot</th><th>Ship</th><th>Estimate</th><th>Answer</th><th><span class="visually-hidden">Withdraw</span></th></tr></thead>
     <tbody>
     {{range .Mine}}
-    <tr><td>{{.LostAt}}</td><td>{{charLink $v.Viewer .PilotID .Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{.Value}}</td>
+    <tr><td>{{.LostAt}}</td><td>{{charLink $v.Viewer .PilotID .Pilot}}</td><td>{{template "fleet-shipcell" .}}</td><td>{{.Value}}</td>
       <td>{{if .Open}}<span class="badge wait">OPEN</span>{{else if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}{{if .HandlerNote}} <small>{{.HandlerNote}}</small>{{end}}</td>
       <td>{{if .CanWithdraw}}<form method="post" action="{{$v.Path}}/{{.ID}}/withdraw" class="inline-form"><button type="submit" class="btn btn-quiet">Withdraw</button></form>{{end}}</td></tr>
     {{end}}
@@ -67,7 +67,7 @@
     <thead><tr><th>Lost</th><th>Pilot</th><th>Ship</th><th>Answer</th></tr></thead>
     <tbody>
     {{range .Ledger}}
-    <tr><td>{{.LostAt}}</td><td>{{charLink $v.Viewer .PilotID .Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td>
+    <tr><td>{{.LostAt}}</td><td>{{charLink $v.Viewer .PilotID .Pilot}}</td><td>{{template "fleet-shipcell" .}}</td>
       <td>{{if .Open}}<span class="badge wait">OPEN</span>{{else if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}</td></tr>
     {{end}}
     </tbody>

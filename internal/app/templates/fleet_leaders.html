@@ -31,7 +31,7 @@
     <thead><tr><th class="card-title">{{if .GroupBoard}}Group{{else}}Pilot{{end}}</th><th class="num">Fleets</th><th class="num">Kills</th><th class="num">Deaths</th><th class="num">ISK destroyed</th><th class="num card-figure">Points</th></tr></thead>
     <tbody>
     {{range .Rows}}
-    <tr{{if .Yours}} class="yours"{{end}}><td><span class="fl-place">{{.Place}}</span>{{if .Href}}<a href="{{.Href}}">{{.Name}}</a>{{else}}{{charLink $v.ViewerChars .ID .Name}}{{end}}</td><td class="num">{{.Fleets}}</td><td class="num{{if not .Kills}} fl-zero{{end}}">{{.Kills}}</td><td class="num{{if not .Deaths}} fl-zero{{end}}">{{.Deaths}}</td><td class="num">{{.ISK}}</td><td class="num"><span class="fl-points"><svg class="fl-pts" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect width="{{printf "%.1f" .Share}}" height="4"/></svg>{{.Points}}</span></td></tr>
+    <tr{{if .Yours}} class="yours"{{end}}><td><span class="fl-place">{{.Place}}</span>{{if .Href}}<a href="{{.Href}}">{{.Name}}</a>{{else}}{{charLink $v.ViewerChars .ID .Name}}{{end}}</td><td class="num">{{.Fleets}}</td><td class="num{{if not .Kills}} fl-zero{{end}}">{{.Kills}}</td><td class="num{{if not .Deaths}} fl-zero{{end}}">{{.Deaths}}</td><td class="num{{if .NoISK}} fl-zero{{end}}">{{.ISK}}</td><td class="num"><span class="fl-points"><svg class="fl-pts" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect width="{{printf "%.1f" .Share}}" height="4"/></svg>{{.Points}}</span></td></tr>
     {{end}}
     </tbody>
   </table>

@@ -59,8 +59,8 @@
   </div>
   {{with .Totals}}
   <div class="l-tiles">
-    <div class="l-stat"><span class="l-stat-label">Kills</span><span class="l-stat-value">{{.Kills}}</span><span class="l-stat-sub">{{.Destroyed}} ISK destroyed</span></div>
-    <div class="l-stat"><span class="l-stat-label">Losses</span><span class="l-stat-value">{{.Losses}}</span><span class="l-stat-sub">{{.Lost}} ISK lost</span></div>
+    <div class="l-stat{{if .Kills}} fl-tone-kill{{end}}"><span class="l-stat-label">Kills</span><span class="l-stat-value">{{.Kills}}</span><span class="l-stat-sub">{{.Destroyed}} ISK destroyed</span></div>
+    <div class="l-stat{{if .Losses}} fl-tone-loss{{end}}"><span class="l-stat-label">Losses</span><span class="l-stat-value">{{.Losses}}</span><span class="l-stat-sub">{{.Lost}} ISK lost</span></div>
   </div>
   {{end}}
   {{if .Battles}}
@@ -141,7 +141,10 @@
 {{end}}
 
 {{with .Attendance}}
-<details class="l-panel fl-fold" aria-labelledby="fl-attendance-title"{{if not $op.LiveView}} open{{end}}>
+{{/* Folded while the fleet is live for a pilot in it, and before it
+     starts, when it holds only the commander's note on how it will be
+     read. */}}
+<details class="l-panel fl-fold" aria-labelledby="fl-attendance-title"{{if and (not $op.LiveView) (or $op.Over $op.Live)}} open{{end}}>
   <summary><h2 id="fl-attendance-title">Attendance <small>{{len .Rows}}</small></h2></summary>
   {{if $op.CanManage}}<p class="fl-hint">{{.Capture}}</p>{{if .CaptureNotes}}<ul class="fl-notes">{{range .CaptureNotes}}<li>{{.}}</li>{{end}}</ul>{{end}}{{end}}
   {{if .Rows}}

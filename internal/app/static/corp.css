@@ -184,3 +184,10 @@ form.co-card > label { flex: none !important; }
 .doctrine-work > .l-seg { align-self: flex-start; margin: 0; }
 .doctrine-work > [role="tabpanel"] { display: flex; flex-direction: column; gap: var(--space-3); }
 .doctrine-remove { margin-inline-start: auto; }
+/* Manage: every fit with its Remove, so the fit cards keep two buttons. */
+.doctrine-out-list { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.doctrine-out-list li { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; border-top: 1px solid var(--hairline); }
+.doctrine-out-list li:first-child { border-top: 0; }
+.doctrine-out-list img { flex: none; border-radius: var(--r-xs); }
+.doctrine-out-name { display: flex; flex-direction: column; min-width: 0; font-size: var(--fs-sm); }
+.doctrine-out-name small { color: var(--muted); font-size: var(--fs-xs); }

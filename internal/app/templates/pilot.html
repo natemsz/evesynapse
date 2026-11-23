@@ -69,7 +69,7 @@
   </div>{{end}}
   {{if .Companions}}<div class="l-panel pi-panel">
     <h3>Flies with</h3>
-    <ul class="pi-mates">{{range .Companions}}<li><a href="/pilot/?character={{.ID}}"><img src="https://images.evetech.net/characters/{{.ID}}/portrait?size=32" alt="" width="24" height="24" loading="lazy"> {{.Name}}</a> <small class="muted">{{if .AllianceName}}{{.AllianceName}}{{else}}{{.CorpName}}{{end}} · {{.N}}</small></li>{{end}}</ul>
+    <ul class="pi-mates">{{range .Companions}}<li><a href="/pilot/?character={{.ID}}"><img src="{{portrait .ID 32}}" alt="" width="24" height="24" loading="lazy"> {{.Name}}</a> <small class="muted">{{if .AllianceName}}{{.AllianceName}}{{else}}{{.CorpName}}{{end}} · {{.N}}</small></li>{{end}}</ul>
   </div>{{end}}
   {{if .Recent}}<div class="l-panel pi-panel">
     <h3>Latest kills and losses <a class="pi-more" href="/intel/kills/?character={{.CharacterID}}">All</a></h3>

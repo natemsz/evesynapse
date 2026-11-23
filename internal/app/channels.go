@@ -1648,7 +1648,7 @@ func (app *Application) channelGrants(ctx context.Context, channelID int64) []gr
 		v := grantView{Kind: g.Kind, ID: g.TargetID, CanPost: g.CanPost}
 		switch g.Kind {
 		case "character":
-			v.Name, v.Logo = names.character(g.TargetID), fmt.Sprintf("https://images.evetech.net/characters/%d/portrait?size=32", g.TargetID)
+			v.Name, v.Logo = names.character(g.TargetID), portraitURL(g.TargetID, 32)
 		case "corporation":
 			v.Name, v.Logo = names.corp(g.TargetID), fmt.Sprintf("https://images.evetech.net/corporations/%d/logo?size=32", g.TargetID)
 		case "alliance":

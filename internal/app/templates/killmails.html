@@ -55,7 +55,7 @@
     <section class="l-panel km-wing s3" aria-labelledby="km-wing-h">
       <h2 id="km-wing-h">Who you fly with</h2>
       <ul class="km-plist">
-        {{range .Wing}}<li><a class="km-pitem km-pilot" href="{{.Href}}"><img src="https://images.evetech.net/characters/{{.ID}}/portrait?size=64" alt="" width="28" height="28" loading="lazy"><span class="km-pname">{{.Name}}<small>{{.Shared}}</small></span><span class="km-pval">{{.ISK}}</span></a></li>{{else}}<li class="muted">No shared kills yet.</li>{{end}}
+        {{range .Wing}}<li><a class="km-pitem km-pilot" href="{{.Href}}"><img src="{{portrait .ID 64}}" alt="" width="28" height="28" loading="lazy"><span class="km-pname">{{.Name}}<small>{{.Shared}}</small></span><span class="km-pval">{{.ISK}}</span></a></li>{{else}}<li class="muted">No shared kills yet.</li>{{end}}
       </ul>
     </section>
     {{end}}

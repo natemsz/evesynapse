@@ -85,7 +85,7 @@ func (app *Application) corporationOverview(ctx context.Context, corpID, charact
 	}
 	if corp.CEOID > 0 {
 		view.CEOID = corp.CEOID
-		view.CEOPortraitURL = fmt.Sprintf("https://images.evetech.net/characters/%d/portrait?size=64", corp.CEOID)
+		view.CEOPortraitURL = portraitURL(corp.CEOID, 64)
 		view.CEOName = app.displayCharacter(ctx, corp.CEOID)
 	}
 	if corp.AllianceID > 0 {

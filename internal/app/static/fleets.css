@@ -187,6 +187,15 @@
 .fl-options label:has(input:checked) { border-color: var(--sel-edge); background: var(--sel-bg); }
 .fl-options label:has(input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 1px; }
 .fl-options--row label { flex: 1 1 12rem; }
+/* The kinds of fleet are short words: all on one row when the panel
+   has the room, in even rows when not, never one left alone. */
+.fl-options--kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); }
+/* The planner's fields in pairs: who and where, then when and how
+   long, each preset row under its own box. */
+.fl-plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+@container page (width < 34rem) {
+  .fl-plan-grid { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* The live fleet */
 .fl-live { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }

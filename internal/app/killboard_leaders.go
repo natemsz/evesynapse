@@ -590,7 +590,7 @@ func (app *Application) killLeaderBoard(ctx context.Context, names *killNames, v
 		switch key {
 		case "character":
 			row.Name = names.character(r.EntityID)
-			row.Img = "https://images.evetech.net/characters/" + id(r.EntityID) + "/portrait?size=64"
+			row.Img = portraitURL(r.EntityID, 64)
 			row.Href = "/intel/kills/?character=" + id(r.EntityID)
 		case "corporation":
 			row.Name = names.corp(r.EntityID)

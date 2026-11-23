@@ -327,6 +327,9 @@ func linkFuncMap() template.FuncMap {
 		// Not a link: a type's 3D render on the image server.
 		"typeRender": eveimg.TypeRender,
 		"typeIcon":   eveimg.TypeIcon,
+		// Not a link: a character's portrait on the image server (a
+		// demo character wears its stand-in's, demo_portraits.go).
+		"portrait": portraitOfAny,
 		// Not links: a formatted ISK amount in the house money
 		// format (see core_iskfig.go).
 		"iskFig":  iskFig,

@@ -63,7 +63,7 @@
   <h2>Known hostiles{{if .Watch}} <span class="ch-cnt">{{len .Watch}}</span>{{end}}</h2>
   {{if .Watch}}<ul class="ch-watch">
     {{range .Watch}}<li>
-      <img class="ch-face" src="https://images.evetech.net/characters/{{.ID}}/portrait?size=64" alt="" width="32" height="32" loading="lazy">
+      <img class="ch-face" src="{{portrait .ID 64}}" alt="" width="32" height="32" loading="lazy">
       <span class="ch-watch-main"><a href="/pilot/?character={{.ID}}">{{.Name}}</a>{{if .Note}}<span class="ch-dim">{{.Note}}</span>{{end}}
         {{if .Seen}}<span class="ch-dim"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.SysID}}">{{.Seen}}</a></span>{{else}}<span class="ch-dim">Not seen lately</span>{{end}}</span>
       {{if $.Channel.CanPost}}<form method="post" action="/pilot/watch" class="inline-form"><input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="channel" value="{{$.Channel.ID}}"><input type="hidden" name="remove" value="1"><input type="hidden" name="back" value="/intel/channels/{{$.Channel.ID}}/"><button type="submit" class="ch-x" aria-label="Remove {{.Name}}">×</button></form>{{end}}

@@ -533,7 +533,7 @@ func TestOpAttendanceIsCapturedFromTheFleet(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, body = f.get(f.member, "/fleets/history/")
-	mustContain(t, "/fleets/history/", body, "Fixture Member</a></td><td>1</td><td>1</td>")
+	mustContain(t, "/fleets/history/", body, "Fixture Member</a></td><td class=\"num\">1</td><td class=\"num\">1</td>")
 	if _, _, body = f.get(f.other, "/fleets/history/"); strings.Contains(body, "Fixture Member") {
 		t.Fatal("another corporation's attendance is shown to an outsider")
 	}

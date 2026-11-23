@@ -38,6 +38,7 @@
     <section class="l-panel" aria-labelledby="fl-public-title">
       <h2 id="fl-public-title">Public fleets</h2>
       {{if .Public}}{{template "fleet_board" .Public}}{{else}}<p class="fl-empty">No public fleets are coming up.</p>{{end}}
+      {{with .ExampleHref}}<p class="fl-hint fl-example-link">Curious what the live tools show? <a href="{{.}}">See an example of a fleet in progress</a>.</p>{{end}}
     </section>
     {{if eq .Level "anonymous"}}
     <aside class="l-panel fl-next" aria-labelledby="fl-join-title">

@@ -173,24 +173,31 @@
 .fl-see:not(:has(input[value="restricted"]:checked)) .fl-rule,
 .fl-join:not(:has(input[value="rule"]:checked)) .fl-rule { display: none; }
 
+/* The planner as a workspace: the form, and beside it a preview of
+   how the fleet shows that follows the form. Each choice is a card
+   that lights when picked. */
+.fl-planner { --l-side: 20rem; }
+.fl-planner .fl-side { position: sticky; top: var(--l-top, 0); }
+.fl-preview .fl-board { margin: 0 0 var(--space-3); }
+.fl-preview-row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: var(--space-1) var(--space-3); padding: var(--space-2); border-radius: var(--r-xs); background: var(--surface-inset); box-shadow: inset 3px 0 0 var(--accent); }
+.fl-preview .fl-facts { grid-template-columns: minmax(0, 1fr); }
+.fl-presets { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
+.fl-presets[hidden] { display: none; }
+.fl-options label { padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-inset); }
+.fl-options label:has(input:checked) { border-color: var(--sel-edge); background: var(--sel-bg); }
+.fl-options label:has(input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 1px; }
+.fl-options--row label { flex: 1 1 12rem; }
+
 /* The live fleet */
 .fl-live { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
 .fl-asof { margin: 0; color: var(--muted); font-size: var(--fs-xs); }
 .fl-asof.is-stale { color: var(--gold); }
 .fl-try-note { margin: 0; padding: var(--space-2) var(--space-3); border-inline-start: 3px solid var(--kept); background: var(--surface-inset); color: var(--text); font-size: var(--fs-sm); }
 .fl-notes { margin: 0; padding-inline-start: 1.1rem; color: var(--muted); font-size: var(--fs-xs); }
-.fl-r-dps { --fl-r: #3987e5; }
-.fl-r-logi { --fl-r: #d95926; }
-.fl-r-tackle { --fl-r: #199e70; }
-.fl-r-scout { --fl-r: #c98500; }
-.fl-r-ewar { --fl-r: #d55181; }
-.fl-r-command { --fl-r: #0ca30c; }
-.fl-r-other { --fl-r: #8b8f98; }
 .fl-rolebar { display: block; width: 100%; height: 1.05rem; border-radius: var(--r-xs); background: var(--row-alt); }
 .fl-rolebar rect { fill: var(--fl-r); stroke: var(--surface-page, #1a1a19); stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .fl-legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: var(--space-2) 0 0; padding: 0; list-style: none; font-size: var(--fs-sm); color: var(--muted); }
 .fl-legend b { color: var(--text); font-weight: 600; }
-.fl-swatch { display: inline-block; width: 0.65rem; height: 0.65rem; margin-inline-end: var(--space-1); border-radius: 2px; background: var(--fl-r); }
 .fl-gap { margin: 0 0 var(--space-2); overflow-wrap: anywhere; }
 .fl-gap .field-label { display: block; }
 .fl-tally { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
@@ -200,28 +207,34 @@
 .fl-invite:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 .fl-pager { justify-content: center; margin-top: var(--space-3); }
 .fl-pilots { container: fl-pilots / inline-size; }
-.fl-pilots select, .fl-pilots input[type="text"] { width: 100%; min-width: 7rem; }
 .fl-pilots td small { color: var(--muted); font-size: var(--fs-xs); }
-/* On a narrow page each pilot is three short lines: who, what and
-   where, then their role and tags, so a full fleet stays scannable. */
+.fl-pilots td[data-label="Edit"] { width: 1%; white-space: nowrap; text-align: end; }
+.fl-edit > summary { list-style: none; cursor: pointer; }
+.fl-edit > summary::-webkit-details-marker { display: none; }
+.fl-edit[open] > summary { margin-bottom: var(--space-2); }
+.fl-edit-form { display: grid; grid-template-columns: minmax(9rem, 12rem) minmax(9rem, 14rem) auto; align-items: end; gap: var(--space-2); white-space: normal; text-align: start; }
+.fl-edit-form .field { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.fl-edit-form select, .fl-edit-form input[type="text"] { width: 100%; min-width: 0; }
+/* On a narrow page each pilot is a short card: who and where, then
+   what they fly, then their role and tags with Edit beside them. */
 @container fl-pilots (max-width: 52rem) {
   .fl-pilots table, .fl-pilots tbody { display: block; width: 100%; }
   .fl-pilots thead { display: none; }
   .fl-pilots tr {
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-    grid-template-areas: "pilot pilot place" "ship ship system" "role tags save";
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "pilot system" "ship ship" "role edit" "tags tags";
     align-items: center; gap: var(--space-1) var(--space-2);
     padding: var(--space-2) 0; border-top: 1px solid var(--hairline);
   }
   .fl-pilots td { display: block; min-width: 0; padding: 0; border: 0; overflow-wrap: anywhere; }
   .fl-pilots td[data-label="Pilot"] { grid-area: pilot; }
-  .fl-pilots td[data-label="Position"] { grid-area: place; color: var(--muted); font-size: var(--fs-xs); text-align: end; }
-  .fl-pilots td[data-label="Ship"] { grid-area: ship; }
   .fl-pilots td[data-label="System"] { grid-area: system; color: var(--muted); text-align: end; }
+  .fl-pilots td[data-label="Ship"] { grid-area: ship; }
   .fl-pilots td[data-label="Role"] { grid-area: role; }
   .fl-pilots td[data-label="Tags"] { grid-area: tags; }
-  .fl-pilots td:last-child { grid-area: save; }
-  .fl-pilots select, .fl-pilots input[type="text"] { min-width: 0; }
+  .fl-pilots td[data-label="Edit"] { grid-area: edit; width: auto; }
+  .fl-pilots td[data-label="Edit"]:has(details[open]) { grid-column: 1 / -1; grid-row: 5; }
+  .fl-edit-form { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Adding a battle log from the fleet's report */
@@ -263,7 +276,7 @@
 .fl-curve-key .is-in { --fl-key: var(--fl-in); }
 .fl-curve-key .is-rep { --fl-key: var(--fl-rep); }
 .fl-curve-key .is-rep::before { border-top-style: dashed; }
-.fl-plot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2); }
+.fl-plot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-2); }
 .fl-plot-y { display: flex; flex-direction: column; justify-content: space-between; color: var(--muted); font-size: var(--fs-xs); text-align: end; }
 .fl-curve { display: block; width: 100%; height: 11rem; }
 .fl-grid { stroke: var(--hairline); stroke-width: 1px; }
@@ -272,7 +285,28 @@
 .fl-ln-in { stroke: var(--fl-in); }
 .fl-ln-rep { stroke: var(--fl-rep); stroke-dasharray: 5 3; }
 .fl-hit { fill: transparent; }
+.fl-mk { stroke: var(--kept); stroke-width: 1.5px; stroke-dasharray: 3 3; }
+.fl-mk.is-loss { stroke: var(--danger); stroke-dasharray: none; }
+.fl-mk:hover { stroke-width: 3px; }
+.fl-plot-x { grid-column: 2; display: flex; justify-content: space-between; color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.fl-curve-key .is-kill { --fl-key: var(--kept); }
+.fl-curve-key .is-loss { --fl-key: var(--danger); }
+.fl-curve-key .is-kill::before { border-top-style: dashed; }
 .fl-hit:hover { fill: color-mix(in srgb, var(--text) 12%, transparent); }
 .fl-extra { margin-top: var(--space-3); }
 .fl-scoring { margin: var(--space-3) 0 0; max-width: 70ch; }
+/* The leaderboard's first three, then a bar of each row's points
+   against the leader's. */
+.fl-podium { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-3); margin: 0 0 var(--space-4); padding: 0; list-style: none; }
+.fl-podium > li { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; padding: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-inset); box-shadow: inset 0 3px 0 var(--fl-medal, var(--hairline)); }
+.fl-podium-1 { --fl-medal: var(--gold); }
+.fl-podium-2 { --fl-medal: var(--muted-2); }
+.fl-podium-3 { --fl-medal: var(--accent); }
+.fl-podium-place { align-self: flex-start; }
+.fl-podium-name { overflow-wrap: anywhere; }
+.fl-podium > li.yours { border-color: var(--sel-edge); }
+.fl-you-rank { margin: 0 0 var(--space-3); color: var(--text); }
+.fl-points { display: inline-flex; align-items: center; gap: var(--space-2); }
+.fl-pts { flex: none; width: 4rem; height: 0.35rem; border-radius: 2px; background: var(--row-alt); }
+.fl-pts rect { fill: var(--gold); }
 .fl-place { display: inline-block; min-width: 2.5ch; margin-inline-end: var(--space-2); color: var(--muted); font-variant-numeric: tabular-nums; }

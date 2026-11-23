@@ -9,58 +9,57 @@
 {{with .Directory}}
 <div class="l-head">
   <p class="l-head-sum">Groups of players who fly together, whatever corporation they are in.</p>
-  <search class="l-head-act">
-    <form method="get" action="/fleets/communities/" class="cm-search">
-      <label class="field-label" for="cm-find">Find a community</label>
-      <input type="search" id="cm-find" name="q" value="{{.Find}}" maxlength="60" autocomplete="off" enterkeyhint="search">
-      <button type="submit" class="btn btn-quiet">Search</button>
-    </form>
-  </search>
+  <div class="l-head-act">
+    <search>
+      <form method="get" action="/fleets/communities/" class="cm-search">
+        <input type="search" id="cm-find" name="q" value="{{.Find}}" maxlength="60" autocomplete="off" enterkeyhint="search" placeholder="Find a community" aria-label="Find a community">
+        <button type="submit" class="btn btn-quiet">Search</button>
+      </form>
+    </search>
+    {{if and (eq .Level "account") (not .AtLimit) .Characters}}<button type="button" class="btn" data-open-modal="cm-start-modal">Start a community</button>{{end}}
+  </div>
 </div>
 
 {{if .Mine}}
 <section class="l-panel" aria-labelledby="cm-mine-title">
   <h2 id="cm-mine-title">Your communities</h2>
   <ul class="cm-mine">
-    {{range .Mine}}
-    <li><a href="{{.Path}}">{{.Name}}</a>
+    {{range .Mine}}{{$row := .}}
+    <li>
+      <div class="cm-mine-top"><a class="cm-mine-name" href="{{.Path}}">{{.Name}}</a>{{with .Pending}}<a class="badge wait" href="{{$row.Path}}?show=requests">{{.}} waiting</a>{{end}}</div>
       <span class="cm-sub">{{.Place}}, {{.Members}}{{if .Closed}}, closed{{end}}</span>
-      {{with .Pending}}<span class="badge wait">{{.}} waiting</span>{{end}}
+      {{if .Fleets}}<span class="cm-mine-links"><a href="{{.Fleets}}">Fleets</a><a href="{{.Doctrines}}">Doctrines</a><a href="{{.Path}}">People</a></span>{{end}}
     </li>
     {{end}}
   </ul>
 </section>
 {{end}}
 
-<div class="l-sidebar l-sidebar--end cm-split">
+{{if eq .Level "account"}}
+{{if .AtLimit}}<p class="cm-note">You lead {{.LedMost}} communities, the most one account can. Close one or hand it to someone else to start another.</p>
+{{else if not .Characters}}<p class="cm-note">Link a working character to start a community.</p>{{end}}
   <section class="l-panel" aria-labelledby="cm-list-title">
     <h2 id="cm-list-title">{{if .Find}}Communities matching “{{.Find}}”{{else}}Listed communities{{end}}</h2>
     {{if .Listed}}
-    <div class="cm-table-box"><table class="cm-table">
-      <thead><tr><th>Community</th><th class="cm-num">Members</th><th>Joining</th></tr></thead>
-      <tbody>
-        {{range .Listed}}
-        <tr>
-          <td><a href="{{.Path}}">{{.Name}}</a>{{with .Description}}<span class="cm-sub cm-clip">{{.}}</span>{{end}}</td>
-          <td class="cm-num">{{.Members}}</td>
-          <td>{{.Policy}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table></div>
+    <ul class="cm-cards" role="list">
+      {{range .Listed}}
+      <li class="cm-card">
+        <div class="cm-card-top"><a class="cm-card-name" href="{{.Path}}">{{.Name}}</a><span class="badge">{{.Policy}}</span></div>
+        {{with .Description}}<p class="cm-card-about">{{.}}</p>{{end}}
+        <span class="cm-sub">{{.Members}} members</span>
+      </li>
+      {{end}}
+    </ul>
     {{else if .Find}}
     <p class="cm-empty">No listed community matches that name. A community that is not listed can only be reached by its link.</p>
     {{else}}
     <p class="cm-empty">No community is listed yet. Communities stay off this list unless their leader adds them.</p>
     {{end}}
   </section>
-
-  <aside class="l-panel cm-next">
-    {{if eq .Level "account"}}
-      <h2 id="cm-start-title">Start a community</h2>
-      {{if .AtLimit}}
-      <p>You lead {{.LedMost}} communities, the most one account can. Close one or hand it to someone else to start another.</p>
-      {{else if .Characters}}
+{{if and (not .AtLimit) .Characters}}
+<div class="modal-backdrop" id="cm-start-modal" hidden>
+  <div class="modal cm-start-modal" role="dialog" aria-modal="true" aria-labelledby="cm-start-title">
+    <div class="modal-head"><h2 id="cm-start-title">Start a community</h2><button type="button" class="modal-close" data-close-modal aria-label="Close">×</button></div>
       <form method="post" action="/fleets/communities/create" class="cm-form" aria-labelledby="cm-start-title">
         <label class="field"><span class="field-label">Name</span>
           <input type="text" name="name" maxlength="60" required autocomplete="off"></label>
@@ -77,10 +76,31 @@
         <label class="cm-check"><input type="checkbox" name="listed" value="1"><span>List it here so people can find it</span></label>
         <button type="submit">Start community</button>
       </form>
-      {{else}}
-      <p>Link a working character to start a community.</p>
+  </div>
+</div>
+{{end}}
+{{else}}
+<div class="l-sidebar l-sidebar--end cm-split">
+  <section class="l-panel" aria-labelledby="cm-list-title">
+    <h2 id="cm-list-title">{{if .Find}}Communities matching “{{.Find}}”{{else}}Listed communities{{end}}</h2>
+    {{if .Listed}}
+    <ul class="cm-cards" role="list">
+      {{range .Listed}}
+      <li class="cm-card">
+        <div class="cm-card-top"><a class="cm-card-name" href="{{.Path}}">{{.Name}}</a><span class="badge">{{.Policy}}</span></div>
+        {{with .Description}}<p class="cm-card-about">{{.}}</p>{{end}}
+        <span class="cm-sub">{{.Members}} members</span>
+      </li>
       {{end}}
-    {{else if eq .Level "pilot"}}
+    </ul>
+    {{else if .Find}}
+    <p class="cm-empty">No listed community matches that name. A community that is not listed can only be reached by its link.</p>
+    {{else}}
+    <p class="cm-empty">No community is listed yet. Communities stay off this list unless their leader adds them.</p>
+    {{end}}
+  </section>
+  <aside class="l-panel cm-next">
+    {{if eq .Level "pilot"}}
       <h2>Signed in as {{.PilotName}}</h2>
       <p>You can join communities without an account. An account also lets you start one and use more than one character.</p>
       <div class="cm-stack">
@@ -98,6 +118,7 @@
     {{end}}
   </aside>
 </div>
+{{end}}
 {{end}}
 </div>
 {{end}}

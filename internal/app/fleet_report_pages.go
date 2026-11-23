@@ -98,6 +98,17 @@ type fleetBattleView struct {
 	Out, In, Reps, Cap, FriendlyFire string
 	Curve                            *fleetCurve
 	TopDPS                           string
+	// Marks are the battle's kills and losses on the curve's x axis,
+	// and Ticks five evenly spaced times along it.
+	Marks []fleetCurveMark
+	Ticks []string
+}
+
+// fleetCurveMark is one killmail drawn on the battle's curve.
+type fleetCurveMark struct {
+	X     float64
+	Loss  bool
+	Label string
 }
 
 type fleetReportView struct {
@@ -314,6 +325,28 @@ func (app *Application) fillFleetBattle(ctx context.Context, view *fleetReportVi
 			row.Value = formatISKShort(k.ValueIsk.Float64)
 		}
 		view.Mails = append(view.Mails, row)
+	}
+	if c := bv.Curve; c != nil && c.Seconds > 0 {
+		start := c.Start
+		if start == 0 {
+			start = shown.StartedAt.Unix()
+		}
+		for _, k := range kills {
+			x := float64(k.KillmailTime.Unix()-start) / float64(c.Seconds) * 600
+			if x < 0 || x > 600 {
+				continue
+			}
+			result := "Kill"
+			if k.Loss {
+				result = "Loss"
+			}
+			label := fmt.Sprintf("%s %s: %s, %s", k.KillmailTime.UTC().Format("15:04:05"), result, names.typeName(k.ShipTypeID), names.character(k.VictimCharacterID))
+			bv.Marks = append(bv.Marks, fleetCurveMark{X: round1(x), Loss: k.Loss, Label: label})
+		}
+		for i := 0; i <= 4; i++ {
+			at := time.Unix(start+c.Seconds*int64(i)/4, 0).UTC()
+			bv.Ticks = append(bv.Ticks, at.Format("15:04"))
+		}
 	}
 }
 

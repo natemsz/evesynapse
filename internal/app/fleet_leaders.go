@@ -38,13 +38,15 @@ type fleetLeaderRow struct {
 	ISK                   string
 	Points                int64
 	Yours                 bool
+	// Share is the row's points as a percentage of the leader's.
+	Share float64
 }
 
 type fleetLeadersView struct {
 	Title, Summary, Scoring string
 	Periods, Boards         []fleetReportChip
 	// Scopes switch between the public board and the viewer's groups'.
-	Scopes             []fleetReportChip
+	Scopes             []module.OwnerOption
 	GroupBoard, Scoped bool
 	AllHref            string
 	Rows               []fleetLeaderRow
@@ -121,9 +123,9 @@ func (app *Application) handleFleetLeaders(w http.ResponseWriter, r *http.Reques
 	}
 	// The boards of the viewer's own groups sit beside the public one.
 	if owners := v.owners(); len(owners) > 0 {
-		view.Scopes = append(view.Scopes, fleetReportChip{Label: "Public", Href: fleetLeadersHref(period, fleetBoardPilots, ""), On: ownerKey == ""})
+		view.Scopes = append(view.Scopes, module.OwnerOption{Name: "Public board", Active: ownerKey == "", Href: fleetLeadersHref(period, board, "")})
 		for _, o := range owners {
-			view.Scopes = append(view.Scopes, fleetReportChip{Label: app.ownerName(ctx, o), Href: fleetLeadersHref(period, fleetBoardPilots, o.Key()), On: o.Key() == ownerKey})
+			view.Scopes = append(view.Scopes, module.OwnerOption{ID: o.ID, Name: fleetOwnerLabel(o, app.ownerName(ctx, o)), Active: o.Key() == ownerKey, Href: fleetLeadersHref(period, fleetBoardPilots, o.Key())})
 		}
 	}
 	rows, err := app.queries.ListFleetLeaders(ctx, db.ListFleetLeadersParams{
@@ -216,6 +218,12 @@ func (app *Application) fleetLeaderRows(ctx context.Context, rows []db.ListFleet
 			row.Href = fleetLeadersHref(period, fleetBoardPilots, orgOwner{Kind: r.EntityKind, ID: r.EntityID}.Key())
 		}
 		out = append(out, row)
+	}
+	// Each row's points as a share of the leader's, for its bar.
+	if len(out) > 0 && out[0].Points > 0 {
+		for i := range out {
+			out[i].Share = min(100, max(0, float64(out[i].Points)*100/float64(out[0].Points)))
+		}
 	}
 	return out
 }

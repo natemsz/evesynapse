@@ -183,15 +183,18 @@ type fleetOwnerChoice struct {
 
 // opFormView is the planner.
 type opFormView struct {
-	ID          int64 // 0 when creating
-	Title       string
-	Description string
-	StartsAt    string // opDateTimeLayout
-	Date        string // the start's day, kept when switching owner
-	Duration    int64
-	Doctrine    string
-	DoctrineID  int64 // one of the owner's doctrines, or 0
-	Doctrines   []opDoctrineGroup
+	// OwnerOptions feed the owner search picker: each opens the planner
+	// for that owner, keeping the day.
+	OwnerOptions []module.OwnerOption
+	ID           int64 // 0 when creating
+	Title        string
+	Description  string
+	StartsAt     string // opDateTimeLayout
+	Date         string // the start's day, kept when switching owner
+	Duration     int64
+	Doctrine     string
+	DoctrineID   int64 // one of the owner's doctrines, or 0
+	Doctrines    []opDoctrineGroup
 	// DoctrineMode is none, suggested or required. DoctrineLocked: the
 	// fleet is over, so what it flew no longer changes.
 	DoctrineMode   string
@@ -242,8 +245,15 @@ func (app *Application) opFormFor(ctx context.Context, v fleetViewer, form *opFo
 		form.Date = form.StartsAt[:len("2006-01-02")]
 	}
 	form.Owners, form.FCs, form.Doctrines = nil, nil, nil
+	form.OwnerOptions = nil
 	for _, o := range v.planOwners() {
-		form.Owners = append(form.Owners, fleetOwnerChoice{Key: o.Key(), Name: fleetOwnerLabel(o, app.ownerName(ctx, o)), Selected: o == owner})
+		name := fleetOwnerLabel(o, app.ownerName(ctx, o))
+		form.Owners = append(form.Owners, fleetOwnerChoice{Key: o.Key(), Name: name, Selected: o == owner})
+		q := url.Values{"owner": {o.Key()}}
+		if form.Date != "" {
+			q.Set("date", form.Date)
+		}
+		form.OwnerOptions = append(form.OwnerOptions, module.OwnerOption{ID: o.ID, Name: name, Active: o == owner, Href: planPath + "?" + q.Encode()})
 	}
 	listed := false
 	for _, c := range v.Characters {

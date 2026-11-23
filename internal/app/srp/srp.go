@@ -342,6 +342,9 @@ func (app *mod) handleSRP(w http.ResponseWriter, r *http.Request) {
 	if cv.Keeps {
 		cv.Policies = srpPolicyRows(owner, policies)
 		cv.PolicyForm = app.srpPolicyForm(ctx, r, policies)
+		if cv.PolicyForm != nil {
+			cv.PolicyForm.Owner = owner.Key()
+		}
 	}
 	ops := map[int64]db.Op{}
 

@@ -87,21 +87,27 @@
 {{if $v.CanEdit}}
 <section class="l-panel fl-pilots" aria-labelledby="fl-pilots-title">
   <h2 id="fl-pilots-title">Roles and tags <small>{{.Pilots}}</small></h2>
-  <p class="fl-hint">Each pilot starts with the role their hull suggests. Pick another to change it. Tags are short notes for the commanders, separated by commas, up to 5.</p>
+  <p class="fl-hint">Each pilot starts with the role their hull suggests. Edit a pilot to give another role, or tags: short notes for the commanders, separated by commas, up to 5.</p>
   <div class="tw" tabindex="0" role="region" aria-labelledby="fl-pilots-title">
   <table>
-    <thead><tr><th>Pilot</th><th>Ship</th><th>System</th><th>Position</th>{{if $v.CanEdit}}<th>Role</th><th>Tags</th><th><span class="visually-hidden">Save</span></th>{{end}}</tr></thead>
+    <thead><tr><th>Pilot</th><th>Ship</th><th>System</th><th>Role</th><th>Tags</th><th><span class="visually-hidden">Edit</span></th></tr></thead>
     <tbody>
     {{range $v.Members}}
     {{$m := .}}
     <tr>
-      <td data-label="Pilot">{{charLink $v.ViewerChars .ID .Name}}</td>
-      <td data-label="Ship">{{if .Hidden}}<span aria-hidden="true">-</span><span class="visually-hidden">Not shown</span>{{else}}{{if .ShipTypeID}}{{itemLink .ShipTypeID .Ship}}{{end}}{{if and $v.Comp.HasDoctrine (not .OnDoctrine)}} <small>not in doctrine</small>{{end}}{{end}}</td>
+      <td data-label="Pilot">{{charLink $v.ViewerChars .ID .Name}}{{if .Commands}} <span class="badge fl-rank">{{.PositionText}}</span>{{end}}</td>
+      <td data-label="Ship">{{if .Hidden}}<span aria-hidden="true">-</span><span class="visually-hidden">Not shown</span>{{else}}{{template "fleet-shipcell" .}}{{if and $v.Comp.HasDoctrine (not .OnDoctrine)}} <span class="fl-off">not in doctrine</span>{{end}}{{end}}</td>
       <td data-label="System">{{if .Hidden}}<span aria-hidden="true">-</span><span class="visually-hidden">Not shown</span>{{else}}{{.System}}{{end}}</td>
-      <td data-label="Position">{{.PositionText}}</td>
-      {{if $v.CanEdit}}<td data-label="Role"><select form="fl-p-{{.ID}}" name="role" aria-label="Role for {{.Name}}"><option value="">{{if .Suggested}}{{.Suggested}} (suggested){{else}}No role set{{end}}</option>{{range $v.Roles}}<option value="{{.}}"{{if eq . $m.Assigned}} selected{{end}}>{{.}}</option>{{end}}</select></td>
-      <td data-label="Tags"><input form="fl-p-{{.ID}}" type="text" name="tags" value="{{.TagText}}" maxlength="130" placeholder="Tags" aria-label="Tags for {{.Name}}"></td>
-      <td><form id="fl-p-{{.ID}}" method="post" action="/fleets/{{$v.ID}}/pilot" class="fl-inline"><input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="page" value="{{$v.Page}}"><button type="submit" class="btn btn-quiet" aria-label="Save {{.Name}}">Save</button></form></td>{{end}}
+      <td data-label="Role">{{with .Role}}<span class="fl-seat-role"><span class="fl-swatch {{$m.RoleClass}}" aria-hidden="true"></span>{{.}}</span>{{if not $m.Assigned}} <small>suggested</small>{{end}}{{end}}</td>
+      <td data-label="Tags">{{if .Tags}}<span class="fl-seat-tags">{{range .Tags}}<span class="fl-tag">{{.}}</span>{{end}}</span>{{end}}</td>
+      <td data-label="Edit"><details class="fl-edit" id="fl-e-{{.ID}}"><summary class="btn btn-quiet" aria-label="Edit {{.Name}}">Edit</summary>
+        <form id="fl-p-{{.ID}}" method="post" action="/fleets/{{$v.ID}}/pilot" class="fl-edit-form">
+          <input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="page" value="{{$v.Page}}">
+          <label class="field"><span class="field-label">Role</span><select name="role"><option value="">{{if .Suggested}}{{.Suggested}}, as the hull suggests{{else}}No role set{{end}}</option>{{range $v.Roles}}<option value="{{.}}"{{if eq . $m.Assigned}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+          <label class="field"><span class="field-label">Tags</span><input type="text" name="tags" value="{{.TagText}}" maxlength="130" placeholder="e.g. anchor, webs"></label>
+          <button type="submit" aria-label="Save {{.Name}}">Save</button>
+        </form>
+      </details></td>
     </tr>
     {{end}}
     </tbody>

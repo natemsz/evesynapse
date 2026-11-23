@@ -1,0 +1,69 @@
+{{define "title"}}Example fleet{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Example fleet</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .FleetExample}}
+<div class="l-page fl-page">
+<div class="l-head">
+  <h2 class="l-head-title">{{.Title}}</h2>
+  <p class="l-head-sum">An example of a fleet in progress, as its fleet commander sees it. The group and its pilots are invented.</p>
+  <div class="l-head-act"><a class="btn btn-quiet" href="/fleets/">All fleets</a></div>
+</div>
+
+<p class="fl-try-note">When you run a fleet here, this is what you get while it flies: who is in it, read from EVE every minute, how well it matches the doctrine, and how its wings and squads are laid out. Pilots in the fleet see the same, limited to what their rank shows in game.</p>
+
+{{with .Live}}
+<section class="l-panel fl-now" aria-labelledby="fl-ex-now-title">
+  <div class="fl-now-head">
+    <h2 id="fl-ex-now-title"><span class="badge kill">Live</span> Running for {{.Running}}</h2>
+    <p class="fl-asof">Updated every minute, last at {{.AsOf}}.</p>
+  </div>
+  {{template "fleet-now-stats" .}}
+</section>
+{{end}}
+
+<div class="l-sidebar l-sidebar--end fl-split">
+<div class="fl-main">
+{{with .Live}}
+<section class="l-panel" aria-labelledby="fl-ex-structure-title">
+  <h2 id="fl-ex-structure-title">Fleet structure</h2>
+  {{template "fleet-structure" .}}
+</section>
+{{with .Comp}}{{if .Hulls}}
+<section class="l-panel" aria-labelledby="fl-ex-hulls-title">
+  <h2 id="fl-ex-hulls-title">Hulls <small>{{len .Hulls}}</small></h2>
+  <div class="tw" tabindex="0" role="region" aria-labelledby="fl-ex-hulls-title">
+  <table>
+    <thead><tr><th>Hull</th><th>Class</th><th class="num">Pilots</th>{{if .HasDoctrine}}<th>Doctrine</th>{{end}}</tr></thead>
+    <tbody>
+    {{$doctrine := .HasDoctrine}}
+    {{range .Hulls}}<tr><td><span class="fl-shipcell"><img src="{{typeRender .TypeID 64}}" width="20" height="20" alt="" loading="lazy">{{itemLink .TypeID .Name}}</span></td><td>{{.Class}}</td><td class="num">{{.Count}}</td>{{if $doctrine}}<td>{{if .Doctrine}}In doctrine{{else}}<span class="fl-off">Not in doctrine</span>{{end}}</td>{{end}}</tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+{{end}}{{end}}
+{{end}}
+</div>
+
+<aside class="fl-side" aria-label="About this fleet">
+  <section class="l-panel fl-brief" aria-labelledby="fl-ex-brief-title">
+    <h2 id="fl-ex-brief-title">Briefing</h2>
+    <dl class="fl-facts">
+      <div><dt class="field-label">Run by</dt><dd>{{.Owner}}</dd></div>
+      {{with .FormUp}}<div><dt class="field-label">Form up</dt><dd>{{.}}</dd></div>{{end}}
+      {{with .Doctrine}}<div><dt class="field-label">Doctrine</dt><dd>{{.}}</dd></div>{{end}}
+      {{with .Fits}}<div class="fl-facts-wide"><dt class="field-label">Doctrine fits</dt><dd><ul class="fl-fits" role="list">{{range .}}<li>{{.Name}}{{if .Role}} <small>{{.Role}}</small>{{end}}</li>{{end}}</ul></dd></div>{{end}}
+    </dl>
+    {{with .About}}<p class="fl-about">{{.}}</p>{{end}}
+  </section>
+  <section class="l-panel fl-next" aria-labelledby="fl-ex-next-title">
+    <h2 id="fl-ex-next-title">Run your own</h2>
+    <p>Plan a fleet for your corporation, alliance or community, share it with a link, and these tools switch on while it flies.</p>
+    <a class="btn" href="/fleets/plan">Plan a fleet</a>
+  </section>
+</aside>
+</div>
+</div>
+{{end}}
+{{end}}

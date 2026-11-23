@@ -5,24 +5,19 @@
 {{with .OpForm}}
 {{$f := .}}
 <div class="l-page fl-page">
-<div class="l-head"><h2 class="l-head-title">{{if .ID}}Change fleet{{else}}Plan a fleet{{end}}</h2></div>
+<div class="l-head">
+  {{if and (not .ID) (gt (len .OwnerOptions) 1)}}<div class="l-head-pick">{{template "ownerselector" .OwnerOptions}}</div>{{end}}
+  <h2 class="l-head-title">{{if .ID}}Change fleet{{else}}Plan a fleet{{end}}</h2>
+  <p class="l-head-sum">For <b>{{.OwnerName}}</b>. Times are EVE time (UTC).</p>
+</div>
 {{if .Errors}}<div role="alert">{{range .Errors}}<p class="err">{{.}}</p>{{end}}</div>{{end}}
 
-{{if and (not .ID) (gt (len .Owners) 1)}}
-<form method="get" action="/fleets/plan" class="l-panel fl-owner">
-  {{with .Date}}<input type="hidden" name="date" value="{{.}}">{{end}}
-  <div class="field"><label class="field-label" for="fl-owner">Planning for</label>
-    <select id="fl-owner" name="owner">{{range .Owners}}<option value="{{.Key}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
-  <button type="submit" class="btn btn-quiet">Switch</button>
-</form>
-{{end}}
-
-<form method="post" action="/fleets/save" class="fl-form">
+<div class="l-sidebar l-sidebar--end fl-split fl-planner">
+<form method="post" action="/fleets/save" class="fl-form" id="fl-plan-form">
   {{if .ID}}<input type="hidden" name="id" value="{{.ID}}">{{else}}<input type="hidden" name="owner" value="{{.OwnerKey}}">{{end}}
 
   <fieldset class="l-panel">
     <legend><h2>The fleet</h2></legend>
-    <p class="fl-hint">For {{.OwnerName}}. Times are EVE time (UTC).</p>
     <div class="form-grid">
       <div class="field wide"><label class="field-label" for="fl-title">Title</label>
         <input id="fl-title" type="text" name="title" value="{{.Title}}" maxlength="120" required></div>
@@ -35,9 +30,11 @@
       {{end}}
       <div class="field"><label class="field-label" for="fl-start">Starts</label>
         <input id="fl-start" type="datetime-local" name="starts_at" value="{{.StartsAt}}" required aria-describedby="fl-start-local">
-        <span class="field-hint" id="fl-start-local" aria-live="polite">In EVE time, which is UTC.</span></div>
+        <span class="field-hint" id="fl-start-local" aria-live="polite">In EVE time, which is UTC.</span>
+        <span class="fl-presets" data-fl-presets hidden><button type="button" class="chip" data-start="+30">In 30 min</button><button type="button" class="chip" data-start="+60">In 1 hour</button><button type="button" class="chip" data-start="19:00">19:00</button><button type="button" class="chip" data-start="20:00">20:00</button><button type="button" class="chip" data-start="21:00">21:00</button></span></div>
       <div class="field"><label class="field-label" for="fl-length">Length in minutes</label>
-        <input id="fl-length" type="number" name="duration" value="{{.Duration}}" min="15" max="1440" step="5" required></div>
+        <input id="fl-length" type="number" name="duration" value="{{.Duration}}" min="15" max="1440" step="5" required>
+        <span class="fl-presets" data-fl-presets hidden><button type="button" class="chip" data-length="60">1 hour</button><button type="button" class="chip" data-length="90">90 min</button><button type="button" class="chip" data-length="120">2 hours</button><button type="button" class="chip" data-length="180">3 hours</button></span></div>
       <div class="field"><label class="field-label" for="fl-formup">Form up</label>
         <input id="fl-formup" type="text" name="form_up" value="{{.FormUp}}" maxlength="120" placeholder="e.g. Jita 4-4"></div>
       <div class="field wide"><label class="field-label" for="fl-details">Details</label>
@@ -114,6 +111,25 @@
     <a href="{{if .ID}}/fleets/{{.ID}}/{{else}}/fleets/{{end}}">Cancel</a>
   </div>
 </form>
+
+<aside class="fl-side" aria-label="How the fleet shows">
+  <section class="l-panel fl-preview" aria-labelledby="fl-preview-title" data-fl-preview>
+    <h2 id="fl-preview-title">How it shows</h2>
+    <ol class="fl-board"><li class="fl-row"><span class="fl-preview-row">
+      <span class="fl-when"><span class="fl-clock" data-pv="clock">{{if .StartsAt}}{{slice .StartsAt 11}}{{end}}</span><span class="fl-day" data-pv="day"></span></span>
+      <span class="fl-what"><span class="fl-title" data-pv="title">{{if .Title}}{{.Title}}{{else}}Your fleet's title{{end}}</span><span class="fl-sub">{{.OwnerName}}</span></span>
+    </span></li></ol>
+    <dl class="fl-facts">
+      <div><dt class="field-label">In your time</dt><dd data-pv="local">Shown as you pick a start</dd></div>
+      <div><dt class="field-label">Length</dt><dd data-pv="length">{{.Duration}} min</dd></div>
+      <div><dt class="field-label">What to fly</dt><dd data-pv="fly">{{range .DoctrineModes}}{{if .Selected}}{{.Label}}{{end}}{{end}}</dd></div>
+      {{if .CanSetAccess}}<div><dt class="field-label">Who can see it</dt><dd data-pv="see">{{range .Visibilities}}{{if .Selected}}{{.Label}}{{end}}{{end}}</dd></div>
+      <div><dt class="field-label">Who can sign up</dt><dd data-pv="join">{{range .Gates}}{{if .Selected}}{{.Label}}{{end}}{{end}}</dd></div>
+      <div><dt class="field-label">Pilot names</dt><dd data-pv="names">{{if .RosterPublic}}Shown to everyone who can open it{{else}}Shown to those who can sign up{{end}}</dd></div>{{end}}
+    </dl>
+  </section>
+</aside>
+</div>
 </div>
 {{end}}
 {{end}}

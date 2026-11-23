@@ -4,7 +4,7 @@
   <input type="text" class="charselector-input" placeholder="Select corporation..." autocomplete="off" aria-label="Select corporation">
   <div class="charselector-dropdown" hidden>
     {{range .}}
-    <a href="?{{.Param}}={{.Value}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}">
+    <a href="{{if .Href}}{{.Href}}{{else}}?{{.Param}}={{.Value}}{{end}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}">
       <span class="charselector-name">{{.Name}}</span>
     </a>
     {{end}}
@@ -19,7 +19,7 @@
   <input type="text" class="charselector-input" placeholder="Select owner..." autocomplete="off" aria-label="Select corporation, alliance or community">
   <div class="charselector-dropdown" hidden>
     {{range .}}
-    <a href="?{{.Param}}={{.Value}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}">
+    <a href="{{if .Href}}{{.Href}}{{else}}?{{.Param}}={{.Value}}{{end}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}">
       <span class="charselector-name">{{.Name}}</span>
     </a>
     {{end}}
@@ -80,7 +80,7 @@
   <div class="fit-card-body">
     <h4><a href="{{.OpenURL}}">{{.Name}}</a></h4>
     <p class="fit-card-line">{{itemSublink .ShipTypeID .Ship}}{{if .Hull}} <small>{{.Hull}}</small>{{end}}</p>
-    <p class="fit-card-line">{{if .Role}}<span class="badge wait">{{.Role}}</span> {{end}}{{if .Doctrine}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{if .Category}} <small>{{.Category}}</small>{{end}}{{end}}{{if .Mine}}<small>Yours</small>{{else if .By}}<small>by {{.By}}</small>{{end}}</p>
+    <p class="fit-card-line">{{if .Role}}<span class="doctrine-role"><span class="fl-swatch {{roleClass .Role}}" aria-hidden="true"></span>{{.Role}}</span> {{end}}{{if .Doctrine}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{if .Category}} <small>{{.Category}}</small>{{end}}{{end}}{{if .Mine}}<small>Yours</small>{{else if .By}}<small>by {{.By}}</small>{{end}}</p>
     {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="{{.URL}}">#{{.Label}}</a> {{end}}</p>{{end}}
   </div>
   <div class="fit-card-actions">

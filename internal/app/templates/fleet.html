@@ -29,21 +29,7 @@
     <a class="btn" href="/fleets/{{.ID}}/composition">{{if .CanEdit}}Set roles and tags{{else}}See composition{{end}}</a>
   </div>
   {{with $op.InFleet}}<p class="fl-you">You are in this fleet: {{range $i, $s := .}}{{if $i}}; {{end}}{{$s}}{{end}}.</p>{{end}}
-  {{with .Comp}}
-  <div class="l-tiles">
-    <div class="l-stat"><span class="l-stat-label">Pilots</span><span class="l-stat-value">{{.Pilots}}</span>{{if $lv.InviteCount}}<span class="l-stat-sub">{{$lv.InviteCount}} signed up and not in yet</span>{{end}}</div>
-    {{if $lv.Full}}
-    {{if .HasDoctrine}}<div class="l-stat"><span class="l-stat-label">In doctrine hulls</span><span class="l-stat-value">{{.OnDoctrine}}</span><span class="l-stat-sub">of {{.Pilots}}{{if .OffDoctrine}}, {{.OffDoctrine}} in another hull{{end}}</span></div>{{end}}
-    <div class="l-stat"><span class="l-stat-label">Hulls</span><span class="l-stat-value">{{len .Hulls}}</span>{{with .Hulls}}<span class="l-stat-sub">Most flown: {{(index . 0).Name}}</span>{{end}}</div>
-    <div class="l-stat"><span class="l-stat-label">Systems</span><span class="l-stat-value">{{len .Systems}}</span>{{with .Systems}}<span class="l-stat-sub">{{(index . 0).Count}} in {{(index . 0).Name}}</span>{{end}}</div>
-    {{end}}
-  </div>
-  {{end}}
-  {{if .RoleBar}}
-  <svg class="fl-rolebar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="{{.RoleSummary}}">{{range .RoleBar}}<rect class="{{.Class}}" x="{{printf "%.3f" .X}}" y="0" width="{{printf "%.3f" .W}}" height="10"><title>{{.Role}}: {{.Count}}</title></rect>{{end}}</svg>
-  <ul class="fl-legend">{{range .RoleBar}}<li><span class="fl-swatch {{.Class}}" aria-hidden="true"></span>{{.Role}} <b>{{.Count}}</b></li>{{end}}</ul>
-  {{end}}
-  {{with .Gaps}}<p class="fl-gaps"><span class="field-label">Doctrine gaps</span> {{.}}</p>{{end}}
+  {{template "fleet-now-stats" .}}
 </section>
 {{end}}
 

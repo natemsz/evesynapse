@@ -5,7 +5,7 @@
 {{with .PAPs}}
 <div class="l-page fl-page">
 {{if .Owners}}
-{{if gt (len .Owners) 1}}<nav class="l-cluster" aria-label="Whose fleets to show">{{range .Owners}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}</nav>{{end}}
+{{if gt (len .Owners) 1}}<div class="l-head"><div class="l-head-pick">{{template "ownerselector" .Owners}}</div><p class="l-head-sum">Past fleets and attendance of <b>{{.Owner}}</b>.</p></div>{{end}}
 <div class="l-switcher fl-history">
   <section class="l-panel" aria-labelledby="fl-past-title">
     <h2 id="fl-past-title">Past fleets of {{.Owner}}</h2>

@@ -341,5 +341,8 @@ func linkFuncMap() template.FuncMap {
 		// Not a link: a whole number with thousands separators (the
 		// battle report's cards).
 		"battleNum": battleNum,
+		// Not a link: the colour class of a part in a fleet (DPS,
+		// Logistics...), shared by fleets and doctrines.
+		"roleClass": fleetRoleClass,
 	}
 }

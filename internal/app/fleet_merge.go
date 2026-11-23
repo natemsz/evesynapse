@@ -361,6 +361,9 @@ type fleetCurve struct {
 	TopDPS  int64           `json:"top_dps"`
 	Seconds int64           `json:"seconds"`
 	Bars    []fleetCurveBar `json:"bars"`
+	// Start is the Unix second the curve's first step begins, so
+	// killmail times can be placed on it.
+	Start int64 `json:"start,omitempty"`
 }
 
 // fleetCurveBar is one point's hover target and what it reads out.
@@ -429,5 +432,5 @@ func buildFleetCurve(steps map[int64]*[3]int64) fleetCurve {
 				battleNum(int64(v[0]+0.5)), battleNum(int64(v[1]+0.5)), battleNum(int64(v[2]+0.5))),
 		}
 	}
-	return fleetCurve{Out: line(0), In: line(1), Reps: line(2), TopDPS: int64(ceil), Seconds: last - first + gamelog.SliceSeconds, Bars: bars}
+	return fleetCurve{Out: line(0), In: line(1), Reps: line(2), TopDPS: int64(ceil), Seconds: last - first + gamelog.SliceSeconds, Bars: bars, Start: first}
 }

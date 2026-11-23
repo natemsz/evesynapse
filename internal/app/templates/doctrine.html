@@ -7,11 +7,24 @@
 <div class="l-head">
   <h2 class="l-head-title">{{.Name}}</h2>
   <p class="l-head-sum">{{if .Member}}<a href="/doctrines/?owner={{.OwnerKey}}">Doctrines</a> · {{end}}{{.Owner}}{{if .Category}} · {{if .Member}}<a href="/doctrines/?owner={{.OwnerKey}}&amp;category={{.Category}}">{{.Category}}</a>{{else}}{{.Category}}{{end}}{{end}} · {{len .Fits}} {{if eq (len .Fits) 1}}fit{{else}}fits{{end}}{{if .Public}} <span class="badge">Anyone with the link</span>{{end}}</p>
+  {{with .ShareURL}}<div class="l-head-act"><button type="button" class="btn btn-quiet" data-copy data-copy-text="{{.}}">Copy share link</button></div>{{end}}
 </div>
 {{if .Tags}}<p class="tag-row">{{range .Tags}}{{if $.Doctrine.Member}}<a href="/doctrines/?owner={{$.Doctrine.OwnerKey}}&amp;tag={{.}}">#{{.}}</a>{{else}}#{{.}}{{end}} {{end}}</p>{{end}}
 {{if .Description}}<p class="co-lede op-description">{{.Description}}</p>{{end}}
 
-<div class="co-sec"><h2>Fits</h2></div>
+{{if .RoleCounts}}<ul class="doctrine-roles" role="list" aria-label="Fits by part">{{range .RoleCounts}}<li><span class="fl-swatch {{roleClass .Role}}" aria-hidden="true"></span>{{.Role}} <b>{{.Count}}</b></li>{{end}}</ul>{{end}}
+{{if .Keeps}}
+<div class="doctrine-work">
+<div class="l-seg" role="tablist" aria-label="Doctrine" data-tabs hidden>
+  <button type="button" role="tab" id="doctrine-fits-tab" aria-controls="doctrine-fits" aria-selected="true">Fits <span class="co-cnt">{{len .Fits}}</span></button>
+  <button type="button" role="tab" id="doctrine-manage-tab" aria-controls="doctrine-manage" aria-selected="false">Manage</button>
+</div>
+<section role="tabpanel" id="doctrine-fits" aria-labelledby="doctrine-fits-tab">
+<h2 class="l-tab-h">Fits</h2>
+{{else}}
+<section id="doctrine-fits" aria-labelledby="doctrine-fits-title">
+<div class="co-sec"><h2 id="doctrine-fits-title">Fits</h2></div>
+{{end}}
 {{if .Fits}}
 <div class="co-cards">
 {{range .Fits}}
@@ -20,28 +33,30 @@
   <div class="co-fit-body">
     <h3><a href="/fittings/?doctrine={{.ID}}#fit-editor">{{.Name}}</a></h3>
     <p class="fit-card-line">{{itemSublink .ShipTypeID .Ship}}</p>
-    {{if or .Role .Note}}<p class="fit-card-line">{{if .Role}}<span class="badge wait">{{.Role}}</span> {{end}}{{.Note}}</p>{{end}}
+    {{if or .Role .Note}}<p class="fit-card-line">{{if .Role}}<span class="doctrine-role"><span class="fl-swatch {{roleClass .Role}}" aria-hidden="true"></span>{{.Role}}</span> {{end}}{{.Note}}</p>{{end}}
   </div>
   {{if .EFT}}
   <details class="doctrine-eft">
     <summary>Fit as text, to import in game</summary>
-    <pre>{{.EFT}}</pre>
+    <pre id="doctrine-eft-{{.ID}}">{{.EFT}}</pre>
   </details>
   {{end}}
   <div class="co-card-foot form-actions">
     <a class="btn" href="/fittings/?doctrine={{.ID}}#fit-editor">Open in fitting tool</a>
-    {{if $.Doctrine.Keeps}}<form method="post" action="/doctrines/{{$.Doctrine.ID}}/fits/{{.ID}}/remove" class="inline-form"><button type="submit" class="btn">Remove</button></form>{{end}}
+    {{if .EFT}}<button type="button" class="btn btn-quiet" data-copy data-copy-from="doctrine-eft-{{.ID}}">Copy fit text</button>{{end}}
+    {{if $.Doctrine.Keeps}}<form method="post" action="/doctrines/{{$.Doctrine.ID}}/fits/{{.ID}}/remove" class="inline-form doctrine-remove" data-confirm="Take {{.Name}} out of this doctrine?"><button type="submit" class="btn btn-quiet">Remove</button></form>{{end}}
   </div>
 </article>
 {{end}}
 </div>
 <p class="prose">The fitting tool shows a fit's numbers with your own skills and what you still have to train. In game, copy a fit's text and use "Import from clipboard" in the fitting window.</p>
 {{else}}
-<p class="co-note">No fits in this doctrine yet.</p>
+<p class="co-note">No fits in this doctrine yet.{{if .Keeps}} Add some under Manage.{{end}}</p>
 {{end}}
-
+</section>
 {{if .Keeps}}
-<div class="co-sec"><h2>Keep this doctrine</h2></div>
+<section role="tabpanel" id="doctrine-manage" aria-labelledby="doctrine-manage-tab">
+<h2 class="l-tab-h">Keep this doctrine</h2>
 {{if .Full}}
 <p class="co-note warn-note">This doctrine is full. Remove a fit to add another.</p>
 {{else}}
@@ -105,6 +120,8 @@
 </form>
 <div class="co-card-foot">
   <form method="post" action="/doctrines/{{.ID}}/delete" class="inline-form" data-confirm="Delete the doctrine {{.Name}} and its fits?"><button type="submit" class="btn btn-danger">Delete this doctrine</button></form>
+</div>
+</section>
 </div>
 {{end}}
 {{end}}

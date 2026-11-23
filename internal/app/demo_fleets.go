@@ -23,6 +23,7 @@ import (
 	json "github.com/goccy/go-json"
 	"math"
 	"math/rand"
+	"net/http"
 	"time"
 
 	"evesynapse/internal/app/module"
@@ -921,4 +922,67 @@ func (s *demoSeed) writeDemoLiveFleet(ctx context.Context, doctrineID, policyID 
 		CaptureStatus: captureRunning, CheckedAt: sql.NullTime{Time: s.now, Valid: true}, BossID: demoCharacterID,
 		Detail: "", ID: op.ID,
 	})
+}
+
+// fleetExampleView is the public example of a running fleet: the demo
+// group's live fleet as its fleet commander sees it, read-only.
+type fleetExampleView struct {
+	Live                                  *fleetLiveView
+	Title, Owner, Doctrine, FormUp, About string
+	Fits                                  []fleetFit
+}
+
+// handleFleetExample is GET /fleets/example/: the demo group's running
+// fleet, read-only, so anyone (not only a demo visitor) can see what
+// the live fleet tools show. Every pilot in it is invented, so no name
+// links anywhere, and nothing on it can be changed.
+func (app *Application) handleFleetExample(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	now := time.Now()
+	v := app.fleetViewerFor(ctx)
+	op, err := app.queries.GetDemoLiveFleet(ctx, demoCommunityID)
+	if err != nil || !isDemoFleet(op) || !fleetLiveOpen(op, now) {
+		app.renderFleetHidden(w, r, v)
+		return
+	}
+	row, err := app.storedComposition(ctx, op.ID)
+	if err != nil || row == nil {
+		app.renderFleetHidden(w, r, v)
+		return
+	}
+	live := fleetLiveRead{row: row}
+	if json.Unmarshal([]byte(row.Payload), &live.comp) != nil {
+		app.renderFleetHidden(w, r, v)
+		return
+	}
+	live.sight = live.comp.sightFor([]int64{op.FcCharacterID})
+	view := app.fleetLiveFor(ctx, op, fleetViewer{}, fleetAccess{}, live, 1, now)
+	view.Polling, view.TryURL, view.CanEdit, view.CanManage = false, "", false, false
+	for i := range view.Structure {
+		plainFleetUnit(&view.Structure[i])
+	}
+	fits, _ := app.fleetFits(ctx, op)
+	for i := range fits {
+		fits[i].Href = ""
+	}
+	page := &fleetExampleView{
+		Live: view, Title: op.Title, Owner: app.ownerName(ctx, opOwner(op)),
+		Doctrine: op.Doctrine, FormUp: op.FormUp, About: op.Description, Fits: fits,
+	}
+	w.Header().Set("X-Robots-Tag", "noindex")
+	data := pageData{ShellData: app.PublicShell(ctx), FleetExample: page}
+	app.render(ctx, w, http.StatusOK, "fleet_example.html", data)
+}
+
+// plainFleetUnit takes the links off every name in a unit.
+func plainFleetUnit(u *fleetUnitView) {
+	if u.Commander != nil {
+		u.Commander.Plain, u.Commander.Mine = true, false
+	}
+	for i := range u.Members {
+		u.Members[i].Plain, u.Members[i].Mine = true, false
+	}
+	for i := range u.Squads {
+		plainFleetUnit(&u.Squads[i])
+	}
 }

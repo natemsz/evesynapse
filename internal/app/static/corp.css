@@ -134,3 +134,53 @@ form.co-card > label { flex: none !important; }
   .co-bar .btn, .co-pick { flex: 1 1 100%; }
   .co-pick select { flex: 1 1 auto; }
 }
+
+/* Ship replacement: tabs for the handler's queue, the pilot's claims
+   and the policies; an open request is a wide card, evidence on the
+   left and the payout on the right, stacking on a narrow page. */
+.srp-work { display: flex; flex-direction: column; gap: var(--space-3); }
+.srp-work > .l-seg { align-self: flex-start; margin: 0; }
+.srp-panel { display: flex; flex-direction: column; gap: var(--space-3); }
+.srp-panel > .prose { margin: 0; }
+.srp-claim { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--space-3); align-items: start; }
+.srp-claim > * { margin: 0; }
+.srp-panel-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-2); }
+.srp-panel-head h3 { margin: 0; }
+.srp-shipcell { display: inline-flex; align-items: center; gap: 0.4em; }
+.srp-shipcell img { flex: none; border-radius: 2px; background: var(--row-alt); }
+.srp-paybar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-4); margin: 0; }
+.srp-paybar-text { flex: 1 1 24rem; min-width: 0; }
+.srp-paybar-text h3 { margin: 0 0 var(--space-1); }
+.srp-paybar-text .hint { margin: 0; }
+.srp-queue { display: flex; flex-direction: column; gap: var(--space-3); }
+.srp-review { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(15rem, 1fr); gap: var(--space-3) var(--space-5); margin: 0; }
+.srp-evidence { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.srp-review-head { display: flex; align-items: flex-start; gap: var(--space-3); }
+.srp-review-head h3 { margin: 0; }
+.srp-review-head .hint { margin: 0.2rem 0 0; }
+.srp-review-who { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.srp-ship { flex: none; border-radius: var(--r-xs); background: var(--row-alt); }
+.srp-est { display: flex; flex-direction: column; align-items: flex-end; color: var(--text-bright); white-space: nowrap; }
+.srp-evidence .srp-facts, .srp-evidence .srp-why { margin: 0; }
+.srp-note { margin: 0; padding: var(--space-2) var(--space-3); border-inline-start: 3px solid var(--hairline); background: var(--surface-inset); }
+.srp-note .field-label { display: block; margin-bottom: 0.2rem; }
+.srp-decide { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border-radius: var(--r-xs); background: var(--surface-inset); align-self: start; }
+.srp-decide .field { display: flex; flex-direction: column; gap: 0.2rem; }
+.srp-decide .form-actions { margin: 0; }
+.srp-policy-modal { width: min(46rem, 100%); }
+@container page (max-width: 46rem) {
+  .srp-review { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A doctrine card shows its ships first, then its fits with their part. */
+.doctrine-ships { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0; }
+.doctrine-ships img { border-radius: var(--r-xs); background: var(--row-alt); }
+.doctrine-more { color: var(--muted); font-size: var(--fs-xs); }
+.doctrine-role { display: inline-flex; align-items: center; color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
+.doctrine-new-modal { width: min(44rem, 100%); }
+.doctrine-roles { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0 0 var(--space-3); padding: 0; list-style: none; color: var(--muted); font-size: var(--fs-sm); }
+.doctrine-roles b { color: var(--text); font-weight: 600; }
+.doctrine-work { display: flex; flex-direction: column; gap: var(--space-3); }
+.doctrine-work > .l-seg { align-self: flex-start; margin: 0; }
+.doctrine-work > [role="tabpanel"] { display: flex; flex-direction: column; gap: var(--space-3); }
+.doctrine-remove { margin-inline-start: auto; }

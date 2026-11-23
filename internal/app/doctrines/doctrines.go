@@ -414,6 +414,14 @@ type doctrineView struct {
 	Keeps    bool
 	Full     bool // no room for another fit
 	Roles    []string
+	// RoleCounts is how many fits the doctrine has for each part.
+	RoleCounts []doctrineRoleCount
+}
+
+// doctrineRoleCount is one part in the fleet and how many fits fill it.
+type doctrineRoleCount struct {
+	Role  string
+	Count int
 }
 
 func (app *mod) handleDoctrine(w http.ResponseWriter, r *http.Request) {
@@ -464,6 +472,17 @@ func (app *mod) handleDoctrine(w http.ResponseWriter, r *http.Request) {
 		view.Fits = append(view.Fits, fv)
 	}
 	view.Full = len(view.Fits) >= doctrineFitsMost
+	counts := map[string]int{}
+	for _, fit := range view.Fits {
+		if fit.Role != "" {
+			counts[fit.Role]++
+		}
+	}
+	for _, role := range app.deps.FleetRoles() {
+		if counts[role] > 0 {
+			view.RoleCounts = append(view.RoleCounts, doctrineRoleCount{Role: role, Count: counts[role]})
+		}
+	}
 	app.deps.Render(ctx, w, http.StatusOK, "doctrine.html", data)
 }
 

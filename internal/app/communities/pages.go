@@ -89,6 +89,9 @@ type mineRow struct {
 	Path, Name, Place, Members string
 	Pending                    string // requests waiting, for a leader or admin
 	Closed                     bool
+	// Fleets and Doctrines open the community's fleet history and
+	// doctrines, for a member in it.
+	Fleets, Doctrines string
 }
 
 type directoryView struct {
@@ -134,6 +137,10 @@ func (app *mod) handleDirectory(w http.ResponseWriter, r *http.Request) {
 			m := mineRow{Path: pathOf(row.Slug), Name: row.Name, Place: roleLabel(row.Role), Members: countText(row.MemberCount) + " " + memberWord(row.MemberCount), Closed: row.ArchivedAt.Valid}
 			if row.State == statePending {
 				m.Place = "Waiting for approval"
+			} else if !m.Closed {
+				key := standing.Owner{Kind: standing.OwnerCommunity, ID: row.ID}.Key()
+				m.Fleets = standing.Address("/fleets/history/", key)
+				m.Doctrines = standing.Address("/doctrines/", key)
 			}
 			if v.userID != 0 && row.State == stateActive && row.Role != standing.CommunityMember && row.PendingCount > 0 {
 				m.Pending = countText(row.PendingCount)
@@ -219,6 +226,9 @@ type communityView struct {
 	Doctrines       []communityDoctrine
 	DoctrinesHref   string
 	PermissionsHref string
+	// HistoryHref and BoardHref open the community's past fleets and
+	// its own leaderboard, for a member.
+	HistoryHref, BoardHref string
 }
 
 // communityDoctrine is one doctrine on a community's page.
@@ -324,6 +334,9 @@ func (app *mod) handleCommunity(w http.ResponseWriter, r *http.Request) {
 		view.Yours = append(view.Yours, place)
 		if p.State == stateActive {
 			view.SeesPeople = true
+			key := standing.Owner{Kind: standing.OwnerCommunity, ID: c.ID}.Key()
+			view.HistoryHref = standing.Address("/fleets/history/", key)
+			view.BoardHref = module.FleetLeadersFor(key)
 		}
 	}
 	if !view.Closed && !view.NeedsInvite {

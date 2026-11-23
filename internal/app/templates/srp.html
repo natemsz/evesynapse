@@ -21,114 +21,125 @@
   <a class="l-stat{{if $corp.Open}} warn{{else}} ok{{end}}" href="#srp-handle"><span class="l-stat-label">Open requests</span><span class="l-stat-value">{{$corp.OpenCount}}</span><span class="l-stat-sub">Waiting on a handler</span></a>
   <div class="l-stat"><span class="l-stat-label">Open estimate</span><span class="l-stat-value">{{if $corp.OpenValue}}{{$corp.OpenValue}}{{else}}0{{end}}</span><span class="l-stat-sub">What the open claims are set to pay</span></div>
   <div class="l-stat"><span class="l-stat-label">Paid, 30 days</span><span class="l-stat-value">{{$corp.PaidCount}}</span><span class="l-stat-sub">{{if $corp.PaidValue}}{{$corp.PaidValue}} paid out{{else}}Nothing paid yet{{end}}</span></div>
-  {{if .Mine}}<a class="l-stat" href="#srp-mine"><span class="l-stat-label">Your requests</span><span class="l-stat-value">{{len .Mine}}</span><span class="l-stat-sub">Asked by your characters</span></a>{{end}}
+  {{if .Mine}}<a class="l-stat" href="#srp-claims"><span class="l-stat-label">Your requests</span><span class="l-stat-value">{{len .Mine}}</span><span class="l-stat-sub">Asked by your characters</span></a>{{end}}
 </div>
 {{end}}
 
-<p class="prose">Lost a ship on one of {{$corp.Name}}'s fleets? Ask for it to be replaced here. A request names the killmail and the fleet it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
-
-<div class="co-cards">
-{{if $corp.Policy}}
-<section class="l-panel co-card">
-  <h3>Replacement policy</h3>
-  <p class="srp-policy">{{$corp.Policy}}</p>
-</section>
+{{$tabs := or $corp.Handles $corp.Keeps $corp.Ledger}}
+<div class="srp-work">
+{{if $tabs}}
+<div class="l-seg" role="tablist" aria-label="Ship replacement" data-tabs hidden>
+  {{if and $corp.Handles $corp.Open}}<button type="button" role="tab" id="srp-handle-tab" aria-controls="srp-handle" aria-selected="true">Requests to handle <span class="co-cnt">{{$corp.OpenCount}}</span></button>{{end}}
+  <button type="button" role="tab" id="srp-claims-tab" aria-controls="srp-claims" aria-selected="false">Your claims{{with .Mine}} <span class="co-cnt">{{len .}}</span>{{end}}</button>
+  {{if and $corp.Handles (not $corp.Open)}}<button type="button" role="tab" id="srp-handle-tab" aria-controls="srp-handle" aria-selected="false">Requests to handle</button>{{end}}
+  {{if or $corp.Keeps $corp.Ledger}}<button type="button" role="tab" id="srp-policies-tab" aria-controls="srp-policies" aria-selected="false">{{if $corp.Keeps}}Policies and ledger{{else}}Ledger{{end}}</button>{{end}}
+</div>
 {{end}}
 
-<form method="post" action="/srp/request" class="l-panel co-card op-form">
-  <input type="hidden" name="owner" value="{{$corp.Key}}">
-  <h3>Request a replacement</h3>
-  {{if .Losses}}
-  <div class="form-grid">
-    <label class="field wide"><span class="field-label">Loss</span>
-      <select name="loss" required>{{range .Losses}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select>
-      <span class="field-hint">Your characters' losses of the last 30 days that happened during one of these fleets</span></label>
-    <label class="field wide"><span class="field-label">Note</span>
-      <input type="text" name="note" maxlength="500" placeholder="Optional: anything the handler should know"></label>
+<section{{if $tabs}} role="tabpanel" aria-labelledby="srp-claims-tab"{{end}} id="srp-claims" class="srp-panel">
+  {{if $tabs}}<h2 class="l-tab-h">Your claims</h2>{{end}}
+  <p class="prose">Lost a ship on one of {{$corp.Name}}'s fleets? Ask for it to be replaced here. A request names the killmail and the fleet it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
+  <div class="srp-claim">
+  {{if $corp.Policy}}
+  <section class="l-panel co-card">
+    <h3>Replacement policy</h3>
+    <p class="srp-policy">{{$corp.Policy}}</p>
+  </section>
+  {{end}}
+  <form method="post" action="/srp/request" class="l-panel co-card op-form">
+    <input type="hidden" name="owner" value="{{$corp.Key}}">
+    <h3>Request a replacement</h3>
+    {{if .Losses}}
+    <div class="form-grid">
+      <label class="field wide"><span class="field-label">Loss</span>
+        <select name="loss" required>{{range .Losses}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select>
+        <span class="field-hint">Your characters' losses of the last 30 days that happened during one of these fleets</span></label>
+      <label class="field wide"><span class="field-label">Note</span>
+        <input type="text" name="note" maxlength="500" placeholder="Optional: anything the handler should know"></label>
+    </div>
+    <div class="form-actions"><button type="submit">Send request</button></div>
+    {{else}}
+    <p class="hint">Nothing to claim: none of your characters has an unclaimed loss during one of these fleets in the last 30 days. A loss shows up here once its killmail reaches the killboard or EveSynapse reads it with the pilot's killmail access.</p>
+    {{end}}
+    {{if .Outside}}<p class="hint">{{.Outside}} other recent loss{{if ne .Outside 1}}es were{{else}} was{{end}} not during one of these fleets and cannot be claimed here.</p>{{end}}
+    {{if .Refused}}<p class="hint">{{.Refused}} loss{{if ne .Refused 1}}es{{end}} during a fleet cannot be claimed right now. The fleet's Ship Replacement tab says why.</p>{{end}}
+  </form>
   </div>
-  <div class="form-actions"><button type="submit">Send request</button></div>
-  {{else}}
-  <p class="hint">Nothing to claim: none of your characters has an unclaimed loss during one of these fleets in the last 30 days. A loss shows up here once its killmail reaches the killboard or EveSynapse reads it with the pilot's killmail access.</p>
+  {{if .Mine}}
+  <section class="l-panel" aria-labelledby="srp-mine-title">
+  <h3 id="srp-mine-title">Your requests</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Lost</th><th>Pilot</th><th>Ship</th><th>Fleet</th><th class="num">Estimate</th><th>Answer</th><th></th></tr></thead>
+    <tbody>
+    {{range .Mine}}
+      <tr><td>{{.LostAt}}</td><td>{{.Pilot}}</td><td>{{template "srp-ship" .}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td><td class="num">{{.Value}}</td>
+        <td>{{if .Open}}<span class="badge wait">OPEN</span>{{else if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}{{if .HandlerNote}} <small>{{.HandlerNote}}</small>{{end}}</td>
+        <td>{{if .CanWithdraw}}<form method="post" action="/srp/{{.ID}}/withdraw" class="inline-form"><input type="hidden" name="owner" value="{{$corp.Key}}"><button type="submit" class="btn">Withdraw</button></form>{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  </section>
   {{end}}
-  {{if .Outside}}<p class="hint">{{.Outside}} other recent loss{{if ne .Outside 1}}es were{{else}} was{{end}} not during one of these fleets and cannot be claimed here.</p>{{end}}
-  {{if .Refused}}<p class="hint">{{.Refused}} loss{{if ne .Refused 1}}es{{end}} during a fleet cannot be claimed right now. The fleet's Ship Replacement tab says why.</p>{{end}}
-</form>
-</div>
-
-{{if .Mine}}
-<section class="l-panel" id="srp-mine">
-<h2 class="co-h2">Your requests</h2>
-<div class="tw">
-<table>
-  <thead><tr><th>Lost</th><th>Pilot</th><th>Ship</th><th>Fleet</th><th>Estimate</th><th>Answer</th><th></th></tr></thead>
-  <tbody>
-  {{range .Mine}}
-    <tr><td>{{.LostAt}}</td><td>{{.Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td><td>{{.Value}}</td>
-      <td>{{if .Open}}<span class="badge wait">OPEN</span>{{else if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}{{if .HandlerNote}} <small>{{.HandlerNote}}</small>{{end}}</td>
-      <td>{{if .CanWithdraw}}<form method="post" action="/srp/{{.ID}}/withdraw" class="inline-form"><input type="hidden" name="owner" value="{{$corp.Key}}"><button type="submit" class="btn">Withdraw</button></form>{{end}}</td></tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
 </section>
-{{end}}
 
 {{if $corp.Handles}}
-<div class="co-sec" id="srp-handle"><h2>Requests to handle</h2></div>
-
-{{if $corp.Open}}
-<form method="post" action="/srp/paylist" class="l-panel co-card op-form form-card">
-  <input type="hidden" name="owner" value="{{$corp.Key}}">
-  <h3>Pay in game</h3>
-  <p class="prose">EVE has no way for a site to give ISK, so paying is done in game. The pay list is one EVE mail listing every open request: each pilot's name opens their information window, where ISK is given, and each ship opens its kill report.</p>
-  {{if $corp.Mailers}}
-  <div class="form-grid">
+<section role="tabpanel" aria-labelledby="srp-handle-tab" id="srp-handle" class="srp-panel">
+  <h2 class="l-tab-h">Requests to handle</h2>
+  {{if $corp.Open}}
+  <form method="post" action="/srp/paylist" class="l-panel srp-paybar">
+    <input type="hidden" name="owner" value="{{$corp.Key}}">
+    <div class="srp-paybar-text"><h3>Pay in game</h3>
+    <p class="hint">EVE has no way for a site to give ISK, so paying is done in game. The pay list is one EVE mail listing every open request: each pilot's name opens their information window, where ISK is given, and each ship opens its kill report.</p></div>
+    {{if $corp.Mailers}}
     <label class="field"><span class="field-label">Send it to</span>
       <select name="character">{{range $corp.Mailers}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
-  </div>
-  <div class="form-actions"><button type="submit">Mail me the pay list</button></div>
-  {{else}}
-  <p class="hint warn-note">None of your characters has granted mail access, so the pay list cannot be sent.</p>
-  {{end}}
-</form>
-
-{{if gt $corp.OpenCount (len $corp.Open)}}<p class="hint">Showing the oldest {{len $corp.Open}} of {{$corp.OpenCount}} open requests.</p>{{end}}
-<div class="co-cards">
-{{range $corp.Open}}
-<section class="l-panel co-card">
-  <div class="co-card-head"><h3>{{.Pilot}} · {{.Ship}}</h3>{{if .Value}}<span class="field-hint">est. {{.Value}}</span>{{end}}</div>
-  <p class="hint">Lost {{.LostAt}} in {{.System}} on <a href="{{.OpURL}}">{{.Op}}</a>. {{killPageLink .KillmailID}}</p>
-  <p class="srp-facts co-badges"><span class="badge kill">KILLMAIL</span><span class="badge kill">DURING THE FLEET</span>{{if .Attended}}<span class="badge kill">ATTENDED</span>{{else if .Attendance}}<span class="badge loss">NOT IN FLEET THEN</span>{{else}}<span class="badge loss">NOT ON ATTENDANCE</span>{{end}}{{if .Doctrine}}{{if .DoctrineShip}}<span class="badge kill">DOCTRINE SHIP</span>{{else}}<span class="badge loss">NOT A DOCTRINE SHIP</span>{{end}}{{end}}</p>
-  <ul class="srp-why">{{if .Attendance}}<li>{{.Attendance}}</li>{{else if not .Attended}}<li>This pilot is not on the fleet's attendance. They can be ticked by hand on the fleet's page.</li>{{end}}{{if .Doctrine}}<li>The fleet flew {{.Doctrine}}.</li>{{end}}</ul>
-  {{if .FitNote}}<p class="hint">{{.FitNote}} EVE shows fits only on the loss mail.</p>{{end}}
-  {{if .Earlier}}<p class="hint warn-note">{{.Earlier}}</p>{{end}}
-  {{if .Note}}<p class="hint">Pilot's note: {{.Note}}</p>{{end}}
-  <form method="post" action="/srp/{{.ID}}/decide" class="op-form">
-    <input type="hidden" name="owner" value="{{$corp.Key}}">
-    <div class="form-grid">
+    <button type="submit">Mail me the pay list</button>
+    {{else}}
+    <p class="hint warn-note">None of your characters has granted mail access, so the pay list cannot be sent.</p>
+    {{end}}
+  </form>
+  {{if gt $corp.OpenCount (len $corp.Open)}}<p class="hint">Showing the oldest {{len $corp.Open}} of {{$corp.OpenCount}} open requests.</p>{{end}}
+  <div class="srp-queue">
+  {{range $corp.Open}}
+  <section class="l-panel srp-review" aria-label="{{.Pilot}}, {{.Ship}}">
+    <div class="srp-evidence">
+      <div class="srp-review-head">
+        {{if .ShipTypeID}}<img class="srp-ship" src="{{typeRender .ShipTypeID 64}}" width="48" height="48" alt="" loading="lazy">{{end}}
+        <div class="srp-review-who"><h3>{{.Pilot}}, {{.Ship}}</h3>
+        <p class="hint">Lost {{.LostAt}} in {{.System}} on <a href="{{.OpURL}}">{{.Op}}</a>. {{killPageLink .KillmailID}}</p></div>
+        {{if .Value}}<span class="srp-est"><span class="field-label">Estimate</span>{{.Value}}</span>{{end}}
+      </div>
+      <p class="srp-facts co-badges"><span class="badge kill">KILLMAIL</span><span class="badge kill">DURING THE FLEET</span>{{if .Attended}}<span class="badge kill">ATTENDED</span>{{else if .Attendance}}<span class="badge loss">NOT IN FLEET THEN</span>{{else}}<span class="badge loss">NOT ON ATTENDANCE</span>{{end}}{{if .Doctrine}}{{if .DoctrineShip}}<span class="badge kill">DOCTRINE SHIP</span>{{else}}<span class="badge loss">NOT A DOCTRINE SHIP</span>{{end}}{{end}}</p>
+      <ul class="srp-why">{{if .Attendance}}<li>{{.Attendance}}</li>{{else if not .Attended}}<li>This pilot is not on the fleet's attendance. They can be ticked by hand on the fleet's page.</li>{{end}}{{if .Doctrine}}<li>The fleet flew {{.Doctrine}}.</li>{{end}}{{with .FitNote}}<li>{{.}} EVE shows fits only on the loss mail.</li>{{end}}</ul>
+      {{if .Earlier}}<p class="hint warn-note">{{.Earlier}}</p>{{end}}
+      {{if .Note}}<blockquote class="srp-note"><span class="field-label">Pilot's note</span> {{.Note}}</blockquote>{{end}}
+    </div>
+    <form method="post" action="/srp/{{.ID}}/decide" class="op-form srp-decide">
+      <input type="hidden" name="owner" value="{{$corp.Key}}">
       <label class="field"><span class="field-label">Paid, in ISK</span>
         <input type="text" name="payout" value="{{.Suggested}}" inputmode="decimal" autocomplete="off"></label>
       <label class="field"><span class="field-label">Note to the pilot</span>
         <input type="text" name="note" maxlength="500" placeholder="Needed to deny"></label>
-    </div>
-    {{if $corp.Mailers}}<label class="check-row"><input type="checkbox" name="mail" value="1" checked> <span>Tell the pilot by EVE mail when marked paid</span></label>{{end}}
-    <div class="form-actions">
-      <button type="submit" name="action" value="paid">Mark paid</button>
-      <button type="submit" name="action" value="deny" class="btn btn-danger">Deny</button>
-    </div>
-  </form>
-</section>
-{{end}}
-</div>
-{{else}}
-<div class="l-panel co-gate"><p>No open requests.</p></div>
-{{end}}
+      {{if $corp.Mailers}}<label class="check-row"><input type="checkbox" name="mail" value="1" checked> <span>Tell the pilot by EVE mail when marked paid</span></label>{{end}}
+      <div class="form-actions">
+        <button type="submit" name="action" value="paid">Mark paid</button>
+        <button type="submit" name="action" value="deny" class="btn btn-danger">Deny</button>
+      </div>
+    </form>
+  </section>
+  {{end}}
+  </div>
+  {{else}}
+  <div class="l-panel co-gate"><p>No open requests.</p></div>
+  {{end}}
 
-{{if $corp.Handled}}
-<section class="l-panel">
-<h2 class="co-h2">Answered</h2>
-<div class="tw">
-<table>
+  {{if $corp.Handled}}
+  <section class="l-panel" aria-labelledby="srp-answered-title">
+  <h3 id="srp-answered-title">Answered</h3>
+  <div class="tw">
+  <table>
   <thead><tr><th>Answered</th><th>Pilot</th><th>Ship</th><th>Fleet</th><th>Answer</th><th>By</th><th></th></tr></thead>
   <tbody>
   {{range $corp.Handled}}
@@ -138,32 +149,19 @@
       <td><form method="post" action="/srp/{{.ID}}/decide" class="inline-form"><input type="hidden" name="owner" value="{{$corp.Key}}"><button type="submit" name="action" value="reopen" class="btn">Open again</button></form></td></tr>
   {{end}}
   </tbody>
-</table>
-</div>
-</section>
-{{end}}
-{{end}}
-
-{{if $corp.Ledger}}
-<section class="l-panel">
-<h2 class="co-h2">Ledger</h2>
-<div class="tw">
-<table>
-  <thead><tr><th>Answered</th><th>Pilot</th><th>Ship</th><th>Fleet</th><th>Answer</th></tr></thead>
-  <tbody>
-  {{range $corp.Ledger}}
-    <tr><td>{{.HandledAt}}</td><td>{{.Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td>
-      <td>{{if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}</td></tr>
+  </table>
+  </div>
+  </section>
   {{end}}
-  </tbody>
-</table>
-</div>
 </section>
 {{end}}
 
-{{if $corp.Keeps}}
-<section class="l-panel" id="srp-policy" aria-labelledby="srp-policy-title">
-  <h2 class="co-h2" id="srp-policy-title">Replacement policies</h2>
+{{if or $corp.Keeps $corp.Ledger}}
+<section role="tabpanel" aria-labelledby="srp-policies-tab" id="srp-policies" class="srp-panel">
+  <h2 class="l-tab-h">{{if $corp.Keeps}}Policies and ledger{{else}}Ledger{{end}}</h2>
+  {{if $corp.Keeps}}
+  <section class="l-panel" id="srp-policy" aria-labelledby="srp-policy-title">
+    <div class="srp-panel-head"><h3 id="srp-policy-title">Replacement policies</h3>{{with $corp.PolicyForm}}{{if not .ID}}<button type="button" class="btn" data-open-modal="srp-policy-modal">New policy</button>{{end}}{{end}}</div>
   {{if $corp.Policies}}
   <div class="tw" tabindex="0" role="region" aria-labelledby="srp-policy-title">
   <table>
@@ -174,11 +172,50 @@
   </table>
   </div>
   {{else}}<p class="hint">No policies yet, so a handler decides each claim.</p>{{end}}
-  {{with $corp.PolicyForm}}
+    {{with $corp.PolicyForm}}{{if .ID}}{{template "srp-policy-form" .}}{{end}}{{end}}
+  </section>
+  {{end}}
+  {{if $corp.Ledger}}
+  <section class="l-panel" aria-labelledby="srp-ledger-title">
+  <h3 id="srp-ledger-title">Ledger</h3>
+  <div class="tw">
+  <table>
+  <thead><tr><th>Answered</th><th>Pilot</th><th>Ship</th><th>Fleet</th><th>Answer</th></tr></thead>
+  <tbody>
+  {{range $corp.Ledger}}
+    <tr><td>{{.HandledAt}}</td><td>{{.Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td>
+      <td>{{if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}</td></tr>
+  {{end}}
+  </tbody>
+  </table>
+  </div>
+  </section>
+  {{end}}
+</section>
+{{end}}
+</div>
+{{with $corp.PolicyForm}}{{if not .ID}}
+<div class="modal-backdrop" id="srp-policy-modal" hidden>
+  <div class="modal srp-policy-modal" role="dialog" aria-modal="true" aria-labelledby="srp-policy-new-title">
+    <div class="modal-head"><h2 id="srp-policy-new-title">New policy</h2><button type="button" class="modal-close" data-close-modal aria-label="Close">×</button></div>
+    {{template "srp-policy-form" .}}
+  </div>
+</div>
+{{end}}{{end}}
+{{if $corp.Directs}}<p class="co-note">Who handles requests is set in <a href="/corporations/settings/?corporation={{$corp.ID}}">corporation settings</a>.</p>{{else if $corp.HandOver}}<p class="co-note">Who handles requests is set in <a href="{{$corp.HandOver}}">fleet permissions</a>.</p>{{end}}
+{{end}}
+{{end}}
+</div>
+{{end}}
+
+{{define "srp-ship"}}<span class="srp-shipcell">{{if .ShipTypeID}}<img src="{{typeRender .ShipTypeID 64}}" width="20" height="20" alt="" loading="lazy">{{end}}{{itemLink .ShipTypeID .Ship}}</span>{{end}}
+
+{{/* A replacement policy's form, new or being changed. */}}
+{{define "srp-policy-form"}}
   <form method="post" action="/srp/policies" class="op-form">
-    <input type="hidden" name="owner" value="{{$corp.Key}}">
+    <input type="hidden" name="owner" value="{{.Owner}}">
     <input type="hidden" name="id" value="{{.ID}}">
-    <h3>{{if .ID}}Change {{.Name}}{{else}}New policy{{end}}</h3>
+    {{if .ID}}<h3>Change {{.Name}}</h3>{{end}}
     <div class="form-grid">
       <label class="field"><span class="field-label">Name</span><input type="text" name="name" value="{{.Name}}" maxlength="60" required></label>
       <label class="field"><span class="field-label">How it pays</span>
@@ -203,12 +240,5 @@
     <label class="check-row"><input type="checkbox" name="default" value="1"{{if .Default}} checked{{end}}> <span>Use for fleets that name no policy</span></label>
     <div class="form-actions"><button type="submit">Save policy</button></div>
   </form>
-  {{if .ID}}<form method="post" action="/srp/policies/{{.ID}}/delete" class="inline-form"><input type="hidden" name="owner" value="{{$corp.Key}}"><button type="submit" class="btn btn-danger">Delete {{.Name}}</button></form>{{end}}
-  {{end}}
-</section>
-{{end}}
-{{if $corp.Directs}}<p class="co-note">Who handles requests is set in <a href="/corporations/settings/?corporation={{$corp.ID}}">corporation settings</a>.</p>{{else if $corp.HandOver}}<p class="co-note">Who handles requests is set in <a href="{{$corp.HandOver}}">fleet permissions</a>.</p>{{end}}
-{{end}}
-{{end}}
-</div>
+  {{if .ID}}<form method="post" action="/srp/policies/{{.ID}}/delete" class="inline-form"><input type="hidden" name="owner" value="{{.Owner}}"><button type="submit" class="btn btn-danger">Delete {{.Name}}</button></form>{{end}}
 {{end}}

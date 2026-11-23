@@ -71,6 +71,7 @@ func (app *Application) runFleetLane(ctx context.Context) {
 	tick := time.NewTicker(fleetLaneTick)
 	defer tick.Stop()
 	for {
+		runGuarded("demo fleet", func() { app.keepDemoFleetLive(ctx, time.Now()) })
 		if !app.esi.HardLimitActive(time.Now()) && !app.esi.ErrorBudgetLow() {
 			runGuarded("fleet lane", func() { app.captureOpAttendance(ctx, time.Now()) })
 		}

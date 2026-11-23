@@ -140,3 +140,46 @@ DELETE FROM pilot_activity_hours WHERE character_id = ANY(sqlc.arg(character_ids
 
 -- name: DeleteDemoPilotActivityApplied :exec
 DELETE FROM pilot_activity_applied WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]);
+
+-- ---------------------------------------------------------------------
+-- The demo's fleet group (demo_fleets.go).
+-- ---------------------------------------------------------------------
+
+-- name: DeleteDemoCommunityOps :exec
+-- The group's fleets; their attendance, reports, scores and claims
+-- cascade.
+DELETE FROM ops WHERE owner_kind = 'community' AND owner_id = $1;
+
+-- name: DeleteDemoCommunityDoctrines :exec
+DELETE FROM doctrines WHERE owner_kind = 'community' AND owner_id = $1;
+
+-- name: DeleteDemoCommunityPolicies :exec
+DELETE FROM srp_policies WHERE owner_kind = 'community' AND owner_id = $1;
+
+-- name: DeleteDemoCommunityGroups :exec
+DELETE FROM org_groups WHERE owner_kind = 'community' AND owner_id = $1;
+
+-- name: DeleteDemoCommunity :exec
+DELETE FROM communities WHERE id = $1;
+
+-- name: InsertDemoCommunity :exec
+-- Unlisted, and joined only by invite.
+INSERT INTO communities (id, slug, name, description, join_policy, listed, invite_token, created_by_character, created_at)
+VALUES (sqlc.arg(id), sqlc.arg(slug), sqlc.arg(name), sqlc.arg(description), 'invite', FALSE,
+        sqlc.narg(invite_token), sqlc.arg(created_by_character), sqlc.arg(created_at));
+
+-- name: KeepDemoFleetLive :exec
+-- Moves the group's running fleet along, so it always reads as live.
+-- The composition's revision stays, so a page holding a visitor's
+-- changes is never refreshed over them.
+WITH live AS (
+    UPDATE ops SET starts_at = sqlc.arg(starts_at)::timestamptz, capture_checked_at = sqlc.arg(seen_at)::timestamptz
+    WHERE owner_kind = 'community' AND owner_id = sqlc.arg(owner_id)::bigint
+      AND capture_status = 'capturing' AND cancelled_at IS NULL
+    RETURNING id
+), seen AS (
+    UPDATE op_attendance a SET last_seen_at = sqlc.arg(seen_at)::timestamptz
+    FROM live WHERE a.op_id = live.id
+)
+UPDATE op_composition c SET computed_at = sqlc.arg(seen_at)::timestamptz
+FROM live WHERE c.op_id = live.id;

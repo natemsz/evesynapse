@@ -15,8 +15,9 @@
 {{end}}
 
 {{define "fleet-live"}}
-<div class="fl-live" id="fl-live"{{if .Polling}} data-fleet-live="{{.LiveURL}}" data-revision="{{.Revision}}" data-every="{{.PollSeconds}}"{{end}}>
+<div class="fl-live" id="fl-live"{{if .Polling}} data-fleet-live="{{.LiveURL}}" data-revision="{{.Revision}}" data-every="{{.PollSeconds}}"{{end}}{{with .TryURL}} data-fleet-try="{{.}}"{{end}}>
 {{$v := .}}
+{{if .TryURL}}<p class="fl-try-note">Sample fleet. Set roles and tags to try the commander tools. Your changes stay on this page and reset when you leave it.</p>{{end}}
 {{if .Has}}
 <p class="fl-asof{{if .Stale}} is-stale{{end}}">{{if .Stale}}Out of date: last read at {{.AsOf}}.{{else}}Last read at {{.AsOf}}.{{end}}{{if .CanManage}} {{.Status}}{{end}}</p>
 {{if .Notes}}<ul class="fl-notes">{{range .Notes}}<li>{{.}}</li>{{end}}</ul>{{end}}

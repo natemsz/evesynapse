@@ -113,6 +113,11 @@ func (app *Application) buildFleetReport(ctx context.Context, opID, seq int64, n
 	if err != nil {
 		return false, err
 	}
+	// The demo's reports are built by its seed from logs that are not
+	// stored, so a rebuild here would empty them.
+	if isDemoFleet(op) {
+		return true, app.queries.ClearFleetReportDirty(ctx, db.ClearFleetReportDirtyParams{DirtySeq: seq, ComputedAt: timeSet(now), OpID: op.ID})
+	}
 	build := &fleetReportBuild{}
 	if !op.CancelledAt.Valid {
 		var ready bool
@@ -201,6 +206,12 @@ func (app *Application) readFleetReport(ctx context.Context, op db.Op, now time.
 	if err != nil {
 		return nil, false, err
 	}
+	build.Pilots, build.Mails = fleetScoreRows(op, attendance, earlier, mails)
+	return build, true, nil
+}
+
+// fleetScoreRows is what each pilot earned on a fleet.
+func fleetScoreRows(op db.Op, attendance []db.OpAttendance, earlier []db.ListPilotsOnEarlierOverlappingFleetRow, mails []*fleetMail) ([]db.InsertFleetScorePilotParams, []db.InsertFleetScoreMailParams) {
 	sameOwner := make(map[int64]bool, len(earlier))
 	publicly := make(map[int64]bool, len(earlier))
 	for _, e := range earlier {
@@ -213,24 +224,26 @@ func (app *Application) readFleetReport(ctx context.Context, op db.Op, now time.
 			sighted++
 		}
 	}
+	pilots := make([]db.InsertFleetScorePilotParams, 0, len(attendance))
 	for _, a := range attendance {
 		seen := a.Source == attendanceFleet
 		long := a.LastSeenAt.UTC().Sub(fleetFirstSighting(a)) >= fleetCreditMinPresence
-		build.Pilots = append(build.Pilots, db.InsertFleetScorePilotParams{
+		pilots = append(pilots, db.InsertFleetScorePilotParams{
 			OpID: op.ID, CharacterID: a.CharacterID, FlownAt: op.StartsAt.UTC(), SeenInFleet: seen,
 			MemberCredit: !sameOwner[a.CharacterID],
 			PublicCredit: seen && long && sighted >= fleetCreditMinPilots && !publicly[a.CharacterID],
 		})
 	}
+	var scored []db.InsertFleetScoreMailParams
 	for _, m := range mails {
 		for _, s := range fleetMailScores(m) {
-			build.Mails = append(build.Mails, db.InsertFleetScoreMailParams{
+			scored = append(scored, db.InsertFleetScoreMailParams{
 				OpID: op.ID, CharacterID: s.Character, KillmailID: s.Mail, At: s.At,
 				Loss: s.Loss, Counts: s.Counts, ValueIsk: s.Value, ValuePoints: s.ValuePoints,
 			})
 		}
 	}
-	return build, true, nil
+	return pilots, scored
 }
 
 // readFleetLogs loads the logs pilots chose to add. Every read touching

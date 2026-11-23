@@ -75,6 +75,9 @@ type fleetReportMail struct {
 	KillmailID, VictimID, ShipTypeID int64
 	When, Victim, Ship, Value        string
 	Loss                             bool
+	// Linked: the mail has a page on the killboard. The demo's
+	// invented mails stay off it.
+	Linked bool
 }
 
 type fleetConsentChoice struct {
@@ -103,6 +106,7 @@ type fleetReportView struct {
 	Path        string
 	Closed      bool
 	Building    bool // closed, with its first build still to come
+	Demo        bool // the demo's invented fleet
 	Chips       []fleetReportChip
 	Battle      *fleetBattleView
 	Pilots      []fleetReportPilot
@@ -134,7 +138,7 @@ func (app *Application) handleFleetReport(w http.ResponseWriter, r *http.Request
 	w.Header().Set("X-Robots-Tag", "noindex")
 	view := &fleetReportView{
 		ID: op.ID, Title: op.Title, Owner: app.ownerName(ctx, opOwner(op)), Path: fleetReportPath(op.ID),
-		Closed: opEnd(op).Add(opCaptureTail).Before(now), UploadHref: "/intel/battles/",
+		Closed: opEnd(op).Add(opCaptureTail).Before(now), UploadHref: "/intel/battles/", Demo: isDemoFleet(op),
 		ViewerChars: make(map[int64]bool, len(v.Characters)),
 	}
 	for _, c := range v.Characters {
@@ -297,7 +301,7 @@ func (app *Application) fillFleetBattle(ctx context.Context, view *fleetReportVi
 		row := fleetReportMail{
 			KillmailID: k.KillmailID, VictimID: k.VictimCharacterID, ShipTypeID: k.ShipTypeID,
 			When: k.KillmailTime.UTC().Format("15:04:05"), Victim: names.character(k.VictimCharacterID),
-			Ship: names.typeName(k.ShipTypeID), Value: "No price yet", Loss: k.Loss,
+			Ship: names.typeName(k.ShipTypeID), Value: "No price yet", Loss: k.Loss, Linked: !view.Demo,
 		}
 		if k.ValueIsk.Valid {
 			row.Value = formatISKShort(k.ValueIsk.Float64)

@@ -438,9 +438,18 @@ func (app *Application) storeFleetRead(ctx context.Context, op db.Op, read fleet
 		return 0, err
 	}
 	comp := app.composeFleet(ctx, op, read, app.fleetWingNames(ctx, token, read.FleetID), tags)
+	if err := app.saveFleetRead(ctx, op, comp, now); err != nil {
+		return 0, err
+	}
+	return len(comp.Members), nil
+}
+
+// saveFleetRead stores a composed read: who was seen, and what the page
+// renders.
+func (app *Application) saveFleetRead(ctx context.Context, op db.Op, comp *fleetComposition, now time.Time) error {
 	payload, err := json.Marshal(comp)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	params := db.UpsertFleetAttendanceParams{OpID: op.ID, SeenAt: now.UTC()}
 	for _, m := range comp.Members {
@@ -452,16 +461,12 @@ func (app *Application) storeFleetRead(ctx context.Context, op db.Op, read fleet
 		params.SystemIds = append(params.SystemIds, m.SystemID)
 		params.SuggestedRoles = append(params.SuggestedRoles, m.Suggested)
 	}
-	seen, err := app.queries.UpsertFleetAttendance(ctx, params)
-	if err != nil {
-		return 0, err
+	if _, err := app.queries.UpsertFleetAttendance(ctx, params); err != nil {
+		return err
 	}
-	if err := app.queries.UpsertOpComposition(ctx, db.UpsertOpCompositionParams{
+	return app.queries.UpsertOpComposition(ctx, db.UpsertOpCompositionParams{
 		OpID: op.ID, Payload: string(payload), ComputedAt: now.UTC(),
-	}); err != nil {
-		return int(seen), err
-	}
-	return int(seen), nil
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -507,6 +512,9 @@ type fleetLiveView struct {
 	InviteCut   bool
 	Roles       []string
 	LiveURL     string
+	// TryURL is set on the demo's live fleet: the commander tools answer
+	// from there and store nothing.
+	TryURL      string
 	ViewerChars map[int64]bool
 }
 
@@ -760,6 +768,10 @@ func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewe
 	if live.row != nil {
 		view.Revision = live.row.Revision
 	}
+	// A refresh would take a demo visitor's changes off the page.
+	if isDemoFleet(op) && app.sessionIsDemo(ctx) {
+		view.Polling, view.TryURL = false, fleetCompositionPath(op.ID)+"/try"
+	}
 	if a.Manage {
 		view.Status, view.Notes = app.fleetCaptureStatus(ctx, op, now, live.comp.Pilots, live.sight)
 		// The list leaves out who is in the fleet, so it would name them
@@ -958,6 +970,67 @@ func (app *Application) handleFleetPilot(w http.ResponseWriter, r *http.Request)
 		logging.Errorf("fleets: update composition of %d: %v", op.ID, err)
 	}
 	app.flash(ctx, "Saved "+comp.Members[at].Name+".")
+}
+
+// fleetTryLimit is the most a demo visitor's page can send.
+const fleetTryLimit = 64 << 10
+
+// handleFleetTry answers the demo's commander tools. The page sends every
+// change the visitor has made, and this lays them over the stored fleet
+// and renders the result. Nothing is written, so a change lasts only as
+// long as the page and no other visitor ever sees it.
+func (app *Application) handleFleetTry(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if !app.sessionIsDemo(ctx) {
+		http.NotFound(w, r)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, fleetTryLimit)
+	op, v, a, live, ok := app.liveFleetFromURL(w, r, true)
+	if !ok {
+		return
+	}
+	if !isDemoFleet(op) || !a.Manage || !live.sight.In {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	var edits map[string]struct {
+		Role string `json:"role"`
+		Tags string `json:"tags"`
+	}
+	if err := json.Unmarshal([]byte(r.FormValue("edits")), &edits); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	stored, err := app.queries.ListOpMemberTags(ctx, op.ID)
+	if err != nil {
+		logging.Errorf("fleets: tags of %d: %v", op.ID, err)
+		http.Error(w, "Unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	changed := make(map[int64]bool, len(edits))
+	var tags []db.ListOpMemberTagsRow
+	for _, m := range live.comp.Members {
+		edit, ok := edits[strconv.FormatInt(m.ID, 10)]
+		if !ok || (edit.Role != "" && !slices.Contains(opFleetRoles, edit.Role)) {
+			continue
+		}
+		changed[m.ID] = true
+		if edit.Role != "" {
+			tags = append(tags, db.ListOpMemberTagsRow{CharacterID: m.ID, Kind: fleetTagRole, Tag: edit.Role})
+		}
+		for _, tag := range parseFleetTags(edit.Tags) {
+			tags = append(tags, db.ListOpMemberTagsRow{CharacterID: m.ID, Kind: fleetTagNote, Tag: tag})
+		}
+	}
+	for _, t := range stored {
+		if !changed[t.CharacterID] {
+			tags = append(tags, t)
+		}
+	}
+	live.comp.assign(tags)
+	page, _ := strconv.Atoi(r.FormValue("page"))
+	app.renderFragment(w, "fleet_composition.html", "fleet-live", app.fleetLiveFor(ctx, op, v, a, live, page, time.Now()))
 }
 
 // saveFleetPilot replaces one pilot's role and tags together.

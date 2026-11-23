@@ -98,6 +98,7 @@
 .fl-live { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
 .fl-asof { margin: 0; color: var(--muted); font-size: var(--fs-xs); }
 .fl-asof.is-stale { color: var(--gold); }
+.fl-try-note { margin: 0; padding: var(--space-2) var(--space-3); border-inline-start: 3px solid var(--kept); background: var(--surface-inset); color: var(--text); font-size: var(--fs-sm); }
 .fl-notes { margin: 0; padding-inline-start: 1.1rem; color: var(--muted); font-size: var(--fs-xs); }
 .fl-r-dps { --fl-r: #3987e5; }
 .fl-r-logi { --fl-r: #d95926; }

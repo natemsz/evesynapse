@@ -48,7 +48,7 @@
   {{else}}<p class="fl-empty">No logs for this battle yet, so there is no curve.</p>{{end}}
   <ul class="fl-tally fl-extra">
     <li><span>Repairs given</span><span>{{.Reps}}</span></li>
-    <li><span>Capacitor drained</span><span>{{.Cap}}</span></li>
+    {{if ne .Cap "0"}}<li><span>Capacitor drained</span><span>{{.Cap}}</span></li>{{end}}
     <li><span>Friendly fire</span><span>{{.FriendlyFire}}</span></li>
   </ul>
 </section>
@@ -78,7 +78,7 @@
     <thead><tr><th>Time</th><th>Result</th><th>Ship</th><th>Pilot</th><th>Value</th></tr></thead>
     <tbody>
     {{range $v.Mails}}
-    <tr><td><a href="/intel/kill/{{.KillmailID}}/">{{.When}}</a></td><td>{{if .Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{charLink $v.ViewerChars .VictimID .Victim}}</td><td>{{.Value}}</td></tr>
+    <tr><td>{{if .Linked}}<a href="/intel/kill/{{.KillmailID}}/">{{.When}}</a>{{else}}{{.When}}{{end}}</td><td>{{if .Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{charLink $v.ViewerChars .VictimID .Victim}}</td><td>{{.Value}}</td></tr>
     {{end}}
     </tbody>
   </table>

@@ -86,6 +86,8 @@ func (app *Application) captureOpAttendance(ctx context.Context, now time.Time) 
 		logging.Errorf("worker: ops to capture: %v", err)
 		return 0, false
 	}
+	// The demo's fleet is invented: there is nothing in EVE to read.
+	ops = slices.DeleteFunc(ops, isDemoFleet)
 	if len(ops) == 0 {
 		return 0, false
 	}

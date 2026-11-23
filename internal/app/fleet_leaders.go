@@ -44,7 +44,7 @@ type fleetLeadersView struct {
 	Title, Summary, Scoring string
 	Periods, Boards         []fleetReportChip
 	// Scopes switch between the public board and the viewer's groups'.
-	Scopes             []fleetReportChip
+	Scopes             []module.OwnerOption
 	GroupBoard, Scoped bool
 	AllHref            string
 	Rows               []fleetLeaderRow
@@ -121,9 +121,9 @@ func (app *Application) handleFleetLeaders(w http.ResponseWriter, r *http.Reques
 	}
 	// The boards of the viewer's own groups sit beside the public one.
 	if owners := v.owners(); len(owners) > 0 {
-		view.Scopes = append(view.Scopes, fleetReportChip{Label: "Public", Href: fleetLeadersHref(period, fleetBoardPilots, ""), On: ownerKey == ""})
+		view.Scopes = append(view.Scopes, module.OwnerOption{Name: "Public board", Active: ownerKey == "", Href: fleetLeadersHref(period, board, "")})
 		for _, o := range owners {
-			view.Scopes = append(view.Scopes, fleetReportChip{Label: app.ownerName(ctx, o), Href: fleetLeadersHref(period, fleetBoardPilots, o.Key()), On: o.Key() == ownerKey})
+			view.Scopes = append(view.Scopes, module.OwnerOption{ID: o.ID, Name: fleetOwnerLabel(o, app.ownerName(ctx, o)), Active: o.Key() == ownerKey, Href: fleetLeadersHref(period, fleetBoardPilots, o.Key())})
 		}
 	}
 	rows, err := app.queries.ListFleetLeaders(ctx, db.ListFleetLeadersParams{

@@ -950,6 +950,9 @@ type OwnerOption struct {
 	Active bool
 	// Param and Value are what the option's link sets in the address.
 	Param, Value string
+	// Href, when set, is the option's whole address instead, for a page
+	// that keeps other choices (a time span) when the owner changes.
+	Href string
 }
 
 // DiscordConfig is the Discord access an install has: the sign-in

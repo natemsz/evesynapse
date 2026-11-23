@@ -4,7 +4,7 @@
   <input type="text" class="charselector-input" placeholder="Select corporation..." autocomplete="off" aria-label="Select corporation">
   <div class="charselector-dropdown" hidden>
     {{range .}}
-    <a href="?{{.Param}}={{.Value}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}">
+    <a href="{{if .Href}}{{.Href}}{{else}}?{{.Param}}={{.Value}}{{end}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}">
       <span class="charselector-name">{{.Name}}</span>
     </a>
     {{end}}
@@ -19,7 +19,7 @@
   <input type="text" class="charselector-input" placeholder="Select owner..." autocomplete="off" aria-label="Select corporation, alliance or community">
   <div class="charselector-dropdown" hidden>
     {{range .}}
-    <a href="?{{.Param}}={{.Value}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}">
+    <a href="{{if .Href}}{{.Href}}{{else}}?{{.Param}}={{.Value}}{{end}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}">
       <span class="charselector-name">{{.Name}}</span>
     </a>
     {{end}}

@@ -1072,3 +1072,27 @@ func TestDemoShowsAKillmailOnlyBattleAndKeepsItsExplorersCurrent(t *testing.T) {
 		t.Error("seeding again left an explorer from an older build")
 	}
 }
+
+// TestDemoReseedsBattlesWithoutAnExplorer: the seed gives every demo
+// fleet battle its explorer, and a demo whose battles were seeded
+// before explorers counts as not seeded, so the next pass seeds it
+// again and the battles gain theirs.
+func TestDemoReseedsBattlesWithoutAnExplorer(t *testing.T) {
+	app, conn, _ := demoTestApp(t)
+	ctx := context.Background()
+	if !app.demoSeedPresent(ctx) {
+		t.Fatal("a fresh demo seed counts as missing: one of its fleet battles has no explorer")
+	}
+	if _, err := conn.Exec(`DELETE FROM fleet_battle_detail WHERE fleet_battle_id = (SELECT MIN(fleet_battle_id) FROM fleet_battle_detail)`); err != nil {
+		t.Fatal(err)
+	}
+	if app.demoSeedPresent(ctx) {
+		t.Fatal("a demo battle without an explorer still counts as seeded")
+	}
+	if err := app.ensureDemoAccount(ctx); err != nil {
+		t.Fatalf("ensureDemoAccount: %v", err)
+	}
+	if !app.demoSeedPresent(ctx) {
+		t.Error("seeding again left a demo battle without an explorer")
+	}
+}

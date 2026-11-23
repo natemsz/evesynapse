@@ -376,7 +376,9 @@ func (app *Application) handleOpEdit(w http.ResponseWriter, r *http.Request) {
 
 func (app *Application) renderOpForm(w http.ResponseWriter, r *http.Request, form *opFormView) {
 	ctx := r.Context()
-	app.render(ctx, w, http.StatusOK, "fleet_form.html", pageData{ShellData: app.PublicShell(ctx), OpForm: form})
+	data := pageData{ShellData: app.PublicShell(ctx), OpForm: form}
+	data.Scripts = []string{"/static/fleets.js"}
+	app.render(ctx, w, http.StatusOK, "fleet_form.html", data)
 }
 
 // handleOpSave creates a fleet, or changes one when the form names it.

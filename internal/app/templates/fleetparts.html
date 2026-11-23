@@ -47,3 +47,7 @@
   {{if .Tags}}<span class="fl-seat-tags">{{range .Tags}}<span class="fl-tag">{{.}}</span>{{end}}</span>{{end}}
 </li>
 {{end}}
+
+{{/* A ship in a table cell: its picture, then its name linking to the
+     item's page. Takes any row with ShipTypeID and Ship. */}}
+{{define "fleet-shipcell"}}<span class="fl-shipcell">{{if .ShipTypeID}}<img src="{{typeRender .ShipTypeID 64}}" width="20" height="20" alt="" loading="lazy">{{itemLink .ShipTypeID .Ship}}{{else}}{{.Ship}}{{end}}</span>{{end}}

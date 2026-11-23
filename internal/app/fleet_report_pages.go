@@ -248,9 +248,10 @@ func (app *Application) fillFleetBattle(ctx context.Context, view *fleetReportVi
 	if len(battles) > 1 {
 		for _, b := range battles {
 			view.Chips = append(view.Chips, fleetReportChip{
-				Label: systemName(b.SystemID) + " " + b.StartedAt.UTC().Format("15:04"),
-				Href:  view.Path + "?battle=" + strconv.Itoa(int(b.Seq)),
-				On:    b.ID == shown.ID,
+				Label: fmt.Sprintf("%s %s: %d %s, %d %s", systemName(b.SystemID), b.StartedAt.UTC().Format("15:04"),
+					b.Kills, map[bool]string{true: "kill", false: "kills"}[b.Kills == 1], b.Losses, map[bool]string{true: "loss", false: "losses"}[b.Losses == 1]),
+				Href: view.Path + "?battle=" + strconv.Itoa(int(b.Seq)),
+				On:   b.ID == shown.ID,
 			})
 		}
 	}

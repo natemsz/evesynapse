@@ -263,6 +263,16 @@ SELECT COUNT(*)::bigint AS battles,
        COALESCE(SUM(isk_lost), 0)::double precision AS isk_lost
 FROM fleet_battles WHERE op_id = $1;
 
+-- name: ListFleetOutcomes :many
+-- How each of a page of past fleets went, for its history row: how many
+-- pilots are on its attendance and its report's kills and losses.
+SELECT o.id AS op_id,
+       (SELECT COUNT(*) FROM op_attendance a WHERE a.op_id = o.id)::int AS flew,
+       COALESCE((SELECT SUM(b.kills) FROM fleet_battles b WHERE b.op_id = o.id), 0)::int AS kills,
+       COALESCE((SELECT SUM(b.losses) FROM fleet_battles b WHERE b.op_id = o.id), 0)::int AS losses
+FROM ops o
+WHERE o.id = ANY(sqlc.arg(op_ids)::bigint[]);
+
 -- name: ListFleetBattlePilots :many
 SELECT * FROM fleet_battle_pilots
 WHERE fleet_battle_id = $1

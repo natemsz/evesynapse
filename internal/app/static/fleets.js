@@ -146,3 +146,31 @@
   });
   schedule();
 })();
+
+// The planner's start is written in EVE time (UTC), while the browser
+// shows the box in its own format: say when that is for the reader.
+(function () {
+  "use strict";
+  function bind() {
+    var input = document.getElementById("fl-start");
+    var out = document.getElementById("fl-start-local");
+    if (!input || !out || input.getAttribute("data-local-bound")) return;
+    input.setAttribute("data-local-bound", "1");
+    function render() {
+      var v = input.value || "";
+      if (v.length === 16) v += ":00";
+      var d = new Date(v + "Z");
+      if (!v || isNaN(d.getTime())) {
+        out.textContent = "In EVE time, which is UTC.";
+        return;
+      }
+      out.textContent = "In EVE time (UTC). That is " + d.toLocaleString(undefined, {
+        weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+      }) + " your time.";
+    }
+    input.addEventListener("input", render);
+    render();
+  }
+  bind();
+  document.addEventListener("evesynapse:content-ready", bind);
+})();

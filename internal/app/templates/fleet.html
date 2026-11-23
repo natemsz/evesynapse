@@ -48,7 +48,7 @@
 {{end}}
 
 {{if not .LiveView}}
-<section class="l-panel fl-muster{{if .Live}} is-live{{end}}{{if .Cancelled}} is-off{{end}}" aria-label="When and where">
+<section class="l-panel fl-muster{{if .Live}} is-running{{end}}{{if .Cancelled}} is-off{{end}}" aria-label="When and where">
   {{template "fleet-when" .}}
   {{template "fleet-facts" .}}
 </section>
@@ -172,7 +172,7 @@
   {{end}}
   {{if .MarkLater}}<p class="fl-hint">You can mark attendance by hand once the fleet is over.</p>{{end}}
   {{if .CanMark}}
-  <section class="foldable"{{if .Capturing}} data-fold="closed"{{end}}>
+  <section class="foldable"{{if or .Capturing .Rows}} data-fold="closed"{{end}}>
   <h3>Mark attendance by hand</h3>
   <p class="fl-hint">{{if .Capturing}}Attendance is read from the fleet in EVE, so this is only for someone the read missed.{{else}}Tick who was there. Pilots seen in the fleet stay as they are.{{end}}</p>
   {{if .Ticks}}

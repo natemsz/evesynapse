@@ -45,7 +45,7 @@
     <thead><tr><th>Hull</th><th>Class</th><th class="num">Pilots</th>{{if .HasDoctrine}}<th>Doctrine</th>{{end}}</tr></thead>
     <tbody>
     {{$doctrine := .HasDoctrine}}
-    {{range .Hulls}}<tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Class}}</td><td class="num">{{.Count}}</td>{{if $doctrine}}<td>{{if .Doctrine}}In doctrine{{else}}Not in doctrine{{end}}</td>{{end}}</tr>{{end}}
+    {{range .Hulls}}<tr><td><span class="fl-shipcell"><img src="{{typeRender .TypeID 64}}" width="20" height="20" alt="" loading="lazy">{{itemLink .TypeID .Name}}</span></td><td>{{.Class}}</td><td class="num">{{.Count}}</td>{{if $doctrine}}<td>{{if .Doctrine}}In doctrine{{else}}<span class="fl-off">Not in doctrine</span>{{end}}</td>{{end}}</tr>{{end}}
     </tbody>
   </table>
   </div>

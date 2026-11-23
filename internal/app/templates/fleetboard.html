@@ -1,5 +1,5 @@
 {{define "fleet_board"}}<ol class="fl-board">
-{{range .}}<li class="fl-row{{if .Live}} is-live{{end}}{{if .Cancelled}} is-off{{end}}">
+{{range .}}<li class="fl-row{{if .Live}} is-running{{end}}{{if .Cancelled}} is-off{{end}}">
   <a href="{{.Href}}">
     <time class="fl-when" datetime="{{.WhenRaw}}"><span class="fl-clock">{{.Clock}}</span><span class="fl-day">{{.Day}}</span></time>
     <span class="fl-what"><span class="fl-title">{{.Title}}</span>{{with .Sub}}<span class="fl-sub">{{.}}</span>{{end}}</span>

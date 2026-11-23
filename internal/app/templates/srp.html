@@ -98,7 +98,8 @@
 <section class="l-panel co-card">
   <div class="co-card-head"><h3>{{.Pilot}} · {{.Ship}}</h3>{{if .Value}}<span class="field-hint">est. {{.Value}}</span>{{end}}</div>
   <p class="hint">Lost {{.LostAt}} in {{.System}} on <a href="{{.OpURL}}">{{.Op}}</a>. {{killPageLink .KillmailID}}</p>
-  <p class="srp-facts co-badges"><span class="badge kill">KILLMAIL</span><span class="badge kill">DURING THE FLEET</span>{{if .Attended}}<span class="badge kill">ATTENDED</span> {{.Attendance}}{{else if .Attendance}}<span class="badge loss">NOT IN FLEET THEN</span> {{.Attendance}}{{else}}<span class="badge loss">NOT ON ATTENDANCE</span> This pilot is not on the fleet's attendance. They can be ticked by hand on the fleet's page.{{end}}{{if .Doctrine}} {{if .DoctrineShip}}<span class="badge kill">DOCTRINE SHIP</span>{{else}}<span class="badge loss">NOT A DOCTRINE SHIP</span>{{end}} The fleet flew {{.Doctrine}}.{{end}}</p>
+  <p class="srp-facts co-badges"><span class="badge kill">KILLMAIL</span><span class="badge kill">DURING THE FLEET</span>{{if .Attended}}<span class="badge kill">ATTENDED</span>{{else if .Attendance}}<span class="badge loss">NOT IN FLEET THEN</span>{{else}}<span class="badge loss">NOT ON ATTENDANCE</span>{{end}}{{if .Doctrine}}{{if .DoctrineShip}}<span class="badge kill">DOCTRINE SHIP</span>{{else}}<span class="badge loss">NOT A DOCTRINE SHIP</span>{{end}}{{end}}</p>
+  <ul class="srp-why">{{if .Attendance}}<li>{{.Attendance}}</li>{{else if not .Attended}}<li>This pilot is not on the fleet's attendance. They can be ticked by hand on the fleet's page.</li>{{end}}{{if .Doctrine}}<li>The fleet flew {{.Doctrine}}.</li>{{end}}</ul>
   {{if .FitNote}}<p class="hint">{{.FitNote}} EVE shows fits only on the loss mail.</p>{{end}}
   {{if .Earlier}}<p class="hint warn-note">{{.Earlier}}</p>{{end}}
   {{if .Note}}<p class="hint">Pilot's note: {{.Note}}</p>{{end}}

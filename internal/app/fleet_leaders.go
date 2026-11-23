@@ -43,10 +43,12 @@ type fleetLeaderRow struct {
 type fleetLeadersView struct {
 	Title, Summary, Scoring string
 	Periods, Boards         []fleetReportChip
-	GroupBoard, Scoped      bool
-	AllHref                 string
-	Rows                    []fleetLeaderRow
-	ViewerChars             map[int64]bool
+	// Scopes switch between the public board and the viewer's groups'.
+	Scopes             []fleetReportChip
+	GroupBoard, Scoped bool
+	AllHref            string
+	Rows               []fleetLeaderRow
+	ViewerChars        map[int64]bool
 }
 
 func fleetLeadersHref(period, board, ownerKey string) string {
@@ -85,8 +87,8 @@ func (app *Application) handleFleetLeaders(w http.ResponseWriter, r *http.Reques
 	var scopeID int64
 	view := &fleetLeadersView{
 		Title:   "Fleet leaderboards",
-		Summary: "Counts public fleets, read from the fleet itself.",
-		Scoring: fmt.Sprintf("A pilot earns %d points for each fleet, %d for each kill and up to %d more for the kill's value, split by damage. Each death takes away %d. Padding kills do not count.",
+		Summary: "Counts public fleets, from attendance read in EVE.",
+		Scoring: fmt.Sprintf("A pilot earns %d points for each fleet, %d for each kill and up to %d more for the kill's value, split by damage. Each death takes away %d. Kills of ships worth under 1 million ISK, of a pilot's own ship, or inside one corporation do not count.",
 			fleetPointsAttend, fleetPointsKill, int(fleetPointsValueCap), fleetPointsDeath),
 		ViewerChars: make(map[int64]bool, len(v.Characters)),
 	}
@@ -115,6 +117,13 @@ func (app *Application) handleFleetLeaders(w http.ResponseWriter, r *http.Reques
 		view.Boards = []fleetReportChip{
 			{Label: "Pilots", Href: fleetLeadersHref(period, fleetBoardPilots, ""), On: board == fleetBoardPilots},
 			{Label: "Groups", Href: fleetLeadersHref(period, fleetBoardGroups, ""), On: board == fleetBoardGroups},
+		}
+	}
+	// The boards of the viewer's own groups sit beside the public one.
+	if owners := v.owners(); len(owners) > 0 {
+		view.Scopes = append(view.Scopes, fleetReportChip{Label: "Public", Href: fleetLeadersHref(period, fleetBoardPilots, ""), On: ownerKey == ""})
+		for _, o := range owners {
+			view.Scopes = append(view.Scopes, fleetReportChip{Label: app.ownerName(ctx, o), Href: fleetLeadersHref(period, fleetBoardPilots, o.Key()), On: o.Key() == ownerKey})
 		}
 	}
 	rows, err := app.queries.ListFleetLeaders(ctx, db.ListFleetLeadersParams{

@@ -316,6 +316,8 @@ var demoFleetTypeNames = []string{
 	"Cap Recharger II", "Co-Processor II", "Medium Core Defense Field Extender I", "Interdiction Sphere Launcher I",
 	"Shield Command Burst II", "Skirmish Command Burst II", "Covert Ops Cloaking Device II", "Core Probe Launcher II",
 	"Data Analyzer II", "Relic Analyzer II", "Inertial Stabilizers II", "Multispectral ECM II", "Signal Distortion Amplifier II",
+	"Heavy Neutron Blaster II", "Heavy Pulse Laser II", "720mm Howitzer Artillery II", "800mm Repeating Cannon II",
+	"Mega Pulse Laser II", "Heavy Energy Neutralizer II",
 }
 
 type demoDoctrineFit struct {
@@ -651,9 +653,75 @@ func demoLogWork(ship string) (out, in, reps float64) {
 	return 300, 150, 0
 }
 
+// demoEnemy is one rival in a made-up battle: what it flies, when it
+// dies (zero: it lives), and how it fights.
+type demoEnemy struct {
+	ID     int64
+	Ship   string
+	Dies   time.Time
+	Weapon string
+	DPS    float64
+	Neut   bool
+}
+
+// demoWeapons is what each hull of the made-up battles shoots with.
+var demoWeapons = map[string]string{
+	"Tengu": "Heavy Missile Launcher II", "Loki": "425mm AutoCannon II", "Sabre": "200mm AutoCannon II",
+	"Huginn": "425mm AutoCannon II", "Claymore": "Heavy Missile Launcher II", "Gila": "Heavy Missile Launcher II",
+	"Proteus": "Heavy Neutron Blaster II", "Legion": "Heavy Pulse Laser II", "Muninn": "720mm Howitzer Artillery II",
+	"Stiletto": "200mm AutoCannon II", "Zealot": "Heavy Pulse Laser II", "Machariel": "800mm Repeating Cannon II",
+	"Nightmare": "Mega Pulse Laser II", "Bhaalgorn": "Mega Pulse Laser II", "Vargur": "800mm Repeating Cannon II",
+	"Cerberus": "Heavy Missile Launcher II", "Ishtar": "Heavy Missile Launcher II",
+}
+
+// demoEnemyDPS is a rival hull's damage a second on the fleet.
+func demoEnemyDPS(ship string) float64 {
+	switch ship {
+	case "Machariel", "Nightmare", "Vargur", "Bhaalgorn":
+		return 820
+	case "Proteus", "Legion", "Muninn", "Cerberus", "Ishtar", "Zealot", "Loki", "Huginn", "Gila":
+		return 430
+	case "Sabre", "Stiletto":
+		return 190
+	}
+	return 0
+}
+
+// demoBattleEnemies is the other side of one made-up battle: everyone
+// the fleet killed, then a tackler and, in a big fight, a neutralizing
+// battleship that both live.
+func (s *demoSeed) demoBattleEnemies(b demoFleetBattle, at time.Time) []demoEnemy {
+	var out []demoEnemy
+	used := map[int64]bool{}
+	for _, m := range b.Mails {
+		if m.Loss || used[m.Victim] {
+			continue
+		}
+		used[m.Victim] = true
+		out = append(out, demoEnemy{ID: m.Victim, Ship: m.Ship, Dies: at.Add(m.At), Weapon: demoWeapons[m.Ship], DPS: demoEnemyDPS(m.Ship), Neut: m.Ship == "Bhaalgorn"})
+	}
+	extras := []demoEnemy{{Ship: "Sabre"}}
+	if len(out) >= 3 {
+		extras = append(extras, demoEnemy{Ship: "Bhaalgorn", Neut: true})
+	}
+	for _, e := range extras {
+		for _, id := range []int64{demoRivalUlric, demoRivalVera, demoRivalWes, demoRivalXan, demoRivalYara, demoRivalZeke} {
+			if !used[id] {
+				used[id] = true
+				e.ID, e.Weapon, e.DPS = id, demoWeapons[e.Ship], demoEnemyDPS(e.Ship)
+				out = append(out, e)
+				break
+			}
+		}
+	}
+	return out
+}
+
 // demoLogRead makes up one pilot's log of one battle, cut on the clock
-// steps a real log is stored in.
-func demoLogRead(id int64, seat demoFleetSeat, mate int64, from time.Time, length time.Duration, system int64, rng *rand.Rand) *fleetLogRead {
+// steps a real log is stored in: party 1 is the next pilot in the
+// fleet, the rest are the rivals. The fleet's fire goes into the next
+// rival to die; the rivals' fire builds on a pilot about to be lost.
+func (s *demoSeed) demoLogRead(id int64, seat demoFleetSeat, mate int64, from time.Time, length time.Duration, system int64, rng *rand.Rand, enemies []demoEnemy, dies time.Time) *fleetLogRead {
 	const stepSeconds = int64(gamelog.SliceSeconds)
 	first := gamelog.ClockStep(from.Unix())
 	last := gamelog.ClockStep(from.Add(length).Unix())
@@ -661,23 +729,176 @@ func demoLogRead(id int64, seat demoFleetSeat, mate int64, from time.Time, lengt
 	r := &fleetLogRead{
 		ID: id, Character: seat.ID, Start: from, End: from.Add(length), Received: from.Add(length + time.Minute),
 		SystemID: system, Usable: true, Fleetmates: map[int64]int64{1: mate},
+		Parties: map[int64]fleetLogParty{1: {Name: demoCastName(mate), Pilot: true, CharacterID: mate}},
 	}
+	for j, e := range enemies {
+		r.Parties[int64(j+2)] = fleetLogParty{Name: demoCastName(e.ID), Hull: e.Ship, HullTypeID: s.typeID(e.Ship), CharacterID: e.ID, Pilot: true}
+	}
+	alive := func(e demoEnemy, t time.Time) bool { return e.Dies.IsZero() || t.Before(e.Dies) }
+	dealt, taken := map[int64]int64{}, map[int64]int64{}
 	phase := rng.Float64() * math.Pi
 	total := float64(last-first) + float64(stepSeconds)
 	for at := first; at <= last; at += stepSeconds {
+		now := time.Unix(at, 0)
 		t := float64(at-first) / total
 		shape := math.Sin(math.Pi*t) * (0.74 + 0.26*math.Sin(t*11+phase))
 		swing := 0.82 + rng.Float64()*0.36
 		work := func(perSecond float64) int64 {
 			return int64(perSecond * float64(stepSeconds) * max(shape, 0.04) * swing)
 		}
-		rows := [][7]int64{{0, work(out), work(in * (1.5 - t)), work(reps), 0, 0, 0}}
+		var rows [][7]int64
+		// Fire: most of it into the next rival to die, the rest on
+		// another still on grid.
+		primary, other := -1, -1
+		for j, e := range enemies {
+			if !alive(e, now) {
+				continue
+			}
+			if primary < 0 || (!e.Dies.IsZero() && (enemies[primary].Dies.IsZero() || e.Dies.Before(enemies[primary].Dies))) {
+				if primary >= 0 {
+					other = primary
+				}
+				primary = j
+			} else if other < 0 {
+				other = j
+			}
+		}
+		row := func(j int) *[7]int64 {
+			for k := range rows {
+				if rows[k][0] == int64(j+2) {
+					return &rows[k]
+				}
+			}
+			rows = append(rows, [7]int64{int64(j + 2)})
+			return &rows[len(rows)-1]
+		}
+		if o := work(out); o > 0 && primary >= 0 {
+			main := o * 85 / 100
+			row(primary)[1] += main
+			dealt[int64(primary)] += main
+			if other >= 0 {
+				row(other)[1] += o - main
+				dealt[int64(other)] += o - main
+			} else {
+				row(primary)[1] += o - main
+				dealt[int64(primary)] += o - main
+			}
+		}
+		// Incoming: from every rival with guns, heavier on a pilot about
+		// to be lost.
+		var weight float64
+		for _, e := range enemies {
+			if alive(e, now) {
+				weight += e.DPS
+			}
+		}
+		pressure := in * (1.5 - t)
+		if !dies.IsZero() && now.Before(dies) && dies.Sub(now) < 45*time.Second {
+			pressure *= 2.6
+		}
+		if inc := work(pressure); inc > 0 && weight > 0 {
+			for j, e := range enemies {
+				if alive(e, now) && e.DPS > 0 {
+					part := int64(float64(inc) * e.DPS / weight)
+					row(j)[2] += part
+					taken[int64(j)] += part
+				}
+			}
+		}
+		// Energy warfare on the logistics, while a neutralizer is on grid.
+		if reps > 0 {
+			for j, e := range enemies {
+				if e.Neut && alive(e, now) {
+					row(j)[6] += 180 + rng.Int63n(420)
+				}
+			}
+		}
+		mates := [7]int64{1}
+		if rp := work(reps); rp > 0 {
+			mates[3] = rp
+		}
 		if mate != 0 && out > 100 && rng.Intn(14) == 0 {
-			rows = append(rows, [7]int64{1, 40 + rng.Int63n(260), 0, 0, 0, 0, 0})
+			mates[1] = 40 + rng.Int63n(260)
+		}
+		if mates[1]+mates[3] > 0 {
+			rows = append(rows, mates)
 		}
 		r.Steps = append(r.Steps, gamelog.AlignedSlice{At: at, Rows: rows})
 	}
+	// Weapons, with how well they landed.
+	quality := func(shots int64) (q [7]int64) {
+		left := shots
+		for i, pct := range []int64{8, 10, 18, 34, 18, 8, 4} {
+			n := shots * pct / 100
+			if i == 6 {
+				n = left
+			}
+			q[i] = n
+			left -= n
+		}
+		return q
+	}
+	add := func(seq int64, dir, weapon string, damage, perShot int64) {
+		if weapon == "" || damage <= 0 {
+			return
+		}
+		shots := max(damage/perShot, 1)
+		q := quality(shots)
+		r.Weapons = append(r.Weapons, db.BattleFightWeapon{
+			FightID: id, PartySeq: int32(seq), Dir: dir, Weapon: weapon, WeaponTypeID: s.typeID(weapon),
+			Shots: shots, Damage: damage, QMiss: q[0], QGraze: q[1], QGlance: q[2], QHit: q[3], QPenetrate: q[4], QSmash: q[5], QWreck: q[6],
+		})
+	}
+	for j, d := range dealt {
+		add(j+2, "out", demoWeapons[seat.Ship], d, 420)
+	}
+	for j, d := range taken {
+		add(j+2, "in", enemies[j].Weapon, d, 640)
+	}
+	// Tackle: our tackle points the first rival it meets; their tackler
+	// scrams a pilot at the front.
+	for j, e := range enemies {
+		switch {
+		case seat.Ship == "Sabre" && j == 0:
+			r.Tackles = append(r.Tackles, db.BattleFightTackle{FightID: id, Seq: int32(len(r.Tackles)), FromName: "you", ToName: demoCastName(e.ID), Kind: "disruption", FirstAt: from.Add(15 * time.Second), Attempts: 6 + int64(rng.Intn(6))})
+		case e.Ship == "Sabre" && (seat.Ship == "Tengu" || seat.Ship == "Loki") && rng.Intn(3) == 0:
+			r.Tackles = append(r.Tackles, db.BattleFightTackle{FightID: id, Seq: int32(len(r.Tackles)), FromName: demoCastName(e.ID), ToName: "you", Kind: "scramble", FirstAt: from.Add(time.Duration(30+rng.Intn(40)) * time.Second), Attempts: 3 + int64(rng.Intn(8))})
+		}
+	}
 	return r
+}
+
+// demoCastName is a made-up pilot's name.
+func demoCastName(id int64) string {
+	for _, c := range demoFleetCast {
+		if c.ID == id {
+			return c.Name
+		}
+	}
+	for _, p := range demoPilots {
+		if p.ID == id {
+			return p.Name
+		}
+	}
+	switch id {
+	case demoCharSera:
+		return "Sera Voss"
+	case demoCharDario:
+		return "Dario Fenn"
+	case demoCharMina:
+		return "Mina Okafor"
+	}
+	return ""
+}
+
+// typeName is a type the seed resolved, by its ID.
+func (s *demoSeed) typeName(id int64) string {
+	for name, t := range s.types {
+		if t == id {
+			return name
+		}
+	}
+	return ""
 }
 
 // writeDemoPastFleet files a closed fleet and its report, built by the
@@ -719,9 +940,16 @@ func (s *demoSeed) writeDemoPastFleet(ctx context.Context, f demoPastFleet, inde
 	for _, b := range f.Battles {
 		system := systems[b.System]
 		at := start.Add(b.Offset)
+		enemies := s.demoBattleEnemies(b, at)
+		lost := map[int64]time.Time{}
+		for _, m := range b.Mails {
+			if m.Loss {
+				lost[seats[m.Seat].ID] = at.Add(m.At)
+			}
+		}
 		for i, seat := range seats[:min(f.Logs, len(seats))] {
 			mate := seats[(i+1)%len(seats)].ID
-			reads = append(reads, demoLogRead(readID, seat, mate, at, b.Length, system, rng))
+			reads = append(reads, s.demoLogRead(readID, seat, mate, at, b.Length, system, rng, enemies, lost[seat.ID]))
 			readID++
 		}
 		for _, m := range b.Mails {
@@ -732,6 +960,13 @@ func (s *demoSeed) writeDemoPastFleet(ctx context.Context, f demoPastFleet, inde
 				mail.Loss, mail.Victim, mail.Ship = true, seat.ID, s.typeID(seat.Ship)
 				mail.Damage = 28000 + rng.Int63n(30000)
 				mail.Value = sql.NullFloat64{Float64: demoFleetValues[seat.Ship], Valid: true}
+				// The rivals on the mail: everyone with guns still on grid.
+				for _, e := range enemies {
+					if e.DPS > 0 && (e.Dies.IsZero() || at.Add(m.At).Before(e.Dies)) {
+						damage := int64(e.DPS) * (6 + rng.Int63n(10))
+						mail.Attackers = append(mail.Attackers, fleetMailAttacker{Character: e.ID, Ship: s.typeID(e.Ship), Damage: damage})
+					}
+				}
 			} else {
 				mail.Victim, mail.Ship = m.Victim, s.typeID(m.Ship)
 				mail.Value = sql.NullFloat64{Float64: demoFleetValues[m.Ship], Valid: true}
@@ -753,6 +988,7 @@ func (s *demoSeed) writeDemoPastFleet(ctx context.Context, f demoPastFleet, inde
 	for i, c := range clusterFleetBattles(mails, reads, on) {
 		if b, ok := composeFleetBattle(op.ID, int32(i), c, counted, on, ships, s.now); ok {
 			b.FightIDs = nil // made-up logs have no stored fight to link
+			b.Detail = fleetDetailJSON(c, counted, on, ships, demoCastName, s.typeName)
 			build.Battles = append(build.Battles, b)
 		}
 	}

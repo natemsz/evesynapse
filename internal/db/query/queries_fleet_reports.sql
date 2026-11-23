@@ -475,3 +475,8 @@ SELECT place, fleets, kills, deaths, isk, points
 FROM fleet_leaders
 WHERE period = sqlc.arg(period)::text AND audience = 'public' AND scope_kind = '' AND scope_id = 0
   AND board = sqlc.arg(board)::text AND entity_kind = sqlc.arg(entity_kind)::text AND entity_id = sqlc.arg(entity_id)::bigint;
+
+-- The names some pilots signed in with.
+-- name: ListVerifiedPilotNames :many
+SELECT character_id, name FROM verified_pilots
+WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND name <> '';

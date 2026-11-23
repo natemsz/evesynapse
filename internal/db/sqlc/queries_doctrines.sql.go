@@ -163,6 +163,35 @@ func (q *Queries) GetDoctrine(ctx context.Context, id int64) (Doctrine, error) {
 	return i, err
 }
 
+const getDoctrineFacets = `-- name: GetDoctrineFacets :one
+SELECT COUNT(*)::bigint AS total,
+       COALESCE(array_agg(DISTINCT d.category) FILTER (WHERE d.category <> ''), '{}')::text[] AS categories,
+       COALESCE((SELECT array_agg(DISTINCT tag)
+                 FROM doctrines t, unnest(string_to_array(t.tags, ',')) AS tag
+                 WHERE t.owner_kind = $1 AND t.owner_id = $2 AND tag <> ''), '{}')::text[] AS tags
+FROM doctrines d
+WHERE d.owner_kind = $1 AND d.owner_id = $2
+`
+
+type GetDoctrineFacetsParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+type GetDoctrineFacetsRow struct {
+	Total      int64    `json:"total"`
+	Categories []string `json:"categories"`
+	Tags       []string `json:"tags"`
+}
+
+// What an owner's doctrine list can be filtered by, in one row.
+func (q *Queries) GetDoctrineFacets(ctx context.Context, arg GetDoctrineFacetsParams) (GetDoctrineFacetsRow, error) {
+	row := q.db.QueryRow(ctx, getDoctrineFacets, arg.OwnerKind, arg.OwnerID)
+	var i GetDoctrineFacetsRow
+	err := row.Scan(&i.Total, &i.Categories, &i.Tags)
+	return i, err
+}
+
 const getDoctrineFit = `-- name: GetDoctrineFit :one
 SELECT f.id, f.doctrine_id, f.name, f.ship_type_id, f.items_json, f.fleet_role, f.note, f.added_by, f.added_at, f.boosts_json, d.owner_kind, d.owner_id, d.visibility, d.name AS doctrine_name
 FROM doctrine_fits f JOIN doctrines d ON d.id = f.doctrine_id
@@ -323,6 +352,74 @@ func (q *Queries) ListDoctrineFits(ctx context.Context, doctrineIds []int64) ([]
 			&i.AddedBy,
 			&i.AddedAt,
 			&i.BoostsJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDoctrinesFiltered = `-- name: ListDoctrinesFiltered :many
+SELECT d.id, d.corporation_id, d.name, d.category, d.description, d.tags, d.created_by, d.created_at, d.updated_at, d.owner_kind, d.owner_id, d.visibility FROM doctrines d
+WHERE d.owner_kind = $1 AND d.owner_id = $2
+  AND ($3::text = '' OR lower(d.category) = lower($3::text))
+  AND ($4::text = '' OR lower($4::text) = ANY(string_to_array(lower(d.tags), ',')))
+  AND ($5::text = ''
+       OR position(lower($5::text) IN lower(concat_ws(E'\n', d.name, d.category, d.description, replace(d.tags, ',', ' ')))) > 0
+       OR EXISTS (
+           SELECT 1 FROM doctrine_fits f
+           LEFT JOIN sde_types t ON t.type_id = f.ship_type_id
+           WHERE f.doctrine_id = d.id
+             AND (position(lower($5::text) IN lower(f.name)) > 0
+                  OR position(lower($5::text) IN lower(COALESCE(t.name, ''))) > 0)))
+ORDER BY lower(d.category), lower(d.name)
+LIMIT $6
+`
+
+type ListDoctrinesFilteredParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+	Category  string `json:"category"`
+	Tag       string `json:"tag"`
+	Needle    string `json:"needle"`
+	RowLimit  int32  `json:"row_limit"`
+}
+
+// An owner's doctrines as its list page filters them: by category, tag,
+// and words in the doctrine or the name or ship of one of its fits.
+func (q *Queries) ListDoctrinesFiltered(ctx context.Context, arg ListDoctrinesFilteredParams) ([]Doctrine, error) {
+	rows, err := q.db.Query(ctx, listDoctrinesFiltered,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.Category,
+		arg.Tag,
+		arg.Needle,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Doctrine
+	for rows.Next() {
+		var i Doctrine
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.Name,
+			&i.Category,
+			&i.Description,
+			&i.Tags,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.Visibility,
 		); err != nil {
 			return nil, err
 		}

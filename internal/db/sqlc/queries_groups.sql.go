@@ -142,6 +142,28 @@ func (q *Queries) DeleteOrgGroup(ctx context.Context, id int64) error {
 	return err
 }
 
+const getCharacterInCorporationsByName = `-- name: GetCharacterInCorporationsByName :one
+SELECT c.character_id
+FROM characters c
+JOIN character_corporations cc ON cc.character_id = c.character_id
+WHERE cc.corporation_id = ANY($1::bigint[]) AND lower(c.name) = lower($2::text)
+ORDER BY c.character_id
+LIMIT 1
+`
+
+type GetCharacterInCorporationsByNameParams struct {
+	CorporationIds []int64 `json:"corporation_ids"`
+	Name           string  `json:"name"`
+}
+
+// A linked character of some corporations, by exact name.
+func (q *Queries) GetCharacterInCorporationsByName(ctx context.Context, arg GetCharacterInCorporationsByNameParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCharacterInCorporationsByName, arg.CorporationIds, arg.Name)
+	var character_id int64
+	err := row.Scan(&character_id)
+	return character_id, err
+}
+
 const getOrgGroup = `-- name: GetOrgGroup :one
 SELECT id, owner_kind, owner_id, name, description, created_by, created_at, member_count FROM org_groups WHERE id = $1
 `
@@ -214,35 +236,33 @@ func (q *Queries) InsertDiscordRoleRule(ctx context.Context, arg InsertDiscordRo
 	return err
 }
 
-const listCharactersInCorporations = `-- name: ListCharactersInCorporations :many
-SELECT c.character_id, c.name, cc.corporation_id
+const listCharactersAmongCorporations = `-- name: ListCharactersAmongCorporations :many
+SELECT c.character_id
 FROM characters c
 JOIN character_corporations cc ON cc.character_id = c.character_id
 WHERE cc.corporation_id = ANY($1::bigint[])
-ORDER BY lower(c.name), c.character_id
+  AND c.character_id = ANY($2::bigint[])
 `
 
-type ListCharactersInCorporationsRow struct {
-	CharacterID   int64  `json:"character_id"`
-	Name          string `json:"name"`
-	CorporationID int64  `json:"corporation_id"`
+type ListCharactersAmongCorporationsParams struct {
+	CorporationIds []int64 `json:"corporation_ids"`
+	CharacterIds   []int64 `json:"character_ids"`
 }
 
-// Every linked character in a set of corporations: who a director can
-// put in a group.
-func (q *Queries) ListCharactersInCorporations(ctx context.Context, corporationIds []int64) ([]ListCharactersInCorporationsRow, error) {
-	rows, err := q.db.Query(ctx, listCharactersInCorporations, corporationIds)
+// Which of some characters are linked and in some corporations.
+func (q *Queries) ListCharactersAmongCorporations(ctx context.Context, arg ListCharactersAmongCorporationsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listCharactersAmongCorporations, arg.CorporationIds, arg.CharacterIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListCharactersInCorporationsRow
+	var items []int64
 	for rows.Next() {
-		var i ListCharactersInCorporationsRow
-		if err := rows.Scan(&i.CharacterID, &i.Name, &i.CorporationID); err != nil {
+		var character_id int64
+		if err := rows.Scan(&character_id); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, character_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -375,6 +395,48 @@ func (q *Queries) ListKnownCorporations(ctx context.Context) ([]int64, error) {
 	return items, nil
 }
 
+const listOrgGroupCandidates = `-- name: ListOrgGroupCandidates :many
+SELECT c.character_id, c.name
+FROM characters c
+JOIN character_corporations cc ON cc.character_id = c.character_id
+WHERE cc.corporation_id = ANY($1::bigint[])
+  AND NOT EXISTS (SELECT 1 FROM org_group_members g WHERE g.group_id = $2 AND g.character_id = c.character_id)
+ORDER BY lower(c.name), c.character_id
+LIMIT $3
+`
+
+type ListOrgGroupCandidatesParams struct {
+	CorporationIds []int64 `json:"corporation_ids"`
+	GroupID        int64   `json:"group_id"`
+	MaxRows        int32   `json:"max_rows"`
+}
+
+type ListOrgGroupCandidatesRow struct {
+	CharacterID int64  `json:"character_id"`
+	Name        string `json:"name"`
+}
+
+// Linked characters of some corporations not yet in a group.
+func (q *Queries) ListOrgGroupCandidates(ctx context.Context, arg ListOrgGroupCandidatesParams) ([]ListOrgGroupCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listOrgGroupCandidates, arg.CorporationIds, arg.GroupID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrgGroupCandidatesRow
+	for rows.Next() {
+		var i ListOrgGroupCandidatesRow
+		if err := rows.Scan(&i.CharacterID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrgGroupMembers = `-- name: ListOrgGroupMembers :many
 SELECT m.character_id, m.added_at,
        COALESCE(c.name, '')::text AS name,
@@ -409,6 +471,65 @@ func (q *Queries) ListOrgGroupMembers(ctx context.Context, groupID int64) ([]Lis
 			&i.CharacterID,
 			&i.AddedAt,
 			&i.Name,
+			&i.CorporationID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrgGroupMembersPage = `-- name: ListOrgGroupMembersPage :many
+SELECT m.character_id,
+       COALESCE(c.name, '')::text AS name,
+       lower(COALESCE(c.name, ''))::text AS sort_name,
+       COALESCE(cc.corporation_id, 0)::bigint AS corporation_id
+FROM org_group_members m
+LEFT JOIN characters c ON c.character_id = m.character_id
+LEFT JOIN character_corporations cc ON cc.character_id = m.character_id
+WHERE m.group_id = $1
+  AND (lower(COALESCE(c.name, '')), m.character_id) > ($2::text, $3::bigint)
+ORDER BY lower(COALESCE(c.name, '')), m.character_id
+LIMIT $4
+`
+
+type ListOrgGroupMembersPageParams struct {
+	GroupID   int64  `json:"group_id"`
+	AfterName string `json:"after_name"`
+	AfterID   int64  `json:"after_id"`
+	MaxRows   int32  `json:"max_rows"`
+}
+
+type ListOrgGroupMembersPageRow struct {
+	CharacterID   int64  `json:"character_id"`
+	Name          string `json:"name"`
+	SortName      string `json:"sort_name"`
+	CorporationID int64  `json:"corporation_id"`
+}
+
+// One page of a group's members, in the same order.
+func (q *Queries) ListOrgGroupMembersPage(ctx context.Context, arg ListOrgGroupMembersPageParams) ([]ListOrgGroupMembersPageRow, error) {
+	rows, err := q.db.Query(ctx, listOrgGroupMembersPage,
+		arg.GroupID,
+		arg.AfterName,
+		arg.AfterID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrgGroupMembersPageRow
+	for rows.Next() {
+		var i ListOrgGroupMembersPageRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Name,
+			&i.SortName,
 			&i.CorporationID,
 		); err != nil {
 			return nil, err
@@ -494,6 +615,47 @@ func (q *Queries) ListOrgGroupsForOwner(ctx context.Context, arg ListOrgGroupsFo
 			&i.CreatedAt,
 			&i.MemberCount,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOwnerGroupsOfCharacters = `-- name: ListOwnerGroupsOfCharacters :many
+SELECT m.character_id, g.name
+FROM org_group_members m
+JOIN org_groups g ON g.id = m.group_id
+WHERE g.owner_kind = $1 AND g.owner_id = $2
+  AND m.character_id = ANY($3::bigint[])
+ORDER BY lower(g.name), g.id
+`
+
+type ListOwnerGroupsOfCharactersParams struct {
+	OwnerKind    string  `json:"owner_kind"`
+	OwnerID      int64   `json:"owner_id"`
+	CharacterIds []int64 `json:"character_ids"`
+}
+
+type ListOwnerGroupsOfCharactersRow struct {
+	CharacterID int64  `json:"character_id"`
+	Name        string `json:"name"`
+}
+
+// Which of an owner's groups some characters are in.
+func (q *Queries) ListOwnerGroupsOfCharacters(ctx context.Context, arg ListOwnerGroupsOfCharactersParams) ([]ListOwnerGroupsOfCharactersRow, error) {
+	rows, err := q.db.Query(ctx, listOwnerGroupsOfCharacters, arg.OwnerKind, arg.OwnerID, arg.CharacterIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOwnerGroupsOfCharactersRow
+	for rows.Next() {
+		var i ListOwnerGroupsOfCharactersRow
+		if err := rows.Scan(&i.CharacterID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

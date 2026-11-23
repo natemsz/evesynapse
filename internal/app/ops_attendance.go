@@ -372,6 +372,16 @@ func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups [
 		Capture: capture, CaptureNotes: notes,
 		Capturing: op.CaptureStatus == captureRunning,
 	}
+	named := make([]int64, 0, len(rows)+len(signups))
+	for _, row := range rows {
+		named = append(named, row.CharacterID)
+	}
+	if canManage {
+		for _, s := range signups {
+			named = append(named, s.CharacterID)
+		}
+	}
+	app.primeVerifiedNames(ctx, named)
 	present := map[int64]db.OpAttendance{}
 	for _, row := range rows {
 		present[row.CharacterID] = row

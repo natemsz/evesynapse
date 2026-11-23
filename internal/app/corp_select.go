@@ -208,39 +208,66 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 	// Only a holder of the ops manager roles hands fleets on, and a form
 	// without the field leaves the choice alone.
 	setsFleets := r.Form.Has("fleets_who") && app.holdsProgramme(ctx, st, owner, permFleets)
-	choices := []string{r.Form.Get("srp_who"), r.Form.Get("doctrines_who"), r.Form.Get("intel_who")}
+	wanted := []struct{ permission, raw string }{
+		{permSRP, r.Form.Get("srp_who")}, {permDoctrines, r.Form.Get("doctrines_who")}, {permIntel, r.Form.Get("intel_who")},
+	}
 	if setsFleets {
-		choices = append(choices, r.Form.Get("fleets_who"))
+		wanted = append(wanted, struct{ permission, raw string }{permFleets, r.Form.Get("fleets_who")})
 	}
-	for _, raw := range choices {
-		if kind, ref, ok := app.parseRuleWho(ctx, owner, raw); raw != "" && (!ok || !permissionRule(owner, kind+":"+ref)) {
-			back("That cannot be handed to the choice made; nothing was saved.")
-			return
-		}
-	}
-	by := app.CorpActorFor(ctx, userID, corp).CharacterID
-	saved := app.setOwnerPermission(ctx, owner, permSRP, r.Form.Get("srp_who"), by) &&
-		app.setOwnerPermission(ctx, owner, permDoctrines, r.Form.Get("doctrines_who"), by) &&
-		app.setOwnerPermission(ctx, owner, permIntel, r.Form.Get("intel_who"), by) &&
-		(!setsFleets || app.setOwnerPermission(ctx, owner, permFleets, r.Form.Get("fleets_who"), by))
-	if saved {
-		text, now := clip(strings.TrimSpace(r.Form.Get("srp_policy")), srpPolicyMax), time.Now().UTC()
-		err = app.queries.SetSRPSettings(ctx, db.SetSRPSettingsParams{CorporationID: corp, Policy: text, UpdatedAt: now})
-		if err == nil {
-			var policies []db.SrpPolicy
-			policies, err = app.queries.ListSRPPolicies(ctx, db.ListSRPPoliciesParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
-			if err == nil {
-				err = app.queries.SetDefaultSRPPolicyText(ctx, db.SetDefaultSRPPolicyTextParams{
-					OwnerKind: owner.Kind, OwnerID: owner.ID, NewName: freeSRPPolicyName(policies), PolicyText: text, UpdatedBy: by, UpdatedAt: now,
-				})
+	choices := make([]corpHandOff, 0, len(wanted))
+	for _, w := range wanted {
+		choice := corpHandOff{permission: w.permission}
+		if w.raw != "" {
+			var ok bool
+			choice.kind, choice.ref, ok = app.parseRuleWho(ctx, owner, w.raw)
+			if !ok || !permissionRule(owner, choice.kind+":"+choice.ref) {
+				back("That cannot be handed to the choice made; nothing was saved.")
+				return
 			}
 		}
+		choices = append(choices, choice)
 	}
-	if !saved || err != nil {
+	by := app.CorpActorFor(ctx, userID, corp).CharacterID
+	text := clip(strings.TrimSpace(r.Form.Get("srp_policy")), srpPolicyMax)
+	if err := app.saveCorpSettings(ctx, owner, choices, text, by, time.Now().UTC()); err != nil {
 		logging.Errorf("corporation settings: save for corporation %d: %v", corp, err)
 		back("The settings could not be saved; check the server log.")
 		return
 	}
 	logging.Infof("corporation settings: user %d changed the settings of corporation %d", userID, corp)
 	back("Saved.")
+}
+
+// corpHandOff is one programme's choice on the settings form.
+type corpHandOff struct {
+	permission, kind, ref string
+}
+
+// saveCorpSettings stores the whole form in one transaction, so a save
+// that fails part way changes nothing.
+func (app *Application) saveCorpSettings(ctx context.Context, owner orgOwner, choices []corpHandOff, policy string, by int64, now time.Time) error {
+	tx, err := app.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	q := app.queries.WithTx(tx)
+	for _, c := range choices {
+		if err := storeOwnerPermission(ctx, q, owner, c.permission, c.kind, c.ref, by); err != nil {
+			return err
+		}
+	}
+	if err := q.SetSRPSettings(ctx, db.SetSRPSettingsParams{CorporationID: owner.ID, Policy: policy, UpdatedAt: now}); err != nil {
+		return err
+	}
+	policies, err := q.ListSRPPolicies(ctx, db.ListSRPPoliciesParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
+	if err != nil {
+		return err
+	}
+	if err := q.SetDefaultSRPPolicyText(ctx, db.SetDefaultSRPPolicyTextParams{
+		OwnerKind: owner.Kind, OwnerID: owner.ID, NewName: freeSRPPolicyName(policies), PolicyText: policy, UpdatedBy: by, UpdatedAt: now,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

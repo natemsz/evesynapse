@@ -20,6 +20,7 @@ import (
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/standing"
 )
@@ -845,6 +846,16 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	if op.Visibility != fleetPublic {
 		w.Header().Set("X-Robots-Tag", "noindex")
 	}
+	live, err := app.fleetLiveReadFor(ctx, op, v, now)
+	if err != nil {
+		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
+	}
+	// While a fleet runs, who is on it stays with those running it, its
+	// owner's members and the pilots in it, whatever its sign-up list
+	// shows the rest of the time.
+	if fleetLiveOpen(op, now) && !a.Manage && !v.belongs(owner) && !live.sight.In {
+		a.SeeNames = false
+	}
 	start := op.StartsAt.UTC()
 	view := &opView{
 		ID: op.ID, Title: op.Title, Description: op.Description, Owner: app.ownerName(ctx, owner),
@@ -919,10 +930,6 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 		if op.Visibility == fleetRestricted {
 			view.ShareNote = "This fleet is private: the link only works for people who can already see it."
 		}
-	}
-	live, err := app.fleetLiveReadFor(ctx, op, v, now)
-	if err != nil {
-		logging.Errorf("fleets: composition of %d: %v", op.ID, err)
 	}
 	if ids := v.characterIDs(); len(ids) > 0 {
 		// How the capture is going is for those running the fleet; a
@@ -1041,6 +1048,29 @@ func (app *Application) fillFleetSignup(ctx context.Context, r *http.Request, vi
 	view.Mine, view.MyShip, view.MyRole, view.MyNote = row.Response, row.Ship, row.FleetRole, row.Note
 }
 
+// primeVerifiedNames puts the names pilots signed in with into the name
+// cache, in one read, so a pilot with no account shows by name at once
+// and not as a number until a public lookup lands.
+func (app *Application) primeVerifiedNames(ctx context.Context, ids []int64) {
+	unknown := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if name, ok := app.esi.CachedCharacterName(id); !ok || name == "" {
+			unknown = append(unknown, id)
+		}
+	}
+	if len(unknown) == 0 {
+		return
+	}
+	rows, err := app.queries.ListVerifiedPilotNames(ctx, unknown)
+	if err != nil {
+		logging.Errorf("fleets: verified pilot names: %v", err)
+		return
+	}
+	for _, row := range rows {
+		app.esi.PrimeName(esi.NameCharacter, row.CharacterID, row.Name)
+	}
+}
+
 // fillFleetRoster sets who is coming, for a viewer who may see names.
 func (app *Application) fillFleetRoster(ctx context.Context, view *opView, op db.Op, signups []db.OpSignup, a fleetAccess) {
 	if !a.SeeNames {
@@ -1050,6 +1080,14 @@ func (app *Application) fillFleetRoster(ctx context.Context, view *opView, op db
 	if err != nil {
 		logging.Errorf("fleets: commanders of %d: %v", op.ID, err)
 	}
+	named := make([]int64, 0, len(signups)+len(commanders))
+	for _, s := range signups {
+		named = append(named, s.CharacterID)
+	}
+	for _, c := range commanders {
+		named = append(named, c.CharacterID)
+	}
+	app.primeVerifiedNames(ctx, named)
 	isCommander := make(map[int64]bool, len(commanders))
 	for _, c := range commanders {
 		isCommander[c.CharacterID] = true

@@ -1031,6 +1031,37 @@ func (q *Queries) ListPilotsOnEarlierOverlappingFleet(ctx context.Context, opID 
 	return items, nil
 }
 
+const listVerifiedPilotNames = `-- name: ListVerifiedPilotNames :many
+SELECT character_id, name FROM verified_pilots
+WHERE character_id = ANY($1::bigint[]) AND name <> ''
+`
+
+type ListVerifiedPilotNamesRow struct {
+	CharacterID int64  `json:"character_id"`
+	Name        string `json:"name"`
+}
+
+// The names some pilots signed in with.
+func (q *Queries) ListVerifiedPilotNames(ctx context.Context, characterIds []int64) ([]ListVerifiedPilotNamesRow, error) {
+	rows, err := q.db.Query(ctx, listVerifiedPilotNames, characterIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListVerifiedPilotNamesRow
+	for rows.Next() {
+		var i ListVerifiedPilotNamesRow
+		if err := rows.Scan(&i.CharacterID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markFleetReportDirty = `-- name: MarkFleetReportDirty :exec
 
 

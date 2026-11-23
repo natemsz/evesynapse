@@ -838,23 +838,33 @@ func (app *mod) memberGroups(ctx context.Context, userID int64, view *corpMember
 		return
 	}
 	view.CanGroup = true
-	linked := map[int64]bool{}
-	if rows, err := app.queries.ListCharactersInCorporations(ctx, []int64{view.CorpID}); err == nil {
-		for _, row := range rows {
-			linked[row.CharacterID] = true
-		}
-	}
-	in := map[int64][]string{}
 	groups, err := app.queries.ListOrgGroupsForOwner(ctx, db.ListOrgGroupsForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 	if err != nil {
 		logging.Errorf("groups: groups of %s: %v", owner.Key(), err)
 	}
 	for _, group := range groups {
 		view.Groups = append(view.Groups, groupChoice{ID: group.ID, Name: group.Name})
-		members, _ := app.queries.ListOrgGroupMembers(ctx, group.ID)
-		for _, m := range members {
-			in[m.CharacterID] = append(in[m.CharacterID], group.Name)
-		}
+	}
+	// Both reads are of the members on this page, in one query each.
+	ids := make([]int64, len(view.Rows))
+	for i := range view.Rows {
+		ids[i] = view.Rows[i].ID
+	}
+	linked := make(map[int64]bool, len(ids))
+	onPage, err := app.queries.ListCharactersAmongCorporations(ctx, db.ListCharactersAmongCorporationsParams{CorporationIds: []int64{view.CorpID}, CharacterIds: ids})
+	if err != nil {
+		logging.Errorf("groups: linked members of %s: %v", owner.Key(), err)
+	}
+	for _, id := range onPage {
+		linked[id] = true
+	}
+	in := make(map[int64][]string, len(ids))
+	places, err := app.queries.ListOwnerGroupsOfCharacters(ctx, db.ListOwnerGroupsOfCharactersParams{OwnerKind: owner.Kind, OwnerID: owner.ID, CharacterIds: ids})
+	if err != nil {
+		logging.Errorf("groups: groups of the members of %s: %v", owner.Key(), err)
+	}
+	for _, place := range places {
+		in[place.CharacterID] = append(in[place.CharacterID], place.Name)
 	}
 	for i := range view.Rows {
 		row := &view.Rows[i]

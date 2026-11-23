@@ -98,6 +98,47 @@ LEFT JOIN character_corporations cc ON cc.character_id = m.character_id
 WHERE m.group_id = $1
 ORDER BY lower(COALESCE(c.name, '')), m.character_id;
 
+-- One page of a group's members, in the same order.
+-- name: ListOrgGroupMembersPage :many
+SELECT m.character_id,
+       COALESCE(c.name, '')::text AS name,
+       lower(COALESCE(c.name, ''))::text AS sort_name,
+       COALESCE(cc.corporation_id, 0)::bigint AS corporation_id
+FROM org_group_members m
+LEFT JOIN characters c ON c.character_id = m.character_id
+LEFT JOIN character_corporations cc ON cc.character_id = m.character_id
+WHERE m.group_id = sqlc.arg(group_id)
+  AND (lower(COALESCE(c.name, '')), m.character_id) > (sqlc.arg(after_name)::text, sqlc.arg(after_id)::bigint)
+ORDER BY lower(COALESCE(c.name, '')), m.character_id
+LIMIT sqlc.arg(max_rows);
+
+-- Linked characters of some corporations not yet in a group.
+-- name: ListOrgGroupCandidates :many
+SELECT c.character_id, c.name
+FROM characters c
+JOIN character_corporations cc ON cc.character_id = c.character_id
+WHERE cc.corporation_id = ANY(sqlc.arg(corporation_ids)::bigint[])
+  AND NOT EXISTS (SELECT 1 FROM org_group_members g WHERE g.group_id = sqlc.arg(group_id) AND g.character_id = c.character_id)
+ORDER BY lower(c.name), c.character_id
+LIMIT sqlc.arg(max_rows);
+
+-- A linked character of some corporations, by exact name.
+-- name: GetCharacterInCorporationsByName :one
+SELECT c.character_id
+FROM characters c
+JOIN character_corporations cc ON cc.character_id = c.character_id
+WHERE cc.corporation_id = ANY(sqlc.arg(corporation_ids)::bigint[]) AND lower(c.name) = lower(sqlc.arg(name)::text)
+ORDER BY c.character_id
+LIMIT 1;
+
+-- Which of some characters are linked and in some corporations.
+-- name: ListCharactersAmongCorporations :many
+SELECT c.character_id
+FROM characters c
+JOIN character_corporations cc ON cc.character_id = c.character_id
+WHERE cc.corporation_id = ANY(sqlc.arg(corporation_ids)::bigint[])
+  AND c.character_id = ANY(sqlc.arg(character_ids)::bigint[]);
+
 -- name: AddOrgGroupMember :exec
 INSERT INTO org_group_members (group_id, character_id, added_by, added_at)
 VALUES (sqlc.arg(group_id), sqlc.arg(character_id), sqlc.arg(added_by), sqlc.arg(added_at))
@@ -122,14 +163,14 @@ JOIN character_corporations cc ON cc.character_id = c.character_id
 WHERE c.user_id = $1 AND c.link_state = 'ok'
 ORDER BY c.character_id;
 
--- Every linked character in a set of corporations: who a director can
--- put in a group.
--- name: ListCharactersInCorporations :many
-SELECT c.character_id, c.name, cc.corporation_id
-FROM characters c
-JOIN character_corporations cc ON cc.character_id = c.character_id
-WHERE cc.corporation_id = ANY(sqlc.arg(corporation_ids)::bigint[])
-ORDER BY lower(c.name), c.character_id;
+-- Which of an owner's groups some characters are in.
+-- name: ListOwnerGroupsOfCharacters :many
+SELECT m.character_id, g.name
+FROM org_group_members m
+JOIN org_groups g ON g.id = m.group_id
+WHERE g.owner_kind = sqlc.arg(owner_kind) AND g.owner_id = sqlc.arg(owner_id)
+  AND m.character_id = ANY(sqlc.arg(character_ids)::bigint[])
+ORDER BY lower(g.name), g.id;
 
 -- The corporations EveSynapse has seen linked characters in.
 -- name: ListKnownCorporations :many

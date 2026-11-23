@@ -82,3 +82,13 @@ search.l-head-act { display: block; flex: 0 1 22rem; min-width: 0; }
 .cm-start-modal { width: min(36rem, 100%); }
 .cm-start-modal .cm-form { padding: 0; }
 .cm-jump { margin: 0 0 var(--space-3); }
+
+/* The member list keeps its columns where they are when a row's Manage
+   opens: the widths are set, and the actions wrap inside their cell, so
+   the row only grows taller. */
+.cm-members { table-layout: fixed; min-width: 38rem; }
+.cm-members td { overflow-wrap: anywhere; }
+.cm-col-place { width: 7.5rem; }
+.cm-col-date { width: 7rem; }
+.cm-col-manage { width: 12rem; }
+.cm-members .cm-manage .cm-actions { flex-wrap: wrap; }

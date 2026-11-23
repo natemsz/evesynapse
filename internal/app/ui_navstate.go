@@ -30,12 +30,29 @@ func navStateMiddleware(next http.Handler) http.Handler {
 			}
 		}
 		ctx := context.WithValue(r.Context(), navStateKey{}, state)
+		if c, err := r.Cookie(navSectionCookie); err == nil && len(c.Value) <= 32 {
+			ctx = context.WithValue(ctx, navSectionKey{}, c.Value)
+		}
 		ctx = withHiddenNotices(ctx, r)
 		if id, err := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); err == nil && id > 0 {
 			ctx = context.WithValue(ctx, navCharacterKey{}, id)
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// navSectionCookie names the menu section of the page the reader was
+// last on, written by app.js after each page shows. A page listed under
+// more than one section (Doctrines sits under Corporation and Fleets)
+// stays in the one the reader came from instead of jumping to the other.
+const navSectionCookie = "evesynapse-section"
+
+type navSectionKey struct{}
+
+// navSectionFrom is the section the reader was last in, "" when unknown.
+func navSectionFrom(ctx context.Context) string {
+	section, _ := ctx.Value(navSectionKey{}).(string)
+	return section
 }
 
 // navCharacterKey carries the character a page was asked for

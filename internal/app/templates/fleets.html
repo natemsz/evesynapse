@@ -5,13 +5,13 @@
 {{with .Fleets}}
 <div class="l-page fl-page">
 <div class="l-head">
-  <p class="l-head-sum">{{if .Live}}<b>{{len .Live}}</b> live now. {{end}}{{if .Total}}All times are EVE time.{{else}}No fleets coming up.{{end}}</p>
+  <p class="l-head-sum">{{if .Live}}<b>{{len .Live}}</b> running now. {{end}}{{if .Total}}Times are in EVE time.{{else}}No fleets are coming up.{{end}}</p>
   <div class="l-head-act">{{if .CanPlan}}<a class="btn" href="/fleets/plan">Plan a fleet</a>{{end}}</div>
 </div>
 
 {{if .Live}}
-<section class="l-panel fl-live" aria-labelledby="fl-live-title">
-  <h2 id="fl-live-title">Live now</h2>
+<section class="l-panel fl-board-live" aria-labelledby="fl-live-title">
+  <h2 id="fl-live-title">Running now</h2>
   {{template "fleet_board" .Live}}
 </section>
 {{end}}

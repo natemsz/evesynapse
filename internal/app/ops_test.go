@@ -7,10 +7,12 @@ package app
 // in-game events together.
 
 import (
+	"bytes"
 	"context"
 	"evesynapse/internal/app/calendar"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -491,7 +493,7 @@ func TestOpAttendanceIsCapturedFromTheFleet(t *testing.T) {
 		t.Fatalf("with no op running: %d recorded, ESI asked %v", stored, fleet.asked)
 	}
 	_, _, body := f.get(f.director, opURL(tomorrow))
-	mustContain(t, "op not started", body, "Attendance will be recorded from Fixture Ceo&#39;s fleet while it runs.")
+	mustContain(t, "op not started", body, "Once the fleet starts, attendance is read from Fixture Ceo&#39;s fleet in EVE.")
 	if strings.Contains(body, "Mark attendance by hand") {
 		t.Fatal("hand-marking is offered before the op has started")
 	}
@@ -512,8 +514,8 @@ func TestOpAttendanceIsCapturedFromTheFleet(t *testing.T) {
 	_, _, body = f.get(f.director, opURL(id))
 	mustContain(t, "running op", body,
 		`Attendance <small>3</small>`,
-		"Attendance is being recorded from Fixture Ceo&#39;s fleet: 3 so far.",
-		"<td>from the fleet</td>")
+		"Reading Fixture Ceo&#39;s fleet in EVE every minute: 3 pilots seen so far.",
+		"<td>Seen in the fleet</td>")
 
 	// Someone leaves the fleet: they were there, and stay recorded.
 	fleet.members = `[{"character_id":90000001,"ship_type_id":29990}]`
@@ -603,7 +605,7 @@ func TestOpAttendanceFallsBackToMarkingByHand(t *testing.T) {
 		t.Fatalf("after marking: %v, want only the signed-up pilot, by hand", got)
 	}
 	_, _, body = f.get(f.director, opURL(id))
-	mustContain(t, "marked", body, "<td>by hand</td>", `name="present" value="90000003" checked>`)
+	mustContain(t, "marked", body, "<td>Marked by hand</td>", `name="present" value="90000003" checked>`)
 
 	// The fleet turns up after all and reports the same pilot: the
 	// fleet's word replaces the hand mark, and saving the hand list
@@ -721,9 +723,9 @@ func TestLiveFleetShowsEachPilotWhatTheirRankShowsInGame(t *testing.T) {
 		t.Fatalf("overview for a pilot in the fleet who cannot see it: %d to %q", code, where)
 	}
 	sees("a planner outside the fleet", planner,
-		[]string{"You are not in this fleet", "Attendance is being recorded from this fleet."},
+		[]string{"You are not in this fleet", "Attendance is being read from the fleet in EVE."},
 		[]string{pilot, "/items/type/", "so far", "fl-p-", "Fixture Member"})
-	if _, _, body := f.get(planner, opURL(id)); strings.Contains(body, "from the fleet") || strings.Contains(body, pilotLink) {
+	if _, _, body := f.get(planner, opURL(id)); strings.Contains(body, "Seen in the fleet") || strings.Contains(body, "<small>from the fleet</small>") || strings.Contains(body, pilotLink) {
 		t.Fatal("the attendance panel shows a running fleet to a planner outside it")
 	}
 
@@ -779,5 +781,58 @@ func TestLiveFleetShowsEachPilotWhatTheirRankShowsInGame(t *testing.T) {
 	}
 	if _, _, body := f.get(bystander, opURL(id)); strings.Contains(body, pilotLink) || strings.Contains(body, ship(587)) {
 		t.Fatal("attendance of a past fleet is shown to someone who was not in it")
+	}
+}
+
+// A game log uploaded from a fleet's Report tab counts in that fleet's
+// report only for the uploader's pilot recorded on the fleet: a pilot
+// the fleet has no record of, or another account's upload, adds nothing.
+func TestFleetLogUploadCountsOnlyRecordedPilots(t *testing.T) {
+	f := newOpsFixture(t)
+	now := time.Now().UTC()
+	id := f.create(now.Add(-3*time.Hour).Truncate(time.Minute), "Roam")
+	if err := f.q.InsertManualAttendance(f.ctx, db.InsertManualAttendanceParams{OpID: id, CharacterID: fixtureCharA, SeenAt: now.Add(-150 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	upload := func(cookie *http.Cookie, listener string) string {
+		t.Helper()
+		var body bytes.Buffer
+		mw := multipart.NewWriter(&body)
+		stamp := now.Add(-150 * time.Minute).Format("2006.01.02 15:04:05")
+		_ = mw.WriteField("paste", "  Gamelog\r\n  Listener: "+listener+"\r\n[ "+stamp+" ] (combat) <b>100</b> to <b>Bad Guy</b>[EVIL](Vexor) - Heavy Pulse Laser II - Hits\r\n")
+		_ = mw.Close()
+		req := httptest.NewRequest(http.MethodPost, "/intel/battles/upload?fleet="+fmt.Sprint(id), &body)
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		f.app.Handler().ServeHTTP(rec, req)
+		return rec.Header().Get("Location")
+	}
+	counted := func(userID int64, chars ...int64) []int64 {
+		t.Helper()
+		on, err := f.q.ListFleetBattleConsentFor(f.ctx, db.ListFleetBattleConsentForParams{OpID: id, UserID: userID, CharacterIds: chars})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return on
+	}
+
+	if back := upload(f.director, "Fixture Alt"); back != fleetReportPath(id) {
+		t.Fatalf("an upload from the fleet went back to %q, want its report", back)
+	}
+	if on := counted(f.directorUser, fixtureCharA, fixtureCharB); len(on) != 0 {
+		t.Fatalf("a log of a pilot not recorded on the fleet counts in its report: %v", on)
+	}
+	upload(f.director, "Fixture Ceo")
+	if on := counted(f.directorUser, fixtureCharA, fixtureCharB); len(on) != 1 || on[0] != fixtureCharA {
+		t.Fatalf("logs counting after the recorded pilot's upload: %v, want only that pilot", on)
+	}
+	var member int64
+	if err := f.app.db.QueryRowContext(f.ctx, `SELECT user_id FROM characters WHERE character_id = $1`, opsCharC).Scan(&member); err != nil {
+		t.Fatal(err)
+	}
+	upload(f.member, "Fixture Member")
+	if on := counted(member, opsCharC); len(on) != 0 {
+		t.Fatalf("a member not on the fleet counts a log in its report: %v", on)
 	}
 }

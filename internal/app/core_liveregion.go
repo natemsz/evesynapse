@@ -49,7 +49,7 @@ func (app *Application) renderFragmentStatus(w http.ResponseWriter, status int, 
 // fragment handlers write it out, the live feeds (livefeed.go) send
 // it down a stream.
 func executeFragment(page, define string, data any) (*bytes.Buffer, error) {
-	ts, err := parsedTemplate(&fragmentTemplates, "fragment", page, "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html")
+	ts, err := parsedTemplate(&fragmentTemplates, "fragment", page, "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/fleetparts.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse fragment template %s: %w", page, err)
 	}

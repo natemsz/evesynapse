@@ -65,6 +65,22 @@ type fleetWing struct {
 	Name   string `json:"name"`
 	Squads int    `json:"squads"`
 	Pilots int    `json:"n"`
+	// Units are the wing's squads that have pilots, in EVE's order, so
+	// the structure keeps their names.
+	Units []fleetSquad `json:"units,omitempty"`
+}
+
+// fleetSquad is one squad of a wing as last read.
+type fleetSquad struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// fleetUnitNames are the names a fleet's boss gave its wings and
+// squads, from one read of the fleet's wings.
+type fleetUnitNames struct {
+	Wings  map[int64]string
+	Squads map[int64]string
 }
 
 type fleetSystem struct {
@@ -91,6 +107,22 @@ type fleetMemberRow struct {
 	// Hidden: this viewer's rank does not show this pilot's ship and
 	// system. Set on the copy made for a page, never stored.
 	Hidden bool `json:"-"`
+	// Mine: one of the viewer's own characters. ShowSystem: the
+	// structure names this pilot's system because the unit is spread
+	// over several. Both are set on a page's copy only.
+	Mine       bool `json:"-"`
+	ShowSystem bool `json:"-"`
+	// OffDoctrine: the fleet flies a doctrine and this pilot's hull is
+	// not in it.
+	OffDoctrine bool `json:"-"`
+}
+
+// RoleClass is the colour class of the pilot's part in the fleet.
+func (m fleetMemberRow) RoleClass() string { return fleetRoleClass(m.Role()) }
+
+// Commands says the pilot leads a unit: the fleet, a wing or a squad.
+func (m fleetMemberRow) Commands() bool {
+	return m.Position == "fleet_commander" || m.Position == "wing_commander" || m.Position == "squad_commander"
 }
 
 // Role is the commander's assignment, or else what the hull suggests.
@@ -246,24 +278,31 @@ func (app *Application) fleetDoctrineFits(ctx context.Context, op db.Op) []doctr
 
 // fleetWingNames reads the fleet's wing names. They are a nicety: on any
 // failure the page numbers the wings instead.
-func (app *Application) fleetWingNames(ctx context.Context, token string, fleetID int64) map[int64]string {
+func (app *Application) fleetWingNames(ctx context.Context, token string, fleetID int64) fleetUnitNames {
 	var wings []struct {
-		ID   int64  `json:"id"`
-		Name string `json:"name"`
+		ID     int64  `json:"id"`
+		Name   string `json:"name"`
+		Squads []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		} `json:"squads"`
 	}
+	out := fleetUnitNames{Wings: map[int64]string{}, Squads: map[int64]string{}}
 	if err := app.esi.Get(ctx, token, fmt.Sprintf("/fleets/%d/wings/", fleetID), &wings); err != nil {
 		logging.Debugf("fleets: wings of %d: %v", fleetID, err)
-		return nil
+		return out
 	}
-	out := make(map[int64]string, len(wings))
 	for _, w := range wings {
-		out[w.ID] = w.Name
+		out.Wings[w.ID] = w.Name
+		for _, sq := range w.Squads {
+			out.Squads[sq.ID] = sq.Name
+		}
 	}
 	return out
 }
 
 // composeFleet turns one read into the stored composition.
-func (app *Application) composeFleet(ctx context.Context, op db.Op, read fleetRead, wingNames map[int64]string, tags []db.ListOpMemberTagsRow) *fleetComposition {
+func (app *Application) composeFleet(ctx context.Context, op db.Op, read fleetRead, units fleetUnitNames, tags []db.ListOpMemberTagsRow) *fleetComposition {
 	members := make([]esi.FleetMember, 0, len(read.Members))
 	seen := make(map[int64]bool, len(read.Members))
 	var hullIDs, unknown []int64
@@ -371,7 +410,7 @@ func (app *Application) composeFleet(ctx context.Context, op db.Op, read fleetRe
 		}
 		w := wings[m.WingID]
 		if w == nil {
-			w = &fleetWing{ID: m.WingID, Name: wingNames[m.WingID]}
+			w = &fleetWing{ID: m.WingID, Name: units.Wings[m.WingID]}
 			wings[m.WingID] = w
 			squads[m.WingID] = map[int64]bool{}
 		}
@@ -400,6 +439,15 @@ func (app *Application) composeFleet(ctx context.Context, op db.Op, read fleetRe
 	})
 	for id, w := range wings {
 		w.Squads = len(squads[id])
+		for squad := range squads[id] {
+			w.Units = append(w.Units, fleetSquad{ID: squad, Name: units.Squads[squad]})
+		}
+		sort.Slice(w.Units, func(i, j int) bool { return w.Units[i].ID < w.Units[j].ID })
+		for i := range w.Units {
+			if w.Units[i].Name == "" {
+				w.Units[i].Name = "Squad " + strconv.Itoa(i+1)
+			}
+		}
 		comp.Wings = append(comp.Wings, *w)
 	}
 	sort.Slice(comp.Wings, func(i, j int) bool { return comp.Wings[i].ID < comp.Wings[j].ID })
@@ -516,6 +564,197 @@ type fleetLiveView struct {
 	// from there and store nothing.
 	TryURL      string
 	ViewerChars map[int64]bool
+	// Running says how long the fleet has been going ("38 min").
+	Running string
+	// Gaps is one sentence on what the doctrine asks for that nobody
+	// in the fleet is flying, for those who see the whole fleet.
+	Gaps string
+	// Structure is the fleet as EVE's fleet window lays it out: fleet
+	// command, then each wing and its squads, with ships shown as the
+	// viewer's rank allows.
+	Structure []fleetUnitView
+}
+
+// fleetUnitView is fleet command, one wing or one squad, as one viewer
+// may see it.
+type fleetUnitView struct {
+	Name      string
+	Pilots    int
+	Commander *fleetMemberRow
+	Members   []fleetMemberRow // everyone under the commander
+	Hulls     []fleetHull      // the ships the viewer can see, most flown first
+	Unseen    int              // pilots whose ship this viewer's rank does not show
+	System    string           // the one system all of them are in, when the viewer sees them all
+	Squads    []fleetUnitView
+	Command   bool // fleet command, above the wings
+}
+
+// fleetStructure lays the members out by wing and squad. Every member
+// sees the names and positions, as in EVE; ships and systems follow
+// sight. It reads only the stored composition, one fleet of at most
+// EVE's 256 pilots.
+func fleetStructure(comp fleetComposition, sight fleetSight, edit bool) []fleetUnitView {
+	bySquad := map[int64][]fleetMemberRow{}
+	wingCommand := map[int64][]fleetMemberRow{}
+	var command []fleetMemberRow
+	for _, m := range comp.Members {
+		r := sight.row(m, edit)
+		r.Mine = sight.own[m.ID]
+		r.OffDoctrine = comp.HasDoctrine && !r.Hidden && !m.OnDoctrine
+		switch {
+		case m.WingID <= 0:
+			command = append(command, r)
+		case m.SquadID <= 0:
+			wingCommand[m.WingID] = append(wingCommand[m.WingID], r)
+		default:
+			bySquad[m.SquadID] = append(bySquad[m.SquadID], r)
+		}
+	}
+	var out []fleetUnitView
+	if len(command) > 0 {
+		lead := fleetUnit("Fleet command", command, "fleet_commander")
+		lead.Command = true
+		out = append(out, lead)
+	}
+	for _, w := range comp.Wings {
+		if w.ID <= 0 {
+			continue
+		}
+		wing := fleetUnit(w.Name, wingCommand[w.ID], "wing_commander")
+		wing.Pilots = w.Pilots
+		seen := map[int64]bool{}
+		for _, sq := range w.Units {
+			seen[sq.ID] = true
+			if rows := bySquad[sq.ID]; len(rows) > 0 {
+				wing.Squads = append(wing.Squads, fleetUnit(sq.Name, rows, "squad_commander"))
+			}
+		}
+		// A read stored before squads carried names still lays out.
+		var rest []int64
+		for _, m := range comp.Members {
+			if m.WingID == w.ID && m.SquadID > 0 && !seen[m.SquadID] {
+				seen[m.SquadID] = true
+				rest = append(rest, m.SquadID)
+			}
+		}
+		slices.Sort(rest)
+		for _, id := range rest {
+			wing.Squads = append(wing.Squads, fleetUnit("Squad "+strconv.Itoa(len(wing.Squads)+1), bySquad[id], "squad_commander"))
+		}
+		// The wing's own figures cover its squads too.
+		for _, sq := range wing.Squads {
+			wing.Unseen += sq.Unseen
+			wing.Hulls = mergeFleetHulls(wing.Hulls, sq.Hulls)
+		}
+		wing.System = ""
+		out = append(out, wing)
+	}
+	return out
+}
+
+// fleetGapText says what the doctrine asks for that the fleet lacks:
+// "Nobody is flying EWAR or Command. No Claymore or Falcon in the
+// fleet." Empty when nothing is missing.
+func fleetGapText(roles, hulls []string) string {
+	or := func(words []string) string {
+		if len(words) < 2 {
+			return strings.Join(words, "")
+		}
+		return strings.Join(words[:len(words)-1], ", ") + " or " + words[len(words)-1]
+	}
+	var parts []string
+	if len(roles) > 0 {
+		parts = append(parts, "Nobody is flying "+or(roles)+".")
+	}
+	if len(hulls) > 0 {
+		parts = append(parts, "No "+or(hulls)+" in the fleet.")
+	}
+	return strings.Join(parts, " ")
+}
+
+// fleetRunningText says how long a fleet has been going: "12 min",
+// "1h 05m". Before its start it says nothing.
+func fleetRunningText(d time.Duration) string {
+	if d < time.Minute {
+		if d < 0 {
+			return ""
+		}
+		return "under a minute"
+	}
+	if d < time.Hour {
+		return strconv.Itoa(int(d/time.Minute)) + " min"
+	}
+	return fmt.Sprintf("%dh %02dm", int(d/time.Hour), int(d%time.Hour/time.Minute))
+}
+
+// fleetUnit is one unit's view: its commander apart, the hulls the
+// viewer can see counted, and its system when every pilot shows one.
+func fleetUnit(name string, rows []fleetMemberRow, commander string) fleetUnitView {
+	u := fleetUnitView{Name: name, Pilots: len(rows)}
+	counts := map[int64]*fleetHull{}
+	systems := map[string]bool{}
+	for _, r := range rows {
+		if r.Hidden {
+			u.Unseen++
+			continue
+		}
+		systems[r.System] = true
+		if r.ShipTypeID == 0 {
+			continue
+		}
+		h := counts[r.ShipTypeID]
+		if h == nil {
+			h = &fleetHull{TypeID: r.ShipTypeID, Name: r.Ship}
+			counts[r.ShipTypeID] = h
+		}
+		h.Count++
+	}
+	if u.Unseen == 0 && len(systems) == 1 {
+		for s := range systems {
+			u.System = s
+		}
+	}
+	for _, h := range counts {
+		u.Hulls = append(u.Hulls, *h)
+	}
+	sortFleetHulls(u.Hulls)
+	for _, r := range rows {
+		r.ShowSystem = u.System == "" && !r.Hidden && r.System != ""
+		if r.Position == commander && u.Commander == nil {
+			lead := r
+			u.Commander = &lead
+			continue
+		}
+		u.Members = append(u.Members, r)
+	}
+	return u
+}
+
+func mergeFleetHulls(into, add []fleetHull) []fleetHull {
+	for _, h := range add {
+		found := false
+		for i := range into {
+			if into[i].TypeID == h.TypeID {
+				into[i].Count += h.Count
+				found = true
+				break
+			}
+		}
+		if !found {
+			into = append(into, h)
+		}
+	}
+	sortFleetHulls(into)
+	return into
+}
+
+func sortFleetHulls(h []fleetHull) {
+	sort.Slice(h, func(i, j int) bool {
+		if h[i].Count != h[j].Count {
+			return h[i].Count > h[j].Count
+		}
+		return h[i].Name < h[j].Name
+	})
 }
 
 func fleetCompositionPath(id int64) string { return opURL(id) + "composition" }
@@ -653,7 +892,7 @@ func (app *Application) fleetLiveReadFor(ctx context.Context, op db.Op, v fleetV
 // fleet.
 func (app *Application) fleetCaptureStatus(ctx context.Context, op db.Op, now time.Time, recorded int, sight fleetSight) (string, []string) {
 	if !sight.All && op.CaptureStatus == captureRunning && fleetLiveOpen(op, now) {
-		return "Attendance is being recorded from this fleet.", nil
+		return "Attendance is being read from the fleet in EVE.", nil
 	}
 	return app.captureSummary(ctx, op, now, recorded)
 }
@@ -788,6 +1027,8 @@ func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewe
 	view.AsOf = live.row.ComputedAt.UTC().Format("15:04") + " EVE"
 	view.AsOfRaw = live.row.ComputedAt.UTC().Format(time.RFC3339)
 	view.Stale = now.Sub(live.row.ComputedAt) > fleetLiveStaleAfter
+	view.Running = fleetRunningText(now.Sub(op.StartsAt))
+	view.Structure = fleetStructure(comp, live.sight, view.CanEdit)
 	if live.sight.All {
 		view.Comp = &comp
 		view.RoleBar = fleetRoleBar(comp.Roles, comp.Pilots)
@@ -796,6 +1037,7 @@ func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewe
 			parts = append(parts, strconv.Itoa(role.Count)+" "+role.Role)
 		}
 		view.RoleSummary = "Pilots by role: " + strings.Join(parts, ", ")
+		view.Gaps = fleetGapText(comp.MissingRoles, comp.MissingHulls)
 	} else {
 		view.Comp = &fleetComposition{Pilots: comp.Pilots, Wings: comp.Wings}
 	}

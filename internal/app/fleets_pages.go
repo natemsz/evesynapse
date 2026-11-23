@@ -155,6 +155,9 @@ func (app *Application) handleFleets(w http.ResponseWriter, r *http.Request) {
 		}
 		switch {
 		case row.Live:
+			// Who is on a running fleet stays with the pilots in it, so
+			// the board says how long it has run instead of a count.
+			row.Count = "Running for " + fleetRunningText(now.Sub(op.StartsAt))
 			view.Live = append(view.Live, row)
 		case mine[op.ID]:
 			view.Yours = append(view.Yours, row)
@@ -221,6 +224,14 @@ func fleetCountText(op db.Op) string {
 		return fmt.Sprintf("%d coming, %d maybe", op.ComingCount, op.MaybeCount)
 	}
 	return fmt.Sprintf("%d coming", op.ComingCount)
+}
+
+// pastFleetCount is a past fleet's sign-ups, as its history row says it.
+func pastFleetCount(n int32) string {
+	if n == 0 {
+		return "No sign-ups"
+	}
+	return fmt.Sprintf("%d signed up", n)
 }
 
 func answerLabel(response string) string {
@@ -330,7 +341,7 @@ func (app *Application) fillFleetHistory(ctx context.Context, v fleetViewer, vie
 		view.Past = append(view.Past, fleetBoardRow{
 			Href: opURL(op.ID), Title: op.Title, Sub: fleetRowSub(op, ""),
 			Day: start.Format("Mon Jan 2"), Clock: start.Format("15:04"), WhenRaw: start.Format(time.RFC3339),
-			Count: fmt.Sprintf("%d signed up", op.ComingCount+op.MaybeCount), Cancelled: op.CancelledAt.Valid,
+			Count: pastFleetCount(op.ComingCount + op.MaybeCount), Cancelled: op.CancelledAt.Valid,
 		})
 	}
 	rows, err := app.queries.ListOwnerPAPs(ctx, db.ListOwnerPAPsParams{

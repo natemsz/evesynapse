@@ -163,6 +163,25 @@ func TestDoctrines(t *testing.T) {
 	}
 	mustContain(t, "corporate fits for a keeper", browse(director, doctrineFitsPath+chosen), page+"/fits/add", `name="copy"`)
 	mustContain(t, "public fits for a keeper", browse(director, publicFitsPath+chosen), page+"/fits/add", `name="public"`)
+	// A keeper's own public fit adds as one of their saved fits, and the
+	// browser keeps the doctrine in its address, so after one add the
+	// next can follow.
+	ownPublic := f.savedFit(f.userID, "Keeper Rifter", 587, true, ``)
+	mustContain(t, "own public fit for a keeper", browse(director, publicFitsPath+chosen), `name="fit" value="`+strconv.FormatInt(ownPublic, 10)+`"`)
+	if _, back := f.post(director, add, url.Values{"fit": {strconv.FormatInt(ownPublic, 10)}, "next": {publicFitsPath + chosen}}); back != publicFitsPath+chosen {
+		t.Fatalf("adding a public fit went back to %q, want the browser still choosing for the doctrine", back)
+	}
+	added, _ := f.q.ListDoctrineFits(f.ctx, []int64{d.ID})
+	found := false
+	for _, df := range added {
+		if df.Name == "Keeper Rifter" {
+			found = true
+			f.post(director, page+"/fits/"+strconv.FormatInt(df.ID, 10)+"/remove", url.Values{})
+		}
+	}
+	if !found {
+		t.Fatal("the keeper's own public fit was not added to the doctrine")
+	}
 
 	// Doctrine boosts for the fitting tool: a fit loading a burst
 	// charge gives that boost, to the corporation's members only.
@@ -207,7 +226,7 @@ func TestDoctrines(t *testing.T) {
 		t.Fatalf("ops %+v, want the one naming the doctrine", ops)
 	}
 	_, body = getPage(t, f.app, member, opURL(ops[0].ID))
-	mustContain(t, "op page", body, `<a href="`+page+`">Shield Lokis</a>`, "Bring", "Fleet Guardian")
+	mustContain(t, "op page", body, `<a href="`+page+`">Shield Lokis</a>`, "Doctrine fits", "Fleet Guardian")
 
 	// Handing it on: an accountant keeps doctrines once the director says so.
 	f.post(member, "/corporations/settings/save", url.Values{"corporation": {"98000001"}, "doctrines_who": {"eve_role:Accountant"}})

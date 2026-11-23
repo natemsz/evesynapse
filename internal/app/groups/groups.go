@@ -100,6 +100,15 @@ func (app *mod) handleGroups(w http.ResponseWriter, r *http.Request) {
 	var shown []standing.Owner
 	if owner, options, ok := app.deps.PickOwner(ctx, r, app.deps.GroupOwners(ctx, userID)); ok {
 		shown, view.OwnerOptions = []standing.Owner{owner}, options
+		// A community's or an alliance's groups are kept from Fleets,
+		// so the page stays in that menu; a corporation's stay under
+		// Corporation.
+		switch owner.Kind {
+		case standing.OwnerCommunity:
+			data.NavAs = "communities.html"
+		case standing.OwnerAlliance:
+			data.NavAs = "fleet_permissions.html"
+		}
 	}
 	openGroup, _ := strconv.ParseInt(r.URL.Query().Get("group"), 10, 64)
 	for _, owner := range shown {

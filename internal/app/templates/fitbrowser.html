@@ -37,7 +37,7 @@
 {{end}}
 
 {{define "fitbrowser"}}
-{{if .For}}<p class="browse-for"><strong>Choosing fits for <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each one added is copied into the doctrine.</p>{{end}}
+{{if .For}}<p class="browse-for"><strong>Adding fits to <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each fit you add is copied into the doctrine. <a href="/doctrines/{{.For.ID}}">Back to the doctrine</a></p>{{end}}
 
 {{if .Total}}
 <form method="get" action="{{.Path}}" class="lookup-form searchpanel">

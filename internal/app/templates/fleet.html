@@ -7,10 +7,10 @@
 <div class="l-page fl-page">
 <div class="l-head">
   <h2 class="l-head-title">{{.Title}}</h2>
-  <p class="l-head-sum">{{.Kind}} by <b>{{.Owner}}</b>. <span class="badge">{{.Visibility}}</span></p>
+  <p class="l-head-sum">{{.Kind}} run by <b>{{.Owner}}</b> <span class="badge">{{.Visibility}}</span></p>
   {{if .CanManage}}
   <div class="l-head-act">
-    <a class="btn btn-quiet" href="/fleets/{{.ID}}/edit">Change</a>
+    <a class="btn btn-quiet" href="/fleets/{{.ID}}/edit">Edit fleet</a>
     <form method="post" action="/fleets/{{.ID}}/cancel"{{if not .Cancelled}} data-confirm="Cancel this fleet? People who signed up will see it was cancelled."{{end}}>
       {{if .Cancelled}}<button type="submit" class="btn btn-quiet">Bring it back</button>{{else}}<button type="submit" class="btn btn-danger">Cancel fleet</button>{{end}}
     </form>
@@ -20,27 +20,72 @@
 
 {{if .Cancelled}}<p class="err">This fleet was cancelled.</p>{{end}}
 
-<section class="l-panel fl-muster{{if .Live}} is-live{{end}}{{if .Cancelled}} is-off{{end}}" aria-label="When and where">
-  <time class="fl-when" datetime="{{.WhenRaw}}">
-    <span class="fl-clock">{{.Clock}}</span>
-    <span class="fl-day">{{.Day}}, EVE time</span>
-    <span class="l-local" data-local-time="{{.WhenRaw}}"></span>
-    {{if .Live}}<span class="badge kill">Live now</span>{{else if and (not .Over) (not .Cancelled)}}<span class="countdown" data-finish="{{.WhenRaw}}"></span>{{else if .Over}}<span class="badge wait">Over</span>{{end}}
-  </time>
-  <dl class="fl-facts">
-    <div><dt class="field-label">Form up</dt><dd>{{if .FormUp}}{{.FormUp}}{{else if .SeeFormUp}}Not set{{else}}Shown once you can sign up{{end}}</dd></div>
-    <div><dt class="field-label">Length</dt><dd>{{.Length}}</dd></div>
-    {{if .FC}}<div><dt class="field-label">Fleet commander</dt><dd>{{charLink $.ViewerChars .FCID .FC}}</dd></div>{{end}}
-    {{range .Commanders}}<div><dt class="field-label">Co-FC</dt><dd>{{charLink $.ViewerChars .CharacterID .Name}}{{if $op.CanPlan}} <form method="post" action="/fleets/{{$op.ID}}/commanders" class="fl-inline"><input type="hidden" name="character" value="{{.CharacterID}}"><input type="hidden" name="do" value="remove"><button type="submit" class="btn btn-quiet">Remove</button></form>{{end}}</dd></div>{{end}}
-    <div><dt class="field-label">Doctrine</dt><dd>{{if .Doctrine}}{{if .DoctrineURL}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{else}}{{.Doctrine}}{{end}} <small>{{if .DoctrineRequired}}required{{else}}suggested{{end}}</small>{{else}}None, bring what you like{{end}}</dd></div>
-    {{if .DoctrineFit}}<div><dt class="field-label">Bring</dt><dd>{{range $i, $fit := .DoctrineFit}}{{if $i}}, {{end}}{{if $fit.Href}}<a href="{{$fit.Href}}">{{$fit.Name}}</a>{{else}}{{$fit.Name}}{{end}}{{if $fit.Role}} <small>({{$fit.Role}})</small>{{end}}{{end}}</dd></div>{{end}}
-    <div><dt class="field-label">Sign-ups</dt><dd>{{.JoinGate}}</dd></div>
-  </dl>
-  {{if .Description}}<p class="fl-about">{{.Description}}</p>{{end}}
+{{with .LiveView}}
+{{$lv := .}}
+<section class="l-panel fl-now" aria-labelledby="fl-now-title">
+  <div class="fl-now-head">
+    <h2 id="fl-now-title"><span class="badge kill">Live</span> Running for {{.Running}}</h2>
+    <p class="fl-asof{{if .Stale}} is-stale{{end}}">{{if .Stale}}Out of date: last read {{.AsOf}}.{{else}}Updated every minute, last at {{.AsOf}}.{{end}}</p>
+    <a class="btn" href="/fleets/{{.ID}}/composition">{{if .CanEdit}}Set roles and tags{{else}}See composition{{end}}</a>
+  </div>
+  {{with $op.InFleet}}<p class="fl-you">You are in this fleet: {{range $i, $s := .}}{{if $i}}; {{end}}{{$s}}{{end}}.</p>{{end}}
+  {{with .Comp}}
+  <div class="l-tiles">
+    <div class="l-stat"><span class="l-stat-label">Pilots</span><span class="l-stat-value">{{.Pilots}}</span>{{if $lv.InviteCount}}<span class="l-stat-sub">{{$lv.InviteCount}} signed up and not in yet</span>{{end}}</div>
+    {{if $lv.Full}}
+    {{if .HasDoctrine}}<div class="l-stat"><span class="l-stat-label">In doctrine hulls</span><span class="l-stat-value">{{.OnDoctrine}}</span><span class="l-stat-sub">of {{.Pilots}}{{if .OffDoctrine}}, {{.OffDoctrine}} in another hull{{end}}</span></div>{{end}}
+    <div class="l-stat"><span class="l-stat-label">Hulls</span><span class="l-stat-value">{{len .Hulls}}</span>{{with .Hulls}}<span class="l-stat-sub">Most flown: {{(index . 0).Name}}</span>{{end}}</div>
+    <div class="l-stat"><span class="l-stat-label">Systems</span><span class="l-stat-value">{{len .Systems}}</span>{{with .Systems}}<span class="l-stat-sub">{{(index . 0).Count}} in {{(index . 0).Name}}</span>{{end}}</div>
+    {{end}}
+  </div>
+  {{end}}
+  {{if .RoleBar}}
+  <svg class="fl-rolebar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="{{.RoleSummary}}">{{range .RoleBar}}<rect class="{{.Class}}" x="{{printf "%.3f" .X}}" y="0" width="{{printf "%.3f" .W}}" height="10"><title>{{.Role}}: {{.Count}}</title></rect>{{end}}</svg>
+  <ul class="fl-legend">{{range .RoleBar}}<li><span class="fl-swatch {{.Class}}" aria-hidden="true"></span>{{.Role}} <b>{{.Count}}</b></li>{{end}}</ul>
+  {{end}}
+  {{with .Gaps}}<p class="fl-gaps"><span class="field-label">Doctrine gaps</span> {{.}}</p>{{end}}
 </section>
+{{end}}
+
+{{if not .LiveView}}
+<section class="l-panel fl-muster{{if .Live}} is-live{{end}}{{if .Cancelled}} is-off{{end}}" aria-label="When and where">
+  {{template "fleet-when" .}}
+  {{template "fleet-facts" .}}
+</section>
+{{end}}
 
 <div class="l-sidebar l-sidebar--end fl-split">
 <div class="fl-main">
+
+{{with .LiveView}}
+<section class="l-panel" aria-labelledby="fl-structure-title">
+  <h2 id="fl-structure-title">Fleet structure</h2>
+  {{if not .Full}}<p class="fl-hint">Everyone in the fleet sees its names and positions. Ships show for you and the pilots under your command, as in EVE.</p>{{end}}
+  {{template "fleet-structure" .}}
+</section>
+{{end}}
+
+{{if .Totals}}
+<section class="l-panel" aria-labelledby="fl-totals-title">
+  <div class="fl-panel-head">
+    <h2 id="fl-totals-title">Fleet totals</h2>
+    {{if .ReportURL}}<a class="btn btn-quiet" href="{{.ReportURL}}">Open the battle report</a>{{end}}
+  </div>
+  {{with .Totals}}
+  <div class="l-tiles">
+    <div class="l-stat"><span class="l-stat-label">Kills</span><span class="l-stat-value">{{.Kills}}</span><span class="l-stat-sub">{{.Destroyed}} ISK destroyed</span></div>
+    <div class="l-stat"><span class="l-stat-label">Losses</span><span class="l-stat-value">{{.Losses}}</span><span class="l-stat-sub">{{.Lost}} ISK lost</span></div>
+  </div>
+  {{end}}
+  {{if .Battles}}
+  <ol class="fl-battles" role="list">
+    {{range .Battles}}<li><a href="{{.Href}}"><span class="fl-battle-where">{{.System}}</span><span class="fl-battle-when">{{.When}}</span><span class="fl-battle-score"><span{{if .Kills}} class="is-kill"{{end}}>{{.Kills}} {{if eq .Kills 1}}kill{{else}}kills{{end}}</span>, <span{{if .Losses}} class="is-loss"{{end}}>{{.Losses}} {{if eq .Losses 1}}loss{{else}}losses{{end}}</span></span><span class="fl-battle-isk">{{.Destroyed}}, {{.Lost}}</span></a></li>{{end}}
+  </ol>
+  {{end}}
+</section>
+{{end}}
+
+{{if and (not .InFleet) (or (not .Over) .Cancelled)}}
 <section class="l-panel fl-signup" aria-labelledby="fl-signup-title">
   <h2 id="fl-signup-title">Your sign-up</h2>
   {{if .Cancelled}}
@@ -48,6 +93,7 @@
   {{else if .Over}}
   <p class="fl-empty">Sign-ups are closed: the fleet is over.{{if .HasSRP}} Lost a ship on it? <a href="/fleets/{{.ID}}/srp">Ask for a replacement</a>.{{end}}</p>
   {{else if .CanJoin}}
+  {{if .Live}}<p class="fl-hint">The fleet is already running. Sign up and the fleet commander sees you on the list of pilots to invite.</p>{{end}}
   <form method="post" action="/fleets/{{.ID}}/signup" class="fl-signup-form">
     {{with .Share}}<input type="hidden" name="share" value="{{.}}">{{end}}
     {{if eq (len .Characters) 1}}{{range .Characters}}<input type="hidden" name="character" value="{{.ID}}"><p class="fl-as">Signing up as <b>{{.Name}}</b></p>{{end}}
@@ -63,7 +109,7 @@
       <div class="field"><label class="field-label" for="fl-ship">Ship</label>
         <input id="fl-ship" type="text" name="ship" value="{{.MyShip}}" maxlength="120" placeholder="e.g. Loki"{{if .DoctrineFit}} list="fl-doctrine-ships"{{end}}>{{if .DoctrineFit}}<datalist id="fl-doctrine-ships">{{range .DoctrineFit}}<option value="{{.Ship}}">{{end}}</datalist>{{end}}</div>
       <div class="field"><label class="field-label" for="fl-role">Role</label>
-        <select id="fl-role" name="fleet_role"{{if .DoctrineFit}} aria-describedby="fl-role-hint"{{end}}><option value="">Any</option>{{range .Roles}}<option value="{{.}}"{{if eq . $op.MyRole}} selected{{end}}>{{.}}</option>{{end}}</select>{{if .DoctrineFit}}<span class="field-hint" id="fl-role-hint">On Any, a doctrine ship takes its part in the doctrine.</span>{{end}}</div>
+        <select id="fl-role" name="fleet_role"{{if .DoctrineFit}} aria-describedby="fl-role-hint"{{end}}><option value="">Any</option>{{range .Roles}}<option value="{{.}}"{{if eq . $op.MyRole}} selected{{end}}>{{.}}</option>{{end}}</select>{{if .DoctrineFit}}<span class="field-hint" id="fl-role-hint">Left on Any, a doctrine ship counts in the role the doctrine gives it.</span>{{end}}</div>
       <div class="field"><label class="field-label" for="fl-note">Note</label>
         <input id="fl-note" type="text" name="note" value="{{.MyNote}}" maxlength="120" placeholder="e.g. 20 minutes late"></div>
     </div>
@@ -80,15 +126,17 @@
   <p class="fl-empty">None of your characters can sign up to this fleet.</p>
   {{end}}
 </section>
+{{end}}
 
+{{if or (not .Over) .ComingCount .MaybeCount}}
 <section class="l-panel" aria-labelledby="fl-roster-title">
   <h2 id="fl-roster-title">Coming <small>{{.ComingCount}}</small>{{if .MaybeCount}} <small>and {{.MaybeCount}} maybe</small>{{end}}</h2>
   {{if not .SeeNames}}
-  <p class="fl-empty">Pilot names are shown to people who can sign up.</p>
+  <p class="fl-empty">{{if .Live}}While the fleet runs, names show only to the pilots in it and the people running it.{{else}}Pilot names show to people who can sign up.{{end}}</p>
   {{else}}
   {{if .RoleCounts}}<p class="fl-hint">{{range $i, $c := .RoleCounts}}{{if $i}}, {{end}}{{$c.Count}} {{$c.Role}}{{end}}</p>{{end}}
   {{if .RosterCut}}<p class="fl-hint">Showing the first 300 sign-ups.</p>{{end}}
-  {{if not .Yes}}<p class="fl-empty">Nobody yet.</p>{{end}}
+  {{if not .Yes}}<p class="fl-empty">Nobody has signed up yet.</p>{{end}}
   {{range .Roster}}
   {{with .Title}}<h3>{{.}}</h3>{{end}}
   <div class="tw">
@@ -104,30 +152,19 @@
   {{end}}
   {{end}}
 </section>
-
-{{with .Totals}}
-<section class="l-panel" aria-labelledby="fl-totals-title">
-  <h2 id="fl-totals-title">Fleet totals</h2>
-  <ul class="fl-tally">
-    <li><span>Kills</span><span>{{.Kills}}</span></li>
-    <li><span>Losses</span><span>{{.Losses}}</span></li>
-    <li><span>ISK destroyed</span><span>{{.Destroyed}}</span></li>
-    <li><span>ISK lost</span><span>{{.Lost}}</span></li>
-  </ul>
-</section>
 {{end}}
 
 {{with .Attendance}}
-<section class="l-panel" aria-labelledby="fl-attendance-title">
-  <h2 id="fl-attendance-title">Attendance <small>{{len .Rows}}</small></h2>
+<details class="l-panel fl-fold" aria-labelledby="fl-attendance-title"{{if not $op.LiveView}} open{{end}}>
+  <summary><h2 id="fl-attendance-title">Attendance <small>{{len .Rows}}</small></h2></summary>
   {{if $op.CanManage}}<p class="fl-hint">{{.Capture}}</p>{{if .CaptureNotes}}<ul class="fl-notes">{{range .CaptureNotes}}<li>{{.}}</li>{{end}}</ul>{{end}}{{end}}
   {{if .Rows}}
   <div class="tw">
   <table>
-    <thead><tr><th>Pilot</th><th>Ship</th><th>Recorded</th></tr></thead>
+    <thead><tr><th>Pilot</th><th>Ship</th><th>How</th></tr></thead>
     <tbody>
     {{range .Rows}}
-      <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{if .ShipTypeID}}{{itemLink .ShipTypeID .Ship}}{{end}}</td><td>{{if .ByHand}}by hand{{else}}from the fleet{{end}}</td></tr>
+      <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{if .ShipTypeID}}{{itemLink .ShipTypeID .Ship}}{{end}}</td><td>{{if .ByHand}}Marked by hand{{else}}Seen in the fleet{{end}}</td></tr>
     {{end}}
     </tbody>
   </table>
@@ -137,7 +174,7 @@
   {{if .CanMark}}
   <section class="foldable"{{if .Capturing}} data-fold="closed"{{end}}>
   <h3>Mark attendance by hand</h3>
-  <p class="fl-hint">{{if .Capturing}}Not needed while the fleet is being read; here in case someone was missed.{{else}}Tick who was there. Pilots recorded from the fleet stay as they are.{{end}}</p>
+  <p class="fl-hint">{{if .Capturing}}Attendance is read from the fleet in EVE, so this is only for someone the read missed.{{else}}Tick who was there. Pilots seen in the fleet stay as they are.{{end}}</p>
   {{if .Ticks}}
   <form method="post" action="/fleets/{{$.Op.ID}}/attendance" class="fl-ticks">
     {{range .Ticks}}
@@ -146,15 +183,40 @@
     <p><button type="submit">Save attendance</button></p>
   </form>
   {{else}}
-  <p class="fl-empty">Nobody signed up to this fleet, so there is nobody to tick yet. Pilots can still sign up while it runs.</p>
+  <p class="fl-empty">Nobody has signed up, so there is nobody to tick yet. Pilots can still sign up while the fleet runs.</p>
   {{end}}
   </section>
   {{end}}
-</section>
+</details>
 {{end}}
 </div>
 
-<aside class="fl-side" aria-label="Share this fleet">
+<aside class="fl-side" aria-label="About this fleet">
+  {{if .LiveView}}
+  <section class="l-panel fl-brief" aria-labelledby="fl-brief-title">
+    <h2 id="fl-brief-title">Briefing</h2>
+    {{template "fleet-when" .}}
+    {{template "fleet-facts" .}}
+  </section>
+  {{end}}
+
+  {{if and .ReportURL (or .Live .Over) .LogPilots}}
+  <section class="l-panel fl-next fl-logs-cta" aria-labelledby="fl-logcta-title">
+    <h2 id="fl-logcta-title">Battle logs</h2>
+    <p>{{if .Over}}Flew in this fleet? Add{{else}}After the fight, add{{end}} your game log so your damage and repairs count in the battle report. Axon sends logs by itself. Without Axon, upload the log file on the Report tab.</p>
+    <ul class="fl-logs-who">{{range .LogPilots}}<li>{{.Name}}: {{if .On}}logs count in the report{{else}}no logs added{{end}}</li>{{end}}</ul>
+    <a class="btn" href="{{.ReportURL}}#fl-logs-title">Add a battle log</a>
+  </section>
+  {{end}}
+
+  {{if and .Over .HasSRP (not .Cancelled)}}
+  <section class="l-panel fl-next" aria-labelledby="fl-srp-title">
+    <h2 id="fl-srp-title">Lost a ship?</h2>
+    <p>Ask {{.Owner}} to replace a ship you lost on this fleet.</p>
+    <a class="btn btn-quiet" href="/fleets/{{.ID}}/srp">Ask for a replacement</a>
+  </section>
+  {{end}}
+
   {{if or .ShareURL .CalendarURL}}
   <section class="l-panel fl-next" aria-labelledby="fl-share-title">
     <h2 id="fl-share-title">Share</h2>
@@ -162,7 +224,10 @@
     <div class="field"><label class="field-label" for="fl-share-link">Share link</label>
       <input id="fl-share-link" type="text" value="{{.}}" readonly aria-describedby="fl-share-hint"></div>
     <p class="fl-hint" id="fl-share-hint">{{$op.ShareNote}}</p>
-    <form method="post" action="/fleets/{{$op.ID}}/share" data-confirm="Make a new link? The current link stops working."><button type="submit" class="btn btn-quiet">Make a new link</button></form>
+    <div class="l-cluster">
+      <button type="button" class="btn btn-quiet" data-copy data-copy-text="{{.}}">Copy link</button>
+      <form method="post" action="/fleets/{{$op.ID}}/share" data-confirm="Make a new link? The current link stops working."><button type="submit" class="btn btn-quiet">Make a new link</button></form>
+    </div>
     {{end}}
     {{with .CalendarURL}}<a class="btn btn-quiet" href="{{.}}">Add to calendar</a>{{end}}
   </section>
@@ -174,3 +239,25 @@
 {{end}}
 {{end}}
 
+{{define "fleet-when"}}
+<time class="fl-when" datetime="{{.WhenRaw}}">
+  <span class="fl-clock">{{.Clock}}</span>
+  <span class="fl-day">{{.Day}}, EVE time</span>
+  <span class="l-local" data-local-time="{{.WhenRaw}}"></span>
+  {{if .Live}}<span class="badge kill">Live now</span>{{else if and (not .Over) (not .Cancelled)}}<span class="countdown" data-finish="{{.WhenRaw}}"></span>{{else if .Over}}<span class="badge wait">Over</span>{{end}}
+</time>
+{{end}}
+
+{{define "fleet-facts"}}
+{{$op := .}}
+<dl class="fl-facts">
+  <div><dt class="field-label">Form up</dt><dd>{{if .FormUp}}{{.FormUp}}{{else if .SeeFormUp}}Not set{{else}}Shown once you can sign up{{end}}</dd></div>
+  <div><dt class="field-label">Planned length</dt><dd>{{.Length}}</dd></div>
+  {{if .FC}}<div><dt class="field-label">Fleet commander</dt><dd>{{charLink $.ViewerChars .FCID .FC}}</dd></div>{{end}}
+  {{range .Commanders}}<div><dt class="field-label">Co-FC</dt><dd>{{charLink $.ViewerChars .CharacterID .Name}}{{if $op.CanPlan}} <form method="post" action="/fleets/{{$op.ID}}/commanders" class="fl-inline"><input type="hidden" name="character" value="{{.CharacterID}}"><input type="hidden" name="do" value="remove"><button type="submit" class="btn btn-quiet">Remove</button></form>{{end}}</dd></div>{{end}}
+  <div><dt class="field-label">Doctrine</dt><dd>{{if .Doctrine}}{{if .DoctrineURL}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{else}}{{.Doctrine}}{{end}} <small>{{if .DoctrineRequired}}required{{else}}suggested{{end}}</small>{{else}}None, bring what you like{{end}}</dd></div>
+  <div><dt class="field-label">Who can sign up</dt><dd>{{.JoinGate}}</dd></div>
+  {{if .DoctrineFit}}<div class="fl-facts-wide"><dt class="field-label">Doctrine fits</dt><dd><ul class="fl-fits" role="list">{{range .DoctrineFit}}<li>{{if .Href}}<a href="{{.Href}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{if .Role}} <small>{{.Role}}</small>{{end}}</li>{{end}}</ul></dd></div>{{end}}
+</dl>
+{{if .Description}}<p class="fl-about">{{.Description}}</p>{{end}}
+{{end}}

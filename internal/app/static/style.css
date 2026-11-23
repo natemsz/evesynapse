@@ -1747,7 +1747,7 @@ html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[d
 /* Data chip: a small box that holds data, not a status (a colony
    and its timer, a container's item count, a contract's volume):
    the body face, in the case it was written. */
-.lchip, .ov-pipill, span.cs-pill, .fo-pill:not(.fo-state) {
+.lchip, .ov-pipill, span.cs-pill, .fo-pill:not(.fo-state), .fl-tag {
   font-family: var(--font-body);
   font-size: var(--fs-xs);
   font-weight: 400;

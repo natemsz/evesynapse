@@ -160,6 +160,38 @@ var demoFleetPool = []demoFleetSeat{
 	{ID: demoPilotSoren, Ship: "Gila", Wing: 3, Squad: 31, Position: "squad_member"},
 }
 
+// demoLiveSeats is the fleet that is always running: Sable as fleet
+// commander and boss, with ten of the group's pilots under her in two
+// wings. One flies a hull the doctrine does not list and one scouts a
+// jump ahead, so the commander tools have something to point out.
+var demoLiveSeats = []demoFleetSeat{
+	{ID: demoCharacterID, Ship: "Tengu", Wing: -1, Squad: -1, Position: "fleet_commander"},
+	{ID: demoPilotAiko, Ship: "Tengu", Wing: 1, Squad: 11, Position: "squad_commander", FleetNotes: []string{"anchor"}},
+	{ID: demoPilotBram, Ship: "Tengu", Wing: 1, Squad: 11, Position: "squad_member"},
+	{ID: demoPilotCass, Ship: "Tengu", Wing: 1, Squad: 11, Position: "squad_member"},
+	{ID: demoPilotDov, Ship: "Loki", Wing: 1, Squad: 11, Position: "squad_member"},
+	{ID: demoPilotSoren, Ship: "Gila", Wing: 1, Squad: 11, Position: "squad_member"},
+	{ID: demoPilotKira, Ship: "Basilisk", Wing: 2, Squad: 21, Position: "squad_commander", FleetNotes: []string{"logi anchor"}},
+	{ID: demoPilotLars, Ship: "Scimitar", Wing: 2, Squad: 21, Position: "squad_member"},
+	{ID: demoPilotOda, Ship: "Sabre", Wing: 2, Squad: 22, Position: "squad_commander", FleetNotes: []string{"bubbles"}},
+	{ID: demoPilotQuinn, Ship: "Huginn", Wing: 2, Squad: 22, Position: "squad_member", FleetNotes: []string{"webs"}},
+	{ID: demoPilotTova, Ship: "Buzzard", Wing: 2, Squad: 22, Position: "squad_member", System: 1, FleetNotes: []string{"chain scout"}},
+}
+
+// demoLiveUnits names the live fleet's wings and squads, as its boss
+// would in game.
+var demoLiveUnits = fleetUnitNames{
+	Wings:  map[int64]string{1: "Main body", 2: "Support"},
+	Squads: map[int64]string{11: "DPS", 21: "Logistics", 22: "Tackle and scouts"},
+}
+
+// demoInventedPilot says a character is one of the demo group's
+// invented pilots or rivals. They have no public record, so their
+// names are never links.
+func demoInventedPilot(id int64) bool {
+	return id >= demoPilotAiko && id <= demoRivalZeke
+}
+
 // demoFleetValues is what each hull is worth on a report, fitted.
 var demoFleetValues = map[string]float64{
 	"Tengu": 512e6, "Loki": 548e6, "Legion": 462e6, "Proteus": 603e6, "Scimitar": 268e6, "Basilisk": 274e6,
@@ -841,7 +873,7 @@ func (s *demoSeed) writeDemoLiveFleet(ctx context.Context, doctrineID, policyID 
 	if err := q.AddOpCommander(ctx, db.AddOpCommanderParams{OpID: op.ID, CharacterID: demoCharSera, AddedBy: demoCharacterID, AddedAt: start}); err != nil {
 		return err
 	}
-	for _, seat := range demoFleetPool {
+	for _, seat := range demoLiveSeats {
 		for _, note := range seat.FleetNotes {
 			if err := q.InsertOpMemberTag(ctx, db.InsertOpMemberTagParams{
 				OpID: op.ID, CharacterID: seat.ID, Kind: fleetTagNote, Tag: note, SetBy: demoCharacterID, SetAt: start,
@@ -864,8 +896,8 @@ func (s *demoSeed) writeDemoLiveFleet(ctx context.Context, doctrineID, policyID 
 			return err
 		}
 	}
-	members := make([]esi.FleetMember, 0, len(demoFleetPool))
-	for _, seat := range demoFleetPool {
+	members := make([]esi.FleetMember, 0, len(demoLiveSeats))
+	for _, seat := range demoLiveSeats {
 		members = append(members, esi.FleetMember{
 			CharacterID: seat.ID, ShipTypeID: s.typeID(seat.Ship), SolarSystemID: systems[seat.System],
 			WingID: seat.Wing, SquadID: seat.Squad, Role: seat.Position,
@@ -876,10 +908,10 @@ func (s *demoSeed) writeDemoLiveFleet(ctx context.Context, doctrineID, policyID 
 		return err
 	}
 	read := fleetRead{State: fleetReadBoss, FleetID: demoFleetMailBase, BossID: demoCharacterID, Members: members}
-	comp := s.app.composeFleet(ctx, op, read, map[int64]string{1: "Main body", 2: "Logistics", 3: "Support"}, tags)
+	comp := s.app.composeFleet(ctx, op, read, demoLiveUnits, tags)
 	// The first sighting is near the start, so the fleet reads as one
 	// that has been running.
-	if _, err := q.UpsertFleetAttendance(ctx, s.demoSeatsParams(op.ID, demoFleetPool, systems, start.Add(2*time.Minute))); err != nil {
+	if _, err := q.UpsertFleetAttendance(ctx, s.demoSeatsParams(op.ID, demoLiveSeats, systems, start.Add(2*time.Minute))); err != nil {
 		return err
 	}
 	if err := s.app.saveFleetRead(ctx, op, comp, s.now); err != nil {

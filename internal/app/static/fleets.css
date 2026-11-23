@@ -58,6 +58,82 @@
   .fl-muster { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* A live fleet's Overview, for a pilot in it: the live panel leads,
+   the structure fills the main column, the briefing moves aside. */
+.fl-now { display: flex; flex-direction: column; gap: var(--space-3); box-shadow: inset 3px 0 0 var(--accent); }
+.fl-now-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.fl-page .fl-now-head h2 { display: inline-flex; align-items: center; gap: var(--space-2); margin: 0; }
+.fl-now-head .btn { margin-inline-start: auto; }
+.fl-now .l-tiles { margin: 0; }
+.fl-now .fl-legend { margin-top: 0; }
+.fl-you { margin: 0; color: var(--text); }
+.fl-gaps { margin: 0; overflow-wrap: anywhere; }
+.fl-gaps .field-label { margin-inline-end: var(--space-2); }
+.fl-brief .fl-when { margin-bottom: var(--space-3); }
+.fl-brief .fl-clock { font-size: var(--fs-2xl); }
+.fl-brief .fl-facts { grid-template-columns: minmax(0, 1fr); }
+.fl-brief .fl-about { margin-top: var(--space-3); }
+.fl-when .badge { align-self: flex-start; }
+.fl-facts-wide { grid-column: 1 / -1; }
+.fl-fits { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin: 0; padding: 0; list-style: none; }
+.fl-fits small { color: var(--muted); font-size: var(--fs-xs); }
+.fl-panel-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }
+.fl-page .fl-panel-head h2 { margin: 0; }
+.fl-logs-who { margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--fs-xs); }
+
+/* A fleet's fights, each a way into its report */
+.fl-battles { margin: var(--space-3) 0 0; padding: 0; list-style: none; border-top: 1px solid var(--hairline); }
+.fl-battles li + li { border-top: 1px solid var(--hairline); }
+.fl-battles a { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.15rem var(--space-3); padding: var(--space-2); color: inherit; }
+.fl-battles a:hover { background: var(--surface-inset); text-decoration: none; }
+.fl-battles a:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.fl-battle-where { color: var(--gold); }
+.fl-battle-when, .fl-battle-isk { color: var(--muted); font-size: var(--fs-xs); text-align: end; }
+.fl-battle-score .is-kill { color: var(--kept); }
+.fl-battle-score .is-loss { color: var(--danger); }
+
+/* A panel that folds (attendance while the fleet runs) */
+.fl-fold > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); list-style: none; cursor: pointer; }
+.fl-fold > summary::-webkit-details-marker { display: none; }
+.fl-page .fl-fold > summary h2 { margin: 0; }
+.fl-fold > summary::after { content: "+"; color: var(--muted); }
+.fl-fold[open] > summary::after { content: "\2212"; }
+.fl-fold[open] > summary { margin-bottom: var(--space-3); }
+.fl-fold > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* The fleet's structure, laid out like EVE's fleet window: wings side
+   by side while there is room, squads on a rail under their wing,
+   one row per pilot with their ship. Fleet command spans the top. */
+.fl-tree { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: var(--space-4) var(--space-5); align-items: start; }
+.fl-wing { min-width: 0; }
+.fl-wing.is-command { grid-column: 1 / -1; }
+.fl-unit-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem var(--space-3); margin-bottom: var(--space-2); }
+.fl-page .fl-unit-head :is(h3, h4) { margin: 0; }
+.fl-unit-meta { color: var(--muted); font-size: var(--fs-xs); }
+.fl-hullmix { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); flex-basis: 100%; }
+.fl-hullmix-item { display: inline-flex; align-items: center; gap: 0.35em; color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
+.fl-hullmix-item img { border-radius: 2px; background: var(--row-alt); }
+.fl-hullmix-item b { color: var(--text); font-weight: 600; }
+.fl-squad { margin-top: var(--space-3); margin-inline-start: 0.45rem; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--hairline); }
+.fl-seats { display: flex; flex-direction: column; gap: 0.15rem; margin: 0; padding: 0; list-style: none; }
+.fl-seat {
+  display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto;
+  grid-template-areas: "ship who role" "ship tags tags";
+  align-items: center; gap: 0 var(--space-2);
+  padding: 0.3rem var(--space-2); border-radius: var(--r-xs);
+}
+.fl-seat.is-lead { background: var(--surface-inset); }
+.fl-seat-ship { grid-area: ship; display: block; width: 2rem; height: 2rem; border-radius: var(--r-xs); background: var(--row-alt); }
+.fl-seat-who { grid-area: who; display: flex; flex-direction: column; min-width: 0; }
+.fl-seat-name { overflow-wrap: anywhere; }
+.fl-seat-ship-name { color: var(--muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.fl-seat.is-unseen .fl-seat-ship-name { font-style: italic; }
+.fl-off { color: var(--gold); }
+.fl-rank { margin-inline-start: var(--space-1); vertical-align: 0.1em; }
+.fl-seat-role { grid-area: role; display: inline-flex; align-items: center; color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
+.fl-seat-tags { grid-area: tags; display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.2rem; }
+.fl-tag { padding: 0.05rem 0.4rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); color: var(--text); }
+
 /* Sign-up */
 .fl-signup-form { display: flex; flex-direction: column; gap: var(--space-3); }
 .fl-signup-form > button { align-self: flex-start; }
@@ -144,6 +220,16 @@
   .fl-pilots td:last-child { grid-area: save; }
   .fl-pilots select, .fl-pilots input[type="text"] { min-width: 0; }
 }
+
+/* Adding a battle log from the fleet's report */
+.fl-logs { display: flex; flex-direction: column; gap: var(--space-3); }
+.fl-logs > .prose { margin: 0; max-width: 70ch; }
+.fl-paste > summary { color: var(--gold); cursor: pointer; }
+.fl-paste[open] > summary { margin-bottom: var(--space-2); }
+.fl-paste textarea { width: 100%; }
+.fl-upload .fl-hint { margin: 0; }
+.fl-logs-count { padding-top: var(--space-3); border-top: 1px solid var(--hairline); }
+.fl-logs-count > .field-label, .fl-logs-count > .fl-hint { grid-column: 1 / -1; margin: 0; }
 
 /* The fleet report */
 .fl-report { --fl-out: var(--gold); --fl-in: var(--danger); --fl-rep: var(--kept); }

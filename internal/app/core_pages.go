@@ -5,6 +5,7 @@ import (
 	"context"
 	"html/template"
 	"net/http"
+	"slices"
 	"sync"
 
 	"evesynapse/internal/app/module"
@@ -181,6 +182,30 @@ type skillRow struct {
 // in a different branch than its template suggests, the corp
 // killmails view reuses killmails.html, set pageData.Section
 // explicitly and render leaves it alone.
+// sectionFor is the section a page renders in: its own, unless the
+// same address is listed under the section its reader came from too
+// (Doctrines under Corporation and Fleets), and then that one. A page
+// file that backs different addresses in two sections (the pilot's and
+// the corporation's killmails) keeps its own.
+func sectionFor(page, last string) string {
+	home := sectionForPage(page)
+	if last == "" || last == home {
+		return home
+	}
+	hrefs := map[string]bool{}
+	for _, e := range sectionNav[home] {
+		if slices.Contains(e.Pages, page) {
+			hrefs[e.Href] = true
+		}
+	}
+	for _, e := range sectionNav[last] {
+		if hrefs[e.Href] && slices.Contains(e.Pages, page) {
+			return last
+		}
+	}
+	return home
+}
+
 func sectionForPage(page string) string {
 	if p, ok := registeredPages[page]; ok && p.Section != "" {
 		return p.Section
@@ -231,7 +256,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/contractlist.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html", "templates/noticebanners.html", "templates/yourorders.html", "templates/reqicons.html", "templates/itemsheet.html", "templates/sharecard.html", "templates/fleetboard.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/contractlist.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html", "templates/noticebanners.html", "templates/yourorders.html", "templates/reqicons.html", "templates/itemsheet.html", "templates/sharecard.html", "templates/fleetboard.html", "templates/fleetparts.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.
@@ -274,8 +299,12 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	if shell.StatusPage == "" {
 		shell.StatusPage = app.cfg.statusPageOrigin
 	}
+	navAs := shell.NavAs
+	if navAs == "" {
+		navAs = page
+	}
 	if shell.Section == "" {
-		shell.Section = sectionForPage(page)
+		shell.Section = sectionFor(navAs, navSectionFrom(ctx))
 	}
 	if shell.NavState == "" {
 		shell.NavState = navStateFrom(ctx)
@@ -290,7 +319,7 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	if shell.NavCharacter == 0 {
 		shell.NavCharacter = navCharacterFrom(ctx)
 	}
-	shell.NavLinks = navLinksFor(shell.Section, shell.NavPage, shell.NavCharacter)
+	shell.NavLinks = navLinksFor(shell.Section, navAs, shell.NavCharacter)
 	shell.NavGroups = navGroupsFor(shell.NavLinks)
 	// A handler that set its own tab strip (the Admin pages,
 	// whose strip is the Admin tabs) keeps it; every other

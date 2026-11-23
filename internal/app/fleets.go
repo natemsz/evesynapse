@@ -797,6 +797,23 @@ type opView struct {
 	Attendance *opAttendance
 	// Totals: the fleet's stored kills, losses and ISK, nil until built.
 	Totals *fleetTotalsView
+
+	// Running: how long a live fleet has been going.
+	Running string
+	// LiveView is the fleet as last read, for a viewer in it: the live
+	// panel and the structure lead the page while it runs.
+	LiveView *fleetLiveView
+	// InFleet says where the viewer's own characters sit in the fleet.
+	InFleet []string
+	// ReportURL is the Report tab, for those it opens to. Battles are
+	// the report's fights, each a link into it, and LogPilots the
+	// viewer's characters on the fleet who can add a battle log.
+	ReportURL string
+	Battles   []fleetBattleLink
+	LogPilots []fleetConsentChoice
+	// ViewerChars are the viewer's characters, whose names link to their
+	// own sheets.
+	ViewerChars map[int64]bool
 }
 
 func (app *Application) handleOp(w http.ResponseWriter, r *http.Request) {
@@ -877,6 +894,10 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	if v.Pilot != nil {
 		view.PilotName = v.Pilot.Name
 	}
+	view.ViewerChars = make(map[int64]bool, len(v.Characters))
+	for _, c := range v.Characters {
+		view.ViewerChars[c.CharacterID] = true
+	}
 	if facts.ViaToken {
 		view.Share = op.ShareToken.String
 	}
@@ -940,12 +961,35 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	}
 
 	view.Totals = app.fleetTotalsFor(ctx, op.ID)
+	if view.Live {
+		view.Running = fleetRunningText(now.Sub(op.StartsAt))
+	}
+	if live.sight.In {
+		view.LiveView = app.fleetLiveFor(ctx, op, v, a, live, 1, now)
+		for _, m := range live.comp.Members {
+			if live.sight.own[m.ID] {
+				seat := m.Name + ", " + strings.ToLower(m.PositionText())
+				if m.Ship != "" {
+					seat += ", in a " + m.Ship
+				}
+				view.InFleet = append(view.InFleet, seat)
+			}
+		}
+	}
+	reportTab := app.fleetReportTab(ctx, op, v, now)
+	if reportTab {
+		view.ReportURL = fleetReportPath(op.ID)
+		if view.Totals != nil {
+			view.Battles = app.fleetBattleLinks(ctx, op.ID)
+		}
+		view.LogPilots = app.fleetConsentChoices(ctx, op.ID, v)
+	}
 	data := pageData{ShellData: app.PublicShell(ctx), Op: view}
 	// The tab opens by the fleet's address, where a share link does not
 	// count, so it is offered only to those it would let in.
 	direct := facts
 	direct.ViaToken = false
-	data.SectionSubTabs = fleetTabs(op.ID, true, seesFleetLive(op, v.access(op, direct), live.sight, now), view.HasSRP, app.fleetReportTab(ctx, op, v, now), "overview")
+	data.SectionSubTabs = fleetTabs(op.ID, true, seesFleetLive(op, v.access(op, direct), live.sight, now), view.HasSRP, reportTab, "overview")
 	if op.Visibility == fleetPublic || facts.ViaToken {
 		data.HeadMeta = module.RenderPageMeta(module.PageMeta{
 			Title:       op.Title,

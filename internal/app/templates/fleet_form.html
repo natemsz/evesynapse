@@ -82,7 +82,7 @@
       <div class="fl-options">
       {{range .Visibilities}}<label><input type="radio" name="visibility" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}<small>{{.Hint}}</small></span></label>{{end}}
       </div>
-      <div class="field fl-rule"><label class="field-label" for="fl-view-rule">Who, when private</label>
+      <div class="field fl-rule"><label class="field-label" for="fl-view-rule">Private to</label>
         <select id="fl-view-rule" name="view_rule">{{range .RuleChoices}}<option value="{{.Value}}"{{if eq .Value $f.ViewRule}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>
     </fieldset>
     <fieldset class="l-panel fl-choices fl-join">
@@ -90,7 +90,7 @@
       <div class="fl-options">
       {{range .Gates}}<label><input type="radio" name="join_gate" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}<small>{{.Hint}}</small></span></label>{{end}}
       </div>
-      <div class="field fl-rule"><label class="field-label" for="fl-join-rule">Who, when you choose</label>
+      <div class="field fl-rule"><label class="field-label" for="fl-join-rule">Pilots who can sign up</label>
         <select id="fl-join-rule" name="join_rule">{{range .RuleChoices}}<option value="{{.Value}}"{{if eq .Value $f.JoinRule}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>
     </fieldset>
   </div>

@@ -90,7 +90,7 @@ func publicItemSublink(typeID int64, name string) template.HTML {
 // viewer is the signed-in user's linked-character set (pageData's
 // ViewerChars). Plain text when the id is unknown.
 func charLink(viewer map[int64]bool, charID int64, name string) template.HTML {
-	if charID <= 0 || name == "" {
+	if charID <= 0 || name == "" || demoInventedPilot(charID) {
 		return template.HTML(html.EscapeString(name))
 	}
 	if viewer[charID] {

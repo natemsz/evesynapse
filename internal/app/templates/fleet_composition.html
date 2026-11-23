@@ -6,7 +6,7 @@
 <div class="l-page fl-page">
 <div class="l-head">
   <h2 class="l-head-title">{{.Title}}</h2>
-  <p class="l-head-sum">Who is in the fleet right now, read from EVE about once a minute.</p>
+  <p class="l-head-sum">Who is in the fleet now, read from EVE every minute.</p>
 </div>
 <p class="visually-hidden" role="status" id="fl-live-said"></p>
 {{template "fleet-live" .}}
@@ -17,15 +17,15 @@
 {{define "fleet-live"}}
 <div class="fl-live" id="fl-live"{{if .Polling}} data-fleet-live="{{.LiveURL}}" data-revision="{{.Revision}}" data-every="{{.PollSeconds}}"{{end}}{{with .TryURL}} data-fleet-try="{{.}}"{{end}}>
 {{$v := .}}
-{{if .TryURL}}<p class="fl-try-note">Sample fleet. Set roles and tags to try the commander tools. Your changes stay on this page and reset when you leave it.</p>{{end}}
+{{if .TryURL}}<p class="fl-try-note">This is a sample fleet. Set roles and tags under Roles and tags to try the commander tools. Nothing is saved: your changes reset when you leave the page.</p>{{end}}
 {{if .Has}}
-<p class="fl-asof{{if .Stale}} is-stale{{end}}">{{if .Stale}}Out of date: last read at {{.AsOf}}.{{else}}Last read at {{.AsOf}}.{{end}}{{if .CanManage}} {{.Status}}{{end}}</p>
+<p class="fl-asof{{if .Stale}} is-stale{{end}}">{{if .Stale}}Out of date: last read {{.AsOf}}.{{else}}Last read {{.AsOf}}.{{end}}{{with .Running}} Running for {{.}}.{{end}}{{if .CanManage}} {{.Status}}{{end}}</p>
 {{if .Notes}}<ul class="fl-notes">{{range .Notes}}<li>{{.}}</li>{{end}}</ul>{{end}}
 {{with .Comp}}
 <div class="l-tiles">
   <div class="l-stat"><span class="l-stat-label">Pilots</span><span class="l-stat-value">{{.Pilots}}</span></div>
-  {{if .HasDoctrine}}<div class="l-stat"><span class="l-stat-label">In a doctrine hull</span><span class="l-stat-value">{{.OnDoctrine}}</span><span class="l-stat-sub">of {{.Pilots}}</span></div>
-  <div class="l-stat"><span class="l-stat-label">In another hull</span><span class="l-stat-value">{{.OffDoctrine}}</span></div>{{end}}
+  {{if .HasDoctrine}}<div class="l-stat"><span class="l-stat-label">In doctrine hulls</span><span class="l-stat-value">{{.OnDoctrine}}</span><span class="l-stat-sub">of {{.Pilots}}</span></div>
+  <div class="l-stat"><span class="l-stat-label">In other hulls</span><span class="l-stat-value">{{.OffDoctrine}}</span></div>{{end}}
   {{if $v.Full}}<div class="l-stat"><span class="l-stat-label">Systems</span><span class="l-stat-value">{{len .Systems}}</span></div>{{end}}
 </div>
 
@@ -57,32 +57,37 @@
   <section class="l-panel" aria-labelledby="fl-gaps-title">
     <h2 id="fl-gaps-title">Doctrine gaps</h2>
     {{if or .MissingHulls .MissingRoles}}
-    {{if .MissingRoles}}<p class="fl-gap"><span class="field-label">No pilot in</span> {{range $i, $r := .MissingRoles}}{{if $i}}, {{end}}{{$r}}{{end}}</p>{{end}}
-    {{if .MissingHulls}}<p class="fl-gap"><span class="field-label">Nobody flying</span> {{range $i, $h := .MissingHulls}}{{if $i}}, {{end}}{{$h}}{{end}}</p>{{end}}
-    {{else}}<p class="fl-empty">Every doctrine hull and role is covered.</p>{{end}}
-    <p class="fl-hint">Checked by hull. EVE does not show other pilots' fits.</p>
+    {{if .MissingRoles}}<p class="fl-gap"><span class="field-label">Roles nobody is flying</span> {{range $i, $r := .MissingRoles}}{{if $i}}, {{end}}{{$r}}{{end}}</p>{{end}}
+    {{if .MissingHulls}}<p class="fl-gap"><span class="field-label">Doctrine hulls not in the fleet</span> {{range $i, $h := .MissingHulls}}{{if $i}}, {{end}}{{$h}}{{end}}</p>{{end}}
+    {{else}}<p class="fl-empty">Every doctrine hull and role is in the fleet.</p>{{end}}
+    <p class="fl-hint">Checked by hull only. EVE does not show other pilots' fits.</p>
   </section>
 </aside>
 {{end}}
 </div>
 {{end}}
 
-<div class="l-tiles l-tiles--cards">
-  <section class="l-panel" aria-labelledby="fl-wings-title">
-    <h2 id="fl-wings-title">Wings</h2>
-    <ul class="fl-tally">{{range .Wings}}<li><span>{{.Name}}{{if .Squads}} <small>{{.Squads}} {{if eq .Squads 1}}squad{{else}}squads{{end}}</small>{{end}}</span><b>{{.Pilots}}</b></li>{{end}}</ul>
-  </section>
+<div class="l-sidebar l-sidebar--end fl-split">
+<div class="fl-main">
+<section class="l-panel" aria-labelledby="fl-structure-title">
+  <h2 id="fl-structure-title">Fleet structure</h2>
+  {{if not $v.Full}}<p class="fl-hint">Everyone in the fleet sees its names and positions. Ships show for you and the pilots under your command, as in EVE.</p>{{end}}
+  {{template "fleet-structure" $v}}
+</section>
+</div>
+<aside class="fl-side" aria-label="Where the fleet is">
   {{if $v.Full}}<section class="l-panel" aria-labelledby="fl-systems-title">
     <h2 id="fl-systems-title">Systems</h2>
     <ul class="fl-tally">{{range .Systems}}<li><span>{{if .Name}}{{.Name}}{{else}}Unknown system{{end}}</span><b>{{.Count}}</b></li>{{end}}</ul>
   </section>{{end}}
   {{template "fleet-invite" $v}}
+</aside>
 </div>
 
+{{if $v.CanEdit}}
 <section class="l-panel fl-pilots" aria-labelledby="fl-pilots-title">
-  <h2 id="fl-pilots-title">Pilots <small>{{.Pilots}}</small></h2>
-  {{if not $v.Full}}<p class="fl-hint">Ships and systems show for you and the pilots under your command, as in EVE.</p>{{end}}
-  {{if $v.CanEdit}}<p class="fl-hint">Set a role to replace the one suggested by the pilot's hull. Tags are separated by commas, up to 5.</p>{{end}}
+  <h2 id="fl-pilots-title">Roles and tags <small>{{.Pilots}}</small></h2>
+  <p class="fl-hint">Each pilot starts with the role their hull suggests. Pick another to change it. Tags are short notes for the commanders, separated by commas, up to 5.</p>
   <div class="tw" tabindex="0" role="region" aria-labelledby="fl-pilots-title">
   <table>
     <thead><tr><th>Pilot</th><th>Ship</th><th>System</th><th>Position</th>{{if $v.CanEdit}}<th>Role</th><th>Tags</th><th><span class="visually-hidden">Save</span></th>{{end}}</tr></thead>
@@ -104,6 +109,7 @@
   </div>
   {{if gt $v.Pages 1}}<nav class="l-cluster fl-pager" aria-label="Pilot pages">{{with $v.PrevURL}}<a class="btn btn-quiet" href="{{.}}">Previous</a>{{end}}<span>Page {{$v.Page}} of {{$v.Pages}}</span>{{with $v.NextURL}}<a class="btn btn-quiet" href="{{.}}">Next</a>{{end}}</nav>{{end}}
 </section>
+{{end}}
 {{end}}
 {{else}}
 <section class="l-panel">

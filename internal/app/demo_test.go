@@ -836,7 +836,7 @@ func TestDemoFleetToolsStoreNothing(t *testing.T) {
 		t.Fatalf("the live sample fleet: %v", err)
 	}
 	cookie := sessionCookie(t, app, app.demoUserID(ctx), demoCharacterID, demoCharName)
-	const gap = `No pilot in</span> EWAR`
+	const gap = `Roles nobody is flying</span> EWAR`
 	if _, body := getPage(t, app, cookie, fleetCompositionPath(opID)); !strings.Contains(body, gap) || !strings.Contains(body, "data-fleet-try") {
 		t.Fatal("the sample fleet does not offer the commander tools with its EWAR gap")
 	}

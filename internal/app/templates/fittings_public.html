@@ -10,11 +10,12 @@
 <div class="l-head">
   <p class="l-head-sum"><b>{{.Total}}</b> public fit{{if ne .Total 1}}s{{end}}, shared by pilots here. Each has its own page with modules, stats, EFT and ratings.</p>
 </div>
-{{if .For}}<p class="browse-for"><strong>Choosing fits for <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each one added is copied into the doctrine.</p>{{end}}
+{{if .For}}<p class="browse-for"><strong>Adding fits to <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each fit you add is copied into the doctrine, so later edits to the public fit do not change it. <a href="/doctrines/{{.For.ID}}">Back to the doctrine</a></p>{{end}}
 
 <div class="l-sidebar pb-layout">
 <form method="get" action="/fittings/public/" class="l-panel pb-filters">
   {{if ne .Filters.Sort .DefaultSort}}<input type="hidden" name="sort" value="{{.Filters.Sort}}">{{end}}
+  {{with .Filters.For}}<input type="hidden" name="for" value="{{.}}">{{end}}
   <span class="searchwrap">
     <input type="search" name="q" id="fit-browse-q" value="{{.Filters.Q}}" placeholder="Search fits, ships and authors…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-browse-suggest" aria-autocomplete="list" aria-label="Search fits" data-suggest="{{.SuggestURL}}">
     <ul class="suggest" id="fit-browse-suggest" role="listbox" hidden></ul>

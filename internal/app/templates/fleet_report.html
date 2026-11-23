@@ -32,7 +32,7 @@
 <section class="l-panel" aria-labelledby="fl-curve-title">
   <div class="fl-curve-head">
     <h2 id="fl-curve-title">Damage and repairs per second</h2>
-    {{if .Curve}}<ul class="fl-curve-key"><li class="is-out">Damage out</li><li class="is-in">Damage in</li><li class="is-rep">Repairs</li></ul>{{end}}
+    {{if .Curve}}<ul class="fl-curve-key"><li class="is-out">Damage out</li><li class="is-in">Damage in</li><li class="is-rep">Repairs</li>{{if .Marks}}<li class="is-kill">Kill</li><li class="is-loss">Loss</li>{{end}}</ul>{{end}}
   </div>
   {{if .Curve}}
   <div class="fl-plot">
@@ -44,7 +44,9 @@
       <polyline class="fl-ln fl-ln-in" points="{{.Curve.In}}" vector-effect="non-scaling-stroke"/>
       <polyline class="fl-ln fl-ln-out" points="{{.Curve.Out}}" vector-effect="non-scaling-stroke"/>
       {{range .Curve.Bars}}<rect class="fl-hit" x="{{.X}}" y="0" width="{{.W}}" height="160"><title>{{.Label}}</title></rect>{{end}}
+      {{range .Marks}}<line class="fl-mk{{if .Loss}} is-loss{{end}}" x1="{{.X}}" y1="0" x2="{{.X}}" y2="160" vector-effect="non-scaling-stroke"><title>{{.Label}}</title></line>{{end}}
     </svg>
+    {{with .Ticks}}<div class="fl-plot-x" aria-hidden="true">{{range .}}<span>{{.}}</span>{{end}}</div>{{end}}
   </div>
   {{else}}<p class="fl-empty">No logs for this battle yet, so there is no curve.</p>{{end}}
   <ul class="fl-tally fl-extra">

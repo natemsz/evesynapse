@@ -263,7 +263,7 @@
 .fl-curve-key .is-in { --fl-key: var(--fl-in); }
 .fl-curve-key .is-rep { --fl-key: var(--fl-rep); }
 .fl-curve-key .is-rep::before { border-top-style: dashed; }
-.fl-plot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2); }
+.fl-plot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-2); }
 .fl-plot-y { display: flex; flex-direction: column; justify-content: space-between; color: var(--muted); font-size: var(--fs-xs); text-align: end; }
 .fl-curve { display: block; width: 100%; height: 11rem; }
 .fl-grid { stroke: var(--hairline); stroke-width: 1px; }
@@ -272,6 +272,13 @@
 .fl-ln-in { stroke: var(--fl-in); }
 .fl-ln-rep { stroke: var(--fl-rep); stroke-dasharray: 5 3; }
 .fl-hit { fill: transparent; }
+.fl-mk { stroke: var(--kept); stroke-width: 1.5px; stroke-dasharray: 3 3; }
+.fl-mk.is-loss { stroke: var(--danger); stroke-dasharray: none; }
+.fl-mk:hover { stroke-width: 3px; }
+.fl-plot-x { grid-column: 2; display: flex; justify-content: space-between; color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.fl-curve-key .is-kill { --fl-key: var(--kept); }
+.fl-curve-key .is-loss { --fl-key: var(--danger); }
+.fl-curve-key .is-kill::before { border-top-style: dashed; }
 .fl-hit:hover { fill: color-mix(in srgb, var(--text) 12%, transparent); }
 .fl-extra { margin-top: var(--space-3); }
 .fl-scoring { margin: var(--space-3) 0 0; max-width: 70ch; }

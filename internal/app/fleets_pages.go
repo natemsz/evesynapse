@@ -60,6 +60,9 @@ type fleetsView struct {
 	Upcoming  []fleetBoardRow
 	Public    []fleetBoardRow
 	Total     int
+	// ExampleHref opens the example of a running fleet, where the
+	// install has the demo that feeds it.
+	ExampleHref string
 }
 
 // visibleFleets gathers the fleets a viewer can see in a span: their
@@ -167,6 +170,9 @@ func (app *Application) handleFleets(w http.ResponseWriter, r *http.Request) {
 			view.Public = append(view.Public, row)
 		}
 		view.Total++
+	}
+	if app.demoUserID(ctx) != 0 {
+		view.ExampleHref = "/fleets/example/"
 	}
 	data := pageData{ShellData: app.PublicShell(ctx), Fleets: view}
 	data.HeadMeta = module.RenderPageMeta(module.PageMeta{

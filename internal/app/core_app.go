@@ -947,6 +947,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	})
 	fleets.Get(fleetsPath, app.handleFleets)
 	fleets.Get(planPath, app.handleOpNew)
+	fleets.Get("/fleets/example/", app.handleFleetExample)
 	fleets.Post("/fleets/save", app.handleOpSave)
 	fleets.Get("/fleets/history/", app.handleFleetHistory)
 	fleets.Get(module.FleetLeadersPath, app.handleFleetLeaders)

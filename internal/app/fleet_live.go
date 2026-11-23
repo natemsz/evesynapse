@@ -115,6 +115,8 @@ type fleetMemberRow struct {
 	// OffDoctrine: the fleet flies a doctrine and this pilot's hull is
 	// not in it.
 	OffDoctrine bool `json:"-"`
+	// Plain: the name is not a link (the public example fleet).
+	Plain bool `json:"-"`
 }
 
 // RoleClass is the colour class of the pilot's part in the fleet.

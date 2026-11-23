@@ -275,4 +275,18 @@
 .fl-hit:hover { fill: color-mix(in srgb, var(--text) 12%, transparent); }
 .fl-extra { margin-top: var(--space-3); }
 .fl-scoring { margin: var(--space-3) 0 0; max-width: 70ch; }
+/* The leaderboard's first three, then a bar of each row's points
+   against the leader's. */
+.fl-podium { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-3); margin: 0 0 var(--space-4); padding: 0; list-style: none; }
+.fl-podium > li { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; padding: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-inset); box-shadow: inset 0 3px 0 var(--fl-medal, var(--hairline)); }
+.fl-podium-1 { --fl-medal: var(--gold); }
+.fl-podium-2 { --fl-medal: var(--muted-2); }
+.fl-podium-3 { --fl-medal: var(--accent); }
+.fl-podium-place { align-self: flex-start; }
+.fl-podium-name { overflow-wrap: anywhere; }
+.fl-podium > li.yours { border-color: var(--sel-edge); }
+.fl-you-rank { margin: 0 0 var(--space-3); color: var(--text); }
+.fl-points { display: inline-flex; align-items: center; gap: var(--space-2); }
+.fl-pts { flex: none; width: 4rem; height: 0.35rem; border-radius: 2px; background: var(--row-alt); }
+.fl-pts rect { fill: var(--gold); }
 .fl-place { display: inline-block; min-width: 2.5ch; margin-inline-end: var(--space-2); color: var(--muted); font-variant-numeric: tabular-nums; }

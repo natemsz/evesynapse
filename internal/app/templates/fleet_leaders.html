@@ -18,12 +18,20 @@
 <section class="l-panel" aria-labelledby="fl-board-title">
   <h2 id="fl-board-title">{{if .GroupBoard}}Groups{{else}}Pilots{{end}}</h2>
   {{if .Rows}}
+  <ol class="fl-podium" role="list">
+    {{range $i, $r := .Rows}}{{if lt $i 3}}<li class="fl-podium-{{.Place}}{{if .Yours}} yours{{end}}">
+      <span class="badge fl-podium-place">{{if eq .Place 1}}First{{else if eq .Place 2}}Second{{else if eq .Place 3}}Third{{else}}Place {{.Place}}{{end}}</span>
+      <span class="fl-podium-name">{{if .Href}}<a href="{{.Href}}">{{.Name}}</a>{{else}}{{charLink $v.ViewerChars .ID .Name}}{{end}}</span>
+      <span class="l-stat-value">{{.Points}}</span><span class="l-stat-sub">points from {{.Fleets}} {{if eq .Fleets 1}}fleet{{else}}fleets{{end}}, {{.Kills}} {{if eq .Kills 1}}kill{{else}}kills{{end}}, {{.ISK}} ISK destroyed</span>
+    </li>{{end}}{{end}}
+  </ol>
+  {{range .Rows}}{{if and .Yours (gt .Place 3)}}<p class="fl-you-rank">Your place: {{.Place}}, {{.Name}} with {{.Points}} points.</p>{{end}}{{end}}
   <div class="tw" tabindex="0" role="region" aria-labelledby="fl-board-title">
   <table>
-    <thead><tr><th class="card-title">{{if .GroupBoard}}Group{{else}}Pilot{{end}}</th><th>Fleets</th><th>Kills</th><th>Deaths</th><th>ISK destroyed</th><th class="card-figure">Points</th></tr></thead>
+    <thead><tr><th class="card-title">{{if .GroupBoard}}Group{{else}}Pilot{{end}}</th><th class="num">Fleets</th><th class="num">Kills</th><th class="num">Deaths</th><th class="num">ISK destroyed</th><th class="num card-figure">Points</th></tr></thead>
     <tbody>
     {{range .Rows}}
-    <tr{{if .Yours}} class="yours"{{end}}><td><span class="fl-place">{{.Place}}</span>{{if .Href}}<a href="{{.Href}}">{{.Name}}</a>{{else}}{{charLink $v.ViewerChars .ID .Name}}{{end}}</td><td>{{.Fleets}}</td><td>{{.Kills}}</td><td>{{.Deaths}}</td><td>{{.ISK}}</td><td>{{.Points}}</td></tr>
+    <tr{{if .Yours}} class="yours"{{end}}><td><span class="fl-place">{{.Place}}</span>{{if .Href}}<a href="{{.Href}}">{{.Name}}</a>{{else}}{{charLink $v.ViewerChars .ID .Name}}{{end}}</td><td class="num">{{.Fleets}}</td><td class="num{{if not .Kills}} fl-zero{{end}}">{{.Kills}}</td><td class="num{{if not .Deaths}} fl-zero{{end}}">{{.Deaths}}</td><td class="num">{{.ISK}}</td><td class="num"><span class="fl-points"><svg class="fl-pts" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect width="{{printf "%.1f" .Share}}" height="4"/></svg>{{.Points}}</span></td></tr>
     {{end}}
     </tbody>
   </table>

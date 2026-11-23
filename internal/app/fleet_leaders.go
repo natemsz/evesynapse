@@ -38,6 +38,8 @@ type fleetLeaderRow struct {
 	ISK                   string
 	Points                int64
 	Yours                 bool
+	// Share is the row's points as a percentage of the leader's.
+	Share float64
 }
 
 type fleetLeadersView struct {
@@ -216,6 +218,12 @@ func (app *Application) fleetLeaderRows(ctx context.Context, rows []db.ListFleet
 			row.Href = fleetLeadersHref(period, fleetBoardPilots, orgOwner{Kind: r.EntityKind, ID: r.EntityID}.Key())
 		}
 		out = append(out, row)
+	}
+	// Each row's points as a share of the leader's, for its bar.
+	if len(out) > 0 && out[0].Points > 0 {
+		for i := range out {
+			out[i].Share = min(100, max(0, float64(out[i].Points)*100/float64(out[0].Points)))
+		}
 	}
 	return out
 }

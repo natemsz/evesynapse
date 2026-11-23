@@ -13,6 +13,7 @@
   <p class="l-head-sum"><b>{{.Members}}</b> {{.MemberWord}}. {{.Policy}}.{{if .Closed}} <span class="badge wait">Closed</span>{{else if not .Listed}} Not listed.{{end}}</p>
   <div class="l-head-act"><a class="btn btn-quiet" href="/fleets/communities/">All communities</a></div>
 </div>
+{{if .HistoryHref}}<nav class="cm-mine-links cm-jump" aria-label="This community's fleets"><a href="{{.HistoryHref}}">Past fleets and attendance</a>{{with .DoctrinesHref}}<a href="{{.}}">Doctrines</a>{{end}}<a href="{{.BoardHref}}">Leaderboard</a></nav>{{end}}
 {{with .Description}}<p class="prose cm-about">{{.}}</p>{{end}}
 
 <div class="l-sidebar cm-split">

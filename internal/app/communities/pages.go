@@ -226,6 +226,9 @@ type communityView struct {
 	Doctrines       []communityDoctrine
 	DoctrinesHref   string
 	PermissionsHref string
+	// HistoryHref and BoardHref open the community's past fleets and
+	// its own leaderboard, for a member.
+	HistoryHref, BoardHref string
 }
 
 // communityDoctrine is one doctrine on a community's page.
@@ -331,6 +334,9 @@ func (app *mod) handleCommunity(w http.ResponseWriter, r *http.Request) {
 		view.Yours = append(view.Yours, place)
 		if p.State == stateActive {
 			view.SeesPeople = true
+			key := standing.Owner{Kind: standing.OwnerCommunity, ID: c.ID}.Key()
+			view.HistoryHref = standing.Address("/fleets/history/", key)
+			view.BoardHref = module.FleetLeadersFor(key)
 		}
 	}
 	if !view.Closed && !view.NeedsInvite {

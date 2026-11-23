@@ -81,3 +81,4 @@ search.l-head-act { display: block; flex: 0 1 22rem; min-width: 0; }
 .cm-card-about { margin: 0; color: var(--text); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 .cm-start-modal { width: min(36rem, 100%); }
 .cm-start-modal .cm-form { padding: 0; }
+.cm-jump { margin: 0 0 var(--space-3); }

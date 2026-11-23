@@ -389,6 +389,57 @@ func (q *Queries) GetDemoLastReset(ctx context.Context) (time.Time, error) {
 	return last_reset_at, err
 }
 
+const getDemoLiveFleet = `-- name: GetDemoLiveFleet :one
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at, capture_boss_id, capture_detail, srp_policy_id FROM ops
+WHERE owner_kind = 'community' AND owner_id = $1::bigint
+  AND capture_status = 'capturing' AND cancelled_at IS NULL
+ORDER BY id DESC
+LIMIT 1
+`
+
+// The demo group's fleet that is always running, the one the public
+// example page shows. Nothing else can match: the owner is the demo
+// community and the fleet is the one being read.
+func (q *Queries) GetDemoLiveFleet(ctx context.Context, ownerID int64) (Op, error) {
+	row := q.db.QueryRow(ctx, getDemoLiveFleet, ownerID)
+	var i Op
+	err := row.Scan(
+		&i.ID,
+		&i.CorporationID,
+		&i.Title,
+		&i.Description,
+		&i.StartsAt,
+		&i.DurationMinutes,
+		&i.Doctrine,
+		&i.FormUp,
+		&i.FcCharacterID,
+		&i.CreatedByCharacter,
+		&i.CreatedAt,
+		&i.CancelledAt,
+		&i.CaptureStatus,
+		&i.CaptureCheckedAt,
+		&i.DiscordAnnouncedAt,
+		&i.DoctrineID,
+		&i.OwnerKind,
+		&i.OwnerID,
+		&i.FleetType,
+		&i.Visibility,
+		&i.JoinGate,
+		&i.ShareToken,
+		&i.RosterPublic,
+		&i.ComingCount,
+		&i.MaybeCount,
+		&i.DoctrineMode,
+		&i.DoctrineSnapshot,
+		&i.DoctrineSnapshotShips,
+		&i.DoctrineSnapshotAt,
+		&i.CaptureBossID,
+		&i.CaptureDetail,
+		&i.SrpPolicyID,
+	)
+	return i, err
+}
+
 const getDemoUser = `-- name: GetDemoUser :one
 
 SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs FROM users WHERE is_demo <> 0 ORDER BY id LIMIT 1

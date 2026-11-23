@@ -183,3 +183,13 @@ WITH live AS (
 )
 UPDATE op_composition c SET computed_at = sqlc.arg(seen_at)::timestamptz
 FROM live WHERE c.op_id = live.id;
+
+-- name: GetDemoLiveFleet :one
+-- The demo group's fleet that is always running, the one the public
+-- example page shows. Nothing else can match: the owner is the demo
+-- community and the fleet is the one being read.
+SELECT * FROM ops
+WHERE owner_kind = 'community' AND owner_id = sqlc.arg(owner_id)::bigint
+  AND capture_status = 'capturing' AND cancelled_at IS NULL
+ORDER BY id DESC
+LIMIT 1;

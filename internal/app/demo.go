@@ -278,15 +278,22 @@ func (app *Application) refreshDemoPilotName(ctx context.Context) error {
 // skills snapshot is the canary, seeded first and never removed
 // by anything but the reset's own wipe-and-reseed. The fleet group
 // is checked too, so an install seeded before it existed gets it
-// on the worker's next pass instead of at the daily restore.
+// on the worker's next pass instead of at the daily restore, and so
+// are its fleet battles' explorers, for the same reason.
 func (app *Application) demoSeedPresent(ctx context.Context) bool {
 	if _, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{
 		CharacterID: demoCharacterID, Kind: esi.SnapSkills,
 	}); err != nil {
 		return false
 	}
-	_, err := app.queries.GetCommunity(ctx, demoCommunityID)
-	return err == nil
+	if _, err := app.queries.GetCommunity(ctx, demoCommunityID); err != nil {
+		return false
+	}
+	// A fleet battle seeded before battles had explorers makes the seed
+	// out of date: the worker never rebuilds the demo's reports, so the
+	// demo seeds again to gain them.
+	missing, err := app.queries.CountFleetBattlesWithoutDetail(ctx, db.CountFleetBattlesWithoutDetailParams{OwnerKind: ownerCommunity, OwnerID: demoCommunityID})
+	return err == nil && missing == 0
 }
 
 // handleDemoSignIn is GET /auth/demo: the landing page's Try it

@@ -29,6 +29,30 @@ func (q *Queries) ClearFleetReportDirty(ctx context.Context, arg ClearFleetRepor
 	return err
 }
 
+const countFleetBattlesWithoutDetail = `-- name: CountFleetBattlesWithoutDetail :one
+SELECT COUNT(*)::bigint
+FROM fleet_battles b
+JOIN ops o ON o.id = b.op_id
+LEFT JOIN fleet_battle_detail d ON d.fleet_battle_id = b.id
+WHERE o.owner_kind = $1::text
+  AND o.owner_id = $2::bigint
+  AND d.fleet_battle_id IS NULL
+`
+
+type CountFleetBattlesWithoutDetailParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+// Battles of one owner's fleets that have no explorer stored; the demo
+// reads it for its own small group to tell an outdated seed.
+func (q *Queries) CountFleetBattlesWithoutDetail(ctx context.Context, arg CountFleetBattlesWithoutDetailParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countFleetBattlesWithoutDetail, arg.OwnerKind, arg.OwnerID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const deleteFleetBattleConsent = `-- name: DeleteFleetBattleConsent :exec
 DELETE FROM op_battle_consent WHERE op_id = $1 AND character_id = $2
 `

@@ -381,6 +381,8 @@ type srpPolicyRow struct {
 	Hulls      string
 	Summary    string
 	EditHref   string
+	// Owner is the owner key the policy's form posts with.
+	Owner string
 }
 
 // srpPolicySummary says what a policy does in one sentence.

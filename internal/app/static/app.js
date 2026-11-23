@@ -3827,6 +3827,22 @@
   startPageSync();
 })();
 
+// A button carrying data-open-modal="<id>" opens that dialog through
+// EveSynapseModal: the create forms (a new doctrine, policy or
+// community) wait behind one. Shell code: bound once, looked up at the
+// time, so swapped-in pages need nothing.
+(function () {
+  "use strict";
+  document.addEventListener("click", function (ev) {
+    var b = ev.target && ev.target.closest ? ev.target.closest("[data-open-modal]") : null;
+    if (!b || !window.EveSynapseModal) return;
+    var el = document.getElementById(b.getAttribute("data-open-modal"));
+    if (!el) return;
+    ev.preventDefault();
+    window.EveSynapseModal.open(el);
+  });
+})();
+
 // The menu section the reader is in, kept for the server
 // (ui_navstate.go): a page listed under two sections, such as
 // Doctrines under Corporation and Fleets, opens in the one the

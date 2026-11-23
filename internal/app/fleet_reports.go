@@ -93,6 +93,8 @@ type fleetBattleBuild struct {
 	Pilots   []db.InsertFleetBattlePilotParams
 	Kills    []db.InsertFleetBattleKillParams
 	Series   string
+	// Detail is the battle's explorer (fleet_explorer.go), as JSON.
+	Detail string
 }
 
 // fleetReportBuild is everything one fleet's build stores.
@@ -194,8 +196,10 @@ func (app *Application) readFleetReport(ctx context.Context, op db.Op, now time.
 	if err != nil {
 		return nil, false, err
 	}
+	names := app.newKillNames(ctx)
 	for i, c := range clusterFleetBattles(mails, reads, on) {
 		if b, ok := composeFleetBattle(op.ID, int32(i), c, counted, on, ships, now); ok {
+			b.Detail = fleetDetailJSON(c, counted, on, ships, names.character, names.typeName)
 			build.Battles = append(build.Battles, b)
 		}
 	}
@@ -314,6 +318,22 @@ func (app *Application) readFleetLogs(ctx context.Context, op db.Op, roster []in
 			case names[strings.ToLower(p.Name)] != 0:
 				r.Fleetmates[int64(p.Seq)] = names[strings.ToLower(p.Name)]
 			}
+		}
+		// The explorer's view of the read: every party it names, its
+		// weapons and its tackle.
+		all, err := app.queries.ListBattleFightPartiesToMatch(ctx, r.ID)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		r.Parties = make(map[int64]fleetLogParty, len(all))
+		for _, p := range all {
+			r.Parties[int64(p.Seq)] = fleetLogParty{Name: p.Name, Ticker: p.Ticker, Hull: p.Hull, HullTypeID: p.HullTypeID, CharacterID: p.CharacterID, Pilot: p.Pilot}
+		}
+		if r.Weapons, err = app.queries.ListBattleFightWeapons(ctx, r.ID); err != nil {
+			return nil, nil, false, err
+		}
+		if r.Tackles, err = app.queries.ListBattleFightTackles(ctx, r.ID); err != nil {
+			return nil, nil, false, err
 		}
 	}
 	return used, counted, true, nil
@@ -518,6 +538,11 @@ func (app *Application) storeFleetReport(ctx context.Context, opID, seq int64, b
 		}
 		if b.Series != "" {
 			if err := q.InsertFleetBattleSeries(ctx, db.InsertFleetBattleSeriesParams{FleetBattleID: id, Payload: b.Series}); err != nil {
+				return err
+			}
+		}
+		if b.Detail != "" {
+			if err := q.InsertFleetBattleDetail(ctx, db.InsertFleetBattleDetailParams{FleetBattleID: id, Payload: b.Detail}); err != nil {
 				return err
 			}
 		}

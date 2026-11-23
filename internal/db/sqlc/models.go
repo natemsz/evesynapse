@@ -640,6 +640,11 @@ type FleetBattle struct {
 	ComputedAt     time.Time `json:"computed_at"`
 }
 
+type FleetBattleDetail struct {
+	FleetBattleID int64  `json:"fleet_battle_id"`
+	Payload       string `json:"payload"`
+}
+
 type FleetBattleFight struct {
 	FleetBattleID int64 `json:"fleet_battle_id"`
 	FightID       int64 `json:"fight_id"`

@@ -127,6 +127,17 @@ func (q *Queries) GetBattleFightAligned(ctx context.Context, fightID int64) (str
 	return aligned, err
 }
 
+const getFleetBattleDetail = `-- name: GetFleetBattleDetail :one
+SELECT payload FROM fleet_battle_detail WHERE fleet_battle_id = $1
+`
+
+func (q *Queries) GetFleetBattleDetail(ctx context.Context, fleetBattleID int64) (string, error) {
+	row := q.db.QueryRow(ctx, getFleetBattleDetail, fleetBattleID)
+	var payload string
+	err := row.Scan(&payload)
+	return payload, err
+}
+
 const getFleetBattleSeries = `-- name: GetFleetBattleSeries :one
 SELECT payload FROM fleet_battle_series WHERE fleet_battle_id = $1
 `
@@ -284,6 +295,20 @@ func (q *Queries) InsertFleetBattle(ctx context.Context, arg InsertFleetBattlePa
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const insertFleetBattleDetail = `-- name: InsertFleetBattleDetail :exec
+INSERT INTO fleet_battle_detail (fleet_battle_id, payload) VALUES ($1, $2)
+`
+
+type InsertFleetBattleDetailParams struct {
+	FleetBattleID int64  `json:"fleet_battle_id"`
+	Payload       string `json:"payload"`
+}
+
+func (q *Queries) InsertFleetBattleDetail(ctx context.Context, arg InsertFleetBattleDetailParams) error {
+	_, err := q.db.Exec(ctx, insertFleetBattleDetail, arg.FleetBattleID, arg.Payload)
+	return err
 }
 
 const insertFleetBattleFights = `-- name: InsertFleetBattleFights :execrows

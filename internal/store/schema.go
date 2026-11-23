@@ -1027,6 +1027,11 @@ var pgFleetReportsSchema string
 //go:embed schema_pg/171_dead_group_rules.sql
 var pgDeadGroupRulesSchema string
 
+// Step 172: a fleet battle's explorer.
+//
+//go:embed schema_pg/172_fleet_battle_detail.sql
+var pgFleetBattleDetailSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1226,6 +1231,7 @@ func schemaSteps() []schemaStep {
 		{169, "battle merge", pgBattleMergeSchema, ""},
 		{170, "fleet reports", pgFleetReportsSchema, ""},
 		{171, "dead group rules", pgDeadGroupRulesSchema, ""},
+		{172, "fleet battle detail", pgFleetBattleDetailSchema, ""},
 	}
 }
 

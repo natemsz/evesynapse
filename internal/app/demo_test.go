@@ -959,3 +959,71 @@ func TestDemoSeedBattleReports(t *testing.T) {
 	}
 	check("after two reseeds")
 }
+
+// TestDemoFleetReportOpensAsAnExplorer: a fleet battle with a stored
+// explorer renders the zoomable strip, its moments in lanes and an open
+// moment; each moment's panel loads alone at its own address for the
+// fleet's members and for no one else; and the demo's invented
+// killmails link to no killboard page.
+func TestDemoFleetReportOpensAsAnExplorer(t *testing.T) {
+	app, conn, _ := demoTestApp(t)
+	var opID int64
+	var seq int32
+	if err := conn.QueryRow(`SELECT b.op_id, b.seq FROM fleet_battles b
+		JOIN fleet_battle_detail d ON d.fleet_battle_id = b.id
+		ORDER BY b.kills DESC, b.id LIMIT 1`).Scan(&opID, &seq); err != nil {
+		t.Fatalf("no demo fleet battle has an explorer: %v", err)
+	}
+	signIn := get(app, nil, "/auth/demo")
+	var cookie *http.Cookie
+	for _, c := range signIn.Result().Cookies() {
+		if c.Name == "evesynapse_session" {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("demo sign-in set no session cookie")
+	}
+
+	path := fleetReportPath(opID) + "?battle=" + strconv.Itoa(int(seq))
+	rec := get(app, cookie, path)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET %s = %d", path, rec.Code)
+	}
+	body := rec.Body.String()
+	mustContain(t, "explorer", body, `data-fleet-zoom`, `id="fl-zoom-data"`, `id="bt-hover-data"`,
+		`class="bt-ev bt-ev-`, `id="bt-moment-h"`, "Kills and losses", "Weapons and how they landed")
+	if strings.Contains(body, "/intel/kill/") {
+		t.Error("the demo's invented killmails link to killboard pages")
+	}
+
+	m := regexp.MustCompile(`data-moment="(/fleets/\d+/report/battle/\d+/moment/\d+/)"`).FindStringSubmatch(body)
+	if m == nil {
+		t.Fatal("no moment on the strip carries its panel's address")
+	}
+	panel := get(app, cookie, m[1])
+	if panel.Code != http.StatusOK {
+		t.Fatalf("GET %s = %d", m[1], panel.Code)
+	}
+	mustContain(t, "moment panel", panel.Body.String(), `id="bt-moment-h"`, `data-moment-from=`)
+	if strings.Contains(panel.Body.String(), "<html") {
+		t.Error("a moment's panel came back as a whole page")
+	}
+	if rec := get(app, nil, m[1]); rec.Code != http.StatusNotFound {
+		t.Errorf("a signed-out visitor opened a moment's panel: %d", rec.Code)
+	}
+	if rec := get(app, cookie, fmt.Sprintf("/fleets/%d/report/battle/%d/moment/9999/", opID, seq)); rec.Code != http.StatusNotFound {
+		t.Errorf("a moment the battle does not have: %d, want 404", rec.Code)
+	}
+}
+
+// TestFleetKillLinksReachTheKillboard: a real killmail on a fleet report
+// links to its killboard page; an invented demo mail links nowhere.
+func TestFleetKillLinksReachTheKillboard(t *testing.T) {
+	if got := fleetKillHref(false, 7001); got != "/intel/kill/7001/" {
+		t.Errorf("a real mail's link = %q", got)
+	}
+	if got := fleetKillHref(true, 7001); got != "" {
+		t.Errorf("a demo mail's link = %q, want none", got)
+	}
+}

@@ -132,6 +132,9 @@ type fleetReportView struct {
 	UploadAction string
 	LogMB        int
 	ViewerChars  map[int64]bool
+	// X is the shown battle's explorer, nil for a battle built before
+	// explorers were (the page then shows its plain report).
+	X *fleetExplorerView
 }
 
 func (app *Application) handleFleetReport(w http.ResponseWriter, r *http.Request) {
@@ -164,6 +167,7 @@ func (app *Application) handleFleetReport(w http.ResponseWriter, r *http.Request
 	view.Consent = app.fleetConsentChoices(ctx, op.ID, v)
 	app.fillFleetBattle(ctx, view, r.URL.Query().Get("battle"))
 	view.Building = view.Closed && view.Battle == nil && app.fleetReportPending(ctx, op.ID)
+	app.fillFleetExplorer(ctx, view, r.URL.Query().Get("battle"), r.URL.Query().Get("m"))
 
 	data := pageData{ShellData: app.PublicShell(ctx), FleetReport: view}
 	facts := app.fleetFactsFor(ctx, v, []db.Op{op})[op.ID]

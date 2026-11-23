@@ -310,3 +310,107 @@
 .fl-pts { flex: none; width: 4rem; height: 0.35rem; border-radius: 2px; background: var(--row-alt); }
 .fl-pts rect { fill: var(--gold); }
 .fl-place { display: inline-block; min-width: 2.5ch; margin-inline-end: var(--space-2); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* --- The fleet battle explorer (fleet_report.html "fleet-explorer").
+   It wears the pilot report's look (battles.css .bt-*); these rules add
+   the fleet's own parts: the ISK balance, the kill rail, the zoom, a
+   lane per pilot and the hands on a killmail. The strip's rows share
+   one gutter, wide enough for a pilot's name. */
+.fl-x { --bt-gut: 10rem; }
+@container page (max-width: 40rem) {
+  .fl-x { --bt-gut: 6rem; }
+}
+.fl-x-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.fl-x-where { color: var(--text-bright); }
+.fl-x-isk { display: inline-flex; align-items: center; gap: var(--space-2); margin-inline-start: auto; color: var(--muted); font-size: var(--fs-xs); }
+.fl-x-iskbar { display: block; width: 9rem; height: 0.5rem; border-radius: 999px; overflow: hidden; background: var(--row-alt); }
+.fl-x-iskbar .is-kill { fill: var(--bt-kill); }
+.fl-x-iskbar .is-loss { fill: var(--bt-loss); }
+.fl-x-eff { color: var(--text-bright); font-weight: 600; }
+
+/* The zoom: its controls, the dragged window, the readout. */
+.fl-x-zoom { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.fl-x-zoom[hidden],
+.fl-x-zoom [hidden] { display: none; }
+.fl-x-zoom-win { margin-inline-end: var(--space-2); color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.fl-x-brush { fill: color-mix(in srgb, var(--text) 10%, transparent); stroke: var(--text-bright); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 3 3; }
+/* Zoomed, the chart shows a window of its drawing: what lies outside
+   it must not spill over the rows around. */
+.fl-x-strip .bt-chart { overflow: hidden; cursor: crosshair; touch-action: pan-y; }
+.fl-x-pbar { overflow: hidden; }
+.fl-x-zoomhint { margin: var(--space-2) 0 0; }
+
+/* The kill rail: each death's ship over the moment it died. */
+.fl-x-rail { display: grid; grid-template-columns: var(--bt-gut) minmax(0, 1fr); align-items: center; margin-bottom: var(--space-2); }
+.fl-x-rail-track { position: relative; height: 2rem; overflow: hidden; }
+.fl-x-pin { position: absolute; top: 0.25rem; translate: -50% 0; display: block; width: 1.5rem; height: 1.5rem; border-radius: var(--r-xs); outline: 2px solid var(--bt-kill); background: var(--row-alt); }
+.fl-x-pin.is-loss { outline-color: var(--bt-loss); }
+.fl-x-pin img { display: block; width: 100%; height: 100%; border-radius: inherit; }
+.fl-x-pin:hover, .fl-x-pin:focus-visible { z-index: 1; outline-width: 3px; }
+.fl-x-pin[hidden] { display: none; }
+
+/* A lane per pilot: gold where they dealt damage, red where they took
+   it, deeper with more; a mark where they died. */
+.fl-x-pilotlanes { margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--hairline); }
+.fl-x-pilotlanes > summary { cursor: pointer; color: var(--gold); font-size: var(--fs-sm); }
+.fl-x-pilotlanes > summary .bt-dim { margin-inline-start: var(--space-2); font-size: var(--fs-xs); }
+.fl-x-plist { display: grid; gap: 0.2rem; margin-top: var(--space-2); }
+.fl-x-plane { display: grid; grid-template-columns: var(--bt-gut) minmax(0, 1fr); align-items: center; min-height: 1.6rem; }
+.fl-x-pname { display: flex; align-items: center; gap: var(--space-1); min-width: 0; padding-inline-end: var(--space-2); font-size: var(--fs-xs); }
+.fl-x-pname img { flex: none; border-radius: var(--r-xs); }
+.fl-x-pn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-x-pbar { display: block; width: 100%; height: 1.25rem; border-radius: var(--r-xs); background: var(--row-alt); overflow: hidden; }
+.fl-o1 { fill: color-mix(in srgb, var(--bt-out) 22%, transparent); }
+.fl-o2 { fill: color-mix(in srgb, var(--bt-out) 40%, transparent); }
+.fl-o3 { fill: color-mix(in srgb, var(--bt-out) 58%, transparent); }
+.fl-o4 { fill: color-mix(in srgb, var(--bt-out) 78%, transparent); }
+.fl-o5 { fill: var(--bt-out); }
+.fl-i1 { fill: color-mix(in srgb, var(--bt-in) 22%, transparent); }
+.fl-i2 { fill: color-mix(in srgb, var(--bt-in) 40%, transparent); }
+.fl-i3 { fill: color-mix(in srgb, var(--bt-in) 58%, transparent); }
+.fl-i4 { fill: color-mix(in srgb, var(--bt-in) 78%, transparent); }
+.fl-i5 { fill: var(--bt-in); }
+.fl-x-death { stroke: var(--bt-loss); stroke-width: 3; }
+
+/* People: a portrait for a character, the ship beside its name. */
+.fl-x-portrait { border-radius: 50%; }
+.fl-x .bt-who-s img { vertical-align: -0.2em; border-radius: 2px; }
+.fl-x-note { display: block; margin-inline-start: calc(24px + var(--space-2)); }
+.fl-x-km { font-size: var(--fs-xs); }
+.fl-x-table .fl-x-fig { white-space: nowrap; }
+.fl-x-table .bt-bar { display: block; width: 100%; max-width: 7rem; margin: 0.25rem 0 0 auto; }
+.fl-x-bar-out { --bt-c: var(--bt-out); }
+.fl-x-bar-in { --bt-c: var(--bt-in); }
+.fl-x-bar-rep { --bt-c: var(--bt-rep); }
+.fl-x-actions { white-space: nowrap; }
+.fl-x-actions a + a { margin-inline-start: var(--space-2); }
+
+/* Who was on a killmail, ours marked. */
+.fl-x-hands { display: grid; gap: 0.25rem; margin: 0 0 var(--space-3); padding: 0; list-style: none; font-size: var(--fs-sm); }
+.fl-x-hands li { display: grid; grid-template-columns: 24px minmax(0, 1fr) 7rem auto; align-items: center; gap: var(--space-2); padding: 0.15rem var(--space-1); border-radius: var(--r-xs); --bt-c: var(--bt-in); }
+.fl-x-hands li.ours { background: var(--surface-inset); --bt-c: var(--bt-out); }
+.fl-x-hands img { border-radius: var(--r-xs); }
+.fl-x-hands .fl-x-portrait { border-radius: 50%; }
+.fl-x-hn { min-width: 0; overflow-wrap: anywhere; }
+.fl-x-hands .bt-bar { width: 100%; max-width: none; margin: 0; }
+.fl-x-hd { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: end; }
+
+/* Tackle, with the module that did it. */
+.fl-x-tlist { display: grid; gap: 0.3rem; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.fl-x-tlist li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem var(--space-1); padding: 0.2rem 0 0.2rem var(--space-2); border-left: 2px solid var(--hairline); }
+.fl-x-tlist li.ours { border-left-color: var(--bt-out); }
+.fl-x-tlist li.on-us { border-left-color: var(--bt-in); }
+.fl-x-tlist img { border-radius: var(--r-xs); }
+
+/* A module's icon beside a lane's label or a heading. */
+.fl-x-lane-icon,
+.fl-x-h-icon { flex: none; border-radius: 2px; }
+.fl-x-h-icon { display: inline-block; margin-inline-end: 0.35rem; vertical-align: -0.3em; }
+.fl-x .bt-lane-label { display: flex; align-items: center; justify-content: flex-end; gap: 0.35rem; white-space: nowrap; }
+@container page (max-width: 40rem) {
+  .fl-x-lane-icon { display: none; }
+  .fl-x-pin { top: 0.4rem; width: 1.15rem; height: 1.15rem; outline-width: 1.5px; }
+}
+/* The fleet's pilots and the enemy side by side only while both stay
+   tables. */
+.fl-x .bt-whole { --l-min: 66rem; }

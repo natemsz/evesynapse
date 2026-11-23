@@ -326,6 +326,7 @@ func linkFuncMap() template.FuncMap {
 		"skillLevel":        skillLevel,
 		// Not a link: a type's 3D render on the image server.
 		"typeRender": eveimg.TypeRender,
+		"typeIcon":   eveimg.TypeIcon,
 		// Not links: a formatted ISK amount in the house money
 		// format (see core_iskfig.go).
 		"iskFig":  iskFig,
@@ -344,5 +345,10 @@ func linkFuncMap() template.FuncMap {
 		// Not a link: the colour class of a part in a fleet (DPS,
 		// Logistics...), shared by fleets and doctrines.
 		"roleClass": fleetRoleClass,
+		// Not a link: a fleet report's party table with its column
+		// headings, for the one row template both tables share.
+		"fleetTableHead": func(t fleetPartyTable, a, b, c string) fleetTableWithHead {
+			return fleetTableWithHead{Table: t, A: a, B: b, C: c}
+		},
 	}
 }

@@ -6168,6 +6168,16 @@ html[data-theme="light"] .setting { border-color: #d8cdb8; background: rgba(0, 0
 html[data-theme="light"] .chip-list label { border-color: #d8cdb8; }
 html[data-theme="light"] .setting-foot, html[data-theme="light"] .row-list li { border-color: #e3d9c6; }
 html[data-theme="light"] .setting h4 { color: var(--accent); }
+/* A part in a fleet (DPS, Logistics...) has one colour everywhere:
+   the fleet pages, doctrines and loadouts (roleClass in templates). */
+.fl-r-dps { --fl-r: #3987e5; }
+.fl-r-logi { --fl-r: #d95926; }
+.fl-r-tackle { --fl-r: #199e70; }
+.fl-r-scout { --fl-r: #c98500; }
+.fl-r-ewar { --fl-r: #d55181; }
+.fl-r-command { --fl-r: #0ca30c; }
+.fl-r-other { --fl-r: #8b8f98; }
+.fl-swatch { display: inline-block; width: 0.65rem; height: 0.65rem; margin-inline-end: var(--space-1); border-radius: 2px; background: var(--fl-r); }
 .srp-facts { margin: 0 0 0.6rem; }
 .srp-facts .badge { margin-right: 0.35rem; }
 .srp-why { margin: 0 0 0.6rem; padding-inline-start: 1.1rem; color: var(--muted); font-size: var(--fs-xs); }

@@ -14,6 +14,7 @@
 <div class="l-head">
   <div class="l-head-pick">{{template "ownerselector" .OwnerOptions}}</div>
   <p class="l-head-sum"><b>{{$corp.Name}}</b>{{if $corp.Total}} · {{$corp.Total}} {{if eq $corp.Total 1}}doctrine{{else}}doctrines{{end}}{{end}}</p>
+  {{if $corp.Manages}}<div class="l-head-act"><button type="button" class="btn" data-open-modal="doctrine-new-modal">New doctrine</button></div>{{end}}
 </div>
 
 <p class="prose">A doctrine is a set of fits for a kind of fleet. A fleet can name one, and every fit opens in the <a href="/fittings/">fitting tool</a>.</p>
@@ -37,10 +38,11 @@
 {{range $corp.Doctrines}}
 <section class="l-panel co-card">
   <div class="co-card-head"><h3><a href="/doctrines/{{.ID}}">{{.Name}}</a></h3>{{if .Category}}<a class="badge wait" href="/doctrines/?owner={{$corp.Key}}&amp;category={{.Category}}">{{.Category}}</a>{{end}}</div>
+  {{if .Fits}}<p class="doctrine-ships" aria-hidden="true">{{range $i, $f := .Fits}}{{if lt $i 6}}{{if $f.ShipTypeID}}<img src="{{typeRender $f.ShipTypeID 64}}" width="32" height="32" alt="" loading="lazy" title="{{$f.Ship}}">{{end}}{{end}}{{end}}{{if gt (len .Fits) 6}}<span class="doctrine-more">+{{len (slice .Fits 6)}}</span>{{end}}</p>{{end}}
   {{if .Description}}<p class="co-dim doctrine-clip">{{.Description}}</p>{{end}}
   {{if .Fits}}
   <ul class="row-list doctrine-fits">
-    {{range .Fits}}<li><span><a href="/fittings/?doctrine={{.ID}}#fit-editor">{{.Name}}</a> <small>{{.Ship}}</small></span>{{if .Role}}<small>{{.Role}}</small>{{end}}</li>
+    {{range .Fits}}<li><span><a href="/fittings/?doctrine={{.ID}}#fit-editor">{{.Name}}</a> <small>{{.Ship}}</small></span>{{if .Role}}<span class="doctrine-role"><span class="fl-swatch {{roleClass .Role}}" aria-hidden="true"></span>{{.Role}}</span>{{end}}</li>
     {{end}}
   </ul>
   {{else}}
@@ -58,9 +60,11 @@
 {{end}}
 
 {{if $corp.Manages}}
-<form method="post" action="/doctrines/create" class="l-panel co-card op-form form-card">
+<div class="modal-backdrop" id="doctrine-new-modal" hidden>
+<div class="modal doctrine-new-modal" role="dialog" aria-modal="true" aria-labelledby="doctrine-new-title">
+<div class="modal-head"><h2 id="doctrine-new-title">New doctrine</h2><button type="button" class="modal-close" data-close-modal aria-label="Close">×</button></div>
+<form method="post" action="/doctrines/create" class="op-form">
   <input type="hidden" name="owner" value="{{$corp.Key}}">
-  <h3>New doctrine</h3>
   <div class="form-grid">
     <label class="field"><span class="field-label">Name</span>
       <input type="text" name="name" maxlength="80" required placeholder="e.g. Shield Lokis"></label>
@@ -78,6 +82,8 @@
   </div>
   <div class="form-actions"><button type="submit">Create doctrine</button><span class="field-hint">Fits are added on the doctrine's own page.</span></div>
 </form>
+</div>
+</div>
 {{end}}
 {{with $corp.HandOver}}<p class="co-note"><a href="{{.}}">Choose who else keeps these doctrines</a></p>{{end}}
 {{end}}

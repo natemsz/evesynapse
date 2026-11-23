@@ -200,28 +200,34 @@
 .fl-invite:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 .fl-pager { justify-content: center; margin-top: var(--space-3); }
 .fl-pilots { container: fl-pilots / inline-size; }
-.fl-pilots select, .fl-pilots input[type="text"] { width: 100%; min-width: 7rem; }
 .fl-pilots td small { color: var(--muted); font-size: var(--fs-xs); }
-/* On a narrow page each pilot is three short lines: who, what and
-   where, then their role and tags, so a full fleet stays scannable. */
+.fl-pilots td[data-label="Edit"] { width: 1%; white-space: nowrap; text-align: end; }
+.fl-edit > summary { list-style: none; cursor: pointer; }
+.fl-edit > summary::-webkit-details-marker { display: none; }
+.fl-edit[open] > summary { margin-bottom: var(--space-2); }
+.fl-edit-form { display: grid; grid-template-columns: minmax(9rem, 12rem) minmax(9rem, 14rem) auto; align-items: end; gap: var(--space-2); white-space: normal; text-align: start; }
+.fl-edit-form .field { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.fl-edit-form select, .fl-edit-form input[type="text"] { width: 100%; min-width: 0; }
+/* On a narrow page each pilot is a short card: who and where, then
+   what they fly, then their role and tags with Edit beside them. */
 @container fl-pilots (max-width: 52rem) {
   .fl-pilots table, .fl-pilots tbody { display: block; width: 100%; }
   .fl-pilots thead { display: none; }
   .fl-pilots tr {
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-    grid-template-areas: "pilot pilot place" "ship ship system" "role tags save";
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "pilot system" "ship ship" "role edit" "tags tags";
     align-items: center; gap: var(--space-1) var(--space-2);
     padding: var(--space-2) 0; border-top: 1px solid var(--hairline);
   }
   .fl-pilots td { display: block; min-width: 0; padding: 0; border: 0; overflow-wrap: anywhere; }
   .fl-pilots td[data-label="Pilot"] { grid-area: pilot; }
-  .fl-pilots td[data-label="Position"] { grid-area: place; color: var(--muted); font-size: var(--fs-xs); text-align: end; }
-  .fl-pilots td[data-label="Ship"] { grid-area: ship; }
   .fl-pilots td[data-label="System"] { grid-area: system; color: var(--muted); text-align: end; }
+  .fl-pilots td[data-label="Ship"] { grid-area: ship; }
   .fl-pilots td[data-label="Role"] { grid-area: role; }
   .fl-pilots td[data-label="Tags"] { grid-area: tags; }
-  .fl-pilots td:last-child { grid-area: save; }
-  .fl-pilots select, .fl-pilots input[type="text"] { min-width: 0; }
+  .fl-pilots td[data-label="Edit"] { grid-area: edit; width: auto; }
+  .fl-pilots td[data-label="Edit"]:has(details[open]) { grid-column: 1 / -1; grid-row: 5; }
+  .fl-edit-form { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Adding a battle log from the fleet's report */

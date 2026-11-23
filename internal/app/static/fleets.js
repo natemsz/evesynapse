@@ -125,7 +125,7 @@
       triedOn = fresh;
       var said = document.getElementById("fl-live-said");
       if (said) said.textContent = "Change shown. It resets when you leave this page.";
-      var again = document.querySelector("#fl-p-" + CSS.escape(id) + " button");
+      var again = document.querySelector("#fl-e-" + CSS.escape(id) + " > summary") || document.querySelector("#fl-p-" + CSS.escape(id) + " button");
       if (again) again.focus();
       document.dispatchEvent(new CustomEvent("evesynapse:content-ready", {
         detail: { root: fresh, url: window.location.href }

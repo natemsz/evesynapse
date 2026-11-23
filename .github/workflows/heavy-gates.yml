@@ -35,7 +35,7 @@ on:
 jobs:
   test:
     if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Check out the source
         uses: actions/checkout@v4
@@ -139,7 +139,7 @@ jobs:
 
   race:
     if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Check out the source
         uses: actions/checkout@v4
@@ -180,7 +180,7 @@ jobs:
 
   core-only:
     if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Check out the source
         uses: actions/checkout@v4
@@ -237,7 +237,7 @@ jobs:
   # run without blocking a release.
   analysis:
     if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     continue-on-error: true
     steps:
       - name: Check out the source
@@ -288,7 +288,7 @@ jobs:
   # reads as green.
   release-gate:
     if: github.server_url == 'https://github.com' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/evesynapse-dev')
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [test, race, core-only]
     permissions:
       actions: write

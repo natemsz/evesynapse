@@ -147,28 +147,86 @@
   schedule();
 })();
 
-// The planner's start is written in EVE time (UTC), while the browser
-// shows the box in its own format: say when that is for the reader.
+// The planner: its start is written in EVE time (UTC) while the
+// browser shows the box in its own format, so say when that is for
+// the reader; preset buttons fill the start and length; and the side
+// preview follows the form as it is filled in.
 (function () {
   "use strict";
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function stamp(d) {
+    return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) + "T" + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes());
+  }
+  function parse(v) {
+    if (!v) return null;
+    if (v.length === 16) v += ":00";
+    var d = new Date(v + "Z");
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function checkedLabel(form, name) {
+    var input = form.querySelector('input[name="' + name + '"]:checked');
+    var span = input && input.parentElement ? input.parentElement.querySelector("span") : null;
+    if (!span) return "";
+    var first = span.firstChild;
+    return first && first.nodeType === 3 ? first.textContent.trim() : span.textContent.trim();
+  }
   function bind() {
-    var input = document.getElementById("fl-start");
+    var form = document.getElementById("fl-plan-form");
+    var start = document.getElementById("fl-start");
     var out = document.getElementById("fl-start-local");
-    if (!input || !out || input.getAttribute("data-local-bound")) return;
-    input.setAttribute("data-local-bound", "1");
-    function render() {
-      var v = input.value || "";
-      if (v.length === 16) v += ":00";
-      var d = new Date(v + "Z");
-      if (!v || isNaN(d.getTime())) {
-        out.textContent = "In EVE time, which is UTC.";
-        return;
-      }
-      out.textContent = "In EVE time (UTC). That is " + d.toLocaleString(undefined, {
-        weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-      }) + " your time.";
+    if (!form || !start || form.getAttribute("data-plan-bound")) return;
+    form.setAttribute("data-plan-bound", "1");
+    var length = document.getElementById("fl-length");
+    var preview = document.querySelector("[data-fl-preview]");
+    function set(key, text) {
+      if (!preview) return;
+      var el = preview.querySelector('[data-pv="' + key + '"]');
+      if (el && text) el.textContent = text;
     }
-    input.addEventListener("input", render);
+    function render() {
+      var d = parse(start.value);
+      var local = d ? d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+      if (out) out.textContent = d ? "In EVE time (UTC). That is " + local + " your time." : "In EVE time, which is UTC.";
+      if (d) {
+        set("clock", pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()));
+        set("day", d.toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }));
+        set("local", local);
+      }
+      var title = document.getElementById("fl-title");
+      set("title", title && title.value.trim() ? title.value.trim() : "Your fleet's title");
+      if (length && length.value) set("length", length.value + " min");
+      set("fly", checkedLabel(form, "doctrine_mode"));
+      set("see", checkedLabel(form, "visibility"));
+      set("join", checkedLabel(form, "join_gate"));
+      var names = form.querySelector('input[name="roster_public"]');
+      if (names) set("names", names.checked ? "Shown to everyone who can open it" : "Shown to those who can sign up");
+    }
+    form.addEventListener("input", render);
+    form.addEventListener("change", render);
+    var presets = form.querySelectorAll("[data-fl-presets]");
+    for (var i = 0; i < presets.length; i++) presets[i].hidden = false;
+    form.addEventListener("click", function (ev) {
+      var b = ev.target && ev.target.closest ? ev.target.closest("[data-start], [data-length]") : null;
+      if (!b) return;
+      ev.preventDefault();
+      if (b.hasAttribute("data-length") && length) {
+        length.value = b.getAttribute("data-length");
+      } else {
+        var spec = b.getAttribute("data-start") || "";
+        var now = new Date();
+        var d;
+        if (spec.charAt(0) === "+") {
+          d = new Date(now.getTime() + parseInt(spec.slice(1), 10) * 60000);
+          d.setUTCMinutes(Math.ceil(d.getUTCMinutes() / 5) * 5, 0, 0);
+        } else {
+          var hm = spec.split(":");
+          d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), parseInt(hm[0], 10), parseInt(hm[1], 10)));
+          if (d.getTime() <= now.getTime()) d = new Date(d.getTime() + 86400000);
+        }
+        start.value = stamp(d);
+      }
+      render();
+    });
     render();
   }
   bind();

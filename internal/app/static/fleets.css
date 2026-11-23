@@ -173,6 +173,21 @@
 .fl-see:not(:has(input[value="restricted"]:checked)) .fl-rule,
 .fl-join:not(:has(input[value="rule"]:checked)) .fl-rule { display: none; }
 
+/* The planner as a workspace: the form, and beside it a preview of
+   how the fleet shows that follows the form. Each choice is a card
+   that lights when picked. */
+.fl-planner { --l-side: 20rem; }
+.fl-planner .fl-side { position: sticky; top: var(--l-top, 0); }
+.fl-preview .fl-board { margin: 0 0 var(--space-3); }
+.fl-preview-row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: var(--space-1) var(--space-3); padding: var(--space-2); border-radius: var(--r-xs); background: var(--surface-inset); box-shadow: inset 3px 0 0 var(--accent); }
+.fl-preview .fl-facts { grid-template-columns: minmax(0, 1fr); }
+.fl-presets { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
+.fl-presets[hidden] { display: none; }
+.fl-options label { padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-inset); }
+.fl-options label:has(input:checked) { border-color: var(--sel-edge); background: var(--sel-bg); }
+.fl-options label:has(input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 1px; }
+.fl-options--row label { flex: 1 1 12rem; }
+
 /* The live fleet */
 .fl-live { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
 .fl-asof { margin: 0; color: var(--muted); font-size: var(--fs-xs); }

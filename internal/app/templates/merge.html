@@ -1,0 +1,23 @@
+{{define "title"}}Move account{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Move everything over</span></h1>{{end}}
+{{define "content"}}
+{{with .Merge}}
+<section class="card lk-confirm" data-fold="never">
+  <h2>Move this account into your other one?</h2>
+  <p class="prose">This account has {{.From.Total}} character{{if ne .From.Total 1}}s{{end}}:</p>
+  {{template "mg-account" .From}}
+  <p class="prose">They move to the account with {{.Into.Total}} character{{if ne .Into.Total 1}}s{{end}}:</p>
+  {{template "mg-account" .Into}}
+  <p class="prose">Saved fits, skill plans, the watchlist and settings move too. Where both accounts have a setting, the other account's is kept. Passkeys stay with this account, which is deleted after 30 days.</p>
+  <form method="post" action="/auth/merge" class="lk-actions">
+    <button class="btn" type="submit" name="action" value="merge">Move everything over</button>
+    <button class="linkbtn" type="submit" name="action" value="cancel">Cancel, keep both accounts</button>
+  </form>
+</section>
+{{end}}
+{{end}}
+
+{{define "mg-account"}}<ul class="lk-account">
+  {{range .Chars}}<li><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}</li>{{end}}
+  {{if .More}}<li class="lk-more">and {{.More}} more</li>{{end}}
+</ul>{{end}}

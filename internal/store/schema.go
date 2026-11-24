@@ -1069,6 +1069,11 @@ var pgSDEAPIBlobsSchema string
 //go:embed schema_pg/179_sde_factions_schematics.sql
 var pgSDEFactionsSchematicsSchema string
 
+// Step 180: when an account emptied by a merge is removed.
+//
+//go:embed schema_pg/180_user_delete_after.sql
+var pgUserDeleteAfterSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1276,6 +1281,7 @@ func schemaSteps() []schemaStep {
 		{177, "fleet invites", pgFleetInvitesSchema, ""},
 		{178, "sde api blobs", pgSDEAPIBlobsSchema, ""},
 		{179, "sde factions and schematics", pgSDEFactionsSchematicsSchema, ""},
+		{180, "user_delete_after", pgUserDeleteAfterSchema, ""},
 	}
 }
 

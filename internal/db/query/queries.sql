@@ -550,12 +550,23 @@ ORDER BY u.id DESC
 LIMIT sqlc.arg(row_limit)::bigint;
 
 -- name: ListEmptyUsers :many
--- Accounts with no character linked: left over from an unlink, or from
--- an older build.
-SELECT u.id, u.created_at, u.last_seen_at FROM users u
+-- Accounts with no character linked: left over from an unlink, from a
+-- merge (delete_after set), or from an older build.
+SELECT u.id, u.created_at, u.last_seen_at, u.delete_after FROM users u
 WHERE NOT EXISTS (SELECT 1 FROM characters c WHERE c.user_id = u.id)
 ORDER BY u.id
 LIMIT sqlc.arg(row_limit)::bigint;
+
+-- name: MarkUserForDeletion :exec
+-- An account emptied by a merge: removed once after has passed.
+UPDATE users SET delete_after = sqlc.arg(after)::timestamptz WHERE id = sqlc.arg(id);
+
+-- name: DeleteDueUsers :execrows
+-- Accounts marked for removal whose time has come, as long as no
+-- character was linked to them since.
+DELETE FROM users u
+WHERE u.delete_after IS NOT NULL AND u.delete_after <= sqlc.arg(now)::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM characters c WHERE c.user_id = u.id);
 
 -- name: DeleteUser :execrows
 -- Everything the account owns goes with it (ON DELETE CASCADE).

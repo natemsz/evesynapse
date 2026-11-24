@@ -3202,6 +3202,7 @@ type User struct {
 	LastSeenAt     time.Time    `json:"last_seen_at"`
 	IsDemo         int64        `json:"is_demo"`
 	VizPrefs       string       `json:"viz_prefs"`
+	DeleteAfter    sql.NullTime `json:"delete_after"`
 }
 
 type UserAppraisal struct {

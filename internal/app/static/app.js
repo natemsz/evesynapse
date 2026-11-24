@@ -6843,16 +6843,24 @@
 // styles: the battle report's cards are the worked example).
 (function () {
   var layer = null, owner = null;
+  // One layer for the page: a chart card (battle.js) may have made it.
   function ensure() {
-    if (!layer) {
-      layer = document.createElement("div");
-      layer.id = "spark-layer";
-      layer.hidden = true;
-      document.body.appendChild(layer);
+    if (!layer || !layer.isConnected) {
+      layer = document.getElementById("spark-layer");
+      if (!layer) {
+        layer = document.createElement("div");
+        layer.id = "spark-layer";
+        layer.hidden = true;
+        document.body.appendChild(layer);
+      }
     }
     return layer;
   }
-  function hide() { if (layer) layer.hidden = true; owner = null; }
+  function hide() {
+    var l = layer || document.getElementById("spark-layer");
+    if (l) l.hidden = true;
+    owner = null;
+  }
   function show(fig) {
     var pop = fig.querySelector(".spark-pop");
     if (!pop) return;
@@ -6865,6 +6873,8 @@
     var x = Math.min(Math.max(8, r.right - lw), window.innerWidth - lw - 8);
     var y = r.top - lh - 8;
     if (y < 8) y = r.bottom + 8;
+    // A card taller than the room either side stays on screen.
+    if (y + lh > window.innerHeight - 8) y = Math.max(8, window.innerHeight - lh - 8);
     l.style.left = x + "px";
     l.style.top = y + "px";
     owner = fig;
@@ -6887,6 +6897,8 @@
     if (fig) show(fig);
   });
   document.addEventListener("focusout", hide);
+  // Escape puts the card away without moving the pointer or focus.
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hide(); });
   window.addEventListener("scroll", hide, true);
   window.addEventListener("resize", hide);
   document.addEventListener("evesynapse:content-ready", hide);

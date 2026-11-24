@@ -104,11 +104,11 @@
 {{/* Adding a battle log from the fleet: upload a game log file or paste
      part of one (battle.js gzips a chosen file), or tick whose logs
      already on EveSynapse count here. Shown to pilots recorded on the
-     fleet. */}}
+     fleet; folded once a log counts in the battle shown. */}}
 {{define "fleet-logs"}}
 {{if .Consent}}
-<section class="l-panel fl-logs" aria-labelledby="fl-logs-title">
-  <h2 id="fl-logs-title">Add your battle log</h2>
+<details class="l-panel fl-logs"{{if not (and .X (not .X.MailsOnly))}} open{{end}}>
+  <summary><h2 class="bt-h" id="fl-logs-title">Add your battle log</h2></summary>
   <p class="prose">Your game log adds your damage and repairs to this report, for everyone who can open it to see. With Axon running, your logs are sent by themselves. Without it, upload the log file from this fleet here.</p>
   <form class="bt-add-form fl-upload" method="post" action="{{.UploadAction}}" enctype="multipart/form-data" data-bt-upload>
     <div class="bt-pick">
@@ -135,7 +135,7 @@
     <p class="fl-hint">A log already uploaded under <a href="{{.UploadHref}}">Battle Reports</a> counts once its pilot is ticked. Untick a pilot to take their logs back out.</p>
     <p><button type="submit" class="btn btn-quiet">Save</button></p>
   </form>
-</section>
+</details>
 {{end}}
 {{end}}
 
@@ -189,7 +189,7 @@
   <div class="fl-x-rail" aria-label="Kills and losses">
     <span class="bt-lane-label">Deaths</span>
     <div class="fl-x-rail-track" data-zoom-track>
-      {{range .Rail}}<a class="fl-x-pin{{if .Loss}} is-loss{{end}}" href="{{.Href}}" data-moment="{{.Fragment}}" data-left="{{.Left}}" data-at="{{.Left}}" title="{{.Label}}"><img src="{{typeRender .Ship 64}}" width="24" height="24" alt="{{.Label}}" loading="lazy"></a>{{end}}
+      {{range .Rail}}<a class="fl-x-pin{{if .Loss}} is-loss{{end}}{{if .Kill}} spark-hover{{end}}" href="{{.Href}}" data-moment="{{.Fragment}}" data-left="{{.Left}}" data-at="{{.Left}}"{{if not .Kill}} title="{{.Label}}"{{end}}><img src="{{typeRender .Ship 64}}" width="24" height="24" alt="{{.Label}}" loading="lazy">{{with .Kill}}{{template "fl-pin-card" .}}{{end}}</a>{{end}}
     </div>
   </div>
   {{end}}
@@ -207,7 +207,7 @@
       <line class="bt-cursor" id="bt-cursor" x1="0" y1="0" x2="0" y2="160" vector-effect="non-scaling-stroke" hidden/>
       <rect class="fl-x-brush" data-zoom-brush x="0" y="0" width="0" height="160" hidden/>
     </svg>
-    {{with .Hover}}<script type="application/json" id="bt-hover-data">{{.}}</script>{{end}}
+    {{with .Hover}}<script type="application/json" id="bt-hover-data" data-side="fleet"{{if $x.Chart.ISK}} data-isk{{end}}>{{.}}</script>{{end}}
     {{with .Zoom}}<script type="application/json" id="fl-zoom-data">{{.}}</script>{{end}}
   </div>
   {{if .Lanes}}
@@ -223,12 +223,12 @@
   </div>
   {{end}}
   {{if .PilotLanes}}
-  <details class="fl-x-pilotlanes"{{if le (len .PilotLanes) 30}} open{{end}}>
+  <details class="fl-x-pilotlanes">
     <summary>Each pilot through the battle <span class="bt-dim">{{len .PilotLanes}} pilots: {{if .MailsOnly}}gold on a kill, red on their loss, from killmails{{else}}gold when dealing damage, red when taking it{{end}}</span></summary>
     <div class="fl-x-plist" role="list">
       {{range .PilotLanes}}
       <div class="fl-x-plane" role="listitem">
-        <span class="fl-x-pname">{{template "fl-who-icon" .Who}}<span class="fl-x-pn">{{.Who.Link}}</span></span>
+        <span class="fl-x-pname{{if .Who.Card}} spark-hover bt-tipped{{end}}"{{if .Who.Card}} tabindex="0"{{end}}>{{template "fl-who-icon" .Who}}<span class="fl-x-pn bt-who-n">{{.Who.Link}}</span>{{if .Who.Card}}{{template "fl-card" .Who}}{{end}}</span>
         <svg class="fl-x-pbar" viewBox="0 0 600 20" preserveAspectRatio="none" role="img" aria-label="{{.Summary}}" data-zoom-svg data-zoom-flat>
           {{range .Cells}}{{if .Out}}<rect class="fl-o{{.Out}}" x="{{.X}}" y="1" width="{{.W}}" height="8"/>{{end}}{{if .In}}<rect class="fl-i{{.In}}" x="{{.X}}" y="11" width="{{.W}}" height="8"/>{{end}}{{end}}
           {{if .Died}}<line class="fl-x-death" x1="{{.DeathX}}" y1="0" x2="{{.DeathX}}" y2="20" vector-effect="non-scaling-stroke"><title>Lost their ship</title></line>{{end}}
@@ -246,11 +246,32 @@
   <section class="l-panel bt-moment" id="bt-moment" aria-labelledby="bt-moment-h" aria-live="polite">
     {{template "fleet-moment" .Moment}}
   </section>
+  {{if or .Findings .Ours.Hulls .Theirs.Hulls}}
+  <div class="l-stack fl-x-side">
   {{if .Findings}}
   <section class="l-panel bt-findings" aria-labelledby="fl-x-find-h">
     <h2 class="bt-h" id="fl-x-find-h">What the numbers say</h2>
-    <ul>{{range .Findings}}<li class="bt-find-{{.Rule}}"><p>{{.Text}}</p></li>{{end}}</ul>
+    <ul>{{range .Findings}}<li class="bt-find-{{.Rule}}{{if .First}} first{{end}}">{{if .First}}<span class="bt-find-k">{{.Label}}</span>{{end}}<p>{{.Text}}</p></li>{{end}}</ul>
   </section>
+  {{end}}
+  {{if or .Ours.Hulls .Theirs.Hulls}}
+  <section class="l-panel bt-sides" aria-labelledby="fl-x-sides-h">
+    <h2 class="bt-h" id="fl-x-sides-h">Who was there</h2>
+    <div class="l-stack bt-sides-pair">
+      {{with .Ours}}{{if .Hulls}}<div class="bt-side bt-side-friendly">
+        <h3 class="bt-sub">The fleet <span class="bt-dim">{{.Pilots}} pilots</span></h3>
+        <ul class="bt-hulls">{{range .Hulls}}<li><img src="{{typeRender .TypeID 64}}" alt="" width="28" height="28" loading="lazy"><span class="bt-hull-n">{{itemLink .TypeID .Name}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>
+      </div>{{end}}{{end}}
+      {{with .Theirs}}{{if .Hulls}}<div class="bt-side bt-side-hostile">
+        <h3 class="bt-sub">Against it <span class="bt-dim">{{.Pilots}} seen{{if $x.MailsOnly}} on the killmails{{end}}</span></h3>
+        <ul class="bt-hulls">{{range .Hulls}}<li><img src="{{typeRender .TypeID 64}}" alt="" width="28" height="28" loading="lazy"><span class="bt-hull-n">{{itemLink .TypeID .Name}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>
+        {{if .Tickers}}<p class="bt-tickers">{{range .Tickers}}<span>[{{.Name}}] {{.Count}}</span>{{end}}</p>{{end}}
+        {{with $x.Groups}}<ul class="fl-x-groups">{{range .}}<li>{{if .Logo}}<img src="{{.Logo}}" alt="" width="24" height="24" loading="lazy">{{else}}<span class="bt-who-dot" aria-hidden="true"></span>{{end}}<span class="fl-x-gn">{{.Link}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>{{end}}
+      </div>{{end}}{{end}}
+    </div>
+  </section>
+  {{end}}
+  </div>
   {{end}}
 </div>
 
@@ -264,7 +285,7 @@
     <tbody>
     {{range .Kills}}<tr class="{{if .Loss}}yours fl-mail-loss{{else}}fl-mail-kill{{end}}">
       <td class="num">{{.At}}</td>
-      <td><span class="bt-who"><img src="{{typeRender .ShipTypeID 64}}" alt="" width="22" height="22" loading="lazy">{{if .Href}}<a href="{{.Href}}">{{.Ship}}</a>{{else}}{{itemLink .ShipTypeID .Ship}}{{end}}</span></td>
+      <td><span class="bt-who spark-hover bt-tipped"><img src="{{typeRender .ShipTypeID 64}}" alt="" width="22" height="22" loading="lazy"><span class="bt-who-n">{{if .Href}}<a href="{{.Href}}">{{.Ship}}</a>{{else}}{{itemLink .ShipTypeID .Ship}}{{end}}</span>{{template "fl-kill-card" .}}</span></td>
       <td>{{template "fl-who" .Victim}}</td>
       <td>{{if .Loss}}<span class="badge loss">Loss</span>{{else}}<span class="badge kill">Kill</span>{{end}}</td>
       <td class="num">{{.Value}}</td>
@@ -286,24 +307,6 @@
     </form>
   </details>
 </section>
-
-{{if or .Ours.Hulls .Theirs.Hulls}}
-<section class="l-panel bt-sides" aria-labelledby="fl-x-sides-h">
-  <h2 class="bt-h" id="fl-x-sides-h">Who was there</h2>
-  <div class="l-switcher bt-sides-pair">
-    {{with .Ours}}{{if .Hulls}}<div class="bt-side bt-side-friendly">
-      <h3 class="bt-sub">The fleet <span class="bt-dim">{{.Pilots}} pilots</span></h3>
-      <ul class="bt-hulls">{{range .Hulls}}<li><img src="{{typeRender .TypeID 64}}" alt="" width="28" height="28" loading="lazy"><span class="bt-hull-n">{{itemLink .TypeID .Name}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>
-    </div>{{end}}{{end}}
-    {{with .Theirs}}{{if .Hulls}}<div class="bt-side bt-side-hostile">
-      <h3 class="bt-sub">Against it <span class="bt-dim">{{.Pilots}} seen{{if $x.MailsOnly}} on the killmails{{end}}</span></h3>
-      <ul class="bt-hulls">{{range .Hulls}}<li><img src="{{typeRender .TypeID 64}}" alt="" width="28" height="28" loading="lazy"><span class="bt-hull-n">{{itemLink .TypeID .Name}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>
-      {{if .Tickers}}<p class="bt-tickers">{{range .Tickers}}<span>[{{.Name}}] {{.Count}}</span>{{end}}</p>{{end}}
-      {{with $x.Groups}}<ul class="fl-x-groups">{{range .}}<li>{{if .Logo}}<img src="{{.Logo}}" alt="" width="24" height="24" loading="lazy">{{else}}<span class="bt-who-dot" aria-hidden="true"></span>{{end}}<span class="fl-x-gn">{{.Link}}</span><span class="bt-hull-c">{{.Count}}{{if .Lost}} <span class="bt-neg">{{.Lost}} lost</span>{{end}}</span></li>{{end}}</ul>{{end}}
-    </div>{{end}}{{end}}
-  </div>
-</section>
-{{end}}
 
 <div class="l-switcher bt-whole">
   {{if .Pilots.Total}}<section class="l-panel" aria-labelledby="fl-x-pilots-h">
@@ -361,7 +364,15 @@
 <h2 class="bt-mtitle" id="bt-moment-h" data-moment-seq="{{.Seq}}">{{.Title}}</h2>
 <p class="bt-msum">{{.Summary}}</p>
 {{if .FromMails}}<p class="fl-hint">No log covers these seconds, so the lists below come from the killmails in them.</p>{{end}}
-<dl class="bt-mnums">{{range .Figures}}<div class="bt-mnum bt-tone-{{.Tone}}"><dt>{{.Label}}</dt><dd>{{.Value}}</dd></div>{{end}}</dl>
+<div class="bt-mfig">
+  {{if .SparkOut}}<svg class="bt-mspark{{if .SparkISK}} fl-chart-isk{{end}}" viewBox="0 0 120 28" preserveAspectRatio="none" role="img" aria-label="{{if .SparkISK}}ISK destroyed and lost so far, around this moment{{else}}The fleet's damage dealt and taken, and its repairs, around this moment{{end}}">
+    <rect class="bt-mspan" x="{{.MarkA}}" y="0" width="{{.MarkB}}" height="28"/>
+    {{if .SparkReps}}<polyline class="bt-ln-repin" points="{{.SparkReps}}" vector-effect="non-scaling-stroke"/>{{end}}
+    <polyline class="bt-ln-in" points="{{.SparkIn}}" vector-effect="non-scaling-stroke"/>
+    <polyline class="bt-ln-out" points="{{.SparkOut}}" vector-effect="non-scaling-stroke"/>
+  </svg>{{end}}
+  <dl class="bt-mnums">{{range .Figures}}<div class="bt-mnum bt-tone-{{.Tone}}"><dt>{{.Label}}</dt><dd>{{.Value}}</dd></div>{{end}}</dl>
+</div>
 {{if .Kills}}
 <ul class="bt-mkills">
   {{range .Kills}}<li class="{{if .Loss}}loss{{else}}kill{{end}}"><img src="{{typeRender .ShipTypeID 64}}" alt="" width="24" height="24" loading="lazy"><span>{{if .Victim.Name}}{{.Victim.Name}}'s {{end}}{{.Ship}} {{if .Loss}}lost{{else}}destroyed{{end}} at {{.At}}{{with .Href}} <a href="{{.}}">View on killboard</a>{{end}}</span></li>{{end}}
@@ -370,7 +381,7 @@
 {{if .Hands}}
 <h3 class="bt-h">On the killmail</h3>
 <ul class="fl-x-hands">
-  {{range .Hands}}<li{{if .Ours}} class="ours"{{end}}>{{template "fl-who-icon" .Who}}<span class="fl-x-hn">{{.Who.Link}}{{with .Who.Hull}} <span class="bt-dim">{{.}}</span>{{end}}{{if .Who.FinalBlow}} <span class="kb-tag">final blow</span>{{end}}{{if .Who.Group}}<span class="fl-x-hg">{{if .Who.GroupLogo}}<img src="{{.Who.GroupLogo}}" alt="" width="16" height="16" loading="lazy">{{end}}{{.Who.Group}}</span>{{end}}</span>{{if .Who.Weapon}}<img class="fl-x-hw" src="{{typeIcon .Who.Weapon 32}}" alt="" width="20" height="20" loading="lazy" title="{{.Who.WeaponName}}">{{else}}<span class="fl-x-hw"></span>{{end}}<span class="bt-bar"><span class="bt-bar-fill" data-w="{{.BarW}}"></span></span><span class="fl-x-hd">{{.Damage}} <span class="bt-dim">{{.Pct}}%</span></span></li>{{end}}
+  {{range .Hands}}<li{{if .Ours}} class="ours"{{end}}>{{template "fl-who-icon" .Who}}<span class="fl-x-hn{{if .Who.Card}} spark-hover bt-tipped{{end}}"{{if .Who.Card}} tabindex="0"{{end}}><span class="bt-who-n">{{.Who.Link}}</span>{{with .Who.Hull}} <span class="bt-dim">{{.}}</span>{{end}}{{if .Who.FinalBlow}} <span class="kb-tag">final blow</span>{{end}}{{if .Who.Group}}<span class="fl-x-hg">{{if .Who.GroupLogo}}<img src="{{.Who.GroupLogo}}" alt="" width="16" height="16" loading="lazy">{{end}}{{.Who.Group}}</span>{{end}}{{if .Who.Card}}{{template "fl-card" .Who}}{{end}}</span>{{if .Who.Weapon}}<img class="fl-x-hw" src="{{typeIcon .Who.Weapon 32}}" alt="" width="20" height="20" loading="lazy" title="{{.Who.WeaponName}}">{{else}}<span class="fl-x-hw"></span>{{end}}<span class="bt-bar"><span class="bt-bar-fill" data-w="{{.BarW}}"></span></span><span class="fl-x-hd">{{.Damage}} <span class="bt-dim">{{.Pct}}%</span></span></li>{{end}}
 </ul>
 {{end}}
 <div class="l-switcher bt-mtables">
@@ -389,9 +400,40 @@
 <p class="bt-dim">This battle has no moments to open.</p>
 {{end}}{{end}}
 
-{{define "fl-who-icon"}}{{if .Portrait}}<img class="fl-x-portrait" src="{{.Portrait}}" alt="" width="24" height="24" loading="lazy">{{else if .ShipTypeID}}<img src="{{typeRender .ShipTypeID 64}}" alt="" width="24" height="24" loading="lazy">{{else}}<span class="bt-who-dot" aria-hidden="true"></span>{{end}}{{end}}
+{{define "fl-who-icon"}}{{if .Portrait}}<img class="fl-x-portrait" src="{{.Portrait}}" alt="" width="24" height="24" loading="lazy">{{else if .ShipTypeID}}<img src="{{typeRender .ShipTypeID 64}}" alt="" width="24" height="24" loading="lazy">{{else if not .Bare}}<span class="bt-who-dot" aria-hidden="true"></span>{{end}}{{end}}
 
-{{define "fl-who"}}<span class="bt-who">{{template "fl-who-icon" .}}<span class="bt-who-t"><span class="bt-who-n">{{.Link}}{{if .Died}} <span class="kb-tag warn">died</span>{{end}}</span>{{if .Group}}<span class="bt-who-s fl-x-grp">{{if .GroupLogo}}<img src="{{.GroupLogo}}" alt="" width="16" height="16" loading="lazy"> {{end}}{{.Group}}</span>{{end}}{{if or .Hull .Ticker}}<span class="bt-who-s">{{if .ShipTypeID}}{{if .Portrait}}<img src="{{typeRender .ShipTypeID 64}}" alt="" width="16" height="16" loading="lazy"> {{end}}{{end}}{{if .Ticker}}[{{.Ticker}}] {{end}}{{.Hull}}</span>{{end}}</span></span>{{end}}
+{{/* A pilot or an enemy as a table's first cell: its picture, its name
+     (a link once a mail named the character), its group and its hull.
+     With a card, the cell is a hover target for it. */}}
+{{define "fl-who"}}<span class="bt-who{{if .Card}} spark-hover bt-tipped{{end}}"{{if .Card}} tabindex="0"{{end}}>{{template "fl-who-icon" .}}<span class="bt-who-t"><span class="bt-who-n">{{.Link}}{{if .Died}} <span class="kb-tag warn">died</span>{{end}}</span>{{if .Group}}<span class="bt-who-s fl-x-grp">{{if .GroupLogo}}<img src="{{.GroupLogo}}" alt="" width="16" height="16" loading="lazy"> {{end}}{{.Group}}</span>{{end}}{{if or .Hull .Ticker}}<span class="bt-who-s">{{if .ShipTypeID}}{{if .Portrait}}<img src="{{typeRender .ShipTypeID 64}}" alt="" width="16" height="16" loading="lazy"> {{end}}{{end}}{{if .Ticker}}[{{.Ticker}}] {{end}}{{.Hull}}</span>{{end}}</span>{{if .Card}}{{template "fl-card" .}}{{end}}</span>{{end}}
+
+{{/* A pilot's or an enemy's card: the tooltip the shared hover layer
+     shows over its name (app.js lifts .spark-pop into one fixed layer),
+     with its figures over the whole battle and its heaviest weapons. */}}
+{{define "fl-card"}}<span class="spark-pop" data-layer="bt-card">
+  <span class="btc-head">{{if .Portrait}}<img class="btc-portrait" src="{{.Portrait}}" alt="" width="36" height="36">{{else if .ShipTypeID}}<img src="{{typeRender .ShipTypeID 64}}" alt="" width="36" height="36">{{end}}<span class="btc-t"><strong>{{.Name}}</strong>{{if or .Hull .Ticker .Died}}<span class="btc-s">{{if and .Portrait .ShipTypeID}}<img class="btc-hull" src="{{typeRender .ShipTypeID 64}}" alt="" width="16" height="16"> {{end}}{{if .Ticker}}[{{.Ticker}}] {{end}}{{.Hull}}{{if .Died}} <span class="kb-tag warn">died</span>{{end}}</span>{{end}}{{with .Group}}<span class="btc-s">{{.}}</span>{{end}}</span></span>
+  {{with .Card}}
+  {{if .Rows}}<span class="btc-rows">{{range .Rows}}<span class="btc-row{{with .Tone}} btc-{{.}}{{end}}"><span>{{.Label}}</span><b>{{.Value}}</b></span>{{end}}</span>{{end}}
+  {{if .Weapons}}<span class="btc-sub">{{.WeaponsHead}}</span>{{range .Weapons}}<span class="btc-w">{{if .TypeID}}<img src="{{typeIcon .TypeID 32}}" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Name}}</span><b>{{.Damage}}</b></span>{{end}}{{end}}
+  {{with .Foot}}<span class="btc-foot">{{.}}</span>{{end}}
+  {{end}}
+</span>{{end}}
+
+{{/* A kill's or a loss's card: whose ship, its value, the most damage
+     and the final blow on its mail. The pin on the rail opens the
+     moment; the ship in the killmail table opens the mail. */}}
+{{define "fl-kill-card-body"}}<span class="btc-top"><span class="bt-chip bt-chip-{{if .Loss}}loss{{else}}kill{{end}}">{{if .Loss}}Loss{{else}}Kill{{end}}</span><span class="btc-time">{{.At}}</span></span>
+  <span class="btc-head"><img src="{{typeRender .ShipTypeID 64}}" alt="" width="36" height="36"><span class="btc-t"><strong>{{.Title}}</strong><span class="btc-s">{{if .Value}}{{.Value}} ISK{{else}}Not valued yet{{end}}</span></span></span>
+  {{with .TopHand}}<span class="btc-sub">Most damage{{if .Who.FinalBlow}} and the final blow{{end}}</span>{{template "fl-card-hand" .}}{{end}}
+  {{with .Blow}}<span class="btc-sub">Final blow</span>{{template "fl-card-hand" .}}{{end}}{{end}}
+{{define "fl-card-hand"}}<span class="btc-w">{{if .Who.Portrait}}<img class="btc-portrait" src="{{.Who.Portrait}}" alt="" width="22" height="22">{{else if .Who.ShipTypeID}}<img src="{{typeRender .Who.ShipTypeID 64}}" alt="" width="22" height="22">{{else}}<span class="btc-noicon"></span>{{end}}<span class="btc-wn">{{.Who.Name}}{{with .Who.Hull}} <span class="btc-s">{{.}}</span>{{end}}</span><b>{{.Pct}}%</b></span>{{end}}
+{{define "fl-kill-hands"}}{{.Hands}} on the killmail{{if .OnMail}}, {{.OnMail}} of them from the fleet{{end}}.{{end}}
+{{define "fl-kill-card"}}<span class="spark-pop" data-layer="bt-card">{{template "fl-kill-card-body" .}}
+  <span class="btc-foot">{{template "fl-kill-hands" .}}</span>
+</span>{{end}}
+{{define "fl-pin-card"}}<span class="spark-pop" data-layer="bt-card">{{template "fl-kill-card-body" .}}
+  <span class="btc-foot">{{template "fl-kill-hands" .}} Select to open this moment.</span>
+</span>{{end}}
 
 {{define "fl-mtable"}}
 <div class="tw">
@@ -413,9 +455,9 @@
 {{end}}
 {{define "fl-table-row"}}<tr{{if .Muted}} class="fl-x-muted"{{end}}>
   <td>{{template "fl-who" .Who}}{{with .Note}}<span class="bt-who-s fl-x-note">{{.}}</span>{{end}}{{if .Who.Died}}{{with .Who.MailHref}} <a class="fl-x-km" href="{{.}}">Killmail</a>{{end}}{{end}}</td>
-  <td class="num fl-x-fig">{{.A}}{{if .AW}}<span class="bt-bar fl-x-bar-out"><span class="bt-bar-fill" data-w="{{.AW}}"></span></span>{{end}}</td>
-  <td class="num fl-x-fig">{{.B}}{{if .BW}}<span class="bt-bar fl-x-bar-in"><span class="bt-bar-fill" data-w="{{.BW}}"></span></span>{{end}}</td>
-  <td class="num fl-x-fig">{{.C}}{{if .CW}}<span class="bt-bar fl-x-bar-rep"><span class="bt-bar-fill" data-w="{{.CW}}"></span></span>{{end}}</td>
+  <td class="num fl-x-fig{{if or (eq .A "0") (eq .A "-")}} fl-zero{{end}}">{{.A}}{{if .AW}}<span class="bt-bar fl-x-bar-out"><span class="bt-bar-fill" data-w="{{.AW}}"></span></span>{{end}}</td>
+  <td class="num fl-x-fig{{if or (eq .B "0") (eq .B "-")}} fl-zero{{end}}">{{.B}}{{if .BW}}<span class="bt-bar fl-x-bar-in"><span class="bt-bar-fill" data-w="{{.BW}}"></span></span>{{end}}</td>
+  <td class="num fl-x-fig{{if or (eq .C "0") (eq .C "-")}} fl-zero{{end}}">{{.C}}{{if .CW}}<span class="bt-bar fl-x-bar-rep"><span class="bt-bar-fill" data-w="{{.CW}}"></span></span>{{end}}</td>
 </tr>{{end}}
 
 {{define "fl-weapons"}}
@@ -429,7 +471,11 @@
 {{if .More}}<button type="button" class="btn btn-quiet bt-more" data-expand="{{.ID}}"><span class="bt-more-c">Show all {{.Total}}</span><span class="bt-more-o">Show fewer</span></button>{{end}}
 {{end}}
 {{define "fl-weapon-row"}}<tr>
-  <td><span class="bt-who">{{if .WeaponTypeID}}<img src="{{typeIcon .WeaponTypeID 32}}" alt="" width="22" height="22" loading="lazy">{{itemLink .WeaponTypeID .Weapon}}{{else}}<span class="bt-who-dot" aria-hidden="true"></span>{{.Weapon}}{{end}}</span></td>
+  <td><span class="bt-who{{if .Judged}} spark-hover bt-tipped{{end}}">{{if .WeaponTypeID}}<img src="{{typeIcon .WeaponTypeID 32}}" alt="" width="22" height="22" loading="lazy"><span class="bt-who-n">{{itemLink .WeaponTypeID .Weapon}}</span>{{else}}<span class="bt-who-dot" aria-hidden="true"></span><span class="bt-who-n"{{if .Judged}} tabindex="0"{{end}}>{{.Weapon}}</span>{{end}}{{if .Judged}}<span class="spark-pop" data-layer="bt-card">
+    <span class="btc-head">{{if .WeaponTypeID}}<img src="{{typeIcon .WeaponTypeID 64}}" alt="" width="36" height="36">{{end}}<span class="btc-t"><strong>{{.Weapon}}</strong><span class="btc-s">{{.Shots}} shots by {{.Party}}, {{.Damage}} damage</span></span></span>
+    <span class="btc-rows">{{range .Segs}}<span class="btc-row"><span><i class="btc-sw {{.Class}}"></i>{{.Label}}</span></span>{{end}}</span>
+    <span class="btc-foot">{{.Good}} hit solidly (glance or better)</span>
+  </span>{{end}}</span></td>
   <td>{{.Party}}</td>
   <td class="num">{{.Shots}}</td>
   <td class="num">{{.Damage}}</td>

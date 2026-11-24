@@ -991,8 +991,9 @@ func TestDemoFleetReportOpensAsAnExplorer(t *testing.T) {
 		t.Fatalf("GET %s = %d", path, rec.Code)
 	}
 	body := rec.Body.String()
-	mustContain(t, "explorer", body, `data-fleet-zoom`, `id="fl-zoom-data"`, `id="bt-hover-data"`,
-		`class="bt-ev bt-ev-`, `id="bt-moment-h"`, "Kills and losses", "Weapons and how they landed")
+	mustContain(t, "explorer", body, `data-fleet-zoom`, `id="fl-zoom-data"`, `id="bt-hover-data" data-side="fleet"`,
+		`class="bt-ev bt-ev-`, `id="bt-moment-h"`, "Kills and losses", "Weapons and how they landed",
+		`class="bt-who spark-hover bt-tipped"`, `class="fl-x-pin spark-hover"`, `class="bt-mspark`, `class="bt-find-k"`)
 	if strings.Contains(body, "/intel/kill/") {
 		t.Error("the demo's invented killmails link to killboard pages")
 	}
@@ -1056,7 +1057,7 @@ func TestDemoShowsAKillmailOnlyBattleAndKeepsItsExplorersCurrent(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET the killmail-only report = %d", rec.Code)
 	}
-	mustContain(t, "killmail-only report", rec.Body.String(), `class="fl-x-source"`, "The battle, kill by kill", "Damage on kills", "A killmail is missing?")
+	mustContain(t, "killmail-only report", rec.Body.String(), `class="fl-x-source"`, "The battle, kill by kill", "Damage on kills", "A killmail is missing?", `data-isk`)
 
 	if _, err := conn.Exec(`UPDATE fleet_battle_detail SET payload = jsonb_set(payload::jsonb, '{v}', '1')::text
 		WHERE fleet_battle_id = (SELECT MIN(fleet_battle_id) FROM fleet_battle_detail)`); err != nil {

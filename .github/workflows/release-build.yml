@@ -85,7 +85,6 @@ jobs:
           CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o dist/evesynapse-windows-arm64.exe ./cmd/evesynapse
           CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o dist/evesynapse-darwin-amd64 ./cmd/evesynapse
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o dist/evesynapse-darwin-arm64 ./cmd/evesynapse
-          cp deploy/setup.sh dist/setup.sh
           cd dist
           for a in arm64 amd64; do
             sha=$(sha256sum "evesynapse-$a" | cut -d' ' -f1)
@@ -178,7 +177,7 @@ jobs:
           HOW="evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers)"
           if [ "$VERSION" != "${VERSION%%-*}" ]; then HOW="evesynapse -update -dev"; fi
           printf 'Automated build of EveSynapse v%s. Update with: %s.\n' "$VERSION" "$HOW" > release-notes.md
-          printf 'If this is your first install, download installer and run it.\n' >> release-notes.md
+          printf 'If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).\n' >> release-notes.md
           python3 - <<'PYEOF'
           import json, os, urllib.request
 
@@ -231,7 +230,7 @@ jobs:
               with open("release-notes.md", "a") as fh:
                   fh.write("\n## What's Changed\n\n" + "\n".join(notes))
           PYEOF
-      # The release is created as a draft, the eight files
+      # The release is created as a draft, the seven files
       # are uploaded to it, and then it is published: the publish
       # is the commit point, and the updater skips drafts, so
       # no reader can see a half-uploaded release. When a draft
@@ -324,7 +323,7 @@ jobs:
                   fh.write(a["name"] + "\n")
           PYEOF
           REL_ID="$(cat release-id.txt)"
-          for f in evesynapse-arm64 evesynapse-amd64 latest.json setup.sh evesynapse-windows-amd64.exe evesynapse-windows-arm64.exe evesynapse-darwin-amd64 evesynapse-darwin-arm64; do
+          for f in evesynapse-arm64 evesynapse-amd64 latest.json evesynapse-windows-amd64.exe evesynapse-windows-arm64.exe evesynapse-darwin-amd64 evesynapse-darwin-arm64; do
             if grep -qx "$f" release-assets.txt; then
               echo "$f: already on the draft; skipping."
               continue
@@ -397,7 +396,7 @@ jobs:
           fi
           export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
           EP="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
-          FILES="evesynapse-arm64 evesynapse-amd64 latest.json setup.sh evesynapse-windows-amd64.exe evesynapse-windows-arm64.exe evesynapse-darwin-amd64 evesynapse-darwin-arm64"
+          FILES="evesynapse-arm64 evesynapse-amd64 latest.json evesynapse-windows-amd64.exe evesynapse-windows-arm64.exe evesynapse-darwin-amd64 evesynapse-darwin-arm64"
           for f in $FILES; do
             aws s3 cp "dist/$f" "s3://$R2_BUCKET/evesynapse/v$VERSION/$f" --endpoint-url "$EP"
           done
@@ -478,7 +477,7 @@ jobs:
               [ -n "$fname" ] && have["$fname"]="$fsha"
             done < <(printf '%s' "$files_json" | python3 -c 'import json,sys; [print(f["file_name"]+"="+f["file_sha256"]) for f in json.load(sys.stdin)]')
           fi
-          for f in evesynapse-arm64 evesynapse-amd64 latest.json setup.sh evesynapse-windows-amd64.exe evesynapse-windows-arm64.exe evesynapse-darwin-amd64 evesynapse-darwin-arm64; do
+          for f in evesynapse-arm64 evesynapse-amd64 latest.json evesynapse-windows-amd64.exe evesynapse-windows-arm64.exe evesynapse-darwin-amd64 evesynapse-darwin-arm64; do
             sha="$(sha256sum "dist/$f" | cut -d' ' -f1)"
             if [ "${have[$f]:-}" = "$sha" ]; then
               echo "$f: already in the GitLab registry under the same hash; skipping."
@@ -495,7 +494,7 @@ jobs:
           import json, os, urllib.request
 
           version = os.environ["VERSION"]
-          files = ["evesynapse-arm64", "evesynapse-amd64", "latest.json", "setup.sh",
+          files = ["evesynapse-arm64", "evesynapse-amd64", "latest.json",
                    "evesynapse-windows-amd64.exe", "evesynapse-windows-arm64.exe",
                    "evesynapse-darwin-amd64", "evesynapse-darwin-arm64"]
           api = os.environ["GL_API"]

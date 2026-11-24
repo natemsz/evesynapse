@@ -25,7 +25,6 @@ var Module = module.Module{
 	},
 	EnhanceScopes:  []module.Scope{},
 	Snapshots:      []string{esi.SnapOrders, esi.SnapOrdersHistory},
-	Widgets:        []module.WidgetDecl{{ID: "market", Title: "Market", Description: "Open orders across characters: counts, sell/buy value, orders expiring soonest.", W: 1, H: 1, After: "pi"}},
 	BriefingTopics: []module.BriefingTopicDecl{{ID: "orders", Title: "Order expiries and undercuts"}},
 	Activities:     []string{"market"},
 	Nav: []module.NavSection{{

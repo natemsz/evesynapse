@@ -1,0 +1,23 @@
+{{define "w-walletflow-all"}}{{$cap := .Cap}}
+{{with .Data}}
+{{if .Any}}
+{{template "wallet-flow-figures" .}}
+<div data-wmore>
+{{template "wallet-flow-detail" .}}
+{{if .Chars}}
+<p><input type="search" id="{{$.Uid "filter"}}" placeholder="Filter by character…" aria-label="Filter wallet flow by character" data-table-filter="{{$.Uid "table"}}" data-row-class="walletflow-row"></p>
+<div class="tw">
+<table id="{{$.Uid "table"}}">
+  <thead><tr><th>Character</th><th class="opt">7d in</th><th class="opt">7d out</th><th>30d net</th></tr></thead>
+  <tbody>
+  {{range .Chars}}<tr class="walletflow-row" data-search="{{.Search}}"><td>{{charLink $.ViewerChars .ID .Name}}</td><td class="opt {{signClass .In7}}">{{.In7}} ISK</td><td class="opt {{signClass .Out7}}">{{.Out7}} ISK</td><td class="{{signClass .Net30}}">{{.Net30}} ISK</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+</div>
+{{else}}
+<p><small>Journal data appears here once your characters have synced.</small></p>
+{{end}}
+{{end}}
+{{end}}

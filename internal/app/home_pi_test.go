@@ -39,9 +39,9 @@ func TestPIWidgetFilterWiring(t *testing.T) {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/", body,
-		`data-table-filter="pi-table"`,
+		`data-table-filter="w-pi-table"`,
 		`data-row-class="pi-row"`,
-		`id="pi-table"`,
+		`id="w-pi-table"`,
 		`class="pi-row"`,
 		`data-search="Fixture Alpha Planet #40123456 expired"`,
 		`data-search="Fixture Alpha Planet #40123456"`,

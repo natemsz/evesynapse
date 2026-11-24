@@ -156,7 +156,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 		"Fleet Overview",
 		"Fixture Alpha", "Fixture Corp", "Trader",
 		"Fixture Bravo", "Fixture Charlie", "Fixture Delta",
-		`id="fleet-filter"`, `data-tag="PI"`,
+		`data-fleet-filter`, `data-tag="PI"`,
 		"Not training",   // Bravo's idle queue (Alpha trains)
 		"re-link needed", // Charlie's fleet flag
 	)
@@ -711,7 +711,7 @@ func TestHomeLayoutSizeOnPreset(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/", page, `data-widget="watchlist" data-gw="1" data-gh="1"`)
+	mustContain(t, "/", page, `data-widget="watchlist" data-key="watchlist" data-gw="1" data-gh="1"`)
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)
@@ -727,7 +727,7 @@ func layoutTilesGrid(items []homeLayoutItem) bool {
 	for _, item := range items {
 		placed := false
 		for r := 0; !placed; r++ {
-			for c := 0; c+item.W <= homeGridMax && !placed; c++ {
+			for c := 0; c+item.W <= homeGridCols && !placed; c++ {
 				free := true
 				for dr := 0; dr < item.H && free; dr++ {
 					for dc := 0; dc < item.W; dc++ {
@@ -751,7 +751,7 @@ func layoutTilesGrid(items []homeLayoutItem) bool {
 		}
 	}
 	for r := 0; r < maxRow; r++ {
-		for c := 0; c < homeGridMax; c++ {
+		for c := 0; c < homeGridCols; c++ {
 			if !occ[cell{r, c}] {
 				return false
 			}
@@ -841,10 +841,10 @@ func TestHomePresetLayoutsTile(t *testing.T) {
 			}
 			def, _ := widgetDefFor(id)
 			if id == widgetNetWorth {
-				if item.W != def.W || item.H != def.H {
-					t.Errorf("%s preset sizes networth at %dx%d, want its maximum %dx%d", activity, item.W, item.H, def.W, def.H)
+				if item.W != def.Default.W || item.H != def.Default.H {
+					t.Errorf("%s preset sizes networth at %dx%d, want its maximum %dx%d", activity, item.W, item.H, def.Default.W, def.Default.H)
 				}
-			} else if item.W*item.H <= def.W*def.H {
+			} else if item.W*item.H <= def.Default.W*def.Default.H {
 				t.Errorf("%s preset sizes specialist %q at catalog size %dx%d, want expanded", activity, id, item.W, item.H)
 			}
 		}
@@ -855,8 +855,8 @@ func TestHomePresetLayoutsTile(t *testing.T) {
 				continue
 			}
 			def, _ := widgetDefFor(id)
-			if item.W != def.W || item.H != def.H {
-				t.Errorf("%s preset sizes fill %q at %dx%d, want catalog %dx%d", activity, id, item.W, item.H, def.W, def.H)
+			if item.W != def.Default.W || item.H != def.Default.H {
+				t.Errorf("%s preset sizes fill %q at %dx%d, want catalog %dx%d", activity, id, item.W, item.H, def.Default.W, def.Default.H)
 			}
 		}
 	}
@@ -1040,101 +1040,32 @@ func TestMigration010Reopen(t *testing.T) {
 	pool.Close()
 }
 
-// TestWidgetSizeBounds: a stored size is held inside the
-// module's floor and ceiling alike, a band drawn 3 tall still
-// stands one row, a KPI stack drawn 3 wide still stands one
-// column, and every catalog module's ceiling clears its floor.
+// TestWidgetSizeBounds: a stored size snaps to one the widget
+// declares: the same width at the nearest height, else the smallest
+// declared size that covers it, else the nearest declared size.
 func TestWidgetSizeBounds(t *testing.T) {
 	for _, c := range []struct {
 		item         homeLayoutItem
 		wantW, wantH int
 	}{
-		{homeLayoutItem{ID: widgetGlance, W: 3, H: 3}, 3, 1},   // a band is one row however tall it is drawn
-		{homeLayoutItem{ID: widgetNetWorth, W: 3, H: 3}, 1, 2}, // a KPI stack is one column however wide
-		{homeLayoutItem{ID: widgetIndustry, W: 3, H: 3}, 2, 3}, // width past the activity column gains nothing
-		{homeLayoutItem{ID: widgetFleet, W: 1, H: 1}, 2, 2},    // the floor still wins from below
-		{homeLayoutItem{ID: widgetFleet, W: 3, H: 3}, 3, 3},    // a table may use the whole grid
-		{homeLayoutItem{ID: widgetBriefing, W: 1, H: 2}, 2, 1}, // floor on width, ceiling on height
+		{homeLayoutItem{ID: widgetGlance, W: 3, H: 3}, 3, 1},   // same width, nearest height
+		{homeLayoutItem{ID: widgetNetWorth, W: 3, H: 3}, 1, 2}, // nothing covers it: the nearest size
+		{homeLayoutItem{ID: widgetIndustry, W: 3, H: 3}, 2, 3}, // nothing covers it: the nearest size
+		{homeLayoutItem{ID: widgetFleet, W: 1, H: 1}, 2, 2},    // the smallest size that covers it
+		{homeLayoutItem{ID: widgetFleet, W: 3, H: 3}, 3, 3},    // a declared size stands
+		{homeLayoutItem{ID: widgetBriefing, W: 1, H: 2}, 2, 1}, // nothing covers it: the nearest, smaller on a tie
 	} {
 		if w, h := widgetSize(c.item); w != c.wantW || h != c.wantH {
 			t.Errorf("widgetSize(%+v) = %dx%d, want %dx%d", c.item, w, h, c.wantW, c.wantH)
 		}
 	}
-	for _, def := range homeWidgetCatalog() {
-		minW, minH := widgetMin(def.ID)
-		maxW, maxH := widgetMax(def.ID)
-		if maxW < minW || maxH < minH {
-			t.Errorf("widget %s: ceiling %dx%d below floor %dx%d", def.ID, maxW, maxH, minW, minH)
-		}
-		if maxW > homeGridMax || maxH > homeGridMax {
-			t.Errorf("widget %s: ceiling %dx%d past the grid", def.ID, maxW, maxH)
-		}
-	}
-	// The heights a list is offered stop where its rows do.
-	for _, c := range []struct{ total, want int }{
-		{0, 1}, {3, 1}, {4, 2}, {8, 2}, {9, 3}, {40, 3},
-	} {
-		if got := capHeightFor(c.total); got != c.want {
-			t.Errorf("capHeightFor(%d) = %d, want %d", c.total, got, c.want)
-		}
-	}
 }
 
-// TestHomeLayoutSizeCeiling: the size action takes a size at the
-// module's ceiling and refuses (in words the script can hear)
-// one past it, leaving the saved layout alone.
-func TestHomeLayoutSizeCeiling(t *testing.T) {
-	transport := &countingTransport{}
-	app, _, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-
-	user, err := q.CreateUser(ctx)
-	if err != nil {
-		t.Fatalf("create user: %v", err)
+// layoutIDs extracts the widget ids of a layout, in order.
+func layoutIDs(items []homeLayoutItem) []string {
+	ids := make([]string, len(items))
+	for i, item := range items {
+		ids[i] = item.ID
 	}
-	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
-
-	postSize := func(widget, w, h string) (int, string) {
-		t.Helper()
-		form := url.Values{"action": {"size"}, "widget": {widget}, "w": {w}, "h": {h}}
-		req := httptest.NewRequest(http.MethodPost, "/home/layout", strings.NewReader(form.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("X-Requested-With", "XMLHttpRequest")
-		req.AddCookie(cookie)
-		rec := httptest.NewRecorder()
-		app.Handler().ServeHTTP(rec, req)
-		return rec.Code, rec.Body.String()
-	}
-	saved := func() string {
-		t.Helper()
-		raw, err := q.GetUserHomeLayout(ctx, user.ID)
-		if err != nil {
-			t.Fatalf("read layout: %v", err)
-		}
-		return raw
-	}
-
-	// Net Worth is one column wide however it is drawn: w=3 is
-	// past its ceiling, refused, nothing saved.
-	if code, body := postSize(widgetNetWorth, "3", "1"); code != http.StatusBadRequest || !strings.Contains(body, `"ok":false`) {
-		t.Fatalf("oversize POST: status %d body %q, want 400 ok:false", code, body)
-	}
-	if got := saved(); got != "" {
-		t.Fatalf("oversize POST saved %q, want the layout untouched", got)
-	}
-	// At the ceiling it saves.
-	if code, _ := postSize(widgetNetWorth, "1", "2"); code != http.StatusOK {
-		t.Fatalf("at-ceiling POST: status %d, want 200", code)
-	}
-	if got := saved(); !strings.Contains(got, `"id":"networth","w":1,"h":2`) {
-		t.Fatalf("saved layout %q: want the networth size at its ceiling", got)
-	}
-	// The band is one row however tall it is drawn: h=2 refuses.
-	if code, _ := postSize(widgetGlance, "3", "2"); code != http.StatusBadRequest {
-		t.Fatalf("glance oversize POST: status %d, want 400", code)
-	}
-	if got := saved(); strings.Contains(got, `"id":"glance","w":3,"h":2`) {
-		t.Fatalf("saved layout %q: the refused glance size landed", got)
-	}
+	return ids
 }

@@ -708,19 +708,6 @@ func StructureSourceRank(source string) int {
 	return 0
 }
 
-// WidgetDecl declares a home widget the module owns: core lists and lays
-// it out only when the module is built in. Feature is the manifest feature
-// whose scopes power it (the module's own id when empty); After names the
-// widget it follows in the catalog.
-type WidgetDecl struct {
-	ID          string
-	Title       string
-	Description string
-	W, H        int
-	Feature     string
-	After       string
-}
-
 // BriefingTopicDecl declares a family of briefing lines the module
 // owns: core's briefing builder produces those lines only when the
 // module is built in. The builder stays core's, reading the shared
@@ -1684,10 +1671,10 @@ type Module struct {
 	// Sitemap lists the module's public pages, so a build without the
 	// module leaves them out of sitemap.xml.
 	Sitemap []SitemapEntry
-	// Widgets and NotifyKinds are what the module adds to the home page and
-	// to the notifications; the builders and producers stay core's, reading
-	// the shared snapshots, but nothing is shown for a module not built in.
-	Widgets     []WidgetDecl
+	// NotifyKinds are what the module adds to the notifications; the
+	// producers stay core's, reading the shared snapshots, but nothing is
+	// shown for a module not built in. (Home widgets declare the module
+	// they need themselves: homeWidgetDef.Requires in core.)
 	NotifyKinds []NotifyKindDecl
 	// BriefingTopics are the briefing line families the module owns;
 	// core's briefing builder reads them from this declaration.

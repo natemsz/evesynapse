@@ -1,0 +1,17 @@
+{{define "w-industry-all"}}{{$cap := .Cap}}
+{{with .Data}}
+<p><small>{{.ActiveJobs}} active job{{if ne .ActiveJobs 1}}s{{end}}{{if .ReadyJobs}} · {{.ReadyJobs}} ready for delivery{{end}}</small></p>
+{{if .Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Character</th><th class="opt">Activity</th><th>Product</th><th>Ends</th></tr></thead>
+  <tbody>
+  {{range $i, $r := .Rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td class="opt">{{.Activity}}</td><td>{{itemLink .TypeID .Name}}</td><td class="when"><span class="when-abs">{{.Ends}}</span>{{if .Left}} <span class="when-rel" title="{{.Ends}}">{{.Left}}</span>{{end}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="wempty"><small>No active jobs right now. Start one from your <a href="/industry/">Blueprints</a>.</small></p>
+{{end}}
+{{end}}
+{{end}}

@@ -292,6 +292,11 @@ func blendedBody(selected []string) []homeLayoutItem {
 
 	items := make([]homeLayoutItem, 0, len(ids))
 	for _, id := range ids {
+		// A widget whose module is not built in is left out before
+		// packing, so the rest still pack into whole bands.
+		if _, ok := widgetDefFor(id); !ok {
+			continue
+		}
 		w, h := blendSize(id, refs[id])
 		items = append(items, homeLayoutItem{ID: id, W: w, H: h})
 	}
@@ -312,7 +317,7 @@ func blendSize(id string, refCount int) (w, h int) {
 	if !ok {
 		return 1, 2
 	}
-	w = def.W
+	w = def.Default.W
 	if full, ok := blendFullSize[id]; ok && w > full.W {
 		w = full.W
 	}
@@ -333,14 +338,16 @@ func packBlendBands(items []homeLayoutItem) []homeLayoutItem {
 		if i == len(items) {
 			return filled == 0
 		}
-		minW, _ := widgetMin(items[i].ID)
-		maxW, _ := widgetMax(items[i].ID)
-		for _, w := range widthsByPreference(items[i].W, minW, maxW) {
+		var allowed []int
+		if def, ok := widgetDefFor(items[i].ID); ok {
+			allowed = def.widthsAt(items[i].H)
+		}
+		for _, w := range widthsByPreference(items[i].W, allowed) {
 			next := filled + w
-			if next > homeGridMax {
+			if next > homeGridCols {
 				continue
 			}
-			if next == homeGridMax {
+			if next == homeGridCols {
 				next = 0
 			}
 			widths[i] = w
@@ -360,23 +367,16 @@ func packBlendBands(items []homeLayoutItem) []homeLayoutItem {
 	return out
 }
 
-// widthsByPreference lists a widget's allowed widths, target first,
-// then outward from it.
-func widthsByPreference(target, minW, maxW int) []int {
-	if target < minW {
-		target = minW
-	}
-	if target > maxW {
-		target = maxW
-	}
-	out := []int{target}
-	for d := 1; d <= homeGridMax; d++ {
-		if target+d <= maxW {
-			out = append(out, target+d)
+// widthsByPreference orders a widget's allowed widths by nearness to
+// target, the wider first on a tie.
+func widthsByPreference(target int, allowed []int) []int {
+	out := append([]int(nil), allowed...)
+	sort.SliceStable(out, func(i, j int) bool {
+		di, dj := absInt(out[i]-target), absInt(out[j]-target)
+		if di != dj {
+			return di < dj
 		}
-		if target-d >= minW {
-			out = append(out, target-d)
-		}
-	}
+		return out[i] > out[j]
+	})
 	return out
 }

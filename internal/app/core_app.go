@@ -38,7 +38,7 @@ import (
 	"evesynapse/internal/webpush"
 )
 
-//go:embed templates/*.html
+//go:embed templates/*.html templates/widgets/*.html
 var templatesFS embed.FS
 
 //go:embed static
@@ -1912,7 +1912,7 @@ func (app *Application) AttachWalletGraph(ctx context.Context, userID, character
 func (app *Application) EmptyWalletGraph() any { return &walletGraphView{State: walletGraphEmpty} }
 
 func (app *Application) WalletFlow(ctx context.Context, ch db.Character) any {
-	bundles := app.loadCharSnaps(ctx, ch.UserID, []db.Character{ch}, []string{widgetWalletFlow})
+	bundles := app.loadCharSnaps(ctx, ch.UserID, []db.Character{ch}, widgetNeeds(widgetWalletFlow))
 	return app.buildWalletFlow(bundles)
 }
 

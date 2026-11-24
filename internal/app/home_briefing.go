@@ -133,6 +133,10 @@ type briefingWidget struct {
 	SinceLabel string // "Oct 2, 21:41", window start as shown
 }
 
+// Quiet: a Briefing with no lines is left off the home (Customize
+// still shows it, so it can be arranged).
+func (b *briefingWidget) Quiet() bool { return b == nil || len(b.Items) == 0 }
+
 // briefingItem is one rendered line and its severity.
 type briefingItem struct {
 	HTML     template.HTML

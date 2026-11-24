@@ -23,7 +23,7 @@ func TestNoUnknownButtonClassesInTemplates(t *testing.T) {
 		all.Write(raw)
 	}
 	css := all.String()
-	templates, _ := fs.Glob(templatesFS, "templates/*.html")
+	templates := templateFiles(t)
 	for _, name := range templates {
 		src, err := fs.ReadFile(templatesFS, name)
 		if err != nil {

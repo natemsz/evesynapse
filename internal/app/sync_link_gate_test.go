@@ -15,16 +15,12 @@ import (
 // exempt, both pages are themselves behind requireAdmin, so
 // their links cannot dead-end.
 func TestSyncLinksAreAdminGated(t *testing.T) {
-	entries, err := fs.ReadDir(templatesFS, "templates")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, e := range entries {
-		name := e.Name()
+	for _, path := range templateFiles(t) {
+		name := strings.TrimPrefix(path, "templates/")
 		if name == "admin.html" || name == "sync.html" {
 			continue
 		}
-		raw, err := fs.ReadFile(templatesFS, "templates/"+name)
+		raw, err := fs.ReadFile(templatesFS, path)
 		if err != nil {
 			t.Fatal(err)
 		}

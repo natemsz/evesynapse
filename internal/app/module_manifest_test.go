@@ -75,11 +75,3 @@ func TestModuleManifestShape(t *testing.T) {
 		}
 	}
 }
-
-func TestWidgetCatalogPointsAtManifest(t *testing.T) {
-	for _, w := range homeWidgetCatalog() {
-		if _, ok := moduleByID(w.Module); !ok {
-			t.Errorf("widget %q names unknown module %q", w.ID, w.Module)
-		}
-	}
-}

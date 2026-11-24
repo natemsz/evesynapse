@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"html/template"
 	"io"
-	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -301,18 +300,13 @@ func newAuthedRequest(t *testing.T, app *Application, cookie *http.Cookie, path 
 // production FuncMap, so a helper-name typo (or a field added to
 // one side only) fails here rather than at first render.
 func TestAllTemplatesParse(t *testing.T) {
-	entries, err := fs.ReadDir(templatesFS, "templates")
-	if err != nil {
-		t.Fatalf("read templates dir: %v", err)
-	}
-	for _, e := range entries {
-		name := e.Name()
-		if name == "base.html" || !strings.HasSuffix(name, ".html") {
+	for _, path := range templateFiles(t) {
+		if path == "templates/base.html" {
 			continue
 		}
 		if _, err := template.New("base").Funcs(linkFuncMap()).ParseFS(templatesFS,
-			"templates/base.html", "templates/"+name); err != nil {
-			t.Errorf("parse %s: %v", name, err)
+			"templates/base.html", path); err != nil {
+			t.Errorf("parse %s: %v", path, err)
 		}
 	}
 }

@@ -381,47 +381,40 @@ html[data-theme="light"] .btn.btn-quiet {
 .kpi.sp-blue { border-color: rgba(169, 214, 255, 0.45); }
 .kpi.sp-blue .spread-bar span.on { background: #a9d6ff; }
 
-/* Price chart text: the chart SVG is 720 units wide and scales
-   with its box, and the box is placement-driven, not viewport-
-   driven, a full-width page renders the chart near 1500px
-   while the Home widget squeezes it under 500px, so the axis
-   type is sized by the chart's own width via container queries.
-   Each band steps the units so the rendered labels stay between
-   about 11 and 15px up to an 820px box: narrow boxes step up,
-   wide boxes step down. Past 820px the scale has no smaller
-   step, so the labels grow with the chart. (Viewport step-downs were here before;
-   at the same viewport they left the Home chart at 3–4px while
-   the full-width chart read fine.) The base rule in style.css
-   (12 units) is the fallback where container queries are
-   unavailable. The gridlines move from near-black to a warm
-   sand so they read against the glass; volume lines stay a
-   step dimmer. */
+/* Price chart text: the chart SVG scales with its box, and its box
+   is placement-driven (a full-width page draws it near 1500px, the
+   Home widget under 500px). app.js gives each chart its exact scale
+   (--chart-text-scale, style.css), so the labels draw at one size in
+   every box. The container-query steps below are for a page without
+   script only: they hold the labels between about 11 and 15px up to an
+   820px box. The gridlines move from near-black to a warm sand so they
+   read against the glass; volume lines stay a step dimmer. */
 .chart-gridline { stroke: rgba(232, 195, 154, 0.25); }
 .volume-gridline { stroke: rgba(232, 195, 154, 0.16); }
 .pchart { container-type: inline-size; }
 @container (max-width: 330px) {
-  .pchart text { font-size: var(--fs-5xl); }
+  .pchart svg:not([data-text-scaled]) text { font-size: var(--fs-5xl); }
 }
 @container (min-width: 331px) and (max-width: 400px) {
-  .pchart text { font-size: var(--fs-4xl); }
+  .pchart svg:not([data-text-scaled]) text { font-size: var(--fs-4xl); }
 }
 @container (min-width: 401px) and (max-width: 480px) {
-  .pchart text { font-size: var(--fs-3xl); }
+  .pchart svg:not([data-text-scaled]) text { font-size: var(--fs-3xl); }
 }
 @container (min-width: 481px) and (max-width: 560px) {
-  .pchart text { font-size: var(--fs-xl); }
+  .pchart svg:not([data-text-scaled]) text { font-size: var(--fs-xl); }
 }
 @container (min-width: 561px) and (max-width: 640px) {
-  .pchart text { font-size: var(--fs-md); }
+  .pchart svg:not([data-text-scaled]) text { font-size: var(--fs-md); }
 }
 @container (min-width: 641px) and (max-width: 720px) {
-  .pchart text { font-size: var(--fs-sm); }
+  .pchart svg:not([data-text-scaled]) text { font-size: var(--fs-sm); }
 }
 @container (min-width: 721px) and (max-width: 820px) {
-  .pchart text { font-size: var(--fs-xs); }
+  .pchart svg:not([data-text-scaled]) text { font-size: var(--fs-xs); }
 }
 @container (min-width: 821px) {
-  .pchart text { font-size: var(--fs-2xs); }
+  .pchart svg:not([data-text-scaled]) text { font-size: var(--fs-2xs); }
 }
 
 /* Home KPI glyphs: the mockup's little Lucide mark in each

@@ -2946,9 +2946,14 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .card[data-widget="profitpulse"] .pf-y-98 { top: 98%; }
 .card[data-widget="profitpulse"] .pf-y-99 { top: 99%; }
 .card[data-widget="profitpulse"] .pf-y-100 { top: 100%; }
+/* A chart's SVG stretches to its panel, and text inside it would
+   stretch with it: huge on a wide page, unreadable on a phone. app.js
+   sets --chart-text-scale on each chart to its viewBox width over its
+   drawn width, so the labels and their outline draw at the same size
+   on every page. Without script the scale is 1. */
 .pchart text {
   font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
+  font-size: calc(var(--fs-2xs) * var(--chart-text-scale, 1));
 }
 .chart-gridline { stroke: #241708; stroke-width: 1; }
 .volume-gridline { stroke: #2a1408; stroke-dasharray: 3 3; }
@@ -2959,7 +2964,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   fill: var(--note);
   paint-order: stroke;
   stroke: var(--panel);
-  stroke-width: 6px;
+  stroke-width: calc(6px * var(--chart-text-scale, 1));
   stroke-linejoin: round;
 }
 .volume-axis { fill: #d98a6a; text-anchor: end; }

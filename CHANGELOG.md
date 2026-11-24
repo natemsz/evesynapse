@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v1.0.2.0] - 2026-11-24
+## [v1.0.2.1] - 2026-11-24
+
+Automated build of EveSynapse v1.0.2.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).
+
+## What's Changed
+
+### Other Changes
+* Backfill changelog through v1.0.2.0 and automate changelog updates on release by @natemsz in #575
+* Remove 0.2.0 substring check from TestVersionFileAndFooter by @natemsz in #574
+* Remove in-tree installer and point releases and docs at evesynapse-installer by @natemsz in #573
+* Merge one account into another and remove the emptied one after 30 days by @natemsz in #572
+* Keep table scroll position on card layout swaps and polish asset scope controls by @natemsz in #571
+* Give floating Overview KPI and briefing cards full glass backgrounds by @natemsz in #570
+
+## [v1.0.2.0]
 
 Automated build of EveSynapse v1.0.2.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 If this is your first install, download installer and run it.

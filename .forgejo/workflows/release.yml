@@ -538,3 +538,87 @@ jobs:
           urllib.request.urlopen(req)
           print("Release v%s created on GitLab." % version)
           PYEOF
+
+  # After a plain release publishes from main, add its notes to
+  # CHANGELOG.md and the embedded internal/app/changelog.md copy on
+  # a pull request for review. Runs with continue-on-error so a
+  # changelog issue never fails a published release.
+  changelog:
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.publish == 'true'
+    continue-on-error: true
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      FORGEJO_API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
+      FORGEJO_GIT: ${{ github.server_url }}/${{ github.repository }}.git
+      FORGEJO_TOKEN: ${{ github.token }}
+    steps:
+      - name: Fetch the built files
+        uses: https://code.forgejo.org/forgejo/download-artifact@v7
+        with:
+          name: dist
+          path: dist
+      - name: Open a changelog pull request
+        run: |
+          if [ "$VERSION" != "${VERSION%%-*}" ]; then
+            echo "Development build $VERSION; skipping changelog update."
+            exit 0
+          fi
+          git clone --depth=5 --branch main "https://x-access-token:${FORGEJO_TOKEN}@${FORGEJO_GIT#https://}" repo
+          cd repo
+          if grep -qF "## [v$VERSION]" CHANGELOG.md; then
+            echo "CHANGELOG.md already documents v$VERSION; nothing to do."
+            exit 0
+          fi
+          BRANCH="chore/changelog-v$VERSION"
+          git checkout -B "$BRANCH"
+          VERSION="$VERSION" NOTES_PATH="$PWD/../dist/release-notes.md" python3 - <<'PYEOF'
+          import datetime, os, re
+
+          version = os.environ["VERSION"]
+          date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+          notes = open(os.environ["NOTES_PATH"], encoding="utf-8").read().replace("\r\n", "\n").strip()
+          notes = "\n".join(ln for ln in notes.splitlines() if not ln.lstrip().startswith("<!--")).strip()
+
+          existing = open("CHANGELOG.md", encoding="utf-8").read()
+          existing = re.sub(r'^(## \[v[^\]]+\]) - \d{4}-\d{2}-\d{2}$', r'\1', existing, flags=re.M)
+          marker = "## [Unreleased]\n\n"
+          if marker not in existing:
+              raise SystemExit("CHANGELOG.md is missing the Unreleased heading")
+          section = f"## [v{version}] - {date}\n\n{notes}\n\n"
+          updated = existing.replace(marker, marker + section, 1)
+          open("CHANGELOG.md", "w", encoding="utf-8").write(updated)
+          open("internal/app/changelog.md", "w", encoding="utf-8").write(updated)
+          PYEOF
+          git config user.name "Nate"
+          git config user.email "nate@evesynapse.app"
+          git add CHANGELOG.md internal/app/changelog.md
+          git commit -m "Update CHANGELOG.md and embedded changelog for v$VERSION"
+          git push --force-with-lease origin "$BRANCH"
+          BRANCH="$BRANCH" VERSION="$VERSION" python3 - <<'PYEOF'
+          import json, os, urllib.request
+
+          api = os.environ["FORGEJO_API"]
+          token = os.environ["FORGEJO_TOKEN"]
+          branch = os.environ["BRANCH"]
+          version = os.environ["VERSION"]
+          headers = {
+              "Authorization": "token " + token,
+              "Content-Type": "application/json",
+              "User-Agent": "evesynapse-release-workflow",
+          }
+          prs = json.load(urllib.request.urlopen(urllib.request.Request(api + "/pulls?state=open&limit=50", headers=headers)))
+          if any(p.get("head", {}).get("ref") == branch for p in prs):
+              print("Changelog PR for v%s is already open; branch updated." % version)
+          else:
+              body = {
+                  "title": "Update changelog for v" + version,
+                  "body": "Adds the v" + version + " release notes to CHANGELOG.md and internal/app/changelog.md.",
+                  "head": branch,
+                  "base": "main",
+              }
+              req = urllib.request.Request(api + "/pulls", data=json.dumps(body).encode(), method="POST", headers=headers)
+              pr = json.load(urllib.request.urlopen(req))
+              print("Opened changelog PR #%s for v%s." % (pr.get("number"), version))
+          PYEOF

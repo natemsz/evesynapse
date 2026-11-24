@@ -7,7 +7,399 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v0.8.7.6] - 2026-11-16
+## [v1.0.2.0] - 2026-11-24
+
+Automated build of EveSynapse v1.0.2.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Read factions, schematics, planets and constellations from the static data by @natemsz in #568
+* Import static data from CCP's SDE API by @natemsz in #567
+* Invite a fleet's pilots from EveSynapse by @natemsz in #564
+* Let a fleet ask what signing up takes: nothing, an EVE sign-in or its permissions by @natemsz in #563
+* Show a live fleet's pilots as a list with class chips by @natemsz in #562
+* Tidy the fleet pages and give demo pilots real portraits by @natemsz in #561
+* Give the fleet battle explorer the battle report's hover cards and moment chart by @natemsz in #560
+* Draw fleet battles from killmails where no log covers them by @natemsz in #559
+
+### 🐛 Bug Fixes
+* Draw chart axis labels at one size however wide the chart is by @natemsz in #566
+* Give fleet battle reports built before the explorer one by @natemsz in #558
+
+### Other Changes
+* Add interior nebula wallpapers, Starfield-only switch, and UI polish by @natemsz in #569
+* Account for re-link-only fleet invite scope in scope tests by @natemsz in #565
+
+## [v1.0.1.9]
+
+Automated build of EveSynapse v1.0.1.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Open fleet battle reports as a zoomable explorer by @natemsz in #557
+
+### 🐛 Bug Fixes
+* Keep the community member columns in place when Manage opens by @natemsz in #556
+
+## [v1.0.1.8]
+
+Automated build of EveSynapse v1.0.1.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Rework fleet pages: tabs, dialogs, planner preview, example fleet by @natemsz in #555
+
+### 🧰 Maintenance & Dependencies
+* Update dependency ubuntu to v26 by @renovate in #554
+* Update Go modules by @renovate in #553
+
+## [v1.0.1.7]
+
+Automated build of EveSynapse v1.0.1.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Polish Fleets: live overview, fleet structure, log upload, menus by @natemsz in #552
+
+## [v1.0.1.6]
+
+Automated build of EveSynapse v1.0.1.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Add Fleets and Communities to the landing page by @natemsz in #550
+
+### 🧰 Maintenance & Dependencies
+* Bump version to 1.0.1.6 by @natemsz in #551
+
+## [v1.0.1.5]
+
+Automated build of EveSynapse v1.0.1.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Add a sample wormhole fleet group to the demo by @natemsz in #548
+* Add fleet battle reports, points and leaderboards by @natemsz in #547
+* Prepare battle logs for merged fleet reports by @natemsz in #546
+* Add ship replacement for alliances and communities by @natemsz in #545
+* Show live fleet details only to pilots in the fleet by @natemsz in #544
+* Add the live fleet view with composition, roles and tags by @natemsz in #543
+* Add doctrines for alliances and communities by @natemsz in #541
+* Add Fleets with owners, access rules and share links by @natemsz in #540
+
+### 🐛 Bug Fixes
+* Fix the bugs left open by the fleet build by @natemsz in #549
+* Show the current module count on the landing page by @natemsz in #542
+
+## [v1.0.1.4]
+
+Automated build of EveSynapse v1.0.1.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Define the font roles in the core stylesheet by @natemsz in #538
+
+### 🧰 Maintenance & Dependencies
+* Bump version to 1.0.1.4 by @natemsz in #539
+
+## [v1.0.1.3]
+
+Automated build of EveSynapse v1.0.1.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Add communities and sign-in for pilots without an account by @natemsz in #536
+* Resolve owner programme access through one permission check by @natemsz in #532
+
+### 🐛 Bug Fixes
+* Keep the killboard restore and retention prune inside the statement timeout by @natemsz in #534
+* Wait for all twenty release files before the GitHub copy by @natemsz in #531
+
+### 🧰 Maintenance & Dependencies
+* Bump version to 1.0.1.3 by @natemsz in #537
+* Move detailed docs to the wiki and add a data flow chart by @natemsz in #535
+* Publish releases as eight files with one signed latest.json by @natemsz in #533
+
+## [v1.0.1.2]
+
+Automated build of EveSynapse v1.0.1.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Publish one signed latest.json for every platform by @natemsz in #529
+* Load wallpapers and landing media from an asset CDN by @natemsz in #528
+
+### 🧰 Maintenance & Dependencies
+* Bump version to 1.0.1.2 by @natemsz in #530
+
+## [v1.0.1.1]
+
+Automated build of EveSynapse v1.0.1.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Wire per-scheme wallpapers into the full and muted tiers by @miko in #523
+
+### 🐛 Bug Fixes
+* Remove the per-scheme wallpapers by @natemsz in #527
+
+### 🧰 Maintenance & Dependencies
+* Update Ranvia loader to 0.4.3 by @natemsz in #526
+
+## [v1.0.1.0]
+
+Automated build of EveSynapse v1.0.1.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Keep market sweeps moving through rate limits and restarts by @natemsz in #525
+
+### Other Changes
+* Separate nav header colors per scheme and expand color-blind mode coverage by @natemsz in #522
+
+## [v1.0.0.9]
+
+Automated build of EveSynapse v1.0.0.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Merge one account into another and remove the emptied one after 30 days by @natemsz in #517
+* Ask before moving a character between accounts or creating an account by @natemsz in #516
+
+### 🐛 Bug Fixes
+* Pin the nav menu item weight to the display weight token by @natemsz in #521
+* Stop structure and contract item lookups from spending ESI's error budget by @natemsz in #520
+* Close outbound connections whose network path went dead by @natemsz in #519
+* Center skill level numerals, scheme menu colors, EVE color tags in titles, even overview card type by @natemsz in #518
+
+## [v1.0.0.8]
+
+Automated build of EveSynapse v1.0.0.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Update Ranvia loader to 0.4.2 by @miko in #515
+
+## [v1.0.0.7]
+
+Automated build of EveSynapse v1.0.0.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Compress responses after the Ranvia guard by @natemsz in #514
+
+## [v1.0.0.6]
+
+Automated build of EveSynapse v1.0.0.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### Other Changes
+* remove custom checks in place of Ranvia handled changes by @natemsz in #512
+
+## [v1.0.0.5]
+
+Automated build of EveSynapse v1.0.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Update Ranvia loader to v0.4.0 by @miko in #511
+* Give every field name the label look; regular field values and scheme-colored titles by @natemsz in #510
+
+## [v1.0.0.4]
+
+Automated build of EveSynapse v1.0.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Give each kind of text one look and even out rendering across platforms by @natemsz in #509
+* Show the killboard security status as a pill by @miko in #508
+* Set row-label th to regular weight by @miko in #507
+* Test against the runner's preinstalled PostgreSQL by @miko in #506
+
+## [v1.0.0.3]
+
+Automated build of EveSynapse v1.0.0.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Re-hint Eve Sans Neue and JetBrains Mono for Windows by @miko in #505
+
+## [v1.0.0.2]
+
+Automated build of EveSynapse v1.0.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Keep SemiBold for menu, chip, and contract tabs by @miko in #504
+
+## [v1.0.0.1]
+
+Automated build of EveSynapse v1.0.0.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, download installer and run it.
+
+## What's Changed
+
+### 🚀 Features
+* Stop faking font weights and thinning text on macOS by @miko in #503
+* Fix fresh installs and RHEL localhost auth in setup.sh by @miko in #502
+* Use the body face for numerals in tables by @miko in #501
+* Use weight 500 for Synapse Numerals values by @miko in #500
+* Use weight 500 for Rajdhani SemiBold text by @miko in #499
+* Give the PI planner notes breathing room by @miko in #498
+* Use Eve Sans Neue for the map font by @miko in #497
+* Serve responsive gallery thumbnails, full size in the modal by @miko in #496
+* Teach the self-updater Windows and macOS, and ship those builds by @miko in #495
+
+## [v1.0.0.0]
+
+Automated build of EveSynapse v1.0.0.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Interactive installer: required steps, autodetected values, review table, embedded setup, cross-platform builds by @miko in #494
+
+## [v0.8.8.7]
+
+Automated build of EveSynapse v0.8.8.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### Other Changes
+* fix/firefox-passkey-qr-fallback by @natemsz in #493
+
+## [v0.8.8.6]
+
+Automated build of EveSynapse v0.8.8.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Add interactive installer with spinning bolt and review screen by @miko in #492
+
+### Other Changes
+* Use one action for local and QR factor sign-in by @natemsz in #491
+
+## [v0.8.8.5]
+
+Automated build of EveSynapse v0.8.8.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* fix/firefox-passkey-qr-fallback by @natemsz in #489
+* Note Ferron in the stack and show the bolt banner on install by @miko in #488
+* Rank killboard leaders one board and scope at a time by @miko in #487
+
+## [v0.8.8.4]
+
+Automated build of EveSynapse v0.8.8.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Update Ranvia loader to v0.3.4 by @miko in #486
+* Let the gallery ambient glow overflow the stage by @miko in #485
+
+## [v0.8.8.2]
+
+Automated build of EveSynapse v0.8.8.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Replace gallery screenshots and add 23 new stills by @miko in #484
+* Update Ranvia loader to v0.3.3 by @miko in #483
+
+## [v0.8.8.1]
+
+Automated build of EveSynapse v0.8.8.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Retry the gallery ambient clip and rebuild the map layers clip by @miko in #482
+
+## [v0.8.8.0]
+
+Automated build of EveSynapse v0.8.8.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Fade the gallery ambient glow out smoothly at its edges by @miko in #481
+
+## [v0.8.7.9]
+
+Automated build of EveSynapse v0.8.7.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Replace the landing schemes video with ten schemes and update the free-to-use wording by @miko in #480
+
+## [v0.8.7.8]
+
+Automated build of EveSynapse v0.8.7.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Send credentials with the web app manifest by @natemsz in #478
+* Fix notification links switching the active character and topbar name mismatch by @natemsz in #477
+
+### Other Changes
+* Close fitting inspector on outside click and bind crawler cache to claim by @natemsz in #479
+
+## [v0.8.7.7]
+
+Automated build of EveSynapse v0.8.7.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+
+### 🚀 Features
+* Character: show active title, corp title, and achievement score on pilot card by @natemsz in #476
+* Changelog: add the missing sections for v0.8.6.8 through v0.8.7.6 by @miko in #475
+
+## [v0.8.7.6]
 
 Automated build of EveSynapse v0.8.7.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 

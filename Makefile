@@ -49,6 +49,24 @@ assets: ## Decode the fonts/wallpaper from ci-assets/ into the embedded asset di
 	ls ci-assets/bg-calm-muted.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-muted.jxl
 	ls ci-assets/bg-calm-muted-4k.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-muted-4k.jxl
 	ls ci-assets/bg-calm-muted-uhd.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-muted-uhd.jxl
+	ls ci-assets/bg-nebula.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula.jpg
+	ls ci-assets/bg-nebula-thumb.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-thumb.jpg
+	ls ci-assets/bg-nebula-mobile.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-mobile.jpg
+	ls ci-assets/bg-nebula-4k.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-4k.jpg
+	ls ci-assets/bg-nebula-uhd.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-uhd.jpg
+	ls ci-assets/bg-nebula.avif.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula.avif
+	ls ci-assets/bg-nebula-mobile.avif.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-mobile.avif
+	ls ci-assets/bg-nebula-4k.avif.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-4k.avif
+	ls ci-assets/bg-nebula-uhd.avif.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-uhd.avif
+	ls ci-assets/bg-nebula-muted.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-muted.jpg
+	ls ci-assets/bg-nebula-muted-thumb.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-muted-thumb.jpg
+	ls ci-assets/bg-nebula-muted-mobile.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-muted-mobile.jpg
+	ls ci-assets/bg-nebula-muted-4k.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-muted-4k.jpg
+	ls ci-assets/bg-nebula-muted-uhd.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-muted-uhd.jpg
+	ls ci-assets/bg-nebula-muted.avif.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-muted.avif
+	ls ci-assets/bg-nebula-muted-mobile.avif.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-muted-mobile.avif
+	ls ci-assets/bg-nebula-muted-4k.avif.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-muted-4k.avif
+	ls ci-assets/bg-nebula-muted-uhd.avif.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-nebula-muted-uhd.avif
 	ls ci-assets/shot-fitting.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-fitting.webp
 	ls ci-assets/shot-planner.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-planner.webp
 	ls ci-assets/shot-overview.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-overview.webp
@@ -62,6 +80,10 @@ assets: ## Decode the fonts/wallpaper from ci-assets/ into the embedded asset di
 	ls ci-assets/shot-appraisal.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-appraisal.webp
 	ls ci-assets/shot-axon.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-axon.webp
 	ls ci-assets/stars-tile.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/stars-tile.webp
+	ls ci-assets/stars-minimal.avif.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/stars-minimal.avif
+	ls ci-assets/stars-minimal-2x.avif.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/stars-minimal-2x.avif
+	ls ci-assets/stars-minimal.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/stars-minimal.webp
+	ls ci-assets/stars-minimal-2x.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/stars-minimal-2x.webp
 
 build-dev: ## Compile the dev server (includes /dev-login) into ./bin/evesynapse-dev
 	go build -o bin/evesynapse-dev ./cmd/evesynapse-dev

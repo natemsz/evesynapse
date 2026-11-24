@@ -1,5 +1,5 @@
 {{define "base"}}<!DOCTYPE html>
-<html lang="en"{{if .NavState}} data-nav="{{.NavState}}"{{end}}{{if .ThemeScheme}} data-scheme="{{.ThemeScheme}}" data-tier="{{.ThemeTier}}"{{else if .ThemeBackdrop}} data-backdrop="{{.ThemeBackdrop}}"{{end}}{{if .ThemeVision}} data-vision="{{.ThemeVision}}"{{end}}>
+<html lang="en"{{if .NavState}} data-nav="{{.NavState}}"{{end}}{{if .ThemeScheme}} data-scheme="{{.ThemeScheme}}" data-tier="{{.ThemeTier}}"{{else if .ThemeBackdrop}} data-backdrop="{{.ThemeBackdrop}}"{{end}}{{if .ThemeVision}} data-vision="{{.ThemeVision}}"{{end}}{{if .ThemeStarsOnly}} data-stars-only="1"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -18,13 +18,26 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="EveSynapse">
-{{/* The backdrop preload names the art the page will paint: the full art for the Full backdrop and the Minmatar full tier, the muted twins otherwise, none for the glow backdrop (bg.css). */}}
+{{/* The backdrop preload names the art the page will paint: the home page wears the planet art (bg-calm*), other interior pages wear the nebula art (bg-nebula*), and glow/minimalistic/starfield-only skip heavy preloads (bg.css). */}}
+{{if .ThemeStarsOnly}}
+{{else if eq .NavPage "home.html"}}
 {{if or (and (not .ThemeScheme) (eq .ThemeBackdrop "full")) (and (or (eq .ThemeScheme "minmatar") (eq .ThemeScheme "minmatar-v3")) (eq .ThemeTier "full"))}}
 <link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-uhd.jxl?v=afdbe38df4d5f595" media="(min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx)">
 <link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-4k.jxl?v=e6653b67c49cd641" media="((min-width: 1501px) and (max-width: 3200px) and (max-resolution: 1.99dppx)), ((min-width: 751px) and (max-width: 1600px) and (min-resolution: 2dppx))">
-{{else if not (and (not .ThemeScheme) (eq .ThemeBackdrop "glow"))}}
+{{else if and (not (or (and (not .ThemeScheme) (eq .ThemeBackdrop "glow")) (eq .ThemeTier "minimalistic"))) (or (not assetsBase) (not .ThemeScheme) (eq .ThemeScheme "minmatar") (eq .ThemeScheme "minmatar-v3"))}}
 <link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-muted-uhd.jxl?v=b7e4118004978f2e" media="(min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx)">
 <link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="{{assetsBase}}/static/bg-calm-muted-4k.jxl?v=73ff76cacb449b10" media="((min-width: 1501px) and (max-width: 3200px) and (max-resolution: 1.99dppx)), ((min-width: 751px) and (max-width: 1600px) and (min-resolution: 2dppx))">
+{{end}}
+{{else if or (and (not .ThemeScheme) (eq .ThemeBackdrop "full")) (and (eq .ThemeScheme "minmatar-v3") (eq .ThemeTier "full"))}}
+<link rel="preload" as="image" type="image/avif" fetchpriority="high" href="{{assetsBase}}/static/bg-nebula-mobile.avif?v=dc9ea763dfb4016c" media="(orientation: portrait) and (max-width: 900px)">
+<link rel="preload" as="image" type="image/avif" fetchpriority="high" href="{{assetsBase}}/static/bg-nebula-uhd.avif?v=8f0339359f8a204a" media="(orientation: landscape) and (min-width: 3201px), (orientation: landscape) and (min-width: 1601px) and (min-resolution: 2dppx)">
+<link rel="preload" as="image" type="image/avif" fetchpriority="high" href="{{assetsBase}}/static/bg-nebula-4k.avif?v=aab68de77eef9fc1" media="(orientation: landscape) and (min-width: 2001px) and (max-width: 3200px) and (max-resolution: 1.99dppx), (orientation: landscape) and (min-width: 1001px) and (max-width: 1600px) and (min-resolution: 2dppx)">
+<link rel="preload" as="image" type="image/avif" fetchpriority="high" href="{{assetsBase}}/static/bg-nebula.avif?v=10247fc41c7b74dc" media="(orientation: landscape) and (max-width: 2000px) and (max-resolution: 1.99dppx), (orientation: landscape) and (max-width: 1000px) and (min-resolution: 2dppx)">
+{{else if and (not (or (and (not .ThemeScheme) (eq .ThemeBackdrop "glow")) (eq .ThemeTier "minimalistic"))) (or (not assetsBase) (not .ThemeScheme) (eq .ThemeScheme "minmatar-v3"))}}
+<link rel="preload" as="image" type="image/avif" fetchpriority="high" href="{{assetsBase}}/static/bg-nebula-muted-mobile.avif?v=4c17c96cddf57e27" media="(orientation: portrait) and (max-width: 900px)">
+<link rel="preload" as="image" type="image/avif" fetchpriority="high" href="{{assetsBase}}/static/bg-nebula-muted-uhd.avif?v=0996e8fdd0729f96" media="(orientation: landscape) and (min-width: 3201px), (orientation: landscape) and (min-width: 1601px) and (min-resolution: 2dppx)">
+<link rel="preload" as="image" type="image/avif" fetchpriority="high" href="{{assetsBase}}/static/bg-nebula-muted-4k.avif?v=c6b7ff75eebcc64f" media="(orientation: landscape) and (min-width: 2001px) and (max-width: 3200px) and (max-resolution: 1.99dppx), (orientation: landscape) and (min-width: 1001px) and (max-width: 1600px) and (min-resolution: 2dppx)">
+<link rel="preload" as="image" type="image/avif" fetchpriority="high" href="{{assetsBase}}/static/bg-nebula-muted.avif?v=bc10ad558bbece6a" media="(orientation: landscape) and (max-width: 2000px) and (max-resolution: 1.99dppx), (orientation: landscape) and (max-width: 1000px) and (min-resolution: 2dppx)">
 {{end}}
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/evesansneue-regular.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/evesansneue-space-regular.woff2" crossorigin>

@@ -283,12 +283,11 @@
      that a row of them lines up. */
   --control-h: 1.9rem;
   /* One corner-radius scale for the whole site: large surfaces,
-     medium tiles and dropdowns, small controls. */
-  --r-lg: 0.5rem;
-  --r-md: 0.5rem;
-  --r-sm: 0.5rem;
-  /* The small-element radius: filter boxes, chips and other
-     minor controls, where the panel radius reads over-round. */
+     medium tiles and dropdowns, small controls, matching the crisp
+     radius used on the contract search containers. */
+  --r-lg: 0.35rem;
+  --r-md: 0.35rem;
+  --r-sm: 0.35rem;
   --r-xs: 0.35rem;
   /* The one type scale: every font-size in every sheet names a
      step here, or one of the relative steps after it. Dense data
@@ -750,7 +749,7 @@ main {
   color: var(--success);
   text-decoration: none;
   padding: 0.2rem 0.45rem;
-  border-radius: 0.4rem;
+  border-radius: var(--r-sm);
 }
 .h-action:hover { color: var(--text-bright); background: rgba(255, 255, 255, 0.04); text-decoration: none; }
 .h-action svg { width: 1.05em; height: 1.05em; }
@@ -3715,7 +3714,7 @@ html[data-nav="rail"] .sidebar .branch > summary {
     top: 50%;
     transform: translateY(-50%);
     padding: 0.35rem 0.7rem;
-    border-radius: 0.4rem;
+    border-radius: var(--r-sm);
     background: color-mix(in srgb, var(--panel) 95%, transparent);
     border: 1px solid color-mix(in srgb, var(--nav-head) 35%, transparent);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
@@ -4243,7 +4242,7 @@ tbody tr.order-beaten td { background: color-mix(in srgb, var(--danger) 10%, tra
   max-height: none;
   overflow: visible;
   border-top: 3px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   padding: 0.8rem;
 }
 .quickjump-panel input[type="search"] {
@@ -5402,7 +5401,7 @@ html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
 #install-app {
   background: transparent;
   border: none;
-  border-radius: 0.4rem;
+  border-radius: var(--r-sm);
   color: var(--gold);
   line-height: 1;
   cursor: pointer;
@@ -5417,7 +5416,7 @@ html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
 #status-open {
   background: transparent;
   border: none;
-  border-radius: 0.4rem;
+  border-radius: var(--r-sm);
   cursor: pointer;
   text-align: left;
 }
@@ -6215,7 +6214,7 @@ html[data-theme="light"] .setting h4 { color: var(--accent); }
 a.badge { text-decoration: none; }
 .lookup-form input[name="tag"] { width: 9rem; }
 .field .searchwrap { display: block; width: 100%; }
-.facets { display: grid; gap: 0.45rem; margin: 0 0 1rem; padding: 0.75rem 0.9rem; border: 1px solid #222; border-radius: 6px; background: rgba(255, 255, 255, 0.02); }
+.facets { display: grid; gap: 0.45rem; margin: 0 0 1rem; padding: 0.75rem 0.9rem; border: 1px solid #222; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.02); }
 .facet { display: flex; align-items: baseline; gap: 0.75rem; min-width: 0; }
 .facet-title { flex: 0 0 6.5rem; }
 .facet-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; min-width: 0; }
@@ -6228,7 +6227,7 @@ a.chip:hover { border-color: var(--accent); }
 .browse-sorts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 .browse-for { margin: 0 0 0.9rem; padding: 0.6rem 0.9rem; border-left: 3px solid var(--accent); background: rgba(255, 106, 26, 0.08); }
 .fit-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr)); gap: 0.75rem; }
-.fit-card { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 0.85rem; align-items: start; padding: 0.85rem; border: 1px solid var(--glass-edge); border-radius: 6px; background: rgba(255, 255, 255, 0.02); }
+.fit-card { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 0.85rem; align-items: start; padding: 0.85rem; border: 1px solid var(--glass-edge); border-radius: var(--r-md); background: rgba(255, 255, 255, 0.02); }
 .fit-card:hover { border-color: rgba(255, 130, 20, 0.45); }
 .fit-card-ship { width: 64px; height: 64px; border-radius: var(--r-md); border: 1px solid #2a2a2a; background: #0e0e0e; }
 .fit-card-body { min-width: 0; }
@@ -6271,7 +6270,7 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
 .loadout-preview-btn::before { content: "▸"; display: inline-block; margin-right: 0.35rem; transition: transform 0.12s ease; }
 .loadout-preview-btn[aria-expanded="true"]::before { transform: rotate(90deg); }
 .loadout-preview-btn:hover { color: var(--text); }
-.loadout-preview-panel { position: absolute; top: calc(100% + 0.4rem); left: 0; z-index: 60; width: max-content; max-width: min(60rem, calc(100vw - 2rem)); max-height: min(70vh, 34rem); overflow: auto; padding: 0.7rem 0.9rem; background: var(--panel); border: 1px solid var(--glass-edge); border-radius: 6px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55); }
+.loadout-preview-panel { position: absolute; top: calc(100% + 0.4rem); left: 0; z-index: 60; width: max-content; max-width: min(60rem, calc(100vw - 2rem)); max-height: min(70vh, 34rem); overflow: auto; padding: 0.7rem 0.9rem; background: var(--panel); border: 1px solid var(--glass-edge); border-radius: var(--r-md); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55); }
 .loadout-preview-panel.flip-up { top: auto; bottom: calc(100% + 0.4rem); }
 .loadout-preview-panel.align-right { left: auto; right: 0; }
 .loadout-preview-cols { display: flex; flex-wrap: wrap; gap: 0.25rem 1.75rem; }

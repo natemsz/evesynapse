@@ -1,184 +1,455 @@
-/* Per-scheme wallpapers: each scheme's full art at Full and its calm art at Muted. The calm art is already darkened, so the muted rules carry no filter (the generic scheme-mute filter above would double-darken it). */
-html[data-scheme="jove"][data-tier="full"] body::before {
+/* Per-scheme CDN wallpapers:
+   - Home page (:has([data-home-page])) keeps the faction planet art.
+   - All other interior pages (:has(.page-body):not(:has([data-home-page])))
+     wear the faction nebula art (portrait mobile, 2K, 4K and 5K UHD in
+     10-bit AVIF with JPEG fallback).
+   Every rule excludes [data-stars-only] so Starfield-only mode fetches none. */
+html:not([data-stars-only])[data-scheme="jove"][data-tier="full"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-jove.jpg?v=6d208014e7ec4dd6"), url("/static/bg-jove-thumb.jpg?v=06d2299136edddb5");
   background-image: image-set(url("/static/bg-jove.jxl?v=a3d50f541521b6da") type("image/jxl"), url("/static/bg-jove.jpg?v=6d208014e7ec4dd6") type("image/jpeg")), url("/static/bg-jove-thumb.jpg?v=06d2299136edddb5");
 }
-html[data-scheme="jove"][data-tier="muted"] body::before {
+html:not([data-stars-only])[data-scheme="jove"][data-tier="muted"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-jove-calm.jpg?v=9fb3b689fc62190f"), url("/static/bg-jove-calm-thumb.jpg?v=184d7f17667f5b8f");
   background-image: image-set(url("/static/bg-jove-calm.jxl?v=2cccd3d52da8fcde") type("image/jxl"), url("/static/bg-jove-calm.jpg?v=9fb3b689fc62190f") type("image/jpeg")), url("/static/bg-jove-calm-thumb.jpg?v=184d7f17667f5b8f");
   filter: none;
 }
-html[data-scheme="caldari"][data-tier="full"] body::before {
+html:not([data-stars-only])[data-scheme="caldari"][data-tier="full"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-caldari.jpg?v=38ef817e7560376c"), url("/static/bg-caldari-thumb.jpg?v=8acbaa0df4ec74dd");
   background-image: image-set(url("/static/bg-caldari.jxl?v=c9607c6ec40ff37f") type("image/jxl"), url("/static/bg-caldari.jpg?v=38ef817e7560376c") type("image/jpeg")), url("/static/bg-caldari-thumb.jpg?v=8acbaa0df4ec74dd");
 }
-html[data-scheme="caldari"][data-tier="muted"] body::before {
+html:not([data-stars-only])[data-scheme="caldari"][data-tier="muted"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-caldari-calm.jpg?v=8d6c67af0b09aa0a"), url("/static/bg-caldari-calm-thumb.jpg?v=295b10ed3874b52d");
   background-image: image-set(url("/static/bg-caldari-calm.jxl?v=050727c58b7bfe8d") type("image/jxl"), url("/static/bg-caldari-calm.jpg?v=8d6c67af0b09aa0a") type("image/jpeg")), url("/static/bg-caldari-calm-thumb.jpg?v=295b10ed3874b52d");
   filter: none;
 }
-html[data-scheme="gallente"][data-tier="full"] body::before {
+html:not([data-stars-only])[data-scheme="gallente"][data-tier="full"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-gallente.jpg?v=9f39222a365244d3"), url("/static/bg-gallente-thumb.jpg?v=da5999d8b012a417");
   background-image: image-set(url("/static/bg-gallente.jxl?v=c5c68b5b4cbce46a") type("image/jxl"), url("/static/bg-gallente.jpg?v=9f39222a365244d3") type("image/jpeg")), url("/static/bg-gallente-thumb.jpg?v=da5999d8b012a417");
 }
-html[data-scheme="gallente"][data-tier="muted"] body::before {
+html:not([data-stars-only])[data-scheme="gallente"][data-tier="muted"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-gallente-calm.jpg?v=4cbd22013d4bbe31"), url("/static/bg-gallente-calm-thumb.jpg?v=2a6288236ede95dd");
   background-image: image-set(url("/static/bg-gallente-calm.jxl?v=3f5ce25ddc52df39") type("image/jxl"), url("/static/bg-gallente-calm.jpg?v=4cbd22013d4bbe31") type("image/jpeg")), url("/static/bg-gallente-calm-thumb.jpg?v=2a6288236ede95dd");
   filter: none;
 }
-html[data-scheme="amarr"][data-tier="full"] body::before {
+html:not([data-stars-only])[data-scheme="amarr"][data-tier="full"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-amarr.jpg?v=7352092b83999472"), url("/static/bg-amarr-thumb.jpg?v=ae5e413b6adf3fae");
   background-image: image-set(url("/static/bg-amarr.jxl?v=f27930796afdc5ee") type("image/jxl"), url("/static/bg-amarr.jpg?v=7352092b83999472") type("image/jpeg")), url("/static/bg-amarr-thumb.jpg?v=ae5e413b6adf3fae");
 }
-html[data-scheme="amarr"][data-tier="muted"] body::before {
+html:not([data-stars-only])[data-scheme="amarr"][data-tier="muted"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-amarr-calm.jpg?v=8e3e8d26c6d658db"), url("/static/bg-amarr-calm-thumb.jpg?v=a9b53b196e744c3f");
   background-image: image-set(url("/static/bg-amarr-calm.jxl?v=c77a91bd75740be8") type("image/jxl"), url("/static/bg-amarr-calm.jpg?v=8e3e8d26c6d658db") type("image/jpeg")), url("/static/bg-amarr-calm-thumb.jpg?v=a9b53b196e744c3f");
   filter: none;
 }
-html[data-scheme="triglavian"][data-tier="full"] body::before {
+html:not([data-stars-only])[data-scheme="triglavian"][data-tier="full"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-triglavian.jpg?v=55d8ac72ea0ae8b3"), url("/static/bg-triglavian-thumb.jpg?v=62a8eee914c9d583");
   background-image: image-set(url("/static/bg-triglavian.jxl?v=c527b9611cade41c") type("image/jxl"), url("/static/bg-triglavian.jpg?v=55d8ac72ea0ae8b3") type("image/jpeg")), url("/static/bg-triglavian-thumb.jpg?v=62a8eee914c9d583");
 }
-html[data-scheme="triglavian"][data-tier="muted"] body::before {
+html:not([data-stars-only])[data-scheme="triglavian"][data-tier="muted"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-triglavian-calm.jpg?v=c92f68549cc70f70"), url("/static/bg-triglavian-calm-thumb.jpg?v=a0e542dc3149a1ef");
   background-image: image-set(url("/static/bg-triglavian-calm.jxl?v=7a2940220c4593df") type("image/jxl"), url("/static/bg-triglavian-calm.jpg?v=c92f68549cc70f70") type("image/jpeg")), url("/static/bg-triglavian-calm-thumb.jpg?v=a0e542dc3149a1ef");
   filter: none;
 }
-html[data-scheme="edencom"][data-tier="full"] body::before {
+html:not([data-stars-only])[data-scheme="edencom"][data-tier="full"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-edencom.jpg?v=48e92fef83d20528"), url("/static/bg-edencom-thumb.jpg?v=06763b265c79940a");
   background-image: image-set(url("/static/bg-edencom.jxl?v=2acfa5d807cea226") type("image/jxl"), url("/static/bg-edencom.jpg?v=48e92fef83d20528") type("image/jpeg")), url("/static/bg-edencom-thumb.jpg?v=06763b265c79940a");
 }
-html[data-scheme="edencom"][data-tier="muted"] body::before {
+html:not([data-stars-only])[data-scheme="edencom"][data-tier="muted"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-edencom-calm.jpg?v=072d4627452e7486"), url("/static/bg-edencom-calm-thumb.jpg?v=39680093dcde0df7");
   background-image: image-set(url("/static/bg-edencom-calm.jxl?v=00c0673c9af3fcb6") type("image/jxl"), url("/static/bg-edencom-calm.jpg?v=072d4627452e7486") type("image/jpeg")), url("/static/bg-edencom-calm-thumb.jpg?v=39680093dcde0df7");
   filter: none;
 }
-html[data-scheme="soe"][data-tier="full"] body::before {
+html:not([data-stars-only])[data-scheme="soe"][data-tier="full"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-soe.jpg?v=982bc3d31ff1bb47"), url("/static/bg-soe-thumb.jpg?v=2214db351f8dd432");
   background-image: image-set(url("/static/bg-soe.jxl?v=5972bd7ffd92bad7") type("image/jxl"), url("/static/bg-soe.jpg?v=982bc3d31ff1bb47") type("image/jpeg")), url("/static/bg-soe-thumb.jpg?v=2214db351f8dd432");
 }
-html[data-scheme="soe"][data-tier="muted"] body::before {
+html:not([data-stars-only])[data-scheme="soe"][data-tier="muted"] body:where(:has([data-home-page]))::before {
   background-image: url("/static/bg-soe-calm.jpg?v=7355912b62753514"), url("/static/bg-soe-calm-thumb.jpg?v=d336556e54455275");
   background-image: image-set(url("/static/bg-soe-calm.jxl?v=0d5cdbe1ea83e411") type("image/jxl"), url("/static/bg-soe-calm.jpg?v=7355912b62753514") type("image/jpeg")), url("/static/bg-soe-calm-thumb.jpg?v=d336556e54455275");
   filter: none;
 }
 @media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
-  html[data-scheme="jove"][data-tier="full"] body::before {
+  html:not([data-stars-only])[data-scheme="jove"][data-tier="full"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-jove-4k.jpg?v=58a90bf278491231"), url("/static/bg-jove-thumb.jpg?v=06d2299136edddb5");
     background-image: image-set(url("/static/bg-jove-4k.jxl?v=3935ef707c3fa254") type("image/jxl"), url("/static/bg-jove-4k.jpg?v=58a90bf278491231") type("image/jpeg")), url("/static/bg-jove-thumb.jpg?v=06d2299136edddb5");
   }
-  html[data-scheme="caldari"][data-tier="full"] body::before {
-    background-image: url("/static/bg-caldari-4k.jpg?v=a03f5581a768c90b"), url("/static/bg-caldari-thumb.jpg?v=8acbaa0df4ec74dd");
-    background-image: image-set(url("/static/bg-caldari-4k.jxl?v=67ef6ff5525dd5ab") type("image/jxl"), url("/static/bg-caldari-4k.jpg?v=a03f5581a768c90b") type("image/jpeg")), url("/static/bg-caldari-thumb.jpg?v=8acbaa0df4ec74dd");
-  }
-  html[data-scheme="gallente"][data-tier="full"] body::before {
-    background-image: url("/static/bg-gallente-4k.jpg?v=8bc206cf2ea35886"), url("/static/bg-gallente-thumb.jpg?v=da5999d8b012a417");
-    background-image: image-set(url("/static/bg-gallente-4k.jxl?v=ea59ac058863bc71") type("image/jxl"), url("/static/bg-gallente-4k.jpg?v=8bc206cf2ea35886") type("image/jpeg")), url("/static/bg-gallente-thumb.jpg?v=da5999d8b012a417");
-  }
-  html[data-scheme="amarr"][data-tier="full"] body::before {
-    background-image: url("/static/bg-amarr-4k.jpg?v=2fa61e39b509e6df"), url("/static/bg-amarr-thumb.jpg?v=ae5e413b6adf3fae");
-    background-image: image-set(url("/static/bg-amarr-4k.jxl?v=2e93aca73bed719b") type("image/jxl"), url("/static/bg-amarr-4k.jpg?v=2fa61e39b509e6df") type("image/jpeg")), url("/static/bg-amarr-thumb.jpg?v=ae5e413b6adf3fae");
-  }
-  html[data-scheme="triglavian"][data-tier="full"] body::before {
-    background-image: url("/static/bg-triglavian-4k.jpg?v=3b0c5e291e8b75d2"), url("/static/bg-triglavian-thumb.jpg?v=62a8eee914c9d583");
-    background-image: image-set(url("/static/bg-triglavian-4k.jxl?v=54ae0f10dcaeadc1") type("image/jxl"), url("/static/bg-triglavian-4k.jpg?v=3b0c5e291e8b75d2") type("image/jpeg")), url("/static/bg-triglavian-thumb.jpg?v=62a8eee914c9d583");
-  }
-  html[data-scheme="edencom"][data-tier="full"] body::before {
-    background-image: url("/static/bg-edencom-4k.jpg?v=6a34e3c342765ec2"), url("/static/bg-edencom-thumb.jpg?v=06763b265c79940a");
-    background-image: image-set(url("/static/bg-edencom-4k.jxl?v=72faf8961fb52d7d") type("image/jxl"), url("/static/bg-edencom-4k.jpg?v=6a34e3c342765ec2") type("image/jpeg")), url("/static/bg-edencom-thumb.jpg?v=06763b265c79940a");
-  }
-  html[data-scheme="soe"][data-tier="full"] body::before {
-    background-image: url("/static/bg-soe-4k.jpg?v=b6979903e89580b9"), url("/static/bg-soe-thumb.jpg?v=2214db351f8dd432");
-    background-image: image-set(url("/static/bg-soe-4k.jxl?v=2ff9c11efab1bc95") type("image/jxl"), url("/static/bg-soe-4k.jpg?v=b6979903e89580b9") type("image/jpeg")), url("/static/bg-soe-thumb.jpg?v=2214db351f8dd432");
-  }
-}
-@media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
-  html[data-scheme="jove"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="jove"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-jove-calm-4k.jpg?v=28c9ad63d4892bf5"), url("/static/bg-jove-calm-thumb.jpg?v=184d7f17667f5b8f");
     background-image: image-set(url("/static/bg-jove-calm-4k.jxl?v=1969abe1d12526e8") type("image/jxl"), url("/static/bg-jove-calm-4k.jpg?v=28c9ad63d4892bf5") type("image/jpeg")), url("/static/bg-jove-calm-thumb.jpg?v=184d7f17667f5b8f");
   }
-  html[data-scheme="caldari"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="caldari"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-caldari-4k.jpg?v=a03f5581a768c90b"), url("/static/bg-caldari-thumb.jpg?v=8acbaa0df4ec74dd");
+    background-image: image-set(url("/static/bg-caldari-4k.jxl?v=67ef6ff5525dd5ab") type("image/jxl"), url("/static/bg-caldari-4k.jpg?v=a03f5581a768c90b") type("image/jpeg")), url("/static/bg-caldari-thumb.jpg?v=8acbaa0df4ec74dd");
+  }
+  html:not([data-stars-only])[data-scheme="caldari"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-caldari-calm-4k.jpg?v=a6043fcf93621783"), url("/static/bg-caldari-calm-thumb.jpg?v=295b10ed3874b52d");
     background-image: image-set(url("/static/bg-caldari-calm-4k.jxl?v=706c505f33e8622e") type("image/jxl"), url("/static/bg-caldari-calm-4k.jpg?v=a6043fcf93621783") type("image/jpeg")), url("/static/bg-caldari-calm-thumb.jpg?v=295b10ed3874b52d");
   }
-  html[data-scheme="gallente"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="gallente"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-gallente-4k.jpg?v=8bc206cf2ea35886"), url("/static/bg-gallente-thumb.jpg?v=da5999d8b012a417");
+    background-image: image-set(url("/static/bg-gallente-4k.jxl?v=ea59ac058863bc71") type("image/jxl"), url("/static/bg-gallente-4k.jpg?v=8bc206cf2ea35886") type("image/jpeg")), url("/static/bg-gallente-thumb.jpg?v=da5999d8b012a417");
+  }
+  html:not([data-stars-only])[data-scheme="gallente"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-gallente-calm-4k.jpg?v=e007900dbb3b9619"), url("/static/bg-gallente-calm-thumb.jpg?v=2a6288236ede95dd");
     background-image: image-set(url("/static/bg-gallente-calm-4k.jxl?v=19fcdec69556aee8") type("image/jxl"), url("/static/bg-gallente-calm-4k.jpg?v=e007900dbb3b9619") type("image/jpeg")), url("/static/bg-gallente-calm-thumb.jpg?v=2a6288236ede95dd");
   }
-  html[data-scheme="amarr"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="amarr"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-amarr-4k.jpg?v=2fa61e39b509e6df"), url("/static/bg-amarr-thumb.jpg?v=ae5e413b6adf3fae");
+    background-image: image-set(url("/static/bg-amarr-4k.jxl?v=2e93aca73bed719b") type("image/jxl"), url("/static/bg-amarr-4k.jpg?v=2fa61e39b509e6df") type("image/jpeg")), url("/static/bg-amarr-thumb.jpg?v=ae5e413b6adf3fae");
+  }
+  html:not([data-stars-only])[data-scheme="amarr"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-amarr-calm-4k.jpg?v=6f55b65782bbab02"), url("/static/bg-amarr-calm-thumb.jpg?v=a9b53b196e744c3f");
     background-image: image-set(url("/static/bg-amarr-calm-4k.jxl?v=409e49dabb4957f0") type("image/jxl"), url("/static/bg-amarr-calm-4k.jpg?v=6f55b65782bbab02") type("image/jpeg")), url("/static/bg-amarr-calm-thumb.jpg?v=a9b53b196e744c3f");
   }
-  html[data-scheme="triglavian"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="triglavian"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-triglavian-4k.jpg?v=3b0c5e291e8b75d2"), url("/static/bg-triglavian-thumb.jpg?v=62a8eee914c9d583");
+    background-image: image-set(url("/static/bg-triglavian-4k.jxl?v=54ae0f10dcaeadc1") type("image/jxl"), url("/static/bg-triglavian-4k.jpg?v=3b0c5e291e8b75d2") type("image/jpeg")), url("/static/bg-triglavian-thumb.jpg?v=62a8eee914c9d583");
+  }
+  html:not([data-stars-only])[data-scheme="triglavian"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-triglavian-calm-4k.jpg?v=22876e4ceb05ad3c"), url("/static/bg-triglavian-calm-thumb.jpg?v=a0e542dc3149a1ef");
     background-image: image-set(url("/static/bg-triglavian-calm-4k.jxl?v=320bbc9ff963b48f") type("image/jxl"), url("/static/bg-triglavian-calm-4k.jpg?v=22876e4ceb05ad3c") type("image/jpeg")), url("/static/bg-triglavian-calm-thumb.jpg?v=a0e542dc3149a1ef");
   }
-  html[data-scheme="edencom"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="edencom"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-edencom-4k.jpg?v=6a34e3c342765ec2"), url("/static/bg-edencom-thumb.jpg?v=06763b265c79940a");
+    background-image: image-set(url("/static/bg-edencom-4k.jxl?v=72faf8961fb52d7d") type("image/jxl"), url("/static/bg-edencom-4k.jpg?v=6a34e3c342765ec2") type("image/jpeg")), url("/static/bg-edencom-thumb.jpg?v=06763b265c79940a");
+  }
+  html:not([data-stars-only])[data-scheme="edencom"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-edencom-calm-4k.jpg?v=bdae69a5b20c8528"), url("/static/bg-edencom-calm-thumb.jpg?v=39680093dcde0df7");
     background-image: image-set(url("/static/bg-edencom-calm-4k.jxl?v=34f1526e888ff6e6") type("image/jxl"), url("/static/bg-edencom-calm-4k.jpg?v=bdae69a5b20c8528") type("image/jpeg")), url("/static/bg-edencom-calm-thumb.jpg?v=39680093dcde0df7");
   }
-  html[data-scheme="soe"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="soe"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-soe-4k.jpg?v=b6979903e89580b9"), url("/static/bg-soe-thumb.jpg?v=2214db351f8dd432");
+    background-image: image-set(url("/static/bg-soe-4k.jxl?v=2ff9c11efab1bc95") type("image/jxl"), url("/static/bg-soe-4k.jpg?v=b6979903e89580b9") type("image/jpeg")), url("/static/bg-soe-thumb.jpg?v=2214db351f8dd432");
+  }
+  html:not([data-stars-only])[data-scheme="soe"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-soe-calm-4k.jpg?v=62ae52a9b5e8e968"), url("/static/bg-soe-calm-thumb.jpg?v=d336556e54455275");
     background-image: image-set(url("/static/bg-soe-calm-4k.jxl?v=f3360794f124b28f") type("image/jxl"), url("/static/bg-soe-calm-4k.jpg?v=62ae52a9b5e8e968") type("image/jpeg")), url("/static/bg-soe-calm-thumb.jpg?v=d336556e54455275");
   }
 }
 @media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
-  html[data-scheme="jove"][data-tier="full"] body::before {
+  html:not([data-stars-only])[data-scheme="jove"][data-tier="full"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-jove-uhd.jpg?v=c76ae9e7b2e6fd5d"), url("/static/bg-jove-thumb.jpg?v=06d2299136edddb5");
     background-image: image-set(url("/static/bg-jove-uhd.jxl?v=cb5d9557188640f7") type("image/jxl"), url("/static/bg-jove-uhd.jpg?v=c76ae9e7b2e6fd5d") type("image/jpeg")), url("/static/bg-jove-thumb.jpg?v=06d2299136edddb5");
   }
-  html[data-scheme="caldari"][data-tier="full"] body::before {
-    background-image: url("/static/bg-caldari-uhd.jpg?v=51f07c521fe0c871"), url("/static/bg-caldari-thumb.jpg?v=8acbaa0df4ec74dd");
-    background-image: image-set(url("/static/bg-caldari-uhd.jxl?v=fd91f211fa2bd06f") type("image/jxl"), url("/static/bg-caldari-uhd.jpg?v=51f07c521fe0c871") type("image/jpeg")), url("/static/bg-caldari-thumb.jpg?v=8acbaa0df4ec74dd");
-  }
-  html[data-scheme="gallente"][data-tier="full"] body::before {
-    background-image: url("/static/bg-gallente-uhd.jpg?v=5a0de291d317e2d0"), url("/static/bg-gallente-thumb.jpg?v=da5999d8b012a417");
-    background-image: image-set(url("/static/bg-gallente-uhd.jxl?v=516d8e5632ebc20b") type("image/jxl"), url("/static/bg-gallente-uhd.jpg?v=5a0de291d317e2d0") type("image/jpeg")), url("/static/bg-gallente-thumb.jpg?v=da5999d8b012a417");
-  }
-  html[data-scheme="amarr"][data-tier="full"] body::before {
-    background-image: url("/static/bg-amarr-uhd.jpg?v=86d74cf629470ff5"), url("/static/bg-amarr-thumb.jpg?v=ae5e413b6adf3fae");
-    background-image: image-set(url("/static/bg-amarr-uhd.jxl?v=03e8d6a5f5c48006") type("image/jxl"), url("/static/bg-amarr-uhd.jpg?v=86d74cf629470ff5") type("image/jpeg")), url("/static/bg-amarr-thumb.jpg?v=ae5e413b6adf3fae");
-  }
-  html[data-scheme="triglavian"][data-tier="full"] body::before {
-    background-image: url("/static/bg-triglavian-uhd.jpg?v=117e8c103979bebb"), url("/static/bg-triglavian-thumb.jpg?v=62a8eee914c9d583");
-    background-image: image-set(url("/static/bg-triglavian-uhd.jxl?v=b578a1f9ed462676") type("image/jxl"), url("/static/bg-triglavian-uhd.jpg?v=117e8c103979bebb") type("image/jpeg")), url("/static/bg-triglavian-thumb.jpg?v=62a8eee914c9d583");
-  }
-  html[data-scheme="edencom"][data-tier="full"] body::before {
-    background-image: url("/static/bg-edencom-uhd.jpg?v=6319ec9d548f68a9"), url("/static/bg-edencom-thumb.jpg?v=06763b265c79940a");
-    background-image: image-set(url("/static/bg-edencom-uhd.jxl?v=172ba4d1d294b9af") type("image/jxl"), url("/static/bg-edencom-uhd.jpg?v=6319ec9d548f68a9") type("image/jpeg")), url("/static/bg-edencom-thumb.jpg?v=06763b265c79940a");
-  }
-  html[data-scheme="soe"][data-tier="full"] body::before {
-    background-image: url("/static/bg-soe-uhd.jpg?v=e3ed8c6f69233a40"), url("/static/bg-soe-thumb.jpg?v=2214db351f8dd432");
-    background-image: image-set(url("/static/bg-soe-uhd.jxl?v=72c572bd6c8b0beb") type("image/jxl"), url("/static/bg-soe-uhd.jpg?v=e3ed8c6f69233a40") type("image/jpeg")), url("/static/bg-soe-thumb.jpg?v=2214db351f8dd432");
-  }
-}
-@media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
-  html[data-scheme="jove"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="jove"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-jove-calm-uhd.jpg?v=22fb690cec6de680"), url("/static/bg-jove-calm-thumb.jpg?v=184d7f17667f5b8f");
     background-image: image-set(url("/static/bg-jove-calm-uhd.jxl?v=9c29679bdb54c1a5") type("image/jxl"), url("/static/bg-jove-calm-uhd.jpg?v=22fb690cec6de680") type("image/jpeg")), url("/static/bg-jove-calm-thumb.jpg?v=184d7f17667f5b8f");
   }
-  html[data-scheme="caldari"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="caldari"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-caldari-uhd.jpg?v=51f07c521fe0c871"), url("/static/bg-caldari-thumb.jpg?v=8acbaa0df4ec74dd");
+    background-image: image-set(url("/static/bg-caldari-uhd.jxl?v=fd91f211fa2bd06f") type("image/jxl"), url("/static/bg-caldari-uhd.jpg?v=51f07c521fe0c871") type("image/jpeg")), url("/static/bg-caldari-thumb.jpg?v=8acbaa0df4ec74dd");
+  }
+  html:not([data-stars-only])[data-scheme="caldari"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-caldari-calm-uhd.jpg?v=e494348ac6187394"), url("/static/bg-caldari-calm-thumb.jpg?v=295b10ed3874b52d");
     background-image: image-set(url("/static/bg-caldari-calm-uhd.jxl?v=7f5055068f32ecf7") type("image/jxl"), url("/static/bg-caldari-calm-uhd.jpg?v=e494348ac6187394") type("image/jpeg")), url("/static/bg-caldari-calm-thumb.jpg?v=295b10ed3874b52d");
   }
-  html[data-scheme="gallente"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="gallente"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-gallente-uhd.jpg?v=5a0de291d317e2d0"), url("/static/bg-gallente-thumb.jpg?v=da5999d8b012a417");
+    background-image: image-set(url("/static/bg-gallente-uhd.jxl?v=516d8e5632ebc20b") type("image/jxl"), url("/static/bg-gallente-uhd.jpg?v=5a0de291d317e2d0") type("image/jpeg")), url("/static/bg-gallente-thumb.jpg?v=da5999d8b012a417");
+  }
+  html:not([data-stars-only])[data-scheme="gallente"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-gallente-calm-uhd.jpg?v=25471d07de0f1543"), url("/static/bg-gallente-calm-thumb.jpg?v=2a6288236ede95dd");
     background-image: image-set(url("/static/bg-gallente-calm-uhd.jxl?v=38e93bd30788b509") type("image/jxl"), url("/static/bg-gallente-calm-uhd.jpg?v=25471d07de0f1543") type("image/jpeg")), url("/static/bg-gallente-calm-thumb.jpg?v=2a6288236ede95dd");
   }
-  html[data-scheme="amarr"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="amarr"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-amarr-uhd.jpg?v=86d74cf629470ff5"), url("/static/bg-amarr-thumb.jpg?v=ae5e413b6adf3fae");
+    background-image: image-set(url("/static/bg-amarr-uhd.jxl?v=03e8d6a5f5c48006") type("image/jxl"), url("/static/bg-amarr-uhd.jpg?v=86d74cf629470ff5") type("image/jpeg")), url("/static/bg-amarr-thumb.jpg?v=ae5e413b6adf3fae");
+  }
+  html:not([data-stars-only])[data-scheme="amarr"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-amarr-calm-uhd.jpg?v=32388fa4ce92fef5"), url("/static/bg-amarr-calm-thumb.jpg?v=a9b53b196e744c3f");
     background-image: image-set(url("/static/bg-amarr-calm-uhd.jxl?v=e0b06ddc453883fa") type("image/jxl"), url("/static/bg-amarr-calm-uhd.jpg?v=32388fa4ce92fef5") type("image/jpeg")), url("/static/bg-amarr-calm-thumb.jpg?v=a9b53b196e744c3f");
   }
-  html[data-scheme="triglavian"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="triglavian"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-triglavian-uhd.jpg?v=117e8c103979bebb"), url("/static/bg-triglavian-thumb.jpg?v=62a8eee914c9d583");
+    background-image: image-set(url("/static/bg-triglavian-uhd.jxl?v=b578a1f9ed462676") type("image/jxl"), url("/static/bg-triglavian-uhd.jpg?v=117e8c103979bebb") type("image/jpeg")), url("/static/bg-triglavian-thumb.jpg?v=62a8eee914c9d583");
+  }
+  html:not([data-stars-only])[data-scheme="triglavian"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-triglavian-calm-uhd.jpg?v=8a515e49fec92b94"), url("/static/bg-triglavian-calm-thumb.jpg?v=a0e542dc3149a1ef");
     background-image: image-set(url("/static/bg-triglavian-calm-uhd.jxl?v=be0c86192fb59ba8") type("image/jxl"), url("/static/bg-triglavian-calm-uhd.jpg?v=8a515e49fec92b94") type("image/jpeg")), url("/static/bg-triglavian-calm-thumb.jpg?v=a0e542dc3149a1ef");
   }
-  html[data-scheme="edencom"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="edencom"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-edencom-uhd.jpg?v=6319ec9d548f68a9"), url("/static/bg-edencom-thumb.jpg?v=06763b265c79940a");
+    background-image: image-set(url("/static/bg-edencom-uhd.jxl?v=172ba4d1d294b9af") type("image/jxl"), url("/static/bg-edencom-uhd.jpg?v=6319ec9d548f68a9") type("image/jpeg")), url("/static/bg-edencom-thumb.jpg?v=06763b265c79940a");
+  }
+  html:not([data-stars-only])[data-scheme="edencom"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-edencom-calm-uhd.jpg?v=6b1f2472f9100161"), url("/static/bg-edencom-calm-thumb.jpg?v=39680093dcde0df7");
     background-image: image-set(url("/static/bg-edencom-calm-uhd.jxl?v=242e360d537b6c27") type("image/jxl"), url("/static/bg-edencom-calm-uhd.jpg?v=6b1f2472f9100161") type("image/jpeg")), url("/static/bg-edencom-calm-thumb.jpg?v=39680093dcde0df7");
   }
-  html[data-scheme="soe"][data-tier="muted"] body::before {
+  html:not([data-stars-only])[data-scheme="soe"][data-tier="full"] body:where(:has([data-home-page]))::before {
+    background-image: url("/static/bg-soe-uhd.jpg?v=e3ed8c6f69233a40"), url("/static/bg-soe-thumb.jpg?v=2214db351f8dd432");
+    background-image: image-set(url("/static/bg-soe-uhd.jxl?v=72c572bd6c8b0beb") type("image/jxl"), url("/static/bg-soe-uhd.jpg?v=e3ed8c6f69233a40") type("image/jpeg")), url("/static/bg-soe-thumb.jpg?v=2214db351f8dd432");
+  }
+  html:not([data-stars-only])[data-scheme="soe"][data-tier="muted"] body:where(:has([data-home-page]))::before {
     background-image: url("/static/bg-soe-calm-uhd.jpg?v=cf1769378877887f"), url("/static/bg-soe-calm-thumb.jpg?v=d336556e54455275");
     background-image: image-set(url("/static/bg-soe-calm-uhd.jxl?v=47bef0fd5394c899") type("image/jxl"), url("/static/bg-soe-calm-uhd.jpg?v=cf1769378877887f") type("image/jpeg")), url("/static/bg-soe-calm-thumb.jpg?v=d336556e54455275");
+  }
+}
+html:not([data-stars-only])[data-scheme="jove"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-jove.jpg?v=09446f1342e3e9d3"), url("/static/bg-nebula-jove-thumb.jpg?v=5c290e2d8c13e698");
+  background-image: image-set(url("/static/bg-nebula-jove.avif?v=d33b5de2bf837230") type("image/avif"), url("/static/bg-nebula-jove.jpg?v=09446f1342e3e9d3") type("image/jpeg")), url("/static/bg-nebula-jove-thumb.jpg?v=5c290e2d8c13e698");
+}
+html:not([data-stars-only])[data-scheme="jove"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-jove-calm.jpg?v=29ea30c14365be19"), url("/static/bg-nebula-jove-calm-thumb.jpg?v=f1c651a0be4f5667");
+  background-image: image-set(url("/static/bg-nebula-jove-calm.avif?v=4163c4cf0a014d24") type("image/avif"), url("/static/bg-nebula-jove-calm.jpg?v=29ea30c14365be19") type("image/jpeg")), url("/static/bg-nebula-jove-calm-thumb.jpg?v=f1c651a0be4f5667");
+  filter: none;
+}
+html:not([data-stars-only])[data-scheme="caldari"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-caldari.jpg?v=a06fd41ce209ff77"), url("/static/bg-nebula-caldari-thumb.jpg?v=6a29b748bbde512a");
+  background-image: image-set(url("/static/bg-nebula-caldari.avif?v=9eada8fd575cfdac") type("image/avif"), url("/static/bg-nebula-caldari.jpg?v=a06fd41ce209ff77") type("image/jpeg")), url("/static/bg-nebula-caldari-thumb.jpg?v=6a29b748bbde512a");
+}
+html:not([data-stars-only])[data-scheme="caldari"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-caldari-calm.jpg?v=008babaf2a02bdd0"), url("/static/bg-nebula-caldari-calm-thumb.jpg?v=dbf694490d60b883");
+  background-image: image-set(url("/static/bg-nebula-caldari-calm.avif?v=cb58bac9d0cf2c02") type("image/avif"), url("/static/bg-nebula-caldari-calm.jpg?v=008babaf2a02bdd0") type("image/jpeg")), url("/static/bg-nebula-caldari-calm-thumb.jpg?v=dbf694490d60b883");
+  filter: none;
+}
+html:not([data-stars-only])[data-scheme="gallente"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-gallente.jpg?v=de911ed4ffaba3d4"), url("/static/bg-nebula-gallente-thumb.jpg?v=7c90a6fd4381eab4");
+  background-image: image-set(url("/static/bg-nebula-gallente.avif?v=1d551a0dfec488b2") type("image/avif"), url("/static/bg-nebula-gallente.jpg?v=de911ed4ffaba3d4") type("image/jpeg")), url("/static/bg-nebula-gallente-thumb.jpg?v=7c90a6fd4381eab4");
+}
+html:not([data-stars-only])[data-scheme="gallente"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-gallente-calm.jpg?v=f9422f52c1387782"), url("/static/bg-nebula-gallente-calm-thumb.jpg?v=56f8daee13ab504d");
+  background-image: image-set(url("/static/bg-nebula-gallente-calm.avif?v=c02320ea27debc1f") type("image/avif"), url("/static/bg-nebula-gallente-calm.jpg?v=f9422f52c1387782") type("image/jpeg")), url("/static/bg-nebula-gallente-calm-thumb.jpg?v=56f8daee13ab504d");
+  filter: none;
+}
+html:not([data-stars-only])[data-scheme="amarr"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-amarr.jpg?v=986fb7f0bf87007d"), url("/static/bg-nebula-amarr-thumb.jpg?v=51238f83ef5e4707");
+  background-image: image-set(url("/static/bg-nebula-amarr.avif?v=5aa64749913104cd") type("image/avif"), url("/static/bg-nebula-amarr.jpg?v=986fb7f0bf87007d") type("image/jpeg")), url("/static/bg-nebula-amarr-thumb.jpg?v=51238f83ef5e4707");
+}
+html:not([data-stars-only])[data-scheme="amarr"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-amarr-calm.jpg?v=5ea650975975fa95"), url("/static/bg-nebula-amarr-calm-thumb.jpg?v=30119403e22a72a1");
+  background-image: image-set(url("/static/bg-nebula-amarr-calm.avif?v=c97f5405258031ec") type("image/avif"), url("/static/bg-nebula-amarr-calm.jpg?v=5ea650975975fa95") type("image/jpeg")), url("/static/bg-nebula-amarr-calm-thumb.jpg?v=30119403e22a72a1");
+  filter: none;
+}
+html:not([data-stars-only])[data-scheme="triglavian"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-triglavian.jpg?v=fb2d566d4e319ea8"), url("/static/bg-nebula-triglavian-thumb.jpg?v=46ff951176460189");
+  background-image: image-set(url("/static/bg-nebula-triglavian.avif?v=a26f298b6bc5bcc4") type("image/avif"), url("/static/bg-nebula-triglavian.jpg?v=fb2d566d4e319ea8") type("image/jpeg")), url("/static/bg-nebula-triglavian-thumb.jpg?v=46ff951176460189");
+}
+html:not([data-stars-only])[data-scheme="triglavian"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-triglavian-calm.jpg?v=7751e89b963ae47e"), url("/static/bg-nebula-triglavian-calm-thumb.jpg?v=9be0dd60d62e383f");
+  background-image: image-set(url("/static/bg-nebula-triglavian-calm.avif?v=7332e102a4273610") type("image/avif"), url("/static/bg-nebula-triglavian-calm.jpg?v=7751e89b963ae47e") type("image/jpeg")), url("/static/bg-nebula-triglavian-calm-thumb.jpg?v=9be0dd60d62e383f");
+  filter: none;
+}
+html:not([data-stars-only])[data-scheme="edencom"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-edencom.jpg?v=da6971ee2ee99f44"), url("/static/bg-nebula-edencom-thumb.jpg?v=94231ea821342e61");
+  background-image: image-set(url("/static/bg-nebula-edencom.avif?v=6e2fa98d0042ec22") type("image/avif"), url("/static/bg-nebula-edencom.jpg?v=da6971ee2ee99f44") type("image/jpeg")), url("/static/bg-nebula-edencom-thumb.jpg?v=94231ea821342e61");
+}
+html:not([data-stars-only])[data-scheme="edencom"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-edencom-calm.jpg?v=9b8506850846f87a"), url("/static/bg-nebula-edencom-calm-thumb.jpg?v=27a66dcdf615562b");
+  background-image: image-set(url("/static/bg-nebula-edencom-calm.avif?v=0e0f3934f0f864b2") type("image/avif"), url("/static/bg-nebula-edencom-calm.jpg?v=9b8506850846f87a") type("image/jpeg")), url("/static/bg-nebula-edencom-calm-thumb.jpg?v=27a66dcdf615562b");
+  filter: none;
+}
+html:not([data-stars-only])[data-scheme="soe"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-soe.jpg?v=900bfeda2705dfa4"), url("/static/bg-nebula-soe-thumb.jpg?v=750e8441530dd2d6");
+  background-image: image-set(url("/static/bg-nebula-soe.avif?v=4ea1b2b76437967a") type("image/avif"), url("/static/bg-nebula-soe.jpg?v=900bfeda2705dfa4") type("image/jpeg")), url("/static/bg-nebula-soe-thumb.jpg?v=750e8441530dd2d6");
+}
+html:not([data-stars-only])[data-scheme="soe"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-soe-calm.jpg?v=82395d94c2b94bef"), url("/static/bg-nebula-soe-calm-thumb.jpg?v=97596e1bf4d7a16a");
+  background-image: image-set(url("/static/bg-nebula-soe-calm.avif?v=8ee208b3150fecb8") type("image/avif"), url("/static/bg-nebula-soe-calm.jpg?v=82395d94c2b94bef") type("image/jpeg")), url("/static/bg-nebula-soe-calm-thumb.jpg?v=97596e1bf4d7a16a");
+  filter: none;
+}
+html:not([data-stars-only])[data-scheme="minmatar"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-minmatar.jpg?v=173c26b5bb4af7ef"), url("/static/bg-nebula-minmatar-thumb.jpg?v=4f36f91178d07dec");
+  background-image: image-set(url("/static/bg-nebula-minmatar.avif?v=26c7ed873da9005d") type("image/avif"), url("/static/bg-nebula-minmatar.jpg?v=173c26b5bb4af7ef") type("image/jpeg")), url("/static/bg-nebula-minmatar-thumb.jpg?v=4f36f91178d07dec");
+}
+html:not([data-stars-only])[data-scheme="minmatar"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+  background-image: url("/static/bg-nebula-minmatar-calm.jpg?v=2727aed41f715737"), url("/static/bg-nebula-minmatar-calm-thumb.jpg?v=9584e31f8c2778c1");
+  background-image: image-set(url("/static/bg-nebula-minmatar-calm.avif?v=be4119e918803f8e") type("image/avif"), url("/static/bg-nebula-minmatar-calm.jpg?v=2727aed41f715737") type("image/jpeg")), url("/static/bg-nebula-minmatar-calm-thumb.jpg?v=9584e31f8c2778c1");
+  filter: none;
+}
+@media (min-width: 2001px), (min-width: 1001px) and (min-resolution: 2dppx), (min-width: 1001px) and (-webkit-min-device-pixel-ratio: 2) {
+  html:not([data-stars-only])[data-scheme="jove"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-jove-4k.jpg?v=b2a04a718853c412"), url("/static/bg-nebula-jove-thumb.jpg?v=5c290e2d8c13e698");
+    background-image: image-set(url("/static/bg-nebula-jove-4k.avif?v=a44a1d548d2c8303") type("image/avif"), url("/static/bg-nebula-jove-4k.jpg?v=b2a04a718853c412") type("image/jpeg")), url("/static/bg-nebula-jove-thumb.jpg?v=5c290e2d8c13e698");
+  }
+  html:not([data-stars-only])[data-scheme="jove"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-jove-calm-4k.jpg?v=46a96060b4e50573"), url("/static/bg-nebula-jove-calm-thumb.jpg?v=f1c651a0be4f5667");
+    background-image: image-set(url("/static/bg-nebula-jove-calm-4k.avif?v=547d69f269874d66") type("image/avif"), url("/static/bg-nebula-jove-calm-4k.jpg?v=46a96060b4e50573") type("image/jpeg")), url("/static/bg-nebula-jove-calm-thumb.jpg?v=f1c651a0be4f5667");
+  }
+  html:not([data-stars-only])[data-scheme="caldari"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-caldari-4k.jpg?v=e1b27db479cbc17f"), url("/static/bg-nebula-caldari-thumb.jpg?v=6a29b748bbde512a");
+    background-image: image-set(url("/static/bg-nebula-caldari-4k.avif?v=7594768a2a1a2084") type("image/avif"), url("/static/bg-nebula-caldari-4k.jpg?v=e1b27db479cbc17f") type("image/jpeg")), url("/static/bg-nebula-caldari-thumb.jpg?v=6a29b748bbde512a");
+  }
+  html:not([data-stars-only])[data-scheme="caldari"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-caldari-calm-4k.jpg?v=2dbe82f2da2658e4"), url("/static/bg-nebula-caldari-calm-thumb.jpg?v=dbf694490d60b883");
+    background-image: image-set(url("/static/bg-nebula-caldari-calm-4k.avif?v=957657085af89b32") type("image/avif"), url("/static/bg-nebula-caldari-calm-4k.jpg?v=2dbe82f2da2658e4") type("image/jpeg")), url("/static/bg-nebula-caldari-calm-thumb.jpg?v=dbf694490d60b883");
+  }
+  html:not([data-stars-only])[data-scheme="gallente"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-gallente-4k.jpg?v=17fb9ad121e491ab"), url("/static/bg-nebula-gallente-thumb.jpg?v=7c90a6fd4381eab4");
+    background-image: image-set(url("/static/bg-nebula-gallente-4k.avif?v=8f421b583da7b7f0") type("image/avif"), url("/static/bg-nebula-gallente-4k.jpg?v=17fb9ad121e491ab") type("image/jpeg")), url("/static/bg-nebula-gallente-thumb.jpg?v=7c90a6fd4381eab4");
+  }
+  html:not([data-stars-only])[data-scheme="gallente"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-gallente-calm-4k.jpg?v=612d3365a140a358"), url("/static/bg-nebula-gallente-calm-thumb.jpg?v=56f8daee13ab504d");
+    background-image: image-set(url("/static/bg-nebula-gallente-calm-4k.avif?v=059ba5675e3598dd") type("image/avif"), url("/static/bg-nebula-gallente-calm-4k.jpg?v=612d3365a140a358") type("image/jpeg")), url("/static/bg-nebula-gallente-calm-thumb.jpg?v=56f8daee13ab504d");
+  }
+  html:not([data-stars-only])[data-scheme="amarr"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-amarr-4k.jpg?v=2544086e43204e6b"), url("/static/bg-nebula-amarr-thumb.jpg?v=51238f83ef5e4707");
+    background-image: image-set(url("/static/bg-nebula-amarr-4k.avif?v=09563325f44afc64") type("image/avif"), url("/static/bg-nebula-amarr-4k.jpg?v=2544086e43204e6b") type("image/jpeg")), url("/static/bg-nebula-amarr-thumb.jpg?v=51238f83ef5e4707");
+  }
+  html:not([data-stars-only])[data-scheme="amarr"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-amarr-calm-4k.jpg?v=a74d14c4b35d8893"), url("/static/bg-nebula-amarr-calm-thumb.jpg?v=30119403e22a72a1");
+    background-image: image-set(url("/static/bg-nebula-amarr-calm-4k.avif?v=86f06ade13bf5f2e") type("image/avif"), url("/static/bg-nebula-amarr-calm-4k.jpg?v=a74d14c4b35d8893") type("image/jpeg")), url("/static/bg-nebula-amarr-calm-thumb.jpg?v=30119403e22a72a1");
+  }
+  html:not([data-stars-only])[data-scheme="triglavian"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-triglavian-4k.jpg?v=e810877543501118"), url("/static/bg-nebula-triglavian-thumb.jpg?v=46ff951176460189");
+    background-image: image-set(url("/static/bg-nebula-triglavian-4k.avif?v=c0a2606f9ce83997") type("image/avif"), url("/static/bg-nebula-triglavian-4k.jpg?v=e810877543501118") type("image/jpeg")), url("/static/bg-nebula-triglavian-thumb.jpg?v=46ff951176460189");
+  }
+  html:not([data-stars-only])[data-scheme="triglavian"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-triglavian-calm-4k.jpg?v=6b6550cbfa0a2f18"), url("/static/bg-nebula-triglavian-calm-thumb.jpg?v=9be0dd60d62e383f");
+    background-image: image-set(url("/static/bg-nebula-triglavian-calm-4k.avif?v=7326eb9dbeb9a5c2") type("image/avif"), url("/static/bg-nebula-triglavian-calm-4k.jpg?v=6b6550cbfa0a2f18") type("image/jpeg")), url("/static/bg-nebula-triglavian-calm-thumb.jpg?v=9be0dd60d62e383f");
+  }
+  html:not([data-stars-only])[data-scheme="edencom"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-edencom-4k.jpg?v=915669fb1b99cc14"), url("/static/bg-nebula-edencom-thumb.jpg?v=94231ea821342e61");
+    background-image: image-set(url("/static/bg-nebula-edencom-4k.avif?v=80638ff3e642cd32") type("image/avif"), url("/static/bg-nebula-edencom-4k.jpg?v=915669fb1b99cc14") type("image/jpeg")), url("/static/bg-nebula-edencom-thumb.jpg?v=94231ea821342e61");
+  }
+  html:not([data-stars-only])[data-scheme="edencom"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-edencom-calm-4k.jpg?v=14f72c63c3244e42"), url("/static/bg-nebula-edencom-calm-thumb.jpg?v=27a66dcdf615562b");
+    background-image: image-set(url("/static/bg-nebula-edencom-calm-4k.avif?v=1fad643642ccec96") type("image/avif"), url("/static/bg-nebula-edencom-calm-4k.jpg?v=14f72c63c3244e42") type("image/jpeg")), url("/static/bg-nebula-edencom-calm-thumb.jpg?v=27a66dcdf615562b");
+  }
+  html:not([data-stars-only])[data-scheme="soe"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-soe-4k.jpg?v=2b24f1e79b0862bc"), url("/static/bg-nebula-soe-thumb.jpg?v=750e8441530dd2d6");
+    background-image: image-set(url("/static/bg-nebula-soe-4k.avif?v=0f6930d187f7ea3f") type("image/avif"), url("/static/bg-nebula-soe-4k.jpg?v=2b24f1e79b0862bc") type("image/jpeg")), url("/static/bg-nebula-soe-thumb.jpg?v=750e8441530dd2d6");
+  }
+  html:not([data-stars-only])[data-scheme="soe"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-soe-calm-4k.jpg?v=f81d9d81f0969d86"), url("/static/bg-nebula-soe-calm-thumb.jpg?v=97596e1bf4d7a16a");
+    background-image: image-set(url("/static/bg-nebula-soe-calm-4k.avif?v=a23cb20a0e4d57de") type("image/avif"), url("/static/bg-nebula-soe-calm-4k.jpg?v=f81d9d81f0969d86") type("image/jpeg")), url("/static/bg-nebula-soe-calm-thumb.jpg?v=97596e1bf4d7a16a");
+  }
+  html:not([data-stars-only])[data-scheme="minmatar"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-minmatar-4k.jpg?v=92d2a7de1be7a032"), url("/static/bg-nebula-minmatar-thumb.jpg?v=4f36f91178d07dec");
+    background-image: image-set(url("/static/bg-nebula-minmatar-4k.avif?v=8fc48f9dd3cf6150") type("image/avif"), url("/static/bg-nebula-minmatar-4k.jpg?v=92d2a7de1be7a032") type("image/jpeg")), url("/static/bg-nebula-minmatar-thumb.jpg?v=4f36f91178d07dec");
+  }
+  html:not([data-stars-only])[data-scheme="minmatar"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-minmatar-calm-4k.jpg?v=078988ce68b8b6a7"), url("/static/bg-nebula-minmatar-calm-thumb.jpg?v=9584e31f8c2778c1");
+    background-image: image-set(url("/static/bg-nebula-minmatar-calm-4k.avif?v=1a45f4899a2972f7") type("image/avif"), url("/static/bg-nebula-minmatar-calm-4k.jpg?v=078988ce68b8b6a7") type("image/jpeg")), url("/static/bg-nebula-minmatar-calm-thumb.jpg?v=9584e31f8c2778c1");
+  }
+}
+@media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
+  html:not([data-stars-only])[data-scheme="jove"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-jove-uhd.jpg?v=efb8cad9fe2a63ec"), url("/static/bg-nebula-jove-thumb.jpg?v=5c290e2d8c13e698");
+    background-image: image-set(url("/static/bg-nebula-jove-uhd.avif?v=fc1b50d2c29ca1e1") type("image/avif"), url("/static/bg-nebula-jove-uhd.jpg?v=efb8cad9fe2a63ec") type("image/jpeg")), url("/static/bg-nebula-jove-thumb.jpg?v=5c290e2d8c13e698");
+  }
+  html:not([data-stars-only])[data-scheme="jove"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-jove-calm-uhd.jpg?v=ca96fb521784be95"), url("/static/bg-nebula-jove-calm-thumb.jpg?v=f1c651a0be4f5667");
+    background-image: image-set(url("/static/bg-nebula-jove-calm-uhd.avif?v=816a19ac3d75151f") type("image/avif"), url("/static/bg-nebula-jove-calm-uhd.jpg?v=ca96fb521784be95") type("image/jpeg")), url("/static/bg-nebula-jove-calm-thumb.jpg?v=f1c651a0be4f5667");
+  }
+  html:not([data-stars-only])[data-scheme="caldari"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-caldari-uhd.jpg?v=87abf273d1581717"), url("/static/bg-nebula-caldari-thumb.jpg?v=6a29b748bbde512a");
+    background-image: image-set(url("/static/bg-nebula-caldari-uhd.avif?v=cfa062eb1dec3e5e") type("image/avif"), url("/static/bg-nebula-caldari-uhd.jpg?v=87abf273d1581717") type("image/jpeg")), url("/static/bg-nebula-caldari-thumb.jpg?v=6a29b748bbde512a");
+  }
+  html:not([data-stars-only])[data-scheme="caldari"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-caldari-calm-uhd.jpg?v=7c890150fa59044f"), url("/static/bg-nebula-caldari-calm-thumb.jpg?v=dbf694490d60b883");
+    background-image: image-set(url("/static/bg-nebula-caldari-calm-uhd.avif?v=e52b7a30b2c06733") type("image/avif"), url("/static/bg-nebula-caldari-calm-uhd.jpg?v=7c890150fa59044f") type("image/jpeg")), url("/static/bg-nebula-caldari-calm-thumb.jpg?v=dbf694490d60b883");
+  }
+  html:not([data-stars-only])[data-scheme="gallente"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-gallente-uhd.jpg?v=641e732a0f00b31b"), url("/static/bg-nebula-gallente-thumb.jpg?v=7c90a6fd4381eab4");
+    background-image: image-set(url("/static/bg-nebula-gallente-uhd.avif?v=64adfa58126d63e1") type("image/avif"), url("/static/bg-nebula-gallente-uhd.jpg?v=641e732a0f00b31b") type("image/jpeg")), url("/static/bg-nebula-gallente-thumb.jpg?v=7c90a6fd4381eab4");
+  }
+  html:not([data-stars-only])[data-scheme="gallente"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-gallente-calm-uhd.jpg?v=3377c9b713a84d4b"), url("/static/bg-nebula-gallente-calm-thumb.jpg?v=56f8daee13ab504d");
+    background-image: image-set(url("/static/bg-nebula-gallente-calm-uhd.avif?v=248062cf451cb1e3") type("image/avif"), url("/static/bg-nebula-gallente-calm-uhd.jpg?v=3377c9b713a84d4b") type("image/jpeg")), url("/static/bg-nebula-gallente-calm-thumb.jpg?v=56f8daee13ab504d");
+  }
+  html:not([data-stars-only])[data-scheme="amarr"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-amarr-uhd.jpg?v=a4bf4edc4192c0ae"), url("/static/bg-nebula-amarr-thumb.jpg?v=51238f83ef5e4707");
+    background-image: image-set(url("/static/bg-nebula-amarr-uhd.avif?v=0870d8c7147e8cd6") type("image/avif"), url("/static/bg-nebula-amarr-uhd.jpg?v=a4bf4edc4192c0ae") type("image/jpeg")), url("/static/bg-nebula-amarr-thumb.jpg?v=51238f83ef5e4707");
+  }
+  html:not([data-stars-only])[data-scheme="amarr"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-amarr-calm-uhd.jpg?v=08c96de1eca5a2db"), url("/static/bg-nebula-amarr-calm-thumb.jpg?v=30119403e22a72a1");
+    background-image: image-set(url("/static/bg-nebula-amarr-calm-uhd.avif?v=54505e6a56f2f74c") type("image/avif"), url("/static/bg-nebula-amarr-calm-uhd.jpg?v=08c96de1eca5a2db") type("image/jpeg")), url("/static/bg-nebula-amarr-calm-thumb.jpg?v=30119403e22a72a1");
+  }
+  html:not([data-stars-only])[data-scheme="triglavian"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-triglavian-uhd.jpg?v=4b381bbd976f0cda"), url("/static/bg-nebula-triglavian-thumb.jpg?v=46ff951176460189");
+    background-image: image-set(url("/static/bg-nebula-triglavian-uhd.avif?v=6e92980dc37358dd") type("image/avif"), url("/static/bg-nebula-triglavian-uhd.jpg?v=4b381bbd976f0cda") type("image/jpeg")), url("/static/bg-nebula-triglavian-thumb.jpg?v=46ff951176460189");
+  }
+  html:not([data-stars-only])[data-scheme="triglavian"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-triglavian-calm-uhd.jpg?v=1744d75f583fc6dd"), url("/static/bg-nebula-triglavian-calm-thumb.jpg?v=9be0dd60d62e383f");
+    background-image: image-set(url("/static/bg-nebula-triglavian-calm-uhd.avif?v=c8ab0d20aea3778a") type("image/avif"), url("/static/bg-nebula-triglavian-calm-uhd.jpg?v=1744d75f583fc6dd") type("image/jpeg")), url("/static/bg-nebula-triglavian-calm-thumb.jpg?v=9be0dd60d62e383f");
+  }
+  html:not([data-stars-only])[data-scheme="edencom"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-edencom-uhd.jpg?v=31fe5d7abefcf385"), url("/static/bg-nebula-edencom-thumb.jpg?v=94231ea821342e61");
+    background-image: image-set(url("/static/bg-nebula-edencom-uhd.avif?v=3b1c047e08de4ffa") type("image/avif"), url("/static/bg-nebula-edencom-uhd.jpg?v=31fe5d7abefcf385") type("image/jpeg")), url("/static/bg-nebula-edencom-thumb.jpg?v=94231ea821342e61");
+  }
+  html:not([data-stars-only])[data-scheme="edencom"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-edencom-calm-uhd.jpg?v=a585fddf6eea4abe"), url("/static/bg-nebula-edencom-calm-thumb.jpg?v=27a66dcdf615562b");
+    background-image: image-set(url("/static/bg-nebula-edencom-calm-uhd.avif?v=c52534d1070d21bf") type("image/avif"), url("/static/bg-nebula-edencom-calm-uhd.jpg?v=a585fddf6eea4abe") type("image/jpeg")), url("/static/bg-nebula-edencom-calm-thumb.jpg?v=27a66dcdf615562b");
+  }
+  html:not([data-stars-only])[data-scheme="soe"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-soe-uhd.jpg?v=0a6fd8862f40cc30"), url("/static/bg-nebula-soe-thumb.jpg?v=750e8441530dd2d6");
+    background-image: image-set(url("/static/bg-nebula-soe-uhd.avif?v=0c23c3d04761812a") type("image/avif"), url("/static/bg-nebula-soe-uhd.jpg?v=0a6fd8862f40cc30") type("image/jpeg")), url("/static/bg-nebula-soe-thumb.jpg?v=750e8441530dd2d6");
+  }
+  html:not([data-stars-only])[data-scheme="soe"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-soe-calm-uhd.jpg?v=78b206caca411a78"), url("/static/bg-nebula-soe-calm-thumb.jpg?v=97596e1bf4d7a16a");
+    background-image: image-set(url("/static/bg-nebula-soe-calm-uhd.avif?v=2469f58add7c5556") type("image/avif"), url("/static/bg-nebula-soe-calm-uhd.jpg?v=78b206caca411a78") type("image/jpeg")), url("/static/bg-nebula-soe-calm-thumb.jpg?v=97596e1bf4d7a16a");
+  }
+  html:not([data-stars-only])[data-scheme="minmatar"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-minmatar-uhd.jpg?v=ffbf3a7b5b0a640d"), url("/static/bg-nebula-minmatar-thumb.jpg?v=4f36f91178d07dec");
+    background-image: image-set(url("/static/bg-nebula-minmatar-uhd.avif?v=9f9a0d23cbb2b2b0") type("image/avif"), url("/static/bg-nebula-minmatar-uhd.jpg?v=ffbf3a7b5b0a640d") type("image/jpeg")), url("/static/bg-nebula-minmatar-thumb.jpg?v=4f36f91178d07dec");
+  }
+  html:not([data-stars-only])[data-scheme="minmatar"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-minmatar-calm-uhd.jpg?v=1b248f5d033e67f2"), url("/static/bg-nebula-minmatar-calm-thumb.jpg?v=9584e31f8c2778c1");
+    background-image: image-set(url("/static/bg-nebula-minmatar-calm-uhd.avif?v=b15a061907799cfb") type("image/avif"), url("/static/bg-nebula-minmatar-calm-uhd.jpg?v=1b248f5d033e67f2") type("image/jpeg")), url("/static/bg-nebula-minmatar-calm-thumb.jpg?v=9584e31f8c2778c1");
+  }
+}
+@media (orientation: portrait) and (max-width: 900px) {
+  html:not([data-stars-only])[data-scheme="jove"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-jove-mobile.jpg?v=166fb314bc8b1c3b"), url("/static/bg-nebula-jove-thumb.jpg?v=5c290e2d8c13e698");
+    background-image: image-set(url("/static/bg-nebula-jove-mobile.avif?v=62f1afb54f97b86e") type("image/avif"), url("/static/bg-nebula-jove-mobile.jpg?v=166fb314bc8b1c3b") type("image/jpeg")), url("/static/bg-nebula-jove-thumb.jpg?v=5c290e2d8c13e698");
+  }
+  html:not([data-stars-only])[data-scheme="jove"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-jove-calm-mobile.jpg?v=62483825c8fd8dc2"), url("/static/bg-nebula-jove-calm-thumb.jpg?v=f1c651a0be4f5667");
+    background-image: image-set(url("/static/bg-nebula-jove-calm-mobile.avif?v=4e812c6c86779144") type("image/avif"), url("/static/bg-nebula-jove-calm-mobile.jpg?v=62483825c8fd8dc2") type("image/jpeg")), url("/static/bg-nebula-jove-calm-thumb.jpg?v=f1c651a0be4f5667");
+  }
+  html:not([data-stars-only])[data-scheme="caldari"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-caldari-mobile.jpg?v=0ebff6dec1472c21"), url("/static/bg-nebula-caldari-thumb.jpg?v=6a29b748bbde512a");
+    background-image: image-set(url("/static/bg-nebula-caldari-mobile.avif?v=9585626a253e7ae9") type("image/avif"), url("/static/bg-nebula-caldari-mobile.jpg?v=0ebff6dec1472c21") type("image/jpeg")), url("/static/bg-nebula-caldari-thumb.jpg?v=6a29b748bbde512a");
+  }
+  html:not([data-stars-only])[data-scheme="caldari"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-caldari-calm-mobile.jpg?v=6ddaa5c67d7f5913"), url("/static/bg-nebula-caldari-calm-thumb.jpg?v=dbf694490d60b883");
+    background-image: image-set(url("/static/bg-nebula-caldari-calm-mobile.avif?v=07f0953bd8e0f69c") type("image/avif"), url("/static/bg-nebula-caldari-calm-mobile.jpg?v=6ddaa5c67d7f5913") type("image/jpeg")), url("/static/bg-nebula-caldari-calm-thumb.jpg?v=dbf694490d60b883");
+  }
+  html:not([data-stars-only])[data-scheme="gallente"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-gallente-mobile.jpg?v=40b5a5ceebdd81d8"), url("/static/bg-nebula-gallente-thumb.jpg?v=7c90a6fd4381eab4");
+    background-image: image-set(url("/static/bg-nebula-gallente-mobile.avif?v=54125c607c8c4f83") type("image/avif"), url("/static/bg-nebula-gallente-mobile.jpg?v=40b5a5ceebdd81d8") type("image/jpeg")), url("/static/bg-nebula-gallente-thumb.jpg?v=7c90a6fd4381eab4");
+  }
+  html:not([data-stars-only])[data-scheme="gallente"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-gallente-calm-mobile.jpg?v=435004ca281e9fe0"), url("/static/bg-nebula-gallente-calm-thumb.jpg?v=56f8daee13ab504d");
+    background-image: image-set(url("/static/bg-nebula-gallente-calm-mobile.avif?v=8c2eaeab764dddef") type("image/avif"), url("/static/bg-nebula-gallente-calm-mobile.jpg?v=435004ca281e9fe0") type("image/jpeg")), url("/static/bg-nebula-gallente-calm-thumb.jpg?v=56f8daee13ab504d");
+  }
+  html:not([data-stars-only])[data-scheme="amarr"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-amarr-mobile.jpg?v=ee9599091db586d0"), url("/static/bg-nebula-amarr-thumb.jpg?v=51238f83ef5e4707");
+    background-image: image-set(url("/static/bg-nebula-amarr-mobile.avif?v=dde34da8e1646713") type("image/avif"), url("/static/bg-nebula-amarr-mobile.jpg?v=ee9599091db586d0") type("image/jpeg")), url("/static/bg-nebula-amarr-thumb.jpg?v=51238f83ef5e4707");
+  }
+  html:not([data-stars-only])[data-scheme="amarr"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-amarr-calm-mobile.jpg?v=12e5616818f77f97"), url("/static/bg-nebula-amarr-calm-thumb.jpg?v=30119403e22a72a1");
+    background-image: image-set(url("/static/bg-nebula-amarr-calm-mobile.avif?v=376bb0d32601bc3e") type("image/avif"), url("/static/bg-nebula-amarr-calm-mobile.jpg?v=12e5616818f77f97") type("image/jpeg")), url("/static/bg-nebula-amarr-calm-thumb.jpg?v=30119403e22a72a1");
+  }
+  html:not([data-stars-only])[data-scheme="triglavian"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-triglavian-mobile.jpg?v=47eed3a6529f074c"), url("/static/bg-nebula-triglavian-thumb.jpg?v=46ff951176460189");
+    background-image: image-set(url("/static/bg-nebula-triglavian-mobile.avif?v=ed766efd7467f2dd") type("image/avif"), url("/static/bg-nebula-triglavian-mobile.jpg?v=47eed3a6529f074c") type("image/jpeg")), url("/static/bg-nebula-triglavian-thumb.jpg?v=46ff951176460189");
+  }
+  html:not([data-stars-only])[data-scheme="triglavian"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-triglavian-calm-mobile.jpg?v=f0ff43b7e9d8a341"), url("/static/bg-nebula-triglavian-calm-thumb.jpg?v=9be0dd60d62e383f");
+    background-image: image-set(url("/static/bg-nebula-triglavian-calm-mobile.avif?v=2d3b8274ddda3409") type("image/avif"), url("/static/bg-nebula-triglavian-calm-mobile.jpg?v=f0ff43b7e9d8a341") type("image/jpeg")), url("/static/bg-nebula-triglavian-calm-thumb.jpg?v=9be0dd60d62e383f");
+  }
+  html:not([data-stars-only])[data-scheme="edencom"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-edencom-mobile.jpg?v=7097fb19e66a216f"), url("/static/bg-nebula-edencom-thumb.jpg?v=94231ea821342e61");
+    background-image: image-set(url("/static/bg-nebula-edencom-mobile.avif?v=c828231488ec2085") type("image/avif"), url("/static/bg-nebula-edencom-mobile.jpg?v=7097fb19e66a216f") type("image/jpeg")), url("/static/bg-nebula-edencom-thumb.jpg?v=94231ea821342e61");
+  }
+  html:not([data-stars-only])[data-scheme="edencom"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-edencom-calm-mobile.jpg?v=3f932e64d55e03e8"), url("/static/bg-nebula-edencom-calm-thumb.jpg?v=27a66dcdf615562b");
+    background-image: image-set(url("/static/bg-nebula-edencom-calm-mobile.avif?v=4a52b4e0b22588ae") type("image/avif"), url("/static/bg-nebula-edencom-calm-mobile.jpg?v=3f932e64d55e03e8") type("image/jpeg")), url("/static/bg-nebula-edencom-calm-thumb.jpg?v=27a66dcdf615562b");
+  }
+  html:not([data-stars-only])[data-scheme="soe"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-soe-mobile.jpg?v=03c56f527f304ebc"), url("/static/bg-nebula-soe-thumb.jpg?v=750e8441530dd2d6");
+    background-image: image-set(url("/static/bg-nebula-soe-mobile.avif?v=4cbef11c958862ff") type("image/avif"), url("/static/bg-nebula-soe-mobile.jpg?v=03c56f527f304ebc") type("image/jpeg")), url("/static/bg-nebula-soe-thumb.jpg?v=750e8441530dd2d6");
+  }
+  html:not([data-stars-only])[data-scheme="soe"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-soe-calm-mobile.jpg?v=fd08d69e23e1da0f"), url("/static/bg-nebula-soe-calm-thumb.jpg?v=97596e1bf4d7a16a");
+    background-image: image-set(url("/static/bg-nebula-soe-calm-mobile.avif?v=c17a7d34d1f58ad3") type("image/avif"), url("/static/bg-nebula-soe-calm-mobile.jpg?v=fd08d69e23e1da0f") type("image/jpeg")), url("/static/bg-nebula-soe-calm-thumb.jpg?v=97596e1bf4d7a16a");
+  }
+  html:not([data-stars-only])[data-scheme="minmatar"][data-tier="full"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-minmatar-mobile.jpg?v=96bb31d192ad1b96"), url("/static/bg-nebula-minmatar-thumb.jpg?v=4f36f91178d07dec");
+    background-image: image-set(url("/static/bg-nebula-minmatar-mobile.avif?v=85cd117d809d89f5") type("image/avif"), url("/static/bg-nebula-minmatar-mobile.jpg?v=96bb31d192ad1b96") type("image/jpeg")), url("/static/bg-nebula-minmatar-thumb.jpg?v=4f36f91178d07dec");
+  }
+  html:not([data-stars-only])[data-scheme="minmatar"][data-tier="muted"] body:where(:has(.page-body):not(:has([data-home-page])))::before {
+    background-image: url("/static/bg-nebula-minmatar-calm-mobile.jpg?v=9490e71544cf4707"), url("/static/bg-nebula-minmatar-calm-thumb.jpg?v=9584e31f8c2778c1");
+    background-image: image-set(url("/static/bg-nebula-minmatar-calm-mobile.avif?v=da87f0e28c8bd67b") type("image/avif"), url("/static/bg-nebula-minmatar-calm-mobile.jpg?v=9490e71544cf4707") type("image/jpeg")), url("/static/bg-nebula-minmatar-calm-thumb.jpg?v=9584e31f8c2778c1");
   }
 }

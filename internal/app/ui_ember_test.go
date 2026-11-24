@@ -32,9 +32,9 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		"color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent)",
 		"animation: sev-pulse 3.2s ease-in-out infinite;",
 		"--panel: #151312;",
-		"--r-lg: 0.5rem;",
-		"--r-md: 0.5rem;",
-		"--r-sm: 0.5rem;",
+		"--r-lg: 0.35rem;",
+		"--r-md: 0.35rem;",
+		"--r-sm: 0.35rem;",
 		"grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));",
 		"--row: rgba(16, 13, 10, 0.55)",
 		"--row-alt: rgba(255, 255, 255, 0.03)",
@@ -97,7 +97,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	// over the warm black ground. The default state is the
 	// unmodified art, no rule at all.
 	for _, want := range []string{
-		`html[data-backdrop="muted"] body::before,`,
+		`html:not([data-stars-only])[data-backdrop="muted"] body::before,`,
 		`background-image: url("/static/bg-calm-muted.jpg?v=d056adc1ec88a9fa"), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");`,
 		`html[data-backdrop="glow"] body::before {`,
 		"radial-gradient(ellipse 95vw 58vh at 100% 0%, rgba(234, 88, 12, 0.32) 0%, rgba(180, 65, 10, 0.13) 52%, rgba(11, 8, 6, 0) 100%)",
@@ -258,7 +258,17 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 	}
 	// The decoded thumbnails must be in the embedded assets (the
 	// Makefile decodes them from ci-assets like every other tier).
-	for _, name := range []string{"static/bg-thumb.jpg", "static/bg-calm-thumb.jpg", "static/bg-calm-uhd.jxl"} {
+	for _, name := range []string{
+		"static/bg-thumb.jpg",
+		"static/bg-calm-thumb.jpg",
+		"static/bg-calm-uhd.jxl",
+		"static/bg-nebula-thumb.jpg",
+		"static/bg-nebula-mobile.avif",
+		"static/bg-nebula-uhd.avif",
+		"static/stars-minimal.avif",
+		"static/stars-minimal-2x.avif",
+		"static/stars-minimal.webp",
+	} {
 		if _, err := fs.Stat(staticFS, name); err != nil {
 			t.Errorf("%s is not embedded: %v", name, err)
 		}

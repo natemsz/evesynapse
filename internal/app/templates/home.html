@@ -25,14 +25,16 @@
 
 {{if .Home}}
 {{if .Home.LoadFailed}}
-<p>Your characters couldn't be loaded. Try again shortly.</p>
+<div data-home-page><p>Your characters couldn't be loaded. Try again shortly.</p></div>
 {{else if not .Home.HasChars}}
+<div data-home-page>
 <p>No characters are linked to this account yet. Every character you sign in with shows up here. Link one to start.</p>
 <p><a class="btn" href="/auth/link">Link your first character</a></p>
+</div>
 {{else}}
 {{if .Home.Customize}}{{if not .Home.Widgets}}<p><small>Your home is empty. Add a module from the Customize menu.</small></p>{{end}}{{end}}
 
-<div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
+<div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}" data-home-page{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
 {{if eq .ID "glance"}}
 <section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}

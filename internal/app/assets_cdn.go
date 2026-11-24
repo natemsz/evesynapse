@@ -40,6 +40,12 @@ func assetsBase() string {
 
 func setAssetsBase(base string) { assetsBaseValue.Store(base) }
 
+// SetDevAssetsBase overrides the CDN base path for the dev server
+// (internal/devtools). Production entrypoints never call it.
+func SetDevAssetsBase(base string) {
+	setAssetsBase(strings.TrimRight(strings.TrimSpace(base), "/"))
+}
+
 // fullWallpapers reports whether the Full wallpaper option is offered.
 func fullWallpapers() bool { return assetsBase() != "" }
 
@@ -70,7 +76,7 @@ func parseAssetsPath(raw string) string {
 func assetsOrigin() string {
 	base := assetsBase()
 	u, err := url.Parse(base)
-	if base == "" || err != nil {
+	if base == "" || err != nil || u.Scheme == "" || u.Host == "" {
 		return ""
 	}
 	return u.Scheme + "://" + u.Host

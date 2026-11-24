@@ -38,7 +38,18 @@ func TestAssetsCDNControlsWallpapers(t *testing.T) {
 		t.Fatal("no CDN stylesheet")
 	}
 	css := string(sheet)
-	for _, want := range []string{"https://cdn.example.com/static/bg-calm-uhd.jpg", "https://cdn.example.com/static/bg-jove-uhd.jpg", "min-width:3201px", assetsOnScope} {
+	for _, want := range []string{
+		"https://cdn.example.com/static/bg-calm-uhd.jpg",
+		"https://cdn.example.com/static/bg-jove-uhd.jpg",
+		"https://cdn.example.com/static/bg-nebula-uhd.avif",
+		"https://cdn.example.com/static/bg-nebula-jove-uhd.avif",
+		"https://cdn.example.com/static/bg-nebula-caldari-mobile.avif",
+		"min-width:3201px",
+		assetsOnScope,
+		`:not([data-stars-only])`,
+		`:not([data-backdrop=glow])`,
+		`:not([data-tier=minimalistic])`,
+	} {
 		if !strings.Contains(css, want) {
 			t.Errorf("the CDN stylesheet lacks %q", want)
 		}

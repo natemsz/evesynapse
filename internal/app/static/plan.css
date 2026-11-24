@@ -136,7 +136,7 @@ skills as a list for the skillbook. */
   min-width: 16rem;
   max-width: 24rem;
   padding: 0.55rem 0.75rem;
-  border-radius: 0.4rem;
+  border-radius: var(--r-sm);
   background: rgba(20, 16, 12, 0.97);
   border: 1px solid rgba(255, 210, 122, 0.35);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);

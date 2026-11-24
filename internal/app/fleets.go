@@ -977,7 +977,7 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 		view.Running = fleetRunningText(now.Sub(op.StartsAt))
 	}
 	if live.sight.In {
-		view.LiveView = app.fleetLiveFor(ctx, op, v, a, live, 1, now)
+		view.LiveView = app.fleetLiveFor(ctx, op, v, a, live, fleetListQuery{}, now)
 		for _, m := range live.comp.Members {
 			if live.sight.own[m.ID] {
 				seat := m.Name + ", " + strings.ToLower(m.PositionText())

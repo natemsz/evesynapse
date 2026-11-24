@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"sort"
 	"strconv"
@@ -575,6 +576,24 @@ type fleetLiveView struct {
 	// command, then each wing and its squads, with ships shown as the
 	// viewer's rank allows.
 	Structure []fleetUnitView
+	// The pilots panel (fleet_pilot_list.go): the view shown (list,
+	// structure or table) and the links to each, whether the fleet is
+	// flat, and for the list its groupings, class and hull chips, groups
+	// and how many pilots the chips keep. ListQuery carries the reader's
+	// choice through a saved edit.
+	Mode      string
+	Modes     []fleetChip
+	Flat      bool
+	Groupings []fleetChip
+	Classes   []fleetChip
+	Ships     []fleetChip
+	List      []fleetListGroup
+	ListShown int
+	ListQuery string
+	// Summary is the Overview's line per ship class for a flat fleet.
+	Summary  []fleetListGroup
+	listKept []fleetMemberRow
+	listQ    fleetListQuery
 }
 
 // fleetUnitView is fleet command, one wing or one squad, as one viewer
@@ -991,7 +1010,7 @@ func fleetRoleBar(roles []fleetRoleCount, pilots int) []fleetRoleSegment {
 
 // fleetLiveFor builds the view from the stored read. It copies only what
 // the viewer's rank shows, so the template cannot show more by mistake.
-func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewer, a fleetAccess, live fleetLiveRead, page int, now time.Time) *fleetLiveView {
+func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewer, a fleetAccess, live fleetLiveRead, q fleetListQuery, now time.Time) *fleetLiveView {
 	view := &fleetLiveView{
 		ID: op.ID, Title: op.Title, Full: live.sight.All, CanManage: a.Manage,
 		CanEdit: a.Manage && live.sight.In, Reading: live.row != nil, Roles: opFleetRoles,
@@ -1003,15 +1022,13 @@ func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewe
 	for _, c := range v.Characters {
 		view.ViewerChars[c.CharacterID] = true
 	}
-	if page > 1 {
-		view.LiveURL += "?page=" + strconv.Itoa(page)
-	}
+	view.LiveURL += q.query()
 	if live.row != nil {
 		view.Revision = live.row.Revision
 	}
 	// A refresh would take a demo visitor's changes off the page.
 	if isDemoFleet(op) && app.sessionIsDemo(ctx) {
-		view.Polling, view.TryURL = false, fleetCompositionPath(op.ID)+"/try"
+		view.Polling, view.TryURL = false, fleetCompositionPath(op.ID)+"/try"+q.query()
 	}
 	if a.Manage {
 		view.Status, view.Notes = app.fleetCaptureStatus(ctx, op, now, live.comp.Pilots, live.sight)
@@ -1043,19 +1060,29 @@ func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewe
 	} else {
 		view.Comp = &fleetComposition{Pilots: comp.Pilots, Wings: comp.Wings}
 	}
-	view.Pages = max(1, (len(comp.Members)+fleetPilotsPerPage-1)/fleetPilotsPerPage)
-	view.Page = min(max(page, 1), view.Pages)
-	from := (view.Page - 1) * fleetPilotsPerPage
-	shown := comp.Members[from:min(from+fleetPilotsPerPage, len(comp.Members))]
-	view.Members = make([]fleetMemberRow, 0, len(shown))
-	for _, m := range shown {
-		view.Members = append(view.Members, live.sight.row(m, view.CanEdit))
+	rows := make([]fleetMemberRow, 0, len(comp.Members))
+	for _, m := range comp.Members {
+		rows = append(rows, live.sight.row(m, view.CanEdit))
 	}
+	base := fleetCompositionPath(op.ID)
+	fillFleetList(view, comp, rows, q, base)
+	if view.Flat && len(rows) > fleetSummaryAt {
+		view.Summary = fleetClassSummary(comp, rows)
+	}
+	// The table pages through the pilots the chips keep.
+	kept := view.listKept
+	view.Pages = max(1, (len(kept)+fleetPilotsPerPage-1)/fleetPilotsPerPage)
+	view.Page = min(max(q.Page, 1), view.Pages)
+	from := (view.Page - 1) * fleetPilotsPerPage
+	view.Members = kept[from:min(from+fleetPilotsPerPage, len(kept))]
+	pageQ := view.listQ
 	if view.Page > 1 {
-		view.PrevURL = fleetCompositionPath(op.ID) + "?page=" + strconv.Itoa(view.Page-1)
+		pageQ.Page = view.Page - 1
+		view.PrevURL = base + pageQ.query()
 	}
 	if view.Page < view.Pages {
-		view.NextURL = fleetCompositionPath(op.ID) + "?page=" + strconv.Itoa(view.Page+1)
+		pageQ.Page = view.Page + 1
+		view.NextURL = base + pageQ.query()
 	}
 	return view
 }
@@ -1116,9 +1143,8 @@ func (app *Application) handleFleetComposition(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	w.Header().Set("X-Robots-Tag", "noindex")
-	data := pageData{ShellData: app.PublicShell(ctx), FleetLive: app.fleetLiveFor(ctx, op, v, a, live, page, time.Now())}
+	data := pageData{ShellData: app.PublicShell(ctx), FleetLive: app.fleetLiveFor(ctx, op, v, a, live, fleetListQueryOf(r), time.Now())}
 	// A pilot let in only by being in the fleet has no Overview to go to.
 	_, _, _, srp := app.seesFleetSRP(ctx, op, v)
 	data.SectionSubTabs = fleetTabs(op.ID, a.View, true, srp, app.fleetReportTab(ctx, op, v, time.Now()), "composition")
@@ -1144,8 +1170,7 @@ func (app *Application) handleFleetLive(w http.ResponseWriter, r *http.Request) 
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	app.renderFragment(w, "fleet_composition.html", "fleet-live", app.fleetLiveFor(ctx, op, v, a, live, page, time.Now()))
+	app.renderFragment(w, "fleet_composition.html", "fleet-live", app.fleetLiveFor(ctx, op, v, a, live, fleetListQueryOf(r), time.Now()))
 }
 
 // parseFleetTags reads the tag box: comma separated, short, no repeats.
@@ -1180,10 +1205,9 @@ func (app *Application) handleFleetPilot(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	back := fleetCompositionPath(op.ID)
-	if p, _ := strconv.Atoi(r.FormValue("page")); p > 1 {
-		back += "?page=" + strconv.Itoa(p)
-	}
+	// Back to the view the edit was made from.
+	list, _ := url.ParseQuery(r.FormValue("list"))
+	back := fleetCompositionPath(op.ID) + fleetListQueryFrom(list).query()
 	defer func() { http.Redirect(w, r, back, http.StatusSeeOther) }()
 	if !a.Manage || !live.sight.In {
 		return
@@ -1280,8 +1304,11 @@ func (app *Application) handleFleetTry(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	live.comp.assign(tags)
-	page, _ := strconv.Atoi(r.FormValue("page"))
-	app.renderFragment(w, "fleet_composition.html", "fleet-live", app.fleetLiveFor(ctx, op, v, a, live, page, time.Now()))
+	q := fleetListQueryOf(r)
+	if page, _ := strconv.Atoi(r.FormValue("page")); page > 0 {
+		q.Page = page
+	}
+	app.renderFragment(w, "fleet_composition.html", "fleet-live", app.fleetLiveFor(ctx, op, v, a, live, q, time.Now()))
 }
 
 // saveFleetPilot replaces one pilot's role and tags together.

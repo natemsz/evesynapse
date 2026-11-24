@@ -1241,7 +1241,7 @@ func (app *Application) handleFleetExample(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	live.sight = live.comp.sightFor([]int64{op.FcCharacterID})
-	view := app.fleetLiveFor(ctx, op, fleetViewer{}, fleetAccess{}, live, 1, now)
+	view := app.fleetLiveFor(ctx, op, fleetViewer{}, fleetAccess{}, live, fleetListQuery{}, now)
 	view.Polling, view.TryURL, view.CanEdit, view.CanManage = false, "", false, false
 	for i := range view.Structure {
 		plainFleetUnit(&view.Structure[i])

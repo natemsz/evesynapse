@@ -1090,6 +1090,33 @@
   }
   onContentReady(initTabs);
   initTabs(document);
+
+  // --- Chart text scale ----------------------------------------
+  // A chart's SVG (.pchart) stretches to its panel, and the text in
+  // it would stretch too: huge on a wide page, tiny on a phone. Each
+  // chart gets --chart-text-scale, its viewBox width over its drawn
+  // width, which style.css multiplies its label size by, and keeps it
+  // as the panel resizes.
+  var chartTextRO = window.ResizeObserver ? new window.ResizeObserver(function (entries) {
+    for (var i = 0; i < entries.length; i++) scaleChartText(entries[i].target);
+  }) : null;
+  function scaleChartText(svg) {
+    var vb = svg.viewBox && svg.viewBox.baseVal;
+    var w = svg.getBoundingClientRect().width;
+    if (!vb || !vb.width || !w) return;
+    svg.style.setProperty("--chart-text-scale", (vb.width / w).toFixed(4));
+  }
+  function initChartText(root) {
+    var svgs = root.querySelectorAll(".pchart svg[viewBox]");
+    for (var i = 0; i < svgs.length; i++) {
+      if (svgs[i].getAttribute("data-text-scaled")) continue;
+      svgs[i].setAttribute("data-text-scaled", "1");
+      scaleChartText(svgs[i]);
+      if (chartTextRO) chartTextRO.observe(svgs[i]);
+    }
+  }
+  onContentReady(initChartText);
+  initChartText(document);
   // A same-page link to a panel (a stat tile pointing at its
   // section) opens that panel too. Shell code: app.js runs once, so
   // this binds once, and it looks the tab up at the time, so

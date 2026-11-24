@@ -288,6 +288,23 @@ func (q *Queries) GetItemName(ctx context.Context, itemID int64) (string, error)
 	return name, err
 }
 
+const getSDEAPIBlob = `-- name: GetSDEAPIBlob :one
+SELECT version, body FROM sde_api_blobs
+WHERE table_name = $1
+`
+
+type GetSDEAPIBlobRow struct {
+	Version string `json:"version"`
+	Body    []byte `json:"body"`
+}
+
+func (q *Queries) GetSDEAPIBlob(ctx context.Context, tableName string) (GetSDEAPIBlobRow, error) {
+	row := q.db.QueryRow(ctx, getSDEAPIBlob, tableName)
+	var i GetSDEAPIBlobRow
+	err := row.Scan(&i.Version, &i.Body)
+	return i, err
+}
+
 const getSDEAttributeType = `-- name: GetSDEAttributeType :one
 SELECT attribute_id, name, stackable, high_is_good, unit_id, default_value FROM sde_attribute_types
 WHERE attribute_id = $1
@@ -2303,6 +2320,33 @@ func (q *Queries) ListSDEMetaGroupsByTypes(ctx context.Context, typeIds []int64)
 	return items, nil
 }
 
+const listSDEMetaPrefix = `-- name: ListSDEMetaPrefix :many
+SELECT key, value FROM sde_meta
+WHERE key LIKE $1::text || '%'
+ORDER BY key
+LIMIT 200
+`
+
+func (q *Queries) ListSDEMetaPrefix(ctx context.Context, prefix string) ([]SdeMetum, error) {
+	rows, err := q.db.Query(ctx, listSDEMetaPrefix, prefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeMetum
+	for rows.Next() {
+		var i SdeMetum
+		if err := rows.Scan(&i.Key, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDERequirementsByType = `-- name: ListSDERequirementsByType :many
 SELECT skill_type_id, level FROM sde_requirements
 WHERE type_id = $1
@@ -3428,6 +3472,32 @@ func (q *Queries) ListTypeNamesByNames(ctx context.Context, names []string) ([]T
 		return nil, err
 	}
 	return items, nil
+}
+
+const putSDEAPIBlob = `-- name: PutSDEAPIBlob :exec
+INSERT INTO sde_api_blobs (table_name, version, body, fetched_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (table_name) DO UPDATE SET
+    version = excluded.version,
+    body = excluded.body,
+    fetched_at = excluded.fetched_at
+`
+
+type PutSDEAPIBlobParams struct {
+	TableName string    `json:"table_name"`
+	Version   string    `json:"version"`
+	Body      []byte    `json:"body"`
+	FetchedAt time.Time `json:"fetched_at"`
+}
+
+func (q *Queries) PutSDEAPIBlob(ctx context.Context, arg PutSDEAPIBlobParams) error {
+	_, err := q.db.Exec(ctx, putSDEAPIBlob,
+		arg.TableName,
+		arg.Version,
+		arg.Body,
+		arg.FetchedAt,
+	)
+	return err
 }
 
 const putSDEOverride = `-- name: PutSDEOverride :exec

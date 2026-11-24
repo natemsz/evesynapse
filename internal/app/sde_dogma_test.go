@@ -123,7 +123,7 @@ func TestSDEDogmaStoreRoundTrip(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
 
-	parsed := &parsedSDE{markers: map[string]fileMarker{}}
+	parsed := &parsedSDE{}
 	parsed.types = []sdeTypeRow{
 		{typeID: 597, name: "Fixture Punisher", groupID: 25, published: 1, mass: 1190000, volume: 28600, capacity: 275},
 	}

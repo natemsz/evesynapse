@@ -46,7 +46,7 @@ func TestCloseWaitsForWorkerBeforeClosingDB(t *testing.T) {
 		// Refuse-fast SDE source: the worker's first SDE
 		// maintenance tick tries an import against it and
 		// fails immediately instead of downloading anything.
-		sdeBaseURL: "http://127.0.0.1:1/",
+		sdeAPIURL: "http://127.0.0.1:1/",
 	}
 	application, err := New(cfg)
 	if err != nil {

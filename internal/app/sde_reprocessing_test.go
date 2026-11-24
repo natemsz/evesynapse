@@ -9,7 +9,7 @@ import (
 // (type, material, quantity) outputs, and invTypes carries
 // each type's portion size into its physics row.
 func TestSDEReprocessingParse(t *testing.T) {
-	parsed := parsedSDE{markers: map[string]fileMarker{}}
+	parsed := parsedSDE{}
 	if err := parseSDEFile("invTypeMaterials.csv", strings.NewReader(
 		"typeID,materialTypeID,quantity\n34,34,0\n12345,34,700\n12345,35,300\nbad,1,1\n"), &parsed); err != nil {
 		t.Fatalf("parse invTypeMaterials: %v", err)
@@ -21,7 +21,7 @@ func TestSDEReprocessingParse(t *testing.T) {
 		t.Errorf("first row = %+v, want 12345 -> 34 x700", parsed.reprocessing[0])
 	}
 
-	parsed = parsedSDE{markers: map[string]fileMarker{}}
+	parsed = parsedSDE{}
 	if err := parseSDEFile("invTypes.csv", strings.NewReader(
 		"typeID,typeName,groupID,marketGroupID,published,mass,volume,capacity,portionSize,description\n12345,Veldspar,25,1850,1,0,0.1,0,100,\n"), &parsed); err != nil {
 		t.Fatalf("parse invTypes: %v", err)

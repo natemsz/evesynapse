@@ -79,9 +79,7 @@ func TestSDEMappingsStoreAndKeep(t *testing.T) {
 	ctx := context.Background()
 
 	parsed := parseMappingsFixture(t)
-	parsed.markers = map[string]fileMarker{
-		sdeMappingsFileName: {etag: "mappings-etag", lastModified: "mappings-build-1"},
-	}
+	parsed.build = "mappings-build-1"
 	if _, err := app.storeSDE(ctx, "fixture-base", parsed); err != nil {
 		t.Fatalf("store SDE with mappings: %v", err)
 	}
@@ -104,7 +102,7 @@ func TestSDEMappingsStoreAndKeep(t *testing.T) {
 	// An import whose dump lacked the dataset must not wipe
 	// the stored mappings: absence is reported, not
 	// destructive.
-	empty := &parsedSDE{markers: map[string]fileMarker{}}
+	empty := &parsedSDE{}
 	if _, err := app.storeSDE(ctx, "fixture-base", empty); err != nil {
 		t.Fatalf("store SDE without mappings: %v", err)
 	}

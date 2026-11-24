@@ -2,6 +2,7 @@ package app
 
 import (
 	"bufio"
+	"bytes"
 	"compress/bzip2"
 	"context"
 	"encoding/csv"
@@ -25,16 +26,15 @@ import (
 
 // ---------------------------------------------------------------------------
 // EVE static data (SDE): a local copy of CCP's static data export,
-// imported from Fuzzwork's community CSV conversion and refreshed
-// rarely (patch-day cadence: automatic daily check, manual button
-// on the Sync page). Type/group/station/system names resolve from
-// the sde_* tables first (see internal/esi); the ESI drip-feed
-// caches stay as fallback for anything the SDE lacks.
+// imported from CCP's SDE API (sde_api.go, JSON Lines tables parsed
+// in sde_jsonl.go) and checked for a new release every sdeCheckEvery
+// (manual button on the Sync page). Type/group/station/system names
+// resolve from the sde_* tables first (see internal/esi); the ESI
+// drip-feed caches stay as fallback for anything the SDE lacks.
 //
-// The CSVs live under /dump/latest/csv/ as plain .csv; older dumps were
-// /dump/latest/ as .csv.bz2. The downloader copes with both: it tries
-// "<name>.csv" then "<name>.csv.bz2", and sniffs bzip2 magic bytes
-// either way. EVE_SDE_BASE_URL overrides the base for mirrors.
+// The CSV parsers below read the same data in Fuzzwork's CSV
+// conversion, for a dump uploaded on the Sync page (sde_override.go):
+// plain .csv or .csv.bz2, bzip2 sniffed by its magic bytes.
 // ---------------------------------------------------------------------------
 
 // sdeFileNames are the dump tables EveSynapse imports: the base
@@ -216,7 +216,7 @@ func (app *Application) recoverSDEPanic(op string) {
 
 // startSDEImport launches a full import in the background (false
 // when one is already running). Used for the first-boot import,
-// when the sde_* tables are still empty.
+// when the sde_* tables are still empty, and after an upload.
 func (app *Application) startSDEImport(reason string) bool {
 	if !app.sdeOpBegin("downloading") {
 		return false
@@ -224,7 +224,7 @@ func (app *Application) startSDEImport(reason string) bool {
 	go func() {
 		defer app.sdeOpEnd()
 		defer app.recoverSDEPanic("import")
-		logging.Infof("sde: import starting (%s) from %s", reason, app.cfg.SDEBaseURL())
+		logging.Infof("sde: import starting (%s) from %s", reason, app.cfg.SDEAPIURL())
 		if err := app.importSDE(app.workerCtx); err != nil {
 			logging.Errorf("sde: import failed: %v", err)
 			app.updateSDEStatus(func(s *sdeStatus) { s.LastError = err.Error() })
@@ -235,10 +235,11 @@ func (app *Application) startSDEImport(reason string) bool {
 	return true
 }
 
-// startSDECheck launches the update check in the background: HEAD
-// the remote files, compare ETag/Last-Modified against the stored
-// markers, and import only when something changed. This is the
-// daily worker check and the Sync page's manual button alike.
+// startSDECheck launches the update check in the background: read
+// the SDE API's current release, compare each table's version with
+// the one stored at the last import, and import only when one of
+// them moved. This is the worker's check and the Sync page's manual
+// button alike.
 func (app *Application) startSDECheck(reason string) bool {
 	if !app.sdeOpBegin("checking") {
 		return false
@@ -248,7 +249,11 @@ func (app *Application) startSDECheck(reason string) bool {
 		defer app.recoverSDEPanic("update check")
 		ctx := app.workerCtx
 
-		changed, err := app.sdeRemoteChanged(ctx)
+		rel, err := app.fetchSDERelease(ctx)
+		var changed []string
+		if err == nil {
+			changed, err = app.sdeAPIChangedTables(ctx, rel)
+		}
 		if err != nil {
 			logging.Errorf("sde: update check failed (%s): %v", reason, err)
 			app.updateSDEStatus(func(s *sdeStatus) { s.LastError = err.Error() })
@@ -258,17 +263,17 @@ func (app *Application) startSDECheck(reason string) bool {
 		if err := app.queries.UpsertSDEMeta(ctx, db.UpsertSDEMetaParams{Key: "last_check_at", Value: now}); err != nil {
 			logging.Errorf("sde: record check time: %v", err)
 		}
-		if !changed {
-			logging.Infof("sde: static data up to date (checked %s)", reason)
+		if len(changed) == 0 {
+			logging.Infof("sde: static data up to date with %s (checked %s)", rel.label(), reason)
 			app.updateSDEStatus(func(s *sdeStatus) {
 				s.LastError = ""
-				s.Message = "Up to date: remote dump unchanged (checked " + now + ")"
+				s.Message = "Up to date with " + rel.label() + " (checked " + now + ")"
 			})
 			return
 		}
-		logging.Infof("sde: remote dump changed; importing (%s)", reason)
-		// The regular dump moved past an upload: import it whole
-		// and retire the upload.
+		logging.Infof("sde: %s changes %s; importing (%s)", rel.label(), strings.Join(changed, ", "), reason)
+		// The API moved past an upload: import the release and
+		// retire the upload.
 		ov := app.loadSDEOverride(ctx)
 		if err := app.importSDEFrom(ctx, nil); err != nil {
 			logging.Errorf("sde: import failed: %v", err)
@@ -277,16 +282,17 @@ func (app *Application) startSDECheck(reason string) bool {
 		}
 		if ov != nil {
 			app.dropSDEOverride(ctx, ov.sha)
-			logging.Infof("sde: regular dump changed after upload %q; upload retired", ov.label)
+			logging.Infof("sde: SDE API changed after upload %q; upload retired", ov.label)
 		}
 		app.updateSDEStatus(func(s *sdeStatus) { s.LastError = "" })
 	}()
 	return true
 }
 
-// sdeMaintenance is the worker's SDE hook (boot + hourly): import
-// when the tables are empty, otherwise run the daily check when
-// it falls due. It only ever starts background work.
+// sdeMaintenance is the worker's periodic SDE hook. It decides
+// between "import now" (empty tables, or a previous import's column
+// set predates the current one) and an update check every
+// sdeCheckEvery.
 func (app *Application) sdeMaintenance(ctx context.Context) {
 	count, err := app.queries.CountSDETypes(ctx)
 	if err != nil {
@@ -301,35 +307,17 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// The universe map rebuilds when its builder moved on (a no-op
 	// until the SDE carries geometry).
 	app.ensureUniverseMap(ctx)
-	// One-time backfills: databases imported before schema 008
-	// have no market-group/published values, databases stored
-	// before schema 011 lack the planner's industry tables,
-	// anything before schema 012 lacks the dogma skill graph,
-	// anything before schema 024 lacks the market browse tree,
-	// and anything before schema 029 lacks the full dogma
-	// attribute/effect set, imports before version 8 lack the
-	// modifier-less effects the fitting engine reads module
-	// states from, imports before version 9 lack the
-	// mutaplasmid roll ranges, imports before version 10
-	// lack the mutaplasmid applicability mappings,
-	// imports before version 11 lack the universe map's
-	// geometry, and imports before version 13 lack the
-	// celestials a kill's location resolves against, and
-	// imports before version 15 lack the item sheet's data, and
-	// imports before version 16 lack the variation tables, and
-	// imports before version 17 lack the Browse tree, and
-	// imports before version 20 lack the buff tables, so
-	// re-import once (the store writes the marker when it
-	// lands). Retries on later ticks while an import keeps
-	// failing.
+	// A stored import whose column set predates sdeImportVersion
+	// re-imports once (the store writes the marker when it lands);
+	// retries on later ticks while an import keeps failing.
 	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != sdeImportVersion {
 		logging.Infof("sde: static data predates current columns, re-importing to backfill")
-		app.startSDEImport("schema-029 backfill")
+		app.startSDEImport("column backfill")
 		return
 	}
 	// Even with a current marker, an empty planner table (say the
 	// tables were cleared by hand) refills here rather than
-	// waiting for the daily tick.
+	// waiting for the next check.
 	if n, err := app.queries.CountSDEBlueprints(ctx); err == nil && n == 0 {
 		logging.Infof("sde: planner tables empty, importing industry data")
 		app.startSDEImport("planner backfill")
@@ -341,11 +329,11 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 		return
 	}
 	if last, err := app.sdeMeta(ctx, "last_check_at"); err == nil && last != "" {
-		if t, perr := time.Parse(time.RFC3339, last); perr == nil && time.Since(t) < 24*time.Hour {
-			return // checked within the day
+		if t, perr := time.Parse(time.RFC3339, last); perr == nil && time.Since(t) < sdeCheckEvery {
+			return
 		}
 	}
-	app.startSDECheck("daily")
+	app.startSDECheck("scheduled")
 }
 
 // sdeImportVersion is the importer's column-set marker (see
@@ -358,88 +346,10 @@ func (app *Application) sdeMeta(ctx context.Context, key string) (string, error)
 }
 
 // ---------------------------------------------------------------------------
-// Remote freshness check.
-// ---------------------------------------------------------------------------
-
-// fileMarker is one remote file's freshness markers.
-type fileMarker struct {
-	etag         string
-	lastModified string
-}
-
-// normalizeETag strips Apache mod_deflate's "-gzip" suffix: the
-// ETag of a compressed GET response carries it while the same
-// file's HEAD response doesn't, so unnormalized values would never
-// compare equal.
-func normalizeETag(etag string) string {
-	inner := strings.Trim(etag, `"`)
-	inner = strings.TrimSuffix(inner, "-gzip")
-	if strings.HasPrefix(etag, `"`) {
-		return `"` + inner + `"`
-	}
-	return inner
-}
-
-// sdeRemoteChanged reports whether any of the dump files
-// differs from the markers recorded at the last import. ETag wins
-// when both sides have one; Last-Modified is the fallback. Missing
-// stored markers (never imported) count as changed.
-func (app *Application) sdeRemoteChanged(ctx context.Context) (bool, error) {
-	for _, name := range sdeFileNames {
-		remote, err := app.headSDEFile(ctx, name)
-		if err != nil {
-			return false, fmt.Errorf("check %s: %w", name, err)
-		}
-		storedETag, _ := app.sdeMeta(ctx, "etag:"+name)
-		storedLM, _ := app.sdeMeta(ctx, "last_modified:"+name)
-		switch {
-		case storedETag == "" && storedLM == "":
-			return true, nil // never imported (or markers lost)
-		case storedETag != "" && remote.etag != "":
-			if normalizeETag(storedETag) != normalizeETag(remote.etag) {
-				return true, nil
-			}
-		case storedLM != remote.lastModified:
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// headSDEFile HEADs one dump file, trying the plain .csv first and
-// the .csv.bz2 name second, and returns its freshness markers.
-func (app *Application) headSDEFile(ctx context.Context, name string) (fileMarker, error) {
-	for _, candidate := range []string{name, name + ".bz2"} {
-		hctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		req, err := http.NewRequestWithContext(hctx, http.MethodHead, app.cfg.SDEBaseURL()+candidate, nil)
-		if err != nil {
-			cancel()
-			return fileMarker{}, err
-		}
-		req.Header.Set("User-Agent", sdeUserAgent)
-		resp, err := sdeHTTPClient.Do(req)
-		if err != nil {
-			cancel()
-			return fileMarker{}, err
-		}
-		resp.Body.Close()
-		cancel()
-		if resp.StatusCode == http.StatusNotFound {
-			continue
-		}
-		if resp.StatusCode != http.StatusOK {
-			return fileMarker{}, fmt.Errorf("HEAD %s: status %d", candidate, resp.StatusCode)
-		}
-		return fileMarker{etag: resp.Header.Get("ETag"), lastModified: resp.Header.Get("Last-Modified")}, nil
-	}
-	return fileMarker{}, fmt.Errorf("neither %s nor %s.bz2 found at %s", name, name, app.cfg.SDEBaseURL())
-}
-
-// ---------------------------------------------------------------------------
-// Import: download + parse all dump tables, then replace the sde_*
-// contents in one transaction (deletes + bulk inserts + meta). The
-// tables are never touched until every file downloaded and parsed
-// cleanly, so a failed import leaves the previous data intact.
+// Import: read every table, then replace the sde_* contents in one
+// transaction (deletes + bulk inserts + meta). The tables are never
+// touched until every required table read and parsed cleanly, so a
+// failed import leaves the previous data intact.
 // ---------------------------------------------------------------------------
 
 func (app *Application) importSDE(ctx context.Context) error {
@@ -447,94 +357,58 @@ func (app *Application) importSDE(ctx context.Context) error {
 	err := app.importSDEFrom(ctx, ov)
 	if err != nil && ov != nil {
 		// A broken upload must not block every later import: drop
-		// it, so the next one reads the regular dump.
+		// it, so the next one reads the SDE API.
 		app.dropSDEOverride(ctx, ov.sha)
 		return fmt.Errorf("uploaded dump %q dropped: %w", ov.label, err)
 	}
 	return err
 }
 
-// importSDEFrom imports the dump, reading each file from the upload
-// ov when it holds it and from the regular dump otherwise (ov nil:
-// the regular dump only).
+// importSDEFrom imports the static data: from the SDE API's current
+// release (ov nil), from a JSON Lines upload with the tables it lacks
+// from the API, or from a CSV upload alone.
 func (app *Application) importSDEFrom(ctx context.Context, ov *sdeArchive) error {
-	base := app.cfg.SDEBaseURL()
-	source := base
-	if ov != nil {
-		source = ov.source(base)
+	parsed := &parsedSDE{versions: make(map[string]string)}
+	// The current release, when the API answers. An upload records
+	// its table versions too, so the check imports again only once
+	// the API moves past them.
+	rel, relErr := app.fetchSDERelease(ctx)
+	if rel != nil {
+		for _, t := range sdeAPITables {
+			if v := rel.Tables[t.name].Version; v != "" {
+				parsed.versions[t.name] = v
+			}
+		}
+		parsed.release = rel
 	}
 
-	parsed := &parsedSDE{markers: make(map[string]fileMarker)}
-	for i, name := range sdeFileNames {
-		app.updateSDEStatus(func(s *sdeStatus) {
-			s.Phase = "downloading"
-			s.Progress = fmt.Sprintf("Downloading %s (%d of %d)…", name, i+1, len(sdeFileNames))
-		})
-		marker, err := app.parseSDESource(ctx, ov, base, name, parsed)
-		if err != nil {
+	var source string
+	switch {
+	case ov != nil && ov.format == sdeFormatCSV:
+		source = ov.source()
+		parsed.build = "upload " + ov.sha[:12]
+		if err := app.parseSDECSVArchive(ov, parsed); err != nil {
 			return err
 		}
-		parsed.markers[name] = marker
-	}
-
-	// The skills file is best-effort (see sdeFileNames): its
-	// absence or a parse hiccup must not fail an otherwise good
-	// import, the planner just shows no required skills.
-	if marker, err := app.parseSDESource(ctx, ov, base, sdeSkillsFileName, parsed); err != nil {
-		logging.Warnf("sde: optional %s unavailable, continuing without it: %v", sdeSkillsFileName, err)
-	} else {
-		parsed.markers[sdeSkillsFileName] = marker
-	}
-	// The mutaplasmid ranges file is best-effort the same way
-	// (see sdeRangesFileName): its absence leaves the previous
-	// ranges in place and is reported, never papered over.
-	if marker, err := app.parseSDESource(ctx, ov, base, sdeRangesFileName, parsed); err != nil {
-		logging.Warnf("sde: optional %s unavailable, keeping previous roll ranges: %v", sdeRangesFileName, err)
-	} else {
-		parsed.markers[sdeRangesFileName] = marker
-	}
-	// The mutaplasmid mappings file is best-effort the same
-	// way (see sdeMappingsFileName): its absence leaves the
-	// previous mappings in place and is reported, never
-	// papered over.
-	if marker, err := app.parseSDESource(ctx, ov, base, sdeMappingsFileName, parsed); err != nil {
-		logging.Warnf("sde: optional %s unavailable, keeping previous mutaplasmid mappings: %v", sdeMappingsFileName, err)
-	} else {
-		parsed.markers[sdeMappingsFileName] = marker
-	}
-	for _, name := range []string{sdeConstellationsFileName, sdeJumpsFileName, sdeCelestialsFileName} {
-		if marker, err := app.parseSDESource(ctx, ov, base, name, parsed); err != nil {
-			logging.Warnf("sde: optional %s unavailable, keeping the previous map data: %v", name, err)
-		} else {
-			parsed.markers[name] = marker
+	default:
+		if rel == nil && ov == nil {
+			return relErr
 		}
-	}
-	for _, name := range sdeSheetFileNames {
-		if marker, err := app.parseSDESource(ctx, ov, base, name, parsed); err != nil {
-			logging.Warnf("sde: optional %s unavailable, keeping the previous item sheet data: %v", name, err)
-		} else {
-			parsed.markers[name] = marker
+		switch {
+		case ov == nil:
+			source = app.cfg.SDEAPIURL() + " " + rel.label()
+			parsed.build = rel.Release
+		case rel == nil:
+			source = ov.source()
+			parsed.build = "upload " + ov.sha[:12]
+		default:
+			source = ov.source() + ", other tables from " + rel.label()
+			parsed.build = "upload " + ov.sha[:12]
 		}
-	}
-	if marker, err := app.parseSDESource(ctx, ov, base, sdeTitlesFileName, parsed); err != nil {
-		logging.Warnf("sde: optional %s unavailable, keeping previous character titles: %v", sdeTitlesFileName, err)
-	} else {
-		parsed.markers[sdeTitlesFileName] = marker
-	}
-	// The buff tables go in together or not at all: modifiers
-	// without their collections (or the reverse) would leave bursts
-	// half described.
-	dbuffComplete := true
-	for _, name := range sdeDbuffFileNames {
-		if marker, err := app.parseSDESource(ctx, ov, base, name, parsed); err != nil {
-			logging.Warnf("sde: optional %s unavailable, keeping the previous buff tables: %v", name, err)
-			dbuffComplete = false
-		} else {
-			parsed.markers[name] = marker
+		if err := app.parseSDEAPITables(ctx, rel, relErr, ov, parsed); err != nil {
+			return err
 		}
-	}
-	if !dbuffComplete {
-		parsed.dbuffs, parsed.dbuffMods = nil, nil
+		parsed.finishJSONL()
 	}
 	parsed.buildIndustryRows()
 	parsed.buildInventionRows()
@@ -588,30 +462,134 @@ func (app *Application) importSDEFrom(ctx context.Context, ov *sdeArchive) error
 	return nil
 }
 
-// parseSDESource parses one dump file from the upload when it holds
-// the file, else from the regular dump. A file read from the upload
-// records the regular dump's current marker, so the update check
-// sees a change only once the regular dump moves past the upload.
-func (app *Application) parseSDESource(ctx context.Context, ov *sdeArchive, base, name string, parsed *parsedSDE) (fileMarker, error) {
-	if ov != nil {
-		found, err := ov.parse(name, parsed)
-		if found {
+// parseSDEAPITables reads every SDE API table: from the upload when
+// it holds the table, else the kept copy or a download from rel. A
+// required table that cannot be read fails the import; an optional
+// one is skipped and keeps the rows stored before.
+func (app *Application) parseSDEAPITables(ctx context.Context, rel *sdeRelease, relErr error, ov *sdeArchive, parsed *parsedSDE) error {
+	var downloaded []string
+	for i, t := range sdeAPITables {
+		app.updateSDEStatus(func(s *sdeStatus) {
+			s.Phase = "downloading"
+			s.Progress = fmt.Sprintf("Reading %s (%d of %d)…", t.name, i+1, len(sdeAPITables))
+		})
+		if ov != nil {
+			found, err := ov.parse(t.name, parsed)
+			if found {
+				if err != nil {
+					return err
+				}
+				continue
+			}
+		}
+		var err error
+		if rel == nil {
+			err = fmt.Errorf("%s is not in the upload and the SDE API is unreachable: %w", t.name, relErr)
+		} else {
+			var body []byte
+			var fresh bool
+			body, fresh, err = app.sdeAPITableBody(ctx, rel, t.name)
 			if err != nil {
-				return fileMarker{}, err
+				// A table that failed to download is tried again at
+				// the next check.
+				delete(parsed.versions, t.name)
+			} else if err = parseSDEJSONLTable(t.name, bytes.NewReader(body), parsed); err == nil && fresh {
+				app.keepSDETable(ctx, t.name, rel.Tables[t.name].Version, body)
+				downloaded = append(downloaded, t.name)
 			}
-			if marker, herr := app.headSDEFile(ctx, name); herr == nil {
-				return marker, nil
+		}
+		if err != nil {
+			if t.required {
+				return err
 			}
-			etag, _ := app.sdeMeta(ctx, "etag:"+name)
-			lm, _ := app.sdeMeta(ctx, "last_modified:"+name)
-			return fileMarker{etag: etag, lastModified: lm}, nil
+			logging.Warnf("sde: optional table %s unavailable, keeping the rows it feeds: %v", t.name, err)
+			parsed.dropJSONLTable(t.name)
 		}
 	}
-	return app.fetchAndParseSDEFile(ctx, base, name, parsed)
+	if len(downloaded) > 0 {
+		logging.Infof("sde: downloaded %d changed tables (%s); the rest read from the kept copies", len(downloaded), strings.Join(downloaded, ", "))
+	}
+	return nil
+}
+
+// parseSDECSVArchive reads a CSV upload. Every file in sdeFileNames is
+// required (the upload was refused without one); the rest are
+// optional, and a missing or broken one keeps the rows stored before.
+func (app *Application) parseSDECSVArchive(ov *sdeArchive, parsed *parsedSDE) error {
+	for i, name := range sdeFileNames {
+		app.updateSDEStatus(func(s *sdeStatus) {
+			s.Phase = "downloading"
+			s.Progress = fmt.Sprintf("Reading %s (%d of %d)…", name, i+1, len(sdeFileNames))
+		})
+		found, err := ov.parse(name, parsed)
+		if !found {
+			return fmt.Errorf("the uploaded CSV dump lacks %s", name)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	optional := func(name, keeps string) bool {
+		found, err := ov.parse(name, parsed)
+		switch {
+		case !found:
+			logging.Warnf("sde: uploaded dump lacks optional %s, keeping %s", name, keeps)
+		case err != nil:
+			logging.Warnf("sde: optional %s unreadable, keeping %s: %v", name, keeps, err)
+		}
+		return found && err == nil
+	}
+	// A broken optional file must not leave half its rows behind.
+	if !optional(sdeSkillsFileName, "the planner's required skills") {
+		parsed.indSkills = nil
+	}
+	if !optional(sdeRangesFileName, "the previous roll ranges") {
+		parsed.dynRanges = nil
+	}
+	if !optional(sdeMappingsFileName, "the previous mutaplasmid mappings") {
+		parsed.dynMappings = nil
+	}
+	if !optional(sdeConstellationsFileName, "the previous map data") {
+		parsed.constellations = nil
+	}
+	if !optional(sdeJumpsFileName, "the previous map data") {
+		parsed.jumps = nil
+	}
+	if !optional(sdeCelestialsFileName, "the previous map data") {
+		parsed.celestials = nil
+	}
+	if !optional(sdeUnitsFileName, "the previous item sheet data") {
+		parsed.units = nil
+	}
+	if !optional(sdeTraitsFileName, "the previous item sheet data") {
+		parsed.traits = nil
+	}
+	if !optional(sdeMetaTypesFileName, "the previous item sheet data") {
+		parsed.metaTypes = nil
+	}
+	if !optional(sdeMetaGroupsFileName, "the previous item sheet data") {
+		parsed.metaGroups = nil
+	}
+	if !optional(sdeTitlesFileName, "the previous character titles") {
+		parsed.titles = nil
+	}
+	// The buff tables go in together or not at all: modifiers
+	// without their collections (or the reverse) would leave bursts
+	// half described.
+	dbuffComplete := true
+	for _, name := range sdeDbuffFileNames {
+		if !optional(name, "the previous buff tables") {
+			dbuffComplete = false
+		}
+	}
+	if !dbuffComplete {
+		parsed.dbuffs, parsed.dbuffMods = nil, nil
+	}
+	return nil
 }
 
 // parsedSDE holds one full dump in memory, ready for the replace
-// transaction, plus each file's remote freshness markers. The
+// transaction, plus where it came from. The
 // industry tables parse into intermediate maps (the blueprint row
 // joins three files) and are flattened by buildIndustryRows once
 // every file is in.
@@ -624,7 +602,15 @@ type parsedSDE struct {
 	npcCorps     []sdeNPCCorpRow
 	systems      []sdeSystemRow
 	regions      []sdeRegionRow
-	markers      map[string]fileMarker
+
+	// build names the dump in the rows that record it (the SDE API
+	// release, or the upload). versions holds the SDE API version of
+	// every table the import read or skipped as unchanged, stored so
+	// the next check can tell what moved; release is the SDE API
+	// release, nil when the API did not answer.
+	build    string
+	versions map[string]string
+	release  *sdeRelease
 
 	// Industry (schema 011): per-blueprint joins over the four
 	// industry files, keyed by blueprint type ID, plus the flat
@@ -700,6 +686,9 @@ type parsedSDE struct {
 
 	// Cosmetic character titles (schema 161): empty when the dump lacks chrTitles.csv.
 	titles []sdeCharacterTitleRow
+
+	// jl holds a JSON Lines dump's cross-table rows until finishJSONL.
+	jl *sdeJSONLState
 }
 
 // sdeCharacterTitleRow maps a cosmetic title UUID to its display name.
@@ -963,48 +952,6 @@ type sdeCelestialRow struct {
 type sdeRegionRow struct {
 	regionID int64
 	name     string
-}
-
-// fetchAndParseSDEFile downloads one dump file (plain .csv, falling
-// back to .csv.bz2; bzip2 content is sniffed by magic bytes either
-// way) and streams it through the table's CSV parser into parsed.
-func (app *Application) fetchAndParseSDEFile(ctx context.Context, base, name string, parsed *parsedSDE) (fileMarker, error) {
-	var lastErr error
-	for _, candidate := range []string{name, name + ".bz2"} {
-		dctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-		req, err := http.NewRequestWithContext(dctx, http.MethodGet, base+candidate, nil)
-		if err != nil {
-			cancel()
-			return fileMarker{}, err
-		}
-		req.Header.Set("User-Agent", sdeUserAgent)
-		resp, err := sdeHTTPClient.Do(req)
-		if err != nil {
-			cancel()
-			return fileMarker{}, fmt.Errorf("download %s: %w", candidate, err)
-		}
-		if resp.StatusCode == http.StatusNotFound {
-			resp.Body.Close()
-			cancel()
-			lastErr = fmt.Errorf("download %s: status 404", candidate)
-			continue
-		}
-		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			cancel()
-			return fileMarker{}, fmt.Errorf("download %s: status %d", candidate, resp.StatusCode)
-		}
-
-		marker := fileMarker{etag: resp.Header.Get("ETag"), lastModified: resp.Header.Get("Last-Modified")}
-		err = parseSDEFile(name, resp.Body, parsed)
-		resp.Body.Close()
-		cancel()
-		if err != nil {
-			return fileMarker{}, err
-		}
-		return marker, nil
-	}
-	return fileMarker{}, lastErr
 }
 
 // parseSDEFile decompresses (when bzip2) and parses one CSV dump
@@ -2103,34 +2050,7 @@ func parseSDEEffects(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) erro
 		if jerr := json.Unmarshal([]byte(info), &mods); jerr != nil {
 			return fmt.Errorf("effect %d: decode modifierInfo: %w", id, jerr)
 		}
-		for _, m := range mods {
-			// Modifiers without both attributes or an operation
-			// (the EffectStopper rows) cannot be applied by the
-			// engine and are not stored; the engine reports the
-			// shapes it skips.
-			if m.ModifiedAttributeID == nil || m.ModifyingAttributeID == nil || m.Operation == nil {
-				continue
-			}
-			row := sdeEffectModifierRow{
-				effectID:      id,
-				modifiedAttr:  *m.ModifiedAttributeID,
-				modifyingAttr: *m.ModifyingAttributeID,
-				operation:     *m.Operation,
-			}
-			if m.Domain != nil {
-				row.domain = *m.Domain
-			}
-			if m.Func != nil {
-				row.fn = *m.Func
-			}
-			if m.GroupID != nil {
-				row.groupID = *m.GroupID
-			}
-			if m.SkillTypeID != nil {
-				row.skillTypeID = *m.SkillTypeID
-			}
-			parsed.modifiers = append(parsed.modifiers, row)
-		}
+		parsed.appendModifiers(id, mods)
 		return nil
 	})
 	return err
@@ -2551,13 +2471,10 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	// when this import actually carried the dataset: a dump
 	// without it leaves the stored ranges untouched rather
 	// than wiping them for an absence (see sdeRangesFileName).
-	// sde_build records the file's marker, so a row can always
+	// sde_build records the dump's build, so a row can always
 	// say which dump it came from.
+	build := parsed.build
 	if len(parsed.dynRanges) > 0 {
-		build := parsed.markers[sdeRangesFileName].lastModified
-		if build == "" {
-			build = parsed.markers[sdeRangesFileName].etag
-		}
 		if _, err := tx.Exec(ctx, "DELETE FROM abyssal_ranges"); err != nil {
 			return 0, fmt.Errorf("clear abyssal_ranges: %w", err)
 		}
@@ -2574,10 +2491,6 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	// an import that carried the dataset touches the stored
 	// rows.
 	if len(parsed.dynMappings) > 0 {
-		build := parsed.markers[sdeMappingsFileName].lastModified
-		if build == "" {
-			build = parsed.markers[sdeMappingsFileName].etag
-		}
 		if _, err := tx.Exec(ctx, "DELETE FROM abyssal_mappings"); err != nil {
 			return 0, fmt.Errorf("clear abyssal_mappings: %w", err)
 		}
@@ -2624,11 +2537,20 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		// it's behind).
 		{Key: "sde_import_version", Value: sdeImportVersion},
 	}
-	for name, m := range parsed.markers {
+	if rel := parsed.release; rel != nil {
 		meta = append(meta,
-			db.UpsertSDEMetaParams{Key: "etag:" + name, Value: m.etag},
-			db.UpsertSDEMetaParams{Key: "last_modified:" + name, Value: m.lastModified},
+			db.UpsertSDEMetaParams{Key: "release", Value: rel.Release},
+			db.UpsertSDEMetaParams{Key: "release_build", Value: strconv.FormatInt(rel.BuildNumber, 10)},
+			db.UpsertSDEMetaParams{Key: "release_date", Value: rel.ReleaseDate},
 		)
+	}
+	// The versions replace the last import's whole set, so a table
+	// the importer stopped reading leaves none behind.
+	if _, err := tx.Exec(ctx, "DELETE FROM sde_meta WHERE key LIKE 'version:%'"); err != nil {
+		return 0, fmt.Errorf("clear SDE versions: %w", err)
+	}
+	for table, v := range parsed.versions {
+		meta = append(meta, db.UpsertSDEMetaParams{Key: "version:" + table, Value: v})
 	}
 	for _, m := range meta {
 		if err := tq.UpsertSDEMeta(ctx, m); err != nil {
@@ -2652,10 +2574,10 @@ type sdeTableCount struct {
 	Rows string // formatted count
 }
 
-// sdeFileMarker is one dump file's stored remote Last-Modified.
-type sdeFileMarker struct {
-	File         string
-	LastModified string // ", " when unknown
+// sdeTableVersion is one SDE API table and the version imported.
+type sdeTableVersion struct {
+	Table   string
+	Version string // shortened; "" when never imported from the API
 }
 
 // sdeView is the Sync page's static-data block.
@@ -2668,8 +2590,9 @@ type sdeView struct {
 	Progress   string
 	Message    string
 	LastError  string
+	Release    string // the SDE API release imported, "" when none
 	Tables     []sdeTableCount
-	Files      []sdeFileMarker
+	Versions   []sdeTableVersion
 	Override   *sdeOverrideView // the active upload, nil when none
 }
 
@@ -2678,7 +2601,7 @@ type sdeView struct {
 func (app *Application) loadSDEView(ctx context.Context) *sdeView {
 	status := app.snapshotSDEStatus()
 	view := &sdeView{
-		SourceBase: app.cfg.SDEBaseURL(),
+		SourceBase: app.cfg.SDEAPIURL(),
 		Running:    status.Running,
 		Progress:   status.Progress,
 		Message:    status.Message,
@@ -2724,12 +2647,21 @@ func (app *Application) loadSDEView(ctx context.Context) *sdeView {
 	if source, err := app.sdeMeta(ctx, "source_base"); err == nil && source != "" {
 		view.SourceBase = source
 	}
-	for _, name := range sdeFileNames {
-		lm, _ := app.sdeMeta(ctx, "last_modified:"+name)
-		if lm == "" {
-			lm = "—"
+	if rel, err := app.sdeMeta(ctx, "release"); err == nil && rel != "" {
+		build, _ := app.sdeMeta(ctx, "release_build")
+		date, _ := app.sdeMeta(ctx, "release_date")
+		view.Release = fmt.Sprintf("%s, build %s, published %s", rel, build, date)
+	}
+	versions, err := app.storedSDEVersions(ctx)
+	if err != nil {
+		logging.Errorf("sync: %v", err)
+	}
+	for _, t := range sdeAPITables {
+		v := versions[t.name]
+		if len(v) > 12 {
+			v = v[:12]
 		}
-		view.Files = append(view.Files, sdeFileMarker{File: name, LastModified: lm})
+		view.Versions = append(view.Versions, sdeTableVersion{Table: t.name, Version: v})
 	}
 
 	switch {

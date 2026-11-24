@@ -2345,6 +2345,13 @@ type Scan struct {
 	GroupID   string    `json:"group_id"`
 }
 
+type SdeApiBlob struct {
+	TableName string    `json:"table_name"`
+	Version   string    `json:"version"`
+	Body      []byte    `json:"body"`
+	FetchedAt time.Time `json:"fetched_at"`
+}
+
 type SdeAttributeType struct {
 	AttributeID     int64   `json:"attribute_id"`
 	Name            string  `json:"name"`

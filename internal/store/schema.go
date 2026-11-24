@@ -1059,6 +1059,11 @@ var pgFleetSignInSchema string
 //go:embed schema_pg/177_fleet_invites.sql
 var pgFleetInvitesSchema string
 
+// Step 178: the SDE API importer's per-table copies.
+//
+//go:embed schema_pg/178_sde_api_blobs.sql
+var pgSDEAPIBlobsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1264,6 +1269,7 @@ func schemaSteps() []schemaStep {
 		{175, "fleet explorer cards", pgFleetExplorerCardsSchema, ""},
 		{176, "fleet sign-in", pgFleetSignInSchema, ""},
 		{177, "fleet invites", pgFleetInvitesSchema, ""},
+		{178, "sde api blobs", pgSDEAPIBlobsSchema, ""},
 	}
 }
 

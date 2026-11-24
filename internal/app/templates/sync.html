@@ -153,10 +153,11 @@
 {{if .Sync.SDE}}
 <section class="card spanall" id="sync-sde">
 <h2>EVE static data (SDE)</h2>
-<p><small>Item, skill, station and system names come from a local copy of CCP's static data export (via Fuzzwork's CSV conversion), checked for updates weekly. ESI is only used for names the SDE lacks.</small></p>
+<p><small>Item, skill, station and system names come from a local copy of CCP's static data, read from CCP's SDE API and checked for a new release every 30 minutes. An import downloads only the tables that changed. ESI is only used for names the static data lacks.</small></p>
 <p>State: <strong>{{.Sync.SDE.State}}</strong>
 {{if .Sync.SDE.ImportedAt}} · imported {{.Sync.SDE.ImportedAt}}{{end}}
-<br><small>Source: {{.Sync.SDE.SourceBase}}</small></p>
+<br><small>Source: {{.Sync.SDE.SourceBase}}</small>
+{{if .Sync.SDE.Release}}<br><small>Release: {{.Sync.SDE.Release}}</small>{{end}}</p>
 {{if .Sync.SDE.Progress}}<p><small>{{.Sync.SDE.Progress}}</small></p>{{end}}
 {{if .Sync.SDE.Message}}<p><small>{{.Sync.SDE.Message}}</small></p>{{end}}
 {{if .Sync.SDE.LastError}}<p class="err">Last SDE error: {{.Sync.SDE.LastError}}</p>{{end}}
@@ -172,10 +173,10 @@
 </div>
 <div class="tw">
 <table>
-  <thead><tr><th>Dump file</th><th>Remote last modified</th></tr></thead>
+  <thead><tr><th>SDE API table</th><th>Version imported</th></tr></thead>
   <tbody>
-  {{range .Sync.SDE.Files}}
-    <tr><td>{{.File}}</td><td>{{.LastModified}}</td></tr>
+  {{range .Sync.SDE.Versions}}
+    <tr><td>{{.Table}}</td><td>{{if .Version}}<code>{{.Version}}</code>{{else}}none yet{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -183,11 +184,11 @@
 <form method="post" action="/admin/sync/sde"><button class="btn" type="submit">Check for SDE update</button></form>
 {{with .Sync.SDE.Override}}
 <p>Using an uploaded dump: <strong>{{.Label}}</strong>, uploaded {{.UploadedAt}} ({{.Size}}, sha256 {{.SHA}}).
-<br><small>Files from the upload: {{.Files}}. Every other file comes from the regular dump. The upload is retired when the regular dump changes.</small></p>
+<br><small>{{if .JSONL}}Tables from the upload: {{.Files}}. Every other table comes from the SDE API.{{else}}A CSV dump from the upload: {{.Files}}. A file it lacks keeps the rows stored before.{{end}} The upload is retired when the SDE API publishes a change to a table the importer reads.</small></p>
 <form method="post" action="/admin/sync/sde/upload/clear"><button class="btn" type="submit">Stop using the upload</button></form>
 {{end}}
 <h3>Upload a dump</h3>
-<p><small>A zip of dump CSV files (plain or .bz2) named as in the regular dump, for when the game changed before the regular dump did. Files the zip lacks come from the regular dump. Up to 96 MB.</small></p>
+<p><small>A zip of JSON Lines tables, such as CCP's static data zip, or of Fuzzwork's CSV files (plain or .bz2), for importing something other than the SDE API's current release. Tables a JSON Lines zip lacks come from the SDE API; a CSV zip must hold every file the import needs. Up to 160 MB.</small></p>
 <form method="post" action="/admin/sync/sde/upload" enctype="multipart/form-data">
 <label><small>Label</small> <input type="text" name="label" maxlength="200" placeholder="Fractured Skies, built from ESI"></label>
 <label><small>File</small> <input type="file" name="archive" accept=".zip,application/zip" required></label>

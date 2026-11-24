@@ -5035,6 +5035,8 @@
   function layoutTableCards(root) {
     var tables = (root || document).querySelectorAll("#main-content table, table");
     var i;
+    var prevX = window.scrollX || 0;
+    var prevY = window.scrollY || 0;
     var measure = [];
     for (i = 0; i < tables.length; i++) {
       var t = tables[i], mode = t.getAttribute("data-cards");
@@ -5048,7 +5050,9 @@
     for (i = 0; i < measure.length; i++) {
       if (measure[i][1] === null) {
         var box = measure[i][0].parentNode;
-        measure[i][1] = measure[i][0].scrollWidth > box.clientWidth + 1;
+        var w = box.clientWidth;
+        if (cardsWidths && box) cardsWidths.set(box, Math.round(w));
+        measure[i][1] = measure[i][0].scrollWidth > w + 1;
       }
     }
     for (i = 0; i < measure.length; i++) {
@@ -5061,6 +5065,12 @@
       table.classList.add("cards-on");
       var p = cardSortPicker(table);
       if (p) p.hidden = false;
+    }
+    // Removing .cards-on above temporarily shortens the document during
+    // measurement, which causes browsers to clamp window.scrollY upward;
+    // restore the reader's scroll position once .cards-on is back.
+    if (prevY > 0 && typeof window.scrollTo === "function" && window.scrollY !== prevY) {
+      window.scrollTo(prevX, prevY);
     }
   }
   // One observer for every table's box: a width change schedules
@@ -5857,6 +5867,7 @@
   "use strict";
   var openRoots = [];
   var docWired = false;
+  var scopePanelSeq = 0;
 
   function closeRoot(root) {
     var panel = root.querySelector("[data-assetscope-panel]");
@@ -5874,6 +5885,8 @@
     var input = root.querySelector("[data-assetscope-q]");
     var none = root.querySelector("[data-assetscope-none]");
     if (!btn || !panel) return;
+    if (!panel.id) panel.id = "asset-scope-panel-" + (++scopePanelSeq);
+    btn.setAttribute("aria-controls", panel.id);
     var wraps = Array.prototype.slice.call(root.querySelectorAll(".asset-scope-rowwrap"));
 
     // The rows are plain links that apply the moment they are
@@ -5942,6 +5955,8 @@
       row.setAttribute("data-sel-ready", "1");
       row.addEventListener("click", function (ev) {
         if (ev.target.closest("a, button, input, select, details, summary")) return;
+        var sel = window.getSelection && window.getSelection();
+        if (sel && sel.type === "Range" && String(sel).length > 0) return;
         var href = row.getAttribute("data-sel");
         if (!href) return;
         // The row's name link carries the same target; going

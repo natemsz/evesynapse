@@ -180,7 +180,8 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 		t.Fatalf("jobs page: status %d", code)
 	}
 	mustContain(t, "/industry/jobs/", body,
-		"Manufacturing", "Fixture Blueprint", "Rifter", "active", "12,345.67")
+		"Manufacturing", "Fixture Blueprint", "Rifter", "active", "12,345.67",
+		`data-row-sel data-sel="/industry/jobs/?`)
 	if strings.Contains(body, "bp-table") || strings.Contains(body, "mining-table") {
 		t.Error("/industry/jobs/ renders another page's block")
 	}

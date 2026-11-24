@@ -132,3 +132,25 @@ test("initMatrixRows: a row is wired at most once", function () {
   app.initMatrixRows(rootWith([row]));
   assert.equal((row._listeners.click || []).length, 1);
 });
+
+test("initMatrixRows: data-row-sel routes clicks through its matching link and ignores text selections", function () {
+  const href = "/industry/jobs/?job=42&list=1";
+  const row = fakeRow(href);
+  row.setAttribute("data-row-sel", "");
+  let linkClicks = 0;
+  const link = new El("a");
+  link.setAttribute("href", href);
+  link.click = function () { linkClicks++; };
+  row.querySelectorAll = function (sel) { return sel === "a[href]" ? [link] : []; };
+  app.initMatrixRows({
+    querySelectorAll(sel) {
+      return sel.indexOf("tr[data-row-sel][data-sel]") >= 0 ? [row] : [];
+    },
+  });
+  global.getSelection = function () { return { type: "Range", toString() { return "Blueprint"; } }; };
+  click(row, false);
+  assert.equal(linkClicks, 0);
+  global.getSelection = function () { return { type: "Caret", toString() { return ""; } }; };
+  click(row, false);
+  assert.equal(linkClicks, 1);
+});

@@ -27,7 +27,8 @@
    search field, so the button names the selection instead of
    squeezing to its caret. */
 .pane-dir-scope { flex: 1 1 12rem; min-width: 11rem; }
-.pane-dir-scope .asset-scope-btn { padding: 0.2rem 0.5rem; font-size: var(--fs-xs); }
+.pane-dir-scope .asset-scope-btn { padding: 0.2rem 1.75rem 0.2rem 0.5rem; font-size: var(--fs-xs); }
+.pane-dir-scope .charselector::after { right: 0.6rem; }
 .pane-dir #assets-dirfilter { flex: 1 1 100%; width: 100%; }
 .dir-foot { margin: 0.8rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
 
@@ -35,7 +36,12 @@
    saved filters, then the search and sort toolbar. */
 .amx-pane-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
 .amx-scope { flex: 0 1 16rem; min-width: 12rem; margin-left: auto; }
-.amx-scope .asset-scope-btn { padding: 0.35rem 0.7rem; font-size: var(--fs-sm); }
+.amx-scope .asset-scope-btn { padding: 0.35rem 1.9rem 0.35rem 0.7rem; font-size: var(--fs-sm); }
+/* Both Assets placements sit at their row's right end, so the panel
+   hangs from the button's right edge and stays wider than the compact
+   trigger. */
+.pane-dir-scope .asset-scope-panel,
+.amx-scope .asset-scope-panel { left: auto; right: 0; width: 17rem; max-width: min(20rem, 85vw); }
 .pane-main .pilltabs { margin-top: 0.7rem; }
 .pane-main .fchips { margin-top: 0.7rem; }
 

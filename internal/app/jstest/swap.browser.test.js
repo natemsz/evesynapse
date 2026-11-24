@@ -624,3 +624,40 @@ test("a content-mutated event drops the fetched-page cache", async function () {
   await waitFor(function () { return env.win.fetched.length > fetches; }, "refetch after mutation");
   await waitFor(function () { return env.mainEl.innerHTML.includes("MARKET"); }, "fresh page painted");
 });
+
+test("a same-page keep swap restores scroll after content-ready runs", async function () {
+  const JOBS_HTML = "<html><head><title>My Jobs · EveSynapse</title>" +
+    '<link rel="stylesheet" href="/static/style.css?v=1">' +
+    '<link rel="stylesheet" href="/static/bg.css?v=1">' +
+    '<link rel="stylesheet" href="/static/jobs.css?v=1">' +
+    '<link rel="stylesheet" href="/static/phone.css?v=1">' +
+    '<script src="/static/app.js"></script>' +
+    '<script src="/static/swap.js"></script></head>' +
+    '<body><main id="main-content"><div class="l-console jb" data-depth="2">JOB 42</div></main></body></html>';
+  const env = makeEnv({ pages: { "/industry/jobs/": JOBS_HTML } });
+  env.win.location = {
+    href: "https://app.test/industry/jobs/",
+    origin: "https://app.test",
+    pathname: "/industry/jobs/"
+  };
+  env.win.scrollY = 1400;
+  // Simulate a browser clamping scrollY to 0 while the newly swapped
+  // table lacks .cards-on, then expanding height during content-ready.
+  let expanded = false;
+  env.win.scrollTo = function (x, y) {
+    env.scrolls.push([x, y]);
+    env.win.scrollY = expanded ? y : 0;
+  };
+  const origDispatch = env.mainDoc.dispatchEvent;
+  env.mainDoc.dispatchEvent = function (ev) {
+    if (ev.type === "evesynapse:content-ready") expanded = true;
+    return origDispatch.call(env.mainDoc, ev);
+  };
+  loadSwap(env);
+  clickOn(env, "/industry/jobs/?job=42&list=1");
+  await waitFor(function () {
+    return env.events.includes("event:evesynapse:content-ready");
+  }, "content-ready");
+  assert.equal(env.win.scrollY, 1400);
+  assert.deepEqual(env.scrolls[env.scrolls.length - 1], [0, 1400]);
+});

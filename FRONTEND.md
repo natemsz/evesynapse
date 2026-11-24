@@ -39,8 +39,8 @@ bearing ones.
 - Per-surface files, loaded only where they belong (base.html
   gates them on section/page): `fit.js` (fitting), `plan.js`
   (build planner), `pi.js` (PI planner), `push.js` (notification
-  settings), `home.js` (the home grid: Customize, the fleet
-  filter, the Briefing pager), `map.js` (the universe map: a canvas drawn from the
+  settings), `home.js` (the home grid: placement, list fitting,
+  Customize, the fleet filter, the Briefing pager), `map.js` (the universe map: a canvas drawn from the
   stored, content-hashed payload at `/map/universe.json`, its
   colors read from `map.css` tokens and the legend's `.sec-N`
   swatches), and the surface files split out of app.js. A page
@@ -300,7 +300,8 @@ Data that can have nothing to say implements `Quiet() bool`, and
 a quiet card is left off the home outside Customize. Long lists
 render in full and mark rows beyond the card's cap with
 `data-wmore`; the expander machinery (above) supplies the
-More/Less toggle. Customize (drag, resize, remove, add) is layered
+More/Less toggle. In fixed rows the card is the box instead: lists
+fit it (see "The home grid" under Layout). Customize (drag, resize, remove, add) is layered
 over the plain customize forms, never a replacement for them.
 
 One card renders alone at `GET /home/widget/{key}` (signed in, own
@@ -583,6 +584,43 @@ properties as knobs and no media queries:
   aside once the reader goes below the console's top level (the
   directory, or the list when the console has no directory), so
   the deeper screen starts under the page head.
+
+### The home grid
+
+The home is a grid of widget cards on its own sheet, `home.css`,
+inside `.l-page`, so it measures the page and never the window.
+
+- **Columns** come from the page's width: three when the page is
+  at least 60rem wide, two from 36rem, one below. A card takes
+  `gw1`-`gw3` columns and `gh1`-`gh4` rows (its stored size); with
+  two columns a width of 3 draws as 2, and with one every card is
+  full width. `--home-cols` on the grid carries the count to
+  home.js.
+- **Rows** are named on the grid by `data-rows`. `auto`: a row is
+  as tall as what its cards hold (with two columns every card spans
+  one row). `fixed` (`?rows=fixed`, not stored): every row is
+  `--w-row` tall, growing with the page, and a card is exactly its
+  cells. Cards are size containers there (`container: widget /
+  size`), so their parts can read the box. Below 36rem rows are auto
+  in both kinds and cards are only inline-size containers: a size
+  container with an auto height collapses to nothing.
+- **Placement**: home.js writes each card's `grid-column` and
+  `grid-row` through the CSSOM. `homePack` puts each card at the
+  first free spot, row by row, the rule CSS `row dense` follows;
+  outside Customize `homeFillGaps` then closes a hole beside a card
+  by widening it, or under one by lengthening it, only to a size the
+  card declares. In Customize the holes show as "Add a widget"
+  cells that open the Add a widget dialog. It runs on load, on
+  content-ready, when the grid changes width, and inside every
+  Customize change. Without JavaScript the span classes and `row
+  dense` lay the grid out.
+- **Fitting** (fixed rows): a list marked `data-w-fit` (its
+  children are its rows) shows the whole rows that fit, and a line
+  after it says how many more there are, linking to the card's
+  `data-href`. When the card still does not fit, its parts after the
+  first are not drawn, the last first: a card never shows a part cut
+  in half. `homeFitCount` is the pure count. With one column the
+  server's cap (`data-wmore`) holds, with the same line.
 
 ### The console
 

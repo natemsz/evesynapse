@@ -492,6 +492,7 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 	}
 	if data.LoggedIn {
 		data.Home = app.buildHome(ctx, r.URL.Query().Get("customize") == "1")
+		data.Home.Rows = homeRowsFor(r)
 	}
 	// Tranquility status line: from the worker-warmed global
 	// store only; absent until the first intel pass lands it.

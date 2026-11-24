@@ -1,0 +1,143 @@
+/* Home: the signed-in Overview's widget grid. Loaded only on the home
+   page (base.html).
+
+   The grid measures the page it sits in (.l-page, container "page"),
+   never the window: three columns when the page is at least 60rem
+   wide, two from 36rem, one below. A widget takes gw1-3 columns and
+   gh1-4 rows, its stored size. With two columns a width of 3 draws as
+   2; with one, every widget is full width. --home-cols carries the
+   column count for home.js.
+
+   Rows come in two kinds, named on the grid by data-rows:
+   - auto: each row is as tall as what its cards hold. With two
+     columns every card spans one row.
+   - fixed (the page asked with ?rows=fixed): every row is one height,
+     --w-row, which grows with the page. A card is exactly its cells
+     and its content never stretches a row. Cards are size containers
+     there (container "widget"), so what is inside can read the box it
+     gets, and their lists show the whole rows that fit.
+   Below 36rem rows are auto in both kinds: each card is as tall as its
+   body, and cards are inline-size containers only (a size container
+   with an auto height would collapse to nothing).
+
+   home.js places every card at the first free spot, row by row
+   (homePack, the same rule as row dense placement), closes a hole
+   beside or under a card by growing it to a size it allows
+   (homeFillGaps), shows the holes in Customize as "Add a widget"
+   cells, and fits lists to their card (homeFitCount). Without
+   JavaScript the span classes and row dense placement lay the grid
+   out. */
+.grid.home-grid {
+  --home-cols: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  grid-auto-flow: row dense;
+  align-items: stretch;
+}
+.grid.home-grid > .card {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  justify-self: stretch;
+  display: flex;
+  flex-direction: column;
+  container: widget / inline-size;
+  /* A card scrolled to (the idle link to the fleet) lands below the
+     sticky top bar, not under it. */
+  scroll-margin-top: 4.75rem;
+}
+.grid.home-grid > .card > .card-body { flex: 1 1 auto; min-width: 0; }
+.grid.home-grid > .card > .card-body > :last-child { margin-bottom: 0; }
+/* Every card heading is one height, in Customize and out: a row as
+   tall as the corner buttons, the title on its centre line. */
+.grid.home-grid > .card > h3:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  box-sizing: border-box;
+  /* The 1.75rem buttons, the band's 0.55rem padding top and bottom,
+     and its 1px rule: a heading with the move handle and one without
+     stand the same height. */
+  min-height: calc(2.85rem + 1px);
+}
+/* A card's tables fit its width: cells wrap rather than pushing the
+   table past the card into a sideways scroll. */
+.grid.home-grid .tw table { width: 100%; }
+/* Cards are positioned (for the corner controls), so a table's
+   visually hidden header text would otherwise anchor to the card and
+   escape its scroller, widening the page on phones. */
+.grid.home-grid .tw { position: relative; }
+/* A card waiting for its render at a new size: the old one, dimmed,
+   until the new one lands. */
+.grid.home-grid > .card.w-stale { opacity: 0.55; transition: opacity 120ms ease; }
+/* Customize shows each card as the page shows it: summary only. */
+.home-custom [data-wmore] { display: none; }
+/* One column: every card is full width, so there is nothing to resize. */
+@container page (width < 36rem) {
+  .grid.home-grid .cardsize, .grid.home-grid .cardgrip, .grid.home-grid .sizepick { display: none; }
+}
+
+@container page (width >= 36rem) {
+  .grid.home-grid { --home-cols: 2; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.home-grid > .card { min-height: 8rem; }
+  .grid.home-grid > :is(.gw2, .gw3) { grid-column: span 2; }
+  .grid.home-grid[data-rows="fixed"] > .gh2 { grid-row: span 2; }
+  .grid.home-grid[data-rows="fixed"] > .gh3 { grid-row: span 3; }
+  .grid.home-grid[data-rows="fixed"] > .gh4 { grid-row: span 4; }
+}
+@container page (width >= 60rem) {
+  .grid.home-grid { --home-cols: 3; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid.home-grid > .gw3 { grid-column: span 3; }
+  .grid.home-grid > .gh2 { grid-row: span 2; }
+  .grid.home-grid > .gh3 { grid-row: span 3; }
+  .grid.home-grid > .gh4 { grid-row: span 4; }
+}
+
+/* Fixed rows: about 168px a row on a 960px page, 184px on 1408px, and
+   216px at most. --w-row reads the page's width (cqi of the page
+   container), so it is set and used on the grid, never inside a card,
+   where cqi would read the card. */
+@container page (width >= 36rem) {
+  .grid.home-grid[data-rows="fixed"] {
+    --w-row: clamp(10rem, 8.35rem + 3.6cqi, 13.5rem);
+    grid-auto-rows: var(--w-row);
+    gap: var(--space-4);
+  }
+  .grid.home-grid[data-rows="fixed"] > .card { container: widget / size; min-height: 0; }
+  .grid.home-grid[data-rows="fixed"] > .card > .card-body { min-height: 0; overflow: hidden; }
+}
+
+/* Lists in fixed rows. Rows past the server's cap (data-wmore) stay
+   hidden until home.js measures the list (.w-fitting): then it shows
+   the whole rows that fit and hides the rest (.w-cut), and the line
+   after the list says how many more there are, linking to the
+   widget's page. Without JavaScript the server's cap holds. */
+.grid.home-grid[data-rows="fixed"] [data-wmore] { display: none; }
+.grid.home-grid[data-rows="fixed"] .w-fitting > [data-wmore] { display: revert; }
+.grid.home-grid[data-rows="fixed"] .w-fitting > .w-cut { display: none; }
+/* A part a fixed card has no room for once its lists gave up their
+   rows is not drawn, rather than drawn cut in half. */
+.grid.home-grid[data-rows="fixed"] > .card > .card-body > .w-drop { display: none; }
+.grid.home-grid .w-more { margin: 0.35rem 0 0; color: var(--muted); }
+.grid.home-grid .w-more[hidden] { display: none; }
+
+/* A hole in Customize: an empty run of cells that opens Add a widget. */
+.grid.home-grid > .w-hole {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 4rem;
+  padding: var(--space-3);
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+  text-decoration: none;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+.grid.home-grid > .w-hole:hover, .grid.home-grid > .w-hole:focus-visible {
+  color: var(--text-bright);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  outline: none;
+}

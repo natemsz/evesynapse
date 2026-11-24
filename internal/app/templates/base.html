@@ -47,6 +47,7 @@
 <link rel="stylesheet" href="/static/bg.css?v={{.AssetVersion}}">
 {{if assetsBase}}<link rel="stylesheet" href="/static/wallpapers-cdn.css?v={{.AssetVersion}}"><script src="/static/assets-probe.js?v={{.AssetVersion}}"></script>{{end}}
 <link rel="stylesheet" href="/static/layout.css?v={{.AssetVersion}}">
+{{if eq .NavPage "home.html"}}<link rel="stylesheet" href="/static/home.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "planner.html") (eq .NavPage "industry.html")}}<link rel="stylesheet" href="/static/plan.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "character.html"}}<link rel="stylesheet" href="/static/overview.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<link rel="stylesheet" href="/static/contracts.css?v={{.AssetVersion}}">{{end}}

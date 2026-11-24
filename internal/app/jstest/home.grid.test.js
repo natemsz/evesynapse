@@ -1,9 +1,10 @@
 // Tests for the home grid helpers in ../static/home.js: the sizes a
 // widget declares and the one a wanted size lands on
-// (homeParseSizes, homeSnapToAllowed) and the two-across fill plan
-// (homeFillPlan: which module closes a row short and widens to
-// finish it). app.js and home.js run under a small DOM stub; only the pure
-// helpers it exports for node are exercised.
+// (homeParseSizes, homeSnapToAllowed), where each widget goes
+// (homePack), how holes close (homeFillGaps) and how many rows of a
+// list fit its card (homeFitCount). app.js and home.js run under a
+// small DOM stub; only the pure helpers they export for node are
+// exercised.
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -145,19 +146,6 @@ test("homeResizeFrame: follows the pointer, held to the ceiling and half a cell"
   assert.deepEqual(app.homeResizeFrame(200, 176, -500, -500, 294, 358, 100, 182), { w: 50, h: 91 }, "half a cell is the floor");
 });
 
-test("homeRowPitch: the resized module's own row step, not the smallest on the page", function () {
-  // Rows size by content: the first row stands 400 tall, the
-  // resized module's row 160. The old measure took the smallest
-  // step on the page, so a drag in the tall row committed cells
-  // the frame never covered.
-  const tops = [0, 400, 560, 720];
-  assert.equal(app.homeRowPitch(tops, 400, 182), 160, "the step out of the module's own row");
-  assert.equal(app.homeRowPitch(tops, 0, 182), 400, "the first row steps to the second");
-  assert.equal(app.homeRowPitch(tops, 720, 182), 160, "the last row reads the step into it");
-  assert.equal(app.homeRowPitch([0, 0, 400, 400], 400, 182), 400, "cards sharing a row top collapse to one row");
-  assert.equal(app.homeRowPitch([120], 120, 182), 182, "a single row falls back");
-});
-
 test("homeSnapCommit: release commits the cells the frame covered", function () {
   // The drag's hysteresis holds the starting cell until the
   // pointer is 62% across the next one; on release the committed
@@ -170,10 +158,50 @@ test("homeSnapCommit: release commits the cells the frame covered", function () 
   assert.equal(app.homeSnapCommit(2, -9999, 180, 3), 1, "one cell is the commit floor");
 });
 
-test("homeFillPlan: the module closing a row short widens to finish it", function () {
-  assert.deepEqual(app.homeFillPlan([1], 2), [0], "a lone cell fills its row");
-  assert.deepEqual(app.homeFillPlan([1, 1], 2), [], "an exact row leaves nothing to fill");
-  assert.deepEqual(app.homeFillPlan([2, 1, 1], 2), [], "the wide module's row is finished by the pair after it");
-  assert.deepEqual(app.homeFillPlan([1, 2], 2), [0], "the narrow module before a wide one finishes its row");
-  assert.deepEqual(app.homeFillPlan([2, 2], 3), [0, 1], "two wides on a three-column grid each close short");
+test("homePack: each widget takes the first spot it fits, row by row", function () {
+  // Three columns: a band, then a tall one beside a square, then a
+  // wide one that cannot fit beside them and starts a new row; the
+  // square after it closes the hole the wide one left.
+  const got = app.homePack([{ w: 3, h: 1 }, { w: 1, h: 2 }, { w: 1, h: 1 }, { w: 2, h: 2 }, { w: 1, h: 1 }], 3);
+  assert.deepEqual(got, [
+    { x: 0, y: 0, w: 3, h: 1 },
+    { x: 0, y: 1, w: 1, h: 2 },
+    { x: 1, y: 1, w: 1, h: 1 },
+    { x: 1, y: 2, w: 2, h: 2 },
+    { x: 2, y: 1, w: 1, h: 1 },
+  ]);
+  assert.deepEqual(app.homePack([{ w: 3, h: 1 }, { w: 1, h: 1 }], 2), [{ x: 0, y: 0, w: 2, h: 1 }, { x: 0, y: 1, w: 1, h: 1 }], "a width past the columns draws as the columns");
+});
+
+test("homeFillGaps: a hole closes by widening or lengthening, only to an allowed size", function () {
+  const sizes = function (list) { return list.split(" ").map(function (s) { return { w: +s[0], h: +s[2] }; }); };
+  // A lone square at the end of a three-column grid widens across
+  // the hole beside it when it may.
+  let placed = [{ x: 0, y: 0, w: 3, h: 1, sizes: sizes("3x1") }, { x: 0, y: 1, w: 1, h: 1, sizes: sizes("1x1 2x1 3x1") }];
+  assert.deepEqual(app.homeFillGaps(placed, 3)[1], { x: 0, y: 1, w: 3, h: 1 }, "widened to the row's end");
+  placed[1].sizes = sizes("1x1 2x1");
+  assert.deepEqual(app.homeFillGaps(placed, 3)[1], { x: 0, y: 1, w: 2, h: 1 }, "as far as an allowed size reaches");
+  placed[1].sizes = sizes("1x1");
+  assert.deepEqual(app.homeFillGaps(placed, 3)[1], { x: 0, y: 1, w: 1, h: 1 }, "a widget with no wider size stays");
+  // A hole under a widget: the one above lengthens into it.
+  placed = [
+    { x: 0, y: 0, w: 1, h: 2, sizes: sizes("1x2") },
+    { x: 1, y: 0, w: 1, h: 1, sizes: sizes("1x1 1x2") },
+    { x: 0, y: 2, w: 2, h: 1, sizes: sizes("2x1") },
+  ];
+  assert.deepEqual(app.homeFillGaps(placed, 2)[1], { x: 1, y: 0, w: 1, h: 2 }, "lengthened into the hole under it");
+  // The widget right of a hole widens leftwards when the one on its
+  // left cannot grow.
+  placed = [
+    { x: 0, y: 0, w: 1, h: 1, sizes: sizes("1x1") },
+    { x: 2, y: 0, w: 1, h: 1, sizes: sizes("1x1 2x1") },
+  ];
+  assert.deepEqual(app.homeFillGaps(placed, 3)[1], { x: 1, y: 0, w: 2, h: 1 }, "widened leftwards");
+});
+
+test("homeFitCount: the rows whose bottom stays above the limit", function () {
+  assert.equal(app.homeFitCount([20, 40, 60, 80], 65), 3);
+  assert.equal(app.homeFitCount([20, 40, 60, 80], 80.4), 4, "half a pixel of rounding is forgiven");
+  assert.equal(app.homeFitCount([20, 40, 60, 80], 10), 0, "no room, no rows");
+  assert.equal(app.homeFitCount([], 100), 0);
 });

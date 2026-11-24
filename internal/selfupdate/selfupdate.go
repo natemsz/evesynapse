@@ -1488,7 +1488,7 @@ func ensureRuntimeDir(w io.Writer) {
 			}
 		}
 		if !strings.Contains(content, "RuntimeDirectory=") {
-			fmt.Fprintln(w, "Notice: /etc/systemd/system/evesynapse.service is missing 'RuntimeDirectory=evesynapse'. Updating the unit file or running deploy/setup.sh is recommended.")
+			fmt.Fprintln(w, "Notice: /etc/systemd/system/evesynapse.service is missing 'RuntimeDirectory=evesynapse'. Updating the unit file or re-running the EveSynapse installer is recommended.")
 		}
 	}
 

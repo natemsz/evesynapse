@@ -13,11 +13,11 @@
 # starts after PostgreSQL (and stops before it: shutdown ordering
 # follows After= in reverse).
 #
-# The install directory and the program in it belong to root (see
-# deploy/setup.sh), because root runs that program for updates. The
-# server's one writable place is the runtime directory below.
+# The install directory and the program in it belong to root (set up
+# by evesynapse-installer), because root runs that program for updates.
+# The server's one writable place is the runtime directory below.
 #
-# Apply once on the box (deploy/setup.sh does this for you):
+# Apply once on the box (evesynapse-installer does this for you):
 #   sudo cp deploy/evesynapse.service /etc/systemd/system/evesynapse.service
 #   sudo systemctl daemon-reload
 

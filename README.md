@@ -166,6 +166,10 @@ good reason:
 
 The file-by-file listing is on the wiki's [Code Layout](https://natems.dev/EveSynapse/evesynapse/wiki/Code-Layout) page, and [Architecture](https://natems.dev/EveSynapse/evesynapse/wiki/Architecture) explains the modules.
 
+## Installing
+
+The recommended way to install EveSynapse is the standalone [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer) ([latest release](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest)). It handles the binary, PostgreSQL setup, configuration, and service unit interactively. Full instructions and manual setup steps live on the wiki's [Installation](https://natems.dev/EveSynapse/evesynapse/wiki/Installation) page.
+
 ## Build from source
 
 Needs Go (the version in `go.mod`). The full build commands are
@@ -186,18 +190,7 @@ go run ./cmd/modbuild -all -write                     # back to the default, eve
 
 `-core-only` is the empty selection (`go build -tags core_only` compiles none regardless of the file). CI checks that the default file is the all-modules selection and that each module builds on its own with what it requires.
 
-Install your build with the setup script's `--build` mode,
-which does the build and the install in one go:
-
-```sh
-sudo bash deploy/setup.sh --build
-```
-
-Or install a build you already made:
-
-```sh
-sudo EVESYNAPSE_BINARY=$PWD/bin/evesynapse bash deploy/setup.sh
-```
+To install a custom build or build from source on a server, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) or follow the [Installation](https://natems.dev/EveSynapse/evesynapse/wiki/Installation) guide.
 
 ## Command-line modes
 

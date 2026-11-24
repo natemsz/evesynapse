@@ -3,7 +3,7 @@
 # GitHub credential is stored on any other forge. The files
 # published are the identical signed files the Forgejo
 # release made (Forgejo stays the one builder and signer):
-# this job waits for that release, downloads its eight
+# this job waits for that release, downloads its seven
 # files, checks each binary's SHA256 against the signed
 # latest.json, and only then creates the GitHub release under the
 # same tag, title and notes, so the updater finds the same
@@ -47,8 +47,8 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           for i in $(seq 1 45); do
             if curl -sf "$FORGEJO_API/releases/tags/$TAG" -o release.json \
-              && [ "$(jq '.assets | length' release.json)" = "8" ]; then
-              echo "Forgejo release $TAG is published with all eight files."
+              && [ "$(jq '.assets | length' release.json)" = "7" ]; then
+              echo "Forgejo release $TAG is published with all seven files."
               exit 0
             fi
             echo "Waiting for the Forgejo release $TAG (try $i of 45)."

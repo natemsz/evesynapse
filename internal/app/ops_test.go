@@ -691,9 +691,10 @@ func TestLiveFleetShowsEachPilotWhatTheirRankShowsInGame(t *testing.T) {
 	const pilot = "Pilot #95000001"
 	const pilotLink = "character=95000001"
 	ship := func(typeID int) string { return fmt.Sprintf("/items/type/%d/", typeID) }
+	// The edit forms live in the table view, which only commanders get.
 	sees := func(who string, cookie *http.Cookie, want, hidden []string) {
 		t.Helper()
-		code, _, body := f.get(cookie, path)
+		code, _, body := f.get(cookie, path+"?view=table")
 		if code != http.StatusOK {
 			t.Fatalf("%s: composition answered %d", who, code)
 		}

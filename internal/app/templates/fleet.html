@@ -44,11 +44,21 @@
 <div class="fl-main">
 
 {{with .LiveView}}
+{{if .Summary}}
+<section class="l-panel" aria-labelledby="fl-structure-title">
+  <div class="fl-panel-head">
+    <h2 id="fl-structure-title">The fleet by ship class</h2>
+    <a class="btn btn-quiet" href="/fleets/{{.ID}}/composition">See all {{.Comp.Pilots}} pilots</a>
+  </div>
+  <ul class="fl-classlist" role="list">{{range .Summary}}<li><span class="fl-classlist-name">{{.Name}}</span><b>{{.Pilots}}</b>{{template "fleet-hulls" .}}</li>{{end}}</ul>
+</section>
+{{else}}
 <section class="l-panel" aria-labelledby="fl-structure-title">
   <h2 id="fl-structure-title">Fleet structure</h2>
   {{if not .Full}}<p class="fl-hint">Everyone in the fleet sees its names and positions. Ships show for you and the pilots under your command, as in EVE.</p>{{end}}
   {{template "fleet-structure" .}}
 </section>
+{{end}}
 {{end}}
 
 {{if .Totals}}

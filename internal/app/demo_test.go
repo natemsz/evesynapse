@@ -851,7 +851,8 @@ func TestDemoFleetToolsStoreNothing(t *testing.T) {
 	try := func(c *http.Cookie) *httptest.ResponseRecorder {
 		t.Helper()
 		form := url.Values{"edits": {fmt.Sprintf(`{"%d":{"role":"EWAR","tags":"jam logi"}}`, demoPilotQuinn)}}
-		req := httptest.NewRequest(http.MethodPost, fleetCompositionPath(opID)+"/try", strings.NewReader(form.Encode()))
+		// Edits are made from the table view; the answer comes back in it.
+		req := httptest.NewRequest(http.MethodPost, fleetCompositionPath(opID)+"/try?view=table", strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.AddCookie(c)
 		rec := httptest.NewRecorder()

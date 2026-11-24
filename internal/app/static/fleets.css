@@ -143,9 +143,9 @@
 .fl-signin > legend { margin-bottom: var(--space-2); }
 .fl-grants { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
 /* Where a pilot is now, for those running a fleet that asks for it. */
-.fl-now { display: inline-flex; align-items: center; gap: 0.4em; }
-.fl-now img { flex: none; border-radius: 2px; background: var(--row-alt); }
-.fl-now small { color: var(--muted); }
+.fl-where { display: inline-flex; align-items: center; gap: 0.4em; }
+.fl-where img { flex: none; border-radius: 2px; background: var(--row-alt); }
+.fl-where small { color: var(--muted); }
 .fl-signup-form { display: flex; flex-direction: column; gap: var(--space-3); }
 .fl-signup-form > button { align-self: flex-start; }
 .fl-as { margin: 0; }

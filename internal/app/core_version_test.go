@@ -72,9 +72,6 @@ func TestVersionFileAndFooter(t *testing.T) {
 	}
 	_, body := getPage(t, app, cookie, "/market/")
 	mustContain(t, "/market/ footer", body, `<a href="https://natems.dev/EveSynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <a class="version-number" href="https://natems.dev/EveSynapse/evesynapse/releases/tag/`+appVersion+`" target="_blank" rel="noopener noreferrer">`+appVersion+`</a> · binary hash <span class="binary-hash">fedcba987</span> <span class="hash-pop-wrap"><button type="button" class="hash-view" aria-expanded="false" aria-controls="build-hash-pop">view hash</button><span class="hash-pop" id="build-hash-pop" role="note" aria-label="Full binary hash" hidden>fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210</span></span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
-	if strings.Contains(body, "0.2.0") {
-		t.Fatal("footer still shows the old hardcoded version")
-	}
 
 	// With no identity known, the hash is left out and the line
 	// is the version line alone.

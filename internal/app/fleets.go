@@ -97,9 +97,16 @@ var fleetVisibilityOptions = []fleetOption{
 
 var fleetJoinOptions = []fleetOption{
 	{Value: joinAnyone, Label: "Anyone", Hint: "Everyone who can open the fleet sees where to form up. Going on the roster takes an EVE sign-in."},
-	{Value: joinVerified, Label: "Any EVE pilot", Hint: "Pilots sign in with EVE to see where to form up and sign up. No account needed."},
 	{Value: joinAccount, Label: "EveSynapse accounts", Hint: "Only pilots with an account here can sign up."},
 	{Value: joinByRule, Label: "Only who you choose", Hint: "Only the people you pick below can sign up."},
+}
+
+// fleetSignInOptions are what a fleet can ask of the pilots who sign up,
+// apart from who may (fleets_access.go).
+var fleetSignInOptions = []fleetOption{
+	{Value: signInNone, Label: "No sign-in", Hint: "Anyone who can open the fleet sees where it forms up. Going on the roster still takes an EVE sign-in."},
+	{Value: signInEVE, Label: "EVE sign-in", Hint: "Pilots sign in with EVE to see where it forms up and to sign up. No permissions are asked and no account is needed."},
+	{Value: signInScopes, Label: "EVE sign-in with the fleet's permissions", Hint: "Pilots sign up with an EveSynapse character that shares its kills and losses, and where it is and what it flies, with those running the fleet."},
 }
 
 // What a fleet flies (ops.doctrine_mode). Stored: never rename.
@@ -143,6 +150,24 @@ func fleetKindText(fleetType string) string {
 		return "Fleet"
 	}
 	return fleetOptionLabel(fleetTypeOptions, fleetType) + " fleet"
+}
+
+// opGrantLink is one of the viewer's characters with the sign-in that
+// grants it a fleet's permissions.
+type opGrantLink struct {
+	Name, Href string
+}
+
+// fleetSignInText says what signing up asks of a pilot, for the fleet's
+// facts; nothing when it asks nothing.
+func fleetSignInText(signIn string) string {
+	switch signIn {
+	case signInEVE:
+		return "An EVE sign-in, with no permissions"
+	case signInScopes:
+		return "An EveSynapse character that shares its kills and losses, and where it is and what it flies, with those running the fleet"
+	}
+	return ""
 }
 
 // fleetJoinSummary says who can sign up, as a viewer reads it.
@@ -216,9 +241,11 @@ type opFormView struct {
 	Type         string
 	Visibility   string
 	JoinGate     string
+	SignIn       string
 	ViewRule     string
 	JoinRule     string
 	RosterPublic bool
+	SignIns      []fleetOption
 	Types        []fleetOption
 	Visibilities []fleetOption
 	Gates        []fleetOption
@@ -289,6 +316,7 @@ func (app *Application) opFormFor(ctx context.Context, v fleetViewer, form *opFo
 	form.Types = fleetOptions(fleetTypeOptions, form.Type)
 	form.Visibilities = fleetOptions(fleetVisibilityOptions, form.Visibility)
 	form.Gates = fleetOptions(fleetJoinOptions, form.JoinGate)
+	form.SignIns = fleetOptions(fleetSignInOptions, form.SignIn)
 	if form.CanSetAccess {
 		form.RuleChoices = app.fleetRuleChoices(ctx, v, owner, form.ViewRule, form.JoinRule)
 	}
@@ -342,7 +370,7 @@ func (app *Application) handleOpNew(w http.ResponseWriter, r *http.Request) {
 	}
 	form := &opFormView{
 		StartsAt: start.Format(opDateTimeLayout), Duration: 60, CanSetAccess: true,
-		Type: defaultFleetType(owner), Visibility: fleetRestricted, JoinGate: joinByRule,
+		Type: defaultFleetType(owner), Visibility: fleetRestricted, JoinGate: joinByRule, SignIn: signInNone,
 		ViewRule: ruleMember, JoinRule: ruleMember, DoctrineMode: doctrineNone,
 	}
 	app.opFormFor(ctx, v, form, owner, sessionCharID(app.sessions, ctx))
@@ -364,7 +392,7 @@ func (app *Application) handleOpEdit(w http.ResponseWriter, r *http.Request) {
 		StartsAt: op.StartsAt.UTC().Format(opDateTimeLayout), Duration: op.DurationMinutes,
 		Doctrine: op.Doctrine, DoctrineID: op.DoctrineID, DoctrineMode: op.DoctrineMode,
 		DoctrineLocked: opEnd(op).Before(time.Now()), FormUp: op.FormUp,
-		CanSetAccess: a.Plan, Type: op.FleetType, Visibility: op.Visibility, JoinGate: op.JoinGate,
+		CanSetAccess: a.Plan, Type: op.FleetType, Visibility: op.Visibility, JoinGate: op.JoinGate, SignIn: op.SignIn,
 		RosterPublic: op.RosterPublic, ViewRule: ruleMember, JoinRule: ruleMember,
 		SRPPolicyID: op.SrpPolicyID.Int64,
 	}
@@ -415,6 +443,7 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 		Type:         r.FormValue("fleet_type"),
 		Visibility:   r.FormValue("visibility"),
 		JoinGate:     r.FormValue("join_gate"),
+		SignIn:       r.FormValue("sign_in"),
 		ViewRule:     r.FormValue("view_rule"),
 		JoinRule:     r.FormValue("join_rule"),
 		RosterPublic: r.FormValue("roster_public") == "1",
@@ -444,6 +473,7 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 			// A commander changes the details only.
 			fcID = op.FcCharacterID
 			form.Type, form.Visibility, form.JoinGate, form.RosterPublic = op.FleetType, op.Visibility, op.JoinGate, op.RosterPublic
+			form.SignIn = op.SignIn
 			form.SRPPolicyID, form.SRPPolicySet = op.SrpPolicyID.Int64, false
 		}
 	} else {
@@ -510,6 +540,13 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 		if !validFleetOption(fleetJoinOptions, form.JoinGate) {
 			form.JoinGate = joinByRule
 			form.Errors = append(form.Errors, "Choose who can sign up.")
+		}
+		if form.SignIn == "" {
+			form.SignIn = signInNone
+		}
+		if !validFleetOption(fleetSignInOptions, form.SignIn) {
+			form.SignIn = signInNone
+			form.Errors = append(form.Errors, "Choose what signing up asks of a pilot.")
 		}
 		var keep []string
 		if id != 0 {
@@ -623,7 +660,7 @@ func (app *Application) saveFleet(ctx context.Context, form *opFormView, owner o
 		}
 		id, err = q.CreateFleet(ctx, db.CreateFleetParams{
 			CorporationID: corp, OwnerKind: owner.Kind, OwnerID: owner.ID, FleetType: form.Type,
-			Visibility: form.Visibility, JoinGate: form.JoinGate, RosterPublic: form.RosterPublic,
+			Visibility: form.Visibility, JoinGate: form.JoinGate, SignIn: form.SignIn, RosterPublic: form.RosterPublic,
 			ShareToken: sql.NullString{String: token, Valid: true}, Title: form.Title, Description: form.Description,
 			StartsAt: start, DurationMinutes: form.Duration, Doctrine: form.Doctrine, DoctrineID: form.DoctrineID, DoctrineMode: form.DoctrineMode,
 			FormUp: form.FormUp, FcCharacterID: fcID, CreatedByCharacter: sessionCharID(app.sessions, ctx), CreatedAt: now,
@@ -640,7 +677,7 @@ func (app *Application) saveFleet(ctx context.Context, form *opFormView, owner o
 		}
 		if form.CanSetAccess {
 			if err := q.UpdateFleetAccess(ctx, db.UpdateFleetAccessParams{
-				ID: id, FleetType: form.Type, Visibility: form.Visibility, JoinGate: form.JoinGate, RosterPublic: form.RosterPublic,
+				ID: id, FleetType: form.Type, Visibility: form.Visibility, JoinGate: form.JoinGate, SignIn: form.SignIn, RosterPublic: form.RosterPublic,
 			}); err != nil {
 				return 0, err
 			}
@@ -723,6 +760,12 @@ type opSignupRow struct {
 	Note        string
 	// CanCommand: a planner can make this pilot a co-FC.
 	CanCommand bool
+	// Where the pilot is and what they fly as last read, for those
+	// running a fleet that asks for its permissions (fillRosterWhere).
+	NowShipID int64
+	NowShip   string
+	NowSystem string
+	NowAge    string
 }
 
 type opRoleCount struct {
@@ -751,14 +794,25 @@ type opView struct {
 	Kind        string // "NPSI fleet", or plain "Fleet" for any other kind
 	Visibility  string
 	JoinGate    string
-	When        string // "Mon Oct 12, 19:00 EVE"
-	Day         string
-	Clock       string
-	WhenRaw     string // RFC3339, drives the live countdown
-	Length      string
-	Doctrine    string
-	DoctrineURL string     // the doctrine's page, for those who can read it
-	DoctrineFit []fleetFit // its fits: what to bring
+	// ShowWhere: the roster shows where each pilot is now (a fleet that
+	// asks for its permissions, to those running it, until it ends).
+	ShowWhere bool
+	// What signing up asks of a pilot, when it asks more than nothing.
+	SignInText string
+	// AsksPermissions: the fleet asks for its permissions. NeedGrant are
+	// the viewer's characters that may sign up once they grant them (each
+	// with its re-link), NeedAccount a pilot with no account.
+	AsksPermissions bool
+	NeedGrant       []opGrantLink
+	NeedAccount     bool
+	When            string // "Mon Oct 12, 19:00 EVE"
+	Day             string
+	Clock           string
+	WhenRaw         string // RFC3339, drives the live countdown
+	Length          string
+	Doctrine        string
+	DoctrineURL     string     // the doctrine's page, for those who can read it
+	DoctrineFit     []fleetFit // its fits: what to bring
 	// DoctrineRequired: pilots are told to bring one of its fits.
 	DoctrineRequired bool
 	FormUp           string
@@ -892,11 +946,13 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 	start := op.StartsAt.UTC()
 	view := &opView{
 		ID: op.ID, Title: op.Title, Description: op.Description, Owner: app.ownerName(ctx, owner),
-		Kind:       fleetKindText(op.FleetType),
-		Visibility: fleetOptionLabel(fleetVisibilityOptions, op.Visibility),
-		JoinGate:   fleetJoinSummary(op, facts.Rules),
-		When:       start.Format("Mon Jan 2, 15:04") + " EVE",
-		Day:        start.Format("Mon Jan 2"), Clock: start.Format("15:04"),
+		Kind:            fleetKindText(op.FleetType),
+		Visibility:      fleetOptionLabel(fleetVisibilityOptions, op.Visibility),
+		JoinGate:        fleetJoinSummary(op, facts.Rules),
+		SignInText:      fleetSignInText(op.SignIn),
+		AsksPermissions: op.SignIn == signInScopes, NeedAccount: a.NeedAccount,
+		When: start.Format("Mon Jan 2, 15:04") + " EVE",
+		Day:  start.Format("Mon Jan 2"), Clock: start.Format("15:04"),
 		WhenRaw:   start.Format(time.RFC3339),
 		Length:    humanDuration(time.Duration(op.DurationMinutes) * time.Minute),
 		Doctrine:  op.Doctrine,
@@ -906,6 +962,9 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 		CanManage: a.Manage, CanPlan: a.Plan, SeeNames: a.SeeNames, SeeFormUp: a.SeeFormUp, CanJoin: a.Join,
 		Level: v.level(), SignIn: "/auth/pilot?next=" + url.QueryEscape(path), Account: "/auth/link?from=cards",
 		ComingCount: op.ComingCount, MaybeCount: op.MaybeCount, Roles: opFleetRoles,
+	}
+	for _, c := range a.NeedGrant {
+		view.NeedGrant = append(view.NeedGrant, opGrantLink{Name: c.Name, Href: relinkURL(fleetPilotModule, c.CharacterID) + "&next=" + url.QueryEscape(path)})
 	}
 	if v.Pilot != nil {
 		view.PilotName = v.Pilot.Name
@@ -981,7 +1040,7 @@ func (app *Application) renderFleet(w http.ResponseWriter, r *http.Request, op d
 		view.Running = fleetRunningText(now.Sub(op.StartsAt))
 	}
 	if live.sight.In {
-		view.LiveView = app.fleetLiveFor(ctx, op, v, a, live, 1, now)
+		view.LiveView = app.fleetLiveFor(ctx, op, v, a, live, fleetListQuery{}, now)
 		for _, m := range live.comp.Members {
 			if live.sight.own[m.ID] {
 				seat := m.Name + ", " + strings.ToLower(m.PositionText())
@@ -1196,9 +1255,77 @@ func (app *Application) fillFleetRoster(ctx context.Context, view *opView, op db
 			view.RoleCounts = append(view.RoleCounts, opRoleCount{Role: role, Count: counts[role]})
 		}
 	}
+	if op.SignIn == signInScopes && a.Manage && !opEnd(op).Before(time.Now()) {
+		view.ShowWhere = true
+		app.fillRosterWhere(ctx, view.Yes, view.Maybe)
+	}
 	for _, group := range []opRosterGroup{{"", view.Yes}, {"Maybe", view.Maybe}, {"Not coming", view.No}} {
 		if len(group.Rows) > 0 {
 			view.Roster = append(view.Roster, group)
+		}
+	}
+}
+
+// fillRosterWhere gives the coming and maybe pilots of a fleet that asks
+// for its permissions where they are and what they fly, from their
+// stored location and ship, in one read for the whole roster. A pilot
+// who has not been read since granting shows nothing.
+func (app *Application) fillRosterWhere(ctx context.Context, lists ...[]opSignupRow) {
+	var ids []int64
+	for _, list := range lists {
+		for _, r := range list {
+			ids = append(ids, r.CharacterID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	rows, err := app.queries.ListPositionSnapshotsForCharacters(ctx, ids)
+	if err != nil {
+		logging.Errorf("fleets: where the roster is: %v", err)
+		return
+	}
+	type where struct {
+		ship, system int64
+		at           time.Time
+	}
+	at := map[int64]*where{}
+	for _, row := range rows {
+		w := at[row.CharacterID]
+		if w == nil {
+			w = &where{}
+			at[row.CharacterID] = w
+		}
+		switch row.Kind {
+		case esi.SnapLocation:
+			var loc esi.Location
+			if json.Unmarshal([]byte(row.Payload), &loc) == nil {
+				w.system, w.at = loc.SolarSystemID, row.FetchedAt
+			}
+		case esi.SnapShip:
+			var ship esi.Ship
+			if json.Unmarshal([]byte(row.Payload), &ship) == nil {
+				w.ship = ship.ShipTypeID
+			}
+		}
+	}
+	names := app.newKillNames(ctx)
+	now := time.Now()
+	for _, list := range lists {
+		for i := range list {
+			w := at[list[i].CharacterID]
+			if w == nil {
+				continue
+			}
+			if w.ship != 0 {
+				list[i].NowShipID, list[i].NowShip = w.ship, names.typeName(w.ship)
+			}
+			if w.system != 0 {
+				list[i].NowSystem = names.system(w.system).Name
+				if d := now.Sub(w.at); d >= 2*time.Minute {
+					list[i].NowAge = humanDuration(d.Truncate(time.Minute)) + " ago"
+				}
+			}
 		}
 	}
 }

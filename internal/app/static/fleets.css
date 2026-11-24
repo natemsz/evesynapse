@@ -137,7 +137,38 @@
 .fl-seat-tags { grid-area: tags; display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.2rem; }
 .fl-tag { padding: 0.05rem 0.4rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); color: var(--text); }
 
+/* The pilots panel (fleet_composition.html): the view links beside its
+   heading, the chips, and the list as cards that fill the width, a
+   heading per group. A fleet of two hundred in one squad reads as a few
+   columns of cards, not one long column. */
+.fl-pilotpanel .fl-panel-head .l-seg { margin: 0; }
+.fl-chipbar { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
+.fl-chiprow { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); }
+.fl-chiprow > .field-label { flex: none; min-width: 5.5rem; margin: 0; }
+.fl-chiprow .l-cluster { gap: var(--space-1); }
+.fl-chiprow .chip { text-decoration: none; white-space: nowrap; }
+.fl-chiprow .chip small { color: var(--muted); }
+.fl-shipchip { display: inline-flex; align-items: center; gap: 0.35em; }
+.fl-shipchip img { border-radius: 2px; }
+.fl-lgroup + .fl-lgroup { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--hairline); }
+.fl-sidebits { --l-min: 36rem; align-items: start; }
+.fl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: 0.15rem var(--space-3); }
+/* The Overview's line per ship class for a big flat fleet. */
+.fl-classlist { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.fl-classlist li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--hairline); }
+.fl-classlist li:last-child { border-bottom: 0; padding-bottom: 0; }
+.fl-classlist-name { color: var(--text-bright); }
+.fl-classlist b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
 /* Sign-up */
+/* What signing up asks: its own choice under who may sign up. */
+.fl-signin { margin: var(--space-3) 0 0; padding: var(--space-3) 0 0; border: 0; border-top: 1px solid var(--hairline); }
+.fl-signin > legend { margin-bottom: var(--space-2); }
+.fl-grants { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
+/* Where a pilot is now, for those running a fleet that asks for it. */
+.fl-where { display: inline-flex; align-items: center; gap: 0.4em; }
+.fl-where img { flex: none; border-radius: 2px; background: var(--row-alt); }
+.fl-where small { color: var(--muted); }
 .fl-signup-form { display: flex; flex-direction: column; gap: var(--space-3); }
 .fl-signup-form > button { align-self: flex-start; }
 .fl-as { margin: 0; }

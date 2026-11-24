@@ -67,55 +67,19 @@
 </div>
 {{end}}
 
+{{/* The list takes the page's width, so a big fleet fills it; the
+     systems and the invite list sit above it. The structure and the
+     table keep them at the side. */}}
+{{if eq $v.Mode "list"}}
+{{if or $v.Full $v.InviteCount}}<div class="l-switcher fl-sidebits">{{template "fleet-side" $v}}</div>{{end}}
+{{template "fleet-pilots" $v}}
+{{else}}
 <div class="l-sidebar l-sidebar--end fl-split">
-<div class="fl-main">
-<section class="l-panel" aria-labelledby="fl-structure-title">
-  <h2 id="fl-structure-title">Fleet structure</h2>
-  {{if not $v.Full}}<p class="fl-hint">Everyone in the fleet sees its names and positions. Ships show for you and the pilots under your command, as in EVE.</p>{{end}}
-  {{template "fleet-structure" $v}}
-</section>
+<div class="fl-main">{{template "fleet-pilots" $v}}</div>
+<aside class="fl-side" aria-label="Where the fleet is">{{template "fleet-side" $v}}</aside>
 </div>
-<aside class="fl-side" aria-label="Where the fleet is">
-  {{if $v.Full}}<section class="l-panel" aria-labelledby="fl-systems-title">
-    <h2 id="fl-systems-title">Systems</h2>
-    <ul class="fl-tally">{{range .Systems}}<li><span>{{if .Name}}{{.Name}}{{else}}Unknown system{{end}}</span><b>{{.Count}}</b></li>{{end}}</ul>
-  </section>{{end}}
-  {{template "fleet-invite" $v}}
-</aside>
-</div>
-
-{{if $v.CanEdit}}
-<section class="l-panel fl-pilots" aria-labelledby="fl-pilots-title">
-  <h2 id="fl-pilots-title">Roles and tags <small>{{.Pilots}}</small></h2>
-  <p class="fl-hint">Each pilot starts with the role their hull suggests. Edit a pilot to give another role, or tags: short notes for the commanders, separated by commas, up to 5.</p>
-  <div class="tw" tabindex="0" role="region" aria-labelledby="fl-pilots-title">
-  <table>
-    <thead><tr><th>Pilot</th><th>Ship</th><th>System</th><th>Role</th><th>Tags</th><th><span class="visually-hidden">Edit</span></th></tr></thead>
-    <tbody>
-    {{range $v.Members}}
-    {{$m := .}}
-    <tr>
-      <td data-label="Pilot">{{charLink $v.ViewerChars .ID .Name}}{{if .Commands}} <span class="badge fl-rank">{{.PositionText}}</span>{{end}}</td>
-      <td data-label="Ship">{{if .Hidden}}<span aria-hidden="true">-</span><span class="visually-hidden">Not shown</span>{{else}}{{template "fleet-shipcell" .}}{{if and $v.Comp.HasDoctrine (not .OnDoctrine)}} <span class="fl-off">not in doctrine</span>{{end}}{{end}}</td>
-      <td data-label="System">{{if .Hidden}}<span aria-hidden="true">-</span><span class="visually-hidden">Not shown</span>{{else}}{{.System}}{{end}}</td>
-      <td data-label="Role">{{with .Role}}<span class="fl-seat-role"><span class="fl-swatch {{$m.RoleClass}}" aria-hidden="true"></span>{{.}}</span>{{if not $m.Assigned}} <small>suggested</small>{{end}}{{end}}</td>
-      <td data-label="Tags">{{if .Tags}}<span class="fl-seat-tags">{{range .Tags}}<span class="fl-tag">{{.}}</span>{{end}}</span>{{end}}</td>
-      <td data-label="Edit"><details class="fl-edit" id="fl-e-{{.ID}}"><summary class="btn btn-quiet" aria-label="Edit {{.Name}}">Edit</summary>
-        <form id="fl-p-{{.ID}}" method="post" action="/fleets/{{$v.ID}}/pilot" class="fl-edit-form">
-          <input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="page" value="{{$v.Page}}">
-          <label class="field"><span class="field-label">Role</span><select name="role"><option value="">{{if .Suggested}}{{.Suggested}}, as the hull suggests{{else}}No role set{{end}}</option>{{range $v.Roles}}<option value="{{.}}"{{if eq . $m.Assigned}} selected{{end}}>{{.}}</option>{{end}}</select></label>
-          <label class="field"><span class="field-label">Tags</span><input type="text" name="tags" value="{{.TagText}}" maxlength="130" placeholder="e.g. anchor, webs"></label>
-          <button type="submit" aria-label="Save {{.Name}}">Save</button>
-        </form>
-      </details></td>
-    </tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  {{if gt $v.Pages 1}}<nav class="l-cluster fl-pager" aria-label="Pilot pages">{{with $v.PrevURL}}<a class="btn btn-quiet" href="{{.}}">Previous</a>{{end}}<span>Page {{$v.Page}} of {{$v.Pages}}</span>{{with $v.NextURL}}<a class="btn btn-quiet" href="{{.}}">Next</a>{{end}}</nav>{{end}}
-</section>
 {{end}}
+
 {{end}}
 {{else}}
 <section class="l-panel">
@@ -165,4 +129,93 @@
   </details>
 </section>
 {{end}}
+{{end}}
+
+{{/* The pilots panel's chips: what the list groups by, then a chip per
+     ship class (the most flown first) and, once a class is picked, its
+     hulls. Every chip is a link, so the page works without script and a
+     live refresh keeps the choice (fleet_pilot_list.go). */}}
+{{define "fleet-chips"}}
+<div class="fl-chipbar">
+  {{if eq .Mode "list"}}<div class="fl-chiprow"><span class="field-label" id="fl-groupby-l">Group by</span><nav class="l-cluster" aria-labelledby="fl-groupby-l">{{range .Groupings}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav></div>{{end}}
+  <div class="fl-chiprow"><span class="field-label" id="fl-classes-l">Ships</span><nav class="l-cluster" aria-labelledby="fl-classes-l">{{range .Classes}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}>{{.Label}} <small>{{.Count}}</small></a>{{end}}</nav></div>
+  {{if .Ships}}<div class="fl-chiprow"><span class="field-label" id="fl-ships-l">Hulls</span><nav class="l-cluster" aria-labelledby="fl-ships-l">{{range .Ships}}<a class="chip fl-shipchip{{if .On}} on{{end}}" href="{{.Href}}"{{if .On}} aria-current="true"{{end}}><img src="{{typeRender .TypeID 64}}" width="18" height="18" alt="" loading="lazy">{{.Label}} <small>{{.Count}}</small></a>{{end}}</nav></div>{{end}}
+</div>
+{{end}}
+
+{{/* The list: a heading per group with its hull mix, then its pilots as
+     cards that fill the width, so a fleet of two hundred in one squad
+     reads as a grid rather than one long column. */}}
+{{define "fleet-pilot-list"}}
+{{range .List}}
+<section class="fl-lgroup" aria-label="{{.Name}}">
+  <div class="fl-unit-head">
+    <h3 class="fl-unit-name">{{.Name}}</h3>
+    <span class="fl-unit-meta">{{.Pilots}} {{if eq .Pilots 1}}pilot{{else}}pilots{{end}}</span>
+    {{if le (len .Hulls) 6}}{{template "fleet-hulls" .}}{{end}}
+  </div>
+  <ul class="fl-seats fl-cards" role="list">{{range .Members}}{{template "fleet-seat" .}}{{end}}</ul>
+</section>
+{{else}}
+<p class="fl-empty">No pilot in the fleet flies that now.</p>
+{{end}}
+{{end}}
+
+{{/* The commander's table: every pilot the chips keep, a page at a
+     time, each with its role and tags to edit. A save comes back to the
+     same view (the list field). */}}
+{{define "fleet-pilot-table"}}{{$v := .}}
+<p class="fl-hint">Each pilot starts with the role their hull suggests. Edit a pilot to give another role, or tags: short notes for the commanders, separated by commas, up to 5.</p>
+<div class="tw" tabindex="0" role="region" aria-labelledby="fl-pilots-title">
+<table>
+  <thead><tr><th>Pilot</th><th>Ship</th><th>System</th><th>Role</th><th>Tags</th><th><span class="visually-hidden">Edit</span></th></tr></thead>
+  <tbody>
+  {{range $v.Members}}
+  {{$m := .}}
+  <tr>
+    <td data-label="Pilot">{{charLink $v.ViewerChars .ID .Name}}{{if .Commands}} <span class="badge fl-rank">{{.PositionText}}</span>{{end}}</td>
+    <td data-label="Ship">{{if .Hidden}}<span aria-hidden="true">-</span><span class="visually-hidden">Not shown</span>{{else}}{{template "fleet-shipcell" .}}{{if and $v.Comp.HasDoctrine (not .OnDoctrine)}} <span class="fl-off">not in doctrine</span>{{end}}{{end}}</td>
+    <td data-label="System">{{if .Hidden}}<span aria-hidden="true">-</span><span class="visually-hidden">Not shown</span>{{else}}{{.System}}{{end}}</td>
+    <td data-label="Role">{{with .Role}}<span class="fl-seat-role"><span class="fl-swatch {{$m.RoleClass}}" aria-hidden="true"></span>{{.}}</span>{{if not $m.Assigned}} <small>suggested</small>{{end}}{{end}}</td>
+    <td data-label="Tags">{{if .Tags}}<span class="fl-seat-tags">{{range .Tags}}<span class="fl-tag">{{.}}</span>{{end}}</span>{{end}}</td>
+    <td data-label="Edit"><details class="fl-edit" id="fl-e-{{.ID}}"><summary class="btn btn-quiet" aria-label="Edit {{.Name}}">Edit</summary>
+      <form id="fl-p-{{.ID}}" method="post" action="/fleets/{{$v.ID}}/pilot" class="fl-edit-form">
+        <input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="page" value="{{$v.Page}}"><input type="hidden" name="list" value="{{$v.ListQuery}}">
+        <label class="field"><span class="field-label">Role</span><select name="role"><option value="">{{if .Suggested}}{{.Suggested}}, as the hull suggests{{else}}No role set{{end}}</option>{{range $v.Roles}}<option value="{{.}}"{{if eq . $m.Assigned}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+        <label class="field"><span class="field-label">Tags</span><input type="text" name="tags" value="{{.TagText}}" maxlength="130" placeholder="e.g. anchor, webs"></label>
+        <button type="submit" aria-label="Save {{.Name}}">Save</button>
+      </form>
+    </details></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if gt $v.Pages 1}}<nav class="l-cluster fl-pager" aria-label="Pilot pages">{{with $v.PrevURL}}<a class="btn btn-quiet" href="{{.}}">Previous</a>{{end}}<span>Page {{$v.Page}} of {{$v.Pages}}</span>{{with $v.NextURL}}<a class="btn btn-quiet" href="{{.}}">Next</a>{{end}}</nav>{{end}}
+{{end}}
+
+{{/* The pilots panel: its view links, then the view. */}}
+{{define "fleet-pilots"}}{{$v := .}}
+<section class="l-panel fl-pilotpanel" aria-labelledby="fl-pilots-title">
+  <div class="fl-panel-head">
+    <h2 id="fl-pilots-title">Pilots <small>{{$v.Comp.Pilots}}</small></h2>
+    <nav class="l-seg fl-views" aria-label="How to show the pilots">{{range $v.Modes}}<a href="{{.Href}}"{{if .On}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}</nav>
+  </div>
+  {{if not $v.Full}}<p class="fl-hint">Everyone in the fleet sees its names and positions. Ships show for you and the pilots under your command, as in EVE.</p>{{end}}
+  {{if eq $v.Mode "structure"}}
+  {{template "fleet-structure" $v}}
+  {{else}}
+  {{template "fleet-chips" $v}}
+  {{if eq $v.Mode "list"}}{{template "fleet-pilot-list" $v}}{{else}}{{template "fleet-pilot-table" $v}}{{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{/* Where the fleet is and who to invite. */}}
+{{define "fleet-side"}}{{$v := .}}
+{{if $v.Full}}<section class="l-panel" aria-labelledby="fl-systems-title">
+  <h2 id="fl-systems-title">Systems</h2>
+  <ul class="fl-tally">{{range $v.Comp.Systems}}<li><span>{{if .Name}}{{.Name}}{{else}}Unknown system{{end}}</span><b>{{.Count}}</b></li>{{end}}</ul>
+</section>{{end}}
+{{template "fleet-invite" $v}}
 {{end}}

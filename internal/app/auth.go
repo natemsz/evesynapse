@@ -352,6 +352,11 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cfg.Scopes = scopes
+		// A re-link asked for from a page (a fleet that wants its
+		// permissions) comes back to it.
+		if next := r.URL.Query().Get("next"); next != "" && safeReturnPath(next) {
+			app.sessions.Put(r.Context(), sessionReturnTo, next)
+		}
 	}
 	// A signed-in player linking with no character named is adding
 	// one: if EVE hands back a character already on the account, the
@@ -434,7 +439,7 @@ func (app *Application) finishIdentityLogin(w http.ResponseWriter, r *http.Reque
 // account. ok is false otherwise, so one cannot probe other accounts'
 // characters.
 func (app *Application) relinkScopesFor(r *http.Request, moduleID string) (scopes []string, ok bool) {
-	m, found := moduleByID(moduleID)
+	m, found := relinkModule(moduleID)
 	if !found || len(m.Scopes) == 0 {
 		return nil, false
 	}
@@ -448,6 +453,20 @@ func (app *Application) relinkScopesFor(r *http.Request, moduleID string) (scope
 		}
 	}
 	return nil, false
+}
+
+// relinkModule is what a targeted re-link for id asks for: a module's
+// declaration, or the fleet's permissions, which are scopes of other
+// features asked for together and nothing more.
+func relinkModule(id string) (moduleDef, bool) {
+	if id != fleetPilotModule {
+		return moduleByID(id)
+	}
+	m := moduleDef{ID: fleetPilotModule}
+	for _, s := range fleetPilotScopes {
+		m.Scopes = append(m.Scopes, scopeUse{Scope: s})
+	}
+	return m, true
 }
 
 // newOAuthState returns 32 random bytes hex-encoded (64 chars).

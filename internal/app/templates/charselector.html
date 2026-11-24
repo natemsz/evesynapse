@@ -15,11 +15,10 @@
 
 {{define "charselectormulti"}}
 <div class="charselector asset-scope" data-assetscope>
-  <button type="button" class="asset-scope-btn" data-assetscope-btn aria-haspopup="true" aria-expanded="false" aria-controls="assets-scope-panel">
+  <button type="button" class="asset-scope-btn" data-assetscope-btn aria-haspopup="true" aria-expanded="false">
     <span class="asset-scope-label">{{.Label}}</span>
-    <span class="asset-scope-caret" aria-hidden="true">▾</span>
   </button>
-  <div class="charselector-dropdown asset-scope-panel" id="assets-scope-panel" data-assetscope-panel hidden>
+  <div class="charselector-dropdown asset-scope-panel" data-assetscope-panel hidden>
     <input type="search" class="charselector-input asset-scope-search" data-assetscope-q placeholder="Search names or tags..." autocomplete="off" aria-label="Search characters by name or tag">
     <a class="charselector-option asset-scope-all{{if .All}} on{{end}}" href="{{.AllHref}}" data-assetscope-allrow><span class="asset-scope-box{{if .All}} on{{end}}" aria-hidden="true">✓</span><span class="charselector-name">All characters</span></a>
     {{range .Chars}}

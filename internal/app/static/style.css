@@ -5536,6 +5536,7 @@ button.charselector-option { background: none; border: none; width: 100%; text-a
   margin-left: 0.4rem;
 }
 html[data-theme="light"] input.charselector-input,
+html[data-theme="light"] .asset-scope-btn,
 html[data-theme="light"] .charselector-dropdown {
   border-color: #d8cdb8;
 }
@@ -6045,6 +6046,7 @@ table.notify-settings.cards-on td:has(> .checkselector) { grid-column: 1 / -1; }
 /* "Show as a card" and "No card" name their column already. */
 #main-content table.notify-settings.cards-on > tbody > tr > td.notify-card[data-label]::before { display: none; }
 .checkselector:has(> .checkselector-sheet.as-sheet) > .charselector-input { display: none; }
+.checkselector:has(> .checkselector-sheet.as-sheet)::after { display: none; }
 .checkselector-open {
   display: flex; align-items: center; gap: 0.5rem;
   width: 100%; min-height: 2.75rem;
@@ -6861,15 +6863,32 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
    panel stays open; Done commits the set, and each row's
    Only link scopes the page to that character in one pick. */
 .asset-scope { margin: 0; max-width: none; flex: 1 1 auto; }
-.asset-scope-btn { display: flex; align-items: center; gap: 0.5rem; width: 100%; white-space: nowrap; justify-content: space-between; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; cursor: pointer; }
+.asset-scope-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  white-space: nowrap;
+  padding: 0.42rem 2rem 0.42rem 0.75rem;
+  border: 1px solid #2a2a2a;
+  border-radius: var(--r-sm);
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.asset-scope-btn:hover { color: var(--text-bright); }
+.asset-scope-btn:focus-visible,
+.asset-scope:has(> .charselector-dropdown:not([hidden])) > .asset-scope-btn {
+  border-color: var(--accent);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 35%, transparent);
+}
 .asset-scope-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.asset-scope-caret { flex: none; color: var(--muted); font-size: var(--fs-xs); }
-/* The panel is wider than its button and hangs from the button's
-   right edge: both Assets placements sit at their row's right end,
-   so the checklist's names and portraits read instead of wrapping
-   inside a button-wide strip. */
-.asset-scope-panel { left: auto; right: 0; width: 17rem; max-width: min(20rem, 85vw); padding: 0.4rem; }
-.asset-scope-search { margin-bottom: 0.4rem; }
+.asset-scope-panel { min-width: min(17rem, 85vw); padding: 0.4rem; }
+.asset-scope-search { margin-bottom: 0.4rem; padding-right: 0.6rem; cursor: text; }
 .asset-scope-box { flex: none; display: grid; place-items: center; width: 1.05rem; height: 1.05rem; border: 1px solid var(--box-edge); border-radius: var(--r-xs); color: transparent; font-size: var(--fs-xs); line-height: 1; }
 .asset-scope-box.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .asset-scope-row.on .charselector-name, .asset-scope-all.on .charselector-name { color: var(--text-bright); font-weight: 600; }

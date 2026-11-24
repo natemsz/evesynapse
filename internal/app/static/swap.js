@@ -852,7 +852,51 @@
     ]);
   }
 
-  function performSwap(url, entry, push, isCurrent) {
+  // Captures a clicked table row's viewport offset and cards-on state
+  // before a same-page swap so that if opening an inspector squeezes
+  // the table between horizontal and card layout, the selected row
+  // stays at the same spot on screen.
+  function tableAnchorFor(a) {
+    if (!a || typeof a.closest !== "function") return null;
+    var tbl = a.closest("table");
+    if (!tbl || !tbl.classList) return null;
+    var row = a.closest("tr") || a;
+    if (typeof row.getBoundingClientRect !== "function") return null;
+    return {
+      href: a.getAttribute("href") || "",
+      top: row.getBoundingClientRect().top,
+      cardsOn: tbl.classList.contains("cards-on")
+    };
+  }
+
+  // Re-applies numeric scroll restoration after content-ready runs
+  // (e.g. after layoutTableCards restores .cards-on document height).
+  function restoreAfterReady(push, anchor) {
+    if (typeof push !== "number") return;
+    if (anchor && main && typeof main.querySelectorAll === "function") {
+      var match = null;
+      var links = main.querySelectorAll("table a[href]");
+      for (var i = 0; i < links.length; i++) {
+        if (links[i].getAttribute("href") === anchor.href) {
+          match = links[i];
+          break;
+        }
+      }
+      var row = match && typeof match.closest === "function" ? match.closest("tr") : null;
+      var tbl = match && typeof match.closest === "function" ? match.closest("table") : null;
+      if (row && tbl && tbl.classList && tbl.classList.contains("cards-on") !== anchor.cardsOn &&
+          typeof row.getBoundingClientRect === "function") {
+        var delta = row.getBoundingClientRect().top - anchor.top;
+        window.scrollTo(0, Math.max(0, (window.scrollY || 0) + delta));
+        return;
+      }
+    }
+    if (window.scrollY !== push) {
+      window.scrollTo(0, push);
+    }
+  }
+
+  function performSwap(url, entry, push, isCurrent, anchor) {
     var current = function () { return !isCurrent || isCurrent(); };
     return adoptStyles(entry.styles).then(function () {
       if (!current()) return false;
@@ -869,6 +913,7 @@
       document.dispatchEvent(new CustomEvent("evesynapse:content-ready", {
         detail: { root: main, url: url }
       }));
+      restoreAfterReady(push, anchor);
       return true;
     }).catch(function () {
       if (!current()) return false;
@@ -989,7 +1034,7 @@
           window.history.pushState({ esSwap: 1, scroll: samePage ? window.scrollY : 0 }, "", url);
         } catch (e) { /* private mode: the swap still lands */ }
       }
-      performSwap(url, hit, opts.push === false ? opts.scroll : landScroll, isCurrent);
+      performSwap(url, hit, opts.push === false ? opts.scroll : landScroll, isCurrent, opts.anchor);
       return;
     }
     var controller = null;
@@ -1011,7 +1056,7 @@
           window.history.pushState({ esSwap: 1, scroll: samePage ? window.scrollY : 0 }, "", url);
         } catch (e) { /* the swap still lands */ }
       }
-      performSwap(url, page, opts.push === false ? opts.scroll : landScroll, isCurrent);
+      performSwap(url, page, opts.push === false ? opts.scroll : landScroll, isCurrent, opts.anchor);
     }).catch(function (err) {
       if (err && err.name === "AbortError") return;
       fullNav(url);
@@ -1067,7 +1112,11 @@
     var d = describeAnchor(a, ev);
     if (!d || !d.verdict) return;
     ev.preventDefault();
-    navigate(d.url.href, { push: true, step: a.getAttribute("data-l-step") });
+    navigate(d.url.href, {
+      push: true,
+      step: a.getAttribute("data-l-step"),
+      anchor: tableAnchorFor(a)
+    });
   });
 
   function prefetchFromEvent(ev) {

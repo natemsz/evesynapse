@@ -883,6 +883,8 @@ tbody tr.yours:hover > td,
 tbody tr.yours { --row-edge: var(--sel-edge); --row-edge-w: 3px; }
 /* As a card, the highlight is the card's own. */
 #main-content table.cards-on > :is(tbody, tfoot) > tr.yours { padding-left: 0.6rem; padding-right: 0.6rem; background: var(--sel-row); border-radius: var(--r-sm); }
+tbody tr[data-row-sel] { cursor: pointer; }
+#main-content table.cards-on > :is(tbody, tfoot) > tr[data-row-sel]:not(.yours):hover { background: var(--row-hover); border-radius: var(--r-sm); }
 
 /* ---- Phone frame ----
    On a phone the sub-nav keeps one row and scrolls sideways

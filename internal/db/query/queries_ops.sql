@@ -70,11 +70,11 @@ WHERE op_id = ANY(sqlc.arg(op_ids)::bigint[])
 -- ---------------------------------------------------------------------
 
 -- name: CreateFleet :one
-INSERT INTO ops (corporation_id, owner_kind, owner_id, fleet_type, visibility, join_gate, roster_public, share_token,
+INSERT INTO ops (corporation_id, owner_kind, owner_id, fleet_type, visibility, join_gate, sign_in, roster_public, share_token,
                  title, description, starts_at, duration_minutes, doctrine, doctrine_id, doctrine_mode, form_up, fc_character_id,
                  created_by_character, created_at)
 VALUES (sqlc.arg(corporation_id), sqlc.arg(owner_kind), sqlc.arg(owner_id), sqlc.arg(fleet_type), sqlc.arg(visibility),
-        sqlc.arg(join_gate), sqlc.arg(roster_public), sqlc.narg(share_token), sqlc.arg(title), sqlc.arg(description),
+        sqlc.arg(join_gate), COALESCE(NULLIF(sqlc.arg(sign_in)::text, ''), 'none'), sqlc.arg(roster_public), sqlc.narg(share_token), sqlc.arg(title), sqlc.arg(description),
         sqlc.arg(starts_at), sqlc.arg(duration_minutes), sqlc.arg(doctrine), sqlc.arg(doctrine_id), sqlc.arg(doctrine_mode), sqlc.arg(form_up),
         sqlc.arg(fc_character_id), sqlc.arg(created_by_character), sqlc.arg(created_at))
 RETURNING id;
@@ -84,6 +84,7 @@ UPDATE ops SET
     fleet_type    = sqlc.arg(fleet_type),
     visibility    = sqlc.arg(visibility),
     join_gate     = sqlc.arg(join_gate),
+    sign_in       = COALESCE(NULLIF(sqlc.arg(sign_in)::text, ''), 'none'),
     roster_public = sqlc.arg(roster_public)
 WHERE id = sqlc.arg(id);
 

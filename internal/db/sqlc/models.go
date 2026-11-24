@@ -1946,6 +1946,7 @@ type Op struct {
 	CaptureBossID         int64          `json:"capture_boss_id"`
 	CaptureDetail         string         `json:"capture_detail"`
 	SrpPolicyID           sql.NullInt64  `json:"srp_policy_id"`
+	SignIn                string         `json:"sign_in"`
 }
 
 type OpAccessRule struct {

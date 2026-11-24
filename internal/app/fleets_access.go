@@ -45,6 +45,18 @@ const (
 	joinVerified = "verified"
 	joinAccount  = "account"
 	joinByRule   = "rule"
+
+	// What a fleet asks of the pilots who sign up, apart from who may
+	// (ops.sign_in, schema 176): no sign-in to see where it forms up, an
+	// EVE sign-in with no permissions, or an EveSynapse character that
+	// shares what the fleet tools read for a pilot (fleetPilotModule).
+	signInNone   = "none"
+	signInEVE    = "eve"
+	signInScopes = "scopes"
+
+	// fleetPilotModule names the fleet's permissions to the targeted
+	// re-link that asks a pilot for them (relinkScopesFor).
+	fleetPilotModule = "fleet_pilot"
 )
 
 // Stored in op_access_rules.action: never rename.
@@ -64,6 +76,9 @@ type fleetViewer struct {
 	Standing   orgStanding
 	Characters []accountCharacter
 	Pilot      *fleetPilot
+	// scopes are what each of an account's characters granted, for a
+	// fleet that asks its pilots for its permissions.
+	scopes map[int64]string
 	// plans holds the owners whose fleets the account may run, by key.
 	plans map[string]bool
 }
@@ -102,6 +117,10 @@ func (app *Application) accountFleetViewer(ctx context.Context, userID int64) fl
 	}
 	v.Standing, v.Characters = st, characters
 	v.plans = app.ownersPermitted(ctx, st, v.owners(), permFleets)
+	v.scopes = map[int64]string{}
+	for _, c := range app.sessionCharacters(ctx) {
+		v.scopes[c.CharacterID] = c.Scopes
+	}
 	return v
 }
 
@@ -287,6 +306,11 @@ type fleetAccess struct {
 	SeeFormUp bool
 	// Signers are the characters that may sign up.
 	Signers []accountCharacter
+	// A fleet that asks for its permissions: the account's characters
+	// that may sign up once they grant them, and whether the viewer is a
+	// pilot with no account, who needs one first.
+	NeedGrant   []accountCharacter
+	NeedAccount bool
 }
 
 // access decides what the viewer may do with a fleet.
@@ -327,10 +351,49 @@ func (v fleetViewer) access(op db.Op, facts fleetFacts) fleetAccess {
 		return fleetAccess{}
 	}
 	a.Signers = v.signers(op, owner, joinRules)
+	if op.SignIn == signInScopes {
+		a.Signers, a.NeedGrant, a.NeedAccount = v.withFleetScopes(a.Signers)
+	}
 	a.Join = len(a.Signers) > 0
 	a.SeeNames = op.RosterPublic || a.Manage || a.Join
-	a.SeeFormUp = op.JoinGate == joinAnyone || a.Manage || a.Join
+	// Where it forms up is open to all only when the fleet asks no
+	// sign-in; otherwise it shows to those who may sign up.
+	a.SeeFormUp = (op.JoinGate == joinAnyone && op.SignIn != signInEVE && op.SignIn != signInScopes) || a.Manage || a.Join
 	return a
+}
+
+// withFleetScopes keeps the signers that granted what a fleet asking for
+// its permissions reads. The rest are returned to be asked for them; a
+// pilot with no account cannot grant them here and needs one first.
+func (v fleetViewer) withFleetScopes(signers []accountCharacter) (keep, grant []accountCharacter, needAccount bool) {
+	if v.Pilot != nil {
+		return nil, nil, len(signers) > 0
+	}
+	want := fleetPilotScopes
+	for _, c := range signers {
+		have := scopeSet(v.scopes[c.CharacterID])
+		ok := true
+		for _, s := range want {
+			ok = ok && have[s]
+		}
+		if ok {
+			keep = append(keep, c)
+		} else {
+			grant = append(grant, c)
+		}
+	}
+	return keep, grant, false
+}
+
+// fleetPilotScopes are what a fleet asking for its permissions needs of
+// a pilot: its kills and losses (ship replacement, the battle report),
+// and where it is and what it flies (shown to those running the fleet).
+// Each belongs to a sign-in feature already (killmails, location), so a
+// pilot tracking a character here often holds them.
+var fleetPilotScopes = []string{
+	"esi-killmails.read_killmails.v1",
+	"esi-location.read_location.v1",
+	"esi-location.read_ship_type.v1",
 }
 
 func (v fleetViewer) meetsAny(owner orgOwner, rules []standing.Rule) bool {

@@ -111,6 +111,14 @@ ORDER BY kind;
 SELECT character_id, kind, fetched_at, cached_until FROM character_snapshots
 WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[])
 ORDER BY character_id, kind;
+-- name: ListPositionSnapshotsForCharacters :many
+-- Where some characters are and what they fly, from their stored
+-- snapshots, in one read: a fleet's roster of pilots who share them
+-- with those running it.
+SELECT character_id, kind, payload, fetched_at FROM character_snapshots
+WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[])
+  AND kind IN ('location', 'ship')
+ORDER BY character_id, kind;
 -- name: ListSnapshotsByKind :many
 SELECT * FROM character_snapshots
 WHERE kind = $1

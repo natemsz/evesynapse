@@ -138,6 +138,14 @@
 .fl-tag { padding: 0.05rem 0.4rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); color: var(--text); }
 
 /* Sign-up */
+/* What signing up asks: its own choice under who may sign up. */
+.fl-signin { margin: var(--space-3) 0 0; padding: var(--space-3) 0 0; border: 0; border-top: 1px solid var(--hairline); }
+.fl-signin > legend { margin-bottom: var(--space-2); }
+.fl-grants { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
+/* Where a pilot is now, for those running a fleet that asks for it. */
+.fl-now { display: inline-flex; align-items: center; gap: 0.4em; }
+.fl-now img { flex: none; border-radius: 2px; background: var(--row-alt); }
+.fl-now small { color: var(--muted); }
 .fl-signup-form { display: flex; flex-direction: column; gap: var(--space-3); }
 .fl-signup-form > button { align-self: flex-start; }
 .fl-as { margin: 0; }

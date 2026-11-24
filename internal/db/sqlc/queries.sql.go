@@ -1491,6 +1491,48 @@ func (q *Queries) ListPlanetLayoutsForUser(ctx context.Context, userID int64) ([
 	return items, nil
 }
 
+const listPositionSnapshotsForCharacters = `-- name: ListPositionSnapshotsForCharacters :many
+SELECT character_id, kind, payload, fetched_at FROM character_snapshots
+WHERE character_id = ANY($1::bigint[])
+  AND kind IN ('location', 'ship')
+ORDER BY character_id, kind
+`
+
+type ListPositionSnapshotsForCharactersRow struct {
+	CharacterID int64     `json:"character_id"`
+	Kind        string    `json:"kind"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
+}
+
+// Where some characters are and what they fly, from their stored
+// snapshots, in one read: a fleet's roster of pilots who share them
+// with those running it.
+func (q *Queries) ListPositionSnapshotsForCharacters(ctx context.Context, characterIds []int64) ([]ListPositionSnapshotsForCharactersRow, error) {
+	rows, err := q.db.Query(ctx, listPositionSnapshotsForCharacters, characterIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPositionSnapshotsForCharactersRow
+	for rows.Next() {
+		var i ListPositionSnapshotsForCharactersRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Kind,
+			&i.Payload,
+			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecentKillmailDetails = `-- name: ListRecentKillmailDetails :many
 SELECT payload FROM killmail_details
 ORDER BY fetched_at DESC

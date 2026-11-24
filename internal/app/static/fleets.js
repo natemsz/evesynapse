@@ -199,6 +199,7 @@
       set("fly", checkedLabel(form, "doctrine_mode"));
       set("see", checkedLabel(form, "visibility"));
       set("join", checkedLabel(form, "join_gate"));
+      set("signin", checkedLabel(form, "sign_in"));
       var names = form.querySelector('input[name="roster_public"]');
       if (names) set("names", names.checked ? "Shown to everyone who can open it" : "Shown to those who can sign up");
     }

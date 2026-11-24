@@ -9,6 +9,17 @@
     window.EveSynapseContent.onReady(fn);
   }
 
+  // once marks el as wired for key and reports whether this is the
+  // first time. Every initializer here runs for the document when the
+  // file loads and again on content-ready, and a swap that adopts
+  // this file does both for the same markup.
+  function once(el, key) {
+    var mark = "_home_" + key;
+    if (el[mark]) return false;
+    el[mark] = true;
+    return true;
+  }
+
   // --- Fleet filter (home overview) ---------------------------
   // The fleet table renders every character server-side; this
   // just hides rows that don't match the typed text or the
@@ -19,7 +30,7 @@
   function initFleetFilter(root) {
     var fleetFilter = root.querySelector("[data-fleet-filter]");
     var fleetRows = root.querySelectorAll(".fleet-row");
-    if (!fleetFilter || !fleetRows.length) return;
+    if (!fleetFilter || !fleetRows.length || !once(fleetFilter, "filter")) return;
     var noMatch = root.querySelector(".fleet-nomatch");
     var shownEl = root.querySelector("[data-fleet-shown]");
     var chips = root.querySelectorAll(".fleet-tags .chip");
@@ -92,7 +103,7 @@
   // whose cards are all filtered out hides with them.
   function initBriefTabs(root) {
     var tabs = root.querySelectorAll("[data-brief]");
-    if (!tabs.length) return;
+    if (!tabs.length || !once(tabs[0], "tabs")) return;
     var cards = root.querySelectorAll(".brief-cards .brief-flip-card");
     var decks = root.querySelectorAll(".brief-cards .brief-deck");
     for (var i = 0; i < tabs.length; i++) {
@@ -273,6 +284,7 @@
   function initBriefFlip(root) {
     var buttons = root.querySelectorAll("[data-brief-flip]");
     for (var i = 0; i < buttons.length; i++) {
+      if (!once(buttons[i], "flip")) continue;
       buttons[i].addEventListener("click", function () {
         var deck = this.closest(".brief-deck");
         if (deck) briefFlip(deck, 1);
@@ -283,6 +295,7 @@
       (function (deck) {
         briefLayout(deck);
         briefFitDeck(deck);
+        if (!once(deck, "deck")) return;
         var sx = 0, sy = 0, tracking = false;
         deck.addEventListener("pointerdown", function (e) {
           if (e.button !== undefined && e.button !== 0) return;
@@ -328,6 +341,7 @@
   function initBriefDismissed(root) {
     var openers = root.querySelectorAll("[data-open-brief-dismissed]");
     for (var i = 0; i < openers.length; i++) {
+      if (!once(openers[i], "dismissed")) continue;
       openers[i].addEventListener("click", function () {
         var modal = document.getElementById(this.getAttribute("data-open-brief-dismissed"));
         if (modal && window.EveSynapseModal) EveSynapseModal.open(modal);
@@ -344,6 +358,7 @@
   function initScopeForms(root) {
     var scopeForms = root.querySelectorAll("form.widget-scope");
     for (var s = 0; s < scopeForms.length; s++) {
+      if (!once(scopeForms[s], "scope")) continue;
       scopeForms[s].addEventListener("change", function () {
         this.submit();
       });
@@ -404,15 +419,53 @@
     module.exports.homeFillPlan = homeFillPlan;
   }
 
-  // A size is offerable when it sits inside the module's floor and
-  // ceiling both: below the floor the content breaks, above the
-  // ceiling it would only draw empty cells.
-  function homeSizeAllowed(w, h, min, max) {
-    return w >= min.w && w <= max.w && h >= min.h && h <= max.h;
+  // homeParseSizes reads a card's data-sizes ("1x1 2x1 2x2") into
+  // the sizes the widget declares, narrowest then shortest first.
+  function homeParseSizes(attr) {
+    var out = [];
+    (attr || "").split(/\s+/).forEach(function (raw) {
+      var m = /^(\d)x(\d)$/.exec(raw);
+      if (m) out.push({ w: +m[1], h: +m[2] });
+    });
+    out.sort(function (a, b) { return a.w - b.w || a.h - b.h; });
+    return out;
+  }
+
+  // homeSnapToAllowed is the declared size a wanted size lands on,
+  // by the server's rule (homeWidgetDef.Snap): the size itself when
+  // declared; else the same width at the nearest height; else the
+  // smallest declared size that covers it; else the nearest declared
+  // size. Ties go to the smaller size.
+  function homeSnapToAllowed(sizes, w, h) {
+    if (!sizes.length) return { w: w, h: h };
+    var i, c, best = null;
+    for (i = 0; i < sizes.length; i++) {
+      if (sizes[i].w === w && sizes[i].h === h) return sizes[i];
+    }
+    for (i = 0; i < sizes.length; i++) {
+      c = sizes[i];
+      if (c.w !== w) continue;
+      if (!best || Math.abs(c.h - h) < Math.abs(best.h - h)) best = c;
+    }
+    if (best) return best;
+    for (i = 0; i < sizes.length; i++) {
+      c = sizes[i];
+      if (c.w < w || c.h < h) continue;
+      if (!best || c.w * c.h < best.w * best.h || (c.w * c.h === best.w * best.h && c.w < best.w)) best = c;
+    }
+    if (best) return best;
+    var dist = function (s) { return Math.abs(s.w - w) + Math.abs(s.h - h); };
+    best = sizes[0];
+    for (i = 1; i < sizes.length; i++) {
+      c = sizes[i];
+      if (dist(c) < dist(best) || (dist(c) === dist(best) && c.w * c.h < best.w * best.h)) best = c;
+    }
+    return best;
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports.homeSizeAllowed = homeSizeAllowed;
+    module.exports.homeParseSizes = homeParseSizes;
+    module.exports.homeSnapToAllowed = homeSnapToAllowed;
   }
 
   // The resize frame's size: it starts exactly over the module,
@@ -521,6 +574,9 @@
     homeTwoUp.addEventListener("change", function () { initHomeFill(document); });
   }
 
+  // The grid's most columns and rows (wSize in home_widget_kit.go).
+  var HOME_COLS = 3, HOME_ROWS = 4;
+
   // --- Home customize: drag, resize, remove, add module --------
   // Layered over the plain customize forms, never replacing them:
   // this runs only on the customize view (the data-customize grid)
@@ -555,7 +611,7 @@
 
   function initHomeGrid(root) {
     var homeGrid = root.querySelector("#home-grid");
-    if (homeGrid && homeGrid.getAttribute("data-customize") === "1" && window.fetch) {
+    if (homeGrid && homeGrid.getAttribute("data-customize") === "1" && window.fetch && once(homeGrid, "customize")) {
       initHomeCustomize(homeGrid);
     }
   }
@@ -582,28 +638,104 @@
       }, function () { return false; });
     }
 
-    // A size decides more than a card's outline: modules draw
-    // different content at different sizes (Profit Pulse's chart
-    // bands, Production Lines' rows). Once a size save lands, swap
-    // the card for the server's fresh render of it at the saved
-    // size, so the card on screen shows the saved form and no
-    // feature appears or disappears across the save.
-    function refreshCard(card) {
-      var id = card.getAttribute("data-widget");
-      return fetch("/?customize=1", {
+    // fetchCard asks the one-card route for a widget's card as it
+    // stands in this Customize view: the element, null when the
+    // widget has nothing to show (204), or a rejection.
+    function fetchCard(key) {
+      return fetch("/home/widget/" + encodeURIComponent(key) + "?customize=1", {
         headers: { "X-Requested-With": "XMLHttpRequest" },
+        credentials: "same-origin",
         cache: "no-store"
       }).then(function (resp) {
-        return resp.ok ? resp.text() : "";
-      }, function () { return ""; }).then(function (html) {
-        if (!html || !card.parentNode) return;
-        var box = document.createElement("div");
-        box.innerHTML = html;
-        var fresh = box.querySelector('.card[data-widget="' + id + '"]');
-        if (!fresh) return;
-        card.replaceWith(fresh);
-        enhanceCard(fresh);
+        if (resp.status === 204) return null;
+        if (!resp.ok) throw new Error("card " + resp.status);
+        return resp.text().then(function (html) {
+          var box = document.createElement("template");
+          box.innerHTML = html.trim();
+          var fresh = box.content.querySelector(".card[data-widget]");
+          if (!fresh) throw new Error("no card");
+          return document.importNode(fresh, true);
+        });
       });
+    }
+
+    // placeCard enhances a card fresh from the server and runs the
+    // page's initializers over it alone, as a swap does for a page.
+    function placeCard(fresh) {
+      enhanceCard(fresh);
+      document.dispatchEvent(new CustomEvent("evesynapse:content-ready", { detail: { root: fresh, part: true } }));
+    }
+
+    // A size decides more than a card's outline: a widget draws a
+    // different form at a different size. Once a size save lands,
+    // the card is swapped for the server's render of it at the saved
+    // size. The old render stays, dimmed, until the new one lands, so
+    // nothing flashes or jumps. A render lands only on the card as it
+    // stands: the live card for the key, not in the middle of a
+    // resize, at the size the server drew. Otherwise a newer resize
+    // is under way, and its own save (or settle, when it ends where
+    // it began) brings the card up to date. Focus on one of the
+    // card's controls moves to the same control on the new card, so a
+    // keyboard resize carries on.
+    var refreshSeq = {};
+    function refreshCard(card) {
+      var key = card.getAttribute("data-key") || card.getAttribute("data-widget");
+      var seq = (refreshSeq[key] || 0) + 1;
+      refreshSeq[key] = seq;
+      card.classList.add("w-stale");
+      return fetchCard(key).then(function (fresh) {
+        if (refreshSeq[key] !== seq) return;
+        var live = card.parentNode ? card : grid.querySelector(':scope > .card[data-key="' + CSS.escape(key) + '"]');
+        if (!live || cardResizing(live)) return;
+        if (!fresh) { removeCard(live); return; }
+        if (live.getAttribute("data-gw") !== fresh.getAttribute("data-gw") ||
+            live.getAttribute("data-gh") !== fresh.getAttribute("data-gh")) return;
+        var control = focusedControl(live);
+        flip(function () { live.replaceWith(fresh); }, fresh);
+        placeCard(fresh);
+        var again = control && fresh.querySelector(control);
+        if (again) again.focus({ preventScroll: true });
+      }, function () {
+        if (refreshSeq[key] === seq) card.classList.remove("w-stale");
+      });
+    }
+    // cardResizing: a grip drag or a run of arrow keys is under way.
+    function cardResizing(card) {
+      return card.classList.contains("resizing") || !!card._keyFrom;
+    }
+    // settle brings a card a resize left on an old render up to date;
+    // a resize that ends without a save calls it.
+    function settle(card) {
+      if (card.parentNode && card.classList.contains("w-stale")) refreshCard(card);
+    }
+    // focusedControl names the card control that has focus, so the
+    // same control on the card's new render can take it.
+    var cardControls = [".cardgrip", ".cardsize", ".draghandle", ".cardsettings"];
+    function focusedControl(card) {
+      var a = document.activeElement;
+      if (!a || !card.contains(a)) return "";
+      for (var i = 0; i < cardControls.length; i++) {
+        if (a.matches(cardControls[i])) return cardControls[i];
+      }
+      return "";
+    }
+
+    // One status line for the whole Customize view, set once per
+    // change: "Net Worth: 2 by 2, medium."
+    var statusEl = document.querySelector("[data-home-status]");
+    function announce(card, w, h) {
+      if (!statusEl) return;
+      var title = titleOf(card);
+      var form = (sizeNamesOf(card)[w + "x" + h] || {}).form;
+      statusEl.textContent = title + ": " + w + " by " + h + (form ? ", " + form : "") + ".";
+    }
+    function titleOf(card) {
+      var heading = card.querySelector(":scope > h2, :scope > h3");
+      if (!heading) return "";
+      var copy = heading.cloneNode(true);
+      var ctl = copy.querySelectorAll("button");
+      for (var i = 0; i < ctl.length; i++) ctl[i].remove();
+      return copy.textContent.trim();
     }
 
     function moduleCards() {
@@ -717,31 +849,31 @@
     }
 
     // --- sizes ---------------------------------------------------
-    // A module's size is its gw/gh classes (grid cells across and
-    // down, 1-3); the CSS lays the grid out from them and every cell
-    // is a fixed size, so a module is exactly as big as its cells.
-    // Some modules have a floor (data-minw / data-minh): asked for
-    // less, the cells blink red and the module keeps its size.
+    // A widget's size is its gw/gh classes (grid cells across and
+    // down); the CSS lays the grid out from them. The sizes it may
+    // take are the ones its declaration lists (data-sizes), and each
+    // draws a named form (data-size-names).
     function sizeOf(el) {
       return {
         w: parseInt(el.getAttribute("data-gw"), 10) || 1,
         h: parseInt(el.getAttribute("data-gh"), 10) || 1
       };
     }
-    function minOf(el) {
-      return {
-        w: parseInt(el.getAttribute("data-minw"), 10) || 1,
-        h: parseInt(el.getAttribute("data-minh"), 10) || 1
-      };
+    function sizesOf(el) {
+      return homeParseSizes(el.getAttribute("data-sizes"));
     }
-    function maxOf(el) {
-      return {
-        w: parseInt(el.getAttribute("data-maxw"), 10) || 3,
-        h: parseInt(el.getAttribute("data-maxh"), 10) || 3
-      };
+    function allows(el, w, h) {
+      return sizesOf(el).some(function (s) { return s.w === w && s.h === h; });
+    }
+    function sizeNamesOf(el) {
+      try { return JSON.parse(el.getAttribute("data-size-names") || "{}"); } catch (err) { return {}; }
+    }
+    function sizeLine(el, w, h) {
+      var says = (sizeNamesOf(el)[w + "x" + h] || {}).says;
+      return w + " by " + h + (says ? ": " + says : "");
     }
     function sizeCard(el, w, h) {
-      ["gw1", "gw2", "gw3", "gh1", "gh2", "gh3"].forEach(function (c) { el.classList.remove(c); });
+      ["gw1", "gw2", "gw3", "gh1", "gh2", "gh3", "gh4"].forEach(function (c) { el.classList.remove(c); });
       el.classList.add("gw" + w);
       el.classList.add("gh" + h);
       el.setAttribute("data-gw", String(w));
@@ -755,9 +887,18 @@
       var was = sizeOf(card);
       if (was.w === w && was.h === h) return;
       flip(function () { sizeCard(card, w, h); });
+      announce(card, w, h);
+      saveSize(card, w, h, was);
+    }
+    // saveSize stores a size the card already shows; a failed save
+    // puts back the size it had before.
+    function saveSize(card, w, h, was) {
       postLayout({ action: "size", widget: card.getAttribute("data-widget"), w: w, h: h }).then(function (ok) {
-        if (!ok) flip(function () { sizeCard(card, was.w, was.h); });
-        else refreshCard(card);
+        if (ok) { refreshCard(card); return; }
+        flip(function () { sizeCard(card, was.w, was.h); });
+        announce(card, was.w, was.h);
+        refuse(card);
+        settle(card);
       });
     }
     function saveOrder() {
@@ -783,9 +924,11 @@
       handle.addEventListener("keydown", function (ev) { keyMove(ev, card, handle); });
 
       // The card's own controls sit in its top-right corner: the
-      // size picker (a 3x3 grid of cells, the way a table size is
-      // picked) and remove. The grip in the bottom-right corner
-      // resizes by dragging, snapping to whole cells.
+      // size picker (three cells across by four down, the way a
+      // table size is picked; only the sizes the widget declares can
+      // be picked, each named for the form it draws) and remove. The
+      // grip in the bottom-right corner resizes by dragging or by the
+      // arrow keys, landing on declared sizes.
       var ctl = document.createElement("div");
       ctl.className = "cardctl";
       var sizeBtn = document.createElement("button");
@@ -802,36 +945,28 @@
       picker.setAttribute("role", "group");
       picker.setAttribute("aria-label", "Size of " + title + ", in grid cells");
       var cells = [];
-      for (var ph = 1; ph <= 3; ph++) {
-        for (var pw = 1; pw <= 3; pw++) {
+      for (var ph = 1; ph <= HOME_ROWS; ph++) {
+        for (var pw = 1; pw <= HOME_COLS; pw++) {
           (function (w, h) {
             var cell = document.createElement("button");
             cell.type = "button";
             cell.className = "sizecell";
             cell.setAttribute("data-gw", String(w));
             cell.setAttribute("data-gh", String(h));
-            cell.setAttribute("aria-label", w + " wide by " + h + " tall");
-            cell.title = w + " × " + h;
-            if (!homeSizeAllowed(w, h, minOf(card), maxOf(card))) {
-              // Past the ceiling: this size would only draw
-              // empty cells, so it is not an option.
+            var line = sizeLine(card, w, h);
+            cell.setAttribute("aria-label", line);
+            cell.title = line;
+            if (!allows(card, w, h)) {
+              // Not a size this widget has a form for.
               cell.disabled = true;
               cell.classList.add("over");
-              cell.setAttribute("aria-label", w + " wide by " + h + " tall (more than this module can use)");
+              cell.setAttribute("aria-label", w + " by " + h + ": not offered");
+              cell.title = "";
             }
             cell.addEventListener("mouseenter", function () { paintPicker(w, h); });
             cell.addEventListener("focus", function () { paintPicker(w, h); });
             cell.addEventListener("click", function () {
-              if (!homeSizeAllowed(w, h, minOf(card), maxOf(card))) return;
-              var min = minOf(card);
-              if (w < min.w || h < min.h) {
-                // Under the module's floor: blink what was asked
-                // for, then show the size it keeps.
-                paintPicker(w, h);
-                cells.forEach(function (c) { if (c.classList.contains("on")) refuse(c); });
-                window.setTimeout(function () { var s = sizeOf(card); paintPicker(s.w, s.h); }, 650);
-                return;
-              }
+              if (!allows(card, w, h)) return;
               resizeCard(card, w, h);
               closePicker();
             });
@@ -841,11 +976,9 @@
         }
       }
       function paintPicker(w, h) {
-        var min = minOf(card), max = maxOf(card);
         cells.forEach(function (c) {
           var cw = +c.getAttribute("data-gw"), ch = +c.getAttribute("data-gh");
-          c.classList.toggle("on", cw <= w && ch <= h && homeSizeAllowed(cw, ch, min, max));
-          c.classList.toggle("floor", cw <= min.w && ch <= min.h);
+          c.classList.toggle("on", cw <= w && ch <= h);
         });
       }
       function closePicker() {
@@ -862,7 +995,7 @@
         if (open) {
           var s = sizeOf(card);
           paintPicker(s.w, s.h);
-          cells[(s.h - 1) * 3 + (s.w - 1)].focus();
+          cells[(s.h - 1) * HOME_COLS + (s.w - 1)].focus();
         }
       });
       picker.addEventListener("keydown", function (ev) {
@@ -888,11 +1021,42 @@
       ctl.appendChild(picker);
       card.appendChild(ctl);
 
-      var grip = document.createElement("span");
+      var grip = document.createElement("button");
+      grip.type = "button";
       grip.className = "cardgrip";
-      grip.setAttribute("aria-hidden", "true");
+      grip.title = "Drag to resize";
+      grip.setAttribute("aria-label", "Resize " + title + " (drag, or use the arrow keys)");
       grip.addEventListener("pointerdown", function (ev) { startResize(ev, card, grip); });
+      grip.addEventListener("keydown", function (ev) { keyResize(ev, card); });
       card.appendChild(grip);
+    }
+
+    // Keyboard resize: the arrow keys on a card's grip step through
+    // the sizes it declares (right and down to the next, left and up
+    // to the one before). Each step shows at once; the save waits
+    // until the keys rest.
+    function keyResize(ev, card) {
+      var fwd = ev.key === "ArrowRight" || ev.key === "ArrowDown";
+      var back = ev.key === "ArrowLeft" || ev.key === "ArrowUp";
+      if (!fwd && !back) return;
+      ev.preventDefault();
+      var sizes = sizesOf(card), now = sizeOf(card), at = -1;
+      for (var i = 0; i < sizes.length; i++) {
+        if (sizes[i].w === now.w && sizes[i].h === now.h) at = i;
+      }
+      var next = sizes[at + (fwd ? 1 : -1)];
+      if (!next) return;
+      if (!card._keyFrom) card._keyFrom = now;
+      flip(function () { sizeCard(card, next.w, next.h); });
+      announce(card, next.w, next.h);
+      clearTimeout(card._keySave);
+      card._keySave = setTimeout(function () {
+        var from = card._keyFrom;
+        card._keyFrom = null;
+        var to = sizeOf(card);
+        if (from.w !== to.w || from.h !== to.h) saveSize(card, to.w, to.h, from);
+        else settle(card);
+      }, 400);
     }
 
     // Keyboard move: the arrow keys on a module's move handle step it
@@ -926,7 +1090,7 @@
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
       ev.preventDefault();
       stopMotion(card);
-      var start = sizeOf(card), cur = start, min = minOf(card), ceil = maxOf(card);
+      var start = sizeOf(card), cur = start, sizes = sizesOf(card);
       var r0 = card.getBoundingClientRect();
       var gcs = window.getComputedStyle(grid);
       var gapX = parseFloat(gcs.columnGap) || 0, gapY = parseFloat(gcs.rowGap) || 0;
@@ -948,13 +1112,19 @@
         parseFloat(window.getComputedStyle(document.documentElement).fontSize);
       var cellH = homeRowPitch(tops, r0.top, (rowPx || 176) + gapY);
       if (!(cellH > 24)) cellH = (rowPx || 176) + gapY;
-      var maxW = Math.max(1, Math.min(ceil.w, cols - colStart));
-      var maxH = ceil.h;
-      var lastX = ev.clientX, lastY = ev.clientY, under = false;
+      // Only the sizes that fit from the column the card starts in.
+      var fits = sizes.filter(function (s) { return s.w <= cols - colStart; });
+      if (!fits.length) fits = sizes;
+      var maxW = 1, maxH = 1;
+      fits.forEach(function (s) { maxW = Math.max(maxW, s.w); maxH = Math.max(maxH, s.h); });
+      var lastX = ev.clientX, lastY = ev.clientY;
       var startX = ev.clientX, startY = ev.clientY;
 
       var frame = document.createElement("div");
       frame.className = "resize-frame";
+      var frameLabel = document.createElement("span");
+      frameLabel.className = "resize-frame-label";
+      frame.appendChild(frameLabel);
       document.body.appendChild(frame);
       try { grip.setPointerCapture(ev.pointerId); } catch (err) { /* nicety */ }
       card.classList.add("resizing");
@@ -980,18 +1150,15 @@
         // grip is taken.
         var relX = r0.width + (lastX - startX);
         var relY = start.h * cellH - gapY + (lastY - startY);
-        var w = snap((relX + gapX) / cellW, cur.w, maxW);
-        var h = snap((relY + gapY) / cellH, cur.h, maxH);
-        under = w < min.w || h < min.h;
-        frame.classList.toggle("under", under);
+        var raw = homeSnapToAllowed(fits, snap((relX + gapX) / cellW, cur.w, maxW), snap((relY + gapY) / cellH, cur.h, maxH));
+        var w = raw.w, h = raw.h;
+        frameLabel.textContent = sizeLine(card, w, h);
         frame.style.left = r.left + "px";
         frame.style.top = r.top + "px";
         var fs = homeResizeFrame(r0.width, r0.height, lastX - startX, lastY - startY,
           maxW * cellW - gapX, maxH * cellH - gapY, cellW, cellH);
         frame.style.width = fs.w + "px";
         frame.style.height = fs.h + "px";
-        w = Math.max(w, min.w);
-        h = Math.max(h, min.h);
         if (w !== cur.w || h !== cur.h) {
           cur = { w: w, h: h };
           flip(function () { sizeCard(card, w, h); }, card);
@@ -1013,22 +1180,18 @@
         // start cells plus the whole cells the pointer covered,
         // without the drag's hysteresis, so the stored size is
         // the frame's final size.
-        var rawW = homeSnapCommit(start.w, lastX - startX, cellW, maxW);
-        var rawH = homeSnapCommit(start.h, lastY - startY, cellH, maxH);
-        under = rawW < min.w || rawH < min.h;
-        cur = { w: Math.max(rawW, min.w), h: Math.max(rawH, min.h) };
-        if (under) refuse(card);
+        cur = homeSnapToAllowed(fits,
+          homeSnapCommit(start.w, lastX - startX, cellW, maxW),
+          homeSnapCommit(start.h, lastY - startY, cellH, maxH));
         var now = sizeOf(card);
         if (now.w !== cur.w || now.h !== cur.h) {
           flip(function () { sizeCard(card, cur.w, cur.h); }, card);
         }
-        if (cur.w === start.w && cur.h === start.h) return;
-        // The module already stands at its new size; save it, and a
+        if (cur.w === start.w && cur.h === start.h) { settle(card); return; }
+        // The widget already stands at its new size; save it, and a
         // failed save puts back the size it started at.
-        postLayout({ action: "size", widget: card.getAttribute("data-widget"), w: cur.w, h: cur.h }).then(function (ok) {
-          if (!ok) flip(function () { sizeCard(card, start.w, start.h); });
-          else refreshCard(card);
-        });
+        announce(card, cur.w, cur.h);
+        saveSize(card, cur.w, cur.h, start);
       }
       grip.addEventListener("pointermove", onMove);
       grip.addEventListener("pointerup", onUp);
@@ -1259,25 +1422,21 @@
       btn.disabled = true;
       postLayout({ action: "toggle", widget: id }).then(function (ok) {
         if (!ok) { btn.disabled = false; return; }
-        // Widget markup is server-rendered; lift the new card
-        // out of a fresh copy of this page rather than rebuilding
-        // it client-side. If anything about that fails, a reload
-        // lands in the same place, the add already saved.
-        fetch("/?customize=1", { headers: { "Accept": "text/html" } }).then(function (resp) {
-          return resp.ok ? resp.text() : "";
-        }).then(function (html) {
-          var doc = new DOMParser().parseFromString(html, "text/html");
-          var fresh = doc.querySelector('.card[data-widget="' + id + '"]');
-          if (!fresh) { window.location.reload(); return; }
-          var node = document.importNode(fresh, true);
-          // Never two cards for one module: if a stale copy is
+        // Widget markup is server-rendered: the new card comes from
+        // the one-card route. If that fails, a reload lands in the
+        // same place, the add already saved.
+        fetchCard(id).then(function (node) {
+          if (!node) { window.location.reload(); return; }
+          // Never two cards for one widget: if a stale copy is
           // somehow still in the grid, it goes before the fresh
           // one lands.
           var stale = grid.querySelector('.card[data-widget="' + id + '"]');
           if (stale) stale.remove();
-          enhanceCard(node);
           window.EveSynapseModal.close(modal);
           flip(function () { grid.appendChild(node); });
+          placeCard(node);
+          var s = sizeOf(node);
+          announce(node, s.w, s.h);
           node.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
         }, function () { window.location.reload(); });
       });
@@ -1314,10 +1473,12 @@
         for (var i = 0; i < ids.length; i++) onHome[ids[i]] = true;
         var available = 0;
         for (var j = 0; j < addItems.length; j++) {
-          var off = !!onHome[addItems[j].getAttribute("data-add-widget")];
-          addItems[j].parentElement.hidden = off;
-          addItems[j].disabled = false;
-          if (!off) available++;
+          // A widget already on the home stays listed, marked.
+          var on = !!onHome[addItems[j].getAttribute("data-add-widget")];
+          addItems[j].disabled = on;
+          var note = addItems[j].querySelector("[data-added-note]");
+          if (note) note.hidden = !on;
+          if (!on) available++;
         }
         if (emptyNote) emptyNote.hidden = available > 0;
         window.EveSynapseModal.open(modal);

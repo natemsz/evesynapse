@@ -1957,6 +1957,10 @@ html[data-theme="light"] .widget-scope select {
 .grid.home-grid > .gw3 { grid-column: span 3; }
 .grid.home-grid > .gh2 { grid-row: span 2; }
 .grid.home-grid > .gh3 { grid-row: span 3; }
+.grid.home-grid > .gh4 { grid-row: span 4; }
+/* A card waiting for its render at a new size: the old one, dimmed,
+   until the new one lands. */
+.grid.home-grid > .card.w-stale { opacity: 0.55; transition: opacity 120ms ease; }
 /* An expanded module (More) grows taller to show its detail, inside
    its own columns: it never changes width or pushes modules into new
    places, so the page keeps the layout Customize set. */
@@ -1970,7 +1974,7 @@ html[data-theme="light"] .widget-scope select {
 @media (max-width: 70rem) {
   .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid.home-grid > .gw3 { grid-column: span 2; }
-  .grid.home-grid > :is(.gh2, .gh3) { grid-row: auto; }
+  .grid.home-grid > :is(.gh2, .gh3, .gh4) { grid-row: auto; }
   .grid.home-grid > .card.gfill { grid-column: 1 / -1; }
 }
 /* Phones: one column, every module its natural height; the summary
@@ -2060,11 +2064,8 @@ html[data-theme="light"] .widget-scope select {
   cursor: pointer;
   transition: background-color 90ms ease, border-color 90ms ease;
 }
-/* A module's floor: the cells it can't go below, marked faintly. */
-.sizepick .sizecell.floor { border-style: dashed; }
 .sizepick .sizecell.on { background: rgba(255, 106, 26, 0.45); border-color: var(--accent); }
-/* Past the module's ceiling the size would only draw empty cells:
-   the picker offers no cell there. */
+/* A size the widget has no form for: the picker offers no cell there. */
 .sizepick .sizecell.over { opacity: 0.25; cursor: not-allowed; }
 .sizepick .sizecell.refused { animation: cell-refuse 650ms ease-out; }
 @keyframes cell-refuse {
@@ -2081,10 +2082,14 @@ html[data-theme="light"] .widget-scope select {
   height: 16px;
   cursor: nwse-resize;
   touch-action: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   background: linear-gradient(135deg, transparent 0 50%, var(--accent) 50% 58%, transparent 58% 70%, var(--accent) 70% 78%, transparent 78%);
   opacity: 0.75;
 }
-.cardgrip:hover, .card.resizing .cardgrip { opacity: 1; }
+.cardgrip:hover, .cardgrip:focus-visible, .card.resizing .cardgrip { opacity: 1; }
+.cardgrip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 45rem) { .cardgrip { display: none; } }
 
 /* The lifted card: out of the grid, fixed to the viewport where it
@@ -2122,8 +2127,8 @@ html[data-theme="light"] .widget-scope select {
 @keyframes slot-glow { 50% { opacity: 1; } }
 body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbing; }
 body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-resize; }
-/* The grip's frame: follows the pointer exactly while the module
-   snaps to whole cells under it; red below the module's floor. */
+/* The grip's frame: follows the pointer exactly while the widget
+   snaps to its declared sizes under it, and names the size it lands on. */
 .resize-frame {
   position: fixed;
   z-index: 55;
@@ -2134,7 +2139,17 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
   background: rgba(255, 106, 26, 0.06);
   box-shadow: 0 0 14px rgba(255, 106, 26, 0.35);
 }
-.resize-frame.under { border-color: #ff5a3c; background: rgba(214, 48, 20, 0.12); box-shadow: 0 0 14px rgba(214, 48, 20, 0.5); }
+.resize-frame-label {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.45rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  color: var(--text-bright);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
 .card.resizing { border-color: var(--accent); box-shadow: 0 0 12px rgba(255, 106, 26, 0.3); }
 /* A refused size: the module blinks red, then stands as it was. */
 .card.refused { animation: card-refuse 650ms ease-out; }
@@ -3379,6 +3394,18 @@ body:has(dialog.share-modal[open]) :is(.ov-pips i.train, [data-live-pill]::befor
 .modal-item:hover { background: var(--row-hover); border-color: var(--accent); }
 .modal-item strong { display: block; }
 .modal-item small { display: block; margin-top: 0.15rem; }
+.modal-item:disabled { cursor: default; opacity: 0.6; }
+.modal-item:disabled:hover { background: var(--row); border-color: #262626; }
+.modal-item .modal-item-on { color: var(--accent); }
+.modal-group {
+  margin: 0.9rem 0 0.2rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .modal-empty { margin: 0.5rem 0 0; }
 
 /* Live-region loading ring. Reduced motion leaves it still. */

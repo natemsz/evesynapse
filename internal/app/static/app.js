@@ -1362,12 +1362,13 @@
 
   // --- Live countdowns ---------------------------------------
   // Any element carrying data-finish (RFC3339) counts down to
-  // that moment (home fleet widget, character page training
-  // line). Without JS the server-rendered remainder stays.
-  // One ticker at a time: the will-swap event stops it before
-  // the old nodes go away, and the ready event starts it for the
-  // fresh ones. A ticking-over-detached-nodes interval would
-  // otherwise pile up behind every swap.
+  // that moment (home widgets, character page training line).
+  // Without JS the server-rendered remainder stays.
+  // One ticker for the whole document: each tick reads every
+  // countdown standing in it, so content that arrives in part (a
+  // home card swapped in alone) joins the same ticker instead of
+  // replacing it. The will-swap event stops it before the old
+  // nodes go away, and the ready event starts it again.
   var countdownTimer = null;
   function fmtLeft(ms) {
     if (ms <= 0) return "done";
@@ -1385,22 +1386,21 @@
       countdownTimer = null;
     }
   }
-  function initCountdowns(root) {
-    var countdowns = root.querySelectorAll("[data-finish]");
-    if (!countdowns.length) return;
-    var tickCountdowns = function () {
-      for (var i = 0; i < countdowns.length; i++) {
-        var t = Date.parse(countdowns[i].getAttribute("data-finish"));
-        if (!isNaN(t)) countdowns[i].textContent = fmtLeft(t - Date.now());
-      }
-    };
-    tickCountdowns();
-    stopCountdowns();
+  function tickCountdowns() {
+    var countdowns = document.querySelectorAll("[data-finish]");
+    for (var i = 0; i < countdowns.length; i++) {
+      var t = Date.parse(countdowns[i].getAttribute("data-finish"));
+      if (!isNaN(t)) countdowns[i].textContent = fmtLeft(t - Date.now());
+    }
+    return countdowns.length;
+  }
+  function initCountdowns() {
+    if (!tickCountdowns() || countdownTimer !== null) return;
     countdownTimer = window.setInterval(tickCountdowns, 1000);
   }
   document.addEventListener("evesynapse:content-will-swap", stopCountdowns);
   onContentReady(initCountdowns);
-  initCountdowns(document);
+  initCountdowns();
 
   // --- Beaten only filter (My Orders) ----------------------------
   // The open-orders table marks rows beaten at their station
@@ -2529,7 +2529,12 @@
     active.kick();
   });
   document.addEventListener("evesynapse:content-will-swap", stopPageSync);
-  document.addEventListener("evesynapse:content-ready", startPageSync);
+  // A part of a page swapped in alone (a home card) keeps the page's
+  // sync job: only a whole page restarts it.
+  document.addEventListener("evesynapse:content-ready", function (ev) {
+    if (ev.detail && ev.detail.part) return;
+    startPageSync();
+  });
   startPageSync();
 })();
 

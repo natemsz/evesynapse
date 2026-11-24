@@ -38,6 +38,7 @@
 {{range .Home.Widgets}}{{template "w-card" .}}
 {{end}}
 </div>
+{{if .Home.Customize}}<p class="visually-hidden" role="status" data-home-status></p>{{end}}
 
 {{if .Home.Customize}}
 <div class="modal-backdrop" id="add-module-modal" hidden>
@@ -46,11 +47,14 @@
       <h2 id="add-module-title">Add a Module</h2>
       <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
     </div>
+    {{range .Home.Customize.Groups}}
+    <h3 class="modal-group">{{.Title}}</h3>
     <ul class="modal-list">
-      {{range .Home.Customize.Entries}}
-      <li><button type="button" class="modal-item" data-add-widget="{{.ID}}"><strong>{{.Title}}</strong><small>{{.Description}}</small></button></li>
+      {{range .Entries}}
+      <li><button type="button" class="modal-item" data-add-widget="{{.ID}}"{{if .Enabled}} disabled data-added{{end}}><strong>{{.Title}}</strong><small>{{.Description}}</small><small class="modal-item-sizes">Starts at {{.Default.W}}x{{.Default.H}}. Sizes {{range $i, $s := .Sizes}}{{if $i}}, {{end}}{{$s.Value}}{{end}}.</small><small class="modal-item-on" data-added-note{{if not .Enabled}} hidden{{end}}>On your home</small></button></li>
       {{end}}
     </ul>
+    {{end}}
     <p class="modal-empty" hidden>Every module is already on your home.</p>
   </div>
 </div>
@@ -81,8 +85,7 @@
     <form method="post" action="/home/layout">
       <input type="hidden" name="action" value="size">
       <input type="hidden" name="widget" value="{{.ID}}">
-      <label><small>Width</small> <select name="w"><option value="1"{{if eq .W 1}} selected{{end}}>1</option><option value="2"{{if eq .W 2}} selected{{end}}>2</option><option value="3"{{if eq .W 3}} selected{{end}}>3</option></select></label>
-      <label><small>Height</small> <select name="h"><option value="1"{{if eq .H 1}} selected{{end}}>1</option><option value="2"{{if eq .H 2}} selected{{end}}>2</option><option value="3"{{if eq .H 3}} selected{{end}}>3</option></select></label>
+      <label><small>Size</small> <select name="size">{{range .Sizes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
       <button type="submit">Resize</button>
     </form>
     {{end}}

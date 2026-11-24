@@ -241,7 +241,7 @@ func TestProfitPulseWidgetEmpty(t *testing.T) {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/", body, `data-widget="profitpulse"`, "No profit yet")
-	if strings.Contains(body, "Gross in") {
+	if at := strings.Index(body, `class="card-body"`); at < 0 || strings.Contains(body[at:], "Gross in") {
 		t.Errorf("empty widget shows figures, want the empty state only")
 	}
 }

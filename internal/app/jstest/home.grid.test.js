@@ -1,6 +1,6 @@
-// Tests for the home grid helpers in ../static/home.js: the size
-// bounds a module may be offered (homeSizeAllowed: inside its
-// floor and ceiling both) and the two-across fill plan
+// Tests for the home grid helpers in ../static/home.js: the sizes a
+// widget declares and the one a wanted size lands on
+// (homeParseSizes, homeSnapToAllowed) and the two-across fill plan
 // (homeFillPlan: which module closes a row short and widens to
 // finish it). app.js and home.js run under a small DOM stub; only the pure
 // helpers it exports for node are exercised.
@@ -114,20 +114,20 @@ function loadAppJS() {
 
 const app = loadAppJS();
 
-test("homeSizeAllowed: inside the floor and ceiling both", function () {
-  const min = { w: 2, h: 1 }, max = { w: 3, h: 1 }; // a band's bounds
-  assert.equal(app.homeSizeAllowed(2, 1, min, max), true);
-  assert.equal(app.homeSizeAllowed(3, 1, min, max), true);
-  assert.equal(app.homeSizeAllowed(1, 1, min, max), false, "below the floor");
-  assert.equal(app.homeSizeAllowed(3, 2, min, max), false, "past the ceiling: only empty cells");
-  assert.equal(app.homeSizeAllowed(2, 2, min, max), false, "past the ceiling on height alone");
+test("homeParseSizes: reads a card's declared sizes, narrowest then shortest", function () {
+  assert.deepEqual(app.homeParseSizes("2x1 1x2 1x1 junk 9"), [{ w: 1, h: 1 }, { w: 1, h: 2 }, { w: 2, h: 1 }]);
+  assert.deepEqual(app.homeParseSizes(""), []);
 });
 
-test("homeSizeAllowed: an unbounded module takes the whole grid only", function () {
-  const min = { w: 1, h: 1 }, max = { w: 3, h: 3 };
-  assert.equal(app.homeSizeAllowed(3, 3, min, max), true);
-  assert.equal(app.homeSizeAllowed(4, 1, min, max), false);
-  assert.equal(app.homeSizeAllowed(1, 4, min, max), false);
+test("homeSnapToAllowed: lands on a declared size by the server's rule", function () {
+  const band = app.homeParseSizes("2x1 3x1");
+  const table = app.homeParseSizes("2x2 2x3 3x2 3x3");
+  const column = app.homeParseSizes("1x1 1x2");
+  assert.deepEqual(app.homeSnapToAllowed(table, 3, 2), { w: 3, h: 2 }, "a declared size stands");
+  assert.deepEqual(app.homeSnapToAllowed(band, 3, 3), { w: 3, h: 1 }, "same width, nearest height");
+  assert.deepEqual(app.homeSnapToAllowed(table, 1, 1), { w: 2, h: 2 }, "the smallest size that covers it");
+  assert.deepEqual(app.homeSnapToAllowed(column, 3, 3), { w: 1, h: 2 }, "nothing covers it: the nearest");
+  assert.deepEqual(app.homeSnapToAllowed(band, 1, 2), { w: 2, h: 1 }, "nearest, smaller on a tie");
 });
 
 test("homeResizeFrame: at rest the frame is exactly the module", function () {

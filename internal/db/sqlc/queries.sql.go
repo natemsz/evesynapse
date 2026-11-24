@@ -170,7 +170,7 @@ func (q *Queries) CreateSkillPlan(ctx context.Context, arg CreateSkillPlanParams
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
 VALUES (now())
-RETURNING id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs
+RETURNING id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after
 `
 
 func (q *Queries) CreateUser(ctx context.Context) (User, error) {
@@ -184,6 +184,7 @@ func (q *Queries) CreateUser(ctx context.Context) (User, error) {
 		&i.LastSeenAt,
 		&i.IsDemo,
 		&i.VizPrefs,
+		&i.DeleteAfter,
 	)
 	return i, err
 }
@@ -226,6 +227,22 @@ type DeleteCloneNameParams struct {
 func (q *Queries) DeleteCloneName(ctx context.Context, arg DeleteCloneNameParams) error {
 	_, err := q.db.Exec(ctx, deleteCloneName, arg.UserID, arg.CharacterID, arg.CloneID)
 	return err
+}
+
+const deleteDueUsers = `-- name: DeleteDueUsers :execrows
+DELETE FROM users u
+WHERE u.delete_after IS NOT NULL AND u.delete_after <= $1::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM characters c WHERE c.user_id = u.id)
+`
+
+// Accounts marked for removal whose time has come, as long as no
+// character was linked to them since.
+func (q *Queries) DeleteDueUsers(ctx context.Context, now time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteDueUsers, now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteLocalFitting = `-- name: DeleteLocalFitting :exec
@@ -664,7 +681,7 @@ func (q *Queries) GetSnapshotFetchState(ctx context.Context, arg GetSnapshotFetc
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs FROM users
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after FROM users
 WHERE id = $1
 `
 
@@ -679,6 +696,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.LastSeenAt,
 		&i.IsDemo,
 		&i.VizPrefs,
+		&i.DeleteAfter,
 	)
 	return i, err
 }
@@ -1167,20 +1185,21 @@ func (q *Queries) ListCorporationIDsByUser(ctx context.Context, userID int64) ([
 }
 
 const listEmptyUsers = `-- name: ListEmptyUsers :many
-SELECT u.id, u.created_at, u.last_seen_at FROM users u
+SELECT u.id, u.created_at, u.last_seen_at, u.delete_after FROM users u
 WHERE NOT EXISTS (SELECT 1 FROM characters c WHERE c.user_id = u.id)
 ORDER BY u.id
 LIMIT $1::bigint
 `
 
 type ListEmptyUsersRow struct {
-	ID         int64     `json:"id"`
-	CreatedAt  time.Time `json:"created_at"`
-	LastSeenAt time.Time `json:"last_seen_at"`
+	ID          int64        `json:"id"`
+	CreatedAt   time.Time    `json:"created_at"`
+	LastSeenAt  time.Time    `json:"last_seen_at"`
+	DeleteAfter sql.NullTime `json:"delete_after"`
 }
 
-// Accounts with no character linked: left over from an unlink, or from
-// an older build.
+// Accounts with no character linked: left over from an unlink, from a
+// merge (delete_after set), or from an older build.
 func (q *Queries) ListEmptyUsers(ctx context.Context, rowLimit int64) ([]ListEmptyUsersRow, error) {
 	rows, err := q.db.Query(ctx, listEmptyUsers, rowLimit)
 	if err != nil {
@@ -1190,7 +1209,12 @@ func (q *Queries) ListEmptyUsers(ctx context.Context, rowLimit int64) ([]ListEmp
 	var items []ListEmptyUsersRow
 	for rows.Next() {
 		var i ListEmptyUsersRow
-		if err := rows.Scan(&i.ID, &i.CreatedAt, &i.LastSeenAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.DeleteAfter,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1920,7 +1944,7 @@ func (q *Queries) ListUserWalletHistory(ctx context.Context, userID int64) ([]Wa
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs FROM users
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after FROM users
 ORDER BY id
 `
 
@@ -1941,6 +1965,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.LastSeenAt,
 			&i.IsDemo,
 			&i.VizPrefs,
+			&i.DeleteAfter,
 		); err != nil {
 			return nil, err
 		}
@@ -2087,6 +2112,21 @@ func (q *Queries) ListWalletHistorySamplesSince(ctx context.Context, arg ListWal
 		return nil, err
 	}
 	return items, nil
+}
+
+const markUserForDeletion = `-- name: MarkUserForDeletion :exec
+UPDATE users SET delete_after = $1::timestamptz WHERE id = $2
+`
+
+type MarkUserForDeletionParams struct {
+	After time.Time `json:"after"`
+	ID    int64     `json:"id"`
+}
+
+// An account emptied by a merge: removed once after has passed.
+func (q *Queries) MarkUserForDeletion(ctx context.Context, arg MarkUserForDeletionParams) error {
+	_, err := q.db.Exec(ctx, markUserForDeletion, arg.After, arg.ID)
+	return err
 }
 
 const nextSkillPlanPosition = `-- name: NextSkillPlanPosition :one

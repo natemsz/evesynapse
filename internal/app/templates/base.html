@@ -53,7 +53,7 @@
 {{if or (eq .NavPage "market.html") (eq .NavPage "market_trends.html") (eq .NavPage "market_lp.html") (eq .NavPage "market_baskets.html") (eq .NavPage "market_basket.html") (eq .NavPage "profit.html") (eq .NavPage "profit_blueprint.html") (eq .NavPage "orders.html") (eq .NavPage "items.html")}}<link rel="stylesheet" href="/static/market.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "admin.html") (eq .NavPage "admin_esi.html") (eq .NavPage "sync.html") (eq .NavPage "admin_notices.html")}}<link rel="stylesheet" href="/static/admin.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "home.html") (eq .NavPage "market_tradeideas.html") (eq .NavPage "link.html")}}<link rel="stylesheet" href="/static/tradeideas.css?v={{.AssetVersion}}">{{end}}
-{{if or (eq .NavPage "link.html") (eq .NavPage "link_confirm.html")}}<link rel="stylesheet" href="/static/link.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "link.html") (eq .NavPage "link_confirm.html") (eq .NavPage "merge.html")}}<link rel="stylesheet" href="/static/link.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "market_appraise.html"}}<link rel="stylesheet" href="/static/appraisal.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "items.html"}}<link rel="stylesheet" href="/static/items.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "items.html") (eq .Section "fitting")}}<link rel="stylesheet" href="/static/itemsheet.css?v={{.AssetVersion}}">{{end}}

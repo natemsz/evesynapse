@@ -187,13 +187,13 @@
 
 {{if .Empty}}<section class="card spanall">
 <h2>Accounts with no characters</h2>
-<p class="an-note prose">Left behind when every character was unlinked, or by an older build. Open one to remove it.</p>
+<p class="an-note prose">Left behind when every character was unlinked, by a merge into another account, or by an older build. Open one to remove it. Merged accounts are removed on their own on the date shown.</p>
 <div class="tw">
 <table>
-  <thead><tr><th>Account</th><th>Created</th><th>Last seen</th></tr></thead>
+  <thead><tr><th>Account</th><th>Created</th><th>Last seen</th><th>Removed on</th></tr></thead>
   <tbody>
   {{range .Empty}}
-    <tr><td><a href="/admin/?account={{.ID}}">{{.ID}}</a></td><td>{{.Created}}</td><td>{{.LastSeen}}</td></tr>
+    <tr><td><a href="/admin/?account={{.ID}}">{{.ID}}</a></td><td>{{.Created}}</td><td>{{.LastSeen}}</td><td>{{if .DeleteAfter}}{{.DeleteAfter}}{{else}}-{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>

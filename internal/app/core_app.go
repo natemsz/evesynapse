@@ -819,6 +819,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/auth/callback", app.handleEVECallback)
 	r.Get("/auth/confirm", app.handleLinkConfirm)
 	r.Post("/auth/confirm", app.handleLinkConfirmPost)
+	r.Get("/auth/merge", app.handleMerge)
+	r.Post("/auth/merge", app.handleMergePost)
 	// Signing out changes state, so it is a POST: a link or an image
 	// tag on another page cannot sign the visitor out.
 	r.Post("/auth/logout", app.handleSignOut)

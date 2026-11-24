@@ -289,7 +289,7 @@ func (q *Queries) GetOpComposition(ctx context.Context, opID int64) (OpCompositi
 }
 
 const getOpSignup = `-- name: GetOpSignup :one
-SELECT op_id, character_id, user_id, response, ship, fleet_role, note, updated_at FROM op_signups WHERE op_id = $1 AND character_id = $2
+SELECT op_id, character_id, user_id, response, ship, fleet_role, note, updated_at, ready_at FROM op_signups WHERE op_id = $1 AND character_id = $2
 `
 
 type GetOpSignupParams struct {
@@ -309,6 +309,7 @@ func (q *Queries) GetOpSignup(ctx context.Context, arg GetOpSignupParams) (OpSig
 		&i.FleetRole,
 		&i.Note,
 		&i.UpdatedAt,
+		&i.ReadyAt,
 	)
 	return i, err
 }
@@ -766,7 +767,7 @@ func (q *Queries) ListOpMemberTags(ctx context.Context, opID int64) ([]ListOpMem
 }
 
 const listOpSignups = `-- name: ListOpSignups :many
-SELECT op_id, character_id, user_id, response, ship, fleet_role, note, updated_at FROM op_signups WHERE op_id = $1 ORDER BY updated_at, character_id LIMIT 300
+SELECT op_id, character_id, user_id, response, ship, fleet_role, note, updated_at, ready_at FROM op_signups WHERE op_id = $1 ORDER BY updated_at, character_id LIMIT 300
 `
 
 // The first sign-ups to a fleet, up to the most its page shows.
@@ -788,6 +789,7 @@ func (q *Queries) ListOpSignups(ctx context.Context, opID int64) ([]OpSignup, er
 			&i.FleetRole,
 			&i.Note,
 			&i.UpdatedAt,
+			&i.ReadyAt,
 		); err != nil {
 			return nil, err
 		}

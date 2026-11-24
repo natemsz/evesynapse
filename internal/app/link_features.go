@@ -100,7 +100,7 @@ var corpFeatureKinds = map[string]string{
 func linkFeatures() []linkFeature {
 	var out []linkFeature
 	for _, def := range moduleDefs() {
-		if def.Layer == layerDerived {
+		if def.Layer == layerDerived || def.RelinkOnly {
 			continue
 		}
 		required := 0

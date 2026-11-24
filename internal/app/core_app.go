@@ -207,6 +207,9 @@ type Application struct {
 	// nameNudge wakes the urgent drain's name lookup the moment a
 	// search notes a name no local tier knows (search.go).
 	nameNudge chan struct{}
+	// inviteNudge wakes the fleet lane to send invites the moment a
+	// commander queues them (fleet_invites.go).
+	inviteNudge chan struct{}
 
 	// urgentMu guards urgentHoldUntil: after ESI pushes back, the
 	// urgent drain stays quiet for a while instead of nudging
@@ -565,6 +568,7 @@ func New(cfg Config) (*Application, error) {
 
 	app := &Application{
 		nameNudge:     make(chan struct{}, 1),
+		inviteNudge:   make(chan struct{}, 1),
 		cfg:           cfg,
 		push:          pushConfigFromEnv(cfg),
 		sessions:      sessionManager,
@@ -964,6 +968,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	fleets.Get("/fleets/{opID:[0-9]+}/composition/live", app.handleFleetLive)
 	fleets.Post("/fleets/{opID:[0-9]+}/composition/try", app.handleFleetTry)
 	fleets.Post("/fleets/{opID:[0-9]+}/pilot", app.handleFleetPilot)
+	fleets.Post("/fleets/{opID:[0-9]+}/invite", app.handleFleetInvite)
+	fleets.Post("/fleets/{opID:[0-9]+}/ready", app.handleFleetReady)
 	fleets.Get("/fleets/{opID:[0-9]+}/report", app.handleFleetReport)
 	fleets.Get("/fleets/{opID:[0-9]+}/report/battle/{seq:[0-9]+}/moment/{m:[0-9]+}/", app.handleFleetReportMoment)
 	fleets.Post("/fleets/{opID:[0-9]+}/report/logs", app.handleFleetReportLogs)

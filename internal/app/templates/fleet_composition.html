@@ -92,13 +92,41 @@
 </div>
 {{end}}
 
+{{/* The pilots to invite: coming and not in the fleet, those ready for
+     an invite first. Once the character the fleet is read through
+     allows it, those running the fleet invite one, the ready ones or
+     everyone coming, and each shows how its invite went
+     (fleet_invites.go). The names stay to copy for inviting in game. */}}
 {{define "fleet-invite"}}
 {{if .InviteCount}}
 <section class="l-panel fl-next" aria-labelledby="fl-invite-title">
   <h2 id="fl-invite-title">To invite <small>{{.InviteCount}}</small></h2>
-  <p class="fl-hint">Signed up as coming and not in the fleet.{{if .InviteCut}} Showing the first {{.InviteShown}}.{{end}}</p>
-  <pre class="fl-invite" id="fl-invite" tabindex="0">{{.Invite}}</pre>
-  <button type="button" class="btn btn-quiet" data-copy data-copy-from="fl-invite">Copy names</button>
+  <p class="fl-hint">Signed up as coming and not in the fleet{{if .InviteReady}}. {{.InviteReady}} ready for an invite, the longest waiting first{{end}}.{{if .InviteCut}} Showing the first {{.InviteShown}}.{{end}}</p>
+  {{if .CanInvite}}
+  <form method="post" action="{{.InviteAction}}" class="fl-invite-all">
+    {{if .InviteReady}}<button type="submit" name="who" value="ready" class="btn">Invite the {{.InviteReady}} ready</button>{{end}}
+    <button type="submit" name="who" value="coming" class="btn btn-quiet">Invite all {{.InviteCount}} coming</button>
+  </form>
+  <p class="fl-hint">Invites go out from {{.InviteFrom}} within seconds.</p>
+  {{end}}
+  <ul class="fl-invitees" role="list">
+  {{range $i, $p := .InvitePilots}}{{if lt $i $.InviteShown}}
+    <li{{if .Ready}} class="is-ready"{{end}}>
+      <span class="fl-invitee"><span>{{.Name}}{{if .Ready}} <span class="badge kill">Ready {{.ReadyFor}}</span>{{end}}</span>{{with .Status}}<small class="{{if $p.Failed}}fl-invite-bad{{else if $p.Sent}}fl-invite-ok{{end}}">{{.}}</small>{{end}}</span>
+      {{if $.CanInvite}}<form method="post" action="{{$.InviteAction}}"><button type="submit" name="who" value="{{.ID}}" class="btn btn-quiet" aria-label="Invite {{.Name}}{{if .Status}} again{{end}}">{{if .Status}}Again{{else}}Invite{{end}}</button></form>{{end}}
+    </li>
+  {{end}}{{end}}
+  </ul>
+  {{if not .CanInvite}}
+  {{with .InviteGrant}}<p class="fl-hint">Invite them from here: allow EveSynapse to send fleet invites from {{$.InviteFrom}}, the character the fleet is read through.</p>
+  <a class="btn btn-quiet" href="{{.}}">Allow fleet invites</a>
+  {{else}}{{with .InviteFrom}}<p class="fl-hint">To invite them from here, {{.}}, the character the fleet is read through, has to allow EveSynapse to send fleet invites.</p>{{end}}{{end}}
+  {{end}}
+  <details class="fl-invite-copy">
+    <summary>Copy the names to invite in game</summary>
+    <pre class="fl-invite" id="fl-invite" tabindex="0">{{.Invite}}</pre>
+    <button type="button" class="btn btn-quiet" data-copy data-copy-from="fl-invite">Copy names</button>
+  </details>
 </section>
 {{end}}
 {{end}}

@@ -245,6 +245,21 @@
 .fl-tally small { color: var(--muted); font-size: var(--fs-xs); }
 .fl-invite { max-height: 14rem; margin: 0; padding: var(--space-2); overflow: auto; background: var(--surface-inset); border-radius: var(--r-xs); font-family: var(--font-body); font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
 .fl-invite:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+/* Invites sent from here: the ready pilots marked and first, each with
+   how its invite went and its own button. */
+.fl-invite-all { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.fl-invitees { display: grid; gap: 0.15rem; max-height: 24rem; margin: 0; padding: 0; overflow: auto; list-style: none; font-size: var(--fs-sm); }
+.fl-invitees li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0.2rem var(--space-1); border-radius: var(--r-xs); }
+.fl-invitees li.is-ready { background: var(--surface-inset); }
+.fl-invitee { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.fl-invitee small { color: var(--muted); font-size: var(--fs-xs); }
+.fl-invitee .fl-invite-ok { color: var(--kept); }
+.fl-invitee .fl-invite-bad { color: var(--gold); }
+.fl-invitees form { flex: none; margin: 0; }
+.fl-invite-copy > summary { cursor: pointer; color: var(--gold); font-size: var(--fs-sm); }
+.fl-invite-copy[open] > summary { margin-bottom: var(--space-2); }
+.fl-ready { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--hairline); }
+.fl-ready p { flex-basis: 100%; margin: 0; }
 .fl-pager { justify-content: center; margin-top: var(--space-3); }
 .fl-pilots { container: fl-pilots / inline-size; }
 .fl-pilots td small { color: var(--muted); font-size: var(--fs-xs); }

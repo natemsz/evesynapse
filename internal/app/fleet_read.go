@@ -74,11 +74,20 @@ func (app *Application) runFleetLane(ctx context.Context) {
 		runGuarded("demo fleet", func() { app.keepDemoFleetLive(ctx, time.Now()) })
 		if !app.esi.HardLimitActive(time.Now()) && !app.esi.ErrorBudgetLow() {
 			runGuarded("fleet lane", func() { app.captureOpAttendance(ctx, time.Now()) })
+			runGuarded("fleet invites", func() { app.sendFleetInvites(ctx, time.Now()) })
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-tick.C:
+		// Between reads, a commander's queued invites go out at once.
+		for waiting := true; waiting; {
+			select {
+			case <-ctx.Done():
+				return
+			case <-app.inviteNudge:
+				if !app.esi.HardLimitActive(time.Now()) && !app.esi.ErrorBudgetLow() {
+					runGuarded("fleet invites", func() { app.sendFleetInvites(ctx, time.Now()) })
+				}
+			case <-tick.C:
+				waiting = false
+			}
 		}
 	}
 }

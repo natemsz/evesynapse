@@ -9,6 +9,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"evesynapse/internal/app/calendar"
 	"fmt"
 	"io"
@@ -412,6 +413,10 @@ type fleetESI struct {
 	// coFleet is what the second commander (opsCharC) is in, if anything.
 	coFleet string
 	asked   []string
+	// invited are the pilots invited into fleet 777, in order; refuse
+	// answers an invite for a pilot with an error status instead.
+	invited []int64
+	refuse  map[int64]int
 }
 
 func (s *fleetESI) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -425,6 +430,19 @@ func (s *fleetESI) RoundTrip(req *http.Request) (*http.Response, error) {
 		return respond(s.fleetStatus, s.fleet)
 	case strings.HasSuffix(req.URL.Path, "/characters/90000003/fleet/") && s.coFleet != "":
 		return respond(http.StatusOK, s.coFleet)
+	case req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/fleets/777/members/"):
+		var invite struct {
+			CharacterID int64  `json:"character_id"`
+			Role        string `json:"role"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&invite); err != nil || invite.Role != "squad_member" {
+			return respond(http.StatusBadRequest, `{"error":"bad invite"}`)
+		}
+		if code := s.refuse[invite.CharacterID]; code != 0 {
+			return respond(code, `{"error":"refused"}`)
+		}
+		s.invited = append(s.invited, invite.CharacterID)
+		return respond(http.StatusNoContent, "")
 	case strings.HasSuffix(req.URL.Path, "/fleets/777/members/"):
 		return respond(s.membersStatus, s.members)
 	}

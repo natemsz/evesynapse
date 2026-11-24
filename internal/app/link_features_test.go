@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -227,12 +228,25 @@ func TestLinkToEVEIsBuiltFromTheChoice(t *testing.T) {
 		t.Errorf("an extra of an unchosen feature was requested: %v", dropped)
 	}
 
+	// A plain sign-in asks for every scope but those only a targeted
+	// re-link asks for (fleet invites).
 	full := eveScopeParam(t, get(app, nil, "/auth/eve"))
 	sort.Strings(full)
-	wantFull := append([]string(nil), eveScopes...)
+	relinkOnly := map[string]bool{}
+	for _, m := range moduleDefs() {
+		for _, s := range m.Scopes {
+			relinkOnly[s.Scope] = relinkOnly[s.Scope] || m.RelinkOnly
+		}
+	}
+	var wantFull []string
+	for _, s := range eveScopes {
+		if !relinkOnly[s] {
+			wantFull = append(wantFull, s)
+		}
+	}
 	sort.Strings(wantFull)
-	if strings.Join(full, " ") != strings.Join(wantFull, " ") {
-		t.Errorf("a plain /auth/eve asks for %v, want the full list", full)
+	if strings.Join(full, " ") != strings.Join(wantFull, " ") || slices.Contains(full, fleetInviteScope) {
+		t.Errorf("a plain /auth/eve asks for %v, want every scope but the re-link-only ones", full)
 	}
 
 	for _, bad := range []string{"/auth/eve?feature=nosuch", "/auth/eve?feature=skills&enhance=esi-nosuch.scope.v1"} {

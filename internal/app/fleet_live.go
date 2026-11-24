@@ -561,8 +561,18 @@ type fleetLiveView struct {
 	InviteShown int
 	InviteCount int
 	InviteCut   bool
-	Roles       []string
-	LiveURL     string
+	// The invite panel (fleet_invites.go): the pilots coming and not in
+	// the fleet, the ready ones first, each with how its invite went;
+	// whether invites go out from here and as whom, and for the owner of
+	// that character the sign-in that allows them.
+	InvitePilots []fleetInviteRow
+	InviteReady  int
+	CanInvite    bool
+	InviteFrom   string
+	InviteGrant  string
+	InviteAction string
+	Roles        []string
+	LiveURL      string
 	// TryURL is set on the demo's live fleet: the commander tools answer
 	// from there and store nothing.
 	TryURL      string
@@ -818,6 +828,17 @@ type fleetSight struct {
 	squads map[int64]bool
 }
 
+// fleetInviteRow is one pilot on the invite panel.
+type fleetInviteRow struct {
+	ID       int64
+	Name     string
+	Ready    bool
+	ReadyFor string // how long they have been ready ("5 min")
+	Status   string // how their invite went, if one was asked for
+	Sent     bool
+	Failed   bool
+}
+
 // sightFor reads the viewer's places from the stored fleet. An account
 // with several characters in the fleet sees what each of them sees.
 func (c *fleetComposition) sightFor(ids []int64) fleetSight {
@@ -1035,7 +1056,7 @@ func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewe
 		// The list leaves out who is in the fleet, so it would name them
 		// to a commander who is not.
 		if live.row == nil || live.sight.In {
-			app.fillFleetInvite(ctx, view, op, live.comp.Members)
+			app.fillFleetInvite(ctx, view, op, live.comp.Members, v)
 		}
 	}
 	if !live.sight.In {
@@ -1089,7 +1110,7 @@ func (app *Application) fleetLiveFor(ctx context.Context, op db.Op, v fleetViewe
 
 // fillFleetInvite lists who said they are coming and is not in the
 // fleet yet, for the FC to invite in game.
-func (app *Application) fillFleetInvite(ctx context.Context, view *fleetLiveView, op db.Op, members []fleetMemberRow) {
+func (app *Application) fillFleetInvite(ctx context.Context, view *fleetLiveView, op db.Op, members []fleetMemberRow, v fleetViewer) {
 	if op.CancelledAt.Valid || opEnd(op).Before(time.Now()) {
 		return
 	}
@@ -1108,21 +1129,75 @@ func (app *Application) fillFleetInvite(ctx context.Context, view *fleetLiveView
 			waiting = append(waiting, s.CharacterID)
 		}
 	}
+	if len(waiting) == 0 {
+		return
+	}
 	app.primeVerifiedNames(ctx, waiting)
-	var names []string
+	sent := map[int64]db.ListFleetInvitesRow{}
+	if rows, err := app.queries.ListFleetInvites(ctx, op.ID); err == nil {
+		for _, row := range rows {
+			sent[row.CharacterID] = row
+		}
+	} else {
+		logging.Errorf("fleets: invites of %d: %v", op.ID, err)
+	}
+	now := time.Now()
+	readyAt := map[int64]time.Time{}
 	for _, s := range signups {
 		if s.Response != opYes || inFleet[s.CharacterID] {
 			continue
 		}
-		view.InviteCount++
-		if len(names) < fleetInviteMax {
-			names = append(names, app.displayCharacter(ctx, s.CharacterID))
+		row := fleetInviteRow{ID: s.CharacterID, Name: app.displayCharacter(ctx, s.CharacterID), Ready: s.ReadyAt.Valid}
+		if row.Ready {
+			readyAt[row.ID] = s.ReadyAt.Time
+			row.ReadyFor = fleetRunningText(now.Sub(s.ReadyAt.Time))
+		}
+		if inv, ok := sent[row.ID]; ok {
+			switch {
+			case inv.FailedAt.Valid:
+				row.Status, row.Failed = inv.Error, true
+			case inv.SentAt.Valid:
+				row.Status, row.Sent = "Invite sent at "+inv.SentAt.Time.UTC().Format("15:04")+" EVE", true
+			default:
+				row.Status = "Invite on its way"
+			}
+		}
+		view.InvitePilots = append(view.InvitePilots, row)
+		if row.Ready {
+			view.InviteReady++
 		}
 	}
-	sort.Strings(names)
-	view.InviteShown = len(names)
-	view.InviteCut = view.InviteCount > len(names)
+	// Who has waited longest first, then the rest by name.
+	sort.SliceStable(view.InvitePilots, func(i, j int) bool {
+		a, b := view.InvitePilots[i], view.InvitePilots[j]
+		if a.Ready != b.Ready {
+			return a.Ready
+		}
+		if a.Ready && !readyAt[a.ID].Equal(readyAt[b.ID]) {
+			return readyAt[a.ID].Before(readyAt[b.ID])
+		}
+		return a.Name < b.Name
+	})
+	view.InviteCount = len(view.InvitePilots)
+	view.InviteShown = min(view.InviteCount, fleetInviteMax)
+	view.InviteCut = view.InviteCount > view.InviteShown
+	names := make([]string, 0, view.InviteShown)
+	for _, p := range view.InvitePilots[:view.InviteShown] {
+		names = append(names, p.Name)
+	}
 	view.Invite = strings.Join(names, "\n")
+
+	// Whether invites go out from here: the character the fleet is read
+	// through has allowed them. Its owner is offered the grant.
+	view.InviteAction = "/fleets/" + strconv.FormatInt(op.ID, 10) + "/invite"
+	if boss := op.CaptureBossID; boss != 0 {
+		view.InviteFrom = app.displayCharacter(ctx, boss)
+		if ch, err := app.queries.GetCharacter(ctx, boss); err == nil && scopeSet(ch.Scopes)[fleetInviteScope] {
+			view.CanInvite = true
+		} else if slices.ContainsFunc(v.Characters, func(c accountCharacter) bool { return c.CharacterID == boss }) {
+			view.InviteGrant = relinkURL(fleetInvitesModule, boss) + "&next=" + url.QueryEscape(fleetCompositionPath(op.ID))
+		}
+	}
 }
 
 func (app *Application) storedComposition(ctx context.Context, opID int64) (*db.OpComposition, error) {

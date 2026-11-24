@@ -1993,6 +1993,16 @@ type OpComposition struct {
 	ComputedAt time.Time `json:"computed_at"`
 }
 
+type OpInvite struct {
+	OpID        int64        `json:"op_id"`
+	CharacterID int64        `json:"character_id"`
+	QueuedBy    int64        `json:"queued_by"`
+	QueuedAt    time.Time    `json:"queued_at"`
+	SentAt      sql.NullTime `json:"sent_at"`
+	FailedAt    sql.NullTime `json:"failed_at"`
+	Error       string       `json:"error"`
+}
+
 type OpMemberTag struct {
 	OpID        int64     `json:"op_id"`
 	CharacterID int64     `json:"character_id"`
@@ -2011,6 +2021,7 @@ type OpSignup struct {
 	FleetRole   string        `json:"fleet_role"`
 	Note        string        `json:"note"`
 	UpdatedAt   time.Time     `json:"updated_at"`
+	ReadyAt     sql.NullTime  `json:"ready_at"`
 }
 
 type OrderHealth struct {

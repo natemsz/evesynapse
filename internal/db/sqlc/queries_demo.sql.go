@@ -390,7 +390,7 @@ func (q *Queries) GetDemoLastReset(ctx context.Context) (time.Time, error) {
 }
 
 const getDemoLiveFleet = `-- name: GetDemoLiveFleet :one
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at, capture_boss_id, capture_detail, srp_policy_id FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id, owner_kind, owner_id, fleet_type, visibility, join_gate, share_token, roster_public, coming_count, maybe_count, doctrine_mode, doctrine_snapshot, doctrine_snapshot_ships, doctrine_snapshot_at, capture_boss_id, capture_detail, srp_policy_id, sign_in FROM ops
 WHERE owner_kind = 'community' AND owner_id = $1::bigint
   AND capture_status = 'capturing' AND cancelled_at IS NULL
 ORDER BY id DESC
@@ -436,6 +436,7 @@ func (q *Queries) GetDemoLiveFleet(ctx context.Context, ownerID int64) (Op, erro
 		&i.CaptureBossID,
 		&i.CaptureDetail,
 		&i.SrpPolicyID,
+		&i.SignIn,
 	)
 	return i, err
 }

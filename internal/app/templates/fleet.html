@@ -109,12 +109,22 @@
       <div class="field"><label class="field-label" for="fl-note">Note</label>
         <input id="fl-note" type="text" name="note" value="{{.MyNote}}" maxlength="120" placeholder="e.g. 20 minutes late"></div>
     </div>
+    {{if .AsksPermissions}}<p class="fl-hint">This fleet asks for its permissions: signing up shares this character's kills and losses, and where it is and what it flies, with those running the fleet.</p>{{end}}
     <button type="submit">{{if .Mine}}Update sign-up{{else}}Sign up{{end}}</button>
   </form>
   {{if eq .Level "pilot"}}<p class="fl-hint">Signed in as {{.PilotName}}, with no account. <a href="{{.Account}}">An account</a> adds reminders and a calendar.</p>{{end}}
+  {{else if and (eq .Level "anonymous") .AsksPermissions}}
+  <p>This fleet asks its pilots to sign up with an EveSynapse character that shares its kills and losses, and where it is and what it flies, with those running the fleet.</p>
+  <a class="btn" href="{{.Account}}">Sign in to EveSynapse</a>
   {{else if eq .Level "anonymous"}}
   <p>Sign in with EVE to sign up. EveSynapse asks for no permissions and keeps no token.</p>
   <a class="btn" href="{{.SignIn}}">Sign in with EVE</a>
+  {{else if .NeedAccount}}
+  <p class="fl-empty">This fleet asks its pilots to sign up with an EveSynapse character that shares its kills and losses, and where it is and what it flies, with those running the fleet. {{.PilotName}} is signed in with no account.</p>
+  <a class="btn" href="{{.Account}}">Create an account</a>
+  {{else if .NeedGrant}}
+  <p>This fleet asks its pilots to share their kills and losses, and where they are and what they fly, with those running it. Sign in again with one of your characters to grant that, then sign up.</p>
+  <ul class="fl-grants">{{range .NeedGrant}}<li><a class="btn btn-quiet" href="{{.Href}}">Grant as {{.Name}}</a></li>{{end}}</ul>
   {{else if eq .Level "pilot"}}
   <p class="fl-empty">{{.PilotName}} cannot sign up to this fleet. It may need an EveSynapse account, or be for certain pilots only.</p>
   <a class="btn btn-quiet" href="{{.Account}}">Create an account</a>
@@ -137,10 +147,10 @@
   {{with .Title}}<h3>{{.}}</h3>{{end}}
   <div class="tw">
   <table>
-    <thead><tr><th>Pilot</th><th>Ship</th><th>Role</th><th>Note</th>{{if $op.CanPlan}}<th class="opt">Co-FC</th>{{end}}</tr></thead>
+    <thead><tr><th>Pilot</th><th>Ship</th><th>Role</th><th>Note</th>{{if $op.ShowWhere}}<th>Now</th>{{end}}{{if $op.CanPlan}}<th class="opt">Co-FC</th>{{end}}</tr></thead>
     <tbody>
     {{range .Rows}}
-      <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{.Ship}}</td><td>{{.Role}}</td><td>{{.Note}}</td>{{if $op.CanPlan}}<td>{{if .CanCommand}}<form method="post" action="/fleets/{{$op.ID}}/commanders" class="fl-inline"><input type="hidden" name="character" value="{{.CharacterID}}"><input type="hidden" name="do" value="add"><button type="submit" class="btn btn-quiet">Make co-FC</button></form>{{end}}</td>{{end}}</tr>
+      <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{.Ship}}</td><td>{{.Role}}</td><td>{{.Note}}</td>{{if $op.ShowWhere}}<td>{{if or .NowSystem .NowShip}}<span class="fl-where">{{if .NowShipID}}<img src="{{typeRender .NowShipID 64}}" width="20" height="20" alt="" loading="lazy">{{end}}<span>{{.NowShip}}{{if and .NowShip .NowSystem}} in {{end}}{{.NowSystem}}{{with .NowAge}} <small>{{.}}</small>{{end}}</span></span>{{else}}<span class="fl-zero">Not read yet</span>{{end}}</td>{{end}}{{if $op.CanPlan}}<td>{{if .CanCommand}}<form method="post" action="/fleets/{{$op.ID}}/commanders" class="fl-inline"><input type="hidden" name="character" value="{{.CharacterID}}"><input type="hidden" name="do" value="add"><button type="submit" class="btn btn-quiet">Make co-FC</button></form>{{end}}</td>{{end}}</tr>
     {{end}}
     </tbody>
   </table>
@@ -256,6 +266,7 @@
   {{range .Commanders}}<div><dt class="field-label">Co-FC</dt><dd>{{charLink $.ViewerChars .CharacterID .Name}}{{if $op.CanPlan}} <form method="post" action="/fleets/{{$op.ID}}/commanders" class="fl-inline"><input type="hidden" name="character" value="{{.CharacterID}}"><input type="hidden" name="do" value="remove"><button type="submit" class="btn btn-quiet">Remove</button></form>{{end}}</dd></div>{{end}}
   <div><dt class="field-label">Doctrine</dt><dd>{{if .Doctrine}}{{if .DoctrineURL}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{else}}{{.Doctrine}}{{end}} <small>{{if .DoctrineRequired}}required{{else}}suggested{{end}}</small>{{else}}None, bring what you like{{end}}</dd></div>
   <div><dt class="field-label">Who can sign up</dt><dd>{{.JoinGate}}</dd></div>
+  {{with .SignInText}}<div><dt class="field-label">Signing up asks</dt><dd>{{.}}</dd></div>{{end}}
   {{if .DoctrineFit}}<div class="fl-facts-wide"><dt class="field-label">Doctrine fits</dt><dd><ul class="fl-fits" role="list">{{range .DoctrineFit}}<li>{{if .Href}}<a href="{{.Href}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{if .Role}} <small>{{.Role}}</small>{{end}}</li>{{end}}</ul></dd></div>{{end}}
 </dl>
 {{if .Description}}<p class="fl-about">{{.Description}}</p>{{end}}

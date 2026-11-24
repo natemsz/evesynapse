@@ -90,6 +90,12 @@
       </div>
       <div class="field fl-rule"><label class="field-label" for="fl-join-rule">Pilots who can sign up</label>
         <select id="fl-join-rule" name="join_rule">{{range .RuleChoices}}<option value="{{.Value}}"{{if eq .Value $f.JoinRule}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>
+      <fieldset class="fl-signin">
+        <legend class="field-label">What signing up asks of a pilot</legend>
+        <div class="fl-options">
+        {{range .SignIns}}<label><input type="radio" name="sign_in" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}<small>{{.Hint}}</small></span></label>{{end}}
+        </div>
+      </fieldset>
     </fieldset>
   </div>
 
@@ -125,6 +131,7 @@
       <div><dt class="field-label">What to fly</dt><dd data-pv="fly">{{range .DoctrineModes}}{{if .Selected}}{{.Label}}{{end}}{{end}}</dd></div>
       {{if .CanSetAccess}}<div><dt class="field-label">Who can see it</dt><dd data-pv="see">{{range .Visibilities}}{{if .Selected}}{{.Label}}{{end}}{{end}}</dd></div>
       <div><dt class="field-label">Who can sign up</dt><dd data-pv="join">{{range .Gates}}{{if .Selected}}{{.Label}}{{end}}{{end}}</dd></div>
+      <div><dt class="field-label">Signing up asks</dt><dd data-pv="signin">{{range .SignIns}}{{if .Selected}}{{.Label}}{{end}}{{end}}</dd></div>
       <div><dt class="field-label">Pilot names</dt><dd data-pv="names">{{if .RosterPublic}}Shown to everyone who can open it{{else}}Shown to those who can sign up{{end}}</dd></div>{{end}}
     </dl>
   </section>

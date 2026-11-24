@@ -35,11 +35,13 @@ WHERE user_id = sqlc.arg(user_id)
 ORDER BY location_id, character_id;
 
 -- The account's most valuable places, summed over its characters,
--- highest first, for the home Net Worth split by location.
+-- highest first, for the home Net Worth split by location. A
+-- non-empty character_ids keeps only those characters.
 -- name: ListUserTopAssetLocations :many
 SELECT location_id, MAX(location_type)::text AS location_type, SUM(est_value)::float8 AS est_value
 FROM asset_location_values
 WHERE user_id = sqlc.arg(user_id)
+  AND (COALESCE(cardinality(sqlc.arg(character_ids)::bigint[]), 0) = 0 OR character_id = ANY(sqlc.arg(character_ids)::bigint[]))
 GROUP BY location_id
 ORDER BY SUM(est_value) DESC, location_id
 LIMIT 8;

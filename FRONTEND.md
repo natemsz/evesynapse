@@ -371,7 +371,7 @@ and `h` when the widget declares that size, or with `view=expand`
 at its largest. It reads only that widget's `Needs`, answers 204
 when the widget has nothing to show, and never moves the
 Briefing's "since you last looked" mark. Customize swaps a card
-for this render after each resize and each add; the old card
+for this render after each resize, each add and each settings save; the old card
 stays, dimmed, until the new one lands. home.js then dispatches
 `evesynapse:content-ready` with `detail.root` set to the card and
 `detail.part` set, so every `onReady` initializer runs over the
@@ -844,7 +844,16 @@ to it:
      `{{define "w-networth-tall"}}<div class="w-body {{.BodyClass}}">`
      then `w-lead`, `w-segbar`, `w-chart`, `w-note`, and `w-empty`
      for the nothing-yet case. No size checks, no fixed ids.
-  4. Check it with the rig: every size at several widths in fixed
+  4. Options are declared, never drawn by the widget: `optScope()`
+     (all characters, one character, or a tag), `optChoice`,
+     `optToggle` and `optMulti`, with `withHint` for a sentence
+     under the field. Customize draws the settings sheet from them
+     (the gear on the card, and the same form in the no-script
+     module list), stores the values per layout key, and checks
+     them against the account. The builder reads `in.Opts`; for a
+     scope it gets `in.Chars` and `in.Bundles` already narrowed and
+     `in.Scope` to say which, and the card's title names the scope.
+  5. Check it with the rig: every size at several widths in fixed
      rows (no overflow, a chart at two rows or more at least 40%
      of the body), a phone at 390px (the narrow body), and Expand.
 

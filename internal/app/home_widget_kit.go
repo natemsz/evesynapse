@@ -105,11 +105,10 @@ type homeWidgetDef struct {
 // widgetInput is what a builder is handed for one card.
 type widgetInput struct {
 	UserID  int64
-	Key     string   // layout key: the widget id
-	Size    wSize    // the size the card draws at
-	Form    string   // the form drawn at Size
-	Forms   []string // every form this render draws (the phone body adds one)
-	Opts    widgetOptions
+	Size    wSize         // the size the card draws at
+	Forms   []string      // every form this render draws: the one at Size, and the phone body's
+	Opts    widgetOptions // the account's settings, each checked against the account
+	Scope   widgetScope   // the scope option's value: Chars and Bundles are already narrowed to it
 	Chars   []db.Character
 	Bundles []*charSnaps
 	Shared  *homeShared // per-render cache
@@ -131,15 +130,17 @@ func (in *widgetInput) Draws(form string) bool {
 // say: a quiet widget's card is left off the home outside Customize.
 type widgetQuiet interface{ Quiet() bool }
 
-// widgetOption is one setting a widget declares. Until the settings
-// sheet stores values, every widget draws with its defaults.
+// widgetOption is one setting a widget declares. The account's value
+// comes from its settings sheet (home_widget_config.go); a widget never
+// stored or holding a value no longer valid draws with the default.
 type widgetOption struct {
 	Key     string
 	Label   string
-	Kind    string // optKindScope or optKindChoice
+	Kind    string // optKindScope, optKindChoice, optKindToggle or optKindMulti
 	Choices []widgetChoice
 	Default string
-	Hint    string
+	Hint    string // one plain sentence under the field, when the label needs it
+	Max     int    // multi: the most values that may be picked; 0 for any number
 }
 
 // widgetChoice is one value a choice option can take and its label.
@@ -148,6 +149,8 @@ type widgetChoice struct{ Value, Label string }
 const (
 	optKindScope  = "scope"  // all characters, a tag, or one character: all, tag:<name>, char:<id>
 	optKindChoice = "choice" // one of the declared choices
+	optKindToggle = "toggle" // on or off: yes, no
+	optKindMulti  = "multi"  // some of the declared choices, comma-joined in declared order
 )
 
 // optScope is the characters a widget reads: all of them by default.
@@ -165,11 +168,63 @@ func optChoice(key, label, def string, choices ...string) widgetOption {
 	return o
 }
 
-// allows reports whether v is a value the option can take.
-func (o widgetOption) allows(v string) bool {
-	if o.Kind != optKindChoice {
-		return v != ""
+// optToggle declares an on or off option.
+func optToggle(key, label string, on bool) widgetOption {
+	o := widgetOption{Key: key, Label: label, Kind: optKindToggle, Default: toggleOff}
+	if on {
+		o.Default = toggleOn
 	}
+	return o
+}
+
+// optMulti declares an option that picks some of its choices (at most
+// max, 0 for any number); def is the default picks, comma-joined, and
+// each choice is "value:Label".
+func optMulti(key, label, def string, max int, choices ...string) widgetOption {
+	o := optChoice(key, label, def, choices...)
+	o.Kind, o.Max = optKindMulti, max
+	return o
+}
+
+// withHint gives an option the sentence its sheet shows under it.
+func withHint(o widgetOption, hint string) widgetOption {
+	o.Hint = hint
+	return o
+}
+
+// allows reports whether v is a value the option can take. A scope
+// value is only checked for its shape here; whether it names the
+// account's characters is valid's job.
+func (o widgetOption) allows(v string) bool {
+	switch o.Kind {
+	case optKindScope:
+		return v == scopeAll ||
+			(strings.HasPrefix(v, scopeCharPfx) && len(v) > len(scopeCharPfx)) ||
+			(strings.HasPrefix(v, scopeTagPfx) && len(v) > len(scopeTagPfx))
+	case optKindToggle:
+		return v == toggleOn || v == toggleOff
+	case optKindMulti:
+		if v == "" {
+			return false
+		}
+		picks := strings.Split(v, ",")
+		if o.Max > 0 && len(picks) > o.Max {
+			return false
+		}
+		seen := map[string]bool{}
+		for _, p := range picks {
+			if seen[p] || !o.hasChoice(p) {
+				return false
+			}
+			seen[p] = true
+		}
+		return true
+	}
+	return o.hasChoice(v)
+}
+
+// hasChoice reports whether v is one of the declared choices.
+func (o widgetOption) hasChoice(v string) bool {
 	for _, c := range o.Choices {
 		if c.Value == v {
 			return true
@@ -235,8 +290,11 @@ func registerHomeWidget(def homeWidgetDef) {
 	}
 	keys := map[string]bool{}
 	for _, o := range def.Options {
-		if o.Key == "" || keys[o.Key] {
-			panic(fmt.Sprintf("home widget %s: option key %q is empty or repeated", def.ID, o.Key))
+		if o.Key == "" || keys[o.Key] || o.Key == "key" || o.Key == "next" {
+			panic(fmt.Sprintf("home widget %s: option key %q is empty, repeated or taken by the settings form", def.ID, o.Key))
+		}
+		if (o.Kind == optKindChoice || o.Kind == optKindMulti) == (len(o.Choices) == 0) {
+			panic(fmt.Sprintf("home widget %s: option %s has choices only when it is a choice or a multi", def.ID, o.Key))
 		}
 		keys[o.Key] = true
 		if !o.allows(o.Default) {
@@ -527,6 +585,7 @@ type homeShared struct {
 	bundles []*charSnaps
 	now     time.Time
 	market  *homeMarketShared
+	configs map[string]string // stored settings by layout key, read on first use
 
 	netWorth      *netWorthWidget
 	netWorthBuilt bool
@@ -539,7 +598,7 @@ type homeShared struct {
 // At a Glance carries the same figures, and the default layout holds both.
 func (s *homeShared) NetWorth(ctx context.Context) *netWorthWidget {
 	if !s.netWorthBuilt {
-		s.netWorth, s.netWorthBuilt = s.app.buildNetWorth(ctx, s.userID, s.bundles), true
+		s.netWorth, s.netWorthBuilt = s.app.buildNetWorth(ctx, s.userID, s.bundles, nil), true
 	}
 	return s.netWorth
 }
@@ -568,13 +627,14 @@ type homeWidget struct {
 	HrefName             string // the page Href opens, by its menu name: "3 more on the Wallet page"
 	Size                 wSize
 	Form                 string
-	Sizes                string // data-sizes: every allowed size
-	SizeNames            string // data-size-names: JSON, size -> {"form", "says"} for the size picker
-	SizeClass            string // gw1-3 gh1-4: the grid classes the CSS applies
-	Cap                  int    // rows or items the server renders before "N more", by height
-	Customize            bool   // rendering under /?customize=1 (form return targets)
-	Expanded             bool   // the Expand view: the largest form, in the shared modal
-	Data                 any    // the builder's value
+	Sizes                string              // data-sizes: every allowed size
+	SizeNames            string              // data-size-names: JSON, size -> {"form", "says"} for the size picker
+	SizeClass            string              // gw1-3 gh1-4: the grid classes the CSS applies
+	Cap                  int                 // rows or items the server renders before "N more", by height
+	Customize            bool                // rendering under /?customize=1 (form return targets)
+	Expanded             bool                // the Expand view: the largest form, in the shared modal
+	Settings             *widgetSettingsView // Customize: the settings sheet, when the widget has options
+	Data                 any                 // the builder's value
 	Body                 template.HTML
 	NarrowBody           template.HTML  // the one-column form a phone draws in place of Body, when the widget has one
 	BodyClass            string         // set while a body renders: "w-wide" beside a narrow body, "w-narrow" on it
@@ -611,9 +671,22 @@ func (app *Application) buildHomeWidget(ctx context.Context, ts *template.Templa
 		ViewerChars: viewer,
 	}
 	in := &widgetInput{
-		UserID: shared.userID, Key: w.Key, Size: size, Form: form.Name, Forms: []string{form.Name},
+		UserID: shared.userID, Size: size, Forms: []string{form.Name},
 		Opts:  def.defaultOptions(),
+		Scope: widgetScope{Value: scopeAll},
 		Chars: shared.chars, Bundles: shared.bundles, Shared: shared, Now: shared.now,
+	}
+	if len(def.Options) > 0 {
+		in.Opts = def.optionsFrom(shared.Config(ctx, w.Key), shared.chars)
+		if o, ok := def.scopeOption(); ok {
+			in.Chars, in.Bundles, in.Scope = applyScope(in.Opts.Get(o.Key), shared.chars, shared.bundles)
+			if label := in.Scope.Label(); label != "" {
+				w.Title += " · " + label
+			}
+		}
+		if customize {
+			w.Settings = def.settingsView(w.Key, in.Opts, shared.chars)
+		}
 	}
 	if ns, ok := def.narrowSize(size); ok {
 		in.Forms = append(in.Forms, def.FormFor(ns).Name)

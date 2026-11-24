@@ -251,8 +251,8 @@ const netWorthHistoryDays = 31
 
 // netWorthDays reads the account's last n sampled days (at most a
 // year), oldest first, each split into ISK on hand and the rest.
-func (app *Application) netWorthDays(ctx context.Context, userID int64, n int) ([]netWorthDay, error) {
-	rows, err := app.queries.ListUserNetWorthSplitDays(ctx, db.ListUserNetWorthSplitDaysParams{UserID: userID, Days: int32(n)})
+func (app *Application) netWorthDays(ctx context.Context, userID int64, n int, charIDs []int64) ([]netWorthDay, error) {
+	rows, err := app.queries.ListUserNetWorthSplitDays(ctx, db.ListUserNetWorthSplitDaysParams{UserID: userID, Days: int32(n), CharacterIds: charIDs})
 	if err != nil {
 		return nil, err
 	}
@@ -274,8 +274,8 @@ func (app *Application) netWorthDays(ctx context.Context, userID int64, n int) (
 // attachNetWorthHistory fills the home Net Worth widget's history from
 // the account's daily samples: the last month of days and the trends
 // beside the live figures, or the "building" state before two days.
-func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWidget, userID int64) {
-	days, err := app.netWorthDays(ctx, userID, netWorthHistoryDays)
+func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWidget, userID int64, charIDs []int64) {
+	days, err := app.netWorthDays(ctx, userID, netWorthHistoryDays, charIDs)
 	if err != nil {
 		logging.Errorf("net worth history for user %d: %v", userID, err)
 		return

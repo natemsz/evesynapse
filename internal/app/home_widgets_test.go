@@ -10,6 +10,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -50,11 +51,12 @@ func postWidgetConfig(t *testing.T, app *Application, cookie *http.Cookie, form 
 	return code
 }
 
-// TestOrdersWidgetScopeAndMerge: the Market orders widget reads
-// its scope + merge mode from the stored widget config,
-// defaults (all/both) out of the box, then character scope, tag
-// scope in both merge modes, an invalid scope falling back to
-// all, and the config surviving layout moves.
+// TestOrdersWidgetScopeAndMerge: the Market widget's settings sheet
+// (scope and show) saves through /home/widget-config and the card
+// draws by it: all characters both ways out of the box, then a
+// character scope, a tag scope read per character and combined, the
+// settings surviving layout moves, and a scope that names a character
+// not on the account, saved or stored, reading as all characters.
 func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
@@ -90,34 +92,39 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/", body,
-		`action="/home/widget-config"`, `name="scope"`,
 		"<strong>3</strong> open orders",
 		"2 sell (350.00 ISK)", "1 buy (432.00 ISK in escrow)",
 	)
-	// The tag shows up as a scope choice.
+	// Customize carries the sheet: every character and every tag in
+	// use are scope choices.
 	code, body = getPage(t, app, cookie, "/?customize=1")
 	if code != http.StatusOK {
 		t.Fatalf("GET /?customize=1: status %d", code)
 	}
-	mustContain(t, "/?customize=1", body, `value="tag:Trader"`, `value="char:90000001"`)
+	mustContain(t, "/?customize=1", body, `action="/home/widget-config"`, `name="key" value="market"`,
+		`name="scope"`, `value="tag:Trader"`, `value="char:90000001"`, `name="show"`)
 
-	stored := func() ordersWidgetConfig {
+	stored := func() map[string]string {
 		t.Helper()
 		blob, err := q.GetWidgetConfig(ctx, db.GetWidgetConfigParams{UserID: user.ID, WidgetID: widgetMarket})
 		if err != nil {
 			t.Fatalf("read widget config: %v", err)
 		}
-		return parseOrdersWidgetConfig(blob)
+		var cfg map[string]string
+		if err := json.Unmarshal([]byte(blob), &cfg); err != nil {
+			t.Fatalf("decode widget config %q: %v", blob, err)
+		}
+		return cfg
 	}
 
 	// Character scope: Alpha only (sell 5×10 = 50.00).
 	if code := postWidgetConfig(t, app, cookie, url.Values{
-		"widget": {widgetMarket}, "scope": {"char:90000001"}, "merge": {mergeBoth}, "next": {"/"},
+		"key": {widgetMarket}, "scope": {"char:90000001"}, "show": {mergeBoth}, "next": {"/"},
 	}); code != http.StatusSeeOther {
 		t.Fatalf("config POST: status %d, want 303", code)
 	}
-	if cfg := stored(); cfg.ScopeType != scopeCharacter || cfg.CharacterID != fixtureCharA {
-		t.Fatalf("stored config = %+v, want character scope on Alpha", cfg)
+	if cfg := stored(); cfg["scope"] != "char:90000001" {
+		t.Fatalf("stored config = %v, want character scope on Alpha", cfg)
 	}
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
@@ -125,7 +132,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 	}
 	mustContain(t, "/ (char scope)", body,
 		"<strong>1</strong> open orders", "1 sell (50.00 ISK)",
-		`value="char:90000001" selected`,
+		"Market · Fixture Alpha",
 	)
 	for _, gone := range []string{"432.00", "300.00", "1 buy"} {
 		if strings.Contains(body, gone) {
@@ -136,7 +143,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 	// Tag scope, per-character rows: Alpha + Bravo rows, no
 	// combined totals line, Charlie (untagged) out.
 	if code := postWidgetConfig(t, app, cookie, url.Values{
-		"widget": {widgetMarket}, "scope": {"tag:Trader"}, "merge": {mergePerCharacter}, "next": {"/"},
+		"key": {widgetMarket}, "scope": {"tag:Trader"}, "show": {mergePerCharacter}, "next": {"/"},
 	}); code != http.StatusSeeOther {
 		t.Fatalf("tag config POST: status %d, want 303", code)
 	}
@@ -146,7 +153,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 	}
 	mustContain(t, "/ (tag rows)", body,
 		"1 sell · 50.00 ISK", "1 buy · 432.00 ISK in escrow",
-		`value="tag:Trader" selected`,
+		"Market · Tag: Trader",
 	)
 	if strings.Contains(body, "<strong>2</strong> open orders") {
 		t.Error("per-character mode rendered the combined totals line")
@@ -157,7 +164,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 
 	// Same tag, combined: totals back, per-character rows gone.
 	if code := postWidgetConfig(t, app, cookie, url.Values{
-		"widget": {widgetMarket}, "scope": {"tag:Trader"}, "merge": {mergeCombined}, "next": {"/"},
+		"key": {widgetMarket}, "scope": {"tag:Trader"}, "show": {mergeCombined}, "next": {"/"},
 	}); code != http.StatusSeeOther {
 		t.Fatalf("combined config POST: status %d, want 303", code)
 	}
@@ -175,7 +182,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 	// The config survives the module leaving and returning:
 	// set per-character once more, toggle off, toggle on.
 	postWidgetConfig(t, app, cookie, url.Values{
-		"widget": {widgetMarket}, "scope": {"tag:Trader"}, "merge": {mergePerCharacter}, "next": {"/"},
+		"key": {widgetMarket}, "scope": {"tag:Trader"}, "show": {mergePerCharacter}, "next": {"/"},
 	})
 	for i := 0; i < 2; i++ {
 		code, _, _ := doReq(t, app, http.MethodPost, "/home/layout",
@@ -189,19 +196,22 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 		t.Fatalf("GET / (after toggles): status %d", code)
 	}
 	mustContain(t, "/ (after toggles)", body, "1 sell · 50.00 ISK")
-	if cfg := stored(); cfg.ScopeType != scopeTag || cfg.Merge != mergePerCharacter {
-		t.Errorf("config after toggles = %+v, want tag/per-character", cfg)
+	if cfg := stored(); cfg["scope"] != "tag:Trader" || cfg["show"] != mergePerCharacter {
+		t.Errorf("config after toggles = %v, want tag/per-character", cfg)
 	}
 
-	// A scope naming a character that isn't linked falls back
-	// to all characters rather than stranding the widget.
+	// A form naming a character that isn't linked is refused, and
+	// the stored settings stand: the widget is never stranded.
+	postWidgetConfig(t, app, cookie, url.Values{
+		"key": {widgetMarket}, "scope": {scopeAll}, "show": {mergeBoth}, "next": {"/"},
+	})
 	if code := postWidgetConfig(t, app, cookie, url.Values{
-		"widget": {widgetMarket}, "scope": {"char:42424299"}, "merge": {mergeBoth}, "next": {"/"},
+		"key": {widgetMarket}, "scope": {"char:42424299"}, "show": {mergePerCharacter}, "next": {"/"},
 	}); code != http.StatusSeeOther {
 		t.Fatalf("invalid scope POST: status %d, want 303", code)
 	}
-	if cfg := stored(); cfg.ScopeType != scopeAll {
-		t.Errorf("invalid-scope config = %+v, want all fallback", cfg)
+	if cfg := stored(); cfg["scope"] != scopeAll || cfg["show"] != mergeBoth {
+		t.Errorf("config after a refused POST = %v, want the stored all/both", cfg)
 	}
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
@@ -209,10 +219,26 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 	}
 	mustContain(t, "/ (fallback)", body, "<strong>3</strong> open orders")
 
+	// A stored scope whose character has left the account reads as
+	// all characters too.
+	if err := q.UpsertWidgetConfig(ctx, db.UpsertWidgetConfigParams{
+		UserID: user.ID, WidgetID: widgetMarket, Config: `{"scope":"char:42424299","show":"both"}`, UpdatedAt: now.UTC(),
+	}); err != nil {
+		t.Fatalf("store stale scope: %v", err)
+	}
+	code, body = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET / (stale scope): status %d", code)
+	}
+	mustContain(t, "/ (stale scope)", body, "<strong>3</strong> open orders")
+	if strings.Contains(body, "Market · ") {
+		t.Error("a stale scope still named itself in the card title")
+	}
+
 	// XHR callers get the bare 200; anonymous ones bounce.
 	req := httptest.NewRequest(http.MethodPost, "/home/widget-config",
 		strings.NewReader(url.Values{
-			"widget": {widgetMarket}, "scope": {"all"}, "merge": {mergeBoth},
+			"key": {widgetMarket}, "scope": {"all"}, "show": {mergeBoth},
 		}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
@@ -223,40 +249,13 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 		t.Errorf("XHR config POST: status %d body %q, want 200 ok", rec.Code, rec.Body.String())
 	}
 	code, _, _ = doReq(t, app, http.MethodPost, "/home/widget-config",
-		url.Values{"widget": {widgetMarket}, "scope": {"all"}})
+		url.Values{"key": {widgetMarket}, "scope": {"all"}})
 	if code != http.StatusSeeOther {
 		t.Errorf("anonymous config POST: status %d, want 303", code)
 	}
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)
-	}
-}
-
-// TestWidgetConfigParsing: stored blobs normalize to defaults
-// when missing, corrupt, or half-valid.
-func TestWidgetConfigParsing(t *testing.T) {
-	if cfg := parseOrdersWidgetConfig(""); cfg.ScopeType != scopeAll || cfg.Merge != mergeBoth {
-		t.Errorf("empty blob = %+v, want defaults", cfg)
-	}
-	if cfg := parseOrdersWidgetConfig("{not json"); cfg.ScopeType != scopeAll || cfg.Merge != mergeBoth {
-		t.Errorf("junk blob = %+v, want defaults", cfg)
-	}
-	if cfg := parseOrdersWidgetConfig(`{"scope_type":"character","character_id":0,"merge":"huge"}`); cfg.ScopeType != scopeAll || cfg.Merge != mergeBoth {
-		t.Errorf("half-valid blob = %+v, want defaults", cfg)
-	}
-	cfg := parseOrdersWidgetConfig(`{"scope_type":"tag","tag":"Trader","merge":"combined"}`)
-	if cfg.ScopeType != scopeTag || cfg.Tag != "Trader" || cfg.Merge != mergeCombined {
-		t.Errorf("tag blob = %+v, want tag/Trader/combined", cfg)
-	}
-	if got := decodeScopeValue("char:123").CharacterID; got != 123 {
-		t.Errorf("decode char:123 → %d", got)
-	}
-	if got := decodeScopeValue("tag:PI alt"); got.Tag != "PI alt" {
-		t.Errorf("decode tag → %q", got.Tag)
-	}
-	if got := decodeScopeValue("gibberish"); got.ScopeType != scopeAll {
-		t.Errorf("decode gibberish → %+v, want all", got)
 	}
 }
 
@@ -587,7 +586,8 @@ func TestMigrations020And021Reopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	if got := app.ordersConfigFor(context.Background(), user.ID); got.ScopeType != scopeAll || got.Merge != mergeBoth {
-		t.Errorf("fresh-user config = %+v, want defaults", got)
+	def := homeWidgetRegistry[widgetMarket]
+	if got := app.storedOptions(context.Background(), user.ID, def, widgetMarket, nil); got.Get("scope") != scopeAll || got.Get("show") != mergeBoth {
+		t.Errorf("fresh-user settings = %v, want defaults", got)
 	}
 }

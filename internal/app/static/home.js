@@ -352,21 +352,6 @@
   initBriefDismissed(document);
 
   // --- Widget settings (orders scope picker) ------------------
-  // A change applies at once: the form IS the plain submit (the
-  // no-JS path), this just skips the button press. In customize
-  // mode the page reloads so the live card re-renders in place.
-  function initScopeForms(root) {
-    var scopeForms = root.querySelectorAll("form.widget-scope");
-    for (var s = 0; s < scopeForms.length; s++) {
-      if (!once(scopeForms[s], "scope")) continue;
-      scopeForms[s].addEventListener("change", function () {
-        this.submit();
-      });
-    }
-  }
-  onContentReady(initScopeForms);
-  initScopeForms(document);
-
   // The size picker's outside-click close binds once and reads the
   // current grid each time; binding it per grid would pile a dead
   // handler behind every swapped customize view.
@@ -377,7 +362,8 @@
   var CARD_ICONS = {
     move: '<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
     size: '<path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/>',
-    remove: '<path d="M6 6l12 12M18 6 6 18"/>'
+    remove: '<path d="M6 6l12 12M18 6 6 18"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>'
   };
   function cardIcon(name) {
     return '<svg class="cardicon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
@@ -1108,6 +1094,71 @@
       return "";
     }
 
+    // Settings: the gear opens the card's own sheet (a plain form the
+    // server rendered into the card) in the shared modal. Saving posts
+    // it as the form would, then swaps in the card as the server now
+    // draws it; a failed save keeps the sheet open and says so.
+    var settingsModal = document.getElementById("w-settings-modal");
+    function openSettings(card) {
+      var tpl = card.querySelector(":scope > template[data-w-settings]");
+      if (!tpl || !settingsModal || !window.EveSynapseModal) return;
+      var box = settingsModal.querySelector("[data-w-settings-box]");
+      var heading = settingsModal.querySelector("[data-w-settings-title]");
+      var title = tpl.getAttribute("data-title") || titleOf(card);
+      heading.textContent = title + " settings";
+      box.replaceChildren(document.importNode(tpl.content, true));
+      var form = box.querySelector("form");
+      // A multi with a limit: once that many are picked, the other
+      // boxes rest until one is unticked (the server refuses more).
+      form.querySelectorAll("fieldset[data-max]").forEach(function (set) {
+        var max = parseInt(set.getAttribute("data-max"), 10) || 0;
+        function cap() {
+          var picked = set.querySelectorAll('input[type="checkbox"]:checked').length;
+          set.querySelectorAll('input[type="checkbox"]').forEach(function (b) {
+            b.disabled = max > 0 && !b.checked && picked >= max;
+          });
+        }
+        set.addEventListener("change", cap);
+        cap();
+      });
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+        var note = form.querySelector(".w-set-error");
+        if (note) note.remove();
+        fetch(form.action, {
+          method: "POST",
+          headers: { "X-Requested-With": "XMLHttpRequest" },
+          credentials: "same-origin",
+          body: new URLSearchParams(new FormData(form))
+        }).then(function (resp) {
+          if (!resp.ok) throw new Error("settings " + resp.status);
+          document.dispatchEvent(new CustomEvent("evesynapse:content-mutated"));
+          window.EveSynapseModal.close(settingsModal);
+          var key = card.getAttribute("data-key");
+          var live = grid.querySelector(':scope > .card[data-key="' + key + '"]') || card;
+          refreshCard(live).then(function () {
+            // The gear that opened the sheet went with the old card:
+            // focus returns to the new card's gear.
+            var a = document.activeElement;
+            if (a && a !== document.body && document.contains(a)) return;
+            var fresh = grid.querySelector(':scope > .card[data-key="' + key + '"] .cardsettings');
+            if (fresh) fresh.focus({ preventScroll: true });
+          });
+          if (statusEl) statusEl.textContent = title + ": settings saved.";
+        }).catch(function () {
+          if (btn) btn.disabled = false;
+          var p = document.createElement("p");
+          p.className = "w-set-error";
+          p.setAttribute("role", "alert");
+          p.textContent = "The settings could not be saved. Check your picks and try again.";
+          form.appendChild(p);
+        });
+      });
+      window.EveSynapseModal.open(settingsModal, { onClose: function () { box.replaceChildren(); } });
+    }
+
     // One status line for the whole Customize view, set once per
     // change: "Net Worth: 2 by 2, medium."
     var statusEl = document.querySelector("[data-home-status]");
@@ -1406,7 +1457,20 @@
           else remove.disabled = false;
         });
       });
+      var settingsTpl = card.querySelector(":scope > template[data-w-settings]");
+      var gear = null;
+      if (settingsTpl) {
+        gear = document.createElement("button");
+        gear.type = "button";
+        gear.className = "cardbtn cardsettings";
+        gear.innerHTML = cardIcon("settings");
+        gear.title = "Settings";
+        gear.setAttribute("aria-haspopup", "dialog");
+        gear.setAttribute("aria-label", (settingsTpl.getAttribute("data-title") || title) + " settings");
+        gear.addEventListener("click", function () { openSettings(card); });
+      }
       ctl.appendChild(sizeBtn);
+      if (gear) ctl.appendChild(gear);
       ctl.appendChild(remove);
       ctl.appendChild(picker);
       card.appendChild(ctl);

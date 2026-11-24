@@ -6,6 +6,13 @@ import (
 	"evesynapse/internal/esi"
 )
 
+// Market's show option: how a scope of several characters reads.
+const (
+	mergeBoth         = "both"          // totals and a row per character's soonest expiries
+	mergeCombined     = "combined"      // totals only
+	mergePerCharacter = "per-character" // a row per character only
+)
+
 func init() {
 	registerHomeWidget(homeWidgetDef{
 		ID: widgetMarket, Title: "Market", Category: wcatMarket, Feature: "market",
@@ -17,8 +24,14 @@ func init() {
 			{Name: "all", Sizes: "1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3", Says: "Open orders and the ones expiring soonest."},
 		},
 		Needs: []string{esi.SnapOrders},
+		Options: []widgetOption{
+			optScope(),
+			withHint(optChoice("show", "Show", mergeBoth,
+				mergeBoth+":Totals and each character", mergeCombined+":Totals only", mergePerCharacter+":Each character only"),
+				"How orders read when more than one character is shown."),
+		},
 		Build: func(ctx context.Context, app *Application, in *widgetInput) any {
-			return app.buildMarket(ctx, in.Bundles, app.ordersConfigFor(ctx, in.UserID), in.Shared.market)
+			return app.buildMarket(ctx, in.Bundles, in.Opts.Get("show"), in.Scope, in.Shared.market)
 		},
 	})
 }

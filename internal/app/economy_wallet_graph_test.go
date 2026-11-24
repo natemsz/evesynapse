@@ -226,7 +226,7 @@ func TestAttachNetWorthHistory(t *testing.T) {
 	seedWalletSample(t, q, user.ID, fixtureCharA, "2026-03-01", 100,
 		sql.NullFloat64{Float64: 1000, Valid: true})
 	w := &netWorthWidget{Any: true}
-	app.attachNetWorthHistory(ctx, w, user.ID)
+	app.attachNetWorthHistory(ctx, w, user.ID, nil)
 	if len(w.days) != 1 || !w.HistoryBuilding {
 		t.Fatalf("one day: days=%d building=%v, want 1 day + building", len(w.days), w.HistoryBuilding)
 	}
@@ -234,7 +234,7 @@ func TestAttachNetWorthHistory(t *testing.T) {
 	seedWalletSample(t, q, user.ID, fixtureCharA, "2026-03-02", 120,
 		sql.NullFloat64{Float64: 1400, Valid: true})
 	w = &netWorthWidget{Any: true}
-	app.attachNetWorthHistory(ctx, w, user.ID)
+	app.attachNetWorthHistory(ctx, w, user.ID, nil)
 	if len(w.days) != 2 || w.HistoryBuilding {
 		t.Fatalf("two days: days=%d building=%v, want 2 days + no building note", len(w.days), w.HistoryBuilding)
 	}
@@ -243,7 +243,7 @@ func TestAttachNetWorthHistory(t *testing.T) {
 	}
 
 	// Full-widget path: buildNetWorth carries the days too.
-	w2 := app.buildNetWorth(ctx, user.ID, nil)
+	w2 := app.buildNetWorth(ctx, user.ID, nil, nil)
 	if len(w2.days) != 2 {
 		t.Fatalf("buildNetWorth carried %d days, want 2", len(w2.days))
 	}

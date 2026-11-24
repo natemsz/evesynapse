@@ -1876,10 +1876,16 @@ const listUserNetWorthDays = `-- name: ListUserNetWorthDays :many
 SELECT day, SUM(net_worth)::float8 AS total
 FROM wallet_history
 WHERE user_id = $1 AND net_worth IS NOT NULL
+  AND (COALESCE(cardinality($2::bigint[]), 0) = 0 OR character_id = ANY($2::bigint[]))
 GROUP BY day
 ORDER BY day DESC
 LIMIT 31
 `
+
+type ListUserNetWorthDaysParams struct {
+	UserID       int64   `json:"user_id"`
+	CharacterIds []int64 `json:"character_ids"`
+}
 
 type ListUserNetWorthDaysRow struct {
 	Day   string  `json:"day"`
@@ -1888,9 +1894,10 @@ type ListUserNetWorthDaysRow struct {
 
 // The account's total net worth per day (summed over its
 // characters), newest first, for the KPI sparkline: one bounded
-// grouped read, never more than 31 rows.
-func (q *Queries) ListUserNetWorthDays(ctx context.Context, userID int64) ([]ListUserNetWorthDaysRow, error) {
-	rows, err := q.db.Query(ctx, listUserNetWorthDays, userID)
+// grouped read, never more than 31 rows. A non-empty character_ids
+// keeps only those characters (a widget scoped to some of them).
+func (q *Queries) ListUserNetWorthDays(ctx context.Context, arg ListUserNetWorthDaysParams) ([]ListUserNetWorthDaysRow, error) {
+	rows, err := q.db.Query(ctx, listUserNetWorthDays, arg.UserID, arg.CharacterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1913,14 +1920,16 @@ const listUserNetWorthSplitDays = `-- name: ListUserNetWorthSplitDays :many
 SELECT day, SUM(balance)::float8 AS isk, SUM(net_worth)::float8 AS total
 FROM wallet_history
 WHERE user_id = $1 AND net_worth IS NOT NULL
+  AND (COALESCE(cardinality($2::bigint[]), 0) = 0 OR character_id = ANY($2::bigint[]))
 GROUP BY day
 ORDER BY day DESC
-LIMIT LEAST($2::int, 366)
+LIMIT LEAST($3::int, 366)
 `
 
 type ListUserNetWorthSplitDaysParams struct {
-	UserID int64 `json:"user_id"`
-	Days   int32 `json:"days"`
+	UserID       int64   `json:"user_id"`
+	CharacterIds []int64 `json:"character_ids"`
+	Days         int32   `json:"days"`
 }
 
 type ListUserNetWorthSplitDaysRow struct {
@@ -1933,9 +1942,10 @@ type ListUserNetWorthSplitDaysRow struct {
 // ISK on hand and the total, for the home Net Worth charts. A
 // character counts toward a day only when it has a net worth that
 // day, and its balance joins the ISK part only then, so the parts
-// always add up to the total. At most a year of days.
+// always add up to the total. At most a year of days. A non-empty
+// character_ids keeps only those characters.
 func (q *Queries) ListUserNetWorthSplitDays(ctx context.Context, arg ListUserNetWorthSplitDaysParams) ([]ListUserNetWorthSplitDaysRow, error) {
-	rows, err := q.db.Query(ctx, listUserNetWorthSplitDays, arg.UserID, arg.Days)
+	rows, err := q.db.Query(ctx, listUserNetWorthSplitDays, arg.UserID, arg.CharacterIds, arg.Days)
 	if err != nil {
 		return nil, err
 	}
@@ -2149,6 +2159,40 @@ func (q *Queries) ListWalletHistorySamplesSince(ctx context.Context, arg ListWal
 			&i.NetWorth,
 			&i.SampledAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWidgetConfigs = `-- name: ListWidgetConfigs :many
+SELECT widget_id, config FROM widget_configs
+WHERE user_id = $1
+ORDER BY widget_id
+LIMIT 200
+`
+
+type ListWidgetConfigsRow struct {
+	WidgetID string `json:"widget_id"`
+	Config   string `json:"config"`
+}
+
+// Every stored widget configuration of one account, read once per
+// home render. An account holds one row per widget it has set.
+func (q *Queries) ListWidgetConfigs(ctx context.Context, userID int64) ([]ListWidgetConfigsRow, error) {
+	rows, err := q.db.Query(ctx, listWidgetConfigs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListWidgetConfigsRow
+	for rows.Next() {
+		var i ListWidgetConfigsRow
+		if err := rows.Scan(&i.WidgetID, &i.Config); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

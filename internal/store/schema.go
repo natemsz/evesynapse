@@ -1074,6 +1074,12 @@ var pgSDEFactionsSchematicsSchema string
 //go:embed schema_pg/180_user_delete_after.sql
 var pgUserDeleteAfterSchema string
 
+// Step 181: the Market widget's settings in the shape every home
+// widget's settings take.
+//
+//go:embed schema_pg/181_widget_settings_market.sql
+var pgWidgetSettingsMarketSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1282,6 +1288,7 @@ func schemaSteps() []schemaStep {
 		{178, "sde api blobs", pgSDEAPIBlobsSchema, ""},
 		{179, "sde factions and schematics", pgSDEFactionsSchematicsSchema, ""},
 		{180, "user_delete_after", pgUserDeleteAfterSchema, ""},
+		{181, "widget_settings_market", pgWidgetSettingsMarketSchema, ""},
 	}
 }
 

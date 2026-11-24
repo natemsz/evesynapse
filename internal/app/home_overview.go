@@ -654,14 +654,6 @@ type marketExpiry struct {
 	Left    string
 }
 
-// marketScopeOption is one choice of the orders widget's scope
-// picker (All characters / one character / one tag).
-type marketScopeOption struct {
-	Value    string // "all" | "char:<id>" | "tag:<name>"
-	Label    string
-	Selected bool
-}
-
 // marketCharRow is one per-character breakdown row of the
 // orders widget (merge mode "per-character", or one half of
 // "both" when the expiring table isn't the breakdown).
@@ -682,12 +674,8 @@ type watchlistWidget struct {
 }
 
 type marketWidget struct {
-	// Scope controls (widget config).
-	ScopeOptions []marketScopeOption
-	Merge        string // mergeBoth | mergeCombined | mergePerCharacter (render-resolved)
-	ShowMerge    bool   // scope covers >1 character: the merge picker matters
-	ScopeEmpty   string // scope selects nobody (unlinked character / unused tag)
-	EmptyOrders  string // scoped characters known, nothing open
+	Merge       string // mergeBoth | mergeCombined | mergePerCharacter: the show setting, both for one character
+	EmptyOrders string // scoped characters known, nothing open
 
 	AnyData     bool // at least one scoped character has an orders snapshot
 	OrdersKnown int  // scoped characters with an orders snapshot
@@ -870,7 +858,10 @@ func absFloat(x float64) float64 {
 	return x
 }
 
-func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles []*charSnaps) *netWorthWidget {
+// charIDs narrows the stored history to those characters (a card scoped
+// to some of them, whose bundles are already narrowed); nil reads the
+// whole account.
+func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles []*charSnaps, charIDs []int64) *netWorthWidget {
 	var walletSum, assetSum, escrowSum float64
 	var walletOK, escrowOK bool
 	var assetsSeen bool
@@ -974,8 +965,8 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	// Net worth over time from the daily sampler (schema 019):
 	// the last month of days, a "building" note before two exist.
 	// Stored rows only, no fetching here.
-	app.attachNetWorthHistory(ctx, w, userID)
-	app.attachNetWorthSpark(ctx, w, userID)
+	app.attachNetWorthHistory(ctx, w, userID, charIDs)
+	app.attachNetWorthSpark(ctx, w, userID, charIDs)
 	return w
 }
 
@@ -983,8 +974,8 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 // daily net-worth totals: one bounded grouped query (<=31 rows,
 // newest last 31 days). Under two sampled days the spark stays
 // empty and the KPI renders no line.
-func (app *Application) attachNetWorthSpark(ctx context.Context, w *netWorthWidget, userID int64) {
-	rows, err := app.queries.ListUserNetWorthDays(ctx, userID)
+func (app *Application) attachNetWorthSpark(ctx context.Context, w *netWorthWidget, userID int64, charIDs []int64) {
+	rows, err := app.queries.ListUserNetWorthDays(ctx, db.ListUserNetWorthDaysParams{UserID: userID, CharacterIds: charIDs})
 	if err != nil {
 		logging.Errorf("net worth sparkline for user %d: %v", userID, err)
 		return
@@ -1070,55 +1061,15 @@ func (app *Application) buildIndustry(ctx context.Context, bundles []*charSnaps)
 	return w
 }
 
-// buildMarket assembles the orders widget over the characters
-// its configuration scopes to (all / one character / one tag),
-// rendered per the merge mode: combined totals, per-character
-// rows, or both. The scope picker offers every linked character
-// and every tag in use; a scope that selects nobody (unlinked
-// character, tag no longer carried) renders its quiet line.
-func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, cfg ordersWidgetConfig, shared *homeMarketShared) *marketWidget {
+// buildMarket assembles the orders widget over the characters its
+// scope setting covers, read the way its show setting says: combined
+// totals, a row per character, or both. One character has nothing to
+// combine, so it always reads both ways.
+func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, show string, scope widgetScope, shared *homeMarketShared) *marketWidget {
 	now := time.Now()
-	w := &marketWidget{Merge: cfg.Merge}
-
-	// The picker: all characters, each character, each tag.
-	selected := cfg.encoded()
-	w.ScopeOptions = append(w.ScopeOptions, marketScopeOption{
-		Value: scopeAll, Label: "All characters", Selected: selected == scopeAll,
-	})
-	for _, b := range bundles {
-		value := "char:" + strconv.FormatInt(b.ch.CharacterID, 10)
-		w.ScopeOptions = append(w.ScopeOptions, marketScopeOption{
-			Value: value, Label: b.ch.Name, Selected: selected == value,
-		})
-	}
-	var tagChars []db.Character
-	for _, b := range bundles {
-		tagChars = append(tagChars, b.ch)
-	}
-	for _, tag := range userTags(tagChars) {
-		value := "tag:" + tag
-		w.ScopeOptions = append(w.ScopeOptions, marketScopeOption{
-			Value: value, Label: "Tag: " + tag, Selected: selected == value,
-		})
-	}
-
-	scoped, label := scopeBundles(bundles, cfg)
-	w.ShowMerge = len(scoped) > 1
-	if !w.ShowMerge {
-		// One character (or none) has nothing to merge: the
-		// totals-plus-rows reading always applies.
+	w := &marketWidget{Merge: show}
+	if len(bundles) < 2 {
 		w.Merge = mergeBoth
-	}
-	if len(scoped) == 0 {
-		switch cfg.ScopeType {
-		case scopeCharacter:
-			w.ScopeEmpty = "That character isn't linked anymore."
-		case scopeTag:
-			w.ScopeEmpty = "No characters carry that tag right now."
-		default:
-			w.ScopeEmpty = "No characters to show orders for yet."
-		}
-		return w
 	}
 
 	var sellSum, buySum float64
@@ -1127,7 +1078,7 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, c
 		at  time.Time
 	}
 	var expiring []expiryRow
-	for _, b := range scoped {
+	for _, b := range bundles {
 		if !b.ordersKnown {
 			continue
 		}
@@ -1197,11 +1148,11 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, c
 		w.SellValue = esi.FormatISK(sellSum)
 		w.BuyValue = esi.FormatISK(buySum)
 	} else if w.AnyData {
-		switch cfg.ScopeType {
-		case scopeCharacter:
-			w.EmptyOrders = fmt.Sprintf("No open orders for %s right now.", label)
-		case scopeTag:
-			w.EmptyOrders = fmt.Sprintf("No open orders for your %s characters right now.", label)
+		switch {
+		case scope.Char != "":
+			w.EmptyOrders = fmt.Sprintf("No open orders for %s right now.", scope.Char)
+		case scope.Tag != "":
+			w.EmptyOrders = fmt.Sprintf("No open orders for your %s characters right now.", scope.Tag)
 		default:
 			w.EmptyOrders = "No open orders across your characters."
 		}
@@ -1211,7 +1162,7 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, c
 	// verdicts the Briefing reads. Quiet when zero. It is
 	// an account-wide summary, so it only reads under the
 	// all-characters scope it describes.
-	if cfg.ScopeType == scopeAll && len(bundles) > 0 {
+	if scope.All() && len(bundles) > 0 {
 		w.Health = app.marketHealthLine(ctx, shared)
 	}
 	return w
@@ -1459,6 +1410,14 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 	}
 	shared := newHomeShared(ctx, app, userID, chars, needs)
 	viewer := viewerChars(chars)
+	if view.Customize != nil {
+		for i := range view.Customize.Entries {
+			e := &view.Customize.Entries[i]
+			if def, ok := widgetDefFor(e.ID); ok && e.Enabled {
+				e.Settings = def.settingsView(def.ID, def.optionsFrom(shared.Config(ctx, def.ID), chars), chars)
+			}
+		}
+	}
 	ts, err := homeTemplateSet()
 	if err != nil {
 		logging.Errorf("home: parse templates: %v", err)
@@ -1497,9 +1456,10 @@ type customizeEntry struct {
 	Position    int // 1-based among enabled; 0 when disabled
 	CanUp       bool
 	CanDown     bool
-	Size        wSize           // current size (on the home, or the default)
-	Default     wSize           // what Add a widget gives it
-	Sizes       []customizeSize // every declared size, for the no-script picker
+	Size        wSize               // current size (on the home, or the default)
+	Default     wSize               // what Add a widget gives it
+	Sizes       []customizeSize     // every declared size, for the no-script picker
+	Settings    *widgetSettingsView // the no-script settings form, for a widget on the home with options
 }
 
 // customizeSize is one size a widget declares, as the no-script size

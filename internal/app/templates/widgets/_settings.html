@@ -1,0 +1,34 @@
+{{/* A widget's settings sheet: one plain form that posts to
+     /home/widget-config and works without JavaScript. Customize puts it
+     in each card that has options (inside a template the gear opens in
+     the shared modal) and in the no-script module list. A toggle posts
+     "no" ahead of its checkbox, so an unticked box still says so; a
+     multi posts an empty marker ahead of its picks for the same reason.
+     No ids: the sheet can be on the page twice. */}}
+{{define "w-settings"}}<form class="w-settings" method="post" action="/home/widget-config">
+  <input type="hidden" name="key" value="{{.Key}}">
+  {{range .Fields}}{{$f := .}}
+  {{if eq .Kind "toggle"}}
+  <div class="w-set-field">
+    <label class="w-set-check"><input type="hidden" name="{{.Key}}" value="no"><input type="checkbox" name="{{.Key}}" value="yes"{{if .On}} checked{{end}}><span>{{.Label}}</span></label>
+    {{if .Hint}}<small class="field-hint">{{.Hint}}</small>{{end}}
+  </div>
+  {{else if eq .Kind "multi"}}
+  <fieldset class="w-set-field w-set-multi"{{with .Max}} data-max="{{.}}"{{end}}>
+    <legend class="field-label">{{.Label}}</legend>
+    <input type="hidden" name="{{.Key}}" value="">
+    {{range .Choices}}<label class="w-set-check"><input type="checkbox" name="{{$f.Key}}" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}</span></label>
+    {{end}}
+    {{if .Hint}}<small class="field-hint">{{.Hint}}</small>{{else if .Max}}<small class="field-hint">Pick up to {{.Max}}.</small>{{end}}
+  </fieldset>
+  {{else}}
+  <div class="w-set-field">
+    <label><small>{{.Label}}</small>
+      <select name="{{.Key}}">{{range .Choices}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+    </label>
+    {{if .Hint}}<small class="field-hint">{{.Hint}}</small>{{end}}
+  </div>
+  {{end}}
+  {{end}}
+  <p class="w-set-foot"><button class="btn" type="submit">Save</button></p>
+</form>{{end}}

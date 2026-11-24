@@ -15,11 +15,25 @@ import (
 
 func inEveScopes(scope string) bool { return contains(eveScopes, scope) }
 
-// TestFullLinkIsTodaysLink: with every module built in, the link that asks
-// for everything is exactly the scope list the developer portal allows,
-// and the plain /auth/eve (no choice) asks for it too.
+// TestFullLinkIsTodaysLink: with every module built in, the sign-up link
+// plus any re-link-only modules equals the scope list the developer portal
+// allows, and re-link-only scopes stay out of the sign-up link.
 func TestFullLinkIsTodaysLink(t *testing.T) {
-	got := append([]string(nil), requestableScopes()...)
+	signup := append([]string(nil), requestableScopes()...)
+	got := append([]string(nil), signup...)
+	for _, def := range moduleDefs() {
+		if !def.RelinkOnly {
+			continue
+		}
+		for _, sc := range def.Scopes {
+			if contains(signup, sc.Scope) {
+				t.Errorf("re-link-only scope %q must stay out of the sign-up link", sc.Scope)
+			}
+			if !contains(got, sc.Scope) {
+				got = append(got, sc.Scope)
+			}
+		}
+	}
 	want := append([]string(nil), eveScopes...)
 	sort.Strings(got)
 	sort.Strings(want)
@@ -278,8 +292,9 @@ func TestEmptySubmittedChoiceNeverWidens(t *testing.T) {
 	}
 
 	full := eveScopeParam(t, get(app, nil, "/auth/eve"))
-	if len(full) != len(eveScopes) {
-		t.Errorf("a plain /auth/eve asks for %d scopes, want the full %d", len(full), len(eveScopes))
+	wantFull := requestableScopes()
+	if len(full) != len(wantFull) {
+		t.Errorf("a plain /auth/eve asks for %d scopes, want the full sign-up set of %d", len(full), len(wantFull))
 	}
 }
 

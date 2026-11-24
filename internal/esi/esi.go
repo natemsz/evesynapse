@@ -215,7 +215,7 @@ const (
 	GlobalIncursions = "incursions" // GET /incursions/
 	GlobalFWSystems  = "fw_systems" // GET /fw/systems/
 	GlobalFWStats    = "fw_stats"   // GET /fw/stats/
-	GlobalFactions   = "factions"   // GET /universe/factions/
+	GlobalFactions   = "factions"   // from the static data (sde_factions)
 	// The map's live layers (schema 073): the last hour's kills
 	// and jumps per system, and who holds each null-sec system.
 	GlobalSystemKills = "system_kills" // GET /universe/system_kills/
@@ -1402,15 +1402,16 @@ type FWStat struct {
 // FWStats is GET /fw/stats/.
 type FWStats []FWStat
 
-// Faction is one entry of GET /universe/factions/ (the slice
-// EveSynapse consumes; the list is nearly static).
+// Faction is one faction (the slice EveSynapse consumes), in the
+// shape ESI's /universe/factions/ used. The list comes from the
+// static data (sde_factions).
 type Faction struct {
 	FactionID     int64  `json:"faction_id"`
 	Name          string `json:"name"`
 	CorporationID int64  `json:"corporation_id"` // the faction's NPC corporation, 0 when none
 }
 
-// Factions is GET /universe/factions/.
+// Factions is the faction list stored as the GlobalFactions snapshot.
 type Factions []Faction
 
 // SystemKills is GET /universe/system_kills/: the last hour's
@@ -1653,10 +1654,8 @@ type PlanetLayout struct {
 	Routes []PlanetRoute `json:"routes"`
 }
 
-// Schematic is GET /universe/schematics/{schematic_id}/ (public).
-// This is the complete ESI surface for a schematic: its name and
-// cycle time. ESI exposes no input/output bill of materials (that
-// lives only in the SDE), so factory pins display the schematic
+// Schematic is one PI schematic's name and cycle time, read from the
+// static data (sde_schematics). Factory pins display the schematic
 // name and never a guessed input list.
 type Schematic struct {
 	SchematicName string `json:"schematic_name"`
@@ -1955,6 +1954,9 @@ func parseRetryAfter(value string) (time.Duration, bool) {
 // 420/429 wrap ErrErrorLimit, a status outside want is a StatusError,
 // anything else is the body.
 func (c *Client) sendOnce(ctx context.Context, hc *http.Client, method, accessToken, path string, raw []byte, ifNoneMatch string, want []int) (body []byte, header http.Header, status int, err error) {
+	if retiredStaticRoute(path) {
+		return nil, nil, http.StatusNotFound, retiredRouteError(method, path)
+	}
 	// ESI's limits, seen coming (ratelimit.go): refused here rather
 	// than by ESI.
 	if err := c.preflight(ctx, method, path, time.Now()); err != nil {
@@ -3008,6 +3010,9 @@ func GlobalSnapshotFresh(snap db.GlobalSnapshot) bool {
 // ESI answers that the stored copy (by its ETag) is still current,
 // only the cache window is renewed.
 func (c *Client) FetchAndStoreGlobalSnapshot(ctx context.Context, kind string) error {
+	if kind == GlobalFactions {
+		return c.storeFactionsSnapshot(ctx)
+	}
 	path := globalSnapshotPath(kind)
 	if path == "" {
 		return fmt.Errorf("unknown global snapshot kind %q", kind)
@@ -3722,16 +3727,15 @@ func (c *Client) StoreStructureName(structureID int64, name string) {
 }
 
 // ---------------------------------------------------------------------------
-// Planet names. GET /universe/planets/{planet_id}/ is public (no
-// token), and planet names never change, so resolution is cheap
-// and durable: FetchPlanet is the network tier (worker only),
-// CachedPlanetName is the render tier, in-process place cache,
-// then the durable planet_names table, and never fetches.
+// Planet names come from the static data (sde_celestials) and never
+// change, so resolution is cheap and durable: FetchPlanet reads the
+// static data (worker only), CachedPlanetName is the render tier,
+// in-process place cache, then the durable planet_names table.
 // ---------------------------------------------------------------------------
 
-// UniversePlanet is GET /universe/planets/{planet_id}/ (public).
-// Only the name feeds the app today; system_id and type_id ride
-// along for future surfaces.
+// UniversePlanet is one planet as the static data names it. Only the
+// name feeds the app today; system_id and type_id ride along for
+// future surfaces.
 type UniversePlanet struct {
 	Name     string `json:"name"`
 	PlanetID int64  `json:"planet_id"`
@@ -3752,11 +3756,14 @@ const (
 // a planet, colony planet ids always exist, so callers treat a
 // 404 as a rare negative and back it off rather than failing.
 func (c *Client) FetchPlanet(ctx context.Context, planetID int64) (UniversePlanet, error) {
-	var out UniversePlanet
-	if err := c.Get(ctx, "", fmt.Sprintf("/universe/planets/%d/", planetID), &out); err != nil {
+	row, err := c.queries.GetSDECelestial(ctx, planetID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return UniversePlanet{}, staticMiss("planet", planetID)
+		}
 		return UniversePlanet{}, err
 	}
-	return out, nil
+	return UniversePlanet{Name: row.Name, PlanetID: planetID, SystemID: row.SystemID, TypeID: row.TypeID}, nil
 }
 
 // CachedPlanetName answers from the in-process place cache (the
@@ -4055,18 +4062,22 @@ func (c *Client) StoreConstellationName(id int64, name string) {
 
 // ---------------------------------------------------------------------------
 // PI schematics: same two tiers as the name caches, FetchSchematic
-// is the network tier (public GET /universe/schematics/{id}/, no
-// token) for the worker's warm-up pass; CachedSchematic is the
-// render tier and never touches the network.
+// reads the static data (sde_schematics) for the worker's warm-up
+// pass; CachedSchematic is the render tier and never touches the
+// database or the network.
 // ---------------------------------------------------------------------------
 
-// FetchSchematic GETs one schematic (public endpoint) and caches
-// it. Errors carry the path and status, nothing sensitive.
+// FetchSchematic reads one schematic from the static data and caches
+// it; one the static data lacks answers as not found.
 func (c *Client) FetchSchematic(ctx context.Context, id int64) (Schematic, error) {
-	var s Schematic
-	if err := c.Get(ctx, "", fmt.Sprintf("/universe/schematics/%d/", id), &s); err != nil {
+	row, err := c.queries.GetSDESchematic(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Schematic{}, staticMiss("schematic", id)
+		}
 		return Schematic{}, err
 	}
+	s := Schematic{SchematicName: row.Name, CycleTime: row.CycleTime}
 	c.StoreSchematic(id, s)
 	return s, nil
 }

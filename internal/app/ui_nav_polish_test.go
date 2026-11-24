@@ -283,8 +283,8 @@ func TestWarmCharacterNameRemembersNonCharacters(t *testing.T) {
 	}
 }
 
-// nameMissTransport answers a non-character id with 422 and a
-// refused type id with 404, counting every call.
+// nameMissTransport answers a non-character id with 422, counting
+// every call. A type id the static data lacks never reaches it.
 type nameMissTransport struct{ calls atomic.Int64 }
 
 func (s *nameMissTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -293,8 +293,6 @@ func (s *nameMissTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	switch req.URL.Path {
 	case "/characters/1000051/":
 		status = http.StatusUnprocessableEntity
-	case "/universe/types/999999999/":
-		status = http.StatusNotFound
 	}
 	return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"error":"fixture"}`))}, nil
 }

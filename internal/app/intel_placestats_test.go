@@ -21,13 +21,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// placeStatsStub serves the collector's three public endpoints
-// (plus factions) from fixtures, counting calls.
+// placeStatsStub serves the collector's three public endpoints from
+// fixtures, counting calls.
 type placeStatsStub struct {
 	kills       string
 	jumps       string
 	sov         string
-	factions    string
 	killsStatus int // nonzero: the kills endpoint answers this status
 	expires     string
 	calls       atomic.Int64
@@ -57,8 +56,6 @@ func (s *placeStatsStub) RoundTrip(req *http.Request) (*http.Response, error) {
 		return s.respond(http.StatusOK, s.jumps), nil
 	case "/sovereignty/systems/":
 		return s.respond(http.StatusOK, s.sov), nil
-	case "/universe/factions/":
-		return s.respond(http.StatusOK, s.factions), nil
 	}
 	return s.respond(http.StatusInternalServerError, `{"error":"unexpected path"}`), nil
 }
@@ -185,10 +182,12 @@ func TestPlaceSovereigntyCollector(t *testing.T) {
 			`{"solar_system_id":30000143,"claim":{"alliance":{"corporation_id":98000002}}},` +
 			`{"solar_system_id":30000144,"claim":{"faction":{"faction_id":500001}}},` +
 			`{"solar_system_id":30000145,"claim":{"unclaimed":true}}]}`,
-		factions: `[{"faction_id":500001,"name":"Caldari State","corporation_id":98000003}]`,
-		expires:  time.Now().Add(2 * time.Hour).UTC().Format(http.TimeFormat),
+		expires: time.Now().Add(2 * time.Hour).UTC().Format(http.TimeFormat),
 	}
-	app, _, q := buildCorpTestApp(t, stub)
+	app, conn, q := buildCorpTestApp(t, stub)
+	if _, err := conn.ExecContext(ctx, `INSERT INTO sde_factions (faction_id, name, corporation_id) VALUES (500001, 'Caldari State', 98000003)`); err != nil {
+		t.Fatalf("seed factions: %v", err)
+	}
 	fetch := func() {
 		t.Helper()
 		for _, kind := range []string{esi.GlobalSovMap, esi.GlobalFactions} {

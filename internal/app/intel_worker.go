@@ -324,19 +324,19 @@ func (app *Application) warmAllianceName(ctx context.Context, budget *warmBudget
 	return true
 }
 
-func (app *Application) warmConstellationName(ctx context.Context, budget *warmBudget, id int64) bool {
-	var constellation esi.Constellation
-	if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/constellations/%d/", id), &constellation); err != nil {
-		if errors.Is(err, esi.ErrErrorLimit) {
-			budget.hitLimit()
-		} else if ctx.Err() == nil {
+// warmConstellationName reads one constellation's name from the
+// static data into the name cache.
+func (app *Application) warmConstellationName(ctx context.Context, _ *warmBudget, id int64) bool {
+	row, err := app.queries.GetSDEConstellation(ctx, id)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			logging.Errorf("worker: intel: warm constellation %d: %v", id, err)
 		}
 		return false
 	}
-	if constellation.Name == "" {
+	if row.Name == "" {
 		return false
 	}
-	app.esi.StoreConstellationName(id, constellation.Name)
+	app.esi.StoreConstellationName(id, row.Name)
 	return true
 }

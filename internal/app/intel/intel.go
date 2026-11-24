@@ -89,7 +89,7 @@ type PageData struct {
 func (p *PageData) Shell() *module.ShellData { return &p.ShellData }
 
 // factionNames builds the faction ID → name map from the stored
-// factions snapshot (the near-static GET /universe/factions/ list).
+// factions snapshot (written from the static data's sde_factions).
 // Empty until the worker's first intel pass lands it.
 func factionNames(ctx context.Context, deps module.Deps) map[int64]string {
 	var factions esi.Factions

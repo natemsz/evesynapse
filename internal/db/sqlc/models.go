@@ -2442,6 +2442,13 @@ type SdeEffectModifier struct {
 	SkillTypeID   int64  `json:"skill_type_id"`
 }
 
+type SdeFaction struct {
+	FactionID            int64  `json:"faction_id"`
+	Name                 string `json:"name"`
+	CorporationID        int64  `json:"corporation_id"`
+	MilitiaCorporationID int64  `json:"militia_corporation_id"`
+}
+
 type SdeGroup struct {
 	GroupID    int64  `json:"group_id"`
 	Name       string `json:"name"`
@@ -2515,6 +2522,12 @@ type SdeRequirement struct {
 	TypeID      int64 `json:"type_id"`
 	SkillTypeID int64 `json:"skill_type_id"`
 	Level       int64 `json:"level"`
+}
+
+type SdeSchematic struct {
+	SchematicID int64  `json:"schematic_id"`
+	Name        string `json:"name"`
+	CycleTime   int64  `json:"cycle_time"`
 }
 
 type SdeSkillMetum struct {

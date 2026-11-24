@@ -27,7 +27,6 @@ import (
 // counts calls, so the tests see exactly what each check costs.
 type swarmESISStub struct {
 	history string // /markets/.../history/
-	types   map[int64]string
 	corps   map[int64]string
 	allies  map[int64]string
 	// contractItems serves /contracts/public/items/{id}/, and
@@ -64,11 +63,6 @@ func (s *swarmESISStub) RoundTrip(req *http.Request) (*http.Response, error) {
 			return s.respond(http.StatusNotFound, `{"error":"no history"}`), nil
 		}
 		return s.respond(http.StatusOK, s.history), nil
-	case strings.HasPrefix(path, "/universe/types/"):
-		if body, ok := s.types[id]; ok {
-			return s.respond(http.StatusOK, body), nil
-		}
-		return s.respond(http.StatusNotFound, `{"error":"no such type"}`), nil
 	case strings.HasPrefix(path, "/corporations/"):
 		if body, ok := s.corps[id]; ok {
 			return s.respond(http.StatusOK, body), nil
@@ -104,6 +98,15 @@ type swarmPair struct {
 	// idA and idB are the two instances' IDs, the ones their keys
 	// certify.
 	idA, idB string
+}
+
+// seedStaticTypeName adds one type to an instance's static data, which
+// a type name check reads.
+func seedStaticTypeName(t *testing.T, app *Application, typeID int64, name string) {
+	t.Helper()
+	if _, err := app.pool.Exec(context.Background(), `INSERT INTO sde_types (type_id, name, group_id) VALUES ($1, $2, 18)`, typeID, name); err != nil {
+		t.Fatalf("seed static type %d: %v", typeID, err)
+	}
 }
 
 func newSwarmPair(t *testing.T, modeB string) *swarmPair {
@@ -188,7 +191,7 @@ func TestSwarmPairSharesNames(t *testing.T) {
 	if err := p.a.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: 34, Name: "Tritanium"}); err != nil {
 		t.Fatalf("seed A: %v", err)
 	}
-	p.stubB.types = map[int64]string{34: `{"name":"Tritanium","group_id":18}`}
+	seedStaticTypeName(t, p.b, 34, "Tritanium")
 	p.pinA(t)
 
 	p.pullStages(t, []swarm.SwarmPullKey{{Kind: swarm.SwarmKindTypeName, Key: "34"}})
@@ -199,10 +202,10 @@ func TestSwarmPairSharesNames(t *testing.T) {
 	if err != nil || name != "Tritanium" {
 		t.Fatalf("B holds %q err %v, want Tritanium", name, err)
 	}
-	// One shared entry cost one ESI swarm.Call to verify, the pass is
-	// bounded, not per-row chatty.
-	if p.stubB.calls != 1 {
-		t.Fatalf("spot check cost %d ESI calls, want 1", p.stubB.calls)
+	// A type name is checked against the static data: the spot
+	// check costs no ESI call.
+	if p.stubB.calls != 0 {
+		t.Fatalf("spot check cost %d ESI calls, want 0", p.stubB.calls)
 	}
 	counters := swarm.StateFor(p.b).SwarmCounterMap(ctx)
 	if counters[swarm.SwarmCounterAppliedNames] != 1 || counters[swarm.SwarmCounterSpotPassed] != 1 {

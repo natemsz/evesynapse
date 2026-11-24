@@ -522,7 +522,7 @@ func TestSwarmPairProvenanceEndToEnd(t *testing.T) {
 	if err := p.a.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: 34, Name: "Tritanium"}); err != nil {
 		t.Fatalf("seed A: %v", err)
 	}
-	p.stubB.types = map[int64]string{34: `{"name":"Tritanium","group_id":18}`}
+	seedStaticTypeName(t, p.b, 34, "Tritanium")
 	p.pinA(t)
 	p.pullStages(t, []swarm.SwarmPullKey{{Kind: swarm.SwarmKindTypeName, Key: "34"}})
 	if got := p.spotRuns(t); got != 1 {
@@ -1494,7 +1494,6 @@ func TestSwarmPairNamesFlowOnDemand(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed A structure name: %v", err)
 	}
-	p.stubB.types = map[int64]string{unknownType: `{"name":"Test Type","group_id":18}`}
 	p.pinA(t)
 	p.b.esi.CachedTypeName(ctx, unknownType) // a reader on B misses it
 	if err := p.b.queries.UpsertStructureSeen(ctx, 1035000000001); err != nil {
@@ -1509,6 +1508,8 @@ func TestSwarmPairNamesFlowOnDemand(t *testing.T) {
 	if _, ok := staged[swarm.SwarmKindStructure+"/1035000000001"]; !ok {
 		t.Fatalf("staging %v: the structure name B asked for did not arrive", staged)
 	}
+	// The check reads B's static data, which has caught up by now.
+	seedStaticTypeName(t, p.b, unknownType, "Test Type")
 	p.spotRuns(t)
 	if got := p.b.esi.CachedTypeName(ctx, unknownType); got != "Test Type" {
 		t.Fatalf("B reads the type as %q after the check, want the name A supplied", got)
@@ -1881,7 +1882,6 @@ func TestSwarmUncheckableEntriesTakeNoCheckSlot(t *testing.T) {
 	ctx := context.Background()
 	p.pinA(t)
 	now := time.Now().UTC()
-	p.stubB.types = map[int64]string{}
 	// Older, so they head the queue.
 	for i := 0; i < swarm.MaxSwarmSpotPerCycle; i++ {
 		id := fmt.Sprintf("%d", 1035000000001+i)
@@ -1893,7 +1893,7 @@ func TestSwarmUncheckableEntriesTakeNoCheckSlot(t *testing.T) {
 	for i := 0; i < swarm.MaxSwarmSpotPerCycle; i++ {
 		typeID := int64(987000 + i)
 		id := fmt.Sprintf("%d", typeID)
-		p.stubB.types[typeID] = `{"name":"Type ` + id + `","group_id":18}`
+		seedStaticTypeName(t, p.b, typeID, "Type "+id)
 		entry := signedBy(t, swarm.StateFor(p.a).SwarmID, swarm.SwarmKindTypeName, id, `{"type_id":`+id+`,"name":"Type `+id+`"}`, now)
 		if err := swarm.StateFor(p.b).StageSwarmEntry(ctx, entry, p.idA, now); err != nil {
 			t.Fatalf("stage type name: %v", err)
@@ -1902,8 +1902,8 @@ func TestSwarmUncheckableEntriesTakeNoCheckSlot(t *testing.T) {
 	if got := p.spotRuns(t); got != swarm.MaxSwarmSpotPerCycle {
 		t.Fatalf("one pass applied %d entries, want all %d checkable ones", got, swarm.MaxSwarmSpotPerCycle)
 	}
-	if p.stubB.calls != swarm.MaxSwarmSpotPerCycle {
-		t.Fatalf("the pass made %d ESI calls, want %d (none for the uncheckable entries)", p.stubB.calls, swarm.MaxSwarmSpotPerCycle)
+	if p.stubB.calls != 0 {
+		t.Fatalf("the pass made %d ESI calls, want 0 (type names check against the static data, uncheckable entries call nothing)", p.stubB.calls)
 	}
 	rows, err := p.b.queries.ListUncheckedStaging(ctx, 50)
 	if err != nil || len(rows) != swarm.MaxSwarmSpotPerCycle {

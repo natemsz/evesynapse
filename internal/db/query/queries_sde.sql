@@ -185,6 +185,23 @@ WHERE key LIKE sqlc.arg(prefix)::text || '%'
 ORDER BY key
 LIMIT 200;
 
+-- name: ListSDEFactions :many
+SELECT faction_id, name, corporation_id FROM sde_factions
+ORDER BY faction_id
+LIMIT 200;
+
+-- name: GetSDESchematic :one
+SELECT name, cycle_time FROM sde_schematics
+WHERE schematic_id = $1;
+
+-- name: GetSDEConstellation :one
+SELECT name, region_id FROM sde_constellations
+WHERE constellation_id = $1;
+
+-- name: GetSDECelestial :one
+SELECT name, system_id, type_id FROM sde_celestials
+WHERE item_id = $1;
+
 -- name: GetSDEAPIBlob :one
 SELECT version, body FROM sde_api_blobs
 WHERE table_name = $1;

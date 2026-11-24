@@ -24,10 +24,38 @@ import (
 // an import downloads only the tables whose version differs from the
 // copy kept in sde_api_blobs.
 
-// sdeCheckEvery is how often the worker asks the SDE API for a new
-// release. CCP publishes one whenever the data changes, not only at
-// downtime, and the release list is a small cached request.
-const sdeCheckEvery = 30 * time.Minute
+// The SDE only changes on patch days, at downtime. The worker checks
+// the SDE API every sdeCheckEvery from downtime (sdeDowntimeHourUTC)
+// until it imports a new release or sdeCheckWindow ends, then stays
+// quiet until the next downtime. A day with no patch costs about a
+// dozen small requests; a patch day stops at the first import.
+const (
+	sdeDowntimeHourUTC = 11
+	sdeCheckEvery      = 30 * time.Minute
+	sdeCheckWindow     = 6 * time.Hour
+)
+
+// sdeCheckDue reports whether the worker should ask the SDE API for a
+// new release at now, given when it last checked and last imported
+// (zero when never). Nothing is due once an import has landed since
+// the latest downtime. Otherwise the first tick after a downtime
+// checks, even past the window, so a worker that was down all
+// window still catches up once; within the window, checks repeat
+// every sdeCheckEvery.
+func sdeCheckDue(now, lastCheck, lastImport time.Time) bool {
+	now = now.UTC()
+	downtime := time.Date(now.Year(), now.Month(), now.Day(), sdeDowntimeHourUTC, 0, 0, 0, time.UTC)
+	if now.Before(downtime) {
+		downtime = downtime.AddDate(0, 0, -1)
+	}
+	if !lastImport.Before(downtime) {
+		return false
+	}
+	if lastCheck.Before(downtime) {
+		return true
+	}
+	return now.Sub(downtime) < sdeCheckWindow && now.Sub(lastCheck) >= sdeCheckEvery
+}
 
 // sdeAPIMaxTableBytes bounds one downloaded table as served
 // (gzipped); the largest, mapMoons, is under 40 MB.

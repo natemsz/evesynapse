@@ -277,8 +277,8 @@ ON CONFLICT (structure_id) DO UPDATE SET
 
 -- ---------------------------------------------------------------------
 -- Planet names (schema 025): queued when a PI surface meets an
--- unresolved planet id, resolved in the background through the
--- public GET /universe/planets/{id}/ (no token). 'resolved' rows
+-- unresolved planet id, resolved in the background from the static
+-- data (sde_celestials). 'resolved' rows
 -- re-check after a long window (planet names never change);
 -- 'missing' rows (404: not a planet) re-check after days;
 -- 'pending' rows are always due.

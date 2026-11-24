@@ -251,8 +251,8 @@ func (app *Application) runWorker(ctx context.Context) {
 	}()
 
 	// SDE maintenance runs alongside the ESI cycle: a first import
-	// when the static-data tables are empty, then an update check
-	// every sdeCheckEvery, see sdeMaintenance in sde.go. It
+	// when the static-data tables are empty, then update checks
+	// after each downtime, see sdeMaintenance in sde.go. It
 	// only ever starts background operations, so it never delays
 	// snapshot refreshes.
 	go func() {
@@ -1526,8 +1526,8 @@ func (app *Application) planetMissSettled(ctx context.Context, id int64) bool {
 }
 
 // warmMissingPlanetNames resolves the names of the character's
-// colony planets (the place cache carries them; the network tier
-// is /universe/planets/).
+// colony planets (the place cache carries them; they resolve from
+// the static data).
 func (app *Application) warmMissingPlanetNames(ctx context.Context, planetIDs map[int64]bool, budget *warmBudget) int {
 	var missing []int64
 	for _, id := range sortedInt64Keys(planetIDs) {
@@ -1675,13 +1675,13 @@ func (app *Application) warmCharacterName(ctx context.Context, budget *warmBudge
 	return name != ""
 }
 
-// warmPlanetName resolves one planet's name from the public
-// /universe/planets/ endpoint into the place-name cache, and
-// persists it in planet_names (schema 025) so the name survives
-// restarts instead of re-warming every cold start.
+// warmPlanetName resolves one planet's name from the static data
+// into the place-name cache, and persists it in planet_names (schema
+// 025) so the name survives restarts instead of re-warming every
+// cold start.
 func (app *Application) warmPlanetName(ctx context.Context, budget *warmBudget, id int64) bool {
-	var planet esi.Station // the payload's name field is all we need
-	if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/planets/%d/", id), &planet); err != nil {
+	planet, err := app.esi.FetchPlanet(ctx, id)
+	if err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if warmDefinitive(err) {
@@ -1719,7 +1719,7 @@ func (app *Application) warmSchematic(ctx context.Context, budget *warmBudget, i
 	if err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
-		} else if ctx.Err() == nil {
+		} else if ctx.Err() == nil && !warmDefinitive(err) {
 			logging.Errorf("worker: warm schematic %d: %v", id, err)
 		}
 		return false

@@ -58,6 +58,8 @@ var sdeAPITables = []sdeAPITable{
 	{"metaGroups", "metaGroupID", false},
 	{"characterTitles", "titleID", false},
 	{"dbuffCollections", "dbuffCollectionID", false},
+	{"factions", "factionID", false},
+	{"planetSchematics", "schematicID", false},
 }
 
 // sdeAPIFileName is a table's file name in a JSON Lines dump.
@@ -662,6 +664,25 @@ func parseSDEJSONLTable(table string, body io.Reader, parsed *parsedSDE) error {
 			}
 			return nil
 		})
+	case "factions":
+		err = eachJSONL(r, func(f *struct {
+			FactionID            int64   `json:"factionID"`
+			Name                 locText `json:"name"`
+			CorporationID        int64   `json:"corporationID"`
+			MilitiaCorporationID int64   `json:"militiaCorporationID"`
+		}) error {
+			parsed.factions = append(parsed.factions, sdeFactionRow{factionID: f.FactionID, name: string(f.Name), corporationID: f.CorporationID, militiaCorporationID: f.MilitiaCorporationID})
+			return nil
+		})
+	case "planetSchematics":
+		err = eachJSONL(r, func(p *struct {
+			SchematicID int64   `json:"schematicID"`
+			Name        locText `json:"name"`
+			CycleTime   int64   `json:"cycleTime"`
+		}) error {
+			parsed.schematics = append(parsed.schematics, sdeSchematicRow{schematicID: p.SchematicID, name: string(p.Name), cycleTime: p.CycleTime})
+			return nil
+		})
 	default:
 		err = fmt.Errorf("unknown SDE table %q", table)
 	}
@@ -699,6 +720,10 @@ func (parsed *parsedSDE) dropJSONLTable(table string) {
 		parsed.titles = nil
 	case "dbuffCollections":
 		parsed.dbuffs, parsed.dbuffMods = nil, nil
+	case "factions":
+		parsed.factions = nil
+	case "planetSchematics":
+		parsed.schematics = nil
 	}
 }
 

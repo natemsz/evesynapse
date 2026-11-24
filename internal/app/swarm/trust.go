@@ -1438,16 +1438,15 @@ func (app *Mod) SwarmVerifyTypeName(ctx context.Context, allowance module.Budget
 	if err := DecodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.TypeID != typeID {
 		return SwarmCheckFail, false
 	}
-	if !app.SwarmTake(allowance) {
-		return SwarmCheckDefer, false
-	}
-	var t esi.Type
-	if err := app.Deps.ESIGet(ctx, fmt.Sprintf("/universe/types/%d/", typeID), &t); err != nil {
-		if errors.Is(err, esi.ErrErrorLimit) {
-			return SwarmCheckDefer, true
-		}
-		if code, has := esi.StatusCode(err); has && code == 404 {
-			return SwarmCheckFail, false
+	// Type names are static data: the check reads the local copy and
+	// spends none of the ESI allowance. Before the first import there
+	// is nothing to check against, so the record waits.
+	t, err := app.Deps.DB().GetSDEType(ctx, typeID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			if n, cerr := app.Deps.DB().CountSDETypes(ctx); cerr == nil && n > 0 {
+				return SwarmCheckFail, false
+			}
 		}
 		return SwarmCheckDefer, false
 	}

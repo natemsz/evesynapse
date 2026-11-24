@@ -97,7 +97,6 @@ func TestWarmMissingTypeNamesSwarmFirst(t *testing.T) {
 	if err := p.a.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: 34, Name: "Tritanium"}); err != nil {
 		t.Fatalf("seed A: %v", err)
 	}
-	p.stubB.types = map[int64]string{34: `{"name":"Tritanium","group_id":18}`}
 	swarm.StateFor(p.a).Cfg.Warms = swarm.ParseSwarmWarm("type_name")
 	p.pinA(t)
 	swarm.StateFor(p.b).SwarmRefreshCoverage(ctx, now)
@@ -114,6 +113,8 @@ func TestWarmMissingTypeNamesSwarmFirst(t *testing.T) {
 		t.Fatalf("pull demand = %v, want [34]", got)
 	}
 	swarm.StateFor(p.b).SwarmFetchPhase(ctx, now)
+	// The check reads B's static data, which has caught up by now.
+	seedStaticTypeName(t, p.b, 34, "Tritanium")
 	if got := p.spotRuns(t); got != 1 {
 		t.Fatalf("applied %d entries, want 1", got)
 	}
@@ -126,22 +127,21 @@ func TestWarmMissingTypeNamesSwarmFirst(t *testing.T) {
 	}
 }
 
-// TestWarmMissingTypeNamesNoPeer: with no peer at all the
-// warming cycle resolves names from ESI exactly as it always
-// has, the swarm note is inert and nothing waits on a peer.
+// TestWarmMissingTypeNamesNoPeer: with no peer at all, a type the
+// static data lacks is not a type ESI can name either: the warming
+// cycle resolves nothing, asks nothing of ESI, and nothing waits on
+// a peer.
 func TestWarmMissingTypeNamesNoPeer(t *testing.T) {
 	p := newSwarmPair(t, swarm.SwarmOpen)
 	ctx := context.Background()
-	p.stubB.types = map[int64]string{34: `{"name":"Tritanium","group_id":18}`}
-	if resolved := p.b.warmMissingTypeNames(ctx, []int64{34}, &warmBudget{left: 10}); resolved != 1 {
-		t.Fatalf("resolved %d names, want 1 from ESI", resolved)
+	if resolved := p.b.warmMissingTypeNames(ctx, []int64{34}, &warmBudget{left: 10}); resolved != 0 {
+		t.Fatalf("resolved %d names, want 0", resolved)
 	}
-	if p.stubB.calls != 1 {
-		t.Fatalf("ESI calls = %d, want 1", p.stubB.calls)
+	if p.stubB.calls != 0 {
+		t.Fatalf("ESI calls = %d, want 0", p.stubB.calls)
 	}
-	name, err := p.b.queries.GetTypeName(ctx, 34)
-	if err != nil || name != "Tritanium" {
-		t.Fatalf("B holds %q err %v, want Tritanium", name, err)
+	if _, err := p.b.queries.GetTypeName(ctx, 34); err == nil {
+		t.Fatal("B stored a name for a type nobody holds")
 	}
 }
 

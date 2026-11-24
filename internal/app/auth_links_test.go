@@ -68,8 +68,6 @@ type pilotStub struct {
 	profileStatus int    // nonzero: every profile answers this status (a 422 case)
 	history       string
 	corps         map[int64]string // corporation id -> corporation payload
-	types         map[int64]string // type id -> type payload
-	factions      string
 	calls         int
 }
 
@@ -114,19 +112,6 @@ func (s *pilotStub) RoundTrip(req *http.Request) (*http.Response, error) {
 		return s.respond(http.StatusNotFound, `{"error":"corporation not found"}`), nil
 	case strings.HasPrefix(path, "/alliances/"):
 		return s.respond(http.StatusOK, `{"name":"Fixture Alliance","ticker":"FALL","creator_id":1,"creator_corporation_id":1,"date_founded":"2010-01-01T00:00:00Z","executor_corporation_id":1}`), nil
-	case path == "/universe/factions/":
-		return s.respond(http.StatusOK, s.factions), nil
-	case strings.HasPrefix(path, "/universe/types/"):
-		var id int64
-		for _, c := range strings.TrimSuffix(strings.TrimPrefix(path, "/universe/types/"), "/") {
-			if c >= '0' && c <= '9' {
-				id = id*10 + int64(c-'0')
-			}
-		}
-		if body, ok := s.types[id]; ok {
-			return s.respond(http.StatusOK, body), nil
-		}
-		return s.respond(http.StatusNotFound, `{"error":"type not found"}`), nil
 	}
 	return s.respond(http.StatusInternalServerError, `{"error":"unexpected path"}`), nil
 }
@@ -210,9 +195,11 @@ func TestPilotPageStatesAndDrain(t *testing.T) {
 			98000001: `{"name":"Current Corp","ticker":"CURR","member_count":10,"ceo_id":1,"tax_rate":0.1}`,
 			98000002: `{"name":"Old Corp","ticker":"OLD","member_count":5,"ceo_id":1,"tax_rate":0.1}`,
 		},
-		factions: `[{"faction_id":500001,"name":"Caldari State","corporation_id":1000035}]`,
 	}
-	app2, _, q2 := buildCorpTestApp(t, stub)
+	app2, conn2, q2 := buildCorpTestApp(t, stub)
+	if _, err := conn2.ExecContext(ctx, `INSERT INTO sde_factions (faction_id, name, corporation_id) VALUES (500001, 'Caldari State', 1000035)`); err != nil {
+		t.Fatalf("seed factions: %v", err)
+	}
 	user2, err := q2.CreateUser(ctx)
 	if err != nil {
 		t.Fatalf("create user 2: %v", err)
@@ -412,11 +399,10 @@ func TestItemDetailsPageAndTypeDetailDrain(t *testing.T) {
 		t.Fatalf("item details renders made %d outbound calls, want 0", got)
 	}
 
-	// Worker layer: the drain stores the public description.
-	stub := &pilotStub{types: map[int64]string{
-		34: `{"name":"Tritanium","group_id":910,"description":"The building block <b>of everything</b>.","published":true}`,
-	}}
-	app2, conn2, q2 := buildCorpTestApp(t, stub)
+	// Worker layer: once the static data carries the description,
+	// the drain stores it, still without an outbound call.
+	transport2 := &countingTransport{}
+	app2, conn2, q2 := buildCorpTestApp(t, transport2)
 	user2, err := q2.CreateUser(ctx)
 	if err != nil {
 		t.Fatalf("create user 2: %v", err)
@@ -430,9 +416,15 @@ func TestItemDetailsPageAndTypeDetailDrain(t *testing.T) {
 	if code, _ := getPage(t, app2, cookie2, "/items/type/34/"); code != http.StatusOK {
 		t.Fatalf("item details page 2: status %d", code)
 	}
+	if _, err := conn2.ExecContext(ctx, `UPDATE sde_types SET description = 'The building block <b>of everything</b>.' WHERE type_id = 34`); err != nil {
+		t.Fatalf("seed description: %v", err)
+	}
 	drained, limited := app2.refreshTypeDetails(ctx, &fetchBudget{left: 120})
 	if limited || drained != 1 {
 		t.Fatalf("type detail drain: drained=%d limited=%v, want 1/false", drained, limited)
+	}
+	if got := transport2.calls.Load(); got != 0 {
+		t.Fatalf("type detail drain made %d outbound calls, want 0", got)
 	}
 	code, body = getPage(t, app2, cookie2, "/items/type/34/")
 	if code != http.StatusOK {

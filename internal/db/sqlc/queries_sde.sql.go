@@ -418,6 +418,24 @@ func (q *Queries) GetSDECategory(ctx context.Context, categoryID int64) (SdeCate
 	return i, err
 }
 
+const getSDECelestial = `-- name: GetSDECelestial :one
+SELECT name, system_id, type_id FROM sde_celestials
+WHERE item_id = $1
+`
+
+type GetSDECelestialRow struct {
+	Name     string `json:"name"`
+	SystemID int64  `json:"system_id"`
+	TypeID   int64  `json:"type_id"`
+}
+
+func (q *Queries) GetSDECelestial(ctx context.Context, itemID int64) (GetSDECelestialRow, error) {
+	row := q.db.QueryRow(ctx, getSDECelestial, itemID)
+	var i GetSDECelestialRow
+	err := row.Scan(&i.Name, &i.SystemID, &i.TypeID)
+	return i, err
+}
+
 const getSDECharacterTitle = `-- name: GetSDECharacterTitle :one
 SELECT name FROM sde_character_titles
 WHERE title_id = $1
@@ -429,6 +447,23 @@ func (q *Queries) GetSDECharacterTitle(ctx context.Context, titleID string) (str
 	var name string
 	err := row.Scan(&name)
 	return name, err
+}
+
+const getSDEConstellation = `-- name: GetSDEConstellation :one
+SELECT name, region_id FROM sde_constellations
+WHERE constellation_id = $1
+`
+
+type GetSDEConstellationRow struct {
+	Name     string `json:"name"`
+	RegionID int64  `json:"region_id"`
+}
+
+func (q *Queries) GetSDEConstellation(ctx context.Context, constellationID int64) (GetSDEConstellationRow, error) {
+	row := q.db.QueryRow(ctx, getSDEConstellation, constellationID)
+	var i GetSDEConstellationRow
+	err := row.Scan(&i.Name, &i.RegionID)
+	return i, err
 }
 
 const getSDEGroup = `-- name: GetSDEGroup :one
@@ -560,6 +595,23 @@ func (q *Queries) GetSDERegion(ctx context.Context, regionID int64) (SdeRegion, 
 	row := q.db.QueryRow(ctx, getSDERegion, regionID)
 	var i SdeRegion
 	err := row.Scan(&i.RegionID, &i.Name)
+	return i, err
+}
+
+const getSDESchematic = `-- name: GetSDESchematic :one
+SELECT name, cycle_time FROM sde_schematics
+WHERE schematic_id = $1
+`
+
+type GetSDESchematicRow struct {
+	Name      string `json:"name"`
+	CycleTime int64  `json:"cycle_time"`
+}
+
+func (q *Queries) GetSDESchematic(ctx context.Context, schematicID int64) (GetSDESchematicRow, error) {
+	row := q.db.QueryRow(ctx, getSDESchematic, schematicID)
+	var i GetSDESchematicRow
+	err := row.Scan(&i.Name, &i.CycleTime)
 	return i, err
 }
 
@@ -2171,6 +2223,38 @@ func (q *Queries) ListSDEEffectsByIDs(ctx context.Context, effectIds []int64) ([
 	for rows.Next() {
 		var i SdeEffect
 		if err := rows.Scan(&i.EffectID, &i.Name, &i.Category); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEFactions = `-- name: ListSDEFactions :many
+SELECT faction_id, name, corporation_id FROM sde_factions
+ORDER BY faction_id
+LIMIT 200
+`
+
+type ListSDEFactionsRow struct {
+	FactionID     int64  `json:"faction_id"`
+	Name          string `json:"name"`
+	CorporationID int64  `json:"corporation_id"`
+}
+
+func (q *Queries) ListSDEFactions(ctx context.Context) ([]ListSDEFactionsRow, error) {
+	rows, err := q.db.Query(ctx, listSDEFactions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEFactionsRow
+	for rows.Next() {
+		var i ListSDEFactionsRow
+		if err := rows.Scan(&i.FactionID, &i.Name, &i.CorporationID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

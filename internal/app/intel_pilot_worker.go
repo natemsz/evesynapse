@@ -247,28 +247,23 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 		}
 	}
 	if profile.FactionID > 0 && allowance.take() {
-		// The factions list is static and already kept as a
-		// global snapshot by the intel pass: read that instead
-		// of fetching it fresh for every pilot in the drain.
+		// The factions list is static data, kept as a global
+		// snapshot by the intel pass; before the first snapshot
+		// it is read from the static data itself.
 		var factions []esi.Faction
-		if app.loadGlobalSnapshot(ctx, esi.GlobalFactions, &factions) {
-			for _, f := range factions {
-				if f.FactionID == profile.FactionID {
-					payload.FactionName = f.Name
-					break
-				}
+		if !app.loadGlobalSnapshot(ctx, esi.GlobalFactions, &factions) {
+			rows, err := app.queries.ListSDEFactions(ctx)
+			if err != nil {
+				logging.Errorf("worker: pilot records: read factions for pilot %d: %v", id, err)
 			}
-		} else if err := app.esi.Get(ctx, "", "/universe/factions/", &factions); err != nil {
-			if errors.Is(err, esi.ErrErrorLimit) {
-				return false, true
+			for _, r := range rows {
+				factions = append(factions, esi.Faction{FactionID: r.FactionID, Name: r.Name})
 			}
-			logging.Errorf("worker: pilot records: fetch factions for pilot %d: %v", id, err)
-		} else {
-			for _, f := range factions {
-				if f.FactionID == profile.FactionID {
-					payload.FactionName = f.Name
-					break
-				}
+		}
+		for _, f := range factions {
+			if f.FactionID == profile.FactionID {
+				payload.FactionName = f.Name
+				break
 			}
 		}
 	}

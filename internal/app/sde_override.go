@@ -69,6 +69,8 @@ func sdeKnownFiles() map[string]bool {
 		known[name] = true
 	}
 	known[sdeTitlesFileName] = true
+	known[sdeFactionsFileName] = true
+	known[sdeSchematicsFileName] = true
 	return known
 }
 

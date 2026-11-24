@@ -143,95 +143,34 @@ func TestPilotCounterpartyJournalRouting(t *testing.T) {
 	}
 }
 
-// placeWarmTransport records request counts per path and answers
-// the station/system endpoints with per-path statuses, so a test
-// can see exactly which place IDs the warm pass asked ESI about.
-type placeWarmTransport struct {
-	mu       sync.Mutex
-	counts   map[string]int
-	statuses map[string]int // path -> status; absent = 200
-}
-
-func newPlaceWarmTransport() *placeWarmTransport {
-	return &placeWarmTransport{counts: map[string]int{}, statuses: map[string]int{}}
-}
-
-func (s *placeWarmTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	path := req.URL.Path
-	s.mu.Lock()
-	s.counts[path]++
-	status := s.statuses[path]
-	s.mu.Unlock()
-	if status == 0 {
-		status = http.StatusOK
-	}
-	body := `{"error":"fixture failure"}`
-	if status == http.StatusOK {
-		body = `{"name":"Fixture Place"}`
-	}
-	return &http.Response{
-		StatusCode: status,
-		Header:     make(http.Header),
-		Body:       io.NopCloser(strings.NewReader(body)),
-	}, nil
-}
-
-func (s *placeWarmTransport) count(path string) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.counts[path]
-}
-
-// TestWarmPlaceNamesSkipsInvalidAndSettlesDead pins the place
-// warm pass's junk filter: an ID outside its kind's space is
-// never fetched, a definitive 404 settles the ID so the next
-// pass asks nothing, and a transient failure settles nothing
-// and is retried.
+// TestWarmPlaceNamesSkipsInvalidAndSettlesDead pins the place warm
+// pass's junk filter: an ID outside its kind's space is never looked
+// up, a station or system the static data lacks settles as a miss so
+// the next pass asks nothing, and none of it calls out.
 func TestWarmPlaceNamesSkipsInvalidAndSettlesDead(t *testing.T) {
-	transport := newPlaceWarmTransport()
-	transport.statuses["/universe/stations/60000001/"] = http.StatusNotFound
-	transport.statuses["/universe/stations/60000002/"] = http.StatusInternalServerError
+	transport := &countingTransport{}
 	app, _, _ := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 
 	places := map[int64]string{
 		0:        "station", // unresolved location: never enqueue
 		30000142: "station", // a system ID wearing the station kind
-		60000001: "station", // definitive 404: settles
-		60000002: "station", // transient 500: settles nothing
+		60000001: "station", // not in the static data: settles
 		30000143: "solar_system",
 	}
-	budget := &warmBudget{left: 100}
-	app.warmMissingPlaceNames(ctx, places, budget)
+	app.warmMissingPlaceNames(ctx, places, &warmBudget{left: 100})
 
-	if got := transport.count("/universe/stations/0/"); got != 0 {
-		t.Fatalf("station 0 fetched %d times, want 0", got)
+	for _, id := range []int64{60000001, 30000143} {
+		if !app.esi.PlaceNameMissed(id) {
+			t.Fatalf("place %d not settled as a miss", id)
+		}
 	}
-	if got := transport.count("/universe/stations/30000142/"); got != 0 {
-		t.Fatalf("system ID fetched as a station %d times, want 0", got)
+	for _, id := range []int64{0, 30000142} {
+		if app.esi.PlaceNameMissed(id) {
+			t.Fatalf("invalid place %d was looked up", id)
+		}
 	}
-	if got := transport.count("/universe/stations/60000001/"); got != 1 {
-		t.Fatalf("dead station fetched %d times, want 1", got)
-	}
-	if got := transport.count("/universe/systems/30000143/"); got != 1 {
-		t.Fatalf("system fetched %d times, want 1", got)
-	}
-	flakyBefore := transport.count("/universe/stations/60000002/")
-	if flakyBefore == 0 {
-		t.Fatal("transient station was never fetched")
-	}
-
-	// Next cycle, same wants re-derived from the stored
-	// snapshots: the settled 404 and the resolved system are not
-	// re-asked; the transient failure is.
-	app.warmMissingPlaceNames(ctx, places, budget)
-	if got := transport.count("/universe/stations/60000001/"); got != 1 {
-		t.Fatalf("settled 404 re-asked: %d fetches, want 1", got)
-	}
-	if got := transport.count("/universe/systems/30000143/"); got != 1 {
-		t.Fatalf("resolved system re-asked: %d fetches, want 1", got)
-	}
-	if got := transport.count("/universe/stations/60000002/"); got <= flakyBefore {
-		t.Fatalf("transient failure not retried: %d fetches, want more than %d", got, flakyBefore)
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("warm pass made %d outbound calls, want 0", got)
 	}
 }

@@ -336,7 +336,7 @@ func (h *nameHarvest) miningLedger(payload string) {
 }
 
 // colonies: colony planets resolve through the place-name cache
-// (their names come from /universe/planets/); their systems ride
+// (their names come from the static data); their systems ride
 // the station/system pass.
 func (h *nameHarvest) colonies(payload string) {
 	var colonies esi.Colonies

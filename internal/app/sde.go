@@ -133,6 +133,13 @@ const (
 	sdeDbuffSkillFileName    = "dbuffLocationRequiredSkillModifiers.csv"
 )
 
+// The faction and PI schematic files (schema 179), optional like the
+// sheet files.
+const (
+	sdeFactionsFileName   = "chrFactions.csv"
+	sdeSchematicsFileName = "planetSchematics.csv"
+)
+
 // sdeDbuffFileNames lists the buff tables' optional files.
 var sdeDbuffFileNames = []string{sdeDbuffsFileName, sdeDbuffItemFileName, sdeDbuffLocationFileName, sdeDbuffGroupFileName, sdeDbuffSkillFileName}
 
@@ -573,6 +580,12 @@ func (app *Application) parseSDECSVArchive(ov *sdeArchive, parsed *parsedSDE) er
 	if !optional(sdeTitlesFileName, "the previous character titles") {
 		parsed.titles = nil
 	}
+	if !optional(sdeFactionsFileName, "the previous factions") {
+		parsed.factions = nil
+	}
+	if !optional(sdeSchematicsFileName, "the previous PI schematics") {
+		parsed.schematics = nil
+	}
 	// The buff tables go in together or not at all: modifiers
 	// without their collections (or the reverse) would leave bursts
 	// half described.
@@ -687,8 +700,27 @@ type parsedSDE struct {
 	// Cosmetic character titles (schema 161): empty when the dump lacks chrTitles.csv.
 	titles []sdeCharacterTitleRow
 
+	// Factions and PI schematics (schema 179): empty when the dump
+	// lacks them, which keeps the stored rows.
+	factions   []sdeFactionRow
+	schematics []sdeSchematicRow
+
 	// jl holds a JSON Lines dump's cross-table rows until finishJSONL.
 	jl *sdeJSONLState
+}
+
+// sdeFactionRow is one faction and its executor and militia
+// corporations.
+type sdeFactionRow struct {
+	factionID, corporationID, militiaCorporationID int64
+	name                                           string
+}
+
+// sdeSchematicRow is one planetary industry schematic: its name and
+// the seconds one cycle takes.
+type sdeSchematicRow struct {
+	schematicID, cycleTime int64
+	name                   string
 }
 
 // sdeCharacterTitleRow maps a cosmetic title UUID to its display name.
@@ -1035,6 +1067,29 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		err = parseSDEMetaGroups(cr, idx, parsed)
 	case sdeTitlesFileName:
 		err = parseSDETitles(cr, idx, parsed)
+	case sdeFactionsFileName:
+		_, err = eachCSVRow(cr, func(rec []string) error {
+			id, err := csvID(rec, idx, "factionID")
+			if err != nil {
+				return errSkipRow
+			}
+			parsed.factions = append(parsed.factions, sdeFactionRow{
+				factionID: id, name: csvFieldOrEmpty(rec, idx, "factionName"),
+				corporationID: csvIDOrZero(rec, idx, "corporationID"), militiaCorporationID: csvIDOrZero(rec, idx, "militiaCorporationID"),
+			})
+			return nil
+		})
+	case sdeSchematicsFileName:
+		_, err = eachCSVRow(cr, func(rec []string) error {
+			id, err := csvID(rec, idx, "schematicID")
+			if err != nil {
+				return errSkipRow
+			}
+			parsed.schematics = append(parsed.schematics, sdeSchematicRow{
+				schematicID: id, name: csvFieldOrEmpty(rec, idx, "schematicName"), cycleTime: csvIDOrZero(rec, idx, "cycleTime"),
+			})
+			return nil
+		})
 	case "dgmTypeAttributes.csv":
 		err = parseSDEDogmaAttributes(cr, idx, parsed)
 	case "dgmAttributeTypes.csv":
@@ -2295,6 +2350,14 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		{"sde_character_titles", len(parsed.titles), "INSERT INTO sde_character_titles (title_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING", func(i int) []any {
 			r := parsed.titles[i]
 			return []any{r.titleID, r.name}
+		}},
+		{"sde_factions", len(parsed.factions), "INSERT INTO sde_factions (faction_id, name, corporation_id, militia_corporation_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING", func(i int) []any {
+			r := parsed.factions[i]
+			return []any{r.factionID, r.name, r.corporationID, r.militiaCorporationID}
+		}},
+		{"sde_schematics", len(parsed.schematics), "INSERT INTO sde_schematics (schematic_id, name, cycle_time) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", func(i int) []any {
+			r := parsed.schematics[i]
+			return []any{r.schematicID, r.name, r.cycleTime}
 		}},
 	}
 	for _, st := range sheetTables {

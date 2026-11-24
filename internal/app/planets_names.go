@@ -8,8 +8,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Planet names. GET /universe/planets/{planet_id}/ is public,
-// no token, no scope, and planet names never change, so the
+// Planet names come from the static data (sde_celestials, read by
+// esi.FetchPlanet) and never change, so the
 // queue in the planet_names table only needs to converge once:
 // PI surfaces note the planet ids they meet (notePlanetIDs),
 // the worker resolves the due ones in the background

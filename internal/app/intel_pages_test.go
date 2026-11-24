@@ -311,8 +311,6 @@ func (s *intelStubTransport) RoundTrip(req *http.Request) (*http.Response, error
 		return respond(http.StatusOK, `[]`)
 	case path == "/fw/stats/":
 		return respond(http.StatusOK, `[]`)
-	case path == "/universe/factions/":
-		return respond(http.StatusOK, `[{"faction_id":500001,"name":"Caldari State"}]`)
 	case path == "/universe/system_kills/":
 		return respond(http.StatusOK, `[{"system_id":30000142,"ship_kills":2,"pod_kills":1,"npc_kills":0}]`)
 	case path == "/universe/system_jumps/":
@@ -329,8 +327,6 @@ func (s *intelStubTransport) RoundTrip(req *http.Request) (*http.Response, error
 		return respond(http.StatusOK, `{"name":"Defender Corp","ticker":"DEF"}`)
 	case path == "/alliances/99000002/":
 		return respond(http.StatusOK, `{"name":"Aggressor Alliance","ticker":"AGA"}`)
-	case path == "/universe/constellations/20000001/":
-		return respond(http.StatusOK, `{"constellation_id":20000001,"name":"Kimotoro","region_id":10000002}`)
 	default:
 		return respond(http.StatusNotFound, `{"error":"unexpected path `+path+`"}`)
 	}
@@ -343,9 +339,17 @@ func (s *intelStubTransport) RoundTrip(req *http.Request) (*http.Response, error
 // is the one thing the third pass refetches.
 func TestRefreshIntel(t *testing.T) {
 	transport := &intelStubTransport{}
-	app, _, q := buildCorpTestApp(t, transport)
+	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 	budget := &warmBudget{left: maxWarmLookupsPerCycle}
+	for _, stmt := range []string{
+		`INSERT INTO sde_factions (faction_id, name) VALUES (500001, 'Caldari State')`,
+		`INSERT INTO sde_constellations (constellation_id, name, region_id) VALUES (20000001, 'Kimotoro', 10000002)`,
+	} {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed static data: %v", err)
+		}
+	}
 
 	stored, names, limited := app.refreshIntel(ctx, budget)
 	if limited {

@@ -1,19 +1,14 @@
 package app
 
-// Planet name resolution: the durable planet_names queue
-// behind the PI surfaces. Renders note wants and never fetch;
-// the worker resolves them through the public /universe/planets/
-// endpoint; resolved names stick across restarts, 404s back off
-// for days, transient errors leave the row pending.
+// Planet name resolution: the durable planet_names queue behind the
+// PI surfaces. Renders note wants and never fetch; the worker resolves
+// them from the static data (sde_celestials); resolved names stick
+// across restarts, and an id the static data lacks backs off for days.
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
-	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -21,72 +16,24 @@ import (
 	"evesynapse/internal/esi"
 )
 
-// planetTransport answers /universe/planets/{id}/ with fixture
-// names and counts fetches per id.
-type planetTransport struct {
-	mu      sync.Mutex
-	fetches map[int64]int
-	names   map[int64]string // id → name (absent = 404)
-	fail    map[int64]bool   // 500: transient failure
-}
-
-func newPlanetTransport() *planetTransport {
-	return &planetTransport{
-		fetches: map[int64]int{},
-		names:   map[int64]string{},
-		fail:    map[int64]bool{},
+// seedPlanet adds one planet to the static data.
+func seedPlanet(t *testing.T, app *Application, id int64, name string) {
+	t.Helper()
+	if _, err := app.pool.Exec(context.Background(), `INSERT INTO sde_celestials (item_id, system_id, name, type_id, radius) VALUES ($1, 30000142, $2, 11, 5000000)`, id, name); err != nil {
+		t.Fatalf("seed planet %d: %v", id, err)
 	}
-}
-
-func (s *planetTransport) respond(status int, body string) *http.Response {
-	return &http.Response{
-		StatusCode: status,
-		Header: http.Header{
-			"Content-Type": []string{"application/json"},
-			"Expires":      []string{"Wed, 01 Jan 2999 00:00:00 GMT"},
-		},
-		Body: io.NopCloser(strings.NewReader(body)),
-	}
-}
-
-func (s *planetTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	path := req.URL.Path
-	if !strings.HasPrefix(path, "/universe/planets/") {
-		return s.respond(404, `{"error":"unexpected path `+path+`"}`), nil
-	}
-	id, _ := strconv.ParseInt(strings.Trim(path[len("/universe/planets/"):], "/"), 10, 64)
-	s.mu.Lock()
-	s.fetches[id]++
-	s.mu.Unlock()
-	if s.fail[id] {
-		return s.respond(500, `{"error":"boom"}`), nil
-	}
-	name, ok := s.names[id]
-	if !ok {
-		return s.respond(404, `{"error":"not found"}`), nil
-	}
-	return s.respond(200, fmt.Sprintf(`{"name":%q,"planet_id":%d,"system_id":30000142,"type_id":11}`, name, id)), nil
-}
-
-func (s *planetTransport) fetchCount(id int64) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.fetches[id]
 }
 
 func TestPlanetResolveSuccessAndCacheHit(t *testing.T) {
-	transport := newPlanetTransport()
-	transport.names[40152063] = "Jita IV"
+	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
+	seedPlanet(t, app, 40152063, "Jita IV")
 
 	app.notePlanetIDs(ctx, 40152063)
 	resolved, limited := app.resolvePlanetNames(ctx, &fetchBudget{left: 120})
 	if limited || resolved != 1 {
 		t.Fatalf("resolve: resolved=%d limited=%v, want 1/false", resolved, limited)
-	}
-	if got := transport.fetchCount(40152063); got != 1 {
-		t.Fatalf("fetches: %d, want 1", got)
 	}
 	row, err := q.GetPlanetName(ctx, 40152063)
 	if err != nil || row.State != esi.PlanetResolved || row.Name != "Jita IV" {
@@ -96,56 +43,37 @@ func TestPlanetResolveSuccessAndCacheHit(t *testing.T) {
 	if got := app.planetDisplayName(ctx, 40152063); got != "Jita IV" {
 		t.Fatalf("planetDisplayName: %q, want Jita IV", got)
 	}
-	// A fresh resolved row is not due: no repeat fetch next pass.
+	// A fresh resolved row is not due: nothing to do next pass.
 	resolved, _ = app.resolvePlanetNames(ctx, &fetchBudget{left: 120})
 	if resolved != 0 {
 		t.Fatalf("second pass resolved %d, want 0", resolved)
 	}
-	if got := transport.fetchCount(40152063); got != 1 {
-		t.Fatalf("fetches after second pass: %d, want 1 (cache hit)", got)
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("resolution made %d outbound calls, want 0", got)
 	}
 }
 
 func TestPlanetResolveNegativeBackoff(t *testing.T) {
-	transport := newPlanetTransport()
-	app, _, q := buildCorpTestApp(t, transport)
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
 
 	const badID = int64(40999999)
 	app.notePlanetIDs(ctx, badID)
 	resolved, _ := app.resolvePlanetNames(ctx, &fetchBudget{left: 120})
 	if resolved != 0 {
-		t.Fatalf("404 resolve: resolved=%d, want 0", resolved)
+		t.Fatalf("unknown planet resolve: resolved=%d, want 0", resolved)
 	}
 	row, err := q.GetPlanetName(ctx, badID)
 	if err != nil || row.State != esi.PlanetMissing {
-		t.Fatalf("row after 404: %+v err=%v, want missing", row, err)
+		t.Fatalf("row after a miss: %+v err=%v, want missing", row, err)
 	}
-	// The fresh negative is not re-asked within the window.
-	app.resolvePlanetNames(ctx, &fetchBudget{left: 120})
-	if got := transport.fetchCount(badID); got != 1 {
-		t.Fatalf("fetches: %d, want 1 (negative backoff)", got)
+	// The fresh negative is not re-asked within the window, and the
+	// fallback stays honest meanwhile.
+	if resolved, _ := app.resolvePlanetNames(ctx, &fetchBudget{left: 120}); resolved != 0 {
+		t.Fatalf("second pass resolved %d, want 0", resolved)
 	}
-	// The fallback stays honest meanwhile.
 	if got := app.planetDisplayName(ctx, badID); got != "Planet #40999999" {
 		t.Fatalf("planetDisplayName: %q, want the id fallback", got)
-	}
-}
-
-func TestPlanetResolveTransientStaysPending(t *testing.T) {
-	transport := newPlanetTransport()
-	transport.fail[40152063] = true
-	app, _, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-
-	app.notePlanetIDs(ctx, 40152063)
-	resolved, _ := app.resolvePlanetNames(ctx, &fetchBudget{left: 120})
-	if resolved != 0 {
-		t.Fatalf("transient resolve: resolved=%d, want 0", resolved)
-	}
-	row, err := q.GetPlanetName(ctx, 40152063)
-	if err != nil || row.State != esi.PlanetPending {
-		t.Fatalf("row after transient failure: %+v err=%v, want pending", row, err)
 	}
 }
 
@@ -285,50 +213,31 @@ func TestPlanetHomeNameResolves(t *testing.T) {
 	}
 }
 
-// TestWarmPlanetNamesSettleDefinitive404 pins the per-character
-// warm pass's share of the planet_names store: a definitive 404
-// is recorded as a miss and not re-asked next cycle, a resolved
-// name is not re-asked, and a transient failure settles nothing
-// and is retried.
-func TestWarmPlanetNamesSettleDefinitive404(t *testing.T) {
-	transport := newPlanetTransport()
-	transport.names[40009077] = "Jita I"
-	transport.fail[40026208] = true // 500: transient failure
+// TestWarmPlanetNamesReadStaticData pins the per-character warm pass's
+// share of the planet_names store: a planet the static data names is
+// stored resolved, an id it lacks is recorded as a miss, id 0 is never
+// looked up, and none of it calls out.
+func TestWarmPlanetNamesReadStaticData(t *testing.T) {
+	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
+	seedPlanet(t, app, 40009077, "Jita I")
 
-	wants := map[int64]bool{0: true, 40026205: true, 40026208: true, 40009077: true}
-	budget := &warmBudget{left: 100}
-	app.warmMissingPlanetNames(ctx, wants, budget)
+	wants := map[int64]bool{0: true, 40026205: true, 40009077: true}
+	app.warmMissingPlanetNames(ctx, wants, &warmBudget{left: 100})
 
-	if got := transport.fetchCount(0); got != 0 {
-		t.Fatalf("planet 0 fetched %d times, want 0", got)
+	row, err := q.GetPlanetName(ctx, 40009077)
+	if err != nil || row.State != esi.PlanetResolved || row.Name != "Jita I" {
+		t.Fatalf("named planet row: %+v err=%v, want resolved Jita I", row, err)
 	}
-	if got := transport.fetchCount(40026205); got != 1 {
-		t.Fatalf("dead planet fetched %d times, want 1", got)
-	}
-	row, err := q.GetPlanetName(ctx, 40026205)
+	row, err = q.GetPlanetName(ctx, 40026205)
 	if err != nil || row.State != esi.PlanetMissing {
-		t.Fatalf("dead planet row: %+v err=%v, want state %q", row, err, esi.PlanetMissing)
+		t.Fatalf("unknown planet row: %+v err=%v, want state %q", row, err, esi.PlanetMissing)
 	}
-	flakyBefore := transport.fetchCount(40026208)
-	if flakyBefore == 0 {
-		t.Fatal("transient planet was never fetched")
+	if _, err := q.GetPlanetName(ctx, 0); err == nil {
+		t.Fatal("planet 0 got a planet_names row, want none")
 	}
-	if _, err := q.GetPlanetName(ctx, 40026208); err == nil {
-		t.Fatal("transient failure settled a planet_names row, want none")
-	}
-
-	// Next cycle, same wants: the settled miss and the resolved
-	// name are not re-asked; the transient failure is.
-	app.warmMissingPlanetNames(ctx, wants, budget)
-	if got := transport.fetchCount(40026205); got != 1 {
-		t.Fatalf("settled miss re-asked: %d fetches, want 1", got)
-	}
-	if got := transport.fetchCount(40009077); got != 1 {
-		t.Fatalf("resolved planet re-asked: %d fetches, want 1", got)
-	}
-	if got := transport.fetchCount(40026208); got <= flakyBefore {
-		t.Fatalf("transient failure not retried: %d fetches, want more than %d", got, flakyBefore)
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("warm pass made %d outbound calls, want 0", got)
 	}
 }

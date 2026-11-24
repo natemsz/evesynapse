@@ -775,22 +775,9 @@ func drainRoute(req *http.Request, path string) (string, bool) {
 		return `[{"cost_indices":[{"activity":"manufacturing","cost_index":0.01}],"solar_system_id":30000142}]`, true
 	case "/status/":
 		return `{"players":12,"server_version":"syncdrain","start_time":"2026-01-01T00:00:00Z"}`, true
-	case "/universe/factions/", "/fw/leaderboards/corporations/", "/fw/leaderboards/characters/",
-		"/fw/stats/", "/fw/systems/", "/universe/ancestries/", "/universe/bloodlines/",
-		"/universe/categories/", "/wars/", "/incursions/", "/alliances/":
+	case "/fw/leaderboards/corporations/", "/fw/leaderboards/characters/",
+		"/fw/stats/", "/fw/systems/", "/wars/", "/incursions/", "/alliances/":
 		return `[]`, true
-	}
-	if m := regexp.MustCompile(`^/universe/types/(\d+)/$`).FindStringSubmatch(path); m != nil {
-		return fmt.Sprintf(`{"name":"Drain Type %s","group_id":1,"description":"sync-drain stub type"}`, m[1]), true
-	}
-	if m := regexp.MustCompile(`^/universe/(systems|stations)/(\d+)/$`).FindStringSubmatch(path); m != nil {
-		return fmt.Sprintf(`{"name":"Drain %s %s"}`, m[1], m[2]), true
-	}
-	if m := regexp.MustCompile(`^/universe/planets/(\d+)/$`).FindStringSubmatch(path); m != nil {
-		return fmt.Sprintf(`{"name":"Drain Planet %s"}`, m[1]), true
-	}
-	if m := regexp.MustCompile(`^/universe/groups/(\d+)/$`).FindStringSubmatch(path); m != nil {
-		return fmt.Sprintf(`{"name":"Drain Group %s"}`, m[1]), true
 	}
 	if strings.HasPrefix(path, "/markets/") {
 		// Order books and history: empty, one page.

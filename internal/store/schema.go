@@ -1064,6 +1064,11 @@ var pgFleetInvitesSchema string
 //go:embed schema_pg/178_sde_api_blobs.sql
 var pgSDEAPIBlobsSchema string
 
+// Step 179: factions and PI schematics from the static data.
+//
+//go:embed schema_pg/179_sde_factions_schematics.sql
+var pgSDEFactionsSchematicsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1270,6 +1275,7 @@ func schemaSteps() []schemaStep {
 		{176, "fleet sign-in", pgFleetSignInSchema, ""},
 		{177, "fleet invites", pgFleetInvitesSchema, ""},
 		{178, "sde api blobs", pgSDEAPIBlobsSchema, ""},
+		{179, "sde factions and schematics", pgSDEFactionsSchematicsSchema, ""},
 	}
 }
 

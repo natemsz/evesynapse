@@ -18,7 +18,7 @@
 
   <fieldset class="l-panel">
     <legend><h2>The fleet</h2></legend>
-    <div class="form-grid">
+    <div class="form-grid fl-plan-grid">
       <div class="field wide"><label class="field-label" for="fl-title">Title</label>
         <input id="fl-title" type="text" name="title" value="{{.Title}}" maxlength="120" required></div>
       {{if .CanSetAccess}}
@@ -28,6 +28,8 @@
       {{else}}
       <div class="field"><span class="field-label">Fleet commander</span><span class="field-static">{{.FCName}}</span></div>
       {{end}}
+      <div class="field"><label class="field-label" for="fl-formup">Form up</label>
+        <input id="fl-formup" type="text" name="form_up" value="{{.FormUp}}" maxlength="120" placeholder="e.g. Jita 4-4"></div>
       <div class="field"><label class="field-label" for="fl-start">Starts</label>
         <input id="fl-start" type="datetime-local" name="starts_at" value="{{.StartsAt}}" required aria-describedby="fl-start-local">
         <span class="field-hint" id="fl-start-local" aria-live="polite">In EVE time, which is UTC.</span>
@@ -35,8 +37,6 @@
       <div class="field"><label class="field-label" for="fl-length">Length in minutes</label>
         <input id="fl-length" type="number" name="duration" value="{{.Duration}}" min="15" max="1440" step="5" required>
         <span class="fl-presets" data-fl-presets hidden><button type="button" class="chip" data-length="60">1 hour</button><button type="button" class="chip" data-length="90">90 min</button><button type="button" class="chip" data-length="120">2 hours</button><button type="button" class="chip" data-length="180">3 hours</button></span></div>
-      <div class="field"><label class="field-label" for="fl-formup">Form up</label>
-        <input id="fl-formup" type="text" name="form_up" value="{{.FormUp}}" maxlength="120" placeholder="e.g. Jita 4-4"></div>
       <div class="field wide"><label class="field-label" for="fl-details">Details</label>
         <textarea id="fl-details" name="description" rows="4" maxlength="2000">{{.Description}}</textarea></div>
     </div>
@@ -69,7 +69,7 @@
   {{if .CanSetAccess}}
   <fieldset class="l-panel fl-choices">
     <legend><h2>Kind of fleet</h2></legend>
-    <div class="fl-options fl-options--row">
+    <div class="fl-options fl-options--row fl-options--kinds">
     {{range .Types}}<label><input type="radio" name="fleet_type" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}</span></label>{{end}}
     </div>
   </fieldset>

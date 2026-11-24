@@ -4,18 +4,17 @@
 {{define "content"}}
 {{with .FleetPermissions}}
 <div class="l-page fl-page">
-<div class="l-head"><h2 class="l-head-title">Fleet permissions</h2></div>
+<div class="l-head">
+  <h2 class="l-head-title">Fleet permissions</h2>
+  {{if .OwnerKey}}<div class="l-head-pick">{{template "ownerselector" .OwnerOptions}}</div>
+  <p class="l-head-sum">{{if .Community}}The leader and admins of <b>{{.OwnerName}}</b>{{else}}Directors of <b>{{.OwnerName}}</b>'s executor corporation{{end}} can always do these. Choose who else can.</p>{{end}}
+</div>
 {{if not .OwnerKey}}
 <div class="l-panel">
   <p>The leader and admins of a community, and the directors of an alliance's executor corporation, choose here who else plans fleets and keeps doctrines.</p>
   {{if .Corporations}}<p>A corporation makes these choices in its <a href="/corporations/settings/">settings</a>.</p>{{end}}
 </div>
 {{else}}
-<div class="l-head">
-  <div class="l-head-pick">{{template "ownerselector" .OwnerOptions}}</div>
-  <p class="l-head-sum"><b>{{.OwnerName}}</b></p>
-</div>
-<p class="prose">{{if .Community}}The leader and admins{{else}}Directors of the executor corporation{{end}} can always do these. Choose who else can.</p>
 
 <form method="post" action="/fleets/permissions/" class="l-panel fl-perms" aria-label="Who else can run {{.OwnerName}}">
   <input type="hidden" name="owner" value="{{.OwnerKey}}">

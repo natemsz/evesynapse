@@ -51,7 +51,7 @@ type managedCharacter struct {
 
 // portraitURL is the CCP image-server portrait for a character.
 func portraitURL(characterID int64, size int) string {
-	return fmt.Sprintf("https://images.evetech.net/characters/%d/portrait?size=%d", characterID, size)
+	return fmt.Sprintf("https://images.evetech.net/characters/%d/portrait?size=%d", portraitOf(characterID), size)
 }
 
 // switcherEntries builds the header switcher model for the

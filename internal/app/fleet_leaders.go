@@ -36,6 +36,7 @@ type fleetLeaderRow struct {
 	Name, Href            string
 	Fleets, Kills, Deaths int64
 	ISK                   string
+	NoISK                 bool // nothing destroyed: the figure steps back
 	Points                int64
 	Yours                 bool
 	// Share is the row's points as a percentage of the leader's.
@@ -202,7 +203,7 @@ func (app *Application) fleetLeaderRows(ctx context.Context, rows []db.ListFleet
 	for _, r := range rows {
 		row := fleetLeaderRow{
 			Place: r.Place, Kind: r.EntityKind, ID: r.EntityID, Fleets: r.Fleets, Kills: r.Kills, Deaths: r.Deaths,
-			ISK: formatISKShort(r.Isk), Points: r.Points,
+			ISK: formatISKShort(r.Isk), NoISK: r.Isk < 0.005, Points: r.Points,
 		}
 		switch r.EntityKind {
 		case "character":

@@ -44,7 +44,6 @@
   <div class="co-card-foot form-actions">
     <a class="btn" href="/fittings/?doctrine={{.ID}}#fit-editor">Open in fitting tool</a>
     {{if .EFT}}<button type="button" class="btn btn-quiet" data-copy data-copy-from="doctrine-eft-{{.ID}}">Copy fit text</button>{{end}}
-    {{if $.Doctrine.Keeps}}<form method="post" action="/doctrines/{{$.Doctrine.ID}}/fits/{{.ID}}/remove" class="inline-form doctrine-remove" data-confirm="Take {{.Name}} out of this doctrine?"><button type="submit" class="btn btn-quiet">Remove</button></form>{{end}}
   </div>
 </article>
 {{end}}
@@ -99,6 +98,15 @@
   <div class="form-actions"><a class="btn" href="/doctrines/fits/?owner={{.OwnerKey}}&amp;for={{.ID}}">From {{.Owner}}'s fits</a><a class="btn" href="/fittings/public/?for={{.ID}}">From public fits</a></div>
 </section>
 </div>
+{{end}}
+
+{{if .Fits}}
+<section class="l-panel co-card doctrine-out" aria-labelledby="doctrine-out-title">
+  <h3 id="doctrine-out-title">Take a fit out</h3>
+  <ul class="doctrine-out-list">
+    {{range .Fits}}<li>{{if .ShipTypeID}}<img src="{{typeRender .ShipTypeID 64}}" width="28" height="28" alt="" loading="lazy">{{end}}<span class="doctrine-out-name">{{.Name}}<small>{{.Ship}}{{if .Role}} · {{.Role}}{{end}}</small></span><form method="post" action="/doctrines/{{$.Doctrine.ID}}/fits/{{.ID}}/remove" class="inline-form doctrine-remove" data-confirm="Take {{.Name}} out of this doctrine?"><button type="submit" class="btn btn-quiet">Remove</button></form></li>{{end}}
+  </ul>
+</section>
 {{end}}
 
 <form method="post" action="/doctrines/{{.ID}}/save" class="l-panel co-card op-form form-card">

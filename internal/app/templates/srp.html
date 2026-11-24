@@ -143,7 +143,7 @@
   <thead><tr><th>Answered</th><th>Pilot</th><th>Ship</th><th>Fleet</th><th>Answer</th><th>By</th><th></th></tr></thead>
   <tbody>
   {{range $corp.Handled}}
-    <tr><td>{{.HandledAt}}</td><td>{{.Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td>
+    <tr><td>{{.HandledAt}}</td><td>{{.Pilot}}</td><td>{{template "srp-ship" .}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td>
       <td>{{if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}{{if .HandlerNote}} <small>{{.HandlerNote}}</small>{{end}}</td>
       <td>{{.HandledBy}}</td>
       <td><form method="post" action="/srp/{{.ID}}/decide" class="inline-form"><input type="hidden" name="owner" value="{{$corp.Key}}"><button type="submit" name="action" value="reopen" class="btn">Open again</button></form></td></tr>
@@ -183,7 +183,7 @@
   <thead><tr><th>Answered</th><th>Pilot</th><th>Ship</th><th>Fleet</th><th>Answer</th></tr></thead>
   <tbody>
   {{range $corp.Ledger}}
-    <tr><td>{{.HandledAt}}</td><td>{{.Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td>
+    <tr><td>{{.HandledAt}}</td><td>{{.Pilot}}</td><td>{{template "srp-ship" .}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td>
       <td>{{if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}</td></tr>
   {{end}}
   </tbody>

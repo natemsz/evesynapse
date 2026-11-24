@@ -137,7 +137,7 @@
       <h2>Active killers</h2>
       {{if $.Scan.Killers}}<ol class="sc-killers">
         {{range $.Scan.Killers}}<li>
-          <img src="https://images.evetech.net/characters/{{.ID}}/portrait?size=64" alt="" width="32" height="32" loading="lazy">
+          <img src="{{portrait .ID 64}}" alt="" width="32" height="32" loading="lazy">
           <span class="sc-killer-main"><a href="/intel/kills/?character={{.ID}}">{{.Name}}</a><span class="muted">{{.Org}}</span></span>
           <span class="sc-killer-n"><strong>{{.Kills}}</strong> <span class="muted">kills</span></span>
           <span class="sc-killer-last">{{.Ago}}{{if .SystemName}} · <span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.SystemName}}{{end}}</span>

@@ -73,7 +73,7 @@
         <div class="kb-kill-main">
           <a class="kb-kill-link" href="/intel/kill/{{.ID}}/">{{.ShipName}}</a>
           <div class="kb-party">
-            {{if .VictimIsStructure}}{{if .CorpID}}<img class="kb-face" src="https://images.evetech.net/corporations/{{.CorpID}}/logo?size=64" alt="" width="34" height="34" loading="lazy">{{end}}{{else}}<img class="kb-face" src="https://images.evetech.net/characters/{{.VictimID}}/portrait?size=64" alt="" width="34" height="34" loading="lazy">{{end}}
+            {{if .VictimIsStructure}}{{if .CorpID}}<img class="kb-face" src="https://images.evetech.net/corporations/{{.CorpID}}/logo?size=64" alt="" width="34" height="34" loading="lazy">{{end}}{{else}}<img class="kb-face" src="{{portrait .VictimID 64}}" alt="" width="34" height="34" loading="lazy">{{end}}
             <div class="kb-party-info">
               <span class="kb-role">Victim</span>
               <span class="kb-party-name">{{if .VictimIsStructure}}{{if .CorpID}}<a href="/intel/kills/?corporation={{.CorpID}}">{{.CorpName}}</a>{{end}}{{else}}<a href="/intel/kills/?character={{.VictimID}}">{{.VictimName}}</a>{{end}}</span>
@@ -82,7 +82,7 @@
           </div>
         </div>
         <div class="kb-party kb-atk">
-          {{if .FinalID}}<img class="kb-face" src="https://images.evetech.net/characters/{{.FinalID}}/portrait?size=64" alt="" width="34" height="34" loading="lazy">
+          {{if .FinalID}}<img class="kb-face" src="{{portrait .FinalID 64}}" alt="" width="34" height="34" loading="lazy">
           <div class="kb-party-info">
             <span class="kb-role">Attacker</span>
             <span class="kb-party-name"><a href="/intel/kills/?character={{.FinalID}}">{{.FinalName}}</a></span>
@@ -160,7 +160,7 @@
   </section>{{end}}
   {{if .Top.Pilots}}<section class="kb-top">
     <h2>Top pilots</h2>
-    <ol>{{range .Top.Pilots}}<li><a href="/intel/kills/?character={{.ID}}"><img src="https://images.evetech.net/characters/{{.ID}}/portrait?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+    <ol>{{range .Top.Pilots}}<li><a href="/intel/kills/?character={{.ID}}"><img src="{{portrait .ID 32}}" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
   </section>{{end}}
   {{if .Top.Systems}}<section class="kb-top">
     <h2>Hottest systems</h2>

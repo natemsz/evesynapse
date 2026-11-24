@@ -257,10 +257,10 @@ type fleetHandView struct {
 
 // characterPortrait is a character's portrait, empty for an invented one.
 func characterPortrait(id int64) string {
-	if id <= 0 || demoInventedPilot(id) {
+	if id <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("https://images.evetech.net/characters/%d/portrait?size=64", id)
+	return portraitURL(id, 64)
 }
 
 // fleetWhoOf names one of the fleet's pilots.

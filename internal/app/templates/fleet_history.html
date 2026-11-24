@@ -17,10 +17,10 @@
     {{if .Rows}}
     <div class="tw">
     <table>
-      <thead><tr><th>Pilot</th><th>Last 30 days</th><th>Last 90 days</th><th>Last fleet</th></tr></thead>
+      <thead><tr><th>Pilot</th><th class="num">Last 30 days</th><th class="num">Last 90 days</th><th class="num">Last fleet</th></tr></thead>
       <tbody>
       {{range .Rows}}
-        <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{.Recent}}</td><td>{{.Total}}</td><td>{{.LastOp}}</td></tr>
+        <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td class="num{{if not .Recent}} fl-zero{{end}}">{{.Recent}}</td><td class="num">{{.Total}}</td><td class="num">{{.LastOp}}</td></tr>
       {{end}}
       </tbody>
     </table>

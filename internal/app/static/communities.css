@@ -71,8 +71,9 @@ search.l-head-act { display: block; flex: 0 1 22rem; min-width: 0; }
 
 /* The directory: listed communities as cards, the head holding the
    search and the way to start one. */
-.cm-page .l-head-act { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.cm-page .l-head-act search { flex: 1 1 16rem; min-width: 0; }
+.cm-page .l-head-act { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-2); }
+.cm-page .l-head-act search { flex: 0 1 18rem; min-width: 11rem; }
+.cm-page .l-head-act > .btn { flex: none; }
 .cm-note { margin: 0; color: var(--muted); }
 .cm-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
 .cm-card { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; padding: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-inset); }

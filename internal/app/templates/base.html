@@ -354,6 +354,7 @@
 {{end}}
 <script src="/static/app.js?v={{.AssetVersion}}" defer></script>
 <script src="/static/swap.js?v={{.AssetVersion}}" defer></script>
+{{if eq .NavPage "home.html"}}<script src="/static/home.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .Section "fitting"}}<script src="/static/fittip.js?v={{.AssetVersion}}" defer></script><script src="/static/fitrange.js?v={{.AssetVersion}}" defer></script><script src="/static/fitramp.js?v={{.AssetVersion}}" defer></script><script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "planner.html"}}<script src="/static/plan.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "character.html"}}<script src="/static/overview.js?v={{.AssetVersion}}" defer></script>{{end}}

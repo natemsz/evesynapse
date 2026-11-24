@@ -1,8 +1,8 @@
-// Tests for the home grid helpers in ../static/app.js: the size
+// Tests for the home grid helpers in ../static/home.js: the size
 // bounds a module may be offered (homeSizeAllowed: inside its
 // floor and ceiling both) and the two-across fill plan
 // (homeFillPlan: which module closes a row short and widens to
-// finish it). app.js runs under a small DOM stub; only the pure
+// finish it). app.js and home.js run under a small DOM stub; only the pure
 // helpers it exports for node are exercised.
 "use strict";
 const test = require("node:test");
@@ -104,9 +104,12 @@ function loadAppJS() {
   global.ResizeObserver = FakeRO;
   global.addEventListener = function () {};
   global.removeEventListener = function () {};
-  const path = require.resolve("../static/app.js");
-  delete require.cache[path];
-  return require(path);
+  const appPath = require.resolve("../static/app.js");
+  delete require.cache[appPath];
+  require(appPath);
+  const homePath = require.resolve("../static/home.js");
+  delete require.cache[homePath];
+  return require(homePath);
 }
 
 const app = loadAppJS();

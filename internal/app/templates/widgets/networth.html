@@ -1,30 +1,38 @@
-{{define "w-networth-all"}}{{$cap := .Cap}}
-{{/* Two rows high or more, the history chart is part of the summary;
-     one row high it waits behind More. */}}
-{{$chartUp := ge .Size.H 2}}
-{{with .Data}}
-{{if .Any}}
-<p class="isk">{{iskFig .Total}}</p>
-<div class="kpis kpis-small">
-  {{if .Wallet}}<div class="kpi"><span class="kpi-k">Wallets</span><span class="kpi-v">{{iskHero .Wallet}}</span></div>{{end}}
-  {{if .AssetsKnown}}<div class="kpi"><span class="kpi-k">Assets</span><span class="kpi-v">{{iskHero .Assets}}</span></div>{{end}}
-  {{if .Escrow}}<div class="kpi"><span class="kpi-k">Order escrow</span><span class="kpi-v">{{iskHero .Escrow}}</span></div>{{end}}
+{{/* Net Worth: the worked example of a widget on the kit. Five forms,
+     each a w-body of kit parts; none reads its size. */}}
+
+{{define "w-networth-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-lead" .Lead}}
+{{with .Spark}}{{template "w-spark" .}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-networth-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{if .Any}}
+<div class="w-side">{{template "w-lead" .Lead}}{{template "w-note" .Note}}</div>
+{{template "w-networth-history" .}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-networth-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-lead" .Lead}}
+{{with .Split}}{{template "w-segbar" .}}{{end}}
+{{if .Line}}{{template "w-chart" .Line}}{{else if .HistoryBuilding}}{{template "w-empty" .Waiting}}{{end}}
+{{template "w-note" .Note}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-networth-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+<div class="w-head">{{template "w-lead" .Lead}}{{with .Tiles}}{{template "w-tiles" .}}{{end}}</div>
+{{template "w-networth-history" .}}
+{{template "w-note" .Note}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-networth-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+<div class="w-head">{{template "w-lead" .Lead}}{{with .Tiles}}{{template "w-tiles" .}}{{end}}</div>
+<div class="w-cols">
+{{template "w-networth-history" .}}
+{{with .Ranked}}<div class="w-aside"><h4 class="w-sub">{{$.Data.RankedBy}}</h4>{{template "w-rank" .}}</div>{{end}}
 </div>
-{{if and $chartUp .History}}
-<div class="nw-chart">{{template "balance-chart" .History}}</div>
-{{end}}
-<div data-wmore>
-<p><small>Estimate{{if .AsOf}} · data as of {{.AsOf}}{{end}}</small></p>
-{{if .AssetsNote}}<p><small>{{.AssetsNote}}</small></p>{{end}}
-{{if .History}}
-{{if not $chartUp}}{{template "balance-chart" .History}}{{end}}
-<p><small>Net worth over time, from the daily samples.</small></p>
-{{else if .HistoryBuilding}}
-<p><small>Net worth history has started. A point is recorded each day.</small></p>
-{{end}}
-</div>
-{{else}}
-<p><small>Balances appear here once your characters have synced.</small></p>
-{{end}}
-{{end}}
-{{end}}
+{{template "w-note" .Note}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* The stacked history the wide, medium and large forms draw, or
+     what its place says while history builds. */}}
+{{define "w-networth-history"}}{{if .Chart}}{{template "w-chart" .Chart}}{{else if .HistoryBuilding}}{{template "w-empty" .Waiting}}{{end}}{{end}}

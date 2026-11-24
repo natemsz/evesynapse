@@ -184,7 +184,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 	// 500 = 4,000.50. Estimate dated by the oldest input.
 	mustContain(t, "/", body,
 		"Net Worth", "4,000.50", "3,000.50", "500.00",
-		"Estimate", "data as of",
+		"Estimate as of",
 	)
 
 	// Industry + market cards.
@@ -290,7 +290,7 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET / after toggle: status %d", code)
 	}
-	for _, gone := range []string{"<h3>Market</h3>"} {
+	for _, gone := range []string{`data-widget="market"`} {
 		if strings.Contains(body, gone) {
 			t.Errorf("market widget still rendered after toggle off (body has %q)", gone)
 		}
@@ -308,8 +308,8 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET / after move: status %d", code)
 	}
-	nwAt := strings.Index(body, "<h3>Net Worth</h3>")
-	piAt := strings.Index(body, "<h3>Planetary Industry</h3>")
+	nwAt := strings.Index(body, `data-widget="networth"`)
+	piAt := strings.Index(body, `data-widget="pi"`)
 	if nwAt < 0 || piAt < 0 || nwAt > piAt {
 		t.Errorf("net worth should render above planetary industry after move-up (nw=%d pi=%d)", nwAt, piAt)
 	}
@@ -332,7 +332,7 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET / after reset: status %d", code)
 	}
-	mustContain(t, "/", body, "<h3>Market</h3>", "Fleet Overview")
+	mustContain(t, "/", body, `data-widget="market"`, "Fleet Overview")
 
 	// A corrupted layout (unknown ids, dupes) is normalized on
 	// load: only the real widget renders.
@@ -346,7 +346,7 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 		t.Fatalf("GET / with bad layout: status %d", code)
 	}
 	mustContain(t, "/", body, "Fleet Overview")
-	if strings.Contains(body, "<h3>Market</h3>") || strings.Contains(body, "<h3>Net Worth</h3>") {
+	if strings.Contains(body, `data-widget="market"`) || strings.Contains(body, `data-widget="networth"`) {
 		t.Error("corrupted layout rendered widgets that were not in it")
 	}
 
@@ -764,8 +764,8 @@ func layoutTilesGrid(items []homeLayoutItem) bool {
 // everything choice and the demo layout, starts with the fixed head
 // at its fixed sizes, stays inside every widget's size bounds, and
 // tiles the grid with no gaps. Single-playstyle specialists stand
-// expanded past their catalog size (Net Worth is already at its
-// maximum catalog size), and fills stand at catalog size.
+// expanded past their catalog size (Net Worth stands at its
+// default size), and fills stand at catalog size.
 func TestHomePresetLayoutsTile(t *testing.T) {
 	activities := []string{"pilots", "market", "industry", "corporation", "fitting"}
 	var choices [][]string
@@ -842,7 +842,7 @@ func TestHomePresetLayoutsTile(t *testing.T) {
 			def, _ := widgetDefFor(id)
 			if id == widgetNetWorth {
 				if item.W != def.Default.W || item.H != def.Default.H {
-					t.Errorf("%s preset sizes networth at %dx%d, want its maximum %dx%d", activity, item.W, item.H, def.Default.W, def.Default.H)
+					t.Errorf("%s preset sizes networth at %dx%d, want its default %dx%d", activity, item.W, item.H, def.Default.W, def.Default.H)
 				}
 			} else if item.W*item.H <= def.Default.W*def.Default.H {
 				t.Errorf("%s preset sizes specialist %q at catalog size %dx%d, want expanded", activity, id, item.W, item.H)
@@ -1049,7 +1049,7 @@ func TestWidgetSizeBounds(t *testing.T) {
 		wantW, wantH int
 	}{
 		{homeLayoutItem{ID: widgetGlance, W: 3, H: 3}, 3, 1},   // same width, nearest height
-		{homeLayoutItem{ID: widgetNetWorth, W: 3, H: 3}, 1, 2}, // nothing covers it: the nearest size
+		{homeLayoutItem{ID: widgetNetWorth, W: 2, H: 4}, 2, 3}, // same width, nearest height
 		{homeLayoutItem{ID: widgetIndustry, W: 3, H: 3}, 2, 3}, // nothing covers it: the nearest size
 		{homeLayoutItem{ID: widgetFleet, W: 1, H: 1}, 2, 2},    // the smallest size that covers it
 		{homeLayoutItem{ID: widgetFleet, W: 3, H: 3}, 3, 3},    // a declared size stands

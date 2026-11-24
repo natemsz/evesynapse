@@ -10,6 +10,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 )
 
 // ---------------------------------------------------------------------------
@@ -223,6 +224,7 @@ func newKPITrend(now, then float64, since string) *kpiTrend {
 		Up:    pct > 0,
 		Delta: fmt.Sprintf("%s (%+.1f%%)", compactISKDelta(now-then), pct),
 		Text:  fmt.Sprintf("%s ISK (%+.1f%%) over %s", compactISKDelta(now-then), pct, since),
+		Since: since,
 	}
 }
 
@@ -243,16 +245,41 @@ func compactISKDelta(v float64) string {
 	return fmt.Sprintf("%s%.0f", sign, v)
 }
 
-// attachNetWorthHistory fills the home Net worth module's
-// history from the user's sampler rows: a chart once two daily
-// totals exist, the "building" state before that.
+// netWorthHistoryDays is how many sampled days the home reads by
+// default: a month, and the day before it for the 30-day change.
+const netWorthHistoryDays = 31
+
+// netWorthDays reads the account's last n sampled days (at most a
+// year), oldest first, each split into ISK on hand and the rest.
+func (app *Application) netWorthDays(ctx context.Context, userID int64, n int) ([]netWorthDay, error) {
+	rows, err := app.queries.ListUserNetWorthSplitDays(ctx, db.ListUserNetWorthSplitDaysParams{UserID: userID, Days: int32(n)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]netWorthDay, 0, len(rows))
+	for i := len(rows) - 1; i >= 0; i-- { // newest first
+		t, err := time.Parse(markethistory.DateLayout, rows[i].Day)
+		if err != nil {
+			continue
+		}
+		assets := rows[i].Total - rows[i].Isk
+		if assets < 0 { // a balance read after the net worth was computed
+			assets = 0
+		}
+		out = append(out, netWorthDay{At: t, ISK: rows[i].Isk, Assets: assets})
+	}
+	return out, nil
+}
+
+// attachNetWorthHistory fills the home Net Worth widget's history from
+// the account's daily samples: the last month of days and the trends
+// beside the live figures, or the "building" state before two days.
 func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWidget, userID int64) {
-	rows, err := app.queries.ListUserWalletHistory(ctx, userID)
+	days, err := app.netWorthDays(ctx, userID, netWorthHistoryDays)
 	if err != nil {
 		logging.Errorf("net worth history for user %d: %v", userID, err)
 		return
 	}
-	days := netWorthBreakdownDays(rows)
 	if base, ok := trendBaseline(days, time.Now()); ok && w.Any {
 		since := trendSpan(base.At, time.Now())
 		w.TotalTrend = newKPITrend(w.totalNow, base.Total(), since)
@@ -263,14 +290,6 @@ func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWi
 			w.AssetsTrend = newKPITrend(w.assetsNow, base.Assets, since)
 		}
 	}
-	if len(days) >= 2 {
-		if chart, ok := buildNetWorthChart(days); ok {
-			c := chart
-			w.History = &c
-		}
-		return
-	}
-	if w.Any {
-		w.HistoryBuilding = true
-	}
+	w.days = days
+	w.HistoryBuilding = w.Any && len(days) < 2
 }

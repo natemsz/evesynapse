@@ -1,0 +1,84 @@
+{{/* The home widget kit: the parts every widget form builds from. Each
+     part fills the box its card gives it (home.css); a form picks parts
+     and never reads its size. The Go types are in home_widget_kit.go
+     and home_widget_chart.go.
+
+     A form's body is one <div class="w-body {{.BodyClass}}">: a column
+     whose chart takes the room the other parts leave. Add w-split to
+     put the first part (or a .w-side) beside the rest when the card is
+     much wider than tall. */}}
+
+{{/* w-lead (wLead): the hero figure, shown short with the whole figure
+     as its title, and how it changed. */}}
+{{define "w-lead"}}<div class="w-lead">
+  {{if .Label}}<span class="w-lead-label">{{.Label}}</span>{{end}}
+  <span class="w-lead-value" title="{{.Full}}">{{if .Href}}<a href="{{.Href}}">{{.Value}}</a>{{else}}{{.Value}}{{end}}{{if .Unit}} <small>{{.Unit}}</small>{{end}}</span>
+  {{if .Change}}<span class="w-lead-change {{.Tone}}" title="{{.ChangeText}}"><span class="w-arrow" aria-hidden="true">{{if .Up}}&#9650;{{else}}&#9660;{{end}}</span> {{.Change}}{{if .Sub}} <small>{{.Sub}}</small>{{end}}</span>{{else if .Sub}}<span class="w-lead-sub">{{.Sub}}</span>{{end}}
+</div>{{end}}
+
+{{/* w-tiles ([]wTile): a row of stat tiles. Where rows are fixed, a
+     second row of tiles that would not fit is not drawn. */}}
+{{define "w-tiles"}}<div class="w-tiles">{{range .}}<div class="l-stat w-tile"><span class="l-stat-label">{{.Label}}</span><span class="l-stat-value" title="{{.Full}}">{{if .Href}}<a href="{{.Href}}">{{.Value}}</a>{{else}}{{.Value}}{{end}}{{if .Unit}} <small>{{.Unit}}</small>{{end}}</span>{{if .Sub}}<span class="l-stat-sub">{{.Sub}}</span>{{end}}</div>{{end}}</div>{{end}}
+
+{{/* w-chart (*wChart): a line or stacked area chart that fills its
+     slot. A legend for two or more series, value ticks on the
+     gridlines (hidden on a short chart), dates under it, the shared
+     chart tooltip, and a visually hidden table twin. */}}
+{{define "w-chart"}}<figure class="w-chart pchart" data-chart-scrub="true">
+{{if .Legend}}<figcaption class="w-legend">{{range .Series}}<span class="w-key"><span class="w-sw w-s{{.Slot}}" aria-hidden="true"></span>{{.Name}}</span>{{end}}</figcaption>{{end}}
+<div class="w-plot">
+<svg viewBox="0 0 {{printf "%.0f" .W}} {{printf "%.0f" .H}}" preserveAspectRatio="none" role="img" aria-label="{{.Label}}">
+{{range .Grid}}<line class="w-grid" x1="0" x2="{{printf "%.0f" $.W}}" y1="{{printf "%.1f" .}}" y2="{{printf "%.1f" .}}" vector-effect="non-scaling-stroke"/>{{end}}
+{{range .Series}}<polygon class="w-area w-s{{.Slot}}" points="{{.Area}}"/>{{end}}
+{{range .Series}}<polyline class="w-line w-s{{.Slot}}" points="{{.Line}}" vector-effect="non-scaling-stroke"/>{{end}}
+{{range .Hits}}<rect class="cdot w-hit" x="{{printf "%.1f" .X}}" y="0" width="{{printf "%.1f" .W}}" height="{{printf "%.0f" $.H}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
+</svg>
+<div class="w-yticks" aria-hidden="true">{{range .YTicks}}<span data-top="{{printf "%.1f" .Pos}}">{{.Label}}</span>{{end}}</div>
+</div>
+<div class="w-xticks" aria-hidden="true">{{range .XTicks}}<span class="w-x-{{.Anchor}}" data-left="{{printf "%.1f" .Pos}}">{{.Label}}</span>{{end}}</div>
+<div class="ctip" hidden></div>
+{{template "w-twin" .Table}}
+</figure>{{end}}
+
+{{/* w-spark (*wChart): a small line strip with no labels, filling its
+     slot, with the same tooltip and table twin. */}}
+{{define "w-spark"}}<div class="w-spark pchart" data-chart-scrub="true">
+<svg viewBox="0 0 {{printf "%.0f" .W}} {{printf "%.0f" .H}}" preserveAspectRatio="none" role="img" aria-label="{{.Label}}">
+{{range .Series}}<polygon class="w-area w-s{{.Slot}}" points="{{.Area}}"/><polyline class="w-line w-s{{.Slot}}" points="{{.Line}}" vector-effect="non-scaling-stroke"/>{{end}}
+{{range .Hits}}<rect class="cdot w-hit" x="{{printf "%.1f" .X}}" y="0" width="{{printf "%.1f" .W}}" height="{{printf "%.0f" $.H}}" tabindex="-1" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
+</svg>
+<div class="ctip" hidden></div>
+{{template "w-twin" .Table}}
+</div>{{end}}
+
+{{/* w-twin (wTable): the table every chart carries for readers who
+     cannot see it. */}}
+{{define "w-twin"}}<div class="visually-hidden"><table data-cards="off" data-nosort><caption>{{.Caption}}</caption><thead><tr>{{range .Head}}<th scope="col">{{.}}</th>{{end}}</tr></thead><tbody>{{range .Rows}}<tr>{{range $i, $c := .}}{{if eq $i 0}}<th scope="row">{{$c}}</th>{{else}}<td>{{$c}}</td>{{end}}{{end}}</tr>{{end}}</tbody></table></div>{{end}}
+
+{{/* w-segbar (*wSegbar): one whole split into its parts, a thin bar
+     with each part's name and figure under it. */}}
+{{define "w-segbar"}}<div class="w-segbar">
+<div class="w-segs" role="img" aria-label="{{.Label}}: {{range $i, $p := .Parts}}{{if $i}}, {{end}}{{$p.Name}} {{$p.Full}} ({{$p.ShareText}}){{end}}">{{range .Parts}}{{if gt .Share 0.0}}<span class="w-seg w-s{{.Slot}}" data-w="{{printf "%.2f" .Share}}" title="{{.Name}}: {{.Full}}, {{.ShareText}}"></span>{{end}}{{end}}</div>
+<ul class="w-segkeys" aria-hidden="true">{{range .Parts}}<li><span class="w-sw w-s{{.Slot}}"></span><span class="w-segname">{{.Name}}</span><span class="w-segval" title="{{.Full}}">{{.Text}}</span></li>{{end}}</ul>
+</div>{{end}}
+
+{{/* w-rank (*wRanked): ranked bars, largest first. The list fits its
+     card like any list (data-w-fit) and ends in "N more". */}}
+{{define "w-rank"}}<ol class="w-rank" data-w-fit aria-label="{{.Label}}">{{range .Rows}}<li><span class="w-rank-name">{{if .Link}}{{.Link}}{{else}}{{.Name}}{{end}}</span><span class="w-rank-val" title="{{.Full}}">{{.Text}}</span><span class="w-rank-bar" aria-hidden="true"><span class="w-s1" data-w="{{printf "%.1f" .Pct}}"></span></span></li>{{end}}</ol>{{end}}
+
+{{/* w-meters: name, bar and figure rows (slots used of available,
+     queue length, fuel days). Each row has .Name, .Pct (0 to 100),
+     .Text and .Tone ("", "warn" or "bad"); the rows fit like a list. */}}
+{{define "w-meters"}}<ul class="w-meters" data-w-fit>{{range .}}<li class="{{.Tone}}"><span class="w-meter-name">{{.Name}}</span><span class="w-meter-val">{{.Text}}</span><span class="l-meter w-meter" aria-hidden="true"><span data-w="{{printf "%.1f" .Pct}}"></span></span></li>{{end}}</ul>{{end}}
+
+{{/* w-more is not a partial: home.js writes the "3 more on the Jobs
+     page" line after every data-w-fit list that has rows it does not
+     show, linking to the card's page (data-href, data-href-name). */}}
+
+{{/* w-note (string): the muted as-of or provenance line, left out on a
+     short card. */}}
+{{define "w-note"}}<p class="w-note"><small>{{.}}</small></p>{{end}}
+
+{{/* w-empty (wEmpty): one sentence and the next step, centred in the
+     body. */}}
+{{define "w-empty"}}<div class="w-empty"><p>{{.Text}}{{if .Href}} <a href="{{.Href}}">{{.Step}}</a>{{end}}</p></div>{{end}}

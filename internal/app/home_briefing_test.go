@@ -90,7 +90,7 @@ func seedBriefingFixture(t *testing.T, app *Application, q *db.Queries, userID i
 // briefingSection slices the briefing module out of a home body.
 func briefingSection(t *testing.T, body string) string {
 	t.Helper()
-	start := strings.Index(body, `<h3>Briefing</h3>`)
+	start := strings.Index(body, `data-widget="briefing"`)
 	if start < 0 {
 		t.Fatal("briefing module missing from home body")
 	}
@@ -266,7 +266,7 @@ func TestBriefingAnchorUntouchedWhenModuleRemoved(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	if strings.Contains(body, "<h3>Briefing</h3>") {
+	if strings.Contains(body, `data-widget="briefing"`) {
 		t.Error("briefing rendered despite being removed from the layout")
 	}
 	raw, err := q.GetUserBriefingAnchor(ctx, user.ID)

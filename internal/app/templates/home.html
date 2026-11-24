@@ -40,7 +40,16 @@
 {{end}}
 </div>
 </div>
-{{if .Home.Customize}}<p class="visually-hidden" role="status" data-home-status></p>{{end}}
+{{if .Home.Customize}}<p class="visually-hidden" role="status" data-home-status></p>{{else}}
+<div class="modal-backdrop" id="w-expand-modal" hidden>
+  <div class="modal w-expand-modal" role="dialog" aria-modal="true" aria-labelledby="w-expand-title">
+    <div class="modal-head">
+      <h2 id="w-expand-title" data-w-expand-title></h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
+    </div>
+    <div class="home-grid w-expand-box" data-w-expand-box></div>
+  </div>
+</div>{{end}}
 
 {{if .Home.Customize}}
 <div class="modal-backdrop" id="add-module-modal" hidden>

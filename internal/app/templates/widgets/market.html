@@ -1,7 +1,7 @@
 {{define "w-market-all"}}{{$cap := .Cap}}
 {{$customize := .Customize}}
 {{with .Data}}
-<div data-wmore>
+<div data-w-detail>
 <form class="widget-scope" method="post" action="/home/widget-config">
   <input type="hidden" name="widget" value="market">
   <input type="hidden" name="next" value="{{if $customize}}/?customize=1{{else}}/{{end}}">
@@ -32,7 +32,7 @@
 {{if .Health}}<p><small>{{.Health}}</small></p>{{end}}
 {{end}}
 {{if eq .Merge "per-character"}}
-<div class="tw" data-wmore>
+<div class="tw" data-w-detail>
 <table>
   <thead><tr><th>Character</th><th>Orders</th><th>Soonest expiry</th></tr></thead>
   <tbody>
@@ -42,7 +42,7 @@
 </div>
 {{else if eq .Merge "both"}}
 {{if .Expiring}}
-<div class="tw" data-wmore>
+<div class="tw" data-w-detail>
 <table>
   <thead><tr><th>Character</th><th>Item</th><th>Expires</th></tr></thead>
   <tbody>

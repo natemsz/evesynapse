@@ -211,7 +211,8 @@ func TestWalletGraphStatesAndFragment(t *testing.T) {
 	}
 }
 
-// Home module: two sampled days chart; one day reads "building".
+// The home Net Worth widget's history: one sampled day reads
+// "building"; two are a chartable month.
 func TestAttachNetWorthHistory(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
@@ -226,27 +227,24 @@ func TestAttachNetWorthHistory(t *testing.T) {
 		sql.NullFloat64{Float64: 1000, Valid: true})
 	w := &netWorthWidget{Any: true}
 	app.attachNetWorthHistory(ctx, w, user.ID)
-	if w.History != nil || !w.HistoryBuilding {
-		t.Fatalf("one day: history=%v building=%v, want chart nil + building", w.History != nil, w.HistoryBuilding)
+	if len(w.days) != 1 || !w.HistoryBuilding {
+		t.Fatalf("one day: days=%d building=%v, want 1 day + building", len(w.days), w.HistoryBuilding)
 	}
 
 	seedWalletSample(t, q, user.ID, fixtureCharA, "2026-03-02", 120,
 		sql.NullFloat64{Float64: 1400, Valid: true})
 	w = &netWorthWidget{Any: true}
 	app.attachNetWorthHistory(ctx, w, user.ID)
-	if w.History == nil || w.HistoryBuilding {
-		t.Fatalf("two days: history=%v building=%v, want chart + no building note", w.History != nil, w.HistoryBuilding)
-	}
-	if w.History.Label != "Net worth over time, split into ISK and assets" {
-		t.Fatalf("chart label = %q", w.History.Label)
+	if len(w.days) != 2 || w.HistoryBuilding {
+		t.Fatalf("two days: days=%d building=%v, want 2 days + no building note", len(w.days), w.HistoryBuilding)
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("net worth history made %d outbound calls, want 0", got)
 	}
 
-	// Full-widget path: buildNetWorth carries the chart too.
+	// Full-widget path: buildNetWorth carries the days too.
 	w2 := app.buildNetWorth(ctx, user.ID, nil)
-	if w2.History == nil {
-		t.Fatal("buildNetWorth did not attach the history chart")
+	if len(w2.days) != 2 {
+		t.Fatalf("buildNetWorth carried %d days, want 2", len(w2.days))
 	}
 }

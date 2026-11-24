@@ -362,6 +362,18 @@ WHERE user_id = $1 AND net_worth IS NOT NULL
 GROUP BY day
 ORDER BY day DESC
 LIMIT 31;
+-- name: ListUserNetWorthSplitDays :many
+-- The account's net worth per sampled day, newest first, split into
+-- ISK on hand and the total, for the home Net Worth charts. A
+-- character counts toward a day only when it has a net worth that
+-- day, and its balance joins the ISK part only then, so the parts
+-- always add up to the total. At most a year of days.
+SELECT day, SUM(balance)::float8 AS isk, SUM(net_worth)::float8 AS total
+FROM wallet_history
+WHERE user_id = sqlc.arg(user_id) AND net_worth IS NOT NULL
+GROUP BY day
+ORDER BY day DESC
+LIMIT LEAST(sqlc.arg(days)::int, 366);
 
 -- ---------------------------------------------------------------------
 -- Widget configuration (schema 020): one JSON blob per

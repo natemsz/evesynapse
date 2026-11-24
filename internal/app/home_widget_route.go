@@ -71,7 +71,8 @@ func (app *Application) handleHomeWidget(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	q := r.URL.Query()
-	if q.Get("view") == "expand" {
+	expand := q.Get("view") == "expand"
+	if expand {
 		big := def.largest()
 		item.W, item.H = big.W, big.H
 	} else if wv, werr := strconv.Atoi(q.Get("w")); werr == nil {
@@ -87,7 +88,7 @@ func (app *Application) handleHomeWidget(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	card, shown := app.buildHomeWidget(ctx, ts, def, item, shared, q.Get("customize") == "1", viewerChars(chars))
+	card, shown := app.buildHomeWidget(ctx, ts, def, item, shared, q.Get("customize") == "1" && !expand, expand, viewerChars(chars))
 	w.Header().Set("Cache-Control", "no-store")
 	if !shown {
 		w.WriteHeader(http.StatusNoContent)

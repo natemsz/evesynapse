@@ -10,8 +10,9 @@ import (
 // without naming it anywhere else: a title, a description, a known
 // category and manifest feature, a page to link to (the Briefing has
 // none), a module that exists when it needs one, a default among its
-// sizes, no size in two forms, and a template for every form. The
-// catalog lists them by category, then title.
+// sizes, no size in two forms, a template for every form, and option
+// defaults among their choices. The catalog lists them by category,
+// then title.
 func TestHomeWidgetDeclarationsHoldTheirContract(t *testing.T) {
 	ts, err := homeTemplateSet()
 	if err != nil {
@@ -67,6 +68,11 @@ func TestHomeWidgetDeclarationsHoldTheirContract(t *testing.T) {
 			}
 			if ts.Lookup("w-"+id+"-"+f.Name) == nil {
 				t.Errorf("widget %q form %q has no template w-%s-%s", id, f.Name, id, f.Name)
+			}
+		}
+		for _, o := range def.Options {
+			if o.Label == "" || !o.allows(o.Default) {
+				t.Errorf("widget %q option %q needs a label and a default among its choices", id, o.Key)
 			}
 		}
 	}

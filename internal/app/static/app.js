@@ -1140,41 +1140,19 @@
   // --- Expanders -------------------------------------------------
   // One mechanism for every summary/detail pair. A detail block
   // carries data-wmore; its control carries data-expand naming the
-  // block's id. Home modules get theirs here: a module whose markup
-  // has a detail block rests on its summary, with a More/Less
-  // toggle in its heading, and takes its whole grid row while
-  // open. Table rows with a detail row of their own (the fleet
+  // block's id. Table rows with a detail row of their own (the fleet
   // overview) render their control server-side and use the same
-  // switch. Without JavaScript nothing is hidden: every detail
-  // block simply renders open. Which modules are open is a
-  // per-browser convenience, remembered in localStorage.
-  var EXPANDED_KEY = "evesynapse.home.expanded";
-  function readExpanded() {
-    try {
-      var v = JSON.parse(window.localStorage.getItem(EXPANDED_KEY) || "[]");
-      return Array.isArray(v) ? v : [];
-    } catch (e) { return []; }
-  }
-  function rememberExpanded(id, open) {
-    var ids = readExpanded().filter(function (x) { return x !== id; });
-    if (open) ids.push(id);
-    try { window.localStorage.setItem(EXPANDED_KEY, JSON.stringify(ids)); } catch (e) { /* private mode */ }
-  }
+  // switch. Without JavaScript nothing is hidden: every detail block
+  // simply renders open. Home widgets do not use it: their cards are
+  // exactly their cells, and Expand (home.js) shows a widget's
+  // largest form instead.
   var expandSeq = 0;
   function setExpanded(ctrl, panels, open) {
     for (var p = 0; p < panels.length; p++) panels[p].hidden = !open;
     ctrl.setAttribute("aria-expanded", open ? "true" : "false");
-    if (ctrl.classList.contains("cardexpand")) {
-      ctrl.textContent = open ? "Less" : "More";
-    }
     var owner = ctrl.getAttribute("data-expand-owner");
     var ownerEl = owner ? document.getElementById(owner) : null;
     if (ownerEl) ownerEl.classList.toggle("expanded", open);
-    var card = ctrl.closest(".card[data-widget]");
-    if (card && ctrl.classList.contains("cardexpand")) {
-      card.classList.toggle("expanded", open);
-      rememberExpanded(card.getAttribute("data-widget"), open);
-    }
   }
   function bindExpander(ctrl, panels, open) {
     if (ctrl.hasAttribute("data-expand-bound")) return;
@@ -1192,28 +1170,6 @@
     });
   }
   function initExpanders(root) {
-    // Customize shows every module whole: it is about arranging. In
-    // fixed rows a card is exactly its cells, so its lists fit the
-    // card instead (home.js) and nothing opens in place.
-    var grid = root.querySelector ? root.querySelector(".home-grid:not(.home-custom):not([data-rows=\"fixed\"])") : null;
-    var remembered = readExpanded();
-    if (grid) {
-      var cards = grid.querySelectorAll(".card[data-widget]");
-      for (var i = 0; i < cards.length; i++) {
-        var card = cards[i];
-        // Every detail block in the module: whole blocks, and the
-        // rows or items past the summary, each marked on its own.
-        var panels = card.querySelectorAll("[data-wmore]");
-        var heading = card.querySelector(":scope > h2, :scope > h3");
-        if (!panels.length || !heading || heading.querySelector(".cardexpand")) continue;
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "cardexpand";
-        heading.appendChild(btn);
-        card.classList.add("has-expand");
-        bindExpander(btn, panels, remembered.indexOf(card.getAttribute("data-widget")) !== -1);
-      }
-    }
     var ctrls = root.querySelectorAll ? root.querySelectorAll("[data-expand]") : [];
     for (var j = 0; j < ctrls.length; j++) {
       var target = document.getElementById(ctrls[j].getAttribute("data-expand"));
@@ -3475,7 +3431,7 @@
   // percentages, "1.2B") sorts numerically, else as text. A row's
   // detail rows (rows that are one wide cell, like the fleet table's)
   // move with it, and in a capped widget the rows past the cap
-  // (data-wmore) are re-marked by position. A row marked
+  // (data-w-over) are re-marked by position. A row marked
   // data-sort-barrier is a group header instead: it never moves and
   // sorting happens inside each group it bounds. data-nosort opts a
   // table out; empty headers do nothing.
@@ -3517,7 +3473,7 @@
       if (single && seg.groups.length) seg.groups[seg.groups.length - 1].push(row);
       else seg.groups.push([row]);
     });
-    var capped = body.querySelectorAll("tr[data-wmore]").length;
+    var capped = body.querySelectorAll("tr[data-w-over]").length;
     var heads = [];
     segments.forEach(function (seg) {
       var groups = seg.groups;
@@ -3542,8 +3498,8 @@
     });
     if (capped) {
       heads.forEach(function (row, i) {
-        if (i >= heads.length - capped) row.setAttribute("data-wmore", "");
-        else row.removeAttribute("data-wmore");
+        if (i >= heads.length - capped) row.setAttribute("data-w-over", "");
+        else row.removeAttribute("data-w-over");
       });
     }
     Array.prototype.forEach.call(th.parentNode.cells, function (c) { c.removeAttribute("aria-sort"); });

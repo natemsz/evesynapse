@@ -274,6 +274,43 @@ func (q *Queries) ListSnapshotStamps(ctx context.Context, arg ListSnapshotStamps
 	return items, nil
 }
 
+const listUserTopAssetLocations = `-- name: ListUserTopAssetLocations :many
+SELECT location_id, MAX(location_type)::text AS location_type, SUM(est_value)::float8 AS est_value
+FROM asset_location_values
+WHERE user_id = $1
+GROUP BY location_id
+ORDER BY SUM(est_value) DESC, location_id
+LIMIT 8
+`
+
+type ListUserTopAssetLocationsRow struct {
+	LocationID   int64   `json:"location_id"`
+	LocationType string  `json:"location_type"`
+	EstValue     float64 `json:"est_value"`
+}
+
+// The account's most valuable places, summed over its characters,
+// highest first, for the home Net Worth split by location.
+func (q *Queries) ListUserTopAssetLocations(ctx context.Context, userID int64) ([]ListUserTopAssetLocationsRow, error) {
+	rows, err := q.db.Query(ctx, listUserTopAssetLocations, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserTopAssetLocationsRow
+	for rows.Next() {
+		var i ListUserTopAssetLocationsRow
+		if err := rows.Scan(&i.LocationID, &i.LocationType, &i.EstValue); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertAssetLocationValue = `-- name: UpsertAssetLocationValue :exec
 
 INSERT INTO asset_location_values (

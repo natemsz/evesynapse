@@ -9,8 +9,8 @@
   <div class="ti-panel ti-acc ti-a{{.Accent}}" role="tabpanel" id="{{.ID}}" aria-labelledby="{{.ID}}-tab">
     <h4 class="ti-h">{{.Title}}</h4>
     {{/* The brief at the resting size, the whole line once More is open. */}}
-    <ol class="ti-list">{{range $i, $idea := .Ideas}}<li{{if ge $i $cap}} data-wmore{{end}}><span class="ti-brief">{{index $g.Briefs $i}}</span><span class="ti-whole">{{$idea}}</span></li>{{end}}</ol>
-    {{with .More $cap}}<p class="ti-more" data-wmore><small><a href="/market/ideas/">All ideas on the Trade Ideas page</a></small></p>{{end}}
+    <ol class="ti-list">{{range $i, $idea := .Ideas}}<li{{if ge $i $cap}} data-w-over{{end}}><span class="ti-brief">{{index $g.Briefs $i}}</span><span class="ti-whole">{{$idea}}</span></li>{{end}}</ol>
+    {{with .More $cap}}<p class="ti-more" data-w-detail><small><a href="/market/ideas/">All ideas on the Trade Ideas page</a></small></p>{{end}}
   </div>
   {{end}}
 </div>

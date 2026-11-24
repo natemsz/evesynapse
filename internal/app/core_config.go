@@ -110,7 +110,7 @@ type Config struct {
 	ranviaLogRefusals        bool           // RANVIA_LOG_REFUSALS=1: log each request Ranvia refuses, checks or slows
 	hubBookDir               string         // systemd's CACHE_DIRECTORY: where hub order books wait across a restart; "" keeps them in memory only
 	lowRAMMode               bool           // LOW_RAM_MODE=1: low-RAM installs serve search from SQL with no in-memory search index (search_index.go); the derived-pack snapshot joins it when built
-	sdeBaseURL               string         // EVE SDE CSV dump base URL (Fuzzwork by default)
+	sdeAPIURL                string         // CCP's SDE API base URL, tenant included
 	fuzzworkBaseURL          string         // Fuzzwork market aggregate base URL (fallback prices)
 	killfeedBaseURL          string         // zKillboard R2Z2 killmail stream base URL (killfeed.go)
 	killfeedOff              bool           // KILLFEED=off: no public killmail stream
@@ -281,9 +281,9 @@ func (c Config) publicHostIsLocal() bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// defaultSDEBaseURL is Fuzzwork's community SDE conversion, CSV tables
-// under /dump/latest/csv/.
-const defaultSDEBaseURL = "https://www.fuzzwork.co.uk/dump/latest/csv/"
+// defaultSDEAPIURL is CCP's SDE API for Tranquility: latest/ names
+// the current release and every table in it.
+const defaultSDEAPIURL = "https://sde.evetech.net/tranquility/"
 
 // defaultFuzzworkBaseURL is Fuzzwork's market aggregate service:
 // the orderset poll and the bulk aggregate CSV the fallback
@@ -383,12 +383,12 @@ func (c Config) PilotBackfillEnabled() bool { return !c.pilotBackfillOff && c.zk
 // not built by LoadConfig (the tests') never starts it either.
 func (c Config) ResidueModelEnabled() bool { return !c.residueOff && c.residueModelPath != "" }
 
-// SDEBaseURL returns the base URL the SDE importer downloads the
-// CSV tables from, always with a trailing slash.
-func (c Config) SDEBaseURL() string {
-	base := c.sdeBaseURL
+// SDEAPIURL returns the SDE API base URL the importer reads
+// releases from, always with a trailing slash.
+func (c Config) SDEAPIURL() string {
+	base := c.sdeAPIURL
 	if base == "" {
-		base = defaultSDEBaseURL
+		base = defaultSDEAPIURL
 	}
 	if !strings.HasSuffix(base, "/") {
 		base += "/"
@@ -445,7 +445,7 @@ func LoadConfig() (Config, error) {
 		ranviaCacheDir:             ranviaCacheDir(),
 		hubBookDir:                 hubBookDir(),
 		ranviaLogRefusals:          os.Getenv("RANVIA_LOG_REFUSALS") == "1",
-		sdeBaseURL:                 getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
+		sdeAPIURL:                  getenvDefault("EVE_SDE_API_URL", defaultSDEAPIURL),
 		fuzzworkBaseURL:            getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),
 		killfeedBaseURL:            getenvDefault("KILLFEED_BASE_URL", defaultKillfeedBaseURL),
 		killfeedOff:                strings.EqualFold(strings.TrimSpace(os.Getenv("KILLFEED")), "off"),

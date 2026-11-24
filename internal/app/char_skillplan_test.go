@@ -98,7 +98,7 @@ const fixtureSkillCategories = `"categoryID","categoryName"
 
 func parseSkillFixture(t *testing.T) *parsedSDE {
 	t.Helper()
-	parsed := &parsedSDE{markers: make(map[string]fileMarker)}
+	parsed := &parsedSDE{}
 	files := map[string]string{
 		"invTypes.csv":          fixtureSkillTypes,
 		"invGroups.csv":         fixtureSkillGroups,

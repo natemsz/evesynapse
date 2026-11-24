@@ -77,9 +77,7 @@ func TestSDERangesStoreAndKeep(t *testing.T) {
 	ctx := context.Background()
 
 	parsed := parseRangesFixture(t)
-	parsed.markers = map[string]fileMarker{
-		sdeRangesFileName: {etag: "ranges-etag", lastModified: "ranges-build-1"},
-	}
+	parsed.build = "ranges-build-1"
 	if _, err := app.storeSDE(ctx, "fixture-base", parsed); err != nil {
 		t.Fatalf("store SDE with ranges: %v", err)
 	}
@@ -103,7 +101,7 @@ func TestSDERangesStoreAndKeep(t *testing.T) {
 
 	// An import whose dump lacked the dataset must not wipe
 	// the stored ranges: absence is reported, not destructive.
-	empty := &parsedSDE{markers: map[string]fileMarker{}}
+	empty := &parsedSDE{}
 	if _, err := app.storeSDE(ctx, "fixture-base", empty); err != nil {
 		t.Fatalf("store SDE without ranges: %v", err)
 	}

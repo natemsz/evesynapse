@@ -251,8 +251,8 @@ func (app *Application) runWorker(ctx context.Context) {
 	}()
 
 	// SDE maintenance runs alongside the ESI cycle: a first import
-	// when the static-data tables are empty, then a daily update
-	// check, see sdeMaintenance in sde.go. It
+	// when the static-data tables are empty, then an update check
+	// every sdeCheckEvery, see sdeMaintenance in sde.go. It
 	// only ever starts background operations, so it never delays
 	// snapshot refreshes.
 	go func() {
@@ -301,7 +301,7 @@ func (app *Application) runWorker(ctx context.Context) {
 
 	cycle := time.NewTicker(time.Minute)
 	heartbeat := time.NewTicker(10 * time.Minute)
-	sdeTick := time.NewTicker(time.Hour)
+	sdeTick := time.NewTicker(sdeCheckEvery / 2)
 	defer cycle.Stop()
 	defer heartbeat.Stop()
 	defer sdeTick.Stop()

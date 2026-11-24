@@ -178,6 +178,24 @@ INSERT INTO sde_meta (key, value)
 VALUES ($1, $2)
 ON CONFLICT (key) DO UPDATE SET
     value = excluded.value;
+
+-- name: ListSDEMetaPrefix :many
+SELECT key, value FROM sde_meta
+WHERE key LIKE sqlc.arg(prefix)::text || '%'
+ORDER BY key
+LIMIT 200;
+
+-- name: GetSDEAPIBlob :one
+SELECT version, body FROM sde_api_blobs
+WHERE table_name = $1;
+
+-- name: PutSDEAPIBlob :exec
+INSERT INTO sde_api_blobs (table_name, version, body, fetched_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (table_name) DO UPDATE SET
+    version = excluded.version,
+    body = excluded.body,
+    fetched_at = excluded.fetched_at;
 -- name: GetSDEOverride :one
 SELECT label, archive, sha256, size_bytes, files, uploaded_by, uploaded_at
 FROM sde_override

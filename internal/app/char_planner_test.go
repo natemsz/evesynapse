@@ -67,7 +67,7 @@ const fixtureIndustrySkills = `"typeID","activityID","skillID","level"
 
 func parseFixtureSDE(t *testing.T, files map[string]string) *parsedSDE {
 	t.Helper()
-	parsed := &parsedSDE{markers: make(map[string]fileMarker)}
+	parsed := &parsedSDE{}
 	for name, body := range files {
 		if err := parseSDEFile(name, strings.NewReader(body), parsed); err != nil {
 			t.Fatalf("parse %s: %v", name, err)

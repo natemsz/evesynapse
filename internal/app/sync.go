@@ -367,9 +367,9 @@ func (app *Application) handleSyncWarm(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSyncSDE kicks off an SDE update check (which imports only
-// when the remote dump changed), then bounces back to the Sync
-// page to watch it happen. The same check runs weekly in the
-// worker; this is its manual trigger.
+// when a table in the SDE API's current release changed), then
+// bounces back to the Sync page to watch it happen. The same check
+// runs every sdeCheckEvery in the worker; this is its manual trigger.
 func (app *Application) handleSyncSDE(w http.ResponseWriter, r *http.Request) {
 	app.startSDECheck("manual")
 	http.Redirect(w, r, "/admin/sync/", http.StatusSeeOther)

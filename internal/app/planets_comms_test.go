@@ -44,6 +44,7 @@ const (
 func TestPhase2Scopes(t *testing.T) {
 	foundPlanets := false
 	foundFittingsWrite := false
+	foundFleetWrite := false
 	foundOrganizeMail := false
 	foundSendMail := false
 	foundOpenWindow := false
@@ -54,6 +55,9 @@ func TestPhase2Scopes(t *testing.T) {
 		}
 		if s == "esi-fittings.write_fittings.v1" {
 			foundFittingsWrite = true
+		}
+		if s == "esi-fleets.write_fleet.v1" {
+			foundFleetWrite = true
 		}
 		if s == "esi-mail.organize_mail.v1" {
 			foundOrganizeMail = true
@@ -67,10 +71,8 @@ func TestPhase2Scopes(t *testing.T) {
 		if s == "esi-ui.write_waypoint.v1" {
 			foundWaypoint = true
 		}
-		for _, banned := range []string{"write_contacts", "write_fleet"} {
-			if strings.Contains(s, banned) {
-				t.Errorf("eveScopes must stay read-only for contacts/fleet, found %q", s)
-			}
+		if strings.Contains(s, "write_contacts") {
+			t.Errorf("eveScopes must stay read-only for contacts, found %q", s)
 		}
 	}
 	if !foundOpenWindow {
@@ -84,6 +86,9 @@ func TestPhase2Scopes(t *testing.T) {
 	}
 	if !foundFittingsWrite {
 		t.Error("eveScopes is missing esi-fittings.write_fittings.v1 (Save to EVE needs it)")
+	}
+	if !foundFleetWrite {
+		t.Error("eveScopes is missing esi-fleets.write_fleet.v1 (fleet invites need it)")
 	}
 	if !foundOrganizeMail {
 		t.Error("eveScopes is missing esi-mail.organize_mail.v1 (mark-as-read needs it)")

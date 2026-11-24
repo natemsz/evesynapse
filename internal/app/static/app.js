@@ -107,24 +107,32 @@
         store("evesynapse-backdrop", backdropWire(root.getAttribute("data-backdrop")) || "muted");
       }
       store("evesynapse-vision", visionWire(root.getAttribute("data-vision")) || null);
+      var isMinimal = root.getAttribute("data-tier") === "minimalistic" ||
+        root.getAttribute("data-backdrop") === "glow";
+      store("evesynapse-stars-only", !isMinimal && root.getAttribute("data-stars-only") === "1" ? "1" : null);
       store("evesynapse-theme-src", "account");
       return;
     }
     if (read("evesynapse-theme-src") === "account" || !window.fetch) return;
     var body = new URLSearchParams();
     var savedScheme = read("evesynapse-scheme");
+    var savedStarsOnly = read("evesynapse-stars-only") === "1" ? "1" : "";
     if (savedScheme === "jove" || savedScheme === "caldari" || savedScheme === "gallente" ||
         savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom" || savedScheme === "soe" ||
         savedScheme === "minmatar" || savedScheme === "minmatar-v3") {
       body.set("scheme", savedScheme);
       var savedTier = read("evesynapse-tier");
-      body.set("tier", savedTier === "minimalistic" ? "minimalistic" : savedTier === "full" ? "full" : "muted");
+      var tierVal = savedTier === "minimalistic" ? "minimalistic" : savedTier === "full" ? "full" : "muted";
+      body.set("tier", tierVal);
       body.set("backdrop", backdropWire(read("evesynapse-backdrop")));
+      if (tierVal === "minimalistic") savedStarsOnly = "";
     } else if (backdropWire(read("evesynapse-backdrop"))) {
+      var bdVal = backdropWire(read("evesynapse-backdrop"));
       body.set("scheme", "");
       body.set("tier", "");
-      body.set("backdrop", backdropWire(read("evesynapse-backdrop")));
-    } else if (visionWire(read("evesynapse-vision"))) {
+      body.set("backdrop", bdVal);
+      if (bdVal === "glow") savedStarsOnly = "";
+    } else if (visionWire(read("evesynapse-vision")) || savedStarsOnly) {
       body.set("scheme", "");
       body.set("tier", "");
       body.set("backdrop", "");
@@ -132,6 +140,7 @@
       return; // no local choice to adopt
     }
     body.set("vision", visionWire(read("evesynapse-vision")));
+    body.set("starsOnly", savedStarsOnly);
     fetch("/settings/theme", {
       method: "POST",
       headers: { "X-Requested-With": "XMLHttpRequest" },

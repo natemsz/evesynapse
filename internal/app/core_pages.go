@@ -403,6 +403,7 @@ func (app *Application) applyAccountTheme(ctx context.Context, shell *module.She
 				shell.ThemeTier = prefs.Tier
 				shell.ThemeBackdrop = prefs.Backdrop
 				shell.ThemeVision = prefs.Vision
+				shell.ThemeStarsOnly = prefs.StarsOnly
 			}
 		}
 	}

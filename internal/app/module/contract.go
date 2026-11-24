@@ -1129,12 +1129,13 @@ type ShellData struct {
 	// ThemeTier, ThemeBackdrop and ThemeVision (the colour-blind
 	// mode). All unset is the anonymous
 	// render, where the browser's local choice rules as before.
-	ThemeScheme   string
-	ThemeTier     string
-	ThemeBackdrop string
-	ThemeVision   string
-	ThemeAccount  bool
-	ThemeStored   bool
+	ThemeScheme    string
+	ThemeTier      string
+	ThemeBackdrop  string
+	ThemeVision    string
+	ThemeStarsOnly bool
+	ThemeAccount   bool
+	ThemeStored    bool
 	// Banners is the administrators' global notices this render
 	// shows above the page body (notices.go); nil when none.
 	Banners any

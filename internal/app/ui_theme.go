@@ -32,6 +32,9 @@ type themePrefs struct {
 	// It retunes the status colours of whichever scheme is on
 	// (bg.css), so it is independent of the scheme and the tier.
 	Vision string `json:"vision,omitempty"`
+	// StarsOnly swaps every interior page backdrop to a pure black
+	// tiled starfield regardless of the active scheme or tier.
+	StarsOnly bool `json:"starsOnly,omitempty"`
 }
 
 // themeSchemes are the scheme names the picker can produce; they
@@ -60,6 +63,11 @@ func validThemeVision(s string) bool {
 
 func validThemeBackdrop(s string) bool {
 	return s == "" || s == "muted" || s == "glow" || s == "full"
+}
+
+func isMinimalisticTheme(prefs themePrefs) bool {
+	return (prefs.Scheme == "" && prefs.Backdrop == "glow") ||
+		(prefs.Scheme != "" && prefs.Tier == "minimalistic")
 }
 
 // signupThemePrefs turns the sign-up theme step's two answers (a
@@ -123,6 +131,9 @@ func parseThemePrefs(blob string) themePrefs {
 	if !validThemeVision(prefs.Vision) {
 		prefs.Vision = ""
 	}
+	if isMinimalisticTheme(prefs) {
+		prefs.StarsOnly = false
+	}
 	return prefs
 }
 
@@ -170,16 +181,30 @@ func (app *Application) handleSettingsThemeSave(w http.ResponseWriter, r *http.R
 		return
 	}
 	prefs := themePrefs{
-		Scheme:   r.FormValue("scheme"),
-		Tier:     r.FormValue("tier"),
-		Backdrop: r.FormValue("backdrop"),
-		Vision:   r.FormValue("vision"),
+		Scheme:    r.FormValue("scheme"),
+		Tier:      r.FormValue("tier"),
+		Backdrop:  r.FormValue("backdrop"),
+		Vision:    r.FormValue("vision"),
+		StarsOnly: r.FormValue("starsOnly") == "1",
 	}
-	// A post without the vision field (a page script cached from
-	// before the colour-blind modes) keeps the stored mode.
-	if _, sent := r.Form["vision"]; !sent {
+	// A post without the vision or starsOnly field (a page script
+	// cached from before those toggles existed) keeps the stored value.
+	_, visionSent := r.Form["vision"]
+	_, starsSent := r.Form["starsOnly"]
+	if !visionSent || !starsSent {
 		stored, _ := app.themePrefsFor(ctx, userID)
-		prefs.Vision = stored.Vision
+		if !visionSent {
+			prefs.Vision = stored.Vision
+		}
+		if !starsSent {
+			prefs.StarsOnly = stored.StarsOnly
+		}
+	}
+	if starsSent {
+		if sv := r.FormValue("starsOnly"); sv != "" && sv != "0" && sv != "1" {
+			http.Error(w, "unknown theme", http.StatusBadRequest)
+			return
+		}
 	}
 	if !fullWallpapers() {
 		if prefs.Backdrop == "full" {
@@ -196,6 +221,9 @@ func (app *Application) handleSettingsThemeSave(w http.ResponseWriter, r *http.R
 	}
 	if prefs.Scheme == "" {
 		prefs.Tier = ""
+	}
+	if isMinimalisticTheme(prefs) {
+		prefs.StarsOnly = false
 	}
 	if err := app.storeThemePrefs(ctx, userID, prefs); err != nil {
 		logging.Errorf("theme: save for user %d: %v", userID, err)

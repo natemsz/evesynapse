@@ -93,6 +93,7 @@
       var bd = null;
       try { bd = window.localStorage.getItem('evesynapse-backdrop'); } catch (e) {}
       body.set('vision', root.getAttribute('data-vision') || '');
+      body.set('starsOnly', st.tier !== 'minimalistic' && root.getAttribute('data-stars-only') === '1' ? '1' : '');
       body.set('backdrop', st.scheme
         ? (bd === 'muted' || bd === 'glow' || bd === 'full' ? bd : '')
         : (st.tier === 'full' ? 'full' : st.tier === 'minimalistic' ? 'glow' : 'muted'));
@@ -144,21 +145,31 @@
       root.removeAttribute('data-tier');
       if (bd === 'full' || bd === 'glow') root.setAttribute('data-backdrop', bd);
       else root.setAttribute('data-backdrop', 'muted');
+      if (bd === 'glow') {
+        root.removeAttribute('data-stars-only');
+        store('evesynapse-stars-only', null);
+      }
       store('evesynapse-scheme', null);
       store('evesynapse-tier', null);
       store('evesynapse-backdrop', bd || 'muted');
       saveAccount();
       markCurrent();
+      markStarsOnly();
     }
 
     function applyScheme(scheme, tier) {
       root.setAttribute('data-scheme', scheme);
       root.setAttribute('data-tier', tier);
       root.removeAttribute('data-backdrop');
+      if (tier === 'minimalistic') {
+        root.removeAttribute('data-stars-only');
+        store('evesynapse-stars-only', null);
+      }
       store('evesynapse-scheme', scheme);
       store('evesynapse-tier', tier);
       saveAccount();
       markCurrent();
+      markStarsOnly();
     }
 
     // The colour-blind mode sits beside the scheme: it retunes the
@@ -185,6 +196,41 @@
       })(visionButtons[k]);
     }
     markVision();
+
+    // Starfield-only switch: swaps every interior page backdrop to
+    // the pure black tiled starfield while leaving the scheme, tier
+    // and colour-blind setting untouched. Turned off and disabled in
+    // Minimalistic mode so the two backdrops never conflict.
+    var starsRow = document.querySelector('[data-stars-only-row]');
+    var starsButtons = document.querySelectorAll('[data-stars-only-row] [data-stars-only]');
+    function isMinimalistic() {
+      return currentState().tier === 'minimalistic';
+    }
+    function markStarsOnly() {
+      var minimal = isMinimalistic();
+      if (minimal) root.removeAttribute('data-stars-only');
+      var on = !minimal && root.getAttribute('data-stars-only') === '1' ? '1' : '';
+      if (starsRow) starsRow.classList.toggle('is-disabled', minimal);
+      for (var k = 0; k < starsButtons.length; k++) {
+        starsButtons[k].disabled = minimal;
+        starsButtons[k].classList.toggle('on', starsButtons[k].getAttribute('data-stars-only') === on);
+      }
+    }
+    function applyStarsOnly(val) {
+      if (isMinimalistic()) return;
+      if (val === '1') root.setAttribute('data-stars-only', '1');
+      else { val = ''; root.removeAttribute('data-stars-only'); }
+      store('evesynapse-stars-only', val || null);
+      saveAccount();
+      markStarsOnly();
+    }
+    for (var k = 0; k < starsButtons.length; k++) {
+      (function (btn) {
+        if (!wire(btn)) return;
+        btn.addEventListener('click', function () { applyStarsOnly(btn.getAttribute('data-stars-only') || ''); });
+      })(starsButtons[k]);
+    }
+    markStarsOnly();
 
     for (var i = 0; i < rows.length; i++) {
       (function (row) {

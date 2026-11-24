@@ -543,12 +543,12 @@ td.mt-reqs { max-width: 12rem; }
 .mb-node.open > .mb-row > a { color: var(--text-bright); }
 .mb-node.chosen > .mb-row > a { background: var(--row-hover); box-shadow: inset 2px 0 0 var(--accent); }
 .mb-children .mb-row > a { font-size: var(--fs-xs); }
-/* The tree's type ladder: categories read as headings (Rajdhani
-   SemiBold capitals, the display treatment), subcategories as
-   capitals at the regular weight, and the groups under them stay
-   small body text. Depth alone decides a row's rung. */
+/* The tree's type ladder: top-level categories carry spaced capitals
+   in the display face, subcategories keep their own casing at the
+   regular display weight, and leaf groups under them stay small body
+   text. Depth alone decides a row's rung. */
 .mb-node.mb-cat > .mb-row > a { font-family: var(--font-display); font-weight: 400; font-synthesis-weight: none; text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-sm); }
-.mb-node.mb-subcat > .mb-row > a { font-family: var(--font-display); font-weight: 400; font-synthesis-weight: none; text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--fs-sm); }
+.mb-node.mb-subcat > .mb-row > a { font-family: var(--font-display); font-weight: 400; font-synthesis-weight: none; text-transform: none; letter-spacing: 0.02em; font-size: var(--fs-sm); }
 .mb-node .market-group-icon svg { width: 1.1rem; height: 1.1rem; }
 .mb-toggle { flex: none; width: 1.05rem; height: 1.05rem; padding: 0; background: none; border: 0; cursor: pointer; position: relative; color: var(--muted); }
 .mb-toggle::before { content: ""; position: absolute; inset: 0.3rem; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(-45deg); transition: transform 120ms ease; }

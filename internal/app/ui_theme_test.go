@@ -116,6 +116,51 @@ func TestAccountThemeSaveAndRender(t *testing.T) {
 	if code := post(cookieA, url.Values{"scheme": {""}, "tier": {""}, "backdrop": {"muted"}, "vision": {"sepia"}}); code != http.StatusBadRequest {
 		t.Fatalf("unknown vision: status %d, want 400", code)
 	}
+
+	// Starfield-only saves beside Full or Muted tiers and renders onto
+	// <html>; a post that leaves the field out keeps the stored choice,
+	// while switching to Minimalistic turns Starfield-only off.
+	if code := post(cookieA, url.Values{"scheme": {"caldari"}, "tier": {"muted"}, "backdrop": {"muted"}, "starsOnly": {"1"}}); code != http.StatusOK {
+		t.Fatalf("starsOnly save: status %d", code)
+	}
+	if code := post(cookieA, url.Values{"scheme": {"jove"}, "tier": {"muted"}, "backdrop": {"muted"}}); code != http.StatusOK {
+		t.Fatalf("save without starsOnly: status %d", code)
+	}
+	code, body = getPage(t, app, cookieA, "/characters/")
+	if code != http.StatusOK {
+		t.Fatalf("characters after starsOnly save: status %d", code)
+	}
+	mustContain(t, "stars-only rendered beside scheme", body,
+		`<html lang="en" data-nav="rail" data-scheme="jove" data-tier="muted" data-vision="redgreen" data-stars-only="1">`)
+	if strings.Contains(body, `rel="preload" as="image"`) {
+		t.Fatal("stars-only should skip wallpaper image preloads on interior pages")
+	}
+	code, homeBody := getPage(t, app, cookieA, "/")
+	if code != http.StatusOK {
+		t.Fatalf("home after starsOnly save: status %d", code)
+	}
+	mustContain(t, "home carries data-home-page marker", homeBody, `data-home-page`)
+	if strings.Contains(homeBody, `rel="preload" as="image"`) {
+		t.Fatal("stars-only should skip wallpaper image preloads on the home page")
+	}
+	if code := post(cookieA, url.Values{"scheme": {"jove"}, "tier": {"minimalistic"}, "backdrop": {"muted"}, "starsOnly": {"1"}}); code != http.StatusOK {
+		t.Fatalf("minimalistic save: status %d", code)
+	}
+	code, body = getPage(t, app, cookieA, "/characters/")
+	if code != http.StatusOK {
+		t.Fatalf("characters after minimalistic save: status %d", code)
+	}
+	mustContain(t, "minimalistic clears stars-only", body,
+		`<html lang="en" data-nav="rail" data-scheme="jove" data-tier="minimalistic" data-vision="redgreen">`)
+	if got := parseThemePrefs(`{"backdrop":"glow","starsOnly":true}`); got.StarsOnly {
+		t.Error("parseThemePrefs should turn off starsOnly on default minimalistic glow")
+	}
+	if got := parseThemePrefs(`{"scheme":"caldari","tier":"minimalistic","starsOnly":true}`); got.StarsOnly {
+		t.Error("parseThemePrefs should turn off starsOnly on scheme minimalistic tier")
+	}
+	if code := post(cookieA, url.Values{"scheme": {"jove"}, "tier": {"muted"}, "backdrop": {"muted"}, "starsOnly": {"maybe"}}); code != http.StatusBadRequest {
+		t.Fatalf("unknown starsOnly: status %d, want 400", code)
+	}
 }
 
 // TestSignupThemePrefs: the sign-up theme step's two answers map

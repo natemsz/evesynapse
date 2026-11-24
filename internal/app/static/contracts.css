@@ -660,7 +660,7 @@
 .cs-dcard {
   background: rgba(255, 242, 226, 0.055);
   border: 1px solid rgba(255, 190, 130, 0.22);
-  border-radius: 0.375rem; padding: 0.75rem;
+  border-radius: var(--r-md); padding: 0.75rem;
   display: flex; flex-direction: column;
 }
 .cs-dhead {

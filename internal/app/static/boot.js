@@ -78,6 +78,11 @@ try {
     if (savedVision === "redgreen" || savedVision === "blueyellow") {
       document.documentElement.setAttribute("data-vision", savedVision);
     }
+    var isMinimal = document.documentElement.getAttribute("data-tier") === "minimalistic" ||
+      document.documentElement.getAttribute("data-backdrop") === "glow";
+    if (!isMinimal && window.localStorage.getItem("evesynapse-stars-only") === "1") {
+      document.documentElement.setAttribute("data-stars-only", "1");
+    }
   }
 } catch (e) {}
 

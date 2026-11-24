@@ -153,7 +153,7 @@
 {{if .Sync.SDE}}
 <section class="card spanall" id="sync-sde">
 <h2>EVE static data (SDE)</h2>
-<p><small>Item, skill, station and system names come from a local copy of CCP's static data, read from CCP's SDE API and checked for a new release every 30 minutes. An import downloads only the tables that changed. ESI is only used for names the static data lacks.</small></p>
+<p><small>Item, skill, station and system names come from a local copy of CCP's static data, read from CCP's SDE API and checked for a new release every 30 minutes after daily downtime, until a new release is imported or six hours pass. An import downloads only the tables that changed. ESI is only used for names the static data lacks.</small></p>
 <p>State: <strong>{{.Sync.SDE.State}}</strong>
 {{if .Sync.SDE.ImportedAt}} · imported {{.Sync.SDE.ImportedAt}}{{end}}
 <br><small>Source: {{.Sync.SDE.SourceBase}}</small>

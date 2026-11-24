@@ -27,8 +27,8 @@ import (
 // ---------------------------------------------------------------------------
 // EVE static data (SDE): a local copy of CCP's static data export,
 // imported from CCP's SDE API (sde_api.go, JSON Lines tables parsed
-// in sde_jsonl.go) and checked for a new release every sdeCheckEvery
-// (manual button on the Sync page). Type/group/station/system names
+// in sde_jsonl.go) and checked for a new release after each downtime,
+// see sdeCheckDue (manual button on the Sync page). Type/group/station/system names
 // resolve from the sde_* tables first (see internal/esi); the ESI
 // drip-feed caches stay as fallback for anything the SDE lacks.
 //
@@ -298,8 +298,8 @@ func (app *Application) startSDECheck(reason string) bool {
 
 // sdeMaintenance is the worker's periodic SDE hook. It decides
 // between "import now" (empty tables, or a previous import's column
-// set predates the current one) and an update check every
-// sdeCheckEvery.
+// set predates the current one) and an update check when sdeCheckDue
+// says one is due.
 func (app *Application) sdeMaintenance(ctx context.Context) {
 	count, err := app.queries.CountSDETypes(ctx)
 	if err != nil {
@@ -335,10 +335,8 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 		app.startSDEImport("skill graph backfill")
 		return
 	}
-	if last, err := app.sdeMeta(ctx, "last_check_at"); err == nil && last != "" {
-		if t, perr := time.Parse(time.RFC3339, last); perr == nil && time.Since(t) < sdeCheckEvery {
-			return
-		}
+	if !sdeCheckDue(time.Now(), app.sdeMetaTime(ctx, "last_check_at"), app.sdeMetaTime(ctx, "imported_at")) {
+		return
 	}
 	app.startSDECheck("scheduled")
 }
@@ -350,6 +348,20 @@ const sdeImportVersion = "22"
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
 	return app.queries.GetSDEMeta(ctx, key)
+}
+
+// sdeMetaTime reads one sde_meta timestamp, zero when absent or
+// unreadable.
+func (app *Application) sdeMetaTime(ctx context.Context, key string) time.Time {
+	v, err := app.sdeMeta(ctx, key)
+	if err != nil || v == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // ---------------------------------------------------------------------------

@@ -68,6 +68,9 @@ type moduleDef struct {
 	// Activities are the kinds of play it serves (see module.Module).
 	Activities []string
 	Uses       []string // derived modules: ids of the modules aggregated
+	// RelinkOnly: never offered at sign-up or by the chooser, only asked
+	// for by a targeted re-link from the page that uses it.
+	RelinkOnly bool
 }
 
 func req(scope, unlocks string) scopeUse { return scopeUse{Scope: scope, Unlocks: unlocks} }
@@ -168,6 +171,10 @@ var moduleManifest = []moduleDef{
 		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-fleets.read_fleet.v1", "Live fleet composition while the character is in a fleet."),
+		}},
+	{ID: fleetInvitesModule, Title: "Fleet invites", Layer: layerCharacter, RelinkOnly: true,
+		Scopes: []scopeUse{
+			req(fleetInviteScope, "Inviting the pilots signed up for a fleet the character is the boss of, when those running it ask."),
 		}},
 	{ID: "planets", Title: "Planetary industry", Layer: layerCharacter,
 		Activities: []string{"industry"},

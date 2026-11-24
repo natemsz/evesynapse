@@ -126,7 +126,7 @@ const (
 // (GET https://esi.evetech.net/meta/openapi.json →
 // components.securitySchemes), minus every mutating scope, anything
 // whose name contains write_, send_, respond_, organize_, manage_ or
-// open_window (2 scopes excluded: write_contacts, write_fleet;
+// open_window (write_contacts is excluded;
 // esi-planets.manage_planets.v1
 // is the one deliberate manage exception, see below). The user's
 // developer-portal application has the same scopes enabled, so
@@ -156,6 +156,13 @@ const (
 // and the developer-portal application must have it enabled.
 // Characters linked before it hold no grant, which the map reports as
 // "sign in again to send routes to the game".
+//
+// One deliberate exception: esi-fleets.write_fleet.v1 is on the list
+// but never asked for at sign-up: the fleet_invites module is re-link
+// only (moduleDef.RelinkOnly), so a fleet's boss is asked for it when
+// they turn on invites from EveSynapse (POST /fleets/{id}/members/,
+// fleet_invites.go). The developer portal must have it enabled before
+// that re-link can succeed; until then only that re-link fails.
 //
 // One deliberate exception: esi-planets.manage_planets.v1
 // IS requested. CCP publishes no read scope for planetary industry,
@@ -208,6 +215,7 @@ var eveScopes = []string{
 	"esi-fittings.read_fittings.v1",
 	"esi-fittings.write_fittings.v1",
 	"esi-fleets.read_fleet.v1",
+	"esi-fleets.write_fleet.v1",
 	"esi-industry.read_character_jobs.v1",
 	"esi-industry.read_character_mining.v1",
 	"esi-industry.read_corporation_jobs.v1",

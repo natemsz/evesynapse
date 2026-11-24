@@ -798,6 +798,10 @@ type opView struct {
 	MyShip     string
 	MyRole     string
 	MyNote     string
+	// MyReady: the selected character told those running the fleet it is
+	// ready for an invite, MyReadyFor how long ago (fleet_invites.go).
+	MyReady    bool
+	MyReadyFor string
 	Roles      []string
 
 	// Share link and calendar file.
@@ -1102,6 +1106,9 @@ func (app *Application) fillFleetSignup(ctx context.Context, r *http.Request, vi
 		return
 	}
 	view.Mine, view.MyShip, view.MyRole, view.MyNote = row.Response, row.Ship, row.FleetRole, row.Note
+	if row.ReadyAt.Valid {
+		view.MyReady, view.MyReadyFor = true, fleetRunningText(time.Since(row.ReadyAt.Time))
+	}
 }
 
 // primeVerifiedNames puts the names pilots signed in with into the name

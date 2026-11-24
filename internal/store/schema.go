@@ -1049,6 +1049,11 @@ var pgFleetExplorerKillmailsSchema string
 //go:embed schema_pg/175_fleet_explorer_cards.sql
 var pgFleetExplorerCardsSchema string
 
+// Step 177: fleet invites sent from EveSynapse, and pilots ready for one.
+//
+//go:embed schema_pg/177_fleet_invites.sql
+var pgFleetInvitesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1252,6 +1257,7 @@ func schemaSteps() []schemaStep {
 		{173, "fleet explorer backfill", pgFleetExplorerBackfillSchema, ""},
 		{174, "fleet explorer killmails", pgFleetExplorerKillmailsSchema, ""},
 		{175, "fleet explorer cards", pgFleetExplorerCardsSchema, ""},
+		{177, "fleet invites", pgFleetInvitesSchema, ""},
 	}
 }
 

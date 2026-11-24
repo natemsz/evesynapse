@@ -101,6 +101,18 @@
     </div>
     <button type="submit">{{if .Mine}}Update sign-up{{else}}Sign up{{end}}</button>
   </form>
+  {{if and .Live .Mine (ne .Mine "no")}}
+  <form method="post" action="/fleets/{{.ID}}/ready" class="fl-ready">
+    {{range .Characters}}{{if .Selected}}<input type="hidden" name="character" value="{{.ID}}">{{end}}{{end}}
+    {{if .MyReady}}
+    <p class="fl-you">You are on the list as ready for an invite, for {{.MyReadyFor}} now. Those running the fleet see you first.</p>
+    <input type="hidden" name="ready" value="0"><button type="submit" class="btn btn-quiet">Not ready any more</button>
+    {{else}}
+    <input type="hidden" name="ready" value="1"><button type="submit" class="btn">I am ready for an invite</button>
+    <span class="fl-hint">Puts you first on the list of pilots those running the fleet invite.</span>
+    {{end}}
+  </form>
+  {{end}}
   {{if eq .Level "pilot"}}<p class="fl-hint">Signed in as {{.PilotName}}, with no account. <a href="{{.Account}}">An account</a> adds reminders and a calendar.</p>{{end}}
   {{else if eq .Level "anonymous"}}
   <p>Sign in with EVE to sign up. EveSynapse asks for no permissions and keeps no token.</p>

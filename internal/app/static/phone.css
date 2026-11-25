@@ -103,14 +103,17 @@
      small-screen block) reads small held at arm's length. */
   body { font-size: var(--fs-sm); }
 
-  /* Flatter surfaces: one glass sheet per page, close to the
-     screen edge, instead of a frame inside a margin inside a
-     frame. The sections inside keep their whisper fills and
+  /* Flatter surfaces: one glass sheet per page, edge to edge
+     across the screen, instead of a frame inside a margin inside
+     a frame. The sections inside keep their whisper fills and
      hairlines, on tighter insets. */
   #main-content > h1 { margin: 0.2rem 0.85rem 0; font-size: var(--fs-4xl); }
   .page-body {
-    margin: 0.6rem 0.4rem 0.75rem;
+    margin: 0.6rem 0 0.75rem;
     padding: 0.85rem 0.7rem 1rem;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
   }
   .page-body:has(.home-grid) { margin: 0 0.4rem; padding-left: 0; padding-right: 0; }
   .foldable { padding: 0.75rem 0.7rem 0.8rem; margin-bottom: 0.85rem; }

@@ -8,17 +8,14 @@
    2; with one, every widget is full width. --home-cols carries the
    column count for home.js.
 
-   Rows come in two kinds, named on the grid by data-rows:
-   - auto: each row is as tall as what its cards hold. With two
-     columns every card spans one row.
-   - fixed (the page asked with ?rows=fixed): every row is one height,
-     --w-row, which grows with the page. A card is exactly its cells
-     and its content never stretches a row. Cards are size containers
-     there (container "widget"), so what is inside can read the box it
-     gets, and their lists show the whole rows that fit.
-   Below 36rem rows are auto in both kinds: each card is as tall as its
-   body, and cards are inline-size containers only (a size container
-   with an auto height would collapse to nothing).
+   With two or three columns every row is one height, --w-row, which
+   grows with the page. A card is exactly its cells and its content
+   never stretches a row. Cards are size containers there (container
+   "widget"), so what is inside can read the box it gets, and their
+   lists show the whole rows that fit. Below 36rem rows are auto: each
+   card is as tall as its body, and cards are inline-size containers
+   only (a size container with an auto height would collapse to
+   nothing).
 
    home.js places every card at the first free spot, row by row
    (homePack, the same rule as row dense placement), closes a hole
@@ -84,18 +81,14 @@
 
 @container page (width >= 36rem) {
   .grid.home-grid { --home-cols: 2; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid.home-grid > .card { min-height: 8rem; }
   .grid.home-grid > :is(.gw2, .gw3) { grid-column: span 2; }
-  .grid.home-grid[data-rows="fixed"] > .gh2 { grid-row: span 2; }
-  .grid.home-grid[data-rows="fixed"] > .gh3 { grid-row: span 3; }
-  .grid.home-grid[data-rows="fixed"] > .gh4 { grid-row: span 4; }
+  .grid.home-grid > .gh2 { grid-row: span 2; }
+  .grid.home-grid > .gh3 { grid-row: span 3; }
+  .grid.home-grid > .gh4 { grid-row: span 4; }
 }
 @container page (width >= 60rem) {
   .grid.home-grid { --home-cols: 3; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .grid.home-grid > .gw3 { grid-column: span 3; }
-  .grid.home-grid > .gh2 { grid-row: span 2; }
-  .grid.home-grid > .gh3 { grid-row: span 3; }
-  .grid.home-grid > .gh4 { grid-row: span 4; }
 }
 
 /* Fixed rows: about 168px a row on a 960px page, 184px on 1408px, and
@@ -103,24 +96,24 @@
    container), so it is set and used on the grid, never inside a card,
    where cqi would read the card. */
 @container page (width >= 36rem) {
-  .grid.home-grid[data-rows="fixed"] {
+  .grid.home-grid {
     --w-row: clamp(10rem, 8.35rem + 3.6cqi, 13.5rem);
     grid-auto-rows: var(--w-row);
     gap: var(--space-4);
   }
-  .grid.home-grid[data-rows="fixed"] > .card { container: widget / size; min-height: 0; }
-  .grid.home-grid[data-rows="fixed"] > .card > .card-body { min-height: 0; overflow: hidden; }
+  .grid.home-grid > .card { container: widget / size; min-height: 0; }
+  .grid.home-grid > .card > .card-body { min-height: 0; overflow: hidden; }
 }
 
 /* Lists in fixed rows: once home.js measures a list (.w-fitting) it
    shows the whole rows that fit and hides the rest (.w-cut), and the
    line after the list says how many more there are, linking to the
    widget's page. Without JavaScript the server's cap holds. */
-.grid.home-grid[data-rows="fixed"] .w-fitting > .w-cut { display: none; }
+.grid.home-grid .w-fitting > .w-cut { display: none; }
 /* A part a fixed card has no room for once its lists gave up their
    rows is not drawn, rather than drawn cut in half. */
-.grid.home-grid[data-rows="fixed"] > .card > .card-body > .w-drop,
-.grid.home-grid[data-rows="fixed"] > .card > .card-body > .w-body > .w-drop { display: none; }
+.grid.home-grid > .card > .card-body > .w-drop,
+.grid.home-grid > .card > .card-body > .w-body > .w-drop { display: none; }
 .grid.home-grid .w-more { margin: 0.35rem 0 0; color: var(--muted); }
 .grid.home-grid .w-more[hidden] { display: none; }
 
@@ -362,21 +355,21 @@
 /* Where the card is exactly its cells, the chart and the spark take
    the room the other parts leave. */
 @container page (width >= 36rem) {
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-chart { flex: 1 1 0; height: auto; min-height: 4.5rem; }
+  .grid.home-grid > .w-card .w-chart { flex: 1 1 0; height: auto; min-height: 4.5rem; }
   /* A chart claims more than half its body: a part after it that then
      has no room is not drawn (home.js), rather than the chart being
      squeezed to a strip. */
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-body > .w-chart,
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-body > .w-cols { min-height: max(4.5rem, 55%); }
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-spark { flex: 1 1 0; height: auto; }
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-cols { flex: 1 1 0; }
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-cols > .w-chart { min-height: 4.5rem; }
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-tiles { grid-template-rows: auto; grid-auto-rows: 0; row-gap: 0; overflow: hidden; }
+  .grid.home-grid > .w-card .w-body > .w-chart,
+  .grid.home-grid > .w-card .w-body > .w-cols { min-height: max(4.5rem, 55%); }
+  .grid.home-grid > .w-card .w-spark { flex: 1 1 0; height: auto; }
+  .grid.home-grid > .w-card .w-cols { flex: 1 1 0; }
+  .grid.home-grid > .w-card .w-cols > .w-chart { min-height: 4.5rem; }
+  .grid.home-grid > .w-card .w-tiles { grid-template-rows: auto; grid-auto-rows: 0; row-gap: 0; overflow: hidden; }
   /* The lead and its tiles share one line: tiles that do not fit
      beside the lead are not drawn, rather than wrapping under it and
      pushing the chart out. */
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-head { flex-wrap: nowrap; }
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-head > .w-tiles { flex-basis: 0; min-width: 0; }
+  .grid.home-grid > .w-card .w-head { flex-wrap: nowrap; }
+  .grid.home-grid > .w-card .w-head > .w-tiles { flex-basis: 0; min-width: 0; }
 }
 
 /* The heading: the title links to the widget's page; the Expand
@@ -493,7 +486,7 @@
 .pp-wf-plot rect { stroke: none; }
 .w-cols > .pp-wf { flex: 2 1 0; }
 @container page (width >= 36rem) {
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-cols > .pp-wf { height: auto; min-height: 4.5rem; }
+  .grid.home-grid > .w-card .w-cols > .pp-wf { height: auto; min-height: 4.5rem; }
 }
 .w-expand-box > .w-card .w-cols > .pp-wf { height: auto; }
 
@@ -507,7 +500,7 @@
    scrolls, its header standing at the top. */
 .w-card [data-w-scroll] { min-height: 0; margin: 0; }
 @container page (width >= 36rem) {
-  .grid.home-grid[data-rows="fixed"] > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; overscroll-behavior: contain; }
+  .grid.home-grid > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; overscroll-behavior: contain; }
 }
 .w-expand-box > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; }
 .w-card [data-w-scroll] thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
@@ -541,9 +534,9 @@
 }
 @container page (width >= 36rem) {
   /* Fixed rows: the grid's tiles share its height, two rows of them. */
-  .grid.home-grid[data-rows="fixed"] > .w-card .glance-grid { grid-auto-rows: minmax(0, 1fr); }
-  .grid.home-grid[data-rows="fixed"] > .w-card .glance-grid > .glance-tile { overflow: hidden; }
-  .grid.home-grid[data-rows="fixed"] > .w-card .glance-grid .w-spark { min-height: 1.5rem; }
+  .grid.home-grid > .w-card .glance-grid { grid-auto-rows: minmax(0, 1fr); }
+  .grid.home-grid > .w-card .glance-grid > .glance-tile { overflow: hidden; }
+  .grid.home-grid > .w-card .glance-grid .w-spark { min-height: 1.5rem; }
 }
 
 /* Training Horizon. */

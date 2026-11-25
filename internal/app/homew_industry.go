@@ -15,7 +15,7 @@ func init() {
 		ID: widgetIndustry, Title: "Industry", Category: wcatIndustry, Feature: "industry",
 		Href:        "/industry/jobs/",
 		Description: "Industry jobs across your characters: what is ready, what finishes next, and how many slots are in use.",
-		Default:     wSize{1, 1},
+		Default:     wSize{1, 2},
 		Forms: []homeWidgetForm{
 			{Name: "small", Sizes: "1x1", Says: "Jobs ready and running, and the next delivery."},
 			{Name: "wide", Sizes: "2x1 3x1", Says: "Slots in use for each kind of job, and the next delivery."},

@@ -12,7 +12,7 @@ func init() {
 		Requires:    "tradeideas",
 		Href:        "/market/ideas/",
 		Description: "A model's read on the Forge spread scanner, one tab per trade strategy. Refreshed twice a day; the Trade Ideas page has the full list.",
-		Default:     wSize{2, 1},
+		Default:     wSize{2, 2},
 		Forms: []homeWidgetForm{
 			{Name: "small", Sizes: "1x1", Says: "The top idea in short."},
 			{Name: "wide", Sizes: "2x1 3x1", Says: "Each strategy with its top idea in short."},

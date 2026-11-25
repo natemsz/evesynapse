@@ -20,7 +20,7 @@ func init() {
 		ID: widgetWatchlist, Title: "Market Watchlist", Category: wcatMarket, Feature: "market_public",
 		Href:        "/market/",
 		Description: "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.",
-		Default:     wSize{1, 1},
+		Default:     wSize{1, 2},
 		Forms: []homeWidgetForm{
 			{Name: "small", Sizes: "1x1", Says: "The biggest mover and how many items are moving."},
 			{Name: "wide", Sizes: "2x1 3x1", Says: "The biggest movers side by side, each with its 30-day line."},

@@ -619,22 +619,17 @@
   }
 
   // --- Home grid: layout ------------------------------------------
-  // home.css sets the columns from the page's width (--home-cols) and
-  // the rows (data-rows). This writes each card's cells on it through
-  // the CSSOM (grid-column, grid-row): homePack's spots, then outside
-  // Customize homeFillGaps closes the holes; in Customize the holes
-  // show as Add a widget cells instead. With one column the cards
-  // stack and nothing is written. With two columns and auto rows
-  // every card spans one row, as home.css draws it without
-  // JavaScript. It runs on load, on content-ready, when the grid
+  // home.css sets the columns from the page's width (--home-cols).
+  // This writes each card's cells on it through the CSSOM
+  // (grid-column, grid-row): homePack's spots, then outside Customize
+  // homeFillGaps closes the holes; in Customize the holes show as Add
+  // a widget cells instead. With one column the cards stack and
+  // nothing is written. It runs on load, on content-ready, when the grid
   // changes width, and inside every Customize change (flip calls it,
   // so the motion plays to the new places).
   function homeCols(grid) {
     var n = parseInt(window.getComputedStyle(grid).getPropertyValue("--home-cols"), 10);
     return n >= 1 ? n : 1;
-  }
-  function homeFixedRows(grid) {
-    return grid.getAttribute("data-rows") === "fixed";
   }
   function homeLayout(grid) {
     var cols = homeCols(grid);
@@ -655,19 +650,16 @@
       }
       return;
     }
-    var flat = !homeFixedRows(grid) && cols === 2;
     for (i = 0; i < cards.length; i++) {
       var w = parseInt(cards[i].getAttribute("data-gw"), 10) || 1;
       var h = parseInt(cards[i].getAttribute("data-gh"), 10) || 1;
       // The sizes the widget allows, as this grid draws them: a width
-      // past the column count draws as the count, and in one-row-high
-      // rows only the sizes at its own height count, as one row.
+      // past the column count draws as the count.
       var drawn = [];
       homeParseSizes(cards[i].getAttribute("data-sizes")).forEach(function (sz) {
-        if (flat && sz.h !== h) return;
-        drawn.push({ w: Math.min(sz.w, cols), h: flat ? 1 : sz.h });
+        drawn.push({ w: Math.min(sz.w, cols), h: sz.h });
       });
-      items.push({ w: Math.min(w, cols), h: flat ? 1 : h, sizes: drawn });
+      items.push({ w: Math.min(w, cols), h: h, sizes: drawn });
     }
     var placed = homePack(items, cols);
     if (!custom) {
@@ -854,7 +846,7 @@
     }
   }
   function homeFit(grid) {
-    var fit = homeFixedRows(grid) && homeCols(grid) >= 2;
+    var fit = homeCols(grid) >= 2;
     var cards = grid.querySelectorAll(":scope > .card[data-widget]");
     for (var i = 0; i < cards.length; i++) homeFitCard(cards[i], fit);
   }

@@ -4,11 +4,13 @@
 {{define "w-profitpulse-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasData}}
 {{template "w-lead" .Lead}}
 {{with .Strip}}{{template "w-barspark" .}}{{end}}
+{{template "w-profitpulse-foot" .}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-profitpulse-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{if .HasData}}
 <div class="w-side">{{template "w-lead" .WideLead}}</div>
 {{with .Days}}{{template "w-bars" .}}{{end}}
+{{template "w-profitpulse-foot" .}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-profitpulse-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasData}}
@@ -16,6 +18,7 @@
 {{template "w-profitpulse-gross" .}}
 {{with .Days}}{{template "w-bars" .}}{{end}}
 {{with .TopItem}}<div class="pp-top"><h4 class="w-sub">Best margin</h4>{{template "w-rank" .}}</div>{{end}}
+{{template "w-profitpulse-foot" .}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-profitpulse-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasData}}
@@ -24,6 +27,7 @@
 {{with .Days}}{{template "w-bars" .}}{{end}}
 {{with .TopItems}}<div class="w-aside"><h4 class="w-sub">Best margins</h4>{{template "w-rank" .}}</div>{{end}}
 </div>
+{{template "w-profitpulse-foot" .}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-profitpulse-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasData}}
@@ -33,7 +37,12 @@
 {{if .Waterfall}}{{template "w-profitpulse-waterfall" $}}{{end}}
 {{with .Activities}}<div class="w-aside"><h4 class="w-sub">By activity</h4>{{template "w-rank" .}}</div>{{end}}
 </div>
+{{template "w-profitpulse-foot" .}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* The live footer: the top item where the form ranks none, and the
+     way to the whole analysis. */}}
+{{define "w-profitpulse-foot"}}<p class="w-note pp-foot"><small>{{with .Top}}Top item: {{if .Link}}{{.Link}}{{else}}{{.Name}}{{end}} margin <b title="{{.Full}}">{{.Text}}</b> · {{end}}<a href="/profit/">Open Profit Analysis</a></small></p>{{end}}
 
 {{/* The gross in beside the kept figure. */}}
 {{define "w-profitpulse-gross"}}<p class="pp-gross"><span>Gross in</span> <b title="{{.GrossFull}}">{{.Gross}}</b></p>{{end}}

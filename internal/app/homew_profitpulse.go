@@ -40,17 +40,18 @@ func init() {
 // render draws.
 type profitPulseView struct {
 	HasData    bool
-	Window     string   // "30 days"
-	Lead       wLead    // kept as profit, and its change on the window before
-	WideLead   wLead    // wide: kept as profit, out of the gross in
-	Gross      string   // gross in, short
-	GrossFull  string   // gross in, whole
-	Tiles      []wTile  // medium, large
-	Strip      *wBars   // small: kept profit per day
-	Days       *wBars   // wide, tall, medium, large: kept profit per day
-	TopItem    *wRanked // tall: the item that earned the most
-	TopItems   *wRanked // medium: the three that earned the most
-	Activities *wRanked // large: kept profit by activity
+	Window     string     // "30 days"
+	Lead       wLead      // kept as profit, and its change on the window before
+	WideLead   wLead      // wide: kept as profit, out of the gross in
+	Gross      string     // gross in, short
+	GrossFull  string     // gross in, whole
+	Tiles      []wTile    // medium, large
+	Strip      *wBars     // small: kept profit per day
+	Days       *wBars     // wide, tall, medium, large: kept profit per day
+	TopItem    *wRanked   // tall: the item that earned the most
+	Top        *wRankItem // wide, large: the item that earned the most, as a line
+	TopItems   *wRanked   // medium: the three that earned the most
+	Activities *wRanked   // large: kept profit by activity
 	Waterfall  *pfWaterfall
 	WfTable    wTable // the waterfall's table twin
 	Empty      wEmpty
@@ -169,7 +170,7 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 		}
 	}
 
-	if in.Draws("tall") || in.Draws("medium") {
+	if in.Draws("wide") || in.Draws("tall") || in.Draws("medium") || in.Draws("large") {
 		prefs := app.profitPrefsFor(ctx, in.UserID)
 		items, err := app.queries.ListTradeItems(ctx, db.ListTradeItemsParams{
 			OwnerKind: ownerChar, OwnerIds: ids, Win: tradeWindowFor(days),
@@ -188,6 +189,9 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 			name := app.typeNameOrID(ctx, r.TypeID)
 			ranked = append(ranked, wRankItem{Name: name, Link: itemLink(r.TypeID, name), Value: margin,
 				Text: signedCompact(margin), Full: signedISK(margin) + " ISK margin"})
+		}
+		if (in.Draws("wide") || in.Draws("large")) && len(ranked) > 0 {
+			v.Top = &ranked[0]
 		}
 		if in.Draws("tall") && len(ranked) > 0 {
 			v.TopItem, _ = wRankedBars("The item with the best margin", ranked[:1], 1)

@@ -769,6 +769,8 @@
 .w-chips { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); margin: 0; padding: 0; list-style: none; }
 .w-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.6rem; border: 1px solid var(--hairline); border-radius: 999px; background: var(--surface-inset); font-size: var(--fs-sm); white-space: nowrap; }
 .w-chip strong { color: var(--text-bright); font-variant-numeric: proportional-nums; }
+.w-chip.w-chip-zero { color: var(--muted); }
+.w-chip.w-chip-zero strong { color: inherit; }
 .w-kind { flex: none; width: 0.6rem; height: 0.6rem; border-radius: 2px; background: var(--w-c, var(--muted)); }
 .w-k-joined { --w-c: var(--w-s1); }
 .w-k-left { --w-c: var(--w-s2); }

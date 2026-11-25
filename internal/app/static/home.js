@@ -933,7 +933,7 @@
         box.replaceChildren();
       }
     });
-    fetch("/home/widget/" + encodeURIComponent(key) + "?view=expand", {
+    fetch("/home/widget/" + encodeURIComponent(key) + "?view=expand" + homeSince("&"), {
       headers: { "X-Requested-With": "XMLHttpRequest" },
       credentials: "same-origin",
       cache: "no-store"
@@ -1006,13 +1006,86 @@
   });
 
   function initHomeGrid(root) {
-    var homeGrid = root.querySelector("#home-grid");
-    if (homeGrid && homeGrid.getAttribute("data-customize") === "1" && window.fetch && once(homeGrid, "customize")) {
-      initHomeCustomize(homeGrid);
+    var homeGrid = root.querySelector("#home-grid") || root.querySelector(".grid.home-grid[data-home-page]");
+    if (!homeGrid || !window.fetch) return;
+    if (homeGrid.getAttribute("data-customize") === "1") {
+      if (once(homeGrid, "customize")) initHomeCustomize(homeGrid);
+    } else if (once(homeGrid, "refresh")) {
+      initHomeRefresh(homeGrid);
     }
+  }
+
+  // --- Home grid: live refresh -----------------------------------
+  // Outside Customize the cards redraw from the server every few
+  // minutes while the page is in view (GET /home/widgets, every card
+  // as it renders now), so countdowns, lists and figures follow the
+  // worker without a reload. A card swaps only when its markup
+  // changed; a card whose size or key no longer matches the page is
+  // left for the next full load. Nothing refreshes while an Expand or
+  // other dialog is open, or once the grid has left the page.
+  var HOME_REFRESH_MS = 5 * 60 * 1000;
+
+  // homeSince is the query part that keeps a fetched card's Briefing
+  // on the window the page was drawn with ("" without a Briefing): the
+  // page's own render moved the stored anchor, so without it the card
+  // would lose the lines the reader is looking at.
+  function homeSince(sep) {
+    var el = document.querySelector("[data-briefing-since]");
+    var v = el ? el.getAttribute("data-briefing-since") : "";
+    return v ? sep + "since=" + encodeURIComponent(v) : "";
+  }
+  function initHomeRefresh(grid) {
+    var last = Date.now(), busy = false, timer = 0;
+    function due() {
+      return document.visibilityState === "visible" && document.contains(grid) &&
+        !document.querySelector(".modal-backdrop:not([hidden]), dialog[open]") && Date.now() - last >= HOME_REFRESH_MS;
+    }
+    function refresh() {
+      if (busy || !due()) return;
+      busy = true;
+      last = Date.now();
+      fetch("/home/widgets" + homeSince("?"), { headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin", cache: "no-store" })
+        .then(function (resp) {
+          if (!resp.ok) throw new Error("widgets " + resp.status);
+          return resp.text();
+        })
+        .then(function (html) {
+          if (!document.contains(grid)) return;
+          var box = document.createElement("template");
+          box.innerHTML = html.trim();
+          var fresh = box.content.querySelectorAll(".card[data-key]");
+          var swapped = false;
+          for (var i = 0; i < fresh.length; i++) {
+            var key = fresh[i].getAttribute("data-key");
+            var live = grid.querySelector(':scope > .card[data-key="' + CSS.escape(key) + '"]');
+            if (!live || live.getAttribute("data-gw") !== fresh[i].getAttribute("data-gw") ||
+                live.getAttribute("data-gh") !== fresh[i].getAttribute("data-gh")) continue;
+            if (live._homeSrc === fresh[i].innerHTML) continue;
+            var node = document.importNode(fresh[i], true);
+            node._homeSrc = fresh[i].innerHTML;
+            node.style.gridColumn = live.style.gridColumn;
+            node.style.gridRow = live.style.gridRow;
+            live.replaceWith(node);
+            document.dispatchEvent(new CustomEvent("evesynapse:content-ready", { detail: { root: node, part: true } }));
+            swapped = true;
+          }
+          if (swapped) { homeLayout(grid); homeFit(grid); }
+        })
+        .catch(function () {})
+        .then(function () { busy = false; });
+    }
+    timer = window.setInterval(function () {
+      if (!document.contains(grid)) { window.clearInterval(timer); return; }
+      refresh();
+    }, 30 * 1000);
+    document.addEventListener("visibilitychange", refresh);
   }
   onContentReady(initHomeGrid);
   initHomeGrid(document);
+
+  // HOME_MAX_COPIES mirrors homeMaxCopies (home_widget_kit.go): the
+  // most cards one widget may have on a home.
+  var HOME_MAX_COPIES = 4;
 
   function initHomeCustomize(grid) {
     var modal = document.getElementById("add-module-modal");
@@ -1034,11 +1107,109 @@
       }, function () { return false; });
     }
 
+    // postLayoutJSON is postLayout for a change whose answer carries
+    // data (a copy's new key): the parsed reply, or null on failure.
+    function postLayoutJSON(params) {
+      var body = new URLSearchParams();
+      for (var key in params) body.set(key, params[key]);
+      return fetch("/home/layout", {
+        method: "POST",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        body: body
+      }).then(function (resp) {
+        if (!resp.ok) return null;
+        document.dispatchEvent(new CustomEvent("evesynapse:content-mutated"));
+        return resp.json();
+      }).catch(function () { return null; });
+    }
+
+    // Undo a remove: one line above the grid names the card just
+    // removed and offers it back for a while. Undo puts it back at
+    // its old place and size, drawn fresh by the one-card route.
+    var undoBar = null, undoTimer = 0;
+    function offerUndo(name, params) {
+      if (undoBar) undoBar.remove();
+      window.clearTimeout(undoTimer);
+      undoBar = document.createElement("p");
+      undoBar.className = "w-undo";
+      undoBar.appendChild(document.createTextNode("Removed " + (name || "the widget") + ". "));
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-quiet";
+      btn.textContent = "Undo";
+      undoBar.appendChild(btn);
+      grid.parentNode.insertBefore(undoBar, grid);
+      var bar = undoBar;
+      var close = function () {
+        if (bar.parentNode) bar.remove();
+        if (undoBar === bar) undoBar = null;
+      };
+      undoTimer = window.setTimeout(close, 15000);
+      if (statusEl) statusEl.textContent = "Removed " + (name || "the widget") + ". Undo is above the grid.";
+      btn.addEventListener("click", function () {
+        btn.disabled = true;
+        postLayout(params).then(function (ok) {
+          if (!ok) { btn.disabled = false; return; }
+          close();
+          fetchCard(params.key).then(function (node) {
+            if (!node) { window.location.reload(); return; }
+            var cards = moduleCards();
+            var before = cards[params.at] || null;
+            flip(function () { grid.insertBefore(node, before); });
+            placeCard(node);
+            if (statusEl) statusEl.textContent = "Put back " + (name || "the widget") + ".";
+            var h = node.querySelector(".draghandle");
+            if (h) h.focus({ preventScroll: true });
+          }, function () { window.location.reload(); });
+        });
+      });
+    }
+
+    // Fill gaps: give each card beside or above a hole the size that
+    // closes it, as the home does outside Customize, and save those
+    // sizes. Only a card that grows into a size it declares changes.
+    var fillBtn = document.querySelector("[data-home-fill]");
+    if (fillBtn && once(fillBtn, "fill")) {
+      fillBtn.hidden = false;
+      fillBtn.addEventListener("click", function () {
+        var cols = homeCols(grid);
+        if (cols < 2) return;
+        var cards = Array.prototype.slice.call(moduleCards());
+        var items = cards.map(function (c) {
+          var s = sizeOf(c);
+          return { w: Math.min(s.w, cols), h: s.h, sizes: sizesOf(c).map(function (z) { return { w: Math.min(z.w, cols), h: z.h }; }) };
+        });
+        var placed = homePack(items, cols);
+        for (var i = 0; i < placed.length; i++) placed[i].sizes = items[i].sizes;
+        placed = homeFillGaps(placed, cols);
+        var pairs = [], grown = [];
+        for (var j = 0; j < cards.length; j++) {
+          var p = placed[j], s = sizeOf(cards[j]);
+          if ((p.w > Math.min(s.w, cols) || p.h > s.h) && allows(cards[j], p.w, p.h)) {
+            pairs.push(keyOf(cards[j]) + ":" + p.w + "x" + p.h);
+            grown.push({ card: cards[j], w: p.w, h: p.h });
+          }
+        }
+        if (!pairs.length) {
+          if (statusEl) statusEl.textContent = "No gaps to fill.";
+          return;
+        }
+        fillBtn.disabled = true;
+        postLayout({ action: "sizes", sizes: pairs.join(",") }).then(function (ok) {
+          fillBtn.disabled = false;
+          if (!ok) return;
+          flip(function () { grown.forEach(function (g) { sizeCard(g.card, g.w, g.h); }); });
+          grown.forEach(function (g) { refreshCard(g.card); });
+          if (statusEl) statusEl.textContent = "Filled the gaps: " + grown.length + " widget" + (grown.length === 1 ? "" : "s") + " grew.";
+        });
+      });
+    }
+
     // fetchCard asks the one-card route for a widget's card as it
     // stands in this Customize view: the element, null when the
     // widget has nothing to show (204), or a rejection.
     function fetchCard(key) {
-      return fetch("/home/widget/" + encodeURIComponent(key) + "?customize=1", {
+      return fetch("/home/widget/" + encodeURIComponent(key) + "?customize=1" + homeSince("&"), {
         headers: { "X-Requested-With": "XMLHttpRequest" },
         credentials: "same-origin",
         cache: "no-store"
@@ -1202,11 +1373,25 @@
     function moduleCards() {
       return grid.querySelectorAll(":scope > .card[data-widget]");
     }
-    function widgetIDs() {
-      var ids = [];
+    // keyOf names a card in the layout: its key ("id#2" for a copy).
+    function keyOf(card) {
+      return card.getAttribute("data-key") || card.getAttribute("data-widget");
+    }
+    function widgetKeys() {
+      var keys = [];
       var cards = moduleCards();
-      for (var i = 0; i < cards.length; i++) ids.push(cards[i].getAttribute("data-widget"));
-      return ids;
+      for (var i = 0; i < cards.length; i++) keys.push(keyOf(cards[i]));
+      return keys;
+    }
+    // widgetCounts is how many cards each widget has on the home.
+    function widgetCounts() {
+      var n = {};
+      var cards = moduleCards();
+      for (var i = 0; i < cards.length; i++) {
+        var id = cards[i].getAttribute("data-widget");
+        n[id] = (n[id] || 0) + 1;
+      }
+      return n;
     }
 
     // --- motion --------------------------------------------------
@@ -1356,7 +1541,7 @@
     // saveSize stores a size the card already shows; a failed save
     // puts back the size it had before.
     function saveSize(card, w, h, was) {
-      postLayout({ action: "size", widget: card.getAttribute("data-widget"), w: w, h: h }).then(function (ok) {
+      postLayout({ action: "size", key: keyOf(card), w: w, h: h }).then(function (ok) {
         if (ok) { refreshCard(card); return; }
         flip(function () { sizeCard(card, was.w, was.h); });
         announce(card, was.w, was.h);
@@ -1365,7 +1550,7 @@
       });
     }
     function saveOrder() {
-      return postLayout({ action: "order", ids: widgetIDs().join(",") });
+      return postLayout({ action: "order", ids: widgetKeys().join(",") });
     }
 
     // Give one card its move handle, resize toggle and × button.
@@ -1373,7 +1558,6 @@
     function enhanceCard(card) {
       var heading = card.querySelector(":scope > h2, :scope > h3");
       if (!heading || card.querySelector(".draghandle")) return;
-      var id = card.getAttribute("data-widget");
       var title = heading.textContent.trim();
 
       var handle = document.createElement("button");
@@ -1474,9 +1658,12 @@
       remove.setAttribute("aria-label", "Remove " + title + " from your home");
       remove.addEventListener("click", function () {
         remove.disabled = true;
-        postLayout({ action: "toggle", widget: id }).then(function (ok) {
-          if (ok) removeCard(card);
-          else remove.disabled = false;
+        var at = Array.prototype.indexOf.call(moduleCards(), card);
+        var was = sizeOf(card), key = keyOf(card), name = titleOf(card);
+        postLayout({ action: "toggle", key: key }).then(function (ok) {
+          if (!ok) { remove.disabled = false; return; }
+          removeCard(card);
+          offerUndo(name, { action: "restore", key: key, at: at, w: was.w, h: was.h });
         });
       });
       var settingsTpl = card.querySelector(":scope > template[data-w-settings]");
@@ -1909,17 +2096,22 @@
 
     function addModule(id, btn) {
       btn.disabled = true;
-      postLayout({ action: "toggle", widget: id }).then(function (ok) {
-        if (!ok) { btn.disabled = false; return; }
+      // A widget already on the home that allows copies gets another
+      // card under a new key; any other add is the plain toggle.
+      var copy = !!widgetCounts()[id];
+      var saved = copy
+        ? postLayoutJSON({ action: "copy", widget: id }).then(function (r) { return r && r.ok ? r.key : null; })
+        : postLayout({ action: "toggle", widget: id }).then(function (ok) { return ok ? id : null; });
+      saved.then(function (key) {
+        if (!key) { btn.disabled = false; return; }
         // Widget markup is server-rendered: the new card comes from
         // the one-card route. If that fails, a reload lands in the
         // same place, the add already saved.
-        fetchCard(id).then(function (node) {
+        fetchCard(key).then(function (node) {
           if (!node) { window.location.reload(); return; }
-          // Never two cards for one widget: if a stale copy is
-          // somehow still in the grid, it goes before the fresh
-          // one lands.
-          var stale = grid.querySelector('.card[data-widget="' + id + '"]');
+          // Never two cards for one key: if a stale one is somehow
+          // still in the grid, it goes before the fresh one lands.
+          var stale = grid.querySelector('.card[data-key="' + CSS.escape(key) + '"]');
           if (stale) stale.remove();
           window.EveSynapseModal.close(modal);
           flip(function () { grid.appendChild(node); });
@@ -1957,17 +2149,20 @@
       var emptyNote = modal.querySelector(".modal-empty");
       var addItems = modal.querySelectorAll("[data-add-widget]");
       var openAdd = function () {
-        var onHome = {};
-        var ids = widgetIDs();
-        for (var i = 0; i < ids.length; i++) onHome[ids[i]] = true;
+        var counts = widgetCounts();
         var available = 0;
         for (var j = 0; j < addItems.length; j++) {
-          // A widget already on the home stays listed, marked.
-          var on = !!onHome[addItems[j].getAttribute("data-add-widget")];
-          addItems[j].disabled = on;
+          // A widget already on the home stays listed, marked; one
+          // that allows copies stays open until it has the most.
+          var n = counts[addItems[j].getAttribute("data-add-widget")] || 0;
+          var multi = addItems[j].hasAttribute("data-add-multi");
+          var full = multi ? n >= HOME_MAX_COPIES : n > 0;
+          addItems[j].disabled = full;
           var note = addItems[j].querySelector("[data-added-note]");
-          if (note) note.hidden = !on;
-          if (!on) available++;
+          if (note) note.hidden = n === 0;
+          var again = addItems[j].querySelector("[data-add-again]");
+          if (again) again.hidden = !(multi && n > 0 && !full);
+          if (!full) available++;
         }
         if (emptyNote) emptyNote.hidden = available > 0;
         window.EveSynapseModal.open(modal);

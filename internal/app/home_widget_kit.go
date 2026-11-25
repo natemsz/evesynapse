@@ -93,7 +93,10 @@ type homeWidgetDef struct {
 	Forms       []homeWidgetForm
 	Needs       []string // snapshot kinds the builder reads (esi.Snap*), needPlanetLayouts for colony layouts
 	Options     []widgetOption
-	Build       func(ctx context.Context, app *Application, in *widgetInput) any
+	// Multi lets the widget stand on the home more than once, each copy
+	// with its own settings. Every widget with a scope option may.
+	Multi bool
+	Build func(ctx context.Context, app *Application, in *widgetInput) any
 
 	sizes  []wSize       // every allowed size, narrowest then shortest first
 	formOf map[wSize]int // size -> index into Forms
@@ -309,11 +312,42 @@ func registerHomeWidget(def homeWidgetDef) {
 		}
 		return def.sizes[i].H < def.sizes[j].H
 	})
+	if _, ok := def.scopeOption(); ok {
+		def.Multi = true
+	}
 	d := def
 	homeWidgetRegistry[def.ID] = &d
 	// The size picker's data depends only on the declaration: built
 	// here once, not on every card render.
 	d.sizesText, d.sizeNamesText = d.sizeList(), d.sizeNames()
+}
+
+// homeMaxCopies is the most cards one widget may have on a home.
+const homeMaxCopies = 4
+
+// copyKey is the layout key of a widget's nth card: the id for the
+// first, "id#n" for a copy.
+func copyKey(id string, n int) string {
+	if n <= 1 {
+		return id
+	}
+	return id + "#" + strconv.Itoa(n)
+}
+
+// widgetDefForKey is the declaration a layout key names: a widget id,
+// or "id#n" for a copy of a widget that allows copies (n from 2 to
+// homeMaxCopies).
+func widgetDefForKey(key string) (*homeWidgetDef, bool) {
+	id, n, copied := strings.Cut(key, "#")
+	def, ok := widgetDefFor(id)
+	if !ok || !copied {
+		return def, ok
+	}
+	i, err := strconv.Atoi(n)
+	if err != nil || i < 2 || i > homeMaxCopies || strconv.Itoa(i) != n || !def.Multi {
+		return nil, false
+	}
+	return def, true
 }
 
 // builtIn reports whether the widget's module is compiled in.
@@ -622,6 +656,26 @@ func (s *homeShared) BriefingSince(ctx context.Context) time.Time {
 	return s.briefingSince
 }
 
+// pinBriefingSince keeps the Briefing on the window a page was drawn
+// with (unix seconds, sent back by the page): the full render moved
+// the anchor, so a card fetched after it would otherwise drop the
+// lines the reader is looking at. The window still reaches back at
+// most briefingMaxWindow; a malformed or future value is ignored.
+func (s *homeShared) pinBriefingSince(v string) {
+	sec, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return
+	}
+	at := time.Unix(sec, 0)
+	if at.After(s.now) {
+		return
+	}
+	if floor := s.now.Add(-briefingMaxWindow); at.Before(floor) {
+		at = floor
+	}
+	s.briefingSince, s.briefingSinceSet = at, true
+}
+
 // QueueEnds is when each pilot's skill queue runs out, by character id:
 // the last finish date in the stored queue (the Briefing's
 // lastQueueFinish). A pilot with no dated queue entry is left out.
@@ -691,7 +745,7 @@ func (app *Application) buildHomeWidget(ctx context.Context, ts *template.Templa
 	size := def.sizeOf(item)
 	form := def.FormFor(size)
 	w := homeWidget{
-		ID: def.ID, Key: def.ID, Title: def.Title, Href: def.Href, HrefName: navLabelFor(def.Href),
+		ID: def.ID, Key: item.LayoutKey(), Title: def.Title, Href: def.Href, HrefName: navLabelFor(def.Href),
 		Size: size, Form: form.Name, Sizes: def.sizesText, SizeNames: def.sizeNamesText,
 		SizeClass:   fmt.Sprintf("gw%d gh%d", size.W, size.H),
 		Cap:         homeCap(size.H),

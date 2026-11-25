@@ -310,6 +310,22 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const deleteWidgetConfig = `-- name: DeleteWidgetConfig :exec
+DELETE FROM widget_configs WHERE user_id = $1 AND widget_id = $2
+`
+
+type DeleteWidgetConfigParams struct {
+	UserID   int64  `json:"user_id"`
+	WidgetID string `json:"widget_id"`
+}
+
+// Drops one card's stored settings, so a new copy under a key an
+// earlier copy used starts at the defaults.
+func (q *Queries) DeleteWidgetConfig(ctx context.Context, arg DeleteWidgetConfigParams) error {
+	_, err := q.db.Exec(ctx, deleteWidgetConfig, arg.UserID, arg.WidgetID)
+	return err
+}
+
 const findCharacters = `-- name: FindCharacters :many
 SELECT character_id, name, user_id FROM characters
 WHERE name ILIKE '%' || $1::text || '%'

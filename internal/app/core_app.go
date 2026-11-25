@@ -761,6 +761,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/home", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/widget/{key}", app.handleHomeWidget)
+		r.Get("/widgets", app.handleHomeWidgets)
 		r.Post("/layout", app.handleHomeLayout)
 		r.Post("/widget-config", app.handleWidgetConfig)
 		r.Post("/briefing/dismiss", app.handleBriefingDismiss)

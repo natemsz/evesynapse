@@ -82,6 +82,15 @@ func TestParseHomeLayoutNormalization(t *testing.T) {
 	if got := parseHomeLayout(`[]`); len(got) != 0 {
 		t.Errorf("saved empty array: got %v, want everything off", got)
 	}
+	// Copies: a widget with a scope option keeps cards keyed id#2 to
+	// id#4, each once; a key past the most, a key naming another
+	// widget, and a copy of a widget without copies drop out.
+	copies := `[{"id":"networth"},{"id":"networth","key":"networth#2","w":2,"h":2},{"id":"networth","key":"networth#2"},` +
+		`{"id":"networth","key":"networth#5"},{"id":"networth","key":"pi#2"},{"id":"srp","key":"srp#2"}]`
+	want := []homeLayoutItem{{ID: "networth"}, {ID: "networth", Key: "networth#2", W: 2, H: 2}}
+	if got := parseHomeLayout(copies); !reflect.DeepEqual(got, want) {
+		t.Errorf("copies: got %v, want %v", got, want)
+	}
 }
 
 // TestHomeGridSizes: the size action stores a size, the page renders

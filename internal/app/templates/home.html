@@ -4,6 +4,7 @@
   {{if .Home.Customize}}<p class="home-bar-note"><small>Drag a module by its move handle, resize it from its corner, remove it with ×. Changes save as you make them. <kbd>\</kbd> finishes.</small></p>{{end}}
   {{with .ESIHealth}}<span class="esi-pill esi-{{.State}}" title="{{.Title}}"><span class="esi-dot" aria-hidden="true"></span><span class="esi-label">{{.Label}}</span>{{if .Players}}<span class="esi-tq">Tranquility <b>{{.Players}}</b> online</span>{{end}}</span>{{end}}
   <a class="btn btn-quiet" href="/auth/link">Link another character</a>
+  {{if .Home.Customize}}<button type="button" class="btn btn-quiet" data-home-fill hidden title="Widen or lengthen widgets so the grid has no gaps">Fill gaps</button>{{end}}
   {{if .Home.Customize}}<a class="btn" href="/" title="Done (\)" aria-keyshortcuts="\">Done <kbd>\</kbd></a>{{end}}
   <details class="menu-pop home-settings">
     <summary class="btn btn-quiet" title="Customize: arrange, add, theme or reset modules" aria-label="Customize settings"><svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></g></svg><span>Customize</span></summary>
@@ -35,7 +36,7 @@
 {{if .Home.Customize}}{{if not .Home.Widgets}}<p><small>Your home is empty. Add a module from the Customize menu.</small></p>{{end}}{{end}}
 
 <div class="l-page home-page">
-<div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}" data-home-page{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
+<div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}" data-home-page{{with .Home.BriefingSince}} data-briefing-since="{{.}}"{{end}}{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}{{template "w-card" .}}
 {{end}}
 </div>
@@ -71,7 +72,7 @@
     <h3 class="modal-group">{{.Title}}</h3>
     <ul class="modal-list">
       {{range .Entries}}
-      <li><button type="button" class="modal-item" data-add-widget="{{.ID}}"{{if .Enabled}} disabled data-added{{end}}><strong>{{.Title}}</strong><small>{{.Description}}</small><small class="modal-item-sizes">Starts at {{.Default.W}}x{{.Default.H}}. Sizes {{range $i, $s := .Sizes}}{{if $i}}, {{end}}{{$s.Value}}{{end}}.</small><small class="modal-item-on" data-added-note{{if not .Enabled}} hidden{{end}}>On your home</small></button></li>
+      <li><button type="button" class="modal-item" data-add-widget="{{.ID}}"{{if .Multi}} data-add-multi{{end}}{{if and .Enabled (not .Multi)}} disabled{{end}}{{if .Enabled}} data-added{{end}}><strong>{{.Title}}</strong><small>{{.Description}}</small><small class="modal-item-sizes">Starts at {{.Default.W}}x{{.Default.H}}. Sizes {{range $i, $s := .Sizes}}{{if $i}}, {{end}}{{$s.Value}}{{end}}.</small><small class="modal-item-on" data-added-note{{if not .Enabled}} hidden{{end}}>On your home</small>{{if .Multi}}<small class="modal-item-on" data-add-again{{if not .Enabled}} hidden{{end}}>Adding it again makes a copy with its own settings.</small>{{end}}</button></li>
       {{end}}
     </ul>
     {{end}}

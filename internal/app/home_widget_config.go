@@ -327,7 +327,7 @@ func (app *Application) handleWidgetConfig(w http.ResponseWriter, r *http.Reques
 			next = n
 		}
 		key := r.PostForm.Get("key")
-		if def, ok := widgetDefFor(key); ok && len(def.Options) > 0 {
+		if def, ok := widgetDefForKey(key); ok && len(def.Options) > 0 {
 			saved = app.saveWidgetOptions(ctx, userID, def, key, r.PostForm)
 		}
 	}

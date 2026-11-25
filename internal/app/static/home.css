@@ -1008,3 +1008,6 @@
 .sv-region { text-align: right; }
 .sv-alliances, .sv-next { margin: 0; font-size: var(--fs-sm); }
 .sv-alliances small { color: var(--muted); }
+
+/* Undo after a remove in Customize: one line above the grid. */
+.w-undo { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--text); }

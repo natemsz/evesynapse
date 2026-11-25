@@ -117,9 +117,18 @@ func widgetSize(item homeLayoutItem) (w, h int) {
 // the user has resized it, its size in grid cells (0 = the catalog
 // default).
 type homeLayoutItem struct {
-	ID string `json:"id"`
-	W  int    `json:"w,omitempty"`
-	H  int    `json:"h,omitempty"`
+	ID  string `json:"id"`
+	Key string `json:"key,omitempty"` // a copy's key, "id#2"; empty for the first card
+	W   int    `json:"w,omitempty"`
+	H   int    `json:"h,omitempty"`
+}
+
+// LayoutKey names the card: its copy key, else the widget id.
+func (i homeLayoutItem) LayoutKey() string {
+	if i.Key != "" {
+		return i.Key
+	}
+	return i.ID
 }
 
 // parseHomeLayout normalizes a persisted layout: unknown ids
@@ -145,10 +154,10 @@ func parseHomeLayout(raw string) []homeLayoutItem {
 	seen := make(map[string]bool, len(entries))
 	for _, entry := range entries {
 		item, ok := parseHomeLayoutEntry(entry)
-		if !ok || seen[item.ID] {
+		if !ok || seen[item.LayoutKey()] {
 			continue
 		}
-		seen[item.ID] = true
+		seen[item.LayoutKey()] = true
 		out = append(out, item)
 	}
 	return out
@@ -167,6 +176,7 @@ func parseHomeLayoutEntry(entry json.RawMessage) (homeLayoutItem, bool) {
 	// v2/v3: {"id": ..., "span": ...} or {"id": ..., "w": .., "h": ..}.
 	var obj struct {
 		ID   string `json:"id"`
+		Key  string `json:"key"`
 		Span string `json:"span"`
 		W    int    `json:"w"`
 		H    int    `json:"h"`
@@ -178,6 +188,13 @@ func parseHomeLayoutEntry(entry json.RawMessage) (homeLayoutItem, bool) {
 		return homeLayoutItem{}, false
 	}
 	item := homeLayoutItem{ID: obj.ID, W: clampGrid(obj.W, homeGridCols), H: clampGrid(obj.H, homeGridRows)}
+	if obj.Key != "" && obj.Key != obj.ID {
+		// A copy: its key must name a copy of this widget.
+		if def, ok := widgetDefForKey(obj.Key); !ok || def.ID != obj.ID {
+			return homeLayoutItem{}, false
+		}
+		item.Key = obj.Key
+	}
 	if obj.Span == "wide" && item.W == 0 {
 		item.W = homeGridCols
 	}
@@ -551,6 +568,10 @@ type homeView struct {
 	HasChars   bool
 	Customize  *customizeView // non-nil in customize mode
 	LoadFailed bool           // character list unreadable
+	// BriefingSince is the start of the Briefing's window in this
+	// render (unix seconds; 0 without a Briefing). The page sends it
+	// back with every card it fetches later (pinBriefingSince).
+	BriefingSince int64
 }
 
 // fleetRow is one line of the fleet overview.
@@ -1204,6 +1225,15 @@ func (app *Application) effectiveHomeLayout(ctx context.Context, userID int64, r
 }
 
 func (app *Application) buildHome(ctx context.Context, customize bool) *homeView {
+	return app.buildHomeView(ctx, customize, !customize, "")
+}
+
+// buildHomeView builds the signed-in home. advance says whether this
+// render counts as the reader looking at the Briefing: a full home
+// render does; Customize and a live refresh of the cards do not.
+// since, when set, is the Briefing window the page was drawn with
+// (pinBriefingSince).
+func (app *Application) buildHomeView(ctx context.Context, customize, advance bool, since string) *homeView {
 	view := &homeView{}
 	userID := app.userID(ctx)
 	if userID == 0 {
@@ -1243,6 +1273,9 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		}
 	}
 	shared := newHomeShared(ctx, app, userID, chars, needs)
+	if since != "" {
+		shared.pinBriefingSince(since)
+	}
 	viewer := viewerChars(chars)
 	if view.Customize != nil {
 		for i := range view.Customize.Entries {
@@ -1277,7 +1310,10 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 	// render that included the briefing: looking at the digest
 	// is what moves the window. A Customize pass arranges the
 	// module; it does not count as having read it.
-	if briefingIn && !customize {
+	if briefingIn {
+		view.BriefingSince = shared.BriefingSince(ctx).Unix()
+	}
+	if briefingIn && advance {
 		app.advanceBriefingAnchor(ctx, userID, shared.now)
 	}
 	return view
@@ -1294,6 +1330,7 @@ type customizeEntry struct {
 	CanDown     bool
 	Size        wSize               // current size (on the home, or the default)
 	Default     wSize               // what Add a widget gives it
+	Multi       bool                // Add a widget can add another copy while one stands
 	Sizes       []customizeSize     // every declared size, for the no-script picker
 	Settings    *widgetSettingsView // the no-script settings form, for a widget on the home with options
 }
@@ -1339,6 +1376,7 @@ func buildCustomizeView(layout []homeLayoutItem) *customizeView {
 			Enabled:     position[def.ID] > 0,
 			Position:    position[def.ID],
 			Default:     def.Default,
+			Multi:       def.Multi,
 		}
 		entry.Size.W, entry.Size.H = widgetSize(homeLayoutItem{ID: def.ID, W: sizes[def.ID].W, H: sizes[def.ID].H})
 		for _, sz := range def.Sizes() {
@@ -1376,11 +1414,16 @@ func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout
 
 // handleHomeLayout applies one layout change (POST /home/layout):
 // toggle a widget, move one up or down, resize one (action=size,
-// w and h in grid cells, 1-3), reset to the default, or accept a
-// whole new order from a drag (action=order, ids comma-joined). Every
-// control is a plain form, so arranging works with no JavaScript: the
-// change saves and bounces back to Customize. Requests with
-// X-Requested-With get a bare 200 instead of the redirect.
+// w and h in grid cells), reset to the default, accept a whole new
+// order from a drag (action=order, layout keys comma-joined), add a
+// copy of a widget that allows copies (action=copy), put a removed
+// card back where it stood (action=restore, with at, w and h), or
+// resize several cards at once (action=sizes, "key:WxH" comma-joined,
+// the gaps Fill gaps closes). A card is named by key (its layout key,
+// "id#2" for a copy), defaulting to widget. Every control is a plain
+// form, so arranging works with no JavaScript: the change saves and
+// bounces back to Customize. Requests with X-Requested-With get JSON
+// instead of the redirect.
 func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
@@ -1388,6 +1431,7 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
+	scripted := r.Header.Get("X-Requested-With") == "XMLHttpRequest"
 	raw, err := app.queries.GetUserHomeLayout(ctx, userID)
 	if err != nil {
 		raw = ""
@@ -1397,11 +1441,28 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 	// widget standing only through the preset is found and resized
 	// here instead of the change silently going nowhere.
 	layout := app.effectiveHomeLayout(ctx, userID, raw)
+	find := func(key string) int {
+		for i, item := range layout {
+			if item.LayoutKey() == key {
+				return i
+			}
+		}
+		return -1
+	}
+	refuse := func() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"ok":false}`)
+	}
+	reply := `{"ok":true}`
 
 	if err := r.ParseForm(); err == nil {
 		action := r.FormValue("action")
-		widget := r.FormValue("widget")
-		def, known := widgetDefFor(widget)
+		key := r.FormValue("key")
+		if key == "" {
+			key = r.FormValue("widget")
+		}
+		def, known := widgetDefForKey(key)
 		switch action {
 		case "reset":
 			// Store the account's own preset rather than "": the
@@ -1409,25 +1470,67 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 			app.saveHomeLayout(ctx, userID, app.defaultLayoutFor(ctx, userID))
 		case "toggle":
 			if known {
-				found := -1
-				for i, item := range layout {
-					if item.ID == widget {
-						found = i
+				if i := find(key); i >= 0 {
+					layout = append(layout[:i], layout[i+1:]...)
+				} else if key == def.ID {
+					layout = append(layout, homeLayoutItem{ID: def.ID})
+				}
+				app.saveHomeLayout(ctx, userID, layout)
+			}
+		case "copy":
+			// Another card of a widget that allows copies, at its
+			// default size, under the first free key.
+			added := ""
+			if known && def.Multi {
+				for n := 1; n <= homeMaxCopies && added == ""; n++ {
+					if k := copyKey(def.ID, n); find(k) < 0 {
+						added = k
+						item := homeLayoutItem{ID: def.ID}
+						if n > 1 {
+							item.Key = k
+						}
+						layout = append(layout, item)
 					}
 				}
-				if found >= 0 {
-					layout = append(layout[:found], layout[found+1:]...)
-				} else {
-					layout = append(layout, homeLayoutItem{ID: widget})
+			}
+			if added == "" {
+				if scripted {
+					refuse()
+					return
 				}
+				break
+			}
+			// A removed copy keeps its settings for undo; a new copy
+			// under the same key starts at the defaults.
+			if err := app.queries.DeleteWidgetConfig(ctx, db.DeleteWidgetConfigParams{UserID: userID, WidgetID: added}); err != nil {
+				logging.Errorf("home: clear settings of %s for user %d: %v", added, userID, err)
+			}
+			app.saveHomeLayout(ctx, userID, layout)
+			reply = `{"ok":true,"key":` + strconv.Quote(added) + `}`
+		case "restore":
+			// Undo a remove: the card goes back at its old place and
+			// size. A size the widget no longer declares falls back to
+			// its default; a card already on the home stays put.
+			if known && find(key) < 0 {
+				item := homeLayoutItem{ID: def.ID}
+				if key != def.ID {
+					item.Key = key
+				}
+				wv, _ := strconv.Atoi(r.FormValue("w"))
+				hv, _ := strconv.Atoi(r.FormValue("h"))
+				if def.Allows(wSize{wv, hv}) {
+					item.W, item.H = wv, hv
+				}
+				at, aerr := strconv.Atoi(r.FormValue("at"))
+				if aerr != nil || at < 0 || at > len(layout) {
+					at = len(layout)
+				}
+				layout = append(layout[:at], append([]homeLayoutItem{item}, layout[at:]...)...)
 				app.saveHomeLayout(ctx, userID, layout)
 			}
 		case "up", "down":
 			if known {
-				for i, item := range layout {
-					if item.ID != widget {
-						continue
-					}
+				if i := find(key); i >= 0 {
 					j := i - 1
 					if action == "down" {
 						j = i + 1
@@ -1435,64 +1538,82 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 					if j >= 0 && j < len(layout) {
 						layout[i], layout[j] = layout[j], layout[i]
 					}
-					break
 				}
 				app.saveHomeLayout(ctx, userID, layout)
 			}
 		case "order":
 			// The whole arrangement, as dragged. Unknown and
-			// duplicate ids drop out and the submitted order
-			// wins; span preferences carry over from the saved
-			// layout (they are orthogonal to order), and an id
-			// never seen before starts at its default size. An empty or
-			// all-unknown list turns everything off, exactly
-			// like toggling each widget off would.
+			// duplicate keys drop out and the submitted order
+			// wins; sizes carry over from the saved layout (they
+			// are orthogonal to order), and a key never seen before
+			// starts at its default size. An empty or all-unknown
+			// list turns everything off, exactly like toggling each
+			// widget off would.
 			prefs := make(map[string]homeLayoutItem, len(layout))
 			for _, item := range layout {
-				prefs[item.ID] = item
+				prefs[item.LayoutKey()] = item
 			}
 			next := make([]homeLayoutItem, 0, len(layout))
 			seen := make(map[string]bool, len(layout))
-			for _, id := range strings.Split(r.FormValue("ids"), ",") {
-				id = strings.TrimSpace(id)
-				if _, ok := widgetDefFor(id); !ok || seen[id] {
+			for _, k := range strings.Split(r.FormValue("ids"), ",") {
+				k = strings.TrimSpace(k)
+				d, ok := widgetDefForKey(k)
+				if !ok || seen[k] {
 					continue
 				}
-				seen[id] = true
-				next = append(next, homeLayoutItem{ID: id, W: prefs[id].W, H: prefs[id].H})
+				seen[k] = true
+				item := homeLayoutItem{ID: d.ID, W: prefs[k].W, H: prefs[k].H}
+				if k != d.ID {
+					item.Key = k
+				}
+				next = append(next, item)
 			}
 			app.saveHomeLayout(ctx, userID, next)
 		case "size":
-			// Resize one widget on the home; the size must be one
-			// the widget declares, else nothing changes, and a
-			// scripted caller is told so, so it can put the size back.
-			// The no-script picker sends one field, size=2x1.
+			// Resize one card; the size must be one the widget
+			// declares, else nothing changes, and a scripted caller
+			// is told so, so it can put the size back. The
+			// no-script picker sends one field, size=2x1.
 			wv, werr := strconv.Atoi(r.FormValue("w"))
 			hv, herr := strconv.Atoi(r.FormValue("h"))
 			if sz, ok := parseWSize(r.FormValue("size")); ok {
 				wv, hv, werr, herr = sz.W, sz.H, nil, nil
 			}
-			valid := known && werr == nil && herr == nil && def.Allows(wSize{wv, hv})
-			if valid {
-				for i := range layout {
-					if layout[i].ID == widget {
-						layout[i].W, layout[i].H = wv, hv
-						app.saveHomeLayout(ctx, userID, layout)
-						break
-					}
+			if known && werr == nil && herr == nil && def.Allows(wSize{wv, hv}) {
+				// A card not on the home changes nothing.
+				if i := find(key); i >= 0 {
+					layout[i].W, layout[i].H = wv, hv
+					app.saveHomeLayout(ctx, userID, layout)
 				}
-			} else if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				_, _ = io.WriteString(w, `{"ok":false}`)
+			} else if scripted {
+				refuse()
 				return
+			}
+		case "sizes":
+			// Several cards at once: each "key:WxH" pair applies
+			// when the card is on the home and the widget declares
+			// the size; the rest are skipped.
+			changed := false
+			for _, pair := range strings.Split(r.FormValue("sizes"), ",") {
+				k, raw, ok := strings.Cut(strings.TrimSpace(pair), ":")
+				sz, sok := parseWSize(raw)
+				d, dok := widgetDefForKey(k)
+				i := find(k)
+				if !ok || !sok || !dok || i < 0 || !d.Allows(sz) {
+					continue
+				}
+				layout[i].W, layout[i].H = sz.W, sz.H
+				changed = true
+			}
+			if changed {
+				app.saveHomeLayout(ctx, userID, layout)
 			}
 		}
 	}
-	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+	if scripted {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, `{"ok":true}`)
+		_, _ = io.WriteString(w, reply)
 		return
 	}
 	http.Redirect(w, r, "/?customize=1", http.StatusSeeOther)

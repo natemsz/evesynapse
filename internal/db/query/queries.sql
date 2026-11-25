@@ -400,6 +400,10 @@ VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id, widget_id) DO UPDATE SET
     config     = excluded.config,
     updated_at = excluded.updated_at;
+-- name: DeleteWidgetConfig :exec
+-- Drops one card's stored settings, so a new copy under a key an
+-- earlier copy used starts at the defaults.
+DELETE FROM widget_configs WHERE user_id = $1 AND widget_id = $2;
 
 -- ---------------------------------------------------------------------
 -- Stored market guide (schema 021): the worker mirrors

@@ -385,6 +385,17 @@ stays, dimmed, until the new one lands. home.js then dispatches
 card alone. A listener that restarts page-level work (the page
 sync poller) skips events marked `part`.
 
+A card's `{key}` is its layout key: the widget id, or `id#2` to
+`id#4` for a copy. Every widget with a scope option may stand on the
+home more than once (`Multi`), each copy with its own settings,
+stored under its key. `GET /home/widgets` renders every card the
+same way, for the live refresh: outside Customize home.js fetches it
+every five minutes while the page is in view and no dialog is open,
+and swaps each card whose markup changed and whose size still
+matches. In Customize a removed card can be put back (`action=restore`
+with its old place and size), and Fill gaps saves the sizes that
+close the grid's holes (`action=sizes`).
+
 ### Character selector
 
 Pages scoped to one pilot render the `charselector` partial

@@ -43,7 +43,7 @@ func (app *Application) handleHomeWidget(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	key := chi.URLParam(r, "key")
-	def, ok := widgetDefFor(key)
+	def, ok := widgetDefForKey(key)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -61,7 +61,7 @@ func (app *Application) handleHomeWidget(w http.ResponseWriter, r *http.Request)
 	var item homeLayoutItem
 	found := false
 	for _, it := range app.effectiveHomeLayout(ctx, userID, raw) {
-		if it.ID == def.ID {
+		if it.LayoutKey() == key {
 			item, found = it, true
 			break
 		}
@@ -82,6 +82,9 @@ func (app *Application) handleHomeWidget(w http.ResponseWriter, r *http.Request)
 	}
 
 	shared := newHomeShared(ctx, app, userID, chars, def.Needs)
+	if v := q.Get("since"); v != "" {
+		shared.pinBriefingSince(v)
+	}
 	ts, err := homeTemplateSet()
 	if err != nil {
 		logging.Errorf("home widget: parse templates: %v", err)
@@ -100,6 +103,37 @@ func (app *Application) handleHomeWidget(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = buf.WriteTo(w)
+}
+
+// handleHomeWidgets serves every card of the signed-in account's home
+// as it renders now (GET /home/widgets), for the live refresh: the
+// cards only, in layout order. Like the one-card route it never moves
+// the Briefing's "since you last looked" anchor, and it keeps the
+// Briefing on the window the page sends back as since.
+func (app *Application) handleHomeWidgets(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if app.userID(ctx) == 0 {
+		http.Error(w, "Not signed in", http.StatusUnauthorized)
+		return
+	}
+	view := app.buildHomeView(ctx, false, false, r.URL.Query().Get("since"))
+	ts, err := homeTemplateSet()
+	if err != nil {
+		logging.Errorf("home widgets: parse templates: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	var buf bytes.Buffer
+	for _, card := range view.Widgets {
+		if err := ts.ExecuteTemplate(&buf, "w-card", card); err != nil {
+			logging.Errorf("home widgets: render %s: %v", card.Key, err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+	}
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = buf.WriteTo(w)
 }

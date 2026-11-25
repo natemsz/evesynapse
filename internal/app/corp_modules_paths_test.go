@@ -7,5 +7,4 @@ const (
 	doctrinesPath    = "/doctrines/"
 	doctrineFitsPath = "/doctrines/fits/"
 	srpOpen          = "open"
-	srpDenied        = "denied"
 )

@@ -83,6 +83,14 @@ WHERE user_id = sqlc.arg(user_id)::bigint
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(row_limit)::bigint;
 
+-- name: CountOpenSRPRequestsByUser :one
+-- An account's open claims and the payouts suggested for them, over
+-- all of its claims (lists of them show only the newest).
+SELECT COUNT(*)::bigint AS requests,
+       COALESCE(SUM(suggested_payout) FILTER (WHERE suggested_payout > 0), 0)::double precision AS suggested
+FROM srp_requests
+WHERE user_id = sqlc.arg(user_id)::bigint AND status = 'open';
+
 -- name: ListSRPRequestsByUserForOwner :many
 SELECT * FROM srp_requests
 WHERE user_id = sqlc.arg(user_id)::bigint AND owner_kind = sqlc.arg(owner_kind) AND owner_id = sqlc.arg(owner_id)

@@ -275,3 +275,10 @@ FROM battle_fight_kills bk
 JOIN battle_fights f ON f.id = bk.fight_id
 WHERE f.user_id = sqlc.arg(user_id) AND bk.killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[])
 GROUP BY bk.killmail_id;
+
+-- name: ListRecentBattleFightsByUser :many
+-- An account's newest fights, a few at most.
+SELECT * FROM battle_fights
+WHERE user_id = sqlc.arg(user_id)
+ORDER BY started_at DESC
+LIMIT sqlc.arg(row_limit)::int;

@@ -20,6 +20,7 @@ import (
 const (
 	srpPath         = "/srp/"
 	srpPaid         = "paid"
+	srpDenied       = "denied"
 	srpNotifyWindow = 14 * 24 * time.Hour
 )
 

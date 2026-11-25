@@ -191,6 +191,10 @@
    and its "N more" line). */
 .w-rest { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .w-body.w-split > .w-rest { flex: 1 1 0; }
+.w-cols > .w-rest { flex: 2 1 0; }
+/* A list in the column keeps its rows' height, so a card with no room
+   for them overflows and home.js gives up whole rows. */
+.w-rest > * { flex: none; }
 @container widget (aspect-ratio > 2.2) {
   .w-body.w-split { flex-direction: row; align-items: stretch; gap: var(--space-4); }
   .w-body.w-split > :first-child { flex: 0 0 auto; width: clamp(9rem, 30%, 15rem); justify-content: center; }
@@ -908,3 +912,35 @@
 .fl-run-one + .fl-run-one { margin-top: var(--space-2); }
 .fl-run-title { margin: 0 0 0.2rem; font-size: var(--fs-sm); }
 .fl-run-title small { color: var(--muted); }
+
+/* ---------------------------------------------------------------------
+   Kills and Losses (templates/widgets/kills.html) and Ship Replacement
+   (templates/widgets/srp.html).
+   --------------------------------------------------------------------- */
+
+.kl-lead { display: flex; flex-direction: column; gap: 0.3rem; }
+.kl-meter { height: 0.375rem; }
+.kl-list, .kl-battles, .srp-claims, .srp-owners { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; min-height: 0; }
+.kl-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.5rem; padding: 0.3rem 0 0.3rem 0.6rem; border-bottom: 1px solid var(--hairline); border-left: 2px solid transparent; font-size: var(--fs-sm); }
+.kl-list > li:last-child, .srp-claims > li:last-child, .srp-owners > li:last-child, .kl-battles > li:last-child { border-bottom: 0; }
+/* A loss carries the bad edge, as rows do across the app. */
+.kl-list > li.kl-loss { border-left-color: var(--v-bad, #ff6b4a); }
+.kl-ship { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kl-value { color: var(--text-bright); font-variant-numeric: tabular-nums; text-align: right; }
+.kl-where, .kl-ago { color: var(--muted); font-size: var(--fs-xs); }
+.kl-ago { text-align: right; white-space: nowrap; }
+.kl-battles > li { padding: 0.3rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.kl-battles small { color: var(--muted); }
+.kl-battle-figs { display: block; color: var(--muted); font-size: var(--fs-xs); }
+
+.srp-review { margin: 0; font-size: var(--fs-sm); }
+.srp-claims > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.srp-ship { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srp-state { font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--v-warn-ink, #ffd27a); text-align: right; }
+.srp-state.srp-paid { color: var(--v-good-ink, #7fe0a3); }
+.srp-state.srp-denied { color: var(--v-bad-ink, #ffab8f); }
+.srp-pay, .srp-ago { color: var(--muted); font-size: var(--fs-xs); }
+.srp-ago { text-align: right; }
+.srp-owners > li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.srp-owners > li > span { color: var(--muted); white-space: nowrap; }
+.srp-review-box { margin-top: var(--space-2); }

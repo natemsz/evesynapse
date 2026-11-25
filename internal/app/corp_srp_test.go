@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
@@ -376,5 +377,34 @@ func TestSRPClaimNeedsTheFleetAndPaysALossOnce(t *testing.T) {
 	mine, err := f.q.ListSRPRequestsByUser(f.ctx, db.ListSRPRequestsByUserParams{UserID: f.pilotUser, RowLimit: 10})
 	if err != nil || len(mine) != 1 || mine[0].OpID != id {
 		t.Fatalf("one loss on two fleets: %+v, %v", mine, err)
+	}
+}
+
+// TestHomeSRPWidgetReviewQueueOnlyForHandlers: the home's Ship
+// Replacement widget tells a director of the claim waiting for review,
+// shows the pilot their own claim, and tells a member who may not
+// handle claims nothing of it.
+func TestHomeSRPWidgetReviewQueueOnlyForHandlers(t *testing.T) {
+	f := newSRPFixture(t)
+	f.post(f.pilot, "/srp/request", url.Values{"loss": {f.claim(srpLossOnOp)}})
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE users SET home_layout = '[{"id":"srp","w":2,"h":2}]'`); err != nil {
+		t.Fatal(err)
+	}
+	get := func(c *http.Cookie) string {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(c)
+		rec := httptest.NewRecorder()
+		f.app.Handler().ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+	if body := get(f.director); !strings.Contains(body, "Waiting for your review") || !strings.Contains(body, "1 waiting") {
+		t.Error("the director's widget does not show the claim waiting for review")
+	}
+	if body := get(f.pilot); !strings.Contains(body, `class="srp-state `) {
+		t.Error("the pilot's widget does not list their own claim")
+	}
+	if body := get(f.acct); strings.Contains(body, "1 waiting") {
+		t.Error("a member who does not handle claims is told of one waiting")
 	}
 }

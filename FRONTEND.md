@@ -309,9 +309,9 @@ shows. When every size of the drawn form is two or more columns
 wide and the widget has a one-column size, the card also renders
 that one-column form (at the nearest height) into `NarrowBody`;
 home.css shows it in place of the wide body when the card is
-under 30rem wide, which is a phone. Options (`optScope`,
-`optChoice`) are declared now and draw at their defaults until
-the settings sheet stores values.
+under 30rem wide, which is a phone. Options are declared with the
+widget and drawn by Customize's settings sheet (see "Defining a
+home widget").
 
 **Kit parts** (`templates/widgets/_kit.html`; Go types in
 home_widget_kit.go and home_widget_chart.go; styles in home.css).
@@ -398,6 +398,166 @@ Ctrl+Y): each saved change records the arrangement it replaced, and
 undo saves one back whole (`action=arrange`, `key:WxH` pairs in
 order). Fill gaps saves the sizes that close the grid's holes
 (`action=sizes`).
+
+### Defining a home widget
+
+A widget is two files, and nothing else names it: the catalog, the
+size picker, the snapshot read, the card shell, Customize and the
+settings sheet all come from the declaration. Add its rules to
+home.css when it needs any, and add it to a preset only if it
+belongs there.
+
+1. `internal/app/homew_<id>.go`: the declaration and the builder.
+2. `internal/app/templates/widgets/<id>.html`: one body per form.
+
+Net Worth (`homew_networth.go`, `templates/widgets/networth.html`)
+is the worked example:
+
+```go
+func init() {
+	registerHomeWidget(homeWidgetDef{
+		ID: widgetNetWorth, Title: "Net Worth", Category: wcatMoney, Feature: "networth", Href: "/wallet/",
+		Description: "Wallets, assets and buy-order escrow across your characters, and how the total has moved.",
+		Default:     wSize{1, 2},
+		Forms: []homeWidgetForm{
+			{Name: "small", Sizes: "1x1", Says: "The total, its 7-day change and a 30-day line."},
+			{Name: "wide", Sizes: "2x1 3x1", Says: "The total beside its chart."},
+			{Name: "tall", Sizes: "1x2 1x3", Says: "The total, how it splits, and its chart."},
+			{Name: "medium", Sizes: "2x2 2x3", Says: "Wallets, assets and escrow over a chart with dates and values."},
+			{Name: "large", Sizes: "3x2 3x3", Says: "Adds the split by character or by location."},
+		},
+		Needs: []string{esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
+		Options: []widgetOption{optScope(),
+			optChoice("range", "History", "30", "30:30 days", "90:90 days", "365:A year"),
+			optChoice("split", "Split by", "chars", "chars:Character", "places:Location")},
+		Build: buildNetWorthWidget,
+	})
+}
+```
+
+**The declaration.** `registerHomeWidget` is called from `init()`
+with a `homeWidgetDef` (types in `home_widget_kit.go`):
+
+| Field | What it is |
+|---|---|
+| `ID` | Stored in every account's layout: never rename one. A const beside the others (`widgetNetWorth`). |
+| `Title`, `Description` | The card's title; the one plain sentence in Add a widget. |
+| `Category` | One of the `wcat*` constants; the catalog groups by it. |
+| `Feature` | The manifest feature whose scopes power it (module_manifest.go). |
+| `Requires` | A module id that must be built in, or `""` for a core widget. A widget whose module is left out drops out quietly, so code and tests must also pass in a `core_only` build. |
+| `Href` | The page with all of it: the title links there, and "3 more on the Wallet page" names it. |
+| `Default` | The size a new card takes; must be one of the forms' sizes. |
+| `Forms` | The looks, each with the sizes that draw it (below). The sizes listed are exactly the sizes the widget may take. |
+| `Needs` | The snapshot kinds the builder reads (`esi.Snap*`, `needPlanetLayouts`). The home reads the union of the visible widgets' needs in one batched query. |
+| `Options` | The settings sheet's fields (below). |
+| `Multi` | May stand on the home more than once, each copy with its own settings. Set for you on every widget with a scope option. |
+| `Build` | `func(ctx, app, in *widgetInput) any`: the data the forms draw. |
+
+Each `homeWidgetForm` is:
+
+| Field | What it is |
+|---|---|
+| `Name` | `small`, `wide`, `tall`, `medium` or `large`: the template's suffix and the size picker's name. |
+| `Sizes` | `"2x1 3x1"`: W columns (1 to 3) by H rows (1 to 4). A size belongs to one form only. |
+| `Says` | One plain sentence for the size picker: what this form shows. |
+| `Grow` | The one exception to "a card is exactly its cells": the card is as tall as what it draws. Only for a band or a roster whose length is the point (the Briefing and At a Glance bands, the Fleet Overview tables). |
+| `GrowRows` | With `Grow`, the rows its scrolling list shows before it scrolls inside. |
+
+`registerHomeWidget` panics on a duplicate id, a malformed size, a
+size in two forms, a default outside the forms, `GrowRows` without
+`Grow`, and an option whose default is not one of its choices:
+declarations are code, and every test run loads them.
+
+**Forms and sizes.**
+- Name each form by what it shows. Every size must show something
+  its neighbours do not (more rows, a chart, a breakdown); if two
+  sizes would look alike, leave one out.
+- Give the widget a one-column size where it can have one: a phone
+  draws that form in place of a wide one (the card's `NarrowBody`).
+- A stored size the widget no longer declares snaps to the nearest
+  one it does, so sizes can be removed without breaking layouts.
+
+**The builder.**
+- Read stored data only, never ESI or another service at render.
+  Every query is bounded, with filters, sorts and limits in SQL;
+  anything bigger is precomputed at ingest into a stored table.
+- Build only what this render draws: `in.Draws("large")` says
+  whether a form is drawn (the card's form, and the phone body's).
+- Take shared facts from `in.Shared` (net worth, queue ends, fleets,
+  market tables...), computed once per render for every widget. A
+  fact two widgets show gets a getter there, not a second query.
+- `in.Chars` and `in.Bundles` are already narrowed to the scope
+  option, and `in.Opts.Get(key)` reads an option, already checked
+  against the account. Never read an option from the request.
+- Return one value for every form. Give it a `wEmpty` (one sentence
+  and the next step) for the nothing-yet case, and a `Quiet() bool`
+  method when a card with nothing to say should leave the home
+  outside Customize.
+- Prices follow the price rules everywhere else on the site. Kill
+  values on the home are EveSynapse's own stored appraisal
+  (`value_ours`) or a gap that says how many kills are unpriced.
+
+**The templates.** One `{{define "w-<id>-<form>"}}` per form, each
+a single `<div class="w-body {{.BodyClass}}">` holding kit parts
+(`templates/widgets/_kit.html`: `w-lead`, `w-tiles`, `w-chart`,
+`w-spark`, `w-bars`, `w-segbar`, `w-rank`, `w-meters`, `w-note`,
+`w-empty`; listed under Home widgets above) and the widget's own
+markup. The data is the card view, with the builder's value as
+`.Data`.
+- No size checks: a template picks parts, never sizes. Anything
+  that depends on room is home.css's job (below).
+- No fixed ids: `{{.Uid "name"}}` (a page can hold a card, its phone
+  body and its Expand view at once). No inline `style=` and no
+  inline scripts.
+- Links to pilots go through `charLink` with `.ViewerChars`, items
+  through `itemLink`, places through `placeLink`.
+- Lists: mark a list `data-w-fit` and home.js shows the whole rows
+  that fit, then "N more" linking to `Href`; rows past the server's
+  cap (`.Cap`) carry `data-w-over` so the list holds without
+  JavaScript. A list that scrolls inside the card instead is
+  `data-w-scroll`, with its rows marked `data-w-row` when the form
+  grows.
+- Copy is plain English, sentence case, no em dashes.
+
+**Styling.** Most widgets need no CSS of their own: the kit parts
+fill their box. A widget that does gets a block in home.css under
+its own heading, with classes named for it (`training-*`, `fl-*`).
+- Read the card, never the window: `@container widget (...)`. The
+  card is the container, so its own width or height decides, at any
+  window size and in any column. No media queries.
+- Table columns a narrow card has no room for carry `opt` (hidden
+  under 34rem) or `opt2` (under 24rem).
+- A column that should fold into its neighbour on a narrow card,
+  rather than vanish, is drawn twice: once as its own cell and once
+  inside the neighbour, and the widget's rules show one of the two
+  by the card's width. Training Horizon's level pips have their own
+  column from 32rem and follow the skill's name below that.
+- A column of names that must never widen the table takes the width
+  the others leave (`max-width: 0` and a share of the width on the
+  cell) and ends a long name in an ellipsis, the full name in the
+  title.
+- Sizes and families come only from the type tokens (`--fs-*`,
+  `--font-*`); colours from the theme tokens, statuses from `--v-*`,
+  chart series from `--w-s1` to `--w-s4`.
+
+**Options.** Declared, never drawn by the widget: `optScope()`
+(all characters, one, or a tag), `optCorp()`, `optChoice(key,
+label, default, "value:Label", ...)`, `optToggle(key, label, on)`
+and `optMulti(key, label, defaults, max, ...)`, with `withHint` for
+a sentence under the field. Customize draws the settings sheet from
+them, stores the values per layout key and checks them against the
+account; the card's title names the scope.
+
+**Before it ships.**
+- `TestHomeWidgetDeclarationsHoldTheirContract` checks the
+  declaration, its options, and that every form has its template.
+- Run the home tests, and `go test -tags core_only -run '^TestHome'`
+  when the widget requires a module.
+- Look at every size in the sealed rig at several widths: no
+  overflow, a chart at two rows or more is at least 40% of the body,
+  the phone body at 390px, and Expand.
+- Grep the tests for every template and stylesheet the change
+  touches, and run each test that names them.
 
 ### Character selector
 
@@ -840,64 +1000,9 @@ to it:
   `internal/app/jstest/` if it carries logic worth pinning,
   the pipeline's JS step names its files explicitly, so add new
   test files to `.github/workflows/heavy-gates.yml` too.
-- **A home widget:** `homew_<id>.go` and `templates/widgets/<id>.html`,
-  data from a stored source. Nothing else is touched (a preset only
-  if the widget belongs in one). Net Worth (`homew_networth.go`,
-  `templates/widgets/networth.html`) is the worked example:
-
-  ```go
-  func init() {
-  	registerHomeWidget(homeWidgetDef{
-  		ID: widgetNetWorth, Title: "Net Worth", Category: wcatMoney, Feature: "networth", Href: "/wallet/",
-  		Description: "Wallets, assets and buy-order escrow across your characters, and how the total has moved.",
-  		Default:     wSize{1, 2},
-  		Forms: []homeWidgetForm{
-  			{Name: "small", Sizes: "1x1", Says: "The total, its 7-day change and a 30-day line."},
-  			{Name: "wide", Sizes: "2x1 3x1", Says: "The total beside its chart."},
-  			{Name: "tall", Sizes: "1x2 1x3", Says: "The total, how it splits, and its chart."},
-  			{Name: "medium", Sizes: "2x2 2x3", Says: "Wallets, assets and escrow over a chart with dates and values."},
-  			{Name: "large", Sizes: "3x2 3x3", Says: "Adds the split by character or by location."},
-  		},
-  		Needs: []string{esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
-  		Options: []widgetOption{optScope(),
-  			optChoice("range", "History", "30", "30:30 days", "90:90 days", "365:A year"),
-  			optChoice("split", "Split by", "chars", "chars:Character", "places:Location")},
-  		Build: buildNetWorthWidget,
-  	})
-  }
-  ```
-
-  1. Name the forms by what they show and give each a sentence for
-     the size picker. A form whose length is the point (a band of
-     figures, a roster) may set `Grow`, and `GrowRows` for its
-     scrolling list; every other form fills its cells. Every size must show something its
-     neighbours do not (more rows, a chart, a breakdown); if two
-     would look alike, drop one.
-  2. The builder returns one value for every drawn form and builds
-     only what `in.Draws(form)` asks for: Net Worth reads its
-     history once and draws a stacked chart for the wide, medium
-     and large forms, the total's line for the tall one, ranked
-     bars only for the large one. Every read is bounded in SQL;
-     shared facts come from `in.Shared` (computed once per render).
-  3. Each form template is one `w-body` of kit parts:
-     `{{define "w-networth-tall"}}<div class="w-body {{.BodyClass}}">`
-     then `w-lead`, `w-segbar`, `w-chart`, `w-note`, and `w-empty`
-     for the nothing-yet case. No size checks, no fixed ids.
-  4. Options are declared, never drawn by the widget: `optScope()`
-     (all characters, one character, or a tag), `optChoice`,
-     `optToggle` and `optMulti`, with `withHint` for a sentence
-     under the field. Customize draws the settings sheet from them
-     (the gear on the card, and the same form in the no-script
-     module list), stores the values per layout key, and checks
-     them against the account. The builder reads `in.Opts`; for a
-     scope it gets `in.Chars` and `in.Bundles` already narrowed and
-     `in.Scope` to say which, and the card's title names the scope.
-  5. Check it with the rig: every size at several widths in fixed
-     rows (no overflow, a chart at two rows or more at least 40%
-     of the body), a phone at 390px (the narrow body), and Expand.
-
-  `TestHomeWidgetDeclarationsHoldTheirContract` checks the
-  declaration, its options, and that every form has its template.
+- **A home widget:** follow "Defining a home widget" (under Home
+  widgets above): one declaration, one template file, and its own
+  rules in home.css when it needs any.
 
 ## Testing
 

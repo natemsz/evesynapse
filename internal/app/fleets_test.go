@@ -205,3 +205,23 @@ func TestAnonymousViewerGetsNoDetailsOfARestrictedFleet(t *testing.T) {
 		t.Errorf("a link-only fleet by its address, with no link: %d", code)
 	}
 }
+
+// TestHomeFleetsWidgetShowsOnlyFleetsThePageShows: the home's Fleets
+// widget lists a corporation's fleet to its member and never to an
+// outsider the Fleets page would not show it to.
+func TestHomeFleetsWidgetShowsOnlyFleetsThePageShows(t *testing.T) {
+	f := newOpsFixture(t)
+	f.create(time.Now().UTC().Add(5*time.Hour).Truncate(time.Minute), "Closed strat op")
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE users SET home_layout = '[{"id":"fleets","w":1,"h":2}]'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, body := f.get(f.member, "/"); !strings.Contains(body, "Closed strat op") {
+		t.Error("a member's Fleets widget leaves out their corporation's fleet")
+	}
+	if _, _, body := f.get(f.other, "/"); strings.Contains(body, "Closed strat op") {
+		t.Error("an outsider's Fleets widget lists a fleet the Fleets page hides from them")
+	}
+	if _, _, body := f.get(f.other, "/home/widget/fleets"); strings.Contains(body, "Closed strat op") {
+		t.Error("the outsider's one-card render lists the hidden fleet")
+	}
+}

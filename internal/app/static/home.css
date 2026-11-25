@@ -621,7 +621,7 @@
   padding: 0.05em 0.5em;
   border: 1px solid var(--v-good, var(--kept));
   border-radius: var(--r-sm);
-  color: var(--v-good-ink, var(--kept));
+  color: var(--v-good-ink, #7fe0a3);
   font-family: var(--font-display);
   font-size: var(--fs-2xs);
   font-weight: 600;
@@ -861,3 +861,50 @@
 .brf-grid .brief-cards .brief-row { padding-block: 0.3rem 0; }
 .brf-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-3); color: var(--muted); }
 .brf-foot > p { margin: 0; }
+
+/* ---------------------------------------------------------------------
+   Coming Up (templates/widgets/agenda.html) and Fleets
+   (templates/widgets/fleets.html).
+   --------------------------------------------------------------------- */
+
+/* Coming Up: rows of a mark in the item's group colour, what and whose,
+   and when on the right. */
+.ag-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; min-height: 0; }
+.ag-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; column-gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.ag-row:last-child { border-bottom: 0; }
+.ag-head { padding: 0.35rem 0 0.1rem; }
+.ag-head:first-child { padding-top: 0; }
+.ag-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--w-c); align-self: center; }
+.ag-what { min-width: 0; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; }
+.ag-who { display: block; color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-when { color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ag-live { color: var(--v-good-ink, #7fe0a3); }
+.ag-next { font-size: var(--fs-lg); line-height: 1.2; }
+/* The timeline: marks from now to the window's end, stacked where they
+   would touch. */
+.ag-track { display: flex; flex-direction: column; gap: 0.2rem; margin: 0; min-width: 0; }
+.w-body.w-split > .ag-track { flex: 1 1 0; justify-content: center; }
+.ag-line { position: relative; height: 3.25rem; margin-inline: 0.5rem; border-bottom: 1px solid var(--hairline); }
+.ag-mark { position: absolute; width: 0.7rem; height: 0.7rem; border-radius: 50%; transform: translate(-50%, -50%); background: var(--w-c); box-shadow: 0 0 0 2px var(--panel); }
+/* The large form: a column per day. */
+.ag-days { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-3); min-height: 0; flex: 1 1 auto; }
+.ag-day { display: flex; flex-direction: column; min-width: 0; }
+.ag-day .ag-row { grid-template-columns: auto minmax(0, 1fr); }
+.ag-day .ag-when { grid-column: 2; font-size: var(--fs-xs); }
+
+/* Fleets: a list of fleets, running ones marked, and the commanded
+   fleets' roles beside it on the large form. */
+.fl-title { font-size: var(--fs-lg); line-height: 1.2; }
+.fl-facts, .fl-roles { margin: 0; font-size: var(--fs-xs); color: var(--muted); }
+.fl-roles a, .fl-answer { color: var(--text-bright); }
+.fl-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; min-height: 0; }
+.fl-list > li { padding: 0.35rem 0 0.35rem 0.6rem; border-bottom: 1px solid var(--hairline); border-left: 2px solid transparent; }
+.fl-list > li:last-child { border-bottom: 0; }
+.fl-list > li.fl-live, .w-tile.fl-live { border-left-color: var(--v-good-ink, #7fe0a3); }
+.fl-row-top { display: flex; justify-content: space-between; gap: 0.5rem; font-size: var(--fs-sm); }
+.fl-row-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-row-top > :last-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fl-running { color: var(--v-good-ink, #7fe0a3); }
+.fl-run-one + .fl-run-one { margin-top: var(--space-2); }
+.fl-run-title { margin: 0 0 0.2rem; font-size: var(--fs-sm); }
+.fl-run-title small { color: var(--muted); }

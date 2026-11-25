@@ -596,6 +596,12 @@ type homeShared struct {
 	briefingSinceSet bool
 
 	queueEnds map[int64]time.Time // QueueEnds: each pilot's last queued finish
+
+	piRows      []piExpiryLine // PIExpiries
+	piRowsBuilt bool
+	upkeep      *upkeepWidget // Upkeep
+	fleets      []homeFleet   // Fleets
+	fleetsBuilt bool
 }
 
 // NetWorth is the account's net worth, built at most once per render:

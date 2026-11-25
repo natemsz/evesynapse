@@ -1,0 +1,55 @@
+{{/* Fleets: the fleets the account can open on the Fleets page that are
+     running or coming up. Five forms; none reads its size. A fleet's
+     commander and form-up show only where the Fleets page would show
+     them to this account. */}}
+
+{{define "w-fleets-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{with .First}}
+<div class="w-lead">
+  <span class="w-lead-label">{{if .Live}}Running now{{else}}Next fleet{{end}}</span>
+  <span class="w-lead-value fl-title"><a href="{{.Href}}">{{.Title}}</a></span>
+  <span class="w-lead-sub">{{template "w-fleets-when" .}}</span>
+</div>
+{{template "w-fleets-facts" .}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-fleets-wide"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Next}}
+<div class="w-tiles fl-next">{{range .Next}}<div class="l-stat w-tile{{if .Live}} fl-live{{end}}">
+  <span class="l-stat-label">{{template "w-fleets-when" .}}</span>
+  <span class="l-stat-value text"><a href="{{.Href}}">{{.Title}}</a></span>
+  <span class="l-stat-sub">{{.Owner}}{{if .Answer}} · {{.Answer}}{{end}}</span>
+</div>{{end}}</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-fleets-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+{{template "w-fleets-list" .Rows}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-fleets-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+{{template "w-fleets-list" .Rows}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-fleets-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+<div class="w-cols">
+<div class="w-rest fl-main">{{template "w-fleets-list" .Rows}}</div>
+{{if .Run}}<div class="w-aside fl-run"><h4 class="w-sub">Fleets you run</h4>
+{{range .Run}}<div class="fl-run-one"><p class="fl-run-title"><a href="{{.Href}}">{{.Title}}</a> <small>{{.Coming}}</small></p>
+{{with .RolesRanked}}{{template "w-rank" .}}{{else}}<p class="w-quiet"><small>No one has picked a role yet.</small></p>{{end}}</div>{{end}}
+</div>{{end}}
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* When a fleet runs: how long it has run, or a countdown to its
+     start. */}}
+{{define "w-fleets-when"}}{{if .Live}}<span class="fl-running">{{.Running}}</span>{{else}}<span class="countdown" data-finish="{{.StartsRaw}}" title="{{.Starts}}">{{.Left}}</span>{{end}}{{end}}
+
+{{/* Who runs it and what to bring, where the account may see them. */}}
+{{define "w-fleets-facts"}}<p class="fl-facts">{{.Owner}}{{if .FC}} · FC {{.FC}}{{end}}{{if .Doctrine}} · {{.Doctrine}}{{end}}{{if .FormUp}} · forms up at {{.FormUp}}{{end}}{{if .Answer}} · <span class="fl-answer">{{.Answer}}</span>{{end}}</p>{{end}}
+
+{{/* The list, running fleets first. A fleet the account runs links to
+     its page to manage it; the medium form also says who is coming in
+     each role (Roles). */}}
+{{define "w-fleets-list"}}<ul class="fl-list" data-w-fit>{{range .}}<li class="{{if .Live}}fl-live{{end}}">
+  <span class="fl-row-top"><a class="fl-row-title" href="{{.Href}}">{{.Title}}</a>{{template "w-fleets-when" .}}</span>
+  {{template "w-fleets-facts" .}}
+  {{if .Roles}}<p class="fl-roles">{{.Coming}}: {{range $i, $r := .Roles}}{{if $i}}, {{end}}{{$r.Count}} {{$r.Role}}{{end}} <a href="{{.Href}}">Manage</a></p>{{else if .Run}}<p class="fl-roles">{{.Coming}}. <a href="{{.Href}}">Manage</a></p>{{end}}
+</li>{{end}}</ul>{{end}}

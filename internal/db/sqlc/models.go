@@ -3242,14 +3242,15 @@ type TypingGuess struct {
 }
 
 type User struct {
-	ID             int64        `json:"id"`
-	CreatedAt      time.Time    `json:"created_at"`
-	HomeLayout     string       `json:"home_layout"`
-	LastBriefingAt sql.NullTime `json:"last_briefing_at"`
-	LastSeenAt     time.Time    `json:"last_seen_at"`
-	IsDemo         int64        `json:"is_demo"`
-	VizPrefs       string       `json:"viz_prefs"`
-	DeleteAfter    sql.NullTime `json:"delete_after"`
+	ID                    int64        `json:"id"`
+	CreatedAt             time.Time    `json:"created_at"`
+	HomeLayout            string       `json:"home_layout"`
+	LastBriefingAt        sql.NullTime `json:"last_briefing_at"`
+	LastSeenAt            time.Time    `json:"last_seen_at"`
+	IsDemo                int64        `json:"is_demo"`
+	VizPrefs              string       `json:"viz_prefs"`
+	DeleteAfter           sql.NullTime `json:"delete_after"`
+	CustomizePromptSeenAt sql.NullTime `json:"customize_prompt_seen_at"`
 }
 
 type UserAppraisal struct {

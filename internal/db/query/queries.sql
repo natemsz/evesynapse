@@ -275,6 +275,17 @@ SELECT COUNT(*) FROM war_details;
 -- name: GetUserHomeLayout :one
 SELECT home_layout FROM users
 WHERE id = $1;
+-- name: GetUserCustomizePromptSeen :one
+-- When the account answered the Customize hint (schema 185);
+-- NULL while it has not.
+SELECT customize_prompt_seen_at FROM users
+WHERE id = $1;
+-- name: SetUserCustomizePromptSeen :execrows
+-- Answers the Customize hint: the first answer sticks, later
+-- ones write nothing.
+UPDATE users
+SET customize_prompt_seen_at = $1
+WHERE id = $2 AND customize_prompt_seen_at IS NULL;
 -- name: SetUserHomeLayout :exec
 UPDATE users
 SET home_layout = $1

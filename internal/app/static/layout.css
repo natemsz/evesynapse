@@ -771,6 +771,9 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
   white-space: normal;
   overflow-wrap: anywhere;
 }
+#main-content table.cards-on > :is(tbody, tfoot) > tr > :is(td, th) :is(button, .btn) {
+  overflow-wrap: normal;
+}
 #main-content table.cards-on > :is(tbody, tfoot) > tr > :is(td, th):first-child,
 #main-content table.cards-on > :is(tbody, tfoot) > tr > :is(td, th)[colspan] {
   grid-column: 1 / -1;

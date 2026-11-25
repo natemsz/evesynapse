@@ -127,7 +127,7 @@
 .ov-rename summary { color: var(--muted); font-size: var(--fs-xs); cursor: pointer; }
 .ov-rename form { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.45rem; }
 .ov-rename input[type="text"] { flex: 1 1 9rem; padding: 0.35rem 0.5rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); }
-.ov-rename button { padding: 0.35rem 0.7rem; }
+.ov-rename button { flex: none; white-space: nowrap; padding: 0.35rem 0.7rem; }
 .ov-rename small { flex-basis: 100%; color: var(--muted); }
 .ov-clonelist { margin-top: 0.7rem; }
 

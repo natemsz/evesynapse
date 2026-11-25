@@ -37,6 +37,7 @@ type extractorInfo struct {
 	Heads       int
 	Expiry      time.Time
 	ExpiryOK    bool
+	Installed   time.Time // when the extraction program started; zero when the layout has none
 }
 
 // layoutExtractors extracts the extractor pins of a colony layout
@@ -56,6 +57,9 @@ func layoutExtractors(layout esi.PlanetLayout) []extractorInfo {
 		}
 		if t, ok := parseRFC3339(pin.ExpiryTime); ok {
 			info.Expiry, info.ExpiryOK = t, true
+		}
+		if t, ok := parseRFC3339(pin.InstallTime); ok {
+			info.Installed = t
 		}
 		out = append(out, info)
 	}

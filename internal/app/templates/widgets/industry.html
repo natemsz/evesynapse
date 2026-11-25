@@ -1,17 +1,41 @@
-{{define "w-industry-all"}}{{$cap := .Cap}}
-{{with .Data}}
-<p><small>{{.ActiveJobs}} active job{{if ne .ActiveJobs 1}}s{{end}}{{if .ReadyJobs}} · {{.ReadyJobs}} ready for delivery{{end}}</small></p>
-{{if .Rows}}
-<div class="tw">
-<table>
-  <thead><tr><th>Character</th><th class="opt">Activity</th><th>Product</th><th>Ends</th></tr></thead>
-  <tbody data-w-fit>
-  {{range $i, $r := .Rows}}<tr{{if ge $i $cap}} data-w-over{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td class="opt">{{.Activity}}</td><td>{{itemLink .TypeID .Name}}</td><td class="when"><span class="when-abs">{{.Ends}}</span>{{if .Left}} <span class="when-rel" title="{{.Ends}}">{{.Left}}</span>{{end}}</td></tr>{{end}}
-  </tbody>
-</table>
+{{/* Industry: five forms on the kit. Slot meters count every job
+     holding a slot (running, paused, or ready and not yet delivered)
+     against the slots each character's skills give. */}}
+
+{{define "w-industry-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Known}}
+{{template "w-lead" .Lead}}
+{{with .Next}}{{template "w-industry-next" .}}{{else}}{{if not .Jobs}}{{template "w-empty" .Empty}}{{end}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-industry-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{if .Known}}
+<div class="w-side">{{template "w-lead" .Lead}}{{with .Next}}{{template "w-industry-next" .}}{{end}}</div>
+<div class="w-ind-slots">{{with .Slots}}{{template "w-meters" .}}{{end}}{{template "w-note" .Note}}</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-industry-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Known}}
+{{if .Jobs}}{{template "w-industry-jobs" $}}{{else}}{{template "w-empty" .Empty}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-industry-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Known}}
+{{with .Slots}}{{template "w-meters" .}}{{end}}
+{{if .Jobs}}{{template "w-industry-jobs" $}}{{else}}{{template "w-empty" .Empty}}{{end}}
+{{template "w-note" .Note}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-industry-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Known}}
+<div class="w-cols w-ind-cols">
+<div class="w-ind-col">{{if .Jobs}}{{template "w-industry-jobs" $}}{{else}}{{template "w-empty" .Empty}}{{end}}</div>
+{{with .Pilots}}<div class="w-aside"><h4 class="w-sub">Slots by character</h4>
+<ul class="w-ind-pilots" data-w-fit>{{range .}}<li><span class="w-ind-pilot">{{charLink $.ViewerChars .CharID .Name}}</span>{{range .Meters}}<span class="w-ind-pm {{.Tone}}" title="{{.Name}}: {{.Text}} slots in use"><span class="w-ind-pk">{{.Name}}</span><span class="w-ind-pv">{{.Text}}</span><span class="l-meter w-meter" aria-hidden="true"><span data-w="{{printf "%.1f" .Pct}}"></span></span></span>{{end}}</li>{{end}}</ul></div>{{end}}
 </div>
-{{else}}
-<p class="wempty"><small>No active jobs right now. Start one from your <a href="/industry/">Blueprints</a>.</small></p>
-{{end}}
-{{end}}
-{{end}}
+{{template "w-note" .Note}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* The next delivery: product and its countdown. */}}
+{{define "w-industry-next"}}<p class="w-ind-next"><span class="w-ind-next-label">Next delivery</span> {{itemLink .TypeID .Product}} <span class="countdown" data-finish="{{.EndRaw}}" title="{{.Ends}}">{{.Left}}</span></p>{{end}}
+
+{{/* The job list (given the card): ready jobs first, then by finish.
+     The large form also draws each job's progress. */}}
+{{define "w-industry-jobs"}}{{$w := .}}{{$bars := eq .Form "large"}}<ul class="w-ind-jobs" data-w-fit>
+{{range $i, $j := .Data.Jobs}}<li{{if ge $i $w.Cap}} data-w-over{{end}}><img class="w-ind-icon" src="{{.Icon}}" alt="" width="32" height="32" loading="lazy"><span class="w-ind-main"><span class="w-ind-prod">{{itemLink .TypeID .Product}}</span><small class="w-ind-sub">{{charLink $w.ViewerChars .CharID .Char}} · {{.Activity}}</small>{{if and $bars .HasBar}}<span class="l-meter w-meter" aria-hidden="true"><span data-w="{{printf "%.1f" .Pct}}"></span></span>{{end}}</span>{{if .Ready}}<span class="w-ind-ready" title="Finished {{.Ends}}">Ready</span>{{else}}<span class="w-ind-left countdown" data-finish="{{.EndRaw}}" title="{{.Ends}}">{{.Left}}</span>{{end}}</li>{{end}}
+</ul>{{end}}

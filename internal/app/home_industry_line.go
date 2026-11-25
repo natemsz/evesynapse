@@ -20,11 +20,9 @@ import (
 // otherwise it is healthy. The buy list is one run of materials
 // for every due and idle line (the stored SDE recipe), less what
 // the stored asset snapshots already hold across the account.
-// How much shows follows the widget's own stored size: the
-// smallest sizes list only the lines needing attention, the
-// default size adds every line and the buy list, the largest adds
-// each attention line's own missing materials and which character
-// is running a line.
+// What is built follows the forms the card draws: the buy list
+// for the forms that show it, and each attention line's own
+// missing materials and who runs each line for the large form.
 // ---------------------------------------------------------------------------
 
 // prodLineDueWithin is how close a running manufacturing job has
@@ -83,9 +81,12 @@ func prodLineBar(row *prodLineRow, startRaw, endRaw string, now time.Time) {
 
 type prodLineWidget struct {
 	HasPins   bool
-	JobsKnown bool // at least one character's job snapshot is loaded
-	Lines     []prodLineRow
-	Attention int // due + needs-restart lines
+	JobsKnown bool          // at least one character's job snapshot is loaded
+	Lines     []prodLineRow // every line, attention first
+	Needing   []prodLineRow // the due and needs-restart lines, in the same order
+	Attention int           // due + needs-restart lines
+	Due       int
+	Restart   int
 	QuietNote string
 	Buy       []prodLineBuyRow
 	ShowBuy   bool
@@ -93,12 +94,10 @@ type prodLineWidget struct {
 
 // buildProdLine shapes the widget from the account's pins, the
 // bundles' job and asset snapshots, and the stored SDE product
-// and recipe maps. gw and gh are the widget's stored grid size.
-func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles []*charSnaps, gw, gh int) *prodLineWidget {
-	out := &prodLineWidget{}
-	area := gw * gh
-	out.ShowBuy = area >= 4
-	detailed := area >= 6
+// and recipe maps. showBuy builds the buy list; detailed adds each
+// attention line's own missing materials and who runs each line.
+func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles []*charSnaps, showBuy, detailed bool) *prodLineWidget {
+	out := &prodLineWidget{ShowBuy: showBuy}
 
 	pinRows, err := app.queries.ListBlueprintPins(ctx, userID)
 	if err != nil || len(pinRows) == 0 {
@@ -223,6 +222,11 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 		if row.State != prodLineHealthy {
 			out.Attention++
 			attentionBps = append(attentionBps, bp)
+			if row.State == prodLineDue {
+				out.Due++
+			} else {
+				out.Restart++
+			}
 		}
 		if detailed && runnerName != "" {
 			row.Runner = runnerName + " · ends " + formatFinish(runnerEnds)
@@ -350,18 +354,12 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 
 	for _, j := range judged {
 		out.Lines = append(out.Lines, j.row)
+		if j.row.State != prodLineHealthy {
+			out.Needing = append(out.Needing, j.row)
+		}
 	}
-	if area < 4 {
-		lines := out.Lines[:0]
-		for _, l := range out.Lines {
-			if l.State != prodLineHealthy {
-				lines = append(lines, l)
-			}
-		}
-		out.Lines = lines
-		if out.Attention == 0 {
-			out.QuietNote = "All pinned lines are running."
-		}
+	if out.Attention == 0 {
+		out.QuietNote = "All pinned lines are running."
 	}
 	return out
 }

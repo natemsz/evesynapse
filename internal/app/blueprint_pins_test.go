@@ -166,17 +166,16 @@ func TestProdLineWidgetSizes(t *testing.T) {
 		t.Error("default size shows the runner detail, want it at the largest size only")
 	}
 
-	// Smallest size (1x1): the lines needing attention only, no
-	// healthy line and no buy list.
+	// Smallest size (1x1): how many lines are due or need a restart,
+	// and the first of them; no healthy line and no buy list.
 	setHomeLayout(t, q, user.ID, `[{"id":"prodline","w":1,"h":1}]`)
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET / (small): status %d", code)
 	}
 	mustContain(t, "/ (prodline small)", body,
+		"Lines needing you", "2 due, 1 needs a restart",
 		"Fixture Widget", "Ready for delivery",
-		"Fixture Doohickey", "Delivers in",
-		"Fixture Sprocket", "Needs a restart",
 	)
 	for _, absent := range []string{"healthy", "Fixture Component", "Buy for the next run"} {
 		if strings.Contains(body, absent) {

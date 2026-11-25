@@ -576,3 +576,126 @@
 @container widget (height < 30rem) and (width < 30rem) {
   .fleet-box > .fleet-tools { display: none; }
 }
+
+/* ---------------------------------------------------------------------
+   Industry, Production Lines and Planetary Industry
+   (templates/widgets/industry.html, prodline.html, pi.html).
+   --------------------------------------------------------------------- */
+
+/* A meter's fill (w-meters, and the bars these widgets draw): the
+   accent, gold once a queue is over its slots, red once a run has
+   stopped. */
+.w-card .w-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.w-card .warn > .w-meter > span, .w-card .w-meter.warn > span { background: var(--v-warn, var(--gold)); }
+.w-card .w-meter.bad > span { background: var(--v-bad, var(--danger)); }
+
+/* Industry: the next delivery, the slot meters beside the lead, the
+   job list, and each character's slots. */
+.w-ind-next, .w-pi-next { margin: 0; font-size: var(--fs-sm); color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+.w-ind-next-label, .w-pi-next-label, .w-ind-pk {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.w-ind-next .countdown, .w-pi-next .countdown { color: var(--text-bright); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.w-ind-slots { flex: 1 1 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-2); min-height: 0; }
+.w-ind-jobs, .w-ind-pilots, .w-pl-chips, .w-pi-rows { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.w-ind-jobs > li {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--hairline);
+  font-size: var(--fs-sm);
+}
+.w-ind-jobs > li:first-child, .w-pi-rows > li:first-child, .w-ind-pilots > li:first-child { border-top: 0; }
+.w-ind-icon { width: 2rem; height: 2rem; border-radius: var(--r-xs); border: 1px solid var(--box-edge); background: rgba(0, 0, 0, 0.35); }
+.w-ind-main { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.w-ind-prod, .w-ind-sub, .w-pi-planet, .w-pi-char, .w-pl-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-ind-sub, .w-pi-char { color: var(--muted); font-size: var(--fs-xs); }
+.w-ind-main > .w-meter { height: 0.3rem; margin-top: 0.15rem; }
+.w-ind-left, .w-pi-when { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-bright); }
+.w-ind-ready {
+  padding: 0.05em 0.5em;
+  border: 1px solid var(--v-good, var(--kept));
+  border-radius: var(--r-sm);
+  color: var(--v-good-ink, var(--kept));
+  font-family: var(--font-display);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.w-ind-cols > .w-ind-col { flex: 2 1 0; min-width: 0; display: flex; flex-direction: column; }
+.w-ind-pilots { gap: var(--space-2); }
+.w-ind-pilots > li { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.15rem var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--hairline); }
+.w-ind-pilot { grid-column: 1 / -1; font-size: var(--fs-sm); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-ind-pm { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.w-ind-pk { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-ind-pv { font-size: var(--fs-xs); color: var(--text-bright); font-variant-numeric: tabular-nums; }
+
+/* Production Lines: the first line needing you, and the lines that
+   need you as chips side by side. */
+.w-pl-first { display: flex; align-items: center; gap: var(--space-2); min-width: 0; font-size: var(--fs-sm); }
+.w-pl-first > .prodline-chip { flex: none; }
+.w-pl-chips { flex: 1 1 0; flex-flow: row wrap; align-content: flex-start; gap: var(--space-2); min-height: 0; }
+.w-pl-chips > li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 12rem;
+  min-width: 0;
+  max-width: 20rem;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--surface-inset);
+}
+.w-pl-chips .prodline-art { width: 2rem; height: 2rem; }
+.w-pl-name { display: flex; flex-direction: column; font-size: var(--fs-sm); }
+.w-pl-name > small { color: var(--muted); font-size: var(--fs-xs); }
+.w-pl-quiet { color: var(--muted); font-size: var(--fs-sm); }
+.w-card .w-cols > .prodline-col { flex: 2 1 0; min-width: 0; display: flex; flex-direction: column; }
+
+/* Planetary Industry: stopped extractors in red, the three-day track,
+   and the planets with their run bars. */
+.w-pi-stopped .w-lead-value { color: var(--v-bad, var(--danger)); }
+.w-pi-track { display: flex; flex-direction: column; gap: 0.2rem; margin: 0; min-width: 0; }
+.w-body.w-split > .w-pi-track { flex: 1 1 0; justify-content: center; }
+.w-pi-line { position: relative; height: 3.25rem; margin-inline: 0.5rem; border-bottom: 1px solid var(--hairline); }
+.w-pi-day { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid var(--hairline); }
+.w-pi-mark {
+  position: absolute;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--w-pi-c);
+  box-shadow: 0 0 0 2px var(--panel);
+}
+.w-pi-dot { flex: none; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--w-pi-c); }
+.w-pi-ok { --w-pi-c: var(--w-s1); }
+.w-pi-warn { --w-pi-c: var(--v-warn, var(--gold)); }
+.w-pi-bad { --w-pi-c: var(--v-bad, var(--danger)); }
+.w-pi-ticks { --w-gutter: 0rem; margin-inline: 0.5rem; }
+.w-pi-rows > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.1rem var(--space-2);
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--hairline);
+  font-size: var(--fs-sm);
+}
+.w-pi-rows > li[hidden] { display: none; }
+.w-pi-char, .w-pi-cycle { grid-column: 1 / -1; }
+.w-pi-cycle { height: 0.3rem; }
+.w-pi-planet > small { color: var(--muted); font-size: var(--fs-xs); }
+.w-pi-when.warn { color: var(--v-warn, var(--gold)); }
+.w-pi-when.bad { color: var(--v-bad-ink, var(--danger)); }
+.w-pi-groups { flex: 1 1 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-2) var(--space-4); min-height: 0; overflow: hidden; }
+.w-pi-group { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }

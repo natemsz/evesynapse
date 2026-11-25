@@ -45,6 +45,27 @@ var slotSkills = [3][2]int64{
 	slotReactions:     {45748, 45749}, // Mass Reactions, Advanced Mass Reactions
 }
 
+// slotMaxFor is the slots a pilot's skills give each queue, from
+// their trained skills by id at the level the bonuses run at.
+func slotMaxFor(levels map[int64]int) [3]int {
+	var m [3]int
+	for c, ids := range slotSkills {
+		m[c] = 1 + levels[ids[0]] + levels[ids[1]]
+	}
+	return m
+}
+
+// slotsUsed counts the jobs holding a slot in each queue at now.
+func slotsUsed(jobs []esi.IndustryJob, now time.Time) [3]int {
+	var u [3]int
+	for _, j := range jobs {
+		if jobOccupiesSlot(jobState(j, now)) {
+			u[jobSlotClass(j.ActivityID)]++
+		}
+	}
+	return u
+}
+
 // jobActivityTabs are the activity filters, in EVE's own order.
 var jobActivityTabs = []struct {
 	key, label string
@@ -255,11 +276,7 @@ func (app *Application) buildJobsView(ctx context.Context, r *http.Request, char
 			for _, s := range skills.Skills {
 				levels[s.SkillID] = s.ActiveSkillLevel
 			}
-			var m [3]int
-			for c, ids := range slotSkills {
-				m[c] = 1 + levels[ids[0]] + levels[ids[1]]
-			}
-			slotMax[ch.CharacterID] = m
+			slotMax[ch.CharacterID] = slotMaxFor(levels)
 			slotKnown[ch.CharacterID] = true
 		}
 	}

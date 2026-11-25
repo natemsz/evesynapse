@@ -357,17 +357,16 @@ func TestBriefingQuietAndSlots(t *testing.T) {
 	}
 
 	// An industrially-active character whose slots stand idle:
-	// Mass Production IV → 5 manufacturing slots, none in use.
-	if _, err := app.db.ExecContext(ctx,
-		`INSERT INTO sde_types (type_id, name, group_id) VALUES (3392, 'Mass Production', 1), (3406, 'Laboratory Operation', 1)`); err != nil {
-		t.Fatalf("seed slot skills: %v", err)
-	}
+	// Mass Production IV → 5 manufacturing slots, none in use: a
+	// running reaction holds a reaction slot, not a manufacturing one.
 	seedSnapshot(t, q, fixtureCharA, esi.SnapSkills, esi.Skills{Skills: []esi.Skill{
-		{SkillID: 3392, ActiveSkillLevel: 4, TrainedSkillLevel: 4},
+		{SkillID: 3387, ActiveSkillLevel: 4, TrainedSkillLevel: 4},
 	}})
 	seedSnapshot(t, q, fixtureCharA, esi.SnapIndustryJobs, []esi.IndustryJob{
 		{JobID: 11, ActivityID: 1, Status: "delivered", ProductTypeID: 587,
 			EndDate: rfc(now.Add(-72 * time.Hour)), CompletedDate: rfc(now.Add(-72 * time.Hour))},
+		{JobID: 12, ActivityID: 11, Status: "active", ProductTypeID: 16670,
+			StartDate: rfc(now.Add(-time.Hour)), EndDate: rfc(now.Add(5 * time.Hour))},
 	})
 	_, body = getPage(t, app, cookie, "/")
 	section := briefingSection(t, body)

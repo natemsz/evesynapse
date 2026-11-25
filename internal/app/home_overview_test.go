@@ -189,7 +189,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 
 	// Industry + market cards.
 	mustContain(t, "/", body,
-		"Industry", "1 active job", "1 ready for delivery", "Manufacturing",
+		"Industry", "Ready to deliver", "1 running",
 		"Market", "open orders", "<strong>2</strong>",
 		"3,000,000.00", // sell 3 × 1,000,000
 	)
@@ -1050,7 +1050,6 @@ func TestWidgetSizeBounds(t *testing.T) {
 	}{
 		{homeLayoutItem{ID: widgetGlance, W: 3, H: 3}, 3, 2},   // same width, nearest height
 		{homeLayoutItem{ID: widgetNetWorth, W: 2, H: 4}, 2, 3}, // same width, nearest height
-		{homeLayoutItem{ID: widgetIndustry, W: 3, H: 3}, 2, 3}, // nothing covers it: the nearest size
 		{homeLayoutItem{ID: widgetFleet, W: 3, H: 3}, 3, 3},    // a declared size stands
 		{homeLayoutItem{ID: widgetBriefing, W: 1, H: 2}, 2, 1}, // nothing covers it: the nearest, smaller on a tie
 	} {

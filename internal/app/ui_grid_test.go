@@ -22,23 +22,23 @@ import (
 // reads as the full grid width; v3 sizes load as stored, held to the
 // grid; encoding always writes v3, omitting default sizes.
 func TestParseHomeLayoutFormats(t *testing.T) {
-	v1 := parseHomeLayout(`["fleet","market"]`)
-	v2 := parseHomeLayout(`[{"id":"fleet"},{"id":"market"}]`)
+	v1 := parseHomeLayout(`["fleet","industry"]`)
+	v2 := parseHomeLayout(`[{"id":"fleet"},{"id":"industry"}]`)
 	if !reflect.DeepEqual(v1, v2) {
 		t.Fatalf("v1 %v and v2 %v layouts differ", v1, v2)
 	}
-	if got := encodeHomeLayout(v1); got != `[{"id":"fleet"},{"id":"market"}]` {
+	if got := encodeHomeLayout(v1); got != `[{"id":"fleet"},{"id":"industry"}]` {
 		t.Fatalf("encode(v1-parsed) = %q", got)
 	}
-	wide := parseHomeLayout(`[{"id":"market","span":"wide"}]`)
-	if want := []homeLayoutItem{{ID: "market", W: 3}}; !reflect.DeepEqual(wide, want) {
+	wide := parseHomeLayout(`[{"id":"industry","span":"wide"}]`)
+	if want := []homeLayoutItem{{ID: "industry", W: 3}}; !reflect.DeepEqual(wide, want) {
 		t.Fatalf("v2 wide = %v, want %v", wide, want)
 	}
-	v3 := parseHomeLayout(`[{"id":"market","w":2,"h":3},{"id":"watchlist","w":9,"h":-1}]`)
-	if want := []homeLayoutItem{{ID: "market", W: 2, H: 3}, {ID: "watchlist", W: 3}}; !reflect.DeepEqual(v3, want) {
+	v3 := parseHomeLayout(`[{"id":"industry","w":2,"h":3},{"id":"watchlist","w":9,"h":-1}]`)
+	if want := []homeLayoutItem{{ID: "industry", W: 2, H: 3}, {ID: "watchlist", W: 3}}; !reflect.DeepEqual(v3, want) {
 		t.Fatalf("v3 = %v, want %v (sizes held to 1-3, unset left unset)", v3, want)
 	}
-	if got := encodeHomeLayout(v3); got != `[{"id":"market","w":2,"h":3},{"id":"watchlist","w":3}]` {
+	if got := encodeHomeLayout(v3); got != `[{"id":"industry","w":2,"h":3},{"id":"watchlist","w":3}]` {
 		t.Fatalf("encode(v3) = %q", got)
 	}
 	if got := encodeHomeLayout(nil); got != `[]` {
@@ -114,7 +114,7 @@ func TestHomeGridSizes(t *testing.T) {
 		}
 		return raw
 	}
-	if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{HomeLayout: `[{"id":"fleet"},{"id":"market","span":"wide"},{"id":"watchlist"}]`, ID: user.ID}); err != nil {
+	if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{HomeLayout: `[{"id":"fleet"},{"id":"industry","span":"wide"},{"id":"watchlist"}]`, ID: user.ID}); err != nil {
 		t.Fatalf("seed layout: %v", err)
 	}
 	_, body := getPage(t, app, cookie, "/")
@@ -122,7 +122,7 @@ func TestHomeGridSizes(t *testing.T) {
 		// Each card carries the sizes it declares for the size picker.
 		`<section class="card w-card gw3 gh2" data-widget="fleet" data-key="fleet" data-gw="3" data-gh="2" data-sizes="1x1 1x2 1x3 1x4 2x1 2x2 2x3 2x4 3x1 3x2 3x3 3x4" data-size-names=`,
 		// An old wide span is the full width now.
-		`<section class="card w-card gw3 gh1" data-widget="market" data-key="market" data-gw="3" data-gh="1" data-sizes="1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`,
+		`<section class="card w-card gw3 gh2" data-widget="industry" data-key="industry" data-gw="3" data-gh="2" data-sizes="1x1 1x2 1x3 1x4 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`,
 		`<section class="card w-card gw1 gh2" data-widget="watchlist" data-key="watchlist" data-gw="1" data-gh="2" data-sizes="1x1 1x2 1x3 1x4 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`)
 
 	// Resize, as the picker's XHR: stored, rendered.

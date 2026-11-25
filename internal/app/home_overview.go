@@ -99,14 +99,7 @@ func widgetSize(item homeLayoutItem) (w, h int) {
 	if !ok {
 		return 1, 1
 	}
-	s := def.Default
-	if item.W > 0 {
-		s.W = item.W
-	}
-	if item.H > 0 {
-		s.H = item.H
-	}
-	s = def.Snap(s)
+	s := def.sizeOf(item)
 	return s.W, s.H
 }
 
@@ -1432,19 +1425,8 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			needs = append(needs, def.Needs...)
 		}
 	}
-	shared := &homeShared{
-		app: app, userID: userID, chars: chars, now: time.Now(),
-		bundles: app.loadCharSnaps(ctx, userID, chars, needs),
-		// The Briefing's market lines, the market widget's health
-		// line and the watchlist widget all read the same two stored
-		// tables; the render fetches each at most once, lazily, so
-		// every reader sees one snapshot of them.
-		market: &homeMarketShared{app: app, userID: userID},
-	}
-	viewer := make(map[int64]bool, len(chars))
-	for _, c := range chars {
-		viewer[c.CharacterID] = true
-	}
+	shared := newHomeShared(ctx, app, userID, chars, needs)
+	viewer := viewerChars(chars)
 	ts, err := homeTemplateSet()
 	if err != nil {
 		logging.Errorf("home: parse templates: %v", err)
@@ -1483,11 +1465,34 @@ type customizeEntry struct {
 	Position    int // 1-based among enabled; 0 when disabled
 	CanUp       bool
 	CanDown     bool
-	W, H        int // current size in grid cells (on the home or default)
+	Size        wSize           // current size (on the home, or the default)
+	Default     wSize           // what Add a widget gives it
+	Sizes       []customizeSize // every declared size, for the no-script picker
+}
+
+// customizeSize is one size a widget declares, as the no-script size
+// picker offers it.
+type customizeSize struct {
+	Value    string // "2x1"
+	Label    string // "2 by 1: the total beside its chart."
+	Selected bool
+}
+
+// customizeGroup is one category of the Add a widget dialog.
+type customizeGroup struct {
+	Title   string
+	Entries []customizeEntry
 }
 
 type customizeView struct {
-	Entries []customizeEntry
+	Entries []customizeEntry // the catalog, by category then title
+	Groups  []customizeGroup // the same entries, grouped by category
+}
+
+// widgetCategoryTitle is a category's heading in the Add a widget dialog.
+var widgetCategoryTitle = map[string]string{
+	wcatOverview: "Overview", wcatPilots: "Pilots", wcatMoney: "Money", wcatIndustry: "Industry",
+	wcatMarket: "Market", wcatCorp: "Corporation", wcatFleets: "Fleets", wcatIntel: "Intel",
 }
 
 func buildCustomizeView(layout []homeLayoutItem) *customizeView {
@@ -1505,13 +1510,27 @@ func buildCustomizeView(layout []homeLayoutItem) *customizeView {
 			Description: def.Description,
 			Enabled:     position[def.ID] > 0,
 			Position:    position[def.ID],
+			Default:     def.Default,
 		}
-		entry.W, entry.H = widgetSize(homeLayoutItem{ID: def.ID, W: sizes[def.ID].W, H: sizes[def.ID].H})
+		entry.Size.W, entry.Size.H = widgetSize(homeLayoutItem{ID: def.ID, W: sizes[def.ID].W, H: sizes[def.ID].H})
+		for _, sz := range def.Sizes() {
+			entry.Sizes = append(entry.Sizes, customizeSize{
+				Value:    sz.String(),
+				Label:    fmt.Sprintf("%d by %d: %s", sz.W, sz.H, lowerFirst(def.FormFor(sz).Says)),
+				Selected: sz == entry.Size,
+			})
+		}
 		if entry.Enabled {
 			entry.CanUp = entry.Position > 1
 			entry.CanDown = entry.Position < len(layout)
 		}
 		view.Entries = append(view.Entries, entry)
+		title := widgetCategoryTitle[def.Category]
+		if n := len(view.Groups); n == 0 || view.Groups[n-1].Title != title {
+			view.Groups = append(view.Groups, customizeGroup{Title: title})
+		}
+		g := &view.Groups[len(view.Groups)-1]
+		g.Entries = append(g.Entries, entry)
 	}
 	return view
 }
@@ -1619,8 +1638,12 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 			// Resize one widget on the home; the size must be one
 			// the widget declares, else nothing changes, and a
 			// scripted caller is told so, so it can put the size back.
+			// The no-script picker sends one field, size=2x1.
 			wv, werr := strconv.Atoi(r.FormValue("w"))
 			hv, herr := strconv.Atoi(r.FormValue("h"))
+			if sz, ok := parseWSize(r.FormValue("size")); ok {
+				wv, hv, werr, herr = sz.W, sz.H, nil, nil
+			}
 			valid := known && werr == nil && herr == nil && def.Allows(wSize{wv, hv})
 			if valid {
 				for i := range layout {

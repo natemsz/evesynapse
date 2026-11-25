@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	json "github.com/goccy/go-json"
+
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 )
@@ -94,6 +96,9 @@ type homeWidgetDef struct {
 
 	sizes  []wSize       // every allowed size, narrowest then shortest first
 	formOf map[wSize]int // size -> index into Forms
+
+	sizesText     string // sizeList, built once at registration
+	sizeNamesText string // sizeNames, built once at registration
 }
 
 // widgetInput is what a builder is handed for one card.
@@ -172,6 +177,9 @@ func registerHomeWidget(def homeWidgetDef) {
 	})
 	d := def
 	homeWidgetRegistry[def.ID] = &d
+	// The size picker's data depends only on the declaration: built
+	// here once, not on every card render.
+	d.sizesText, d.sizeNamesText = d.sizeList(), d.sizeNames()
 }
 
 // builtIn reports whether the widget's module is compiled in.
@@ -238,6 +246,20 @@ func (d *homeWidgetDef) FormFor(s wSize) homeWidgetForm {
 	return d.Forms[d.formOf[d.Default]]
 }
 
+// sizeOf is the size a layout entry draws at: its stored size, the
+// default on each axis it leaves unset, snapped to an allowed size.
+// Customize, the presets and the card renderer all size by it.
+func (d *homeWidgetDef) sizeOf(item homeLayoutItem) wSize {
+	s := d.Default
+	if item.W > 0 {
+		s.W = item.W
+	}
+	if item.H > 0 {
+		s.H = item.H
+	}
+	return d.Snap(s)
+}
+
 // sizeList is the allowed sizes as "1x1 2x1 ...", for data-sizes.
 func (d *homeWidgetDef) sizeList() string {
 	parts := make([]string, len(d.sizes))
@@ -247,14 +269,50 @@ func (d *homeWidgetDef) sizeList() string {
 	return strings.Join(parts, " ")
 }
 
-// bounds is the smallest and largest width and height among the sizes.
-func (d *homeWidgetDef) bounds() (lo, hi wSize) {
-	lo = wSize{homeGridCols, homeGridRows}
-	for _, s := range d.sizes {
-		lo.W, lo.H = min(lo.W, s.W), min(lo.H, s.H)
-		hi.W, hi.H = max(hi.W, s.W), max(hi.H, s.H)
+// sizeNames is, for each allowed size, the form it draws and the
+// size picker's line for it: "Medium: the list and a chart." A widget
+// with one form has no form name to show, only its sentence.
+func (d *homeWidgetDef) sizeNames() string {
+	type named struct {
+		Form string `json:"form"`
+		Says string `json:"says"`
 	}
-	return lo, hi
+	out := make(map[string]named, len(d.sizes))
+	for _, sz := range d.sizes {
+		f := d.FormFor(sz)
+		n := named{Says: f.Says}
+		if len(d.Forms) > 1 {
+			n.Form = f.Name
+			n.Says = strings.ToUpper(f.Name[:1]) + f.Name[1:] + ": " + lowerFirst(f.Says)
+		}
+		out[sz.String()] = n
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return "{}"
+	}
+	return string(raw)
+}
+
+// lowerFirst lowers a sentence's first letter, for a line that follows
+// a form name; a leading acronym ("ISK flow") keeps its case.
+func lowerFirst(s string) string {
+	if len(s) < 2 || strings.ToUpper(s[1:2]) == s[1:2] {
+		return s
+	}
+	return strings.ToLower(s[:1]) + s[1:]
+}
+
+// largest is the widget's biggest size: the most cells, the wider on
+// a tie. Expand shows the form that draws it.
+func (d *homeWidgetDef) largest() wSize {
+	best := d.sizes[0]
+	for _, s := range d.sizes[1:] {
+		if s.W*s.H > best.W*best.H || (s.W*s.H == best.W*best.H && s.W > best.W) {
+			best = s
+		}
+	}
+	return best
 }
 
 // widthsAt is the allowed widths at height h, narrowest first.
@@ -352,14 +410,22 @@ func (s *homeShared) BriefingSince(ctx context.Context) time.Time {
 	return s.briefingSince
 }
 
+// viewerChars is the account's characters as the set charLink reads.
+func viewerChars(chars []db.Character) map[int64]bool {
+	out := make(map[int64]bool, len(chars))
+	for _, c := range chars {
+		out[c.CharacterID] = true
+	}
+	return out
+}
+
 // homeWidget is the view a card's shell and body templates get.
 type homeWidget struct {
 	ID, Key, Title, Href string
 	Size                 wSize
 	Form                 string
 	Sizes                string // data-sizes: every allowed size
-	MinW, MinH           int    // the smallest width and height among the sizes (Customize's picker)
-	MaxW, MaxH           int    // the largest
+	SizeNames            string // data-size-names: JSON, size -> {"form", "says"} for the size picker
 	SizeClass            string // gw1-3 gh1-4: the grid classes the CSS applies
 	Cap                  int    // rows or items shown before More, by height
 	Customize            bool   // rendering under /?customize=1 (form return targets)
@@ -378,20 +444,11 @@ func (w homeWidget) Uid(name string) string {
 // renders its body. It returns false when the widget is quiet and the
 // home is not being customized.
 func (app *Application) buildHomeWidget(ctx context.Context, ts *template.Template, def *homeWidgetDef, item homeLayoutItem, shared *homeShared, customize bool, viewer map[int64]bool) (homeWidget, bool) {
-	size := wSize{item.W, item.H}
-	if size.W == 0 {
-		size.W = def.Default.W
-	}
-	if size.H == 0 {
-		size.H = def.Default.H
-	}
-	size = def.Snap(size)
+	size := def.sizeOf(item)
 	form := def.FormFor(size)
-	lo, hi := def.bounds()
 	w := homeWidget{
 		ID: def.ID, Key: def.ID, Title: def.Title, Href: def.Href,
-		Size: size, Form: form.Name, Sizes: def.sizeList(),
-		MinW: lo.W, MinH: lo.H, MaxW: hi.W, MaxH: hi.H,
+		Size: size, Form: form.Name, Sizes: def.sizesText, SizeNames: def.sizeNamesText,
 		SizeClass:   fmt.Sprintf("gw%d gh%d", size.W, size.H),
 		Cap:         homeCap(size.H),
 		Customize:   customize,

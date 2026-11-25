@@ -110,11 +110,11 @@ func TestHomeGridSizes(t *testing.T) {
 	}
 	_, body := getPage(t, app, cookie, "/")
 	mustContain(t, "/ defaults", body,
-		// The fleet table carries its floor for the size picker.
-		`<section class="card w-card gw3 gh2" data-widget="fleet" data-key="fleet" data-gw="3" data-gh="2" data-sizes="2x2 2x3 3x2 3x3" data-minw="2" data-minh="2">`,
+		// Each card carries the sizes it declares for the size picker.
+		`<section class="card w-card gw3 gh2" data-widget="fleet" data-key="fleet" data-gw="3" data-gh="2" data-sizes="2x2 2x3 3x2 3x3" data-size-names=`,
 		// An old wide span is the full width now.
-		`<section class="card w-card gw3 gh1" data-widget="market" data-key="market" data-gw="3" data-gh="1" data-sizes="1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3">`,
-		`<section class="card w-card gw1 gh1" data-widget="watchlist" data-key="watchlist" data-gw="1" data-gh="1" data-sizes="1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3">`)
+		`<section class="card w-card gw3 gh1" data-widget="market" data-key="market" data-gw="3" data-gh="1" data-sizes="1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`,
+		`<section class="card w-card gw1 gh1" data-widget="watchlist" data-key="watchlist" data-gw="1" data-gh="1" data-sizes="1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`)
 
 	// Resize, as the picker's XHR: stored, rendered.
 	code, resp := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"2"}, "h": {"3"}}, cookie, true)
@@ -125,7 +125,7 @@ func TestHomeGridSizes(t *testing.T) {
 		t.Fatalf("saved layout = %q, want skills 2x3", got)
 	}
 	_, body = getPage(t, app, cookie, "/")
-	mustContain(t, "/ resized", body, `<section class="card w-card gw2 gh3" data-widget="watchlist" data-key="watchlist" data-gw="2" data-gh="3" data-sizes="1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3">`)
+	mustContain(t, "/ resized", body, `<section class="card w-card gw2 gh3" data-widget="watchlist" data-key="watchlist" data-gw="2" data-gh="3" data-sizes="1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`)
 
 	// Out of bounds, unparsable, or under a floor: the scripted
 	// caller is refused with 400 so it can put the size back, and
@@ -151,9 +151,12 @@ func TestHomeGridSizes(t *testing.T) {
 	if got := saved(); got != before {
 		t.Fatalf("invalid sizes changed storage: %q -> %q", before, got)
 	}
-	// The no-JS form path redirects back to Customize.
-	if code, _ := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"1"}, "h": {"1"}}, cookie, false); code != http.StatusSeeOther {
+	// The no-JS form sends one size field and redirects back to Customize.
+	if code, _ := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "size": {"1x1"}}, cookie, false); code != http.StatusSeeOther {
 		t.Fatalf("form size POST: status %d, want 303", code)
+	}
+	if got := saved(); !strings.Contains(got, `{"id":"watchlist","w":1,"h":1}`) {
+		t.Fatalf("saved layout = %q, want the form's watchlist 1x1", got)
 	}
 	// Anonymous POSTs bounce like every layout action.
 	if code, _, _ := doReq(t, app, http.MethodPost, "/home/layout", url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"2"}, "h": {"2"}}); code != http.StatusSeeOther {

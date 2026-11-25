@@ -1,7 +1,7 @@
 {{/* The one card shell every home widget draws in: the grid classes and
      size data the Customize engine reads, the title, and the body the
      widget's form template rendered. */}}
-{{define "w-card"}}<section class="card w-card {{.SizeClass}}" data-widget="{{.ID}}" data-key="{{.Key}}" data-gw="{{.Size.W}}" data-gh="{{.Size.H}}" data-sizes="{{.Sizes}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>
+{{define "w-card"}}<section class="card w-card {{.SizeClass}}" data-widget="{{.ID}}" data-key="{{.Key}}" data-gw="{{.Size.W}}" data-gh="{{.Size.H}}" data-sizes="{{.Sizes}}" data-size-names="{{.SizeNames}}">
   <h3>{{.Title}}</h3>
   <div class="card-body">
 {{.Body}}

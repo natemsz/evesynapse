@@ -39,7 +39,8 @@ bearing ones.
 - Per-surface files, loaded only where they belong (base.html
   gates them on section/page): `fit.js` (fitting), `plan.js`
   (build planner), `pi.js` (PI planner), `push.js` (notification
-  settings), `map.js` (the universe map: a canvas drawn from the
+  settings), `home.js` (the home grid: Customize, the fleet
+  filter, the Briefing pager), `map.js` (the universe map: a canvas drawn from the
   stored, content-hashed payload at `/map/universe.json`, its
   colors read from `map.css` tokens and the legend's `.sec-N`
   swatches), and the surface files split out of app.js. A page
@@ -253,7 +254,8 @@ Any element with `data-finish="<RFC3339>"` counts down to that
 moment. The server renders the static remainder as the text,
 that's the no-JS fallback and the pre-JS paint, and one shared
 ticker updates all of them, stopping on will-swap and starting
-on content-ready.
+on content-ready. Each tick reads every countdown in the document,
+so a fragment swapped in alone joins the same ticker.
 
 ### Tables with a filter box
 
@@ -291,13 +293,28 @@ visible widgets' `Needs`) and the card shell all come from the
 declaration. `templates/widgets/_card.html` is the one shell,
 `<section class="card w-card" data-widget data-key data-gw
 data-gh data-sizes …>` with an `<h3>` title and a `.card-body`
-holding the rendered body. Bodies render from stored data only.
+holding the rendered body, and `data-size-names` (JSON: each size
+to its form and the size picker's sentence). Bodies render from
+stored data only.
 Data that can have nothing to say implements `Quiet() bool`, and
 a quiet card is left off the home outside Customize. Long lists
 render in full and mark rows beyond the card's cap with
 `data-wmore`; the expander machinery (above) supplies the
 More/Less toggle. Customize (drag, resize, remove, add) is layered
 over the plain customize forms, never a replacement for them.
+
+One card renders alone at `GET /home/widget/{key}` (signed in, own
+home only, `Cache-Control: no-store`): at its stored size, at `w`
+and `h` when the widget declares that size, or with `view=expand`
+at its largest. It reads only that widget's `Needs`, answers 204
+when the widget has nothing to show, and never moves the
+Briefing's "since you last looked" mark. Customize swaps a card
+for this render after each resize and each add; the old card
+stays, dimmed, until the new one lands. home.js then dispatches
+`evesynapse:content-ready` with `detail.root` set to the card and
+`detail.part` set, so every `onReady` initializer runs over the
+card alone. A listener that restarts page-level work (the page
+sync poller) skips events marked `part`.
 
 ### Character selector
 
@@ -684,7 +701,7 @@ to it:
   will-swap for anything global, and a node test in
   `internal/app/jstest/` if it carries logic worth pinning,
   the pipeline's JS step names its files explicitly, so add new
-  test files to `.gitlab-ci.yml` too.
+  test files to `.github/workflows/heavy-gates.yml` too.
 - **A home widget:** `homew_<id>.go` with its declaration and
   builder, and `templates/widgets/<id>.html` with a body per
   form, data from a stored source. Nothing else is touched (a

@@ -92,6 +92,7 @@ type homeWidgetDef struct {
 	Default     wSize  // must be one of the forms' sizes
 	Forms       []homeWidgetForm
 	Needs       []string // snapshot kinds the builder reads (esi.Snap*), needPlanetLayouts for colony layouts
+	Options     []widgetOption
 	Build       func(ctx context.Context, app *Application, in *widgetInput) any
 
 	sizes  []wSize       // every allowed size, narrowest then shortest first
@@ -107,7 +108,8 @@ type widgetInput struct {
 	Key     string   // layout key: the widget id
 	Size    wSize    // the size the card draws at
 	Form    string   // the form drawn at Size
-	Forms   []string // every form this render draws
+	Forms   []string // every form this render draws (the phone body adds one)
+	Opts    widgetOptions
 	Chars   []db.Character
 	Bundles []*charSnaps
 	Shared  *homeShared // per-render cache
@@ -128,6 +130,68 @@ func (in *widgetInput) Draws(form string) bool {
 // widgetQuiet is implemented by widget data that can have nothing to
 // say: a quiet widget's card is left off the home outside Customize.
 type widgetQuiet interface{ Quiet() bool }
+
+// widgetOption is one setting a widget declares. Until the settings
+// sheet stores values, every widget draws with its defaults.
+type widgetOption struct {
+	Key     string
+	Label   string
+	Kind    string // optKindScope or optKindChoice
+	Choices []widgetChoice
+	Default string
+	Hint    string
+}
+
+// widgetChoice is one value a choice option can take and its label.
+type widgetChoice struct{ Value, Label string }
+
+const (
+	optKindScope  = "scope"  // all characters, a tag, or one character: all, tag:<name>, char:<id>
+	optKindChoice = "choice" // one of the declared choices
+)
+
+// optScope is the characters a widget reads: all of them by default.
+func optScope() widgetOption {
+	return widgetOption{Key: "scope", Label: "Characters", Kind: optKindScope, Default: "all"}
+}
+
+// optChoice declares a choice option; each choice is "value:Label".
+func optChoice(key, label, def string, choices ...string) widgetOption {
+	o := widgetOption{Key: key, Label: label, Kind: optKindChoice, Default: def}
+	for _, c := range choices {
+		v, l, _ := strings.Cut(c, ":")
+		o.Choices = append(o.Choices, widgetChoice{Value: v, Label: l})
+	}
+	return o
+}
+
+// allows reports whether v is a value the option can take.
+func (o widgetOption) allows(v string) bool {
+	if o.Kind != optKindChoice {
+		return v != ""
+	}
+	for _, c := range o.Choices {
+		if c.Value == v {
+			return true
+		}
+	}
+	return false
+}
+
+// widgetOptions is a widget's option values by key.
+type widgetOptions map[string]string
+
+// Get is the value of the option key ("" when the widget has none).
+func (o widgetOptions) Get(key string) string { return o[key] }
+
+// defaultOptions is every declared option at its default.
+func (d *homeWidgetDef) defaultOptions() widgetOptions {
+	out := make(widgetOptions, len(d.Options))
+	for _, o := range d.Options {
+		out[o.Key] = o.Default
+	}
+	return out
+}
 
 // homeWidgetRegistry is written only from init functions, then read.
 var homeWidgetRegistry = map[string]*homeWidgetDef{}
@@ -168,6 +232,16 @@ func registerHomeWidget(def homeWidgetDef) {
 	}
 	if _, ok := def.formOf[def.Default]; !ok {
 		panic(fmt.Sprintf("home widget %s: default %s is not one of its sizes", def.ID, def.Default))
+	}
+	keys := map[string]bool{}
+	for _, o := range def.Options {
+		if o.Key == "" || keys[o.Key] {
+			panic(fmt.Sprintf("home widget %s: option key %q is empty or repeated", def.ID, o.Key))
+		}
+		keys[o.Key] = true
+		if !o.allows(o.Default) {
+			panic(fmt.Sprintf("home widget %s: option %s defaults to %q, not one of its choices", def.ID, o.Key, o.Default))
+		}
 	}
 	sort.Slice(def.sizes, func(i, j int) bool {
 		if def.sizes[i].W != def.sizes[j].W {
@@ -326,6 +400,34 @@ func (d *homeWidgetDef) widthsAt(h int) []int {
 	return out
 }
 
+// narrowSize is the size a phone draws in place of s: when every size
+// of the form drawing s is two or more columns wide and the widget
+// allows a one-column size, the one-column size at the nearest height
+// (the shorter on a tie). ok is false when s's form already has a
+// one-column size or the widget has none.
+func (d *homeWidgetDef) narrowSize(s wSize) (wSize, bool) {
+	i, ok := d.formOf[s]
+	if !ok {
+		return wSize{}, false
+	}
+	for _, raw := range strings.Fields(d.Forms[i].Sizes) {
+		if fs, _ := parseWSize(raw); fs.W < 2 {
+			return wSize{}, false
+		}
+	}
+	var best wSize
+	found := false
+	for _, c := range d.sizes {
+		if c.W != 1 {
+			continue
+		}
+		if !found || absInt(c.H-s.H) < absInt(best.H-s.H) {
+			best, found = c, true
+		}
+	}
+	return best, found
+}
+
 // Snap turns a stored size into an allowed one: the size itself when
 // allowed; else the same width at the nearest height; else the
 // smallest allowed size that covers it; else the nearest allowed size.
@@ -375,6 +477,47 @@ func absInt(n int) int {
 	return n
 }
 
+// wLead is the hero figure a widget leads with, for the w-lead
+// partial: the value shown short, the whole figure for its title, and
+// how it changed.
+type wLead struct {
+	Label      string
+	Value      string // auto-compact: "4.21B"
+	Unit       string // "ISK"
+	Full       string // the whole figure, for the title
+	Change     string // "+1.24B (+3.1%)"
+	ChangeText string // the change in words, for its title
+	Up         bool   // the change's direction
+	UpIsGood   bool   // whether up reads as good news
+	Sub        string
+	Href       string
+}
+
+// Tone is the class the change takes: good or bad news.
+func (l wLead) Tone() string {
+	if l.Change == "" {
+		return ""
+	}
+	if l.Up == l.UpIsGood {
+		return "w-good"
+	}
+	return "w-bad"
+}
+
+// wTile is one stat tile in a w-tiles row.
+type wTile struct {
+	Label string
+	Value string // auto-compact
+	Unit  string
+	Full  string // the whole figure, for the title
+	Sub   string
+	Href  string
+}
+
+// wEmpty is what a widget with nothing to show says: one sentence and,
+// when there is one, the next step and where it is.
+type wEmpty struct{ Text, Step, Href string }
+
 // homeShared is the per-render cache: each fact a widget reads is
 // computed once and reused by every widget that shows it.
 type homeShared struct {
@@ -422,61 +565,95 @@ func viewerChars(chars []db.Character) map[int64]bool {
 // homeWidget is the view a card's shell and body templates get.
 type homeWidget struct {
 	ID, Key, Title, Href string
+	HrefName             string // the page Href opens, by its menu name: "3 more on the Wallet page"
 	Size                 wSize
 	Form                 string
 	Sizes                string // data-sizes: every allowed size
 	SizeNames            string // data-size-names: JSON, size -> {"form", "says"} for the size picker
 	SizeClass            string // gw1-3 gh1-4: the grid classes the CSS applies
-	Cap                  int    // rows or items shown before More, by height
+	Cap                  int    // rows or items the server renders before "N more", by height
 	Customize            bool   // rendering under /?customize=1 (form return targets)
+	Expanded             bool   // the Expand view: the largest form, in the shared modal
 	Data                 any    // the builder's value
 	Body                 template.HTML
+	NarrowBody           template.HTML  // the one-column form a phone draws in place of Body, when the widget has one
+	BodyClass            string         // set while a body renders: "w-wide" beside a narrow body, "w-narrow" on it
 	ViewerChars          map[int64]bool // the account's characters, for charLink
 }
 
-// Uid is an element id unique to this card: widget templates use it
-// instead of fixed ids, since one page may hold more than one body.
+// Uid is an element id unique to this body: widget templates use it
+// instead of fixed ids, since one page may hold more than one body (a
+// phone body beside the wide one, the Expand view beside the card).
 func (w homeWidget) Uid(name string) string {
-	return "w-" + strings.ReplaceAll(w.Key, "#", "-") + "-" + name
+	id := "w-" + strings.ReplaceAll(w.Key, "#", "-") + "-" + name
+	if w.BodyClass == "w-narrow" {
+		id += "-n"
+	}
+	if w.Expanded {
+		id += "-x"
+	}
+	return id
 }
 
 // buildHomeWidget builds one card for item at its snapped size and
 // renders its body. It returns false when the widget is quiet and the
 // home is not being customized.
-func (app *Application) buildHomeWidget(ctx context.Context, ts *template.Template, def *homeWidgetDef, item homeLayoutItem, shared *homeShared, customize bool, viewer map[int64]bool) (homeWidget, bool) {
+func (app *Application) buildHomeWidget(ctx context.Context, ts *template.Template, def *homeWidgetDef, item homeLayoutItem, shared *homeShared, customize, expanded bool, viewer map[int64]bool) (homeWidget, bool) {
 	size := def.sizeOf(item)
 	form := def.FormFor(size)
 	w := homeWidget{
-		ID: def.ID, Key: def.ID, Title: def.Title, Href: def.Href,
+		ID: def.ID, Key: def.ID, Title: def.Title, Href: def.Href, HrefName: navLabelFor(def.Href),
 		Size: size, Form: form.Name, Sizes: def.sizesText, SizeNames: def.sizeNamesText,
 		SizeClass:   fmt.Sprintf("gw%d gh%d", size.W, size.H),
 		Cap:         homeCap(size.H),
 		Customize:   customize,
+		Expanded:    expanded,
 		ViewerChars: viewer,
 	}
 	in := &widgetInput{
 		UserID: shared.userID, Key: w.Key, Size: size, Form: form.Name, Forms: []string{form.Name},
+		Opts:  def.defaultOptions(),
 		Chars: shared.chars, Bundles: shared.bundles, Shared: shared, Now: shared.now,
+	}
+	if ns, ok := def.narrowSize(size); ok {
+		in.Forms = append(in.Forms, def.FormFor(ns).Name)
 	}
 	w.Data = def.Build(ctx, app, in)
 	if q, ok := w.Data.(widgetQuiet); ok && q.Quiet() && !customize {
 		return w, false
 	}
 	if ts != nil {
-		if err := renderWidgetBodies(ts, &w); err != nil {
+		if err := renderWidgetBodies(ts, def, &w); err != nil {
 			logging.Errorf("home: render widget %s: %v", w.ID, err)
 		}
 	}
 	return w, true
 }
 
-// renderWidgetBodies executes the card's form template into Body.
-func renderWidgetBodies(ts *template.Template, w *homeWidget) error {
+// renderWidgetBodies executes the card's form template into Body and,
+// when the widget has a one-column form a phone draws instead, that
+// form into NarrowBody. home.css shows one of the two by the card's
+// width.
+func renderWidgetBodies(ts *template.Template, def *homeWidgetDef, w *homeWidget) error {
+	ns, narrow := def.narrowSize(w.Size)
 	var buf bytes.Buffer
+	if narrow {
+		w.BodyClass = "w-wide"
+	}
 	if err := ts.ExecuteTemplate(&buf, "w-"+w.ID+"-"+w.Form, w); err != nil {
 		return err
 	}
 	w.Body = template.HTML(buf.String())
+	if narrow {
+		n := *w
+		n.Size, n.Form, n.BodyClass, n.Body = ns, def.FormFor(ns).Name, "w-narrow", ""
+		buf.Reset()
+		if err := ts.ExecuteTemplate(&buf, "w-"+n.ID+"-"+n.Form, n); err != nil {
+			return err
+		}
+		w.NarrowBody = template.HTML(buf.String())
+	}
+	w.BodyClass = ""
 	return nil
 }
 
@@ -498,4 +675,20 @@ func pageTemplateFiles(page string) []string {
 // homeTemplateSet is the parsed home page set, the one render uses.
 func homeTemplateSet() (*template.Template, error) {
 	return parsedTemplate(&pageTemplates, "base", "home.html", pageTemplateFiles("home.html")...)
+}
+
+// navLabelFor is the menu name of the page at href ("Wallet"), or ""
+// when no menu entry opens it.
+func navLabelFor(href string) string {
+	if href == "" {
+		return ""
+	}
+	for _, entries := range sectionNav {
+		for _, e := range entries {
+			if e.Href == href {
+				return e.Label
+			}
+		}
+	}
+	return ""
 }

@@ -702,10 +702,10 @@
   // ([data-w-fit], whose children are its rows) shows the whole rows
   // that fit and hides the rest, and the line after it says how many
   // more there are, linking to the widget's page (the card's
-  // data-href). With one column the cards take their content's
-  // height and the server's cap holds (rows marked data-wmore), with
-  // the same line. Where rows follow their content there is nothing
-  // to fit.
+  // data-href, named by data-href-name: "3 more on the Jobs page").
+  // Where cards take their content's height (auto rows, one column)
+  // the server's cap holds instead (rows marked data-w-over), with
+  // the same line.
   // homeListBox is the block a list stands in: a table body's table
   // (and its scroller), else the list itself.
   function homeListBox(list) {
@@ -722,13 +722,16 @@
     var href = card.getAttribute("data-href");
     var text = href ? document.createElement("a") : document.createElement("span");
     if (href) text.href = href;
+    text.setAttribute("data-page", card.getAttribute("data-href-name") || "");
     small.appendChild(text);
     line.appendChild(small);
     anchor.insertAdjacentElement("afterend", line);
     return line;
   }
   function homeSetMore(line, n) {
-    line.querySelector("a, span").textContent = n + " more";
+    var text = line.querySelector("a, span");
+    var page = text.getAttribute("data-page");
+    text.textContent = n + " more" + (page && text.tagName === "A" ? " on the " + page + " page" : "");
     line.hidden = n <= 0;
   }
   // homeCut hides a row the card has no room for, or shows it again.
@@ -782,15 +785,21 @@
       if (!n && homeListBox(list) !== list) homeCut(homeListBox(list), true);
     }
   }
-  // homeFitCard fits one card's body to its box. fit is false with
-  // one column, where the server's cap holds (its rows past the cap
-  // are cut the same way). Lists give up rows first; when the card
-  // still overflows, its parts after the first are not drawn, the
-  // last first, until it fits (.w-drop): a card shows the whole parts
-  // that fit, never a part cut in half.
+  // homeFitCard fits one card's body to its box. fit is false where
+  // cards take their content's height, and the server's cap holds
+  // (its rows past the cap are cut the same way). Lists give up rows
+  // first; when the card still overflows, its parts after the first
+  // are not drawn, the last first, until it fits (.w-drop): a card
+  // shows the whole parts that fit, never a part cut in half. A kit
+  // body (.w-body) is the box its parts fit, the one drawn when the
+  // card has a phone body beside it.
   function homeFitCard(card, fit) {
     var body = card.querySelector(":scope > .card-body");
     if (!body) return;
+    var kits = body.querySelectorAll(":scope > .w-body");
+    for (var b = 0; b < kits.length; b++) {
+      if (kits[b].getClientRects().length) { body = kits[b]; break; }
+    }
     var lists = body.querySelectorAll("[data-w-fit]");
     var i, k;
     var dropped = body.querySelectorAll(":scope > .w-drop");
@@ -801,7 +810,7 @@
         var kids = lists[i].children, capped = 0;
         if (homeListBox(lists[i]) !== lists[i]) homeCut(homeListBox(lists[i]), false);
         for (k = 0; k < kids.length; k++) {
-          var capRow = kids[k].hasAttribute("data-wmore");
+          var capRow = kids[k].hasAttribute("data-w-over");
           homeCut(kids[k], false);
           if (capRow) {
             homeCut(kids[k], true);
@@ -812,23 +821,24 @@
       }
       return;
     }
-    homeFitLists(body, lists, card);
-    if (!homeOverflows(body)) return;
-    // The parts in the body's flow; a part set beside it (the
-    // Briefing's filters, placed in the heading band) takes no room.
+    // The parts in the body's flow, taken before the lists give up
+    // rows (a list that gives up all of them is still the first
+    // part); a part set beside it (the Briefing's filters, placed in
+    // the heading band) takes no room.
     var parts = Array.prototype.filter.call(body.children, function (el) {
       if (el.classList.contains("w-more") || !el.getClientRects().length) return false;
       var pos = window.getComputedStyle(el).position;
       return pos !== "absolute" && pos !== "fixed";
     });
+    homeFitLists(body, lists, card);
+    if (!homeOverflows(body)) return;
     for (i = parts.length - 1; i >= 1 && homeOverflows(body); i--) {
       parts[i].classList.add("w-drop");
       homeFitLists(body, lists, card);
     }
   }
   function homeFit(grid) {
-    if (!homeFixedRows(grid)) return;
-    var fit = homeCols(grid) >= 2;
+    var fit = homeFixedRows(grid) && homeCols(grid) >= 2;
     var cards = grid.querySelectorAll(":scope > .card[data-widget]");
     for (var i = 0; i < cards.length; i++) homeFitCard(cards[i], fit);
   }
@@ -862,6 +872,95 @@
       for (var i = 0; i < grids.length; i++) homeFit(grids[i]);
     });
   }
+
+  // --- Home grid: Expand ---------------------------------------------
+  // Each card's heading carries an Expand button, rendered hidden and
+  // shown here: it opens the widget's largest form in the shared
+  // modal, fetched from the one-card route (view=expand) into a box
+  // the form fills. Without JavaScript the card's title links to its
+  // page, which has all of it.
+  function initHomeExpand(root) {
+    var btns = root.querySelectorAll ? root.querySelectorAll("[data-w-expand][hidden]") : [];
+    for (var i = 0; i < btns.length; i++) btns[i].hidden = false;
+  }
+  onContentReady(initHomeExpand);
+  initHomeExpand(document);
+
+  var homeExpandSeq = 0;
+  function homeExpandNote(box, text, href) {
+    var p = document.createElement("p");
+    p.className = "w-expand-note";
+    p.textContent = text;
+    if (href) {
+      var a = document.createElement("a");
+      a.href = href;
+      a.textContent = "Open its page";
+      p.appendChild(document.createTextNode(" "));
+      p.appendChild(a);
+    }
+    box.replaceChildren(p);
+  }
+  function homeExpand(card, modal) {
+    var key = card.getAttribute("data-key");
+    var href = card.getAttribute("data-href");
+    var heading = card.querySelector(":scope > h3");
+    var name = heading ? (heading.querySelector(".w-title") || heading).textContent.trim() : key;
+    var title = modal.querySelector("[data-w-expand-title]");
+    var box = modal.querySelector("[data-w-expand-box]");
+    var seq = ++homeExpandSeq;
+    title.replaceChildren();
+    if (href) {
+      var link = document.createElement("a");
+      link.href = href;
+      link.textContent = name;
+      title.appendChild(link);
+    } else {
+      title.textContent = name;
+    }
+    box.setAttribute("aria-busy", "true");
+    homeExpandNote(box, "Loading " + name + ".");
+    window.EveSynapseModal.open(modal, {
+      onClose: function () {
+        homeExpandSeq++;
+        box.replaceChildren();
+      }
+    });
+    fetch("/home/widget/" + encodeURIComponent(key) + "?view=expand", {
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+      credentials: "same-origin",
+      cache: "no-store"
+    }).then(function (resp) {
+      if (resp.status === 204) return null;
+      if (!resp.ok) throw new Error("card " + resp.status);
+      return resp.text();
+    }).then(function (html) {
+      if (seq !== homeExpandSeq) return;
+      box.removeAttribute("aria-busy");
+      var tpl = document.createElement("template");
+      tpl.innerHTML = (html || "").trim();
+      var fresh = tpl.content.querySelector(".card[data-widget]");
+      if (!fresh) {
+        homeExpandNote(box, name + " has nothing to show right now.", href);
+        return;
+      }
+      fresh = document.importNode(fresh, true);
+      box.replaceChildren(fresh);
+      document.dispatchEvent(new CustomEvent("evesynapse:content-ready", { detail: { root: fresh, part: true } }));
+    }).catch(function () {
+      if (seq !== homeExpandSeq) return;
+      box.removeAttribute("aria-busy");
+      homeExpandNote(box, name + " could not be loaded.", href);
+    });
+  }
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest("[data-w-expand]") : null;
+    if (!btn) return;
+    var card = btn.closest(".card[data-widget]");
+    var modal = document.getElementById("w-expand-modal");
+    if (!card || !modal || !window.EveSynapseModal || !window.fetch) return;
+    ev.preventDefault();
+    homeExpand(card, modal);
+  });
 
   // The grid's most columns and rows (wSize in home_widget_kit.go).
   var HOME_COLS = 3, HOME_ROWS = 4;

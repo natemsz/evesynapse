@@ -767,9 +767,6 @@ td.mt-reqs { max-width: 12rem; }
 .pf-axis-x .pf-x-end { transform: translateX(-100%); }
 .pf-chart .cdot.pf-hit { fill: var(--accent); fill-opacity: 0; stroke: none; }
 .pf-chart .cdot.pf-hit:hover, .pf-chart .cdot.pf-hit:focus, .pf-chart .cdot.pf-hit.is-selected { fill-opacity: 0.12; stroke: none; outline: none; }
-.ctip .ctip-row { display: flex; align-items: center; gap: 0.45rem; }
-.ctip .ctip-sw { width: 0.6rem; height: 0.6rem; border-radius: 2px; flex: none; }
-.ctip .ctip-val { margin-left: auto; padding-left: 0.9rem; font-variant-numeric: tabular-nums; }
 .pf-act-grid { display: grid; grid-template-columns: minmax(0, 1fr) 18.75rem; gap: 1rem 1.5rem; align-items: start; }
 @container page (width < 52rem) { .pf-act-grid { grid-template-columns: minmax(0, 1fr); } }
 .pf-card { background: var(--panel); border: 1px solid var(--box-edge); border-radius: var(--r-md); padding: 0.8rem 0.9rem; }

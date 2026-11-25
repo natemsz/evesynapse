@@ -1,10 +1,12 @@
 {{/* The one card shell every home widget draws in: the grid classes and
      size data the Customize engine reads, the page a list's "N more" line
-     links to, the title, and the body the widget's form template
-     rendered. */}}
-{{define "w-card"}}<section class="card w-card {{.SizeClass}}" data-widget="{{.ID}}" data-key="{{.Key}}" data-gw="{{.Size.W}}" data-gh="{{.Size.H}}" data-sizes="{{.Sizes}}" data-size-names="{{.SizeNames}}"{{if .Href}} data-href="{{.Href}}"{{end}}>
-  <h3>{{.Title}}</h3>
+     links to, the title (a link to that page), the Expand button (shown
+     by home.js; it opens the widget's largest form in the shared modal),
+     and the bodies the widget's form templates rendered: a phone draws
+     the narrow body in place of the wide one (home.css). */}}
+{{define "w-card"}}<section class="card w-card {{.SizeClass}}{{if .Expanded}} w-expanded{{end}}" data-widget="{{.ID}}" data-key="{{.Key}}" data-gw="{{.Size.W}}" data-gh="{{.Size.H}}" data-sizes="{{.Sizes}}" data-size-names="{{.SizeNames}}"{{if .Href}} data-href="{{.Href}}"{{end}}{{if .HrefName}} data-href-name="{{.HrefName}}"{{end}}>
+  <h3>{{if and .Href (not .Customize)}}<a class="w-title" href="{{.Href}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}{{if not (or .Customize .Expanded)}}<button type="button" class="cardbtn w-expand" data-w-expand aria-label="Expand {{.Title}}" title="Expand" hidden><svg class="cardicon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></g></svg></button>{{end}}</h3>
   <div class="card-body">
-{{.Body}}
+{{.Body}}{{.NarrowBody}}
   </div>
 </section>{{end}}

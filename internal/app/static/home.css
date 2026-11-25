@@ -70,8 +70,13 @@
 /* A card waiting for its render at a new size: the old one, dimmed,
    until the new one lands. */
 .grid.home-grid > .card.w-stale { opacity: 0.55; transition: opacity 120ms ease; }
-/* Customize shows each card as the page shows it: summary only. */
-.home-custom [data-wmore] { display: none; }
+/* Rows past the server's cap (data-w-over) show only where home.js
+   fits the list to its card (.w-fitting), and in the Expand view. A
+   widget's detail blocks (data-w-detail) are for the Expand view,
+   where the card has room for them. */
+.w-card [data-w-over], .w-card [data-w-detail] { display: none; }
+.grid.home-grid .w-fitting > [data-w-over],
+.w-card.w-expanded [data-w-over], .w-card.w-expanded [data-w-detail] { display: revert; }
 /* One column: every card is full width, so there is nothing to resize. */
 @container page (width < 36rem) {
   .grid.home-grid .cardsize, .grid.home-grid .cardgrip, .grid.home-grid .sizepick { display: none; }
@@ -107,17 +112,15 @@
   .grid.home-grid[data-rows="fixed"] > .card > .card-body { min-height: 0; overflow: hidden; }
 }
 
-/* Lists in fixed rows. Rows past the server's cap (data-wmore) stay
-   hidden until home.js measures the list (.w-fitting): then it shows
-   the whole rows that fit and hides the rest (.w-cut), and the line
-   after the list says how many more there are, linking to the
+/* Lists in fixed rows: once home.js measures a list (.w-fitting) it
+   shows the whole rows that fit and hides the rest (.w-cut), and the
+   line after the list says how many more there are, linking to the
    widget's page. Without JavaScript the server's cap holds. */
-.grid.home-grid[data-rows="fixed"] [data-wmore] { display: none; }
-.grid.home-grid[data-rows="fixed"] .w-fitting > [data-wmore] { display: revert; }
 .grid.home-grid[data-rows="fixed"] .w-fitting > .w-cut { display: none; }
 /* A part a fixed card has no room for once its lists gave up their
    rows is not drawn, rather than drawn cut in half. */
-.grid.home-grid[data-rows="fixed"] > .card > .card-body > .w-drop { display: none; }
+.grid.home-grid[data-rows="fixed"] > .card > .card-body > .w-drop,
+.grid.home-grid[data-rows="fixed"] > .card > .card-body > .w-body > .w-drop { display: none; }
 .grid.home-grid .w-more { margin: 0.35rem 0 0; color: var(--muted); }
 .grid.home-grid .w-more[hidden] { display: none; }
 
@@ -141,3 +144,267 @@
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   outline: none;
 }
+
+/* ---------------------------------------------------------------------
+   The widget kit (templates/widgets/_kit.html). Every part fills the
+   box its card gives it; the rules are the same for every widget.
+
+   Where a card is a size container (fixed rows, the Expand view) its
+   body is exactly the room under the heading: the chart takes what the
+   other parts leave. Where a card takes its content's height (auto
+   rows, phones) the chart is as tall as a share of the card's width.
+   --------------------------------------------------------------------- */
+
+/* Series colours: one categorical order, checked for colour-blind
+   separation and contrast on the dark card surface. Text never takes
+   them; a swatch, line or fill beside it carries the identity. */
+.w-card {
+  --w-s1: #3f8eea;
+  --w-s2: #e05a14;
+  --w-s3: #a8609e;
+  --w-s4: #c98500;
+}
+.w-card .w-s1 { --w-c: var(--w-s1); }
+.w-card .w-s2 { --w-c: var(--w-s2); }
+.w-card .w-s3 { --w-c: var(--w-s3); }
+.w-card .w-s4 { --w-c: var(--w-s4); }
+
+/* The body: a column of parts. */
+.w-card > .card-body:has(> .w-body) { display: flex; flex-direction: column; min-height: 0; }
+.w-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.w-body > * { flex: none; min-width: 0; margin: 0; }
+
+/* A phone draws the narrow body in place of the wide one. */
+.w-body.w-narrow { display: none; }
+@container widget (width < 30rem) {
+  .w-body.w-wide { display: none; }
+  .w-body.w-narrow { display: flex; }
+}
+
+/* w-split: the first part (or .w-side) beside the rest when the card
+   is much wider than tall. Only a size container answers an
+   aspect-ratio query, so cards that take their content's height
+   stack. */
+.w-side { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+@container widget (aspect-ratio > 2.2) {
+  .w-body.w-split { flex-direction: row; align-items: stretch; gap: var(--space-4); }
+  .w-body.w-split > :first-child { flex: 0 0 auto; width: clamp(9rem, 30%, 15rem); justify-content: center; }
+  .w-body.w-split > .w-chart { flex: 1 1 0; height: auto; min-height: 0; }
+}
+
+/* w-head: the lead with tiles beside it, wrapping under it when the
+   card is narrow. w-cols: the chart and a side list. */
+.w-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-4); }
+.w-head > .w-lead { flex: 0 1 auto; }
+.w-head > .w-tiles { flex: 1 1 18rem; }
+.w-cols { display: flex; gap: var(--space-4); min-height: 0; }
+.w-cols > .w-chart { flex: 2 1 0; }
+.w-aside { flex: 1 1 0; min-width: 11rem; display: flex; flex-direction: column; gap: var(--space-1); }
+@container widget (width < 40rem) {
+  .w-cols { flex-direction: column; }
+  .w-aside { min-width: 0; }
+}
+.w-sub {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* w-lead: the hero figure. Proportional digits at display size; the
+   change sits beside the value when there is room. */
+.w-lead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 0.6rem; min-width: 0; }
+.w-lead-label {
+  flex: 1 0 100%;
+  font-family: var(--font-display);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.w-lead-value {
+  font-family: var(--font-num);
+  font-size: clamp(var(--fs-2xl), min(10cqi, 24cqb), var(--fs-6xl));
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--text-bright);
+  font-variant-numeric: proportional-nums;
+  white-space: nowrap;
+}
+.w-lead-value small { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
+.w-lead-value a { color: inherit; text-decoration: none; }
+.w-lead-change, .w-lead-sub { font-size: var(--fs-xs); color: var(--text); white-space: nowrap; }
+.w-lead-change small { color: var(--muted); }
+.w-lead-change .w-arrow { font-size: var(--fs-rel-glyph); }
+.w-good { color: var(--v-good-ink, var(--success)); }
+.w-bad { color: var(--v-bad, var(--danger)); }
+
+/* w-tiles: stat tiles that wrap by width. Where rows are fixed, only
+   the first row of tiles is drawn. */
+.w-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  gap: var(--space-2);
+}
+.w-tile { padding: var(--space-2) var(--space-3); }
+.w-tile .l-stat-value { font-size: clamp(var(--fs-sm), 11cqi, var(--fs-2xl)); font-variant-numeric: proportional-nums; }
+.w-tile .l-stat-value small { font-size: var(--fs-2xs); color: var(--muted); font-weight: 600; }
+
+/* w-chart: legend, plot, dates. The plot's SVG stretches to the plot
+   (preserveAspectRatio none); its value labels are HTML on the
+   gridlines, hidden on a short chart. */
+.w-card .w-chart {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  margin: 0;
+  height: clamp(7rem, 40cqi, 12rem);
+  container: wchart / size;
+}
+.w-legend { display: flex; flex-wrap: wrap; gap: 0.1rem 0.8rem; font-size: var(--fs-xs); color: var(--text); line-height: 1.3; }
+.w-key { display: inline-flex; align-items: center; gap: 0.35rem; }
+.w-sw { flex: none; width: 0.7rem; height: 0.7rem; border-radius: 2px; background: var(--w-c); }
+/* Value labels stand in a gutter left of the plot, each centred on
+   its gridline; dates run under the plot, lined up with it. */
+.w-chart { --w-gutter: 2.6rem; }
+.w-plot { position: relative; flex: 1 1 0; min-height: 0; }
+.w-plot > svg { position: absolute; top: 0.45rem; bottom: 0.45rem; left: var(--w-gutter); width: calc(100% - var(--w-gutter)); height: calc(100% - 0.9rem); overflow: visible; display: block; }
+.w-plot > .w-yticks { position: absolute; top: 0.45rem; bottom: 0.45rem; left: 0; width: calc(var(--w-gutter) - 0.4rem); }
+.w-grid { stroke: var(--hairline); stroke-width: 1; }
+.w-area { fill: var(--w-c); fill-opacity: 0.12; stroke: none; }
+.w-line { fill: none; stroke: var(--w-c); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.w-card .pchart .cdot.w-hit { fill: var(--text-bright); fill-opacity: 0; stroke: none; outline: none; }
+.w-card .pchart .cdot.w-hit:hover, .w-card .pchart .cdot.w-hit:focus-visible, .w-card .pchart .cdot.w-hit.is-selected { fill-opacity: 0.07; stroke: none; }
+.w-yticks { pointer-events: none; }
+.w-yticks > span {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: var(--fs-2xs);
+  line-height: 1.2;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.w-xticks { position: relative; flex: none; height: 1.1rem; margin-left: var(--w-gutter); font-size: var(--fs-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.w-xticks > span { position: absolute; top: 0; white-space: nowrap; }
+.w-xticks > .w-x-middle { transform: translateX(-50%); }
+.w-xticks > .w-x-end { transform: translateX(-100%); }
+@container wchart (height < 6rem) {
+  .w-plot, .w-xticks { --w-gutter: 0rem; }
+  .w-plot > .w-yticks { display: none; }
+  .w-plot > svg { top: 0.15rem; bottom: 0; height: calc(100% - 0.15rem); }
+}
+@container wchart (width < 16rem) {
+  .w-xticks > .w-x-middle { display: none; }
+}
+.w-card .ctip-sw { background: var(--w-c, transparent); }
+
+/* w-spark: a line strip filling its slot. */
+.w-card .w-spark { position: relative; flex: 1 1 auto; min-height: 2.5rem; height: clamp(2.5rem, 18cqi, 4.5rem); }
+.w-spark > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; display: block; }
+
+/* w-segbar: a thin bar, a 2px gap between its parts, then each
+   part's name and figure. */
+.w-segbar { display: flex; flex-direction: column; gap: var(--space-1); }
+.w-segs { display: flex; gap: 2px; height: 0.5rem; }
+.w-seg { flex: 0 1 auto; min-width: 2px; height: 100%; border-radius: 0.25rem; background: var(--w-c); }
+.w-segkeys {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.5rem), 1fr));
+  gap: 0.15rem 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.w-segkeys > li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 0.35rem; min-width: 0; }
+.w-segname { min-width: 0; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-segval { grid-column: 2; font-size: var(--fs-sm); font-weight: 600; color: var(--text-bright); white-space: nowrap; }
+
+/* w-rank: ranked bars, square at the baseline, rounded at the end. */
+.w-rank { display: flex; flex-direction: column; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
+.w-rank > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.15rem 0.6rem; font-size: var(--fs-sm); }
+.w-rank-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-rank-val { color: var(--text-bright); font-variant-numeric: tabular-nums; }
+.w-rank-bar { grid-column: 1 / -1; height: 0.375rem; border-radius: 0 0.25rem 0.25rem 0; background: color-mix(in srgb, var(--w-s1) 14%, transparent); overflow: hidden; }
+.w-rank-bar > span { display: block; height: 100%; border-radius: 0 0.25rem 0.25rem 0; background: var(--w-c); }
+
+/* w-meters: name, figure and bar rows. */
+.w-meters { display: flex; flex-direction: column; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
+.w-meters > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.15rem 0.6rem; font-size: var(--fs-sm); }
+.w-meters .w-meter { grid-column: 1 / -1; }
+
+/* w-note and w-empty. */
+.w-note { color: var(--muted); font-size: var(--fs-xs); }
+@container widget (height < 12rem) {
+  .w-note { display: none; }
+}
+.w-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); }
+.w-empty > p { margin: 0; max-width: 28rem; }
+
+/* Where the card is exactly its cells, the chart and the spark take
+   the room the other parts leave. */
+@container page (width >= 36rem) {
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-chart { flex: 1 1 0; height: auto; min-height: 4.5rem; }
+  /* A chart claims more than half its body: a part after it that then
+     has no room is not drawn (home.js), rather than the chart being
+     squeezed to a strip. */
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-body > .w-chart,
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-body > .w-cols { min-height: max(4.5rem, 55%); }
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-spark { flex: 1 1 0; height: auto; }
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-cols { flex: 1 1 0; }
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-cols > .w-chart { min-height: 4.5rem; }
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-tiles { grid-template-rows: auto; grid-auto-rows: 0; row-gap: 0; overflow: hidden; }
+}
+
+/* The heading: the title links to the widget's page; the Expand
+   button sits at the band's far end. The band trims its padding on a
+   one-row card. */
+.w-card > h3 > .w-title { color: inherit; text-decoration: none; }
+.w-card > h3 > .w-title:hover, .w-card > h3 > .w-title:focus-visible { text-decoration: underline; text-underline-offset: 0.2em; }
+.w-card > h3 > .w-expand { margin-left: auto; }
+.w-card > h3 > .w-expand[hidden] { display: none; }
+/* Chips a widget sets in the heading band (the Briefing's filters, the
+   Fleet tags) stand clear of the Expand button. */
+.w-card:has(> h3 > .w-expand:not([hidden])) :is(.fleet-tags, .brief-tabs) { right: 3.4rem; }
+@container widget (height < 12rem) {
+  .grid.home-grid > .w-card > h3:first-child { min-height: calc(2.35rem + 1px); padding-block: 0.3rem; margin-bottom: 0.5rem; }
+}
+
+/* The Expand view: the widget's largest form in the shared modal, in
+   a box it fills. The card sheds its own glass: the modal is the
+   pane. */
+.modal.w-expand-modal { width: min(64rem, calc(100vw - 2rem)); max-width: calc(100vw - 2rem); display: flex; flex-direction: column; }
+.w-expand-box { display: flex; height: min(36rem, 70vh); min-height: 12rem; margin-top: var(--space-2); }
+.w-expand-box > .w-card.w-expanded {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  container: widget / size;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.w-expand-box > .w-card > h3 { display: none; }
+.w-expand-box > .w-card > .card-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.w-expand-box > .w-card .w-chart { flex: 1 1 0; height: auto; min-height: 6rem; }
+.w-expand-box > .w-card .w-spark { flex: 1 1 0; height: auto; }
+.w-expand-box > .w-card .w-cols { flex: 1 1 0; }
+.w-expand-note { margin: auto; color: var(--muted); }

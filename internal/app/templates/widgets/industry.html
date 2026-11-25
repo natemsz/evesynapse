@@ -6,7 +6,7 @@
 <table>
   <thead><tr><th>Character</th><th class="opt">Activity</th><th>Product</th><th>Ends</th></tr></thead>
   <tbody data-w-fit>
-  {{range $i, $r := .Rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td class="opt">{{.Activity}}</td><td>{{itemLink .TypeID .Name}}</td><td class="when"><span class="when-abs">{{.Ends}}</span>{{if .Left}} <span class="when-rel" title="{{.Ends}}">{{.Left}}</span>{{end}}</td></tr>{{end}}
+  {{range $i, $r := .Rows}}<tr{{if ge $i $cap}} data-w-over{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td class="opt">{{.Activity}}</td><td>{{itemLink .TypeID .Name}}</td><td class="when"><span class="when-abs">{{.Ends}}</span>{{if .Left}} <span class="when-rel" title="{{.Ends}}">{{.Left}}</span>{{end}}</td></tr>{{end}}
   </tbody>
 </table>
 </div>

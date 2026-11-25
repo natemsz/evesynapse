@@ -936,31 +936,6 @@ h3 + .tw > table, h3 + table {
   cursor: pointer;
 }
 .foldbtn:hover { color: var(--text-bright); }
-/* A home module's More/Less toggle (app.js Expanders): the same
-   seat in the heading as the fold button it replaces there. */
-.card.has-expand > h2:first-child, .card.has-expand > h3:first-child { padding-right: 5rem; position: relative; }
-.cardexpand {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  right: 0.7rem;
-  z-index: 2;
-  height: 1.7rem;
-  padding: 0 0.55rem;
-  display: inline-flex;
-  align-items: center;
-  font: inherit;
-  font-size: var(--fs-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--gold);
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--gold) 20%, transparent),
-    color-mix(in srgb, var(--accent) 16%, transparent));
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
 /* --- info tips: a filled circular "i" beside a panel or chart
    name; its explainer rides in a styled bubble shown on hover or
    keyboard focus, so panels carry no prose of their own. --- */
@@ -995,9 +970,6 @@ h3 + .tw > table, h3 + table {
   opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
 }
 
-.cardexpand::after { content: " \25BE"; }
-.cardexpand[aria-expanded="true"]::after { content: " \25B4"; }
-.cardexpand:hover { color: var(--text-bright); border-color: var(--accent); }
 .panel.has-fold > h1:first-child { padding-right: 3rem; position: relative; }
 .panel.folded > *:not(h1),
 .card.folded > *:not(:first-child),
@@ -1868,8 +1840,8 @@ html.js :has(> [data-tabs]:not([data-tabs-ready])) .ti-h { display: none; }
 .ti-compact .ti-list li { padding: 0.25rem 0.45rem 0.25rem 2rem; font-size: var(--fs-sm); }
 .ti-compact .ti-list li::before { top: 0.33rem; }
 /* The module shows each idea's brief until More opens it. */
-.ti-compact .ti-whole, .card.expanded .ti-compact .ti-brief { display: none; }
-.card.expanded .ti-compact .ti-whole { display: inline; }
+.ti-compact .ti-whole, .w-expanded .ti-compact .ti-brief { display: none; }
+.w-expanded .ti-compact .ti-whole { display: inline; }
 .ti-compact .ti-brief { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .ti-more { margin: 0.4rem 0 0; }
 .cust-row { border: 1px solid #262626; background: var(--row); padding: 0.6rem 0.8rem; margin: 0.5rem 0; border-radius: var(--r-sm); }
@@ -2940,6 +2912,10 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
 }
 .ctip .ctip-date { color: var(--gold); font-weight: 600; }
+/* Tooltip rows (data-tip-rows): a swatch, the series, its value. */
+.ctip .ctip-row { display: flex; align-items: center; gap: 0.45rem; }
+.ctip .ctip-sw { width: 0.6rem; height: 0.6rem; border-radius: 2px; flex: none; }
+.ctip .ctip-val { margin-left: auto; padding-left: 0.9rem; font-variant-numeric: tabular-nums; }
 /* The day under the pointer, drawn through every panel of a chart. */
 .chart-crosshair { position: absolute; width: 1px; margin-left: -0.5px; background: var(--gold); opacity: 0.45; pointer-events: none; z-index: 5; }
 .chart-crosshair[hidden] { display: none; }

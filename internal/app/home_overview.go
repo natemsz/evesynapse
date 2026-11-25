@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"evesynapse/internal/app/module"
-	"evesynapse/internal/balancechart"
 	"fmt"
 	"io"
 	"net/http"
@@ -581,8 +580,7 @@ type netWorthWidget struct {
 	AssetsNote      string // partial-pricing coverage line, "" when everything priced
 	Escrow          string
 	AsOf            string
-	History         *balancechart.BalanceChart // net worth over time, when 2+ sampled days exist
-	HistoryBuilding bool                       // history recording, not yet chartable
+	HistoryBuilding bool // history recording, not yet chartable
 	// WalletPct is the wallets' share of the total, "48.1%", and
 	// WalletBar the same share for a data-w bar; both empty when
 	// the total is not positive.
@@ -605,8 +603,21 @@ type netWorthWidget struct {
 	WalletTrend *kpiTrend
 	AssetsTrend *kpiTrend
 
-	// The live figures the trends compare.
-	totalNow, walletNow, assetsNow float64
+	// The live figures the trends compare, and escrow on its own.
+	totalNow, walletNow, assetsNow, escrowNow float64
+	// pricedItems of totalItems asset stacks have a house price.
+	pricedItems, totalItems int
+	// days is the last month of sampled days, oldest first; chars is
+	// each character's live total, in the bundles' order.
+	days  []netWorthDay
+	chars []netWorthChar
+}
+
+// netWorthChar is one character's live net worth.
+type netWorthChar struct {
+	ID    int64
+	Name  string
+	Total float64
 }
 
 // kpiTrend is one figure's direction and its change, for the arrow's
@@ -615,6 +626,7 @@ type kpiTrend struct {
 	Up    bool
 	Delta string // shown beside the arrow: "-1.74B (-1.2%)"
 	Text  string
+	Since string // the span compared: "7 days"
 }
 
 type industryRow struct {
@@ -883,7 +895,9 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	}
 
 	for _, b := range bundles {
+		var own float64
 		if b.walletKnown {
+			own += b.wallet
 			walletSum += b.wallet
 			walletOK = true
 			noteAsOf(b, esi.SnapWallet)
@@ -902,6 +916,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 					continue
 				}
 				assetSum += float64(a.Quantity) * price
+				own += float64(a.Quantity) * price
 				pricedItems++
 			}
 			noteAsOf(b, esi.SnapAssets)
@@ -910,6 +925,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 			for _, o := range b.orders {
 				if o.IsBuyOrder {
 					escrowSum += o.Escrow
+					own += o.Escrow
 					escrowOK = true
 				}
 			}
@@ -917,10 +933,14 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 				noteAsOf(b, esi.SnapOrders)
 			}
 		}
+		if b.walletKnown || b.assetsKnown || b.ordersKnown {
+			w.chars = append(w.chars, netWorthChar{ID: b.ch.CharacterID, Name: b.ch.Name, Total: own})
+		}
 	}
 
 	total := walletSum + assetSum + escrowSum
-	w.totalNow, w.walletNow, w.assetsNow = total, walletSum, assetSum+escrowSum
+	w.totalNow, w.walletNow, w.assetsNow, w.escrowNow = total, walletSum, assetSum+escrowSum, escrowSum
+	w.pricedItems, w.totalItems = pricedItems, totalItems
 	if walletOK || assetsSeen || escrowOK {
 		w.Any = true
 		w.Total = esi.FormatISK(total)
@@ -952,8 +972,8 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 		w.AsOf = formatFinish(asOf.UTC().Format(time.RFC3339))
 	}
 	// Net worth over time from the daily sampler (schema 019):
-	// a chart once two sampled days exist, a "building"
-	// note before that. Stored rows only, no fetching here.
+	// the last month of days, a "building" note before two exist.
+	// Stored rows only, no fetching here.
 	app.attachNetWorthHistory(ctx, w, userID)
 	app.attachNetWorthSpark(ctx, w, userID)
 	return w
@@ -1453,7 +1473,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		if def.ID == widgetBriefing {
 			briefingIn = true
 		}
-		if w, ok := app.buildHomeWidget(ctx, ts, def, item, shared, customize, viewer); ok {
+		if w, ok := app.buildHomeWidget(ctx, ts, def, item, shared, customize, false, viewer); ok {
 			view.Widgets = append(view.Widgets, w)
 		}
 	}

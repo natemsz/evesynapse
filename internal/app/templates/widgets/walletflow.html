@@ -2,7 +2,7 @@
 {{with .Data}}
 {{if .Any}}
 {{template "wallet-flow-figures" .}}
-<div data-wmore>
+<div data-w-detail>
 {{template "wallet-flow-detail" .}}
 {{if .Chars}}
 <p><input type="search" id="{{$.Uid "filter"}}" placeholder="Filter by character…" aria-label="Filter wallet flow by character" data-table-filter="{{$.Uid "table"}}" data-row-class="walletflow-row"></p>

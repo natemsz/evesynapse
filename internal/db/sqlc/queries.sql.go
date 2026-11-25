@@ -1909,6 +1909,51 @@ func (q *Queries) ListUserNetWorthDays(ctx context.Context, userID int64) ([]Lis
 	return items, nil
 }
 
+const listUserNetWorthSplitDays = `-- name: ListUserNetWorthSplitDays :many
+SELECT day, SUM(balance)::float8 AS isk, SUM(net_worth)::float8 AS total
+FROM wallet_history
+WHERE user_id = $1 AND net_worth IS NOT NULL
+GROUP BY day
+ORDER BY day DESC
+LIMIT LEAST($2::int, 366)
+`
+
+type ListUserNetWorthSplitDaysParams struct {
+	UserID int64 `json:"user_id"`
+	Days   int32 `json:"days"`
+}
+
+type ListUserNetWorthSplitDaysRow struct {
+	Day   string  `json:"day"`
+	Isk   float64 `json:"isk"`
+	Total float64 `json:"total"`
+}
+
+// The account's net worth per sampled day, newest first, split into
+// ISK on hand and the total, for the home Net Worth charts. A
+// character counts toward a day only when it has a net worth that
+// day, and its balance joins the ISK part only then, so the parts
+// always add up to the total. At most a year of days.
+func (q *Queries) ListUserNetWorthSplitDays(ctx context.Context, arg ListUserNetWorthSplitDaysParams) ([]ListUserNetWorthSplitDaysRow, error) {
+	rows, err := q.db.Query(ctx, listUserNetWorthSplitDays, arg.UserID, arg.Days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserNetWorthSplitDaysRow
+	for rows.Next() {
+		var i ListUserNetWorthSplitDaysRow
+		if err := rows.Scan(&i.Day, &i.Isk, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserWalletHistory = `-- name: ListUserWalletHistory :many
 SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history

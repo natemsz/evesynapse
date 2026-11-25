@@ -154,12 +154,10 @@ worked example.
 
 One mechanism for every summary/detail pair: the detail block
 carries `data-wmore`, its control carries `data-expand` naming
-the block's id. Home modules get their control injected into
-the heading automatically (below); table rows that own a
-detail row render their control server-side and use the same
-switch. Without JS every detail block renders open. Open state
-is a per-browser convenience in localStorage
-(`evesynapse.home.expanded`).
+the block's id. Table rows that own a detail row render their
+control server-side and use the same switch. Without JS every
+detail block renders open. Home widgets do not use it: a card is
+exactly its cells, so it has Expand instead (below).
 
 ### Collapsible sections
 
@@ -277,32 +275,95 @@ A widget is one declaration and one template file:
   category, manifest feature, the module it requires (if any),
   the page it links to, its default size, its forms with the
   sizes that draw each one, the snapshot kinds its builder reads
-  (`Needs`), and the builder. The sizes the forms list are
-  exactly the sizes the widget may take; a stored size outside
-  them snaps to one of them. The types, the registry and the size
-  rules are in `home_widget_kit.go`.
+  (`Needs`), its options, and the builder. The sizes the forms
+  list are exactly the sizes the widget may take; a stored size
+  outside them snaps to one of them. The types, the registry and
+  the size rules are in `home_widget_kit.go`.
 - `internal/app/templates/widgets/<id>.html` defines one body per
   form, `w-<id>-<form>`. Its data is the card view (`.Size`,
-  `.Cap`, `.Customize`, `.ViewerChars`) with the builder's value
-  as `.Data`. Element ids come from `{{.Uid "name"}}`, never a
-  fixed id: a page may hold more than one body.
+  `.Form`, `.Cap`, `.Customize`, `.ViewerChars`) with the
+  builder's value as `.Data`. Element ids come from
+  `{{.Uid "name"}}`, never a fixed id: a page may hold more than
+  one body.
 
 Nothing else names the widget: the catalog, the size picker's
 bounds, the snapshot read (one batched query for the union of the
 visible widgets' `Needs`) and the card shell all come from the
 declaration. `templates/widgets/_card.html` is the one shell,
 `<section class="card w-card" data-widget data-key data-gw
-data-gh data-sizes …>` with an `<h3>` title and a `.card-body`
-holding the rendered body, and `data-size-names` (JSON: each size
-to its form and the size picker's sentence). Bodies render from
-stored data only.
+data-gh data-sizes …>` with an `<h3>` title (a link to the
+widget's page outside Customize), the Expand button, and a
+`.card-body` holding the rendered bodies, plus `data-size-names`
+(JSON: each size to its form and the size picker's sentence),
+`data-href` and `data-href-name` (the page and its menu name, for
+"3 more on the Jobs page"). Bodies render from stored data only.
 Data that can have nothing to say implements `Quiet() bool`, and
-a quiet card is left off the home outside Customize. Long lists
-render in full and mark rows beyond the card's cap with
-`data-wmore`; the expander machinery (above) supplies the
-More/Less toggle. In fixed rows the card is the box instead: lists
-fit it (see "The home grid" under Layout). Customize (drag, resize, remove, add) is layered
-over the plain customize forms, never a replacement for them.
+a quiet card is left off the home outside Customize. Customize
+(drag, resize, remove, add) is layered over the plain customize
+forms, never a replacement for them.
+
+**Forms.** A size draws the form that lists it, and a template
+picks parts, never sizes: the builder is told which forms this
+render draws (`in.Draws("large")`) and skips data no drawn form
+shows. When every size of the drawn form is two or more columns
+wide and the widget has a one-column size, the card also renders
+that one-column form (at the nearest height) into `NarrowBody`;
+home.css shows it in place of the wide body when the card is
+under 30rem wide, which is a phone. Options (`optScope`,
+`optChoice`) are declared now and draw at their defaults until
+the settings sheet stores values.
+
+**Kit parts** (`templates/widgets/_kit.html`; Go types in
+home_widget_kit.go and home_widget_chart.go; styles in home.css).
+A form's body is one `<div class="w-body {{.BodyClass}}">`, a
+column of parts:
+
+- `w-lead` (`wLead`): the hero figure, short ("4.6B ISK"), the
+  whole figure as its title, its change with direction and
+  whether up is good news (`.w-good`, `.w-bad`).
+- `w-tiles` (`[]wTile`): stat tiles on `.l-stat` that wrap by
+  width; where rows are fixed a second row of tiles is not drawn.
+- `w-chart` (`*wChart`): a line or stacked area chart that fills
+  the room the other parts leave. Built by `wLineChart` and
+  `wStackedChart` from at most a year of days (a long series keeps
+  every nth day): data units on an SVG with
+  `preserveAspectRatio="none"`, lines that keep 2px through
+  `vector-effect`, a legend for two or more series, value labels
+  in a gutter (hidden on a chart under 6rem tall), dates placed by
+  `data-left`, hover columns for the shared chart tooltip
+  (`data-date`, `data-tip-rows`), and a visually hidden table twin
+  (`w-twin`). Where rows are fixed a chart claims more than half
+  its body, so a later part that no longer fits is not drawn.
+- `w-spark`: the same line with no labels, filling its slot.
+- `w-segbar` (`wSegments`): one whole split into up to six parts,
+  a thin bar with each part's name and figure under it.
+- `w-rank` (`wRankedBars`): ranked bars, largest first; it fits
+  its card like any list.
+- `w-meters`: name, figure and bar rows (`.Name`, `.Pct`, `.Text`,
+  `.Tone`).
+- `w-note`: the muted as-of or provenance line, left out on a card
+  under 12rem tall. `w-empty` (`wEmpty`): one sentence and the next
+  step, centred.
+- Lists: any list marked `data-w-fit` (its children are its rows)
+  fits its card; rows past the server's cap carry `data-w-over`.
+  home.js writes the "3 more on the Jobs page" line after it
+  (`.w-more`).
+
+Arrangement, the same for every widget: `.w-split` puts the first
+part (or a `.w-side`) beside the rest when the card is much wider
+than tall (a size container's aspect ratio, so cards that take
+their content's height stack); `.w-head` sets the lead beside its
+tiles; `.w-cols` sets the chart beside a side list. Series colours
+are `--w-s1` to `--w-s4` (`.w-s1` on a mark), one categorical
+order checked for colour-blind separation on the card surface;
+text never takes them.
+
+**Expand.** Each card's heading has an Expand button (shown by
+home.js): it opens the widget's largest form in the shared modal,
+fetched from the one-card route with `view=expand` into a box the
+form fills. A legacy widget's detail blocks (`data-w-detail`) and
+its rows past the cap show only there. Without JavaScript the
+title links to the widget's page.
 
 One card renders alone at `GET /home/widget/{key}` (signed in, own
 home only, `Cache-Control: no-store`): at its stored size, at `w`
@@ -619,8 +680,10 @@ inside `.l-page`, so it measures the page and never the window.
   after it says how many more there are, linking to the card's
   `data-href`. When the card still does not fit, its parts after the
   first are not drawn, the last first: a card never shows a part cut
-  in half. `homeFitCount` is the pure count. With one column the
-  server's cap (`data-wmore`) holds, with the same line.
+  in half; in a kit body the parts are the `.w-body`'s children.
+  `homeFitCount` is the pure count. Where cards take their
+  content's height (auto rows, one column) the server's cap
+  (`data-w-over`) holds, with the same line.
 
 ### The console
 
@@ -740,12 +803,53 @@ to it:
   `internal/app/jstest/` if it carries logic worth pinning,
   the pipeline's JS step names its files explicitly, so add new
   test files to `.github/workflows/heavy-gates.yml` too.
-- **A home widget:** `homew_<id>.go` with its declaration and
-  builder, and `templates/widgets/<id>.html` with a body per
-  form, data from a stored source. Nothing else is touched (a
-  preset only if the widget belongs in one).
+- **A home widget:** `homew_<id>.go` and `templates/widgets/<id>.html`,
+  data from a stored source. Nothing else is touched (a preset only
+  if the widget belongs in one). Net Worth (`homew_networth.go`,
+  `templates/widgets/networth.html`) is the worked example:
+
+  ```go
+  func init() {
+  	registerHomeWidget(homeWidgetDef{
+  		ID: widgetNetWorth, Title: "Net Worth", Category: wcatMoney, Feature: "networth", Href: "/wallet/",
+  		Description: "Wallets, assets and buy-order escrow across your characters, and how the total has moved.",
+  		Default:     wSize{1, 2},
+  		Forms: []homeWidgetForm{
+  			{Name: "small", Sizes: "1x1", Says: "The total, its 7-day change and a 30-day line."},
+  			{Name: "wide", Sizes: "2x1 3x1", Says: "The total beside its chart."},
+  			{Name: "tall", Sizes: "1x2 1x3", Says: "The total, how it splits, and its chart."},
+  			{Name: "medium", Sizes: "2x2 2x3", Says: "Wallets, assets and escrow over a chart with dates and values."},
+  			{Name: "large", Sizes: "3x2 3x3", Says: "Adds the split by character or by location."},
+  		},
+  		Needs: []string{esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
+  		Options: []widgetOption{optScope(),
+  			optChoice("range", "History", "30", "30:30 days", "90:90 days", "365:A year"),
+  			optChoice("split", "Split by", "chars", "chars:Character", "places:Location")},
+  		Build: buildNetWorthWidget,
+  	})
+  }
+  ```
+
+  1. Name the forms by what they show and give each a sentence for
+     the size picker. Every size must show something its
+     neighbours do not (more rows, a chart, a breakdown); if two
+     would look alike, drop one.
+  2. The builder returns one value for every drawn form and builds
+     only what `in.Draws(form)` asks for: Net Worth reads its
+     history once and draws a stacked chart for the wide, medium
+     and large forms, the total's line for the tall one, ranked
+     bars only for the large one. Every read is bounded in SQL;
+     shared facts come from `in.Shared` (computed once per render).
+  3. Each form template is one `w-body` of kit parts:
+     `{{define "w-networth-tall"}}<div class="w-body {{.BodyClass}}">`
+     then `w-lead`, `w-segbar`, `w-chart`, `w-note`, and `w-empty`
+     for the nothing-yet case. No size checks, no fixed ids.
+  4. Check it with the rig: every size at several widths in fixed
+     rows (no overflow, a chart at two rows or more at least 40%
+     of the body), a phone at 390px (the narrow body), and Expand.
+
   `TestHomeWidgetDeclarationsHoldTheirContract` checks the
-  declaration and that every form has its template.
+  declaration, its options, and that every form has its template.
 
 ## Testing
 

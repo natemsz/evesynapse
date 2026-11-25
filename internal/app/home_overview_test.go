@@ -598,7 +598,7 @@ func TestHomeLayoutPlaystylePresets(t *testing.T) {
 	// renders only when it has items, so a bare account's render
 	// starts at At a Glance; the tiling test pins the head itself.
 	_, cookie := newAccount(90000101, `{"activities":["market"]}`)
-	wantMarket := []string{"glance", "fleet", "tradeideas", "watchlist", "profitpulse", "walletflow", "networth", "market", "movers", "lp"}
+	wantMarket := builtInWidgets("glance", "fleet", "tradeideas", "watchlist", "profitpulse", "walletflow", "networth", "market", "movers", "lp")
 	if got := homeIDs(cookie); strings.Join(got, ",") != strings.Join(wantMarket, ",") {
 		t.Errorf("market preset = %v, want %v", got, wantMarket)
 	}
@@ -638,7 +638,7 @@ func TestHomeLayoutPlaystylePresets(t *testing.T) {
 	// ahead of the single-playstyle specialists.
 	_, blendCookie := newAccount(90000104, `{"activities":["industry","corporation"]}`)
 	blend := homeIDs(blendCookie)
-	for _, specialist := range []string{"prodline", "pulse", "upkeep"} {
+	for _, specialist := range builtInWidgets("prodline", "pulse", "upkeep") {
 		if indexOfWidget(blend, specialist) < 0 {
 			t.Errorf("blend %v is missing specialist %q", blend, specialist)
 		}
@@ -653,7 +653,7 @@ func TestHomeLayoutPlaystylePresets(t *testing.T) {
 	// only, no upkeep (the seed holds no structures) and no trade
 	// ideas (the seed holds no stored answer).
 	demoIDs := homeIDs(sessionCookie(t, app, demoUser.ID, 90000105, "Fixture Demo"))
-	for _, want := range []string{"glance", "fleet", "walletflow", "networth", "prodline", "pi", "profitpulse", "industry", "market", "training", "watchlist", "pulse"} {
+	for _, want := range builtInWidgets("glance", "fleet", "walletflow", "networth", "prodline", "pi", "profitpulse", "industry", "market", "training", "watchlist", "pulse") {
 		if indexOfWidget(demoIDs, want) < 0 {
 			t.Errorf("demo preset %v is missing %q", demoIDs, want)
 		}
@@ -763,9 +763,10 @@ func layoutTilesGrid(items []homeLayoutItem) bool {
 // TestHomePresetLayoutsTile: every preset, singles, blends, the
 // everything choice and the demo layout, starts with the fixed head
 // at its fixed sizes, stays inside every widget's size bounds, and
-// tiles the grid with no gaps. Single-playstyle specialists stand
-// expanded past their catalog size (Net Worth stands at its
-// default size), and fills stand at catalog size.
+// tiles the grid with no gaps, in any build. Every built-in specialist
+// and fill is present; when the build has the whole body, single-
+// playstyle specialists stand expanded past their catalog size (Net
+// Worth stands at its default size) and fills stand at catalog size.
 func TestHomePresetLayoutsTile(t *testing.T) {
 	activities := []string{"pilots", "market", "industry", "corporation", "fitting"}
 	var choices [][]string
@@ -833,10 +834,22 @@ func TestHomePresetLayoutsTile(t *testing.T) {
 		for _, item := range layout {
 			byID[item.ID] = item
 		}
+		whole := true
+		for _, item := range singlePlaystyleBodies[activity] {
+			if _, ok := widgetDefFor(item.ID); !ok {
+				whole = false
+			}
+		}
 		for _, id := range pw.Specialists {
+			if _, ok := widgetDefFor(id); !ok {
+				continue
+			}
 			item, present := byID[id]
 			if !present {
 				t.Errorf("%s preset is missing specialist %q", activity, id)
+				continue
+			}
+			if !whole {
 				continue
 			}
 			def, _ := widgetDefFor(id)
@@ -849,9 +862,15 @@ func TestHomePresetLayoutsTile(t *testing.T) {
 			}
 		}
 		for _, id := range pw.Fill {
+			if _, ok := widgetDefFor(id); !ok {
+				continue
+			}
 			item, present := byID[id]
 			if !present {
 				t.Errorf("%s preset is missing fill %q", activity, id)
+				continue
+			}
+			if !whole {
 				continue
 			}
 			def, _ := widgetDefFor(id)
@@ -1066,4 +1085,16 @@ func layoutIDs(items []homeLayoutItem) []string {
 		ids[i] = item.ID
 	}
 	return ids
+}
+
+// builtInWidgets is ids less the widgets this build leaves out (a
+// module not built in), in order.
+func builtInWidgets(ids ...string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := widgetDefFor(id); ok {
+			out = append(out, id)
+		}
+	}
+	return out
 }

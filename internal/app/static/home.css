@@ -510,9 +510,7 @@
 .w-card [data-w-scroll] thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
 
 /* Bars drawn as a span sized by data-w inside an .l-meter track. */
-.glance-meter > span,
 .card[data-widget="training"] .w-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
-.glance-meter.warn > span { background: var(--gold); }
 .card[data-widget="training"] .w-meters > li.warn .w-meter > span { background: var(--gold); }
 .card[data-widget="training"] .w-meters > li.bad .w-meter-val { color: var(--v-bad-ink, #ffab8f); }
 
@@ -520,11 +518,9 @@
    (wide), one per row (tall), or a grid with a line under each
    (medium, large). The tiles carry the glass (style.css). */
 .glance-tile { min-height: 0; }
-.glance-tile .l-stat-label a { color: inherit; text-decoration: none; }
-.glance-tile .l-stat-label a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
-.glance-change { font-size: var(--fs-xs); white-space: nowrap; }
-.glance-change .w-arrow { font-size: var(--fs-rel-glyph); }
-.glance-tile > .glance-meter { margin-top: auto; flex: none; }
+.glance-tile .kpi-k a { color: inherit; text-decoration: none; }
+.glance-tile .kpi-k a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.glance-tile > .kpi-bar { flex: none; }
 .glance-tile > .w-spark { margin-top: var(--space-1); }
 .glance-band { grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); }
 .glance-stack { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -532,7 +528,8 @@
 .glance-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .glance-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .glance-hero { flex: 1 1 auto; }
-.glance-hero > .w-lead .w-lead-value { font-size: clamp(var(--fs-xl), 14cqi, var(--fs-4xl)); }
+.glance-hero { display: flex; }
+.glance-hero > .glance-tile { flex: 1 1 auto; }
 @container widget (width < 30rem) {
   .glance-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

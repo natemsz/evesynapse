@@ -1,15 +1,13 @@
 {{/* At a Glance: the figures the reader picks (the figures option), as
-     stat tiles. Five forms; none reads its size. */}}
+     the home's KPI tiles: icon, label, figure, bar, sub line. Five
+     forms; none reads its size. */}}
 
 {{define "w-glance-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Tiles}}
-<div class="l-stat glance-tile glance-hero{{with .First.Tone}} {{.}}{{end}}">
-{{template "w-lead" .Lead}}
-{{if .Spark}}{{template "w-spark" .Spark}}{{else if .First.Meter}}{{template "glance-meter" .First.Meter}}{{end}}
-</div>
+<div class="glance-hero">{{template "glance-tile" .First}}</div>
 {{end}}{{end}}</div>{{end}}
 
 {{define "w-glance-wide"}}<div class="w-body {{.BodyClass}}">{{with .Data}}
-<div class="w-tiles glance-band">{{range .Tiles}}{{template "glance-tile" .}}{{end}}</div>
+<div class="kpis glance-band">{{range .Tiles}}{{template "glance-tile" .}}{{end}}</div>
 {{end}}</div>{{end}}
 
 {{define "w-glance-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}
@@ -24,15 +22,17 @@
 <div class="glance-grid glance-grid-3">{{range .Tiles}}{{template "glance-tile" .}}{{end}}</div>
 {{end}}</div>{{end}}
 
-{{/* One figure as a tile: label, value and its change, the sub line,
-     then its line or meter where the form built one. */}}
-{{define "glance-tile"}}<div class="l-stat w-tile glance-tile{{with .Tone}} {{.}}{{end}}" data-tile="{{.ID}}">
-<span class="l-stat-label">{{if .Href}}<a href="{{.Href}}">{{.Label}}</a>{{else}}{{.Label}}{{end}}</span>
-<span class="l-stat-value" title="{{.Full}}">{{.Value}}{{if .Unit}} <small>{{.Unit}}</small>{{end}}</span>
-{{if .Change}}<span class="glance-change {{.ChangeTone}}" title="{{.ChangeText}}"><span class="w-arrow" aria-hidden="true">{{if .Up}}&#9650;{{else}}&#9660;{{end}}</span> {{.Change}}</span>{{end}}
-{{if .Sub}}<span class="l-stat-sub">{{if .SubHref}}<a class="linkbtn" href="{{.SubHref}}"{{if .SubIdle}} data-fleet-idle{{end}}>{{.Sub}}</a>{{else}}{{.Sub}}{{end}}</span>{{end}}
-{{if .Line}}{{template "w-spark" .Line}}{{else if .Meter}}{{template "glance-meter" .Meter}}{{end}}
+{{/* One figure as a KPI tile: its glyph, label, figure and change, the
+     bar or 30-day line where it has one, then the sub line. ISK
+     figures read in full, as everywhere on the home. */}}
+{{define "glance-tile"}}<div class="kpi glance-tile" data-tile="{{.ID}}">
+<span class="kpi-icon" aria-hidden="true">{{template "glance-icon" .ID}}</span>
+<span class="kpi-k">{{if .Href}}<a href="{{.Href}}">{{.Label}}</a>{{else}}{{.Label}}{{end}}</span>
+<span class="kpi-v" title="{{.Full}}">{{if .Hero}}{{iskHero .Hero}}{{else}}{{.Value}}{{if .Unit}} <small>{{.Unit}}</small>{{end}}{{end}}{{if .Change}} <span class="kpi-trend {{if .Up}}up{{else}}down{{end}}" title="{{.ChangeText}}" aria-label="{{if .Up}}Up{{else}}Down{{end}} {{.ChangeText}}">{{if .Up}}&#9650;{{else}}&#9660;{{end}} {{.Change}}</span>{{end}}</span>
+{{if .Line}}{{template "w-spark" .Line}}{{else if .Meter}}<span class="kpi-bar{{if eq .Meter.Tone "warn"}} warn{{end}}" role="img" aria-label="{{.Meter.Label}}: {{printf "%.0f" .Meter.Pct}}%"><span data-w="{{printf "%.1f" .Meter.Pct}}"></span></span>{{end}}
+{{if .SubHTML}}<span class="kpi-sub">{{.SubHTML}}</span>{{else if .Sub}}<span class="kpi-sub">{{if .SubHref}}<a class="linkbtn" href="{{.SubHref}}"{{if .SubIdle}} data-fleet-idle{{end}}>{{.Sub}}</a>{{else}}{{.Sub}}{{end}}</span>{{end}}
 </div>{{end}}
 
-{{/* A share as a thin bar under a tile that has no history. */}}
-{{define "glance-meter"}}<span class="l-meter glance-meter{{with .Tone}} {{.}}{{end}}" role="img" aria-label="{{.Label}}: {{printf "%.0f" .Pct}}%"><span data-w="{{printf "%.1f" .Pct}}"></span></span>{{end}}
+{{/* Each figure's glyph: 16px Lucide strokes in the ember the live
+     tiles use (bg.css .kpi-icon; schemes repaint the stroke). */}}
+{{define "glance-icon"}}<svg viewBox="0 0 24 24" fill="none" stroke="#ffa25e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">{{if eq . "networth"}}<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>{{else if eq . "wallets"}}<path d="M13.744 17.736a6 6 0 1 1-7.48-7.48"/><path d="M15 6h1v4"/><path d="m6.134 14.768.866-.5 2 3.464"/><circle cx="16" cy="8" r="6"/>{{else if eq . "assets"}}<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/>{{else if eq . "training"}}<path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/>{{else if eq . "profit"}}<path d="M22 7 13.5 15.5l-5-5L2 17"/><path d="M16 7h6v6"/>{{else if eq . "escrow"}}<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>{{else if eq . "orders"}}<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>{{else if eq . "undercut"}}<path d="M22 17 13.5 8.5l-5 5L2 7"/><path d="M16 17h6v-6"/>{{else if eq . "jobs"}}<path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/>{{else if eq . "extractors"}}<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>{{else if eq . "mail"}}<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>{{else if eq . "srp"}}<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/>{{else if eq . "kills"}}<circle cx="12" cy="12" r="10"/><path d="M22 12h-4"/><path d="M6 12H2"/><path d="M12 6V2"/><path d="M12 22v-4"/>{{else if eq . "nextfleet"}}<path d="M12 3.5 15.6 10H8.4Z"/><path d="M6 13.5 9.6 20H2.4Z"/><path d="M18 13.5 21.6 20h-7.2Z"/>{{end}}</svg>{{end}}

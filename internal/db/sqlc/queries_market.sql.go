@@ -459,7 +459,7 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
        volatility_30d, history_days, avg_daily_volume_30d,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d, swept_at
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = $2
 `
@@ -508,6 +508,7 @@ func (q *Queries) GetMarketRegionStat(ctx context.Context, arg GetMarketRegionSt
 		&i.SellLow30d,
 		&i.SellHigh30d,
 		&i.SellMean30d,
+		&i.SweptAt,
 	)
 	return i, err
 }
@@ -2049,7 +2050,7 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
        volatility_30d, history_days, avg_daily_volume_30d,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d, swept_at
 FROM market_region_stats
 WHERE region_id = $1
 ORDER BY type_id
@@ -2100,6 +2101,7 @@ func (q *Queries) ListMarketRegionStatsByRegion(ctx context.Context, regionID in
 			&i.SellLow30d,
 			&i.SellHigh30d,
 			&i.SellMean30d,
+			&i.SweptAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2116,7 +2118,7 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
        volatility_30d, history_days, avg_daily_volume_30d,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d, swept_at
 FROM market_region_stats
 WHERE type_id = $1
 ORDER BY region_id
@@ -2167,6 +2169,7 @@ func (q *Queries) ListMarketRegionStatsByType(ctx context.Context, typeID int64)
 			&i.SellLow30d,
 			&i.SellHigh30d,
 			&i.SellMean30d,
+			&i.SweptAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2303,7 +2306,7 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
        volatility_30d, history_days, avg_daily_volume_30d,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d, swept_at
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = ANY($2::bigint[])
 `
@@ -2358,6 +2361,7 @@ func (q *Queries) ListMarketRegionStatsForTypes(ctx context.Context, arg ListMar
 			&i.SellLow30d,
 			&i.SellHigh30d,
 			&i.SellMean30d,
+			&i.SweptAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2683,7 +2687,7 @@ SELECT type_id, typical_sell, typical_buy, sell_orders, avg_daily_volume_30d,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, volatility_30d, history_days, updated_at,
        sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM (
-    SELECT s.region_id, s.type_id, s.best_sell, s.typical_sell, s.sell_band, s.best_buy, s.typical_buy, s.buy_band, s.sell_orders, s.buy_orders, s.sell_volume, s.buy_volume, s.updated_at, s.avg_daily_volume, s.sell_avg, s.sell_max, s.sell_p5, s.sell_stddev, s.buy_avg, s.buy_min, s.buy_p5, s.buy_stddev, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d, s.buy_chg_1d, s.buy_chg_7d, s.buy_chg_30d, s.volatility_30d, s.history_days, s.avg_daily_volume_30d, s.sell_spark_30d, s.sell_low_30d, s.sell_high_30d, s.sell_mean_30d,
+    SELECT s.region_id, s.type_id, s.best_sell, s.typical_sell, s.sell_band, s.best_buy, s.typical_buy, s.buy_band, s.sell_orders, s.buy_orders, s.sell_volume, s.buy_volume, s.updated_at, s.avg_daily_volume, s.sell_avg, s.sell_max, s.sell_p5, s.sell_stddev, s.buy_avg, s.buy_min, s.buy_p5, s.buy_stddev, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d, s.buy_chg_1d, s.buy_chg_7d, s.buy_chg_30d, s.volatility_30d, s.history_days, s.avg_daily_volume_30d, s.sell_spark_30d, s.sell_low_30d, s.sell_high_30d, s.sell_mean_30d, s.swept_at,
            CASE $1::text
                WHEN 'volatile' THEN s.volatility_30d
                WHEN 'rising' THEN CASE $2::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END
@@ -3563,7 +3567,7 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
        volatility_30d, history_days, avg_daily_volume_30d,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d, swept_at
 FROM market_region_stats
 `
 
@@ -3614,6 +3618,7 @@ func (q *Queries) ListStatPackRegionStats(ctx context.Context) ([]MarketRegionSt
 			&i.SellLow30d,
 			&i.SellHigh30d,
 			&i.SellMean30d,
+			&i.SweptAt,
 		); err != nil {
 			return nil, err
 		}
@@ -4450,6 +4455,29 @@ func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNamePara
 	return err
 }
 
+const touchMarketRegionStatsSweptAt = `-- name: TouchMarketRegionStatsSweptAt :execrows
+UPDATE market_region_stats SET swept_at = $1
+WHERE region_id = $2 AND type_id = ANY($3::bigint[])
+`
+
+type TouchMarketRegionStatsSweptAtParams struct {
+	SweptAt  time.Time `json:"swept_at"`
+	RegionID int64     `json:"region_id"`
+	TypeIds  []int64   `json:"type_ids"`
+}
+
+// Stamps the last-verified time (schema 184) on the rows a
+// completed sweep fetched, changed or not: updated_at keeps
+// its last-changed meaning, swept_at is what the freshness
+// checks read.
+func (q *Queries) TouchMarketRegionStatsSweptAt(ctx context.Context, arg TouchMarketRegionStatsSweptAtParams) (int64, error) {
+	result, err := q.db.Exec(ctx, touchMarketRegionStatsSweptAt, arg.SweptAt, arg.RegionID, arg.TypeIds)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const touchOrderLifecycleChecked = `-- name: TouchOrderLifecycleChecked :exec
 UPDATE order_lifecycle SET beaten_checked = $1::timestamptz
 WHERE character_id = $2 AND order_id = $3 AND closed_at IS NULL
@@ -4793,8 +4821,8 @@ func (q *Queries) UpsertMarketHistoryWant(ctx context.Context, arg UpsertMarketH
 }
 
 const upsertMarketRegionStat = `-- name: UpsertMarketRegionStat :exec
-INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at, swept_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 ON CONFLICT (region_id, type_id) DO UPDATE SET
     best_sell    = excluded.best_sell,
     typical_sell = excluded.typical_sell,
@@ -4807,7 +4835,8 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
     sell_volume  = excluded.sell_volume,
     buy_volume   = excluded.buy_volume,
     avg_daily_volume = excluded.avg_daily_volume,
-    updated_at   = excluded.updated_at
+    updated_at   = excluded.updated_at,
+    swept_at     = excluded.swept_at
 `
 
 type UpsertMarketRegionStatParams struct {
@@ -4825,6 +4854,7 @@ type UpsertMarketRegionStatParams struct {
 	BuyVolume      int64     `json:"buy_volume"`
 	AvgDailyVolume float64   `json:"avg_daily_volume"`
 	UpdatedAt      time.Time `json:"updated_at"`
+	SweptAt        time.Time `json:"swept_at"`
 }
 
 func (q *Queries) UpsertMarketRegionStat(ctx context.Context, arg UpsertMarketRegionStatParams) error {
@@ -4843,6 +4873,7 @@ func (q *Queries) UpsertMarketRegionStat(ctx context.Context, arg UpsertMarketRe
 		arg.BuyVolume,
 		arg.AvgDailyVolume,
 		arg.UpdatedAt,
+		arg.SweptAt,
 	)
 	return err
 }

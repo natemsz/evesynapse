@@ -146,7 +146,7 @@ func typicalForMode(own *db.MarketRegionStat, mode string) (appraisalPrice, bool
 // (my ruling, 2026-11-12: a build cost is enough when it
 // is all we have, asterisked wherever it is shown).
 func resolveAppraisalPriceMode(own *db.MarketRegionStat, tv *db.TrueValue, fb *db.MarketStatsFallback, now time.Time, mode string) appraisalPrice {
-	if p, ok := typicalForMode(own, mode); ok && now.Sub(own.UpdatedAt) < fallbackOwnFresh {
+	if p, ok := typicalForMode(own, mode); ok && now.Sub(ownVerifiedAt(own)) < fallbackOwnFresh {
 		return p
 	}
 	if tv != nil {

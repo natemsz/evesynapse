@@ -1794,6 +1794,7 @@ type MarketRegionStat struct {
 	SellLow30d        float64         `json:"sell_low_30d"`
 	SellHigh30d       float64         `json:"sell_high_30d"`
 	SellMean30d       float64         `json:"sell_mean_30d"`
+	SweptAt           time.Time       `json:"swept_at"`
 }
 
 type MarketRegionStatsDaily struct {

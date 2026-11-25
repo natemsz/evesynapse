@@ -17,8 +17,10 @@ import (
 
 func TestResolveAppraisalPriceOrder(t *testing.T) {
 	now := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
-	freshOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, UpdatedAt: now.Add(-time.Hour)}
-	staleOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, UpdatedAt: now.Add(-10 * 24 * time.Hour)}
+	freshOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, UpdatedAt: now.Add(-time.Hour), SweptAt: now.Add(-time.Hour)}
+	staleOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, UpdatedAt: now.Add(-10 * 24 * time.Hour), SweptAt: now.Add(-10 * 24 * time.Hour)}
+	verifiedOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, UpdatedAt: now.Add(-10 * 24 * time.Hour), SweptAt: now.Add(-time.Hour)}
+	unverifiedOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, UpdatedAt: now.Add(-time.Hour), SweptAt: now.Add(-10 * 24 * time.Hour)}
 	zeroOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 0, UpdatedAt: now.Add(-time.Hour)}
 	tv := &db.TrueValue{TypeID: 1, EstSell: sql.NullFloat64{Float64: 80, Valid: true}, SellSource: tvSampleListing, ComputedAt: now.Add(-2 * time.Hour)}
 	tvNone := &db.TrueValue{TypeID: 1, ComputedAt: now}
@@ -39,6 +41,8 @@ func TestResolveAppraisalPriceOrder(t *testing.T) {
 	}{
 		{"fresh own beats everything", freshOwn, tv, freshFB, module.AppraisalTierTypical, 100, true},
 		{"stale own yields to the estimate", staleOwn, tv, freshFB, module.AppraisalTierEstimate, 80, true},
+		{"own unchanged for days but verified an hour ago beats the estimate", verifiedOwn, tv, freshFB, module.AppraisalTierTypical, 100, true},
+		{"own changed an hour ago but unverified for days yields to the estimate", unverifiedOwn, tv, freshFB, module.AppraisalTierEstimate, 80, true},
 		{"estimate beats a live fallback", nil, tv, freshFB, module.AppraisalTierEstimate, 80, true},
 		{"fallback speaks when nothing else does", staleOwn, tvNone, freshFB, module.AppraisalTierFallback, 60, true},
 		{"floor rule: stale own over an expired fallback", staleOwn, nil, expiredFB, module.AppraisalTierTypical, 100, true},
@@ -344,7 +348,7 @@ func TestAppraisePublicContractsEndToEnd(t *testing.T) {
 // The global market rule: a type with no stat at the basis
 // region and a stat at ESI's global market region prices
 // from the global row at the own-swept tier (its own
-// updated_at governing freshness, floor rule included),
+// swept_at governing freshness, floor rule included),
 // while a type the hub carries keeps its hub row -- the
 // global book is a type's own market, never a borrowed hub.
 func TestAppraiseLinesWithBasisGlobalMarket(t *testing.T) {

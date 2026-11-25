@@ -1090,6 +1090,12 @@ var pgSystemCampsSchema string
 //go:embed schema_pg/183_doctrine_readiness.sql
 var pgDoctrineReadinessSchema string
 
+// Step 184: the region sweep's last-verified stamp on market
+// region rows.
+//
+//go:embed schema_pg/184_region_stats_swept_at.sql
+var pgRegionStatsSweptAtSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1301,6 +1307,7 @@ func schemaSteps() []schemaStep {
 		{181, "widget_settings_market", pgWidgetSettingsMarketSchema, ""},
 		{182, "system_camps", pgSystemCampsSchema, ""},
 		{183, "doctrine_readiness", pgDoctrineReadinessSchema, ""},
+		{184, "region_stats_swept_at", pgRegionStatsSweptAtSchema, ""},
 	}
 }
 

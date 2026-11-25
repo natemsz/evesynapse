@@ -928,6 +928,11 @@
   }
   .cs-table tbody tr.cs-row:first-child { border-top: 1px solid var(--box-edge); }
   .cs-table tbody tr.cs-row.open { border-color: var(--accent); }
+  .cs-table tbody tr.cs-row.is-live {
+    background: color-mix(in srgb, var(--accent) 12%, var(--row-alt));
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .cs-table tbody tr.cs-row.is-live > :first-child { box-shadow: none; }
   .cs-table td.cs-c1 { grid-area: head; padding: 0; }
   .cs-table td.cs-c2 { grid-area: contents; padding: 0; }
   .cs-table td.cs-c3 { grid-area: price; padding: 0; }

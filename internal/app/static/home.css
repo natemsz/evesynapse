@@ -735,6 +735,9 @@
 
 /* Two lists side by side: each takes half. */
 .w-cols.w-cols-lists > .w-aside { flex: 1 1 0; min-width: 0; }
+/* As in .w-rest: a list keeps its rows' height, so home.js fits whole
+   rows and its "N more" line never sits over one. */
+.w-cols.w-cols-lists > .w-aside > * { flex: none; }
 
 /* Watchlist: the biggest mover's name, movers side by side, and the
    stored 30-day line in a column or slot of its own. */
@@ -972,3 +975,36 @@
 .ct-kind { font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: right; }
 .ct-overdue { color: var(--v-bad-ink, #ffab8f); }
 .ct-list + .w-sub { margin-top: var(--space-2); }
+
+/* ---------------------------------------------------------------------
+   Loyalty Points (templates/widgets/lp.html), Market Movers
+   (templates/widgets/movers.html) and Sovereignty
+   (templates/widgets/sov.html).
+   --------------------------------------------------------------------- */
+
+.lp-list, .lp-pilots, .mv-list, .sv-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; min-height: 0; }
+.lp-list > li, .mv-list > li, .sv-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.lp-pilots > li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.lp-list > li:last-child, .lp-pilots > li:last-child, .mv-list > li:last-child, .sv-list > li:last-child { border-bottom: 0; }
+.lp-corp, .mv-name, .sv-system { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-points, .mv-price { color: var(--text-bright); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.lp-points small { color: var(--muted); }
+.lp-rate, .lp-value, .mv-sub, .sv-sub, .sv-when { color: var(--muted); font-size: var(--fs-xs); }
+.lp-value, .sv-when { text-align: right; white-space: nowrap; }
+.mv-list > li { grid-template-columns: minmax(0, 1fr) auto 4rem; align-items: center; }
+.mv-list > li > .mv-sub { grid-column: 1; }
+.mv-chg { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; color: var(--text-bright); }
+.mv-chg.up { color: var(--v-good-ink, #7fe0a3); }
+.mv-chg.down { color: var(--v-bad-ink, #ffab8f); }
+.mv-line { grid-column: 3; grid-row: 1 / span 2; width: 100%; height: 1.6rem; }
+.mv-line polyline { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linejoin: round; }
+.mv-line.up polyline { stroke: var(--v-good, #4cc38a); }
+.mv-line.down polyline { stroke: var(--v-bad, #ff6b4a); }
+.sv-list > li { padding-left: 0.6rem; border-left: 2px solid transparent; }
+.sv-list > li.sv-open, .sv-list > li.sv-loss { border-left-color: var(--v-bad, #ff6b4a); }
+.sv-list > li.sv-gain { border-left-color: var(--v-good, #4cc38a); }
+.sv-open .sv-when, .sv-loss .sv-when { color: var(--v-bad-ink, #ffab8f); }
+.sv-gain .sv-when { color: var(--v-good-ink, #7fe0a3); }
+.sv-region { text-align: right; }
+.sv-alliances, .sv-next { margin: 0; font-size: var(--fs-sm); }
+.sv-alliances small { color: var(--muted); }

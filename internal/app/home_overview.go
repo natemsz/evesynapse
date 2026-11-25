@@ -56,6 +56,9 @@ const (
 	widgetClones      = "clones"
 	widgetMail        = "mail"
 	widgetContracts   = "contracts"
+	widgetLP          = "lp"
+	widgetMovers      = "movers"
+	widgetSov         = "sov"
 	// "server" (the Tranquility module) is retired: the player count
 	// and ESI health ride the Overview bar now. A saved layout naming
 	// it drops the entry on load; never reuse the id. "attention"
@@ -283,6 +286,10 @@ type charSnaps struct {
 	implants      esi.Implants
 	fatigue       *esi.Fatigue
 
+	// Loyalty Points: LP held per corporation.
+	loyaltyKnown bool
+	loyalty      esi.LoyaltyBalances
+
 	// fetched records when each snapshot was fetched, so widgets
 	// can date their data ("as of").
 	fetched map[string]time.Time
@@ -485,6 +492,11 @@ func (b *charSnaps) decode(kind, payload string) {
 		var v esi.Fatigue
 		if json.Unmarshal([]byte(payload), &v) == nil {
 			b.fatigue = &v
+		}
+	case esi.SnapLoyalty:
+		var v esi.LoyaltyBalances
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.loyaltyKnown, b.loyalty = true, v
 		}
 	}
 }

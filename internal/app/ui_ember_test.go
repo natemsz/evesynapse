@@ -182,12 +182,14 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 			t.Errorf("style.css regained a raw %s; use the --r-* tokens", raw)
 		}
 	}
-	// The sparkline renders only when it has points (never a fake line).
+	// The sparklines render only when they have points (never a fake
+	// line): the net worth tile's own spark, then the 30-day line.
 	tpl, err := fs.ReadFile(templatesFS, "templates/widgets/glance.html")
 	if err != nil {
 		t.Fatalf("read widgets/glance.html: %v", err)
 	}
-	if !strings.Contains(string(tpl), `{{if .Line}}{{template "w-spark" .Line}}`) {
+	if !strings.Contains(string(tpl), `{{if .SparkPoints}}<svg class="kpi-spark"`) ||
+		!strings.Contains(string(tpl), `{{else if .Line}}{{template "w-spark" .Line}}`) {
 		t.Error("the tile line is not gated on its points being present")
 	}
 }

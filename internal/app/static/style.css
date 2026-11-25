@@ -2008,6 +2008,46 @@ html.js :has(> [data-tabs]:not([data-tabs-ready])) .ti-h { display: none; }
   pointer-events: none;
 }
 @keyframes slot-glow { 50% { opacity: 1; } }
+/* What the drop will do, at the top of the slot (the lifted card hangs
+   below the pointer): "Swap with Net Worth", and when holding still
+   would fit the space, a line saying so over a bar that fills while
+   the hold counts (home.js FIT_MS). */
+.grid.home-grid > .drag-placeholder .drag-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.3rem;
+  padding: var(--space-3);
+  text-align: center;
+  pointer-events: none;
+}
+.drag-hint-main {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-bright);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+.drag-hint-sub { font-size: var(--fs-xs); color: var(--text); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+.grid.home-grid > .drag-placeholder.w-hold .drag-hint::after,
+.grid.home-grid > .drag-placeholder.w-held .drag-hint::after {
+  content: "";
+  width: min(9rem, 70%);
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(var(--accent), var(--accent)) left / 0% 100% no-repeat, rgba(255, 255, 255, 0.12);
+}
+.grid.home-grid > .drag-placeholder.w-hold .drag-hint::after { animation: slot-hold 650ms linear forwards; }
+.grid.home-grid > .drag-placeholder.w-held .drag-hint::after { background-size: 100% 100%; }
+@keyframes slot-hold { to { background-size: 100% 100%; } }
+/* The card a drop would swap with, already in the dragged card's old
+   place: its edge lit so the trade reads at a glance. */
+.grid.home-grid > .card.w-swap-with { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 14px rgba(255, 106, 26, 0.3); }
 body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbing; }
 body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-resize; }
 /* The grip's frame: follows the pointer exactly while the widget

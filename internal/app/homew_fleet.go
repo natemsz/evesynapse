@@ -18,8 +18,10 @@ func init() {
 			{Name: "small", Sizes: "1x1", Says: "How many pilots are online, training and idle."},
 			{Name: "wide", Sizes: "2x1 3x1", Says: "Portraits with online dots, as many as fit."},
 			{Name: "tall", Sizes: "1x2 1x3 1x4", Says: "Each pilot's system and training, with a filter on taller cards."},
-			{Name: "medium", Sizes: "2x2 2x3 2x4", Says: "The pilot table with location, training and wallet."},
-			{Name: "large", Sizes: "3x2 3x3 3x4", Says: "The full table with ships and each pilot's details."},
+			// The tables are as tall as the roster, up to ten pilots, then
+			// scroll inside the card.
+			{Name: "medium", Sizes: "2x2 2x3 2x4", Says: "The pilot table with location, training and wallet.", Grow: true, GrowRows: 10},
+			{Name: "large", Sizes: "3x2 3x3 3x4", Says: "The full table with ships and each pilot's details.", Grow: true, GrowRows: 10},
 		},
 		Needs: []string{esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapMailLabels},
 		Options: []widgetOption{

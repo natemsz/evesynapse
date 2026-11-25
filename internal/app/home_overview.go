@@ -1418,10 +1418,10 @@ func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout
 // toggle a widget, move one up or down, resize one (action=size,
 // w and h in grid cells), reset to the default, accept a whole new
 // order from a drag (action=order, layout keys comma-joined), add a
-// copy of a widget that allows copies (action=copy), put a removed
-// card back where it stood (action=restore, with at, w and h), or
+// copy of a widget that allows copies (action=copy), or
 // resize several cards at once (action=sizes, "key:WxH" comma-joined,
-// the gaps Fill gaps closes). A card is named by key (its layout key,
+// the gaps Fill gaps closes), or set the whole arrangement, order and
+// sizes (action=arrange, "key:WxH" comma-joined: undo, redo, swaps). A card is named by key (its layout key,
 // "id#2" for a copy), defaulting to widget. Every control is a plain
 // form, so arranging works with no JavaScript: the change saves and
 // bounces back to Customize. Requests with X-Requested-With get JSON
@@ -1509,27 +1509,6 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 			}
 			app.saveHomeLayout(ctx, userID, layout)
 			reply = `{"ok":true,"key":` + strconv.Quote(added) + `}`
-		case "restore":
-			// Undo a remove: the card goes back at its old place and
-			// size. A size the widget no longer declares falls back to
-			// its default; a card already on the home stays put.
-			if known && find(key) < 0 {
-				item := homeLayoutItem{ID: def.ID}
-				if key != def.ID {
-					item.Key = key
-				}
-				wv, _ := strconv.Atoi(r.FormValue("w"))
-				hv, _ := strconv.Atoi(r.FormValue("h"))
-				if def.Allows(wSize{wv, hv}) {
-					item.W, item.H = wv, hv
-				}
-				at, aerr := strconv.Atoi(r.FormValue("at"))
-				if aerr != nil || at < 0 || at > len(layout) {
-					at = len(layout)
-				}
-				layout = append(layout[:at], append([]homeLayoutItem{item}, layout[at:]...)...)
-				app.saveHomeLayout(ctx, userID, layout)
-			}
 		case "up", "down":
 			if known {
 				if i := find(key); i >= 0 {
@@ -1591,6 +1570,33 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 				refuse()
 				return
 			}
+		case "arrange":
+			// The whole layout in one change, "key:WxH" comma-joined
+			// in order: undo and redo put back an arrangement this
+			// way, and a swap moves two cards and trades their sizes
+			// at once. Unknown and repeated keys drop out; a size the
+			// widget does not declare falls back to its default. A
+			// card left out leaves the home and keeps its settings, as
+			// a remove does.
+			next := make([]homeLayoutItem, 0, len(layout))
+			seen := make(map[string]bool, len(layout))
+			for _, pair := range strings.Split(r.FormValue("layout"), ",") {
+				k, raw, _ := strings.Cut(strings.TrimSpace(pair), ":")
+				d, ok := widgetDefForKey(k)
+				if !ok || seen[k] {
+					continue
+				}
+				seen[k] = true
+				item := homeLayoutItem{ID: d.ID}
+				if k != d.ID {
+					item.Key = k
+				}
+				if sz, sok := parseWSize(raw); sok && d.Allows(sz) {
+					item.W, item.H = sz.W, sz.H
+				}
+				next = append(next, item)
+			}
+			app.saveHomeLayout(ctx, userID, next)
 		case "sizes":
 			// Several cards at once: each "key:WxH" pair applies
 			// when the card is on the home and the widget declares

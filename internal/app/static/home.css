@@ -10,7 +10,9 @@
 
    With two or three columns every row is one height, --w-row, which
    grows with the page. A card is exactly its cells and its content
-   never stretches a row. Cards are size containers there (container
+   never stretches a row, except a card whose form grows (data-grow):
+   the rows it spans take its content's height (home.js writes the
+   grid's rows). Cards are size containers there (container
    "widget"), so what is inside can read the box it gets, and their
    lists show the whole rows that fit. Below 36rem rows are auto: each
    card is as tall as its body, and cards are inline-size containers
@@ -100,10 +102,17 @@
   .grid.home-grid {
     --w-row: clamp(10rem, 8.35rem + 3.6cqi, 13.5rem);
     grid-auto-rows: var(--w-row);
-    gap: var(--space-4);
+    gap: 1rem;
   }
   .grid.home-grid > .card { container: widget / size; min-height: 0; }
   .grid.home-grid > .card > .card-body { min-height: 0; overflow: hidden; }
+  /* A card whose form grows (data-grow; home.js marks it .w-grows and
+     sizes its rows to it) is as tall as what it draws: an inline-size
+     container only, since a size container takes no height from its
+     content. Its scrolling list takes its own height, capped by
+     home.js at the form's rows. */
+  .grid.home-grid > .card.w-grows { container: widget / inline-size; }
+  .grid.home-grid > .w-card.w-grows .w-body > [data-w-scroll] { flex: none; }
 }
 
 /* Lists in fixed rows: once home.js measures a list (.w-fitting) it

@@ -723,3 +723,24 @@ SELECT entity_id, kills, isk FROM killboard_top
 WHERE kind = sqlc.arg(kind)::text
 ORDER BY kills DESC, entity_id
 LIMIT sqlc.arg(max_rows)::bigint;
+
+-- Gate camps per system (schema 182): each threat layer build
+-- replaces the table with the camps it found.
+-- name: DeleteSystemCamps :exec
+DELETE FROM system_camps;
+
+-- name: InsertSystemCamp :exec
+INSERT INTO system_camps (system_id, group_kind, group_id, group_name, kills, since, celestial, spread, crew, detected_at)
+VALUES (sqlc.arg(system_id), sqlc.arg(group_kind), sqlc.arg(group_id), sqlc.arg(group_name), sqlc.arg(kills),
+        sqlc.arg(since)::timestamptz, sqlc.arg(celestial), sqlc.arg(spread), sqlc.arg(crew)::text[], sqlc.arg(detected_at)::timestamptz)
+ON CONFLICT (system_id) DO NOTHING;
+
+-- The standing camps in some systems: rows from a build at or after
+-- fresh_since only, so a stalled worker shows no camp rather than an
+-- old one.
+-- name: ListSystemCamps :many
+SELECT system_id, group_kind, group_id, group_name, kills, since, celestial, spread, crew, detected_at
+FROM system_camps
+WHERE system_id = ANY(sqlc.arg(system_ids)::bigint[]) AND detected_at >= sqlc.arg(fresh_since)::timestamptz
+ORDER BY system_id
+LIMIT 100;

@@ -1020,7 +1020,8 @@
 .ar-figs { color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .ar-kills { color: var(--v-bad-ink, #ffab8f); }
 .ar-sub, .ar-ago { color: var(--muted); font-size: var(--fs-xs); }
-.ar-day { grid-column: 1 / -1; }
+.ar-day, .ar-camp { grid-column: 1 / -1; }
+.ar-camp { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--v-bad-ink, #ffab8f); font-size: var(--fs-xs); }
 .ar-intel { color: var(--text-bright); }
 .ar-intel::before, .ar-on::before { content: ""; display: inline-block; width: 0.45em; height: 0.45em; margin-right: 0.4em; border-radius: 50%; vertical-align: middle; background: var(--muted); }
 .ar-intel.ar-loss::before { background: var(--v-bad, #ff6b4a); }

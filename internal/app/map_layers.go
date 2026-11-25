@@ -163,7 +163,10 @@ func (app *Application) refreshMapLayers(ctx context.Context) {
 	if meta, err := app.queries.GetMapLayersMeta(ctx); err == nil && meta.Sources == sources {
 		return
 	}
-	threat, _ := app.loadThreat(ctx, now)
+	threat, ok := app.loadThreat(ctx, now)
+	if ok {
+		app.storeSystemCamps(ctx, now, threat.Camps)
+	}
 	if len(snaps) == 0 && len(threat.ID) == 0 {
 		return
 	}

@@ -41,6 +41,7 @@ import (
 	"sort"
 	"time"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 )
 
@@ -333,7 +334,9 @@ func (app *Application) structureTypes(ctx context.Context, typeIDs []int64) map
 	return out
 }
 
-// loadThreat reads the recent kills and builds the threat layer.
+// loadThreat reads the recent kills and builds the threat layer. It
+// reports ok only when every read succeeded, so its camps can replace
+// the stored ones.
 func (app *Application) loadThreat(ctx context.Context, now time.Time) (mapLayerThreat, bool) {
 	if snap := app.threatMemorySnapshot(now); snap != nil {
 		return snap.layer, true
@@ -353,7 +356,11 @@ func (app *Application) loadThreat(ctx context.Context, now time.Time) (mapLayer
 	for i, r := range rows {
 		kills[i] = threatKill{ID: r.KillmailID, System: r.SystemID, Time: r.KillmailTime, Public: r.Public, VictimCorp: r.VictimCorporationID, Location: r.LocationID, Structure: structs[r.ShipTypeID]}
 	}
+	// Without the attackers no camp can be found: the layer is still
+	// built from the kills, but it reports not ok and is not cached,
+	// so the stored camps stand until a whole build replaces them.
 	arows, err := app.queries.ListThreatAttackers(ctx, now.Add(-threatCampWindow))
+	whole := err == nil
 	if err != nil {
 		logging.Errorf("map: threat: attackers: %v", err)
 	}
@@ -372,8 +379,67 @@ func (app *Application) loadThreat(ctx context.Context, now time.Time) (mapLayer
 		return names.character(id)
 	})
 	app.dressCamps(ctx, names, th.Camps)
+	if !whole {
+		return th, false
+	}
 	app.storeThreatSnapshot(now, th)
 	return th, true
+}
+
+// campFresh is how old a stored camp may be and still stand: a few
+// layer builds (one at least every five minutes). A stalled worker
+// shows no camp rather than an old one.
+const campFresh = 20 * time.Minute
+
+// storeSystemCamps replaces the stored camps (system_camps) with the
+// ones a threat build found, in one transaction, so a reader sees the
+// old set or the new one, never half of each.
+func (app *Application) storeSystemCamps(ctx context.Context, now time.Time, camps []mapCamp) {
+	tx, err := app.pool.Begin(ctx)
+	if err != nil {
+		logging.Errorf("map: camps: begin: %v", err)
+		return
+	}
+	defer tx.Rollback(ctx)
+	q := app.queries.WithTx(tx)
+	if err := q.DeleteSystemCamps(ctx); err != nil {
+		logging.Errorf("map: camps: clear: %v", err)
+		return
+	}
+	for _, c := range camps {
+		crew := c.Crew
+		if crew == nil {
+			crew = []string{}
+		}
+		if err := q.InsertSystemCamp(ctx, db.InsertSystemCampParams{
+			SystemID: c.System, GroupKind: c.Kind, GroupID: c.GroupID, GroupName: c.Group, Kills: int32(c.Kills),
+			Since: time.Unix(c.Since, 0).UTC(), Celestial: c.Celestial, Spread: c.Spread, Crew: crew, DetectedAt: now,
+		}); err != nil {
+			logging.Errorf("map: camps: store system %d: %v", c.System, err)
+			return
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		logging.Errorf("map: camps: commit: %v", err)
+	}
+}
+
+// standingCamps is the stored camps in the given systems, keyed by
+// system, from builds no older than campFresh.
+func (app *Application) standingCamps(ctx context.Context, systems []int64, now time.Time) map[int64]db.SystemCamp {
+	out := map[int64]db.SystemCamp{}
+	if len(systems) == 0 {
+		return out
+	}
+	rows, err := app.queries.ListSystemCamps(ctx, db.ListSystemCampsParams{SystemIds: systems, FreshSince: now.Add(-campFresh)})
+	if err != nil {
+		logging.Errorf("map: camps: read: %v", err)
+		return out
+	}
+	for _, r := range rows {
+		out[r.SystemID] = r
+	}
+	return out
 }
 
 // threatFingerprint moves when a kill lands, and every five minutes

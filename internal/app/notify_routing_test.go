@@ -229,7 +229,8 @@ func TestNotifyDigestNeverNotifies(t *testing.T) {
 
 // seedCampKills stores a three-kill gate camp on one gate in the
 // given system, the same shape the system page test proves a camp
-// from.
+// from. The camp is found and stored when the map's layers are next
+// built (refreshMapLayers), as the worker does.
 func seedCampKills(t *testing.T, conn *sql.DB, systemID int64, now time.Time) {
 	t.Helper()
 	exec := func(s string, args ...any) {
@@ -290,6 +291,7 @@ func TestNotifyCampAlerts(t *testing.T) {
 	const rancer = int64(30003504)
 	now := time.Now().UTC()
 	seedCampKills(t, conn, rancer, now)
+	app.refreshMapLayers(ctx) // the worker stores the camp it finds
 	if err := app.storeNotifyPrefs(ctx, user.ID, notifyPrefs{CampSystems: []int64{rancer}}); err != nil {
 		t.Fatalf("store prefs: %v", err)
 	}

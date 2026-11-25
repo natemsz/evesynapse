@@ -544,27 +544,20 @@ func (app *Application) notifyCampEvents(ctx context.Context, c *notifyCollector
 	if !online {
 		return
 	}
-	names := app.newKillNames(ctx)
+	camps := app.standingCamps(ctx, prefs.CampSystems, now)
 	for _, systemID := range prefs.CampSystems {
 		// The source is registered on every pass, camp or not, so
 		// a camp that forms reads as a transition from a known
 		// past, not as history.
 		src := c.source(notifyCamp, systemID)
-		stream, err := app.queries.ListKillsBySystem(ctx, db.ListKillsBySystemParams{
-			SystemID: systemID, BeforeTime: now.Add(time.Hour), BeforeID: 1 << 62, MaxRows: systemKillsFetch,
-		})
-		if err != nil {
-			logging.Errorf("notify: camp kills for system %d: %v", systemID, err)
-			continue
-		}
-		camp := app.mapSystemCamp(ctx, names, systemID, now, stream)
-		if camp == nil {
+		camp, ok := camps[systemID]
+		if !ok {
 			continue
 		}
 		name := app.campSystemName(ctx, systemID)
 		c.add(notifyEvent{
 			Kind: notifyCamp, Source: src,
-			Key:   fmt.Sprintf("camp|%d|%d", systemID, camp.Since),
+			Key:   fmt.Sprintf("camp|%d|%d", systemID, camp.Since.Unix()),
 			Title: fmt.Sprintf("Gate camp in %s: %d kills in the last hour", name, camp.Kills),
 			URL:   fmt.Sprintf("/system/?system=%d", systemID),
 		})

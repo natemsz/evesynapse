@@ -172,6 +172,17 @@ func (q *Queries) DeleteKillAttackersFor(ctx context.Context, killmailIds []int6
 	return err
 }
 
+const deleteSystemCamps = `-- name: DeleteSystemCamps :exec
+DELETE FROM system_camps
+`
+
+// Gate camps per system (schema 182): each threat layer build
+// replaces the table with the camps it found.
+func (q *Queries) DeleteSystemCamps(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteSystemCamps)
+	return err
+}
+
 const getBiggestKill = `-- name: GetBiggestKill :one
 SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM kills
 WHERE public AND killmail_time >= $1::timestamptz AND value_ours IS NOT NULL
@@ -729,6 +740,42 @@ type InsertKillStatsPendingParams struct {
 
 func (q *Queries) InsertKillStatsPending(ctx context.Context, arg InsertKillStatsPendingParams) error {
 	_, err := q.db.Exec(ctx, insertKillStatsPending, arg.KillmailID, arg.KillmailTime)
+	return err
+}
+
+const insertSystemCamp = `-- name: InsertSystemCamp :exec
+INSERT INTO system_camps (system_id, group_kind, group_id, group_name, kills, since, celestial, spread, crew, detected_at)
+VALUES ($1, $2, $3, $4, $5,
+        $6::timestamptz, $7, $8, $9::text[], $10::timestamptz)
+ON CONFLICT (system_id) DO NOTHING
+`
+
+type InsertSystemCampParams struct {
+	SystemID   int64     `json:"system_id"`
+	GroupKind  string    `json:"group_kind"`
+	GroupID    int64     `json:"group_id"`
+	GroupName  string    `json:"group_name"`
+	Kills      int32     `json:"kills"`
+	Since      time.Time `json:"since"`
+	Celestial  string    `json:"celestial"`
+	Spread     bool      `json:"spread"`
+	Crew       []string  `json:"crew"`
+	DetectedAt time.Time `json:"detected_at"`
+}
+
+func (q *Queries) InsertSystemCamp(ctx context.Context, arg InsertSystemCampParams) error {
+	_, err := q.db.Exec(ctx, insertSystemCamp,
+		arg.SystemID,
+		arg.GroupKind,
+		arg.GroupID,
+		arg.GroupName,
+		arg.Kills,
+		arg.Since,
+		arg.Celestial,
+		arg.Spread,
+		arg.Crew,
+		arg.DetectedAt,
+	)
 	return err
 }
 
@@ -1715,6 +1762,53 @@ func (q *Queries) ListRecentKillEntities(ctx context.Context, since time.Time) (
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSystemCamps = `-- name: ListSystemCamps :many
+SELECT system_id, group_kind, group_id, group_name, kills, since, celestial, spread, crew, detected_at
+FROM system_camps
+WHERE system_id = ANY($1::bigint[]) AND detected_at >= $2::timestamptz
+ORDER BY system_id
+LIMIT 100
+`
+
+type ListSystemCampsParams struct {
+	SystemIds  []int64   `json:"system_ids"`
+	FreshSince time.Time `json:"fresh_since"`
+}
+
+// The standing camps in some systems: rows from a build at or after
+// fresh_since only, so a stalled worker shows no camp rather than an
+// old one.
+func (q *Queries) ListSystemCamps(ctx context.Context, arg ListSystemCampsParams) ([]SystemCamp, error) {
+	rows, err := q.db.Query(ctx, listSystemCamps, arg.SystemIds, arg.FreshSince)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SystemCamp
+	for rows.Next() {
+		var i SystemCamp
+		if err := rows.Scan(
+			&i.SystemID,
+			&i.GroupKind,
+			&i.GroupID,
+			&i.GroupName,
+			&i.Kills,
+			&i.Since,
+			&i.Celestial,
+			&i.Spread,
+			&i.Crew,
+			&i.DetectedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

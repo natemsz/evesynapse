@@ -3302,6 +3302,7 @@ body:has(dialog.share-modal[open]) :is(.ov-pips i.train, [data-live-pill]::befor
 .modal-item:hover { background: var(--row-hover); border-color: var(--accent); }
 .modal-item strong { display: block; }
 .modal-item small { display: block; margin-top: 0.15rem; }
+.modal-item small[hidden] { display: none; }
 .modal-item:disabled { cursor: default; opacity: 0.6; }
 .modal-item:disabled:hover { background: var(--row); border-color: #262626; }
 .modal-item .modal-item-on { color: var(--accent); }

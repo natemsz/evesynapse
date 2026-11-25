@@ -2134,8 +2134,10 @@
         if (n !== was && Math.abs(raw - was) < 0.62) n = was;
         return Math.max(1, Math.min(hi, n));
       }
-      // Runs on every pointer move, straight from the event: the
-      // frame tracks the pointer with no frame of lag.
+      // Runs once per frame while the grip moves: pointer moves
+      // between frames coalesce, so the grid refits at most once
+      // per frame however fast the moves arrive.
+      var frameRaf = 0;
       function frameTick() {
         var r = card.getBoundingClientRect();
         // The frame starts exactly over the module and follows the
@@ -2166,9 +2168,18 @@
       function onMove(e) {
         lastX = e.clientX;
         lastY = e.clientY;
-        frameTick();
+        if (!frameRaf) {
+          frameRaf = requestAnimationFrame(function () {
+            frameRaf = 0;
+            frameTick();
+          });
+        }
       }
       function onUp() {
+        if (frameRaf) {
+          cancelAnimationFrame(frameRaf);
+          frameRaf = 0;
+        }
         grip.removeEventListener("pointermove", onMove);
         grip.removeEventListener("pointerup", onUp);
         grip.removeEventListener("pointercancel", onUp);

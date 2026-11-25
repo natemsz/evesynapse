@@ -944,3 +944,31 @@
 .srp-owners > li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
 .srp-owners > li > span { color: var(--muted); white-space: nowrap; }
 .srp-review-box { margin-top: var(--space-2); }
+
+/* ---------------------------------------------------------------------
+   Clones and Fatigue (templates/widgets/clones.html), Mail
+   (templates/widgets/mail.html) and Contracts
+   (templates/widgets/contracts.html).
+   --------------------------------------------------------------------- */
+
+.cl-pilots, .cl-clones, .cl-implants, .ml-list, .ml-counts, .ct-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; min-height: 0; }
+.cl-pilots > li, .ml-list > li, .ct-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.5rem; padding: 0.3rem 0 0.3rem 0.6rem; border-bottom: 1px solid var(--hairline); border-left: 2px solid transparent; font-size: var(--fs-sm); }
+.cl-clones > li, .cl-implants > li, .ml-counts > li { padding: 0.3rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.cl-pilots > li:last-child, .cl-clones > li:last-child, .cl-implants > li:last-child, .ml-list > li:last-child, .ml-counts > li:last-child, .ct-list > li:last-child { border-bottom: 0; }
+/* A pilot carrying fatigue takes the warning edge. */
+.cl-pilots > li.cl-fatigued { border-left-color: var(--v-warn, #ffb547); }
+.cl-pilot, .cl-loc, .ml-pilot, .ml-subject, .ct-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-fatigue, .ml-count { text-align: right; white-space: nowrap; }
+.cl-fatigued .cl-fatigue { color: var(--v-warn-ink, #ffd27a); }
+.cl-home, .cl-jump, .ml-sub, .ml-ago, .ct-meta, .ct-money { color: var(--muted); font-size: var(--fs-xs); }
+.cl-home, .ml-sub, .ct-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-jump, .ml-ago, .ct-money { text-align: right; white-space: nowrap; }
+.ml-sub { grid-column: 1 / -1; }
+.cl-clones small, .cl-implants small { display: block; color: var(--muted); font-size: var(--fs-xs); }
+.cl-clears, .ml-newest, .ct-soonest { margin: 0; font-size: var(--fs-sm); }
+.ml-newest small { display: block; color: var(--muted); font-size: var(--fs-xs); }
+.ml-counts > li { display: flex; justify-content: space-between; gap: 0.5rem; }
+.ml-counts > li > span { color: var(--text-bright); font-variant-numeric: tabular-nums; }
+.ct-kind { font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: right; }
+.ct-overdue { color: var(--v-bad-ink, #ffab8f); }
+.ct-list + .w-sub { margin-top: var(--space-2); }

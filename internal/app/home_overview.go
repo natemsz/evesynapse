@@ -53,6 +53,9 @@ const (
 	widgetFleets      = "fleets"
 	widgetKills       = "kills"
 	widgetSRP         = "srp"
+	widgetClones      = "clones"
+	widgetMail        = "mail"
+	widgetContracts   = "contracts"
 	// "server" (the Tranquility module) is retired: the player count
 	// and ESI health ride the Overview bar now. A saved layout naming
 	// it drops the entry on load; never reuse the id. "attention"
@@ -273,6 +276,13 @@ type charSnaps struct {
 	journalKnown bool
 	journal      esi.WalletJournal
 
+	// Clones and Fatigue: jump clones and the home station, the
+	// active implants, and jump fatigue.
+	clones        *esi.Clones
+	implantsKnown bool
+	implants      esi.Implants
+	fatigue       *esi.Fatigue
+
 	// fetched records when each snapshot was fetched, so widgets
 	// can date their data ("as of").
 	fetched map[string]time.Time
@@ -460,6 +470,21 @@ func (b *charSnaps) decode(kind, payload string) {
 		var v esi.WalletJournal
 		if json.Unmarshal([]byte(payload), &v) == nil {
 			b.journalKnown, b.journal = true, v
+		}
+	case esi.SnapClones:
+		var v esi.Clones
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.clones = &v
+		}
+	case esi.SnapImplants:
+		var v esi.Implants
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.implantsKnown, b.implants = true, v
+		}
+	case esi.SnapFatigue:
+		var v esi.Fatigue
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.fatigue = &v
 		}
 	}
 }

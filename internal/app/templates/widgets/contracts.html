@@ -1,0 +1,32 @@
+{{/* Contracts: the account's open contracts, soonest deadline first.
+     Four forms; none reads its size. */}}
+
+{{define "w-contracts-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+{{template "w-lead" .Lead}}
+{{with .Soonest}}<p class="ct-soonest">{{if .Overdue}}<span class="ct-overdue" title="{{.DueAt}}">Overdue</span>{{else}}{{.Due}} {{template "w-contracts-due" .}}{{end}}: <a href="{{.Href}}">{{.Name}}</a></p>{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-contracts-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+{{template "w-contracts-list" .Rows}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-contracts-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+{{if .ForYou}}<h4 class="w-sub">For you</h4>{{template "w-contracts-list" .ForYou}}{{end}}
+{{if .FromYou}}<h4 class="w-sub">Issued by you</h4>{{template "w-contracts-list" .FromYou}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-contracts-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+<div class="w-cols w-cols-lists">
+<div class="w-aside"><h4 class="w-sub">For you</h4>{{if .ForYou}}{{template "w-contracts-list" .ForYou}}{{else}}<p class="w-quiet"><small>Nothing open for you.</small></p>{{end}}</div>
+<div class="w-aside"><h4 class="w-sub">Issued by you</h4>{{if .FromYou}}{{template "w-contracts-list" .FromYou}}{{else}}<p class="w-quiet"><small>You have nothing open.</small></p>{{end}}</div>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-contracts-due"}}{{if .Overdue}}<span class="ct-overdue" title="{{.DueAt}}">overdue</span>{{else}}<span class="countdown" data-finish="{{.DueRaw}}" title="{{.DueAt}}">{{.Left}}</span>{{end}}{{end}}
+
+{{define "w-contracts-list"}}<ul class="ct-list" data-w-fit>{{range .}}<li>
+  <a class="ct-name" href="{{.Href}}">{{.Name}}</a>
+  <span class="ct-kind">{{.Kind}}</span>
+  <small class="ct-meta">{{.State}}{{if .Overdue}}, <span class="ct-overdue" title="{{.DueAt}}">overdue</span>{{else if .Due}}, {{.DueLow}} {{template "w-contracts-due" .}}{{end}}</small>
+  <small class="ct-money">{{if .Money}}{{.Money}} ISK {{.MoneyFor}}{{end}}</small>
+</li>{{end}}</ul>{{end}}

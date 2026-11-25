@@ -19,7 +19,9 @@ func init() {
 		Default:     wSize{3, 1},
 		Forms: []homeWidgetForm{
 			{Name: "small", Sizes: "1x1", Says: "How many alerts of each severity, and the most urgent one."},
-			{Name: "wide", Sizes: "2x1 3x1", Says: "One row of small alert cards by kind, with arrows for the rest."},
+			// The band is as tall as its alert cards: on a narrow grid
+			// the severity chips take a line of their own above them.
+			{Name: "wide", Sizes: "2x1 3x1", Says: "One row of small alert cards by kind, with arrows for the rest.", Grow: true},
 			{Name: "tall", Sizes: "1x2 1x3 1x4", Says: "Every alert as a line, grouped by kind."},
 			{Name: "medium", Sizes: "2x2 2x3", Says: "Alert cards two across, each flipping through its alerts."},
 			{Name: "large", Sizes: "3x2 3x3", Says: "Alert cards three across, with severity filters and the dismissed list."},

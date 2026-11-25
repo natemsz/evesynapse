@@ -684,7 +684,7 @@ inside `.l-page`, so it measures the page and never the window.
   can read the box. Below 36rem rows are auto and cards are only
   inline-size containers: a size container with an auto height
   collapses to nothing. The one exception is a form declared with
-  `Grow` (the At a Glance band, the Fleet Overview tables): its card
+  `Grow` (the Briefing and At a Glance bands, the Fleet Overview tables): its card
   is as tall as what it draws, home.js writes the grid's row tracks
   so the rows it spans take that height (`homeRowTracks`; a row it
   shares with another card keeps at least `--w-row`), and with

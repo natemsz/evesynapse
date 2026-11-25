@@ -45,7 +45,7 @@ type playstyleWidgets struct {
 
 var playstyleWidgetsByActivity = map[string]playstyleWidgets{
 	"pilots": {
-		Specialists: []string{widgetTraining, widgetNetWorth},
+		Specialists: []string{widgetTraining, widgetNetWorth, widgetKills},
 	},
 	"market": {
 		Specialists: []string{widgetTradeIdeas, widgetMarket, widgetProfitPulse, widgetWatchlist},
@@ -57,7 +57,7 @@ var playstyleWidgetsByActivity = map[string]playstyleWidgets{
 	},
 	"corporation": {
 		Specialists: []string{widgetPulse, widgetUpkeep, widgetWalletFlow, widgetFleets},
-		Fill:        []string{widgetNetWorth, widgetTraining, widgetPI, widgetIndustry, widgetMarket},
+		Fill:        []string{widgetNetWorth, widgetTraining, widgetPI, widgetIndustry, widgetSRP},
 	},
 	"fitting": {
 		Specialists: []string{widgetTraining},
@@ -80,6 +80,7 @@ var singlePlaystyleBodies = map[string][]homeLayoutItem{
 		{ID: widgetIndustry, W: 1, H: 2},
 		{ID: widgetWatchlist, W: 1, H: 2},
 		{ID: widgetMarket, W: 1, H: 2},
+		{ID: widgetKills, W: 3, H: 1},
 	},
 	"market": {
 		{ID: widgetTradeIdeas, W: 2, H: 3},
@@ -107,7 +108,7 @@ var singlePlaystyleBodies = map[string][]homeLayoutItem{
 		{ID: widgetIndustry, W: 1, H: 2},
 		{ID: widgetNetWorth, W: 1, H: 2},
 		{ID: widgetTraining, W: 1, H: 2},
-		{ID: widgetMarket, W: 1, H: 1},
+		{ID: widgetSRP, W: 1, H: 1},
 	},
 	"fitting": {
 		{ID: widgetTraining, W: 2, H: 2},
@@ -138,6 +139,7 @@ var demoHomeBody = []homeLayoutItem{
 	{ID: widgetMarket, W: 1, H: 1},
 	{ID: widgetWatchlist, W: 1, H: 1},
 	{ID: widgetPulse, W: 3, H: 1},
+	{ID: widgetKills, W: 3, H: 2},
 }
 
 // blendCanonicalOrder breaks ties between widgets that serve the
@@ -147,6 +149,7 @@ var blendCanonicalOrder = []string{
 	widgetNetWorth, widgetTraining, widgetMarket, widgetWalletFlow,
 	widgetIndustry, widgetProfitPulse, widgetWatchlist, widgetPI,
 	widgetProdLine, widgetTradeIdeas, widgetPulse, widgetUpkeep, widgetFleets,
+	widgetKills, widgetSRP,
 }
 
 // blendFullSize is a widget's full size in a blend, used for the
@@ -166,6 +169,8 @@ var blendFullSize = map[string]struct{ W, H int }{
 	widgetPulse:       {2, 2},
 	widgetUpkeep:      {2, 2},
 	widgetFleets:      {2, 2},
+	widgetKills:       {2, 2},
+	widgetSRP:         {2, 2},
 }
 
 // defaultLayoutFor is the layout an account with no saved layout

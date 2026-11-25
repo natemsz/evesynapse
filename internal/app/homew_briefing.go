@@ -199,11 +199,38 @@ func (app *Application) briefingWaitingLines(ctx context.Context, userID int64, 
 }
 
 // briefingSRPLines: the ship replacement claims waiting for review at
-// each owner the account may answer for. The owners are found the way
-// the ship replacement notices find them: the corporations of the
-// account's characters, their alliances, and the communities they are
-// active in.
+// each owner the account may answer for (srpWaitingFor).
 func (app *Application) briefingSRPLines(ctx context.Context, userID int64, communities []db.ListCommunitiesForCharactersRow) []briefingLine {
+	var lines []briefingLine
+	for _, w := range app.srpWaitingFor(ctx, userID, communities) {
+		html := fmt.Sprintf(`%d ship replacement claim%s wait%s for review in <a href="%s">%s</a>`, w.Open, pluralSuffix(w.Open), pluralVerb(w.Open), w.Href, template.HTMLEscapeString(w.Name))
+		if w.Owed > 0 {
+			html += ", " + iskCompact(w.Owed) + " ISK suggested"
+		}
+		lines = append(lines, briefingLine{html: html + ".", Rank: briefingSRPReview, key: "srp|" + w.Owner.Key(), href: w.Href})
+	}
+	return lines
+}
+
+// srpWaiting is one owner's ship replacement claims waiting for review.
+type srpWaiting struct {
+	Owner orgOwner
+	Name  string
+	Href  string
+	Open  int
+	Owed  float64
+}
+
+// OwedText is what the waiting claims would pay, short.
+func (w srpWaiting) OwedText() string { return iskCompact(w.Owed) }
+
+// srpWaitingFor is, for each owner whose ship replacement claims the
+// account may answer, how many wait for review and what they would pay.
+// The owners are found the way the ship replacement notices find them:
+// the corporations of the account's characters, their alliances, and
+// the communities they are active in; each is checked against the
+// account's standing (permSRP). Bounded: one count per owner, capped.
+func (app *Application) srpWaitingFor(ctx context.Context, userID int64, communities []db.ListCommunitiesForCharactersRow) []srpWaiting {
 	rows, err := app.queries.ListWorkingCharacterCorporationsByUser(ctx, userID)
 	if err != nil {
 		logging.Errorf("home: corporations of user %d: %v", userID, err)
@@ -232,7 +259,7 @@ func (app *Application) briefingSRPLines(ctx context.Context, userID int64, comm
 	}
 	var st orgStanding
 	var stOK, stTried bool
-	var lines []briefingLine
+	var out []srpWaiting
 	for _, o := range owners {
 		open, err := app.queries.CountOpenSRPRequests(ctx, db.CountOpenSRPRequestsParams{OwnerKind: o.Kind, OwnerID: o.ID})
 		if err != nil || open.Requests == 0 {
@@ -246,13 +273,8 @@ func (app *Application) briefingSRPLines(ctx context.Context, userID int64, comm
 		if !stOK || !app.ownerPermits(ctx, st, o, permSRP) {
 			continue
 		}
-		n := int(open.Requests)
-		href := standing.Address(srpPath, o.Key())
-		html := fmt.Sprintf(`%d ship replacement claim%s wait%s for review in <a href="%s">%s</a>`, n, pluralSuffix(n), pluralVerb(n), href, template.HTMLEscapeString(app.ownerName(ctx, o)))
-		if open.Owed > 0 {
-			html += ", " + iskCompact(open.Owed) + " ISK suggested"
-		}
-		lines = append(lines, briefingLine{html: html + ".", Rank: briefingSRPReview, key: "srp|" + o.Key(), href: href})
+		out = append(out, srpWaiting{Owner: o, Name: app.ownerName(ctx, o), Href: standing.Address(srpPath, o.Key()),
+			Open: int(open.Requests), Owed: open.Owed})
 	}
-	return lines
+	return out
 }

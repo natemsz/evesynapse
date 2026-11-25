@@ -1,0 +1,59 @@
+{{/* Kills and Losses: the account's pilots on the killboard. Values are
+     the killboard's stored mail values. Five forms; none reads its
+     size. */}}
+
+{{define "w-kills-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-kills-lead" .Main}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-kills-wide"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+<div class="w-tiles kl-windows">{{template "w-kills-tile" .Week}}{{template "w-kills-tile" .Month}}</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-kills-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Latest}}
+{{template "w-kills-list" $}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-kills-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-kills-lead" .Main}}
+<div class="w-cols">
+<div class="w-rest">{{if .Latest}}{{template "w-kills-list" $}}{{end}}</div>
+{{with .Systems}}<div class="w-aside"><h4 class="w-sub">Where you kill most</h4>{{template "w-rank" .}}</div>{{end}}
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-kills-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-kills-lead" .Main}}
+<div class="w-cols">
+<div class="w-rest">{{if .Latest}}{{template "w-kills-list" $}}{{end}}</div>
+{{with .Systems}}<div class="w-aside"><h4 class="w-sub">Where you kill most</h4>{{template "w-rank" .}}</div>{{end}}
+{{if .Battles}}<div class="w-aside"><h4 class="w-sub">Your recent battles</h4><ul class="kl-battles" data-w-fit>{{range .Battles}}<li><a href="{{.Href}}">{{.Where}}</a> <small>{{.When}}</small><span class="kl-battle-figs">{{.Kills}} killed, {{.Losses}} lost{{if .Outcome}} · {{.Outcome}}{{end}}</span></li>{{end}}</ul></div>{{end}}
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* The efficiency over the window, with the kills and losses behind
+     it as a meter of ISK destroyed against ISK lost. */}}
+{{define "w-kills-lead"}}<div class="kl-lead">
+<div class="w-lead">
+  <span class="w-lead-label">ISK efficiency, {{.Window}}</span>
+  <span class="w-lead-value"{{if .Efficiency}} title="{{.Killed}} ISK destroyed, {{.Lost}} ISK lost"{{end}}>{{if .Efficiency}}{{.Efficiency}}{{else}}<small>No ISK valued yet</small>{{end}}</span>
+  <span class="w-lead-sub">{{.Kills}} {{.KillWord}}, {{.Losses}} {{.LossWord}}</span>
+</div>
+{{if .Efficiency}}<span class="l-meter w-meter kl-meter {{.Tone}}" title="{{.Killed}} ISK destroyed, {{.Lost}} ISK lost"><span data-w="{{printf "%.1f" .Pct}}"></span></span>{{end}}
+</div>{{end}}
+
+{{define "w-kills-tile"}}<div class="l-stat w-tile">
+  <span class="l-stat-label">Last {{.Window}}</span>
+  <span class="l-stat-value">{{if .Efficiency}}{{.Efficiency}} <small>ISK efficiency</small>{{else}}<small>No ISK valued yet</small>{{end}}</span>
+  <span class="l-stat-sub">{{.Kills}} {{.KillWord}}{{with .Killed}} ({{.}} ISK){{end}}, {{.Losses}} {{.LossWord}}{{with .Lost}} ({{.}} ISK){{end}}</span>
+  {{if .Efficiency}}<span class="l-meter w-meter kl-meter {{.Tone}}" aria-hidden="true"><span data-w="{{printf "%.1f" .Pct}}"></span></span>{{end}}
+</div>{{end}}
+
+{{/* The latest kills and losses (given the card); losses carry the bad
+     edge. */}}
+{{define "w-kills-list"}}<ul class="kl-list" data-w-fit>{{range .Data.Latest}}<li class="{{if .Lost}}kl-loss{{end}}">
+  <a class="kl-ship" href="{{.Href}}">{{.Ship}}</a>
+  <span class="kl-value">{{if .Value}}{{.Value}}{{end}}</span>
+  <small class="kl-where">{{if .Lost}}Lost in {{else}}Killed in {{end}}{{systemLink .SystemID .System}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}</small>
+  <small class="kl-ago" title="{{.At}}">{{.Ago}}</small>
+</li>{{end}}</ul>{{end}}

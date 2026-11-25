@@ -1026,6 +1026,74 @@ func (q *Queries) ListKillsForFight(ctx context.Context, arg ListKillsForFightPa
 	return items, nil
 }
 
+const listRecentBattleFightsByUser = `-- name: ListRecentBattleFightsByUser :many
+SELECT id, user_id, character_id, listener, session_file, started_at, ended_at, system_id, system_from, hull_type_id, hull_from, damage_out, damage_in, reps_out, reps_in, cap_in, peak_in_dps, peak_in_at, pilots, kills, losses, isk_destroyed, isk_lost, outcome, spark_out, spark_in, lines, unparsed, share_token, shared, received_at, correlated_at, merge_digest, merge_dirty_seq FROM battle_fights
+WHERE user_id = $1
+ORDER BY started_at DESC
+LIMIT $2::int
+`
+
+type ListRecentBattleFightsByUserParams struct {
+	UserID   int64 `json:"user_id"`
+	RowLimit int32 `json:"row_limit"`
+}
+
+// An account's newest fights, a few at most.
+func (q *Queries) ListRecentBattleFightsByUser(ctx context.Context, arg ListRecentBattleFightsByUserParams) ([]BattleFight, error) {
+	rows, err := q.db.Query(ctx, listRecentBattleFightsByUser, arg.UserID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BattleFight
+	for rows.Next() {
+		var i BattleFight
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.CharacterID,
+			&i.Listener,
+			&i.SessionFile,
+			&i.StartedAt,
+			&i.EndedAt,
+			&i.SystemID,
+			&i.SystemFrom,
+			&i.HullTypeID,
+			&i.HullFrom,
+			&i.DamageOut,
+			&i.DamageIn,
+			&i.RepsOut,
+			&i.RepsIn,
+			&i.CapIn,
+			&i.PeakInDps,
+			&i.PeakInAt,
+			&i.Pilots,
+			&i.Kills,
+			&i.Losses,
+			&i.IskDestroyed,
+			&i.IskLost,
+			&i.Outcome,
+			&i.SparkOut,
+			&i.SparkIn,
+			&i.Lines,
+			&i.Unparsed,
+			&i.ShareToken,
+			&i.Shared,
+			&i.ReceivedAt,
+			&i.CorrelatedAt,
+			&i.MergeDigest,
+			&i.MergeDirtySeq,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockBattleFightForCorrelation = `-- name: LockBattleFightForCorrelation :one
 SELECT received_at FROM battle_fights WHERE id = $1 FOR UPDATE
 `

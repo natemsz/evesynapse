@@ -48,3 +48,42 @@ SELECT id, kind, system_id, created_at FROM scans
 WHERE user_id = sqlc.arg(user_id) AND system_id > 0
 ORDER BY created_at DESC
 LIMIT 200;
+
+-- The newest kills and losses of some characters, each killmail once:
+-- the newest row_limit of each character's feed, merged. A loss is a
+-- kill whose victim is one of the characters.
+-- name: ListAccountLatestKills :many
+SELECT k.killmail_id, k.killmail_time, k.system_id, k.ship_type_id, k.victim_character_id,
+       COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk,
+       (k.victim_character_id = ANY(sqlc.arg(character_ids)::bigint[])) AS lost
+FROM (
+    SELECT DISTINCT f.killmail_id
+    FROM unnest(sqlc.arg(character_ids)::bigint[]) AS c(id)
+    CROSS JOIN LATERAL (
+        SELECT e.killmail_id FROM kill_entity_feed e
+        WHERE e.kind = 'character' AND e.entity_id = c.id AND c.id > 0
+        ORDER BY e.killmail_time DESC, e.killmail_id DESC
+        LIMIT sqlc.arg(row_limit)::int
+    ) f
+) m
+JOIN kills k ON k.killmail_id = m.killmail_id
+ORDER BY k.killmail_time DESC, k.killmail_id DESC
+LIMIT sqlc.arg(row_limit)::int;
+
+-- name: ListAccountLatestLosses :many
+-- The newest ships the account's characters lost: per character its
+-- newest losses (kills_victim_char_idx), then the newest of those
+-- overall. Same columns as ListAccountLatestKills.
+SELECT k.killmail_id, k.killmail_time, k.system_id, k.ship_type_id, k.victim_character_id,
+       COALESCE(k.value_ours, k.value_zkill, 0)::float8 AS isk,
+       TRUE AS lost
+FROM unnest(sqlc.arg(character_ids)::bigint[]) AS c(id)
+CROSS JOIN LATERAL (
+    SELECT v.killmail_id, v.killmail_time, v.system_id, v.ship_type_id, v.victim_character_id, v.value_ours, v.value_zkill
+    FROM kills v
+    WHERE v.victim_character_id = c.id AND c.id > 0
+    ORDER BY v.killmail_time DESC, v.killmail_id DESC
+    LIMIT sqlc.arg(row_limit)::int
+) k
+ORDER BY k.killmail_time DESC, k.killmail_id DESC
+LIMIT sqlc.arg(row_limit)::int;

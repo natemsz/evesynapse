@@ -1,0 +1,38 @@
+{{/* Ship Replacement: the account's own claims, and the claims waiting
+     for its review at each group it handles them for. Four forms; none
+     reads its size. */}}
+
+{{define "w-srp-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-lead" .Lead}}
+{{if .Waiting}}<p class="srp-review"><a href="{{(index .Review 0).Href}}">{{.Waiting}} waiting for your review</a></p>{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-srp-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Claims}}
+{{template "w-srp-claims" .Claims}}
+{{else if .Review}}{{template "w-srp-review" .Review}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-srp-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{if .Claims}}{{template "w-srp-claims" .Claims}}{{end}}
+{{if .Review}}<div class="srp-review-box"><h4 class="w-sub">Waiting for your review</h4>{{template "w-srp-review" .Review}}</div>{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-srp-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-lead" .Lead}}
+<div class="w-cols">
+<div class="w-rest">{{if .Claims}}<h4 class="w-sub">Your claims</h4>{{template "w-srp-claims" .Claims}}{{else}}<p class="w-quiet"><small>You have no claims.</small></p>{{end}}</div>
+<div class="w-aside"><h4 class="w-sub">Waiting for your review</h4>{{if .Review}}{{template "w-srp-review" .Review}}{{else}}<p class="w-quiet"><small>Nothing waits for you.</small></p>{{end}}</div>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-srp-claims"}}<ul class="srp-claims" data-w-fit>{{range .}}<li>
+  <a class="srp-ship" href="{{.Href}}">{{.Ship}}</a>
+  <span class="srp-state {{.Tone}}">{{.State}}</span>
+  <small class="srp-pay">{{if .Pay}}{{.Pay}} ISK{{if .Suggests}} suggested{{end}}{{end}}</small>
+  <small class="srp-ago">{{.Ago}}</small>
+</li>{{end}}</ul>{{end}}
+
+{{define "w-srp-review"}}<ul class="srp-owners" data-w-fit>{{range .}}<li>
+  <a href="{{.Href}}">{{.Name}}</a>
+  <span>{{.Open}} waiting{{if .Owed}}, {{.OwedText}} ISK suggested{{end}}</span>
+</li>{{end}}</ul>{{end}}

@@ -69,6 +69,27 @@ func (q *Queries) CountOpenSRPRequests(ctx context.Context, arg CountOpenSRPRequ
 	return i, err
 }
 
+const countOpenSRPRequestsByUser = `-- name: CountOpenSRPRequestsByUser :one
+SELECT COUNT(*)::bigint AS requests,
+       COALESCE(SUM(suggested_payout) FILTER (WHERE suggested_payout > 0), 0)::double precision AS suggested
+FROM srp_requests
+WHERE user_id = $1::bigint AND status = 'open'
+`
+
+type CountOpenSRPRequestsByUserRow struct {
+	Requests  int64   `json:"requests"`
+	Suggested float64 `json:"suggested"`
+}
+
+// An account's open claims and the payouts suggested for them, over
+// all of its claims (lists of them show only the newest).
+func (q *Queries) CountOpenSRPRequestsByUser(ctx context.Context, userID int64) (CountOpenSRPRequestsByUserRow, error) {
+	row := q.db.QueryRow(ctx, countOpenSRPRequestsByUser, userID)
+	var i CountOpenSRPRequestsByUserRow
+	err := row.Scan(&i.Requests, &i.Suggested)
+	return i, err
+}
+
 const createSRPPolicy = `-- name: CreateSRPPolicy :one
 INSERT INTO srp_policies (owner_kind, owner_id, name, mode, percent, max_payout, requires_doctrine,
                           requires_attendance, claim_window_hours, ledger_visibility, policy_text,

@@ -1,22 +1,48 @@
-{{define "w-pi-all"}}{{$cap := .Cap}}
-{{with .Data}}
-{{if .Any}}
-<p><small>{{.Colonies}} colon{{if eq .Colonies 1}}y{{else}}ies{{end}} across your characters{{if .Expired}} · {{.Expired}} extractor{{if ne .Expired 1}}s{{end}} expired{{end}} · <a href="/planets/">colonies</a></small></p>
-{{if .Soonest}}
-<p data-w-detail><input type="search" id="{{$.Uid "filter"}}" placeholder="Filter by character or planet…" aria-label="Filter planetary industry" data-table-filter="{{$.Uid "table"}}" data-row-class="pi-row"></p>
-<div class="tw">
-<table id="{{$.Uid "table"}}">
-  <thead><tr><th>Character</th><th>Planet</th><th>Extractor</th></tr></thead>
-  <tbody data-w-fit>
-  {{range $i, $r := .Soonest}}<tr class="pi-row" data-search="{{.Search}}"{{if ge $i $cap}} data-w-over{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{.Planet}}</td><td>{{if gt .Count 1}}{{.Count}} extractors {{end}}{{if .Expired}}expired {{end}}{{.Expires}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
-  </tbody>
-</table>
-</div>
-{{else}}
-<p><small>No extractor timers yet.</small></p>
-{{end}}
-{{else}}
-<p><small>Colonies appear here once your characters have synced.</small></p>
-{{end}}
-{{end}}
-{{end}}
+{{/* Planetary Industry: extractor stops across the characters, on the
+     kit. The track puts each planet on a three-day line; the list
+     reads the same planets soonest first. */}}
+
+{{define "w-pi-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+<div class="w-pi-lead {{if .Expired}}w-pi-stopped{{end}}">{{template "w-lead" .Lead}}</div>
+{{with .Next}}{{template "w-pi-next" .}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-pi-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{if .Any}}
+<div class="w-side"><div class="w-pi-lead {{if .Expired}}w-pi-stopped{{end}}">{{template "w-lead" .Lead}}</div>{{with .Next}}{{template "w-pi-next" .}}{{end}}</div>
+{{with .Track}}{{template "w-pi-track" .}}{{else}}{{template "w-empty" .Empty}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-pi-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{if .Soonest}}<p data-w-detail><input type="search" id="{{$.Uid "filter"}}" placeholder="Filter by character or planet" aria-label="Filter planetary industry" data-table-filter="{{$.Uid "table"}}" data-row-class="pi-row"></p>
+{{template "w-pi-rows" $}}{{else}}{{template "w-empty" .Empty}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-pi-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{with .Track}}{{template "w-pi-track" .}}{{end}}
+{{if .Soonest}}{{template "w-pi-rows" $}}{{else}}{{template "w-empty" .Empty}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-pi-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{with .Track}}{{template "w-pi-track" .}}{{end}}
+{{if .Groups}}<div class="w-pi-groups">{{range $g := .Groups}}<div class="w-pi-group"><h4 class="w-sub">{{charLink $.ViewerChars .CharID .Char}}</h4><ul class="w-pi-rows" data-w-fit>{{range .Rows}}<li class="pi-row">{{template "w-pi-row" .}}</li>{{end}}</ul></div>{{end}}</div>{{else}}{{template "w-empty" .Empty}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* The planet list (given the card), soonest stop first, with the
+     filter's row marks. */}}
+{{define "w-pi-rows"}}{{$w := .}}<ul id="{{.Uid "table"}}" class="w-pi-rows" data-w-fit>{{range $i, $r := .Data.Soonest}}<li class="pi-row" data-search="{{.Search}}"{{if ge $i $w.Cap}} data-w-over{{end}}>{{template "w-pi-row" .}}<small class="w-pi-char">{{charLink $w.ViewerChars .CharID .Char}}</small></li>{{end}}</ul>{{end}}
+
+{{/* One planet: its name, how many extractors stop together, when,
+     and how far the run has gone (when the layout says when it
+     started). */}}
+{{define "w-pi-row"}}<span class="w-pi-planet">{{.Planet}}{{if gt .Count 1}} <small>{{.Count}} extractors</small>{{end}}</span>{{if .Expired}}<span class="w-pi-when bad" title="Stopped {{.Expires}}">Stopped</span>{{else}}<span class="w-pi-when {{.Tone}} countdown" data-finish="{{.ExpiresRaw}}" title="Stops {{.Expires}}">{{.Left}}</span>{{end}}{{if .HasCycle}}<span class="l-meter w-meter w-pi-cycle {{.Tone}}" title="{{printf "%.0f" .CyclePct}}% of this run done"><span data-w="{{printf "%.1f" .CyclePct}}"></span></span>{{end}}{{end}}
+
+{{define "w-pi-next"}}<p class="w-pi-next"><span class="w-pi-next-label">Next to stop</span> {{.Planet}} <span class="countdown" data-finish="{{.ExpiresRaw}}" title="{{.Expires}}">{{.Left}}</span></p>{{end}}
+
+{{/* The three-day track: one mark per planet, stopped ones at the
+     left edge, a legend for the states it shows, and its table twin. */}}
+{{define "w-pi-track"}}<figure class="w-pi-track">
+<figcaption class="w-legend">{{range .Tones}}<span class="w-key"><span class="w-pi-dot w-pi-{{or .Tone "ok"}}" aria-hidden="true"></span>{{.Name}}</span>{{end}}</figcaption>
+<div class="w-pi-line" aria-hidden="true"><span class="w-pi-day" data-left="33.3"></span><span class="w-pi-day" data-left="66.7"></span>{{range .Marks}}<span class="w-pi-mark w-pi-{{or .Tone "ok"}}" data-left="{{printf "%.1f" .Left}}" data-top="{{printf "%.0f" .Top}}" title="{{.Label}}"></span>{{end}}</div>
+<div class="w-xticks w-pi-ticks" aria-hidden="true">{{range .Ticks}}<span class="w-x-{{.Anchor}}" data-left="{{printf "%.1f" .Pos}}">{{.Label}}</span>{{end}}</div>
+{{template "w-twin" .Table}}
+</figure>{{end}}

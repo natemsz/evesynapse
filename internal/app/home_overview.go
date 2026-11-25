@@ -629,22 +629,6 @@ type kpiTrend struct {
 	Since string // the span compared: "7 days"
 }
 
-type industryRow struct {
-	Char     string
-	CharID   int64
-	Activity string
-	Name     string
-	TypeID   int64
-	Ends     string
-	Left     string
-}
-
-type industryWidget struct {
-	Rows       []industryRow
-	ActiveJobs int
-	ReadyJobs  int
-}
-
 type marketExpiry struct {
 	Char    string
 	CharID  int64
@@ -687,30 +671,6 @@ type marketWidget struct {
 	Expiring    []marketExpiry
 	PerChar     []marketCharRow
 	Health      string // One-liner: undercuts + watchlist moves, "" when quiet
-}
-
-// piExpiryLine is one extractor deadline in the PI widget.
-// Search is the client-side filter text (character, planet,
-// expiry state); the generic table filter in app.js matches it
-// with no page reload.
-type piExpiryLine struct {
-	Char    string
-	CharID  int64
-	Planet  string
-	Expires string
-	Left    string // "in 2d 3h", "" once expired
-	Expired bool
-	Search  string
-	// Count is how many extractors on the planet share this deadline
-	// (to the minute): one row for them all.
-	Count int
-}
-
-type piWidget struct {
-	Any      bool // any colonies data at all
-	Colonies int
-	Expired  int
-	Soonest  []piExpiryLine
 }
 
 // orderExpiry computes an order's expiry from ESI's issued +
@@ -989,78 +949,6 @@ func (app *Application) attachNetWorthSpark(ctx context.Context, w *netWorthWidg
 	}
 }
 
-func (app *Application) buildIndustry(ctx context.Context, bundles []*charSnaps) *industryWidget {
-	now := time.Now()
-	// Product/blueprint names resolve in one batched pass.
-	var ids []int64
-	for _, b := range bundles {
-		for _, j := range b.jobs {
-			if j.ProductTypeID > 0 {
-				ids = append(ids, j.ProductTypeID)
-			}
-			ids = append(ids, j.BlueprintTypeID)
-		}
-	}
-	names := app.esi.CachedTypeNames(ctx, ids)
-	nameFor := func(id int64) string {
-		if name, ok := names[id]; ok && name != "" {
-			return name
-		}
-		return fmt.Sprintf("Type #%d", id)
-	}
-
-	type pending struct {
-		row industryRow
-		end time.Time
-	}
-	var pendingRows []pending
-	w := &industryWidget{}
-	for _, b := range bundles {
-		if !b.jobsKnown {
-			continue
-		}
-		for _, j := range b.jobs {
-			switch j.Status {
-			case "ready":
-				w.ReadyJobs++
-			case "active", "paused":
-				w.ActiveJobs++
-				end, ok := parseRFC3339(j.EndDate)
-				if !ok {
-					continue
-				}
-				nameID := j.ProductTypeID
-				if nameID == 0 {
-					nameID = j.BlueprintTypeID
-				}
-				pendingRows = append(pendingRows, pending{
-					row: industryRow{
-						Char:     b.ch.Name,
-						CharID:   b.ch.CharacterID,
-						Activity: industryActivityLabel(j.ActivityID),
-						Name:     nameFor(nameID),
-						TypeID:   nameID,
-						Ends:     formatFinish(j.EndDate),
-						Left:     humanDuration(time.Until(end)),
-					},
-					end: end,
-				})
-			}
-		}
-	}
-	sort.SliceStable(pendingRows, func(i, j int) bool {
-		return pendingRows[i].end.Before(pendingRows[j].end)
-	})
-	for i, p := range pendingRows {
-		if i >= 8 {
-			break
-		}
-		_ = now
-		w.Rows = append(w.Rows, p.row)
-	}
-	return w
-}
-
 // buildMarket assembles the orders widget over the characters its
 // scope setting covers, read the way its show setting says: combined
 // totals, a row per character, or both. One character has nothing to
@@ -1207,75 +1095,6 @@ func (app *Application) marketHealthLine(ctx context.Context, shared *homeMarket
 		parts = append(parts, fmt.Sprintf("watchlist: %d moving", moving))
 	}
 	return strings.Join(parts, " · ")
-}
-
-// buildPI assembles the planetary-industry widget: colonies
-// across the fleet, how many extractor heads have stopped, and
-// the soonest extractor deadlines (expired first, most overdue
-// leading). Deadlines come from layout expiry fields only,
-// fixed at install time, the one PI number ESI keeps honest.
-func (app *Application) buildPI(ctx context.Context, bundles []*charSnaps) *piWidget {
-	now := time.Now()
-	w := &piWidget{}
-	type pending struct {
-		row piExpiryLine
-		at  time.Time
-	}
-	var pendingRows []pending
-	grouped := map[string]int{}
-	for _, b := range bundles {
-		if !b.planetsKnown {
-			continue
-		}
-		w.Any = true
-		w.Colonies += len(b.colonies)
-		for _, colony := range b.colonies {
-			layout := b.layouts[colony.PlanetID]
-			if layout == nil {
-				continue
-			}
-			planet := app.planetDisplayName(ctx, colony.PlanetID)
-			for _, ex := range layoutExtractors(*layout) {
-				if !ex.ExpiryOK {
-					continue
-				}
-				row := piExpiryLine{
-					Char:    b.ch.Name,
-					CharID:  b.ch.CharacterID,
-					Planet:  planet,
-					Expires: formatFinish(ex.Expiry.UTC().Format(time.RFC3339)),
-				}
-				if ex.Expiry.Before(now) {
-					row.Expired = true
-					w.Expired++
-					row.Search = b.ch.Name + " " + planet + " expired"
-				} else {
-					row.Left = "in " + humanDuration(time.Until(ex.Expiry))
-					row.Search = b.ch.Name + " " + planet
-				}
-				row.Count = 1
-				// Extractors on one planet installed together end together:
-				// one row with a count rather than one row each.
-				key := fmt.Sprintf("%d|%d|%d", b.ch.CharacterID, colony.PlanetID, ex.Expiry.Unix()/60)
-				if i, seen := grouped[key]; seen {
-					pendingRows[i].row.Count++
-					continue
-				}
-				grouped[key] = len(pendingRows)
-				pendingRows = append(pendingRows, pending{row: row, at: ex.Expiry})
-			}
-		}
-	}
-	sort.SliceStable(pendingRows, func(i, j int) bool {
-		return pendingRows[i].at.Before(pendingRows[j].at)
-	})
-	for i, p := range pendingRows {
-		if i >= 5 {
-			break
-		}
-		w.Soonest = append(w.Soonest, p.row)
-	}
-	return w
 }
 
 // ---------------------------------------------------------------------------

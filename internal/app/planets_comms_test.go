@@ -201,7 +201,7 @@ func TestPlanetsPagesRenderFromSnapshots(t *testing.T) {
 	}
 	mustContain(t, "/ (PI widget + fleet)", body,
 		"Planetary Industry",
-		"2 colonies across your characters", "1 extractor expired",
+		`title="Stopped `, "Stopped</span>",
 		"3 unread",
 	)
 	if got := transport.calls.Load(); got != before {

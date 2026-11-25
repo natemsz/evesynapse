@@ -398,16 +398,12 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 	}
 
 	bb := &briefingBuilder{
-		app:    app,
-		since:  since,
-		now:    now,
-		viewer: viewer,
-		seen:   map[string]bool{},
-		// Industry slot bases need the four slot skills' type IDs,
-		// resolved from the local static data by name (type IDs are
-		// CCP's to change; names are how the skill catalog speaks).
-		slotSkillIDs: app.slotSkillIDs(ctx),
-		groupAt:      briefingGroupThreshold(len(bundles)),
+		app:     app,
+		since:   since,
+		now:     now,
+		viewer:  viewer,
+		seen:    map[string]bool{},
+		groupAt: briefingGroupThreshold(len(bundles)),
 	}
 	for _, b := range bundles {
 		prefix := string(briefCharLink(viewer, b.ch.CharacterID, b.ch.Name))
@@ -698,8 +694,7 @@ type briefingBuilder struct {
 	app        *Application
 	since, now time.Time
 	// viewer is the account's own characters, for name links.
-	viewer       map[int64]bool
-	slotSkillIDs map[string]int64
+	viewer map[int64]bool
 
 	lines []briefingLine
 	seen  map[string]bool
@@ -839,15 +834,13 @@ func (bb *briefingBuilder) skillLines(ctx context.Context, b *charSnaps, prefix 
 
 // industryLines: finished jobs waiting for delivery, and idle slots.
 func (bb *briefingBuilder) industryLines(ctx context.Context, b *charSnaps, prefix string) {
-	app, since, now, slotSkillIDs := bb.app, bb.since, bb.now, bb.slotSkillIDs
+	app, since, now := bb.app, bb.since, bb.now
 	if b.jobsKnown {
 		readyN := 0
 		var readyAt time.Time
 		var readyItem template.HTML
-		activeManuf, activeResearch := 0, 0
 		for _, j := range b.jobs {
-			switch j.Status {
-			case "ready":
+			if j.Status == "ready" {
 				done, ok := industryDoneAt(j)
 				if ok && !done.Before(since) && !done.After(now) {
 					readyN++
@@ -859,13 +852,6 @@ func (bb *briefingBuilder) industryLines(ctx context.Context, b *charSnaps, pref
 						}
 						readyItem = itemLink(nameID, app.typeNameOrID(ctx, nameID))
 					}
-				}
-			case "active", "paused":
-				switch j.ActivityID {
-				case 1, 11:
-					activeManuf++
-				case 2, 3, 4, 5, 8:
-					activeResearch++
 				}
 			}
 		}
@@ -880,15 +866,14 @@ func (bb *briefingBuilder) industryLines(ctx context.Context, b *charSnaps, pref
 		}
 
 		if b.skillsKnown && len(b.jobs) > 0 {
-			levels := briefingSkillLevels(b.skills)
-			manufMax := 1 + levels[slotSkillIDs["Mass Production"]] + levels[slotSkillIDs["Advanced Mass Production"]]
-			researchMax := 1 + levels[slotSkillIDs["Laboratory Operation"]] + levels[slotSkillIDs["Advanced Laboratory Operation"]]
-			if idle := manufMax - activeManuf; idle > 0 {
+			have, used := slotMaxFor(briefingSkillLevels(b.skills)), slotsUsed(b.jobs, now)
+			manufMax, researchMax := have[slotManufacturing], have[slotScience]
+			if idle := manufMax - used[slotManufacturing]; idle > 0 {
 				bb.add(briefingKey(b.ch.CharacterID, "idle-manufacturing"), briefingIdleSlots, time.Time{},
 					template.HTML(fmt.Sprintf("%s has %d of %d manufacturing slots idle. <a href=\"/industry/jobs/?character=%d&view=1\">My Jobs</a>", prefix, idle, manufMax, b.ch.CharacterID)),
 					fmt.Sprintf("/industry/jobs/?character=%d&view=1", b.ch.CharacterID))
 			}
-			if idle := researchMax - activeResearch; idle > 0 {
+			if idle := researchMax - used[slotScience]; idle > 0 {
 				bb.add(briefingKey(b.ch.CharacterID, "idle-research"), briefingIdleSlots, time.Time{},
 					template.HTML(fmt.Sprintf("%s has %d of %d research slots idle. <a href=\"/industry/jobs/?character=%d&view=1\">My Jobs</a>", prefix, idle, researchMax, b.ch.CharacterID)),
 					fmt.Sprintf("/industry/jobs/?character=%d&view=1", b.ch.CharacterID))

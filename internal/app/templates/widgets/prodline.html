@@ -1,23 +1,48 @@
-{{define "w-prodline-all"}}{{$cap := .Cap}}
-{{with .Data}}
-{{if not .HasPins}}
-<p class="wempty"><small>No pinned lines yet. Pin a blueprint from your <a href="/industry/">Blueprints</a> and its line shows here.</small></p>
-{{else if not .JobsKnown}}
-<p><small>Job data is still syncing.</small></p>
-{{else}}
-{{if .QuietNote}}<p><small>{{.QuietNote}}</small></p>{{end}}
-{{if .Lines}}
-<ul class="prodline-lines" data-w-fit>
-{{range $i, $r := .Lines}}<li{{if ge $i $cap}} data-w-over{{end}}><div class="prodline-line">{{if .Art}}<img class="prodline-art" src="{{.Art}}"{{if .ArtFallback}} data-fallback-src="{{.ArtFallback}}"{{end}} alt="" width="40" height="40" loading="lazy">{{end}}<div class="prodline-main"><div class="prodline-top"><span class="prodline-prod">{{if .ProductTypeID}}{{itemLink .ProductTypeID .Product}}{{else}}{{.Product}}{{end}}</span> <span class="prodline-chip prodline-{{.State}}">{{.Chip}}</span></div>{{if .HasBar}}<div class="meter prodline-meter prodline-meter-{{.State}}"><span data-w="{{.BarPct}}"></span></div>{{end}}{{if .BarLabel}}<div class="prodline-barlabel">{{.BarLabel}}</div>{{end}}{{if .Runner}}<small class="prodline-runner">{{.Runner}}</small>{{end}}{{if .Missing}}<ul class="prodline-missing">{{range .Missing}}<li class="prodline-buyrow">{{if .Art}}<img class="prodline-buyart" src="{{.Art}}" alt="" width="24" height="24" loading="lazy">{{end}}<span class="prodline-buyname">{{.Name}}</span> <span class="prodline-qty">{{.Qty}}</span></li>{{end}}</ul>{{end}}</div></div></li>{{end}}
-</ul>
-{{end}}
-{{if and .ShowBuy .Buy}}
-<h4>Buy for the next run</h4>
-<ul class="prodline-buy" data-w-fit>
-{{range .Buy}}<li class="prodline-buyrow">{{if .Art}}<img class="prodline-buyart" src="{{.Art}}" alt="" width="24" height="24" loading="lazy">{{end}}<span class="prodline-buyname">{{.Name}}</span> <span class="prodline-qty">{{.Qty}}</span></li>{{end}}
-</ul>
-<p><small>One run of each due or idle line, less what your characters already hold.</small></p>
-{{end}}
-{{end}}
-{{end}}
-{{end}}
+{{/* Production Lines: the pinned blueprints and the state of each
+     line, on the kit. */}}
+
+{{define "w-prodline-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if and .HasPins .JobsKnown}}
+{{template "w-lead" .Lead}}
+{{with .Needing}}{{with index . 0}}<p class="w-pl-first">{{template "w-prodline-art" .}}<span class="w-pl-name">{{template "w-prodline-product" .}}<small>{{.Note}}</small></span></p>{{end}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-prodline-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{if and .HasPins .JobsKnown}}
+{{template "w-lead" .Lead}}
+{{if .Needing}}<ul class="w-pl-chips" data-w-fit>{{range $i, $r := .Needing}}<li{{if ge $i $.Cap}} data-w-over{{end}}>{{template "w-prodline-art" .}}<span class="w-pl-name">{{template "w-prodline-product" .}}<small>{{.Note}}</small></span></li>{{end}}</ul>
+{{else}}<p class="w-pl-quiet">{{.QuietNote}}</p>{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-prodline-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if and .HasPins .JobsKnown}}
+{{template "w-prodline-lines" $}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-prodline-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if and .HasPins .JobsKnown}}
+<div class="w-cols">
+{{template "w-prodline-lines" $}}
+{{template "w-prodline-buy" .}}
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-prodline-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if and .HasPins .JobsKnown}}
+<div class="w-cols">
+{{template "w-prodline-lines" $}}
+{{template "w-prodline-buy" .}}
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-prodline-art"}}{{if .Art}}<img class="prodline-art" src="{{.Art}}"{{if .ArtFallback}} data-fallback-src="{{.ArtFallback}}"{{end}} alt="" width="40" height="40" loading="lazy">{{end}}{{end}}
+{{define "w-prodline-product"}}{{if .ProductTypeID}}{{itemLink .ProductTypeID .Product}}{{else}}{{.Product}}{{end}}{{end}}
+
+{{/* Every line (given the card), attention first: art, state chip,
+     progress bar and timing. The large form adds who runs it and
+     what it is missing. */}}
+{{define "w-prodline-lines"}}{{$w := .}}{{$more := eq .Form "large"}}<div class="prodline-col"><ul class="prodline-lines" data-w-fit>
+{{range $i, $r := .Data.Lines}}<li{{if ge $i $w.Cap}} data-w-over{{end}}><div class="prodline-line">{{template "w-prodline-art" .}}<div class="prodline-main"><div class="prodline-top"><span class="prodline-prod">{{template "w-prodline-product" .}}</span> <span class="prodline-chip prodline-{{.State}}">{{.Chip}}</span></div>{{if .HasBar}}<div class="meter prodline-meter prodline-meter-{{.State}}"><span data-w="{{.BarPct}}"></span></div>{{end}}{{if .BarLabel}}<div class="prodline-barlabel">{{.BarLabel}}</div>{{end}}{{if $more}}{{if .Runner}}<small class="prodline-runner">{{.Runner}}</small>{{end}}{{if .Missing}}<ul class="prodline-missing">{{range .Missing}}{{template "w-prodline-buyrow" .}}{{end}}</ul></div>{{end}}{{end}}</div></div></li>{{end}}
+</ul>{{end}}
+
+{{/* The buy list: one run of each due or idle line, less what the
+     characters hold. */}}
+{{define "w-prodline-buy"}}<div class="w-aside">{{if .Buy}}<h4 class="w-sub">Buy for the next run</h4>
+<ul class="prodline-buy" data-w-fit>{{range .Buy}}{{template "w-prodline-buyrow" .}}{{end}}</ul>
+{{template "w-note" "One run of each due or idle line, less what your characters already hold."}}{{else}}<h4 class="w-sub">Buy for the next run</h4><p class="w-pl-quiet">{{if .Attention}}Your characters hold what the next runs need.{{else}}{{.QuietNote}}{{end}}</p>{{end}}</div>{{end}}
+{{define "w-prodline-buyrow"}}<li class="prodline-buyrow">{{if .Art}}<img class="prodline-buyart" src="{{.Art}}" alt="" width="24" height="24" loading="lazy">{{end}}<span class="prodline-buyname">{{.Name}}</span> <span class="prodline-qty">{{.Qty}}</span></li>{{end}}

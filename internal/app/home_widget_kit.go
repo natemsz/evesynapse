@@ -636,6 +636,10 @@ type homeShared struct {
 	upkeep      *upkeepWidget // Upkeep
 	fleets      []homeFleet   // Fleets
 	fleetsBuilt bool
+
+	intelID         intelIdentity   // IntelChannels
+	intelChannels   []accessChannel // IntelChannels
+	intelChansBuilt bool
 }
 
 // NetWorth is the account's net worth, built at most once per render:

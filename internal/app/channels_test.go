@@ -241,3 +241,74 @@ func TestIntelFeedAccess(t *testing.T) {
 		t.Errorf("the feed page signed out: %d, want the sign-in redirect", rec.Code)
 	}
 }
+
+// TestHomeRadarShowsOnlyIntelTheFeedShows: the Radar widget lists
+// intel about a pilot's system only from channels the account can
+// read, as the feed's sentence and never the raw paste.
+func TestHomeRadarShowsOnlyIntelTheFeedShows(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, emptyESI{})
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, `INSERT INTO sde_systems (system_id, name, region_id, security) VALUES
+		(30000142, 'Jita', 10000002, 0.946) ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	const corp = int64(98000101)
+	member := func(charID int64, name string) (int64, *http.Cookie) {
+		u, err := q.CreateUser(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seedCharacter(t, q, u.ID, charID, name)
+		if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{CharacterID: charID, CorporationID: corp, UpdatedAt: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+		seedSnapshot(t, q, charID, esi.SnapLocation, esi.Location{SolarSystemID: 30000142})
+		if _, err := conn.ExecContext(ctx, `UPDATE users SET home_layout = '[{"id":"local","w":2,"h":2}]' WHERE id = $1`, u.ID); err != nil {
+			t.Fatal(err)
+		}
+		return u.ID, sessionCookie(t, app, u.ID, charID, name)
+	}
+	ownerID, owner := member(90000101, "Channel Owner")
+	_, mate := member(90000102, "Corp Mate")
+	for _, name := range []string{"Home intel", "Secret intel"} {
+		req := httptest.NewRequest(http.MethodPost, "/intel/channels/create", strings.NewReader(url.Values{"name": {name}}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Requested-With", "XMLHttpRequest")
+		req.AddCookie(owner)
+		app.Handler().ServeHTTP(httptest.NewRecorder(), req)
+	}
+	chans, err := q.ListAccessibleChannels(ctx, db.ListAccessibleChannelsParams{UserID: ownerID, CharacterIds: []int64{}, CorporationIds: []int64{}, AllianceIds: []int64{}, GroupIds: []int64{}})
+	if err != nil || len(chans) != 2 {
+		t.Fatalf("the owner's channels: %+v %v", chans, err)
+	}
+	for _, c := range chans {
+		if c.Name == "Home intel" {
+			if err := q.UpsertIntelChannelGrant(ctx, db.UpsertIntelChannelGrantParams{ChannelID: c.ID, Kind: "corporation", TargetID: corp, CreatedAt: time.Now()}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		req := httptest.NewRequest(http.MethodPost, "/intel/channels/"+strconv.FormatInt(c.ID, 10)+"/report",
+			strings.NewReader(url.Values{"system": {"Jita"}, "text": {strings.Fields(c.Name)[0] + " Guy"}}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Requested-With", "XMLHttpRequest")
+		req.AddCookie(owner)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("report to %s: %d %s", c.Name, rec.Code, rec.Body.String())
+		}
+	}
+	_, body := getPage(t, app, mate, "/home/widget/local")
+	if !strings.Contains(body, "Home intel") || !strings.Contains(body, "1 in local") {
+		t.Errorf("the mate's widget leaves out the granted channel's report on their system: %s", body)
+	}
+	if strings.Contains(body, "Secret intel") {
+		t.Error("the mate's widget shows a report from a channel the feed hides from them")
+	}
+	if strings.Contains(body, "Home Guy") {
+		t.Error("the widget shows the raw paste instead of the report's sentence")
+	}
+	if _, body := getPage(t, app, owner, "/home/widget/local"); !strings.Contains(body, "Secret intel") {
+		t.Error("the owner's widget leaves out their own channel's report")
+	}
+}

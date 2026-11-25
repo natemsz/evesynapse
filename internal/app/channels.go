@@ -439,6 +439,19 @@ func (app *Application) channelReports(ctx context.Context, id intelIdentity, ch
 		logging.Warnf("channels: reports of %d: %v", channelID, err)
 		return nil
 	}
+	feed := make([]db.ListIntelReportsAcrossChannelsRow, len(rows))
+	for i, r := range rows {
+		feed[i] = db.ListIntelReportsAcrossChannelsRow(r)
+	}
+	return app.reportViewsOf(ctx, id, feed, nil)
+}
+
+// reportViewsOf turns stored reports into the cards the feed shows,
+// in the order given. A grouped report's card speaks for its group:
+// the composite's headline and counts, not its own alone. channelNames
+// names each card's channel; nil leaves the names off (one channel's
+// own page).
+func (app *Application) reportViewsOf(ctx context.Context, id intelIdentity, rows []db.ListIntelReportsAcrossChannelsRow, channelNames map[int64]string) []reportView {
 	names := app.newKillNames(ctx)
 	now := time.Now()
 	var groupIDs []int64
@@ -451,14 +464,12 @@ func (app *Application) channelReports(ctx context.Context, id intelIdentity, ch
 	gangs := app.gangsForGroups(ctx, groupIDs)
 	out := make([]reportView, 0, len(rows))
 	for _, r := range rows {
-		rv := reportView{ID: r.ID, Channel: r.ChannelID, SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
+		rv := reportView{ID: r.ID, Channel: r.ChannelID, ChName: channelNames[r.ChannelID], SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
 			Hostiles: r.Hostiles, Clear: r.Clear, ScanID: r.ScanID, Source: r.Source, At: r.SeenAt.Unix(), Time: r.SeenAt,
 			Ago: ageText(now, r.SeenAt), Mine: r.AuthorUserID == id.userID}
 		sys := names.system(r.SystemID)
 		rv.SystemName = sys.Name
 		rv.SecText, rv.SecTier = secRound(sys.Security)
-		// A grouped report's card speaks for its group: the
-		// composite's headline and counts, not its own alone.
 		if comp, ok := comps[r.GroupID]; ok && len(comp.Members) > 1 {
 			app.applyCompositeCard(ctx, &rv, r.Kind, comp, names)
 		} else {
@@ -574,35 +585,7 @@ func (app *Application) feedReports(ctx context.Context, id intelIdentity, chann
 		logging.Warnf("channels: feed reports: %v", err)
 		return nil
 	}
-	names := app.newKillNames(ctx)
-	now := time.Now()
-	var groupIDs []int64
-	for _, r := range rows {
-		if r.GroupID > 0 {
-			groupIDs = append(groupIDs, r.GroupID)
-		}
-	}
-	comps := app.groupCompositesFor(ctx, groupIDs)
-	gangs := app.gangsForGroups(ctx, groupIDs)
-	out := make([]reportView, 0, len(rows))
-	for _, r := range rows {
-		rv := reportView{ID: r.ID, Channel: r.ChannelID, ChName: namesByID[r.ChannelID], SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
-			Hostiles: r.Hostiles, Clear: r.Clear, ScanID: r.ScanID, Source: r.Source, At: r.SeenAt.Unix(), Time: r.SeenAt,
-			Ago: ageText(now, r.SeenAt), Mine: r.AuthorUserID == id.userID}
-		sys := names.system(r.SystemID)
-		rv.SystemName = sys.Name
-		rv.SecText, rv.SecTier = secRound(sys.Security)
-		if comp, ok := comps[r.GroupID]; ok && len(comp.Members) > 1 {
-			app.applyCompositeCard(ctx, &rv, r.Kind, comp, names)
-		} else {
-			applyAnalysis(&rv, r.Kind, r.Analysis, names)
-		}
-		if g := gangs[r.GroupID]; g.showsAsEvent() {
-			rv.Gang = app.reportGangView(ctx, g, r.SystemID, now)
-		}
-		out = append(out, rv)
-	}
-	return out
+	return app.reportViewsOf(ctx, id, rows, namesByID)
 }
 
 func (app *Application) handleIntelFeed(w http.ResponseWriter, r *http.Request) {

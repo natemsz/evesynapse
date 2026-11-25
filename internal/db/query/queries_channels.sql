@@ -229,6 +229,24 @@ WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
 ORDER BY seen_at DESC, id DESC
 LIMIT sqlc.arg(max_rows)::int;
 
+-- The recent reports about some systems across some channels,
+-- newest first: the home's Radar widget. A report
+-- counts when it is filed under one of the systems, or under
+-- another system with a reading that names one of them as its gate
+-- (gate intel is about both sides, as on the system page). The
+-- caller passes only the channels its reader can access
+-- (accessibleChannels). Same columns as the feed, so its cards
+-- build the same way.
+-- name: ListIntelReportsAboutSystems :many
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, group_id
+FROM intel_reports
+WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
+  AND seen_at >= sqlc.arg(since)::timestamptz
+  AND (system_id = ANY(sqlc.arg(system_ids)::bigint[])
+       OR COALESCE(substring(analysis from '"gate":\s*([0-9]+)')::bigint, 0) = ANY(sqlc.arg(system_ids)::bigint[]))
+ORDER BY seen_at DESC, id DESC
+LIMIT sqlc.arg(max_rows)::int;
+
 -- The feed: reports across some channels, latest seen first -- a
 -- page before a (seen_at, id) key, or everything posted after
 -- after_id (the live feed's poll). The caller passes only the

@@ -1353,6 +1353,93 @@ func (q *Queries) ListIntelReports(ctx context.Context, arg ListIntelReportsPara
 	return items, nil
 }
 
+const listIntelReportsAboutSystems = `-- name: ListIntelReportsAboutSystems :many
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, group_id
+FROM intel_reports
+WHERE channel_id = ANY($1::bigint[])
+  AND seen_at >= $2::timestamptz
+  AND (system_id = ANY($3::bigint[])
+       OR COALESCE(substring(analysis from '"gate":\s*([0-9]+)')::bigint, 0) = ANY($3::bigint[]))
+ORDER BY seen_at DESC, id DESC
+LIMIT $4::int
+`
+
+type ListIntelReportsAboutSystemsParams struct {
+	ChannelIds []int64   `json:"channel_ids"`
+	Since      time.Time `json:"since"`
+	SystemIds  []int64   `json:"system_ids"`
+	MaxRows    int32     `json:"max_rows"`
+}
+
+type ListIntelReportsAboutSystemsRow struct {
+	ID           int64     `json:"id"`
+	ChannelID    int64     `json:"channel_id"`
+	SystemID     int64     `json:"system_id"`
+	AuthorUserID int64     `json:"author_user_id"`
+	Reporter     string    `json:"reporter"`
+	Text         string    `json:"text"`
+	Pilots       string    `json:"pilots"`
+	Hostiles     int32     `json:"hostiles"`
+	Clear        bool      `json:"clear"`
+	ScanID       string    `json:"scan_id"`
+	Source       string    `json:"source"`
+	SeenAt       time.Time `json:"seen_at"`
+	CreatedAt    time.Time `json:"created_at"`
+	Kind         string    `json:"kind"`
+	Analysis     string    `json:"analysis"`
+	GroupID      int64     `json:"group_id"`
+}
+
+// The recent reports about some systems across some channels,
+// newest first: the home's Radar widget. A report
+// counts when it is filed under one of the systems, or under
+// another system with a reading that names one of them as its gate
+// (gate intel is about both sides, as on the system page). The
+// caller passes only the channels its reader can access
+// (accessibleChannels). Same columns as the feed, so its cards
+// build the same way.
+func (q *Queries) ListIntelReportsAboutSystems(ctx context.Context, arg ListIntelReportsAboutSystemsParams) ([]ListIntelReportsAboutSystemsRow, error) {
+	rows, err := q.db.Query(ctx, listIntelReportsAboutSystems,
+		arg.ChannelIds,
+		arg.Since,
+		arg.SystemIds,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIntelReportsAboutSystemsRow
+	for rows.Next() {
+		var i ListIntelReportsAboutSystemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChannelID,
+			&i.SystemID,
+			&i.AuthorUserID,
+			&i.Reporter,
+			&i.Text,
+			&i.Pilots,
+			&i.Hostiles,
+			&i.Clear,
+			&i.ScanID,
+			&i.Source,
+			&i.SeenAt,
+			&i.CreatedAt,
+			&i.Kind,
+			&i.Analysis,
+			&i.GroupID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIntelReportsAcrossChannels = `-- name: ListIntelReportsAcrossChannels :many
 SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, group_id
 FROM intel_reports

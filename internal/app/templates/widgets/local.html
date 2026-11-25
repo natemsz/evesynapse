@@ -1,0 +1,56 @@
+{{/* Radar: the systems the account's pilots are in, with
+     ESI's stored last-hour kills and jumps and the intel the account's
+     channels hold on them. Report lines are the feed's own sentence,
+     never the raw paste. Four forms; none reads its size. */}}
+
+{{define "w-local-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Systems}}
+{{template "w-lead" .Lead}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-local-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Systems}}
+<ul class="ar-list" data-w-fit>{{range .Systems}}<li class="{{if .Kills}}ar-hot{{end}}">
+  {{template "w-local-head" .}}
+  <small class="ar-sub" title="{{.PilotNames}}">{{.PilotsText}}</small>
+  <small class="ar-sub ar-region">{{.System.Region}}</small>
+  {{with .Latest}}{{template "w-local-intel" .}}{{end}}
+</li>{{end}}</ul>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-local-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Systems}}
+<div class="w-cols w-cols-lists">
+<div class="w-rest"><ul class="ar-list" data-w-fit>{{range .Systems}}<li class="{{if .Kills}}ar-hot{{end}}">
+  {{template "w-local-head" .}}
+  <small class="ar-sub" title="{{.PilotNames}}">{{.PilotsText}}</small>
+  <small class="ar-sub ar-region"><a href="{{.MapHref}}">On the map</a></small>
+</li>{{end}}</ul></div>
+<div class="w-aside"><h4 class="w-sub">Intel, last hour</h4>{{template "w-local-reports" .}}</div>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-local-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Systems}}
+<div class="w-cols w-cols-lists">
+<div class="w-rest"><ul class="ar-list" data-w-fit>{{range .Systems}}<li class="{{if .Kills}}ar-hot{{end}}">
+  {{template "w-local-head" .}}
+  <small class="ar-sub ar-pilots">{{range $i, $p := .Pilots}}{{if $i}}, {{end}}<span class="{{if $p.Online}}ar-on{{end}}"{{if $p.Online}} title="Online"{{end}}>{{charLink $.ViewerChars $p.ID $p.Name}}</span>{{end}}</small>
+  <small class="ar-sub ar-region"><a href="{{.MapHref}}">On the map</a></small>
+  {{if .HasStats}}<small class="ar-sub ar-day">Last 24 hours: {{.DayText}}</small>{{end}}
+</li>{{end}}</ul></div>
+<div class="w-aside"><h4 class="w-sub">Intel, last hour</h4>{{template "w-local-reports" .}}</div>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* A system's name, security and last hour. */}}
+{{define "w-local-head"}}<span class="ar-system">{{systemLink .System.Place.SystemID .System.Place.Name}}<span class="sec-pill sec-{{.System.SecTier}}">{{.System.SecText}}</span></span>
+<span class="ar-figs">{{if .HasStats}}<span class="{{if .Kills}}ar-kills{{end}}"{{if .Kills}} title="{{.KillsTitle}}"{{end}}>{{.KillsText}}</span>, {{.JumpsText}}{{else}}No figures yet{{end}}</span>{{end}}
+
+{{/* One report's sentence, linking to its reading, and its age. */}}
+{{define "w-local-intel"}}<a class="ar-intel ar-{{.KindTone}}" href="/intel/workbench/{{.ID}}/">{{if .Text}}{{.Text}}{{else}}{{.KindLabel}}{{end}}</a>
+<small class="ar-ago">{{.Ago}}</small>{{end}}
+
+{{define "w-local-reports"}}{{if .Reports}}<ul class="ar-reports" data-w-fit>{{range .Reports}}<li>
+  {{template "w-local-intel" .}}
+  <small class="ar-sub">{{systemLink .About.Place.SystemID .About.Place.Name}}{{if .Far}}, from {{.SystemName}}{{end}} · <a href="/map/?system={{.About.Place.SystemID}}">Map</a></small>
+  <small class="ar-sub ar-region">{{.ChName}}</small>
+</li>{{end}}</ul>
+{{else if .Channels}}<p class="w-quiet"><small>No intel on these systems in the last hour.</small></p>
+{{else}}<p class="w-quiet"><small>Reports from your intel channels show here. <a href="/intel/channels/">Open Intel Channels</a></small></p>{{end}}{{end}}

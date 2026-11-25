@@ -1009,5 +1009,23 @@
 .sv-alliances, .sv-next { margin: 0; font-size: var(--fs-sm); }
 .sv-alliances small { color: var(--muted); }
 
+/* Radar: systems with kills carry the bad edge; each intel
+   line leads with a dot in its report's tone. */
+.ar-list, .ar-reports { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; min-height: 0; }
+.ar-list > li, .ar-reports > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.5rem; padding: 0.3rem 0 0.3rem 0.6rem; border-bottom: 1px solid var(--hairline); border-left: 2px solid transparent; font-size: var(--fs-sm); }
+.ar-list > li:last-child, .ar-reports > li:last-child { border-bottom: 0; }
+.ar-list > li.ar-hot { border-left-color: var(--v-bad, #ff6b4a); }
+.ar-system, .ar-intel, .ar-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-figs, .ar-region, .ar-ago { text-align: right; white-space: nowrap; }
+.ar-figs { color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.ar-kills { color: var(--v-bad-ink, #ffab8f); }
+.ar-sub, .ar-ago { color: var(--muted); font-size: var(--fs-xs); }
+.ar-day { grid-column: 1 / -1; }
+.ar-intel { color: var(--text-bright); }
+.ar-intel::before, .ar-on::before { content: ""; display: inline-block; width: 0.45em; height: 0.45em; margin-right: 0.4em; border-radius: 50%; vertical-align: middle; background: var(--muted); }
+.ar-intel.ar-loss::before { background: var(--v-bad, #ff6b4a); }
+.ar-intel.ar-wait::before { background: var(--v-warn, #e8b04a); }
+.ar-intel.ar-kill::before, .ar-on::before { background: var(--v-good, #4cc38a); }
+
 /* Undo after a remove in Customize: one line above the grid. */
 .w-undo { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--text); }

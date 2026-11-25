@@ -99,6 +99,20 @@ func (s *homeShared) Fleets(ctx context.Context) []homeFleet {
 	return s.fleets
 }
 
+// IntelChannels is the account's intel identity and the channels it
+// can read, the intel feed's own access check (accessibleChannels), so
+// the home never shows a report the feed would hide.
+func (s *homeShared) IntelChannels(ctx context.Context) (intelIdentity, []accessChannel) {
+	if !s.intelChansBuilt {
+		s.intelChansBuilt = true
+		if s.userID != 0 {
+			s.intelID = s.app.intelIdentityFor(ctx, s.userID, 0)
+			s.intelChannels = s.app.accessibleChannels(ctx, s.intelID)
+		}
+	}
+	return s.intelID, s.intelChannels
+}
+
 // sortFleetsByStart orders fleets by start, running ones first.
 func sortFleetsByStart(fleets []homeFleet) {
 	sort.SliceStable(fleets, func(i, j int) bool { return fleets[i].Op.StartsAt.Before(fleets[j].Op.StartsAt) })

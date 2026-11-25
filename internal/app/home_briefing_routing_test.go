@@ -213,6 +213,7 @@ func TestBriefingCampCard(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	const rancer = int64(30003504)
 	seedCampKills(t, conn, rancer, now)
+	app.refreshMapLayers(ctx) // the worker stores the camp it finds
 	seedOnlineNow(t, q, fixtureCharA, true)
 	if err := app.storeNotifyPrefs(ctx, user.ID, notifyPrefs{CampSystems: []int64{rancer}}); err != nil {
 		t.Fatalf("store prefs: %v", err)
@@ -247,6 +248,7 @@ func TestBriefingCampCardNeedsOnline(t *testing.T) {
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	seedCampKills(t, conn, 30003504, now)
+	app.refreshMapLayers(ctx) // the worker stores the camp it finds
 	seedOnlineNow(t, q, fixtureCharA, false)
 	if err := app.storeNotifyPrefs(ctx, user.ID, notifyPrefs{CampSystems: []int64{30003504}}); err != nil {
 		t.Fatalf("store prefs: %v", err)

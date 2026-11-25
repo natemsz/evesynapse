@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,13 +18,13 @@ func init() {
 	registerHomeWidget(homeWidgetDef{
 		ID: widgetLocal, Title: "Radar", Category: wcatIntel, Feature: "location",
 		Href:        "/map/",
-		Description: "The systems your pilots are in: kills and jumps in the last hour, and the intel your channels have on them.",
+		Description: "The systems your pilots are in: kills and jumps in the last hour, gate camps, and the intel your channels have on them.",
 		Default:     wSize{1, 2},
 		Forms: []homeWidgetForm{
-			{Name: "small", Sizes: "1x1", Says: "How many of your pilots' systems saw kills in the last hour."},
-			{Name: "tall", Sizes: "1x2 1x3 1x4", Says: "Each system with its pilots, last hour's kills and jumps, and the latest intel."},
+			{Name: "small", Sizes: "1x1", Says: "How many of your pilots' systems saw kills in the last hour, and any gate camp."},
+			{Name: "tall", Sizes: "1x2 1x3 1x4", Says: "Each system with its pilots, last hour's kills and jumps, any gate camp, and the latest intel."},
 			{Name: "medium", Sizes: "2x2 2x3", Says: "The systems beside every intel report on them from the last hour."},
-			{Name: "large", Sizes: "3x2 3x3", Says: "Adds each system's pilots by name and its last 24 hours."},
+			{Name: "large", Sizes: "3x2 3x3", Says: "Adds each system's pilots by name, its last 24 hours, and who keeps turning up on a camp's kills."},
 		},
 		Needs:   []string{esi.SnapLocation, esi.SnapOnline},
 		Options: []widgetOption{optScope()},
@@ -64,6 +65,18 @@ type nearSystem struct {
 	Jumps24  int64
 	Latest   *reportView // the newest intel report about the system
 	Reports  int         // intel reports about the system, last hour
+	Camp     *nearCamp   // a gate camp standing in the system
+}
+
+// nearCamp is a gate camp the threat layer found and stored
+// (system_camps): who holds it, how long, and where in the system.
+type nearCamp struct {
+	Group string
+	Href  string // the group on the killboard
+	Kills int32
+	Began string // "34 minutes ago"
+	Where string // "at Perimeter gate", "across the system" or ""
+	Crew  string // the recurring pilots, named
 }
 
 // PilotsText is how many of the account's pilots are in the system, and
@@ -125,7 +138,8 @@ type nearView struct {
 	Lead     wLead
 	Systems  []nearSystem
 	Reports  []nearReport
-	Hot      int  // systems with kills in the last hour
+	Hot      int  // systems with kills in the last hour or a camp standing
+	Camps    int  // systems with a gate camp standing
 	Channels bool // the account can read at least one intel channel
 	Empty    wEmpty
 }
@@ -162,6 +176,18 @@ func buildNearWidget(ctx context.Context, app *Application, in *widgetInput) any
 		return v
 	}
 
+	for id, c := range app.standingCamps(ctx, order, in.Now) {
+		camp := &nearCamp{Group: c.GroupName, Kills: c.Kills, Began: agoText(in.Now.Sub(c.Since)),
+			Href: "/intel/kills/?" + c.GroupKind + "=" + strconv.FormatInt(c.GroupID, 10), Crew: strings.Join(c.Crew, ", ")}
+		switch {
+		case c.Celestial != "":
+			camp.Where = "at " + c.Celestial
+		case c.Spread:
+			camp.Where = "across the system"
+		}
+		bySystem[id].Camp = camp
+	}
+
 	stats, err := app.queries.ListSystemActivityStatsByIDs(ctx, order)
 	if err != nil {
 		logging.Errorf("home: activity around the pilots of user %d: %v", in.UserID, err)
@@ -186,15 +212,21 @@ func buildNearWidget(ctx context.Context, app *Application, in *widgetInput) any
 			}
 			return s.Pilots[i].Name < s.Pilots[j].Name
 		})
-		if s.Kills > 0 {
+		if s.Hot() {
 			v.Hot++
+		}
+		if s.Camp != nil {
+			v.Camps++
 		}
 		v.Systems = append(v.Systems, *s)
 	}
-	// Where the trouble is first: kills, then fresh intel, then where
-	// most of the pilots are.
+	// Where the trouble is first: a gate camp, kills, then fresh
+	// intel, then where most of the pilots are.
 	sort.SliceStable(v.Systems, func(i, j int) bool {
 		a, b := v.Systems[i], v.Systems[j]
+		if (a.Camp != nil) != (b.Camp != nil) {
+			return a.Camp != nil
+		}
 		if a.Kills != b.Kills {
 			return a.Kills > b.Kills
 		}
@@ -212,10 +244,16 @@ func buildNearWidget(ctx context.Context, app *Application, in *widgetInput) any
 
 	of := pluralCount(int64(len(v.Systems)), "system", "systems")
 	v.Lead = wLead{Label: "Systems with kills, last hour", Href: "/map/"}
+	if v.Camps > 0 {
+		v.Lead.Label = "Systems with kills or a camp"
+	}
 	if v.Hot > 0 {
 		v.Lead.Value = thousands(int64(v.Hot))
 		v.Lead.Sub = "of the " + of + " your pilots are in"
 		v.Lead.Full = fmt.Sprintf("%d of the %s your pilots are in saw kills in the last hour", v.Hot, of)
+		if v.Camps > 0 {
+			v.Lead.Sub = campLeadText(v)
+		}
 	} else {
 		v.Lead.Label = "Last hour"
 		v.Lead.Value = "Quiet"
@@ -274,3 +312,19 @@ func (app *Application) nearReports(ctx context.Context, in *widgetInput, v *nea
 		v.Reports = append(v.Reports, nearReport{reportView: rv, About: about.System, Far: far})
 	}
 }
+
+// campLeadText names the gate camps for the small form's sub line.
+func campLeadText(v *nearView) string {
+	if v.Camps == 1 {
+		for _, s := range v.Systems {
+			if s.Camp != nil {
+				return "Gate camp in " + s.System.Place.Name
+			}
+		}
+	}
+	return fmt.Sprintf("Gate camps in %d of the systems your pilots are in", v.Camps)
+}
+
+// Hot reports whether the system needs the bad edge: kills in the last
+// hour, or a camp standing.
+func (s nearSystem) Hot() bool { return s.Kills > 0 || s.Camp != nil }

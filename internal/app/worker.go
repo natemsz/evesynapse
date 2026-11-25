@@ -1024,10 +1024,13 @@ func (c *cycleState) warmNames(ctx context.Context, characters []db.Character) {
 			logging.Warnf("worker: ESI error limit hit refreshing intel; backing off until next cycle")
 			c.limited = true
 		}
-		// The map's live layers fold the snapshots just refreshed
-		// (a no-op when nothing they read has moved).
-		app.refreshMapLayers(ctx)
 	}
+	// The map's live layers fold the stored snapshots and kills and
+	// store the standing gate camps (a no-op when nothing they read
+	// has moved). They read only the database, so they run while ESI
+	// is limited too: kills keep arriving, and a camp must not lapse
+	// because ESI is unwell.
+	app.refreshMapLayers(ctx)
 	// The killboard: merge our characters' killmails, price the
 	// unpriced, prune details past two years. Local work only.
 	runGuarded("killboard", func() { app.killboardMaintenance(ctx) })

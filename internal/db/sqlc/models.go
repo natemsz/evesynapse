@@ -3018,6 +3018,19 @@ type SystemActivityStat struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+type SystemCamp struct {
+	SystemID   int64     `json:"system_id"`
+	GroupKind  string    `json:"group_kind"`
+	GroupID    int64     `json:"group_id"`
+	GroupName  string    `json:"group_name"`
+	Kills      int32     `json:"kills"`
+	Since      time.Time `json:"since"`
+	Celestial  string    `json:"celestial"`
+	Spread     bool      `json:"spread"`
+	Crew       []string  `json:"crew"`
+	DetectedAt time.Time `json:"detected_at"`
+}
+
 type SystemSovereignty struct {
 	SystemID        int64        `json:"system_id"`
 	AllianceID      int64        `json:"alliance_id"`

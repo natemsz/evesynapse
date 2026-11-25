@@ -1065,26 +1065,18 @@ func (app *Application) briefingCampLines(ctx context.Context, prefs notifyPrefs
 	if !online {
 		return nil
 	}
-	names := app.newKillNames(ctx)
+	camps := app.standingCamps(ctx, prefs.CampSystems, now)
 	var lines []briefingLine
 	for _, systemID := range prefs.CampSystems {
-		stream, err := app.queries.ListKillsBySystem(ctx, db.ListKillsBySystemParams{
-			SystemID: systemID, BeforeTime: now.Add(time.Hour), BeforeID: 1 << 62, MaxRows: systemKillsFetch,
-		})
-		if err != nil {
-			logging.Errorf("home: camp kills for system %d: %v", systemID, err)
-			continue
-		}
-		camp := app.mapSystemCamp(ctx, names, systemID, now, stream)
-		if camp == nil {
+		camp, ok := camps[systemID]
+		if !ok {
 			continue
 		}
 		name := app.campSystemName(ctx, systemID)
-		at := time.Unix(camp.Since, 0).UTC()
 		lines = append(lines, briefingLine{
 			html: string(template.HTML(fmt.Sprintf("Gate camp in <a href=\"/system/?system=%d\">%s</a>: %d kills in the last hour.",
 				systemID, template.HTMLEscapeString(name), camp.Kills))),
-			Rank: briefingCamp, At: at,
+			Rank: briefingCamp, At: camp.Since.UTC(),
 			key:  fmt.Sprintf("camp|%d", systemID),
 			href: fmt.Sprintf("/system/?system=%d", systemID),
 		})

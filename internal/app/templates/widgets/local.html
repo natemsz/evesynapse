@@ -8,20 +8,22 @@
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-local-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Systems}}
-<ul class="ar-list" data-w-fit>{{range .Systems}}<li class="{{if .Kills}}ar-hot{{end}}">
+<ul class="ar-list" data-w-fit>{{range .Systems}}<li class="{{if .Hot}}ar-hot{{end}}">
   {{template "w-local-head" .}}
   <small class="ar-sub" title="{{.PilotNames}}">{{.PilotsText}}</small>
   <small class="ar-sub ar-region">{{.System.Region}}</small>
+  {{with .Camp}}{{template "w-local-camp" .}}{{end}}
   {{with .Latest}}{{template "w-local-intel" .}}{{end}}
 </li>{{end}}</ul>
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-local-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Systems}}
 <div class="w-cols w-cols-lists">
-<div class="w-rest"><ul class="ar-list" data-w-fit>{{range .Systems}}<li class="{{if .Kills}}ar-hot{{end}}">
+<div class="w-rest"><ul class="ar-list" data-w-fit>{{range .Systems}}<li class="{{if .Hot}}ar-hot{{end}}">
   {{template "w-local-head" .}}
   <small class="ar-sub" title="{{.PilotNames}}">{{.PilotsText}}</small>
   <small class="ar-sub ar-region"><a href="{{.MapHref}}">On the map</a></small>
+  {{with .Camp}}{{template "w-local-camp" .}}{{end}}
 </li>{{end}}</ul></div>
 <div class="w-aside"><h4 class="w-sub">Intel, last hour</h4>{{template "w-local-reports" .}}</div>
 </div>
@@ -29,11 +31,12 @@
 
 {{define "w-local-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Systems}}
 <div class="w-cols w-cols-lists">
-<div class="w-rest"><ul class="ar-list" data-w-fit>{{range .Systems}}<li class="{{if .Kills}}ar-hot{{end}}">
+<div class="w-rest"><ul class="ar-list" data-w-fit>{{range .Systems}}<li class="{{if .Hot}}ar-hot{{end}}">
   {{template "w-local-head" .}}
   <small class="ar-sub ar-pilots">{{range $i, $p := .Pilots}}{{if $i}}, {{end}}<span class="{{if $p.Online}}ar-on{{end}}"{{if $p.Online}} title="Online"{{end}}>{{charLink $.ViewerChars $p.ID $p.Name}}</span>{{end}}</small>
   <small class="ar-sub ar-region"><a href="{{.MapHref}}">On the map</a></small>
   {{if .HasStats}}<small class="ar-sub ar-day">Last 24 hours: {{.DayText}}</small>{{end}}
+  {{with .Camp}}{{template "w-local-camp" .}}{{with .Crew}}<small class="ar-sub ar-day">On several of its kills: {{.}}</small>{{end}}{{end}}
 </li>{{end}}</ul></div>
 <div class="w-aside"><h4 class="w-sub">Intel, last hour</h4>{{template "w-local-reports" .}}</div>
 </div>
@@ -42,6 +45,10 @@
 {{/* A system's name, security and last hour. */}}
 {{define "w-local-head"}}<span class="ar-system">{{systemLink .System.Place.SystemID .System.Place.Name}}<span class="sec-pill sec-{{.System.SecTier}}">{{.System.SecText}}</span></span>
 <span class="ar-figs">{{if .HasStats}}<span class="{{if .Kills}}ar-kills{{end}}"{{if .Kills}} title="{{.KillsTitle}}"{{end}}>{{.KillsText}}</span>, {{.JumpsText}}{{else}}No figures yet{{end}}</span>{{end}}
+
+{{/* A gate camp: who holds it, how many kills, since when and where.
+     Found and stored by the map's threat layer (system_camps). */}}
+{{define "w-local-camp"}}<span class="ar-camp" title="Gate camp: {{.Group}}, {{.Kills}} kills, started {{.Began}}{{with .Where}}, {{.}}{{end}}">Gate camp: <a href="{{.Href}}">{{.Group}}</a>, {{.Kills}} kills, started {{.Began}}{{with .Where}}, {{.}}{{end}}</span>{{end}}
 
 {{/* One report's sentence, linking to its reading, and its age. */}}
 {{define "w-local-intel"}}<a class="ar-intel ar-{{.KindTone}}" href="/intel/workbench/{{.ID}}/">{{if .Text}}{{.Text}}{{else}}{{.KindLabel}}{{end}}</a>

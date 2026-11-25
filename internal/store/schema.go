@@ -1080,6 +1080,11 @@ var pgUserDeleteAfterSchema string
 //go:embed schema_pg/181_widget_settings_market.sql
 var pgWidgetSettingsMarketSchema string
 
+// Step 182: gate camps per system, stored by the threat layer's build.
+//
+//go:embed schema_pg/182_system_camps.sql
+var pgSystemCampsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1289,6 +1294,7 @@ func schemaSteps() []schemaStep {
 		{179, "sde factions and schematics", pgSDEFactionsSchematicsSchema, ""},
 		{180, "user_delete_after", pgUserDeleteAfterSchema, ""},
 		{181, "widget_settings_market", pgWidgetSettingsMarketSchema, ""},
+		{182, "system_camps", pgSystemCampsSchema, ""},
 	}
 }
 

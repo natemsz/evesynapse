@@ -101,6 +101,18 @@ func briefingSection(t *testing.T, body string) string {
 	return rest
 }
 
+// placeBriefingLarge puts the Briefing alone on the account's home at
+// 3x2, its large form: the decks, the window line and the dismissed
+// list.
+func placeBriefingLarge(t *testing.T, q *db.Queries, userID int64) {
+	t.Helper()
+	if err := q.SetUserHomeLayout(context.Background(), db.SetUserHomeLayoutParams{
+		HomeLayout: `[{"id":"briefing","w":3,"h":2}]`, ID: userID,
+	}); err != nil {
+		t.Fatalf("set layout: %v", err)
+	}
+}
+
 func TestBriefingDigestRules(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
@@ -113,6 +125,7 @@ func TestBriefingDigestRules(t *testing.T) {
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	seedBriefingFixture(t, app, q, user.ID, now)
+	placeBriefingLarge(t, q, user.ID)
 
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/")
@@ -292,6 +305,7 @@ func TestBriefingCapAndDedupe(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	placeBriefingLarge(t, q, user.ID)
 
 	// Fifteen waiting contracts aggregate to ONE line (dedupe
 	// per character+rule), and fifteen calendar events flood the
@@ -600,6 +614,7 @@ func TestBriefingDismissedLines(t *testing.T) {
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	seedBriefingFixture(t, app, q, user.ID, now)
+	placeBriefingLarge(t, q, user.ID)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	post := func(path, key string) int {
@@ -638,5 +653,20 @@ func TestBriefingDismissedLines(t *testing.T) {
 	mustContain(t, "briefing restored", section, "has 3 unread mail")
 	if strings.Contains(section, "Dismissed (") {
 		t.Error("dismissed list still offered after the restore")
+	}
+}
+
+// TestBriefingSRPClaimsOnlyForHandlers: ship replacement claims
+// waiting for review reach the Briefing of an account that may answer
+// them, and never that of a member who may not.
+func TestBriefingSRPClaimsOnlyForHandlers(t *testing.T) {
+	f := newSRPFixture(t)
+	f.post(f.pilot, "/srp/request", url.Values{"loss": {f.claim(srpLossOnOp)}})
+	lines := f.app.briefingSRPLines(f.ctx, f.userID, nil)
+	if len(lines) != 1 || !strings.Contains(lines[0].html, "1 ship replacement claim waits for review") {
+		t.Fatalf("director's briefing lines = %+v, want the one waiting claim", lines)
+	}
+	if lines := f.app.briefingSRPLines(f.ctx, f.acctUser, nil); len(lines) != 0 {
+		t.Fatalf("a member who does not handle claims was told of one: %+v", lines)
 	}
 }

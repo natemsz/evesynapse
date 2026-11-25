@@ -1,28 +1,73 @@
-{{define "w-briefing-all"}}{{$cap := .Cap}}
-{{with .Data}}
-{{if .Items}}
+{{/* Briefing: five forms over one digest. Each form is a w-body of
+     parts; none reads its size. The decks keep the markup home.js
+     flips, filters and pages (.brief-cards, .brief-deck,
+     .brief-flip-card, data-brief-flip). */}}
+
+{{define "w-briefing-small"}}<div class="w-body brf-small {{.BodyClass}}">{{with .Data}}{{if .Items}}
+<ul class="brf-pills" aria-label="Alerts by severity">{{range .Pills}}<li class="brf-pill sev-{{.Sev}}"><span class="brf-n">{{.N}}</span> {{.Label}}</li>{{end}}</ul>
+{{with .Top}}<div class="brf-top sev-{{.Severity}}">
+  <span class="brf-kind">{{if .Href}}<a href="{{.Href}}">{{end}}<span class="brief-icon brief-icon-{{.Kind}}" aria-hidden="true"></span>{{$.Data.TopKind}}{{if .Href}}</a>{{end}}</span>
+  <p class="brf-text"><span class="visually-hidden">{{.Severity}}: </span>{{.HTML}}</p>
+</div>{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-briefing-wide"}}<div class="w-body brf-wide {{.BodyClass}}">{{with .Data}}{{if .Items}}
+<div class="brief-pager">
+<button type="button" class="brief-page-btn" data-brief-page="-1" aria-label="Show the previous briefing cards" hidden>&#8249;</button>
+<ul class="briefing brief-cards">{{range .Stacks}}{{template "w-briefing-deck-mini" .}}{{end}}</ul>
+<button type="button" class="brief-page-btn" data-brief-page="1" aria-label="Show the next briefing cards" hidden>&#8250;</button>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-briefing-tall"}}<div class="w-body brf-tall {{.BodyClass}}">{{with .Data}}{{if .Items}}
+<ul class="brf-lines" data-w-fit>{{range $s := .Stacks}}{{range $i, $it := $s.Items}}<li class="brf-line sev-{{$it.Severity}}"{{if eq $i 0}} data-kind-first{{end}}>
+  {{if eq $i 0}}<span class="brf-kind">{{if $s.Href}}<a href="{{$s.Href}}">{{end}}<span class="brief-icon brief-icon-{{$s.Kind}}" aria-hidden="true"></span>{{$s.Title}}{{if $s.Href}}</a>{{end}}</span>{{end}}
+  <div class="brf-line-row"><span class="brf-mark" aria-hidden="true"></span><span class="brf-text"><span class="visually-hidden">{{$it.Severity}}: </span>{{if $it.Title}}<b>{{$it.Title}}.</b> {{end}}{{$it.HTML}}</span>{{if $it.Key}}<form class="brief-dismiss" method="post" action="/home/briefing/dismiss"><input type="hidden" name="key" value="{{$it.Key}}"><button type="submit" class="brief-x" aria-label="Dismiss this alert" title="Dismiss: hide it. It stays under Dismissed while it applies">×</button></form>{{end}}</div>
+</li>{{end}}{{end}}</ul>
+{{template "w-note" (printf "Since %s" .SinceLabel)}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-briefing-medium"}}<div class="w-body brf-grid {{.BodyClass}}">{{with .Data}}{{if .Items}}
+<ul class="briefing brief-cards" data-w-fit>{{range .Stacks}}{{template "w-briefing-deck" .}}{{end}}</ul>
+{{template "w-briefing-foot" $}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-briefing-large"}}<div class="w-body brf-grid brf-three {{.BodyClass}}">{{with .Data}}{{if .Items}}
 <div class="brief-tabs" role="group" aria-label="Show briefing items by severity">
   <button type="button" class="chip on" data-brief="all" aria-pressed="true">All ({{.Counts.All}})</button>
   {{if .Counts.Critical}}<button type="button" class="chip sev-critical" data-brief="critical" aria-pressed="false">Critical ({{.Counts.Critical}})</button>{{end}}
   {{if .Counts.Warning}}<button type="button" class="chip sev-warning" data-brief="warning" aria-pressed="false">Warning ({{.Counts.Warning}})</button>{{end}}
   {{if .Counts.Info}}<button type="button" class="chip sev-info" data-brief="info" aria-pressed="false">Info ({{.Counts.Info}})</button>{{end}}
 </div>
-<div class="brief-pager">
-<button type="button" class="brief-page-btn" data-brief-page="-1" aria-label="Show the previous briefing cards" hidden>&#8249;</button>
-<ul class="briefing brief-cards">
-{{/* One deck per kind: every line is a full card, the face card
-     in front and the rest stacked behind it. Each line can be
-     hidden (not deleted) into the dismissed list below. */}}
-{{range $s := .Stacks}}<li class="brief-deck{{if gt (len $s.Items) 1}} has-flip{{end}}">
-  {{range $i, $it := $s.Items}}<div class="brief-card brief-flip-card sev-{{$it.Severity}}" data-pos="{{$i}}" data-sev="{{$it.Severity}}">
-    <span class="brief-head"><a class="brief-card-link" href="{{$s.Href}}"><span class="brief-icon brief-icon-{{$s.Kind}}" aria-hidden="true"></span><span class="brief-stack-title">{{$s.Title}}</span></a><span class="brief-meta">{{if gt (len $s.Items) 1}}<span class="brief-count">{{len $s.Items}} alerts</span>{{end}}{{if $it.Key}}<form class="brief-dismiss" method="post" action="/home/briefing/dismiss"><input type="hidden" name="key" value="{{$it.Key}}"><button type="submit" class="brief-x" aria-label="Dismiss this alert" title="Dismiss: hide it. It stays under Dismissed while it applies">×</button></form>{{end}}</span></span>
+<ul class="briefing brief-cards" data-w-fit>{{range .Stacks}}{{template "w-briefing-deck" .}}{{end}}</ul>
+{{template "w-briefing-foot" $}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* One deck per kind (a briefingStack): every line is a full card,
+     the face in front and the rest stacked behind it; the count beside
+     the kind flips to the next. Each line can be hidden (not deleted)
+     into the dismissed list. */}}
+{{define "w-briefing-deck"}}<li class="brief-deck">
+  {{range $i, $it := .Items}}<div class="brief-card brief-flip-card sev-{{$it.Severity}}" data-pos="{{$i}}" data-sev="{{$it.Severity}}">
+    <span class="brief-head"><a class="brief-card-link" href="{{$.Href}}"><span class="brief-icon brief-icon-{{$.Kind}}" aria-hidden="true"></span><span class="brief-stack-title">{{$.Title}}</span></a><span class="brief-meta">{{if gt (len $.Items) 1}}<button type="button" class="brf-flip" data-brief-flip aria-label="Show the next alert in this stack"><span class="brief-count">{{len $.Items}} alerts</span> <span class="brief-arrow" aria-hidden="true">→</span></button>{{end}}{{if $it.Key}}<form class="brief-dismiss" method="post" action="/home/briefing/dismiss"><input type="hidden" name="key" value="{{$it.Key}}"><button type="submit" class="brief-x" aria-label="Dismiss this alert" title="Dismiss: hide it. It stays under Dismissed while it applies">×</button></form>{{end}}</span></span>
     <div class="brief-row"><div class="brief-row-main">{{if $it.Title}}<h4 class="brief-title">{{$it.Title}}</h4>{{end}}<span class="brief-text">{{$it.HTML}}</span></div><span class="brief-row-side"><span class="sev">{{$it.Severity}}</span>{{if $it.Count}}<span class="brief-count">{{$it.Count}}</span>{{end}}</span></div>
-    {{if gt (len $s.Items) 1}}<button type="button" class="brief-more-btn" data-brief-flip aria-label="Show the next alert in this stack">more <span class="brief-arrow" aria-hidden="true">→</span></button>{{end}}
   </div>{{end}}
 </li>{{end}}
-</ul>
-<button type="button" class="brief-page-btn" data-brief-page="1" aria-label="Show the next briefing cards" hidden>&#8250;</button>
-</div>
+
+{{/* The wide form's small deck: the kind, how many alerts it holds,
+     and one line at a time; the arrow beside the count flips to the
+     next. The card's edge carries the severity. */}}
+{{define "w-briefing-deck-mini"}}<li class="brief-deck brf-mini">
+  {{range $i, $it := .Items}}<div class="brief-card brief-flip-card sev-{{$it.Severity}}" data-pos="{{$i}}" data-sev="{{$it.Severity}}">
+    <span class="brief-head"><a class="brief-card-link" href="{{$.Href}}"><span class="brief-icon brief-icon-{{$.Kind}}" aria-hidden="true"></span><span class="brf-mini-title">{{$.Title}}</span></a><span class="brief-meta">{{if gt (len $.Items) 1}}<button type="button" class="brf-flip" data-brief-flip aria-label="Show the next alert in this stack"><span class="brief-count">{{len $.Items}}</span> <span class="brief-arrow" aria-hidden="true">→</span></button>{{end}}{{if $it.Key}}<form class="brief-dismiss" method="post" action="/home/briefing/dismiss"><input type="hidden" name="key" value="{{$it.Key}}"><button type="submit" class="brief-x" aria-label="Dismiss this alert" title="Dismiss: hide it. It stays under Dismissed while it applies">×</button></form>{{end}}</span></span>
+    <p class="brf-text"><span class="visually-hidden">{{$it.Severity}}: </span>{{if $it.Title}}<b>{{$it.Title}}.</b> {{end}}{{$it.HTML}}</p>
+  </div>{{end}}
+</li>{{end}}
+
+{{/* The medium and large forms' last line: lines past the cap, the
+     window, and the dismissed list in the shared modal. Its dot is the
+     card (homeWidget). */}}
+{{define "w-briefing-foot"}}{{with .Data}}<div class="brf-foot">
 {{if .More}}<p><small>+{{.More}} more need{{if eq .More 1}}s{{end}} your attention.</small></p>{{end}}
 <p><small>Since {{.SinceLabel}}</small>{{if .Dismissed}} · <button type="button" class="brief-dismissed-open" data-open-brief-dismissed="{{$.Uid "dismissed"}}">Dismissed ({{len .Dismissed}})</button>{{end}}</p>
 {{if .Dismissed}}
@@ -36,8 +81,4 @@
   </div>
 </div>
 {{end}}
-{{else}}
-<p>Nothing needs your attention right now.</p>
-{{end}}
-{{end}}
-{{end}}
+</div>{{end}}{{end}}

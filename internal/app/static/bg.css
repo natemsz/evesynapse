@@ -477,6 +477,19 @@ html[data-theme="light"] .btn.btn-quiet {
   .pchart svg:not([data-text-scaled]) text { font-size: var(--fs-2xs); }
 }
 
+/* Home KPI glyphs: the mockup's little Lucide mark in each
+   tile's top right (wallet, coins, package, book), the same
+   16px ember treatment the briefing cards carry (.brief-icon
+   in style.css). The glyphs ride inline in the template (the
+   .kpi-spark precedent): bg.css bans SVG data URIs outright
+   (the starfield guard), and style.css has outgrown a
+   whole-file push; bg.css loads after it and wins ties. The
+   label of an icon-bearing tile keeps clear of the glyph. */
+.kpi { position: relative; }
+.kpi:has(> .kpi-icon) .kpi-k { padding-right: 1.5rem; }
+.kpi-icon { position: absolute; top: 0.55rem; right: 0.6rem; width: 16px; height: 16px; opacity: 0.85; pointer-events: none; }
+.kpi-icon svg { display: block; width: 16px; height: 16px; }
+
 /* Item browser tree: the published-only switch hides rows with
    the hidden attribute; a table row's own display value would
    otherwise win over the UA's [hidden] rule in some engines. */
@@ -897,6 +910,10 @@ html[data-scheme][data-tier="minimalistic"] body::before {
    itself takes the scheme. Gradient-painted shapes keep their
    gradient, whose stops ride the scheme above. */
 html[data-scheme] .nav-icon svg { fill: var(--sch-core); stroke: var(--sch-core); }
+/* The home KPI icons are baked ember strokes in the template;
+   the scheme repaints them the way it repaints the search
+   magnifier. */
+html[data-scheme] .kpi-icon svg { stroke: var(--sch-hi); }
 /* The shell controls' focus ring is a baked gold outline in
    style.css; under a scheme it takes the highlight. */
 html[data-scheme] .nav-hamburger:focus-visible,

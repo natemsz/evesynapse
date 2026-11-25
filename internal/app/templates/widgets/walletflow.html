@@ -57,6 +57,6 @@
 {{/* Income and spend over 30 days, each split by kind, a key line per
      part. */}}
 {{define "w-walletflow-splits"}}{{if or .InSplit .OutSplit}}<div class="wf-splits">
-{{with .InSplit}}<div class="w-aside"><h4 class="w-sub">Income, 30 days</h4>{{template "w-segbar" .}}</div>{{end}}
-{{with .OutSplit}}<div class="w-aside"><h4 class="w-sub">Spend, 30 days</h4>{{template "w-segbar" .}}</div>{{end}}
+{{with .InSplit}}<div class="w-aside"><h4 class="w-sub">Income, 30 days</h4>{{template "w-segbar-share" .}}</div>{{end}}
+{{with .OutSplit}}<div class="w-aside"><h4 class="w-sub">Spend, 30 days</h4>{{template "w-segbar-share" .}}</div>{{end}}
 </div>{{end}}{{end}}

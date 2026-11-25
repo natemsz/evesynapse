@@ -87,6 +87,7 @@ type industryHomeView struct {
 	Slots   []industryMeter
 	Pilots  []industryPilot
 	Note    string // whose slots the meters leave out
+	Summary string // small: "6 active jobs · 1 ready for delivery", as live said it
 	Empty   wEmpty
 }
 
@@ -220,6 +221,8 @@ func buildIndustryWidget(ctx context.Context, app *Application, in *widgetInput)
 	if skillsMissing > 0 && (len(v.Slots) > 0 || len(v.Pilots) > 0) {
 		v.Note = fmt.Sprintf("Slots leave out %d character%s whose skills have not synced.", skillsMissing, pluralSuffix(skillsMissing))
 	}
+	v.Summary = pluralCount(int64(v.Running), "active job", "active jobs") + fmt.Sprintf(" · %d ready for delivery", v.Ready)
+
 	return v
 }
 

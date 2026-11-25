@@ -48,6 +48,7 @@ type upkeepView struct {
 	Soonest string // "Astrahus X: fuel expires, in 2d 3h"
 	Meters  []upkeepMeter
 	Corps   []upkeepCorpMeters // medium: grouped by corporation
+	Corp    string             // the one corporation's name, when there is one (several name each line)
 	Many    bool               // more than one corporation
 	Empty   wEmpty
 }
@@ -79,6 +80,9 @@ func buildUpkeepWidget(ctx context.Context, app *Application, in *widgetInput) a
 			cm.Meters = append(cm.Meters, upkeepMeterFor(*it, it.Name, in.Now))
 		}
 		v.Corps = append(v.Corps, cm)
+	}
+	if !v.Many {
+		v.Corp = raw.Corps[0].Name
 	}
 	sortUpkeepMeters(v.Meters)
 	v.Lead = wLead{Label: "Due within 7 days", Value: strconv.Itoa(raw.Count), Full: fmt.Sprintf("%d deadlines within 7 days", raw.Count)}

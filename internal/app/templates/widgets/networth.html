@@ -14,7 +14,7 @@
 {{define "w-networth-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
 {{template "w-lead" .Lead}}
 {{with .Split}}{{template "w-segbar" .}}{{end}}
-{{if .Line}}{{template "w-chart" .Line}}{{else if .HistoryBuilding}}{{template "w-empty" .Waiting}}{{end}}
+{{template "w-networth-history" .}}
 {{template "w-note" .Note}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
@@ -33,6 +33,6 @@
 {{template "w-note" .Note}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
-{{/* The stacked history the wide, medium and large forms draw, or
+{{/* The stacked history the wide, tall, medium and large forms draw, or
      what its place says while history builds. */}}
 {{define "w-networth-history"}}{{if .Chart}}{{template "w-chart" .Chart}}{{else if .HistoryBuilding}}{{template "w-empty" .Waiting}}{{end}}{{end}}

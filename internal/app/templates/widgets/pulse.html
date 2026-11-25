@@ -2,19 +2,22 @@
      roles can read. Each change carries its kind as a mark and a word. */}}
 
 {{define "w-pulse-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+{{with .Corp}}<h4 class="w-sub">{{.}}</h4>{{end}}
 {{template "w-pulse-counts" .}}
 {{end}}{{end}}</div>{{end}}
 
 {{define "w-pulse-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
-<div class="w-side">{{template "w-pulse-counts" .}}</div>
+<div class="w-side">{{with .Corp}}<h4 class="w-sub">{{.}}</h4>{{end}}{{template "w-pulse-counts" .}}</div>
 {{if .Feed}}<div class="w-rest">{{template "w-pulse-feed" .Feed}}</div>{{end}}
 {{end}}{{end}}</div>{{end}}
 
 {{define "w-pulse-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+{{with .Corp}}<h4 class="w-sub">{{.}}</h4>{{end}}
 {{if .Feed}}{{template "w-pulse-feed" .Feed}}{{else}}{{template "w-pulse-counts" .}}{{end}}
 {{end}}{{end}}</div>{{end}}
 
 {{define "w-pulse-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+{{with .Corp}}<h4 class="w-sub">{{.}}</h4>{{end}}
 {{template "w-pulse-counts" .}}
 {{if .Feed}}<div class="w-cols w-cols-lists">
 <div class="w-aside"><h4 class="w-sub">Latest changes</h4>{{template "w-pulse-feed" .Feed}}</div>
@@ -33,7 +36,7 @@
 {{end}}{{end}}</div>{{end}}
 
 {{/* How many of each kind, or the quiet note. */}}
-{{define "w-pulse-counts"}}{{if .Counts}}<ul class="w-chips">{{range .Counts}}<li class="w-chip"><span class="w-kind w-k-{{.Kind}}" aria-hidden="true"></span><strong>{{.N}}</strong> {{.Says}}</li>{{end}}</ul>
+{{define "w-pulse-counts"}}{{if .Counts}}<ul class="w-chips">{{range .Counts}}<li class="w-chip{{if not .N}} w-chip-zero{{end}}"><span class="w-kind w-k-{{.Kind}}" aria-hidden="true"></span><strong>{{.N}}</strong> {{.Says}}</li>{{end}}</ul>
 {{else}}<p class="w-quiet">Nothing changed in your corporations lately.</p>{{end}}{{end}}
 
 {{/* A list of changes, newest first. */}}

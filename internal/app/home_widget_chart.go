@@ -326,6 +326,7 @@ type wPart struct {
 	Value float64
 	Text  string
 	Full  string
+	Short string // when set, the key shows Short instead of Text on a narrow card ("102M" for "101,883,600.00")
 }
 
 // wSegment is a part with its share of the whole, in percent.

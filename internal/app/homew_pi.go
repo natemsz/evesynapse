@@ -109,7 +109,8 @@ type piView struct {
 	Soonest  []piExpiryLine
 	Groups   []piGroup
 	Track    *piTrack
-	Filtered bool // the visit option is on
+	Filtered bool   // the visit option is on
+	Summary  string // "5 colonies across your characters · 1 extractor expired"
 	Empty    wEmpty
 }
 
@@ -192,6 +193,12 @@ func buildPIWidget(ctx context.Context, app *Application, in *widgetInput) any {
 				v.Groups = append(v.Groups, piGroup{Char: r.Char, CharID: r.CharID})
 			}
 			v.Groups[i].Rows = append(v.Groups[i].Rows, r)
+		}
+	}
+	if v.Any {
+		v.Summary = pluralCount(int64(v.Colonies), "colony", "colonies") + " across your characters"
+		if v.Expired > 0 {
+			v.Summary += " · " + pluralCount(int64(v.Expired), "extractor expired", "extractors expired")
 		}
 	}
 	return v

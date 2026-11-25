@@ -50,7 +50,6 @@ type watchlistHomeRow struct {
 type watchlistHomeView struct {
 	Rows   []watchlistHomeRow
 	Moving int // items past their alert line
-	Lead   *watchlistHomeRow
 	Empty  wEmpty
 }
 
@@ -111,16 +110,6 @@ func buildWatchlistHome(ctx context.Context, app *Application, in *widgetInput) 
 			}
 			return math.Abs(v.Rows[i].Move) > math.Abs(v.Rows[j].Move)
 		})
-	}
-	// The lead is the biggest move whatever the order.
-	for i := range v.Rows {
-		r := &v.Rows[i]
-		if r.Known && (v.Lead == nil || math.Abs(r.Move) > math.Abs(v.Lead.Move)) {
-			v.Lead = r
-		}
-	}
-	if v.Lead == nil {
-		v.Lead = &v.Rows[0]
 	}
 	return v
 }

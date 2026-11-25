@@ -17,18 +17,19 @@
    only (a size container with an auto height would collapse to
    nothing).
 
-   home.js places every card at the first free spot, row by row
-   (homePack, the same rule as row dense placement), closes a hole
-   beside or under a card by growing it to a size it allows
-   (homeFillGaps), shows the holes in Customize as "Add a widget"
-   cells, and fits lists to their card (homeFitCount). Without
-   JavaScript the span classes and row dense placement lay the grid
-   out. */
+   home.js places every card at the first free spot at or after the
+   card before it (homePack, the same rule as row placement): cards
+   keep their order and none moves back into a hole, which stays
+   until the reader fills it. Fill gaps closes a hole beside or under
+   a card by growing it to a size it allows (homeFillGaps), Customize
+   shows the holes as "Add a widget" cells, and lists fit their card
+   (homeFitCount). Without JavaScript the span classes and row
+   placement lay the grid out. */
 .grid.home-grid {
   --home-cols: 1;
   grid-template-columns: minmax(0, 1fr);
   grid-auto-rows: auto;
-  grid-auto-flow: row dense;
+  grid-auto-flow: row;
   align-items: stretch;
 }
 .grid.home-grid > .card {
@@ -156,11 +157,13 @@
   --w-s2: #e05a14;
   --w-s3: #a8609e;
   --w-s4: #c98500;
+  --w-s5: #199e70; /* aqua: the fifth slot, validated with the four above on the dark card surface */
 }
 .w-card .w-s1 { --w-c: var(--w-s1); }
 .w-card .w-s2 { --w-c: var(--w-s2); }
 .w-card .w-s3 { --w-c: var(--w-s3); }
 .w-card .w-s4 { --w-c: var(--w-s4); }
+.w-card .w-s5 { --w-c: var(--w-s5); }
 
 /* The body: a column of parts. */
 .w-card > .card-body:has(> .w-body) { display: flex; flex-direction: column; min-height: 0; }
@@ -334,6 +337,28 @@
 .w-segkeys > li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 0.35rem; min-width: 0; }
 .w-segname { min-width: 0; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .w-segval { grid-column: 2; font-size: var(--fs-sm); font-weight: 600; color: var(--text-bright); white-space: nowrap; }
+/* A figure in full where the card has the width, its short form where
+   it does not (wPart.Short). */
+.w-segval .w-short { display: none; }
+@container widget (width < 30rem) {
+  .w-segval:has(.w-short) .w-full { display: none; }
+  .w-segval .w-short { display: inline; }
+}
+/* The small Watchlist keeps its table on a narrow card and leaves out
+   the columns it can spare. */
+@container widget (width < 26rem) {
+  .w-watch-small .w-opt { display: none; }
+}
+.w-watch-small :is(th, td) { padding-block: 0.2rem; }
+/* On a short card a split keeps its figures and leaves out its bar,
+   and Profit Pulse leaves its footer to the title, which links to the
+   same page. */
+@container widget (height < 12rem) {
+  .w-segbar > .w-segs { display: none; }
+  .w-segkeys > li { grid-template-columns: auto auto minmax(0, 1fr); }
+  .w-segkeys > li > .w-segval { grid-column: auto; text-align: right; }
+  .pp-foot { display: none; }
+}
 
 /* w-rank: ranked bars, square at the baseline, rounded at the end. */
 .w-rank { display: flex; flex-direction: column; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
@@ -351,8 +376,12 @@
 /* w-note and w-empty. */
 .w-note { color: var(--muted); font-size: var(--fs-xs); }
 @container widget (height < 12rem) {
-  .w-note { display: none; }
+  .w-note:not(.w-keep) { display: none; }
 }
+/* w-keep: a line that carries a link or a figure live showed (a
+   summary, the way to the page), not provenance: it stays on a short
+   card. */
+.w-note.w-keep { margin: 0; }
 .w-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); }
 .w-empty > p { margin: 0; max-width: 28rem; }
 
@@ -388,6 +417,9 @@
 .w-card:has(> h3 > .w-expand:not([hidden])) :is(.fleet-tags, .brief-tabs) { right: 3.4rem; }
 @container widget (height < 12rem) {
   .grid.home-grid > .w-card > h3:first-child { min-height: calc(2.35rem + 1px); padding-block: 0.3rem; margin-bottom: 0.5rem; }
+  /* The corner buttons follow the shorter band, so they stay on the
+     title's centre line: (2.35rem + 1px - 1.75rem buttons) / 2. */
+  .grid.home-grid > .w-card > .cardctl { top: calc(0.3rem + 0.5px); }
 }
 
 /* The Expand view: the widget's largest form in the shared modal, in
@@ -472,9 +504,11 @@
    part's key on one line. */
 .wf-splits { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .wf-splits > .w-aside { flex: 1 1 12rem; }
-.wf-splits .w-segkeys { display: flex; flex-direction: column; gap: 0.1rem; }
-.wf-splits .w-segkeys > li { grid-template-columns: auto minmax(0, 1fr) auto; }
-.wf-splits .w-segval { grid-column: 3; font-size: var(--fs-xs); }
+.wf-splits .w-segkeys { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: 0.1rem var(--space-3); }
+.wf-splits .w-segname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wf-splits .w-segkeys > li { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.w-segshare { grid-column: 3; font-size: var(--fs-xs); color: var(--text); font-variant-numeric: tabular-nums; text-align: right; min-width: 3.2em; }
+.wf-splits .w-segval { grid-column: 4; font-size: var(--fs-xs); }
 /* The large form's sources and sinks, side by side. */
 .wf-ranks { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .wf-ranks > .w-aside { flex: 1 1 14rem; }
@@ -501,18 +535,17 @@
 /* Lists that scroll inside their card (data-w-scroll): the Fleet
    Overview roster. Where the card is exactly its cells, or in the
    Expand view, the roster takes the room the other parts leave and
-   scrolls, its header standing at the top. */
+   scrolls only when it is longer than that room. The wheel passes on
+   to the page at either end, and the header keeps the live table's
+   plain look. */
 .w-card [data-w-scroll] { min-height: 0; margin: 0; }
 @container page (width >= 36rem) {
-  .grid.home-grid > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; overscroll-behavior: contain; }
+  .grid.home-grid > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; }
 }
 .w-expand-box > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; }
-.w-card [data-w-scroll] thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
 
 /* Bars drawn as a span sized by data-w inside an .l-meter track. */
-.glance-meter > span,
 .card[data-widget="training"] .w-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
-.glance-meter.warn > span { background: var(--gold); }
 .card[data-widget="training"] .w-meters > li.warn .w-meter > span { background: var(--gold); }
 .card[data-widget="training"] .w-meters > li.bad .w-meter-val { color: var(--v-bad-ink, #ffab8f); }
 
@@ -520,11 +553,9 @@
    (wide), one per row (tall), or a grid with a line under each
    (medium, large). The tiles carry the glass (style.css). */
 .glance-tile { min-height: 0; }
-.glance-tile .l-stat-label a { color: inherit; text-decoration: none; }
-.glance-tile .l-stat-label a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
-.glance-change { font-size: var(--fs-xs); white-space: nowrap; }
-.glance-change .w-arrow { font-size: var(--fs-rel-glyph); }
-.glance-tile > .glance-meter { margin-top: auto; flex: none; }
+.glance-tile .kpi-k a { color: inherit; text-decoration: none; }
+.glance-tile .kpi-k a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.glance-tile > .kpi-bar { flex: none; }
 .glance-tile > .w-spark { margin-top: var(--space-1); }
 .glance-band { grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); }
 .glance-stack { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -532,7 +563,8 @@
 .glance-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .glance-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .glance-hero { flex: 1 1 auto; }
-.glance-hero > .w-lead .w-lead-value { font-size: clamp(var(--fs-xl), 14cqi, var(--fs-4xl)); }
+.glance-hero { display: flex; }
+.glance-hero > .glance-tile { flex: 1 1 auto; }
 @container widget (width < 30rem) {
   .glance-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -571,7 +603,7 @@
 .fleet-list-main small, .fleet-list-when { font-size: inherit; color: var(--muted); }
 .fleet-list-when { grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fleet-box > .fleet-tools { flex: none; }
-.fleet-box > .fleet-tools input.fleet-filter { width: 100%; box-sizing: border-box; }
+.fleet-box > .fleet-tools input.fleet-filter { max-width: 100%; box-sizing: border-box; }
 /* A short tall card has room for the roster only: its filter shows
    from three rows up. */
 @container widget (height < 30rem) and (width < 30rem) {
@@ -615,6 +647,9 @@
   font-size: var(--fs-sm);
 }
 .w-ind-jobs > li:first-child, .w-pi-rows > li:first-child, .w-ind-pilots > li:first-child { border-top: 0; }
+.w-ind-compact > li { grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto; padding: 0.25rem 0; }
+.w-ind-compact .w-ind-sub { max-width: 9rem; }
+.w-ind-sum { margin: 0 0 var(--space-1); }
 .w-ind-icon { width: 2rem; height: 2rem; border-radius: var(--r-xs); border: 1px solid var(--box-edge); background: rgba(0, 0, 0, 0.35); }
 .w-ind-main { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .w-ind-prod, .w-ind-sub, .w-pi-planet, .w-pi-char, .w-pl-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -662,6 +697,10 @@
 .w-pl-name > small { color: var(--muted); font-size: var(--fs-xs); }
 .w-pl-quiet { color: var(--muted); font-size: var(--fs-sm); }
 .w-card .w-cols > .prodline-col { flex: 2 1 0; min-width: 0; display: flex; flex-direction: column; }
+/* The buy list sets its items in as many columns as the card's width
+   holds, so a 2x2 shows the whole list live showed in one column
+   (the rows still fit whole: homeFitCount reads each row's bottom). */
+.w-card .prodline-buy { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr)); column-gap: var(--space-4); align-content: start; }
 
 /* Planetary Industry: stopped extractors in red, the three-day track,
    and the planets with their run bars. */
@@ -771,6 +810,8 @@
 .w-chips { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); margin: 0; padding: 0; list-style: none; }
 .w-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.6rem; border: 1px solid var(--hairline); border-radius: 999px; background: var(--surface-inset); font-size: var(--fs-sm); white-space: nowrap; }
 .w-chip strong { color: var(--text-bright); font-variant-numeric: proportional-nums; }
+.w-chip.w-chip-zero { color: var(--muted); }
+.w-chip.w-chip-zero strong { color: inherit; }
 .w-kind { flex: none; width: 0.6rem; height: 0.6rem; border-radius: 2px; background: var(--w-c, var(--muted)); }
 .w-k-joined { --w-c: var(--w-s1); }
 .w-k-left { --w-c: var(--w-s2); }
@@ -859,7 +900,7 @@
 /* Medium and large: the decks two or three across, one across on a
    narrow card. Rows of decks that do not fit are left for Expand. */
 .brf-grid ul.brief-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 0.6rem 0.75rem; margin: 0; padding: 0 0.65rem 0.65rem 0; overflow: visible; scroll-snap-type: none; }
-.brf-grid.brf-three ul.brief-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container widget (width >= 60rem) { .brf-grid.brf-three ul.brief-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @container widget (width < 40rem) { .brf-grid ul.brief-cards, .brf-grid.brf-three ul.brief-cards { grid-template-columns: minmax(0, 1fr); } }
 .brf-grid .brief-deck { min-width: 0; width: auto; max-width: none; }
 .brf-grid .brief-card { padding: 0.6rem 0.85rem; }

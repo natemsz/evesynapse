@@ -5,7 +5,7 @@
 <div class="w-lead"><span class="w-lead-label">Top idea: {{.Title}}</span></div>
 {{if .Briefs}}<p class="w-ti-brief">{{index .Briefs 0}}</p>{{end}}
 {{end}}
-{{template "w-note" .Note}}
+<p class="w-note w-keep"><small>{{.Note}} <a href="/market/ideas/">All ideas</a></small></p>
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-tradeideas-wide"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasIdeas}}
@@ -14,12 +14,12 @@
 
 {{define "w-tradeideas-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasIdeas}}
 {{template "w-tradeideas-tabs" $}}
-{{template "w-note" .Note}}
+<p class="w-note w-keep"><small>{{.Note}} <a href="/market/ideas/">All ideas</a></small></p>
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-tradeideas-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasIdeas}}
 {{template "w-tradeideas-tabs" $}}
-{{template "w-note" .Note}}
+<p class="w-note w-keep"><small>{{.Note}} <a href="/market/ideas/">All ideas</a></small></p>
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-tradeideas-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasIdeas}}
@@ -29,7 +29,7 @@
   <ol class="ti-list" data-w-fit>{{range .Briefs}}<li>{{.}}</li>{{end}}</ol>
 </section>{{end}}
 </div>
-{{template "w-note" .Note}}
+<p class="w-note w-keep"><small>{{.Note}} <a href="/market/ideas/">All ideas</a></small></p>
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{/* One strategy at a time behind tabs: briefs in the tall form, the

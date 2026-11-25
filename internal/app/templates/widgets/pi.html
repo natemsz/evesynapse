@@ -13,16 +13,19 @@
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-pi-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-pi-sum" .}}
 {{if .Soonest}}<p data-w-detail><input type="search" id="{{$.Uid "filter"}}" placeholder="Filter by character or planet" aria-label="Filter planetary industry" data-table-filter="{{$.Uid "table"}}" data-row-class="pi-row"></p>
 {{template "w-pi-rows" $}}{{else}}{{template "w-empty" .Empty}}{{end}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-pi-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-pi-sum" .}}
 {{with .Track}}{{template "w-pi-track" .}}{{end}}
 {{if .Soonest}}{{template "w-pi-rows" $}}{{else}}{{template "w-empty" .Empty}}{{end}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-pi-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-pi-sum" .}}
 {{with .Track}}{{template "w-pi-track" .}}{{end}}
 {{if .Groups}}<div class="w-pi-groups">{{range $g := .Groups}}<div class="w-pi-group"><h4 class="w-sub">{{charLink $.ViewerChars .CharID .Char}}</h4><ul class="w-pi-rows" data-w-fit>{{range .Rows}}<li class="pi-row">{{template "w-pi-row" .}}</li>{{end}}</ul></div>{{end}}</div>{{else}}{{template "w-empty" .Empty}}{{end}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
@@ -35,6 +38,10 @@
      and how far the run has gone (when the layout says when it
      started). */}}
 {{define "w-pi-row"}}<span class="w-pi-planet">{{.Planet}}{{if gt .Count 1}} <small>{{.Count}} extractors</small>{{end}}</span>{{if .Expired}}<span class="w-pi-when bad" title="Stopped {{.Expires}}">Stopped</span>{{else}}<span class="w-pi-when {{.Tone}} countdown" data-finish="{{.ExpiresRaw}}" title="Stops {{.Expires}}">{{.Left}}</span>{{end}}{{if .HasCycle}}<span class="l-meter w-meter w-pi-cycle {{.Tone}}" title="{{printf "%.0f" .CyclePct}}% of this run done"><span data-w="{{printf "%.1f" .CyclePct}}"></span></span>{{end}}{{end}}
+
+{{/* The live summary: colonies, stopped extractors, and the way to the
+     Planetary Industry page. */}}
+{{define "w-pi-sum"}}<p class="w-note w-keep w-pi-sum"><small>{{.Summary}} · <a href="/planets/">colonies</a></small></p>{{end}}
 
 {{define "w-pi-next"}}<p class="w-pi-next"><span class="w-pi-next-label">Next to stop</span> {{.Planet}} <span class="countdown" data-finish="{{.ExpiresRaw}}" title="{{.Expires}}">{{.Left}}</span></p>{{end}}
 

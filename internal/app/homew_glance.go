@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"html/template"
+	"strconv"
 	"strings"
 
 	db "evesynapse/internal/db/sqlc"
@@ -65,7 +67,7 @@ type glanceTileDef struct {
 var glanceTiles = []glanceTileDef{
 	{ID: "networth", Label: "Fleet net worth", Needs: []string{esi.SnapWallet, esi.SnapAssets, esi.SnapOrders}, Build: glanceNetWorth},
 	{ID: "wallets", Label: "Liquid wallets", Needs: []string{esi.SnapWallet, esi.SnapAssets, esi.SnapOrders}, Build: glanceWallets},
-	{ID: "assets", Label: "Hangar and asset value", Needs: []string{esi.SnapWallet, esi.SnapAssets, esi.SnapOrders}, Build: glanceAssets},
+	{ID: "assets", Label: "Hangar & asset value", Needs: []string{esi.SnapWallet, esi.SnapAssets, esi.SnapOrders}, Build: glanceAssets},
 	{ID: "training", Label: "Skill training", Needs: []string{esi.SnapSkillqueue}, Build: glanceTraining},
 	{ID: "profit", Label: "Kept profit, 30 days", Build: glanceProfit},
 	{ID: "escrow", Label: "Order escrow", Needs: []string{esi.SnapWallet, esi.SnapAssets, esi.SnapOrders}, Build: glanceEscrow},
@@ -100,8 +102,12 @@ func glanceNeeds() []string {
 type glanceTile struct {
 	ID, Label   string
 	Value, Unit string
+	Hero        string // an ISK figure in full ("4,640,044,553.19"), drawn as the live tiles draw it
 	Full        string // the whole figure, for the title
 	Sub         string
+	SubHTML     template.HTML // a sub line with ISK figures in it
+	SparkPoints string        // the live tile's 30-day sparkline (net worth), as the net worth widget drew it
+	SparkArea   string
 	SubHref     string // the sub line as a link, when it is the next step
 	SubIdle     bool   // the sub line is the idle pilots' link the Fleet Overview answers
 	Href        string
@@ -131,9 +137,7 @@ func (t glanceTile) ChangeTone() string {
 // glanceView is what the At a Glance forms draw.
 type glanceView struct {
 	Tiles []glanceTile
-	Lead  wLead   // small: the first figure
-	Spark *wChart // small: its last 30 days
-	First glanceTile
+	First glanceTile // small: the first figure, with its last 30 days
 }
 
 // glanceBuild is what the tile builders share for one card.
@@ -174,19 +178,10 @@ func buildGlanceWidget(ctx context.Context, app *Application, in *widgetInput) a
 	}
 	if len(v.Tiles) > 0 && in.Draws("small") {
 		f := v.Tiles[0]
-		v.First = f
-		v.Lead = wLead{Label: f.Label, Value: f.Value, Unit: f.Unit, Full: f.Full, Change: f.Change, ChangeText: f.ChangeText,
-			Up: f.Up, UpIsGood: f.UpIsGood, Href: f.Href}
-		if f.Change != "" {
-			if f.Since != "" {
-				v.Lead.Sub = "over " + f.Since
-			}
-		} else {
-			v.Lead.Sub = f.Sub
-		}
 		if len(f.days) > 1 {
-			v.Spark, _ = wLineChart(f.Label+" over the last 30 days", f.Label, 1, f.days)
+			f.Line, _ = wLineChart(f.Label+" over the last 30 days", f.Label, 1, f.days)
 		}
+		v.First = f
 	}
 	return v
 }
@@ -206,7 +201,17 @@ func glanceMonth(nw *netWorthWidget, pick func(netWorthDay) float64) []wDay {
 
 // glanceISK fills a tile's figure as ISK, shown short.
 func glanceISK(t *glanceTile, v float64, full string) {
-	t.Value, t.Unit, t.Full = iskCompact(v), "ISK", full+" ISK"
+	t.Value, t.Unit, t.Full, t.Hero = iskCompact(v), "ISK", full+" ISK", full
+}
+
+// glanceBar is a share the net worth widget wrote as a data-w width
+// ("94.4"), as a tile's bar.
+func glanceBar(w, label string) *glanceMeter {
+	pct, err := strconv.ParseFloat(w, 64)
+	if err != nil || w == "" {
+		return nil
+	}
+	return &glanceMeter{Pct: clampPct(pct), Label: label}
 }
 
 // glanceTrend copies a net worth trend onto a tile.
@@ -224,9 +229,16 @@ func glanceNetWorth(ctx context.Context, g *glanceBuild) glanceTile {
 	}
 	glanceISK(&t, nw.totalNow, nw.Total)
 	glanceTrend(&t, nw.TotalTrend)
-	if nw.AsOf != "" {
-		t.Sub = "Estimate as of " + nw.AsOf
+	t.SparkPoints, t.SparkArea = nw.SparkPoints, nw.SparkArea
+	// What it is made of, as the live tile says it.
+	var parts []string
+	if nw.Wallet != "" {
+		parts = append(parts, "Wallets "+string(iskFig(nw.Wallet)))
 	}
+	if nw.AssetsKnown {
+		parts = append(parts, "Assets "+string(iskFig(nw.Assets)))
+	}
+	t.SubHTML = template.HTML(strings.Join(parts, " · "))
 	t.days = glanceMonth(nw, netWorthDay.Total)
 	return t
 }
@@ -242,6 +254,7 @@ func glanceWallets(ctx context.Context, g *glanceBuild) glanceTile {
 	if nw.WalletPct != "" {
 		t.Sub = nw.WalletPct + " of net worth"
 	}
+	t.Meter = glanceBar(nw.WalletBar, "Share of net worth in wallets")
 	t.days = glanceMonth(nw, func(d netWorthDay) float64 { return d.ISK })
 	return t
 }
@@ -261,6 +274,7 @@ func glanceAssets(ctx context.Context, g *glanceBuild) glanceTile {
 	case nw.AssetsPct != "":
 		t.Sub = nw.AssetsPct + " of items priced"
 	}
+	t.Meter = glanceBar(nw.AssetsBar, "Share of items priced")
 	t.days = glanceMonth(nw, func(d netWorthDay) float64 { return d.Assets })
 	return t
 }
@@ -306,7 +320,7 @@ func glanceTraining(_ context.Context, g *glanceBuild) glanceTile {
 	t.Value, t.Unit = fmt.Sprintf("%d / %d", training, pilots), "training"
 	t.Full = fmt.Sprintf("%d of %d pilots training", training, pilots)
 	if idle > 0 {
-		t.Sub, t.SubHref, t.SubIdle, t.Tone = fmt.Sprintf("%d idle, show them", idle), "/characters/", true, "warn"
+		t.Sub, t.SubHref, t.SubIdle, t.Tone = fmt.Sprintf("%d idle · show them", idle), "/characters/", true, "warn"
 	} else {
 		t.Sub = "Every queue is running"
 	}

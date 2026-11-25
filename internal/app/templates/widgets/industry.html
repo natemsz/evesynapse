@@ -3,8 +3,9 @@
      against the slots each character's skills give. */}}
 
 {{define "w-industry-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Known}}
-{{template "w-lead" .Lead}}
-{{with .Next}}{{template "w-industry-next" .}}{{else}}{{if not .Jobs}}{{template "w-empty" .Empty}}{{end}}{{end}}
+{{if .Jobs}}<p class="w-note w-keep w-ind-sum"><small>{{.Summary}}</small></p>
+{{template "w-industry-jobs-compact" $}}
+{{else}}{{template "w-lead" .Lead}}{{template "w-empty" .Empty}}{{end}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-industry-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{if .Known}}
@@ -30,6 +31,12 @@
 </div>
 {{template "w-note" .Note}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* The small form's job list, one line a job as live drew it:
+     product, character, time left; the rows that fit, then N more. */}}
+{{define "w-industry-jobs-compact"}}{{$w := .}}<ul class="w-ind-jobs w-ind-compact" data-w-fit>
+{{range $i, $j := .Data.Jobs}}<li{{if ge $i $w.Cap}} data-w-over{{end}}><span class="w-ind-prod">{{itemLink .TypeID .Product}}</span><small class="w-ind-sub">{{charLink $w.ViewerChars .CharID .Char}}</small>{{if .Ready}}<span class="w-ind-ready" title="Finished {{.Ends}}">Ready</span>{{else}}<span class="w-ind-left countdown" data-finish="{{.EndRaw}}" title="{{.Ends}}">{{.Left}}</span>{{end}}</li>{{end}}
+</ul>{{end}}
 
 {{/* The next delivery: product and its countdown. */}}
 {{define "w-industry-next"}}<p class="w-ind-next"><span class="w-ind-next-label">Next delivery</span> {{itemLink .TypeID .Product}} <span class="countdown" data-finish="{{.EndRaw}}" title="{{.Ends}}">{{.Left}}</span></p>{{end}}

@@ -67,7 +67,8 @@ type pulseCorpFeed struct {
 
 // pulseView is what the Corp Pulse forms draw.
 type pulseView struct {
-	Counts []pulseCount    // the kinds with changes, across the corporations shown
+	Counts []pulseCount    // every kind the settings show, with its count (zero too), across the corporations shown
+	Corp   string          // the one corporation's name, when the card shows one
 	Feed   []pulseEvent    // every change shown, newest first (timers by their end)
 	Moves  []pulseEvent    // medium: the largest wallet moves
 	Corps  []pulseCorpFeed // large: a column per corporation
@@ -104,7 +105,7 @@ func buildPulseWidget(ctx context.Context, app *Application, in *widgetInput) an
 	total := map[string]int{}
 	for _, c := range corps {
 		feed := pulseCorpEvents(c, kinds)
-		cf := pulseCorpFeed{Name: c.Name, Feed: feed, Counts: pulseCounts(feed)}
+		cf := pulseCorpFeed{Name: c.Name, Feed: feed, Counts: pulseCounts(feed, kinds)}
 		for _, e := range feed {
 			total[e.Kind]++
 		}
@@ -123,9 +124,12 @@ func buildPulseWidget(ctx context.Context, app *Application, in *widgetInput) an
 		v.Feed = v.Feed[:pulseFeedMax]
 	}
 	for _, k := range pulseKindOrder {
-		if total[k.Kind] > 0 {
+		if kinds[k.Kind] {
 			v.Counts = append(v.Counts, pulseCount{Kind: k.Kind, Says: k.Says, N: total[k.Kind]})
 		}
+	}
+	if len(corps) == 1 {
+		v.Corp = corps[0].Name
 	}
 	if len(corps) < 2 {
 		for i := range v.Feed {
@@ -186,14 +190,14 @@ func pulseKindSays(kind string) string {
 
 // pulseCounts is how many changes of each kind a feed holds, the
 // kinds with none left out.
-func pulseCounts(feed []pulseEvent) []pulseCount {
+func pulseCounts(feed []pulseEvent, kinds map[string]bool) []pulseCount {
 	n := map[string]int{}
 	for _, e := range feed {
 		n[e.Kind]++
 	}
 	var out []pulseCount
 	for _, k := range pulseKindOrder {
-		if n[k.Kind] > 0 {
+		if kinds[k.Kind] {
 			out = append(out, pulseCount{Kind: k.Kind, Says: k.Says, N: n[k.Kind]})
 		}
 	}

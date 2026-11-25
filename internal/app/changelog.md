@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v1.0.2.7] - 2026-11-25
+## [v1.0.2.8] - 2026-11-25
+
+Automated build of EveSynapse v1.0.2.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).
+
+## What's Changed
+
+### 🐛 Bug Fixes
+* Hide add-a-widget notes for modules not on the home by @natemsz in #614
+
+### Other Changes
+* Update changelog for v1.0.2.7 by @natemsz in #613
+
+## [v1.0.2.7]
 
 Automated build of EveSynapse v1.0.2.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).

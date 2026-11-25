@@ -44,12 +44,13 @@ type homeKillsTotals struct {
 	Window      string // "7 days"
 	Kills       int64
 	Losses      int64
-	Killed      string // ISK destroyed, short; empty when none is valued
-	Lost        string // ISK lost, short; empty when none is valued
+	Killed      string // ISK destroyed by our appraisal, short; empty when none is valued
+	Lost        string // ISK lost by our appraisal, short; empty when none is valued
 	KillWord    string // "kill" or "kills"
 	LossWord    string // "loss" or "losses"
 	Efficiency  string // "82%", or "" with nothing destroyed or lost
 	Pct         float64
+	Unpriced    int64 // kills and losses we have not valued yet
 	killed, lst float64
 }
 
@@ -145,7 +146,7 @@ func buildKillsWidget(ctx context.Context, app *Application, in *widgetInput) an
 			if systems[i].Kills != systems[j].Kills {
 				return systems[i].Kills > systems[j].Kills
 			}
-			return systems[i].IskKilled > systems[j].IskKilled
+			return systems[i].OwnKilled > systems[j].OwnKilled
 		})
 		var ranked []wRankItem
 		for _, s := range systems {
@@ -153,8 +154,12 @@ func buildKillsWidget(ctx context.Context, app *Application, in *widgetInput) an
 				continue
 			}
 			name := app.homeKillSystem(ctx, s.SystemID)
+			full := fmt.Sprintf("%d kills", s.Kills)
+			if s.OwnKilled > 0 {
+				full += fmt.Sprintf(", %s ISK destroyed", iskCompact(s.OwnKilled))
+			}
 			ranked = append(ranked, wRankItem{Name: name, Link: systemLink(s.SystemID, name), Value: float64(s.Kills),
-				Text: strconv.FormatInt(s.Kills, 10), Full: fmt.Sprintf("%d kills, %s ISK destroyed", s.Kills, iskCompact(s.IskKilled))})
+				Text: strconv.FormatInt(s.Kills, 10), Full: full})
 		}
 		v.Systems, _ = wRankedBars("Where your pilots kill most, last "+v.Main.Window, ranked, len(ranked))
 	}
@@ -174,7 +179,8 @@ func buildKillsWidget(ctx context.Context, app *Application, in *widgetInput) an
 }
 
 // killsWindow is the account's kills and losses over the last days, and
-// the per-system rows they came from.
+// the per-system rows they came from. ISK is our own appraisal only: a
+// kill we have not valued counts as unpriced, never at an outside value.
 func (app *Application) killsWindow(ctx context.Context, ids []int64, now time.Time, days int) (homeKillsTotals, []db.ListAccountKillsBySystemRow) {
 	t := homeKillsTotals{Window: fmt.Sprintf("%d days", days)}
 	rows, err := app.queries.ListAccountKillsBySystem(ctx, db.ListAccountKillsBySystemParams{CharacterIds: ids, Since: now.AddDate(0, 0, -days)})
@@ -185,8 +191,9 @@ func (app *Application) killsWindow(ctx context.Context, ids []int64, now time.T
 	for _, r := range rows {
 		t.Kills += r.Kills
 		t.Losses += r.Losses
-		t.killed += r.IskKilled
-		t.lst += r.IskLost
+		t.killed += r.OwnKilled
+		t.lst += r.OwnLost
+		t.Unpriced += r.Unpriced
 	}
 	if t.killed > 0 {
 		t.Killed = iskCompact(t.killed)

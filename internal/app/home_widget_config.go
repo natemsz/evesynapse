@@ -248,6 +248,9 @@ func (d *homeWidgetDef) settingsView(key string, opts widgetOptions, chars []db.
 				}
 			}
 			for _, c := range o.Choices {
+				if !c.builtIn() {
+					continue
+				}
 				f.Choices = append(f.Choices, widgetSettingsChoice{Value: c.Value, Label: c.Label, Selected: picked[c.Value]})
 			}
 		}

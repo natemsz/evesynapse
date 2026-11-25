@@ -1,6 +1,6 @@
 {{/* Kills and Losses: the account's pilots on the killboard. Values are
-     the killboard's stored mail values. Five forms; none reads its
-     size. */}}
+     EveSynapse's own appraisal only; a kill not valued yet shows no ISK
+     and is counted as not valued. Five forms; none reads its size. */}}
 
 {{define "w-kills-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
 {{template "w-kills-lead" .Main}}
@@ -37,7 +37,7 @@
 <div class="w-lead">
   <span class="w-lead-label">ISK efficiency, {{.Window}}</span>
   <span class="w-lead-value"{{if .Efficiency}} title="{{.Killed}} ISK destroyed, {{.Lost}} ISK lost"{{end}}>{{if .Efficiency}}{{.Efficiency}}{{else}}<small>No ISK valued yet</small>{{end}}</span>
-  <span class="w-lead-sub">{{.Kills}} {{.KillWord}}, {{.Losses}} {{.LossWord}}</span>
+  <span class="w-lead-sub">{{.Kills}} {{.KillWord}}, {{.Losses}} {{.LossWord}}{{if .Unpriced}}, {{.Unpriced}} not valued yet{{end}}</span>
 </div>
 {{if .Efficiency}}<span class="l-meter w-meter kl-meter {{.Tone}}" title="{{.Killed}} ISK destroyed, {{.Lost}} ISK lost"><span data-w="{{printf "%.1f" .Pct}}"></span></span>{{end}}
 </div>{{end}}
@@ -45,7 +45,7 @@
 {{define "w-kills-tile"}}<div class="l-stat w-tile">
   <span class="l-stat-label">Last {{.Window}}</span>
   <span class="l-stat-value">{{if .Efficiency}}{{.Efficiency}} <small>ISK efficiency</small>{{else}}<small>No ISK valued yet</small>{{end}}</span>
-  <span class="l-stat-sub">{{.Kills}} {{.KillWord}}{{with .Killed}} ({{.}} ISK){{end}}, {{.Losses}} {{.LossWord}}{{with .Lost}} ({{.}} ISK){{end}}</span>
+  <span class="l-stat-sub">{{.Kills}} {{.KillWord}}{{with .Killed}} ({{.}} ISK){{end}}, {{.Losses}} {{.LossWord}}{{with .Lost}} ({{.}} ISK){{end}}{{if .Unpriced}}, {{.Unpriced}} not valued yet{{end}}</span>
   {{if .Efficiency}}<span class="l-meter w-meter kl-meter {{.Tone}}" aria-hidden="true"><span data-w="{{printf "%.1f" .Pct}}"></span></span>{{end}}
 </div>{{end}}
 
@@ -53,7 +53,7 @@
      edge. */}}
 {{define "w-kills-list"}}<ul class="kl-list" data-w-fit>{{range .Data.Latest}}<li class="{{if .Lost}}kl-loss{{end}}">
   <a class="kl-ship" href="{{.Href}}">{{.Ship}}</a>
-  <span class="kl-value">{{if .Value}}{{.Value}}{{end}}</span>
+  <span class="kl-value">{{if .Value}}{{.Value}}{{else}}<small>Not valued yet</small>{{end}}</span>
   <small class="kl-where">{{if .Lost}}Lost in {{else}}Killed in {{end}}{{systemLink .SystemID .System}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}</small>
   <small class="kl-ago" title="{{.At}}">{{.Ago}}</small>
 </li>{{end}}</ul>{{end}}

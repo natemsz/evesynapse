@@ -104,13 +104,13 @@ func TestPulseWidgetGatesAndRenders(t *testing.T) {
 		esi.CorpMemberTrackings{{CharacterID: 93300006, StartDate: rfc(now.Add(-24 * time.Hour))}},
 		esi.CorpJournal{{ID: 2, Date: rfc(now.Add(-2 * time.Hour)), RefType: "bounty_prizes", Amount: 9000000, Balance: 10000000, Description: "rats"}},
 		esi.CorpStructures{{StructureID: 103, Name: "Astrahus Three", UnanchorsAt: rfc(now.Add(48 * time.Hour))}})
-	setHomeLayout(t, q, user.ID, `[{"id":"pulse"}]`)
+	setHomeLayout(t, q, user.ID, `[{"id":"pulse","w":1,"h":2}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/", body, "Corp Pulse", "Character #93300006", "bounty_prizes", "Astrahus Three", "unanchoring")
+	mustContain(t, "/", body, "Corp Pulse", "Character #93300006", "rats (9,000,000.00 ISK)", "Astrahus Three", "unanchoring")
 
 	// Without a qualifying role the widget shows the gated note.
 	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpRoles, esi.CharacterRoles{Roles: []string{"Contract_Taker"}})

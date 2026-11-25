@@ -33,7 +33,7 @@ func TestUpkeepRendersAndGates(t *testing.T) {
 		{StructureID: 202, Name: "Full Fuel Keep", FuelExpires: rfc(now.Add(60 * 24 * time.Hour))},
 		{StructureID: 203, Name: "Leaving Astra", UnanchorsAt: rfc(now.Add(72 * time.Hour))},
 	})
-	setHomeLayout(t, q, user.ID, `[{"id":"upkeep"}]`)
+	setHomeLayout(t, q, user.ID, `[{"id":"upkeep","w":1,"h":2}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {

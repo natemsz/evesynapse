@@ -194,6 +194,10 @@
    aspect-ratio query, so cards that take their content's height
    stack. */
 .w-side { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+/* .w-rest: the column beside the side that is not a chart (a list
+   and its "N more" line). */
+.w-rest { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.w-body.w-split > .w-rest { flex: 1 1 0; }
 @container widget (aspect-ratio > 2.2) {
   .w-body.w-split { flex-direction: row; align-items: stretch; gap: var(--space-4); }
   .w-body.w-split > :first-child { flex: 0 0 auto; width: clamp(9rem, 30%, 15rem); justify-content: center; }
@@ -699,3 +703,88 @@
 .w-pi-when.bad { color: var(--v-bad-ink, var(--danger)); }
 .w-pi-groups { flex: 1 1 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-2) var(--space-4); min-height: 0; overflow: hidden; }
 .w-pi-group { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+
+/* ---------------------------------------------------------------------
+   Market and corporation widgets (Market orders, Market Watchlist,
+   Trade Ideas, Corp Pulse, Upkeep & Fuel): the parts their forms add
+   to the kit.
+   --------------------------------------------------------------------- */
+
+/* A lead with a status badge beside it. */
+.w-leadrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); min-width: 0; }
+.w-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.w-badge.w-warn { color: var(--v-warn, #fbbf24); background: color-mix(in srgb, var(--v-warn, #fbbf24) 12%, transparent); }
+.w-badge.w-bad { color: var(--v-bad-ink, #ffab8f); background: var(--v-bad-bg, rgba(120, 26, 6, 0.38)); }
+.w-quiet { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+
+/* Rows that need you: the thing, why, and whose it is. */
+.w-alist, .w-feed { display: flex; flex-direction: column; gap: 0.35rem; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.w-alist > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 0.6rem; font-size: var(--fs-sm); }
+.w-alist-main, .w-feed-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-alist-why { white-space: nowrap; color: var(--text); }
+.w-alist-sub { grid-column: 1 / -1; color: var(--muted); font-size: var(--fs-xs); }
+
+/* Two lists side by side: each takes half. */
+.w-cols.w-cols-lists > .w-aside { flex: 1 1 0; min-width: 0; }
+
+/* Watchlist: the biggest mover's name, movers side by side, and the
+   stored 30-day line in a column or slot of its own. */
+.w-watch-name { flex: 1 0 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-md); }
+.w-movers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--space-2) var(--space-4); margin: 0; padding: 0; list-style: none; flex: 1 1 auto; min-height: 0; }
+.w-movers > li { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; min-height: 0; }
+.w-movers-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+.w-movers-fig { font-family: var(--font-num); font-size: var(--fs-lg); font-weight: 700; color: var(--text-bright); white-space: nowrap; }
+.w-movers-fig small { font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 400; color: var(--text); }
+.w-movers-line { flex: 1 1 auto; min-height: 1.5rem; }
+.w-card .px-line { display: block; width: 100%; height: 1.5rem; }
+.w-card .w-movers-line .px-line { height: 100%; min-height: 1.5rem; }
+.w-card .px-line polyline { fill: none; stroke: var(--w-s1); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.w-watch .w-trend { width: 5.5rem; }
+
+/* Trade Ideas: a strategy with its top idea, strategies side by side,
+   and whole lines that wrap. */
+.w-ti-brief { margin: 0; min-width: 0; font-size: var(--fs-sm); color: var(--text); }
+.w-ti-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.w-ti-chips > li { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-left: 3px solid var(--ti-accent, var(--accent)); border-radius: var(--r-sm); background: var(--surface-inset); }
+.w-ti-chip { font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-bright); }
+.w-ti-chips .w-ti-brief { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-ti-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-3); flex: 1 1 auto; min-height: 0; }
+.w-ti-col { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; min-height: 0; overflow: hidden; }
+.w-ti-col .ti-h { margin: 0; }
+.w-ti-col .ti-list li { font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-ti-tabs .ti-h { display: none; }
+.w-ti-whole .ti-list li { white-space: normal; }
+
+/* Corp Pulse: counts as chips, and changes with their kind's mark. */
+.w-chips { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); margin: 0; padding: 0; list-style: none; }
+.w-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.6rem; border: 1px solid var(--hairline); border-radius: 999px; background: var(--surface-inset); font-size: var(--fs-sm); white-space: nowrap; }
+.w-chip strong { color: var(--text-bright); font-variant-numeric: proportional-nums; }
+.w-kind { flex: none; width: 0.6rem; height: 0.6rem; border-radius: 2px; background: var(--w-c, var(--muted)); }
+.w-k-joined { --w-c: var(--w-s1); }
+.w-k-left { --w-c: var(--w-s2); }
+.w-k-anchored { --w-c: var(--w-s3); }
+.w-k-wallet { --w-c: var(--w-s4); }
+.w-k-removed { background: none; border: 2px solid var(--w-s3); }
+.w-k-timers { background: none; border: 2px solid var(--w-s4); border-radius: 50%; }
+.w-feed > li { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 0 0.45rem; font-size: var(--fs-sm); }
+.w-feed-says { font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.w-feed-when { grid-column: 3; color: var(--muted); font-size: var(--fs-xs); }
+
+/* Upkeep: a meter's fill, and the soonest deadlines' meters side by
+   side. */
+.w-upkeep .w-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.w-meters-row > .w-meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: var(--space-2) var(--space-4); }
+.w-upkeep .w-meters > li.warn .w-meter > span { background: var(--v-warn, #fbbf24); }
+.w-upkeep .w-meters > li.bad .w-meter-val { color: var(--v-bad-ink, #ffab8f); }

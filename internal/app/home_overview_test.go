@@ -190,7 +190,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 	// Industry + market cards.
 	mustContain(t, "/", body,
 		"Industry", "Ready to deliver", "1 running",
-		"Market", "open orders", "<strong>2</strong>",
+		"Market", `title="2 open orders"`,
 		"3,000,000.00", // sell 3 × 1,000,000
 	)
 

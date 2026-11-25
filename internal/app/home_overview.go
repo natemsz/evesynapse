@@ -651,12 +651,6 @@ type marketCharRow struct {
 	Soonest  string // soonest expiring order: "Tritanium (in 2d 3h)"
 }
 
-// watchlistWidget is the Home Market-watchlist module: the same
-// rows the Market page computes, at a glance.
-type watchlistWidget struct {
-	Rows []watchlistRow
-}
-
 type marketWidget struct {
 	Merge       string // mergeBoth | mergeCombined | mergePerCharacter: the show setting, both for one character
 	EmptyOrders string // scoped characters known, nothing open
@@ -1009,18 +1003,16 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, s
 				}
 			}
 		}
-		if w.Merge == mergePerCharacter {
-			if cSell > 0 {
-				row.Sell = fmt.Sprintf("%d sell · %s ISK", cSell, esi.FormatISK(cSellSum))
-			}
-			if cBuy > 0 {
-				row.Buy = fmt.Sprintf("%d buy · %s ISK in escrow", cBuy, esi.FormatISK(cBuySum))
-			}
-			if soonest != nil {
-				row.Soonest = fmt.Sprintf("%s (in %s)", soonest.row.Item, humanDuration(time.Until(soonest.at)))
-			}
-			w.PerChar = append(w.PerChar, row)
+		if cSell > 0 {
+			row.Sell = fmt.Sprintf("%d sell · %s ISK", cSell, esi.FormatISK(cSellSum))
 		}
+		if cBuy > 0 {
+			row.Buy = fmt.Sprintf("%d buy · %s ISK in escrow", cBuy, esi.FormatISK(cBuySum))
+		}
+		if soonest != nil {
+			row.Soonest = fmt.Sprintf("%s (in %s)", soonest.row.Item, humanDuration(time.Until(soonest.at)))
+		}
+		w.PerChar = append(w.PerChar, row)
 	}
 	w.AnyData = w.OrdersKnown > 0
 	sort.SliceStable(expiring, func(i, j int) bool {
@@ -1054,13 +1046,6 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, s
 		w.Health = app.marketHealthLine(ctx, shared)
 	}
 	return w
-}
-
-// buildWatchlistWidget assembles the Home watchlist module from
-// the same stored rows the Market page renders: latest average,
-// 7/30-day moves, and the moving flag past the user's line.
-func (app *Application) buildWatchlistWidget(ctx context.Context, shared *homeMarketShared) *watchlistWidget {
-	return &watchlistWidget{Rows: app.watchlistRows(ctx, shared.watchlist(ctx), shared.watchMove, app.vizPrefsFor(ctx, shared.userID).SparkHover)}
 }
 
 // marketHealthLine sums the market widget's one-line health
@@ -1233,7 +1218,9 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		for i := range view.Customize.Entries {
 			e := &view.Customize.Entries[i]
 			if def, ok := widgetDefFor(e.ID); ok && e.Enabled {
-				e.Settings = def.settingsView(def.ID, def.optionsFrom(shared.Config(ctx, def.ID), chars), chars)
+				opts := def.optionsFrom(shared.Config(ctx, def.ID), chars)
+				e.Settings = def.settingsView(def.ID, opts, chars)
+				shared.fillCorpChoices(ctx, e.Settings, opts)
 			}
 		}
 	}

@@ -363,6 +363,7 @@ func (app *Application) diffPulseStructures(ctx context.Context, ref pulseCorpRe
 type pulseJoin struct {
 	Name   string
 	Joined string
+	At     time.Time
 }
 
 // pulseMove is one significant wallet movement: division,
@@ -371,24 +372,23 @@ type pulseMove struct {
 	Division int64
 	Text     string
 	When     string
+	At       time.Time
 }
 
 // pulseChange is one recorded departure, arrival, or removal.
 type pulseChange struct {
 	Text string
 	When string
+	At   time.Time
 }
 
 // pulseTimer is a structure running a clock: unanchoring or a
 // pending state transition.
-type pulseTimer struct {
-	Name string
-	Text string
-	When string
-}
+type pulseTimer = structureClock
 
 // pulseCorpView is one corporation's visible pulse.
 type pulseCorpView struct {
+	CorpID  int64
 	Name    string
 	Joined  []pulseJoin
 	Left    []pulseChange
@@ -432,7 +432,7 @@ func (app *Application) buildPulse(ctx context.Context, userID int64) *pulseWidg
 		if !members && !wallet && !structs {
 			continue
 		}
-		view := pulseCorpView{Name: app.pulseCorpName(ctx, ref)}
+		view := pulseCorpView{CorpID: ref.CorpID, Name: app.pulseCorpName(ctx, ref)}
 		if members {
 			view.Joined = app.pulseJoined(ctx, ref, now)
 			view.Left, _ = app.pulseChanges(ctx, ref.CorpID, pulseMemberLeft, now)
@@ -474,7 +474,7 @@ func (app *Application) pulseJoined(ctx context.Context, ref pulseCorpRef, now t
 			// else the stand-in with a want left for the worker.
 			name = app.displayCharacter(ctx, t.CharacterID)
 		}
-		out = append(out, pulseJoin{Name: name, Joined: formatFinish(t.StartDate)})
+		out = append(out, pulseJoin{Name: name, Joined: formatFinish(t.StartDate), At: start})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	if len(out) > 5 {
@@ -506,7 +506,7 @@ func (app *Application) pulseChanges(ctx context.Context, corpID int64, kind str
 				text = app.displayCharacter(ctx, id)
 			}
 		}
-		out = append(out, pulseChange{Text: text, When: formatFinish(r.At.UTC().Format(time.RFC3339))})
+		out = append(out, pulseChange{Text: text, When: formatFinish(r.At.UTC().Format(time.RFC3339)), At: r.At})
 		if len(out) >= 5 {
 			break
 		}
@@ -546,15 +546,17 @@ func (app *Application) pulseMoves(ctx context.Context, ref pulseCorpRef, now ti
 			if abs < pulseMoveMinISK {
 				continue
 			}
-			text := e.RefType
-			if e.Description != "" {
-				text += ": " + e.Description
+			// The journal's own description, else its kind in words.
+			text := e.Description
+			if text == "" {
+				text = flowRefName(e.RefType)
 			}
 			all = append(all, candidate{
 				move: pulseMove{
 					Division: div.Division,
 					Text:     text + " (" + esi.FormatISK(e.Amount) + " ISK)",
 					When:     formatFinish(e.Date),
+					At:       at,
 				},
 				abs: abs,
 				at:  at,
@@ -585,7 +587,7 @@ func (app *Application) pulseTimers(ctx context.Context, ref pulseCorpRef) []pul
 		if len(out) >= 5 {
 			break
 		}
-		out = append(out, pulseTimer{Name: c.Name, Text: c.Text, When: c.When})
+		out = append(out, c)
 	}
 	return out
 }

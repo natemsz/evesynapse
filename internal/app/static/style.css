@@ -7025,4 +7025,5 @@ html[data-vision="blueyellow"] .pip-t2 { background: #6b5280; color: #f5ecff; }
    and on a card the pair takes the card's full width. */
 .chars-table form { display: flex; align-items: center; gap: var(--space-2); margin: 0; }
 .chars-table form input[name="tags"] { flex: 1 1 8rem; min-width: 0; width: auto; }
+.chars-table form .btn { flex: none; white-space: nowrap; }
 #main-content table.cards-on.chars-table > tbody > tr > td:has(> form) { grid-column: 1 / -1; }

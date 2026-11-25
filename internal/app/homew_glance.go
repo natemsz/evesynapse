@@ -30,8 +30,8 @@ func init() {
 			{Name: "small", Sizes: "1x1", Says: "Your first figure, its 7-day change and a 30-day line."},
 			{Name: "wide", Sizes: "2x1 3x1", Says: "Your figures as tiles in one row, as many as fit."},
 			{Name: "tall", Sizes: "1x2 1x3", Says: "Your figures as tiles, one per row."},
-			{Name: "medium", Sizes: "2x2", Says: "Four figures, each with its line or meter."},
-			{Name: "large", Sizes: "3x2", Says: "Six figures, each with its line or meter."},
+			{Name: "medium", Sizes: "2x2", Says: "Your figures in two columns, each with its line or meter."},
+			{Name: "large", Sizes: "3x2", Says: "Your figures in three columns, each with its line or meter."},
 		},
 		Needs: glanceNeeds(),
 		Options: []widgetOption{

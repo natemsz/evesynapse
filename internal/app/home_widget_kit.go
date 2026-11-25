@@ -592,6 +592,8 @@ type homeShared struct {
 
 	briefingSince    time.Time
 	briefingSinceSet bool
+
+	queueEnds map[int64]time.Time // QueueEnds: each pilot's last queued finish
 }
 
 // NetWorth is the account's net worth, built at most once per render:
@@ -610,6 +612,25 @@ func (s *homeShared) BriefingSince(ctx context.Context) time.Time {
 		s.briefingSince, s.briefingSinceSet = s.app.briefingWindowStart(ctx, s.userID, s.now), true
 	}
 	return s.briefingSince
+}
+
+// QueueEnds is when each pilot's skill queue runs out, by character id:
+// the last finish date in the stored queue (the Briefing's
+// lastQueueFinish). A pilot with no dated queue entry is left out.
+// Computed once per render for every widget that shows it.
+func (s *homeShared) QueueEnds() map[int64]time.Time {
+	if s.queueEnds == nil {
+		s.queueEnds = make(map[int64]time.Time, len(s.bundles))
+		for _, b := range s.bundles {
+			if !b.queueKnown {
+				continue
+			}
+			if t, ok := parseRFC3339(lastQueueFinish(b.queue)); ok {
+				s.queueEnds[b.ch.CharacterID] = t
+			}
+		}
+	}
+	return s.queueEnds
 }
 
 // viewerChars is the account's characters as the set charLink reads.

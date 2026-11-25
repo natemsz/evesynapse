@@ -111,7 +111,7 @@ func TestHomeGridSizes(t *testing.T) {
 	_, body := getPage(t, app, cookie, "/")
 	mustContain(t, "/ defaults", body,
 		// Each card carries the sizes it declares for the size picker.
-		`<section class="card w-card gw3 gh2" data-widget="fleet" data-key="fleet" data-gw="3" data-gh="2" data-sizes="2x2 2x3 3x2 3x3" data-size-names=`,
+		`<section class="card w-card gw3 gh2" data-widget="fleet" data-key="fleet" data-gw="3" data-gh="2" data-sizes="1x1 1x2 1x3 1x4 2x1 2x2 2x3 2x4 3x1 3x2 3x3 3x4" data-size-names=`,
 		// An old wide span is the full width now.
 		`<section class="card w-card gw3 gh1" data-widget="market" data-key="market" data-gw="3" data-gh="1" data-sizes="1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`,
 		`<section class="card w-card gw1 gh1" data-widget="watchlist" data-key="watchlist" data-gw="1" data-gh="1" data-sizes="1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`)
@@ -140,9 +140,9 @@ func TestHomeGridSizes(t *testing.T) {
 		{url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"1"}, "h": {"0"}}, http.StatusBadRequest},
 		{url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"x"}, "h": {"1"}}, http.StatusBadRequest},
 		{url.Values{"action": {"size"}, "widget": {widgetPI}, "w": {"2"}, "h": {"2"}}, http.StatusOK},
-		// Under the fleet table's 2x2 floor.
-		{url.Values{"action": {"size"}, "widget": {widgetFleet}, "w": {"1"}, "h": {"2"}}, http.StatusBadRequest},
-		{url.Values{"action": {"size"}, "widget": {widgetFleet}, "w": {"3"}, "h": {"1"}}, http.StatusBadRequest},
+		// Sizes At a Glance does not declare.
+		{url.Values{"action": {"size"}, "widget": {widgetGlance}, "w": {"2"}, "h": {"3"}}, http.StatusBadRequest},
+		{url.Values{"action": {"size"}, "widget": {widgetGlance}, "w": {"1"}, "h": {"4"}}, http.StatusBadRequest},
 	} {
 		if code, _ := doLayoutPost(t, app, c.v, cookie, true); code != c.want {
 			t.Fatalf("size POST %v: status %d, want %d", c.v, code, c.want)

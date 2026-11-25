@@ -31,10 +31,10 @@ func TestSparklineSVG(t *testing.T) {
 	}
 }
 
-// TestHomeKPISparkAndPricedBar: with two sampled days the Fleet net
-// worth KPI carries the sparkline and the Hangar KPI its priced-share
-// bar; with one day there is no SVG anywhere.
-func TestHomeKPISparkAndPricedBar(t *testing.T) {
+// TestHomeGlanceLinesAndPricedShare: with two sampled days the medium
+// At a Glance draws the net worth tile's line and the asset tile says
+// how much of the hangar is priced; with one day there is no line.
+func TestHomeGlanceLinesAndPricedShare(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -54,13 +54,13 @@ func TestHomeKPISparkAndPricedBar(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed region stat: %v", err)
 	}
-	setHomeLayout(t, q, user.ID, `[{"id":"glance"}]`)
+	setHomeLayout(t, q, user.ID, `[{"id":"glance","w":2,"h":2}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	seedWalletSample(t, q, user.ID, fixtureCharA, "2026-03-01", 100, nw(1000))
 	_, body := getPage(t, app, cookie, "/")
-	if strings.Contains(body, "kpi-spark") {
-		t.Error("one sampled day rendered a sparkline; want none")
+	if strings.Contains(body, `class="w-spark pchart"`) {
+		t.Error("one sampled day drew a line; want none")
 	}
 
 	seedWalletSample(t, q, user.ID, fixtureCharA, "2026-03-02", 120, nw(1400))
@@ -68,46 +68,26 @@ func TestHomeKPISparkAndPricedBar(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/ (spark + priced bar)", body,
-		`class="kpi-spark"`, `class="kpi-spark-line"`,
-		`<span class="kpi-bar"><span data-w="50.0"></span></span>`) // 1 of 2 items priced
+	mustContain(t, "/ (line + priced share)", body,
+		`data-tile="networth"`, `class="w-spark pchart"`,
+		"1 of 2 items priced")
 }
 
-// TestHomeKPIGlyphs: each of the four glance KPI tiles carries
-// its mockup glyph span (wallet, coins, package, book), the
-// briefing-card icon treatment at tile scale, and no other tile
-// on the page grows one.
-func TestHomeKPIGlyphs(t *testing.T) {
-	transport := &countingTransport{}
-	app, _, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-	user, err := q.CreateUser(ctx)
-	if err != nil {
-		t.Fatalf("create user: %v", err)
+// wideCard is one card of a home page, the widget's body as a desktop
+// reader sees it, without the one-column copy a phone draws beside it.
+func wideCard(body, id string) string {
+	i := strings.Index(body, `data-widget="`+id+`"`)
+	if i < 0 {
+		return ""
 	}
-	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	seedSnapshot(t, q, fixtureCharA, esi.SnapWallet, 1000.5)
-	setHomeLayout(t, q, user.ID, `[{"id":"glance"}]`)
-	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
-
-	code, body := getPage(t, app, cookie, "/")
-	if code != 200 {
-		t.Fatalf("GET /: status %d", code)
+	card := body[i:]
+	if j := strings.Index(card, `<section class="card`); j >= 0 {
+		card = card[:j]
 	}
-	mustContain(t, "/ (kpi glyphs)", body,
-		`<span class="kpi-icon kpi-icon-wallet" aria-hidden="true">`,
-		`<span class="kpi-icon kpi-icon-coins" aria-hidden="true">`,
-		`<span class="kpi-icon kpi-icon-assets" aria-hidden="true">`,
-		`<span class="kpi-icon kpi-icon-skills" aria-hidden="true">`,
-		// One distinctive path fragment per glyph, so a swapped
-		// or dropped path fails here, not on my screen.
-		`M19 7V4a1 1 0 0 0-1-1H5`,                   // wallet body
-		`<circle cx="16" cy="8" r="6"/>`,            // coins top coin
-		`<polyline points="3.29 7 12 12 20.71 7"/>`, // package lid seam
-		`M22 4h-6a4 4 0 0 0-4 4v12`)                 // book-open right cover
-	if got := strings.Count(body, `class="kpi-icon `); got != 4 {
-		t.Errorf("kpi glyph spans = %d, want exactly the four glance tiles", got)
+	if j := strings.Index(card, `w-narrow"`); j >= 0 {
+		card = card[:j]
 	}
+	return card
 }
 
 // TestFleetSecurityBadge: a pilot's location cell carries the
@@ -136,7 +116,7 @@ func TestFleetSecurityBadge(t *testing.T) {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/ (fleet badge)", body, `<span class="sec-pill sec-0">-0.3</span>`)
-	if got := strings.Count(body, "sec-pill"); got != 1 {
+	if got := strings.Count(wideCard(body, "fleet"), "sec-pill"); got != 1 {
 		t.Errorf("security pills = %d, want 1 (only the pilot with a known location)", got)
 	}
 }

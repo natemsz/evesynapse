@@ -21,19 +21,21 @@
   }
 
   // --- Fleet filter (home overview) ---------------------------
-  // The fleet table renders every character server-side; this
-  // just hides rows that don't match the typed text or the
-  // active chip: All, a tag, or Not training. A row's detail row
-  // goes with it, and a click anywhere on a row (not on a link)
-  // opens its detail, like its chevron. No JS: the full list is
-  // simply visible, details and all.
-  function initFleetFilter(root) {
-    var fleetFilter = root.querySelector("[data-fleet-filter]");
-    var fleetRows = root.querySelectorAll(".fleet-row");
-    if (!fleetFilter || !fleetRows.length || !once(fleetFilter, "filter")) return;
-    var noMatch = root.querySelector(".fleet-nomatch");
-    var shownEl = root.querySelector("[data-fleet-shown]");
-    var chips = root.querySelectorAll(".fleet-tags .chip");
+  // Each Fleet Overview roster (.fleet-box: the card's body, its
+  // phone body, the Expand view) renders every pilot in its scope
+  // server-side; this hides the rows that don't match the typed
+  // text or the active chip: All, a tag, or Not training. A row's
+  // detail row goes with it, and a click anywhere on a row (not on a
+  // link) opens its detail, like its chevron. Each body is wired on
+  // its own, so two on one page never share a filter. No JS: the
+  // full list is simply visible, details and all.
+  function initFleetBox(box) {
+    var fleetFilter = box.querySelector(".fleet-filter");
+    var fleetRows = box.querySelectorAll(".fleet-row");
+    if (!fleetFilter || !fleetRows.length || !once(box, "fleet")) return;
+    var noMatch = box.querySelector(".fleet-nomatch");
+    var shownEl = box.querySelector("[data-fleet-shown]");
+    var chips = box.querySelectorAll(".fleet-tags .chip");
     var activeTag = "";
     var idleOnly = false;
     var detailOf = function (row) {
@@ -80,20 +82,34 @@
         if (btn) btn.click();
       });
     }
-    // The KPI band's idle count ("N idle, show them") is a link to
-    // the Characters page; with the Fleet Overview on the page it
-    // filters the fleet to the idle pilots and brings the module into
-    // view instead.
-    var idleLink = root.querySelector("[data-fleet-idle]");
-    var idleChip = root.querySelector(".fleet-tags [data-idle-chip]");
-    var fleetCard = fleetFilter.closest(".card");
-    if (idleLink && idleChip && fleetCard) {
-      idleLink.addEventListener("click", function (ev) {
+    // The idle links elsewhere on the home ask the box to show its
+    // idle pilots.
+    var idleChip = box.querySelector(".fleet-tags [data-idle-chip]");
+    box._fleetShowIdle = idleChip ? function () {
+      if (!idleChip.classList.contains("on")) pick(idleChip);
+    } : null;
+  }
+  // An idle count ("2 idle, show them") links to the Characters page;
+  // with a Fleet Overview on the home that can filter to its idle
+  // pilots, it does that and brings the card into view instead.
+  function initFleetIdleLink(link) {
+    if (!once(link, "fleetidle")) return;
+    link.addEventListener("click", function (ev) {
+      var boxes = document.querySelectorAll(".grid.home-grid > .card[data-widget='fleet'] .fleet-box");
+      for (var i = 0; i < boxes.length; i++) {
+        if (!boxes[i]._fleetShowIdle || !boxes[i].getClientRects().length) continue;
         ev.preventDefault();
-        if (!idleChip.classList.contains("on")) pick(idleChip);
-        fleetCard.scrollIntoView({ block: "start", behavior: "smooth" });
-      });
-    }
+        boxes[i]._fleetShowIdle();
+        boxes[i].closest(".card").scrollIntoView({ block: "start", behavior: "smooth" });
+        return;
+      }
+    });
+  }
+  function initFleetFilter(root) {
+    var boxes = Array.prototype.slice.call(root.querySelectorAll(".fleet-box"));
+    if (root.matches && root.matches(".fleet-box")) boxes.push(root);
+    boxes.forEach(initFleetBox);
+    Array.prototype.forEach.call(root.querySelectorAll("[data-fleet-idle]"), initFleetIdleLink);
   }
   onContentReady(initFleetFilter);
   initFleetFilter(document);

@@ -152,20 +152,6 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		!strings.Contains(bg, "background-color: color-mix(in srgb, var(--panel) 88%, transparent);") {
 		t.Error("bg.css lost the charselector dropdown's deep paint; the open list is illegible over content again")
 	}
-	// The home KPI tiles carry the mockup's Lucide glyphs in their
-	// top right (the .brief-icon treatment at tile scale). The
-	// rules live in bg.css, style.css has outgrown a whole-file
-	// push, pinned here so a merge cannot silently drop them.
-	for _, want := range []string{
-		".kpi { position: relative; }",
-		".kpi:has(> .kpi-icon) .kpi-k { padding-right: 1.5rem; }",
-		".kpi-icon { position: absolute; top: 0.55rem; right: 0.6rem; width: 16px; height: 16px;",
-		".kpi-icon svg { display: block; width: 16px; height: 16px; }",
-	} {
-		if !strings.Contains(bg, want) {
-			t.Errorf("bg.css is missing the KPI glyph rule %q", want)
-		}
-	}
 	if !strings.Contains(style, ".page-body:has(.home-grid) {") {
 		t.Error("style.css lost the widget-home wrapper exemption")
 	}
@@ -201,8 +187,8 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read widgets/glance.html: %v", err)
 	}
-	if !strings.Contains(string(tpl), `{{if .NetWorth.SparkPoints}}<svg class="kpi-spark"`) {
-		t.Error("the KPI sparkline is not gated on its points being present")
+	if !strings.Contains(string(tpl), `{{if .Line}}{{template "w-spark" .Line}}`) {
+		t.Error("the tile line is not gated on its points being present")
 	}
 }
 

@@ -1,33 +1,75 @@
-{{define "w-fleet-all"}}{{$cap := .Cap}}
-{{with .Data}}
-{{if or .Tags .Idle}}<p class="fleet-tags"><span class="fleet-tags-label">Tags:</span>
-  <button type="button" class="chip on" data-tag="" aria-pressed="true">All</button>
-  {{range .Tags}}<button type="button" class="chip" data-tag="{{.}}" aria-pressed="false">{{.}}</button>{{end}}
-  {{if .Idle}}<button type="button" class="chip sev-critical" data-tag="" data-idle-chip aria-pressed="false">Not training ({{.Idle}})</button>{{end}}
-</p>{{end}}
-<p class="fleet-tools">
-  <input id="{{$.Uid "filter"}}" data-fleet-filter type="search" aria-label="Filter characters" placeholder="Filter by name, tag, corporation or system…" size="36">
-</p>
-<div class="tw">
+{{/* Fleet Overview: every pilot in the card's scope, in the order its
+     sort option says. Five forms; none reads its size. The roster in
+     the tall, medium and large forms scrolls inside the card
+     (data-w-scroll) under its filter; home.js filters each body on its
+     own (.fleet-box). */}}
+
+{{define "w-fleet-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+<dl class="fleet-counts">
+  <div><dt>Pilots</dt><dd>{{len .Rows}}</dd></div>
+  {{if .OnlineKnown}}<div><dt>Online</dt><dd>{{.Online}}</dd></div>{{end}}
+  <div><dt>Training</dt><dd>{{.Training}}</dd></div>
+  <div class="{{if .Idle}}fleet-count-idle{{end}}"><dt>Not training</dt><dd>{{if .Idle}}<a href="/characters/" data-fleet-idle>{{.Idle}}</a>{{else}}0{{end}}</dd></div>
+</dl>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-fleet-wide"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+<ul class="fleet-faces" data-w-fit>{{range $i, $r := .Rows}}<li{{if ge $i $.Cap}} data-w-over{{end}}>
+  <a class="fleet-face" href="/character/?character={{.ID}}" title="{{.Name}}{{if .SystemName}}, {{.SystemName}}{{end}}{{if .QueueKnown}}{{if .NotTraining}}, not training{{end}}{{end}}"><span class="pilot"><img class="portrait" src="{{.PortraitURL}}" alt="" width="48" height="48">{{if .OnlineKnown}}<span class="dot {{if .Online}}on{{else}}off{{end}}"></span>{{end}}</span><span class="fleet-face-name">{{.Name}}</span></a>
+  <span class="visually-hidden">{{if .OnlineKnown}}{{if .Online}}online{{else}}offline{{end}}{{end}}{{if .QueueKnown}}{{if .NotTraining}}, not training{{end}}{{end}}</span>
+</li>{{end}}</ul>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-fleet-tall"}}<div class="w-body fleet-box {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+{{template "fleet-filter" .}}
+<ul class="fleet-list" data-w-scroll>{{range .Rows}}
+  <li class="fleet-row" data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>
+    <span class="pilot"><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{if .OnlineKnown}}<span class="dot {{if .Online}}on{{else}}off{{end}}" title="{{if .Online}}Online{{else}}Offline{{end}}"></span>{{end}}</span>
+    <span class="fleet-list-main"><a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}
+      <small>{{if .SystemName}}{{placeLink .SystemRef}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}{{end}}</small></span>
+    <span class="fleet-list-when">{{template "fleet-training" .}}</span>
+  </li>{{end}}
+</ul>
+<p class="fleet-nomatch" hidden>No characters match the filter.</p>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-fleet-medium"}}<div class="w-body fleet-box {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+{{template "fleet-tags" .}}
+{{template "fleet-filter" .}}
+<div class="tw fleet-scroll" data-w-scroll>
+<table class="fleet-table">
+  <thead><tr><th>Character</th><th class="opt2">Location</th><th>Training</th><th class="num">Wallet</th></tr></thead>
+  <tbody>
+  {{range .Rows}}<tr class="fleet-row" data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>{{template "fleet-cell-pilot" .}}<td>{{template "fleet-training" .}}</td>{{template "fleet-cell-wallet" .}}</tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{template "fleet-foot" .}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-fleet-large"}}<div class="w-body fleet-box {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+{{template "fleet-tags" .}}
+{{template "fleet-filter" .}}
+<div class="tw fleet-scroll" data-w-scroll>
 <table class="fleet-table">
   <thead><tr><th>Character</th><th class="opt2">Location</th><th class="opt">Ship</th><th>Training</th><th class="num">Wallet</th><th><span class="visually-hidden">Details</span></th></tr></thead>
   <tbody>
   {{range .Rows}}
   <tr class="fleet-row" data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>
-    <td><span class="pilot"><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{if .OnlineKnown}}<span class="dot {{if .Online}}on{{else}}off{{end}}" title="{{if .Online}}Online{{else}}Offline{{end}}"></span>{{end}}</span> <a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}<br><small>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{end}}{{if and .CorpName .Tags}} · {{end}}{{.Tags}}</small></td>
-    <td class="opt2">{{placeLink .SystemRef}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}{{if .DockedName}}<br><small>{{placeLink .DockedRef}}</small>{{end}}</td>
+    {{template "fleet-cell-pilot" .}}
     <td class="opt">{{itemLink .ShipTypeID .ShipTypeName}}{{if .ShipName}}<br><small>&ldquo;{{.ShipName}}&rdquo;</small>{{end}}</td>
-    <td>{{if .QueueKnown}}{{if .Training}}{{.Training}}{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}{{else}}<em class="idle">Not training</em>{{end}}{{else}}—{{end}}</td>
-    <td class="num">{{if .WalletKnown}}{{iskFig .ISK}}{{else}}—{{end}}</td>
+    <td>{{template "fleet-training" .}}</td>
+    {{template "fleet-cell-wallet" .}}
     <td><button type="button" class="rowexpand" data-expand="{{$.Uid (printf "d-%d" .ID)}}" aria-label="Details for {{.Name}}"></button></td>
   </tr>
   <tr class="fleet-detail" id="{{$.Uid (printf "d-%d" .ID)}}">
     <td colspan="6"><dl class="fleet-facts">
-      <div><dt>Corporation</dt><dd>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{else}}—{{end}}</dd></div>
-      <div><dt>Status</dt><dd>{{if .OnlineKnown}}{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}} · last login {{.LastLogin}}{{end}}{{else}}—{{end}}</dd></div>
-      <div><dt>Docked</dt><dd>{{if .DockedName}}{{placeLink .DockedRef}}{{else}}—{{end}}</dd></div>
-      {{if moduleOn "mail"}}<div><dt>Mail</dt><dd>{{if .UnreadKnown}}{{if .Unread}}<a href="/mail/?character={{.ID}}">{{.Unread}} unread</a>{{else}}No unread mail{{end}}{{else}}—{{end}}</dd></div>{{end}}
-      <div><dt>Tags</dt><dd>{{if .Tags}}{{.Tags}}{{else}}—{{end}}</dd></div>
+      <div><dt>Corporation</dt><dd>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{else}}-{{end}}</dd></div>
+      <div><dt>Status</dt><dd>{{if .OnlineKnown}}{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}} · last login {{.LastLogin}}{{end}}{{else}}-{{end}}</dd></div>
+      <div><dt>Docked</dt><dd>{{if .DockedName}}{{placeLink .DockedRef}}{{else}}-{{end}}</dd></div>
+      {{if moduleOn "mail"}}<div><dt>Mail</dt><dd>{{if .UnreadKnown}}{{if .Unread}}<a href="/mail/?character={{.ID}}">{{.Unread}} unread</a>{{else}}No unread mail{{end}}{{else}}-{{end}}</dd></div>{{end}}
+      <div><dt>Tags</dt><dd>{{if .Tags}}{{.Tags}}{{else}}-{{end}}</dd></div>
       <div><dt>Sheet</dt><dd><a href="/character/?character={{.ID}}">Open {{.Name}}</a></dd></div>
     </dl></td>
   </tr>
@@ -35,7 +77,26 @@
   </tbody>
 </table>
 </div>
-<p class="fleet-nomatch" hidden>No characters match the filter.</p>
-<p class="fleet-foot"><small>Showing <span data-fleet-shown>{{len .Rows}}</span> of {{len .Rows}} characters{{if .TotalISK}} · fleet liquid total {{.TotalISK}} ISK{{end}}</small></p>
-{{end}}
-{{end}}
+{{template "fleet-foot" .}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* The parts the roster forms share. */}}
+{{define "fleet-tags"}}{{if or .Tags .Idle}}<p class="fleet-tags"><span class="fleet-tags-label">Tags:</span>
+  <button type="button" class="chip on" data-tag="" aria-pressed="true">All</button>
+  {{range .Tags}}<button type="button" class="chip" data-tag="{{.}}" aria-pressed="false">{{.}}</button>{{end}}
+  {{if .Idle}}<button type="button" class="chip sev-critical" data-tag="" data-idle-chip aria-pressed="false">Not training ({{.Idle}})</button>{{end}}
+</p>{{end}}{{end}}
+
+{{define "fleet-filter"}}<p class="fleet-tools">
+  <input class="fleet-filter" type="search" aria-label="Filter characters" placeholder="Filter by name, tag, corporation or system" size="36">
+</p>{{end}}
+
+{{define "fleet-cell-pilot"}}<td><span class="pilot"><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{if .OnlineKnown}}<span class="dot {{if .Online}}on{{else}}off{{end}}" title="{{if .Online}}Online{{else}}Offline{{end}}"></span>{{end}}</span> <a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}<br><small>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{end}}{{if and .CorpName .Tags}} · {{end}}{{.Tags}}</small></td>
+    <td class="opt2">{{placeLink .SystemRef}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}{{if .DockedName}}<br><small>{{placeLink .DockedRef}}</small>{{end}}</td>{{end}}
+
+{{define "fleet-cell-wallet"}}<td class="num">{{if .WalletKnown}}{{iskFig .ISK}}{{else}}-{{end}}</td>{{end}}
+
+{{define "fleet-training"}}{{if .QueueKnown}}{{if .Training}}{{.Training}}{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}{{else}}<em class="idle">Not training</em>{{end}}{{else}}-{{end}}{{end}}
+
+{{define "fleet-foot"}}<p class="fleet-nomatch" hidden>No characters match the filter.</p>
+<p class="fleet-foot"><small>Showing <span data-fleet-shown>{{len .Rows}}</span> of {{len .Rows}} characters{{if .TotalISK}} · fleet liquid total {{.TotalISK}} ISK{{end}}</small></p>{{end}}

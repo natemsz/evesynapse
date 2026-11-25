@@ -4,9 +4,7 @@ package app
 // Training horizon: the next finishes across every character's
 // whole skill queue, plus who is sitting idle, second and third
 // queued skills included, so one glance replaces opening every
-// character's queue. At one row high the module is compact (what
-// the retired Skills module was): each character's next finish only,
-// and a count of who is idle.
+// character's queue. homew_training.go draws it at each size.
 // ---------------------------------------------------------------------------
 
 import (
@@ -32,26 +30,26 @@ type trainingEvent struct {
 	LevelNum   int
 	State      string
 	Finish     string
+	FinishAt   string // RFC3339, for the live countdown
 	Left       string
 	finish     time.Time
 }
 
 // trainingWidget is the horizon: the soonest finishes across
 // the fleet and the names training nothing. IdleMore counts
-// the idle names cut by idleNamesCap. Heads and IdleCount are the
-// compact form: each training character's next finish, soonest
-// first, and how many characters are idle.
+// the idle names cut by idleNamesCap; IdleCount is how many
+// characters are idle.
 type trainingWidget struct {
 	Events    []trainingEvent
 	Idle      []string
 	IdleMore  int
-	Heads     []trainingEvent
 	IdleCount int
 }
 
 // trainingHorizonCap bounds one render; the queue snapshots
-// are small but the fleet may not be.
-const trainingHorizonCap = 10
+// are small but the fleet may not be. It is as many rows as the
+// tallest form holds.
+const trainingHorizonCap = 20
 
 // idleNamesCap bounds the idle list; the count beside it stays
 // exact when names are cut.
@@ -61,7 +59,12 @@ const idleNamesCap = 6
 // still to finish, soonest first. Characters with no active
 // queue land in Idle by name.
 func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps) *trainingWidget {
-	now := time.Now()
+	return app.buildTrainingWithin(ctx, bundles, time.Now(), 0)
+}
+
+// buildTrainingWithin is the horizon over the finishes due within the
+// given span of now (0 for everything queued).
+func (app *Application) buildTrainingWithin(ctx context.Context, bundles []*charSnaps, now time.Time, within time.Duration) *trainingWidget {
 	w := &trainingWidget{}
 	var pending []trainingEvent
 	for _, b := range bundles {
@@ -95,18 +98,11 @@ func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps)
 			}
 			return trained, state
 		}
-		if head != nil {
-			if finish, ok := parseRFC3339(head.FinishDate); ok {
-				ev := app.trainingEventFor(ctx, b, *head, finish, now)
-				ev.TrainedLvl, ev.State = levelOf(*head)
-				w.Heads = append(w.Heads, ev)
-			}
-		}
 		for _, entry := range live {
 			// The horizon is dated: an entry without a finish date
 			// (a paused queue) has no place on it.
 			finish, ok := parseRFC3339(entry.FinishDate)
-			if !ok {
+			if !ok || (within > 0 && finish.After(now.Add(within))) {
 				continue
 			}
 			ev := app.trainingEventFor(ctx, b, entry, finish, now)
@@ -115,7 +111,6 @@ func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps)
 		}
 	}
 	sort.SliceStable(pending, func(i, j int) bool { return pending[i].finish.Before(pending[j].finish) })
-	sort.SliceStable(w.Heads, func(i, j int) bool { return w.Heads[i].finish.Before(w.Heads[j].finish) })
 	w.IdleCount = len(w.Idle)
 	if len(pending) > trainingHorizonCap {
 		pending = pending[:trainingHorizonCap]
@@ -143,6 +138,7 @@ func (app *Application) trainingEventFor(ctx context.Context, b *charSnaps, entr
 		Level:    esi.RomanLevel(entry.FinishedLevel),
 		LevelNum: entry.FinishedLevel,
 		Finish:   formatFinish(entry.FinishDate),
+		FinishAt: finish.UTC().Format(time.RFC3339),
 		Left:     humanDuration(finish.Sub(now)),
 		finish:   finish,
 	}

@@ -354,8 +354,12 @@
 /* w-note and w-empty. */
 .w-note { color: var(--muted); font-size: var(--fs-xs); }
 @container widget (height < 12rem) {
-  .w-note { display: none; }
+  .w-note:not(.w-keep) { display: none; }
 }
+/* w-keep: a line that carries a link or a figure live showed (a
+   summary, the way to the page), not provenance: it stays on a short
+   card. */
+.w-note.w-keep { margin: 0; }
 .w-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); }
 .w-empty > p { margin: 0; max-width: 28rem; }
 
@@ -475,7 +479,8 @@
    part's key on one line. */
 .wf-splits { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .wf-splits > .w-aside { flex: 1 1 12rem; }
-.wf-splits .w-segkeys { display: flex; flex-direction: column; gap: 0.1rem; }
+.wf-splits .w-segkeys { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: 0.1rem var(--space-3); }
+.wf-splits .w-segname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wf-splits .w-segkeys > li { grid-template-columns: auto minmax(0, 1fr) auto auto; }
 .w-segshare { grid-column: 3; font-size: var(--fs-xs); color: var(--text); font-variant-numeric: tabular-nums; text-align: right; min-width: 3.2em; }
 .wf-splits .w-segval { grid-column: 4; font-size: var(--fs-xs); }

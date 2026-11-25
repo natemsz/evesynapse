@@ -66,7 +66,7 @@
      share of the whole ("78.7%"), for splits read by proportion. */}}
 {{define "w-segbar-share"}}<div class="w-segbar">
 <div class="w-segs" role="img" aria-label="{{.Label}}: {{range $i, $p := .Parts}}{{if $i}}, {{end}}{{$p.Name}} {{$p.Full}} ({{$p.ShareText}}){{end}}">{{range .Parts}}{{if gt .Share 0.0}}<span class="w-seg w-s{{.Slot}}" data-w="{{printf "%.2f" .Share}}" title="{{.Name}}: {{.Full}}, {{.ShareText}}"></span>{{end}}{{end}}</div>
-<ul class="w-segkeys" aria-hidden="true">{{range .Parts}}<li><span class="w-sw w-s{{.Slot}}"></span><span class="w-segname">{{.Name}}</span><span class="w-segshare">{{.ShareText}}</span><span class="w-segval" title="{{.Full}}">{{.Text}}</span></li>{{end}}</ul>
+<ul class="w-segkeys" aria-hidden="true">{{range .Parts}}<li><span class="w-sw w-s{{.Slot}}"></span><span class="w-segname" title="{{.Name}}">{{.Name}}</span><span class="w-segshare">{{.ShareText}}</span><span class="w-segval" title="{{.Full}}">{{.Text}}</span></li>{{end}}</ul>
 </div>{{end}}
 
 {{/* w-rank (*wRanked): ranked bars, largest first. The list fits its

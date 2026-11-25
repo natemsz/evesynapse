@@ -41,7 +41,7 @@
 
 {{/* The live summary: colonies, stopped extractors, and the way to the
      Planetary Industry page. */}}
-{{define "w-pi-sum"}}<p class="w-note w-pi-sum"><small>{{.Summary}} · <a href="/planets/">colonies</a></small></p>{{end}}
+{{define "w-pi-sum"}}<p class="w-note w-keep w-pi-sum"><small>{{.Summary}} · <a href="/planets/">colonies</a></small></p>{{end}}
 
 {{define "w-pi-next"}}<p class="w-pi-next"><span class="w-pi-next-label">Next to stop</span> {{.Planet}} <span class="countdown" data-finish="{{.ExpiresRaw}}" title="{{.Expires}}">{{.Left}}</span></p>{{end}}
 

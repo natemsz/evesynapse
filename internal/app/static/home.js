@@ -627,12 +627,18 @@
   // --- Home grid: layout ------------------------------------------
   // home.css sets the columns from the page's width (--home-cols).
   // This writes each card's cells on it through the CSSOM
-  // (grid-column, grid-row): homePack's spots, then outside Customize
-  // homeFillGaps closes the holes; in Customize the holes show as Add
-  // a widget cells instead. With one column the cards stack and
+  // (grid-column, grid-row): homePack's spots. On the three columns
+  // Customize draws, every card stands at the size its reader chose and
+  // a hole stays a hole (Customize shows it as an Add a widget cell;
+  // Fill gaps closes it on request). On a narrower grid, which the
+  // layout was not made for, homeFillGaps closes the holes for the
+  // reader, as live's two-column fill did. With one column the cards stack and
   // nothing is written. It runs on load, on content-ready, when the grid
   // changes width, and inside every Customize change (flip calls it,
   // so the motion plays to the new places).
+  // homeDesignCols is the column count layouts are made on (Customize
+  // and the server's presets, homeGridCols in Go).
+  var homeDesignCols = 3;
   function homeCols(grid) {
     var n = parseInt(window.getComputedStyle(grid).getPropertyValue("--home-cols"), 10);
     return n >= 1 ? n : 1;
@@ -668,7 +674,7 @@
       items.push({ w: Math.min(w, cols), h: h, sizes: drawn });
     }
     var placed = homePack(items, cols);
-    if (!custom) {
+    if (!custom && cols < homeDesignCols) {
       for (i = 0; i < placed.length; i++) placed[i].sizes = items[i].sizes;
       placed = homeFillGaps(placed, cols);
     }

@@ -3,7 +3,7 @@
      against the slots each character's skills give. */}}
 
 {{define "w-industry-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Known}}
-{{if .Jobs}}<p class="w-note w-ind-sum"><small>{{.Summary}}</small></p>
+{{if .Jobs}}<p class="w-note w-keep w-ind-sum"><small>{{.Summary}}</small></p>
 {{template "w-industry-jobs-compact" $}}
 {{else}}{{template "w-lead" .Lead}}{{template "w-empty" .Empty}}{{end}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}

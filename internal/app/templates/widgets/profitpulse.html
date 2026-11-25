@@ -42,7 +42,7 @@
 
 {{/* The live footer: the top item where the form ranks none, and the
      way to the whole analysis. */}}
-{{define "w-profitpulse-foot"}}<p class="w-note pp-foot"><small>{{with .Top}}Top item: {{if .Link}}{{.Link}}{{else}}{{.Name}}{{end}} margin <b title="{{.Full}}">{{.Text}}</b> · {{end}}<a href="/profit/">Open Profit Analysis</a></small></p>{{end}}
+{{define "w-profitpulse-foot"}}<p class="w-note w-keep pp-foot"><small>{{with .Top}}Top item: {{if .Link}}{{.Link}}{{else}}{{.Name}}{{end}} margin <b title="{{.Full}}">{{.Text}}</b> · {{end}}<a href="/profit/">Open Profit Analysis</a></small></p>{{end}}
 
 {{/* The gross in beside the kept figure. */}}
 {{define "w-profitpulse-gross"}}<p class="pp-gross"><span>Gross in</span> <b title="{{.GrossFull}}">{{.Gross}}</b></p>{{end}}

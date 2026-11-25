@@ -29,9 +29,9 @@ func TestNoInlineCodeInTemplatesOrScripts(t *testing.T) {
 	}
 	inlineScript := regexp.MustCompile(`(?is)<script\b([^>]*)>`)
 
-	templates, err := fs.Glob(templatesFS, "templates/*.html")
-	if err != nil || len(templates) == 0 {
-		t.Fatalf("no embedded templates found: %v", err)
+	templates := templateFiles(t)
+	if len(templates) == 0 {
+		t.Fatal("no embedded templates found")
 	}
 	for _, name := range templates {
 		raw, err := fs.ReadFile(templatesFS, name)
@@ -74,4 +74,19 @@ func TestNoInlineCodeInTemplatesOrScripts(t *testing.T) {
 func snippet(src string, i int) string {
 	start, end := max(i-20, 0), min(i+80, len(src))
 	return strings.Join(strings.Fields(src[start:end]), " ")
+}
+
+// templateFiles is every embedded template: the pages and partials, and
+// the home widget templates under templates/widgets.
+func templateFiles(t *testing.T) []string {
+	t.Helper()
+	var out []string
+	for _, pattern := range []string{"templates/*.html", "templates/widgets/*.html"} {
+		matches, err := fs.Glob(templatesFS, pattern)
+		if err != nil {
+			t.Fatalf("glob %s: %v", pattern, err)
+		}
+		out = append(out, matches...)
+	}
+	return out
 }

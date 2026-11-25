@@ -1,0 +1,41 @@
+{{define "w-fleet-all"}}{{$cap := .Cap}}
+{{with .Data}}
+{{if or .Tags .Idle}}<p class="fleet-tags"><span class="fleet-tags-label">Tags:</span>
+  <button type="button" class="chip on" data-tag="" aria-pressed="true">All</button>
+  {{range .Tags}}<button type="button" class="chip" data-tag="{{.}}" aria-pressed="false">{{.}}</button>{{end}}
+  {{if .Idle}}<button type="button" class="chip sev-critical" data-tag="" data-idle-chip aria-pressed="false">Not training ({{.Idle}})</button>{{end}}
+</p>{{end}}
+<p class="fleet-tools">
+  <input id="{{$.Uid "filter"}}" data-fleet-filter type="search" aria-label="Filter characters" placeholder="Filter by name, tag, corporation or system…" size="36">
+</p>
+<div class="tw">
+<table class="fleet-table">
+  <thead><tr><th>Character</th><th class="opt2">Location</th><th class="opt">Ship</th><th>Training</th><th class="num">Wallet</th><th><span class="visually-hidden">Details</span></th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+  <tr class="fleet-row" data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>
+    <td><span class="pilot"><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{if .OnlineKnown}}<span class="dot {{if .Online}}on{{else}}off{{end}}" title="{{if .Online}}Online{{else}}Offline{{end}}"></span>{{end}}</span> <a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}<br><small>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{end}}{{if and .CorpName .Tags}} · {{end}}{{.Tags}}</small></td>
+    <td class="opt2">{{placeLink .SystemRef}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}{{if .DockedName}}<br><small>{{placeLink .DockedRef}}</small>{{end}}</td>
+    <td class="opt">{{itemLink .ShipTypeID .ShipTypeName}}{{if .ShipName}}<br><small>&ldquo;{{.ShipName}}&rdquo;</small>{{end}}</td>
+    <td>{{if .QueueKnown}}{{if .Training}}{{.Training}}{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}{{else}}<em class="idle">Not training</em>{{end}}{{else}}—{{end}}</td>
+    <td class="num">{{if .WalletKnown}}{{iskFig .ISK}}{{else}}—{{end}}</td>
+    <td><button type="button" class="rowexpand" data-expand="{{$.Uid (printf "d-%d" .ID)}}" aria-label="Details for {{.Name}}"></button></td>
+  </tr>
+  <tr class="fleet-detail" id="{{$.Uid (printf "d-%d" .ID)}}">
+    <td colspan="6"><dl class="fleet-facts">
+      <div><dt>Corporation</dt><dd>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{else}}—{{end}}</dd></div>
+      <div><dt>Status</dt><dd>{{if .OnlineKnown}}{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}} · last login {{.LastLogin}}{{end}}{{else}}—{{end}}</dd></div>
+      <div><dt>Docked</dt><dd>{{if .DockedName}}{{placeLink .DockedRef}}{{else}}—{{end}}</dd></div>
+      {{if moduleOn "mail"}}<div><dt>Mail</dt><dd>{{if .UnreadKnown}}{{if .Unread}}<a href="/mail/?character={{.ID}}">{{.Unread}} unread</a>{{else}}No unread mail{{end}}{{else}}—{{end}}</dd></div>{{end}}
+      <div><dt>Tags</dt><dd>{{if .Tags}}{{.Tags}}{{else}}—{{end}}</dd></div>
+      <div><dt>Sheet</dt><dd><a href="/character/?character={{.ID}}">Open {{.Name}}</a></dd></div>
+    </dl></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p class="fleet-nomatch" hidden>No characters match the filter.</p>
+<p class="fleet-foot"><small>Showing <span data-fleet-shown>{{len .Rows}}</span> of {{len .Rows}} characters{{if .TotalISK}} · fleet liquid total {{.TotalISK}} ISK{{end}}</small></p>
+{{end}}
+{{end}}

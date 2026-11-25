@@ -1,0 +1,30 @@
+{{define "w-networth-all"}}{{$cap := .Cap}}
+{{/* Two rows high or more, the history chart is part of the summary;
+     one row high it waits behind More. */}}
+{{$chartUp := ge .Size.H 2}}
+{{with .Data}}
+{{if .Any}}
+<p class="isk">{{iskFig .Total}}</p>
+<div class="kpis kpis-small">
+  {{if .Wallet}}<div class="kpi"><span class="kpi-k">Wallets</span><span class="kpi-v">{{iskHero .Wallet}}</span></div>{{end}}
+  {{if .AssetsKnown}}<div class="kpi"><span class="kpi-k">Assets</span><span class="kpi-v">{{iskHero .Assets}}</span></div>{{end}}
+  {{if .Escrow}}<div class="kpi"><span class="kpi-k">Order escrow</span><span class="kpi-v">{{iskHero .Escrow}}</span></div>{{end}}
+</div>
+{{if and $chartUp .History}}
+<div class="nw-chart">{{template "balance-chart" .History}}</div>
+{{end}}
+<div data-wmore>
+<p><small>Estimate{{if .AsOf}} · data as of {{.AsOf}}{{end}}</small></p>
+{{if .AssetsNote}}<p><small>{{.AssetsNote}}</small></p>{{end}}
+{{if .History}}
+{{if not $chartUp}}{{template "balance-chart" .History}}{{end}}
+<p><small>Net worth over time, from the daily samples.</small></p>
+{{else if .HistoryBuilding}}
+<p><small>Net worth history has started. A point is recorded each day.</small></p>
+{{end}}
+</div>
+{{else}}
+<p><small>Balances appear here once your characters have synced.</small></p>
+{{end}}
+{{end}}
+{{end}}

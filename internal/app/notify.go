@@ -925,7 +925,7 @@ func (app *Application) notifyAccounts(ctx context.Context, characters []db.Char
 func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db.Character, now time.Time, opsOnly bool) (int, error) {
 	c := newNotifyCollector()
 	if !opsOnly {
-		bundles := app.loadCharSnaps(ctx, userID, chars, []string{widgetBriefing})
+		bundles := app.loadCharSnaps(ctx, userID, chars, widgetNeeds(widgetBriefing))
 		c = app.collectNotifyEvents(ctx, userID, bundles, now)
 		app.foresee(ctx, userID, bundles, now)
 	}

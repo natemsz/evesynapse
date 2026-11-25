@@ -197,9 +197,9 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		}
 	}
 	// The sparkline renders only when it has points (never a fake line).
-	tpl, err := fs.ReadFile(templatesFS, "templates/home.html")
+	tpl, err := fs.ReadFile(templatesFS, "templates/widgets/glance.html")
 	if err != nil {
-		t.Fatalf("read home.html: %v", err)
+		t.Fatalf("read widgets/glance.html: %v", err)
 	}
 	if !strings.Contains(string(tpl), `{{if .NetWorth.SparkPoints}}<svg class="kpi-spark"`) {
 		t.Error("the KPI sparkline is not gated on its points being present")

@@ -422,7 +422,7 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 		app.fillShell(ctx, d.Shell(), page)
 	}
 
-	ts, err := parsedTemplate(&pageTemplates, "base", page, pageSharedTemplates...)
+	ts, err := parsedTemplate(&pageTemplates, "base", page, pageTemplateFiles(page)...)
 	if err != nil {
 		logging.Errorf("parse template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

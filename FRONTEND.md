@@ -268,23 +268,36 @@ read rule on big data.
 
 ### Home widgets
 
-A widget is three registrations and a body:
+A widget is one declaration and one template file:
 
-- the module manifest (module_manifest.go): id, title, layer;
-- the overview registry (home_overview.go): default size and
-  grid bounds (W/H, MinW/MinH);
-- a block in home.html keyed by widget id.
+- `internal/app/homew_<id>.go` calls `registerHomeWidget` from
+  `init()` with a `homeWidgetDef`: id, title, description,
+  category, manifest feature, the module it requires (if any),
+  the page it links to, its default size, its forms with the
+  sizes that draw each one, the snapshot kinds its builder reads
+  (`Needs`), and the builder. The sizes the forms list are
+  exactly the sizes the widget may take; a stored size outside
+  them snaps to one of them. The types, the registry and the size
+  rules are in `home_widget_kit.go`.
+- `internal/app/templates/widgets/<id>.html` defines one body per
+  form, `w-<id>-<form>`. Its data is the card view (`.Size`,
+  `.Cap`, `.Customize`, `.ViewerChars`) with the builder's value
+  as `.Data`. Element ids come from `{{.Uid "name"}}`, never a
+  fixed id: a page may hold more than one body.
 
-home.html renders the shell for every widget,
-`<section class="card" data-widget data-gw data-gh …>` with an
-`<h3>` title and a `.card-body`, and the block fills
-`.card-body` from stored data only. Long lists render in full
-and mark rows beyond the widget's cap with `data-wmore`; the
-expander machinery (above) supplies the More/Less toggle and
-the "all of it on the X page" link is part of the block.
-Customize (drag, resize, remove, add) is layered over the
-plain customize forms, never a replacement for them; a widget
-that renders its shell honestly gets all of it for free.
+Nothing else names the widget: the catalog, the size picker's
+bounds, the snapshot read (one batched query for the union of the
+visible widgets' `Needs`) and the card shell all come from the
+declaration. `templates/widgets/_card.html` is the one shell,
+`<section class="card w-card" data-widget data-key data-gw
+data-gh data-sizes …>` with an `<h3>` title and a `.card-body`
+holding the rendered body. Bodies render from stored data only.
+Data that can have nothing to say implements `Quiet() bool`, and
+a quiet card is left off the home outside Customize. Long lists
+render in full and mark rows beyond the card's cap with
+`data-wmore`; the expander machinery (above) supplies the
+More/Less toggle. Customize (drag, resize, remove, add) is layered
+over the plain customize forms, never a replacement for them.
 
 ### Character selector
 
@@ -632,10 +645,12 @@ to it:
   AND the section tab strip. The quick-jump palette in app.js
   (`quickJumpPages`) must carry the same labels,
   `TestQuickJumpPagesMatchNav` fails otherwise.
-- **Home widgets:** the module manifest (module_manifest.go) and
-  the overview registry (home_overview.go) define each widget's
-  id, title, default size and layer. A widget renders through the
-  home template by id; its body comes from stored data.
+- **Home widgets:** one declaration per widget (`homew_<id>.go`,
+  on the registry in home_widget_kit.go) defines its id, title,
+  sizes and forms, data needs, and the module it requires; its
+  manifest feature names the scopes that power it. A widget's
+  bodies are `w-<id>-<form>` templates in templates/widgets; its
+  data comes from stored sources.
 
 ## Server → JS contracts
 
@@ -670,10 +685,12 @@ to it:
   `internal/app/jstest/` if it carries logic worth pinning,
   the pipeline's JS step names its files explicitly, so add new
   test files to `.gitlab-ci.yml` too.
-- **A home widget:** manifest entry, registry entry, template
-  block keyed by widget id, data from a stored source. Follow an
-  existing widget end to end; the trade-ideas module is a recent
-  complete example.
+- **A home widget:** `homew_<id>.go` with its declaration and
+  builder, and `templates/widgets/<id>.html` with a body per
+  form, data from a stored source. Nothing else is touched (a
+  preset only if the widget belongs in one).
+  `TestHomeWidgetDeclarationsHoldTheirContract` checks the
+  declaration and that every form has its template.
 
 ## Testing
 

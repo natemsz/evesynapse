@@ -626,7 +626,7 @@ func TestBriefingDismissedLines(t *testing.T) {
 	}
 	_, body = getPage(t, app, cookie, "/")
 	section = briefingSection(t, body)
-	mustContain(t, "briefing dismissed", section, "Dismissed (1)", "brief-dismissed-modal")
+	mustContain(t, "briefing dismissed", section, "Dismissed (1)", `data-open-brief-dismissed="w-briefing-dismissed"`, `id="w-briefing-dismissed"`)
 	if n := strings.Count(section, "has 3 unread mail"); n != 1 {
 		t.Errorf("mail line appears %d times after dismissal, want 1 (the dismissed list only)", n)
 	}

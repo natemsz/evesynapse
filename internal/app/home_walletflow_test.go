@@ -46,7 +46,7 @@ func TestWalletFlowRenders(t *testing.T) {
 		"bounty_prizes",
 		"market_escrow",
 		"pchart", // cumulative net-flow chart
-		`data-table-filter="walletflow-table"`,
+		`data-table-filter="w-walletflow-table"`,
 		`data-search="Fixture Alpha"`,
 		// The donuts: all income is bounties, all spend escrow.
 		`aria-label="Income by type, last 30 days"`,

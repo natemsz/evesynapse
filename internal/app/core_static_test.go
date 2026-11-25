@@ -397,7 +397,7 @@ func TestTemplatesAreParsedOnce(t *testing.T) {
 	// The same shared files render uses: this test fills the cache
 	// render reads, and a list of its own that fell behind left every
 	// later page of the test run without the notifications partial.
-	shared := pageSharedTemplates
+	shared := pageTemplateFiles("home.html")
 	first, err := parsedTemplate(&pageTemplates, "base", "home.html", shared...)
 	if err != nil {
 		t.Fatalf("parse home.html: %v", err)

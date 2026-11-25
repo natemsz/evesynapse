@@ -1410,7 +1410,7 @@
   // opens its detail, like its chevron. No JS: the full list is
   // simply visible, details and all.
   function initFleetFilter(root) {
-    var fleetFilter = root.querySelector("#fleet-filter");
+    var fleetFilter = root.querySelector("[data-fleet-filter]");
     var fleetRows = root.querySelectorAll(".fleet-row");
     if (!fleetFilter || !fleetRows.length) return;
     var noMatch = root.querySelector(".fleet-nomatch");
@@ -1806,7 +1806,7 @@
     var openers = root.querySelectorAll("[data-open-brief-dismissed]");
     for (var i = 0; i < openers.length; i++) {
       openers[i].addEventListener("click", function () {
-        var modal = document.getElementById("brief-dismissed-modal");
+        var modal = document.getElementById(this.getAttribute("data-open-brief-dismissed"));
         if (modal && window.EveSynapseModal) EveSynapseModal.open(modal);
       });
     }

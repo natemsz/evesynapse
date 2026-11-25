@@ -4,7 +4,6 @@ import (
 	"context"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/balancechart"
-	"evesynapse/internal/ideas"
 	"fmt"
 	"io"
 	"net/http"
@@ -59,46 +58,15 @@ const (
 	// Training Horizon at one row high is what it showed.
 )
 
-// The home grid is three cells wide on a desktop (two on a mid-size
-// screen, one on a phone). Every module takes 1-3 cells across and
-// 1-3 rows down: its catalog default until the user resizes it in
-// Customize. Size is information, not decoration: a taller module
-// shows more of its rows before More, and a wider one shows the
-// table columns a narrow one leaves out.
-const homeGridMax = 3
-
 // clampGrid holds a stored size inside the grid; 0 (unset) stays 0.
-func clampGrid(n int) int {
+func clampGrid(n, most int) int {
 	switch {
 	case n <= 0:
 		return 0
-	case n > homeGridMax:
-		return homeGridMax
+	case n > most:
+		return most
 	}
 	return n
-}
-
-// widgetDef is one entry of the widget catalog: what Customize
-// offers and what a saved layout may name.
-type widgetDef struct {
-	ID          string
-	Title       string
-	Description string
-	W, H        int    // default size in grid cells, 1-3 each
-	Module      string // id of the feature (manifest entry or module declaration) that powers it
-}
-
-var coreWidgetCatalog = []widgetDef{
-	{widgetGlance, "At a Glance", "The fleet's key figures in one band: net worth, liquid wallets, assets, and how many pilots are training.", 3, 1, "networth"},
-	{widgetBriefing, "Briefing", "What changed since you last looked, and what needs you in the next day.", 3, 1, "briefing"},
-	{widgetFleet, "Fleet Overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", 3, 2, "fleet"},
-	{widgetNetWorth, "Net Worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", 1, 2, "networth"},
-	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first.", 1, 1, "industry"},
-	{widgetProdLine, "Production Lines", "Your pinned production lines: what is due, what needs a restart, and what to buy for the next run.", 2, 2, "industry"},
-	{widgetPI, "Planetary Industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", 1, 2, "planets"},
-	{widgetWatchlist, "Market Watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", 1, 1, "market_public"},
-	{widgetTraining, "Training Horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", 1, 2, "skills"},
-	{widgetProfitPulse, "Profit pulse", "The Profit Analysis headline for the last 30 days: what came in, what you kept, and the item that earned the most.", 2, 2, "market"},
 }
 
 // defaultHomeLayout is what accounts with no saved layout get, sized
@@ -108,8 +76,8 @@ var coreWidgetCatalog = []widgetDef{
 // finishes, extractor timers, net worth) side by side at double
 // height, and wallet flow at two by two with the industry and
 // market checks stacked beside it. Sizes are explicit here rather
-// than taken from the catalog, so the default tiles even where a
-// module's catalog size (what Add a module gives it) differs.
+// than taken from the declarations, so the default tiles even where
+// a widget's default size (what Add a widget gives it) differs.
 // Accounts with a saved layout keep theirs.
 var defaultHomeLayout = []homeLayoutItem{
 	{ID: widgetBriefing, W: 3, H: 1},
@@ -123,119 +91,23 @@ var defaultHomeLayout = []homeLayoutItem{
 	{ID: widgetMarket, W: 1, H: 1},
 }
 
-// widgetMinSize is the floor under a module's size, for the modules
-// whose content stops making sense below it (a table needs its
-// columns, a band its width). Unlisted modules go down to one cell.
-// Customize refuses a smaller size, and a stored one is held up to it.
-var widgetMinSize = map[string]struct{ W, H int }{
-	widgetGlance:     {2, 1},
-	widgetBriefing:   {2, 1},
-	widgetFleet:      {2, 2},
-	widgetWalletFlow: {2, 1},
-}
-
-// widgetMin is a module's floor in grid cells (1x1 when it has none).
-func widgetMin(id string) (w, h int) {
-	if m, ok := widgetMinSize[id]; ok {
-		return m.W, m.H
-	}
-	return 1, 1
-}
-
-// widgetMaxSize is the ceiling over a module's size, for the
-// modules whose content stops gaining from more cells: a band
-// that is one row however tall it stands, a KPI stack that is one
-// column however wide. Unlisted modules may use the whole grid.
-// Customize never offers a size above the ceiling, a stored one
-// is held down to it, and the dynamic part of the ceiling (the
-// heights a list's rows actually need) tightens further at
-// render: see capHeightFor.
-var widgetMaxSize = map[string]struct{ W, H int }{
-	widgetGlance:     {3, 1},
-	widgetBriefing:   {3, 1},
-	widgetNetWorth:   {1, 2},
-	widgetIndustry:   {2, 3},
-	widgetPI:         {2, 3},
-	widgetTradeIdeas: {2, 3},
-	widgetTraining:   {2, 3},
-	widgetPulse:      {3, 2},
-	widgetUpkeep:     {2, 3},
-}
-
-// widgetMax is a module's ceiling in grid cells (the whole grid
-// when it has none), never below its floor.
-func widgetMax(id string) (w, h int) {
-	w, h = homeGridMax, homeGridMax
-	if m, ok := widgetMaxSize[id]; ok {
-		w, h = m.W, m.H
-	}
-	minW, minH := widgetMin(id)
-	return max(w, minW), max(h, minH)
-}
-
-// capHeightFor is the smallest drawn height whose cap covers
-// total rows: a list with three rows gains nothing from a second
-// cell down, so the taller sizes are not offered for it.
-func capHeightFor(total int) int {
-	for h := 1; h <= homeGridMax; h++ {
-		if total <= homeCap(h) {
-			return h
-		}
-	}
-	return homeGridMax
-}
-
-// homeWidgetCatalog is every widget this build has: core's own, then the
-// ones the built-in modules declare, each after the widget it names.
-func homeWidgetCatalog() []widgetDef {
-	out := append([]widgetDef(nil), coreWidgetCatalog...)
-	for _, m := range registeredModules {
-		for _, w := range m.Widgets {
-			def := widgetDef{ID: w.ID, Title: w.Title, Description: w.Description, W: w.W, H: w.H, Module: w.Feature}
-			if def.Module == "" {
-				def.Module = m.ID
-			}
-			at := len(out)
-			for i, existing := range out {
-				if w.After != "" && existing.ID == w.After {
-					at = i + 1
-					break
-				}
-			}
-			out = append(out, widgetDef{})
-			copy(out[at+1:], out[at:])
-			out[at] = def
-		}
-	}
-	return out
-}
-
-func widgetDefFor(id string) (widgetDef, bool) {
-	for _, def := range homeWidgetCatalog() {
-		if def.ID == id {
-			return def, true
-		}
-	}
-	return widgetDef{}, false
-}
-
-// widgetSize resolves a layout item's size: the stored one where
-// set, else the widget's catalog default (1x1 for an unknown id,
-// which a normalized layout cannot contain).
+// widgetSize is the size a layout entry draws at: its stored size
+// (the widget's default per unset axis), snapped to one the widget
+// declares.
 func widgetSize(item homeLayoutItem) (w, h int) {
-	w, h = 1, 1
-	if def, ok := widgetDefFor(item.ID); ok {
-		w, h = def.W, def.H
+	def, ok := widgetDefFor(item.ID)
+	if !ok {
+		return 1, 1
 	}
+	s := def.Default
 	if item.W > 0 {
-		w = item.W
+		s.W = item.W
 	}
 	if item.H > 0 {
-		h = item.H
+		s.H = item.H
 	}
-	minW, minH := widgetMin(item.ID)
-	maxW, maxH := widgetMax(item.ID)
-	return min(max(w, minW), maxW), min(max(h, minH), maxH)
+	s = def.Snap(s)
+	return s.W, s.H
 }
 
 // homeLayoutItem is one persisted layout entry: the widget and, once
@@ -302,9 +174,9 @@ func parseHomeLayoutEntry(entry json.RawMessage) (homeLayoutItem, bool) {
 	if _, ok := widgetDefFor(obj.ID); !ok {
 		return homeLayoutItem{}, false
 	}
-	item := homeLayoutItem{ID: obj.ID, W: clampGrid(obj.W), H: clampGrid(obj.H)}
+	item := homeLayoutItem{ID: obj.ID, W: clampGrid(obj.W, homeGridCols), H: clampGrid(obj.H, homeGridRows)}
 	if obj.Span == "wide" && item.W == 0 {
-		item.W = homeGridMax
+		item.W = homeGridCols
 	}
 	return item, true
 }
@@ -334,15 +206,6 @@ func defaultHomeLayoutItems() []homeLayoutItem {
 	return items
 }
 
-// layoutIDs extracts the widget ids of a layout, in order.
-func layoutIDs(items []homeLayoutItem) []string {
-	ids := make([]string, len(items))
-	for i, item := range items {
-		ids[i] = item.ID
-	}
-	return ids
-}
-
 // homeCap is how many rows or items a module shows before More, by
 // its height: one cell holds a short list, every extra row holds
 // five more.
@@ -354,24 +217,6 @@ func homeCap(h int) int { return 3 + 5*(h-1) }
 // calls esi.Get/GetCached, a stale or missing snapshot dims its
 // own widget, exactly like every other page.
 // ---------------------------------------------------------------------------
-
-var widgetSnapshotKinds = map[string][]string{
-	widgetBriefing:    {esi.SnapSkillqueue, esi.SnapSkills, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapOrdersHistory, esi.SnapPlanets, esi.SnapMail, esi.SnapMailLabels, esi.SnapCalendar},
-	widgetFleet:       {esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapMailLabels},
-	widgetNetWorth:    {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
-	widgetIndustry:    {esi.SnapIndustryJobs},
-	widgetProdLine:    {esi.SnapIndustryJobs, esi.SnapAssets},
-	widgetMarket:      {esi.SnapOrders},
-	widgetWatchlist:   {}, // watchlist + stored history only; no character snapshots
-	widgetPI:          {esi.SnapPlanets},
-	widgetTradeIdeas:  {}, // stored model answer only; no character snapshots
-	widgetTraining:    {esi.SnapSkillqueue},
-	widgetPulse:       {}, // corp snapshots load per corporation, not via bundles
-	widgetProfitPulse: {}, // stored profit tables only; no character snapshots
-	widgetWalletFlow:  {esi.SnapWalletJournal},
-	widgetUpkeep:      {}, // corp snapshots load per corporation, not via bundles
-	widgetGlance:      {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders, esi.SnapSkillqueue},
-}
 
 // charSnaps is one character's decoded snapshot bundle. Fields
 // stay nil/false when the snapshot is absent or undecodable,
@@ -437,19 +282,23 @@ type charSnaps struct {
 }
 
 // loadCharSnaps reads the snapshots of every linked character in
-// one query (kinds restricted to what the visible widgets need)
-// and decodes them into per-character bundles.
-func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars []db.Character, layout []string) []*charSnaps {
+// one query (kinds restricted to the needs given: the union of the
+// visible widgets' Needs) and decodes them into per-character bundles.
+func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars []db.Character, needs []string) []*charSnaps {
 	kindSet := map[string]bool{}
-	for _, id := range layout {
-		for _, kind := range widgetSnapshotKinds[id] {
-			kindSet[kind] = true
+	needLayouts := false
+	for _, kind := range needs {
+		if kind == needPlanetLayouts {
+			needLayouts = true
+			continue
 		}
+		kindSet[kind] = true
 	}
 	kinds := make([]string, 0, len(kindSet))
 	for kind := range kindSet {
 		kinds = append(kinds, kind)
 	}
+	sort.Strings(kinds)
 
 	bundles := make(map[int64]*charSnaps, len(chars))
 	out := make([]*charSnaps, 0, len(chars))
@@ -458,10 +307,18 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 		bundles[ch.CharacterID] = b
 		out = append(out, b)
 	}
-	if len(kinds) == 0 {
-		return out
+	if len(kinds) > 0 {
+		app.decodeUserSnaps(ctx, userID, kinds, bundles)
 	}
+	if needLayouts {
+		app.loadPlanetLayouts(ctx, userID, bundles)
+	}
+	return out
+}
 
+// decodeUserSnaps reads the account's snapshots of the given kinds in
+// one batch and decodes each into its character's bundle.
+func (app *Application) decodeUserSnaps(ctx context.Context, userID int64, kinds []string, bundles map[int64]*charSnaps) {
 	rows, err := app.queries.ListSnapshotsForUser(ctx, db.ListSnapshotsForUserParams{
 		UserID: userID,
 		Kinds:  kinds,
@@ -471,7 +328,7 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 		// character shells (name/tags) plus warming notes,
 		// never to an error page.
 		logging.Errorf("home: list snapshots for user %d: %v", userID, err)
-		return out
+		return
 	}
 	for _, row := range rows {
 		b := bundles[row.CharacterID]
@@ -484,44 +341,35 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 		b.fetched[row.Kind] = row.FetchedAt
 		b.decode(row.Kind, row.Payload)
 	}
+}
 
-	// Per-planet layouts ride suffix-keyed snapshots, so they
-	// cannot join the batched kind list above: load them in a
-	// second pass when a visible widget (briefing, PI) reads
-	// them.
-	needLayouts := false
-	for _, id := range layout {
-		if id == widgetPI || id == widgetBriefing {
-			needLayouts = true
-			break
-		}
+// loadPlanetLayouts reads the per-planet colony layouts. They ride
+// suffix-keyed snapshots, so they cannot join the batched kind list:
+// a widget asks for them with needPlanetLayouts.
+func (app *Application) loadPlanetLayouts(ctx context.Context, userID int64, bundles map[int64]*charSnaps) {
+	layoutRows, err := app.queries.ListPlanetLayoutsForUser(ctx, userID)
+	if err != nil {
+		logging.Errorf("home: list planet layouts for user %d: %v", userID, err)
+		return
 	}
-	if needLayouts {
-		layoutRows, err := app.queries.ListPlanetLayoutsForUser(ctx, userID)
-		if err != nil {
-			logging.Errorf("home: list planet layouts for user %d: %v", userID, err)
-		} else {
-			for _, row := range layoutRows {
-				b := bundles[row.CharacterID]
-				if b == nil {
-					continue
-				}
-				planetID, ok := esi.PlanetLayoutPlanetID(row.Kind)
-				if !ok {
-					continue
-				}
-				var v esi.PlanetLayout
-				if json.Unmarshal([]byte(row.Payload), &v) != nil {
-					continue
-				}
-				if b.layouts == nil {
-					b.layouts = map[int64]*esi.PlanetLayout{}
-				}
-				b.layouts[planetID] = &v
-			}
+	for _, row := range layoutRows {
+		b := bundles[row.CharacterID]
+		if b == nil {
+			continue
 		}
+		planetID, ok := esi.PlanetLayoutPlanetID(row.Kind)
+		if !ok {
+			continue
+		}
+		var v esi.PlanetLayout
+		if json.Unmarshal([]byte(row.Payload), &v) != nil {
+			continue
+		}
+		if b.layouts == nil {
+			b.layouts = map[int64]*esi.PlanetLayout{}
+		}
+		b.layouts[planetID] = &v
 	}
-	return out
 }
 
 func (b *charSnaps) decode(kind, payload string) {
@@ -662,32 +510,6 @@ func queueState(queue esi.Skillqueue, now time.Time) (training bool, finishedAt 
 // ---------------------------------------------------------------------------
 // Widget view models.
 // ---------------------------------------------------------------------------
-
-type homeWidget struct {
-	ID          string
-	Title       string
-	W, H        int    // size in grid cells
-	MinW, MinH  int    // the module's floor in grid cells (Customize refuses less)
-	MaxW, MaxH  int    // the module's ceiling for this render (Customize offers no more)
-	SizeClass   string // gw1-3 gh1-3: the grid classes the CSS applies
-	Cap         int    // rows or items shown before More, by height
-	Customize   bool   // rendering under /?customize=1 (form return targets)
-	Fleet       *fleetWidget
-	Briefing    *briefingWidget
-	NetWorth    *netWorthWidget
-	Industry    *industryWidget
-	ProdLine    *prodLineWidget
-	Market      *marketWidget
-	Watchlist   *watchlistWidget
-	PI          *piWidget
-	Training    *trainingWidget
-	Pulse       *pulseWidget
-	WalletFlow  *walletFlowWidget
-	TradeIdeas  *ideas.Widget
-	Upkeep      *upkeepWidget
-	Glance      *glanceWidget
-	ProfitPulse *profitPulseWidget
-}
 
 // homeView is the signed-in Home body (pageData.Home).
 type homeView struct {
@@ -1600,110 +1422,46 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		return view
 	}
 
-	bundles := app.loadCharSnaps(ctx, userID, chars, layoutIDs(layout))
+	// One batched snapshot read: the union of the visible widgets'
+	// needs.
+	var needs []string
+	defs := make([]*homeWidgetDef, len(layout))
+	for i, item := range layout {
+		if def, ok := widgetDefFor(item.ID); ok {
+			defs[i] = def
+			needs = append(needs, def.Needs...)
+		}
+	}
+	shared := &homeShared{
+		app: app, userID: userID, chars: chars, now: time.Now(),
+		bundles: app.loadCharSnaps(ctx, userID, chars, needs),
+		// The Briefing's market lines, the market widget's health
+		// line and the watchlist widget all read the same two stored
+		// tables; the render fetches each at most once, lazily, so
+		// every reader sees one snapshot of them.
+		market: &homeMarketShared{app: app, userID: userID},
+	}
+	viewer := make(map[int64]bool, len(chars))
+	for _, c := range chars {
+		viewer[c.CharacterID] = true
+	}
+	ts, err := homeTemplateSet()
+	if err != nil {
+		logging.Errorf("home: parse templates: %v", err)
+	}
 
-	// The briefing's "since you last looked" window,
-	// resolved before the widgets build. The anchor only exists
-	// once the module has rendered, so a home without it never
-	// touches the anchor at all.
-	now := time.Now()
-	briefingSince := time.Time{}
 	briefingIn := false
-	for _, item := range layout {
-		if item.ID == widgetBriefing {
+	for i, item := range layout {
+		def := defs[i]
+		if def == nil {
+			continue
+		}
+		if def.ID == widgetBriefing {
 			briefingIn = true
 		}
-	}
-	if briefingIn {
-		briefingSince = app.briefingWindowStart(ctx, userID, now)
-	}
-
-	// The net-worth widget is computed at most once per render:
-	// the glance widget carries the same figures, and the default
-	// layout holds both.
-	var netWorth *netWorthWidget
-	netWorthBuilt := false
-	sharedNetWorth := func() *netWorthWidget {
-		if !netWorthBuilt {
-			netWorth, netWorthBuilt = app.buildNetWorth(ctx, userID, bundles), true
+		if w, ok := app.buildHomeWidget(ctx, ts, def, item, shared, customize, viewer); ok {
+			view.Widgets = append(view.Widgets, w)
 		}
-		return netWorth
-	}
-
-	// The Briefing's market lines, the market widget's health
-	// line and the watchlist widget all read the same two stored
-	// tables; the render fetches each at most once, lazily, so
-	// every reader sees one snapshot of them.
-	marketShared := &homeMarketShared{app: app, userID: userID}
-
-	for _, item := range layout {
-		def, _ := widgetDefFor(item.ID)
-		gw, gh := widgetSize(item)
-		minW, minH := widgetMin(item.ID)
-		maxW, maxH := widgetMax(item.ID)
-		w := homeWidget{
-			ID: item.ID, Title: def.Title,
-			W: gw, H: gh, SizeClass: fmt.Sprintf("gw%d gh%d", gw, gh),
-			MinW: minW, MinH: minH,
-			MaxW: maxW, MaxH: maxH,
-			Cap:       homeCap(gh),
-			Customize: customize,
-		}
-		switch item.ID {
-		case widgetBriefing:
-			w.Briefing = app.buildBriefing(ctx, bundles, briefingSince, now, marketShared)
-		case widgetFleet:
-			w.Fleet = app.buildFleet(ctx, userID, bundles)
-		case widgetNetWorth:
-			w.NetWorth = sharedNetWorth()
-		case widgetIndustry:
-			w.Industry = app.buildIndustry(ctx, bundles)
-		case widgetProdLine:
-			w.ProdLine = app.buildProdLine(ctx, userID, bundles, gw, gh)
-		case widgetMarket:
-			w.Market = app.buildMarket(ctx, bundles, app.ordersConfigFor(ctx, userID), marketShared)
-		case widgetWatchlist:
-			w.Watchlist = app.buildWatchlistWidget(ctx, marketShared)
-		case widgetPI:
-			w.PI = app.buildPI(ctx, bundles)
-		case widgetTradeIdeas:
-			w.TradeIdeas = ideas.Stored(ctx, app.queries, app.cfg.TradeIdeasConfigured())
-		case widgetTraining:
-			w.Training = app.buildTraining(ctx, bundles)
-		case widgetPulse:
-			w.Pulse = app.buildPulse(ctx, userID)
-		case widgetWalletFlow:
-			w.WalletFlow = app.buildWalletFlow(bundles)
-		case widgetUpkeep:
-			w.Upkeep = app.buildUpkeep(ctx, userID)
-		case widgetGlance:
-			w.Glance = app.buildGlance(bundles, sharedNetWorth())
-		case widgetProfitPulse:
-			w.ProfitPulse = app.buildProfitPulse(ctx, userID, gw, gh)
-		}
-		// A list's offered heights stop where its rows do: with
-		// two rows standing, the taller sizes would only draw
-		// empty cells, so they are not offered.
-		listRows := -1
-		switch {
-		case w.Industry != nil:
-			listRows = len(w.Industry.Rows)
-		case w.Watchlist != nil:
-			listRows = len(w.Watchlist.Rows)
-		case w.PI != nil:
-			listRows = len(w.PI.Soonest)
-		case w.Training != nil:
-			listRows = len(w.Training.Events)
-		case w.TradeIdeas != nil:
-			listRows = 0
-			for _, g := range w.TradeIdeas.Groups {
-				listRows += len(g.Ideas)
-			}
-		}
-		if listRows >= 0 {
-			w.MaxH = min(w.MaxH, max(capHeightFor(listRows), minH))
-		}
-		view.Widgets = append(view.Widgets, w)
 	}
 
 	// The anchor advances only after a real (non-Customize) home
@@ -1711,7 +1469,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 	// is what moves the window. A Customize pass arranges the
 	// module; it does not count as having read it.
 	if briefingIn && !customize {
-		app.advanceBriefingAnchor(ctx, userID, now)
+		app.advanceBriefingAnchor(ctx, userID, shared.now)
 	}
 	return view
 }
@@ -1796,7 +1554,7 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 	if err := r.ParseForm(); err == nil {
 		action := r.FormValue("action")
 		widget := r.FormValue("widget")
-		_, known := widgetDefFor(widget)
+		def, known := widgetDefFor(widget)
 		switch action {
 		case "reset":
 			// Store the account's own preset rather than "": the
@@ -1858,16 +1616,12 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 			}
 			app.saveHomeLayout(ctx, userID, next)
 		case "size":
-			// Resize one widget on the home; both sizes must be
-			// whole cells inside the module's bounds (its floor
-			// and ceiling), else nothing changes, and a scripted
-			// caller is told so, so it can put the size back.
+			// Resize one widget on the home; the size must be one
+			// the widget declares, else nothing changes, and a
+			// scripted caller is told so, so it can put the size back.
 			wv, werr := strconv.Atoi(r.FormValue("w"))
 			hv, herr := strconv.Atoi(r.FormValue("h"))
-			minW, minH := widgetMin(widget)
-			maxW, maxH := widgetMax(widget)
-			valid := known && werr == nil && herr == nil &&
-				wv >= minW && wv <= maxW && hv >= minH && hv <= maxH
+			valid := known && werr == nil && herr == nil && def.Allows(wSize{wv, hv})
 			if valid {
 				for i := range layout {
 					if layout[i].ID == widget {

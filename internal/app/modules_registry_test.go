@@ -215,19 +215,10 @@ func TestRegisteredFeaturesAgreeWithTheManifest(t *testing.T) {
 	}
 }
 
-// TestModuleDeclaredCatalogsKeepTheirOrder: the home widgets and the
-// notification kinds the modules declare land where they were before
-// the modules, so the customize list and the notification settings read
-// the same.
+// TestModuleDeclaredCatalogsKeepTheirOrder: the notification kinds the
+// modules declare land where they were before the modules, so the
+// notification settings read the same.
 func TestModuleDeclaredCatalogsKeepTheirOrder(t *testing.T) {
-	var widgets []string
-	for _, w := range homeWidgetCatalog() {
-		widgets = append(widgets, w.ID)
-	}
-	wantWidgets := "glance briefing fleet networth industry prodline pi market watchlist tradeideas training pulse profitpulse walletflow upkeep"
-	if got := strings.Join(widgets, " "); got != wantWidgets {
-		t.Errorf("widget catalog = %q, want %q", got, wantWidgets)
-	}
 	var kinds []string
 	for _, k := range notifyKindList() {
 		kinds = append(kinds, k.ID)

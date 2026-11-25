@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v1.0.2.4] - 2026-11-25
+## [v1.0.2.5] - 2026-11-25
+
+Automated build of EveSynapse v1.0.2.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).
+
+## What's Changed
+
+### 🚀 Features
+* Read drag intent in Customize, add undo and redo, and let the glance band and fleet table grow with their content by @natemsz in #607
+
+### 🐛 Bug Fixes
+* Let the Briefing band grow with its alert cards so no card is cut off by @natemsz in #608
+
+### Other Changes
+* Update changelog for v1.0.2.4 by @natemsz in #606
+
+## [v1.0.2.4]
 
 Automated build of EveSynapse v1.0.2.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).

@@ -311,7 +311,7 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	setHomeLayout(t, q, user.ID, `[{"id":"tradeideas"}]`)
+	setHomeLayout(t, q, user.ID, `[{"id":"tradeideas","w":1,"h":2}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	if err := q.PutTradeIdeas(ctx, db.PutTradeIdeasParams{
 		Body: "- Station flips\n- Regional arb <script>alert(1)</script>", AsOf: time.Now().UTC(), Model: ideas.GemmaModel,
@@ -335,7 +335,7 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/ trade ideas module", body, `data-widget="tradeideas"`, "Station flips", `role="tablist"`, `aria-controls="ti-1"`)
+	mustContain(t, "/ trade ideas module", body, `data-widget="tradeideas"`, "Station flips", `role="tablist"`, `aria-controls="w-tradeideas-g0"`)
 	if strings.Contains(body, "<script>alert(1)</script>") {
 		t.Fatalf("model text rendered unescaped on the home page")
 	}
@@ -414,7 +414,7 @@ func TestTradeIdeasPageEmptyStates(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	setHomeLayout(t, q, user.ID, `[{"id":"tradeideas"}]`)
+	setHomeLayout(t, q, user.ID, `[{"id":"tradeideas","w":1,"h":2}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/market/ideas/")
 	if code != http.StatusOK {

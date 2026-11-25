@@ -203,6 +203,8 @@ func (o widgetOption) allows(v string) bool {
 			(strings.HasPrefix(v, scopeTagPfx) && len(v) > len(scopeTagPfx))
 	case optKindToggle:
 		return v == toggleOn || v == toggleOff
+	case optKindCorp:
+		return v == scopeAll || corpOptionID(v) > 0
 	case optKindMulti:
 		if v == "" {
 			return false
@@ -707,6 +709,7 @@ func (app *Application) buildHomeWidget(ctx context.Context, ts *template.Templa
 		}
 		if customize {
 			w.Settings = def.settingsView(w.Key, in.Opts, shared.chars)
+			shared.fillCorpChoices(ctx, w.Settings, in.Opts)
 		}
 	}
 	if ns, ok := def.narrowSize(size); ok {
@@ -785,4 +788,68 @@ func navLabelFor(href string) string {
 		}
 	}
 	return ""
+}
+
+// ---------------------------------------------------------------------------
+// The corporation option: every corporation the account's characters
+// are in, or one of them, for widgets that read corporation data.
+// Values are "all" and "corp:<id>". The settings sheet lists the
+// corporations by name and leaves the field out while there is only
+// one; a value naming a corporation the card cannot read reads as all
+// (the builder's job, since only it knows what it can read).
+// ---------------------------------------------------------------------------
+
+const (
+	optKindCorp = "corp" // all corporations or one: all, corp:<id>
+	corpOptPfx  = "corp:"
+)
+
+// optCorp is the corporations a widget reads: all of them by default.
+func optCorp() widgetOption {
+	return widgetOption{Key: "corp", Label: "Corporation", Kind: optKindCorp, Default: scopeAll}
+}
+
+// corpOptionID is the corporation a corporation option's value names,
+// 0 for all corporations or a malformed value.
+func corpOptionID(v string) int64 {
+	raw, ok := strings.CutPrefix(v, corpOptPfx)
+	if !ok {
+		return 0
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		return 0
+	}
+	return id
+}
+
+// fillCorpChoices gives a settings sheet's corporation fields their
+// choices: every corporation the account's characters are in, by
+// name. A field with one corporation or none to choose from is left
+// out of the sheet.
+func (s *homeShared) fillCorpChoices(ctx context.Context, view *widgetSettingsView, opts widgetOptions) {
+	if view == nil {
+		return
+	}
+	var fields []widgetSettingsField
+	var corps []pulseCorpRef
+	read := false
+	for _, f := range view.Fields {
+		if f.Kind == optKindCorp {
+			if !read {
+				corps, read = s.app.pulseCorps(ctx, s.chars), true
+			}
+			if len(corps) < 2 {
+				continue
+			}
+			cur := opts.Get(f.Key)
+			f.Choices = []widgetSettingsChoice{{Value: scopeAll, Label: "All corporations", Selected: cur == scopeAll}}
+			for _, c := range corps {
+				val := corpOptPfx + strconv.FormatInt(c.CorpID, 10)
+				f.Choices = append(f.Choices, widgetSettingsChoice{Value: val, Label: s.app.pulseCorpName(ctx, c), Selected: cur == val})
+			}
+		}
+		fields = append(fields, f)
+	}
+	view.Fields = fields
 }

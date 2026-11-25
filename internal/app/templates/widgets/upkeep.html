@@ -1,13 +1,23 @@
-{{define "w-upkeep-all"}}{{$cap := .Cap}}
-{{with .Data}}
-{{if .Corps}}
-<p><small>{{.Count}} deadline{{if ne .Count 1}}s{{end}}{{if .Urgent}} · <strong>{{.Urgent}} past due</strong>{{end}}</small></p>
-{{range .Corps}}
-<h4>{{.Name}}</h4>
-<ul class="attention" data-w-fit>{{range $i, $it := .Items}}<li{{if ge $i $cap}} data-w-over{{end}}>{{if .Urgent}}<strong>{{.Name}}: {{.Text}}</strong>{{else}}{{.Name}}: {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
-{{end}}
-{{else}}
-<p><small>All structures are fueled, or none of your characters has the Station Manager or Director role needed to check.</small></p>
-{{end}}
-{{end}}
-{{end}}
+{{/* Upkeep & Fuel: four forms on the kit. Each deadline is a meter of
+     the week the widget watches: empty once past due. */}}
+
+{{define "w-upkeep-small"}}<div class="w-body w-upkeep {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+<div class="w-leadrow">{{template "w-lead" .Lead}}{{if .Urgent}}<span class="w-badge w-bad">{{.Urgent}} past due</span>{{end}}</div>
+{{if .Soonest}}<p class="w-lead-sub">Soonest: {{.Soonest}}</p>{{end}}
+{{end}}{{end}}</div>{{end}}
+
+{{define "w-upkeep-wide"}}<div class="w-body w-upkeep {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+<div class="w-meters-row">{{template "w-meters" .Soon}}</div>
+{{end}}{{end}}</div>{{end}}
+
+{{define "w-upkeep-tall"}}<div class="w-body w-upkeep {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+<div class="w-leadrow">{{template "w-lead" .Lead}}{{if .Urgent}}<span class="w-badge w-bad">{{.Urgent}} past due</span>{{end}}</div>
+{{template "w-meters" .Meters}}
+{{end}}{{end}}</div>{{end}}
+
+{{define "w-upkeep-medium"}}<div class="w-body w-upkeep {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+<div class="w-leadrow">{{template "w-lead" .Lead}}{{if .Urgent}}<span class="w-badge w-bad">{{.Urgent}} past due</span>{{end}}</div>
+<div class="w-ti-cols">{{range .Corps}}
+<section class="w-ti-col"><h4 class="w-sub">{{.Name}}</h4>{{template "w-meters" .Meters}}</section>{{end}}
+</div>
+{{end}}{{end}}</div>{{end}}

@@ -1,21 +1,47 @@
-{{define "w-tradeideas-all"}}{{$cap := .Cap}}
-{{with .Data}}
-{{if .HasIdeas}}
-<div class="ti ti-compact">
+{{/* Trade Ideas: five forms on the kit, over the stored answer. Tab
+     and panel ids come from Uid: one page may hold two bodies. */}}
+
+{{define "w-tradeideas-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasIdeas}}{{with index .Groups 0}}
+<div class="w-lead"><span class="w-lead-label">Top idea: {{.Title}}</span></div>
+{{if .Briefs}}<p class="w-ti-brief">{{index .Briefs 0}}</p>{{end}}
+{{end}}
+{{template "w-note" .Note}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-tradeideas-wide"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasIdeas}}
+<ul class="w-ti-chips" data-w-fit>{{range .Groups}}<li class="ti-acc ti-a{{.Accent}}"><span class="w-ti-chip">{{.Title}}</span>{{if .Briefs}}<span class="w-ti-brief">{{index .Briefs 0}}</span>{{end}}</li>{{end}}</ul>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-tradeideas-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasIdeas}}
+{{template "w-tradeideas-tabs" $}}
+{{template "w-note" .Note}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-tradeideas-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasIdeas}}
+{{template "w-tradeideas-tabs" $}}
+{{template "w-note" .Note}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-tradeideas-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .HasIdeas}}
+<div class="w-ti-cols">{{range .Groups}}
+<section class="w-ti-col ti-panel ti-acc ti-a{{.Accent}}">
+  <h4 class="ti-h">{{.Title}}</h4>
+  <ol class="ti-list" data-w-fit>{{range .Briefs}}<li>{{.}}</li>{{end}}</ol>
+</section>{{end}}
+</div>
+{{template "w-note" .Note}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* One strategy at a time behind tabs: briefs in the tall form, the
+     whole lines in the medium one. The card's view. */}}
+{{define "w-tradeideas-tabs"}}{{$w := .}}{{with .Data}}<div class="ti ti-compact w-ti-tabs{{if eq $w.Form "medium"}} w-ti-whole{{end}}">
   <div class="ti-tabs" role="tablist" aria-label="Trade strategies" data-tabs hidden>
-    {{range $i, $g := .Groups}}<button type="button" role="tab" class="ti-acc ti-a{{.Accent}}" id="{{.ID}}-tab" aria-controls="{{.ID}}" aria-selected="{{if eq $i 0}}true{{else}}false{{end}}">{{.Title}}</button>{{end}}
+    {{range $i, $g := .Groups}}<button type="button" role="tab" class="ti-acc ti-a{{.Accent}}" id="{{$w.Uid (printf "g%d-tab" $i)}}" aria-controls="{{$w.Uid (printf "g%d" $i)}}" aria-selected="{{if eq $i 0}}true{{else}}false{{end}}">{{.Title}}</button>{{end}}
   </div>
-  {{range $g := .Groups}}
-  <div class="ti-panel ti-acc ti-a{{.Accent}}" role="tabpanel" id="{{.ID}}" aria-labelledby="{{.ID}}-tab">
+  {{range $i, $g := .Groups}}
+  <div class="ti-panel ti-acc ti-a{{.Accent}}" role="tabpanel" id="{{$w.Uid (printf "g%d" $i)}}" aria-labelledby="{{$w.Uid (printf "g%d-tab" $i)}}">
     <h4 class="ti-h">{{.Title}}</h4>
-    {{/* The brief at the resting size, the whole line once More is open. */}}
-    <ol class="ti-list">{{range $i, $idea := .Ideas}}<li{{if ge $i $cap}} data-w-over{{end}}><span class="ti-brief">{{index $g.Briefs $i}}</span><span class="ti-whole">{{$idea}}</span></li>{{end}}</ol>
-    {{with .More $cap}}<p class="ti-more" data-w-detail><small><a href="/market/ideas/">All ideas on the Trade Ideas page</a></small></p>{{end}}
+    <ol class="ti-list" data-w-fit>{{range $j, $idea := .Ideas}}<li>{{if eq $w.Form "medium"}}{{$idea}}{{else}}<span class="ti-brief">{{index $g.Briefs $j}}</span>{{end}}</li>{{end}}</ol>
   </div>
   {{end}}
-</div>
-<p><small>As of {{.AsOf}} · {{.Model}} on the Forge spread scanner · <a href="/market/ideas/">all ideas</a></small></p>
-{{else if .Configured}}<p><small>No ideas yet. They're generated after the next Forge market sweep.</small></p>
-{{else}}<p><small>Trade Ideas are not set up on this server.</small></p>{{end}}
-{{end}}
-{{end}}
+</div>{{end}}{{end}}

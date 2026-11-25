@@ -83,17 +83,18 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 		{OrderID: 3, TypeID: 34, IsBuyOrder: false, Price: 100, VolumeRemain: 3, VolumeTotal: 3,
 			Issued: rfc(now), Duration: 1},
 	})
-	setHomeLayout(t, q, user.ID, `[{"id":"market"}]`)
+	setHomeLayout(t, q, user.ID, `[{"id":"market","w":2,"h":2}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
-	// Default: all characters, totals + expiring rows.
+	// Default: all characters, totals + a row per character.
 	code, body := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/", body,
-		"<strong>3</strong> open orders",
+		`title="3 open orders"`,
 		"2 sell (350.00 ISK)", "1 buy (432.00 ISK in escrow)",
+		"1 sell · 50.00 ISK",
 	)
 	// Customize carries the sheet: every character and every tag in
 	// use are scope choices.
@@ -131,7 +132,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 		t.Fatalf("GET / (char scope): status %d", code)
 	}
 	mustContain(t, "/ (char scope)", body,
-		"<strong>1</strong> open orders", "1 sell (50.00 ISK)",
+		`title="1 open orders"`, "1 sell (50.00 ISK)",
 		"Market · Fixture Alpha",
 	)
 	for _, gone := range []string{"432.00", "300.00", "1 buy"} {
@@ -141,7 +142,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 	}
 
 	// Tag scope, per-character rows: Alpha + Bravo rows, no
-	// combined totals line, Charlie (untagged) out.
+	// combined totals tiles, Charlie (untagged) out.
 	if code := postWidgetConfig(t, app, cookie, url.Values{
 		"key": {widgetMarket}, "scope": {"tag:Trader"}, "show": {mergePerCharacter}, "next": {"/"},
 	}); code != http.StatusSeeOther {
@@ -155,8 +156,8 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 		"1 sell · 50.00 ISK", "1 buy · 432.00 ISK in escrow",
 		"Market · Tag: Trader",
 	)
-	if strings.Contains(body, "<strong>2</strong> open orders") {
-		t.Error("per-character mode rendered the combined totals line")
+	if strings.Contains(body, "1 sell (50.00 ISK)") {
+		t.Error("per-character mode rendered the combined totals tiles")
 	}
 	if strings.Contains(body, "300.00") {
 		t.Error("tag scope leaked untagged Charlie's sell value")
@@ -173,7 +174,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 		t.Fatalf("GET / (tag combined): status %d", code)
 	}
 	mustContain(t, "/ (tag combined)", body,
-		"<strong>2</strong> open orders", "1 sell (50.00 ISK)", "1 buy (432.00 ISK in escrow)",
+		`title="2 open orders"`, "1 sell (50.00 ISK)", "1 buy (432.00 ISK in escrow)",
 	)
 	if strings.Contains(body, "1 sell · 50.00 ISK") {
 		t.Error("combined mode rendered per-character rows")
@@ -195,7 +196,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET / (after toggles): status %d", code)
 	}
-	mustContain(t, "/ (after toggles)", body, "1 sell · 50.00 ISK")
+	mustContain(t, "/ (after toggles)", body, "Market · Tag: Trader")
 	if cfg := stored(); cfg["scope"] != "tag:Trader" || cfg["show"] != mergePerCharacter {
 		t.Errorf("config after toggles = %v, want tag/per-character", cfg)
 	}
@@ -217,7 +218,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET / (fallback): status %d", code)
 	}
-	mustContain(t, "/ (fallback)", body, "<strong>3</strong> open orders")
+	mustContain(t, "/ (fallback)", body, `title="3 open orders"`)
 
 	// A stored scope whose character has left the account reads as
 	// all characters too.
@@ -230,7 +231,7 @@ func TestOrdersWidgetScopeAndMerge(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET / (stale scope): status %d", code)
 	}
-	mustContain(t, "/ (stale scope)", body, "<strong>3</strong> open orders")
+	mustContain(t, "/ (stale scope)", body, `title="3 open orders"`)
 	if strings.Contains(body, "Market · ") {
 		t.Error("a stale scope still named itself in the card title")
 	}
@@ -272,7 +273,7 @@ func TestWatchlistWidgetHome(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	setHomeLayout(t, q, user.ID, `[{"id":"watchlist"}]`)
+	setHomeLayout(t, q, user.ID, `[{"id":"watchlist","w":2,"h":2}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	code, body := getPage(t, app, cookie, "/")

@@ -1,20 +1,40 @@
-{{define "w-pulse-all"}}{{$cap := .Cap}}
-{{with .Data}}
-{{if .Corps}}
-{{range .Corps}}
-<h4>{{.Name}}</h4>
-<p><small>{{len .Joined}} joined · {{len .Left}} left · {{len .Moves}} wallet move{{if ne (len .Moves) 1}}s{{end}} · {{len .Added}} anchored · {{len .Removed}} removed · {{len .Timers}} timer{{if ne (len .Timers) 1}}s{{end}}</small></p>
-<div data-w-detail>
-{{if .Joined}}<p><small>Joined: {{range $i, $j := .Joined}}{{if $i}}, {{end}}{{$j.Name}} ({{$j.Joined}}){{end}}.</small></p>{{end}}
-{{if .Left}}<ul class="attention">{{range .Left}}<li>{{.Text}} left <small>{{.When}}</small></li>{{end}}</ul>{{end}}
-{{if .Moves}}<ul class="attention">{{range .Moves}}<li>Division {{.Division}}: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
-{{if .Added}}<ul class="attention">{{range .Added}}<li>Anchored: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
-{{if .Removed}}<ul class="attention">{{range .Removed}}<li>Removed: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
-{{if .Timers}}<ul class="attention">{{range .Timers}}<li>{{.Name}}: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
+{{/* Corp Pulse: five forms on the kit, over the changes the account's
+     roles can read. Each change carries its kind as a mark and a word. */}}
+
+{{define "w-pulse-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+{{template "w-pulse-counts" .}}
+{{end}}{{end}}</div>{{end}}
+
+{{define "w-pulse-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+<div class="w-side">{{template "w-pulse-counts" .}}</div>
+{{if .Feed}}<div class="w-rest">{{template "w-pulse-feed" .Feed}}</div>{{end}}
+{{end}}{{end}}</div>{{end}}
+
+{{define "w-pulse-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+{{if .Feed}}{{template "w-pulse-feed" .Feed}}{{else}}{{template "w-pulse-counts" .}}{{end}}
+{{end}}{{end}}</div>{{end}}
+
+{{define "w-pulse-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+{{template "w-pulse-counts" .}}
+{{if .Feed}}<div class="w-cols w-cols-lists">
+<div class="w-aside"><h4 class="w-sub">Latest changes</h4>{{template "w-pulse-feed" .Feed}}</div>
+{{if .Moves}}<div class="w-aside"><h4 class="w-sub">Largest wallet moves</h4>{{template "w-pulse-feed" .Moves}}</div>{{end}}
+</div>{{end}}
+{{end}}{{end}}</div>{{end}}
+
+{{define "w-pulse-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Empty.Text}}{{template "w-empty" .Empty}}{{else}}
+<div class="w-ti-cols">{{range .Corps}}
+<section class="w-ti-col">
+  <h4 class="w-sub">{{.Name}}</h4>
+  {{template "w-pulse-counts" .}}
+  {{if .Feed}}{{template "w-pulse-feed" .Feed}}{{end}}
+</section>{{end}}
 </div>
-{{end}}
-{{else}}
-<p><small>Nothing to show. This needs a Director, Personnel Manager, Accountant, or Station Manager role in the corporation.</small></p>
-{{end}}
-{{end}}
-{{end}}
+{{end}}{{end}}</div>{{end}}
+
+{{/* How many of each kind, or the quiet note. */}}
+{{define "w-pulse-counts"}}{{if .Counts}}<ul class="w-chips">{{range .Counts}}<li class="w-chip"><span class="w-kind w-k-{{.Kind}}" aria-hidden="true"></span><strong>{{.N}}</strong> {{.Says}}</li>{{end}}</ul>
+{{else}}<p class="w-quiet">Nothing changed in your corporations lately.</p>{{end}}{{end}}
+
+{{/* A list of changes, newest first. */}}
+{{define "w-pulse-feed"}}<ol class="w-feed" data-w-fit>{{range .}}<li><span class="w-kind w-k-{{.Kind}}" aria-hidden="true"></span><span class="w-feed-says">{{.Says}}</span><span class="w-feed-text">{{.Text}}</span><small class="w-feed-when">{{.When}}{{if .Corp}} · {{.Corp}}{{end}}</small></li>{{end}}</ol>{{end}}

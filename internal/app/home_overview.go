@@ -82,11 +82,12 @@ var defaultHomeLayout = []homeLayoutItem{
 	{ID: widgetBriefing, W: 3, H: 1},
 	{ID: widgetGlance, W: 3, H: 1},
 	{ID: widgetFleet, W: 3, H: 2},
-	{ID: widgetTraining, W: 1, H: 2},
-	{ID: widgetPI, W: 1, H: 2},
+	{ID: widgetIndustry, W: 1, H: 2},
 	{ID: widgetNetWorth, W: 1, H: 2},
+	{ID: widgetTraining, W: 1, H: 2},
 	{ID: widgetWalletFlow, W: 2, H: 2},
-	{ID: widgetIndustry, W: 1, H: 1},
+	{ID: widgetPI, W: 1, H: 2},
+	{ID: widgetProfitPulse, W: 2, H: 1},
 	{ID: widgetMarket, W: 1, H: 1},
 }
 
@@ -509,18 +510,6 @@ type homeView struct {
 	HasChars   bool
 	Customize  *customizeView // non-nil in customize mode
 	LoadFailed bool           // character list unreadable
-	Rows       string         // the grid's data-rows: "auto" or "fixed" (homeRowsFor)
-}
-
-// homeRowsFor is how the home grid sizes its rows for a request:
-// "fixed" (every row one height, a card exactly its cells) when the
-// request asks with ?rows=fixed, "auto" (rows as tall as their
-// content) otherwise. The choice is per request and never stored.
-func homeRowsFor(r *http.Request) string {
-	if r.URL.Query().Get("rows") == "fixed" {
-		return "fixed"
-	}
-	return "auto"
 }
 
 // fleetRow is one line of the fleet overview.

@@ -24,7 +24,7 @@ func init() {
 		Requires:    "corpdata",
 		Href:        "/corporations/",
 		Description: "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.",
-		Default:     wSize{1, 1},
+		Default:     wSize{2, 2},
 		Forms: []homeWidgetForm{
 			{Name: "small", Sizes: "1x1", Says: "How many of each change, or a quiet note."},
 			{Name: "wide", Sizes: "2x1 3x1", Says: "The counts and the two latest changes."},

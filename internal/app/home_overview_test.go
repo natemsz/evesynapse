@@ -189,7 +189,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 
 	// Industry + market cards.
 	mustContain(t, "/", body,
-		"Industry", "Ready to deliver", "1 running",
+		"Industry", `class="w-ind-ready"`, "Manufacturing",
 		"Market", `title="2 open orders"`,
 		"3,000,000.00", // sell 3 × 1,000,000
 	)
@@ -598,7 +598,7 @@ func TestHomeLayoutPlaystylePresets(t *testing.T) {
 	// renders only when it has items, so a bare account's render
 	// starts at At a Glance; the tiling test pins the head itself.
 	_, cookie := newAccount(90000101, `{"activities":["market"]}`)
-	wantMarket := []string{"glance", "fleet", "tradeideas", "networth", "profitpulse", "walletflow", "watchlist", "market"}
+	wantMarket := []string{"glance", "fleet", "tradeideas", "watchlist", "profitpulse", "walletflow", "networth", "market"}
 	if got := homeIDs(cookie); strings.Join(got, ",") != strings.Join(wantMarket, ",") {
 		t.Errorf("market preset = %v, want %v", got, wantMarket)
 	}

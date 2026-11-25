@@ -53,7 +53,7 @@ var playstyleWidgetsByActivity = map[string]playstyleWidgets{
 	},
 	"industry": {
 		Specialists: []string{widgetProdLine, widgetPI, widgetIndustry, widgetProfitPulse},
-		Fill:        []string{widgetMarket, widgetWatchlist, widgetTraining, widgetNetWorth},
+		Fill:        []string{widgetMarket, widgetTraining, widgetNetWorth},
 	},
 	"corporation": {
 		Specialists: []string{widgetPulse, widgetUpkeep, widgetWalletFlow},
@@ -69,53 +69,52 @@ var playstyleWidgetsByActivity = map[string]playstyleWidgets{
 // single-playstyle preset. Specialist widgets stand expanded, larger
 // than their catalog size within their size bounds; the rest stand
 // at their catalog sizes. Every body tiles the three-wide grid with
-// no gaps. Net Worth is the one specialist that cannot grow: its
-// catalog size is already its maximum.
+// no gaps. Net Worth stands at its catalog size wherever it is a
+// specialist.
 var singlePlaystyleBodies = map[string][]homeLayoutItem{
 	"pilots": {
 		{ID: widgetTraining, W: 2, H: 2},
 		{ID: widgetNetWorth, W: 1, H: 2},
 		{ID: widgetPI, W: 1, H: 2},
 		{ID: widgetWalletFlow, W: 2, H: 2},
-		{ID: widgetIndustry, W: 1, H: 1},
-		{ID: widgetWatchlist, W: 1, H: 1},
-		{ID: widgetMarket, W: 1, H: 1},
+		{ID: widgetIndustry, W: 1, H: 2},
+		{ID: widgetWatchlist, W: 1, H: 2},
+		{ID: widgetMarket, W: 1, H: 2},
 	},
 	"market": {
-		{ID: widgetTradeIdeas, W: 2, H: 2},
-		{ID: widgetNetWorth, W: 1, H: 2},
+		{ID: widgetTradeIdeas, W: 2, H: 3},
+		{ID: widgetWatchlist, W: 1, H: 3},
 		{ID: widgetProfitPulse, W: 3, H: 2},
 		{ID: widgetWalletFlow, W: 2, H: 2},
-		{ID: widgetWatchlist, W: 1, H: 2},
+		{ID: widgetNetWorth, W: 1, H: 2},
 		{ID: widgetMarket, W: 3, H: 1},
 	},
 	"industry": {
 		{ID: widgetProdLine, W: 3, H: 2},
-		{ID: widgetPI, W: 2, H: 2},
-		{ID: widgetNetWorth, W: 1, H: 2},
-		{ID: widgetProfitPulse, W: 3, H: 2},
+		{ID: widgetPI, W: 1, H: 3},
+		{ID: widgetIndustry, W: 2, H: 2},
 		{ID: widgetTraining, W: 1, H: 2},
+		{ID: widgetNetWorth, W: 1, H: 2},
 		{ID: widgetMarket, W: 1, H: 1},
-		{ID: widgetWatchlist, W: 1, H: 1},
-		{ID: widgetIndustry, W: 2, H: 1},
+		{ID: widgetProfitPulse, W: 3, H: 2},
 	},
 	"corporation": {
 		{ID: widgetWalletFlow, W: 3, H: 2},
-		{ID: widgetPulse, W: 2, H: 2},
+		{ID: widgetPulse, W: 3, H: 2},
+		{ID: widgetUpkeep, W: 1, H: 3},
 		{ID: widgetNetWorth, W: 1, H: 2},
-		{ID: widgetUpkeep, W: 2, H: 1},
-		{ID: widgetMarket, W: 1, H: 1},
 		{ID: widgetTraining, W: 1, H: 2},
-		{ID: widgetIndustry, W: 1, H: 1},
 		{ID: widgetPI, W: 1, H: 2},
-		{ID: widgetWatchlist, W: 1, H: 1},
+		{ID: widgetIndustry, W: 1, H: 2},
+		{ID: widgetMarket, W: 1, H: 1},
 	},
 	"fitting": {
 		{ID: widgetTraining, W: 2, H: 2},
 		{ID: widgetNetWorth, W: 1, H: 2},
 		{ID: widgetWalletFlow, W: 2, H: 2},
+		{ID: widgetIndustry, W: 1, H: 2},
 		{ID: widgetMarket, W: 1, H: 1},
-		{ID: widgetIndustry, W: 1, H: 1},
+		{ID: widgetWatchlist, W: 2, H: 1},
 	},
 }
 

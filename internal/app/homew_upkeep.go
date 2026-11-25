@@ -14,7 +14,7 @@ func init() {
 		Requires:    "corpdata",
 		Href:        "/corporations/structures/",
 		Description: "Structures low on fuel, unanchoring, or running a state timer. Station Managers and Directors only.",
-		Default:     wSize{1, 1},
+		Default:     wSize{1, 2},
 		Forms: []homeWidgetForm{
 			{Name: "small", Sizes: "1x1", Says: "How many are past due or due within 7 days, and the soonest."},
 			{Name: "wide", Sizes: "2x1 3x1", Says: "The soonest three, each with the time it has left."},

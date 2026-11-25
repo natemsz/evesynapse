@@ -114,7 +114,7 @@ func TestHomeGridSizes(t *testing.T) {
 		`<section class="card w-card gw3 gh2" data-widget="fleet" data-key="fleet" data-gw="3" data-gh="2" data-sizes="1x1 1x2 1x3 1x4 2x1 2x2 2x3 2x4 3x1 3x2 3x3 3x4" data-size-names=`,
 		// An old wide span is the full width now.
 		`<section class="card w-card gw3 gh1" data-widget="market" data-key="market" data-gw="3" data-gh="1" data-sizes="1x1 1x2 1x3 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`,
-		`<section class="card w-card gw1 gh1" data-widget="watchlist" data-key="watchlist" data-gw="1" data-gh="1" data-sizes="1x1 1x2 1x3 1x4 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`)
+		`<section class="card w-card gw1 gh2" data-widget="watchlist" data-key="watchlist" data-gw="1" data-gh="2" data-sizes="1x1 1x2 1x3 1x4 2x1 2x2 2x3 3x1 3x2 3x3" data-size-names=`)
 
 	// Resize, as the picker's XHR: stored, rendered.
 	code, resp := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"2"}, "h": {"3"}}, cookie, true)

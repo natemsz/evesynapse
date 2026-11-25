@@ -664,14 +664,12 @@ inside `.l-page`, so it measures the page and never the window.
   two columns a width of 3 draws as 2, and with one every card is
   full width. `--home-cols` on the grid carries the count to
   home.js.
-- **Rows** are named on the grid by `data-rows`. `auto`: a row is
-  as tall as what its cards hold (with two columns every card spans
-  one row). `fixed` (`?rows=fixed`, not stored): every row is
-  `--w-row` tall, growing with the page, and a card is exactly its
-  cells. Cards are size containers there (`container: widget /
-  size`), so their parts can read the box. Below 36rem rows are auto
-  in both kinds and cards are only inline-size containers: a size
-  container with an auto height collapses to nothing.
+- **Rows**: with two or three columns every row is `--w-row` tall,
+  growing with the page, and a card is exactly its cells. Cards are
+  size containers there (`container: widget / size`), so their parts
+  can read the box. Below 36rem rows are auto and cards are only
+  inline-size containers: a size container with an auto height
+  collapses to nothing.
 - **Placement**: home.js writes each card's `grid-column` and
   `grid-row` through the CSSOM. `homePack` puts each card at the
   first free spot, row by row, the rule CSS `row dense` follows;

@@ -1,0 +1,49 @@
+{{/* Sovereignty: the space the account's pilots' alliances hold. ESI
+     names only the defender of a contest, so no attacker is shown.
+     Four forms; none reads its size. */}}
+
+{{define "w-sov-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Alliances}}
+{{template "w-lead" .Lead}}
+{{if not .Contests}}{{with .Next}}<p class="sv-next">Next window <span class="countdown" data-finish="{{.AtRaw}}" title="{{.At}}">{{.Left}}</span>: {{systemLink .System.Place.SystemID .System.Place.Name}}</p>{{end}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-sov-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Alliances}}
+{{template "w-sov-timers" .}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-sov-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Alliances}}
+<div class="w-cols w-cols-lists">
+<div class="w-rest">{{template "w-sov-timers" .}}</div>
+<div class="w-aside"><h4 class="w-sub">This week</h4>{{template "w-sov-changes" .}}</div>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-sov-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Alliances}}
+{{template "w-sov-alliances" .Alliances}}
+<div class="w-cols w-cols-lists">
+<div class="w-aside"><h4 class="w-sub">Contests</h4>{{if .Contests}}{{template "w-sov-list" .Contests}}{{else}}<p class="w-quiet"><small>No contests.</small></p>{{end}}</div>
+<div class="w-aside"><h4 class="w-sub">Vulnerability windows, next 24 hours</h4>{{if .Windows}}{{template "w-sov-list" .Windows}}{{else}}<p class="w-quiet"><small>No windows in the next 24 hours.</small></p>{{end}}</div>
+<div class="w-aside"><h4 class="w-sub">This week</h4>{{template "w-sov-changes" .}}</div>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-sov-alliances"}}<p class="sv-alliances">{{range $i, $a := .}}{{if $i}} · {{end}}<a href="{{$a.Href}}">{{$a.Name}}</a> <small>{{$a.Held}} held{{if $a.Gained}}, {{$a.Gained}} gained{{end}}{{if $a.Lost}}, {{$a.Lost}} lost{{end}} this week</small>{{end}}</p>{{end}}
+
+{{/* Contests, then windows, as one list: the timers that need you. */}}
+{{define "w-sov-timers"}}{{if or .Contests .Windows}}<ul class="sv-list" data-w-fit>{{range .Contests}}{{template "w-sov-row" .}}{{end}}{{range .Windows}}{{template "w-sov-row" .}}{{end}}</ul>{{else}}<p class="w-quiet"><small>No contests and no windows in the next 24 hours.</small></p>{{end}}{{end}}
+
+{{define "w-sov-list"}}<ul class="sv-list" data-w-fit>{{range .}}{{template "w-sov-row" .}}{{end}}</ul>{{end}}
+
+{{define "w-sov-row"}}<li class="{{if .Open}}sv-open{{end}}">
+  <span class="sv-system">{{systemLink .System.Place.SystemID .System.Place.Name}}<span class="sec-pill sec-{{.System.SecTier}}">{{.System.SecText}}</span></span>
+  <span class="sv-when">{{if .State}}{{.State}}{{if .Left}}, closes <span class="countdown" data-finish="{{.AtRaw}}" title="{{.At}}">{{.Left}}</span>{{end}}{{else}}<span class="countdown" data-finish="{{.AtRaw}}" title="{{.At}}">{{.Left}}</span>{{end}}</span>
+  <small class="sv-sub">{{.What}}, {{.Alliance}}</small>
+  <small class="sv-sub sv-region">{{.System.Region}}</small>
+</li>{{end}}
+
+{{define "w-sov-changes"}}{{if .Changes}}<ul class="sv-list" data-w-fit>{{range .Changes}}<li class="{{if .Gained}}sv-gain{{else}}sv-loss{{end}}">
+  <span class="sv-system">{{systemLink .System.Place.SystemID .System.Place.Name}}<span class="sec-pill sec-{{.System.SecTier}}">{{.System.SecText}}</span></span>
+  <span class="sv-when">{{if .Gained}}Gained{{else}}Lost{{end}}</span>
+  <small class="sv-sub">{{.System.Region}}</small>
+  <small class="sv-sub sv-region">{{.Ago}}</small>
+</li>{{end}}</ul>{{else}}<p class="w-quiet"><small>No systems gained or lost.</small></p>{{end}}{{end}}

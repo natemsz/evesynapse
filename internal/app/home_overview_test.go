@@ -598,7 +598,7 @@ func TestHomeLayoutPlaystylePresets(t *testing.T) {
 	// renders only when it has items, so a bare account's render
 	// starts at At a Glance; the tiling test pins the head itself.
 	_, cookie := newAccount(90000101, `{"activities":["market"]}`)
-	wantMarket := []string{"glance", "fleet", "tradeideas", "watchlist", "profitpulse", "walletflow", "networth", "market"}
+	wantMarket := []string{"glance", "fleet", "tradeideas", "watchlist", "profitpulse", "walletflow", "networth", "market", "movers", "lp"}
 	if got := homeIDs(cookie); strings.Join(got, ",") != strings.Join(wantMarket, ",") {
 		t.Errorf("market preset = %v, want %v", got, wantMarket)
 	}

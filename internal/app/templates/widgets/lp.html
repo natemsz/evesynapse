@@ -1,0 +1,40 @@
+{{/* Loyalty Points: LP the account's pilots hold, valued at each
+     store's best stored offer. Four forms; none reads its size. */}}
+
+{{define "w-lp-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Corps}}
+{{template "w-lead" .Lead}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-lp-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Corps}}
+{{template "w-lead" .Lead}}
+{{template "w-lp-corps" .Corps}}
+{{with .Note}}{{template "w-note" .}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-lp-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Corps}}
+{{template "w-lead" .Lead}}
+<div class="w-cols w-cols-lists">
+<div class="w-rest">{{template "w-lp-corps" .Corps}}</div>
+<div class="w-aside"><h4 class="w-sub">By pilot</h4>{{template "w-lp-pilots" $}}</div>
+</div>
+{{with .Note}}{{template "w-note" .}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-lp-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Corps}}
+{{template "w-lead" .Lead}}
+<div class="w-cols w-cols-lists">
+<div class="w-rest">{{template "w-lp-corps" .Corps}}</div>
+{{with .Ranked}}<div class="w-aside"><h4 class="w-sub">What it is worth</h4>{{template "w-rank" .}}</div>{{end}}
+<div class="w-aside"><h4 class="w-sub">By pilot</h4>{{template "w-lp-pilots" $}}</div>
+</div>
+{{with .Note}}{{template "w-note" .}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-lp-corps"}}<ul class="lp-list" data-w-fit>{{range .}}<li>
+  <a class="lp-corp" href="{{.Href}}">{{.Name}}</a>
+  <span class="lp-points">{{.LP}} <small>LP</small></span>
+  <small class="lp-rate">{{if .PerLP}}{{.PerLP}} ISK per LP{{else}}No offer valued{{end}}</small>
+  <small class="lp-value">{{with .Value}}{{.}} ISK{{end}}</small>
+</li>{{end}}</ul>{{end}}
+
+{{define "w-lp-pilots"}}<ul class="lp-pilots" data-w-fit>{{range .Data.Pilots}}<li><span>{{charLink $.ViewerChars .CharID .Name}}</span><span class="lp-points">{{.LP}}</span></li>{{end}}</ul>{{end}}

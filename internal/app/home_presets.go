@@ -50,7 +50,7 @@ var playstyleWidgetsByActivity = map[string]playstyleWidgets{
 	},
 	"market": {
 		Specialists: []string{widgetTradeIdeas, widgetMarket, widgetProfitPulse, widgetWatchlist},
-		Fill:        []string{widgetWalletFlow, widgetNetWorth},
+		Fill:        []string{widgetWalletFlow, widgetNetWorth, widgetMovers, widgetLP},
 	},
 	"industry": {
 		Specialists: []string{widgetProdLine, widgetPI, widgetIndustry, widgetProfitPulse},
@@ -89,7 +89,9 @@ var singlePlaystyleBodies = map[string][]homeLayoutItem{
 		{ID: widgetProfitPulse, W: 3, H: 2},
 		{ID: widgetWalletFlow, W: 2, H: 2},
 		{ID: widgetNetWorth, W: 1, H: 2},
-		{ID: widgetMarket, W: 3, H: 1},
+		{ID: widgetMarket, W: 1, H: 2},
+		{ID: widgetMovers, W: 1, H: 2},
+		{ID: widgetLP, W: 1, H: 2},
 	},
 	"industry": {
 		{ID: widgetProdLine, W: 3, H: 2},
@@ -153,6 +155,7 @@ var blendCanonicalOrder = []string{
 	widgetIndustry, widgetProfitPulse, widgetWatchlist, widgetPI,
 	widgetProdLine, widgetTradeIdeas, widgetPulse, widgetUpkeep, widgetFleets,
 	widgetKills, widgetSRP, widgetClones, widgetMail, widgetContracts,
+	widgetLP, widgetMovers, widgetSov,
 }
 
 // blendFullSize is a widget's full size in a blend, used for the
@@ -177,6 +180,9 @@ var blendFullSize = map[string]struct{ W, H int }{
 	widgetClones:      {2, 2},
 	widgetMail:        {2, 2},
 	widgetContracts:   {2, 2},
+	widgetLP:          {2, 2},
+	widgetMovers:      {2, 2},
+	widgetSov:         {2, 2},
 }
 
 // defaultLayoutFor is the layout an account with no saved layout

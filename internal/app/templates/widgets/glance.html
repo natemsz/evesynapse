@@ -29,7 +29,7 @@
 <span class="kpi-icon" aria-hidden="true">{{template "glance-icon" .ID}}</span>
 <span class="kpi-k">{{if .Href}}<a href="{{.Href}}">{{.Label}}</a>{{else}}{{.Label}}{{end}}</span>
 <span class="kpi-v" title="{{.Full}}">{{if .Hero}}{{iskHero .Hero}}{{else}}{{.Value}}{{if .Unit}} <small>{{.Unit}}</small>{{end}}{{end}}{{if .Change}} <span class="kpi-trend {{if .Up}}up{{else}}down{{end}}" title="{{.ChangeText}}" aria-label="{{if .Up}}Up{{else}}Down{{end}} {{.ChangeText}}">{{if .Up}}&#9650;{{else}}&#9660;{{end}} {{.Change}}</span>{{end}}</span>
-{{if .Line}}{{template "w-spark" .Line}}{{else if .Meter}}<span class="kpi-bar{{if eq .Meter.Tone "warn"}} warn{{end}}" role="img" aria-label="{{.Meter.Label}}: {{printf "%.0f" .Meter.Pct}}%"><span data-w="{{printf "%.1f" .Meter.Pct}}"></span></span>{{end}}
+{{if .SparkPoints}}<svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{.SparkArea}}"/><polyline class="kpi-spark-line" points="{{.SparkPoints}}"/></svg>{{else if .Line}}{{template "w-spark" .Line}}{{else if .Meter}}<span class="kpi-bar{{if eq .Meter.Tone "warn"}} warn{{end}}" role="img" aria-label="{{.Meter.Label}}: {{printf "%.0f" .Meter.Pct}}%"><span data-w="{{printf "%.1f" .Meter.Pct}}"></span></span>{{end}}
 {{if .SubHTML}}<span class="kpi-sub">{{.SubHTML}}</span>{{else if .Sub}}<span class="kpi-sub">{{if .SubHref}}<a class="linkbtn" href="{{.SubHref}}"{{if .SubIdle}} data-fleet-idle{{end}}>{{.Sub}}</a>{{else}}{{.Sub}}{{end}}</span>{{end}}
 </div>{{end}}
 

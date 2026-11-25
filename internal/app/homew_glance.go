@@ -106,8 +106,10 @@ type glanceTile struct {
 	Full        string // the whole figure, for the title
 	Sub         string
 	SubHTML     template.HTML // a sub line with ISK figures in it
-	SubHref     string        // the sub line as a link, when it is the next step
-	SubIdle     bool          // the sub line is the idle pilots' link the Fleet Overview answers
+	SparkPoints string        // the live tile's 30-day sparkline (net worth), as the net worth widget drew it
+	SparkArea   string
+	SubHref     string // the sub line as a link, when it is the next step
+	SubIdle     bool   // the sub line is the idle pilots' link the Fleet Overview answers
 	Href        string
 	Tone        string // l-stat tone: "", "warn", "hot" or "ok"
 	Change      string // "+1.24B (+3.1%)"
@@ -227,6 +229,7 @@ func glanceNetWorth(ctx context.Context, g *glanceBuild) glanceTile {
 	}
 	glanceISK(&t, nw.totalNow, nw.Total)
 	glanceTrend(&t, nw.TotalTrend)
+	t.SparkPoints, t.SparkArea = nw.SparkPoints, nw.SparkArea
 	// What it is made of, as the live tile says it.
 	var parts []string
 	if nw.Wallet != "" {

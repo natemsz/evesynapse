@@ -613,6 +613,9 @@
   font-size: var(--fs-sm);
 }
 .w-ind-jobs > li:first-child, .w-pi-rows > li:first-child, .w-ind-pilots > li:first-child { border-top: 0; }
+.w-ind-compact > li { grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto; padding: 0.25rem 0; }
+.w-ind-compact .w-ind-sub { max-width: 9rem; }
+.w-ind-sum { margin: 0 0 var(--space-1); }
 .w-ind-icon { width: 2rem; height: 2rem; border-radius: var(--r-xs); border: 1px solid var(--box-edge); background: rgba(0, 0, 0, 0.35); }
 .w-ind-main { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .w-ind-prod, .w-ind-sub, .w-pi-planet, .w-pi-char, .w-pl-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -660,6 +663,10 @@
 .w-pl-name > small { color: var(--muted); font-size: var(--fs-xs); }
 .w-pl-quiet { color: var(--muted); font-size: var(--fs-sm); }
 .w-card .w-cols > .prodline-col { flex: 2 1 0; min-width: 0; display: flex; flex-direction: column; }
+/* The buy list sets its items in as many columns as the card's width
+   holds, so a 2x2 shows the whole list live showed in one column
+   (the rows still fit whole: homeFitCount reads each row's bottom). */
+.w-card .prodline-buy { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr)); column-gap: var(--space-4); align-content: start; }
 
 /* Planetary Industry: stopped extractors in red, the three-day track,
    and the planets with their run bars. */

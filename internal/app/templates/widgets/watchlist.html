@@ -1,16 +1,18 @@
 {{/* Market Watchlist: four forms on the kit. Where a row draws its
      30-day line in a column of its own, the price is a plain figure
      (its hover only stands in once a table reads as cards); the small
-     form has no line, so its price carries the hover. */}}
+     form is live's table (item, average, 7 and 30 days, status) and
+     has no line, so its price carries the hover. */}}
 
-{{define "w-watchlist-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{with .Lead}}
-<div class="w-lead">
-  <span class="w-lead-label">{{if $.Data.Moving}}Biggest mover{{else}}Watching{{end}}</span>
-  <span class="w-watch-name"><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></span>
-  {{if .Priced}}<span class="w-lead-value">{{sparkFig .Current .Spark}} <small>ISK</small></span>
-  <span class="w-lead-change">{{if .Known}}<span class="w-arrow" aria-hidden="true">{{if .Up}}&#9650;{{else}}&#9660;{{end}}</span> {{end}}{{.Change7}} <small>over 7 days</small></span>{{else}}<span class="w-lead-sub">No price yet</span>{{end}}
+{{define "w-watchlist-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
+<div class="tw">
+<table class="w-watch w-watch-small">
+  <thead><tr><th>Item</th><th>Average</th><th>7 days</th><th>30 days</th><th>Status</th></tr></thead>
+  <tbody data-w-fit>
+  {{range $i, $r := .Rows}}<tr{{if ge $i $.Cap}} data-w-over{{end}}><td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td><td>{{sparkFigFallback .Current .Spark}}</td><td>{{.Change7}}</td><td>{{.Change30}}</td><td>{{if .Moving}}<strong title="{{.MoveText}}">Moving</strong>{{else}}Calm{{end}}</td></tr>{{end}}
+  </tbody>
+</table>
 </div>
-<p class="w-lead-sub">{{if $.Data.Moving}}{{$.Data.Moving}} of {{len $.Data.Rows}} items past their alert line{{else}}All {{len $.Data.Rows}} items calm{{end}}</p>
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-watchlist-wide"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}

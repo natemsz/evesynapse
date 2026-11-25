@@ -17,18 +17,19 @@
    only (a size container with an auto height would collapse to
    nothing).
 
-   home.js places every card at the first free spot, row by row
-   (homePack, the same rule as row dense placement), closes a hole
-   beside or under a card by growing it to a size it allows
-   (homeFillGaps), shows the holes in Customize as "Add a widget"
-   cells, and fits lists to their card (homeFitCount). Without
-   JavaScript the span classes and row dense placement lay the grid
-   out. */
+   home.js places every card at the first free spot at or after the
+   card before it (homePack, the same rule as row placement): cards
+   keep their order and none moves back into a hole, which stays
+   until the reader fills it. Fill gaps closes a hole beside or under
+   a card by growing it to a size it allows (homeFillGaps), Customize
+   shows the holes as "Add a widget" cells, and lists fit their card
+   (homeFitCount). Without JavaScript the span classes and row
+   placement lay the grid out. */
 .grid.home-grid {
   --home-cols: 1;
   grid-template-columns: minmax(0, 1fr);
   grid-auto-rows: auto;
-  grid-auto-flow: row dense;
+  grid-auto-flow: row;
   align-items: stretch;
 }
 .grid.home-grid > .card {

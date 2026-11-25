@@ -158,17 +158,18 @@ test("homeSnapCommit: release commits the cells the frame covered", function () 
   assert.equal(app.homeSnapCommit(2, -9999, 180, 3), 1, "one cell is the commit floor");
 });
 
-test("homePack: each widget takes the first spot it fits, row by row", function () {
+test("homePack: each widget takes the first spot it fits after the one before it; nothing moves back into a hole", function () {
   // Three columns: a band, then a tall one beside a square, then a
-  // wide one that cannot fit beside them and starts a new row; the
-  // square after it closes the hole the wide one left.
+  // wide one that cannot fit beside them and starts a new row. The
+  // square after it does not move back up into the hole the wide one
+  // left: it follows the wide one, and the hole stays.
   const got = app.homePack([{ w: 3, h: 1 }, { w: 1, h: 2 }, { w: 1, h: 1 }, { w: 2, h: 2 }, { w: 1, h: 1 }], 3);
   assert.deepEqual(got, [
     { x: 0, y: 0, w: 3, h: 1 },
     { x: 0, y: 1, w: 1, h: 2 },
     { x: 1, y: 1, w: 1, h: 1 },
     { x: 1, y: 2, w: 2, h: 2 },
-    { x: 2, y: 1, w: 1, h: 1 },
+    { x: 0, y: 3, w: 1, h: 1 },
   ]);
   assert.deepEqual(app.homePack([{ w: 3, h: 1 }, { w: 1, h: 1 }], 2), [{ x: 0, y: 0, w: 2, h: 1 }, { x: 0, y: 1, w: 1, h: 1 }], "a width past the columns draws as the columns");
 });

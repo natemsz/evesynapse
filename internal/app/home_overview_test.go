@@ -722,15 +722,21 @@ func TestHomeLayoutSizeOnPreset(t *testing.T) {
 }
 
 // layoutTilesGrid reports whether a layout covers the three-wide
-// grid with no gaps, under the grid's dense placement.
+// grid with no gaps, under the grid's placement: each card at the
+// first free spot at or after the card before it (no backfill).
 func layoutTilesGrid(items []homeLayoutItem) bool {
 	type cell struct{ r, c int }
 	occ := make(map[cell]bool)
 	maxRow := 0
+	cr, cc := 0, 0
 	for _, item := range items {
 		placed := false
-		for r := 0; !placed; r++ {
-			for c := 0; c+item.W <= homeGridCols && !placed; c++ {
+		for r := cr; !placed; r++ {
+			from := 0
+			if r == cr {
+				from = cc
+			}
+			for c := from; c+item.W <= homeGridCols && !placed; c++ {
 				free := true
 				for dr := 0; dr < item.H && free; dr++ {
 					for dc := 0; dc < item.W; dc++ {
@@ -748,6 +754,7 @@ func layoutTilesGrid(items []homeLayoutItem) bool {
 					if r+item.H > maxRow {
 						maxRow = r + item.H
 					}
+					cr, cc = r, c+item.W
 					placed = true
 				}
 			}

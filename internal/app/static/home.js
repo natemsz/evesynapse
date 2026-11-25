@@ -392,12 +392,13 @@
   // --- Home grid: placement ----------------------------------------
   // Pure: the cells each widget takes. items are the widgets in page
   // order, each { w, h } in cells; cols is the grid's column count.
-  // Each widget goes at the first spot where it fits, scanning rows
-  // top to bottom and columns left to right from the top of the grid
-  // every time, the rule CSS row dense placement follows, so a later
-  // small widget closes a hole an earlier wide one left. A width past
-  // the column count draws as the column count. Returns { x, y, w, h }
-  // per item (x the column, y the row, from 0).
+  // Each widget goes at the first spot where it fits at or after the
+  // spot of the widget before it, scanning left to right then down,
+  // the rule CSS row placement follows: widgets keep their order and
+  // none moves back up into a hole an earlier one left (the hole
+  // stays until the reader fills it). A width past the column count
+  // draws as the column count. Returns { x, y, w, h } per item (x the
+  // column, y the row, from 0).
   function homePack(items, cols) {
     cols = Math.max(1, cols | 0);
     var taken = [];
@@ -410,16 +411,19 @@
       return true;
     };
     var out = [];
+    var cx = 0, cy = 0; // the cursor: just after the previous widget
     for (var i = 0; i < items.length; i++) {
       var w = Math.max(1, Math.min(cols, items[i].w | 0 || 1));
       var h = Math.max(1, items[i].h | 0 || 1);
-      var y = 0, x = 0, placed = false;
+      var y = cy, x = 0, from = cx, placed = false;
       while (!placed) {
-        for (x = 0; x + w <= cols; x++) {
+        for (x = from; x + w <= cols; x++) {
           if (free(x, y, w, h)) { placed = true; break; }
         }
-        if (!placed) y++;
+        if (!placed) { y++; from = 0; }
       }
+      cx = x + w;
+      cy = y;
       for (var r = y; r < y + h; r++) {
         taken[r] = taken[r] || [];
         for (var c = x; c < x + w; c++) taken[r][c] = true;

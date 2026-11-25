@@ -1903,6 +1903,8 @@ html.js :has(> [data-tabs]:not([data-tabs-ready])) .ti-h { display: none; }
   cursor: grab;
 }
 .draghandle:active { cursor: grabbing; }
+/* In Customize the heading band drags the card like the handle. */
+.home-custom.has-controls .card > h3:first-child { cursor: grab; }
 /* In Customize the heading is a row: handle, title, then room for the
    corner controls, all on one centre line. */
 .home-custom.has-controls .card > h3:first-child { padding-right: 5.2rem; }

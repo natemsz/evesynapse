@@ -395,6 +395,9 @@
 .w-card:has(> h3 > .w-expand:not([hidden])) :is(.fleet-tags, .brief-tabs) { right: 3.4rem; }
 @container widget (height < 12rem) {
   .grid.home-grid > .w-card > h3:first-child { min-height: calc(2.35rem + 1px); padding-block: 0.3rem; margin-bottom: 0.5rem; }
+  /* The corner buttons follow the shorter band, so they stay on the
+     title's centre line: (2.35rem + 1px - 1.75rem buttons) / 2. */
+  .grid.home-grid > .w-card > .cardctl { top: calc(0.3rem + 0.5px); }
 }
 
 /* The Expand view: the widget's largest form in the shared modal, in
@@ -510,13 +513,14 @@
 /* Lists that scroll inside their card (data-w-scroll): the Fleet
    Overview roster. Where the card is exactly its cells, or in the
    Expand view, the roster takes the room the other parts leave and
-   scrolls, its header standing at the top. */
+   scrolls only when it is longer than that room. The wheel passes on
+   to the page at either end, and the header keeps the live table's
+   plain look. */
 .w-card [data-w-scroll] { min-height: 0; margin: 0; }
 @container page (width >= 36rem) {
-  .grid.home-grid > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; overscroll-behavior: contain; }
+  .grid.home-grid > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; }
 }
 .w-expand-box > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; }
-.w-card [data-w-scroll] thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
 
 /* Bars drawn as a span sized by data-w inside an .l-meter track. */
 .card[data-widget="training"] .w-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
@@ -577,7 +581,7 @@
 .fleet-list-main small, .fleet-list-when { font-size: inherit; color: var(--muted); }
 .fleet-list-when { grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fleet-box > .fleet-tools { flex: none; }
-.fleet-box > .fleet-tools input.fleet-filter { width: 100%; box-sizing: border-box; }
+.fleet-box > .fleet-tools input.fleet-filter { max-width: 100%; box-sizing: border-box; }
 /* A short tall card has room for the roster only: its filter shows
    from three rows up. */
 @container widget (height < 30rem) and (width < 30rem) {

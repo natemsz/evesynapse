@@ -689,6 +689,7 @@
     homeHoles(placed, cols).forEach(function (hole) {
       var a = document.createElement("a");
       a.className = "w-hole";
+      a._homeCell = { x: hole.x, y: hole.y };
       a.href = "/?customize=1&add=1";
       a.textContent = "Add a widget";
       a.style.gridColumn = (hole.x + 1) + " / span " + hole.w;
@@ -1177,42 +1178,59 @@
       });
     }
 
+    // gapGrowth: the cards that grow into a hole beside or under them
+    // (homeFillGaps), each only to a size it declares, as
+    // { card, w, h, pair } with pair the "key:WxH" the sizes action
+    // takes. With only set, just that card's growth.
+    function gapGrowth(only) {
+      var cols = homeCols(grid);
+      if (cols < 2) return [];
+      var cards = Array.prototype.slice.call(moduleCards());
+      var items = cards.map(function (c) {
+        var s = sizeOf(c);
+        return { w: Math.min(s.w, cols), h: s.h, sizes: sizesOf(c).map(function (z) { return { w: Math.min(z.w, cols), h: z.h }; }) };
+      });
+      var placed = homePack(items, cols);
+      for (var i = 0; i < placed.length; i++) placed[i].sizes = items[i].sizes;
+      placed = homeFillGaps(placed, cols);
+      var grown = [];
+      for (var j = 0; j < cards.length; j++) {
+        if (only && cards[j] !== only) continue;
+        var p = placed[j], s = sizeOf(cards[j]);
+        if ((p.w > Math.min(s.w, cols) || p.h > s.h) && allows(cards[j], p.w, p.h)) {
+          grown.push({ card: cards[j], w: p.w, h: p.h, pair: keyOf(cards[j]) + ":" + p.w + "x" + p.h });
+        }
+      }
+      return grown;
+    }
+    // growInto saves and draws the sizes gapGrowth found; done(ok)
+    // runs after.
+    function growInto(grown, done) {
+      postLayout({ action: "sizes", sizes: grown.map(function (g) { return g.pair; }).join(",") }).then(function (ok) {
+        if (ok) {
+          flip(function () { grown.forEach(function (g) { sizeCard(g.card, g.w, g.h); }); });
+          grown.forEach(function (g) { refreshCard(g.card); });
+        }
+        if (done) done(ok);
+      });
+    }
+
     // Fill gaps: give each card beside or above a hole the size that
-    // closes it, as the home does outside Customize, and save those
-    // sizes. Only a card that grows into a size it declares changes.
+    // closes it and save those sizes. Only a card that grows into a
+    // size it declares changes.
     var fillBtn = document.querySelector("[data-home-fill]");
     if (fillBtn && once(fillBtn, "fill")) {
       fillBtn.hidden = false;
       fillBtn.addEventListener("click", function () {
-        var cols = homeCols(grid);
-        if (cols < 2) return;
-        var cards = Array.prototype.slice.call(moduleCards());
-        var items = cards.map(function (c) {
-          var s = sizeOf(c);
-          return { w: Math.min(s.w, cols), h: s.h, sizes: sizesOf(c).map(function (z) { return { w: Math.min(z.w, cols), h: z.h }; }) };
-        });
-        var placed = homePack(items, cols);
-        for (var i = 0; i < placed.length; i++) placed[i].sizes = items[i].sizes;
-        placed = homeFillGaps(placed, cols);
-        var pairs = [], grown = [];
-        for (var j = 0; j < cards.length; j++) {
-          var p = placed[j], s = sizeOf(cards[j]);
-          if ((p.w > Math.min(s.w, cols) || p.h > s.h) && allows(cards[j], p.w, p.h)) {
-            pairs.push(keyOf(cards[j]) + ":" + p.w + "x" + p.h);
-            grown.push({ card: cards[j], w: p.w, h: p.h });
-          }
-        }
-        if (!pairs.length) {
+        var grown = gapGrowth(null);
+        if (!grown.length) {
           if (statusEl) statusEl.textContent = "No gaps to fill.";
           return;
         }
         fillBtn.disabled = true;
-        postLayout({ action: "sizes", sizes: pairs.join(",") }).then(function (ok) {
+        growInto(grown, function (ok) {
           fillBtn.disabled = false;
-          if (!ok) return;
-          flip(function () { grown.forEach(function (g) { sizeCard(g.card, g.w, g.h); }); });
-          grown.forEach(function (g) { refreshCard(g.card); });
-          if (statusEl) statusEl.textContent = "Filled the gaps: " + grown.length + " widget" + (grown.length === 1 ? "" : "s") + " grew.";
+          if (ok && statusEl) statusEl.textContent = "Filled the gaps: " + grown.length + " widget" + (grown.length === 1 ? "" : "s") + " grew.";
         });
       });
     }
@@ -1581,6 +1599,21 @@
       heading.insertBefore(handle, heading.firstChild);
       handle.addEventListener("pointerdown", function (ev) { startDrag(ev, card, handle); });
       handle.addEventListener("keydown", function (ev) { keyMove(ev, card, handle); });
+      // The whole heading band drags too: a press anywhere on it that is
+      // not one of its own controls starts the same drag as the handle.
+      // The title stays a link: a press that never moves is still its
+      // click, and the click a drag ends in is swallowed.
+      heading.addEventListener("pointerdown", function (ev) {
+        if (ev.target.closest("button, input, select, textarea, form, .draghandle")) return;
+        heading._dragged = false;
+        startDrag(ev, card, heading);
+      });
+      heading.addEventListener("click", function (ev) {
+        if (!heading._dragged) return;
+        heading._dragged = false;
+        ev.preventDefault();
+        ev.stopPropagation();
+      }, true);
 
       // The card's own controls sit in its top-right corner: the
       // size picker (three cells across by four down, the way a
@@ -1912,6 +1945,7 @@
 
       function lift() {
         lifted = true;
+        handle._dragged = true;
         savedNodes = Array.prototype.slice.call(moduleCards());
         var open = grid.querySelectorAll(".sizepick:not([hidden])");
         for (var i = 0; i < open.length; i++) open[i].hidden = true;
@@ -1990,6 +2024,23 @@
           if (kids[i] !== slot && !target && inside(b, px, py)) target = kids[i];
         }
         if (!target) {
+          // Over an empty cell: the slot goes just before the first card
+          // that stands after that cell, reading row by row, so the
+          // order-keeping layout puts the dragged card in the hole (and
+          // the drop grows it to fill the space around).
+          var holes = grid.querySelectorAll(":scope > .w-hole");
+          for (var h = 0; h < holes.length; h++) {
+            var hr = holes[h].getBoundingClientRect();
+            if (!inside({ l: hr.left + window.scrollX, r: hr.right + window.scrollX, t: hr.top + window.scrollY, b: hr.bottom + window.scrollY }, px, py)) continue;
+            var cell = holes[h]._homeCell, ref = null;
+            for (var k = 0; k < kids.length; k++) {
+              var sp = kids[k]._homeSpan;
+              if (kids[k] === slot || !sp) continue;
+              if (sp.y > cell.y || (sp.y === cell.y && sp.x > cell.x)) { ref = kids[k]; break; }
+            }
+            if (ref !== slot.nextSibling) moveSlot(ref, null);
+            return;
+          }
           if (py > bottom && kids[kids.length - 1] !== slot) moveSlot(null, null);
           return;
         }
@@ -2083,7 +2134,15 @@
           for (var i = 0; !changed && i < moved.length; i++) changed = moved[i] !== savedNodes[i];
           if (!changed) return;
           saveOrder().then(function (ok) {
-            if (!ok) flip(function () { for (var j = 0; j < savedNodes.length; j++) grid.appendChild(savedNodes[j]); });
+            if (!ok) {
+              flip(function () { for (var j = 0; j < savedNodes.length; j++) grid.appendChild(savedNodes[j]); });
+              return;
+            }
+            // Dropped beside empty cells, the card grows to fill them
+            // when it allows that size, as a card stretched to its row
+            // did before rows were fixed.
+            var grown = gapGrowth(card);
+            if (grown.length) growInto(grown);
           });
         });
       }

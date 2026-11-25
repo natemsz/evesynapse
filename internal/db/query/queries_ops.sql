@@ -304,3 +304,12 @@ WHERE o.owner_kind = sqlc.arg(owner_kind)
 GROUP BY a.character_id
 ORDER BY total DESC, a.character_id
 LIMIT 100;
+
+-- name: ListOpRoleCounts :many
+-- How many pilots coming to each of some fleets will play each role.
+SELECT op_id, fleet_role, count(*)::bigint AS n
+FROM op_signups
+WHERE op_id = ANY(@op_ids::bigint[]) AND response = 'yes' AND fleet_role <> ''
+GROUP BY op_id, fleet_role
+ORDER BY op_id, fleet_role
+LIMIT 100;

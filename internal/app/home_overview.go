@@ -49,6 +49,8 @@ const (
 	widgetUpkeep      = "upkeep"
 	widgetGlance      = "glance"
 	widgetProfitPulse = "profitpulse"
+	widgetAgenda      = "agenda"
+	widgetFleets      = "fleets"
 	// "server" (the Tranquility module) is retired: the player count
 	// and ESI health ride the Overview bar now. A saved layout naming
 	// it drops the entry on load; never reuse the id. "attention"
@@ -82,12 +84,12 @@ var defaultHomeLayout = []homeLayoutItem{
 	{ID: widgetBriefing, W: 3, H: 1},
 	{ID: widgetGlance, W: 3, H: 1},
 	{ID: widgetFleet, W: 3, H: 2},
-	{ID: widgetIndustry, W: 1, H: 2},
+	{ID: widgetAgenda, W: 1, H: 2},
 	{ID: widgetNetWorth, W: 1, H: 2},
 	{ID: widgetTraining, W: 1, H: 2},
 	{ID: widgetWalletFlow, W: 2, H: 2},
 	{ID: widgetPI, W: 1, H: 2},
-	{ID: widgetProfitPulse, W: 2, H: 1},
+	{ID: widgetIndustry, W: 2, H: 1},
 	{ID: widgetMarket, W: 1, H: 1},
 }
 

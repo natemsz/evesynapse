@@ -1,0 +1,45 @@
+{{/* Coming Up: everything with a time on it across the account, in time
+     order, over the window the settings pick. Five forms; none reads
+     its size. */}}
+
+{{define "w-agenda-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Items}}
+<ul class="ag-list" data-w-fit>{{range $i, $it := .Items}}{{if lt $i 2}}{{template "w-agenda-row" $it}}{{end}}{{end}}</ul>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-agenda-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{with .First}}
+<div class="w-side"><div class="w-lead">
+  <span class="w-lead-label">Next</span>
+  <span class="w-lead-value ag-next">{{.What}}</span>
+  <span class="w-lead-sub">{{template "w-agenda-when" .}}{{if .Who}} · {{.Who}}{{end}}</span>
+</div></div>
+{{template "w-agenda-track" $.Data}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-agenda-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Items}}
+<ul class="ag-list" data-w-fit>{{range .Groups}}<li class="ag-head"><h4 class="w-sub">{{.Label}}</h4></li>{{range .Items}}{{template "w-agenda-row" .}}{{end}}{{end}}</ul>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-agenda-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Items}}
+{{template "w-agenda-track" .}}
+<ul class="ag-list" data-w-fit>{{range .Items}}{{template "w-agenda-row" .}}{{end}}</ul>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-agenda-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Items}}
+<div class="ag-days">{{range .Days}}<div class="ag-day"><h4 class="w-sub">{{.Label}}</h4>
+{{if .Items}}<ul class="ag-list" data-w-fit>{{range .Items}}{{template "w-agenda-row" .}}{{end}}</ul>{{else}}<p class="w-quiet"><small>Nothing.</small></p>{{end}}</div>{{end}}</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* One item: a mark in its group's colour, what it is, whose, when. */}}
+{{define "w-agenda-row"}}<li class="ag-row"><span class="ag-dot w-s{{.Slot}}" aria-hidden="true"></span><span class="ag-what">{{.What}}{{if .Who}}<small class="ag-who">{{.Who}}</small>{{end}}</span><span class="ag-when">{{template "w-agenda-when" .}}</span></li>{{end}}
+
+{{define "w-agenda-when"}}{{if .Live}}<span class="ag-live">{{.Left}}</span>{{else if .Left}}<span class="countdown" data-finish="{{.AtRaw}}" title="{{.When}}">{{.Left}}</span>{{else}}<span title="{{.When}}">now</span>{{end}}{{end}}
+
+{{/* The timeline from now to the end of the window: one mark per item,
+     stacked where they would touch, a legend for the groups it shows,
+     and its table twin. */}}
+{{define "w-agenda-track"}}<figure class="ag-track">
+<figcaption class="w-legend">{{range .Legend}}<span class="w-key"><span class="ag-dot w-s{{.Slot}}" aria-hidden="true"></span>{{.Label}}</span>{{end}}</figcaption>
+<div class="ag-line" aria-hidden="true">{{range .Marks}}<span class="ag-mark w-s{{.Slot}}" data-left="{{printf "%.1f" .Left}}" data-top="{{printf "%.0f" .Top}}" title="{{.Label}}"></span>{{end}}</div>
+<div class="w-xticks" aria-hidden="true">{{range .Ticks}}<span class="w-x-{{.Anchor}}" data-left="{{printf "%.1f" .Pos}}">{{.Label}}</span>{{end}}</div>
+{{template "w-twin" .Table}}
+</figure>{{end}}

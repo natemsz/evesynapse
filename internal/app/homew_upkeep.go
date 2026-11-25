@@ -56,7 +56,7 @@ type upkeepView struct {
 const upkeepWideMeters = 3
 
 func buildUpkeepWidget(ctx context.Context, app *Application, in *widgetInput) any {
-	raw := app.buildUpkeep(ctx, in.UserID)
+	raw := in.Shared.Upkeep(ctx)
 	v := &upkeepView{Urgent: raw.Urgent, Many: len(raw.Corps) > 1}
 	if len(raw.Corps) == 0 {
 		v.Empty = wEmpty{Text: "All structures are fueled, or none of your characters has the Station Manager or Director role needed to check."}

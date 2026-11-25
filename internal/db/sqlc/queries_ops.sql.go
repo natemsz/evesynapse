@@ -766,6 +766,42 @@ func (q *Queries) ListOpMemberTags(ctx context.Context, opID int64) ([]ListOpMem
 	return items, nil
 }
 
+const listOpRoleCounts = `-- name: ListOpRoleCounts :many
+SELECT op_id, fleet_role, count(*)::bigint AS n
+FROM op_signups
+WHERE op_id = ANY($1::bigint[]) AND response = 'yes' AND fleet_role <> ''
+GROUP BY op_id, fleet_role
+ORDER BY op_id, fleet_role
+LIMIT 100
+`
+
+type ListOpRoleCountsRow struct {
+	OpID      int64  `json:"op_id"`
+	FleetRole string `json:"fleet_role"`
+	N         int64  `json:"n"`
+}
+
+// How many pilots coming to each of some fleets will play each role.
+func (q *Queries) ListOpRoleCounts(ctx context.Context, opIds []int64) ([]ListOpRoleCountsRow, error) {
+	rows, err := q.db.Query(ctx, listOpRoleCounts, opIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpRoleCountsRow
+	for rows.Next() {
+		var i ListOpRoleCountsRow
+		if err := rows.Scan(&i.OpID, &i.FleetRole, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOpSignups = `-- name: ListOpSignups :many
 SELECT op_id, character_id, user_id, response, ship, fleet_role, note, updated_at, ready_at FROM op_signups WHERE op_id = $1 ORDER BY updated_at, character_id LIMIT 300
 `

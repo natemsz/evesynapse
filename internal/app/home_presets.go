@@ -56,7 +56,7 @@ var playstyleWidgetsByActivity = map[string]playstyleWidgets{
 		Fill:        []string{widgetMarket, widgetTraining, widgetNetWorth},
 	},
 	"corporation": {
-		Specialists: []string{widgetPulse, widgetUpkeep, widgetWalletFlow},
+		Specialists: []string{widgetPulse, widgetUpkeep, widgetWalletFlow, widgetFleets},
 		Fill:        []string{widgetNetWorth, widgetTraining, widgetPI, widgetIndustry, widgetMarket},
 	},
 	"fitting": {
@@ -102,10 +102,11 @@ var singlePlaystyleBodies = map[string][]homeLayoutItem{
 		{ID: widgetWalletFlow, W: 3, H: 2},
 		{ID: widgetPulse, W: 3, H: 2},
 		{ID: widgetUpkeep, W: 1, H: 3},
-		{ID: widgetNetWorth, W: 1, H: 2},
-		{ID: widgetTraining, W: 1, H: 2},
+		{ID: widgetFleets, W: 1, H: 3},
 		{ID: widgetPI, W: 1, H: 2},
 		{ID: widgetIndustry, W: 1, H: 2},
+		{ID: widgetNetWorth, W: 1, H: 2},
+		{ID: widgetTraining, W: 1, H: 2},
 		{ID: widgetMarket, W: 1, H: 1},
 	},
 	"fitting": {
@@ -114,18 +115,20 @@ var singlePlaystyleBodies = map[string][]homeLayoutItem{
 		{ID: widgetWalletFlow, W: 2, H: 2},
 		{ID: widgetIndustry, W: 1, H: 2},
 		{ID: widgetMarket, W: 1, H: 1},
-		{ID: widgetWatchlist, W: 2, H: 1},
+		{ID: widgetFleets, W: 2, H: 1},
 	},
 }
 
 // demoHomeBody is the demo account's showcase body: a broad mix over
-// the demo seed (a trader main and an industry/PI alt) at catalog
-// sizes. Corp Pulse closes the layout as one wide band; the seed
+// the demo seed (a trader main and an industry/PI alt), with Coming Up
+// and the demo's running fleet near the top. Corp Pulse closes the layout as one wide band; the seed
 // fills it (corp members, wallets and tracking under a Director).
 // Upkeep and Trade Ideas stay out: the seed holds no structures and
 // no stored trade-ideas answer, so both would render empty.
 var demoHomeBody = []homeLayoutItem{
+	{ID: widgetAgenda, W: 1, H: 2},
 	{ID: widgetWalletFlow, W: 2, H: 2},
+	{ID: widgetFleets, W: 2, H: 2},
 	{ID: widgetNetWorth, W: 1, H: 2},
 	{ID: widgetTraining, W: 1, H: 2},
 	{ID: widgetProdLine, W: 2, H: 2},
@@ -143,7 +146,7 @@ var demoHomeBody = []homeLayoutItem{
 var blendCanonicalOrder = []string{
 	widgetNetWorth, widgetTraining, widgetMarket, widgetWalletFlow,
 	widgetIndustry, widgetProfitPulse, widgetWatchlist, widgetPI,
-	widgetProdLine, widgetTradeIdeas, widgetPulse, widgetUpkeep,
+	widgetProdLine, widgetTradeIdeas, widgetPulse, widgetUpkeep, widgetFleets,
 }
 
 // blendFullSize is a widget's full size in a blend, used for the
@@ -162,6 +165,7 @@ var blendFullSize = map[string]struct{ W, H int }{
 	widgetTradeIdeas:  {2, 2},
 	widgetPulse:       {2, 2},
 	widgetUpkeep:      {2, 2},
+	widgetFleets:      {2, 2},
 }
 
 // defaultLayoutFor is the layout an account with no saved layout

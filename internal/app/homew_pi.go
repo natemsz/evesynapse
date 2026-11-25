@@ -116,59 +116,17 @@ type piView struct {
 func buildPIWidget(ctx context.Context, app *Application, in *widgetInput) any {
 	now := in.Now
 	v := &piView{Filtered: in.Opts.Get("visit") == toggleOn}
-	var rows []piExpiryLine
-	grouped := map[string]int{}
 	for _, b := range in.Bundles {
-		if !b.planetsKnown {
-			continue
-		}
-		v.Any = true
-		v.Colonies += len(b.colonies)
-		for _, colony := range b.colonies {
-			layout := b.layouts[colony.PlanetID]
-			if layout == nil {
-				continue
-			}
-			planet := app.planetDisplayName(ctx, colony.PlanetID)
-			for _, ex := range layoutExtractors(*layout) {
-				if !ex.ExpiryOK {
-					continue
-				}
-				// Extractors on one planet installed together stop
-				// together: one row with a count rather than one each.
-				key := fmt.Sprintf("%d|%d|%d", b.ch.CharacterID, colony.PlanetID, ex.Expiry.Unix()/60)
-				if i, seen := grouped[key]; seen {
-					rows[i].Count++
-					continue
-				}
-				row := piExpiryLine{
-					Char: b.ch.Name, CharID: b.ch.CharacterID, Planet: planet, Count: 1,
-					ExpiresRaw: ex.Expiry.UTC().Format(time.RFC3339),
-					Expires:    formatFinish(ex.Expiry.UTC().Format(time.RFC3339)),
-					at:         ex.Expiry,
-				}
-				if ex.Expiry.Before(now) {
-					row.Expired = true
-					row.Search = b.ch.Name + " " + planet + " expired"
-				} else {
-					row.Left = humanDuration(ex.Expiry.Sub(now))
-					row.Soon = ex.Expiry.Sub(now) <= piSoon
-					row.Search = b.ch.Name + " " + planet
-				}
-				if !ex.Installed.IsZero() && ex.Expiry.After(ex.Installed) {
-					pct := float64(now.Sub(ex.Installed)) * 100 / float64(ex.Expiry.Sub(ex.Installed))
-					row.HasCycle, row.CyclePct = true, min(max(pct, 0), 100)
-				}
-				grouped[key] = len(rows)
-				rows = append(rows, row)
-			}
+		if b.planetsKnown {
+			v.Any = true
+			v.Colonies += len(b.colonies)
 		}
 	}
+	rows := forChars(in.Shared.PIExpiries(ctx), in.Chars, func(r piExpiryLine) int64 { return r.CharID })
 	if !v.Any {
 		v.Empty = wEmpty{Text: "Colonies appear here once your characters have synced."}
 		return v
 	}
-	sort.SliceStable(rows, func(i, j int) bool { return rows[i].at.Before(rows[j].at) })
 	for _, r := range rows {
 		switch {
 		case r.Expired:
@@ -283,4 +241,56 @@ func piTrackOf(rows []piExpiryLine, now time.Time) *piTrack {
 		}
 	}
 	return t
+}
+
+// piExpiryRows is every extractor stop across the pilots, a row per
+// planet and stop time (extractors installed together stop together),
+// soonest first. A colony whose layout has not warmed has no rows.
+func piExpiryRows(ctx context.Context, app *Application, bundles []*charSnaps, now time.Time) []piExpiryLine {
+	var rows []piExpiryLine
+	grouped := map[string]int{}
+	for _, b := range bundles {
+		if !b.planetsKnown {
+			continue
+		}
+		for _, colony := range b.colonies {
+			layout := b.layouts[colony.PlanetID]
+			if layout == nil {
+				continue
+			}
+			planet := app.planetDisplayName(ctx, colony.PlanetID)
+			for _, ex := range layoutExtractors(*layout) {
+				if !ex.ExpiryOK {
+					continue
+				}
+				key := fmt.Sprintf("%d|%d|%d", b.ch.CharacterID, colony.PlanetID, ex.Expiry.Unix()/60)
+				if i, seen := grouped[key]; seen {
+					rows[i].Count++
+					continue
+				}
+				row := piExpiryLine{
+					Char: b.ch.Name, CharID: b.ch.CharacterID, Planet: planet, Count: 1,
+					ExpiresRaw: ex.Expiry.UTC().Format(time.RFC3339),
+					Expires:    formatFinish(ex.Expiry.UTC().Format(time.RFC3339)),
+					at:         ex.Expiry,
+				}
+				if ex.Expiry.Before(now) {
+					row.Expired = true
+					row.Search = b.ch.Name + " " + planet + " expired"
+				} else {
+					row.Left = humanDuration(ex.Expiry.Sub(now))
+					row.Soon = ex.Expiry.Sub(now) <= piSoon
+					row.Search = b.ch.Name + " " + planet
+				}
+				if !ex.Installed.IsZero() && ex.Expiry.After(ex.Installed) {
+					pct := float64(now.Sub(ex.Installed)) * 100 / float64(ex.Expiry.Sub(ex.Installed))
+					row.HasCycle, row.CyclePct = true, min(max(pct, 0), 100)
+				}
+				grouped[key] = len(rows)
+				rows = append(rows, row)
+			}
+		}
+	}
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].at.Before(rows[j].at) })
+	return rows
 }

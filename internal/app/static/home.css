@@ -1028,5 +1028,22 @@
 .ar-intel.ar-wait::before { background: var(--v-warn, #e8b04a); }
 .ar-intel.ar-kill::before, .ar-on::before { background: var(--v-good, #4cc38a); }
 
+/* Doctrine Readiness: a row per doctrine with its ready meter; no pilot
+   ready carries the bad edge. The large form lists each doctrine's fits
+   under its name. */
+.dr-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; min-height: 0; }
+.dr-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.5rem; row-gap: 0.15rem; padding: 0.3rem 0 0.3rem 0.6rem; border-bottom: 1px solid var(--hairline); border-left: 2px solid transparent; font-size: var(--fs-sm); }
+.dr-list > li:last-child { border-bottom: 0; }
+.dr-list > li.bad { border-left-color: var(--v-bad, #ff6b4a); }
+.dr-name, .dr-fitname, .dr-who, .dr-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-ready, .dr-sp { color: var(--muted); font-size: var(--fs-xs); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dr-meter, .dr-sub, .dr-head + .dr-fit .dr-missing, .dr-fit .dr-missing { grid-column: 1 / -1; }
+.dr-sub { color: var(--muted); font-size: var(--fs-xs); }
+.dr-fits > li.dr-head { padding-top: 0.45rem; }
+.dr-fits > li.dr-head .dr-name { color: var(--text-bright); font-weight: 600; }
+.dr-fits > li.dr-fit { padding-left: 1.2rem; }
+.dr-who { text-align: right; font-size: var(--fs-xs); }
+.dr-fitname small { color: var(--muted); }
+
 /* Undo after a remove in Customize: one line above the grid. */
 .w-undo { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--text); }

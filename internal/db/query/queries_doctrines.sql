@@ -152,3 +152,85 @@ SELECT COUNT(*)::bigint AS total,
                  WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = sqlc.arg(owner_id) AND tag <> ''), '{}')::text[] AS tags
 FROM doctrines d
 WHERE d.owner_kind = sqlc.arg(owner_kind) AND d.owner_id = sqlc.arg(owner_id);
+
+-- Doctrine readiness (schema 183, doctrine_readiness.go). The fold's
+-- inputs: the fits of the doctrines some owners keep ("kind:id"
+-- keys), and a fingerprint of that fit set that moves when a fit or
+-- doctrine is added or removed.
+-- name: DoctrineFitsFingerprint :one
+SELECT COALESCE(md5(string_agg(f.id::text, ',' ORDER BY f.id)), '')::text AS fits
+FROM doctrines d
+JOIN doctrine_fits f ON f.doctrine_id = d.id
+WHERE (d.owner_kind || ':' || d.owner_id::text) = ANY(sqlc.arg(owner_keys)::text[]);
+
+-- name: ListDoctrineFitsForOwners :many
+SELECT f.id, f.doctrine_id, f.ship_type_id, f.items_json
+FROM doctrines d
+JOIN doctrine_fits f ON f.doctrine_id = d.id
+WHERE (d.owner_kind || ':' || d.owner_id::text) = ANY(sqlc.arg(owner_keys)::text[])
+ORDER BY f.id
+LIMIT 2000;
+
+-- name: GetDoctrineReadinessFold :one
+SELECT user_id, inputs, computed_at FROM doctrine_readiness_folds WHERE user_id = $1;
+
+-- name: UpsertDoctrineReadinessFold :exec
+INSERT INTO doctrine_readiness_folds (user_id, inputs, computed_at)
+VALUES (sqlc.arg(user_id), sqlc.arg(inputs), sqlc.arg(computed_at))
+ON CONFLICT (user_id) DO UPDATE SET inputs = EXCLUDED.inputs, computed_at = EXCLUDED.computed_at;
+
+-- name: DeleteDoctrineFitReadiness :exec
+DELETE FROM doctrine_fit_readiness WHERE user_id = $1;
+
+-- name: DeleteDoctrineReadiness :exec
+DELETE FROM doctrine_readiness WHERE user_id = $1;
+
+-- name: InsertDoctrineFitReadiness :exec
+INSERT INTO doctrine_fit_readiness (user_id, fit_id, doctrine_id, ready_ids, near_character, near_missing, near_missing_n, near_sp, computed_at)
+VALUES (sqlc.arg(user_id), sqlc.arg(fit_id), sqlc.arg(doctrine_id), sqlc.arg(ready_ids)::bigint[], sqlc.arg(near_character),
+        sqlc.arg(near_missing), sqlc.arg(near_missing_n), sqlc.arg(near_sp), sqlc.arg(computed_at))
+ON CONFLICT (user_id, fit_id) DO NOTHING;
+
+-- name: InsertDoctrineReadiness :exec
+INSERT INTO doctrine_readiness (user_id, doctrine_id, fits, fits_flyable, pilots, pilots_ready, near_character, near_fit, near_missing, near_missing_n, near_sp, computed_at)
+VALUES (sqlc.arg(user_id), sqlc.arg(doctrine_id), sqlc.arg(fits), sqlc.arg(fits_flyable), sqlc.arg(pilots), sqlc.arg(pilots_ready),
+        sqlc.arg(near_character), sqlc.arg(near_fit), sqlc.arg(near_missing), sqlc.arg(near_missing_n), sqlc.arg(near_sp), sqlc.arg(computed_at))
+ON CONFLICT (user_id, doctrine_id) DO NOTHING;
+
+-- An account's doctrines with their readiness, for the home widget:
+-- doctrines with the fewest ready pilots first, then by name.
+-- name: ListDoctrineReadinessByUser :many
+SELECT r.doctrine_id, d.name, d.category, d.owner_kind, d.owner_id, r.fits, r.fits_flyable, r.pilots, r.pilots_ready,
+       r.near_character, r.near_fit, COALESCE(nf.name, '')::text AS near_fit_name, COALESCE(nf.ship_type_id, 0)::bigint AS near_ship,
+       r.near_missing, r.near_missing_n, r.near_sp, r.computed_at
+FROM doctrine_readiness r
+JOIN doctrines d ON d.id = r.doctrine_id
+LEFT JOIN doctrine_fits nf ON nf.id = r.near_fit
+WHERE r.user_id = sqlc.arg(user_id)
+ORDER BY r.pilots_ready, lower(d.name), d.id
+LIMIT sqlc.arg(row_limit);
+
+-- How many doctrines an account has readiness for, and how many of
+-- them a pilot of its can fly: the totals behind a capped list.
+-- name: CountDoctrineReadinessByUser :one
+SELECT COUNT(*)::bigint AS doctrines,
+       (COUNT(*) FILTER (WHERE r.pilots_ready > 0))::bigint AS flyable
+FROM doctrine_readiness r
+WHERE r.user_id = sqlc.arg(user_id);
+
+-- The fits of some of an account's doctrines with their readiness: at
+-- most fits_each per doctrine, so every doctrine asked for gets its
+-- first fits however many the others hold.
+-- name: ListDoctrineFitReadinessByUser :many
+SELECT x.fit_id, x.doctrine_id, x.name, x.ship_type_id, x.fleet_role, x.ready_ids, x.near_character, x.near_missing, x.near_missing_n, x.near_sp
+FROM unnest(sqlc.arg(doctrine_ids)::bigint[]) AS d(id)
+CROSS JOIN LATERAL (
+    SELECT r.fit_id, r.doctrine_id, f.name, f.ship_type_id, f.fleet_role, r.ready_ids, r.near_character, r.near_missing, r.near_missing_n, r.near_sp
+    FROM doctrine_fit_readiness r
+    JOIN doctrine_fits f ON f.id = r.fit_id
+    WHERE r.user_id = sqlc.arg(user_id) AND r.doctrine_id = d.id
+    ORDER BY f.id
+    LIMIT sqlc.arg(fits_each)::int
+) x
+ORDER BY x.doctrine_id, x.fit_id
+LIMIT 100;

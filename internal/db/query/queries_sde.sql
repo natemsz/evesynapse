@@ -993,3 +993,7 @@ WHERE c.item_id = ANY(sqlc.arg(ids)::bigint[]);
 SELECT name FROM sde_character_titles
 WHERE title_id = $1;
 
+
+-- The training ranks of some skills.
+-- name: ListSDESkillRanks :many
+SELECT type_id, rank FROM sde_skill_meta WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);

@@ -155,7 +155,7 @@ var blendCanonicalOrder = []string{
 	widgetIndustry, widgetProfitPulse, widgetWatchlist, widgetPI,
 	widgetProdLine, widgetTradeIdeas, widgetPulse, widgetUpkeep, widgetFleets,
 	widgetKills, widgetSRP, widgetClones, widgetMail, widgetContracts,
-	widgetLP, widgetMovers, widgetSov, widgetLocal,
+	widgetLP, widgetMovers, widgetSov, widgetLocal, widgetDoctrines,
 }
 
 // blendFullSize is a widget's full size in a blend, used for the
@@ -184,6 +184,7 @@ var blendFullSize = map[string]struct{ W, H int }{
 	widgetMovers:      {2, 2},
 	widgetSov:         {2, 2},
 	widgetLocal:       {2, 2},
+	widgetDoctrines:   {2, 2},
 }
 
 // defaultLayoutFor is the layout an account with no saved layout

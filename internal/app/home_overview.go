@@ -60,6 +60,7 @@ const (
 	widgetMovers      = "movers"
 	widgetSov         = "sov"
 	widgetLocal       = "local"
+	widgetDoctrines   = "doctrines"
 	// "server" (the Tranquility module) is retired: the player count
 	// and ESI health ride the Overview bar now. A saved layout naming
 	// it drops the entry on load; never reuse the id. "attention"

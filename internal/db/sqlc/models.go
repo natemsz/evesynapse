@@ -570,6 +570,39 @@ type DoctrineFit struct {
 	BoostsJson sql.NullString `json:"boosts_json"`
 }
 
+type DoctrineFitReadiness struct {
+	UserID        int64     `json:"user_id"`
+	FitID         int64     `json:"fit_id"`
+	DoctrineID    int64     `json:"doctrine_id"`
+	ReadyIds      []int64   `json:"ready_ids"`
+	NearCharacter int64     `json:"near_character"`
+	NearMissing   string    `json:"near_missing"`
+	NearMissingN  int32     `json:"near_missing_n"`
+	NearSp        int64     `json:"near_sp"`
+	ComputedAt    time.Time `json:"computed_at"`
+}
+
+type DoctrineReadiness struct {
+	UserID        int64     `json:"user_id"`
+	DoctrineID    int64     `json:"doctrine_id"`
+	Fits          int32     `json:"fits"`
+	FitsFlyable   int32     `json:"fits_flyable"`
+	Pilots        int32     `json:"pilots"`
+	PilotsReady   int32     `json:"pilots_ready"`
+	NearCharacter int64     `json:"near_character"`
+	NearFit       int64     `json:"near_fit"`
+	NearMissing   string    `json:"near_missing"`
+	NearMissingN  int32     `json:"near_missing_n"`
+	NearSp        int64     `json:"near_sp"`
+	ComputedAt    time.Time `json:"computed_at"`
+}
+
+type DoctrineReadinessFold struct {
+	UserID     int64     `json:"user_id"`
+	Inputs     string    `json:"inputs"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
 type EntityName struct {
 	Kind      string    `json:"kind"`
 	ID        int64     `json:"id"`

@@ -309,7 +309,17 @@ func (app *Application) demoSeedPresent(ctx context.Context) bool {
 	// out of date: the worker never rebuilds the demo's reports, so the
 	// demo seeds again to gain them.
 	missing, err := app.queries.CountFleetBattlesWithoutDetail(ctx, db.CountFleetBattlesWithoutDetailParams{OwnerKind: ownerCommunity, OwnerID: demoCommunityID})
-	return err == nil && missing == 0
+	if err != nil || missing != 0 {
+		return false
+	}
+	// A seed from before doctrine readiness has no fold, and the
+	// worker never folds the demo's pilots: seed again to gain it.
+	if moduleCompiledIn("doctrines") {
+		if _, err := app.queries.GetDoctrineReadinessFold(ctx, app.demoUserID(ctx)); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // handleDemoSignIn is GET /auth/demo: the landing page's Try it

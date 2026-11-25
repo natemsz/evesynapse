@@ -783,6 +783,11 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	// blueprint against the skill and asset snapshots just stored.
 	app.refreshBlueprintBuildable(ctx, ch)
 
+	// Doctrine readiness (schema 183): which of the account's
+	// pilots can fly each fit of its doctrines, against the skill
+	// snapshots just stored.
+	app.refreshDoctrineReadiness(ctx, ch.UserID)
+
 	// Profit ledger (schema 104): fold the journal, transaction and
 	// job snapshots just stored into the durable ledger and its
 	// attribution, after the day's net worth sample it reads.

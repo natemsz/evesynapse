@@ -623,6 +623,9 @@ func (app *Application) seedDemoData(ctx context.Context, now time.Time) error {
 			return fmt.Errorf("demo seed: fold remainder for pilot %d: %w", pilot.ID, err)
 		}
 	}
+	// Which demo pilot can fly each doctrine fit, as the worker would
+	// fold it (the worker never refreshes the demo's pilots).
+	app.refreshDoctrineReadiness(ctx, userID)
 	logging.Infof("demo: seeded the demo account (%d skills at V for %s)", len(s.skills), demoCharName)
 	return nil
 }

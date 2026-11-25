@@ -368,6 +368,11 @@
   .grid.home-grid[data-rows="fixed"] > .w-card .w-cols { flex: 1 1 0; }
   .grid.home-grid[data-rows="fixed"] > .w-card .w-cols > .w-chart { min-height: 4.5rem; }
   .grid.home-grid[data-rows="fixed"] > .w-card .w-tiles { grid-template-rows: auto; grid-auto-rows: 0; row-gap: 0; overflow: hidden; }
+  /* The lead and its tiles share one line: tiles that do not fit
+     beside the lead are not drawn, rather than wrapping under it and
+     pushing the chart out. */
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-head { flex-wrap: nowrap; }
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-head > .w-tiles { flex-basis: 0; min-width: 0; }
 }
 
 /* The heading: the title links to the widget's page; the Expand
@@ -425,3 +430,65 @@
 .w-set-foot { margin: 0; display: flex; justify-content: flex-end; }
 .w-set-error { margin: 0; color: var(--v-bad-ink, #ffab8f); }
 #home-module-list .w-settings { margin: var(--space-2) 0 var(--space-3); max-width: 26rem; }
+
+/* ---------------------------------------------------------------------
+   Money forms: diverging bars (w-bars, w-barspark), the neutral Other
+   part, and the Wallet Flow and Profit Pulse arrangements.
+   --------------------------------------------------------------------- */
+
+/* Diverging bars: a gain above the zero line in the kept colour, a
+   loss under it in the lost colour; the zero line is a hairline. */
+.w-card .w-up { --w-c: var(--kept); }
+.w-card .w-down { --w-c: var(--lost); }
+.w-bar { fill: var(--w-c); stroke: none; }
+.w-zero { stroke: var(--muted); stroke-opacity: 0.6; stroke-width: 1; }
+/* Other, the folded tail of a split, takes no categorical hue. */
+.w-card .w-s0 { --w-c: color-mix(in srgb, var(--muted) 65%, transparent); }
+/* The waterfall's tooltip swatches wear its step fills. */
+.w-card .ctip-sw:is(.sem-kept, .sem-lost, .sem-recycled) { background: var(--w-c-sem); }
+.w-card .ctip-sw.sem-kept { --w-c-sem: var(--kept); }
+.w-card .ctip-sw.sem-lost { --w-c-sem: var(--lost); }
+.w-card .ctip-sw.sem-recycled { --w-c-sem: var(--recycled); }
+
+/* Wallet Flow: income and spend rows, each a name, a bar on one
+   scale and its figure on one line. */
+.wf-io { display: flex; flex-direction: column; gap: 0.3rem; margin: 0; padding: 0; list-style: none; }
+.wf-io > li { display: grid; grid-template-columns: minmax(4.5rem, auto) minmax(2rem, 1fr) auto; align-items: center; gap: 0.6rem; font-size: var(--fs-sm); }
+.wf-io-name { color: var(--muted); white-space: nowrap; }
+.wf-io-val { color: var(--text-bright); white-space: nowrap; text-align: right; }
+.wf-io-bar { height: 0.375rem; border-radius: 0 0.25rem 0.25rem 0; background: color-mix(in srgb, var(--muted) 14%, transparent); overflow: hidden; }
+.wf-io-bar > span { display: block; height: 100%; border-radius: 0 0.25rem 0.25rem 0; background: var(--w-c); }
+.wf-inout { margin: 0; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; }
+/* In, out and net over 7 and 30 days: short figures in aligned
+   columns beside the chart. */
+.wf-figs { width: 100%; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; border-collapse: collapse; }
+.wf-figs :is(th, td) { padding: 0.15rem 0 0.15rem 0.6rem; }
+.wf-figs :is(th, td):first-child { padding-left: 0; }
+.wf-figs thead th { font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; color: var(--muted); text-align: right; }
+.wf-figs tbody th { text-align: left; font-weight: 400; color: var(--muted); }
+.wf-figs td { text-align: right; white-space: nowrap; }
+/* The splits: income and spend side by side under the chart, each
+   part's key on one line. */
+.wf-splits { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.wf-splits > .w-aside { flex: 1 1 12rem; }
+.wf-splits .w-segkeys { display: flex; flex-direction: column; gap: 0.1rem; }
+.wf-splits .w-segkeys > li { grid-template-columns: auto minmax(0, 1fr) auto; }
+.wf-splits .w-segval { grid-column: 3; font-size: var(--fs-xs); }
+/* The large form's sources and sinks, side by side. */
+.wf-ranks { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.wf-ranks > .w-aside { flex: 1 1 14rem; }
+
+/* Profit Pulse: the gross in under the kept figure, and the waterfall
+   drawn to fill its column. */
+.pp-gross { display: flex; gap: 0.5rem; align-items: baseline; font-size: var(--fs-sm); color: var(--muted); }
+.pp-gross > b { color: var(--text-bright); font-weight: 600; }
+.pp-top .w-rank { margin-top: var(--space-1); }
+.w-card .pp-wf { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; margin: 0; height: clamp(9rem, 40cqi, 13rem); }
+.pp-wf-plot { position: relative; flex: 1 1 0; min-height: 3rem; }
+.pp-wf-plot > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.pp-wf-plot rect { stroke: none; }
+.w-cols > .pp-wf { flex: 2 1 0; }
+@container page (width >= 36rem) {
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-cols > .pp-wf { height: auto; min-height: 4.5rem; }
+}
+.w-expand-box > .w-card .w-cols > .pp-wf { height: auto; }

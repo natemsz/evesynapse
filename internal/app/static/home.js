@@ -737,9 +737,11 @@
     return body.scrollHeight - body.clientHeight > 1;
   }
   // homeFitLists gives every list its rows back, then takes rows off
-  // the lists, the last list first (what a card leads with stays),
-  // until the body fits. A list inside a part that is not drawn
-  // counts all its rows as more.
+  // until the body fits. One list gives up its last rows at once.
+  // With several, the row lowest on the card goes first: stacked
+  // lists give up rows the last list first (what a card leads with
+  // stays), and lists side by side give up rows in turn. A list
+  // inside a part that is not drawn counts all its rows as more.
   function homeFitLists(body, lists, card) {
     var l, k;
     for (l = 0; l < lists.length; l++) {
@@ -748,27 +750,39 @@
       for (k = 0; k < kids.length; k++) homeCut(kids[k], false);
       homeSetMore(homeMoreLine(lists[l], card), lists[l].getClientRects().length ? 0 : kids.length);
     }
-    for (l = lists.length - 1; l >= 0 && homeOverflows(body); l--) {
-      var list = lists[l];
-      if (!list.getClientRects().length) continue;
-      var rows = Array.prototype.slice.call(list.children);
-      if (!rows.length) continue;
-      var line = homeMoreLine(list, card);
-      homeSetMore(line, rows.length);
+    if (!homeOverflows(body)) return;
+    var live = Array.prototype.filter.call(lists, function (list) {
+      return list.getClientRects().length && list.children.length;
+    });
+    var rows = live.map(function (list) { return Array.prototype.slice.call(list.children); });
+    var lines = live.map(function (list) { return homeMoreLine(list, card); });
+    var shown = rows.map(function (r) { return r.length; });
+    if (live.length === 1) {
+      homeSetMore(lines[0], rows[0].length);
       var over = body.scrollHeight - body.clientHeight;
-      var bottoms = rows.map(function (r) { return r.getBoundingClientRect().bottom; });
-      var n = homeFitCount(bottoms, bottoms[bottoms.length - 1] - over);
-      for (k = n; k < rows.length; k++) homeCut(rows[k], true);
-      // A table can reflow once rows go; give up one more row while
-      // the card still overflows.
-      while (n > 0 && homeOverflows(body)) {
-        n--;
-        homeCut(rows[n], true);
+      var bottoms = rows[0].map(function (r) { return r.getBoundingClientRect().bottom; });
+      shown[0] = homeFitCount(bottoms, bottoms[bottoms.length - 1] - over);
+      for (k = shown[0]; k < rows[0].length; k++) homeCut(rows[0][k], true);
+      homeSetMore(lines[0], rows[0].length - shown[0]);
+    }
+    // A table can reflow once rows go: keep taking rows while the
+    // card still overflows.
+    while (homeOverflows(body)) {
+      var pick = -1, low = -Infinity;
+      for (l = 0; l < live.length; l++) {
+        if (!shown[l]) continue;
+        var bottom = rows[l][shown[l] - 1].getBoundingClientRect().bottom;
+        if (bottom >= low) { low = bottom; pick = l; }
       }
-      homeSetMore(line, rows.length - n);
-      // A table with no row left goes too: a header over nothing says
-      // nothing the line after it does not.
-      if (!n && homeListBox(list) !== list) homeCut(homeListBox(list), true);
+      if (pick < 0) break;
+      shown[pick]--;
+      homeCut(rows[pick][shown[pick]], true);
+      homeSetMore(lines[pick], rows[pick].length - shown[pick]);
+    }
+    // A table with no row left goes too: a header over nothing says
+    // nothing the line after it does not.
+    for (l = 0; l < live.length; l++) {
+      if (!shown[l] && homeListBox(live[l]) !== live[l]) homeCut(homeListBox(live[l]), true);
     }
   }
   // homeFitCard fits one card's body to its box. fit is false where

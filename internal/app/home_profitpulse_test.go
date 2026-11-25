@@ -1,18 +1,14 @@
 package app
 
-// Tests for the Profit pulse home widget: the headline figures
-// come from the stored profit_daily rows (the unattributed
-// remainder excluded, as on the Profit page), the top item from
-// the stored trade_item_window rows, the mini chart from the
-// same profit_daily rows bucketed per day, and the waterfall
-// from the stored trade_item_daily cost rows, drawn by the
-// Profit page's own chart builder. How much shows follows the
-// widget's stored size: figures only below 2x2, the top item
-// and the mini chart added at 2x2, 2x3 and 3x2 (the chart
-// beside the figures where the shape is at least as wide as
-// tall, below them where it is taller), and the waterfall
-// instead of the chart at 3x3. Same hermetic contract as the
-// other home suites: seeded stored state, zero outbound calls.
+// Tests for the Profit pulse home widget: the figures come from
+// the stored profit_daily rows (the unattributed remainder excluded,
+// as on the Profit page), the change from the same rows over the
+// window before, the items from the stored trade_item_window rows,
+// the daily bars from profit_daily bucketed per day, and the
+// waterfall from the stored trade_item_daily cost rows, drawn by the
+// Profit page's own chart builder. Each form builds only what it
+// draws. Same hermetic contract as the other home suites: seeded
+// stored state, zero outbound calls.
 
 import (
 	"context"
@@ -97,125 +93,64 @@ func TestProfitPulseWidgetSizes(t *testing.T) {
 	}
 	seedOverviewCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha", "")
 	seedProfitPulse(t, app, q, fixtureCharA)
+	// The 30 days before the window kept 100,000: the change is +750,000.
+	if _, err := app.db.ExecContext(ctx,
+		`INSERT INTO profit_daily (owner_kind, owner_id, day, activity, income, costs) VALUES ('char', $1, $2, 'trading', 100000, 0)`,
+		fixtureCharA, time.Now().UTC().AddDate(0, 0, -40).Format("2006-01-02")); err != nil {
+		t.Fatalf("seed previous window: %v", err)
+	}
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
-
-	// The mini chart's bars are the seeded days' kept profit:
-	// every seeded row sits on today, so the chart draws one
-	// bar, at full height, on the last day. The chart belongs
-	// to 2x2, 3x2 and 2x3: beside the figures where the shape
-	// is at least as wide as tall (drawn tall and narrow),
-	// below them where it is taller (drawn wide). Below 2x2
-	// there is no chart, and at 3x3 the waterfall replaces it.
-	if mid := app.buildProfitPulse(ctx, user.ID, 2, 2); mid.Mini == nil {
-		t.Fatalf("2x2 widget has no mini chart")
-	} else if !mid.MiniSide {
-		t.Errorf("2x2 mini chart placement = below, want beside the figures")
-	} else if mid.Mini.W != 144 || mid.Mini.H != 72 {
-		t.Errorf("2x2 mini chart viewBox = %dx%d, want 144x72 (tall and narrow)", mid.Mini.W, mid.Mini.H)
-	} else if len(mid.Mini.Bars) != 1 {
-		t.Fatalf("mini chart has %d bars, want 1 (only today has kept profit)", len(mid.Mini.Bars))
-	} else if bar := mid.Mini.Bars[0]; bar.Class != "sem-kept" || bar.H != 34 || bar.X < 135 {
-		t.Errorf("mini bar = %+v, want a full-height sem-kept bar on the last day", bar)
+	chars, err := q.ListCharactersByUser(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("list characters: %v", err)
 	}
-	if wide := app.buildProfitPulse(ctx, user.ID, 3, 2); wide.Mini == nil || !wide.MiniSide {
-		t.Errorf("3x2 widget mini=%t side=%t, want the mini chart beside the figures", wide.Mini != nil, wide.MiniSide)
-	}
-	if tall := app.buildProfitPulse(ctx, user.ID, 2, 3); tall.Mini == nil {
-		t.Fatalf("2x3 widget has no mini chart")
-	} else if tall.MiniSide {
-		t.Errorf("2x3 mini chart placement = beside, want below the figures")
-	} else if tall.Mini.W != 288 || tall.Mini.H != 72 {
-		t.Errorf("2x3 mini chart viewBox = %dx%d, want 288x72 (wide)", tall.Mini.W, tall.Mini.H)
-	} else if len(tall.Mini.Bars) != 1 {
-		t.Fatalf("2x3 mini chart has %d bars, want 1 (only today has kept profit)", len(tall.Mini.Bars))
-	} else if bar := tall.Mini.Bars[0]; bar.Class != "sem-kept" || bar.H != 34 || bar.X < 270 {
-		t.Errorf("2x3 mini bar = %+v, want a full-height sem-kept bar on the last day", bar)
-	}
-	if small := app.buildProfitPulse(ctx, user.ID, 1, 1); small.Mini != nil {
-		t.Errorf("smallest-size widget has a mini chart, want figures only")
-	}
-	if large := app.buildProfitPulse(ctx, user.ID, 3, 3); large.Mini != nil || large.Waterfall == nil {
-		t.Errorf("largest-size widget mini=%t waterfall=%t, want the waterfall only", large.Mini != nil, large.Waterfall != nil)
+	def, _ := widgetDefFor(widgetProfitPulse)
+	build := func(form string) *profitPulseView {
+		in := &widgetInput{UserID: user.ID, Forms: []string{form}, Opts: def.defaultOptions(), Chars: chars, Now: time.Now().UTC()}
+		return buildProfitPulseWidget(ctx, app, in).(*profitPulseView)
 	}
 
-	// Smallest size: the two headline figures only.
-	setHomeLayout(t, q, user.ID, `[{"id":"profitpulse","w":1,"h":1}]`)
-	code, body := getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET / (small): status %d", code)
+	// Kept is the labeled activities only, and its change is against
+	// the window before, read from the same stored rows.
+	small := build("small")
+	if small.Lead.Value != "+850K" || small.Lead.Change != "+750K" || small.Gross != "1.3M ISK" {
+		t.Errorf("small figures kept=%q change=%q gross=%q, want +850K, +750K, 1.3M ISK", small.Lead.Value, small.Lead.Change, small.Gross)
 	}
-	mustContain(t, "/", body,
-		`data-widget="profitpulse"`, "Profit pulse",
-		"Last 30 days", "Gross in", "1,300,000.00", "Kept as profit", "850,000.00",
-	)
-	for _, absent := range []string{"Top item", "Kept profit per day", "Where the ISK went"} {
-		if strings.Contains(body, absent) {
-			t.Errorf("small widget shows %q, want figures only", absent)
+	// Every seeded row sits on today: one bar, above zero, on the last day.
+	if small.Strip == nil || len(small.Strip.Bars) != 1 || small.Strip.Bars[0].Down || small.Strip.Bars[0].X < 950 {
+		t.Errorf("small strip = %+v, want one bar above zero on the last day", small.Strip)
+	}
+	if small.Days != nil || small.Waterfall != nil {
+		t.Errorf("small form built the day chart or the waterfall")
+	}
+	// The medium form ranks the items by margin, broker fees in.
+	if mid := build("medium"); mid.TopItems == nil || len(mid.TopItems.Rows) != 2 ||
+		mid.TopItems.Rows[0].Name != "Tritanium" || mid.TopItems.Rows[0].Text != "+185K" || mid.Waterfall != nil {
+		t.Errorf("medium top items = %+v, want Tritanium +185K then Pyerite, and no waterfall", mid.TopItems)
+	}
+	// in.Draws("large") decides the waterfall and the activity split.
+	if large := build("large"); large.Waterfall == nil || large.Activities == nil || large.Activities.Rows[0].Name != "Trading" ||
+		large.Activities.Rows[0].Text != "+600K" {
+		t.Errorf("large waterfall=%t activities=%+v, want the waterfall and Trading first at +600K", large.Waterfall != nil, large.Activities)
+	}
+
+	for _, c := range []struct {
+		layout string
+		want   []string
+	}{
+		{`[{"id":"profitpulse","w":1,"h":1}]`, []string{"Kept as profit", "850K", "w-barchart"}},
+		{`[{"id":"profitpulse"}]`, []string{"Gross in", "Best margins", "Tritanium", "w-barchart"}},
+		{`[{"id":"profitpulse","w":3,"h":3}]`, []string{"Where the ISK went", "was kept as profit", "COGS", "Net earned", "By activity",
+			// The chart labels position by pf-x/pf-y classes, as on
+			// the Profit page; inline styles are blocked by the CSP.
+			"pf-x-", "pf-y-"}},
+	} {
+		setHomeLayout(t, q, user.ID, c.layout)
+		code, body := getPage(t, app, cookie, "/")
+		if code != http.StatusOK {
+			t.Fatalf("GET / (%s): status %d", c.layout, code)
 		}
-	}
-
-	// Default size (2x2): the top item and the mini chart join
-	// the figures, the chart beside them.
-	setHomeLayout(t, q, user.ID, `[{"id":"profitpulse"}]`)
-	code, body = getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET / (default): status %d", code)
-	}
-	mustContain(t, "/", body,
-		"Top item", "Tritanium", "185,000.00",
-		"Kept profit per day", `class="profitpulse-mini"`, "profitpulse-beside",
-	)
-	if strings.Contains(body, "Where the ISK went") {
-		t.Errorf("default-size widget shows the waterfall, want it only at a larger size")
-	}
-
-	// 3x2: the mini chart again, beside the figures, and no
-	// waterfall (at this size the chart replaces it).
-	setHomeLayout(t, q, user.ID, `[{"id":"profitpulse","w":3,"h":2}]`)
-	code, body = getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET / (3x2): status %d", code)
-	}
-	mustContain(t, "/", body,
-		"Top item", "Kept profit per day", `class="profitpulse-mini"`, "profitpulse-beside",
-	)
-	if strings.Contains(body, "Where the ISK went") {
-		t.Errorf("3x2 widget shows the waterfall, want the mini chart instead")
-	}
-
-	// 2x3: the mini chart below the figures, and no waterfall.
-	setHomeLayout(t, q, user.ID, `[{"id":"profitpulse","w":2,"h":3}]`)
-	code, body = getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET / (2x3): status %d", code)
-	}
-	mustContain(t, "/", body,
-		"Top item", "Kept profit per day", `class="profitpulse-mini"`,
-	)
-	if strings.Contains(body, "profitpulse-beside") {
-		t.Errorf("2x3 widget places the mini chart beside the figures, want it below")
-	}
-	if strings.Contains(body, "Where the ISK went") {
-		t.Errorf("2x3 widget shows the waterfall, want the mini chart instead")
-	}
-
-	// Largest size: the waterfall joins, drawn from the same span
-	// totals the Profit page walks (fees residual 100,000).
-	setHomeLayout(t, q, user.ID, `[{"id":"profitpulse","w":3,"h":3}]`)
-	code, body = getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET / (large): status %d", code)
-	}
-	mustContain(t, "/", body,
-		"Top item", "Where the ISK went", "was kept as profit",
-		"Capital recycled (COGS)", "Industry costs", "Fees, taxes and other outflows", "Net earned",
-		"Sales with no cost basis",
-		// The chart labels position by pf-x/pf-y classes, as on
-		// the Profit page; inline styles are blocked by the CSP.
-		"pf-x-", "pf-y-",
-	)
-	if strings.Contains(body, "Kept profit per day") {
-		t.Errorf("largest-size widget shows the mini chart, want the waterfall only")
+		mustContain(t, c.layout, body, append([]string{`data-widget="profitpulse"`}, c.want...)...)
 	}
 
 	if got := transport.calls.Load(); got != 0 {

@@ -82,3 +82,34 @@
 {{/* w-empty (wEmpty): one sentence and the next step, centred in the
      body. */}}
 {{define "w-empty"}}<div class="w-empty"><p>{{.Text}}{{if .Href}} <a href="{{.Href}}">{{.Step}}</a>{{end}}</p></div>{{end}}
+
+{{/* w-bars (*wBars): a diverging bar chart that fills its slot, one
+     bar per day above or below the zero line, with value ticks, dates,
+     the shared chart tooltip and a table twin. */}}
+{{define "w-bars"}}<figure class="w-chart w-barchart pchart" data-chart-scrub="true">
+<div class="w-plot">
+<svg viewBox="0 0 {{printf "%.0f" .W}} {{printf "%.0f" .H}}" preserveAspectRatio="none" role="img" aria-label="{{.Label}}">
+{{range .Grid}}<line class="w-grid" x1="0" x2="{{printf "%.0f" $.W}}" y1="{{printf "%.1f" .}}" y2="{{printf "%.1f" .}}" vector-effect="non-scaling-stroke"/>{{end}}
+{{template "w-bar-marks" .}}
+{{range .Hits}}<rect class="cdot w-hit" x="{{printf "%.1f" .X}}" y="0" width="{{printf "%.1f" .W}}" height="{{printf "%.0f" $.H}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
+</svg>
+<div class="w-yticks" aria-hidden="true">{{range .YTicks}}<span data-top="{{printf "%.1f" .Pos}}">{{.Label}}</span>{{end}}</div>
+</div>
+<div class="w-xticks" aria-hidden="true">{{range .XTicks}}<span class="w-x-{{.Anchor}}" data-left="{{printf "%.1f" .Pos}}">{{.Label}}</span>{{end}}</div>
+<div class="ctip" hidden></div>
+{{template "w-twin" .Table}}
+</figure>{{end}}
+
+{{/* w-barspark (*wBars): the same bars as a strip with no labels,
+     filling its slot. */}}
+{{define "w-barspark"}}<div class="w-spark w-barchart pchart" data-chart-scrub="true">
+<svg viewBox="0 0 {{printf "%.0f" .W}} {{printf "%.0f" .H}}" preserveAspectRatio="none" role="img" aria-label="{{.Label}}">
+{{template "w-bar-marks" .}}
+{{range .Hits}}<rect class="cdot w-hit" x="{{printf "%.1f" .X}}" y="0" width="{{printf "%.1f" .W}}" height="{{printf "%.0f" $.H}}" tabindex="-1" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
+</svg>
+<div class="ctip" hidden></div>
+{{template "w-twin" .Table}}
+</div>{{end}}
+
+{{define "w-bar-marks"}}{{range .Bars}}<rect class="w-bar {{if .Down}}w-down{{else}}w-up{{end}}" x="{{printf "%.1f" .X}}" y="{{printf "%.1f" .Y}}" width="{{printf "%.1f" .W}}" height="{{printf "%.1f" .H}}"/>{{end}}
+<line class="w-zero" x1="0" x2="{{printf "%.0f" .W}}" y1="{{printf "%.1f" .ZeroY}}" y2="{{printf "%.1f" .ZeroY}}" vector-effect="non-scaling-stroke"/>{{end}}

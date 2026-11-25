@@ -415,3 +415,72 @@ func wRankedBars(label string, items []wRankItem, max int) (*wRanked, bool) {
 	}
 	return r, true
 }
+
+// ---------------------------------------------------------------------------
+// Diverging bars: one bar per day from a zero line, above it for a gain
+// and below it for a loss (Profit Pulse's kept profit). The same data
+// units, grid, ticks, hover columns and table twin as the line charts;
+// the w-bars and w-barspark partials draw it.
+// ---------------------------------------------------------------------------
+
+// wBar is one day's bar in data units; Down marks a value under zero.
+type wBar struct {
+	X, Y, W, H float64
+	Down       bool
+}
+
+// wBars is a diverging bar chart: the chart's frame, its bars and the
+// height of its zero line.
+type wBars struct {
+	wChart
+	Bars  []wBar
+	ZeroY float64
+}
+
+// wBarChart draws each day's first value as a bar from zero, on a
+// scale that always holds zero. Days are never thinned (a bar is a
+// day's whole figure): only the last wChartMaxPoints are drawn. ok is
+// false under two days or when every day is zero.
+func wBarChart(label, name string, days []wDay) (*wBars, bool) {
+	if len(days) > wChartMaxPoints {
+		days = days[len(days)-wChartMaxPoints:]
+	}
+	if len(days) < 2 {
+		return nil, false
+	}
+	lo, hi := 0.0, 0.0
+	for _, d := range days {
+		lo, hi = math.Min(lo, d.Values[0]), math.Max(hi, d.Values[0])
+	}
+	if lo == 0 && hi == 0 {
+		return nil, false
+	}
+	sc := wNiceScale(lo, hi, 3)
+	n := len(days)
+	b := &wBars{wChart: wChart{Label: label, W: wChartW, H: wChartH}, ZeroY: sc.y(0)}
+	b.Table = wTable{Caption: label, Head: []string{"Day", name}}
+	band := wChartW / float64(n)
+	bw := band * 0.7
+	for i, d := range days {
+		v := d.Values[0]
+		date := d.At.Format("2006-01-02")
+		b.Table.Rows = append(b.Table.Rows, []string{date, esi.FormatISK(v)})
+		tone := "w-up"
+		if v < 0 {
+			tone = "w-down"
+		}
+		if v != 0 {
+			top, bot := math.Min(sc.y(v), b.ZeroY), math.Max(sc.y(v), b.ZeroY)
+			b.Bars = append(b.Bars, wBar{X: float64(i)*band + (band-bw)/2, Y: top, W: bw, H: math.Max(bot-top, 1), Down: v < 0})
+		}
+		raw, _ := json.Marshal([][3]string{{name, iskCompact(v) + " ISK", tone}})
+		b.Hits = append(b.Hits, wHit{X: float64(i) * band, W: band, Date: date, Rows: string(raw),
+			Label: date + ": " + iskCompact(v) + " ISK"})
+	}
+	for _, v := range sc.ticks {
+		b.Grid = append(b.Grid, sc.y(v))
+		b.YTicks = append(b.YTicks, wTick{Label: wAxisISK(v), Pos: sc.y(v) / wChartH * 100})
+	}
+	b.XTicks = wDateTicks(days, days[n-1].At.Sub(days[0].At) > 183*24*time.Hour)
+	return b, true
+}

@@ -335,6 +335,10 @@ column of parts:
   (`w-twin`). Where rows are fixed a chart claims more than half
   its body, so a later part that no longer fits is not drawn.
 - `w-spark`: the same line with no labels, filling its slot.
+- `w-bars` and `w-barspark` (`wBarChart`): one bar per day above or
+  below a zero line (gains in `--kept`, losses in `--lost`), with
+  the chart's ticks, hover columns and table twin; the spark form
+  draws the bars alone.
 - `w-segbar` (`wSegments`): one whole split into up to six parts,
   a thin bar with each part's name and figure under it.
 - `w-rank` (`wRankedBars`): ranked bars, largest first; it fits
@@ -347,13 +351,16 @@ column of parts:
 - Lists: any list marked `data-w-fit` (its children are its rows)
   fits its card; rows past the server's cap carry `data-w-over`.
   home.js writes the "3 more on the Jobs page" line after it
-  (`.w-more`).
+  (`.w-more`). When a card has no room, the row lowest on the card
+  goes first: stacked lists give up rows the last list first, and
+  lists side by side give up rows in turn.
 
 Arrangement, the same for every widget: `.w-split` puts the first
 part (or a `.w-side`) beside the rest when the card is much wider
 than tall (a size container's aspect ratio, so cards that take
 their content's height stack); `.w-head` sets the lead beside its
-tiles; `.w-cols` sets the chart beside a side list. Series colours
+tiles (on one line where rows are fixed: tiles that do not fit
+beside the lead are not drawn); `.w-cols` sets the chart beside a side list. Series colours
 are `--w-s1` to `--w-s4` (`.w-s1` on a mark), one categorical
 order checked for colour-blind separation on the card surface;
 text never takes them.

@@ -1,7 +1,8 @@
 {{/* The one card shell every home widget draws in: the grid classes and
-     size data the Customize engine reads, the title, and the body the
-     widget's form template rendered. */}}
-{{define "w-card"}}<section class="card w-card {{.SizeClass}}" data-widget="{{.ID}}" data-key="{{.Key}}" data-gw="{{.Size.W}}" data-gh="{{.Size.H}}" data-sizes="{{.Sizes}}" data-size-names="{{.SizeNames}}">
+     size data the Customize engine reads, the page a list's "N more" line
+     links to, the title, and the body the widget's form template
+     rendered. */}}
+{{define "w-card"}}<section class="card w-card {{.SizeClass}}" data-widget="{{.ID}}" data-key="{{.Key}}" data-gw="{{.Size.W}}" data-gh="{{.Size.H}}" data-sizes="{{.Sizes}}" data-size-names="{{.SizeNames}}"{{if .Href}} data-href="{{.Href}}"{{end}}>
   <h3>{{.Title}}</h3>
   <div class="card-body">
 {{.Body}}

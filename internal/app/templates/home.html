@@ -34,9 +34,11 @@
 {{else}}
 {{if .Home.Customize}}{{if not .Home.Widgets}}<p><small>Your home is empty. Add a module from the Customize menu.</small></p>{{end}}{{end}}
 
-<div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}" data-home-page{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
+<div class="l-page home-page">
+<div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}" data-home-page data-rows="{{.Home.Rows}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}{{template "w-card" .}}
 {{end}}
+</div>
 </div>
 {{if .Home.Customize}}<p class="visually-hidden" role="status" data-home-status></p>{{end}}
 

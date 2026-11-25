@@ -385,38 +385,154 @@
       CARD_ICONS[name] + "</g></svg>";
   }
 
-  // --- Home grid: two-across fill -------------------------------
-  // Between the phone band and the desktop's three columns the
-  // home grid runs two across, and module widths drawn for three
-  // columns leave holes: a one-column module ahead of a wide one
-  // (which must start a new row), or last on the page, stands
-  // alone beside an empty cell. Rather than reorder anything (the
-  // grid never backfills, so Customize stays honest), the module
-  // left alone on its row widens to fill it (.gfill). Desktop's
-  // three columns are what Customize draws and are left as drawn;
-  // the phone's one column has nothing to fill.
-  //
-  // Pure: given each module's column span in page order and the
-  // column count, the indexes of the modules that close a row
-  // short, each widens to finish its row.
-  function homeFillPlan(spans, cols) {
-    var fill = [], used = 0, last = -1;
-    for (var i = 0; i < spans.length; i++) {
-      var s = Math.min(spans[i], cols);
-      if (used > 0 && used + s > cols) {
-        fill.push(last);
-        used = 0;
+  // --- Home grid: placement ----------------------------------------
+  // Pure: the cells each widget takes. items are the widgets in page
+  // order, each { w, h } in cells; cols is the grid's column count.
+  // Each widget goes at the first spot where it fits, scanning rows
+  // top to bottom and columns left to right from the top of the grid
+  // every time, the rule CSS row dense placement follows, so a later
+  // small widget closes a hole an earlier wide one left. A width past
+  // the column count draws as the column count. Returns { x, y, w, h }
+  // per item (x the column, y the row, from 0).
+  function homePack(items, cols) {
+    cols = Math.max(1, cols | 0);
+    var taken = [];
+    var free = function (x, y, w, h) {
+      for (var r = y; r < y + h; r++) {
+        var row = taken[r];
+        if (!row) continue;
+        for (var c = x; c < x + w; c++) if (row[c]) return false;
       }
-      used += s;
-      last = i;
-      if (used >= cols) used = 0;
+      return true;
+    };
+    var out = [];
+    for (var i = 0; i < items.length; i++) {
+      var w = Math.max(1, Math.min(cols, items[i].w | 0 || 1));
+      var h = Math.max(1, items[i].h | 0 || 1);
+      var y = 0, x = 0, placed = false;
+      while (!placed) {
+        for (x = 0; x + w <= cols; x++) {
+          if (free(x, y, w, h)) { placed = true; break; }
+        }
+        if (!placed) y++;
+      }
+      for (var r = y; r < y + h; r++) {
+        taken[r] = taken[r] || [];
+        for (var c = x; c < x + w; c++) taken[r][c] = true;
+      }
+      out.push({ x: x, y: y, w: w, h: h });
     }
-    if (used > 0 && last >= 0) fill.push(last);
-    return fill;
+    return out;
+  }
+
+  // homeGridCells maps placed widgets onto a rows-by-cols table of
+  // the index standing in each cell (-1 for a hole). rows is the
+  // grid's height: the lowest widget's bottom row.
+  function homeGridCells(placed, cols) {
+    var rows = 0, i, r, c;
+    for (i = 0; i < placed.length; i++) rows = Math.max(rows, placed[i].y + placed[i].h);
+    var cells = [];
+    for (r = 0; r < rows; r++) {
+      cells.push([]);
+      for (c = 0; c < cols; c++) cells[r].push(-1);
+    }
+    for (i = 0; i < placed.length; i++) {
+      var p = placed[i];
+      for (r = p.y; r < p.y + p.h; r++) for (c = p.x; c < p.x + p.w; c++) cells[r][c] = i;
+    }
+    return cells;
+  }
+
+  // Pure: closes the holes homePack leaves. placed is homePack's
+  // result with each item's allowed sizes added (sizes: [{ w, h }]).
+  // A hole beside a widget is closed by widening that widget (the one
+  // on its left first, then the one on its right), a hole under one by
+  // lengthening it, and only to a size the widget allows; a widget
+  // grows by as much of the hole as an allowed size covers. Holes no
+  // allowed size can close stay. Returns new { x, y, w, h } per item.
+  function homeFillGaps(placed, cols) {
+    var out = placed.map(function (p) { return { x: p.x, y: p.y, w: p.w, h: p.h }; });
+    var allows = function (i, w, h) {
+      var sizes = placed[i].sizes || [];
+      for (var k = 0; k < sizes.length; k++) if (sizes[k].w === w && sizes[k].h === h) return true;
+      return false;
+    };
+    var clear = function (cells, x, y, w, h) {
+      if (x < 0 || x + w > cols || y < 0 || y + h > cells.length) return false;
+      for (var r = y; r < y + h; r++) for (var c = x; c < x + w; c++) if (cells[r][c] !== -1) return false;
+      return true;
+    };
+    var grow = function (cells, r, c) {
+      var run = 0, k, i, p;
+      while (c + run < cols && cells[r][c + run] === -1) run++;
+      // The widget on the hole's left widens rightwards.
+      if (c > 0 && (i = cells[r][c - 1]) >= 0) {
+        p = out[i];
+        for (k = run; k >= 1; k--) {
+          if (allows(i, p.w + k, p.h) && clear(cells, p.x + p.w, p.y, k, p.h)) { p.w += k; return true; }
+        }
+      }
+      // The widget on its right widens leftwards.
+      if (c + run < cols && (i = cells[r][c + run]) >= 0) {
+        p = out[i];
+        for (k = run; k >= 1; k--) {
+          if (allows(i, p.w + k, p.h) && clear(cells, p.x - k, p.y, k, p.h)) { p.x -= k; p.w += k; return true; }
+        }
+      }
+      // The widget above it lengthens downwards.
+      if (r > 0 && (i = cells[r - 1][c]) >= 0) {
+        p = out[i];
+        var down = 0;
+        while (r + down < cells.length && clear(cells, p.x, r + down, p.w, 1)) down++;
+        for (k = down; k >= 1; k--) {
+          if (allows(i, p.w, p.h + k)) { p.h += k; return true; }
+        }
+      }
+      return false;
+    };
+    var changed = true;
+    while (changed) {
+      changed = false;
+      var cells = homeGridCells(out, cols);
+      for (var r = 0; r < cells.length && !changed; r++) {
+        for (var c = 0; c < cols && !changed; c++) {
+          if (cells[r][c] === -1 && grow(cells, r, c)) changed = true;
+        }
+      }
+    }
+    return out;
+  }
+
+  // homeHoles lists the empty runs of cells inside the grid, row by
+  // row: { x, y, w } each. Customize shows them as Add a widget cells.
+  function homeHoles(placed, cols) {
+    var cells = homeGridCells(placed, cols), out = [];
+    for (var r = 0; r < cells.length; r++) {
+      for (var c = 0; c < cols; c++) {
+        if (cells[r][c] !== -1) continue;
+        var w = 1;
+        while (c + w < cols && cells[r][c + w] === -1) w++;
+        out.push({ x: c, y: r, w: w });
+        c += w - 1;
+      }
+    }
+    return out;
+  }
+
+  // Pure: how many rows of a list fit. bottoms are the rows' bottom
+  // edges in order, limit the lowest edge a row may reach. Rows count
+  // from the first until one passes the limit; half a pixel of
+  // rounding is forgiven.
+  function homeFitCount(bottoms, limit) {
+    var n = 0;
+    while (n < bottoms.length && bottoms[n] <= limit + 0.5) n++;
+    return n;
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports.homeFillPlan = homeFillPlan;
+    module.exports.homePack = homePack;
+    module.exports.homeFillGaps = homeFillGaps;
+    module.exports.homeFitCount = homeFitCount;
   }
 
   // homeParseSizes reads a card's data-sizes ("1x1 2x1 2x2") into
@@ -486,35 +602,6 @@
     module.exports.homeResizeFrame = homeResizeFrame;
   }
 
-  // The height of one grid row where the resized module stands:
-  // the step from its row's tops to the next row's, or from the
-  // previous row when it stands in the last one, or the fallback
-  // when the grid has a single row. Rows size by content, so the
-  // smallest step anywhere on the page (the old measure) commits
-  // cells the frame never covered whenever the module's own row
-  // stands taller.
-  function homeRowPitch(tops, ownTop, fallback) {
-    var rows = [];
-    for (var i = 0; i < tops.length; i++) {
-      var t = Math.round(tops[i]);
-      if (rows.indexOf(t) < 0) rows.push(t);
-    }
-    rows.sort(function (a, b) { return a - b; });
-    var at = rows.indexOf(Math.round(ownTop));
-    if (at >= 0 && at + 1 < rows.length) return rows[at + 1] - rows[at];
-    if (at > 0) return rows[at] - rows[at - 1];
-    var best = 0;
-    for (var j = 1; j < rows.length; j++) {
-      var d = rows[j] - rows[j - 1];
-      if (d > 0 && (!best || d < best)) best = d;
-    }
-    return best || fallback;
-  }
-
-  if (typeof module !== "undefined" && module.exports) {
-    module.exports.homeRowPitch = homeRowPitch;
-  }
-
   // The cells a released resize commits: the start cells plus the
   // whole cells the pointer covered, rounded plainly. The drag's
   // hysteresis holds the card's cells steady mid-drag, but the
@@ -529,49 +616,251 @@
     module.exports.homeSnapCommit = homeSnapCommit;
   }
 
-  var homeTwoUp = window.matchMedia ? window.matchMedia("(min-width: 45.0625rem) and (max-width: 70rem)") : null;
-
-  function layoutHomeFill(grid) {
-    // Mid-resize the card under the grip owns its width; widening
-    // it from here too would fight the drag.
-    if (grid.querySelector(":scope > .card.resizing")) return;
-    var cards = [], spans = [], i;
+  // --- Home grid: layout ------------------------------------------
+  // home.css sets the columns from the page's width (--home-cols) and
+  // the rows (data-rows). This writes each card's cells on it through
+  // the CSSOM (grid-column, grid-row): homePack's spots, then outside
+  // Customize homeFillGaps closes the holes; in Customize the holes
+  // show as Add a widget cells instead. With one column the cards
+  // stack and nothing is written. With two columns and auto rows
+  // every card spans one row, as home.css draws it without
+  // JavaScript. It runs on load, on content-ready, when the grid
+  // changes width, and inside every Customize change (flip calls it,
+  // so the motion plays to the new places).
+  function homeCols(grid) {
+    var n = parseInt(window.getComputedStyle(grid).getPropertyValue("--home-cols"), 10);
+    return n >= 1 ? n : 1;
+  }
+  function homeFixedRows(grid) {
+    return grid.getAttribute("data-rows") === "fixed";
+  }
+  function homeLayout(grid) {
+    var cols = homeCols(grid);
+    var custom = grid.classList.contains("home-custom");
+    var cards = [], items = [], i;
     for (i = 0; i < grid.children.length; i++) {
       var c = grid.children[i];
-      if (!c.classList.contains("card") || c.classList.contains("dragging")) continue;
-      cards.push(c);
-      spans.push(c.classList.contains("gw2") || c.classList.contains("gw3") ? 2 : 1);
+      if (c.classList.contains("card") && !c.classList.contains("dragging")) cards.push(c);
     }
-    var on = {};
-    if (homeTwoUp && homeTwoUp.matches) {
-      var plan = homeFillPlan(spans, 2);
-      for (i = 0; i < plan.length; i++) on[plan[i]] = true;
+    var old = grid.querySelectorAll(":scope > .w-hole");
+    for (i = 0; i < old.length; i++) old[i].remove();
+    grid._homeCols = cols;
+    if (cols < 2) {
+      for (i = 0; i < cards.length; i++) {
+        cards[i].style.gridColumn = "";
+        cards[i].style.gridRow = "";
+        cards[i]._homeSpan = null;
+      }
+      return;
+    }
+    var flat = !homeFixedRows(grid) && cols === 2;
+    for (i = 0; i < cards.length; i++) {
+      var w = parseInt(cards[i].getAttribute("data-gw"), 10) || 1;
+      var h = parseInt(cards[i].getAttribute("data-gh"), 10) || 1;
+      // The sizes the widget allows, as this grid draws them: a width
+      // past the column count draws as the count, and in one-row-high
+      // rows only the sizes at its own height count, as one row.
+      var drawn = [];
+      homeParseSizes(cards[i].getAttribute("data-sizes")).forEach(function (sz) {
+        if (flat && sz.h !== h) return;
+        drawn.push({ w: Math.min(sz.w, cols), h: flat ? 1 : sz.h });
+      });
+      items.push({ w: Math.min(w, cols), h: flat ? 1 : h, sizes: drawn });
+    }
+    var placed = homePack(items, cols);
+    if (!custom) {
+      for (i = 0; i < placed.length; i++) placed[i].sizes = items[i].sizes;
+      placed = homeFillGaps(placed, cols);
     }
     for (i = 0; i < cards.length; i++) {
-      // Write only on change, so the observer below settles.
-      if (cards[i].classList.contains("gfill") !== !!on[i]) cards[i].classList.toggle("gfill", !!on[i]);
+      var p = placed[i];
+      var col = (p.x + 1) + " / span " + p.w, row = (p.y + 1) + " / span " + p.h;
+      if (cards[i].style.gridColumn !== col) cards[i].style.gridColumn = col;
+      if (cards[i].style.gridRow !== row) cards[i].style.gridRow = row;
+      cards[i]._homeSpan = p;
     }
+    if (!custom) return;
+    homeHoles(placed, cols).forEach(function (hole) {
+      var a = document.createElement("a");
+      a.className = "w-hole";
+      a.href = "/?customize=1&add=1";
+      a.textContent = "Add a widget";
+      a.style.gridColumn = (hole.x + 1) + " / span " + hole.w;
+      a.style.gridRow = String(hole.y + 1);
+      a.addEventListener("click", function (ev) {
+        var add = document.getElementById("add-module-btn");
+        if (!add) return;
+        ev.preventDefault();
+        add.click();
+      });
+      grid.appendChild(a);
+    });
   }
 
-  function initHomeFill(root) {
-    var grids = (root || document).querySelectorAll(".grid.home-grid");
-    for (var i = 0; i < grids.length; i++) {
-      var grid = grids[i];
-      layoutHomeFill(grid);
-      if (grid._fillObserver || !window.MutationObserver) continue;
-      // Customize moves, resizes, adds and removes modules in
-      // place; follow it. Observers on swapped-out grids die with
-      // their nodes.
-      grid._fillObserver = new MutationObserver(function (g) {
-        return function () { layoutHomeFill(g); };
-      }(grid));
-      grid._fillObserver.observe(grid, { childList: true, subtree: false, attributes: true, attributeFilter: ["class"] });
+  // --- Home grid: lists that fit ----------------------------------
+  // In fixed rows a card is exactly its cells, so a list in it
+  // ([data-w-fit], whose children are its rows) shows the whole rows
+  // that fit and hides the rest, and the line after it says how many
+  // more there are, linking to the widget's page (the card's
+  // data-href). With one column the cards take their content's
+  // height and the server's cap holds (rows marked data-wmore), with
+  // the same line. Where rows follow their content there is nothing
+  // to fit.
+  // homeListBox is the block a list stands in: a table body's table
+  // (and its scroller), else the list itself.
+  function homeListBox(list) {
+    return list.tagName === "TBODY" ? (list.closest(".tw") || list.closest("table")) : list;
+  }
+  function homeMoreLine(list, card) {
+    var anchor = homeListBox(list);
+    var line = anchor.nextElementSibling;
+    if (line && line.classList.contains("w-more")) return line;
+    line = document.createElement("p");
+    line.className = "w-more";
+    line.hidden = true;
+    var small = document.createElement("small");
+    var href = card.getAttribute("data-href");
+    var text = href ? document.createElement("a") : document.createElement("span");
+    if (href) text.href = href;
+    small.appendChild(text);
+    line.appendChild(small);
+    anchor.insertAdjacentElement("afterend", line);
+    return line;
+  }
+  function homeSetMore(line, n) {
+    line.querySelector("a, span").textContent = n + " more";
+    line.hidden = n <= 0;
+  }
+  // homeCut hides a row the card has no room for, or shows it again.
+  // The row takes the hidden attribute as well as .w-cut: a table drawn
+  // as cards (cards-on) styles its rows by id and spares only hidden
+  // ones.
+  function homeCut(row, on) {
+    if (on) {
+      row.classList.add("w-cut");
+      row.hidden = true;
+    } else if (row.classList.contains("w-cut")) {
+      row.classList.remove("w-cut");
+      row.hidden = false;
     }
   }
-  onContentReady(initHomeFill);
-  initHomeFill(document);
-  if (homeTwoUp && homeTwoUp.addEventListener) {
-    homeTwoUp.addEventListener("change", function () { initHomeFill(document); });
+  function homeOverflows(body) {
+    return body.scrollHeight - body.clientHeight > 1;
+  }
+  // homeFitLists gives every list its rows back, then takes rows off
+  // the lists, the last list first (what a card leads with stays),
+  // until the body fits. A list inside a part that is not drawn
+  // counts all its rows as more.
+  function homeFitLists(body, lists, card) {
+    var l, k;
+    for (l = 0; l < lists.length; l++) {
+      var kids = lists[l].children;
+      if (homeListBox(lists[l]) !== lists[l]) homeCut(homeListBox(lists[l]), false);
+      for (k = 0; k < kids.length; k++) homeCut(kids[k], false);
+      homeSetMore(homeMoreLine(lists[l], card), lists[l].getClientRects().length ? 0 : kids.length);
+    }
+    for (l = lists.length - 1; l >= 0 && homeOverflows(body); l--) {
+      var list = lists[l];
+      if (!list.getClientRects().length) continue;
+      var rows = Array.prototype.slice.call(list.children);
+      if (!rows.length) continue;
+      var line = homeMoreLine(list, card);
+      homeSetMore(line, rows.length);
+      var over = body.scrollHeight - body.clientHeight;
+      var bottoms = rows.map(function (r) { return r.getBoundingClientRect().bottom; });
+      var n = homeFitCount(bottoms, bottoms[bottoms.length - 1] - over);
+      for (k = n; k < rows.length; k++) homeCut(rows[k], true);
+      // A table can reflow once rows go; give up one more row while
+      // the card still overflows.
+      while (n > 0 && homeOverflows(body)) {
+        n--;
+        homeCut(rows[n], true);
+      }
+      homeSetMore(line, rows.length - n);
+      // A table with no row left goes too: a header over nothing says
+      // nothing the line after it does not.
+      if (!n && homeListBox(list) !== list) homeCut(homeListBox(list), true);
+    }
+  }
+  // homeFitCard fits one card's body to its box. fit is false with
+  // one column, where the server's cap holds (its rows past the cap
+  // are cut the same way). Lists give up rows first; when the card
+  // still overflows, its parts after the first are not drawn, the
+  // last first, until it fits (.w-drop): a card shows the whole parts
+  // that fit, never a part cut in half.
+  function homeFitCard(card, fit) {
+    var body = card.querySelector(":scope > .card-body");
+    if (!body) return;
+    var lists = body.querySelectorAll("[data-w-fit]");
+    var i, k;
+    var dropped = body.querySelectorAll(":scope > .w-drop");
+    for (i = 0; i < dropped.length; i++) dropped[i].classList.remove("w-drop");
+    for (i = 0; i < lists.length; i++) lists[i].classList.toggle("w-fitting", fit);
+    if (!fit) {
+      for (i = 0; i < lists.length; i++) {
+        var kids = lists[i].children, capped = 0;
+        if (homeListBox(lists[i]) !== lists[i]) homeCut(homeListBox(lists[i]), false);
+        for (k = 0; k < kids.length; k++) {
+          var capRow = kids[k].hasAttribute("data-wmore");
+          homeCut(kids[k], false);
+          if (capRow) {
+            homeCut(kids[k], true);
+            capped++;
+          }
+        }
+        homeSetMore(homeMoreLine(lists[i], card), capped);
+      }
+      return;
+    }
+    homeFitLists(body, lists, card);
+    if (!homeOverflows(body)) return;
+    // The parts in the body's flow; a part set beside it (the
+    // Briefing's filters, placed in the heading band) takes no room.
+    var parts = Array.prototype.filter.call(body.children, function (el) {
+      if (el.classList.contains("w-more") || !el.getClientRects().length) return false;
+      var pos = window.getComputedStyle(el).position;
+      return pos !== "absolute" && pos !== "fixed";
+    });
+    for (i = parts.length - 1; i >= 1 && homeOverflows(body); i--) {
+      parts[i].classList.add("w-drop");
+      homeFitLists(body, lists, card);
+    }
+  }
+  function homeFit(grid) {
+    if (!homeFixedRows(grid)) return;
+    var fit = homeCols(grid) >= 2;
+    var cards = grid.querySelectorAll(":scope > .card[data-widget]");
+    for (var i = 0; i < cards.length; i++) homeFitCard(cards[i], fit);
+  }
+
+  function initHomeLayout(root) {
+    var grids = root.querySelectorAll ? Array.prototype.slice.call(root.querySelectorAll(".grid.home-grid")) : [];
+    if (!grids.length && root.closest) {
+      var own = root.closest(".grid.home-grid");
+      if (own) grids.push(own);
+    }
+    grids.forEach(function (grid) {
+      homeLayout(grid);
+      homeFit(grid);
+      if (grid._homeRO || !window.ResizeObserver) return;
+      // A new width can change the column count and, in fixed rows,
+      // the row height: place and fit again. Observers on swapped-out
+      // grids die with their nodes.
+      grid._homeRO = new ResizeObserver(function () {
+        if (grid.querySelector(":scope > .card.resizing, :scope > .card.dragging")) return;
+        if (homeCols(grid) !== grid._homeCols) homeLayout(grid);
+        homeFit(grid);
+      });
+      grid._homeRO.observe(grid);
+    });
+  }
+  onContentReady(initHomeLayout);
+  initHomeLayout(document);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () {
+      var grids = document.querySelectorAll(".grid.home-grid");
+      for (var i = 0; i < grids.length; i++) homeFit(grids[i]);
+    });
   }
 
   // The grid's most columns and rows (wSize in home_widget_kit.go).
@@ -797,6 +1086,8 @@
       for (var i = 0; i < els.length; i++) before.set(els[i], els[i].getBoundingClientRect());
       for (var j = 0; j < els.length; j++) stopMotion(els[j]);
       mutate();
+      homeLayout(grid);
+      homeFit(grid);
       var now = movers();
       layout = new Map();
       for (var k = 0; k < now.length; k++) {
@@ -1094,24 +1385,19 @@
       var r0 = card.getBoundingClientRect();
       var gcs = window.getComputedStyle(grid);
       var gapX = parseFloat(gcs.columnGap) || 0, gapY = parseFloat(gcs.rowGap) || 0;
-      var cols = (gcs.gridTemplateColumns || "").split(" ").filter(Boolean).length || 1;
-      // The cell pitch is measured from the grid itself, never
-      // from the card under the grip: a card widened to fill its
-      // row stands a row wide whatever its drawn size says, and
-      // rows size by content, so the row pitch is the step out of
-      // the row the module stands in (homeRowPitch).
+      var cols = homeCols(grid);
+      // The column pitch is measured from the grid itself, never from
+      // the card under the grip: a card grown to close a hole stands
+      // wider than its stored size says. The row pitch is the card's
+      // own rows, evenly: exactly one row and its gap where rows are
+      // fixed, and the rows the card stands in where they follow
+      // their content.
       var gridRect = grid.getBoundingClientRect();
       var cellW = (gridRect.width + gapX) / cols;
       var colStart = Math.max(0, Math.min(cols - 1, Math.round((r0.left - gridRect.left) / cellW)));
-      var tops = [], els = grid.querySelectorAll(":scope > .card");
-      for (var i = 0; i < els.length; i++) {
-        if (els[i].classList.contains("dragging")) continue;
-        tops.push(els[i].getBoundingClientRect().top);
-      }
-      var rowPx = parseFloat(gcs.getPropertyValue("--home-row")) *
-        parseFloat(window.getComputedStyle(document.documentElement).fontSize);
-      var cellH = homeRowPitch(tops, r0.top, (rowPx || 176) + gapY);
-      if (!(cellH > 24)) cellH = (rowPx || 176) + gapY;
+      var spanH = card._homeSpan ? card._homeSpan.h : start.h;
+      var cellH = (r0.height + gapY) / spanH;
+      if (!(cellH > 24)) cellH = 176 + gapY;
       // Only the sizes that fit from the column the card starts in.
       var fits = sizes.filter(function (s) { return s.w <= cols - colStart; });
       if (!fits.length) fits = sizes;
@@ -1231,6 +1517,11 @@
       var startX = ev.clientX, startY = ev.clientY;
       var lastX = startX, lastY = startY;
       var lifted = false, slot = null, origin = null, savedNodes = null;
+      // The lifted card is fixed, and the page's size container
+      // (.l-page) is its containing block, so it moves with the page
+      // when the page scrolls. fixX and fixY carry it back under the
+      // pointer (onScroll).
+      var fixX = 0, fixY = 0;
       var raf = 0, lock = null, holdUntil = 0, dirty = true;
 
       try { handle.setPointerCapture(ev.pointerId); } catch (err) { /* nicety */ }
@@ -1266,15 +1557,25 @@
           card.style.top = (origin.top - missY) + "px";
         }
         document.body.classList.add("drag-active");
+        homeLayout(grid);
         measure();
+        window.addEventListener("scroll", onScroll, { passive: true });
         raf = requestAnimationFrame(tick);
+      }
+
+      function onScroll() {
+        if (!lifted) return;
+        var r = card.getBoundingClientRect();
+        fixX += origin.left + (lastX - startX) - r.left;
+        fixY += origin.top + (lastY - startY) - r.top;
+        follow();
       }
 
       // The card is placed on every pointer move, straight from the
       // event (a transform: no layout), so it never trails the
       // pointer by a frame.
       function follow() {
-        card.style.transform = "translate3d(" + (lastX - startX) + "px," + (lastY - startY) + "px,0)";
+        card.style.transform = "translate3d(" + (lastX - startX + fixX) + "px," + (lastY - startY + fixY) + "px,0)";
       }
 
       // The frame loop only scrolls: the closer the pointer rides to
@@ -1343,6 +1644,7 @@
         handle.removeEventListener("pointerup", onUp);
         handle.removeEventListener("pointercancel", onCancel);
         document.removeEventListener("keydown", onKey, true);
+        window.removeEventListener("scroll", onScroll);
         if (raf) cancelAnimationFrame(raf);
         raf = 0;
       }
@@ -1357,6 +1659,8 @@
         card.style.transform = card.style.transformOrigin = "";
         document.body.classList.remove("drag-active");
         lifted = false;
+        homeLayout(grid);
+        homeFit(grid);
       }
 
       // Glide the lifted card onto the slot's cell, then let it take
@@ -1364,7 +1668,7 @@
       function landThen(done) {
         var b = layout.get(slot);
         if (!canAnimate || !b) { done(); return; }
-        var dx = b.l - window.scrollX - origin.left, dy = b.t - window.scrollY - origin.top;
+        var dx = b.l - window.scrollX - origin.left + fixX, dy = b.t - window.scrollY - origin.top + fixY;
         var a = card.animate([
           { transform: card.style.transform || "none" },
           { transform: "translate3d(" + dx + "px," + dy + "px,0)" }

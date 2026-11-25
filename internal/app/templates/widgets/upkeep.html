@@ -4,7 +4,7 @@
 <p><small>{{.Count}} deadline{{if ne .Count 1}}s{{end}}{{if .Urgent}} · <strong>{{.Urgent}} past due</strong>{{end}}</small></p>
 {{range .Corps}}
 <h4>{{.Name}}</h4>
-<ul class="attention">{{range $i, $it := .Items}}<li{{if ge $i $cap}} data-wmore{{end}}>{{if .Urgent}}<strong>{{.Name}}: {{.Text}}</strong>{{else}}{{.Name}}: {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
+<ul class="attention" data-w-fit>{{range $i, $it := .Items}}<li{{if ge $i $cap}} data-wmore{{end}}>{{if .Urgent}}<strong>{{.Name}}: {{.Text}}</strong>{{else}}{{.Name}}: {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
 {{end}}
 {{else}}
 <p><small>All structures are fueled, or none of your characters has the Station Manager or Director role needed to check.</small></p>

@@ -1762,7 +1762,7 @@ label > small:first-child, .lp-field > span, .mb-minvol > span, .fchips-label,
 .cs-hunts-label, .ap-label, .sov-pick-l, .kb-f-l, .pi-field > span, .co-pick > span,
 .sc-sys > span, .pi-watch label > span, .fit-boost-fields label > span,
 .map-route-jump label > span,
-.fleet-tags-label, .facet-title, .pie-head, .co-fuel-l {
+.fleet-tags-label, .facet-title, .pie-head, .co-fuel-l, .w-hole {
   font-family: var(--font-display);
   font-size: var(--fs-2xs);
   font-weight: var(--fw-display);
@@ -1897,94 +1897,6 @@ html[data-theme="light"] .widget-scope select {
    pop-up are inserted by app.js; without it the noscript module list
    carries plain forms. */
 .home-actions form { margin: 0; }
-/* The home grid: three cells across on a desktop, two on a mid-size
-   screen, one on a phone. A module takes gw1-3 cells across and gh1-3
-   rows down (its size, stored per user). Rows take their content's
-   height: a module drawn taller shows more rows in its lists
-   (homeCap) and spans more grid rows beside its neighbours, so a
-   size change always shows, but a module never stands taller than
-   what it holds and what its row-mates need, a fixed row floor
-   left a two-row module holding three items mostly empty. The
-   modules sharing a row stretch to match; every module keeps a
-   modest minimum so a one-line module is not a sliver. Nothing scrolls inside a
-   module, so the wheel always scrolls the page. Customize shows each
-   module as the page shows it (summary only, More closed), so rows
-   size the same in both views. Placement backfills: a module that
-   fits a hole an earlier wide module left takes it (staying in
-   reading order otherwise), so no cell stands empty beside a
-   module that could fill it. */
-.grid.home-grid {
-  --home-row: 11rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: auto;
-  grid-auto-flow: row dense;
-  align-items: stretch;
-}
-.grid.home-grid > .card {
-  position: relative;
-  min-width: 0;
-  min-height: 8rem;
-  justify-self: stretch;
-  display: flex;
-  flex-direction: column;
-  container-type: inline-size;
-}
-.grid.home-grid > .card > .card-body { flex: 1 1 auto; min-width: 0; }
-.grid.home-grid > .card > .card-body > :last-child { margin-bottom: 0; }
-/* Every module heading is one height, in Customize and out: a row as
-   tall as the corner buttons, the title on its centre line. */
-.grid.home-grid > .card > h3:first-child {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  box-sizing: border-box;
-  /* The 1.75rem buttons, the band's 0.55rem padding top and bottom,
-     and its 1px rule: a heading with the move handle and one without
-     stand the same height. */
-  min-height: calc(2.85rem + 1px);
-}
-/* A module's tables fit its width: cells wrap rather than pushing the
-   table past the card into a sideways scroll. */
-.grid.home-grid .tw table { width: 100%; }
-/* Cards are positioned (for the corner controls), so a table's
-   visually-hidden header text would otherwise anchor to the card and
-   escape its scroller, widening the page on phones. */
-.grid.home-grid .tw { position: relative; }
-/* A module scrolled to (the idle link to the fleet) lands below the
-   sticky top bar, not under it. */
-.grid.home-grid > .card { scroll-margin-top: 4.75rem; }
-.grid.home-grid > .gw2 { grid-column: span 2; }
-.grid.home-grid > .gw3 { grid-column: span 3; }
-.grid.home-grid > .gh2 { grid-row: span 2; }
-.grid.home-grid > .gh3 { grid-row: span 3; }
-.grid.home-grid > .gh4 { grid-row: span 4; }
-/* A card waiting for its render at a new size: the old one, dimmed,
-   until the new one lands. */
-.grid.home-grid > .card.w-stale { opacity: 0.55; transition: opacity 120ms ease; }
-/* An expanded module (More) grows taller to show its detail, inside
-   its own columns: it never changes width or pushes modules into new
-   places, so the page keeps the layout Customize set. */
-/* Customize shows each module as the page shows it: summary only. */
-.home-custom [data-wmore] { display: none; }
-/* Two across (between the phone band and 70rem): module sizes are
-   drawn for three columns, so here a module spans one grid row
-   whatever its drawn height (its height still sets how many rows
-   its lists show), and a module left alone on its row widens to
-   fill it (app.js, .gfill) instead of leaving an empty cell. */
-@media (max-width: 70rem) {
-  .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid.home-grid > .gw3 { grid-column: span 2; }
-  .grid.home-grid > :is(.gh2, .gh3, .gh4) { grid-row: auto; }
-  .grid.home-grid > .card.gfill { grid-column: 1 / -1; }
-}
-/* Phones: one column, every module its natural height; the summary
-   shows first and More opens the rest. */
-@media (max-width: 45rem) {
-  .grid.home-grid { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
-  .grid.home-grid > .card { grid-column: auto; grid-row: auto; min-height: 0; }
-  /* Sizes only apply on wider screens, so there is nothing to resize. */
-  .grid.home-grid .cardsize, .grid.home-grid .cardgrip, .grid.home-grid .sizepick { display: none; }
-}
 
 /* --- Customize: move, resize, remove --------------------------------
    The move handle starts a module's heading; resize and remove sit in
@@ -2090,7 +2002,6 @@ html[data-theme="light"] .widget-scope select {
 }
 .cardgrip:hover, .cardgrip:focus-visible, .card.resizing .cardgrip { opacity: 1; }
 .cardgrip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (max-width: 45rem) { .cardgrip { display: none; } }
 
 /* The lifted card: out of the grid, fixed to the viewport where it
    was, following the pointer by transform. Ember border and glow. */

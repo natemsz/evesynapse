@@ -1192,8 +1192,10 @@
     });
   }
   function initExpanders(root) {
-    // Customize shows every module whole: it is about arranging.
-    var grid = root.querySelector ? root.querySelector(".home-grid:not(.home-custom)") : null;
+    // Customize shows every module whole: it is about arranging. In
+    // fixed rows a card is exactly its cells, so its lists fit the
+    // card instead (home.js) and nothing opens in place.
+    var grid = root.querySelector ? root.querySelector(".home-grid:not(.home-custom):not([data-rows=\"fixed\"])") : null;
     var remembered = readExpanded();
     if (grid) {
       var cards = grid.querySelectorAll(".card[data-widget]");

@@ -1,10 +1,10 @@
 package tests
 
 // Page stylesheets: the feature sheets (plan, trade ideas, link
-// chooser) load only on the pages whose markup uses their classes,
-// never site-wide. The map below is the contract: a page gains a
-// sheet by rendering markup that needs it, and this test fails if
-// base.html's conditionals and the pages drift apart.
+// chooser, the home grid) load only on the pages whose markup uses
+// their classes, never site-wide. The map below is the contract: a
+// page gains a sheet by rendering markup that needs it, and this test
+// fails if base.html's conditionals and the pages drift apart.
 
 import (
 	"context"
@@ -30,14 +30,15 @@ func TestPageStylesheetsLoadOnlyWhereUsed(t *testing.T) {
 		plan  = `/static/plan.css?v=`
 		ideas = `/static/tradeideas.css?v=`
 		link  = `/static/link.css?v=`
+		home  = `/static/home.css?v=`
 	)
-	// want: sheets of the three a page must carry; every other of
-	// the three must be absent. style.css and bg.css always load.
+	// want: sheets of the four a page must carry; every other of
+	// the four must be absent. style.css and bg.css always load.
 	cases := []struct {
 		path string
 		want []string
 	}{
-		{"/", []string{ideas}},                // home trade-ideas widget
+		{"/", []string{ideas, home}},          // the home grid and its trade-ideas widget
 		{"/planner/", []string{plan}},         // build planner
 		{"/industry/", []string{plan}},        // planner glyph on Blueprints
 		{"/industry/pi/", nil},                // PI planner (its own pi.css)
@@ -45,7 +46,7 @@ func TestPageStylesheetsLoadOnlyWhereUsed(t *testing.T) {
 		{"/auth/link", []string{ideas, link}}, // chooser cards take the accents
 		{"/characters/", nil},                 // a page using none of them
 	}
-	all := []string{plan, ideas, link}
+	all := []string{plan, ideas, link, home}
 	for _, tc := range cases {
 		code, body := apptest.GetPage(t, rig, cookie, tc.path)
 		if code != 200 {

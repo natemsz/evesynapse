@@ -510,6 +510,18 @@ type homeView struct {
 	HasChars   bool
 	Customize  *customizeView // non-nil in customize mode
 	LoadFailed bool           // character list unreadable
+	Rows       string         // the grid's data-rows: "auto" or "fixed" (homeRowsFor)
+}
+
+// homeRowsFor is how the home grid sizes its rows for a request:
+// "fixed" (every row one height, a card exactly its cells) when the
+// request asks with ?rows=fixed, "auto" (rows as tall as their
+// content) otherwise. The choice is per request and never stored.
+func homeRowsFor(r *http.Request) string {
+	if r.URL.Query().Get("rows") == "fixed" {
+		return "fixed"
+	}
+	return "auto"
 }
 
 // fleetRow is one line of the fleet overview.

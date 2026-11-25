@@ -1,8 +1,8 @@
 package app
 
-// Wallet flow tests: window math, source/sink ranking, the net
-// chart, and the per-character filter wiring, over seeded
-// journal snapshots through the real router.
+// Wallet flow tests: window math, source and sink ranking, the
+// running net chart and the net by character, over seeded journal
+// snapshots through the real router.
 
 import (
 	"context"
@@ -32,7 +32,7 @@ func TestWalletFlowRenders(t *testing.T) {
 		// Outside the 30-day window: ignored entirely.
 		{ID: 0, Date: rfc(now.Add(-40 * 24 * time.Hour)), RefType: "bounty_prizes", Amount: 999999, Balance: 999999},
 	})
-	setHomeLayout(t, q, user.ID, `[{"id":"walletflow"}]`)
+	setHomeLayout(t, q, user.ID, `[{"id":"walletflow","w":3,"h":3}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
@@ -43,16 +43,10 @@ func TestWalletFlowRenders(t *testing.T) {
 		"5,100.00",  // 30-day income: 5000 + 100, not the aged 999999
 		"-2,000.00", // 30-day spend
 		"3,100.00",  // 30-day net
-		"bounty_prizes",
-		"market_escrow",
-		"pchart", // cumulative net-flow chart
-		`data-table-filter="w-walletflow-table"`,
-		`data-search="Fixture Alpha"`,
-		// The donuts: all income is bounties, all spend escrow.
-		`aria-label="Income by type, last 30 days"`,
-		`aria-label="Spend by type, last 30 days"`,
-		`<span class="pie-l">bounty prizes</span> <b>100.0%</b>`,
-		`<span class="pie-l">market escrow</span> <b>100.0%</b>`,
+		`aria-label="Running net, income less spend, over 30 days"`,
+		// All income is bounties, all spend escrow.
+		"Top sources", "Bounty prizes", "Top sinks", "Market escrow",
+		"Fixture Alpha", // the net by character
 	)
 	if strings.Contains(body, "999,999") {
 		t.Fatalf("out-of-window entry leaked into the widget")

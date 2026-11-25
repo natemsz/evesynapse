@@ -82,6 +82,13 @@ type walletFlowWidget struct {
 	// type, as share of each side's total; nil when a side is empty.
 	InPie  *flowPie
 	OutPie *flowPie
+
+	// The figures behind the strings, for the home widget's parts:
+	// the window totals, each side's ref-type totals, and the
+	// running net per day.
+	in7, out7, in30, out30 float64
+	refIn, refOut          map[string]float64
+	netDays                []balancechart.BalancePoint
 }
 
 // flowPie is one donut: the largest ref types and the rest as
@@ -172,6 +179,8 @@ func (app *Application) finishWalletFlow(w *walletFlowWidget, dayNet map[time.Ti
 	w.In30 = esi.FormatISK(in30)
 	w.Out30 = esi.FormatISK(out30)
 	w.Net30 = esi.FormatISK(in30 + out30)
+	w.in7, w.out7, w.in30, w.out30 = in7, out7, in30, out30
+	w.refIn, w.refOut = refIn, refOut
 	w.Sources = topFlowRefs(refIn, false)
 	w.Sinks = topFlowRefs(refOut, true)
 	w.InPie = buildFlowPie(refIn)
@@ -188,6 +197,7 @@ func (app *Application) finishWalletFlow(w *walletFlowWidget, dayNet map[time.Ti
 		running += dayNet[d]
 		points = append(points, balancechart.BalancePoint{At: d, Balance: running})
 	}
+	w.netDays = points
 	if chart, ok := balancechart.BuildBalanceChart(points); ok {
 		chart.Label = "Cumulative net flow, ISK per day"
 		chart.Legend = []balancechart.ChartLegendItem{{Class: "legend-price", Label: "Net flow"}}

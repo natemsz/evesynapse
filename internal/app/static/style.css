@@ -2600,35 +2600,14 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .legend-assets { background: var(--accent); opacity: 0.9; }
 .legend-total { height: 2px; background: var(--gold); }
 .legend-note { margin-left: auto; color: #9d8668; }
-/* Profit pulse widget: its figures, plus the Profit page waterfall's
-   own fills and connectors (those rules live in market.css, which
-   the home page does not load), scoped to this card only. The
-   semantic fills and legend chrome are the global rules above. */
-.card[data-widget="profitpulse"] .profitpulse-sub { color: var(--muted); }
-.card[data-widget="profitpulse"] .profitpulse-figs { display: flex; flex-wrap: wrap; gap: 0.5rem 2.5rem; margin: 0.25rem 0 0.5rem; }
-.card[data-widget="profitpulse"] .profitpulse-figs dt { font-size: var(--fs-xs); color: var(--muted); }
-.card[data-widget="profitpulse"] .profitpulse-figs dd { margin: 0; font-size: var(--fs-2xl); font-weight: 500; }
-.card[data-widget="profitpulse"] .profitpulse-top { margin: 0.25rem 0; }
-.card[data-widget="profitpulse"] .profitpulse-mini-cap { margin: 0.5rem 0 0.15rem; }
-.card[data-widget="profitpulse"] .profitpulse-mini { display: block; }
-.card[data-widget="profitpulse"] .profitpulse-mini rect { stroke: none; }
-.card[data-widget="profitpulse"] .profitpulse-mini-zero { stroke: var(--muted); stroke-opacity: 0.5; stroke-width: 1; }
-.card[data-widget="profitpulse"] .profitpulse-beside { display: flex; gap: 1.25rem; align-items: flex-start; }
-.card[data-widget="profitpulse"] .profitpulse-beside .profitpulse-data { flex: 1 1 auto; min-width: 0; }
-.card[data-widget="profitpulse"] .profitpulse-beside .profitpulse-chart { flex: 0 0 36%; min-width: 0; }
-.card[data-widget="profitpulse"] .profitpulse-beside .profitpulse-mini-cap { margin-top: 0.25rem; }
-.card[data-widget="profitpulse"] .profitpulse-more { margin: 0.5rem 0 0; }
-.card[data-widget="profitpulse"] .pf-chart { margin: 0.5rem 0 0; }
-.card[data-widget="profitpulse"] .pf-chart svg { display: block; max-width: 100%; }
-.card[data-widget="profitpulse"] .pf-chart rect { stroke: none; }
+/* Profit pulse widget: the Profit page waterfall's own fills,
+   connectors and labels (those rules live in market.css, which the
+   home page does not load), scoped to this card only. */
 .card[data-widget="profitpulse"] .pf-wf-gross { fill: var(--text); }
 .card[data-widget="profitpulse"] .pf-wf-industry { fill: color-mix(in srgb, var(--recycled) 55%, var(--note)); }
-.card[data-widget="profitpulse"] .legend-swatch.pf-wf-industry { background: color-mix(in srgb, var(--recycled) 55%, var(--note)); }
 .card[data-widget="profitpulse"] .pf-wf-conn { stroke: var(--muted); stroke-opacity: 0.6; stroke-width: 1; stroke-dasharray: 4 3; fill: none; vector-effect: non-scaling-stroke; }
-.card[data-widget="profitpulse"] .pf-wf-cap { fill: url("#pf-hatch-pp"); }
 .card[data-widget="profitpulse"] .pf-hatch-bg { fill: color-mix(in srgb, var(--unverified) 7%, transparent); }
 .card[data-widget="profitpulse"] .pf-hatch-line { stroke: var(--unverified); stroke-opacity: 0.5; stroke-width: 1.4; }
-.card[data-widget="profitpulse"] .legend-swatch.pf-gap { background: repeating-linear-gradient(45deg, var(--unverified) 0 2px, transparent 2px 5px); }
 .card[data-widget="profitpulse"] .profitpulse-wf-values { position: absolute; inset: 0; pointer-events: none; }
 .card[data-widget="profitpulse"] .profitpulse-wf-values span { position: absolute; transform: translateX(-50%); font-size: var(--fs-2xs); line-height: 1; color: var(--text-bright); text-shadow: 0 1px 3px var(--panel); white-space: nowrap; }
 .card[data-widget="profitpulse"] .profitpulse-wf-values span:first-child { color: var(--panel); text-shadow: none; }

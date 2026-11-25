@@ -1,23 +1,62 @@
-{{define "w-walletflow-all"}}{{$cap := .Cap}}
-{{with .Data}}
-{{if .Any}}
-{{template "wallet-flow-figures" .}}
-<div data-w-detail>
-{{template "wallet-flow-detail" .}}
-{{if .Chars}}
-<p><input type="search" id="{{$.Uid "filter"}}" placeholder="Filter by character…" aria-label="Filter wallet flow by character" data-table-filter="{{$.Uid "table"}}" data-row-class="walletflow-row"></p>
-<div class="tw">
-<table id="{{$.Uid "table"}}">
-  <thead><tr><th>Character</th><th class="opt">7d in</th><th class="opt">7d out</th><th>30d net</th></tr></thead>
-  <tbody>
-  {{range .Chars}}<tr class="walletflow-row" data-search="{{.Search}}"><td>{{charLink $.ViewerChars .ID .Name}}</td><td class="opt {{signClass .In7}}">{{.In7}} ISK</td><td class="opt {{signClass .Out7}}">{{.Out7}} ISK</td><td class="{{signClass .Net30}}">{{.Net30}} ISK</td></tr>{{end}}
+{{/* Wallet Flow: income against spend from the stored journals. Five
+     forms of kit parts; none reads its size. The Wallet page draws the
+     same figures with its own partials (templates/walletflow.html). */}}
+
+{{define "w-walletflow-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-lead" .Lead}}
+{{template "w-walletflow-io" .Meters}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-walletflow-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{if .Any}}
+<div class="w-side">{{template "w-lead" .Lead}}<p class="wf-inout">{{.InOut}}</p></div>
+{{with .Line}}{{template "w-chart" .}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* Parts after the chart are not drawn when the card has no room for
+     them, the 7-day bars first. */}}
+{{define "w-walletflow-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+{{template "w-lead" .Lead}}
+{{with .Line}}{{template "w-chart" .}}{{end}}
+{{template "w-walletflow-io" .Meters}}
+{{template "w-walletflow-io" .Meters7}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-walletflow-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+<div class="w-cols">
+{{with .Line}}{{template "w-chart" .}}{{end}}
+<div class="w-aside">{{template "w-walletflow-table" .}}</div>
+</div>
+{{template "w-walletflow-splits" .}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-walletflow-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
+<div class="w-cols">
+{{with .Line}}{{template "w-chart" .}}{{end}}
+<div class="w-aside">{{template "w-walletflow-table" .}}</div>
+</div>
+{{if or .Sources .Sinks .ByChar}}<div class="wf-ranks">
+{{with .Sources}}<div class="w-aside"><h4 class="w-sub">Top sources, 30 days</h4>{{template "w-rank" .}}</div>{{end}}
+{{with .Sinks}}<div class="w-aside"><h4 class="w-sub">Top sinks, 30 days</h4>{{template "w-rank" .}}</div>{{end}}
+{{with .ByChar}}<div class="w-aside"><h4 class="w-sub">Net by character, 30 days</h4>{{template "w-rank" .}}</div>{{end}}
+</div>{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* Income and spend as bars on one scale, a row each: name, bar,
+     figure. */}}
+{{define "w-walletflow-io"}}<ul class="wf-io">{{range .}}<li><span class="wf-io-name">{{.Name}}</span><span class="wf-io-bar" aria-hidden="true"><span class="{{.Tone}}" data-w="{{printf "%.1f" .Pct}}"></span></span><span class="wf-io-val">{{.Text}}</span></li>{{end}}</ul>{{end}}
+
+{{/* In, out and net over 7 and 30 days, short, with the whole
+     figures as titles. */}}
+{{define "w-walletflow-table"}}<table class="wf-figs" data-cards="off">
+  <thead><tr><th></th><th>7 days</th><th>30 days</th></tr></thead>
+  <tbody>{{range .Figs}}
+    <tr><th scope="row">{{.Name}}</th><td class="{{signClass .Week}}" title="{{.WeekFull}}">{{.Week}}</td><td class="{{signClass .Month}}" title="{{.MonthFull}}">{{.Month}}</td></tr>{{end}}
   </tbody>
-</table>
-</div>
-{{end}}
-</div>
-{{else}}
-<p><small>Journal data appears here once your characters have synced.</small></p>
-{{end}}
-{{end}}
-{{end}}
+</table>{{end}}
+
+{{/* Income and spend over 30 days, each split by kind, a key line per
+     part. */}}
+{{define "w-walletflow-splits"}}{{if or .InSplit .OutSplit}}<div class="wf-splits">
+{{with .InSplit}}<div class="w-aside"><h4 class="w-sub">Income, 30 days</h4>{{template "w-segbar" .}}</div>{{end}}
+{{with .OutSplit}}<div class="w-aside"><h4 class="w-sub">Spend, 30 days</h4>{{template "w-segbar" .}}</div>{{end}}
+</div>{{end}}{{end}}

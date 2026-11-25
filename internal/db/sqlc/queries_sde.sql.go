@@ -2597,6 +2597,36 @@ func (q *Queries) ListSDESkillCatalog(ctx context.Context) ([]ListSDESkillCatalo
 	return items, nil
 }
 
+const listSDESkillRanks = `-- name: ListSDESkillRanks :many
+SELECT type_id, rank FROM sde_skill_meta WHERE type_id = ANY($1::bigint[])
+`
+
+type ListSDESkillRanksRow struct {
+	TypeID int64   `json:"type_id"`
+	Rank   float64 `json:"rank"`
+}
+
+// The training ranks of some skills.
+func (q *Queries) ListSDESkillRanks(ctx context.Context, typeIds []int64) ([]ListSDESkillRanksRow, error) {
+	rows, err := q.db.Query(ctx, listSDESkillRanks, typeIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDESkillRanksRow
+	for rows.Next() {
+		var i ListSDESkillRanksRow
+		if err := rows.Scan(&i.TypeID, &i.Rank); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDEStationsBySystem = `-- name: ListSDEStationsBySystem :many
 SELECT station_id, name, system_id FROM sde_stations
 WHERE system_id = $1

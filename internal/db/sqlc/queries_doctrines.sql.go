@@ -57,6 +57,27 @@ func (q *Queries) CountDoctrineFits(ctx context.Context, doctrineID int64) (int6
 	return column_1, err
 }
 
+const countDoctrineReadinessByUser = `-- name: CountDoctrineReadinessByUser :one
+SELECT COUNT(*)::bigint AS doctrines,
+       (COUNT(*) FILTER (WHERE r.pilots_ready > 0))::bigint AS flyable
+FROM doctrine_readiness r
+WHERE r.user_id = $1
+`
+
+type CountDoctrineReadinessByUserRow struct {
+	Doctrines int64 `json:"doctrines"`
+	Flyable   int64 `json:"flyable"`
+}
+
+// How many doctrines an account has readiness for, and how many of
+// them a pilot of its can fly: the totals behind a capped list.
+func (q *Queries) CountDoctrineReadinessByUser(ctx context.Context, userID int64) (CountDoctrineReadinessByUserRow, error) {
+	row := q.db.QueryRow(ctx, countDoctrineReadinessByUser, userID)
+	var i CountDoctrineReadinessByUserRow
+	err := row.Scan(&i.Doctrines, &i.Flyable)
+	return i, err
+}
+
 const createDoctrine = `-- name: CreateDoctrine :one
 
 INSERT INTO doctrines (corporation_id, owner_kind, owner_id, visibility, name, category, description, tags, created_by, created_at, updated_at)
@@ -121,6 +142,42 @@ type DeleteDoctrineFitParams struct {
 func (q *Queries) DeleteDoctrineFit(ctx context.Context, arg DeleteDoctrineFitParams) error {
 	_, err := q.db.Exec(ctx, deleteDoctrineFit, arg.ID, arg.DoctrineID)
 	return err
+}
+
+const deleteDoctrineFitReadiness = `-- name: DeleteDoctrineFitReadiness :exec
+DELETE FROM doctrine_fit_readiness WHERE user_id = $1
+`
+
+func (q *Queries) DeleteDoctrineFitReadiness(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, deleteDoctrineFitReadiness, userID)
+	return err
+}
+
+const deleteDoctrineReadiness = `-- name: DeleteDoctrineReadiness :exec
+DELETE FROM doctrine_readiness WHERE user_id = $1
+`
+
+func (q *Queries) DeleteDoctrineReadiness(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, deleteDoctrineReadiness, userID)
+	return err
+}
+
+const doctrineFitsFingerprint = `-- name: DoctrineFitsFingerprint :one
+SELECT COALESCE(md5(string_agg(f.id::text, ',' ORDER BY f.id)), '')::text AS fits
+FROM doctrines d
+JOIN doctrine_fits f ON f.doctrine_id = d.id
+WHERE (d.owner_kind || ':' || d.owner_id::text) = ANY($1::text[])
+`
+
+// Doctrine readiness (schema 183, doctrine_readiness.go). The fold's
+// inputs: the fits of the doctrines some owners keep ("kind:id"
+// keys), and a fingerprint of that fit set that moves when a fit or
+// doctrine is added or removed.
+func (q *Queries) DoctrineFitsFingerprint(ctx context.Context, ownerKeys []string) (string, error) {
+	row := q.db.QueryRow(ctx, doctrineFitsFingerprint, ownerKeys)
+	var fits string
+	err := row.Scan(&fits)
+	return fits, err
 }
 
 const doctrineHasShip = `-- name: DoctrineHasShip :one
@@ -237,6 +294,91 @@ func (q *Queries) GetDoctrineFit(ctx context.Context, id int64) (GetDoctrineFitR
 	return i, err
 }
 
+const getDoctrineReadinessFold = `-- name: GetDoctrineReadinessFold :one
+SELECT user_id, inputs, computed_at FROM doctrine_readiness_folds WHERE user_id = $1
+`
+
+func (q *Queries) GetDoctrineReadinessFold(ctx context.Context, userID int64) (DoctrineReadinessFold, error) {
+	row := q.db.QueryRow(ctx, getDoctrineReadinessFold, userID)
+	var i DoctrineReadinessFold
+	err := row.Scan(&i.UserID, &i.Inputs, &i.ComputedAt)
+	return i, err
+}
+
+const insertDoctrineFitReadiness = `-- name: InsertDoctrineFitReadiness :exec
+INSERT INTO doctrine_fit_readiness (user_id, fit_id, doctrine_id, ready_ids, near_character, near_missing, near_missing_n, near_sp, computed_at)
+VALUES ($1, $2, $3, $4::bigint[], $5,
+        $6, $7, $8, $9)
+ON CONFLICT (user_id, fit_id) DO NOTHING
+`
+
+type InsertDoctrineFitReadinessParams struct {
+	UserID        int64     `json:"user_id"`
+	FitID         int64     `json:"fit_id"`
+	DoctrineID    int64     `json:"doctrine_id"`
+	ReadyIds      []int64   `json:"ready_ids"`
+	NearCharacter int64     `json:"near_character"`
+	NearMissing   string    `json:"near_missing"`
+	NearMissingN  int32     `json:"near_missing_n"`
+	NearSp        int64     `json:"near_sp"`
+	ComputedAt    time.Time `json:"computed_at"`
+}
+
+func (q *Queries) InsertDoctrineFitReadiness(ctx context.Context, arg InsertDoctrineFitReadinessParams) error {
+	_, err := q.db.Exec(ctx, insertDoctrineFitReadiness,
+		arg.UserID,
+		arg.FitID,
+		arg.DoctrineID,
+		arg.ReadyIds,
+		arg.NearCharacter,
+		arg.NearMissing,
+		arg.NearMissingN,
+		arg.NearSp,
+		arg.ComputedAt,
+	)
+	return err
+}
+
+const insertDoctrineReadiness = `-- name: InsertDoctrineReadiness :exec
+INSERT INTO doctrine_readiness (user_id, doctrine_id, fits, fits_flyable, pilots, pilots_ready, near_character, near_fit, near_missing, near_missing_n, near_sp, computed_at)
+VALUES ($1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11, $12)
+ON CONFLICT (user_id, doctrine_id) DO NOTHING
+`
+
+type InsertDoctrineReadinessParams struct {
+	UserID        int64     `json:"user_id"`
+	DoctrineID    int64     `json:"doctrine_id"`
+	Fits          int32     `json:"fits"`
+	FitsFlyable   int32     `json:"fits_flyable"`
+	Pilots        int32     `json:"pilots"`
+	PilotsReady   int32     `json:"pilots_ready"`
+	NearCharacter int64     `json:"near_character"`
+	NearFit       int64     `json:"near_fit"`
+	NearMissing   string    `json:"near_missing"`
+	NearMissingN  int32     `json:"near_missing_n"`
+	NearSp        int64     `json:"near_sp"`
+	ComputedAt    time.Time `json:"computed_at"`
+}
+
+func (q *Queries) InsertDoctrineReadiness(ctx context.Context, arg InsertDoctrineReadinessParams) error {
+	_, err := q.db.Exec(ctx, insertDoctrineReadiness,
+		arg.UserID,
+		arg.DoctrineID,
+		arg.Fits,
+		arg.FitsFlyable,
+		arg.Pilots,
+		arg.PilotsReady,
+		arg.NearCharacter,
+		arg.NearFit,
+		arg.NearMissing,
+		arg.NearMissingN,
+		arg.NearSp,
+		arg.ComputedAt,
+	)
+	return err
+}
+
 const listCommunityDoctrines = `-- name: ListCommunityDoctrines :many
 SELECT id, name, category, visibility FROM doctrines
 WHERE owner_kind = 'community' AND owner_id = $1
@@ -325,6 +467,74 @@ func (q *Queries) ListDoctrineFitBoosts(ctx context.Context, doctrineIds []int64
 	return items, nil
 }
 
+const listDoctrineFitReadinessByUser = `-- name: ListDoctrineFitReadinessByUser :many
+SELECT x.fit_id, x.doctrine_id, x.name, x.ship_type_id, x.fleet_role, x.ready_ids, x.near_character, x.near_missing, x.near_missing_n, x.near_sp
+FROM unnest($1::bigint[]) AS d(id)
+CROSS JOIN LATERAL (
+    SELECT r.fit_id, r.doctrine_id, f.name, f.ship_type_id, f.fleet_role, r.ready_ids, r.near_character, r.near_missing, r.near_missing_n, r.near_sp
+    FROM doctrine_fit_readiness r
+    JOIN doctrine_fits f ON f.id = r.fit_id
+    WHERE r.user_id = $2 AND r.doctrine_id = d.id
+    ORDER BY f.id
+    LIMIT $3::int
+) x
+ORDER BY x.doctrine_id, x.fit_id
+LIMIT 100
+`
+
+type ListDoctrineFitReadinessByUserParams struct {
+	DoctrineIds []int64 `json:"doctrine_ids"`
+	UserID      int64   `json:"user_id"`
+	FitsEach    int32   `json:"fits_each"`
+}
+
+type ListDoctrineFitReadinessByUserRow struct {
+	FitID         int64   `json:"fit_id"`
+	DoctrineID    int64   `json:"doctrine_id"`
+	Name          string  `json:"name"`
+	ShipTypeID    int64   `json:"ship_type_id"`
+	FleetRole     string  `json:"fleet_role"`
+	ReadyIds      []int64 `json:"ready_ids"`
+	NearCharacter int64   `json:"near_character"`
+	NearMissing   string  `json:"near_missing"`
+	NearMissingN  int32   `json:"near_missing_n"`
+	NearSp        int64   `json:"near_sp"`
+}
+
+// The fits of some of an account's doctrines with their readiness: at
+// most fits_each per doctrine, so every doctrine asked for gets its
+// first fits however many the others hold.
+func (q *Queries) ListDoctrineFitReadinessByUser(ctx context.Context, arg ListDoctrineFitReadinessByUserParams) ([]ListDoctrineFitReadinessByUserRow, error) {
+	rows, err := q.db.Query(ctx, listDoctrineFitReadinessByUser, arg.DoctrineIds, arg.UserID, arg.FitsEach)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDoctrineFitReadinessByUserRow
+	for rows.Next() {
+		var i ListDoctrineFitReadinessByUserRow
+		if err := rows.Scan(
+			&i.FitID,
+			&i.DoctrineID,
+			&i.Name,
+			&i.ShipTypeID,
+			&i.FleetRole,
+			&i.ReadyIds,
+			&i.NearCharacter,
+			&i.NearMissing,
+			&i.NearMissingN,
+			&i.NearSp,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDoctrineFits = `-- name: ListDoctrineFits :many
 SELECT id, doctrine_id, name, ship_type_id, items_json, fleet_role, note, added_by, added_at, boosts_json FROM doctrine_fits
 WHERE doctrine_id = ANY($1::bigint[])
@@ -352,6 +562,124 @@ func (q *Queries) ListDoctrineFits(ctx context.Context, doctrineIds []int64) ([]
 			&i.AddedBy,
 			&i.AddedAt,
 			&i.BoostsJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDoctrineFitsForOwners = `-- name: ListDoctrineFitsForOwners :many
+SELECT f.id, f.doctrine_id, f.ship_type_id, f.items_json
+FROM doctrines d
+JOIN doctrine_fits f ON f.doctrine_id = d.id
+WHERE (d.owner_kind || ':' || d.owner_id::text) = ANY($1::text[])
+ORDER BY f.id
+LIMIT 2000
+`
+
+type ListDoctrineFitsForOwnersRow struct {
+	ID         int64  `json:"id"`
+	DoctrineID int64  `json:"doctrine_id"`
+	ShipTypeID int64  `json:"ship_type_id"`
+	ItemsJson  string `json:"items_json"`
+}
+
+func (q *Queries) ListDoctrineFitsForOwners(ctx context.Context, ownerKeys []string) ([]ListDoctrineFitsForOwnersRow, error) {
+	rows, err := q.db.Query(ctx, listDoctrineFitsForOwners, ownerKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDoctrineFitsForOwnersRow
+	for rows.Next() {
+		var i ListDoctrineFitsForOwnersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.DoctrineID,
+			&i.ShipTypeID,
+			&i.ItemsJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDoctrineReadinessByUser = `-- name: ListDoctrineReadinessByUser :many
+SELECT r.doctrine_id, d.name, d.category, d.owner_kind, d.owner_id, r.fits, r.fits_flyable, r.pilots, r.pilots_ready,
+       r.near_character, r.near_fit, COALESCE(nf.name, '')::text AS near_fit_name, COALESCE(nf.ship_type_id, 0)::bigint AS near_ship,
+       r.near_missing, r.near_missing_n, r.near_sp, r.computed_at
+FROM doctrine_readiness r
+JOIN doctrines d ON d.id = r.doctrine_id
+LEFT JOIN doctrine_fits nf ON nf.id = r.near_fit
+WHERE r.user_id = $1
+ORDER BY r.pilots_ready, lower(d.name), d.id
+LIMIT $2
+`
+
+type ListDoctrineReadinessByUserParams struct {
+	UserID   int64 `json:"user_id"`
+	RowLimit int32 `json:"row_limit"`
+}
+
+type ListDoctrineReadinessByUserRow struct {
+	DoctrineID    int64     `json:"doctrine_id"`
+	Name          string    `json:"name"`
+	Category      string    `json:"category"`
+	OwnerKind     string    `json:"owner_kind"`
+	OwnerID       int64     `json:"owner_id"`
+	Fits          int32     `json:"fits"`
+	FitsFlyable   int32     `json:"fits_flyable"`
+	Pilots        int32     `json:"pilots"`
+	PilotsReady   int32     `json:"pilots_ready"`
+	NearCharacter int64     `json:"near_character"`
+	NearFit       int64     `json:"near_fit"`
+	NearFitName   string    `json:"near_fit_name"`
+	NearShip      int64     `json:"near_ship"`
+	NearMissing   string    `json:"near_missing"`
+	NearMissingN  int32     `json:"near_missing_n"`
+	NearSp        int64     `json:"near_sp"`
+	ComputedAt    time.Time `json:"computed_at"`
+}
+
+// An account's doctrines with their readiness, for the home widget:
+// doctrines with the fewest ready pilots first, then by name.
+func (q *Queries) ListDoctrineReadinessByUser(ctx context.Context, arg ListDoctrineReadinessByUserParams) ([]ListDoctrineReadinessByUserRow, error) {
+	rows, err := q.db.Query(ctx, listDoctrineReadinessByUser, arg.UserID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDoctrineReadinessByUserRow
+	for rows.Next() {
+		var i ListDoctrineReadinessByUserRow
+		if err := rows.Scan(
+			&i.DoctrineID,
+			&i.Name,
+			&i.Category,
+			&i.OwnerKind,
+			&i.OwnerID,
+			&i.Fits,
+			&i.FitsFlyable,
+			&i.Pilots,
+			&i.PilotsReady,
+			&i.NearCharacter,
+			&i.NearFit,
+			&i.NearFitName,
+			&i.NearShip,
+			&i.NearMissing,
+			&i.NearMissingN,
+			&i.NearSp,
+			&i.ComputedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -627,4 +955,21 @@ func (q *Queries) UpdateDoctrine(ctx context.Context, arg UpdateDoctrineParams) 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const upsertDoctrineReadinessFold = `-- name: UpsertDoctrineReadinessFold :exec
+INSERT INTO doctrine_readiness_folds (user_id, inputs, computed_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id) DO UPDATE SET inputs = EXCLUDED.inputs, computed_at = EXCLUDED.computed_at
+`
+
+type UpsertDoctrineReadinessFoldParams struct {
+	UserID     int64     `json:"user_id"`
+	Inputs     string    `json:"inputs"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
+func (q *Queries) UpsertDoctrineReadinessFold(ctx context.Context, arg UpsertDoctrineReadinessFoldParams) error {
+	_, err := q.db.Exec(ctx, upsertDoctrineReadinessFold, arg.UserID, arg.Inputs, arg.ComputedAt)
+	return err
 }

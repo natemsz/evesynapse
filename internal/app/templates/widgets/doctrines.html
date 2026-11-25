@@ -1,0 +1,46 @@
+{{/* Doctrine Readiness: which of the account's pilots can fly its
+     doctrines, folded by the worker (doctrine_readiness.go) from the
+     stored skill snapshots. Four forms; none reads its size. */}}
+
+{{define "w-doctrines-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Doctrines}}
+{{template "w-lead" .Lead}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-doctrines-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Doctrines}}
+<ul class="dr-list" data-w-fit>{{range .Doctrines}}{{template "w-doctrines-row" .}}{{end}}</ul>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-doctrines-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Doctrines}}
+<div class="w-cols w-cols-lists">
+<div class="w-rest"><ul class="dr-list" data-w-fit>{{range .Doctrines}}<li class="{{.Tone}}">
+  <a class="dr-name" href="{{.Href}}">{{.Name}}</a>
+  <span class="dr-ready">{{.ReadyText}}</span>
+  <span class="l-meter w-meter dr-meter {{.Tone}}" aria-hidden="true"><span data-w="{{printf "%.1f" .Pct}}"></span></span>
+</li>{{end}}</ul></div>
+<div class="w-aside"><h4 class="w-sub">Closest to flying one</h4>{{if .Nearest}}<ul class="dr-list dr-near" data-w-fit>{{range .Nearest}}<li>
+  <span class="dr-name">{{.Pilot}}</span>
+  <small class="dr-sp">{{.SP}} skill points</small>
+  <small class="dr-sub"><a href="{{.Href}}">{{.Doctrine}}</a>, {{.Fit}}</small>
+  <small class="dr-sub dr-missing" title="{{.Text}}">{{.Missing}}{{if .More}} and {{.More}} more{{end}}</small>
+</li>{{end}}</ul>{{else}}<p class="w-quiet"><small>Every pilot can fly every doctrine.</small></p>{{end}}</div>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-doctrines-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Doctrines}}
+<ul class="dr-list dr-fits" data-w-fit>{{range $d := .Doctrines}}
+<li class="dr-head {{$d.Tone}}"><a class="dr-name" href="{{$d.Href}}">{{$d.Name}}</a><span class="dr-ready">{{$d.ReadyText}}</span></li>
+{{range $d.FitRows}}<li class="dr-fit">
+  <span class="dr-fitname">{{.Name}}{{with .Role}} <small>{{.}}</small>{{end}}</span>
+  <span class="dr-who">{{if .Ready}}{{range $i, $p := .Ready}}{{if $i}}, {{end}}{{charLink $.ViewerChars $p.ID $p.Name}}{{end}}{{else}}<small>Nobody yet</small>{{end}}</span>
+  {{with .Near}}<small class="dr-sub dr-missing" title="{{.Text}}">{{.Pilot}} needs {{.Missing}}{{if .More}} and {{.More}} more{{end}}, {{.SP}} skill points</small>{{end}}
+</li>{{end}}{{with $d.FitsMore}}<li class="dr-fit"><small class="dr-sub">{{.}} on the doctrine page</small></li>{{end}}{{end}}</ul>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* One doctrine: how many pilots are ready, and what the nearest one
+     still needs. */}}
+{{define "w-doctrines-row"}}<li class="{{.Tone}}">
+  <a class="dr-name" href="{{.Href}}">{{.Name}}</a>
+  <span class="dr-ready">{{.ReadyText}}</span>
+  <span class="l-meter w-meter dr-meter {{.Tone}}" aria-hidden="true"><span data-w="{{printf "%.1f" .Pct}}"></span></span>
+  {{with .Near}}<small class="dr-sub dr-missing" title="{{.Fit}}: {{.Text}}">{{.Pilot}} needs {{.Missing}}{{if .More}} and {{.More}} more{{end}}</small>{{end}}
+</li>{{end}}

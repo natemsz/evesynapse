@@ -1085,6 +1085,11 @@ var pgWidgetSettingsMarketSchema string
 //go:embed schema_pg/182_system_camps.sql
 var pgSystemCampsSchema string
 
+// Step 183: which of an account's pilots can fly each doctrine fit.
+//
+//go:embed schema_pg/183_doctrine_readiness.sql
+var pgDoctrineReadinessSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1295,6 +1300,7 @@ func schemaSteps() []schemaStep {
 		{180, "user_delete_after", pgUserDeleteAfterSchema, ""},
 		{181, "widget_settings_market", pgWidgetSettingsMarketSchema, ""},
 		{182, "system_camps", pgSystemCampsSchema, ""},
+		{183, "doctrine_readiness", pgDoctrineReadinessSchema, ""},
 	}
 }
 

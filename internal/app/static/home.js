@@ -1254,6 +1254,61 @@
   onContentReady(initHomeGrid);
   initHomeGrid(document);
 
+  // --- Customize hint -------------------------------------------
+  // The one-time card under the Customize button: the server
+  // renders it open once per session for an account that has not
+  // answered (home_customize_prompt.go); this gives it the drop,
+  // and a close that lasts only this visit (answering is the
+  // form). The listeners bind once and look the card up as it
+  // stands, so a swap that repaints the home keeps one set.
+  var customizePromptBound = false;
+  var customizePromptHiding = null;
+  function customizePromptCard() {
+    return document.getElementById("customize-prompt");
+  }
+  function hideCustomizePrompt() {
+    var card = customizePromptCard();
+    if (!card || card.hidden || customizePromptHiding) return;
+    card.classList.remove("is-open");
+    var still = window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (still) {
+      card.hidden = true;
+      return;
+    }
+    customizePromptHiding = window.setTimeout(function () {
+      customizePromptHiding = null;
+      card.hidden = true;
+    }, 180);
+  }
+  function initCustomizePrompt(root) {
+    var card = root.querySelector
+      ? root.querySelector("#customize-prompt")
+      : null;
+    if (!card) card = customizePromptCard();
+    if (card && !card.hidden) {
+      // Rendered open: give it the drop.
+      window.requestAnimationFrame(function () {
+        card.classList.add("is-open");
+      });
+    }
+    if (customizePromptBound) return;
+    customizePromptBound = true;
+    document.addEventListener("click", function (ev) {
+      if (!ev.target.closest) return;
+      var live = customizePromptCard();
+      if (!live || live.hidden) return;
+      if (ev.target.closest("[data-customize-prompt-close]") ||
+          !live.contains(ev.target)) hideCustomizePrompt();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") hideCustomizePrompt();
+    });
+    document.addEventListener("evesynapse:content-will-swap", hideCustomizePrompt);
+  }
+  onContentReady(initCustomizePrompt);
+  initCustomizePrompt(document);
+
   // HOME_MAX_COPIES mirrors homeMaxCopies (home_widget_kit.go): the
   // most cards one widget may have on a home.
   var HOME_MAX_COPIES = 4;

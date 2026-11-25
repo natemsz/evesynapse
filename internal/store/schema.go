@@ -1096,6 +1096,11 @@ var pgDoctrineReadinessSchema string
 //go:embed schema_pg/184_region_stats_swept_at.sql
 var pgRegionStatsSweptAtSchema string
 
+// Step 185: the Customize hint's one-time stamp on accounts.
+//
+//go:embed schema_pg/185_customize_prompt_seen.sql
+var pgCustomizePromptSeenSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1308,6 +1313,7 @@ func schemaSteps() []schemaStep {
 		{182, "system_camps", pgSystemCampsSchema, ""},
 		{183, "doctrine_readiness", pgDoctrineReadinessSchema, ""},
 		{184, "region_stats_swept_at", pgRegionStatsSweptAtSchema, ""},
+		{185, "customize_prompt_seen", pgCustomizePromptSeenSchema, ""},
 	}
 }
 

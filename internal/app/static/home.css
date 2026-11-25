@@ -27,6 +27,23 @@
    shows the holes as "Add a widget" cells, and lists fit their card
    (homeFitCount). Without JavaScript the span classes and row
    placement lay the grid out. */
+
+/* The Customize hint: the notification prompt's card (bg.css)
+   hung from the Customize button instead of the bell. The home
+   bar is its anchor: the card drops from its bottom edge,
+   right-aligned under the button, and runs the bar's width on
+   a phone. */
+.home-bar { position: relative; }
+.home-bar .customize-prompt {
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: min(22rem, calc(100vw - 2rem));
+}
+@media (max-width: 860px) {
+  .home-bar .customize-prompt { left: auto; right: 0; width: min(22rem, calc(100vw - 2rem)); }
+}
+
 .grid.home-grid {
   --home-cols: 1;
   grid-template-columns: minmax(0, 1fr);

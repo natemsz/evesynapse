@@ -20,6 +20,18 @@
       </form>
     </div>
   </details>
+  {{with .Home.CustomizePrompt}}{{template "customize-prompt" .}}{{end}}
+</div>{{end}}
+{{define "customize-prompt"}}<div class="notify-prompt customize-prompt" id="customize-prompt" role="dialog" aria-label="About customizing your home"{{if not .AutoOpen}} hidden{{end}}>
+  <form method="post" action="/home/customize-prompt">
+    <p class="notify-prompt-title">This page is yours to arrange</p>
+    <p class="notify-prompt-sub">The modules below can be moved, resized and swapped for others, and new modules have been added to the list.</p>
+    <div class="notify-prompt-actions">
+      <button type="submit" name="action" value="try" class="btn">See the new modules</button>
+      <button type="submit" name="action" value="dismiss" class="btn btn-quiet">Not now</button>
+    </div>
+  </form>
+  <button type="button" class="notify-prompt-close" data-customize-prompt-close aria-label="Close">&times;</button>
 </div>{{end}}
 {{define "content"}}
 {{if .LoggedIn}}

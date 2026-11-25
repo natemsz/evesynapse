@@ -170,7 +170,7 @@ func (q *Queries) CreateSkillPlan(ctx context.Context, arg CreateSkillPlanParams
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
 VALUES (now())
-RETURNING id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after
+RETURNING id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after, customize_prompt_seen_at
 `
 
 func (q *Queries) CreateUser(ctx context.Context) (User, error) {
@@ -185,6 +185,7 @@ func (q *Queries) CreateUser(ctx context.Context) (User, error) {
 		&i.IsDemo,
 		&i.VizPrefs,
 		&i.DeleteAfter,
+		&i.CustomizePromptSeenAt,
 	)
 	return i, err
 }
@@ -697,7 +698,7 @@ func (q *Queries) GetSnapshotFetchState(ctx context.Context, arg GetSnapshotFetc
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after FROM users
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after, customize_prompt_seen_at FROM users
 WHERE id = $1
 `
 
@@ -713,6 +714,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.IsDemo,
 		&i.VizPrefs,
 		&i.DeleteAfter,
+		&i.CustomizePromptSeenAt,
 	)
 	return i, err
 }
@@ -728,6 +730,20 @@ func (q *Queries) GetUserBriefingAnchor(ctx context.Context, id int64) (sql.Null
 	var last_briefing_at sql.NullTime
 	err := row.Scan(&last_briefing_at)
 	return last_briefing_at, err
+}
+
+const getUserCustomizePromptSeen = `-- name: GetUserCustomizePromptSeen :one
+SELECT customize_prompt_seen_at FROM users
+WHERE id = $1
+`
+
+// When the account answered the Customize hint (schema 185);
+// NULL while it has not.
+func (q *Queries) GetUserCustomizePromptSeen(ctx context.Context, id int64) (sql.NullTime, error) {
+	row := q.db.QueryRow(ctx, getUserCustomizePromptSeen, id)
+	var customize_prompt_seen_at sql.NullTime
+	err := row.Scan(&customize_prompt_seen_at)
+	return customize_prompt_seen_at, err
 }
 
 const getUserDraftFitting = `-- name: GetUserDraftFitting :one
@@ -2015,7 +2031,7 @@ func (q *Queries) ListUserWalletHistory(ctx context.Context, userID int64) ([]Wa
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after FROM users
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after, customize_prompt_seen_at FROM users
 ORDER BY id
 `
 
@@ -2037,6 +2053,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.IsDemo,
 			&i.VizPrefs,
 			&i.DeleteAfter,
+			&i.CustomizePromptSeenAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2428,6 +2445,27 @@ type SetUserBriefingAnchorParams struct {
 func (q *Queries) SetUserBriefingAnchor(ctx context.Context, arg SetUserBriefingAnchorParams) error {
 	_, err := q.db.Exec(ctx, setUserBriefingAnchor, arg.LastBriefingAt, arg.ID)
 	return err
+}
+
+const setUserCustomizePromptSeen = `-- name: SetUserCustomizePromptSeen :execrows
+UPDATE users
+SET customize_prompt_seen_at = $1
+WHERE id = $2 AND customize_prompt_seen_at IS NULL
+`
+
+type SetUserCustomizePromptSeenParams struct {
+	CustomizePromptSeenAt sql.NullTime `json:"customize_prompt_seen_at"`
+	ID                    int64        `json:"id"`
+}
+
+// Answers the Customize hint: the first answer sticks, later
+// ones write nothing.
+func (q *Queries) SetUserCustomizePromptSeen(ctx context.Context, arg SetUserCustomizePromptSeenParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserCustomizePromptSeen, arg.CustomizePromptSeenAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setUserHomeLayout = `-- name: SetUserHomeLayout :exec

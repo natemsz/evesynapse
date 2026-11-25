@@ -763,6 +763,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/widget/{key}", app.handleHomeWidget)
 		r.Get("/widgets", app.handleHomeWidgets)
 		r.Post("/layout", app.handleHomeLayout)
+		r.Post("/customize-prompt", app.handleCustomizePrompt)
 		r.Post("/widget-config", app.handleWidgetConfig)
 		r.Post("/briefing/dismiss", app.handleBriefingDismiss)
 		r.Post("/briefing/restore", app.handleBriefingRestore)

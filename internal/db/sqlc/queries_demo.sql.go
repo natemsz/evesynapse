@@ -443,7 +443,7 @@ func (q *Queries) GetDemoLiveFleet(ctx context.Context, ownerID int64) (Op, erro
 
 const getDemoUser = `-- name: GetDemoUser :one
 
-SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after FROM users WHERE is_demo <> 0 ORDER BY id LIMIT 1
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs, delete_after, customize_prompt_seen_at FROM users WHERE is_demo <> 0 ORDER BY id LIMIT 1
 `
 
 // ---------------------------------------------------------------------
@@ -466,6 +466,7 @@ func (q *Queries) GetDemoUser(ctx context.Context) (User, error) {
 		&i.IsDemo,
 		&i.VizPrefs,
 		&i.DeleteAfter,
+		&i.CustomizePromptSeenAt,
 	)
 	return i, err
 }

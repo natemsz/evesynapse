@@ -570,6 +570,10 @@ type homeView struct {
 	HasChars   bool
 	Customize  *customizeView // non-nil in customize mode
 	LoadFailed bool           // character list unreadable
+	// CustomizePrompt is the one-time hint under the Customize
+	// button (home_customize_prompt.go); nil once answered, in
+	// Customize itself, and for the demo account.
+	CustomizePrompt *customizePromptView
 	// BriefingSince is the start of the Briefing's window in this
 	// render (unix seconds; 0 without a Briefing). The page sends it
 	// back with every card it fetches later (pinBriefingSince).
@@ -1259,6 +1263,11 @@ func (app *Application) buildHomeView(ctx context.Context, customize, advance bo
 
 	if customize {
 		view.Customize = buildCustomizeView(layout)
+		// Opening Customize answers the hint: the reader has
+		// found the thing it points at.
+		app.markCustomizePromptSeen(ctx, userID)
+	} else if view.HasChars {
+		view.CustomizePrompt = app.customizePromptFor(ctx, userID)
 	}
 	if !view.HasChars || len(layout) == 0 {
 		return view

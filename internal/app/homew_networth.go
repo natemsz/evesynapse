@@ -40,8 +40,7 @@ type netWorthView struct {
 	*netWorthWidget
 	Lead     wLead
 	Spark    *wChart  // small: the total over the last month
-	Chart    *wChart  // wide, medium, large: wallets and the rest, stacked
-	Line     *wChart  // tall: the total, under the split bar that shows its parts
+	Chart    *wChart  // wide, tall, medium, large: wallets and the rest, stacked, as live drew it
 	Split    *wSegbar // tall: wallets, assets and escrow
 	Tiles    []wTile  // medium, large
 	Ranked   *wRanked // large: by character or by location
@@ -90,13 +89,13 @@ func buildNetWorthWidget(ctx context.Context, app *Application, in *widgetInput)
 	if in.Draws("tall") {
 		var parts []wPart
 		if nw.Wallet != "" {
-			parts = append(parts, wPart{Name: "Wallets", Slot: 1, Value: nw.walletNow, Text: iskCompact(nw.walletNow), Full: nw.Wallet})
+			parts = append(parts, wPart{Name: "Wallets", Slot: 1, Value: nw.walletNow, Text: nw.Wallet, Full: nw.Wallet})
 		}
 		if nw.AssetsKnown {
-			parts = append(parts, wPart{Name: "Assets", Slot: 2, Value: assets, Text: iskCompact(assets), Full: nw.Assets})
+			parts = append(parts, wPart{Name: "Assets", Slot: 2, Value: assets, Text: nw.Assets, Full: nw.Assets})
 		}
 		if nw.Escrow != "" {
-			parts = append(parts, wPart{Name: "Order escrow", Slot: 3, Value: nw.escrowNow, Text: iskCompact(nw.escrowNow), Full: nw.Escrow})
+			parts = append(parts, wPart{Name: "Order escrow", Slot: 3, Value: nw.escrowNow, Text: nw.Escrow, Full: nw.Escrow})
 		}
 		v.Split, _ = wSegments("How the total splits", parts)
 	}
@@ -137,14 +136,7 @@ func buildNetWorthWidget(ctx context.Context, app *Application, in *widgetInput)
 		if span == 365 {
 			v.Range = "a year"
 		}
-		if in.Draws("tall") {
-			days := make([]wDay, len(hist))
-			for i, d := range hist {
-				days[i] = wDay{At: d.At, Values: []float64{d.Total()}}
-			}
-			v.Line, _ = wLineChart("Net worth over "+v.Range, "Total", 1, days)
-		}
-		if in.Draws("wide") || in.Draws("medium") || in.Draws("large") {
+		if in.Draws("wide") || in.Draws("tall") || in.Draws("medium") || in.Draws("large") {
 			days := make([]wDay, len(hist))
 			for i, d := range hist {
 				days[i] = wDay{At: d.At, Values: []float64{d.ISK, d.Assets}}

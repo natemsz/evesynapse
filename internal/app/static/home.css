@@ -157,11 +157,13 @@
   --w-s2: #e05a14;
   --w-s3: #a8609e;
   --w-s4: #c98500;
+  --w-s5: #199e70; /* aqua: the fifth slot, validated with the four above on the dark card surface */
 }
 .w-card .w-s1 { --w-c: var(--w-s1); }
 .w-card .w-s2 { --w-c: var(--w-s2); }
 .w-card .w-s3 { --w-c: var(--w-s3); }
 .w-card .w-s4 { --w-c: var(--w-s4); }
+.w-card .w-s5 { --w-c: var(--w-s5); }
 
 /* The body: a column of parts. */
 .w-card > .card-body:has(> .w-body) { display: flex; flex-direction: column; min-height: 0; }
@@ -474,8 +476,9 @@
 .wf-splits { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .wf-splits > .w-aside { flex: 1 1 12rem; }
 .wf-splits .w-segkeys { display: flex; flex-direction: column; gap: 0.1rem; }
-.wf-splits .w-segkeys > li { grid-template-columns: auto minmax(0, 1fr) auto; }
-.wf-splits .w-segval { grid-column: 3; font-size: var(--fs-xs); }
+.wf-splits .w-segkeys > li { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.w-segshare { grid-column: 3; font-size: var(--fs-xs); color: var(--text); font-variant-numeric: tabular-nums; text-align: right; min-width: 3.2em; }
+.wf-splits .w-segval { grid-column: 4; font-size: var(--fs-xs); }
 /* The large form's sources and sinks, side by side. */
 .wf-ranks { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .wf-ranks > .w-aside { flex: 1 1 14rem; }

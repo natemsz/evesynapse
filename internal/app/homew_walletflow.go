@@ -67,8 +67,8 @@ type flowMeter struct {
 }
 
 // flowSplitParts is how many kinds a split names before the rest
-// fold into Other: four key lines fit beside the chart.
-const flowSplitParts = 3
+// fold into Other: five, as live listed them, each with its share.
+const flowSplitParts = 5
 
 func buildWalletFlowWidget(ctx context.Context, app *Application, in *widgetInput) any {
 	f := app.buildWalletFlow(in.Bundles)

@@ -29,7 +29,7 @@
 }
 /* On a phone the tab names drop their qualifiers to stay one row. */
 @container page (max-width: 34rem) { .fo-long { display: none; } }
-.fo-cnt { display: inline-block; min-width: 1.4em; margin-left: 0.35rem; padding: 0 0.35em; border-radius: 999px; background: var(--hairline); color: var(--text); font-family: var(--font-num); font-size: var(--fs-2xs); text-align: center; }
+.fo-cnt { display: inline-block; min-width: 1.4em; margin-left: 0.35rem; padding: 0 0.35em; border-radius: var(--r-xs); background: var(--hairline); color: var(--text); font-family: var(--font-num); font-size: var(--fs-2xs); text-align: center; }
 .fo-cnt.bad { background: color-mix(in srgb, var(--danger) 30%, transparent); color: var(--text-bright); }
 .fo-h { margin: 0 0 var(--space-3); color: var(--gold); }
 .fo-tabs > [role="tabpanel"] + [role="tabpanel"] { margin-top: var(--space-5); }
@@ -116,7 +116,7 @@ tbody tr.order-beaten { --row-edge: var(--danger); --row-edge-w: 3px; }
 /* Filter chips: the contract types, then whose contract it is. */
 .ct-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); }
 .ct-chips-gap { width: 1px; height: 1.4rem; margin: 0 var(--space-1); background: var(--hairline); }
-.ct-chip { display: inline-flex; align-items: center; min-height: 2rem; padding: 0 0.75rem; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); text-decoration: none; }
+.ct-chip { display: inline-flex; align-items: center; min-height: 2rem; padding: 0 0.75rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); color: var(--muted); text-decoration: none; }
 .ct-chip:hover { color: var(--text); background: var(--row-hover); text-decoration: none; }
 .ct-chip.on { border-color: var(--sel-edge); background: var(--sel-bg); color: var(--text-bright); }
 

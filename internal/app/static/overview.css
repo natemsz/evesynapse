@@ -29,7 +29,7 @@
 
 /* ---- Trained banner ---- */
 .ov-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; margin-bottom: 1rem; padding: 0.6rem 0.8rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: color-mix(in srgb, var(--kept) 14%, transparent); }
-.ov-bchip { padding: 0.18rem 0.55rem; border-radius: 999px; background: var(--kept); color: #0b1206; font-weight: 700; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; }
+.ov-bchip { padding: 0.18rem 0.55rem; border-radius: var(--r-xs); background: var(--kept); color: #0b1206; font-weight: 700; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; }
 .ov-bitem { font-size: var(--fs-sm); }
 .ov-bitem .lv { color: var(--gold); }
 .ov-bitem .when { color: var(--muted); font-size: var(--fs-xs); }
@@ -53,7 +53,7 @@
 .ov-entity { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.65rem; border-bottom: 1px solid color-mix(in srgb, var(--box-edge) 65%, transparent); }
 .ov-portrait, .ov-ship-art { position: relative; flex: 0 0 56px; width: 56px; height: 56px; }
 .ov-portrait img, .ov-ship-art img { display: block; width: 56px; height: 56px; border-radius: var(--r-sm); background: var(--input-bg); border: 1px solid var(--box-edge); object-fit: cover; }
-.ov-secchip { position: absolute; left: 50%; bottom: -0.35rem; transform: translateX(-50%); padding: 0.02rem 0.35rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--box-edge); color: var(--text); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.1; z-index: 1; }
+.ov-secchip { position: absolute; left: 50%; bottom: -0.35rem; transform: translateX(-50%); padding: 0.02rem 0.35rem; border-radius: var(--r-xs); background: var(--glass); border: 1px solid var(--box-edge); color: var(--text); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.1; z-index: 1; }
 .ov-entity-main { min-width: 0; flex: 1 1 auto; }
 /* The pilot's name leads its card. The ship line and the soonest
    extractor expiry are plain data at the size of the card rows; the
@@ -84,7 +84,7 @@
 .ov-pisub { color: var(--muted); font-size: var(--fs-xs); line-height: 1.45; }
 .ov-pisub .bad, .ov-table .bad { color: var(--danger); }
 .ov-pipills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
-.ov-pipill { padding: 0.12rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; }
+.ov-pipill { padding: 0.12rem 0.45rem; border: 1px solid var(--box-edge); border-radius: var(--r-xs); }
 .ov-pipill.expired { border-color: var(--danger); color: var(--danger); }
 .ov-pipill.soon { border-color: var(--gold); color: var(--gold); }
 
@@ -212,7 +212,7 @@
 }
 .ov-lvl.zero { color: var(--muted); }
 .ov-table .ov-nm { font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 400; }
-.ov-tag { margin-left: 0.45rem; padding: 0.05rem 0.4rem; border-radius: 999px; }
+.ov-tag { margin-left: 0.45rem; padding: 0.05rem 0.4rem; border-radius: var(--r-xs); }
 .ov-tag.mastered { background: color-mix(in srgb, var(--kept) 14%, transparent); color: var(--kept); border: 1px solid var(--kept); }
 .ov-tag.untrained { color: var(--muted); border: 1px solid var(--box-edge); }
 .ov-pips { display: inline-flex; gap: 0.18rem; }

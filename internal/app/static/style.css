@@ -1823,7 +1823,7 @@ h4, h5, .box-title, .km-h, .bt-h, .cs-dhead-t, .jb-h, .sov-h3, .wl-h, .lp-h, .ib
   letter-spacing: 0.06em;
   color: var(--muted-2);
 }
-.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; }
+.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: var(--r-sm); padding: 0.15rem 0.7rem; cursor: pointer; }
 .chip.on { border-color: var(--accent); color: var(--accent); }
 .relink { color: var(--danger); }
 .attention { list-style: none; margin: 0; padding: 0; }
@@ -2352,7 +2352,7 @@ ul.brief-cards::-webkit-scrollbar { display: none; }
 @media (prefers-reduced-motion: reduce) { ul.brief-cards { scroll-behavior: auto; } }
 .brief-page-btn {
   position: absolute; top: 50%; transform: translateY(-50%); z-index: 4;
-  width: 2rem; height: 2rem; border-radius: 999px; cursor: pointer;
+  width: 2rem; height: 2rem; border-radius: var(--r-sm); cursor: pointer;
   border: 1px solid var(--box-edge); background: var(--panel); color: var(--text-bright);
   font-size: var(--fs-2xl); line-height: 1; display: grid; place-items: center;
 }
@@ -2459,7 +2459,7 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
 .brief-deck.brief-off { display: none; }
 .brief-deck.has-flip .brief-flip-card { padding-bottom: 2.15rem; }
 .brief-deck.noanim .brief-flip-card { transition: none; }
-.brief-more-btn { position: absolute; right: 0.6rem; bottom: 0.55rem; z-index: 1; display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.22rem 0.6rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.16); background: color-mix(in srgb, var(--brief-tint, var(--panel)) 30%, rgba(10, 14, 20, 0.35)); color: var(--text); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.brief-more-btn { position: absolute; right: 0.6rem; bottom: 0.55rem; z-index: 1; display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.22rem 0.6rem; border-radius: var(--r-sm); border: 1px solid rgba(255, 255, 255, 0.16); background: color-mix(in srgb, var(--brief-tint, var(--panel)) 30%, rgba(10, 14, 20, 0.35)); color: var(--text); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
 .brief-more-btn:hover, .brief-more-btn:focus-visible { border-color: var(--accent); color: var(--text-bright); }
 .brief-more-btn .brief-arrow { transition: transform 160ms ease; }
 .brief-more-btn:hover .brief-arrow { transform: translateX(2px); }
@@ -2470,7 +2470,7 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
 .brief-card-link { display: inline-flex; align-items: center; gap: 0.5rem; }
 .brief-deck .brief-head { margin-bottom: 0.15rem; }
 .brief-stack-title { font-family: var(--font-display); font-size: var(--fs-3xl); font-weight: 700; line-height: 1.05; letter-spacing: 0.01em; }
-.brief-deck .brief-count { border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px; padding: 0.08rem 0.45rem; }
+.brief-deck .brief-count { border: 1px solid rgba(255, 255, 255, 0.14); border-radius: var(--r-xs); padding: 0.08rem 0.45rem; }
 .brief-row { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.55rem 0; border-top: 1px solid color-mix(in srgb, var(--brief-tint, transparent) 30%, rgba(255, 255, 255, 0.05)); }
 .brief-cards .brief-row:first-of-type { border-top: none; }
 .brief-row-main { flex: 1 1 auto; min-width: 0; }
@@ -4944,7 +4944,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-tip-x:hover { color: var(--text); }
 .fit-tip-states { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.4rem; }
 .fit-tip-state {
-  background: #1c1c1c; border: 1px solid #3a3a3a; border-radius: 999px;
+  background: #1c1c1c; border: 1px solid #3a3a3a; border-radius: var(--r-xs);
   color: var(--text); font: inherit; font-size: var(--fs-xs); line-height: 1;
   padding: 0.25rem 0.7rem; cursor: pointer;
 }
@@ -4964,13 +4964,13 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   max-width: 18rem;
   padding: 0.2rem 0.7rem 0.2rem 0.2rem;
   border: 2px solid #ffb84d;
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: rgba(10, 10, 10, 0.92);
   box-shadow: 0 0 16px rgba(255, 106, 26, 0.7);
   pointer-events: none;
   color: var(--text);
 }
-.fit-drag-ghost img { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+.fit-drag-ghost img { width: 40px; height: 40px; border-radius: var(--r-xs); flex: none; }
 .fit-ghost-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .fit-ghost-name { font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fit-ghost-cost { font-family: var(--font-num); font-size: var(--fs-xs); color: var(--muted); }
@@ -5034,7 +5034,7 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
 .fit-famchips button {
   background: #141414;
   border: 1px solid #2c2c2c;
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   color: var(--muted);
   cursor: pointer;
   font: inherit;
@@ -5745,7 +5745,7 @@ html[data-theme="light"] tr.asset-inside table { border-left-color: #d8cdb8; }
   box-sizing: border-box;
   min-width: 1rem;
   padding: 0 0.2rem;
-  border-radius: 999px;
+  border-radius: var(--r-xs);
   background: var(--v-bad-deep, #d63c14);
   color: #fff;
   font-size: var(--fs-2xs);
@@ -6149,7 +6149,7 @@ table.notify-settings.cards-on td:has(> .checkselector) { grid-column: 1 / -1; }
   margin: 0;
   padding: 0.2rem 0.65rem;
   border: 1px solid #2a2a2a;
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: var(--input-bg);
   cursor: pointer;
 }
@@ -6927,7 +6927,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 
 /* Pill tabs: a row of divisions with counts. */
 .pilltabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); text-decoration: none; }
+.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--muted); text-decoration: none; }
 .pilltab:hover { color: var(--text); }
 .pilltab.on { background: var(--glass); border-color: var(--accent); color: var(--text-bright); }
 .pilltab .cnt { font-weight: var(--fw-display); opacity: 0.75; }
@@ -6936,7 +6936,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
    delete, plus the save form that names the current view. */
 .fchips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
 
-.fchip { padding: 0.3rem 0.65rem; border: 1px solid var(--box-edge); border-radius: 999px; background: none; color: var(--text); text-decoration: none; cursor: pointer; }
+.fchip { padding: 0.3rem 0.65rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: none; color: var(--text); text-decoration: none; cursor: pointer; }
 .fchip.on { border-color: var(--accent); color: var(--text); background: var(--glass); }
 .fchip.save { border-style: dashed; color: var(--muted); }
 .fchip-wrap { display: inline-flex; align-items: center; gap: 0.1rem; }

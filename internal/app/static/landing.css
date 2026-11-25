@@ -87,7 +87,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
    it under the Tools button on open), never nested in the
    bar, so the bar's own backdrop-filter cannot take the
    panel's backdrop down with it. */
-.ld-menu { position: fixed; top: 0; left: 0; z-index: 50; display: grid; grid-template-columns: repeat(4, minmax(148px, 1fr)); gap: 20px 28px; width: min(880px, calc(100% - 24px)); overflow-y: auto; overscroll-behavior: contain; padding: 22px 24px 24px; border-radius: 14px; isolation: isolate; background: rgb(8 13 22 / 0.48); backdrop-filter: blur(30px) saturate(1.45); -webkit-backdrop-filter: blur(30px) saturate(1.45); border: 1px solid rgba(255, 106, 0, 0.16); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
+.ld-menu { position: fixed; top: 0; left: 0; z-index: 50; display: grid; grid-template-columns: repeat(4, minmax(148px, 1fr)); gap: 20px 28px; width: min(880px, calc(100% - 24px)); overflow-y: auto; overscroll-behavior: contain; padding: 22px 24px 24px; border-radius: var(--r-md); isolation: isolate; background: rgb(8 13 22 / 0.48); backdrop-filter: blur(30px) saturate(1.45); -webkit-backdrop-filter: blur(30px) saturate(1.45); border: 1px solid rgba(255, 106, 0, 0.16); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
 .ld-menu[hidden] { display: none; }
 .ld-menu::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0; background: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0) 46%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18); }
 .ld-menu > * { position: relative; z-index: 1; }
@@ -105,7 +105,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-blk, .ld-feat { scroll-margin-top: 92px; }
 .ld-hsp { flex: 1; }
 
-.ld-btn { display: inline-block; padding: 9px 18px; border-radius: 9px; font-family: Rajdhani, sans-serif; font-weight: 500; font-size: var(--fs-md); text-decoration: none; border: 1px solid transparent; cursor: pointer; white-space: nowrap; flex: none; }
+.ld-btn { display: inline-block; padding: 9px 18px; border-radius: var(--r-sm); font-family: Rajdhani, sans-serif; font-weight: 500; font-size: var(--fs-md); text-decoration: none; border: 1px solid transparent; cursor: pointer; white-space: nowrap; flex: none; }
 .ld-btn-ember { background: #f25f00; color: #fff; }
 .ld-btn-ember:hover { background: #ff7d1f; }
 .ld-btn-ghost { background: rgba(19, 14, 10, 0.5); color: var(--text); border-color: rgba(255, 255, 255, 0.07); }
@@ -144,7 +144,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-ctas { display: flex; gap: 14px; margin: 28px 0 12px; flex-wrap: wrap; }
 .ld-cta-note { color: #cdbca6; font-size: var(--fs-sm); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9); }
 
-.ld-glass { background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); border: 1px solid rgba(255, 106, 0, 0.16); border-radius: 14px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45); }
+.ld-glass { background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); border: 1px solid rgba(255, 106, 0, 0.16); border-radius: var(--r-lg); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45); }
 
 .ld-preview { padding: 20px 22px; }
 .ld-pv-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -160,11 +160,11 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
    Inside the landing preview the design's flat values win: no
    nested glass, no nested blur, the design's tile geometry. */
 .ld-preview .kpis { grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 0; background: none; border: none; border-radius: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.ld-preview .kpi { background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 11px; padding: 13px 14px; }
+.ld-preview .kpi { background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: var(--r-md); padding: 13px 14px; }
 .ld-preview .kpi-k { color: var(--faint, #8a7a66); font-size: var(--fs-xs); letter-spacing: 0.14em; }
 .ld-preview .kpi-v { font-family: Rajdhani, sans-serif; font-size: var(--fs-4xl); font-weight: 700; }
 .ld-preview .kpi-sub { color: var(--ld-dim); font-size: var(--fs-xs); }
-.ld-preview .brief-card { flex: none; max-width: none; padding: 12px 15px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.07); border-left: 3px solid #ffb35c; border-radius: 11px; font-size: var(--fs-sm); }
+.ld-preview .brief-card { flex: none; max-width: none; padding: 12px 15px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.07); border-left: 3px solid #ffb35c; border-radius: var(--r-md); font-size: var(--fs-sm); }
 .ld-preview .brief-card.sev-critical { border-left-color: #ff5148; }
 .ld-preview .brief-card.sev-info { border-left-color: #57b6ff; }
 
@@ -187,11 +187,11 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
    flat on the sky. The frame says "this is the actual product"
    before a word of caption is read. */
 .ld-shot { margin: 30px 0 0; }
-.ld-browser { max-width: 1050px; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255, 140, 40, 0.4); background: #17100b; box-shadow: 0 40px 90px rgba(0, 0, 0, 0.8), 0 0 70px rgba(255, 110, 0, 0.18); }
+.ld-browser { max-width: 1050px; margin: 0 auto; border-radius: var(--r-lg); overflow: hidden; border: 1px solid rgba(255, 140, 40, 0.4); background: #17100b; box-shadow: 0 40px 90px rgba(0, 0, 0, 0.8), 0 0 70px rgba(255, 110, 0, 0.18); }
 .ld-browser-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
 .ld-dot { width: 11px; height: 11px; border-radius: 50%; background: #3a2c20; flex: none; }
 .ld-dot-on { background: #f97116; }
-.ld-url { margin-left: 10px; background: rgba(255, 255, 255, 0.06); border-radius: 7px; padding: 4px 12px; font-size: var(--fs-xs); color: #cdbca6; }
+.ld-url { margin-left: 10px; background: rgba(255, 255, 255, 0.06); border-radius: var(--r-sm); padding: 4px 12px; font-size: var(--fs-xs); color: #cdbca6; }
 .ld-browser img { display: block; width: 100%; height: auto; }
 .ld-shot figcaption { text-align: center; color: var(--ld-dim); font-size: var(--fs-md); margin-top: 16px; }
 .ld-ctas-center { justify-content: center; }
@@ -214,7 +214,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-scard h3 { font-size: var(--fs-3xl); margin: 6px 0 7px; }
 .ld-scard p { color: var(--ld-dim); font-size: var(--fs-md); }
 .ld-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-.ld-chip { font-family: "JetBrains Mono", monospace; font-size: var(--fs-xs); color: #e8dcc8; background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 20px; padding: 3px 10px; }
+.ld-chip { font-family: "JetBrains Mono", monospace; font-size: var(--fs-xs); color: #e8dcc8; background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: var(--r-xs); padding: 3px 10px; }
 
 /* Alternating feature sections: copy on one side, the product
    (or a panel shaped like it) on the other, swapping sides
@@ -236,12 +236,12 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-cap { color: var(--faint, #8a7a66); font-size: var(--fs-xs); margin-bottom: 12px; }
 .ld-prow { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed rgba(255, 255, 255, 0.06); font-size: var(--fs-md); }
 .ld-prow:last-of-type { border-bottom: none; }
-.ld-tag { display: inline-block; font-size: var(--fs-xs); font-weight: 700; border-radius: 20px; padding: 0 8px; margin-left: 8px; }
+.ld-tag { display: inline-block; font-size: var(--fs-xs); font-weight: 700; border-radius: var(--r-xs); padding: 0 8px; margin-left: 8px; }
 .ld-tag-have { background: rgba(67, 214, 138, 0.14); color: #43d68a; border: 1px solid rgba(67, 214, 138, 0.35); }
 .ld-tag-buy { background: rgba(255, 179, 92, 0.13); color: var(--gold); border: 1px solid rgba(255, 179, 92, 0.35); }
 .ld-ptotal { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.07); font-family: Rajdhani, sans-serif; font-size: var(--fs-lg); flex-wrap: wrap; }
 .ld-ptotal b { color: var(--gold); }
-.ld-sec { display: inline-block; min-width: 30px; text-align: center; padding: 0 6px; border-radius: 20px; font-size: var(--fs-xs); font-weight: 700; background: rgba(63, 212, 192, 0.16); color: #3fd4c0; border: 1px solid rgba(63, 212, 192, 0.4); }
+.ld-sec { display: inline-block; min-width: 30px; text-align: center; padding: 0 6px; border-radius: var(--r-xs); font-size: var(--fs-xs); font-weight: 700; background: rgba(63, 212, 192, 0.16); color: #3fd4c0; border: 1px solid rgba(63, 212, 192, 0.4); }
 
 /* The corporation loop, stacked: doctrines feed fits, fits
    feed replacement, replacement runs beside Discord. */
@@ -297,7 +297,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
    for the whole scroll; back-to-top joins it once the reader is
    deep enough to need it (landing.js toggles its hidden flag). */
 .ld-float { position: fixed; right: 18px; bottom: 18px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 9px; }
-.ld-float .ld-btn { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55); border-radius: 999px; }
+.ld-float .ld-btn { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55); border-radius: var(--r-sm); }
 .ld-topbtn[hidden] { display: none; }
 
 /* Public tools modal: every public tool by category, each a
@@ -307,10 +307,10 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .ld-modal[hidden] { display: none; }
 .ld-modal-backdrop { position: absolute; inset: 0; background: rgba(2, 1, 1, 0.74); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.ld-modal-card { position: relative; width: min(880px, 100%); max-height: 86vh; overflow: auto; border-radius: 20px; padding: 26px 28px 30px; }
+.ld-modal-card { position: relative; width: min(880px, 100%); max-height: 86vh; overflow: auto; border-radius: var(--r-lg); padding: 26px 28px 30px; }
 .ld-modal-card h3 { font-size: var(--fs-4xl); margin: 4px 0 6px; }
 .ld-tm-sub { color: var(--ld-dim); font-size: var(--fs-sm); max-width: 56ch; }
-.ld-modal-x { position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(19, 14, 10, 0.5); color: var(--text); font-size: var(--fs-lg); cursor: pointer; line-height: 1; }
+.ld-modal-x { position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; border-radius: var(--r-sm); border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(19, 14, 10, 0.5); color: var(--text); font-size: var(--fs-lg); cursor: pointer; line-height: 1; }
 .ld-tm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; margin-top: 18px; }
 .ld-tm-group h4 { font-family: Rajdhani, sans-serif; text-transform: uppercase; letter-spacing: 0.08em; font-size: var(--fs-md); margin: 0 0 6px; }
 .ld-tm-group a { display: block; padding: 7px 2px; border-bottom: 1px dashed rgba(255, 255, 255, 0.06); color: var(--text); text-decoration: none; }
@@ -335,14 +335,14 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-gallery.ld-gal-on .ld-gal-track { overflow: visible; transition: transform 0.45s ease; }
 .ld-gal-slide { flex: 0 0 58%; margin: 0; opacity: 0.55; transform: scale(0.84); transition: opacity 0.3s ease, transform 0.3s ease; }
 .ld-gal-slide.is-active { opacity: 1; transform: none; }
-.ld-gal-slide img, .ld-gal-slide video { display: block; width: 100%; height: auto; border-radius: 10px; cursor: pointer; }
+.ld-gal-slide img, .ld-gal-slide video { display: block; width: 100%; height: auto; border-radius: var(--r-md); cursor: pointer; }
 .ld-gallery.ld-gal-on .ld-gal-slide.is-active img, .ld-gallery.ld-gal-on .ld-gal-slide.is-active video { cursor: zoom-in; }
 .ld-gal-cap { color: var(--ld-dim); font-size: var(--fs-sm); text-align: center; margin: 0; padding-top: 12px; }
 .ld-gal-ambient { position: absolute; left: 50%; top: 50%; width: 88%; transform: translate(-50%, -50%); z-index: 0; pointer-events: none; opacity: 0; transition: opacity 0.45s ease; }
 .ld-gal-ambient.is-on { opacity: 0.6; }
 div.ld-gal-ambient > video, div.ld-gal-ambient > img { display: block; width: 100%; height: 100%; object-fit: cover; filter: blur(96px) saturate(1.6) brightness(1.4); }
 .ld-gal-ambient [hidden] { display: none; }
-.ld-gal-modal-ambient { left: 18px; right: 18px; top: 18px; width: auto; transform: none; overflow: hidden; border-radius: 24px; -webkit-mask-image: radial-gradient(ellipse 70% 70% at center, black 45%, transparent 72%); mask-image: radial-gradient(ellipse 70% 70% at center, black 45%, transparent 72%); }
+.ld-gal-modal-ambient { left: 18px; right: 18px; top: 18px; width: auto; transform: none; overflow: hidden; border-radius: var(--r-lg); -webkit-mask-image: radial-gradient(ellipse 70% 70% at center, black 45%, transparent 72%); mask-image: radial-gradient(ellipse 70% 70% at center, black 45%, transparent 72%); }
 .ld-gal-arrow { display: none; position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(19, 14, 10, 0.82); color: var(--text); font-size: var(--fs-2xl); line-height: 1; cursor: pointer; z-index: 2; align-items: center; justify-content: center; padding: 0; }
 .ld-gallery.ld-gal-on .ld-gal-arrow { display: flex; }
 .ld-gal-arrow svg { display: block; }
@@ -353,7 +353,7 @@ div.ld-gal-ambient > video, div.ld-gal-ambient > img { display: block; width: 10
 .ld-gal-mprev { left: 14px; }
 .ld-gal-mnext { right: 14px; }
 .ld-gal-card { position: relative; width: min(1280px, 100%); padding: 18px; }
-.ld-gal-card img, .ld-gal-card video { position: relative; z-index: 1; display: block; width: 100%; height: auto; border-radius: 12px; }
+.ld-gal-card img, .ld-gal-card video { position: relative; z-index: 1; display: block; width: 100%; height: auto; border-radius: var(--r-md); }
 .ld-gal-card [hidden] { display: none; }
 .ld-gal-card .ld-modal-x { background: rgba(19, 14, 10, 0.82); }
 .ld-gal-modal-cap { color: var(--ld-dim); font-size: var(--fs-sm); text-align: center; margin: 12px 0 2px; }

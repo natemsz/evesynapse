@@ -411,7 +411,7 @@ html[data-theme="light"] .btn.btn-quiet {
 .region-pills a {
   font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-xs);
   letter-spacing: 0.09em; text-transform: uppercase; text-decoration: none; white-space: nowrap;
-  color: var(--muted); padding: 0.34rem 0.85rem; border-radius: 999px;
+  color: var(--muted); padding: 0.34rem 0.85rem; border-radius: var(--r-sm);
   background: rgba(23, 17, 13, 0.55); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   transition: filter 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
@@ -966,7 +966,7 @@ html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 .scheme-meta { flex: 1 1 auto; min-width: 0; }
 .scheme-name { font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-lg); letter-spacing: .05em; text-transform: uppercase; }
 .scheme-sub { font-size: var(--fs-xs); opacity: .72; }
-.current-badge { font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-xs); letter-spacing: .12em; text-transform: uppercase; padding: .18rem .5rem; border-radius: 999px; border: 1px solid var(--sch-accent, #ff6a1a); color: var(--sch-hi, #ffd27a); visibility: hidden; }
+.current-badge { font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-xs); letter-spacing: .12em; text-transform: uppercase; padding: .18rem .5rem; border-radius: var(--r-xs); border: 1px solid var(--sch-accent, #ff6a1a); color: var(--sch-hi, #ffd27a); visibility: hidden; }
 .current .current-badge { visibility: visible; }
 .tier-seg { display: inline-flex; border: 1px solid rgba(255,255,255,.16); border-radius: var(--r-sm); overflow: hidden; flex: 0 0 auto; }
 .tier-seg button { appearance: none; border: 0; background: rgba(255,255,255,.04); color: inherit; font: inherit; font-size: var(--fs-xs); padding: .42rem .8rem; cursor: pointer; min-height: 0; text-transform: uppercase; letter-spacing: .06em; }

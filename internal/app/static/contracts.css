@@ -25,7 +25,7 @@
 .cs-hunts-label { color: var(--gold); }
 .cs-hunt {
   display: inline-flex; align-items: center; gap: 0.4rem;
-  border: 1px solid var(--box-edge); border-radius: 999px;
+  border: 1px solid var(--box-edge); border-radius: var(--r-sm);
   padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
   background: var(--row-alt);
   font-family: var(--font-display); font-weight: var(--fw-display);
@@ -194,7 +194,7 @@
 .cs-region-quick { display: inline-flex; gap: 0.35rem; white-space: nowrap; }
 .cs-region-quick button {
   display: inline-flex; align-items: center;
-  border: 1px solid var(--box-edge); border-radius: 999px;
+  border: 1px solid var(--box-edge); border-radius: var(--r-sm);
   padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
   background: var(--row-alt);
   font-family: var(--font-display); font-weight: var(--fw-display);
@@ -207,7 +207,7 @@
 .cs-chip {
   display: inline-flex; align-items: center; gap: 0.15rem;
   border: 1px solid var(--accent); color: var(--accent);
-  border-radius: 999px; padding: 0.08rem 0.35rem 0.08rem 0.65rem;
+  border-radius: var(--r-xs); padding: 0.08rem 0.35rem 0.08rem 0.65rem;
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   font-size: var(--fs-sm);
 }
@@ -236,7 +236,7 @@
 .cs-cap-chips { display: inline-flex; gap: 0.35rem; }
 .cs-cap-chips button {
   border: 1px solid var(--box-edge); background: var(--row-alt);
-  color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer;
+  color: var(--text); border-radius: var(--r-sm); padding: 0.15rem 0.7rem; cursor: pointer;
   font-family: var(--font-display); font-weight: var(--fw-display);
   text-transform: uppercase; letter-spacing: 0.07em; font-size: var(--fs-xs);
 }
@@ -271,7 +271,7 @@
 .cs-tab.on { color: var(--text-bright); border-color: var(--accent); background: var(--row-hover); box-shadow: inset 0 2px 0 var(--accent); }
 .cs-tab.on .cs-chev::after { content: "▴"; color: var(--accent); }
 .cs-count {
-  background: var(--accent); color: #16100b; border-radius: 999px;
+  background: var(--accent); color: #16100b; border-radius: var(--r-xs);
   font-size: var(--fs-xs); font-weight: 700; padding: 0 0.42rem; line-height: 1.35;
 }
 .cs-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 0.9rem; }
@@ -469,7 +469,7 @@
   display: none; position: absolute; bottom: calc(100% + 4px); left: 50%;
   transform: translateX(-50%);
   background: rgba(18, 12, 8, 0.96); color: var(--text-bright);
-  border: 1px solid var(--box-edge); border-radius: 4px;
+  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
   padding: 0.15rem 0.45rem; font-size: var(--fs-2xs); white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); pointer-events: none; z-index: 10;
   font-family: var(--font-body); text-transform: none;
@@ -495,11 +495,9 @@
 /* The count itself prints black on its orange pill; the
    rest of the count line keeps the pill's own color. */
 .cs-count strong { color: #000; }
-/* In the count bar the count rides in its pill at the
-   roomier padding and lighter weight the design calls
-   for, on the squared 8px radius; the spec tabs' count
-   badges keep the shared .cs-count pill above. */
-.cs-countbar .cs-count { padding: 0.25rem 0.52rem; font-weight: 500; border-radius: 8px; }
+/* In the count bar the count rides at roomier padding and
+   lighter weight, matching the shared small radius. */
+.cs-countbar .cs-count { padding: 0.25rem 0.52rem; font-weight: 500; border-radius: var(--r-xs); }
 .cs-counthint { margin: 0; font-size: var(--fs-xs); color: var(--muted); }
 /* The live pill sits beside the count; the hint keeps the far end. */
 .cs-live-pill { margin-right: auto; margin-left: -0.5rem; }
@@ -507,7 +505,7 @@
 .cs-none { margin: 0; padding: 0.7rem 0.85rem 0.6rem; }
 .cs-active { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.7rem 0.85rem 0; }
 .cs-fchip {
-  border: 1px solid var(--glass-edge); border-radius: 999px;
+  border: 1px solid var(--glass-edge); border-radius: var(--r-sm);
   padding: 0.12rem 0.6rem; color: var(--text); text-decoration: none;
   background: var(--glass); font-size: var(--fs-sm);
 }
@@ -567,7 +565,7 @@
   font-family: var(--font-display);
   text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--v-good-ink, #6ee7a8); background: var(--v-good-bg, rgba(6, 40, 24, 0.55));
-  border: 1px solid color-mix(in srgb, var(--v-good, #34d399) 50%, transparent); border-radius: 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--v-good, #34d399) 50%, transparent); border-radius: var(--r-xs);
 }
 .cs-row-title {
   color: var(--text-bright); font-weight: 500; font-size: var(--fs-xs);
@@ -608,7 +606,7 @@
    or the courier's volume and rate. */
 .cs-pill {
   display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;
-  padding: 0.1rem 0.5rem; border-radius: 0.25rem;
+  padding: 0.1rem 0.5rem; border-radius: var(--r-xs);
 }
 .cs-pill.ab { background: color-mix(in srgb, var(--v-info, #22d3ee) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--v-info, #22d3ee) 35%, transparent); color: var(--v-info-ink, #a5f3fc); }
 .cs-pill.bp { background: color-mix(in srgb, var(--v-warn, #f59e0b) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--v-warn, #f59e0b) 35%, transparent); color: var(--v-warn, #fcd34d); }
@@ -690,7 +688,7 @@
 }
 .cs-aline-l { min-width: 0; }
 .cs-gchip {
-  padding: 0.1rem 0.4rem; font-size: var(--fs-2xs); border-radius: 0.25rem;
+  padding: 0.1rem 0.4rem; font-size: var(--fs-2xs); border-radius: var(--r-xs);
   background: rgba(255, 240, 220, 0.09); color: #d8c6b2;
 }
 .cs-aq { color: #ff882e; }

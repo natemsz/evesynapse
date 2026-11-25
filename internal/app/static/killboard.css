@@ -37,7 +37,7 @@
   margin: 0;
   padding: 0.3rem 0.4rem 0.3rem 0.7rem;
   border: 1px solid var(--accent);
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .kb-scope-k { color: var(--muted-2); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -47,7 +47,7 @@
   place-items: center;
   width: 1.5rem;
   height: 1.5rem;
-  border-radius: 50%;
+  border-radius: var(--r-xs);
   color: var(--muted-2);
   text-decoration: none;
   font-size: var(--fs-xl);
@@ -60,7 +60,7 @@
   flex: none;
   padding: 0.3rem 0.75rem;
   border: 1px solid var(--hairline);
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: var(--surface-inset);
   color: var(--muted-2);
   text-decoration: none;

@@ -14,7 +14,7 @@
 /* State chips: active and established read as live (accent),
    pending and mobilizing as rising (gold), ended and withdrawing as
    done (muted). */
-.iw-state { display: inline-block; padding: 0.1rem 0.55rem; border: 1px solid currentColor; border-radius: 999px; white-space: nowrap; color: var(--muted); }
+.iw-state { display: inline-block; padding: 0.1rem 0.55rem; border: 1px solid currentColor; border-radius: var(--r-xs); white-space: nowrap; color: var(--muted); }
 .iw-active, .iw-established { color: var(--accent); }
 .iw-pending, .iw-mobilizing { color: var(--gold); }
 .iw-ended, .iw-withdrawing { color: var(--muted); }
@@ -71,7 +71,7 @@
 .iw-boss { color: var(--gold); font-weight: 600; }
 .iw-inc .iw-dim { margin: 0; }
 .iw-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.35rem 0 0; padding: 0; list-style: none; }
-.iw-chips li { padding: 0.1rem 0.5rem; border: 1px solid var(--hairline); border-radius: 999px; font-size: var(--fs-md); }
+.iw-chips li { padding: 0.1rem 0.5rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); font-size: var(--fs-md); }
 
 /* Militias: the systems held lead, large, over the share meter. */
 .iw-fac-held { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 0.2rem var(--space-2); }

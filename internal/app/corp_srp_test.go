@@ -385,6 +385,9 @@ func TestSRPClaimNeedsTheFleetAndPaysALossOnce(t *testing.T) {
 // shows the pilot their own claim, and tells a member who may not
 // handle claims nothing of it.
 func TestHomeSRPWidgetReviewQueueOnlyForHandlers(t *testing.T) {
+	if !moduleCompiledIn("srp") {
+		t.Skip("the Ship Replacement widget needs the srp module, which this build leaves out")
+	}
 	f := newSRPFixture(t)
 	f.post(f.pilot, "/srp/request", url.Values{"loss": {f.claim(srpLossOnOp)}})
 	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE users SET home_layout = '[{"id":"srp","w":2,"h":2}]'`); err != nil {

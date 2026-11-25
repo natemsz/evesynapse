@@ -250,7 +250,7 @@ func selectedPlaystyles(activities []string) []string {
 func presetWithHead(body []homeLayoutItem) []homeLayoutItem {
 	items := make([]homeLayoutItem, 0, len(homePresetHead)+len(body))
 	items = append(items, homePresetHead...)
-	items = append(items, body...)
+	items = append(items, presetBody(body)...)
 	return normalizePreset(items)
 }
 
@@ -259,8 +259,26 @@ func presetWithHead(body []homeLayoutItem) []homeLayoutItem {
 func presetWithDemoHead(body []homeLayoutItem) []homeLayoutItem {
 	items := make([]homeLayoutItem, 0, len(demoPresetHead)+len(body))
 	items = append(items, demoPresetHead...)
-	items = append(items, body...)
+	items = append(items, presetBody(body)...)
 	return normalizePreset(items)
+}
+
+// presetBody is a preset body for this build: as written when every
+// widget in it is built in. A build without some of them (a module left
+// out) would leave holes in the hand-tiled body, so the widgets it has
+// are packed into whole bands two rows tall instead, as a blend is,
+// each near its written width.
+func presetBody(body []homeLayoutItem) []homeLayoutItem {
+	kept := make([]homeLayoutItem, 0, len(body))
+	for _, item := range body {
+		if _, ok := widgetDefFor(item.ID); ok {
+			kept = append(kept, homeLayoutItem{ID: item.ID, W: item.W, H: 2})
+		}
+	}
+	if len(kept) == len(body) {
+		return body
+	}
+	return packBlendBands(kept)
 }
 
 // normalizePreset clamps every size to its widget's bounds and drops

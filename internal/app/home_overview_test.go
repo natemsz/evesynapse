@@ -187,12 +187,15 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 		"Estimate as of",
 	)
 
-	// Industry + market cards.
-	mustContain(t, "/", body,
-		"Industry", "Ready to deliver", "1 running",
-		"Market", `title="2 open orders"`,
-		"3,000,000.00", // sell 3 × 1,000,000
-	)
+	// Industry card, and the market card where the market module is
+	// built in.
+	mustContain(t, "/", body, "Industry", "Ready to deliver", "1 running")
+	if moduleCompiledIn("market") {
+		mustContain(t, "/", body,
+			"Market", `title="2 open orders"`,
+			"3,000,000.00", // sell 3 × 1,000,000
+		)
+	}
 
 	// The Overview bar's ESI pill, before any status is stored:
 	// a neutral "checking" state, never a player count. The
@@ -282,22 +285,22 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 		t.Error("default home carries a retired or opt-in module")
 	}
 
-	// Toggle Market off: the card disappears, layout persists.
-	if code, _ := post("toggle", widgetMarket); code != http.StatusSeeOther {
+	// Toggle Industry off: the card disappears, layout persists.
+	if code, _ := post("toggle", widgetIndustry); code != http.StatusSeeOther {
 		t.Fatalf("toggle POST: status %d", code)
 	}
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET / after toggle: status %d", code)
 	}
-	for _, gone := range []string{`data-widget="market"`} {
+	for _, gone := range []string{`data-widget="industry"`} {
 		if strings.Contains(body, gone) {
-			t.Errorf("market widget still rendered after toggle off (body has %q)", gone)
+			t.Errorf("industry widget still rendered after toggle off (body has %q)", gone)
 		}
 	}
 	mustContain(t, "/", body, "Fleet Overview", "Net Worth")
-	if got := saved(); !strings.Contains(got, `"fleet"`) || strings.Contains(got, `"market"`) {
-		t.Errorf("persisted layout %q: want fleet without market", got)
+	if got := saved(); !strings.Contains(got, `"fleet"`) || strings.Contains(got, `"industry"`) {
+		t.Errorf("persisted layout %q: want fleet without industry", got)
 	}
 
 	// Move Net Worth above Planetary Industry: order flips on the page.
@@ -324,7 +327,7 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 		`name="widget" value="watchlist"`, ">Add<", "Move up",
 	)
 
-	// Reset restores the default set (market back).
+	// Reset restores the default set (industry back).
 	if code, _ := post("reset", ""); code != http.StatusSeeOther {
 		t.Fatalf("reset POST: status %d", code)
 	}
@@ -332,7 +335,7 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET / after reset: status %d", code)
 	}
-	mustContain(t, "/", body, `data-widget="market"`, "Fleet Overview")
+	mustContain(t, "/", body, `data-widget="industry"`, "Fleet Overview")
 
 	// A corrupted layout (unknown ids, dupes) is normalized on
 	// load: only the real widget renders.
@@ -346,7 +349,7 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 		t.Fatalf("GET / with bad layout: status %d", code)
 	}
 	mustContain(t, "/", body, "Fleet Overview")
-	if strings.Contains(body, `data-widget="market"`) || strings.Contains(body, `data-widget="networth"`) {
+	if strings.Contains(body, `data-widget="industry"`) || strings.Contains(body, `data-widget="networth"`) {
 		t.Error("corrupted layout rendered widgets that were not in it")
 	}
 
@@ -404,9 +407,9 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 		return raw
 	}
 
-	// Drag order: Market above Fleet, as one XHR save.
+	// Drag order: Industry above Fleet, as one XHR save.
 	code, body := doLayoutPost(t, app, url.Values{
-		"action": {"order"}, "ids": {"market,fleet,pi"},
+		"action": {"order"}, "ids": {"industry,fleet,pi"},
 	}, cookie, true)
 	if code != http.StatusOK {
 		t.Fatalf("XHR order POST: status %d, want 200 (body %q)", code, body)
@@ -415,17 +418,17 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 		t.Fatalf("XHR order POST body = %q, want {\"ok\":true}", body)
 	}
 	// The default layout's sizes travel with each module.
-	if got := saved(); got != `[{"id":"market","w":1,"h":1},{"id":"fleet","w":3,"h":2},{"id":"pi","w":1,"h":2}]` {
+	if got := saved(); got != `[{"id":"industry","w":2,"h":1},{"id":"fleet","w":3,"h":2},{"id":"pi","w":1,"h":2}]` {
 		t.Fatalf("saved layout = %q, want dragged order", got)
 	}
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mAt := strings.Index(body, `data-widget="market"`)
+	iAt := strings.Index(body, `data-widget="industry"`)
 	fAt := strings.Index(body, `data-widget="fleet"`)
-	if mAt < 0 || fAt < 0 || mAt > fAt {
-		t.Errorf("market should render above fleet after drag (market=%d fleet=%d)", mAt, fAt)
+	if iAt < 0 || fAt < 0 || iAt > fAt {
+		t.Errorf("industry should render above fleet after drag (industry=%d fleet=%d)", iAt, fAt)
 	}
 
 	// Unknown + duplicate ids normalize away; order survives.
@@ -494,7 +497,7 @@ func TestHomeLayoutToggleRoundTrips(t *testing.T) {
 	// …but it is offered in the add-module pop-up.
 	mustContain(t, "/?customize=1 (after remove)", body, `data-add-widget="networth"`)
 
-	// Add Market Watchlist from the catalog: appended after the survivors.
+	// Add Watchlist from the catalog: appended after the survivors.
 	code, _ = doLayoutPost(t, app, url.Values{
 		"action": {"toggle"}, "widget": {widgetWatchlist},
 	}, cookie, true)
@@ -505,13 +508,13 @@ func TestHomeLayoutToggleRoundTrips(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	skAt := strings.Index(body, `data-widget="watchlist"`)
-	mkAt := strings.Index(body, `data-widget="market"`)
-	if skAt < 0 {
+	wlAt := strings.Index(body, `data-widget="watchlist"`)
+	inAt := strings.Index(body, `data-widget="industry"`)
+	if wlAt < 0 {
 		t.Fatal("watchlist card missing after add-from-catalog")
 	}
-	if mkAt < 0 || skAt < mkAt {
-		t.Errorf("added module should append at the end (watchlist=%d market=%d)", skAt, mkAt)
+	if inAt < 0 || wlAt < inAt {
+		t.Errorf("added module should append at the end (watchlist=%d industry=%d)", wlAt, inAt)
 	}
 
 	if got := transport.calls.Load(); got != 0 {
@@ -598,7 +601,7 @@ func TestHomeLayoutPlaystylePresets(t *testing.T) {
 	// renders only when it has items, so a bare account's render
 	// starts at At a Glance; the tiling test pins the head itself.
 	_, cookie := newAccount(90000101, `{"activities":["market"]}`)
-	wantMarket := []string{"glance", "fleet", "tradeideas", "watchlist", "profitpulse", "walletflow", "networth", "market", "movers", "lp"}
+	wantMarket := builtInWidgets("glance", "fleet", "tradeideas", "watchlist", "profitpulse", "walletflow", "networth", "market", "movers", "lp")
 	if got := homeIDs(cookie); strings.Join(got, ",") != strings.Join(wantMarket, ",") {
 		t.Errorf("market preset = %v, want %v", got, wantMarket)
 	}
@@ -638,7 +641,7 @@ func TestHomeLayoutPlaystylePresets(t *testing.T) {
 	// ahead of the single-playstyle specialists.
 	_, blendCookie := newAccount(90000104, `{"activities":["industry","corporation"]}`)
 	blend := homeIDs(blendCookie)
-	for _, specialist := range []string{"prodline", "pulse", "upkeep"} {
+	for _, specialist := range builtInWidgets("prodline", "pulse", "upkeep") {
 		if indexOfWidget(blend, specialist) < 0 {
 			t.Errorf("blend %v is missing specialist %q", blend, specialist)
 		}
@@ -653,7 +656,7 @@ func TestHomeLayoutPlaystylePresets(t *testing.T) {
 	// only, no upkeep (the seed holds no structures) and no trade
 	// ideas (the seed holds no stored answer).
 	demoIDs := homeIDs(sessionCookie(t, app, demoUser.ID, 90000105, "Fixture Demo"))
-	for _, want := range []string{"glance", "fleet", "walletflow", "networth", "prodline", "pi", "profitpulse", "industry", "market", "training", "watchlist", "pulse"} {
+	for _, want := range builtInWidgets("glance", "fleet", "walletflow", "networth", "prodline", "pi", "profitpulse", "industry", "market", "training", "watchlist", "pulse") {
 		if indexOfWidget(demoIDs, want) < 0 {
 			t.Errorf("demo preset %v is missing %q", demoIDs, want)
 		}
@@ -704,8 +707,8 @@ func TestHomeLayoutSizeOnPreset(t *testing.T) {
 	if !strings.Contains(raw, `{"id":"watchlist","w":1,"h":1}`) {
 		t.Errorf("stored layout = %q, want the committed watchlist 1x1 in it", raw)
 	}
-	if !strings.Contains(raw, `"tradeideas"`) {
-		t.Errorf("stored layout = %q, want the market preset it resized, tradeideas included", raw)
+	if !strings.Contains(raw, `"movers"`) {
+		t.Errorf("stored layout = %q, want the market preset it resized, movers included", raw)
 	}
 	code, page := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
@@ -763,9 +766,10 @@ func layoutTilesGrid(items []homeLayoutItem) bool {
 // TestHomePresetLayoutsTile: every preset, singles, blends, the
 // everything choice and the demo layout, starts with the fixed head
 // at its fixed sizes, stays inside every widget's size bounds, and
-// tiles the grid with no gaps. Single-playstyle specialists stand
-// expanded past their catalog size (Net Worth stands at its
-// default size), and fills stand at catalog size.
+// tiles the grid with no gaps, in any build. Every built-in specialist
+// and fill is present; when the build has the whole body, single-
+// playstyle specialists stand expanded past their catalog size (Net
+// Worth stands at its default size) and fills stand at catalog size.
 func TestHomePresetLayoutsTile(t *testing.T) {
 	activities := []string{"pilots", "market", "industry", "corporation", "fitting"}
 	var choices [][]string
@@ -833,10 +837,22 @@ func TestHomePresetLayoutsTile(t *testing.T) {
 		for _, item := range layout {
 			byID[item.ID] = item
 		}
+		whole := true
+		for _, item := range singlePlaystyleBodies[activity] {
+			if _, ok := widgetDefFor(item.ID); !ok {
+				whole = false
+			}
+		}
 		for _, id := range pw.Specialists {
+			if _, ok := widgetDefFor(id); !ok {
+				continue
+			}
 			item, present := byID[id]
 			if !present {
 				t.Errorf("%s preset is missing specialist %q", activity, id)
+				continue
+			}
+			if !whole {
 				continue
 			}
 			def, _ := widgetDefFor(id)
@@ -849,9 +865,15 @@ func TestHomePresetLayoutsTile(t *testing.T) {
 			}
 		}
 		for _, id := range pw.Fill {
+			if _, ok := widgetDefFor(id); !ok {
+				continue
+			}
 			item, present := byID[id]
 			if !present {
 				t.Errorf("%s preset is missing fill %q", activity, id)
+				continue
+			}
+			if !whole {
 				continue
 			}
 			def, _ := widgetDefFor(id)
@@ -885,7 +907,7 @@ func TestHomeCustomizeSurface(t *testing.T) {
 	mustContain(t, "/?customize=1", body,
 		// Live draggable grid.
 		`id="home-grid"`, `data-customize="1"`, `home-custom`,
-		`data-widget="fleet"`, `data-widget="market"`,
+		`data-widget="fleet"`, `data-widget="networth"`,
 		// The Customize menu: Done exits, Add a module, Theme and
 		// Reset live behind one settings button; nothing to save.
 		`aria-label="Customize settings"`, ">Done</a>", `id="add-module-btn"`, ">Add a module</a>",
@@ -1066,4 +1088,16 @@ func layoutIDs(items []homeLayoutItem) []string {
 		ids[i] = item.ID
 	}
 	return ids
+}
+
+// builtInWidgets is ids less the widgets this build leaves out (a
+// module not built in), in order.
+func builtInWidgets(ids ...string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := widgetDefFor(id); ok {
+			out = append(out, id)
+		}
+	}
+	return out
 }

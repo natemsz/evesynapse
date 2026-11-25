@@ -15,6 +15,12 @@ func init() {
 	for i, t := range glanceTiles {
 		choices[i] = t.ID + ":" + t.Label
 	}
+	figures := optMulti("figures", "Figures", glanceDefault, glanceMax, choices...)
+	for _, t := range glanceTiles {
+		if t.Requires != "" {
+			figures = choiceRequires(figures, t.ID, t.Requires)
+		}
+	}
 	registerHomeWidget(homeWidgetDef{
 		ID: widgetGlance, Title: "At a Glance", Category: wcatOverview, Feature: "networth",
 		Href:        "/characters/",
@@ -24,12 +30,12 @@ func init() {
 			{Name: "small", Sizes: "1x1", Says: "Your first figure, its 7-day change and a 30-day line."},
 			{Name: "wide", Sizes: "2x1 3x1", Says: "Your figures as tiles in one row, as many as fit."},
 			{Name: "tall", Sizes: "1x2 1x3", Says: "Your figures as tiles, one per row."},
-			{Name: "medium", Sizes: "2x2", Says: "Four figures, each with its line or meter."},
-			{Name: "large", Sizes: "3x2", Says: "Six figures, each with its line or meter."},
+			{Name: "medium", Sizes: "2x2", Says: "Your figures in two columns, each with its line or meter."},
+			{Name: "large", Sizes: "3x2", Says: "Your figures in three columns, each with its line or meter."},
 		},
 		Needs: glanceNeeds(),
 		Options: []widgetOption{
-			withHint(optMulti("figures", "Figures", glanceDefault, glanceMax, choices...),
+			withHint(figures,
 				"Pick up to six. They show in this order; the first one leads the smallest size."),
 		},
 		Build: buildGlanceWidget,
@@ -44,12 +50,14 @@ const glanceMax = 6
 
 // glanceTileDef is one figure At a Glance can show: its id (stored in
 // the figures option; never rename one), its label, the snapshot kinds
-// it reads, and how it is built from the render's shared data.
+// it reads, the module it needs (none for core figures), and how it is
+// built from the render's shared data.
 type glanceTileDef struct {
-	ID    string
-	Label string
-	Needs []string
-	Build func(ctx context.Context, g *glanceBuild) glanceTile
+	ID       string
+	Label    string
+	Needs    []string
+	Requires string
+	Build    func(ctx context.Context, g *glanceBuild) glanceTile
 }
 
 // glanceTiles is the tile catalog, in the order the settings sheet
@@ -65,6 +73,10 @@ var glanceTiles = []glanceTileDef{
 	{ID: "undercut", Label: "Orders undercut", Build: glanceUndercut},
 	{ID: "jobs", Label: "Jobs ready", Needs: []string{esi.SnapIndustryJobs}, Build: glanceJobs},
 	{ID: "extractors", Label: "Extractors stopped", Needs: []string{esi.SnapPlanets, needPlanetLayouts}, Build: glanceExtractors},
+	{ID: "mail", Label: "Unread mail", Needs: []string{esi.SnapMailLabels}, Requires: "mail", Build: glanceMail},
+	{ID: "srp", Label: "Ship replacement pending", Requires: "srp", Build: glanceSRP},
+	{ID: "kills", Label: "Kills, 7 days", Build: glanceKills},
+	{ID: "nextfleet", Label: "Next fleet", Build: glanceNextFleet},
 }
 
 // glanceNeeds is the union of every tile's needs: the card reads the
@@ -146,7 +158,7 @@ func buildGlanceWidget(ctx context.Context, app *Application, in *widgetInput) a
 	lines := in.Draws("medium") || in.Draws("large")
 	for _, id := range picks {
 		for _, def := range glanceTiles {
-			if def.ID != id {
+			if def.ID != id || (def.Requires != "" && !moduleCompiledIn(def.Requires)) {
 				continue
 			}
 			t := def.Build(ctx, g)
@@ -491,4 +503,104 @@ func clampPct(p float64) float64 {
 		return 100
 	}
 	return p
+}
+
+// glanceMail is the unread EVE mail across the card's pilots, from the
+// same mail labels snapshot the Mail widget reads.
+func glanceMail(_ context.Context, g *glanceBuild) glanceTile {
+	t := glanceTile{Href: "/mail/"}
+	known := false
+	var unread int64
+	pilots := 0
+	for _, b := range g.in.Bundles {
+		if b.mailLabels == nil {
+			continue
+		}
+		known = true
+		if b.mailLabels.TotalUnreadCount > 0 {
+			unread += b.mailLabels.TotalUnreadCount
+			pilots++
+		}
+	}
+	if !known {
+		return t
+	}
+	t.Value = fmt.Sprint(unread)
+	t.Full = pluralCount(unread, "unread mail", "unread mails")
+	if unread == 0 {
+		t.Sub = "No unread mail"
+		return t
+	}
+	t.Sub = pluralCount(int64(pilots), "pilot has unread mail", "pilots have unread mail")
+	return t
+}
+
+// glanceSRP is what the account's open ship replacement claims would
+// pay, as the Ship Replacement widget's lead counts it.
+func glanceSRP(ctx context.Context, g *glanceBuild) glanceTile {
+	t := glanceTile{Href: srpPath}
+	open, err := g.app.queries.CountOpenSRPRequestsByUser(ctx, g.in.UserID)
+	if err != nil {
+		logging.Errorf("home: open ship replacement claims of user %d: %v", g.in.UserID, err)
+		return t
+	}
+	glanceISK(&t, open.Suggested, esi.FormatISK(open.Suggested))
+	if open.Requests == 0 {
+		t.Sub = "No open claims"
+		return t
+	}
+	t.Sub = pluralCount(open.Requests, "open claim", "open claims")
+	return t
+}
+
+// glanceKills is the card's pilots' kills over the last 7 days, with the
+// ISK efficiency the Kills and Losses widget shows: our own appraisal
+// only.
+func glanceKills(ctx context.Context, g *glanceBuild) glanceTile {
+	t := glanceTile{Href: "/intel/kills/"}
+	ids := make([]int64, 0, len(g.in.Chars))
+	for _, c := range g.in.Chars {
+		ids = append(ids, c.CharacterID)
+	}
+	if len(ids) == 0 {
+		return t
+	}
+	k, _ := g.app.killsWindow(ctx, ids, g.in.Now.UTC(), 7)
+	t.Value = fmt.Sprint(k.Kills)
+	t.Full = fmt.Sprintf("%s and %s in the last 7 days", pluralCount(k.Kills, "kill", "kills"), pluralCount(k.Losses, "loss", "losses"))
+	t.Sub = pluralCount(k.Losses, "loss", "losses")
+	if k.Efficiency != "" {
+		t.Sub += ", " + k.Efficiency + " ISK efficiency"
+		tone := ""
+		if k.Tone() == "bad" {
+			tone = "warn"
+		}
+		t.Meter = &glanceMeter{Pct: clampPct(k.Pct), Label: "ISK efficiency over 7 days", Tone: tone}
+	}
+	if k.Unpriced > 0 {
+		t.Sub += fmt.Sprintf(", %d not valued yet", k.Unpriced)
+	}
+	return t
+}
+
+// glanceNextFleet is the running fleet, else the next one, that the
+// account can open on the Fleets page, from the render's shared fleets.
+func glanceNextFleet(ctx context.Context, g *glanceBuild) glanceTile {
+	t := glanceTile{Href: fleetsPath}
+	for _, f := range g.in.Shared.Fleets(ctx) {
+		if !f.Access.View {
+			continue
+		}
+		row := g.app.homeFleetRowOf(ctx, f, g.in.Now)
+		t.Sub, t.SubHref = row.Title, row.Href
+		if row.Live {
+			t.Value, t.Full = "Now", row.Title+": "+row.Running
+			t.Tone = "ok"
+		} else {
+			t.Value, t.Full = strings.TrimPrefix(row.Left, "in "), row.Title+" starts "+row.Left
+		}
+		return t
+	}
+	t.Value, t.Full, t.Sub = "None", "No fleet running or coming up in the next 7 days", "None in the next 7 days"
+	return t
 }

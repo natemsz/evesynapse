@@ -147,7 +147,22 @@ type widgetOption struct {
 }
 
 // widgetChoice is one value a choice option can take and its label.
-type widgetChoice struct{ Value, Label string }
+// Requires names the module the choice needs; the settings sheet leaves
+// it out when that module is not built in.
+type widgetChoice struct{ Value, Label, Requires string }
+
+// choiceRequires marks the choice v as needing a module.
+func choiceRequires(o widgetOption, v, module string) widgetOption {
+	for i := range o.Choices {
+		if o.Choices[i].Value == v {
+			o.Choices[i].Requires = module
+		}
+	}
+	return o
+}
+
+// builtIn reports whether the choice's module is compiled in.
+func (c widgetChoice) builtIn() bool { return c.Requires == "" || moduleCompiledIn(c.Requires) }
 
 const (
 	optKindScope  = "scope"  // all characters, a tag, or one character: all, tag:<name>, char:<id>

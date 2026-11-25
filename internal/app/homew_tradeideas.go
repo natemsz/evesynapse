@@ -22,6 +22,15 @@ func init() {
 		},
 		Build: func(ctx context.Context, app *Application, in *widgetInput) any {
 			v := &tradeIdeasView{Widget: ideas.Stored(ctx, app.queries, app.cfg.TradeIdeasConfigured())}
+			// The card shows ideas only: a group holding notes alone (the
+			// answer's opening lines) would lead with an empty tab or tile.
+			kept := v.Groups[:0]
+			for _, g := range v.Groups {
+				if len(g.Ideas) > 0 {
+					kept = append(kept, g)
+				}
+			}
+			v.Groups, v.HasIdeas = kept, len(kept) > 0
 			switch {
 			case v.HasIdeas:
 				v.Note = "As of " + v.AsOf + ", " + v.Model + " on the Forge spread scanner."

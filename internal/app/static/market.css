@@ -82,7 +82,7 @@
   min-width: 1.25rem;
   padding: 0 0.35rem;
   margin-left: 0.3rem;
-  border-radius: 999px;
+  border-radius: var(--r-xs);
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--text-bright);
   font-size: var(--fs-2xs);
@@ -649,7 +649,7 @@ td.mt-reqs { max-width: 12rem; }
    modal's switches. Layer colors match the approved mockup. */
 .viz-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin: 0.2rem 0 0.1rem; }
 .viz-head .mt-modes { margin: 0; }
-.viz-gear { display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem; flex: none; border-radius: 999px; border: 1px solid var(--box-edge); background: transparent; color: var(--muted); cursor: pointer; }
+.viz-gear { display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem; flex: none; border-radius: var(--r-sm); border: 1px solid var(--box-edge); background: transparent; color: var(--muted); cursor: pointer; }
 .viz-gear:hover, .viz-gear:focus-visible { color: var(--accent); border-color: var(--accent); }
 .legend-ma20 { height: 2px; background: #8a93a6; }
 .legend-channel { background: color-mix(in srgb, var(--success) 25%, transparent); }
@@ -1027,7 +1027,7 @@ a:hover .pf-hero-gap, a:focus .pf-hero-gap { fill: color-mix(in srgb, var(--unve
 .pf-hero-ends span { position: absolute; right: 4px; transform: translateY(-50%); font-size: var(--fs-xs); line-height: 1; background: color-mix(in srgb, var(--panel) 75%, transparent); padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
 .pf-end-earned { color: var(--accent); }
 .pf-end-nw { color: var(--gold); }
-.pf-hero-chip { position: absolute; right: 0.5rem; bottom: 0.5rem; z-index: 2; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid color-mix(in srgb, var(--unverified) 45%, transparent); border-radius: 999px; padding: 0.18rem 0.6rem; font-size: var(--fs-xs); color: var(--text); text-decoration: none; }
+.pf-hero-chip { position: absolute; right: 0.5rem; bottom: 0.5rem; z-index: 2; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid color-mix(in srgb, var(--unverified) 45%, transparent); border-radius: var(--r-xs); padding: 0.18rem 0.6rem; font-size: var(--fs-xs); color: var(--text); text-decoration: none; }
 .pf-hero-chip:hover, .pf-hero-chip:focus { border-color: var(--unverified); color: var(--text); text-decoration: none; }
 .pf-dim { opacity: 0.22; }
 
@@ -1070,7 +1070,7 @@ a:hover .pf-hero-gap, a:focus .pf-hero-gap { fill: color-mix(in srgb, var(--unve
    the Not explained breakdown. */
 .pf-kpi-gold .kpi-spark-line { stroke: var(--gold); }
 .pf-kpi-gold .kpi-spark-area { fill: color-mix(in srgb, var(--gold) 18%, transparent); }
-.pf-cov-pill { display: inline-block; padding: 0 0.5rem; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--unverified) 45%, transparent); background: color-mix(in srgb, var(--unverified) 16%, transparent); color: var(--unverified); font-size: var(--fs-xs); text-decoration: none; white-space: nowrap; }
+.pf-cov-pill { display: inline-block; padding: 0 0.5rem; border-radius: var(--r-xs); border: 1px solid color-mix(in srgb, var(--unverified) 45%, transparent); background: color-mix(in srgb, var(--unverified) 16%, transparent); color: var(--unverified); font-size: var(--fs-xs); text-decoration: none; white-space: nowrap; }
 .pf-cov-pill:hover, .pf-cov-pill:focus { color: var(--unverified); border-color: var(--unverified); text-decoration: none; }
 .pf-ne-tip { margin: 0.35rem 0 0; }
 .pf-ne-trigger { color: var(--muted); font-size: var(--fs-xs); border-bottom: 1px dotted color-mix(in srgb, var(--muted) 65%, transparent); }

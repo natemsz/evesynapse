@@ -56,7 +56,7 @@
 .sc-bridge i { display: block; width: 100%; height: 0.3rem; border-radius: 0.2rem; background: linear-gradient(90deg, var(--accent), var(--gold), var(--success)); }
 
 .sc-bar { flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); }
-.sc-region { padding: 0.1rem 0.55rem; border: 1px solid var(--sel-edge); border-radius: 999px; background: var(--sel-bg); color: var(--text-bright); font-size: var(--fs-sm); }
+.sc-region { padding: 0.1rem 0.55rem; border: 1px solid var(--sel-edge); border-radius: var(--r-xs); background: var(--sel-bg); color: var(--text-bright); font-size: var(--fs-sm); }
 .sc-meta { flex: 1 1 18rem; min-width: 0; color: var(--muted); font-size: var(--fs-sm); }
 .sc-age { color: var(--muted-2); }
 .sc-csv { margin-left: auto; }

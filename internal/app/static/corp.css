@@ -67,7 +67,7 @@
 .co-struct-id { flex: 1 1 auto; min-width: 0; }
 .co-struct-id h3 { margin: 0; overflow-wrap: anywhere; }
 .co-struct-id p { margin: 0.15rem 0 0; font-size: var(--fs-xs); }
-.co-state { flex: none; padding: 0.1rem 0.5rem; border: 1px solid var(--hairline); border-radius: 999px; color: var(--kept); }
+.co-state { flex: none; padding: 0.1rem 0.5rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); color: var(--kept); }
 .co-state.co-warn { color: var(--gold); border-color: currentColor; }
 .co-state.co-bad { color: var(--danger); border-color: currentColor; }
 .co-fuel { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem var(--space-2); align-items: baseline; }
@@ -86,7 +86,7 @@
 .co-facts dt { color: var(--muted); }
 .co-facts dd { margin: 0; text-align: right; }
 .co-svcs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0; padding: 0; list-style: none; }
-.co-svc { padding: 0.15rem 0.55rem; border: 1px solid var(--hairline); border-radius: 999px; font-size: var(--fs-sm); }
+.co-svc { padding: 0.15rem 0.55rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); font-size: var(--fs-sm); }
 .co-svc small { color: var(--kept); }
 .co-svc.off small { color: var(--danger); }
 

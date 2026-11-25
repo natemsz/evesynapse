@@ -104,7 +104,7 @@
 .ch-rep-gang-likely { display: block; color: var(--muted); }
 /* What the report was read to name: pilots (linked), ships, the gate. */
 .ch-rep-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem; }
-.ch-tag { display: inline-block; padding: 0.05rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; font-size: var(--fs-xs); color: var(--text); text-decoration: none; }
+.ch-tag { display: inline-block; padding: 0.05rem 0.45rem; border: 1px solid var(--box-edge); border-radius: var(--r-xs); font-size: var(--fs-xs); color: var(--text); text-decoration: none; }
 a.ch-tag:hover { border-color: var(--accent); }
 .ch-tag.friendly { border-color: var(--success); color: var(--muted); }
 .ch-tag.ship { color: var(--muted); }

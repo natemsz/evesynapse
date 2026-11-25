@@ -1,0 +1,41 @@
+{{/* Clones and Fatigue: jump fatigue, the clone jump cooldown and the
+     jump clones of the account's pilots. Four forms; none reads its
+     size. */}}
+
+{{define "w-clones-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Known}}
+{{template "w-lead" .Lead}}
+{{with .Longest}}<p class="cl-clears">Clears <span class="countdown" data-finish="{{.FatigueRaw}}" title="{{.FatigueAt}}">{{.FatigueLeft}}</span> for {{charLink $.ViewerChars .CharID .Name}}</p>{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-clones-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Known}}
+{{template "w-clones-pilots" $}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-clones-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Known}}
+<div class="w-cols w-cols-lists">
+<div class="w-rest">{{template "w-clones-pilots" $}}</div>
+<div class="w-aside"><h4 class="w-sub">Jump clones</h4>{{template "w-clones-jumpclones" $}}</div>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-clones-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Known}}
+<div class="w-cols w-cols-lists">
+<div class="w-rest">{{template "w-clones-pilots" $}}</div>
+<div class="w-aside"><h4 class="w-sub">Jump clones</h4>{{template "w-clones-jumpclones" $}}</div>
+<div class="w-aside"><h4 class="w-sub">Active implants</h4><ul class="cl-implants" data-w-fit>{{range .Pilots}}{{if .Implants}}<li><span class="cl-pilot">{{charLink $.ViewerChars .CharID .Name}}</span><small>{{range $i, $m := .Implants}}{{if $i}}, {{end}}{{itemLink $m.TypeID $m.Name}}{{end}}</small></li>{{end}}{{end}}</ul></div>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{/* One row per pilot (given the card): fatigue, the next clone jump
+     and the home station. */}}
+{{define "w-clones-pilots"}}<ul class="cl-pilots" data-w-fit>{{range .Data.Pilots}}<li class="{{if .Fatigued}}cl-fatigued{{end}}">
+  <span class="cl-pilot">{{charLink $.ViewerChars .CharID .Name}}</span>
+  <span class="cl-fatigue">{{if .Fatigued}}Fatigue <span class="countdown" data-finish="{{.FatigueRaw}}" title="{{.FatigueAt}}">{{.FatigueLeft}}</span>{{else}}No fatigue{{end}}</span>
+  <small class="cl-home">{{if .Home}}Home: {{.Home}}{{end}}</small>
+  <small class="cl-jump">{{if .CloneKnown}}{{if .CloneReady}}Clone jump ready{{else}}Clone jump <span class="countdown" data-finish="{{.CloneRaw}}" title="{{.CloneAt}}">{{.CloneLeft}}</span>{{end}}{{end}}</small>
+</li>{{end}}</ul>{{end}}
+
+{{define "w-clones-jumpclones"}}{{if .Data.Clones}}<ul class="cl-clones" data-w-fit>{{range .Data.Clones}}<li>
+  <span class="cl-loc">{{.Location}}</span>
+  <small>{{charLink $.ViewerChars .CharID .Pilot}}, {{.Name}}{{if .Implants}}, {{.Implants}} implant{{if ne .Implants 1}}s{{end}}{{end}}</small>
+</li>{{end}}</ul>{{else}}<p class="w-quiet"><small>No jump clones.</small></p>{{end}}{{end}}

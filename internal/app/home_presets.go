@@ -46,6 +46,7 @@ type playstyleWidgets struct {
 var playstyleWidgetsByActivity = map[string]playstyleWidgets{
 	"pilots": {
 		Specialists: []string{widgetTraining, widgetNetWorth, widgetKills},
+		Fill:        []string{widgetClones},
 	},
 	"market": {
 		Specialists: []string{widgetTradeIdeas, widgetMarket, widgetProfitPulse, widgetWatchlist},
@@ -61,7 +62,7 @@ var playstyleWidgetsByActivity = map[string]playstyleWidgets{
 	},
 	"fitting": {
 		Specialists: []string{widgetTraining},
-		Fill:        []string{widgetNetWorth, widgetWalletFlow, widgetMarket, widgetIndustry},
+		Fill:        []string{widgetNetWorth, widgetWalletFlow, widgetMarket, widgetIndustry, widgetClones},
 	},
 }
 
@@ -79,7 +80,7 @@ var singlePlaystyleBodies = map[string][]homeLayoutItem{
 		{ID: widgetWalletFlow, W: 2, H: 2},
 		{ID: widgetIndustry, W: 1, H: 2},
 		{ID: widgetWatchlist, W: 1, H: 2},
-		{ID: widgetMarket, W: 1, H: 2},
+		{ID: widgetClones, W: 1, H: 2},
 		{ID: widgetKills, W: 3, H: 1},
 	},
 	"market": {
@@ -115,8 +116,10 @@ var singlePlaystyleBodies = map[string][]homeLayoutItem{
 		{ID: widgetNetWorth, W: 1, H: 2},
 		{ID: widgetWalletFlow, W: 2, H: 2},
 		{ID: widgetIndustry, W: 1, H: 2},
-		{ID: widgetMarket, W: 1, H: 1},
+		{ID: widgetClones, W: 1, H: 2},
 		{ID: widgetFleets, W: 2, H: 1},
+		{ID: widgetMarket, W: 1, H: 1},
+		{ID: widgetContracts, W: 1, H: 1},
 	},
 }
 
@@ -149,7 +152,7 @@ var blendCanonicalOrder = []string{
 	widgetNetWorth, widgetTraining, widgetMarket, widgetWalletFlow,
 	widgetIndustry, widgetProfitPulse, widgetWatchlist, widgetPI,
 	widgetProdLine, widgetTradeIdeas, widgetPulse, widgetUpkeep, widgetFleets,
-	widgetKills, widgetSRP,
+	widgetKills, widgetSRP, widgetClones, widgetMail, widgetContracts,
 }
 
 // blendFullSize is a widget's full size in a blend, used for the
@@ -171,6 +174,9 @@ var blendFullSize = map[string]struct{ W, H int }{
 	widgetFleets:      {2, 2},
 	widgetKills:       {2, 2},
 	widgetSRP:         {2, 2},
+	widgetClones:      {2, 2},
+	widgetMail:        {2, 2},
+	widgetContracts:   {2, 2},
 }
 
 // defaultLayoutFor is the layout an account with no saved layout

@@ -1,0 +1,39 @@
+{{/* Mail: unread EVE mail across the account's pilots. Four forms;
+     none reads its size. */}}
+
+{{define "w-mail-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Unread}}
+{{template "w-lead" .Lead}}
+{{with .Newest}}<p class="ml-newest"><a href="{{.Href}}">{{.Subject}}</a> <small>{{template "w-mail-from" .}}</small></p>{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-mail-tall"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Unread}}
+{{template "w-mail-pilots" .Pilots}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-mail-medium"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Unread}}
+{{if .Headers}}{{template "w-mail-headers" $}}{{else}}{{template "w-mail-pilots" .Pilots}}{{end}}
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-mail-large"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Unread}}
+<div class="w-cols w-cols-lists">
+<div class="w-rest">{{if .Headers}}{{template "w-mail-headers" $}}{{else}}<p class="w-quiet"><small>The newest mails have not loaded yet.</small></p>{{end}}</div>
+<div class="w-aside"><h4 class="w-sub">Unread per pilot</h4>{{template "w-mail-counts" .Pilots}}</div>
+</div>
+{{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
+
+{{define "w-mail-from"}}{{if .Sender}}from {{.Sender}}, {{end}}<span title="{{.At}}">{{.Ago}}</span>{{end}}
+
+{{define "w-mail-pilots"}}<ul class="ml-list" data-w-fit>{{range .}}<li>
+  <a class="ml-pilot" href="{{.Href}}">{{.Name}}</a>
+  <span class="ml-count">{{.Unread}} unread</span>
+  {{with .Newest}}<small class="ml-sub"><a href="{{.Href}}">{{.Subject}}</a>{{if .Sender}}, from {{.Sender}}{{end}}</small>{{end}}
+</li>{{end}}</ul>{{end}}
+
+{{define "w-mail-counts"}}<ul class="ml-counts" data-w-fit>{{range .}}<li><a href="{{.Href}}">{{.Name}}</a><span>{{.Unread}}</span></li>{{end}}</ul>{{end}}
+
+{{/* The newest unread mails (given the card). */}}
+{{define "w-mail-headers"}}<ul class="ml-list" data-w-fit>{{range .Data.Headers}}<li>
+  <a class="ml-subject" href="{{.Href}}">{{.Subject}}</a>
+  <small class="ml-ago" title="{{.At}}">{{.Ago}}</small>
+  <small class="ml-sub">{{if .Sender}}From {{charLink $.ViewerChars .SenderID .Sender}} to {{else}}To {{end}}{{charLink $.ViewerChars .CharID .Pilot}}</small>
+</li>{{end}}</ul>{{end}}

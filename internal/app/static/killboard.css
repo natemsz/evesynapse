@@ -250,6 +250,9 @@
 /* --- Narrow pages: a kill folds, ship and victim over the final
    blow, system last, the org lines and region folded away --- */
 @container page (width < 45rem) {
+  .kb-search { flex: 1 1 100%; margin-left: 0; }
+  .kb-search .searchwrap { flex: 1 1 auto; width: auto; max-width: none; min-width: 0; }
+  .kb-search .btn { flex: none; white-space: nowrap; }
   .kb-kill {
     grid-template-columns: 2.6rem minmax(0, 1fr) minmax(0, auto);
     grid-template-areas: "ship main value" "ship atk value" "ship where meta";

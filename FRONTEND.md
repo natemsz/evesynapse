@@ -392,9 +392,12 @@ stored under its key. `GET /home/widgets` renders every card the
 same way, for the live refresh: outside Customize home.js fetches it
 every five minutes while the page is in view and no dialog is open,
 and swaps each card whose markup changed and whose size still
-matches. In Customize a removed card can be put back (`action=restore`
-with its old place and size), and Fill gaps saves the sizes that
-close the grid's holes (`action=sizes`).
+matches. In Customize every arrangement change can be undone and
+redone (Undo and Redo in the home bar; Ctrl+Z, and Ctrl+Shift+Z or
+Ctrl+Y): each saved change records the arrangement it replaced, and
+undo saves one back whole (`action=arrange`, `key:WxH` pairs in
+order). Fill gaps saves the sizes that close the grid's holes
+(`action=sizes`).
 
 ### Character selector
 
@@ -680,17 +683,35 @@ inside `.l-page`, so it measures the page and never the window.
   size containers there (`container: widget / size`), so their parts
   can read the box. Below 36rem rows are auto and cards are only
   inline-size containers: a size container with an auto height
-  collapses to nothing.
+  collapses to nothing. The one exception is a form declared with
+  `Grow` (the At a Glance band, the Fleet Overview tables): its card
+  is as tall as what it draws, home.js writes the grid's row tracks
+  so the rows it spans take that height (`homeRowTracks`; a row it
+  shares with another card keeps at least `--w-row`), and with
+  `GrowRows` its scrolling list (`data-w-scroll`, rows marked
+  `data-w-row`) shows that many rows, then scrolls inside.
 - **Placement**: home.js writes each card's `grid-column` and
   `grid-row` through the CSSOM. `homePack` puts each card at the
-  first free spot, row by row, the rule CSS `row dense` follows;
-  outside Customize `homeFillGaps` then closes a hole beside a card
-  by widening it, or under one by lengthening it, only to a size the
-  card declares. In Customize the holes show as "Add a widget"
-  cells that open the Add a widget dialog. It runs on load, on
-  content-ready, when the grid changes width, and inside every
-  Customize change. Without JavaScript the span classes and `row
-  dense` lay the grid out.
+  first free spot at or after the card before it, so cards keep
+  their order and a hole stays until the reader fills it; on a grid
+  narrower than three columns `homeFillGaps` then closes a hole
+  beside a card by widening it, or under one by lengthening it, only
+  to a size the card declares. In Customize the holes show as "Add
+  a widget" cells: the widget picked there goes into that hole, at
+  the largest size it allows that the hole holds. It runs on load,
+  on content-ready, when the grid changes width, and inside every
+  Customize change. Without JavaScript the span classes and row
+  placement lay the grid out.
+- **Dragging** reads intent from where the pointer rests: the middle
+  of another card swaps the two (each keeps its size), its edges put
+  the card beside it, an empty cell puts it there (`homeInsertAt`
+  finds the place in the order that moves the other cards least).
+  Held still a moment, the card fits the space instead: a swap
+  trades sizes, a move into a space takes the largest size the free
+  cells hold (`homeFitSpace`). The slot says which and fills a bar
+  while the hold counts. Each intent is laid out from the order the
+  drag started with (`homeReorder`), so passing over cards leaves no
+  trail, and the drop saves order and sizes in one call.
 - **Fitting** (fixed rows): a list marked `data-w-fit` (its
   children are its rows) shows the whole rows that fit, and a line
   after it says how many more there are, linking to the card's
@@ -847,7 +868,9 @@ to it:
   ```
 
   1. Name the forms by what they show and give each a sentence for
-     the size picker. Every size must show something its
+     the size picker. A form whose length is the point (a band of
+     figures, a roster) may set `Grow`, and `GrowRows` for its
+     scrolling list; every other form fills its cells. Every size must show something its
      neighbours do not (more rows, a chart, a breakdown); if two
      would look alike, drop one.
   2. The builder returns one value for every drawn form and builds

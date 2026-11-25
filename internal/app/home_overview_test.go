@@ -384,8 +384,9 @@ func doLayoutPost(t *testing.T, app *Application, form url.Values, cookie *http.
 
 // TestHomeLayoutOrderAction: the drag-save action accepts the
 // whole arrangement at once, reorders persist, unknown and
-// duplicate ids normalize away server-side, XHR callers get a
-// bare 200 instead of the redirect, and anonymous POSTs bounce.
+// duplicate ids normalize away server-side, arrange sets order and
+// sizes together, XHR callers get a bare 200 instead of the
+// redirect, and anonymous POSTs bounce.
 func TestHomeLayoutOrderAction(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
@@ -442,6 +443,19 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 		t.Fatalf("saved layout = %q, want normalized [watchlist fleet]", got)
 	}
 
+	// Arrange (undo, redo, swaps) sets order and sizes in one save:
+	// unknown and repeated keys drop out, a size the widget does not
+	// declare falls back to its default, a card left out leaves.
+	code, _ = doLayoutPost(t, app, url.Values{
+		"action": {"arrange"}, "layout": {"fleet:2x3,bogus:1x1,pi:3x4,fleet:1x1,industry:2x1"},
+	}, cookie, true)
+	if code != http.StatusOK {
+		t.Fatalf("XHR arrange POST: status %d", code)
+	}
+	if got := saved(); got != `[{"id":"fleet","w":2,"h":3},{"id":"pi"},{"id":"industry","w":2,"h":1}]` {
+		t.Fatalf("saved layout = %q, want fleet 2x3, pi at its default, industry 2x1", got)
+	}
+
 	// The same action as a plain form POST still redirects.
 	code, _ = doLayoutPost(t, app, url.Values{
 		"action": {"order"}, "ids": {"fleet"},
@@ -449,8 +463,8 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 	if code != http.StatusSeeOther {
 		t.Fatalf("form order POST: status %d, want 303", code)
 	}
-	if got := saved(); got != `[{"id":"fleet","w":3,"h":2}]` {
-		t.Fatalf("saved layout = %q, want [fleet]", got)
+	if got := saved(); got != `[{"id":"fleet","w":2,"h":3}]` {
+		t.Fatalf("saved layout = %q, want [fleet] at its arranged size", got)
 	}
 
 	// Anonymous order POSTs bounce, signed-in XHR or not.

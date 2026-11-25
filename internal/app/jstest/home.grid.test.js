@@ -1,8 +1,10 @@
 // Tests for the home grid helpers in ../static/home.js: the sizes a
 // widget declares and the one a wanted size lands on
 // (homeParseSizes, homeSnapToAllowed), where each widget goes
-// (homePack), how holes close (homeFillGaps) and how many rows of a
-// list fit its card (homeFitCount). app.js and home.js run under a
+// (homePack), how holes close (homeFillGaps), how many rows of a
+// list fit its card (homeFitCount), the rows a growing card sizes
+// (homeRowTracks), the size a card takes to fit a space
+// (homeFitSpace) and the order a drag intent makes (homeReorder). app.js and home.js run under a
 // small DOM stub; only the pure helpers they export for node are
 // exercised.
 "use strict";
@@ -205,4 +207,40 @@ test("homeFitCount: the rows whose bottom stays above the limit", function () {
   assert.equal(app.homeFitCount([20, 40, 60, 80], 80.4), 4, "half a pixel of rounding is forgiven");
   assert.equal(app.homeFitCount([20, 40, 60, 80], 10), 0, "no room, no rows");
   assert.equal(app.homeFitCount([], 100), 0);
+});
+
+test("homeRowTracks: rows only growing cards stand in take their height; shared rows keep a fixed row", function () {
+  const placed = [{ x: 0, y: 0, w: 3, h: 1 }, { x: 0, y: 1, w: 2, h: 2 }, { x: 2, y: 1, w: 1, h: 1 }, { x: 0, y: 3, w: 1, h: 1 }];
+  assert.equal(app.homeRowTracks(placed, [false, false, false, false]), "", "nothing grows: the grid's own rows");
+  assert.equal(app.homeRowTracks(placed, [true, false, false, false]), "auto var(--w-row) var(--w-row) var(--w-row)");
+  assert.equal(app.homeRowTracks(placed, [false, true, false, false]),
+    "var(--w-row) minmax(var(--w-row), auto) auto var(--w-row)", "a row shared with a fixed card keeps its floor");
+});
+
+test("homeFitSpace: the allowed size that covers the most of the free cells at a spot", function () {
+  const sizes = function (list) { return list.split(" ").map(function (s) { return { w: +s[0], h: +s[2] }; }); };
+  // A row of three; the middle cell is free, with a free cell under it.
+  const others = [{ x: 0, y: 0, w: 1, h: 2 }, { x: 2, y: 0, w: 1, h: 2 }, { x: 0, y: 2, w: 3, h: 1 }];
+  assert.deepEqual(app.homeFitSpace(others, { x: 1, y: 0 }, 3, sizes("1x1 1x2 2x2")), { w: 1, h: 2 }, "grows down into the free cell");
+  assert.deepEqual(app.homeFitSpace(others, { x: 1, y: 0 }, 3, sizes("1x1 2x2")), { w: 1, h: 1 }, "shrinks to what the hole holds");
+  assert.equal(app.homeFitSpace(others, { x: 1, y: 0 }, 3, sizes("2x1 2x2")), null, "nothing it allows fits");
+  assert.deepEqual(app.homeFitSpace([{ x: 0, y: 0, w: 1, h: 1 }], { x: 1, y: 0 }, 3, sizes("1x1 2x1 1x2")), { w: 2, h: 1 },
+    "never below the lowest card; the wider of equal sizes");
+});
+
+test("homeReorder: a swap trades two places; a move goes beside or before its card", function () {
+  const base = ["a", "b", "c", "d"];
+  assert.deepEqual(app.homeReorder(base, "a", { kind: "swap", ref: "c" }), ["c", "b", "a", "d"]);
+  assert.deepEqual(app.homeReorder(base, "a", { kind: "after", ref: "c" }), ["b", "c", "a", "d"]);
+  assert.deepEqual(app.homeReorder(base, "d", { kind: "before", ref: "b" }), ["a", "d", "b", "c"]);
+  assert.deepEqual(app.homeReorder(base, "b", { kind: "at", ref: null }), ["a", "c", "d", "b"], "no card after: last");
+  assert.deepEqual(base, ["a", "b", "c", "d"], "the base order is untouched");
+});
+
+test("homeInsertAt: the place in the order that lands a card on a cell, moving the others least", function () {
+  // Three across: two 1x2 cards and a 1x1, so the cell under the 1x1, (2,1), is a hole.
+  const others = [{ w: 1, h: 2 }, { w: 1, h: 2 }, { w: 1, h: 1 }, { w: 3, h: 1 }];
+  const now = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 2 }];
+  assert.equal(app.homeInsertAt(others, now, { w: 1, h: 1 }, { x: 2, y: 1 }, 3), 3, "into the hole, nobody moves");
+  assert.equal(app.homeInsertAt(others, now, { w: 2, h: 1 }, { x: 2, y: 1 }, 3), -1, "too wide for the cell's row");
 });

@@ -38,6 +38,15 @@
     var chips = box.querySelectorAll(".fleet-tags .chip");
     var activeTag = "";
     var idleOnly = false;
+    // A growing card's roster shows its first rows and scrolls past
+    // them (homeGrowCap): measured again whenever the rows showing
+    // change, by the filter or by a detail row opening.
+    var card = box.closest(".grid.home-grid > .card");
+    if (card) {
+      box.addEventListener("click", function () {
+        window.requestAnimationFrame(function () { homeGrowCap(card); });
+      });
+    }
     var detailOf = function (row) {
       var btn = row.querySelector("[data-expand]");
       return btn ? document.getElementById(btn.getAttribute("data-expand")) : null;
@@ -56,6 +65,7 @@
       }
       if (noMatch) noMatch.hidden = shown > 0;
       if (shownEl) shownEl.textContent = String(shown);
+      if (card) homeGrowCap(card);
     };
     var pick = function (chip) {
       activeTag = (chip.getAttribute("data-tag") || "").toLowerCase();
@@ -537,10 +547,116 @@
     return n;
   }
 
+  // Pure: the grid's row tracks when some cards grow (their form is as
+  // tall as its content, data-grow). placed is homePack's result,
+  // grows says which of them grow. A row only growing cards stand in
+  // takes their height ("auto"); a row they share with other cards
+  // keeps at least a fixed row ("minmax(var(--w-row), auto)"), so a
+  // short roster never squeezes the card beside it; every other row is
+  // a fixed row. "" when nothing grows: the grid's own rows hold.
+  function homeRowTracks(placed, grows) {
+    var rows = 0, any = false, grow = [], other = [], i, r;
+    for (i = 0; i < placed.length; i++) {
+      var p = placed[i];
+      rows = Math.max(rows, p.y + p.h);
+      if (grows[i]) any = true;
+      for (r = p.y; r < p.y + p.h; r++) {
+        if (grows[i]) grow[r] = true;
+        else other[r] = true;
+      }
+    }
+    if (!any) return "";
+    var tracks = [];
+    for (r = 0; r < rows; r++) {
+      tracks.push(!grow[r] ? "var(--w-row)" : other[r] ? "minmax(var(--w-row), auto)" : "auto");
+    }
+    return tracks.join(" ");
+  }
+
+  // Pure: the size a card takes to fit the space at a spot. others are
+  // the cells the other cards stand in ({ x, y, w, h }), at the cell
+  // the card goes to ({ x, y }), cols the column count, sizes the
+  // sizes the card allows. The space is the free cells from that spot
+  // rightwards and down, never below the lowest card (the grid has no
+  // floor of its own). The answer is the allowed size that covers the
+  // most of it, the wider on a tie, or null when none fits there.
+  function homeFitSpace(others, at, cols, sizes) {
+    var bottom = at.y + 1, i, r, c;
+    for (i = 0; i < others.length; i++) bottom = Math.max(bottom, others[i].y + others[i].h);
+    var taken = function (x, y) {
+      for (var k = 0; k < others.length; k++) {
+        var o = others[k];
+        if (x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h) return true;
+      }
+      return false;
+    };
+    var free = function (w, h) {
+      if (at.x + w > cols || at.y + h > bottom) return false;
+      for (r = at.y; r < at.y + h; r++) for (c = at.x; c < at.x + w; c++) if (taken(c, r)) return false;
+      return true;
+    };
+    var best = null;
+    for (i = 0; i < sizes.length; i++) {
+      var s = sizes[i];
+      if (!free(s.w, s.h)) continue;
+      if (!best || s.w * s.h > best.w * best.h || (s.w * s.h === best.w * best.h && s.w > best.w)) best = s;
+    }
+    return best ? { w: best.w, h: best.h } : null;
+  }
+
+  // Pure: where in the order a card goes so that it lands on a cell.
+  // others are the other cards in order ({ w, h }), now where each
+  // stands ({ x, y }), size the card's size, cell the cell it should
+  // cover. Every place in the order is tried; of those where the card
+  // covers the cell, the one that moves the other cards least wins,
+  // with the card's corner on the cell before it merely covering it,
+  // and the earlier place on a tie. -1 when no place covers it.
+  function homeInsertAt(others, now, size, cell, cols) {
+    var best = -1, bestCost = Infinity;
+    for (var k = 0; k <= others.length; k++) {
+      var placed = homePack(others.slice(0, k).concat([size], others.slice(k)), cols);
+      var p = placed[k];
+      if (cell.x < p.x || cell.x >= p.x + p.w || cell.y < p.y || cell.y >= p.y + p.h) continue;
+      var cost = p.x === cell.x && p.y === cell.y ? 0 : 0.5;
+      for (var i = 0; i < others.length; i++) {
+        var q = placed[i < k ? i : i + 1], o = now[i] || q;
+        cost += Math.abs(q.x - o.x) + Math.abs(q.y - o.y);
+      }
+      if (cost < bestCost) { bestCost = cost; best = k; }
+    }
+    return best;
+  }
+
+  // Pure: the order a drag intent makes. base is the order before the
+  // drag, with item (the dragged card's slot) in it; intent is
+  // { kind, ref }: "swap" trades places with ref, "before" and "after"
+  // go beside ref, "at" goes just before ref (null: at the end).
+  // Returns a new array; base is untouched.
+  function homeReorder(base, item, intent) {
+    var out = base.slice(), i = out.indexOf(item), j;
+    if (intent.kind === "swap") {
+      j = out.indexOf(intent.ref);
+      if (i < 0 || j < 0) return out;
+      out[i] = intent.ref;
+      out[j] = item;
+      return out;
+    }
+    if (i >= 0) out.splice(i, 1);
+    j = intent.ref == null ? out.length : out.indexOf(intent.ref);
+    if (j < 0) j = out.length;
+    if (intent.kind === "after" && intent.ref != null) j++;
+    out.splice(j, 0, item);
+    return out;
+  }
+
   if (typeof module !== "undefined" && module.exports) {
     module.exports.homePack = homePack;
     module.exports.homeFillGaps = homeFillGaps;
     module.exports.homeFitCount = homeFitCount;
+    module.exports.homeRowTracks = homeRowTracks;
+    module.exports.homeFitSpace = homeFitSpace;
+    module.exports.homeReorder = homeReorder;
+    module.exports.homeInsertAt = homeInsertAt;
   }
 
   // homeParseSizes reads a card's data-sizes ("1x1 2x1 2x2") into
@@ -654,12 +770,18 @@
     var old = grid.querySelectorAll(":scope > .w-hole");
     for (i = 0; i < old.length; i++) old[i].remove();
     grid._homeCols = cols;
+    var grows = cards.map(function (c) {
+      var g = homeGrows(c);
+      c.classList.toggle("w-grows", g);
+      return g;
+    });
     if (cols < 2) {
       for (i = 0; i < cards.length; i++) {
         cards[i].style.gridColumn = "";
         cards[i].style.gridRow = "";
         cards[i]._homeSpan = null;
       }
+      grid.style.gridTemplateRows = "";
       return;
     }
     for (i = 0; i < cards.length; i++) {
@@ -685,6 +807,8 @@
       if (cards[i].style.gridRow !== row) cards[i].style.gridRow = row;
       cards[i]._homeSpan = p;
     }
+    var tracks = homeRowTracks(placed, grows);
+    if (grid.style.gridTemplateRows !== tracks) grid.style.gridTemplateRows = tracks;
     if (!custom) return;
     homeHoles(placed, cols).forEach(function (hole) {
       var a = document.createElement("a");
@@ -695,10 +819,11 @@
       a.style.gridColumn = (hole.x + 1) + " / span " + hole.w;
       a.style.gridRow = String(hole.y + 1);
       a.addEventListener("click", function (ev) {
-        var add = document.getElementById("add-module-btn");
-        if (!add) return;
+        // Customize opens Add a widget for this hole: the widget
+        // picked goes into it.
+        if (!grid._homeAddAt) return;
         ev.preventDefault();
-        add.click();
+        grid._homeAddAt(a._homeCell);
       });
       grid.appendChild(a);
     });
@@ -814,9 +939,42 @@
   // shows the whole parts that fit, never a part cut in half. A kit
   // body (.w-body) is the box its parts fit, the one drawn when the
   // card has a phone body beside it.
+  // homeGrows: the card's form at its size is as tall as its content
+  // (its size is listed in data-grow).
+  function homeGrows(card) {
+    var g = card.getAttribute("data-grow");
+    if (!g) return false;
+    var size = (card.getAttribute("data-gw") || "1") + "x" + (card.getAttribute("data-gh") || "1");
+    return (" " + g + " ").indexOf(" " + size + " ") >= 0;
+  }
+  // homeGrowCap: a growing card's scrolling list ([data-w-scroll])
+  // shows the form's rows (data-grow-rows, counting the rows marked
+  // data-w-row that are showing) and scrolls past them: it stops at
+  // the top of the first row past the cap. With fewer rows it is as
+  // tall as they are.
+  function homeGrowCap(card) {
+    var cap = parseInt(card.getAttribute("data-grow-rows"), 10) || 0;
+    var lists = card.querySelectorAll("[data-w-scroll]");
+    for (var i = 0; i < lists.length; i++) {
+      var list = lists[i];
+      list.style.maxHeight = "";
+      list.style.overflowY = "";
+      if (!cap || !card.classList.contains("w-grows") || !list.getClientRects().length) continue;
+      var rows = Array.prototype.filter.call(list.querySelectorAll("[data-w-row]"), function (row) {
+        return row.getClientRects().length > 0;
+      });
+      if (rows.length <= cap) continue;
+      var top = rows[cap].getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+      list.style.maxHeight = Math.floor(top) + "px";
+      list.style.overflowY = "auto";
+    }
+  }
   function homeFitCard(card, fit) {
     var body = card.querySelector(":scope > .card-body");
     if (!body) return;
+    homeGrowCap(card);
+    // A growing card is as tall as what it draws: nothing to fit.
+    if (card.classList.contains("w-grows")) fit = false;
     var kits = body.querySelectorAll(":scope > .w-body");
     for (var b = 0; b < kits.length; b++) {
       if (kits[b].getClientRects().length) { body = kits[b]; break; }
@@ -1100,6 +1258,28 @@
   // most cards one widget may have on a home.
   var HOME_MAX_COPIES = 4;
 
+  // The Customize view's undo and redo (initHomeCustomize sets it for
+  // the grid on screen). The shortcuts are bound once: Ctrl+Z undoes,
+  // Ctrl+Shift+Z or Ctrl+Y redoes (Cmd on a Mac), except while typing
+  // or with a dialog open, where the keys keep their own meaning.
+  // Declared without a value: the first Customize view is set up
+  // before this line runs, and an initial value would wipe its own.
+  var homeHistory;
+  document.addEventListener("keydown", function (ev) {
+    if (!homeHistory || !document.contains(homeHistory.grid)) return;
+    if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
+    var k = (ev.key || "").toLowerCase();
+    var isUndo = k === "z" && !ev.shiftKey;
+    var isRedo = (k === "z" && ev.shiftKey) || (k === "y" && !ev.shiftKey);
+    if (!isUndo && !isRedo) return;
+    var t = ev.target;
+    if (t && t.closest && t.closest("input, textarea, select, [contenteditable]:not([contenteditable=false])")) return;
+    if (document.querySelector(".modal-backdrop:not([hidden]), dialog[open]")) return;
+    ev.preventDefault();
+    if (isUndo) homeHistory.undo();
+    else homeHistory.redo();
+  });
+
   function initHomeCustomize(grid) {
     var modal = document.getElementById("add-module-modal");
     grid.classList.add("has-controls");
@@ -1136,13 +1316,142 @@
       }).catch(function () { return null; });
     }
 
-    // Undo a remove: one line above the grid names the card just
-    // removed and offers it back for a while. Undo puts it back at
-    // its old place and size, drawn fresh by the one-card route.
+    // --- undo and redo ---------------------------------------------
+    // Every arrangement change made here (move, swap, resize, remove,
+    // add, Fill gaps) can be undone and redone: Undo and Redo in the
+    // home bar, Ctrl+Z, and Ctrl+Shift+Z or Ctrl+Y (Cmd on a Mac). A
+    // change records the arrangement it replaced (each card's key and
+    // size, in order) once its save lands. Undo saves an arrangement
+    // back in one call (action=arrange) and redraws only the cards
+    // that changed. Widget settings are not arrangement and stay.
+    var undoStack = [], redoStack = [], historyBusy = false;
+    var HISTORY_MAX = 50;
+    var undoBtn = document.querySelector("[data-home-undo]");
+    var redoBtn = document.querySelector("[data-home-redo]");
+    function arrangement() {
+      return Array.prototype.map.call(moduleCards(), function (c) {
+        var s = sizeOf(c);
+        return { key: keyOf(c), w: s.w, h: s.h };
+      });
+    }
+    function arrangementText(list) {
+      return list.map(function (a) { return a.key + ":" + a.w + "x" + a.h; }).join(",");
+    }
+    function saveArrangement() {
+      return postLayout({ action: "arrange", layout: arrangementText(arrangement()) });
+    }
+    function paintHistory() {
+      if (undoBtn) undoBtn.disabled = historyBusy || !undoStack.length;
+      if (redoBtn) redoBtn.disabled = historyBusy || !redoStack.length;
+    }
+    // record notes a change that saved; before is the arrangement it
+    // replaced.
+    function record(before) {
+      if (!before) return;
+      undoStack.push(before);
+      if (undoStack.length > HISTORY_MAX) undoStack.shift();
+      redoStack = [];
+      closeUndoBar();
+      paintHistory();
+    }
+    // applyArrangement saves an arrangement and draws it: cards not in
+    // it leave, cards missing from the grid come from the one-card
+    // route, every card takes its place and size, and a card whose
+    // size changed is drawn again in its form for that size.
+    function applyArrangement(target, done) {
+      historyBusy = true;
+      paintHistory();
+      var finish = function (ok) {
+        historyBusy = false;
+        paintHistory();
+        done(ok);
+      };
+      postLayout({ action: "arrange", layout: arrangementText(target) }).then(function (ok) {
+        if (!ok) { finish(false); return; }
+        var have = {};
+        Array.prototype.forEach.call(moduleCards(), function (c) { have[keyOf(c)] = c; });
+        var missing = target.filter(function (t) { return !have[t.key]; });
+        Promise.all(missing.map(function (t) { return fetchCard(t.key); })).then(function (nodes) {
+          var fresh = {}, keep = {}, resized = [], i;
+          for (i = 0; i < missing.length; i++) {
+            // The arrangement saved; a card that cannot be drawn here
+            // is drawn by a reload, in the same place.
+            if (!nodes[i]) { window.location.reload(); return; }
+            fresh[missing[i].key] = nodes[i];
+          }
+          target.forEach(function (t) { keep[t.key] = true; });
+          flip(function () {
+            Array.prototype.forEach.call(moduleCards(), function (c) {
+              if (!keep[keyOf(c)]) c.remove();
+            });
+            target.forEach(function (t) {
+              var node = have[t.key] || fresh[t.key];
+              var s = sizeOf(node);
+              if (have[t.key] && (s.w !== t.w || s.h !== t.h)) {
+                sizeCard(node, t.w, t.h);
+                resized.push(node);
+              }
+              grid.appendChild(node);
+            });
+          });
+          missing.forEach(function (t) { placeCard(fresh[t.key]); });
+          resized.forEach(function (c) { refreshCard(c); });
+          finish(true);
+        }, function () { window.location.reload(); });
+      });
+    }
+    // A step waits while a drag, a resize or a keyboard resize is under
+    // way: its own save is still to come.
+    function midChange() {
+      if (historyBusy || document.body.classList.contains("drag-active") || document.body.classList.contains("resize-active")) return true;
+      return Array.prototype.some.call(moduleCards(), function (c) { return !!c._keyFrom; });
+    }
+    function historyStep(from, to, said, none) {
+      if (midChange()) return;
+      if (!from.length) {
+        if (statusEl) statusEl.textContent = none;
+        return;
+      }
+      var target = from.pop(), now = arrangement();
+      closeUndoBar();
+      applyArrangement(target, function (ok) {
+        if (ok) {
+          to.push(now);
+          if (statusEl) statusEl.textContent = said;
+        } else {
+          from.push(target);
+          if (statusEl) statusEl.textContent = "The change could not be saved. Try again.";
+        }
+        paintHistory();
+      });
+    }
+    function undo() { historyStep(undoStack, redoStack, "Undone.", "Nothing to undo."); }
+    function redo() { historyStep(redoStack, undoStack, "Redone.", "Nothing to redo."); }
+    var mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
+    if (undoBtn && once(undoBtn, "undo")) {
+      undoBtn.hidden = false;
+      undoBtn.title = "Undo the last change (" + (mac ? "⌘Z" : "Ctrl+Z") + ")";
+      undoBtn.addEventListener("click", undo);
+    }
+    if (redoBtn && once(redoBtn, "redo")) {
+      redoBtn.hidden = false;
+      redoBtn.title = "Redo (" + (mac ? "⇧⌘Z" : "Ctrl+Y") + ")";
+      redoBtn.addEventListener("click", redo);
+    }
+    paintHistory();
+    homeHistory = { grid: grid, undo: undo, redo: redo };
+
+    // After a remove, one line above the grid names the card and
+    // offers Undo, the same undo as the home bar's, until the next
+    // change.
     var undoBar = null, undoTimer = 0;
-    function offerUndo(name, params) {
-      if (undoBar) undoBar.remove();
+    function closeUndoBar() {
       window.clearTimeout(undoTimer);
+      if (undoBar && undoBar.parentNode) undoBar.remove();
+      undoBar = null;
+    }
+    function offerUndo(name) {
+      closeUndoBar();
       undoBar = document.createElement("p");
       undoBar.className = "w-undo";
       undoBar.appendChild(document.createTextNode("Removed " + (name || "the widget") + ". "));
@@ -1152,37 +1461,16 @@
       btn.textContent = "Undo";
       undoBar.appendChild(btn);
       grid.parentNode.insertBefore(undoBar, grid);
-      var bar = undoBar;
-      var close = function () {
-        if (bar.parentNode) bar.remove();
-        if (undoBar === bar) undoBar = null;
-      };
-      undoTimer = window.setTimeout(close, 15000);
+      undoTimer = window.setTimeout(closeUndoBar, 15000);
       if (statusEl) statusEl.textContent = "Removed " + (name || "the widget") + ". Undo is above the grid.";
-      btn.addEventListener("click", function () {
-        btn.disabled = true;
-        postLayout(params).then(function (ok) {
-          if (!ok) { btn.disabled = false; return; }
-          close();
-          fetchCard(params.key).then(function (node) {
-            if (!node) { window.location.reload(); return; }
-            var cards = moduleCards();
-            var before = cards[params.at] || null;
-            flip(function () { grid.insertBefore(node, before); });
-            placeCard(node);
-            if (statusEl) statusEl.textContent = "Put back " + (name || "the widget") + ".";
-            var h = node.querySelector(".draghandle");
-            if (h) h.focus({ preventScroll: true });
-          }, function () { window.location.reload(); });
-        });
-      });
+      btn.addEventListener("click", undo);
     }
 
     // gapGrowth: the cards that grow into a hole beside or under them
     // (homeFillGaps), each only to a size it declares, as
     // { card, w, h, pair } with pair the "key:WxH" the sizes action
-    // takes. With only set, just that card's growth.
-    function gapGrowth(only) {
+    // takes.
+    function gapGrowth() {
       var cols = homeCols(grid);
       if (cols < 2) return [];
       var cards = Array.prototype.slice.call(moduleCards());
@@ -1195,7 +1483,6 @@
       placed = homeFillGaps(placed, cols);
       var grown = [];
       for (var j = 0; j < cards.length; j++) {
-        if (only && cards[j] !== only) continue;
         var p = placed[j], s = sizeOf(cards[j]);
         if ((p.w > Math.min(s.w, cols) || p.h > s.h) && allows(cards[j], p.w, p.h)) {
           grown.push({ card: cards[j], w: p.w, h: p.h, pair: keyOf(cards[j]) + ":" + p.w + "x" + p.h });
@@ -1222,14 +1509,16 @@
     if (fillBtn && once(fillBtn, "fill")) {
       fillBtn.hidden = false;
       fillBtn.addEventListener("click", function () {
-        var grown = gapGrowth(null);
+        var grown = gapGrowth();
         if (!grown.length) {
           if (statusEl) statusEl.textContent = "No gaps to fill.";
           return;
         }
         fillBtn.disabled = true;
+        var before = arrangement();
         growInto(grown, function (ok) {
           fillBtn.disabled = false;
+          if (ok) record(before);
           if (ok && statusEl) statusEl.textContent = "Filled the gaps: " + grown.length + " widget" + (grown.length === 1 ? "" : "s") + " grew.";
         });
       });
@@ -1564,15 +1853,17 @@
     function resizeCard(card, w, h) {
       var was = sizeOf(card);
       if (was.w === w && was.h === h) return;
+      var before = arrangement();
       flip(function () { sizeCard(card, w, h); });
       announce(card, w, h);
-      saveSize(card, w, h, was);
+      saveSize(card, w, h, was, before);
     }
     // saveSize stores a size the card already shows; a failed save
-    // puts back the size it had before.
-    function saveSize(card, w, h, was) {
+    // puts back the size it had before. before is the arrangement the
+    // resize replaced, for undo.
+    function saveSize(card, w, h, was, before) {
       postLayout({ action: "size", key: keyOf(card), w: w, h: h }).then(function (ok) {
-        if (ok) { refreshCard(card); return; }
+        if (ok) { record(before); refreshCard(card); return; }
         flip(function () { sizeCard(card, was.w, was.h); });
         announce(card, was.w, was.h);
         refuse(card);
@@ -1703,12 +1994,12 @@
       remove.setAttribute("aria-label", "Remove " + title + " from your home");
       remove.addEventListener("click", function () {
         remove.disabled = true;
-        var at = Array.prototype.indexOf.call(moduleCards(), card);
-        var was = sizeOf(card), key = keyOf(card), name = titleOf(card);
-        postLayout({ action: "toggle", key: key }).then(function (ok) {
+        var before = arrangement(), name = titleOf(card);
+        postLayout({ action: "toggle", key: keyOf(card) }).then(function (ok) {
           if (!ok) { remove.disabled = false; return; }
+          record(before);
           removeCard(card);
-          offerUndo(name, { action: "restore", key: key, at: at, w: was.w, h: was.h });
+          offerUndo(name);
         });
       });
       var settingsTpl = card.querySelector(":scope > template[data-w-settings]");
@@ -1754,7 +2045,10 @@
       }
       var next = sizes[at + (fwd ? 1 : -1)];
       if (!next) return;
-      if (!card._keyFrom) card._keyFrom = now;
+      if (!card._keyFrom) {
+        card._keyFrom = now;
+        card._keyBefore = arrangement();
+      }
       flip(function () { sizeCard(card, next.w, next.h); });
       announce(card, next.w, next.h);
       clearTimeout(card._keySave);
@@ -1762,7 +2056,7 @@
         var from = card._keyFrom;
         card._keyFrom = null;
         var to = sizeOf(card);
-        if (from.w !== to.w || from.h !== to.h) saveSize(card, to.w, to.h, from);
+        if (from.w !== to.w || from.h !== to.h) saveSize(card, to.w, to.h, from, card._keyBefore);
         else settle(card);
       }, 400);
     }
@@ -1777,11 +2071,12 @@
       var all = Array.prototype.slice.call(moduleCards());
       var i = all.indexOf(card), j = back ? i - 1 : i + 1;
       if (j < 0 || j >= all.length) return;
+      var before = arrangement();
       flip(function () {
         grid.insertBefore(card, back ? all[j] : all[j].nextSibling);
       });
       handle.focus();
-      saveOrder();
+      saveOrder().then(function (ok) { if (ok) record(before); });
     }
 
     // --- grip resize ---------------------------------------------
@@ -1799,6 +2094,7 @@
       ev.preventDefault();
       stopMotion(card);
       var start = sizeOf(card), cur = start, sizes = sizesOf(card);
+      var before = arrangement();
       var r0 = card.getBoundingClientRect();
       var gcs = window.getComputedStyle(grid);
       var gapX = parseFloat(gcs.columnGap) || 0, gapY = parseFloat(gcs.rowGap) || 0;
@@ -1894,7 +2190,7 @@
         // The widget already stands at its new size; save it, and a
         // failed save puts back the size it started at.
         announce(card, cur.w, cur.h);
-        saveSize(card, cur.w, cur.h, start);
+        saveSize(card, cur.w, cur.h, start, before);
       }
       grip.addEventListener("pointermove", onMove);
       grip.addEventListener("pointerup", onUp);
@@ -1905,26 +2201,61 @@
     // --- dragging --------------------------------------------------
     // Lifting a card puts a glowing slot into its place, with its
     // size, and takes the card out of the grid (position: fixed) at
-    // exactly the spot it occupied, nothing under the pointer moves
+    // exactly the spot it occupied: nothing under the pointer moves
     // at lift-off. The card then follows the pointer by transform
-    // alone, so it tracks without lag. The slot moves when the
-    // pointer is over another module: before it if the pointer is in
-    // that module's first half (left half within the same row, top
-    // half across rows), after it otherwise; the module the slot
-    // just passed is ignored until the pointer leaves it, so a
-    // boundary never flip-flops. Past the last module the slot goes
-    // to the end. Holding the card near a viewport edge scrolls the
-    // page. On drop the card glides into the slot and takes its
-    // place; Escape or a cancelled pointer puts everything back.
-    // The grid child beside el (dir -1 before, 1 after), skipping
-    // text and the lifted card, which sits out of the flow.
-    function sibling(el, dir) {
-      var n = dir < 0 ? el.previousElementSibling : el.nextElementSibling;
-      while (n && n.classList.contains("dragging")) n = dir < 0 ? n.previousElementSibling : n.nextElementSibling;
-      return n;
-    }
+    // alone, so it tracks without lag.
+    //
+    // Where the pointer rests says what the reader means:
+    // - over the middle of another card: swap the two. The other card
+    //   moves to the dragged card's old place; each keeps its size.
+    // - over the edge of a card: go beside it (before it over its left
+    //   or top edge, after it over its right or bottom edge).
+    // - over an empty cell: go there. Below the last card: go last.
+    // Held still there a moment longer (FIT_MS, a bar fills in the
+    // slot), the card fits the space instead of keeping its size: a
+    // swap trades sizes with the other card, and a move into a space
+    // takes the largest size it allows that the free cells there hold,
+    // growing into room beside it or shrinking into a smaller hole.
+    // Moving on, or dropping first, keeps every size as it was.
+    //
+    // Each intent is laid out from the order the drag started with,
+    // so passing over cards never leaves a trail of swaps, and a new
+    // intent takes over only once the pointer has rested on it a
+    // moment (SETTLE_MS), so cards do not jump as it passes by. The
+    // intent stays while the pointer is over the slot or the spot
+    // that made it. Holding the card near a viewport edge scrolls the
+    // page. On drop the card glides into the slot and the
+    // arrangement saves in one call; Escape or a cancelled pointer
+    // puts everything back.
+    var SETTLE_MS = 110, FIT_MS = 650;
     function inside(b, x, y) {
       return !!b && x >= b.l && x <= b.r && y >= b.t && y <= b.b;
+    }
+    // The card standing first after a cell, reading row by row (not
+    // skip): the card a card placed in that cell goes before.
+    function cardAfterCell(cell, skip) {
+      var cards = moduleCards();
+      for (var k = 0; k < cards.length; k++) {
+        var sp = cards[k]._homeSpan;
+        if (cards[k] === skip || cards[k].classList.contains("dragging") || !sp) continue;
+        if (sp.y > cell.y || (sp.y === cell.y && sp.x > cell.x)) return cards[k];
+      }
+      return null;
+    }
+    // spaceFit: the size card would take to fit the free cells at a
+    // spot (homeFitSpace), counting every card but card and skip as in
+    // the way, or null when it would keep its size or cannot fit.
+    // Only on the grid layouts are made on.
+    function spaceFit(card, at, skip, now) {
+      var cols = homeCols(grid);
+      if (cols < homeDesignCols || !at) return null;
+      var others = [];
+      Array.prototype.forEach.call(moduleCards(), function (c) {
+        if (c !== card && c !== skip && !c.classList.contains("dragging") && c._homeSpan) others.push(c._homeSpan);
+      });
+      var f = homeFitSpace(others, at, cols, sizesOf(card).filter(function (s) { return s.w <= cols; }));
+      if (!f || (f.w === now.w && f.h === now.h)) return null;
+      return f;
     }
 
     function startDrag(ev, card, handle) {
@@ -1933,20 +2264,33 @@
 
       var startX = ev.clientX, startY = ev.clientY;
       var lastX = startX, lastY = startY;
-      var lifted = false, slot = null, origin = null, savedNodes = null;
+      var lifted = false, slot = null, hint = null, origin = null, savedNodes = null;
+      // base is the order at lift, with the slot in the card's place;
+      // sizes, every card's size at lift.
+      var base = null, sizes = null, before = null;
+      // liftSpots: where each card stood at lift, the places a drop
+      // into an empty cell disturbs least.
+      var liftSpots = null;
+      // intent is what the drop would do now ({ kind, ref, cell, zone,
+      // since, fit, fits }); pending, an intent the pointer has just
+      // come to rest on.
+      var intent = null, pending = null;
       // The lifted card is fixed, and the page's size container
       // (.l-page) is its containing block, so it moves with the page
       // when the page scrolls. fixX and fixY carry it back under the
       // pointer (onScroll).
       var fixX = 0, fixY = 0;
-      var raf = 0, lock = null, holdUntil = 0, dirty = true;
+      var raf = 0, holdUntil = 0, dirty = true;
 
       try { handle.setPointerCapture(ev.pointerId); } catch (err) { /* nicety */ }
 
       function lift() {
         lifted = true;
         handle._dragged = true;
+        before = arrangement();
         savedNodes = Array.prototype.slice.call(moduleCards());
+        sizes = new Map();
+        savedNodes.forEach(function (n) { sizes.set(n, sizeOf(n)); });
         var open = grid.querySelectorAll(".sizepick:not([hidden])");
         for (var i = 0; i < open.length; i++) open[i].hidden = true;
         stopMotion(card);
@@ -1954,9 +2298,13 @@
         slot = document.createElement("div");
         slot.className = "card drag-placeholder";
         slot.setAttribute("aria-hidden", "true");
+        hint = document.createElement("span");
+        hint.className = "drag-hint";
+        slot.appendChild(hint);
         var s = sizeOf(card);
         sizeCard(slot, s.w, s.h);
         grid.insertBefore(slot, card);
+        base = savedNodes.map(function (n) { return n === card ? slot : n; });
         card.style.left = origin.left + "px";
         card.style.top = origin.top + "px";
         card.style.width = origin.width + "px";
@@ -1976,6 +2324,7 @@
         }
         document.body.classList.add("drag-active");
         homeLayout(grid);
+        liftSpots = spotsNow();
         measure();
         window.addEventListener("scroll", onScroll, { passive: true });
         raf = requestAnimationFrame(tick);
@@ -1996,8 +2345,10 @@
         card.style.transform = "translate3d(" + (lastX - startX + fixX) + "px," + (lastY - startY + fixY) + "px,0)";
       }
 
-      // The frame loop only scrolls: the closer the pointer rides to
-      // a viewport edge, the faster the page rolls under it.
+      // The frame loop scrolls (the closer the pointer rides to a
+      // viewport edge, the faster the page rolls under it) and keeps
+      // time: an intent the pointer has rested on long enough takes
+      // over, and one held long enough fits the space.
       function tick() {
         raf = 0;
         if (!lifted) return;
@@ -2006,60 +2357,187 @@
         else if (lastY > window.innerHeight - edge) speed = Math.min(16, Math.ceil((lastY - (window.innerHeight - edge)) / 4));
         if (speed) { window.scrollBy(0, speed); dirty = true; }
         if (dirty) retarget();
+        var now = performance.now();
+        if (pending && now - pending.since >= SETTLE_MS) take(pending);
+        else if (intent && intent.fits && !intent.fit && now - intent.since >= FIT_MS) {
+          intent.fit = true;
+          lay(intent);
+        }
         raf = requestAnimationFrame(tick);
+      }
+
+      // What the pointer at (px, py) asks for: the zone of a card it is
+      // over (edges go beside, the middle swaps), an empty cell, or
+      // the space below the last card. null over a gutter.
+      function intentAt(px, py) {
+        var kids = movers(), bottom = 0, i;
+        for (i = 0; i < kids.length; i++) {
+          var b = layout.get(kids[i]);
+          if (b && b.b > bottom) bottom = b.b;
+          if (kids[i] === slot || !inside(b, px, py)) continue;
+          var w = b.r - b.l, h = b.b - b.t;
+          var ex = Math.min(w * 0.25, 80), ey = Math.min(h * 0.2, 48);
+          var t = kids[i];
+          if (px < b.l + ex) return { kind: "before", ref: t, zone: { l: b.l, r: b.l + ex, t: b.t, b: b.b } };
+          if (px > b.r - ex) return { kind: "after", ref: t, zone: { l: b.r - ex, r: b.r, t: b.t, b: b.b } };
+          if (py < b.t + ey) return { kind: "before", ref: t, zone: { l: b.l, r: b.r, t: b.t, b: b.t + ey } };
+          if (py > b.b - ey) return { kind: "after", ref: t, zone: { l: b.l, r: b.r, t: b.b - ey, b: b.b } };
+          return { kind: "swap", ref: t, zone: { l: b.l + ex, r: b.r - ex, t: b.t + ey, b: b.b - ey } };
+        }
+        var holes = grid.querySelectorAll(":scope > .w-hole");
+        for (i = 0; i < holes.length; i++) {
+          var hr = pageBox(holes[i].getBoundingClientRect());
+          if (!inside(hr, px, py)) continue;
+          var cell = holes[i]._homeCell;
+          return { kind: "at", ref: cardAfterCell(cell, null), cell: cell, zone: hr };
+        }
+        if (py > bottom) return { kind: "at", ref: null, zone: { l: -Infinity, r: Infinity, t: bottom, b: Infinity } };
+        return null;
+      }
+      function sameIntent(a, b) {
+        return !!a && !!b && a.kind === b.kind && a.ref === b.ref && (a.cell || null) === (b.cell || null);
       }
 
       function retarget() {
         if (!lifted || performance.now() < holdUntil) return;
         dirty = false;
         var px = lastX + window.scrollX, py = lastY + window.scrollY;
-        if (lock && !inside(layout.get(lock), px, py)) lock = null;
-        var sb = layout.get(slot);
-        if (inside(sb, px, py)) { lock = null; return; }
-        var kids = Array.prototype.slice.call(movers());
-        var target = null, bottom = 0;
-        for (var i = 0; i < kids.length; i++) {
-          var b = layout.get(kids[i]);
-          if (b && b.b > bottom) bottom = b.b;
-          if (kids[i] !== slot && !target && inside(b, px, py)) target = kids[i];
-        }
-        if (!target) {
-          // Over an empty cell: the slot goes just before the first card
-          // that stands after that cell, reading row by row, so the
-          // order-keeping layout puts the dragged card in the hole (and
-          // the drop grows it to fill the space around).
-          var holes = grid.querySelectorAll(":scope > .w-hole");
-          for (var h = 0; h < holes.length; h++) {
-            var hr = holes[h].getBoundingClientRect();
-            if (!inside({ l: hr.left + window.scrollX, r: hr.right + window.scrollX, t: hr.top + window.scrollY, b: hr.bottom + window.scrollY }, px, py)) continue;
-            var cell = holes[h]._homeCell, ref = null;
-            for (var k = 0; k < kids.length; k++) {
-              var sp = kids[k]._homeSpan;
-              if (kids[k] === slot || !sp) continue;
-              if (sp.y > cell.y || (sp.y === cell.y && sp.x > cell.x)) { ref = kids[k]; break; }
-            }
-            if (ref !== slot.nextSibling) moveSlot(ref, null);
-            return;
-          }
-          if (py > bottom && kids[kids.length - 1] !== slot) moveSlot(null, null);
+        // Over the slot, or still on the spot that made the intent:
+        // nothing changes, and the fit keeps counting.
+        if (inside(layout.get(slot), px, py) || (intent && inside(intent.zone, px, py))) {
+          pending = null;
           return;
         }
-        if (target === lock) return;
-        var tb = layout.get(target);
-        var sameRow = sb && sb.t < tb.b && tb.t < sb.b;
-        var first = sameRow ? px < (tb.l + tb.r) / 2 : py < (tb.t + tb.b) / 2;
-        // Already on that side of it: nothing to do.
-        if ((first ? sibling(target, -1) : sibling(target, 1)) === slot) return;
-        moveSlot(first ? target : target.nextSibling, target);
+        var next = intentAt(px, py);
+        if (!next) { pending = null; return; }
+        if (sameIntent(next, intent)) { intent.zone = next.zone; pending = null; return; }
+        if (sameIntent(next, pending)) { pending.zone = next.zone; return; }
+        next.since = performance.now();
+        pending = next;
       }
 
-      function moveSlot(ref, passed) {
-        flip(function () { grid.insertBefore(slot, ref); });
-        lock = passed;
+      // take makes an intent the drop's: it is laid out, and whether
+      // holding it would fit the space is worked out on that layout.
+      function take(next) {
+        pending = null;
+        intent = next;
+        intent.since = performance.now();
+        intent.fit = false;
+        intent.fits = null;
+        if (next.kind === "swap") {
+          // Trading sizes: each card takes the size nearest the other's
+          // that it allows.
+          var mine = sizes.get(card), theirs = sizes.get(next.ref);
+          var a = homeSnapToAllowed(sizesOf(card), theirs.w, theirs.h);
+          var b = homeSnapToAllowed(sizesOf(next.ref), mine.w, mine.h);
+          if (a.w !== mine.w || a.h !== mine.h || b.w !== theirs.w || b.h !== theirs.h) {
+            intent.fits = { slot: { w: a.w, h: a.h }, ref: { w: b.w, h: b.h } };
+          }
+        }
+        if (next.cell) next.ref = refToCover(sizes.get(card), next.cell, liftSpots);
+        lay(intent);
+        if (next.kind !== "swap") {
+          // The space to fit is the free cells from the slot's corner,
+          // as long as the fitted card covers the cell the pointer is
+          // over; else the free cells from that cell itself.
+          var sp = slot._homeSpan, at = sp ? { x: sp.x, y: sp.y } : null;
+          var f = spaceFit(card, at, null, sizes.get(card));
+          var covers = function (pos, size, c) {
+            return c.x >= pos.x && c.x < pos.x + size.w && c.y >= pos.y && c.y < pos.y + size.h;
+          };
+          if (next.cell && at && !covers(at, f || sp, next.cell)) {
+            var g = spaceFit(card, next.cell, null, sizes.get(card));
+            if (g || !f) { at = next.cell; f = g; }
+          }
+          if (f) {
+            intent.fits = { slot: f };
+            if (next.cell) intent.fitRef = refToCover(f, at, spotsNow());
+          }
+          paintHint();
+        }
+      }
+      // spotsNow: where each card stands now.
+      function spotsNow() {
+        var m = new Map();
+        Array.prototype.forEach.call(moduleCards(), function (c) {
+          if (c._homeSpan) m.set(c, { x: c._homeSpan.x, y: c._homeSpan.y });
+        });
+        return m;
+      }
+      // refToCover: the card the slot goes before so that, at size,
+      // it covers cell and moves the other cards least from spots
+      // (homeInsertAt); the card after the cell when no place covers it.
+      function refToCover(size, cell, spots) {
+        var others = base.filter(function (n) { return n !== slot; });
+        var cols = homeCols(grid);
+        var k = homeInsertAt(
+          others.map(function (n) { var s = sizes.get(n); return { w: Math.min(s.w, cols), h: s.h }; }),
+          others.map(function (n) { return spots.get(n); }),
+          { w: Math.min(size.w, cols), h: size.h }, cell, cols);
+        if (k < 0) return cardAfterCell(cell, null);
+        return k < others.length ? others[k] : null;
+      }
+
+      // lay draws an intent: the order it makes from the drag's start,
+      // every card at its own size but the ones a fit resizes.
+      function lay(it) {
+        var fit = it && it.fit && it.fits;
+        var how = fit && it.fitRef !== undefined ? { kind: it.kind, ref: it.fitRef } : it;
+        var order = how ? homeReorder(base, slot, how) : base;
+        flip(function () {
+          sizes.forEach(function (s, n) {
+            if (n === card) return;
+            var want = fit && fit.ref && n === it.ref ? fit.ref : s;
+            var now = sizeOf(n);
+            if (now.w !== want.w || now.h !== want.h) sizeCard(n, want.w, want.h);
+          });
+          var own = fit ? fit.slot : sizes.get(card);
+          sizeCard(slot, own.w, own.h);
+          var kids = Array.prototype.filter.call(grid.children, function (n) { return order.indexOf(n) >= 0; });
+          var same = kids.length === order.length && kids.every(function (n, i) { return n === order[i]; });
+          if (!same) order.forEach(function (n) { grid.appendChild(n); });
+        });
+        var marked = grid.querySelectorAll(":scope > .w-swap-with");
+        for (var i = 0; i < marked.length; i++) marked[i].classList.remove("w-swap-with");
+        if (it && it.kind === "swap") it.ref.classList.add("w-swap-with");
+        paintHint();
         // Let the hop's layout settle under the pointer before the
         // next decision.
         holdUntil = performance.now() + 90;
         dirty = true;
+      }
+
+      // The slot says what the drop will do, and, when holding on
+      // would fit the space, fills a bar while the hold counts.
+      function paintHint() {
+        var it = intent, main = "", sub = "";
+        if (it && it.kind === "swap") {
+          main = "Swap with " + titleOf(it.ref);
+          if (it.fits) sub = it.fit ? "Trading sizes" : "Hold to trade sizes";
+        } else if (it && it.fits) {
+          sub = it.fit ? "Fits the space: " + it.fits.slot.w + " by " + it.fits.slot.h : "Hold to fit the space";
+        }
+        hint.replaceChildren();
+        if (main) {
+          var m = document.createElement("span");
+          m.className = "drag-hint-main";
+          m.textContent = main;
+          hint.appendChild(m);
+        }
+        if (sub) {
+          var sb = document.createElement("span");
+          sb.className = "drag-hint-sub";
+          sb.textContent = sub;
+          hint.appendChild(sb);
+        }
+        var waiting = !!(it && it.fits && !it.fit);
+        // The bar restarts with every new intent.
+        slot.classList.remove("w-hold");
+        if (waiting) {
+          void slot.offsetWidth;
+          slot.classList.add("w-hold");
+        }
+        slot.classList.toggle("w-held", !!(it && it.fit));
       }
 
       function onMove(e) {
@@ -2085,10 +2563,17 @@
       }
 
       // Every exit path ends here: no slot, no lifted card, no
-      // inline style survives a drag.
+      // inline style survives a drag. The card takes the slot's
+      // place and size.
       function settle() {
-        if (slot && slot.parentNode) grid.replaceChild(card, slot);
+        if (slot && slot.parentNode) {
+          var s = sizeOf(slot);
+          sizeCard(card, s.w, s.h);
+          grid.replaceChild(card, slot);
+        }
         slot = null;
+        var marked = grid.querySelectorAll(":scope > .w-swap-with");
+        for (var i = 0; i < marked.length; i++) marked[i].classList.remove("w-swap-with");
         card.classList.remove("dragging");
         card.style.left = card.style.top = card.style.width = card.style.height = "";
         card.style.transform = card.style.transformOrigin = "";
@@ -2123,26 +2608,47 @@
         window.setTimeout(finish, 260);
       }
 
+      // putBack lays out the arrangement the drag started from.
+      function putBack() {
+        flip(function () {
+          sizes.forEach(function (s, n) {
+            var now = sizeOf(n);
+            if (now.w !== s.w || now.h !== s.h) sizeCard(n, s.w, s.h);
+          });
+          savedNodes.forEach(function (n) { grid.appendChild(n); });
+        });
+      }
+
       function onUp() {
         detach();
         if (!lifted) return;
+        // A drop just as the pointer came to rest still means it.
+        if (pending) take(pending);
         lifted = false;
+        var it = intent;
         landThen(function () {
           settle();
           var moved = moduleCards();
           var changed = moved.length !== savedNodes.length;
           for (var i = 0; !changed && i < moved.length; i++) changed = moved[i] !== savedNodes[i];
-          if (!changed) return;
-          saveOrder().then(function (ok) {
+          var resized = savedNodes.filter(function (n) {
+            var was = sizes.get(n), now = sizeOf(n);
+            return was.w !== now.w || was.h !== now.h;
+          });
+          if (!changed && !resized.length) return;
+          saveArrangement().then(function (ok) {
             if (!ok) {
-              flip(function () { for (var j = 0; j < savedNodes.length; j++) grid.appendChild(savedNodes[j]); });
+              putBack();
+              refuse(card);
               return;
             }
-            // Dropped beside empty cells, the card grows to fill them
-            // when it allows that size, as a card stretched to its row
-            // did before rows were fixed.
-            var grown = gapGrowth(card);
-            if (grown.length) growInto(grown);
+            record(before);
+            resized.forEach(function (n) { refreshCard(n); });
+            if (!statusEl) return;
+            var s = sizeOf(card);
+            statusEl.textContent = it && it.kind === "swap"
+              ? titleOf(card) + " swapped with " + titleOf(it.ref) + (it.fit ? ", sizes traded." : ".")
+              : titleOf(card) + " moved" + (resized.indexOf(card) >= 0 ? ", now " + s.w + " by " + s.h : "") + ".";
           });
         });
       }
@@ -2151,11 +2657,21 @@
         detach();
         if (!lifted) return;
         lifted = false;
-        // Back to where it started: the slot returns to the card's
-        // old place, the card lands there.
-        var at = savedNodes.indexOf(card);
-        var next = savedNodes[at + 1] || null;
-        flip(function () { grid.insertBefore(slot, next); });
+        pending = null;
+        intent = null;
+        // Back to where it started: every card at its old place and
+        // size, the slot in the card's place, the card lands there.
+        flip(function () {
+          sizes.forEach(function (s, n) {
+            if (n === card) return;
+            var now = sizeOf(n);
+            if (now.w !== s.w || now.h !== s.h) sizeCard(n, s.w, s.h);
+          });
+          var own = sizes.get(card);
+          sizeCard(slot, own.w, own.h);
+          base.forEach(function (n) { grid.appendChild(n); });
+        });
+        paintHint();
         landThen(settle);
       }
 
@@ -2165,8 +2681,13 @@
       document.addEventListener("keydown", onKey, true);
     }
 
+    // addAt is the hole Add a widget was opened from: the widget added
+    // goes into it, at the largest size it allows that the hole holds.
+    var addAt = null;
     function addModule(id, btn) {
       btn.disabled = true;
+      var at = addAt, before = arrangement();
+      addAt = null;
       // A widget already on the home that allows copies gets another
       // card under a new key; any other add is the plain toggle.
       var copy = !!widgetCounts()[id];
@@ -2185,11 +2706,30 @@
           var stale = grid.querySelector('.card[data-key="' + CSS.escape(key) + '"]');
           if (stale) stale.remove();
           window.EveSynapseModal.close(modal);
-          flip(function () { grid.appendChild(node); });
-          placeCard(node);
+          // The hole is measured before the card goes in: the size it
+          // takes is the largest it allows that the hole holds.
           var s = sizeOf(node);
+          var f = at ? spaceFit(node, at, null, s) : null;
+          if (f) {
+            sizeCard(node, f.w, f.h);
+            s = f;
+          }
+          flip(function () {
+            if (at) grid.insertBefore(node, cardAfterCell(at, null));
+            else grid.appendChild(node);
+          });
+          placeCard(node);
           announce(node, s.w, s.h);
           node.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+          // The add saved the widget at the end at its default size; a
+          // card put into a hole saves its place and size too.
+          if (!at) { record(before); return; }
+          saveArrangement().then(function (ok) {
+            // The add itself saved: a reload shows where it stands.
+            if (!ok) { window.location.reload(); return; }
+            record(before);
+            if (f) refreshCard(node);
+          });
         }, function () { window.location.reload(); });
       });
     }
@@ -2242,8 +2782,13 @@
         ev.preventDefault();
         var menu = addBtn.closest("details");
         if (menu) menu.open = false;
+        addAt = null;
         openAdd();
       });
+      grid._homeAddAt = function (cell) {
+        addAt = cell;
+        openAdd();
+      };
       // The Overview menu's "Add a module" lands here from the home
       // with ?add=1: open the pop-up straight away.
       if (/[?&]add=1\b/.test(window.location.search)) openAdd();

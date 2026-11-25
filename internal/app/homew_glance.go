@@ -30,7 +30,8 @@ func init() {
 		Default:     wSize{3, 1},
 		Forms: []homeWidgetForm{
 			{Name: "small", Sizes: "1x1", Says: "Your first figure, its 7-day change and a 30-day line."},
-			{Name: "wide", Sizes: "2x1 3x1", Says: "Your figures as tiles in one row, as many as fit."},
+			// The band is as tall as its tiles.
+			{Name: "wide", Sizes: "2x1 3x1", Says: "Your figures as tiles in one row, as many as fit.", Grow: true},
 			{Name: "tall", Sizes: "1x2 1x3", Says: "Your figures as tiles, one per row."},
 			{Name: "medium", Sizes: "2x2", Says: "Your figures in two columns, each with its line or meter."},
 			{Name: "large", Sizes: "3x2", Says: "Your figures in three columns, each with its line or meter."},

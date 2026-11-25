@@ -78,6 +78,15 @@ type homeWidgetForm struct {
 	Name  string // template suffix and the size picker's name for it
 	Sizes string // "2x1 3x1": every size listed here draws this form
 	Says  string // one plain sentence for the size picker: what this form shows
+	// Grow is the one exception to "a card is exactly its cells": a
+	// card drawing this form is as tall as what it draws, and the rows
+	// it spans take that height (rows it shares with other cards keep
+	// at least a row's height). For a band or a roster whose length is
+	// the point. Without JavaScript the card keeps its cells.
+	Grow bool
+	// GrowRows caps a growing card's scrolling list (data-w-scroll): it
+	// shows this many rows, then scrolls inside. 0 draws every row.
+	GrowRows int
 }
 
 // homeWidgetDef is a widget's whole declaration.
@@ -103,6 +112,7 @@ type homeWidgetDef struct {
 
 	sizesText     string // sizeList, built once at registration
 	sizeNamesText string // sizeNames, built once at registration
+	growText      string // the sizes whose form grows, as sizeList writes them
 }
 
 // widgetInput is what a builder is handed for one card.
@@ -293,6 +303,9 @@ func registerHomeWidget(def homeWidgetDef) {
 		if f.Name == "" {
 			panic("home widget " + def.ID + ": a form has no name")
 		}
+		if f.GrowRows < 0 || (f.GrowRows > 0 && !f.Grow) {
+			panic(fmt.Sprintf("home widget %s: form %s caps rows without growing", def.ID, f.Name))
+		}
 		for _, raw := range strings.Fields(f.Sizes) {
 			s, ok := parseWSize(raw)
 			if !ok {
@@ -335,6 +348,13 @@ func registerHomeWidget(def homeWidgetDef) {
 	// The size picker's data depends only on the declaration: built
 	// here once, not on every card render.
 	d.sizesText, d.sizeNamesText = d.sizeList(), d.sizeNames()
+	var grows []string
+	for _, sz := range d.sizes {
+		if d.Forms[d.formOf[sz]].Grow {
+			grows = append(grows, sz.String())
+		}
+	}
+	d.growText = strings.Join(grows, " ")
 }
 
 // homeMaxCopies is the most cards one widget may have on a home.
@@ -732,6 +752,8 @@ type homeWidget struct {
 	Sizes                string              // data-sizes: every allowed size
 	SizeNames            string              // data-size-names: JSON, size -> {"form", "says"} for the size picker
 	SizeClass            string              // gw1-3 gh1-4: the grid classes the CSS applies
+	Grow                 string              // data-grow: the sizes whose form takes its content's height
+	GrowRows             int                 // data-grow-rows: the drawn form's list cap when it grows
 	Cap                  int                 // rows or items the server renders before "N more", by height
 	Customize            bool                // rendering under /?customize=1 (form return targets)
 	Expanded             bool                // the Expand view: the largest form, in the shared modal
@@ -766,6 +788,7 @@ func (app *Application) buildHomeWidget(ctx context.Context, ts *template.Templa
 	w := homeWidget{
 		ID: def.ID, Key: item.LayoutKey(), Title: def.Title, Href: def.Href, HrefName: navLabelFor(def.Href),
 		Size: size, Form: form.Name, Sizes: def.sizesText, SizeNames: def.sizeNamesText,
+		Grow: def.growText, GrowRows: form.GrowRows,
 		SizeClass:   fmt.Sprintf("gw%d gh%d", size.W, size.H),
 		Cap:         homeCap(size.H),
 		Customize:   customize,

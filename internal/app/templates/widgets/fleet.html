@@ -2,7 +2,9 @@
      sort option says. Five forms; none reads its size. The roster in
      the tall, medium and large forms scrolls inside the card
      (data-w-scroll) under its filter; home.js filters each body on its
-     own (.fleet-box). */}}
+     own (.fleet-box). The tables are as tall as the roster up to ten
+     pilots (the forms grow, homew_fleet.go), counting the rows marked
+     data-w-row. */}}
 
 {{define "w-fleet-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
 <dl class="fleet-counts">
@@ -23,7 +25,7 @@
 {{define "w-fleet-tall"}}<div class="w-body fleet-box {{.BodyClass}}">{{with .Data}}{{if .Rows}}
 {{template "fleet-filter" .}}
 <ul class="fleet-list" data-w-scroll>{{range .Rows}}
-  <li class="fleet-row" data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>
+  <li class="fleet-row" data-w-row data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>
     <span class="pilot"><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{if .OnlineKnown}}<span class="dot {{if .Online}}on{{else}}off{{end}}" title="{{if .Online}}Online{{else}}Offline{{end}}"></span>{{end}}</span>
     <span class="fleet-list-main"><a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}
       <small>{{if .SystemName}}{{placeLink .SystemRef}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}{{end}}</small></span>
@@ -40,7 +42,7 @@
 <table class="fleet-table">
   <thead><tr><th>Character</th><th class="opt2">Location</th><th>Training</th><th class="num">Wallet</th></tr></thead>
   <tbody>
-  {{range .Rows}}<tr class="fleet-row" data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>{{template "fleet-cell-pilot" .}}<td>{{template "fleet-training" .}}</td>{{template "fleet-cell-wallet" .}}</tr>
+  {{range .Rows}}<tr class="fleet-row" data-w-row data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>{{template "fleet-cell-pilot" .}}<td>{{template "fleet-training" .}}</td>{{template "fleet-cell-wallet" .}}</tr>
   {{end}}
   </tbody>
 </table>
@@ -56,7 +58,7 @@
   <thead><tr><th>Character</th><th class="opt2">Location</th><th class="opt">Ship</th><th>Training</th><th class="num">Wallet</th><th><span class="visually-hidden">Details</span></th></tr></thead>
   <tbody>
   {{range .Rows}}
-  <tr class="fleet-row" data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>
+  <tr class="fleet-row" data-w-row data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>
     {{template "fleet-cell-pilot" .}}
     <td class="opt">{{itemLink .ShipTypeID .ShipTypeName}}{{if .ShipName}}<br><small>&ldquo;{{.ShipName}}&rdquo;</small>{{end}}</td>
     <td>{{template "fleet-training" .}}</td>

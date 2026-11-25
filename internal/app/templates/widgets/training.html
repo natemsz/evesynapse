@@ -45,13 +45,17 @@
 </div>
 {{end}}</div>{{end}}
 
-{{/* The horizon as a table: skill and its level pips, pilot, when. */}}
+{{/* The horizon as a table: skill, its level pips, pilot, when. The
+     pips stand in a column of their own on a card wide enough for it
+     (.training-lvl); on a narrower one that column is not drawn and
+     the same pips follow the skill's name (.training-lvl-in), wrapping
+     under it. home.css decides from the card's width. */}}
 {{define "w-training-list"}}{{$w := .}}{{with .Data}}{{if .Events}}
 <div class="tw">
 <table data-cards="off">
-  <thead><tr><th>Skill</th><th>Character</th><th>Finishes</th></tr></thead>
+  <thead><tr><th>Skill</th><th class="training-lvl">Level</th><th>Character</th><th>Finishes</th></tr></thead>
   <tbody data-w-fit>
-  {{range $i, $r := .Events}}<tr{{if ge $i $w.Cap}} data-w-over{{end}}><td>{{itemLink .SkillID .Skill}} {{skillLevel .TrainedLvl .LevelNum .State}}</td><td>{{charLink $w.ViewerChars .CharID .Char}}</td><td class="when" title="{{.Finish}}"><span class="countdown" data-finish="{{.FinishAt}}">in {{.Left}}</span></td></tr>{{end}}
+  {{range $i, $r := .Events}}<tr{{if ge $i $w.Cap}} data-w-over{{end}}><td>{{itemLink .SkillID .Skill}}<span class="training-lvl-in"> {{skillLevel .TrainedLvl .LevelNum .State}}</span></td><td class="training-lvl">{{skillLevel .TrainedLvl .LevelNum .State}}</td><td class="training-who"><span class="training-char" title="{{.Char}}">{{charLink $w.ViewerChars .CharID .Char}}</span></td><td class="when" title="{{.Finish}}"><span class="countdown" data-finish="{{.FinishAt}}">in {{.Left}}</span></td></tr>{{end}}
   </tbody>
 </table>
 </div>

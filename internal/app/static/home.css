@@ -591,6 +591,19 @@
 .training-idle { color: var(--muted); }
 .training-idlelist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.2rem; font-size: var(--fs-sm); }
 .card[data-widget="training"] .when { white-space: nowrap; }
+/* The horizon table: the level pips get a column of their own once the
+   card is 32rem wide (the medium and large forms); a narrower card draws
+   them after the skill's name instead. The pilot column takes the width
+   the other columns leave (max-width: 0 keeps a long name from widening
+   the table) and a long name ends in an ellipsis, the full name in the
+   title. */
+.card[data-widget="training"] .training-lvl { display: none; }
+@container widget (width >= 32rem) {
+  .card[data-widget="training"] .training-lvl { display: table-cell; white-space: nowrap; }
+  .card[data-widget="training"] .training-lvl-in { display: none; }
+}
+.card[data-widget="training"] .training-who { width: 30%; max-width: 0; }
+.training-char { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Fleet Overview. */
 .fleet-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); margin: 0; flex: 1 1 auto; align-content: center; }

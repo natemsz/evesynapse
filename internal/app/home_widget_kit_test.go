@@ -3,6 +3,8 @@ package app
 import (
 	"strings"
 	"testing"
+
+	db "evesynapse/internal/db/sqlc"
 )
 
 // TestHomeWidgetDeclarationsHoldTheirContract: every registered home
@@ -82,6 +84,47 @@ func TestHomeWidgetDeclarationsHoldTheirContract(t *testing.T) {
 		if category[a.Category] > category[b.Category] ||
 			(a.Category == b.Category && a.Title > b.Title) {
 			t.Errorf("catalog lists %q before %q, want category then title order", a.ID, b.ID)
+		}
+	}
+}
+
+// TestWidgetSettingsFormsReadAsSent: the settings sheet's form reads
+// back as the account set it. A toggle posts "no" ahead of its
+// checkbox, so the last value wins; a multi posts an empty marker
+// ahead of its picks; a field the form leaves out keeps its stored
+// value. A form with a value that is not valid for the account (picks
+// past the limit, no picks, another account's character) is refused,
+// and the stored settings stand.
+func TestWidgetSettingsFormsReadAsSent(t *testing.T) {
+	def := &homeWidgetDef{Options: []widgetOption{
+		optScope(),
+		optToggle("due", "Only planets that need a visit", false),
+		optMulti("topics", "Topics", "a,b", 2, "a:A", "b:B", "c:C"),
+		optChoice("range", "History", "30", "30:30 days", "90:90 days"),
+	}}
+	chars := []db.Character{{CharacterID: 7, Name: "Juno Park", Tags: "industry"}}
+	stored := def.optionsFrom(`{"scope":"tag:industry","due":"yes","topics":"c","range":"90"}`, chars)
+	if stored.Get("scope") != "tag:industry" || stored.Get("due") != "yes" || stored.Get("topics") != "c" || stored.Get("range") != "90" {
+		t.Fatalf("stored settings read as %v", stored)
+	}
+	got, ok := def.formOptions(map[string][]string{
+		"scope":  {"char:7"},
+		"due":    {"no"},
+		"topics": {"", "a", "b"},
+	}, stored, chars)
+	if !ok || got.Get("scope") != "char:7" || got.Get("due") != "no" || got.Get("topics") != "a,b" || got.Get("range") != "90" {
+		t.Errorf("unticked toggle, two picks, range left out: %v (ok %v)", got, ok)
+	}
+	if got, ok := def.formOptions(map[string][]string{"due": {"no", "yes"}}, stored, chars); !ok || got.Get("due") != "yes" {
+		t.Errorf("ticked toggle: due = %q (ok %v), want yes", got.Get("due"), ok)
+	}
+	for name, form := range map[string]map[string][]string{
+		"another account's character": {"scope": {"char:8"}},
+		"three picks of two":          {"topics": {"", "a", "b", "c"}},
+		"no picks":                    {"topics": {""}},
+	} {
+		if got, ok := def.formOptions(form, stored, chars); ok || got.Get("scope") != "tag:industry" || got.Get("topics") != "c" {
+			t.Errorf("%s: saved %v (ok %v), want refused with the stored settings", name, got, ok)
 		}
 	}
 }

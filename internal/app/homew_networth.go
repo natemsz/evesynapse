@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
@@ -56,7 +57,16 @@ type netWorthView struct {
 const netWorthRanked = 8
 
 func buildNetWorthWidget(ctx context.Context, app *Application, in *widgetInput) any {
+	// The whole account's figures are shared with At a Glance; a card
+	// scoped to some characters sums its own over them.
 	nw := in.Shared.NetWorth(ctx)
+	var ids []int64
+	if !in.Scope.All() {
+		for _, c := range in.Chars {
+			ids = append(ids, c.CharacterID)
+		}
+		nw = app.buildNetWorth(ctx, in.UserID, in.Bundles, ids)
+	}
 	v := &netWorthView{netWorthWidget: nw}
 	if !nw.Any {
 		v.Empty = wEmpty{Text: "Balances appear here once your characters have synced."}
@@ -117,7 +127,7 @@ func buildNetWorthWidget(ctx context.Context, app *Application, in *widgetInput)
 		span, hist := 30, month
 		if n, err := strconv.Atoi(in.Opts.Get("range")); err == nil && n > 30 {
 			span = n
-			if more, err := app.netWorthDays(ctx, in.UserID, n); err != nil {
+			if more, err := app.netWorthDays(ctx, in.UserID, n, ids); err != nil {
 				logging.Errorf("net worth history for user %d: %v", in.UserID, err)
 			} else {
 				hist = more
@@ -145,7 +155,14 @@ func buildNetWorthWidget(ctx context.Context, app *Application, in *widgetInput)
 	}
 	if in.Draws("large") {
 		if in.Opts.Get("split") == "places" {
-			v.RankedBy, v.Ranked = "Top locations", app.netWorthByPlace(ctx, in.UserID)
+			// Always the linked characters, scoped or not: an unlinked
+			// character's rows stay in the table but are not the
+			// account's any more.
+			linked := make([]int64, 0, len(in.Chars))
+			for _, c := range in.Chars {
+				linked = append(linked, c.CharacterID)
+			}
+			v.RankedBy, v.Ranked = "Top locations", app.netWorthByPlace(ctx, in.UserID, linked)
 		} else {
 			v.RankedBy, v.Ranked = "By character", netWorthByChar(nw.chars, viewerChars(in.Chars))
 		}
@@ -167,9 +184,13 @@ func netWorthByChar(chars []netWorthChar, viewer map[int64]bool) *wRanked {
 }
 
 // netWorthByPlace ranks the places holding the most asset value: one
-// bounded read of the stored per-place values, highest first.
-func (app *Application) netWorthByPlace(ctx context.Context, userID int64) *wRanked {
-	rows, err := app.queries.ListUserTopAssetLocations(ctx, userID)
+// bounded read of the stored per-place values, highest first, over
+// charIDs: the characters linked to the account, or some of them.
+func (app *Application) netWorthByPlace(ctx context.Context, userID int64, charIDs []int64) *wRanked {
+	if len(charIDs) == 0 {
+		return nil
+	}
+	rows, err := app.queries.ListUserTopAssetLocations(ctx, db.ListUserTopAssetLocationsParams{UserID: userID, CharacterIds: charIDs})
 	if err != nil {
 		logging.Errorf("net worth by location for user %d: %v", userID, err)
 		return nil

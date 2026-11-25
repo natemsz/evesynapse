@@ -1743,6 +1743,15 @@ label > small:first-child, .lp-field > span, .mb-minvol > span, .fchips-label,
   letter-spacing: 0.06em;
   color: var(--muted-2);
 }
+/* Hint: one sentence under a control saying what it does. */
+.field-hint {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--muted);
+}
 /* Card title: an h3, a label that titles its panel's one field
    (the scan paste box), the calendar's month, a card head, and a
    chart's title. */
@@ -1849,22 +1858,6 @@ html.js :has(> [data-tabs]:not([data-tabs-ready])) .ti-h { display: none; }
 .cust-actions form { margin: 0; }
 .cust-actions button, .cust-row > form button { font: inherit; cursor: pointer; }
 
-/* --- widget settings --- The button is the no-JS path (app.js submits
-   on change). */
-.widget-scope { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin: 0 0 0.5rem; }
-.widget-scope select {
-  background: var(--input-bg);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  padding: 0.3rem 0.4rem;
-  font: inherit;
-}
-html[data-theme="light"] .widget-scope select {
-  border-color: #d8cdb8;
-}
-.widget-scope select:focus { border-color: var(--accent); outline: none; }
-
 /* --- home customize mode --- The drag handles, × and add-module
    pop-up are inserted by app.js; without it the noscript module list
    carries plain forms. */
@@ -1910,6 +1903,8 @@ html[data-theme="light"] .widget-scope select {
 /* In Customize the heading is a row: handle, title, then room for the
    corner controls, all on one centre line. */
 .home-custom.has-controls .card > h3:first-child { padding-right: 5.2rem; }
+/* A third button, the settings gear, on a widget with options. */
+.home-custom.has-controls .card:has(> template[data-w-settings]) > h3:first-child { padding-right: 7.3rem; }
 .cardctl {
   position: absolute;
   /* The heading band's own padding: the buttons share its centre. */

@@ -40,7 +40,16 @@
 {{end}}
 </div>
 </div>
-{{if .Home.Customize}}<p class="visually-hidden" role="status" data-home-status></p>{{else}}
+{{if .Home.Customize}}<p class="visually-hidden" role="status" data-home-status></p>
+<div class="modal-backdrop" id="w-settings-modal" hidden>
+  <div class="modal w-settings-modal" role="dialog" aria-modal="true" aria-labelledby="w-settings-title">
+    <div class="modal-head">
+      <h2 id="w-settings-title" data-w-settings-title>Settings</h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
+    </div>
+    <div data-w-settings-box></div>
+  </div>
+</div>{{else}}
 <div class="modal-backdrop" id="w-expand-modal" hidden>
   <div class="modal w-expand-modal" role="dialog" aria-modal="true" aria-labelledby="w-expand-title">
     <div class="modal-head">
@@ -101,6 +110,7 @@
     </form>
     {{end}}
   </p>
+  {{with .Settings}}{{template "w-settings" .}}{{end}}
 </div>
 {{end}}
 <p><a class="btn" href="/">Done</a></p>

@@ -26,7 +26,7 @@ func TestNetWorthDaysSplitTheTotal(t *testing.T) {
 	seedWalletSample(t, q, user.ID, 3, "2026-03-01", 999, sql.NullFloat64{}) // unknown: not counted at all
 	seedWalletSample(t, q, user.ID, 1, "2026-03-02", 5000, sql.NullFloat64{})
 	seedWalletSample(t, q, user.ID, 1, "2026-03-03", 300, nw(200)) // balance read after the net worth: assets clamp at 0
-	days, err := app.netWorthDays(ctx, user.ID, 30)
+	days, err := app.netWorthDays(ctx, user.ID, 30, nil)
 	if err != nil {
 		t.Fatalf("netWorthDays: %v", err)
 	}

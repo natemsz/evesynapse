@@ -408,3 +408,20 @@
 .w-expand-box > .w-card .w-spark { flex: 1 1 0; height: auto; }
 .w-expand-box > .w-card .w-cols { flex: 1 1 0; }
 .w-expand-note { margin: auto; color: var(--muted); }
+
+/* Widget settings: the sheet the gear opens in the shared modal, and
+   the same form in the no-script module list. A field per row, its
+   label over it and its hint under it; checkboxes sit beside their
+   words. */
+.modal.w-settings-modal { width: min(26rem, calc(100vw - 2rem)); }
+.w-settings { display: flex; flex-direction: column; gap: var(--space-3); }
+.w-set-field { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; border: 0; min-width: 0; }
+.w-set-field > label { display: flex; flex-direction: column; gap: var(--space-1); }
+.w-set-field select { width: 100%; }
+.w-set-multi { gap: var(--space-2); }
+.w-set-multi > legend { padding: 0; margin-bottom: var(--space-1); }
+.w-set-check { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; }
+.w-set-check input[type="checkbox"] { margin: 0; accent-color: var(--accent); }
+.w-set-foot { margin: 0; display: flex; justify-content: flex-end; }
+.w-set-error { margin: 0; color: var(--v-bad-ink, #ffab8f); }
+#home-module-list .w-settings { margin: var(--space-2) 0 var(--space-3); max-width: 26rem; }

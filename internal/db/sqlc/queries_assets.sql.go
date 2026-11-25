@@ -278,10 +278,16 @@ const listUserTopAssetLocations = `-- name: ListUserTopAssetLocations :many
 SELECT location_id, MAX(location_type)::text AS location_type, SUM(est_value)::float8 AS est_value
 FROM asset_location_values
 WHERE user_id = $1
+  AND (COALESCE(cardinality($2::bigint[]), 0) = 0 OR character_id = ANY($2::bigint[]))
 GROUP BY location_id
 ORDER BY SUM(est_value) DESC, location_id
 LIMIT 8
 `
+
+type ListUserTopAssetLocationsParams struct {
+	UserID       int64   `json:"user_id"`
+	CharacterIds []int64 `json:"character_ids"`
+}
 
 type ListUserTopAssetLocationsRow struct {
 	LocationID   int64   `json:"location_id"`
@@ -290,9 +296,10 @@ type ListUserTopAssetLocationsRow struct {
 }
 
 // The account's most valuable places, summed over its characters,
-// highest first, for the home Net Worth split by location.
-func (q *Queries) ListUserTopAssetLocations(ctx context.Context, userID int64) ([]ListUserTopAssetLocationsRow, error) {
-	rows, err := q.db.Query(ctx, listUserTopAssetLocations, userID)
+// highest first, for the home Net Worth split by location. A
+// non-empty character_ids keeps only those characters.
+func (q *Queries) ListUserTopAssetLocations(ctx context.Context, arg ListUserTopAssetLocationsParams) ([]ListUserTopAssetLocationsRow, error) {
+	rows, err := q.db.Query(ctx, listUserTopAssetLocations, arg.UserID, arg.CharacterIds)
 	if err != nil {
 		return nil, err
 	}

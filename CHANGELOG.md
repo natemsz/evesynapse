@@ -7,7 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v1.0.2.1] - 2026-11-24
+## [v1.0.2.4] - 2026-11-25
+
+Automated build of EveSynapse v1.0.2.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).
+
+## What's Changed
+
+### 🚀 Features
+* Show only our own kill values on the home, add four At a Glance figures, and fix core-only presets and empty Trade Ideas tabs by @natemsz in #603
+* Add the Doctrine Readiness home widget and the fold behind it by @natemsz in #602
+* Store gate camps per system and show them in Radar by @natemsz in #601
+* Add the Radar home widget by @natemsz in #600
+* Let home widgets have copies, undo a remove, fill gaps and refresh live by @natemsz in #599
+* Add the Loyalty Points, Market Movers and Sovereignty home widgets by @natemsz in #598
+* Add the Clones and Fatigue, Mail and Contracts home widgets by @natemsz in #597
+* Add the Kills and Losses and Ship Replacement home widgets by @natemsz in #596
+* Add the Coming Up and Fleets home widgets by @natemsz in #595
+* Lay the home out in fixed rows by default, and set widget defaults and presets for the forms by @natemsz in #594
+* Give the Briefing a form for each size and two new topics by @natemsz in #593
+* Give the market and corporation widgets a form for each size by @natemsz in #592
+* Give Industry, Production Lines and Planetary Industry a form for each size by @natemsz in #591
+* Give At a Glance, Training Horizon and Fleet Overview a form for each size by @natemsz in #590
+* Give Wallet Flow and Profit Pulse a form for each size by @natemsz in #589
+* Give home widgets a settings sheet with a character scope by @natemsz in #588
+* Build home widgets from kit parts, open them with Expand, and rebuild Net Worth on the kit by @natemsz in #587
+* Lay the home grid out from the page's width, with fixed rows on request by @natemsz in #586
+* Render one home card alone and size cards by their declared forms by @natemsz in #585
+* Declare each home widget once by @natemsz in #584
+
+### 🐛 Bug Fixes
+* Pin both At a Glance sparklines as drawn only when they have points by @natemsz in #605
+* Bring every home widget back to the live release's functionality, at the size the reader picked by @natemsz in #604
+
+### Other Changes
+* Upgrade ranvia.io/go to v0.5.0 by @natemsz in #583
+* Align older chip, pill, button, and card corner radii to the radius tokens by @natemsz in #582
+* Stretch page containers to full width in mobile view by @natemsz in #581
+* Keep character Save buttons on a single line by @natemsz in #580
+* Move live highlight bar onto contract cards on narrow screens by @natemsz in #579
+* Expand killboard search bar to full width on narrow screens by @natemsz in #578
+* Update changelog for v1.0.2.1 by @natemsz in #576
+
+## [v1.0.2.1]
 
 Automated build of EveSynapse v1.0.2.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).

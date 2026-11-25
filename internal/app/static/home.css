@@ -37,11 +37,9 @@
 .home-bar .customize-prompt {
   top: calc(100% + 8px);
   right: 0;
+  left: auto;
   z-index: 60;
   width: min(22rem, calc(100vw - 2rem));
-}
-@media (max-width: 860px) {
-  .home-bar .customize-prompt { left: auto; right: 0; width: min(22rem, calc(100vw - 2rem)); }
 }
 
 .grid.home-grid {

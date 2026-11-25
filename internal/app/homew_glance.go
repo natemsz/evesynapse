@@ -75,6 +75,8 @@ var glanceTiles = []glanceTileDef{
 	{ID: "extractors", Label: "Extractors stopped", Needs: []string{esi.SnapPlanets, needPlanetLayouts}, Build: glanceExtractors},
 	{ID: "mail", Label: "Unread mail", Needs: []string{esi.SnapMailLabels}, Requires: "mail", Build: glanceMail},
 	{ID: "srp", Label: "Ship replacement pending", Requires: "srp", Build: glanceSRP},
+	{ID: "kills", Label: "Kills, 7 days", Build: glanceKills},
+	{ID: "nextfleet", Label: "Next fleet", Build: glanceNextFleet},
 }
 
 // glanceNeeds is the union of every tile's needs: the card reads the
@@ -548,5 +550,57 @@ func glanceSRP(ctx context.Context, g *glanceBuild) glanceTile {
 		return t
 	}
 	t.Sub = pluralCount(open.Requests, "open claim", "open claims")
+	return t
+}
+
+// glanceKills is the card's pilots' kills over the last 7 days, with the
+// ISK efficiency the Kills and Losses widget shows: our own appraisal
+// only.
+func glanceKills(ctx context.Context, g *glanceBuild) glanceTile {
+	t := glanceTile{Href: "/intel/kills/"}
+	ids := make([]int64, 0, len(g.in.Chars))
+	for _, c := range g.in.Chars {
+		ids = append(ids, c.CharacterID)
+	}
+	if len(ids) == 0 {
+		return t
+	}
+	k, _ := g.app.killsWindow(ctx, ids, g.in.Now.UTC(), 7)
+	t.Value = fmt.Sprint(k.Kills)
+	t.Full = fmt.Sprintf("%s and %s in the last 7 days", pluralCount(k.Kills, "kill", "kills"), pluralCount(k.Losses, "loss", "losses"))
+	t.Sub = pluralCount(k.Losses, "loss", "losses")
+	if k.Efficiency != "" {
+		t.Sub += ", " + k.Efficiency + " ISK efficiency"
+		tone := ""
+		if k.Tone() == "bad" {
+			tone = "warn"
+		}
+		t.Meter = &glanceMeter{Pct: clampPct(k.Pct), Label: "ISK efficiency over 7 days", Tone: tone}
+	}
+	if k.Unpriced > 0 {
+		t.Sub += fmt.Sprintf(", %d not valued yet", k.Unpriced)
+	}
+	return t
+}
+
+// glanceNextFleet is the running fleet, else the next one, that the
+// account can open on the Fleets page, from the render's shared fleets.
+func glanceNextFleet(ctx context.Context, g *glanceBuild) glanceTile {
+	t := glanceTile{Href: fleetsPath}
+	for _, f := range g.in.Shared.Fleets(ctx) {
+		if !f.Access.View {
+			continue
+		}
+		row := g.app.homeFleetRowOf(ctx, f, g.in.Now)
+		t.Sub, t.SubHref = row.Title, row.Href
+		if row.Live {
+			t.Value, t.Full = "Now", row.Title+": "+row.Running
+			t.Tone = "ok"
+		} else {
+			t.Value, t.Full = strings.TrimPrefix(row.Left, "in "), row.Title+" starts "+row.Left
+		}
+		return t
+	}
+	t.Value, t.Full, t.Sub = "None", "No fleet running or coming up in the next 7 days", "None in the next 7 days"
 	return t
 }

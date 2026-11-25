@@ -87,6 +87,7 @@ func TestBriefingDismissalSurvivesCardToggle(t *testing.T) {
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	seedBriefingFixture(t, app, q, user.ID, now)
+	placeBriefingLarge(t, q, user.ID)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	post := func(path, key string) int {

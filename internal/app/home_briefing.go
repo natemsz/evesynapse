@@ -70,6 +70,8 @@ const (
 	briefingNotTraining
 	briefingIdleSlots
 	briefingOrderExpiring
+	briefingSRPReview
+	briefingJoinRequests
 	briefingCourier
 	briefingContract
 	briefingCalendar
@@ -178,6 +180,10 @@ func briefingKindTitle(kind string) string {
 		return "Calendar"
 	case "market":
 		return "Market"
+	case "srp":
+		return "Ship Replacement"
+	case "community":
+		return "Communities"
 	case "camp":
 		return "Gate Camps"
 	case "link":
@@ -265,6 +271,10 @@ func briefingKind(rank int) string {
 		return "skills"
 	case briefingCourier, briefingContract:
 		return "contract"
+	case briefingSRPReview:
+		return "srp"
+	case briefingJoinRequests:
+		return "community"
 	case briefingCalendar:
 		return "calendar"
 	case briefingWatchMove:
@@ -385,7 +395,7 @@ func briefingTopicBuiltIn(id string) bool {
 	return false
 }
 
-func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps, since, now time.Time, shared *homeMarketShared) *briefingWidget {
+func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps, since, now time.Time, shared *homeMarketShared, filter briefingFilter) *briefingWidget {
 	w := &briefingWidget{SinceLabel: briefingSinceLabel(since)}
 	if len(bundles) == 0 {
 		return w
@@ -439,6 +449,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 	// price history (the Needs-attention feed's own sources). ----
 	lines = append(lines, app.briefingMarketLines(ctx, bundles, viewer, names, shared, now, userID, prefs)...)
 	lines = append(lines, app.briefingCampLines(ctx, prefs, bundles, now)...)
+	lines = append(lines, app.briefingWaitingLines(ctx, userID, bundles)...)
 	lines = aggregateBriefing(lines, briefingGroupThreshold(len(bundles)))
 
 	sort.SliceStable(lines, func(i, j int) bool {
@@ -495,7 +506,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 	}
 	var visible []briefingLine
 	for _, l := range lines {
-		if cardsOff[briefingKind(l.Rank)] {
+		if cardsOff[briefingKind(l.Rank)] || !filter.keeps(l.Rank) {
 			continue
 		}
 		if l.key != "" && dismissed[l.key] {

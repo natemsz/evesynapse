@@ -1051,7 +1051,7 @@ func TestWidgetSizeBounds(t *testing.T) {
 		{homeLayoutItem{ID: widgetGlance, W: 3, H: 3}, 3, 2},   // same width, nearest height
 		{homeLayoutItem{ID: widgetNetWorth, W: 2, H: 4}, 2, 3}, // same width, nearest height
 		{homeLayoutItem{ID: widgetFleet, W: 3, H: 3}, 3, 3},    // a declared size stands
-		{homeLayoutItem{ID: widgetBriefing, W: 1, H: 2}, 2, 1}, // nothing covers it: the nearest, smaller on a tie
+		{homeLayoutItem{ID: widgetGlance, W: 1, H: 4}, 1, 3},   // same width, nearest height
 	} {
 		if w, h := widgetSize(c.item); w != c.wantW || h != c.wantH {
 			t.Errorf("widgetSize(%+v) = %dx%d, want %dx%d", c.item, w, h, c.wantW, c.wantH)

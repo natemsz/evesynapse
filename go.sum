@@ -1,5 +1,3 @@
-github.com/alexedwards/scs/pgxstore v0.0.0-20251002162104-209de6e426de h1:wNJVpr0ag/BL2nRGBIESdLe1qoljXIolF/qPi1gleRA=
-github.com/alexedwards/scs/pgxstore v0.0.0-20251002162104-209de6e426de/go.mod h1:hwveArYcjyOK66EViVgVU5Iqj7zyEsWjKXMQhDJrTLI=
 github.com/alexedwards/scs/pgxstore v0.0.0-20261119174900-ed2e92329119 h1:bVnX1wVk9gz8A/pHLXrkOxYJeCWXJ299LKu7YQzY4OE=
 github.com/alexedwards/scs/pgxstore v0.0.0-20261119174900-ed2e92329119/go.mod h1:hwveArYcjyOK66EViVgVU5Iqj7zyEsWjKXMQhDJrTLI=
 github.com/alexedwards/scs/v2 v2.9.0 h1:xa05mVpwTBm1iLeTMNFfAWpKUm4fXAW7CeAViqBVS90=
@@ -42,8 +40,6 @@ github.com/jackc/pgx/v5 v5.13.0/go.mod h1:u2Fi6no03HCSBYE+ZVdLxbwdu3xyi2vU+K/YNJ
 github.com/jackc/puddle/v2 v2.2.1/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
 github.com/jackc/puddle/v2 v2.2.3 h1:f8HoREISb3l5eO9coPgK7U3hKLhWGokOFVcThl5jrao=
 github.com/jackc/puddle/v2 v2.2.3/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
-github.com/klauspost/compress v1.20.4 h1:dD0v/bvxtjCBqQu6sx1TNWkalEY5lNTIe+HY9w8TeNI=
-github.com/klauspost/compress v1.20.4/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
 github.com/klauspost/compress v1.20.5 h1:rJj5VjH4xQxbnLphg6eqUcDxRFCw1jpMdDY9qXlrwSs=
 github.com/klauspost/compress v1.20.5/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
@@ -68,12 +64,8 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
-github.com/tdewolff/minify/v2 v2.24.25 h1:KY1wnYYqW3xzeV8gWXgofpNGrdhivhZW3Pg7HNp/5PY=
-github.com/tdewolff/minify/v2 v2.24.25/go.mod h1:BYEE+vQMcMc8XacA2rmMUgw+WeN4K0XYZqYFECz4seg=
 github.com/tdewolff/minify/v2 v2.25.0 h1:RDGc2ypqgM/fwapxPFWXFicyfL5MK0s1Ky3rV8mNjZs=
 github.com/tdewolff/minify/v2 v2.25.0/go.mod h1:hMx0xVg/szOA9PLvUn+GQuF8HbfEtP7Jxh3r7B7ZOTg=
-github.com/tdewolff/parse/v2 v2.8.20 h1:eU+UStwuoeHnXdaSBIoEfNnj33URx24gJDdNViHHYwM=
-github.com/tdewolff/parse/v2 v2.8.20/go.mod h1:OemXEPll2+Sn7pQ6xFxC9cEm1wDnNt1hC2q3jIh+OoI=
 github.com/tdewolff/parse/v2 v2.25.0 h1:a5gjBNi5lNyrtUxM3Npxqm/BsFCtJ7LwPQJkmLUDFeE=
 github.com/tdewolff/parse/v2 v2.25.0/go.mod h1:OemXEPll2+Sn7pQ6xFxC9cEm1wDnNt1hC2q3jIh+OoI=
 github.com/tdewolff/test v1.0.12 h1:7F21DqIajswxuche0geHdrUZRCWE4oko4b7bcmkkrxk=
@@ -152,11 +144,7 @@ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EV
 gopkg.in/errgo.v2 v2.1.0/go.mod h1:hNsd1EY+bozCKY1Ytp96fpM3vjJbqLJn88ws8XvfDNI=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-ranvia.io/go v0.4.1 h1:DOOpT8ZDXbcO6yYYuwQzT2UhiYUH8YPDLmj9kkNe2SE=
-ranvia.io/go v0.4.1/go.mod h1:/bRHzGTuaLClzQjMAoZLu151yVZwZiCY630wncaLBEs=
-ranvia.io/go v0.4.2 h1:jn235CB+pBMcmB3LeUnUyhL/rBiI7j1JZSstKYlY1lY=
-ranvia.io/go v0.4.2/go.mod h1:/bRHzGTuaLClzQjMAoZLu151yVZwZiCY630wncaLBEs=
-ranvia.io/go v0.4.3 h1:jjrreerWpNB8ZLDIqcegU01qUd3YlsmKUyj5gXa65LE=
-ranvia.io/go v0.4.3/go.mod h1:/bRHzGTuaLClzQjMAoZLu151yVZwZiCY630wncaLBEs=
+ranvia.io/go v0.5.0 h1:5ZorM3woH28H+FCxNQumpeVkaSC2MD1ECjgJFhXHkTE=
+ranvia.io/go v0.5.0/go.mod h1:/bRHzGTuaLClzQjMAoZLu151yVZwZiCY630wncaLBEs=
 rsc.io/qr v0.2.0 h1:6vBLea5/NRMVTz8V66gipeLycZMl/+UlFmk8DvqQ6WY=
 rsc.io/qr v0.2.0/go.mod h1:IF+uZjkb9fqyeF/4tlBoynqmQxUoPfWEKh921coOuXs=

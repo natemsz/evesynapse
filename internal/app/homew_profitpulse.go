@@ -88,23 +88,18 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 	// The page's own totals: the labeled activities only. The
 	// unattributed remainder is not an activity and stays out of the
 	// figures, exactly as on the Profit page.
-	labeled := make(map[string]string, len(profitActivityLabels))
-	for _, l := range profitActivityLabels {
-		labeled[l.key] = l.label
-	}
-	var gross, kept, industryCosts float64
+	gross, kept, has := profitLabeledTotals(acts)
+	v.HasData = has
+	var industryCosts float64
 	byAct := map[string]float64{}
 	for _, a := range acts {
-		if _, ok := labeled[a.Activity]; !ok {
+		if !profitActivityLabeled(a.Activity) {
 			continue
 		}
-		gross += a.Income
-		kept += a.Income - a.Costs
 		byAct[a.Activity] += a.Income - a.Costs
 		if a.Activity == actIndustry {
 			industryCosts = a.Costs
 		}
-		v.HasData = true
 	}
 	if !v.HasData {
 		return v
@@ -118,19 +113,9 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 	if both, err := app.queries.ListProfitByActivity(ctx, db.ListProfitByActivityParams{OwnerKind: ownerChar, OwnerIds: ids, FromDay: prevDay}); err != nil {
 		logging.Errorf("profitpulse: previous window for user %d: %v", in.UserID, err)
 	} else {
-		var bothIn, bothCost, nowIn, nowCost float64
-		for _, a := range both {
-			if _, ok := labeled[a.Activity]; ok {
-				bothIn, bothCost = bothIn+a.Income, bothCost+a.Costs
-			}
-		}
-		for _, a := range acts {
-			if _, ok := labeled[a.Activity]; ok {
-				nowIn, nowCost = nowIn+a.Income, nowCost+a.Costs
-			}
-		}
-		prevKept = (bothIn - bothCost) - (nowIn - nowCost)
-		prevAny = bothIn != nowIn || bothCost != nowCost
+		bothIn, bothKept, _ := profitLabeledTotals(both)
+		prevKept = bothKept - kept
+		prevAny = bothIn != gross || bothKept != kept
 	}
 	if prevAny {
 		d := kept - prevKept
@@ -168,7 +153,7 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 			series[i] = wDay{At: t, Values: []float64{0}}
 		}
 		for _, r := range buckets {
-			if _, ok := labeled[r.Activity]; !ok {
+			if !profitActivityLabeled(r.Activity) {
 				continue
 			}
 			if i, ok := at[r.Bucket]; ok {
@@ -258,4 +243,31 @@ func signedCompact(v float64) string {
 		return "+" + iskCompact(v)
 	}
 	return iskCompact(v)
+}
+
+// profitLabeledTotals is the Profit page's headline from activity
+// rows: gross in and kept profit over the labeled activities only
+// (the unattributed remainder is not an activity). ok is false when
+// no labeled activity has a row.
+func profitLabeledTotals(acts []db.ListProfitByActivityRow) (gross, kept float64, ok bool) {
+	for _, a := range acts {
+		if !profitActivityLabeled(a.Activity) {
+			continue
+		}
+		gross += a.Income
+		kept += a.Income - a.Costs
+		ok = true
+	}
+	return gross, kept, ok
+}
+
+// profitActivityLabeled reports whether an activity is one the Profit
+// page names.
+func profitActivityLabeled(activity string) bool {
+	for _, l := range profitActivityLabels {
+		if l.key == activity {
+			return true
+		}
+	}
+	return false
 }

@@ -156,7 +156,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 		"Fleet Overview",
 		"Fixture Alpha", "Fixture Corp", "Trader",
 		"Fixture Bravo", "Fixture Charlie", "Fixture Delta",
-		`data-fleet-filter`, `data-tag="PI"`,
+		`class="fleet-filter"`, `data-tag="PI"`,
 		"Not training",   // Bravo's idle queue (Alpha trains)
 		"re-link needed", // Charlie's fleet flag
 	)
@@ -165,7 +165,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 	// paused one. The fleet's Not training count says both, and
 	// exactly their two rows carry the idle flag.
 	mustContain(t, "/", body, "Not training (2)")
-	if got := strings.Count(body, `data-idle="1"`); got != 2 {
+	if got := strings.Count(wideCard(body, "fleet"), `data-idle="1"`); got != 2 {
 		t.Errorf("fleet rows flagged idle = %d, want 2 (Bravo's empty queue, Delta's paused queue)", got)
 	}
 
@@ -1048,10 +1048,9 @@ func TestWidgetSizeBounds(t *testing.T) {
 		item         homeLayoutItem
 		wantW, wantH int
 	}{
-		{homeLayoutItem{ID: widgetGlance, W: 3, H: 3}, 3, 1},   // same width, nearest height
+		{homeLayoutItem{ID: widgetGlance, W: 3, H: 3}, 3, 2},   // same width, nearest height
 		{homeLayoutItem{ID: widgetNetWorth, W: 2, H: 4}, 2, 3}, // same width, nearest height
 		{homeLayoutItem{ID: widgetIndustry, W: 3, H: 3}, 2, 3}, // nothing covers it: the nearest size
-		{homeLayoutItem{ID: widgetFleet, W: 1, H: 1}, 2, 2},    // the smallest size that covers it
 		{homeLayoutItem{ID: widgetFleet, W: 3, H: 3}, 3, 3},    // a declared size stands
 		{homeLayoutItem{ID: widgetBriefing, W: 1, H: 2}, 2, 1}, // nothing covers it: the nearest, smaller on a tie
 	} {

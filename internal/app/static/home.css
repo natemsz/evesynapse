@@ -492,3 +492,87 @@
   .grid.home-grid[data-rows="fixed"] > .w-card .w-cols > .pp-wf { height: auto; min-height: 4.5rem; }
 }
 .w-expand-box > .w-card .w-cols > .pp-wf { height: auto; }
+
+/* ---------------------------------------------------------------------
+   Pilot widgets: At a Glance, Training Horizon and Fleet Overview.
+   --------------------------------------------------------------------- */
+
+/* Lists that scroll inside their card (data-w-scroll): the Fleet
+   Overview roster. Where the card is exactly its cells, or in the
+   Expand view, the roster takes the room the other parts leave and
+   scrolls, its header standing at the top. */
+.w-card [data-w-scroll] { min-height: 0; margin: 0; }
+@container page (width >= 36rem) {
+  .grid.home-grid[data-rows="fixed"] > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; overscroll-behavior: contain; }
+}
+.w-expand-box > .w-card .w-body > [data-w-scroll] { flex: 1 1 0; overflow: auto; }
+.w-card [data-w-scroll] thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
+
+/* Bars drawn as a span sized by data-w inside an .l-meter track. */
+.glance-meter > span,
+.card[data-widget="training"] .w-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.glance-meter.warn > span { background: var(--gold); }
+.card[data-widget="training"] .w-meters > li.warn .w-meter > span { background: var(--gold); }
+.card[data-widget="training"] .w-meters > li.bad .w-meter-val { color: var(--v-bad-ink, #ffab8f); }
+
+/* At a Glance: each figure is a tile; the forms set them in one row
+   (wide), one per row (tall), or a grid with a line under each
+   (medium, large). The tiles carry the glass (style.css). */
+.glance-tile { min-height: 0; }
+.glance-tile .l-stat-label a { color: inherit; text-decoration: none; }
+.glance-tile .l-stat-label a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.glance-change { font-size: var(--fs-xs); white-space: nowrap; }
+.glance-change .w-arrow { font-size: var(--fs-rel-glyph); }
+.glance-tile > .glance-meter { margin-top: auto; flex: none; }
+.glance-tile > .w-spark { margin-top: var(--space-1); }
+.glance-band { grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); }
+.glance-stack { display: flex; flex-direction: column; gap: var(--space-2); }
+.glance-grid { flex: 1 1 auto; display: grid; gap: var(--space-2); min-height: 0; }
+.glance-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.glance-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.glance-hero { flex: 1 1 auto; }
+.glance-hero > .w-lead .w-lead-value { font-size: clamp(var(--fs-xl), 14cqi, var(--fs-4xl)); }
+@container widget (width < 30rem) {
+  .glance-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container page (width >= 36rem) {
+  /* Fixed rows: the grid's tiles share its height, two rows of them. */
+  .grid.home-grid[data-rows="fixed"] > .w-card .glance-grid { grid-auto-rows: minmax(0, 1fr); }
+  .grid.home-grid[data-rows="fixed"] > .w-card .glance-grid > .glance-tile { overflow: hidden; }
+  .grid.home-grid[data-rows="fixed"] > .w-card .glance-grid .w-spark { min-height: 1.5rem; }
+}
+
+/* Training Horizon. */
+.training-next .l-stat-value.text { font-size: var(--fs-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.training-next { grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); }
+.training-cols > .training-main { flex: 2 1 0; min-width: 0; display: flex; flex-direction: column; }
+.training-idle { color: var(--muted); }
+.training-idlelist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.2rem; font-size: var(--fs-sm); }
+.card[data-widget="training"] .when { white-space: nowrap; }
+
+/* Fleet Overview. */
+.fleet-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); margin: 0; flex: 1 1 auto; align-content: center; }
+.fleet-counts > div { min-width: 0; }
+.fleet-counts dt { font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.fleet-counts dd { margin: 0; font-family: var(--font-num); font-size: var(--fs-2xl); font-weight: 700; color: var(--text-bright); font-variant-numeric: proportional-nums; }
+.fleet-counts .fleet-count-idle dd, .fleet-counts .fleet-count-idle dd a { color: var(--gold); }
+.fleet-faces { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin: 0; padding: 0; list-style: none; align-content: flex-start; }
+.fleet-face { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; color: var(--text); text-decoration: none; }
+.fleet-face .portrait { width: 3rem; height: 3rem; }
+.fleet-face-name { display: none; max-width: 5.5rem; font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container widget (width >= 60rem) {
+  .fleet-face-name { display: block; }
+}
+.fleet-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.15rem; }
+.fleet-list > .fleet-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0.1rem 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.fleet-list-main { display: flex; flex-direction: column; min-width: 0; }
+.fleet-list-main > a { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fleet-list-main small, .fleet-list-when { font-size: inherit; color: var(--muted); }
+.fleet-list-when { grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fleet-box > .fleet-tools { flex: none; }
+.fleet-box > .fleet-tools input.fleet-filter { width: 100%; box-sizing: border-box; }
+/* A short tall card has room for the roster only: its filter shows
+   from three rows up. */
+@container widget (height < 30rem) and (width < 30rem) {
+  .fleet-box > .fleet-tools { display: none; }
+}

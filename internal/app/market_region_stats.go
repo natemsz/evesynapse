@@ -329,6 +329,34 @@ func typeStations(tb *typeBook) map[int64]*stationAccum {
 	return out
 }
 
+// stampSweptAt records a completed sweep's verification time on
+// every type it fetched in the region, changed or not (schema
+// 184): updated_at stays the last-changed stamp, swept_at is the
+// last-verified stamp the freshness checks read. Chunked like
+// the sweep's other writes.
+func stampSweptAt(ctx context.Context, q *db.Queries, regionID int64, typeIDs []int64, at time.Time) error {
+	for start := 0; start < len(typeIDs); start += sweepBatchSize {
+		end := min(start+sweepBatchSize, len(typeIDs))
+		if _, err := q.TouchMarketRegionStatsSweptAt(ctx, db.TouchMarketRegionStatsSweptAtParams{
+			RegionID: regionID, TypeIds: typeIDs[start:end], SweptAt: at,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fetchedTypeIDs lists every type a staged book carries, in the
+// sweep's deterministic order.
+func (b *hubBook) fetchedTypeIDs() []int64 {
+	ids := make([]int64, 0, len(b.types))
+	for typeID := range b.types {
+		ids = append(ids, typeID)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
 // storeRegionBook writes a swept book into the stored stats. With
 // the region's previous book (ob) in hand and the same UTC day, it
 // writes only the items whose orders or stored sold-per-day figure
@@ -397,6 +425,12 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	sort.Slice(res.gone, func(i, j int) bool { return res.gone[i] < res.gone[j] })
 	res.written = len(res.changed)
 	if !res.full && len(res.changed) == 0 && len(res.gone) == 0 {
+		// Nothing moved, so no stats rewrite: the sweep still
+		// verified every fetched type, and that verification is
+		// what swept_at records.
+		if err := stampSweptAt(ctx, app.queries, regionID, nb.fetchedTypeIDs(), now); err != nil {
+			return res, err
+		}
 		app.recordMarketFetch(ctx, regionSweepKind(regionID), fetchStateOK, "")
 		return res, nil
 	}
@@ -863,6 +897,12 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 			sellVals, buyVals, now); err != nil {
 			return res, err
 		}
+	}
+	// Every type this sweep fetched is verified as of now,
+	// changed or not (schema 184). Inside the same transaction,
+	// so a reader never sees new figures beside a stale stamp.
+	if err := stampSweptAt(ctx, qtx, regionID, nb.fetchedTypeIDs(), now); err != nil {
+		return res, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return res, err

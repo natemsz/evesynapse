@@ -417,6 +417,57 @@ func TestRegionSweepStoresAvgDailyVolume(t *testing.T) {
 	}
 }
 
+// A sweep that fetches a type whose orders did not move verifies
+// it without rewriting its stats: swept_at advances to the new
+// sweep, updated_at keeps the last-changed time.
+func TestRegionSweepStampsUnchangedTypesAsVerified(t *testing.T) {
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	for _, region := range marketRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	transport.books[10000002] = [][]esi.MarketOrder{
+		{
+			{OrderID: 1, TypeID: 34, IsBuyOrder: false, Price: 5.0, VolumeRemain: 100},
+		},
+	}
+	sweepUntilIdle(t, app)
+	first, err := q.GetMarketRegionStat(ctx, db.GetMarketRegionStatParams{RegionID: 10000002, TypeID: 34})
+	if err != nil {
+		t.Fatalf("read swept row: %v", err)
+	}
+	if first.SweptAt.IsZero() {
+		t.Fatal("first sweep left swept_at unset")
+	}
+
+	// Rewind the verified stamp and make The Forge due again
+	// (twice the gate old starts at once). The book is unchanged.
+	stale := time.Now().UTC().Add(-2 * time.Hour)
+	if _, err := conn.ExecContext(ctx, `UPDATE market_region_stats SET swept_at = $1 WHERE region_id = 10000002 AND type_id = 34`, stale); err != nil {
+		t.Fatalf("rewind swept_at: %v", err)
+	}
+	if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
+		Kind: regionSweepKind(10000002), State: fetchStateOK, AttemptedAt: time.Now().UTC().Add(-11 * time.Minute),
+	}); err != nil {
+		t.Fatalf("make Forge due: %v", err)
+	}
+	sweepUntilIdle(t, app)
+
+	second, err := q.GetMarketRegionStat(ctx, db.GetMarketRegionStatParams{RegionID: 10000002, TypeID: 34})
+	if err != nil {
+		t.Fatalf("read re-swept row: %v", err)
+	}
+	if !second.UpdatedAt.Equal(first.UpdatedAt) {
+		t.Errorf("unchanged sweep moved updated_at: %v, want the last-changed %v", second.UpdatedAt, first.UpdatedAt)
+	}
+	if age := time.Since(second.SweptAt); age < 0 || age > time.Minute {
+		t.Errorf("unchanged sweep left swept_at %v old, want a fresh verification stamp", age)
+	}
+}
+
 // The hub sweep reads each region once per ESI market window (five
 // minutes): stats younger than the gate are left alone, and a region
 // past the gate waits for the window to roll over before it starts.

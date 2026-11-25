@@ -539,8 +539,8 @@ WHERE normalized_name = $3;
 DELETE FROM market_region_stats
 WHERE region_id = $1;
 -- name: UpsertMarketRegionStat :exec
-INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at, swept_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 ON CONFLICT (region_id, type_id) DO UPDATE SET
     best_sell    = excluded.best_sell,
     typical_sell = excluded.typical_sell,
@@ -553,13 +553,21 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
     sell_volume  = excluded.sell_volume,
     buy_volume   = excluded.buy_volume,
     avg_daily_volume = excluded.avg_daily_volume,
-    updated_at   = excluded.updated_at;
+    updated_at   = excluded.updated_at,
+    swept_at     = excluded.swept_at;
+-- name: TouchMarketRegionStatsSweptAt :execrows
+-- Stamps the last-verified time (schema 184) on the rows a
+-- completed sweep fetched, changed or not: updated_at keeps
+-- its last-changed meaning, swept_at is what the freshness
+-- checks read.
+UPDATE market_region_stats SET swept_at = sqlc.arg(swept_at)
+WHERE region_id = sqlc.arg(region_id) AND type_id = ANY(sqlc.arg(type_ids)::bigint[]);
 -- name: GetMarketRegionStat :one
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
        volatility_30d, history_days, avg_daily_volume_30d,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d, swept_at
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = $2;
 -- name: ListMarketRegionStatsByType :many
@@ -567,7 +575,7 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
        volatility_30d, history_days, avg_daily_volume_30d,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d, swept_at
 FROM market_region_stats
 WHERE type_id = $1
 ORDER BY region_id;
@@ -618,7 +626,7 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
        volatility_30d, history_days, avg_daily_volume_30d,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d, swept_at
 FROM market_region_stats
 WHERE region_id = $1
 ORDER BY type_id;
@@ -627,7 +635,7 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
        volatility_30d, history_days, avg_daily_volume_30d,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d, swept_at
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = ANY($2::bigint[]);
 -- All swept region stats for the in-memory stat pack snapshot
@@ -637,7 +645,7 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
        volatility_30d, history_days, avg_daily_volume_30d,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d, swept_at
 FROM market_region_stats;
 -- All station stats for the in-memory stat pack snapshot.
 -- name: ListStatPackStationStats :many

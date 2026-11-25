@@ -990,6 +990,7 @@ func (app *Application) houseValue(ctx context.Context, typeID, regionID int64, 
 			TypeID:      typeID,
 			TypicalSell: liveTypicalSell,
 			UpdatedAt:   now,
+			SweptAt:     now,
 		}
 		fromGlobal = regionID == globalMarketRegion
 	}

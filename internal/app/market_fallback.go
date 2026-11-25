@@ -68,10 +68,15 @@ const (
 	// stalling the worker cycle.
 	fuzzworkFetchTimeout = 5 * time.Minute
 	// fallbackOwnFresh is how long our own sweep's row wins
-	// outright: about three missed sweep cycles. Their
-	// half-hour cadence never outbids a live sweep because of
-	// it -- the swap prefers source, then freshness, never
-	// newest-wins, so hub prices cannot flap between sources.
+	// outright once a completed sweep has verified it (the
+	// row's swept_at, schema 184): about three missed sweep
+	// cycles. Their half-hour cadence never outbids a live
+	// sweep because of it: the swap prefers source, then
+	// freshness, never newest-wins, so hub prices cannot
+	// flap between sources. The row's updated_at is its
+	// last-changed stamp and never governs this check: a
+	// type whose orders sit unchanged is verified by every
+	// sweep that fetches it, however old updated_at reads.
 	fallbackOwnFresh = 3 * time.Hour
 	// fallbackHardExpiry is the fallback's use-by: past it the
 	// row renders as no price at all, however empty the page
@@ -139,6 +144,21 @@ type resolvedTypicals struct {
 	AsOf                    time.Time
 }
 
+// ownVerifiedAt is when a completed sweep last verified a
+// row's orders (schema 184): the row's swept_at. A row built
+// before that stamp existed (a zero swept_at, in memory only)
+// reads its last-changed stamp instead, so nothing unstored
+// gains freshness it never had.
+func ownVerifiedAt(own *db.MarketRegionStat) time.Time {
+	if own == nil {
+		return time.Time{}
+	}
+	if own.SweptAt.IsZero() {
+		return own.UpdatedAt
+	}
+	return own.SweptAt
+}
+
 // resolvedRegionTypicals applies the swap order to one
 // (type, region)'s two stored rows (either may be nil). It is
 // the single-pair resolver every consumer goes through: the
@@ -148,7 +168,7 @@ type resolvedTypicals struct {
 // row may speak: nothing stored, or only a fallback row past
 // its hard expiry.
 func resolvedRegionTypicals(own *db.MarketRegionStat, fb *db.MarketStatsFallback, now time.Time) (resolvedTypicals, bool) {
-	if own != nil && now.Sub(own.UpdatedAt) < fallbackOwnFresh {
+	if own != nil && now.Sub(ownVerifiedAt(own)) < fallbackOwnFresh {
 		return resolvedTypicals{
 			TypicalSell: own.TypicalSell, TypicalBuy: own.TypicalBuy,
 			SellBand: own.SellBand, BuyBand: own.BuyBand,

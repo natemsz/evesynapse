@@ -101,7 +101,17 @@ func TestResolvedRegionTypicals(t *testing.T) {
 		return &db.MarketRegionStat{
 			RegionID: 10000002, TypeID: 34, TypicalSell: sell, TypicalBuy: sell / 2,
 			SellBand: sell * 2, BuyBand: sell / 3, SellOrders: 10, BuyOrders: 9,
-			UpdatedAt: now.Add(-age),
+			UpdatedAt: now.Add(-age), SweptAt: now.Add(-age),
+		}
+	}
+	// ownAges builds a row whose orders last changed changedAgo
+	// ago and whose book a completed sweep last verified
+	// verifiedAgo ago: the two stamps the swap must tell apart.
+	ownAges := func(changedAgo, verifiedAgo time.Duration, sell float64) *db.MarketRegionStat {
+		return &db.MarketRegionStat{
+			RegionID: 10000002, TypeID: 34, TypicalSell: sell, TypicalBuy: sell / 2,
+			SellBand: sell * 2, BuyBand: sell / 3, SellOrders: 10, BuyOrders: 9,
+			UpdatedAt: now.Add(-changedAgo), SweptAt: now.Add(-verifiedAgo),
 		}
 	}
 	fb := func(age time.Duration, sell float64) *db.MarketStatsFallback {
@@ -121,6 +131,8 @@ func TestResolvedRegionTypicals(t *testing.T) {
 	}{
 		{"own fresh beats fallback", own(30*time.Minute, 111), fb(time.Hour, 222), true, 111, false},
 		{"own stale yields to fallback", own(4*time.Hour, 111), fb(time.Hour, 222), true, 222, true},
+		{"own unchanged for hours but verified minutes ago beats fallback", ownAges(8*time.Hour, 10*time.Minute, 111), fb(time.Hour, 222), true, 111, false},
+		{"own changed recently but unverified for hours yields to fallback", ownAges(30*time.Minute, 4*time.Hour, 111), fb(time.Hour, 222), true, 222, true},
 		{"no own row, fallback speaks", nil, fb(time.Hour, 222), true, 222, true},
 		{"expired fallback is a gap", nil, fb(49*time.Hour, 222), false, 0, false},
 		{"expired fallback leaves our stale row", own(4*time.Hour, 111), fb(49*time.Hour, 222), true, 111, false},
@@ -139,6 +151,16 @@ func TestResolvedRegionTypicals(t *testing.T) {
 		if got.TypicalSell != tc.wantSell || got.Fallback != tc.wantFb {
 			t.Errorf("%s: picked sell %v fallback=%v, want %v / %v", tc.name, got.TypicalSell, got.Fallback, tc.wantSell, tc.wantFb)
 		}
+	}
+	// A verified-but-unchanged row keeps its last-changed stamp
+	// as its age: winning on swept_at must not freshen the date
+	// shown beside it.
+	got, ok := resolvedRegionTypicals(ownAges(8*time.Hour, 10*time.Minute, 111), fb(time.Hour, 222), now)
+	if !ok || got.Fallback {
+		t.Fatalf("verified-but-unchanged row: ok=%v fallback=%v, want our own row", ok, got.Fallback)
+	}
+	if want := now.Add(-8 * time.Hour); !got.AsOf.Equal(want) {
+		t.Errorf("verified-but-unchanged as-of = %v, want the last-changed stamp %v", got.AsOf, want)
 	}
 }
 
@@ -292,12 +314,20 @@ func seedFallbackRow(t *testing.T, q *db.Queries, regionID, typeID int64, median
 
 func seedOwnStat(t *testing.T, q *db.Queries, regionID, typeID int64, typicalSell, typicalBuy float64, updatedAt time.Time) {
 	t.Helper()
+	seedOwnStatSwept(t, q, regionID, typeID, typicalSell, typicalBuy, updatedAt, updatedAt)
+}
+
+// seedOwnStatSwept seeds a sweep row with its last-changed and
+// last-verified stamps apart, as a slow-moving type's row reads
+// between sweeps.
+func seedOwnStatSwept(t *testing.T, q *db.Queries, regionID, typeID int64, typicalSell, typicalBuy float64, updatedAt, sweptAt time.Time) {
+	t.Helper()
 	if err := q.UpsertMarketRegionStat(context.Background(), db.UpsertMarketRegionStatParams{
 		RegionID: regionID, TypeID: typeID,
 		BestSell: typicalSell, TypicalSell: typicalSell, SellBand: typicalSell * 2,
 		BestBuy: typicalBuy, TypicalBuy: typicalBuy, BuyBand: typicalBuy / 2,
 		SellOrders: 10, BuyOrders: 9, SellVolume: 100, BuyVolume: 90,
-		AvgDailyVolume: 1, UpdatedAt: updatedAt,
+		AvgDailyVolume: 1, UpdatedAt: updatedAt, SweptAt: sweptAt,
 	}); err != nil {
 		t.Fatalf("seed own stat %d/%d: %v", regionID, typeID, err)
 	}
@@ -314,15 +344,19 @@ func TestFallbackStripSwap(t *testing.T) {
 	seedFallbackRow(t, q, 10000002, 34, 222, 60, now.Add(-time.Hour))
 	// Domain: no sweep row at all -- the fallback speaks.
 	seedFallbackRow(t, q, 10000043, 34, 333, 60, now.Add(-time.Hour))
-	// Sinq Laison: our row went stale -- the fallback takes over.
-	seedOwnStat(t, q, 10000032, 34, 444, 55, now.Add(-5*time.Hour))
+	// Sinq Laison: our orders have not changed in hours, but a
+	// completed sweep verified them minutes ago: our row wins.
+	seedOwnStatSwept(t, q, 10000032, 34, 444, 55, now.Add(-8*time.Hour), now.Add(-10*time.Minute))
 	seedFallbackRow(t, q, 10000032, 34, 555, 60, now.Add(-time.Hour))
 	// Metropolis: our row is stale and the fallback expired --
 	// our row still shows (with its age), the expired fallback
 	// never does.
 	seedOwnStat(t, q, 10000042, 34, 666, 55, now.Add(-5*time.Hour))
 	seedFallbackRow(t, q, 10000042, 34, 777, 60, now.Add(-49*time.Hour))
-	// Heimatar: nothing stored anywhere.
+	// Heimatar: our orders changed recently but no completed
+	// sweep has verified them in hours: the fallback takes over.
+	seedOwnStatSwept(t, q, 10000030, 34, 888, 55, now.Add(-30*time.Minute), now.Add(-5*time.Hour))
+	seedFallbackRow(t, q, 10000030, 34, 999, 60, now.Add(-time.Hour))
 
 	item := &marketItem{TypeID: 34, RegionID: 10000002}
 	app.attachRegionStats(context.Background(), item)
@@ -337,9 +371,9 @@ func TestFallbackStripSwap(t *testing.T) {
 	}{
 		10000002: {esi.FormatISK(111), "", true},
 		10000043: {esi.FormatISK(333), fallbackSourceLabel, true},
-		10000032: {esi.FormatISK(555), fallbackSourceLabel, true},
+		10000032: {esi.FormatISK(444), "", true},
 		10000042: {esi.FormatISK(666), "", true},
-		10000030: {"", "", false},
+		10000030: {esi.FormatISK(999), fallbackSourceLabel, true},
 	}
 	for regionID, w := range want {
 		row := byRegion[regionID]

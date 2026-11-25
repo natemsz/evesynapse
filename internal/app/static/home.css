@@ -337,6 +337,28 @@
 .w-segkeys > li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 0.35rem; min-width: 0; }
 .w-segname { min-width: 0; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .w-segval { grid-column: 2; font-size: var(--fs-sm); font-weight: 600; color: var(--text-bright); white-space: nowrap; }
+/* A figure in full where the card has the width, its short form where
+   it does not (wPart.Short). */
+.w-segval .w-short { display: none; }
+@container widget (width < 30rem) {
+  .w-segval:has(.w-short) .w-full { display: none; }
+  .w-segval .w-short { display: inline; }
+}
+/* The small Watchlist keeps its table on a narrow card and leaves out
+   the columns it can spare. */
+@container widget (width < 26rem) {
+  .w-watch-small .w-opt { display: none; }
+}
+.w-watch-small :is(th, td) { padding-block: 0.2rem; }
+/* On a short card a split keeps its figures and leaves out its bar,
+   and Profit Pulse leaves its footer to the title, which links to the
+   same page. */
+@container widget (height < 12rem) {
+  .w-segbar > .w-segs { display: none; }
+  .w-segkeys > li { grid-template-columns: auto auto minmax(0, 1fr); }
+  .w-segkeys > li > .w-segval { grid-column: auto; text-align: right; }
+  .pp-foot { display: none; }
+}
 
 /* w-rank: ranked bars, square at the baseline, rounded at the end. */
 .w-rank { display: flex; flex-direction: column; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
@@ -878,7 +900,7 @@
 /* Medium and large: the decks two or three across, one across on a
    narrow card. Rows of decks that do not fit are left for Expand. */
 .brf-grid ul.brief-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 0.6rem 0.75rem; margin: 0; padding: 0 0.65rem 0.65rem 0; overflow: visible; scroll-snap-type: none; }
-.brf-grid.brf-three ul.brief-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container widget (width >= 60rem) { .brf-grid.brf-three ul.brief-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @container widget (width < 40rem) { .brf-grid ul.brief-cards, .brf-grid.brf-three ul.brief-cards { grid-template-columns: minmax(0, 1fr); } }
 .brf-grid .brief-deck { min-width: 0; width: auto; max-width: none; }
 .brf-grid .brief-card { padding: 0.6rem 0.85rem; }

@@ -8,7 +8,7 @@
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 
 {{define "w-pi-wide"}}<div class="w-body w-split {{.BodyClass}}">{{with .Data}}{{if .Any}}
-<div class="w-side"><div class="w-pi-lead {{if .Expired}}w-pi-stopped{{end}}">{{template "w-lead" .Lead}}</div>{{with .Next}}{{template "w-pi-next" .}}{{end}}{{template "w-pi-sum" .}}</div>
+<div class="w-side"><div class="w-pi-lead {{if .Expired}}w-pi-stopped{{end}}">{{template "w-lead" .Lead}}</div>{{with .Next}}{{template "w-pi-next" .}}{{end}}</div>
 {{with .Track}}{{template "w-pi-track" .}}{{else}}{{template "w-empty" .Empty}}{{end}}
 {{else}}{{template "w-empty" .Empty}}{{end}}{{end}}</div>{{end}}
 

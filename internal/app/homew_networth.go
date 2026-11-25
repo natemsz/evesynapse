@@ -89,13 +89,13 @@ func buildNetWorthWidget(ctx context.Context, app *Application, in *widgetInput)
 	if in.Draws("tall") {
 		var parts []wPart
 		if nw.Wallet != "" {
-			parts = append(parts, wPart{Name: "Wallets", Slot: 1, Value: nw.walletNow, Text: nw.Wallet, Full: nw.Wallet})
+			parts = append(parts, wPart{Name: "Wallets", Slot: 1, Value: nw.walletNow, Text: nw.Wallet, Full: nw.Wallet, Short: iskCompact(nw.walletNow)})
 		}
 		if nw.AssetsKnown {
-			parts = append(parts, wPart{Name: "Assets", Slot: 2, Value: assets, Text: nw.Assets, Full: nw.Assets})
+			parts = append(parts, wPart{Name: "Assets", Slot: 2, Value: assets, Text: nw.Assets, Full: nw.Assets, Short: iskCompact(assets)})
 		}
 		if nw.Escrow != "" {
-			parts = append(parts, wPart{Name: "Order escrow", Slot: 3, Value: nw.escrowNow, Text: nw.Escrow, Full: nw.Escrow})
+			parts = append(parts, wPart{Name: "Order escrow", Slot: 3, Value: nw.escrowNow, Text: nw.Escrow, Full: nw.Escrow, Short: iskCompact(nw.escrowNow)})
 		}
 		v.Split, _ = wSegments("How the total splits", parts)
 	}

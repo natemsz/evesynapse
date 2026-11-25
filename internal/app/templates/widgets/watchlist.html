@@ -6,10 +6,10 @@
 
 {{define "w-watchlist-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Rows}}
 <div class="tw">
-<table class="w-watch w-watch-small">
-  <thead><tr><th>Item</th><th>Average</th><th>7 days</th><th>30 days</th><th>Status</th></tr></thead>
+<table class="w-watch w-watch-small" data-cards="off">
+  <thead><tr><th>Item</th><th class="w-opt">Average</th><th>7 days</th><th class="w-opt">30 days</th><th>Status</th></tr></thead>
   <tbody data-w-fit>
-  {{range $i, $r := .Rows}}<tr{{if ge $i $.Cap}} data-w-over{{end}}><td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td><td>{{sparkFigFallback .Current .Spark}}</td><td>{{.Change7}}</td><td>{{.Change30}}</td><td>{{if .Moving}}<strong title="{{.MoveText}}">Moving</strong>{{else}}Calm{{end}}</td></tr>{{end}}
+  {{range $i, $r := .Rows}}<tr{{if ge $i $.Cap}} data-w-over{{end}}><td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td><td class="w-opt">{{sparkFigFallback .Current .Spark}}</td><td>{{.Change7}}</td><td class="w-opt">{{.Change30}}</td><td>{{if .Moving}}<strong title="{{.MoveText}}">Moving</strong>{{else}}Calm{{end}}</td></tr>{{end}}
   </tbody>
 </table>
 </div>

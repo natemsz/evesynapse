@@ -144,8 +144,8 @@ func buildMarketWidget(ctx context.Context, app *Application, in *widgetInput) a
 	v.Lead = wLead{Label: "Open orders", Value: strconv.Itoa(base.Open), Full: fmt.Sprintf("%d open orders", base.Open),
 		Sub: fmt.Sprintf("%d sell, %d buy", base.SellCount, base.BuyCount)}
 	v.Split, _ = wSegments("Sell value against buy escrow", []wPart{
-		{Name: "Sell orders", Slot: 1, Value: sell, Text: base.SellValue, Full: base.SellValue + " ISK"},
-		{Name: "Buy escrow", Slot: 2, Value: buy, Text: base.BuyValue, Full: base.BuyValue + " ISK"},
+		{Name: "Sell orders", Slot: 1, Value: sell, Text: base.SellValue, Full: base.SellValue + " ISK", Short: iskCompact(sell)},
+		{Name: "Buy escrow", Slot: 2, Value: buy, Text: base.BuyValue, Full: base.BuyValue + " ISK", Short: iskCompact(buy)},
 	})
 	if (in.Draws("medium") || in.Draws("large")) && base.Merge != mergePerCharacter {
 		v.Tiles = []wTile{

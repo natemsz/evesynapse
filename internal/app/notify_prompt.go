@@ -109,6 +109,15 @@ func (app *Application) handleNotifyPrompt(w http.ResponseWriter, r *http.Reques
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
 	}
+	// The demo account never keeps an answer: the prompt drops
+	// again on the next login, and writing to the shared account
+	// would stick for every visitor. The session mark from the
+	// prompt showing already keeps it down for this visit, so
+	// there is nothing to save, only the redirect back.
+	if app.isDemoUser(ctx, userID) {
+		http.Redirect(w, r, back, http.StatusSeeOther)
+		return
+	}
 	prefs := app.notifyPrefsFor(ctx, userID)
 	prefs.PromptAnswered = true
 	if r.FormValue("action") != "dismiss" {

@@ -523,9 +523,7 @@ func TestWalletHistorySamplerOneRowPerDay(t *testing.T) {
 		t.Fatalf("seed region stat: %v", err)
 	}
 	// The sweep landing mid-test: the cache window lapses.
-	app.forgeTypicalsMu.Lock()
-	app.forgeTypicalsCache = nil
-	app.forgeTypicalsMu.Unlock()
+	lapsePriceCaches(app)
 	seedSnapshot(t, q, fixtureCharA, esi.SnapAssets, []esi.Asset{{TypeID: 34, Quantity: 100}})
 	seedSnapshot(t, q, fixtureCharA, esi.SnapOrders, []esi.CharOrder{{IsBuyOrder: true, Escrow: 50.5}})
 	if err := q.UpsertSnapshot(ctx, db.UpsertSnapshotParams{

@@ -402,6 +402,11 @@ type Application struct {
 	// the first tier of the house price order, cached in memory
 	// on the same window as the true values so renders reload
 	// the stats table only a few times an hour.
+	// houseValuations' cache (truevalue.go): one unit's value per
+	// type in the appraisal tool's house order.
+	houseValuesMu       sync.Mutex
+	houseValuesCache    map[int64]float64
+	houseValuesLoaded   time.Time
 	forgeTypicalsMu     sync.Mutex
 	forgeTypicalsCache  map[int64]float64
 	forgeTypicalsLoaded time.Time

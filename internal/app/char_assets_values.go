@@ -130,11 +130,8 @@ func (app *Application) refreshAssetLocationValues(ctx context.Context, ch db.Ch
 		return
 	}
 
-	typicals := app.TypicalSells(ctx)
-	trueValues := app.storedTrueValues(ctx)
-	price := func(typeID int64) (float64, bool) {
-		return pickValuationPrice(typicals[typeID], estSellOf(trueValues, typeID), buildCostOf(trueValues, typeID))
-	}
+	values := app.houseValuations(ctx)
+	price := func(typeID int64) (float64, bool) { return houseValueOf(values, typeID) }
 
 	typeIDs := make([]int64, 0, len(items))
 	seen := make(map[int64]bool, len(items))

@@ -49,12 +49,11 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 	}
 
 	netWorth := sql.NullFloat64{}
-	// Net worth is sampled only when a house price source exists
-	// at all, swept typicals or stored estimated sells, so a
-	// day with no prices leaves net worth unset rather than
-	// storing a bare balance.
-	if typicals := app.TypicalSells(ctx); len(typicals) > 0 || len(app.TrueValues(ctx)) > 0 {
-		if total, ok := app.characterNetWorth(ctx, ch.CharacterID, balance, typicals); ok {
+	// Net worth is sampled only when the house order prices
+	// anything at all, so a day with no prices leaves net worth
+	// unset rather than storing a bare balance.
+	if values := app.houseValuations(ctx); len(values) > 0 {
+		if total, ok := app.characterNetWorth(ctx, ch.CharacterID, balance, values); ok {
 			netWorth = sql.NullFloat64{Float64: total, Valid: true}
 		}
 	}
@@ -78,12 +77,11 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 // assets none of the price sources can value), the caller then
 // leaves the day's net worth unset rather than storing a
 // balance wearing a net-worth label.
-func (app *Application) characterNetWorth(ctx context.Context, characterID int64, balance float64, typicals map[int64]float64) (float64, bool) {
+func (app *Application) characterNetWorth(ctx context.Context, characterID int64, balance float64, values map[int64]float64) (float64, bool) {
 	total := balance
 	valued := false
 	// The same price order as the home widget's (buildNetWorth):
-	// the swept Forge typical, then the true-value estimated sell.
-	trueValues := app.storedTrueValues(ctx)
+	// houseValuations, the appraisal tool's order.
 
 	if snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{
 		CharacterID: characterID, Kind: esi.SnapAssets,
@@ -91,7 +89,7 @@ func (app *Application) characterNetWorth(ctx context.Context, characterID int64
 		var assets []esi.Asset
 		if json.Unmarshal([]byte(snap.Payload), &assets) == nil {
 			for _, a := range assets {
-				price, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID), buildCostOf(trueValues, a.TypeID))
+				price, ok := houseValueOf(values, a.TypeID)
 				if !ok {
 					continue
 				}

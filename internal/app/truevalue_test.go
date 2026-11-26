@@ -983,3 +983,57 @@ func TestFitPricingGlobalOnlyReprice(t *testing.T) {
 		t.Errorf("repriced fit = %v ISK, want 7500000 (the hull at its global typical)", got.TotalPrice)
 	}
 }
+
+// TestHouseValuationsFollowTheAppraisalOrder: assets, net worth and
+// profit value a unit in the appraisal tool's order. A fresh Forge
+// typical wins; a stale one yields to the stored estimate, then to
+// the outside fallback inside its expiry, and still speaks when
+// nothing else can; a build cost prices only what nothing else
+// does; the guide average prices nothing.
+func TestHouseValuationsFollowTheAppraisalOrder(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	now := time.Now().UTC()
+	stale := now.Add(-2 * fallbackOwnFresh)
+
+	stat := func(typeID int64, sell float64, at time.Time) {
+		t.Helper()
+		if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+			RegionID: defaultMarketRegion, TypeID: typeID, TypicalSell: sell, AvgDailyVolume: 1000,
+			UpdatedAt: at, SweptAt: at,
+		}); err != nil {
+			t.Fatalf("seed region stat %d: %v", typeID, err)
+		}
+	}
+	fallback := func(typeID int64, median float64, asOf time.Time) {
+		t.Helper()
+		if err := q.InsertMarketStatsFallback(ctx, db.InsertMarketStatsFallbackParams{
+			RegionID: defaultMarketRegion, TypeID: typeID, MedianSell: median, Source: "fuzzwork",
+			SourceAsof: asOf, FetchedAt: asOf,
+		}); err != nil {
+			t.Fatalf("seed fallback %d: %v", typeID, err)
+		}
+	}
+	stat(9001, 100, now) // fresh typical beats the estimate
+	seedTrueValue(t, q, 9001, 0, 80, 2)
+	stat(9002, 100, stale) // stale typical yields to the estimate
+	seedTrueValue(t, q, 9002, 0, 80, 2)
+	stat(9003, 100, stale) // stale typical yields to the fallback
+	fallback(9003, 90, now)
+	stat(9004, 100, stale) // stale typical when the fallback expired
+	fallback(9004, 90, now.Add(-2*fallbackHardExpiry))
+	seedTrueValue(t, q, 9005, 33, 0, 0) // build cost only
+	if err := q.UpsertGuidePrice(ctx, db.UpsertGuidePriceParams{TypeID: 9006, AveragePrice: 50, AdjustedPrice: 40}); err != nil {
+		t.Fatalf("seed guide: %v", err)
+	}
+
+	values := app.houseValuations(ctx)
+	for id, want := range map[int64]float64{9001: 100, 9002: 80, 9003: 90, 9004: 100, 9005: 33} {
+		if got, ok := houseValueOf(values, id); !ok || got != want {
+			t.Errorf("value of %d = (%v, %v), want (%v, true)", id, got, ok, want)
+		}
+	}
+	if got, ok := houseValueOf(values, 9006); ok {
+		t.Errorf("guide-only type valued at %v, want unpriced", got)
+	}
+}

@@ -165,46 +165,90 @@ func (app *Application) AskEvidence(ctx context.Context, typeID int64) (module.A
 	return module.AskEvidence{Low: tv.AskLow.Float64, High: tv.AskHigh.Float64, Count: tv.AskCount}, true
 }
 
-// pickValuationPrice resolves one unit's price in the house
-// order: The Forge's swept typical sell, then the true-value
-// estimated sell (estSell, 0 when none is stored), then the
-// stored build cost (my ruling, 2026-11-12: enough when it
-// is all we have). ok=false when no tier knows the type,
-// CCP's guide average is banned as a price source (my
-// ruling, 2026-10-17) and the adjusted price survives only
-// as the EIV input to job fees, never as a price.
-func pickValuationPrice(typicalSell, estSell, buildCost float64) (float64, bool) {
-	if typicalSell > 0 {
-		return typicalSell, true
+// houseValuations returns one unit's value per type in the
+// appraisal tool's house order, sell side (resolveAppraisalPriceMode):
+// The Forge's swept typical sell while fresh, then the stored
+// estimated sell, then the labeled outside fallback while inside its
+// expiry, then the swept typical however old, then the stored build
+// cost. A type The Forge carries no row for reads its global-market
+// row (a global-market type's book is its market everywhere). Types
+// no tier prices are absent: CCP's guide average never prices
+// anything. Assets, net worth, profit and every other valuation read
+// this one map, so they agree with the appraisal tool.
+//
+// Cached on the true-value window. Bounded read: the region stats
+// table holds one row per type traded in The Forge (plus a handful
+// of global rows), and the fallback table one row per type and hub,
+// the same whole-table reads the stat pack build makes.
+func (app *Application) houseValuations(ctx context.Context) map[int64]float64 {
+	app.houseValuesMu.Lock()
+	defer app.houseValuesMu.Unlock()
+	if app.houseValuesCache != nil && time.Since(app.houseValuesLoaded) < trueValueCacheWindow {
+		return app.houseValuesCache
 	}
-	if estSell > 0 {
-		return estSell, true
+	own := map[int64]*db.MarketRegionStat{}
+	rows, err := app.queries.ListMarketRegionStatsByRegion(ctx, defaultMarketRegion)
+	if err != nil {
+		logging.Errorf("prices: house valuations: forge rows: %v", err)
+		return app.houseValuesCache
 	}
-	if buildCost > 0 {
-		return buildCost, true
+	for i := range rows {
+		own[rows[i].TypeID] = &rows[i]
 	}
-	return 0, false
-}
-
-// estSellOf reads the estimated sell for one type out of a
-// stored-true-values map (nil-safe): 0 when there is none.
-func estSellOf(rows map[int64]db.TrueValue, typeID int64) float64 {
-	if tv, ok := rows[typeID]; ok {
-		if est, ok := storedEstimate(tv); ok {
-			return est
+	gRows, err := app.queries.ListMarketRegionStatsByRegion(ctx, globalMarketRegion)
+	if err != nil {
+		logging.Errorf("prices: house valuations: global rows: %v", err)
+	} else {
+		for i := range gRows {
+			if own[gRows[i].TypeID] == nil {
+				own[gRows[i].TypeID] = &gRows[i]
+			}
 		}
 	}
-	return 0
+	fallbacks := map[int64]*db.MarketStatsFallback{}
+	fbRows, err := app.queries.ListStatPackFallbackStats(ctx)
+	if err != nil {
+		logging.Errorf("prices: house valuations: fallback rows: %v", err)
+	} else {
+		for i := range fbRows {
+			if fbRows[i].RegionID == defaultMarketRegion {
+				fallbacks[fbRows[i].TypeID] = &fbRows[i]
+			}
+		}
+	}
+	trueValues := app.storedTrueValues(ctx)
+
+	now := time.Now()
+	out := make(map[int64]float64, len(own)+len(trueValues))
+	price := func(typeID int64) {
+		if _, done := out[typeID]; done {
+			return
+		}
+		var tv *db.TrueValue
+		if row, ok := trueValues[typeID]; ok {
+			tv = &row
+		}
+		if p := resolveAppraisalPriceMode(own[typeID], tv, fallbacks[typeID], now, module.AppraisalModeSell); p.ok && p.unit > 0 {
+			out[typeID] = p.unit
+		}
+	}
+	for id := range own {
+		price(id)
+	}
+	for id := range trueValues {
+		price(id)
+	}
+	for id := range fallbacks {
+		price(id)
+	}
+	app.houseValuesCache, app.houseValuesLoaded = out, now
+	return out
 }
 
-// buildCostOf reads the stored build cost for one type out
-// of a stored-true-values map (nil-safe): 0 when the type has
-// no computed row.
-func buildCostOf(rows map[int64]db.TrueValue, typeID int64) float64 {
-	if tv, ok := rows[typeID]; ok && tv.BuildCost > 0 {
-		return tv.BuildCost
-	}
-	return 0
+// houseValueOf looks one type up in a houseValuations map.
+func houseValueOf(values map[int64]float64, typeID int64) (float64, bool) {
+	v, ok := values[typeID]
+	return v, ok
 }
 
 // trueValueBasis is the estimated sell's provenance in plain

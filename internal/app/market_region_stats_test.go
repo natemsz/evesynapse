@@ -745,49 +745,89 @@ func TestRegionSweepStoresStatPackTrends(t *testing.T) {
 	}
 }
 
-// The change feed (schema 106) records a sharp move against the last
-// stored day, and leaves a small one out.
+// The change feed (schema 106) compares the 7-day traded median against
+// the 30-day traded median from market_history, enforces the shared
+// ISK/day and trades/day floors, and scales the move threshold by hub.
 func TestRegionSweepDetectsMarketChanges(t *testing.T) {
 	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
+	const (
+		forge  int64 = 10000002
+		domain int64 = 10000043
+	)
 	for _, region := range marketRegions {
-		if region.ID != 10000002 {
+		if region.ID != forge && region.ID != domain {
 			markRegionFresh(t, q, region.ID)
 		}
 	}
 	now := time.Now().UTC()
-	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
-	for _, s := range []struct {
-		typeID int64
-		sell   float64
-	}{{34, 10}, {35, 100}} {
-		if err := q.UpsertMarketRegionStatDaily(ctx, db.UpsertMarketRegionStatDailyParams{
-			RegionID: 10000002, TypeID: s.typeID, Day: yesterday, TypicalSell: s.sell, BestSell: s.sell, SellOrders: 6, SellVolume: 600,
-		}); err != nil {
-			t.Fatalf("seed daily: %v", err)
-		}
+	dayStr := func(offset int) string { return now.AddDate(0, 0, -offset).Format("2006-01-02") }
+	today := dayStr(0)
+
+	seedHist := func(regionID, typeID int64, offset int, avg float64, vol, orders int64) {
+		t.Helper()
 		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
-			RegionID: 10000002, TypeID: s.typeID, Date: yesterday, Average: s.sell, Highest: s.sell, Lowest: s.sell, Volume: 50, OrderCount: 5,
+			RegionID: regionID, TypeID: typeID, Date: dayStr(offset),
+			Average: avg, Highest: avg, Lowest: avg, Volume: vol, OrderCount: orders,
 		}); err != nil {
 			t.Fatalf("seed history: %v", err)
 		}
 	}
-	var book []esi.MarketOrder
-	for i := int64(0); i < 6; i++ {
-		book = append(book,
-			esi.MarketOrder{OrderID: 100 + i, TypeID: 34, Price: 15, VolumeRemain: 100},  // +50%
-			esi.MarketOrder{OrderID: 200 + i, TypeID: 35, Price: 103, VolumeRemain: 100}) // +3%
+	// Forge:
+	//  - type 34: 100 -> 150 (+50%), 150M ISK/day, 20 trades/day -> recorded
+	//  - type 35: 100 -> 103 (+3%), 150M ISK/day, 20 trades/day -> below 10% Forge threshold
+	//  - type 36: 100 -> 150 (+50%), 5M ISK/day, 20 trades/day -> below 100M Forge floor
+	// Domain (20M ISK/day floor, 15% threshold):
+	//  - type 37: 100 -> 112 (+12%), 30M ISK/day, 15 trades/day -> below 15% Domain threshold
+	//  - type 38: 100 -> 120 (+20%), 30M ISK/day, 15 trades/day -> recorded
+	for d := 29; d >= 1; d-- {
+		p34, p35, p36 := 100.0, 100.0, 100.0
+		p37, p38 := 100.0, 100.0
+		if d <= 5 {
+			p34, p35, p36 = 150.0, 103.0, 150.0
+			p37, p38 = 112.0, 120.0
+		}
+		seedHist(forge, 34, d, p34, 1_200_000, 20)
+		seedHist(forge, 35, d, p35, 1_600_000, 20)
+		seedHist(forge, 36, d, p36, 40_000, 20)
+		seedHist(domain, 37, d, p37, 300_000, 15)
+		seedHist(domain, 38, d, p38, 300_000, 15)
 	}
-	transport.books[10000002] = [][]esi.MarketOrder{book}
+	var forgeBook, domainBook []esi.MarketOrder
+	for i := int64(0); i < 6; i++ {
+		forgeBook = append(forgeBook,
+			esi.MarketOrder{OrderID: 100 + i, TypeID: 34, Price: 150, VolumeRemain: 1000},
+			esi.MarketOrder{OrderID: 200 + i, TypeID: 35, Price: 103, VolumeRemain: 1000},
+			esi.MarketOrder{OrderID: 300 + i, TypeID: 36, Price: 150, VolumeRemain: 1000},
+		)
+		domainBook = append(domainBook,
+			esi.MarketOrder{OrderID: 400 + i, TypeID: 37, Price: 112, VolumeRemain: 1000},
+			esi.MarketOrder{OrderID: 500 + i, TypeID: 38, Price: 120, VolumeRemain: 1000},
+		)
+	}
+	transport.books[forge] = [][]esi.MarketOrder{forgeBook}
+	transport.books[domain] = [][]esi.MarketOrder{domainBook}
 	sweepUntilIdle(t, app)
 
-	rows, err := q.ListMarketChangesForRegion(ctx, db.ListMarketChangesForRegionParams{RegionID: 10000002, Since: yesterday})
+	forgeRows, err := q.ListMarketChangesForRegion(ctx, db.ListMarketChangesForRegionParams{
+		RegionID: forge, Since: today, MinIsk: 100_000_000, MinTrades: 10,
+	})
 	if err != nil {
-		t.Fatalf("list changes: %v", err)
+		t.Fatalf("list forge changes: %v", err)
 	}
-	if len(rows) != 1 || rows[0].TypeID != 34 || rows[0].Kind != "price_up" || rows[0].Before != 10 || rows[0].After != 15 {
-		t.Fatalf("changes = %+v, want one price_up for type 34 from 10 to 15", rows)
+	if len(forgeRows) != 1 || forgeRows[0].TypeID != 34 || forgeRows[0].Kind != "price_up" || forgeRows[0].Before != 100 || forgeRows[0].After != 150 {
+		t.Fatalf("forge changes = %+v, want one price_up for type 34 from 100 to 150", forgeRows)
+	}
+
+	domainRows, err := q.ListMarketChangesForRegion(ctx, db.ListMarketChangesForRegionParams{
+		RegionID: domain, Since: today, MinIsk: 20_000_000, MinTrades: 10,
+	})
+	if err != nil {
+		t.Fatalf("list domain changes: %v", err)
+	}
+	if len(domainRows) != 1 || domainRows[0].TypeID != 38 || domainRows[0].Kind != "price_up" || domainRows[0].Before != 100 || domainRows[0].After != 120 {
+		t.Fatalf("domain changes = %+v, want one price_up for type 38 from 100 to 120", domainRows)
 	}
 }
 

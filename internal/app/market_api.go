@@ -37,6 +37,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 	"evesynapse/internal/marketwire"
 	"github.com/jackc/pgx/v5"
 )
@@ -307,7 +308,11 @@ func (app *Application) handleMarketAPIChanges(w http.ResponseWriter, r *http.Re
 		return
 	}
 	rows, err := app.queries.ListMarketChangesForRegion(ctx, db.ListMarketChangesForRegionParams{
-		RegionID: region, Since: time.Now().UTC().AddDate(0, 0, -days+1).Format("2006-01-02"), Kind: kind,
+		RegionID:  region,
+		Since:     time.Now().UTC().AddDate(0, 0, -days+1).Format("2006-01-02"),
+		Kind:      kind,
+		MinIsk:    float64(markethistory.DefaultMinISK(region)),
+		MinTrades: float64(markethistory.DefaultMinTrades),
 	})
 	if err != nil {
 		logging.Errorf("market api: changes: %v", err)

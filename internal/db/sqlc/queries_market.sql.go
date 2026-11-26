@@ -117,6 +117,15 @@ func (q *Queries) DeleteMarketBookOrdersByRegion(ctx context.Context, regionID i
 	return err
 }
 
+const deleteMarketMoversRankedByRegion = `-- name: DeleteMarketMoversRankedByRegion :exec
+DELETE FROM market_movers_ranked WHERE region_id = $1
+`
+
+func (q *Queries) DeleteMarketMoversRankedByRegion(ctx context.Context, regionID int64) error {
+	_, err := q.db.Exec(ctx, deleteMarketMoversRankedByRegion, regionID)
+	return err
+}
+
 const deleteMarketRegionStatsByRegion = `-- name: DeleteMarketRegionStatsByRegion :exec
 DELETE FROM market_region_stats
 WHERE region_id = $1
@@ -247,36 +256,39 @@ const detectMarketChanges = `-- name: DetectMarketChanges :execrows
 INSERT INTO market_changes (region_id, type_id, day, kind, before, after, pct, detected_at)
 SELECT $1::bigint, c.type_id, $2::text, c.kind, c.before, c.after, c.pct, $3::timestamptz
 FROM (
-    SELECT s.type_id, k.kind, k.before, k.after, k.pct
+    SELECT s.type_id, s.volatility_30d, k.kind, k.before, k.after, k.pct
     FROM market_region_stats s
-    JOIN LATERAL (
-        SELECT dd.typical_sell, dd.typical_buy, dd.sell_volume FROM market_region_stats_daily dd
+    LEFT JOIN LATERAL (
+        SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dd.sell_volume)
+                   FILTER (WHERE dd.sell_volume > 0)::double precision AS base_supply,
+               PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (dd.typical_sell - dd.typical_buy) / dd.typical_buy * 100.0)
+                   FILTER (WHERE dd.typical_buy > 0 AND dd.typical_sell > dd.typical_buy)::double precision AS base_spread
+        FROM market_region_stats_daily dd
         WHERE dd.region_id = s.region_id AND dd.type_id = s.type_id
           AND dd.day < $2::text
-          AND dd.day >= to_char($2::date - 3, 'YYYY-MM-DD')
-        ORDER BY dd.day DESC LIMIT 1
+          AND dd.day >= to_char($2::date - 7, 'YYYY-MM-DD')
     ) d ON true
     CROSS JOIN LATERAL (VALUES
-        (CASE WHEN s.typical_sell > d.typical_sell THEN 'price_up' ELSE 'price_down' END,
-         d.typical_sell, s.typical_sell,
-         CASE WHEN d.typical_sell > 0 THEN (s.typical_sell - d.typical_sell) / d.typical_sell * 100 END),
-        ('supply_down', d.sell_volume::float8, s.sell_volume::float8,
-         CASE WHEN d.sell_volume > 0 THEN (s.sell_volume - d.sell_volume)::float8 / d.sell_volume * 100 END),
+        (CASE WHEN s.mover_chg_7v30 > 0 THEN 'price_up' ELSE 'price_down' END,
+         CASE WHEN s.sell_median_30d > 0 AND s.sell_median_7d > 0 THEN s.sell_median_30d END,
+         CASE WHEN s.sell_median_30d > 0 AND s.sell_median_7d > 0 THEN s.sell_median_7d END,
+         s.mover_chg_7v30),
+        ('supply_down', d.base_supply, s.sell_volume::float8,
+         CASE WHEN d.base_supply > 0 THEN (s.sell_volume::float8 - d.base_supply) / d.base_supply * 100.0 END),
         ('spread_wide',
-         CASE WHEN d.typical_buy > 0 THEN (d.typical_sell - d.typical_buy) / d.typical_buy * 100 END,
-         CASE WHEN s.typical_buy > 0 THEN (s.typical_sell - s.typical_buy) / s.typical_buy * 100 END,
-         CASE WHEN s.typical_buy > 0 AND d.typical_buy > 0
-              THEN ((s.typical_sell - s.typical_buy) / s.typical_buy - (d.typical_sell - d.typical_buy) / d.typical_buy) * 100 END)
+         d.base_spread,
+         s.spread_pct,
+         CASE WHEN s.spread_pct IS NOT NULL AND d.base_spread IS NOT NULL THEN s.spread_pct - d.base_spread END)
     ) AS k (kind, before, after, pct)
     WHERE s.region_id = $1::bigint
       AND (COALESCE(cardinality($4::bigint[]), 0) = 0 OR s.type_id = ANY($4::bigint[]))
-      AND s.sell_orders >= 5 AND s.avg_daily_volume_30d >= 1
-      AND s.typical_sell > 0 AND d.typical_sell > 0
+      AND s.isk_traded_7d >= $5::double precision
+      AND s.avg_orders_7d >= $6::double precision
+      AND s.typical_sell > 0
 ) c
 WHERE c.before IS NOT NULL AND c.after IS NOT NULL AND c.pct IS NOT NULL AND (
-       (c.kind IN ('price_up', 'price_down') AND ABS(c.pct) >= GREATEST($5::float8,
-            3 * COALESCE((SELECT v.volatility_30d FROM market_region_stats v
-                          WHERE v.region_id = $1::bigint AND v.type_id = c.type_id), 0)))
+       (c.kind IN ('price_up', 'price_down') AND ABS(c.pct) >= GREATEST($7::float8,
+            3.0 * COALESCE(c.volatility_30d, 0)))
     OR (c.kind = 'supply_down' AND c.before >= 10 AND c.pct <= -50)
     OR (c.kind = 'spread_wide' AND c.before > 0 AND c.after >= 10 AND c.after >= 2 * c.before)
 )
@@ -285,16 +297,26 @@ ON CONFLICT (region_id, type_id, day, kind) DO UPDATE SET
 `
 
 type DetectMarketChangesParams struct {
-	RegionID int64     `json:"region_id"`
-	Day      string    `json:"day"`
-	Now      time.Time `json:"now"`
-	TypeIds  []int64   `json:"type_ids"`
-	MinMove  float64   `json:"min_move"`
+	RegionID  int64     `json:"region_id"`
+	Day       string    `json:"day"`
+	Now       time.Time `json:"now"`
+	TypeIds   []int64   `json:"type_ids"`
+	MinIsk    float64   `json:"min_isk"`
+	MinTrades float64   `json:"min_trades"`
+	MinMove   float64   `json:"min_move"`
 }
 
 // The change feed (schema 106) for one region, inside its sweep
-// transaction after the trend figures: each stat pack row against
-// the newest stored day before today (within three days).
+// transaction after the trend figures:
+//   - price_up / price_down compare the 7-day traded median against
+//     the 30-day traded median from market_history (sell_median_7d vs
+//     sell_median_30d, mover_chg_7v30), gated by hub-scaled min_move
+//     and 3x daily volatility.
+//   - supply_down and spread_wide compare current book supply and
+//     spread against the trailing 7-day daily sweep median baseline.
+//   - Every kind enforces the shared min_isk (7d average ISK traded
+//     per day) and min_trades (7d average trades per day) floors.
+//
 // type_ids narrows it to the items a sweep wrote; empty means all.
 func (q *Queries) DetectMarketChanges(ctx context.Context, arg DetectMarketChangesParams) (int64, error) {
 	result, err := q.db.Exec(ctx, detectMarketChanges,
@@ -302,6 +324,8 @@ func (q *Queries) DetectMarketChanges(ctx context.Context, arg DetectMarketChang
 		arg.Day,
 		arg.Now,
 		arg.TypeIds,
+		arg.MinIsk,
+		arg.MinTrades,
 		arg.MinMove,
 	)
 	if err != nil {
@@ -551,7 +575,7 @@ func (q *Queries) GetMarketRegionStatsStamp(ctx context.Context, regionID int64)
 }
 
 const getMarketStatChange7 = `-- name: GetMarketStatChange7 :one
-SELECT sell_chg_7d, sell_chg_30d, typical_sell, updated_at FROM market_region_stats
+SELECT mover_chg_7v30, sell_chg_7d, sell_chg_30d, typical_sell, updated_at FROM market_region_stats
 WHERE region_id = $1 AND type_id = $2
 `
 
@@ -561,18 +585,21 @@ type GetMarketStatChange7Params struct {
 }
 
 type GetMarketStatChange7Row struct {
-	SellChg7d   sql.NullFloat64 `json:"sell_chg_7d"`
-	SellChg30d  sql.NullFloat64 `json:"sell_chg_30d"`
-	TypicalSell float64         `json:"typical_sell"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	MoverChg7v30 sql.NullFloat64 `json:"mover_chg_7v30"`
+	SellChg7d    sql.NullFloat64 `json:"sell_chg_7d"`
+	SellChg30d   sql.NullFloat64 `json:"sell_chg_30d"`
+	TypicalSell  float64         `json:"typical_sell"`
+	UpdatedAt    time.Time       `json:"updated_at"`
 }
 
-// A watched item's 7- and 30-day change of the typical sell from the
-// stat pack, with when the row was written.
+// A watched item's stored traded-median move (mover_chg_7v30) and
+// 7- and 30-day typical-sell changes from the stat pack, with when
+// the row was written.
 func (q *Queries) GetMarketStatChange7(ctx context.Context, arg GetMarketStatChange7Params) (GetMarketStatChange7Row, error) {
 	row := q.db.QueryRow(ctx, getMarketStatChange7, arg.RegionID, arg.TypeID)
 	var i GetMarketStatChange7Row
 	err := row.Scan(
+		&i.MoverChg7v30,
 		&i.SellChg7d,
 		&i.SellChg30d,
 		&i.TypicalSell,
@@ -673,25 +700,16 @@ func (q *Queries) GetMarketStatsFallbackMeta(ctx context.Context) (MarketStatsFa
 }
 
 const getMarketTrendStamp = `-- name: GetMarketTrendStamp :one
-SELECT COUNT(*) FILTER (WHERE sell_chg_7d IS NOT NULL OR mover_chg_7v30 IS NOT NULL) AS with_change,
-       COUNT(*) FILTER (WHERE volatility_30d IS NOT NULL) AS with_volatility,
-       MAX(updated_at) AS stamp
-FROM market_region_stats WHERE region_id = $1
+SELECT updated_at FROM market_movers_ranked WHERE region_id = $1 LIMIT 1
 `
 
-type GetMarketTrendStampRow struct {
-	WithChange     int64       `json:"with_change"`
-	WithVolatility int64       `json:"with_volatility"`
-	Stamp          interface{} `json:"stamp"`
-}
-
-// How much of a region's stat pack has trend figures yet: rows with
-// a 7-day change, rows with a volatility figure, and the newest write.
-func (q *Queries) GetMarketTrendStamp(ctx context.Context, regionID int64) (GetMarketTrendStampRow, error) {
+// Checks whether pre-ranked movers exist for a region and when they were
+// last written, in one bounded index probe.
+func (q *Queries) GetMarketTrendStamp(ctx context.Context, regionID int64) (time.Time, error) {
 	row := q.db.QueryRow(ctx, getMarketTrendStamp, regionID)
-	var i GetMarketTrendStampRow
-	err := row.Scan(&i.WithChange, &i.WithVolatility, &i.Stamp)
-	return i, err
+	var updated_at time.Time
+	err := row.Scan(&updated_at)
+	return updated_at, err
 }
 
 const getOrderLifecycle = `-- name: GetOrderLifecycle :one
@@ -972,6 +990,78 @@ func (q *Queries) GetWatchlistEntry(ctx context.Context, arg GetWatchlistEntryPa
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const insertMarketMoversRankedForRegion = `-- name: InsertMarketMoversRankedForRegion :execrows
+WITH candidates AS (
+    SELECT s.type_id, s.isk_traded_7d, s.avg_orders_7d,
+           b.sort_by, b.mode, b.period, b.score
+    FROM market_region_stats s
+    CROSS JOIN LATERAL (
+        SELECT 'confirmed'::text AS sort_by, 'rising'::text AS mode, 1::integer AS period, CASE WHEN s.avg_vol_7d > 0 AND s.avg_vol_7d >= s.avg_vol_30d AND s.sell_chg_1d > 0 THEN ABS(s.sell_chg_1d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END AS score
+        UNION ALL SELECT 'confirmed', 'falling',  1,  CASE WHEN s.avg_vol_7d > 0 AND s.avg_vol_7d >= s.avg_vol_30d AND s.sell_chg_1d < 0 THEN ABS(s.sell_chg_1d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
+        UNION ALL SELECT 'confirmed', 'rising',   7,  CASE WHEN s.avg_vol_7d > 0 AND s.avg_vol_7d >= s.avg_vol_30d AND s.mover_hold_days >= 4 AND s.mover_chg_7v30 > 0 THEN s.mover_score END
+        UNION ALL SELECT 'confirmed', 'falling',  7,  CASE WHEN s.avg_vol_7d > 0 AND s.avg_vol_7d >= s.avg_vol_30d AND s.mover_hold_days >= 4 AND s.mover_chg_7v30 < 0 THEN s.mover_score END
+        UNION ALL SELECT 'confirmed', 'both',     7,  CASE WHEN s.avg_vol_7d > 0 AND s.avg_vol_7d >= s.avg_vol_30d AND s.mover_hold_days >= 4 AND (s.mover_chg_7v30 > 0 OR s.mover_chg_7v30 < 0) THEN s.mover_score END
+        UNION ALL SELECT 'confirmed', 'rising',   30, CASE WHEN s.avg_vol_7d > 0 AND s.avg_vol_7d >= s.avg_vol_30d AND s.sell_chg_30d > 0 THEN ABS(s.sell_chg_30d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
+        UNION ALL SELECT 'confirmed', 'falling',  30, CASE WHEN s.avg_vol_7d > 0 AND s.avg_vol_7d >= s.avg_vol_30d AND s.sell_chg_30d < 0 THEN ABS(s.sell_chg_30d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
+        UNION ALL SELECT 'confirmed', 'volatile', 0,  CASE WHEN s.avg_vol_7d > 0 AND s.avg_vol_7d >= s.avg_vol_30d AND s.volatility_30d > 0 THEN s.volatility_30d * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
+        UNION ALL SELECT 'isk_move', 'rising',   1,  CASE WHEN s.avg_vol_7d > 0 AND s.sell_chg_1d > 0 THEN ABS(s.typical_sell - s.typical_sell / (1.0 + s.sell_chg_1d / 100.0)) * s.avg_vol_7d END
+        UNION ALL SELECT 'isk_move', 'falling',  1,  CASE WHEN s.avg_vol_7d > 0 AND s.sell_chg_1d < 0 AND s.sell_chg_1d > -100.0 THEN ABS(s.typical_sell - s.typical_sell / (1.0 + s.sell_chg_1d / 100.0)) * s.avg_vol_7d END
+        UNION ALL SELECT 'isk_move', 'rising',   7,  CASE WHEN s.avg_vol_7d > 0 AND s.mover_chg_7v30 > 0 AND s.isk_move_7d > 0 THEN s.isk_move_7d END
+        UNION ALL SELECT 'isk_move', 'falling',  7,  CASE WHEN s.avg_vol_7d > 0 AND s.mover_chg_7v30 < 0 AND s.isk_move_7d > 0 THEN s.isk_move_7d END
+        UNION ALL SELECT 'isk_move', 'both',     7,  CASE WHEN s.avg_vol_7d > 0 AND (s.mover_chg_7v30 > 0 OR s.mover_chg_7v30 < 0) AND s.isk_move_7d > 0 THEN s.isk_move_7d END
+        UNION ALL SELECT 'isk_move', 'rising',   30, CASE WHEN s.avg_vol_7d > 0 AND s.sell_chg_30d > 0 THEN ABS(s.typical_sell - s.typical_sell / (1.0 + s.sell_chg_30d / 100.0)) * s.avg_vol_7d END
+        UNION ALL SELECT 'isk_move', 'falling',  30, CASE WHEN s.avg_vol_7d > 0 AND s.sell_chg_30d < 0 AND s.sell_chg_30d > -100.0 THEN ABS(s.typical_sell - s.typical_sell / (1.0 + s.sell_chg_30d / 100.0)) * s.avg_vol_7d END
+        UNION ALL SELECT 'isk_move', 'volatile', 0,  CASE WHEN s.avg_vol_7d > 0 AND s.volatility_30d > 0 THEN s.typical_sell * s.avg_vol_7d * (s.volatility_30d / 100.0) END
+        UNION ALL SELECT 'spread_profit', 'rising',   1,  CASE WHEN s.daily_spread_profit > 0 AND s.sell_chg_1d > 0 THEN s.daily_spread_profit END
+        UNION ALL SELECT 'spread_profit', 'falling',  1,  CASE WHEN s.daily_spread_profit > 0 AND s.sell_chg_1d < 0 THEN s.daily_spread_profit END
+        UNION ALL SELECT 'spread_profit', 'rising',   7,  CASE WHEN s.daily_spread_profit > 0 AND s.sell_chg_7d > 0 THEN s.daily_spread_profit END
+        UNION ALL SELECT 'spread_profit', 'falling',  7,  CASE WHEN s.daily_spread_profit > 0 AND s.sell_chg_7d < 0 THEN s.daily_spread_profit END
+        UNION ALL SELECT 'spread_profit', 'both',     7,  CASE WHEN s.daily_spread_profit > 0 AND (s.sell_chg_7d > 0 OR s.sell_chg_7d < 0) THEN s.daily_spread_profit END
+        UNION ALL SELECT 'spread_profit', 'rising',   30, CASE WHEN s.daily_spread_profit > 0 AND s.sell_chg_30d > 0 THEN s.daily_spread_profit END
+        UNION ALL SELECT 'spread_profit', 'falling',  30, CASE WHEN s.daily_spread_profit > 0 AND s.sell_chg_30d < 0 THEN s.daily_spread_profit END
+        UNION ALL SELECT 'spread_profit', 'volatile', 0,  CASE WHEN s.daily_spread_profit > 0 THEN s.daily_spread_profit END
+        UNION ALL SELECT 'raw_pct', 'rising',   1,  CASE WHEN s.sell_chg_1d > 0 THEN s.sell_chg_1d END
+        UNION ALL SELECT 'raw_pct', 'falling',  1,  CASE WHEN s.sell_chg_1d < 0 THEN -s.sell_chg_1d END
+        UNION ALL SELECT 'raw_pct', 'rising',   7,  CASE WHEN s.sell_chg_7d > 0 THEN s.sell_chg_7d END
+        UNION ALL SELECT 'raw_pct', 'falling',  7,  CASE WHEN s.sell_chg_7d < 0 THEN -s.sell_chg_7d END
+        UNION ALL SELECT 'raw_pct', 'both',     7,  CASE WHEN s.sell_chg_7d > 0 OR s.sell_chg_7d < 0 THEN ABS(s.sell_chg_7d) END
+        UNION ALL SELECT 'raw_pct', 'rising',   30, CASE WHEN s.sell_chg_30d > 0 THEN s.sell_chg_30d END
+        UNION ALL SELECT 'raw_pct', 'falling',  30, CASE WHEN s.sell_chg_30d < 0 THEN -s.sell_chg_30d END
+        UNION ALL SELECT 'raw_pct', 'volatile', 0,  CASE WHEN s.volatility_30d > 0 THEN s.volatility_30d END
+    ) b
+    WHERE s.region_id = $1
+      AND s.typical_sell > 0
+      AND b.score IS NOT NULL
+      AND b.score > 0
+),
+ranked AS (
+    SELECT sort_by, mode, period, type_id, score, isk_traded_7d, avg_orders_7d,
+           ROW_NUMBER() OVER (PARTITION BY sort_by, mode, period ORDER BY score DESC, type_id ASC)::integer AS rank
+    FROM candidates
+)
+INSERT INTO market_movers_ranked (region_id, sort_by, mode, period, rank, type_id, score, isk_traded_7d, avg_orders_7d, updated_at)
+SELECT $1, sort_by, mode, period, rank, type_id, score, isk_traded_7d, avg_orders_7d, $2
+FROM ranked
+WHERE sort_by <> 'raw_pct' OR rank <= 100
+`
+
+type InsertMarketMoversRankedForRegionParams struct {
+	RegionID int64     `json:"region_id"`
+	Now      time.Time `json:"now"`
+}
+
+// Precomputes ranked mover rows for one region across all sort modes,
+// directions (including combined 'both' for the tall Market Movers
+// widget), and periods (0 for volatile). Run inside the region sweep
+// transaction and after history refreshes so renders read with LIMIT only.
+func (q *Queries) InsertMarketMoversRankedForRegion(ctx context.Context, arg InsertMarketMoversRankedForRegionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertMarketMoversRankedForRegion, arg.RegionID, arg.Now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertMarketStatsFallback = `-- name: InsertMarketStatsFallback :exec
@@ -1759,61 +1849,6 @@ func (q *Queries) ListMarketBrowseTypes(ctx context.Context, arg ListMarketBrows
 }
 
 const listMarketChangesForRegion = `-- name: ListMarketChangesForRegion :many
-SELECT type_id, day, kind, before, after, pct, detected_at
-FROM market_changes
-WHERE region_id = $1 AND day >= $2::text
-  AND ($3::text = '' OR kind = $3::text)
-ORDER BY day DESC, ABS(pct) DESC, type_id
-LIMIT 100
-`
-
-type ListMarketChangesForRegionParams struct {
-	RegionID int64  `json:"region_id"`
-	Since    string `json:"since"`
-	Kind     string `json:"kind"`
-}
-
-type ListMarketChangesForRegionRow struct {
-	TypeID     int64     `json:"type_id"`
-	Day        string    `json:"day"`
-	Kind       string    `json:"kind"`
-	Before     float64   `json:"before"`
-	After      float64   `json:"after"`
-	Pct        float64   `json:"pct"`
-	DetectedAt time.Time `json:"detected_at"`
-}
-
-// The API change feed: a region's changes from a day on, newest day
-// first, biggest moves first within it.
-func (q *Queries) ListMarketChangesForRegion(ctx context.Context, arg ListMarketChangesForRegionParams) ([]ListMarketChangesForRegionRow, error) {
-	rows, err := q.db.Query(ctx, listMarketChangesForRegion, arg.RegionID, arg.Since, arg.Kind)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListMarketChangesForRegionRow
-	for rows.Next() {
-		var i ListMarketChangesForRegionRow
-		if err := rows.Scan(
-			&i.TypeID,
-			&i.Day,
-			&i.Kind,
-			&i.Before,
-			&i.After,
-			&i.Pct,
-			&i.DetectedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMarketChangesForRegionFiltered = `-- name: ListMarketChangesForRegionFiltered :many
 SELECT c.type_id, c.day, c.kind, c.before, c.after, c.pct, c.detected_at,
        COALESCE(s.isk_traded_7d, 0)::double precision AS isk_traded_7d,
        COALESCE(s.avg_orders_7d, 0)::double precision AS avg_orders_7d,
@@ -1831,7 +1866,7 @@ ORDER BY c.day DESC, ABS(c.pct) DESC, c.type_id
 LIMIT 100
 `
 
-type ListMarketChangesForRegionFilteredParams struct {
+type ListMarketChangesForRegionParams struct {
 	RegionID  int64   `json:"region_id"`
 	Since     string  `json:"since"`
 	Kind      string  `json:"kind"`
@@ -1839,7 +1874,7 @@ type ListMarketChangesForRegionFilteredParams struct {
 	MinTrades float64 `json:"min_trades"`
 }
 
-type ListMarketChangesForRegionFilteredRow struct {
+type ListMarketChangesForRegionRow struct {
 	TypeID        int64     `json:"type_id"`
 	Day           string    `json:"day"`
 	Kind          string    `json:"kind"`
@@ -1853,10 +1888,11 @@ type ListMarketChangesForRegionFilteredRow struct {
 	SpreadWidened bool      `json:"spread_widened"`
 }
 
-// The Trends page's change feed with the active ISK traded/day and
-// trades/day floors applied in SQL against market_region_stats.
-func (q *Queries) ListMarketChangesForRegionFiltered(ctx context.Context, arg ListMarketChangesForRegionFilteredParams) ([]ListMarketChangesForRegionFilteredRow, error) {
-	rows, err := q.db.Query(ctx, listMarketChangesForRegionFiltered,
+// A region's change feed from a day on, with the active ISK traded/day
+// and trades/day floors applied in SQL against market_region_stats.
+// Shared by the Trends change feed and the public market changes API.
+func (q *Queries) ListMarketChangesForRegion(ctx context.Context, arg ListMarketChangesForRegionParams) ([]ListMarketChangesForRegionRow, error) {
+	rows, err := q.db.Query(ctx, listMarketChangesForRegion,
 		arg.RegionID,
 		arg.Since,
 		arg.Kind,
@@ -1867,9 +1903,9 @@ func (q *Queries) ListMarketChangesForRegionFiltered(ctx context.Context, arg Li
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListMarketChangesForRegionFilteredRow
+	var items []ListMarketChangesForRegionRow
 	for rows.Next() {
-		var i ListMarketChangesForRegionFilteredRow
+		var i ListMarketChangesForRegionRow
 		if err := rows.Scan(
 			&i.TypeID,
 			&i.Day,
@@ -2871,187 +2907,6 @@ func (q *Queries) ListMarketStatsFallbackForTypes(ctx context.Context, arg ListM
 	return items, nil
 }
 
-const listMarketTrendTypes = `-- name: ListMarketTrendTypes :many
-SELECT type_id, typical_sell, typical_buy, sell_orders, avg_daily_volume_30d,
-       sell_avg_7d, sell_median_7d, sell_median_30d, mover_chg_7v30, mover_hold_days,
-       isk_traded_7d, avg_orders_7d, avg_vol_7d, avg_vol_30d,
-       mover_score, isk_move_7d, daily_spread_profit, spread_pct, spread_widened, confirmed_hubs,
-       sell_chg_1d, sell_chg_7d, sell_chg_30d, volatility_30d, history_days, updated_at,
-       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
-FROM (
-    SELECT s.region_id, s.type_id, s.best_sell, s.typical_sell, s.sell_band, s.best_buy, s.typical_buy, s.buy_band, s.sell_orders, s.buy_orders, s.sell_volume, s.buy_volume, s.updated_at, s.avg_daily_volume, s.sell_avg, s.sell_max, s.sell_p5, s.sell_stddev, s.buy_avg, s.buy_min, s.buy_p5, s.buy_stddev, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d, s.buy_chg_1d, s.buy_chg_7d, s.buy_chg_30d, s.volatility_30d, s.history_days, s.avg_daily_volume_30d, s.sell_spark_30d, s.sell_low_30d, s.sell_high_30d, s.sell_mean_30d, s.swept_at, s.sell_avg_7d, s.sell_median_7d, s.sell_median_30d, s.mover_chg_7v30, s.mover_hold_days, s.isk_traded_7d, s.avg_orders_7d, s.avg_vol_7d, s.avg_vol_30d, s.mover_score, s.isk_move_7d, s.daily_spread_profit, s.spread_pct, s.spread_widened, s.confirmed_hubs,
-           CASE $1::text
-               WHEN 'confirmed' THEN
-                   CASE $2::text
-                       WHEN 'volatile' THEN CASE WHEN s.volatility_30d IS NOT NULL THEN s.volatility_30d * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
-                       ELSE CASE $3::int
-                           WHEN 1 THEN CASE WHEN s.sell_chg_1d IS NOT NULL THEN ABS(s.sell_chg_1d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
-                           WHEN 30 THEN CASE WHEN s.sell_chg_30d IS NOT NULL THEN ABS(s.sell_chg_30d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
-                           ELSE s.mover_score
-                       END
-                   END
-               WHEN 'isk_move' THEN
-                   CASE $2::text
-                       WHEN 'volatile' THEN CASE WHEN s.volatility_30d IS NOT NULL THEN s.typical_sell * GREATEST(s.avg_vol_7d, 0) * (s.volatility_30d / 100.0) END
-                       ELSE CASE $3::int
-                           WHEN 1 THEN CASE WHEN s.sell_chg_1d IS NOT NULL AND s.sell_chg_1d > -100.0 THEN ABS(s.typical_sell - s.typical_sell / (1.0 + s.sell_chg_1d / 100.0)) * GREATEST(s.avg_vol_7d, 0) END
-                           WHEN 30 THEN CASE WHEN s.sell_chg_30d IS NOT NULL AND s.sell_chg_30d > -100.0 THEN ABS(s.typical_sell - s.typical_sell / (1.0 + s.sell_chg_30d / 100.0)) * GREATEST(s.avg_vol_7d, 0) END
-                           ELSE CASE WHEN s.mover_chg_7v30 IS NOT NULL THEN s.isk_move_7d END
-                       END
-                   END
-               WHEN 'spread_profit' THEN
-                   CASE WHEN s.daily_spread_profit > 0 THEN s.daily_spread_profit END
-               ELSE
-                   CASE $2::text
-                       WHEN 'volatile' THEN s.volatility_30d
-                       WHEN 'rising' THEN CASE $3::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END
-                       ELSE -(CASE $3::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END)
-                   END
-           END AS score,
-           CASE $3::int
-               WHEN 1 THEN s.sell_chg_1d
-               WHEN 30 THEN s.sell_chg_30d
-               ELSE CASE WHEN $1::text IN ('confirmed', 'isk_move') THEN s.mover_chg_7v30 ELSE s.sell_chg_7d END
-           END AS dir_chg
-    FROM market_region_stats s
-    WHERE s.region_id = $4
-      AND s.typical_sell > 0
-      AND ($1::text = 'raw_pct' OR (
-          s.isk_traded_7d >= $5::double precision
-          AND s.avg_orders_7d >= $6::double precision
-      ))
-      AND ($1::text <> 'confirmed' OR (
-          s.avg_vol_7d > 0
-          AND s.avg_vol_7d >= s.avg_vol_30d
-          AND ($2::text = 'volatile' OR $3::int <> 7 OR s.mover_hold_days >= 4)
-      ))
-) ranked
-WHERE score IS NOT NULL
-  AND score > 0
-  AND (
-      $2::text = 'volatile'
-      OR ($2::text = 'rising' AND dir_chg > 0)
-      OR ($2::text = 'falling' AND dir_chg < 0)
-  )
-ORDER BY score DESC, type_id
-LIMIT $7::bigint
-`
-
-type ListMarketTrendTypesParams struct {
-	SortBy    string  `json:"sort_by"`
-	Mode      string  `json:"mode"`
-	Period    int32   `json:"period"`
-	RegionID  int64   `json:"region_id"`
-	MinIsk    float64 `json:"min_isk"`
-	MinTrades float64 `json:"min_trades"`
-	RowCap    int64   `json:"row_cap"`
-}
-
-type ListMarketTrendTypesRow struct {
-	TypeID            int64           `json:"type_id"`
-	TypicalSell       float64         `json:"typical_sell"`
-	TypicalBuy        float64         `json:"typical_buy"`
-	SellOrders        int64           `json:"sell_orders"`
-	AvgDailyVolume30d float64         `json:"avg_daily_volume_30d"`
-	SellAvg7d         float64         `json:"sell_avg_7d"`
-	SellMedian7d      float64         `json:"sell_median_7d"`
-	SellMedian30d     float64         `json:"sell_median_30d"`
-	MoverChg7v30      sql.NullFloat64 `json:"mover_chg_7v30"`
-	MoverHoldDays     int64           `json:"mover_hold_days"`
-	IskTraded7d       float64         `json:"isk_traded_7d"`
-	AvgOrders7d       float64         `json:"avg_orders_7d"`
-	AvgVol7d          float64         `json:"avg_vol_7d"`
-	AvgVol30d         float64         `json:"avg_vol_30d"`
-	MoverScore        sql.NullFloat64 `json:"mover_score"`
-	IskMove7d         float64         `json:"isk_move_7d"`
-	DailySpreadProfit float64         `json:"daily_spread_profit"`
-	SpreadPct         sql.NullFloat64 `json:"spread_pct"`
-	SpreadWidened     bool            `json:"spread_widened"`
-	ConfirmedHubs     int64           `json:"confirmed_hubs"`
-	SellChg1d         sql.NullFloat64 `json:"sell_chg_1d"`
-	SellChg7d         sql.NullFloat64 `json:"sell_chg_7d"`
-	SellChg30d        sql.NullFloat64 `json:"sell_chg_30d"`
-	Volatility30d     sql.NullFloat64 `json:"volatility_30d"`
-	HistoryDays       int64           `json:"history_days"`
-	UpdatedAt         time.Time       `json:"updated_at"`
-	SellSpark30d      string          `json:"sell_spark_30d"`
-	SellLow30d        float64         `json:"sell_low_30d"`
-	SellHigh30d       float64         `json:"sell_high_30d"`
-	SellMean30d       float64         `json:"sell_mean_30d"`
-}
-
-// The Trends screen and Market Movers widget, ranked in one bounded
-// SQL read over precomputed stat pack columns.
-//
-// sort_by chooses the ranking and gating:
-//
-//	confirmed     volume-confirmed move (default): ISK/day floor,
-//	              trades/day floor, 7d volume >= 30d average, and
-//	              (for 7d directional moves) at least 4 of 7 days held,
-//	              ranked by mover_score = ABS(chg) * LN(1 + isk_traded_7d).
-//	isk_move      ISK value of the move, with ISK/day and trades/day floors.
-//	spread_profit estimated daily spread profit, with ISK/day and trades/day floors.
-//	raw_pct       all gates off, ranked by raw % move (or volatility) so
-//	              traders can inspect thin or manipulated books.
-func (q *Queries) ListMarketTrendTypes(ctx context.Context, arg ListMarketTrendTypesParams) ([]ListMarketTrendTypesRow, error) {
-	rows, err := q.db.Query(ctx, listMarketTrendTypes,
-		arg.SortBy,
-		arg.Mode,
-		arg.Period,
-		arg.RegionID,
-		arg.MinIsk,
-		arg.MinTrades,
-		arg.RowCap,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListMarketTrendTypesRow
-	for rows.Next() {
-		var i ListMarketTrendTypesRow
-		if err := rows.Scan(
-			&i.TypeID,
-			&i.TypicalSell,
-			&i.TypicalBuy,
-			&i.SellOrders,
-			&i.AvgDailyVolume30d,
-			&i.SellAvg7d,
-			&i.SellMedian7d,
-			&i.SellMedian30d,
-			&i.MoverChg7v30,
-			&i.MoverHoldDays,
-			&i.IskTraded7d,
-			&i.AvgOrders7d,
-			&i.AvgVol7d,
-			&i.AvgVol30d,
-			&i.MoverScore,
-			&i.IskMove7d,
-			&i.DailySpreadProfit,
-			&i.SpreadPct,
-			&i.SpreadWidened,
-			&i.ConfirmedHubs,
-			&i.SellChg1d,
-			&i.SellChg7d,
-			&i.SellChg30d,
-			&i.Volatility30d,
-			&i.HistoryDays,
-			&i.UpdatedAt,
-			&i.SellSpark30d,
-			&i.SellLow30d,
-			&i.SellHigh30d,
-			&i.SellMean30d,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listMarketTypePricesForTypes = `-- name: ListMarketTypePricesForTypes :many
 SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
 FROM market_type_prices
@@ -3507,6 +3362,137 @@ func (q *Queries) ListPlanetResolutions(ctx context.Context, arg ListPlanetResol
 			return nil, err
 		}
 		items = append(items, planet_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRankedMarketMovers = `-- name: ListRankedMarketMovers :many
+SELECT m.rank, m.score,
+       s.type_id, s.typical_sell, s.typical_buy, s.sell_orders, s.avg_daily_volume_30d,
+       s.sell_avg_7d, s.sell_median_7d, s.sell_median_30d, s.mover_chg_7v30, s.mover_hold_days,
+       s.isk_traded_7d, s.avg_orders_7d, s.avg_vol_7d, s.avg_vol_30d,
+       s.mover_score, s.isk_move_7d, s.daily_spread_profit, s.spread_pct, s.spread_widened, s.confirmed_hubs,
+       s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d, s.volatility_30d, s.history_days, s.updated_at,
+       s.sell_spark_30d, s.sell_low_30d, s.sell_high_30d, s.sell_mean_30d
+FROM market_movers_ranked m
+JOIN market_region_stats s
+  ON s.region_id = m.region_id AND s.type_id = m.type_id
+WHERE m.region_id = $1
+  AND m.sort_by = $2::text
+  AND m.mode = $3::text
+  AND m.period = $4::int
+  AND ($2::text = 'raw_pct' OR (
+      m.isk_traded_7d >= $5::double precision
+      AND m.avg_orders_7d >= $6::double precision
+  ))
+ORDER BY m.rank
+LIMIT $7::bigint
+`
+
+type ListRankedMarketMoversParams struct {
+	RegionID  int64   `json:"region_id"`
+	SortBy    string  `json:"sort_by"`
+	Mode      string  `json:"mode"`
+	Period    int32   `json:"period"`
+	MinIsk    float64 `json:"min_isk"`
+	MinTrades float64 `json:"min_trades"`
+	RowCap    int64   `json:"row_cap"`
+}
+
+type ListRankedMarketMoversRow struct {
+	Rank              int32           `json:"rank"`
+	Score             float64         `json:"score"`
+	TypeID            int64           `json:"type_id"`
+	TypicalSell       float64         `json:"typical_sell"`
+	TypicalBuy        float64         `json:"typical_buy"`
+	SellOrders        int64           `json:"sell_orders"`
+	AvgDailyVolume30d float64         `json:"avg_daily_volume_30d"`
+	SellAvg7d         float64         `json:"sell_avg_7d"`
+	SellMedian7d      float64         `json:"sell_median_7d"`
+	SellMedian30d     float64         `json:"sell_median_30d"`
+	MoverChg7v30      sql.NullFloat64 `json:"mover_chg_7v30"`
+	MoverHoldDays     int64           `json:"mover_hold_days"`
+	IskTraded7d       float64         `json:"isk_traded_7d"`
+	AvgOrders7d       float64         `json:"avg_orders_7d"`
+	AvgVol7d          float64         `json:"avg_vol_7d"`
+	AvgVol30d         float64         `json:"avg_vol_30d"`
+	MoverScore        sql.NullFloat64 `json:"mover_score"`
+	IskMove7d         float64         `json:"isk_move_7d"`
+	DailySpreadProfit float64         `json:"daily_spread_profit"`
+	SpreadPct         sql.NullFloat64 `json:"spread_pct"`
+	SpreadWidened     bool            `json:"spread_widened"`
+	ConfirmedHubs     int64           `json:"confirmed_hubs"`
+	SellChg1d         sql.NullFloat64 `json:"sell_chg_1d"`
+	SellChg7d         sql.NullFloat64 `json:"sell_chg_7d"`
+	SellChg30d        sql.NullFloat64 `json:"sell_chg_30d"`
+	Volatility30d     sql.NullFloat64 `json:"volatility_30d"`
+	HistoryDays       int64           `json:"history_days"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+	SellSpark30d      string          `json:"sell_spark_30d"`
+	SellLow30d        float64         `json:"sell_low_30d"`
+	SellHigh30d       float64         `json:"sell_high_30d"`
+	SellMean30d       float64         `json:"sell_mean_30d"`
+}
+
+// Reads pre-ranked movers for the Trends screen and Market Movers widget
+// directly from market_movers_ranked in primary-key rank order with LIMIT.
+func (q *Queries) ListRankedMarketMovers(ctx context.Context, arg ListRankedMarketMoversParams) ([]ListRankedMarketMoversRow, error) {
+	rows, err := q.db.Query(ctx, listRankedMarketMovers,
+		arg.RegionID,
+		arg.SortBy,
+		arg.Mode,
+		arg.Period,
+		arg.MinIsk,
+		arg.MinTrades,
+		arg.RowCap,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRankedMarketMoversRow
+	for rows.Next() {
+		var i ListRankedMarketMoversRow
+		if err := rows.Scan(
+			&i.Rank,
+			&i.Score,
+			&i.TypeID,
+			&i.TypicalSell,
+			&i.TypicalBuy,
+			&i.SellOrders,
+			&i.AvgDailyVolume30d,
+			&i.SellAvg7d,
+			&i.SellMedian7d,
+			&i.SellMedian30d,
+			&i.MoverChg7v30,
+			&i.MoverHoldDays,
+			&i.IskTraded7d,
+			&i.AvgOrders7d,
+			&i.AvgVol7d,
+			&i.AvgVol30d,
+			&i.MoverScore,
+			&i.IskMove7d,
+			&i.DailySpreadProfit,
+			&i.SpreadPct,
+			&i.SpreadWidened,
+			&i.ConfirmedHubs,
+			&i.SellChg1d,
+			&i.SellChg7d,
+			&i.SellChg30d,
+			&i.Volatility30d,
+			&i.HistoryDays,
+			&i.UpdatedAt,
+			&i.SellSpark30d,
+			&i.SellLow30d,
+			&i.SellHigh30d,
+			&i.SellMean30d,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -4304,8 +4290,9 @@ func (q *Queries) RefreshMarketHubConfirmation(ctx context.Context, arg RefreshM
 
 const refreshMarketRegionStatAvgVolume = `-- name: RefreshMarketRegionStatAvgVolume :exec
 WITH hr AS (
-    SELECT CASE WHEN MAX(m.date) = to_char((now() AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD')
-                THEN (now() AT TIME ZONE 'UTC')::date
+    SELECT CASE WHEN MAX(m.date)::date >= (now() AT TIME ZONE 'UTC')::date - 2
+                 AND MAX(m.date)::date <= (now() AT TIME ZONE 'UTC')::date
+                THEN MAX(m.date)::date
                 ELSE (now() AT TIME ZONE 'UTC')::date - 1
            END AS ref_date,
            MAX(m.date)::date AS max_date
@@ -4322,29 +4309,58 @@ agg AS (
            COALESCE(SUM(h.volume::double precision)
                FILTER (WHERE h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS avg_vol_7d,
            COALESCE(SUM(h.volume::double precision)
-               FILTER (WHERE h.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 30.0 AS avg_vol_30d
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 30.0 AS avg_vol_30d,
+           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY h.average)
+               FILTER (WHERE h.average > 0 AND h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision AS sell_median_7d,
+           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY h.average)
+               FILTER (WHERE h.average > 0 AND h.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision AS sell_median_30d
     FROM hr
     LEFT JOIN market_history h
       ON h.region_id = $1
      AND h.type_id = $2
      AND hr.max_date IS NOT NULL
      AND h.date >= to_char(LEAST(hr.ref_date - 29, hr.max_date - 29), 'YYYY-MM-DD')
+),
+hold AS (
+    SELECT COALESCE(COUNT(*) FILTER (WHERE
+               (agg.sell_median_7d > agg.sell_median_30d
+                AND h.average >= agg.sell_median_30d + 0.5 * (agg.sell_median_7d - agg.sell_median_30d))
+            OR (agg.sell_median_7d < agg.sell_median_30d
+                AND h.average <= agg.sell_median_30d + 0.5 * (agg.sell_median_7d - agg.sell_median_30d))
+           ), 0)::bigint AS hold_days
+    FROM hr
+    CROSS JOIN agg
+    LEFT JOIN market_history h
+      ON h.region_id = $1
+     AND h.type_id = $2
+     AND hr.max_date IS NOT NULL
+     AND h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD')
+     AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')
+     AND h.average > 0
+     AND agg.sell_median_7d > 0
+     AND agg.sell_median_30d > 0
 )
 UPDATE market_region_stats s SET
     avg_daily_volume     = agg.avg_daily_volume,
     avg_daily_volume_30d = agg.avg_daily_volume_30d,
+    sell_median_7d       = agg.sell_median_7d,
+    sell_median_30d      = agg.sell_median_30d,
+    mover_chg_7v30       = CASE WHEN agg.sell_median_7d > 0 AND agg.sell_median_30d > 0
+                                THEN (agg.sell_median_7d - agg.sell_median_30d) / agg.sell_median_30d * 100.0 END,
+    mover_hold_days      = hold.hold_days,
     isk_traded_7d        = agg.isk_traded_7d,
     avg_orders_7d        = agg.avg_orders_7d,
     avg_vol_7d           = agg.avg_vol_7d,
     avg_vol_30d          = agg.avg_vol_30d,
-    mover_score          = CASE WHEN s.mover_chg_7v30 IS NOT NULL THEN ABS(s.mover_chg_7v30) * LN(1.0 + GREATEST(agg.isk_traded_7d, 0)) END,
-    isk_move_7d          = CASE WHEN s.sell_median_7d > 0 AND s.sell_median_30d > 0
-                                THEN ABS(s.sell_median_7d - s.sell_median_30d) * GREATEST(agg.avg_vol_7d, 0)
+    mover_score          = CASE WHEN agg.sell_median_7d > 0 AND agg.sell_median_30d > 0
+                                THEN ABS((agg.sell_median_7d - agg.sell_median_30d) / agg.sell_median_30d * 100.0) * LN(1.0 + GREATEST(agg.isk_traded_7d, 0)) END,
+    isk_move_7d          = CASE WHEN agg.sell_median_7d > 0 AND agg.sell_median_30d > 0
+                                THEN ABS(agg.sell_median_7d - agg.sell_median_30d) * GREATEST(agg.avg_vol_7d, 0)
                                 ELSE 0 END,
     daily_spread_profit  = CASE WHEN s.typical_buy > 0 AND s.typical_sell > s.typical_buy
                                 THEN (s.typical_sell - s.typical_buy) * LEAST(GREATEST(agg.avg_vol_7d, 0), s.sell_volume::double precision, s.buy_volume::double precision)
                                 ELSE 0 END
-FROM agg
+FROM agg, hold
 WHERE s.region_id = $1 AND s.type_id = $2
 `
 
@@ -4353,29 +4369,109 @@ type RefreshMarketRegionStatAvgVolumeParams struct {
 	TypeID   int64 `json:"type_id"`
 }
 
-// Recomputes one region stat's traded-volume and mover-activity figures
-// from its stored history right after a history fetch, so neither the
-// scanner/tradefinder nor Trends/Movers wait for the next region sweep.
+// Recomputes one region stat's traded-volume, traded-price medians,
+// hold days, and mover-activity figures from its stored history right
+// after a history fetch, so neither the scanner/tradefinder nor
+// Trends/Movers wait for the next region sweep.
 func (q *Queries) RefreshMarketRegionStatAvgVolume(ctx context.Context, arg RefreshMarketRegionStatAvgVolumeParams) error {
 	_, err := q.db.Exec(ctx, refreshMarketRegionStatAvgVolume, arg.RegionID, arg.TypeID)
 	return err
 }
 
 const refreshMarketRegionStatAvgVolumes = `-- name: RefreshMarketRegionStatAvgVolumes :execrows
-UPDATE market_region_stats s SET avg_daily_volume = v.avg_daily_volume
-FROM (
-    SELECT h.type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
+WITH hr AS (
+    SELECT m.type_id,
+           CASE WHEN MAX(m.date)::date >= (now() AT TIME ZONE 'UTC')::date - 2
+                 AND MAX(m.date)::date <= (now() AT TIME ZONE 'UTC')::date
+                THEN MAX(m.date)::date
+                ELSE (now() AT TIME ZONE 'UTC')::date - 1
+           END AS ref_date,
+           MAX(m.date)::date AS max_date
+    FROM market_history m
+    WHERE m.region_id = $1 AND m.type_id = ANY($2::bigint[])
+    GROUP BY m.type_id
+),
+agg AS (
+    SELECT h.type_id,
+           COALESCE(AVG(h.volume) FILTER (WHERE h.date >= to_char(hr.max_date - 6, 'YYYY-MM-DD')), 0)::double precision AS avg_daily_volume,
+           COALESCE(AVG(h.volume) FILTER (WHERE h.date >= to_char(hr.max_date - 29, 'YYYY-MM-DD')), 0)::double precision AS avg_daily_volume_30d,
+           COALESCE(SUM(h.volume::double precision * h.average)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS isk_traded_7d,
+           COALESCE(SUM(h.order_count::double precision)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS avg_orders_7d,
+           COALESCE(SUM(h.volume::double precision)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS avg_vol_7d,
+           COALESCE(SUM(h.volume::double precision)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 30.0 AS avg_vol_30d,
+           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY h.average)
+               FILTER (WHERE h.average > 0 AND h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision AS sell_median_7d,
+           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY h.average)
+               FILTER (WHERE h.average > 0 AND h.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision AS sell_median_30d
     FROM market_history h
-    JOIN (
-        SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD') AS window_start
-        FROM market_history m
-        WHERE m.region_id = $1 AND m.type_id = ANY($2::bigint[])
-        GROUP BY m.type_id
-    ) w ON w.type_id = h.type_id
-    WHERE h.region_id = $1 AND h.type_id = ANY($2::bigint[]) AND h.date >= w.window_start
+    JOIN hr ON hr.type_id = h.type_id
+    WHERE h.region_id = $1
+      AND h.type_id = ANY($2::bigint[])
+      AND h.date >= to_char(LEAST(hr.ref_date - 29, hr.max_date - 29), 'YYYY-MM-DD')
     GROUP BY h.type_id
+),
+hold AS (
+    SELECT h.type_id,
+           COUNT(*) FILTER (WHERE
+               (agg.sell_median_7d > agg.sell_median_30d
+                AND h.average >= agg.sell_median_30d + 0.5 * (agg.sell_median_7d - agg.sell_median_30d))
+            OR (agg.sell_median_7d < agg.sell_median_30d
+                AND h.average <= agg.sell_median_30d + 0.5 * (agg.sell_median_7d - agg.sell_median_30d))
+           )::bigint AS hold_days
+    FROM market_history h
+    JOIN hr ON hr.type_id = h.type_id
+    JOIN agg ON agg.type_id = h.type_id
+    WHERE h.region_id = $1
+      AND h.type_id = ANY($2::bigint[])
+      AND h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD')
+      AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')
+      AND h.average > 0
+      AND agg.sell_median_7d > 0
+      AND agg.sell_median_30d > 0
+    GROUP BY h.type_id
+)
+UPDATE market_region_stats s SET
+    avg_daily_volume     = v.avg_daily_volume,
+    avg_daily_volume_30d = v.avg_daily_volume_30d,
+    sell_median_7d       = v.sell_median_7d,
+    sell_median_30d      = v.sell_median_30d,
+    mover_chg_7v30       = CASE WHEN v.sell_median_7d > 0 AND v.sell_median_30d > 0
+                                THEN (v.sell_median_7d - v.sell_median_30d) / v.sell_median_30d * 100.0 END,
+    mover_hold_days      = v.hold_days,
+    isk_traded_7d        = v.isk_traded_7d,
+    avg_orders_7d        = v.avg_orders_7d,
+    avg_vol_7d           = v.avg_vol_7d,
+    avg_vol_30d          = v.avg_vol_30d,
+    mover_score          = CASE WHEN v.sell_median_7d > 0 AND v.sell_median_30d > 0
+                                THEN ABS((v.sell_median_7d - v.sell_median_30d) / v.sell_median_30d * 100.0) * LN(1.0 + GREATEST(v.isk_traded_7d, 0)) END,
+    isk_move_7d          = CASE WHEN v.sell_median_7d > 0 AND v.sell_median_30d > 0
+                                THEN ABS(v.sell_median_7d - v.sell_median_30d) * GREATEST(v.avg_vol_7d, 0)
+                                ELSE 0 END,
+    daily_spread_profit  = CASE WHEN s.typical_buy > 0 AND s.typical_sell > s.typical_buy
+                                THEN (s.typical_sell - s.typical_buy) * LEAST(GREATEST(v.avg_vol_7d, 0), s.sell_volume::double precision, s.buy_volume::double precision)
+                                ELSE 0 END
+FROM (
+    SELECT a.type_id, a.avg_daily_volume, a.avg_daily_volume_30d,
+           a.sell_median_7d, a.sell_median_30d,
+           a.isk_traded_7d, a.avg_orders_7d, a.avg_vol_7d, a.avg_vol_30d,
+           COALESCE(hd.hold_days, 0)::bigint AS hold_days
+    FROM agg a
+    LEFT JOIN hold hd ON hd.type_id = a.type_id
 ) v
-WHERE s.region_id = $1 AND s.type_id = v.type_id AND s.avg_daily_volume <> v.avg_daily_volume
+WHERE s.region_id = $1
+  AND s.type_id = v.type_id
+  AND (
+      s.avg_daily_volume <> v.avg_daily_volume
+      OR s.isk_traded_7d <> v.isk_traded_7d
+      OR s.avg_orders_7d <> v.avg_orders_7d
+      OR s.sell_median_7d <> v.sell_median_7d
+      OR s.sell_median_30d <> v.sell_median_30d
+      OR s.mover_hold_days <> v.hold_days
+  )
 `
 
 type RefreshMarketRegionStatAvgVolumesParams struct {
@@ -4384,9 +4480,8 @@ type RefreshMarketRegionStatAvgVolumesParams struct {
 }
 
 // RefreshMarketRegionStatAvgVolume for several types of one region in
-// one statement, touching only rows whose figure changed: the
-// tradefinder's self-heal for pending routes whose history is stored
-// but whose sold-per-day figure has not caught up.
+// one statement, updating traded-volume, traded medians, hold days,
+// and mover-activity metrics for rows whose figures changed.
 func (q *Queries) RefreshMarketRegionStatAvgVolumes(ctx context.Context, arg RefreshMarketRegionStatAvgVolumesParams) (int64, error) {
 	result, err := q.db.Exec(ctx, refreshMarketRegionStatAvgVolumes, arg.RegionID, arg.TypeIds)
 	if err != nil {
@@ -4458,8 +4553,7 @@ const refreshMarketStatPackTrends = `-- name: RefreshMarketStatPackTrends :execr
 WITH cur7 AS (
     SELECT dd.type_id,
            AVG(dd.typical_sell) FILTER (WHERE dd.typical_sell > 0)::double precision AS sell_avg_7d,
-           AVG(dd.typical_buy) FILTER (WHERE dd.typical_buy > 0)::double precision AS buy_avg_7d,
-           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dd.typical_sell) FILTER (WHERE dd.typical_sell > 0)::double precision AS sell_median_7d
+           AVG(dd.typical_buy) FILTER (WHERE dd.typical_buy > 0)::double precision AS buy_avg_7d
     FROM market_region_stats_daily dd
     WHERE dd.region_id = $1
       AND dd.day >= to_char($2::date - 6, 'YYYY-MM-DD')
@@ -4478,9 +4572,8 @@ prev7 AS (
       AND (COALESCE(cardinality($3::bigint[]), 0) = 0 OR dd.type_id = ANY($3::bigint[]))
     GROUP BY dd.type_id
 ),
-med30 AS (
+spread30 AS (
     SELECT dd.type_id,
-           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dd.typical_sell) FILTER (WHERE dd.typical_sell > 0)::double precision AS sell_median_30d,
            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (dd.typical_sell - dd.typical_buy) / dd.typical_buy * 100.0)
                FILTER (WHERE dd.typical_buy > 0 AND dd.typical_sell > dd.typical_buy)::double precision AS spread_median_30d
     FROM market_region_stats_daily dd
@@ -4490,32 +4583,11 @@ med30 AS (
       AND (COALESCE(cardinality($3::bigint[]), 0) = 0 OR dd.type_id = ANY($3::bigint[]))
     GROUP BY dd.type_id
 ),
-hold AS (
-    SELECT dd.type_id,
-           COUNT(*) FILTER (WHERE
-               (c7.sell_median_7d > m30.sell_median_30d
-                AND dd.typical_sell > m30.sell_median_30d
-                AND dd.typical_sell >= m30.sell_median_30d + 0.5 * (c7.sell_median_7d - m30.sell_median_30d))
-            OR (c7.sell_median_7d < m30.sell_median_30d
-                AND dd.typical_sell < m30.sell_median_30d
-                AND dd.typical_sell <= m30.sell_median_30d + 0.5 * (c7.sell_median_7d - m30.sell_median_30d))
-           )::bigint AS hold_days
-    FROM market_region_stats_daily dd
-    JOIN cur7 c7 ON c7.type_id = dd.type_id
-    JOIN med30 m30 ON m30.type_id = dd.type_id
-    WHERE dd.region_id = $1
-      AND dd.day >= to_char($2::date - 6, 'YYYY-MM-DD')
-      AND dd.day <= to_char($2::date, 'YYYY-MM-DD')
-      AND dd.typical_sell > 0
-      AND c7.sell_median_7d > 0
-      AND m30.sell_median_30d > 0
-      AND (COALESCE(cardinality($3::bigint[]), 0) = 0 OR dd.type_id = ANY($3::bigint[]))
-    GROUP BY dd.type_id
-),
 hist_ref AS (
     SELECT mh.type_id,
-           CASE WHEN MAX(mh.date) = to_char($2::date, 'YYYY-MM-DD')
-                THEN $2::date
+           CASE WHEN MAX(mh.date)::date >= $2::date - 2
+                 AND MAX(mh.date)::date <= $2::date
+                THEN MAX(mh.date)::date
                 ELSE $2::date - 1
            END AS ref_date,
            MAX(mh.date)::date AS max_date
@@ -4534,11 +4606,35 @@ hist AS (
            COALESCE(SUM(mh.volume::double precision)
                FILTER (WHERE mh.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND mh.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS avg_vol_7d,
            COALESCE(SUM(mh.volume::double precision)
-               FILTER (WHERE mh.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND mh.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 30.0 AS avg_vol_30d
+               FILTER (WHERE mh.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND mh.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 30.0 AS avg_vol_30d,
+           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY mh.average)
+               FILTER (WHERE mh.average > 0 AND mh.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND mh.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision AS sell_median_7d,
+           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY mh.average)
+               FILTER (WHERE mh.average > 0 AND mh.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND mh.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision AS sell_median_30d
     FROM market_history mh
     JOIN hist_ref hr ON hr.type_id = mh.type_id
     WHERE mh.region_id = $1
       AND mh.date >= to_char(LEAST(hr.ref_date - 29, hr.max_date - 29), 'YYYY-MM-DD')
+      AND (COALESCE(cardinality($3::bigint[]), 0) = 0 OR mh.type_id = ANY($3::bigint[]))
+    GROUP BY mh.type_id
+),
+hold AS (
+    SELECT mh.type_id,
+           COUNT(*) FILTER (WHERE
+               (h.sell_median_7d > h.sell_median_30d
+                AND mh.average >= h.sell_median_30d + 0.5 * (h.sell_median_7d - h.sell_median_30d))
+            OR (h.sell_median_7d < h.sell_median_30d
+                AND mh.average <= h.sell_median_30d + 0.5 * (h.sell_median_7d - h.sell_median_30d))
+           )::bigint AS hold_days
+    FROM market_history mh
+    JOIN hist_ref hr ON hr.type_id = mh.type_id
+    JOIN hist h ON h.type_id = mh.type_id
+    WHERE mh.region_id = $1
+      AND mh.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD')
+      AND mh.date <= to_char(hr.ref_date, 'YYYY-MM-DD')
+      AND mh.average > 0
+      AND h.sell_median_7d > 0
+      AND h.sell_median_30d > 0
       AND (COALESCE(cardinality($3::bigint[]), 0) = 0 OR mh.type_id = ANY($3::bigint[]))
     GROUP BY mh.type_id
 )
@@ -4578,14 +4674,15 @@ FROM (
     SELECT r.type_id,
            d1.typical_sell AS s1, d1.typical_buy AS b1,
            d30.typical_sell AS s30, d30.typical_buy AS b30,
-           c7.sell_avg_7d, c7.buy_avg_7d, c7.sell_median_7d,
+           c7.sell_avg_7d, c7.buy_avg_7d,
            p7.sell_avg_prev7, p7.buy_avg_prev7,
-           m30.sell_median_30d,
-           CASE WHEN c7.sell_median_7d > 0 AND m30.sell_median_30d > 0
-                THEN (c7.sell_median_7d - m30.sell_median_30d) / m30.sell_median_30d * 100.0
+           COALESCE(h.sell_median_7d, 0)::double precision AS sell_median_7d,
+           COALESCE(h.sell_median_30d, 0)::double precision AS sell_median_30d,
+           CASE WHEN COALESCE(h.sell_median_7d, 0) > 0 AND COALESCE(h.sell_median_30d, 0) > 0
+                THEN (h.sell_median_7d - h.sell_median_30d) / h.sell_median_30d * 100.0
            END AS mover_chg_7v30,
            COALESCE(hd.hold_days, 0)::bigint AS hold_days,
-           COALESCE(m30.spread_median_30d,
+           COALESCE(sp30.spread_median_30d,
                     CASE WHEN d1.typical_buy > 0 AND d1.typical_sell > d1.typical_buy
                          THEN (d1.typical_sell - d1.typical_buy) / d1.typical_buy * 100.0 END) AS base_spread,
            v.vol, COALESCE(v.days, 0) AS days,
@@ -4597,7 +4694,7 @@ FROM (
     FROM market_region_stats r
     LEFT JOIN cur7 c7 ON c7.type_id = r.type_id
     LEFT JOIN prev7 p7 ON p7.type_id = r.type_id
-    LEFT JOIN med30 m30 ON m30.type_id = r.type_id
+    LEFT JOIN spread30 sp30 ON sp30.type_id = r.type_id
     LEFT JOIN hold hd ON hd.type_id = r.type_id
     LEFT JOIN LATERAL (
         SELECT dd.typical_sell, dd.typical_buy FROM market_region_stats_daily dd
@@ -4641,7 +4738,7 @@ type RefreshMarketStatPackTrendsParams struct {
 	TypeIds  []int64   `json:"type_ids"`
 }
 
-// The stat pack's trend and mover figures (schemas 101 and 188),
+// The stat pack's trend and mover figures (schemas 101, 188, 189),
 // derived for one region inside the sweep's own transaction, right
 // after today's daily rows land.
 //
@@ -4650,9 +4747,9 @@ type RefreshMarketStatPackTrendsParams struct {
 //   - 7d change compares the rolling 7-day average typical price
 //     ([today-6..today]) against the prior 7-day rolling average
 //     ([today-13..today-7]), avoiding single-day snapshot noise.
-//   - mover_chg_7v30 compares the 7-day median daily sell price
-//     against the 30-day median daily sell price, and mover_hold_days
-//     counts how many of the last 7 days held at least half the move.
+//   - sell_median_7d, sell_median_30d, mover_chg_7v30 and
+//     mover_hold_days read actual traded daily averages from
+//     market_history over the trailing 7 and 30 days.
 //   - isk_traded_7d, avg_orders_7d, avg_vol_7d and avg_vol_30d read
 //     calendar-day averages from regional market_history (actual
 //     recorded volume * average price and order_count).

@@ -37,6 +37,6 @@
 {{define "w-movers-row"}}<li>
   <span class="mv-head"><a class="mv-name" href="{{.Href}}">{{.Name}}</a>{{if .HubBadge}}<span class="mv-badge" title="{{.HubTitle}}">{{.HubBadge}}</span>{{end}}</span>
   <span class="mv-chg {{.Change.Dir}}">{{if .Change.Text}}{{.Change.Text}}{{else}}{{.Swing}}{{end}}</span>
-  <small class="mv-sub">{{.Price}} ISK{{if .Warn}} · <span class="mv-warn">{{.Warn}}</span>{{else if .Meta}} · {{.Meta}}{{else if .Swing}}, swings {{.Swing}}{{end}}</small>
+  <small class="mv-sub">{{.Price}} ISK{{if .Meta}} · {{.Meta}}{{end}}{{if .Warn}} · <span class="mv-warn">{{.Warn}}</span>{{end}}</small>
   {{if .Line}}<svg class="mv-line {{.Change.Dir}}" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{.Line}}" vector-effect="non-scaling-stroke"/></svg>{{end}}
 </li>{{end}}

@@ -1760,6 +1760,19 @@ type MarketHistoryWant struct {
 	Priority        int64     `json:"priority"`
 }
 
+type MarketMoversRanked struct {
+	RegionID    int64     `json:"region_id"`
+	SortBy      string    `json:"sort_by"`
+	Mode        string    `json:"mode"`
+	Period      int32     `json:"period"`
+	Rank        int32     `json:"rank"`
+	TypeID      int64     `json:"type_id"`
+	Score       float64   `json:"score"`
+	IskTraded7d float64   `json:"isk_traded_7d"`
+	AvgOrders7d float64   `json:"avg_orders_7d"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type MarketRegionStat struct {
 	RegionID          int64           `json:"region_id"`
 	TypeID            int64           `json:"type_id"`

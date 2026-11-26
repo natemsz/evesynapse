@@ -20,12 +20,14 @@ import (
 // the account (users.customize_prompt_seen_at, schema 185) so it
 // follows the person and not the browser, and opening Customize
 // counts as answering, since the reader has found the thing the
-// card points at. It does not wait for the notification prompt:
-// when both cards are due they queue up and drop together, one
-// after the next. The demo account reads the same shape without
-// the remembered answer: it drops once per login (the session
-// mark), and nothing is saved for it, so every visitor sees it
-// once.
+// card points at. It queues behind the notification prompt, one
+// by one: it waits while that card is about to show on this view,
+// and drops once the notification is done (answered, or already
+// shown this session). If the notification was already answered
+// the hint does not wait for one that will never come, it drops
+// right away. The demo account reads the same shape without the
+// remembered answer: it drops once per login (the session mark),
+// and nothing is saved for it, so every visitor sees it once.
 // ---------------------------------------------------------------------------
 
 // sessionCustomizePromptShown marks a session that has already
@@ -44,11 +46,16 @@ type customizePromptView struct {
 }
 
 // customizePromptFor builds the card for an account, or nil when
-// it must not drop: already answered, or already shown this
-// session. It does not wait for the notification prompt: the two
-// cards queue up, so when both are due they drop together, one
-// after the next, and a shown notification prompt never holds
-// this one back.
+// it must not drop: already answered, already shown this session,
+// or the notification prompt is about to show on this view. The
+// queue is one by one: the notification goes first, and this card
+// waits until it is done. This runs before the shell builds the
+// notification prompt (buildHome runs before fillShell), so the
+// session flag here still means "shown on an earlier view", and
+// the check reads whether the notification will show on this one.
+// A notification that was already answered never holds this one
+// back: the hint drops right away instead of waiting for a card
+// that will never come.
 func (app *Application) customizePromptFor(ctx context.Context, userID int64) *customizePromptView {
 	seen, err := app.queries.GetUserCustomizePromptSeen(ctx, userID)
 	if err != nil {
@@ -59,6 +66,9 @@ func (app *Application) customizePromptFor(ctx context.Context, userID int64) *c
 		return nil
 	}
 	if app.sessions.GetBool(ctx, sessionCustomizePromptShown) {
+		return nil
+	}
+	if !app.notifyPrefsFor(ctx, userID).PromptAnswered && !app.sessions.GetBool(ctx, sessionNotifyPromptShown) {
 		return nil
 	}
 	app.sessions.Put(ctx, sessionCustomizePromptShown, true)

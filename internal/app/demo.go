@@ -362,6 +362,14 @@ func demoPostAllowed(path string) bool {
 	if path == "/auth/logout" {
 		return true
 	}
+	// The two one-time prompt dismissals: answering them only
+	// touches the visitor's own session, and the handlers skip
+	// the account write for demo, so the prompt drops again on
+	// the next login. Blocking them made demo show "you can't do
+	// that on demo" on a plain dismiss, which is not a write.
+	if path == "/notifications/prompt" || path == "/home/customize-prompt" {
+		return true
+	}
 	for _, prefix := range []string{
 		"/fittings/simulate/",
 		"/fittings/solve-implants/",

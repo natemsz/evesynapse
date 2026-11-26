@@ -24,6 +24,7 @@ func TestAboutPagePublic(t *testing.T) {
 		`id="about"`, `id="contact"`, `id="privacy"`,
 		"3518 Fremont Ave N, Seattle, WA 98103 Ste E",
 		"admin@evesynapse.app",
+		"bugs@evesynapse.app",
 		`<a href="/about/#about">About</a>`,
 		`<a href="/about/#contact">Contact</a>`,
 		`<a href="/about/#privacy">Privacy Policy</a>`,

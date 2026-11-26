@@ -2,8 +2,8 @@ package app
 
 // Hermetic tests for industry build planner:
 //
-//   - Importer: the five Fuzzwork industry files parse with the
-//     manufacturing-activity filter and join into blueprint rows.
+//   - Importer: the SDE's blueprints table parses with the
+//     manufacturing-activity filter into blueprint rows.
 //   - Engine: BOM expansion against fixture recipes, the EVE
 //     material formula (ME curve, base-1 floor), whole-run child
 //     production, cycle guard, node cap, owned-blueprint ME/TE
@@ -29,64 +29,36 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Importer fixtures: small but real-shaped slices of the Fuzzwork
-// industry files (quoted CSV, manufacturing is activityID 1).
+// Importer fixtures: small but real-shaped records of the SDE's
+// blueprints table, as JSON Lines.
 // ---------------------------------------------------------------------------
 
-const fixtureIndustryBlueprints = `"typeID","maxProductionLimit"
-"2001","300"
-"2002","60"
-"2003","0"
+// fixtureBlueprints: 2001 manufactures (and invents, with its own
+// skill), 2002 manufactures, 2003 only reacts.
+const fixtureBlueprints = `{"blueprintTypeID":2001,"maxProductionLimit":300,"activities":{"manufacturing":{"time":600,"materials":[{"typeID":1002,"quantity":2},{"typeID":34,"quantity":10}],"products":[{"typeID":1001,"quantity":1}],"skills":[{"typeID":3380,"level":1}]},"copying":{"time":210},"invention":{"time":100,"skills":[{"typeID":11442,"level":2}]}}}
+{"blueprintTypeID":2002,"maxProductionLimit":60,"activities":{"manufacturing":{"time":300,"materials":[{"typeID":34,"quantity":5}],"products":[{"typeID":1002,"quantity":1}],"skills":[{"typeID":3380,"level":4}]}}}
+{"blueprintTypeID":2003,"maxProductionLimit":0,"activities":{"reaction":{"time":120,"materials":[{"typeID":34,"quantity":7}],"products":[{"typeID":1003,"quantity":1}]}}}
 `
 
-const fixtureIndustryActivity = `"typeID","activityID","time"
-"2001","1","600"
-"2001","3","210"
-"2002","1","300"
-"2003","11","120"
-`
-
-const fixtureIndustryProducts = `"typeID","activityID","productTypeID","quantity"
-"2001","1","1001","1"
-"2002","1","1002","1"
-"2003","11","1003","1"
-`
-
-const fixtureIndustryMaterials = `"typeID","activityID","materialTypeID","quantity"
-"2001","1","1002","2"
-"2001","1","34","10"
-"2002","1","34","5"
-"2003","11","34","7"
-`
-
-const fixtureIndustrySkills = `"typeID","activityID","skillID","level"
-"2001","1","3380","1"
-"2001","8","11442","2"
-"2002","1","3380","4"
-`
-
-func parseFixtureSDE(t *testing.T, files map[string]string) *parsedSDE {
+// parseFixtureSDE feeds JSON Lines tables to the importer's parser and
+// builds the derived rows, as an import does.
+func parseFixtureSDE(t *testing.T, tables map[string]string) *parsedSDE {
 	t.Helper()
 	parsed := &parsedSDE{}
-	for name, body := range files {
-		if err := parseSDEFile(name, strings.NewReader(body), parsed); err != nil {
+	for name, body := range tables {
+		if err := parseSDEJSONLTable(name, strings.NewReader(body), parsed); err != nil {
 			t.Fatalf("parse %s: %v", name, err)
 		}
 	}
+	parsed.finishJSONL()
 	parsed.buildIndustryRows()
 	return parsed
 }
 
-func TestIndustryCSVImportJoinsBlueprints(t *testing.T) {
-	parsed := parseFixtureSDE(t, map[string]string{
-		"industryBlueprints.csv":        fixtureIndustryBlueprints,
-		"industryActivity.csv":          fixtureIndustryActivity,
-		"industryActivityProducts.csv":  fixtureIndustryProducts,
-		"industryActivityMaterials.csv": fixtureIndustryMaterials,
-		sdeSkillsFileName:               fixtureIndustrySkills,
-	})
+func TestIndustryImportJoinsBlueprints(t *testing.T) {
+	parsed := parseFixtureSDE(t, map[string]string{"blueprints": fixtureBlueprints})
 
-	// Blueprint 2003 only reacts (activity 11): no planner row.
+	// Blueprint 2003 only reacts: no planner row.
 	if len(parsed.blueprints) != 2 {
 		t.Fatalf("blueprints: got %d rows, want 2 (2001, 2002)", len(parsed.blueprints))
 	}
@@ -99,8 +71,8 @@ func TestIndustryCSVImportJoinsBlueprints(t *testing.T) {
 		t.Errorf("blueprint 2002 time: got %d, want 300", parsed.blueprints[1].manufacturingTimeSeconds)
 	}
 
-	// Materials: manufacturing only, the activity-11 row (34×7
-	// under 2003) must not appear.
+	// Materials: manufacturing only, the reaction's 34×7 under 2003
+	// must not appear.
 	mats := map[[2]int64]int64{}
 	for _, m := range parsed.bpMaterials {
 		mats[[2]int64{m.blueprintTypeID, m.materialTypeID}] = m.quantity
@@ -109,11 +81,11 @@ func TestIndustryCSVImportJoinsBlueprints(t *testing.T) {
 		t.Errorf("materials wrong: %v", mats)
 	}
 	if _, bad := mats[[2]int64{2003, 34}]; bad {
-		t.Error("reaction material (activity 11) leaked into the planner tables")
+		t.Error("a reaction material leaked into the planner tables")
 	}
 
-	// Skills: manufacturing only, the invention skill (activity
-	// 8) under 2001 must not appear.
+	// Skills: manufacturing only, the invention skill under 2001
+	// must not appear.
 	skills := map[[2]int64]int64{}
 	for _, s := range parsed.bpSkills {
 		skills[[2]int64{s.blueprintTypeID, s.skillTypeID}] = s.level

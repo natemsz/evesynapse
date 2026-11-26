@@ -1,45 +1,30 @@
 package app
 
-// Mutaplasmid roll ranges (schema 055): the dump's
-// dynamicItemAttributes.csv is the ground truth the abyssal
+// Mutaplasmid roll ranges (schema 055): the SDE's
+// dynamicItemAttributes table is the ground truth the abyssal
 // corpus divides by, so its parse is pinned to the live
 // dataset's rows for a real mutator, and the store proves an
-// import lands them -- and that an import without the file
+// import lands them -- and that an import without the table
 // leaves stored ranges untouched instead of wiping them.
 
 import (
-	"bytes"
 	"context"
-	"encoding/csv"
 	"sort"
 	"strings"
 	"testing"
 )
 
-// sdeRangesFixtureCSV carries the live dataset's rows for
-// mutator 47735 (Gravid Warp Disruptor Mutaplasmid), one
-// malformed row (skipped whole), and one other mutator.
-const sdeRangesFixtureCSV = "typeID,attributeID,min,max,highIsGood\n" +
-	"47735,6,1.0,2.0,0\n" +
-	"47735,50,0.85,1.3,0\n" +
-	"47735,54,0.9,1.15,1\n" +
-	"47735,11,notanumber,2.0,0\n" +
-	"47744,54,0.85,1.1,1\n"
+// sdeRangesFixture carries the live dataset's ranges for mutator
+// 47735 (Gravid Warp Disruptor Mutaplasmid), one entry missing its
+// min (skipped), and one other mutator.
+const sdeRangesFixture = `{"typeID":47735,"attributeIDs":[{"attributeID":6,"min":1.0,"max":2.0},{"attributeID":50,"min":0.85,"max":1.3},{"attributeID":54,"min":0.9,"max":1.15},{"attributeID":11,"max":2.0}]}
+{"typeID":47744,"attributeIDs":[{"attributeID":54,"min":0.85,"max":1.1}]}
+`
 
 func parseRangesFixture(t *testing.T) *parsedSDE {
 	t.Helper()
-	cr := csv.NewReader(bytes.NewReader([]byte(sdeRangesFixtureCSV)))
-	cr.FieldsPerRecord = -1
-	head, err := cr.Read()
-	if err != nil {
-		t.Fatalf("fixture header: %v", err)
-	}
-	idx := make(map[string]int, len(head))
-	for i, name := range head {
-		idx[strings.TrimSpace(name)] = i
-	}
 	parsed := &parsedSDE{}
-	if err := parseSDEDynRanges(cr, idx, parsed); err != nil {
+	if err := parseSDEJSONLTable("dynamicItemAttributes", strings.NewReader(sdeRangesFixture), parsed); err != nil {
 		t.Fatalf("parse ranges: %v", err)
 	}
 	return parsed
@@ -48,7 +33,7 @@ func parseRangesFixture(t *testing.T) *parsedSDE {
 func TestParseSDEDynRanges(t *testing.T) {
 	parsed := parseRangesFixture(t)
 	if len(parsed.dynRanges) != 4 {
-		t.Fatalf("parsed ranges = %d, want 4 (the malformed row skipped)", len(parsed.dynRanges))
+		t.Fatalf("parsed ranges = %d, want 4 (the entry without a min skipped)", len(parsed.dynRanges))
 	}
 	var got []sdeDynRangeRow
 	for _, r := range parsed.dynRanges {

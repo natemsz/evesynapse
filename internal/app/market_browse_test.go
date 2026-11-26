@@ -20,13 +20,12 @@ func TestSDEMarketGroupsParseAndStore(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
 
-	// Current dump spelling: parentMarketGroupID.
-	csvCurrent := "\"marketGroupID\",\"parentMarketGroupID\",\"marketGroupName\",\"iconID\",\"hasTypes\"\n" +
-		"\"4\",\"\",\"Ships\",\"42\",\"0\"\n" +
-		"\"404\",\"4\",\"Frigates\",\"43\",\"0\"\n" +
-		"\"405\",\"404\",\"Standard Frigates\",\"44\",\"1\"\n"
+	groups := `{"marketGroupID":4,"name":{"en":"Ships"},"iconID":42,"hasTypes":false}
+{"marketGroupID":404,"parentGroupID":4,"name":{"en":"Frigates"},"iconID":43,"hasTypes":false}
+{"marketGroupID":405,"parentGroupID":404,"name":{"en":"Standard Frigates"},"iconID":44,"hasTypes":true}
+`
 	var parsed parsedSDE
-	if err := parseSDEFile("invMarketGroups.csv", strings.NewReader(csvCurrent), &parsed); err != nil {
+	if err := parseSDEJSONLTable("marketGroups", strings.NewReader(groups), &parsed); err != nil {
 		t.Fatalf("parse market groups: %v", err)
 	}
 	if len(parsed.marketGroups) != 3 {
@@ -44,17 +43,6 @@ func TestSDEMarketGroupsParseAndStore(t *testing.T) {
 	}
 	if got := byID[405]; got.parentGroupID != 404 || got.hasTypes != 1 {
 		t.Fatalf("leaf group = %+v, want parent 404 hasTypes 1", got)
-	}
-
-	// Older spelling: parentGroupID parses the same way.
-	csvLegacy := "\"marketGroupID\",\"parentGroupID\",\"marketGroupName\"\n" +
-		"\"4\",\"0\",\"Ships\"\n\"404\",\"4\",\"Frigates\"\n"
-	var legacy parsedSDE
-	if err := parseSDEFile("invMarketGroups.csv", strings.NewReader(csvLegacy), &legacy); err != nil {
-		t.Fatalf("parse market groups (legacy parent column): %v", err)
-	}
-	if len(legacy.marketGroups) != 2 || legacy.marketGroups[1].parentGroupID != 4 {
-		t.Fatalf("legacy parse = %+v, want child parented to 4", legacy.marketGroups)
 	}
 
 	// The store round-trips the tree and stamps import version 7.

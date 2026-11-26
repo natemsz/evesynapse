@@ -1,25 +1,22 @@
 package app
 
-// Importer tests for the schema-029 dogma widening: the new CSV
-// parsers (attribute types, effects with decoded modifierInfo,
-// type effects), the full dgmTypeAttributes retention, and the
+// Importer tests for the dogma tables: attribute types, effects with
+// their modifiers, type dogma (attributes and effect links), and the
 // store round-trip into the sde_* dogma tables.
 
 import (
-	"bytes"
 	"context"
-	"encoding/csv"
 	"strings"
 	"testing"
 )
 
 func TestSDEDogmaParsers(t *testing.T) {
-	// dgmAttributeTypes: names, stackable flag, defaults.
-	attrTypesCSV := "\"attributeID\",\"attributeName\",\"description\",\"iconID\",\"defaultValue\",\"published\",\"displayName\",\"unitID\",\"stackable\",\"highIsGood\",\"categoryID\"\n" +
-		"\"263\",\"shieldCapacity\",\"\",\"1\",\"0\",\"1\",\"Shield HP\",\"113\",\"1\",\"1\",\"1\"\n" +
-		"\"267\",\"armorEmDamageResonance\",\"\",\"2\",\"1\",\"1\",\"EM damage resistance\",\"112\",\"0\",\"0\",\"1\"\n"
+	// dogmaAttributes: names, stackable flag, defaults.
+	attrs := `{"attributeID":263,"name":"shieldCapacity","iconID":1,"defaultValue":0,"published":true,"displayName":{"en":"Shield HP"},"unitID":113,"stackable":true,"highIsGood":true,"attributeCategoryID":1}
+{"attributeID":267,"name":"armorEmDamageResonance","iconID":2,"defaultValue":1,"published":true,"displayName":{"en":"EM damage resistance"},"unitID":112,"stackable":false,"highIsGood":false,"attributeCategoryID":1}
+`
 	var parsed parsedSDE
-	if err := parseSDEFile("dgmAttributeTypes.csv", strings.NewReader(attrTypesCSV), &parsed); err != nil {
+	if err := parseSDEJSONLTable("dogmaAttributes", strings.NewReader(attrs), &parsed); err != nil {
 		t.Fatalf("parse attribute types: %v", err)
 	}
 	if len(parsed.attrTypes) != 2 {
@@ -32,28 +29,20 @@ func TestSDEDogmaParsers(t *testing.T) {
 		t.Fatalf("attribute type 1 = %+v, want non-stackable default 1", got)
 	}
 
-	// dgmEffects: every effect row lands (the fitting engine reads
+	// dogmaEffects: every effect lands (the fitting engine reads
 	// module states from effect categories, and armorRepair /
 	// shieldBoosting carry no modifiers), modifiers decode, and
-	// EffectStopper-only rows (no operation) store no modifier.
-	// The fixture is written through a real CSV writer so the JSON
-	// quoting matches the dump's actual escaping.
-	var effectsBuf bytes.Buffer
-	cw := csv.NewWriter(&effectsBuf)
-	_ = cw.Write([]string{"effectID", "effectName", "effectCategory", "modifierInfo"})
-	_ = cw.Write([]string{"21", "shieldCapacityBonusOnline", "4",
-		`[{"domain": "shipID", "func": "ItemModifier", "modifiedAttributeID": 263, "modifyingAttributeID": 72, "operation": 2}]`})
-	_ = cw.Write([]string{"34", "projectileFired", "2", ""})
-	_ = cw.Write([]string{"5928", "warpScrambleTargetMWDBlockActivationForEntity", "1",
-		`[{"domain": "target", "func": "EffectStopper"}]`})
-	_ = cw.Write([]string{"92", "projectileWeaponDamageMultiply", "4",
-		`[{"domain": "shipID", "func": "LocationGroupModifier", "groupID": 55, "modifiedAttributeID": 64, "modifyingAttributeID": 64, "operation": 4}]`})
-	cw.Flush()
-	if err := parseSDEFile("dgmEffects.csv", &effectsBuf, &parsed); err != nil {
+	// EffectStopper-only entries (no operation) store no modifier.
+	effects := `{"effectID":21,"name":"shieldCapacityBonusOnline","effectCategoryID":4,"modifierInfo":[{"domain":"shipID","func":"ItemModifier","modifiedAttributeID":263,"modifyingAttributeID":72,"operation":2}]}
+{"effectID":34,"name":"projectileFired","effectCategoryID":2}
+{"effectID":5928,"name":"warpScrambleTargetMWDBlockActivationForEntity","effectCategoryID":1,"modifierInfo":[{"domain":"target","func":"EffectStopper"}]}
+{"effectID":92,"name":"projectileWeaponDamageMultiply","effectCategoryID":4,"modifierInfo":[{"domain":"shipID","func":"LocationGroupModifier","groupID":55,"modifiedAttributeID":64,"modifyingAttributeID":64,"operation":4}]}
+`
+	if err := parseSDEJSONLTable("dogmaEffects", strings.NewReader(effects), &parsed); err != nil {
 		t.Fatalf("parse effects: %v", err)
 	}
 	if len(parsed.effects) != 4 {
-		t.Fatalf("parsed %d effects, want all 4 rows", len(parsed.effects))
+		t.Fatalf("parsed %d effects, want all 4", len(parsed.effects))
 	}
 	byID := map[int64]sdeEffectRow{}
 	for _, e := range parsed.effects {
@@ -78,26 +67,20 @@ func TestSDEDogmaParsers(t *testing.T) {
 		t.Fatalf("modifier 1 = %+v, want effect 92 group modifier", m1)
 	}
 
-	// dgmTypeEffects links.
-	typeEffectsCSV := "\"typeID\",\"effectID\",\"isDefault\"\n" +
-		"\"377\",\"21\",\"1\"\n\"377\",\"16\",\"1\"\n\"519\",\"92\",\"0\"\n"
-	if err := parseSDEFile("dgmTypeEffects.csv", strings.NewReader(typeEffectsCSV), &parsed); err != nil {
-		t.Fatalf("parse type effects: %v", err)
+	// typeDogma: effect links keep their default flag, and every
+	// attribute is kept for fitting, not just the skill graph's
+	// dozen: attribute 999 (outside the skill filter) must reach
+	// the fitting rows while the skill-graph map holds only the
+	// wanted pairs.
+	typeDogma := `{"typeID":377,"dogmaEffects":[{"effectID":21,"isDefault":true},{"effectID":16,"isDefault":true}]}
+{"typeID":519,"dogmaEffects":[{"effectID":92,"isDefault":false}]}
+{"typeID":597,"dogmaAttributes":[{"attributeID":275,"value":1},{"attributeID":999,"value":42},{"attributeID":72,"value":400.5}]}
+`
+	if err := parseSDEJSONLTable("typeDogma", strings.NewReader(typeDogma), &parsed); err != nil {
+		t.Fatalf("parse type dogma: %v", err)
 	}
 	if len(parsed.typeEffects) != 3 || parsed.typeEffects[0].isDefault != 1 || parsed.typeEffects[2].isDefault != 0 {
 		t.Fatalf("type effects = %+v, want 3 rows with defaults 1,1,0", parsed.typeEffects)
-	}
-
-	// dgmTypeAttributes now keeps every row, not just the skill
-	// graph's dozen: attribute 999 (outside the skill filter)
-	// must survive into the fitting rows while the filtered
-	// graph map only holds the wanted pairs.
-	dogmaCSV := "\"typeID\",\"attributeID\",\"valueInt\",\"valueFloat\"\n" +
-		"\"597\",\"275\",\"\",\"1.0\"\n" +
-		"\"597\",\"999\",\"42\",\"\"\n" +
-		"\"597\",\"72\",\"\",\"400.5\"\n"
-	if err := parseSDEFile("dgmTypeAttributes.csv", strings.NewReader(dogmaCSV), &parsed); err != nil {
-		t.Fatalf("parse dogma attributes: %v", err)
 	}
 	if len(parsed.typeAttrs) != 3 {
 		t.Fatalf("kept %d type attribute rows, want all 3", len(parsed.typeAttrs))

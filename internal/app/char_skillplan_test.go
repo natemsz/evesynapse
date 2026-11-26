@@ -31,87 +31,56 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Importer fixtures: real rows from the 2026-10-02 Fuzzwork dump
-// (quoted CSV; dogma values ride in valueFloat, one valueInt row is
-// added to prove both columns parse).
+// Importer fixtures: real rows of the SDE's types, groups, categories
+// and typeDogma tables, as JSON Lines.
 // ---------------------------------------------------------------------------
 
-const fixtureDogma = `"typeID","attributeID","valueInt","valueFloat"
-"3300","180","","167.0"
-"3300","181","","168.0"
-"3300","275","","1.0"
-"3300","441","","-2.0"
-"12093","180","","168.0"
-"12093","181","","167.0"
-"12093","182","","3327.0"
-"12093","183","","3432.0"
-"12093","275","","4.0"
-"12093","277","","3.0"
-"12093","278","","5.0"
-"20533","180","","167.0"
-"20533","181","","168.0"
-"20533","182","","20342.0"
-"20533","275","","14.0"
-"20533","277","","5.0"
-"24313","180","","167.0"
-"24313","181","","168.0"
-"24313","182","","20533.0"
-"24313","183","","3336.0"
-"24313","184","","3442.0"
-"24313","275","","14.0"
-"24313","277","","4.0"
-"24313","278","","3.0"
-"24313","279","","5.0"
-"24313","1285","","21610.0"
-"24313","1286","","4.0"
-"24313","1287","","3.0"
-"24313","1289","","21611.0"
-"54790","180","","165.0"
-"54790","181","","166.0"
-"54790","275","","1.0"
-"999001","275","3",""
+const fixtureDogma = `{"typeID":3300,"dogmaAttributes":[{"attributeID":180,"value":167},{"attributeID":181,"value":168},{"attributeID":275,"value":1},{"attributeID":441,"value":-2}]}
+{"typeID":12093,"dogmaAttributes":[{"attributeID":180,"value":168},{"attributeID":181,"value":167},{"attributeID":182,"value":3327},{"attributeID":183,"value":3432},{"attributeID":275,"value":4},{"attributeID":277,"value":3},{"attributeID":278,"value":5}]}
+{"typeID":20533,"dogmaAttributes":[{"attributeID":180,"value":167},{"attributeID":181,"value":168},{"attributeID":182,"value":20342},{"attributeID":275,"value":14},{"attributeID":277,"value":5}]}
+{"typeID":24313,"dogmaAttributes":[{"attributeID":180,"value":167},{"attributeID":181,"value":168},{"attributeID":182,"value":20533},{"attributeID":183,"value":3336},{"attributeID":184,"value":3442},{"attributeID":275,"value":14},{"attributeID":277,"value":4},{"attributeID":278,"value":3},{"attributeID":279,"value":5},{"attributeID":1285,"value":21610},{"attributeID":1286,"value":4},{"attributeID":1287,"value":3},{"attributeID":1289,"value":21611}]}
+{"typeID":54790,"dogmaAttributes":[{"attributeID":180,"value":165},{"attributeID":181,"value":166},{"attributeID":275,"value":1}]}
+{"typeID":999001,"dogmaAttributes":[{"attributeID":275,"value":3}]}
 `
 
-const fixtureSkillTypes = `"typeID","groupID","typeName","published"
-"3300","255","Gunnery","1"
-"3327","257","Spaceship Command","1"
-"3432","1216","Electronics Upgrades","1"
-"12093","257","Covert Ops","1"
-"20342","257","Advanced Spaceship Command","1"
-"20533","257","Capital Ships","1"
-"24313","257","Gallente Carrier","1"
-"54790","4321","EDENCOM Frigate (old)","0"
-"999001","255","Unreleased Test Skill","0"
+const fixtureSkillTypes = `{"typeID":3300,"groupID":255,"name":"Gunnery","published":true}
+{"typeID":3327,"groupID":257,"name":"Spaceship Command","published":true}
+{"typeID":3432,"groupID":1216,"name":"Electronics Upgrades","published":true}
+{"typeID":12093,"groupID":257,"name":"Covert Ops","published":true}
+{"typeID":20342,"groupID":257,"name":"Advanced Spaceship Command","published":true}
+{"typeID":20533,"groupID":257,"name":"Capital Ships","published":true}
+{"typeID":24313,"groupID":257,"name":"Gallente Carrier","published":true}
+{"typeID":54790,"groupID":4321,"name":"EDENCOM Frigate (old)","published":false}
+{"typeID":999001,"groupID":255,"name":"Unreleased Test Skill","published":false}
 `
 
-const fixtureSkillGroups = `"groupID","groupName","categoryID"
-"255","Gunnery","16"
-"257","Spaceship Command","16"
-"1216","Electronic Systems","16"
-"4321","Precursor Ship","29"
+const fixtureSkillGroups = `{"groupID":255,"categoryID":16,"name":"Gunnery"}
+{"groupID":257,"categoryID":16,"name":"Spaceship Command"}
+{"groupID":1216,"categoryID":16,"name":"Electronic Systems"}
+{"groupID":4321,"categoryID":29,"name":"Precursor Ship"}
 `
 
-const fixtureSkillCategories = `"categoryID","categoryName"
-"16","Skill"
-"29","Ship"
+const fixtureSkillCategories = `{"categoryID":16,"name":"Skill"}
+{"categoryID":29,"name":"Ship"}
 `
 
 func parseSkillFixture(t *testing.T) *parsedSDE {
 	t.Helper()
 	parsed := &parsedSDE{}
 	files := map[string]string{
-		"invTypes.csv":          fixtureSkillTypes,
-		"invGroups.csv":         fixtureSkillGroups,
-		"invCategories.csv":     fixtureSkillCategories,
-		"dgmTypeAttributes.csv": fixtureDogma,
+		"types":      fixtureSkillTypes,
+		"groups":     fixtureSkillGroups,
+		"categories": fixtureSkillCategories,
+		"typeDogma":  fixtureDogma,
 	}
-	// Types/groups/categories parse before dogma in the real
-	// importer too (buildSkillRows joins over them).
-	for _, name := range []string{"invTypes.csv", "invGroups.csv", "invCategories.csv", "dgmTypeAttributes.csv"} {
-		if err := parseSDEFile(name, strings.NewReader(files[name]), parsed); err != nil {
+	// Types, groups and categories parse before dogma, as in the
+	// importer (buildSkillRows joins over them).
+	for _, name := range []string{"types", "groups", "categories", "typeDogma"} {
+		if err := parseSDEJSONLTable(name, strings.NewReader(files[name]), parsed); err != nil {
 			t.Fatalf("parse %s: %v", name, err)
 		}
 	}
+	parsed.finishJSONL()
 	parsed.buildSkillRows()
 	return parsed
 }

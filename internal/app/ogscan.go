@@ -250,7 +250,7 @@ func ogDScanBody(img *image.NRGBA, d *dscanReading) {
 	if d.Value > 0 {
 		// The baked font carries no ≈; a tilde says the same
 		// thing in the glyphs it has.
-		value = "Hull value ~ " + formatISKShort(d.Value) + " ISK"
+		value = "Hull value ~ " + iskCompact(d.Value) + " ISK"
 	}
 	if len(d.Types) > 0 {
 		maxW := ogW - 2*ogMargin

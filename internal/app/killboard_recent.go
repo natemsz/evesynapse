@@ -123,7 +123,7 @@ func (app *Application) noteRecentKillPrice(ctx context.Context, killmailID int6
 	}
 	r.mu.Unlock()
 	if found && app.killLive.count() > 0 {
-		app.killLive.publishKillPriced(app.newKillNames(ctx).row(priced), priced, formatISKShort(valueOurs), valueOurs >= killBigValue)
+		app.killLive.publishKillPriced(app.newKillNames(ctx).row(priced), priced, iskCompact(valueOurs), valueOurs >= killBigValue)
 	}
 }
 

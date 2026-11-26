@@ -102,9 +102,9 @@ func (app *Application) fitCard(ctx context.Context, src fitCardSource) cardJob 
 			doc.ShipTypeID = src.shipTypeID
 		}
 		if cost := app.fitBuilder().FitCost(ctx, &doc, nil); cost.Known {
-			price = formatISKShort(cost.TotalRaw) + " ISK"
+			price = iskCompact(cost.TotalRaw) + " ISK"
 			if cost.BuildPriced {
-				price = formatISKShort(cost.TotalRaw) + "* ISK"
+				price = iskCompact(cost.TotalRaw) + "* ISK"
 			}
 		}
 	}
@@ -217,11 +217,11 @@ func (app *Application) itemCardJob(ctx context.Context, typeID int64) (cardJob,
 		}
 		var where []string
 		if sellAt != nil {
-			c.Stats = append(c.Stats, card.Stat{Label: "LOWEST SELL", Value: card.Figure(formatISKShort(sellAt.sell))})
+			c.Stats = append(c.Stats, card.Stat{Label: "LOWEST SELL", Value: card.Figure(iskCompact(sellAt.sell))})
 			where = append(where, "lowest sell in "+sellAt.Region)
 		}
 		if buyAt != nil {
-			c.Stats = append(c.Stats, card.Stat{Label: "HIGHEST BUY", Value: card.Figure(formatISKShort(buyAt.buy))})
+			c.Stats = append(c.Stats, card.Stat{Label: "HIGHEST BUY", Value: card.Figure(iskCompact(buyAt.buy))})
 			where = append(where, "highest buy in "+buyAt.Region)
 		}
 		if len(where) > 0 {
@@ -283,10 +283,10 @@ func (app *Application) marketCardJob(ctx context.Context, typeID, regionID int6
 				continue
 			}
 			if row.BestSell > 0 {
-				c.Stats = append(c.Stats, card.Stat{Label: "SELL", Value: card.Figure(formatISKShort(row.BestSell))})
+				c.Stats = append(c.Stats, card.Stat{Label: "SELL", Value: card.Figure(iskCompact(row.BestSell))})
 			}
 			if row.BestBuy > 0 {
-				c.Stats = append(c.Stats, card.Stat{Label: "BUY", Value: card.Figure(formatISKShort(row.BestBuy))})
+				c.Stats = append(c.Stats, card.Stat{Label: "BUY", Value: card.Figure(iskCompact(row.BestBuy))})
 			}
 			if row.BestSell > 0 && row.BestBuy > 0 {
 				spread := tradefees.NetMarginPct(row.BestBuy, row.BestSell, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
@@ -454,10 +454,10 @@ func (app *Application) battleCardJob(ctx context.Context, f db.BattleFight) car
 		{Label: "LOSSES", Value: card.Figure(esi.FormatInt(int64(f.Losses)))},
 	}
 	if f.IskDestroyed > 0 {
-		c.Stats = append(c.Stats, card.Stat{Label: "ISK DESTROYED", Value: card.Figure(formatISKShort(f.IskDestroyed))})
+		c.Stats = append(c.Stats, card.Stat{Label: "ISK DESTROYED", Value: card.Figure(iskCompact(f.IskDestroyed))})
 	}
 	if f.IskLost > 0 {
-		c.Stats = append(c.Stats, card.Stat{Label: "ISK LOST", Value: card.Figure(formatISKShort(f.IskLost))})
+		c.Stats = append(c.Stats, card.Stat{Label: "ISK LOST", Value: card.Figure(iskCompact(f.IskLost))})
 	}
 	pilot := f.Listener
 	if f.HullTypeID > 0 {

@@ -119,7 +119,7 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 		row := basketListRow(b.ID, b.Name, b.RegionID, !b.UserID.Valid, b.ItemCount)
 		if b.ValueDay != "" {
 			row.Value = esi.FormatISK(b.ValueSell)
-			row.ValueShort = formatISKShort(b.ValueSell)
+			row.ValueShort = iskCompact(b.ValueSell)
 			row.Partial = b.PricedItems < b.ItemCount
 		}
 		if b.UserID.Valid {
@@ -240,7 +240,7 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 	} else if len(sums) == 1 && sums[0].ItemCount > 0 {
 		s := sums[0]
 		view.Value, view.ValueBuy = esi.FormatISK(s.ValueSell), esi.FormatISK(s.ValueBuy)
-		view.ValueShort, view.ValueBuyShort = formatISKShort(s.ValueSell), formatISKShort(s.ValueBuy)
+		view.ValueShort, view.ValueBuyShort = iskCompact(s.ValueSell), iskCompact(s.ValueBuy)
 		row.Partial = s.PricedItems < s.ItemCount
 		view.Chg1, view.Chg7, view.Chg30 = newTrendFigure(s.Chg1d), newTrendFigure(s.Chg7d), newTrendFigure(s.Chg30d)
 		view.Delta1, view.Delta7, view.Delta30 = signedISKShort(s.Delta1d), signedISKShort(s.Delta7d), signedISKShort(s.Delta30d)
@@ -286,7 +286,7 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 		if s.Priced {
 			line.priced, line.value = true, s.Value
 			line.Unit, line.Value = esi.FormatISK(s.Unit), esi.FormatISK(s.Value)
-			line.UnitShort, line.ValueShort = formatISKShort(s.Unit), formatISKShort(s.Value)
+			line.UnitShort, line.ValueShort = iskCompact(s.Unit), iskCompact(s.Value)
 			line.Share = fmt.Sprintf("%.1f%%", s.SharePct)
 			line.SharePct = strconv.FormatFloat(math.Round(s.SharePct), 'f', 0, 64)
 			line.Chg = newTrendFigure(pick(s.Chg1d, s.Chg7d, s.Chg30d))
@@ -294,7 +294,7 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 				line.impact = imp.Float64
 				line.Impact = esi.FormatISK(math.Abs(imp.Float64))
 				line.ImpactUp = imp.Float64 >= 0
-				line.ImpactShort = formatISKShort(math.Abs(imp.Float64))
+				line.ImpactShort = iskCompact(math.Abs(imp.Float64))
 			}
 		} else {
 			view.Unpriced++
@@ -309,7 +309,7 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 		}
 		for _, m := range movers {
 			mv := marketBasketMover{TypeID: m.TypeID, Name: app.typeNameOrID(ctx, m.TypeID), Unit: esi.FormatISK(m.Unit), Chg: newTrendFigure(sql.NullFloat64{Float64: m.Chg, Valid: !math.IsNaN(m.Chg)}),
-				Impact: formatISKShort(math.Abs(m.Impact)), Qty: esi.FormatInt(qty[m.TypeID])}
+				Impact: iskCompact(math.Abs(m.Impact)), Qty: esi.FormatInt(qty[m.TypeID])}
 			if sign > 0 {
 				view.MoversUp = append(view.MoversUp, mv)
 			} else {
@@ -370,10 +370,7 @@ func signedISKShort(d sql.NullFloat64) string {
 	if !d.Valid {
 		return ""
 	}
-	if d.Float64 < 0 {
-		return "−" + formatISKShort(-d.Float64)
-	}
-	return "+" + formatISKShort(d.Float64)
+	return iskCompactSigned(d.Float64)
 }
 
 // basketChangeBase finds the two worths a change compares: the

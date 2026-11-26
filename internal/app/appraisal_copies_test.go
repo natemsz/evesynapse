@@ -379,9 +379,9 @@ func TestContractDetailCopyMedianLabel(t *testing.T) {
 
 	_, body := getAnon(t, app, "/contracts/search/7006/")
 	// The detail page renders the drawer's cards, whose
-	// figures use the short form (42,000 -> "42.0K ISK").
+	// figures use the short form (42,000 -> "42.00K ISK").
 	mustContain(t, "detail copy median", body,
-		"Our copy median", "median of 12 copy listings", "42.0K ISK")
+		"Our copy median", "median of 12 copy listings", "42.00K ISK")
 	_, body = getAnon(t, app, "/contracts/search/7006/panel")
 	mustContain(t, "panel copy median", body,
 		"Our copy median", "median of 12 copy listings")
@@ -461,7 +461,7 @@ func TestAppraisePublicContractsResearchedOriginalEndToEnd(t *testing.T) {
 
 	_, body := getAnon(t, app, "/contracts/search/9301/panel")
 	mustContain(t, "panel researched original", body,
-		"Our research median", "3.0M ISK")
+		"Our research median", "3.00M ISK")
 }
 
 // TestAppraisalToolBlueprintCopyMedian covers the paste

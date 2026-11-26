@@ -761,6 +761,22 @@ modules, market chart points) are surface code (fit.js, the
 chart code in app.js) with their own anchoring rules; don't
 stretch `data-tip` into one of those.
 
+### ISK figures
+
+One compact form for ISK everywhere: two decimals with the unit
+("312.40M", "1.27B", "940.00K"), a whole number under 1,000, and a
+figure that rounds up to a whole unit takes that unit (999,996 is
+"1.00M"). Changes carry their sign ("+820.50M", "-1.74B").
+
+- Go: `humanize.ISKCompact` and `humanize.ISKCompactSigned`; inside
+  package app, `iskCompact` and `iskCompactSigned`.
+- JS: `EveSynapseContent.iskCompact(v)` in app.js, the same rules
+  (pinned by jstest/isk.test.js against the Go cases). Don't write
+  a local formatter in a page script.
+- Exact figures (tooltips, the full line under a hero number) use
+  `esi.FormatISK`. Chart axis ticks drop trailing zeros ("15B",
+  "12.5B"); they label a scale, not a figure.
+
 ## Layout
 
 `layout.css` owns where a page's regions go and how they collapse.

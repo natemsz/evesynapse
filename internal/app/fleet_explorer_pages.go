@@ -608,8 +608,8 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 		reps += v
 	}
 	x.Tiles = []battleTile{
-		{Label: "Kills", Value: strconv.Itoa(int(shown.Kills)), Sub: formatISKShort(destroyed) + " ISK destroyed", Tone: "pos"},
-		{Label: "Losses", Value: strconv.Itoa(int(shown.Losses)), Sub: formatISKShort(lost) + " ISK lost", Tone: "neg"},
+		{Label: "Kills", Value: strconv.Itoa(int(shown.Kills)), Sub: iskCompact(destroyed) + " ISK destroyed", Tone: "pos"},
+		{Label: "Losses", Value: strconv.Itoa(int(shown.Losses)), Sub: iskCompact(lost) + " ISK lost", Tone: "neg"},
 	}
 	if x.MailsOnly {
 		var onKills, onLosses int64
@@ -657,7 +657,7 @@ func (app *Application) fleetExplorerFor(ctx context.Context, view *fleetReportV
 	}
 	x.Chart = fleetChartView{Out: line(series[0]), In: line(series[1]), Reps: line(series[2]), YTop: battleNum(int64(ceil))}
 	if per == 1 {
-		x.Chart.ISK, x.Chart.YTop = true, formatISKShort(ceil)
+		x.Chart.ISK, x.Chart.YTop = true, iskCompact(ceil)
 	}
 	clock := func(sec int) string { return time.Unix(d.Start+int64(sec), 0).UTC().Format("15:04:05") }
 	cards := newFleetCards(d, clock)

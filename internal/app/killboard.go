@@ -195,7 +195,7 @@ func (n *killNames) row(k db.Kill) killRow {
 		r.VictimName = r.ShipName
 	}
 	if k.ValueOurs.Valid {
-		r.Value = formatISKShort(k.ValueOurs.Float64)
+		r.Value = iskCompact(k.ValueOurs.Float64)
 		r.Big = k.ValueOurs.Float64 >= killBigValue
 	}
 	return r
@@ -487,7 +487,7 @@ func (app *Application) killboardHeadline(ctx context.Context, names *killNames)
 		return st, killboardTop{}
 	}
 	st.KillsHour, st.KillsDay = h.KillsHour, h.KillsDay
-	st.ISKDay = formatISKShort(h.IskDay)
+	st.ISKDay = iskCompact(h.IskDay)
 	if h.BiggestKillmailID > 0 {
 		if k, err := app.queries.GetPublicKill(ctx, h.BiggestKillmailID); err == nil {
 			row := names.row(k)
@@ -497,7 +497,7 @@ func (app *Application) killboardHeadline(ctx context.Context, names *killNames)
 	var top killboardTop
 	if rows, err := app.queries.ListKillboardTop(ctx, db.ListKillboardTopParams{Kind: "alliance", MaxRows: 8}); err == nil {
 		for _, r := range rows {
-			top.Alliances = append(top.Alliances, killTopRow{ID: r.EntityID, Name: names.alliance(r.EntityID), Count: r.Kills, Note: formatISKShort(r.Isk)})
+			top.Alliances = append(top.Alliances, killTopRow{ID: r.EntityID, Name: names.alliance(r.EntityID), Count: r.Kills, Note: iskCompact(r.Isk)})
 		}
 	}
 	if rows, err := app.queries.ListKillboardTop(ctx, db.ListKillboardTopParams{Kind: "ship", MaxRows: 8}); err == nil {
@@ -585,7 +585,7 @@ func (app *Application) killboardScopedHeadline(ctx context.Context, names *kill
 			if s, err := app.queries.GetKillEntityStats(ctx, db.GetKillEntityStatsParams{Kind: kind, EntityID: id, Since: time.Unix(0, 0).UTC()}); err == nil {
 				st.Solo, st.HasSolo = s.Solo, true
 				if s.IskKilled > 0 {
-					st.ISKDestroyed = formatISKShort(s.IskKilled)
+					st.ISKDestroyed = iskCompact(s.IskKilled)
 				}
 			} else {
 				logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
@@ -598,7 +598,7 @@ func (app *Application) killboardScopedHeadline(ctx context.Context, names *kill
 		st.Kills, st.Solo, st.Losses = s.Kills, s.Solo, s.Losses
 		st.HasSolo = true
 		if s.IskKilled > 0 {
-			st.ISKDestroyed = formatISKShort(s.IskKilled)
+			st.ISKDestroyed = iskCompact(s.IskKilled)
 		}
 	} else {
 		logging.Warnf("killboard scoped %s %d: stats: %v", kind, id, err)
@@ -738,9 +738,9 @@ func (app *Application) killPageFor(ctx context.Context, names *killNames, k db.
 	v.Damage = esi.FormatInt(k.DamageTaken)
 	if k.ValueOurs.Valid {
 		v.Priced = true
-		v.ValueFull = formatISKShort(k.ValueOurs.Float64)
-		v.DroppedFull = formatISKShort(k.ValueDroppedOurs.Float64)
-		v.DestroyedFull = formatISKShort(k.ValueOurs.Float64 - k.ValueDroppedOurs.Float64)
+		v.ValueFull = iskCompact(k.ValueOurs.Float64)
+		v.DroppedFull = iskCompact(k.ValueDroppedOurs.Float64)
+		v.DestroyedFull = iskCompact(k.ValueOurs.Float64 - k.ValueDroppedOurs.Float64)
 		if k.ValueOurs.Float64 > 0 {
 			v.DroppedPct = int(k.ValueDroppedOurs.Float64/k.ValueOurs.Float64*100 + 0.5)
 		}
@@ -889,7 +889,7 @@ func (app *Application) fillKillDetail(ctx context.Context, names *killNames, v 
 				row := killItemRow{TypeID: it.ItemTypeID, Name: names.typeName(it.ItemTypeID), Qty: part.qty,
 					Dropped: part.dropped, Depth: depth, Copy: it.Singleton == 2}
 				if p, ok := price[it.ItemTypeID]; ok && !row.Copy {
-					row.Value = formatISKShort(p * float64(part.qty))
+					row.Value = iskCompact(p * float64(part.qty))
 				}
 				add(f, row)
 			}

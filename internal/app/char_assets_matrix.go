@@ -764,22 +764,8 @@ func (app *Application) assetLocationSystem(ctx context.Context, locID int64, lo
 	return 0, false
 }
 
-// assetISK formats a value the way the design's figures read:
-// billions to two decimals, millions to one.
-func assetISK(v float64) string {
-	switch {
-	case v >= 1_000_000_000:
-		return fmt.Sprintf("%.2fB", v/1_000_000_000)
-	case v >= 1_000_000:
-		return fmt.Sprintf("%.1fM", v/1_000_000)
-	case v >= 10_000:
-		return fmt.Sprintf("%.1fK", v/1_000)
-	case v == 0:
-		return "0"
-	default:
-		return fmt.Sprintf("%.2f", v)
-	}
-}
+// assetISK writes an asset value in the house compact form.
+func assetISK(v float64) string { return iskCompact(v) }
 
 // assetVolume formats a volume in m3: whole numbers with
 // thousands separators at any real size, one decimal below ten.

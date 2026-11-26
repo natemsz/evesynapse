@@ -74,9 +74,10 @@ func Plural(n int, word string) string {
 	return fmt.Sprintf("%d %ss", n, word)
 }
 
-// ISKCompact writes an ISK amount short for tiles and directory
-// values: "312.4M", "1.27B", "940K"; under 1,000 it is the whole
-// number. Pages built on the layout framework use this one form.
+// ISKCompact writes an ISK amount short, the one compact form every
+// page uses: "312.40M", "1.27B", "940.00K", always two decimals
+// with the unit; under 1,000 it is the whole number. The browser
+// mirrors it as EveSynapseContent.iskCompact in app.js.
 func ISKCompact(v float64) string {
 	neg := v < 0
 	if neg {
@@ -87,18 +88,24 @@ func ISKCompact(v float64) string {
 		div    float64
 		suffix string
 	}{{1e12, "T"}, {1e9, "B"}, {1e6, "M"}, {1e3, "K"}} {
-		// 999,960 is "1.0M", never "1000K": a figure that rounds up
-		// to a whole unit takes that unit.
-		if v >= u.div*0.9995 {
-			out = strconv.FormatFloat(v/u.div, 'f', 1, 64) + u.suffix
-			if v/u.div >= 100 {
-				out = strconv.FormatFloat(v/u.div, 'f', 0, 64) + u.suffix
-			}
+		// 999,996 is "1.00M", never "1000.00K": a figure that rounds
+		// up to a whole unit takes that unit.
+		if v >= u.div*0.999995 {
+			out = strconv.FormatFloat(v/u.div, 'f', 2, 64) + u.suffix
 			break
 		}
 	}
-	if neg {
+	if neg && out != "0" {
 		return "-" + out
 	}
 	return out
+}
+
+// ISKCompactSigned writes an ISK change in the compact form with its
+// sign: "+820.50M", "-1.74B", and "0" for no change.
+func ISKCompactSigned(v float64) string {
+	if v > 0 {
+		return "+" + ISKCompact(v)
+	}
+	return ISKCompact(v)
 }

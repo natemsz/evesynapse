@@ -178,7 +178,9 @@ func wAxisISK(v float64) string {
 	}
 	s := iskCompact(v)
 	for _, unit := range []string{"K", "M", "B", "T"} {
-		s = strings.Replace(s, ".0"+unit, unit, 1)
+		if num, ok := strings.CutSuffix(s, unit); ok && strings.Contains(num, ".") {
+			return strings.TrimSuffix(strings.TrimRight(num, "0"), ".") + unit
+		}
 	}
 	return s
 }

@@ -106,7 +106,7 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 		return v
 	}
 	v.Gross, v.GrossFull = iskCompact(gross)+" ISK", esi.FormatISK(gross)+" ISK"
-	v.Lead = wLead{Label: "Kept as profit", Value: signedCompact(kept), Unit: "ISK", Full: signedISK(kept) + " ISK kept over the last " + v.Window, UpIsGood: true, Sub: "over " + v.Window}
+	v.Lead = wLead{Label: "Kept as profit", Value: iskCompactSigned(kept), Unit: "ISK", Full: signedISK(kept) + " ISK kept over the last " + v.Window, UpIsGood: true, Sub: "over " + v.Window}
 
 	// The window before: the query reads from a day on, so the span
 	// of both windows less this one is the one before.
@@ -120,7 +120,7 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 	}
 	if prevAny {
 		d := kept - prevKept
-		v.Lead.Change, v.Lead.Up = signedCompact(d), d >= 0
+		v.Lead.Change, v.Lead.Up = iskCompactSigned(d), d >= 0
 		v.Lead.ChangeText = signedISK(d) + " ISK on the " + v.Window + " before"
 		v.Lead.Sub = "on the " + v.Window + " before"
 	}
@@ -134,7 +134,7 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 			v.Tiles = append(v.Tiles, wTile{Label: "Kept of gross in", Value: strconv.FormatFloat(kept/gross*100, 'f', 0, 64) + "%", Full: "Kept " + signedISK(kept) + " of " + v.GrossFull})
 		}
 		if prevAny {
-			v.Tiles = append(v.Tiles, wTile{Label: "Kept, the " + v.Window + " before", Value: signedCompact(prevKept), Unit: "ISK", Full: signedISK(prevKept) + " ISK"})
+			v.Tiles = append(v.Tiles, wTile{Label: "Kept, the " + v.Window + " before", Value: iskCompactSigned(prevKept), Unit: "ISK", Full: signedISK(prevKept) + " ISK"})
 		}
 	}
 
@@ -188,7 +188,7 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 			margin := r.CovRevenue - r.CovCost - r.CovTax - broker
 			name := app.typeNameOrID(ctx, r.TypeID)
 			ranked = append(ranked, wRankItem{Name: name, Link: itemLink(r.TypeID, name), Value: margin,
-				Text: signedCompact(margin), Full: signedISK(margin) + " ISK margin"})
+				Text: iskCompactSigned(margin), Full: signedISK(margin) + " ISK margin"})
 		}
 		if (in.Draws("wide") || in.Draws("large")) && len(ranked) > 0 {
 			v.Top = &ranked[0]
@@ -208,7 +208,7 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 			if !ok || math.Abs(k) < 0.005 {
 				continue
 			}
-			parts = append(parts, wRankItem{Name: l.label, Value: k, Text: signedCompact(k), Full: signedISK(k) + " ISK kept"})
+			parts = append(parts, wRankItem{Name: l.label, Value: k, Text: iskCompactSigned(k), Full: signedISK(k) + " ISK kept"})
 		}
 		sort.SliceStable(parts, func(i, j int) bool { return parts[i].Value > parts[j].Value })
 		v.Activities, _ = wRankedBars("Kept profit by activity", parts, len(parts))
@@ -239,14 +239,6 @@ func buildProfitPulseWidget(ctx context.Context, app *Application, in *widgetInp
 		}
 	}
 	return v
-}
-
-// signedCompact writes a figure short with its sign: +1.2M, -350K, 0.
-func signedCompact(v float64) string {
-	if v > 0 {
-		return "+" + iskCompact(v)
-	}
-	return iskCompact(v)
 }
 
 // profitLabeledTotals is the Profit page's headline from activity

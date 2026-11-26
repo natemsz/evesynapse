@@ -69,7 +69,7 @@ func TestPilotIntel(t *testing.T) {
 	exec(`INSERT INTO pilot_activity_hours (character_id, hour, events) VALUES ($1, 21, 5)`, hostile)
 	_, body = getPage(t, app, &http.Cookie{Name: "nobody", Value: "x"}, "/pilot/?character="+strconv.FormatInt(hostile, 10))
 	for _, want := range []string{"Every recorded kill and loss", `<span class="l-stat-label">Kills</span><span class="l-stat-value">137</span>`, `<span class="l-stat-label">Losses</span><span class="l-stat-value">42</span>`,
-		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">10m</span>`,
+		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">10.00M</span>`,
 		`<span class="l-stat-label">Usual hull</span><span class="l-stat-value text">Sabre</span>`, `<span class="l-stat-label">Typical gang size</span><span class="l-stat-value">3.5</span>`,
 		`<span class="l-stat-label">Last active</span>`, "41 flown · 27 final blows · 12 lost"} {
 		if !strings.Contains(body, want) {

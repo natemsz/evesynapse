@@ -96,7 +96,11 @@ func iskFig(formatted string) template.HTML { return iskFigure(formatted, false)
 func iskHero(formatted string) template.HTML { return iskFigure(formatted, true) }
 
 // iskCompact writes an ISK amount short for tiles and directory
-// values: "312.4M", "1.27B", "940K". Pages built on the layout
+// values: "312.40M", "1.27B", "940.00K". Pages built on the layout
 // framework use this one form (humanize.ISKCompact, shared with
 // the modules).
 func iskCompact(v float64) string { return humanize.ISKCompact(v) }
+
+// iskCompactSigned writes an ISK change short with its sign
+// (humanize.ISKCompactSigned).
+func iskCompactSigned(v float64) string { return humanize.ISKCompactSigned(v) }

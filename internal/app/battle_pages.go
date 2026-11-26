@@ -416,18 +416,18 @@ func (app *Application) handleBattles(w http.ResponseWriter, r *http.Request) {
 			Kills: f.Kills, Losses: f.Losses, SparkOut: f.SparkOut, SparkIn: f.SparkIn, Pilots: f.Pilots,
 		}
 		if f.IskDestroyed > 0 {
-			row.Destroyed = formatISKShort(f.IskDestroyed)
+			row.Destroyed = iskCompact(f.IskDestroyed)
 		}
 		if f.IskLost > 0 {
-			row.Lost = formatISKShort(f.IskLost)
+			row.Lost = iskCompact(f.IskLost)
 		}
 		v.Rows = append(v.Rows, row)
 	}
 	if len(fights) > 0 {
 		v.Tiles = []battleTile{
 			{Label: "Fights", Value: strconv.Itoa(len(fights)), Sub: "read from your game logs"},
-			{Label: "Kills", Value: strconv.Itoa(int(kills)), Sub: formatISKShort(destroyed) + " destroyed", Tone: "pos"},
-			{Label: "Losses", Value: strconv.Itoa(int(losses)), Sub: formatISKShort(lost) + " lost", Tone: "neg"},
+			{Label: "Kills", Value: strconv.Itoa(int(kills)), Sub: iskCompact(destroyed) + " destroyed", Tone: "pos"},
+			{Label: "Losses", Value: strconv.Itoa(int(losses)), Sub: iskCompact(lost) + " lost", Tone: "neg"},
 			{Label: "Efficiency", Value: iskEfficiency(destroyed, lost), Sub: "of the ISK on these mails"},
 		}
 	}
@@ -866,7 +866,7 @@ func (app *Application) battleKillRow(ctx context.Context, k db.BattleFightKill)
 		row.Victim = app.displayCharacter(ctx, k.VictimCharacterID)
 	}
 	if k.ValueIsk.Valid {
-		row.Value = formatISKShort(k.ValueIsk.Float64)
+		row.Value = iskCompact(k.ValueIsk.Float64)
 	}
 	if !k.Loss && k.MyDamage > 0 {
 		row.Mine = esi.FormatInt(k.MyDamage)

@@ -19,6 +19,21 @@
       document.addEventListener("evesynapse:content-ready", function (ev) {
         fn((ev.detail && ev.detail.root) || document);
       });
+    },
+    // iskCompact mirrors Go's humanize.ISKCompact, the one compact
+    // ISK form: "312.40M", "1.27B", "940.00K"; whole under 1,000.
+    iskCompact: function (v) {
+      var neg = v < 0;
+      if (neg) v = -v;
+      var out = String(Math.round(v));
+      var units = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]];
+      for (var i = 0; i < units.length; i++) {
+        if (v >= units[i][0] * 0.999995) {
+          out = (v / units[i][0]).toFixed(2) + units[i][1];
+          break;
+        }
+      }
+      return neg && out !== "0" ? "-" + out : out;
     }
   };
   function onContentReady(fn) {
@@ -5428,12 +5443,6 @@
   if (!window.matchMedia) return;
   var mq = window.matchMedia("(max-width: 45rem)");
   var undos = [];
-  function compactISK(v) {
-    if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
-    if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
-    if (v >= 1e3) return (v / 1e3).toFixed(1) + "K";
-    return v.toFixed(2);
-  }
   function exactLine(cls, text) {
     var line = document.createElement("div");
     line.className = cls;
@@ -5449,7 +5458,7 @@
       if (cv && isFinite(raw) && raw >= 1e3) {
         var orig = cv.textContent;
         var line = exactLine("ap-cs", orig);
-        cv.textContent = compactISK(raw) + " ISK";
+        cv.textContent = window.EveSynapseContent.iskCompact(raw) + " ISK";
         cv.parentNode.insertBefore(line, cv.nextSibling);
         undos.push(function () {
           cv.textContent = orig;
@@ -5464,7 +5473,7 @@
       if (!isFinite(num) || num < 1e6) return;
       var hidden = fig.querySelector(".visually-hidden");
       var line = exactLine("kpi-exact", hidden ? hidden.textContent : "");
-      var compact = document.createTextNode(compactISK(num) + " ");
+      var compact = document.createTextNode(window.EveSynapseContent.iskCompact(num) + " ");
       fig.parentNode.replaceChild(compact, fig);
       v.parentNode.insertBefore(line, v.nextSibling);
       undos.push(function () {

@@ -267,7 +267,7 @@ func (app *mod) shapeFlow(ctx context.Context, view *walletView, c walletChoice,
 	view.OutTotal = "-" + humanize.ISKCompact(outSum)
 	if inSum > 0 {
 		kept := inSum - outSum
-		view.Kept = fmt.Sprintf("%.1f%% of income kept (%s ISK)", kept/inSum*100, signed(kept))
+		view.Kept = fmt.Sprintf("%.1f%% of income kept (%s ISK)", kept/inSum*100, humanize.ISKCompactSigned(kept))
 	}
 	// The best seller: the item that brought in the most from sales.
 	sold := map[int64]float64{}
@@ -423,11 +423,4 @@ func (app *mod) shapeTrade(view *walletView, c walletChoice, journal esi.WalletJ
 func inRange(date string, cutoff time.Time) bool {
 	t, err := time.Parse(time.RFC3339, date)
 	return err == nil && !t.Before(cutoff)
-}
-
-func signed(v float64) string {
-	if v >= 0 {
-		return "+" + humanize.ISKCompact(v)
-	}
-	return humanize.ISKCompact(v)
 }

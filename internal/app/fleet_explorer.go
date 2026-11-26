@@ -1604,7 +1604,7 @@ func fleetFindings(x fleetDetailInput, d fleetDetail) []fleetFinding {
 			eff = fmt.Sprintf(" (%.0f%% of the ISK destroyed was theirs)", destroyed*100/(destroyed+lost))
 		}
 		say("outcome", fmt.Sprintf("%s for %s, %s ISK destroyed against %s lost%s.",
-			humanize.Plural(kills, "kill"), fleetLossWord(losses), formatISKShort(destroyed), formatISKShort(lost), eff))
+			humanize.Plural(kills, "kill"), fleetLossWord(losses), iskCompact(destroyed), iskCompact(lost), eff))
 	}
 	// Focus: how much of the fleet's damage went into what it killed.
 	var onKilled, total int64

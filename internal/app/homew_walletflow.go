@@ -77,12 +77,12 @@ func buildWalletFlowWidget(ctx context.Context, app *Application, in *widgetInpu
 		return v
 	}
 	net30, net7 := f.in30+f.out30, f.in7+f.out7
-	v.Lead = wLead{Label: "Net, 30 days", Value: signedCompact(net30), Unit: "ISK", Full: f.Net30 + " ISK in less out over 30 days"}
-	v.Lead.Sub = signedCompact(net7) + " ISK over 7 days"
-	v.InOut = "In " + signedCompact(f.in30) + ", out " + signedCompact(f.out30)
+	v.Lead = wLead{Label: "Net, 30 days", Value: iskCompactSigned(net30), Unit: "ISK", Full: f.Net30 + " ISK in less out over 30 days"}
+	v.Lead.Sub = iskCompactSigned(net7) + " ISK over 7 days"
+	v.InOut = "In " + iskCompactSigned(f.in30) + ", out " + iskCompactSigned(f.out30)
 
 	meter := func(name string, val, top float64) flowMeter {
-		m := flowMeter{Name: name, Text: signedCompact(val), Tone: "w-s1"}
+		m := flowMeter{Name: name, Text: iskCompactSigned(val), Tone: "w-s1"}
 		if val < 0 {
 			m.Tone = "w-s2"
 		}
@@ -103,7 +103,7 @@ func buildWalletFlowWidget(ctx context.Context, app *Application, in *widgetInpu
 	}
 	if in.Draws("medium") || in.Draws("large") {
 		fig := func(name string, week, month float64) flowFig {
-			return flowFig{Name: name, Week: signedCompact(week), Month: signedCompact(month),
+			return flowFig{Name: name, Week: iskCompactSigned(week), Month: iskCompactSigned(month),
 				WeekFull: signedISK(week) + " ISK", MonthFull: signedISK(month) + " ISK"}
 		}
 		v.Figs = []flowFig{fig("In", f.in7, f.in30), fig("Out", f.out7, f.out30), fig("Net", net7, net30)}
@@ -126,7 +126,7 @@ func buildWalletFlowWidget(ctx context.Context, app *Application, in *widgetInpu
 		for _, c := range f.Chars {
 			net := c.w30.In + c.w30.Out
 			chars = append(chars, wRankItem{Name: c.Name, Link: charLink(mine, c.ID, c.Name), Value: math.Abs(net),
-				Text: signedCompact(net), Full: signedISK(net) + " ISK net over 30 days"})
+				Text: iskCompactSigned(net), Full: signedISK(net) + " ISK net over 30 days"})
 		}
 		sort.SliceStable(chars, func(i, j int) bool { return chars[i].Value > chars[j].Value })
 		v.ByChar, _ = wRankedBars("Net over 30 days by character", chars, len(chars))
@@ -178,7 +178,7 @@ func flowSorted(totals map[string]float64) []wRankItem {
 		if a == 0 {
 			continue
 		}
-		items = append(items, wRankItem{Name: flowRefName(ref), Value: a, Text: signedCompact(total), Full: signedISK(total) + " ISK"})
+		items = append(items, wRankItem{Name: flowRefName(ref), Value: a, Text: iskCompactSigned(total), Full: signedISK(total) + " ISK"})
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Value != items[j].Value {

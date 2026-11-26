@@ -2290,7 +2290,7 @@ func prepScanView(v *scanPageView) {
 		v.TypesGrid = withPct(sortCounts(v.TypesGrid))
 		v.TypesOff = withPct(sortCounts(v.TypesOff))
 		if d.Value > 0 && len(d.Prices) > 0 {
-			v.ValueText = formatISKShort(d.Value)
+			v.ValueText = iskCompact(d.Value)
 			vals := make([]scanTypeValue, 0, len(d.Prices))
 			for _, c := range d.Types {
 				p, ok := d.Prices[c.ID]
@@ -2594,7 +2594,7 @@ func scanDescription(v *scanPageView) string {
 		s := "D-scan in " + place + ": " + plural(r.DScan.Ships, "ship") + ", " +
 			strconv.Itoa(r.DScan.ShipsGrid) + " on grid."
 		if r.DScan.Value > 0 {
-			s += " Hull value ≈ " + formatISKShort(r.DScan.Value) + " ISK."
+			s += " Hull value ≈ " + iskCompact(r.DScan.Value) + " ISK."
 		}
 		return s
 	case r.Local != nil:

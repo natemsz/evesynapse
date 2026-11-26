@@ -130,25 +130,19 @@ func formatOpenDuration(d time.Duration) string {
 	days := int(d / (24 * time.Hour))
 	hours := int((d - time.Duration(days)*24*time.Hour) / time.Hour)
 	minutes := int((d - time.Duration(days)*24*time.Hour - time.Duration(hours)*time.Hour) / time.Minute)
-	plural := func(n int, unit string) string {
-		if n == 1 {
-			return fmt.Sprintf("%d %s", n, unit)
-		}
-		return fmt.Sprintf("%d %ss", n, unit)
-	}
 	switch {
 	case days > 0:
 		if hours == 0 {
-			return plural(days, "day")
+			return humanize.Plural(days, "day")
 		}
-		return plural(days, "day") + " " + plural(hours, "hour")
+		return humanize.Plural(days, "day") + " " + humanize.Plural(hours, "hour")
 	case hours > 0:
 		if minutes == 0 {
-			return plural(hours, "hour")
+			return humanize.Plural(hours, "hour")
 		}
-		return plural(hours, "hour") + " " + plural(minutes, "minute")
+		return humanize.Plural(hours, "hour") + " " + humanize.Plural(minutes, "minute")
 	default:
-		return plural(minutes, "minute")
+		return humanize.Plural(minutes, "minute")
 	}
 }
 

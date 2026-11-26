@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 )
 
@@ -152,14 +153,14 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 	}
 	parts := []string{
 		"took " + shortDuration(t.Took),
-		plural(t.Characters, "character") + " (" + tiers + ")",
+		humanize.Plural(t.Characters, "character") + " (" + tiers + ")",
 		fmt.Sprintf("%d of %d fetches", t.Fetches, t.Budget),
 	}
 	if t.Deferred > 0 {
 		parts = append(parts, fmt.Sprintf("%d put off to the next cycle", t.Deferred))
 	}
 	if t.RateHeld > 0 {
-		parts = append(parts, plural(t.RateHeld, "character")+" left alone at ESI's request (rate limit)")
+		parts = append(parts, humanize.Plural(t.RateHeld, "character")+" left alone at ESI's request (rate limit)")
 	}
 	switch {
 	case t.NeverFetched:
@@ -174,10 +175,10 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 		{"Fetches", fmt.Sprintf("%d of %d allowed", t.Fetches, t.Budget)},
 	}
 	if t.Deferred > 0 {
-		v.LastRows = append(v.LastRows, statRow{"Put off to the next cycle", plural(t.Deferred, "character")})
+		v.LastRows = append(v.LastRows, statRow{"Put off to the next cycle", humanize.Plural(t.Deferred, "character")})
 	}
 	if t.RateHeld > 0 {
-		v.LastRows = append(v.LastRows, statRow{"Left alone at ESI's request", plural(t.RateHeld, "character") + " (rate limit)"})
+		v.LastRows = append(v.LastRows, statRow{"Left alone at ESI's request", humanize.Plural(t.RateHeld, "character") + " (rate limit)"})
 	}
 	switch {
 	case t.NeverFetched:
@@ -284,11 +285,4 @@ func logWorkerOverrun(t workerTiming) {
 		}
 	}
 	logging.Warnf("worker: the cycle took %s, longer than the minute between cycles (%s)", shortDuration(t.Took), strings.Join(parts, ", "))
-}
-
-func plural(n int, word string) string {
-	if n == 1 {
-		return "1 " + word
-	}
-	return fmt.Sprintf("%d %ss", n, word)
 }

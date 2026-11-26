@@ -113,9 +113,9 @@ func wThin(days []wDay) []wDay {
 	return out
 }
 
-// wNiceStep rounds a raw tick step up to 1, 2, 2.5 or 5 times a power
+// niceStep rounds a raw tick step up to 1, 2, 2.5 or 5 times a power
 // of ten.
-func wNiceStep(raw float64) float64 {
+func niceStep(raw float64) float64 {
 	if raw <= 0 || math.IsNaN(raw) || math.IsInf(raw, 0) {
 		return 1
 	}
@@ -147,7 +147,7 @@ func wNiceScale(lo, hi float64, n int) wScale {
 		}
 		lo, hi = lo-pad, hi+pad
 	}
-	step := wNiceStep((hi - lo) / float64(n-1))
+	step := niceStep((hi - lo) / float64(n-1))
 	s := wScale{lo: math.Floor(lo/step) * step, hi: math.Ceil(hi/step) * step}
 	for v := s.lo; v <= s.hi+step/2; v += step {
 		s.ticks = append(s.ticks, v)

@@ -16,7 +16,6 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"evesynapse/internal/app/module"
@@ -198,14 +197,7 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 		if name, ok := typeNames[typeID]; ok {
 			return name
 		}
-		name := app.deps.TypeNameOrID(ctx, typeID)
-		if strings.HasPrefix(name, "Type #") {
-			// The SDE knows most types by name; fall back to the
-			// local SDE row before settling for the placeholder.
-			if row, rerr := app.queries.GetSDEType(ctx, typeID); rerr == nil && row.Name != "" {
-				name = row.Name
-			}
-		}
+		name := app.deps.TypeName(ctx, typeID)
 		typeNames[typeID] = name
 		return name
 	}

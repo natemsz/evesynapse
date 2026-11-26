@@ -41,6 +41,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/intelchat"
 	"evesynapse/internal/logging"
@@ -714,12 +715,12 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 		}
 		res := app.postChatLines(ctx, base, lines, "chat", "")
 		posted := res.Posted
-		msg := fmt.Sprintf("Posted %s from the pasted lines.", plural(posted, "report"))
+		msg := fmt.Sprintf("Posted %s from the pasted lines.", humanize.Plural(posted, "report"))
 		if res.Duplicates > 0 {
 			msg += fmt.Sprintf(" %d already in the channel.", res.Duplicates)
 		}
 		if res.Skipped > 0 {
-			msg += fmt.Sprintf(" %s skipped (no system named, or a question).", plural(res.Skipped, "line"))
+			msg += fmt.Sprintf(" %s skipped (no system named, or a question).", humanize.Plural(res.Skipped, "line"))
 		}
 		if posted == 0 && res.Duplicates > 0 {
 			linesReply(http.StatusOK, msg, 0, res.SkippedLines)

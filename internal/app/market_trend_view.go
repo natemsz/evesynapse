@@ -536,7 +536,7 @@ func decorateBookChart(c *bookTrendChart, rows []db.ListMarketRegionStatsDailyRe
 		}
 		c.Hits = append(c.Hits, pfHit{X: left, W: right - left, Date: heading, Label: heading, Rows: string(js)})
 	}
-	step := pfNiceStep((hi - lo) / 4)
+	step := niceStep((hi - lo) / 4)
 	for v := math.Ceil(lo/step) * step; v <= hi+step*1e-9; v += step {
 		yy := y(v)
 		c.PriceTicks = append(c.PriceTicks, bookTick{Y: yy, LabelY: yy - 3, Label: pfShortISK(v)})

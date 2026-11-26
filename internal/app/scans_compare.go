@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"evesynapse/internal/app/module"
+	"evesynapse/internal/humanize"
 )
 
 // scanCompareView is the compare page: the form's two inputs
@@ -392,13 +393,13 @@ func diffLocalGroups(a, b *localReading, corps bool) []scanOrgDiff {
 func compareHeadline(res scanResult) string {
 	switch {
 	case res.DScan != nil:
-		return plural(res.DScan.Ships, "ship") + " · " + itoa(res.DScan.ShipsGrid) + " on grid"
+		return humanize.Plural(res.DScan.Ships, "ship") + " · " + itoa(res.DScan.ShipsGrid) + " on grid"
 	case res.Local != nil:
-		return plural(len(res.Local.Pilots)+len(res.Local.Unknown), "pilot")
+		return humanize.Plural(len(res.Local.Pilots)+len(res.Local.Unknown), "pilot")
 	case res.Fleet != nil:
-		return plural(len(res.Fleet.Members), "member")
+		return humanize.Plural(len(res.Fleet.Members), "member")
 	case res.Probe != nil:
-		return plural(len(res.Probe.Sigs), "signature")
+		return humanize.Plural(len(res.Probe.Sigs), "signature")
 	}
 	return ""
 }

@@ -329,27 +329,12 @@ func pfShortISK(v float64) string {
 	return sign + strconv.FormatFloat(math.Round(v), 'f', -1, 64)
 }
 
-// pfNiceStep rounds a raw step up to 1, 2 or 5 times a power of
-// ten.
-func pfNiceStep(raw float64) float64 {
-	if raw <= 0 {
-		return 1
-	}
-	p := math.Pow(10, math.Floor(math.Log10(raw)))
-	for _, m := range []float64{1, 2, 2.5, 5, 10} {
-		if raw <= m*p {
-			return m * p
-		}
-	}
-	return 10 * p
-}
-
 // pfTicksFor labels four or five round values across a scale. y
 // maps a value to plot units; h is the plot's height in those
 // units.
 func pfTicksFor(lo, hi float64, y func(float64) float64, h int, format func(float64) string) []pfTick {
 	var out []pfTick
-	step := pfNiceStep((hi - lo) / 4)
+	step := niceStep((hi - lo) / 4)
 	for v := math.Ceil(lo/step) * step; v <= hi+step*1e-9; v += step {
 		yy := y(v)
 		out = append(out, pfTick{Y: yy, Pos: strconv.Itoa(int(math.Round(yy / float64(h) * 100))), Label: format(v)})

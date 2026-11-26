@@ -12,6 +12,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"github.com/jackc/pgx/v5"
 )
@@ -244,7 +245,7 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 	} else {
 		killSub = fmt.Sprintf("%d solo", solo)
 		if view.CharView {
-			killSub += ", " + plural(blows, "final blow")
+			killSub += ", " + humanize.Plural(blows, "final blow")
 		}
 		if kills > 0 {
 			killSub += fmt.Sprintf(", %.1f pilots on average", float64(attackers)/float64(kills))
@@ -389,9 +390,9 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 			} else {
 				h.EffClass = pctWidthClass(0)
 			}
-			h.Record = plural(h.Kills, "kill") + ", 1 loss"
+			h.Record = humanize.Plural(h.Kills, "kill") + ", 1 loss"
 			if h.Losses != 1 {
-				h.Record = fmt.Sprintf("%s, %d losses", plural(h.Kills, "kill"), h.Losses)
+				h.Record = fmt.Sprintf("%s, %d losses", humanize.Plural(h.Kills, "kill"), h.Losses)
 			}
 			view.Hulls = append(view.Hulls, h.kmHull)
 		}
@@ -414,7 +415,7 @@ func (app *Application) shapeKillmails(ctx context.Context, r *http.Request, vie
 				break
 			}
 			w := wingBy[id]
-			shared := plural(w.kills, "shared kill")
+			shared := humanize.Plural(w.kills, "shared kill")
 			view.Wing = append(view.Wing, kmWing{ID: id, Name: app.displayCharacter(ctx, id), Kills: w.kills,
 				ISK: iskCompact(w.isk), Shared: shared, Href: fmt.Sprintf("/pilot/?character=%d", id)})
 		}

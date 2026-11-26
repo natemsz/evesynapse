@@ -1862,14 +1862,6 @@ func (app *Application) OwnerPermits(ctx context.Context, st standing.Standing, 
 	return app.ownerPermits(ctx, st, owner, permission)
 }
 
-func (app *Application) PlayerCorps(ctx context.Context, userID int64) []int64 {
-	return app.playerCorps(ctx, userID)
-}
-
-func (app *Application) PickCorporation(ctx context.Context, r *http.Request, offered []int64) (int64, []module.OwnerOption) {
-	return app.pickCorporation(ctx, r, offered)
-}
-
 func (app *Application) OwnerCorporations(ctx context.Context, o standing.Owner) []int64 {
 	return app.ownerCorporations(ctx, o)
 }

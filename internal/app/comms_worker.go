@@ -55,7 +55,7 @@ func (app *Application) refreshCommsSnapshots(ctx context.Context, ch db.Charact
 		if kindExcludedByGrants(granted, kind) {
 			continue // the login never granted this kind's scope: not planned
 		}
-		switch app.fetchCommsKind(ctx, ch, kind, allowance) {
+		switch app.fetchSnapshotKind(ctx, ch, kind, allowance) {
 		case corpFetchOK:
 			refreshed++
 		case corpFetchLimited:
@@ -77,11 +77,13 @@ func (app *Application) refreshCommsSnapshots(ctx context.Context, ch db.Charact
 	return refreshed + details, ltd
 }
 
-// fetchCommsKind refreshes one list-level kind when it is due,
-// spending one unit of the cycle allowance per fetch. Outcomes
-// are recorded exactly like fetchCharKind (economy_worker.go):
-// a 403 is a stale-scope login, logged once and backed off.
-func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kind string, allowance *fetchBudget) corpFetchOutcome {
+// fetchSnapshotKind refreshes one character snapshot kind when it
+// is due, spending one unit of allowance per fetch (nil spends
+// none). A recorded refusal (401 or 403: a stale-scope login, or a
+// token ESI rejects) backs the kind off instead of retrying every
+// minute; the pages explain from the record in the meantime
+// (fetch_refusal.go).
+func (app *Application) fetchSnapshotKind(ctx context.Context, ch db.Character, kind string, allowance *fetchBudget) corpFetchOutcome {
 	snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
 	switch {
 	case serr == nil && esi.SnapshotFresh(snap):
@@ -90,14 +92,11 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 		logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 
-	// A recorded refusal backs the kind off instead of retrying
-	// every minute (same rule as the economy cluster,
-	// fetch_refusal.go).
 	if app.refusalSettled(ctx, ch.CharacterID, kind) {
 		return corpFetchSkipped
 	}
 
-	if !allowance.take() {
+	if allowance != nil && !allowance.take() {
 		return corpFetchSkipped
 	}
 	if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {

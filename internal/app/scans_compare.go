@@ -470,10 +470,10 @@ func (app *Application) handleScanCompare(w http.ResponseWriter, r *http.Request
 				}
 			}
 			if aRes.DScan.Value > 0 {
-				dd.ValueBefore = formatISKShort(aRes.DScan.Value)
+				dd.ValueBefore = iskCompact(aRes.DScan.Value)
 			}
 			if bRes.DScan.Value > 0 {
-				dd.ValueAfter = formatISKShort(bRes.DScan.Value)
+				dd.ValueAfter = iskCompact(bRes.DScan.Value)
 			}
 			v.DScan = dd
 		case aRes.Local != nil:

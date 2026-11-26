@@ -30,6 +30,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fitview"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 )
 
@@ -1115,20 +1116,9 @@ func (app *page) saveAppraisal(ctx context.Context, userID int64, anonymous bool
 	return id, token, err
 }
 
-// formatCompactISK writes a value the compact way the hero
-// card's sub-line uses: 820.50, 54.52M, 1.74B.
-func formatCompactISK(v float64) string {
-	switch {
-	case v >= 1e9:
-		return fmt.Sprintf("%.2fB", v/1e9)
-	case v >= 1e6:
-		return fmt.Sprintf("%.2fM", v/1e6)
-	case v >= 1e3:
-		return fmt.Sprintf("%.1fK", v/1e3)
-	default:
-		return fmt.Sprintf("%.2f", v)
-	}
-}
+// formatCompactISK writes a value in the house compact form for the
+// hero card's sub-line: "54.52M", "1.74B".
+func formatCompactISK(v float64) string { return humanize.ISKCompact(v) }
 
 // hubTotal is one cell of the hub-comparison strip: the
 // appraisal's total at one hub's typical sell.

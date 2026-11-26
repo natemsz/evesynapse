@@ -241,7 +241,7 @@ func (app *Application) buildMarketTrendsViewFresh(ctx context.Context, q map[st
 			TradedDay: esi.FormatInt(int64(math.Round(r.AvgDailyVolume30d))),
 			Chg1:      newTrendFigure(r.SellChg1d), Chg7: newTrendFigure(r.SellChg7d), Chg30: newTrendFigure(r.SellChg30d),
 		}
-		row.SellShort = formatISKShort(r.TypicalSell)
+		row.SellShort = iskCompact(r.TypicalSell)
 		// The stored 30-day line (schema 121): the trend column's
 		// chart, and the typical sell's hover card where cards drop
 		// that column.
@@ -253,7 +253,7 @@ func (app *Application) buildMarketTrendsViewFresh(ctx context.Context, q map[st
 		}
 		if r.TypicalBuy > 0 {
 			row.TypicalBuy = esi.FormatISK(r.TypicalBuy)
-			row.BuyShort = formatISKShort(r.TypicalBuy)
+			row.BuyShort = iskCompact(r.TypicalBuy)
 		}
 		if r.Volatility30d.Valid {
 			row.Volatility = strconv.FormatFloat(r.Volatility30d.Float64, 'f', 1, 64) + "%"

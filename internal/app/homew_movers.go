@@ -106,7 +106,7 @@ func buildMoversWidget(ctx context.Context, app *Application, in *widgetInput) a
 		for _, r := range rows {
 			row := moverRow{TypeID: r.TypeID, Name: app.typeNameOrID(ctx, r.TypeID),
 				Href:  "/market/?type=" + strconv.FormatInt(r.TypeID, 10) + "&region=" + strconv.FormatInt(regionID, 10),
-				Price: formatISKShort(r.TypicalSell), Change: newTrendFigure(r.SellChg7d), Line: r.SellSpark30d}
+				Price: iskCompact(r.TypicalSell), Change: newTrendFigure(r.SellChg7d), Line: r.SellSpark30d}
 			if r.SellChg7d.Valid {
 				row.chg = math.Abs(r.SellChg7d.Float64)
 			}

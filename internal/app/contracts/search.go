@@ -572,24 +572,10 @@ func countdownText(until time.Time, now time.Time) string {
 	}
 }
 
-// formatShortISK renders an ISK figure the way the results
-// table does: full precision under ten thousand, then the
-// abbreviated magnitudes (2dp billions, 1dp millions and
-// thousands). It is deliberately local to this package --
-// the house formatter (esi.FormatISK, full precision
-// everywhere) keeps serving every other surface.
+// formatShortISK writes a contract figure in the house compact form
+// with its unit: "205.00M ISK", "940 ISK".
 func formatShortISK(v float64) string {
-	if v < 10000 {
-		return fmt.Sprintf("%.2f ISK", v)
-	}
-	switch {
-	case v >= 1e9:
-		return fmt.Sprintf("%.2fB ISK", v/1e9)
-	case v >= 1e6:
-		return fmt.Sprintf("%.1fM ISK", v/1e6)
-	default:
-		return fmt.Sprintf("%.1fK ISK", v/1e3)
-	}
+	return humanize.ISKCompact(v) + " ISK"
 }
 
 // expiryText words the time until expiry for a result row:

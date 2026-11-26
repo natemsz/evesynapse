@@ -189,7 +189,7 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 		if st, err := app.queries.GetKillEntityStats(ctx, db.GetKillEntityStatsParams{Kind: "character", EntityID: id, Since: since}); err == nil {
 			v.Kills, v.Solo, v.Losses = st.Kills, st.Solo, st.Losses
 			if st.IskKilled > 0 {
-				v.ISK = iskShortGo(st.IskKilled)
+				v.ISK = iskCompact(st.IskKilled)
 			}
 		} else {
 			logging.Warnf("pilot intel %d: stats: %v", id, err)
@@ -205,7 +205,7 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 				k.Flew = names.typeName(r.Flew)
 			}
 			if r.Value > 0 {
-				k.Value = iskShortGo(r.Value)
+				k.Value = iskCompact(r.Value)
 			}
 			v.Recent = append(v.Recent, k)
 		}
@@ -249,7 +249,7 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 		if st, err := app.pilotAllTimeStats(ctx, id); err == nil {
 			v.Solo = st.Solo
 			if st.IskKilled > 0 {
-				v.ISK = iskShortGo(st.IskKilled)
+				v.ISK = iskCompact(st.IskKilled)
 			}
 		} else {
 			logging.Warnf("pilot intel %d: stats: %v", id, err)
@@ -349,20 +349,6 @@ func peakHours(hours []pilotHour) string {
 		return ""
 	}
 	return fmt.Sprintf("Most active %02d:00–%02d:00 EVE", at, (at+3)%24)
-}
-
-func iskShortGo(v float64) string {
-	switch {
-	case v >= 1e12:
-		return fmt.Sprintf("%.1ft", v/1e12)
-	case v >= 1e9:
-		return fmt.Sprintf("%.1fb", v/1e9)
-	case v >= 1e6:
-		return fmt.Sprintf("%.0fm", v/1e6)
-	case v >= 1e3:
-		return fmt.Sprintf("%.0fk", v/1e3)
-	}
-	return fmt.Sprintf("%.0f", v)
 }
 
 // handlePilotWatch is POST /pilot/watch: add (or, with remove, take

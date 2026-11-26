@@ -3,8 +3,6 @@ package app
 import (
 	"bytes"
 	"context"
-	"evesynapse/internal/esi"
-	"fmt"
 	"net/http"
 
 	"evesynapse/internal/app/module"
@@ -22,19 +20,6 @@ type landingData struct {
 	module.ShellData
 	Error         string
 	SSOConfigured bool
-}
-
-func formatISKShort(v float64) string {
-	switch {
-	case v >= 1_000_000_000:
-		return fmt.Sprintf("%.2fB", v/1_000_000_000)
-	case v >= 1_000_000:
-		return fmt.Sprintf("%.2fM", v/1_000_000)
-	case v >= 10_000:
-		return fmt.Sprintf("%.1fK", v/1_000)
-	default:
-		return esi.FormatISK(v)
-	}
 }
 
 // buildLanding assembles the landing page's data.

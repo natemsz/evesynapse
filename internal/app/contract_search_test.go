@@ -398,7 +398,7 @@ func TestContractSearchRowSpreadCountsWants(t *testing.T) {
 	}
 	// (The template escapes the spread's leading + as &#43;.)
 	mustContain(t, "wants spread", body,
-		"Wants Counted", "Wants Wash", "Wants Unpriced", "&#43;400.00 ISK spread")
+		"Wants Counted", "Wants Wash", "Wants Unpriced", "&#43;400 ISK spread")
 	if strings.Contains(body, "&#43;900.00 ISK spread") {
 		t.Error("a wanted side was left out of a row's cost: price-only +900 spread still shows")
 	}

@@ -160,7 +160,7 @@ func (app *Application) pilotSheetJob(ctx context.Context, id int64, theme, visi
 			{Label: "LOSSES", Value: card.Figure(esi.FormatInt(prof.Losses))},
 		}
 		if st.IskKilled > 0 {
-			s.Figures = append(s.Figures, card.Stat{Label: "ISK DESTROYED", Value: card.Figure(iskShortGo(st.IskKilled))})
+			s.Figures = append(s.Figures, card.Stat{Label: "ISK DESTROYED", Value: card.Figure(iskCompact(st.IskKilled))})
 		}
 		if total := st.IskKilled + st.IskLost; total > 0 {
 			s.Figures = append(s.Figures, card.Stat{Label: "ISK EFFICIENCY", Value: card.Figure(fmt.Sprintf("%.1f%%", st.IskKilled*100/total))})
@@ -176,7 +176,7 @@ func (app *Application) pilotSheetJob(ctx context.Context, id int64, theme, visi
 			s.Minor = append(s.Minor, card.Stat{Label: "TYPICAL GANG", Value: card.Figure(strconv.FormatFloat(avg, 'f', 1, 64))})
 		}
 		if st.IskLost > 0 {
-			s.Minor = append(s.Minor, card.Stat{Label: "ISK LOST", Value: card.Figure(iskShortGo(st.IskLost))})
+			s.Minor = append(s.Minor, card.Stat{Label: "ISK LOST", Value: card.Figure(iskCompact(st.IskLost))})
 		}
 		names := app.newKillNames(ctx)
 		if rows, err := app.queries.ListPilotActivityShips(ctx, db.ListPilotActivityShipsParams{CharacterID: id, MaxRows: pilotSheetShips}); err == nil && len(rows) > 0 {

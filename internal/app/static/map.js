@@ -1680,7 +1680,7 @@
       return heatValue(name, m) + (m < full ? "+" : "");
     }
     function heatValue(name, v) {
-      return DATA_HEAT[name] && DATA_HEAT[name].isk ? iskShort(v) : Math.round(v).toLocaleString();
+      return DATA_HEAT[name] && DATA_HEAT[name].isk ? window.EveSynapseContent.iskCompact(v) : Math.round(v).toLocaleString();
     }
     // heatRanked: a ranked heat layer's systems quietest first, each
     // one's rank, and the values in order, built once per payload.
@@ -4879,13 +4879,6 @@
     }
     function dataAny() { for (var k in dataOn) if (dataOn[k]) return true; return false; }
 
-    function iskShort(v) {
-      if (v >= 1e12) return (v / 1e12).toFixed(1) + "t";
-      if (v >= 1e9) return (v / 1e9).toFixed(1) + "b";
-      if (v >= 1e6) return (v / 1e6).toFixed(v >= 1e8 ? 0 : 1) + "m";
-      if (v >= 1e3) return Math.round(v / 1e3) + "k";
-      return String(Math.round(v));
-    }
     function untilShort(unix) {
       var s = unix - Date.now() / 1000;
       if (s <= 0) return "now";
@@ -5187,8 +5180,8 @@
       }
       if (dataOn.market && MINE.market[i]) {
         var mk = MINE.market[i], mp = [];
-        if (mk.sell) mp.push(mk.sell + " sell · " + iskShort(mk.iskSell));
-        if (mk.buy) mp.push(mk.buy + " buy · " + iskShort(mk.iskBuy));
+        if (mk.sell) mp.push(mk.sell + " sell · " + window.EveSynapseContent.iskCompact(mk.iskSell));
+        if (mk.buy) mp.push(mk.buy + " buy · " + window.EveSynapseContent.iskCompact(mk.iskBuy));
         if (mk.contracts) mp.push(plural(mk.contracts, "contract"));
         rows.push(["Orders", mp.join("; ")]);
       }
@@ -5205,9 +5198,9 @@
       }
       var dk = dataHeat(), hr = dk && MINE.heat[dk].rows[i];
       if (hr) {
-        if (dk === "assets") rows.push(["Your assets", "≈" + iskShort(hr.v) + " ISK"]);
-        if (dk === "pvp") rows.push(["Your PvP, 30 days", plural(hr.a, "kill") + " · " + plural(hr.b, "loss").replace("losss", "losses") + " · " + iskShort(hr.c) + " ISK"]);
-        if (dk === "mining") rows.push(["Your mining, 30 days", Math.round(hr.v).toLocaleString() + " units" + (hr.a ? " · " + iskShort(hr.a) + " ISK" : "")]);
+        if (dk === "assets") rows.push(["Your assets", "≈" + window.EveSynapseContent.iskCompact(hr.v) + " ISK"]);
+        if (dk === "pvp") rows.push(["Your PvP, 30 days", plural(hr.a, "kill") + " · " + plural(hr.b, "loss").replace("losss", "losses") + " · " + window.EveSynapseContent.iskCompact(hr.c) + " ISK"]);
+        if (dk === "mining") rows.push(["Your mining, 30 days", Math.round(hr.v).toLocaleString() + " units" + (hr.a ? " · " + window.EveSynapseContent.iskCompact(hr.a) + " ISK" : "")]);
       }
       if (dataOn.watched && MINE.watched[i]) {
         rows.push(["Watched", MINE.watched[i].map(function (w) {

@@ -716,7 +716,7 @@ func TestKillPageBuildCostAsterisk(t *testing.T) {
 		t.Fatalf("kill page: status %d", code)
 	}
 	mustContain(t, "kill page", body,
-		"750.0K*",
+		"750.00K*",
 		"* Part of this value is priced at build cost, where no market or contract price is known.",
 	)
 }
@@ -988,16 +988,16 @@ func TestKillmailTilesScope(t *testing.T) {
 		t.Fatalf("GET /killmails/ = %d, want 200", code)
 	}
 	// All time: 65 kills (10 of them solo), 2 losses, 950M
-	// destroyed, 10.0M lost.
+	// destroyed, 10.00M lost.
 	mustContain(t, "/killmails/", body,
 		`Tile figures: <b>All time</b>`, "scope=30d",
 		`<span class="l-stat-label">Kills</span><span class="l-stat-value">65</span><span class="l-stat-sub">10 solo</span>`,
 		`<span class="l-stat-label">Losses</span><span class="l-stat-value">2</span><span class="l-stat-sub">32.50 kills per loss</span>`,
-		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">950M</span><span class="l-stat-sub">99% ISK efficiency</span>`,
-		`<span class="l-stat-label">ISK lost</span><span class="l-stat-value">10.0M</span>`,
+		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">950.00M</span><span class="l-stat-sub">99% ISK efficiency</span>`,
+		`<span class="l-stat-label">ISK lost</span><span class="l-stat-value">10.00M</span>`,
 		// The note keeps the window's own sums: the newest 50
 		// mails hold 48 of the kills and both losses.
-		`Showing 50 of 50: 48 kills, 2 losses in this window; <span class="km-k">480M ISK destroyed</span>, <span class="km-l">10.0M ISK lost</span>.`)
+		`Showing 50 of 50: 48 kills, 2 losses in this window; <span class="km-k">480.00M ISK destroyed</span>, <span class="km-l">10.00M ISK lost</span>.`)
 
 	code, body = getPage(t, app, cookie, "/killmails/?character=90000001&scope=30d")
 	if code != http.StatusOK {
@@ -1009,7 +1009,7 @@ func TestKillmailTilesScope(t *testing.T) {
 		`Tile figures: <b>Last 30 days</b>`,
 		`<span class="l-stat-label">Kills</span><span class="l-stat-value">55</span><span class="l-stat-sub">0 solo</span>`,
 		`<span class="l-stat-label">Losses</span><span class="l-stat-value">2</span><span class="l-stat-sub">27.50 kills per loss</span>`,
-		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">550M</span><span class="l-stat-sub">98% ISK efficiency</span>`,
-		`<span class="l-stat-label">ISK lost</span><span class="l-stat-value">10.0M</span>`,
-		`Showing 50 of 50: 48 kills, 2 losses in this window; <span class="km-k">480M ISK destroyed</span>, <span class="km-l">10.0M ISK lost</span>.`)
+		`<span class="l-stat-label">ISK destroyed</span><span class="l-stat-value">550.00M</span><span class="l-stat-sub">98% ISK efficiency</span>`,
+		`<span class="l-stat-label">ISK lost</span><span class="l-stat-value">10.00M</span>`,
+		`Showing 50 of 50: 48 kills, 2 losses in this window; <span class="km-k">480.00M ISK destroyed</span>, <span class="km-l">10.00M ISK lost</span>.`)
 }

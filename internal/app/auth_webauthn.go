@@ -523,25 +523,27 @@ func writeFactorJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// refuseFactor turns a factor or enrollment request away: a JSON
+// endpoint gets status with {"error": code}, a page is sent to page.
+func refuseFactor(w http.ResponseWriter, r *http.Request, json bool, status int, code, page string) {
+	if json {
+		writeFactorJSON(w, status, map[string]string{"error": code})
+		return
+	}
+	http.Redirect(w, r, page, http.StatusSeeOther)
+}
+
 // factorAuthed is the guard for the factor and enrollment
 // endpoints: a signed-in session, pending or fully in. JSON
 // endpoints get a 401 body; pages bounce home.
 func (app *Application) factorAuthed(w http.ResponseWriter, r *http.Request, json bool) (ctx context.Context, userID int64, ok bool) {
 	ctx = r.Context()
 	if !app.sessions.GetBool(ctx, sessionAuthenticated) {
-		if json {
-			writeFactorJSON(w, http.StatusUnauthorized, map[string]string{"error": "signin"})
-		} else {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-		}
+		refuseFactor(w, r, json, http.StatusUnauthorized, "signin", "/")
 		return ctx, 0, false
 	}
 	if userID = app.userID(ctx); userID == 0 {
-		if json {
-			writeFactorJSON(w, http.StatusUnauthorized, map[string]string{"error": "signin"})
-		} else {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-		}
+		refuseFactor(w, r, json, http.StatusUnauthorized, "signin", "/")
 		return ctx, 0, false
 	}
 	return ctx, userID, true
@@ -894,28 +896,16 @@ func (app *Application) enrollAuthed(w http.ResponseWriter, r *http.Request, jso
 		return ctx, 0, false
 	}
 	if !app.sessions.GetBool(ctx, session2FAPending) {
-		if json {
-			writeFactorJSON(w, http.StatusForbidden, map[string]string{"error": "state"})
-		} else {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-		}
+		refuseFactor(w, r, json, http.StatusForbidden, "state", "/")
 		return ctx, 0, false
 	}
 	if !app.sessions.GetBool(ctx, session2FAMustEnroll) {
-		if json {
-			writeFactorJSON(w, http.StatusForbidden, map[string]string{"error": "state"})
-		} else {
-			http.Redirect(w, r, "/auth/factor", http.StatusSeeOther)
-		}
+		refuseFactor(w, r, json, http.StatusForbidden, "state", "/auth/factor")
 		return ctx, 0, false
 	}
 	if !app.pendingAlive(ctx) {
 		app.endPendingSession(ctx)
-		if json {
-			writeFactorJSON(w, http.StatusForbidden, map[string]string{"error": "expired"})
-		} else {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-		}
+		refuseFactor(w, r, json, http.StatusForbidden, "expired", "/")
 		return ctx, 0, false
 	}
 	return ctx, userID, true
@@ -1052,11 +1042,7 @@ func (app *Application) securityAuthed(w http.ResponseWriter, r *http.Request, j
 		return ctx, 0, false
 	}
 	if app.sessions.GetBool(ctx, session2FAPending) {
-		if json {
-			writeFactorJSON(w, http.StatusForbidden, map[string]string{"error": "pending"})
-		} else {
-			http.Redirect(w, r, "/auth/factor", http.StatusSeeOther)
-		}
+		refuseFactor(w, r, json, http.StatusForbidden, "pending", "/auth/factor")
 		return ctx, 0, false
 	}
 	return ctx, userID, true
@@ -1078,11 +1064,7 @@ func (app *Application) securityNeedsFresh(w http.ResponseWriter, r *http.Reques
 	if n == 0 || app.factorFresh(ctx) {
 		return false
 	}
-	if json {
-		writeFactorJSON(w, http.StatusForbidden, map[string]string{"error": "stale"})
-	} else {
-		http.Redirect(w, r, "/auth/factor", http.StatusSeeOther)
-	}
+	refuseFactor(w, r, json, http.StatusForbidden, "stale", "/auth/factor")
 	return true
 }
 

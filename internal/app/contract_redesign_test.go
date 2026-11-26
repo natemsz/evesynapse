@@ -233,7 +233,7 @@ func TestContractSearchCardRows(t *testing.T) {
 		`<div class="cs-row-issuer">Issuer One</div>`,
 		"↗ Deal -15%",
 		`data-th="Our value"`,
-		"1000.00 ISK", "priced 1 of 1 lines", "&#43;150.00 ISK spread",
+		"1.00K ISK", "priced 1 of 1 lines", "&#43;150 ISK spread",
 		"Jita IV - Moon 4")
 
 	courier := row("7003")
@@ -241,7 +241,7 @@ func TestContractSearchCardRows(t *testing.T) {
 		"Move My Stuff",
 		`<div class="cs-row-issuer">Issuer One</div>`,
 		`data-th="Collateral"`,
-		"Reward", "5.0M ISK", "Collat: 100.0K ISK",
+		"Reward", "5.00M ISK", "Collat: 100.00K ISK",
 		"Sealed Plastic Wrap (1,000 m³)",
 		"🚚 1,000 m³ <span>•</span> <span>5000 ISK/m³</span>",
 		"collateral")
@@ -290,10 +290,10 @@ func TestContractPanelFragment(t *testing.T) {
 	}
 	mustContain(t, "panel 7001", body,
 		"Contract Line Appraisal (Forge Sweep)", "Tritanium",
-		"Typical Jita Price: 1000.00 ISK",
+		"Typical Jita Price: 1.00K ISK",
 		"ID: 7001", "Issued by Issuer One (Pilot)",
-		"Deal Execution Summary", "Asking Price:", "850.00 ISK",
-		"EveSynapse Value:", "Estimated Spread:", "150.00 ISK (15.0%)",
+		"Deal Execution Summary", "Asking Price:", "850 ISK",
+		"EveSynapse Value:", "Estimated Spread:", "150 ISK (15.0%)",
 		"Full contract page",
 		"Copy Contract Link", "contract:10000002//7001")
 	if strings.Contains(body, "<html") || strings.Contains(body, "pagetitle") {
@@ -306,7 +306,7 @@ func TestContractPanelFragment(t *testing.T) {
 	_, body = getAnon(t, app, "/contracts/search/7003/panel")
 	mustContain(t, "panel 7003", body,
 		"Contract Line Appraisal (Route Hauling Rate)",
-		"Asking Price:", "5.0M ISK", "EveSynapse Value:", "100.0K ISK")
+		"Asking Price:", "5.00M ISK", "EveSynapse Value:", "100.00K ISK")
 	if strings.Contains(body, "Estimated Spread:") {
 		t.Error("the courier drawer renders a spread figure")
 	}
@@ -332,8 +332,8 @@ func TestContractPanelAbyssal(t *testing.T) {
 	mustContain(t, "panel 8501", body,
 		"Contract Line Appraisal (Abyssal Neural Model)",
 		"Abyssal Test Damage", "[Roll 45/100]",
-		"Abyssal Typical: 205.0M ISK",
-		"Mutaplasmid Attributes", "Est Range: 180.0M – 240.0M ISK",
+		"Abyssal Typical: 205.00M ISK",
+		"Mutaplasmid Attributes", "Est Range: 180.00M – 240.00M ISK",
 		"Damage Multiplier", "&#43;18.0% (80%)",
 		"Capacitor Need", "CPU", `data-w="80"`, `data-w="2"`)
 }
@@ -364,7 +364,7 @@ func TestContractPanelUnchangedRollsHidden(t *testing.T) {
 		t.Fatalf("abyssal panel: status %d, want 200", code)
 	}
 	mustContain(t, "panel unchanged rolls", body,
-		"Mutaplasmid Attributes", "Est Range: 180.0M – 240.0M ISK",
+		"Mutaplasmid Attributes", "Est Range: 180.00M – 240.00M ISK",
 		"Damage Multiplier", "CPU")
 	if strings.Contains(body, "Capacitor Need") {
 		t.Error("the attributes card still lists a roll that changed nothing")
@@ -419,18 +419,18 @@ func TestContractSearchNegativeSpread(t *testing.T) {
 	_, body := getAnon(t, app, "/contracts/search/")
 	mustContain(t, "negative spread row", body,
 		"compared against our swept typicals pricing model",
-		"-1000.00 ISK spread")
+		"-1.00K ISK spread")
 	if n := strings.Count(body, `class="cs-spread neg"`); n != 1 {
 		t.Errorf("negative spread rows: got %d, want 1 (the underwater exchange only)", n)
 	}
 
 	_, body = getAnon(t, app, "/contracts/search/7021/panel")
 	mustContain(t, "panel 7021", body,
-		"Estimated Spread:", "-1000.00 ISK (-100.0%)", `cs-srow sp neg`)
+		"Estimated Spread:", "-1.00K ISK (-100.0%)", `cs-srow sp neg`)
 
 	_, body = getAnon(t, app, "/contracts/search/7022/panel")
 	mustContain(t, "panel 7022", body,
-		"Asking Price:", "5000.00 ISK", "EveSynapse Value:", "1000.00 ISK")
+		"Asking Price:", "5.00K ISK", "EveSynapse Value:", "1.00K ISK")
 	if strings.Contains(body, "Estimated Spread:") {
 		t.Error("the courier summary renders a spread")
 	}
@@ -472,16 +472,16 @@ func TestContractSearchBarterSpread(t *testing.T) {
 		tier_mix='typical:2', priced_at=$1 WHERE contract_id=7031`, now)
 
 	_, body := getAnon(t, app, "/contracts/search/")
-	mustContain(t, "barter spread row", body, "-5010.00 ISK spread")
+	mustContain(t, "barter spread row", body, "-5.01K ISK spread")
 	if n := strings.Count(body, `class="cs-spread neg"`); n != 1 {
 		t.Errorf("negative spread rows: got %d, want 1 (the barter exchange only)", n)
 	}
 
 	_, body = getAnon(t, app, "/contracts/search/7031/panel")
 	mustContain(t, "panel 7031", body,
-		"Asking Price:", "7010.00 ISK",
-		"EveSynapse Value:", "2000.00 ISK",
-		"Estimated Spread:", "-5010.00 ISK (-250.5%)", `cs-srow sp neg`)
+		"Asking Price:", "7.01K ISK",
+		"EveSynapse Value:", "2.00K ISK",
+		"Estimated Spread:", "-5.01K ISK (-250.5%)", `cs-srow sp neg`)
 }
 
 // TestContractSearchContentsCap pins the contents cell's

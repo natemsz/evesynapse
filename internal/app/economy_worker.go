@@ -9,7 +9,6 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
-	"github.com/jackc/pgx/v5"
 )
 
 // ---------------------------------------------------------------------------
@@ -66,39 +65,9 @@ func (app *Application) refreshEconomySnapshots(ctx context.Context, ch db.Chara
 }
 
 // fetchCharKind refreshes one economy snapshot kind when it is
-// due, recording the outcome like fetchCorpKind does.
+// due, with no cycle allowance.
 func (app *Application) fetchCharKind(ctx context.Context, ch db.Character, kind string) corpFetchOutcome {
-	snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
-	switch {
-	case serr == nil && esi.SnapshotFresh(snap):
-		return corpFetchSkipped
-	case serr != nil && !errors.Is(serr, pgx.ErrNoRows):
-		logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
-	}
-
-	// A recorded refusal (401 or 403: a stale-scope login, or a
-	// token ESI rejects) backs this kind off instead of retrying
-	// every minute; the pages explain from the record in the
-	// meantime (fetch_refusal.go).
-	if app.refusalSettled(ctx, ch.CharacterID, kind) {
-		return corpFetchSkipped
-	}
-
-	if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
-		switch {
-		case errors.Is(err, esi.ErrErrorLimit):
-			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
-			return corpFetchLimited
-		case app.recordFetchRefusal(ctx, ch.CharacterID, kind, err):
-			return corpFetchFailed
-		default:
-			logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
-			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, err.Error())
-			return corpFetchFailed
-		}
-	}
-	app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateOK, "")
-	return corpFetchOK
+	return app.fetchSnapshotKind(ctx, ch, kind, nil)
 }
 
 // ---------------------------------------------------------------------------

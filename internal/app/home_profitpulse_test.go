@@ -113,8 +113,8 @@ func TestProfitPulseWidgetSizes(t *testing.T) {
 	// Kept is the labeled activities only, and its change is against
 	// the window before, read from the same stored rows.
 	small := build("small")
-	if small.Lead.Value != "+850K" || small.Lead.Change != "+750K" || small.Gross != "1.3M ISK" {
-		t.Errorf("small figures kept=%q change=%q gross=%q, want +850K, +750K, 1.3M ISK", small.Lead.Value, small.Lead.Change, small.Gross)
+	if small.Lead.Value != "+850.00K" || small.Lead.Change != "+750.00K" || small.Gross != "1.30M ISK" {
+		t.Errorf("small figures kept=%q change=%q gross=%q, want +850.00K, +750.00K, 1.30M ISK", small.Lead.Value, small.Lead.Change, small.Gross)
 	}
 	// Every seeded row sits on today: one bar, above zero, on the last day.
 	if small.Strip == nil || len(small.Strip.Bars) != 1 || small.Strip.Bars[0].Down || small.Strip.Bars[0].X < 950 {
@@ -125,20 +125,20 @@ func TestProfitPulseWidgetSizes(t *testing.T) {
 	}
 	// The medium form ranks the items by margin, broker fees in.
 	if mid := build("medium"); mid.TopItems == nil || len(mid.TopItems.Rows) != 2 ||
-		mid.TopItems.Rows[0].Name != "Tritanium" || mid.TopItems.Rows[0].Text != "+185K" || mid.Waterfall != nil {
-		t.Errorf("medium top items = %+v, want Tritanium +185K then Pyerite, and no waterfall", mid.TopItems)
+		mid.TopItems.Rows[0].Name != "Tritanium" || mid.TopItems.Rows[0].Text != "+185.00K" || mid.Waterfall != nil {
+		t.Errorf("medium top items = %+v, want Tritanium +185.00K then Pyerite, and no waterfall", mid.TopItems)
 	}
 	// in.Draws("large") decides the waterfall and the activity split.
 	if large := build("large"); large.Waterfall == nil || large.Activities == nil || large.Activities.Rows[0].Name != "Trading" ||
-		large.Activities.Rows[0].Text != "+600K" {
-		t.Errorf("large waterfall=%t activities=%+v, want the waterfall and Trading first at +600K", large.Waterfall != nil, large.Activities)
+		large.Activities.Rows[0].Text != "+600.00K" {
+		t.Errorf("large waterfall=%t activities=%+v, want the waterfall and Trading first at +600.00K", large.Waterfall != nil, large.Activities)
 	}
 
 	for _, c := range []struct {
 		layout string
 		want   []string
 	}{
-		{`[{"id":"profitpulse","w":1,"h":1}]`, []string{"Kept as profit", "850K", "w-barchart"}},
+		{`[{"id":"profitpulse","w":1,"h":1}]`, []string{"Kept as profit", "850.00K", "w-barchart"}},
 		{`[{"id":"profitpulse"}]`, []string{"Gross in", "Best margins", "Tritanium", "w-barchart"}},
 		{`[{"id":"profitpulse","w":3,"h":3}]`, []string{"Where the ISK went", "was kept as profit", "COGS", "Net earned", "By activity",
 			// The chart labels position by pf-x/pf-y classes, as on

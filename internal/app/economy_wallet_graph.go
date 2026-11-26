@@ -222,27 +222,10 @@ func newKPITrend(now, then float64, since string) *kpiTrend {
 	}
 	return &kpiTrend{
 		Up:    pct > 0,
-		Delta: fmt.Sprintf("%s (%+.1f%%)", compactISKDelta(now-then), pct),
-		Text:  fmt.Sprintf("%s ISK (%+.1f%%) over %s", compactISKDelta(now-then), pct, since),
+		Delta: fmt.Sprintf("%s (%+.1f%%)", iskCompactSigned(now-then), pct),
+		Text:  fmt.Sprintf("%s ISK (%+.1f%%) over %s", iskCompactSigned(now-then), pct, since),
 		Since: since,
 	}
-}
-
-// compactISKDelta writes a signed ISK change short: "-1.74B", "+820.5M".
-func compactISKDelta(v float64) string {
-	sign := "+"
-	if v < 0 {
-		sign, v = "-", -v
-	}
-	for _, u := range []struct {
-		div    float64
-		suffix string
-	}{{1e12, "T"}, {1e9, "B"}, {1e6, "M"}, {1e3, "K"}} {
-		if v >= u.div {
-			return fmt.Sprintf("%s%.2f%s", sign, v/u.div, u.suffix)
-		}
-	}
-	return fmt.Sprintf("%s%.0f", sign, v)
 }
 
 // netWorthHistoryDays is how many sampled days the home reads by

@@ -192,7 +192,7 @@ func (app *Application) pilotCardJob(ctx context.Context, id int64) (cardJob, bo
 				{Label: "LOSSES", Value: card.Figure(esi.FormatInt(prof.Losses))},
 			}
 			if st, err := app.pilotAllTimeStats(ctx, id); err == nil && st.IskKilled > 0 {
-				c.Stats = append(c.Stats, card.Stat{Label: "ISK DESTROYED", Value: card.Figure(iskShortGo(st.IskKilled))})
+				c.Stats = append(c.Stats, card.Stat{Label: "ISK DESTROYED", Value: card.Figure(iskCompact(st.IskKilled))})
 			}
 		}
 	case !errors.Is(err, pgx.ErrNoRows):

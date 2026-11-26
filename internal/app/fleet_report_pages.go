@@ -277,7 +277,7 @@ func (app *Application) fillFleetBattle(ctx context.Context, view *fleetReportVi
 		When:   shown.StartedAt.UTC().Format("Mon Jan 2, 15:04") + " EVE",
 		Length: humanDuration(max(shown.EndedAt.Sub(shown.StartedAt), time.Minute)),
 		Kills:  shown.Kills, Losses: shown.Losses,
-		Destroyed: formatISKShort(shown.IskDestroyed), Lost: formatISKShort(shown.IskLost),
+		Destroyed: iskCompact(shown.IskDestroyed), Lost: iskCompact(shown.IskLost),
 		Out: battleNum(shown.DamageOut), In: battleNum(shown.DamageIn), Reps: battleNum(shown.RepsOut),
 		Cap: battleNum(shown.CapOut), FriendlyFire: battleNum(shown.FriendlyFire),
 	}
@@ -330,7 +330,7 @@ func (app *Application) fillFleetBattle(ctx context.Context, view *fleetReportVi
 			Ship: names.typeName(k.ShipTypeID), Value: "No price yet", Loss: k.Loss, Linked: !view.Demo && k.Public,
 		}
 		if k.ValueIsk.Valid {
-			row.Value = formatISKShort(k.ValueIsk.Float64)
+			row.Value = iskCompact(k.ValueIsk.Float64)
 		}
 		view.Mails = append(view.Mails, row)
 	}
@@ -426,7 +426,7 @@ func (app *Application) fleetTotalsFor(ctx context.Context, opID int64) *fleetTo
 	if t.Battles == 0 {
 		return nil
 	}
-	return &fleetTotalsView{Battles: t.Battles, Kills: t.Kills, Losses: t.Losses, Destroyed: formatISKShort(t.IskDestroyed), Lost: formatISKShort(t.IskLost)}
+	return &fleetTotalsView{Battles: t.Battles, Kills: t.Kills, Losses: t.Losses, Destroyed: iskCompact(t.IskDestroyed), Lost: iskCompact(t.IskLost)}
 }
 
 // fleetBattleLink is one fight of a fleet's report, as a row on the
@@ -455,7 +455,7 @@ func (app *Application) fleetBattleLinks(ctx context.Context, opID int64) []flee
 			Href:   fleetReportPath(opID) + "?battle=" + strconv.Itoa(int(b.Seq)),
 			System: system, When: b.StartedAt.UTC().Format("15:04") + " EVE",
 			Kills: b.Kills, Losses: b.Losses,
-			Destroyed: formatISKShort(b.IskDestroyed) + " destroyed", Lost: formatISKShort(b.IskLost) + " lost",
+			Destroyed: iskCompact(b.IskDestroyed) + " destroyed", Lost: iskCompact(b.IskLost) + " lost",
 		})
 		if b.IskDestroyed == 0 {
 			out[len(out)-1].Destroyed = "nothing destroyed"

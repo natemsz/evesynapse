@@ -248,7 +248,7 @@ func TestPublicFitCostIsHullPlusParts(t *testing.T) {
 	// Hull 1,000 (typical) + 2 x 250 (estimated sell) + 3 x 40 (typical),
 	// the hull's part of it 62%.
 	const total = 1620.0
-	const hullLine = `<li class="fc-hull"><span>Hull</span> <b>1.0K</b> <small>62%</small></li>`
+	const hullLine = `<li class="fc-hull"><span>Hull</span> <b>1.00K</b> <small>62%</small></li>`
 	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
 	if code != http.StatusOK {
 		t.Fatalf("public fit page: status %d", code)
@@ -324,7 +324,7 @@ func TestPublicFitCostBuildTier(t *testing.T) {
 		t.Errorf("stored price = %v (err %v), want %v (the reprice's build tier agrees with the live sum)", got.TotalPrice, err, total)
 	}
 	const note = "* Part of this value is priced at build cost, where no market or contract price is known."
-	const hullLine = `<li class="fc-hull"><span>Hull</span> <b>5.0K*</b> <small>91%</small></li>`
+	const hullLine = `<li class="fc-hull"><span>Hull</span> <b>5.00K*</b> <small>91%</small></li>`
 	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
 	if code != http.StatusOK {
 		t.Fatalf("public fit page: status %d", code)

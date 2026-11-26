@@ -586,7 +586,7 @@ func (app *Application) killLeaderBoard(ctx context.Context, names *killNames, v
 	}
 	id := func(n int64) string { return strconv.FormatInt(n, 10) }
 	for i, r := range list {
-		row := killLeaderRow{Rank: i + 1, ID: r.EntityID, Count: r.Kills, Solo: r.Solo, ISK: formatISKShort(r.Isk)}
+		row := killLeaderRow{Rank: i + 1, ID: r.EntityID, Count: r.Kills, Solo: r.Solo, ISK: iskCompact(r.Isk)}
 		switch key {
 		case "character":
 			row.Name = names.character(r.EntityID)
@@ -656,7 +656,7 @@ func (app *Application) killLeaderRail(ctx context.Context, names *killNames, ki
 		return rows
 	}
 	for _, r := range read("alliance") {
-		top.Alliances = append(top.Alliances, killTopRow{ID: r.EntityID, Name: names.alliance(r.EntityID), Count: r.Kills, Note: formatISKShort(r.Isk)})
+		top.Alliances = append(top.Alliances, killTopRow{ID: r.EntityID, Name: names.alliance(r.EntityID), Count: r.Kills, Note: iskCompact(r.Isk)})
 	}
 	if kind == "ship" {
 		for _, r := range read("character") {

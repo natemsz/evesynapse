@@ -120,9 +120,9 @@ type sovEndedFight struct {
 // sovFightFigOf dresses a fight's stored figures.
 func sovFightFigOf(id, kills int64, isk float64, dl int64, dli float64, dk int64, dki float64) sovFightFig {
 	return sovFightFig{
-		ID: id, Kills: kills, ISK: formatISKShort(isk),
-		DefLost: dl, DefLostV: formatISKShort(dli),
-		DefKilled: dk, DefKillV: formatISKShort(dki),
+		ID: id, Kills: kills, ISK: iskCompact(isk),
+		DefLost: dl, DefLostV: iskCompact(dli),
+		DefKilled: dk, DefKillV: iskCompact(dki),
 		Href: "/intel/kills/?fight=" + strconv.FormatInt(id, 10),
 	}
 }

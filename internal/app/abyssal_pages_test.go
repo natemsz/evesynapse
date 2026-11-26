@@ -72,7 +72,7 @@ func TestAbyssalSearchAndDetailPages(t *testing.T) {
 	_, body := getAnon(t, app, "/contracts/search/?family=test_damage_thing")
 	mustContain(t, "family search", body,
 		"Bricked But Pretty", "Roll Score: 45/100", "<span>Top 20%</span>",
-		"[Roll 45/100]", "205.0M ISK", "priced 1 of 1 lines")
+		"[Roll 45/100]", "205.00M ISK", "priced 1 of 1 lines")
 
 	// A family the item is not in excludes it.
 	_, body = getAnon(t, app, "/contracts/search/?family=warp_scrambler")
@@ -118,8 +118,8 @@ func TestAbyssalSearchAndDetailPages(t *testing.T) {
 	mustContain(t, "abyssal detail", body,
 		"Damage Multiplier", "Capacitor Need", "CPU", "&#43;18.0%", `data-w="80"`, `data-w="2"`,
 		"Roll score <strong>45 / 100</strong>",
-		"Our estimate", "<strong>205.0M ISK</strong>",
-		"likely 180.0M – 240.0M ISK",
+		"Our estimate", "<strong>205.00M ISK</strong>",
+		"likely 180.00M – 240.00M ISK",
 		"from 8 current and recent listings of this module",
 		"Held back by: CPU fitting cost",
 		"Our abyssal estimate")

@@ -217,26 +217,58 @@ func (b *tokenBox) aeadFor(stored string) cipher.AEAD {
 	}
 }
 
-// sealTokens seals a character's token pair for storing.
-func (b *tokenBox) sealTokens(characterID int64, access, refresh string) (sealedAccess, sealedRefresh string, err error) {
-	if sealedAccess, err = b.seal(access, characterID, tokenFieldAccess); err != nil {
+// sealPair seals an access and refresh token for storing, each bound
+// to its owner id and its own field name.
+func (b *tokenBox) sealPair(ownerID int64, accessField, refreshField, access, refresh string) (sealedAccess, sealedRefresh string, err error) {
+	if sealedAccess, err = b.seal(access, ownerID, accessField); err != nil {
 		return "", "", err
 	}
-	if sealedRefresh, err = b.seal(refresh, characterID, tokenFieldRefresh); err != nil {
+	if sealedRefresh, err = b.seal(refresh, ownerID, refreshField); err != nil {
 		return "", "", err
 	}
 	return sealedAccess, sealedRefresh, nil
 }
 
+// openPair opens a stored access and refresh token sealed by sealPair.
+func (b *tokenBox) openPair(ownerID int64, accessField, refreshField, access, refresh string) (openAccess, openRefresh string, err error) {
+	if openAccess, err = b.open(access, ownerID, accessField); err != nil {
+		return "", "", err
+	}
+	if openRefresh, err = b.open(refresh, ownerID, refreshField); err != nil {
+		return "", "", err
+	}
+	return openAccess, openRefresh, nil
+}
+
+// pairNeedsReseal reports a stored pair holding a token that is not
+// sealed under the current envelope.
+func pairNeedsReseal(access, refresh string) bool {
+	return (access != "" && !tokenSealedCurrent(access)) || (refresh != "" && !tokenSealedCurrent(refresh))
+}
+
+// sealTokens seals a character's token pair for storing.
+func (b *tokenBox) sealTokens(characterID int64, access, refresh string) (sealedAccess, sealedRefresh string, err error) {
+	return b.sealPair(characterID, tokenFieldAccess, tokenFieldRefresh, access, refresh)
+}
+
 // openTokens opens a character row's stored token pair.
 func (b *tokenBox) openTokens(ch db.Character) (access, refresh string, err error) {
-	if access, err = b.open(ch.AccessToken, ch.CharacterID, tokenFieldAccess); err != nil {
-		return "", "", err
-	}
-	if refresh, err = b.open(ch.RefreshToken, ch.CharacterID, tokenFieldRefresh); err != nil {
-		return "", "", err
-	}
-	return access, refresh, nil
+	return b.openPair(ch.CharacterID, tokenFieldAccess, tokenFieldRefresh, ch.AccessToken, ch.RefreshToken)
+}
+
+const (
+	discordAccessField  = "discord_access"
+	discordRefreshField = "discord_refresh"
+)
+
+// openDiscordTokens opens a Discord link's stored token pair.
+func (b *tokenBox) openDiscordTokens(link db.DiscordLink) (access, refresh string, err error) {
+	return b.openPair(link.UserID, discordAccessField, discordRefreshField, link.AccessToken, link.RefreshToken)
+}
+
+// sealDiscordTokens seals a Discord link's token pair for storing.
+func (b *tokenBox) sealDiscordTokens(userID int64, access, refresh string) (sealedAccess, sealedRefresh string, err error) {
+	return b.sealPair(userID, discordAccessField, discordRefreshField, access, refresh)
 }
 
 // prepareStoredTokens runs once at boot, before the worker starts,
@@ -252,31 +284,6 @@ func (b *tokenBox) openTokens(ch db.Character) (access, refresh string, err erro
 // are re-sealed as v2, so switching encryption on, or the KDF
 // under it, takes effect at the next start rather than a refresh
 // at a time.
-const (
-	discordAccessField  = "discord_access"
-	discordRefreshField = "discord_refresh"
-)
-
-func (b *tokenBox) openDiscordTokens(link db.DiscordLink) (access, refresh string, err error) {
-	if access, err = b.open(link.AccessToken, link.UserID, discordAccessField); err != nil {
-		return "", "", err
-	}
-	if refresh, err = b.open(link.RefreshToken, link.UserID, discordRefreshField); err != nil {
-		return "", "", err
-	}
-	return access, refresh, nil
-}
-
-func (b *tokenBox) sealDiscordTokens(userID int64, access, refresh string) (sealedAccess, sealedRefresh string, err error) {
-	if sealedAccess, err = b.seal(access, userID, discordAccessField); err != nil {
-		return "", "", err
-	}
-	if sealedRefresh, err = b.seal(refresh, userID, discordRefreshField); err != nil {
-		return "", "", err
-	}
-	return sealedAccess, sealedRefresh, nil
-}
-
 func (app *Application) prepareStoredTokens(ctx context.Context) error {
 	characters, err := app.queries.ListAllCharacters(ctx)
 	if err != nil {
@@ -291,8 +298,7 @@ func (app *Application) prepareStoredTokens(ctx context.Context) error {
 				"  UPDATE characters SET access_token = '', refresh_token = '', link_state = 'token_dead';\n"+
 				"and each character signs in once more to link again", ch.CharacterID, err)
 		}
-		if (ch.AccessToken != "" && !tokenSealedCurrent(ch.AccessToken)) ||
-			(ch.RefreshToken != "" && !tokenSealedCurrent(ch.RefreshToken)) {
+		if pairNeedsReseal(ch.AccessToken, ch.RefreshToken) {
 			reseal = append(reseal, ch)
 		}
 	}
@@ -308,8 +314,7 @@ func (app *Application) prepareStoredTokens(ctx context.Context) error {
 				"Put back the TOKEN_ENCRYPTION_KEY this database was last run with. If that key is gone for good, clear the stored Discord tokens with\n"+
 				"  UPDATE discord_links SET access_token = '', refresh_token = '', token_expiry = NULL;", link.UserID, err)
 		}
-		if (link.AccessToken != "" && !tokenSealedCurrent(link.AccessToken)) ||
-			(link.RefreshToken != "" && !tokenSealedCurrent(link.RefreshToken)) {
+		if pairNeedsReseal(link.AccessToken, link.RefreshToken) {
 			resealDiscord = append(resealDiscord, link)
 		}
 	}

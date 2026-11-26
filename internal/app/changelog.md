@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v1.0.3.0] - 2026-11-26
+## [v1.0.3.1] - 2026-11-26
+
+Automated build of EveSynapse v1.0.3.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).
+
+## What's Changed
+
+### 🚀 Features
+* Build the Android app on GitHub runners and use Gradle 9.9.2 in both jobs by @miko in #644
+* Drop the floating title on the footer pages and point source links at Forgejo by @miko in #639
+
+### 🧰 Maintenance & Dependencies
+* Share snapshot, pricing, skill, search, cookie and swarm helpers, and value holdings in the appraisal order by @natemsz in #638
+
+### Other Changes
+* Add changelog version explorer and consolidated minor view by @natemsz in #642
+* Stamp release changelog notes before building binaries by @natemsz in #641
+* Add a confirmed delete control for saved fits on My Loadouts by @natemsz in #640
+* Bound Muse Wonder reasoning effort and raise its Trade Ideas token cap by @natemsz in #637
+
+## [v1.0.3.0]
 
 Automated build of EveSynapse v1.0.3.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).

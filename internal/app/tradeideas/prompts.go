@@ -19,7 +19,7 @@ const (
 	tradeIdeasPageCSVRows   = 200
 	tradeIdeasPageBodyCap   = 32 * 1024
 	tradeIdeasPageMaxTokens = 6000
-	tradeIdeasTimeout       = 3 * time.Minute
+	tradeIdeasTimeout       = 5 * time.Minute
 	tradeIdeasRespCap       = 1 << 20
 )
 

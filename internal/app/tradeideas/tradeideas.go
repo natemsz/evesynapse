@@ -149,7 +149,7 @@ func Refresh(ctx context.Context, deps module.Deps) (stored int) {
 		if base == "" {
 			base = metaAIAPIBase
 		}
-		body, err = callMetaAI(ctx, client, base, cfg.MetaKey, model, prompt, tradeIdeasPageBodyCap, tradeIdeasPageMaxTokens)
+		body, err = callMetaAI(ctx, client, base, cfg.MetaKey, model, prompt, tradeIdeasPageBodyCap, metaAIPageMaxTokens)
 	} else {
 		body, err = callCloudflareAIWith(ctx, client, tradeIdeasAPIBase,
 			cfg.CloudflareAccountID, cfg.CloudflareToken, model, prompt, tradeIdeasPageBodyCap, tradeIdeasPageMaxTokens)

@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"evesynapse/internal/app/tradeideas"
 	"evesynapse/internal/ideas"
 	"net/http"
@@ -38,6 +39,18 @@ func TestTradeIdeasRefreshUsesMeta(t *testing.T) {
 	}
 	if host := stub.last.URL.Host; host != "api.meta.ai" {
 		t.Fatalf("asked %q, want api.meta.ai", host)
+	}
+	var sent struct {
+		Reasoning struct {
+			Effort string `json:"effort"`
+		} `json:"reasoning"`
+		MaxOutputTokens int `json:"max_output_tokens"`
+	}
+	if err := json.Unmarshal(mustReadStub(t, stub), &sent); err != nil {
+		t.Fatalf("decode Meta request: %v", err)
+	}
+	if sent.Reasoning.Effort != "medium" || sent.MaxOutputTokens != 32000 {
+		t.Fatalf("Meta request = %+v, want reasoning.effort=medium and max_output_tokens=32000", sent)
 	}
 	page, err := q.GetTradeIdeasPage(ctx)
 	if err != nil || page.Model != ideas.MuseModel || !strings.Contains(page.Body, "Tritanium") {

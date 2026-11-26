@@ -24,15 +24,29 @@ import (
 const (
 	metaAIModel   = ideas.MuseModel
 	metaAIAPIBase = "https://api.meta.ai/v1"
+	// metaAIReasoningEffort bounds Muse Wonder's internal reasoning
+	// depth on the Responses API. Omitting reasoning leaves the model
+	// at its "max" default, which can spend the token budget before
+	// finishing the visible list of ideas.
+	metaAIReasoningEffort = "medium"
+	// metaAIPageMaxTokens caps Muse Wonder's combined hidden reasoning
+	// and visible output tokens for a page refresh.
+	metaAIPageMaxTokens = 32000
 )
 
+type metaAIReasoning struct {
+	Effort string `json:"effort"`
+}
+
 // metaAIRequest is one Responses API call: a single user turn, no
-// streaming, its output capped by the ask that sends it.
+// streaming, bounded reasoning effort, and its output capped by the
+// ask that sends it.
 type metaAIRequest struct {
-	Model           string          `json:"model"`
-	Input           []metaAIMessage `json:"input"`
-	Stream          bool            `json:"stream"`
-	MaxOutputTokens int             `json:"max_output_tokens,omitempty"`
+	Model           string           `json:"model"`
+	Input           []metaAIMessage  `json:"input"`
+	Reasoning       *metaAIReasoning `json:"reasoning,omitempty"`
+	Stream          bool             `json:"stream"`
+	MaxOutputTokens int              `json:"max_output_tokens,omitempty"`
 }
 
 type metaAIMessage struct {
@@ -51,9 +65,19 @@ type metaAIContent struct {
 // carry) is read when no parts are. A status other than "completed"
 // (an answer cut off at its token limit, a failed run) is refused
 // even when it carries some text: half an analysis must not replace
-// a whole one.
+// a whole one. IncompleteDetails and Usage are read for error
+// reporting when a call stops early.
 type metaAIResponse struct {
-	Status string `json:"status"`
+	Status            string `json:"status"`
+	IncompleteDetails *struct {
+		Reason string `json:"reason"`
+	} `json:"incomplete_details"`
+	Usage *struct {
+		OutputTokens        int `json:"output_tokens"`
+		OutputTokensDetails *struct {
+			ReasoningTokens int `json:"reasoning_tokens"`
+		} `json:"output_tokens_details"`
+	} `json:"usage"`
 	Output []struct {
 		Type    string `json:"type"`
 		Content []struct {
@@ -68,13 +92,13 @@ type metaAIResponse struct {
 }
 
 // callMetaAI runs one Muse Wonder call and returns the answer text,
-// truncated to bodyCap, with the model's output capped at
-// maxOutputTokens (the ask's own cap, as the Cloudflare call sends).
-// A response the cap cut short reports a status other than
-// "completed" and is refused below, never half-stored. The analyst
-// framing the Cloudflare call sends as a system message leads the
-// user turn here. apiBase is a parameter for tests; production
-// passes metaAIAPIBase.
+// truncated to bodyCap, with reasoning effort set to
+// metaAIReasoningEffort and combined reasoning plus visible output
+// capped at maxOutputTokens. A response the cap cut short reports a
+// status other than "completed" and is refused below, never
+// half-stored. The analyst framing the Cloudflare call sends as a
+// system message leads the user turn here. apiBase is a parameter for
+// tests; production passes metaAIAPIBase.
 func callMetaAI(ctx context.Context, client *http.Client, apiBase, apiKey, model, prompt string, bodyCap, maxOutputTokens int) (string, error) {
 	if apiKey == "" {
 		return "", fmt.Errorf("meta ai: no API key configured")
@@ -82,6 +106,7 @@ func callMetaAI(ctx context.Context, client *http.Client, apiBase, apiKey, model
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(metaAIRequest{
 		Model:           model,
+		Reasoning:       &metaAIReasoning{Effort: metaAIReasoningEffort},
 		MaxOutputTokens: maxOutputTokens,
 		Input: []metaAIMessage{{
 			Role: "user",
@@ -121,6 +146,24 @@ func callMetaAI(ctx context.Context, client *http.Client, apiBase, apiKey, model
 		return "", fmt.Errorf("meta ai: decode response: %w", decodeErr)
 	}
 	if decoded.Status != "" && decoded.Status != "completed" {
+		var details []string
+		if decoded.IncompleteDetails != nil && decoded.IncompleteDetails.Reason != "" {
+			details = append(details, "reason "+clip(decoded.IncompleteDetails.Reason, 40))
+		}
+		if decoded.Error != nil && decoded.Error.Message != "" {
+			details = append(details, clip(decoded.Error.Message, 200))
+		}
+		if decoded.Usage != nil && decoded.Usage.OutputTokens > 0 {
+			if decoded.Usage.OutputTokensDetails != nil && decoded.Usage.OutputTokensDetails.ReasoningTokens > 0 {
+				details = append(details, fmt.Sprintf("%d output tokens, %d reasoning",
+					decoded.Usage.OutputTokens, decoded.Usage.OutputTokensDetails.ReasoningTokens))
+			} else {
+				details = append(details, fmt.Sprintf("%d output tokens", decoded.Usage.OutputTokens))
+			}
+		}
+		if len(details) > 0 {
+			return "", fmt.Errorf("meta ai: response %s (%s)", clip(decoded.Status, 40), strings.Join(details, "; "))
+		}
 		return "", fmt.Errorf("meta ai: response %s", clip(decoded.Status, 40))
 	}
 	var answer strings.Builder

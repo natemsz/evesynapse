@@ -474,15 +474,9 @@ func glanceExtractors(_ context.Context, g *glanceBuild) glanceTile {
 			if layout == nil {
 				continue
 			}
-			for _, ex := range layoutExtractors(*layout) {
-				if !ex.ExpiryOK {
-					continue
-				}
-				all++
-				if ex.Expiry.Before(g.in.Now) {
-					stopped++
-				}
-			}
+			e := layoutExpiry(*layout, g.in.Now)
+			all += e.known
+			stopped += e.stopped
 		}
 	}
 	if !known {

@@ -1499,18 +1499,10 @@ func (app *Application) ovColonies(ctx context.Context, view *characterView, ov 
 		}
 		row.Outputs = strings.Join(outputs, " → ")
 		// Soonest extractor expiry, for the row and the pill.
-		var soonest time.Time
-		soonestOK := false
-		for _, ex := range layoutExtractors(layout) {
-			if !ex.ExpiryOK {
-				continue
-			}
-			if ex.Expiry.Before(now) {
-				row.Expired = true
-			}
-			if !soonestOK || ex.Expiry.Before(soonest) {
-				soonest, soonestOK = ex.Expiry, true
-			}
+		e := layoutExpiry(layout, now)
+		soonest, soonestOK := e.soonest, e.ok
+		if e.stopped > 0 {
+			row.Expired = true
 		}
 		pill := colonyPill{Planet: row.Planet}
 		switch {

@@ -72,6 +72,33 @@ func layoutExtractors(layout esi.PlanetLayout) []extractorInfo {
 	return out
 }
 
+// extractorExpiry is the expiry fold over one colony's extractors:
+// how many have a known expiry, how many of those have stopped by
+// now, and the soonest expiry (ok false when none is known).
+type extractorExpiry struct {
+	known, stopped int
+	soonest        time.Time
+	ok             bool
+}
+
+// layoutExpiry folds a colony layout's extractor expiries at now.
+func layoutExpiry(layout esi.PlanetLayout, now time.Time) extractorExpiry {
+	var e extractorExpiry
+	for _, ex := range layoutExtractors(layout) {
+		if !ex.ExpiryOK {
+			continue
+		}
+		e.known++
+		if ex.Expiry.Before(now) {
+			e.stopped++
+		}
+		if !e.ok || ex.Expiry.Before(e.soonest) {
+			e.soonest, e.ok = ex.Expiry, true
+		}
+	}
+	return e
+}
+
 // loadPlanetLayout decodes one planet's stored layout snapshot.
 func (app *Application) loadPlanetLayout(ctx context.Context, characterID, planetID int64) (esi.PlanetLayout, bool) {
 	var layout esi.PlanetLayout
@@ -109,16 +136,10 @@ func (app *Application) characterPISummary(ctx context.Context, ch db.Character)
 		if !ok {
 			continue
 		}
-		for _, ex := range layoutExtractors(layout) {
-			if !ex.ExpiryOK {
-				continue
-			}
-			if ex.Expiry.Before(now) {
-				summary.Expired++
-			}
-			if !summary.SoonestOK || ex.Expiry.Before(summary.Soonest) {
-				summary.Soonest, summary.SoonestOK = ex.Expiry, true
-			}
+		e := layoutExpiry(layout, now)
+		summary.Expired += e.stopped
+		if e.ok && (!summary.SoonestOK || e.soonest.Before(summary.Soonest)) {
+			summary.Soonest, summary.SoonestOK = e.soonest, true
 		}
 	}
 	return summary

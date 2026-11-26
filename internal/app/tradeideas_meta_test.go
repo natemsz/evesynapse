@@ -19,8 +19,10 @@ import (
 const metaReply = `{"id":"resp_1","object":"response","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"### Station Flips\n* **Tritanium** · Jita IV-4 — deep volume"}]}]}`
 
 // TestTradeIdeasRefreshUsesMeta: with MODEL_API_KEY set the refresh
-// asks Muse Wonder for both answers (never Cloudflare), stores them
-// under its model name, and the page credits it.
+// asks Muse Wonder for the page's answer (never Cloudflare), stores it
+// under its model name, and the page credits it. One ask only: the
+// home module displays a smaller amount of the page's saved answer
+// and never asks itself.
 func TestTradeIdeasRefreshUsesMeta(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
@@ -31,18 +33,14 @@ func TestTradeIdeasRefreshUsesMeta(t *testing.T) {
 	stub := &cloudflareStub{reply: metaReply}
 	app.tradeIdeasHTTP = &http.Client{Transport: stub}
 
-	if stored := tradeideas.Refresh(ctx, app); stored != 2 || stub.calls != 2 {
-		t.Fatalf("refresh stored %d with %d calls, want 2 and 2", stored, stub.calls)
+	if stored := tradeideas.Refresh(ctx, app); stored != 1 || stub.calls != 1 {
+		t.Fatalf("refresh stored %d with %d calls, want 1 and 1", stored, stub.calls)
 	}
 	if host := stub.last.URL.Host; host != "api.meta.ai" {
 		t.Fatalf("asked %q, want api.meta.ai", host)
 	}
-	row, err := q.GetTradeIdeas(ctx)
-	if err != nil || row.Model != ideas.MuseModel || !strings.Contains(row.Body, "Tritanium") {
-		t.Fatalf("module row: %+v err %v", row, err)
-	}
 	page, err := q.GetTradeIdeasPage(ctx)
-	if err != nil || page.Model != ideas.MuseModel {
+	if err != nil || page.Model != ideas.MuseModel || !strings.Contains(page.Body, "Tritanium") {
 		t.Fatalf("page row: %+v err %v", page, err)
 	}
 
@@ -64,8 +62,8 @@ func TestTradeIdeasConfiguredWithMetaKey(t *testing.T) {
 	}
 }
 
-// TestTradeIdeasModelSwitchRefreshesNow: a fresh Gemma answer does
-// not hold off Muse Wonder once MODEL_API_KEY is set, the answer
+// TestTradeIdeasModelSwitchRefreshesNow: a fresh Gemma page answer
+// does not hold off Muse Wonder once MODEL_API_KEY is set, the answer
 // another model gave is asked again on the next cycle, not 12 hours
 // later, and the new model's fresh answer then holds as usual.
 func TestTradeIdeasModelSwitchRefreshesNow(t *testing.T) {
@@ -73,9 +71,6 @@ func TestTradeIdeasModelSwitchRefreshesNow(t *testing.T) {
 	ctx := context.Background()
 	seedTradeIdeasScanner(t, conn, q)
 	fresh := time.Now().UTC().Add(-time.Hour)
-	if err := q.PutTradeIdeas(ctx, db.PutTradeIdeasParams{Body: "### Gemma\n* old", AsOf: fresh, Model: ideas.GemmaModel}); err != nil {
-		t.Fatalf("seed module answer: %v", err)
-	}
 	if err := q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{Body: "### Gemma\n* old", AsOf: fresh, Model: ideas.GemmaModel}); err != nil {
 		t.Fatalf("seed page answer: %v", err)
 	}
@@ -83,13 +78,13 @@ func TestTradeIdeasModelSwitchRefreshesNow(t *testing.T) {
 	stub := &cloudflareStub{reply: metaReply}
 	app.tradeIdeasHTTP = &http.Client{Transport: stub}
 
-	if stored := tradeideas.Refresh(ctx, app); stored != 2 || stub.calls != 2 {
-		t.Fatalf("after the switch: stored %d with %d calls, want 2 and 2", stored, stub.calls)
+	if stored := tradeideas.Refresh(ctx, app); stored != 1 || stub.calls != 1 {
+		t.Fatalf("after the switch: stored %d with %d calls, want 1 and 1", stored, stub.calls)
 	}
-	if row, err := q.GetTradeIdeas(ctx); err != nil || row.Model != ideas.MuseModel {
-		t.Fatalf("module row after the switch: %+v err %v", row, err)
+	if row, err := q.GetTradeIdeasPage(ctx); err != nil || row.Model != ideas.MuseModel {
+		t.Fatalf("page row after the switch: %+v err %v", row, err)
 	}
-	if stored := tradeideas.Refresh(ctx, app); stored != 0 || stub.calls != 2 {
-		t.Fatalf("second refresh: stored %d with %d calls, want 0 and 2", stored, stub.calls)
+	if stored := tradeideas.Refresh(ctx, app); stored != 0 || stub.calls != 1 {
+		t.Fatalf("second refresh: stored %d with %d calls, want 0 and 1", stored, stub.calls)
 	}
 }

@@ -3,16 +3,18 @@
 // the configured model (Meta's Muse Wonder with MODEL_API_KEY, else
 // Gemma on Cloudflare Workers AI) about the top scanner rows every so
 // often and stores the answer; the page renders the stored answer only,
-// so the model is never on the render path. The external model calls
+// so the model is never on the render path. One model call per refresh:
+// the home module displays a smaller amount of the page's saved answer
+// and never asks itself. The external model calls
 // belong to this module: a build without it never makes one.
 //
-// Cost bounds: the prompt carries at most tradeIdeasCSVRows scanner
-// rows, refreshes run at most every tradeIdeasRefreshAge (and only when
-// the Forge sweep has data), a failing refresh backs off from 30 minutes
-// (trade_ideas_attempts), the call runs beside the worker cycle rather
-// than in it, the answer is truncated to tradeIdeasBodyCap, and the
-// token travels in the Authorization header alone: never a URL, never a
-// log line.
+// Cost bounds: the prompt carries at most tradeIdeasPageCSVRows
+// scanner rows, refreshes run at most every tradeIdeasRefreshAge (and
+// only when the Forge sweep has data), a failing refresh backs off
+// from 30 minutes (trade_ideas_attempts), the call runs beside the
+// worker cycle rather than in it, the answer is truncated to
+// tradeIdeasPageBodyCap, and the token travels in the Authorization
+// header alone: never a URL, never a log line.
 package tradeideas
 
 import (
@@ -98,9 +100,12 @@ func Start(ctx context.Context, deps module.Deps) {
 }
 
 // Refresh asks the model about the Forge scanner rows and stores the
-// answer, when one is due (tradeIdeasDue). It reports how many answers
-// landed. Anything failing (unconfigured, no sweep yet, the model down)
-// keeps the previous answer; a failed ask is recorded and backs off.
+// answer, when one is due (tradeIdeasDue). One ask only, the page's:
+// the home module displays a smaller amount of the page's saved
+// answer and never asks itself, so a short widget cap can never block
+// the page. It reports how many answers landed. Anything failing
+// (unconfigured, no sweep yet, the model down) keeps the previous
+// answer; a failed ask is recorded and backs off.
 func Refresh(ctx context.Context, deps module.Deps) (stored int) {
 	cfg := deps.ModelConfig()
 	if !cfg.Configured() {
@@ -108,7 +113,7 @@ func Refresh(ctx context.Context, deps module.Deps) (stored int) {
 	}
 	q := deps.DB()
 	now := time.Now().UTC()
-	// One model answers both: Muse Wonder when its key is set, else
+	// One model answers: Muse Wonder when its key is set, else
 	// Gemma. An answer another model gave counts as never answered,
 	// so switching models (setting or clearing MODEL_API_KEY) asks
 	// the new one on the next cycle instead of up to 12 hours later.
@@ -116,92 +121,57 @@ func Refresh(ctx context.Context, deps module.Deps) (stored int) {
 	if cfg.UsesMeta() {
 		model = metaAIModel
 	}
-	var moduleAt, pageAt, attemptedAt time.Time
+	var pageAt, attemptedAt time.Time
 	failures := 0
-	if row, err := q.GetTradeIdeas(ctx); err == nil && row.Model == model {
-		moduleAt = row.AsOf
-	}
 	if row, err := q.GetTradeIdeasPage(ctx); err == nil && row.Model == model {
 		pageAt = row.AsOf
 	}
 	if a, err := q.GetTradeIdeasAttempt(ctx); err == nil {
 		attemptedAt, failures = a.AttemptedAt, int(a.Failures)
 	}
-	// The home module's answer and the page's share the cadence and the
-	// backoff; each is asked for only when it is due itself.
-	asks := []struct {
-		want      bool
-		name      string
-		rows      int
-		prompt    string
-		bodyCap   int
-		maxTokens int
-		put       func(body string, rows []ideas.Row) error
-	}{
-		{tradeIdeasDue(now, moduleAt, attemptedAt, failures), "module", tradeIdeasCSVRows, tradeIdeasPrompt, tradeIdeasBodyCap, tradeIdeasModuleMaxTokens,
-			func(body string, rows []ideas.Row) error {
-				raw, err := ideas.EncodeRows(rows)
-				if err != nil {
-					return err
-				}
-				return q.PutTradeIdeas(ctx, db.PutTradeIdeasParams{Body: body, Rows: sql.NullString{String: raw, Valid: true}, AsOf: now, Model: model})
-			}},
-		{tradeIdeasDue(now, pageAt, attemptedAt, failures), "page", tradeIdeasPageCSVRows, tradeIdeasPagePrompt, tradeIdeasPageBodyCap, tradeIdeasPageMaxTokens,
-			func(body string, rows []ideas.Row) error {
-				raw, err := ideas.EncodeRows(rows)
-				if err != nil {
-					return err
-				}
-				return q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{Body: body, Rows: sql.NullString{String: raw, Valid: true}, AsOf: now, Model: model})
-			}},
+	if !tradeIdeasDue(now, pageAt, attemptedAt, failures) {
+		return 0
 	}
-	asked := false
-	for _, ask := range asks {
-		if !ask.want {
-			continue
-		}
-		rows, ok := BuildCSVRows(ctx, deps, ask.rows)
-		if !ok {
-			return stored // nothing to ask about yet: not an attempt
-		}
-		csvText := RenderCSV(rows)
-		asked = true
-		prompt := tradeIdeasWrap(ask.prompt, csvText)
-		var body string
-		var err error
-		client := cfg.HTTP
-		if client == nil {
-			client = &http.Client{Timeout: tradeIdeasTimeout}
-		}
-		if cfg.UsesMeta() {
-			base := cfg.MetaAPIBase
-			if base == "" {
-				base = metaAIAPIBase
-			}
-			body, err = callMetaAI(ctx, client, base, cfg.MetaKey, model, prompt, ask.bodyCap, ask.maxTokens)
-		} else {
-			body, err = callCloudflareAIWith(ctx, client, tradeIdeasAPIBase,
-				cfg.CloudflareAccountID, cfg.CloudflareToken, model, prompt, ask.bodyCap, ask.maxTokens)
-		}
-		if err == nil {
-			if err = ask.put(body, rows); err != nil {
-				err = fmt.Errorf("store: %w", err)
-			}
-		}
-		if err != nil {
-			if ctx.Err() == nil {
-				logging.Errorf("trade ideas: refresh %s (failure %d in a row; next try in %s): %v",
-					ask.name, failures+1, tradeIdeasBackoff(failures+1), err)
-				noteAttempt(ctx, q, now, failures+1)
-			}
-			return stored
-		}
-		stored++
+	rows, ok := BuildCSVRows(ctx, deps, tradeIdeasPageCSVRows)
+	if !ok {
+		return 0 // nothing to ask about yet: not an attempt
 	}
-	if asked {
-		noteAttempt(ctx, q, now, 0)
+	csvText := RenderCSV(rows)
+	prompt := tradeIdeasWrap(tradeIdeasPagePrompt, csvText)
+	var body string
+	var err error
+	client := cfg.HTTP
+	if client == nil {
+		client = &http.Client{Timeout: tradeIdeasTimeout}
 	}
-	return stored
+	if cfg.UsesMeta() {
+		base := cfg.MetaAPIBase
+		if base == "" {
+			base = metaAIAPIBase
+		}
+		body, err = callMetaAI(ctx, client, base, cfg.MetaKey, model, prompt, tradeIdeasPageBodyCap, tradeIdeasPageMaxTokens)
+	} else {
+		body, err = callCloudflareAIWith(ctx, client, tradeIdeasAPIBase,
+			cfg.CloudflareAccountID, cfg.CloudflareToken, model, prompt, tradeIdeasPageBodyCap, tradeIdeasPageMaxTokens)
+	}
+	if err == nil {
+		raw, encErr := ideas.EncodeRows(rows)
+		if encErr != nil {
+			err = encErr
+		} else if err = q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{Body: body, Rows: sql.NullString{String: raw, Valid: true}, AsOf: now, Model: model}); err != nil {
+			err = fmt.Errorf("store: %w", err)
+		}
+	}
+	if err != nil {
+		if ctx.Err() == nil {
+			logging.Errorf("trade ideas: refresh page (failure %d in a row; next try in %s): %v",
+				failures+1, tradeIdeasBackoff(failures+1), err)
+			noteAttempt(ctx, q, now, failures+1)
+		}
+		return 0
+	}
+	noteAttempt(ctx, q, now, 0)
+	return 1
 }
 
 // noteAttempt records an ask and the run of failures it ends with (0

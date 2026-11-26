@@ -6,7 +6,9 @@ import (
 	"fmt"
 	json "github.com/goccy/go-json"
 	"net/http"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"evesynapse/internal/app/module"
@@ -55,6 +57,7 @@ type fittingsView struct {
 	CountPublic   int
 	CountLocal    int
 	CountEVE      int
+	DeleteNext    string
 	Fittings      []fittingEntry
 }
 
@@ -191,6 +194,18 @@ func (app *tool) handleFittingsSaved(w http.ResponseWriter, r *http.Request) {
 	}
 	view.CountEVE = len(eveEntries)
 	view.CountAll = view.CountLocal + view.CountEVE
+	deleteNext := "/fittings/saved/"
+	if view.Source != "all" || view.CharacterID > 0 {
+		q := url.Values{}
+		if view.Source != "all" {
+			q.Set("source", view.Source)
+		}
+		if view.CharacterID > 0 {
+			q.Set("character", strconv.FormatInt(view.CharacterID, 10))
+		}
+		deleteNext += "?" + q.Encode()
+	}
+	view.DeleteNext = deleteNext
 
 	switch source {
 	case "public":

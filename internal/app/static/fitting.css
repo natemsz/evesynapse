@@ -189,6 +189,53 @@ html.fit-full-open { overflow: hidden; }
 .lo-card .fit-card-line + .fit-card-line { margin-top: var(--space-1); }
 .lo-none { margin: 0; color: var(--muted); }
 .lo-empty > p { margin: 0; }
+.lo-delete-form { margin-left: auto; align-items: center; }
+.fit-delete-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.fit-delete-icon svg { width: 20px; height: 20px; }
+.fit-delete-icon:hover,
+.fit-delete-icon:focus-visible { color: var(--danger); }
+.fit-delete-icon:focus-visible {
+  outline: none;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 55%, transparent);
+}
+dialog.lo-delete-modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(26rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  color: var(--text);
+}
+dialog.lo-delete-modal:modal { overscroll-behavior: contain; }
+dialog.lo-delete-modal::backdrop {
+  background: rgba(12, 8, 5, 0.84);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.modal-head .lo-delete-title {
+  margin: 0.1rem 0 0.6rem;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-display);
+  letter-spacing: 0.05em;
+}
+.lo-delete-msg { margin: var(--space-2) 0 var(--space-4); overflow-wrap: anywhere; }
+.lo-delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin: 0;
+}
 
 /* --- Public Loadouts Browser ---
    The filters are a side panel beside the results, wrapping above

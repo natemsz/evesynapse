@@ -991,9 +991,9 @@ func TestCharacterSheetFromSnapshots(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	var titleParsed parsedSDE
-	chrTitlesCSV := "\ufeff\"titleID\",\"titleName\"\n\"08DFebb0-b4ff-593d-b78e-b42a963f7847\",\"Arch-Luminary\"\n"
-	if err := parseSDEFile(sdeTitlesFileName, strings.NewReader(chrTitlesCSV), &titleParsed); err != nil {
-		t.Fatalf("parse %s: %v", sdeTitlesFileName, err)
+	titlesJSONL := `{"titleID":"08DFebb0-b4ff-593d-b78e-b42a963f7847","name":{"en":"Arch-Luminary"}}` + "\n"
+	if err := parseSDEJSONLTable("characterTitles", strings.NewReader(titlesJSONL), &titleParsed); err != nil {
+		t.Fatalf("parse characterTitles: %v", err)
 	}
 	if len(titleParsed.titles) != 1 || titleParsed.titles[0].titleID != "08dfebb0-b4ff-593d-b78e-b42a963f7847" || titleParsed.titles[0].name != "Arch-Luminary" {
 		t.Fatalf("parsed titles = %+v, want normalized Arch-Luminary", titleParsed.titles)

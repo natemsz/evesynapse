@@ -14,10 +14,8 @@ import (
 
 // CCP's SDE API (sde.evetech.net) serves every static data table as
 // JSON Lines: one record per line, localized text as a map of
-// language to string. The parsers below read those tables into the
-// same parsedSDE the CSV parsers fill, so the store step, the
-// derived tables and every reader stay the same whichever format a
-// dump arrives in.
+// language to string. The parsers below read those tables into
+// parsedSDE, which the store step writes.
 
 // sdeAPITable is one SDE API table the importer reads. A required
 // table missing from a dump fails the import; an optional one keeps

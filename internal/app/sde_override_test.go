@@ -7,13 +7,12 @@ import (
 	"testing"
 )
 
-// TestSDEArchiveReadsEitherDumpFormat pins how an uploaded dump is
+// TestSDEArchiveReadsJSONLinesTables pins how an uploaded dump is
 // read: JSON Lines tables (in the SDE API's shape, or with the "_key"
-// ids CCP's zip writes) and CSV files are found under any folder and
-// other entries are ignored; a CSV dump must hold every file the
-// import needs, a .bz2 name maps to its plain name, and a zip mixing
-// both formats, holding no dump file, or not a zip at all is refused.
-func TestSDEArchiveReadsEitherDumpFormat(t *testing.T) {
+// ids CCP's zip writes) are found under any folder and other entries
+// are ignored; a zip holding CSV files, no table, or not a zip at all
+// is refused.
+func TestSDEArchiveReadsJSONLinesTables(t *testing.T) {
 	build := func(files map[string]string) []byte {
 		var buf bytes.Buffer
 		zw := zip.NewWriter(&buf)
@@ -40,9 +39,6 @@ func TestSDEArchiveReadsEitherDumpFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open JSON Lines zip: %v", err)
 	}
-	if arc.format != sdeFormatJSONL {
-		t.Fatalf("format = %q, want %q", arc.format, sdeFormatJSONL)
-	}
 	if got := arc.names(); len(got) != 1 || got[0] != "categories.jsonl" {
 		t.Fatalf("names = %v, want [categories.jsonl]", got)
 	}
@@ -57,31 +53,11 @@ func TestSDEArchiveReadsEitherDumpFormat(t *testing.T) {
 		t.Fatal("types reported found in a zip without it")
 	}
 
-	csvDump := map[string]string{"dump/README.txt": "notes"}
-	for _, name := range sdeFileNames {
-		csvDump["dump/"+name] = "x\n"
-	}
-	csvDump["dump/invGroups.csv.bz2"] = csvDump["dump/invGroups.csv"]
-	delete(csvDump, "dump/invGroups.csv")
-	csvDump["dump/invCategories.csv"] = "categoryID,categoryName,iconID,published\n6,Ship,,1\n"
-	arc, err = openSDEArchive(build(csvDump))
-	if err != nil {
-		t.Fatalf("open CSV zip: %v", err)
-	}
-	if arc.format != sdeFormatCSV || len(arc.files) != len(sdeFileNames) || arc.files["invGroups.csv"] == nil {
-		t.Fatalf("CSV zip read as %q with %d files, want %q with %d including invGroups.csv", arc.format, len(arc.files), sdeFormatCSV, len(sdeFileNames))
-	}
-	parsed = &parsedSDE{}
-	if found, err := arc.parse("invCategories.csv", parsed); !found || err != nil || len(parsed.categories) != 1 {
-		t.Fatalf("parse invCategories.csv: found %v, err %v, %d rows", found, err, len(parsed.categories))
-	}
-
-	delete(csvDump, "dump/invTypes.csv")
-	if _, err := openSDEArchive(build(csvDump)); err == nil || !strings.Contains(err.Error(), "invTypes.csv") {
-		t.Fatalf("a CSV dump without invTypes.csv: err %v, want one naming the missing file", err)
-	}
-	if _, err := openSDEArchive(build(map[string]string{"invTypes.csv": "x", "types.jsonl": "{}"})); err == nil {
-		t.Fatal("a zip mixing CSV files and JSON Lines tables was accepted")
+	for _, name := range []string{"dump/invTypes.csv", "dump/invGroups.csv.bz2"} {
+		_, err := openSDEArchive(build(map[string]string{name: "x", "types.jsonl": "{}"}))
+		if err == nil || !strings.Contains(err.Error(), "CSV dumps are not imported") {
+			t.Fatalf("a zip holding %s: err %v, want the CSV refusal", name, err)
+		}
 	}
 	if _, err := openSDEArchive(build(map[string]string{"notes.txt": "x"})); err == nil {
 		t.Fatal("a zip without dump files was accepted")

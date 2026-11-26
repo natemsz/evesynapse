@@ -235,22 +235,20 @@ func TestSDEImportParsesAndStoresDescriptions(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
 
-	withDesc := "\"typeID\",\"typeName\",\"description\",\"groupID\",\"marketGroupID\",\"published\"\n" +
-		"\"34\",\"Tritanium\",\"A basic mineral.\",\"18\",\"4\",\"1\"\n"
+	withDesc := `{"typeID":34,"groupID":18,"marketGroupID":4,"name":{"en":"Tritanium"},"description":{"en":"A basic mineral."},"published":true}` + "\n"
 	var parsed parsedSDE
-	if err := parseSDEFile("invTypes.csv", strings.NewReader(withDesc), &parsed); err != nil {
-		t.Fatalf("parse invTypes with description: %v", err)
+	if err := parseSDEJSONLTable("types", strings.NewReader(withDesc), &parsed); err != nil {
+		t.Fatalf("parse types with description: %v", err)
 	}
 	if len(parsed.types) != 1 || parsed.types[0].description != "A basic mineral." {
 		t.Fatalf("parsed types = %+v, want description carried", parsed.types)
 	}
 
-	// A dump without the column still parses (empty description).
-	withoutDesc := "\"typeID\",\"typeName\",\"groupID\",\"marketGroupID\",\"published\"\n" +
-		"\"34\",\"Tritanium\",\"18\",\"4\",\"1\"\n"
+	// A record without a description still parses (empty description).
+	withoutDesc := `{"typeID":34,"groupID":18,"marketGroupID":4,"name":{"en":"Tritanium"},"published":true}` + "\n"
 	var parsed2 parsedSDE
-	if err := parseSDEFile("invTypes.csv", strings.NewReader(withoutDesc), &parsed2); err != nil {
-		t.Fatalf("parse invTypes without description: %v", err)
+	if err := parseSDEJSONLTable("types", strings.NewReader(withoutDesc), &parsed2); err != nil {
+		t.Fatalf("parse types without description: %v", err)
 	}
 	if len(parsed2.types) != 1 || parsed2.types[0].description != "" {
 		t.Fatalf("parsed types = %+v, want empty description", parsed2.types)

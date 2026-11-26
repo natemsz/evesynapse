@@ -23,15 +23,9 @@ import (
 
 // An uploaded dump stands in for the regular one when the importer
 // should read something other than the SDE API's current release. It
-// is a zip in one of two formats, told apart by the file names in it:
-//
-//   - JSON Lines tables named as in the SDE API (types.jsonl, ...),
-//     such as CCP's own static data zip. Tables the zip lacks come
-//     from the SDE API.
-//   - CSV files named as in Fuzzwork's conversion (invTypes.csv, ...,
-//     plain or .bz2). A CSV dump stands alone: it must hold every file
-//     the import needs, and an optional file it lacks keeps the rows
-//     stored before.
+// is a zip of JSON Lines tables named as in the SDE API (types.jsonl,
+// ...), such as CCP's own static data zip. Tables the zip lacks come
+// from the SDE API.
 //
 // The importer drops the upload when an import from it fails, and when
 // the SDE API publishes a release that changes a table it reads.
@@ -44,36 +38,6 @@ const (
 	sdeOverrideMaxFileBytes = 1 << 30
 )
 
-// The two dump formats an upload can hold.
-const (
-	sdeFormatCSV   = "CSV"
-	sdeFormatJSONL = "JSON Lines"
-)
-
-// sdeKnownFiles is every CSV dump file the importer reads.
-func sdeKnownFiles() map[string]bool {
-	known := make(map[string]bool, len(sdeFileNames)+7)
-	for _, name := range sdeFileNames {
-		known[name] = true
-	}
-	for _, name := range []string{
-		sdeSkillsFileName, sdeRangesFileName, sdeMappingsFileName,
-		sdeConstellationsFileName, sdeJumpsFileName, sdeCelestialsFileName,
-	} {
-		known[name] = true
-	}
-	for _, name := range sdeSheetFileNames {
-		known[name] = true
-	}
-	for _, name := range sdeDbuffFileNames {
-		known[name] = true
-	}
-	known[sdeTitlesFileName] = true
-	known[sdeFactionsFileName] = true
-	known[sdeSchematicsFileName] = true
-	return known
-}
-
 // sdeKnownTables is every SDE API table the importer reads.
 func sdeKnownTables() map[string]bool {
 	known := make(map[string]bool, len(sdeAPITables))
@@ -83,111 +47,81 @@ func sdeKnownTables() map[string]bool {
 	return known
 }
 
-// sdeArchive is an opened upload: its dump files by name (CSV file
-// names, or table names for JSON Lines).
+// sdeArchive is an opened upload: its JSON Lines tables by table name.
 type sdeArchive struct {
-	label  string
-	sha    string
-	format string
-	files  map[string]*zip.File
+	label string
+	sha   string
+	files map[string]*zip.File
 }
 
-// openSDEArchive reads a zip upload and indexes the dump files in
-// it. Entries the importer does not read are ignored. A zip holding
-// none of its files, files of both formats, the same file twice, a
-// file past the size cap, or a CSV dump missing a file the import
-// needs is refused.
+// openSDEArchive reads a zip upload and indexes the tables in it.
+// Entries the importer does not read are ignored. A zip holding CSV
+// files, none of the tables, the same table twice, or a file past the
+// size cap is refused.
 func openSDEArchive(data []byte) (*sdeArchive, error) {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return nil, fmt.Errorf("not a zip file: %w", err)
 	}
-	knownCSV, knownTables := sdeKnownFiles(), sdeKnownTables()
-	csvFiles := make(map[string]*zip.File)
-	tableFiles := make(map[string]*zip.File)
+	knownTables := sdeKnownTables()
+	arc := &sdeArchive{files: make(map[string]*zip.File)}
 	for _, f := range zr.File {
 		if f.FileInfo().IsDir() {
 			continue
 		}
 		base := path.Base(f.Name)
-		var name string
-		var into map[string]*zip.File
-		if csvName := strings.TrimSuffix(base, ".bz2"); knownCSV[csvName] {
-			name, into = csvName, csvFiles
-		} else if table := strings.TrimSuffix(base, ".jsonl"); table != base && knownTables[table] {
-			name, into = table, tableFiles
-		} else {
+		if strings.HasSuffix(base, ".csv") || strings.HasSuffix(base, ".csv.bz2") {
+			return nil, errors.New("CSV dumps are not imported; upload a zip of JSON Lines tables, such as CCP's static data zip")
+		}
+		table := strings.TrimSuffix(base, ".jsonl")
+		if table == base || !knownTables[table] {
 			continue
 		}
-		if _, dup := into[name]; dup {
+		if _, dup := arc.files[table]; dup {
 			return nil, fmt.Errorf("%s appears twice", base)
 		}
 		if f.UncompressedSize64 > sdeOverrideMaxFileBytes {
 			return nil, fmt.Errorf("%s unpacks to more than %d MB", base, sdeOverrideMaxFileBytes>>20)
 		}
-		into[name] = f
+		arc.files[table] = f
 	}
-	arc := &sdeArchive{}
-	switch {
-	case len(csvFiles) > 0 && len(tableFiles) > 0:
-		return nil, errors.New("the zip mixes CSV files and JSON Lines tables; upload one format")
-	case len(tableFiles) > 0:
-		arc.format, arc.files = sdeFormatJSONL, tableFiles
-	case len(csvFiles) > 0:
-		var missing []string
-		for _, name := range sdeFileNames {
-			if csvFiles[name] == nil {
-				missing = append(missing, name)
-			}
-		}
-		if len(missing) > 0 {
-			return nil, fmt.Errorf("a CSV dump must hold every file the import needs; missing %s", strings.Join(missing, ", "))
-		}
-		arc.format, arc.files = sdeFormatCSV, csvFiles
-	default:
-		return nil, errors.New("the zip holds none of the dump files the importer reads")
+	if len(arc.files) == 0 {
+		return nil, errors.New("the zip holds none of the tables the importer reads")
 	}
 	sum := sha256.Sum256(data)
 	arc.sha = hex.EncodeToString(sum[:])
 	return arc, nil
 }
 
-// names lists the archive's dump files, sorted.
+// names lists the archive's table files, sorted.
 func (a *sdeArchive) names() []string {
 	out := make([]string, 0, len(a.files))
 	for name := range a.files {
-		if a.format == sdeFormatJSONL {
-			name = sdeAPIFileName(name)
-		}
-		out = append(out, name)
+		out = append(out, sdeAPIFileName(name))
 	}
 	sort.Strings(out)
 	return out
 }
 
-// parse feeds one archive file (a CSV file name, or a table name in a
-// JSON Lines upload) to its parser. found is false when the archive
-// lacks the file.
-func (a *sdeArchive) parse(name string, parsed *parsedSDE) (found bool, err error) {
-	f, ok := a.files[name]
+// parse feeds one table of the upload to its parser. found is false
+// when the archive lacks the table.
+func (a *sdeArchive) parse(table string, parsed *parsedSDE) (found bool, err error) {
+	f, ok := a.files[table]
 	if !ok {
 		return false, nil
 	}
 	rc, err := f.Open()
 	if err != nil {
-		return true, fmt.Errorf("open %s in upload: %w", name, err)
+		return true, fmt.Errorf("open %s in upload: %w", table, err)
 	}
 	defer rc.Close()
 	body := io.LimitReader(rc, sdeOverrideMaxFileBytes)
-	if a.format == sdeFormatJSONL {
-		return true, parseSDEJSONLTable(name, newSDEZipShape(name, body), parsed)
-	}
-	return true, parseSDEFile(name, body, parsed)
+	return true, parseSDEJSONLTable(table, newSDEZipShape(table, body), parsed)
 }
 
 // source names the upload for the importer's source line.
 func (a *sdeArchive) source() string {
-	return fmt.Sprintf("uploaded %s dump %q (sha256 %s)", a.format, a.label, a.sha[:12])
+	return fmt.Sprintf("uploaded JSON Lines dump %q (sha256 %s)", a.label, a.sha[:12])
 }
 
 // loadSDEOverride returns the active upload, or nil when there is
@@ -221,7 +155,6 @@ func (app *Application) dropSDEOverride(ctx context.Context, sha string) {
 // sdeOverrideView is the Sync page's line about an active upload.
 type sdeOverrideView struct {
 	Label      string
-	JSONL      bool // a JSON Lines dump; false for CSV
 	SHA        string
 	Size       string
 	Files      string
@@ -235,7 +168,6 @@ func (app *Application) loadSDEOverrideView(ctx context.Context) *sdeOverrideVie
 	}
 	return &sdeOverrideView{
 		Label:      row.Label,
-		JSONL:      strings.Contains(row.Files, ".jsonl"),
 		SHA:        row.Sha256[:12],
 		Size:       fmt.Sprintf("%.1f MB", float64(row.SizeBytes)/(1<<20)),
 		Files:      strings.ReplaceAll(row.Files, ",", ", "),

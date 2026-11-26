@@ -266,6 +266,81 @@ pages are the worked example. This is a convenience over an
 already-rendered table, never a substitute for the bounded-
 read rule on big data.
 
+### Copy buttons
+
+Any button with `data-copy` copies text, through one delegated
+handler in app.js (never write a second clipboard handler: two
+document-level ones fight over every copy button on the site,
+since a swap never unloads a script). What it copies:
+`data-copy-text="…"`, else the text of the element whose id is in
+`data-copy-from`, else the full address of `data-copy-url` (a path
+on this site). The label flips to "Copied" for a moment, or to
+`data-copied-label` when the button names its own, and the button
+carries `.copied` meanwhile.
+
+```html
+<button type="button" class="btn small" data-copy data-copy-from="ap-multisell">Copy multi-sell list</button>
+<button type="button" class="cs-copy" data-copy data-copy-text="{{.Link}}" data-copied-label="✓" aria-label="Copy contract link">⧉</button>
+```
+
+### Small wiring attributes
+
+Delegated in app.js, so swapped pages need nothing:
+
+| Attribute | What it does |
+|---|---|
+| `data-confirm="Question?"` on a form | asks before the form submits |
+| `data-autosubmit` on a control | submits its form when it changes (the form's button stays for readers without JavaScript) |
+| `data-href="/path"` on a button | goes to that same-site path on click (no inline handlers under the CSP) |
+| `data-open-modal="<id>"` on a button | opens that dialog through `EveSynapseModal` |
+| `data-local-time="<RFC3339>"` | the browser writes in the reader's own local time for that moment (the element stays hidden without JS) |
+| `data-finish="<RFC3339>"` | a countdown (see Countdowns); only for times, never for anything else |
+
+Attribute names belong to one helper each. A page that needs an
+endpoint or a setting on an element uses its own name for it
+(`data-finish-url`, `data-begin`), never a helper's.
+
+### Price hovers
+
+A figure wrapped in `.spark-hover` with a server-rendered hidden
+`.spark-pop` (sparkline.go) shows the pop in one fixed layer on
+hover or focus, so a scrolling table never clips it; a pop naming
+`data-layer` dresses the layer in that class. Use it for a price
+that has history; see the price hover ruling in the dev notes for
+when it replaces an inline sparkline column.
+
+### Chart hover columns
+
+A chart in a `.pchart` with `data-chart-scrub` gets the shared
+tooltip: full-height `rect.cdot` hit columns carrying `data-date`
+and JSON `data-tip-rows`, and a `.ctip` the shared code fills (the
+home kit's `w-chart` and the Profit charts are the worked examples).
+Don't write a chart tooltip of your own.
+
+### Live feeds
+
+`window.esLive` is the shared live-feed treatment (killboard,
+market item page, public contracts): `stream` opens a page's event
+stream, `mark` gives a row that streamed in `.is-live` (it glows
+in and fades back once it has been seen in a visible tab), `flash`
+marks a value that changed in place (`.live-changed`, `data-dir`
+up or down), `pill` drives the `[data-live-pill]` stream state, and
+`retime` keeps `time[data-live-ago]` ages current. A new live page
+uses it rather than its own stream or glow.
+
+### First-run cards
+
+A small card that drops from a control the first time it matters
+(the notification card under the bell, the Customize hint and the
+Customize exit card under the home bar) uses the
+`.notify-prompt` card: `.notify-prompt-title`, `.notify-prompt-sub`,
+`.notify-prompt-actions`, a `.notify-prompt-close` button, and the
+`is-open` class for its drop. Each card is shown once per account
+(shown is seen, whatever the reader does with it), remembered on the
+account so it follows the person, and two cards that would show on
+the same view queue one behind the other: the second renders hidden
+and drops when the first closes.
+
 ### Home widgets
 
 A widget is one declaration and one template file:

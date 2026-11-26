@@ -15,12 +15,12 @@ import (
 // Customize button the first time a signed-in account views its
 // home, telling it the page can be arranged and that new modules
 // have joined the list. It follows the notification prompt's
-// shape (notify_prompt.go): it shows itself once per session for
-// an account that has not answered, the answer is remembered on
+// shape (notify_prompt.go): it shows itself once per account, and
+// shown is seen, whatever the reader does with it. The stamp is on
 // the account (users.customize_prompt_seen_at, schema 185) so it
 // follows the person and not the browser, and opening Customize
-// counts as answering, since the reader has found the thing the
-// card points at. It queues behind the notification prompt, one
+// counts too, since the reader has found the thing the card points
+// at. It queues behind the notification prompt, one
 // by one: on a view where that card shows, this one renders hidden
 // and drops when the reader closes the notification card; once the
 // notification is done (answered, or already shown this session) it
@@ -36,9 +36,6 @@ import (
 // not on every home view of it.
 const sessionCustomizePromptShown = "customize_prompt_shown"
 
-// sessionCustomizePromptQueued marks a session whose hint rendered
-// queued behind the notification prompt (see customizePromptFor).
-const sessionCustomizePromptQueued = "customize_prompt_queued"
 
 // customizePromptView is the card, as home.html shows it under
 // the Customize button.
@@ -77,19 +74,15 @@ func (app *Application) customizePromptFor(ctx context.Context, userID int64) *c
 		return nil
 	}
 	if !app.notifyPrefsFor(ctx, userID).PromptAnswered && !app.sessions.GetBool(ctx, sessionNotifyPromptShown) {
-		// The notification prompt drops on this view: wait behind it.
-		app.sessions.Put(ctx, sessionCustomizePromptQueued, true)
+		// The notification card drops on this view: wait behind it.
+		// home.js drops this one when that card closes and records
+		// it as seen then (action=seen); a reader who leaves first
+		// sees it on the next home view.
 		return &customizePromptView{Queued: true}
 	}
-	if app.sessions.GetBool(ctx, sessionCustomizePromptQueued) {
-		// It waited behind a notification card the reader closed
-		// without answering, and dropped then: not twice. Answering
-		// that card clears the mark (handleNotifyPrompt), and the
-		// hint drops below.
-		app.sessions.Put(ctx, sessionCustomizePromptShown, true)
-		return nil
-	}
+	// Shown is seen: it drops once, whatever the reader does with it.
 	app.sessions.Put(ctx, sessionCustomizePromptShown, true)
+	app.markCustomizePromptSeen(ctx, userID)
 	return &customizePromptView{AutoOpen: true}
 }
 
@@ -121,6 +114,12 @@ func (app *Application) handleCustomizePrompt(w http.ResponseWriter, r *http.Req
 		return
 	}
 	app.markCustomizePromptSeen(ctx, userID)
+	app.sessions.Put(ctx, sessionCustomizePromptShown, true)
+	if r.FormValue("action") == "seen" {
+		// home.js dropped a queued card: nothing to show back.
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if r.FormValue("action") == "try" {
 		http.Redirect(w, r, "/?customize=1&add=1", http.StatusSeeOther)
 		return

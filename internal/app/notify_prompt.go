@@ -88,6 +88,15 @@ func (app *Application) notifyPromptFor(ctx context.Context, userID int64) *noti
 	if !view.Answered && !app.sessions.GetBool(ctx, sessionNotifyPromptShown) {
 		app.sessions.Put(ctx, sessionNotifyPromptShown, true)
 		view.AutoOpen = true
+		// Shown is seen: the card drops once per account, like a "Not
+		// now" (the choices stay in Settings and the bell's list). The
+		// demo account keeps nothing, so it sees it once per login.
+		if !app.isDemoUser(ctx, userID) {
+			prefs.PromptAnswered = true
+			if err := app.storeNotifyPrefs(ctx, userID, prefs); err != nil {
+				logging.Errorf("notify: record prompt shown for user %d: %v", userID, err)
+			}
+		}
 	}
 	return view
 }
@@ -109,10 +118,6 @@ func (app *Application) handleNotifyPrompt(w http.ResponseWriter, r *http.Reques
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
 	}
-	// An answer reloads the page before the Customize hint queued
-	// behind this card could drop, so it lifts the queue: the hint
-	// drops on the next home view (home_customize_prompt.go).
-	app.sessions.Remove(ctx, sessionCustomizePromptQueued)
 	// The demo account never keeps an answer: the prompt drops
 	// again on the next login, and writing to the shared account
 	// would stick for every visitor. The session mark from the

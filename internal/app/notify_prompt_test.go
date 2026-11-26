@@ -35,7 +35,7 @@ func (f *notifyFixture) prefs() notifyPrefs {
 	return f.app.notifyPrefsFor(f.ctx, f.userID)
 }
 
-func TestNotifyPromptDropsOnceForTheUnanswered(t *testing.T) {
+func TestNotifyPromptDropsOncePerAccount(t *testing.T) {
 	f := newNotifyFixture(t)
 	cookie := f.session()
 
@@ -49,14 +49,16 @@ func TestNotifyPromptDropsOnceForTheUnanswered(t *testing.T) {
 	_, body = getPage(t, f.app, cookie, "/notifications/")
 	mustContain(t, "second page of the visit", body, promptClosed)
 
-	// A new visit (a new session) is shown it again: the account
-	// has not answered yet.
+	// Shown is seen: a new visit (a new session) does not drop it
+	// again, and nothing about the channels changed.
+	if prefs := f.prefs(); !prefs.PromptAnswered || len(prefs.OffChannels) != 0 {
+		t.Fatalf("after the first showing: answered=%v channels off=%v, want answered and no channel change", prefs.PromptAnswered, prefs.OffChannels)
+	}
 	cookie = f.session()
 	_, body = getPage(t, f.app, cookie, "/notifications/")
-	mustContain(t, "a new visit", body, promptOpen)
+	mustContain(t, "a new visit", body, promptClosed)
 
-	// "Not now" is an answer: stored, and the card never drops
-	// unasked again, in any session.
+	// "Not now" still stores an answer and changes no channel.
 	code, _ := f.post(cookie, "/notifications/prompt", url.Values{"action": {"dismiss"}})
 	if code != http.StatusSeeOther {
 		t.Fatalf("dismiss = %d, want 303", code)

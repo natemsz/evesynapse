@@ -1321,6 +1321,15 @@
       card.hidden = false;
       window.requestAnimationFrame(function () { card.classList.add("is-open"); });
     }, 0);
+    // Shown is seen: record it, so it drops once per account.
+    var body = new URLSearchParams();
+    body.set("action", "seen");
+    fetch("/home/customize-prompt", {
+      method: "POST",
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+      credentials: "same-origin",
+      body: body
+    }).catch(function () { /* the next home view shows it again */ });
   });
 
   // The way out of Customize: on entering it, a card under the bar

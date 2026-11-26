@@ -7,7 +7,7 @@
   {{if .Home.Customize}}<button type="button" class="btn btn-quiet" data-home-undo hidden disabled title="Undo the last change (Ctrl+Z)" aria-keyshortcuts="Control+Z Meta+Z">Undo</button>
   <button type="button" class="btn btn-quiet" data-home-redo hidden disabled title="Redo (Ctrl+Y)" aria-keyshortcuts="Control+Y Control+Shift+Z Meta+Shift+Z">Redo</button>
   <button type="button" class="btn btn-quiet" data-home-fill hidden title="Widen or lengthen widgets so the grid has no gaps">Fill gaps</button>{{end}}
-  {{if .Home.Customize}}<a class="btn" href="/" title="Done (\)" aria-keyshortcuts="\">Done <kbd>\</kbd></a>{{end}}
+  {{if .Home.Customize}}<a class="btn" href="/" title="Exit customization (\)" aria-keyshortcuts="\" data-customize-exit>Exit customization <kbd>\</kbd></a>{{end}}
   <details class="menu-pop home-settings">
     <summary class="btn btn-quiet" title="Customize: arrange, add, theme or reset modules" aria-label="Customize settings"><svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></g></svg><span>Customize</span></summary>
     <div class="menu-pop-body" role="menu">
@@ -21,8 +21,13 @@
     </div>
   </details>
   {{with .Home.CustomizePrompt}}{{template "customize-prompt" .}}{{end}}
+  {{if .Home.Customize}}<div class="notify-prompt customize-prompt" id="customize-exit-hint" role="status" hidden>
+    <p class="notify-prompt-title">You are arranging your home</p>
+    <p class="notify-prompt-sub">Press <kbd>\</kbd> or Exit customization when you are done.</p>
+    <button type="button" class="notify-prompt-close" data-customize-exit-hint-close aria-label="Close">&times;</button>
+  </div>{{end}}
 </div>{{end}}
-{{define "customize-prompt"}}<div class="notify-prompt customize-prompt" id="customize-prompt" role="dialog" aria-label="About customizing your home"{{if not .AutoOpen}} hidden{{end}}>
+{{define "customize-prompt"}}<div class="notify-prompt customize-prompt" id="customize-prompt" role="dialog" aria-label="About customizing your home"{{if .Queued}} data-customize-prompt-queued{{end}}{{if not .AutoOpen}} hidden{{end}}>
   <form method="post" action="/home/customize-prompt">
     <p class="notify-prompt-title">This page is yours to arrange</p>
     <p class="notify-prompt-sub">The modules below can be moved, resized and swapped for others, and new modules have been added to the list.</p>

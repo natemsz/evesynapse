@@ -977,23 +977,18 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	// the last month of days, a "building" note before two exist.
 	// Stored rows only, no fetching here.
 	app.attachNetWorthHistory(ctx, w, userID, charIDs)
-	app.attachNetWorthSpark(ctx, w, userID, charIDs)
+	attachNetWorthSpark(w)
 	return w
 }
 
-// attachNetWorthSpark fills the KPI sparkline from the account's
-// daily net-worth totals: one bounded grouped query (<=31 rows,
-// newest last 31 days). Under two sampled days the spark stays
-// empty and the KPI renders no line.
-func (app *Application) attachNetWorthSpark(ctx context.Context, w *netWorthWidget, userID int64, charIDs []int64) {
-	rows, err := app.queries.ListUserNetWorthDays(ctx, db.ListUserNetWorthDaysParams{UserID: userID, CharacterIds: charIDs})
-	if err != nil {
-		logging.Errorf("net worth sparkline for user %d: %v", userID, err)
-		return
-	}
-	totals := make([]float64, 0, len(rows))
-	for i := len(rows) - 1; i >= 0; i-- { // query is newest-first
-		totals = append(totals, rows[i].Total)
+// attachNetWorthSpark fills the KPI sparkline from the daily totals the
+// history read already holds (w.days, oldest first): no second query.
+// Under two sampled days the spark stays empty and the KPI renders no
+// line.
+func attachNetWorthSpark(w *netWorthWidget) {
+	totals := make([]float64, 0, len(w.days))
+	for _, d := range w.days {
+		totals = append(totals, d.Total())
 	}
 	if line, area, ok := sparklineSVG(totals); ok {
 		w.SparkPoints, w.SparkArea = line, area

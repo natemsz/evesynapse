@@ -4299,8 +4299,12 @@
     card.classList.add("is-open");
   }
 
-  function hide() {
+  // hide closes the card; byReader marks a close the reader made
+  // (the close button, a click outside, Escape), which lets a card
+  // queued behind this one drop (the home's Customize hint).
+  function hide(byReader) {
     if (card.hidden || hiding) return;
+    if (byReader) document.dispatchEvent(new CustomEvent("evesynapse:notify-prompt-closed"));
     card.classList.remove("is-open");
     if (still) {
       card.hidden = true;
@@ -4329,10 +4333,10 @@
       return;
     }
     if (card.hidden) return;
-    if (ev.target.closest("[data-notify-prompt-close]") || !card.contains(ev.target)) hide();
+    if (ev.target.closest("[data-notify-prompt-close]") || !card.contains(ev.target)) hide(true);
   });
   document.addEventListener("keydown", function (ev) {
-    if (ev.key === "Escape" && !card.hidden) hide();
+    if (ev.key === "Escape" && !card.hidden) hide(true);
   });
   document.addEventListener("evesynapse:content-will-swap", function () {
     if (!card.hidden) hide();
@@ -4713,15 +4717,22 @@
 // Copy buttons: [data-copy] copies its data-copy-text, the text of
 // [data-copy-from], or the full address of its data-copy-url (a
 // path on this site, for share buttons); the label flips to Copied
-// briefly.
+// (or the button's data-copied-label) briefly, with the copied class.
 // Server-rendered share blocks use it so no page needs its own
 // clipboard code.
 (function () {
   "use strict";
   function flash(btn) {
+    if (btn.dataset.copyBusy) return;
+    btn.dataset.copyBusy = "1";
     var prior = btn.textContent;
-    btn.textContent = "Copied";
-    setTimeout(function () { btn.textContent = prior; }, 1500);
+    btn.textContent = btn.getAttribute("data-copied-label") || "Copied";
+    btn.classList.add("copied");
+    setTimeout(function () {
+      btn.textContent = prior;
+      btn.classList.remove("copied");
+      delete btn.dataset.copyBusy;
+    }, 1500);
   }
   document.addEventListener("click", function (ev) {
     var btn = ev.target && ev.target.closest ? ev.target.closest("[data-copy]") : null;

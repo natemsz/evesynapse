@@ -1106,11 +1106,6 @@ ON CONFLICT (character_id, order_id) DO UPDATE SET
 UPDATE order_lifecycle
 SET closed_at = sqlc.arg(closed_at)::timestamptz, close_kind = sqlc.arg(close_kind), beaten_now = 0
 WHERE character_id = sqlc.arg(character_id) AND order_id = sqlc.arg(order_id) AND closed_at IS NULL;
--- name: ListOrderLifecycleByCharacter :many
-SELECT *
-FROM order_lifecycle
-WHERE character_id = $1
-ORDER BY first_seen_at DESC, order_id DESC;
 -- name: ListOpenOrderLifecycleByCharacter :many
 SELECT *
 FROM order_lifecycle
@@ -1122,6 +1117,20 @@ FROM order_lifecycle ol
 JOIN characters c ON c.character_id = ol.character_id
 WHERE c.user_id = $1
 ORDER BY ol.closed_at DESC NULLS LAST, ol.first_seen_at DESC, ol.order_id DESC;
+-- name: GetOrderLifecycleSummary :one
+-- One character's lifecycle summary strip in one aggregate: orders
+-- tracked, outbid events, closed orders filled and ended, and the
+-- median time from first seen to filled (seconds; averages the two
+-- middle values on an even count).
+SELECT
+    COUNT(*)::bigint AS tracked,
+    COALESCE(SUM(outbid_events), 0)::bigint AS outbid_events,
+    (COUNT(*) FILTER (WHERE closed_at IS NOT NULL AND close_kind = 'filled'))::bigint AS filled,
+    (COUNT(*) FILTER (WHERE closed_at IS NOT NULL AND close_kind <> 'filled'))::bigint AS ended,
+    COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM closed_at - first_seen_at))
+        FILTER (WHERE closed_at IS NOT NULL AND close_kind = 'filled' AND closed_at >= first_seen_at), -1)::float8 AS median_fill_seconds
+FROM order_lifecycle
+WHERE character_id = $1;
 -- name: ListClosedOrderLifecycleByCharacter :many
 SELECT *
 FROM order_lifecycle

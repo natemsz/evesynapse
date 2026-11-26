@@ -21,9 +21,10 @@ import (
 // follows the person and not the browser, and opening Customize
 // counts as answering, since the reader has found the thing the
 // card points at. It queues behind the notification prompt, one
-// by one: it waits while that card is about to show on this view,
-// and drops once the notification is done (answered, or already
-// shown this session). If the notification was already answered
+// by one: on a view where that card shows, this one renders hidden
+// and drops when the reader closes the notification card; once the
+// notification is done (answered, or already shown this session) it
+// drops on its own. If the notification was already answered
 // the hint does not wait for one that will never come, it drops
 // right away. The demo account reads the same shape without the
 // remembered answer: it drops once per login (the session mark),
@@ -35,21 +36,28 @@ import (
 // not on every home view of it.
 const sessionCustomizePromptShown = "customize_prompt_shown"
 
+// sessionCustomizePromptQueued marks a session whose hint rendered
+// queued behind the notification prompt (see customizePromptFor).
+const sessionCustomizePromptQueued = "customize_prompt_queued"
+
 // customizePromptView is the card, as home.html shows it under
 // the Customize button.
 type customizePromptView struct {
-	// AutoOpen: the card renders open. The card only renders at
-	// all for an account that has not answered in a session that
-	// has not been shown it, so this is always true in practice;
-	// it keeps the card's contract the notification prompt's.
+	// AutoOpen: the card renders open.
 	AutoOpen bool
+	// Queued: the notification prompt shows on this view first, so
+	// the card renders hidden and home.js drops it once the reader
+	// closes that prompt without answering it (answering reloads
+	// the page, and the next home view drops the card as usual).
+	Queued bool
 }
 
 // customizePromptFor builds the card for an account, or nil when
-// it must not drop: already answered, already shown this session,
-// or the notification prompt is about to show on this view. The
-// queue is one by one: the notification goes first, and this card
-// waits until it is done. This runs before the shell builds the
+// it must not drop (already answered, already shown this session).
+// While the notification prompt is about to show on this view the
+// card comes back queued: rendered hidden, dropped by home.js when
+// that prompt closes. The queue is one by one: the notification
+// goes first. This runs before the shell builds the
 // notification prompt (buildHome runs before fillShell), so the
 // session flag here still means "shown on an earlier view", and
 // the check reads whether the notification will show on this one.
@@ -69,6 +77,16 @@ func (app *Application) customizePromptFor(ctx context.Context, userID int64) *c
 		return nil
 	}
 	if !app.notifyPrefsFor(ctx, userID).PromptAnswered && !app.sessions.GetBool(ctx, sessionNotifyPromptShown) {
+		// The notification prompt drops on this view: wait behind it.
+		app.sessions.Put(ctx, sessionCustomizePromptQueued, true)
+		return &customizePromptView{Queued: true}
+	}
+	if app.sessions.GetBool(ctx, sessionCustomizePromptQueued) {
+		// It waited behind a notification card the reader closed
+		// without answering, and dropped then: not twice. Answering
+		// that card clears the mark (handleNotifyPrompt), and the
+		// hint drops below.
+		app.sessions.Put(ctx, sessionCustomizePromptShown, true)
 		return nil
 	}
 	app.sessions.Put(ctx, sessionCustomizePromptShown, true)

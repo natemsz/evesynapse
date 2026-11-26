@@ -30,7 +30,7 @@
     {{else}}
     <button class="btn" type="button" disabled>View in game</button>
     {{end}}{{end}}
-    {{with $d.Panel}}<button type="button" class="btn btn-quiet cs-copy" data-copy="{{.CopyText}}">⧉ Copy contract link</button>{{end}}
+    {{with $d.Panel}}<button type="button" class="btn btn-quiet cs-copy" data-copied-label="Copied Link!" data-copy data-copy-text="{{.CopyText}}">⧉ Copy contract link</button>{{end}}
   </div>
   {{if and $d.ViewInGame.Visible (not $d.ViewInGame.Enabled)}}<p class="cd-note">{{$d.ViewInGame.Note}}{{if $d.ViewInGame.Relink}} <a href="{{$d.ViewInGame.Relink}}">Sign in again</a> to enable it.{{end}}</p>{{end}}
 </section>

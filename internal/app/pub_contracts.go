@@ -291,10 +291,11 @@ func (app *Application) advancePublicContractRegion(ctx context.Context, regionI
 // fetchPublicContractPage reads one page of a region's public
 // contract list and reports the total page count from the
 // X-Pages header. Auth-free public data, like the region book
-// fetches.
+// fetches, and as large: a page is up to a thousand contracts, so
+// it rides the bulk client.
 func (app *Application) fetchPublicContractPage(ctx context.Context, regionID, page int64) ([]esi.PublicContract, int, error) {
 	path := fmt.Sprintf("/contracts/public/%d/?page=%d", regionID, page)
-	body, header, err := app.esi.FetchRaw(ctx, "", path)
+	body, header, err := app.esi.FetchRawLong(ctx, "", path)
 	if err != nil {
 		return nil, 0, err
 	}

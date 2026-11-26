@@ -193,17 +193,13 @@ func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.
 	if !moduleCompiledIn("skillplans") {
 		return
 	}
-	plans, err := app.queries.ListSkillPlans(ctx, db.ListSkillPlansParams{UserID: userID, CharacterID: ch.CharacterID})
+	plans, err := app.queries.ListSkillPlanSummaries(ctx, db.ListSkillPlanSummariesParams{UserID: userID, CharacterID: ch.CharacterID})
 	if err != nil {
 		logging.Errorf("skills: plans for character %d: %v", ch.CharacterID, err)
 		return
 	}
 	for _, p := range plans {
-		items, err := app.queries.ListSkillPlanItems(ctx, p.ID)
-		if err != nil {
-			continue
-		}
-		view.Plans = append(view.Plans, skillPlanSummary{ID: p.ID, Name: p.Name, Items: len(items), Character: p.CharacterID})
+		view.Plans = append(view.Plans, skillPlanSummary{ID: p.ID, Name: p.Name, Items: int(p.Items), Character: p.CharacterID})
 	}
 }
 

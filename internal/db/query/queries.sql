@@ -358,23 +358,13 @@ SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
 WHERE user_id = $1 AND character_id = $2 AND day >= $3
 ORDER BY day;
--- name: ListUserWalletHistory :many
-SELECT user_id, character_id, day, balance, net_worth, sampled_at
+-- name: ListUserLatestNetWorths :many
+-- Each of the account's characters' newest sample that carries a net
+-- worth: one row per character, read through the user index.
+SELECT DISTINCT ON (character_id) character_id, balance, net_worth::float8 AS net_worth
 FROM wallet_history
-WHERE user_id = $1
-ORDER BY day, character_id;
--- name: ListUserNetWorthDays :many
--- The account's total net worth per day (summed over its
--- characters), newest first, for the KPI sparkline: one bounded
--- grouped read, never more than 31 rows. A non-empty character_ids
--- keeps only those characters (a widget scoped to some of them).
-SELECT day, SUM(net_worth)::float8 AS total
-FROM wallet_history
-WHERE user_id = sqlc.arg(user_id) AND net_worth IS NOT NULL
-  AND (COALESCE(cardinality(sqlc.arg(character_ids)::bigint[]), 0) = 0 OR character_id = ANY(sqlc.arg(character_ids)::bigint[]))
-GROUP BY day
-ORDER BY day DESC
-LIMIT 31;
+WHERE user_id = $1 AND net_worth IS NOT NULL
+ORDER BY character_id, day DESC;
 -- name: ListUserNetWorthSplitDays :many
 -- The account's net worth per sampled day, newest first, split into
 -- ISK on hand and the total, for the home Net Worth charts. A
@@ -430,6 +420,15 @@ RETURNING id, user_id, character_id, name, created_at;
 SELECT id, user_id, character_id, name, created_at FROM skill_plans
 WHERE user_id = $1 AND character_id = $2
 ORDER BY created_at, id;
+-- name: ListSkillPlanSummaries :many
+-- A character's plans with how many skills each holds, in one grouped
+-- read (the skill sheet's plan list).
+SELECT p.id, p.character_id, p.name, COUNT(i.skill_type_id)::int AS items
+FROM skill_plans p
+LEFT JOIN skill_plan_items i ON i.plan_id = p.id
+WHERE p.user_id = $1 AND p.character_id = $2
+GROUP BY p.id
+ORDER BY p.created_at, p.id;
 -- name: GetSkillPlan :one
 SELECT id, user_id, character_id, name, created_at FROM skill_plans
 WHERE id = $1 AND user_id = $2;

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"slices"
 	"sort"
 	"time"
 
@@ -153,70 +152,33 @@ func formatOpenDuration(d time.Duration) string {
 	}
 }
 
-// medianDuration returns the median of durations (average of the
-// two middle values on an even count).
-func medianDuration(durations []time.Duration) time.Duration {
-	if len(durations) == 0 {
-		return 0
-	}
-	sorted := make([]time.Duration, len(durations))
-	copy(sorted, durations)
-	slices.Sort(sorted)
-	n := len(sorted)
-	if n%2 == 1 {
-		return sorted[n/2]
-	}
-	return (sorted[n/2-1] + sorted[n/2]) / 2
-}
+// lifecycleClosedRows is how many closed orders the lifecycle table
+// lists, newest first.
+const lifecycleClosedRows = 50
 
-// buildOrderLifecycle reads the stored lifecycle rows for one
-// character and distils the summary strip and the newest closed
-// orders. Cache-only: no ESI call ever leaves this function.
+// buildOrderLifecycle reads one character's stored lifecycle summary
+// (one aggregate) and its newest closed orders (capped in SQL).
+// Cache-only: no ESI call ever leaves this function.
 func (app *mod) buildOrderLifecycle(ctx context.Context, characterID int64) (*orderLifecycleSummary, []orderLifecycleRow) {
-	rows, err := app.queries.ListOrderLifecycleByCharacter(ctx, characterID)
+	summary := &orderLifecycleSummary{FillShare: "--", TypicalFill: "--"}
+	agg, err := app.queries.GetOrderLifecycleSummary(ctx, characterID)
 	if err != nil {
 		logging.Errorf("orders: lifecycle for %d: %v", characterID, err)
-		return &orderLifecycleSummary{FillShare: "--", TypicalFill: "--"}, nil
+		return summary, nil
 	}
-	summary := &orderLifecycleSummary{FillShare: "--", TypicalFill: "--"}
-	summary.Tracked = len(rows)
-	var filledDurations []time.Duration
-	for _, row := range rows {
-		summary.OutbidEvents += row.OutbidEvents
-		if !row.ClosedAt.Valid {
-			continue
-		}
-		if row.CloseKind == "filled" {
-			summary.Filled++
-			if d := row.ClosedAt.Time.Sub(row.FirstSeenAt); d >= 0 {
-				filledDurations = append(filledDurations, d)
-			}
-		} else {
-			summary.Ended++
-		}
-	}
+	summary.Tracked, summary.OutbidEvents = int(agg.Tracked), agg.OutbidEvents
+	summary.Filled, summary.Ended = int(agg.Filled), int(agg.Ended)
 	closedCount := summary.Filled + summary.Ended
 	if closedCount > 0 {
 		summary.FillShare = fmt.Sprintf("%d%% (%d of %d)", summary.Filled*100/closedCount, summary.Filled, closedCount)
 	}
-	if len(filledDurations) > 0 {
-		summary.TypicalFill = formatOpenDuration(medianDuration(filledDurations))
+	if agg.MedianFillSeconds >= 0 {
+		summary.TypicalFill = formatOpenDuration(time.Duration(agg.MedianFillSeconds * float64(time.Second)))
 	}
-	// Newest closed first, capped.
-	var closed []db.OrderLifecycle
-	for _, row := range rows {
-		if row.ClosedAt.Valid {
-			closed = append(closed, row)
-		}
-	}
-	sort.Slice(closed, func(i, j int) bool {
-		if !closed[i].ClosedAt.Time.Equal(closed[j].ClosedAt.Time) {
-			return closed[i].ClosedAt.Time.After(closed[j].ClosedAt.Time)
-		}
-		return closed[i].OrderID > closed[j].OrderID
-	})
-	if len(closed) > 50 {
-		closed = closed[:50]
+	closed, err := app.queries.ListClosedOrderLifecycleByCharacter(ctx, db.ListClosedOrderLifecycleByCharacterParams{CharacterID: characterID, RowLimit: lifecycleClosedRows})
+	if err != nil {
+		logging.Errorf("orders: closed lifecycle for %d: %v", characterID, err)
+		return summary, nil
 	}
 	out := make([]orderLifecycleRow, 0, len(closed))
 	for _, row := range closed {

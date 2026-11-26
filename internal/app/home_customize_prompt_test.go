@@ -46,12 +46,13 @@ func TestCustomizePromptShowsOnceAndSticks(t *testing.T) {
 	}
 
 	// Account A: the hint queues behind the notification prompt,
-	// one by one. It does not drop on the first home view while
-	// that card is still to show; it drops once the notification
-	// is answered, and a "Not now" answer ends it for good.
+	// one by one. On the first home view, where that card shows, it
+	// renders hidden and queued (home.js drops it when the card is
+	// closed); answered, the notification reloads the page and the
+	// hint drops on that view; a "Not now" answer ends it for good.
 	userA, cookieA := newAccount(710001, "Hint Alpha")
-	if code, body := getPage(t, app, cookieA, "/"); code != http.StatusOK || strings.Contains(body, `id="customize-prompt"`) {
-		t.Fatalf("first home view: code %d, hint present %v, want 200 without the hint while the notification is showing", code, strings.Contains(body, `id="customize-prompt"`))
+	if code, body := getPage(t, app, cookieA, "/"); code != http.StatusOK || !strings.Contains(body, `id="customize-prompt" role="dialog" aria-label="About customizing your home" data-customize-prompt-queued hidden`) {
+		t.Fatalf("first home view: code %d, want 200 with the hint hidden and queued behind the notification", code)
 	}
 	answerNotify(cookieA)
 	if _, body := getPage(t, app, cookieA, "/"); !strings.Contains(body, `id="customize-prompt"`) {
@@ -116,9 +117,9 @@ func TestCustomizePromptDemoSeesItOncePerLogin(t *testing.T) {
 	}
 
 	// First home view of the login: the notification is to show,
-	// so the hint waits and does not drop yet.
-	if code, body := getPage(t, app, cookie, "/"); code != http.StatusOK || strings.Contains(body, `id="customize-prompt"`) {
-		t.Fatalf("demo first home view: code %d, hint present %v, want 200 without the hint while the notification is showing", code, strings.Contains(body, `id="customize-prompt"`))
+	// so the hint waits behind it, hidden and queued.
+	if code, body := getPage(t, app, cookie, "/"); code != http.StatusOK || !strings.Contains(body, `data-customize-prompt-queued hidden`) {
+		t.Fatalf("demo first home view: code %d, want 200 with the hint hidden and queued behind the notification", code)
 	}
 	// Dismissing the notification is a plain dismiss for demo:
 	// it writes nothing and does not turn the visitor away.
@@ -135,8 +136,8 @@ func TestCustomizePromptDemoSeesItOncePerLogin(t *testing.T) {
 	// A fresh login: nothing was saved for demo, so the cycle
 	// repeats, notification first, then the hint.
 	fresh := sessionCookie(t, app, userID, demoCharacterID, demoCharName)
-	if _, body := getPage(t, app, fresh, "/"); strings.Contains(body, `id="customize-prompt"`) {
-		t.Error("demo fresh login showed the hint before the notification")
+	if _, body := getPage(t, app, fresh, "/"); !strings.Contains(body, `data-customize-prompt-queued hidden`) {
+		t.Error("demo fresh login did not queue the hint behind the notification")
 	}
 	dismissNotify(fresh)
 	if _, body := getPage(t, app, fresh, "/"); !strings.Contains(body, `id="customize-prompt"`) {

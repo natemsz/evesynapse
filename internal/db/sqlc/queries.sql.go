@@ -1646,6 +1646,54 @@ func (q *Queries) ListSkillPlanItems(ctx context.Context, planID int64) ([]Skill
 	return items, nil
 }
 
+const listSkillPlanSummaries = `-- name: ListSkillPlanSummaries :many
+SELECT p.id, p.character_id, p.name, COUNT(i.skill_type_id)::int AS items
+FROM skill_plans p
+LEFT JOIN skill_plan_items i ON i.plan_id = p.id
+WHERE p.user_id = $1 AND p.character_id = $2
+GROUP BY p.id
+ORDER BY p.created_at, p.id
+`
+
+type ListSkillPlanSummariesParams struct {
+	UserID      int64 `json:"user_id"`
+	CharacterID int64 `json:"character_id"`
+}
+
+type ListSkillPlanSummariesRow struct {
+	ID          int64  `json:"id"`
+	CharacterID int64  `json:"character_id"`
+	Name        string `json:"name"`
+	Items       int32  `json:"items"`
+}
+
+// A character's plans with how many skills each holds, in one grouped
+// read (the skill sheet's plan list).
+func (q *Queries) ListSkillPlanSummaries(ctx context.Context, arg ListSkillPlanSummariesParams) ([]ListSkillPlanSummariesRow, error) {
+	rows, err := q.db.Query(ctx, listSkillPlanSummaries, arg.UserID, arg.CharacterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSkillPlanSummariesRow
+	for rows.Next() {
+		var i ListSkillPlanSummariesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CharacterID,
+			&i.Name,
+			&i.Items,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSkillPlans = `-- name: ListSkillPlans :many
 SELECT id, user_id, character_id, name, created_at FROM skill_plans
 WHERE user_id = $1 AND character_id = $2
@@ -1904,40 +1952,31 @@ func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsFor
 	return items, nil
 }
 
-const listUserNetWorthDays = `-- name: ListUserNetWorthDays :many
-SELECT day, SUM(net_worth)::float8 AS total
+const listUserLatestNetWorths = `-- name: ListUserLatestNetWorths :many
+SELECT DISTINCT ON (character_id) character_id, balance, net_worth::float8 AS net_worth
 FROM wallet_history
 WHERE user_id = $1 AND net_worth IS NOT NULL
-  AND (COALESCE(cardinality($2::bigint[]), 0) = 0 OR character_id = ANY($2::bigint[]))
-GROUP BY day
-ORDER BY day DESC
-LIMIT 31
+ORDER BY character_id, day DESC
 `
 
-type ListUserNetWorthDaysParams struct {
-	UserID       int64   `json:"user_id"`
-	CharacterIds []int64 `json:"character_ids"`
+type ListUserLatestNetWorthsRow struct {
+	CharacterID int64   `json:"character_id"`
+	Balance     float64 `json:"balance"`
+	NetWorth    float64 `json:"net_worth"`
 }
 
-type ListUserNetWorthDaysRow struct {
-	Day   string  `json:"day"`
-	Total float64 `json:"total"`
-}
-
-// The account's total net worth per day (summed over its
-// characters), newest first, for the KPI sparkline: one bounded
-// grouped read, never more than 31 rows. A non-empty character_ids
-// keeps only those characters (a widget scoped to some of them).
-func (q *Queries) ListUserNetWorthDays(ctx context.Context, arg ListUserNetWorthDaysParams) ([]ListUserNetWorthDaysRow, error) {
-	rows, err := q.db.Query(ctx, listUserNetWorthDays, arg.UserID, arg.CharacterIds)
+// Each of the account's characters' newest sample that carries a net
+// worth: one row per character, read through the user index.
+func (q *Queries) ListUserLatestNetWorths(ctx context.Context, userID int64) ([]ListUserLatestNetWorthsRow, error) {
+	rows, err := q.db.Query(ctx, listUserLatestNetWorths, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListUserNetWorthDaysRow
+	var items []ListUserLatestNetWorthsRow
 	for rows.Next() {
-		var i ListUserNetWorthDaysRow
-		if err := rows.Scan(&i.Day, &i.Total); err != nil {
+		var i ListUserLatestNetWorthsRow
+		if err := rows.Scan(&i.CharacterID, &i.Balance, &i.NetWorth); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1986,40 +2025,6 @@ func (q *Queries) ListUserNetWorthSplitDays(ctx context.Context, arg ListUserNet
 	for rows.Next() {
 		var i ListUserNetWorthSplitDaysRow
 		if err := rows.Scan(&i.Day, &i.Isk, &i.Total); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listUserWalletHistory = `-- name: ListUserWalletHistory :many
-SELECT user_id, character_id, day, balance, net_worth, sampled_at
-FROM wallet_history
-WHERE user_id = $1
-ORDER BY day, character_id
-`
-
-func (q *Queries) ListUserWalletHistory(ctx context.Context, userID int64) ([]WalletHistory, error) {
-	rows, err := q.db.Query(ctx, listUserWalletHistory, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []WalletHistory
-	for rows.Next() {
-		var i WalletHistory
-		if err := rows.Scan(
-			&i.UserID,
-			&i.CharacterID,
-			&i.Day,
-			&i.Balance,
-			&i.NetWorth,
-			&i.SampledAt,
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

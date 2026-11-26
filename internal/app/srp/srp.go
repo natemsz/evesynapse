@@ -234,13 +234,13 @@ type srpCorpView struct {
 
 // srpView is the /srp/ page: one owner's ship replacement.
 type srpView struct {
-	CorpOptions []module.OwnerOption
-	Corp        *srpCorpView // nil when the account belongs to no owner
-	Losses      []srpLossChoice
-	Outside     int // recent losses that were not during one of its fleets
-	Claimed     int // recent losses already asked for
-	Refused     int // losses during a fleet that its policy does not cover
-	Mine        []srpRow
+	OwnerOptions []module.OwnerOption
+	Corp         *srpCorpView // nil when the account belongs to no owner
+	Losses       []srpLossChoice
+	Outside      int // recent losses that were not during one of its fleets
+	Claimed      int // recent losses already asked for
+	Refused      int // losses during a fleet that its policy does not cover
+	Mine         []srpRow
 }
 
 // srpRows builds the page's rows for a list of requests. Attendance is
@@ -329,7 +329,7 @@ func (app *mod) handleSRP(w http.ResponseWriter, r *http.Request) {
 	if cv.Keeps && owner.Kind != standing.OwnerCorporation {
 		cv.HandOver = standing.Address("/fleets/permissions/", owner.Key())
 	}
-	view.CorpOptions, view.Corp = options, cv
+	view.OwnerOptions, view.Corp = options, cv
 	policies, err := app.queries.ListSRPPolicies(ctx, db.ListSRPPoliciesParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 	if err != nil {
 		logging.Errorf("srp: policies of %s: %v", owner.Key(), err)

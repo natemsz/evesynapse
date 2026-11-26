@@ -3148,7 +3148,7 @@ html[data-theme="light"] .esi-ours-down .esi-label { color: #6d28d9; }
 .menu-pop-body a:hover, .menu-pop-body button:hover { background: var(--row-hover); color: var(--text-bright); }
 .menu-pop-body form { margin: 0; }
 /* A menu item's keyboard shortcut, at its right edge. */
-.menu-pop-body a kbd, .home-bar-note kbd {
+.menu-pop-body a kbd, .home-bar-note kbd, .customize-prompt kbd {
   font: inherit;
   font-size: var(--fs-xs);
   padding: 0 0.35rem;
@@ -3156,7 +3156,8 @@ html[data-theme="light"] .esi-ours-down .esi-label { color: #6d28d9; }
   border: 1px solid #4a2408;
   border-radius: var(--r-sm);
 }
-.menu-pop-body a kbd { float: right; margin-left: 1rem; }
+.menu-pop-body a:has(> kbd) { display: flex; align-items: center; gap: 1rem; }
+.menu-pop-body a kbd { margin-left: auto; flex: none; }
 .home-bar .btn kbd {
   margin-left: 0.45rem;
   padding: 0 0.3rem;

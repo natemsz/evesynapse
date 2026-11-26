@@ -8,7 +8,7 @@
 <div class="l-page">
 {{with .DiscordServers}}
 <div class="l-head">
-  <div class="l-head-pick">{{template "corpselector" .OwnerOptions}}</div>
+  <div class="l-head-pick">{{template "ownerselector" .OwnerOptions}}</div>
   {{with .Owner}}<p class="l-head-sum"><b>{{.Name}}</b> · {{.Kind}} · {{len .Servers}} {{if eq (len .Servers) 1}}server{{else}}servers{{end}}</p>
   {{if $.DiscordServers.CanInstall}}
   <form method="post" action="/discord/servers/add" class="l-head-act inline-form">

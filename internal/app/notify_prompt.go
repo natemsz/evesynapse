@@ -109,6 +109,10 @@ func (app *Application) handleNotifyPrompt(w http.ResponseWriter, r *http.Reques
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
 	}
+	// An answer reloads the page before the Customize hint queued
+	// behind this card could drop, so it lifts the queue: the hint
+	// drops on the next home view (home_customize_prompt.go).
+	app.sessions.Remove(ctx, sessionCustomizePromptQueued)
 	// The demo account never keeps an answer: the prompt drops
 	// again on the next login, and writing to the shared account
 	// would stick for every visitor. The session mark from the

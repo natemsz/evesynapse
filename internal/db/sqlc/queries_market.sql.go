@@ -725,6 +725,43 @@ func (q *Queries) GetOrderLifecycle(ctx context.Context, arg GetOrderLifecyclePa
 	return i, err
 }
 
+const getOrderLifecycleSummary = `-- name: GetOrderLifecycleSummary :one
+SELECT
+    COUNT(*)::bigint AS tracked,
+    COALESCE(SUM(outbid_events), 0)::bigint AS outbid_events,
+    (COUNT(*) FILTER (WHERE closed_at IS NOT NULL AND close_kind = 'filled'))::bigint AS filled,
+    (COUNT(*) FILTER (WHERE closed_at IS NOT NULL AND close_kind <> 'filled'))::bigint AS ended,
+    COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM closed_at - first_seen_at))
+        FILTER (WHERE closed_at IS NOT NULL AND close_kind = 'filled' AND closed_at >= first_seen_at), -1)::float8 AS median_fill_seconds
+FROM order_lifecycle
+WHERE character_id = $1
+`
+
+type GetOrderLifecycleSummaryRow struct {
+	Tracked           int64   `json:"tracked"`
+	OutbidEvents      int64   `json:"outbid_events"`
+	Filled            int64   `json:"filled"`
+	Ended             int64   `json:"ended"`
+	MedianFillSeconds float64 `json:"median_fill_seconds"`
+}
+
+// One character's lifecycle summary strip in one aggregate: orders
+// tracked, outbid events, closed orders filled and ended, and the
+// median time from first seen to filled (seconds; averages the two
+// middle values on an even count).
+func (q *Queries) GetOrderLifecycleSummary(ctx context.Context, characterID int64) (GetOrderLifecycleSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getOrderLifecycleSummary, characterID)
+	var i GetOrderLifecycleSummaryRow
+	err := row.Scan(
+		&i.Tracked,
+		&i.OutbidEvents,
+		&i.Filled,
+		&i.Ended,
+		&i.MedianFillSeconds,
+	)
+	return i, err
+}
+
 const getPilotNameWant = `-- name: GetPilotNameWant :one
 SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
 FROM pilot_name_wants
@@ -2937,58 +2974,6 @@ func (q *Queries) ListOrderHealthByUser(ctx context.Context, userID int64) ([]Or
 			&i.RegionBest,
 			&i.Status,
 			&i.ComputedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listOrderLifecycleByCharacter = `-- name: ListOrderLifecycleByCharacter :many
-SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
-FROM order_lifecycle
-WHERE character_id = $1
-ORDER BY first_seen_at DESC, order_id DESC
-`
-
-func (q *Queries) ListOrderLifecycleByCharacter(ctx context.Context, characterID int64) ([]OrderLifecycle, error) {
-	rows, err := q.db.Query(ctx, listOrderLifecycleByCharacter, characterID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []OrderLifecycle
-	for rows.Next() {
-		var i OrderLifecycle
-		if err := rows.Scan(
-			&i.ID,
-			&i.CharacterID,
-			&i.OrderID,
-			&i.TypeID,
-			&i.LocationID,
-			&i.RegionID,
-			&i.IsBuyOrder,
-			&i.ListedPrice,
-			&i.VolumeTotal,
-			&i.VolumeRemainLast,
-			&i.FirstSeenAt,
-			&i.LastSeenAt,
-			&i.ClosedAt,
-			&i.CloseKind,
-			&i.OutbidEvents,
-			&i.BeatenNow,
-			&i.BeatenAt,
-			&i.BeatingPrice,
-			&i.BeatingVolume,
-			&i.SuggestedPrice,
-			&i.UnitCost,
-			&i.MarginPct,
-			&i.TaxRate,
-			&i.BeatenChecked,
 		); err != nil {
 			return nil, err
 		}

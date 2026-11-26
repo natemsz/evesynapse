@@ -622,15 +622,9 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		// The latest net worth sample's split (wallets versus
 		// assets and escrow), the home chart's two parts, for the
 		// hero gap's composition.
-		if hist, err := app.queries.ListUserWalletHistory(ctx, userID); err == nil {
-			latest := map[int64]db.WalletHistory{}
-			for _, h := range hist {
-				if h.NetWorth.Valid {
-					latest[h.CharacterID] = h
-				}
-			}
+		if latest, err := app.queries.ListUserLatestNetWorths(ctx, userID); err == nil {
 			for _, h := range latest {
-				view.assetsNow += h.NetWorth.Float64 - h.Balance
+				view.assetsNow += h.NetWorth - h.Balance
 				view.hasAssets = true
 			}
 		}

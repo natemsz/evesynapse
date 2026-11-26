@@ -13,6 +13,7 @@ import (
 	"html/template"
 	"strconv"
 	"strings"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
 )
@@ -75,19 +76,30 @@ func ModelLabel(model string) string {
 	return "Gemma"
 }
 
-// Stored reads the module's own short answer (the home module's).
-// Rendered reads only, one bounded row, no fetches. configured says
-// whether a model is set up, for the empty state's wording.
+// Stored reads the page's saved answer (row 2), falling back to the
+// module's own short answer (row 1) until the first page answer
+// lands. The home module displays a smaller amount of the page's
+// answer and never asks itself. Rendered reads only, one bounded row,
+// no fetches. configured says whether a model is set up, for the
+// empty state's wording.
 func Stored(ctx context.Context, q *db.Queries, configured bool) *Widget {
 	w := &Widget{Configured: configured}
-	row, err := q.GetTradeIdeas(ctx)
-	if err != nil || strings.TrimSpace(row.Body) == "" {
+	// The page's row and the module's row are different types, so
+	// carry the shared fields out instead of the row itself.
+	var body, rows string
+	var asOf time.Time
+	var model string
+	if page, err := q.GetTradeIdeasPage(ctx); err == nil && strings.TrimSpace(page.Body) != "" {
+		body, rows, asOf, model = page.Body, page.Rows.String, page.AsOf, page.Model
+	} else if mod, err := q.GetTradeIdeas(ctx); err == nil && strings.TrimSpace(mod.Body) != "" {
+		body, rows, asOf, model = mod.Body, mod.Rows.String, mod.AsOf, mod.Model
+	} else {
 		return w
 	}
-	w.Groups = Parse(row.Body, DecodeRows(row.Rows.String))
+	w.Groups = Parse(body, DecodeRows(rows))
 	w.HasIdeas = len(w.Groups) > 0
-	w.AsOf = row.AsOf.UTC().Format("Jan 2, 3:04 PM")
-	w.Model = ModelLabel(row.Model)
+	w.AsOf = asOf.UTC().Format("Jan 2, 3:04 PM")
+	w.Model = ModelLabel(model)
 	return w
 }
 

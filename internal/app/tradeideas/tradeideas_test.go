@@ -71,7 +71,7 @@ func TestTruncateRunesKeepsBoundaries(t *testing.T) {
 func TestCloudflareCallShape(t *testing.T) {
 	stub := &cloudflareStub{reply: `{"success":true,"errors":[],"result":{"response":"- idea one"}}`}
 	client := &http.Client{Transport: stub}
-	prompt := tradeIdeasPrompt + "\n\nItem,Station\nTritanium,Jita\n"
+	prompt := tradeIdeasPagePrompt + "\n\nItem,Station\nTritanium,Jita\n"
 	got, err := callCloudflareAI(context.Background(), client, tradeIdeasAPIBase,
 		"abcdef0123456789abcdef0123456789", "test-token-for-trade-ideas-only", tradeIdeasModel, prompt)
 	if err != nil {
@@ -96,7 +96,7 @@ func TestCloudflareCallShape(t *testing.T) {
 	if err := json.Unmarshal(stub.body, &sent); err != nil || len(sent.Messages) != 2 {
 		t.Fatalf("request body: %v (%s)", err, stub.body)
 	}
-	if sent.Messages[1].Role != "user" || !strings.Contains(sent.Messages[1].Content, tradeIdeasPrompt) || !strings.Contains(sent.Messages[1].Content, "Tritanium") {
+	if sent.Messages[1].Role != "user" || !strings.Contains(sent.Messages[1].Content, tradeIdeasPagePrompt) || !strings.Contains(sent.Messages[1].Content, "Tritanium") {
 		t.Fatalf("prompt not carried: %q", sent.Messages[1].Content)
 	}
 }
@@ -206,7 +206,7 @@ func TestTradeIdeasPromptFencesData(t *testing.T) {
 func TestCallMetaAIRequestAndAnswer(t *testing.T) {
 	stub := &cloudflareStub{reply: metaReply}
 	got, err := callMetaAI(context.Background(), &http.Client{Transport: stub}, metaAIAPIBase,
-		"meta-test-key", metaAIModel, "Item,Station\nTritanium,Jita\n", tradeIdeasBodyCap, 2222)
+		"meta-test-key", metaAIModel, "Item,Station\nTritanium,Jita\n", tradeIdeasPageBodyCap, 2222)
 	if err != nil {
 		t.Fatalf("callMetaAI: %v", err)
 	}

@@ -222,31 +222,26 @@ func TestTradeIdeasRefreshStores(t *testing.T) {
 	seedTradeIdeasScanner(t, conn, q)
 	stub := &cloudflareStub{reply: `{"success":true,"errors":[],"result":{"response":"- Buy Tritanium low"}}`}
 	app.tradeIdeasHTTP = &http.Client{Transport: stub}
-	// Two asks: the module's short answer and the page's own long one.
-	if stored := tradeideas.Refresh(ctx, app); stored != 2 || stub.calls != 2 {
-		t.Fatalf("refresh stored %d with %d calls, want 2 and 2", stored, stub.calls)
-	}
-	row, err := q.GetTradeIdeas(ctx)
-	if err != nil || !strings.Contains(row.Body, "Buy Tritanium low") || row.Model != ideas.GemmaModel {
-		t.Fatalf("stored row: %+v err %v", row, err)
+	// One ask: the page's own long answer. The home module displays
+	// a smaller amount of this same saved answer and never asks itself.
+	if stored := tradeideas.Refresh(ctx, app); stored != 1 || stub.calls != 1 {
+		t.Fatalf("refresh stored %d with %d calls, want 1 and 1", stored, stub.calls)
 	}
 	page, err := q.GetTradeIdeasPage(ctx)
-	if err != nil || !strings.Contains(page.Body, "Buy Tritanium low") {
+	if err != nil || !strings.Contains(page.Body, "Buy Tritanium low") || page.Model != ideas.GemmaModel {
 		t.Fatalf("stored page row: %+v err %v", page, err)
 	}
-	// Body and row set are stored together, for both asks: the rows
-	// the CSV carried, numbered as sent.
-	for name, raw := range map[string]string{"module": row.Rows.String, "page": page.Rows.String} {
-		rows := ideas.DecodeRows(raw)
-		if len(rows) != 2 || rows[0].N != 1 || rows[1].N != 2 {
-			t.Fatalf("%s row set = %+v, want the two seeded rows numbered 1, 2", name, rows)
-		}
-		items := map[string]bool{rows[0].Item: true, rows[1].Item: true}
-		if !items["Tritanium"] || !items["Pyerite"] || rows[0].Spread == "" || rows[0].Profit == "" {
-			t.Fatalf("%s row set lacks the seeded figures: %+v", name, rows)
-		}
+	// Body and row set are stored together: the rows the CSV carried,
+	// numbered as sent.
+	rows := ideas.DecodeRows(page.Rows.String)
+	if len(rows) != 2 || rows[0].N != 1 || rows[1].N != 2 {
+		t.Fatalf("page row set = %+v, want the two seeded rows numbered 1, 2", rows)
 	}
-	// The last ask was the page's: its prompt, its larger answer.
+	items := map[string]bool{rows[0].Item: true, rows[1].Item: true}
+	if !items["Tritanium"] || !items["Pyerite"] || rows[0].Spread == "" || rows[0].Profit == "" {
+		t.Fatalf("page row set lacks the seeded figures: %+v", rows)
+	}
+	// The ask was the page's: its prompt, its larger answer.
 	sent := string(mustReadStub(t, stub))
 	if !strings.Contains(sent, "Tritanium") || !strings.Contains(sent, "up to twenty ideas") || !strings.Contains(sent, `"max_tokens":6000`) {
 		t.Fatalf("page ask lacked its prompt, the scanner rows or its slim token cap: %s", sent)
@@ -255,8 +250,8 @@ func TestTradeIdeasRefreshStores(t *testing.T) {
 		t.Fatalf("page ask is not on the row-reference contract: %s", sent)
 	}
 	// Fresh enough: the model is not asked again.
-	if stored := tradeideas.Refresh(ctx, app); stored != 0 || stub.calls != 2 {
-		t.Fatalf("second refresh stored %d with %d calls, want 0 and 2", stored, stub.calls)
+	if stored := tradeideas.Refresh(ctx, app); stored != 0 || stub.calls != 1 {
+		t.Fatalf("second refresh stored %d with %d calls, want 0 and 1", stored, stub.calls)
 	}
 }
 
@@ -276,7 +271,7 @@ func TestTradeIdeasRefreshKeepsOldOnFailure(t *testing.T) {
 	app.cfg.cloudflareAuthToken = "test-token-for-trade-ideas-only"
 	seedTradeIdeasScanner(t, conn, q)
 	now := time.Now().UTC().Add(-25 * time.Hour) // past the refresh age
-	if err := q.PutTradeIdeas(ctx, db.PutTradeIdeasParams{Body: "old ideas", AsOf: now, Model: ideas.GemmaModel}); err != nil {
+	if err := q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{Body: "old ideas", AsOf: now, Model: ideas.GemmaModel}); err != nil {
 		t.Fatalf("seed old answer: %v", err)
 	}
 	stub := &cloudflareStub{code: http.StatusBadGateway, reply: `bad gateway`}
@@ -284,7 +279,7 @@ func TestTradeIdeasRefreshKeepsOldOnFailure(t *testing.T) {
 	if stored := tradeideas.Refresh(ctx, app); stored != 0 {
 		t.Fatalf("failed refresh stored %d, want 0", stored)
 	}
-	row, err := q.GetTradeIdeas(ctx)
+	row, err := q.GetTradeIdeasPage(ctx)
 	if err != nil || row.Body != "old ideas" {
 		t.Fatalf("old answer lost: %+v err %v", row, err)
 	}
@@ -313,7 +308,7 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	setHomeLayout(t, q, user.ID, `[{"id":"tradeideas","w":1,"h":2}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
-	if err := q.PutTradeIdeas(ctx, db.PutTradeIdeasParams{
+	if err := q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{
 		Body: "- Station flips\n- Regional arb <script>alert(1)</script>", AsOf: time.Now().UTC(), Model: ideas.GemmaModel,
 	}); err != nil {
 		t.Fatalf("store answer: %v", err)
@@ -341,7 +336,8 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 	}
 
 	// Once the page's own answer lands, the page shows it, every
-	// idea with its figures, while the module keeps its short one.
+	// idea with its figures, and the home module shows the same
+	// answer, a smaller amount of it, not the old one.
 	if err := q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{
 		Body:  "### Hauling Arbitrage\n* **Pyerite** · Jita IV-4 · buy 9.10 · sell 10.40 · 14.3% · 2,000/day · 2.6M ISK/day — thin spread, deep volume",
 		AsOf:  time.Now().UTC(),
@@ -355,14 +351,14 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 	}
 	mustContain(t, "/market/ideas/ (page answer)", body, "Hauling Arbitrage", "<strong>Pyerite</strong>", "2.6M ISK/day", "thin spread, deep volume", "ti-detail")
 	if strings.Contains(body, "Station flips") {
-		t.Error("page still shows the module's answer after its own landed")
+		t.Error("page still shows the old answer after the new one landed")
 	}
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET / (page answer): status %d", code)
 	}
-	if !strings.Contains(body, "Station flips") || strings.Contains(body, "Hauling Arbitrage") {
-		t.Error("home module should keep the module's own answer")
+	if !strings.Contains(body, "Hauling Arbitrage") || strings.Contains(body, "Station flips") {
+		t.Error("home module should show the page's new answer, a smaller amount of it")
 	}
 }
 
@@ -472,7 +468,7 @@ func TestTradeIdeasRefreshBesideCycle(t *testing.T) {
 	}
 	close(release)
 	app.moduleWG.Wait()
-	if row, err := q.GetTradeIdeas(ctx); err != nil || !strings.Contains(row.Body, "late") {
+	if row, err := q.GetTradeIdeasPage(ctx); err != nil || !strings.Contains(row.Body, "late") {
 		t.Errorf("the refresh beside the cycle did not land: %+v %v", row, err)
 	}
 }

@@ -170,15 +170,10 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 	types := app.intelTypes(ctx)
 	systems := app.systemLookup(ctx)
 	areas := app.intelAreas(ctx)
-	side := app.intelSideOf(ctx, channelID)
-	// The channel's known hostiles are its set standing: a pilot
-	// on the watch list reads red whatever their affiliation says.
-	watch := map[int64]bool{}
-	if rows, err := app.queries.ListIntelWatch(ctx, []int64{channelID}); err == nil {
-		for _, r := range rows {
-			watch[r.CharacterID] = true
-		}
-	}
+	// The channel's standing: its side, and its known hostiles, a
+	// pilot on the watch list reading red whatever their
+	// affiliation says.
+	st := app.channelStandingOf(ctx, channelID)
 	neighbours := map[int64]map[int64]bool{}
 	neighbourNames := map[int64]map[int64]string{}
 	neighbourSet := func(sys int64) map[int64]bool {
@@ -279,9 +274,9 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 				if missing != nil {
 					missing[id] = true
 				}
-				return false, watch[id]
+				return false, st.watch[id]
 			}
-			return side.corps[corp] || (alliance > 0 && side.alliances[alliance]), watch[id]
+			return st.side.corps[corp] || (alliance > 0 && st.side.alliances[alliance]), st.watch[id]
 		},
 	}
 }
@@ -495,10 +490,14 @@ func (app *Application) rosterReRead(ctx context.Context, channelID int64, in in
 		a.Pilots = append(a.Pilots, intelanalyze.Pilot{ID: lp.ID, Name: lp.Name,
 			Friendly: st.ofLocal(lp) == bucketFriendly, Red: st.watch[lp.ID]})
 	}
-	counts := intelanalyze.StandingCounts{Hostile: split[bucketHostile], Friendly: split[bucketFriendly],
-		Neutral: split[bucketNeutral], Unclassified: split[bucketUnknown]}
-	a.Counts = &counts
+	a.Counts = standingCountsOf(split)
 	return &rosterRead{analysis: a, result: res, sentence: sentence}
+}
+
+// standingCountsOf turns a standing split (indexed by bucket) into
+// the report's stored counts.
+func standingCountsOf(split [4]int) *intelanalyze.StandingCounts {
+	return &intelanalyze.StandingCounts{Hostile: split[bucketHostile], Friendly: split[bucketFriendly], Neutral: split[bucketNeutral], Unclassified: split[bucketUnknown]}
 }
 
 // storeRosterScan stores a roster reading as a scan, its raw

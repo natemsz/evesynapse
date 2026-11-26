@@ -451,9 +451,7 @@ func (app *Application) buildWorkbench(ctx context.Context, rep db.IntelReport, 
 	if rep.ScanID != "" {
 		if row, err := app.queries.GetScan(ctx, rep.ScanID); err == nil {
 			_ = json.Unmarshal([]byte(row.Result), &res)
-			if p, err := scan.Parse(row.Raw); err == nil && p.Kind == scan.KindDScan {
-				rawRows = p.DScan
-			}
+			rawRows = scanDScanRows(row)
 		}
 	}
 

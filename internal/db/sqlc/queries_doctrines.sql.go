@@ -250,7 +250,7 @@ func (q *Queries) GetDoctrineFacets(ctx context.Context, arg GetDoctrineFacetsPa
 }
 
 const getDoctrineFit = `-- name: GetDoctrineFit :one
-SELECT f.id, f.doctrine_id, f.name, f.ship_type_id, f.items_json, f.fleet_role, f.note, f.added_by, f.added_at, f.boosts_json, d.owner_kind, d.owner_id, d.visibility, d.name AS doctrine_name
+SELECT f.id, f.doctrine_id, f.name, f.ship_type_id, f.items_json, f.fleet_role, f.note, f.added_by, f.added_at, f.boosts_json, f.search_text, f.fit_tags, d.owner_kind, d.owner_id, d.visibility, d.name AS doctrine_name
 FROM doctrine_fits f JOIN doctrines d ON d.id = f.doctrine_id
 WHERE f.id = $1
 `
@@ -266,6 +266,8 @@ type GetDoctrineFitRow struct {
 	AddedBy      int64          `json:"added_by"`
 	AddedAt      time.Time      `json:"added_at"`
 	BoostsJson   sql.NullString `json:"boosts_json"`
+	SearchText   sql.NullString `json:"search_text"`
+	FitTags      sql.NullString `json:"fit_tags"`
 	OwnerKind    string         `json:"owner_kind"`
 	OwnerID      int64          `json:"owner_id"`
 	Visibility   string         `json:"visibility"`
@@ -286,6 +288,8 @@ func (q *Queries) GetDoctrineFit(ctx context.Context, id int64) (GetDoctrineFitR
 		&i.AddedBy,
 		&i.AddedAt,
 		&i.BoostsJson,
+		&i.SearchText,
+		&i.FitTags,
 		&i.OwnerKind,
 		&i.OwnerID,
 		&i.Visibility,
@@ -536,7 +540,7 @@ func (q *Queries) ListDoctrineFitReadinessByUser(ctx context.Context, arg ListDo
 }
 
 const listDoctrineFits = `-- name: ListDoctrineFits :many
-SELECT id, doctrine_id, name, ship_type_id, items_json, fleet_role, note, added_by, added_at, boosts_json FROM doctrine_fits
+SELECT id, doctrine_id, name, ship_type_id, items_json, fleet_role, note, added_by, added_at, boosts_json, search_text, fit_tags FROM doctrine_fits
 WHERE doctrine_id = ANY($1::bigint[])
 ORDER BY doctrine_id, id
 `
@@ -562,6 +566,8 @@ func (q *Queries) ListDoctrineFits(ctx context.Context, doctrineIds []int64) ([]
 			&i.AddedBy,
 			&i.AddedAt,
 			&i.BoostsJson,
+			&i.SearchText,
+			&i.FitTags,
 		); err != nil {
 			return nil, err
 		}
@@ -604,6 +610,40 @@ func (q *Queries) ListDoctrineFitsForOwners(ctx context.Context, ownerKeys []str
 			&i.ShipTypeID,
 			&i.ItemsJson,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDoctrineFitsWithoutSearch = `-- name: ListDoctrineFitsWithoutSearch :many
+SELECT id, items_json FROM doctrine_fits
+WHERE search_text IS NULL
+ORDER BY id
+LIMIT $1::bigint
+`
+
+type ListDoctrineFitsWithoutSearchRow struct {
+	ID        int64  `json:"id"`
+	ItemsJson string `json:"items_json"`
+}
+
+// Fits whose search text is not worked out yet (stored before schema
+// 186, or seeded), oldest first, a bounded batch per worker pass.
+func (q *Queries) ListDoctrineFitsWithoutSearch(ctx context.Context, rowLimit int64) ([]ListDoctrineFitsWithoutSearchRow, error) {
+	rows, err := q.db.Query(ctx, listDoctrineFitsWithoutSearch, rowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDoctrineFitsWithoutSearchRow
+	for rows.Next() {
+		var i ListDoctrineFitsWithoutSearchRow
+		if err := rows.Scan(&i.ID, &i.ItemsJson); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -862,6 +902,24 @@ type SetDoctrineFitBoostsParams struct {
 
 func (q *Queries) SetDoctrineFitBoosts(ctx context.Context, arg SetDoctrineFitBoostsParams) error {
 	_, err := q.db.Exec(ctx, setDoctrineFitBoosts, arg.ID, arg.BoostsJson)
+	return err
+}
+
+const setDoctrineFitSearch = `-- name: SetDoctrineFitSearch :exec
+UPDATE doctrine_fits SET search_text = $1, fit_tags = $2
+WHERE id = $3
+`
+
+type SetDoctrineFitSearchParams struct {
+	SearchText sql.NullString `json:"search_text"`
+	FitTags    sql.NullString `json:"fit_tags"`
+	ID         int64          `json:"id"`
+}
+
+// A fit's search text and own tags, worked out from its items when it
+// is saved (schema 186).
+func (q *Queries) SetDoctrineFitSearch(ctx context.Context, arg SetDoctrineFitSearchParams) error {
+	_, err := q.db.Exec(ctx, setDoctrineFitSearch, arg.SearchText, arg.FitTags, arg.ID)
 	return err
 }
 

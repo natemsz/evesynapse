@@ -7,22 +7,24 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
 const getScan = `-- name: GetScan :one
-SELECT id, kind, system_id, user_id, group_id, raw, result, created_at FROM scans WHERE id = $1
+SELECT id, kind, system_id, user_id, group_id, raw, result, created_at, dscan_rows FROM scans WHERE id = $1
 `
 
 type GetScanRow struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	SystemID  int64     `json:"system_id"`
-	UserID    int64     `json:"user_id"`
-	GroupID   string    `json:"group_id"`
-	Raw       string    `json:"raw"`
-	Result    string    `json:"result"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string         `json:"id"`
+	Kind      string         `json:"kind"`
+	SystemID  int64          `json:"system_id"`
+	UserID    int64          `json:"user_id"`
+	GroupID   string         `json:"group_id"`
+	Raw       string         `json:"raw"`
+	Result    string         `json:"result"`
+	CreatedAt time.Time      `json:"created_at"`
+	DscanRows sql.NullString `json:"dscan_rows"`
 }
 
 func (q *Queries) GetScan(ctx context.Context, id string) (GetScanRow, error) {
@@ -37,25 +39,27 @@ func (q *Queries) GetScan(ctx context.Context, id string) (GetScanRow, error) {
 		&i.Raw,
 		&i.Result,
 		&i.CreatedAt,
+		&i.DscanRows,
 	)
 	return i, err
 }
 
 const insertScan = `-- name: InsertScan :exec
 
-INSERT INTO scans (id, kind, system_id, user_id, group_id, raw, result, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO scans (id, kind, system_id, user_id, group_id, raw, result, created_at, dscan_rows)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type InsertScanParams struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	SystemID  int64     `json:"system_id"`
-	UserID    int64     `json:"user_id"`
-	GroupID   string    `json:"group_id"`
-	Raw       string    `json:"raw"`
-	Result    string    `json:"result"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string         `json:"id"`
+	Kind      string         `json:"kind"`
+	SystemID  int64          `json:"system_id"`
+	UserID    int64          `json:"user_id"`
+	GroupID   string         `json:"group_id"`
+	Raw       string         `json:"raw"`
+	Result    string         `json:"result"`
+	CreatedAt time.Time      `json:"created_at"`
+	DscanRows sql.NullString `json:"dscan_rows"`
 }
 
 // ---------------------------------------------------------------------
@@ -72,6 +76,7 @@ func (q *Queries) InsertScan(ctx context.Context, arg InsertScanParams) error {
 		arg.Raw,
 		arg.Result,
 		arg.CreatedAt,
+		arg.DscanRows,
 	)
 	return err
 }

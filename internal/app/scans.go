@@ -22,6 +22,7 @@ package app
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"errors"
 	"fmt"
 	json "github.com/goccy/go-json"
@@ -190,6 +191,55 @@ type scanResult struct {
 	Local   *localReading `json:"local,omitempty"`
 	Fleet   *fleetReading `json:"fleet,omitempty"`
 	Probe   *probeReading `json:"probe,omitempty"`
+}
+
+// storedDScanRow is one d-scan row as the scan keeps it beside its
+// reading (scans.dscan_rows, schema 187): what the report workbench
+// lists for each instance.
+type storedDScanRow struct {
+	TypeID int64   `json:"t"`
+	Name   string  `json:"n,omitempty"`
+	DistKm float64 `json:"d"`
+}
+
+// dscanRowsOf parses a paste once, when its scan is stored, and keeps
+// its rows when it is a d-scan; anything else keeps an empty value
+// (NULL is left for scans stored before the rows were kept).
+func dscanRowsOf(raw string) sql.NullString {
+	p, err := scan.Parse(raw)
+	if err != nil || p.Kind != scan.KindDScan || len(p.DScan) == 0 {
+		return sql.NullString{Valid: true}
+	}
+	rows := make([]storedDScanRow, len(p.DScan))
+	for i, r := range p.DScan {
+		rows[i] = storedDScanRow{TypeID: r.TypeID, Name: r.Name, DistKm: r.DistKm}
+	}
+	body, err := json.Marshal(rows)
+	if err != nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: string(body), Valid: true}
+}
+
+// scanDScanRows is a stored scan's d-scan rows: the ones kept when it
+// was stored, or, for a scan stored before they were kept, its paste
+// parsed again.
+func scanDScanRows(row db.GetScanRow) []scan.DScanRow {
+	if !row.DscanRows.Valid {
+		if p, err := scan.Parse(row.Raw); err == nil && p.Kind == scan.KindDScan {
+			return p.DScan
+		}
+		return nil
+	}
+	var kept []storedDScanRow
+	if row.DscanRows.String == "" || json.Unmarshal([]byte(row.DscanRows.String), &kept) != nil {
+		return nil
+	}
+	out := make([]scan.DScanRow, len(kept))
+	for i, r := range kept {
+		out[i] = scan.DScanRow{TypeID: r.TypeID, Name: r.Name, DistKm: r.DistKm}
+	}
+	return out
 }
 
 // scanCount is one tally: a ship class, a type, a system, a wing.
@@ -2422,7 +2472,7 @@ func (app *Application) handleScanSubmit(w http.ResponseWriter, r *http.Request)
 			// A fresh paste starts a group named for itself.
 			groupID = id
 		}
-		err = app.queries.InsertScan(ctx, db.InsertScanParams{ID: id, Kind: string(res.Kind), SystemID: res.SystemID, UserID: app.userID(ctx), GroupID: groupID, Raw: v.Raw, Result: string(body), CreatedAt: time.Now().UTC()})
+		err = app.queries.InsertScan(ctx, db.InsertScanParams{ID: id, Kind: string(res.Kind), SystemID: res.SystemID, UserID: app.userID(ctx), GroupID: groupID, Raw: v.Raw, Result: string(body), CreatedAt: time.Now().UTC(), DscanRows: dscanRowsOf(v.Raw)})
 	}
 	if err != nil {
 		logging.Errorf("scans: store: %v", err)

@@ -568,6 +568,8 @@ type DoctrineFit struct {
 	AddedBy    int64          `json:"added_by"`
 	AddedAt    time.Time      `json:"added_at"`
 	BoostsJson sql.NullString `json:"boosts_json"`
+	SearchText sql.NullString `json:"search_text"`
+	FitTags    sql.NullString `json:"fit_tags"`
 }
 
 type DoctrineFitReadiness struct {
@@ -2369,14 +2371,15 @@ type RestockTarget struct {
 }
 
 type Scan struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	SystemID  int64     `json:"system_id"`
-	UserID    int64     `json:"user_id"`
-	Raw       string    `json:"raw"`
-	Result    string    `json:"result"`
-	CreatedAt time.Time `json:"created_at"`
-	GroupID   string    `json:"group_id"`
+	ID        string         `json:"id"`
+	Kind      string         `json:"kind"`
+	SystemID  int64          `json:"system_id"`
+	UserID    int64          `json:"user_id"`
+	Raw       string         `json:"raw"`
+	Result    string         `json:"result"`
+	CreatedAt time.Time      `json:"created_at"`
+	GroupID   string         `json:"group_id"`
+	DscanRows sql.NullString `json:"dscan_rows"`
 }
 
 type SdeApiBlob struct {

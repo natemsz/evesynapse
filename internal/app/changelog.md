@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v1.0.2.11] - 2026-11-26
+## [v1.0.2.12] - 2026-11-26
+
+Automated build of EveSynapse v1.0.2.12. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).
+
+## What's Changed
+
+### 🚀 Features
+* Bump version to 1.0.2.12 in internal/app/version.txt by @miko in #623
+* Queue the Customize hint one by one behind the notification prompt by @miko in #622
+
+## [v1.0.2.11]
 
 Automated build of EveSynapse v1.0.2.11. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).

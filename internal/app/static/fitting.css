@@ -209,7 +209,6 @@ html.fit-full-open { overflow: hidden; }
   box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 55%, transparent);
 }
 dialog.lo-delete-modal {
-  position: fixed;
   inset: 0;
   margin: auto;
   width: min(26rem, calc(100vw - 2rem));

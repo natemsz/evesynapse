@@ -1630,19 +1630,28 @@ func (app *Application) warmTypeGroup(ctx context.Context, budget *warmBudget, i
 }
 
 func (app *Application) warmGroupName(ctx context.Context, budget *warmBudget, id int64) bool {
-	var g esi.Group
-	if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/groups/%d/", id), &g); err != nil {
+	return warmESIName(ctx, app, budget, fmt.Sprintf("/universe/groups/%d/", id), "warm group", id,
+		func(g *esi.Group) string { return g.Name }, app.esi.StoreGroupName)
+}
+
+// warmESIName reads entity id from an ESI path and stores its name
+// when ESI returns one. An error-limit answer spends the warm budget;
+// any other error is logged under what, unless the context ended.
+func warmESIName[T any](ctx context.Context, app *Application, budget *warmBudget, path, what string, id int64, nameOf func(*T) string, store func(id int64, name string)) bool {
+	var v T
+	if err := app.esi.Get(ctx, "", path, &v); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			logging.Errorf("worker: warm group %d: %v", id, err)
+			logging.Errorf("worker: %s %d: %v", what, id, err)
 		}
 		return false
 	}
-	if g.Name == "" {
+	name := nameOf(&v)
+	if name == "" {
 		return false
 	}
-	app.esi.StoreGroupName(id, g.Name)
+	store(id, name)
 	return true
 }
 

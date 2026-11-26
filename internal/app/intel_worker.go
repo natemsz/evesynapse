@@ -291,37 +291,13 @@ func (app *Application) warmIntelNames(ctx context.Context, budget *warmBudget) 
 }
 
 func (app *Application) warmCorpName(ctx context.Context, budget *warmBudget, id int64) bool {
-	var corp esi.Corporation
-	if err := app.esi.Get(ctx, "", fmt.Sprintf("/corporations/%d/", id), &corp); err != nil {
-		if errors.Is(err, esi.ErrErrorLimit) {
-			budget.hitLimit()
-		} else if ctx.Err() == nil {
-			logging.Errorf("worker: intel: warm corporation %d: %v", id, err)
-		}
-		return false
-	}
-	if corp.Name == "" {
-		return false
-	}
-	app.esi.StoreCorpName(id, corp.Name)
-	return true
+	return warmESIName(ctx, app, budget, fmt.Sprintf("/corporations/%d/", id), "intel: warm corporation", id,
+		func(c *esi.Corporation) string { return c.Name }, app.esi.StoreCorpName)
 }
 
 func (app *Application) warmAllianceName(ctx context.Context, budget *warmBudget, id int64) bool {
-	var alliance esi.Alliance
-	if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/", id), &alliance); err != nil {
-		if errors.Is(err, esi.ErrErrorLimit) {
-			budget.hitLimit()
-		} else if ctx.Err() == nil {
-			logging.Errorf("worker: intel: warm alliance %d: %v", id, err)
-		}
-		return false
-	}
-	if alliance.Name == "" {
-		return false
-	}
-	app.esi.StoreAllianceName(id, alliance.Name)
-	return true
+	return warmESIName(ctx, app, budget, fmt.Sprintf("/alliances/%d/", id), "intel: warm alliance", id,
+		func(a *esi.Alliance) string { return a.Name }, app.esi.StoreAllianceName)
 }
 
 // warmConstellationName reads one constellation's name from the

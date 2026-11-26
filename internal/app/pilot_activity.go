@@ -94,18 +94,6 @@ const (
 
 const pilotBackfillUserAgent = "EveSynapse pilot activity (contact: the site operator; self-hosted EVE Online companion)"
 
-// pilotBackfillQueueChan returns the backfill queue, making it on
-// first use.
-func (app *Application) pilotBackfillQueueChan() chan int64 {
-	app.pilotBackfillMu.Lock()
-	defer app.pilotBackfillMu.Unlock()
-	if app.pilotBackfillCh == nil {
-		app.pilotBackfillCh = make(chan int64, pilotBackfillQueueSize)
-		app.pilotBackfillQueued = map[int64]bool{}
-	}
-	return app.pilotBackfillCh
-}
-
 // notePilotsEncountered offers pilots met in a reading (a channel
 // report, a scan) to the backfill worker. It never blocks the
 // reading: a full queue drops the offer and logs it, and the
@@ -114,22 +102,9 @@ func (app *Application) notePilotsEncountered(ids []int64) {
 	if !app.cfg.PilotBackfillEnabled() || len(ids) == 0 {
 		return
 	}
-	ch := app.pilotBackfillQueueChan()
-	for _, id := range ids {
-		if id <= 0 {
-			continue
-		}
-		app.pilotBackfillMu.Lock()
-		if !app.pilotBackfillQueued[id] {
-			select {
-			case ch <- id:
-				app.pilotBackfillQueued[id] = true
-			default:
-				logging.Warnf("pilot activity: backfill queue full; pilot %d waits for a later reading", id)
-			}
-		}
-		app.pilotBackfillMu.Unlock()
-	}
+	app.pilotBackfill.offer(ids, func(id int64) {
+		logging.Warnf("pilot activity: backfill queue full; pilot %d waits for a later reading", id)
+	})
 }
 
 // noteAnalysisPilots offers the pilots an intel analysis resolved
@@ -152,19 +127,8 @@ func (app *Application) runPilotBackfill(ctx context.Context) {
 		logging.Infof("pilot activity: backfill off (PILOT_BACKFILL=off)")
 		return
 	}
-	ch := app.pilotBackfillQueueChan()
 	client := &http.Client{Timeout: 30 * time.Second}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case id := <-ch:
-			app.backfillPilot(ctx, client, id)
-			app.pilotBackfillMu.Lock()
-			delete(app.pilotBackfillQueued, id)
-			app.pilotBackfillMu.Unlock()
-		}
-	}
+	app.pilotBackfill.drain(ctx, func(id int64) { app.backfillPilot(ctx, client, id) })
 }
 
 // killInvolvementCutoff returns the moment kill involvement

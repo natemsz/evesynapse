@@ -11,16 +11,9 @@ package appraise
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
-	"net/http"
-	"slices"
-	"strings"
 	"time"
 
-	"evesynapse/internal/logging"
+	"evesynapse/internal/app/module"
 )
 
 // anonHistoryCookie names the anonymous-history cookie.
@@ -33,145 +26,21 @@ const anonHistoryCap = 20
 // after its last view before the worker sweep deletes it.
 const anonAppraisalTTL = 180 * 24 * time.Hour
 
-// isShareTokenShape reports whether s looks like a share token
-// (48 lowercase hex characters from newShareToken).
-func isShareTokenShape(s string) bool {
-	if len(s) != 48 {
-		return false
-	}
-	for _, c := range s {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			return false
-		}
-	}
-	return true
-}
-
 // anonHistorySecret returns the per-install signing secret,
 // creating and storing one on first use.
 func (app *page) anonHistorySecret(ctx context.Context) ([]byte, error) {
-	if secret, err := app.queries.GetAppraisalCookieSecret(ctx); err == nil && secret != "" {
-		return []byte(secret), nil
-	}
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
-		return nil, err
-	}
-	secret := hex.EncodeToString(buf)
-	if err := app.queries.InsertAppraisalCookieSecret(ctx, secret); err != nil {
-		return nil, err
-	}
-	stored, err := app.queries.GetAppraisalCookieSecret(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return []byte(stored), nil
+	return module.CookieSecret(ctx, app.queries.GetAppraisalCookieSecret, app.queries.InsertAppraisalCookieSecret)
 }
 
-// signValue signs one payload: payload + "." + HMAC hex.
-func signValue(secret []byte, payload string) string {
-	mac := hmac.New(sha256.New, secret)
-	mac.Write([]byte(payload))
-	return payload + "." + hex.EncodeToString(mac.Sum(nil))
-}
-
-// verifySignedValue returns a signed value's payload when
-// its signature checks out.
-func verifySignedValue(secret []byte, value string) (string, bool) {
-	i := strings.LastIndex(value, ".")
-	if i < 0 {
-		return "", false
+// anonHistory is the anonymous appraisal history cookie.
+func (app *page) anonHistory() module.TokenHistory {
+	return module.TokenHistory{
+		Cookie: anonHistoryCookie,
+		Cap:    anonHistoryCap,
+		TTL:    anonAppraisalTTL,
+		What:   "appraisal: anon history",
+		Secret: app.anonHistorySecret,
 	}
-	payload, sig := value[:i], value[i+1:]
-	mac := hmac.New(sha256.New, secret)
-	mac.Write([]byte(payload))
-	if !hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(sig)) {
-		return "", false
-	}
-	return payload, true
-}
-
-func signAnonTokens(secret []byte, tokens []string) string {
-	return signValue(secret, strings.Join(tokens, "."))
-}
-
-func verifyAnonTokens(secret []byte, value string) []string {
-	payload, ok := verifySignedValue(secret, value)
-	if !ok {
-		return nil
-	}
-	var out []string
-	for tok := range strings.SplitSeq(payload, ".") {
-		if isShareTokenShape(tok) {
-			out = append(out, tok)
-		}
-	}
-	return out
-}
-
-// anonTokens reads the request's verified history tokens,
-// newest first. No cookie, a bad signature, or an unavailable
-// secret all read as no history.
-func (app *page) anonTokens(ctx context.Context, r *http.Request) []string {
-	c, err := r.Cookie(anonHistoryCookie)
-	if err != nil || c.Value == "" {
-		return nil
-	}
-	secret, err := app.anonHistorySecret(ctx)
-	if err != nil {
-		logging.Errorf("appraisal: anon history secret: %v", err)
-		return nil
-	}
-	return verifyAnonTokens(secret, c.Value)
-}
-
-// writeAnonCookie stores the tokens as the history cookie.
-func (app *page) writeAnonCookie(ctx context.Context, w http.ResponseWriter, tokens []string) {
-	if len(tokens) > anonHistoryCap {
-		tokens = tokens[:anonHistoryCap]
-	}
-	secret, err := app.anonHistorySecret(ctx)
-	if err != nil {
-		logging.Errorf("appraisal: anon history secret: %v", err)
-		return
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     anonHistoryCookie,
-		Value:    signAnonTokens(secret, tokens),
-		Path:     "/",
-		MaxAge:   int(anonAppraisalTTL / time.Second),
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-}
-
-// rememberAnonToken returns the request's tokens with tok
-// moved to the front, capped, and writes the updated cookie.
-func (app *page) rememberAnonToken(ctx context.Context, w http.ResponseWriter, r *http.Request, tok string) {
-	tokens := []string{tok}
-	for _, t := range app.anonTokens(ctx, r) {
-		if t != tok {
-			tokens = append(tokens, t)
-		}
-	}
-	app.writeAnonCookie(ctx, w, tokens)
-}
-
-// forgetAnonToken drops tok from the history cookie.
-func (app *page) forgetAnonToken(ctx context.Context, w http.ResponseWriter, r *http.Request, tok string) {
-	var tokens []string
-	for _, t := range app.anonTokens(ctx, r) {
-		if t != tok {
-			tokens = append(tokens, t)
-		}
-	}
-	app.writeAnonCookie(ctx, w, tokens)
-}
-
-// hasAnonToken reports whether the request's verified history
-// holds tok: the cookie-holder is the appraisal's creator.
-func (app *page) hasAnonToken(ctx context.Context, r *http.Request, tok string) bool {
-	return slices.Contains(app.anonTokens(ctx, r), tok)
 }
 
 // anonymousOwnerID returns the shared anonymous owner's user

@@ -12,19 +12,17 @@ package fitting
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	json "github.com/goccy/go-json"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
@@ -40,18 +38,6 @@ const anonFitCap = 20
 // last view before the sweep deletes it.
 const anonFitTTL = 180 * 24 * time.Hour
 
-func isFitShareTokenShape(s string) bool {
-	if len(s) != 48 {
-		return false
-	}
-	for _, c := range s {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			return false
-		}
-	}
-	return true
-}
-
 func newFitShareToken() (string, error) {
 	buf := make([]byte, 24)
 	if _, err := rand.Read(buf); err != nil {
@@ -63,111 +49,18 @@ func newFitShareToken() (string, error) {
 // fitHistorySecret returns the per-install signing secret,
 // creating and storing one on first use.
 func (app *tool) fitHistorySecret(ctx context.Context) ([]byte, error) {
-	if secret, err := app.queries.GetFittingCookieSecret(ctx); err == nil && secret != "" {
-		return []byte(secret), nil
-	}
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
-		return nil, err
-	}
-	secret := hex.EncodeToString(buf)
-	if err := app.queries.InsertFittingCookieSecret(ctx, secret); err != nil {
-		return nil, err
-	}
-	stored, err := app.queries.GetFittingCookieSecret(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return []byte(stored), nil
+	return module.CookieSecret(ctx, app.queries.GetFittingCookieSecret, app.queries.InsertFittingCookieSecret)
 }
 
-func signFitValue(secret []byte, payload string) string {
-	mac := hmac.New(sha256.New, secret)
-	mac.Write([]byte(payload))
-	return payload + "." + hex.EncodeToString(mac.Sum(nil))
-}
-
-func verifyFitValue(secret []byte, value string) (string, bool) {
-	i := strings.LastIndex(value, ".")
-	if i < 0 {
-		return "", false
+// anonFits is the anonymous fit history cookie.
+func (app *tool) anonFits() module.TokenHistory {
+	return module.TokenHistory{
+		Cookie: anonFitCookie,
+		Cap:    anonFitCap,
+		TTL:    anonFitTTL,
+		What:   "fittings: anon fit",
+		Secret: app.fitHistorySecret,
 	}
-	payload, sig := value[:i], value[i+1:]
-	mac := hmac.New(sha256.New, secret)
-	mac.Write([]byte(payload))
-	if !hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(sig)) {
-		return "", false
-	}
-	return payload, true
-}
-
-// anonFitTokens reads the request's verified fit tokens.
-func (app *tool) anonFitTokens(ctx context.Context, r *http.Request) []string {
-	c, err := r.Cookie(anonFitCookie)
-	if err != nil || c.Value == "" {
-		return nil
-	}
-	secret, err := app.fitHistorySecret(ctx)
-	if err != nil {
-		logging.Errorf("fittings: anon fit secret: %v", err)
-		return nil
-	}
-	payload, ok := verifyFitValue(secret, c.Value)
-	if !ok {
-		return nil
-	}
-	var out []string
-	for tok := range strings.SplitSeq(payload, ".") {
-		if isFitShareTokenShape(tok) {
-			out = append(out, tok)
-		}
-	}
-	return out
-}
-
-func (app *tool) writeAnonFitCookie(ctx context.Context, w http.ResponseWriter, tokens []string) {
-	if len(tokens) > anonFitCap {
-		tokens = tokens[:anonFitCap]
-	}
-	secret, err := app.fitHistorySecret(ctx)
-	if err != nil {
-		logging.Errorf("fittings: anon fit secret: %v", err)
-		return
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     anonFitCookie,
-		Value:    signFitValue(secret, strings.Join(tokens, ".")),
-		Path:     "/",
-		MaxAge:   int(anonFitTTL / time.Second),
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-}
-
-func (app *tool) rememberAnonFit(ctx context.Context, w http.ResponseWriter, r *http.Request, tok string) {
-	tokens := []string{tok}
-	for _, t := range app.anonFitTokens(ctx, r) {
-		if t != tok {
-			tokens = append(tokens, t)
-		}
-	}
-	app.writeAnonFitCookie(ctx, w, tokens)
-}
-
-func (app *tool) forgetAnonFit(ctx context.Context, w http.ResponseWriter, r *http.Request, tok string) {
-	var tokens []string
-	for _, t := range app.anonFitTokens(ctx, r) {
-		if t != tok {
-			tokens = append(tokens, t)
-		}
-	}
-	app.writeAnonFitCookie(ctx, w, tokens)
-}
-
-// hasAnonFit reports whether the request's verified history
-// holds tok: the cookie-holder is the fit's creator.
-func (app *tool) hasAnonFit(ctx context.Context, r *http.Request, tok string) bool {
-	return slices.Contains(app.anonFitTokens(ctx, r), tok)
 }
 
 // anonFitOwnerID returns the shared anonymous owner's user id.
@@ -198,7 +91,7 @@ type anonFitEntry struct {
 // anonFitHistory shapes the cookie's anonymous fits in cookie
 // order, skipping tokens whose rows are gone.
 func (app *tool) anonFitHistory(ctx context.Context, r *http.Request) []anonFitEntry {
-	tokens := app.anonFitTokens(ctx, r)
+	tokens := app.anonFits().Tokens(ctx, r)
 	if len(tokens) == 0 {
 		return nil
 	}
@@ -302,7 +195,7 @@ func (app *tool) handleFitSaveAnonymous(w http.ResponseWriter, r *http.Request) 
 	}); err != nil {
 		logging.Errorf("fittings: anon price %d: %v", row.ID, err)
 	}
-	app.rememberAnonFit(ctx, w, r, token)
+	app.anonFits().Remember(ctx, w, r, token)
 	writeFitJSON(w, map[string]any{
 		"id": row.ID, "shareToken": token,
 		"shareUrl": "/fittings/share/" + token + "/",
@@ -314,11 +207,11 @@ func (app *tool) handleFitSaveAnonymous(w http.ResponseWriter, r *http.Request) 
 func (app *tool) handleFitDeleteAnonymous(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	token := chi.URLParam(r, "token")
-	if app.hasAnonFit(ctx, r, token) {
+	if app.anonFits().Has(ctx, r, token) {
 		if _, err := app.queries.DeleteAnonymousFittingByToken(ctx, token); err != nil {
 			logging.Errorf("fittings: delete anonymous fit: %v", err)
 		}
-		app.forgetAnonFit(ctx, w, r, token)
+		app.anonFits().Forget(ctx, w, r, token)
 	}
 	http.Redirect(w, r, "/fittings/", http.StatusSeeOther)
 }

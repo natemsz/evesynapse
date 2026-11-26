@@ -186,7 +186,7 @@ func (app *page) rememberedBasis(ctx context.Context, r *http.Request, userID in
 	}
 	if c, err := r.Cookie(anonBasisCookie); err == nil && c.Value != "" {
 		if secret, err := app.anonHistorySecret(ctx); err == nil {
-			if payload, ok := verifySignedValue(secret, c.Value); ok {
+			if payload, ok := module.VerifySignedValue(secret, c.Value); ok {
 				parts := strings.Split(payload, "|")
 				if len(parts) == 3 {
 					return app.basisFromValues(app.defaultBasis(), url.Values{
@@ -217,7 +217,7 @@ func (app *page) rememberBasis(ctx context.Context, w http.ResponseWriter, r *ht
 	payload := fmt.Sprintf("%d|%s|%s", b.RegionID, b.Mode, strconv.FormatFloat(b.Percent, 'f', -1, 64))
 	http.SetCookie(w, &http.Cookie{
 		Name:     anonBasisCookie,
-		Value:    signValue(secret, payload),
+		Value:    module.SignValue(secret, payload),
 		Path:     "/",
 		MaxAge:   int(anonAppraisalTTL / time.Second),
 		HttpOnly: true,

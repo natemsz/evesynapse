@@ -1326,7 +1326,7 @@ func (app *page) handleAppraisePage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		view.Saved = app.anonSavedList(ctx, app.anonTokens(ctx, r))
+		view.Saved = app.anonSavedList(ctx, app.anonHistory().Tokens(ctx, r))
 	}
 	data.Appraise = view
 	app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
@@ -1372,7 +1372,7 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		if userID > 0 {
 			view.Saved = app.savedList(ctx, userID)
 		} else {
-			view.Saved = app.anonSavedList(ctx, app.anonTokens(ctx, r))
+			view.Saved = app.anonSavedList(ctx, app.anonHistory().Tokens(ctx, r))
 		}
 		data.Appraise = view
 		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
@@ -1420,7 +1420,7 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	app.rememberBasis(ctx, w, r, 0, basis)
-	app.rememberAnonToken(ctx, w, r, token)
+	app.anonHistory().Remember(ctx, w, r, token)
 	http.Redirect(w, r, "/market/appraise/s/"+token+"/", http.StatusSeeOther)
 }
 
@@ -1459,7 +1459,7 @@ func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 		if err := app.queries.TouchUserAppraisalByToken(ctx, token); err != nil {
 			logging.Errorf("appraisal: touch %s: %v", token, err)
 		}
-		if app.hasAnonToken(ctx, r, token) {
+		if app.anonHistory().Has(ctx, r, token) {
 			res.CanDelete = true
 			res.DeleteURL = "/market/appraise/s/" + token + "/delete"
 		}
@@ -1494,11 +1494,11 @@ func (app *page) handleAppraiseDelete(w http.ResponseWriter, r *http.Request) {
 func (app *page) handleAppraiseDeleteAnon(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	token := chi.URLParam(r, "token")
-	if app.hasAnonToken(ctx, r, token) {
+	if app.anonHistory().Has(ctx, r, token) {
 		if _, err := app.queries.DeleteAnonymousAppraisalByToken(ctx, token); err != nil {
 			logging.Errorf("appraisal: delete anonymous: %v", err)
 		}
-		app.forgetAnonToken(ctx, w, r, token)
+		app.anonHistory().Forget(ctx, w, r, token)
 	}
 	http.Redirect(w, r, "/market/appraise/", http.StatusSeeOther)
 }
@@ -1620,6 +1620,6 @@ func (app *page) handleAppraiseRepriceToken(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	app.rememberBasis(ctx, w, r, 0, basis)
-	app.rememberAnonToken(ctx, w, r, newToken)
+	app.anonHistory().Remember(ctx, w, r, newToken)
 	http.Redirect(w, r, "/market/appraise/s/"+newToken+"/", http.StatusSeeOther)
 }

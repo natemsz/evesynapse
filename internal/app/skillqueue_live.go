@@ -46,3 +46,43 @@ func queueHead(queue esi.Skillqueue, now time.Time) *esi.SkillqueueEntry {
 	}
 	return &live[0]
 }
+
+// pendingLevels is the levels still to train per skill, read off the
+// live queue. The skills snapshot can lag the queue (a level that just
+// finished is not in it yet), so the trained level is also read off
+// the queue: every lower level of a skill that is no longer pending
+// has finished.
+type pendingLevels map[int64]map[int]bool
+
+// add marks one level of a skill as still to train.
+func (p pendingLevels) add(skillID int64, level int) {
+	if p[skillID] == nil {
+		p[skillID] = map[int]bool{}
+	}
+	p[skillID][level] = true
+}
+
+// trainedBelow returns the highest level below level that is no
+// longer pending: the level the skill is trained to by the time the
+// queue reaches level.
+func (p pendingLevels) trainedBelow(skillID int64, level int) int {
+	t := level - 1
+	for t > 0 && p[skillID][t] {
+		t--
+	}
+	return t
+}
+
+// trained returns the level below the lowest one still pending, and
+// false when the skill has nothing pending.
+func (p pendingLevels) trained(skillID int64) (int, bool) {
+	levels := p[skillID]
+	if len(levels) == 0 {
+		return 0, false
+	}
+	lowest := 6
+	for l := range levels {
+		lowest = min(lowest, l)
+	}
+	return lowest - 1, true
+}

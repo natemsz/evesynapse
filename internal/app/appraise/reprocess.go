@@ -99,7 +99,7 @@ func (app *page) rememberedRefine(ctx context.Context, r *http.Request, userID i
 	}
 	if c, err := r.Cookie(anonRefineCookie); err == nil && c.Value != "" {
 		if secret, err := app.anonHistorySecret(ctx); err == nil {
-			if payload, ok := verifySignedValue(secret, c.Value); ok {
+			if payload, ok := module.VerifySignedValue(secret, c.Value); ok {
 				parts := strings.Split(payload, "|")
 				if len(parts) == 2 {
 					if v, err := strconv.ParseFloat(parts[0], 64); err == nil && v > 0 {
@@ -133,7 +133,7 @@ func (app *page) rememberRefine(ctx context.Context, w http.ResponseWriter, r *h
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     anonRefineCookie,
-		Value:    signValue(secret, strconv.FormatFloat(s.Rate, 'f', -1, 64)+"|"+prune),
+		Value:    module.SignValue(secret, strconv.FormatFloat(s.Rate, 'f', -1, 64)+"|"+prune),
 		Path:     "/",
 		MaxAge:   int(anonAppraisalTTL / time.Second),
 		HttpOnly: true,

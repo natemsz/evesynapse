@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/scan"
 )
@@ -164,12 +165,12 @@ func renderScanOG(res scanResult, meta ogMeta) *image.NRGBA {
 			}
 			name := g.Name
 			ogText(img, ogMargin, y, ogFit(name, 30, 760), 30, ogTextC, 0)
-			n := plural(g.N, "pilot")
+			n := humanize.Plural(g.N, "pilot")
 			ogText(img, ogMargin+790, y, n, 30, ogMuted, 0)
 			y += 52
 		}
 		if len(res.Local.Alliances) > 3 {
-			ogText(img, ogMargin, y, "+"+plural(len(res.Local.Alliances)-3, "more group"), 24, ogMuted, 0)
+			ogText(img, ogMargin, y, "+"+humanize.Plural(len(res.Local.Alliances)-3, "more group"), 24, ogMuted, 0)
 		}
 	case res.Fleet != nil:
 		ogText(img, ogMargin, 348, ogFit(ogTopCounts(res.Fleet.Classes, 4), 30, ogW-2*ogMargin), 30, ogTextC, 0)
@@ -191,15 +192,15 @@ func ogSummary(res scanResult) string {
 	switch {
 	case res.DScan != nil:
 		d := res.DScan
-		return plural(d.Ships, "ship") + " · " + itoa(d.ShipsGrid) + " on grid · " + itoa(d.Ships-d.ShipsGrid) + " off grid"
+		return humanize.Plural(d.Ships, "ship") + " · " + itoa(d.ShipsGrid) + " on grid · " + itoa(d.Ships-d.ShipsGrid) + " off grid"
 	case res.Local != nil:
-		return plural(len(res.Local.Pilots)+len(res.Local.Unknown), "pilot") + " · " + plural(len(res.Local.Alliances), "group")
+		return humanize.Plural(len(res.Local.Pilots)+len(res.Local.Unknown), "pilot") + " · " + humanize.Plural(len(res.Local.Alliances), "group")
 	case res.Fleet != nil:
-		return plural(len(res.Fleet.Members), "member") + " · " + pluralCount(int64(len(res.Fleet.Classes)), "ship class", "ship classes")
+		return humanize.Plural(len(res.Fleet.Members), "member") + " · " + pluralCount(int64(len(res.Fleet.Classes)), "ship class", "ship classes")
 	case res.Probe != nil:
-		s := plural(len(res.Probe.Sigs), "signature")
+		s := humanize.Plural(len(res.Probe.Sigs), "signature")
 		if res.Probe.Unresolved > 0 {
-			s += " · " + plural(res.Probe.Unresolved, "unscanned")
+			s += " · " + humanize.Plural(res.Probe.Unresolved, "unscanned")
 		}
 		return s
 	}

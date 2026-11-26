@@ -32,18 +32,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// corpBackfillQueueChan returns the corp backfill queue, making
-// it on first use.
-func (app *Application) corpBackfillQueueChan() chan int64 {
-	app.corpBackfillMu.Lock()
-	defer app.corpBackfillMu.Unlock()
-	if app.corpBackfillCh == nil {
-		app.corpBackfillCh = make(chan int64, pilotBackfillQueueSize)
-		app.corpBackfillQueued = map[int64]bool{}
-	}
-	return app.corpBackfillCh
-}
-
 // noteCorpsEncountered offers corporations met on a profile or a
 // killmail page to the backfill worker. It never blocks the page:
 // a full queue drops the offer and logs it, and the corporation's
@@ -52,22 +40,9 @@ func (app *Application) noteCorpsEncountered(ids []int64) {
 	if !app.cfg.PilotBackfillEnabled() || len(ids) == 0 {
 		return
 	}
-	ch := app.corpBackfillQueueChan()
-	for _, id := range ids {
-		if id <= 0 {
-			continue
-		}
-		app.corpBackfillMu.Lock()
-		if !app.corpBackfillQueued[id] {
-			select {
-			case ch <- id:
-				app.corpBackfillQueued[id] = true
-			default:
-				logging.Warnf("corp coverage: backfill queue full; corporation %d waits for a later visit", id)
-			}
-		}
-		app.corpBackfillMu.Unlock()
-	}
+	app.corpBackfill.offer(ids, func(id int64) {
+		logging.Warnf("corp coverage: backfill queue full; corporation %d waits for a later visit", id)
+	})
 }
 
 // runCorpBackfill is the corp backfill worker: one corporation at
@@ -76,19 +51,8 @@ func (app *Application) runCorpBackfill(ctx context.Context) {
 	if !app.cfg.PilotBackfillEnabled() {
 		return
 	}
-	ch := app.corpBackfillQueueChan()
 	client := &http.Client{Timeout: 30 * time.Second}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case id := <-ch:
-			app.backfillCorp(ctx, client, id)
-			app.corpBackfillMu.Lock()
-			delete(app.corpBackfillQueued, id)
-			app.corpBackfillMu.Unlock()
-		}
-	}
+	app.corpBackfill.drain(ctx, func(id int64) { app.backfillCorp(ctx, client, id) })
 }
 
 // backfillCorp ingests a corporation's recent kill history from

@@ -374,9 +374,7 @@ func TestNetWorthHousePrices(t *testing.T) {
 		t.Fatalf("seed region stat: %v", err)
 	}
 	// The sweep landing mid-test: the cache window lapses.
-	app.forgeTypicalsMu.Lock()
-	app.forgeTypicalsCache = nil
-	app.forgeTypicalsMu.Unlock()
+	lapsePriceCaches(app)
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET / (swept): status %d", code)
@@ -566,4 +564,15 @@ func TestHomeWidgetSettingsDefaultForANewUser(t *testing.T) {
 	if got := app.storedOptions(context.Background(), user.ID, def, widgetMarket, nil); got.Get("scope") != scopeAll || got.Get("show") != mergeBoth {
 		t.Errorf("fresh-user settings = %v, want defaults", got)
 	}
+}
+
+// lapsePriceCaches drops the cached swept typicals and house
+// valuations, as the cache window lapsing would after a sweep.
+func lapsePriceCaches(app *Application) {
+	app.forgeTypicalsMu.Lock()
+	app.forgeTypicalsCache = nil
+	app.forgeTypicalsMu.Unlock()
+	app.houseValuesMu.Lock()
+	app.houseValuesCache = nil
+	app.houseValuesMu.Unlock()
 }

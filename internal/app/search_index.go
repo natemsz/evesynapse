@@ -5,11 +5,9 @@ import (
 	json "github.com/goccy/go-json"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -111,7 +109,6 @@ type searchIndexPilot struct {
 // after the swap; the record maps are kept current by the store
 // hooks under the index lock, so record reads hold it.
 type searchSnapshot struct {
-	builtAt   time.Time
 	types     []searchIndexType
 	systems   []searchIndexSystem
 	regions   []searchIndexRegion
@@ -173,11 +170,8 @@ func (d searchRecordDelta) applyTo(snap *searchSnapshot, key searchRecordKey) {
 // the build in flight, and the record deltas a build must not
 // lose. The zero value is ready to use.
 type searchIndexState struct {
-	mu       sync.RWMutex
-	snap     *searchSnapshot
-	building bool
-	sdeStale bool
-	pending  map[searchRecordKey]searchRecordDelta
+	memSnapshot[searchSnapshot]
+	pending map[searchRecordKey]searchRecordDelta
 }
 
 // searchSnapshot returns the live snapshot, starting a background
@@ -189,12 +183,8 @@ func (app *Application) searchSnapshot() *searchSnapshot {
 	if app.cfg.lowRAMMode {
 		return nil
 	}
-	idx := &app.searchIdx
-	idx.mu.RLock()
-	snap := idx.snap
-	stale := snap == nil || idx.sdeStale || time.Since(snap.builtAt) > searchIndexMaxAge
-	idx.mu.RUnlock()
-	if stale {
+	snap, due := app.searchIdx.current(searchIndexMaxAge)
+	if due {
 		app.kickSearchIndexBuild()
 	}
 	return snap
@@ -205,30 +195,9 @@ func (app *Application) searchSnapshot() *searchSnapshot {
 // background lifecycle and the SQL path serves. In low-RAM mode
 // (LOW_RAM_MODE=1) it never starts a build.
 func (app *Application) kickSearchIndexBuild() {
-	if app.cfg.lowRAMMode {
-		return
+	if ctx, ok := app.snapshotBuildContext(); ok {
+		app.searchIdx.kick(ctx, "search index", app.buildSearchIndex)
 	}
-	if app.workerCtx == nil {
-		return
-	}
-	idx := &app.searchIdx
-	idx.mu.Lock()
-	if idx.building {
-		idx.mu.Unlock()
-		return
-	}
-	idx.building = true
-	idx.mu.Unlock()
-	go func() {
-		defer func() {
-			idx.mu.Lock()
-			idx.building = false
-			idx.mu.Unlock()
-		}()
-		if err := app.buildSearchIndex(app.workerCtx); err != nil {
-			logging.Warnf("search index: build: %v", err)
-		}
-	}()
 }
 
 // buildSearchIndex reads the whole search surface once and swaps
@@ -261,7 +230,6 @@ func (app *Application) buildSearchIndex(ctx context.Context) error {
 	}
 
 	snap := &searchSnapshot{
-		builtAt:   time.Now(),
 		corps:     make(map[int64]searchIndexOrg, len(corpRows)),
 		alliances: make(map[int64]searchIndexOrg, len(allianceRows)),
 		pilots:    make(map[int64]searchIndexPilot, len(pilotRows)),
@@ -305,8 +273,7 @@ func (app *Application) buildSearchIndex(ctx context.Context) error {
 		delta.applyTo(snap, key)
 	}
 	idx.pending = make(map[searchRecordKey]searchRecordDelta)
-	idx.snap = snap
-	idx.sdeStale = false
+	idx.swapLocked(snap)
 	idx.mu.Unlock()
 	return nil
 }
@@ -319,10 +286,7 @@ func (app *Application) invalidateSearchIndexSDE() {
 	if app.cfg.lowRAMMode {
 		return
 	}
-	idx := &app.searchIdx
-	idx.mu.Lock()
-	idx.sdeStale = true
-	idx.mu.Unlock()
+	app.searchIdx.markStale()
 	app.kickSearchIndexBuild()
 }
 
@@ -393,33 +357,30 @@ func (app *Application) noteSearchPilotRecord(id int64, state, payload string) {
 }
 
 func (app *Application) noteSearchCorporationRecord(id int64, state, payload string) {
-	delta := searchRecordDelta{drop: true}
-	if state == orgStateReady && payload != "" {
-		if name, ticker, ok := searchCorpEntry(payload); ok {
-			delta = searchRecordDelta{name: name, ticker: ticker}
-			app.noteEntity(id, entityDirectoryEntry{ID: id, Name: name, Ticker: ticker, Kind: "corporation"}, false)
-		} else {
-			app.noteEntity(id, entityDirectoryEntry{}, true)
-		}
-	} else {
-		app.noteEntity(id, entityDirectoryEntry{}, true)
-	}
-	app.noteSearchRecord(searchRecordKey{kind: searchRecordCorporation, id: id}, delta)
+	app.noteSearchOrgRecord(searchRecordCorporation, "corporation", searchCorpEntry, id, state, payload)
 }
 
 func (app *Application) noteSearchAllianceRecord(id int64, state, payload string) {
+	app.noteSearchOrgRecord(searchRecordAlliance, "alliance", searchAllianceEntry, id, state, payload)
+}
+
+// noteSearchOrgRecord notes one stored corporation or alliance
+// record to the search index and the entity directory: its name
+// and ticker when the record is ready and decodes, a drop
+// otherwise.
+func (app *Application) noteSearchOrgRecord(kind searchRecordKind, entityKind string, entry func(payload string) (name, ticker string, ok bool), id int64, state, payload string) {
 	delta := searchRecordDelta{drop: true}
 	if state == orgStateReady && payload != "" {
-		if name, ticker, ok := searchAllianceEntry(payload); ok {
+		if name, ticker, ok := entry(payload); ok {
 			delta = searchRecordDelta{name: name, ticker: ticker}
-			app.noteEntity(id, entityDirectoryEntry{ID: id, Name: name, Ticker: ticker, Kind: "alliance"}, false)
+			app.noteEntity(id, entityDirectoryEntry{ID: id, Name: name, Ticker: ticker, Kind: entityKind}, false)
 		} else {
 			app.noteEntity(id, entityDirectoryEntry{}, true)
 		}
 	} else {
 		app.noteEntity(id, entityDirectoryEntry{}, true)
 	}
-	app.noteSearchRecord(searchRecordKey{kind: searchRecordAlliance, id: id}, delta)
+	app.noteSearchRecord(searchRecordKey{kind: kind, id: id}, delta)
 }
 
 // setPilotRecord stores a pilot record and notes it to the
@@ -569,10 +530,23 @@ func (snap *searchSnapshot) searchRegions(q string, lim int64) []searchHit {
 	return out
 }
 
-// searchIndexCorporations reads the snapshot's corporation
-// entries under the index lock. ok is false when no snapshot
-// exists, telling the caller to serve the SQL path.
+// searchIndexCorporations and searchIndexAlliances read the
+// snapshot's corporation or alliance entries under the index lock.
+// ok is false when no snapshot exists, telling the caller to serve
+// the SQL path.
 func (app *Application) searchIndexCorporations(q string, lim int) (hits []searchHit, ok bool) {
+	return app.searchIndexOrgs(func(s *searchSnapshot) map[int64]searchIndexOrg { return s.corps }, "corporation", "Corporation", q, lim)
+}
+
+func (app *Application) searchIndexAlliances(q string, lim int) (hits []searchHit, ok bool) {
+	return app.searchIndexOrgs(func(s *searchSnapshot) map[int64]searchIndexOrg { return s.alliances }, "alliance", "Alliance", q, lim)
+}
+
+// searchIndexOrgs is the shared corporation and alliance snapshot
+// search: matching entries in id order, then the SQL path's name
+// sort and cap. Hits are labeled with the ticker, or with
+// fallback when there is none.
+func (app *Application) searchIndexOrgs(orgs func(*searchSnapshot) map[int64]searchIndexOrg, kind, fallback, q string, lim int) (hits []searchHit, ok bool) {
 	idx := &app.searchIdx
 	idx.mu.RLock()
 	snap := idx.snap
@@ -585,7 +559,7 @@ func (app *Application) searchIndexCorporations(q string, lim int) (hits []searc
 		e  searchIndexOrg
 	}
 	var founds []found
-	for id, e := range snap.corps {
+	for id, e := range orgs(snap) {
 		if _, ok := nameMatchTier(e.name, q); ok {
 			founds = append(founds, found{id: id, e: e})
 		}
@@ -593,45 +567,19 @@ func (app *Application) searchIndexCorporations(q string, lim int) (hits []searc
 	idx.mu.RUnlock()
 	sort.Slice(founds, func(i, j int) bool { return founds[i].id < founds[j].id })
 	for _, f := range founds {
-		label := "Corporation"
-		if f.e.ticker != "" {
-			label = "[" + f.e.ticker + "]"
-		}
-		hits = append(hits, searchHit{Kind: "corporation", ID: f.id, Name: f.e.name, Label: label})
+		hits = append(hits, searchHit{Kind: kind, ID: f.id, Name: f.e.name, Label: orgTickerLabel(f.e.ticker, fallback)})
 	}
 	sortHitsByName(hits, q)
 	return capHits(hits, lim), true
 }
 
-func (app *Application) searchIndexAlliances(q string, lim int) (hits []searchHit, ok bool) {
-	idx := &app.searchIdx
-	idx.mu.RLock()
-	snap := idx.snap
-	if snap == nil {
-		idx.mu.RUnlock()
-		return nil, false
+// orgTickerLabel labels a corporation or alliance hit: its ticker
+// in brackets, or fallback when it has none.
+func orgTickerLabel(ticker, fallback string) string {
+	if ticker == "" {
+		return fallback
 	}
-	type found struct {
-		id int64
-		e  searchIndexOrg
-	}
-	var founds []found
-	for id, e := range snap.alliances {
-		if _, ok := nameMatchTier(e.name, q); ok {
-			founds = append(founds, found{id: id, e: e})
-		}
-	}
-	idx.mu.RUnlock()
-	sort.Slice(founds, func(i, j int) bool { return founds[i].id < founds[j].id })
-	for _, f := range founds {
-		label := "Alliance"
-		if f.e.ticker != "" {
-			label = "[" + f.e.ticker + "]"
-		}
-		hits = append(hits, searchHit{Kind: "alliance", ID: f.id, Name: f.e.name, Label: label})
-	}
-	sortHitsByName(hits, q)
-	return capHits(hits, lim), true
+	return "[" + ticker + "]"
 }
 
 func (app *Application) searchIndexPilots(q string, ownIDs map[int64]bool, lim int) (hits []searchHit, ok bool) {

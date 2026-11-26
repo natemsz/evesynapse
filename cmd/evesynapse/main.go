@@ -24,144 +24,14 @@
 //	evesynapse -refresh                mark all cached data out of
 //	                                   date so the next start fetches
 //	                                   fresh copies (server stopped)
-//	                                   into Postgres (DATABASE_URL);
 package main
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
-	"evesynapse/internal/app"
-	"evesynapse/internal/logging"
-	"evesynapse/internal/pidfile"
-	"evesynapse/internal/selfupdate"
+	"evesynapse/internal/appmain"
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
-}
-
-func run(args []string, stdout, stderr io.Writer) int {
-	if len(args) > 0 {
-		switch args[0] {
-		case "-version", "--version":
-			fmt.Fprintln(stdout, app.Version())
-			return 0
-		case "-update":
-			return selfupdate.Run(app.Version(), args[1:], stdout, stderr)
-		case "-refresh":
-			cfg, err := app.LoadConfig()
-			if err != nil {
-				fmt.Fprintln(stderr, "evesynapse:", err)
-				return 2
-			}
-			return app.RunRefresh(args[1:], cfg, stdout, stderr)
-		case "-populate-names":
-			cfg, err := app.LoadConfig()
-			if err != nil {
-				fmt.Fprintln(stderr, "evesynapse:", err)
-				return 2
-			}
-			return app.RunPopulateNames(args[1:], cfg, stdout, stderr)
-		case "-seed-demo":
-			cfg, err := app.LoadConfig()
-			if err != nil {
-				fmt.Fprintln(stderr, "evesynapse:", err)
-				return 2
-			}
-			return app.RunSeedDemo(args[1:], cfg, stdout, stderr)
-		case "-push-keys":
-			return app.RunPushKeys(stdout, stderr)
-		case "-wrap-token-key":
-			cfg, err := app.LoadConfig()
-			if err != nil {
-				fmt.Fprintln(stderr, "evesynapse:", err)
-				return 2
-			}
-			return app.RunWrapTokenKey(args[1:], cfg, stdout, stderr)
-		case "-h", "--help", "-help":
-			printUsage(stdout)
-			return 0
-		default:
-			fmt.Fprintf(stderr, "evesynapse: unknown option %q\n\n", args[0])
-			printUsage(stderr)
-			return 2
-		}
-	}
-	return serve()
-}
-
-func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  evesynapse                          run the web app")
-	fmt.Fprintln(w, "  evesynapse -version                 print the version and exit")
-	fmt.Fprintln(w, "  evesynapse -update -arm64           update to the latest release for this computer (-x86 on Intel/AMD)")
-	fmt.Fprintln(w, "  evesynapse -update -dev             update to the latest dev-branch release")
-	fmt.Fprintln(w, "  evesynapse -update <url> <checksum> install a downloaded update and restart (a local file needs no checksum)")
-	fmt.Fprintln(w, "  evesynapse -refresh                 refresh all cached data on next start (app must be stopped)")
-	fmt.Fprintln(w, "  evesynapse -populate-names          store every alliance and reachable corporation name now (safe while running)")
-	fmt.Fprintln(w, "  evesynapse -seed-demo               create or restore the shared demo account's seed data (safe while running)")
-	fmt.Fprintln(w, "  evesynapse -push-keys               print a new key pair for browser push, as lines for .env")
-	fmt.Fprintln(w, "  evesynapse -wrap-token-key          wrap TOKEN_ENCRYPTION_KEY with the OCI KMS key; prints TOKEN_KEY_WRAPPED")
-}
-
-// serve runs the web app until a termination signal (SIGTERM from
-// the service manager or an update, SIGINT from a terminal) or a
-// server error, then shuts down gracefully: HTTP drains first,
-// then Close stops the worker and releases the database.
-func serve() int {
-	cfg, err := app.LoadConfig()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "evesynapse:", err)
-		return 2
-	}
-	if err := cfg.SetupLogging(); err != nil {
-		fmt.Fprintln(os.Stderr, "evesynapse:", err)
-		return 2
-	}
-
-	application, err := app.New(cfg)
-	if err != nil {
-		logging.Errorf("evesynapse: cannot start: %v", err)
-		return 1
-	}
-	defer application.Close()
-
-	pidPath := pidfile.Start()
-	defer pidfile.Remove(pidPath)
-
-	srv := app.NewHTTPServer(cfg.Addr(), application.Handler())
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	errCh := make(chan error, 1)
-	go func() { errCh <- srv.ListenAndServe() }()
-
-	logging.Infof("evesynapse: listening on %s (db: %s, EVE SSO configured: %t)",
-		cfg.Addr(), cfg.DatabaseLabel(), cfg.SSOConfigured())
-
-	select {
-	case err := <-errCh:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logging.Errorf("evesynapse: server: %v", err)
-			return 1
-		}
-		return 0
-	case <-ctx.Done():
-		logging.Infof("evesynapse: shutting down")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			logging.Errorf("evesynapse: shutdown: %v", err)
-		}
-		return 0
-	}
+	os.Exit(appmain.Run("evesynapse", os.Args[1:], os.Stdout, os.Stderr, appmain.Hooks{}))
 }

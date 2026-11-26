@@ -3,10 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
-
-	"evesynapse/internal/logging"
 )
 
 const entityDirectoryMaxAge = 24 * time.Hour
@@ -20,57 +17,26 @@ type entityDirectoryEntry struct {
 }
 
 type entityDirectorySnapshot struct {
-	builtAt  time.Time
 	entities map[int64]entityDirectoryEntry
 }
 
-type entityDirectoryState struct {
-	mu       sync.RWMutex
-	snap     *entityDirectorySnapshot
-	building bool
-	stale    bool
-}
+type entityDirectoryState = memSnapshot[entityDirectorySnapshot]
 
 func (app *Application) entityDirectorySnapshot() *entityDirectorySnapshot {
 	if app.cfg.lowRAMMode {
 		return nil
 	}
-	s := &app.entityDir
-	s.mu.RLock()
-	snap := s.snap
-	stale := snap == nil || s.stale || time.Since(snap.builtAt) > entityDirectoryMaxAge
-	s.mu.RUnlock()
-	if stale {
+	snap, due := app.entityDir.current(entityDirectoryMaxAge)
+	if due {
 		app.kickEntityDirectoryBuild()
 	}
 	return snap
 }
 
 func (app *Application) kickEntityDirectoryBuild() {
-	if app.cfg.lowRAMMode {
-		return
+	if ctx, ok := app.snapshotBuildContext(); ok {
+		app.entityDir.kick(ctx, "entity directory", app.buildEntityDirectory)
 	}
-	if app.workerCtx == nil {
-		return
-	}
-	s := &app.entityDir
-	s.mu.Lock()
-	if s.building {
-		s.mu.Unlock()
-		return
-	}
-	s.building = true
-	s.mu.Unlock()
-	go func() {
-		defer func() {
-			s.mu.Lock()
-			s.building = false
-			s.mu.Unlock()
-		}()
-		if err := app.buildEntityDirectory(app.workerCtx); err != nil {
-			logging.Warnf("entity directory: build: %v", err)
-		}
-	}()
 }
 
 func (app *Application) buildEntityDirectory(ctx context.Context) error {
@@ -92,7 +58,6 @@ func (app *Application) buildEntityDirectory(ctx context.Context) error {
 	}
 
 	snap := &entityDirectorySnapshot{
-		builtAt:  time.Now(),
 		entities: make(map[int64]entityDirectoryEntry, len(pilotRows)+len(corpRows)+len(allianceRows)+len(structRows)),
 	}
 
@@ -135,11 +100,7 @@ func (app *Application) buildEntityDirectory(ctx context.Context) error {
 		}
 	}
 
-	s := &app.entityDir
-	s.mu.Lock()
-	s.snap = snap
-	s.stale = false
-	s.mu.Unlock()
+	app.entityDir.swap(snap)
 	return nil
 }
 

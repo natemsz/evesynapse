@@ -138,9 +138,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 		t.Fatalf("seed region stat: %v", err)
 	}
 	// The sweep landing mid-test: the cache window lapses.
-	app.forgeTypicalsMu.Lock()
-	app.forgeTypicalsCache = nil
-	app.forgeTypicalsMu.Unlock()
+	lapsePriceCaches(app)
 
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/")

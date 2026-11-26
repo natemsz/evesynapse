@@ -91,11 +91,8 @@ func (app *Application) landDeliveredJobs(ctx context.Context, src ledgerSource,
 			bonuses[b.FacilityID] = b.MaterialBonus
 		}
 	}
-	typicals := app.TypicalSells(ctx)
-	estimates := app.storedTrueValues(ctx)
-	priceNow := func(typeID int64) (float64, bool) {
-		return pickValuationPrice(typicals[typeID], estSellOf(estimates, typeID), buildCostOf(estimates, typeID))
-	}
+	values := app.houseValuations(ctx)
+	priceNow := func(typeID int64) (float64, bool) { return houseValueOf(values, typeID) }
 
 	touched := map[int64]bool{}
 	var earliest time.Time
@@ -492,8 +489,7 @@ func (app *Application) landContractSales(ctx context.Context, src ledgerSource)
 	if json.Unmarshal([]byte(src.contracts.Payload), &contracts) != nil {
 		return nil, time.Time{}, nil
 	}
-	typicals := app.TypicalSells(ctx)
-	estimates := app.storedTrueValues(ctx)
+	values := app.houseValuations(ctx)
 	touched := map[int64]bool{}
 	var earliest time.Time
 	for _, c := range contracts {
@@ -525,7 +521,7 @@ func (app *Application) landContractSales(ctx context.Context, src ledgerSource)
 		value, units := 0.0, int64(0)
 		weight := map[int64]float64{}
 		for t, n := range qty {
-			if price, ok := pickValuationPrice(typicals[t], estSellOf(estimates, t), buildCostOf(estimates, t)); ok {
+			if price, ok := houseValueOf(values, t); ok {
 				weight[t] = price * float64(n)
 				value += weight[t]
 			}

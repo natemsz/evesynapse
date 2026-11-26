@@ -141,7 +141,7 @@ func abyssalLearnFamily(in []abyssalLearnRow) *abyssalLearned {
 			rows = append(rows, r)
 		}
 	}
-	rows = abyssalTrimOutliers(rows)
+	rows = trimLearnOutliers(rows)
 	l := &abyssalLearned{}
 	l.Fit.Comps = len(rows)
 	for _, r := range rows {
@@ -149,7 +149,7 @@ func abyssalLearnFamily(in []abyssalLearnRow) *abyssalLearned {
 			l.Fit.SalesN++
 		}
 	}
-	l.Fit.NEff = abyssalLearnNEff(rows)
+	l.Fit.NEff = learnNEff(rows)
 	if len(rows) < abyssalLearnMinComps {
 		return l
 	}
@@ -162,9 +162,9 @@ func abyssalLearnFamily(in []abyssalLearnRow) *abyssalLearned {
 		hold = abyssalLearnMinHoldout
 	}
 	train, test := sorted[:len(sorted)-hold], sorted[len(sorted)-hold:]
-	logF, _ := abyssalShrunkLogFactor(abyssalLearnLogs(train))
+	logF, _ := abyssalShrunkLogFactor(learnTargets(train))
 	m := fitAbyssalGBM(train, abyssalGBMDefaults)
-	shrinkTrain := abyssalLearnNEff(train) / (abyssalLearnNEff(train) + abyssalLearnPrior)
+	shrinkTrain := learnNEff(train) / (learnNEff(train) + abyssalLearnPrior)
 	var errLadder, errModel, signed []weightedValue
 	for _, r := range test {
 		pm := math.Log(abyssalLearnBand(shrinkTrain * m.Predict(r.X)))
@@ -204,49 +204,6 @@ func abyssalLearnFamily(in []abyssalLearnRow) *abyssalLearned {
 		}
 	}
 	return l
-}
-
-// abyssalTrimOutliers drops comps whose target sits more than
-// abyssalLearnTrimMADs robust deviations from the family's
-// weighted median: joke asks and mispastes, before any fit sees
-// them.
-func abyssalTrimOutliers(rows []abyssalLearnRow) []abyssalLearnRow {
-	if len(rows) < 5 {
-		return rows
-	}
-	med := abyssalWeightedQuantile(abyssalLearnLogs(rows), 0.5)
-	dev := make([]weightedValue, len(rows))
-	for i, r := range rows {
-		dev[i] = weightedValue{v: math.Abs(r.Y - med), w: r.W}
-	}
-	mad := math.Max(1.4826*abyssalWeightedQuantile(dev, 0.5), 0.05)
-	out := rows[:0:0]
-	for _, r := range rows {
-		if math.Abs(r.Y-med) <= abyssalLearnTrimMADs*mad {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
-func abyssalLearnLogs(rows []abyssalLearnRow) []weightedValue {
-	out := make([]weightedValue, len(rows))
-	for i, r := range rows {
-		out[i] = weightedValue{v: r.Y, w: r.W}
-	}
-	return out
-}
-
-func abyssalLearnNEff(rows []abyssalLearnRow) float64 {
-	sw, sw2 := 0.0, 0.0
-	for _, r := range rows {
-		sw += r.W
-		sw2 += r.W * r.W
-	}
-	if sw2 <= 0 {
-		return 0
-	}
-	return sw * sw / sw2
 }
 
 // ---------------------------------------------------------------------
@@ -350,7 +307,7 @@ func fitAbyssalGBM(rows []abyssalLearnRow, p abyssalGBMParams) *abyssalGBM {
 	for i, r := range rows {
 		w[i] = r.W * float64(len(rows)) / sw // mean weight 1
 	}
-	m.Base = abyssalWeightedQuantile(abyssalLearnLogs(rows), 0.5)
+	m.Base = abyssalWeightedQuantile(learnTargets(rows), 0.5)
 	pred := make([]float64, len(rows))
 	for i := range pred {
 		pred[i] = m.Base

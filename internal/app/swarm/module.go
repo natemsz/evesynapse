@@ -239,8 +239,9 @@ var Module = module.Module{
 		admin.Post("/admin/swarm/exclude", h((*Mod).HandleSwarmExclude))
 		admin.Post("/admin/swarm/admit", h((*Mod).HandleSwarmAdmit))
 		admin.Post("/admin/swarm/remove", h((*Mod).HandleSwarmRemove))
-		// The machine API: bearer-gated by the shared secret, dark (404)
-		// while sharing is off. No session middleware: instances are not
+		// The machine API, dark (404) while sharing is off: pulls are
+		// signature-gated, the other endpoints bearer-gated by the
+		// shared secret. No session middleware: instances are not
 		// browsers.
 		r.Get("/swarm/members", h((*Mod).HandleSwarmMembers))
 		r.Post("/swarm/pull", h((*Mod).HandleSwarmPull))

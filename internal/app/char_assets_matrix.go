@@ -502,8 +502,7 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 
 	// Shared lookups across the scope: prices (the house order),
 	// ship types, stored volumes and group names.
-	typicals := app.TypicalSells(ctx)
-	trueValues := app.storedTrueValues(ctx)
+	values := app.houseValuations(ctx)
 	typeSet := make(map[int64]bool)
 	for _, cd := range datas {
 		for _, it := range cd.items {
@@ -515,9 +514,7 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 		typeIDs = append(typeIDs, id)
 	}
 	lk := assetLookups{
-		priceOf: func(typeID int64) (float64, bool) {
-			return pickValuationPrice(typicals[typeID], estSellOf(trueValues, typeID), buildCostOf(trueValues, typeID))
-		},
+		priceOf:   func(typeID int64) (float64, bool) { return houseValueOf(values, typeID) },
 		shipTypes: make(map[int64]bool),
 	}
 	if ids, err := app.queries.ListSDEShipTypeIDs(ctx, typeIDs); err != nil {

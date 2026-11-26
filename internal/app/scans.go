@@ -39,6 +39,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/scan"
 )
@@ -1705,7 +1706,7 @@ func probeSentence(pr *probeReading, sysName string) string {
 	if sysName != "" {
 		s = "In " + sysName + ": "
 	}
-	s += plural(len(pr.Sigs), "signature")
+	s += humanize.Plural(len(pr.Sigs), "signature")
 	if pr.Unresolved > 0 {
 		s += fmt.Sprintf(", %d unresolved", pr.Unresolved)
 	}
@@ -1731,19 +1732,19 @@ func scanTitle(res scanResult) string {
 	switch res.Kind {
 	case scan.KindDScan:
 		if res.DScan != nil {
-			return "D-scan · " + plural(res.DScan.Ships, "ship")
+			return "D-scan · " + humanize.Plural(res.DScan.Ships, "ship")
 		}
 	case scan.KindLocal:
 		if res.Local != nil {
-			return "Local · " + plural(len(res.Local.Pilots)+len(res.Local.Unknown), "pilot")
+			return "Local · " + humanize.Plural(len(res.Local.Pilots)+len(res.Local.Unknown), "pilot")
 		}
 	case scan.KindFleet:
 		if res.Fleet != nil {
-			return "Fleet · " + plural(len(res.Fleet.Members), "member")
+			return "Fleet · " + humanize.Plural(len(res.Fleet.Members), "member")
 		}
 	case scan.KindProbe:
 		if res.Probe != nil {
-			return "Probe scan · " + plural(len(res.Probe.Sigs), "signature")
+			return "Probe scan · " + humanize.Plural(len(res.Probe.Sigs), "signature")
 		}
 	}
 	return "Scan"
@@ -2037,7 +2038,7 @@ func signedScanDelta(d int, noun string) string {
 		sign = "-"
 		d = -d
 	}
-	return sign + plural(d, noun)
+	return sign + humanize.Plural(d, noun)
 }
 
 // notableMoves lists the notable-hull moves between two
@@ -2591,19 +2592,19 @@ func scanDescription(v *scanPageView) string {
 	}
 	switch {
 	case r.DScan != nil:
-		s := "D-scan in " + place + ": " + plural(r.DScan.Ships, "ship") + ", " +
+		s := "D-scan in " + place + ": " + humanize.Plural(r.DScan.Ships, "ship") + ", " +
 			strconv.Itoa(r.DScan.ShipsGrid) + " on grid."
 		if r.DScan.Value > 0 {
 			s += " Hull value ≈ " + iskCompact(r.DScan.Value) + " ISK."
 		}
 		return s
 	case r.Local != nil:
-		return "Local scan in " + place + ": " + plural(len(r.Local.Pilots)+len(r.Local.Unknown), "pilot") +
-			" in " + plural(len(r.Local.Alliances), "group") + "."
+		return "Local scan in " + place + ": " + humanize.Plural(len(r.Local.Pilots)+len(r.Local.Unknown), "pilot") +
+			" in " + humanize.Plural(len(r.Local.Alliances), "group") + "."
 	case r.Fleet != nil:
-		return "Fleet composition: " + plural(len(r.Fleet.Members), "member") + "."
+		return "Fleet composition: " + humanize.Plural(len(r.Fleet.Members), "member") + "."
 	case r.Probe != nil:
-		return "Probe scan in " + place + ": " + plural(len(r.Probe.Sigs), "signature") + "."
+		return "Probe scan in " + place + ": " + humanize.Plural(len(r.Probe.Sigs), "signature") + "."
 	}
 	return "A scan shared from EveSynapse."
 }

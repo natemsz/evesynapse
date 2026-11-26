@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"evesynapse/internal/app/module"
+	"evesynapse/internal/humanize"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -292,7 +293,7 @@ func (app *Application) handleAdminAccountRemove(w http.ResponseWriter, r *http.
 	case n == 0:
 		back("There is no account with that number.")
 	default:
-		logging.Warnf("admin: account %d removed account %d and its %s", by, id, plural(len(characters), "character"))
-		back("Account " + strconv.FormatInt(id, 10) + " was removed, with its " + plural(len(characters), "character") + " and their stored data.")
+		logging.Warnf("admin: account %d removed account %d and its %s", by, id, humanize.Plural(len(characters), "character"))
+		back("Account " + strconv.FormatInt(id, 10) + " was removed, with its " + humanize.Plural(len(characters), "character") + " and their stored data.")
 	}
 }

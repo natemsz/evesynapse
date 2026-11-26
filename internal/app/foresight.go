@@ -257,22 +257,22 @@ func (app *Application) foreseeDock(ctx context.Context, userID int64, ch db.Cha
 }
 
 // hangarTypesWorthMost lists the types a character has most value of
-// in a station's hangar, at our own prices (swept typical sell, then
-// the stored estimate); by quantity while nothing is priced yet.
+// in a station's hangar, at house prices (houseValuations); by
+// quantity while nothing is priced yet.
 func (app *Application) hangarTypesWorthMost(ctx context.Context, characterID, stationID int64, most int) []int64 {
 	var assets []esi.Asset
 	if !app.loadCorpSnapshot(ctx, characterID, esi.SnapAssets, &assets) {
 		return nil
 	}
-	typicals, trueValues := app.TypicalSells(ctx), app.storedTrueValues(ctx)
-	havePrices := len(typicals) > 0 || len(trueValues) > 0
+	values := app.houseValuations(ctx)
+	havePrices := len(values) > 0
 	worth := map[int64]float64{}
 	for _, a := range assets {
 		if a.LocationID != stationID || a.LocationFlag != "Hangar" || a.IsBlueprintCopy {
 			continue
 		}
 		value := float64(a.Quantity)
-		if p, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID), buildCostOf(trueValues, a.TypeID)); ok {
+		if p, ok := houseValueOf(values, a.TypeID); ok {
 			value *= p
 		} else if havePrices {
 			continue // nothing we price: nothing to sell

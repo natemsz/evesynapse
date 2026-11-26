@@ -186,7 +186,7 @@ func (app *page) rememberedBasis(ctx context.Context, r *http.Request, userID in
 	}
 	if c, err := r.Cookie(anonBasisCookie); err == nil && c.Value != "" {
 		if secret, err := app.anonHistorySecret(ctx); err == nil {
-			if payload, ok := verifySignedValue(secret, c.Value); ok {
+			if payload, ok := module.VerifySignedValue(secret, c.Value); ok {
 				parts := strings.Split(payload, "|")
 				if len(parts) == 3 {
 					return app.basisFromValues(app.defaultBasis(), url.Values{
@@ -217,7 +217,7 @@ func (app *page) rememberBasis(ctx context.Context, w http.ResponseWriter, r *ht
 	payload := fmt.Sprintf("%d|%s|%s", b.RegionID, b.Mode, strconv.FormatFloat(b.Percent, 'f', -1, 64))
 	http.SetCookie(w, &http.Cookie{
 		Name:     anonBasisCookie,
-		Value:    signValue(secret, payload),
+		Value:    module.SignValue(secret, payload),
 		Path:     "/",
 		MaxAge:   int(anonAppraisalTTL / time.Second),
 		HttpOnly: true,
@@ -263,31 +263,7 @@ func tierLabelWithBasis(tier string, b pricingBasis) string {
 	if hub == "" {
 		hub = "Forge"
 	}
-	switch tier {
-	case module.AppraisalTierTypical:
-		return "Our " + hub + " typical (sell)"
-	case module.AppraisalTierTypicalBuy:
-		return "Our " + hub + " typical (buy)"
-	case module.AppraisalTierTypicalSplit:
-		return "Our " + hub + " typical (split)"
-	case module.AppraisalTierTypicalSplitSell:
-		return "Our " + hub + " typical (split, sell side only)"
-	case module.AppraisalTierTypicalSplitBuy:
-		return "Our " + hub + " typical (split, buy side only)"
-	case module.AppraisalTierEstimate:
-		return "Estimated sell"
-	case module.AppraisalTierAbyssal:
-		return "Our abyssal estimate"
-	case module.AppraisalTierCopyMedian:
-		return "Our copy median"
-	case module.AppraisalTierResearchMedian:
-		return "Our research median"
-	case module.AppraisalTierFallback:
-		return "Fuzzwork aggregate"
-	case module.AppraisalTierBuildCost:
-		return "Build cost"
-	}
-	return "Not priced"
+	return module.TierLabel(tier, hub)
 }
 
 // tierLabelForLine words one priced line's tier: a typical
@@ -297,7 +273,7 @@ func tierLabelWithBasis(tier string, b pricingBasis) string {
 // line's stated source is never a hub the type does not
 // trade in. Every other line words as tierLabelWithBasis.
 func tierLabelForLine(tier string, b pricingBasis, sourceRegionID int64) string {
-	if sourceRegionID == 0 || sourceRegionID == b.RegionID || !isTypicalTier(tier) {
+	if sourceRegionID == 0 || sourceRegionID == b.RegionID || !module.IsTypicalTier(tier) {
 		return tierLabelWithBasis(tier, b)
 	}
 	switch tier {

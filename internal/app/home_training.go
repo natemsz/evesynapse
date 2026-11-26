@@ -72,21 +72,15 @@ func (app *Application) buildTrainingWithin(ctx context.Context, bundles []*char
 			continue
 		}
 		live := liveSkillqueue(b.queue, now)
-		// Levels still in the queue, per skill: the level below the
-		// lowest one queued is trained (the character page's rule).
-		queuedLevels := map[int64]map[int]bool{}
+		// Levels still in the queue, per skill (the character
+		// page's rule for the trained level).
+		queuedLevels := pendingLevels{}
 		for _, e := range live {
-			if queuedLevels[e.SkillID] == nil {
-				queuedLevels[e.SkillID] = map[int]bool{}
-			}
-			queuedLevels[e.SkillID][e.FinishedLevel] = true
+			queuedLevels.add(e.SkillID, e.FinishedLevel)
 		}
 		head := queueHead(b.queue, now)
 		levelOf := func(e esi.SkillqueueEntry) (trained int, state string) {
-			trained = e.FinishedLevel - 1
-			for trained > 0 && queuedLevels[e.SkillID][trained] {
-				trained--
-			}
+			trained = queuedLevels.trainedBelow(e.SkillID, e.FinishedLevel)
 			state = "queued"
 			if head != nil && e.SkillID == head.SkillID && e.FinishedLevel == head.FinishedLevel {
 				state = "training"

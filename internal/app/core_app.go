@@ -358,11 +358,8 @@ type Application struct {
 	cardFetch func(ctx context.Context, url string) ([]byte, error)
 
 	// Pilot activity profiles (pilot_activity.go): the backfill
-	// queue and who is already on it. The channel is made on first
-	// use; the map keeps a much-reported pilot queued once.
-	pilotBackfillMu     sync.Mutex
-	pilotBackfillCh     chan int64
-	pilotBackfillQueued map[int64]bool
+	// queue, which keeps a much-reported pilot queued once.
+	pilotBackfill backfillQueue
 	// When kill involvement became permanent (schema step
 	// 127's applied_at), read once and cached: profiles
 	// backfilled before it are offered one restoration walk
@@ -371,11 +368,8 @@ type Application struct {
 	involvementCutoff     time.Time
 	involvementCutoffRead bool
 	// Corporation killboard coverage (corp_backfill.go): the
-	// corp backfill queue and who is already on it, the pilot
-	// backfill queue's twin.
-	corpBackfillMu     sync.Mutex
-	corpBackfillCh     chan int64
-	corpBackfillQueued map[int64]bool
+	// corp backfill queue.
+	corpBackfill backfillQueue
 	// The pilot orbit's per-character snapshot stamp: a
 	// character whose orbit snapshots have not moved since
 	// the last scan is not walked again (intel_pilot_worker.go).
@@ -408,6 +402,11 @@ type Application struct {
 	// the first tier of the house price order, cached in memory
 	// on the same window as the true values so renders reload
 	// the stats table only a few times an hour.
+	// houseValuations' cache (truevalue.go): one unit's value per
+	// type in the appraisal tool's house order.
+	houseValuesMu       sync.Mutex
+	houseValuesCache    map[int64]float64
+	houseValuesLoaded   time.Time
 	forgeTypicalsMu     sync.Mutex
 	forgeTypicalsCache  map[int64]float64
 	forgeTypicalsLoaded time.Time

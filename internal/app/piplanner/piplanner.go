@@ -18,6 +18,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/piplan"
 )
@@ -493,18 +494,11 @@ func piAgo(d time.Duration) string {
 	case d < time.Minute:
 		return "just now"
 	case d < time.Hour:
-		return plural(int(d/time.Minute), "minute") + " ago"
+		return humanize.Plural(int(d/time.Minute), "minute") + " ago"
 	case d < 48*time.Hour:
-		return plural(int(d/time.Hour), "hour") + " ago"
+		return humanize.Plural(int(d/time.Hour), "hour") + " ago"
 	}
-	return plural(int(d/(24*time.Hour)), "day") + " ago"
-}
-
-func plural(n int, unit string) string {
-	if n == 1 {
-		return "1 " + unit
-	}
-	return strconv.Itoa(n) + " " + unit + "s"
+	return humanize.Plural(int(d/(24*time.Hour)), "day") + " ago"
 }
 
 func fillPIPlanDisplay(view *piPlannerView, plan *piplan.Plan, ids map[string]int64) {

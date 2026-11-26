@@ -239,11 +239,10 @@ func (app *Application) lpRequiredValue(ctx context.Context, corp, offerID, k in
 	if err != nil || len(reqs) == 0 {
 		return 0
 	}
-	typicals := app.TypicalSells(ctx)
-	estimates := app.storedTrueValues(ctx)
+	values := app.houseValuations(ctx)
 	v := 0.0
 	for _, r := range reqs {
-		if price, ok := pickValuationPrice(typicals[r.TypeID], estSellOf(estimates, r.TypeID), buildCostOf(estimates, r.TypeID)); ok {
+		if price, ok := houseValueOf(values, r.TypeID); ok {
 			v += price * float64(r.Quantity*k)
 		}
 	}

@@ -59,44 +59,60 @@ func SealSwarmMembers(raw []byte, secret string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	aead, err := gcmForKey(key)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, aead.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return "", fmt.Errorf("swarm: seal members: %w", err)
-	}
-	sealed := aead.Seal(nonce, nonce, raw, nil)
-	return SwarmMembersPrefix + base64.StdEncoding.EncodeToString(sealed), nil
+	return sealUnder(key, raw, SwarmMembersPrefix, "seal members")
 }
 
 // OpenSwarmMembers opens a sealed member list. Any failure is
 // one error: callers must not learn whether the prefix, the
 // encoding, the secret, or the ciphertext was wrong.
 func OpenSwarmMembers(sealed, secret string) ([]byte, error) {
-	rest, ok := strings.CutPrefix(sealed, SwarmMembersPrefix)
+	return openUnder(sealed, SwarmMembersPrefix, func() ([]byte, error) { return SwarmMembersKey(secret) },
+		"swarm: member list does not open")
+}
+
+// sealUnder seals raw with AES-GCM under key: prefix, then
+// base64 of a fresh random nonce followed by the ciphertext.
+// what names the operation in a nonce-source error.
+func sealUnder(key, raw []byte, prefix, what string) (string, error) {
+	aead, err := gcmForKey(key)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", fmt.Errorf("swarm: %s: %w", what, err)
+	}
+	sealed := aead.Seal(nonce, nonce, raw, nil)
+	return prefix + base64.StdEncoding.EncodeToString(sealed), nil
+}
+
+// openUnder opens a sealUnder value under the key deriveKey
+// returns. Every failure is the one error fail: callers must
+// not learn whether the prefix, the encoding, the secret, or
+// the ciphertext was wrong.
+func openUnder(sealed, prefix string, deriveKey func() ([]byte, error), fail string) ([]byte, error) {
+	rest, ok := strings.CutPrefix(sealed, prefix)
 	if !ok {
-		return nil, errors.New("swarm: member list does not open")
+		return nil, errors.New(fail)
 	}
 	raw, err := base64.StdEncoding.DecodeString(rest)
 	if err != nil {
-		return nil, errors.New("swarm: member list does not open")
+		return nil, errors.New(fail)
 	}
-	key, err := SwarmMembersKey(secret)
+	key, err := deriveKey()
 	if err != nil {
-		return nil, errors.New("swarm: member list does not open")
+		return nil, errors.New(fail)
 	}
 	aead, err := gcmForKey(key)
 	if err != nil {
-		return nil, errors.New("swarm: member list does not open")
+		return nil, errors.New(fail)
 	}
 	if len(raw) < aead.NonceSize() {
-		return nil, errors.New("swarm: member list does not open")
+		return nil, errors.New(fail)
 	}
 	opened, err := aead.Open(nil, raw[:aead.NonceSize()], raw[aead.NonceSize():], nil)
 	if err != nil {
-		return nil, errors.New("swarm: member list does not open")
+		return nil, errors.New(fail)
 	}
 	return opened, nil
 }

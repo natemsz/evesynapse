@@ -36,6 +36,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/scan"
@@ -993,10 +994,10 @@ func compMemberDelta(comp *intelComposite, m compMember) string {
 			}
 		}
 		if plus > 0 {
-			parts = append(parts, "+"+plural(plus, "hull"))
+			parts = append(parts, "+"+humanize.Plural(plus, "hull"))
 		}
 		if minus > 0 {
-			parts = append(parts, "-"+plural(minus, "hull"))
+			parts = append(parts, "-"+humanize.Plural(minus, "hull"))
 		}
 	}
 	if comp.Local != nil && m.PilotIDs != nil {
@@ -1020,10 +1021,10 @@ func compMemberDelta(comp *intelComposite, m compMember) string {
 			}
 		}
 		if plus > 0 {
-			parts = append(parts, "+"+plural(plus, "pilot"))
+			parts = append(parts, "+"+humanize.Plural(plus, "pilot"))
 		}
 		if minus > 0 {
-			parts = append(parts, "-"+plural(minus, "pilot"))
+			parts = append(parts, "-"+humanize.Plural(minus, "pilot"))
 		}
 	}
 	if len(parts) == 0 && (m.Tallies != nil || m.PilotIDs != nil) {

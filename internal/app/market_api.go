@@ -223,7 +223,7 @@ func (app *Application) handleMarketAPIPrices(w http.ResponseWriter, r *http.Req
 		}{{module.AppraisalModeSell, &tp.Sell}, {module.AppraisalModeBuy, &tp.Buy}} {
 			if pr := resolveAppraisalPriceMode(p.Own, p.Estimate, p.Fallback, now, side.mode); pr.ok {
 				wp := &marketwire.Price{Value: pr.unit, Tier: pr.tier, AsOf: pr.asOf.UTC()}
-				if p.FromGlobal && typicalTier(pr.tier) {
+				if p.FromGlobal && module.IsTypicalTier(pr.tier) {
 					wp.SourceRegionID = globalMarketRegion
 				}
 				*side.dst = wp

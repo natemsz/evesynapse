@@ -248,13 +248,10 @@ func (app *Application) buildMine(ctx context.Context, userID int64) minePayload
 	}
 	assetsISK := map[int64]float64{}
 	assetsN := map[int64]float64{}
-	// Values in the house order (truevalue.go): The Forge's swept
-	// typical sells, then the stored estimated sell; the guide's
+	// Values in the house order (houseValuations); the guide's
 	// average prices nothing.
-	typicals, trueValues := app.TypicalSells(ctx), app.storedTrueValues(ctx)
-	priceOf := func(typeID int64) (float64, bool) {
-		return pickValuationPrice(typicals[typeID], estSellOf(trueValues, typeID), buildCostOf(trueValues, typeID))
-	}
+	values := app.houseValuations(ctx)
+	priceOf := func(typeID int64) (float64, bool) { return houseValueOf(values, typeID) }
 	structSeen := map[int64]bool{}
 	mining := map[int64]*mineHeat{}
 

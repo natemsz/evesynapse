@@ -56,7 +56,6 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"evesynapse/internal/app/module"
@@ -293,12 +292,7 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 		if name, ok := typeNames[typeID]; ok {
 			return name
 		}
-		name := app.deps.TypeNameOrID(ctx, typeID)
-		if strings.HasPrefix(name, "Type #") {
-			if row, rerr := app.queries.GetSDEType(ctx, typeID); rerr == nil && row.Name != "" {
-				name = row.Name
-			}
-		}
+		name := app.deps.TypeName(ctx, typeID)
 		typeNames[typeID] = name
 		return name
 	}

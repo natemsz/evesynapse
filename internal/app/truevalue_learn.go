@@ -148,50 +148,6 @@ func tvRowsToAbyssal(rows []tvLearnRow) []abyssalLearnRow {
 	return out
 }
 
-func tvLearnLogs(rows []tvLearnRow) []weightedValue {
-	out := make([]weightedValue, len(rows))
-	for i, r := range rows {
-		out[i] = weightedValue{v: r.Y, w: r.W}
-	}
-	return out
-}
-
-func tvLearnNEff(rows []tvLearnRow) float64 {
-	sw, sw2 := 0.0, 0.0
-	for _, r := range rows {
-		sw += r.W
-		sw2 += r.W * r.W
-	}
-	if sw2 <= 0 {
-		return 0
-	}
-	return sw * sw / sw2
-}
-
-// tvTrimRows drops rows whose target sits more than
-// abyssalLearnTrimMADs robust deviations from the set's
-// weighted median -- the abyssal corpus's outlier rule
-// (abyssalTrimOutliers), applied to ship rows: joke asks and
-// mispastes, before any fit sees them.
-func tvTrimRows(rows []tvLearnRow) []tvLearnRow {
-	if len(rows) < 5 {
-		return rows
-	}
-	med := abyssalWeightedQuantile(tvLearnLogs(rows), 0.5)
-	dev := make([]weightedValue, len(rows))
-	for i, r := range rows {
-		dev[i] = weightedValue{v: math.Abs(r.Y - med), w: r.W}
-	}
-	mad := math.Max(1.4826*abyssalWeightedQuantile(dev, 0.5), 0.05)
-	out := rows[:0:0]
-	for _, r := range rows {
-		if math.Abs(r.Y-med) <= abyssalLearnTrimMADs*mad {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
 // tvShrunkLogFactor is the bounded factor's arithmetic over
 // weighted log ratios: the weighted median, shrunk toward no
 // correction by the effective count, clamped to the band.
@@ -199,13 +155,7 @@ func tvTrimRows(rows []tvLearnRow) []tvLearnRow {
 // shared by the family factor, the hull's own factor, and
 // the backtest that judges the model against exactly this.
 func tvShrunkLogFactor(rows []tvLearnRow, prior float64) (logFactor, nEff float64) {
-	nEff = tvLearnNEff(rows)
-	if len(rows) == 0 || nEff <= 0 {
-		return 0, 0
-	}
-	med := abyssalWeightedQuantile(tvLearnLogs(rows), 0.5)
-	shrunk := med * nEff / (nEff + prior)
-	return math.Min(math.Max(shrunk, math.Log(tvLearnBandMin)), math.Log(tvLearnBandMax)), nEff
+	return shrunkLogFactor(learnTargets(rows), prior, tvLearnBandMin, tvLearnBandMax)
 }
 
 func tvLearnBand(logMult float64) float64 {
@@ -264,9 +214,9 @@ func tvLearnFamily(in []tvLearnRow) *tvShipFamilyFit {
 			rows = append(rows, r)
 		}
 	}
-	rows = tvTrimRows(rows)
+	rows = trimLearnOutliers(rows)
 	f := &tvShipFamilyFit{rows: rows, comps: len(rows)}
-	f.nEff = tvLearnNEff(rows)
+	f.nEff = learnNEff(rows)
 	if len(rows) >= tvFactorMinRows && f.nEff >= tvFactorMinNEff {
 		f.logFactor, _ = tvShrunkLogFactor(rows, tvFactorPrior)
 		f.factorOK = true
@@ -287,7 +237,7 @@ func tvLearnFamily(in []tvLearnRow) *tvShipFamilyFit {
 	train, test := sorted[:len(sorted)-hold], sorted[len(sorted)-hold:]
 	logF, _ := tvShrunkLogFactor(train, tvFactorPrior)
 	m := fitAbyssalGBM(tvRowsToAbyssal(train), abyssalGBMDefaults)
-	shrinkTrain := tvLearnNEff(train) / (tvLearnNEff(train) + tvLearnPrior)
+	shrinkTrain := learnNEff(train) / (learnNEff(train) + tvLearnPrior)
 	var errFactor, errModel []weightedValue
 	for _, r := range test {
 		pm := math.Log(tvLearnBand(shrinkTrain * m.Predict(r.X)))
@@ -429,7 +379,7 @@ func buildTVShipPricing(subjects map[int64]bool, ladders map[int64]float64, samp
 				})
 			}
 		}
-		rows = tvTrimRows(rows)
+		rows = trimLearnOutliers(rows)
 		levelRows[typeID] = rows
 		familyLevelPool[h.family] = append(familyLevelPool[h.family], rows...)
 	}
@@ -460,7 +410,7 @@ func buildTVShipPricing(subjects map[int64]bool, ladders map[int64]float64, samp
 		switch {
 		case peerW > 0:
 			level = (ownSum + tvLevelPrior*(peerSum/peerW)) / (ownW + tvLevelPrior)
-		case tvLearnNEff(rows) >= tvLevelSoloNEff:
+		case learnNEff(rows) >= tvLevelSoloNEff:
 			level = ownSum / ownW
 		default:
 			continue // no peers to shrink toward, too little of its own

@@ -878,13 +878,10 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	var assetsSeen bool
 	var pricedItems, totalItems int
 	var asOf time.Time
-	// Valuation prices resolve in the house order (truevalue.go):
-	// The Forge's swept typical sells, then the stored true-value
-	// estimated sell, a contract-traded hull in a hangar values
-	// at its estimated sell, not CCP's fossil. The guide's
+	// Valuation prices resolve in the house order
+	// (houseValuations, the appraisal tool's order). The guide's
 	// average prices nothing.
-	typicals := app.TypicalSells(ctx)
-	trueValues := app.storedTrueValues(ctx)
+	values := app.houseValuations(ctx)
 	w := &netWorthWidget{}
 
 	// The estimate is only as fresh as its stalest input.
@@ -905,15 +902,14 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 			noteAsOf(b, esi.SnapWallet)
 		}
 		// Assets price off the house order. Every stack counts
-		// toward coverage: priced when a swept typical or a
-		// stored estimate knows the type, skipped when neither
-		// does (the widget says how much of the estate the
+		// toward coverage: priced when any tier of the house
+		// order knows the type, skipped when none does (the widget says how much of the estate the
 		// number covers).
 		if b.assetsKnown {
 			assetsSeen = true
 			for _, a := range b.assets {
 				totalItems++
-				price, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID), buildCostOf(trueValues, a.TypeID))
+				price, ok := houseValueOf(values, a.TypeID)
 				if !ok {
 					continue
 				}

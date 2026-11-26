@@ -940,7 +940,6 @@ func abyssalIsotonic(vals, weights []float64) []float64 {
 // uncertainty.
 func abyssalMarketCalibration(comps []abyssalComp) (factor, nEff, sd float64) {
 	var logs []weightedValue
-	sw, sw2 := 0.0, 0.0
 	for _, c := range comps {
 		if c.Ask <= 0 || c.LadderValue <= 0 {
 			continue
@@ -950,10 +949,8 @@ func abyssalMarketCalibration(comps []abyssalComp) (factor, nEff, sd float64) {
 			w = 1
 		}
 		logs = append(logs, weightedValue{v: math.Log(c.Ask / c.LadderValue), w: w})
-		sw += w
-		sw2 += w * w
 	}
-	if len(logs) == 0 || sw2 <= 0 {
+	if len(logs) == 0 {
 		return 1, 0, 0.2
 	}
 	shrunk, nEff := abyssalShrunkLogFactor(logs)
@@ -965,18 +962,7 @@ func abyssalMarketCalibration(comps []abyssalComp) (factor, nEff, sd float64) {
 // clamped to the factor's bounds. Shared with the backtest, which
 // judges the learned correction against exactly this.
 func abyssalShrunkLogFactor(logs []weightedValue) (logFactor, nEff float64) {
-	sw, sw2 := 0.0, 0.0
-	for _, l := range logs {
-		sw += l.w
-		sw2 += l.w * l.w
-	}
-	if len(logs) == 0 || sw2 <= 0 {
-		return 0, 0
-	}
-	nEff = sw * sw / sw2
-	med := abyssalWeightedQuantile(logs, 0.5)
-	shrunk := med * nEff / (nEff + abyssalCalibPrior)
-	return math.Min(math.Max(shrunk, math.Log(abyssalCalibMin)), math.Log(abyssalCalibMax)), nEff
+	return shrunkLogFactor(logs, abyssalCalibPrior, abyssalCalibMin, abyssalCalibMax)
 }
 
 // abyssalCurveCorrection fits the bounded per-family

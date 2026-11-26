@@ -54,6 +54,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/logging"
 )
@@ -921,7 +922,7 @@ func (app *Application) groupProfileLikely(ctx context.Context, comp *intelCompo
 func gangCompLine(snap gangSnapshot) string {
 	if len(snap.Hulls) == 0 {
 		if n := len(snap.Pilots); n > 0 {
-			return plural(n, "pilot")
+			return humanize.Plural(n, "pilot")
 		}
 		return ""
 	}

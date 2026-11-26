@@ -36,7 +36,6 @@ import (
 // not on every home view of it.
 const sessionCustomizePromptShown = "customize_prompt_shown"
 
-
 // customizePromptView is the card, as home.html shows it under
 // the Customize button.
 type customizePromptView struct {

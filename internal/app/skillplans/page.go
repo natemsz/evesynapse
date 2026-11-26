@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fitview"
@@ -27,61 +28,6 @@ import (
 // snapshots, so no handler ever calls ESI (loadCorpSnapshot reads
 // the snapshot table only).
 // ---------------------------------------------------------------------------
-
-// sdeSkillGraph is the handler-side skillplan.Graph: SDE table reads,
-// memoized per render (plan expansion revisits the same skills).
-type sdeSkillGraph struct {
-	app  *plans
-	ctx  context.Context
-	meta map[int64]skillplan.SkillMeta
-	miss map[int64]bool
-	reqs map[int64][]skillplan.Requirement
-}
-
-func newSDESkillGraph(app *plans, ctx context.Context) *sdeSkillGraph {
-	return &sdeSkillGraph{
-		app:  app,
-		ctx:  ctx,
-		meta: make(map[int64]skillplan.SkillMeta),
-		miss: make(map[int64]bool),
-		reqs: make(map[int64][]skillplan.Requirement),
-	}
-}
-
-func (g *sdeSkillGraph) Meta(skillID int64) (skillplan.SkillMeta, bool) {
-	if m, ok := g.meta[skillID]; ok {
-		return m, true
-	}
-	if g.miss[skillID] {
-		return skillplan.SkillMeta{}, false
-	}
-	row, err := g.app.queries.GetSDESkillMeta(g.ctx, skillID)
-	if err != nil {
-		g.miss[skillID] = true
-		return skillplan.SkillMeta{}, false
-	}
-	m := skillplan.SkillMeta{Rank: row.Rank, Primary: row.PrimaryAttr, Secondary: row.SecondaryAttr}
-	g.meta[skillID] = m
-	return m, true
-}
-
-func (g *sdeSkillGraph) Requirements(typeID int64) []skillplan.Requirement {
-	if rows, ok := g.reqs[typeID]; ok {
-		return rows
-	}
-	dbRows, err := g.app.queries.ListSDERequirementsByType(g.ctx, typeID)
-	if err != nil {
-		logging.Errorf("skill plans: requirements for type %d: %v", typeID, err)
-		g.reqs[typeID] = nil
-		return nil
-	}
-	rows := make([]skillplan.Requirement, 0, len(dbRows))
-	for _, r := range dbRows {
-		rows = append(rows, skillplan.Requirement{SkillID: r.SkillTypeID, Level: int(r.Level)})
-	}
-	g.reqs[typeID] = rows
-	return rows
-}
 
 // loadCharTraining assembles the engine's character input from the
 // snapshots. loaded=false when the skills snapshot isn't there yet
@@ -119,21 +65,6 @@ func (app *plans) loadCharTraining(ctx context.Context, characterID int64) (skil
 	var attrs esi.Attributes
 	app.deps.LoadCorpSnapshot(ctx, characterID, esi.SnapAttributes, &attrs)
 	return ct, attrs, true
-}
-
-// attrsOrFlat converts the ESI attributes payload into a skillplan.AttrSet,
-// reporting whether a real snapshot backed it.
-func attrsOrFlat(raw esi.Attributes, loaded bool) (skillplan.AttrSet, bool) {
-	if !loaded || (raw.Charisma == 0 && raw.Intelligence == 0 && raw.Memory == 0 && raw.Perception == 0 && raw.Willpower == 0) {
-		return skillplan.FlatAttrSet, false
-	}
-	return skillplan.AttrSet{
-		Charisma:     raw.Charisma,
-		Intelligence: raw.Intelligence,
-		Memory:       raw.Memory,
-		Perception:   raw.Perception,
-		Willpower:    raw.Willpower,
-	}, true
 }
 
 // characterAttrsLoaded reports whether the attributes snapshot is
@@ -532,7 +463,7 @@ func planLeft(d *skillPlanDetail) string {
 // ---------------------------------------------------------------------------
 
 type planBuildEnv struct {
-	graph *sdeSkillGraph
+	graph *module.SDESkillGraph
 	items map[int64][]db.SkillPlanItem
 	chars map[int64]*planCharLoad
 }
@@ -556,9 +487,9 @@ func newPlanBuildEnv() *planBuildEnv {
 	}
 }
 
-func (env *planBuildEnv) graphFor(app *plans, ctx context.Context) *sdeSkillGraph {
+func (env *planBuildEnv) graphFor(app *plans, ctx context.Context) *module.SDESkillGraph {
 	if env.graph == nil {
-		env.graph = newSDESkillGraph(app, ctx)
+		env.graph = module.NewSDESkillGraph(ctx, app.queries, "skill plans")
 	}
 	return env.graph
 }
@@ -615,7 +546,7 @@ func (app *plans) buildPlanDetailEnv(ctx context.Context, env *planBuildEnv, ch 
 	graph := env.graphFor(app, ctx)
 	cl := env.charLoad(app, ctx, ch.CharacterID)
 	ct, rawAttrs, skillsLoaded := cl.ct, cl.rawAttrs, cl.loaded
-	attrs, attrsKnown := attrsOrFlat(rawAttrs, skillsLoaded && env.attrsLoaded(app, ctx, cl, ch.CharacterID))
+	attrs, attrsKnown := module.SkillAttrs(rawAttrs, skillsLoaded && env.attrsLoaded(app, ctx, cl, ch.CharacterID))
 
 	targets := make([]skillplan.Target, 0, len(items))
 	for _, item := range items {
@@ -892,7 +823,7 @@ func (app *plans) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Request)
 	}
 	// Only real skills can enter a plan (the browser/editor search
 	// only offers them; a crafted POST gets the same answer).
-	addGraph := newSDESkillGraph(app, ctx)
+	addGraph := module.NewSDESkillGraph(ctx, app.queries, "skill plans")
 	if _, ok := addGraph.Meta(skillID); !ok {
 		skillPlansRedirect(w, r, characterID, planID)
 		return
@@ -994,7 +925,7 @@ func (app *plans) handleSkillPlanItemsAddBulk(w http.ResponseWriter, r *http.Req
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
 	}
-	graph := newSDESkillGraph(app, ctx)
+	graph := module.NewSDESkillGraph(ctx, app.queries, "skill plans")
 	ct, _, loaded := app.loadCharTraining(ctx, characterID)
 	existing, _ := app.queries.ListSkillPlanItems(ctx, planID)
 	existingLevel := map[int64]int64{}
@@ -1317,7 +1248,7 @@ func (app *plans) loadLocalFitting(ctx context.Context, userID, localID int64) (
 // fitClosureTargets computes a fitting's skill closure plus the
 // per-skill status against the character (for the preview).
 func (app *plans) fitClosureTargets(ctx context.Context, ch db.Character, fit esi.Fitting) (targets []skillplan.Target, preview *fitPreview) {
-	graph := newSDESkillGraph(app, ctx)
+	graph := module.NewSDESkillGraph(ctx, app.queries, "skill plans")
 	typeIDs := []int64{fit.ShipTypeID}
 	seen := map[int64]bool{fit.ShipTypeID: true}
 	for _, item := range fit.Items {
@@ -1459,7 +1390,7 @@ func (app *plans) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Request)
 
 	// Skills with no SDE meta can't be trained against the graph;
 	// leave them out (the preview said so openly).
-	graph := newSDESkillGraph(app, ctx)
+	graph := module.NewSDESkillGraph(ctx, app.queries, "skill plans")
 	kept := targets[:0]
 	for _, t := range targets {
 		if _, ok := graph.Meta(t.SkillID); ok {

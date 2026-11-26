@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/humanize"
@@ -560,19 +561,6 @@ func trainPipsFor(trained, target int) []ovPip {
 	return pips
 }
 
-// attrSetOf converts the attributes snapshot to the plan
-// engine's set; an absent or empty snapshot falls back to the
-// flat set, flagged by the second return.
-func attrSetOf(attrs esi.Attributes, known bool) (skillplan.AttrSet, bool) {
-	if !known || (attrs.Charisma == 0 && attrs.Intelligence == 0 && attrs.Memory == 0 && attrs.Perception == 0 && attrs.Willpower == 0) {
-		return skillplan.FlatAttrSet, false
-	}
-	return skillplan.AttrSet{
-		Charisma: attrs.Charisma, Intelligence: attrs.Intelligence,
-		Memory: attrs.Memory, Perception: attrs.Perception, Willpower: attrs.Willpower,
-	}, true
-}
-
 // fmtRate renders an SP-per-minute rate without a trailing
 // ".0": "40" or "40.5".
 func fmtRate(x float64) string {
@@ -585,62 +573,6 @@ func fmtRate(x float64) string {
 // ---------------------------------------------------------------------------
 // Assembly.
 // ---------------------------------------------------------------------------
-
-// ovSkillGraph is the overview's skillplan.Graph: SDE table
-// reads, memoized per render (plan expansion revisits the same
-// skills). It mirrors the skillplans module's graph; the math
-// it feeds is the module's own skillplan.Compute.
-type ovSkillGraph struct {
-	app  *Application
-	ctx  context.Context
-	meta map[int64]skillplan.SkillMeta
-	miss map[int64]bool
-	reqs map[int64][]skillplan.Requirement
-}
-
-func newOvSkillGraph(app *Application, ctx context.Context) *ovSkillGraph {
-	return &ovSkillGraph{
-		app: app, ctx: ctx,
-		meta: make(map[int64]skillplan.SkillMeta),
-		miss: make(map[int64]bool),
-		reqs: make(map[int64][]skillplan.Requirement),
-	}
-}
-
-func (g *ovSkillGraph) Meta(skillID int64) (skillplan.SkillMeta, bool) {
-	if m, ok := g.meta[skillID]; ok {
-		return m, true
-	}
-	if g.miss[skillID] {
-		return skillplan.SkillMeta{}, false
-	}
-	row, err := g.app.queries.GetSDESkillMeta(g.ctx, skillID)
-	if err != nil {
-		g.miss[skillID] = true
-		return skillplan.SkillMeta{}, false
-	}
-	m := skillplan.SkillMeta{Rank: row.Rank, Primary: row.PrimaryAttr, Secondary: row.SecondaryAttr}
-	g.meta[skillID] = m
-	return m, true
-}
-
-func (g *ovSkillGraph) Requirements(typeID int64) []skillplan.Requirement {
-	if rows, ok := g.reqs[typeID]; ok {
-		return rows
-	}
-	dbRows, err := g.app.queries.ListSDERequirementsByType(g.ctx, typeID)
-	if err != nil {
-		logging.Errorf("character: requirements for type %d: %v", typeID, err)
-		g.reqs[typeID] = nil
-		return nil
-	}
-	rows := make([]skillplan.Requirement, 0, len(dbRows))
-	for _, r := range dbRows {
-		rows = append(rows, skillplan.Requirement{SkillID: r.SkillTypeID, Level: int(r.Level)})
-	}
-	g.reqs[typeID] = rows
-	return rows
-}
 
 // ovCharTraining assembles the plan engine's character input
 // from the view's snapshot-derived maps: trained SP per skill,
@@ -716,8 +648,8 @@ func (app *Application) fillOverview(ctx context.Context, ch db.Character, view 
 		for i, it := range st.Stage {
 			targets = append(targets, skillplan.Target{SkillID: it.SkillID, Level: it.Level, Intent: i})
 		}
-		attrs, _ := attrSetOf(view.Attrs, view.AttrsKnown)
-		oc := skillplan.Compute(newOvSkillGraph(app, ctx), targets, ovCharTraining(view), attrs, now)
+		attrs, _ := module.SkillAttrs(view.Attrs, view.AttrsKnown)
+		oc := skillplan.Compute(module.NewSDESkillGraph(ctx, app.queries, "character"), targets, ovCharTraining(view), attrs, now)
 		outcome = &oc
 	}
 
@@ -915,7 +847,7 @@ func (app *Application) ovTrainingStrip(view *characterView, ov *overviewView, c
 	ov.TrainPips = trainPipsFor(head.TrainedLvl, head.LevelNum)
 	ov.TrainingDone = view.TrainingFinish
 	if e, ok := catByID[head.SkillID]; ok {
-		attrs, known := attrSetOf(view.Attrs, view.AttrsKnown)
+		attrs, known := module.SkillAttrs(view.Attrs, view.AttrsKnown)
 		if known {
 			rate := skillplan.SPPerMinute(skillplan.SkillMeta{Rank: e.Rank, Primary: e.Primary, Secondary: e.Secondary}, attrs)
 			ov.TrainSPHour = esi.FormatInt(int64(rate*60+0.5)) + " SP per hour"
@@ -1068,7 +1000,7 @@ func (app *Application) ovInspectorSkill(ctx context.Context, view *characterVie
 	level := view.SkillLevels[e.TypeID]
 	curSP := view.SkillSP[e.TypeID]
 	meta := skillplan.SkillMeta{Rank: e.Rank, Primary: e.Primary, Secondary: e.Secondary}
-	attrs, attrsKnown := attrSetOf(view.Attrs, view.AttrsKnown)
+	attrs, attrsKnown := module.SkillAttrs(view.Attrs, view.AttrsKnown)
 	insp := &inspectorSkill{
 		TypeID:     e.TypeID,
 		Name:       e.Name,

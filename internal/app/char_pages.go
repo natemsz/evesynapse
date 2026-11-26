@@ -650,27 +650,13 @@ func (app *Application) fillCharacterQueue(ctx context.Context, ch db.Character,
 		view.CompletesAt = qv.CompletesAt
 		queued := map[int64]int{}
 		// The levels still to train, per skill, from the live queue.
-		// The skills snapshot can lag the queue (a level that just
-		// finished is not in it yet), so a row's trained level is
-		// also read off the queue: every lower level of the same
-		// skill that is no longer pending has finished.
-		pending := map[int64]map[int]bool{}
+		pending := pendingLevels{}
 		for _, r := range view.Queue {
-			if pending[r.SkillID] == nil {
-				pending[r.SkillID] = map[int]bool{}
-			}
-			pending[r.SkillID][r.LevelNum] = true
-		}
-		trainedBelow := func(skillID int64, level int) int {
-			t := level - 1
-			for t > 0 && pending[skillID][t] {
-				t--
-			}
-			return max(t, trainedByID[skillID])
+			pending.add(r.SkillID, r.LevelNum)
 		}
 		for i := range view.Queue {
 			row := &view.Queue[i]
-			row.TrainedLvl = trainedBelow(row.SkillID, row.LevelNum)
+			row.TrainedLvl = max(pending.trainedBelow(row.SkillID, row.LevelNum), trainedByID[row.SkillID])
 			if row.Num == 1 {
 				row.State = "training"
 				view.TrainingSkillID = row.SkillID
@@ -685,12 +671,8 @@ func (app *Application) fillCharacterQueue(ctx context.Context, ch db.Character,
 				sr := &view.SkillGroups[gi].Skills[si]
 				// Same lag in the skill list: the level below the
 				// lowest one still queued has finished.
-				if levels := pending[sr.TypeID]; len(levels) > 0 {
-					lowest := 6
-					for l := range levels {
-						lowest = min(lowest, l)
-					}
-					sr.TrainedLvl = max(sr.TrainedLvl, lowest-1)
+				if trained, ok := pending.trained(sr.TypeID); ok {
+					sr.TrainedLvl = max(sr.TrainedLvl, trained)
 				}
 				switch {
 				case sr.TypeID == view.TrainingSkillID && view.TrainingSkillID != 0:

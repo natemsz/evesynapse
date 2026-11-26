@@ -87,7 +87,7 @@ func TestAbyssalLearnGate(t *testing.T) {
 func TestAbyssalLearnTrim(t *testing.T) {
 	rows := learnFixture(60, 4, func([]float64) float64 { return 0 }, 0.05)
 	rows[3].Y, rows[7].Y = 4, -4 // 55x and 1/55x the ladder
-	kept := abyssalTrimOutliers(rows)
+	kept := trimLearnOutliers(rows)
 	for _, r := range kept {
 		if math.Abs(r.Y) > 1 {
 			t.Fatalf("an outlier survived trimming: %+v", r)
